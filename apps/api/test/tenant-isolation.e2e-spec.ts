@@ -1,0 +1,73 @@
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import cookieParser from 'cookie-parser';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+
+/**
+ * End-to-end proof that company A can never see or affect company B's data,
+ * even when authenticated and even when guessing IDs. Exercises the real
+ * stack (HTTP -> TenantGuard -> tenant-scope extension -> Postgres RLS)
+ * against the docker-compose dev database, seeded via `prisma db seed`.
+ */
+describe('Tenant isolation (e2e)', () => {
+  let app: INestApplication;
+  let tokenA: string;
+  let tokenB: string;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    await app.init();
+
+    const loginA = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
+    const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
+    tokenA = loginA.body.accessToken;
+    tokenB = loginB.body.accessToken;
+  }, 30000); // booting a full Nest app + DB connections exceeds Jest's 5s default hook timeout
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('rejects unauthenticated access', async () => {
+    await request(app.getHttpServer()).get('/accounts').expect(401);
+  });
+
+  it("only returns company A's own accounts for company A's token", async () => {
+    const res = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    expect(res.body.length).toBeGreaterThan(0);
+    expect(res.body.every((a: { companyId: string }) => a.companyId === res.body[0].companyId)).toBe(true);
+    // Subset check (not exact-equality): this suite runs repeatedly against a
+    // shared dev DB, and the "creating an account..." test below adds a new
+    // account every run without cleaning up — asserting the exact set would
+    // make the test fail on any re-run, which isn't the property under test.
+    expect(res.body.map((a: { code: string }) => a.code)).toEqual(expect.arrayContaining(['1000', '2000']));
+  });
+
+  it("only returns company B's own accounts for company B's token, disjoint from A's", async () => {
+    const resA = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    const resB = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenB}`).expect(200);
+
+    const idsA = new Set(resA.body.map((a: { id: string }) => a.id));
+    const idsB = resB.body.map((a: { id: string }) => a.id);
+    expect(idsB.some((id: string) => idsA.has(id))).toBe(false);
+    expect(resB.body.map((a: { code: string }) => a.code)).toEqual(expect.arrayContaining(['1000']));
+  });
+
+  it("creating an account as company A never becomes visible to company B", async () => {
+    const created = await request(app.getHttpServer())
+      .post('/accounts')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ code: `TEST-${Date.now()}`, name: 'Isolation test account', type: 'expense' })
+      .expect(201);
+
+    const resB = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenB}`).expect(200);
+    expect(resB.body.some((a: { id: string }) => a.id === created.body.id)).toBe(false);
+
+    const resA = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    expect(resA.body.some((a: { id: string }) => a.id === created.body.id)).toBe(true);
+  });
+});

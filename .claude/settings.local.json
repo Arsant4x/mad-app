@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(docker -v)",
+      "Bash(docker compose *)",
+      "PowerShell(node -v)",
+      "PowerShell(npm -v)",
+      "PowerShell(docker version --format '{{.Client.Version}}' 2>$null)",
+      "PowerShell(if\\(-not $?\\){'docker not found'})",
+      "PowerShell(docker version --format '{{.Client.Version}}')",
+      "PowerShell(docker info --format '{{.ServerVersion}}' 2>&1)",
+      "PowerShell(docker compose version)",
+      "Bash(cd \"/c/Users/mnqad/Desktop/mad-app\" && mkdir -p apps/api apps/web packages/shared prisma && ls -la)",
+      "Bash(mkdir -p apps/api/prisma)",
+      "Bash(mv prisma/schema.prisma apps/api/prisma/schema.prisma)",
+      "Bash(rmdir prisma *)",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(48\\).toString\\('hex'\\)\\)\")",
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(12\\).toString\\('base64url'\\)\\)\")",
+      "Bash(sed -i 's|change-me-access-secret-min-32-chars|__TRACKED_VAR__|' .env)",
+      "Bash(sed -i 's|change-me-refresh-secret-min-32-chars|__TRACKED_VAR__|' .env)",
+      "Bash(sed -i 's|change-me-strong-password|__TRACKED_VAR__|' .env)",
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "PowerShell(Get-Volume | Select-Object DriveLetter, FileSystemLabel, @{N='FreeGB';E={[math]::Round\\($_.SizeRemaining/1GB,2\\)}}, @{N='SizeGB';E={[math]::Round\\($_.Size/1GB,2\\)}})",
+      "PowerShell(robocopy \"C:\\\\Users\\\\mnqad\\\\Desktop\\\\mad-app\" \"D:\\\\mad-app\" /E /COPYALL /XJ /R:2 /W:1)",
+      "PowerShell(robocopy \"C:\\\\Users\\\\mnqad\\\\Desktop\\\\mad-app\" \"D:\\\\mad-app\" /E /XJ /R:2 /W:1)"
+    ]
+  }
+}

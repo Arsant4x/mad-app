@@ -1,0 +1,870 @@
+// Phase 1 schema: identity, tenancy, auth + one example tenant-scoped business
+// table (Account = chart of accounts) used to prove out the isolation pattern
+// end-to-end. Every future business table (invoices, customers, properties...)
+// follows the exact same shape as `Account`: a `companyId` FK + RLS policy.
+//
+// Auth design: a single `LoginIdentity` table owns username/passwordHash and
+// is the one global login namespace shared by the platform admin, companies,
+// and company employees — mirroring the mockup's single login box where
+// developer/company/employee accounts all share one `userAccounts` list with
+// globally-unique usernames. Each identity points to exactly one profile row
+// (PlatformAdmin | Company | CompanyUser).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  // Runtime + `migrate deploy` connection: the non-superuser, non-BYPASSRLS
+  // `app_user` role, so Row-Level Security (see prisma/migrations/*/migration.sql)
+  // actually applies. `mad_app` (the docker-compose bootstrap user) is a
+  // superuser and would silently bypass every RLS policy if used here.
+  url               = env("DATABASE_URL")
+  // `prisma migrate dev` needs to spin up a throwaway shadow DB to diff
+  // schema changes, which requires CREATEDB — a privilege `app_user`
+  // deliberately doesn't have. This lets the shadow DB use the superuser
+  // connection while DATABASE_URL stays least-privilege.
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  STOPPED
+}
+
+enum ActorType {
+  PLATFORM_ADMIN
+  COMPANY
+  COMPANY_USER
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum InvoiceStatus {
+  DUE
+  PAID
+  OVERDUE
+}
+
+model LoginIdentity {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  passwordHash String
+  actorType    ActorType
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  platformAdmin PlatformAdmin?
+  company       Company?
+  companyUser   CompanyUser?
+  refreshTokens RefreshToken[]
+
+  @@map("login_identities")
+}
+
+/// Platform super-admin — operates the developer panel, manages companies
+/// and permission templates. Never scoped to a company.
+model PlatformAdmin {
+  id              String        @id @default(uuid())
+  loginIdentityId String        @unique
+  loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
+  displayName     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("platform_admins")
+}
+
+/// A permission template controls which screens/modules an actor can access.
+/// The developer template (isSystem = true) always grants all screens and
+/// cannot be edited or deleted, mirroring TEMPLATES['0001'] in the mockup.
+model PermissionTemplate {
+  id             String   @id @default(uuid())
+  name           String
+  isSystem       Boolean  @default(false)
+  isAllScreens   Boolean  @default(false)
+  allowedScreens String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  companies    Company[]
+  companyUsers CompanyUser[]
+
+  @@map("permission_templates")
+}
+
+/// A tenant (company/organization). Created by the platform admin from the
+/// developer panel. This is the row that every business table's `companyId`
+/// points to — the unit of data isolation.
+model Company {
+  id              String        @id @default(uuid())
+  loginIdentityId String        @unique
+  loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
+  orgName         String
+  status          AccountStatus @default(ACTIVE)
+  frozenAt        DateTime?
+  subStart        DateTime?
+  subEnd          DateTime?
+
+  permissionTemplateId String
+  permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users            CompanyUser[]
+  accounts         Account[]
+  customers        Customer[]
+  invoices         Invoice[]
+  invoiceLines     InvoiceLine[]
+  suppliers        Supplier[]
+  purchases        Purchase[]
+  products         Product[]
+  employees        Employee[]
+  banks            Bank[]
+  bankTransactions BankTransaction[]
+  journalEntries   JournalEntry[]
+  journalLines     JournalLine[]
+  properties       Property[]
+  units            Unit[]
+  contracts        Contract[]
+  installments     Installment[]
+  rentPayments     RentPayment[]
+  warehouses       Warehouse[]
+  stockMovements   StockMovement[]
+  obligations      GovernmentObligation[]
+  reservations     Reservation[]
+  messageScripts   MessageScript[]
+
+  @@map("companies")
+}
+
+/// An employee sub-account under a company (parentAccountId in the mockup).
+/// Scoped to the parent company; permission template controls which screens
+/// this specific employee can see.
+model CompanyUser {
+  id              String        @id @default(uuid())
+  loginIdentityId String        @unique
+  loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  status          AccountStatus @default(ACTIVE)
+
+  permissionTemplateId String
+  permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("company_users")
+}
+
+/// Refresh tokens are stored hashed so a stolen DB dump can't be replayed
+/// directly, and so we can revoke sessions server-side (e.g. when a company
+/// is frozen/stopped, its tokens are revoked immediately).
+model RefreshToken {
+  id              String        @id @default(uuid())
+  tokenHash       String        @unique
+  loginIdentityId String
+  loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("refresh_tokens")
+}
+
+/// Chart of accounts — first real tenant-scoped business table. Every future
+/// business table (customers, invoices, properties, ...) repeats this exact
+/// pattern: `companyId String` + relation + RLS policy of the same shape.
+model Account {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  code           String
+  name           String
+  type           String
+  openingBalance Decimal @default(0) @db.Decimal(18, 2)
+  /// Running balance, moved by posted journal lines (see JournalPostingService).
+  /// Starts equal to `openingBalance` at creation; independent of it after that,
+  /// same relationship as Bank.balance/openingBalance.
+  balance        Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  journalLines JournalLine[]
+
+  @@unique([companyId, code])
+  @@map("accounts")
+}
+
+/// A customer the company invoices. Deliberately minimal — full customer
+/// management (statements, aging, ...) is a separate future screen; this is
+/// just enough to give Invoice a real `customerId` FK instead of free text.
+model Customer {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  vatNumber   String?
+  phone       String?
+  creditLimit Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices  Invoice[]
+  contracts Contract[]
+
+  @@unique([companyId, name])
+  @@map("customers")
+}
+
+/// Sales invoice. `subtotal`/`taxTotal`/`total` are always derived
+/// server-side from `lines` (see InvoicesService) — a client-submitted total
+/// is never trusted, since a client could set an arbitrary amount otherwise.
+model Invoice {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  no         String
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  issueDate DateTime      @db.Date
+  dueDate   DateTime      @db.Date
+  status    InvoiceStatus @default(DUE)
+
+  subtotal Decimal @db.Decimal(18, 2)
+  taxTotal Decimal @db.Decimal(18, 2)
+  total    Decimal @db.Decimal(18, 2)
+  notes    String?
+
+  /// Null when required accounts (1200/4100/2200) aren't set up yet for this
+  /// company — the invoice itself is still created, just not posted (see
+  /// InvoicesService). `onDelete: Restrict` means the linked JournalEntry
+  /// can't be deleted directly from the Journal screen while this invoice
+  /// still references it — reverse it via deleting/re-editing the invoice.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines InvoiceLine[]
+
+  @@unique([companyId, no])
+  @@map("invoices")
+}
+
+/// A single invoice line item. Carries `companyId` too (denormalized, always
+/// equal to its parent invoice's) so it fits the exact same tenant-scope
+/// Prisma extension + RLS pattern as every other tenant table (see
+/// tenant-scope.extension.ts) instead of being a special case that only
+/// inherits isolation transitively through its parent invoice.
+model InvoiceLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Decimal @db.Decimal(14, 2)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  taxRate     Decimal @default(15) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+
+  @@map("invoice_lines")
+}
+
+/// A purchase supplier / service provider. Same shape and role as Customer,
+/// just for the purchase side.
+model Supplier {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name      String
+  vatNumber String?
+  phone     String?
+  category  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+
+  @@unique([companyId, name])
+  @@map("suppliers")
+}
+
+/// A purchase invoice / recurring obligation (utilities, rent, payroll...).
+/// `paid` + `paidDate` are the whole payment lifecycle here — there's no
+/// linked bank account or journal entry yet (Banks/Journal aren't built),
+/// unlike the original mockup which posts a full payment journal entry.
+model Purchase {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  no         String
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  date     DateTime  @db.Date
+  dueDate  DateTime? @db.Date
+  category String?
+
+  subtotal  Decimal @db.Decimal(18, 2)
+  taxAmount Decimal @db.Decimal(18, 2)
+  exempt    Boolean @default(false)
+  total     Decimal @db.Decimal(18, 2)
+
+  paid     Boolean   @default(false)
+  paidDate DateTime? @db.Date
+
+  /// Same deal as Invoice.journalEntryId — null if required accounts aren't
+  /// set up yet, Restrict so the entry can't be deleted out from under it.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, no])
+  @@map("purchases")
+}
+
+/// Catalog item (product or service) used as a reference list when writing
+/// invoice line items. Deliberately not a hard FK from InvoiceLine — invoice
+/// lines stay free-text (matching the original mockup), this is just the
+/// picklist source, not an enforced relationship.
+model Product {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name     String
+  sku      String?
+  category String?
+  unit     String?
+  price    Decimal @default(0) @db.Decimal(18, 2)
+  cost     Decimal @default(0) @db.Decimal(18, 2)
+  minStock Decimal @default(0) @db.Decimal(14, 2)
+  barcode  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stockMovements StockMovement[]
+
+  @@map("products")
+}
+
+/// Basic HR record — deliberately just the employee roster (no GOSI payroll
+/// calculator, no job-role/permission linking; both are separate features
+/// not built yet).
+model Employee {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  fullName   String
+  jobTitle   String?
+  department String?
+  hireDate   DateTime       @db.Date
+  baseSalary Decimal        @default(0) @db.Decimal(18, 2)
+  phone      String?
+  status     EmployeeStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employees")
+}
+
+/// Bank account for the company. `balance` is the current balance and
+/// `openingBalance` the balance it started at. Each `BankTransaction`
+/// shifts `balance` by its `amount` (see TransactionsService); editing
+/// `openingBalance` later preserves any such drift by shifting `balance` by
+/// the same delta instead of overwriting it (see BanksService.update).
+model Bank {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name           String
+  iban           String?
+  balance        Decimal  @default(0) @db.Decimal(18, 2)
+  openingBalance Decimal  @default(0) @db.Decimal(18, 2)
+  openingDate    DateTime @db.Date
+
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  transactions BankTransaction[]
+  rentPayments RentPayment[]
+
+  @@map("banks")
+}
+
+/// A manual bank transaction (deposit/withdrawal). `matched`/`entryNo` mirror
+/// the mockup's journal-reconciliation fields — a manually-created transaction
+/// is always unmatched, but RentPayment sets both when a rent payment is
+/// collected via bank transfer (see ContractsService), since that's a real
+/// cash movement that's also posted to the Journal.
+model BankTransaction {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  bankId String
+  bank   Bank   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+
+  date        DateTime @db.Date
+  description String
+  amount      Decimal  @db.Decimal(18, 2)
+  source      String?
+  matched     Boolean  @default(false)
+  entryNo     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bank_transactions")
+}
+
+/// A posted double-entry journal entry — `no` numbering, balance
+/// (totalDebit === totalCredit) and account-balance effects follow the
+/// original mockup exactly (see JournalPostingService). `auto` distinguishes
+/// system-generated entries (from issuing/editing an invoice or purchase)
+/// from ones a user built by hand in the Journal screen; both are deleted
+/// the same way (reverse the balance effect, then delete), but an entry
+/// still referenced by an Invoice/Purchase can't be deleted directly (see
+/// Invoice.journalEntryId) — un-link it by deleting/re-editing that invoice
+/// or purchase instead.
+///
+/// There is no "edit a posted entry" — matches the mockup (delete + repost
+/// is how a correction is made) and avoids a whole class of balance-drift
+/// bugs from partial edits.
+model JournalEntry {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  no          String
+  date        DateTime @db.Date
+  memo        String
+  totalDebit  Decimal  @db.Decimal(18, 2)
+  totalCredit Decimal  @db.Decimal(18, 2)
+  auto        Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  lines        JournalLine[]
+  invoices     Invoice[]
+  purchases    Purchase[]
+  rentPayments RentPayment[]
+
+  @@unique([companyId, no])
+  @@map("journal_entries")
+}
+
+/// One debit-or-credit line of a JournalEntry. `onDelete: Restrict` on
+/// `account` means an Account that has ever been posted to can't be deleted
+/// — same FK-restrict pattern used everywhere else in this codebase.
+model JournalLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  debit  Decimal @default(0) @db.Decimal(18, 2)
+  credit Decimal @default(0) @db.Decimal(18, 2)
+
+  @@map("journal_lines")
+}
+
+/// A managed real-estate property. Trimmed from the original mockup's
+/// richer model: no file attachments (no storage service built yet), no
+/// per-floor category overrides (only the property-wide `activityType`/
+/// `activitySubtype` lock is enforced — see ContractsService), no shared-area
+/// inventory editor, no map screen yet (`lat`/`lng` are captured for when
+/// one is built). Deleting a property with units is blocked (`onDelete:
+/// Restrict` on Unit.propertyId) — simpler and safer than the mockup, which
+/// allows it and leaves the units dangling.
+model Property {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name    String
+  address String?
+  floors  Int     @default(1)
+
+  /// Free string, one of: residential/shop/showroom/office/warehouse/mixed,
+  /// or null for "no restriction" — validated in CreatePropertyDto.
+  activityType    String?
+  /// Only meaningful when activityType === 'residential' — e.g. families-only,
+  /// singles-only, students — matches the mockup's residential sub-category.
+  activitySubtype String?
+
+  /// 'owned' | 'leased' | 'managed' — validated in CreatePropertyDto.
+  ownership String
+
+  /// Only set when ownership === 'leased': the company's own head-lease terms.
+  /// Sub-contracts for units in this property must fall within this window.
+  leaseValue Decimal?  @db.Decimal(18, 2)
+  leaseCycle String?
+  leaseStart DateTime? @db.Date
+  leaseEnd   DateTime? @db.Date
+
+  /// Only set when ownership === 'managed': the company's commission rate.
+  opRate Decimal? @db.Decimal(5, 2)
+
+  deedNo String?
+  lat    Float?
+  lng    Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  units Unit[]
+
+  @@map("properties")
+}
+
+/// A leasable unit within a Property. `type`/`subtype` mirror the mockup's
+/// UNIT_TYPE_CONFIG (residential has a fixed category select; commercial
+/// types take a free-text allowed-activity description) but are both plain
+/// strings here, validated client-side only — same trim as Account.type.
+/// Status (vacant/rented/reserved/under maintenance) is never stored; it's
+/// always derived live from `underMaintenance` + whether an active Contract
+/// currently covers today (see UnitsService.withStatus).
+model Unit {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+
+  unitNo           String
+  floor            String?
+  type             String
+  subtype          String?
+  rentMonthly      Decimal @db.Decimal(18, 2)
+  underMaintenance Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contracts    Contract[]
+  reservations Reservation[]
+
+  @@unique([companyId, propertyId, unitNo])
+  @@map("units")
+}
+
+enum ReservationStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+}
+
+/// A pre-contract holding on a Unit — matches the mockup's lightweight
+/// reservation mechanism exactly: no financial posting for the deposit
+/// (purely a record, same gap as the mockup), no due-date reminders.
+/// `expiryDate` lazily flips ACTIVE -> EXPIRED on read (`ReservationsService`),
+/// never via a background job. Converting to a contract (same unit, matching
+/// tenant name) flips it to CONVERTED instead — see ContractsService.create.
+model Reservation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  name       String
+  phone      String?
+  deposit    Decimal           @default(0) @db.Decimal(18, 2)
+  expiryDate DateTime          @db.Date
+  status     ReservationStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reservations")
+}
+
+enum ContractStatus {
+  DRAFT
+  DUE
+  LATE
+  CANCELLED
+}
+
+enum InstallmentStatus {
+  DUE
+  LATE
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+}
+
+/// A lease contract for a Unit. Trimmed from the mockup: no occupants list,
+/// no business-registration sub-fields, no file attachment, no key-money/
+/// deposit-settlement/tenant-rating records yet (planned as a follow-up
+/// increment). `customerId` is set automatically on create — mirrors the
+/// mockup's `syncTenantToCustomer`, but as a real FK to the existing Customer
+/// model instead of a loose name match.
+model Contract {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  /// `EJ-<year>-<seq>`, server-generated — see ContractsService.nextContractNumber.
+  no     String
+  /// Optional official Ejar-platform registry number, free text — display only.
+  ejarNo String?
+
+  tenant String
+  phone  String?
+
+  value  Decimal        @db.Decimal(18, 2)
+  /// 'monthly' | 'quarterly' | 'semiannual' | 'annual' — drives installment generation.
+  cycle  String
+  start  DateTime       @db.Date
+  end    DateTime       @db.Date
+  deposit Decimal       @default(0) @db.Decimal(18, 2)
+
+  services  String?
+  /// 'unfurnished' | 'furnished' | 'partial'.
+  furnished String?
+
+  status       ContractStatus @default(DUE)
+  cancelDate   DateTime?      @db.Date
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  installments Installment[]
+  payments     RentPayment[]
+
+  @@unique([companyId, no])
+  @@map("contracts")
+}
+
+/// One scheduled rent payment for a Contract, generated evenly across the
+/// contract's cycle at creation time (see ContractsService.generateInstallments)
+/// and re-derivable on demand. `status` auto-flips DUE -> LATE lazily (on
+/// read, not via a background job — matches the mockup's `refreshInstallmentStatuses`).
+model Installment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  dueDate DateTime          @db.Date
+  amount  Decimal           @db.Decimal(18, 2)
+  status  InstallmentStatus @default(DUE)
+  notes   String?
+
+  createdAt DateTime @default(now())
+
+  payments RentPayment[]
+
+  @@map("contract_installments")
+}
+
+/// An actual collected rent payment. Always posts a journal entry (debit
+/// cash, credit rental-revenue — soft-skipped if those accounts aren't set
+/// up yet, same pattern as Invoice/Purchase auto-posting) and, when paid via
+/// bank transfer, also creates a matching BankTransaction (see
+/// ContractsService.recordPayment) so it shows up in the Bank Transactions
+/// screen too, not just the ledger.
+model RentPayment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  installmentId String?
+  installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+
+  date       DateTime      @db.Date
+  amount     Decimal       @db.Decimal(18, 2)
+  discount   Decimal       @default(0) @db.Decimal(18, 2)
+  netAmount  Decimal       @db.Decimal(18, 2)
+  method     PaymentMethod
+
+  bankId String?
+  bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+
+  notes String?
+
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@map("rent_payments")
+}
+
+/// A storage location. `manager` is a free-text name, not a real Employee FK
+/// (matches the mockup — no dedicated warehouse-staff assignment feature).
+/// Deleting a warehouse that still has any stock movement referencing it —
+/// as either the source or the transfer destination — is blocked
+/// (`onDelete: Restrict` on both `StockMovement.warehouse` and
+/// `.toWarehouse`), unlike the mockup, which allows it and leaves movements
+/// pointing at a warehouse id that no longer exists.
+model Warehouse {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name     String
+  location String?
+  manager  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movementsFrom StockMovement[] @relation("MovementSourceWarehouse")
+  movementsTo   StockMovement[] @relation("MovementDestinationWarehouse")
+
+  @@map("warehouses")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  TRANSFER
+  ADJUSTMENT
+}
+
+/// A single stock-ledger entry — there is no separate materialized
+/// stock-balance table (the mockup declares one, `stockLevels`, but never
+/// actually writes to it — dead code). Current on-hand quantity for a
+/// product/warehouse pair is always computed live by summing movements
+/// (`InventoryService.stockQty`), the same "compute, don't store" pattern
+/// already used for Unit status elsewhere in this app. `qty` is always
+/// positive for IN/OUT/TRANSFER (the `type` implies the sign); for
+/// ADJUSTMENT it's the signed net change itself (matches the mockup).
+model StockMovement {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  warehouseId String
+  warehouse   Warehouse @relation("MovementSourceWarehouse", fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  /// Only set when type === TRANSFER (the destination warehouse); null otherwise.
+  toWarehouseId String?
+  toWarehouse   Warehouse? @relation("MovementDestinationWarehouse", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+
+  type   StockMovementType
+  qty    Decimal  @db.Decimal(14, 2)
+  reason String?
+  date   DateTime @db.Date
+
+  createdAt DateTime @default(now())
+
+  @@map("stock_movements")
+}
+
+/// A government-compliance checklist item — deliberately minimal, matching
+/// the mockup exactly: no due date, no amount, no penalty, no recurrence.
+/// `body` is the government entity name (free text, not its own table — the
+/// mockup never normalizes it either) and `done` is manually toggled with no
+/// automatic reset. The standard 9-item checklist (ZATCA/MOC/GOSI) is
+/// auto-seeded per company on first read (`ObligationsService.list`) rather
+/// than at signup, so it works regardless of how the company was created.
+model GovernmentObligation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  body  String
+  title String
+  done  Boolean @default(false)
+  /// Fixed display order within the seeded checklist — `createdAt` can't be
+  /// used for this since every row from the same `createMany` seed call
+  /// shares an identical statement-level timestamp in Postgres.
+  order Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("government_obligations")
+}
+
+/// Which contact group a message template is meant for — matches the
+/// mockup's `audience` field ('مستأجرون'|'عملاء'|'موظفون'), translated to
+/// English enum values like every other status/category field in this app.
+enum ScriptAudience {
+  TENANT
+  CUSTOMER
+  EMPLOYEE
+}
+
+/// A reusable message template ("قوالب الرسائل") for contacting tenants,
+/// customers, or employees. Confirmed by reading the mockup: there's no
+/// {{placeholder}} token system — authors just type a literal bracketed name
+/// like "[الاسم]" into `text` and the one consumer (a WhatsApp deep-link
+/// button elsewhere in the app) does a plain string replace before opening
+/// wa.me. That WhatsApp wiring itself is a browser-only cosmetic hook spread
+/// across the Customers/Contracts/Employees screens and is deliberately not
+/// ported here — this model only backs the standalone CRUD screen.
+model MessageScript {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  audience ScriptAudience
+  title    String
+  text     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("message_scripts")
+}

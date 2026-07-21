@@ -1,0 +1,28 @@
+const CYCLE_STEP_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
+
+/** Splits `value` evenly across installments stepped by `cycle`, with any
+ * rounding remainder absorbed into the last installment — matches the
+ * mockup's `generateInstallments`. Installment count is derived from the
+ * contract's total duration in months (approximated via a 30.44-day month,
+ * same as the mockup) divided by the cycle's step. */
+export function generateInstallmentSchedule(start: Date, end: Date, value: number, cycle: string): { dueDate: Date; amount: number }[] {
+  const stepMonths = CYCLE_STEP_MONTHS[cycle] ?? 1;
+  const totalDays = Math.max(1, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  const totalMonths = Math.max(1, Math.round(totalDays / 30.44));
+  const count = Math.max(1, Math.round(totalMonths / stepMonths));
+
+  const base = Math.floor((value / count) * 100) / 100;
+  const schedule: { dueDate: Date; amount: number }[] = [];
+  let remaining = value;
+  const dueDate = new Date(start);
+
+  for (let i = 0; i < count; i++) {
+    const isLast = i === count - 1;
+    const amount = isLast ? Math.round(remaining * 100) / 100 : base;
+    remaining = Math.round((remaining - amount) * 100) / 100;
+    schedule.push({ dueDate: new Date(dueDate), amount });
+    dueDate.setMonth(dueDate.getMonth() + stepMonths);
+  }
+
+  return schedule;
+}
