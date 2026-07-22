@@ -86,7 +86,7 @@ model PlatformAdmin {
 /// cannot be edited or deleted, mirroring TEMPLATES['0001'] in the mockup.
 model PermissionTemplate {
   id             String   @id @default(uuid())
-  name           String
+  name           String @unique
   isSystem       Boolean  @default(false)
   isAllScreens   Boolean  @default(false)
   allowedScreens String[] @default([])

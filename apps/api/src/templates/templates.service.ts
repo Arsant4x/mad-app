@@ -10,27 +10,36 @@ export class TemplatesService {
   list() {
     return this.prisma.permissionTemplate.findMany({ orderBy: { createdAt: 'asc' } });
   }
+async create(dto: CreateTemplateDto) {
+    const name = dto.name?.trim();
+    if (!name) throw new ConflictException('اسم النموذج مطلوب');
 
-  create(dto: CreateTemplateDto) {
+    const duplicate = await this.prisma.permissionTemplate.findUnique({ where: { name } });
+    if (duplicate) throw new ConflictException(`يوجد نموذج بالاسم "${name}" بالفعل`);
+
     return this.prisma.permissionTemplate.create({
       data: {
-        name: dto.name,
+        name,
         isAllScreens: dto.isAllScreens ?? false,
         allowedScreens: dto.isAllScreens ? [] : (dto.allowedScreens ?? []),
       },
     });
   }
-
   async update(id: string, dto: UpdateTemplateDto) {
     const existing = await this.prisma.permissionTemplate.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('القالب غير موجود');
     if (existing.isSystem) throw new ForbiddenException('نموذج المطوّر ثابت ولا يمكن تعديله');
+    const newName = dto.name?.trim();
+    if (newName && newName !== existing.name) {
+      const duplicate = await this.prisma.permissionTemplate.findUnique({ where: { name: newName } });
+      if (duplicate) throw new ConflictException(`يوجد نموذج بالاسم "${newName}" بالفعل`);
+    }
 
     const isAllScreens = dto.isAllScreens ?? existing.isAllScreens;
     return this.prisma.permissionTemplate.update({
       where: { id },
       data: {
-        name: dto.name,
+       name: newName ?? existing.name,
         isAllScreens,
         allowedScreens: isAllScreens ? [] : (dto.allowedScreens ?? existing.allowedScreens),
       },
