@@ -98,11 +98,20 @@ export function AppShell() {
               </div>
             );
           })}
-          {user?.actorType === 'COMPANY' && (
-            <NavLink to="/company-users" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              {t('nav_company_users')}
+          <div>
+            <div className="nav-group-label">{t('grp_company')}</div>
+            {/* Not gated by a permission-template screen — matches the
+             * backend's company-profile route, which any tenant actor can
+             * read (only actorType COMPANY can edit, enforced server-side). */}
+            <NavLink to="/company-profile" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              {t('nav_company_profile')}
             </NavLink>
-          )}
+            {user?.actorType === 'COMPANY' && (
+              <NavLink to="/company-users" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                {t('nav_company_users')}
+              </NavLink>
+            )}
+          </div>
         </nav>
         <button className="logout-btn" onClick={() => logout()}>
           {t('logout')}

@@ -4,10 +4,22 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
+/** A run-unique suffix, same shape as the one already used for throwaway
+ * usernames below. PermissionTemplate.name is @unique by design, so any
+ * template this suite creates must carry it too — a fixed name succeeds on a
+ * fresh DB and then 409s on every later run against the same dev database. */
+const runSuffix = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
 describe('Platform admin / permission templates / company users (e2e)', () => {
   let app: INestApplication;
   let platformAdminToken: string;
   let companyAToken: string;
+
+  // Cleaned up in afterAll so repeated runs don't leave the dev DB's template
+  // list growing. Company users must go first — a template still assigned to
+  // one can't be deleted (409, see TemplatesService.remove).
+  const createdTemplateIds: string[] = [];
+  const createdCompanyUserIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -26,6 +38,12 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
+    for (const id of createdCompanyUserIds) {
+      await request(app.getHttpServer()).delete(`/company-users/${id}`).set('Authorization', `Bearer ${companyAToken}`);
+    }
+    for (const id of createdTemplateIds) {
+      await request(app.getHttpServer()).delete(`/templates/${id}`).set('Authorization', `Bearer ${platformAdminToken}`);
+    }
     await app.close();
   });
 
@@ -149,19 +167,21 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
   });
 
   it('a company owner can create a limited-permission employee sub-account, but the sub-account cannot manage other sub-accounts', async () => {
+    const suffix = runSuffix();
     const limitedTemplate = await request(app.getHttpServer())
       .post('/templates')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ name: 'كاشير', allowedScreens: ['dashboard', 'invoice', 'customers'] })
+      .send({ name: `كاشير ${suffix}`, allowedScreens: ['dashboard', 'invoice', 'customers'] })
       .expect(201);
+    createdTemplateIds.push(limitedTemplate.body.id);
 
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const username = `cashier-${suffix}`;
-    await request(app.getHttpServer())
+    const cashier = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${companyAToken}`)
       .send({ name: 'موظف كاشير', username, password: 'CashierPass123!', permissionTemplateId: limitedTemplate.body.id })
       .expect(201);
+    createdCompanyUserIds.push(cashier.body.id);
 
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'CashierPass123!' }).expect(200);
     expect(login.body.user.allowedScreens).toEqual(['dashboard', 'invoice', 'customers']);
@@ -175,19 +195,21 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
   });
 
   it("REGRESSION — a limited-permission-template company user can reach a screen it's allowed but not one it isn't (locks in the @RequiresScreen class-vs-handler reflector fix)", async () => {
+    const suffix = runSuffix();
     const limitedTemplate = await request(app.getHttpServer())
       .post('/templates')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ name: 'محاسب فقط', allowedScreens: ['invoice', 'customers'] })
+      .send({ name: `محاسب فقط ${suffix}`, allowedScreens: ['invoice', 'customers'] })
       .expect(201);
+    createdTemplateIds.push(limitedTemplate.body.id);
 
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const username = `accountant-${suffix}`;
-    await request(app.getHttpServer())
+    const accountant = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${companyAToken}`)
       .send({ name: 'محاسب', username, password: 'AccPass123!', permissionTemplateId: limitedTemplate.body.id })
       .expect(201);
+    createdCompanyUserIds.push(accountant.body.id);
 
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AccPass123!' }).expect(200);
     const token = login.body.accessToken;

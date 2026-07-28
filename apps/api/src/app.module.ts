@@ -4,6 +4,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { BanksModule } from './banks/banks.module';
 import { CompaniesModule } from './companies/companies.module';
+import { CompanyProfileModule } from './company-profile/company-profile.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { TenantPrismaModule } from './common/tenant/tenant-prisma.module';
@@ -54,6 +55,7 @@ import { WarehousesModule } from './warehouses/warehouses.module';
     CompaniesModule,
     CompanyUsersModule,
     ScriptsModule,
+    CompanyProfileModule,
   ],
 })
 export class AppModule {}

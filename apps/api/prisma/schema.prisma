@@ -112,6 +112,28 @@ model Company {
   subStart        DateTime?
   subEnd          DateTime?
 
+  /// "بيانات المنشأة" — the legal/tax identity shown on printed tax invoices
+  /// and required for ZATCA e-invoicing. Deliberately separate from `orgName`
+  /// above, which is the platform-admin-facing subscription/display name.
+  /// All nullable: a brand-new company has none of this filled in yet, and
+  /// businesses under the VAT registration threshold legitimately have no
+  /// vatNumber at all.
+  legalName   String?
+  /// 15 digits, starts and ends with '3' — validated in the DTO, not just
+  /// here, since Postgres has no regex CHECK on this column.
+  vatNumber   String?
+  /// Commercial Registration number, 10 digits — validated in the DTO.
+  crNumber    String?
+  phone       String?
+  email       String?
+  website     String?
+  address     String?
+  /// Deliberately unset by any code path right now — file storage (MinIO,
+  /// already provisioned in docker-compose but unused anywhere yet) isn't
+  /// wired up, so there's no legitimate way to populate this. Column exists
+  /// now so a future upload feature doesn't need its own migration.
+  logoFileKey String?
+
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
 

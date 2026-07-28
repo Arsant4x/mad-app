@@ -4,6 +4,7 @@ import { RoleAwareIndex } from './layout/RoleAwareIndex';
 import { RootShell } from './layout/RootShell';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { BanksPage } from './pages/banks/BanksPage';
+import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
@@ -49,6 +50,7 @@ export default function App() {
                 </ScreenGuard>
               }
             />
+            <Route path="company-profile" element={<CompanyProfilePage />} />
             <Route
               path="company-users"
               element={

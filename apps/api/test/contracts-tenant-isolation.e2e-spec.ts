@@ -95,8 +95,16 @@ describe('Properties/Units/Contracts (e2e)', () => {
     expect(Number(accountsAfter.body.find((a: { code: string }) => a.code === '1000').balance) - cashBefore).toBeCloseTo(1000);
     expect(Number(accountsAfter.body.find((a: { code: string }) => a.code === '4200').balance) - revenueBefore).toBeCloseTo(1000);
 
-    const banks = await request(app.getHttpServer()).get('/banks').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    const bank = banks.body[0];
+    // Create the bank this test needs instead of assuming one already exists:
+    // seed.ts creates no banks at all, and banks-tenant-isolation deletes the
+    // one it makes, so `GET /banks` is legitimately empty on a clean DB.
+    const bank = (
+      await request(app.getHttpServer())
+        .post('/banks')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: `بنك اختبار الإيجار ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, openingBalance: 5000, openingDate: '2026-01-01' })
+        .expect(201)
+    ).body;
     const bankBalanceBefore = Number(bank.balance);
 
     const bankPayment = await request(app.getHttpServer())
