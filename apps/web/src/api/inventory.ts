@@ -27,6 +27,21 @@ export interface StockMovementInput {
   qty: number;
   date: string;
   reason?: string;
+  /** Batch/lot + expiry — used on receiving (IN) perishables. */
+  batchNo?: string;
+  expiryDate?: string;
+}
+
+export interface ExpiringBatch {
+  id: string;
+  productName: string;
+  sku: string | null;
+  warehouseName: string;
+  batchNo: string | null;
+  qty: number;
+  expiryDate: string;
+  daysLeft: number;
+  expired: boolean;
 }
 
 export interface StockLevelRow {
@@ -42,3 +57,5 @@ export const listStockMovements = () => apiClient.get<StockMovement[]>('/invento
 export const createStockMovement = (dto: StockMovementInput) => apiClient.post<StockMovement & { resultingQty: number }>('/inventory/movements', dto).then((r) => r.data);
 export const deleteStockMovement = (id: string) => apiClient.delete(`/inventory/movements/${id}`);
 export const getStockLevels = () => apiClient.get<StockLevelRow[]>('/inventory/stock-levels').then((r) => r.data);
+export const getExpiringStock = (withinDays = 90) =>
+  apiClient.get<ExpiringBatch[]>('/inventory/expiring', { params: { withinDays } }).then((r) => r.data);

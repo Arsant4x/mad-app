@@ -30,6 +30,8 @@ export function StockMovementModal({
   const [qty, setQty] = useState('');
   const [date, setDate] = useState(today());
   const [reason, setReason] = useState('');
+  const [batchNo, setBatchNo] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -53,6 +55,9 @@ export function StockMovementModal({
         qty: qtyNum,
         date,
         reason: reason.trim() || undefined,
+        // Batch/expiry only apply to received stock.
+        batchNo: type === 'IN' ? batchNo.trim() || undefined : undefined,
+        expiryDate: type === 'IN' ? expiryDate || undefined : undefined,
       });
       if (result && result.resultingQty < 0) {
         // Keep the modal open so the user actually sees this — matches the
@@ -135,6 +140,18 @@ export function StockMovementModal({
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
+        {type === 'IN' && (
+          <div className="two-col">
+            <div className="field">
+              <label>رقم التشغيلة (اختياري)</label>
+              <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="Batch / Lot" />
+            </div>
+            <div className="field">
+              <label>تاريخ الانتهاء (اختياري)</label>
+              <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+            </div>
+          </div>
+        )}
         <div className="field">
           <label>السبب / ملاحظات</label>
           <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="استلام من مورد، بيع، جرد دوري..." />

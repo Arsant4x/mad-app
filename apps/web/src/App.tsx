@@ -18,6 +18,7 @@ import { EmployeesPage } from './pages/employees/EmployeesPage';
 import { LeavesPage } from './pages/leaves/LeavesPage';
 import { StockLevelsPage } from './pages/inventory/StockLevelsPage';
 import { StockMovementsPage } from './pages/inventory/StockMovementsPage';
+import { ExpiringStockPage } from './pages/inventory/ExpiringStockPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
 import { JournalPage } from './pages/journal/JournalPage';
 import { LoginPage } from './pages/LoginPage';
@@ -248,6 +249,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="inventory">
                   <StockMovementsPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="expiring"
+              element={
+                <ScreenGuard screen="inventory">
+                  <ExpiringStockPage />
                 </ScreenGuard>
               }
             />

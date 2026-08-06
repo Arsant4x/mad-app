@@ -45,6 +45,7 @@ const NAV_GROUPS: NavGroupDef[] = [
       { screen: 'inventory', to: '/warehouses', labelKey: 'nav_warehouses' },
       { screen: 'inventory', to: '/stock-levels', labelKey: 'nav_stock_levels' },
       { screen: 'inventory', to: '/stock-movements', labelKey: 'nav_stock_movements' },
+      { screen: 'inventory', to: '/expiring', labelKey: 'nav_expiring' },
     ],
   },
   {
