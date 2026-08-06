@@ -65,7 +65,10 @@ export function PropertiesMap({ properties, units }: { properties: Property[]; u
         </p>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* `isolation: isolate` gives the map its own stacking context, so
+          Leaflet's internal z-indexes (panes and controls up to 1000) stay
+          contained here and can't paint over the rest of the page. */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden', isolation: 'isolate' }}>
         <MapContainer center={center} zoom={mapped.length > 0 ? 11 : 6} style={{ height: 460, width: '100%' }} scrollWheelZoom>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

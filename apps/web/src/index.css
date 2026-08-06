@@ -405,7 +405,9 @@ tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  /* Above everything, including a Leaflet map (whose controls sit at z-index
+   * 1000). At the old value of 50 the map showed through an open modal. */
+  z-index: 2000;
   padding: 20px;
 }
 .modal {
@@ -787,7 +789,11 @@ tr:last-child td {
 
 .app-shell {
   display: flex;
-  min-height: 100vh;
+  /* The shell fills the viewport and never scrolls itself — only the content
+   * pane below does. This is what keeps the sidebar fixed in place while a page
+   * scrolls, instead of the whole shell (sidebar included) scrolling away. */
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -800,6 +806,9 @@ tr:last-child td {
   flex-direction: column;
   gap: 12px;
   position: relative;
+  /* Its own scroll, so a long nav on a short screen stays reachable without
+   * moving the content pane. */
+  overflow-y: auto;
 }
 /* The mockup's thin dashed gold accent running down the sidebar's inner edge
  * (.sidebar::after) — a small but very visible detail that was missing
@@ -884,6 +893,11 @@ tr:last-child td {
   flex: 1;
   padding: 24px 30px 60px;
   max-width: 1240px;
+  /* The one scrolling region. `min-height: 0` lets this flex child actually
+   * shrink to the shell's height so its own overflow scrolls, rather than
+   * pushing the shell taller and dragging the sidebar with it. */
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .inline-form {

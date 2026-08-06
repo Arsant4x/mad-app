@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createBranch, deleteBranch, listBranches, updateBranch, type Branch, type BranchInput } from '../../api/branches';
-import { listProperties, type Property } from '../../api/properties';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -15,7 +14,6 @@ export function BranchesPage() {
   const canManage = user?.actorType === 'COMPANY';
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -28,7 +26,7 @@ export function BranchesPage() {
   }
 
   useEffect(() => {
-    Promise.all([reload(), listProperties().then(setProperties), listWarehouses().then(setWarehouses)]).finally(() => setLoading(false));
+    Promise.all([reload(), listWarehouses().then(setWarehouses)]).finally(() => setLoading(false));
   }, []);
 
   const rows = useMemo(() => {
@@ -63,7 +61,6 @@ export function BranchesPage() {
 
   if (loading) return null;
 
-  const propertyName = (id: string | null) => properties.find((p) => p.id === id)?.name ?? '—';
   const warehouseName = (id: string | null) => warehouses.find((w) => w.id === id)?.name ?? '—';
 
   return (
@@ -104,7 +101,6 @@ export function BranchesPage() {
                 <th>اسم الفرع</th>
                 <th>النوع</th>
                 <th>النشاط</th>
-                <th>العقار المرتبط</th>
                 <th>المستودع الافتراضي</th>
                 <th>ساعات العمل</th>
                 {canManage && <th></th>}
@@ -116,7 +112,6 @@ export function BranchesPage() {
                   <td>{b.name}</td>
                   <td>{b.type ?? '—'}</td>
                   <td>{b.activity?.name ?? '—'}</td>
-                  <td>{propertyName(b.propertyId)}</td>
                   <td>{warehouseName(b.warehouseId)}</td>
                   <td>{b.hours ?? '—'}</td>
                   {canManage && (
@@ -139,7 +134,6 @@ export function BranchesPage() {
       {modal && (
         <BranchModal
           editing={modal.mode === 'edit' ? modal.branch : null}
-          properties={properties}
           warehouses={warehouses}
           onCancel={() => setModal(null)}
           onSave={handleSave}
