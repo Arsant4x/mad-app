@@ -1,27 +1,21 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthContext';
+import { SubscriptionPage } from '../pages/subscription/SubscriptionPage';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, bootLoading } = useAuth();
-  const { t } = useTranslation();
 
   if (bootLoading) return null;
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.status === 'FROZEN') {
-    return (
-      <div className="status-screen">
-        <h1>{t('account_frozen_title')}</h1>
-        <p>{t('account_frozen_body')}</p>
-      </div>
-    );
-  }
+  // STOPPED: full lock-out except self-service renewal. Land them on the renew
+  // gate so they can reactivate from inside the platform (owner's rule) rather
+  // than being bounced to a dead login page.
+  if (user.status === 'STOPPED') return <SubscriptionPage standalone />;
 
-  if (user.status === 'STOPPED') {
-    return <Navigate to="/login" replace />;
-  }
-
+  // FROZEN is the read-only grace period: let them into the app so they can view
+  // and export. Writes are refused by the server, and AppShell shows a renew
+  // banner. (Previously this was a dead-end "contact the operator" screen.)
   return <>{children}</>;
 }

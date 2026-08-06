@@ -151,9 +151,14 @@ export function AppShell() {
               {t('nav_company_profile')}
             </NavLink>
             {user?.actorType === 'COMPANY' && (
-              <NavLink to="/company-users" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                {t('nav_company_users')}
-              </NavLink>
+              <>
+                <NavLink to="/subscription" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                  {t('nav_subscription')}
+                </NavLink>
+                <NavLink to="/company-users" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                  {t('nav_company_users')}
+                </NavLink>
+              </>
             )}
           </div>
         </nav>
@@ -162,6 +167,29 @@ export function AppShell() {
         </button>
       </aside>
       <main className="main-content">
+        {user?.status === 'FROZEN' && (
+          <div
+            style={{
+              background: '#fdecea',
+              color: '#8a1c13',
+              border: '1px solid #f3b6ae',
+              borderRadius: 8,
+              padding: '10px 14px',
+              marginBottom: 14,
+              fontSize: 13,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>انتهى اشتراكك — أنت في فترة سماح للاطلاع والتصدير فقط. لا يمكن الإضافة أو التعديل أو الحذف حتى التجديد.</span>
+            <NavLink to="/subscription" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              جدّد الآن
+            </NavLink>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
