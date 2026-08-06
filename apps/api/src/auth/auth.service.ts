@@ -167,7 +167,10 @@ export class AuthService {
       if (evaluated.status !== company.status || evaluated.frozenAt?.getTime() !== company.frozenAt?.getTime()) {
         await this.prisma.company.update({ where: { id: company.id }, data: { status: evaluated.status, frozenAt: evaluated.frozenAt } });
       }
-      if (evaluated.status === 'STOPPED') throw new AccountStoppedException();
+      // Deliberately NO STOPPED block here anymore: a stopped company must be
+      // able to log in **to renew from inside the platform** (owner's rule — no
+      // contacting the provider). The TenantGuard keeps a stopped tenant locked
+      // to subscription self-service only; every other endpoint still 403s.
 
       payload = { sub: identity.id, actorType: 'COMPANY', companyId: company.id, profileId: company.id, username: identity.username };
       user = {

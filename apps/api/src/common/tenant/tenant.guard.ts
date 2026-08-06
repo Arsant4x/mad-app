@@ -6,6 +6,7 @@ import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
 import { AccountFrozenException, AccountStoppedException, ScreenForbiddenException } from './tenant.exceptions';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
+import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
 import { MSG } from '../i18n/messages';
 
 /**
@@ -42,8 +43,20 @@ export class TenantGuard implements CanActivate {
       });
     }
 
-    if (evaluated.status === 'STOPPED') throw new AccountStoppedException();
-    if (evaluated.status === 'FROZEN') throw new AccountFrozenException();
+    // Subscription self-service (view + renew/pay) is the one thing a lapsed
+    // tenant may always reach, so it can reactivate from inside the platform.
+    const subscriptionSelfService = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_INACTIVE_KEY, [context.getHandler(), context.getClass()]);
+
+    // STOPPED is a full lock-out — except subscription self-service.
+    if (evaluated.status === 'STOPPED' && !subscriptionSelfService) throw new AccountStoppedException();
+    // FROZEN is the post-expiry grace period: the tenant may still read and
+    // export its own data, but not add/edit/delete anything (owner's rule). So
+    // only mutating methods are blocked; GET/HEAD and renewal pass through.
+    if (evaluated.status === 'FROZEN') {
+      const method = req.method.toUpperCase();
+      const isRead = method === 'GET' || method === 'HEAD';
+      if (!isRead && !subscriptionSelfService) throw new AccountFrozenException();
+    }
 
     let allowedScreens: string[] | 'all' = company.permissionTemplate.isAllScreens ? 'all' : company.permissionTemplate.allowedScreens;
     // The company owner always sees every branch, including the consolidated

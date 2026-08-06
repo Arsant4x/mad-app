@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Company } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
@@ -8,6 +8,22 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 const COMPANY_INCLUDE = { permissionTemplate: true } as const;
+
+/**
+ * Subscription start is anchored to the **actual** activation day and never
+ * accepts an earlier date (owner's rule): a backdated start would grant a
+ * shorter or already-lapsed subscription and muddy every grace-period
+ * calculation. A missing value means "activate now"; a future value (scheduled
+ * start) is allowed, an earlier one is refused.
+ */
+function resolveSubStart(dtoSubStart?: string): Date {
+  if (!dtoSubStart) return new Date();
+  const requested = new Date(dtoSubStart);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  if (requested < startOfToday) throw new BadRequestException(MSG.sub_start_no_backdate);
+  return requested;
+}
 
 @Injectable()
 export class CompaniesService {
@@ -54,7 +70,7 @@ export class CompaniesService {
           create: {
             orgName: dto.orgName,
             permissionTemplateId: dto.permissionTemplateId,
-            subStart: dto.subStart ? new Date(dto.subStart) : undefined,
+            subStart: resolveSubStart(dto.subStart),
             subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
           },
         },
@@ -96,7 +112,8 @@ export class CompaniesService {
       data: {
         orgName: dto.orgName,
         permissionTemplateId: dto.permissionTemplateId,
-        subStart: dto.subStart ? new Date(dto.subStart) : undefined,
+        // subStart is intentionally not editable — it is fixed to the actual
+        // activation day (owner's rule). Renewal moves subEnd, never subStart.
         subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
         ...(reactivate ? { status: 'ACTIVE', frozenAt: null } : {}),
       },
