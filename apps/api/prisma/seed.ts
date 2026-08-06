@@ -63,15 +63,30 @@ async function main() {
   // postPurchaseEntry/postRentPaymentEntry's soft-skip).
   const LEDGER_ACCOUNTS = [
     { code: '1200', name: 'الذمم المدينة', type: 'asset', openingBalance: 0 },
-    { code: '2100', name: 'الذمم الدائنة', type: 'liability', openingBalance: 0 },
+    // Key money the company *paid* to take over a leased location: an asset (the
+  // right to occupy the site), not an expense of the month it was paid in.
+  { code: '1600', name: 'تقبيل وحقوق انتفاع', type: 'asset', openingBalance: 0 },
+  { code: '2100', name: 'الذمم الدائنة', type: 'liability', openingBalance: 0 },
     { code: '2200', name: 'ضريبة القيمة المضافة المستحقة', type: 'liability', openingBalance: 0 },
+  // Tenant deposits are money held on someone else's behalf — a liability
+  // until it is refunded or converted into income at settlement.
+  { code: '2300', name: 'تأمينات المستأجرين', type: 'liability', openingBalance: 0 },
     { code: '4100', name: 'إيرادات المبيعات', type: 'revenue', openingBalance: 0 },
     { code: '4200', name: 'إيرادات الإيجار', type: 'revenue', openingBalance: 0 },
+  // Where a forfeited deposit lands: it is not rent, so it must not inflate
+  // rental revenue.
+  { code: '4300', name: 'إيرادات أخرى', type: 'revenue', openingBalance: 0 },
     { code: '5100', name: 'تكلفة المبيعات', type: 'expense', openingBalance: 0 },
     { code: '5200', name: 'الرواتب والأجور', type: 'expense', openingBalance: 0 },
     { code: '5300', name: 'مصروفات إدارية وعمومية', type: 'expense', openingBalance: 0 },
     { code: '5400', name: 'مصروفات أخرى', type: 'expense', openingBalance: 0 },
     { code: '5500', name: 'مصروفات تأسيس', type: 'expense', openingBalance: 0 },
+    // 5600, not 5500: the multi-currency spec originally named 5500 for this,
+    // but that code was already taken by مصروفات تأسيس above.
+    { code: '5600', name: 'فروق عملة (ربح/خسارة)', type: 'expense', openingBalance: 0 },
+  // Kept out of 5300 (general admin) so a landlord can see what the buildings
+  // themselves cost to keep running.
+  { code: '5700', name: 'مصروفات صيانة', type: 'expense', openingBalance: 0 },
   ];
   await seedAccounts(companyA.id, [
     { code: '1000', name: 'النقدية', type: 'asset', openingBalance: 50000 },
@@ -79,6 +94,12 @@ async function main() {
     ...LEDGER_ACCOUNTS,
   ]);
   await seedAccounts(companyB.id, [{ code: '1000', name: 'الصندوق', type: 'asset', openingBalance: 8000 }, ...LEDGER_ACCOUNTS]);
+
+  // Every company gets one activity and its base currency up front, so the
+  // rest of the app can assume both exist without null-checking. There's no
+  // activity-management screen yet by design — see BusinessActivity's comment.
+  await seedActivityAndCurrency(companyA.id, 'النشاط الرئيسي', 'عقارات');
+  await seedActivityAndCurrency(companyB.id, 'النشاط الرئيسي', 'عقارات');
 
   await seedCustomers(companyA.id, [
     { name: 'شركة أفق العقارية', vatNumber: '300012345600003', phone: '0555000111' },
@@ -138,6 +159,26 @@ async function seedAccounts(companyId: string, accounts: { code: string; name: s
         create: { companyId, code: a.code, name: a.name, type: a.type, openingBalance: a.openingBalance, balance: a.openingBalance },
       });
     }
+  });
+}
+
+/** Seeds the company's default business activity and its base currency.
+ * Same `set_config` requirement as seedAccounts — both tables are RLS-scoped.
+ * Idempotent via upsert on the natural keys, so re-running is safe. */
+async function seedActivityAndCurrency(companyId: string, activityName: string, activityType: string) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+
+    const existingActivity = await tx.businessActivity.findFirst({ where: { companyId, name: activityName } });
+    if (!existingActivity) {
+      await tx.businessActivity.create({ data: { companyId, name: activityName, activityType } });
+    }
+
+    await tx.currency.upsert({
+      where: { companyId_code: { companyId, code: 'SAR' } },
+      update: {},
+      create: { companyId, code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', isBase: true, rate: 1 },
+    });
   });
 }
 

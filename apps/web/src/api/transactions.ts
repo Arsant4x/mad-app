@@ -3,6 +3,7 @@ import { apiClient } from './client';
 
 export interface BankTx {
   id: string;
+  branchId: string | null;
   bankId: string;
   bank: Bank;
   date: string;
@@ -15,6 +16,8 @@ export interface BankTx {
 
 export interface TransactionInput {
   bankId: string;
+  /** Omit for a company-wide record. */
+  branchId?: string;
   date: string;
   description: string;
   amount: number;

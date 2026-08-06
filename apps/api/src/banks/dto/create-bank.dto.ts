@@ -1,6 +1,7 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
-export class CreateBankDto {
+export class CreateBankDto extends CurrencyFieldsDto {
   @IsString()
   @IsNotEmpty()
   name!: string;

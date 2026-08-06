@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { expireStaleReservations } from '../reservations/reservations.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved';
 
@@ -18,7 +19,7 @@ export class UnitsService {
   create(companyId: string, dto: CreateUnitDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const property = await tx.property.findUnique({ where: { id: dto.propertyId } });
-      if (!property) throw new NotFoundException('العقار غير موجود');
+      if (!property) throw new NotFoundException(MSG.property_not_found);
 
       try {
         return await tx.unit.create({
@@ -34,7 +35,7 @@ export class UnitsService {
         });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          throw new ConflictException(`رقم الوحدة "${dto.unitNo}" مستخدَم بالفعل في هذا العقار`);
+          throw new ConflictException(formatMessage(MSG.unit_number_taken, { unitNo: dto.unitNo }));
         }
         throw e;
       }
@@ -44,7 +45,7 @@ export class UnitsService {
   update(companyId: string, id: string, dto: UpdateUnitDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.unit.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الوحدة غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.unit_not_found);
 
       const data: Prisma.UnitUncheckedUpdateInput = {};
       if (dto.floor !== undefined) data.floor = dto.floor;
@@ -60,7 +61,7 @@ export class UnitsService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.unit.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الوحدة غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.unit_not_found);
       try {
         await tx.unit.delete({ where: { id } });
       } catch (e) {
@@ -68,7 +69,7 @@ export class UnitsService {
         // RESTRICT, so this fires when the unit still has any contracts
         // (current or historical).
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException('لا يمكن حذف وحدة مرتبطة بعقود — احذف عقودها أولاً');
+          throw new ConflictException(MSG.unit_has_contracts);
         }
         throw e;
       }

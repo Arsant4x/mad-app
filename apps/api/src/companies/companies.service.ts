@@ -5,6 +5,7 @@ import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 const COMPANY_INCLUDE = { permissionTemplate: true } as const;
 
@@ -26,19 +27,23 @@ export class CompaniesService {
     if (evaluated.status === company.status && evaluated.frozenAt?.getTime() === company.frozenAt?.getTime()) {
       return company;
     }
+    // The update returns the same row with the same include, so it is a `T` —
+    // but TypeScript can't prove that for an open generic, and the assertion
+    // has to go through `unknown` now that Company carries enough fields for
+    // the two shapes to no longer overlap structurally on their own.
     return this.prisma.company.update({
       where: { id: company.id },
       data: { status: evaluated.status, frozenAt: evaluated.frozenAt },
       include: COMPANY_INCLUDE,
-    }) as Promise<T>;
+    }) as unknown as Promise<T>;
   }
 
   async create(dto: CreateCompanyDto) {
     const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-    if (!template) throw new NotFoundException('قالب الصلاحيات غير موجود');
+    if (!template) throw new NotFoundException(MSG.template_not_found);
 
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-    if (existing) throw new ConflictException(`اسم المستخدم "${dto.username}" مستخدَم بالفعل`);
+    if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
 
     const identity = await this.prisma.loginIdentity.create({
       data: {
@@ -62,16 +67,16 @@ export class CompaniesService {
 
   async update(id: string, dto: UpdateCompanyDto) {
     const existing = await this.prisma.company.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('الشركة غير موجودة');
+    if (!existing) throw new NotFoundException(MSG.company_not_found);
 
     if (dto.permissionTemplateId) {
       const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-      if (!template) throw new NotFoundException('قالب الصلاحيات غير موجود');
+      if (!template) throw new NotFoundException(MSG.template_not_found);
     }
 
     if (dto.username) {
       const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(`اسم المستخدم "${dto.username}" مستخدَم بالفعل`);
+      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
       await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
     }
     if (dto.password) {
@@ -101,7 +106,7 @@ export class CompaniesService {
 
   async remove(id: string): Promise<void> {
     const existing = await this.prisma.company.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('الشركة غير موجودة');
+    if (!existing) throw new NotFoundException(MSG.company_not_found);
     // Cascades through every business table via Company's onDelete: Cascade
     // relations — deleting a company wipes all of its data, matching the
     // mockup's deleteUserAccount (no confirmation short-circuit server-side;

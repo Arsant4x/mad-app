@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { createProperty, deleteProperty, listProperties, updateProperty, type Property, type PropertyInput } from '../../api/properties';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
+import { listUnits, type Unit } from '../../api/units';
+import { PropertiesMap } from './PropertiesMap';
 import { PropertyModal } from './PropertyModal';
+import i18n from '../../i18n';
 
 const ACTIVITY_LABEL: Record<string, string> = {
   residential: 'سكني',
@@ -17,6 +20,9 @@ const OWNERSHIP_LABEL: Record<string, string> = { owned: 'ملك', leased: 'إي
 
 export function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
+  // Units drive the map pin colours, so they are fetched alongside.
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [view, setView] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; property: Property } | null>(null);
@@ -24,7 +30,9 @@ export function PropertiesPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    setProperties(await listProperties());
+    const [props, us] = await Promise.all([listProperties(), listUnits()]);
+    setProperties(props);
+    setUnits(us);
   }
 
   useEffect(() => {
@@ -56,7 +64,7 @@ export function PropertiesPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف العقار');
+      setDeleteError(message ?? i18n.t('err_property_delete'));
     }
   }
 
@@ -84,8 +92,21 @@ export function PropertiesPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <div className="chip-group">
+          <button className={view === 'list' ? 'chip active' : 'chip'} onClick={() => setView('list')}>
+            قائمة
+          </button>
+          <button className={view === 'map' ? 'chip active' : 'chip'} onClick={() => setView('map')}>
+            خريطة
+          </button>
+        </div>
       </div>
 
+      {/* The map shows the *filtered* set, so searching narrows both views the
+          same way rather than one silently ignoring the query. */}
+      {view === 'map' && <PropertiesMap properties={rows} units={units} />}
+
+      {view === 'list' && (
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead>
@@ -127,6 +148,7 @@ export function PropertiesPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {modal && <PropertyModal editing={modal.mode === 'edit' ? modal.property : null} onCancel={() => setModal(null)} onSave={handleSave} />}
 

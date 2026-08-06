@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type { Unit } from './units';
 
-export type ContractStatus = 'DRAFT' | 'DUE' | 'LATE' | 'CANCELLED';
+export type ContractStatus = 'DRAFT' | 'UPCOMING' | 'DUE' | 'LATE' | 'CANCELLED';
 export type ContractCycle = 'monthly' | 'quarterly' | 'semiannual' | 'annual';
 export type Furnished = 'unfurnished' | 'furnished' | 'partial';
 export type InstallmentStatus = 'DUE' | 'LATE' | 'PAID' | 'CANCELLED';
@@ -47,8 +47,157 @@ export interface Contract {
   status: ContractStatus;
   cancelDate: string | null;
   cancelReason: string | null;
+  /** What the tenant owes for terminating early — compensation, posted to other
+   * income rather than rent. Null when the parties agreed on nothing. */
+  settlementAmount: string | null;
+  settlementEntryId: string | null;
+  /** The contract this one renews, if any — set on the renewal, not the source. */
+  renewedFromId: string | null;
   installments: Installment[];
   payments: RentPayment[];
+  deposits: ContractDeposit[];
+  claims: ContractClaim[];
+  keyMoney: ContractKeyMoney[];
+  handovers: ContractHandover[];
+}
+
+export type HandoverType = 'DELIVERY' | 'RECEIPT';
+export type HandoverStatus = 'DRAFT' | 'SIGNED';
+export type ItemCondition = 'GOOD' | 'FAIR' | 'DAMAGED' | 'MISSING';
+
+export interface HandoverItem {
+  id: string;
+  label: string;
+  condition: ItemCondition;
+  note: string | null;
+}
+
+export interface ContractHandover {
+  id: string;
+  type: HandoverType;
+  status: HandoverStatus;
+  date: string;
+  electricityMeter: string | null;
+  waterMeter: string | null;
+  notes: string | null;
+  /** Server-stamped at signing — never supplied by the client. */
+  signedAt: string | null;
+  signedBy: string | null;
+  items: HandoverItem[];
+}
+
+export interface HandoverItemInput {
+  label: string;
+  condition: ItemCondition;
+  note?: string;
+}
+
+export interface CreateHandoverInput {
+  type: HandoverType;
+  date: string;
+  electricityMeter?: string;
+  waterMeter?: string;
+  notes?: string;
+  items: HandoverItemInput[];
+}
+
+export interface UpdateHandoverInput {
+  date?: string;
+  electricityMeter?: string;
+  waterMeter?: string;
+  notes?: string;
+  /** Replaces the list wholesale. */
+  items?: HandoverItemInput[];
+}
+
+/** Which way the key money went — it decides the accounting, not just the
+ * label: received is income, paid is an asset the company bought. */
+export type KeyMoneyDirection = 'RECEIVED' | 'PAID';
+
+export interface ContractKeyMoney {
+  id: string;
+  direction: KeyMoneyDirection;
+  amount: string;
+  note: string | null;
+  currency: string;
+  paidAt: string;
+  journalEntryId: string | null;
+}
+
+export interface RecordKeyMoneyInput {
+  direction: KeyMoneyDirection;
+  amount: number;
+  paidAt: string;
+  note?: string;
+}
+
+export type ClaimKind = 'MAINTENANCE' | 'UTILITIES' | 'LATE_FEE' | 'DAMAGE' | 'OTHER';
+export type ClaimStatus = 'OPEN' | 'PAID' | 'WAIVED';
+
+export interface ContractClaim {
+  id: string;
+  kind: ClaimKind;
+  amount: string;
+  description: string;
+  currency: string;
+  issuedAt: string;
+  status: ClaimStatus;
+  settledAt: string | null;
+  waiveReason: string | null;
+  journalEntryId: string | null;
+  settlementEntryId: string | null;
+}
+
+export interface CreateClaimInput {
+  kind: ClaimKind;
+  amount: number;
+  description: string;
+  issuedAt: string;
+}
+
+export type DepositType = 'RENT' | 'FACILITY';
+/** Who is holding the money. EJAR means the platform blocked it and the
+ * company never received it — nothing is posted to the ledger. */
+export type DepositHolder = 'COMPANY' | 'EJAR';
+export type DepositStatus = 'HELD' | 'SETTLED';
+export type DeductionKind = 'UNPAID_RENT' | 'DAMAGE' | 'UTILITIES' | 'CLEANING' | 'OTHER';
+
+export interface DepositDeduction {
+  id: string;
+  kind: DeductionKind;
+  amount: string;
+  reason: string;
+}
+
+export interface ContractDeposit {
+  id: string;
+  type: DepositType;
+  holder: DepositHolder;
+  amount: string;
+  currency: string;
+  receivedAt: string;
+  status: DepositStatus;
+  settledAt: string | null;
+  refundAmount: string | null;
+  note: string | null;
+  /** Null for an Ejar-held deposit, and for a company deposit recorded before
+   * the ledger accounts existed. */
+  journalEntryId: string | null;
+  settlementEntryId: string | null;
+  deductions: DepositDeduction[];
+}
+
+export interface RecordDepositInput {
+  type: DepositType;
+  holder?: DepositHolder;
+  amount: number;
+  receivedAt: string;
+  note?: string;
+}
+
+export interface SettleDepositInput {
+  settledAt: string;
+  deductions: { kind: DeductionKind; amount: number; reason: string }[];
 }
 
 export interface CreateContractInput {
@@ -74,10 +223,17 @@ export interface UpdateContractInput {
   ejarNo?: string;
 }
 
+/** How the early-termination settlement is worked out. The last two are
+ * conveniences that compute an amount from the remaining installments. */
+export type SettlementBasis = 'none' | 'amount' | 'installments' | 'all';
+
 export interface CancelContractInput {
   cancelDate: string;
   cancelReason: string;
   installmentDisposition: 'keep' | 'cancel';
+  settlementBasis?: SettlementBasis;
+  settlementAmount?: number;
+  settlementInstallments?: number;
 }
 
 export interface RecordPaymentInput {
@@ -96,3 +252,45 @@ export const createContract = (dto: CreateContractInput) => apiClient.post<Contr
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);
 export const cancelContract = (id: string, dto: CancelContractInput) => apiClient.post<Contract>(`/contracts/${id}/cancel`, dto).then((r) => r.data);
 export const recordPayment = (contractId: string, dto: RecordPaymentInput) => apiClient.post<RentPayment>(`/contracts/${contractId}/payments`, dto).then((r) => r.data);
+export interface RenewContractInput {
+  start: string;
+  end: string;
+  value?: number;
+  cycle?: ContractCycle;
+  /** Overrides the server's own numbering, for externally-issued references. */
+  no?: string;
+  ejarNo?: string;
+  /** Defaults to true server-side: a held deposit moves to the new lease. */
+  carryDeposits?: boolean;
+}
+
+export const renewContract = (id: string, dto: RenewContractInput) =>
+  apiClient.post<Contract>(`/contracts/${id}/renew`, dto).then((r) => r.data);
+
+export const createHandover = (contractId: string, dto: CreateHandoverInput) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/handovers`, dto).then((r) => r.data);
+export const updateHandover = (contractId: string, handoverId: string, dto: UpdateHandoverInput) =>
+  apiClient.patch<Contract>(`/contracts/${contractId}/handovers/${handoverId}`, dto).then((r) => r.data);
+/** Takes no timestamp: the server stamps the signing time, which is what makes
+ * it worth anything in a dispute. */
+export const signHandover = (contractId: string, handoverId: string, signedBy: string) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/handovers/${handoverId}/sign`, { signedBy }).then((r) => r.data);
+export const deleteHandover = (contractId: string, handoverId: string) =>
+  apiClient.delete<Contract>(`/contracts/${contractId}/handovers/${handoverId}`).then((r) => r.data);
+
+export const recordKeyMoney = (contractId: string, dto: RecordKeyMoneyInput) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/key-money`, dto).then((r) => r.data);
+
+export const createClaim = (contractId: string, dto: CreateClaimInput) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/claims`, dto).then((r) => r.data);
+export const payClaim = (contractId: string, claimId: string, paidAt: string) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/claims/${claimId}/pay`, { paidAt }).then((r) => r.data);
+export const waiveClaim = (contractId: string, claimId: string, dto: { waivedAt: string; reason: string }) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/claims/${claimId}/waive`, dto).then((r) => r.data);
+
+/** Renewal, the claim calls and both deposit calls return the whole contract,
+ * so the screen refreshes from one response instead of refetching. */
+export const recordDeposit = (contractId: string, dto: RecordDepositInput) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/deposits`, dto).then((r) => r.data);
+export const settleDeposit = (contractId: string, depositId: string, dto: SettleDepositInput) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/deposits/${depositId}/settle`, dto).then((r) => r.data);

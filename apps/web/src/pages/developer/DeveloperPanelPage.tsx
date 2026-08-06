@@ -6,6 +6,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt } from '../../lib/format';
 import { CompanyModal } from './CompanyModal';
 import { TemplateModal } from './TemplateModal';
+import i18n from '../../i18n';
 
 const STATUS_META: Record<Company['status'], { label: string; badgeClass: string }> = {
   ACTIVE: { label: 'نشط', badgeClass: 'paid' },
@@ -78,7 +79,7 @@ export function DeveloperPanelPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف الحساب');
+      setDeleteError(message ?? i18n.t('err_account_delete'));
     }
   }
 
@@ -91,7 +92,7 @@ export function DeveloperPanelPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف النموذج');
+      setDeleteError(message ?? i18n.t('err_template_delete'));
     }
   }
 

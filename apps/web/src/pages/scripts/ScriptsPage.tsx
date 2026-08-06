@@ -3,6 +3,7 @@ import { createScript, deleteScript, listScripts, updateScript, type MessageScri
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { ScriptModal } from './ScriptModal';
+import i18n from '../../i18n';
 
 const AUDIENCE_META: Record<ScriptAudience, { label: string; tagClass: string }> = {
   TENANT: { label: 'مستأجرون', tagClass: 'type-asset' },
@@ -55,7 +56,7 @@ export function ScriptsPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف القالب');
+      setDeleteError(message ?? i18n.t('err_script_delete'));
     }
   }
 

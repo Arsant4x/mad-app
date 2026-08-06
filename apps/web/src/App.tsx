@@ -4,10 +4,16 @@ import { RoleAwareIndex } from './layout/RoleAwareIndex';
 import { RootShell } from './layout/RootShell';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { BanksPage } from './pages/banks/BanksPage';
+import { BranchesPage } from './pages/branches/BranchesPage';
+import { SettingsPage } from './pages/settings/SettingsPage';
 import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
+import { MaintenancePage } from './pages/maintenance/MaintenancePage';
+import { NotificationsPage } from './pages/notifications/NotificationsPage';
+import { RemindersPage } from './pages/reminders/RemindersPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
+import { FiscalPage } from './pages/fiscal/FiscalPage';
 import { EmployeesPage } from './pages/employees/EmployeesPage';
 import { StockLevelsPage } from './pages/inventory/StockLevelsPage';
 import { StockMovementsPage } from './pages/inventory/StockMovementsPage';
@@ -68,6 +74,35 @@ export default function App() {
               }
             />
             <Route
+              path="branches"
+              element={
+                <ScreenGuard screen="branches">
+                  <BranchesPage />
+                </ScreenGuard>
+              }
+
+            />
+
+            <Route
+              path="settings"
+              element={
+                <ScreenGuard screen="settings">
+                  <SettingsPage />
+                </ScreenGuard>
+              }
+            />
+
+            <Route
+              path="fiscal"
+              element={
+                <ScreenGuard screen="fiscal">
+                  <FiscalPage />
+                </ScreenGuard>
+              }
+
+            />
+
+            <Route
               path="journal"
               element={
                 <ScreenGuard screen="journal">
@@ -96,6 +131,26 @@ export default function App() {
               element={
                 <ScreenGuard screen="contracts">
                   <ContractsPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="reminders"
+              element={
+                <ScreenGuard screen="contracts">
+                  <RemindersPage />
+                </ScreenGuard>
+              }
+            />
+            {/* No ScreenGuard, matching the backend: notifications are already
+                filtered to their recipient, so a second gate would only hide a
+                manager's own escalations from them. */}
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route
+              path="maintenance"
+              element={
+                <ScreenGuard screen="maintenance">
+                  <MaintenancePage />
                 </ScreenGuard>
               }
             />

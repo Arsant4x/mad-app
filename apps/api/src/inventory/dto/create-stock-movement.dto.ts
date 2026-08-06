@@ -1,8 +1,9 @@
+import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export const STOCK_MOVEMENT_TYPES = ['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT'] as const;
 
-export class CreateStockMovementDto {
+export class CreateStockMovementDto extends BranchFieldDto {
   @IsString()
   @IsNotEmpty()
   productId!: string;

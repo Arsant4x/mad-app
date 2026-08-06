@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
+import { MSG } from '../common/i18n/messages';
 
 @Injectable()
 export class PropertiesService {
@@ -40,7 +41,7 @@ export class PropertiesService {
   update(companyId: string, id: string, dto: UpdatePropertyDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.property.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('العقار غير موجود');
+      if (!existing) throw new NotFoundException(MSG.property_not_found);
 
       const data: Prisma.PropertyUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -65,14 +66,14 @@ export class PropertiesService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.property.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('العقار غير موجود');
+      if (!existing) throw new NotFoundException(MSG.property_not_found);
       try {
         await tx.property.delete({ where: { id } });
       } catch (e) {
         // P2003 = foreign key violation — units.propertyId is ON DELETE
         // RESTRICT, so this fires when the property still has units.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException('لا يمكن حذف عقار له وحدات — احذف وحداته أولاً');
+          throw new ConflictException(MSG.property_has_units);
         }
         throw e;
       }

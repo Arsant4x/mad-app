@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { MSG } from '../common/i18n/messages';
 
 /** Matches the original mockup's genBarcode(): a 12-digit, EAN-13-shaped
  * numeric string derived from the current timestamp. Not guaranteed globally
@@ -42,7 +43,7 @@ export class ProductsService {
   update(companyId: string, id: string, dto: UpdateProductDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.product.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('المنتج غير موجود');
+      if (!existing) throw new NotFoundException(MSG.product_not_found);
 
       const data: Prisma.ProductUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -61,7 +62,7 @@ export class ProductsService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.product.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('المنتج غير موجود');
+      if (!existing) throw new NotFoundException(MSG.product_not_found);
       await tx.product.delete({ where: { id } });
     });
   }

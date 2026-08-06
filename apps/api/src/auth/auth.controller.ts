@@ -5,6 +5,7 @@ import { AuthService, AuthUserView } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtPayload } from './types';
+import { MSG } from '../common/i18n/messages';
 
 const REFRESH_COOKIE = 'refresh_token';
 
@@ -27,7 +28,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {
     const presented = req.cookies?.[REFRESH_COOKIE];
-    if (!presented) throw new UnauthorizedException('لا توجد جلسة');
+    if (!presented) throw new UnauthorizedException(MSG.session_missing);
     const result = await this.authService.refresh(presented);
     this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken, user: result.user };

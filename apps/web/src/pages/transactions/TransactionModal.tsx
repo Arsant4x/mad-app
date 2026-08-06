@@ -1,16 +1,21 @@
 import { useState } from 'react';
+import type { Branch } from '../../api/branches';
+import { BranchPicker } from '../../components/BranchPicker';
 import type { Bank } from '../../api/banks';
 import type { BankTx, TransactionInput } from '../../api/transactions';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 export function TransactionModal({
   banks,
   editing,
+  branches,
   onCancel,
   onSave,
 }: {
   banks: Bank[];
   editing: BankTx | null;
+  branches: Branch[];
   onCancel: () => void;
   onSave: (data: TransactionInput) => Promise<void>;
 }) {
@@ -19,6 +24,7 @@ export function TransactionModal({
   const [amount, setAmount] = useState(editing?.amount ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [source, setSource] = useState(editing?.source ?? '');
+  const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,14 +32,21 @@ export function TransactionModal({
     setError(null);
     const amountNum = parseFloat(String(amount));
     if (!description.trim() || !amountNum) {
-      setError('الرجاء إدخال البيان والمبلغ');
+      setError(i18n.t('err_transaction_fields'));
       return;
     }
     setSaving(true);
     try {
-      await onSave({ bankId, date, description: description.trim(), amount: amountNum, source: source.trim() || undefined });
+      await onSave({
+        bankId,
+        date,
+        description: description.trim(),
+        amount: amountNum,
+        source: source.trim() || undefined,
+        branchId: branchId || undefined,
+      });
     } catch {
-      setError('تعذّر حفظ الحركة البنكية');
+      setError(i18n.t('err_transaction_save'));
     } finally {
       setSaving(false);
     }
@@ -76,6 +89,7 @@ export function TransactionModal({
           <label>المصدر</label>
           <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="مبيعات / دفعة مقدمة..." />
         </div>
+        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

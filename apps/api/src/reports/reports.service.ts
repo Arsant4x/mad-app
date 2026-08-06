@@ -19,9 +19,257 @@ const CASH_FLOW_ACCOUNTS = [
   { code: '1400', name: 'الأصول الثابتة' },
 ];
 
+/** Dates are compared day-to-day, so the time part is stripped: an installment
+ * due today must not count as late because the clock says 14:00. */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+interface InstallmentForCollection {
+  status: string;
+  dueDate: Date;
+  amount: Prisma.Decimal;
+  payments: { date: Date }[];
+}
+
+/**
+ * On-time collection: of the rent that has actually fallen due, how much was
+ * paid by its due date.
+ *
+ * Two deliberate exclusions. **Not-yet-due installments** are left out — a
+ * landlord who has just issued next year's schedule is not at 8% collection.
+ * **Cancelled ones** too: they were never owed.
+ *
+ * "On time" is judged by the *earliest* payment against the installment, since
+ * a tenant who paid on the due date and topped up later still paid on time.
+ */
+function collectionRate(installments: InstallmentForCollection[], today: Date) {
+  const due = installments.filter((i) => i.status !== 'CANCELLED' && startOfDay(i.dueDate) <= today);
+
+  let dueAmount = 0;
+  let paidAmount = 0;
+  let onTimeAmount = 0;
+  let lateCount = 0;
+
+  for (const i of due) {
+    const amount = Number(i.amount);
+    dueAmount += amount;
+    if (i.status !== 'PAID') {
+      lateCount += 1;
+      continue;
+    }
+
+    paidAmount += amount;
+    const firstPayment = i.payments.reduce<Date | null>((min, p) => (min === null || p.date < min ? p.date : min), null);
+    if (firstPayment && startOfDay(firstPayment) <= startOfDay(i.dueDate)) onTimeAmount += amount;
+  }
+
+  const pct = (part: number) => (dueAmount === 0 ? 0 : Math.round((part / dueAmount) * 1000) / 10);
+
+  return {
+    dueAmount: Math.round(dueAmount * 100) / 100,
+    paidAmount: Math.round(paidAmount * 100) / 100,
+    onTimeAmount: Math.round(onTimeAmount * 100) / 100,
+    collectedRate: pct(paidAmount),
+    onTimeRate: pct(onTimeAmount),
+    /** Installments due and still unpaid — the follow-up list's length. */
+    overdueCount: lateCount,
+  };
+}
+
+/** Contracts ending within 30/60/90 days — the renewal pipeline. Buckets are
+ * cumulative windows, so a lease ending in 20 days appears in all three; that
+ * is what "expiring within 90 days" means to the person reading it. */
+async function expiringContracts(tx: Prisma.TransactionClient, today: Date) {
+  const horizon = new Date(today);
+  horizon.setDate(horizon.getDate() + 90);
+
+  const contracts = await tx.contract.findMany({
+    where: { status: { notIn: ['CANCELLED', 'DRAFT'] }, end: { gte: today, lte: horizon } },
+    orderBy: { end: 'asc' },
+    select: {
+      id: true,
+      no: true,
+      tenant: true,
+      end: true,
+      value: true,
+      // A lease that already has a renewal is not part of the pipeline.
+      renewedTo: { select: { id: true } },
+      unit: { select: { unitNo: true, property: { select: { name: true } } } },
+    },
+  });
+
+  const daysUntil = (d: Date) => Math.round((startOfDay(d).getTime() - today.getTime()) / 86400000);
+  const pending = contracts.filter((c) => !c.renewedTo);
+
+  return {
+    within30: pending.filter((c) => daysUntil(c.end) <= 30).length,
+    within60: pending.filter((c) => daysUntil(c.end) <= 60).length,
+    within90: pending.length,
+    /** Already renewed — shown so the number that *needs* action is not
+     * mistaken for the number expiring. */
+    alreadyRenewed: contracts.length - pending.length,
+    contracts: pending.map((c) => ({
+      id: c.id,
+      no: c.no,
+      tenant: c.tenant,
+      end: c.end,
+      value: c.value,
+      daysLeft: daysUntil(c.end),
+      unitNo: c.unit.unitNo,
+      propertyName: c.unit.property.name,
+    })),
+  };
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  /**
+   * Revenue/expense per branch, plus a consolidated total — the owner's view
+   * across the whole company (CLAUDE.md 6.8's "تقرير لكل فرع + مجمَّع للمالك").
+   *
+   * Built from the posted ledger rather than from invoices/purchases directly,
+   * so it reflects the same numbers the financial statements do — which is
+   * exactly why the auto-posted entry inherits its document's branch.
+   *
+   * Amounts are the **base-currency** figures: a branch trading in a second
+   * currency must still roll up into one comparable total.
+   */
+  branchSummary(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const [branches, accounts] = await Promise.all([
+        tx.branch.findMany({
+          where: allowedBranchIds === 'all' ? {} : { id: { in: allowedBranchIds } },
+          orderBy: { name: 'asc' },
+        }),
+        tx.account.findMany({ select: { id: true, type: true } }),
+      ]);
+      const accountType = new Map(accounts.map((a) => [a.id, a.type]));
+
+      const date = this.dateFilter(range);
+      const lines = await tx.journalLine.findMany({
+        where: date ? { journalEntry: { date } } : undefined,
+        select: { accountId: true, debit: true, credit: true, journalEntry: { select: { branchId: true } } },
+      });
+
+      const empty = () => ({ revenue: 0, expenses: 0 });
+      const byBranch = new Map<string, { revenue: number; expenses: number }>();
+      const unassigned = empty();
+      const total = empty();
+
+      const visible = new Set(branches.map((b) => b.id));
+      for (const b of branches) byBranch.set(b.id, empty());
+
+      for (const line of lines) {
+        const type = accountType.get(line.accountId);
+        if (type !== 'revenue' && type !== 'expense') continue;
+
+        const branchId = line.journalEntry.branchId;
+        // A restricted employee must not see other branches' figures leak into
+        // the consolidated total either — skip what they can't see.
+        if (branchId && allowedBranchIds !== 'all' && !visible.has(branchId)) continue;
+
+        // Revenue is credit-normal, expenses debit-normal (see DEBIT_NORMAL_TYPES).
+        const amount = type === 'revenue' ? Number(line.credit) - Number(line.debit) : Number(line.debit) - Number(line.credit);
+        const bucket = branchId ? byBranch.get(branchId) : unassigned;
+        if (!bucket) continue;
+
+        if (type === 'revenue') {
+          bucket.revenue += amount;
+          total.revenue += amount;
+        } else {
+          bucket.expenses += amount;
+          total.expenses += amount;
+        }
+      }
+
+      const round = (n: number) => Math.round(n * 100) / 100;
+      const shape = (name: string, id: string | null, v: { revenue: number; expenses: number }) => ({
+        branchId: id,
+        branchName: name,
+        revenue: round(v.revenue),
+        expenses: round(v.expenses),
+        netIncome: round(v.revenue - v.expenses),
+      });
+
+      return {
+        branches: branches.map((b) => shape(b.name, b.id, byBranch.get(b.id)!)),
+        // Kept as its own row rather than folded into a branch: company-wide
+        // documents (and everything predating branches) genuinely belong to no
+        // branch, and hiding them would make the rows not add up to the total.
+        unassigned: shape('غير مسنَد لفرع', null, unassigned),
+        consolidated: shape('الإجمالي المجمَّع', null, total),
+      };
+    });
+  }
+
+  /**
+   * The three numbers a landlord actually runs the portfolio on: how full it
+   * is, whether the rent arrives on time, and what is about to expire.
+   *
+   * Derived entirely from existing data — no new tables, and no stored
+   * aggregates that could drift out of step with the rows they summarize.
+   */
+  propertyKpis(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const today = startOfDay(new Date());
+
+      const [properties, units, activeContracts, activeReservations, installments] = await Promise.all([
+        tx.property.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+        tx.unit.findMany({ select: { id: true, propertyId: true, underMaintenance: true } }),
+        // "Occupied" means a live contract covering *today* — exactly the rule
+        // UnitsService uses, so the map and this report can never disagree.
+        tx.contract.findMany({
+          where: { start: { lte: today }, end: { gte: today }, status: { not: 'CANCELLED' } },
+          select: { unitId: true },
+        }),
+        tx.reservation.findMany({ where: { status: 'ACTIVE' }, select: { unitId: true } }),
+        tx.installment.findMany({ select: { status: true, dueDate: true, amount: true, payments: { select: { date: true } } } }),
+      ]);
+
+      const rentedUnits = new Set(activeContracts.map((c) => c.unitId));
+      const reservedUnits = new Set(activeReservations.map((r) => r.unitId));
+
+      const occupancy = properties.map((p) => {
+        const own = units.filter((u) => u.propertyId === p.id);
+        const maintenance = own.filter((u) => u.underMaintenance).length;
+        const rented = own.filter((u) => !u.underMaintenance && rentedUnits.has(u.id)).length;
+        const reserved = own.filter((u) => !u.underMaintenance && !rentedUnits.has(u.id) && reservedUnits.has(u.id)).length;
+        const vacant = own.length - maintenance - rented - reserved;
+
+        return {
+          propertyId: p.id,
+          propertyName: p.name,
+          total: own.length,
+          rented,
+          reserved,
+          vacant,
+          maintenance,
+          // Against total units, not against lettable ones: a building half
+          // under maintenance is genuinely half empty, and hiding that in the
+          // denominator would flatter the number.
+          occupancyRate: own.length === 0 ? 0 : Math.round((rented / own.length) * 1000) / 10,
+        };
+      });
+
+      const totalUnits = units.length;
+      const totalRented = units.filter((u) => !u.underMaintenance && rentedUnits.has(u.id)).length;
+
+      return {
+        occupancy,
+        portfolio: {
+          totalProperties: properties.length,
+          totalUnits,
+          rented: totalRented,
+          occupancyRate: totalUnits === 0 ? 0 : Math.round((totalRented / totalUnits) * 1000) / 10,
+        },
+        collection: collectionRate(installments, today),
+        expiring: await expiringContracts(tx, today),
+      };
+    });
+  }
 
   incomeStatement(companyId: string, range: ReportRangeDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -111,13 +359,20 @@ export class ReportsService {
     });
   }
 
-  private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {
+  /** Shared by every report so they all interpret the same range identically —
+   * an empty range means "everything", not "nothing". */
+  private dateFilter(range: ReportRangeDto): Prisma.DateTimeFilter | undefined {
     const date: Prisma.DateTimeFilter = {};
     if (range.from) date.gte = new Date(range.from);
     if (range.to) date.lte = new Date(range.to);
+    return Object.keys(date).length ? date : undefined;
+  }
+
+  private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {
+    const date = this.dateFilter(range);
 
     const lines = await tx.journalLine.findMany({
-      where: Object.keys(date).length ? { journalEntry: { date } } : undefined,
+      where: date ? { journalEntry: { date } } : undefined,
       select: { accountId: true, debit: true, credit: true },
     });
 

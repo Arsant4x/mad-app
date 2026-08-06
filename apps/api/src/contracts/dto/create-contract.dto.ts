@@ -1,9 +1,10 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export const CONTRACT_CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as const;
 
-export class CreateContractDto {
+export class CreateContractDto extends CurrencyFieldsDto {
   @IsString()
   @IsNotEmpty()
   unitId!: string;

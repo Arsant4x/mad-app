@@ -1,6 +1,7 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
-export class UpdateTransactionDto {
+export class UpdateTransactionDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   bankId?: string;

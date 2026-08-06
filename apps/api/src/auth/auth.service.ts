@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
+import { MSG } from '../common/i18n/messages';
 
 export interface AuthUserView {
   id: string;
@@ -70,9 +71,9 @@ export class AuthService {
 
     // Same generic message whether the username doesn't exist or the
     // password is wrong — never reveal which one failed.
-    if (!identity) throw new UnauthorizedException('بيانات الدخول غير صحيحة');
+    if (!identity) throw new UnauthorizedException(MSG.invalid_credentials);
     const passwordOk = await argon2.verify(identity.passwordHash, password);
-    if (!passwordOk) throw new UnauthorizedException('بيانات الدخول غير صحيحة');
+    if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
 
     return this.buildSessionFromIdentity(identity as unknown as IdentityWithProfiles);
   }
@@ -85,7 +86,7 @@ export class AuthService {
       include: { loginIdentity: { include: IDENTITY_INCLUDE } },
     });
 
-    if (!stored) throw new UnauthorizedException('جلسة غير صالحة');
+    if (!stored) throw new UnauthorizedException(MSG.session_invalid);
 
     if (stored.revokedAt) {
       // Reuse of an already-rotated refresh token likely means it leaked —
@@ -94,10 +95,10 @@ export class AuthService {
         where: { loginIdentityId: stored.loginIdentityId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      throw new UnauthorizedException('جلسة غير صالحة');
+      throw new UnauthorizedException(MSG.session_invalid);
     }
 
-    if (stored.expiresAt < new Date()) throw new UnauthorizedException('انتهت صلاحية الجلسة');
+    if (stored.expiresAt < new Date()) throw new UnauthorizedException(MSG.session_expired);
 
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
 
@@ -111,7 +112,7 @@ export class AuthService {
       where: { id: payload.sub },
       include: IDENTITY_INCLUDE,
     });
-    if (!identity) throw new UnauthorizedException('جلسة غير صالحة');
+    if (!identity) throw new UnauthorizedException(MSG.session_invalid);
 
     if (identity.actorType === 'PLATFORM_ADMIN' && identity.platformAdmin) {
       return { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all' };
@@ -139,7 +140,7 @@ export class AuthService {
         allowedScreens: identity.companyUser.permissionTemplate.isAllScreens ? 'all' : identity.companyUser.permissionTemplate.allowedScreens,
       };
     }
-    throw new UnauthorizedException('جلسة غير صالحة');
+    throw new UnauthorizedException(MSG.session_invalid);
   }
 
   async logout(presentedToken: string): Promise<void> {
@@ -194,7 +195,7 @@ export class AuthService {
         allowedScreens: companyUser.permissionTemplate.isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens,
       };
     } else {
-      throw new UnauthorizedException('بيانات الدخول غير صحيحة');
+      throw new UnauthorizedException(MSG.invalid_credentials);
     }
 
     const accessToken = await this.signAccessToken(payload);

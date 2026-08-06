@@ -1,8 +1,9 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsDateString, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { InvoiceLineDto } from './invoice-line.dto';
 
-export class CreateInvoiceDto {
+export class CreateInvoiceDto extends CurrencyFieldsDto {
   @IsString()
   @IsNotEmpty()
   customerId!: string;

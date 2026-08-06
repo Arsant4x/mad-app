@@ -16,12 +16,12 @@ export class BanksController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.banksService.list(tenant.companyId);
+    return this.banksService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateBankDto) {
-    return this.banksService.create(tenant.companyId, dto);
+    return this.banksService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

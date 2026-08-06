@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Supplier, SupplierInput } from '../../api/suppliers';
+import i18n from '../../i18n';
 
 export function SupplierModal({
   editing,
@@ -20,7 +21,7 @@ export function SupplierModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم المورد');
+      setError(i18n.t('err_supplier_name_required'));
       return;
     }
     setSaving(true);
@@ -33,7 +34,7 @@ export function SupplierModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ المورد');
+      setError(message ?? i18n.t('err_supplier_save'));
     } finally {
       setSaving(false);
     }

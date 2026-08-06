@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Product, ProductInput } from '../../api/products';
+import i18n from '../../i18n';
 
 export function ProductModal({
   editing,
@@ -24,7 +25,7 @@ export function ProductModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم المنتج');
+      setError(i18n.t('err_product_name_required'));
       return;
     }
     setSaving(true);
@@ -40,7 +41,7 @@ export function ProductModal({
         barcode: barcode.trim() || undefined,
       });
     } catch {
-      setError('تعذّر حفظ المنتج');
+      setError(i18n.t('err_product_save'));
     } finally {
       setSaving(false);
     }

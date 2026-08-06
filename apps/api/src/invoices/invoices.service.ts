@@ -1,11 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { buildZatcaQr } from '../zatca/qr.util';
 import { Prisma } from '@prisma/client';
+import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
+import { MSG } from '../common/i18n/messages';
 
 const INVOICE_INCLUDE = { customer: true, lines: true } as const;
 
@@ -21,17 +25,44 @@ function computeTotals(lines: InvoiceLineDto[]) {
 export class InvoicesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.findMany({ include: INVOICE_INCLUDE, orderBy: { issueDate: 'desc' } }),
-    );
+  list(companyId: string, allowedBranchIds: string[] | 'all') {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const invoices = await tx.invoice.findMany({ where: branchFilter(allowedBranchIds), include: INVOICE_INCLUDE, orderBy: { issueDate: 'desc' } });
+
+      // The ZATCA QR is derived, not stored: it must reflect the company's
+      // *current* legal name and VAT number, so an invoice issued before the
+      // company profile was completed starts showing a valid QR the moment
+      // those fields are filled in — rather than being permanently stamped
+      // with the blanks it was created with.
+      //
+      // Company is the tenant identity row (no RLS, not in the tenant-scope
+      // extension), so it's read straight by id from the verified context.
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { legalName: true, vatNumber: true },
+      });
+
+      return invoices.map((inv) => ({
+        ...inv,
+        zatcaQr: buildZatcaQr({
+          sellerName: company?.legalName ?? '',
+          vatNumber: company?.vatNumber ?? '',
+          issuedAt: inv.issueDate,
+          // ZATCA wants the figures as billed, in the invoice's own currency.
+          total: Number(inv.total),
+          vatAmount: Number(inv.taxTotal),
+        }),
+      }));
+    });
   }
 
-  create(companyId: string, dto: CreateInvoiceDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto) {
     const { subtotal, taxTotal, total } = computeTotals(dto.lines);
+    const { currency, exchangeRate } = resolveCurrency(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextInvoiceNumber's comment.
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       const no = await this.nextInvoiceNumber(tx);
       const created = await tx.invoice.create({
         // `companyId` (top-level and on each nested line) is set explicitly
@@ -44,6 +75,7 @@ export class InvoicesService {
         data: {
           companyId,
           no,
+          branchId,
           customerId: dto.customerId,
           issueDate: new Date(dto.issueDate),
           dueDate: new Date(dto.dueDate),
@@ -51,6 +83,11 @@ export class InvoicesService {
           subtotal,
           taxTotal,
           total,
+          currency,
+          exchangeRate,
+          baseSubtotal: toBaseAmount(subtotal, exchangeRate),
+          baseTaxTotal: toBaseAmount(taxTotal, exchangeRate),
+          baseTotal: toBaseAmount(total, exchangeRate),
           lines: {
             create: dto.lines.map((l) => ({
               companyId,
@@ -68,12 +105,13 @@ export class InvoicesService {
       // required accounts (1200/4100/2200) aren't set up for this company yet
       // — see the schema comment on Invoice.journalEntryId.
       const entry = await postInvoiceEntry(tx, companyId, {
+        branchId: created.branchId,
         no: created.no,
         issueDate: created.issueDate,
         customerName: created.customer.name,
-        subtotal: Number(created.subtotal),
-        taxTotal: Number(created.taxTotal),
-        total: Number(created.total),
+        baseSubtotal: Number(created.baseSubtotal),
+        baseTaxTotal: Number(created.baseTaxTotal),
+        baseTotal: Number(created.baseTotal),
       });
       if (!entry) return created;
       return tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
@@ -83,7 +121,7 @@ export class InvoicesService {
   update(companyId: string, id: string, dto: UpdateInvoiceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.invoice.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الفاتورة غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.invoice_not_found);
 
       const data: Prisma.InvoiceUncheckedUpdateInput = {};
       if (dto.customerId) data.customerId = dto.customerId;
@@ -94,9 +132,18 @@ export class InvoicesService {
 
       if (dto.lines) {
         const totals = computeTotals(dto.lines);
+        // The rate stays whatever the invoice was issued at unless the caller
+        // explicitly sends a new one — re-editing lines must not silently
+        // reprice the document at today's rate.
+        const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
         data.subtotal = totals.subtotal;
         data.taxTotal = totals.taxTotal;
         data.total = totals.total;
+        data.baseSubtotal = toBaseAmount(totals.subtotal, rate);
+        data.baseTaxTotal = toBaseAmount(totals.taxTotal, rate);
+        data.baseTotal = toBaseAmount(totals.total, rate);
+        if (dto.currency) data.currency = dto.currency;
+        if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
         // Replace-all rather than diffing line-by-line — simplest correct
         // approach, and invoices are edited as a whole in the UI anyway.
         await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
@@ -127,12 +174,13 @@ export class InvoicesService {
 
       if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
       const entry = await postInvoiceEntry(tx, companyId, {
+        branchId: updated.branchId,
         no: updated.no,
         issueDate: updated.issueDate,
         customerName: updated.customer.name,
-        subtotal: Number(updated.subtotal),
-        taxTotal: Number(updated.taxTotal),
-        total: Number(updated.total),
+        baseSubtotal: Number(updated.baseSubtotal),
+        baseTaxTotal: Number(updated.baseTaxTotal),
+        baseTotal: Number(updated.baseTotal),
       });
       if (!entry) return updated;
       return tx.invoice.update({ where: { id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
@@ -142,7 +190,7 @@ export class InvoicesService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.invoice.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الفاتورة غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.invoice_not_found);
       await tx.invoice.delete({ where: { id } });
       // Deleting the invoice first removes the only row referencing the
       // entry, so it can now be reversed and deleted without hitting the

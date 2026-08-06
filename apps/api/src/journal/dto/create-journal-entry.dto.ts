@@ -1,8 +1,9 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsDateString, IsNotEmpty, IsString, ValidateNested } from 'class-validator';
 import { JournalLineDto } from './journal-line.dto';
 
-export class CreateJournalEntryDto {
+export class CreateJournalEntryDto extends CurrencyFieldsDto {
   @IsDateString()
   date!: string;
 

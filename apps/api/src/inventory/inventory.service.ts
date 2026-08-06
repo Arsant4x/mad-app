@@ -1,8 +1,10 @@
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
+import { MSG } from '../common/i18n/messages';
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 
@@ -12,34 +14,35 @@ export type StockStatus = 'out' | 'low' | 'available';
 export class InventoryService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  listMovements(companyId: string) {
+  listMovements(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.stockMovement.findMany({ include: MOVEMENT_INCLUDE, orderBy: { date: 'desc' } }),
+      tx.stockMovement.findMany({ where: branchFilter(allowedBranchIds), include: MOVEMENT_INCLUDE, orderBy: { date: 'desc' } }),
     );
   }
 
-  create(companyId: string, dto: CreateStockMovementDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateStockMovementDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const product = await tx.product.findUnique({ where: { id: dto.productId } });
-      if (!product) throw new NotFoundException('المنتج غير موجود');
+      if (!product) throw new NotFoundException(MSG.product_not_found);
       const warehouse = await tx.warehouse.findUnique({ where: { id: dto.warehouseId } });
-      if (!warehouse) throw new NotFoundException('المستودع غير موجود');
+      if (!warehouse) throw new NotFoundException(MSG.warehouse_not_found);
 
       if (dto.type === 'TRANSFER') {
-        if (!dto.toWarehouseId) throw new BadRequestException('الرجاء اختيار المستودع الوجهة');
-        if (dto.toWarehouseId === dto.warehouseId) throw new BadRequestException('لا يمكن التحويل لنفس المستودع');
+        if (!dto.toWarehouseId) throw new BadRequestException(MSG.destination_warehouse_required);
+        if (dto.toWarehouseId === dto.warehouseId) throw new BadRequestException(MSG.destination_same_as_source);
         const toWarehouse = await tx.warehouse.findUnique({ where: { id: dto.toWarehouseId } });
-        if (!toWarehouse) throw new NotFoundException('المستودع الوجهة غير موجود');
+        if (!toWarehouse) throw new NotFoundException(MSG.destination_warehouse_not_found);
       }
 
       if (dto.type === 'ADJUSTMENT') {
-        if (dto.qty === 0) throw new BadRequestException('قيمة التسوية يجب ألا تساوي صفراً');
+        if (dto.qty === 0) throw new BadRequestException(MSG.adjustment_cannot_be_zero);
       } else if (dto.qty <= 0) {
-        throw new BadRequestException('الكمية يجب أن تكون أكبر من صفر');
+        throw new BadRequestException(MSG.quantity_must_be_positive);
       }
 
       const movement = await tx.stockMovement.create({
         data: {
+          branchId: await resolveBranchId(tx, dto.branchId, allowedBranchIds),
           productId: dto.productId,
           warehouseId: dto.warehouseId,
           toWarehouseId: dto.type === 'TRANSFER' ? dto.toWarehouseId : undefined,
@@ -63,7 +66,7 @@ export class InventoryService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.stockMovement.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الحركة غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.movement_not_found);
       await tx.stockMovement.delete({ where: { id } });
     });
   }

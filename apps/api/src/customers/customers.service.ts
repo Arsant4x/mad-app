@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { MSG } from '../common/i18n/messages';
 
 @Injectable()
 export class CustomersService {
@@ -31,7 +32,7 @@ export class CustomersService {
   update(companyId: string, id: string, dto: UpdateCustomerDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('العميل غير موجود');
+      if (!existing) throw new NotFoundException(MSG.customer_not_found);
       await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, id);
 
       const data: Prisma.CustomerUncheckedUpdateInput = {};
@@ -47,14 +48,14 @@ export class CustomersService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('العميل غير موجود');
+      if (!existing) throw new NotFoundException(MSG.customer_not_found);
       try {
         await tx.customer.delete({ where: { id } });
       } catch (e) {
         // P2003 = foreign key violation — invoices.customerId is ON DELETE
         // RESTRICT, so this fires when the customer still has invoices.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException('لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً');
+          throw new ConflictException(MSG.customer_has_invoices);
         }
         throw e;
       }

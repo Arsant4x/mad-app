@@ -16,12 +16,12 @@ export class InvoicesController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.invoicesService.list(tenant.companyId);
+    return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateInvoiceDto) {
-    return this.invoicesService.create(tenant.companyId, dto);
+    return this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

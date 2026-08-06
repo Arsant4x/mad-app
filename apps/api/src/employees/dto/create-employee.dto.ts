@@ -1,7 +1,8 @@
+import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 import { EmployeeStatus } from '@prisma/client';
 import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
-export class CreateEmployeeDto {
+export class CreateEmployeeDto extends BranchFieldDto {
   @IsString()
   @IsNotEmpty()
   fullName!: string;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ActivityType, Ownership, Property, PropertyInput } from '../../api/properties';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
   { value: 'residential', label: 'سكني' },
@@ -33,6 +34,9 @@ export function PropertyModal({
   const [activitySubtype, setActivitySubtype] = useState(editing?.activitySubtype ?? '');
   const [ownership, setOwnership] = useState<Ownership>(editing?.ownership ?? 'owned');
   const [deedNo, setDeedNo] = useState(editing?.deedNo ?? '');
+  // Kept as strings so a half-typed "24." doesn't collapse to NaN mid-edit.
+  const [lat, setLat] = useState(editing?.lat != null ? String(editing.lat) : '');
+  const [lng, setLng] = useState(editing?.lng != null ? String(editing.lng) : '');
   const [leaseValue, setLeaseValue] = useState(editing?.leaseValue ?? '');
   const [leaseCycle, setLeaseCycle] = useState(editing?.leaseCycle ?? '');
   const [leaseStart, setLeaseStart] = useState(editing?.leaseStart?.slice(0, 10) ?? today());
@@ -44,7 +48,7 @@ export function PropertyModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم العقار');
+      setError(i18n.t('err_property_name_required'));
       return;
     }
     setSaving(true);
@@ -62,10 +66,14 @@ export function PropertyModal({
         leaseStart: ownership === 'leased' ? leaseStart : undefined,
         leaseEnd: ownership === 'leased' ? leaseEnd : undefined,
         opRate: ownership === 'managed' ? parseFloat(String(opRate)) || undefined : undefined,
+        // `|| undefined` would swallow a legitimate 0, so emptiness is checked
+        // explicitly — longitude 0 is a real place.
+        lat: lat.trim() === '' ? undefined : Number(lat),
+        lng: lng.trim() === '' ? undefined : Number(lng),
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ العقار');
+      setError(message ?? i18n.t('err_property_save'));
     } finally {
       setSaving(false);
     }
@@ -87,6 +95,19 @@ export function PropertyModal({
         <div className="field">
           <label>العنوان</label>
           <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="المدينة — الحي" />
+        </div>
+        <div className="two-col">
+          <div className="field">
+            <label>خط العرض (Latitude)</label>
+            <input className="num" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="24.7136" />
+          </div>
+          <div className="field">
+            <label>خط الطول (Longitude)</label>
+            <input className="num" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="46.6753" />
+            {/* Says where to get them, since nobody knows their coordinates by
+                heart — and a property without them simply won't appear on the map. */}
+            <p className="hint">انسخهما من خرائط جوجل (اضغط مطوّلاً على الموقع). العقار بدونهما لا يظهر على الخريطة.</p>
+          </div>
         </div>
         <div className="two-col">
           <div className="field">

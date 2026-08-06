@@ -1,5 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { MSG } from '../common/i18n/messages';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 
 /** Account types whose balance increases with a debit (asset, expense);
  * the rest (liability, equity, revenue) increase with a credit. Matches
@@ -23,7 +26,7 @@ async function fetchAccountTypes(tx: Prisma.TransactionClient, accountIds: strin
   const rows = await tx.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, type: true } });
   const types = new Map(rows.map((r) => [r.id, r.type]));
   if (accountIds.some((id) => !types.has(id))) {
-    throw new NotFoundException('أحد الحسابات المحددة بالقيد غير موجود');
+    throw new NotFoundException(MSG.journal_line_account_not_found);
   }
   return types;
 }
@@ -68,6 +71,10 @@ export interface CreateJournalEntryInput {
   memo: string;
   lines: PostingLine[];
   auto?: boolean;
+  /** Defaults to the base currency at parity — see base-amount.util. */
+  currency?: string;
+  exchangeRate?: number;
+  branchId?: string | null;
 }
 
 /** Creates a balanced journal entry and immediately posts it to account
@@ -84,13 +91,19 @@ export async function createJournalEntry(
   const totalDebit = input.lines.reduce((sum, l) => sum + l.debit, 0);
   const totalCredit = input.lines.reduce((sum, l) => sum + l.credit, 0);
   if (totalDebit <= 0 || Math.abs(totalDebit - totalCredit) > 0.001) {
-    throw new BadRequestException('القيد غير متوازن — لا يمكن ترحيله');
+    throw new BadRequestException(MSG.journal_entry_unbalanced);
   }
+
+  // Refuse anything dated inside a closed period. Placed here rather than in
+  // each caller because this function is the one path every posting takes —
+  // manual, invoice, purchase and rent alike (see assertPeriodOpen).
+  await assertPeriodOpen(tx, input.date);
 
   // Validate every referenced account belongs to this tenant *before*
   // writing anything — see fetchAccountTypes for why this must come first.
   const accountTypes = await fetchAccountTypes(tx, [...new Set(input.lines.map((l) => l.accountId))]);
 
+  const { currency, exchangeRate } = resolveCurrency(input);
   const no = await nextJournalNumber(tx);
   const entry = await tx.journalEntry.create({
     data: {
@@ -101,6 +114,11 @@ export async function createJournalEntry(
       totalDebit,
       totalCredit,
       auto: input.auto ?? false,
+      branchId: input.branchId ?? null,
+      currency,
+      exchangeRate,
+      baseTotalDebit: toBaseAmount(totalDebit, exchangeRate),
+      baseTotalCredit: toBaseAmount(totalCredit, exchangeRate),
       lines: {
         create: input.lines.map((l) => ({
           companyId: input.companyId,

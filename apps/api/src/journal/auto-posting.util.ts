@@ -29,13 +29,28 @@ export function purchaseExpenseAccountCode(category?: string | null): string {
   return PURCHASE_CATEGORY_ACCOUNT[(category ?? '').trim()] ?? '5300';
 }
 
+/** Currency gains and losses on settlement — the owner picked 5600 for this.
+ * A single account carries both directions: a gain lands as a credit against
+ * it, which is how a one-line FX difference is conventionally presented. */
+export const FX_DIFFERENCE_ACCOUNT = '5600';
+
+/**
+ * `branchId` is the source document's branch: the auto-posted entry has to
+ * land in the same branch, otherwise a per-branch P&L built from the ledger
+ * would never reconcile with the documents it came from.
+ *
+ * Amounts are **base-currency** figures (the `base*` columns), never the
+ * document's own currency: a ledger has one unit, and posting 100 USD next to
+ * 100 SAR would make every report meaningless.
+ */
 export interface InvoiceForPosting {
+  branchId?: string | null;
   no: string;
   issueDate: Date;
   customerName: string;
-  subtotal: number;
-  taxTotal: number;
-  total: number;
+  baseSubtotal: number;
+  baseTaxTotal: number;
+  baseTotal: number;
 }
 
 /** Debit A/R (1200) for the total, credit Revenue (4100) for the subtotal,
@@ -43,15 +58,15 @@ export interface InvoiceForPosting {
  * `invoicePostingLines`/`postInvoiceToLedger`. Returns `null` (soft-skip) if
  * the invoice has nothing to post or a required account is missing. */
 export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: string, inv: InvoiceForPosting) {
-  if (inv.total <= 0) return null;
+  if (inv.baseTotal <= 0) return null;
 
-  const needCodes = ['1200', '4100', ...(inv.taxTotal > 0 ? ['2200'] : [])];
+  const needCodes = ['1200', '4100', ...(inv.baseTaxTotal > 0 ? ['2200'] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
 
-  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: inv.total, credit: 0 }];
-  if (inv.subtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: inv.subtotal });
-  if (inv.taxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: inv.taxTotal });
+  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: inv.baseTotal, credit: 0 }];
+  if (inv.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: inv.baseSubtotal });
+  if (inv.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: inv.baseTaxTotal });
 
   return createJournalEntry(tx, {
     companyId,
@@ -59,17 +74,20 @@ export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: 
     memo: `فاتورة مبيعات ${inv.no} — ${inv.customerName}`,
     lines,
     auto: true,
+    branchId: inv?.branchId ?? null,
   });
 }
 
+/** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
+  branchId?: string | null;
   no: string;
   date: Date;
   supplierName: string;
   category: string | null;
-  subtotal: number;
-  taxAmount: number;
-  total: number;
+  baseSubtotal: number;
+  baseTaxAmount: number;
+  baseTotal: number;
 }
 
 /** Debit the category's expense account for the subtotal, debit VAT (2200)
@@ -78,16 +96,16 @@ export interface PurchaseForPosting {
  * `null` (soft-skip) if there's nothing to post or a required account is
  * missing. */
 export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId: string, p: PurchaseForPosting) {
-  if (p.total <= 0) return null;
+  if (p.baseTotal <= 0) return null;
 
   const expCode = purchaseExpenseAccountCode(p.category);
-  const needCodes = [expCode, '2100', ...(p.taxAmount > 0 ? ['2200'] : [])];
+  const needCodes = [expCode, '2100', ...(p.baseTaxAmount > 0 ? ['2200'] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
 
-  const lines: PostingLine[] = [{ accountId: ids.get(expCode)!, debit: p.subtotal, credit: 0 }];
-  if (p.taxAmount > 0) lines.push({ accountId: ids.get('2200')!, debit: p.taxAmount, credit: 0 });
-  lines.push({ accountId: ids.get('2100')!, debit: 0, credit: p.total });
+  const lines: PostingLine[] = [{ accountId: ids.get(expCode)!, debit: p.baseSubtotal, credit: 0 }];
+  if (p.baseTaxAmount > 0) lines.push({ accountId: ids.get('2200')!, debit: p.baseTaxAmount, credit: 0 });
+  lines.push({ accountId: ids.get('2100')!, debit: 0, credit: p.baseTotal });
 
   return createJournalEntry(tx, {
     companyId,
@@ -95,33 +113,391 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
     memo: `فاتورة شراء ${p.no} — ${p.supplierName}`,
     lines,
     auto: true,
+    branchId: p.branchId ?? null,
   });
 }
 
 export interface RentPaymentForPosting {
+  branchId?: string | null;
   contractNo: string;
   tenant: string;
   date: Date;
-  netAmount: number;
+  /// Cash received, valued at the **settlement** rate.
+  baseNetAmount: number;
+  /// The same cash valued at the rate the **contract** was priced at. Equal to
+  /// `baseNetAmount` whenever the rate hasn't moved, which is always the case
+  /// for a single-currency company.
+  baseExpectedAmount: number;
 }
 
-/** Debit cash (1000), credit rental revenue (4200) — a distinct revenue
- * account from sales invoices' 4100, matching the mockup's rent-collection
- * posting (`confirmRentPayment`). Returns `null` (soft-skip) if either
- * account isn't set up yet for this company. */
+/**
+ * Debit cash (1000), credit rental revenue (4200) — a distinct revenue account
+ * from sales invoices' 4100, matching the mockup's rent-collection posting
+ * (`confirmRentPayment`).
+ *
+ * When the currency moved between pricing and settlement, the two sides no
+ * longer match: revenue is credited at the contract's rate (what was actually
+ * earned) while cash is debited at the settlement rate (what actually arrived),
+ * and the gap is a realized currency gain or loss posted to 5600. Recognising
+ * it as revenue instead would overstate the business's operating performance
+ * with something the market did.
+ *
+ * Returns `null` (soft-skip) if a required account isn't set up yet.
+ */
 export async function postRentPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: RentPaymentForPosting) {
-  if (p.netAmount <= 0) return null;
+  if (p.baseNetAmount <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['1000', '4200']);
+  // Rounded to the ledger's 2 decimals before comparing: a rate carries 6, so
+  // an unrounded difference would post lines like 0.0000001 forever.
+  const cash = Math.round(p.baseNetAmount * 100) / 100;
+  const revenue = Math.round(p.baseExpectedAmount * 100) / 100;
+  const fxDifference = Math.round((cash - revenue) * 100) / 100;
+
+  const needCodes = ['1000', '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
+
+  const lines: PostingLine[] = [
+    { accountId: ids.get('1000')!, debit: cash, credit: 0 },
+    { accountId: ids.get('4200')!, debit: 0, credit: revenue },
+  ];
+
+  if (fxDifference > 0) {
+    // More cash than the contract priced — a gain, credited against 5600.
+    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: 0, credit: fxDifference });
+  } else if (fxDifference < 0) {
+    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: -fxDifference, credit: 0 });
+  }
 
   return createJournalEntry(tx, {
     companyId,
     date: p.date,
     memo: `دفعة إيجار — عقد ${p.contractNo} — ${p.tenant}`,
+    lines,
+    auto: true,
+    branchId: p?.branchId ?? null,
+  });
+}
+
+/** Where tenant deposits are held. A liability: the money is the tenant's
+ * until the lease ends, so it must never appear as revenue on receipt. */
+export const TENANT_DEPOSITS_ACCOUNT = '2300';
+/** Where a forfeited deposit lands — deliberately not 4200, so keeping a
+ * deposit doesn't masquerade as rental income. */
+export const OTHER_INCOME_ACCOUNT = '4300';
+
+export interface DepositForPosting {
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  /** In the reporting currency, like every other posting. */
+  baseAmount: number;
+  typeLabel: string;
+}
+
+/**
+ * Debit cash (1000), credit tenant deposits (2300).
+ *
+ * The deposit is *not* income. Recording it as such would overstate the year's
+ * profit and then require a reversal when it's refunded — which is exactly the
+ * error the old `Contract.deposit` column invited by holding a number nothing
+ * ever posted.
+ *
+ * Only called for company-held deposits. One blocked on Ejar is recorded but
+ * never posted: no cash arrived, and the company owes nothing back because it
+ * is not the custodian.
+ *
+ * Returns `null` (soft-skip) if a required account isn't set up yet.
+ */
+export async function postDepositReceiptEntry(tx: Prisma.TransactionClient, companyId: string, d: DepositForPosting) {
+  if (d.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1000', TENANT_DEPOSITS_ACCOUNT]);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: d.date,
+    memo: `${d.typeLabel} — عقد ${d.contractNo} — ${d.tenant}`,
     lines: [
-      { accountId: ids.get('1000')!, debit: p.netAmount, credit: 0 },
-      { accountId: ids.get('4200')!, debit: 0, credit: p.netAmount },
+      { accountId: ids.get('1000')!, debit: d.baseAmount, credit: 0 },
+      { accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: 0, credit: d.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
+export interface DepositSettlementForPosting {
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  /** True when the company itself held the money and raised the liability. */
+  heldByCompany: boolean;
+  /** The full held amount, which is what leaves the liability account. */
+  baseAmount: number;
+  /** Deductions already grouped by where they should land. */
+  againstReceivable: number;
+  againstIncome: number;
+  refund: number;
+  typeLabel: string;
+}
+
+/**
+ * Settles a deposit — and the entry depends entirely on **who was holding it**.
+ *
+ * **Company-held.** Debit 2300 for the whole amount: the obligation ends here
+ * regardless of where the money goes. Then credit each destination:
+ *
+ * - **unpaid rent** → 1200, because that rent was already recognized as revenue
+ *   when the invoice was raised; crediting income again would count it twice;
+ * - **damage, utilities, cleaning, other** → 4300, income the landlord keeps;
+ * - **the remainder** → 1000, cash actually handed back.
+ *
+ * **Ejar-held.** There is no liability to clear — the money was never the
+ * company's. Only the awarded deductions move: the platform releases them to
+ * the company, so cash is debited and the same two destinations credited. The
+ * refund is settled between Ejar and the tenant and touches nothing here, so a
+ * full refund posts **no entry at all**.
+ *
+ * Returns `null` (soft-skip) if a required account isn't set up yet, or if
+ * there is genuinely nothing to post.
+ */
+export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: DepositSettlementForPosting) {
+  if (s.baseAmount <= 0) return null;
+
+  const awarded = Math.round((s.againstReceivable + s.againstIncome) * 100) / 100;
+  // Ejar refunding the tenant in full is a real, valid outcome that simply
+  // never touches this company's books.
+  if (!s.heldByCompany && awarded <= 0) return null;
+
+  const needCodes = [
+    ...(s.heldByCompany ? [TENANT_DEPOSITS_ACCOUNT] : ['1000']),
+    ...(s.againstReceivable > 0 ? ['1200'] : []),
+    ...(s.againstIncome > 0 ? [OTHER_INCOME_ACCOUNT] : []),
+    ...(s.heldByCompany && s.refund > 0 ? ['1000'] : []),
+  ];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+
+  const lines: PostingLine[] = s.heldByCompany
+    ? [{ accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: s.baseAmount, credit: 0 }]
+    : [{ accountId: ids.get('1000')!, debit: awarded, credit: 0 }];
+
+  if (s.againstReceivable > 0) lines.push({ accountId: ids.get('1200')!, debit: 0, credit: s.againstReceivable });
+  if (s.againstIncome > 0) lines.push({ accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.againstIncome });
+  if (s.heldByCompany && s.refund > 0) lines.push({ accountId: ids.get('1000')!, debit: 0, credit: s.refund });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: s.date,
+    memo: `تسوية ${s.typeLabel} — عقد ${s.contractNo} — ${s.tenant}${s.heldByCompany ? '' : ' (محجوز لدى إيجار)'}`,
+    lines,
+    auto: true,
+  });
+}
+
+export interface ContractSettlementForPosting {
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  baseAmount: number;
+}
+
+/**
+ * Early-termination settlement: debit the tenant (1200), credit other income
+ * (4300).
+ *
+ * **Not** 4200. Rental revenue is earned by letting the property for a period;
+ * this is compensation for a period the tenant is *not* occupying it. Booking
+ * it as rent would overstate occupancy-driven revenue and make the yield
+ * figures on the reports lie.
+ *
+ * A receivable rather than cash, because agreeing the settlement and collecting
+ * it are separate events — and once it is a receivable, a held deposit can be
+ * applied against it through the normal deduction flow.
+ *
+ * Returns `null` (soft-skip) if a required account isn't set up yet.
+ */
+export async function postContractSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: ContractSettlementForPosting) {
+  if (s.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: s.date,
+    memo: `تسوية إلغاء عقد ${s.contractNo} — ${s.tenant}`,
+    lines: [
+      { accountId: ids.get('1200')!, debit: s.baseAmount, credit: 0 },
+      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
+export interface ClaimForPosting {
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  baseAmount: number;
+  kindLabel: string;
+}
+
+/**
+ * Raising a claim: debit the tenant (1200), credit other income (4300).
+ *
+ * Same shape as a cancellation settlement, and for the same reason — a repair
+ * the tenant caused or a late fee is income, but not *rental* income. Keeping
+ * both out of 4200 is what lets a rent-roll report mean what it says.
+ */
+export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
+  if (c.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    lines: [
+      { accountId: ids.get('1200')!, debit: c.baseAmount, credit: 0 },
+      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: c.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
+/** Collecting a claim: cash in (1000 or the bank's account), receivable out. */
+export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
+  if (c.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1000', '1200']);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `تحصيل مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    lines: [
+      { accountId: ids.get('1000')!, debit: c.baseAmount, credit: 0 },
+      { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
+/**
+ * Writing a claim off: reverse the income and clear the receivable.
+ *
+ * A reversing entry rather than deleting the original. The claim really was
+ * raised — the tenant may well have been told about it — so the ledger has to
+ * show both that it happened and that it was dropped.
+ */
+export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
+  if (c.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `إسقاط مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    lines: [
+      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: c.baseAmount, credit: 0 },
+      { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
+/** Key money the company paid for the right to occupy a leased site. An asset:
+ * the benefit runs for the whole tenancy, not just the month it was paid. */
+export const KEY_MONEY_ASSET_ACCOUNT = '1600';
+
+export interface KeyMoneyForPosting {
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  baseAmount: number;
+  received: boolean;
+}
+
+/**
+ * Key money, posted according to which way it went.
+ *
+ * **Received** — cash in, other income. Not rent: it buys the *right to the
+ * location*, and it is not refundable, which is what separates it from a
+ * deposit.
+ *
+ * **Paid** — cash out, capitalized to 1600. Expensing it immediately would
+ * dump a lump sum into one month's P&L for a benefit that runs for years.
+ *
+ * ⚠️ **Amortization is not implemented.** Paid key money sits in 1600 until
+ * someone writes it down with a manual journal entry. Spreading it over the
+ * lease term is the correct treatment and is a separate piece of work — doing
+ * it silently and wrongly would be worse than leaving it visible.
+ */
+export async function postKeyMoneyEntry(tx: Prisma.TransactionClient, companyId: string, k: KeyMoneyForPosting) {
+  if (k.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['1000', k.received ? OTHER_INCOME_ACCOUNT : KEY_MONEY_ASSET_ACCOUNT]);
+  if (!ids) return null;
+
+  const lines: PostingLine[] = k.received
+    ? [
+        { accountId: ids.get('1000')!, debit: k.baseAmount, credit: 0 },
+        { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: k.baseAmount },
+      ]
+    : [
+        { accountId: ids.get(KEY_MONEY_ASSET_ACCOUNT)!, debit: k.baseAmount, credit: 0 },
+        { accountId: ids.get('1000')!, debit: 0, credit: k.baseAmount },
+      ];
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: k.date,
+    memo: `${k.received ? 'تقبيل مقبوض' : 'تقبيل مدفوع'} — عقد ${k.contractNo} — ${k.tenant}`,
+    lines,
+    auto: true,
+  });
+}
+
+/** What keeping the buildings running costs — deliberately not 5300, so a
+ * landlord can separate property upkeep from office overheads. */
+export const MAINTENANCE_EXPENSE_ACCOUNT = '5700';
+
+export interface MaintenanceCostForPosting {
+  title: string;
+  propertyName: string;
+  date: Date;
+  baseAmount: number;
+}
+
+/**
+ * Debit maintenance expense (5700), credit cash (1000).
+ *
+ * Posted when the work is *completed*, not when it is reported: a request that
+ * is still open has no known cost, and one that gets cancelled never has one.
+ *
+ * Recovering the cost from the tenant is a separate decision — that is what a
+ * claim is for, and it posts on its own.
+ */
+export async function postMaintenanceCostEntry(tx: Prisma.TransactionClient, companyId: string, m: MaintenanceCostForPosting) {
+  if (m.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, [MAINTENANCE_EXPENSE_ACCOUNT, '1000']);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: m.date,
+    memo: `صيانة — ${m.propertyName} — ${m.title}`,
+    lines: [
+      { accountId: ids.get(MAINTENANCE_EXPENSE_ACCOUNT)!, debit: m.baseAmount, credit: 0 },
+      { accountId: ids.get('1000')!, debit: 0, credit: m.baseAmount },
     ],
     auto: true,
   });

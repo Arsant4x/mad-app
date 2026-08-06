@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listBranches, type Branch } from '../../api/branches';
 import { listBanks, type Bank } from '../../api/banks';
 import { createTransaction, deleteTransaction, listTransactions, updateTransaction, type BankTx, type TransactionInput } from '../../api/transactions';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -9,6 +10,7 @@ import { TransactionModal } from './TransactionModal';
 export function TransactionsPage() {
   const [transactions, setTransactions] = useState<BankTx[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; tx: BankTx } | null>(null);
@@ -22,6 +24,8 @@ export function TransactionsPage() {
   }
 
   useEffect(() => {
+    // The picker options — filtered server-side to what this user may use.
+    listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
   }, []);
 
@@ -138,7 +142,7 @@ export function TransactionsPage() {
         </table>
       </div>
 
-      {modal && <TransactionModal banks={banks} editing={modal.mode === 'edit' ? modal.tx : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {modal && <TransactionModal banks={banks} branches={branches} editing={modal.mode === 'edit' ? modal.tx : null} onCancel={() => setModal(null)} onSave={handleSave} />}
 
       {pendingDelete && (
         <ConfirmModal

@@ -13,6 +13,12 @@ import { ReportsService } from './reports.service';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  /** Occupancy, on-time collection and the renewal pipeline — all derived, none stored. */
+  @Get('property-kpis')
+  propertyKpis(@CurrentTenant() tenant: TenantContext) {
+    return this.reportsService.propertyKpis(tenant.companyId);
+  }
+
   @Get('income-statement')
   incomeStatement(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
     return this.reportsService.incomeStatement(tenant.companyId, range);
@@ -26,5 +32,13 @@ export class ReportsController {
   @Get('cash-flow')
   cashFlow(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
     return this.reportsService.cashFlow(tenant.companyId, range);
+  }
+
+  /** Per-branch revenue/expense plus the consolidated total. Scoped to the
+   * caller's branches, so an employee sees their own figures and the owner
+   * sees the whole company. */
+  @Get('branch-summary')
+  branchSummary(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
+    return this.reportsService.branchSummary(tenant.companyId, tenant.allowedBranchIds, range);
   }
 }

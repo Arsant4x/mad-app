@@ -1,9 +1,10 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { Type } from 'class-transformer';
 import { ArrayMinSize, IsDateString, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { InvoiceStatus } from '@prisma/client';
 import { InvoiceLineDto } from './invoice-line.dto';
 
-export class UpdateInvoiceDto {
+export class UpdateInvoiceDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   customerId?: string;

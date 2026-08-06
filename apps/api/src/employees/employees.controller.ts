@@ -16,12 +16,12 @@ export class EmployeesController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.employeesService.list(tenant.companyId);
+    return this.employeesService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateEmployeeDto) {
-    return this.employeesService.create(tenant.companyId, dto);
+    return this.employeesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

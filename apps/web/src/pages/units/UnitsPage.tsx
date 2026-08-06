@@ -7,6 +7,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
 import { ReservationModal } from './ReservationModal';
 import { UnitModal } from './UnitModal';
+import i18n from '../../i18n';
 
 const STATUS_META: Record<UnitStatus, { label: string; badgeClass: string }> = {
   vacant: { label: 'شاغرة', badgeClass: 'draft' },
@@ -74,7 +75,7 @@ export function UnitsPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف الوحدة');
+      setDeleteError(message ?? i18n.t('err_unit_delete'));
     }
   }
 

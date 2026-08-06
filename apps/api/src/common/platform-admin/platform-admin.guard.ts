@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtPayload } from '../../auth/types';
+import { MSG } from '../i18n/messages';
 
 /**
  * Runs after JwtAuthGuard on platform-admin-only routes (company/template
@@ -14,7 +15,7 @@ export class PlatformAdminGuard implements CanActivate {
     const payload = req.user as JwtPayload | undefined;
     if (!payload) throw new UnauthorizedException();
     if (payload.actorType !== 'PLATFORM_ADMIN') {
-      throw new ForbiddenException('هذا الإجراء متاح لحساب المطوّر فقط');
+      throw new ForbiddenException(MSG.platform_admin_only);
     }
     return true;
   }

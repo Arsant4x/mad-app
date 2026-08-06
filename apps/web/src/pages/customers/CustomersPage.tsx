@@ -6,6 +6,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { CustomerModal } from './CustomerModal';
+import i18n from '../../i18n';
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -61,7 +62,7 @@ export function CustomersPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف العميل');
+      setDeleteError(message ?? i18n.t('err_customer_delete'));
     }
   }
 

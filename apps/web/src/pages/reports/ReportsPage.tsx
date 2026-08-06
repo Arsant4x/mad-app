@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getBalanceSheet, getCashFlow, getIncomeStatement, type BalanceSheet, type CashFlow, type IncomeStatement } from '../../api/reports';
+import {
+  getBalanceSheet,
+  getCashFlow,
+  getIncomeStatement,
+  getPropertyKpis,
+  type BalanceSheet,
+  type CashFlow,
+  type IncomeStatement,
+  type PropertyKpis,
+} from '../../api/reports';
 import { dfmt, fmt } from '../../lib/format';
+import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -14,6 +24,8 @@ export function ReportsPage() {
   const [income, setIncome] = useState<IncomeStatement | null>(null);
   const [balance, setBalance] = useState<BalanceSheet | null>(null);
   const [cash, setCash] = useState<CashFlow | null>(null);
+  const [branchSummary, setBranchSummary] = useState<BranchSummary | null>(null);
+  const [kpis, setKpis] = useState<PropertyKpis | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
@@ -29,11 +41,21 @@ export function ReportsPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getIncomeStatement({ from: from ?? undefined, to }), getBalanceSheet(), getCashFlow({ from: from ?? undefined, to })])
-      .then(([inc, bal, cf]) => {
+    Promise.all([
+      getIncomeStatement({ from: from ?? undefined, to }),
+      getBalanceSheet(),
+      getCashFlow({ from: from ?? undefined, to }),
+      getBranchSummary({ from: from ?? undefined, to }),
+      // Point-in-time by design: occupancy and expiry are about today, not
+      // about the selected reporting period.
+      getPropertyKpis(),
+    ])
+      .then(([inc, bal, cf, br, pk]) => {
         setIncome(inc);
         setBalance(bal);
         setCash(cf);
+        setBranchSummary(br);
+        setKpis(pk);
       })
       .finally(() => setLoading(false));
   }, [from, to]);
@@ -101,6 +123,19 @@ export function ReportsPage() {
         <button className={tab === 'cash' ? 'tab active' : 'tab'} onClick={() => setTab('cash')}>
           التدفقات النقدية
         </button>
+        {/* Only for landlords: a business with no properties has nothing here. */}
+        {(kpis?.occupancy.length ?? 0) > 0 && (
+          <button className={tab === 'property' ? 'tab active' : 'tab'} onClick={() => setTab('property')}>
+            المؤشرات العقارية
+          </button>
+        )}
+        {/* Only offered once branches exist — a single-location business has
+            nothing to compare. */}
+        {(branchSummary?.branches.length ?? 0) > 0 && (
+          <button className={tab === 'branch' ? 'tab active' : 'tab'} onClick={() => setTab('branch')}>
+            حسب الفرع
+          </button>
+        )}
       </div>
 
       <div className="card">
@@ -242,6 +277,175 @@ export function ReportsPage() {
                   <td>صافي التغير في النقدية</td>
                   <td className="num">{fmt(cash.netCashChange)}</td>
                 </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {tab === 'branch' && branchSummary && (
+          <>
+            <div className="card-title" style={{ marginBottom: 14 }}>
+              الأداء حسب الفرع — {periodLabel}
+            </div>
+            <p className="hint" style={{ marginBottom: 10 }}>
+              محسوب من القيود المرحَّلة بالعملة الأساسية، فتظهر الفروع التي تتعامل بعملة أخرى ضمن إجمالي واحد قابل للمقارنة.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>الفرع</th>
+                  <th>الإيرادات</th>
+                  <th>المصروفات</th>
+                  <th>صافي الدخل</th>
+                </tr>
+              </thead>
+              <tbody>
+                {branchSummary.branches.map((b) => (
+                  <tr key={b.branchId}>
+                    <td>{b.branchName}</td>
+                    <td className="num">{fmt(b.revenue)}</td>
+                    <td className="num">{fmt(b.expenses)}</td>
+                    <td className="num" style={{ color: b.netIncome >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
+                      {fmt(b.netIncome)}
+                    </td>
+                  </tr>
+                ))}
+                {/* Its own row rather than folded away: company-wide documents
+                    genuinely belong to no branch, and hiding them would stop
+                    the rows adding up to the consolidated total. */}
+                <tr style={{ color: 'var(--muted)' }}>
+                  <td>{branchSummary.unassigned.branchName}</td>
+                  <td className="num">{fmt(branchSummary.unassigned.revenue)}</td>
+                  <td className="num">{fmt(branchSummary.unassigned.expenses)}</td>
+                  <td className="num">{fmt(branchSummary.unassigned.netIncome)}</td>
+                </tr>
+                <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700 }}>
+                  <td>{branchSummary.consolidated.branchName}</td>
+                  <td className="num">{fmt(branchSummary.consolidated.revenue)}</td>
+                  <td className="num">{fmt(branchSummary.consolidated.expenses)}</td>
+                  <td className="num" style={{ color: branchSummary.consolidated.netIncome >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
+                    {fmt(branchSummary.consolidated.netIncome)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {tab === 'property' && kpis && (
+          <>
+            <div className="card-title" style={{ marginBottom: 14 }}>
+              مؤشرات المحفظة العقارية — حتى اليوم
+            </div>
+            {/* Says the figures are live, unlike the tabs above which honour the
+                period picker. Leaving that unsaid invites the wrong reading. */}
+            <p className="hint" style={{ marginBottom: 10 }}>
+              هذه المؤشرات لحظية ولا تتبع الفترة المختارة أعلاه: الإشغال والعقود المنتهية تُحسب من تاريخ اليوم.
+            </p>
+
+            <div className="two-col" style={{ marginBottom: 14 }}>
+              <div className="field">
+                <label>معدل الإشغال</label>
+                <p className="num" style={{ fontSize: 20, margin: 0, fontWeight: 700 }}>
+                  {kpis.portfolio.occupancyRate}%
+                </p>
+                <p className="hint">
+                  {kpis.portfolio.rented} من {kpis.portfolio.totalUnits} وحدة في {kpis.portfolio.totalProperties} عقاراً
+                </p>
+              </div>
+              <div className="field">
+                <label>التحصيل في الوقت المحدد</label>
+                <p className="num" style={{ fontSize: 20, margin: 0, fontWeight: 700 }}>
+                  {kpis.collection.onTimeRate}%
+                </p>
+                {/* Two different numbers, and the gap between them is the point. */}
+                <p className="hint">
+                  المحصَّل إجمالاً {kpis.collection.collectedRate}% من {fmt(kpis.collection.dueAmount)} مستحقة —{' '}
+                  {kpis.collection.overdueCount} قسط متأخر
+                </p>
+              </div>
+            </div>
+
+            <div className="card-title" style={{ margin: '16px 0 8px' }}>
+              العقود المنتهية قريباً
+            </div>
+            <div className="chip-group" style={{ marginBottom: 8 }}>
+              <span className="chip">خلال 30 يوماً: {kpis.expiring.within30}</span>
+              <span className="chip">خلال 60: {kpis.expiring.within60}</span>
+              <span className="chip">خلال 90: {kpis.expiring.within90}</span>
+              {kpis.expiring.alreadyRenewed > 0 && <span className="chip">مجدَّدة بالفعل: {kpis.expiring.alreadyRenewed}</span>}
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>العقد</th>
+                  <th>المستأجر</th>
+                  <th>الموقع</th>
+                  <th>الانتهاء</th>
+                  <th>المتبقي</th>
+                  <th>القيمة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpis.expiring.contracts.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>
+                      <div className="empty-state">لا توجد عقود تنتهي خلال 90 يوماً</div>
+                    </td>
+                  </tr>
+                )}
+                {kpis.expiring.contracts.map((c) => (
+                  <tr key={c.id}>
+                    <td className="num">{c.no}</td>
+                    <td>{c.tenant}</td>
+                    <td>
+                      {c.propertyName}
+                      <div className="hint">وحدة {c.unitNo}</div>
+                    </td>
+                    <td className="num">{dfmt(c.end)}</td>
+                    <td className="num" style={{ color: c.daysLeft <= 30 ? 'var(--rose)' : undefined }}>
+                      {c.daysLeft} يوم
+                    </td>
+                    <td className="num">{fmt(c.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="card-title" style={{ margin: '16px 0 8px' }}>
+              الإشغال حسب العقار
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>العقار</th>
+                  <th>الوحدات</th>
+                  <th>مؤجَّرة</th>
+                  <th>محجوزة</th>
+                  <th>شاغرة</th>
+                  <th>صيانة</th>
+                  <th>الإشغال</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpis.occupancy.length === 0 && (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="empty-state">لا توجد عقارات</div>
+                    </td>
+                  </tr>
+                )}
+                {kpis.occupancy.map((o) => (
+                  <tr key={o.propertyId}>
+                    <td>{o.propertyName}</td>
+                    <td className="num">{o.total}</td>
+                    <td className="num">{o.rented}</td>
+                    <td className="num">{o.reserved}</td>
+                    <td className="num">{o.vacant}</td>
+                    <td className="num">{o.maintenance}</td>
+                    <td className="num">{o.occupancyRate}%</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </>

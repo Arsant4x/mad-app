@@ -4,6 +4,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
 import { WarehouseModal } from './WarehouseModal';
+import i18n from '../../i18n';
 
 export function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -46,7 +47,7 @@ export function WarehousesPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف المستودع');
+      setDeleteError(message ?? i18n.t('err_warehouse_delete'));
     }
   }
 

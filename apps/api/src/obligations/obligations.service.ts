@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
+import { MSG } from '../common/i18n/messages';
 
 /** The standard 9-item checklist from the mockup, verbatim — no due date, no
  * amount, no penalty, no recurrence. Auto-seeded per company on first read
@@ -41,7 +42,7 @@ export class ObligationsService {
   toggle(companyId: string, id: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.governmentObligation.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('البند غير موجود');
+      if (!existing) throw new NotFoundException(MSG.obligation_not_found);
       return tx.governmentObligation.update({ where: { id }, data: { done: !existing.done } });
     });
   }

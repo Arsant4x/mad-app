@@ -1,0 +1,209 @@
+import { useState } from 'react';
+import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract } from '../../api/contracts';
+import { dfmt, fmt, today } from '../../lib/format';
+
+const KIND_LABEL: Record<ClaimKind, string> = {
+  MAINTENANCE: 'صيانة',
+  UTILITIES: 'فواتير خدمات',
+  LATE_FEE: 'غرامة تأخير',
+  DAMAGE: 'أضرار',
+  OTHER: 'أخرى',
+};
+
+const STATUS_META: Record<ClaimStatus, { label: string; badgeClass: string }> = {
+  OPEN: { label: 'مستحقة', badgeClass: 'due' },
+  PAID: { label: 'محصَّلة', badgeClass: 'paid' },
+  WAIVED: { label: 'مُسقَطة', badgeClass: 'draft' },
+};
+
+const KINDS = Object.keys(KIND_LABEL) as ClaimKind[];
+
+/**
+ * Claims on the tenant: repairs they caused, utilities they left, late fees.
+ *
+ * A claim is owed from the moment it is raised, so the list leads with the
+ * outstanding total — that figure is what the landlord chases, and it is also
+ * what a held deposit can be applied against.
+ */
+export function ClaimsSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [waivingId, setWaivingId] = useState<string | null>(null);
+  const [waiveReason, setWaiveReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [kind, setKind] = useState<ClaimKind>('MAINTENANCE');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [issuedAt, setIssuedAt] = useState(today());
+
+  const outstanding = contract.claims.filter((c) => c.status === 'OPEN').reduce((sum, c) => sum + Number(c.amount), 0);
+
+  function fail(e: unknown) {
+    const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إتمام العملية'));
+  }
+
+  async function run(action: () => Promise<Contract>, after?: () => void) {
+    setError(null);
+    setBusy(true);
+    try {
+      onChanged(await action());
+      after?.();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>
+          المطالبات ({contract.claims.length}){outstanding > 0 && <span className="hint"> — مستحق على المستأجر: {fmt(outstanding)}</span>}
+        </span>
+        {contract.status !== 'CANCELLED' && (
+          <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
+            {adding ? 'إلغاء' : '+ مطالبة'}
+          </button>
+        )}
+      </div>
+
+      {error && <p className="error-text">{error}</p>}
+
+      {adding && (
+        <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
+          <div className="two-col">
+            <div className="field">
+              <label>النوع</label>
+              <select value={kind} onChange={(e) => setKind(e.target.value as ClaimKind)}>
+                {KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>المبلغ</label>
+              <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <label>الوصف</label>
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="يظهر للمستأجر — اذكر السبب بوضوح" />
+          </div>
+          <div className="field">
+            <label>تاريخ المطالبة</label>
+            <input type="date" value={issuedAt} onChange={(e) => setIssuedAt(e.target.value)} />
+          </div>
+          {/* Says where it lands, because "claim" doesn't tell the user it is
+              recognized as income the moment it's raised. */}
+          <p className="hint">تُسجَّل فور إنشائها كمستحق على المستأجر ضمن إيرادات أخرى — ويمكن خصمها لاحقاً من التأمين المحتجز.</p>
+          <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
+            <button
+              className="btn btn-primary"
+              disabled={busy || !(Number(amount) > 0) || !description.trim()}
+              onClick={() =>
+                run(
+                  () => createClaim(contract.id, { kind, amount: Number(amount), description: description.trim(), issuedAt }),
+                  () => {
+                    setAdding(false);
+                    setAmount('');
+                    setDescription('');
+                  },
+                )
+              }
+            >
+              حفظ
+            </button>
+          </div>
+        </div>
+      )}
+
+      <table>
+        <thead>
+          <tr>
+            <th>النوع</th>
+            <th>الوصف</th>
+            <th>المبلغ</th>
+            <th>التاريخ</th>
+            <th>الحالة</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {contract.claims.length === 0 && (
+            <tr>
+              <td colSpan={6}>
+                <div className="empty-state">لا توجد مطالبات</div>
+              </td>
+            </tr>
+          )}
+          {contract.claims.map((c) => (
+            <tr key={c.id}>
+              <td>{KIND_LABEL[c.kind]}</td>
+              <td>{c.description}</td>
+              <td className="num">{fmt(c.amount)}</td>
+              <td className="num">{dfmt(c.issuedAt)}</td>
+              <td>
+                <span className={`badge ${STATUS_META[c.status].badgeClass}`}>{STATUS_META[c.status].label}</span>
+                {c.status === 'WAIVED' && c.waiveReason && <div className="hint">{c.waiveReason}</div>}
+                {c.settledAt && <div className="hint">{dfmt(c.settledAt)}</div>}
+              </td>
+              <td>
+                {c.status === 'OPEN' && (
+                  <>
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => payClaim(contract.id, c.id, today()))}>
+                      تحصيل
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setWaivingId(waivingId === c.id ? null : c.id);
+                        setWaiveReason('');
+                        setError(null);
+                      }}
+                    >
+                      إسقاط
+                    </button>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {waivingId && (
+        <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
+          <div className="field">
+            <label>سبب الإسقاط</label>
+            <input value={waiveReason} onChange={(e) => setWaiveReason(e.target.value)} placeholder="مثال: تنازل ودّي" />
+            {/* Written off, not deleted — the ledger shows both that it was
+                raised and that it was dropped. */}
+            <p className="hint">سيُعكس الإيراد المسجَّل وتُصفَّى الذمّة، وتبقى المطالبة ظاهرة في السجل.</p>
+          </div>
+          <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
+            <button className="btn btn-ghost" onClick={() => setWaivingId(null)}>
+              تراجع
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={busy || !waiveReason.trim()}
+              onClick={() =>
+                run(
+                  () => waiveClaim(contract.id, waivingId, { waivedAt: today(), reason: waiveReason.trim() }),
+                  () => setWaivingId(null),
+                )
+              }
+            >
+              تأكيد الإسقاط
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

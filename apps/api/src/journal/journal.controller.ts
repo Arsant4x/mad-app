@@ -15,7 +15,7 @@ export class JournalController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.journalService.list(tenant.companyId);
+    return this.journalService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()

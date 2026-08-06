@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Customer, CustomerInput } from '../../api/customers';
+import i18n from '../../i18n';
 
 export function CustomerModal({
   editing,
@@ -20,7 +21,7 @@ export function CustomerModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم العميل');
+      setError(i18n.t('err_customer_name_required'));
       return;
     }
     setSaving(true);
@@ -33,7 +34,7 @@ export function CustomerModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ العميل');
+      setError(message ?? i18n.t('err_customer_save'));
     } finally {
       setSaving(false);
     }

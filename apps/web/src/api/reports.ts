@@ -41,6 +41,43 @@ export interface ReportRange {
   to?: string;
 }
 
+export interface PropertyOccupancy {
+  propertyId: string;
+  propertyName: string;
+  total: number;
+  rented: number;
+  reserved: number;
+  vacant: number;
+  maintenance: number;
+  /** Rented ÷ **total** units — a building half under maintenance really is
+   * half empty, so maintenance stays in the denominator. */
+  occupancyRate: number;
+}
+
+export interface PropertyKpis {
+  occupancy: PropertyOccupancy[];
+  portfolio: { totalProperties: number; totalUnits: number; rented: number; occupancyRate: number };
+  collection: {
+    /** Only instalments that have actually fallen due — next year's schedule
+     * doesn't drag the rate down. */
+    dueAmount: number;
+    paidAmount: number;
+    onTimeAmount: number;
+    collectedRate: number;
+    onTimeRate: number;
+    overdueCount: number;
+  };
+  expiring: {
+    within30: number;
+    within60: number;
+    within90: number;
+    alreadyRenewed: number;
+    contracts: { id: string; no: string; tenant: string; end: string; value: string; daysLeft: number; unitNo: string; propertyName: string }[];
+  };
+}
+
+export const getPropertyKpis = () => apiClient.get<PropertyKpis>('/reports/property-kpis').then((r) => r.data);
+
 export const getIncomeStatement = (range: ReportRange) => apiClient.get<IncomeStatement>('/reports/income-statement', { params: range }).then((r) => r.data);
 export const getBalanceSheet = () => apiClient.get<BalanceSheet>('/reports/balance-sheet').then((r) => r.data);
 export const getCashFlow = (range: ReportRange) => apiClient.get<CashFlow>('/reports/cash-flow', { params: range }).then((r) => r.data);

@@ -1,0 +1,472 @@
+/**
+ * Every user-facing message the API can return, in each supported language.
+ *
+ * Services throw the *key* (e.g. `throw new NotFoundException(MSG.invoice_not_found)`)
+ * and `HttpExceptionFilter` swaps it for the caller's language, chosen from
+ * the request's `Accept-Language` header. A key that isn't in this catalog is
+ * passed through untouched, so a message written inline still works — it just
+ * won't be translated.
+ *
+ * Messages with a runtime value use `{placeholder}` and are built with
+ * `formatMessage(key, { placeholder: value })` at the throw site.
+ */
+
+export type Language = 'ar' | 'en';
+
+export const SUPPORTED_LANGUAGES: readonly Language[] = ['ar', 'en'] as const;
+
+/** Arabic is the product's primary language: it's the fallback whenever the
+ * request doesn't ask for something we support. */
+export const DEFAULT_LANGUAGE: Language = 'ar';
+
+/** Keys are namespaced by domain so the catalog stays navigable as it grows.
+ * The value is the key itself — this indirection is what lets a service refer
+ * to `MSG.invoice_not_found` and get compile-time safety against typos. */
+export const MSG = {
+  // generic
+  internal_error: 'common.internal_error',
+
+  // auth / session
+  invalid_credentials: 'auth.invalid_credentials',
+  session_expired: 'auth.session_expired',
+  session_invalid: 'auth.session_invalid',
+  session_missing: 'auth.session_missing',
+  company_login_required: 'auth.company_login_required',
+  platform_admin_only: 'auth.platform_admin_only',
+
+  // accounts / journal
+  account_not_found: 'accounts.not_found',
+  account_code_taken: 'accounts.code_taken',
+  account_type_locked: 'accounts.type_locked',
+  account_has_journal_lines: 'accounts.has_journal_lines',
+  journal_entry_not_found: 'journal.entry_not_found',
+  journal_entry_unbalanced: 'journal.entry_unbalanced',
+  journal_line_account_not_found: 'journal.line_account_not_found',
+  journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
+
+  // customers / invoices
+  customer_not_found: 'customers.not_found',
+  customer_has_invoices: 'customers.has_invoices',
+  invoice_not_found: 'invoices.not_found',
+
+  // suppliers / purchases
+  supplier_not_found: 'suppliers.not_found',
+  supplier_has_purchases: 'suppliers.has_purchases',
+  purchase_not_found: 'purchases.not_found',
+
+  // products / inventory
+  product_not_found: 'products.not_found',
+  warehouse_not_found: 'warehouses.not_found',
+  warehouse_has_movements: 'warehouses.has_movements',
+  destination_warehouse_required: 'inventory.destination_required',
+  destination_warehouse_not_found: 'inventory.destination_not_found',
+  destination_same_as_source: 'inventory.destination_same_as_source',
+  movement_not_found: 'inventory.movement_not_found',
+  quantity_must_be_positive: 'inventory.quantity_must_be_positive',
+  adjustment_cannot_be_zero: 'inventory.adjustment_cannot_be_zero',
+
+  // employees / banks
+  employee_not_found: 'employees.not_found',
+  bank_not_found: 'banks.not_found',
+  bank_required: 'banks.required',
+  bank_transaction_not_found: 'transactions.not_found',
+
+  // properties / units / contracts
+  property_not_found: 'properties.not_found',
+  property_has_units: 'properties.has_units',
+  unit_not_found: 'units.not_found',
+  unit_number_taken: 'units.number_taken',
+  unit_has_contracts: 'units.has_contracts',
+  unit_type_activity_mismatch: 'units.type_activity_mismatch',
+  unit_subtype_mismatch: 'units.subtype_mismatch',
+  contract_not_found: 'contracts.not_found',
+  contract_already_cancelled: 'contracts.already_cancelled',
+  contract_start_after_end: 'contracts.start_after_end',
+  contract_outside_head_lease: 'contracts.outside_head_lease',
+  contract_dates_overlap: 'contracts.dates_overlap',
+  installment_not_found: 'contracts.installment_not_found',
+  contract_cancelled_cannot_renew: 'contracts.cancelled_cannot_renew',
+  contract_already_renewed: 'contracts.already_renewed',
+  contract_no_taken: 'contracts.no_taken',
+  renewal_must_start_after_source: 'contracts.renewal_start_before_source',
+  warranty_not_found: 'warranties.not_found',
+  warranty_end_before_start: 'warranties.end_before_start',
+  warranty_has_claims: 'warranties.has_claims',
+  warranty_not_covering: 'warranties.not_covering',
+  notification_not_found: 'notifications.not_found',
+  escalation_recipient_not_found: 'notifications.escalation_recipient_not_found',
+  maintenance_not_found: 'maintenance.not_found',
+  maintenance_invalid_transition: 'maintenance.invalid_transition',
+  maintenance_status_final: 'maintenance.status_final',
+  unit_not_in_property: 'units.not_in_property',
+  handover_not_found: 'handovers.not_found',
+  handover_signed_immutable: 'handovers.signed_immutable',
+  claim_not_found: 'claims.not_found',
+  claim_already_settled: 'claims.already_settled',
+  deposit_not_found: 'deposits.not_found',
+  deposit_already_settled: 'deposits.already_settled',
+  deductions_exceed_deposit: 'deposits.deductions_exceed',
+  payment_net_must_be_positive: 'contracts.payment_net_must_be_positive',
+
+  // reservations
+  reservation_not_found: 'reservations.not_found',
+  reservation_unit_rented: 'reservations.unit_rented',
+  reservation_already_active: 'reservations.already_active',
+  reservation_name_mismatch: 'reservations.name_mismatch',
+
+  // obligations
+  obligation_not_found: 'obligations.not_found',
+
+  // platform admin / templates / company users
+  company_not_found: 'companies.not_found',
+  username_taken: 'companies.username_taken',
+  template_not_found: 'templates.not_found',
+  template_name_required: 'templates.name_required',
+  template_name_taken: 'templates.name_taken',
+  template_in_use: 'templates.in_use',
+  template_system_immutable: 'templates.system_immutable',
+  template_system_undeletable: 'templates.system_undeletable',
+  template_system_not_assignable: 'templates.system_not_assignable',
+  templates_read_forbidden: 'templates.read_forbidden',
+  company_user_not_found: 'companyUsers.not_found',
+  company_users_owner_only: 'companyUsers.owner_only',
+  company_profile_owner_only: 'companyProfile.owner_only',
+
+  // zatca
+  zatca_profile_incomplete: 'zatca.profile_incomplete',
+  zatca_onboarding_not_started: 'zatca.onboarding_not_started',
+  zatca_already_onboarded: 'zatca.already_onboarded',
+  zatca_compliance_required: 'zatca.compliance_required',
+  zatca_not_onboarded: 'zatca.not_onboarded',
+  zatca_already_cleared: 'zatca.already_cleared',
+
+  // branches / activities
+  branch_not_found: 'branches.not_found',
+  branch_name_taken: 'branches.name_taken',
+  branch_forbidden: 'branches.forbidden',
+  branch_has_data: 'branches.has_data',
+  activity_not_found: 'activities.not_found',
+  activity_name_taken: 'activities.name_taken',
+  activity_in_use: 'activities.in_use',
+  activity_last_one: 'activities.last_one',
+
+  // currencies / exchange rates
+  currency_not_found: 'currencies.not_found',
+  currency_code_taken: 'currencies.code_taken',
+  currency_base_immutable: 'currencies.base_immutable',
+  currency_base_undeletable: 'currencies.base_undeletable',
+  currency_in_use: 'currencies.in_use',
+  currency_rate_must_be_positive: 'currencies.rate_must_be_positive',
+  exchange_rate_same_currency: 'exchangeRates.same_currency',
+
+  // fiscal year / period close
+  fiscal_year_not_found: 'fiscal.year_not_found',
+  fiscal_period_not_found: 'fiscal.period_not_found',
+  fiscal_year_overlaps: 'fiscal.year_overlaps',
+  fiscal_year_start_after_end: 'fiscal.year_start_after_end',
+  fiscal_no_period_for_date: 'fiscal.no_period_for_date',
+  fiscal_period_closed: 'fiscal.period_closed',
+
+  // tenant status / screen access
+  account_frozen: 'tenant.account_frozen',
+  account_stopped: 'tenant.account_stopped',
+  screen_forbidden: 'tenant.screen_forbidden',
+
+  // files
+  file_missing: 'files.missing',
+  file_too_large: 'files.too_large',
+  file_type_unsupported: 'files.type_unsupported',
+  file_access_denied: 'files.access_denied',
+
+  // validation (used by class-validator DTOs)
+  vat_number_invalid: 'validation.vat_number',
+  cr_number_invalid: 'validation.cr_number',
+  postal_code_invalid: 'validation.postal_code',
+  email_invalid: 'validation.email',
+  legal_name_required: 'validation.legal_name_required',
+  file_key_required: 'validation.file_key_required',
+} as const;
+
+export type MessageKey = (typeof MSG)[keyof typeof MSG];
+
+const CATALOG: Record<string, Record<Language, string>> = {
+  [MSG.internal_error]: { ar: 'حدث خطأ غير متوقع في الخادم', en: 'An unexpected server error occurred' },
+
+  [MSG.invalid_credentials]: { ar: 'بيانات الدخول غير صحيحة', en: 'Invalid username or password' },
+  [MSG.session_expired]: { ar: 'انتهت صلاحية الجلسة', en: 'Your session has expired' },
+  [MSG.session_invalid]: { ar: 'جلسة غير صالحة', en: 'Invalid session' },
+  [MSG.session_missing]: { ar: 'لا توجد جلسة', en: 'No active session' },
+  [MSG.company_login_required]: { ar: 'مطلوب تسجيل دخول بحساب شركة', en: 'A company account login is required' },
+  [MSG.platform_admin_only]: { ar: 'هذا الإجراء متاح لحساب المطوّر فقط', en: 'This action is restricted to the platform administrator' },
+
+  [MSG.account_not_found]: { ar: 'الحساب غير موجود', en: 'Account not found' },
+  [MSG.account_code_taken]: { ar: 'رمز الحساب "{code}" مستخدَم بالفعل', en: 'Account code "{code}" is already in use' },
+  [MSG.account_type_locked]: { ar: 'لا يمكن تغيير نوع حساب مستخدَم بقيود مرحّلة', en: "Cannot change the type of an account that has posted journal entries" },
+  [MSG.account_has_journal_lines]: {
+    ar: 'لا يمكن حذف حساب مرتبط بقيود يومية — احذف القيود المرتبطة أولاً',
+    en: 'Cannot delete an account linked to journal entries — delete those entries first',
+  },
+  [MSG.journal_entry_not_found]: { ar: 'القيد غير موجود', en: 'Journal entry not found' },
+  [MSG.journal_entry_unbalanced]: { ar: 'القيد غير متوازن — لا يمكن ترحيله', en: 'Journal entry is unbalanced — it cannot be posted' },
+  [MSG.journal_line_account_not_found]: { ar: 'أحد الحسابات المحددة بالقيد غير موجود', en: 'One of the accounts referenced by this entry does not exist' },
+  [MSG.journal_auto_entry_undeletable]: {
+    ar: 'لا يمكن حذف قيد آلي مباشرة — احذف المستند المصدر (الفاتورة/فاتورة الشراء) بدلاً من ذلك',
+    en: 'An automatic entry cannot be deleted directly — delete the source document (invoice/purchase) instead',
+  },
+
+  [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
+  [MSG.customer_has_invoices]: {
+    ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',
+    en: 'Cannot delete a customer that has invoices — delete their invoices first',
+  },
+  [MSG.invoice_not_found]: { ar: 'الفاتورة غير موجودة', en: 'Invoice not found' },
+
+  [MSG.supplier_not_found]: { ar: 'المورد غير موجود', en: 'Supplier not found' },
+  [MSG.supplier_has_purchases]: {
+    ar: 'لا يمكن حذف مورد مرتبط بفواتير شراء — احذف فواتيره أولاً',
+    en: 'Cannot delete a supplier that has purchase invoices — delete those invoices first',
+  },
+  [MSG.purchase_not_found]: { ar: 'فاتورة الشراء غير موجودة', en: 'Purchase invoice not found' },
+
+  [MSG.product_not_found]: { ar: 'المنتج غير موجود', en: 'Product not found' },
+  [MSG.warehouse_not_found]: { ar: 'المستودع غير موجود', en: 'Warehouse not found' },
+  [MSG.warehouse_has_movements]: {
+    ar: 'لا يمكن حذف مستودع له حركات مخزون — احذف حركاته أولاً',
+    en: 'Cannot delete a warehouse that has stock movements — delete those movements first',
+  },
+  [MSG.destination_warehouse_required]: { ar: 'الرجاء اختيار المستودع الوجهة', en: 'Please choose a destination warehouse' },
+  [MSG.destination_warehouse_not_found]: { ar: 'المستودع الوجهة غير موجود', en: 'Destination warehouse not found' },
+  [MSG.destination_same_as_source]: { ar: 'لا يمكن التحويل لنفس المستودع', en: 'Cannot transfer to the same warehouse' },
+  [MSG.movement_not_found]: { ar: 'الحركة غير موجودة', en: 'Stock movement not found' },
+  [MSG.quantity_must_be_positive]: { ar: 'الكمية يجب أن تكون أكبر من صفر', en: 'Quantity must be greater than zero' },
+  [MSG.adjustment_cannot_be_zero]: { ar: 'قيمة التسوية يجب ألا تساوي صفراً', en: 'Adjustment amount cannot be zero' },
+
+  [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
+  [MSG.bank_not_found]: { ar: 'الحساب البنكي غير موجود', en: 'Bank account not found' },
+  [MSG.bank_required]: { ar: 'الرجاء اختيار الحساب البنكي', en: 'Please choose a bank account' },
+  [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
+
+  [MSG.property_not_found]: { ar: 'العقار غير موجود', en: 'Property not found' },
+  [MSG.property_has_units]: {
+    ar: 'لا يمكن حذف عقار له وحدات — احذف وحداته أولاً',
+    en: 'Cannot delete a property that has units — delete its units first',
+  },
+  [MSG.unit_not_found]: { ar: 'الوحدة غير موجودة', en: 'Unit not found' },
+  [MSG.unit_number_taken]: { ar: 'رقم الوحدة "{unitNo}" مستخدَم بالفعل في هذا العقار', en: 'Unit number "{unitNo}" is already used in this property' },
+  [MSG.unit_has_contracts]: {
+    ar: 'لا يمكن حذف وحدة مرتبطة بعقود — احذف عقودها أولاً',
+    en: 'Cannot delete a unit that has contracts — delete its contracts first',
+  },
+  [MSG.unit_type_activity_mismatch]: { ar: 'نوع الوحدة لا يتوافق مع نشاط العقار المحدَّد', en: "Unit type does not match the property's designated activity" },
+  [MSG.unit_subtype_mismatch]: {
+    ar: 'فئة الوحدة لا تتوافق مع الفئة السكنية المحدَّدة للعقار',
+    en: "Unit category does not match the property's designated residential category",
+  },
+  [MSG.contract_not_found]: { ar: 'العقد غير موجود', en: 'Contract not found' },
+  [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
+  [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },
+  [MSG.contract_outside_head_lease]: {
+    ar: 'مدة العقد يجب أن تقع ضمن فترة عقد إيجار العقار الأصلي',
+    en: "Contract period must fall within the property's own head-lease window",
+  },
+  [MSG.contract_dates_overlap]: {
+    ar: 'تعارض تواريخ — الوحدة مؤجَّرة بالفعل بموجب العقد {contractNo} خلال هذه الفترة',
+    en: 'Date conflict — this unit is already leased under contract {contractNo} during that period',
+  },
+  [MSG.installment_not_found]: { ar: 'القسط غير موجود', en: 'Installment not found' },
+  [MSG.contract_cancelled_cannot_renew]: { ar: 'لا يمكن تجديد عقد ملغى', en: 'A cancelled contract cannot be renewed' },
+  [MSG.contract_already_renewed]: {
+    ar: 'هذا العقد مجدَّد بالفعل بالعقد {contractNo}',
+    en: 'This contract has already been renewed as {contractNo}',
+  },
+  [MSG.contract_no_taken]: { ar: 'رقم العقد "{contractNo}" مستخدَم بالفعل', en: 'Contract number "{contractNo}" is already in use' },
+  [MSG.renewal_must_start_after_source]: {
+    ar: 'تاريخ بداية التجديد يجب أن يكون بعد بداية العقد الأصلي',
+    en: 'The renewal must start after the original contract began',
+  },
+  [MSG.warranty_not_found]: { ar: 'الضمان غير موجود', en: 'Warranty not found' },
+  [MSG.warranty_end_before_start]: { ar: 'تاريخ انتهاء الضمان قبل تاريخ بدايته', en: 'The warranty ends before it starts' },
+  [MSG.warranty_has_claims]: { ar: 'لا يمكن حذف ضمان استُخدم في بلاغات صيانة — هو المستند خلفها', en: 'A warranty already claimed against cannot be deleted — it is the evidence behind those jobs' },
+  [MSG.warranty_not_covering]: { ar: 'هذا الضمان لا يغطي موقع البلاغ أو تاريخه', en: 'This warranty does not cover the location or the date of the request' },
+  [MSG.notification_not_found]: { ar: 'الإشعار غير موجود', en: 'Notification not found' },
+  [MSG.escalation_recipient_not_found]: { ar: 'مستلم التصعيد غير موجود أو غير تابع لهذه الشركة', en: 'The escalation recipient does not exist in this company' },
+  [MSG.maintenance_not_found]: { ar: 'بلاغ الصيانة غير موجود', en: 'Maintenance request not found' },
+  [MSG.maintenance_invalid_transition]: {
+    ar: 'لا يمكن نقل البلاغ من "{from}" إلى "{to}"',
+    en: 'A request cannot move from "{from}" to "{to}"',
+  },
+  [MSG.maintenance_status_final]: {
+    ar: 'البلاغ "{status}" ولا يقبل التعديل',
+    en: 'This request is "{status}" and can no longer be edited',
+  },
+  [MSG.unit_not_in_property]: { ar: 'الوحدة لا تتبع العقار المحدَّد', en: 'The unit does not belong to the selected property' },
+  [MSG.handover_not_found]: { ar: 'النموذج غير موجود', en: 'Handover form not found' },
+  [MSG.handover_signed_immutable]: {
+    ar: 'النموذج موقَّع ولا يمكن تعديله أو حذفه',
+    en: 'This form is signed and can no longer be changed or deleted',
+  },
+  [MSG.claim_not_found]: { ar: 'المطالبة غير موجودة', en: 'Claim not found' },
+  [MSG.claim_already_settled]: { ar: 'هذه المطالبة مسوّاة بالفعل', en: 'This claim has already been settled' },
+  [MSG.deposit_not_found]: { ar: 'التأمين غير موجود', en: 'Deposit not found' },
+  [MSG.deposit_already_settled]: { ar: 'تمت تسوية هذا التأمين مسبقاً', en: 'This deposit has already been settled' },
+  [MSG.deductions_exceed_deposit]: {
+    ar: 'مجموع الخصومات يتجاوز مبلغ التأمين ({held})',
+    en: 'Deductions exceed the deposit amount ({held})',
+  },
+  [MSG.payment_net_must_be_positive]: { ar: 'المبلغ الصافي يجب أن يكون أكبر من صفر', en: 'Net amount must be greater than zero' },
+
+  [MSG.reservation_not_found]: { ar: 'الحجز غير موجود', en: 'Reservation not found' },
+  [MSG.reservation_unit_rented]: {
+    ar: 'هذه الوحدة مؤجَّرة حالياً بعقد سارٍ — لا يمكن حجزها',
+    en: 'This unit is currently leased under an active contract — it cannot be reserved',
+  },
+  [MSG.reservation_already_active]: {
+    ar: 'يوجد حجز نشط على هذه الوحدة بالفعل حتى {expiryDate}',
+    en: 'This unit already has an active reservation until {expiryDate}',
+  },
+  [MSG.reservation_name_mismatch]: {
+    ar: 'تعذّر الحفظ — هذه الوحدة محجوزة بعربون لـ"{name}" حتى {expiryDate}. لا يمكن تأجيرها لمستأجر آخر قبل انتهاء الحجز، أو أدخل نفس الاسم لتحويل الحجز إلى عقد',
+    en: 'Cannot save — this unit is reserved with a deposit for "{name}" until {expiryDate}. It cannot be leased to a different tenant before the reservation ends; enter the same name to convert the reservation into a contract',
+  },
+
+  [MSG.obligation_not_found]: { ar: 'البند غير موجود', en: 'Obligation item not found' },
+
+  [MSG.company_not_found]: { ar: 'الشركة غير موجودة', en: 'Company not found' },
+  [MSG.username_taken]: { ar: 'اسم المستخدم "{username}" مستخدَم بالفعل', en: 'Username "{username}" is already taken' },
+  [MSG.template_not_found]: { ar: 'القالب غير موجود', en: 'Permission template not found' },
+  [MSG.template_name_required]: { ar: 'اسم النموذج مطلوب', en: 'Template name is required' },
+  [MSG.template_name_taken]: { ar: 'يوجد نموذج بالاسم "{name}" بالفعل', en: 'A template named "{name}" already exists' },
+  [MSG.template_in_use]: {
+    ar: 'لا يمكن حذف قالب مستخدَم من قِبل شركة أو حساب موظف',
+    en: 'Cannot delete a template that is assigned to a company or an employee account',
+  },
+  [MSG.template_system_immutable]: { ar: 'نموذج المطوّر ثابت ولا يمكن تعديله', en: 'The developer template is fixed and cannot be edited' },
+  [MSG.template_system_undeletable]: { ar: 'نموذج المطوّر ثابت ولا يمكن حذفه', en: 'The developer template is fixed and cannot be deleted' },
+  [MSG.template_system_not_assignable]: { ar: 'لا يمكن إسناد نموذج المطوّر لحساب موظف', en: 'The developer template cannot be assigned to an employee account' },
+  [MSG.templates_read_forbidden]: { ar: 'لا تملك صلاحية عرض قوالب الصلاحيات', en: 'You do not have permission to view permission templates' },
+  [MSG.company_user_not_found]: { ar: 'حساب الموظف غير موجود', en: 'Employee account not found' },
+  [MSG.company_users_owner_only]: {
+    ar: 'إدارة حسابات الموظفين متاحة لحساب الشركة الرئيسي فقط',
+    en: 'Managing employee accounts is restricted to the main company account',
+  },
+  [MSG.company_profile_owner_only]: {
+    ar: 'تعديل بيانات المنشأة متاح لحساب الشركة الرئيسي فقط',
+    en: 'Editing company details is restricted to the main company account',
+  },
+
+  [MSG.zatca_profile_incomplete]: { ar: 'أكمل الاسم القانوني والرقم الضريبي في بيانات المنشأة قبل الإرسال لهيئة الزكاة', en: 'Complete the legal name and VAT number in the company profile before submitting to ZATCA' },
+  [MSG.zatca_onboarding_not_started]: { ar: 'ابدأ ربط الفوترة الإلكترونية أولاً من إعدادات المنشأة', en: 'Start e-invoicing onboarding first' },
+  [MSG.zatca_already_onboarded]: { ar: 'الربط مكتمل بالفعل — إعادة التوليد ستُبطل شهادتك الحالية', en: 'Onboarding is already complete — regenerating would invalidate your current certificate' },
+  [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
+  [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
+  [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
+
+  [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
+  [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
+  [MSG.branch_forbidden]: { ar: 'لا تملك صلاحية الوصول إلى هذا الفرع', en: 'You do not have permission to access this branch' },
+  [MSG.branch_has_data]: {
+    ar: 'لا يمكن حذف فرع مرتبط بحركات — انقل بياناته أو أعد إسنادها أولاً',
+    en: 'Cannot delete a branch that has activity — move or reassign its records first',
+  },
+  [MSG.activity_not_found]: { ar: 'النشاط التجاري غير موجود', en: 'Business activity not found' },
+  [MSG.activity_name_taken]: { ar: 'يوجد نشاط بالاسم "{name}" بالفعل', en: 'An activity named "{name}" already exists' },
+  [MSG.activity_in_use]: {
+    ar: 'لا يمكن حذف نشاط مرتبط بفروع أو منتجات — أعد إسنادها أولاً',
+    en: 'Cannot delete an activity linked to branches or products — reassign them first',
+  },
+  [MSG.activity_last_one]: {
+    ar: 'لا يمكن حذف آخر نشاط — يجب أن يبقى للمنشأة نشاط واحد على الأقل',
+    en: 'Cannot delete the last activity — a company must keep at least one',
+  },
+
+  [MSG.currency_not_found]: { ar: 'العملة غير موجودة', en: 'Currency not found' },
+  [MSG.currency_code_taken]: { ar: 'العملة "{code}" مضافة بالفعل', en: 'Currency "{code}" is already defined' },
+  [MSG.currency_base_immutable]: {
+    ar: 'لا يمكن تغيير العملة الأساسية — كل الأرصدة المحاسبية مسجّلة بها',
+    en: 'The base currency cannot be changed — every posted balance is recorded in it',
+  },
+  [MSG.currency_base_undeletable]: { ar: 'لا يمكن حذف العملة الأساسية', en: 'The base currency cannot be deleted' },
+  [MSG.currency_in_use]: {
+    ar: 'لا يمكن حذف عملة مستخدَمة في مستندات — راجع الفواتير والمشتريات أولاً',
+    en: 'Cannot delete a currency used by documents — check invoices and purchases first',
+  },
+  [MSG.currency_rate_must_be_positive]: { ar: 'سعر الصرف يجب أن يكون أكبر من صفر', en: 'The exchange rate must be greater than zero' },
+  [MSG.exchange_rate_same_currency]: { ar: 'لا يمكن تسجيل سعر صرف بين العملة ونفسها', en: 'An exchange rate cannot be between a currency and itself' },
+
+  [MSG.fiscal_year_not_found]: { ar: 'السنة المالية غير موجودة', en: 'Fiscal year not found' },
+  [MSG.fiscal_period_not_found]: { ar: 'الفترة المالية غير موجودة', en: 'Fiscal period not found' },
+  [MSG.fiscal_year_overlaps]: {
+    ar: 'توجد سنة مالية معرَّفة بالفعل تتداخل مع هذه الفترة',
+    en: 'A fiscal year covering part of this period is already defined',
+  },
+  [MSG.fiscal_year_start_after_end]: { ar: 'تاريخ بداية السنة المالية يجب أن يسبق تاريخ نهايتها', en: "The fiscal year's start date must come before its end date" },
+  [MSG.fiscal_no_period_for_date]: {
+    ar: 'لا توجد فترة مالية معرَّفة لهذا التاريخ',
+    en: 'No fiscal period is defined for this date',
+  },
+  [MSG.fiscal_period_closed]: {
+    ar: 'الفترة {period} مقفلة — التصحيح يكون بقيد عكسي في فترة مفتوحة',
+    en: 'Period {period} is closed — post a reversing entry in an open period instead',
+  },
+
+  [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
+  [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
+  [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
+
+  [MSG.file_missing]: { ar: 'لم يتم إرسال أي ملف', en: 'No file was uploaded' },
+  [MSG.file_too_large]: { ar: 'حجم الملف يتجاوز الحد المسموح (10 ميغابايت)', en: 'File exceeds the maximum allowed size (10 MB)' },
+  [MSG.file_type_unsupported]: {
+    ar: 'نوع الملف غير مدعوم — المسموح: PDF أو صورة (JPEG/PNG/WebP)',
+    en: 'Unsupported file type — allowed: PDF or image (JPEG/PNG/WebP)',
+  },
+  [MSG.file_access_denied]: { ar: 'لا تملك صلاحية الوصول إلى هذا الملف', en: 'You do not have permission to access this file' },
+
+  [MSG.vat_number_invalid]: {
+    ar: 'الرقم الضريبي يجب أن يتكوّن من 15 رقماً ويبدأ وينتهي بالرقم 3',
+    en: 'VAT number must be 15 digits, starting and ending with 3',
+  },
+  [MSG.cr_number_invalid]: { ar: 'رقم السجل التجاري يجب أن يتكوّن من 10 أرقام بالضبط', en: 'Commercial registration number must be exactly 10 digits' },
+  [MSG.postal_code_invalid]: { ar: 'الرمز البريدي يجب أن يكون 5 أرقام', en: 'The postal code must be 5 digits' },
+  [MSG.email_invalid]: { ar: 'صيغة البريد الإلكتروني غير صحيحة', en: 'Email address format is invalid' },
+  [MSG.legal_name_required]: { ar: 'الاسم القانوني مطلوب', en: 'Legal name is required' },
+  [MSG.file_key_required]: { ar: 'مفتاح الملف مطلوب', en: 'File key is required' },
+};
+
+/** Looks up `key` in the requested language. An unknown key is returned as-is
+ * so an inline message (or a NestJS built-in like "Unauthorized") still
+ * reaches the caller instead of being swallowed. */
+export function translate(key: string, language: Language): string {
+  const entry = CATALOG[key];
+  if (!entry) return key;
+  return entry[language] ?? entry[DEFAULT_LANGUAGE];
+}
+
+/** Encodes a key plus its runtime values into a single string, so it can ride
+ * through NestJS's exception plumbing (which only carries a message string)
+ * and still be translated later. Format: `key {"a":"b"}`. */
+export function formatMessage(key: MessageKey, params: Record<string, string | number>): string {
+  return `${key} ${JSON.stringify(params)}`;
+}
+
+const PARAM_SEPARATOR = ' ';
+
+/** Reverses `formatMessage`, translates, then substitutes `{placeholder}`s. */
+export function resolveMessage(raw: string, language: Language): string {
+  const separatorIndex = raw.indexOf(PARAM_SEPARATOR);
+  if (separatorIndex === -1) return translate(raw, language);
+
+  const key = raw.slice(0, separatorIndex);
+  let params: Record<string, string | number> = {};
+  try {
+    params = JSON.parse(raw.slice(separatorIndex + 1));
+  } catch {
+    // Malformed payload: fall back to translating the key alone rather than
+    // leaking the raw JSON to the user.
+    return translate(key, language);
+  }
+
+  return Object.entries(params).reduce<string>(
+    (text, [name, value]) => text.split(`{${name}}`).join(String(value)),
+    translate(key, language),
+  );
+}

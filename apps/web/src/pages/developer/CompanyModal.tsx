@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Company, CompanyInput } from '../../api/companies';
 import type { PermissionTemplate } from '../../api/templates';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 export function CompanyModal({
   templates,
@@ -26,7 +27,7 @@ export function CompanyModal({
   async function handleSubmit() {
     setError(null);
     if (!orgName.trim() || (!editing && (!username.trim() || !password))) {
-      setError('أكمل الاسم واسم الدخول وكلمة المرور');
+      setError(i18n.t('err_company_fields'));
       return;
     }
     setSaving(true);
@@ -41,7 +42,7 @@ export function CompanyModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ الحساب');
+      setError(message ?? i18n.t('err_account_save'));
     } finally {
       setSaving(false);
     }

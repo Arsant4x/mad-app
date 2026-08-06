@@ -3,6 +3,7 @@ import type { Supplier } from './suppliers';
 
 export interface Purchase {
   id: string;
+  branchId: string | null;
   no: string;
   supplierId: string;
   supplier: Supplier;
@@ -19,6 +20,8 @@ export interface Purchase {
 
 export interface CreatePurchaseInput {
   supplierId: string;
+  /** Omit for a company-wide record. */
+  branchId?: string;
   date: string;
   dueDate?: string;
   category?: string;

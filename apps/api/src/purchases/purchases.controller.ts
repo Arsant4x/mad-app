@@ -16,12 +16,12 @@ export class PurchasesController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.purchasesService.list(tenant.companyId);
+    return this.purchasesService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePurchaseDto) {
-    return this.purchasesService.create(tenant.companyId, dto);
+    return this.purchasesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

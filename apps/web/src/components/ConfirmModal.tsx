@@ -5,12 +5,16 @@ export function ConfirmModal({
   title,
   body,
   confirmLabel = 'تأكيد',
+  hideCancel = false,
   onCancel,
   onConfirm,
 }: {
   title: string;
   body: string;
   confirmLabel?: string;
+  /** For dialogs that only acknowledge something — offering "إلغاء" beside
+   * "حسناً" implies a choice that isn't there. */
+  hideCancel?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -25,9 +29,11 @@ export function ConfirmModal({
         </div>
         <p style={{ fontSize: 12.5, color: 'var(--charcoal)' }}>{body}</p>
         <div className="modal-foot">
-          <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
-          </button>
+          {!hideCancel && (
+            <button className="btn btn-ghost" onClick={onCancel}>
+              إلغاء
+            </button>
+          )}
           <button className="btn btn-primary" onClick={onConfirm}>
             {confirmLabel}
           </button>

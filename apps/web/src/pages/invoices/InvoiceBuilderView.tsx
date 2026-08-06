@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
+import type { Branch } from '../../api/branches';
 import type { Customer, Invoice } from '../../api/invoices';
 import { fmt, toLocalISODate, today } from '../../lib/format';
+import i18n from '../../i18n';
 
 interface LineDraft {
   description: string;
@@ -36,21 +38,24 @@ export function InvoiceBuilderView({
   customers,
   editing,
   nextNumberHint,
+  branches,
   onCancel,
   onSave,
   onCreateCustomer,
 }: {
   customers: Customer[];
+  branches: Branch[];
   editing: Invoice | null;
   nextNumberHint: string;
   onCancel: () => void;
-  onSave: (data: { customerId: string; issueDate: string; dueDate: string; notes: string; lines: LineDraft[] }) => Promise<void>;
+  onSave: (data: { customerId: string; issueDate: string; dueDate: string; notes: string; branchId: string; lines: LineDraft[] }) => Promise<void>;
   onCreateCustomer: (name: string) => Promise<Customer>;
 }) {
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
   const [issueDate, setIssueDate] = useState(editing ? editing.issueDate.slice(0, 10) : today());
   const [dueDate, setDueDate] = useState(editing ? editing.dueDate.slice(0, 10) : defaultDueDate());
   const [notes, setNotes] = useState(editing?.notes ?? DEFAULT_NOTES);
+  const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [lines, setLines] = useState<LineDraft[]>(() => initialLines(editing));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,11 +80,11 @@ export function InvoiceBuilderView({
     setError(null);
     const name = customerInput.trim();
     if (!name) {
-      setError('اكتب اسم العميل أولاً');
+      setError(i18n.t('err_customer_name_first'));
       return;
     }
     if (lines.length === 0 || lines.some((l) => !l.description.trim())) {
-      setError('أكمل وصف كل بند، أو احذف البنود الفارغة');
+      setError(i18n.t('err_invoice_line_desc'));
       return;
     }
 
@@ -87,9 +92,9 @@ export function InvoiceBuilderView({
     try {
       let customer = customers.find((c) => c.name === name);
       if (!customer) customer = await onCreateCustomer(name);
-      await onSave({ customerId: customer.id, issueDate, dueDate, notes, lines });
+      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines });
     } catch {
-      setError('تعذّر حفظ الفاتورة — حاول مرة أخرى');
+      setError(i18n.t('err_invoice_save'));
     } finally {
       setSaving(false);
     }
@@ -141,6 +146,21 @@ export function InvoiceBuilderView({
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
             </div>
+            {/* Only shown once branches exist — a single-location business
+                should never be asked to pick one. */}
+            {branches.length > 0 && (
+              <div className="field">
+                <label>الفرع</label>
+                <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                  <option value="">— على مستوى الشركة —</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="card">

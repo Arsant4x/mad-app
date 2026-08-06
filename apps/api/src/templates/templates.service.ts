@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 @Injectable()
 export class TemplatesService {
@@ -12,10 +13,10 @@ export class TemplatesService {
   }
 async create(dto: CreateTemplateDto) {
     const name = dto.name?.trim();
-    if (!name) throw new ConflictException('اسم النموذج مطلوب');
+    if (!name) throw new ConflictException(MSG.template_name_required);
 
     const duplicate = await this.prisma.permissionTemplate.findUnique({ where: { name } });
-    if (duplicate) throw new ConflictException(`يوجد نموذج بالاسم "${name}" بالفعل`);
+    if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name }));
 
     return this.prisma.permissionTemplate.create({
       data: {
@@ -27,12 +28,12 @@ async create(dto: CreateTemplateDto) {
   }
   async update(id: string, dto: UpdateTemplateDto) {
     const existing = await this.prisma.permissionTemplate.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('القالب غير موجود');
-    if (existing.isSystem) throw new ForbiddenException('نموذج المطوّر ثابت ولا يمكن تعديله');
+    if (!existing) throw new NotFoundException(MSG.template_not_found);
+    if (existing.isSystem) throw new ForbiddenException(MSG.template_system_immutable);
     const newName = dto.name?.trim();
     if (newName && newName !== existing.name) {
       const duplicate = await this.prisma.permissionTemplate.findUnique({ where: { name: newName } });
-      if (duplicate) throw new ConflictException(`يوجد نموذج بالاسم "${newName}" بالفعل`);
+      if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name: newName }));
     }
 
     const isAllScreens = dto.isAllScreens ?? existing.isAllScreens;
@@ -48,15 +49,15 @@ async create(dto: CreateTemplateDto) {
 
   async remove(id: string): Promise<void> {
     const existing = await this.prisma.permissionTemplate.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('القالب غير موجود');
-    if (existing.isSystem) throw new ForbiddenException('نموذج المطوّر ثابت ولا يمكن حذفه');
+    if (!existing) throw new NotFoundException(MSG.template_not_found);
+    if (existing.isSystem) throw new ForbiddenException(MSG.template_system_undeletable);
 
     const [companyCount, companyUserCount] = await Promise.all([
       this.prisma.company.count({ where: { permissionTemplateId: id } }),
       this.prisma.companyUser.count({ where: { permissionTemplateId: id } }),
     ]);
     if (companyCount + companyUserCount > 0) {
-      throw new ConflictException('لا يمكن حذف قالب مستخدَم من قِبل شركة أو حساب موظف');
+      throw new ConflictException(MSG.template_in_use);
     }
 
     await this.prisma.permissionTemplate.delete({ where: { id } });

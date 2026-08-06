@@ -20,12 +20,12 @@ export class InventoryController {
 
   @Get('movements')
   listMovements(@CurrentTenant() tenant: TenantContext) {
-    return this.inventoryService.listMovements(tenant.companyId);
+    return this.inventoryService.listMovements(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post('movements')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateStockMovementDto) {
-    return this.inventoryService.create(tenant.companyId, dto);
+    return this.inventoryService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Delete('movements/:id')

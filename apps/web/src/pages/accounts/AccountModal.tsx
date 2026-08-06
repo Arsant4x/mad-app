@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Account, AccountInput, AccountType } from '../../api/accounts';
+import i18n from '../../i18n';
 
 const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
   { value: 'asset', label: 'أصل' },
@@ -28,7 +29,7 @@ export function AccountModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim() || !code.trim()) {
-      setError('الرجاء تعبئة اسم ورمز الحساب');
+      setError(i18n.t('err_account_name_code_required'));
       return;
     }
     setSaving(true);
@@ -36,7 +37,7 @@ export function AccountModal({
       await onSave({ code: code.trim(), name: name.trim(), type, openingBalance: parseFloat(String(openingBalance)) || 0 });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ الحساب');
+      setError(message ?? i18n.t('err_account_save'));
     } finally {
       setSaving(false);
     }

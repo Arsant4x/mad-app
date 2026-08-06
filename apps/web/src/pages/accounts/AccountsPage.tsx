@@ -4,6 +4,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
 import { AccountModal } from './AccountModal';
+import i18n from '../../i18n';
 
 const TYPE_GROUPS: AccountType[] = ['asset', 'liability', 'equity', 'revenue', 'expense'];
 const TYPE_LABEL: Record<AccountType, string> = { asset: 'أصل', liability: 'خصم', equity: 'حقوق ملكية', revenue: 'إيراد', expense: 'مصروف' };
@@ -55,7 +56,7 @@ export function AccountsPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف الحساب');
+      setDeleteError(message ?? i18n.t('err_account_delete'));
     }
   }
 

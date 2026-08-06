@@ -6,6 +6,7 @@ import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
 import { AccountFrozenException, AccountStoppedException, ScreenForbiddenException } from './tenant.exceptions';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
+import { MSG } from '../i18n/messages';
 
 /**
  * Runs after JwtAuthGuard on every tenant (COMPANY / COMPANY_USER) route.
@@ -25,7 +26,7 @@ export class TenantGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     const payload = req.user as JwtPayload | undefined;
     if (!payload || !payload.companyId) {
-      throw new UnauthorizedException('مطلوب تسجيل دخول بحساب شركة');
+      throw new UnauthorizedException(MSG.company_login_required);
     }
 
     const company = await this.prisma.company.findUniqueOrThrow({
@@ -45,16 +46,23 @@ export class TenantGuard implements CanActivate {
     if (evaluated.status === 'FROZEN') throw new AccountFrozenException();
 
     let allowedScreens: string[] | 'all' = company.permissionTemplate.isAllScreens ? 'all' : company.permissionTemplate.allowedScreens;
+    // The company owner always sees every branch, including the consolidated
+    // view (CLAUDE.md 6.8) — only employees can be narrowed.
+    let allowedBranchIds: string[] | 'all' = 'all';
 
     if (payload.actorType === 'COMPANY_USER') {
       const companyUser = await this.prisma.companyUser.findUniqueOrThrow({
         where: { id: payload.profileId },
-        include: { permissionTemplate: true },
+        include: { permissionTemplate: true, branches: { select: { branchId: true } } },
       });
       if (companyUser.status !== 'ACTIVE') {
         throw new AccountFrozenException();
       }
       allowedScreens = companyUser.permissionTemplate.isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens;
+      // No assignment means unrestricted, not "no access" — otherwise every
+      // employee account that existed before branches shipped would have been
+      // locked out of everything the moment this rolled out.
+      allowedBranchIds = companyUser.branches.length > 0 ? companyUser.branches.map((b) => b.branchId) : 'all';
     }
 
     // getAllAndOverride, not get(..., context.getHandler()) alone — every
@@ -73,6 +81,7 @@ export class TenantGuard implements CanActivate {
       actorType: payload.actorType,
       profileId: payload.profileId,
       allowedScreens,
+      allowedBranchIds,
     };
     return true;
   }

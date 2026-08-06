@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { getUnreadCount } from '../api/notifications';
 import { useAuth } from '../auth/AuthContext';
 
 interface NavItemDef {
@@ -25,6 +27,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { screen: 'accounts', to: '/accounts', labelKey: 'nav_accounts' },
       { screen: 'journal', to: '/journal', labelKey: 'nav_journal' },
+      { screen: 'fiscal', to: '/fiscal', labelKey: 'nav_fiscal' },
     ],
   },
   {
@@ -50,8 +53,11 @@ const NAV_GROUPS: NavGroupDef[] = [
       { screen: 'properties', to: '/properties', labelKey: 'nav_properties' },
       { screen: 'properties', to: '/units', labelKey: 'nav_units' },
       { screen: 'contracts', to: '/contracts', labelKey: 'nav_contracts' },
+      { screen: 'contracts', to: '/reminders', labelKey: 'nav_reminders' },
+      { screen: 'maintenance', to: '/maintenance', labelKey: 'nav_maintenance' },
     ],
   },
+  { labelKey: 'grp_branches', items: [{ screen: 'branches', to: '/branches', labelKey: 'nav_branches' }] },
   { labelKey: 'grp_hr', items: [{ screen: 'employees', to: '/employees', labelKey: 'nav_employees' }] },
   {
     labelKey: 'grp_banks',
@@ -68,11 +74,35 @@ const NAV_GROUPS: NavGroupDef[] = [
     ],
   },
   { labelKey: 'grp_reports', items: [{ screen: 'reports', to: '/reports', labelKey: 'nav_reports' }] },
+  { labelKey: 'grp_settings', items: [{ screen: 'settings', to: '/settings', labelKey: 'nav_settings' }] },
 ];
+
+/** How often the sidebar re-checks the unread count. Two minutes: escalation is
+ * a daily-threshold mechanism, so a tighter poll would be network traffic
+ * bought for no earlier knowledge. */
+const UNREAD_POLL_MS = 120_000;
 
 export function AppShell() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    // A failed count must never break the shell — the badge simply doesn't
+    // update, and every screen behind it keeps working.
+    const poll = () =>
+      getUnreadCount()
+        .then((r) => !cancelled && setUnread(r.unread))
+        .catch(() => undefined);
+
+    poll();
+    const timer = setInterval(poll, UNREAD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   const canSee = (screen: string) => user?.allowedScreens === 'all' || user?.allowedScreens.includes(screen);
 
@@ -84,6 +114,13 @@ export function AppShell() {
           <div>{user?.displayName}</div>
         </div>
         <nav>
+          {/* Not screen-gated: a notification is already filtered to the person
+           * it was addressed to, and gating the bell behind some other screen's
+           * permission would hide a manager's own escalations from them. */}
+          <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+            {t('nav_notifications')}
+            {unread > 0 && <span className="badge overdue" style={{ marginRight: 6 }}>{unread}</span>}
+          </NavLink>
           {NAV_GROUPS.map((group) => {
             const visibleItems = group.items.filter((item) => canSee(item.screen));
             if (visibleItems.length === 0) return null;

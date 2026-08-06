@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ALLOWED_SCREENS, SCREEN_LABELS, type PermissionTemplate, type TemplateInput } from '../../api/templates';
+import i18n from '../../i18n';
 
 export function TemplateModal({
   editing,
@@ -31,13 +32,13 @@ export function TemplateModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم النموذج');
+      setError(i18n.t('err_template_name_required'));
       return;
     }
     const finalScreens = new Set(screens);
     finalScreens.add('dashboard');
     if (finalScreens.size === 0) {
-      setError('اختر قسماً واحداً على الأقل');
+      setError(i18n.t('err_template_screen_required'));
       return;
     }
     setSaving(true);
@@ -45,7 +46,7 @@ export function TemplateModal({
       await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: [...finalScreens] });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ النموذج');
+      setError(message ?? i18n.t('err_template_save'));
     } finally {
       setSaving(false);
     }

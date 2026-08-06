@@ -1,0 +1,62 @@
+import { createHash } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+
+/**
+ * ZATCA phase-2 invoice hash chain.
+ *
+ * Every invoice carries the hash of the previous one (PIH — Previous Invoice
+ * Hash) and is itself hashed, so altering or deleting an invoice invalidates
+ * every hash issued after it. That is the property the authority checks.
+ *
+ * ⚠️ **Verify before going live.** The genesis value below is defined by the
+ * ZATCA e-invoicing specification, and that spec is versioned. This follows the
+ * widely-published rule (first invoice's PIH = base64 of SHA-256 of "0"), which
+ * differs from the mockup's placeholder (`btoa('0'.repeat(44))`).
+ *
+ * The hash itself is **not** computed here: it is the SHA-256 of the
+ * canonicalized UBL invoice, produced by `ubl/xades.util.ts` as a by-product of
+ * signing. An earlier version hashed a JSON summary of the invoice fields,
+ * which chained correctly but would never have matched what the authority
+ * recomputes from the XML it receives.
+ */
+
+/** base64( SHA-256("0") ) — the chain's genesis value for a company's first invoice. */
+export const GENESIS_PREVIOUS_HASH = createHash('sha256').update('0').digest('base64');
+
+/**
+ * The next position in this company's submission sequence.
+ *
+ * Counts invoices that already carry an ICV rather than reading a counter, so
+ * it stays correct without a separate row to keep in step. A retry must *not*
+ * call this — it keeps the number it was first given.
+ */
+export async function nextIcv(tx: Prisma.TransactionClient): Promise<number> {
+  const submitted = await tx.invoice.count({ where: { zatcaIcv: { not: null } } });
+  return submitted + 1;
+}
+
+/**
+ * The hash the next invoice must chain onto: the most recently *hashed*
+ * invoice for this company, or the genesis value if there is none.
+ *
+ * Ordered by `zatcaSubmittedAt` rather than creation time, because the chain
+ * follows submission order — an invoice created earlier but submitted later
+ * belongs later in the chain.
+ */
+export async function latestChainHash(tx: Prisma.TransactionClient): Promise<string> {
+  const previous = await tx.invoice.findFirst({
+    where: { zatcaHash: { not: null } },
+    orderBy: [{ zatcaSubmittedAt: 'desc' }],
+    select: { zatcaHash: true },
+  });
+  return previous?.zatcaHash ?? GENESIS_PREVIOUS_HASH;
+}
+
+/**
+ * Standard (B2B) vs simplified (B2C) — decided by whether the buyer has a VAT
+ * registration number, matching the mockup's `invoiceType` rule. The two are
+ * cleared differently by the authority, so this is not cosmetic.
+ */
+export function invoiceTypeFor(buyerVatNumber: string | null | undefined): 'standard' | 'simplified' {
+  return buyerVatNumber?.trim() ? 'standard' : 'simplified';
+}

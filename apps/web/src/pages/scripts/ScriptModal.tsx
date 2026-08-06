@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MessageScript, ScriptAudience, ScriptInput } from '../../api/scripts';
+import i18n from '../../i18n';
 
 const AUDIENCE_OPTIONS: { value: ScriptAudience; label: string }[] = [
   { value: 'TENANT', label: 'مستأجرون' },
@@ -25,7 +26,7 @@ export function ScriptModal({
   async function handleSubmit() {
     setError(null);
     if (!title.trim() || !text.trim()) {
-      setError('الرجاء تعبئة العنوان والنص');
+      setError(i18n.t('err_script_fields'));
       return;
     }
     setSaving(true);
@@ -33,7 +34,7 @@ export function ScriptModal({
       await onSave({ audience, title: title.trim(), text: text.trim() });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ القالب');
+      setError(message ?? i18n.t('err_script_save'));
     } finally {
       setSaving(false);
     }

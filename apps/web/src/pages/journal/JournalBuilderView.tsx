@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Account } from '../../api/accounts';
 import type { CreateJournalEntryInput, JournalLineInput } from '../../api/journal';
 import { fmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
 interface LineDraft {
   accountId: string;
@@ -53,7 +54,7 @@ export function JournalBuilderView({
       .filter((l) => l.accountId && (parseFloat(l.debit) || parseFloat(l.credit)))
       .map((l) => ({ accountId: l.accountId, debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 }));
     if (!postingLines.length) {
-      setError('أضف سطراً واحداً على الأقل بحساب صحيح');
+      setError(i18n.t('err_journal_line_required'));
       return;
     }
     setSaving(true);
@@ -61,7 +62,7 @@ export function JournalBuilderView({
       await onSave({ date, memo: memo.trim() || 'بدون بيان', lines: postingLines });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر ترحيل القيد');
+      setError(message ?? i18n.t('err_journal_post'));
     } finally {
       setSaving(false);
     }

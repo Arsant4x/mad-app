@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Warehouse, WarehouseInput } from '../../api/warehouses';
+import i18n from '../../i18n';
 
 export function WarehouseModal({
   editing,
@@ -19,7 +20,7 @@ export function WarehouseModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم المستودع');
+      setError(i18n.t('err_warehouse_name_required'));
       return;
     }
     setSaving(true);
@@ -27,7 +28,7 @@ export function WarehouseModal({
       await onSave({ name: name.trim(), location: location.trim() || undefined, manager: manager.trim() || undefined });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ المستودع');
+      setError(message ?? i18n.t('err_warehouse_save'));
     } finally {
       setSaving(false);
     }

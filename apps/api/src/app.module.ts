@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { BanksModule } from './banks/banks.module';
@@ -10,8 +11,17 @@ import { ContractsModule } from './contracts/contracts.module';
 import { TenantPrismaModule } from './common/tenant/tenant-prisma.module';
 import { CustomersModule } from './customers/customers.module';
 import { EmployeesModule } from './employees/employees.module';
+import { FilesModule } from './files/files.module';
+import { ActivitiesModule } from './activities/activities.module';
+import { BranchesModule } from './branches/branches.module';
+import { CurrenciesModule } from './currencies/currencies.module';
+import { ZatcaModule } from './zatca/zatca.module';
+import { FiscalModule } from './fiscal/fiscal.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { JournalModule } from './journal/journal.module';
 import { ObligationsModule } from './obligations/obligations.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -26,16 +36,24 @@ import { TemplatesModule } from './templates/templates.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UnitsModule } from './units/units.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
+import { WarrantiesModule } from './warranties/warranties.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Runs the daily escalation sweep in-process. Safe under multiple
+    // instances because every notification it raises is deduplicated by a
+    // unique key — see EscalationService.
+    ScheduleModule.forRoot(),
     PrismaModule,
     TenantPrismaModule,
     AuthModule,
     AccountsModule,
     CustomersModule,
     InvoicesModule,
+    MaintenanceModule,
+    NotificationsModule,
+    RemindersModule,
     SuppliersModule,
     PurchasesModule,
     ProductsModule,
@@ -48,6 +66,7 @@ import { WarehousesModule } from './warehouses/warehouses.module';
     UnitsModule,
     ContractsModule,
     WarehousesModule,
+    WarrantiesModule,
     InventoryModule,
     ObligationsModule,
     ReservationsModule,
@@ -55,7 +74,13 @@ import { WarehousesModule } from './warehouses/warehouses.module';
     CompaniesModule,
     CompanyUsersModule,
     ScriptsModule,
+    FiscalModule,
+    BranchesModule,
+    ActivitiesModule,
+    CurrenciesModule,
+    ZatcaModule,
     CompanyProfileModule,
+    FilesModule,
   ],
 })
 export class AppModule {}

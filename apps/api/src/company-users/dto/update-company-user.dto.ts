@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 const STATUSES = ['ACTIVE', 'FROZEN', 'STOPPED'] as const;
 
@@ -25,4 +25,12 @@ export class UpdateCompanyUserDto {
   @IsOptional()
   @IsIn(STATUSES)
   status?: (typeof STATUSES)[number];
+
+  /// Which branches this employee may see. Sending `[]` clears the restriction
+  /// (back to unrestricted within the company) rather than locking them out of
+  /// everything — see CompanyUserBranch. Omitting the key leaves it unchanged.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  branchIds?: string[];
 }

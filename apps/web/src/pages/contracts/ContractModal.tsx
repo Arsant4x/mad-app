@@ -3,6 +3,7 @@ import type { Property } from '../../api/properties';
 import type { Unit } from '../../api/units';
 import type { ContractCycle, CreateContractInput, Furnished } from '../../api/contracts';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const CYCLE_OPTIONS: { value: ContractCycle; label: string }[] = [
   { value: 'monthly', label: 'شهرية' },
@@ -46,7 +47,7 @@ export function ContractModal({
   async function submit(draft: boolean) {
     setError(null);
     if (!unitId || !tenant.trim() || !value) {
-      setError('الرجاء اختيار الوحدة وإدخال اسم المستأجر والقيمة');
+      setError(i18n.t('err_contract_fields'));
       return;
     }
     setSaving(true);
@@ -67,7 +68,7 @@ export function ContractModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ العقد');
+      setError(message ?? i18n.t('err_contract_save'));
     } finally {
       setSaving(false);
     }

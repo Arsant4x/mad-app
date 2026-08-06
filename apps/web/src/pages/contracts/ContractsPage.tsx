@@ -10,6 +10,8 @@ import { ContractModal } from './ContractModal';
 
 const STATUS_META: Record<ContractStatus, { label: string; badgeClass: string }> = {
   DRAFT: { label: 'مسودة', badgeClass: 'draft' },
+  // Signed and certain, unlike a draft — its term simply hasn't started.
+  UPCOMING: { label: 'قادم مؤكَّد', badgeClass: 'due' },
   DUE: { label: 'سارٍ', badgeClass: 'paid' },
   LATE: { label: 'متأخر', badgeClass: 'overdue' },
   CANCELLED: { label: 'ملغى', badgeClass: 'due' },

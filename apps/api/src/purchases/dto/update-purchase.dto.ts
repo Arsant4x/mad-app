@@ -1,6 +1,7 @@
+import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
-export class UpdatePurchaseDto {
+export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   supplierId?: string;

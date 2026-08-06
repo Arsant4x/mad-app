@@ -10,6 +10,13 @@ export interface CompanyProfile {
   email: string | null;
   website: string | null;
   address: string | null;
+  /** The address in the parts ZATCA's cac:PostalAddress requires — a standard
+   * invoice is rejected without them. */
+  street: string | null;
+  buildingNumber: string | null;
+  district: string | null;
+  city: string | null;
+  postalCode: string | null;
   logoFileKey: string | null;
 }
 
@@ -21,6 +28,13 @@ export interface CompanyProfileInput {
   email?: string;
   website?: string;
   address?: string;
+  street?: string;
+  buildingNumber?: string;
+  district?: string;
+  city?: string;
+  postalCode?: string;
+  /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
+  logoFileKey?: string;
 }
 
 export const getCompanyProfile = () => apiClient.get<CompanyProfile>('/company-profile').then((r) => r.data);

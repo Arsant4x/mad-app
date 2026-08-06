@@ -662,6 +662,16 @@ tr:last-child td {
   margin-top: 4px;
 }
 
+/* A rejection reason from the authority can be a long diagnostic string; it is
+   capped here so one bad row can't stretch the invoices table, with the full
+   text still available on the badge's tooltip. */
+.zatca-reason {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .totals-card {
   background: var(--ink);
   color: #fff;

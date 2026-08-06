@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReservationInput } from '../../api/reservations';
+import i18n from '../../i18n';
 
 export function ReservationModal({
   unitLabel,
@@ -20,7 +21,7 @@ export function ReservationModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim() || !expiryDate) {
-      setError('الرجاء إدخال اسم صاحب الحجز وتاريخ انتهاء الحجز');
+      setError(i18n.t('err_reservation_fields'));
       return;
     }
     setSaving(true);
@@ -33,7 +34,7 @@ export function ReservationModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حجز الوحدة');
+      setError(message ?? i18n.t('err_reservation_save'));
     } finally {
       setSaving(false);
     }

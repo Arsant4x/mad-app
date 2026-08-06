@@ -4,6 +4,7 @@ export type EmployeeStatus = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
 
 export interface Employee {
   id: string;
+  branchId: string | null;
   fullName: string;
   jobTitle: string | null;
   department: string | null;
@@ -15,6 +16,8 @@ export interface Employee {
 
 export interface EmployeeInput {
   fullName: string;
+  /** Omit for a company-wide record. */
+  branchId?: string;
   jobTitle?: string;
   department?: string;
   hireDate: string;

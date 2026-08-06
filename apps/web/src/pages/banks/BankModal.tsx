@@ -1,13 +1,18 @@
 import { useState } from 'react';
+import type { Branch } from '../../api/branches';
+import { BranchPicker } from '../../components/BranchPicker';
 import type { Bank, BankInput } from '../../api/banks';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 export function BankModal({
   editing,
+  branches,
   onCancel,
   onSave,
 }: {
   editing: Bank | null;
+  branches: Branch[];
   onCancel: () => void;
   onSave: (data: BankInput) => Promise<void>;
 }) {
@@ -15,13 +20,14 @@ export function BankModal({
   const [iban, setIban] = useState(editing?.iban ?? '');
   const [openingBalance, setOpeningBalance] = useState(editing?.openingBalance ?? '');
   const [openingDate, setOpeningDate] = useState(editing ? editing.openingDate.slice(0, 10) : today());
+  const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('الرجاء إدخال اسم الحساب');
+      setError(i18n.t('err_bank_name_required'));
       return;
     }
     setSaving(true);
@@ -31,9 +37,10 @@ export function BankModal({
         iban: iban.trim() || undefined,
         openingBalance: parseFloat(String(openingBalance)) || 0,
         openingDate,
+        branchId: branchId || undefined,
       });
     } catch {
-      setError('تعذّر حفظ الحساب البنكي');
+      setError(i18n.t('err_bank_save'));
     } finally {
       setSaving(false);
     }
@@ -66,6 +73,7 @@ export function BankModal({
             <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
           </div>
         </div>
+        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

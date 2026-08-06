@@ -21,12 +21,29 @@ export interface Invoice {
   issueDate: string;
   dueDate: string;
   status: InvoiceStatus;
+  branchId: string | null;
   subtotal: string;
   taxTotal: string;
   total: string;
   notes: string | null;
+  /** Base64 TLV for the ZATCA phase-1 QR, or null while the company profile
+   * is missing its legal name or VAT number. Built server-side. */
+  zatcaQr: string | null;
+
+  /** Phase 2 — where this invoice stands with the authority. All null/default
+   * until it is submitted; the chain values are assigned at submission and
+   * kept across retries. */
+  zatcaStatus: ZatcaInvoiceStatus;
+  /** The authority's clearance or rejection note, or the local reason a
+   * submission could not be completed. */
+  zatcaMessage: string | null;
+  zatcaSubmittedAt: string | null;
+  /** Invoice Counter Value — position in the company's submission sequence. */
+  zatcaIcv: number | null;
   lines: InvoiceLine[];
 }
+
+export type ZatcaInvoiceStatus = 'NOT_SUBMITTED' | 'SUBMITTING' | 'CLEARED' | 'REJECTED';
 
 export interface InvoiceLineInput {
   description: string;
@@ -40,6 +57,9 @@ export interface CreateInvoiceInput {
   issueDate: string;
   dueDate: string;
   notes?: string;
+  /** Omit for a company-wide invoice; the server rejects a branch the signed-in
+   * user isn't allowed to write to. */
+  branchId?: string;
   lines: InvoiceLineInput[];
 }
 

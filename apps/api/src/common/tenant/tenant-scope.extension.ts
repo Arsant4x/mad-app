@@ -7,8 +7,20 @@ import { Prisma } from '@prisma/client';
  * has to remember to update when adding a new tenant-scoped table — forgetting
  * to add it here means queries against that model simply won't be auto-scoped,
  * so treat this list as part of the schema itself.
+ *
+ * `CompanyUserBranch` is deliberately absent: it carries no `companyId` of its
+ * own and is only reachable through a CompanyUser that is already scoped, so
+ * there is nothing here to inject. Branch visibility is a *permission* filter
+ * (owner sees all, employee sees the branches granted to them), not the
+ * absolute company boundary this extension enforces.
  */
 export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
+  'BusinessActivity',
+  'Branch',
+  'Currency',
+  'ExchangeRate',
+  'FiscalYear',
+  'FiscalPeriod',
   'Account',
   'Customer',
   'Invoice',
@@ -26,11 +38,23 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Contract',
   'Installment',
   'RentPayment',
+  'ContractDeposit',
+  'DepositDeduction',
+  'ContractClaim',
+  'ContractKeyMoney',
+  'ContractHandover',
+  'HandoverItem',
+  'MaintenanceRequest',
+  'ReminderPolicy',
+  'RentReminder',
+  'Notification',
+  'Warranty',
   'Warehouse',
   'StockMovement',
   'GovernmentObligation',
   'Reservation',
   'MessageScript',
+  'ZatcaCredential',
 ]);
 
 const READ_OR_MUTATE_BY_WHERE = new Set([

@@ -46,6 +46,55 @@ describe('Company profile (e2e)', () => {
     expect(fetched.body.email).toBe('test-a@example.com');
   });
 
+  it('stores the national address as separate parts, not one line', async () => {
+    // ZATCA reads street/building/district/city/postal code out of
+    // cac:PostalAddress individually; a standard invoice is rejected without
+    // them, and the free-text `address` cannot be split reliably after the
+    // fact — so both are stored, and neither overwrites the other.
+    const updated = await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({
+        legalName: 'شركة اختبار العزل المحدودة',
+        address: 'الرياض، العليا، طريق الملك فهد',
+        street: 'طريق الملك فهد',
+        buildingNumber: '1234',
+        district: 'العليا',
+        city: 'الرياض',
+        postalCode: '12345',
+      })
+      .expect(200);
+
+    expect(updated.body.street).toBe('طريق الملك فهد');
+    expect(updated.body.buildingNumber).toBe('1234');
+    expect(updated.body.postalCode).toBe('12345');
+    expect(updated.body.address).toBe('الرياض، العليا، طريق الملك فهد');
+
+    const fetched = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    expect(fetched.body.district).toBe('العليا');
+    expect(fetched.body.city).toBe('الرياض');
+  });
+
+  it('rejects a postal code that is not five digits', async () => {
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      // legalName is required on PATCH, so it has to be resent — with the same
+      // value the suite's other cases expect, since this endpoint replaces it.
+      .send({ legalName: 'شركة اختبار العزل المحدودة', postalCode:'123' })
+      .expect(400);
+
+    // Empty means "not provided", not "invalid" — a merchant without one must
+    // still be able to save the rest of the profile.
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      // legalName is required on PATCH, so it has to be resent — with the same
+      // value the suite's other cases expect, since this endpoint replaces it.
+      .send({ legalName: 'شركة اختبار العزل المحدودة', postalCode:'' })
+      .expect(200);
+  });
+
   it('rejects an invalid VAT number (not 15 digits / wrong prefix-suffix)', async () => {
     await request(app.getHttpServer())
       .patch('/company-profile')
@@ -89,6 +138,47 @@ describe('Company profile (e2e)', () => {
 
     const fetchedA = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenA}`).expect(200);
     expect(fetchedA.body.legalName).toBe('شركة اختبار العزل المحدودة');
+  });
+
+  it('attaches an uploaded logo, serves it back, and clears it on request', async () => {
+    const uploaded = await request(app.getHttpServer())
+      .post('/files')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .attach('file', Buffer.from('fake-png-bytes'), { filename: 'شعار.png', contentType: 'image/png' })
+      .expect(201);
+
+    const saved = await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ legalName: 'شركة اختبار العزل المحدودة', logoFileKey: uploaded.body.key })
+      .expect(200);
+    expect(saved.body.logoFileKey).toBe(uploaded.body.key);
+
+    const fetched = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    expect(fetched.body.logoFileKey).toBe(uploaded.body.key);
+
+    const cleared = await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ legalName: 'شركة اختبار العزل المحدودة', logoFileKey: '' })
+      .expect(200);
+    expect(cleared.body.logoFileKey).toBeNull();
+  });
+
+  it("refuses a logo key that belongs to another company", async () => {
+    const uploadedByA = await request(app.getHttpServer())
+      .post('/files')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .attach('file', Buffer.from('a-logo'), { filename: 'a.png', contentType: 'image/png' })
+      .expect(201);
+
+    // Company B knows A's key and tries to claim it as its own logo. Nothing in
+    // the database stops this — only the explicit prefix check does.
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ legalName: 'شركة ب', logoFileKey: uploadedByA.body.key })
+      .expect(403);
   });
 
   it('lets a limited-permission employee sub-account read the profile but not edit it', async () => {

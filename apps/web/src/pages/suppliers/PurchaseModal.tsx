@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react';
+import type { Branch } from '../../api/branches';
+import { BranchPicker } from '../../components/BranchPicker';
 import type { Purchase } from '../../api/purchases';
 import type { Supplier } from '../../api/suppliers';
 import { fmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const CATEGORY_SUGGESTIONS = ['كهرباء', 'مياه', 'اتصالات وإنترنت', 'إيجار', 'رواتب', 'تكلفة مبيعات', 'مصروفات تأسيس', 'مصروفات أخرى'];
 
 export function PurchaseModal({
   suppliers,
+  branches,
   editing,
   onCancel,
   onSave,
   onCreateSupplier,
 }: {
   suppliers: Supplier[];
+  branches: Branch[];
   editing: Purchase | null;
   onCancel: () => void;
-  onSave: (data: { supplierId: string; date: string; dueDate?: string; category?: string; subtotal: number; exempt: boolean }) => Promise<void>;
+  onSave: (data: { supplierId: string; date: string; dueDate?: string; category?: string; subtotal: number; exempt: boolean; branchId?: string }) => Promise<void>;
   onCreateSupplier: (name: string) => Promise<Supplier>;
 }) {
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');
@@ -24,6 +29,7 @@ export function PurchaseModal({
   const [category, setCategory] = useState(editing?.category ?? '');
   const [subtotal, setSubtotal] = useState(editing ? editing.subtotal : '');
   const [exempt, setExempt] = useState(editing?.exempt ?? false);
+  const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,11 +44,11 @@ export function PurchaseModal({
     const name = supplierInput.trim();
     const sub = parseFloat(String(subtotal)) || 0;
     if (!name) {
-      setError('اختر المورد أولاً');
+      setError(i18n.t('err_supplier_first'));
       return;
     }
     if (!sub) {
-      setError('الرجاء إدخال المبلغ قبل الضريبة');
+      setError(i18n.t('err_subtotal_required'));
       return;
     }
 
@@ -50,9 +56,17 @@ export function PurchaseModal({
     try {
       let supplier = suppliers.find((s) => s.name === name);
       if (!supplier) supplier = await onCreateSupplier(name);
-      await onSave({ supplierId: supplier.id, date, dueDate: dueDate || undefined, category: category.trim() || undefined, subtotal: sub, exempt });
+      await onSave({
+        supplierId: supplier.id,
+        date,
+        dueDate: dueDate || undefined,
+        category: category.trim() || undefined,
+        subtotal: sub,
+        exempt,
+        branchId: branchId || undefined,
+      });
     } catch {
-      setError('تعذّر حفظ فاتورة الشراء');
+      setError(i18n.t('err_purchase_save'));
     } finally {
       setSaving(false);
     }
@@ -121,6 +135,8 @@ export function PurchaseModal({
             </b>
           </div>
         </div>
+
+        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
 
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">

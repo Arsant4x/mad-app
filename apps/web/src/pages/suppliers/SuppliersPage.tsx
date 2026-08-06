@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listBranches, type Branch } from '../../api/branches';
 import { createPurchase, deletePurchase, listPurchases, updatePurchase, type Purchase } from '../../api/purchases';
 import { createSupplier, deleteSupplier, listSuppliers, updateSupplier, type Supplier, type SupplierInput } from '../../api/suppliers';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -9,6 +10,7 @@ import { PurchaseModal } from './PurchaseModal';
 import { purchaseStatus } from './purchaseStatus';
 import { SupplierDetailModal } from './SupplierDetailModal';
 import { SupplierModal } from './SupplierModal';
+import i18n from '../../i18n';
 
 type PurchaseSortKey = 'date' | 'no' | 'total' | 'supplier';
 const PURCHASE_SORT_OPTIONS: { key: PurchaseSortKey; label: string }[] = [
@@ -21,6 +23,7 @@ const PURCHASE_SORT_OPTIONS: { key: PurchaseSortKey; label: string }[] = [
 export function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<PurchaseSortKey>('date');
@@ -43,6 +46,8 @@ export function SuppliersPage() {
   }
 
   useEffect(() => {
+    // The picker options — filtered server-side to what this user may use.
+    listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
   }, []);
 
@@ -81,7 +86,7 @@ export function SuppliersPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setSupplierDeleteError(message ?? 'تعذّر حذف المورد');
+      setSupplierDeleteError(message ?? i18n.t('err_supplier_delete'));
     }
   }
 
@@ -293,6 +298,7 @@ export function SuppliersPage() {
 
       {purchaseModal && (
         <PurchaseModal
+          branches={branches}
           suppliers={suppliers}
           editing={purchaseModal.mode === 'edit' ? purchaseModal.purchase : null}
           onCancel={() => setPurchaseModal(null)}

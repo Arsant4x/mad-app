@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
+import { MSG } from '../common/i18n/messages';
 
 @Injectable()
 export class SuppliersService {
@@ -31,7 +32,7 @@ export class SuppliersService {
   update(companyId: string, id: string, dto: UpdateSupplierDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.supplier.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('المورد غير موجود');
+      if (!existing) throw new NotFoundException(MSG.supplier_not_found);
       await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, id);
 
       const data: Prisma.SupplierUncheckedUpdateInput = {};
@@ -47,14 +48,14 @@ export class SuppliersService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.supplier.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('المورد غير موجود');
+      if (!existing) throw new NotFoundException(MSG.supplier_not_found);
       try {
         await tx.supplier.delete({ where: { id } });
       } catch (e) {
         // P2003 = foreign key violation — purchases.supplierId is ON DELETE
         // RESTRICT, so this fires when the supplier still has purchases.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException('لا يمكن حذف مورد مرتبط بفواتير شراء — احذف فواتيره أولاً');
+          throw new ConflictException(MSG.supplier_has_purchases);
         }
         throw e;
       }

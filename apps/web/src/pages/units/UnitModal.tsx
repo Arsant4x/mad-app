@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Property } from '../../api/properties';
 import type { Unit, UnitInput } from '../../api/units';
+import i18n from '../../i18n';
 
 const TYPE_OPTIONS = ['سكني', 'محل', 'معرض', 'مكتب', 'مخزن', 'أخرى'];
 
@@ -30,7 +31,7 @@ export function UnitModal({
   async function handleSubmit() {
     setError(null);
     if (!propertyId || !unitNo.trim()) {
-      setError('الرجاء اختيار العقار وإدخال رقم الوحدة');
+      setError(i18n.t('err_unit_fields'));
       return;
     }
     setSaving(true);
@@ -46,7 +47,7 @@ export function UnitModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ الوحدة');
+      setError(message ?? i18n.t('err_unit_save'));
     } finally {
       setSaving(false);
     }

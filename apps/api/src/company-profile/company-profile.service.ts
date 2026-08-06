@@ -1,6 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
+import { MSG } from '../common/i18n/messages';
+import { assertKeyBelongsToCompany, FilesService } from '../files/files.service';
 
 const PROFILE_SELECT = {
   id: true,
@@ -12,6 +14,11 @@ const PROFILE_SELECT = {
   email: true,
   website: true,
   address: true,
+  street: true,
+  buildingNumber: true,
+  district: true,
+  city: true,
+  postalCode: true,
   logoFileKey: true,
 } as const;
 
@@ -21,7 +28,7 @@ const PROFILE_SELECT = {
  * change it. */
 function assertIsCompanyOwner(actorType: string): void {
   if (actorType !== 'COMPANY') {
-    throw new ForbiddenException('تعديل بيانات المنشأة متاح لحساب الشركة الرئيسي فقط');
+    throw new ForbiddenException(MSG.company_profile_owner_only);
   }
 }
 
@@ -36,16 +43,31 @@ function emptyToNull(value: string | undefined): string | null | undefined {
 
 @Injectable()
 export class CompanyProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CompanyProfileService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly files: FilesService,
+  ) {}
 
   get(companyId: string) {
     return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: PROFILE_SELECT });
   }
 
-  update(companyId: string, actorType: string, dto: UpdateCompanyProfileDto) {
+  async update(companyId: string, actorType: string, dto: UpdateCompanyProfileDto) {
     assertIsCompanyOwner(actorType);
 
-    return this.prisma.company.update({
+    const logoFileKey = emptyToNull(dto.logoFileKey);
+    // A storage key is just a string on this row — nothing stops a caller from
+    // sending another company's key, and RLS can't help because MinIO isn't
+    // Postgres. So re-verify it resolves under *this* company's prefix before
+    // storing it, the same way a foreign id from a request body is re-checked
+    // elsewhere in this codebase.
+    if (logoFileKey) assertKeyBelongsToCompany(logoFileKey, companyId);
+
+    const previous = logoFileKey !== undefined ? await this.prisma.company.findUnique({ where: { id: companyId }, select: { logoFileKey: true } }) : null;
+
+    const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: {
         legalName: dto.legalName.trim(),
@@ -55,8 +77,25 @@ export class CompanyProfileService {
         email: emptyToNull(dto.email),
         website: emptyToNull(dto.website),
         address: emptyToNull(dto.address),
+        street: emptyToNull(dto.street),
+        buildingNumber: emptyToNull(dto.buildingNumber),
+        district: emptyToNull(dto.district),
+        city: emptyToNull(dto.city),
+        postalCode: emptyToNull(dto.postalCode),
+        ...(logoFileKey !== undefined ? { logoFileKey } : {}),
       },
       select: PROFILE_SELECT,
     });
+
+    // Replacing or clearing the logo leaves the old object orphaned in storage
+    // — nothing else ever references it. Deleted after the row is safely
+    // updated, and failures are logged rather than thrown: a stale object is a
+    // cleanup problem, not a reason to fail the user's save.
+    const staleKey = previous?.logoFileKey;
+    if (staleKey && staleKey !== logoFileKey) {
+      await this.files.remove(companyId, staleKey).catch((e: Error) => this.logger.warn(`Could not delete replaced logo "${staleKey}": ${e.message}`));
+    }
+
+    return updated;
   }
 }

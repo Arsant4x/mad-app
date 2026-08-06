@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**
  * Reference implementation for every future tenant-scoped module: all data
@@ -41,7 +42,7 @@ export class AccountsService {
   update(companyId: string, id: string, dto: UpdateAccountDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.account.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الحساب غير موجود');
+      if (!existing) throw new NotFoundException(MSG.account_not_found);
 
       const data: Prisma.AccountUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -52,7 +53,7 @@ export class AccountsService {
         // moved its balance — matches the mockup's "لا يمكن تغيير نوع حساب
         // مستخدَم بقيود مرحّلة" restriction.
         const usedInJournal = (await tx.journalLine.count({ where: { accountId: id } })) > 0;
-        if (usedInJournal) throw new ConflictException('لا يمكن تغيير نوع حساب مستخدَم بقيود مرحّلة');
+        if (usedInJournal) throw new ConflictException(MSG.account_type_locked);
         data.type = dto.type;
       }
 
@@ -72,7 +73,7 @@ export class AccountsService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.account.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الحساب غير موجود');
+      if (!existing) throw new NotFoundException(MSG.account_not_found);
       try {
         await tx.account.delete({ where: { id } });
       } catch (e) {
@@ -80,7 +81,7 @@ export class AccountsService {
         // DELETE RESTRICT, so this fires when the account still has posted
         // journal lines.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException('لا يمكن حذف حساب مرتبط بقيود يومية — احذف القيود المرتبطة أولاً');
+          throw new ConflictException(MSG.account_has_journal_lines);
         }
         throw e;
       }
@@ -89,6 +90,6 @@ export class AccountsService {
 
   private async assertNoDuplicateCode(tx: Prisma.TransactionClient, code: string, excludeId?: string): Promise<void> {
     const existing = await tx.account.findFirst({ where: { code, ...(excludeId ? { id: { not: excludeId } } : {}) } });
-    if (existing) throw new ConflictException(`رمز الحساب "${code}" مستخدَم بالفعل`);
+    if (existing) throw new ConflictException(formatMessage(MSG.account_code_taken, { code }));
   }
 }

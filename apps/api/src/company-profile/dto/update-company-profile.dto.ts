@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
+import { MSG } from '../../common/i18n/messages';
 
 export class UpdateCompanyProfileDto {
   @IsString()
@@ -11,12 +12,12 @@ export class UpdateCompanyProfileDto {
   /// genuinely non-empty value gets format-checked.
   @IsOptional()
   @ValidateIf((o) => !!o.vatNumber)
-  @Matches(/^3\d{13}3$/, { message: 'الرقم الضريبي يجب أن يتكوّن من 15 رقماً ويبدأ وينتهي بالرقم 3' })
+  @Matches(/^3\d{13}3$/, { message: MSG.vat_number_invalid })
   vatNumber?: string;
 
   @IsOptional()
   @ValidateIf((o) => !!o.crNumber)
-  @Matches(/^\d{10}$/, { message: 'رقم السجل التجاري يجب أن يتكوّن من 10 أرقام بالضبط' })
+  @Matches(/^\d{10}$/, { message: MSG.cr_number_invalid })
   crNumber?: string;
 
   @IsOptional()
@@ -25,7 +26,7 @@ export class UpdateCompanyProfileDto {
 
   @IsOptional()
   @ValidateIf((o) => !!o.email)
-  @IsEmail({}, { message: 'صيغة البريد الإلكتروني غير صحيحة' })
+  @IsEmail({}, { message: MSG.email_invalid })
   email?: string;
 
   @IsOptional()
@@ -35,4 +36,36 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  /// The address again, in the parts ZATCA's cac:PostalAddress requires. Free
+  /// text apart from the postal code, which the authority expects as five
+  /// digits — a merchant with none is better served by an empty field than by
+  /// a rejected invoice, hence @ValidateIf rather than a hard requirement.
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  buildingNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  district?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => !!o.postalCode)
+  @Matches(/^\d{5}$/, { message: MSG.postal_code_invalid })
+  postalCode?: string;
+
+  /// Storage key returned by `POST /files` for the uploaded logo. Sending ''
+  /// clears the logo (and deletes the stored object); the service verifies the
+  /// key is under this company's own prefix before saving it.
+  @IsOptional()
+  @IsString()
+  logoFileKey?: string;
 }

@@ -4,6 +4,7 @@ import { createJournalEntry, deleteJournalEntry, listJournalEntries, type Create
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { JournalBuilderView } from './JournalBuilderView';
 import { JournalListView } from './JournalListView';
+import i18n from '../../i18n';
 
 type View = { mode: 'list' } | { mode: 'builder' };
 
@@ -40,7 +41,7 @@ export function JournalPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف القيد');
+      setDeleteError(message ?? i18n.t('err_journal_delete'));
     }
   }
 

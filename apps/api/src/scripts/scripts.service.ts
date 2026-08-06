@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateScriptDto } from './dto/create-script.dto';
 import { UpdateScriptDto } from './dto/update-script.dto';
+import { MSG } from '../common/i18n/messages';
 
 @Injectable()
 export class ScriptsService {
@@ -23,7 +24,7 @@ export class ScriptsService {
   update(companyId: string, id: string, dto: UpdateScriptDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.messageScript.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('القالب غير موجود');
+      if (!existing) throw new NotFoundException(MSG.template_not_found);
       return tx.messageScript.update({ where: { id }, data: dto });
     });
   }
@@ -31,7 +32,7 @@ export class ScriptsService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.messageScript.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('القالب غير موجود');
+      if (!existing) throw new NotFoundException(MSG.template_not_found);
       await tx.messageScript.delete({ where: { id } });
     });
   }

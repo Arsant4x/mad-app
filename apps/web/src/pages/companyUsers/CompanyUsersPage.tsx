@@ -4,6 +4,7 @@ import { listTemplates, type PermissionTemplate } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { CompanyUserModal } from './CompanyUserModal';
+import i18n from '../../i18n';
 
 const STATUS_META: Record<CompanyUser['status'], { label: string; badgeClass: string }> = {
   ACTIVE: { label: 'نشط', badgeClass: 'paid' },
@@ -53,7 +54,7 @@ export function CompanyUsersPage() {
       await reload();
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف الحساب');
+      setDeleteError(message ?? i18n.t('err_account_delete'));
     }
   }
 

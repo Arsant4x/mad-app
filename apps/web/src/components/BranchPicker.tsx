@@ -1,0 +1,39 @@
+import type { Branch } from '../api/branches';
+
+/**
+ * The branch field shared by every document form.
+ *
+ * Renders **nothing** when the company has no branches — a single-location
+ * business should never be asked to pick one, and every record simply stays
+ * company-wide. The empty option means exactly that, and is the default.
+ *
+ * `branches` should come straight from `listBranches()`, which already returns
+ * only what the signed-in user may write to, so no extra filtering is needed.
+ */
+export function BranchPicker({
+  branches,
+  value,
+  onChange,
+  label = 'الفرع',
+}: {
+  branches: Branch[];
+  value: string;
+  onChange: (branchId: string) => void;
+  label?: string;
+}) {
+  if (branches.length === 0) return null;
+
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— على مستوى الشركة —</option>
+        {branches.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}

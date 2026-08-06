@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import type { Branch } from '../../api/branches';
+import { BranchPicker } from '../../components/BranchPicker';
 import type { Employee, EmployeeInput, EmployeeStatus } from '../../api/employees';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
   { value: 'ACTIVE', label: 'نشط' },
@@ -10,10 +13,12 @@ const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
 
 export function EmployeeModal({
   editing,
+  branches,
   onCancel,
   onSave,
 }: {
   editing: Employee | null;
+  branches: Branch[];
   onCancel: () => void;
   onSave: (data: EmployeeInput) => Promise<void>;
 }) {
@@ -24,13 +29,14 @@ export function EmployeeModal({
   const [baseSalary, setBaseSalary] = useState(editing?.baseSalary ?? '');
   const [phone, setPhone] = useState(editing?.phone ?? '');
   const [status, setStatus] = useState<EmployeeStatus>(editing?.status ?? 'ACTIVE');
+  const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit() {
     setError(null);
     if (!fullName.trim()) {
-      setError('الرجاء إدخال اسم الموظف');
+      setError(i18n.t('err_employee_name_required'));
       return;
     }
     setSaving(true);
@@ -43,9 +49,10 @@ export function EmployeeModal({
         baseSalary: parseFloat(String(baseSalary)) || 0,
         phone: phone.trim() || undefined,
         status,
+        branchId: branchId || undefined,
       });
     } catch {
-      setError('تعذّر حفظ بيانات الموظف');
+      setError(i18n.t('err_employee_save'));
     } finally {
       setSaving(false);
     }
@@ -100,6 +107,7 @@ export function EmployeeModal({
             </select>
           </div>
         </div>
+        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

@@ -16,12 +16,12 @@ export class TransactionsController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.transactionsService.list(tenant.companyId);
+    return this.transactionsService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateTransactionDto) {
-    return this.transactionsService.create(tenant.companyId, dto);
+    return this.transactionsService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

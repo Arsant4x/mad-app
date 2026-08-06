@@ -10,3 +10,7 @@ coverage/
 .vscode/
 .idea/
 apps/api/generated/
+
+# Database dumps taken before destructive operations — never commit real data.
+backups/
+/backup-before-cleanup.sql

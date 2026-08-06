@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CompanyUser, CompanyUserInput } from '../../api/companyUsers';
 import type { PermissionTemplate } from '../../api/templates';
+import i18n from '../../i18n';
 
 export function CompanyUserModal({
   templates,
@@ -23,7 +24,7 @@ export function CompanyUserModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim() || (!editing && (!username.trim() || !password))) {
-      setError('أكمل اسم الموظف واسم الدخول وكلمة المرور');
+      setError(i18n.t('err_company_user_fields'));
       return;
     }
     setSaving(true);
@@ -36,7 +37,7 @@ export function CompanyUserModal({
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر حفظ حساب الموظف');
+      setError(message ?? i18n.t('err_company_user_save'));
     } finally {
       setSaving(false);
     }

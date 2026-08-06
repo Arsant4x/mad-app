@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 const RESERVATION_INCLUDE = { unit: { include: { property: true } } };
 
@@ -19,18 +20,20 @@ export class ReservationsService {
   create(companyId: string, dto: CreateReservationDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const unit = await tx.unit.findUnique({ where: { id: dto.unitId } });
-      if (!unit) throw new NotFoundException('الوحدة غير موجودة');
+      if (!unit) throw new NotFoundException(MSG.unit_not_found);
 
       const today = new Date();
       const currentContract = await tx.contract.findFirst({
         where: { unitId: dto.unitId, status: { not: 'CANCELLED' }, start: { lte: today }, end: { gte: today } },
       });
-      if (currentContract) throw new ConflictException('هذه الوحدة مؤجَّرة حالياً بعقد سارٍ — لا يمكن حجزها');
+      if (currentContract) throw new ConflictException(MSG.reservation_unit_rented);
 
       await expireStaleReservations(tx);
       const existing = await activeReservationForUnit(tx, dto.unitId);
       if (existing) {
-        throw new ConflictException(`يوجد حجز نشط على هذه الوحدة بالفعل حتى ${existing.expiryDate.toISOString().slice(0, 10)}`);
+        throw new ConflictException(
+          formatMessage(MSG.reservation_already_active, { expiryDate: existing.expiryDate.toISOString().slice(0, 10) }),
+        );
       }
 
       const created = await tx.reservation.create({
@@ -51,7 +54,7 @@ export class ReservationsService {
   cancel(companyId: string, id: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.reservation.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('الحجز غير موجود');
+      if (!existing) throw new NotFoundException(MSG.reservation_not_found);
       return tx.reservation.update({ where: { id }, data: { status: 'EXPIRED' }, include: RESERVATION_INCLUDE });
     });
   }

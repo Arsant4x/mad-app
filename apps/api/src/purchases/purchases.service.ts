@@ -1,10 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
+import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
+import { MSG } from '../common/i18n/messages';
 
 const PURCHASE_INCLUDE = { supplier: true } as const;
 const VAT_RATE = 0.15;
@@ -20,24 +23,27 @@ function computeTax(subtotal: number, exempt: boolean) {
 export class PurchasesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.purchase.findMany({ include: PURCHASE_INCLUDE, orderBy: { date: 'desc' } }),
+      tx.purchase.findMany({ where: branchFilter(allowedBranchIds), include: PURCHASE_INCLUDE, orderBy: { date: 'desc' } }),
     );
   }
 
-  create(companyId: string, dto: CreatePurchaseDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
     const exempt = dto.exempt ?? false;
     const { tax, total } = computeTax(dto.subtotal, exempt);
+    const { currency, exchangeRate } = resolveCurrency(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextPurchaseNumber's comment.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
         const no = await this.nextPurchaseNumber(tx);
         const created = await tx.purchase.create({
           data: {
             companyId,
             no,
+            branchId,
             supplierId: dto.supplierId,
             date: new Date(dto.date),
             dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
@@ -46,6 +52,11 @@ export class PurchasesService {
             taxAmount: tax,
             exempt,
             total,
+            currency,
+            exchangeRate,
+            baseSubtotal: toBaseAmount(dto.subtotal, exchangeRate),
+            baseTaxAmount: toBaseAmount(tax, exchangeRate),
+            baseTotal: toBaseAmount(total, exchangeRate),
           } as unknown as Prisma.PurchaseUncheckedCreateInput,
           include: PURCHASE_INCLUDE,
         });
@@ -54,13 +65,14 @@ export class PurchasesService {
         // the required accounts (expense category/2100/2200) aren't set up
         // for this company yet.
         const entry = await postPurchaseEntry(tx, companyId, {
+          branchId: created.branchId,
           no: created.no,
           date: created.date,
           supplierName: created.supplier.name,
           category: created.category,
-          subtotal: Number(created.subtotal),
-          taxAmount: Number(created.taxAmount),
-          total: Number(created.total),
+          baseSubtotal: Number(created.baseSubtotal),
+          baseTaxAmount: Number(created.baseTaxAmount),
+          baseTotal: Number(created.baseTotal),
         });
         if (!entry) return created;
         return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
@@ -71,7 +83,7 @@ export class PurchasesService {
   update(companyId: string, id: string, dto: UpdatePurchaseDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('فاتورة الشراء غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.purchase_not_found);
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;
@@ -83,10 +95,17 @@ export class PurchasesService {
         const subtotal = dto.subtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
         const { tax, total } = computeTax(subtotal, exempt);
+        // Keep the rate the purchase was recorded at unless explicitly changed.
+        const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
         data.subtotal = subtotal;
         data.exempt = exempt;
         data.taxAmount = tax;
         data.total = total;
+        data.baseSubtotal = toBaseAmount(subtotal, rate);
+        data.baseTaxAmount = toBaseAmount(tax, rate);
+        data.baseTotal = toBaseAmount(total, rate);
+        if (dto.currency) data.currency = dto.currency;
+        if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
       }
 
       if (dto.paid !== undefined) {
@@ -111,13 +130,14 @@ export class PurchasesService {
 
       if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
       const entry = await postPurchaseEntry(tx, companyId, {
+        branchId: updated.branchId,
         no: updated.no,
         date: updated.date,
         supplierName: updated.supplier.name,
         category: updated.category,
-        subtotal: Number(updated.subtotal),
-        taxAmount: Number(updated.taxAmount),
-        total: Number(updated.total),
+        baseSubtotal: Number(updated.baseSubtotal),
+        baseTaxAmount: Number(updated.baseTaxAmount),
+        baseTotal: Number(updated.baseTotal),
       });
       if (!entry) return updated;
       return tx.purchase.update({ where: { id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
@@ -127,7 +147,7 @@ export class PurchasesService {
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException('فاتورة الشراء غير موجودة');
+      if (!existing) throw new NotFoundException(MSG.purchase_not_found);
       await tx.purchase.delete({ where: { id } });
       await unpostIfLinked(tx, existing.journalEntryId);
     });

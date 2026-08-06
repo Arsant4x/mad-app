@@ -21,8 +21,15 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(username, password);
-    } catch {
-      setError(t('login_error_generic'));
+    } catch (e) {
+      // Prefer the server's message — it's already localized to the language
+      // this client asked for (see api/client.ts's Accept-Language header), and
+      // it distinguishes a frozen/stopped account from bad credentials. The
+      // generic string is only a fallback for a network-level failure that
+      // never reached the server.
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      const message = Array.isArray(data?.message) ? data.message.join(' — ') : data?.message;
+      setError(message ?? t('login_error_generic'));
     } finally {
       setSubmitting(false);
     }

@@ -1,4 +1,11 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import i18n from '../i18n';
+
+/** The API answers in whichever of `ar`/`en` this resolves to; anything else
+ * falls back to Arabic server-side. */
+function currentLanguage(): string {
+  return i18n.language?.startsWith('en') ? 'en' : 'ar';
+}
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -43,6 +50,11 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
     config.headers.set('Authorization', `Bearer ${accessToken}`);
   }
+  // Tells the API which language to return its error messages in. Read from
+  // i18n on every request rather than captured once, so switching the language
+  // takes effect immediately without a reload. Importing i18n lazily here
+  // keeps this module free of a hard dependency on the i18n bundle.
+  config.headers.set('Accept-Language', currentLanguage());
   return config;
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listBranches, type Branch } from '../../api/branches';
 import { createBank, deleteBank, listBanks, updateBank, type Bank, type BankInput } from '../../api/banks';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -7,6 +8,7 @@ import { BankModal } from './BankModal';
 
 export function BanksPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
@@ -17,6 +19,8 @@ export function BanksPage() {
   }
 
   useEffect(() => {
+    // The picker options — filtered server-side to what this user may use.
+    listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
   }, []);
 
@@ -111,7 +115,7 @@ export function BanksPage() {
         </table>
       </div>
 
-      {modal && <BankModal editing={modal.mode === 'edit' ? modal.bank : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {modal && <BankModal branches={branches} editing={modal.mode === 'edit' ? modal.bank : null} onCancel={() => setModal(null)} onSave={handleSave} />}
 
       {pendingDelete && (
         <ConfirmModal

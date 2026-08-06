@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listBranches, type Branch } from '../../api/branches';
 import { createEmployee, deleteEmployee, listEmployees, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -13,6 +14,7 @@ const STATUS_META: Record<EmployeeStatus, { label: string; badgeClass: string }>
 
 export function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; employee: Employee } | null>(null);
@@ -23,6 +25,8 @@ export function EmployeesPage() {
   }
 
   useEffect(() => {
+    // The picker options — filtered server-side to what this user may use.
+    listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
   }, []);
 
@@ -129,7 +133,7 @@ export function EmployeesPage() {
         </table>
       </div>
 
-      {modal && <EmployeeModal editing={modal.mode === 'edit' ? modal.employee : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {modal && <EmployeeModal branches={branches} editing={modal.mode === 'edit' ? modal.employee : null} onCancel={() => setModal(null)} onSave={handleSave} />}
 
       {pendingDelete && (
         <ConfirmModal

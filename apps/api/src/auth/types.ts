@@ -18,6 +18,16 @@ export interface TenantContext {
   actorType: ActorType;
   profileId: string;
   allowedScreens: string[] | 'all';
+  /**
+   * Which branches this actor may see. `'all'` for the company owner, and for
+   * an employee with no branch assignment (see CompanyUserBranch).
+   *
+   * Unlike `companyId` — an absolute boundary enforced by RLS — this is a
+   * *permission* filter applied in queries. Keep the two distinct: a bug here
+   * shows one branch's data to a colleague in the same company; a bug in
+   * companyId scoping leaks another company's data entirely.
+   */
+  allowedBranchIds: string[] | 'all';
 }
 
 declare module 'express' {

@@ -3,6 +3,7 @@ import type { StockMovementInput, StockMovementType } from '../../api/inventory'
 import type { Product } from '../../api/products';
 import type { Warehouse } from '../../api/warehouses';
 import { today } from '../../lib/format';
+import i18n from '../../i18n';
 
 const TYPE_OPTIONS: { value: StockMovementType; label: string }[] = [
   { value: 'IN', label: 'إضافة (وارد)' },
@@ -39,7 +40,7 @@ export function StockMovementModal({
     setWarning(null);
     const qtyNum = parseFloat(qty);
     if (!productId || !warehouseId || !qtyNum) {
-      setError('الرجاء اختيار المنتج والمستودع وإدخال الكمية');
+      setError(i18n.t('err_movement_fields'));
       return;
     }
     setSaving(true);
@@ -64,7 +65,7 @@ export function StockMovementModal({
       }
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر تسجيل الحركة');
+      setError(message ?? i18n.t('err_movement_save'));
     } finally {
       setSaving(false);
     }
