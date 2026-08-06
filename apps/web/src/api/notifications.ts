@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 /** What the notification is about. Drives both the icon and where clicking it
  * takes you — a free-text title could not do either. */
-export type NotificationKind = 'RENT_ESCALATION';
+export type NotificationKind = 'RENT_ESCALATION' | 'WARRANTY_EXPIRING';
 
 export interface AppNotification {
   id: string;
@@ -39,3 +39,12 @@ export const getUnreadCount = () => apiClient.get<{ unread: number }>('/notifica
 export const markNotificationRead = (id: string) => apiClient.patch<AppNotification>(`/notifications/${id}/read`).then((r) => r.data);
 export const markAllNotificationsRead = () => apiClient.post<{ marked: number }>('/notifications/read-all').then((r) => r.data);
 export const runEscalation = () => apiClient.post<EscalationRun>('/notifications/run-escalation').then((r) => r.data);
+
+/** What one warranty-expiry check did. `raised` new warnings out of `checked`
+ * warranties inside the notice window. */
+export interface WarrantyCheckRun {
+  raised: number;
+  checked: number;
+  noticeDays: number;
+}
+export const runWarrantyCheck = () => apiClient.post<WarrantyCheckRun>('/notifications/run-warranty-check').then((r) => r.data);

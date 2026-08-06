@@ -208,22 +208,32 @@ export class EscalationService {
    * logged individually.
    */
   @Cron(CronExpression.EVERY_DAY_AT_7AM)
-  async runForAllCompanies(): Promise<{ companies: number; escalated: number }> {
+  async runForAllCompanies(): Promise<{ companies: number; escalated: number; warned: number }> {
     // Deliberately the unscoped client: this is the one place that legitimately
     // crosses tenants — to then enter each tenant's own context below.
     const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
 
     let escalated = 0;
+    let warned = 0;
     for (const c of companies) {
+      // Escalation and warranty checks are independent: a failure in one must
+      // not skip the other for the same company, nor the rest of the sweep.
       try {
         const result = await this.runForCompany(c.id);
         escalated += result.escalated;
       } catch (e) {
         this.logger.error(`Escalation sweep failed for company ${c.id}`, e instanceof Error ? e.stack : String(e));
       }
+      try {
+        const result = await this.warrantyExpiryForCompany(c.id);
+        warned += result.raised;
+      } catch (e) {
+        this.logger.error(`Warranty-expiry sweep failed for company ${c.id}`, e instanceof Error ? e.stack : String(e));
+      }
     }
 
     if (escalated > 0) this.logger.log(`Escalation sweep raised ${escalated} notification(s) across ${companies.length} company(ies)`);
-    return { companies: companies.length, escalated };
+    if (warned > 0) this.logger.log(`Warranty-expiry sweep raised ${warned} notification(s) across ${companies.length} company(ies)`);
+    return { companies: companies.length, escalated, warned };
   }
 }

@@ -5,6 +5,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   runEscalation,
+  runWarrantyCheck,
   type AppNotification,
   type NotificationList,
 } from '../../api/notifications';
@@ -50,6 +51,21 @@ export function NotificationsPage() {
       if (!n.readAt) await markNotificationRead(n.id);
     });
     if (n.linkScreen === 'contracts') navigate('/contracts');
+    // Warranties are managed from within the maintenance screen — there is no
+    // standalone route, so send the manager where they can actually act.
+    else if (n.linkScreen === 'warranties' || n.linkScreen === 'maintenance') navigate('/maintenance');
+  }
+
+  async function checkWarrantiesNow() {
+    setRunResult(null);
+    await run(async () => {
+      const result = await runWarrantyCheck();
+      if (result.raised === 0) {
+        setRunResult(`لا جديد — لا ضمانات تنتهي خلال ${result.noticeDays} يوم لم يُنبَّه عنها.`);
+      } else {
+        setRunResult(`تنبيه بشأن ${result.raised} ضمان يقترب انتهاؤه.`);
+      }
+    });
   }
 
   async function checkNow() {
@@ -80,6 +96,9 @@ export function NotificationsPage() {
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost" disabled={busy} onClick={checkNow}>
             فحص التصعيد الآن
+          </button>
+          <button className="btn btn-ghost" disabled={busy} onClick={checkWarrantiesNow}>
+            فحص الضمانات الآن
           </button>
           <button className="btn btn-ghost" disabled={busy || data.unread === 0} onClick={() => run(markAllNotificationsRead)}>
             تعليم الكل كمقروء

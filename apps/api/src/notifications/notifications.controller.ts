@@ -52,4 +52,15 @@ export class NotificationsController {
   runEscalation(@CurrentTenant() tenant: TenantContext, @Query('contractId') contractId?: string) {
     return this.escalationService.runForCompany(tenant.companyId, contractId);
   }
+
+  /**
+   * Runs the warranty-expiry check now, for this company only.
+   *
+   * Same rationale as run-escalation: a daily job the owner cannot trigger is
+   * one they cannot trust. Idempotent — one warning per warranty, ever.
+   */
+  @Post('run-warranty-check')
+  runWarrantyCheck(@CurrentTenant() tenant: TenantContext) {
+    return this.escalationService.warrantyExpiryForCompany(tenant.companyId);
+  }
 }

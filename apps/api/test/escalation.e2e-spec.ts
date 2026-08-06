@@ -60,6 +60,12 @@ describe('Escalation and notifications (e2e)', () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
 
+    // Baseline reset: this suite shares demo-company-a, whose policy is mutated
+    // by the tests below. If a prior run was interrupted before afterAll, it
+    // would leave escalateAfterDays set and make the "off by default" assertion
+    // fail. Resetting here makes the suite re-runnable from any leftover state.
+    await setPolicy({ escalateAfterDays: null, escalateToUserId: null }).expect(200);
+
     const property = await auth(request(app.getHttpServer()).post('/properties'))
       .send({ name: `عقار التصعيد ${suffix}`, ownership: 'owned' })
       .expect(201);
