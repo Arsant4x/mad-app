@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -21,6 +21,13 @@ export class InventoryController {
   @Get('movements')
   listMovements(@CurrentTenant() tenant: TenantContext) {
     return this.inventoryService.listMovements(tenant.companyId, tenant.allowedBranchIds);
+  }
+
+  /** Batches expiring within `withinDays` (default 90), already-expired first. */
+  @Get('expiring')
+  expiring(@CurrentTenant() tenant: TenantContext, @Query('withinDays') withinDays?: string) {
+    const days = withinDays ? Math.max(0, parseInt(withinDays, 10) || 0) : 90;
+    return this.inventoryService.expiringStock(tenant.companyId, tenant.allowedBranchIds, days);
   }
 
   @Post('movements')

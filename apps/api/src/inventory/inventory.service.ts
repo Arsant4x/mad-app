@@ -50,6 +50,10 @@ export class InventoryService {
           qty: dto.type === 'ADJUSTMENT' ? dto.qty : Math.abs(dto.qty),
           date: new Date(dto.date),
           reason: dto.reason,
+          // Batch/expiry are meaningful on receiving stock; ignored on OUT so a
+          // sale never re-stamps a batch it's drawing down.
+          batchNo: dto.type === 'IN' ? dto.batchNo : undefined,
+          expiryDate: dto.type === 'IN' && dto.expiryDate ? new Date(dto.expiryDate) : undefined,
         } as unknown as Prisma.StockMovementUncheckedCreateInput,
         include: MOVEMENT_INCLUDE,
       });
@@ -60,6 +64,48 @@ export class InventoryService {
       // information to flag it if it wants to.
       const resultingQty = await currentStockQty(tx, dto.productId, dto.warehouseId);
       return { ...movement, resultingQty };
+    });
+  }
+
+  /**
+   * Batches approaching expiry (or already past it), for the perishable side of
+   * inventory — pharmacies above all.
+   *
+   * Reads receiving (IN) movements that carry an expiry within the horizon. It
+   * reports the batch as **received**, not the live remaining quantity of that
+   * exact batch — per-batch depletion (FEFO) is a larger feature — so `qty` is
+   * what came in. Still the actionable list: what to pull or discount before it
+   * lapses. Ordered soonest-first; already-expired ones come first (negative
+   * `daysLeft`).
+   */
+  expiringStock(companyId: string, allowedBranchIds: string[] | 'all', withinDays = 90) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const horizon = new Date(today);
+      horizon.setDate(horizon.getDate() + withinDays);
+
+      const rows = await tx.stockMovement.findMany({
+        where: { ...branchFilter(allowedBranchIds), type: 'IN', expiryDate: { not: null, lte: horizon } },
+        include: { product: { select: { name: true, sku: true } }, warehouse: { select: { name: true } } },
+        orderBy: { expiryDate: 'asc' },
+      });
+
+      return rows.map((m) => {
+        const expiry = m.expiryDate as Date;
+        const daysLeft = Math.round((expiry.getTime() - today.getTime()) / 86400000);
+        return {
+          id: m.id,
+          productName: m.product.name,
+          sku: m.product.sku,
+          warehouseName: m.warehouse.name,
+          batchNo: m.batchNo,
+          qty: Number(m.qty),
+          expiryDate: expiry.toISOString().slice(0, 10),
+          daysLeft,
+          expired: daysLeft < 0,
+        };
+      });
     });
   }
 

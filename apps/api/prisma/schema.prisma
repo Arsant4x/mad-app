@@ -1906,8 +1906,16 @@ model StockMovement {
   reason String?
   date   DateTime @db.Date
 
+  /// Batch/lot number and expiry — set on receiving (IN) movements for
+  /// perishables (medicines, food, cosmetics). Optional: non-perishable stock
+  /// leaves them null. Kept on the movement, not the product, because the same
+  /// product arrives in many batches with different expiry dates.
+  batchNo    String?
+  expiryDate DateTime? @db.Date
+
   createdAt DateTime @default(now())
 
+  @@index([expiryDate])
   @@map("stock_movements")
 }
 

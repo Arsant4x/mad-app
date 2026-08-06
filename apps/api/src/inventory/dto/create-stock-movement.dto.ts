@@ -1,5 +1,5 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export const STOCK_MOVEMENT_TYPES = ['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT'] as const;
 
@@ -29,4 +29,13 @@ export class CreateStockMovementDto extends BranchFieldDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  /// Batch/lot number and expiry — used on receiving (IN) perishables.
+  @IsOptional()
+  @IsString()
+  batchNo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expiryDate?: string;
 }
