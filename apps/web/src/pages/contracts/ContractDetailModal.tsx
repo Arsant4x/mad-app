@@ -45,6 +45,9 @@ function PaymentForm({
   const [discount, setDiscount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [bankId, setBankId] = useState(banks[0]?.id ?? '');
+  // Which cash box took a cash receipt. Optional and defaults to none, so cash
+  // payments keep working exactly as before unless a box is chosen.
+  const [cashBoxId, setCashBoxId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +59,15 @@ function PaymentForm({
     }
     setSaving(true);
     try {
-      await onSubmit({ date, amount: parseFloat(amount) || 0, discount: parseFloat(discount) || undefined, method, bankId: method === 'BANK' ? bankId : undefined });
+      await onSubmit({
+        date,
+        amount: parseFloat(amount) || 0,
+        discount: parseFloat(discount) || undefined,
+        method,
+        // A bank transfer names the account; a cash receipt may name the branch
+        // cash box that took it (optional — omitted keeps the old behaviour).
+        bankId: method === 'BANK' ? bankId : cashBoxId || undefined,
+      });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? i18n.t('err_payment_record'));
@@ -100,6 +111,20 @@ function PaymentForm({
               </option>
             ))}
           </select>
+        </div>
+      )}
+      {method === 'CASH' && banks.length > 0 && (
+        <div className="field">
+          <label>الصندوق المستلِم (اختياري)</label>
+          <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
+            <option value="">— لا صندوق محدّد —</option>
+            {banks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          <p className="hint">اختر صندوق الفرع الذي استلم النقد ليرتفع رصيده. اتركه فارغاً لتسجيل الدخل دون تحديد صندوق.</p>
         </div>
       )}
       {error && <p className="error-text">{error}</p>}

@@ -255,8 +255,13 @@ export class ContractsService {
         }
 
         if (dto.method === 'BANK' && !dto.bankId) throw new BadRequestException(MSG.bank_required);
-        const bank = dto.method === 'BANK' ? await tx.bank.findUnique({ where: { id: dto.bankId! } }) : null;
-        if (dto.method === 'BANK' && !bank) throw new NotFoundException(MSG.bank_not_found);
+        // A bankId is honoured for **either** method: a bank transfer names the
+        // account, and a cash receipt may name the branch cash box it landed in
+        // (a cash box is just a Bank record pointed at a branch — CLAUDE.md 6.8).
+        // Either way the balance moves and a transaction is written, so a
+        // branch's cash box reflects real money rather than only the GL account.
+        const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
+        if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
 
         // A payment defaults to the contract's currency/rate, but can carry
         // its own — the gap between the rate the contract was priced at and
@@ -307,7 +312,9 @@ export class ContractsService {
             discount,
             netAmount,
             method: dto.method,
-            bankId: dto.method === 'BANK' ? dto.bankId : undefined,
+            // Records which money-holder took it — the bank account for a
+            // transfer, or the branch cash box for a cash receipt.
+            bankId: bank ? bank.id : undefined,
             notes: dto.notes,
             journalEntryId: journalEntry?.id,
             currency: payCurrency,
