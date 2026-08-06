@@ -58,7 +58,13 @@ const NAV_GROUPS: NavGroupDef[] = [
     ],
   },
   { labelKey: 'grp_branches', items: [{ screen: 'branches', to: '/branches', labelKey: 'nav_branches' }] },
-  { labelKey: 'grp_hr', items: [{ screen: 'employees', to: '/employees', labelKey: 'nav_employees' }] },
+  {
+    labelKey: 'grp_hr',
+    items: [
+      { screen: 'employees', to: '/employees', labelKey: 'nav_employees' },
+      { screen: 'employees', to: '/leaves', labelKey: 'nav_leaves' },
+    ],
+  },
   {
     labelKey: 'grp_banks',
     items: [
