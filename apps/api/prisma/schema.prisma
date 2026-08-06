@@ -234,6 +234,8 @@ model Company {
   obligations      GovernmentObligation[]
   reservations     Reservation[]
   messageScripts   MessageScript[]
+  leaveTypes       LeaveType[]
+  leaveRequests    LeaveRequest[]
 
   @@map("companies")
 }
@@ -788,7 +790,70 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  leaveRequests LeaveRequest[]
+
   @@map("employees")
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A kind of leave a company grants — "سنوية", "مرضية", "بدون راتب". The
+/// entitlement is **configurable per company**, never a hardcoded number:
+/// statutory day counts differ by contract and change over time, so the owner
+/// sets them rather than the code guessing (and guessing wrong is a compliance
+/// risk). `annualDays = 0` means "no fixed entitlement" (e.g. unpaid leave),
+/// which the balance treats as unlimited rather than zero.
+model LeaveType {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name       String
+  annualDays Int     @default(0)
+  paid       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests LeaveRequest[]
+
+  @@unique([companyId, name])
+  @@map("leave_types")
+}
+
+/// One leave request and its approval state. `days` is stored (inclusive
+/// calendar days between start and end) so a report never has to recompute it,
+/// and an approver decides on the number they saw. Balance is derived, never
+/// stored — same "compute, don't store" rule as unit status and stock.
+model LeaveRequest {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  leaveTypeId String
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  days      Int
+  reason    String?
+
+  status      LeaveRequestStatus @default(PENDING)
+  decidedAt   DateTime?
+  decidedNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@map("leave_requests")
 }
 
 /// Bank account for the company. `balance` is the current balance and

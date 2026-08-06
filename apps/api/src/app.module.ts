@@ -11,6 +11,7 @@ import { ContractsModule } from './contracts/contracts.module';
 import { TenantPrismaModule } from './common/tenant/tenant-prisma.module';
 import { CustomersModule } from './customers/customers.module';
 import { EmployeesModule } from './employees/employees.module';
+import { LeavesModule } from './leaves/leaves.module';
 import { FilesModule } from './files/files.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { BranchesModule } from './branches/branches.module';
@@ -58,6 +59,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     PurchasesModule,
     ProductsModule,
     EmployeesModule,
+    LeavesModule,
     BanksModule,
     TransactionsModule,
     JournalModule,

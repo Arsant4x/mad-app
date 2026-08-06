@@ -68,6 +68,13 @@ export const MSG = {
 
   // employees / banks
   employee_not_found: 'employees.not_found',
+  leave_type_not_found: 'leaves.type_not_found',
+  leave_type_duplicate_name: 'leaves.type_duplicate_name',
+  leave_type_in_use: 'leaves.type_in_use',
+  leave_request_not_found: 'leaves.request_not_found',
+  leave_request_not_pending: 'leaves.request_not_pending',
+  leave_dates_invalid: 'leaves.dates_invalid',
+  leave_overlap: 'leaves.overlap',
   bank_not_found: 'banks.not_found',
   bank_required: 'banks.required',
   bank_transaction_not_found: 'transactions.not_found',
@@ -248,6 +255,13 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.adjustment_cannot_be_zero]: { ar: 'قيمة التسوية يجب ألا تساوي صفراً', en: 'Adjustment amount cannot be zero' },
 
   [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
+  [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
+  [MSG.leave_type_duplicate_name]: { ar: 'يوجد نوع إجازة بنفس الاسم', en: 'A leave type with this name already exists' },
+  [MSG.leave_type_in_use]: { ar: 'لا يمكن حذف نوع إجازة مستخدم في طلبات قائمة', en: 'A leave type used by existing requests cannot be deleted' },
+  [MSG.leave_request_not_found]: { ar: 'طلب الإجازة غير موجود', en: 'Leave request not found' },
+  [MSG.leave_request_not_pending]: { ar: 'لا يمكن تعديل طلب سبق البتّ فيه — فقط الطلبات المعلّقة', en: 'Only a pending request can be changed' },
+  [MSG.leave_dates_invalid]: { ar: 'تاريخ البداية يجب ألا يكون بعد تاريخ النهاية', en: 'Start date must not be after end date' },
+  [MSG.leave_overlap]: { ar: 'للموظف إجازة أخرى تتداخل مع هذه الفترة', en: 'The employee already has leave overlapping this period' },
   [MSG.bank_not_found]: { ar: 'الحساب البنكي غير موجود', en: 'Bank account not found' },
   [MSG.bank_required]: { ar: 'الرجاء اختيار الحساب البنكي', en: 'Please choose a bank account' },
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
