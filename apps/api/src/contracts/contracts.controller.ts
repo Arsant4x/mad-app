@@ -1,9 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { MAX_FILE_BYTES } from '../files/files.service';
+import { ContractAttachmentsService } from './contract-attachments.service';
 import { ContractsService } from './contracts.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
@@ -19,11 +22,40 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('contracts')
 export class ContractsController {
-  constructor(private readonly contractsService: ContractsService) {}
+  constructor(
+    private readonly contractsService: ContractsService,
+    private readonly attachments: ContractAttachmentsService,
+  ) {}
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
     return this.contractsService.list(tenant.companyId);
+  }
+
+  // ---- Attachments (signed lease PDFs, ID scans, annexes) ----
+  // The static `attachments/...` routes are declared before `:id`-based ones so
+  // the router never reads "attachments" as a contract id.
+
+  @Get('attachments/:attachmentId/download-url')
+  attachmentDownloadUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
+    return this.attachments.downloadUrl(tenant.companyId, attachmentId);
+  }
+
+  @Delete('attachments/:attachmentId')
+  @HttpCode(204)
+  removeAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
+    return this.attachments.remove(tenant.companyId, attachmentId);
+  }
+
+  @Get(':contractId/attachments')
+  listAttachments(@CurrentTenant() tenant: TenantContext, @Param('contractId') contractId: string) {
+    return this.attachments.list(tenant.companyId, contractId);
+  }
+
+  @Post(':contractId/attachments')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  addAttachment(@CurrentTenant() tenant: TenantContext, @Param('contractId') contractId: string, @UploadedFile() file: Express.Multer.File) {
+    return this.attachments.add(tenant.companyId, contractId, file);
   }
 
   @Get(':id')

@@ -14,6 +14,7 @@ import {
   type SettlementBasis,
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
+import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
 import { HandoversSection } from './HandoversSection';
@@ -503,6 +504,10 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             onChanged();
           }}
         />
+
+        {/* Attachments own their state — separate endpoint, not part of the
+            contract object — so they take just the id, no onChanged. */}
+        <AttachmentsSection contractId={contract.id} />
 
         <div className="card-title" style={{ margin: '16px 0 10px' }}>
           سجل الدفعات ({contract.payments.length})

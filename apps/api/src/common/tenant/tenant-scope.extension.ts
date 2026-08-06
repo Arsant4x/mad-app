@@ -44,6 +44,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'ContractKeyMoney',
   'ContractHandover',
   'HandoverItem',
+  'ContractAttachment',
   'MaintenanceRequest',
   'ReminderPolicy',
   'RentReminder',

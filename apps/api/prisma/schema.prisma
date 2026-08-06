@@ -223,6 +223,7 @@ model Company {
   keyMoney         ContractKeyMoney[]
   handovers        ContractHandover[]
   handoverItems    HandoverItem[]
+  contractAttachments ContractAttachment[]
   maintenance      MaintenanceRequest[]
   reminderPolicy   ReminderPolicy?
   rentReminders    RentReminder[]
@@ -1670,6 +1671,7 @@ model Contract {
 
   installments Installment[]
   payments     RentPayment[]
+  attachments  ContractAttachment[]
   deposits     ContractDeposit[]
   claims       ContractClaim[]
   keyMoney     ContractKeyMoney[]
@@ -1677,6 +1679,31 @@ model Contract {
 
   @@unique([companyId, no])
   @@map("contracts")
+}
+
+/// A file stored against a contract — a signed lease PDF, an ID scan, an
+/// annex. The bytes live in object storage (MinIO); this row is the metadata
+/// and the tenant-scoped handle the app lists and authorizes against. The
+/// storage key is re-verified under the company prefix on every download, the
+/// same way logo keys are — object storage has no RLS.
+model ContractAttachment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  /// Object-storage key: companies/{companyId}/{uuid}-{filename}.
+  fileKey  String
+  filename String
+  size     Int
+  mimeType String
+
+  uploadedAt DateTime @default(now())
+
+  @@index([contractId])
+  @@map("contract_attachments")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

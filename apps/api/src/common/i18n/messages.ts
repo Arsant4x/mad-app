@@ -178,6 +178,7 @@ export const MSG = {
   file_too_large: 'files.too_large',
   file_type_unsupported: 'files.type_unsupported',
   file_access_denied: 'files.access_denied',
+  file_not_found: 'files.not_found',
 
   // validation (used by class-validator DTOs)
   vat_number_invalid: 'validation.vat_number',
@@ -425,6 +426,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Unsupported file type — allowed: PDF or image (JPEG/PNG/WebP)',
   },
   [MSG.file_access_denied]: { ar: 'لا تملك صلاحية الوصول إلى هذا الملف', en: 'You do not have permission to access this file' },
+  [MSG.file_not_found]: { ar: 'الملف غير موجود', en: 'File not found' },
 
   [MSG.vat_number_invalid]: {
     ar: 'الرقم الضريبي يجب أن يتكوّن من 15 رقماً ويبدأ وينتهي بالرقم 3',

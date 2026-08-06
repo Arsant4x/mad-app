@@ -294,3 +294,31 @@ export const recordDeposit = (contractId: string, dto: RecordDepositInput) =>
   apiClient.post<Contract>(`/contracts/${contractId}/deposits`, dto).then((r) => r.data);
 export const settleDeposit = (contractId: string, depositId: string, dto: SettleDepositInput) =>
   apiClient.post<Contract>(`/contracts/${contractId}/deposits/${depositId}/settle`, dto).then((r) => r.data);
+
+/** Contract attachments — signed lease PDFs, ID scans, annexes. The bytes live
+ * in object storage; these calls carry only metadata plus a short-lived signed
+ * URL fetched on demand (see files.ts for why URLs aren't cached). */
+export interface ContractAttachment {
+  id: string;
+  contractId: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: string;
+}
+
+export const listContractAttachments = (contractId: string) =>
+  apiClient.get<ContractAttachment[]>(`/contracts/${contractId}/attachments`).then((r) => r.data);
+
+export const uploadContractAttachment = async (contractId: string, file: File): Promise<ContractAttachment> => {
+  const form = new FormData();
+  // Content-Type left unset so the browser adds the multipart boundary itself.
+  form.append('file', file);
+  const res = await apiClient.post<ContractAttachment>(`/contracts/${contractId}/attachments`, form);
+  return res.data;
+};
+
+export const contractAttachmentDownloadUrl = (attachmentId: string) =>
+  apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/attachments/${attachmentId}/download-url`).then((r) => r.data);
+
+export const deleteContractAttachment = (attachmentId: string) => apiClient.delete(`/contracts/attachments/${attachmentId}`);
