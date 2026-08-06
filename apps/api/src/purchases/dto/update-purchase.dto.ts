@@ -1,5 +1,5 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
@@ -26,6 +26,20 @@ export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsBoolean()
   exempt?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  excludeFromVat?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  amortize?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  amortizeMonths?: number;
 
   @IsOptional()
   @IsBoolean()

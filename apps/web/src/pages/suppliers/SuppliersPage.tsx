@@ -96,7 +96,18 @@ export function SuppliersPage() {
     return supplier;
   }
 
-  async function handleSavePurchase(data: { supplierId: string; date: string; dueDate?: string; category?: string; subtotal: number; exempt: boolean }) {
+  async function handleSavePurchase(data: {
+    supplierId: string;
+    date: string;
+    dueDate?: string;
+    category?: string;
+    subtotal: number;
+    exempt: boolean;
+    excludeFromVat: boolean;
+    amortize: boolean;
+    amortizeMonths?: number;
+    branchId?: string;
+  }) {
     if (purchaseModal?.mode === 'edit') {
       await updatePurchase(purchaseModal.purchase.id, data);
     } else {
@@ -250,7 +261,19 @@ export function SuppliersPage() {
                   <td className="num">{p.no}</td>
                   <td>{p.supplier.name}</td>
                   <td className="num">{dfmt(p.date)}</td>
-                  <td>{p.category || '—'}</td>
+                  <td>
+                    {p.category || '—'}
+                    {p.excludeFromVat && (
+                      <span className="badge draft" style={{ fontSize: 9, marginRight: 4 }}>
+                        مستبعدة من الإقرار
+                      </span>
+                    )}
+                    {p.amortize && p.amortizeMonths ? (
+                      <span className="badge" style={{ fontSize: 9, marginRight: 4 }}>
+                        استهلاك {p.amortizeMonths} شهر
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="num">{fmt(p.subtotal)}</td>
                   <td className="num">{p.exempt ? 'معفاة' : fmt(p.taxAmount)}</td>
                   <td className="num">{fmt(p.total)}</td>

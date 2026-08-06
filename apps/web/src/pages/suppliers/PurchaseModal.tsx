@@ -20,7 +20,18 @@ export function PurchaseModal({
   branches: Branch[];
   editing: Purchase | null;
   onCancel: () => void;
-  onSave: (data: { supplierId: string; date: string; dueDate?: string; category?: string; subtotal: number; exempt: boolean; branchId?: string }) => Promise<void>;
+  onSave: (data: {
+    supplierId: string;
+    date: string;
+    dueDate?: string;
+    category?: string;
+    subtotal: number;
+    exempt: boolean;
+    excludeFromVat: boolean;
+    amortize: boolean;
+    amortizeMonths?: number;
+    branchId?: string;
+  }) => Promise<void>;
   onCreateSupplier: (name: string) => Promise<Supplier>;
 }) {
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');
@@ -29,9 +40,16 @@ export function PurchaseModal({
   const [category, setCategory] = useState(editing?.category ?? '');
   const [subtotal, setSubtotal] = useState(editing ? editing.subtotal : '');
   const [exempt, setExempt] = useState(editing?.exempt ?? false);
+  const [excludeFromVat, setExcludeFromVat] = useState(editing?.excludeFromVat ?? false);
+  const [amortize, setAmortize] = useState(editing?.amortize ?? false);
+  const [amortizeMonths, setAmortizeMonths] = useState(editing?.amortizeMonths ? String(editing.amortizeMonths) : '');
   const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Amortization is offered only for establishment costs — matches the mockup,
+  // which shows the control only when that category is selected.
+  const isIncorporation = category.trim() === 'مصروفات تأسيس';
 
   const preview = useMemo(() => {
     const sub = parseFloat(String(subtotal)) || 0;
@@ -52,6 +70,13 @@ export function PurchaseModal({
       return;
     }
 
+    const amort = isIncorporation && amortize;
+    const months = amort ? parseInt(amortizeMonths, 10) || 0 : undefined;
+    if (amort && (!months || months < 1)) {
+      setError('حدّد عدد أشهر الاستهلاك (شهر واحد على الأقل).');
+      return;
+    }
+
     setSaving(true);
     try {
       let supplier = suppliers.find((s) => s.name === name);
@@ -63,6 +88,9 @@ export function PurchaseModal({
         category: category.trim() || undefined,
         subtotal: sub,
         exempt,
+        excludeFromVat,
+        amortize: amort,
+        amortizeMonths: months,
         branchId: branchId || undefined,
       });
     } catch {
@@ -119,6 +147,12 @@ export function PurchaseModal({
             <input type="checkbox" style={{ width: 'auto' }} checked={exempt} onChange={(e) => setExempt(e.target.checked)} /> معفاة من ضريبة القيمة المضافة
           </label>
         </div>
+        <div className="field">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={excludeFromVat} onChange={(e) => setExcludeFromVat(e.target.checked)} /> مستبعدة من الإقرار الضريبي (بلا فاتورة ضريبية صحيحة)
+          </label>
+          <p className="hint" style={{ marginTop: 4 }}>لا تُسترد ضريبتها في إقرار القيمة المضافة.</p>
+        </div>
         <div className="two-col" style={{ background: 'var(--paper)', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             ضريبة القيمة المضافة (15٪)
@@ -135,6 +169,21 @@ export function PurchaseModal({
             </b>
           </div>
         </div>
+
+        {isIncorporation && (
+          <div className="field">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" style={{ width: 'auto' }} checked={amortize} onChange={(e) => setAmortize(e.target.checked)} /> استهلاك على فترة (مصروف تأسيس مؤجَّل)
+            </label>
+            {amortize && (
+              <div style={{ marginTop: 8 }}>
+                <label>عدد أشهر الاستهلاك</label>
+                <input className="num" value={amortizeMonths} onChange={(e) => setAmortizeMonths(e.target.value)} placeholder="مثال: 12" />
+                <p className="hint" style={{ marginTop: 4 }}>للتقرير فقط — المصروف يُقيَّد كاملاً الآن على حساب مصروفات التأسيس (5500).</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
 

@@ -1,5 +1,5 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsString()
@@ -24,4 +24,20 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsBoolean()
   exempt?: boolean;
+
+  /// VAT charged but no valid tax invoice → drop from the VAT declaration.
+  @IsOptional()
+  @IsBoolean()
+  excludeFromVat?: boolean;
+
+  /// Only meaningful when category = 'مصروفات تأسيس'; enforced in the service.
+  @IsOptional()
+  @IsBoolean()
+  amortize?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  amortizeMonths?: number;
 }

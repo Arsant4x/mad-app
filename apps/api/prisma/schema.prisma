@@ -699,7 +699,18 @@ model Purchase {
   subtotal  Decimal @db.Decimal(18, 2)
   taxAmount Decimal @db.Decimal(18, 2)
   exempt    Boolean @default(false)
+  /// VAT was charged but there's no valid tax invoice, so its input VAT cannot
+  /// be reclaimed — the purchase is dropped from the VAT declaration. Distinct
+  /// from `exempt` (no VAT at all). Matches the mockup: this affects **only the
+  /// declaration**, not the ledger (the tax still posts to 2200).
+  excludeFromVat Boolean @default(false)
   total     Decimal @db.Decimal(18, 2)
+
+  /// Establishment ("مصروفات تأسيس") costs may be marked for amortization over
+  /// `amortizeMonths`. Reporting metadata only — the expense still hits 5500 in
+  /// full; there is no automatic monthly posting (same stance as key money).
+  amortize       Boolean @default(false)
+  amortizeMonths Int?
 
   currency      String  @default("SAR")
   exchangeRate  Decimal @default(1) @db.Decimal(18, 6)

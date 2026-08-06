@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
@@ -11,6 +11,25 @@ import { MSG } from '../common/i18n/messages';
 
 const PURCHASE_INCLUDE = { supplier: true } as const;
 const VAT_RATE = 0.15;
+
+/** The one category whose expenses may be amortized — matches the mockup, which
+ * only offers the amortization control when the category is establishment costs
+ * (and maps that category to account 5500). */
+const INCORPORATION_CATEGORY = 'مصروفات تأسيس';
+
+/** Amortization is establishment-only and needs a real month count. Returns the
+ * clean pair to store, or throws a localized error. `amortize=false` always
+ * clears the month count so a stale value can't linger. */
+function resolveAmortization(amortize: boolean, category: string | null | undefined, months: number | null | undefined): {
+  amortize: boolean;
+  amortizeMonths: number | null;
+} {
+  if (!amortize) return { amortize: false, amortizeMonths: null };
+  if ((category ?? '').trim() !== INCORPORATION_CATEGORY || !months || months < 1) {
+    throw new BadRequestException(MSG.purchase_amortize_requires_incorporation);
+  }
+  return { amortize: true, amortizeMonths: months };
+}
 
 /** Always derive tax/total server-side from subtotal + exempt — never trust
  * a client-submitted amount (same reasoning as invoices). */
@@ -33,6 +52,7 @@ export class PurchasesService {
     const exempt = dto.exempt ?? false;
     const { tax, total } = computeTax(dto.subtotal, exempt);
     const { currency, exchangeRate } = resolveCurrency(dto);
+    const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, dto.category, dto.amortizeMonths);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextPurchaseNumber's comment.
     return retryOnUniqueConflict(() =>
@@ -51,6 +71,9 @@ export class PurchasesService {
             subtotal: dto.subtotal,
             taxAmount: tax,
             exempt,
+            excludeFromVat: dto.excludeFromVat ?? false,
+            amortize,
+            amortizeMonths,
             total,
             currency,
             exchangeRate,
@@ -111,6 +134,22 @@ export class PurchasesService {
       if (dto.paid !== undefined) {
         data.paid = dto.paid;
         data.paidDate = dto.paid ? new Date(dto.paidDate ?? new Date().toISOString().slice(0, 10)) : null;
+      }
+
+      // Declaration exclusion and amortization are metadata only — neither
+      // touches the ledger, so they never trigger a re-post below.
+      if (dto.excludeFromVat !== undefined) data.excludeFromVat = dto.excludeFromVat;
+
+      // Re-validate whenever amortize, its months, or the category changes: a
+      // category moved away from establishment costs must invalidate an
+      // amortization set earlier.
+      if (dto.amortize !== undefined || dto.amortizeMonths !== undefined || dto.category !== undefined) {
+        const effCategory = dto.category !== undefined ? dto.category : existing.category;
+        const effAmortize = dto.amortize ?? existing.amortize;
+        const effMonths = dto.amortizeMonths ?? existing.amortizeMonths;
+        const resolved = resolveAmortization(effAmortize, effCategory, effMonths);
+        data.amortize = resolved.amortize;
+        data.amortizeMonths = resolved.amortizeMonths;
       }
 
       // Anything that changes who/what/how-much gets reversed and re-posted

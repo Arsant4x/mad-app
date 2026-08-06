@@ -53,6 +53,7 @@ export const MSG = {
   supplier_not_found: 'suppliers.not_found',
   supplier_has_purchases: 'suppliers.has_purchases',
   purchase_not_found: 'purchases.not_found',
+  purchase_amortize_requires_incorporation: 'purchases.amortize_requires_incorporation',
 
   // products / inventory
   product_not_found: 'products.not_found',
@@ -227,6 +228,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Cannot delete a supplier that has purchase invoices — delete those invoices first',
   },
   [MSG.purchase_not_found]: { ar: 'فاتورة الشراء غير موجودة', en: 'Purchase invoice not found' },
+  [MSG.purchase_amortize_requires_incorporation]: {
+    ar: 'الاستهلاك على فترة متاح فقط لمصروفات التأسيس، مع عدد أشهر صحيح.',
+    en: 'Amortization is only available for establishment expenses, with a valid number of months.',
+  },
 
   [MSG.product_not_found]: { ar: 'المنتج غير موجود', en: 'Product not found' },
   [MSG.warehouse_not_found]: { ar: 'المستودع غير موجود', en: 'Warehouse not found' },

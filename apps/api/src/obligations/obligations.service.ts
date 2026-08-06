@@ -56,17 +56,24 @@ export class ObligationsService {
 
       const [invoices, purchases] = await Promise.all([
         tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to } }, select: { subtotal: true, taxTotal: true } }),
-        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true } }),
+        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true } }),
       ]);
 
       const salesStandard = invoices.reduce((s, v) => s + Number(v.subtotal), 0);
       const salesStandardVat = invoices.reduce((s, v) => s + Number(v.taxTotal), 0);
 
-      const taxablePurchases = purchases.filter((p) => !p.exempt);
-      const exemptPurchases = purchases.filter((p) => p.exempt);
+      // A purchase with no valid tax invoice is dropped from the declaration
+      // entirely (matching the mockup): its input VAT can't be reclaimed, so it
+      // must not reduce the net VAT owed. Reported separately for transparency.
+      const declarablePurchases = purchases.filter((p) => !p.excludeFromVat);
+      const excludedPurchases = purchases.filter((p) => p.excludeFromVat);
+
+      const taxablePurchases = declarablePurchases.filter((p) => !p.exempt);
+      const exemptPurchases = declarablePurchases.filter((p) => p.exempt);
       const purchasesStandard = taxablePurchases.reduce((s, p) => s + Number(p.subtotal), 0);
       const purchasesStandardVat = taxablePurchases.reduce((s, p) => s + Number(p.taxAmount), 0);
       const purchasesExempt = exemptPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
+      const purchasesExcluded = excludedPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
 
       return {
         year: query.year,
@@ -78,6 +85,8 @@ export class ObligationsService {
         purchasesStandard,
         purchasesStandardVat,
         purchasesExempt,
+        purchasesExcluded,
+        excludedCount: excludedPurchases.length,
         totalPurchases: purchasesStandard + purchasesExempt,
         netVat: salesStandardVat - purchasesStandardVat,
         invoiceCount: invoices.length,

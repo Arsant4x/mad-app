@@ -13,6 +13,9 @@ export interface Purchase {
   subtotal: string;
   taxAmount: string;
   exempt: boolean;
+  excludeFromVat: boolean;
+  amortize: boolean;
+  amortizeMonths: number | null;
   total: string;
   paid: boolean;
   paidDate: string | null;
@@ -27,6 +30,9 @@ export interface CreatePurchaseInput {
   category?: string;
   subtotal: number;
   exempt?: boolean;
+  excludeFromVat?: boolean;
+  amortize?: boolean;
+  amortizeMonths?: number;
 }
 
 export type UpdatePurchaseInput = Partial<CreatePurchaseInput> & { paid?: boolean; paidDate?: string };
