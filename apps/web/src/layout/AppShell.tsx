@@ -63,7 +63,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     labelKey: 'grp_hr',
     items: [
       { screen: 'employees', to: '/employees', labelKey: 'nav_employees' },
-      { screen: 'employees', to: '/leaves', labelKey: 'nav_leaves' },
+      { screen: 'employees', to: '/hr', labelKey: 'nav_hr' },
     ],
   },
   {

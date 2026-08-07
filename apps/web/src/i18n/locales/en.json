@@ -33,7 +33,6 @@
   "nav_stock_movements": "Stock Movements",
   "nav_expiring": "Expiring",
   "nav_employees": "Employees",
-  "nav_leaves": "Leave",
   "nav_subscription": "Subscription",
   "nav_banks": "Bank Accounts",
   "nav_transactions": "Bank Transactions",
@@ -131,5 +130,6 @@
   "err_currency_delete": "Could not delete the currency",
   "err_rate_fields": "Enter both currencies, the rate and the date",
   "err_rate_save": "Could not save the exchange rate",
-  "nav_audit_log": "Audit Log"
+  "nav_audit_log": "Audit Log",
+  "nav_hr": "HR"
 }

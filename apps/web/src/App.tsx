@@ -17,7 +17,7 @@ import { RemindersPage } from './pages/reminders/RemindersPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
 import { FiscalPage } from './pages/fiscal/FiscalPage';
 import { EmployeesPage } from './pages/employees/EmployeesPage';
-import { LeavesPage } from './pages/leaves/LeavesPage';
+import { HrPage } from './pages/hr/HrPage';
 import { StockLevelsPage } from './pages/inventory/StockLevelsPage';
 import { StockMovementsPage } from './pages/inventory/StockMovementsPage';
 import { ExpiringStockPage } from './pages/inventory/ExpiringStockPage';
@@ -208,10 +208,10 @@ export default function App() {
               }
             />
             <Route
-              path="leaves"
+              path="hr"
               element={
                 <ScreenGuard screen="employees">
-                  <LeavesPage />
+                  <HrPage />
                 </ScreenGuard>
               }
             />
