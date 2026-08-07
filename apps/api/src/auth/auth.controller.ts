@@ -1,8 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService, AuthUserView } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto, RegisterDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtPayload } from './types';
 import { MSG } from '../common/i18n/messages';
@@ -16,10 +18,39 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  /** Hard per-IP throttle: 10 attempts a minute is generous for a human and
+   * useless for a password-guessing script. */
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {
     const result = await this.authService.login(dto.username, dto.password);
+    this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  /** Always 200 with the same body — see AuthService.forgotPassword for why. */
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ ok: true }> {
+    await this.authService.forgotPassword(dto.username);
+    return { ok: true };
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ ok: true }> {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { ok: true };
+  }
+
+  /** Self-signup with a trial — returns a working session immediately. */
+  @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {
+    const result = await this.authService.register(dto.orgName, dto.username, dto.password, dto.email);
     this.setRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
   }

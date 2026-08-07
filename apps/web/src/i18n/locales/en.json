@@ -133,5 +133,22 @@
   "nav_audit_log": "Audit Log",
   "nav_hr": "HR",
   "nav_incorp_report": "Incorporation Costs",
-  "nav_trash": "Trash"
+  "nav_trash": "Trash",
+  "login_forgot_link": "Forgot password?",
+  "login_register_link": "New company? Create your account",
+  "register_title": "Create company account",
+  "register_org": "Company name",
+  "register_email": "Email (for password recovery)",
+  "register_submit": "Create account",
+  "register_back": "Have an account? Sign in",
+  "register_trial_hint": "Starts with a full-featured free trial.",
+  "forgot_title": "Password recovery",
+  "forgot_hint": "Enter your username — if the account has an email on file, a link will be sent.",
+  "forgot_submit": "Send reset link",
+  "forgot_sent": "If the account exists and has an email on file, a reset link has been sent.",
+  "reset_title": "Set a new password",
+  "reset_password_label": "New password",
+  "reset_submit": "Set password",
+  "reset_success": "Password changed — sign in with it now.",
+  "reset_error": "Could not set the password"
 }

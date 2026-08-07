@@ -92,8 +92,27 @@ model LoginIdentity {
   company       Company?
   companyUser   CompanyUser?
   refreshTokens RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("login_identities")
+}
+
+/// One-shot, short-lived password-reset token. Only its SHA-256 hash is stored
+/// — a database leak must not hand out working reset links — and `usedAt`
+/// makes each token single-use. Platform-level table (like login_identities):
+/// no companyId, no RLS.
+model PasswordResetToken {
+  id              String        @id @default(uuid())
+  loginIdentityId String
+  loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([loginIdentityId])
+  @@map("password_reset_tokens")
 }
 
 /// Platform super-admin — operates the developer panel, manages companies

@@ -25,6 +25,7 @@ import { ExpiringStockPage } from './pages/inventory/ExpiringStockPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
 import { JournalPage } from './pages/journal/JournalPage';
 import { LoginPage } from './pages/LoginPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { ObligationsPage } from './pages/obligations/ObligationsPage';
 import { VatDeclarationPage } from './pages/obligations/VatDeclarationPage';
 import { ProductsPage } from './pages/products/ProductsPage';
@@ -46,6 +47,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/"
             element={

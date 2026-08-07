@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
 
@@ -10,6 +11,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
+  // Standard hardening headers (HSTS, no-sniff, frame denial…). CSP is left
+  // off: this process serves only a JSON API plus Swagger, and Swagger's inline
+  // scripts break under a strict default CSP for no security gain here.
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser());
   app.enableCors({
     origin: config.get<string>('WEB_ORIGIN', 'http://localhost:5173'),

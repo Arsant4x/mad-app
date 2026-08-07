@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AccountStatus } from '@prisma/client';
@@ -8,7 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { MailService } from '../common/mail/mail.service';
 
 export interface AuthUserView {
   id: string;
@@ -61,6 +62,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly mail: MailService,
   ) {}
 
   async login(username: string, password: string): Promise<LoginResult> {
@@ -227,6 +229,119 @@ export class AuthService {
     });
 
     return { refreshToken, refreshTokenExpiresAt: expiresAt };
+  }
+
+  // ---------- Password reset ----------
+
+  /** Reset links die after this long. Long enough to open an inbox, short
+   * enough that a forwarded or leaked email goes stale the same hour. */
+  private static readonly RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+  /**
+   * Starts a reset. Deliberately returns nothing either way — answering
+   * "that username doesn't exist" hands an attacker a directory of accounts.
+   *
+   * Only company owners are eligible: the email on file belongs to the
+   * company profile, and an employee's password is reset by the owner from
+   * the employee-accounts screen (that path already exists).
+   */
+  async forgotPassword(username: string): Promise<void> {
+    const identity = await this.prisma.loginIdentity.findUnique({
+      where: { username },
+      include: { company: { select: { email: true, orgName: true } } },
+    });
+    const email = identity?.actorType === 'COMPANY' ? identity.company?.email : null;
+    if (!identity || !email) return;
+
+    // One live token per identity: a fresh request invalidates older links,
+    // so the newest email is always the one that works.
+    await this.prisma.passwordResetToken.deleteMany({ where: { loginIdentityId: identity.id, usedAt: null } });
+
+    const token = crypto.randomBytes(32).toString('base64url');
+    await this.prisma.passwordResetToken.create({
+      data: {
+        loginIdentityId: identity.id,
+        tokenHash: this.hashToken(token),
+        expiresAt: new Date(Date.now() + AuthService.RESET_TOKEN_TTL_MS),
+      },
+    });
+
+    const link = `${this.config.get<string>('WEB_ORIGIN', 'http://localhost:5173')}/reset-password?token=${token}`;
+    await this.mail.send(
+      email,
+      'استعادة كلمة المرور — mad-app',
+      `وصلنا طلب لاستعادة كلمة مرور حساب «${identity.company?.orgName}».\n\n` +
+        `لتعيين كلمة مرور جديدة افتح الرابط التالي خلال 30 دقيقة:\n${link}\n\n` +
+        `إن لم تطلب ذلك فتجاهل هذه الرسالة — كلمة مرورك لم تتغير.`,
+    );
+  }
+
+  /** Completes a reset: one token, one use, and every open session dies with
+   * the old password — a stolen refresh token must not outlive it. */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash: this.hashToken(token) } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new UnauthorizedException(MSG.reset_token_invalid);
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.loginIdentity.update({ where: { id: record.loginIdentityId }, data: { passwordHash } }),
+      this.prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      this.prisma.refreshToken.updateMany({
+        where: { loginIdentityId: record.loginIdentityId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+  // ---------- Self-registration ----------
+
+  /**
+   * A merchant signs itself up (CLAUDE.md §10: «العميل يسجّل بنفسه») and gets a
+   * trial subscription. TRIAL_DAYS is env-config, not code — trial length is a
+   * commercial decision the owner adjusts without a deploy. Activity selection
+   * at signup (SPEC 15.3) is deliberately NOT here yet: it hangs on the
+   * unresolved 15.9 decision.
+   */
+  async register(orgName: string, username: string, password: string, email?: string): Promise<LoginResult> {
+    if (this.config.get<string>('REGISTRATION_ENABLED', 'true') === 'false') {
+      throw new ForbiddenException(MSG.register_disabled);
+    }
+
+    const clash = await this.prisma.loginIdentity.findUnique({ where: { username } });
+    if (clash) throw new ConflictException(formatMessage(MSG.username_taken, { username }));
+
+    // The broadest template: a new merchant sees the whole product during its
+    // trial; narrowing is what employee sub-accounts are for.
+    const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true }, orderBy: { createdAt: 'asc' } });
+    if (!template) throw new ConflictException(MSG.register_unavailable);
+
+    const trialDays = parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);
+    const now = new Date();
+    const subEnd = new Date(now);
+    subEnd.setDate(subEnd.getDate() + trialDays);
+
+    await this.prisma.loginIdentity.create({
+      data: {
+        username,
+        passwordHash: await argon2.hash(password),
+        actorType: 'COMPANY',
+        company: {
+          create: {
+            orgName: orgName.trim(),
+            email: email?.trim() || null,
+            permissionTemplateId: template.id,
+            subStart: now,
+            subEnd,
+          },
+        },
+      },
+    });
+
+    // Reusing the full login path gives the new merchant a working session in
+    // the same response — no second request, no divergent session logic.
+    return this.login(username, password);
   }
 
   private hashToken(token: string): string {

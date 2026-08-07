@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { BanksModule } from './banks/banks.module';
@@ -14,6 +16,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
+import { MailModule } from './common/mail/mail.module';
 import { TrashModule } from './trash/trash.module';
 import { DeletionRequestsModule } from './deletion-requests/deletion-requests.module';
 import { ExportModule } from './export/export.module';
@@ -51,8 +54,18 @@ import { WarrantiesModule } from './warranties/warranties.module';
     // instances because every notification it raises is deduplicated by a
     // unique key — see EscalationService.
     ScheduleModule.forRoot(),
+    // Flood protection: a generous global ceiling (normal use never hits it),
+    // with a much stricter per-route limit on login (see AuthController) so
+    // password guessing is throttled hard. Skipped entirely under Jest — the
+    // e2e suite fires hundreds of requests from one IP by design, and rate
+    // limiting is not the behaviour those tests exist to verify.
+    ThrottlerModule.forRoot({
+      throttlers: [{ limit: 600, ttl: 60_000 }],
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     PrismaModule,
     TenantPrismaModule,
+    MailModule,
     AuditModule,
     TrashModule,
     DeletionRequestsModule,
@@ -94,5 +107,6 @@ import { WarrantiesModule } from './warranties/warranties.module';
     CompanyProfileModule,
     FilesModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
