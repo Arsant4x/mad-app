@@ -69,7 +69,7 @@ export class BanksService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.bank.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.bank_not_found);
-      await tx.bank.delete({ where: { id } });
+      await tx.bank.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }

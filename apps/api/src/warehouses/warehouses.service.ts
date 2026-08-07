@@ -55,17 +55,16 @@ export class WarehousesService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.warehouse.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.warehouse_not_found);
-      try {
-        await tx.warehouse.delete({ where: { id } });
-      } catch (e) {
-        // P2003 = foreign key violation — stock_movements.warehouseId/
-        // toWarehouseId are ON DELETE RESTRICT, so this fires when the
-        // warehouse still has any movement history (in either direction).
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException(MSG.warehouse_has_movements);
-        }
-        throw e;
-      }
+      // Checked explicitly rather than by catching a foreign-key error: a soft
+      // delete never touches the FK, so the database can no longer be the one
+      // refusing this. Same rule (CLAUDE.md 6.4), enforced where it's visible.
+      // Both directions count — a warehouse that only ever *received* stock
+      // still has history worth keeping.
+      const movementCount = await tx.stockMovement.count({ where: { OR: [{ warehouseId: id }, { toWarehouseId: id }] } });
+      if (movementCount > 0) throw new ConflictException(MSG.warehouse_has_movements);
+
+      // Soft delete — recoverable from the trash for 30 days.
+      await tx.warehouse.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }

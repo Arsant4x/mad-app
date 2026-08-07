@@ -184,6 +184,8 @@ export const MSG = {
   screen_forbidden: 'tenant.screen_forbidden',
   action_forbidden: 'tenant.action_forbidden',
   master_data_locked: 'tenant.master_data_locked',
+  trash_entity_unknown: 'trash.entity_unknown',
+  trash_item_not_found: 'trash.item_not_found',
 
   // files
   file_missing: 'files.missing',
@@ -440,6 +442,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
+  [MSG.trash_entity_unknown]: { ar: 'نوع السجل غير معروف', en: 'Unknown record type' },
+  [MSG.trash_item_not_found]: { ar: 'السجل غير موجود في سلة المحذوفات', en: 'Record not found in trash' },
   [MSG.master_data_locked]: { ar: 'البيانات الرئيسية مقفلة — لا يمكن تعديل العقارات أو العقود إلا لمالك المنشأة أو موظف مُستثنى', en: 'Master data is locked — only the owner or an exempted employee may change properties or contracts' },
   [MSG.action_forbidden]: { ar: 'لا تملك صلاحية تنفيذ هذا الإجراء ({action}) على شاشة "{screen}"', en: 'You do not have permission to perform this action ({action}) on the "{screen}" screen' },
 

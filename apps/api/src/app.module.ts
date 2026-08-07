@@ -14,6 +14,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
+import { TrashModule } from './trash/trash.module';
 import { FilesModule } from './files/files.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { BranchesModule } from './branches/branches.module';
@@ -51,6 +52,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     PrismaModule,
     TenantPrismaModule,
     AuditModule,
+    TrashModule,
     AuthModule,
     AccountsModule,
     CustomersModule,

@@ -63,7 +63,7 @@ export class ProductsService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.product.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.product_not_found);
-      await tx.product.delete({ where: { id } });
+      await tx.product.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }

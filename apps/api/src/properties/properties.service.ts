@@ -67,16 +67,14 @@ export class PropertiesService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.property.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.property_not_found);
-      try {
-        await tx.property.delete({ where: { id } });
-      } catch (e) {
-        // P2003 = foreign key violation — units.propertyId is ON DELETE
-        // RESTRICT, so this fires when the property still has units.
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException(MSG.property_has_units);
-        }
-        throw e;
-      }
+      // Checked explicitly rather than by catching a foreign-key error: a soft
+      // delete never touches the FK, so the database can no longer be the one
+      // refusing this. Same rule (CLAUDE.md 6.4), enforced where it's visible.
+      const unitCount = await tx.unit.count({ where: { propertyId: id } });
+      if (unitCount > 0) throw new ConflictException(MSG.property_has_units);
+
+      // Soft delete — recoverable from the trash for 30 days.
+      await tx.property.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }

@@ -56,7 +56,7 @@ export class EmployeesService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.employee.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.employee_not_found);
-      await tx.employee.delete({ where: { id } });
+      await tx.employee.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }

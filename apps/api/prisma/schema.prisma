@@ -575,6 +575,13 @@ model Customer {
   contracts Contract[]
 
   @@unique([companyId, name])
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("customers")
 }
 
@@ -691,6 +698,13 @@ model Supplier {
   purchases Purchase[]
 
   @@unique([companyId, name])
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("suppliers")
 }
 
@@ -784,6 +798,13 @@ model Product {
 
   stockMovements StockMovement[]
 
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("products")
 }
 
@@ -810,6 +831,13 @@ model Employee {
   updatedAt DateTime @updatedAt
 
   leaveRequests LeaveRequest[]
+
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
 
   @@map("employees")
 }
@@ -949,6 +977,13 @@ model Bank {
   updatedAt    DateTime          @updatedAt
   transactions BankTransaction[]
   rentPayments RentPayment[]
+
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
 
   @@map("banks")
 }
@@ -1108,6 +1143,13 @@ model Property {
   maintenance MaintenanceRequest[]
   warranties  Warranty[]
 
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("properties")
 }
 
@@ -1142,6 +1184,13 @@ model Unit {
   warranties   Warranty[]
 
   @@unique([companyId, propertyId, unitNo])
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("units")
 }
 
@@ -1928,6 +1977,13 @@ model Warehouse {
   movementsTo   StockMovement[] @relation("MovementDestinationWarehouse")
   branches      Branch[]
 
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
+
   @@map("warehouses")
 }
 
@@ -2036,6 +2092,13 @@ model MessageScript {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+
+  /// Soft delete: set instead of removing the row, so it can be restored
+  /// from the trash within 30 days. Reads filter it out centrally.
+  deletedAt DateTime?
+  /// Hidden from day-to-day lists but still counted in the books.
+  archived  Boolean  @default(false)
 
   @@map("message_scripts")
 }

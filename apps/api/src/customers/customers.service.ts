@@ -49,16 +49,14 @@ export class CustomersService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.customer_not_found);
-      try {
-        await tx.customer.delete({ where: { id } });
-      } catch (e) {
-        // P2003 = foreign key violation — invoices.customerId is ON DELETE
-        // RESTRICT, so this fires when the customer still has invoices.
-        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
-          throw new ConflictException(MSG.customer_has_invoices);
-        }
-        throw e;
-      }
+      // Checked explicitly rather than by catching a foreign-key error: a soft
+      // delete never touches the FK, so the database can no longer be the one
+      // refusing this. Same rule (CLAUDE.md 6.4), enforced where it's visible.
+      const invoiceCount = await tx.invoice.count({ where: { customerId: id } });
+      if (invoiceCount > 0) throw new ConflictException(MSG.customer_has_invoices);
+
+      // Soft delete — recoverable from the trash for 30 days.
+      await tx.customer.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 

@@ -33,7 +33,7 @@ export class ScriptsService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.messageScript.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.template_not_found);
-      await tx.messageScript.delete({ where: { id } });
+      await tx.messageScript.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
 }
