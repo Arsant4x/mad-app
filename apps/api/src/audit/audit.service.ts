@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 /** What the reader sees instead of a route name. Keyed by the first path
  * segment, which is how the interceptor groups entries. */
@@ -114,15 +115,46 @@ const SUB_RESOURCE_LABELS: Record<string, string> = {
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /** Writes one entry. Runs in the tenant's own context so RLS applies to the
-   * trail exactly as it does to the data it describes. */
+   * trail exactly as it does to the data it describes.
+   *
+   * Retries transient failures: the write opens its own transaction, and on a
+   * busy server the transaction pool can momentarily starve ("transaction not
+   * found / max wait exceeded"). The interceptor deliberately never fails the
+   * request over an audit write, which means a dropped write here would vanish
+   * silently — so this layer absorbs the blip instead of losing the trail. */
   async record(input: AuditEntryInput): Promise<void> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this.writeEntry(input);
+        return;
+      } catch (e) {
+        lastError = e;
+        await new Promise((r) => setTimeout(r, 150 * attempt));
+      }
+    }
+    throw lastError;
+  }
+
+  /** One short-lived batch transaction: set the RLS variable, insert the row.
+   * Deliberately NOT runInTenantContext — that opens an *interactive*
+   * transaction held across client round-trips, and audit writes are frequent
+   * enough that under load they starve the transaction pool (which is exactly
+   * when trail entries silently vanished). A sequential batch holds the
+   * connection for microseconds and RLS still checks the same boundary. */
+  private async writeEntry(input: AuditEntryInput): Promise<void> {
     const summary = buildSummary(input);
-    await this.tenantPrisma.runInTenantContext(input.companyId, (tx) =>
-      tx.auditLog.create({
+    await this.prisma.$transaction([
+      this.prisma.$executeRaw`SELECT set_config('app.company_id', ${input.companyId}, true)`,
+      this.prisma.auditLog.create({
         data: {
+          companyId: input.companyId,
           actorType: input.actorType,
           actorId: input.actorId,
           actorName: input.actorName,
@@ -135,7 +167,7 @@ export class AuditService {
           ip: input.ip,
         } as unknown as Prisma.AuditLogUncheckedCreateInput,
       }),
-    );
+    ]);
   }
 
   /**

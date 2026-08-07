@@ -7,6 +7,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { PayPurchaseModal } from './PayPurchaseModal';
 import { PurchaseModal } from './PurchaseModal';
+import { PurchaseAttachmentsModal } from './PurchaseAttachmentsModal';
 import { purchaseStatus } from './purchaseStatus';
 import { SupplierDetailModal } from './SupplierDetailModal';
 import { SupplierModal } from './SupplierModal';
@@ -38,6 +39,7 @@ export function SuppliersPage() {
 
   const [purchaseModal, setPurchaseModal] = useState<{ mode: 'create' } | { mode: 'edit'; purchase: Purchase } | null>(null);
   const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
+  const [attachmentsFor, setAttachmentsFor] = useState<Purchase | null>(null);
   const [pendingDeletePurchase, setPendingDeletePurchase] = useState<Purchase | null>(null);
   const [pendingUnpay, setPendingUnpay] = useState<Purchase | null>(null);
 
@@ -296,6 +298,7 @@ export function SuppliersPage() {
                           : { label: '💳 تسديد الفاتورة', onClick: () => setPayingPurchase(p) },
                         ...(p.paid ? [{ label: '↺ التراجع عن السداد', onClick: () => setPendingUnpay(p) }] : []),
                         { label: '✎ تعديل', onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
+                        { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
                         '-',
                         { label: '🗑 حذف', onClick: () => setPendingDeletePurchase(p), danger: true },
                       ]}
@@ -337,6 +340,8 @@ export function SuppliersPage() {
           onCreateSupplier={handleCreateSupplierQuick}
         />
       )}
+
+      {attachmentsFor && <PurchaseAttachmentsModal purchase={attachmentsFor} onClose={() => setAttachmentsFor(null)} />}
 
       {payingPurchase && <PayPurchaseModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onConfirm={confirmPay} />}
 

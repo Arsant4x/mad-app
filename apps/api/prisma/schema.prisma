@@ -275,6 +275,7 @@ model Company {
   auditLogs        AuditLog[]
   deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
+  purchaseAttachments PurchaseAttachment[]
 
   @@map("companies")
 }
@@ -792,6 +793,8 @@ model Purchase {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  attachments PurchaseAttachment[]
 
   @@unique([companyId, no])
   @@map("purchases")
@@ -1972,6 +1975,29 @@ model ContractAttachment {
 
   @@index([contractId])
   @@map("contract_attachments")
+}
+
+/// فاتورة مصروف تأسيسي ومستندها (صورة/PDF) — مستند §5: same bytes-in-object-
+/// storage pattern as ContractAttachment; the row is the tenant-scoped
+/// authorization record.
+model PurchaseAttachment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  /// Object-storage key: companies/{companyId}/{uuid}-{filename}.
+  fileKey  String
+  filename String
+  size     Int
+  mimeType String
+
+  uploadedAt DateTime @default(now())
+
+  @@index([purchaseId])
+  @@map("purchase_attachments")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the
