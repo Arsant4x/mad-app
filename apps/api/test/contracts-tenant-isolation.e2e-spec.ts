@@ -153,8 +153,16 @@ describe('Properties/Units/Contracts (e2e)', () => {
       .send({ unitId: unit.id, tenant: 'عزل بين الشركات', value: 1200, cycle: 'monthly', start: '2031-01-01', end: '2031-12-31' })
       .expect(201);
 
-    const listB = await request(app.getHttpServer()).get('/contracts').set('Authorization', `Bearer ${tokenB}`).expect(200);
-    expect(listB.body.some((c: { id: string }) => c.id === contract.body.id)).toBe(false);
+    // Searched by the exact tenant name rather than scanning page 1 — with the
+    // list paginated, "not on the first page" would be a much weaker check
+    // than "the search finds nothing across the whole tenant".
+    const listB = await request(app.getHttpServer())
+      .get('/contracts')
+      .query({ search: 'عزل بين الشركات' })
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(listB.body.total).toBe(0);
+    expect(listB.body.items.some((c: { id: string }) => c.id === contract.body.id)).toBe(false);
 
     await request(app.getHttpServer()).get(`/contracts/${contract.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
 

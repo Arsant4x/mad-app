@@ -1949,6 +1949,8 @@ model Contract {
   handovers    ContractHandover[]
 
   @@unique([companyId, no])
+  /// The paginated list orders by start desc within the tenant.
+  @@index([companyId, start])
   @@map("contracts")
 }
 
@@ -2026,6 +2028,11 @@ model Installment {
   payments  RentPayment[]
   reminders RentReminder[]
 
+  /// For loading one contract's schedule (findOne) — Postgres does not index
+  /// FK columns on its own, so at ~30k installments each lookup was a scan.
+  @@index([contractId])
+  /// For the lazy DUE→LATE refresh that runs on every contracts read.
+  @@index([companyId, status, dueDate])
   @@map("contract_installments")
 }
 
@@ -2068,6 +2075,8 @@ model RentPayment {
 
   createdAt DateTime @default(now())
 
+  /// Same reasoning as Installment's contractId index.
+  @@index([contractId])
   @@map("rent_payments")
 }
 

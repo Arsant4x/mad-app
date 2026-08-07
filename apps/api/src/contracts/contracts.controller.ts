@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
@@ -12,6 +12,7 @@ import { ContractsService } from './contracts.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
+import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
 import { RecordDepositDto, SettleDepositDto } from './dto/deposit.dto';
@@ -30,8 +31,8 @@ export class ContractsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.contractsService.list(tenant.companyId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListContractsQueryDto) {
+    return this.contractsService.list(tenant.companyId, query);
   }
 
   // ---- Attachments (signed lease PDFs, ID scans, annexes) ----

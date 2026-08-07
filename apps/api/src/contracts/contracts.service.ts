@@ -17,6 +17,7 @@ import { activeReservationForUnit, expireStaleReservations } from '../reservatio
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
+import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, HandoverItemDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
 import { RecordDepositDto, SettleDepositDto } from './dto/deposit.dto';
@@ -77,8 +78,8 @@ const UNIT_TYPE_TO_ACTIVITY: Record<string, string> = {
 export class ContractsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listRefreshed(tx));
+  list(companyId: string, query: ListContractsQueryDto = {}) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listRefreshed(tx, query));
   }
 
   findOne(companyId: string, id: string) {
@@ -869,8 +870,45 @@ export class ContractsService {
     });
   }
 
-  private async listRefreshed(tx: Prisma.TransactionClient) {
+  /**
+   * Paginated, slim list — contract row + unit/property only, never the full
+   * sub-tree. The old shape (every contract with all installments, payments,
+   * deposits, claims, key money and handovers) grew linearly with portfolio
+   * size and blew the tenant transaction's 5s timeout at ~1,300 contracts
+   * (~12 MB of JSON). The detail modal loads one contract's sub-tree via
+   * findOne, which keeps CONTRACT_INCLUDE.
+   *
+   * Statuses stay mockup-faithful: the same lazy refresh runs first, and each
+   * row's `status` is the stored, freshly-refreshed value — nothing is
+   * computed per row.
+   */
+  private async listRefreshed(tx: Prisma.TransactionClient, query: ListContractsQueryDto) {
     await this.refreshInstallmentStatuses(tx);
-    return tx.contract.findMany({ include: CONTRACT_INCLUDE, orderBy: { start: 'desc' } });
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const q = query.search?.trim();
+    const where: Prisma.ContractWhereInput = q
+      ? {
+          OR: [
+            { tenant: { contains: q, mode: 'insensitive' } },
+            { no: { contains: q, mode: 'insensitive' } },
+            { unit: { unitNo: { contains: q, mode: 'insensitive' } } },
+          ],
+        }
+      : {};
+
+    // Sequential on purpose: an interactive transaction runs on a single
+    // connection, so concurrent queries on `tx` would only race for it.
+    const total = await tx.contract.count({ where });
+    const items = await tx.contract.findMany({
+      where,
+      include: { unit: { include: { property: true } } },
+      orderBy: { start: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+
+    return { items, total, page, pageSize };
   }
 }

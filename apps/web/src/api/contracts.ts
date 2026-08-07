@@ -246,7 +246,28 @@ export interface RecordPaymentInput {
   notes?: string;
 }
 
-export const listContracts = () => apiClient.get<Contract[]>('/contracts').then((r) => r.data);
+/** One row of the paginated list — the contract itself plus its unit, without
+ * the sub-tree (installments, payments, deposits, …). The list endpoint went
+ * on a diet after the full shape blew the server's transaction timeout at
+ * ~1,300 contracts; the detail modal fetches the full Contract by id. */
+export type ContractListItem = Omit<Contract, 'installments' | 'payments' | 'deposits' | 'claims' | 'keyMoney' | 'handovers'>;
+
+export interface ContractListResponse {
+  items: ContractListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListContractsParams {
+  page?: number;
+  pageSize?: number;
+  /** Server-side — matches tenant name, contract no, or unit no. */
+  search?: string;
+}
+
+export const listContracts = (params: ListContractsParams = {}) =>
+  apiClient.get<ContractListResponse>('/contracts', { params }).then((r) => r.data);
 export const getContract = (id: string) => apiClient.get<Contract>(`/contracts/${id}`).then((r) => r.data);
 export const createContract = (dto: CreateContractInput) => apiClient.post<Contract>('/contracts', dto).then((r) => r.data);
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);

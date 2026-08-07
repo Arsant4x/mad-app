@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
-import { createContract, listContracts, type Contract, type ContractStatus, type CreateContractInput } from '../../api/contracts';
+import {
+  createContract,
+  getContract,
+  listContracts,
+  type Contract,
+  type ContractListItem,
+  type ContractStatus,
+  type CreateContractInput,
+} from '../../api/contracts';
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
 import { dfmt, fmt } from '../../lib/format';
@@ -17,41 +25,62 @@ const STATUS_META: Record<ContractStatus, { label: string; badgeClass: string }>
   CANCELLED: { label: 'ملغى', badgeClass: 'due' },
 };
 
+const PAGE_SIZE = 25;
+
 export function ContractsPage() {
-  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [contracts, setContracts] = useState<ContractListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showBuilder, setShowBuilder] = useState(false);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  // The list rows are slim, so opening the detail modal fetches the full
+  // contract (with installments, payments, …) by id.
+  const [detailContract, setDetailContract] = useState<Contract | null>(null);
+  const searchDebounce = useRef<number | undefined>(undefined);
 
-  async function reload() {
-    const [c, u, p, b] = await Promise.all([listContracts(), listUnits(), listProperties(), listBanks()]);
-    setContracts(c);
+  async function reloadPage(p: number, q: string) {
+    const res = await listContracts({ page: p, pageSize: PAGE_SIZE, search: q.trim() || undefined });
+    setContracts(res.items);
+    setTotal(res.total);
+    setPage(res.page);
+  }
+
+  async function reloadAll() {
+    const [, u, p, b] = await Promise.all([reloadPage(page, search), listUnits(), listProperties(), listBanks()]);
     setUnits(u);
     setProperties(p);
     setBanks(b);
   }
 
   useEffect(() => {
-    reload().finally(() => setLoading(false));
+    reloadAll().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return contracts;
-    return contracts.filter((c) => c.tenant.toLowerCase().includes(q) || c.no.toLowerCase().includes(q) || c.unit.unitNo.toLowerCase().includes(q));
-  }, [contracts, search]);
+  // Search runs server-side now that the client only holds one page, debounced
+  // so a keystroke burst becomes one request. Every new search restarts at
+  // page 1 — the old page number is meaningless against a different filter.
+  function handleSearch(q: string) {
+    setSearch(q);
+    window.clearTimeout(searchDebounce.current);
+    searchDebounce.current = window.setTimeout(() => void reloadPage(1, q), 300);
+  }
 
   async function handleSave(data: CreateContractInput) {
     await createContract(data);
     setShowBuilder(false);
-    await reload();
+    await reloadPage(page, search);
   }
 
-  const detailContract = contracts.find((c) => c.id === detailId) ?? null;
+  async function openDetail(id: string) {
+    setDetailContract(await getContract(id));
+  }
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (loading) return null;
 
@@ -75,7 +104,7 @@ export function ContractsPage() {
         <>
           <div className="toolbar">
             <div className="search-box">
-              <input placeholder="ابحث باسم المستأجر أو رقم العقد أو الوحدة..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input placeholder="ابحث باسم المستأجر أو رقم العقد أو الوحدة..." value={search} onChange={(e) => handleSearch(e.target.value)} />
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M21 21l-4-4" />
@@ -98,15 +127,15 @@ export function ContractsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 && (
+                {contracts.length === 0 && (
                   <tr>
                     <td colSpan={8}>
                       <div className="empty-state">لا توجد عقود مطابقة</div>
                     </td>
                   </tr>
                 )}
-                {rows.map((c) => (
-                  <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailId(c.id)}>
+                {contracts.map((c) => (
+                  <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => void openDetail(c.id)}>
                     <td className="num">{c.no}</td>
                     <td>{c.tenant}</td>
                     <td>
@@ -124,13 +153,32 @@ export function ContractsPage() {
               </tbody>
             </table>
           </div>
+
+          {pageCount > 1 && (
+            <div className="toolbar" style={{ justifyContent: 'space-between', marginTop: 10 }}>
+              <button className="btn btn-ghost" disabled={page <= 1} onClick={() => void reloadPage(page - 1, search)}>
+                → السابق
+              </button>
+              <span style={{ alignSelf: 'center' }}>
+                صفحة {page} من {pageCount} — إجمالي العقود: {total}
+              </span>
+              <button className="btn btn-ghost" disabled={page >= pageCount} onClick={() => void reloadPage(page + 1, search)}>
+                التالي ←
+              </button>
+            </div>
+          )}
         </>
       )}
 
       {showBuilder && <ContractModal units={units} properties={properties} onCancel={() => setShowBuilder(false)} onSave={handleSave} />}
 
       {detailContract && (
-        <ContractDetailModal contract={detailContract} banks={banks} onClose={() => setDetailId(null)} onChanged={reload} />
+        <ContractDetailModal
+          contract={detailContract}
+          banks={banks}
+          onClose={() => setDetailContract(null)}
+          onChanged={() => void reloadPage(page, search)}
+        />
       )}
     </div>
   );

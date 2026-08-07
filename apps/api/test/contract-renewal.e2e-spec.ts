@@ -96,8 +96,11 @@ describe('Contract renewal (e2e)', () => {
   }, 30000);
 
   it('marks a future renewal UPCOMING, not DUE', async () => {
-    const list = await request(app.getHttpServer()).get('/contracts').set('Authorization', `Bearer ${token}`).expect(200);
-    const renewal = list.body.find((c: { renewedFromId: string | null }) => c.renewedFromId === sourceId);
+    // The list is paginated now, so the renewal is located through the
+    // server-side search (the suffix makes the tenant name unique to this run)
+    // rather than assuming it lands on page 1.
+    const list = await request(app.getHttpServer()).get('/contracts').query({ search: suffix }).set('Authorization', `Bearer ${token}`).expect(200);
+    const renewal = list.body.items.find((c: { renewedFromId: string | null }) => c.renewedFromId === sourceId);
 
     // Signed and certain, but its term hasn't started — distinct from DRAFT,
     // which may never happen at all.
