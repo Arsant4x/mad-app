@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { useAuth } from '../auth/AuthContext';
+import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
 
 interface NavItemDef {
   screen: string;
@@ -117,8 +118,19 @@ export function AppShell() {
 
   const canSee = (screen: string) => user?.allowedScreens === 'all' || user?.allowedScreens.includes(screen);
 
+  const inSupportMode = user?.actorType === 'PLATFORM_ADMIN' && !!supportCompanyId();
+
   return (
     <div className="app-shell">
+      {/* §1.10: معاينة الدعم لا تُخفى أبداً — شريط أحمر دائم مع مخرج فوري. */}
+      {inSupportMode && (
+        <div style={{ position: 'fixed', top: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 200, background: 'var(--rose)', color: '#fff', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+          <span>🔍 وضع الدعم الفني — معاينة «{supportCompanyName()}» للقراءة فقط، وكل ما تفتحه مسجَّل أمام المنشأة</span>
+          <button className="btn btn-ghost btn-sm" style={{ color: '#fff', borderColor: '#fff', marginInlineStart: 'auto' }} onClick={() => { exitSupportMode(); window.location.href = '/'; }}>
+            خروج من وضع الدعم
+          </button>
+        </div>
+      )}
       <aside className="sidebar">
         <div className="brand">{t('app_name')}</div>
         <div className="current-user">

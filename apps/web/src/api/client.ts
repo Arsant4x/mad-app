@@ -55,6 +55,10 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   // takes effect immediately without a reload. Importing i18n lazily here
   // keeps this module free of a hard dependency on the i18n bundle.
   config.headers.set('Accept-Language', currentLanguage());
+  // وضع الدعم الفني: اختيار المنشأة يُقرأ محلياً، والإذن الحقيقي يفحصه
+  // الخادم على كل طلب (موافقة مالك + نافذة) — الرأس وحده لا يمنح شيئاً.
+  const supportCompany = localStorage.getItem('support.companyId');
+  if (supportCompany) config.headers.set('X-Support-Company', supportCompany);
   return config;
 });
 

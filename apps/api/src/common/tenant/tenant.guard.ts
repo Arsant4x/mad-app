@@ -1,7 +1,8 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
 import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException } from './tenant.exceptions';
@@ -28,11 +29,42 @@ export class TenantGuard implements CanActivate {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
+    private readonly supportAccessService: SupportAccessService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<Request>();
     const payload = req.user as JwtPayload | undefined;
+
+    // ---- وضع الدعم الفني (§1.10) ----
+    // A PLATFORM_ADMIN carrying X-Support-Company enters that company's data
+    // IF AND ONLY IF an owner-approved, unexpired grant exists — read-only,
+    // and every single request lands in a log the owner reads. No grant, no
+    // entry: consent is enforced here, not promised in a policy document.
+    if (payload?.actorType === 'PLATFORM_ADMIN') {
+      const supportCompanyId = req.header('x-support-company');
+      if (!supportCompanyId) throw new UnauthorizedException(MSG.company_login_required);
+
+      const grant = await this.supportAccessService.activeGrantFor(supportCompanyId);
+      if (!grant) throw new ForbiddenException(MSG.support_no_active_grant);
+
+      const method = req.method.toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') throw new ForbiddenException(MSG.support_read_only);
+
+      // The log line is part of the access itself — if it can't be written,
+      // the access doesn't happen.
+      await this.supportAccessService.logAccess(grant.id, supportCompanyId, method, req.path);
+
+      req.tenant = {
+        companyId: supportCompanyId,
+        actorType: payload.actorType,
+        profileId: payload.profileId,
+        allowedScreens: 'all',
+        allowedBranchIds: 'all',
+      };
+      return true;
+    }
+
     if (!payload || !payload.companyId) {
       throw new UnauthorizedException(MSG.company_login_required);
     }

@@ -279,6 +279,8 @@ model Company {
   posShifts           PosShift[]
   posPayments         PosPayment[]
   integrations        IntegrationConnection[]
+  supportGrants       SupportAccessGrant[]
+  supportLogs         SupportAccessLog[]
 
   @@map("companies")
 }
@@ -2107,6 +2109,56 @@ model IntegrationConnection {
   updatedAt DateTime @updatedAt
 
   @@map("integration_connections")
+}
+
+enum SupportGrantStatus {
+  PENDING
+  APPROVED
+  DENIED
+  REVOKED
+}
+
+/// وضع الدعم الفني (احتياجات §1.10): دخول مدير المنصة لبيانات منشأة
+/// **بموافقتها الصريحة فقط**، لمدة محددة، للقراءة فقط، وبسجل كامل تراه
+/// المنشأة. الإنفاذ تقني في TenantGuard — لا سياسةً على الورق.
+model SupportAccessGrant {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  requestedById   String
+  requestedByName String
+  /// لماذا يطلب الدعم الدخول — يظهر للمالك قبل موافقته.
+  reason          String
+  durationMinutes Int
+
+  status      SupportGrantStatus @default(PENDING)
+  requestedAt DateTime           @default(now())
+  decidedAt   DateTime?
+  /// نهاية النافذة — انقضاؤها يميت الجلسة ولو بقي status=APPROVED.
+  expiresAt   DateTime?
+
+  logs SupportAccessLog[]
+
+  @@index([companyId, status])
+  @@map("support_access_grants")
+}
+
+/// كل طلب HTTP نفّذه الدعم أثناء نافذته — سطرٌ لا يُمحى يراه المالك.
+model SupportAccessLog {
+  id        String @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  grantId String
+  grant   SupportAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  method String
+  path   String
+  at     DateTime @default(now())
+
+  @@index([companyId, at])
+  @@map("support_access_logs")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

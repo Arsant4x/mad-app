@@ -17,6 +17,7 @@ import { LeavesModule } from './leaves/leaves.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PosModule } from './pos/pos.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { SupportAccessModule } from './support-access/support-access.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './common/mail/mail.module';
@@ -88,6 +89,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     AttendanceModule,
     PosModule,
     IntegrationsModule,
+    SupportAccessModule,
     SubscriptionModule,
     BanksModule,
     TransactionsModule,
