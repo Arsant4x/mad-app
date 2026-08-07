@@ -55,8 +55,10 @@ export class CompaniesService {
   }
 
   async create(dto: CreateCompanyDto) {
-    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-    if (!template) throw new NotFoundException(MSG.template_not_found);
+    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } });
+    // A company account rides on a GLOBAL preset — a company-owned template
+    // defines employees within a company, not the company itself.
+    if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
 
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
     if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
@@ -86,8 +88,10 @@ export class CompaniesService {
     if (!existing) throw new NotFoundException(MSG.company_not_found);
 
     if (dto.permissionTemplateId) {
-      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-      if (!template) throw new NotFoundException(MSG.template_not_found);
+      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } });
+    // A company account rides on a GLOBAL preset — a company-owned template
+    // defines employees within a company, not the company itself.
+    if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
     }
 
     if (dto.username) {

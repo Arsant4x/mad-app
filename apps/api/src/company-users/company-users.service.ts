@@ -38,8 +38,10 @@ export class CompanyUsersService {
   async create(companyId: string, actorType: string, dto: CreateCompanyUserDto) {
     assertIsCompanyOwner(actorType);
 
-    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-    if (!template) throw new NotFoundException(MSG.template_not_found);
+    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
+      // Global preset or this company's own — a guessed id must never smuggle
+      // in another company's template (actor rule, §3.5).
+      if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
     if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
 
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
@@ -65,8 +67,10 @@ export class CompanyUsersService {
     if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
 
     if (dto.permissionTemplateId) {
-      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId } });
-      if (!template) throw new NotFoundException(MSG.template_not_found);
+      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
+      // Global preset or this company's own — a guessed id must never smuggle
+      // in another company's template (actor rule, §3.5).
+      if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
       if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
     }
 

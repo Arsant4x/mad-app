@@ -314,7 +314,7 @@ export class AuthService {
 
     // The broadest template: a new merchant sees the whole product during its
     // trial; narrowing is what employee sub-accounts are for.
-    const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true }, orderBy: { createdAt: 'asc' } });
+    const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true, companyId: null }, orderBy: { createdAt: 'asc' } });
     if (!template) throw new ConflictException(MSG.register_unavailable);
 
     const trialDays = parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);

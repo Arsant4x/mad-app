@@ -133,7 +133,12 @@ model PlatformAdmin {
 /// cannot be edited or deleted, mirroring TEMPLATES['0001'] in the mockup.
 model PermissionTemplate {
   id             String   @id @default(uuid())
-  name           String @unique
+  /// null = a platform-wide preset the developer panel manages. Set = owned
+  /// by ONE company: the owner defines what their employees may do — that is
+  /// the owner's decision, in the owner's UI (actor rule, CLAUDE.md §3.5).
+  companyId String?
+  ownerCompany Company? @relation("CompanyTemplates", fields: [companyId], references: [id], onDelete: Cascade)
+  name           String
   isSystem       Boolean  @default(false)
   isAllScreens   Boolean  @default(false)
   allowedScreens String[] @default([])
@@ -148,6 +153,7 @@ model PermissionTemplate {
   companies    Company[]
   companyUsers CompanyUser[]
 
+  @@unique([companyId, name])
   @@map("permission_templates")
 }
 
@@ -268,6 +274,7 @@ model Company {
   attendance       AttendanceRecord[]
   auditLogs        AuditLog[]
   deletionRequests AccountDeletionRequest[]
+  ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
 
   @@map("companies")
 }

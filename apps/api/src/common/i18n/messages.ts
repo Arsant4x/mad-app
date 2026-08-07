@@ -144,6 +144,7 @@ export const MSG = {
   template_system_undeletable: 'templates.system_undeletable',
   template_system_not_assignable: 'templates.system_not_assignable',
   templates_read_forbidden: 'templates.read_forbidden',
+  templates_owner_only: 'templates.owner_only',
   company_user_not_found: 'companyUsers.not_found',
   company_users_owner_only: 'companyUsers.owner_only',
   company_profile_owner_only: 'companyProfile.owner_only',
@@ -388,6 +389,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.template_system_immutable]: { ar: 'نموذج المطوّر ثابت ولا يمكن تعديله', en: 'The developer template is fixed and cannot be edited' },
   [MSG.template_system_undeletable]: { ar: 'نموذج المطوّر ثابت ولا يمكن حذفه', en: 'The developer template is fixed and cannot be deleted' },
   [MSG.template_system_not_assignable]: { ar: 'لا يمكن إسناد نموذج المطوّر لحساب موظف', en: 'The developer template cannot be assigned to an employee account' },
+  [MSG.templates_owner_only]: { ar: 'إدارة نماذج الصلاحيات متاحة لمالك المنشأة أو مدير المنصة فقط', en: 'Only the company owner or the platform admin can manage permission templates' },
   [MSG.templates_read_forbidden]: { ar: 'لا تملك صلاحية عرض قوالب الصلاحيات', en: 'You do not have permission to view permission templates' },
   [MSG.company_user_not_found]: { ar: 'حساب الموظف غير موجود', en: 'Employee account not found' },
   [MSG.company_users_owner_only]: {

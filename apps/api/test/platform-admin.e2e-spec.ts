@@ -47,29 +47,36 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     await app.close();
   });
 
-  it('a company can read the template list (to populate its employee-account form) but only a platform admin can create/edit/delete templates', async () => {
-    // A company needs the read-only list to assign templates to its own
-    // employee sub-accounts (see CompanyUsersPage), so GET is allowed here —
-    // only the mutating routes are platform-admin-only.
+  it('template scopes (actor rule §3.5): the admin owns global presets, a company owns its own — and neither crosses over', async () => {
+    // Everyone authenticated may read the list (the employee-account form
+    // needs it); a company sees global presets plus its own.
     await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${companyAToken}`).expect(200);
-    await request(app.getHttpServer())
+
+    // A company owner MAY create templates now — that is the whole point of
+    // the actor rule: employee permissions are the owner's decision. The
+    // created template is company-scoped, never global.
+    const ownersOwn = await request(app.getHttpServer())
       .post('/templates')
       .set('Authorization', `Bearer ${companyAToken}`)
-      .send({ name: 'محاولة شركة', allowedScreens: ['dashboard'] })
-      .expect(403);
+      .send({ name: `نموذج مالك ${runSuffix()}`, allowedScreens: ['dashboard'] })
+      .expect(201);
+    expect(ownersOwn.body.companyId).not.toBeNull();
 
     const created = await request(app.getHttpServer())
       .post('/templates')
       .set('Authorization', `Bearer ${platformAdminToken}`)
-      .send({ name: 'قالب اختبار', allowedScreens: ['dashboard', 'invoice'] })
+      .send({ name: `قالب اختبار ${runSuffix()}`, allowedScreens: ['dashboard', 'invoice'] })
       .expect(201);
     expect(created.body.allowedScreens).toEqual(['dashboard', 'invoice']);
+    expect(created.body.companyId).toBeNull();
 
+    // A company touching a GLOBAL preset reads as not-found — it is outside
+    // its writable scope, and 404 doesn't confirm the id exists.
     await request(app.getHttpServer())
       .patch(`/templates/${created.body.id}`)
       .set('Authorization', `Bearer ${companyAToken}`)
       .send({ name: 'محاولة تعديل من شركة' })
-      .expect(403);
+      .expect(404);
 
     await request(app.getHttpServer())
       .patch(`/templates/${created.body.id}`)
@@ -77,8 +84,10 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
       .send({ allowedScreens: ['dashboard', 'invoice', 'customers'] })
       .expect(200);
 
-    await request(app.getHttpServer()).delete(`/templates/${created.body.id}`).set('Authorization', `Bearer ${companyAToken}`).expect(403);
+    await request(app.getHttpServer()).delete(`/templates/${created.body.id}`).set('Authorization', `Bearer ${companyAToken}`).expect(404);
     await request(app.getHttpServer()).delete(`/templates/${created.body.id}`).set('Authorization', `Bearer ${platformAdminToken}`).expect(204);
+    // Clean up the owner's template through its own scope.
+    await request(app.getHttpServer()).delete(`/templates/${ownersOwn.body.id}`).set('Authorization', `Bearer ${companyAToken}`).expect(204);
   });
 
   it('the system (developer) template cannot be edited or deleted by anyone', async () => {

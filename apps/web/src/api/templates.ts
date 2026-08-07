@@ -70,6 +70,8 @@ export type ScreenActionMap = Record<string, ScreenAction[]>;
 
 export interface PermissionTemplate {
   id: string;
+  /** null = قالب عام من المنصة؛ قيمة = نموذج تملكه هذه المنشأة. */
+  companyId: string | null;
   name: string;
   isSystem: boolean;
   isAllScreens: boolean;

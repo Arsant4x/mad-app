@@ -76,7 +76,10 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
 
     // An employee restricted to the north branch only.
     const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${ownerToken}`).expect(200);
-    const template = templates.body.find((t: { isSystem: boolean }) => !t.isSystem);
+    // A GLOBAL preset only: the owner's list now also carries company-owned
+    // templates (actor rule §3.5), and picking whichever comes first would tie
+    // this suite to whatever another suite happens to have created.
+    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
     const emp = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${ownerToken}`)
