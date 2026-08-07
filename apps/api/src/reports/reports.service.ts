@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
-import { ReportRangeDto } from './dto/report-range.dto';
+import { ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
 
 interface Movement {
   debit: number;
@@ -366,6 +366,64 @@ export class ReportsService {
     if (range.from) date.gte = new Date(range.from);
     if (range.to) date.lte = new Date(range.to);
     return Object.keys(date).length ? date : undefined;
+  }
+
+  /**
+   * ميزان المراجعة (احتياجات 10.4): لكل حساب تحرّك في الفترة — مجموع مدينه
+   * ودائنه ورصيده على طرفه الطبيعي، والإجماليان متساويان حتماً (قيد مزدوج).
+   * يقرأ من القيود الحقيقية لا من حالة موازية (قاعدة 11)، وبمرشّح فرع
+   * اختياري (10.5) — غيابه = المجمَّع.
+   */
+  trialBalance(companyId: string, filter: TrialBalanceDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const date = this.dateFilter(filter);
+      const lines = await tx.journalLine.findMany({
+        where: {
+          journalEntry: {
+            ...(date ? { date } : {}),
+            ...(filter.branchId ? { branchId: filter.branchId } : {}),
+          },
+        },
+        select: { accountId: true, debit: true, credit: true },
+      });
+
+      const byAccount = new Map<string, { debit: number; credit: number }>();
+      for (const l of lines) {
+        const cur = byAccount.get(l.accountId) ?? { debit: 0, credit: 0 };
+        cur.debit += Number(l.debit);
+        cur.credit += Number(l.credit);
+        byAccount.set(l.accountId, cur);
+      }
+
+      const accounts = await tx.account.findMany({ where: { id: { in: [...byAccount.keys()] } }, orderBy: { code: 'asc' } });
+      const rows = accounts.map((a) => {
+        const m = byAccount.get(a.id)!;
+        const net = m.debit - m.credit;
+        return {
+          code: a.code,
+          name: a.name,
+          debitTotal: Number(m.debit.toFixed(2)),
+          creditTotal: Number(m.credit.toFixed(2)),
+          balanceDebit: net > 0 ? Number(net.toFixed(2)) : 0,
+          balanceCredit: net < 0 ? Number((-net).toFixed(2)) : 0,
+        };
+      });
+
+      const totalDebit = Number(rows.reduce((s2, r) => s2 + r.debitTotal, 0).toFixed(2));
+      const totalCredit = Number(rows.reduce((s2, r) => s2 + r.creditTotal, 0).toFixed(2));
+      return {
+        from: filter.from ?? null,
+        to: filter.to ?? null,
+        branchId: filter.branchId ?? null,
+        rows,
+        totalDebit,
+        totalCredit,
+        totalBalanceDebit: Number(rows.reduce((s2, r) => s2 + r.balanceDebit, 0).toFixed(2)),
+        totalBalanceCredit: Number(rows.reduce((s2, r) => s2 + r.balanceCredit, 0).toFixed(2)),
+        /** عدم توازنه = عطب في القيود يستحق إنذاراً لا إخفاءً. */
+        balanced: Math.abs(totalDebit - totalCredit) < 0.01,
+      };
+    });
   }
 
   private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {

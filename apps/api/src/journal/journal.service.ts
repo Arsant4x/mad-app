@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+import { resolveBranchId } from '../branches/branch-scope.util';
 import { createJournalEntry, reverseAndDeleteJournalEntry } from './journal-posting.util';
 import { MSG } from '../common/i18n/messages';
 
@@ -19,13 +20,15 @@ export class JournalService {
     );
   }
 
-  create(companyId: string, dto: CreateJournalEntryDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateJournalEntryDto) {
     // Retries the whole transaction on a "no" collision from a concurrent
     // manual entry — same reasoning as InvoicesService.create.
     return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
         createJournalEntry(tx, {
           companyId,
+          // كل مستند مالي يحمل فرعه (احتياجات §2) — كان يُقبل ثم يُسقط صمتاً.
+          branchId: await resolveBranchId(tx, dto.branchId, allowedBranchIds),
           date: new Date(dto.date),
           memo: dto.memo,
           auto: false,

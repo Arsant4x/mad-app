@@ -23,7 +23,7 @@ export class JournalController {
   @Post()
   @RequiresAction('record')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateJournalEntryDto) {
-    return this.journalService.create(tenant.companyId, dto);
+    return this.journalService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Delete(':id')

@@ -1,11 +1,13 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { ReportRangeDto } from './dto/report-range.dto';
+import { ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { buildCsv } from '../common/csv.util';
 import { ReportsService } from './reports.service';
 
 @Controller('reports')
@@ -37,6 +39,35 @@ export class ReportsController {
   @RequiresAction('view')
   cashFlow(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
     return this.reportsService.cashFlow(tenant.companyId, range);
+  }
+
+  /** ميزان المراجعة (10.4) — فترة + فرع اختياري. */
+  @Get('trial-balance')
+  @RequiresAction('view')
+  trialBalance(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto) {
+    return this.reportsService.trialBalance(tenant.companyId, filter);
+  }
+
+  /** تصدير 10.12 — CSV بـBOM ليفتح عربياً سليماً في Excel. */
+  @Get('trial-balance/export')
+  @RequiresAction('view')
+  async trialBalanceCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto, @Res() res: Response) {
+    const report = await this.reportsService.trialBalance(tenant.companyId, filter);
+    const csv = buildCsv(
+      [
+        { label: 'رمز الحساب', value: (r: (typeof report.rows)[number]) => r.code },
+        { label: 'اسم الحساب', value: (r: (typeof report.rows)[number]) => r.name },
+        { label: 'مدين', value: (r: (typeof report.rows)[number]) => r.debitTotal },
+        { label: 'دائن', value: (r: (typeof report.rows)[number]) => r.creditTotal },
+        { label: 'رصيد مدين', value: (r: (typeof report.rows)[number]) => r.balanceDebit },
+        { label: 'رصيد دائن', value: (r: (typeof report.rows)[number]) => r.balanceCredit },
+      ],
+      report.rows,
+    );
+    res
+      .set('Content-Type', 'text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="trial-balance-${filter.from ?? 'all'}-${filter.to ?? 'all'}.csv"`)
+      .send(csv);
   }
 
   /** Per-branch revenue/expense plus the consolidated total. Scoped to the

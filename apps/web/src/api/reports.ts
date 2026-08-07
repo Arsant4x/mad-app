@@ -81,3 +81,38 @@ export const getPropertyKpis = () => apiClient.get<PropertyKpis>('/reports/prope
 export const getIncomeStatement = (range: ReportRange) => apiClient.get<IncomeStatement>('/reports/income-statement', { params: range }).then((r) => r.data);
 export const getBalanceSheet = () => apiClient.get<BalanceSheet>('/reports/balance-sheet').then((r) => r.data);
 export const getCashFlow = (range: ReportRange) => apiClient.get<CashFlow>('/reports/cash-flow', { params: range }).then((r) => r.data);
+
+export interface TrialBalanceRow {
+  code: string;
+  name: string;
+  debitTotal: number;
+  creditTotal: number;
+  balanceDebit: number;
+  balanceCredit: number;
+}
+
+export interface TrialBalance {
+  from: string | null;
+  to: string | null;
+  branchId: string | null;
+  rows: TrialBalanceRow[];
+  totalDebit: number;
+  totalCredit: number;
+  totalBalanceDebit: number;
+  totalBalanceCredit: number;
+  balanced: boolean;
+}
+
+export const getTrialBalance = (params: { from?: string; to?: string; branchId?: string }) =>
+  apiClient.get<TrialBalance>('/reports/trial-balance', { params }).then((r) => r.data);
+
+/** تنزيل CSV عبر blob — الرأس Authorization يمرّ مع apiClient لا مع رابط عارٍ. */
+export const downloadTrialBalanceCsv = async (params: { from?: string; to?: string; branchId?: string }) => {
+  const res = await apiClient.get('/reports/trial-balance/export', { params, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `trial-balance-${params.from ?? 'all'}-${params.to ?? 'all'}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};

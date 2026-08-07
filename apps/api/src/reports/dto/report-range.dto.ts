@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class ReportRangeDto {
   @IsOptional()
@@ -8,4 +8,11 @@ export class ReportRangeDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+}
+
+/** ميزان المراجعة (10.4): فترة + فرع اختياري — «أو مجمَّع» عند غيابه. */
+export class TrialBalanceDto extends ReportRangeDto {
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }

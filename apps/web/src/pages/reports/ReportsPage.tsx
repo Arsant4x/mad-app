@@ -8,12 +8,15 @@ import {
   type CashFlow,
   type IncomeStatement,
   type PropertyKpis,
+  getTrialBalance,
+  downloadTrialBalanceCsv,
+  type TrialBalance,
 } from '../../api/reports';
 import { dfmt, fmt } from '../../lib/format';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -26,6 +29,7 @@ export function ReportsPage() {
   const [cash, setCash] = useState<CashFlow | null>(null);
   const [branchSummary, setBranchSummary] = useState<BranchSummary | null>(null);
   const [kpis, setKpis] = useState<PropertyKpis | null>(null);
+  const [trial, setTrial] = useState<TrialBalance | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
@@ -49,13 +53,15 @@ export function ReportsPage() {
       // Point-in-time by design: occupancy and expiry are about today, not
       // about the selected reporting period.
       getPropertyKpis(),
+      getTrialBalance({ from: from ?? undefined, to }),
     ])
-      .then(([inc, bal, cf, br, pk]) => {
+      .then(([inc, bal, cf, br, pk, tb]) => {
         setIncome(inc);
         setBalance(bal);
         setCash(cf);
         setBranchSummary(br);
         setKpis(pk);
+        setTrial(tb);
       })
       .finally(() => setLoading(false));
   }, [from, to]);
@@ -122,6 +128,9 @@ export function ReportsPage() {
         </button>
         <button className={tab === 'cash' ? 'tab active' : 'tab'} onClick={() => setTab('cash')}>
           التدفقات النقدية
+        </button>
+        <button className={tab === 'trial' ? 'tab active' : 'tab'} onClick={() => setTab('trial')}>
+          ميزان المراجعة
         </button>
         {/* Only for landlords: a business with no properties has nothing here. */}
         {(kpis?.occupancy.length ?? 0) > 0 && (
@@ -330,6 +339,54 @@ export function ReportsPage() {
               </tbody>
             </table>
           </>
+        )}
+
+        {tab === 'trial' && trial && (
+          <div className="card">
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
+              <div className="card-title">ميزان المراجعة</div>
+              {!trial.balanced && <span className="badge overdue" style={{ marginRight: 10 }}>⚠ غير متوازن — راجع القيود</span>}
+              <button className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={() => downloadTrialBalanceCsv({ from: from ?? undefined, to })}>
+                ⬇ تصدير CSV
+              </button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>الرمز</th>
+                  <th>الحساب</th>
+                  <th>مدين</th>
+                  <th>دائن</th>
+                  <th>رصيد مدين</th>
+                  <th>رصيد دائن</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trial.rows.length === 0 && (
+                  <tr>
+                    <td colSpan={6}><div className="empty-state">لا حركة في الفترة المحددة</div></td>
+                  </tr>
+                )}
+                {trial.rows.map((r) => (
+                  <tr key={r.code}>
+                    <td className="num">{r.code}</td>
+                    <td>{r.name}</td>
+                    <td className="num">{fmt(r.debitTotal)}</td>
+                    <td className="num">{fmt(r.creditTotal)}</td>
+                    <td className="num">{r.balanceDebit ? fmt(r.balanceDebit) : '—'}</td>
+                    <td className="num">{r.balanceCredit ? fmt(r.balanceCredit) : '—'}</td>
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
+                  <td colSpan={2}>الإجمالي</td>
+                  <td className="num">{fmt(trial.totalDebit)}</td>
+                  <td className="num">{fmt(trial.totalCredit)}</td>
+                  <td className="num">{fmt(trial.totalBalanceDebit)}</td>
+                  <td className="num">{fmt(trial.totalBalanceCredit)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         )}
 
         {tab === 'property' && kpis && (
