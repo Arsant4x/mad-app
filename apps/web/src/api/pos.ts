@@ -39,3 +39,7 @@ export const closeShift = (id: string, declaredClosing: number, notes?: string) 
   apiClient.post<ClosedShift>(`/pos/shifts/${id}/close`, { declaredClosing, notes }).then((r) => r.data);
 export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMethod, customerId?: string) =>
   apiClient.post<Invoice>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
+
+/** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
+export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; customerId?: string }) =>
+  apiClient.post<Invoice>('/pos/sales/sync', sale).then((r) => r.data);

@@ -648,6 +648,13 @@ model Invoice {
   posShift      PosShift? @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
   paymentMethod String?
 
+  /// Offline POS sync (doc §6 v2): the terminal-generated id that makes the
+  /// sync idempotent — resending the same sale can never duplicate it — and
+  /// the temporary receipt reference shown before a real number existed.
+  /// Central numbering happens AT SYNC, so terminals can never collide.
+  clientSaleId String?
+  offlineRef   String?
+
   /// See Company.baseCurrency for the scheme these columns belong to.
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
@@ -689,6 +696,7 @@ model Invoice {
   lines InvoiceLine[]
 
   @@unique([companyId, no])
+  @@unique([companyId, clientSaleId])
   @@map("invoices")
 }
 

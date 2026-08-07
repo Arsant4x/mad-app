@@ -5,7 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
-import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto } from './dto/pos.dto';
+import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
@@ -104,7 +104,48 @@ export class PosService {
   }
 
   /** بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة. */
-  async createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
+  createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
+    return this.ring(tenant, dto, {});
+  }
+
+  /**
+   * مزامنة بيع سُجّل أوفلاين (مستند §6 v2) — idempotent بمعرّف الطرفية:
+   * resending the same clientSaleId returns the SAME invoice, never a copy.
+   * The real invoice number is assigned HERE, centrally — two terminals that
+   * sold offline at the same moment can therefore never collide on numbering,
+   * which is exactly the conflict the requirements doc flags.
+   */
+  async syncSale(tenant: TenantContext, dto: SyncPosSaleDto) {
+    const existing = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
+    if (existing) return existing;
+    try {
+      return await this.ring(tenant, dto, {
+        clientSaleId: dto.clientSaleId,
+        offlineRef: dto.offlineRef,
+        issueDate: dto.ringAt?.slice(0, 10),
+      });
+    } catch (e) {
+      // Two terminals racing the same clientSaleId: the loser reads the
+      // winner's row — the caller cannot tell the difference, by design.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const winner = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
+        if (winner) return winner;
+      }
+      throw e;
+    }
+  }
+
+  private findByClientSaleId(companyId: string, clientSaleId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.findFirst({ where: { clientSaleId }, include: { lines: true, customer: true } }),
+    );
+  }
+
+  private async ring(
+    tenant: TenantContext,
+    dto: CreatePosSaleDto,
+    opts: { clientSaleId?: string; offlineRef?: string; issueDate?: string },
+  ) {
     const { shiftId, invoiceDto } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
@@ -117,11 +158,14 @@ export class PosService {
 
       const customerId = dto.customerId ?? (await this.walkInCustomerId(tx));
       const today = new Date().toISOString().slice(0, 10);
+      // An offline sale keeps the day it was actually rung, not the day the
+      // connection came back.
+      const issueDate = opts.issueDate ?? today;
       const invoiceDto = {
         customerId,
-        issueDate: today,
-        // Paid on the spot — due "today" keeps it out of every aging bucket.
-        dueDate: today,
+        issueDate,
+        // Paid on the spot — due = issue keeps it out of every aging bucket.
+        dueDate: issueDate,
         branchId: shift.branchId ?? undefined,
         lines: dto.lines.map((l) => {
           const p = byId.get(l.productId)!;
@@ -138,7 +182,13 @@ export class PosService {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
       tx.invoice.update({
         where: { id: invoice.id },
-        data: { status: 'PAID', posShiftId: shiftId, paymentMethod: dto.paymentMethod },
+        data: {
+          status: 'PAID',
+          posShiftId: shiftId,
+          paymentMethod: dto.paymentMethod,
+          clientSaleId: opts.clientSaleId,
+          offlineRef: opts.offlineRef,
+        } as Prisma.InvoiceUncheckedUpdateInput,
         include: { lines: true, customer: true },
       }),
     );

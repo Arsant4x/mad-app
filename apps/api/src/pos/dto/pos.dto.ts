@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsIn, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateNested } from 'class-validator';
 
 export class OpenShiftDto {
   /** العهدة الافتتاحية — what the drawer starts with. Zero is a valid float. */
@@ -47,4 +47,21 @@ export class CreatePosSaleDto {
   @IsOptional()
   @IsString()
   customerId?: string;
+}
+
+/** مزامنة بيع أوفلاين: نفس البيع + هوية الطرفية التي تجعل الإرسال آمن التكرار. */
+export class SyncPosSaleDto extends CreatePosSaleDto {
+  /** Terminal-generated UUID — the idempotency key. */
+  @IsString()
+  clientSaleId!: string;
+
+  /** المرجع المؤقت المطبوع على الإيصال قبل وجود رقم حقيقي. */
+  @IsOptional()
+  @IsString()
+  offlineRef?: string;
+
+  /** متى رُنّ البيع فعلاً (ISO) — يُحفظ تاريخَ الفاتورة لا تاريخ عودة الشبكة. */
+  @IsOptional()
+  @IsDateString()
+  ringAt?: string;
 }

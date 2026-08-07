@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listProducts, type Product } from '../../api/products';
-import { closeShift, createPosSale, getCurrentShift, openShift, type ClosedShift, type PosPaymentMethod, type PosShift } from '../../api/pos';
+import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosShift } from '../../api/pos';
+import { useAuth } from '../../auth/AuthContext';
+import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
 import { fmt } from '../../lib/format';
 
@@ -16,6 +18,8 @@ interface CartLine {
  * فاتورة حقيقية مدفوعة على نفس ترقيم الفواتير، والدرج يُحسب في الخادم.
  */
 export function PosPage() {
+  const { user } = useAuth();
+  const companyId = user?.companyId ?? '';
   const [shift, setShift] = useState<PosShift | null>(null);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -28,17 +32,60 @@ export function PosPage() {
   const [closing, setClosing] = useState(false);
   const [declared, setDeclared] = useState('');
   const [closed, setClosed] = useState<ClosedShift | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
+  const [offlineReceipt, setOfflineReceipt] = useState<QueuedSale | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
-    const [s, p] = await Promise.all([getCurrentShift(), listProducts()]);
-    setShift(s);
-    setProducts(p);
+    try {
+      const [s, p] = await Promise.all([getCurrentShift(), listProducts()]);
+      setShift(s);
+      setProducts(p);
+      cacheProducts(companyId, p);
+      setOffline(false);
+    } catch (e) {
+      if (!isNetworkError(e)) throw e;
+      // انقطاع: نبيع من آخر كتالوج معروف، والمناوبة كما كانت في الذاكرة.
+      setProducts((prev) => (prev.length ? prev : readCachedProducts(companyId)));
+      setOffline(true);
+    }
+    setQueueCount(readQueue(companyId).length);
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** تفريغ الطابور: كل بيع مصفوف يُعاد إرساله — الخادم يبتلع التكرار بأمان. */
+  async function flushQueue() {
+    const queue = readQueue(companyId);
+    for (const sale of queue) {
+      try {
+        await syncPosSale(sale);
+        removeFromQueue(companyId, sale.clientSaleId);
+      } catch (e) {
+        if (isNetworkError(e)) return; // ما زلنا أوفلاين — نحاول لاحقاً.
+        // رفض حقيقي (مثل مناوبة مقفلة): يبقى في الطابور ويُعرض للمستخدم.
+        const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+        setError(d?.message ?? 'تعذّرت مزامنة بيع مصفوف');
+        return;
+      }
+    }
+    setQueueCount(readQueue(companyId).length);
+    if (queue.length) await reload();
+  }
+
+  useEffect(() => {
+    const timer = setInterval(flushQueue, 12000);
+    window.addEventListener('online', flushQueue);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', flushQueue);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -77,14 +124,37 @@ export function PosPage() {
     if (!cart.length || paying) return;
     setPaying(true);
     setError(null);
+    // كل بيع — أونلاين أو أوفلاين — يحمل هوية طرفية من لحظة الرنّ: المسار
+    // واحد (sync) والخادم يبتلع أي تكرار، فلا فقدان ولا ازدواج (مستند §6).
+    const sale = {
+      clientSaleId: newClientSaleId(),
+      offlineRef: newOfflineRef(),
+      ringAt: new Date().toISOString(),
+      lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+      paymentMethod: method,
+    };
     try {
-      const invoice = await createPosSale(cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })), method);
+      const invoice = await syncPosSale(sale);
       setCart([]);
       setReceipt(invoice);
       await reload();
     } catch (e) {
-      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر إتمام البيع');
+      if (isNetworkError(e)) {
+        // انقطاع: البيع يصطفّ محلياً بإيصال مؤقت، ويتزامن وحده لاحقاً.
+        const queued = {
+          ...sale,
+          display: cart.map((l) => ({ name: l.product.name, quantity: l.quantity, unitPrice: Number(l.product.price) })),
+          total: totals.total,
+        };
+        enqueueSale(companyId, queued);
+        setQueueCount(readQueue(companyId).length);
+        setOffline(true);
+        setCart([]);
+        setOfflineReceipt(queued);
+      } else {
+        const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+        setError(d?.message ?? 'تعذّر إتمام البيع');
+      }
     } finally {
       setPaying(false);
     }
@@ -104,6 +174,11 @@ export function PosPage() {
 
   async function handleCloseShift() {
     if (!shift) return;
+    // الدرج لا يُختم وفي الطابور مبيعات لم تصل — العدّ سيكون ناقصاً حتماً.
+    if (readQueue(companyId).length > 0) {
+      setError('توجد مبيعات غير متزامنة — انتظر عودة الاتصال حتى يفرغ الطابور ثم أقفل.');
+      return;
+    }
     setError(null);
     try {
       const res = await closeShift(shift.id, Number(declared || '0'));
@@ -192,6 +267,8 @@ export function PosPage() {
           <div className="page-title">الكاشير</div>
           <div className="page-sub">
             مناوبة {shift.openedByName} · {shift.salesCount} عملية · الدرج المتوقع {fmt(shift.expectedCash)}
+            {offline && <span className="badge draft" style={{ marginRight: 8 }}>⚠ أوفلاين — البيع مستمر</span>}
+            {queueCount > 0 && <span className="badge draft" style={{ marginRight: 8 }}>بانتظار المزامنة: {queueCount}</span>}
           </div>
         </div>
         <div className="topbar-actions">
@@ -292,6 +369,40 @@ export function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* إيصال أوفلاين — مرجع مؤقت، الرقم الحقيقي يأتي مع المزامنة */}
+      {offlineReceipt && (
+        <div className="overlay" onClick={() => setOfflineReceipt(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="modal-head">
+              <div className="modal-title">بيع مسجَّل أوفلاين ✓</div>
+              <button className="modal-close" onClick={() => setOfflineReceipt(null)}>✕</button>
+            </div>
+            <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>مرجع مؤقت: {offlineReceipt.offlineRef}</p>
+            <table>
+              <tbody>
+                {offlineReceipt.display.map((l, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 12 }}>{l.name}</td>
+                    <td className="num" style={{ fontSize: 12 }}>{l.quantity} × {fmt(l.unitPrice)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
+                  <td className="num" style={{ fontWeight: 700 }}>{fmt(offlineReceipt.total)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
+              سيُرقَّم كفاتورة رسمية تلقائياً فور عودة الاتصال
+            </p>
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setOfflineReceipt(null)}>إغلاق</button>
+              <button className="btn btn-primary" onClick={() => window.print()}>🖨 طباعة</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* إيصال */}
       {receipt && (

@@ -5,7 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto } from './dto/pos.dto';
+import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
 import { PosService } from './pos.service';
 
 /**
@@ -41,6 +41,13 @@ export class PosController {
   @RequiresAction('review')
   closeShift(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseShiftDto) {
     return this.posService.closeShift(tenant, id, dto);
+  }
+
+  /** مزامنة مبيعات الأوفلاين — idempotent: التكرار يعيد نفس الفاتورة. */
+  @Post('sales/sync')
+  @RequiresAction('record')
+  syncSale(@CurrentTenant() tenant: TenantContext, @Body() dto: SyncPosSaleDto) {
+    return this.posService.syncSale(tenant, dto);
   }
 
   @Post('sales')
