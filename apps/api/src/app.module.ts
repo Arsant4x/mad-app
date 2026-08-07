@@ -15,6 +15,8 @@ import { LeavesModule } from './leaves/leaves.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { TrashModule } from './trash/trash.module';
+import { DeletionRequestsModule } from './deletion-requests/deletion-requests.module';
+import { ExportModule } from './export/export.module';
 import { FilesModule } from './files/files.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { BranchesModule } from './branches/branches.module';
@@ -53,6 +55,8 @@ import { WarrantiesModule } from './warranties/warranties.module';
     TenantPrismaModule,
     AuditModule,
     TrashModule,
+    DeletionRequestsModule,
+    ExportModule,
     AuthModule,
     AccountsModule,
     CustomersModule,

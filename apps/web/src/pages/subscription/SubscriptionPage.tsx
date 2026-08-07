@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getSubscription, renewSubscription, type SubscriptionStatus } from '../../api/subscription';
+import { exportAllData, getSubscription, renewSubscription, type SubscriptionStatus } from '../../api/subscription';
 import { useAuth } from '../../auth/AuthContext';
+import { DeletionRequestCard } from './DeletionRequestCard';
 
 const STATUS_META: Record<SubscriptionStatus['status'], { label: string; badge: string }> = {
   ACTIVE: { label: 'نشط', badge: 'paid' },
@@ -21,6 +22,7 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState(12);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,6 +44,26 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
       const data = (e as { response?: { data?: { message?: string } } })?.response?.data;
       setError(data?.message ?? 'تعذّر تجديد الاشتراك');
       setBusy(false);
+    }
+  }
+
+
+  async function downloadExport() {
+    setExporting(true);
+    try {
+      const data = await exportAllData();
+      // Built client-side into a file download; nothing is sent anywhere.
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mad-app-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('تعذّر تصدير البيانات');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -86,6 +108,14 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
           </div>
         </>
       )}
+      <div className="card" style={{ marginTop: 14 }}>
+        <div className="card-title" style={{ marginBottom: 10 }}>نسخة من بياناتك</div>
+        <p className="hint" style={{ marginBottom: 10 }}>ملف JSON واحد يضمّ كل بيانات منشأتك — متاح دائماً، حتى في فترة السماح.</p>
+        <button className="btn btn-ghost btn-sm" disabled={exporting} onClick={downloadExport}>
+          {exporting ? 'جارٍ التجهيز…' : 'تصدير كل البيانات'}
+        </button>
+      </div>
+      <DeletionRequestCard />
       {standalone && (
         <button className="btn btn-ghost" style={{ marginTop: 14 }} onClick={() => logout()}>
           تسجيل الخروج

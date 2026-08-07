@@ -247,6 +247,7 @@ model Company {
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
   auditLogs        AuditLog[]
+  deletionRequests AccountDeletionRequest[]
 
   @@map("companies")
 }
@@ -884,6 +885,38 @@ model AuditLog {
   @@index([companyId, createdAt])
   @@index([entity, entityId])
   @@map("audit_logs")
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// A merchant asking for its account (and all its data) to be deleted.
+/// SaaS rule: the merchant never wipes its own database — it files a request,
+/// and the platform (support) reviews and executes it. The request itself is
+/// the audit trail of that decision, so it survives on the platform side.
+model AccountDeletionRequest {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// Why the merchant is leaving — worth reading before executing.
+  reason String?
+
+  status DeletionRequestStatus @default(PENDING)
+
+  /// Set when support decides; the note is what gets communicated back.
+  decidedAt   DateTime?
+  decidedNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("account_deletion_requests")
 }
 
 enum LeaveRequestStatus {

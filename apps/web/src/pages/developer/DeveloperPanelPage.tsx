@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { createCompany, deleteCompany, listCompanies, updateCompany, type Company, type CompanyInput } from '../../api/companies';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -212,6 +213,8 @@ export function DeveloperPanelPage() {
           </tbody>
         </table>
       </div>
+
+      <DeletionRequestsSection onExecuted={reload} />
 
       {companyModal && (
         <CompanyModal

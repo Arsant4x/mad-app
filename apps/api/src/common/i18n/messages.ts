@@ -186,6 +186,11 @@ export const MSG = {
   master_data_locked: 'tenant.master_data_locked',
   trash_entity_unknown: 'trash.entity_unknown',
   trash_item_not_found: 'trash.item_not_found',
+  deletion_owner_only: 'deletion.owner_only',
+  export_owner_only: 'export.owner_only',
+  deletion_already_pending: 'deletion.already_pending',
+  deletion_request_not_found: 'deletion.not_found',
+  deletion_not_pending: 'deletion.not_pending',
 
   // files
   file_missing: 'files.missing',
@@ -442,6 +447,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
+  [MSG.export_owner_only]: { ar: 'تصدير البيانات متاح لمالك المنشأة فقط', en: 'Only the company owner can export the data' },
+  [MSG.deletion_owner_only]: { ar: 'طلب حذف الحساب متاح لمالك المنشأة فقط', en: 'Only the company owner can request account deletion' },
+  [MSG.deletion_already_pending]: { ar: 'يوجد طلب حذف قيد المراجعة بالفعل', en: 'A deletion request is already under review' },
+  [MSG.deletion_request_not_found]: { ar: 'طلب الحذف غير موجود', en: 'Deletion request not found' },
+  [MSG.deletion_not_pending]: { ar: 'لا يمكن تعديل طلب سبق البتّ فيه', en: 'This request has already been decided' },
   [MSG.trash_entity_unknown]: { ar: 'نوع السجل غير معروف', en: 'Unknown record type' },
   [MSG.trash_item_not_found]: { ar: 'السجل غير موجود في سلة المحذوفات', en: 'Record not found in trash' },
   [MSG.master_data_locked]: { ar: 'البيانات الرئيسية مقفلة — لا يمكن تعديل العقارات أو العقود إلا لمالك المنشأة أو موظف مُستثنى', en: 'Master data is locked — only the owner or an exempted employee may change properties or contracts' },
