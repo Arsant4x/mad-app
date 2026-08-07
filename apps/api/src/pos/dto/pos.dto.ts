@@ -24,6 +24,15 @@ export class CloseShiftDto {
   notes?: string;
 }
 
+export class PosPaymentPartDto {
+  @IsIn(['CASH', 'CARD'])
+  method!: 'CASH' | 'CARD';
+
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
+}
+
 export class PosSaleLineDto {
   @IsString()
   productId!: string;
@@ -40,8 +49,15 @@ export class CreatePosSaleDto {
   @Type(() => PosSaleLineDto)
   lines!: PosSaleLineDto[];
 
-  @IsIn(['CASH', 'CARD'])
-  paymentMethod!: 'CASH' | 'CARD';
+  /** SPLIT = نقدي + بطاقة معاً؛ التفصيل في payments. */
+  @IsIn(['CASH', 'CARD', 'SPLIT'])
+  paymentMethod!: 'CASH' | 'CARD' | 'SPLIT';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PosPaymentPartDto)
+  payments?: PosPaymentPartDto[];
 
   /** Optional named customer; omitted = the walk-in «عميل نقدي». */
   @IsOptional()

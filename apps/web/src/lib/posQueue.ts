@@ -1,5 +1,5 @@
 import type { Product } from '../api/products';
-import type { PosPaymentMethod, PosSaleLine } from '../api/pos';
+import type { PosPaymentMethod, PosPaymentPart, PosSaleLine } from '../api/pos';
 
 /**
  * طابور مبيعات الأوفلاين (مستند §6 v2) — localStorage per company.
@@ -16,6 +16,7 @@ export interface QueuedSale {
   ringAt: string;
   lines: PosSaleLine[];
   paymentMethod: PosPaymentMethod;
+  payments?: PosPaymentPart[];
   /** ما يلزم لعرض الإيصال أوفلاين — الأسماء والأسعار وقت البيع. */
   display: { name: string; quantity: number; unitPrice: number }[];
   total: number;

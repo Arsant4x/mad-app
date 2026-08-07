@@ -16,6 +16,7 @@ export type InvoiceStatus = 'DUE' | 'PAID' | 'OVERDUE';
 export interface Invoice {
   /** POS فقط: كيف دُفعت (CASH/CARD) وأي مناوبة سجّلتها. */
   paymentMethod?: string | null;
+  posPayments?: { method: string; amount: string | number }[];
   posShiftId?: string | null;
   id: string;
   no: string;

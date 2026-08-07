@@ -15,7 +15,7 @@ const INVOICE_INCLUDE = { customer: true, lines: true } as const;
 
 /** Always derive totals from the lines server-side — a client-submitted
  * total is never trusted (a client could otherwise bill an arbitrary amount). */
-function computeTotals(lines: InvoiceLineDto[]) {
+export function computeTotals(lines: InvoiceLineDto[]) {
   const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
   const taxTotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
   return { subtotal, taxTotal, total: subtotal + taxTotal };

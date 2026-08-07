@@ -277,6 +277,7 @@ model Company {
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   posShifts           PosShift[]
+  posPayments         PosPayment[]
 
   @@map("companies")
 }
@@ -654,6 +655,7 @@ model Invoice {
   /// Central numbering happens AT SYNC, so terminals can never collide.
   clientSaleId String?
   offlineRef   String?
+  posPayments  PosPayment[]
 
   /// See Company.baseCurrency for the scheme these columns belong to.
   currency     String  @default("SAR")
@@ -2051,6 +2053,27 @@ model PosShift {
 
   @@index([companyId, status])
   @@map("pos_shifts")
+}
+
+/// دفعة واحدة من فاتورة كاشير (مستند §4): الفاتورة الواحدة قد تُدفع نقداً
+/// وبطاقةً معاً — صفٌّ لكل طريقة بمبلغها، ودرجُ المناوبة يجمع النقد فقط.
+/// Extensible by design: a BNPL or terminal-mediated method lands here as
+/// another method string without touching the drawer math.
+model PosPayment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  method String
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, invoiceId])
+  @@map("pos_payments")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

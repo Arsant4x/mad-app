@@ -1,7 +1,12 @@
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
 
-export type PosPaymentMethod = 'CASH' | 'CARD';
+export type PosPaymentMethod = 'CASH' | 'CARD' | 'SPLIT';
+
+export interface PosPaymentPart {
+  method: 'CASH' | 'CARD';
+  amount: number;
+}
 
 export interface PosShift {
   id: string;
@@ -41,5 +46,5 @@ export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMet
   apiClient.post<Invoice>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
 
 /** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
-export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; customerId?: string }) =>
+export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
   apiClient.post<Invoice>('/pos/sales/sync', sale).then((r) => r.data);

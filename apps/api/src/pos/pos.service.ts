@@ -1,9 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantContext } from '../auth/types';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
-import { InvoicesService } from '../invoices/invoices.service';
+import { computeTotals, InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
 
@@ -137,7 +137,7 @@ export class PosService {
 
   private findByClientSaleId(companyId: string, clientSaleId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.findFirst({ where: { clientSaleId }, include: { lines: true, customer: true } }),
+      tx.invoice.findFirst({ where: { clientSaleId }, include: { lines: true, customer: true, posPayments: true } }),
     );
   }
 
@@ -172,6 +172,17 @@ export class PosService {
           return { description: p.name, quantity: l.quantity, unitPrice: Number(p.price), taxRate: POS_TAX_RATE };
         }),
       } as CreateInvoiceDto;
+
+      // الدفع المقسّم يُدقَّق قبل إنشاء أي شيء: نفس دالة المجاميع التي
+      // ستحسب الفاتورة تتحقق أن الأجزاء تساويها — لا فاتورة نصف مدفوعة.
+      if (dto.paymentMethod === 'SPLIT') {
+        if (!dto.payments?.length) throw new BadRequestException(MSG.pos_split_parts_required);
+        const expected = computeTotals(invoiceDto.lines).total;
+        const paid = dto.payments.reduce((sum, p) => sum + p.amount, 0);
+        if (Math.abs(paid - expected) > 0.01) throw new BadRequestException(MSG.pos_split_mismatch);
+      } else if (dto.payments?.length) {
+        throw new BadRequestException(MSG.pos_split_only_for_split);
+      }
       return { shiftId: shift.id, invoiceDto };
     });
 
@@ -179,8 +190,14 @@ export class PosService {
     // outside the block above because it opens its own tenant transaction.
     const invoice = await this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, invoiceDto);
 
-    return this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
-      tx.invoice.update({
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم
+      // كما فصّله الكاشير — درجُ المناوبة يجمع صفوف النقد فقط.
+      const parts = dto.paymentMethod === 'SPLIT' ? dto.payments! : [{ method: dto.paymentMethod, amount: Number(invoice.total) }];
+      await tx.posPayment.createMany({
+        data: parts.map((p) => ({ companyId: tenant.companyId, invoiceId: invoice.id, method: p.method, amount: p.amount })),
+      });
+      return tx.invoice.update({
         where: { id: invoice.id },
         data: {
           status: 'PAID',
@@ -189,25 +206,27 @@ export class PosService {
           clientSaleId: opts.clientSaleId,
           offlineRef: opts.offlineRef,
         } as Prisma.InvoiceUncheckedUpdateInput,
-        include: { lines: true, customer: true },
-      }),
-    );
+        include: { lines: true, customer: true, posPayments: true },
+      });
+    });
   }
 
   private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotals> {
-    const groups = await tx.invoice.groupBy({
-      by: ['paymentMethod'],
-      where: { posShiftId: shiftId },
-      _sum: { total: true },
-      _count: { _all: true },
-    });
+    // من صفوف الدفعات لا من الفواتير: الفاتورة المقسّمة تضع في الدرج
+    // جزءها النقدي فقط.
+    const [groups, salesCount] = await Promise.all([
+      tx.posPayment.groupBy({
+        by: ['method'],
+        where: { invoice: { posShiftId: shiftId } },
+        _sum: { amount: true },
+      }),
+      tx.invoice.count({ where: { posShiftId: shiftId } }),
+    ]);
     let cashTotal = 0;
     let cardTotal = 0;
-    let salesCount = 0;
     for (const g of groups) {
-      const sum = Number(g._sum.total ?? 0);
-      salesCount += g._count._all;
-      if (g.paymentMethod === 'CASH') cashTotal += sum;
+      const sum = Number(g._sum.amount ?? 0);
+      if (g.method === 'CASH') cashTotal += sum;
       else cardTotal += sum;
     }
     return {

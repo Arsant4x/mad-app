@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listProducts, type Product } from '../../api/products';
-import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosShift } from '../../api/pos';
+import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
@@ -35,6 +35,8 @@ export function PosPage() {
   const [offline, setOffline] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [offlineReceipt, setOfflineReceipt] = useState<QueuedSale | null>(null);
+  const [splitting, setSplitting] = useState(false);
+  const [splitCash, setSplitCash] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
@@ -120,7 +122,7 @@ export function PosPage() {
     }
   }
 
-  async function pay(method: PosPaymentMethod) {
+  async function pay(method: PosPaymentMethod, payments?: PosPaymentPart[]) {
     if (!cart.length || paying) return;
     setPaying(true);
     setError(null);
@@ -132,6 +134,7 @@ export function PosPage() {
       ringAt: new Date().toISOString(),
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
       paymentMethod: method,
+      payments,
     };
     try {
       const invoice = await syncPosSale(sale);
@@ -158,6 +161,22 @@ export function PosPage() {
     } finally {
       setPaying(false);
     }
+  }
+
+  /** تقسيم: الكاشير يُدخل النقد، والبطاقة تكمل الباقي تلقائياً. */
+  async function confirmSplit() {
+    const cash = Number(splitCash || '0');
+    const card = Number((totals.total - cash).toFixed(2));
+    if (cash <= 0 || card <= 0) {
+      setError('أدخل مبلغاً نقدياً أكبر من صفر وأقل من الإجمالي.');
+      return;
+    }
+    setSplitting(false);
+    setSplitCash('');
+    await pay('SPLIT', [
+      { method: 'CASH', amount: cash },
+      { method: 'CARD', amount: card },
+    ]);
   }
 
   async function handleOpenShift() {
@@ -367,8 +386,36 @@ export function PosPage() {
               💳 شبكة
             </button>
           </div>
+          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying} onClick={() => setSplitting(true)}>
+            ✂ تقسيم نقدي + شبكة
+          </button>
         </div>
       </div>
+
+      {/* تقسيم الدفع */}
+      {splitting && (
+        <div className="overlay" onClick={() => setSplitting(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="modal-head">
+              <div className="modal-title">تقسيم الدفع</div>
+              <button className="modal-close" onClick={() => setSplitting(false)}>✕</button>
+            </div>
+            <p className="num" style={{ textAlign: 'center', fontWeight: 700, fontSize: 18 }}>{fmt(totals.total)}</p>
+            <div className="field">
+              <label>المبلغ النقدي</label>
+              <input type="number" min="0" autoFocus value={splitCash} onChange={(e) => setSplitCash(e.target.value)} placeholder="0.00" />
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+              الشبكة تُكمل الباقي: <b className="num">{fmt(Math.max(0, totals.total - Number(splitCash || '0')))}</b>
+            </p>
+            {error && <p className="error-text">{error}</p>}
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setSplitting(false)}>إلغاء</button>
+              <button className="btn btn-primary" onClick={confirmSplit}>تأكيد التقسيم</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* إيصال أوفلاين — مرجع مؤقت، الرقم الحقيقي يأتي مع المزامنة */}
       {offlineReceipt && (
@@ -437,7 +484,14 @@ export function PosPage() {
                 </tbody>
               </table>
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
-                {receipt.paymentMethod === 'CASH' ? 'دفع نقدي' : 'دفع بالشبكة'} · {new Date().toLocaleString('ar-SA')}
+                {receipt.paymentMethod === 'CASH' && 'دفع نقدي'}
+                {receipt.paymentMethod === 'CARD' && 'دفع بالشبكة'}
+                {receipt.paymentMethod === 'SPLIT' &&
+                  (receipt.posPayments ?? [])
+                    .map((p) => (p.method === 'CASH' ? `نقدي ${fmt(Number(p.amount))}` : `شبكة ${fmt(Number(p.amount))}`))
+                    .join(' + ')}
+                {' · '}
+                {new Date().toLocaleString('ar-SA')}
               </p>
             </div>
             <div className="modal-foot">
