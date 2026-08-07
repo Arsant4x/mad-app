@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { ObligationsService } from './obligations.service';
@@ -14,16 +15,19 @@ export class ObligationsController {
   constructor(private readonly obligationsService: ObligationsService) {}
 
   @Get()
+  @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
     return this.obligationsService.list(tenant.companyId);
   }
 
   @Get('vat-declaration')
+  @RequiresAction('view')
   vatDeclaration(@CurrentTenant() tenant: TenantContext, @Query() query: VatDeclarationQueryDto) {
     return this.obligationsService.vatDeclaration(tenant.companyId, query);
   }
 
   @Patch(':id/toggle')
+  @RequiresAction('review')
   toggle(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.obligationsService.toggle(tenant.companyId, id);
   }

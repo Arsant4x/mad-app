@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SendReminderDto, UpdateReminderPolicyDto } from './dto/reminder.dto';
 import { RemindersService } from './reminders.service';
@@ -16,17 +17,20 @@ export class RemindersController {
   constructor(private readonly remindersService: RemindersService) {}
 
   @Get('policy')
+  @RequiresAction('view')
   getPolicy(@CurrentTenant() tenant: TenantContext) {
     return this.remindersService.getPolicy(tenant.companyId);
   }
 
   @Patch('policy')
+  @RequiresAction('edit')
   updatePolicy(@CurrentTenant() tenant: TenantContext, @Body() dto: UpdateReminderPolicyDto) {
     return this.remindersService.updatePolicy(tenant.companyId, dto);
   }
 
   /** The queue for today, with each message already rendered. */
   @Get('due')
+  @RequiresAction('view')
   dueToday(@CurrentTenant() tenant: TenantContext, @Query('contractId') contractId?: string) {
     return this.remindersService.dueToday(tenant.companyId, contractId);
   }
@@ -37,6 +41,7 @@ export class RemindersController {
   }
 
   @Get('installments/:installmentId/history')
+  @RequiresAction('view')
   history(@CurrentTenant() tenant: TenantContext, @Param('installmentId') installmentId: string) {
     return this.remindersService.history(tenant.companyId, installmentId);
   }

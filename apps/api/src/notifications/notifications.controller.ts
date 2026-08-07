@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { NoAudit } from '../audit/no-audit.decorator';
 import { EscalationService } from './escalation.service';
 import { NotificationsService } from './notifications.service';
 
@@ -32,11 +33,13 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
+  @NoAudit()
   markRead(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.notificationsService.markRead(tenant, id);
   }
 
   @Post('read-all')
+  @NoAudit()
   markAllRead(@CurrentTenant() tenant: TenantContext) {
     return this.notificationsService.markAllRead(tenant);
   }
@@ -49,6 +52,7 @@ export class NotificationsController {
    * nothing.
    */
   @Post('run-escalation')
+  @NoAudit()
   runEscalation(@CurrentTenant() tenant: TenantContext, @Query('contractId') contractId?: string) {
     return this.escalationService.runForCompany(tenant.companyId, contractId);
   }
@@ -60,6 +64,7 @@ export class NotificationsController {
    * one they cannot trust. Idempotent — one warning per warranty, ever.
    */
   @Post('run-warranty-check')
+  @NoAudit()
   runWarrantyCheck(@CurrentTenant() tenant: TenantContext) {
     return this.escalationService.warrantyExpiryForCompany(tenant.companyId);
   }

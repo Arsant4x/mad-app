@@ -241,6 +241,7 @@ model Company {
   messageScripts   MessageScript[]
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
+  auditLogs        AuditLog[]
 
   @@map("companies")
 }
@@ -798,6 +799,50 @@ model Employee {
   leaveRequests LeaveRequest[]
 
   @@map("employees")
+}
+
+/// An immutable record of who changed what, and when.
+///
+/// Written automatically by `AuditInterceptor` on every successful mutating
+/// request — not sprinkled through services by hand, which is the only way it
+/// can be trusted to be complete. There is deliberately **no update or delete**
+/// path anywhere in the app: a tamperable audit trail is worse than none,
+/// because it looks like evidence.
+model AuditLog {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// COMPANY (owner) or COMPANY_USER (employee).
+  actorType String
+  actorId   String
+  /// Denormalized on purpose: the display name **at the time of the action**.
+  /// Resolving it live would rewrite history when an employee is renamed or
+  /// deleted, and "who did this" must stay answerable afterwards.
+  actorName String
+
+  /// Screen the action belonged to (contracts, invoices, …) and the concrete
+  /// action (add/edit/delete/record/review) as enforced by @RequiresAction.
+  screen String
+  action String
+
+  /// The affected record, when the route identifies one.
+  entity   String
+  entityId String?
+
+  /// A human-readable Arabic sentence — SPEC 12.2 explicitly wants a readable
+  /// change, not raw JSON dumped on the reader.
+  summary String
+  /// Structured detail for the curious, with secrets stripped. Never the whole
+  /// request body verbatim.
+  details Json?
+
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
 }
 
 enum LeaveRequestStatus {

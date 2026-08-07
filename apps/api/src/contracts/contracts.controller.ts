@@ -39,22 +39,26 @@ export class ContractsController {
   // the router never reads "attachments" as a contract id.
 
   @Get('attachments/:attachmentId/download-url')
+  @RequiresAction('view')
   attachmentDownloadUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
     return this.attachments.downloadUrl(tenant.companyId, attachmentId);
   }
 
   @Delete('attachments/:attachmentId')
+  @RequiresAction('delete')
   @HttpCode(204)
   removeAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
     return this.attachments.remove(tenant.companyId, attachmentId);
   }
 
   @Get(':contractId/attachments')
+  @RequiresAction('view')
   listAttachments(@CurrentTenant() tenant: TenantContext, @Param('contractId') contractId: string) {
     return this.attachments.list(tenant.companyId, contractId);
   }
 
   @Post(':contractId/attachments')
+  @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
   addAttachment(@CurrentTenant() tenant: TenantContext, @Param('contractId') contractId: string, @UploadedFile() file: Express.Multer.File) {
     return this.attachments.add(tenant.companyId, contractId, file);
@@ -79,23 +83,27 @@ export class ContractsController {
   }
 
   @Post(':id/cancel')
+  @RequiresAction('delete')
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CancelContractDto) {
     return this.contractsService.cancel(tenant.companyId, id, dto);
   }
 
   /** Creates the next lease and links it back to this one. */
   @Post(':id/renew')
+  @RequiresAction('add')
   renew(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RenewContractDto) {
     return this.contractsService.renew(tenant.companyId, id, dto);
   }
 
   /** The condition-of-unit form. Draft until signed, immutable after. */
   @Post(':id/handovers')
+  @RequiresAction('add')
   createHandover(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateHandoverDto) {
     return this.contractsService.createHandover(tenant.companyId, id, dto);
   }
 
   @Patch(':id/handovers/:handoverId')
+  @RequiresAction('edit')
   updateHandover(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
@@ -107,6 +115,7 @@ export class ContractsController {
 
   /** Freezes the form, with a server-side timestamp. */
   @Post(':id/handovers/:handoverId/sign')
+  @RequiresAction('review')
   signHandover(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
@@ -117,12 +126,14 @@ export class ContractsController {
   }
 
   @Delete(':id/handovers/:handoverId')
+  @RequiresAction('delete')
   deleteHandover(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('handoverId') handoverId: string) {
     return this.contractsService.deleteHandover(tenant.companyId, id, handoverId);
   }
 
   /** التقبيل — the lump sum for the right to a commercial location. */
   @Post(':id/key-money')
+  @RequiresAction('record')
   recordKeyMoney(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordKeyMoneyDto) {
     return this.contractsService.recordKeyMoney(tenant.companyId, id, dto);
   }
@@ -130,17 +141,20 @@ export class ContractsController {
   /** A demand on the tenant outside the rent schedule — posted as a receivable
    * the moment it is raised. */
   @Post(':id/claims')
+  @RequiresAction('add')
   createClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateClaimDto) {
     return this.contractsService.createClaim(tenant.companyId, id, dto);
   }
 
   @Post(':id/claims/:claimId/pay')
+  @RequiresAction('record')
   payClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('claimId') claimId: string, @Body() dto: PayClaimDto) {
     return this.contractsService.payClaim(tenant.companyId, id, claimId, dto);
   }
 
   /** Writes the claim off, reversing the income it recognized. */
   @Post(':id/claims/:claimId/waive')
+  @RequiresAction('review')
   waiveClaim(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('claimId') claimId: string, @Body() dto: WaiveClaimDto) {
     return this.contractsService.waiveClaim(tenant.companyId, id, claimId, dto);
   }
@@ -148,12 +162,14 @@ export class ContractsController {
   /** Money received and held on the tenant's behalf — posted as a liability,
    * never as revenue. */
   @Post(':id/deposits')
+  @RequiresAction('record')
   recordDeposit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordDepositDto) {
     return this.contractsService.recordDeposit(tenant.companyId, id, dto);
   }
 
   /** Closes the deposit out: itemized deductions, remainder refunded. */
   @Post(':id/deposits/:depositId/settle')
+  @RequiresAction('review')
   settleDeposit(
     @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,

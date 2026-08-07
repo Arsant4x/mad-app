@@ -13,6 +13,7 @@ import { CustomersModule } from './customers/customers.module';
 import { EmployeesModule } from './employees/employees.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { AuditModule } from './audit/audit.module';
 import { FilesModule } from './files/files.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { BranchesModule } from './branches/branches.module';
@@ -49,6 +50,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     TenantPrismaModule,
+    AuditModule,
     AuthModule,
     AccountsModule,
     CustomersModule,

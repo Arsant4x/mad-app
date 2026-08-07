@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 import { FiscalService } from './fiscal.service';
@@ -14,11 +15,13 @@ export class FiscalController {
   constructor(private readonly fiscalService: FiscalService) {}
 
   @Get()
+  @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
     return this.fiscalService.list(tenant.companyId);
   }
 
   @Post()
+  @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateFiscalYearDto) {
     return this.fiscalService.create(tenant.companyId, dto);
   }
@@ -27,16 +30,19 @@ export class FiscalController {
    * never have to know the current state to express the intent, and a
    * double-submitted request stays idempotent. */
   @Patch('periods/:id/close')
+  @RequiresAction('review')
   closePeriod(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.fiscalService.setPeriodStatus(tenant.companyId, id, true);
   }
 
   @Patch('periods/:id/reopen')
+  @RequiresAction('review')
   reopenPeriod(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.fiscalService.setPeriodStatus(tenant.companyId, id, false);
   }
 
   @Delete(':id')
+  @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.fiscalService.remove(tenant.companyId, id);

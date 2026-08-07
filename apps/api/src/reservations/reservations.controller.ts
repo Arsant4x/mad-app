@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { ReservationsService } from './reservations.service';
@@ -14,11 +15,13 @@ export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
   @Get()
+  @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
     return this.reservationsService.list(tenant.companyId);
   }
 
   @Post()
+  @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateReservationDto) {
     return this.reservationsService.create(tenant.companyId, dto);
   }
