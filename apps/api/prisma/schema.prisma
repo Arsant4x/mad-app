@@ -720,6 +720,10 @@ model Purchase {
   /// full; there is no automatic monthly posting (same stance as key money).
   amortize       Boolean @default(false)
   amortizeMonths Int?
+  /// Which establishment line this purchase belongs to ("رسوم ترخيص",
+  /// "تجهيزات") — groups the incorporation-expenses report. Free text: the
+  /// items differ per business and the mockup never constrained them.
+  incorpItem     String?
 
   currency      String  @default("SAR")
   exchangeRate  Decimal @default(1) @db.Decimal(18, 6)

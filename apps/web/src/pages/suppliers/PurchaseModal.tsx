@@ -30,6 +30,7 @@ export function PurchaseModal({
     excludeFromVat: boolean;
     amortize: boolean;
     amortizeMonths?: number;
+    incorpItem?: string;
     branchId?: string;
   }) => Promise<void>;
   onCreateSupplier: (name: string) => Promise<Supplier>;
@@ -43,6 +44,7 @@ export function PurchaseModal({
   const [excludeFromVat, setExcludeFromVat] = useState(editing?.excludeFromVat ?? false);
   const [amortize, setAmortize] = useState(editing?.amortize ?? false);
   const [amortizeMonths, setAmortizeMonths] = useState(editing?.amortizeMonths ? String(editing.amortizeMonths) : '');
+  const [incorpItem, setIncorpItem] = useState(editing?.incorpItem ?? '');
   const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,7 @@ export function PurchaseModal({
         excludeFromVat,
         amortize: amort,
         amortizeMonths: months,
+        incorpItem: isIncorporation ? incorpItem.trim() || undefined : undefined,
         branchId: branchId || undefined,
       });
     } catch {
@@ -169,6 +172,19 @@ export function PurchaseModal({
             </b>
           </div>
         </div>
+
+        {isIncorporation && (
+          <div className="field">
+            <label>بند التأسيس</label>
+            <input list="incorp-item-list" value={incorpItem} onChange={(e) => setIncorpItem(e.target.value)} placeholder="رسوم ترخيص / تجهيزات / أثاث..." />
+            <datalist id="incorp-item-list">
+              {['رسوم ترخيص', 'تجهيزات', 'أثاث', 'ديكور', 'استشارات', 'رسوم حكومية'].map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <p className="hint">يُجمَّع التقرير حسب هذا البند.</p>
+          </div>
+        )}
 
         {isIncorporation && (
           <div className="field">

@@ -106,6 +106,7 @@ export function SuppliersPage() {
     excludeFromVat: boolean;
     amortize: boolean;
     amortizeMonths?: number;
+    incorpItem?: string;
     branchId?: string;
   }) {
     if (purchaseModal?.mode === 'edit') {

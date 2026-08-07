@@ -74,6 +74,7 @@ export class PurchasesService {
             excludeFromVat: dto.excludeFromVat ?? false,
             amortize,
             amortizeMonths,
+            incorpItem: dto.incorpItem?.trim() || null,
             total,
             currency,
             exchangeRate,
@@ -139,6 +140,7 @@ export class PurchasesService {
       // Declaration exclusion and amortization are metadata only — neither
       // touches the ledger, so they never trigger a re-post below.
       if (dto.excludeFromVat !== undefined) data.excludeFromVat = dto.excludeFromVat;
+      if (dto.incorpItem !== undefined) data.incorpItem = dto.incorpItem.trim() || null;
 
       // Re-validate whenever amortize, its months, or the category changes: a
       // category moved away from establishment costs must invalidate an
@@ -180,6 +182,55 @@ export class PurchasesService {
       });
       if (!entry) return updated;
       return tx.purchase.update({ where: { id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
+    });
+  }
+
+  /**
+   * تقرير مصاريف التأسيس — establishment costs grouped by line item.
+   *
+   * Deliberately separate from the general expense report (the mockup keeps
+   * them apart too): setting a business up is a one-off investment, and mixing
+   * it into running costs makes the first year's operating performance look far
+   * worse than it is.
+   *
+   * Amounts are base-currency, so a company that paid a foreign supplier still
+   * gets one comparable total.
+   */
+  incorporationReport(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const rows = await tx.purchase.findMany({
+        where: { category: INCORPORATION_CATEGORY },
+        select: { incorpItem: true, baseTotal: true, amortize: true, amortizeMonths: true },
+      });
+
+      const total = rows.reduce((s, p) => s + Number(p.baseTotal), 0);
+      const amortizedCount = rows.filter((p) => p.amortize).length;
+
+      const byItem = new Map<string, { count: number; total: number; amortizeMonths: number | null }>();
+      for (const p of rows) {
+        // Unlabelled purchases still belong in the report — dropping them would
+        // make the totals disagree with the ledger.
+        const key = p.incorpItem?.trim() || 'بدون بند محدَّد';
+        const cur = byItem.get(key) ?? { count: 0, total: 0, amortizeMonths: null };
+        cur.count += 1;
+        cur.total += Number(p.baseTotal);
+        if (p.amortize && cur.amortizeMonths === null) cur.amortizeMonths = p.amortizeMonths ?? 0;
+        byItem.set(key, cur);
+      }
+
+      return {
+        total,
+        invoiceCount: rows.length,
+        amortizedCount,
+        items: [...byItem.entries()]
+          .map(([item, v]) => ({
+            item,
+            count: v.count,
+            total: v.total,
+            method: v.amortizeMonths !== null ? `استهلاك (${v.amortizeMonths} شهر)` : 'دفعة واحدة',
+          }))
+          .sort((a, b) => b.total - a.total),
+      };
     });
   }
 

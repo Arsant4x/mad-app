@@ -42,6 +42,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { screen: 'suppliers', to: '/suppliers', labelKey: 'nav_suppliers' },
       { screen: 'products', to: '/products', labelKey: 'nav_products' },
+      { screen: 'suppliers', to: '/incorporation-report', labelKey: 'nav_incorp_report' },
       { screen: 'inventory', to: '/warehouses', labelKey: 'nav_warehouses' },
       { screen: 'inventory', to: '/stock-levels', labelKey: 'nav_stock_levels' },
       { screen: 'inventory', to: '/stock-movements', labelKey: 'nav_stock_movements' },

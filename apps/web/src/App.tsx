@@ -31,6 +31,7 @@ import { PropertiesPage } from './pages/properties/PropertiesPage';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { ScriptsPage } from './pages/scripts/ScriptsPage';
 import { SuppliersPage } from './pages/suppliers/SuppliersPage';
+import { IncorporationReportPage } from './pages/suppliers/IncorporationReportPage';
 import { TransactionsPage } from './pages/transactions/TransactionsPage';
 import { UnitsPage } from './pages/units/UnitsPage';
 import { WarehousesPage } from './pages/warehouses/WarehousesPage';
@@ -188,6 +189,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="suppliers">
                   <SuppliersPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="incorporation-report"
+              element={
+                <ScreenGuard screen="suppliers">
+                  <IncorporationReportPage />
                 </ScreenGuard>
               }
             />

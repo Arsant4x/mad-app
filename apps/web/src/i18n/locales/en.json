@@ -131,5 +131,6 @@
   "err_rate_fields": "Enter both currencies, the rate and the date",
   "err_rate_save": "Could not save the exchange rate",
   "nav_audit_log": "Audit Log",
-  "nav_hr": "HR"
+  "nav_hr": "HR",
+  "nav_incorp_report": "Incorporation Costs"
 }

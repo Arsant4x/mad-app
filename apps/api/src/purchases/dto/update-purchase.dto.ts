@@ -41,6 +41,11 @@ export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @Max(120)
   amortizeMonths?: number;
 
+  /// Establishment-expense line item, for the incorporation report.
+  @IsOptional()
+  @IsString()
+  incorpItem?: string;
+
   @IsOptional()
   @IsBoolean()
   paid?: boolean;

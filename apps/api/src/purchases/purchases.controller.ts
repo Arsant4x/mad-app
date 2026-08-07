@@ -15,6 +15,14 @@ import { PurchasesService } from './purchases.service';
 export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 
+  /** تقرير مصاريف التأسيس. Declared before the plain list so the router never
+   * reads "incorporation-report" as anything else. */
+  @Get('incorporation-report')
+  @RequiresAction('view')
+  incorporationReport(@CurrentTenant() tenant: TenantContext) {
+    return this.purchasesService.incorporationReport(tenant.companyId);
+  }
+
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
