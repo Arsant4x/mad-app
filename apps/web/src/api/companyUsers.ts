@@ -8,6 +8,8 @@ export interface CompanyUser {
   name: string;
   status: CompanyUserStatus;
   permissionTemplateId: string;
+  /** Exempts this employee from the master-data lock. */
+  canEditMasterData: boolean;
   permissionTemplate: PermissionTemplate;
 }
 
@@ -20,6 +22,6 @@ export interface CompanyUserInput {
 
 export const listCompanyUsers = () => apiClient.get<CompanyUser[]>('/company-users').then((r) => r.data);
 export const createCompanyUser = (dto: CompanyUserInput) => apiClient.post<CompanyUser>('/company-users', dto).then((r) => r.data);
-export const updateCompanyUser = (id: string, dto: Partial<CompanyUserInput> & { status?: CompanyUserStatus }) =>
+export const updateCompanyUser = (id: string, dto: Partial<CompanyUserInput> & { status?: CompanyUserStatus; canEditMasterData?: boolean }) =>
   apiClient.patch<CompanyUser>(`/company-users/${id}`, dto).then((r) => r.data);
 export const deleteCompanyUser = (id: string) => apiClient.delete(`/company-users/${id}`);

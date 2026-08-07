@@ -9,6 +9,7 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { SubscriptionPage } from './pages/subscription/SubscriptionPage';
 import { AuditLogPage } from './pages/audit/AuditLogPage';
+import { TrashPage } from './pages/trash/TrashPage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
 import { MaintenancePage } from './pages/maintenance/MaintenancePage';
@@ -68,6 +69,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="audit">
                   <AuditLogPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="trash"
+              element={
+                <ScreenGuard screen="audit">
+                  <TrashPage />
                 </ScreenGuard>
               }
             />

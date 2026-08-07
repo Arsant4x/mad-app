@@ -132,5 +132,6 @@
   "err_rate_save": "تعذّر حفظ سعر الصرف",
   "nav_audit_log": "سجل التدقيق",
   "nav_hr": "شؤون الموظفين",
-  "nav_incorp_report": "مصاريف التأسيس"
+  "nav_incorp_report": "مصاريف التأسيس",
+  "nav_trash": "سلة المحذوفات"
 }

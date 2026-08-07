@@ -132,5 +132,6 @@
   "err_rate_save": "Could not save the exchange rate",
   "nav_audit_log": "Audit Log",
   "nav_hr": "HR",
-  "nav_incorp_report": "Incorporation Costs"
+  "nav_incorp_report": "Incorporation Costs",
+  "nav_trash": "Trash"
 }

@@ -18,6 +18,8 @@ export interface CompanyProfile {
   city: string | null;
   postalCode: string | null;
   logoFileKey: string | null;
+  /** Freezes properties/contracts company-wide. */
+  masterDataLocked: boolean;
 }
 
 export interface CompanyProfileInput {
@@ -35,6 +37,7 @@ export interface CompanyProfileInput {
   postalCode?: string;
   /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
   logoFileKey?: string;
+  masterDataLocked?: boolean;
 }
 
 export const getCompanyProfile = () => apiClient.get<CompanyProfile>('/company-profile').then((r) => r.data);

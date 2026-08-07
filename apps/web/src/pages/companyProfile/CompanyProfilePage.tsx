@@ -38,6 +38,7 @@ export function CompanyProfilePage() {
   // The stored key is what gets saved; `logoPreviewUrl` is a short-lived signed
   // URL just for display, refetched whenever the key changes.
   const [logoFileKey, setLogoFileKey] = useState('');
+  const [masterDataLocked, setMasterDataLocked] = useState(false);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -59,6 +60,7 @@ export function CompanyProfilePage() {
         setCity(p.city ?? '');
         setPostalCode(p.postalCode ?? '');
         setLogoFileKey(p.logoFileKey ?? '');
+        setMasterDataLocked(p.masterDataLocked ?? false);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -149,6 +151,7 @@ export function CompanyProfilePage() {
         city: city.trim(),
         postalCode: postalCode.trim(),
         logoFileKey,
+        masterDataLocked,
       });
       setSaved(true);
     } catch (e) {
@@ -253,6 +256,22 @@ export function CompanyProfilePage() {
       </div>
 
       <ZatcaOnboardingCard canEdit={canEdit} />
+
+      {/* Lives here, in the company's own settings, rather than in a section of
+          its own — it is a property of the company like its VAT number is. */}
+      <div className="card">
+        <div className="card-title" style={{ marginBottom: 14 }}>
+          حماية البيانات الرئيسية
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: canEdit ? 'pointer' : 'default' }}>
+          <input type="checkbox" style={{ width: 'auto' }} checked={masterDataLocked} disabled={!canEdit} onChange={(e) => setMasterDataLocked(e.target.checked)} />
+          قفل العقارات والعقود — لا يعدّلها إلا المالك أو موظف مُستثنى
+        </label>
+        <p className="hint" style={{ marginTop: 6 }}>
+          عند التفعيل تبقى القراءة والتقارير كما هي للجميع، ويُمنع فقط الإضافة والتعديل والحذف على العقارات والعقود.
+          استثنِ موظفاً بعينه من شاشة «حسابات الموظفين».
+        </p>
+      </div>
 
       <div className="card">
         <div className="card-title" style={{ marginBottom: 14 }}>

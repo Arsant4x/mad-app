@@ -30,7 +30,7 @@ export function CompanyUsersPage() {
     reload().finally(() => setLoading(false));
   }, []);
 
-  async function handleSave(data: Partial<CompanyUserInput>) {
+  async function handleSave(data: Partial<CompanyUserInput> & { canEditMasterData?: boolean }) {
     if (modal?.mode === 'edit') {
       await updateCompanyUser(modal.user.id, data);
     } else {

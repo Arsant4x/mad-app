@@ -12,12 +12,13 @@ export function CompanyUserModal({
   templates: PermissionTemplate[];
   editing: CompanyUser | null;
   onCancel: () => void;
-  onSave: (data: Partial<CompanyUserInput>) => Promise<void>;
+  onSave: (data: Partial<CompanyUserInput> & { canEditMasterData?: boolean }) => Promise<void>;
 }) {
   const [name, setName] = useState(editing?.name ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? templates[0]?.id ?? '');
+  const [canEditMasterData, setCanEditMasterData] = useState(editing?.canEditMasterData ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,7 @@ export function CompanyUserModal({
         ...(username.trim() ? { username: username.trim() } : {}),
         ...(password ? { password } : {}),
         permissionTemplateId,
+        canEditMasterData,
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -75,6 +77,15 @@ export function CompanyUserModal({
               </option>
             ))}
           </select>
+        </div>
+        {/* Sits with the rest of this employee's permissions — the natural
+            place to ask "what may this person touch". */}
+        <div className="field">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" style={{ width: 'auto' }} checked={canEditMasterData} onChange={(e) => setCanEditMasterData(e.target.checked)} />
+            استثناء من قفل البيانات الرئيسية
+          </label>
+          <p className="hint" style={{ marginTop: 4 }}>يسمح له بتعديل العقارات والعقود حتى عندما تكون مقفلة على بقية الموظفين.</p>
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
