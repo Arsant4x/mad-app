@@ -1,5 +1,14 @@
 import { useState } from 'react';
-import { ALLOWED_SCREENS, SCREEN_LABELS, type PermissionTemplate, type TemplateInput } from '../../api/templates';
+import {
+  ACTION_LABELS,
+  ALLOWED_SCREENS,
+  SCREEN_ACTIONS,
+  SCREEN_LABELS,
+  type PermissionTemplate,
+  type ScreenAction,
+  type ScreenActionMap,
+  type TemplateInput,
+} from '../../api/templates';
 import i18n from '../../i18n';
 
 export function TemplateModal({
@@ -13,20 +22,42 @@ export function TemplateModal({
 }) {
   const [name, setName] = useState(editing?.name ?? '');
   const [screens, setScreens] = useState<Set<string>>(new Set(editing?.allowedScreens ?? ['dashboard']));
+  // Per-screen actions. A screen missing from this map means "all actions",
+  // which is exactly how the server reads it too.
+  const [actions, setActions] = useState<ScreenActionMap>(editing?.screenActions ?? {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function toggle(key: string) {
+  function toggleScreen(key: string) {
     setScreens((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+        // Dropping a screen drops its action detail with it.
+        setActions((a) => {
+          const copy = { ...a };
+          delete copy[key];
+          return copy;
+        });
+      } else next.add(key);
       return next;
     });
   }
 
-  function selectAll(checked: boolean) {
+  function toggleAction(screen: string, action: ScreenAction) {
+    setActions((prev) => {
+      // Undetailed means "all", so the first click starts from the full set and
+      // removes one — otherwise ticking a box would silently *widen* nothing and
+      // unticking would look like it did nothing.
+      const current = prev[screen] ?? [...SCREEN_ACTIONS];
+      const next = current.includes(action) ? current.filter((a) => a !== action) : [...current, action];
+      return { ...prev, [screen]: next };
+    });
+  }
+
+  function selectAllScreens(checked: boolean) {
     setScreens(checked ? new Set(ALLOWED_SCREENS) : new Set());
+    if (!checked) setActions({});
   }
 
   async function handleSubmit() {
@@ -37,13 +68,18 @@ export function TemplateModal({
     }
     const finalScreens = new Set(screens);
     finalScreens.add('dashboard');
-    if (finalScreens.size === 0) {
-      setError(i18n.t('err_template_screen_required'));
-      return;
+
+    // Only send action detail for screens still selected, and drop entries that
+    // grant everything anyway (keeps the stored map minimal and readable).
+    const finalActions: ScreenActionMap = {};
+    for (const [screen, list] of Object.entries(actions)) {
+      if (!finalScreens.has(screen) || list.length === 0 || list.length === SCREEN_ACTIONS.length) continue;
+      finalActions[screen] = list;
     }
+
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: [...finalScreens] });
+      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: [...finalScreens], screenActions: finalActions });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? i18n.t('err_template_save'));
@@ -54,7 +90,7 @@ export function TemplateModal({
 
   return (
     <div className="overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="modal-head">
           <div className="modal-title">{editing ? 'تعديل النموذج' : 'نموذج جديد'}</div>
           <button className="modal-close" onClick={onCancel}>
@@ -66,24 +102,42 @@ export function TemplateModal({
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: محاسب خارجي، مدير مبيعات..." />
         </div>
         <p className="field hint" style={{ marginBottom: 10 }}>
-          اختر الأقسام اللي يسمح لهذا النموذج بالوصول لها:
+          اختر الأقسام، ثم حدّد ما يُسمح به داخل كل قسم. قسم بلا تحديد أفعال = كل الصلاحيات عليه.
         </p>
         <div style={{ marginBottom: 8 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => selectAll(true)}>
+          <button className="btn btn-ghost btn-sm" onClick={() => selectAllScreens(true)}>
             تحديد الكل
           </button>{' '}
-          <button className="btn btn-ghost btn-sm" onClick={() => selectAll(false)}>
+          <button className="btn btn-ghost btn-sm" onClick={() => selectAllScreens(false)}>
             إلغاء التحديد
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-          {ALLOWED_SCREENS.map((key) => (
-            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer', fontSize: 'calc(12px * var(--font-scale))' }}>
-              <input type="checkbox" checked={screens.has(key)} onChange={() => toggle(key)} style={{ width: 'auto' }} />
-              {SCREEN_LABELS[key]}
-            </label>
-          ))}
+
+        <div style={{ maxHeight: 380, overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
+          {ALLOWED_SCREENS.map((key) => {
+            const on = screens.has(key);
+            const granted = actions[key] ?? [...SCREEN_ACTIONS];
+            return (
+              <div key={key} style={{ borderBottom: '1px solid var(--line)', padding: '8px 10px', background: on ? 'transparent' : 'var(--paper)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: on ? 600 : 400 }}>
+                  <input type="checkbox" checked={on} onChange={() => toggleScreen(key)} style={{ width: 'auto' }} />
+                  {SCREEN_LABELS[key]}
+                </label>
+                {on && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6, paddingRight: 22 }}>
+                    {SCREEN_ACTIONS.map((action) => (
+                      <label key={action} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 'calc(11.5px * var(--font-scale))', color: 'var(--muted)' }}>
+                        <input type="checkbox" checked={granted.includes(action)} onChange={() => toggleAction(key, action)} style={{ width: 'auto' }} />
+                        {ACTION_LABELS[action]}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
+
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
