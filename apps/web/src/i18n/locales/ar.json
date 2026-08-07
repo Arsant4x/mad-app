@@ -130,5 +130,6 @@
   "err_currency_save": "تعذّر حفظ العملة",
   "err_currency_delete": "تعذّر حذف العملة",
   "err_rate_fields": "أدخل العملتين وسعر الصرف والتاريخ",
-  "err_rate_save": "تعذّر حفظ سعر الصرف"
+  "err_rate_save": "تعذّر حفظ سعر الصرف",
+  "nav_audit_log": "سجل التدقيق"
 }

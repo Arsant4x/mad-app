@@ -8,6 +8,7 @@ import { BranchesPage } from './pages/branches/BranchesPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { SubscriptionPage } from './pages/subscription/SubscriptionPage';
+import { AuditLogPage } from './pages/audit/AuditLogPage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
 import { MaintenancePage } from './pages/maintenance/MaintenancePage';
@@ -61,6 +62,14 @@ export default function App() {
             />
             <Route path="company-profile" element={<CompanyProfilePage />} />
             <Route path="subscription" element={<SubscriptionPage />} />
+            <Route
+              path="audit-log"
+              element={
+                <ScreenGuard screen="audit">
+                  <AuditLogPage />
+                </ScreenGuard>
+              }
+            />
             <Route
               path="company-users"
               element={

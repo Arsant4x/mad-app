@@ -78,6 +78,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     items: [
       { screen: 'obligations', to: '/obligations', labelKey: 'nav_obligations' },
       { screen: 'scripts', to: '/scripts', labelKey: 'nav_scripts' },
+      { screen: 'audit', to: '/audit-log', labelKey: 'nav_audit_log' },
     ],
   },
   { labelKey: 'grp_reports', items: [{ screen: 'reports', to: '/reports', labelKey: 'nav_reports' }] },
