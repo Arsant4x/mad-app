@@ -12,8 +12,8 @@ export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved';
 export class UnitsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listWithStatus(tx));
+  list(companyId: string, includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listWithStatus(tx, includeArchived));
   }
 
   create(companyId: string, dto: CreateUnitDto) {
@@ -58,6 +58,16 @@ export class UnitsService {
     });
   }
 
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.unit.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.unit_not_found);
+      return tx.unit.update({ where: { id }, data: { archived } });
+    });
+  }
+
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.unit.findUnique({ where: { id } });
@@ -78,9 +88,9 @@ export class UnitsService {
    * the mockup's `unitStatusInfo`: under maintenance takes priority, then
    * whether a non-cancelled contract currently covers today, then whether an
    * active (non-expired) reservation holds the unit. */
-  private async listWithStatus(tx: Prisma.TransactionClient): Promise<(Unit & { status: UnitStatus; currentTenant: string | null; reservedBy: string | null })[]> {
+  private async listWithStatus(tx: Prisma.TransactionClient, includeArchived = false): Promise<(Unit & { status: UnitStatus; currentTenant: string | null; reservedBy: string | null })[]> {
     await expireStaleReservations(tx);
-    const units = await tx.unit.findMany({ orderBy: [{ propertyId: 'asc' }, { unitNo: 'asc' }] });
+    const units = await tx.unit.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: [{ propertyId: 'asc' }, { unitNo: 'asc' }] });
     const today = new Date();
 
     const activeContracts = await tx.contract.findMany({

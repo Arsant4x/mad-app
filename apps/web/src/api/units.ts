@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved';
 
 export interface Unit {
+  archived: boolean;
   id: string;
   propertyId: string;
   unitNo: string;
@@ -26,7 +27,10 @@ export interface UnitInput {
   underMaintenance?: boolean;
 }
 
-export const listUnits = () => apiClient.get<Unit[]>('/units').then((r) => r.data);
+export const listUnits = (includeArchived = false) => apiClient.get<Unit[]>('/units', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createUnit = (dto: UnitInput) => apiClient.post<Unit>('/units', dto).then((r) => r.data);
 export const updateUnit = (id: string, dto: Partial<Omit<UnitInput, 'propertyId' | 'unitNo'>>) => apiClient.patch<Unit>(`/units/${id}`, dto).then((r) => r.data);
 export const deleteUnit = (id: string) => apiClient.delete(`/units/${id}`);
+
+/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+export const setUnitArchived = (id: string, archived: boolean) => apiClient.patch<Unit>(`/units/${id}/archive`, { archived }).then((r) => r.data);

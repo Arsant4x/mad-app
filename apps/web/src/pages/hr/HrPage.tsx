@@ -15,6 +15,7 @@ import {
   type LeaveStatus,
   type LeaveType,
 } from '../../api/leaves';
+import { deleteAttendance, listAttendance, recordAttendance, updateAttendance, type AttendanceRecord, type AttendanceStatus } from '../../api/attendance';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, today } from '../../lib/format';
@@ -34,9 +35,9 @@ function apiError(e: unknown, fallback: string): string {
  * شؤون الموظفين — ported from the v20 mockup's `screen-hr`: a KPI row over
  * cards, one card per area, rather than a standalone page per feature.
  *
- * Only areas that actually work are rendered. Attendance and payroll cards
- * arrive when those are built — a card with a button that does nothing would
- * be exactly the hollow shell this project's rules forbid.
+ * Only areas that actually work are rendered — attendance and leaves today;
+ * the payroll card arrives when payroll exists (a dead button would be the
+ * hollow shell this project's rules forbid).
  */
 export function HrPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -58,6 +59,14 @@ export function HrPage() {
   const [typeDays, setTypeDays] = useState('');
   const [typePaid, setTypePaid] = useState(true);
 
+  // ---- الحضور والانصراف (SPEC 9.4) ----
+  const [attDate, setAttDate] = useState(today());
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [attAdding, setAttAdding] = useState(false);
+  const [attEmp, setAttEmp] = useState('');
+  const [attStatus, setAttStatus] = useState<AttendanceStatus>('PRESENT');
+  const [attCheckIn, setAttCheckIn] = useState('');
+
   const [balanceFor, setBalanceFor] = useState<{ name: string; data: LeaveBalance } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ kind: 'type' | 'request'; id: string; label: string } | null>(null);
 
@@ -67,6 +76,11 @@ export function HrPage() {
     setTypes(tps);
     setRequests(reqs);
   }
+
+  useEffect(() => {
+    listAttendance(attDate).then(setAttendance).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attDate]);
 
   useEffect(() => {
     reload()
@@ -87,8 +101,35 @@ export function HrPage() {
     }
   }
 
+  async function reloadAttendance() {
+    setAttendance(await listAttendance(attDate));
+  }
+
   const pending = useMemo(() => requests.filter((r) => r.status === 'PENDING'), [requests]);
   const approvedDays = useMemo(() => requests.filter((r) => r.status === 'APPROVED').reduce((s, r) => s + r.days, 0), [requests]);
+
+  async function submitAttendance() {
+    if (!attEmp) {
+      setError('اختر الموظف.');
+      return;
+    }
+    await run(async () => {
+      await recordAttendance({ employeeId: attEmp, date: attDate, status: attStatus, checkIn: attCheckIn || undefined });
+      await reloadAttendance();
+      setAttAdding(false);
+      setAttCheckIn('');
+    }, 'تعذّر تسجيل الحضور');
+  }
+
+  /** انصراف الآن — يختم بوقت الساعة الحالي. */
+  async function checkOutNow(rec: AttendanceRecord) {
+    const now = new Date();
+    const hhmm = String(now.getHours()).padStart(2, '0') + ':'+ String(now.getMinutes()).padStart(2, '0');
+    await run(async () => {
+      await updateAttendance(rec.id, { checkOut: hhmm });
+      await reloadAttendance();
+    }, 'تعذّر تسجيل الانصراف');
+  }
 
   async function submitRequest() {
     if (!reqEmp || !reqType) {
@@ -139,7 +180,7 @@ export function HrPage() {
       <div className="topbar">
         <div>
           <div className="page-title">شؤون الموظفين</div>
-          <div className="page-sub">الإجازات وأرصدتها — والحضور ومسيّر الرواتب عند بنائهما</div>
+          <div className="page-sub">الحضور والانصراف · الإجازات وأرصدتها — ومسيّر الرواتب عند بنائه</div>
         </div>
       </div>
 
@@ -159,9 +200,84 @@ export function HrPage() {
           <div className="kpi-value">{approvedDays}</div>
         </div>
         <div className="kpi-card neu">
-          <div className="kpi-label">أنواع الإجازات</div>
-          <div className="kpi-value">{types.length}</div>
+          <div className="kpi-label">{attDate === today() ? 'حضور اليوم' : 'حضور اليوم المحدَّد'}</div>
+          <div className="kpi-value">{attendance.filter((a) => a.status === 'PRESENT').length}</div>
         </div>
+      </div>
+
+      {/* ---------- الحضور والانصراف ---------- */}
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">الحضور والانصراف</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input type="date" value={attDate} onChange={(e) => setAttDate(e.target.value)} style={{ width: 'auto' }} />
+            <button className="btn btn-ghost btn-sm" onClick={() => setAttAdding((v) => !v)}>
+              {attAdding ? 'إلغاء' : '+ تسجيل حضور'}
+            </button>
+          </div>
+        </div>
+
+        {attAdding && (
+          <div style={{ background: 'var(--paper)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <div className="two-col">
+              <div className="field">
+                <label>الموظف</label>
+                <select value={attEmp} onChange={(e) => setAttEmp(e.target.value)}>
+                  <option value="">— اختر —</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.fullName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>الحالة</label>
+                <select value={attStatus} onChange={(e) => setAttStatus(e.target.value as AttendanceStatus)}>
+                  <option value="PRESENT">حاضر</option>
+                  <option value="ABSENT">غائب</option>
+                </select>
+              </div>
+            </div>
+            {attStatus === 'PRESENT' && (
+              <div className="field">
+                <label>وقت الحضور</label>
+                <input type="time" value={attCheckIn} onChange={(e) => setAttCheckIn(e.target.value)} style={{ width: 'auto' }} />
+              </div>
+            )}
+            <button className="btn btn-primary btn-sm" disabled={busy} onClick={submitAttendance}>حفظ</button>
+          </div>
+        )}
+
+        {attendance.length === 0 ? (
+          <p className="hint">لا سجلات لهذا اليوم.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>الموظف</th>
+                <th>الحالة</th>
+                <th>حضور</th>
+                <th>انصراف</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.map((rec) => (
+                <tr key={rec.id}>
+                  <td>{rec.employee.fullName}</td>
+                  <td><span className={`badge ${rec.status === 'PRESENT' ? 'paid' : 'overdue'}`}>{rec.status === 'PRESENT' ? 'حاضر' : 'غائب'}</span></td>
+                  <td className="num">{rec.checkIn ?? '—'}</td>
+                  <td className="num">{rec.checkOut ?? '—'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {rec.status === 'PRESENT' && !rec.checkOut && (
+                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => checkOutNow(rec)}>انصراف الآن</button>
+                    )}{' '}
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(async () => { await deleteAttendance(rec.id); await reloadAttendance(); }, 'تعذّر الحذف')}>حذف</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* ---------- طلبات الإجازة ---------- */}

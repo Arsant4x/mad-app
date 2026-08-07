@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { createPurchase, deletePurchase, listPurchases, updatePurchase, type Purchase } from '../../api/purchases';
-import { createSupplier, deleteSupplier, listSuppliers, updateSupplier, type Supplier, type SupplierInput } from '../../api/suppliers';
+import { createSupplier, deleteSupplier, listSuppliers, setSupplierArchived, updateSupplier, type Supplier, type SupplierInput } from '../../api/suppliers';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -26,6 +26,8 @@ export function SuppliersPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [sortKey, setSortKey] = useState<PurchaseSortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -40,7 +42,7 @@ export function SuppliersPage() {
   const [pendingUnpay, setPendingUnpay] = useState<Purchase | null>(null);
 
   async function reload() {
-    const [sup, pur] = await Promise.all([listSuppliers(), listPurchases()]);
+    const [sup, pur] = await Promise.all([listSuppliers(showArchived), listPurchases()]);
     setSuppliers(sup);
     setPurchases(pur);
   }
@@ -49,7 +51,8 @@ export function SuppliersPage() {
     // The picker options — filtered server-side to what this user may use.
     listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const supplierRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -163,6 +166,9 @@ export function SuppliersPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -187,7 +193,7 @@ export function SuppliersPage() {
             {supplierRows.map((s) => (
               <tr key={s.id}>
                 <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(s)}>
-                  {s.name} 👁
+                  {s.name} 👁{s.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
                 </td>
                 <td className="num">{s.vatNumber || '—'}</td>
                 <td className="num">{s.phone || '—'}</td>
@@ -197,6 +203,7 @@ export function SuppliersPage() {
                     actions={[
                       { label: '👁 عرض التفاصيل', onClick: () => setDetailFor(s) },
                       { label: '✎ تعديل', onClick: () => setSupplierModal({ mode: 'edit', supplier: s }) },
+                      { label: s.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setSupplierArchived(s.id, !s.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDeleteSupplier(s), danger: true },
                     ]}

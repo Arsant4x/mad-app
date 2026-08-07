@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCustomer, deleteCustomer, listCustomers, updateCustomer, type Customer, type CustomerInput } from '../../api/customers';
+import { createCustomer, deleteCustomer, listCustomers, setCustomerArchived, updateCustomer, type Customer, type CustomerInput } from '../../api/customers';
 import { listInvoices, type Invoice } from '../../api/invoices';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -13,20 +13,23 @@ export function CustomersPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; customer: Customer } | null>(null);
   const [detailFor, setDetailFor] = useState<Customer | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Customer | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    const [cust, inv] = await Promise.all([listCustomers(), listInvoices()]);
+    const [cust, inv] = await Promise.all([listCustomers(showArchived), listInvoices()]);
     setCustomers(cust);
     setInvoices(inv);
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const balanceByCustomer = useMemo(() => {
     const map = new Map<string, number>();
@@ -90,6 +93,9 @@ export function CustomersPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -117,7 +123,7 @@ export function CustomersPage() {
               return (
                 <tr key={c.id}>
                   <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(c)}>
-                    {c.name} 👁
+                    {c.name} 👁{c.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
                   </td>
                   <td className="num">{c.vatNumber || '—'}</td>
                   <td className="num">{c.phone || '—'}</td>
@@ -130,6 +136,7 @@ export function CustomersPage() {
                       actions={[
                         { label: '👁 عرض التفاصيل', onClick: () => setDetailFor(c) },
                         { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', customer: c }) },
+                        { label: c.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setCustomerArchived(c.id, !c.archived).then(reload) },
                         '-',
                         { label: '🗑 حذف', onClick: () => setPendingDelete(c), danger: true },
                       ]}

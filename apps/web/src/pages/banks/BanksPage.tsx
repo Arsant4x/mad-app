@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
-import { createBank, deleteBank, listBanks, updateBank, type Bank, type BankInput } from '../../api/banks';
+import { createBank, deleteBank, listBanks, setBankArchived, updateBank, type Bank, type BankInput } from '../../api/banks';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -11,18 +11,21 @@ export function BanksPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Bank | null>(null);
 
   async function reload() {
-    setBanks(await listBanks());
+    setBanks(await listBanks(showArchived));
   }
 
   useEffect(() => {
     // The picker options — filtered server-side to what this user may use.
     listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -71,6 +74,9 @@ export function BanksPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -95,7 +101,7 @@ export function BanksPage() {
             )}
             {rows.map((b) => (
               <tr key={b.id}>
-                <td>{b.name}</td>
+                <td>{b.name}{b.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td className="num">{b.iban || '—'}</td>
                 <td className="num">{fmt(b.balance)}</td>
                 <td className="num">{fmt(b.openingBalance)}</td>
@@ -104,6 +110,7 @@ export function BanksPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', bank: b }) },
+                      { label: b.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(b), danger: true },
                     ]}

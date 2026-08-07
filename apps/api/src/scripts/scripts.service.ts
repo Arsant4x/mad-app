@@ -9,8 +9,8 @@ import { MSG } from '../common/i18n/messages';
 export class ScriptsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.messageScript.findMany({ orderBy: { createdAt: 'desc' } }));
+  list(companyId: string, includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.messageScript.findMany({ ...{ orderBy: { createdAt: 'desc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
   }
 
   create(companyId: string, dto: CreateScriptDto) {
@@ -26,6 +26,16 @@ export class ScriptsService {
       const existing = await tx.messageScript.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.template_not_found);
       return tx.messageScript.update({ where: { id }, data: dto });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.messageScript.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.template_not_found);
+      return tx.messageScript.update({ where: { id }, data: { archived } });
     });
   }
 

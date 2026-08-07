@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createProperty, deleteProperty, listProperties, updateProperty, type Property, type PropertyInput } from '../../api/properties';
+import { createProperty, deleteProperty, listProperties, setPropertyArchived, updateProperty, type Property, type PropertyInput } from '../../api/properties';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { listUnits, type Unit } from '../../api/units';
@@ -25,19 +25,22 @@ export function PropertiesPage() {
   const [view, setView] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; property: Property } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Property | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    const [props, us] = await Promise.all([listProperties(), listUnits()]);
+    const [props, us] = await Promise.all([listProperties(showArchived), listUnits()]);
     setProperties(props);
     setUnits(us);
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -100,6 +103,9 @@ export function PropertiesPage() {
             خريطة
           </button>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       {/* The map shows the *filtered* set, so searching narrows both views the
@@ -129,7 +135,7 @@ export function PropertiesPage() {
             )}
             {rows.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td>{p.name}{p.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td>{p.address || '—'}</td>
                 <td className="num">{p.floors}</td>
                 <td>{p.activityType ? ACTIVITY_LABEL[p.activityType] : '—'}</td>
@@ -138,6 +144,7 @@ export function PropertiesPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', property: p }) },
+                      { label: p.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setPropertyArchived(p.id, !p.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(p), danger: true },
                     ]}

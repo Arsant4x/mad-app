@@ -9,8 +9,8 @@ import { MSG } from '../common/i18n/messages';
 export class SuppliersService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.supplier.findMany({ orderBy: { name: 'asc' } }));
+  list(companyId: string, includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.supplier.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
   }
 
   create(companyId: string, dto: CreateSupplierDto) {
@@ -42,6 +42,16 @@ export class SuppliersService {
       if (dto.category !== undefined) data.category = dto.category || null;
 
       return tx.supplier.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.supplier.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.supplier_not_found);
+      return tx.supplier.update({ where: { id }, data: { archived } });
     });
   }
 

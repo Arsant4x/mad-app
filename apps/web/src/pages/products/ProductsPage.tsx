@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createProduct, deleteProduct, listProducts, updateProduct, type Product, type ProductInput } from '../../api/products';
+import { createProduct, deleteProduct, listProducts, setProductArchived, updateProduct, type Product, type ProductInput } from '../../api/products';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -9,16 +9,19 @@ export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; product: Product } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null);
 
   async function reload() {
-    setProducts(await listProducts());
+    setProducts(await listProducts(showArchived));
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -74,6 +77,9 @@ export function ProductsPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -100,7 +106,7 @@ export function ProductsPage() {
             )}
             {rows.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td>{p.name}{p.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td className="num">{p.sku || '—'}</td>
                 <td>{p.category || '—'}</td>
                 <td>{p.unit || '—'}</td>
@@ -111,6 +117,7 @@ export function ProductsPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', product: p }) },
+                      { label: p.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setProductArchived(p.id, !p.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(p), danger: true },
                     ]}

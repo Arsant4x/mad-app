@@ -265,6 +265,7 @@ model Company {
   messageScripts   MessageScript[]
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
+  attendance       AttendanceRecord[]
   auditLogs        AuditLog[]
   deletionRequests AccountDeletionRequest[]
 
@@ -851,6 +852,7 @@ model Employee {
   updatedAt DateTime @updatedAt
 
   leaveRequests LeaveRequest[]
+  attendance    AttendanceRecord[]
 
 
   /// Soft delete: set instead of removing the row, so it can be restored
@@ -997,6 +999,36 @@ model LeaveRequest {
 
   @@index([employeeId])
   @@map("leave_requests")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+/// One employee, one day. Check-in/out are wall-clock strings ("08:05") —
+/// the mockup records what the clock on the wall said, and payroll math over
+/// minutes is a later feature that can parse them when it exists.
+model AttendanceRecord {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  date     DateTime         @db.Date
+  status   AttendanceStatus @default(PRESENT)
+  checkIn  String?
+  checkOut String?
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One row per employee per day — a second check-in edits, never duplicates.
+  @@unique([employeeId, date])
+  @@map("attendance_records")
 }
 
 /// Bank account for the company. `balance` is the current balance and

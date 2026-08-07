@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createScript, deleteScript, listScripts, updateScript, type MessageScript, type ScriptAudience, type ScriptInput } from '../../api/scripts';
+import { createScript, deleteScript, listScripts, setScriptArchived, updateScript, type MessageScript, type ScriptAudience, type ScriptInput } from '../../api/scripts';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { ScriptModal } from './ScriptModal';
@@ -15,18 +15,21 @@ export function ScriptsPage() {
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [audienceFilter, setAudienceFilter] = useState<'all' | ScriptAudience>('all');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; script: MessageScript } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<MessageScript | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    setScripts(await listScripts());
+    setScripts(await listScripts(showArchived));
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -84,6 +87,9 @@ export function ScriptsPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
         <div className="field" style={{ marginBottom: 0 }}>
           <select value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value as 'all' | ScriptAudience)}>
             <option value="all">كل الفئات</option>
@@ -119,12 +125,13 @@ export function ScriptsPage() {
                 <td>
                   <span className={`type-tag ${AUDIENCE_META[s.audience].tagClass}`}>{AUDIENCE_META[s.audience].label}</span>
                 </td>
-                <td>{s.title}</td>
+                <td>{s.title}{s.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td style={{ maxWidth: 420, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.text}</td>
                 <td>
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', script: s }) },
+                      { label: s.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setScriptArchived(s.id, !s.archived).then(reload) },
                       { label: '🗑 حذف', onClick: () => setPendingDelete(s), danger: true },
                     ]}
                   />

@@ -4,6 +4,7 @@ export type Ownership = 'owned' | 'leased' | 'managed';
 export type ActivityType = 'residential' | 'shop' | 'showroom' | 'office' | 'warehouse' | 'mixed';
 
 export interface Property {
+  archived: boolean;
   id: string;
   name: string;
   address: string | null;
@@ -38,7 +39,10 @@ export interface PropertyInput {
   lng?: number;
 }
 
-export const listProperties = () => apiClient.get<Property[]>('/properties').then((r) => r.data);
+export const listProperties = (includeArchived = false) => apiClient.get<Property[]>('/properties', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createProperty = (dto: PropertyInput) => apiClient.post<Property>('/properties', dto).then((r) => r.data);
 export const updateProperty = (id: string, dto: Partial<PropertyInput>) => apiClient.patch<Property>(`/properties/${id}`, dto).then((r) => r.data);
 export const deleteProperty = (id: string) => apiClient.delete(`/properties/${id}`);
+
+/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+export const setPropertyArchived = (id: string, archived: boolean) => apiClient.patch<Property>(`/properties/${id}/archive`, { archived }).then((r) => r.data);

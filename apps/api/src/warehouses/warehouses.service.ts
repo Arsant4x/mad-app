@@ -10,9 +10,9 @@ import { MSG } from '../common/i18n/messages';
 export class WarehousesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, includeArchived = false) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const [warehouses, quantities] = await Promise.all([tx.warehouse.findMany({ orderBy: { name: 'asc' } }), computeStockQuantities(tx)]);
+      const [warehouses, quantities] = await Promise.all([tx.warehouse.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: { name: 'asc' } }), computeStockQuantities(tx)]);
 
       return warehouses.map((w) => {
         let itemCount = 0;
@@ -48,6 +48,16 @@ export class WarehousesService {
       if (dto.manager !== undefined) data.manager = dto.manager;
 
       return tx.warehouse.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.warehouse.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.warehouse_not_found);
+      return tx.warehouse.update({ where: { id }, data: { archived } });
     });
   }
 

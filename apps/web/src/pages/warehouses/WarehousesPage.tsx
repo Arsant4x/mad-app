@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createWarehouse, deleteWarehouse, listWarehouses, updateWarehouse, type Warehouse, type WarehouseInput } from '../../api/warehouses';
+import { createWarehouse, deleteWarehouse, listWarehouses, setWarehouseArchived, updateWarehouse, type Warehouse, type WarehouseInput } from '../../api/warehouses';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -10,17 +10,20 @@ export function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; warehouse: Warehouse } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Warehouse | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    setWarehouses(await listWarehouses());
+    setWarehouses(await listWarehouses(showArchived));
   }
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -75,6 +78,9 @@ export function WarehousesPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -99,7 +105,7 @@ export function WarehousesPage() {
             )}
             {rows.map((w) => (
               <tr key={w.id}>
-                <td>{w.name}</td>
+                <td>{w.name}{w.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td>{w.location || '—'}</td>
                 <td>{w.manager || '—'}</td>
                 <td className="num">{w.itemCount}</td>
@@ -108,6 +114,7 @@ export function WarehousesPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', warehouse: w }) },
+                      { label: w.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(w), danger: true },
                     ]}

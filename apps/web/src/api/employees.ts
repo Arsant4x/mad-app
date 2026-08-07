@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export type EmployeeStatus = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
 
 export interface Employee {
+  archived: boolean;
   id: string;
   branchId: string | null;
   fullName: string;
@@ -26,7 +27,10 @@ export interface EmployeeInput {
   status?: EmployeeStatus;
 }
 
-export const listEmployees = () => apiClient.get<Employee[]>('/employees').then((r) => r.data);
+export const listEmployees = (includeArchived = false) => apiClient.get<Employee[]>('/employees', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createEmployee = (dto: EmployeeInput) => apiClient.post<Employee>('/employees', dto).then((r) => r.data);
 export const updateEmployee = (id: string, dto: Partial<EmployeeInput>) => apiClient.patch<Employee>(`/employees/${id}`, dto).then((r) => r.data);
 export const deleteEmployee = (id: string) => apiClient.delete(`/employees/${id}`);
+
+/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+export const setEmployeeArchived = (id: string, archived: boolean) => apiClient.patch<Employee>(`/employees/${id}/archive`, { archived }).then((r) => r.data);

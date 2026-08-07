@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listProperties, type Property } from '../../api/properties';
 import { cancelReservation, createReservation, listReservations, type Reservation, type ReservationInput } from '../../api/reservations';
-import { createUnit, deleteUnit, listUnits, updateUnit, type Unit, type UnitInput, type UnitStatus } from '../../api/units';
+import { createUnit, deleteUnit, listUnits, setUnitArchived, updateUnit, type Unit, type UnitInput, type UnitStatus } from '../../api/units';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -21,6 +21,8 @@ export function UnitsPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [propertyFilter, setPropertyFilter] = useState<string>('all');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; unit: Unit } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Unit | null>(null);
@@ -30,7 +32,7 @@ export function UnitsPage() {
   const [pendingCancelReservation, setPendingCancelReservation] = useState<{ unit: Unit; reservation: Reservation } | null>(null);
 
   async function reload() {
-    const [u, p, r] = await Promise.all([listUnits(), listProperties(), listReservations()]);
+    const [u, p, r] = await Promise.all([listUnits(showArchived), listProperties(), listReservations()]);
     setUnits(u);
     setProperties(p);
     setReservations(r);
@@ -38,7 +40,8 @@ export function UnitsPage() {
 
   useEffect(() => {
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const propertyById = useMemo(() => new Map(properties.map((p) => [p.id, p])), [properties]);
   const activeReservationByUnit = useMemo(
@@ -126,6 +129,9 @@ export function UnitsPage() {
                 <path d="M21 21l-4-4" />
               </svg>
             </div>
+            <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+              عرض المؤرشفة
+            </button>
             <div className="field" style={{ marginBottom: 0 }}>
               <select value={propertyFilter} onChange={(e) => setPropertyFilter(e.target.value)}>
                 <option value="all">كل العقارات</option>
@@ -164,7 +170,7 @@ export function UnitsPage() {
                   return (
                     <tr key={u.id}>
                       <td>{propertyById.get(u.propertyId)?.name ?? '—'}</td>
-                      <td className="num">{u.unitNo}</td>
+                      <td className="num">{u.unitNo}{u.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                       <td>{u.floor || '—'}</td>
                       <td>{u.type}</td>
                       <td className="num">{fmt(u.rentMonthly)}</td>
@@ -184,6 +190,7 @@ export function UnitsPage() {
                             ...(u.status === 'vacant' ? [{ label: '💳 حجز بعربون', onClick: () => setReservingUnit(u) }] : []),
                             ...(activeRsv ? [{ label: '✕ إلغاء الحجز', onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
                             { label: u.underMaintenance ? '✓ إنهاء الصيانة' : '🔧 وضع تحت الصيانة', onClick: () => toggleMaintenance(u) },
+                            { label: u.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
                             '-',
                             { label: '🗑 حذف', onClick: () => setPendingDelete(u), danger: true },
                           ]}

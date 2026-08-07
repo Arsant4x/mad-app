@@ -11,8 +11,8 @@ import { MSG } from '../common/i18n/messages';
 export class BanksService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.bank.findMany({ where: branchFilter(allowedBranchIds), orderBy: { name: 'asc' } }));
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.bank.findMany({ where: { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }) }, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateBankDto) {
@@ -62,6 +62,16 @@ export class BanksService {
       }
 
       return tx.bank.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.bank.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.bank_not_found);
+      return tx.bank.update({ where: { id }, data: { archived } });
     });
   }
 

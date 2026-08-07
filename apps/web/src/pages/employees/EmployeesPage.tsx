@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
-import { createEmployee, deleteEmployee, listEmployees, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
+import { createEmployee, deleteEmployee, listEmployees, setEmployeeArchived, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -17,18 +17,21 @@ export function EmployeesPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Include archived records; off by day-to-day default (gap-analysis §1).
+  const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; employee: Employee } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Employee | null>(null);
 
   async function reload() {
-    setEmployees(await listEmployees());
+    setEmployees(await listEmployees(showArchived));
   }
 
   useEffect(() => {
     // The picker options — filtered server-side to what this user may use.
     listBranches().then(setBranches);
     reload().finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -83,6 +86,9 @@ export function EmployeesPage() {
             <path d="M21 21l-4-4" />
           </svg>
         </div>
+        <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
+          عرض المؤرشفة
+        </button>
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -109,7 +115,7 @@ export function EmployeesPage() {
             )}
             {rows.map((e) => (
               <tr key={e.id}>
-                <td>{e.fullName}</td>
+                <td>{e.fullName}{e.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td>{e.jobTitle || '—'}</td>
                 <td>{e.department || '—'}</td>
                 <td className="num">{dfmt(e.hireDate)}</td>
@@ -122,6 +128,7 @@ export function EmployeesPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', employee: e }) },
+                      { label: e.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setEmployeeArchived(e.id, !e.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(e), danger: true },
                     ]}

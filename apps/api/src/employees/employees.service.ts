@@ -10,8 +10,8 @@ import { MSG } from '../common/i18n/messages';
 export class EmployeesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.employee.findMany({ where: branchFilter(allowedBranchIds), orderBy: { fullName: 'asc' } }));
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.employee.findMany({ where: { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }) }, orderBy: { fullName: 'asc' } }));
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateEmployeeDto) {
@@ -49,6 +49,16 @@ export class EmployeesService {
       if (dto.status !== undefined) data.status = dto.status;
 
       return tx.employee.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.employee.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.employee_not_found);
+      return tx.employee.update({ where: { id }, data: { archived } });
     });
   }
 

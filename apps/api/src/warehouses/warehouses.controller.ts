@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards , Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { WarehousesService } from './warehouses.service';
@@ -17,8 +18,8 @@ export class WarehousesController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.warehousesService.list(tenant.companyId);
+  list(@CurrentTenant() tenant: TenantContext, @Query('includeArchived') includeArchived?: string) {
+    return this.warehousesService.list(tenant.companyId, includeArchived === 'true');
   }
 
   @Post()
@@ -31,6 +32,13 @@ export class WarehousesController {
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateWarehouseDto) {
     return this.warehousesService.update(tenant.companyId, id, dto);
+  }
+
+  /** أرشفة/إلغاء أرشفة — يخفيه من القوائم اليومية ويبقيه في الحسابات. */
+  @Patch(':id/archive')
+  @RequiresAction('edit')
+  setArchived(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: SetArchivedDto) {
+    return this.warehousesService.setArchived(tenant.companyId, id, dto.archived);
   }
 
   @Delete(':id')

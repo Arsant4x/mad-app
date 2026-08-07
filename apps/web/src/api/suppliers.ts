@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 
 export interface Supplier {
+  archived: boolean;
   id: string;
   name: string;
   vatNumber: string | null;
@@ -15,7 +16,10 @@ export interface SupplierInput {
   category?: string;
 }
 
-export const listSuppliers = () => apiClient.get<Supplier[]>('/suppliers').then((r) => r.data);
+export const listSuppliers = (includeArchived = false) => apiClient.get<Supplier[]>('/suppliers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createSupplier = (dto: SupplierInput) => apiClient.post<Supplier>('/suppliers', dto).then((r) => r.data);
 export const updateSupplier = (id: string, dto: Partial<SupplierInput>) => apiClient.patch<Supplier>(`/suppliers/${id}`, dto).then((r) => r.data);
 export const deleteSupplier = (id: string) => apiClient.delete(`/suppliers/${id}`);
+
+/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+export const setSupplierArchived = (id: string, archived: boolean) => apiClient.patch<Supplier>(`/suppliers/${id}/archive`, { archived }).then((r) => r.data);

@@ -9,8 +9,8 @@ import { MSG } from '../common/i18n/messages';
 export class PropertiesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.property.findMany({ orderBy: { name: 'asc' } }));
+  list(companyId: string, includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.property.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
   }
 
   create(companyId: string, dto: CreatePropertyDto) {
@@ -60,6 +60,16 @@ export class PropertiesService {
       if (dto.lng !== undefined) data.lng = dto.lng;
 
       return tx.property.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.property.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.property_not_found);
+      return tx.property.update({ where: { id }, data: { archived } });
     });
   }
 

@@ -17,8 +17,8 @@ function generateBarcode(): string {
 export class ProductsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.product.findMany({ orderBy: { name: 'asc' } }));
+  list(companyId: string, includeArchived = false) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.product.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
   }
 
   create(companyId: string, dto: CreateProductDto) {
@@ -56,6 +56,16 @@ export class ProductsService {
       if (dto.barcode !== undefined) data.barcode = dto.barcode || existing.barcode;
 
       return tx.product.update({ where: { id }, data });
+    });
+  }
+
+  /** Hidden from day-to-day lists while staying in the books — archiving
+   * is presentation, deletion is the trash. */
+  setArchived(companyId: string, id: string, archived: boolean) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.product.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.product_not_found);
+      return tx.product.update({ where: { id }, data: { archived } });
     });
   }
 
