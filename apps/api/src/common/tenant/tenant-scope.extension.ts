@@ -51,6 +51,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'AccountDeletionRequest',
   'AttendanceRecord',
   'PurchaseAttachment',
+  'PosShift',
   'MaintenanceRequest',
   'ReminderPolicy',
   'RentReminder',

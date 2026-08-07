@@ -22,6 +22,7 @@ export const ALLOWED_SCREENS = [
   'reports',
   'scripts',
   'audit',
+  'pos',
 ] as const;
 
 /**

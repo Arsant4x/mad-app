@@ -150,5 +150,6 @@
   "reset_password_label": "New password",
   "reset_submit": "Set password",
   "reset_success": "Password changed — sign in with it now.",
-  "reset_error": "Could not set the password"
+  "reset_error": "Could not set the password",
+  "nav_pos": "POS"
 }

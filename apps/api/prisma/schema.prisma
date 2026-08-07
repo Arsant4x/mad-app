@@ -276,6 +276,7 @@ model Company {
   deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
+  posShifts           PosShift[]
 
   @@map("companies")
 }
@@ -386,6 +387,7 @@ model Branch {
   employees        Employee[]
   banks            Bank[]
   bankTransactions BankTransaction[]
+  posShifts PosShift[]
   invoices         Invoice[]
   purchases        Purchase[]
   journalEntries   JournalEntry[]
@@ -639,6 +641,12 @@ model Invoice {
   taxTotal Decimal @db.Decimal(18, 2)
   total    Decimal @db.Decimal(18, 2)
   notes    String?
+
+  /// Set only on POS sales: the shift the sale rang on, and how it was paid
+  /// (CASH/CARD) — cash feeds the shift's expected-drawer math.
+  posShiftId    String?
+  posShift      PosShift? @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
+  paymentMethod String?
 
   /// See Company.baseCurrency for the scheme these columns belong to.
   currency     String  @default("SAR")
@@ -2000,6 +2008,41 @@ model PurchaseAttachment {
 
   @@index([purchaseId])
   @@map("purchase_attachments")
+}
+
+enum PosShiftStatus {
+  OPEN
+  CLOSED
+}
+
+/// مناوبة كاشير (مستند §6): تُفتح بعهدة نقدية، تُختم بجردٍ معلَن، والفرق
+/// (العجز/الزيادة) يُحسب من مبيعات النقد المسجّلة عليها — لا يُدخل يدوياً.
+model PosShift {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  /// The login identity that opened the shift — a cashier closes their own.
+  openedById   String
+  openedByName String
+
+  status       PosShiftStatus @default(OPEN)
+  openedAt     DateTime       @default(now())
+  closedAt     DateTime?
+
+  /// العهدة الافتتاحية (cash float) — what the drawer starts with.
+  openingFloat    Decimal  @db.Decimal(18, 2)
+  /// What the cashier counted at close; variance = declared − expected.
+  declaredClosing Decimal? @db.Decimal(18, 2)
+  notes           String?
+
+  invoices Invoice[]
+
+  @@index([companyId, status])
+  @@map("pos_shifts")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

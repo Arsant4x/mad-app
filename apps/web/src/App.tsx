@@ -23,6 +23,7 @@ import { StockLevelsPage } from './pages/inventory/StockLevelsPage';
 import { StockMovementsPage } from './pages/inventory/StockMovementsPage';
 import { ExpiringStockPage } from './pages/inventory/ExpiringStockPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
+import { PosPage } from './pages/pos/PosPage';
 import { JournalPage } from './pages/journal/JournalPage';
 import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -176,6 +177,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="maintenance">
                   <MaintenancePage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="pos"
+              element={
+                <ScreenGuard screen="pos">
+                  <PosPage />
                 </ScreenGuard>
               }
             />

@@ -1,0 +1,394 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { listProducts, type Product } from '../../api/products';
+import { closeShift, createPosSale, getCurrentShift, openShift, type ClosedShift, type PosPaymentMethod, type PosShift } from '../../api/pos';
+import type { Invoice } from '../../api/invoices';
+import { fmt } from '../../lib/format';
+
+interface CartLine {
+  product: Product;
+  quantity: number;
+}
+
+/**
+ * شاشة الكاشير (مستند §6 — النسخة الأولى، أونلاين).
+ *
+ * touch-first: أزرار كبيرة، بحث/باركود واحد، سلة، ودفع بزرّين. البيع يخرج
+ * فاتورة حقيقية مدفوعة على نفس ترقيم الفواتير، والدرج يُحسب في الخادم.
+ */
+export function PosPage() {
+  const [shift, setShift] = useState<PosShift | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [query, setQuery] = useState('');
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [floatInput, setFloatInput] = useState('');
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<Invoice | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [declared, setDeclared] = useState('');
+  const [closed, setClosed] = useState<ClosedShift | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  async function reload() {
+    const [s, p] = await Promise.all([getCurrentShift(), listProducts()]);
+    setShift(s);
+    setProducts(p);
+  }
+
+  useEffect(() => {
+    reload().finally(() => setLoading(false));
+  }, []);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q) || (p.barcode ?? '').includes(q));
+  }, [products, query]);
+
+  const totals = useMemo(() => {
+    const subtotal = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity, 0);
+    const tax = subtotal * 0.15;
+    return { subtotal, tax, total: subtotal + tax };
+  }, [cart]);
+
+  function addToCart(p: Product) {
+    setCart((prev) => {
+      const hit = prev.find((l) => l.product.id === p.id);
+      if (hit) return prev.map((l) => (l.product.id === p.id ? { ...l, quantity: l.quantity + 1 } : l));
+      return [...prev, { product: p, quantity: 1 }];
+    });
+  }
+
+  function changeQty(id: string, delta: number) {
+    setCart((prev) => prev.flatMap((l) => (l.product.id === id ? (l.quantity + delta <= 0 ? [] : [{ ...l, quantity: l.quantity + delta }]) : [l])));
+  }
+
+  /** باركود: Enter مع تطابق واحد يضيفه مباشرة ويصفّي البحث. */
+  function handleSearchEnter() {
+    if (visible.length === 1) {
+      addToCart(visible[0]);
+      setQuery('');
+      searchRef.current?.focus();
+    }
+  }
+
+  async function pay(method: PosPaymentMethod) {
+    if (!cart.length || paying) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const invoice = await createPosSale(cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })), method);
+      setCart([]);
+      setReceipt(invoice);
+      await reload();
+    } catch (e) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setError(d?.message ?? 'تعذّر إتمام البيع');
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function handleOpenShift() {
+    setError(null);
+    try {
+      await openShift(Number(floatInput || '0'));
+      setFloatInput('');
+      await reload();
+    } catch (e) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setError(d?.message ?? 'تعذّر فتح المناوبة');
+    }
+  }
+
+  async function handleCloseShift() {
+    if (!shift) return;
+    setError(null);
+    try {
+      const res = await closeShift(shift.id, Number(declared || '0'));
+      setClosing(false);
+      setDeclared('');
+      setClosed(res);
+      await reload();
+    } catch (e) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setError(d?.message ?? 'تعذّر إقفال المناوبة');
+    }
+  }
+
+  if (loading) return null;
+
+  // ---- لا مناوبة: بطاقة فتح ----
+  if (!shift) {
+    return (
+      <div>
+        <div className="topbar">
+          <div>
+            <div className="page-title">الكاشير</div>
+            <div className="page-sub">افتح مناوبة لبدء البيع</div>
+          </div>
+        </div>
+        <div className="card" style={{ maxWidth: 420 }}>
+          <div className="card-title" style={{ marginBottom: 10 }}>
+            فتح مناوبة
+          </div>
+          <div className="field">
+            <label>العهدة الافتتاحية (نقد الدرج)</label>
+            <input type="number" min="0" value={floatInput} onChange={(e) => setFloatInput(e.target.value)} placeholder="0.00" />
+          </div>
+          {error && <p className="error-text">{error}</p>}
+          <button className="btn btn-primary" style={{ width: '100%', padding: 14, fontSize: 16 }} onClick={handleOpenShift}>
+            🧾 فتح المناوبة
+          </button>
+        </div>
+
+        {closed && (
+          <div className="card" style={{ maxWidth: 420, marginTop: 14 }}>
+            <div className="card-title">ملخص المناوبة المقفلة</div>
+            <table>
+              <tbody>
+                <tr>
+                  <td>عدد المبيعات</td>
+                  <td className="num">{closed.salesCount}</td>
+                </tr>
+                <tr>
+                  <td>نقدي</td>
+                  <td className="num">{fmt(closed.cashTotal)}</td>
+                </tr>
+                <tr>
+                  <td>شبكة</td>
+                  <td className="num">{fmt(closed.cardTotal)}</td>
+                </tr>
+                <tr>
+                  <td>المتوقع في الدرج</td>
+                  <td className="num">{fmt(closed.expectedCash)}</td>
+                </tr>
+                <tr>
+                  <td>المعدود فعلياً</td>
+                  <td className="num">{fmt(Number(closed.declaredClosing))}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <b>{closed.variance === 0 ? 'مطابق' : closed.variance > 0 ? 'زيادة' : 'عجز'}</b>
+                  </td>
+                  <td className="num" style={{ color: closed.variance === 0 ? 'var(--emerald)' : 'var(--rose)', fontWeight: 700 }}>
+                    {fmt(Math.abs(closed.variance))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ---- مناوبة مفتوحة: الكاشير ----
+  return (
+    <div>
+      <div className="topbar">
+        <div>
+          <div className="page-title">الكاشير</div>
+          <div className="page-sub">
+            مناوبة {shift.openedByName} · {shift.salesCount} عملية · الدرج المتوقع {fmt(shift.expectedCash)}
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <button className="btn btn-ghost" onClick={() => setClosing(true)}>
+            إقفال المناوبة
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, alignItems: 'start' }}>
+        {/* الأصناف */}
+        <div className="card">
+          <div className="search-box" style={{ marginBottom: 12, maxWidth: 'none' }}>
+            <input
+              ref={searchRef}
+              autoFocus
+              placeholder="ابحث بالاسم أو امسح الباركود ثم Enter..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearchEnter()}
+            />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4-4" />
+            </svg>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, maxHeight: '60vh', overflowY: 'auto' }}>
+            {visible.map((p) => (
+              <button
+                key={p.id}
+                className="btn btn-ghost"
+                style={{ padding: '14px 8px', display: 'flex', flexDirection: 'column', gap: 6, border: '1px solid var(--line)', minHeight: 84 }}
+                onClick={() => addToCart(p)}
+              >
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</span>
+                <span className="num" style={{ color: 'var(--muted)' }}>
+                  {fmt(Number(p.price))}
+                </span>
+              </button>
+            ))}
+            {visible.length === 0 && <div className="empty-state">لا صنف مطابقاً</div>}
+          </div>
+        </div>
+
+        {/* السلة */}
+        <div className="card">
+          <div className="card-title" style={{ marginBottom: 8 }}>
+            السلة
+          </div>
+          {cart.length === 0 && <div className="empty-state">اضغط صنفاً لإضافته</div>}
+          {cart.map((l) => (
+            <div key={l.product.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{l.product.name}</div>
+                <div className="num" style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {fmt(Number(l.product.price))} × {l.quantity}
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => changeQty(l.product.id, -1)}>
+                −
+              </button>
+              <span className="num" style={{ minWidth: 20, textAlign: 'center' }}>
+                {l.quantity}
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={() => changeQty(l.product.id, 1)}>
+                +
+              </button>
+            </div>
+          ))}
+
+          <table style={{ marginTop: 10 }}>
+            <tbody>
+              <tr>
+                <td>الإجمالي قبل الضريبة</td>
+                <td className="num">{fmt(totals.subtotal)}</td>
+              </tr>
+              <tr>
+                <td>الضريبة 15%</td>
+                <td className="num">{fmt(totals.tax)}</td>
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 700 }}>الإجمالي</td>
+                <td className="num" style={{ fontWeight: 700, fontSize: 16 }}>
+                  {fmt(totals.total)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {error && <p className="error-text">{error}</p>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying} onClick={() => pay('CASH')}>
+              💵 نقدي
+            </button>
+            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying} onClick={() => pay('CARD')}>
+              💳 شبكة
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* إيصال */}
+      {receipt && (
+        <div className="overlay" onClick={() => setReceipt(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="modal-head">
+              <div className="modal-title">تم البيع ✓</div>
+              <button className="modal-close" onClick={() => setReceipt(null)}>
+                ✕
+              </button>
+            </div>
+            <div id="pos-receipt">
+              <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>
+                فاتورة {receipt.no}
+              </p>
+              <table>
+                <tbody>
+                  {receipt.lines?.map((l) => (
+                    <tr key={l.id}>
+                      <td style={{ fontSize: 12 }}>{l.description}</td>
+                      <td className="num" style={{ fontSize: 12 }}>
+                        {Number(l.quantity)} × {fmt(Number(l.unitPrice))}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
+                    <td className="num" style={{ fontWeight: 700 }}>
+                      {fmt(Number(receipt.total))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
+                {receipt.paymentMethod === 'CASH' ? 'دفع نقدي' : 'دفع بالشبكة'} · {new Date().toLocaleString('ar-SA')}
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setReceipt(null)}>
+                إغلاق
+              </button>
+              <button className="btn btn-primary" onClick={() => window.print()}>
+                🖨 طباعة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* إقفال المناوبة */}
+      {closing && (
+        <div className="overlay" onClick={() => setClosing(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-head">
+              <div className="modal-title">إقفال المناوبة</div>
+              <button className="modal-close" onClick={() => setClosing(false)}>
+                ✕
+              </button>
+            </div>
+            <table>
+              <tbody>
+                <tr>
+                  <td>العهدة الافتتاحية</td>
+                  <td className="num">{fmt(Number(shift.openingFloat))}</td>
+                </tr>
+                <tr>
+                  <td>مبيعات نقدية</td>
+                  <td className="num">{fmt(shift.cashTotal)}</td>
+                </tr>
+                <tr>
+                  <td>مبيعات شبكة</td>
+                  <td className="num">{fmt(shift.cardTotal)}</td>
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 700 }}>المتوقع في الدرج</td>
+                  <td className="num" style={{ fontWeight: 700 }}>
+                    {fmt(shift.expectedCash)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="field" style={{ marginTop: 10 }}>
+              <label>النقد المعدود فعلياً</label>
+              <input type="number" min="0" value={declared} onChange={(e) => setDeclared(e.target.value)} placeholder="0.00" />
+            </div>
+            {error && <p className="error-text">{error}</p>}
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setClosing(false)}>
+                إلغاء
+              </button>
+              <button className="btn btn-primary" onClick={handleCloseShift}>
+                إقفال وحساب الفرق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
