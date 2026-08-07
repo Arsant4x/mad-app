@@ -1,0 +1,12 @@
+# Keep the build context lean: dependencies are installed inside the image
+# from the lockfile, never copied from the host.
+node_modules
+**/node_modules
+**/dist
+.git
+backups
+*.html
+*.sql
+.env
+.env.*
+!.env.production.example

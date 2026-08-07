@@ -4,6 +4,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.log
 .DS_Store
 coverage/
@@ -14,3 +15,7 @@ apps/api/generated/
 # Database dumps taken before destructive operations — never commit real data.
 backups/
 /backup-before-cleanup.sql
+
+# Production secrets never enter git
+.env.production
+backups/

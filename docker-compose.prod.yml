@@ -1,0 +1,126 @@
+# Production stack. Copy .env.production.example to .env.production, fill it,
+# then:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# TLS is deliberately NOT terminated here — put a reverse proxy (Caddy, nginx,
+# or the host platform's load balancer) in front of ports 8080/3000 and give it
+# the certificate. Both app ports bind to localhost only for that reason.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres-init-prod:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # app_user, NOT the postgres superuser — superusers bypass RLS silently
+      # and would hollow out tenant isolation's second layer (CLAUDE.md 6.1).
+      DATABASE_URL: postgresql://app_user:${APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-mad-app-files}
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      TRIAL_DAYS: ${TRIAL_DAYS:-14}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      DEV_SEED_PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME}
+      DEV_SEED_PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:80"
+
+  # Nightly logical backup, keeping the newest 14 dumps. A dump the platform
+  # can restore is the operator-side safety net; the merchant-side copy is the
+  # in-app JSON export.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c 'while true; do
+        pg_dump -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -F c
+          -f "/backups/mad-app-$(date +%Y%m%d-%H%M%S).dump"
+        && ls -1t /backups/mad-app-*.dump | tail -n +15 | xargs -r rm --;
+        sleep 86400;
+      done'
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
