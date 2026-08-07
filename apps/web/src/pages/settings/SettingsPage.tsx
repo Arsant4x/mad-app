@@ -18,6 +18,7 @@ import {
 } from '../../api/currencies';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { useAuth } from '../../auth/AuthContext';
+import { IntegrationsCard } from './IntegrationsCard';
 import i18n from '../../i18n';
 
 /**
@@ -432,6 +433,8 @@ export function SettingsPage() {
           onCancel={() => setPendingCurrencyDelete(null)}
         />
       )}
+      {/* الربط والتكاملات — تظهر للمالك فقط: المفاتيح ملكه (قاعدة §3.5). */}
+      {user?.actorType === 'COMPANY' && <IntegrationsCard />}
     </div>
   );
 }

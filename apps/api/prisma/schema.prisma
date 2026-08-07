@@ -278,6 +278,7 @@ model Company {
   purchaseAttachments PurchaseAttachment[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
+  integrations        IntegrationConnection[]
 
   @@map("companies")
 }
@@ -2069,11 +2070,43 @@ model PosPayment {
 
   method String
   amount Decimal @db.Decimal(18, 2)
+  /// مرجع عملية المزوّد (رقم موافقة الجهاز/البوابة) إن مرّت عبر adapter.
+  providerRef String?
 
   createdAt DateTime @default(now())
 
   @@index([companyId, invoiceId])
   @@map("pos_payments")
+}
+
+enum IntegrationKind {
+  PAYMENT_GATEWAY
+  BNPL
+  ECOMMERCE
+}
+
+/// ربط منشأة بمزوّد خارجي (مستند: «كل تكامل خارجي طبقة قابلة للاستبدال»).
+/// المفاتيح ملك التاجر وتُخزَّن مشفّرة AES-256-GCM (انظر credentials.crypto.ts)
+/// ولا تُقرأ مفكوكة إلا لحظة استدعاء المزوّد — القراءات تُرجع قناعاً فقط.
+model IntegrationConnection {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  kind     IntegrationKind
+  /// "MOCK" | "GEIDEA" | "TAMARA" | "SALLA" ... — مفتاح سجل الـadapters.
+  provider String
+  label    String?
+
+  /// JSON مشفّر: iv.tag.ciphertext (base64) — أبداً ليس نصاً صريحاً.
+  credentials String
+
+  enabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_connections")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

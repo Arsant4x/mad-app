@@ -16,6 +16,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PosModule } from './pos/pos.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { AuditModule } from './audit/audit.module';
 import { MailModule } from './common/mail/mail.module';
@@ -86,6 +87,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     LeavesModule,
     AttendanceModule,
     PosModule,
+    IntegrationsModule,
     SubscriptionModule,
     BanksModule,
     TransactionsModule,

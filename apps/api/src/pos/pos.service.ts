@@ -4,6 +4,8 @@ import { TenantContext } from '../auth/types';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { computeTotals, InvoicesService } from '../invoices/invoices.service';
+import { IntegrationsService } from '../integrations/integrations.service';
+import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
 
@@ -37,6 +39,7 @@ export class PosService {
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly invoicesService: InvoicesService,
+    private readonly integrationsService: IntegrationsService,
   ) {}
 
   openShift(tenant: TenantContext, dto: OpenShiftDto) {
@@ -123,6 +126,9 @@ export class PosService {
         clientSaleId: dto.clientSaleId,
         offlineRef: dto.offlineRef,
         issueDate: dto.ringAt?.slice(0, 10),
+        // بيع أوفلاين أُخذت بطاقته على الجهاز وقت الانقطاع — لا نعيد تمريرها
+        // عند المزامنة؛ البوابة تُستشار في البيع الحي فقط.
+        viaSync: true,
       });
     } catch (e) {
       // Two terminals racing the same clientSaleId: the loser reads the
@@ -144,9 +150,9 @@ export class PosService {
   private async ring(
     tenant: TenantContext,
     dto: CreatePosSaleDto,
-    opts: { clientSaleId?: string; offlineRef?: string; issueDate?: string },
+    opts: { clientSaleId?: string; offlineRef?: string; issueDate?: string; viaSync?: boolean },
   ) {
-    const { shiftId, invoiceDto } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+    const { shiftId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
 
@@ -183,7 +189,27 @@ export class PosService {
       } else if (dto.payments?.length) {
         throw new BadRequestException(MSG.pos_split_only_for_split);
       }
-      return { shiftId: shift.id, invoiceDto };
+      // §4: البطاقة تمرّ عبر بوابة الدفع إن كانت مربوطة — قبل إنشاء أي
+      // فاتورة، فالرفض لا يخلّف شيئاً وراءه. بلا ربطٍ يبقى السلوك السابق.
+      let providerRef: string | null = null;
+      const cardAmount =
+        dto.paymentMethod === 'CARD'
+          ? computeTotals(invoiceDto.lines).total
+          : dto.paymentMethod === 'SPLIT'
+            ? dto.payments!.filter((p) => p.method === 'CARD').reduce((sum, p) => sum + p.amount, 0)
+            : 0;
+      if (cardAmount > 0 && !opts.viaSync) {
+        const result = await this.integrationsService.chargeCardIfConfigured(tx, {
+          amount: Number(cardAmount.toFixed(2)),
+          currency: 'SAR',
+          reference: opts.clientSaleId ?? opts.offlineRef ?? `POS-${shift.id.slice(0, 8)}-${await tx.invoice.count({ where: { posShiftId: shift.id } })}`,
+        });
+        if (result && !result.approved) {
+          throw new BadRequestException(formatMessage(MSG.pos_terminal_declined, { reason: result.declineReason ?? '—' }));
+        }
+        providerRef = result?.providerRef ?? null;
+      }
+      return { shiftId: shift.id, invoiceDto, providerRef };
     });
 
     // Same path a hand-written invoice takes (numbering retry included) —
@@ -195,7 +221,14 @@ export class PosService {
       // كما فصّله الكاشير — درجُ المناوبة يجمع صفوف النقد فقط.
       const parts = dto.paymentMethod === 'SPLIT' ? dto.payments! : [{ method: dto.paymentMethod, amount: Number(invoice.total) }];
       await tx.posPayment.createMany({
-        data: parts.map((p) => ({ companyId: tenant.companyId, invoiceId: invoice.id, method: p.method, amount: p.amount })),
+        data: parts.map((p) => ({
+          companyId: tenant.companyId,
+          invoiceId: invoice.id,
+          method: p.method,
+          amount: p.amount,
+          // مرجع البوابة يلتصق بصف البطاقة وحده.
+          providerRef: p.method === 'CARD' ? providerRef : null,
+        })),
       });
       return tx.invoice.update({
         where: { id: invoice.id },
