@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
@@ -26,15 +26,25 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { FilesService } from '../files/files.service';
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
   installments: { orderBy: { dueDate: 'asc' as const } },
   payments: { orderBy: { date: 'desc' as const } },
   deposits: { include: { deductions: true }, orderBy: { receivedAt: 'asc' as const } },
+  settlementLines: { orderBy: { createdAt: 'asc' as const } },
   claims: { orderBy: { issuedAt: 'desc' as const } },
   keyMoney: { orderBy: { paidAt: 'asc' as const } },
-  handovers: { include: { items: { orderBy: { createdAt: 'asc' as const } } }, orderBy: { date: 'asc' as const } },
+  // photos عبر select صريح: fileKey مفتاح تخزين داخلي لا يغادر الخادم —
+  // التنزيل عبر رابط موقَّع فقط (اكتشاف المراجعة).
+  handovers: {
+    include: {
+      items: { orderBy: { createdAt: 'asc' as const } },
+      photos: { select: { id: true, handoverId: true, itemId: true, filename: true, size: true, mimeType: true, note: true, uploadedAt: true } },
+    },
+    orderBy: { date: 'asc' as const },
+  },
 };
 
 /** Arabic labels for the ledger memo — permanent record, so not translated at
@@ -76,7 +86,12 @@ const UNIT_TYPE_TO_ACTIVITY: Record<string, string> = {
 
 @Injectable()
 export class ContractsService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  private readonly logger = new Logger(ContractsService.name);
+
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly files: FilesService,
+  ) {}
 
   list(companyId: string, query: ListContractsQueryDto = {}) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listRefreshed(tx, query));
@@ -189,6 +204,12 @@ export class ContractsService {
         // 'cancel'` is about to void, and voiding them first would settle at
         // zero.
         const settlementAmount = await this.resolveSettlementAmount(tx, id, cancelDate, dto);
+        // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
+        // يساويه = خطأ إدخال يُرفض قبل أي أثر.
+        if (dto.settlementLines?.length) {
+          const sum = dto.settlementLines.reduce((acc, l) => acc + l.amount, 0);
+          if (Math.abs(sum - settlementAmount) > 0.01) throw new BadRequestException(MSG.settlement_lines_mismatch);
+        }
         const settlementEntry =
           settlementAmount > 0
             ? await postContractSettlementEntry(tx, companyId, {
@@ -211,6 +232,12 @@ export class ContractsService {
         if (cancelDate < existing.end) data.end = cancelDate;
 
         await tx.contract.update({ where: { id }, data });
+
+        if (dto.settlementLines?.length) {
+          await tx.contractSettlementLine.createMany({
+            data: dto.settlementLines.map((l) => ({ companyId, contractId: id, label: l.label, amount: l.amount })),
+          });
+        }
 
         if (dto.installmentDisposition === 'cancel') {
           await tx.installment.updateMany({
@@ -549,12 +576,20 @@ export class ContractsService {
   }
 
   /** Deleting is a draft-only operation for the same reason editing is. */
-  deleteHandover(companyId: string, contractId: string, handoverId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  async deleteHandover(companyId: string, contractId: string, handoverId: string) {
+    const { photoKeys, refreshed } = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const handover = await this.loadEditableHandover(tx, contractId, handoverId);
+      // صور المسودة تُحذف صفوفها بالتتالي — نلتقط مفاتيح كائناتها قبل ذلك
+      // كي لا تبقى بايتاتها يتيمةً في التخزين (اكتشاف المراجعة).
+      const photos = await tx.handoverPhoto.findMany({ where: { handoverId: handover.id }, select: { fileKey: true } });
       await tx.contractHandover.delete({ where: { id: handover.id } });
-      return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      const refreshed = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      return { photoKeys: photos.map((p) => p.fileKey), refreshed };
     });
+    for (const key of photoKeys) {
+      await this.files.remove(companyId, key).catch((e: Error) => this.logger.warn(`Could not delete handover photo object "${key}": ${e.message}`));
+    }
+    return refreshed;
   }
 
   /** The single gate every mutation goes through — one place to be wrong, and
@@ -567,17 +602,37 @@ export class ContractsService {
   }
 
   private async replaceHandoverItems(tx: Prisma.TransactionClient, handoverId: string, items: HandoverItemDto[]) {
-    await tx.handoverItem.deleteMany({ where: { handoverId } });
-    if (items.length === 0) return;
-
-    await tx.handoverItem.createMany({
-      data: items.map((i) => ({
-        handoverId,
-        label: i.label.trim(),
-        condition: i.condition,
-        note: i.note?.trim() || null,
-      })) as unknown as Prisma.HandoverItemUncheckedCreateInput[],
+    // Photos hang off items by id, and this replace strategy re-creates every
+    // item with a NEW id (onDelete: SetNull would silently orphan them —
+    // caught in adversarial review). Remember which labels each photo pointed
+    // at, and re-attach by label after the rebuild; a photo whose item was
+    // truly removed degrades to a whole-form photo rather than vanishing.
+    const linkedPhotos = await tx.handoverPhoto.findMany({
+      where: { handoverId, itemId: { not: null } },
+      select: { id: true, item: { select: { label: true } } },
     });
+
+    await tx.handoverItem.deleteMany({ where: { handoverId } });
+
+    if (items.length > 0) {
+      await tx.handoverItem.createMany({
+        data: items.map((i) => ({
+          handoverId,
+          label: i.label.trim(),
+          condition: i.condition,
+          note: i.note?.trim() || null,
+        })) as unknown as Prisma.HandoverItemUncheckedCreateInput[],
+      });
+    }
+
+    if (linkedPhotos.length > 0) {
+      const fresh = await tx.handoverItem.findMany({ where: { handoverId }, select: { id: true, label: true } });
+      const idByLabel = new Map(fresh.map((i) => [i.label, i.id]));
+      for (const photo of linkedPhotos) {
+        const newItemId = photo.item ? (idByLabel.get(photo.item.label) ?? null) : null;
+        await tx.handoverPhoto.update({ where: { id: photo.id }, data: { itemId: newItemId } });
+      }
+    }
   }
 
   /**

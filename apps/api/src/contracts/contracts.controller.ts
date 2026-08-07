@@ -8,6 +8,8 @@ import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import { ContractAttachmentsService } from './contract-attachments.service';
+import { ClaimAttachmentsService } from './claim-attachments.service';
+import { HandoverPhotosService } from './handover-photos.service';
 import { ContractsService } from './contracts.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
@@ -27,6 +29,8 @@ export class ContractsController {
   constructor(
     private readonly contractsService: ContractsService,
     private readonly attachments: ContractAttachmentsService,
+    private readonly claimAttachments: ClaimAttachmentsService,
+    private readonly handoverPhotos: HandoverPhotosService,
   ) {}
 
   @Get()
@@ -50,6 +54,64 @@ export class ContractsController {
   @HttpCode(204)
   removeAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
     return this.attachments.remove(tenant.companyId, attachmentId);
+  }
+
+  // مرفقات المطالبات — نمط مرفقات العقد نفسه (احتياجات §11).
+  @Get('claim-attachments/:attachmentId/download-url')
+  @RequiresAction('view')
+  claimAttachmentUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
+    return this.claimAttachments.downloadUrl(tenant.companyId, attachmentId);
+  }
+
+  @Delete('claim-attachments/:attachmentId')
+  @RequiresAction('delete')
+  removeClaimAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
+    return this.claimAttachments.remove(tenant.companyId, attachmentId);
+  }
+
+  @Get('claims/:claimId/attachments')
+  @RequiresAction('view')
+  listClaimAttachments(@CurrentTenant() tenant: TenantContext, @Param('claimId') claimId: string) {
+    return this.claimAttachments.list(tenant.companyId, claimId);
+  }
+
+  @Post('claims/:claimId/attachments')
+  @RequiresAction('add')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  addClaimAttachment(@CurrentTenant() tenant: TenantContext, @Param('claimId') claimId: string, @UploadedFile() file: Express.Multer.File) {
+    return this.claimAttachments.add(tenant.companyId, claimId, file);
+  }
+
+  // صور نماذج الاستلام/التسليم — تُقفل مع النموذج بعد التوقيع (16.15).
+  @Get('handover-photos/:photoId/download-url')
+  @RequiresAction('view')
+  handoverPhotoUrl(@CurrentTenant() tenant: TenantContext, @Param('photoId') photoId: string) {
+    return this.handoverPhotos.downloadUrl(tenant.companyId, photoId);
+  }
+
+  @Delete('handover-photos/:photoId')
+  @RequiresAction('delete')
+  removeHandoverPhoto(@CurrentTenant() tenant: TenantContext, @Param('photoId') photoId: string) {
+    return this.handoverPhotos.remove(tenant.companyId, photoId);
+  }
+
+  @Get('handovers/:handoverId/photos')
+  @RequiresAction('view')
+  listHandoverPhotos(@CurrentTenant() tenant: TenantContext, @Param('handoverId') handoverId: string) {
+    return this.handoverPhotos.list(tenant.companyId, handoverId);
+  }
+
+  @Post('handovers/:handoverId/photos')
+  @RequiresAction('add')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
+  addHandoverPhoto(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('handoverId') handoverId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('itemId') itemId?: string,
+    @Body('note') note?: string,
+  ) {
+    return this.handoverPhotos.add(tenant.companyId, handoverId, file, { itemId: itemId || undefined, note: note || undefined });
   }
 
   @Get(':contractId/attachments')

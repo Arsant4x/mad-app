@@ -154,6 +154,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
   const [settlementBasis, setSettlementBasis] = useState<SettlementBasis>('none');
   const [settlementAmount, setSettlementAmount] = useState('');
   const [settlementInstallments, setSettlementInstallments] = useState('1');
+  const [lines, setLines] = useState<{ label: string; amount: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -179,6 +180,13 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
       setError(i18n.t('err_cancel_reason_required'));
       return;
     }
+    if (settlementBasis !== 'none' && lines.length) {
+      const sum = lines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0);
+      if (Math.abs(sum - previewedSettlement) > 0.01) {
+        setError('مجموع البنود لا يساوي مبلغ التسوية.');
+        return;
+      }
+    }
     setSaving(true);
     try {
       await onSubmit({
@@ -191,6 +199,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
               settlementBasis,
               ...(settlementBasis === 'amount' ? { settlementAmount: parseFloat(settlementAmount) || 0 } : {}),
               ...(settlementBasis === 'installments' ? { settlementInstallments: parseInt(settlementInstallments, 10) || 0 } : {}),
+              ...(lines.length ? { settlementLines: lines.map((l) => ({ label: l.label.trim(), amount: parseFloat(l.amount) || 0 })) } : {}),
             }),
       });
     } catch (e) {
@@ -250,6 +259,30 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
         <p className="hint">
           سيُسجَّل {fmt(previewedSettlement)} كمستحق على المستأجر ضمن إيرادات أخرى — وليس إيراد إيجار. يمكن خصمه لاحقاً من التأمين المحتجز.
         </p>
+      )}
+      {previewedSettlement > 0 && (
+        <div className="card" style={{ background: '#faf9f5', marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <b>تفصيل التسوية بنوداً (اختياري)</b>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={() => setLines((ls) => [...ls, { label: '', amount: '' }])}>
+              + بند
+            </button>
+          </div>
+          {lines.map((l, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <input style={{ flex: 2 }} placeholder="مثال: بدل إشعار" value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+              <input style={{ flex: 1 }} type="number" placeholder="المبلغ (سالب = خصم)" value={l.amount} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
+                ✕
+              </button>
+            </div>
+          ))}
+          {lines.length > 0 && (
+            <p className="hint" style={{ marginTop: 6 }}>
+              مجموع البنود: <b className="num">{fmt(lines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0))}</b> — يجب أن يساوي {fmt(previewedSettlement)}
+            </p>
+          )}
+        </div>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>

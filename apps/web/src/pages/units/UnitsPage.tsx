@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listProperties, type Property } from '../../api/properties';
+import { BulkUnitsModal } from './BulkUnitsModal';
 import { cancelReservation, createReservation, listReservations, type Reservation, type ReservationInput } from '../../api/reservations';
 import { createUnit, deleteUnit, listUnits, setUnitArchived, updateUnit, type Unit, type UnitInput, type UnitStatus } from '../../api/units';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -14,11 +15,13 @@ const STATUS_META: Record<UnitStatus, { label: string; badgeClass: string }> = {
   rented: { label: 'مؤجَّرة', badgeClass: 'paid' },
   maintenance: { label: 'صيانة', badgeClass: 'overdue' },
   reserved: { label: 'محجوزة', badgeClass: 'due' },
+  upcoming: { label: 'محجوزة لعقد قادم', badgeClass: 'due' },
 };
 
 export function UnitsPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   // Include archived records; off by day-to-day default (gap-analysis §1).
@@ -111,6 +114,9 @@ export function UnitsPage() {
           <div className="page-sub">وحدات جميع العقارات وحالتها الحالية</div>
         </div>
         <div className="topbar-actions">
+          <button className="btn btn-ghost" onClick={() => setBulkOpen(true)} disabled={properties.length === 0}>
+            ⧉ وحدات بالجملة
+          </button>
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
             + وحدة جديدة
           </button>
@@ -178,6 +184,8 @@ export function UnitsPage() {
                         <span className={`badge ${STATUS_META[u.status].badgeClass}`}>
                           {u.status === 'rented' && u.currentTenant
                             ? `مؤجَّرة — ${u.currentTenant}`
+                            : u.status === 'upcoming' && u.upcomingTenant
+                              ? `عقد قادم مؤكَّد — ${u.upcomingTenant}`
                             : u.status === 'reserved' && activeRsv
                               ? `محجوزة حتى ${activeRsv.expiryDate.slice(0, 10)} — ${activeRsv.name}`
                               : STATUS_META[u.status].label}
@@ -203,6 +211,17 @@ export function UnitsPage() {
             </table>
           </div>
         </>
+      )}
+
+      {bulkOpen && (
+        <BulkUnitsModal
+          properties={properties}
+          onCancel={() => setBulkOpen(false)}
+          onDone={async () => {
+            setBulkOpen(false);
+            await reload();
+          }}
+        />
       )}
 
       {modal && (

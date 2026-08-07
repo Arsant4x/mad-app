@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
+import { BulkCreateUnitsDto } from './dto/bulk-create-units.dto';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitsService } from './units.service';
@@ -26,6 +27,13 @@ export class UnitsController {
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateUnitDto) {
     return this.unitsService.create(tenant.companyId, dto);
+  }
+
+  /** إنشاء وحدات بالجملة — بادئة + عدد، كلٌّ أو لا شيء. */
+  @Post('bulk')
+  @RequiresAction('add')
+  createBulk(@CurrentTenant() tenant: TenantContext, @Body() dto: BulkCreateUnitsDto) {
+    return this.unitsService.createBulk(tenant.companyId, dto);
   }
 
   @Patch(':id')

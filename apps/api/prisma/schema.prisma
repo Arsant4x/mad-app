@@ -281,6 +281,9 @@ model Company {
   integrations        IntegrationConnection[]
   supportGrants       SupportAccessGrant[]
   supportLogs         SupportAccessLog[]
+  claimAttachments    ClaimAttachment[]
+  handoverPhotos      HandoverPhoto[]
+  settlementLines     ContractSettlementLine[]
 
   @@map("companies")
 }
@@ -1289,6 +1292,8 @@ model Unit {
   subtype          String?
   rentMonthly      Decimal @db.Decimal(18, 2)
   underMaintenance Boolean @default(false)
+  /// وصف تفصيلي للغرف والمحتويات (نص حر) — يظهر في بطاقة الوحدة والنماذج.
+  roomDetails      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1678,6 +1683,8 @@ model ContractHandover {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  photos HandoverPhoto[]
+
   @@map("contract_handovers")
 }
 
@@ -1694,6 +1701,8 @@ model HandoverItem {
   note      String?
 
   createdAt DateTime @default(now())
+
+  photos HandoverPhoto[]
 
   @@map("handover_items")
 }
@@ -1798,6 +1807,8 @@ model ContractClaim {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  attachments ClaimAttachment[]
 
   @@map("contract_claims")
 }
@@ -1969,6 +1980,8 @@ model Contract {
   keyMoney     ContractKeyMoney[]
   handovers    ContractHandover[]
 
+  settlementLines ContractSettlementLine[]
+
   @@unique([companyId, no])
   /// The paginated list orders by start desc within the tenant.
   @@index([companyId, start])
@@ -1998,6 +2011,73 @@ model ContractAttachment {
 
   @@index([contractId])
   @@map("contract_attachments")
+}
+
+/// مرفق مطالبة (§16 — احتياجات §11): فاتورة إصلاح، صور ضرر، مراسلات.
+/// Mirror of ContractAttachment — bytes in MinIO, tenant-scoped metadata here.
+model ClaimAttachment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  claimId String
+  claim   ContractClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  fileKey  String
+  filename String
+  size     Int
+  mimeType String
+
+  uploadedAt DateTime @default(now())
+
+  @@index([claimId])
+  @@map("claim_attachments")
+}
+
+/// صورة على نموذج استلام/تسليم (16.15) — على النموذج كله أو على بندٍ بعينه
+/// (خدش الباب ← صورة على بند الباب). تُقفل مع النموذج: لا إضافة ولا حذف
+/// بعد التوقيع — الصور جزء مما وُقِّع عليه.
+model HandoverPhoto {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  handoverId String
+  handover   ContractHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+
+  itemId String?
+  item   HandoverItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  fileKey  String
+  filename String
+  size     Int
+  mimeType String
+  note     String?
+
+  uploadedAt DateTime @default(now())
+
+  @@index([handoverId])
+  @@map("handover_photos")
+}
+
+/// بند من تسوية إلغاء العقد (§16): «شهر إشعار: 3000» · «صيانة: -450»…
+/// المجموع يجب أن يساوي مبلغ التسوية المرحَّل — يُدقَّق على الخادم.
+model ContractSettlementLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  label  String
+  /// موجب = على المستأجر، سالب = له (استرداد).
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([contractId])
+  @@map("contract_settlement_lines")
 }
 
 /// فاتورة مصروف تأسيسي ومستندها (صورة/PDF) — مستند §5: same bytes-in-object-

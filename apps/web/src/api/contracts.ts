@@ -231,6 +231,8 @@ export interface CancelContractInput {
   cancelDate: string;
   cancelReason: string;
   installmentDisposition: 'keep' | 'cancel';
+  /** تفصيل التسوية بنوداً — مجموعها يجب أن يساوي المبلغ، والخادم يدقّق. */
+  settlementLines?: { label: string; amount: number }[];
   settlementBasis?: SettlementBasis;
   settlementAmount?: number;
   settlementInstallments?: number;
@@ -343,3 +345,56 @@ export const contractAttachmentDownloadUrl = (attachmentId: string) =>
   apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/attachments/${attachmentId}/download-url`).then((r) => r.data);
 
 export const deleteContractAttachment = (attachmentId: string) => apiClient.delete(`/contracts/attachments/${attachmentId}`);
+
+/** مرفقات المطالبات وصور نماذج التسليم — نفس نمط مرفقات العقد. */
+export interface ClaimAttachment {
+  id: string;
+  claimId: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: string;
+}
+
+export const listClaimAttachments = (claimId: string) =>
+  apiClient.get<ClaimAttachment[]>(`/contracts/claims/${claimId}/attachments`).then((r) => r.data);
+
+export const uploadClaimAttachment = async (claimId: string, file: File): Promise<ClaimAttachment> => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await apiClient.post<ClaimAttachment>(`/contracts/claims/${claimId}/attachments`, form);
+  return res.data;
+};
+
+export const claimAttachmentDownloadUrl = (attachmentId: string) =>
+  apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/claim-attachments/${attachmentId}/download-url`).then((r) => r.data);
+
+export const deleteClaimAttachment = (attachmentId: string) => apiClient.delete(`/contracts/claim-attachments/${attachmentId}`);
+
+export interface HandoverPhoto {
+  id: string;
+  handoverId: string;
+  itemId: string | null;
+  filename: string;
+  size: number;
+  mimeType: string;
+  note: string | null;
+  uploadedAt: string;
+}
+
+export const listHandoverPhotos = (handoverId: string) =>
+  apiClient.get<HandoverPhoto[]>(`/contracts/handovers/${handoverId}/photos`).then((r) => r.data);
+
+export const uploadHandoverPhoto = async (handoverId: string, file: File, opts?: { itemId?: string; note?: string }): Promise<HandoverPhoto> => {
+  const form = new FormData();
+  form.append('file', file);
+  if (opts?.itemId) form.append('itemId', opts.itemId);
+  if (opts?.note) form.append('note', opts.note);
+  const res = await apiClient.post<HandoverPhoto>(`/contracts/handovers/${handoverId}/photos`, form);
+  return res.data;
+};
+
+export const handoverPhotoDownloadUrl = (photoId: string) =>
+  apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/handover-photos/${photoId}/download-url`).then((r) => r.data);
+
+export const deleteHandoverPhoto = (photoId: string) => apiClient.delete(`/contracts/handover-photos/${photoId}`);

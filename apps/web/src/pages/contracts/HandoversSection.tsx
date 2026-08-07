@@ -1,15 +1,5 @@
-import { useState } from 'react';
-import {
-  createHandover,
-  deleteHandover,
-  signHandover,
-  updateHandover,
-  type Contract,
-  type ContractHandover,
-  type HandoverItemInput,
-  type HandoverType,
-  type ItemCondition,
-} from '../../api/contracts';
+import { useRef, useState } from 'react';
+import { createHandover, deleteHandover, signHandover, updateHandover, type Contract, type ContractHandover, type HandoverItemInput, type HandoverType, type ItemCondition, listHandoverPhotos, uploadHandoverPhoto, handoverPhotoDownloadUrl, deleteHandoverPhoto, type HandoverPhoto } from '../../api/contracts';
 import { dfmt, today } from '../../lib/format';
 
 const TYPE_LABEL: Record<HandoverType, string> = {
@@ -49,6 +39,36 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
+  const [photosFor, setPhotosFor] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<HandoverPhoto[]>([]);
+  const [photoItemId, setPhotoItemId] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const photoFileRef = useRef<HTMLInputElement>(null);
+
+  async function togglePhotos(handoverId: string) {
+    if (photosFor === handoverId) {
+      setPhotosFor(null);
+      return;
+    }
+    setPhotosFor(handoverId);
+    setPhotoItemId('');
+    setPhotos(await listHandoverPhotos(handoverId));
+  }
+
+  async function handlePhotoUpload(file: File) {
+    if (!photosFor) return;
+    setPhotoUploading(true);
+    try {
+      await uploadHandoverPhoto(photosFor, file, { itemId: photoItemId || undefined });
+      setPhotos(await listHandoverPhotos(photosFor));
+    } catch (e) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setError(d?.message ?? 'تعذّر رفع الصورة — الحد 10MB وبصيغ صور/PDF');
+    } finally {
+      setPhotoUploading(false);
+      if (photoFileRef.current) photoFileRef.current.value = '';
+    }
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -244,7 +264,8 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 // The stamp is the evidence — shown to the second, and always
                 // beside who signed.
                 <div className="hint">
-                  وقّعه {h.signedBy} — {new Date(h.signedAt!).toLocaleString('ar-SA')}
+                  وقّعه {h.signedBy} — {new Date(h.signedAt!).toLocaleString('ar-SA')}{' '}
+                  <button className="btn btn-ghost btn-sm" onClick={() => togglePhotos(h.id)}>📷 الصور</button>
                 </div>
               )}
             </div>
@@ -252,6 +273,9 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
               <div style={{ display: 'flex', gap: 4 }}>
                 <button className="btn btn-ghost" onClick={() => loadForEdit(h)}>
                   تعديل
+                </button>
+                <button className="btn btn-ghost" onClick={() => togglePhotos(h.id)}>
+                  📷 الصور
                 </button>
                 <button className="btn btn-ghost" onClick={() => setSigningId(signingId === h.id ? null : h.id)}>
                   توقيع
@@ -284,6 +308,60 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
             </table>
           )}
           {h.notes && <p className="hint">{h.notes}</p>}
+
+          {photosFor === h.id && (
+            <div className="card" style={{ background: '#faf9f5', marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <b>صور النموذج</b>
+                {h.status !== 'SIGNED' && (
+                  <>
+                    <select value={photoItemId} onChange={(e) => setPhotoItemId(e.target.value)} style={{ maxWidth: 200 }}>
+                      <option value="">النموذج كاملاً</option>
+                      {h.items.map((it) => (
+                        <option key={it.id} value={it.id}>
+                          بند: {it.label}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                      {photoUploading ? 'جارٍ الرفع…' : '📤 إضافة صورة'}
+                      <input ref={photoFileRef} type="file" accept="image/*" style={{ display: 'none' }} disabled={photoUploading} onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])} />
+                    </label>
+                  </>
+                )}
+                {h.status === 'SIGNED' && <span className="hint">النموذج موقَّع — الصور جزء ممّا وُقِّع عليه فلا تُعدَّل</span>}
+              </div>
+              {photos.length === 0 && <div className="empty-state">لا صور</div>}
+              {photos.map((ph) => (
+                <div key={ph.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span style={{ flex: 1, fontSize: 13 }}>
+                    {ph.filename}
+                    {ph.itemId && <span className="hint"> — {h.items.find((it) => it.id === ph.itemId)?.label ?? 'بند'}</span>}
+                    {ph.note && <span className="hint"> · {ph.note}</span>}
+                  </span>
+                  <button className="btn btn-ghost btn-sm" onClick={async () => window.open((await handoverPhotoDownloadUrl(ph.id)).url, '_blank')}>
+                    عرض
+                  </button>
+                  {h.status !== 'SIGNED' && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={async () => {
+                        try {
+                          await deleteHandoverPhoto(ph.id);
+                          setPhotos(await listHandoverPhotos(h.id));
+                        } catch (e2) {
+                          const d = (e2 as { response?: { data?: { message?: string } } })?.response?.data;
+                          setError(d?.message ?? 'تعذّر حذف الصورة');
+                        }
+                      }}
+                    >
+                      حذف
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {signingId === h.id && (
             <div style={{ marginTop: 8 }}>

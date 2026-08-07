@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract } from '../../api/contracts';
+import { useRef, useState } from 'react';
+import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
 
 const KIND_LABEL: Record<ClaimKind, string> = {
@@ -29,6 +29,34 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
   const [adding, setAdding] = useState(false);
   const [waivingId, setWaivingId] = useState<string | null>(null);
   const [waiveReason, setWaiveReason] = useState('');
+  const [attachFor, setAttachFor] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ClaimAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function openAttachments(claimId: string) {
+    if (attachFor === claimId) {
+      setAttachFor(null);
+      return;
+    }
+    setAttachFor(claimId);
+    setAttachments(await listClaimAttachments(claimId));
+  }
+
+  async function handleUpload(file: File) {
+    if (!attachFor) return;
+    setUploading(true);
+    try {
+      await uploadClaimAttachment(attachFor, file);
+      setAttachments(await listClaimAttachments(attachFor));
+    } catch (e) {
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setError(d?.message ?? 'تعذّر رفع المرفق — الحد 10MB وبصيغ PDF/صور');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -170,6 +198,9 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
                     </button>
                   </>
                 )}
+                <button className="btn btn-ghost" onClick={() => openAttachments(c.id)}>
+                  📎 مرفقات
+                </button>
               </td>
             </tr>
           ))}
@@ -204,6 +235,42 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
           </div>
         </div>
       )}
+      {attachFor && (
+        <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <b>مرفقات المطالبة</b>
+            <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', marginRight: 'auto' }}>
+              {uploading ? 'جارٍ الرفع…' : '📤 إرفاق ملف'}
+              <input ref={fileRef} type="file" style={{ display: 'none' }} disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
+            </label>
+          </div>
+          {attachments.length === 0 && <div className="empty-state">لا مرفقات — فاتورة الإصلاح وصور الضرر توثَّق هنا</div>}
+          {attachments.map((a) => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+              <span style={{ flex: 1, fontSize: 13 }}>{a.filename}</span>
+              <span className="num" style={{ fontSize: 12, color: 'var(--muted)' }}>{Math.ceil(a.size / 1024)} KB</span>
+              <button className="btn btn-ghost btn-sm" onClick={async () => window.open((await claimAttachmentDownloadUrl(a.id)).url, '_blank')}>
+                تنزيل
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={async () => {
+                  try {
+                    await deleteClaimAttachment(a.id);
+                    setAttachments(await listClaimAttachments(attachFor));
+                  } catch (e) {
+                    const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+                    setError(d?.message ?? 'تعذّر حذف المرفق');
+                  }
+                }}
+              >
+                حذف
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 }

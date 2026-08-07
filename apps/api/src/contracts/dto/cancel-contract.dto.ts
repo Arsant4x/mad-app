@@ -1,6 +1,18 @@
-import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateIf, ValidateNested } from 'class-validator';
 
 const SETTLEMENT_BASES = ['none', 'amount', 'installments', 'all'] as const;
+
+/** بند من تفصيل التسوية: «شهر إشعار: 3000» · «خصم صيانة: -450». */
+export class SettlementLineDto {
+  @IsString()
+  @IsNotEmpty()
+  label!: string;
+
+  /** موجب = على المستأجر، سالب = له — والمجموع يجب أن يساوي مبلغ التسوية. */
+  @IsNumber()
+  amount!: number;
+}
 
 export class CancelContractDto {
   @IsString()
@@ -37,6 +49,14 @@ export class CancelContractDto {
   @IsNumber()
   @IsPositive()
   settlementAmount?: number;
+
+  /** تفصيل التسوية بنوداً (§16) — اختياري؛ عند وجوده يُدقَّق مجموعه ضد
+   * المبلغ المحسوب ويُخزَّن سطراً سطراً. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SettlementLineDto)
+  settlementLines?: SettlementLineDto[];
 
   @ValidateIf((o) => o.settlementBasis === 'installments')
   @IsInt()

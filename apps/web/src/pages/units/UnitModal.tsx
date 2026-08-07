@@ -25,6 +25,7 @@ export function UnitModal({
   const [subtype, setSubtype] = useState(editing?.subtype ?? '');
   const [rentMonthly, setRentMonthly] = useState(editing?.rentMonthly ?? '');
   const [underMaintenance, setUnderMaintenance] = useState(editing?.underMaintenance ?? false);
+  const [roomDetails, setRoomDetails] = useState(editing?.roomDetails ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ export function UnitModal({
         type,
         subtype: subtype.trim() || undefined,
         rentMonthly: parseFloat(String(rentMonthly)) || 0,
+        roomDetails: roomDetails.trim() || undefined,
         underMaintenance,
       });
     } catch (e) {
@@ -96,6 +98,10 @@ export function UnitModal({
             <label>الفئة / النشاط المسموح به</label>
             <input value={subtype} onChange={(e) => setSubtype(e.target.value)} placeholder="عوائل / نشاط تجاري..." />
           </div>
+        </div>
+        <div className="field">
+          <label>تفاصيل الغرف والمحتويات</label>
+          <textarea rows={3} value={roomDetails} onChange={(e) => setRoomDetails(e.target.value)} placeholder="صالة + غرفتان، مطبخ راكب، مكيفات..." />
         </div>
         <div className="field">
           <label>الإيجار الشهري</label>

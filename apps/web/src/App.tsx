@@ -38,6 +38,7 @@ import { IncorporationReportPage } from './pages/suppliers/IncorporationReportPa
 import { TransactionsPage } from './pages/transactions/TransactionsPage';
 import { UnitsPage } from './pages/units/UnitsPage';
 import { WarehousesPage } from './pages/warehouses/WarehousesPage';
+import { WarrantiesPage } from './pages/warranties/WarrantiesPage';
 import { CompanyOwnerGuard } from './routes/CompanyOwnerGuard';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { ScreenGuard } from './routes/ScreenGuard';
@@ -177,6 +178,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="maintenance">
                   <MaintenancePage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="warranties"
+              element={
+                <ScreenGuard screen="maintenance">
+                  <WarrantiesPage />
                 </ScreenGuard>
               }
             />

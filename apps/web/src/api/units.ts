@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved';
+export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved' | 'upcoming';
 
 export interface Unit {
   archived: boolean;
@@ -15,9 +15,13 @@ export interface Unit {
   status: UnitStatus;
   currentTenant: string | null;
   reservedBy: string | null;
+  /** اسم مستأجر العقد القادم المؤكَّد — يملأ حالة upcoming فقط. */
+  upcomingTenant: string | null;
+  roomDetails: string | null;
 }
 
 export interface UnitInput {
+  roomDetails?: string;
   propertyId: string;
   unitNo: string;
   floor?: string;
@@ -34,3 +38,7 @@ export const deleteUnit = (id: string) => apiClient.delete(`/units/${id}`);
 
 /** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
 export const setUnitArchived = (id: string, archived: boolean) => apiClient.patch<Unit>(`/units/${id}/archive`, { archived }).then((r) => r.data);
+
+/** إنشاء بالجملة: بادئة + عدد — كلٌّ أو لا شيء، والتصادم يسمّي أرقامه. */
+export const bulkCreateUnits = (dto: { propertyId: string; prefix: string; count: number; startAt?: number; floor?: string; type: string; subtype?: string; rentMonthly: number }) =>
+  apiClient.post<{ created: number; unitNos: string[] }>('/units/bulk', dto).then((r) => r.data);

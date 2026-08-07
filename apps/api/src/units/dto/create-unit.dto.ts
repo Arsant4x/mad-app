@@ -28,4 +28,9 @@ export class CreateUnitDto {
   @IsOptional()
   @IsBoolean()
   underMaintenance?: boolean;
+
+  /** وصف الغرف والمحتويات — نص حر يظهر في بطاقة الوحدة. */
+  @IsOptional()
+  @IsString()
+  roomDetails?: string;
 }
