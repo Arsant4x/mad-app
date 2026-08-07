@@ -7,7 +7,8 @@ import { computeTotals, InvoicesService } from '../invoices/invoices.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
-import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
+import { currentStockQty } from '../inventory/stock-quantity.util';
+import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
@@ -15,6 +16,24 @@ const POS_TAX_RATE = 15;
 
 /** اسم عميل المرور الافتراضي — created once per company, then reused. */
 const WALK_IN_CUSTOMER = 'عميل نقدي';
+
+/**
+ * تقرير خصم المخزون المرفق بردّ البيع (معلوماتي فقط — الرصيد نفسه يبقى
+ * مشتقاً من دفتر الحركات وحده، قاعدة 11: لا حالة موازية).
+ *
+ * `deducted: false` هو سلوك التراجع الصريح، لا عطلاً: وردية بلا فرع، أو فرع
+ * بلا مستودع مربوط، أو سلة كلها بنود غير مخزنية — البيع يمضي والخصم يُتخطى.
+ */
+export type StockDeductionReport =
+  | {
+      deducted: true;
+      warehouseId: string;
+      /** عدد حركات OUT المُنشأة (حركة لكل بند مخزني). */
+      movements: number;
+      /** بنود هبط رصيدها تحت الصفر — تحذير ناعم لا مانع، كسياسة المخزون القائمة. */
+      belowZero: { productId: string; resultingQty: number }[];
+    }
+  | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
 export interface ShiftTotals {
   salesCount: number;
@@ -152,9 +171,15 @@ export class PosService {
     dto: CreatePosSaleDto,
     opts: { clientSaleId?: string; offlineRef?: string; issueDate?: string; viaSync?: boolean },
   ) {
-    const { shiftId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+    const { shiftId, shiftBranchId, branchWarehouseId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
+
+      // مستودع الخصم = مستودع فرع الوردية (Branch.warehouseId) — قاعدة 6.8:
+      // لكل فرع مخزونه. وردية بلا فرع أو فرع بلا مستودع ⇒ لا خصم (تراجع صريح).
+      const branchWarehouseId = shift.branchId
+        ? ((await tx.branch.findUnique({ where: { id: shift.branchId }, select: { warehouseId: true } }))?.warehouseId ?? null)
+        : null;
 
       const ids = dto.lines.map((l) => l.productId);
       const products = await tx.product.findMany({ where: { id: { in: ids } } });
@@ -209,7 +234,7 @@ export class PosService {
         }
         providerRef = result?.providerRef ?? null;
       }
-      return { shiftId: shift.id, invoiceDto, providerRef };
+      return { shiftId: shift.id, shiftBranchId: shift.branchId, branchWarehouseId, invoiceDto, providerRef };
     });
 
     // Same path a hand-written invoice takes (numbering retry included) —
@@ -230,7 +255,19 @@ export class PosService {
           providerRef: p.method === 'CARD' ? providerRef : null,
         })),
       });
-      return tx.invoice.update({
+      // خصم المخزون داخل نفس معاملة إتمام البيع (موجز POS §6): لو خسرت
+      // مزامنةٌ سباقَ clientSaleId فسقطت هذه المعاملة، سقطت حركاتها معها —
+      // فلا خصم مزدوج بنيوياً. وإعادة الإرسال المتطابقة لا تصل هنا أصلاً
+      // (syncSale يعيد فاتورة الفائز قبل أي رنّ جديد).
+      const stockDeduction = await this.deductStock(tx, tenant.companyId, {
+        warehouseId: branchWarehouseId,
+        branchId: shiftBranchId,
+        lines: dto.lines,
+        date: invoiceDto.issueDate,
+        invoiceNo: invoice.no,
+      });
+
+      const updated = await tx.invoice.update({
         where: { id: invoice.id },
         data: {
           status: 'PAID',
@@ -241,7 +278,58 @@ export class PosService {
         } as Prisma.InvoiceUncheckedUpdateInput,
         include: { lines: true, customer: true, posPayments: true },
       });
+      return { ...updated, stockDeduction };
     });
+  }
+
+  /**
+   * حركات OUT لبنود البيع المخزنية — على مستودع فرع الوردية.
+   *
+   * «مخزني» = له حركة واحدة على الأقل في دفتر الحركات (الرصيد هنا مشتق من
+   * الدفتر وحده، فبند بلا أي حركة — خدمة أو صنف لا تتعقبه المنشأة — لا معنى
+   * لخصمه، وخصمه كان سيلوّث شاشة الأرصدة بسوالب دائمة لكل خدمة تُباع).
+   *
+   * النقص لا يمنع البيع: السالب مسموح بتحذير ناعم، نفس سياسة إنشاء الحركة
+   * اليدوية في InventoryService — الكاشير لا يوقف طابور المحل على جرد.
+   */
+  private async deductStock(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    args: { warehouseId: string | null; branchId: string | null; lines: PosSaleLineDto[]; date: string; invoiceNo: string },
+  ): Promise<StockDeductionReport> {
+    if (!args.warehouseId) return { deducted: false, reason: 'NO_BRANCH_WAREHOUSE' };
+    const warehouseId = args.warehouseId;
+
+    const ids = [...new Set(args.lines.map((l) => l.productId))];
+    const tracked = new Set(
+      (await tx.stockMovement.findMany({ where: { productId: { in: ids } }, select: { productId: true }, distinct: ['productId'] })).map(
+        (m) => m.productId,
+      ),
+    );
+    const deductible = args.lines.filter((l) => tracked.has(l.productId));
+    if (!deductible.length) return { deducted: false, reason: 'NO_TRACKED_PRODUCTS' };
+
+    await tx.stockMovement.createMany({
+      // companyId صراحةً — createMany لا يمرّ على امتداد حقن المستأجر دائماً،
+      // نفس نمط posPayment.createMany أعلاه؛ RLS يسند الاثنين.
+      data: deductible.map((l) => ({
+        companyId,
+        productId: l.productId,
+        warehouseId,
+        branchId: args.branchId,
+        type: 'OUT' as const,
+        qty: l.quantity,
+        date: new Date(args.date),
+        reason: `بيع كاشير ${args.invoiceNo}`,
+      })),
+    });
+
+    const belowZero: { productId: string; resultingQty: number }[] = [];
+    for (const productId of new Set(deductible.map((l) => l.productId))) {
+      const resultingQty = await currentStockQty(tx, productId, warehouseId);
+      if (resultingQty < 0) belowZero.push({ productId, resultingQty });
+    }
+    return { deducted: true, warehouseId, movements: deductible.length, belowZero };
   }
 
   private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotals> {
