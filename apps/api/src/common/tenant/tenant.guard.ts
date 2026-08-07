@@ -4,12 +4,17 @@ import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, ScreenForbiddenException } from './tenant.exceptions';
+import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException } from './tenant.exceptions';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
+
+/** Screens holding the records the whole ledger hangs off. Freezing these is
+ * what the master-data lock is for — invoices and payments stay editable. */
+const MASTER_DATA_SCREENS = new Set(['properties', 'contracts']);
+const WRITE_ACTIONS = new Set(['add', 'edit', 'delete']);
 
 /**
  * Runs after JwtAuthGuard on every tenant (COMPANY / COMPANY_USER) route.
@@ -66,6 +71,7 @@ export class TenantGuard implements CanActivate {
     // The company owner always sees every branch, including the consolidated
     // view (CLAUDE.md 6.8) — only employees can be narrowed.
     let allowedBranchIds: string[] | 'all' = 'all';
+    let canEditMasterData = false;
 
     if (payload.actorType === 'COMPANY_USER') {
       const companyUser = await this.prisma.companyUser.findUniqueOrThrow({
@@ -81,6 +87,7 @@ export class TenantGuard implements CanActivate {
       // No assignment means unrestricted, not "no access" — otherwise every
       // employee account that existed before branches shipped would have been
       // locked out of everything the moment this rolled out.
+      canEditMasterData = companyUser.canEditMasterData;
       allowedBranchIds = companyUser.branches.length > 0 ? companyUser.branches.map((b) => b.branchId) : 'all';
     }
 
@@ -101,6 +108,16 @@ export class TenantGuard implements CanActivate {
     const requiredAction = this.reflector.getAllAndOverride<ScreenAction | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
     if (requiredScreen && requiredAction && !isActionAllowed(isAllScreens, allowedScreens === 'all' ? [] : allowedScreens, screenActions, requiredScreen, requiredAction)) {
       throw new ActionForbiddenException(requiredAction, requiredScreen);
+    }
+
+    // Master-data lock: when the company freezes its asset register, only the
+    // owner and explicitly-exempted employees may still change it. Reads and
+    // every other screen are untouched — this protects the records the whole
+    // ledger hangs off, not the day-to-day work.
+    if (company.masterDataLocked && requiredScreen && MASTER_DATA_SCREENS.has(requiredScreen) && requiredAction && WRITE_ACTIONS.has(requiredAction)) {
+      if (payload.actorType !== 'COMPANY' && !canEditMasterData) {
+        throw new MasterDataLockedException();
+      }
     }
 
     req.tenant = {

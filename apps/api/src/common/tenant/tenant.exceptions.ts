@@ -28,3 +28,11 @@ export class ActionForbiddenException extends ForbiddenException {
     super({ code: 'ACTION_FORBIDDEN', message: formatMessage(MSG.action_forbidden, { action, screen }) });
   }
 }
+
+/** Raised when the company has frozen its master records and this actor is
+ * not the owner nor exempted. */
+export class MasterDataLockedException extends ForbiddenException {
+  constructor() {
+    super({ code: 'MASTER_DATA_LOCKED', message: MSG.master_data_locked });
+  }
+}

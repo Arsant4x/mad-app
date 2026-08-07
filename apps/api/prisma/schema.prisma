@@ -142,6 +142,10 @@ model Company {
   orgName         String
   status          AccountStatus @default(ACTIVE)
   frozenAt        DateTime?
+  /// When on, the master records (properties/units) are frozen company-wide:
+  /// nobody edits or deletes them except the owner and employees explicitly
+  /// exempted. Stops a busy clerk from quietly reshaping the asset register.
+  masterDataLocked Boolean @default(false)
   subStart        DateTime?
   subEnd          DateTime?
 
@@ -194,6 +198,7 @@ model Company {
 
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -257,6 +262,10 @@ model CompanyUser {
   company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
   status          AccountStatus @default(ACTIVE)
+  /// Exempts this employee from the company-wide master-data lock, so a
+  /// property manager can still maintain the register while everyone else is
+  /// frozen out of it.
+  canEditMasterData Boolean @default(false)
 
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])

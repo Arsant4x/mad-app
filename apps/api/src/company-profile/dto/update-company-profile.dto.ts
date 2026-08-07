@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 
 export class UpdateCompanyProfileDto {
@@ -68,4 +68,8 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsString()
   logoFileKey?: string;
+  /// Freezes properties/contracts company-wide (gap-analysis §1).
+  @IsOptional()
+  @IsBoolean()
+  masterDataLocked?: boolean;
 }

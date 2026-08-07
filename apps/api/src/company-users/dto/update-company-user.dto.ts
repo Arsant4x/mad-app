@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 const STATUSES = ['ACTIVE', 'FROZEN', 'STOPPED'] as const;
 
@@ -33,4 +33,8 @@ export class UpdateCompanyUserDto {
   @IsArray()
   @IsString({ each: true })
   branchIds?: string[];
+  /// Exempts this employee from the master-data lock.
+  @IsOptional()
+  @IsBoolean()
+  canEditMasterData?: boolean;
 }

@@ -104,7 +104,7 @@ export class CompanyUsersService {
 
     return this.prisma.companyUser.update({
       where: { id },
-      data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status },
+      data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
       include: COMPANY_USER_INCLUDE,
     });
   }

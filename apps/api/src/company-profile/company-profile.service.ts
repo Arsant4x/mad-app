@@ -20,6 +20,7 @@ const PROFILE_SELECT = {
   city: true,
   postalCode: true,
   logoFileKey: true,
+  masterDataLocked: true,
 } as const;
 
 /** Matches CompanyUsersService's assertIsCompanyOwner — only the company
@@ -83,6 +84,7 @@ export class CompanyProfileService {
         city: emptyToNull(dto.city),
         postalCode: emptyToNull(dto.postalCode),
         ...(logoFileKey !== undefined ? { logoFileKey } : {}),
+        ...(dto.masterDataLocked !== undefined ? { masterDataLocked: dto.masterDataLocked } : {}),
       },
       select: PROFILE_SELECT,
     });
