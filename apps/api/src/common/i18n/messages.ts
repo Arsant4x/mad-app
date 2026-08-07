@@ -42,6 +42,8 @@ export const MSG = {
   account_code_taken: 'accounts.code_taken',
   account_type_locked: 'accounts.type_locked',
   account_has_journal_lines: 'accounts.has_journal_lines',
+  account_opening_equity_protected: 'accounts.opening_equity_protected',
+  account_opening_equity_type_conflict: 'accounts.opening_equity_type_conflict',
   journal_entry_not_found: 'journal.entry_not_found',
   journal_entry_unbalanced: 'journal.entry_unbalanced',
   journal_line_account_not_found: 'journal.line_account_not_found',
@@ -260,6 +262,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_has_journal_lines]: {
     ar: 'لا يمكن حذف حساب مرتبط بقيود يومية — احذف القيود المرتبطة أولاً',
     en: 'Cannot delete an account linked to journal entries — delete those entries first',
+  },
+  [MSG.account_opening_equity_protected]: {
+    ar: 'حساب الأرصدة الافتتاحية ({code}) يُدار آلياً كطرف مقابل للقيود الافتتاحية — لا يُدخل له رصيد افتتاحي',
+    en: 'The opening-balances account ({code}) is managed automatically as the counterpart of opening entries — it cannot take an opening balance of its own',
+  },
+  [MSG.account_opening_equity_type_conflict]: {
+    ar: 'الرمز {code} محجوز لحساب الأرصدة الافتتاحية (حقوق ملكية)، وهو موجود لديك بنوع مختلف — عدّل رمز ذلك الحساب أولاً',
+    en: 'Code {code} is reserved for the opening-balances equity account, but it already exists with a different type — change that account\'s code first',
   },
   [MSG.journal_entry_not_found]: { ar: 'القيد غير موجود', en: 'Journal entry not found' },
   [MSG.journal_entry_unbalanced]: { ar: 'القيد غير متوازن — لا يمكن ترحيله', en: 'Journal entry is unbalanced — it cannot be posted' },

@@ -81,8 +81,10 @@ describe('Trash / soft delete (e2e)', () => {
     // Came back intact, not as a blank shell.
     expect(restored?.name).toBe(name);
 
+    // `?? false`: on a pristine DB this was the only trashed customer, so the
+    // whole group vanishes — absence of the group is absence from the trash.
     const group = (await trash()).groups.find((g) => g.entity === 'customers');
-    expect(group?.items.some((i) => i.id === customerId)).toBe(false);
+    expect(group?.items.some((i) => i.id === customerId) ?? false).toBe(false);
   }, 60000);
 
   it('never shows one company another\'s trash, nor lets it restore from it', async () => {
@@ -100,8 +102,9 @@ describe('Trash / soft delete (e2e)', () => {
   it('purges permanently, with no way back', async () => {
     await authA(request(app.getHttpServer()).delete(`/trash/customers/${customerId}`)).expect(204);
 
+    // Same `?? false` as "restores it intact" — an emptied group disappears.
     const group = (await trash()).groups.find((g) => g.entity === 'customers');
-    expect(group?.items.some((i) => i.id === customerId)).toBe(false);
+    expect(group?.items.some((i) => i.id === customerId) ?? false).toBe(false);
     await authA(request(app.getHttpServer()).post(`/trash/customers/${customerId}/restore`)).expect(404);
   }, 60000);
 });

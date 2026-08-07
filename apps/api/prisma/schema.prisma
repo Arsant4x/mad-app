@@ -202,10 +202,9 @@ model Company {
   district       String?
   city           String?
   postalCode     String?
-  /// Deliberately unset by any code path right now — file storage (MinIO,
-  /// already provisioned in docker-compose but unused anywhere yet) isn't
-  /// wired up, so there's no legitimate way to populate this. Column exists
-  /// now so a future upload feature doesn't need its own migration.
+  /// MinIO object key for the company logo, set through the company-profile
+  /// update — which verifies the key belongs to this company and deletes the
+  /// replaced object from storage.
   logoFileKey String?
 
   /// Every report is normalized to this currency. Each money-carrying table
@@ -578,16 +577,24 @@ model Account {
   code           String
   name           String
   type           String
+  /// The *declared* opening balance. Never a balance source of its own: any
+  /// non-zero value is backed by a real posted opening entry (see
+  /// JournalEntry.openingForAccountId; counterpart account 3900), so every
+  /// report reads it from the ledger like any other posting. Edits post a
+  /// delta entry — never a silent mutation (see AccountsService.update).
   openingBalance Decimal @default(0) @db.Decimal(18, 2)
-  /// Running balance, moved by posted journal lines (see JournalPostingService).
-  /// Starts equal to `openingBalance` at creation; independent of it after that,
-  /// same relationship as Bank.balance/openingBalance.
+  /// Running balance, moved exclusively by posted journal lines (see
+  /// journal-posting.util.ts) — the opening entry included, so it starts at 0
+  /// and reaches `openingBalance` through the ledger, not by seeding.
   balance        Decimal @default(0) @db.Decimal(18, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   journalLines JournalLine[]
+  /// This account's opening entry plus any delta entries posted by later
+  /// opening-balance edits — see JournalEntry.openingForAccountId.
+  openingEntries JournalEntry[] @relation("OpeningEntries")
 
   @@unique([companyId, code])
   @@map("accounts")
@@ -1172,6 +1179,16 @@ model JournalEntry {
   baseTotalDebit  Decimal @db.Decimal(18, 2)
   baseTotalCredit Decimal @db.Decimal(18, 2)
 
+  /// Set when this entry *is* an account's opening entry (or a delta entry
+  /// from editing that account's opening balance): the قيد افتتاحي posted
+  /// against the 3900 opening-balances equity account. Identifies opening
+  /// entries precisely — for delta computation, for reversal when the account
+  /// is deleted, and for the idempotent backfill — instead of matching memos.
+  /// Restrict (not SetNull): the marker must never silently detach; the
+  /// account-delete path explicitly reverses these entries first.
+  openingForAccountId String?
+  openingForAccount   Account? @relation("OpeningEntries", fields: [openingForAccountId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   lines        JournalLine[]
@@ -1189,6 +1206,7 @@ model JournalEntry {
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
 
   @@unique([companyId, no])
+  @@index([openingForAccountId])
   @@map("journal_entries")
 }
 

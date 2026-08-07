@@ -75,6 +75,11 @@ export function AccountModal({
         <div className="field">
           <label>الرصيد الافتتاحي</label>
           <input className="num" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" />
+          <p className="hint" style={{ marginTop: 4 }}>
+            {editing
+              ? 'تغيير الرصيد الافتتاحي يُرحَّل بقيد تسوية جديد مقابل حساب الأرصدة الافتتاحية (3900) — القيد الأصلي يبقى كما هو.'
+              : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900)، بتاريخ بداية السنة المالية إن وُجدت.'}
+          </p>
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">

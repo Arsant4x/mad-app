@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
 
 const prisma = new PrismaClient();
 
@@ -95,6 +96,12 @@ async function main() {
   ]);
   await seedAccounts(companyB.id, [{ code: '1000', name: 'الصندوق', type: 'asset', openingBalance: 8000 }, ...LEDGER_ACCOUNTS]);
 
+  // Every seeded opening balance must be backed by a real قيد افتتاحي against
+  // 3900 (CLAUDE.md 3.8) — the same idempotent backfill the standalone script
+  // runs, so re-seeding an already-migrated DB adds nothing twice.
+  await seedOpeningEntries(companyA.id);
+  await seedOpeningEntries(companyB.id);
+
   // Every company gets one activity and its base currency up front, so the
   // rest of the app can assume both exist without null-checking. There's no
   // activity-management screen yet by design — see BusinessActivity's comment.
@@ -148,7 +155,12 @@ async function seedDemoCompany(opts: {
  * adds any new accounts (e.g. LEDGER_ACCOUNTS) without touching existing
  * ones — an account's `balance` may have drifted from postings since, so
  * only `openingBalance` would ever need updating here, and code/type/name
- * for an existing account are left untouched on upsert. */
+ * for an existing account are left untouched on upsert.
+ *
+ * `balance` is still seeded equal to `openingBalance` here, deliberately:
+ * seedOpeningEntries right after posts the قيد افتتاحي for each account and
+ * reverts the account-side double count — one shared invariant («balance
+ * already contains the opening amount») for fresh and legacy DBs alike. */
 async function seedAccounts(companyId: string, accounts: { code: string; name: string; type: string; openingBalance: number }[]) {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
@@ -159,6 +171,16 @@ async function seedAccounts(companyId: string, accounts: { code: string; name: s
         create: { companyId, code: a.code, name: a.name, type: a.type, openingBalance: a.openingBalance, balance: a.openingBalance },
       });
     }
+  });
+}
+
+/** Posts the قيد افتتاحي behind every seeded opening balance — see
+ * backfillCompanyOpeningEntries. Idempotent (accounts that already have an
+ * opening entry are skipped), so re-seeding never double-posts. */
+async function seedOpeningEntries(companyId: string) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+    await backfillCompanyOpeningEntries(tx, companyId);
   });
 }
 

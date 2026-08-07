@@ -4,12 +4,22 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
+import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
+import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, round2 } from '../journal/opening-balance.util';
 
 /**
  * Reference implementation for every future tenant-scoped module: all data
  * access goes through `tenantPrisma.runInTenantContext`, never through the
  * raw PrismaService. The service itself never has to filter by companyId —
  * that's handled centrally (see tenant-scope.extension.ts + rls.sql).
+ *
+ * Opening balances are *posted*, not seeded: a non-zero opening balance
+ * becomes a real قيد افتتاحي against 3900 (see opening-balance.util.ts), so
+ * `balance` and every report read it from the ledger. That's why create and
+ * update are wrapped in retryOnUniqueConflict — they now allocate journal
+ * numbers, with the same concurrent-numbering race as any posting service.
  */
 @Injectable()
 export class AccountsService {
@@ -20,66 +30,107 @@ export class AccountsService {
   }
 
   create(companyId: string, dto: CreateAccountDto) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      await this.assertNoDuplicateCode(tx, dto.code);
-      const openingBalance = dto.openingBalance ?? 0;
-      return tx.account.create({
-        // `companyId` is intentionally omitted here — the tenant-scope
-        // extension injects it at runtime (see tenant-scope.extension.ts).
-        // Prisma's generated types don't know about that, so the cast is
-        // the documented escape hatch for this pattern.
-        data: {
-          code: dto.code,
-          name: dto.name,
-          type: dto.type,
-          openingBalance,
-          balance: openingBalance,
-        } as unknown as Prisma.AccountCreateInput,
-      });
-    });
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        await this.assertNoDuplicateCode(tx, dto.code);
+        const openingBalance = round2(dto.openingBalance ?? 0);
+        this.assertNotOpeningEquity(dto.code, openingBalance !== 0);
+
+        const account = await tx.account.create({
+          // `companyId` is intentionally omitted here — the tenant-scope
+          // extension injects it at runtime (see tenant-scope.extension.ts).
+          // Prisma's generated types don't know about that, so the cast is
+          // the documented escape hatch for this pattern.
+          // `balance` starts at 0 — the opening entry below moves it, so the
+          // ledger stays the only source of balance.
+          data: {
+            code: dto.code,
+            name: dto.name,
+            type: dto.type,
+            openingBalance,
+          } as unknown as Prisma.AccountCreateInput,
+        });
+
+        if (openingBalance !== 0) {
+          await postOpeningDeltaEntry(tx, { companyId, account, delta: openingBalance });
+          // Re-read so the response carries the balance the entry just posted.
+          return tx.account.findUniqueOrThrow({ where: { id: account.id } });
+        }
+        return account;
+      }),
+    );
   }
 
   update(companyId: string, id: string, dto: UpdateAccountDto) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.account.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.account_not_found);
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const existing = await tx.account.findUnique({ where: { id } });
+        if (!existing) throw new NotFoundException(MSG.account_not_found);
 
-      const data: Prisma.AccountUncheckedUpdateInput = {};
-      if (dto.name !== undefined) data.name = dto.name;
+        const data: Prisma.AccountUncheckedUpdateInput = {};
+        if (dto.name !== undefined) data.name = dto.name;
 
-      if (dto.type !== undefined && dto.type !== existing.type) {
-        // Changing an account's debit/credit-normal side after it already has
-        // posted journal lines would silently flip how every past posting
-        // moved its balance — matches the mockup's "لا يمكن تغيير نوع حساب
-        // مستخدَم بقيود مرحّلة" restriction.
-        const usedInJournal = (await tx.journalLine.count({ where: { accountId: id } })) > 0;
-        if (usedInJournal) throw new ConflictException(MSG.account_type_locked);
-        data.type = dto.type;
-      }
+        if (dto.type !== undefined && dto.type !== existing.type) {
+          // Changing an account's debit/credit-normal side after it already has
+          // posted journal lines would silently flip how every past posting
+          // moved its balance — matches the mockup's "لا يمكن تغيير نوع حساب
+          // مستخدَم بقيود مرحّلة" restriction. An opening entry counts: it
+          // encodes the side too. Delete + recreate is the correction path.
+          const usedInJournal = (await tx.journalLine.count({ where: { accountId: id } })) > 0;
+          if (usedInJournal) throw new ConflictException(MSG.account_type_locked);
+          data.type = dto.type;
+        }
 
-      if (dto.openingBalance !== undefined) {
-        // Preserve any drift already posted into `balance` by shifting it by
-        // the same delta, rather than overwriting it outright — same pattern
-        // as BanksService.update.
-        const delta = dto.openingBalance - Number(existing.openingBalance);
-        data.openingBalance = dto.openingBalance;
-        data.balance = Number(existing.balance) + delta;
-      }
+        // An opening-balance change is a *posting*, never a mutation: the
+        // difference goes through a delta قيد افتتاحي (same dating and 3900
+        // counterpart as the original), so the ledger keeps supporting the
+        // number and closed periods keep refusing it (CLAUDE.md 6.9).
+        const delta = dto.openingBalance === undefined ? 0 : round2(dto.openingBalance) - round2(Number(existing.openingBalance));
+        if (delta !== 0) {
+          this.assertNotOpeningEquity(existing.code, true);
+          data.openingBalance = round2(dto.openingBalance!);
+        }
 
-      return tx.account.update({ where: { id }, data });
-    });
+        // Row first, entry second: a same-request type change must be in
+        // effect before the delta entry picks its debit/credit side from
+        // `type` — posting from the old type would contradict the account.
+        const updated = await tx.account.update({ where: { id }, data });
+        if (delta !== 0) {
+          await postOpeningDeltaEntry(tx, {
+            companyId,
+            account: updated,
+            delta,
+            memo: `تعديل الرصيد الافتتاحي — ${updated.name} (${updated.code})`,
+          });
+          // Re-read so the response carries the balance the entry just moved.
+          return tx.account.findUniqueOrThrow({ where: { id } });
+        }
+        return updated;
+      }),
+    );
   }
 
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.account.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.account_not_found);
+
+      // The account's opening entries are system-owned (auto), so deleting
+      // the account deletes them with it — reversing their balance effect on
+      // the 3900 counterpart. Dated inside a closed period they are history
+      // and must stay: the same refusal as any other posting into that period.
+      const openingEntries = await tx.journalEntry.findMany({ where: { openingForAccountId: id } });
+      for (const entry of openingEntries) {
+        await assertPeriodOpen(tx, entry.date);
+        await reverseAndDeleteJournalEntry(tx, entry.id);
+      }
+
       try {
         await tx.account.delete({ where: { id } });
       } catch (e) {
         // P2003 = foreign key violation — journal_lines.accountId is ON
         // DELETE RESTRICT, so this fires when the account still has posted
-        // journal lines.
+        // journal lines beyond its own opening entries.
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
           throw new ConflictException(MSG.account_has_journal_lines);
         }
@@ -91,5 +142,13 @@ export class AccountsService {
   private async assertNoDuplicateCode(tx: Prisma.TransactionClient, code: string, excludeId?: string): Promise<void> {
     const existing = await tx.account.findFirst({ where: { code, ...(excludeId ? { id: { not: excludeId } } : {}) } });
     if (existing) throw new ConflictException(formatMessage(MSG.account_code_taken, { code }));
+  }
+
+  /** 3900 is the counterpart of every opening entry — giving it an opening
+   * balance of its own would make it its own counterpart. */
+  private assertNotOpeningEquity(code: string, hasOpening: boolean): void {
+    if (hasOpening && code === OPENING_EQUITY_CODE) {
+      throw new ConflictException(formatMessage(MSG.account_opening_equity_protected, { code: OPENING_EQUITY_CODE }));
+    }
   }
 }

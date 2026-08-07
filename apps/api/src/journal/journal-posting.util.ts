@@ -75,6 +75,9 @@ export interface CreateJournalEntryInput {
   currency?: string;
   exchangeRate?: number;
   branchId?: string | null;
+  /** Marks this entry as an account's قيد افتتاحي (or opening-balance delta
+   * entry) — see opening-balance.util.ts. */
+  openingForAccountId?: string;
 }
 
 /** Creates a balanced journal entry and immediately posts it to account
@@ -115,6 +118,7 @@ export async function createJournalEntry(
       totalCredit,
       auto: input.auto ?? false,
       branchId: input.branchId ?? null,
+      openingForAccountId: input.openingForAccountId ?? null,
       currency,
       exchangeRate,
       baseTotalDebit: toBaseAmount(totalDebit, exchangeRate),
