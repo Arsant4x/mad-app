@@ -118,6 +118,11 @@ model PermissionTemplate {
   isSystem       Boolean  @default(false)
   isAllScreens   Boolean  @default(false)
   allowedScreens String[] @default([])
+  /// Per-screen action grants, e.g. { "contracts": ["view","add","edit"] }.
+  /// A screen in `allowedScreens` with **no** entry here ⇒ all actions on it
+  /// (backward-compat: templates created before actions existed keep working).
+  /// `isAllScreens` ⇒ every action everywhere.
+  screenActions  Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

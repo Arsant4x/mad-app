@@ -22,3 +22,9 @@ export class ScreenForbiddenException extends ForbiddenException {
     super({ code: 'SCREEN_FORBIDDEN', message: formatMessage(MSG.screen_forbidden, { screen }) });
   }
 }
+
+export class ActionForbiddenException extends ForbiddenException {
+  constructor(action: string, screen: string) {
+    super({ code: 'ACTION_FORBIDDEN', message: formatMessage(MSG.action_forbidden, { action, screen }) });
+  }
+}

@@ -4,9 +4,11 @@ import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountFrozenException, AccountStoppedException, ScreenForbiddenException } from './tenant.exceptions';
+import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, ScreenForbiddenException } from './tenant.exceptions';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
+import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
+import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
 
 /**
@@ -58,7 +60,9 @@ export class TenantGuard implements CanActivate {
       if (!isRead && !subscriptionSelfService) throw new AccountFrozenException();
     }
 
-    let allowedScreens: string[] | 'all' = company.permissionTemplate.isAllScreens ? 'all' : company.permissionTemplate.allowedScreens;
+    let isAllScreens = company.permissionTemplate.isAllScreens;
+    let allowedScreens: string[] | 'all' = isAllScreens ? 'all' : company.permissionTemplate.allowedScreens;
+    let screenActions = (company.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;
     // The company owner always sees every branch, including the consolidated
     // view (CLAUDE.md 6.8) — only employees can be narrowed.
     let allowedBranchIds: string[] | 'all' = 'all';
@@ -71,7 +75,9 @@ export class TenantGuard implements CanActivate {
       if (companyUser.status !== 'ACTIVE') {
         throw new AccountFrozenException();
       }
-      allowedScreens = companyUser.permissionTemplate.isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens;
+      isAllScreens = companyUser.permissionTemplate.isAllScreens;
+      allowedScreens = isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens;
+      screenActions = (companyUser.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;
       // No assignment means unrestricted, not "no access" — otherwise every
       // employee account that existed before branches shipped would have been
       // locked out of everything the moment this rolled out.
@@ -87,6 +93,14 @@ export class TenantGuard implements CanActivate {
     const requiredScreen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]);
     if (requiredScreen && allowedScreens !== 'all' && !allowedScreens.includes(requiredScreen)) {
       throw new ScreenForbiddenException(requiredScreen);
+    }
+
+    // Action-level check, opt-in per endpoint (@RequiresAction). Only meaningful
+    // once the screen is allowed; a screen with no explicit action set grants
+    // all actions (backward compat), so pre-existing templates never regress.
+    const requiredAction = this.reflector.getAllAndOverride<ScreenAction | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
+    if (requiredScreen && requiredAction && !isActionAllowed(isAllScreens, allowedScreens === 'all' ? [] : allowedScreens, screenActions, requiredScreen, requiredAction)) {
+      throw new ActionForbiddenException(requiredAction, requiredScreen);
     }
 
     req.tenant = {

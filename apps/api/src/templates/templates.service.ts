@@ -1,8 +1,24 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
+import { SCREEN_ACTIONS, type ScreenAction, type ScreenActionMap } from './screens';
 import { formatMessage, MSG } from '../common/i18n/messages';
+
+/** Keeps only known screens the template actually grants, and known actions —
+ * so a stray key from the client can't smuggle in a permission for a screen the
+ * template doesn't include. `isAllScreens` needs no map (it grants everything). */
+function sanitizeScreenActions(input: Record<string, string[]> | undefined, allowedScreens: string[], isAllScreens: boolean): ScreenActionMap | null {
+  if (isAllScreens || !input) return null;
+  const out: ScreenActionMap = {};
+  for (const [screen, actions] of Object.entries(input)) {
+    if (!allowedScreens.includes(screen) || !Array.isArray(actions)) continue;
+    const valid = [...new Set(actions.filter((a): a is ScreenAction => (SCREEN_ACTIONS as readonly string[]).includes(a)))];
+    if (valid.length) out[screen] = valid;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 @Injectable()
 export class TemplatesService {
@@ -18,11 +34,15 @@ async create(dto: CreateTemplateDto) {
     const duplicate = await this.prisma.permissionTemplate.findUnique({ where: { name } });
     if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name }));
 
+    const isAllScreens = dto.isAllScreens ?? false;
+    const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? []);
+    const screenActions = sanitizeScreenActions(dto.screenActions, allowedScreens, isAllScreens);
     return this.prisma.permissionTemplate.create({
       data: {
         name,
-        isAllScreens: dto.isAllScreens ?? false,
-        allowedScreens: dto.isAllScreens ? [] : (dto.allowedScreens ?? []),
+        isAllScreens,
+        allowedScreens,
+        screenActions: screenActions ?? Prisma.DbNull,
       },
     });
   }
@@ -37,12 +57,18 @@ async create(dto: CreateTemplateDto) {
     }
 
     const isAllScreens = dto.isAllScreens ?? existing.isAllScreens;
+    const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? existing.allowedScreens);
+    // Re-sanitize against the (possibly new) screen set so an action for a
+    // screen just removed from the template doesn't linger.
+    const sourceActions = dto.screenActions ?? ((existing.screenActions as Record<string, string[]> | null) ?? undefined);
+    const screenActions = sanitizeScreenActions(sourceActions, allowedScreens, isAllScreens);
     return this.prisma.permissionTemplate.update({
       where: { id },
       data: {
-       name: newName ?? existing.name,
+        name: newName ?? existing.name,
         isAllScreens,
-        allowedScreens: isAllScreens ? [] : (dto.allowedScreens ?? existing.allowedScreens),
+        allowedScreens,
+        screenActions: screenActions ?? Prisma.DbNull,
       },
     });
   }

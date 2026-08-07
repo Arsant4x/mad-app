@@ -182,6 +182,7 @@ export const MSG = {
   account_frozen: 'tenant.account_frozen',
   account_stopped: 'tenant.account_stopped',
   screen_forbidden: 'tenant.screen_forbidden',
+  action_forbidden: 'tenant.action_forbidden',
 
   // files
   file_missing: 'files.missing',
@@ -438,6 +439,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
+  [MSG.action_forbidden]: { ar: 'لا تملك صلاحية تنفيذ هذا الإجراء ({action}) على شاشة "{screen}"', en: 'You do not have permission to perform this action ({action}) on the "{screen}" screen' },
 
   [MSG.file_missing]: { ar: 'لم يتم إرسال أي ملف', en: 'No file was uploaded' },
   [MSG.file_too_large]: { ar: 'حجم الملف يتجاوز الحد المسموح (10 ميغابايت)', en: 'File exceeds the maximum allowed size (10 MB)' },

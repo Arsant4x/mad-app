@@ -77,7 +77,12 @@ describe('Subscription lifecycle (e2e)', () => {
     expect(co.id).toBeTruthy();
     const token = await loginToken(co.username, co.password);
     const sub = await request(app.getHttpServer()).get('/subscription').set('Authorization', `Bearer ${token}`).expect(200);
-    expect(sub.body.subStart).toBe(iso(0));
+    // subStart is the UTC date of the activation moment. Accept today or
+    // yesterday (UTC) so a run that straddles midnight UTC isn't flaky.
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const y = new Date();
+    y.setUTCDate(y.getUTCDate() - 1);
+    expect([y.toISOString().slice(0, 10), todayUtc]).toContain(sub.body.subStart);
     expect(sub.body.status).toBe('ACTIVE');
   }, 40000);
 

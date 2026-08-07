@@ -1,4 +1,4 @@
-import { ArrayUnique, IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { ArrayUnique, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import { ALLOWED_SCREENS } from '../screens';
 
 export class UpdateTemplateDto {
@@ -16,4 +16,8 @@ export class UpdateTemplateDto {
   @ArrayUnique()
   @IsIn(ALLOWED_SCREENS, { each: true })
   allowedScreens?: string[];
+
+  @IsOptional()
+  @IsObject()
+  screenActions?: Record<string, string[]>;
 }

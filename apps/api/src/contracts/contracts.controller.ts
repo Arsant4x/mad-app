@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import { ContractAttachmentsService } from './contract-attachments.service';
@@ -28,6 +29,7 @@ export class ContractsController {
   ) {}
 
   @Get()
+  @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
     return this.contractsService.list(tenant.companyId);
   }
@@ -59,16 +61,19 @@ export class ContractsController {
   }
 
   @Get(':id')
+  @RequiresAction('view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.contractsService.findOne(tenant.companyId, id);
   }
 
   @Post()
+  @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateContractDto) {
     return this.contractsService.create(tenant.companyId, dto);
   }
 
   @Patch(':id')
+  @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateContractDto) {
     return this.contractsService.update(tenant.companyId, id, dto);
   }
@@ -159,6 +164,7 @@ export class ContractsController {
   }
 
   @Post(':id/payments')
+  @RequiresAction('record')
   recordPayment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordPaymentDto) {
     return this.contractsService.recordPayment(tenant.companyId, id, dto);
   }
