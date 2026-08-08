@@ -9,6 +9,8 @@ const VAT_PATTERN = /^3\d{13}3$/;
 const CR_PATTERN = /^\d{10}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POSTAL_CODE_PATTERN = /^\d{5}$/;
+/** الرقم الإضافي أربع خانات — نفس صرامة الرمز البريدي وعند الكتابة فقط. */
+const ADDITIONAL_NUMBER_PATTERN = /^\d{4}$/;
 
 type FieldErrors = Partial<Record<keyof CompanyProfileInput, string>>;
 
@@ -29,6 +31,8 @@ export function CompanyProfilePage() {
   const [district, setDistrict] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
+  const [additionalNumber, setAdditionalNumber] = useState('');
+  const [unitNumber, setUnitNumber] = useState('');
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -59,6 +63,8 @@ export function CompanyProfilePage() {
         setDistrict(p.district ?? '');
         setCity(p.city ?? '');
         setPostalCode(p.postalCode ?? '');
+        setAdditionalNumber(p.additionalNumber ?? '');
+        setUnitNumber(p.unitNumber ?? '');
         setLogoFileKey(p.logoFileKey ?? '');
         setMasterDataLocked(p.masterDataLocked ?? false);
       })
@@ -125,6 +131,9 @@ export function CompanyProfilePage() {
     if (postalCode.trim() && !POSTAL_CODE_PATTERN.test(postalCode.trim())) {
       errors.postalCode = i18n.t('err_postal_code');
     }
+    if (additionalNumber.trim() && !ADDITIONAL_NUMBER_PATTERN.test(additionalNumber.trim())) {
+      errors.additionalNumber = i18n.t('err_additional_number');
+    }
     return errors;
   }
 
@@ -150,6 +159,8 @@ export function CompanyProfilePage() {
         district: district.trim(),
         city: city.trim(),
         postalCode: postalCode.trim(),
+        additionalNumber: additionalNumber.trim(),
+        unitNumber: unitNumber.trim(),
         logoFileKey,
         masterDataLocked,
       });
@@ -323,10 +334,22 @@ export function CompanyProfilePage() {
             <input value={city} onChange={(e) => setCity(e.target.value)} disabled={!canEdit} placeholder="الرياض" />
           </div>
         </div>
+        <div className="two-col">
+          <div className="field">
+            <label>الرمز البريدي</label>
+            <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} disabled={!canEdit} placeholder="12345" />
+            {fieldErrors.postalCode && <p className="error-text">{fieldErrors.postalCode}</p>}
+          </div>
+          <div className="field">
+            <label>الرقم الإضافي</label>
+            <input value={additionalNumber} onChange={(e) => setAdditionalNumber(e.target.value)} disabled={!canEdit} placeholder="1234" />
+            {fieldErrors.additionalNumber && <p className="error-text">{fieldErrors.additionalNumber}</p>}
+          </div>
+        </div>
         <div className="field">
-          <label>الرمز البريدي</label>
-          <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} disabled={!canEdit} placeholder="12345" />
-          {fieldErrors.postalCode && <p className="error-text">{fieldErrors.postalCode}</p>}
+          <label>رقم الوحدة (شقة/مكتب)</label>
+          <input value={unitNumber} onChange={(e) => setUnitNumber(e.target.value)} disabled={!canEdit} placeholder="12" />
+          <p className="hint">بهذين الحقلين يكتمل العنوان الوطني السعودي (7 حقول) الذي تطلبه ZATCA وإيجار.</p>
         </div>
       </div>
     </div>

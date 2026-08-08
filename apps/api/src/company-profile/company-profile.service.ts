@@ -19,6 +19,8 @@ const PROFILE_SELECT = {
   district: true,
   city: true,
   postalCode: true,
+  additionalNumber: true,
+  unitNumber: true,
   logoFileKey: true,
   masterDataLocked: true,
 } as const;
@@ -83,6 +85,8 @@ export class CompanyProfileService {
         district: emptyToNull(dto.district),
         city: emptyToNull(dto.city),
         postalCode: emptyToNull(dto.postalCode),
+        additionalNumber: emptyToNull(dto.additionalNumber),
+        unitNumber: emptyToNull(dto.unitNumber),
         ...(logoFileKey !== undefined ? { logoFileKey } : {}),
         ...(dto.masterDataLocked !== undefined ? { masterDataLocked: dto.masterDataLocked } : {}),
       },

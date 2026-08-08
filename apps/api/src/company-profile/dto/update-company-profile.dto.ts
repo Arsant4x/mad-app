@@ -62,6 +62,18 @@ export class UpdateCompanyProfileDto {
   @Matches(/^\d{5}$/, { message: MSG.postal_code_invalid })
   postalCode?: string;
 
+  /// الرقم الإضافي أربع خانات رسمياً — يُتحقَّق كما يُتحقَّق الرمز البريدي:
+  /// عند كتابته فقط، فالتاجر بلا رقم إضافي أولى بحقلٍ فارغ من فاتورة مرفوضة.
+  @IsOptional()
+  @ValidateIf((o) => !!o.additionalNumber)
+  @Matches(/^\d{4}$/, { message: MSG.additional_number_invalid })
+  additionalNumber?: string;
+
+  /// رقم الوحدة (شقة/مكتب) — نص حر: تختلف صيغته بين المباني.
+  @IsOptional()
+  @IsString()
+  unitNumber?: string;
+
   /// Storage key returned by `POST /files` for the uploaded logo. Sending ''
   /// clears the logo (and deletes the stored object); the service verifies the
   /// key is under this company's own prefix before saving it.

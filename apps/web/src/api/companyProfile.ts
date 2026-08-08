@@ -17,6 +17,8 @@ export interface CompanyProfile {
   district: string | null;
   city: string | null;
   postalCode: string | null;
+  additionalNumber: string | null;
+  unitNumber: string | null;
   logoFileKey: string | null;
   /** Freezes properties/contracts company-wide. */
   masterDataLocked: boolean;
@@ -35,6 +37,8 @@ export interface CompanyProfileInput {
   district?: string;
   city?: string;
   postalCode?: string;
+  additionalNumber?: string;
+  unitNumber?: string;
   /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
   logoFileKey?: string;
   masterDataLocked?: boolean;

@@ -212,6 +212,11 @@ model Company {
   district       String?
   city           String?
   postalCode     String?
+  /// الرقمان المكمّلان للعنوان الوطني السعودي (7 حقول رسمية): الرقم
+  /// الإضافي أربع خانات يميّز المدخل داخل المبنى نفسه، ورقم الوحدة
+  /// (شقة/مكتب). بهما يكتمل العنوان الذي تطلبه ZATCA وإيجار وواثق.
+  additionalNumber String?
+  unitNumber       String?
   /// MinIO object key for the company logo, set through the company-profile
   /// update — which verifies the key belongs to this company and deletes the
   /// replaced object from storage.

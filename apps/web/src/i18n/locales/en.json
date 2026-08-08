@@ -153,5 +153,6 @@
   "reset_success": "Password changed — sign in with it now.",
   "reset_error": "Could not set the password",
   "nav_pos": "POS",
-  "nav_quotes": "Quotes"
+  "nav_quotes": "Quotes",
+  "err_additional_number": "The additional number must be 4 digits"
 }
