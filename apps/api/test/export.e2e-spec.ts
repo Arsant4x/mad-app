@@ -11,17 +11,34 @@ import { AppModule } from '../src/app.module';
  * What must hold: the owner gets one JSON document carrying its real records,
  * an employee cannot walk out with the whole database, and the file never
  * contains another company's rows.
+ *
+ * Both tenants are registered fresh instead of reusing the demo pair: /export
+ * dumps the entire company, and on a dev database carrying residual rows from
+ * other suites, exporting demo-company-a is slow enough to blow past timeouts
+ * when the whole e2e suite runs. A fresh tenant keeps the export tiny and the
+ * assertions independent of whatever other suites left behind.
  */
 describe('Data export (e2e)', () => {
   let app: INestApplication;
+  let adminToken: string;
   let tokenA: string;
+  let tokenB: string;
   let empToken: string;
-  let empId: string;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const markerName = `عميل التصدير ${suffix}`;
   let markerId: string;
+  const cleanupCompanyIds: string[] = [];
 
   const authA = (r: request.Test) => r.set('Authorization', `Bearer ${tokenA}`);
+
+  async function registerCompany(username: string) {
+    const res = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ orgName: `منشأة تصدير ${username}`, username, password: 'ExpPass123!', email: `${username}@example.com` })
+      .expect(201);
+    cleanupCompanyIds.push(res.body.user.companyId);
+    return res.body.accessToken as string;
+  }
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -30,7 +47,15 @@ describe('Data export (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
-    tokenA = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    adminToken = (
+      await request(app.getHttpServer()).post('/auth/login').send({
+        username: process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan',
+        password: process.env.DEV_SEED_PLATFORM_ADMIN_PASSWORD,
+      })
+    ).body.accessToken;
+
+    tokenA = await registerCompany(`exp-a-${suffix}`);
+    tokenB = await registerCompany(`exp-b-${suffix}`);
 
     markerId = (await authA(request(app.getHttpServer()).post('/customers')).send({ name: markerName }).expect(201)).body.id;
 
@@ -39,18 +64,16 @@ describe('Data export (e2e)', () => {
     const templates = await authA(request(app.getHttpServer()).get('/templates')).expect(200);
     const tpl = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean }[]).find((t) => t.isAllScreens && !t.isSystem);
     const username = `exp-emp-${suffix}`;
-    const created = await authA(request(app.getHttpServer()).post('/company-users'))
+    await authA(request(app.getHttpServer()).post('/company-users'))
       .send({ name: `موظف ${username}`, username, password: 'ExpPass123!', permissionTemplateId: tpl!.id })
       .expect(201);
-    empId = created.body.id;
     empToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'ExpPass123!' })).body.accessToken;
   }, 60000);
 
   afterAll(async () => {
-    if (empId) await authA(request(app.getHttpServer()).delete(`/company-users/${empId}`));
-    if (markerId) {
-      await authA(request(app.getHttpServer()).delete(`/customers/${markerId}`));
-      await authA(request(app.getHttpServer()).delete(`/trash/customers/${markerId}`));
+    // Deleting the companies cascades through employees, identities, and rows.
+    for (const id of cleanupCompanyIds) {
+      await request(app.getHttpServer()).delete(`/companies/${id}`).set('Authorization', `Bearer ${adminToken}`);
     }
     await app.close();
   });
@@ -72,8 +95,7 @@ describe('Data export (e2e)', () => {
     await request(app.getHttpServer()).get('/export').set('Authorization', `Bearer ${empToken}`).expect(403);
   }, 60000);
 
-  it('never carries another company\'s rows', async () => {
-    const tokenB = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' })).body.accessToken;
+  it("never carries another company's rows", async () => {
     const res = await request(app.getHttpServer()).get('/export').set('Authorization', `Bearer ${tokenB}`).expect(200);
     const customers = res.body.data.customers as { id: string }[];
     expect(customers.some((c) => c.id === markerId)).toBe(false);
