@@ -32,6 +32,21 @@ export interface CreateJournalEntryInput {
   lines: JournalLineInput[];
 }
 
-export const listJournalEntries = () => apiClient.get<JournalEntry[]>('/journal').then((r) => r.data);
+export interface JournalListResponse {
+  items: JournalEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListJournalParams {
+  page?: number;
+  pageSize?: number;
+  /** Server-side — matches memo, entry no, or a line's account code. */
+  search?: string;
+}
+
+export const listJournalEntries = (params: ListJournalParams = {}) =>
+  apiClient.get<JournalListResponse>('/journal', { params }).then((r) => r.data);
 export const createJournalEntry = (dto: CreateJournalEntryInput) => apiClient.post<JournalEntry>('/journal', dto).then((r) => r.data);
 export const deleteJournalEntry = (id: string) => apiClient.delete(`/journal/${id}`);

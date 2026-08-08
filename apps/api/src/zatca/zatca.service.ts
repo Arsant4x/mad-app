@@ -64,7 +64,7 @@ export class ZatcaService {
     const unsigned = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        include: { customer: true, lines: true },
+        include: { customer: true, lines: true, relatedInvoice: { select: { no: true } } },
       });
       if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
       if (invoice.zatcaStatus === 'CLEARED') throw new BadRequestException(MSG.zatca_already_cleared);
@@ -87,6 +87,12 @@ export class ZatcaService {
         uuid,
         issuedAt: invoice.issueDate,
         invoiceType,
+        // Credit/debit notes travel as the same Invoice structure with type
+        // code 381/383 plus the original's reference and the reason — and
+        // they occupy ordinary positions in the same ICV/PIH chain.
+        documentType: invoice.docType === 'CREDIT_NOTE' ? 'credit' : invoice.docType === 'DEBIT_NOTE' ? 'debit' : 'invoice',
+        billingReference: invoice.relatedInvoice ? { invoiceNumber: invoice.relatedInvoice.no } : undefined,
+        adjustmentReason: invoice.adjustmentReason ?? undefined,
         icv,
         pih: previousHash,
         seller: {

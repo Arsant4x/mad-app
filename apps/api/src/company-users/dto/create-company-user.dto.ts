@@ -1,4 +1,4 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsArray, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateCompanyUserDto {
   @IsString()
@@ -15,4 +15,12 @@ export class CreateCompanyUserDto {
 
   @IsString()
   permissionTemplateId!: string;
+
+  /// Which branches this employee may see, from day one — same semantics as
+  /// UpdateCompanyUserDto.branchIds: empty/omitted = unrestricted within the
+  /// company (see CompanyUserBranch).
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  branchIds?: string[];
 }

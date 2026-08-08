@@ -102,10 +102,11 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
   }, 30000);
 
   afterAll(async () => {
-    // Submitted invoices carry a chain link, and the delete endpoint now
-    // refuses those with 409 (see InvoicesService.remove). Test rows aren't a
-    // real chain, so strip the link first and let the API delete normally —
-    // which also reverses the auto-posted journal entries.
+    // The chain guard refuses deleting a document with an assigned ICV/hash
+    // (see InvoicesService.remove). These test rows were never really at the
+    // authority, so every chain field is stripped first and the API then
+    // deletes normally — which also reverses the auto-posted journal entries.
+    // Cleanup must not depend on the guard's absence.
     await tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.updateMany({
         where: { id: { in: createdInvoiceIds } },

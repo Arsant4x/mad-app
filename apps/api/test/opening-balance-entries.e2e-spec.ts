@@ -60,9 +60,14 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     return res.body as { id: string; code: string; type: string; openingBalance: string; balance: string }[];
   }
 
-  async function listJournal() {
-    const res = await request(app.getHttpServer()).get('/journal').set('Authorization', `Bearer ${token}`).expect(200);
-    return res.body as {
+  // The journal list is paginated now, and the shared demo company has
+  // thousands of accumulated entries — so the entries for one account are
+  // located through the server-side search. Every account this suite creates
+  // has a unique suffixed code, and the journal search matches line account
+  // codes, so searching by code returns exactly this account's entries.
+  async function listJournal(search: string) {
+    const res = await request(app.getHttpServer()).get('/journal').query({ search, pageSize: 100 }).set('Authorization', `Bearer ${token}`).expect(200);
+    return res.body.items as {
       id: string;
       no: string;
       date: string;
@@ -91,7 +96,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     expect(equity).toBeDefined();
     expect(equity!.type).toBe('equity');
 
-    const entries = entriesFor(await listJournal(), account.id);
+    const entries = entriesFor(await listJournal(account.code), account.id);
     expect(entries).toHaveLength(1);
     const [entry] = entries;
     expect(entry.auto).toBe(true);
@@ -113,7 +118,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     const account = await createAccount({ code: `OB-L-${suffix()}`, name: 'خصم افتتاحي', type: 'liability', openingBalance: 300 });
     expect(Number(account.balance)).toBe(300);
 
-    const [entry] = entriesFor(await listJournal(), account.id);
+    const [entry] = entriesFor(await listJournal(account.code), account.id);
     const accountLine = entry.lines.find((l) => l.accountId === account.id)!;
     expect(Number(accountLine.credit)).toBe(300);
     expect(Number(accountLine.debit)).toBe(0);
@@ -123,7 +128,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     const account = await createAccount({ code: `OB-N-${suffix()}`, name: 'أصل بافتتاحي سالب', type: 'asset', openingBalance: -200 });
     expect(Number(account.balance)).toBe(-200);
 
-    const [entry] = entriesFor(await listJournal(), account.id);
+    const [entry] = entriesFor(await listJournal(account.code), account.id);
     expect(Number(entry.totalDebit)).toBe(200);
     const accountLine = entry.lines.find((l) => l.accountId === account.id)!;
     expect(Number(accountLine.credit)).toBe(200);
@@ -133,7 +138,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
   it('posts no entry at all for a zero opening balance', async () => {
     const account = await createAccount({ code: `OB-Z-${suffix()}`, name: 'بلا افتتاحي', type: 'expense' });
     expect(Number(account.balance)).toBe(0);
-    expect(entriesFor(await listJournal(), account.id)).toHaveLength(0);
+    expect(entriesFor(await listJournal(account.code), account.id)).toHaveLength(0);
   });
 
   it('carries the opening amounts into the trial balance, which stays balanced', async () => {
@@ -158,7 +163,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
 
     await request(app.getHttpServer()).patch(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).send({ openingBalance: 1000 }).expect(200);
 
-    let entries = entriesFor(await listJournal(), account.id);
+    let entries = entriesFor(await listJournal(account.code), account.id);
     expect(entries).toHaveLength(2);
     const original = entries.find((e) => Number(e.totalDebit) === 750)!;
     const delta = entries.find((e) => Number(e.totalDebit) === 250)!;
@@ -174,7 +179,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     // edit of history.
     await request(app.getHttpServer()).patch(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).send({ openingBalance: 400 }).expect(200);
 
-    entries = entriesFor(await listJournal(), account.id);
+    entries = entriesFor(await listJournal(account.code), account.id);
     expect(entries).toHaveLength(3);
     const downward = entries.find((e) => Number(e.totalDebit) === 600)!;
     const accountLine = downward.lines.find((l) => l.accountId === account.id)!;
@@ -188,7 +193,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
   it('posts nothing when the opening balance is "edited" to its current value', async () => {
     const account = await createAccount({ code: `OB-S-${suffix()}`, name: 'حساب ساكن', type: 'revenue', openingBalance: 90 });
     await request(app.getHttpServer()).patch(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).send({ openingBalance: 90 }).expect(200);
-    expect(entriesFor(await listJournal(), account.id)).toHaveLength(1);
+    expect(entriesFor(await listJournal(account.code), account.id)).toHaveLength(1);
   });
 
   it('refuses an opening balance on the 3900 counterpart account itself', async () => {
@@ -210,7 +215,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
 
     await request(app.getHttpServer()).delete(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).expect(204);
 
-    const journal = await listJournal();
+    const journal = await listJournal(account.code);
     expect(entriesFor(journal, account.id)).toHaveLength(0);
     expect(Number((await listAccounts()).find((a) => a.code === '3900')!.balance)).toBe(equityBefore);
   });
@@ -226,7 +231,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
 
     try {
       const account = await createAccount({ code: `OB-F-${suffix()}`, name: 'حساب مؤرَّخ', type: 'asset', openingBalance: 900 });
-      const [entry] = entriesFor(await listJournal(), account.id);
+      const [entry] = entriesFor(await listJournal(account.code), account.id);
       expect(entry.date.startsWith('2026-01-01')).toBe(true);
 
       await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/close`).set('Authorization', `Bearer ${token}`).expect(200);

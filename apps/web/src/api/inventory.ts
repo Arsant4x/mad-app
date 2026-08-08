@@ -53,7 +53,22 @@ export interface StockLevelRow {
   status: StockStatus;
 }
 
-export const listStockMovements = () => apiClient.get<StockMovement[]>('/inventory/movements').then((r) => r.data);
+export interface StockMovementListResponse {
+  items: StockMovement[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ListStockMovementsParams {
+  page?: number;
+  pageSize?: number;
+  /** Server-side — matches product name, warehouse name, or reason. */
+  search?: string;
+}
+
+export const listStockMovements = (params: ListStockMovementsParams = {}) =>
+  apiClient.get<StockMovementListResponse>('/inventory/movements', { params }).then((r) => r.data);
 export const createStockMovement = (dto: StockMovementInput) => apiClient.post<StockMovement & { resultingQty: number }>('/inventory/movements', dto).then((r) => r.data);
 export const deleteStockMovement = (id: string) => apiClient.delete(`/inventory/movements/${id}`);
 export const getStockLevels = () => apiClient.get<StockLevelRow[]>('/inventory/stock-levels').then((r) => r.data);

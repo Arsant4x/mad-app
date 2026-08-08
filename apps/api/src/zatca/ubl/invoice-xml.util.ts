@@ -45,6 +45,17 @@ export interface UblInvoiceInput {
   issuedAt: Date;
   /** 'standard' (B2B, cleared) or 'simplified' (B2C, reported). */
   invoiceType: 'standard' | 'simplified';
+  /** Which of the three ZATCA document kinds this is. Defaults to 'invoice'.
+   * Credit and debit notes keep the same `Invoice` root element — ZATCA does
+   * not use UBL's separate CreditNote/DebitNote documents; only the type code
+   * and the two fields below distinguish them. */
+  documentType?: UblDocumentType;
+  /** Credit/debit notes only (BR-KSA-56): the invoice being adjusted, referenced
+   * by its human number via cac:BillingReference. */
+  billingReference?: { invoiceNumber: string };
+  /** Credit/debit notes only (BR-KSA-17): why the adjustment was issued.
+   * Travels as cac:PaymentMeans/cbc:InstructionNote. */
+  adjustmentReason?: string;
   /** Invoice Counter Value — a gapless per-company sequence starting at 1. */
   icv: number;
   /** Previous Invoice Hash, base64. */
@@ -63,8 +74,21 @@ export interface UblInvoiceInput {
   taxTotalSar: number;
 }
 
-/** `388` is UBL's code for a tax invoice; credit/debit notes would be 381/383. */
-const INVOICE_TYPE_CODE = '388';
+export type UblDocumentType = 'invoice' | 'credit' | 'debit';
+
+/** UNTDID 1001: 388 tax invoice, 381 credit note, 383 debit note. ZATCA's
+ * compliance check demands all three, in both standard and simplified form,
+ * before it will issue a production CSID. */
+const DOCUMENT_TYPE_CODE: Record<UblDocumentType, string> = {
+  invoice: '388',
+  credit: '381',
+  debit: '383',
+};
+
+/** UNTDID 4461 payment means. Our data model doesn't capture how an adjustment
+ * is settled, and ZATCA validates only that the element and its InstructionNote
+ * are present on 381/383 — so a fixed `10` (cash) is emitted. */
+const ADJUSTMENT_PAYMENT_MEANS_CODE = '10';
 
 /**
  * The `name` attribute on the type code is a seven-digit flag string. Position 1
@@ -176,6 +200,30 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
  */
 export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
   const { currency } = input;
+  const documentType = input.documentType ?? 'invoice';
+
+  // A 381/383 without its original-invoice reference or reason is rejected by
+  // the authority unconditionally (BR-KSA-56 / BR-KSA-17) — failing here keeps
+  // that a programming error instead of a clearance rejection weeks later.
+  if (documentType !== 'invoice' && (!input.billingReference || !input.adjustmentReason?.trim())) {
+    throw new Error(`A ${documentType} note requires billingReference and adjustmentReason.`);
+  }
+
+  // UBL's sequence puts BillingReference *before* AdditionalDocumentReference
+  // (the ICV/PIH blocks) and PaymentMeans after the customer party.
+  const billingReference =
+    documentType !== 'invoice'
+      ? '<cac:BillingReference><cac:InvoiceDocumentReference>' +
+        `<cbc:ID>${esc(input.billingReference!.invoiceNumber)}</cbc:ID>` +
+        '</cac:InvoiceDocumentReference></cac:BillingReference>'
+      : '';
+  const paymentMeans =
+    documentType !== 'invoice'
+      ? '<cac:PaymentMeans>' +
+        `<cbc:PaymentMeansCode>${ADJUSTMENT_PAYMENT_MEANS_CODE}</cbc:PaymentMeansCode>` +
+        `<cbc:InstructionNote>${esc(input.adjustmentReason!)}</cbc:InstructionNote>` +
+        '</cac:PaymentMeans>'
+      : '';
 
   // Tax is reported per category. One category per distinct rate keeps the
   // subtotals reconcilable line by line.
@@ -211,11 +259,12 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
     `<cbc:UUID>${esc(input.uuid)}</cbc:UUID>` +
     `<cbc:IssueDate>${datePart(input.issuedAt)}</cbc:IssueDate>` +
     `<cbc:IssueTime>${timePart(input.issuedAt)}</cbc:IssueTime>` +
-    `<cbc:InvoiceTypeCode name="${TRANSACTION_CODE[input.invoiceType]}">${INVOICE_TYPE_CODE}</cbc:InvoiceTypeCode>` +
+    `<cbc:InvoiceTypeCode name="${TRANSACTION_CODE[input.invoiceType]}">${DOCUMENT_TYPE_CODE[documentType]}</cbc:InvoiceTypeCode>` +
     `<cbc:DocumentCurrencyCode>${esc(currency)}</cbc:DocumentCurrencyCode>` +
     // Always SAR: the authority accounts for the tax in local currency even
     // when the invoice is denominated in another one.
     '<cbc:TaxCurrencyCode>SAR</cbc:TaxCurrencyCode>' +
+    billingReference +
     // ICV and PIH: the two references that make the invoice chain verifiable.
     '<cac:AdditionalDocumentReference>' +
     '<cbc:ID>ICV</cbc:ID>' +
@@ -229,6 +278,7 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
     '</cac:AdditionalDocumentReference>' +
     partyXml('cac:AccountingSupplierParty', input.seller) +
     partyXml('cac:AccountingCustomerParty', input.buyer) +
+    paymentMeans +
     '<cac:TaxTotal>' +
     `<cbc:TaxAmount currencyID="SAR">${money(input.taxTotalSar)}</cbc:TaxAmount>` +
     '</cac:TaxTotal>' +

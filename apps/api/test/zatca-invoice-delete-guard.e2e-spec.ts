@@ -142,7 +142,10 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     expect(submitted.body.zatcaHash).toBeTruthy();
 
     const res = await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(409);
-    expect(res.body.message).toContain('سلسلة الفوترة الإلكترونية');
+    // Asserted on the remedy rather than the wording of the diagnosis: a
+    // refusal that doesn't tell the merchant to issue a credit note leaves
+    // them with no legitimate way to correct the document.
+    expect(res.body.message).toContain('إشعار دائن');
 
     // The refusal must have left the invoice — and its link — untouched.
     const list = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200);
@@ -160,7 +163,10 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id }, data: { zatcaStatus: 'CLEARED' } }));
 
     const res = await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(409);
-    expect(res.body.message).toContain('سلسلة الفوترة الإلكترونية');
+    // Asserted on the remedy rather than the wording of the diagnosis: a
+    // refusal that doesn't tell the merchant to issue a credit note leaves
+    // them with no legitimate way to correct the document.
+    expect(res.body.message).toContain('إشعار دائن');
   }, 30000);
 
   it('keeps the chain intact after a refused delete — the next invoice still finds its predecessor', async () => {

@@ -11,6 +11,10 @@ export interface CompanyUser {
   /** Exempts this employee from the master-data lock. */
   canEditMasterData: boolean;
   permissionTemplate: PermissionTemplate;
+  /** صفوف الإسناد كمعرّفات فقط (الخادم لا يضمّن جدول الفروع المحمي بـRLS
+   * هنا) — الأسماء تُحلّ من قائمة الفروع المحمَّلة أصلاً في الشاشة.
+   * فارغة = يرى كل الفروع. */
+  branches: { branchId: string }[];
 }
 
 export interface CompanyUserInput {
@@ -18,6 +22,8 @@ export interface CompanyUserInput {
   username: string;
   password: string;
   permissionTemplateId: string;
+  /** الفروع التي يراها الموظف — فارغة/غائبة = بلا قيد (كل الفروع). */
+  branchIds?: string[];
 }
 
 export const listCompanyUsers = () => apiClient.get<CompanyUser[]>('/company-users').then((r) => r.data);

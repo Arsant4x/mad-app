@@ -24,7 +24,15 @@ export interface TransactionInput {
   source?: string;
 }
 
-export const listTransactions = () => apiClient.get<BankTx[]>('/transactions').then((r) => r.data);
+export interface BankTxListResponse {
+  items: BankTx[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export const listTransactions = (params: { page?: number; pageSize?: number; search?: string } = {}) =>
+  apiClient.get<BankTxListResponse>('/transactions', { params }).then((r) => r.data);
 export const createTransaction = (dto: TransactionInput) => apiClient.post<BankTx>('/transactions', dto).then((r) => r.data);
 export const updateTransaction = (id: string, dto: Partial<TransactionInput>) => apiClient.patch<BankTx>(`/transactions/${id}`, dto).then((r) => r.data);
 export const deleteTransaction = (id: string) => apiClient.delete(`/transactions/${id}`);

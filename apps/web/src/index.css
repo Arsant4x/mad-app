@@ -912,3 +912,37 @@ tr:last-child td {
   border: 1px solid var(--line);
   border-radius: 6px;
 }
+
+/* ---------- print ----------
+   طباعة الكاشير = ورقة العميل وحدها. بلا هذه القاعدة كان window.print() يطبع
+   الصفحة كاملةً — الشريط الجانبي وشبكة الأصناف وأزرار النافذة، وأخطرها تنبيه
+   المخزون السالب الداخلي الذي يظهر تحت الإيصال: بيانُ جردٍ للتاجر لا سطرٌ
+   لزبونه. الوسم .print-receipt يلفّ جسم الإيصال وحده (أونلاين وأوفلاين). */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible;
+  }
+  /* النافذة عائمة (overlay ثابت مُتوسِّط)، فالإيصال يُنتزع إلى أعلى الورقة
+     وإلا طُبع في منتصفها أو انقصّ أسفلها. */
+  .print-receipt {
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
+    width: 100%;
+  }
+  .overlay {
+    position: static;
+    padding: 0;
+    background: none;
+  }
+  .modal {
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+  }
+}

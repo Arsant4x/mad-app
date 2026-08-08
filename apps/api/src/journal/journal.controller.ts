@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+import { ListJournalQueryDto } from './dto/list-journal-query.dto';
 import { JournalService } from './journal.service';
 
 @Controller('journal')
@@ -16,8 +17,8 @@ export class JournalController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.journalService.list(tenant.companyId, tenant.allowedBranchIds);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListJournalQueryDto) {
+    return this.journalService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Post()

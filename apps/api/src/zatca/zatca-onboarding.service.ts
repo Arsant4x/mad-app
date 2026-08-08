@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ZatcaEnvironment, ZatcaOnboardingStatus } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { MSG } from '../common/i18n/messages';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { StartOnboardingDto, SubmitOtpDto } from './dto/onboarding.dto';
 import { csrToBase64, generateCsr, ZatcaEnv } from './csr.util';
+import { GENESIS_PREVIOUS_HASH } from './hash-chain.util';
+import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
+import { signInvoice } from './ubl/xades.util';
 
 /**
  * Fatoora onboarding, run by the platform on the merchant's behalf.
@@ -41,6 +45,24 @@ export const API_BASE: Record<ZatcaEnvironment, string> = {
 
 /** Identifies this platform as the E-invoice Generation Solution. */
 const SOLUTION_NAME = 'mad-app';
+
+/**
+ * The authority's conformance matrix: it will not issue a production CSID
+ * until one sample of EVERY document kind the solution declared has passed
+ * `/compliance/invoices` — standard and simplified, each as invoice, credit
+ * note and debit note. Six documents. The CSR's default invoice-type flags
+ * (`1100`, see StartOnboardingDto) declare both kinds, so all six are always
+ * submitted. Order matters only in that the samples form their own PIH chain,
+ * ICV 1→6 from the genesis hash, exactly like a real submission sequence.
+ */
+const COMPLIANCE_SAMPLES: ReadonlyArray<{ invoiceType: 'standard' | 'simplified'; documentType: UblDocumentType }> = [
+  { invoiceType: 'standard', documentType: 'invoice' },
+  { invoiceType: 'standard', documentType: 'credit' },
+  { invoiceType: 'standard', documentType: 'debit' },
+  { invoiceType: 'simplified', documentType: 'invoice' },
+  { invoiceType: 'simplified', documentType: 'credit' },
+  { invoiceType: 'simplified', documentType: 'debit' },
+];
 
 function assertIsCompanyOwner(actorType: string): void {
   if (actorType !== 'COMPANY') {
@@ -177,6 +199,10 @@ export class ZatcaOnboardingService {
       const body = (await res.json().catch(() => ({}))) as {
         binarySecurityToken?: string;
         secret?: string;
+        // The authority's identifier for this compliance request. Numeric in
+        // the responses seen so far, but stored as text — it is an opaque
+        // handle we echo back, never something we compute with.
+        requestID?: string | number;
         errors?: unknown;
       };
 
@@ -188,6 +214,7 @@ export class ZatcaOnboardingService {
       // narrowing inside a closure, so `body.secret` would read as possibly
       // undefined there despite the guard above.
       const { binarySecurityToken, secret } = body;
+      const complianceRequestId = body.requestID === undefined || body.requestID === null ? null : String(body.requestID);
 
       await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
         tx.zatcaCredential.update({
@@ -195,11 +222,23 @@ export class ZatcaOnboardingService {
           data: {
             complianceCsidEnc: encryptSecret(binarySecurityToken),
             complianceSecretEnc: encryptSecret(secret),
+            complianceRequestId,
             status: ZatcaOnboardingStatus.COMPLIANCE_ISSUED,
             lastError: null,
           },
         }),
       );
+
+      // Holding the certificate is not yet compliance: the production CSID is
+      // only granted after the six sample documents pass, so they are run
+      // here, immediately, while the merchant is still watching the screen.
+      const checkError = await this.runComplianceChecks(companyId, {
+        environment: credential.environment,
+        privateKeyEnc: credential.privateKeyEnc,
+        complianceCsid: binarySecurityToken,
+        complianceSecret: secret,
+      });
+      if (checkError) return this.fail(companyId, checkError);
 
       return this.getStatus(companyId);
     } catch (e) {
@@ -209,18 +248,133 @@ export class ZatcaOnboardingService {
   }
 
   /**
+   * Builds, signs and submits the six conformance samples with the freshly
+   * issued compliance CSID. Returns `null` when every sample passes, or a
+   * description of the first failure. Sequential on purpose: the samples form
+   * a PIH chain, so document N+1 embeds N's hash.
+   */
+  private async runComplianceChecks(
+    companyId: string,
+    input: { environment: ZatcaEnvironment; privateKeyEnc: string | null; complianceCsid: string; complianceSecret: string },
+  ): Promise<string | null> {
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: {
+        legalName: true,
+        vatNumber: true,
+        crNumber: true,
+        address: true,
+        street: true,
+        buildingNumber: true,
+        district: true,
+        city: true,
+        postalCode: true,
+      },
+    });
+
+    const seller = {
+      name: company.legalName!,
+      vatNumber: company.vatNumber,
+      crNumber: company.crNumber,
+      street: company.street ?? company.address,
+      buildingNumber: company.buildingNumber,
+      district: company.district,
+      city: company.city,
+      postalCode: company.postalCode,
+    };
+    const privateKeyPem = decryptSecret(input.privateKeyEnc!);
+    const issuedAt = new Date();
+
+    let pih = GENESIS_PREVIOUS_HASH;
+    for (let i = 0; i < COMPLIANCE_SAMPLES.length; i++) {
+      const sample = COMPLIANCE_SAMPLES[i];
+      const number = `CMP-${i + 1}`;
+      // A credit/debit sample references its own type's invoice sample —
+      // the authority validates the reference's presence, not its target.
+      const referencedInvoice = sample.invoiceType === 'standard' ? 'CMP-1' : 'CMP-4';
+      const uuid = randomUUID();
+
+      const unsigned = buildUnsignedInvoiceXml({
+        number,
+        uuid,
+        issuedAt,
+        invoiceType: sample.invoiceType,
+        documentType: sample.documentType,
+        billingReference: sample.documentType === 'invoice' ? undefined : { invoiceNumber: referencedInvoice },
+        adjustmentReason: sample.documentType === 'invoice' ? undefined : 'عينة فحص الامتثال — تصحيح',
+        icv: i + 1,
+        pih,
+        seller,
+        // A standard sample needs a VAT-registered buyer; a simplified one a
+        // plain cash customer. Both synthetic — nothing is billed.
+        buyer:
+          sample.invoiceType === 'standard'
+            ? { name: 'شركة عينة الامتثال', vatNumber: '399999999900003', street: 'طريق العينة', buildingNumber: '1111', district: 'حي العينة', city: 'الرياض', postalCode: '12345' }
+            : { name: 'عميل نقدي', vatNumber: null },
+        lines: [{ description: 'عينة فحص الامتثال', quantity: 1, unitPrice: 100, taxRate: 15 }],
+        currency: 'SAR',
+        subtotal: 100,
+        taxTotal: 15,
+        total: 115,
+        taxTotalSar: 15,
+      });
+
+      const { signedXml, invoiceHash } = await signInvoice({
+        unsignedXml: unsigned,
+        privateKeyPem,
+        certificateBase64: input.complianceCsid,
+        qr: { sellerName: seller.name, vatNumber: seller.vatNumber!, issuedAt, total: 115, vatAmount: 15 },
+      });
+
+      const res = await fetch(`${apiBaseFor(input.environment)}/compliance/invoices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Accept-Version': 'V2',
+          Authorization: `Basic ${Buffer.from(`${input.complianceCsid}:${input.complianceSecret}`).toString('base64')}`,
+        },
+        body: JSON.stringify({ invoiceHash, uuid, invoice: Buffer.from(signedXml, 'utf8').toString('base64') }),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { errors?: unknown };
+        return `compliance ${sample.invoiceType}/${sample.documentType}: HTTP ${res.status} — ${JSON.stringify(body.errors ?? body)}`.slice(0, 500);
+      }
+
+      pih = invoiceHash;
+    }
+    return null;
+  }
+
+  /**
    * Step 3 — swap the compliance certificate for a production one, which is
    * what actually clears real invoices.
    *
    * The authority only issues this after the merchant's solution has passed
-   * the conformance checks, so a rejection here usually means those haven't
-   * been completed rather than that anything is misconfigured.
+   * the conformance checks (run automatically at the end of `submitOtp`), so
+   * a rejection here usually means those haven't completed rather than that
+   * anything is misconfigured.
+   *
+   * ⚠️ TODO (deferred) — production CSID **renewal**: `PATCH
+   * /production/csids`. A production certificate expires; the renewal call
+   * authenticates with the *current* production CSID and returns a re-issued
+   * one against the same key. **Trigger condition:** the certificate entering
+   * its expiry window (parse `notAfter` from the stored certificate; renew
+   * ~30 days before). Needs a scheduled sweep over `zatca_credentials` plus
+   * the PATCH + certificate swap — none of which exists yet. Until built, an
+   * expired certificate surfaces as clearance rejections and the recovery is
+   * manual re-onboarding with a fresh OTP.
    */
   async requestProductionCertificate(companyId: string, actorType: string) {
     assertIsCompanyOwner(actorType);
 
     const credential = await this.credential(companyId);
-    if (!credential || !secretIsSet(credential.complianceCsidEnc)) {
+    // Both halves are required: the certificate authenticates the call, the
+    // request id tells the authority WHICH conformance run to check. A
+    // credential from before that id was captured must redo the OTP step
+    // rather than send a request the authority can only reject.
+    if (!credential || !secretIsSet(credential.complianceCsidEnc) || !credential.complianceRequestId) {
       throw new BadRequestException(MSG.zatca_compliance_required);
     }
 
@@ -236,7 +390,11 @@ export class ZatcaOnboardingService {
           'Accept-Version': 'V2',
           Authorization: `Basic ${Buffer.from(`${token}:${secret}`).toString('base64')}`,
         },
-        body: JSON.stringify({ compliance_request_id: credential.id }),
+        // The authority's own request id, captured at the OTP step — NOT our
+        // row id. Matching this to the passed conformance run is precisely
+        // what gates the production certificate; sending a local uuid means
+        // it is never issued.
+        body: JSON.stringify({ compliance_request_id: credential.complianceRequestId }),
       });
 
       const body = (await res.json().catch(() => ({}))) as {

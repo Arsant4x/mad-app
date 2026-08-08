@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { listBranches, type Branch } from '../../api/branches';
 import { createCompanyUser, deleteCompanyUser, listCompanyUsers, updateCompanyUser, type CompanyUser, type CompanyUserInput } from '../../api/companyUsers';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, ACTION_LABELS, SCREEN_LABELS, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { OwnerTemplateModal } from './OwnerTemplateModal';
@@ -16,6 +17,7 @@ const STATUS_META: Record<CompanyUser['status'], { label: string; badgeClass: st
 export function CompanyUsersPage() {
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [tplModal, setTplModal] = useState<{ mode: 'create' } | { mode: 'edit'; template: PermissionTemplate } | null>(null);
   const [pendingDeleteTpl, setPendingDeleteTpl] = useState<PermissionTemplate | null>(null);
   const [tplError, setTplError] = useState<string | null>(null);
@@ -25,9 +27,18 @@ export function CompanyUsersPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    const [u, t] = await Promise.all([listCompanyUsers(), listTemplates()]);
+    const [u, t, b] = await Promise.all([listCompanyUsers(), listTemplates(), listBranches()]);
     setUsers(u);
     setTemplates(t.filter((tpl) => !tpl.isSystem));
+    setBranches(b);
+  }
+
+  /** «كل الفروع» لغير المقيَّد — الأسماء تُحلّ من قائمة الفروع لأن الخادم
+   * يعيد صفوف الإسناد كمعرّفات فقط (جدول الفروع محمي بـRLS هناك). */
+  function describeBranches(u: CompanyUser): string {
+    if (!u.branches?.length) return 'كل الفروع';
+    const nameById = new Map(branches.map((b) => [b.id, b.name]));
+    return u.branches.map((r) => nameById.get(r.branchId) ?? '—').join('، ');
   }
 
   useEffect(() => {
@@ -120,6 +131,9 @@ export function CompanyUsersPage() {
               <tr>
                 <th>اسم الموظف</th>
                 <th>النموذج</th>
+                {/* عمود الفروع يظهر فقط لمنشأة لديها فروع — لمنشأة الموقع
+                    الواحد سيكون «كل الفروع» في كل صف: ضجيج بلا معلومة. */}
+                {branches.length > 0 && <th>الفروع</th>}
                 <th>الحالة</th>
                 <th></th>
               </tr>
@@ -127,7 +141,7 @@ export function CompanyUsersPage() {
             <tbody>
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={branches.length > 0 ? 5 : 4}>
                     <div className="empty-state">لا يوجد موظفون بحسابات دخول بعد</div>
                   </td>
                 </tr>
@@ -136,6 +150,7 @@ export function CompanyUsersPage() {
                 <tr key={u.id}>
                   <td>{u.name}</td>
                   <td>{u.permissionTemplate.name}</td>
+                  {branches.length > 0 && <td style={{ fontSize: 12, color: 'var(--muted)' }}>{describeBranches(u)}</td>}
                   <td>
                     <span className={`badge ${STATUS_META[u.status].badgeClass}`}>{STATUS_META[u.status].label}</span>
                   </td>
@@ -195,7 +210,7 @@ export function CompanyUsersPage() {
       </div>
 
       {modal && (
-        <CompanyUserModal templates={templates} editing={modal.mode === 'edit' ? modal.user : null} onCancel={() => setModal(null)} onSave={handleSave} />
+        <CompanyUserModal templates={templates} branches={branches} editing={modal.mode === 'edit' ? modal.user : null} onCancel={() => setModal(null)} onSave={handleSave} />
       )}
 
       {tplModal && <OwnerTemplateModal editing={tplModal.mode === 'edit' ? tplModal.template : null} onCancel={() => setTplModal(null)} onSave={handleSaveTemplate} />}

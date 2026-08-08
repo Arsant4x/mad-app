@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { MSG } from '../common/i18n/messages';
 
@@ -13,8 +14,45 @@ const TX_INCLUDE = { bank: true } as const;
 export class TransactionsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.bankTransaction.findMany({ where: branchFilter(allowedBranchIds), include: TX_INCLUDE, orderBy: { date: 'desc' } }));
+  list(companyId: string, allowedBranchIds: string[] | 'all', query: ListTransactionsQueryDto = {}) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 25;
+      const q = query.search?.trim();
+      // The search nests under AND: branchFilter's restricted form already
+      // claims the top-level OR key, and spreading a second OR over it would
+      // replace the branch scope with the search — leaking other branches' rows.
+      const where: Prisma.BankTransactionWhereInput = {
+        ...branchFilter(allowedBranchIds),
+        ...(q
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { description: { contains: q, mode: 'insensitive' } },
+                    { bank: { name: { contains: q, mode: 'insensitive' } } },
+                    { source: { contains: q, mode: 'insensitive' } },
+                    { entryNo: { contains: q, mode: 'insensitive' } },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      };
+
+      // Sequential on purpose: an interactive transaction runs on a single
+      // connection, so concurrent queries on `tx` would only race for it.
+      const total = await tx.bankTransaction.count({ where });
+      const items = await tx.bankTransaction.findMany({
+        where,
+        include: TX_INCLUDE,
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+
+      return { items, total, page, pageSize };
+    });
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateTransactionDto) {

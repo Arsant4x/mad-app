@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
+import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
 
@@ -14,10 +15,43 @@ export type StockStatus = 'out' | 'low' | 'available';
 export class InventoryService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  listMovements(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.stockMovement.findMany({ where: branchFilter(allowedBranchIds), include: MOVEMENT_INCLUDE, orderBy: { date: 'desc' } }),
-    );
+  listMovements(companyId: string, allowedBranchIds: string[] | 'all', query: ListMovementsQueryDto = {}) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 25;
+      const q = query.search?.trim();
+      // The search OR is wrapped in AND because branchFilter may itself be an
+      // OR (allowed branches ∪ company-wide rows) — a bare spread of two ORs
+      // would let the search clause clobber the branch restriction.
+      const searchWhere: Prisma.StockMovementWhereInput = q
+        ? {
+            AND: [
+              {
+                OR: [
+                  { product: { name: { contains: q, mode: 'insensitive' } } },
+                  { warehouse: { name: { contains: q, mode: 'insensitive' } } },
+                  { toWarehouse: { name: { contains: q, mode: 'insensitive' } } },
+                  { reason: { contains: q, mode: 'insensitive' } },
+                ],
+              },
+            ],
+          }
+        : {};
+      const where: Prisma.StockMovementWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere };
+
+      // Sequential on purpose: an interactive transaction runs on a single
+      // connection, so concurrent queries on `tx` would only race for it.
+      const total = await tx.stockMovement.count({ where });
+      const items = await tx.stockMovement.findMany({
+        where,
+        include: MOVEMENT_INCLUDE,
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+
+      return { items, total, page, pageSize };
+    });
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateStockMovementDto) {

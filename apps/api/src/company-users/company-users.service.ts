@@ -44,6 +44,10 @@ export class CompanyUsersService {
       if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
     if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
 
+    // قبل إنشاء أي شيء — فرع مرفوض بعد إنشاء الحساب كان سيترك حساباً
+    // نصف مُنشأ، وإعادة المحاولة تصطدم بـusername_taken.
+    if (dto.branchIds?.length) await this.assertBranchIdsBelongToCompany(companyId, dto.branchIds);
+
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
     if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
 
@@ -57,6 +61,10 @@ export class CompanyUsersService {
       include: { companyUser: { include: COMPANY_USER_INCLUDE } },
     });
 
+    if (dto.branchIds?.length) {
+      await this.replaceBranchAssignments(identity.companyUser!.id, dto.branchIds);
+      return this.prisma.companyUser.findUniqueOrThrow({ where: { id: identity.companyUser!.id }, include: COMPANY_USER_INCLUDE });
+    }
     return identity.companyUser!;
   }
 
@@ -84,26 +92,8 @@ export class CompanyUsersService {
     }
 
     if (dto.branchIds !== undefined) {
-      // Every id must belong to this company — a branch id from elsewhere
-      // would otherwise be stored and then silently widen this employee's
-      // visibility. Same re-validation rule as any foreign id off a request
-      // body (see the journal cross-tenant lesson).
-      //
-      // Read via the *tenant-scoped* client: `branches` is RLS-protected, and
-      // the raw PrismaService this service otherwise uses (its own tables,
-      // company_users/login_identities, carry no RLS) would see zero rows here
-      // and reject every valid id.
-      const valid = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.branch.findMany({ where: { id: { in: dto.branchIds } }, select: { id: true } }),
-      );
-      if (valid.length !== dto.branchIds.length) throw new NotFoundException(MSG.branch_not_found);
-
-      // Replace-all: the payload is the complete desired set, so diffing would
-      // only add a way for the two to drift apart.
-      await this.prisma.companyUserBranch.deleteMany({ where: { companyUserId: id } });
-      if (dto.branchIds.length > 0) {
-        await this.prisma.companyUserBranch.createMany({ data: dto.branchIds.map((branchId) => ({ companyUserId: id, branchId })) });
-      }
+      await this.assertBranchIdsBelongToCompany(companyId, dto.branchIds);
+      await this.replaceBranchAssignments(id, dto.branchIds);
     }
 
     return this.prisma.companyUser.update({
@@ -111,6 +101,32 @@ export class CompanyUsersService {
       data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
       include: COMPANY_USER_INCLUDE,
     });
+  }
+
+  /** Every id must belong to this company — a branch id from elsewhere would
+   * otherwise be stored and then silently widen this employee's visibility.
+   * Same re-validation rule as any foreign id off a request body (see the
+   * journal cross-tenant lesson).
+   *
+   * Read via the *tenant-scoped* client: `branches` is RLS-protected, and the
+   * raw PrismaService this service otherwise uses (its own tables,
+   * company_users/login_identities, carry no RLS) would see zero rows here and
+   * reject every valid id. */
+  private async assertBranchIdsBelongToCompany(companyId: string, branchIds: string[]): Promise<void> {
+    if (branchIds.length === 0) return;
+    const valid = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } }),
+    );
+    if (valid.length !== branchIds.length) throw new NotFoundException(MSG.branch_not_found);
+  }
+
+  /** Replace-all: the payload is the complete desired set, so diffing would
+   * only add a way for the two to drift apart. Empty = unrestricted. */
+  private async replaceBranchAssignments(companyUserId: string, branchIds: string[]): Promise<void> {
+    await this.prisma.companyUserBranch.deleteMany({ where: { companyUserId } });
+    if (branchIds.length > 0) {
+      await this.prisma.companyUserBranch.createMany({ data: branchIds.map((branchId) => ({ companyUserId, branchId })) });
+    }
   }
 
   async remove(companyId: string, actorType: string, id: string): Promise<void> {

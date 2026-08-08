@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
+import { ListJournalQueryDto } from './dto/list-journal-query.dto';
 import { resolveBranchId } from '../branches/branch-scope.util';
 import { createJournalEntry, reverseAndDeleteJournalEntry } from './journal-posting.util';
 import { MSG } from '../common/i18n/messages';
@@ -14,10 +15,42 @@ const JOURNAL_ENTRY_INCLUDE = { lines: { include: { account: true } } } as const
 export class JournalService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.journalEntry.findMany({ where: branchFilter(allowedBranchIds), include: JOURNAL_ENTRY_INCLUDE, orderBy: { date: 'desc' } }),
-    );
+  list(companyId: string, allowedBranchIds: string[] | 'all', query: ListJournalQueryDto = {}) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 25;
+      const q = query.search?.trim();
+      // The search OR is wrapped in AND because branchFilter may itself be an
+      // OR (allowed branches ∪ company-wide rows) — a bare spread of two ORs
+      // would let the search clause clobber the branch restriction.
+      const searchWhere: Prisma.JournalEntryWhereInput = q
+        ? {
+            AND: [
+              {
+                OR: [
+                  { memo: { contains: q, mode: 'insensitive' } },
+                  { no: { contains: q, mode: 'insensitive' } },
+                  { lines: { some: { account: { code: { contains: q, mode: 'insensitive' } } } } },
+                ],
+              },
+            ],
+          }
+        : {};
+      const where: Prisma.JournalEntryWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere };
+
+      // Sequential on purpose: an interactive transaction runs on a single
+      // connection, so concurrent queries on `tx` would only race for it.
+      const total = await tx.journalEntry.count({ where });
+      const items = await tx.journalEntry.findMany({
+        where,
+        include: JOURNAL_ENTRY_INCLUDE,
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+
+      return { items, total, page, pageSize };
+    });
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateJournalEntryDto) {

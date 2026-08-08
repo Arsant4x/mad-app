@@ -25,13 +25,6 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-interface InstallmentForCollection {
-  status: string;
-  dueDate: Date;
-  amount: Prisma.Decimal;
-  payments: { date: Date }[];
-}
-
 /**
  * On-time collection: of the rent that has actually fallen due, how much was
  * paid by its due date.
@@ -42,38 +35,47 @@ interface InstallmentForCollection {
  *
  * "On time" is judged by the *earliest* payment against the installment, since
  * a tenant who paid on the due date and topped up later still paid on time.
+ *
+ * Aggregated in SQL, not by loading rows: at portfolio scale (tens of
+ * thousands of installments) fetching every installment with its payments
+ * relation took ~10s and blew the 5s tenant-transaction timeout — the same
+ * failure mode as the contracts-list fix. RLS still applies (raw SQL is
+ * exactly what layer 2 exists for), and `companyId` is bound explicitly as
+ * layer 1. `todayIso` is a `YYYY-MM-DD` string so the comparison stays a pure
+ * calendar-date one, matching the old startOfDay() semantics.
  */
-function collectionRate(installments: InstallmentForCollection[], today: Date) {
-  const due = installments.filter((i) => i.status !== 'CANCELLED' && startOfDay(i.dueDate) <= today);
+async function collectionRate(tx: Prisma.TransactionClient, companyId: string, today: Date) {
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  let dueAmount = 0;
-  let paidAmount = 0;
-  let onTimeAmount = 0;
-  let lateCount = 0;
+  const [agg] = await tx.$queryRaw<{ dueAmount: number; paidAmount: number; onTimeAmount: number; overdueCount: number }[]>`
+    SELECT
+      COALESCE(SUM(i.amount), 0)::float8                                  AS "dueAmount",
+      COALESCE(SUM(i.amount) FILTER (WHERE i.status = 'PAID'), 0)::float8 AS "paidAmount",
+      COALESCE(SUM(i.amount) FILTER (WHERE i.status = 'PAID' AND fp."firstDate" <= i."dueDate"), 0)::float8
+                                                                          AS "onTimeAmount",
+      (COUNT(*) FILTER (WHERE i.status <> 'PAID'))::int                   AS "overdueCount"
+    FROM "contract_installments" i
+    LEFT JOIN (
+      SELECT p."installmentId", MIN(p.date) AS "firstDate"
+      FROM "rent_payments" p
+      WHERE p."companyId" = ${companyId} AND p."installmentId" IS NOT NULL
+      GROUP BY p."installmentId"
+    ) fp ON fp."installmentId" = i.id
+    WHERE i."companyId" = ${companyId}
+      AND i.status <> 'CANCELLED'
+      AND i."dueDate" <= ${todayIso}::date
+  `;
 
-  for (const i of due) {
-    const amount = Number(i.amount);
-    dueAmount += amount;
-    if (i.status !== 'PAID') {
-      lateCount += 1;
-      continue;
-    }
-
-    paidAmount += amount;
-    const firstPayment = i.payments.reduce<Date | null>((min, p) => (min === null || p.date < min ? p.date : min), null);
-    if (firstPayment && startOfDay(firstPayment) <= startOfDay(i.dueDate)) onTimeAmount += amount;
-  }
-
-  const pct = (part: number) => (dueAmount === 0 ? 0 : Math.round((part / dueAmount) * 1000) / 10);
+  const pct = (part: number) => (agg.dueAmount === 0 ? 0 : Math.round((part / agg.dueAmount) * 1000) / 10);
 
   return {
-    dueAmount: Math.round(dueAmount * 100) / 100,
-    paidAmount: Math.round(paidAmount * 100) / 100,
-    onTimeAmount: Math.round(onTimeAmount * 100) / 100,
-    collectedRate: pct(paidAmount),
-    onTimeRate: pct(onTimeAmount),
+    dueAmount: Math.round(agg.dueAmount * 100) / 100,
+    paidAmount: Math.round(agg.paidAmount * 100) / 100,
+    onTimeAmount: Math.round(agg.onTimeAmount * 100) / 100,
+    collectedRate: pct(agg.paidAmount),
+    onTimeRate: pct(agg.onTimeAmount),
     /** Installments due and still unpaid — the follow-up list's length. */
-    overdueCount: lateCount,
+    overdueCount: agg.overdueCount,
   };
 }
 
@@ -216,7 +218,7 @@ export class ReportsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const today = startOfDay(new Date());
 
-      const [properties, units, activeContracts, activeReservations, installments] = await Promise.all([
+      const [properties, units, activeContracts, activeReservations, collection] = await Promise.all([
         tx.property.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
         tx.unit.findMany({ select: { id: true, propertyId: true, underMaintenance: true } }),
         // "Occupied" means a live contract covering *today* — exactly the rule
@@ -226,7 +228,7 @@ export class ReportsService {
           select: { unitId: true },
         }),
         tx.reservation.findMany({ where: { status: 'ACTIVE' }, select: { unitId: true } }),
-        tx.installment.findMany({ select: { status: true, dueDate: true, amount: true, payments: { select: { date: true } } } }),
+        collectionRate(tx, companyId, today),
       ]);
 
       const rentedUnits = new Set(activeContracts.map((c) => c.unitId));
@@ -265,7 +267,7 @@ export class ReportsService {
           rented: totalRented,
           occupancyRate: totalUnits === 0 ? 0 : Math.round((totalRented / totalUnits) * 1000) / 10,
         },
-        collection: collectionRate(installments, today),
+        collection,
         expiring: await expiringContracts(tx, today),
       };
     });

@@ -33,15 +33,25 @@ describe('Bank transactions tenant isolation (e2e)', () => {
       .send({ name: `بنك اختبار ${Date.now()}`, openingBalance: 1000, openingDate: '2026-01-01' })
       .expect(201);
 
+    // Unique per run: the transactions list is paginated, so company B's
+    // isolation is proven by a server-side search for this exact description
+    // returning nothing tenant-wide — not by scanning one page of the
+    // accumulated demo data.
+    const description = `اختبار عزل ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const tx = await request(app.getHttpServer())
       .post('/transactions')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ bankId: bank.body.id, date: '2026-01-02', description: 'اختبار', amount: -200 })
+      .send({ bankId: bank.body.id, date: '2026-01-02', description, amount: -200 })
       .expect(201);
     expect(Number(tx.body.bank.balance)).toBe(800);
 
-    const resB = await request(app.getHttpServer()).get('/transactions').set('Authorization', `Bearer ${tokenB}`).expect(200);
-    expect(resB.body.some((t: { id: string }) => t.id === tx.body.id)).toBe(false);
+    const resB = await request(app.getHttpServer())
+      .get('/transactions')
+      .query({ search: description })
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(resB.body.total).toBe(0);
+    expect(resB.body.items.some((t: { id: string }) => t.id === tx.body.id)).toBe(false);
 
     await request(app.getHttpServer()).patch(`/transactions/${tx.body.id}`).set('Authorization', `Bearer ${tokenB}`).send({ amount: 1 }).expect(404);
     await request(app.getHttpServer()).delete(`/transactions/${tx.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);

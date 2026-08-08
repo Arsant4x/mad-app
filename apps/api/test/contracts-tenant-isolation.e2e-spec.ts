@@ -117,8 +117,15 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const banksAfter = await request(app.getHttpServer()).get('/banks').set('Authorization', `Bearer ${tokenA}`).expect(200);
     expect(Number(banksAfter.body.find((b: { id: string }) => b.id === bank.id).balance) - bankBalanceBefore).toBeCloseTo(900);
 
-    const transactions = await request(app.getHttpServer()).get('/transactions').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    const tx = transactions.body.find((t: { amount: string }) => Number(t.amount) === 900);
+    // The transactions list is paginated — the payment's transaction is found
+    // through the server-side search on the bank's unique per-run name, not by
+    // assuming it lands on page 1 of the accumulated demo data.
+    const transactions = await request(app.getHttpServer())
+      .get('/transactions')
+      .query({ search: bank.name })
+      .set('Authorization', `Bearer ${tokenA}`)
+      .expect(200);
+    const tx = transactions.body.items.find((t: { amount: string }) => Number(t.amount) === 900);
     expect(tx).toBeDefined();
     expect(tx.matched).toBe(true);
   });

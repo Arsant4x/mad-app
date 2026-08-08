@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { listBanks, type Bank } from '../../api/banks';
 import { createTransaction, deleteTransaction, listTransactions, updateTransaction, type BankTx, type TransactionInput } from '../../api/transactions';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { TransactionModal } from './TransactionModal';
 
+const PAGE_SIZE = 25;
+
 export function TransactionsPage() {
   const [transactions, setTransactions] = useState<BankTx[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,30 +21,31 @@ export function TransactionsPage() {
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; tx: BankTx } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BankTx | null>(null);
   const [needsBankNotice, setNeedsBankNotice] = useState(false);
+  const searchDebounce = useRef<number | undefined>(undefined);
 
-  async function reload() {
-    const [tx, bnk] = await Promise.all([listTransactions(), listBanks()]);
-    setTransactions(tx);
+  async function reload(p: number, q: string) {
+    const [tx, bnk] = await Promise.all([listTransactions({ page: p, pageSize: PAGE_SIZE, search: q.trim() || undefined }), listBanks()]);
+    setTransactions(tx.items);
+    setTotal(tx.total);
+    setPage(tx.page);
     setBanks(bnk);
   }
 
   useEffect(() => {
     // The picker options — filtered server-side to what this user may use.
     listBranches().then(setBranches);
-    reload().finally(() => setLoading(false));
+    reload(1, '').finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return transactions;
-    return transactions.filter(
-      (x) =>
-        x.description.toLowerCase().includes(q) ||
-        x.bank.name.toLowerCase().includes(q) ||
-        (x.source ?? '').toLowerCase().includes(q) ||
-        (x.entryNo ?? '').toLowerCase().includes(q),
-    );
-  }, [transactions, search]);
+  // Search runs server-side now that the client only holds one page, debounced
+  // so a keystroke burst becomes one request. Every new search restarts at
+  // page 1 — the old page number is meaningless against a different filter.
+  function handleSearch(q: string) {
+    setSearch(q);
+    window.clearTimeout(searchDebounce.current);
+    searchDebounce.current = window.setTimeout(() => void reload(1, q), 300);
+  }
 
   function openCreate() {
     if (!banks.length) {
@@ -56,14 +62,14 @@ export function TransactionsPage() {
       await createTransaction(data);
     }
     setModal(null);
-    await reload();
+    await reload(page, search);
   }
 
   async function confirmDelete() {
     if (!pendingDelete) return;
     await deleteTransaction(pendingDelete.id);
     setPendingDelete(null);
-    await reload();
+    await reload(page, search);
   }
 
   if (loading) return null;
@@ -84,7 +90,7 @@ export function TransactionsPage() {
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل الحركة..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder="ابحث بأي تفاصيل الحركة..." value={search} onChange={(e) => handleSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -107,14 +113,14 @@ export function TransactionsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {transactions.length === 0 && (
               <tr>
                 <td colSpan={8}>
                   <div className="empty-state">لا توجد حركات بنكية مطابقة</div>
                 </td>
               </tr>
             )}
-            {rows.map((x) => (
+            {transactions.map((x) => (
               <tr key={x.id}>
                 <td className="num">{dfmt(x.date)}</td>
                 <td>{x.description}</td>
@@ -141,6 +147,8 @@ export function TransactionsPage() {
           </tbody>
         </table>
       </div>
+
+      <Pager page={page} pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))} total={total} onPage={(p) => void reload(p, search)} />
 
       {modal && <TransactionModal banks={banks} branches={branches} editing={modal.mode === 'edit' ? modal.tx : null} onCancel={() => setModal(null)} onSave={handleSave} />}
 

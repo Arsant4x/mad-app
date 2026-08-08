@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listProducts, type Product } from '../../api/products';
+import { listBranches, type Branch } from '../../api/branches';
+import { BranchPicker } from '../../components/BranchPicker';
 import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
@@ -23,9 +25,11 @@ export function PosPage() {
   const [shift, setShift] = useState<PosShift | null>(null);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [query, setQuery] = useState('');
   const [cart, setCart] = useState<CartLine[]>([]);
   const [floatInput, setFloatInput] = useState('');
+  const [branchInput, setBranchInput] = useState('');
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Invoice | null>(null);
@@ -37,6 +41,9 @@ export function PosPage() {
   const [offlineReceipt, setOfflineReceipt] = useState<QueuedSale | null>(null);
   const [splitting, setSplitting] = useState(false);
   const [splitCash, setSplitCash] = useState('');
+  /** بنود هبط رصيدها تحت الصفر بهذا البيع — تحذير ناعم داخل الإيصال، لا يمنع البيع. */
+  const [stockWarnings, setStockWarnings] = useState<{ name: string; resultingQty: number }[]>([]);
+  const [stockNotice, setStockNotice] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   async function reload() {
@@ -51,6 +58,14 @@ export function PosPage() {
       // انقطاع: نبيع من آخر كتالوج معروف، والمناوبة كما كانت في الذاكرة.
       setProducts((prev) => (prev.length ? prev : readCachedProducts(companyId)));
       setOffline(true);
+    }
+    // بمعزل عن الكتلة أعلاه: فشلُ الفروع لا يُسقط البيع في الأوفلاين، وإعادةُ
+    // المحاولة مع كل reload تعني أن انقطاعاً لحظةَ الفتح لا يُخفي المُنتقي بقيةَ
+    // اليوم — وإخفاؤه صامتاً يعني مناوبةً بلا فرع، أي بيعاً كاملاً بلا خصم مخزون.
+    try {
+      setBranches(await listBranches());
+    } catch {
+      /* بلا فروع معروفة يختفي المُنتقي وتُفتح المناوبة على مستوى الشركة كما قبل. */
     }
     setQueueCount(readQueue(companyId).length);
   }
@@ -138,6 +153,17 @@ export function PosPage() {
     };
     try {
       const invoice = await syncPosSale(sale);
+      // الخادم يعيد ids فقط في belowZero — الأسماء تُحلّ من السلة قبل تفريغها.
+      const deduction = invoice.stockDeduction;
+      if (deduction?.deducted && deduction.belowZero.length > 0) {
+        const nameById = new Map(cart.map((l) => [l.product.id, l.product.name]));
+        setStockWarnings(deduction.belowZero.map((b) => ({ name: nameById.get(b.productId) ?? b.productId, resultingQty: b.resultingQty })));
+      } else {
+        setStockWarnings([]);
+      }
+      // تخطي الخصم سلوك مقصود لا خطأ — تلميح خافت فقط لوردية على فرع بلا
+      // مستودع مربوط (وردية بلا فرع أصلاً أو سلة كلها خدمات لا تستحق أي إشارة).
+      setStockNotice(deduction?.deducted === false && deduction.reason === 'NO_BRANCH_WAREHOUSE' && shift?.branchId ? 'لم يُخصم المخزون تلقائياً — لا مستودع مرتبطاً بفرع المناوبة' : null);
       setCart([]);
       setReceipt(invoice);
       await reload();
@@ -182,7 +208,9 @@ export function PosPage() {
   async function handleOpenShift() {
     setError(null);
     try {
-      await openShift(Number(floatInput || '0'));
+      // فرع الوردية يحدد مستودع الخصم (Branch.warehouseId) — بلا فرع يمضي
+      // البيع بلا خصم مخزون، وهو التراجع الصريح لا خطأ.
+      await openShift(Number(floatInput || '0'), branchInput || undefined);
       setFloatInput('');
       await reload();
     } catch (e) {
@@ -231,6 +259,7 @@ export function PosPage() {
             <label>العهدة الافتتاحية (نقد الدرج)</label>
             <input type="number" min="0" value={floatInput} onChange={(e) => setFloatInput(e.target.value)} placeholder="0.00" />
           </div>
+          <BranchPicker branches={branches} value={branchInput} onChange={setBranchInput} label="فرع المناوبة (يحدد مستودع خصم المخزون)" />
           {error && <p className="error-text">{error}</p>}
           <button className="btn btn-primary" style={{ width: '100%', padding: 14, fontSize: 16 }} onClick={handleOpenShift}>
             🧾 فتح المناوبة
@@ -286,6 +315,7 @@ export function PosPage() {
           <div className="page-title">الكاشير</div>
           <div className="page-sub">
             مناوبة {shift.openedByName} · {shift.salesCount} عملية · الدرج المتوقع {fmt(shift.expectedCash)}
+            {shift.branchId && <span className="badge draft" style={{ marginRight: 8 }}>{branches.find((b) => b.id === shift.branchId)?.name ?? 'فرع'}</span>}
             {offline && <span className="badge draft" style={{ marginRight: 8 }}>⚠ أوفلاين — البيع مستمر</span>}
             {queueCount > 0 && <span className="badge draft" style={{ marginRight: 8 }}>بانتظار المزامنة: {queueCount}</span>}
           </div>
@@ -425,24 +455,26 @@ export function PosPage() {
               <div className="modal-title">بيع مسجَّل أوفلاين ✓</div>
               <button className="modal-close" onClick={() => setOfflineReceipt(null)}>✕</button>
             </div>
-            <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>مرجع مؤقت: {offlineReceipt.offlineRef}</p>
-            <table>
-              <tbody>
-                {offlineReceipt.display.map((l, i) => (
-                  <tr key={i}>
-                    <td style={{ fontSize: 12 }}>{l.name}</td>
-                    <td className="num" style={{ fontSize: 12 }}>{l.quantity} × {fmt(l.unitPrice)}</td>
+            <div className="print-receipt">
+              <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>مرجع مؤقت: {offlineReceipt.offlineRef}</p>
+              <table>
+                <tbody>
+                  {offlineReceipt.display.map((l, i) => (
+                    <tr key={i}>
+                      <td style={{ fontSize: 12 }}>{l.name}</td>
+                      <td className="num" style={{ fontSize: 12 }}>{l.quantity} × {fmt(l.unitPrice)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
+                    <td className="num" style={{ fontWeight: 700 }}>{fmt(offlineReceipt.total)}</td>
                   </tr>
-                ))}
-                <tr>
-                  <td style={{ fontWeight: 700 }}>الإجمالي (شامل الضريبة)</td>
-                  <td className="num" style={{ fontWeight: 700 }}>{fmt(offlineReceipt.total)}</td>
-                </tr>
-              </tbody>
-            </table>
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
-              سيُرقَّم كفاتورة رسمية تلقائياً فور عودة الاتصال
-            </p>
+                </tbody>
+              </table>
+              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
+                سيُرقَّم كفاتورة رسمية تلقائياً فور عودة الاتصال
+              </p>
+            </div>
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setOfflineReceipt(null)}>إغلاق</button>
               <button className="btn btn-primary" onClick={() => window.print()}>🖨 طباعة</button>
@@ -461,7 +493,7 @@ export function PosPage() {
                 ✕
               </button>
             </div>
-            <div id="pos-receipt">
+            <div id="pos-receipt" className="print-receipt">
               <p className="num" style={{ textAlign: 'center', fontWeight: 700 }}>
                 فاتورة {receipt.no}
               </p>
@@ -494,6 +526,17 @@ export function PosPage() {
                 {new Date().toLocaleString('ar-SA')}
               </p>
             </div>
+            {/* خارج .print-receipt عمداً — تنبيه للكاشير لا سطراً على إيصال العميل. */}
+            {stockWarnings.length > 0 && (
+              <p className="hint" style={{ color: 'var(--rose)' }}>
+                تنبيه: الرصيد الناتج سالب — {stockWarnings.map((w) => `${w.name} (${fmt(w.resultingQty)})`).join('، ')} — تحقق من الجرد
+              </p>
+            )}
+            {stockNotice && (
+              <p className="hint" style={{ color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>
+                {stockNotice}
+              </p>
+            )}
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setReceipt(null)}>
                 إغلاق

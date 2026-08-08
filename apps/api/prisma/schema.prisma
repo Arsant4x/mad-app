@@ -59,6 +59,16 @@ enum ZatcaStatus {
   REJECTED
 }
 
+/// Which ZATCA document kind an `invoices` row is. Credit/debit notes share
+/// the invoice table deliberately: the authority's hash chain and ICV counter
+/// run across ALL document types, so the chain queries in hash-chain.util.ts
+/// must see every kind in one place.
+enum InvoiceDocType {
+  INVOICE
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
 /// Which ZATCA environment a company's integration points at. Kept explicit
 /// so a sandbox test can never be mistaken for a real clearance.
 enum ZatcaEnvironment {
@@ -455,6 +465,13 @@ model ZatcaCredential {
   /// Issued after the OTP exchange; lets the merchant run conformance checks.
   complianceCsidEnc   String?
   complianceSecretEnc String?
+  /// The authority's OWN identifier for this compliance request, returned
+  /// alongside the compliance certificate. It is what `/production/csids`
+  /// matches the passed conformance run against — sending anything else
+  /// (our row id, say) means the production certificate is never issued, so
+  /// it is captured at the OTP step and kept. Not a secret: it identifies a
+  /// request, it does not authenticate one.
+  complianceRequestId String?
   /// Issued once conformance passes; this is what signs real invoices.
   productionCsidEnc   String?
   productionSecretEnc String?
@@ -697,6 +714,21 @@ model Invoice {
   /// invoice can actually be diagnosed.
   zatcaMessage      String?
 
+  /// ZATCA document kind — see the enum's comment for why notes share this
+  /// table. A CREDIT_NOTE row's amounts are stored POSITIVE (the docType
+  /// carries the direction, matching the UBL documents ZATCA receives); the
+  /// ledger reversal happens through its own journal entry, never by editing
+  /// the original invoice's posted entry.
+  docType InvoiceDocType @default(INVOICE)
+  /// Credit/debit notes only: the invoice this note adjusts (BR-KSA-56).
+  /// Restrict — an invoice that has issued adjustments must stay on file.
+  relatedInvoiceId String?
+  relatedInvoice   Invoice?  @relation("InvoiceAdjustments", fields: [relatedInvoiceId], references: [id], onDelete: Restrict)
+  adjustments      Invoice[] @relation("InvoiceAdjustments")
+  /// Credit/debit notes only (BR-KSA-17): why the adjustment was issued —
+  /// travels to the authority as cac:PaymentMeans/cbc:InstructionNote.
+  adjustmentReason String?
+
   /// Null when required accounts (1200/4100/2200) aren't set up yet for this
   /// company — the invoice itself is still created, just not posted (see
   /// InvoicesService). `onDelete: Restrict` means the linked JournalEntry
@@ -712,6 +744,7 @@ model Invoice {
 
   @@unique([companyId, no])
   @@unique([companyId, clientSaleId])
+  @@index([relatedInvoiceId])
   @@map("invoices")
 }
 
@@ -2334,6 +2367,10 @@ model RentPayment {
 
   /// Same reasoning as Installment's contractId index.
   @@index([contractId])
+  /// For the property-KPIs first-payment-per-installment join, and for the
+  /// ON DELETE SET NULL cascade that fires per deleted installment — without
+  /// it each cascading installment delete re-scans this whole table.
+  @@index([installmentId])
   @@map("rent_payments")
 }
 

@@ -10,6 +10,11 @@ import { AppModule } from '../src/app.module';
  * isolation proof here is behavioral: post a fresh, uniquely-dated journal
  * entry as company A and confirm it shows up in A's income statement but
  * never affects company B's numbers computed from the same endpoints.
+ *
+ * property-kpis matters doubly here: its collection figure is the codebase's
+ * first raw-SQL read, which the tenant-scope extension (layer 1) cannot
+ * auto-inject `companyId` into — the query binds it explicitly and RLS backs
+ * it up. This suite is what proves that stays true.
  */
 describe('Reports tenant isolation (e2e)', () => {
   let app: INestApplication;
@@ -66,6 +71,56 @@ describe('Reports tenant isolation (e2e)', () => {
 
     await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   });
+
+  it("company A's rent collection and occupancy never bleed into company B's property KPIs", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const kpis = (token: string) => request(app.getHttpServer()).get('/reports/property-kpis').set('Authorization', `Bearer ${token}`).expect(200);
+
+    const beforeB = (await kpis(tokenB)).body;
+
+    // Company A: fresh property + unit + a 2024 contract whose installments
+    // are all due, with one paid on its due date — every collection figure
+    // (due, paid, on-time, overdue) moves for A.
+    const property = await request(app.getHttpServer())
+      .post('/properties')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: `عقار عزل المؤشرات ${suffix}`, ownership: 'owned' })
+      .expect(201);
+    const unit = await request(app.getHttpServer())
+      .post('/units')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ propertyId: property.body.id, unitNo: `ISO-${suffix}`, type: 'سكني', rentMonthly: 1000 })
+      .expect(201);
+    const contract = await request(app.getHttpServer())
+      .post('/contracts')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ unitId: unit.body.id, tenant: `مستأجر العزل ${suffix}`, value: 24000, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
+      .expect(201);
+    const first = contract.body.installments[0];
+    await request(app.getHttpServer())
+      .post(`/contracts/${contract.body.id}/payments`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ installmentId: first.id, date: '2024-01-01', amount: Number(first.amount), method: 'CASH' })
+      .expect(201);
+
+    // A sees its own new property; B's report neither lists it nor moves a
+    // single collection figure. If the raw collection SQL ever lost its
+    // companyId bind, A's freshly-due 24,000 would surface in B's dueAmount.
+    const afterA = (await kpis(tokenA)).body;
+    expect(afterA.occupancy.some((o: { propertyId: string }) => o.propertyId === property.body.id)).toBe(true);
+
+    const afterB = (await kpis(tokenB)).body;
+    expect(afterB.occupancy.some((o: { propertyId: string }) => o.propertyId === property.body.id)).toBe(false);
+    expect(afterB.collection).toEqual(beforeB.collection);
+    expect(afterB.portfolio.totalUnits).toBe(beforeB.portfolio.totalUnits);
+
+    // Cancel the contract so repeated runs don't accumulate due rent in the
+    // shared dev company.
+    await request(app.getHttpServer())
+      .post(`/contracts/${contract.body.id}/cancel`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ cancelDate: '2030-12-31', cancelReason: 'تنظيف بيانات الاختبار', installmentDisposition: 'cancel' });
+  }, 40000);
 
   it("balance sheet totals company A's own accounts only, disjoint from B's", async () => {
     const balA = await request(app.getHttpServer()).get('/reports/balance-sheet').set('Authorization', `Bearer ${tokenA}`).expect(200);

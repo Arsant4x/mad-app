@@ -39,9 +39,13 @@ export function DashboardPage() {
 
   const periodLabel = from ? `من ${dfmt(from)} إلى ${dfmt(to)}` : `حتى ${dfmt(to)} (كل الفترات)`;
 
-  const revenue = useMemo(() => invoices.filter((i) => inRange(i.issueDate, from, to)).reduce((s, i) => s + Number(i.total), 0), [invoices, from, to]);
+  // A credit note stores positive amounts (docType carries the direction), so
+  // it enters revenue with a flipped sign rather than inflating it.
+  const signedTotal = (i: Invoice) => (i.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(i.total);
+  const revenue = useMemo(() => invoices.filter((i) => inRange(i.issueDate, from, to)).reduce((s, i) => s + signedTotal(i), 0), [invoices, from, to]);
   const expense = useMemo(() => purchases.filter((p) => inRange(p.date, from, to)).reduce((s, p) => s + Number(p.total), 0), [purchases, from, to]);
   const net = revenue - expense;
+  // Notes are issued as status PAID, so the receivables filter already skips them.
   const receivables = useMemo(() => invoices.filter((i) => i.status !== 'PAID').reduce((s, i) => s + Number(i.total), 0), [invoices]);
 
   const months = useMemo(() => {
@@ -57,7 +61,7 @@ export function DashboardPage() {
       const mFrom = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
       const mToDate = new Date(d.getFullYear(), d.getMonth() + 1, 0);
       const mTo = `${mToDate.getFullYear()}-${String(mToDate.getMonth() + 1).padStart(2, '0')}-${String(mToDate.getDate()).padStart(2, '0')}`;
-      const rv = invoices.filter((inv) => inRange(inv.issueDate, mFrom, mTo)).reduce((s, inv) => s + Number(inv.total), 0);
+      const rv = invoices.filter((inv) => inRange(inv.issueDate, mFrom, mTo)).reduce((s, inv) => s + (inv.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(inv.total), 0);
       result.push({ label: MONTH_NAMES[d.getMonth()], value: Math.round(rv / 1000) });
     }
     return result;

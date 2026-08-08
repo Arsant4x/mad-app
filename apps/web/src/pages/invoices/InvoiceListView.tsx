@@ -27,6 +27,8 @@ export function InvoiceListView({
   onDelete,
   onChangeStatus,
   onSubmitToZatca,
+  onIssueCreditNote,
+  onIssueDebitNote,
   canSubmitToZatca,
   submittingId,
 }: {
@@ -36,6 +38,8 @@ export function InvoiceListView({
   onDelete: (invoice: Invoice) => void;
   onChangeStatus: (invoice: Invoice, status: InvoiceStatus) => void;
   onSubmitToZatca: (invoice: Invoice) => void;
+  onIssueCreditNote: (invoice: Invoice) => void;
+  onIssueDebitNote: (invoice: Invoice) => void;
   canSubmitToZatca: boolean;
   /** The invoice currently being sent, so its row can say so — submission is a
    * network round-trip to the authority, not an instant local change. */
@@ -143,13 +147,34 @@ export function InvoiceListView({
             {rows.map((inv) => (
               <tr key={inv.id}>
                 <td>{inv.customer.name}</td>
-                <td className="num">{inv.no}</td>
+                <td className="num">
+                  {inv.no}
+                  {/* A note looks exactly like an invoice otherwise — the
+                      badge and the original's number are what tell the reader
+                      this row adjusts rather than bills afresh. Red for a
+                      credit (reduces), amber for a debit (adds). */}
+                  {inv.docType !== 'INVOICE' && (
+                    <>
+                      <span className={`badge ${inv.docType === 'CREDIT_NOTE' ? 'overdue' : 'due'}`} style={{ marginInlineStart: 6 }}>
+                        {inv.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : 'إشعار مدين'}
+                      </span>
+                      {inv.relatedInvoice && <div className="hint">على الفاتورة {inv.relatedInvoice.no}</div>}
+                    </>
+                  )}
+                </td>
                 <td className="num">{dfmt(inv.issueDate)}</td>
                 <td className="num">{dfmt(inv.dueDate)}</td>
                 <td>
-                  <span style={{ cursor: 'pointer' }} title="اضغط لتغيير الحالة" onClick={() => setStatusModalFor(inv)}>
-                    <span className={`badge ${STATUS_META[inv.status].badgeClass}`}>{STATUS_META[inv.status].label}</span>
-                  </span>
+                  {/* A credit note has no payment lifecycle — the server
+                      refuses the edit, so the affordance isn't offered. A
+                      debit note IS receivable: its status stays clickable. */}
+                  {inv.docType !== 'CREDIT_NOTE' ? (
+                    <span style={{ cursor: 'pointer' }} title="اضغط لتغيير الحالة" onClick={() => setStatusModalFor(inv)}>
+                      <span className={`badge ${STATUS_META[inv.status].badgeClass}`}>{STATUS_META[inv.status].label}</span>
+                    </span>
+                  ) : (
+                    <span className="badge">—</span>
+                  )}
                 </td>
                 <td className="num">{fmt(inv.total)}</td>
                 <td>
@@ -171,7 +196,19 @@ export function InvoiceListView({
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل الفاتورة', onClick: () => onEdit(inv) },
+                      // A note is immutable after issue (the server refuses the
+                      // edit), and crediting a credit note is meaningless — both
+                      // actions exist only on real invoices.
+                      ...(inv.docType === 'INVOICE'
+                        ? [
+                            // A cleared invoice's data is frozen (the server
+                            // refuses the edit) — correcting it is exactly
+                            // what the two notes below are for.
+                            ...(inv.zatcaStatus !== 'CLEARED' ? [{ label: '✎ تعديل الفاتورة', onClick: () => onEdit(inv) }] : []),
+                            { label: '↩ إشعار دائن', onClick: () => onIssueCreditNote(inv) },
+                            { label: '↪ إشعار مدين', onClick: () => onIssueDebitNote(inv) },
+                          ]
+                        : []),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED'

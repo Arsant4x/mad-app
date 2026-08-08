@@ -78,15 +78,24 @@ describe('Journal ledger + account posting (e2e)', () => {
 
   it("keeps company B from seeing, deleting, or posting against company A's journal/accounts", async () => {
     const { asset, liability } = await createTestAccounts(tokenA);
+    // Unique per run so the paginated list can be interrogated through the
+    // server-side search — "absent from page 1" of the accumulated demo DB
+    // would prove nothing, "the search finds nothing tenant-wide" does.
+    const marker = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
     const entry = await request(app.getHttpServer())
       .post('/journal')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ date: '2026-01-01', memo: 'isolation entry', lines: [{ accountId: asset.id, debit: 50, credit: 0 }, { accountId: liability.id, debit: 0, credit: 50 }] })
+      .send({ date: '2026-01-01', memo: `isolation entry ${marker}`, lines: [{ accountId: asset.id, debit: 50, credit: 0 }, { accountId: liability.id, debit: 0, credit: 50 }] })
       .expect(201);
 
-    const resB = await request(app.getHttpServer()).get('/journal').set('Authorization', `Bearer ${tokenB}`).expect(200);
-    expect(resB.body.some((j: { id: string }) => j.id === entry.body.id)).toBe(false);
+    const resB = await request(app.getHttpServer())
+      .get('/journal')
+      .query({ search: `isolation entry ${marker}` })
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(resB.body.total).toBe(0);
+    expect(resB.body.items.some((j: { id: string }) => j.id === entry.body.id)).toBe(false);
 
     await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
 
@@ -95,11 +104,15 @@ describe('Journal ledger + account posting (e2e)', () => {
     await request(app.getHttpServer())
       .post('/journal')
       .set('Authorization', `Bearer ${tokenB}`)
-      .send({ date: '2026-01-01', memo: 'cross tenant attempt', lines: [{ accountId: asset.id, debit: 10, credit: 0 }, { accountId: liability.id, debit: 0, credit: 10 }] })
+      .send({ date: '2026-01-01', memo: `cross tenant attempt ${marker}`, lines: [{ accountId: asset.id, debit: 10, credit: 0 }, { accountId: liability.id, debit: 0, credit: 10 }] })
       .expect(404);
 
-    const bJournalAfter = await request(app.getHttpServer()).get('/journal').set('Authorization', `Bearer ${tokenB}`).expect(200);
-    expect(bJournalAfter.body.some((j: { memo: string }) => j.memo === 'cross tenant attempt')).toBe(false);
+    const bJournalAfter = await request(app.getHttpServer())
+      .get('/journal')
+      .query({ search: `cross tenant attempt ${marker}` })
+      .set('Authorization', `Bearer ${tokenB}`)
+      .expect(200);
+    expect(bJournalAfter.body.total).toBe(0);
 
     const accountsAfter = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
     const assetAfter = accountsAfter.body.find((a: { id: string }) => a.id === asset.id);

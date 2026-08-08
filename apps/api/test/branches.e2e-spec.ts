@@ -183,6 +183,54 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     await request(app.getHttpServer()).delete(`/branches/${otherBranch.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(204);
   });
 
+  it('creates an employee already scoped to a branch — one call, restriction live immediately', async () => {
+    const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
+
+    const created = await request(app.getHttpServer())
+      .post('/company-users')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'موظف جنوبي منذ الإنشاء', username: `south-${suffix}`, password: 'BranchPass123!', permissionTemplateId: template.id, branchIds: [branchSouthId] })
+      .expect(201);
+    expect(created.body.branches.map((b: { branchId: string }) => b.branchId)).toEqual([branchSouthId]);
+
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: `south-${suffix}`, password: 'BranchPass123!' });
+    const branches = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${login.body.accessToken}`).expect(200);
+    expect(branches.body.map((b: { id: string }) => b.id)).toEqual([branchSouthId]);
+
+    await request(app.getHttpServer()).delete(`/company-users/${created.body.id}`).set('Authorization', `Bearer ${ownerToken}`).expect(204);
+  });
+
+  it("refuses creating an employee with another company's branch — without leaving a half-created account", async () => {
+    const otherBranch = await request(app.getHttpServer())
+      .post('/branches')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: `فرع شركة ب للإنشاء ${suffix}` })
+      .expect(201);
+
+    const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
+    const username = `foreign-${suffix}`;
+
+    await request(app.getHttpServer())
+      .post('/company-users')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'محاولة فرع أجنبي', username, password: 'BranchPass123!', permissionTemplateId: template.id, branchIds: [otherBranch.body.id] })
+      .expect(404);
+
+    // الرفض يسبق إنشاء أي شيء: نفس اسم الدخول يجب أن يمرّ في المحاولة
+    // الصحيحة التالية — لا حساب نصف مُنشأ يحجزه.
+    const retry = await request(app.getHttpServer())
+      .post('/company-users')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'محاولة صحيحة', username, password: 'BranchPass123!', permissionTemplateId: template.id, branchIds: [branchNorthId] })
+      .expect(201);
+    expect(retry.body.branches.map((b: { branchId: string }) => b.branchId)).toEqual([branchNorthId]);
+
+    await request(app.getHttpServer()).delete(`/company-users/${retry.body.id}`).set('Authorization', `Bearer ${ownerToken}`).expect(204);
+    await request(app.getHttpServer()).delete(`/branches/${otherBranch.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(204);
+  });
+
   it('stops an employee from creating or deleting branches', async () => {
     await request(app.getHttpServer()).post('/branches').set('Authorization', `Bearer ${employeeToken}`).send({ name: 'فرع من موظف' }).expect(403);
     await request(app.getHttpServer()).delete(`/branches/${branchNorthId}`).set('Authorization', `Bearer ${employeeToken}`).expect(403);

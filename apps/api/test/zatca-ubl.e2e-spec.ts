@@ -305,4 +305,79 @@ describe('ZATCA UBL 2.1 invoice and XAdES signature', () => {
       expect(xml).not.toContain('<cbc:CompanyID></cbc:CompanyID>');
     });
   });
+
+  describe('credit and debit notes (381/383)', () => {
+    // What makes a note a note: the type code plus these two fields. Everything
+    // else — root element included — is identical to a 388 invoice, because
+    // ZATCA does not use UBL's separate CreditNote/DebitNote documents.
+    const noteFields = {
+      documentType: 'credit' as const,
+      billingReference: { invoiceNumber: 'INV-2026-0001' },
+      adjustmentReason: 'إرجاع بضاعة',
+    };
+
+    it('emits 381 with the original reference and the reason, keeping the Invoice root', () => {
+      const xml = buildUnsignedInvoiceXml({ ...baseInvoice, ...noteFields, number: 'CN-2026-0001' });
+
+      expect(xml).toContain('<cbc:InvoiceTypeCode name="0100000">381</cbc:InvoiceTypeCode>');
+      // BR-KSA-56 — the adjusted invoice, referenced by its human number.
+      expect(xml).toContain(
+        '<cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>INV-2026-0001</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>',
+      );
+      // BR-KSA-17 — the reason, carried as a PaymentMeans instruction note.
+      expect(xml).toContain('<cbc:InstructionNote>إرجاع بضاعة</cbc:InstructionNote>');
+      expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?><Invoice ');
+      expect(() => parseXml(xml)).not.toThrow();
+    });
+
+    it('emits 383 for a debit note', () => {
+      const xml = buildUnsignedInvoiceXml({ ...baseInvoice, ...noteFields, documentType: 'debit' });
+
+      expect(xml).toContain('<cbc:InvoiceTypeCode name="0100000">383</cbc:InvoiceTypeCode>');
+    });
+
+    it('marks a simplified credit note with the 2xxxxxx transaction code', () => {
+      const xml = buildUnsignedInvoiceXml({ ...baseInvoice, ...noteFields, invoiceType: 'simplified', buyer: { name: 'عميل نقدي', vatNumber: null } });
+
+      expect(xml).toContain('<cbc:InvoiceTypeCode name="0200000">381</cbc:InvoiceTypeCode>');
+    });
+
+    it('keeps the UBL sequence: BillingReference before the ICV block, PaymentMeans between buyer and tax totals', () => {
+      const xml = buildUnsignedInvoiceXml({ ...baseInvoice, ...noteFields });
+
+      // UBL is an XSD sequence — a misplaced element is rejected outright.
+      expect(xml.indexOf('<cac:BillingReference>')).toBeLessThan(xml.indexOf('<cbc:ID>ICV</cbc:ID>'));
+      expect(xml.indexOf('<cac:PaymentMeans>')).toBeGreaterThan(xml.indexOf('<cac:AccountingCustomerParty>'));
+      expect(xml.indexOf('<cac:PaymentMeans>')).toBeLessThan(xml.indexOf('<cac:TaxTotal>'));
+    });
+
+    it('a plain 388 invoice carries neither a billing reference nor payment means', () => {
+      const xml = buildUnsignedInvoiceXml(baseInvoice);
+
+      expect(xml).not.toContain('<cac:BillingReference>');
+      expect(xml).not.toContain('<cac:PaymentMeans>');
+    });
+
+    it('refuses to build a note missing the reference or the reason', () => {
+      // Either omission produces a document the authority rejects
+      // unconditionally — better a programming error here than a clearance
+      // rejection weeks later.
+      expect(() => buildUnsignedInvoiceXml({ ...baseInvoice, documentType: 'credit' })).toThrow(/billingReference/);
+      expect(() =>
+        buildUnsignedInvoiceXml({ ...baseInvoice, documentType: 'debit', billingReference: { invoiceNumber: 'INV-1' }, adjustmentReason: '   ' }),
+      ).toThrow(/adjustmentReason/);
+    });
+
+    it('signs a credit note that verifies, with the chain continuing across document types', async () => {
+      const invoice = await sign();
+      const note = await sign({ ...noteFields, number: 'CN-2026-0001', icv: 2, pih: invoice.invoiceHash });
+
+      // The authority runs ONE chain per solution — a note occupies an
+      // ordinary position in it, chained onto whatever came before it,
+      // whatever its type.
+      await expect(verifySignedInvoice(note.signedXml)).resolves.toBe(true);
+      expect(note.signedXml).toContain(invoice.invoiceHash);
+      expect(note.invoiceHash).not.toBe(invoice.invoiceHash);
+    }, 30000);
+  });
 });

@@ -49,7 +49,9 @@ describe('POS cashier (e2e)', () => {
     for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
     // حركات المخزون أولاً — Restrict يمنع حذف صنف/مستودع له تاريخ حركات.
     if (trackedProductId) {
-      const movements = (await auth(request(app.getHttpServer()).get('/inventory/movements'))).body as { id: string; productId: string }[];
+      // القائمة مقسّمة صفحات الآن — البحث بلاحقة التشغيل الفريدة (اسم الصنف
+      // والمستودع يحملانها) يعيد حركات هذا الاختبار وحدها بدل مسح صفحة واحدة.
+      const movements = (await auth(request(app.getHttpServer()).get('/inventory/movements')).query({ search: suffix, pageSize: 100 })).body.items as { id: string; productId: string }[];
       for (const m of movements.filter((m) => m.productId === trackedProductId)) {
         await auth(request(app.getHttpServer()).delete(`/inventory/movements/${m.id}`));
       }
@@ -140,7 +142,7 @@ describe('POS cashier (e2e)', () => {
 
     // الرصيد مشتق من دفتر الحركات لا من عدّاد (قاعدة 11): حركة OUT حقيقية
     // على فرع الوردية تحمل رقم الفاتورة.
-    const movements = (await auth(request(app.getHttpServer()).get('/inventory/movements')).expect(200)).body;
+    const movements = (await auth(request(app.getHttpServer()).get('/inventory/movements')).query({ search: suffix, pageSize: 100 }).expect(200)).body.items;
     const out = movements.find((m: { type: string; productId: string }) => m.type === 'OUT' && m.productId === trackedProductId);
     expect(out).toBeTruthy();
     expect(Number(out.qty)).toBeCloseTo(2, 2);

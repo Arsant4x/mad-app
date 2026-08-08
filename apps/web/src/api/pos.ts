@@ -36,6 +36,19 @@ export interface PosSaleLine {
   quantity: number;
 }
 
+/** مرآة StockDeductionReport في الخادم — معلوماتي فقط، الرصيد يبقى مشتقاً من دفتر الحركات. */
+export type StockDeductionReport =
+  | {
+      deducted: true;
+      warehouseId: string;
+      movements: number;
+      /** بنود هبط رصيدها تحت الصفر — تحذير ناعم بعد البيع، لا مانع. */
+      belowZero: { productId: string; resultingQty: number }[];
+    }
+  | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
+export type PosSaleResponse = Invoice & { stockDeduction?: StockDeductionReport };
+
 export const getCurrentShift = () => apiClient.get<PosShift | null>('/pos/shifts/current').then((r) => r.data);
 export const listShifts = () => apiClient.get<PosShift[]>('/pos/shifts').then((r) => r.data);
 export const openShift = (openingFloat: number, branchId?: string) =>
@@ -43,8 +56,8 @@ export const openShift = (openingFloat: number, branchId?: string) =>
 export const closeShift = (id: string, declaredClosing: number, notes?: string) =>
   apiClient.post<ClosedShift>(`/pos/shifts/${id}/close`, { declaredClosing, notes }).then((r) => r.data);
 export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMethod, customerId?: string) =>
-  apiClient.post<Invoice>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
+  apiClient.post<PosSaleResponse>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
 
 /** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
 export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
-  apiClient.post<Invoice>('/pos/sales/sync', sale).then((r) => r.data);
+  apiClient.post<PosSaleResponse>('/pos/sales/sync', sale).then((r) => r.data);

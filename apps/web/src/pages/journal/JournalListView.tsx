@@ -1,27 +1,29 @@
-import { useMemo, useState } from 'react';
 import type { JournalEntry } from '../../api/journal';
+import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 
 export function JournalListView({
   entries,
+  search,
+  onSearch,
+  page,
+  pageCount,
+  total,
+  onPage,
   onNew,
   onDelete,
 }: {
   entries: JournalEntry[];
+  search: string;
+  onSearch: (q: string) => void;
+  page: number;
+  pageCount: number;
+  total: number;
+  onPage: (page: number) => void;
   onNew: () => void;
   onDelete: (entry: JournalEntry) => void;
 }) {
-  const [search, setSearch] = useState('');
-
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter(
-      (j) => j.memo.toLowerCase().includes(q) || j.no.toLowerCase().includes(q) || j.lines.some((l) => l.account.code.toLowerCase().includes(q)),
-    );
-  }, [entries, search]);
-
   return (
     <div className="subview active">
       <div className="topbar">
@@ -38,7 +40,7 @@ export function JournalListView({
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالبيان أو رقم القيد..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder="ابحث بالبيان أو رقم القيد..." value={search} onChange={(e) => onSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -60,14 +62,14 @@ export function JournalListView({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
+            {entries.length === 0 && (
               <tr>
                 <td colSpan={7}>
                   <div className="empty-state">لا توجد قيود مطابقة</div>
                 </td>
               </tr>
             )}
-            {rows.map((j) => (
+            {entries.map((j) => (
               <tr key={j.id}>
                 <td className="num">{j.no}</td>
                 <td className="num">{dfmt(j.date)}</td>
@@ -92,6 +94,8 @@ export function JournalListView({
           </tbody>
         </table>
       </div>
+
+      <Pager page={page} pageCount={pageCount} total={total} onPage={onPage} />
     </div>
   );
 }

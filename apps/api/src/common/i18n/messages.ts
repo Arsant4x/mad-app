@@ -183,7 +183,15 @@ export const MSG = {
   zatca_compliance_required: 'zatca.compliance_required',
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
-  zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
+
+  // credit/debit notes + chain integrity
+  credit_note_target_invalid: 'creditNotes.target_invalid',
+  credit_note_exceeds_remaining: 'creditNotes.exceeds_remaining',
+  credit_note_immutable: 'creditNotes.immutable',
+  invoice_has_credit_notes: 'creditNotes.invoice_has_notes',
+  invoice_zatca_chain_locked: 'zatca.chain_locked',
+  invoice_cleared_immutable: 'zatca.cleared_immutable',
+  invoice_chain_successor_locked: 'zatca.chain_successor_locked',
 
   // branches / activities
   branch_not_found: 'branches.not_found',
@@ -468,10 +476,13 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
   [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
   [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
-  [MSG.zatca_invoice_chain_locked]: {
-    ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
-    en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
-  },
+  [MSG.credit_note_target_invalid]: { ar: 'إشعار الدائن يُصدَر على فاتورة أصلية فقط، لا على إشعار آخر', en: 'A credit note can only be issued against an original invoice, not another note' },
+  [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة إشعار الدائن تتجاوز المتبقي من الفاتورة الأصلية', en: 'The credit note amount exceeds what remains of the original invoice' },
+  [MSG.credit_note_immutable]: { ar: 'إشعار الدائن لا يُعدَّل بعد إصداره — احذفه وأصدر إشعاراً جديداً، أو أصدر إشعاراً مصححاً', en: 'A credit note cannot be edited after issue — delete and reissue it, or issue a correcting note' },
+  [MSG.invoice_has_credit_notes]: { ar: 'لا يمكن حذف فاتورة صدرت عليها إشعارات دائن — احذف الإشعارات أولاً', en: 'An invoice with issued credit notes cannot be deleted — remove the notes first' },
+  [MSG.invoice_zatca_chain_locked]: { ar: 'مستند أُرسل لهيئة الزكاة لا يمكن حذفه — موقعه في سلسلة الترقيم محجوز لدى الهيئة؛ لعكس أثره أصدر إشعار دائن', en: 'A document submitted to ZATCA cannot be deleted — its position in the authority’s chain is taken; issue a credit note to reverse it' },
+  [MSG.invoice_cleared_immutable]: { ar: 'فاتورة مصدَّقة لدى الهيئة لا تُعدَّل بياناتها — أصدر إشعار دائن أو مدين للتصحيح (تغيير حالة السداد فقط مسموح)', en: 'An invoice cleared by the authority cannot be edited — issue a credit or debit note to correct it (only the payment status may change)' },
+  [MSG.invoice_chain_successor_locked]: { ar: 'لا يمكن تعديل هذا المستند: صدرت بعده مستندات مرتبطة به في سلسلة ترقيم الهيئة، وتعديله يقطعها — أصدر إشعاراً للتصحيح', en: 'This document cannot be edited: later documents are already chained to it in the authority’s sequence and editing it would break that chain — issue a note to correct it' },
 
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },

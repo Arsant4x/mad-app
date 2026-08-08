@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { TransactionsService } from './transactions.service';
 
@@ -17,8 +18,8 @@ export class TransactionsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.transactionsService.list(tenant.companyId, tenant.allowedBranchIds);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListTransactionsQueryDto) {
+    return this.transactionsService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Post()

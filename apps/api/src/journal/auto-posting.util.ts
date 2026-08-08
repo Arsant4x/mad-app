@@ -78,6 +78,62 @@ export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: 
   });
 }
 
+/**
+ * The mirror image of `postInvoiceEntry` — what a credit note posts: credit
+ * A/R (1200) for the total, debit Revenue (4100) for the subtotal, debit VAT
+ * payable (2200) for the tax.
+ *
+ * A **separate reversing entry**, never an edit of the original invoice's
+ * posted entry: the sale really happened and its entry stays; the credit note
+ * is its own document with its own ledger footprint (same rule as
+ * `postClaimWaiverEntry` and journal-posting.util's never-edit principle).
+ */
+export async function postCreditNoteEntry(tx: Prisma.TransactionClient, companyId: string, note: InvoiceForPosting) {
+  if (note.baseTotal <= 0) return null;
+
+  const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+
+  const lines: PostingLine[] = [];
+  if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: note.baseSubtotal, credit: 0 });
+  if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: note.baseTaxTotal, credit: 0 });
+  lines.push({ accountId: ids.get('1200')!, debit: 0, credit: note.baseTotal });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: note.issueDate,
+    memo: `إشعار دائن ${note.no} — ${note.customerName}`,
+    lines,
+    auto: true,
+    branchId: note.branchId ?? null,
+  });
+}
+
+/** A debit note bills *more* for an already-invoiced sale (an undercharge
+ * correction), so it posts in the same direction as the invoice itself —
+ * only the memo distinguishes it in the ledger. */
+export async function postDebitNoteEntry(tx: Prisma.TransactionClient, companyId: string, note: InvoiceForPosting) {
+  if (note.baseTotal <= 0) return null;
+
+  const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+
+  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: note.baseTotal, credit: 0 }];
+  if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: note.baseSubtotal });
+  if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: note.baseTaxTotal });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: note.issueDate,
+    memo: `إشعار مدين ${note.no} — ${note.customerName}`,
+    lines,
+    auto: true,
+    branchId: note.branchId ?? null,
+  });
+}
+
 /** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
   branchId?: string | null;

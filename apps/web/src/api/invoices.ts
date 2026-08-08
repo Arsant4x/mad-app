@@ -13,7 +13,16 @@ export interface InvoiceLine {
 
 export type InvoiceStatus = 'DUE' | 'PAID' | 'OVERDUE';
 
+/** Credit/debit notes are invoice rows too (ZATCA's chain runs across all
+ * document kinds); amounts stay positive — `docType` carries the direction. */
+export type InvoiceDocType = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+
 export interface Invoice {
+  docType: InvoiceDocType;
+  /** Credit/debit notes only: the invoice this note adjusts. */
+  relatedInvoice: { id: string; no: string } | null;
+  /** Credit/debit notes only: the reason the note was issued (goes to ZATCA). */
+  adjustmentReason: string | null;
   /** POS فقط: كيف دُفعت (CASH/CARD) وأي مناوبة سجّلتها. */
   paymentMethod?: string | null;
   posPayments?: { method: string; amount: string | number }[];
@@ -69,7 +78,28 @@ export interface CreateInvoiceInput {
 
 export type UpdateInvoiceInput = Partial<CreateInvoiceInput> & { status?: InvoiceStatus };
 
+export interface CreateCreditNoteInput {
+  /** Required — ZATCA rejects a credit note without its reason. */
+  reason: string;
+  /** The user's local calendar date — the server clock is UTC, so omitting
+   * this can stamp a late-night note with yesterday's date. */
+  issueDate?: string;
+  /** Omit for a full credit of the original invoice. */
+  lines?: InvoiceLineInput[];
+}
+
 export const listInvoices = () => apiClient.get<Invoice[]>('/invoices').then((r) => r.data);
 export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice>('/invoices', dto).then((r) => r.data);
 export const updateInvoice = (id: string, dto: UpdateInvoiceInput) => apiClient.patch<Invoice>(`/invoices/${id}`, dto).then((r) => r.data);
 export const deleteInvoice = (id: string) => apiClient.delete(`/invoices/${id}`);
+export const issueCreditNote = (invoiceId: string, dto: CreateCreditNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/credit-note`, dto).then((r) => r.data);
+
+export interface CreateDebitNoteInput {
+  reason: string;
+  issueDate?: string;
+  /** Required — a debit note bills specific additional amounts; there is no
+   * full-copy default (that would be accidental double-billing). */
+  lines: InvoiceLineInput[];
+}
+
+export const issueDebitNote = (invoiceId: string, dto: CreateDebitNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/debit-note`, dto).then((r) => r.data);

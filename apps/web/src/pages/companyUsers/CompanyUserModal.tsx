@@ -1,15 +1,20 @@
 import { useState } from 'react';
+import type { Branch } from '../../api/branches';
 import type { CompanyUser, CompanyUserInput } from '../../api/companyUsers';
 import type { PermissionTemplate } from '../../api/templates';
 import i18n from '../../i18n';
 
 export function CompanyUserModal({
   templates,
+  branches,
   editing,
   onCancel,
   onSave,
 }: {
   templates: PermissionTemplate[];
+  /** فروع المنشأة — فارغة لمنشأة بلا فروع فلا يظهر قسم الإسناد إطلاقاً
+   * (نفس فلسفة BranchPicker: منشأة الموقع الواحد لا تُسأل عن فروع). */
+  branches: Branch[];
   editing: CompanyUser | null;
   onCancel: () => void;
   onSave: (data: Partial<CompanyUserInput> & { canEditMasterData?: boolean }) => Promise<void>;
@@ -19,8 +24,13 @@ export function CompanyUserModal({
   const [password, setPassword] = useState('');
   const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? templates[0]?.id ?? '');
   const [canEditMasterData, setCanEditMasterData] = useState(editing?.canEditMasterData ?? false);
+  const [branchIds, setBranchIds] = useState<string[]>(editing?.branches.map((b) => b.branchId) ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleBranch(id: string) {
+    setBranchIds((prev) => (prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id]));
+  }
 
   async function handleSubmit() {
     setError(null);
@@ -36,6 +46,9 @@ export function CompanyUserModal({
         ...(password ? { password } : {}),
         permissionTemplateId,
         canEditMasterData,
+        // تُرسل دائماً ما دامت للمنشأة فروع: القيمة هي المجموعة الكاملة
+        // المطلوبة (استبدال كلي في الخادم)، وإفراغها يعيد الموظف بلا قيد.
+        ...(branches.length > 0 ? { branchIds } : {}),
       });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -78,6 +91,24 @@ export function CompanyUserModal({
             ))}
           </select>
         </div>
+        {/* إسناد الفروع هنا مع بقية صلاحيات الموظف (قرار 6.8: الموظف يرى
+            فرعه فقط) — يظهر فقط لمنشأة لديها فروع أصلاً. */}
+        {branches.length > 0 && (
+          <div className="field">
+            <label>الفروع التي يراها</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+              {branches.map((b) => (
+                <label key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'normal' }}>
+                  <input type="checkbox" style={{ width: 'auto' }} checked={branchIds.includes(b.id)} onChange={() => toggleBranch(b.id)} />
+                  {b.name}
+                </label>
+              ))}
+            </div>
+            <p className="hint" style={{ marginTop: 4 }}>
+              {branchIds.length === 0 ? 'بلا تحديد = يرى كل الفروع والبيانات العامة.' : 'يرى الفروع المحددة والبيانات العامة (غير المسندة لفرع) فقط، ويسري فوراً دون إعادة دخول.'}
+            </p>
+          </div>
+        )}
         {/* Sits with the rest of this employee's permissions — the natural
             place to ask "what may this person touch". */}
         <div className="field">

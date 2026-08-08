@@ -2,10 +2,23 @@ import { useEffect, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { useLocation } from 'react-router-dom';
 import { createCustomer, listCustomers, type Customer } from '../../api/customers';
-import { createInvoice, deleteInvoice, type Invoice, type InvoiceStatus, listInvoices, updateInvoice } from '../../api/invoices';
+import {
+  createInvoice,
+  deleteInvoice,
+  type Invoice,
+  type InvoiceLineInput,
+  type InvoiceStatus,
+  issueCreditNote,
+  issueDebitNote,
+  listInvoices,
+  updateInvoice,
+} from '../../api/invoices';
 import { submitInvoiceToZatca } from '../../api/zatca';
 import { useAuth } from '../../auth/AuthContext';
+import { today } from '../../lib/format';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { CreditNoteModal } from './CreditNoteModal';
+import { DebitNoteModal } from './DebitNoteModal';
 import { InvoiceBuilderView } from './InvoiceBuilderView';
 import { InvoiceListView } from './InvoiceListView';
 
@@ -25,6 +38,8 @@ export function InvoicesPage() {
   const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
+  const [creditNoteFor, setCreditNoteFor] = useState<Invoice | null>(null);
+  const [debitNoteFor, setDebitNoteFor] = useState<Invoice | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -89,6 +104,40 @@ export function InvoicesPage() {
     }
   }
 
+  /** Full credit of the whole invoice — the server derives the amounts from
+   * the original's lines and refuses over-crediting; any refusal (e.g. an
+   * already fully-credited invoice) surfaces in the same error modal as a
+   * ZATCA refusal. */
+  async function handleIssueCreditNote(reason: string) {
+    if (!creditNoteFor) return;
+    const invoice = creditNoteFor;
+    setCreditNoteFor(null);
+    try {
+      await issueCreditNote(invoice.id, { reason, issueDate: today() });
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار إشعار الدائن'));
+    } finally {
+      await reload();
+    }
+  }
+
+  /** Additional billing against the invoice — the lines are the merchant's,
+   * never copied from the original (that would be double-billing). */
+  async function handleIssueDebitNote(reason: string, lines: InvoiceLineInput[]) {
+    if (!debitNoteFor) return;
+    const invoice = debitNoteFor;
+    setDebitNoteFor(null);
+    try {
+      await issueDebitNote(invoice.id, { reason, issueDate: today(), lines });
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار الإشعار المدين'));
+    } finally {
+      await reload();
+    }
+  }
+
   async function handleCreateCustomer(name: string): Promise<Customer> {
     const customer = await createCustomer({ name });
     setCustomers((cs) => [...cs, customer].sort((a, b) => a.name.localeCompare(b.name)));
@@ -115,7 +164,7 @@ export function InvoicesPage() {
         customers={customers}
         branches={branches}
         editing={view.editing}
-        nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`}
+        nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.filter((i) => i.docType === 'INVOICE').length + 1).padStart(4, '0')}`}
         onCancel={() => setView({ mode: 'list' })}
         onSave={handleSave}
         onCreateCustomer={handleCreateCustomer}
@@ -132,9 +181,13 @@ export function InvoicesPage() {
         onDelete={(invoice) => setPendingDelete(invoice)}
         onChangeStatus={handleChangeStatus}
         onSubmitToZatca={(invoice) => setPendingSubmit(invoice)}
+        onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
+        onIssueDebitNote={(invoice) => setDebitNoteFor(invoice)}
         canSubmitToZatca={user?.actorType === 'COMPANY'}
         submittingId={submittingId}
       />
+      {creditNoteFor && <CreditNoteModal invoice={creditNoteFor} onCancel={() => setCreditNoteFor(null)} onConfirm={handleIssueCreditNote} />}
+      {debitNoteFor && <DebitNoteModal invoice={debitNoteFor} onCancel={() => setDebitNoteFor(null)} onConfirm={handleIssueDebitNote} />}
       {pendingSubmit && (
         <ConfirmModal
           title="إرسال الفاتورة لهيئة الزكاة"

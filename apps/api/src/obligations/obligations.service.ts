@@ -55,12 +55,16 @@ export class ObligationsService {
       const to = new Date(Date.UTC(query.year, endMonth, 0));
 
       const [invoices, purchases] = await Promise.all([
-        tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to } }, select: { subtotal: true, taxTotal: true } }),
+        tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to } }, select: { subtotal: true, taxTotal: true, docType: true } }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true } }),
       ]);
 
-      const salesStandard = invoices.reduce((s, v) => s + Number(v.subtotal), 0);
-      const salesStandardVat = invoices.reduce((s, v) => s + Number(v.taxTotal), 0);
+      // A credit note reduces the quarter's output VAT — its stored amounts
+      // are positive (the docType carries the direction), so it enters the
+      // declaration with a flipped sign rather than adding to sales.
+      const sign = (docType: string) => (docType === 'CREDIT_NOTE' ? -1 : 1);
+      const salesStandard = invoices.reduce((s, v) => s + sign(v.docType) * Number(v.subtotal), 0);
+      const salesStandardVat = invoices.reduce((s, v) => s + sign(v.docType) * Number(v.taxTotal), 0);
 
       // A purchase with no valid tax invoice is dropped from the declaration
       // entirely (matching the mockup): its input VAT can't be reclaimed, so it

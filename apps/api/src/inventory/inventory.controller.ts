@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
+import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { InventoryService } from './inventory.service';
 
 @Controller('inventory')
@@ -22,8 +23,8 @@ export class InventoryController {
 
   @Get('movements')
   @RequiresAction('view')
-  listMovements(@CurrentTenant() tenant: TenantContext) {
-    return this.inventoryService.listMovements(tenant.companyId, tenant.allowedBranchIds);
+  listMovements(@CurrentTenant() tenant: TenantContext, @Query() query: ListMovementsQueryDto) {
+    return this.inventoryService.listMovements(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** Batches expiring within `withinDays` (default 90), already-expired first. */

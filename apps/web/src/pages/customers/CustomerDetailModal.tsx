@@ -5,8 +5,14 @@ import { STATUS_META } from '../invoices/statusMeta';
 
 export function CustomerDetailModal({ customer, invoices, onClose }: { customer: Customer; invoices: Invoice[]; onClose: () => void }) {
   const customerInvoices = invoices.filter((v) => v.customerId === customer.id).sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
-  const totalBilled = customerInvoices.reduce((s, v) => s + Number(v.total), 0);
-  const totalPaid = customerInvoices.filter((v) => v.status === 'PAID').reduce((s, v) => s + Number(v.total), 0);
+  // Credit notes sit in this list too, storing positive amounts — so what was
+  // billed is the NET of invoices and debit notes minus credits.
+  const totalBilled = customerInvoices.reduce((s, v) => s + (v.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(v.total), 0);
+  // A credit note is issued as PAID (nothing is receivable on it), but no money
+  // came in — counting it as collected would overstate what this customer paid.
+  const totalPaid = customerInvoices.filter((v) => v.status === 'PAID' && v.docType !== 'CREDIT_NOTE').reduce((s, v) => s + Number(v.total), 0);
+  // Unchanged: credit notes are PAID so they drop out, and a debit note is
+  // genuinely receivable, so its DUE amount belongs here.
   const balance = customerInvoices.filter((v) => v.status !== 'PAID').reduce((s, v) => s + Number(v.total), 0);
 
   return (
@@ -72,12 +78,28 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
             )}
             {customerInvoices.map((v) => (
               <tr key={v.id}>
-                <td className="num">{v.no}</td>
+                <td className="num">
+                  {v.no}
+                  {/* Without this, a credit note reads as just another
+                      invoice and the totals above look like they don't add up. */}
+                  {v.docType !== 'INVOICE' && (
+                    <span className={`badge ${v.docType === 'CREDIT_NOTE' ? 'overdue' : 'due'}`} style={{ marginInlineStart: 6 }}>
+                      {v.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : 'إشعار مدين'}
+                    </span>
+                  )}
+                </td>
                 <td className="num">{dfmt(v.issueDate)}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[v.status].badgeClass}`}>{STATUS_META[v.status].label}</span>
+                  {v.docType === 'CREDIT_NOTE' ? (
+                    <span className="badge">—</span>
+                  ) : (
+                    <span className={`badge ${STATUS_META[v.status].badgeClass}`}>{STATUS_META[v.status].label}</span>
+                  )}
                 </td>
-                <td className="num">{fmt(v.total)}</td>
+                <td className="num">
+                  {v.docType === 'CREDIT_NOTE' ? '−' : ''}
+                  {fmt(v.total)}
+                </td>
               </tr>
             ))}
           </tbody>
