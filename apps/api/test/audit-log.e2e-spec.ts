@@ -39,6 +39,30 @@ describe('Audit log (e2e)', () => {
     return res.body as Entry[];
   }
 
+  /**
+   * Waits for a just-written entry to land.
+   *
+   * The audit write is deliberately fire-and-forget — `AuditInterceptor` calls
+   * `record()` without awaiting it, so no user request is ever slowed down or
+   * failed by its own trail entry. That is the right behaviour for the server
+   * and a race for the test: the 201 can arrive before the row is committed, so
+   * reading the trail once, immediately, wins on an idle machine and loses under
+   * full-suite load. Poll instead of guessing.
+   *
+   * The list is returned even when the deadline passes, so a real regression
+   * still fails on the assertion that follows — which names what was missing —
+   * rather than on a timeout here.
+   */
+  async function trailUntil(landed: (entries: Entry[]) => boolean): Promise<Entry[]> {
+    const deadline = Date.now() + 5000;
+    let entries = await trail();
+    while (!landed(entries) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      entries = await trail();
+    }
+    return entries;
+  }
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -59,7 +83,8 @@ describe('Audit log (e2e)', () => {
     const created = await authA(request(app.getHttpServer()).post('/customers')).send({ name: customerName }).expect(201);
     customerId = created.body.id;
 
-    const entry = (await trail()).find((e) => e.entityId === customerId && e.action === 'add');
+    const isCreation = (e: Entry) => e.entityId === customerId && e.action === 'add';
+    const entry = (await trailUntil((entries) => entries.some(isCreation))).find(isCreation);
     expect(entry).toBeTruthy();
     // Reads as a sentence naming what happened and to whom — not raw JSON.
     expect(entry!.summary).toBe(`أضاف عميل «${customerName}»`);
@@ -71,8 +96,8 @@ describe('Audit log (e2e)', () => {
   it('records an edit distinctly from the creation', async () => {
     await authA(request(app.getHttpServer()).patch(`/customers/${customerId}`)).send({ phone: '0500000000' }).expect(200);
 
-    const mine = (await trail()).filter((e) => e.entityId === customerId);
-    const actions = mine.map((e) => e.action);
+    const actionsFor = (entries: Entry[]) => entries.filter((e) => e.entityId === customerId).map((e) => e.action);
+    const actions = actionsFor(await trailUntil((entries) => actionsFor(entries).includes('edit')));
     expect(actions).toContain('add');
     expect(actions).toContain('edit');
   }, 40000);
@@ -88,7 +113,8 @@ describe('Audit log (e2e)', () => {
       .send({ name: `موظف ${username}`, username, password: 'SecretPass123!', permissionTemplateId: tpl.id })
       .expect(201);
 
-    const entry = (await trail()).find((e) => e.entity === 'company-users' && e.entityId === created.body.id);
+    const isTheNewAccount = (e: Entry) => e.entity === 'company-users' && e.entityId === created.body.id;
+    const entry = (await trailUntil((entries) => entries.some(isTheNewAccount))).find(isTheNewAccount);
     expect(entry).toBeTruthy();
     const serialized = JSON.stringify(entry!.details ?? {});
     expect(serialized).not.toContain('SecretPass123!');
