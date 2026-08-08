@@ -62,6 +62,27 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     );
   }
 
+  /**
+   * ZATCA onboarding refuses a company without a legal name and VAT number —
+   * correctly, since both are stamped into the signed document. The seed sets
+   * neither on the company itself (only on customers and suppliers), so a
+   * suite that assumes them is really assuming an earlier run left them
+   * behind: green on a long-lived test database, red on a fresh one.
+   */
+  async function ensureCompanyProfile() {
+    const current = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${token}`).expect(200);
+    if (current.body.legalName?.trim() && current.body.vatNumber?.trim()) return;
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        legalName: current.body.legalName?.trim() || current.body.orgName || 'منشأة اختبار سلسلة الفوترة',
+        // 15 digits starting and ending with 3, per the VAT validator.
+        vatNumber: current.body.vatNumber?.trim() || '300000000000003',
+      })
+      .expect(200);
+  }
+
   async function makeInvoice(): Promise<string> {
     const res = await request(app.getHttpServer())
       .post('/invoices')
@@ -102,6 +123,7 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
     customerId = customers.body[0].id;
 
+    await ensureCompanyProfile();
     await seedProductionCredential();
   }, 30000);
 
