@@ -184,6 +184,7 @@ export const MSG = {
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
   zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
+  zatca_invoice_edit_chain_locked: 'zatca.invoice_edit_chain_locked',
 
   // branches / activities
   branch_not_found: 'branches.not_found',
@@ -471,6 +472,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_invoice_chain_locked]: {
     ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
     en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
+  },
+  [MSG.zatca_invoice_edit_chain_locked]: {
+    ar: 'لا يمكن تعديل بيانات فاتورة دخلت سلسلة الفوترة الإلكترونية — الهاش المُسجَّل لدى الهيئة محسوب على هذه البيانات نفسها، وتغييرها يكسر السلسلة؛ التصحيح يكون بإشعار دائن. (تعديل الملاحظات وحالة السداد يبقى متاحاً)',
+    en: 'An invoice that has entered the e-invoicing chain cannot have its content edited — the hash recorded with the authority was computed over this very data, and changing it breaks the chain; correct it with a credit note. (Notes and payment status can still be changed.)',
   },
 
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },

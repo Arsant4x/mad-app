@@ -123,6 +123,39 @@ export class InvoicesService {
       const existing = await tx.invoice.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
 
+      // Same chain-link test as remove(), for the same reason: the hash the
+      // authority holds was computed over this document's content, so editing
+      // that content leaves the stored hash describing a document that no
+      // longer exists — and every successor's PIH commits to it. Keyed on the
+      // chain fields rather than zatcaStatus so a REJECTED document (which
+      // keeps its link for retry) and a submission interrupted after the ICV
+      // was fixed are both covered.
+      //
+      // Only what the signature covers is refused. Notes and payment status
+      // never enter the XML, so they stay editable — an invoice must still be
+      // markable PAID after it has been cleared.
+      //
+      // The test is presence, not difference: a field that arrives is treated
+      // as an attempt to set it, exactly like `affectsPosting` below. Diffing
+      // submitted values against stored ones would make the guard depend on
+      // Decimal/date normalisation getting it right every time, and a guard
+      // that silently lets an edit through when the comparison is wrong is
+      // worse than one that refuses a no-op resubmission. It also means the
+      // builder screen — which always posts the whole document — is refused
+      // as a whole, which is the correct answer for a chained invoice.
+      const changesSignedContent =
+        dto.lines !== undefined ||
+        dto.customerId !== undefined ||
+        dto.issueDate !== undefined ||
+        dto.dueDate !== undefined ||
+        // Currency and rate reach the authority through the base* columns:
+        // ZATCA is told the VAT figure in SAR, and that is `baseTaxTotal`.
+        dto.currency !== undefined ||
+        dto.exchangeRate !== undefined;
+      if (changesSignedContent && (existing.zatcaIcv !== null || existing.zatcaHash !== null)) {
+        throw new ConflictException(MSG.zatca_invoice_edit_chain_locked);
+      }
+
       const data: Prisma.InvoiceUncheckedUpdateInput = {};
       if (dto.customerId) data.customerId = dto.customerId;
       if (dto.issueDate) data.issueDate = new Date(dto.issueDate);

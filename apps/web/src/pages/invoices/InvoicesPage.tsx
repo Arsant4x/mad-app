@@ -24,6 +24,7 @@ export function InvoicesPage() {
   const [view, setView] = useState<View>((location.state as { openBuilder?: boolean } | null)?.openBuilder ? { mode: 'builder', editing: null } : { mode: 'list' });
   const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -95,13 +96,27 @@ export function InvoicesPage() {
     return customer;
   }
 
+  /**
+   * The server refuses to edit the content of an invoice that entered the
+   * ZATCA chain (409) — the builder posts the whole document, so that refusal
+   * covers this screen. Show its Arabic reason and **stay in the builder**:
+   * closing back to the list would throw away everything the user typed for a
+   * save that never happened.
+   */
   async function handleSave(data: { customerId: string; issueDate: string; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] }) {
     // An empty picker means company-wide — send it as omitted, not as ''.
     const payload = { ...data, branchId: data.branchId || undefined };
-    if (view.mode === 'builder' && view.editing) {
-      await updateInvoice(view.editing.id, payload);
-    } else {
-      await createInvoice(payload);
+    setSaveError(null);
+    try {
+      if (view.mode === 'builder' && view.editing) {
+        await updateInvoice(view.editing.id, payload);
+      } else {
+        await createInvoice(payload);
+      }
+    } catch (e) {
+      const body = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? 'تعذّر حفظ الفاتورة'));
+      return;
     }
     setView({ mode: 'list' });
     await reload();
@@ -111,15 +126,20 @@ export function InvoicesPage() {
 
   if (view.mode === 'builder') {
     return (
-      <InvoiceBuilderView
-        customers={customers}
-        branches={branches}
-        editing={view.editing}
-        nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`}
-        onCancel={() => setView({ mode: 'list' })}
-        onSave={handleSave}
-        onCreateCustomer={handleCreateCustomer}
-      />
+      <>
+        <InvoiceBuilderView
+          customers={customers}
+          branches={branches}
+          editing={view.editing}
+          nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`}
+          onCancel={() => setView({ mode: 'list' })}
+          onSave={handleSave}
+          onCreateCustomer={handleCreateCustomer}
+        />
+        {saveError && (
+          <ConfirmModal title="تعذّر الحفظ" body={saveError} confirmLabel="حسناً" hideCancel onCancel={() => setSaveError(null)} onConfirm={() => setSaveError(null)} />
+        )}
+      </>
     );
   }
 
