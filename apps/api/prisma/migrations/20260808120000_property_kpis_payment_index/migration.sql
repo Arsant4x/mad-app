@@ -1,10 +1,25 @@
 -- GET /reports/property-kpis blew the 5s tenant-transaction timeout on large
 -- portfolios: it loaded every installment *with its payments relation* into JS
--- (~10s at 50k installments) just to compute the collection rate. The service
--- now aggregates in SQL with a first-payment-per-installment join; this index
--- covers that join, and — as a bonus — the ON DELETE SET NULL cascade from
--- contract_installments, which previously re-scanned rent_payments once per
--- deleted installment.
+-- just to compute the collection rate. Measured on 111,221 installments, the
+-- old path did not merely run slow — it FAILED: "Transaction already closed …
+-- the timeout for this transaction was 5000 ms, however 8374 ms passed". The
+-- service now aggregates in SQL instead.
+--
+-- This index does NOT accelerate that aggregate, and saying otherwise would
+-- send the next reader down the wrong path. The first-payment-per-installment
+-- subquery groups the whole company's rent_payments with no predicate on
+-- installmentId, and MIN(date) is not in the index, so Postgres hash-
+-- aggregates a sequential scan — confirmed by EXPLAIN (ANALYZE, BUFFERS) and
+-- true at any table size. The rewrite is what bought the speed (387–863 ms
+-- against a run that used to expire); the index buys none of it.
+--
+-- Its one real justification is the FK: installmentId is ON DELETE SET NULL,
+-- and Postgres fires that referential-integrity trigger once per deleted
+-- contract_installments row — not once per statement. Without an index each
+-- firing sequentially scans rent_payments. Measured: 60,000 index scans for
+-- 60,000 deleted installments. The production path for that is company
+-- deletion (deletion-requests → CompaniesService.remove) and test/benchmark
+-- teardown; there is no contract-delete endpoint today.
 
 -- CreateIndex
 CREATE INDEX "rent_payments_installmentId_idx" ON "rent_payments"("installmentId");

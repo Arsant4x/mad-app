@@ -75,52 +75,81 @@ describe('Reports tenant isolation (e2e)', () => {
   it("company A's rent collection and occupancy never bleed into company B's property KPIs", async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const kpis = (token: string) => request(app.getHttpServer()).get('/reports/property-kpis').set('Authorization', `Bearer ${token}`).expect(200);
+    const cleanup: { token: string; id: string }[] = [];
 
-    const beforeB = (await kpis(tokenB)).body;
+    /** A fully-due 2024 lease with its first instalment paid on the due date —
+     * every collection figure (due, paid, on-time, overdue) moves by a known
+     * amount, which is what makes an exact-delta assertion possible. */
+    async function leaseWith(token: string, tag: string, annual: number) {
+      const property = await request(app.getHttpServer())
+        .post('/properties')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: `عقار عزل المؤشرات ${tag} ${suffix}`, ownership: 'owned' })
+        .expect(201);
+      const unit = await request(app.getHttpServer())
+        .post('/units')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ propertyId: property.body.id, unitNo: `ISO-${tag}-${suffix}`, type: 'سكني', rentMonthly: annual / 12 })
+        .expect(201);
+      const contract = await request(app.getHttpServer())
+        .post('/contracts')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ unitId: unit.body.id, tenant: `مستأجر العزل ${tag} ${suffix}`, value: annual, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
+        .expect(201);
+      const first = contract.body.installments[0];
+      await request(app.getHttpServer())
+        .post(`/contracts/${contract.body.id}/payments`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ installmentId: first.id, date: '2024-01-01', amount: Number(first.amount), method: 'CASH' })
+        .expect(201);
+      cleanup.push({ token, id: contract.body.id });
+      return { propertyId: property.body.id, paid: Number(first.amount), due: annual };
+    }
 
-    // Company A: fresh property + unit + a 2024 contract whose installments
-    // are all due, with one paid on its due date — every collection figure
-    // (due, paid, on-time, overdue) moves for A.
-    const property = await request(app.getHttpServer())
-      .post('/properties')
-      .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: `عقار عزل المؤشرات ${suffix}`, ownership: 'owned' })
-      .expect(201);
-    const unit = await request(app.getHttpServer())
-      .post('/units')
-      .set('Authorization', `Bearer ${tokenA}`)
-      .send({ propertyId: property.body.id, unitNo: `ISO-${suffix}`, type: 'سكني', rentMonthly: 1000 })
-      .expect(201);
-    const contract = await request(app.getHttpServer())
-      .post('/contracts')
-      .set('Authorization', `Bearer ${tokenA}`)
-      .send({ unitId: unit.body.id, tenant: `مستأجر العزل ${suffix}`, value: 24000, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
-      .expect(201);
-    const first = contract.body.installments[0];
-    await request(app.getHttpServer())
-      .post(`/contracts/${contract.body.id}/payments`)
-      .set('Authorization', `Bearer ${tokenA}`)
-      .send({ installmentId: first.id, date: '2024-01-01', amount: Number(first.amount), method: 'CASH' })
-      .expect(201);
+    try {
+      // B gets a lease of its own FIRST. Without it B's collection figures are
+      // all zero on a fresh database, and "B did not move" degenerates into
+      // comparing zero to zero — an assertion that cannot fail, which is how
+      // this test read before 2026-08-08. Now B carries real money, so a leak
+      // from A would have to change a non-zero number.
+      const bLease = await leaseWith(tokenB, 'B', 36000);
+      const beforeB = (await kpis(tokenB)).body;
+      expect(beforeB.collection.dueAmount).toBeGreaterThan(0);
+      expect(beforeB.collection.paidAmount).toBeGreaterThanOrEqual(bLease.paid);
 
-    // A sees its own new property; B's report neither lists it nor moves a
-    // single collection figure. If the raw collection SQL ever lost its
-    // companyId bind, A's freshly-due 24,000 would surface in B's dueAmount.
-    const afterA = (await kpis(tokenA)).body;
-    expect(afterA.occupancy.some((o: { propertyId: string }) => o.propertyId === property.body.id)).toBe(true);
+      // Now A does the same, with a deliberately different annual value so any
+      // bleed would be arithmetically visible rather than coincidentally equal.
+      const beforeA = (await kpis(tokenA)).body;
+      const aLease = await leaseWith(tokenA, 'A', 24000);
 
-    const afterB = (await kpis(tokenB)).body;
-    expect(afterB.occupancy.some((o: { propertyId: string }) => o.propertyId === property.body.id)).toBe(false);
-    expect(afterB.collection).toEqual(beforeB.collection);
-    expect(afterB.portfolio.totalUnits).toBe(beforeB.portfolio.totalUnits);
+      // A moved by exactly its own lease, and sees its own property.
+      const afterA = (await kpis(tokenA)).body;
+      expect(afterA.occupancy.some((o: { propertyId: string }) => o.propertyId === aLease.propertyId)).toBe(true);
+      expect(afterA.collection.dueAmount - beforeA.collection.dueAmount).toBeCloseTo(aLease.due, 2);
+      expect(afterA.collection.paidAmount - beforeA.collection.paidAmount).toBeCloseTo(aLease.paid, 2);
 
-    // Cancel the contract so repeated runs don't accumulate due rent in the
-    // shared dev company.
-    await request(app.getHttpServer())
-      .post(`/contracts/${contract.body.id}/cancel`)
-      .set('Authorization', `Bearer ${tokenA}`)
-      .send({ cancelDate: '2030-12-31', cancelReason: 'تنظيف بيانات الاختبار', installmentDisposition: 'cancel' });
-  }, 40000);
+      // B did not move at all — neither its properties nor any of the four
+      // collection figures, each compared as a value rather than by deep-equal
+      // on a possibly-empty object.
+      const afterB = (await kpis(tokenB)).body;
+      expect(afterB.occupancy.some((o: { propertyId: string }) => o.propertyId === aLease.propertyId)).toBe(false);
+      expect(afterB.collection.dueAmount).toBeCloseTo(beforeB.collection.dueAmount, 2);
+      expect(afterB.collection.paidAmount).toBeCloseTo(beforeB.collection.paidAmount, 2);
+      expect(afterB.collection.onTimeAmount).toBeCloseTo(beforeB.collection.onTimeAmount, 2);
+      expect(afterB.collection.overdueCount).toBe(beforeB.collection.overdueCount);
+      expect(afterB.portfolio.totalUnits).toBe(beforeB.portfolio.totalUnits);
+    } finally {
+      // Cancel both leases so repeated runs don't accumulate due rent in the
+      // shared dev companies — in `finally`, because a failed assertion above
+      // would otherwise poison every later run's baseline.
+      for (const c of cleanup) {
+        await request(app.getHttpServer())
+          .post(`/contracts/${c.id}/cancel`)
+          .set('Authorization', `Bearer ${c.token}`)
+          .send({ cancelDate: '2030-12-31', cancelReason: 'تنظيف بيانات الاختبار', installmentDisposition: 'cancel' });
+      }
+    }
+  }, 60000);
 
   it("balance sheet totals company A's own accounts only, disjoint from B's", async () => {
     const balA = await request(app.getHttpServer()).get('/reports/balance-sheet').set('Authorization', `Bearer ${tokenA}`).expect(200);

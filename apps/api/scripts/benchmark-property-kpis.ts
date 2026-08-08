@@ -144,7 +144,16 @@ async function main() {
 
   const already = await inTenant(company.id, (tx) => tx.contract.count({ where: { companyId: company.id, no: { startsWith: 'BM-' } } }));
   if (skipSeed) {
-    if (already === 0) throw new Error('--skip-seed passed but no BM- contracts are present — run once with --keep first.');
+    // A partial fixture is worse than none: a run that died at 2,000 of 5,000
+    // contracts would otherwise be measured silently and reported as if it
+    // were the full portfolio, making two variants incomparable for a reason
+    // nothing in the output would reveal. Demand the exact count.
+    if (already !== TARGET_EXTRA) {
+      throw new Error(
+        `--skip-seed expects exactly ${TARGET_EXTRA} BM- contracts in place, found ${already}. ` +
+          `Re-seed with --keep (a run that died mid-seed leaves a partial fixture, and measuring it would compare two different portfolios).`,
+      );
+    }
     console.log(`--skip-seed: measuring against the ${already} BM- contracts already in place.`);
   } else {
     if (already > 0) {
@@ -158,7 +167,18 @@ async function main() {
   const contracts = await inTenant(company.id, (tx) => tx.contract.count({ where: { companyId: company.id } }));
   const installments = await inTenant(company.id, (tx) => tx.installment.count({ where: { companyId: company.id } }));
   const payments = await inTenant(company.id, (tx) => tx.rentPayment.count({ where: { companyId: company.id } }));
-  console.log(`Now: ${contracts} contracts, ${installments} installments, ${payments} rent payments\n`);
+  console.log(`Now: ${contracts} contracts, ${installments} installments, ${payments} rent payments`);
+
+  // Print the configuration that was *observed*, never one that was assumed.
+  // Comparing variants means dropping and re-creating indexes by hand out of
+  // band, and a run labelled "with index" from memory is how two timings that
+  // differed 2× both got filed under the same heading with no way to audit
+  // either. Ask the catalog instead.
+  const [{ present }] = await prisma.$queryRaw<{ present: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_indexes WHERE tablename = 'rent_payments' AND indexname = 'rent_payments_installmentId_idx'
+    ) AS present`;
+  console.log(`Measured configuration: rent_payments_installmentId_idx is ${present ? 'PRESENT' : 'ABSENT'}\n`);
 
   // Boot the real application context so propertyKpis() runs exactly the
   // production path, 5s tenant-transaction timeout included.
@@ -167,7 +187,7 @@ async function main() {
     const svc = app.get(ReportsService);
 
     let worst = 0;
-    let failed = false;
+    const failures: string[] = [];
     for (const label of ['cold  ', 'warm 1', 'warm 2']) {
       const t = Date.now();
       try {
@@ -176,17 +196,20 @@ async function main() {
         worst = Math.max(worst, ms);
         console.log(`${label} ${ms} ms`);
       } catch (e) {
-        failed = true;
         // Prisma buries the reason under a code frame, so pull out the line
         // that names it — "Transaction already closed" is the whole point of
         // this run, and printing the frame's first line instead would hide it.
         const lines = (e as Error).message.split('\n').map((l) => l.trim()).filter(Boolean);
         const why = lines.find((l) => /transaction|timeout|timed out/i.test(l)) ?? lines[0] ?? String(e);
+        failures.push(why);
         console.log(`${label} FAILED after ${Date.now() - t} ms — ${why}`);
       }
     }
-    if (failed) {
-      console.log('\nresult: FAIL — the report cannot survive the 5s tenant-transaction timeout');
+    if (failures.length) {
+      // Report the cause that was actually caught. Asserting the transaction
+      // timeout for every exception would mislabel an ordinary TypeError in
+      // the service as a performance result.
+      console.log(`\nresult: FAIL — ${failures[0]}`);
       process.exitCode = 1;
     } else {
       console.log(`\nworst case: ${worst} ms — ${worst < 1000 ? 'PASS (< 1s)' : 'FAIL (>= 1s)'}`);

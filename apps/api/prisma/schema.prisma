@@ -2455,9 +2455,13 @@ model RentPayment {
 
   /// Same reasoning as Installment's contractId index.
   @@index([contractId])
-  /// For the property-KPIs first-payment-per-installment join, and for the
-  /// ON DELETE SET NULL cascade that fires per deleted installment — without
-  /// it each cascading installment delete re-scans this whole table.
+  /// NOT for the property-KPIs aggregate — that subquery groups the whole
+  /// company's payments with no predicate on installmentId, so Postgres
+  /// hash-aggregates a seq scan and never touches this index, at any size
+  /// (verified with EXPLAIN ANALYZE). It exists for the FK: installmentId is
+  /// ON DELETE SET NULL, and the referential-integrity trigger fires once per
+  /// deleted installment row — without an index each firing scans this whole
+  /// table (measured: 60,000 scans for 60,000 deleted installments).
   @@index([installmentId])
   @@map("rent_payments")
 }
