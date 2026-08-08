@@ -188,15 +188,19 @@ export const MSG = {
   zatca_compliance_required: 'zatca.compliance_required',
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
+  // chain integrity. Deletion is refused for any document that took a place
+  // in the sequence; editing is refused only once the authority has accepted
+  // it (or may be about to) — see InvoicesService.
+  zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
+  zatca_invoice_cleared_locked: 'zatca.invoice_cleared_locked',
+  zatca_invoice_submitting_locked: 'zatca.invoice_submitting_locked',
+  zatca_invoice_successor_locked: 'zatca.invoice_successor_locked',
 
-  // credit/debit notes + chain integrity
+  // credit/debit notes
   credit_note_target_invalid: 'creditNotes.target_invalid',
   credit_note_exceeds_remaining: 'creditNotes.exceeds_remaining',
   credit_note_immutable: 'creditNotes.immutable',
   invoice_has_credit_notes: 'creditNotes.invoice_has_notes',
-  invoice_zatca_chain_locked: 'zatca.chain_locked',
-  invoice_cleared_immutable: 'zatca.cleared_immutable',
-  invoice_chain_successor_locked: 'zatca.chain_successor_locked',
 
   // branches / activities
   branch_not_found: 'branches.not_found',
@@ -491,9 +495,22 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة إشعار الدائن تتجاوز المتبقي من الفاتورة الأصلية', en: 'The credit note amount exceeds what remains of the original invoice' },
   [MSG.credit_note_immutable]: { ar: 'إشعار الدائن لا يُعدَّل بعد إصداره — احذفه وأصدر إشعاراً جديداً، أو أصدر إشعاراً مصححاً', en: 'A credit note cannot be edited after issue — delete and reissue it, or issue a correcting note' },
   [MSG.invoice_has_credit_notes]: { ar: 'لا يمكن حذف فاتورة صدرت عليها إشعارات دائن — احذف الإشعارات أولاً', en: 'An invoice with issued credit notes cannot be deleted — remove the notes first' },
-  [MSG.invoice_zatca_chain_locked]: { ar: 'مستند أُرسل لهيئة الزكاة لا يمكن حذفه — موقعه في سلسلة الترقيم محجوز لدى الهيئة؛ لعكس أثره أصدر إشعار دائن', en: 'A document submitted to ZATCA cannot be deleted — its position in the authority’s chain is taken; issue a credit note to reverse it' },
-  [MSG.invoice_cleared_immutable]: { ar: 'فاتورة مصدَّقة لدى الهيئة لا تُعدَّل بياناتها — أصدر إشعار دائن أو مدين للتصحيح (تغيير حالة السداد فقط مسموح)', en: 'An invoice cleared by the authority cannot be edited — issue a credit or debit note to correct it (only the payment status may change)' },
-  [MSG.invoice_chain_successor_locked]: { ar: 'لا يمكن تعديل هذا المستند: صدرت بعده مستندات مرتبطة به في سلسلة ترقيم الهيئة، وتعديله يقطعها — أصدر إشعاراً للتصحيح', en: 'This document cannot be edited: later documents are already chained to it in the authority’s sequence and editing it would break that chain — issue a note to correct it' },
+  [MSG.zatca_invoice_chain_locked]: {
+    ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
+    en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
+  },
+  [MSG.zatca_invoice_cleared_locked]: {
+    ar: 'لا يمكن تعديل بيانات فاتورة مصدَّقة لدى هيئة الزكاة — هي مستند قانوني قائم، والتصحيح يكون بإشعار دائن. (تعديل الملاحظات وحالة السداد يبقى متاحاً)',
+    en: 'An invoice cleared by ZATCA cannot have its content edited — it is a standing legal document; correct it with a credit note. (Notes and payment status can still be changed.)',
+  },
+  [MSG.zatca_invoice_submitting_locked]: {
+    ar: 'الفاتورة قيد الإرسال إلى هيئة الزكاة — انتظر نتيجة الإرسال قبل تعديلها؛ فإن صُدِّقت صار التصحيح بإشعار دائن',
+    en: 'This invoice is being submitted to ZATCA — wait for the result before editing it; if it clears, correction is by credit note',
+  },
+  [MSG.zatca_invoice_successor_locked]: {
+    ar: 'لا يمكن تعديل هذه الفاتورة المرفوضة: صدر بعدها مستند يرتبط بها في سلسلة الهيئة، وتعديلها يقطع ارتباطه — أرسلها كما هي أو صحّح بإشعار دائن',
+    en: 'This rejected invoice cannot be edited: a later document is already chained to it in the authority’s sequence and editing it would break that link — resubmit it as is, or correct it with a credit note',
+  },
 
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },

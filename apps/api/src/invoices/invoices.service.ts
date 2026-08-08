@@ -186,27 +186,66 @@ export class InvoicesService {
       const existing = await tx.invoice.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
 
-      const affectsDocument =
-        dto.customerId !== undefined || dto.issueDate !== undefined || dto.lines !== undefined || dto.currency !== undefined || dto.exchangeRate !== undefined;
+      // What the submitted XML is signed over. Notes and payment status are
+      // absent on purpose: they never enter the document, so they stay
+      // editable at every stage — a cleared invoice must still be markable
+      // PAID.
+      //
+      // The test is presence, not difference: a field that arrives is treated
+      // as an attempt to set it, exactly like `affectsPosting` below. Diffing
+      // submitted values against stored ones would make the guard depend on
+      // Decimal/date normalisation getting it right every time, and a guard
+      // that silently lets an edit through when the comparison is wrong is
+      // worse than one that refuses a no-op resubmission. It also means the
+      // builder screen — which always posts the whole document — is refused
+      // as a whole, which is the right answer for a locked invoice.
+      const changesSignedContent =
+        dto.lines !== undefined ||
+        dto.customerId !== undefined ||
+        dto.issueDate !== undefined ||
+        dto.dueDate !== undefined ||
+        // Currency and rate reach the authority through the base* columns:
+        // ZATCA is told the VAT figure in SAR, and that is `baseTaxTotal`.
+        dto.currency !== undefined ||
+        dto.exchangeRate !== undefined;
+
       // A credit note adjusts a document as it stood — editing it afterwards
       // would silently change what was adjusted. Delete + reissue instead. A
       // debit note is receivable, so its payment status may still move.
       if (existing.docType === 'CREDIT_NOTE') throw new BadRequestException(MSG.credit_note_immutable);
-      if (existing.docType === 'DEBIT_NOTE' && affectsDocument) throw new BadRequestException(MSG.credit_note_immutable);
-      // Once the authority has CLEARED a document, the XML it holds is the
-      // legal invoice — changing what the row says here would make the two
-      // disagree. REJECTED stays editable on purpose: fixing the data and
-      // retrying (same UUID/ICV) is the legitimate recovery path.
-      if (existing.zatcaStatus === 'CLEARED' && affectsDocument) throw new BadRequestException(MSG.invoice_cleared_immutable);
-      // …but only while nothing has been chained onto it. Once a later
-      // document exists, its PIH commits to THIS document's hash; rewriting
-      // the content behind that hash orphans the link, and the authority
-      // rejects the successor. Retrying a rejected tip is still fine — that
-      // is the whole reason the edit stays open — so the test is "is anything
-      // after me", not "have I been submitted".
-      if (affectsDocument && existing.zatcaIcv !== null) {
-        const successors = await tx.invoice.count({ where: { zatcaIcv: { gt: existing.zatcaIcv } } });
-        if (successors > 0) throw new BadRequestException(MSG.invoice_chain_successor_locked);
+      if (existing.docType === 'DEBIT_NOTE' && changesSignedContent) throw new BadRequestException(MSG.credit_note_immutable);
+
+      if (changesSignedContent) {
+        // The line is acceptance, not whether the chain was touched. A
+        // CLEARED invoice is a standing legal document and the authority
+        // holds its signed XML — editing the row would make the two disagree,
+        // so correction is by credit note. A REJECTED one has no legal
+        // existence at all: fixing the data and resubmitting is the intended
+        // recovery, and a credit note against a document the authority never
+        // accepted would be a note against nothing. (Deletion stays refused
+        // for both — see remove(): a rejected invoice has still burned its
+        // ICV slot, and editing keeps that slot while deleting leaves a gap.)
+        if (existing.zatcaStatus === 'CLEARED') throw new ConflictException(MSG.zatca_invoice_cleared_locked);
+        // In flight: the request may already be at the authority and may come
+        // back CLEARED, which would leave the row disagreeing with the XML
+        // just as an edit-after-clearance does. Brief by design — the status
+        // is set immediately before dispatch and overwritten by the outcome.
+        if (existing.zatcaStatus === 'SUBMITTING') throw new ConflictException(MSG.zatca_invoice_submitting_locked);
+
+        // Second layer. `latestChainHash` no longer hands a rejected
+        // invoice's hash to the next document, so the normal path can no
+        // longer produce this shape — but rows recorded before that rule, and
+        // any future path that sets a PIH another way, still can. Where a
+        // successor has committed to this document's hash, recomputing it on
+        // resubmission would leave that successor pointing at a hash that
+        // exists nowhere. Testing for the successor directly (rather than
+        // "is there a higher ICV") keeps the common case — fix the rejection
+        // and retry immediately — open, and refuses only when something is
+        // genuinely attached.
+        if (existing.zatcaHash !== null) {
+          const successors = await tx.invoice.count({ where: { zatcaPreviousHash: existing.zatcaHash } });
+          if (successors > 0) throw new ConflictException(MSG.zatca_invoice_successor_locked);
+        }
       }
 
       const data: Prisma.InvoiceUncheckedUpdateInput = {};
@@ -284,7 +323,7 @@ export class InvoicesService {
       // recorded is covered by the same condition. Deleting the row would
       // leave the next document chained onto a hash that no longer exists
       // locally. Reversal is a credit note, not a delete.
-      if (existing.zatcaIcv !== null || existing.zatcaHash !== null) throw new ConflictException(MSG.invoice_zatca_chain_locked);
+      if (existing.zatcaIcv !== null || existing.zatcaHash !== null) throw new ConflictException(MSG.zatca_invoice_chain_locked);
       // The FK is Restrict, so this would fail anyway — checked here to give
       // a diagnosable 409 instead of a raw constraint error.
       const adjustments = await tx.invoice.count({ where: { relatedInvoiceId: id } });

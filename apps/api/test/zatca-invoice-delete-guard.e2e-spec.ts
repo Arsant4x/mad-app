@@ -194,6 +194,10 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
   it('keeps the chain intact after a refused delete — the next invoice still finds its predecessor', async () => {
     const a = await makeInvoice();
     const submittedA = await submit(a);
+    // Cleared, because only an accepted document is handed on as the next
+    // PIH (see latestChainHash) — a rejected one is skipped, so a rejected A
+    // would make this assertion pass for the wrong reason.
+    await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: a }, data: { zatcaStatus: 'CLEARED' } }));
     await request(app.getHttpServer()).delete(`/invoices/${a}`).set('Authorization', `Bearer ${token}`).expect(409);
 
     // Had the delete gone through, latestChainHash would have picked an older
