@@ -53,6 +53,11 @@ export const MSG = {
   customer_not_found: 'customers.not_found',
   customer_has_invoices: 'customers.has_invoices',
   invoice_not_found: 'invoices.not_found',
+  quote_not_found: 'quotes.not_found',
+  quote_expired: 'quotes.expired',
+  quote_already_converted: 'quotes.already_converted',
+  quote_converted_immutable: 'quotes.converted_immutable',
+  quote_converted_undeletable: 'quotes.converted_undeletable',
 
   // suppliers / purchases
   supplier_not_found: 'suppliers.not_found',
@@ -293,6 +298,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',
     en: 'Cannot delete a customer that has invoices — delete their invoices first',
   },
+  [MSG.quote_not_found]: { ar: 'عرض السعر غير موجود', en: 'Quote not found' },
+  [MSG.quote_expired]: { ar: 'انتهت صلاحية العرض بتاريخ {date} — أصدر عرضاً محدَّثاً', en: 'The quote expired on {date} — issue an updated one' },
+  [MSG.quote_already_converted]: { ar: 'حُوِّل سابقاً إلى الفاتورة {invoiceNo}', en: 'Already converted to invoice {invoiceNo}' },
+  [MSG.quote_converted_immutable]: { ar: 'عرضٌ محوَّل لا يُعدَّل — فاتورته {invoiceNo} قائمة', en: 'A converted quote is immutable — its invoice {invoiceNo} stands' },
+  [MSG.quote_converted_undeletable]: { ar: 'عرضٌ محوَّل لا يُحذف — فاتورته {invoiceNo} قائمة', en: 'A converted quote cannot be deleted — its invoice {invoiceNo} stands' },
   [MSG.invoice_not_found]: { ar: 'الفاتورة غير موجودة', en: 'Invoice not found' },
 
   [MSG.supplier_not_found]: { ar: 'المورد غير موجود', en: 'Supplier not found' },

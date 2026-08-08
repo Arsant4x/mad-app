@@ -152,5 +152,6 @@
   "reset_submit": "Set password",
   "reset_success": "Password changed — sign in with it now.",
   "reset_error": "Could not set the password",
-  "nav_pos": "POS"
+  "nav_pos": "POS",
+  "nav_quotes": "Quotes"
 }

@@ -290,6 +290,8 @@ model Company {
   integrations        IntegrationConnection[]
   supportGrants       SupportAccessGrant[]
   supportLogs         SupportAccessLog[]
+  quotes              Quote[]
+  quoteLines          QuoteLine[]
   claimAttachments    ClaimAttachment[]
   handoverPhotos      HandoverPhoto[]
   settlementLines     ContractSettlementLine[]
@@ -408,6 +410,8 @@ model Branch {
   purchases        Purchase[]
   journalEntries   JournalEntry[]
   stockMovements   StockMovement[]
+
+  quotes Quote[]
 
   @@unique([companyId, name])
   @@map("branches")
@@ -636,6 +640,8 @@ model Customer {
   invoices  Invoice[]
   contracts Contract[]
 
+  quotes Quote[]
+
   @@unique([companyId, name])
 
   /// Soft delete: set instead of removing the row, so it can be restored
@@ -741,6 +747,8 @@ model Invoice {
   updatedAt DateTime @updatedAt
 
   lines InvoiceLine[]
+
+  convertedFromQuote Quote?
 
   @@unique([companyId, no])
   @@unique([companyId, clientSaleId])
@@ -2290,6 +2298,81 @@ model SupportAccessLog {
 
   @@index([companyId, at])
   @@map("support_access_logs")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  CONVERTED
+}
+
+/// عرض سعر (4.9): وثيقة تفاوض لا التزام — لا ترحيل ولا ضريبة مستحقة حتى
+/// يتحوّل فاتورةً. «منتهي الصلاحية» يُشتق قراءةً من validUntil (نمط
+/// الحجوزات — لا cron): DRAFT/SENT بعد تاريخه يُقرأ EXPIRED ويُرفض تحويله.
+/// بنوده بشكل بنود الفاتورة حرفياً — فالتحويل نقلٌ لا إعادة إدخال.
+model Quote {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// تسلسل مستقل تماماً عن INV/CN: يُشتق من جدول العروض نفسه (Q-YYYY-0001)
+  /// — لكل نوع مستند عدّاده الخاص لكل منشأة (شرط صاحب المشروع).
+  no         String
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  issueDate  DateTime @db.Date
+  /// آخر يوم يصلح فيه التحويل — بعده يُعرض ويُرفض تحويله باسم تاريخه.
+  validUntil DateTime @db.Date
+
+  status QuoteStatus @default(DRAFT)
+  notes  String?
+
+  subtotal Decimal @db.Decimal(18, 2)
+  taxTotal Decimal @db.Decimal(18, 2)
+  total    Decimal @db.Decimal(18, 2)
+
+  /// See Company.baseCurrency for the scheme these columns belong to.
+  currency     String  @default("SAR")
+  exchangeRate Decimal @default(1) @db.Decimal(18, 6)
+  baseSubtotal Decimal @db.Decimal(18, 2)
+  baseTaxTotal Decimal @db.Decimal(18, 2)
+  baseTotal    Decimal @db.Decimal(18, 2)
+
+  /// التحويل أحادي للأبد: فهرس فريد يمنع فاتورتين لعرضٍ واحد حتى تحت سباق
+  /// نقرتين — الخاسر يقرأ الفائز ويعيد 409 باسم فاتورته (قرار 6.12).
+  convertedInvoiceId String?  @unique
+  convertedInvoice   Invoice? @relation(fields: [convertedInvoiceId], references: [id], onDelete: Restrict)
+  convertedAt        DateTime?
+
+  lines QuoteLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, no])
+  @@index([companyId, status])
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id        String @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Decimal @db.Decimal(18, 2)
+  unitPrice   Decimal @db.Decimal(18, 2)
+  taxRate     Decimal @db.Decimal(5, 2)
+
+  @@index([quoteId])
+  @@map("quote_lines")
 }
 
 /// One scheduled rent payment for a Contract, generated evenly across the

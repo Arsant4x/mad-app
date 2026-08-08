@@ -112,11 +112,20 @@ export class InvoicesService {
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto) {
-    const { subtotal, taxTotal, total } = computeTotals(dto.lines);
-    const { currency, exchangeRate } = resolveCurrency(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextInvoiceNumber's comment.
-    return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, (tx) => this.createWithinTx(tx, companyId, allowedBranchIds, dto)));
+  }
+
+  /**
+   * نقطة الدخول داخل-المعاملة (4.9): يستهلكها تحويل عرض السعر ليجعل إنشاء
+   * الفاتورة وختمَ العرض معاملةً واحدة ذرّية. الجسد هو ما كان داخل create
+   * حرفياً — لا تغيير سلوك للمسار القائم، واختباراته القديمة حكمُ ذلك.
+   * ملاحظة: من يستدعيها مسؤول عن retryOnUniqueConflict حول معاملته كلها.
+   */
+  async createWithinTx(tx: Prisma.TransactionClient, companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto) {
+    const { subtotal, taxTotal, total } = computeTotals(dto.lines);
+    const { currency, exchangeRate } = resolveCurrency(dto);
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       const no = await this.nextDocumentNumber(tx, 'INV');
       const created = await tx.invoice.create({
@@ -170,7 +179,6 @@ export class InvoicesService {
       });
       if (!entry) return created;
       return tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
-    }));
   }
 
   update(companyId: string, id: string, dto: UpdateInvoiceDto) {

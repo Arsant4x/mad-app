@@ -24,6 +24,7 @@ import { StockMovementsPage } from './pages/inventory/StockMovementsPage';
 import { ExpiringStockPage } from './pages/inventory/ExpiringStockPage';
 import { InvoicesPage } from './pages/invoices/InvoicesPage';
 import { PosPage } from './pages/pos/PosPage';
+import { QuotesPage } from './pages/quotes/QuotesPage';
 import { JournalPage } from './pages/journal/JournalPage';
 import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -194,6 +195,14 @@ export default function App() {
               element={
                 <ScreenGuard screen="pos">
                   <PosPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="quotes"
+              element={
+                <ScreenGuard screen="quotes">
+                  <QuotesPage />
                 </ScreenGuard>
               }
             />

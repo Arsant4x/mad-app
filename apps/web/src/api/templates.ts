@@ -24,6 +24,7 @@ export const ALLOWED_SCREENS = [
   'scripts',
   'audit',
   'pos',
+  'quotes',
 ] as const;
 
 export const SCREEN_LABELS: Record<(typeof ALLOWED_SCREENS)[number], string> = {
@@ -49,6 +50,7 @@ export const SCREEN_LABELS: Record<(typeof ALLOWED_SCREENS)[number], string> = {
   scripts: 'قوالب الرسائل',
   audit: 'سجل التدقيق',
   pos: 'الكاشير',
+  quotes: 'عروض الأسعار',
 };
 
 /** Actions a permission can grant on a screen — mirrors SCREEN_ACTIONS in

@@ -35,6 +35,7 @@ const NAV_GROUPS: NavGroupDef[] = [
     labelKey: 'grp_sales',
     items: [
       { screen: 'pos', to: '/pos', labelKey: 'nav_pos' },
+      { screen: 'quotes', to: '/quotes', labelKey: 'nav_quotes' },
       { screen: 'invoice', to: '/invoices', labelKey: 'nav_invoices' },
       { screen: 'customers', to: '/customers', labelKey: 'nav_customers' },
     ],

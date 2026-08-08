@@ -16,6 +16,7 @@ import { EmployeesModule } from './employees/employees.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PosModule } from './pos/pos.module';
+import { QuotesModule } from './quotes/quotes.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { SupportAccessModule } from './support-access/support-access.module';
 import { SubscriptionModule } from './subscription/subscription.module';
@@ -88,6 +89,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     LeavesModule,
     AttendanceModule,
     PosModule,
+    QuotesModule,
     IntegrationsModule,
     SupportAccessModule,
     SubscriptionModule,
