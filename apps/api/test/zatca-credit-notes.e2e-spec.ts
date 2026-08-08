@@ -240,6 +240,10 @@ describe('ZATCA credit notes (e2e)', () => {
     it('a credit note takes an ordinary position in the one hash chain', async () => {
       const invoice = await makeInvoice();
       const a = await request(app.getHttpServer()).post(`/zatca/invoices/${invoice.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      // Only an accepted document is handed on as the next PIH (see
+      // latestChainHash) — a rejected one is skipped, so the invoice is
+      // cleared here to make it a genuine predecessor.
+      await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: invoice.id }, data: { zatcaStatus: 'CLEARED' } }));
 
       const note = await issueNote(invoice.id).expect(201);
       createdInvoiceIds.push(note.body.id);
@@ -263,7 +267,7 @@ describe('ZATCA credit notes (e2e)', () => {
       // position is burned either way. Deleting it would leave the next
       // document chained onto a hash that no longer exists locally.
       const res = await request(app.getHttpServer()).delete(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).expect(409);
-      expect(res.body.message).toContain('zatca.chain_locked');
+      expect(res.body.message).toContain('zatca.invoice_chain_locked');
     }, 30000);
 
     it('freezes a CLEARED invoice against data edits, while REJECTED stays fixable and payment status stays free', async () => {
@@ -286,8 +290,8 @@ describe('ZATCA credit notes (e2e)', () => {
         .patch(`/invoices/${invoice.id}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ lines: [{ description: 'تلاعب بعد التصديق', quantity: 1, unitPrice: 1, taxRate: 15 }] })
-        .expect(400);
-      expect(frozen.body.message).toContain('zatca.cleared_immutable');
+        .expect(409);
+      expect(frozen.body.message).toContain('zatca.invoice_cleared_locked');
       await request(app.getHttpServer()).patch(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(200);
     }, 30000);
   });
