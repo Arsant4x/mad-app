@@ -36,16 +36,30 @@ export async function nextIcv(tx: Prisma.TransactionClient): Promise<number> {
 }
 
 /**
- * The hash the next invoice must chain onto: the most recently *hashed*
+ * The hash the next invoice must chain onto: the most recently *accepted*
  * invoice for this company, or the genesis value if there is none.
  *
  * Ordered by `zatcaSubmittedAt` rather than creation time, because the chain
  * follows submission order — an invoice created earlier but submitted later
  * belongs later in the chain.
+ *
+ * **Only CLEARED documents are eligible.** A document the authority did not
+ * accept never entered its records, so it cannot be anyone's predecessor:
+ * the authority recomputes the chain from what it holds, and expects the next
+ * PIH to be the hash of the last document it actually accepted. Handing out a
+ * rejected invoice's hash also made that hash load-bearing while the invoice
+ * was still being corrected — fixing it recomputes the hash and orphans
+ * whatever chained onto the old one, which is the defect
+ * InvoicesService.update's successor check exists to catch. That check stays
+ * as a second layer (it still guards data recorded before this rule, and any
+ * path that sets a PIH by other means); this is the fix at the source.
+ *
+ * SUBMITTING is excluded for the same reason — nothing is accepted yet, and a
+ * retry in flight still carries the *previous* attempt's stale hash.
  */
 export async function latestChainHash(tx: Prisma.TransactionClient): Promise<string> {
   const previous = await tx.invoice.findFirst({
-    where: { zatcaHash: { not: null } },
+    where: { zatcaHash: { not: null }, zatcaStatus: 'CLEARED' },
     orderBy: [{ zatcaSubmittedAt: 'desc' }],
     select: { zatcaHash: true },
   });

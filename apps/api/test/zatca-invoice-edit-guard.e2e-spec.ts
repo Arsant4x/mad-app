@@ -244,15 +244,22 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     const a = await makeRejectedInvoice();
     const first = await getInvoice(a);
     const b = await makeRejectedInvoice();
-    // Precondition: B really did commit to A's hash as its PIH — that link is
-    // what an edit to A would orphan.
-    const second = await getInvoice(b);
-    expect(second!.zatcaPreviousHash).toBe(first!.zatcaHash);
+
+    // The link is set explicitly rather than by submitting B normally,
+    // because `latestChainHash` no longer hands a rejected invoice's hash to
+    // the next document — that fix at the source is covered in
+    // zatca-phase2 ("never hands a rejected invoice's hash to the next
+    // document"). This guard remains as the second layer: rows recorded
+    // before that rule, or any future path that sets a PIH another way, can
+    // still present this shape, and editing A would orphan B's PIH.
+    await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.update({ where: { id: b }, data: { zatcaPreviousHash: first!.zatcaHash } }),
+    );
 
     const res = await patch(a, { lines: [{ description: 'بند متأخر', quantity: 1, unitPrice: 300, taxRate: 15 }] }).expect(409);
     expect(res.body.message).toContain('يقطع ارتباطه');
 
-    // B, at the end of the line, is still editable.
+    // B, with nothing chained onto it, is still editable.
     await patch(b, { lines: [{ description: 'بند طرف السلسلة', quantity: 1, unitPrice: 310, taxRate: 15 }] }).expect(200);
   }, 60000);
 

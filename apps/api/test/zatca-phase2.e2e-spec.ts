@@ -301,9 +301,13 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(second.body.zatcaHash).toBe(first.body.zatcaHash);
     }, 30000);
 
-    it('chains each new invoice onto the previous one', async () => {
+    it('chains each new invoice onto the previous accepted one', async () => {
       const idA = await makeInvoice();
       const a = await request(app.getHttpServer()).post(`/zatca/invoices/${idA}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      // Only an accepted document can be a predecessor, and clearance needs a
+      // certificate only the authority can issue — so it is simulated on top
+      // of a real submission (same chain link, accepted status).
+      await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: idA }, data: { zatcaStatus: 'CLEARED' } }));
 
       const idB = await makeInvoice();
       const b = await request(app.getHttpServer()).post(`/zatca/invoices/${idB}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
@@ -314,5 +318,32 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(b.body.zatcaIcv).toBe(a.body.zatcaIcv + 1);
       expect(b.body.zatcaHash).not.toBe(a.body.zatcaHash);
     }, 30000);
+
+    it('never hands a rejected invoice\'s hash to the next document — it inherits the last accepted one', async () => {
+      // An accepted document to inherit from...
+      const idCleared = await makeInvoice();
+      const cleared = await request(app.getHttpServer()).post(`/zatca/invoices/${idCleared}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: idCleared }, data: { zatcaStatus: 'CLEARED' } }));
+
+      // ...then a rejected one submitted after it. It burns its ICV slot (so
+      // it can never be deleted) but the authority never recorded it.
+      const idRejected = await makeInvoice();
+      const rejected = await request(app.getHttpServer()).post(`/zatca/invoices/${idRejected}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      expect(rejected.body.zatcaStatus).toBe('REJECTED');
+      expect(rejected.body.zatcaHash).toBeTruthy();
+
+      const idNext = await makeInvoice();
+      const next = await request(app.getHttpServer()).post(`/zatca/invoices/${idNext}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+
+      // The rejected invoice is not a predecessor: it is skipped, and the last
+      // accepted document is inherited instead. Were its hash handed on,
+      // correcting and resubmitting it would recompute that hash and orphan
+      // this document's PIH.
+      expect(next.body.zatcaPreviousHash).not.toBe(rejected.body.zatcaHash);
+      expect(next.body.zatcaPreviousHash).toBe(cleared.body.zatcaHash);
+      // The skip is in the hash chain only — the counter still counts the
+      // rejected document, because its position is genuinely taken.
+      expect(next.body.zatcaIcv).toBe(rejected.body.zatcaIcv + 1);
+    }, 40000);
   });
 });
