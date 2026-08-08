@@ -184,7 +184,9 @@ export const MSG = {
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
   zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
-  zatca_invoice_edit_chain_locked: 'zatca.invoice_edit_chain_locked',
+  zatca_invoice_cleared_locked: 'zatca.invoice_cleared_locked',
+  zatca_invoice_submitting_locked: 'zatca.invoice_submitting_locked',
+  zatca_invoice_successor_locked: 'zatca.invoice_successor_locked',
 
   // branches / activities
   branch_not_found: 'branches.not_found',
@@ -473,9 +475,17 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
     en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
   },
-  [MSG.zatca_invoice_edit_chain_locked]: {
-    ar: 'لا يمكن تعديل بيانات فاتورة دخلت سلسلة الفوترة الإلكترونية — الهاش المُسجَّل لدى الهيئة محسوب على هذه البيانات نفسها، وتغييرها يكسر السلسلة؛ التصحيح يكون بإشعار دائن. (تعديل الملاحظات وحالة السداد يبقى متاحاً)',
-    en: 'An invoice that has entered the e-invoicing chain cannot have its content edited — the hash recorded with the authority was computed over this very data, and changing it breaks the chain; correct it with a credit note. (Notes and payment status can still be changed.)',
+  [MSG.zatca_invoice_cleared_locked]: {
+    ar: 'لا يمكن تعديل بيانات فاتورة مصدَّقة لدى هيئة الزكاة — هي مستند قانوني قائم، والتصحيح يكون بإشعار دائن. (تعديل الملاحظات وحالة السداد يبقى متاحاً)',
+    en: 'An invoice cleared by ZATCA cannot have its content edited — it is a standing legal document; correct it with a credit note. (Notes and payment status can still be changed.)',
+  },
+  [MSG.zatca_invoice_submitting_locked]: {
+    ar: 'الفاتورة قيد الإرسال إلى هيئة الزكاة — انتظر نتيجة الإرسال قبل تعديلها؛ فإن صُدِّقت صار التصحيح بإشعار دائن',
+    en: 'This invoice is being submitted to ZATCA — wait for the result before editing it; if it clears, correction is by credit note',
+  },
+  [MSG.zatca_invoice_successor_locked]: {
+    ar: 'لا يمكن تعديل هذه الفاتورة المرفوضة: صدر بعدها مستند يرتبط بها في سلسلة الهيئة، وتعديلها يقطع ارتباطه — أرسلها كما هي أو صحّح بإشعار دائن',
+    en: 'This rejected invoice cannot be edited: a later document is already chained to it in the authority’s sequence and editing it would break that link — resubmit it as is, or correct it with a credit note',
   },
 
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
