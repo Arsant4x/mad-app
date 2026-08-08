@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr } from '../zatca/qr.util';
 import { Prisma } from '@prisma/client';
@@ -191,6 +191,16 @@ export class InvoicesService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.invoice.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
+      // Once a document holds a ZATCA chain link it can never be deleted — the
+      // next document's PIH commits to its hash, and the ICV marks its position
+      // in the sequence the authority audits. This is deliberately keyed on the
+      // chain fields, not on zatcaStatus: a REJECTED invoice keeps its link for
+      // retry (see ZatcaService.submitInvoice), and a submission interrupted
+      // before the hash was recorded still occupies its ICV slot — both would
+      // leave a gap. Correction happens by credit note, never by deletion.
+      if (existing.zatcaIcv !== null || existing.zatcaHash !== null) {
+        throw new ConflictException(MSG.zatca_invoice_chain_locked);
+      }
       await tx.invoice.delete({ where: { id } });
       // Deleting the invoice first removes the only row referencing the
       // entry, so it can now be reversed and deleted without hitting the

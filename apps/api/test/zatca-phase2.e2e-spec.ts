@@ -102,8 +102,18 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
   }, 30000);
 
   afterAll(async () => {
+    // Submitted invoices carry a chain link, and the delete endpoint now
+    // refuses those with 409 (see InvoicesService.remove). Test rows aren't a
+    // real chain, so strip the link first and let the API delete normally —
+    // which also reverses the auto-posted journal entries.
+    await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.updateMany({
+        where: { id: { in: createdInvoiceIds } },
+        data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
+      }),
+    );
     for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`);
+      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
     }
     for (const id of createdCompanyUserIds) {
       await request(app.getHttpServer()).delete(`/company-users/${id}`).set('Authorization', `Bearer ${token}`);

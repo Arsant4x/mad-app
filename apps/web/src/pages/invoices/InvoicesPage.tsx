@@ -23,6 +23,7 @@ export function InvoicesPage() {
   // showInvoiceBuilder() combo.
   const [view, setView] = useState<View>((location.state as { openBuilder?: boolean } | null)?.openBuilder ? { mode: 'builder', editing: null } : { mode: 'list' });
   const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -40,10 +41,21 @@ export function InvoicesPage() {
     reload().finally(() => setLoading(false));
   }, []);
 
+  /**
+   * The server refuses to delete an invoice that entered the ZATCA chain
+   * (409) — that refusal must reach the user as its Arabic reason, not
+   * disappear as an unhandled rejection leaving the row silently in place.
+   */
   async function confirmDelete() {
     if (!pendingDelete) return;
-    await deleteInvoice(pendingDelete.id);
+    const invoice = pendingDelete;
     setPendingDelete(null);
+    try {
+      await deleteInvoice(invoice.id);
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setDeleteError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حذف الفاتورة'));
+    }
     await reload();
   }
 
@@ -143,6 +155,9 @@ export function InvoicesPage() {
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmDelete}
         />
+      )}
+      {deleteError && (
+        <ConfirmModal title="تعذّر الحذف" body={deleteError} confirmLabel="حسناً" hideCancel onCancel={() => setDeleteError(null)} onConfirm={() => setDeleteError(null)} />
       )}
     </>
   );

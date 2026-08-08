@@ -183,6 +183,7 @@ export const MSG = {
   zatca_compliance_required: 'zatca.compliance_required',
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
+  zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
 
   // branches / activities
   branch_not_found: 'branches.not_found',
@@ -467,6 +468,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
   [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
   [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
+  [MSG.zatca_invoice_chain_locked]: {
+    ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
+    en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
+  },
 
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
