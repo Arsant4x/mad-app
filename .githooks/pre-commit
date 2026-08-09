@@ -1,0 +1,76 @@
+#!/bin/sh
+# حارس الأسرار — يمنع تكرار ما حدث مع backup-before-cleanup.sql.
+#
+# الدرس الذي وُلد منه هذا الملف: كان المسار مذكوراً في .gitignore منذ يوم
+# إضافته، ومع ذلك بقي يُدفع إلى GitHub تسعة أشهر — لأن **قواعد التجاهل لا
+# تسري على ملف متتبَّع أصلاً**. فالحماية بـ.gitignore وحدها وهمٌ يُطمئن.
+#
+# هذا الخطاف يفحص ما هو **مُدرَج للالتزام فعلاً**، فيمسك الحالتين معاً:
+# الملف الجديد الذي يتجاوز التجاهل بـ`git add -f`، والملف المتتبَّع سلفاً.
+#
+# التفعيل (مرة واحدة لكل نسخة):   git config core.hooksPath .githooks
+# التجاوز عند الحاجة الحقيقية:     git commit --no-verify
+#
+# ملاحظة: git لا يشارك .git/hooks بين النسخ، ولذلك يعيش الخطاف هنا داخل
+# المستودع ويُشار إليه بـcore.hooksPath — وإلا لحمى جهاز كاتبه وحده.
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+blocked=""
+reason=""
+
+for f in $staged; do
+  case "$f" in
+    # المسموح صراحةً أولاً — هجرات Prisma وسكربتات تهيئة Postgres مصدرٌ لا بيانات.
+    apps/api/prisma/migrations/*|docker/postgres-init/*|docker/postgres-init-prod/*) continue ;;
+    # القوالب الفارغة مقصودة.
+    *.env.example|.env.example|.env.production.example) continue ;;
+  esac
+
+  case "$f" in
+    *.sql)   blocked="$blocked\n  $f  — ملف SQL خارج مجلد الهجرات (مقلب قاعدة؟)" ;;
+    *.dump|*.bak|*.backup) blocked="$blocked\n  $f  — مقلب/نسخة احتياطية" ;;
+    *.pem|*.key|*.p12|*.pfx|*.jks) blocked="$blocked\n  $f  — مفتاح أو شهادة" ;;
+    .env|.env.*|*/.env|*/.env.*) blocked="$blocked\n  $f  — ملف بيئة (أسرار)" ;;
+  esac
+done
+
+# فحص المحتوى: الاسم قد يكون بريئاً والحمولة سرّاً. يفحص النسخة **المُدرَجة**
+# (:$f) لا التي على القرص — فما يُلتزم هو ما في الفهرس.
+for f in $staged; do
+  case "$f" in
+    apps/api/prisma/migrations/*) continue ;;
+    *.spec.ts|*.e2e-spec.ts|*.md) continue ;;  # توكيدات ووثائق تذكر الأنماط نصاً
+    # والخطاف نفسه: أنماط البحث مكتوبة داخله حرفياً، فبدون هذا السطر يرفض
+    # نفسه عند أول التزام — وقد فعل. الأنماط كودٌ لا حمولة، كحال الاختبارات.
+    .githooks/*) continue ;;
+  esac
+  content=$(git show ":$f" 2>/dev/null | head -c 2000000) || continue
+  case "$content" in
+    *'$argon2id$v='*)          reason="$reason\n  $f  — يحتوي هاش كلمة مرور argon2id" ;;
+  esac
+  case "$content" in
+    *'-----BEGIN'*'PRIVATE KEY-----'*) reason="$reason\n  $f  — يحتوي مفتاحاً خاصاً" ;;
+  esac
+done
+
+if [ -n "$blocked" ] || [ -n "$reason" ]; then
+  printf '\n'
+  printf '════════════════════════════════════════════════════════════\n'
+  printf '  رُفض الالتزام: ملفات قد تحمل أسراراً\n'
+  printf '════════════════════════════════════════════════════════════\n'
+  [ -n "$blocked" ] && printf '  بحسب النوع:%b\n' "$blocked"
+  [ -n "$reason" ]  && printf '  بحسب المحتوى:%b\n' "$reason"
+  printf '\n'
+  printf '  ما دخل التاريخ لا يخرج منه إلا بإعادة كتابته ودفعٍ قسري\n'
+  printf '  لكل الفروع — وحتى بعدها يُعامل السرّ كمكشوف.\n'
+  printf '\n'
+  printf '  انقل الملف خارج المستودع، أو أزله من الإدراج:\n'
+  printf '    git restore --staged <path>\n'
+  printf '  وإن كان مقصوداً فعلاً:  git commit --no-verify\n'
+  printf '════════════════════════════════════════════════════════════\n\n'
+  exit 1
+fi
+
+exit 0
