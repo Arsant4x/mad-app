@@ -65,12 +65,36 @@ function sanitizeFilename(filename: string): string {
 export class FilesService implements OnModuleInit {
   private readonly logger = new Logger(FilesService.name);
   private readonly bucket = process.env.S3_BUCKET ?? 'mad-app-files';
+  /**
+   * عميلان لا واحد — لأن للتخزين عنوانين مختلفين حقيقةً:
+   *
+   *   الداخلي (S3_ENDPOINT = http://minio:9000) يستعمله **الخادم** للرفع
+   *   والحذف داخل شبكة Docker.
+   *
+   *   العام (S3_PUBLIC_URL = https://files.example.com) هو ما يجب أن يظهر في
+   *   **رابط التنزيل الموقَّع** الذي يُسلَّم للمتصفح — فاسم `minio` لا يُحلّ
+   *   خارج الشبكة، وكل مرفق كان يُرفع بنجاح ثم يتعذّر تنزيله.
+   *
+   * ولأن التوقيع يشمل المضيف، لا يصحّ توقيع رابط بالعنوان الداخلي ثم استبدال
+   * نصّه — يجب أن يوقَّع بالعنوان العام من الأصل، وهذا ما يفعله العميل الثاني.
+   */
   private readonly client = new S3Client({
     endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
     region: 'us-east-1',
     // MinIO serves buckets as a path (localhost:9000/bucket/key), not as a
     // subdomain the way real S3 does — without this the SDK builds URLs that
     // don't resolve locally.
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY ?? '',
+      secretAccessKey: process.env.S3_SECRET_KEY ?? '',
+    },
+  });
+
+  /** توأم العميل أعلاه بالعنوان العام — للتوقيع وحده، لا يرفع ولا يحذف. */
+  private readonly signingClient = new S3Client({
+    endpoint: process.env.S3_PUBLIC_URL ?? process.env.S3_ENDPOINT ?? 'http://localhost:9000',
+    region: 'us-east-1',
     forcePathStyle: true,
     credentials: {
       accessKeyId: process.env.S3_ACCESS_KEY ?? '',
@@ -118,7 +142,8 @@ export class FilesService implements OnModuleInit {
 
   async downloadUrl(companyId: string, key: string): Promise<{ url: string; expiresInSeconds: number }> {
     assertKeyBelongsToCompany(key, companyId);
-    const url = await getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+    // signingClient لا client: الرابط يذهب إلى متصفح خارج شبكة Docker.
+    const url = await getSignedUrl(this.signingClient, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
       expiresIn: DOWNLOAD_URL_TTL_SECONDS,
     });
     return { url, expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS };

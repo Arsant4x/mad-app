@@ -41,6 +41,15 @@ export class MailService {
 
   async send(to: string, subject: string, text: string): Promise<void> {
     if (!this.transporter) {
+      // نصّ الرسالة يحمل **رمز استعادة كلمة المرور صالحاً**. طباعته مقبولة على
+      // جهاز المطوّر (هي الطريقة الوحيدة لالتقاط الرابط بلا SMTP)، وكارثة على
+      // خادم: سجلّات الحاوية تُلتقط وتُشحن وتُحفظ، فيصير كل رمز استعادة
+      // مقروءاً لأي من يملك اطلاعاً على السجل — وSMTP غير مهيّأ هو الحالة
+      // الافتراضية الموثَّقة في DEPLOY.md، لا حالة نادرة.
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(`SMTP غير مهيّأ — لم تُرسَل رسالة إلى ${to} («${subject}»). اضبط SMTP_* وإلا فاستعادة كلمة المرور معطَّلة.`);
+        return;
+      }
       this.logger.warn(`SMTP not configured — email to ${to} logged instead:\n--- ${subject} ---\n${text}`);
       return;
     }

@@ -38,6 +38,16 @@ COPY --from=build /app/apps/api/prisma apps/api/prisma
 
 WORKDIR /app/apps/api
 EXPOSE 3000
+# dist/src/main.js — NOT dist/main.js. tsconfig.build.json excludes only
+# node_modules/dist/test/*.spec.ts, so prisma/*.ts and scripts/*.ts are part of
+# the compilation too; TypeScript then infers the common rootDir as apps/api/
+# and mirrors the tree under dist/ (dist/src, dist/prisma, dist/scripts).
+# The old path made the container exit with MODULE_NOT_FOUND on every boot.
+#
+# That same layout is what makes the production bootstrap runnable here:
+#   node dist/scripts/bootstrap-production.js
+# (`prisma db seed` cannot work in this image — no ts-node, no src/*.ts.)
+#
 # Migrations run on every boot: idempotent, and the container is the only
 # thing guaranteed to run before the app touches the schema.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]

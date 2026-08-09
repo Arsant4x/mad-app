@@ -44,6 +44,11 @@ services:
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
     volumes:
       - minio_data:/data
+    # 9000 على الحلقة المحلية وحدها — الوسيط العاكس هو من يواجه الإنترنت
+    # ويحمل الشهادة، تماماً كالواجهة والخادم. بدون هذا لا يصل متصفح العميل
+    # إلى روابط التنزيل الموقَّعة. ولوحة الإدارة (9001) تبقى غير منشورة.
+    ports:
+      - "127.0.0.1:9000:9000"
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -70,11 +75,18 @@ services:
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
       WEB_ORIGIN: ${WEB_ORIGIN}
+      # الداخلي للرفع والحذف من الخادم…
       S3_ENDPOINT: http://minio:9000
+      # …والعام لتوقيع روابط التنزيل التي يفتحها متصفح العميل. اسم `minio` لا
+      # يُحلّ خارج شبكة Docker، فبدونه يُرفع كل مرفق ولا يُنزَّل أبداً.
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_BUCKET: ${S3_BUCKET:-mad-app-files}
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY}
+      # بديله في الكود مفتاح ثابت منشور — وحارس الإقلاع يرفض التشغيل بدونه.
+      INTEGRATIONS_ENC_KEY: ${INTEGRATIONS_ENC_KEY}
+      ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
@@ -110,15 +122,37 @@ services:
         condition: service_healthy
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      # تُقرأ داخل الصدفة ($$) لا عبر مفسّر Compose — فلا بد من تمريرها.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./backups:/backups
-    entrypoint: >
-      sh -c 'while true; do
-        pg_dump -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -F c
-          -f "/backups/mad-app-$(date +%Y%m%d-%H%M%S).dump"
-        && ls -1t /backups/mad-app-*.dump | tail -n +15 | xargs -r rm --;
-        sleep 86400;
-      done'
+    # كتلة حرفية (|) لا مطوية (>): الصيغة المطوية تحتفظ بأسطر الأسطر الأكثر
+    # إزاحة، فكان `-f "..."` ينفصل عن `pg_dump` ويبدأ سطرٌ بـ`&&` — أي خطأ
+    # تحليل في sh («syntax error near unexpected token &&») يجعل الحاوية
+    # تنهار وتعيد التشغيل بلا نهاية، فلا نسخة احتياطية واحدة تُؤخذ أبداً.
+    # و`$$` تمنع Compose من تفسير `$(date …)` قبل أن تصل الصدفة.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        while true; do
+          stamp=$$(date +%Y%m%d-%H%M%S)
+          # pg_dump لا يصدّر الأدوار — دور app_user يُنشئه سكربت التهيئة عند
+          # أول إقلاع، فالاستعادة على قاعدة جديدة تمرّ بنفس المسار.
+          if pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -F c -f "/backups/mad-app-$$stamp.dump.tmp"; then
+            # إعادة التسمية بعد النجاح وحده: مقلبٌ نصفُه مكتوب يبدو صالحاً
+            # في القائمة ثم يفشل عند الاستعادة — وقتَ الحاجة إليه بالضبط.
+            mv "/backups/mad-app-$$stamp.dump.tmp" "/backups/mad-app-$$stamp.dump"
+            ls -1t /backups/mad-app-*.dump | tail -n +15 | xargs -r rm -f
+            echo "backup ok: mad-app-$$stamp.dump"
+          else
+            rm -f "/backups/mad-app-$$stamp.dump.tmp"
+            echo "backup FAILED at $$stamp" >&2
+          fi
+          sleep 86400
+        done
 
 volumes:
   postgres_data:

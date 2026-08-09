@@ -27,6 +27,20 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 يتصل به التطبيق. الدور الأعلى يتجاوز عزل الصفوف (RLS) بصمت، لذا لا يتصل
 به التطبيق أبداً — هذا قرار أمني ثابت في المشروع (CLAUDE.md 6.1).
 
+🔐 **حساب مدير المنصة في الإنتاج — قرار المالك (2026-08-09):**
+`PLATFORM_ADMIN_PASSWORD` **تُولَّد عشوائياً ولا تُوثَّق في أي ملف.** لا تُعاد
+استخدام كلمة حساب التطوير (`Arsan_admin`) ولا تُكتب في وثيقة أو رسالة أو
+تذكرة — تُولَّد، تُلصق في `.env.production` على الخادم، وتُحفظ في مدير كلمات
+مرور. الإنتاج **يبدأ بحساب جديد** لا صلة له بحساب القاعدة المحلية:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+```
+
+وبعد أول دخول، `bootstrapPlatform` **لا يعيد ضبط كلمة مرور حساب قائم** عمداً
+(`update: {}`) — فإعادة تشغيله بعد أي تحديث لا تُرجع كلمة المرور إلى ما في ملف
+البيئة ولا تُبطل تدويراً جرى بعده.
+
 ## 2) التشغيل
 
 ```bash
@@ -44,12 +58,17 @@ curl http://127.0.0.1:8080        # صفحة الواجهة
 ## 3) إنشاء حساب مدير المنصة (مرة واحدة)
 
 ```bash
-docker compose -f docker-compose.prod.yml exec api npx prisma db seed
+docker compose -f docker-compose.prod.yml exec api node dist/scripts/bootstrap-production.js
 ```
 
-⚠️ الـseed الحالي يُنشئ أيضاً شركتين تجريبيتين (`demo-company-a/b`).
-بعد الدخول بحساب المدير، **احذفهما من لوحة المطوّر** — بيئة الإنتاج لا
-تحمل بيانات تجريبية.
+ينشئ قالبَي الصلاحيات العامّين وحساب المدير من `PLATFORM_ADMIN_*`،
+**ولا شيء غيرهما**. القاعدة تبقى نظيفة: صفر منشأة، صفر بيانات تجريبية.
+وهو عديم الأثر عند التكرار — أعد تشغيله بعد كل تحديث بلا قلق.
+
+> ⚠️ **لا تشغّل `npx prisma db seed` على خادم حيّ.** تلك بذرة تطوير تُنشئ
+> شركتين دخولهما `DemoPass123!` **مكتوبةً في المستودع العام**. الخادم يرفضها
+> الآن من تلقاء نفسه حين `NODE_ENV=production`، وهي لا تعمل في صورة الإنتاج
+> أصلاً (لا `ts-node` فيها ولا ملفات مصدر).
 
 ## 4) TLS (https) — إلزامي قبل استقبال أي عميل
 
@@ -69,7 +88,15 @@ app.example.com {
 api.example.com {
     reverse_proxy 127.0.0.1:3000
 }
+# نطاق ثالث للمرفقات: رابط التنزيل الموقَّع يُسلَّم لمتصفح العميل، والعنوان
+# الداخلي (minio:9000) لا يُحلّ خارج شبكة Docker. يجب أن يطابق S3_PUBLIC_URL.
+files.example.com {
+    reverse_proxy 127.0.0.1:9000
+}
 ```
+
+⚠️ حاوية MinIO لا تنشر 9000 على المضيف افتراضياً — أضف
+`ports: ["127.0.0.1:9000:9000"]` لخدمة `minio` قبل أن يعمل هذا النطاق.
 
 ```bash
 sudo systemctl reload caddy
@@ -82,9 +109,34 @@ sudo systemctl reload caddy
 تُجرَّب استعادتها ليست نسخة:
 
 ```bash
+set -a; . ./.env.production; set +a          # يحمّل POSTGRES_USER/DB إلى صدفتك
 docker compose -f docker-compose.prod.yml exec -T postgres \
   pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean < backups/mad-app-XXXX.dump
 ```
+
+> السطر الأول ليس زينة: `$POSTGRES_USER` يعيش في `.env.production` لا في
+> صدفتك، وبدونه يعمل `pg_restore -U ""` فيفشل بخطأ مصادقة غامض.
+
+**جرّب الاستعادة على قاعدة منفصلة أولاً** — استعادةٌ بـ`--clean` على القاعدة
+الحيّة تحذف قبل أن تكتب، فنسخةٌ تالفة تعني ضياع الاثنتين:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  createdb -U "$POSTGRES_USER" restore_test
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  pg_restore -U "$POSTGRES_USER" -d restore_test < backups/mad-app-XXXX.dump
+# تحقّق أن الصفوف موجودة فعلاً، لا أن الأمر انتهى بلا خطأ:
+docker compose -f docker-compose.prod.yml exec -T postgres \
+  psql -U "$POSTGRES_USER" -d restore_test -c \
+  "SELECT (SELECT count(*) FROM companies) AS companies, (SELECT count(*) FROM invoices) AS invoices;"
+```
+
+⚠️ **`pg_dump` لا يصدّر الأدوار.** دور `app_user` يُنشئه سكربت التهيئة عند أول
+إقلاع لقاعدة جديدة، فالاستعادة على خادم جديد تمرّ بذلك المسار — لكن استعادةً
+إلى مثيل Postgres لا يحمل الدور ستفشل عند إسناد الملكية.
+
+⚠️ **حجم MinIO خارج هذه النسخة** — المقلب يغطي قاعدة البيانات وحدها. المرفقات
+(عقود · شعارات · صور) في حجم `minio_data`، ويلزمها نسخٌ منفصل.
 
 انسخ مجلد `backups/` دورياً خارج الخادم (rclone / S3 / أي تخزين خارجي).
 

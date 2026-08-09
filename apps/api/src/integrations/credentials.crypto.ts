@@ -14,8 +14,22 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypt
  */
 const DEV_FALLBACK = 'dev-only-integrations-key-change-in-production';
 
+/**
+ * المفتاح الاحتياطي **للتطوير وحده**، ونصّه منشور في هذا الملف — فاستعماله في
+ * الإنتاج يعني أن بيانات اعتماد بوابات الدفع للتجار «مشفَّرة» بمفتاح يعرفه كل
+ * من قرأ المستودع، أي غير مشفَّرة عملياً.
+ *
+ * الرمي هنا شبكة أمان ثانية: حارس الإقلاع (production-secrets.ts) يرفض
+ * التشغيل أصلاً بلا INTEGRATIONS_ENC_KEY. لكن الحارس قد يُلتفّ عليه (اختبار
+ * يستورد هذه الوحدة مباشرة، أو سكربت يعمل خارج bootstrap)، والصمت في هذا
+ * الموضع تحديداً يُنتج بيانات مشفَّرة بمفتاح خاطئ لا تُكتشف إلا عند أول دفعة.
+ */
 function key(): Buffer {
-  return createHash('sha256').update(process.env.INTEGRATIONS_ENC_KEY ?? DEV_FALLBACK).digest();
+  const configured = process.env.INTEGRATIONS_ENC_KEY;
+  if (!configured && process.env.NODE_ENV === 'production') {
+    throw new Error('INTEGRATIONS_ENC_KEY غير مضبوط — يشفّر بيانات اعتماد بوابات الدفع، ولا بديل افتراضي له في الإنتاج.');
+  }
+  return createHash('sha256').update(configured ?? DEV_FALLBACK).digest();
 }
 
 export function encryptCredentials(plain: Record<string, string>): string {

@@ -2,38 +2,32 @@ import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
 import { DEFAULT_CHART } from '../src/accounts/default-chart';
+import { bootstrapPlatform } from '../src/platform/platform-bootstrap';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // حارس: هذه بذرة **تطوير** تُنشئ حسابين دخولهما `DemoPass123!` مكتوبةً في
+  // هذا الملف. تشغيلها على خادم حيّ يفتح المنصة للعالم بكلمة مرور منشورة.
+  // تمهيد الإنتاج له سكربته: scripts/bootstrap-production.ts.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_SEED_IN_PRODUCTION !== 'true') {
+    throw new Error(
+      'رُفضت البذرة: هذه بيانات تطوير (حسابات بكلمة مرور منشورة في المستودع) ولن تُزرع في الإنتاج.\n' +
+        'لتمهيد منصة حيّة استعمل:  node dist/scripts/bootstrap-production.js',
+    );
+  }
+
   const devUsername = process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan';
   const devPassword = process.env.DEV_SEED_PLATFORM_ADMIN_PASSWORD;
   if (!devPassword) {
     throw new Error('DEV_SEED_PLATFORM_ADMIN_PASSWORD must be set in .env before seeding');
   }
 
-  const devTemplate = await prisma.permissionTemplate.upsert({
-    where: { id: 'dev-template' },
-    update: {},
-    create: { id: 'dev-template', name: 'المطوّر', isSystem: true, isAllScreens: true },
-  });
-
-  const fullAccessTemplate = await prisma.permissionTemplate.upsert({
-    where: { id: 'full-access-template' },
-    update: {},
-    create: { id: 'full-access-template', name: 'المستخدم الأول (شامل)', isSystem: false, isAllScreens: true },
-  });
-
-  await prisma.loginIdentity.upsert({
-    where: { username: devUsername },
-    update: {},
-    create: {
-      username: devUsername,
-      passwordHash: await argon2.hash(devPassword),
-      actorType: 'PLATFORM_ADMIN',
-      platformAdmin: { create: { displayName: 'المطوّر' } },
-    },
-  });
+  // نفس التمهيد الذي يشغّله الإنتاج حرفياً — مصدر واحد، فلا يفترق ما يراه
+  // المطوّر عمّا يُولد على الخادم.
+  await bootstrapPlatform(prisma, { username: devUsername, password: devPassword });
+  const devTemplate = { id: 'dev-template', name: 'المطوّر' };
+  const fullAccessTemplate = { id: 'full-access-template' };
 
   // Two demo companies — used both for manual testing and by the
   // tenant-isolation Jest suite to prove that company A can never see
