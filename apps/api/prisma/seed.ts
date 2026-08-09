@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
+import { DEFAULT_CHART } from '../src/accounts/default-chart';
 
 const prisma = new PrismaClient();
 
@@ -56,45 +57,22 @@ async function main() {
   // still adds anything new — e.g. the ledger accounts below were added
   // after the demo companies already existed in dev databases.
 
-  // The baseline chart of accounts auto-posting needs (see
-  // apps/api/src/journal/auto-posting.util.ts): A/R, A/P, VAT payable,
-  // sales revenue, rental revenue, and the purchase-category expense
-  // accounts. Without these, invoices/purchases/rent payments still save
-  // fine but silently skip posting to the ledger (see postInvoiceEntry/
-  // postPurchaseEntry/postRentPaymentEntry's soft-skip).
-  const LEDGER_ACCOUNTS = [
-    { code: '1200', name: 'الذمم المدينة', type: 'asset', openingBalance: 0 },
-    // Key money the company *paid* to take over a leased location: an asset (the
-  // right to occupy the site), not an expense of the month it was paid in.
-  { code: '1600', name: 'تقبيل وحقوق انتفاع', type: 'asset', openingBalance: 0 },
-  { code: '2100', name: 'الذمم الدائنة', type: 'liability', openingBalance: 0 },
-    { code: '2200', name: 'ضريبة القيمة المضافة المستحقة', type: 'liability', openingBalance: 0 },
-  // Tenant deposits are money held on someone else's behalf — a liability
-  // until it is refunded or converted into income at settlement.
-  { code: '2300', name: 'تأمينات المستأجرين', type: 'liability', openingBalance: 0 },
-    { code: '4100', name: 'إيرادات المبيعات', type: 'revenue', openingBalance: 0 },
-    { code: '4200', name: 'إيرادات الإيجار', type: 'revenue', openingBalance: 0 },
-  // Where a forfeited deposit lands: it is not rent, so it must not inflate
-  // rental revenue.
-  { code: '4300', name: 'إيرادات أخرى', type: 'revenue', openingBalance: 0 },
-    { code: '5100', name: 'تكلفة المبيعات', type: 'expense', openingBalance: 0 },
-    { code: '5200', name: 'الرواتب والأجور', type: 'expense', openingBalance: 0 },
-    { code: '5300', name: 'مصروفات إدارية وعمومية', type: 'expense', openingBalance: 0 },
-    { code: '5400', name: 'مصروفات أخرى', type: 'expense', openingBalance: 0 },
-    { code: '5500', name: 'مصروفات تأسيس', type: 'expense', openingBalance: 0 },
-    // 5600, not 5500: the multi-currency spec originally named 5500 for this,
-    // but that code was already taken by مصروفات تأسيس above.
-    { code: '5600', name: 'فروق عملة (ربح/خسارة)', type: 'expense', openingBalance: 0 },
-  // Kept out of 5300 (general admin) so a landlord can see what the buildings
-  // themselves cost to keep running.
-  { code: '5700', name: 'مصروفات صيانة', type: 'expense', openingBalance: 0 },
-  ];
+  // The chart itself is NOT written here any more: it lives in
+  // src/accounts/default-chart.ts, the one source every new company is born
+  // with. The seed only adds the demo *opening balances* on top of it — that
+  // way a demo company and a freshly-registered merchant get an identical
+  // chart, and adding an account for a new posting path is a one-file change.
+  //
+  // Order matters: the balance-bearing entries go first so the upsert creates
+  // them with their amount; DEFAULT_CHART's zero-balance twin then hits the
+  // `update: {}` no-op and leaves the amount alone.
+  const LEDGER_ACCOUNTS = DEFAULT_CHART.map((a) => ({ ...a, openingBalance: 0 }));
   await seedAccounts(companyA.id, [
     { code: '1000', name: 'النقدية', type: 'asset', openingBalance: 50000 },
     { code: '2000', name: 'الموردون', type: 'liability', openingBalance: 12000 },
     ...LEDGER_ACCOUNTS,
   ]);
-  await seedAccounts(companyB.id, [{ code: '1000', name: 'الصندوق', type: 'asset', openingBalance: 8000 }, ...LEDGER_ACCOUNTS]);
+  await seedAccounts(companyB.id, [{ code: '1000', name: 'النقدية', type: 'asset', openingBalance: 8000 }, ...LEDGER_ACCOUNTS]);
 
   // Every seeded opening balance must be backed by a real قيد افتتاحي against
   // 3900 (CLAUDE.md 3.8) — the same idempotent backfill the standalone script

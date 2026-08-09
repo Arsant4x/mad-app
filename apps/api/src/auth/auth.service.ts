@@ -5,6 +5,7 @@ import { AccountStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { createDefaultChart } from '../accounts/default-chart';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
@@ -322,21 +323,28 @@ export class AuthService {
     const subEnd = new Date(now);
     subEnd.setDate(subEnd.getDate() + trialDays);
 
-    await this.prisma.loginIdentity.create({
-      data: {
-        username,
-        passwordHash: await argon2.hash(password),
-        actorType: 'COMPANY',
-        company: {
-          create: {
-            orgName: orgName.trim(),
-            email: email?.trim() || null,
-            permissionTemplateId: template.id,
-            subStart: now,
-            subEnd,
+    // نفس ضمانة مسار لوحة المدير: الدليل يُولد مع المنشأة في معاملة واحدة،
+    // فالتاجر الذي سجّل بنفسه يصدر أول فاتورة ويجدها مرحَّلةً بلا أي إعداد.
+    await this.prisma.$transaction(async (tx) => {
+      const created = await tx.loginIdentity.create({
+        data: {
+          username,
+          passwordHash: await argon2.hash(password),
+          actorType: 'COMPANY',
+          company: {
+            create: {
+              orgName: orgName.trim(),
+              email: email?.trim() || null,
+              permissionTemplateId: template.id,
+              subStart: now,
+              subEnd,
+            },
           },
         },
-      },
+        include: { company: { select: { id: true } } },
+      });
+      await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
+      await createDefaultChart(tx, created.company!.id);
     });
 
     // Reusing the full login path gives the new merchant a working session in

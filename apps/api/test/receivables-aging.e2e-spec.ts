@@ -143,16 +143,11 @@ describe('Receivables aging (e2e)', () => {
     const coToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'AgingPass123!' })).body.accessToken;
     const co = (r: request.Test) => r.set('Authorization', `Bearer ${coToken}`);
 
-    // منشأة جديدة تُولد بلا دليل حسابات — فلا تُرحَّل قيودها إطلاقاً (الترحيل
-    // يتخطّى بهدوء حين تغيب الحسابات). نهيّئ الثلاثة التي يحتاجها مسار الفوترة
-    // والتحصيل، كما يفعل أي عميل حقيقي قبل أول فاتورة.
-    for (const [code, name, type] of [
-      ['1000', 'الصندوق', 'asset'],
-      ['1200', 'ذمم العملاء', 'asset'],
-      ['4100', 'إيرادات المبيعات', 'revenue'],
-    ]) {
-      await co(request(app.getHttpServer()).post('/accounts')).send({ code, name, type }).expect(201);
-    }
+    // لا تهيئة يدوية للدليل بعد اليوم: المنشأة تُولد به كاملاً (4.7). كان هذا
+    // الاختبار ينشئ 1000/1200/4100 بنفسه لأن المنشأة كانت تُولد فارغةً فلا
+    // يُرحَّل لها قيد — وحذف تلك الحلقة هنا هو نفسه دليلٌ على أن الميلاد تغيّر.
+    const bornWith = ((await co(request(app.getHttpServer()).get('/accounts')).expect(200)).body as { code: string }[]).map((a) => a.code);
+    expect(bornWith).toEqual(expect.arrayContaining(['1000', '1200', '4100']));
 
     const buyer = (await co(request(app.getHttpServer()).post('/customers')).send({ name: `مشترٍ ${suffix}` }).expect(201)).body.id;
     const box = (await co(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, openingBalance: 0, openingDate: dayStr(0) }).expect(201)).body.id;

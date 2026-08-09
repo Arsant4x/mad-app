@@ -7,12 +7,12 @@ import { AppModule } from '../src/app.module';
 /**
  * Proves invoices/purchases auto-post to the ledger through the real chart
  * of accounts seeded for demo-company-a (1200/4100/2200/2100/5300 — see
- * prisma/seed.ts's LEDGER_ACCOUNTS), and that editing/deleting the source
- * document reverses/reposts the linked journal entry rather than leaving it
- * to drift. Complements journal-tenant-isolation.e2e-spec.ts (which covers
- * manual entries) and the soft-skip path (verified manually against a fresh,
- * ledger-account-less company — not practical to set up here since the demo
- * companies already have the full chart seeded).
+ * src/accounts/default-chart.ts, which the seed now draws from), and that
+ * editing/deleting the source document reverses/reposts the linked journal
+ * entry rather than leaving it to drift. Complements
+ * journal-tenant-isolation.e2e-spec.ts (which covers manual entries) and
+ * default-chart.e2e-spec.ts, which covers the other end: a company created
+ * seconds ago posting its first invoice with zero manual setup.
  */
 describe('Invoice/purchase auto-posting (e2e)', () => {
   let app: INestApplication;

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Company } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
+import { createDefaultChart } from '../accounts/default-chart';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -63,21 +64,31 @@ export class CompaniesService {
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
     if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
 
-    const identity = await this.prisma.loginIdentity.create({
-      data: {
-        username: dto.username,
-        passwordHash: await argon2.hash(dto.password),
-        actorType: 'COMPANY',
-        company: {
-          create: {
-            orgName: dto.orgName,
-            permissionTemplateId: dto.permissionTemplateId,
-            subStart: resolveSubStart(dto.subStart),
-            subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
+    // المنشأة ودليلها يُولدان معاً في معاملة واحدة: منشأةٌ بلا دليل تصدر
+    // مستنداتها بنجاح ولا يُرحَّل منها شيء (التخطي الصامت في resolveAccountIds)،
+    // فالحالة الوسطى تلك أسوأ من فشل الإنشاء — ولذلك لا تُولد أصلاً.
+    const identity = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.loginIdentity.create({
+        data: {
+          username: dto.username,
+          passwordHash: await argon2.hash(dto.password),
+          actorType: 'COMPANY',
+          company: {
+            create: {
+              orgName: dto.orgName,
+              permissionTemplateId: dto.permissionTemplateId,
+              subStart: resolveSubStart(dto.subStart),
+              subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
+            },
           },
         },
-      },
-      include: { company: { include: COMPANY_INCLUDE } },
+        include: { company: { include: COMPANY_INCLUDE } },
+      });
+      // سياسة RLS على accounts تفحص الإدراج أيضاً (WITH CHECK) — والسياق لا
+      // يمكن ضبطه قبل هذه اللحظة لأن المعرّف يولد مع الصف.
+      await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
+      await createDefaultChart(tx, created.company!.id);
+      return created;
     });
 
     return identity.company!;
