@@ -1,10 +1,6 @@
 node_modules/
 dist/
 build/
-.env
-.env.*
-!.env.example
-!.env.production.example
 *.log
 .DS_Store
 coverage/
@@ -12,10 +8,28 @@ coverage/
 .idea/
 apps/api/generated/
 
-# Database dumps taken before destructive operations — never commit real data.
-backups/
-/backup-before-cleanup.sql
+# ---- الأسرار: لا سرّ في المستودع إطلاقاً ----
+# القاعدة: تجاهُلٌ عام لكل ملفات البيئة، ثم استثناء القوالب الفارغة وحدها.
+# ترتيب السطور مهم — الاستثناء (!) يجب أن يلي النمط الذي يستثني منه.
+.env
+.env.*
+!.env.example
+!.env.production.example
 
-# Production secrets never enter git
-.env.production
+# ---- مقالب قواعد البيانات: تحمل هاشات كلمات المرور ورموز الجلسات ----
+# ⚠️ لا يكفي إضافة المسار هنا: قواعد التجاهل **لا تسري على ملف متتبَّع أصلاً**.
+# كان /backup-before-cleanup.sql مذكوراً هنا منذ 2026-07-28 والملف يُدفع إلى
+# GitHub طوال الوقت، لأن `git rm --cached` لم يُنفَّذ قط. فأي ملف يُضاف هنا
+# لاحقاً: تحقّق بـ`git check-ignore -v <path>` (بلا --no-index) — خروجٌ بـ1
+# يعني أن القاعدة لم تُطبَّق وأن الملف ما زال متتبَّعاً.
 backups/
+*.dump
+*.sql
+!apps/api/prisma/migrations/**/*.sql
+!docker/postgres-init/*.sql
+
+# ---- مفاتيح وشهادات ----
+*.pem
+*.key
+*.p12
+*.pfx
