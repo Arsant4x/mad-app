@@ -24,6 +24,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Account',
   'Customer',
   'Invoice',
+  'Payment',
+  'PaymentAllocation',
   'Quote',
   'QuoteLine',
   'InvoiceLine',

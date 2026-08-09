@@ -33,6 +33,7 @@ import { ZatcaModule } from './zatca/zatca.module';
 import { FiscalModule } from './fiscal/fiscal.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { PaymentsModule } from './payments/payments.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
@@ -79,6 +80,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     AccountsModule,
     CustomersModule,
     InvoicesModule,
+    PaymentsModule,
     MaintenanceModule,
     NotificationsModule,
     RemindersModule,

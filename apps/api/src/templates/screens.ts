@@ -8,6 +8,7 @@ export const ALLOWED_SCREENS = [
   'branches',
   'settings',
   'invoice',
+  'payments',
   'customers',
   'suppliers',
   'products',

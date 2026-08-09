@@ -235,6 +235,68 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
   });
 }
 
+export interface CustomerPaymentForPosting {
+  paymentNo: string;
+  customerName: string;
+  date: Date;
+  /** النقد الداخل بالعملة الأساسية = مبلغ الدفعة × سعر يومها. سالبٌ في العكس. */
+  baseCash: number;
+  /** الذمّة المسوّاة بالعملة الأساسية = كل تخصيص × سعر **فاتورته**، لا سعر
+   * الدفعة. الفارق بينهما ربح/خسارة صرف محقَّقة، لا إيراد ولا خصم. */
+  baseReceivable: number;
+  branchId?: string | null;
+  reversal?: boolean;
+}
+
+/**
+ * مقبوض من عميل (4.5): مدين الصندوق/البنك 1000 · دائن ذمم العملاء 1200.
+ *
+ * **لا إيراد هنا إطلاقاً** — الإيراد اعتُرف به يوم الفاتورة
+ * (postInvoiceEntry). التحصيل تسويةُ ذمّة لا بيعٌ جديد، وخلطهما يضاعف
+ * إيراد السنة.
+ *
+ * فرق العملة: الفاتورة قيّدت ذمّتها بسعر يومها، والنقد يدخل بسعر يوم
+ * الدفعة — فما بينهما فرقٌ **محقَّق** يُرحَّل على 5600 تماماً كما في سداد
+ * الإيجار، بدل أن يتضخّم أو ينكمش به النقد أو الذمّة.
+ *
+ * الدفعة العكسية تمرّ بنفس الدالة بمبالغ سالبة فتنقلب الأطراف — قيدٌ مضاد
+ * يُبقي الأصل كما هو (المرحَّل لا يُعدَّل ولا يُحذف).
+ *
+ * تُعيد null (تخطٍّ ناعم) إن لم تُهيَّأ الحسابات بعد — كسائر الترحيلات.
+ */
+export async function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: CustomerPaymentForPosting) {
+  const cash = Math.round(p.baseCash * 100) / 100;
+  const receivable = Math.round(p.baseReceivable * 100) / 100;
+  if (cash === 0 && receivable === 0) return null;
+
+  const fxDifference = Math.round((cash - receivable) * 100) / 100;
+  const needCodes = ['1000', '1200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+
+  // الموجب يعني نقداً داخلاً وذمّةً تنقص؛ السالب (العكس) يقلبهما معاً.
+  const lines: PostingLine[] = [
+    { accountId: ids.get('1000')!, debit: cash > 0 ? cash : 0, credit: cash < 0 ? -cash : 0 },
+    { accountId: ids.get('1200')!, debit: receivable < 0 ? -receivable : 0, credit: receivable > 0 ? receivable : 0 },
+  ];
+
+  if (fxDifference > 0) {
+    // نقدٌ أكثر مما قُيّدت به الذمّة — ربح صرف محقَّق.
+    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: 0, credit: fxDifference });
+  } else if (fxDifference < 0) {
+    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: -fxDifference, credit: 0 });
+  }
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: p.date,
+    memo: `${p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    lines,
+    auto: true,
+    branchId: p.branchId ?? null,
+  });
+}
+
 /** Where tenant deposits are held. A liability: the money is the tenant's
  * until the lease ends, so it must never appear as revenue on receipt. */
 export const TENANT_DEPOSITS_ACCOUNT = '2300';

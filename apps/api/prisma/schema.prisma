@@ -48,6 +48,8 @@ enum EmployeeStatus {
 
 enum InvoiceStatus {
   DUE
+  /// سُدِّد بعضها — تُشتق من مجموع التخصيصات، ولا يكتبها مسار.
+  PARTIAL
   PAID
   OVERDUE
 }
@@ -292,6 +294,8 @@ model Company {
   purchaseAttachments PurchaseAttachment[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
+  payments            Payment[]
+  paymentAllocations  PaymentAllocation[]
   integrations        IntegrationConnection[]
   supportGrants       SupportAccessGrant[]
   supportLogs         SupportAccessLog[]
@@ -417,6 +421,8 @@ model Branch {
   stockMovements   StockMovement[]
 
   quotes Quote[]
+
+  payments Payment[]
 
   @@unique([companyId, name])
   @@map("branches")
@@ -647,6 +653,8 @@ model Customer {
 
   quotes Quote[]
 
+  payments Payment[]
+
   @@unique([companyId, name])
 
   /// Soft delete: set instead of removing the row, so it can be restored
@@ -754,6 +762,8 @@ model Invoice {
   lines InvoiceLine[]
 
   convertedFromQuote Quote?
+
+  paymentAllocations PaymentAllocation[]
 
   @@unique([companyId, no])
   @@unique([companyId, clientSaleId])
@@ -1156,6 +1166,8 @@ model Bank {
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
 
+  payments Payment[]
+
   @@map("banks")
 }
 
@@ -1250,6 +1262,8 @@ model JournalEntry {
   claimSettlements    ContractClaim[]   @relation("ClaimSettlement")
   keyMoneyEntries     ContractKeyMoney[] @relation("KeyMoney")
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
+
+  payments Payment[]
 
   @@unique([companyId, no])
   @@index([openingForAccountId])
@@ -2420,6 +2434,80 @@ model Installment {
 /// bank transfer, also creates a matching BankTransaction (see
 /// ContractsService.recordPayment) so it shows up in the Bank Transactions
 /// screen too, not just the ledger.
+/// دفعة مقبوضة من عميل (4.5). المبلغ يعيش هنا وحده — لا حقل مبلغ مدفوع على
+/// الفاتورة إطلاقاً: «المدفوع» و«المتبقي» يُحسبان من التخصيصات في كل مرة.
+/// الدفعة الواحدة قد توزَّع على عدة فواتير، والفاتورة قد تستقبل عدة دفعات.
+model Payment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  no String
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  /// فرع الدفعة: هو من يحدد الصندوق الذي يدخله النقد.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  date   DateTime      @db.Date
+  amount Decimal       @db.Decimal(18, 2)
+  method PaymentMethod
+
+  /// حساب البنك، أو صندوق الفرع النقدي (صندوق = Bank مربوط بفرع).
+  bankId String?
+  bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+
+  /// رقم الحوالة/الشيك/المرجع لدى المزوّد.
+  reference String?
+  notes     String?
+
+  /// See Company.baseCurrency for the scheme these columns belong to.
+  currency     String  @default("SAR")
+  exchangeRate Decimal @default(1) @db.Decimal(18, 6)
+  baseAmount   Decimal @db.Decimal(18, 2)
+
+  /// دفعة مرحَّلة لا تُعدَّل ولا تُحذف — التصحيح بدفعة عكسية تشير للأصل.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  /// الدفعة العكسية تحمل مبلغاً سالباً وتشير إلى ما تصحّحه.
+  reversesId String?  @unique
+  reverses   Payment? @relation("PaymentReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  reversedBy Payment? @relation("PaymentReversal")
+
+  allocations PaymentAllocation[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, no])
+  @@index([companyId, customerId])
+  @@map("payments")
+}
+
+/// تخصيص جزء من دفعة لفاتورة بعينها — هو مصدر الحقيقة الوحيد لـ«المدفوع».
+/// صفٌّ واحد لكل (دفعة، فاتورة): إعادة التخصيص تحدّث المبلغ لا تكرّر الصف.
+model PaymentAllocation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([paymentId, invoiceId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
 model RentPayment {
   id        String  @id @default(uuid())
   companyId String

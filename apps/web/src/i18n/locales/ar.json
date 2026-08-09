@@ -154,5 +154,6 @@
   "reset_error": "تعذّر تعيين كلمة المرور",
   "nav_pos": "الكاشير",
   "nav_quotes": "عروض الأسعار",
-  "err_additional_number": "الرقم الإضافي يجب أن يكون 4 أرقام"
+  "err_additional_number": "الرقم الإضافي يجب أن يكون 4 أرقام",
+  "nav_payments": "سندات القبض"
 }
