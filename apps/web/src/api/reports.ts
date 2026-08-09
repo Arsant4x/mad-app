@@ -116,3 +116,47 @@ export const downloadTrialBalanceCsv = async (params: { from?: string; to?: stri
   link.click();
   URL.revokeObjectURL(url);
 };
+
+/** صفّ عميل في تقرير أعمار الذمم (4.6) — كل المبالغ بالعملة الأساسية. */
+export interface AgingRow {
+  customerId: string;
+  customerName: string;
+  current: number;
+  d1: number;
+  d31: number;
+  d61: number;
+  d90: number;
+  /** دفعات على الحساب وإشعارات بلا فاتورة — تخفّض الذمّة بلا عمرٍ تنتمي إليه. */
+  unapplied: number;
+  total: number;
+}
+
+export interface AgingReport {
+  asOf: string;
+  branchId: string | null;
+  customerId: string | null;
+  rows: AgingRow[];
+  totals: Omit<AgingRow, 'customerId' | 'customerName'>;
+  /** يُحسب عند الطلب فقط — مسح الدفتر أثقل من التقرير نفسه. */
+  reconciliation: { ledgerBalance: number; reportTotal: number; difference: number; accountMissing: boolean } | null;
+}
+
+export interface AgingParams {
+  asOf?: string;
+  branchId?: string;
+  customerId?: string;
+  reconcile?: string;
+}
+
+export const getReceivablesAging = (params: AgingParams) =>
+  apiClient.get<AgingReport>('/reports/receivables-aging', { params }).then((r) => r.data);
+
+export const downloadReceivablesAgingCsv = async (params: AgingParams) => {
+  const res = await apiClient.get('/reports/receivables-aging/export', { params, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `receivables-aging-${params.asOf ?? 'today'}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};

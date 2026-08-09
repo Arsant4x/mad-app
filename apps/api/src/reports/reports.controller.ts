@@ -6,7 +6,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
 import { buildCsv } from '../common/csv.util';
 import { ReportsService } from './reports.service';
 
@@ -42,6 +42,36 @@ export class ReportsController {
   }
 
   /** ميزان المراجعة (10.4) — فترة + فرع اختياري. */
+  /** أعمار ذمم العملاء (4.6) — شرائح التأخر إلى تاريخ التقرير. */
+  @Get('receivables-aging')
+  @RequiresAction('view')
+  receivablesAging(@CurrentTenant() tenant: TenantContext, @Query() filter: AgingDto) {
+    return this.reportsService.receivablesAging(tenant.companyId, { ...filter, reconcile: filter.reconcile } as never);
+  }
+
+  /** تصدير 10.12 — CSV بـBOM ليفتح عربياً سليماً في Excel. */
+  @Get('receivables-aging/export')
+  @RequiresAction('view')
+  async receivablesAgingCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: AgingDto, @Res() res: Response) {
+    const report = await this.reportsService.receivablesAging(tenant.companyId, filter as never);
+    const csv = buildCsv(
+      [
+        { label: 'العميل', value: (r: (typeof report.rows)[number]) => r.customerName },
+        { label: 'جارٍ', value: (r: (typeof report.rows)[number]) => r.current },
+        { label: '1-30', value: (r: (typeof report.rows)[number]) => r.d1 },
+        { label: '31-60', value: (r: (typeof report.rows)[number]) => r.d31 },
+        { label: '61-90', value: (r: (typeof report.rows)[number]) => r.d61 },
+        { label: 'أكثر من 90', value: (r: (typeof report.rows)[number]) => r.d90 },
+        { label: 'غير منسوب', value: (r: (typeof report.rows)[number]) => r.unapplied },
+        { label: 'الإجمالي', value: (r: (typeof report.rows)[number]) => r.total },
+      ],
+      report.rows,
+    );
+    res
+      .set('Content-Type', 'text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="receivables-aging-${report.asOf}.csv"`)
+      .send(csv);
+  }
   @Get('trial-balance')
   @RequiresAction('view')
   trialBalance(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto) {

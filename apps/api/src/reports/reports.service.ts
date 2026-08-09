@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
-import { ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
 
 interface Movement {
   debit: number;
@@ -123,6 +123,9 @@ async function expiringContracts(tx: Prisma.TransactionClient, today: Date) {
     })),
   };
 }
+
+/** حساب ذمم العملاء — مرجع مطابقة تقرير الأعمار. */
+const RECEIVABLES_ACCOUNT = '1200';
 
 @Injectable()
 export class ReportsService {
@@ -376,6 +379,175 @@ export class ReportsService {
    * يقرأ من القيود الحقيقية لا من حالة موازية (قاعدة 11)، وبمرشّح فرع
    * اختياري (10.5) — غيابه = المجمَّع.
    */
+  /**
+   * أعمار ذمم العملاء (4.6) — «مَن يدين لنا، بكم، ومنذ متى».
+   *
+   * **يقرأ من الحقيقة لا من حالة موازية (قاعدة 11):** متبقي كل فاتورة =
+   * إجماليها − ما خُصِّص لها من سندات القبض − إشعاراتها الدائنة + إشعاراتها
+   * المدينة. لا حقل «مدفوع» ولا حالة الفاتورة تدخل الحساب إطلاقاً.
+   *
+   * **العملات:** كل شيء بالعملة الأساسية **بسعر الفاتورة** — وهو السعر
+   * الوحيد المتسق مع الدفتر: قيد الفاتورة رحّل baseTotal على 1200، وقيد
+   * التحصيل خفّضه بمبلغ التخصيص × سعر الفاتورة، وفرق الصرف ذهب إلى 5600
+   * لا إلى الذمم. فالمطابقة تصحّ رياضياً لا بالمصادفة.
+   *
+   * **الأرصدة غير المنسوبة:** دفعة على الحساب أو إشعار دائن بلا فاتورة
+   * يخفّضان 1200 دون أن ينتميا لعمرٍ ما — فيظهران في عمود مستقل يُطرح من
+   * إجمالي العميل، لا يُحشران في شريحة كذباً.
+   */
+  receivablesAging(companyId: string, filter: AgingDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // تاريخ التقرير: كأي تقرير يقبل فترة — الافتراض اليوم.
+      const asOf = filter.asOf ? new Date(filter.asOf) : new Date();
+      asOf.setHours(23, 59, 59, 999);
+
+      const branchWhere = filter.branchId ? { branchId: filter.branchId } : {};
+      const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
+
+      // كل مستندات الذمم حتى تاريخ التقرير: الفواتير وإشعاراتها معاً —
+      // فالإشعار يعدّل ذمّة فاتورته لا ذمّةً مستقلة.
+      const documents = await tx.invoice.findMany({
+        where: { issueDate: { lte: asOf }, ...branchWhere, ...customerWhere },
+        select: {
+          id: true,
+          no: true,
+          docType: true,
+          relatedInvoiceId: true,
+          customerId: true,
+          customer: { select: { id: true, name: true } },
+          issueDate: true,
+          dueDate: true,
+          total: true,
+          baseTotal: true,
+          exchangeRate: true,
+          currency: true,
+        },
+      });
+
+      const invoices = documents.filter((d) => d.docType === 'INVOICE');
+      const notes = documents.filter((d) => d.docType !== 'INVOICE');
+
+      // تخصيصات السندات حتى التاريخ — بمبلغ المستند، يُترجم بسعر فاتورته.
+      const allocations = await tx.paymentAllocation.groupBy({
+        by: ['invoiceId'],
+        where: { payment: { date: { lte: asOf } } },
+        _sum: { amount: true },
+      });
+      const allocByInvoice = new Map(allocations.map((a) => [a.invoiceId, Number(a._sum.amount ?? 0)]));
+
+      // إشعارات منسوبة لفواتيرها، وأخرى بلا فاتورة (تُطرح من رصيد عميلها).
+      const noteAdjustment = new Map<string, number>();
+      const unappliedByCustomer = new Map<string, number>();
+      for (const n of notes) {
+        const base = Number(n.baseTotal);
+        const signed = n.docType === 'CREDIT_NOTE' ? -base : base;
+        if (n.relatedInvoiceId) noteAdjustment.set(n.relatedInvoiceId, (noteAdjustment.get(n.relatedInvoiceId) ?? 0) + signed);
+        else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);
+      }
+
+      // دفعات لم تُخصَّص: خفّضت 1200 بلا فاتورة تنتمي إليها.
+      const payments = await tx.payment.findMany({
+        where: { date: { lte: asOf }, ...branchWhere, ...customerWhere },
+        select: { customerId: true, amount: true, exchangeRate: true, allocations: { select: { amount: true } } },
+      });
+      for (const p of payments) {
+        const allocated = p.allocations.reduce((sum, a) => sum + Number(a.amount), 0);
+        const onAccount = Number(p.amount) - allocated;
+        if (Math.abs(onAccount) > 0.005) {
+          unappliedByCustomer.set(p.customerId, (unappliedByCustomer.get(p.customerId) ?? 0) - onAccount * Number(p.exchangeRate));
+        }
+      }
+
+      const buckets = () => ({ current: 0, d1: 0, d31: 0, d61: 0, d90: 0 });
+      const rows = new Map<string, { customerId: string; customerName: string; current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number }>();
+      const rowFor = (customerId: string, customerName: string) => {
+        let r = rows.get(customerId);
+        if (!r) {
+          r = { customerId, customerName, ...buckets(), unapplied: 0, total: 0 };
+          rows.set(customerId, r);
+        }
+        return r;
+      };
+
+      for (const inv of invoices) {
+        const rate = Number(inv.exchangeRate);
+        const allocatedBase = (allocByInvoice.get(inv.id) ?? 0) * rate;
+        const remaining = Number((Number(inv.baseTotal) - allocatedBase + (noteAdjustment.get(inv.id) ?? 0)).toFixed(2));
+        // المسدَّدة كاملاً تُستبعد؛ والجزئية تدخل بمتبقيها وحده.
+        if (Math.abs(remaining) < 0.005) continue;
+
+        const r = rowFor(inv.customerId, inv.customer.name);
+        // العمر من الاستحقاق إلى تاريخ التقرير — لا من اليوم دائماً.
+        const days = Math.floor((asOf.getTime() - new Date(inv.dueDate).getTime()) / 86400000);
+        if (days <= 0) r.current += remaining;
+        else if (days <= 30) r.d1 += remaining;
+        else if (days <= 60) r.d31 += remaining;
+        else if (days <= 90) r.d61 += remaining;
+        else r.d90 += remaining;
+      }
+
+      for (const [customerId, amount] of unappliedByCustomer) {
+        if (Math.abs(amount) < 0.005) continue;
+        const customer = documents.find((d) => d.customerId === customerId)?.customer ?? (await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true } }));
+        if (!customer) continue;
+        rowFor(customerId, customer.name).unapplied += amount;
+      }
+
+      const result = [...rows.values()].map((r) => ({
+        ...r,
+        current: Number(r.current.toFixed(2)),
+        d1: Number(r.d1.toFixed(2)),
+        d31: Number(r.d31.toFixed(2)),
+        d61: Number(r.d61.toFixed(2)),
+        d90: Number(r.d90.toFixed(2)),
+        unapplied: Number(r.unapplied.toFixed(2)),
+        total: Number((r.current + r.d1 + r.d31 + r.d61 + r.d90 + r.unapplied).toFixed(2)),
+      }));
+      result.sort((a, b) => b.total - a.total);
+
+      const sum = (pick: (r: (typeof result)[number]) => number) => Number(result.reduce((t, r) => t + pick(r), 0).toFixed(2));
+      const totals = {
+        current: sum((r) => r.current),
+        d1: sum((r) => r.d1),
+        d31: sum((r) => r.d31),
+        d61: sum((r) => r.d61),
+        d90: sum((r) => r.d90),
+        unapplied: sum((r) => r.unapplied),
+        total: sum((r) => r.total),
+      };
+
+      // المطابقة عند الطلب فقط: مسحُ دفتر اليومية أثقل من التقرير نفسه،
+      // فلا يُدفع ثمنه في كل تحميل (زر «طابق مع ميزان المراجعة»).
+      const reconciliation = filter.reconcile ? await this.reconcileAgainstReceivables(tx, asOf, filter.branchId, totals.total) : null;
+
+      return { asOf: asOf.toISOString().slice(0, 10), branchId: filter.branchId ?? null, customerId: filter.customerId ?? null, rows: result, totals, reconciliation };
+    });
+  }
+
+  /**
+   * يقارن مجموع التقرير برصيد حساب الذمم 1200 حتى تاريخ التقرير.
+   *
+   * الفرق ليس خطأً يُخفى ولا يُجبَر: مصدره الطبيعي **قيدٌ يدوي على الذمم**
+   * لا يقابله مستند. عرضه صراحةً يجعل المحاسب يعرف مصدره بدل أن يظن
+   * التقرير خاطئاً.
+   */
+  private async reconcileAgainstReceivables(tx: Prisma.TransactionClient, asOf: Date, branchId: string | undefined, reportTotal: number) {
+    const account = await tx.account.findFirst({ where: { code: RECEIVABLES_ACCOUNT }, select: { id: true } });
+    if (!account) return { ledgerBalance: 0, reportTotal, difference: Number((reportTotal * -1).toFixed(2)), accountMissing: true };
+
+    const agg = await tx.journalLine.aggregate({
+      where: { accountId: account.id, journalEntry: { date: { lte: asOf }, ...(branchId ? { branchId } : {}) } },
+      _sum: { debit: true, credit: true },
+    });
+    const ledgerBalance = Number((Number(agg._sum.debit ?? 0) - Number(agg._sum.credit ?? 0)).toFixed(2));
+    return {
+      ledgerBalance,
+      reportTotal,
+      /** موجب = الدفتر أكبر من التقرير (قيود يدوية على الذمم). */
+      difference: Number((ledgerBalance - reportTotal).toFixed(2)),
+      accountMissing: false,
+    };
+  }
   trialBalance(companyId: string, filter: TrialBalanceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(filter);

@@ -1,3 +1,4 @@
+import { ReceivablesAgingSection } from './ReceivablesAgingSection';
 import { useEffect, useMemo, useState } from 'react';
 import {
   getBalanceSheet,
@@ -16,7 +17,7 @@ import { dfmt, fmt } from '../../lib/format';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -131,6 +132,9 @@ export function ReportsPage() {
         </button>
         <button className={tab === 'trial' ? 'tab active' : 'tab'} onClick={() => setTab('trial')}>
           ميزان المراجعة
+        </button>
+        <button className={tab === 'aging' ? 'tab active' : 'tab'} onClick={() => setTab('aging')}>
+          أعمار الذمم
         </button>
         {/* Only for landlords: a business with no properties has nothing here. */}
         {(kpis?.occupancy.length ?? 0) > 0 && (
@@ -340,6 +344,8 @@ export function ReportsPage() {
             </table>
           </>
         )}
+
+        {tab === 'aging' && <ReceivablesAgingSection />}
 
         {tab === 'trial' && trial && (
           <div className="card">
