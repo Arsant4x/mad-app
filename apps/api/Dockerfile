@@ -29,9 +29,17 @@ WORKDIR /app
 # contains the generated prisma client and argon2's compiled binding, so the
 # runtime stage never runs npm at all. Bigger image, zero install surprises —
 # trim later if size ever matters.
+#
+# There is deliberately NO `COPY /app/apps/api/node_modules`: npm workspaces
+# hoists every dependency to the ROOT node_modules, so that directory does not
+# exist in the build stage at all — the COPY that used to be here aborted the
+# image build outright ("stat app/apps/api/node_modules: file does not exist"),
+# which is why this image had never been built successfully. Node resolves
+# upward from /app/apps/api to /app/node_modules, so nothing is lost: verified
+# in the built image by requiring @nestjs/core, @prisma/client and argon2 from
+# /app/apps/api.
 COPY --from=build /app/node_modules node_modules
 COPY --from=build /app/package.json package.json
-COPY --from=build /app/apps/api/node_modules apps/api/node_modules
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/prisma apps/api/prisma
