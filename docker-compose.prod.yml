@@ -137,21 +137,49 @@ services:
       - -c
       - |
         set -eu
+        MIN_TABLES=50
+        MIN_BYTES=51200
+        # ① انتظر اكتمال المخطط قبل أول مقلب. الهجرات تعمل في حاوية api عند
+        # كل إقلاع، وpostgres يصير healthy قبلها — فبلا هذا الانتظار تلتقط
+        # أول لقطة قاعدةً بلا جدول واحد، ثم تنام يوماً كاملاً. حدث فعلاً:
+        # أول نسخة على خادم الاختبار كانت 1.2K وصفر جداول، وتبدو سليمة في ls.
+        # انتظارٌ بالشرط لا بـsleep ثابت: لا يخمّن زمن الهجرات.
+        until [ "$$(psql -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'" 2>/dev/null || echo 0)" -ge "$$MIN_TABLES" ]; do
+          echo "backup: في انتظار اكتمال المخطط قبل أول نسخة..."
+          sleep 15
+        done
+        echo "backup: المخطط جاهز — بدء الدورة"
         while true; do
+          nap=86400
           stamp=$$(date +%Y%m%d-%H%M%S)
+          tmp="/backups/mad-app-$$stamp.dump.tmp"
           # pg_dump لا يصدّر الأدوار — دور app_user يُنشئه سكربت التهيئة عند
           # أول إقلاع، فالاستعادة على قاعدة جديدة تمرّ بنفس المسار.
-          if pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -F c -f "/backups/mad-app-$$stamp.dump.tmp"; then
-            # إعادة التسمية بعد النجاح وحده: مقلبٌ نصفُه مكتوب يبدو صالحاً
-            # في القائمة ثم يفشل عند الاستعادة — وقتَ الحاجة إليه بالضبط.
-            mv "/backups/mad-app-$$stamp.dump.tmp" "/backups/mad-app-$$stamp.dump"
-            ls -1t /backups/mad-app-*.dump | tail -n +15 | xargs -r rm -f
-            echo "backup ok: mad-app-$$stamp.dump"
+          if pg_dump -h postgres -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -F c -f "$$tmp"; then
+            # ② تُفحص **محتويات** المقلب لا حجمه وحده: عدد الجداول من
+            # pg_restore -l. نسخة فارغة أسوأ من غياب نسخة لأنها تُطمئن كذباً،
+            # ولا تنكشف إلا يوم الحاجة إليها.
+            tables=$$(pg_restore -l "$$tmp" 2>/dev/null | grep -c "TABLE " || true)
+            bytes=$$(wc -c < "$$tmp")
+            if [ "$$tables" -ge "$$MIN_TABLES" ] && [ "$$bytes" -ge "$$MIN_BYTES" ]; then
+              # إعادة التسمية بعد النجاح **والتحقق** معاً: مقلبٌ نصفُه مكتوب
+              # يبدو صالحاً في القائمة ثم يفشل عند الاستعادة.
+              mv "$$tmp" "/backups/mad-app-$$stamp.dump"
+              ls -1t /backups/mad-app-*.dump | tail -n +15 | xargs -r rm -f
+              echo "backup ok: mad-app-$$stamp.dump ($$tables جدولاً · $$bytes بايت)"
+            else
+              rm -f "$$tmp"
+              echo "backup REJECTED at $$stamp: $$tables جدولاً و$$bytes بايت — دون الحد ($$MIN_TABLES/$$MIN_BYTES). حُذف." >&2
+              nap=300
+            fi
           else
-            rm -f "/backups/mad-app-$$stamp.dump.tmp"
+            rm -f "$$tmp"
             echo "backup FAILED at $$stamp" >&2
+            nap=300
           fi
-          sleep 86400
+          # المرفوض أو الفاشل يُعاد بعد 5 دقائق لا بعد يوم — وإلا بقيت
+          # المنصة بلا نسخة صالحة 24 ساعة بسبب عطلٍ عابر.
+          sleep "$$nap"
         done
 
 volumes:
