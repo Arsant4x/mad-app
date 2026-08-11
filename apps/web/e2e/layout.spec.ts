@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { apiReachable, deleteCompany, loginThroughUi, registerCompany, type TestCompany } from './fixtures';
+import { loginThroughUi, readTestCompany, type TestCompany } from './fixtures';
 
 /**
  * الاختبار ٥ — التخطيط عبر العروض الثلاثة. **في Playwright حصراً.**
@@ -23,13 +23,13 @@ test.describe('الاختبار ٥ — التخطيط لا يبتلع المحت
   let co: TestCompany | undefined;
   let hasApi = false;
 
-  test.beforeAll(async ({ request }) => {
-    hasApi = await apiReachable(request);
-    if (hasApi) co = await registerCompany(request, 'layout');
-  });
-
-  test.afterAll(async ({ request }) => {
-    if (co) await deleteCompany(request, co.companyId);
+  test.beforeAll(() => {
+    // منشأة التشغيل الواحدة التي سجّلها globalSetup — ولا تسجيل هنا: ستّ
+    // تسجيلات (مجموعتان × ثلاثة عروض) تتجاوز حدّ التسجيل 5/دقيقة فترتدّ
+    // بـ429، والحدّ حارسٌ إنتاجيّ لا يُلتفّ عليه.
+    const state = readTestCompany();
+    hasApi = state.hasApi;
+    co = state.hasApi ? (state as TestCompany) : undefined;
   });
 
   /**
@@ -74,5 +74,56 @@ test.describe('الاختبار ٥ — التخطيط لا يبتلع المحت
     await loginThroughUi(page, co!);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, 'التطبيق أوسع من الشاشة').toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * أ٣ — سلوك قائمة الجوال المنقول من النموذج: الزر يفتح، والتنقّل يغلق.
+ *
+ * يُنفَّذ على mobile-375 وحده: فوق 860px الزر مخفيٌّ بالتصميم، واختبارُ
+ * سلوكٍ لا يظهر أصلاً توكيدٌ على لا شيء.
+ */
+test.describe('أ٣ — قائمة الجوال تفتح بالزر وتُغلق بالتنقّل', () => {
+  let co: TestCompany | undefined;
+  let hasApi = false;
+
+  test.beforeAll(() => {
+    const state = readTestCompany();
+    hasApi = state.hasApi;
+    co = state.hasApi ? (state as TestCompany) : undefined;
+  });
+
+  test('الزر يفتح الشريط، واختيار وجهةٍ يغلقه تلقائياً', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-375', 'الزر يظهر تحت 860px فقط');
+    test.skip(!hasApi, 'لا API متاح في هذه البيئة (CI بلا postgres بعد) — بند متابعة: يُضاف قبل 2026-08-17');
+    await loginThroughUi(page, co!);
+
+    const sidebar = page.locator('.sidebar');
+    const menuBtn = page.getByRole('button', { name: 'القائمة' });
+
+    // مغلقة ابتداءً: الشريط خارج الشاشة فلا يتقاطع مع العرض.
+    // ⚠️ الاتجاه يتبع اللغة: في RTL يخرج **يميناً** (‎right:-290px ⇒ x ≥ العرض)،
+    // وفي LTR يخرج يساراً (‎left:-290px ⇒ x+width ≤ 0). توكيدٌ يفترض جهةً
+    // واحدة يسقط على الاتجاه الآخر بلا أن يكون في الشيفرة عطل — وهو ما وقع
+    // في أول صياغة لهذا الاختبار.
+    const width = testInfo.project.use.viewport!.width;
+    const off = await sidebar.boundingBox();
+    expect(off, 'الشريط غير مركَّب').not.toBeNull();
+    const offScreen = off!.x >= width - 1 || off!.x + off!.width <= 1;
+    expect(offScreen, `الشريط ظاهر قبل فتح القائمة (x=${Math.round(off!.x)}, w=${Math.round(off!.width)})`).toBe(true);
+
+    await menuBtn.click();
+    await expect(page.locator('.app-shell.mobile-menu-open')).toHaveCount(1);
+    // مفتوحة: الشريط داخل الشاشة الآن.
+    await expect
+      .poll(async () => {
+        const b = await sidebar.boundingBox();
+        return b ? b.x + b.width : -1;
+      }, { message: 'الشريط لم ينزلق إلى الشاشة' })
+      .toBeGreaterThan(100);
+
+    // التنقّل يغلقها — نظير goTo() في النموذج.
+    await page.locator('.sidebar nav a').first().click();
+    await expect(page.locator('.app-shell.mobile-menu-open'), 'القائمة بقيت مفتوحة بعد التنقّل').toHaveCount(0);
   });
 });

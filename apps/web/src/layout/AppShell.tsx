@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { useAuth } from '../auth/AuthContext';
@@ -123,8 +123,33 @@ export function AppShell() {
 
   const inSupportMode = user?.actorType === 'PLATFORM_ADMIN' && !!supportCompanyId();
 
+  // قائمة الجوال — منقولة من toggleMobileMenu/goTo في النموذج (أ٣): فئةٌ على
+  // الجذر تفتح الشريط المنزلق، والستارة تغلقه، وكل تنقّلٍ يغلقه تلقائياً.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => {
+    // نظير `classList.remove('mobile-menu-open')` داخل goTo() في النموذج:
+    // اختيارُ وجهةٍ يعني انتهاء الحاجة للقائمة — إبقاؤها مفتوحة فوق الصفحة
+    // الجديدة يجبر المستخدم على إغلاقها يدوياً بعد كل تنقّل.
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
   return (
-    <div className="app-shell">
+    <div className={mobileMenuOpen ? 'app-shell mobile-menu-open' : 'app-shell'}>
+      {/* زر الهامبرغر الثابت (يظهر تحت 860px فقط عبر CSS) — أيقونته تتبدّل
+       * بين ☰ و✕ كما في النموذج حرفياً. */}
+      <button className="mobile-menu-btn" title="القائمة" aria-label="القائمة" onClick={() => setMobileMenuOpen((v) => !v)}>
+        {mobileMenuOpen ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        )}
+      </button>
+      <div className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} />
       {/* §1.10: معاينة الدعم لا تُخفى أبداً — شريط أحمر دائم مع مخرج فوري. */}
       {inSupportMode && (
         <div style={{ position: 'fixed', top: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 200, background: 'var(--rose)', color: '#fff', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>

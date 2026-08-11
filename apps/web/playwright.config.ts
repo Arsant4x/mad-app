@@ -17,6 +17,10 @@ const BASE = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './e2e',
+  // منشأة اختبار واحدة لكل تشغيل (قرار المالك) — تُسجَّل هنا وتُحذف في
+  // التفكيك، فلا تتكرر لكل مجموعة وعرض وترتدّ بحدّ المعدّل.
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   // التوازي مطفأ: الاختبارات تسجّل منشأة حقيقية على خادم واحد، والتوازي
   // يجعل تشخيص أي سقوط تخميناً — أيّ تشغيلٍ خلّف أي بيانات؟
   fullyParallel: false,

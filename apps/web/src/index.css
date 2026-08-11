@@ -946,3 +946,59 @@ tr:last-child td {
     padding: 0;
   }
 }
+
+/* =================== الجوال والشاشات الضيقة (أ٣) ===================
+ * منقول من accounting-platform.html:247-293 **حرفياً لا تأليفاً** — بترجمة
+ * أسماء الفئات وحدها: ‎.app→.app-shell و‎.main→.main-content. نقاط التوقف
+ * 860/420/340 هي قيم النموذج الفعلية (لا 860/600 التي وردت في الموجز خطأً).
+ *
+ * أدقّ ما في الحل وأولُ ما يُنسى عند التأليف: ‎padding:60px على المحتوى —
+ * يحجز الشريط الذي يشغله زر الهامبرغر الثابت فلا يجلس فوق عنوان الصفحة.
+ *
+ * فوق 860px لا يتغيّر شيء: إصلاح «تثبيت الشريط عند التمرير» المكتبي
+ * (‎height:100vh + overflow:hidden) يبقى كما هو؛ تحته يعود التدفق العادي
+ * (display:block) ويتولى المستند التمرير الرأسي كما في النموذج.
+ */
+.mobile-menu-btn{ display:none; }
+.sidebar-backdrop{ display:none; }
+@media (max-width:860px){
+  html{ overflow-x:hidden!important; width:100%!important; }
+  body{ overflow-x:hidden!important; width:100%!important; position:relative; }
+  .app-shell{ display:block!important; width:100%!important; height:auto!important; overflow:visible!important; }
+  .app-shell .sidebar{ display:flex!important; position:fixed!important; top:0!important; bottom:0!important; left:auto!important; right:-290px!important;
+    width:270px!important; max-width:270px!important; z-index:300!important; margin:0!important; transform:none!important;
+    transition:right .25s ease!important; box-shadow:-8px 0 30px rgba(0,0,0,.3); padding:20px 16px!important; overflow-y:auto!important; }
+  html[dir="ltr"] .app-shell .sidebar{ right:auto!important; left:-290px!important; transition:left .25s ease!important; }
+  .app-shell.mobile-menu-open .sidebar{ right:0!important; }
+  html[dir="ltr"] .app-shell.mobile-menu-open .sidebar{ left:0!important; }
+  .mobile-menu-btn{ display:flex!important; position:fixed!important; top:12px!important; right:14px!important; z-index:320!important; width:40px; height:40px; border-radius:10px;
+    border:1px solid var(--line); background:#fff; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(16,25,46,.12); }
+  html[dir="ltr"] .mobile-menu-btn{ right:auto!important; left:14px!important; }
+  .sidebar-backdrop{ position:fixed!important; top:0!important; left:0!important; right:0!important; bottom:0!important; background:rgba(10,15,25,.45); z-index:290; }
+  .app-shell.mobile-menu-open .sidebar-backdrop{ display:block!important; }
+  .main-content{ display:block!important; padding:60px 14px 40px!important; max-width:100%!important; width:100%!important; box-sizing:border-box!important; overflow-x:hidden; }
+  .kpi-row{ grid-template-columns:1fr 1fr; gap:8px; }
+  .two-col{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:9px; }
+  .field{ margin-bottom:9px; min-width:0; }
+  .field label{ margin-bottom:3px; }
+  .field input, .field select, .field textarea{ padding:8px 9px; }
+  .topbar{ margin-bottom:16px; }
+  .topbar-actions{ width:100%; }
+  .topbar-actions .btn{ flex:1; }
+  .toolbar{ gap:8px; }
+  /* الجداول: تمرير أفقي داخل حاويتها لا في الصفحة (قرار المالك — أمانة
+   * للبيانات على حساب سهولة القراءة، ويليق بـ«الجوال للاطّلاع فقط»). */
+  table{ font-size:11px; }
+  th, td{ padding:7px 8px!important; white-space:nowrap; }
+  .card{ overflow-x:auto; max-width:100%; }
+  .modal{ width:94vw; max-width:94vw; max-height:92vh; padding:16px 14px; }
+  .btn{ min-height:38px; }
+  .icon-btn, .menu-btn{ min-width:30px; min-height:30px; }
+  .action-menu{ min-width:170px; }
+}
+@media (max-width:420px){
+  .kpi-row{ grid-template-columns:1fr; }
+}
+@media (max-width:340px){
+  .two-col{ grid-template-columns:1fr; }
+}

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import type { APIRequestContext } from '@playwright/test';
 
 /**
@@ -11,6 +12,19 @@ import type { APIRequestContext } from '@playwright/test';
  * القاعدة — فما لا يُنظّف عبر المسار الحقيقي لا يُثبت أن المسار الحقيقي ينظّف.
  */
 const API = process.env.E2E_API_URL ?? 'http://localhost:3000';
+
+/** ملف حالة التشغيل — يحمل بيانات المنشأة الواحدة المشتركة بين كل العروض
+ *  والمجموعات. خارج المستودع (test-results/ متجاهَل). */
+export const STATE_FILE = 'test-results/.e2e-company.json';
+
+/** يقرأ منشأة التشغيل التي سجّلها globalSetup. */
+export function readTestCompany(): { hasApi: boolean } & Partial<TestCompany> {
+  try {
+    return JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+  } catch {
+    return { hasApi: false };
+  }
+}
 
 export interface TestCompany {
   username: string;

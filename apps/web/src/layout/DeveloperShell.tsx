@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthContext';
@@ -8,9 +9,25 @@ import { useAuth } from '../auth/AuthContext';
 export function DeveloperShell() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
+  // نفس معالجة أ٣ في AppShell: تحت 860px يصير الشريط منزلقاً، وبدون هذا
+  // الزر تُقفَل لوحة المطوّر على الجوال بلا مدخل — وشاشة مقفلة تُقرأ عطلاً.
+  // (لا إغلاق-عند-التنقّل هنا: الشل بوجهة واحدة.)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="app-shell">
+    <div className={mobileMenuOpen ? 'app-shell mobile-menu-open' : 'app-shell'}>
+      <button className="mobile-menu-btn" title="القائمة" aria-label="القائمة" onClick={() => setMobileMenuOpen((v) => !v)}>
+        {mobileMenuOpen ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        )}
+      </button>
+      <div className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} />
       <aside className="sidebar">
         <div className="brand">{t('app_name')}</div>
         <div className="current-user">
