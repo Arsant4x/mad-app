@@ -88,5 +88,9 @@ export async function loginThroughUi(page: import('@playwright/test').Page, co: 
   await page.getByRole('textbox').first().fill(co.username);
   await page.locator('input[type="password"]').fill(co.password);
   await page.getByRole('button', { name: 'دخول' }).click();
-  await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 20_000 });
+  // 45s لا 20s: قياسٌ محلي أعطى 406ms لدورة تسجيل+دخول كاملة (argon2 ثقيل
+  // عمداً: m=65536,t=3,p=4) — أي هامش 49×. لكن عدّاء CI قيس أبطأ ~9× في هذا
+  // المشروع، والهامش المتبقي حينها ~5× وحده. الرفع تأمينٌ رخيص: لا يُخفي
+  // عطلاً — الاختبار يسقط كما يسقط، وإنما بعد مهلةٍ أصدق.
+  await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 45_000 });
 }

@@ -58,8 +58,14 @@ jobs:
           POSTGRES_PASSWORD: ci_only_not_a_secret
           POSTGRES_DB: mad_app
         ports: ['5432:5432']
+        # `-U mad_app` لا `pg_isready` مجرّداً: بلا مستخدمٍ صريح يتصل الفحص
+        # بالمستخدم الافتراضي (root) فيطبع
+        #   FATAL: role "root" does not exist
+        # كل خمس ثوانٍ. لا يمنع شيئاً — الفحص يعتدّ بردّ الخادم لا بنجاح
+        # الاتصال — لكنه يدفن سطور الفشل الحقيقية تحت ضجيج، وهو ما جعل
+        # استخراج سبب سقوطٍ في السير متعذّراً.
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U mad_app -d mad_app"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -140,6 +146,30 @@ jobs:
             echo "::warning::اختبارات تخطيط مُتخطّاة رغم وجود postgres — افحص سجل الـAPI"
           fi
           tail -20 /tmp/api.log || true
+
+      # سبب السقوط **في السجل نفسه** لا في أثرٍ يحتاج تنزيلاً.
+      #
+      # وُلدت هذه الخطوة من عجزٍ حقيقي: سقطت playwright في السير ولم يمكن
+      # استخراج السطر، لأن واجهة GitHub تعرض سجل حاوية postgres لا خطوة
+      # الاختبارات. فمن يقرأ النتيجة يرى «exit 1» بلا سبب — وتشخيصٌ يحتاج
+      # تنزيل أثرٍ ثم فتحه محلياً ليس تشخيصاً متاحاً.
+      - name: طباعة تفاصيل السقوط (اسم الاختبار ورسالته)
+        if: always()
+        run: |
+          echo "──────── ملخّص التشغيل ────────"
+          cat apps/web/test-results/.last-run.json 2>/dev/null || echo "(لا ملخّص)"
+          echo ""
+          echo "──────── سياق كل سقوط ────────"
+          found=0
+          for f in apps/web/test-results/*/error-context.md; do
+            [ -e "$f" ] || continue
+            found=1
+            echo "═══ $f ═══"
+            head -60 "$f"
+            echo ""
+          done
+          [ "$found" = "0" ] && echo "(لا ملفات سياق — لم يسقط شيء أو لم يُكتب الأثر)"
+          exit 0
 
       - uses: actions/upload-artifact@v4
         if: always()
