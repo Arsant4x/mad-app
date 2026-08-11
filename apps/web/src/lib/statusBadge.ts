@@ -31,11 +31,16 @@ export interface BadgeMetaAlt {
   badge: string;
 }
 
-export function badgeOf<K extends string>(map: Record<K, BadgeMeta>, key: K | string): BadgeMeta {
+/**
+ * ⚠️ المُعامل النوعي مشتقّ من **الخريطة وحدها**، و`key` نصٌّ مجرّد.
+ * لو كُتب `key: K` لاستنتج TypeScript `K` من المفتاح أيضاً، فيصير تمرير قيمة
+ * مجهولة خطأ ترجمة — أي أن التوقيع نفسه يمنع الحالة التي وُجدت الدالة لأجلها.
+ */
+export function badgeOf<M extends Record<string, BadgeMeta>>(map: M, key: string): BadgeMeta {
   return (map as Record<string, BadgeMeta | undefined>)[key] ?? { label: String(key), badgeClass: '' };
 }
 
-export function badgeAltOf<K extends string>(map: Record<K, BadgeMetaAlt>, key: K | string): BadgeMetaAlt {
+export function badgeAltOf<M extends Record<string, BadgeMetaAlt>>(map: M, key: string): BadgeMetaAlt {
   return (map as Record<string, BadgeMetaAlt | undefined>)[key] ?? { label: String(key), badge: '' };
 }
 
@@ -47,6 +52,6 @@ export interface TagMeta {
   tagClass: string;
 }
 
-export function tagOf<K extends string>(map: Record<K, TagMeta>, key: K | string): TagMeta {
+export function tagOf<M extends Record<string, TagMeta>>(map: M, key: string): TagMeta {
   return (map as Record<string, TagMeta | undefined>)[key] ?? { label: String(key), tagClass: '' };
 }

@@ -1,0 +1,56 @@
+# اختبارات الواجهة — vitest (مكوّنات) + Playwright (متصفح، ثلاثة عروض).
+#
+# ⏳ صرامة مؤجَّلة (قرار المالك 2026-08-10): يُبلّغ أسبوعاً ثم يمنع الدمج.
+#    حتى 2026-08-17 يُكمل هذا السير دائماً بنجاح ويطبع نتيجته فقط — فحارسٌ
+#    صارم على اختبارات لم تستقرّ بعد يُعطَّل عند أول سقوط كاذب، فيموت.
+#    **في 2026-08-17 احذف `continue-on-error` من خطوتَي vitest وplaywright.**
+#    التاريخ مثبَّت هنا وفي CLAUDE.md معاً كي لا يُنسى في وضع الإبلاغ للأبد.
+name: web-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/web-tests.yml'
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      # --ignore-scripts: ثنائي esbuild يصل عبر optionalDependencies (حزمة
+      # المنصة @esbuild/linux-x64)، لا عبر postinstall — فالسكربت احتياطٌ لا
+      # حاجة إليه، وتخطّيه يجعل التثبيت حتمياً ويُسكت تحذير allow-scripts.
+      # مُتحقَّق منه: npm ci بلا موافقة سكربتات يترك esbuild عاملاً (--version).
+      - run: npm ci --ignore-scripts
+      - name: vitest (report-only until 2026-08-17)
+        continue-on-error: true # ⏳ احذفه في 2026-08-17
+        run: npm run test --workspace apps/web
+
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      # المتصفح يحتاج سكربتاته: تنزيل Chromium نفسه. مقصورٌ على chromium
+      # (قرار المالك: لا متصفحات متعددة).
+      - run: npx --workspace apps/web playwright install --with-deps chromium
+      - name: playwright — 375/768/1280 (report-only until 2026-08-17)
+        continue-on-error: true # ⏳ احذفه في 2026-08-17
+        run: npm run test:e2e --workspace apps/web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

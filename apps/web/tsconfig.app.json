@@ -22,5 +22,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // ملفات الاختبار خارج بناء الإنتاج: أنواع vitest غير محمَّلة هنا، ولا
+  // معنى لشحن اختبارٍ في حزمة المستخدم. tsconfig.test.json يغطّيها.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test/**"]
 }
