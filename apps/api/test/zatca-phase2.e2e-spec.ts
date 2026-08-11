@@ -94,8 +94,26 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
-    customerId = customers.body[0].id;
+    // ── اكتفاء ذاتي: لا تفترض ما لم تصنعه ─────────────────────────────────
+    // `/zatca/onboarding/start` يرفض بـ400 (zatca_profile_incomplete) ما لم
+    // يكن للمنشأة اسمٌ نظامي ورقمٌ ضريبي — والبذرة لا تملأهما. فكانت هذه
+    // المجموعة تنجح **فقط إن سبقتها** مجموعةٌ أخرى تكتب ملف المنشأة، وتسقط
+    // على أي قاعدة نظيفة. تُهيّئ ما تحتاجه بنفسها الآن.
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ legalName: 'شركة الأفق التجارية', vatNumber: '300000000000003' })
+      .expect(200);
+
+    // وعميلٌ خاص بها بدل `customers.body[0]` — الاعتماد على «أول ما تجده»
+    // يربط النتيجة بترتيب صفوفٍ لا يملكه هذا الملف.
+    customerId = (
+      await request(app.getHttpServer())
+        .post('/customers')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: `عميل ZATCA ${Date.now()}` })
+        .expect(201)
+    ).body.id;
 
     // Whatever a previous run left behind must not decide what this one asserts.
     await clearCredential();

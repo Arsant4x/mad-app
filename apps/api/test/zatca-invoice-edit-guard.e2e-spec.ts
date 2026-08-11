@@ -149,11 +149,23 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
-    customerId = customers.body[0].id;
-    // A second seeded customer, so "change the customer" is a real change —
-    // not a no-op that would slip past a guard by accident.
-    otherCustomerId = customers.body[1].id;
+    // اكتفاء ذاتي: ملف المنشأة شرطُ مسار ZATCA، والبذرة لا تملؤه.
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ legalName: 'شركة الأفق التجارية', vatNumber: '300000000000003' })
+      .expect(200);
+
+    // عميلان **يُنشئهما هذا الملف** بدل `customers.body[0]` و`[1]`: الاعتماد
+    // على «أول ما تجده» يربط النتيجة بترتيب صفوفٍ لا يملكه، ويسقط على قاعدة
+    // نظيفة فيها عميلٌ واحد أو لا عميل.
+    const mkCustomer = async (name: string) =>
+      (await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ name }).expect(201)).body.id as string;
+    const stamp = Date.now();
+    customerId = await mkCustomer(`عميل حارس التعديل أ ${stamp}`);
+    // ثانٍ مغاير، فيكون «تغيير العميل» تغييراً حقيقياً لا لا-عمليةً تمرّ من
+    // الحارس بالمصادفة.
+    otherCustomerId = await mkCustomer(`عميل حارس التعديل ب ${stamp}`);
     expect(otherCustomerId).not.toBe(customerId);
 
     await seedProductionCredential();

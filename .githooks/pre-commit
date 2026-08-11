@@ -25,7 +25,7 @@ for f in $staged; do
     # المسموح صراحةً أولاً — هجرات Prisma وسكربتات تهيئة Postgres مصدرٌ لا بيانات.
     apps/api/prisma/migrations/*|docker/postgres-init/*|docker/postgres-init-prod/*) continue ;;
     # القوالب الفارغة مقصودة.
-    *.env.example|.env.example|.env.production.example) continue ;;
+    *.env.example|*.env.test.example|.env.example|.env.production.example|.env.test.example) continue ;;
   esac
 
   case "$f" in

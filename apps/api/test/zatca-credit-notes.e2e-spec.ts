@@ -69,8 +69,21 @@ describe('ZATCA credit notes (e2e)', () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
-    customerId = customers.body[0].id;
+    // اكتفاء ذاتي: ملف المنشأة شرطُ مسار ZATCA (zatca_profile_incomplete →
+    // 400)، والبذرة لا تملؤه؛ وعميلٌ خاص بدل `customers.body[0]` الذي يربط
+    // النتيجة بترتيب صفوفٍ لا يملكه هذا الملف.
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ legalName: 'شركة الأفق التجارية', vatNumber: '300000000000003' })
+      .expect(200);
+    customerId = (
+      await request(app.getHttpServer())
+        .post('/customers')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: `عميل إشعارات ${Date.now()}` })
+        .expect(201)
+    ).body.id;
   }, 30000);
 
   afterAll(async () => {
