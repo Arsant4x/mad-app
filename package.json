@@ -20,5 +20,8 @@
     "@prisma/engines@5.22.0": true,
     "argon2@0.41.1": true,
     "prisma@5.22.0": true
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }
