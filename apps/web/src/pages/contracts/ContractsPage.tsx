@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useRef, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
 import {
@@ -146,7 +147,7 @@ export function ContractsPage() {
                     <td className="num">{dfmt(c.start)}</td>
                     <td className="num">{dfmt(c.end)}</td>
                     <td>
-                      <span className={`badge ${STATUS_META[c.status].badgeClass}`}>{STATUS_META[c.status].label}</span>
+                      <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
                     </td>
                   </tr>
                 ))}

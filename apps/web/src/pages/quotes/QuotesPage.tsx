@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { convertQuote, deleteQuote, listQuotes, type DerivedQuoteStatus, type Quote } from '../../api/quotes';
@@ -130,7 +131,7 @@ export function QuotesPage() {
               </tr>
             )}
             {rows.map((q) => {
-              const meta = STATUS_META[q.derivedStatus];
+              const meta = badgeOf(STATUS_META, q.derivedStatus);
               const blockReason = convertBlockReason(q);
               return (
                 <tr key={q.id}>

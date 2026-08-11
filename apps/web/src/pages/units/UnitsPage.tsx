@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { listProperties, type Property } from '../../api/properties';
 import { BulkUnitsModal } from './BulkUnitsModal';
@@ -181,14 +182,14 @@ export function UnitsPage() {
                       <td>{u.type}</td>
                       <td className="num">{fmt(u.rentMonthly)}</td>
                       <td>
-                        <span className={`badge ${STATUS_META[u.status].badgeClass}`}>
+                        <span className={`badge ${badgeOf(STATUS_META, u.status).badgeClass}`}>
                           {u.status === 'rented' && u.currentTenant
                             ? `مؤجَّرة — ${u.currentTenant}`
                             : u.status === 'upcoming' && u.upcomingTenant
                               ? `عقد قادم مؤكَّد — ${u.upcomingTenant}`
                             : u.status === 'reserved' && activeRsv
                               ? `محجوزة حتى ${activeRsv.expiryDate.slice(0, 10)} — ${activeRsv.name}`
-                              : STATUS_META[u.status].label}
+                              : badgeOf(STATUS_META, u.status).label}
                         </span>
                       </td>
                       <td>

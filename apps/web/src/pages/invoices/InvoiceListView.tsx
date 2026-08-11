@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useMemo, useState } from 'react';
 import { ZatcaQr } from '../../components/ZatcaQr';
 import type { Invoice, InvoiceStatus } from '../../api/invoices';
@@ -170,7 +171,7 @@ export function InvoiceListView({
                       debit note IS receivable: its status stays clickable. */}
                   {inv.docType !== 'CREDIT_NOTE' ? (
                     <span style={{ cursor: 'pointer' }} title="اضغط لتغيير الحالة" onClick={() => setStatusModalFor(inv)}>
-                      <span className={`badge ${STATUS_META[inv.status].badgeClass}`}>{STATUS_META[inv.status].label}</span>
+                      <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
                     </span>
                   ) : (
                     <span className="badge">—</span>
@@ -184,8 +185,8 @@ export function InvoiceListView({
                   {inv.zatcaQr ? <ZatcaQr payload={inv.zatcaQr} size={64} /> : <span className="badge">غير مكتمل</span>}
                 </td>
                 <td>
-                  <span className={`badge ${ZATCA_STATUS_META[inv.zatcaStatus].badgeClass}`} title={inv.zatcaMessage ?? undefined}>
-                    {ZATCA_STATUS_META[inv.zatcaStatus].label}
+                  <span className={`badge ${badgeOf(ZATCA_STATUS_META, inv.zatcaStatus).badgeClass}`} title={inv.zatcaMessage ?? undefined}>
+                    {badgeOf(ZATCA_STATUS_META, inv.zatcaStatus).label}
                   </span>
                   {/* The authority's reason is the only way to act on a
                       rejection, so it is shown rather than hidden behind the

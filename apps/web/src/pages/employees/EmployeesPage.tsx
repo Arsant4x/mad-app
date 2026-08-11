@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { createEmployee, deleteEmployee, listEmployees, setEmployeeArchived, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
@@ -122,7 +123,7 @@ export function EmployeesPage() {
                 <td className="num">{fmt(e.baseSalary)}</td>
                 <td className="num">{e.phone || '—'}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[e.status].badgeClass}`}>{STATUS_META[e.status].label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, e.status).badgeClass}`}>{badgeOf(STATUS_META, e.status).label}</span>
                 </td>
                 <td>
                   <RowMenu

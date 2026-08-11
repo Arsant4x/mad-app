@@ -1,3 +1,4 @@
+import { badgeAltOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
 import {
   cancelDeletionRequest,
@@ -60,7 +61,7 @@ export function DeletionRequestCard() {
 
       {req && (
         <div style={{ marginBottom: 10 }}>
-          <span className={`badge ${STATUS_META[req.status].badge}`}>{STATUS_META[req.status].label}</span>{' '}
+          <span className={`badge ${badgeAltOf(STATUS_META, req.status).badge}`}>{badgeAltOf(STATUS_META, req.status).label}</span>{' '}
           <span className="hint">قُدِّم في {dfmt(req.createdAt)}</span>
           {req.decidedNote && <p className="hint" style={{ marginTop: 6 }}>ردّ الدعم: {req.decidedNote}</p>}
         </div>

@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import {
   assignMaintenance,
@@ -165,7 +166,7 @@ export function MaintenancePage() {
               <select value={priority} onChange={(e) => setPriority(e.target.value as MaintenancePriority)}>
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
-                    {PRIORITY_META[p].label}
+                    {badgeOf(PRIORITY_META, p).label}
                   </option>
                 ))}
               </select>
@@ -248,7 +249,7 @@ export function MaintenancePage() {
             {rows.map((r) => (
               <tr key={r.id}>
                 <td>
-                  <span className={`badge ${PRIORITY_META[r.priority].badgeClass}`}>{PRIORITY_META[r.priority].label}</span>
+                  <span className={`badge ${badgeOf(PRIORITY_META, r.priority).badgeClass}`}>{badgeOf(PRIORITY_META, r.priority).label}</span>
                 </td>
                 <td>
                   {r.title}
@@ -262,7 +263,7 @@ export function MaintenancePage() {
                 </td>
                 <td className="num">{dfmt(r.reportedAt)}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[r.status].badgeClass}`}>{STATUS_META[r.status].label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, r.status).badgeClass}`}>{badgeOf(STATUS_META, r.status).label}</span>
                 </td>
                 <td className="num">{r.cost ? fmt(r.cost) : '—'}</td>
                 <td>

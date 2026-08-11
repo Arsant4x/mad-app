@@ -1,3 +1,4 @@
+import { badgeOf } from '../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listInvoices, type Invoice } from '../api/invoices';
@@ -179,7 +180,7 @@ export function DashboardPage() {
                 <td className="num">{inv.no}</td>
                 <td className="num">{dfmt(inv.issueDate)}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[inv.status].badgeClass}`}>{STATUS_META[inv.status].label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
                 </td>
                 <td className="num">{fmt(inv.total)}</td>
               </tr>

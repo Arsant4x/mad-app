@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { SupportAccessSection } from './SupportAccessSection';
@@ -199,7 +200,7 @@ export function DeveloperPanelPage() {
                 <td>{c.permissionTemplate.name}</td>
                 <td className="num">{c.subEnd ? dfmt(c.subEnd) : '—'}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[c.status].badgeClass}`}>{STATUS_META[c.status].label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
                 </td>
                 <td>
                   <RowMenu

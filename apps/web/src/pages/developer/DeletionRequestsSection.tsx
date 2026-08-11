@@ -1,3 +1,4 @@
+import { badgeAltOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
 import {
   approveDeletionRequest,
@@ -83,7 +84,7 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
                 <td>{r.reason ?? '—'}</td>
                 <td className="num">{dfmt(r.createdAt)}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[r.status].badge}`}>{STATUS_META[r.status].label}</span>
+                  <span className={`badge ${badgeAltOf(STATUS_META, r.status).badge}`}>{badgeAltOf(STATUS_META, r.status).label}</span>
                   {r.decidedNote && <div className="hint">{r.decidedNote}</div>}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>

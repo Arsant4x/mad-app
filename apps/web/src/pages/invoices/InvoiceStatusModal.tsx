@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useState } from 'react';
 import type { InvoiceStatus } from '../../api/invoices';
 import { STATUS_META, STATUS_ORDER } from './statusMeta';
@@ -27,7 +28,7 @@ export function InvoiceStatusModal({
           <select value={value} onChange={(e) => setValue(e.target.value as InvoiceStatus)}>
             {STATUS_ORDER.map((s) => (
               <option key={s} value={s}>
-                {STATUS_META[s].label}
+                {badgeOf(STATUS_META, s).label}
               </option>
             ))}
           </select>

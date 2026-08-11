@@ -1,3 +1,4 @@
+import { badgeAltOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
 import { exportAllData, getSubscription, renewSubscription, type SubscriptionStatus } from '../../api/subscription';
 import { useAuth } from '../../auth/AuthContext';
@@ -76,7 +77,7 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
           <div className="card" style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <b>{sub.orgName}</b>
-              <span className={`badge ${STATUS_META[sub.status].badge}`}>{STATUS_META[sub.status].label}</span>
+              <span className={`badge ${badgeAltOf(STATUS_META, sub.status).badge}`}>{badgeAltOf(STATUS_META, sub.status).label}</span>
             </div>
             <div className="hint">بداية الاشتراك: {sub.subStart ?? '—'}</div>
             <div className="hint">نهاية الاشتراك: {sub.subEnd ?? '—'}</div>

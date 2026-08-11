@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { createCompanyUser, deleteCompanyUser, listCompanyUsers, updateCompanyUser, type CompanyUser, type CompanyUserInput } from '../../api/companyUsers';
@@ -152,7 +153,7 @@ export function CompanyUsersPage() {
                   <td>{u.permissionTemplate.name}</td>
                   {branches.length > 0 && <td style={{ fontSize: 12, color: 'var(--muted)' }}>{describeBranches(u)}</td>}
                   <td>
-                    <span className={`badge ${STATUS_META[u.status].badgeClass}`}>{STATUS_META[u.status].label}</span>
+                    <span className={`badge ${badgeOf(STATUS_META, u.status).badgeClass}`}>{badgeOf(STATUS_META, u.status).label}</span>
                   </td>
                   <td>
                     <RowMenu

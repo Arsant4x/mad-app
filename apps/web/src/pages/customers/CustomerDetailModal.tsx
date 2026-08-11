@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import type { Customer } from '../../api/customers';
 import type { Invoice } from '../../api/invoices';
 import { dfmt, fmt } from '../../lib/format';
@@ -93,7 +94,7 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
                   {v.docType === 'CREDIT_NOTE' ? (
                     <span className="badge">—</span>
                   ) : (
-                    <span className={`badge ${STATUS_META[v.status].badgeClass}`}>{STATUS_META[v.status].label}</span>
+                    <span className={`badge ${badgeOf(STATUS_META, v.status).badgeClass}`}>{badgeOf(STATUS_META, v.status).label}</span>
                   )}
                 </td>
                 <td className="num">

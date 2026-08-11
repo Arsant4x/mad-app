@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useState } from 'react';
 import type { Bank } from '../../api/banks';
 import {
@@ -500,7 +501,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
                 <td className="num">{dfmt(i.dueDate)}</td>
                 <td className="num">{fmt(i.amount)}</td>
                 <td>
-                  <span className={`badge ${INSTALLMENT_STATUS_META[i.status].badgeClass}`}>{INSTALLMENT_STATUS_META[i.status].label}</span>
+                  <span className={`badge ${badgeOf(INSTALLMENT_STATUS_META, i.status).badgeClass}`}>{badgeOf(INSTALLMENT_STATUS_META, i.status).label}</span>
                 </td>
                 <td>
                   {(i.status === 'DUE' || i.status === 'LATE') && contract.status !== 'CANCELLED' && (

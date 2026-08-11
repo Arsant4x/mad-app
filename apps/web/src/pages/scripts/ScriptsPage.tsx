@@ -1,3 +1,4 @@
+import { tagOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { createScript, deleteScript, listScripts, setScriptArchived, updateScript, type MessageScript, type ScriptAudience, type ScriptInput } from '../../api/scripts';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -95,7 +96,7 @@ export function ScriptsPage() {
             <option value="all">كل الفئات</option>
             {(Object.keys(AUDIENCE_META) as ScriptAudience[]).map((a) => (
               <option key={a} value={a}>
-                {AUDIENCE_META[a].label}
+                {tagOf(AUDIENCE_META, a).label}
               </option>
             ))}
           </select>
@@ -123,7 +124,7 @@ export function ScriptsPage() {
             {rows.map((s) => (
               <tr key={s.id}>
                 <td>
-                  <span className={`type-tag ${AUDIENCE_META[s.audience].tagClass}`}>{AUDIENCE_META[s.audience].label}</span>
+                  <span className={`type-tag ${tagOf(AUDIENCE_META, s.audience).tagClass}`}>{tagOf(AUDIENCE_META, s.audience).label}</span>
                 </td>
                 <td>{s.title}{s.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td style={{ maxWidth: 420, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.text}</td>

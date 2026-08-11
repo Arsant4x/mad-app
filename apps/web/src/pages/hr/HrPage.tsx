@@ -1,3 +1,4 @@
+import { badgeAltOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { listEmployees, type Employee } from '../../api/employees';
 import {
@@ -423,7 +424,7 @@ export function HrPage() {
                   <td className="num">{dfmt(r.endDate)}</td>
                   <td className="num">{r.days}</td>
                   <td>
-                    <span className={`badge ${STATUS_META[r.status].badge}`}>{STATUS_META[r.status].label}</span>
+                    <span className={`badge ${badgeAltOf(STATUS_META, r.status).badge}`}>{badgeAltOf(STATUS_META, r.status).label}</span>
                   </td>
                   <td>
                     {r.status === 'PENDING' && (

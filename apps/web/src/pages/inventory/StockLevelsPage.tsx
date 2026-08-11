@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { getStockLevels, type StockLevelRow, type StockStatus } from '../../api/inventory';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
@@ -93,7 +94,7 @@ export function StockLevelsPage() {
                 <td className="num">{fmt(r.qty)}</td>
                 <td className="num">{fmt(r.product.minStock)}</td>
                 <td>
-                  <span className={`badge ${STATUS_META[r.status].badgeClass}`}>{STATUS_META[r.status].label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, r.status).badgeClass}`}>{badgeOf(STATUS_META, r.status).label}</span>
                 </td>
               </tr>
             ))}

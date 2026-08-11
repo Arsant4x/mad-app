@@ -1,3 +1,4 @@
+import { badgeOf } from '../../lib/statusBadge';
 import { useRef, useState } from 'react';
 import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
@@ -176,7 +177,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
               <td className="num">{fmt(c.amount)}</td>
               <td className="num">{dfmt(c.issuedAt)}</td>
               <td>
-                <span className={`badge ${STATUS_META[c.status].badgeClass}`}>{STATUS_META[c.status].label}</span>
+                <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
                 {c.status === 'WAIVED' && c.waiveReason && <div className="hint">{c.waiveReason}</div>}
                 {c.settledAt && <div className="hint">{dfmt(c.settledAt)}</div>}
               </td>
