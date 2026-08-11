@@ -11,7 +11,14 @@ export interface InvoiceLine {
   taxRate: string;
 }
 
-export type InvoiceStatus = 'DUE' | 'PAID' | 'OVERDUE';
+/**
+ * ⚠️ يجب أن يطابق `enum InvoiceStatus` في prisma/schema.prisma حرفياً.
+ *
+ * لا رابط آلي بين الاثنين: هذا النوع مكتوب بيد، فقيمةٌ تُضاف في المخطط تمرّ
+ * صامتة هنا. حدث ذلك مع PARTIAL في 4.5 — أُضيفت للمخطط ولـrecomputeInvoiceStatus
+ * ونُسيت هنا، فانهارت الشاشات عند أول فاتورة مسدَّدة جزئياً على بيانات حقيقية.
+ */
+export type InvoiceStatus = 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 
 /** Credit/debit notes are invoice rows too (ZATCA's chain runs across all
  * document kinds); amounts stay positive — `docType` carries the direction. */
@@ -39,6 +46,12 @@ export interface Invoice {
   taxTotal: string;
   total: string;
   notes: string | null;
+  /** ما تبقّى على هذا المستند فعلاً: الإجمالي − الإشعارات الدائنة − المقبوض.
+   *  يُحسب في الخادم (invoices.service.ts outstandingOf) فلا تُعيد كل شاشة
+   *  حسابه بطريقتها — وهو ما أنتج رقمين مختلفين لنفس العميل. */
+  outstanding: number;
+  /** كم رُدّ من هذه الفاتورة بإشعارات دائنة. */
+  creditedTotal: number;
   /** Base64 TLV for the ZATCA phase-1 QR, or null while the company profile
    * is missing its legal name or VAT number. Built server-side. */
   zatcaQr: string | null;

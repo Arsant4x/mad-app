@@ -59,11 +59,19 @@ export class InvoicesService {
    * Floored at zero: a fully-credited invoice that was also marked paid must
    * not read as the customer being owed money.
    */
-  private outstandingOf(inv: { docType: string; status: string; total: Prisma.Decimal; id: string }, creditedByInvoiceId: Map<string, number>): number {
+  private outstandingOf(
+    inv: { docType: string; status: string; total: Prisma.Decimal; id: string },
+    creditedByInvoiceId: Map<string, number>,
+    allocatedByInvoiceId: Map<string, number>,
+  ): number {
     if (inv.docType === 'CREDIT_NOTE') return 0;
     if (inv.status === 'PAID') return 0;
     const credited = inv.docType === 'INVOICE' ? (creditedByInvoiceId.get(inv.id) ?? 0) : 0;
-    return Math.max(0, round2(Number(inv.total) - credited));
+    // المقبوض يُطرح كما يُطرح الإشعار الدائن — وإغفاله كان يجعل الفاتورة
+    // المسدَّدة جزئياً تُحتسب بكامل قيمتها، فيطالَب العميل بما دفعه.
+    // (قاعدة 4.5: أي رقم يعرض «المتبقي» يُحسب من التخصيصات لا من حقل.)
+    const allocated = allocatedByInvoiceId.get(inv.id) ?? 0;
+    return Math.max(0, round2(Number(inv.total) - credited - allocated));
   }
 
   list(companyId: string, allowedBranchIds: string[] | 'all') {
@@ -78,6 +86,11 @@ export class InvoicesService {
         _sum: { total: true },
       });
       const creditedByInvoiceId = new Map(creditTotals.map((row) => [row.relatedInvoiceId!, Number(row._sum.total ?? 0)]));
+
+      // المقبوض لكل فاتورة في استعلام واحد — كما تفعل خريطة الإشعارات أعلاه،
+      // فاستعلامٌ لكل صف على شاشة تسردها جميعاً طلبٌ لكل فاتورة.
+      const allocationTotals = await tx.paymentAllocation.groupBy({ by: ['invoiceId'], _sum: { amount: true } });
+      const allocatedByInvoiceId = new Map(allocationTotals.map((row) => [row.invoiceId, Number(row._sum.amount ?? 0)]));
 
       // The ZATCA QR is derived, not stored: it must reflect the company's
       // *current* legal name and VAT number, so an invoice issued before the
@@ -95,7 +108,7 @@ export class InvoicesService {
       return invoices.map((inv) => ({
         ...inv,
         /** What this document still leaves owing — see outstandingOf. */
-        outstanding: this.outstandingOf(inv, creditedByInvoiceId),
+        outstanding: this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId),
         /** How much of this invoice has been credited back, so a screen can
          * show the invoice as partly reversed without a second request. */
         creditedTotal: inv.docType === 'INVOICE' ? (creditedByInvoiceId.get(inv.id) ?? 0) : 0,

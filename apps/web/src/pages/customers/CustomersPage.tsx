@@ -34,8 +34,12 @@ export function CustomersPage() {
   const balanceByCustomer = useMemo(() => {
     const map = new Map<string, number>();
     for (const inv of invoices) {
-      if (inv.status === 'PAID') continue;
-      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + Number(inv.total));
+      // `outstanding` لا `total`: الخادم يطرح منه الإشعارات الدائنة **والمقبوض**
+      // (invoices.service.ts outstandingOf). جمعُ الإجمالي كان يحتسب الفاتورة
+      // المسدَّدة جزئياً بكاملها، فيُظهر رصيداً أعلى مما يدين به العميل فعلاً
+      // ويخالف رقم تقرير أعمار الذمم لنفس العميل.
+      // ولا حاجة لتخطي PAID: outstanding يعيد صفراً لها ولإشعارات الدائن.
+      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + inv.outstanding);
     }
     return map;
   }, [invoices]);
