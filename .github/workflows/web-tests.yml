@@ -13,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'apps/web/**'
+      - 'apps/api/**'
       - '.github/workflows/web-tests.yml'
 
 jobs:
@@ -35,6 +36,38 @@ jobs:
 
   playwright:
     runs-on: ubuntu-latest
+
+    # قاعدة بيانات حقيقية: اختبارات التخطيط تسجّل منشأة فعلية عبر الـAPI
+    # (قرار المالك: العزل أهم من السرعة). وبدونها كانت تُتخطّى — أي أن السير
+    # يمنع على ستة اختبارات ويترك الحارس الوحيد للتخطيط بلا تنفيذ.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mad_app
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: mad_app
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # كلمات مرور CI صريحةً في الملف عمداً: القاعدة تُخلق وتموت مع الوظيفة
+      # ولا تُنشر على شبكة، فلا سرّ هنا يُحمى — ووضعها في secrets يوحي بأمانٍ
+      # وهمي ويجعل السير غير قابل للتشغيل على نسخة مستنسخة.
+      PGPASSWORD: ci_only_not_a_secret
+      APP_DB_PASSWORD: ci_app_pass
+      DATABASE_URL: postgresql://app_user:ci_app_pass@localhost:5432/mad_app?schema=public
+      JWT_ACCESS_SECRET: ci-jwt-secret-not-used-outside-ci-0123456789
+      DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+      DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+      E2E_API_URL: http://localhost:3000
+      # NODE_ENV يبقى development عمداً: حارس أسرار الإنتاج
+      # (production-secrets.ts) يرفض الإقلاع بقيم كهذه — وهو تصرّفه الصحيح.
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,12 +75,62 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci --ignore-scripts
-      # المتصفح يحتاج سكربتاته: تنزيل Chromium نفسه. مقصورٌ على chromium
-      # (قرار المالك: لا متصفحات متعددة).
-      - run: npx --workspace apps/web playwright install --with-deps chromium
+
+      # دور app_user: في الإنتاج ينشئه سكربت تهيئة مربوط بالحاوية، ولا مقابل
+      # له في `services:` — فيُنشأ هنا يدوياً بنفس الخصائص. NOSUPERUSER
+      # وNOBYPASSRLS شرطان لا تفصيل: الدور الخارق يتجاوز عزل الصفوف بصمت،
+      # فاختبارٌ يعمل بدورٍ خارق لا يختبر العزل أصلاً.
+      - name: إنشاء دور app_user (نظير docker/postgres-init-prod)
+        run: |
+          psql -h localhost -U mad_app -d mad_app -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE app_user WITH LOGIN PASSWORD 'ci_app_pass' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+          GRANT ALL PRIVILEGES ON DATABASE mad_app TO app_user;
+          ALTER SCHEMA public OWNER TO app_user;
+          SQL
+
+      - name: prisma generate + migrate deploy
+        working-directory: apps/api
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      # بذرة التطوير: تُنشئ مدير المنصة والقوالب العامة — ومدير المنصة لازم
+      # لتنظيف منشآت الاختبار (DELETE /companies/:id). القاعدة تموت مع الوظيفة
+      # فبياناتها التجريبية بلا أثر.
+      - name: بذرة (مدير المنصة + القوالب)
+        working-directory: apps/api
+        run: npx prisma db seed
+
+      - name: إقلاع الـAPI وانتظار جاهزيته
+        working-directory: apps/api
+        run: |
+          npm run start > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:3000/docs; then echo "API جاهز بعد ${i}0s"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::الـAPI لم يجهز خلال 600 ثانية"; tail -40 /tmp/api.log; exit 1
+
+      # `npm exec --workspace` لا `npx --workspace`: الأخيرة ليست علماً في npx،
+      # فتُفسَّر كوسيط لـplaywright ويُجلب ثنائيٌّ من ذاكرة npx بدل المثبَّت
+      # محلياً — فينهار التشغيل بـERR_MODULE_NOT_FOUND عند حلّ @playwright/test.
+      # (انكشف بمحاكاة السير محلياً قبل دفعه.)
+      - run: npm exec --workspace apps/web -- playwright install --with-deps chromium
+
       - name: playwright — 375/768/1280 (report-only until 2026-08-17)
         continue-on-error: true # ⏳ احذفه في 2026-08-17
         run: npm run test:e2e --workspace apps/web
+
+      # حارسٌ للحارس: إن تُخطّي أيّ اختبار تخطيطٍ رغم وجود قاعدة، فالسبب عطل
+      # في الإقلاع لا غياب بنية — ويجب أن يُرى لا أن يُقرأ نجاحاً.
+      - name: التحقق أن اختبارات التخطيط نُفِّذت فعلاً ولم تُتخطَّ
+        if: always()
+        run: |
+          if grep -q '"status":"skipped"' apps/web/test-results/.last-run.json 2>/dev/null; then
+            echo "::warning::اختبارات تخطيط مُتخطّاة رغم وجود postgres — افحص سجل الـAPI"
+          fi
+          tail -20 /tmp/api.log || true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
