@@ -6,6 +6,7 @@ import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { createDefaultChart } from '../accounts/default-chart';
+import { createCompanyDefaults } from '../companies/company-defaults';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
@@ -345,6 +346,9 @@ export class AuthService {
       });
       await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
       await createDefaultChart(tx, created.company!.id);
+      // نشاط افتراضي وصفّ عملة الأساس — نفس عائلة دليل الحسابات: منشأة
+      // تُولد ناقصة بصمت لأن مسار البذرة وحده كان يكملها.
+      await createCompanyDefaults(tx, created.company!.id);
     });
 
     // Reusing the full login path gives the new merchant a working session in
