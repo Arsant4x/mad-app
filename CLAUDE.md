@@ -326,6 +326,77 @@
 > | ZATCA `SANDBOX` / `SIMULATION` | 🔴 **ثغرة نظامية — أُصلحت 2026-08-12**: نقاطٌ حقيقية لدى الهيئة لكن فواتيرها **لا تُعتمد نظاماً**. مُنعت حين `NODE_ENV=production`، والافتراضي صار `PRODUCTION` — الفخّ كان في الافتراضي `?? SANDBOX` لا في الاختيار (نفس درس `?? MOCK`) |
 > | حرّاس `return true` (`tenant.guard` · `screens.ts` …) | 🟢 قرارات صلاحيات لا محوّلات — خارج هذا الصنف |
 
+## ⚖️ محظورات ZATCA على حلول الفوترة — بنصّها ومصدرها (استُخرجت 2026-08-12)
+
+**المصدر:** [قرار تطبيق الفوترة الإلكترونية](https://zatca.gov.sa/en/E-Invoicing/Introduction/LawsAndRegulations/Documents/E-Invoicing%20Implementation%20Resolution_EN.pdf)
+· القسم **`E. Prohibited functions`** · **الملحق (1)**، جدول *Prohibited
+Functionalities* (ص 15–16). استُخرج من الـPDF نفسه لا من وصفٍ عنه.
+
+> ⚠️ **تنويه الهيئة بنصّه:** *«The Arabic language is the official version of
+> the resolution and this version is unofficial translation … in case of any
+> discrepancy … the Arabic version prevails».*
+> **فالنصوص أدناه إنجليزية — دقيقةٌ لا نهائية. وأي ادّعاء امتثال يُراجَع على
+> النسخة العربية.**
+
+**البند الحاكم:** *The Compliant E-Invoice solution **shall not have the
+prohibited functionalities as specified in Annex (1)*** · و*must not be able
+to generate **more than one sequence*** لكل وحدة.
+
+| # | المحظور | نصّه | نفاذه |
+|---|---|---|---|
+| 1 | **Uncontrolled access** | *Anonymous access · Ability to operate with default password · **Absence of user session management*** | 2021-12-04 |
+| 2 | **Tampering of e-invoices … or logs** | *Allow alteration or deletion of generated e-invoices · **Allows for log modification/deletion** · Generated with inaccurate timestamps · **Non-sequential log generation** · Electronic Invoice counter reset* | 2021-12-04 |
+| 3 | **Multiple sequences** | *more than one Electronic Invoice sequence at any given time* | 2021-12-04 |
+| 4 | **Export of stamping keys** | *Provide an option to export cryptographic stamp stamping key* | 2023-01-01 |
+| 5 | **Time change** | *Allow software time changes · Allow modification of timestamp value during issuing* | 2023-01-01 |
+| 6 | **العدّاد** (القسم `C.7`) | *tamper-resistant Electronic Invoice counter that **cannot be reset or reformatted*** | — |
+
+### ✅ فحصان **نافيان مُثبَتان** — لا يُعاد بحثهما
+
+**النفي المُثبَت أثمن من عدم البحث**: يمنع إعادة السؤال نفسه بعد شهر، ويمنع
+البناء على ظنٍّ في الاتجاه المعاكس.
+
+**① «هل يمكن حذف سجل تدقيق؟» — لا. ثلاثة أقفال مستقلة:**
+- `audit.controller.ts` فيه **`@Get()` وحده** — لا مسار حذفٍ أو تعديلٍ مسجَّل.
+- `TRASHED_ENTITIES` قائمة `as const` بتسعة كيانات لا تشمل `auditLog`،
+  و`entity(key)` ترمي `NotFoundException` على أي مفتاح خارجها.
+- `auditLog.delete` · `deleteMany` · `update` — **صفر نتيجة** في المشروع.
+- والتشغيل وافق: `DELETE /audit-log/…` و`DELETE /trash/audit/…` ⇒ `404`.
+
+**② مستند «Security Features and Implementation Standards» لا يحوي متطلبات
+صلاحيات.** جُلبت [النسخة 1.2 (2023-05-19)](https://zatca.gov.sa/ar/E-Invoicing/SystemsDevelopers/Documents/20230519_ZATCA_Electronic_Invoice_Security_Features_Implementation_Standards_vF.pdf)
+واستُخرجت كاملةً. فهرسها: السياق · الختم التشفيري (ECDSA) · رمز QR · مصادقة
+EGS بـOAuth 2.0. وفحصٌ نافٍ على النصّ كله:
+
+```
+session management 0 · user management 0 · access control 0
+password 0 · authorization 0 · audit log 0
+```
+
+**فمتطلب إدارة الجلسات مصدره الوحيد هو الملحق (1) من القرار** — لا هذا
+المستند. وكان البناء على ظنّ خلافِ ذلك وشيكاً لولا الفحص.
+
+### 📌 حفظ السجلات مقابل حق المحو — بحث 2026-08-12
+
+**لا تعارض بل تكامل:**
+
+| | |
+|---|---|
+| **ZATCA / الضريبة** | حفظ الفواتير والدفاتر **6 سنوات** من نهاية الفترة الضريبية — و**11 سنة للخدمات المرتبطة بالعقار** ⚠️ (يخصّنا مباشرةً)، **وداخل المملكة** |
+| **PDPL** | حق طلب الإتلاف منصوصٌ عليه **«دون الإخلال بأحكام المادة (18)»** — أي أنه **مقيَّد باستثناءات نظامية**، ومنها الالتزام بالحفظ |
+
+⚠️ **ما لم أستطع جلبه: نصّ المادة (18) حرفياً.** المصادر ثانوية تُجمع على وجود
+الاستثناء ولا تعطي نصّه. **لا يُبنى على هذا ادّعاء امتثال قبل مراجعة النصّ.**
+
+**قرار المالك (2026-08-12) — سجل التدقيق يبقى بعد حذف المنشأة:**
+> سجل التدقيق **أثرٌ إشرافي لا بيان مستأجر**، وحذفه يعني أن أثر **آخر عملية
+> قبل الحذف يُمحى مع الحذف نفسه** — أسوأ توقيت ممكن. وإن اقتضى حقُّ المحو
+> إخفاء هوية صاحبه: **تُخفى الهوية ويبقى الأثر.**
+>
+> ⬅️ **بند تنفيذ مفتوح:** `AuditLog.companyId` عليه `onDelete: Cascade` اليوم
+> — أي أن السلوك الحالي **يخالف هذا القرار**. يحتاج ترحيلاً وقراراً على شكل
+> إخفاء الهوية.
+
 **⭐ قاعدة (2026-08-12): رقمٌ لم يُقرأ من مخرَج ليس رقماً.**
 > **الحادثة:** دُفع فرع `docs/deploy-hardening` ولم يُنشأ له طلب دمج قط، ثم
 > أُشير إليه مرتين بوصفه «PR #11» — رقمٌ **افتُرض** من تسلسل الطلبات السابقة
