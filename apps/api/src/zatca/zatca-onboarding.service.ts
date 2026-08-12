@@ -31,7 +31,40 @@ import { signInvoice } from './ubl/xades.util';
  * can set it after the app has booted. **Must never be set in production** —
  * it would silently point clearance at somewhere that is not the authority.
  */
+/**
+ * بيئات الاختبار لدى الهيئة — **ممنوعة في الإنتاج**.
+ *
+ * ⚠️ ليست محوّلاً وهمياً من صنعنا: `SANDBOX` و`SIMULATION` نقاطٌ حقيقية لدى
+ * هيئة الزكاة والضريبة والجمارك، وقوالب الشهادات تمنع خلطها بالإنتاج. لكن
+ * الفصل من جهة الهيئة **لا يغني عن حاجزنا**: تاجرٌ يختار بيئة اختبار على
+ * خادم الإنتاج يرى فواتيره «مقبولة» وتُختم `CLEARED` عندنا — **وهي غير
+ * معتمدة نظاماً**. العطل لا يظهر حتى تصل المطالبة الضريبية.
+ *
+ * وهو نفس صنف ثغرة المزوّد التجريبي (CLAUDE.md): مسارُ اختبارٍ يُنتج مخرَجاً
+ * يشبه الحقيقي.
+ */
+const TEST_ENVIRONMENTS: readonly ZatcaEnvironment[] = [ZatcaEnvironment.SANDBOX, ZatcaEnvironment.SIMULATION];
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+/** الافتراضي يتبع البيئة: تجربةٌ آمنة خارج الإنتاج، وحقيقةٌ داخله. */
+export function defaultEnvironment(): ZatcaEnvironment {
+  return isProduction() ? ZatcaEnvironment.PRODUCTION : ZatcaEnvironment.SANDBOX;
+}
+
+/** يرفض بيئة اختبار على الإنتاج — صراحةً بنصٍّ يشرح الأثر، لا صمتاً. */
+export function assertEnvironmentAllowed(environment: ZatcaEnvironment): void {
+  if (isProduction() && TEST_ENVIRONMENTS.includes(environment)) {
+    throw new BadRequestException(MSG.zatca_test_environment_forbidden_in_production);
+  }
+}
+
 export function apiBaseFor(environment: ZatcaEnvironment): string {
+  // الحاجز الثاني — عند كل نداءٍ للهيئة: منع التهيئة لا يحمي بيانات اعتماد
+  // أُنشئت قبل هذا الحاجز أو رحلت مع نسخة بيانات، وهي التي تختم الفواتير.
+  assertEnvironmentAllowed(environment);
   return process.env.ZATCA_API_BASE_OVERRIDE?.trim() || API_BASE[environment];
 }
 
@@ -133,7 +166,12 @@ export class ZatcaOnboardingService {
       throw new BadRequestException(MSG.zatca_already_onboarded);
     }
 
-    const environment = (dto.environment ?? ZatcaEnvironment.SANDBOX) as ZatcaEnvironment;
+    // الافتراضي يتبع البيئة لا العكس: `SANDBOX` هو الصواب على جهاز مطوّر،
+    // وهو **الفخّ نفسه** على الإنتاج — تاجرٌ لا يمرّر الحقل يُهيَّأ على بيئة
+    // اختبار ويظنّ فواتيره معتمدة. وطلبُ شهادة إنتاج لا يخيف: لا تُصدَر إلا
+    // برمز OTP حقيقي من بوابة فاتورة، ولا يملكه إلا تاجرٌ حقيقي.
+    const environment = (dto.environment ?? defaultEnvironment()) as ZatcaEnvironment;
+    assertEnvironmentAllowed(environment);
     const { privateKeyPem, csrPem } = await generateCsr(
       {
         organizationName: company.legalName.trim(),
