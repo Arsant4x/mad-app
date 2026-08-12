@@ -179,7 +179,11 @@ export const MSG = {
   integration_not_found: 'integrations.not_found',
   integration_owner_only: 'integrations.owner_only',
   integration_mock_forbidden_in_production: 'integrations.mock_forbidden_in_production',
+
   zatca_test_environment_forbidden_in_production: 'zatca.test_environment_forbidden_in_production',
+
+  // التفويض
+  delegation_cycle_rejected: 'delegation.cycle_rejected',
   owner_only: 'common.owner_only',
   support_no_active_grant: 'support.no_active_grant',
   support_read_only: 'support.read_only',
@@ -478,6 +482,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.pos_terminal_declined]: { ar: 'رفضت بوابة الدفع العملية: {reason}', en: 'The payment gateway declined: {reason}' },
   [MSG.integration_unknown_provider]: { ar: 'مزوّد غير معروف لهذا النوع من الربط', en: 'Unknown provider for this integration kind' },
   [MSG.zatca_test_environment_forbidden_in_production]: { ar: 'بيئة الاختبار (SANDBOX/SIMULATION) غير مسموحة في الإنتاج — فواتيرها لا تُعتمد لدى هيئة الزكاة والضريبة والجمارك', en: 'Test environments (SANDBOX/SIMULATION) are not allowed in production — their invoices are not accepted by ZATCA' },
+  [MSG.delegation_cycle_rejected]: {
+    ar: 'لا يمكن التفويض لهذا المستخدم — فهو يفوّضك أصلاً (مباشرةً أو عبر سلسلة)، والتفويض الدائري غير مسموح',
+    en: 'Cannot delegate to this user — they already delegate to you (directly or through a chain), and circular delegation is not allowed',
+  },
   [MSG.integration_mock_forbidden_in_production]: { ar: 'المزوّد التجريبي غير مسموح في بيئة الإنتاج — يعتمد كل عملية دفع بلا تحصيل فعلي', en: 'The test provider is not allowed in production — it approves every payment without collecting money' },
   [MSG.integration_credentials_required]: { ar: 'مفاتيح الربط مطلوبة', en: 'Credentials are required' },
   [MSG.integration_kind_already_active]: { ar: 'يوجد ربط فعّال من هذا النوع بالفعل — عطّله أولاً', en: 'An active connection of this kind already exists — disable it first' },
