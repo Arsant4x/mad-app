@@ -53,7 +53,11 @@ jobs:
       - name: vitest (blocking)
         run: npm run test --workspace apps/web
 
-  # إثباتٌ **حيّ** لحرّاس سجل التفويض — على postgres حقيقي.
+  # إثباتٌ **حيّ** لحرّاس السجلّات الملحَقة — على postgres حقيقي.
+  #
+  # يغطّي `delegation_logs` و`task_logs` معاً. والاسم عامّ عمداً: وظيفةٌ
+  # باسم سجلٍّ بعينه تصير مضلِّلة عند إضافة الثاني — وهي عائلة الخطأ نفسها
+  # التي وقعت حين حلّ تعليقُ `nginx-cache` فوق وظيفةٍ أخرى.
   #
   # لماذا وظيفة قائمة بذاتها: `delegation-log.spec.ts` يقرأ نصّ الترحيل
   # ويثبت أن المنع **مكتوب**. وهو لازمٌ لا كافٍ — نصٌّ سليم قد لا يُطبَّق
@@ -62,7 +66,7 @@ jobs:
   #
   # ⛔ مانعة من أول يوم — المنع هنا التزامٌ نظامي (الملحق (1) من قرار ZATCA)
   # لا تفصيلة جودة.
-  delegation-log-live:
+  append-only-logs-live:
     runs-on: ubuntu-latest
 
     services:
@@ -120,19 +124,39 @@ jobs:
         working-directory: apps/api
         run: npx prisma db seed
 
-      # حارسٌ للحارس: الترحيل يجب أن يكون قد طُبِّق فعلاً — وإلا مرّت
-      # الاختبارات على جدولٍ لا وجود له بأخطاءٍ تبدو كرفض.
-      - name: التحقق أن جدول السجل ومُشغِّلاته موجودة فعلاً
+      # حارسٌ للحارس — للسجلّين معاً: الترحيل يجب أن يكون قد طُبِّق فعلاً،
+      # وإلا مرّت الاختبارات على جدولٍ لا وجود له بأخطاءٍ تبدو كرفض.
+      #
+      # ⚠️ ولا يكفي أن يردّ الاستعلام: جدولٌ بلا مُشغِّلات يُعطي مجموعةً
+      # فارغة **بنجاح**، فتمرّ الاختبارات على جدولٍ بلا حماية بأخطاءٍ تبدو
+      # كرفض. فيُتحقَّق من **العدد** لا من نجاح الأمر.
+      - name: التحقق أن الجدولين ومُشغِّلاتهما موجودة فعلاً
         run: |
-          psql -h localhost -U mad_app -d mad_app -v ON_ERROR_STOP=1 -c \
-            "SELECT tgname FROM pg_trigger WHERE tgrelid = 'delegation_logs'::regclass AND NOT tgisinternal;"
+          psql -h localhost -U mad_app -d mad_app -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT tgrelid::regclass AS "table", tgname
+            FROM pg_trigger
+           WHERE tgrelid IN ('delegation_logs'::regclass, 'task_logs'::regclass)
+             AND NOT tgisinternal
+           ORDER BY 1, 2;
 
-      - name: الإثبات الحيّ — أربعة مسارات (blocking)
+          DO $$
+          DECLARE n int;
+          BEGIN
+            SELECT count(*) INTO n FROM pg_trigger
+             WHERE tgrelid IN ('delegation_logs'::regclass, 'task_logs'::regclass)
+               AND NOT tgisinternal;
+            IF n <> 4 THEN
+              RAISE EXCEPTION 'متوقَّع 4 مُشغِّلات (إدراج + ملحق-فقط لكل سجل) ووُجد %', n;
+            END IF;
+          END $$;
+          SQL
+
+      - name: الإثبات الحيّ — تسعة مسارات على السجلّين (blocking)
         working-directory: apps/api
         shell: bash
         run: |
           set -o pipefail
-          npx jest src/delegations/delegation-log.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
+          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
 
       - name: ملخّص خام
         if: always()
