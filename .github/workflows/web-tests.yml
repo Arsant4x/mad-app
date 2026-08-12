@@ -84,6 +84,12 @@ jobs:
       # ⚠️ `app_user` لا الدور الخارق: الخارق يتجاوز RLS بصمت، فاختبارٌ
       # يعمل به لا يختبر العزل — ولا يختبر أن السياسة مفروضة (FORCE).
       DATABASE_URL: postgresql://app_user:ci_app_pass@localhost:5432/mad_app?schema=public
+      # ⚠️ البذرة ترفض العمل بدونهما (`seed.ts:23`) — وهو تصرّفها الصحيح:
+      # حساب مدير منصة بكلمة مرور افتراضية أسوأ من بذرةٍ لا تعمل. نُسيا في
+      # أول صياغة فسقطت الوظيفة عند البذرة لا عند الحرّاس، والمخرَج جاء
+      # فارغاً — «أحمر» بلا سطر اختبار واحد.
+      DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+      DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
 
     steps:
       - uses: actions/checkout@v4
