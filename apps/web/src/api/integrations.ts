@@ -19,12 +19,26 @@ export const KIND_LABELS: Record<IntegrationKind, string> = {
   ECOMMERCE: 'متجر إلكتروني',
 };
 
-/** المتاح اليوم لكل نوع — يتوسّع بمزوّد حقيقي عند توفر مفاتيحه. */
+/**
+ * المزوّدون **الحقيقيون** المتاحون للتاجر — فارغة اليوم عمداً.
+ *
+ * ⚠️ كان هنا `MOCK` معروضاً باسم «مزوّد تجريبي (Mock)» **كخيارٍ وحيد**. وهو
+ * ليس نقصاً تجميلياً بل **ثغرة مالية**: محوّله يعتمد كل عملية بطاقة بلا
+ * تحصيل، فتُختم الفواتير مسدَّدة بلا مال. أُزيل من الواجهة، ورُفض في الخادم
+ * حين `NODE_ENV=production` (`integrations.service.ts`).
+ *
+ * **قاعدة الإضافة:** لا يُدرَج هنا إلا مزوّد يُحصّل مالاً فعلاً. وبمجرد
+ * وجود واحد يظهر القسم من تلقائه — لا شيء آخر يحتاج تعديلاً.
+ */
 export const PROVIDERS_BY_KIND: Record<IntegrationKind, { value: string; label: string }[]> = {
-  PAYMENT_GATEWAY: [{ value: 'MOCK', label: 'مزوّد تجريبي (Mock)' }],
-  BNPL: [{ value: 'MOCK', label: 'مزوّد تجريبي (Mock)' }],
-  ECOMMERCE: [{ value: 'MOCK', label: 'مزوّد تجريبي (Mock)' }],
+  PAYMENT_GATEWAY: [],
+  BNPL: [],
+  ECOMMERCE: [],
 };
+
+/** هل يوجد مزوّد حقيقي واحد على الأقل؟ يحسم عرض قسم الربط من إخفائه. */
+export const hasAnyProvider = (): boolean =>
+  Object.values(PROVIDERS_BY_KIND).some((list) => list.length > 0);
 
 export const listIntegrations = () => apiClient.get<IntegrationConnection[]>('/integrations').then((r) => r.data);
 export const createIntegration = (dto: { kind: IntegrationKind; provider: string; label?: string; credentials: Record<string, string> }) =>

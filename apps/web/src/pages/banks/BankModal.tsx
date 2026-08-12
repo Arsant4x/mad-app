@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import type { Bank, BankInput } from '../../api/banks';
@@ -39,8 +40,8 @@ export function BankModal({
         openingDate,
         branchId: branchId || undefined,
       });
-    } catch {
-      setError(i18n.t('err_bank_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_bank_save')));
     } finally {
       setSaving(false);
     }

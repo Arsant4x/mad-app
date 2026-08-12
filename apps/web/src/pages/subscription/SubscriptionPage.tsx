@@ -1,4 +1,5 @@
 import { badgeAltOf } from '../../lib/statusBadge';
+import { apiErrorMessage } from '../../lib/apiError';
 import { useEffect, useState } from 'react';
 import { exportAllData, getSubscription, renewSubscription, type SubscriptionStatus } from '../../api/subscription';
 import { useAuth } from '../../auth/AuthContext';
@@ -61,8 +62,8 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
       a.download = `mad-app-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setError('تعذّر تصدير البيانات');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر تصدير البيانات'));
     } finally {
       setExporting(false);
     }
@@ -101,7 +102,6 @@ export function SubscriptionPage({ standalone = false }: { standalone?: boolean 
                 </button>
               ))}
             </div>
-            <p className="hint" style={{ marginBottom: 10 }}>الدفع الإلكتروني قيد الإضافة — التجديد الآن يمدّد الاشتراك مباشرةً.</p>
             {error && <p className="error-text">{error}</p>}
             <button className="btn btn-primary" disabled={busy} onClick={renew}>
               {busy ? 'جارٍ التجديد…' : `تجديد ${months} شهر`}
