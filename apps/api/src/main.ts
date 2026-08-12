@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
+import { validationExceptionFactory } from './common/i18n/validation.util';
 import { assertProductionSecrets } from './common/config/production-secrets';
 
 async function bootstrap() {
@@ -35,7 +36,18 @@ async function bootstrap() {
     origin: config.get<string>('WEB_ORIGIN', 'http://localhost:5173'),
     credentials: true,
   });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+  // `exceptionFactory` يحوّل أخطاء class-validator إلى حمولاتٍ مقروءة آلياً
+  // يترجمها المرشّح بلغة الطلب. بدونه تصل المستخدمَ العربي رسائل إنجليزية
+  // خامّة مثل `baseSalary must be a number conforming to the specified
+  // constraints` — وهي الرسائل التي كانت تظهر «خطأً غير واضح».
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+      exceptionFactory: validationExceptionFactory,
+    }),
+  );
   // Translates every error message into the caller's Accept-Language — see
   // common/i18n/http-exception.filter.ts. Registered after the pipe so it also
   // catches (and localizes) validation failures.

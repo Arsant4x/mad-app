@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import type { Employee, EmployeeInput, EmployeeStatus } from '../../api/employees';
@@ -51,8 +52,8 @@ export function EmployeeModal({
         status,
         branchId: branchId || undefined,
       });
-    } catch {
-      setError(i18n.t('err_employee_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_employee_save')));
     } finally {
       setSaving(false);
     }

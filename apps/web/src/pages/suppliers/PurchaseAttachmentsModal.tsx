@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import {
   deletePurchaseAttachment,
   listPurchaseAttachments,
@@ -62,8 +63,8 @@ export function PurchaseAttachmentsModal({ purchase, onClose }: { purchase: Purc
     try {
       const { url } = await purchaseAttachmentDownloadUrl(att.id);
       window.open(url, '_blank', 'noopener');
-    } catch {
-      setError('تعذّر فتح الملف');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر فتح الملف'));
     }
   }
 
@@ -73,8 +74,8 @@ export function PurchaseAttachmentsModal({ purchase, onClose }: { purchase: Purc
     try {
       await deletePurchaseAttachment(att.id);
       setItems((xs) => xs.filter((x) => x.id !== att.id));
-    } catch {
-      setError('تعذّر حذف الملف');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر حذف الملف'));
     } finally {
       setBusy(false);
       setConfirmingId(null);

@@ -11,6 +11,26 @@ const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
   ECOMMERCE: ['MOCK'],
 };
 
+/**
+ * المزوّدون التجريبيون — **ممنوعون في الإنتاج**.
+ *
+ * ⚠️ **ثغرة مالية لا تفصيلة تجميل:** `MockTerminalAdapter` يعيد
+ * `approved: true` لكل مبلغ لا تنتهي هللاته بـ13، بلا أي اتصال بمزوّد.
+ * فتاجرٌ على الإنتاج يربط «مزوّد تجريبي» يحصل على جهاز بطاقةٍ **يعتمد كل
+ * عملية بلا تحصيل مال**، وتُختم فواتيره مسدَّدة. لا خسارة بيانات — خسارة
+ * نقد حقيقي.
+ *
+ * والقائمة قاعدةٌ لا استثناء: أي محوّل تجريبي يُضاف لاحقاً (تقسيط · متجر ·
+ * غيرها) **يُدرَج هنا**، وإلا تكرّرت الثغرة بنفس الشكل.
+ */
+const TEST_ONLY_PROVIDERS = new Set(['MOCK']);
+
+/** بيئة الإنتاج تُقرأ عند كل فحص لا مرةً عند التحميل — فالاختبار يستطيع
+ *  محاكاتها، ولا تتجمّد القيمة على ما كانت عليه لحظة الإقلاع. */
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 /** الشكل الآمن للعرض: المفاتيح مقنَّعة، والمشفَّر لا يغادر الخادم. */
 function toSafe(row: { id: string; kind: IntegrationKind; provider: string; label: string | null; enabled: boolean; credentials: string; createdAt: Date }) {
   return {
@@ -45,6 +65,11 @@ export class IntegrationsService {
   create(companyId: string, dto: { kind: IntegrationKind; provider: string; label?: string; credentials: Record<string, string> }) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       if (!KNOWN_PROVIDERS[dto.kind]?.includes(dto.provider)) throw new BadRequestException(MSG.integration_unknown_provider);
+      // الحاجز الأول: منع دخول المزوّد التجريبي أصلاً. رفضٌ صريح بنصّ عربي
+      // يشرح السبب — لا تجاهل صامت يترك التاجر يظن أن الربط تمّ.
+      if (isProduction() && TEST_ONLY_PROVIDERS.has(dto.provider)) {
+        throw new BadRequestException(MSG.integration_mock_forbidden_in_production);
+      }
       if (!Object.keys(dto.credentials ?? {}).length) throw new BadRequestException(MSG.integration_credentials_required);
 
       const activeSame = await tx.integrationConnection.findFirst({ where: { kind: dto.kind, enabled: true } });
@@ -91,6 +116,20 @@ export class IntegrationsService {
   async chargeCardIfConfigured(tx: Prisma.TransactionClient, request: TerminalChargeRequest): Promise<TerminalChargeResult | null> {
     const conn = await tx.integrationConnection.findFirst({ where: { kind: 'PAYMENT_GATEWAY', enabled: true } });
     if (!conn) return null;
+
+    /**
+     * الحاجز الثاني — وهو الأهم عملياً: منعُ الإنشاء لا يحمي صفّاً **موجوداً
+     * سلفاً**. اتصالٌ تجريبي أُنشئ قبل هذا الحاجز، أو رحل مع نسخة بيانات،
+     * يبقى فعّالاً ويعتمد كل بطاقة. فالفحص يقع عند لحظة الشحن نفسها.
+     *
+     * والرمي لا الإعادة بـ`null`: الإعادة بـ`null` تعني «لا بوابة» فيمرّ
+     * البيع كأنه نقدي — أي **يُختم مسدَّداً بلا مال** وهو العطل بعينه.
+     * الرفض الصريح يوقف البيع ويُظهر السبب للكاشير.
+     */
+    if (isProduction() && TEST_ONLY_PROVIDERS.has(conn.provider)) {
+      throw new BadRequestException(MSG.integration_mock_forbidden_in_production);
+    }
+
     const adapter = TERMINAL_ADAPTERS[conn.provider];
     if (!adapter) return null;
     // The ONLY place credentials are decrypted — straight into the call.

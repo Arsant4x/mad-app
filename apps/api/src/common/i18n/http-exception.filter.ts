@@ -2,6 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import { Request, Response } from 'express';
 import { resolveLanguage } from './language.util';
 import { Language, MSG, resolveMessage } from './messages';
+import { localizeValidation } from './validation.util';
 
 interface NestErrorBody {
   statusCode: number;
@@ -57,8 +58,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
     return {
       ...body,
       message: Array.isArray(message)
-        ? message.map((m) => resolveMessage(m, language))
-        : resolveMessage(message, language),
+        ? message.map((m) => this.translateOne(m, language))
+        : this.translateOne(message, language),
     };
+  }
+
+  /**
+   * حمولات التحقّق أولاً، ثم كتالوج الرسائل.
+   *
+   * الترتيب مقصود: `resolveMessage` يمرّر أي نصٍّ غير معروف كما هو، فلو سبق
+   * لخرجت حمولة التحقّق إلى المستخدم بصيغتها الخام (`@v:isNumber|…`) — أي
+   * أسوأ من الإنجليزية التي نُصلحها.
+   */
+  private translateOne(raw: string, language: Language): string {
+    return localizeValidation(raw, language) ?? resolveMessage(raw, language);
   }
 }

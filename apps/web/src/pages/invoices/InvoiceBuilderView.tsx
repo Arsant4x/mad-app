@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import type { Customer, Invoice } from '../../api/invoices';
 import { fmt, toLocalISODate, today } from '../../lib/format';
@@ -93,8 +94,8 @@ export function InvoiceBuilderView({
       let customer = customers.find((c) => c.name === name);
       if (!customer) customer = await onCreateCustomer(name);
       await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines });
-    } catch {
-      setError(i18n.t('err_invoice_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_invoice_save')));
     } finally {
       setSaving(false);
     }

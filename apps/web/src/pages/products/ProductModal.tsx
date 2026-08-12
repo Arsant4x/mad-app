@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Product, ProductInput } from '../../api/products';
 import i18n from '../../i18n';
 
@@ -40,8 +41,8 @@ export function ProductModal({
         minStock: parseFloat(String(minStock)) || 0,
         barcode: barcode.trim() || undefined,
       });
-    } catch {
-      setError(i18n.t('err_product_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_product_save')));
     } finally {
       setSaving(false);
     }

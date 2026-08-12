@@ -4,6 +4,7 @@ import {
   deleteIntegration,
   KIND_LABELS,
   listIntegrations,
+  hasAnyProvider,
   PROVIDERS_BY_KIND,
   setIntegrationEnabled,
   type IntegrationConnection,
@@ -20,7 +21,8 @@ export function IntegrationsCard() {
   const [connections, setConnections] = useState<IntegrationConnection[]>([]);
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<IntegrationKind>('PAYMENT_GATEWAY');
-  const [provider, setProvider] = useState('MOCK');
+    // ⚠️ بلا افتراضي: كان 'MOCK' هنا، فيُرسَل ويُقبَل حتى لو لم يختره أحد.
+  const [provider, setProvider] = useState('');
   const [label, setLabel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [merchantId, setMerchantId] = useState('');
@@ -76,6 +78,16 @@ export function IntegrationsCard() {
     setPendingDelete(null);
     await reload();
   }
+
+  /**
+   * القسم لا يُعرض ما لم يوجد مزوّد حقيقي — **ولا حتى لعرض اتصالٍ قائم**.
+   *
+   * كان الخيار الوحيد المعروض «مزوّد تجريبي (Mock)»، ومحوّله يعتمد كل عملية
+   * بطاقة بلا تحصيل. فقسمٌ لا يقدّم إلا مزوّداً وهمياً ليس ميزةً ناقصة بل
+   * **دعوةٌ لثغرة مالية**. يعود من تلقائه فور إدراج أول مزوّد حقيقي في
+   * `PROVIDERS_BY_KIND` — بلا تعديلٍ هنا.
+   */
+  if (!hasAnyProvider()) return null;
 
   return (
     <div className="card" style={{ marginTop: 14 }}>
@@ -145,7 +157,7 @@ export function IntegrationsCard() {
                 onChange={(e) => {
                   const k = e.target.value as IntegrationKind;
                   setKind(k);
-                  setProvider(PROVIDERS_BY_KIND[k][0]?.value ?? 'MOCK');
+                  setProvider(PROVIDERS_BY_KIND[k][0]?.value ?? '');
                 }}
               >
                 {Object.entries(KIND_LABELS).map(([v, l]) => (

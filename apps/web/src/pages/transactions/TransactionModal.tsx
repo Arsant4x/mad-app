@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import type { Bank } from '../../api/banks';
@@ -45,8 +46,8 @@ export function TransactionModal({
         source: source.trim() || undefined,
         branchId: branchId || undefined,
       });
-    } catch {
-      setError(i18n.t('err_transaction_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_transaction_save')));
     } finally {
       setSaving(false);
     }

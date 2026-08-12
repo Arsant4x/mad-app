@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import type { Purchase } from '../../api/purchases';
@@ -96,8 +97,8 @@ export function PurchaseModal({
         incorpItem: isIncorporation ? incorpItem.trim() || undefined : undefined,
         branchId: branchId || undefined,
       });
-    } catch {
-      setError(i18n.t('err_purchase_save'));
+    } catch (e) {
+      setError(apiErrorMessage(e, i18n.t('err_purchase_save')));
     } finally {
       setSaving(false);
     }
