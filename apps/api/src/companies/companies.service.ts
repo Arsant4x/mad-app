@@ -3,6 +3,7 @@ import { Company } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { createDefaultChart } from '../accounts/default-chart';
+import { createCompanyDefaults } from './company-defaults';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -88,6 +89,9 @@ export class CompaniesService {
       // يمكن ضبطه قبل هذه اللحظة لأن المعرّف يولد مع الصف.
       await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
       await createDefaultChart(tx, created.company!.id);
+      // نشاط افتراضي وصفّ عملة الأساس — نفس عائلة دليل الحسابات: منشأة
+      // تُولد ناقصة بصمت لأن مسار البذرة وحده كان يكملها.
+      await createCompanyDefaults(tx, created.company!.id);
       return created;
     });
 
