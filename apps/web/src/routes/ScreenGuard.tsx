@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useAuth } from '../auth/AuthContext';
+import { usePermissions } from '../auth/PermissionsContext';
 import { AccessDenied } from './AccessDenied';
 
 /** Route-level counterpart to AppShell's canSee() nav check — that only
@@ -11,7 +11,9 @@ import { AccessDenied } from './AccessDenied';
  * @RequiresScreen decorators (see apps/web/src/api/templates.ts's
  * ALLOWED_SCREENS for the canonical list). */
 export function ScreenGuard({ screen, children }: { screen: string; children: ReactNode }) {
-  const { user } = useAuth();
-  const allowed = user?.allowedScreens === 'all' || user?.allowedScreens.includes(screen);
-  return allowed ? <>{children}</> : <AccessDenied />;
+  const { canSee, loading } = usePermissions();
+  // ⚠️ أثناء الجلب **لا يُعرض المحتوى ولا يُعرض المنع**: عرضُ المحتوى
+  // متفائلاً يومض بما قد يُمنع، وعرضُ المنع يومض برفضٍ كاذب لمن يملك.
+  if (loading) return null;
+  return canSee(screen) ? <>{children}</> : <AccessDenied />;
 }

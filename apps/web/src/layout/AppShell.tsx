@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { useAuth } from '../auth/AuthContext';
+import { usePermissions } from '../auth/PermissionsContext';
 import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
 
 interface NavItemDef {
@@ -119,7 +120,9 @@ export function AppShell() {
     };
   }, []);
 
-  const canSee = (screen: string) => user?.allowedScreens === 'all' || user?.allowedScreens.includes(screen);
+  // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا. انظر
+  // `PermissionsContext`: نسختان من قاعدةٍ واحدة تفترقان بلا شكوى.
+  const { canSee } = usePermissions();
 
   const inSupportMode = user?.actorType === 'PLATFORM_ADMIN' && !!supportCompanyId();
 

@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
+import { PermissionsProvider } from './auth/PermissionsContext';
 import { RoleAwareIndex } from './layout/RoleAwareIndex';
 import { RootShell } from './layout/RootShell';
 import { AccountsPage } from './pages/accounts/AccountsPage';
@@ -48,7 +49,11 @@ import { ScreenGuard } from './routes/ScreenGuard';
 export default function App() {
   return (
     <AuthProvider>
+      {/* ⚠️ `PermissionsProvider` **داخل** الموجّه: يعيد الجلب عند كل تنقّل،
+        * فيحتاج `useLocation`. وخارجَه لا يرى التنقّل — فتبقى الصلاحيات
+        * مثبَّتةً على أول تحميل، وهو ما يمنعه الشرط. */}
       <BrowserRouter>
+        <PermissionsProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -353,6 +358,7 @@ export default function App() {
             />
           </Route>
         </Routes>
+        </PermissionsProvider>
       </BrowserRouter>
     </AuthProvider>
   );
