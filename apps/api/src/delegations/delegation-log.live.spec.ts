@@ -44,7 +44,15 @@ d('حرّاس سجل التفويض — إثباتٌ حيّ على قاعدة ح
      * و`findFirstOrThrow` مقصودة: قاعدةٌ بلا منشأة تعني أن البذرة لم
      * تُشغَّل — وذلك سقوطٌ صريح لا تخطٍّ صامت.
      */
-    const company = await prisma.company.findFirstOrThrow({ select: { id: true } });
+    /**
+     * ⚠️ **الترتيب صريح** — `findFirst` بلا `orderBy` لا يضمن صفّاً بعينه.
+     *
+     * و`task-log.live.spec.ts` يأخذ **الثانية** عمداً: القيدان `RESTRICT`
+     * يقعان على المنشأة نفسها، وPostgres يذكر أول قيدٍ يُنتهك — فتشاركُ
+     * منشأةٍ واحدة يجعل إثبات أحدهما مستحيلاً. فتحديدُ الترتيب هنا هو ما
+     * يضمن أنهما لا تلتقيان.
+     */
+    const company = await prisma.company.findFirstOrThrow({ select: { id: true }, orderBy: { createdAt: 'asc' } });
     companyId = company.id;
   });
 

@@ -33,8 +33,26 @@ d('حرّاس سجل المهام — إثباتٌ حيّ على قاعدة حق
      * و`findFirstOrThrow` مقصودة: قاعدةٌ بلا منشأة تعني أن البذرة لم
      * تُشغَّل — وذلك سقوطٌ صريح لا تخطٍّ صامت.
      */
-    const company = await prisma.company.findFirstOrThrow({ select: { id: true } });
-    companyId = company.id;
+    /**
+     * ⚠️ **منشأة غير التي يستعملها `delegation-log.live`** — وهذا شرط
+     * إثبات لا تنظيم.
+     *
+     * القيدان `RESTRICT` يقعان على المنشأة نفسها، وPostgres يذكر **أول**
+     * قيدٍ يُنتهك. فلو تشاركت الملفّان منشأةً واحدة لذكرت رسالةُ الحذف
+     * `delegation_logs` دائماً، ولتعذّر إثبات أن `task_logs` يمنع شيئاً.
+     *
+     * وقد وقع ذلك فعلاً: سقط التوكيد `toContain('task_logs')` بينما الحذف
+     * **كان ممنوعاً** — سقوطٌ صحيح لسببٍ غير الذي يبدو، وهو ما يجعل
+     * «أحمر» غير قابل للقراءة وحده.
+     *
+     * فتُؤخذ الثانية. والبذرة تُنشئ منشأتين، فإن وُجدت واحدة فذلك خللٌ في
+     * البذرة يجب أن **يسقط صراحةً** لا أن يُتخطّى.
+     */
+    const companies = await prisma.company.findMany({ select: { id: true }, orderBy: { createdAt: 'asc' }, take: 2 });
+    if (companies.length < 2) {
+      throw new Error(`الإثبات يحتاج منشأتين مختلفتين (وُجد ${companies.length}) — تحقّق من البذرة`);
+    }
+    companyId = companies[1].id;
   });
 
   afterAll(async () => {
