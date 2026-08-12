@@ -29,13 +29,29 @@ d('حرّاس سجل التفويض — إثباتٌ حيّ على قاعدة ح
   let companyId: string;
 
   beforeAll(async () => {
-    // منشأة خاصة بهذا الاختبار — لا تُلمس بيانات غيرها.
-    const company = await prisma.company.create({
-      data: { orgName: `live-guard-${Date.now()}`, baseCurrency: 'SAR' } as never,
-      select: { id: true },
-    });
+    /**
+     * ⚠️ **تُقرأ منشأة قائمة، ولا تُركَّب واحدة.**
+     *
+     * أول صياغة استدعت `prisma.company.create({ orgName, baseCurrency })`
+     * — وسقطت الأربعة في `beforeAll` بـ`PrismaClientValidationError` **قبل
+     * أن تلمس أي حارس**. والسبب أن `Company` يتطلّب `loginIdentityId`
+     * و`permissionTemplateId` أيضاً: شكلٌ **افتُرض ولم يُقرأ من المخطط**.
+     *
+     * وتركيبها هنا يدوياً يعني إعادة بناء مسار التسجيل داخل اختبار —
+     * فيصير الاختبار يحرس نسخته من المسار لا المسار نفسه. فالبذرة تُشغَّل
+     * في السير (`prisma db seed`) وتُقرأ منها منشأة: مسار الإنشاء الحقيقي.
+     *
+     * و`findFirstOrThrow` مقصودة: قاعدةٌ بلا منشأة تعني أن البذرة لم
+     * تُشغَّل — وذلك سقوطٌ صريح لا تخطٍّ صامت.
+     */
+    const company = await prisma.company.findFirstOrThrow({ select: { id: true } });
     companyId = company.id;
   });
+
+  /**
+   * ⚠️ التنظيف بالختم لا بالحذف — فالجدول نفسه يمنع الحذف، وهو المقصود.
+   * الصفوف المضافة تبقى: بضعة صفوف في قاعدة CI تموت مع الوظيفة.
+   */
 
   afterAll(async () => {
     await prisma.$disconnect();
@@ -85,9 +101,18 @@ d('حرّاس سجل التفويض — إثباتٌ حيّ على قاعدة ح
   });
 
   it('③ حذف الشركة يُرفض بـRESTRICT — الحذف المتسلسل الذي لا يمرّ بأي دالة', async () => {
-    await expect(prisma.company.delete({ where: { id: companyId } })).rejects.toThrow();
+    /**
+     * ⚠️ **يُؤكَّد أن الرفض من `delegation_logs` بعينه.**
+     *
+     * منشأةٌ مبذورة لها علاقات كثيرة، فحذفها يفشل لأسبابٍ شتّى. وتوكيدٌ
+     * على مجرّد `.rejects.toThrow()` **يمرّ لسببٍ خاطئ** — يبدو إثباتاً
+     * وهو ليس منه. فالمقصود قيدُ سجل التفويض، فيُطابَق باسمه.
+     */
+    const err = await prisma.company.delete({ where: { id: companyId } }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(String((err as Error).message)).toContain('delegation_logs');
 
-    // والمنشأة والسجل باقيان معاً.
+    // والمنشأة باقية — الرفض ليس جزئياً.
     const still = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
     expect(still).not.toBeNull();
   });
