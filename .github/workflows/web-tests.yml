@@ -29,6 +29,8 @@ on:
       # هنا، تعديلُ إعداد nginx **لا يُشغّل حارسه** — أي أن أخطر تغييرٍ عليه
       # يمرّ بلا فحص، وهو بالضبط التغيير الذي أنتج الصفحة البيضاء أول مرة.
       - 'docker/web-nginx.conf'
+      # الترحيلات: الإثبات الحيّ يحرسها، فتعديلها يجب أن يُشغّله.
+      - 'apps/api/prisma/migrations/**'
 
 jobs:
   vitest:
@@ -61,6 +63,78 @@ jobs:
   #
   # ⛔ مانعة من أول يوم — بلا `continue-on-error`. درسُ 2026-08-12: وضع
   # الإبلاغ لم يُنقذ حارساً قط، بل أخفى ستة سقوطات وأنتج دمجاً على أخضرَ كاذب.
+  # إثباتٌ **حيّ** لحرّاس سجل التفويض — على postgres حقيقي.
+  #
+  # لماذا وظيفة قائمة بذاتها: `delegation-log.spec.ts` يقرأ نصّ الترحيل
+  # ويثبت أن المنع **مكتوب**. وهو لازمٌ لا كافٍ — نصٌّ سليم قد لا يُطبَّق
+  # (ترحيلٌ لم يُشغَّل · مُشغِّل أُسقط لاحقاً · دورٌ يتجاوز السياسة).
+  # **وحارس نظامي غير مُختبَر حيّاً ليس امتثالاً** (قرار المالك 2026-08-12).
+  #
+  # ⛔ مانعة من أول يوم — المنع هنا التزامٌ نظامي (الملحق (1) من قرار ZATCA)
+  # لا تفصيلة جودة.
+  delegation-log-live:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mad_app
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: mad_app
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mad_app -d mad_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PGPASSWORD: ci_only_not_a_secret
+      # ⚠️ `app_user` لا الدور الخارق: الخارق يتجاوز RLS بصمت، فاختبارٌ
+      # يعمل به لا يختبر العزل — ولا يختبر أن السياسة مفروضة (FORCE).
+      DATABASE_URL: postgresql://app_user:ci_app_pass@localhost:5432/mad_app?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+
+      - name: إنشاء دور app_user (نظير docker/postgres-init-prod)
+        run: |
+          psql -h localhost -U mad_app -d mad_app -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE app_user WITH LOGIN PASSWORD 'ci_app_pass' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+          GRANT ALL PRIVILEGES ON DATABASE mad_app TO app_user;
+          ALTER SCHEMA public OWNER TO app_user;
+          SQL
+
+      - name: prisma generate + migrate deploy
+        working-directory: apps/api
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      # حارسٌ للحارس: الترحيل يجب أن يكون قد طُبِّق فعلاً — وإلا مرّت
+      # الاختبارات على جدولٍ لا وجود له بأخطاءٍ تبدو كرفض.
+      - name: التحقق أن جدول السجل ومُشغِّلاته موجودة فعلاً
+        run: |
+          psql -h localhost -U mad_app -d mad_app -v ON_ERROR_STOP=1 -c \
+            "SELECT tgname FROM pg_trigger WHERE tgrelid = 'delegation_logs'::regclass AND NOT tgisinternal;"
+
+      - name: الإثبات الحيّ — أربعة مسارات (blocking)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -o pipefail
+          npx jest src/delegations/delegation-log.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
+
+      - name: ملخّص خام
+        if: always()
+        run: grep -aE "✓|✗|√|×|Tests:|Suites:" /tmp/live.log || echo "(لا ملخّص)"
+
   nginx-cache:
     runs-on: ubuntu-latest
     steps:
