@@ -25,6 +25,10 @@ on:
       - 'apps/web/**'
       - 'apps/api/**'
       - '.github/workflows/web-tests.yml'
+      # ⚠️ لازمٌ لا تكميلي: الاختبار ٧ يحرس ترويسات هذا الملف بعينه. وبدونه
+      # هنا، تعديلُ إعداد nginx **لا يُشغّل حارسه** — أي أن أخطر تغييرٍ عليه
+      # يمرّ بلا فحص، وهو بالضبط التغيير الذي أنتج الصفحة البيضاء أول مرة.
+      - 'docker/web-nginx.conf'
 
 jobs:
   vitest:
@@ -46,6 +50,72 @@ jobs:
       # كذلك، فلم يبقَ في هذا الملف حارسٌ في وضع الإبلاغ.)
       - name: vitest (blocking)
         run: npm run test --workspace apps/web
+
+  # الاختبار ٧ — ترويسات التخزين، على nginx **الحقيقي** لا على خادم المعاينة.
+  #
+  # لماذا وظيفة مستقلة: الترويسات تخصّ صورة الإنتاج (`apps/web/Dockerfile` +
+  # `docker/web-nginx.conf`)، وخادم معاينة vite لا يقدّمها أصلاً — فكان
+  # `caching.spec.ts` مشروطاً بـ`E2E_BASE_URL` ومربوطاً بإجراءٍ يدوي قبل
+  # النشر، أي أنه **لم يُنفَّذ في أي بيئة قط**. وحارسٌ لا يعمل ليس حارساً،
+  # وهذا تحديداً الحارس الوحيد لإصلاح الصفحة البيضاء.
+  #
+  # ⛔ مانعة من أول يوم — بلا `continue-on-error`. درسُ 2026-08-12: وضع
+  # الإبلاغ لم يُنقذ حارساً قط، بل أخفى ستة سقوطات وأنتج دمجاً على أخضرَ كاذب.
+  nginx-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+
+      # سياق البناء هو جذر المستودع (الـDockerfile ينسخ package-lock والحزم).
+      - name: بناء صورة الواجهة (nginx + الحزمة المبنية)
+        run: docker build -f apps/web/Dockerfile --build-arg VITE_API_URL=http://localhost:3000 -t mad-web:ci .
+
+      - name: تشغيل الصورة وانتظار جاهزيتها
+        run: |
+          docker run -d --name mad-web -p 8080:80 mad-web:ci
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:8080/; then echo "nginx جاهز بعد ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::الصورة لم تجهز خلال 30 ثانية"; docker logs mad-web; exit 1
+
+      # 📉 **حدٌّ مقصود ومُعلَن:** عرضٌ واحد لا ثلاثة. ترويسات التخزين تخرج من
+      # nginx مستقلةً عن مقاس النافذة تماماً، فثلاثة أعراض = ٣× كلفة بصفر
+      # معلومة إضافية. ولا متصفح يُنزَّل: الثلاثة تستعمل `request` وحده لا
+      # `page` — مُتحقَّق منه محلياً بتوجيه `PLAYWRIGHT_BROWSERS_PATH` إلى
+      # مجلد فارغ، فمرّت الثلاثة. أي أن `playwright install` هدرٌ هنا.
+      #
+      # ولا API في هذه الوظيفة عمداً: `globalSetup` يكتشف ذلك ويكتب
+      # `{hasApi:false}` بلا تسجيل منشأة — فلا أثر ولا حاجة لتنظيف.
+      - name: الاختبار ٧ على nginx (blocking)
+        shell: bash
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: |
+          set -o pipefail
+          npm run test:e2e --workspace apps/web -- e2e/caching.spec.ts --project=desktop-1280 2>&1 | tee /tmp/cache.log
+
+      # نفس درس حارس التخطّي الميت: تخطٍّ صامت هنا يترك المنعَ بلا معنى —
+      # فالوظيفة كلها ثلاثة اختبارات، وتخطّيها يعني أن `E2E_BASE_URL` لم يصل.
+      - name: التحقق أن الاختبار ٧ نُفِّذ فعلاً ولم يُتخطَّ
+        if: always()
+        shell: bash
+        run: |
+          if sed 's/\x1b\[[0-9;]*m//g' /tmp/cache.log 2>/dev/null | grep -aqE "^[[:space:]]*[0-9]+ skipped"; then
+            echo "::error::الاختبار ٧ مُتخطّى رغم وجود nginx — E2E_BASE_URL لم يصل إلى playwright"
+            docker logs mad-web || true
+            exit 1
+          fi
+          grep -aE "^[[:space:]]*[0-9]+ (passed|failed|skipped)" /tmp/cache.log || echo "(لا ملخّص)"
+
+      - name: سجل nginx
+        if: failure()
+        run: docker logs mad-web || true
 
   playwright:
     runs-on: ubuntu-latest

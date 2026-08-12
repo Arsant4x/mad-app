@@ -4,7 +4,7 @@
 # VITE_API_URL is baked at BUILD time (Vite inlines import.meta.env), so the
 # image is per-environment — rebuild to point it at a different API.
 
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
