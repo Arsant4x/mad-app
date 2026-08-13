@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { SECTORS } from '../sectors';
 
 export class UpdateActivityDto {
   @IsOptional()
@@ -11,4 +12,16 @@ export class UpdateActivityDto {
   @IsString()
   @MaxLength(60)
   activityType?: string;
+
+  /**
+   * القطاع — **مقروءٌ من `SECTORS` لا منسوخاً هنا**. قائمةٌ منسوخة تفترق
+   * عن مصدرها عند أول قطاع جديد، وهي عائلة الخمسة عشر اسماً المخترَعة.
+   *
+   * ⚠️ ولا يُقبل `sectorSuggested` من العميل: الاقتراح تكتبه المطابقة
+   * الآلية وحدها، والتأكيد يُكتب هنا. وقبولُه من الخارج يمحو الفرق بين
+   * «رشّحه الحاسوب» و«أكّده الإنسان».
+   */
+  @IsOptional()
+  @IsIn(SECTORS as readonly string[])
+  sector?: string;
 }

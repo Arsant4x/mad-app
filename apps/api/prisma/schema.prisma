@@ -246,6 +246,18 @@ model Company {
 
   users            CompanyUser[]
   activities       BusinessActivity[]
+
+  /// النشاط الرئيسي — **مفتاح الترشيح كله**.
+  ///
+  /// ⚠️ `null` يعني **لا ترشيح إطلاقاً**: المنشأة ترى كل شاشاتها كما كانت.
+  /// وهو الجواب على «ماذا يحدث للمنشآت القائمة لحظة التطبيق؟» — العمود
+  /// يبدأ فارغاً، فلا يستيقظ تاجرٌ فلا يجد شاشاته. والترشيح يبدأ عند أول
+  /// اختيارٍ صريح.
+  ///
+  /// و`SetNull` لا `Cascade`: حذف النشاط الرئيسي يُعيد المنشأة إلى «لا
+  /// ترشيح» — والفشل هنا آمن، ترى الكل.
+  primaryActivityId String?
+  primaryActivity   BusinessActivity? @relation("CompanyPrimaryActivity", fields: [primaryActivityId], references: [id], onDelete: SetNull)
   branches         Branch[]
   currencies       Currency[]
   exchangeRates    ExchangeRate[]
@@ -372,7 +384,31 @@ model BusinessActivity {
   name String
   /// Free text (عقارات | مطاعم | صيدلية ...), same trim as Account.type —
   /// the fixed per-activity behaviour lives in code, not in a DB enum.
+  ///
+  /// ⚠️ **لا يُمسّ** (قرار المالك 2026-08-13): يقارَن به في مواضع قائمة،
+  /// وتعديلُه يمسّ ما لم يُطلب. والتصنيف الجديد في `sector` أدناه.
   activityType String?
+
+  /// قطاع النشاط — قائمة مغلقة تُشتقّ منها الشاشات (`activities/sectors.ts`).
+  ///
+  /// ⚠️ ولا يُسمّى `activityType`: في المخطط حقلان بذلك الاسم ومعناهما
+  /// مختلف — `Property.activityType` يصف **استعمال العقار** لا قطاع
+  /// المنشأة، ويقارَن به في `contracts.service.ts`.
+  sector String?
+
+  /// ما رشّحته المطابقة الآلية من النصّ الحرّ — **اقتراحٌ لا حكم**.
+  ///
+  /// منفصلٌ عن `sector` عمداً: «عقارات وتجارة» أو «مؤسسة الرياض» لا
+  /// تُطابَق بثقة، وخطأٌ واحد يُخفي شاشةً يعمل عليها تاجر. فالمالك يؤكّد،
+  /// ودمجُ الحقلين يمحو الفرق بين «رشّحه الحاسوب» و«أكّده الإنسان».
+  sectorSuggested String?
+
+  /// التعطيل لا الحذف: الشاشات تختفي و**البيانات تبقى**. وعقودُ منشأةٍ
+  /// عطّلت «عقارات» لا تُحذف ولا تُخفى من التقارير — تختفي شاشتها فقط.
+  disabledAt DateTime?
+
+  /// المنشآت التي جعلت هذا النشاط رئيسياً (علاقة مسمّاة — الأخرى أعلاه).
+  primaryOf Company[] @relation("CompanyPrimaryActivity")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

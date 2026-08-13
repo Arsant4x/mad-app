@@ -5,7 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException } from './tenant.exceptions';
+import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
+import { SECTORS, Sector, screensFor } from '../../activities/sectors';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
@@ -130,6 +131,29 @@ export class TenantGuard implements CanActivate {
     // manually while testing the new permission-template feature: a
     // limited-template CompanyUser could reach any screen's endpoints.
     const requiredScreen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]);
+
+    /**
+     * ⚠️ **ترشيح النشاط قبل فحص القالب — والترتيب مقصود.**
+     *
+     * السببان مختلفان تماماً، وما يفعله التاجر بعدهما مختلف:
+     *
+     *   - النشاط لا يشمل الشاشة ⇒ **يضيف نشاطاً** من إعداداته.
+     *   - القالب لا يمنحها ⇒ **يطلبها من صاحب المنشأة**.
+     *
+     * ولو فُحص القالب أولاً لقيل لصاحب المنشأة نفسه — وهو يملك كل الشاشات —
+     * «لا تملك صلاحية»، وهو **جوابٌ كاذب**: يملكها ونشاطه لا يشملها.
+     *
+     * ⚠️ وهذا الفحص هو ما يجعل القاعدة الثالثة محقَّقة: الترشيح في
+     * `/me/permissions` وحده **تجميلٌ لا حماية** — يُخفي الرابط ويترك
+     * العنوان المباشر يمرّ.
+     */
+    if (requiredScreen) {
+      const sectorScreens = await this.sectorScreensFor(company.id);
+      if (sectorScreens && !sectorScreens.has(requiredScreen)) {
+        throw new ScreenNotInSectorException(requiredScreen);
+      }
+    }
+
     if (requiredScreen && allowedScreens !== 'all' && !allowedScreens.includes(requiredScreen)) {
       throw new ScreenForbiddenException(requiredScreen);
     }
@@ -160,5 +184,34 @@ export class TenantGuard implements CanActivate {
       allowedBranchIds,
     };
     return true;
+  }
+
+  /**
+   * شاشات أنشطة المنشأة — أو `null` إن كان الترشيح **مطفأً**.
+   *
+   * ⚠️ نسخةٌ من منطق `PermissionsService.sectorScreensFor` **عمداً لا
+   * سهواً**: الحارس يعمل على كل طلب في التطبيق، وحقنُ خدمةٍ من وحدةٍ
+   * أخرى فيه يخلق اعتماداً دائرياً (`PermissionsModule` يستعمل الحارس).
+   *
+   * والمصدر الحقيقي واحد رغم ذلك: **`screensFor` في `activities/sectors.ts`**
+   * — وهي التي تحمل الخريطة والقواعد. وما يتكرّر هنا استعلامان لا منطق،
+   * وحارسٌ يقارن مخرَج الاثنين يمنع افتراقهما.
+   */
+  private async sectorScreensFor(companyId: string): Promise<Set<string> | null> {
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: { primaryActivityId: true },
+    });
+    // `null` ⇒ لا ترشيح: المنشأة القائمة ترى ما كانت تراه بالضبط.
+    if (!company.primaryActivityId) return null;
+
+    const activities = await this.prisma.businessActivity.findMany({
+      where: { companyId, disabledAt: null },
+      select: { sector: true },
+    });
+    const sectors = activities
+      .map((a) => a.sector)
+      .filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s));
+    return screensFor(sectors);
   }
 }
