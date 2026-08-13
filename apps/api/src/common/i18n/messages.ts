@@ -192,6 +192,14 @@ export const MSG = {
   delegation_revoke_forbidden: 'delegation.revoke_forbidden',
   delegation_empty_grant: 'delegation.empty_grant',
   delegation_sequence_conflict: 'delegation.sequence_conflict',
+
+  // المهام
+  task_assignee_not_found: 'task.assignee_not_found',
+  task_target_incomplete: 'task.target_incomplete',
+  task_target_not_visible: 'task.target_not_visible',
+  task_recurrence_needs_anchor: 'task.recurrence_needs_anchor',
+  task_not_found: 'task.not_found',
+  task_transition_forbidden: 'task.transition_forbidden',
   owner_only: 'common.owner_only',
   support_no_active_grant: 'support.no_active_grant',
   support_read_only: 'support.read_only',
@@ -507,6 +515,21 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Only the grantor or the company owner may revoke',
   },
   [MSG.delegation_empty_grant]: { ar: 'اختر صلاحيةً واحدة على الأقل', en: 'Select at least one permission' },
+  [MSG.task_assignee_not_found]: { ar: 'الموظف غير موجود في هذه المنشأة', en: 'Employee not found in this company' },
+  [MSG.task_target_incomplete]: {
+    ar: 'المستند المرتبط يحتاج الشاشة والمعرّف معاً — أو لا شيء',
+    en: 'A linked document needs both a screen and an id — or neither',
+  },
+  [MSG.task_target_not_visible]: {
+    ar: 'لا تربط مهمةً بمستندٍ لا تراه أنت',
+    en: 'You cannot link a task to a document you cannot see yourself',
+  },
+  [MSG.task_recurrence_needs_anchor]: { ar: 'المهمة المتكرّرة تحتاج أول موعد استحقاق', en: 'A recurring task needs a first due date' },
+  [MSG.task_not_found]: { ar: 'المهمة غير موجودة', en: 'Task not found' },
+  [MSG.task_transition_forbidden]: {
+    ar: 'لا تملك صلاحية هذا الانتقال على شاشة المستند — والإسناد لا يمنح صلاحية',
+    en: 'You lack the permission for this transition on the document screen — assignment grants none',
+  },
   [MSG.delegation_sequence_conflict]: {
     ar: 'تفويضٌ آخر سُجِّل في اللحظة نفسها — أعد المحاولة',
     en: 'Another delegation was recorded at the same moment — please retry',

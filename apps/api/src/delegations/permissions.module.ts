@@ -8,5 +8,8 @@ import { DelegationsService } from './delegations.service';
 @Module({
   controllers: [PermissionsController, DelegationsController],
   providers: [PermissionsService, DelegationsService],
+  // تُصدَّر لـ`TasksModule`: `canOpenTarget` يُشتقّ من **نفس** المصدر الذي
+  // تقرأه الواجهة — لا نسخةَ حسابٍ ثانية تفترق عنه بلا شكوى.
+  exports: [PermissionsService],
 })
 export class PermissionsModule {}
