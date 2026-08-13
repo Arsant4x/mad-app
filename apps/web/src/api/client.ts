@@ -19,7 +19,14 @@ export interface AuthUser {
   displayName: string;
   companyId: string | null;
   status: AccountStatus;
-  allowedScreens: string[] | 'all';
+  // ⚠️ **لا `allowedScreens` هنا عمداً.** الخادم ما زال يرسله في استجابة
+  // الدخول، لكن تعريفه في هذا النوع يجعل الحساب به ممكناً — وقد وقع فعلاً:
+  // قاعدة «كل الشاشات» كانت مكتوبة مرتين (`AppShell` و`ScreenGuard`).
+  //
+  // وأخطر من التكرار أنه **يُثبَّت لحظة الدخول**: تفويضٌ يُسحب بعده يبقى
+  // ظاهراً حتى الخروج والعودة. فالصلاحيات تُقرأ من `usePermissions()` وحده
+  // — حيّةً من `/me/permissions`. وحذفُ الحقل من النوع يجعل المخالفة **خطأ
+  // ترجمة** لا مخالفةَ أسلوب.
 }
 
 interface RefreshResult {

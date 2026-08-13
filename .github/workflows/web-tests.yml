@@ -53,6 +53,77 @@ jobs:
       - name: vitest (blocking)
         run: npm run test --workspace apps/web
 
+  # اختبارات الخادم — **كانت غائبة عن السير كلياً حتى 2026-08-13**.
+  #
+  # 🔴 الاكتشاف: الاستدعاء الوحيد لـ`jest` في هذا الملف كان يسمّي ملفّين
+  #    بعينهما (`delegation-log.live` و`task-log.live`). أي أن **92** ملف
+  #    اختبار في `apps/api` لم يُنفَّذ في السير قطّ: **15** وحدةً نقيّة في
+  #    `src/` (تُشغَّل هنا) و**77** اختبار تكاملٍ في `test/` تحتاج قاعدةً
+  #    حيّة (**ما زالت خارج السير** — بند متابعة مسجَّل).
+  #
+  #    ومن الخمسة عشر:
+  #      · `zatca/environment-guard.spec.ts`      (التزام نظامي)
+  #      · `integrations/mock-provider-guard.spec.ts` (الثغرة المالية)
+  #      · `common/config/production-secrets.spec.ts`
+  #      · كل حرّاس المرحلتين الأولى والثانية (التقاطع · الشجرة · الدورات ·
+  #        السجل · نموذج المهمة · رؤية المهمة)
+  #
+  #    كلٌّ منها حارسٌ طُلب صراحةً وأُثبت بالعكس محلياً — ثم لم يُشغَّل حيث
+  #    يهمّ. وهو نفس درس الاختبار ٧: **حارسٌ لا يعمل ليس حارساً**، وسقوطه
+  #    الذي لا يُرى لا يمنع شيئاً.
+  #
+  # ⛔ مانعة من أول يوم — لا اعتماد خارجي لها (لا قاعدة ولا شبكة)، فلا عذر.
+  api-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+
+      # أنواع Prisma فقط — لا اتصال بقاعدة. الاختبارات هنا نقيّة كلها،
+      # لكنها تستورد أنواعاً مولَّدة (`@prisma/client`) فتفشل الترجمة بدونها.
+      - name: prisma generate (أنواع فقط، بلا قاعدة)
+        working-directory: apps/api
+        run: npx prisma generate
+
+      # ⚠️ `--roots src` شرطٌ لا تحسين. `testRegex` في package.json هو
+      # `.*\.(spec|e2e-spec)\.ts$` — فيلتقط **77** ملفاً في `test/` كلها
+      # تحتاج قاعدةً حيّة. تشغيلها هنا يعني 21 مجموعة حمراء لأسبابٍ بيئية،
+      # فتُقرأ الوظيفة على أنها عطبٌ في الشيفرة وتُعطَّل خلال أسبوع.
+      #
+      # النطاق هنا: **الوحدات النقيّة وحدها** — 15 ملفاً في `src/` بلا الحيّة.
+      # (والـ77 الأخرى ما زالت خارج السير كلياً — بند متابعة مسجَّل للمالك.)
+      - name: jest — وحدات الخادم النقيّة (blocking)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -o pipefail
+          npx jest --roots '<rootDir>/src' --testPathIgnorePatterns "live\.spec" --verbose 2>&1 | tee /tmp/api-unit.log
+
+      # حارسٌ للحارس: عددُ الملفات المنفَّذة يطابق الموجودة على القرص.
+      #
+      # ⚠️ يقرأ **القرص** لا مخرَج jest وحده. فنمطٌ يتغيّر (`.spec` ⇒ `.test`)
+      # أو ملفٌّ يقع خارج `testMatch` يختفي **صامتاً**: تبقى الوظيفة خضراء
+      # وقد نقص حارس. وهي عائلة العطل نفسها التي أخفت هذه الوظيفة سنةً —
+      # ولا يكشفها إلا عدٌّ من المصدر.
+      - name: التحقق أن كل ملفات الاختبار نُفِّذت فعلاً
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          on_disk=$(find src -name '*.spec.ts' ! -name '*live.spec.ts' | wc -l)
+          ran=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/api-unit.log \
+            | grep -aoE "Test Suites:.*[0-9]+ total" | grep -aoE "[0-9]+ total" | grep -aoE "^[0-9]+" || echo 0)
+          echo "على القرص: $on_disk · نُفِّذ: $ran"
+          if [ "$on_disk" != "$ran" ]; then
+            echo "::error::تفاوت: $on_disk ملف اختبار على القرص و$ran منفَّذ — حارسٌ سقط خارج نطاق jest"
+            exit 1
+          fi
+          grep -aE "Tests:|Test Suites:" /tmp/api-unit.log || echo "(لا ملخّص)"
+
   # إثباتٌ **حيّ** لحرّاس السجلّات الملحَقة — على postgres حقيقي.
   #
   # يغطّي `delegation_logs` و`task_logs` معاً. والاسم عامّ عمداً: وظيفةٌ

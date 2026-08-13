@@ -48,6 +48,7 @@ import { ReservationsModule } from './reservations/reservations.module';
 import { ScriptsModule } from './scripts/scripts.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { TemplatesModule } from './templates/templates.module';
+import { PermissionsModule } from './delegations/permissions.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { UnitsModule } from './units/units.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
@@ -108,6 +109,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     ObligationsModule,
     ReservationsModule,
     TemplatesModule,
+    PermissionsModule,
     CompaniesModule,
     CompanyUsersModule,
     ScriptsModule,
