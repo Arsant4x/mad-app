@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { APIRequestContext } from '@playwright/test';
+import { test, type APIRequestContext } from '@playwright/test';
 
 /**
  * منشأة اختبار تُسجَّل وتُحذف لكل تشغيل (قرار المالك 2026-08-10).
@@ -96,4 +96,75 @@ export async function loginThroughUi(page: import('@playwright/test').Page, co: 
   // غائب عن السير). المهلة كانت عَرَضاً لا سبباً. فإن عاد هذا الانتظار
   // يسقط: لا ترفع الرقم — افحص أولاً هل وصل طلب `POST /auth/login` أصلاً.
   await page.locator('.app-shell').waitFor({ state: 'attached', timeout: 45_000 });
+}
+
+/**
+ * جلسةٌ **حيّة** مشتركة — صفحةٌ واحدة مسجَّلة الدخول لكل مجموعة/عرض.
+ *
+ * ## لماذا لا `storageState`
+ *
+ * الطريق المعتاد في Playwright هو حفظ الحالة في ملف وإعادتها لكل اختبار.
+ * وهو هنا **خطرٌ لا حلّ**: رمز التحديث أحاديُّ الاستعمال، وإعادة استعماله
+ * تُفسَّر تسريباً فتُبطل **كل جلسات الهوية** (`auth.service.ts:95`). ولقطةٌ
+ * محفوظة تُستعاد مرّتين هي بالضبط «إعادة استعمال» — فأول اختبارٍ يدوّر
+ * الرمز، والثاني يقدّم القديم، فتموت الحزمة كلها بـ401.
+ *
+ * وهذه خاصيةٌ أمنية مقصودة لا عطب. فالحلّ يبقي الجلسة **حيّةً في السياق**
+ * لا مُلتقَطة: ملفُّ تعريف الارتباط يتدوّر في المتصفّح نفسه، فلا إعادة
+ * استعمال أصلاً.
+ *
+ * ## ولماذا هذا آمن
+ *
+ * `playwright.config.ts`: `workers: 1` و`fullyParallel: false` — التنفيذ
+ * تسلسليّ، فلا اختباران يتقاسمان الصفحة في اللحظة نفسها.
+ *
+ * ## الأثر المقيس
+ *
+ * `POST /auth/login` محدودٌ بعشر محاولات في الدقيقة **لكل IP**، وعدّاء
+ * السير يشغّل العروض الثلاثة من IP واحد. فكان مجموع الدخول في التشغيل
+ * الكامل **اثنتي عشرة** محاولة — تمرّ بالتباعد الزمني لا بالتصميم، وقد
+ * سقطت فعلاً مرّتين حين أُضيف ملفُّ مواصفةٍ واحد. وبهذه الجلسة تصير **ستّاً**.
+ *
+ *   test.describe('…', () => {
+ *     const session = sharedSession();
+ *     test('…', async () => { await session.page().goto('/x'); });
+ *   });
+ */
+/**
+ * @param opts.onlyProject اسم العرض الوحيد الذي تُنشأ الجلسة فيه.
+ *
+ * ⚠️ **لازمٌ لا تحسين.** `beforeAll` يعمل لكل عرض، فمجموعةٌ تُتخطّى على
+ * عرضين تدفع مع ذلك ثمن الدخول فيهما — ثلاث محاولات مقابل اختبارٍ واحد.
+ * وهو ما وقعتُ فيه في أول صياغة لهذا المُعامل بعينه.
+ */
+export function sharedSession(opts: { onlyProject?: string } = {}): {
+  page: () => import('@playwright/test').Page;
+  hasApi: () => boolean;
+} {
+  let page: import('@playwright/test').Page | undefined;
+  let hasApi = false;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    const state = readTestCompany();
+    hasApi = state.hasApi;
+    if (!hasApi) return;
+    if (opts.onlyProject && testInfo.project.name !== opts.onlyProject) return;
+    // العرض من المشروع صراحةً: صفحةٌ تُنشأ من `browser` لا ترث `use.viewport`،
+    // وبدونه تُقاس اختبارات التخطيط كلها على 1280 — أي تمرّ بلا معنى.
+    page = await browser.newPage({ viewport: testInfo.project.use.viewport });
+    await loginThroughUi(page, state as TestCompany);
+  });
+
+  test.afterAll(async () => {
+    await page?.close();
+    page = undefined;
+  });
+
+  return {
+    hasApi: () => hasApi,
+    page: () => {
+      if (!page) throw new Error('لا جلسة — استُدعيت `page()` قبل الدخول أو بلا API');
+      return page;
+    },
+  };
 }
