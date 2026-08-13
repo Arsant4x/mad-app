@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Unauthor
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantPrismaService } from './tenant-prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
@@ -29,6 +30,7 @@ const WRITE_ACTIONS = new Set(['add', 'edit', 'delete']);
 export class TenantGuard implements CanActivate {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenantPrisma: TenantPrismaService,
     private readonly reflector: Reflector,
     private readonly supportAccessService: SupportAccessService,
   ) {}
@@ -205,10 +207,12 @@ export class TenantGuard implements CanActivate {
     // `null` ⇒ لا ترشيح: المنشأة القائمة ترى ما كانت تراه بالضبط.
     if (!company.primaryActivityId) return null;
 
-    const activities = await this.prisma.businessActivity.findMany({
-      where: { companyId, disabledAt: null },
-      select: { sector: true },
-    });
+    // ⚠️ **تحت سياق المستأجر**: `business_activities` عليه RLS ENABLE+FORCE،
+    // وقراءةٌ خارجه تعود **فارغةً بنجاح** — فتصير `sectors` خاوية،
+    // و`screensFor([])` تُرجع الكل، **فيتعطّل الترشيح كله بصمت**.
+    const activities = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.businessActivity.findMany({ where: { disabledAt: null }, select: { sector: true } }),
+    );
     const sectors = activities
       .map((a) => a.sector)
       .filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s));

@@ -138,10 +138,12 @@ export class PermissionsService {
     });
     if (!company.primaryActivityId) return null;
 
-    const activities = await this.prisma.businessActivity.findMany({
-      where: { companyId, disabledAt: null },
-      select: { sector: true },
-    });
+    // ⚠️ **تحت سياق المستأجر**: `business_activities` عليه RLS ENABLE+FORCE،
+    // وقراءةٌ خارجه تعود **فارغةً بنجاح** — فتصير `sectors` خاوية،
+    // و`screensFor([])` تُرجع الكل، **فيتعطّل الترشيح كله بصمت**.
+    const activities = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.businessActivity.findMany({ where: { disabledAt: null }, select: { sector: true } }),
+    );
     const sectors = activities.map((a) => a.sector).filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s));
     return screensFor(sectors);
   }

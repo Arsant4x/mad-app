@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { MSG } from '../common/i18n/messages';
 import { TenantContext } from '../auth/types';
@@ -36,6 +37,7 @@ export interface ScreenChangePreview {
 export class PrimaryActivityService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenantPrisma: TenantPrismaService,
     private readonly audit: AuditService,
   ) {}
 
@@ -71,10 +73,14 @@ export class PrimaryActivityService {
     if (!confirmed) throw new BadRequestException(MSG.primary_activity_needs_confirmation);
 
     if (nextActivityId) {
-      const activity = await this.prisma.businessActivity.findFirst({
-        where: { id: nextActivityId, companyId: tenant.companyId },
-        select: { id: true, name: true, sector: true, disabledAt: true },
-      });
+      // ⚠️ تحت السياق: `business_activities` محميّ بـRLS، وقراءةٌ خارجه
+      // تعود **فارغةً بنجاح** — فيُقرأ نشاطٌ قائم «غير موجود».
+      const activity = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+        tx.businessActivity.findFirst({
+          where: { id: nextActivityId },
+          select: { id: true, name: true, sector: true, disabledAt: true },
+        }),
+      );
       if (!activity) throw new NotFoundException(MSG.activity_not_found);
       // نشاطٌ معطَّل لا يصلح رئيسياً: شاشاته لا تُحتسب أصلاً، فيصير
       // الترشيح مشغَّلاً بلا مصدر — والنتيجة النواة وحدها بلا سبب مفهوم.
@@ -145,10 +151,12 @@ export class PrimaryActivityService {
    */
   private async screensIf(companyId: string, primaryActivityId: string | null): Promise<Set<string>> {
     if (!primaryActivityId) return new Set(ALLOWED_SCREENS);
-    const activities = await this.prisma.businessActivity.findMany({
-      where: { companyId, disabledAt: null },
-      select: { sector: true },
-    });
+    // ⚠️ **تحت سياق المستأجر**: `business_activities` عليه RLS ENABLE+FORCE،
+    // وقراءةٌ خارجه تعود **فارغةً بنجاح** — فتصير `sectors` خاوية،
+    // و`screensFor([])` تُرجع الكل، **فيتعطّل الترشيح كله بصمت**.
+    const activities = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.businessActivity.findMany({ where: { disabledAt: null }, select: { sector: true } }),
+    );
     const sectors = activities
       .map((a) => a.sector)
       .filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s));
