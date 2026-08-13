@@ -29,9 +29,24 @@ import { Grant } from './permission-tree';
 export class DelegationsController {
   constructor(private readonly delegations: DelegationsService) {}
 
-  /** السجل الشجري للمنشأة — مستقلٌّ عن أي موظف بعينه. */
+  /**
+   * السجل الشجري للمنشأة — مستقلٌّ عن أي موظف بعينه.
+   *
+   * ⚠️ **`audit` لا `employees`** — ويَجُبّ شاشة الصنف أعلاه.
+   *
+   * والفرق ليس تصنيفاً: من يدقّق الامتثال يحتاج **تاريخ الصلاحيات** ولا
+   * يحتاج إدارة الموظفين. وربطُ السجل بـ`employees` يعني أن مدقّقاً يملك
+   * `audit` لا يرى من فوّض من — وهي المعلومة التي جاء يدقّقها. وموضعُه في
+   * الشريط بجانب سجل التدقيق يقول ذلك بنفسه.
+   *
+   * ولا `@RequiresAction`: المجاوران (`audit.controller` و`trash.controller`)
+   * يحرسان بالشاشة وحدها. وفعلٌ أشدّ هنا يجعل قالباً يفتح سجل التدقيق
+   * ويُرفض عن سجل التفويض — تفاوتٌ بلا سبب.
+   *
+   * (قرار المالك 2026-08-13، بعد أن رفعتُه بنداً مفتوحاً.)
+   */
   @Get('log')
-  @RequiresAction('audit')
+  @RequiresScreen('audit')
   log(@CurrentTenant() tenant: TenantContext) {
     return this.delegations.logTree(tenant);
   }
