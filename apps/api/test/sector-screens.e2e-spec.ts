@@ -149,13 +149,29 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
   it('⭐⑥ موظفٌ يعمل على شاشة ثم يُعطَّل نشاطها — يُرفض في **الطلب التالي** بلا إعادة دخول', async () => {
     // نفس متطلب `Absence of user session management` (الملحق 1): تغييرٌ في
     // السلطة ينفذ فوراً، لا عند انتهاء الجلسة.
-    const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${token}`).expect(200);
-    const tpl = templates.body.find((t: { isAllScreens: boolean }) => t.isAllScreens) ?? templates.body[0];
+    /**
+     * ⚠️ قالبٌ **تُنشئه هذه الحزمة** لا «أول ما تجده».
+     *
+     * صياغةٌ أولى أخذت `templates.find(t => t.isAllScreens)` — وهو **القالب
+     * النظامي**، و`template.isSystem` غير قابلٍ للإسناد
+     * (`company-users.service.ts:45`) فردّ 403. والاعتماد على «أول ما
+     * تجده» هو نفسه ما جعل ثلاث مجموعات ZATCA تنجح «إن سبقتها» أخرى.
+     */
+    const tpl = await request(app.getHttpServer())
+      .post('/templates')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: `كاشير-${suffix}`,
+        isAllScreens: false,
+        allowedScreens: ['dashboard', 'products', 'contracts'],
+        screenActions: { dashboard: ['view'], products: ['view'], contracts: ['view'] },
+      })
+      .expect(201);
 
     const emp = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'كاشير', username: `cashier-${suffix}`, password: 'SectorPass123!', permissionTemplateId: tpl.id })
+      .send({ name: 'كاشير', username: `cashier-${suffix}`, password: 'SectorPass123!', permissionTemplateId: tpl.body.id })
       .expect(201);
     empId = emp.body.id;
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: `cashier-${suffix}`, password: 'SectorPass123!' });
