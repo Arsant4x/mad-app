@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { SECTORS } from '../sectors';
 
 export class UpdateActivityDto {
@@ -24,4 +24,16 @@ export class UpdateActivityDto {
   @IsOptional()
   @IsIn(SECTORS as readonly string[])
   sector?: string;
+
+  /**
+   * التعطيل لا الحذف: `true` يُخفي شاشات النشاط و**يُبقي بياناته كما هي**.
+   *
+   * ⚠️ وعقودُ منشأةٍ عطّلت «عقارات» لا تُحذف ولا تُخفى من التقارير —
+   * تختفي شاشتها فقط. وإخفاؤها من التقارير يجعل ميزان المراجعة يكذب.
+   *
+   * و`false` يُعيد التفعيل فوراً — في الطلب التالي بلا إعادة دخول.
+   */
+  @IsOptional()
+  @IsBoolean()
+  disabled?: boolean;
 }

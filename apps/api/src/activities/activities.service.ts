@@ -93,6 +93,14 @@ export class ActivitiesService {
         data.sectorSuggested = null;
       }
 
+      /**
+       * التعطيل لا الحذف — والبيانات تبقى كما هي.
+       *
+       * ⚠️ ولا صفّ يُحذف: عقودُ منشأةٍ عطّلت «عقارات» تبقى في التقارير،
+       * وتختفي شاشتها فقط. وإخفاؤها من التقارير يجعل ميزان المراجعة يكذب.
+       */
+      if (dto.disabled !== undefined) data.disabledAt = dto.disabled ? new Date() : null;
+
       return tx.businessActivity.update({ where: { id }, data });
     });
   }
