@@ -10,6 +10,7 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { SubscriptionPage } from './pages/subscription/SubscriptionPage';
 import { AuditLogPage } from './pages/audit/AuditLogPage';
+import { DelegationLogPage } from './pages/audit/DelegationLogPage';
 import { TrashPage } from './pages/trash/TrashPage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
@@ -88,6 +89,19 @@ export default function App() {
               element={
                 <ScreenGuard screen="audit">
                   <TrashPage />
+                </ScreenGuard>
+              }
+            />
+            {/* ⚠️ `employees` لا `audit` — **مطابقةً للخادم حرفياً**
+              * (`DelegationsController` يحمل `@RequiresScreen('employees')`).
+              * وحارسٌ في الواجهة يخالف الخادم يُنتج أسوأ الحالتين: رابطٌ
+              * يظهر وصفحةٌ ترفض، أو العكس. وموضعه في الشريط قرارُ عرض،
+              * وصلاحيتُه قرارُ خادم — ولا يُخلطان. */}
+            <Route
+              path="delegation-log"
+              element={
+                <ScreenGuard screen="employees">
+                  <DelegationLogPage />
                 </ScreenGuard>
               }
             />

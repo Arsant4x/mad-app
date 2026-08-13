@@ -7,6 +7,7 @@ import { OwnerTemplateModal } from './OwnerTemplateModal';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { CompanyUserModal } from './CompanyUserModal';
+import { DelegationModal } from './DelegationModal';
 import i18n from '../../i18n';
 
 const STATUS_META: Record<CompanyUser['status'], { label: string; badgeClass: string }> = {
@@ -25,6 +26,7 @@ export function CompanyUsersPage() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; user: CompanyUser } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CompanyUser | null>(null);
+  const [delegating, setDelegating] = useState<CompanyUser | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
@@ -159,6 +161,10 @@ export function CompanyUsersPage() {
                     <RowMenu
                       actions={[
                         { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', user: u }) },
+                        // التفويض **من الموظف** لا من شاشة مستقلة: هو علاقةٌ
+                        // بين شخصين لا إعداد نظام، وشاشةٌ مستقلة تسأل «لمن؟»
+                        // أولاً — أي تعيد بناء هذه القائمة بعينها.
+                        { label: '⇄ التفويض', onClick: () => setDelegating(u) },
                         { label: u.status === 'ACTIVE' ? '⏸ تجميد الحساب' : '✓ إعادة التفعيل', onClick: () => toggleStatus(u) },
                         '-',
                         { label: '🗑 حذف', onClick: () => setPendingDelete(u), danger: true },
@@ -212,6 +218,10 @@ export function CompanyUsersPage() {
 
       {modal && (
         <CompanyUserModal templates={templates} branches={branches} editing={modal.mode === 'edit' ? modal.user : null} onCancel={() => setModal(null)} onSave={handleSave} />
+      )}
+
+      {delegating && (
+        <DelegationModal granteeId={delegating.id} granteeName={delegating.name} onClose={() => setDelegating(null)} />
       )}
 
       {tplModal && <OwnerTemplateModal editing={tplModal.mode === 'edit' ? tplModal.template : null} onCancel={() => setTplModal(null)} onSave={handleSaveTemplate} />}

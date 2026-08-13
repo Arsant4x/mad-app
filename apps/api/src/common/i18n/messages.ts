@@ -184,6 +184,14 @@ export const MSG = {
 
   // التفويض
   delegation_cycle_rejected: 'delegation.cycle_rejected',
+  delegation_exceeds_grantor: 'delegation.exceeds_grantor',
+  delegation_grantee_not_found: 'delegation.grantee_not_found',
+  delegation_self: 'delegation.self',
+  delegation_not_found: 'delegation.not_found',
+  delegation_already_revoked: 'delegation.already_revoked',
+  delegation_revoke_forbidden: 'delegation.revoke_forbidden',
+  delegation_empty_grant: 'delegation.empty_grant',
+  delegation_sequence_conflict: 'delegation.sequence_conflict',
   owner_only: 'common.owner_only',
   support_no_active_grant: 'support.no_active_grant',
   support_read_only: 'support.read_only',
@@ -485,6 +493,23 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.delegation_cycle_rejected]: {
     ar: 'لا يمكن التفويض لهذا المستخدم — فهو يفوّضك أصلاً (مباشرةً أو عبر سلسلة)، والتفويض الدائري غير مسموح',
     en: 'Cannot delegate to this user — they already delegate to you (directly or through a chain), and circular delegation is not allowed',
+  },
+  [MSG.delegation_exceeds_grantor]: {
+    ar: 'لا يمكنك تفويض صلاحية لا تملكها أنت',
+    en: 'You cannot delegate a permission you do not hold yourself',
+  },
+  [MSG.delegation_grantee_not_found]: { ar: 'الموظف غير موجود في هذه المنشأة', en: 'Employee not found in this company' },
+  [MSG.delegation_self]: { ar: 'لا يفوّض أحدٌ نفسه', en: 'Nobody delegates to themselves' },
+  [MSG.delegation_not_found]: { ar: 'التفويض غير موجود', en: 'Delegation not found' },
+  [MSG.delegation_already_revoked]: { ar: 'التفويض مسحوبٌ بالفعل', en: 'This delegation is already revoked' },
+  [MSG.delegation_revoke_forbidden]: {
+    ar: 'السحب لمن فوّض أو لصاحب المنشأة وحدهما',
+    en: 'Only the grantor or the company owner may revoke',
+  },
+  [MSG.delegation_empty_grant]: { ar: 'اختر صلاحيةً واحدة على الأقل', en: 'Select at least one permission' },
+  [MSG.delegation_sequence_conflict]: {
+    ar: 'تفويضٌ آخر سُجِّل في اللحظة نفسها — أعد المحاولة',
+    en: 'Another delegation was recorded at the same moment — please retry',
   },
   [MSG.integration_mock_forbidden_in_production]: { ar: 'المزوّد التجريبي غير مسموح في بيئة الإنتاج — يعتمد كل عملية دفع بلا تحصيل فعلي', en: 'The test provider is not allowed in production — it approves every payment without collecting money' },
   [MSG.integration_credentials_required]: { ar: 'مفاتيح الربط مطلوبة', en: 'Credentials are required' },

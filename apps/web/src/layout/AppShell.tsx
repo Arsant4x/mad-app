@@ -86,6 +86,11 @@ const NAV_GROUPS: NavGroupDef[] = [
       { screen: 'obligations', to: '/obligations', labelKey: 'nav_obligations' },
       { screen: 'scripts', to: '/scripts', labelKey: 'nav_scripts' },
       { screen: 'audit', to: '/audit-log', labelKey: 'nav_audit_log' },
+      // ⚠️ `employees` لا `audit` — **مطابقةً لحارس الخادم** كما في المسار.
+      // موضعُه هنا (بجانب سجل التدقيق) قرارُ عرض، وصلاحيتُه قرارُ خادم.
+      // وأثرٌ مقصود: مدقّقٌ يملك `audit` بلا `employees` **لا يرى الرابط** —
+      // وهو الصحيح، لأن الخادم كان سيرفضه. بندٌ مفتوح للمالك.
+      { screen: 'employees', to: '/delegation-log', labelKey: 'nav_delegation_log' },
       { screen: 'audit', to: '/trash', labelKey: 'nav_trash' },
     ],
   },
