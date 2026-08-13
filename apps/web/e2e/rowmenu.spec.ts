@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { loginThroughUi, readTestCompany, TestCompany } from './fixtures';
+import { sharedSession } from './fixtures';
 
 /**
  * حارس `RowMenu` — المكوّن الذي تستعمله **عشرون شاشة**، فعطلٌ فيه يظهر
@@ -20,26 +20,38 @@ import { loginThroughUi, readTestCompany, TestCompany } from './fixtures';
  * حساباً) — صفوفٌ حقيقية بلا تهيئة وبلا اعتمادٍ على بيانات سابقة.
  */
 test.describe('RowMenu — قائمة الصف مشتركة بين عشرين شاشة', () => {
-  let co: TestCompany | undefined;
-  let hasApi = false;
+  /**
+   * جلسةٌ واحدة للمجموعة — **والدخول كان في `beforeEach`**.
+   *
+   * وهو الفخّ بعينه الذي كلّفنا يوماً كاملاً: دخولٌ في `beforeEach` **يتضاعف
+   * بعدد الاختبارات صامتاً**. اختباران اليوم ⇒ محاولتان؛ ومن يضيف ثالثاً غداً
+   * يدفع ثالثة بلا أن يرى في الملف رقماً يتغيّر. و`POST /auth/login` محدودٌ
+   * بعشرٍ في الدقيقة **لكل IP**، وعدّاء السير واحد للعروض الثلاثة.
+   *
+   * ⚠️ و`onlyProject` لازمٌ لا تحسين: `beforeAll` يعمل لكل عرض، فمجموعةٌ
+   * تُتخطّى على عرضين تدفع مع ذلك ثمن الدخول فيهما.
+   */
+  const session = sharedSession({ onlyProject: 'desktop-1280' });
 
-  test.beforeAll(() => {
-    const state = readTestCompany();
-    hasApi = state.hasApi;
-    co = state.hasApi ? (state as TestCompany) : undefined;
-  });
-
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-1280', 'سلوك القائمة مستقل عن العرض — عرضٌ واحد يكفي');
-    test.skip(!hasApi, 'لا API متاح في هذه البيئة. (في CI يوجد API؛ فتخطٍّ هنا يعني عطل إقلاع لا نقص بنية)');
-    await loginThroughUi(page, co!);
-    // تنقّلٌ داخل التطبيق لا `goto`: رمز الوصول في الذاكرة، وإعادة تحميل
-    // كاملة تُسقط الجلسة إلى مسار التجديد وتجعل الاختبار يقيس شيئاً آخر.
+    test.skip(!session.hasApi(), 'لا API متاح في هذه البيئة. (في CI يوجد API؛ فتخطٍّ هنا يعني عطل إقلاع لا نقص بنية)');
+    const page = session.page();
+
+    // إعادة تهيئة الحالة بين اختبارَين يتقاسمان الصفحة: قائمةٌ بقيت مفتوحة
+    // أو تمريرٌ لم يُرجَع يجعل الثاني يقيس أثر الأول.
+    //
+    // ⚠️ **تنقّلٌ داخل التطبيق لا `goto`**: رمز الوصول في الذاكرة، وإعادة
+    // تحميل كاملة تُسقط الجلسة إلى مسار التجديد وتجعل الاختبار يقيس شيئاً
+    // آخر. فالخروج والعودة بنقرتين يُعيد تركيب الشاشة نظيفةً بلا مساس
+    // بالجلسة — وهو ما كان يفعله الدخول المتكرّر بثمنٍ أغلى.
+    await page.getByRole('link', { name: 'لوحة التحكم' }).click();
     await page.getByRole('link', { name: 'دليل الحسابات' }).click();
     await expect(page.locator('.menu-btn').first()).toBeVisible();
   });
 
-  test('فتح قائمة صفٍّ ثم صفٍّ آخر يترك واحدة مفتوحة فقط', async ({ page }) => {
+  test('فتح قائمة صفٍّ ثم صفٍّ آخر يترك واحدة مفتوحة فقط', async () => {
+    const page = session.page();
     const buttons = page.locator('.menu-btn');
     expect(await buttons.count(), 'تحتاج الشاشة صفَّين على الأقل').toBeGreaterThan(1);
 
@@ -51,7 +63,8 @@ test.describe('RowMenu — قائمة الصف مشتركة بين عشرين ش
     await expect(page.locator('.action-menu'), 'قائمتان مفتوحتان معاً — التراكب بعينه').toHaveCount(1);
   });
 
-  test('التمرير لا يفصل القائمة عن صفّها', async ({ page }) => {
+  test('التمرير لا يفصل القائمة عن صفّها', async () => {
+    const page = session.page();
     await page.locator('.menu-btn').first().click();
     const menu = page.locator('.action-menu');
     await expect(menu).toHaveCount(1);
