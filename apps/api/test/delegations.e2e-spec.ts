@@ -170,6 +170,32 @@ describe('التفويض — المنح والسحب والسجل (e2e)', () => 
     await request(app.getHttpServer()).patch(`/delegations/${sealed.id}/revoke`).set('Authorization', `Bearer ${ownerToken}`).expect(400);
   });
 
+  it('⭐ مدقّقٌ يملك `audit` بلا `employees` يقرأ السجل ولا يدير التفويض', async () => {
+    // قرار المالك 2026-08-13: من يدقّق الامتثال يحتاج **تاريخ الصلاحيات**
+    // ولا يحتاج إدارة الموظفين. فالسجل على `audit`، وبقية النقاط على
+    // `employees` — والاختبار يثبت **الاتجاهين** لا أحدهما.
+    const tpl = await request(app.getHttpServer())
+      .post('/templates')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: `مدقّق-${suffix}`, isAllScreens: false, allowedScreens: ['audit', 'dashboard'], screenActions: { audit: ['view', 'audit'], dashboard: ['view'] } })
+      .expect(201);
+    const auditor = await makeUser('auditor', tpl.body.id);
+
+    // ✅ يقرأ السجل.
+    const log = await request(app.getHttpServer()).get('/delegations/log').set('Authorization', `Bearer ${auditor.token}`).expect(200);
+    expect(Array.isArray(log.body.roots)).toBe(true);
+
+    // ⛔ ولا يدير التفويض — الشاشة الأخرى محروسة بـ`employees`.
+    await request(app.getHttpServer()).get(`/delegations/${empId}`).set('Authorization', `Bearer ${auditor.token}`).expect(403);
+    await request(app.getHttpServer())
+      .post('/delegations')
+      .set('Authorization', `Bearer ${auditor.token}`)
+      .send({ granteeId: empId, nodeKey: 'contracts', grants: ['contracts:view'] })
+      .expect(403);
+
+    await request(app.getHttpServer()).delete(`/company-users/${auditor.id}`).set('Authorization', `Bearer ${ownerToken}`);
+  });
+
   it('⭐⑧ السجل غابةٌ لا شجرة — تفويض المدير للموظف ظاهرٌ للمالك', async () => {
     const res = await request(app.getHttpServer()).get('/delegations/log').set('Authorization', `Bearer ${ownerToken}`).expect(200);
     const all = JSON.stringify(res.body.roots);

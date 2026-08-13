@@ -92,15 +92,17 @@ export default function App() {
                 </ScreenGuard>
               }
             />
-            {/* ⚠️ `employees` لا `audit` — **مطابقةً للخادم حرفياً**
-              * (`DelegationsController` يحمل `@RequiresScreen('employees')`).
-              * وحارسٌ في الواجهة يخالف الخادم يُنتج أسوأ الحالتين: رابطٌ
-              * يظهر وصفحةٌ ترفض، أو العكس. وموضعه في الشريط قرارُ عرض،
-              * وصلاحيتُه قرارُ خادم — ولا يُخلطان. */}
+            {/* ⚠️ `audit` — **مطابقةً للخادم حرفياً**: `DelegationsController.log`
+              * يحمل `@RequiresScreen('audit')` يَجُبّ شاشة الصنف. وحارسٌ في
+              * الواجهة يخالف الخادم يُنتج أسوأ الحالتين: رابطٌ يظهر وصفحةٌ
+              * ترفض، أو العكس.
+              *
+              * والتطابق **محروسٌ لا موصوف**: `guardsMatchServer.test.ts` يقرأ
+              * هذا الملف ومتحكّم الخادم معاً ويقارنهما. */}
             <Route
               path="delegation-log"
               element={
-                <ScreenGuard screen="employees">
+                <ScreenGuard screen="audit">
                   <DelegationLogPage />
                 </ScreenGuard>
               }
