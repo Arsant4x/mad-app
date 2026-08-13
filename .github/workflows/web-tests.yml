@@ -124,21 +124,37 @@ jobs:
           fi
           grep -aE "Tests:|Test Suites:" /tmp/api-unit.log || echo "(لا ملخّص)"
 
-  # إثباتٌ **حيّ** لحرّاس السجلّات الملحَقة — على postgres حقيقي.
+  # كل ما يحتاج قاعدةً حيّة — الإثباتُ الحيّ للسجلّات **و**اختبارات التكامل.
   #
-  # يغطّي `delegation_logs` و`task_logs` معاً. والاسم عامّ عمداً: وظيفةٌ
-  # باسم سجلٍّ بعينه تصير مضلِّلة عند إضافة الثاني — وهي عائلة الخطأ نفسها
+  # سُمّيت `append-only-logs-live` حتى 2026-08-13، ثم اتّسع ما تفعله فاتّسع
+  # اسمها: وظيفةٌ باسمٍ أضيق ممّا تفعله تُقرأ خطأً — وهي عائلة الخطأ نفسها
   # التي وقعت حين حلّ تعليقُ `nginx-cache` فوق وظيفةٍ أخرى.
   #
-  # لماذا وظيفة قائمة بذاتها: `delegation-log.spec.ts` يقرأ نصّ الترحيل
-  # ويثبت أن المنع **مكتوب**. وهو لازمٌ لا كافٍ — نصٌّ سليم قد لا يُطبَّق
-  # (ترحيلٌ لم يُشغَّل · مُشغِّل أُسقط لاحقاً · دورٌ يتجاوز السياسة).
-  # **وحارس نظامي غير مُختبَر حيّاً ليس امتثالاً** (قرار المالك 2026-08-12).
+  # ## ما تغطّيه
   #
-  # ⛔ مانعة من أول يوم — المنع هنا التزامٌ نظامي (الملحق (1) من قرار ZATCA)
-  # لا تفصيلة جودة.
-  append-only-logs-live:
+  # ① الإثبات الحيّ لحرّاس `delegation_logs` و`task_logs`.
+  #    `delegation-log.spec.ts` يقرأ نصّ الترحيل ويثبت أن المنع **مكتوب** —
+  #    وهو لازمٌ لا كافٍ: نصٌّ سليم قد لا يُطبَّق (ترحيلٌ لم يُشغَّل · مُشغِّل
+  #    أُسقط لاحقاً · دورٌ يتجاوز السياسة). **وحارس نظامي غير مُختبَر حيّاً
+  #    ليس امتثالاً** (قرار المالك 2026-08-12).
+  #
+  # ② الـ77 اختبار تكامل في `test/` — **كانت خارج السير كلياً** حتى اليوم.
+  #    وهي حرّاس المنصّة الفعلية: عزل المستأجر · العقود · الفوترة · ZATCA ·
+  #    وضع الدعم · الأرشفة. أُضيفت بقرار المالك 2026-08-13: «حارس لا يُشغَّل
+  #    ليس حارساً — وهي قاعدتنا التي بنينا عليها الاختبار السابع».
+  #
+  # ## لماذا تسلسلياً وبطيئاً
+  #
+  # `test:e2e` في package.json يحمل `--runInBand` منذ نشأته: 77 مجموعة
+  # تتقاسم قاعدةً واحدة، وتوازيها يجعل توكيدات فروق الأرصدة تقرأ كتابةَ
+  # مجموعةٍ أخرى. والقرار مُعلَن: **سيرٌ بطيء يمسك أفضل من سريع لا يرى**.
+  # خطُّ الأساس المسجَّل على قاعدة نظيفة: 80 مجموعة · 469 اختباراً · 1339 ث.
+  #
+  # ⛔ مانعة من أول يوم.
+  db-integration:
     runs-on: ubuntu-latest
+    # سقفٌ لئلا يلتهم تعليقٌ ستّ ساعات. خطّ الأساس 22 دقيقة، والضِّعف هامش.
+    timeout-minutes: 60
 
     services:
       postgres:
@@ -166,6 +182,23 @@ jobs:
       DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
       DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
 
+      # ⚠️ ما تحته منقولٌ من `apps/api/.env.test.example` — وهو **مصدر واحد**
+      # كُتب من حوادث لا من تخمين. أُضيعت أربع دورات تشغيل (~ساعة ونصف) على
+      # تفاوت هذه المتغيّرات بين البيئات، وكل سقوطٍ منها بدا **عطلاً في
+      # المنصة** حتى فُحص. فلا يُنقص منها شيء بلا قراءة الملف.
+      JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 30d
+      WEB_ORIGIN: http://localhost:5173
+      # ⚠️ غيابه يجعل `/zatca/onboarding/start` يرتدّ بـ400 فتسقط ثلاث
+      # مجموعات بسببٍ يبدو منطقياً وليس كذلك.
+      SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+      # ⚠️ بلا MinIO يرتدّ رفع الشعار بـ500 وتسقط `company-profile`.
+      S3_ENDPOINT: http://localhost:9100
+      S3_ACCESS_KEY: mad_app
+      S3_SECRET_KEY: mad_app_dev_password
+      S3_BUCKET: mad-app-files
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -173,6 +206,23 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci --ignore-scripts
+
+      # MinIO بـ`docker run` لا كحاوية خدمة: خدمات GitHub لا تقبل `command:`،
+      # وصورة minio تحتاج `server /data` وسيطاً — بدونه تخرج فوراً. والنمط
+      # قائمٌ في هذا الملف أصلاً (`nginx-cache`).
+      #
+      # ولا خطوة `mc mb`: `FilesService.onModuleInit` ينشئ الحاوية عند أول
+      # إقلاع (مقروءٌ من المصدر لا مفترَض).
+      - name: تشغيل MinIO وانتظار جاهزيته
+        run: |
+          docker run -d --name minio -p 9100:9000 \
+            -e MINIO_ROOT_USER=mad_app -e MINIO_ROOT_PASSWORD=mad_app_dev_password \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:9100/minio/health/live; then echo "MinIO جاهز بعد ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::MinIO لم يجهز خلال 30 ثانية"; docker logs minio; exit 1
 
       - name: إنشاء دور app_user (نظير docker/postgres-init-prod)
         run: |
@@ -229,9 +279,67 @@ jobs:
           set -o pipefail
           npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
 
-      - name: ملخّص خام
+      - name: ملخّص خام (السجلّان)
         if: always()
         run: grep -aE "✓|✗|√|×|Tests:|Suites:" /tmp/live.log || echo "(لا ملخّص)"
+
+      # ═══ الـ77 اختبار تكامل — أول تشغيل لها في السير على الإطلاق ═══
+      #
+      # `npm run test:e2e` لا استدعاء jest مباشرةً: السكربت يحمل
+      # `--runInBand --forceExit` وهما قرارا المشروع لا تفصيلتان. وإعادة
+      # كتابتهما هنا تعني نسخةً ثانية من القرار تفترق عن الأولى بصمت.
+      #
+      # ⚠️ `set -o pipefail` مع `tee`: صدفة Actions الافتراضية `bash -e` بلا
+      # pipefail، فرمز خروج الأنبوب رمزُ `tee` — صفرٌ دائماً. بدونه تعود
+      # الوظيفة خضراء ولو سقطت السبعة والسبعون كلها.
+      #
+      # و`if: always()` لا لتخفيف المنع — الخطوة تُسقط الوظيفة كما هي. بل
+      # لئلا يحجب سقوطُ الخطوة السابقة نتيجةَ هذه: خطوةٌ تتوقّف عند أول فشل
+      # تترك 77 مجموعة **بلا نتيجة**، فيُقرأ الأحمر على أنه السجلّان وحدهما
+      # ويُصلَح ما ليس معطوباً. سقوطان يُريان أصدق من واحدٍ يحجب الآخر.
+      - name: اختبارات التكامل — 77 مجموعة على قاعدة حيّة (blocking)
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee /tmp/e2e.log
+
+      # حارسٌ للحارس: عددُ ما نُفِّذ يطابق ما على القرص.
+      #
+      # ⚠️ يقرأ **القرص** لا مخرَج jest وحده. الوظيفة كلها وُلدت من عطلٍ من
+      # هذه العائلة: استدعاءٌ يسمّي ملفّين بعينهما، فتبقى 92 مجموعة خارج
+      # السير سنةً بلا أن يشتكي شيء. وعددٌ ناقص هنا يعني حارساً سقط خارج
+      # نطاق jest — والوظيفة تبقى خضراء بدونه.
+      - name: التحقق أن الـ77 نُفِّذت فعلاً
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          on_disk=$(find test -name '*.e2e-spec.ts' | wc -l)
+          ran=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/e2e.log \
+            | grep -aoE "Test Suites:.*[0-9]+ total" | grep -aoE "[0-9]+ total" | grep -aoE "^[0-9]+" || echo 0)
+          echo "على القرص: $on_disk · نُفِّذ: $ran"
+          if [ "$on_disk" != "$ran" ]; then
+            echo "::error::تفاوت: $on_disk اختبار تكامل على القرص و$ran منفَّذ — حارسٌ سقط خارج نطاق jest"
+            exit 1
+          fi
+
+      # ملخّص دائم في **كل** تشغيل. درسُ Playwright: رقمٌ مقروء في السجل
+      # أرخص من أثرٍ يُنزَّل، وأصدق من استنتاجٍ من خلوّ `--log-failed`.
+      - name: ملخّص خام (التكامل) + أسماء الساقط
+        if: always()
+        shell: bash
+        run: |
+          echo "──────── الملخّص ────────"
+          grep -aE "Tests:|Test Suites:|Time:" /tmp/e2e.log || echo "(لا ملخّص)"
+          echo ""
+          echo "──────── المجموعات الساقطة ────────"
+          sed 's/\x1b\[[0-9;]*m//g' /tmp/e2e.log | grep -aE "^(FAIL|  ●)" | head -80 || echo "(لا سقوط)"
+
+      - name: سجل MinIO
+        if: failure()
+        run: docker logs minio 2>&1 | tail -30 || true
 
   # الاختبار ٧ — ترويسات التخزين، على nginx **الحقيقي** لا على خادم المعاينة.
   #
