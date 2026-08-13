@@ -1,0 +1,146 @@
+import { useEffect, useState } from 'react';
+import { createTask } from '../api/tasks';
+import { listCompanyUsers, type CompanyUser } from '../api/companyUsers';
+import { usePermissions } from '../auth/PermissionsContext';
+import { apiErrorMessage } from '../lib/apiError';
+
+/**
+ * إسناد مهمة **من داخل المستند** — مكوّنٌ واحد يُركَّب في الثلاث.
+ *
+ * ## لماذا واحدٌ لا ثلاث نسخ
+ *
+ * العقود والفواتير والبلاغات تحتاج الشيء نفسه: «أسنِد هذا المستند لفلان».
+ * وثلاث نسخ تفترق عند أول تعديل — تُصلَح إحداها وتبقى اثنتان، **بلا شكوى**.
+ * وهي عائلة العطب التي أنتجت `RowMenu` أصلاً: مكوّنٌ واحد لعشرين شاشة.
+ *
+ * ## والاستعمال يمرّ الشاشة والمعرّف فقط
+ *
+ *     <AssignTaskButton screen="contracts" entityId={contract.id} />
+ *
+ * ولا يمرّ **عنوان المستند ولا محتواه**: العنوان يكتبه المُسنِد، والخادم
+ * لا يقرأ المستند أصلاً. فالمكوّن لا يفتح باباً لتسريب ما لا يُسرَّب.
+ *
+ * ## ⚠️ والزرّ لا يظهر لمن لا يرى المستند
+ *
+ * الخادم يرفض ربط مهمةٍ بمستندٍ لا يراه المُسنِد (`task_target_not_visible`)
+ * — وإلا صار الإسناد **قناة تسريب معكوسة**: من لا يملك `contracts:view`
+ * يربط مهمةً بعقدٍ لم يره فيكشف وجوده ومعرّفه لمن يفتحه.
+ *
+ * وإخفاء الزر هنا **عرضٌ لا منع**: يوفّر محاولةً ترفضها الخادم، والمنع
+ * هناك لا هنا.
+ */
+export function AssignTaskButton({ screen, entityId }: { screen: string; entityId: string }) {
+  const { can } = usePermissions();
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<CompanyUser[]>([]);
+  const [title, setTitle] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
+  const [dueAnchor, setDueAnchor] = useState('');
+  const [recurEveryDays, setRecurEveryDays] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    listCompanyUsers()
+      .then((u) => setUsers(u.filter((x) => x.status === 'ACTIVE')))
+      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل الموظفين')));
+  }, [open]);
+
+  // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا.
+  if (!can(screen, 'view')) return null;
+
+  const submit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await createTask({
+        title: title.trim(),
+        assigneeId,
+        targetScreen: screen,
+        targetId: entityId,
+        recurEveryDays: recurEveryDays > 0 ? recurEveryDays : undefined,
+        // مهمةٌ متكرّرة تحتاج مرساة — والقاعدة تفرضها بقيدٍ أيضاً.
+        dueAnchor: dueAnchor ? new Date(dueAnchor).toISOString() : undefined,
+      });
+      setDone(true);
+      setOpen(false);
+      setTitle('');
+      setAssigneeId('');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر إسناد المهمة'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)} data-testid="assign-task-open">
+        ⊕ أسنِد مهمة
+      </button>
+      {done && <span className="muted" data-testid="assign-task-done"> أُسنِدت</span>}
+
+      {open && (
+        <div className="overlay" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="إسناد مهمة">
+            <div className="modal-head">
+              <div className="modal-title">إسناد مهمة على هذا المستند</div>
+              <button className="modal-close" onClick={() => setOpen(false)}>✕</button>
+            </div>
+
+            {error && <p className="error" role="alert">{error}</p>}
+
+            <div className="field">
+              <label>عنوان المهمة</label>
+              {/* العنوان يكتبه المُسنِد — **ولا يُؤخذ من المستند**. فالمكلَّف
+                * يقرأه دون أن يقرأ المستند، وهي القاعدة بعينها. */}
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: راجع بند التأمين" data-testid="assign-title" />
+            </div>
+
+            <div className="field">
+              <label>المكلَّف</label>
+              <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} data-testid="assign-assignee">
+                <option value="">اختر موظفاً</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="two-col">
+              <div className="field">
+                <label>أول موعد استحقاق (اختياري)</label>
+                <input type="date" value={dueAnchor} onChange={(e) => setDueAnchor(e.target.value)} data-testid="assign-due" />
+              </div>
+              <div className="field">
+                <label>تتكرّر كل (يوم)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={recurEveryDays}
+                  onChange={(e) => setRecurEveryDays(Number(e.target.value))}
+                  data-testid="assign-recur"
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving || title.trim().length < 2 || !assigneeId || (recurEveryDays > 0 && !dueAnchor)}
+                onClick={submit}
+                data-testid="assign-submit"
+              >
+                إسناد
+              </button>
+              <button type="button" onClick={() => setOpen(false)} disabled={saving}>إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

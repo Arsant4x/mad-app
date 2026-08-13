@@ -1,3 +1,4 @@
+import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useRef, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
@@ -125,12 +126,13 @@ export function ContractsPage() {
                   <th>البداية</th>
                   <th>النهاية</th>
                   <th>الحالة</th>
+                  <th>مهمة</th>
                 </tr>
               </thead>
               <tbody>
                 {contracts.length === 0 && (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="empty-state">لا توجد عقود مطابقة</div>
                     </td>
                   </tr>
@@ -148,6 +150,15 @@ export function ContractsPage() {
                     <td className="num">{dfmt(c.end)}</td>
                     <td>
                       <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
+                    </td>
+                    {/* الإسناد **من داخل المستند** — مكوّنٌ واحد يُركَّب في
+                      * العقود والفواتير والبلاغات. ثلاث نسخ تفترق عند أول
+                      * تعديل: تُصلَح إحداها وتبقى اثنتان بلا شكوى. */}
+                    {/* ⚠️ `stopPropagation` لازم: الصفّ كله يفتح نافذة
+                      * التفاصيل بالنقر، فبدونه يفتح زرُّ الإسناد نافذتين
+                      * معاً — وهو عطلٌ يظهر أول مرة يُنقر فيها. */}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <AssignTaskButton screen="contracts" entityId={c.id} />
                     </td>
                   </tr>
                 ))}

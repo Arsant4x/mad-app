@@ -1,3 +1,4 @@
+import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useMemo, useState } from 'react';
 import { ZatcaQr } from '../../components/ZatcaQr';
@@ -134,13 +135,14 @@ export function InvoiceListView({
               <th>المبلغ</th>
               <th>فوترة (ZATCA)</th>
               <th>التصديق</th>
+              <th>مهمة</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9}>
+                <td colSpan={10}>
                   <div className="empty-state">لا توجد فواتير مطابقة</div>
                 </td>
               </tr>
@@ -193,6 +195,13 @@ export function InvoiceListView({
                       badge alone. */}
                   {inv.zatcaStatus === 'REJECTED' && inv.zatcaMessage && <div className="hint zatca-reason">{inv.zatcaMessage}</div>}
                   {inv.zatcaIcv !== null && <div className="hint">تسلسل: {inv.zatcaIcv}</div>}
+                </td>
+                {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في
+                  * العقود والبلاغات. وخارج `RowMenu` عمداً: الإسناد فعلٌ
+                  * متكرّر على الفواتير المعلَّقة، ودفنُه في قائمةٍ منسدلة
+                  * يجعله يُستعمل أقلّ مما يجب. */}
+                <td onClick={(e) => e.stopPropagation()}>
+                  <AssignTaskButton screen="invoice" entityId={inv.id} />
                 </td>
                 <td>
                   <RowMenu

@@ -1,3 +1,4 @@
+import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -268,6 +269,11 @@ export function MaintenancePage() {
                 <td className="num">{r.cost ? fmt(r.cost) : '—'}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في
+                      * العقود والفواتير. ولا يُخلط بـ«إسناد» أدناه: ذاك
+                      * يُسنِد **البلاغ إلى فنّي** (حقلٌ في البلاغ)، وهذا
+                      * يُنشئ **مهمةً متابَعة** على البلاغ. */}
+                    <AssignTaskButton screen="maintenance" entityId={r.id} />
                     {/* Only the moves the server would actually accept are
                         offered — a button that always 409s is worse than none. */}
                     {r.status === 'REPORTED' && (

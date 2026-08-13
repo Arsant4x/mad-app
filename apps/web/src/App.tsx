@@ -11,6 +11,7 @@ import { CompanyProfilePage } from './pages/companyProfile/CompanyProfilePage';
 import { SubscriptionPage } from './pages/subscription/SubscriptionPage';
 import { AuditLogPage } from './pages/audit/AuditLogPage';
 import { DelegationLogPage } from './pages/audit/DelegationLogPage';
+import { MyTasksPage } from './pages/tasks/MyTasksPage';
 import { TrashPage } from './pages/trash/TrashPage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
@@ -107,6 +108,12 @@ export default function App() {
                 </ScreenGuard>
               }
             />
+            {/* ⚠️ بلا `ScreenGuard` — **مطابقةً للخادم**: `TasksController`
+              * بلا `@RequiresScreen`. و«مهامي» يقرأ ما كُلِّف به الفاعل نفسه،
+              * فحارسُ شاشةٍ يمنع موظفاً محدود الصلاحية من رؤية ما كُلِّف به —
+              * وهو نقيض الغرض: المهمة تُسنَد إليه بالضبط لأنه لا يملك الشاشة.
+              * ونظيرُه القائم: `notifications`. */}
+            <Route path="my-tasks" element={<MyTasksPage />} />
             <Route
               path="company-users"
               element={
