@@ -7,7 +7,14 @@ import { usePermissions } from '../auth/PermissionsContext';
 import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
 
 interface NavItemDef {
-  screen: string;
+  /**
+   * الشاشة التي تحرس هذا المدخل — و`null` يعني **بلا حارس شاشة عمداً**،
+   * مطابقةً لنقطةٍ في الخادم بلا `@RequiresScreen` (مهامي · الإشعارات).
+   *
+   * ⚠️ ولا يعني «للجميع بلا حساب»: الحراسة داخل الخدمة نفسها — الاستعلام
+   * مقيَّدٌ بصاحبه. وحارسُ شاشةٍ فوقه يُخفي عن الموظف ما كُلِّف به.
+   */
+  screen: string | null;
   to: string;
   labelKey: string;
   end?: boolean;
@@ -23,7 +30,16 @@ interface NavGroupDef {
  * this structure — not just the flat list of links — is what makes the
  * sidebar look like the original instead of one long undifferentiated list. */
 const NAV_GROUPS: NavGroupDef[] = [
-  { labelKey: 'grp_home', items: [{ screen: 'dashboard', to: '/', labelKey: 'nav_dashboard', end: true }] },
+  {
+    labelKey: 'grp_home',
+    items: [
+      { screen: 'dashboard', to: '/', labelKey: 'nav_dashboard', end: true },
+      // ⚠️ `screen: null` — **بلا حارس شاشة، مطابقةً للخادم**. «مهامي» يقرأ
+      // ما كُلِّف به الفاعل نفسه، وحارسُ شاشةٍ يُخفي عن موظفٍ محدود الصلاحية
+      // ما كُلِّف به — وهو نقيض الغرض. نظيرُه: `notifications`.
+      { screen: null, to: '/my-tasks', labelKey: 'nav_my_tasks' },
+    ],
+  },
   {
     labelKey: 'grp_accounting',
     items: [
@@ -180,7 +196,8 @@ export function AppShell() {
             {unread > 0 && <span className="badge overdue" style={{ marginRight: 6 }}>{unread}</span>}
           </NavLink>
           {NAV_GROUPS.map((group) => {
-            const visibleItems = group.items.filter((item) => canSee(item.screen));
+            // `screen: null` ⇒ يظهر دائماً — والحراسة في الخدمة لا هنا.
+            const visibleItems = group.items.filter((item) => item.screen === null || canSee(item.screen));
             if (visibleItems.length === 0) return null;
             return (
               <div key={group.labelKey}>
