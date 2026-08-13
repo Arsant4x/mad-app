@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loginThroughUi, readTestCompany, type TestCompany } from './fixtures';
+import { loginThroughUi, readTestCompany, sharedSession, type TestCompany } from './fixtures';
 
 /**
  * الاختبار ٥ — التخطيط عبر العروض الثلاثة. **في Playwright حصراً.**
@@ -20,17 +20,19 @@ import { loginThroughUi, readTestCompany, type TestCompany } from './fixtures';
  * واحدة — فعلى شاشة 375px يتبقّى للمحتوى **125px** يُقصّ ولا يُمرَّر.
  */
 test.describe('الاختبار ٥ — التخطيط لا يبتلع المحتوى', () => {
-  let co: TestCompany | undefined;
-  let hasApi = false;
-
-  test.beforeAll(() => {
-    // منشأة التشغيل الواحدة التي سجّلها globalSetup — ولا تسجيل هنا: ستّ
-    // تسجيلات (مجموعتان × ثلاثة عروض) تتجاوز حدّ التسجيل 5/دقيقة فترتدّ
-    // بـ429، والحدّ حارسٌ إنتاجيّ لا يُلتفّ عليه.
-    const state = readTestCompany();
-    hasApi = state.hasApi;
-    co = state.hasApi ? (state as TestCompany) : undefined;
-  });
+  /**
+   * جلسةٌ واحدة للمجموعة كلها — لا دخولٌ لكل اختبار.
+   *
+   * الاختباران المحميّان كانا يسجّلان الدخول كلٌّ على حدة، أي ستّ محاولات
+   * في التشغيل الكامل (ثلاثة عروض). و`POST /auth/login` محدودٌ بعشرٍ في
+   * الدقيقة **لكل IP** — وعدّاء السير واحد. فالمجموع كان يمرّ بالتباعد
+   * الزمني لا بالتصميم، وسقط فعلاً حين أُضيف ملفُّ مواصفةٍ واحد.
+   *
+   * ولا `storageState`: إعادة استعمال رمز التحديث تُبطل كل جلسات الهوية —
+   * انظر `sharedSession` في `fixtures.ts`.
+   */
+  const session = sharedSession();
+  const hasApiNow = () => session.hasApi();
 
   /**
    * تخطٍّ **صريح ومعلَّل** لا صامت: من يقرأ نتيجة السير يجب أن يعرف أن
@@ -38,7 +40,7 @@ test.describe('الاختبار ٥ — التخطيط لا يبتلع المحت
    * ✅ لم يعد يقع في CI (صار فيه postgres + API)؛ يبقى للتشغيل المحلي بلا خادم.
    */
   const requireApi = () =>
-    test.skip(!hasApi, 'لا API متاح في هذه البيئة — الاختبار يحتاج تسجيل منشأة حقيقية. (في CI يوجد API؛ فتخطٍّ هنا يعني عطل إقلاع لا نقص بنية)');
+    test.skip(!hasApiNow(), 'لا API متاح في هذه البيئة — الاختبار يحتاج تسجيل منشأة حقيقية. (في CI يوجد API؛ فتخطٍّ هنا يعني عطل إقلاع لا نقص بنية)');
 
   test('صفحة الدخول تُعرض بلا تمرير أفقي', async ({ page }) => {
     await page.goto('/');
@@ -53,9 +55,9 @@ test.describe('الاختبار ٥ — التخطيط لا يبتلع المحت
     expect(content ?? '', 'بلا viewport meta يعرض الجوال بعرضٍ وهمي 980px').toContain('width=device-width');
   });
 
-  test('الهيكل بعد الدخول يترك للمحتوى مساحة صالحة', async ({ page }, testInfo) => {
+  test('الهيكل بعد الدخول يترك للمحتوى مساحة صالحة', async ({}, testInfo) => {
     requireApi();
-    await loginThroughUi(page, co!);
+    const page = session.page();
 
     const width = testInfo.project.use.viewport!.width;
     const usable = await page.evaluate(() => {
@@ -69,10 +71,9 @@ test.describe('الاختبار ٥ — التخطيط لا يبتلع المحت
     expect(usable, `المحتوى ${Math.round(usable)}px من ${width}px — الشريط يبتلع الشاشة`).toBeGreaterThan(width * 0.5);
   });
 
-  test('لا تمرير أفقي داخل التطبيق بعد الدخول', async ({ page }) => {
+  test('لا تمرير أفقي داخل التطبيق بعد الدخول', async () => {
     requireApi();
-    await loginThroughUi(page, co!);
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    const overflow = await session.page().evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, 'التطبيق أوسع من الشاشة').toBeLessThanOrEqual(1);
   });
 });
