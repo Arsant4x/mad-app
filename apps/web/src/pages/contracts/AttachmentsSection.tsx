@@ -17,8 +17,10 @@ function humanSize(bytes: number): string {
 }
 
 /**
- * Files that belong to a lease — the signed PDF above all, plus ID scans or
- * annexes. Kept apart from the rest of the contract object because it is its
+ * Files that belong to a lease — the signed PDF above all, plus annexes and
+ * clearance letters. Deliberately not ID scans (see the ContractAttachment
+ * model comment); the warning below says so to the user, too.
+ * Kept apart from the rest of the contract object because it is its
  * own endpoint: the bytes live in object storage and are fetched through a
  * short-lived signed URL only when someone actually opens one.
  */
@@ -94,7 +96,15 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
         </>
       </div>
 
-      <p className="hint" style={{ marginBottom: 10 }}>PDF أو صورة (JPG/PNG/WebP)، حتى 10 ميغابايت. تُحفظ خاصة ولا تُشارك إلا برابط مؤقّت عند الفتح.</p>
+      <p className="hint" style={{ marginBottom: 6 }}>PDF أو صورة (JPG/PNG/WebP)، حتى 10 ميغابايت. تُحفظ خاصة ولا تُشارك إلا برابط مؤقّت عند الفتح.</p>
+
+      {/* تحذير نظامي لا تنسيقي: لائحة مرفق الضيافة السياحي (2289) م.٢٨/١٤ تُلزم
+          المرفق المرخَّص بالتحقق من الهوية من أصلها وتسجيل بياناتها فقط «دون طلب
+          أو أخذ نسخة منها». الإلزام على عميلنا لا علينا — لكن رفع الصورة هنا
+          يضعه في المخالفة، والمنع غير ممكن تقنياً (الصور مسموحة لأسباب مشروعة:
+          صور التسليم، مرفقات المطالبات). فالتحذير هو الأداة المتاحة.
+          ولا يُحذف هذا التحذير إلا بعد وجود حقل رقم الهوية — انظر بند ③. */}
+      <p className="warn-text" style={{ marginBottom: 10 }}>⚠️ لا ترفع صور الهويات — سجّل الرقم في حقله.</p>
 
       {error && <p className="error-text">{error}</p>}
 

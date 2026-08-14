@@ -318,7 +318,9 @@ export const recordDeposit = (contractId: string, dto: RecordDepositInput) =>
 export const settleDeposit = (contractId: string, depositId: string, dto: SettleDepositInput) =>
   apiClient.post<Contract>(`/contracts/${contractId}/deposits/${depositId}/settle`, dto).then((r) => r.data);
 
-/** Contract attachments — signed lease PDFs, ID scans, annexes. The bytes live
+/** Contract attachments — signed lease PDFs, annexes, clearance letters.
+ * Deliberately not ID scans — see the ContractAttachment model comment.
+ * The bytes live
  * in object storage; these calls carry only metadata plus a short-lived signed
  * URL fetched on demand (see files.ts for why URLs aren't cached). */
 export interface ContractAttachment {
