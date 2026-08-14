@@ -23,6 +23,25 @@ export class ScreenForbiddenException extends ForbiddenException {
   }
 }
 
+/**
+ * الشاشة موجودة، ونشاط المنشأة لا يشملها.
+ *
+ * ## ⚠️ ولماذا 403 لا 404 — والفرق مقصود
+ *
+ * في الفواتير وأمثالها يُردّ 404 عمداً: وجودُ الصفّ نفسه معلومةٌ لا تُسرَّب
+ * لمن لا يملكها. **وهنا العكس**: الشاشات معروفةٌ للجميع (`ALLOWED_SCREENS`
+ * قائمة ثابتة في المنتج)، فإخفاء وجودها لا يحمي شيئاً — ويترك التاجر
+ * أمام «غير موجود» عن شاشةٍ يراها في التسويق.
+ *
+ * فالرفض هنا **معلوم السبب**: موجودة · وغير مفعّلة لنشاطك · ويمكن تفعيلها.
+ * (قرار المالك 2026-08-13.)
+ */
+export class ScreenNotInSectorException extends ForbiddenException {
+  constructor(screen: string) {
+    super({ code: 'SCREEN_NOT_IN_SECTOR', message: formatMessage(MSG.screen_not_in_sector, { screen }) });
+  }
+}
+
 export class ActionForbiddenException extends ForbiddenException {
   constructor(action: string, screen: string) {
     super({ code: 'ACTION_FORBIDDEN', message: formatMessage(MSG.action_forbidden, { action, screen }) });

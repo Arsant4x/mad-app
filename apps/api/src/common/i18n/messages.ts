@@ -263,6 +263,9 @@ export const MSG = {
   account_frozen: 'tenant.account_frozen',
   account_stopped: 'tenant.account_stopped',
   screen_forbidden: 'tenant.screen_forbidden',
+  screen_not_in_sector: 'tenant.screen_not_in_sector',
+  primary_activity_needs_confirmation: 'activity.primary_needs_confirmation',
+  primary_activity_disabled: 'activity.primary_disabled',
   action_forbidden: 'tenant.action_forbidden',
   master_data_locked: 'tenant.master_data_locked',
   trash_entity_unknown: 'trash.entity_unknown',
@@ -639,6 +642,23 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
+  /**
+   * ⚠️ الرسالة تقول **ثلاثة** لا واحداً: الشاشة موجودة · وغير مفعّلة
+   * لنشاطك · ويمكن تفعيلها من الإعدادات. ورفضٌ مجرّد يترك التاجر يظنّ
+   * المنصة ناقصة، فيبحث عن بديل بدل أن يضيف نشاطاً بنقرة.
+   */
+  [MSG.primary_activity_needs_confirmation]: {
+    ar: 'تغيير النشاط الرئيسي يحتاج تأكيداً — اعرض الشاشات التي ستختفي أولاً',
+    en: 'Changing the primary activity needs confirmation — show which screens will disappear first',
+  },
+  [MSG.primary_activity_disabled]: {
+    ar: 'لا يصلح نشاطٌ معطَّل نشاطاً رئيسياً — فعّله أولاً',
+    en: 'A disabled activity cannot be the primary one — enable it first',
+  },
+  [MSG.screen_not_in_sector]: {
+    ar: 'شاشة "{screen}" غير مفعّلة لنشاط منشأتك — أضِف النشاط المناسب من الإعدادات لتظهر',
+    en: 'The "{screen}" screen is not enabled for your business activity — add the matching activity in Settings to show it',
+  },
   [MSG.export_owner_only]: { ar: 'تصدير البيانات متاح لمالك المنشأة فقط', en: 'Only the company owner can export the data' },
   [MSG.deletion_owner_only]: { ar: 'طلب حذف الحساب متاح لمالك المنشأة فقط', en: 'Only the company owner can request account deletion' },
   [MSG.deletion_already_pending]: { ar: 'يوجد طلب حذف قيد المراجعة بالفعل', en: 'A deletion request is already under review' },

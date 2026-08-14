@@ -4,6 +4,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
+import { suggestSector } from './sectors';
 
 /** Same rule as branches: what lines of business a company runs is an
  * owner-level decision, not something an employee redefines. */
@@ -45,7 +46,21 @@ export class ActivitiesService {
       if (clash) throw new ConflictException(formatMessage(MSG.activity_name_taken, { name }));
 
       return tx.businessActivity.create({
-        data: { name, activityType: dto.activityType?.trim() || null } as unknown as Prisma.BusinessActivityUncheckedCreateInput,
+        data: {
+          name,
+          activityType: dto.activityType?.trim() || null,
+          // ما أكّده المالك صراحةً — أو لا شيء.
+          sector: dto.sector ?? null,
+          /**
+           * ⚠️ **الاقتراح يُكتب هنا ولا يُكتب في `sector` أبداً.**
+           *
+           * المطابقة الآلية تقرأ نصّاً حرّاً ككلمة «متجر» أو «مؤسسة» — وهي
+           * لا تُطابق بثقة. وخطأٌ واحد **يُخفي شاشةً يعمل عليها تاجر**،
+           * فالمالك يؤكّد. ودمجُ الحقلين يمحو الفرق بين «رشّحه الحاسوب»
+           * و«أكّده الإنسان» — فلا يُعرف بعدها أيّهما جرى.
+           */
+          sectorSuggested: dto.sector ? null : suggestSector(dto.activityType),
+        } as unknown as Prisma.BusinessActivityUncheckedCreateInput,
       });
     });
   }
@@ -63,7 +78,28 @@ export class ActivitiesService {
         if (clash) throw new ConflictException(formatMessage(MSG.activity_name_taken, { name }));
         data.name = name;
       }
-      if (dto.activityType !== undefined) data.activityType = dto.activityType.trim() || null;
+      if (dto.activityType !== undefined) {
+        data.activityType = dto.activityType.trim() || null;
+        // نصٌّ جديد ⇒ اقتراحٌ جديد — **ما لم يكن المالك قد أكّد قطاعاً**.
+        // وإعادة الاقتراح فوق تأكيدٍ قائم تنقض قراره بلا أن يطلب.
+        if (dto.sector === undefined && !existing.sector) data.sectorSuggested = suggestSector(dto.activityType);
+      }
+      /**
+       * ⚠️ التأكيد **يمحو الاقتراح**: بقاؤهما معاً يجعل الشاشة تعرض
+       * ترشيحاً لقطاعٍ مؤكَّد بالفعل — فيظنّ المالك أنه لم يؤكّد.
+       */
+      if (dto.sector !== undefined) {
+        data.sector = dto.sector;
+        data.sectorSuggested = null;
+      }
+
+      /**
+       * التعطيل لا الحذف — والبيانات تبقى كما هي.
+       *
+       * ⚠️ ولا صفّ يُحذف: عقودُ منشأةٍ عطّلت «عقارات» تبقى في التقارير،
+       * وتختفي شاشتها فقط. وإخفاؤها من التقارير يجعل ميزان المراجعة يكذب.
+       */
+      if (dto.disabled !== undefined) data.disabledAt = dto.disabled ? new Date() : null;
 
       return tx.businessActivity.update({ where: { id }, data });
     });

@@ -6,6 +6,7 @@ import { TenantContext } from '../auth/types';
 import { Grant, TreeNode, buildTree } from './permission-tree';
 import { DelegationLink, RootGrants, effectiveGrants } from './intersection';
 import { rootGrantsFrom } from './root-grants';
+import { SECTORS, Sector, screensFor } from '../activities/sectors';
 import { ExtinguishedGrant, splitLastLink } from './extinguished';
 import { DelegationRow, chainsFor } from './chain-source';
 
@@ -60,7 +61,15 @@ export class PermissionsService {
    * والقياس يجعل الأمر بلا ثمن أصلاً: انظر القسم أسفل الملف.
    */
   async forActor(tenant: TenantContext): Promise<MePermissions> {
-    const root = await this.rootFor(tenant);
+    /**
+     * ⚠️ **الأنشطة تضيّق السقف قبل التفويض لا بعده.**
+     *
+     * القاعدة المعتمَدة: `الشاشات = اتحاد الأنشطة ∩ قالب الصلاحيات`.
+     * وتضييقُ الجذر يجعل كل ما بعده يرثه تلقائياً — `grantable` والشجرة
+     * والتفويض. أما الترشيح في النهاية فيترك **ما يجوز تفويضه** أوسع مما
+     * يُرى: يمنح المفوِّض شاشةً لا يفتحها أحد.
+     */
+    const root = narrowToScreens(await this.rootFor(tenant), await this.sectorScreensFor(tenant.companyId));
 
     // صاحب المنشأة جذرٌ بطبعه: لا أحد يفوّضه، فلا سلسلة فوقه.
     const rows = tenant.actorType === 'COMPANY' ? [] : await this.rowsFor(tenant.companyId);
@@ -105,6 +114,41 @@ export class PermissionsService {
   }
 
   /**
+   * شاشات أنشطة المنشأة — أو `null` إن كان الترشيح **مطفأً**.
+   *
+   * ## المفتاح: `primaryActivityId`
+   *
+   * `null` ⇒ **لا ترشيح إطلاقاً**. وهو الجواب على «ماذا يحدث للمنشآت
+   * القائمة لحظة التطبيق؟»: كلها تستيقظ غداً وترى ما كانت تراه بالضبط،
+   * لأن العمود يبدأ فارغاً. والترشيح يبدأ عند أول اختيارٍ صريح.
+   *
+   * ⚠️ **والاتحاد لا التقاطع** بين الأنشطة: منشأةٌ بنشاطين ترى شاشات
+   * الاثنين. والتقاطع يُخفي عنها ما تعمل عليه.
+   *
+   * ⚠️ **والمعطَّل لا يُحتسب** — لكن بياناته تبقى: تختفي شاشته ولا يُحذف
+   * صفّ. وإخفاؤها من التقارير يجعل ميزان المراجعة يكذب.
+   *
+   * وكل مسارٍ غامض هنا **يفتح لا يغلق**: نشاطٌ بلا قطاع، أو أنشطةٌ كلها
+   * بلا قطاع ⇒ `screensFor([])` ⇒ الكل.
+   */
+  private async sectorScreensFor(companyId: string): Promise<Set<string> | null> {
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: { primaryActivityId: true },
+    });
+    if (!company.primaryActivityId) return null;
+
+    // ⚠️ **تحت سياق المستأجر**: `business_activities` عليه RLS ENABLE+FORCE،
+    // وقراءةٌ خارجه تعود **فارغةً بنجاح** — فتصير `sectors` خاوية،
+    // و`screensFor([])` تُرجع الكل، **فيتعطّل الترشيح كله بصمت**.
+    const activities = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.businessActivity.findMany({ where: { disabledAt: null }, select: { sector: true } }),
+    );
+    const sectors = activities.map((a) => a.sector).filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s));
+    return screensFor(sectors);
+  }
+
+  /**
    * سقف السلسلة من القالب.
    *
    * ⚠️ يُقرأ من **نفس** الجدولين اللذين يقرأهما `tenant.guard.ts`، بنفس
@@ -146,6 +190,21 @@ export class PermissionsService {
       `,
     );
   }
+}
+
+/**
+ * يقصر مجموعة الأزواج على شاشاتٍ بعينها.
+ *
+ * @param screens `null` يعني **لا ترشيح** — تُعاد المجموعة كما هي.
+ *
+ * ⚠️ و`null` ليست «مجموعة فارغة»: الفارغة تُخفي كل شيء، و`null` تُظهر كل
+ * شيء. وخلطُهما هو الفرق بين «تاجرٌ لم يختر نشاطه» و«تاجرٌ بلا شاشات».
+ */
+function narrowToScreens(grants: RootGrants, screens: ReadonlySet<string> | null): RootGrants {
+  if (!screens) return grants;
+  const out = new Set<Grant>();
+  for (const g of grants) if (screens.has(g.slice(0, g.lastIndexOf(':')))) out.add(g);
+  return out;
 }
 
 /** الشجرة مقصورةً على الشاشات التي يملك فيها الفاعل فعلاً واحداً على الأقل. */
