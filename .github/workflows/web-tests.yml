@@ -277,7 +277,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
+          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts src/activities/rls-probe.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
 
       - name: ملخّص خام (السجلّان)
         if: always()
