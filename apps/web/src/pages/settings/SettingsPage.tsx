@@ -5,7 +5,11 @@ import {
   listActivities,
   updateActivity,
   type Activity,
+  SECTORS,
+  SECTOR_LABELS,
+  type Sector,
 } from '../../api/activities';
+import { PrimaryActivityModal } from './PrimaryActivityModal';
 import {
   createCurrency,
   deleteCurrency,
@@ -43,6 +47,9 @@ export function SettingsPage() {
   const [activityType, setActivityType] = useState('');
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [pendingActivityDelete, setPendingActivityDelete] = useState<Activity | null>(null);
+  const [activitySector, setActivitySector] = useState<Sector | ''>('');
+  /** النشاط المرشَّح ليصير رئيسياً — و`null` داخل الكائن يعني التراجع. */
+  const [primaryCandidate, setPrimaryCandidate] = useState<Activity | 'CLEAR' | null>(null);
 
   const [code, setCode] = useState('');
   const [currencyName, setCurrencyName] = useState('');
@@ -79,12 +86,29 @@ export function SettingsPage() {
       return;
     }
     try {
-      const dto = { name: activityName.trim(), activityType: activityType.trim() || undefined };
+      const dto = { name: activityName.trim(), activityType: activityType.trim() || undefined, sector: activitySector || undefined };
       if (editingActivity) await updateActivity(editingActivity.id, dto);
       else await createActivity(dto);
       setActivityName('');
       setActivityType('');
+      setActivitySector('');
       setEditingActivity(null);
+      await reload();
+    } catch (e) {
+      setError(serverMessage(e, i18n.t('err_activity_save')));
+    }
+  }
+
+  /**
+   * التعطيل لا الحذف — الشاشات تختفي و**البيانات تبقى كما هي**.
+   *
+   * ⚠️ ولا يُخفى النشاط من الجدول بعد التعطيل: بقاؤه مرئياً معطَّلاً هو ما
+   * يجعل إعادة تفعيله ممكنة. وإخفاؤه يجعله يبدو محذوفاً — وهو ليس كذلك.
+   */
+  async function toggleActivity(a: Activity) {
+    setError(null);
+    try {
+      await updateActivity(a.id, { disabled: a.disabledAt === null });
       await reload();
     } catch (e) {
       setError(serverMessage(e, i18n.t('err_activity_save')));
@@ -181,6 +205,13 @@ export function SettingsPage() {
       <div className="card">
         <div className="card-head">
           <div className="card-title">الأنشطة التجارية</div>
+          {/* ⭐ **التراجع الفوري** — مرئيٌّ دائماً لا مخفيّاً في قائمة.
+            * فمن أخفى شاشةً بالخطأ يحتاج طريق العودة الآن، لا بعد بحث. */}
+          {isOwner && (
+            <button className="btn btn-ghost btn-sm" data-testid="clear-primary" onClick={() => setPrimaryCandidate('CLEAR')}>
+              إظهار كل الشاشات (إلغاء الترشيح)
+            </button>
+          )}
         </div>
 
         {isOwner && (
@@ -192,6 +223,17 @@ export function SettingsPage() {
             <div className="field">
               <label>نوع النشاط (اختياري)</label>
               <input value={activityType} onChange={(e) => setActivityType(e.target.value)} placeholder="عقارات | مطاعم | صيدلية" />
+            </div>
+            <div className="field">
+              <label>القطاع — يحدّد الشاشات</label>
+              {/* القائمة من `SECTORS` المقروءة، لا مكتوبةً هنا. */}
+              <select value={activitySector} onChange={(e) => setActivitySector(e.target.value as Sector | '')} data-testid="sector-select">
+                <option value="">— بلا قطاع (كل الشاشات) —</option>
+                {SECTORS.map((s) => (
+                  <option key={s} value={s}>{SECTOR_LABELS[s]}</option>
+                ))}
+              </select>
+              <p className="hint">القطاع يحدّد الشاشات التي تظهر لك ولموظفيك. ويبقى بلا أثر حتى تختار نشاطاً رئيسياً.</p>
             </div>
           </div>
         )}
@@ -221,6 +263,7 @@ export function SettingsPage() {
             <tr>
               <th>النشاط</th>
               <th>النوع</th>
+              <th>القطاع</th>
               <th>الفروع</th>
               <th>المنتجات</th>
               {isOwner && <th></th>}
@@ -228,9 +271,26 @@ export function SettingsPage() {
           </thead>
           <tbody>
             {activities.map((a) => (
-              <tr key={a.id}>
-                <td>{a.name}</td>
+              <tr key={a.id} data-testid={`activity-${a.id}`} data-disabled={a.disabledAt !== null}>
+                <td>
+                  {a.name}
+                  {a.disabledAt && <span className="badge sealed" style={{ marginInlineStart: 6 }}>معطَّل</span>}
+                </td>
                 <td>{a.activityType ?? '—'}</td>
+                <td data-testid={`sector-${a.id}`}>
+                  {/* ⭐ **ثلاث حالات لا اثنتان**: مؤكَّد · مقترَح ينتظر
+                    * التأكيد · ولا شيء. والثانية هي التي تحتاج فعلاً من
+                    * المالك — ودمجُها بالأولى يجعله يظنّ أنه أكّد. */}
+                  {a.sector ? (
+                    SECTOR_LABELS[a.sector]
+                  ) : a.sectorSuggested ? (
+                    <span className="hint" data-testid={`suggested-${a.id}`}>
+                      نرشّح: {SECTOR_LABELS[a.sectorSuggested]} — يحتاج تأكيدك
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td>{a.branchCount}</td>
                 <td>{a.productCount}</td>
                 {isOwner && (
@@ -241,10 +301,24 @@ export function SettingsPage() {
                         setEditingActivity(a);
                         setActivityName(a.name);
                         setActivityType(a.activityType ?? '');
+                        setActivitySector(a.sector ?? a.sectorSuggested ?? '');
                       }}
                     >
                       تعديل
                     </button>
+                    {/* التعطيل لا الحذف — والبيانات تبقى. */}
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      data-testid={`toggle-${a.id}`}
+                      onClick={() => void toggleActivity(a)}
+                    >
+                      {a.disabledAt ? 'تفعيل' : 'تعطيل'}
+                    </button>
+                    {a.sector && !a.disabledAt && (
+                      <button className="btn btn-ghost btn-sm" data-testid={`make-primary-${a.id}`} onClick={() => setPrimaryCandidate(a)}>
+                        اجعله رئيسياً
+                      </button>
+                    )}
                     <button className="btn btn-ghost btn-sm" onClick={() => setPendingActivityDelete(a)}>
                       حذف
                     </button>
@@ -414,6 +488,17 @@ export function SettingsPage() {
           </table>
         )}
       </div>
+
+      {primaryCandidate && (
+        <PrimaryActivityModal
+          activity={primaryCandidate === 'CLEAR' ? null : primaryCandidate}
+          onCancel={() => setPrimaryCandidate(null)}
+          onDone={() => {
+            setPrimaryCandidate(null);
+            void reload();
+          }}
+        />
+      )}
 
       {pendingActivityDelete && (
         <ConfirmModal

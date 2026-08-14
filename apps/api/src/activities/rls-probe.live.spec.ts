@@ -93,6 +93,52 @@ describe('تشخيص حيّ: قراءة جدولٍ محميّ خارج سياق 
     expect(Object.keys(verdicts)).toHaveLength(TABLES.length);
   }, 120000);
 
+  /**
+   * ⚠️ **قياسٌ حاسم حين تكون الجداول فارغة.**
+   *
+   * أول تشغيلٍ للتشخيص أعطى «لا بيانات — القياس لا يحكم» للأربعة: البذرة
+   * لا تُنشئ سجلَّ تدقيقٍ ولا طلبَ حذفٍ ولا موافقةَ دعم. والصفر بلا صفوف
+   * **لا يفرّق** بين «العزل يعمل» و«لا شيء هناك».
+   *
+   * فالحكم يُؤخذ من **كتالوج القاعدة الحيّ** لا من نصّ الترحيل: شكل
+   * السياسة (`pg_policies`) و`relforcerowsecurity` معاً. وهما ما يقرّر
+   * السلوك فعلاً — مع دور الاتصال، وهو `app_user` بـ`NOBYPASSRLS`.
+   *
+   * وما زال **تشغيلاً لا قراءة**: يسأل القاعدة عمّا تطبّقه الآن، لا الملف
+   * عمّا كُتب فيه يوماً.
+   */
+  it('⭐ الحكم الحاسم: شكل السياسة و`FORCE` من كتالوج القاعدة الحيّ', async () => {
+    const rows = await prisma.$queryRawUnsafe<
+      { table: string; forced: boolean; qual: string | null }[]
+    >(`
+      SELECT c.relname AS "table",
+             c.relforcerowsecurity AS forced,
+             pg_get_expr(p.polqual, p.polrelid) AS qual
+        FROM pg_class c
+        LEFT JOIN pg_policy p ON p.polrelid = c.oid
+       WHERE c.relname = ANY($1)
+    `, TABLES.map((t) => t.table));
+
+    // eslint-disable-next-line no-console
+    console.log('\n  ═══ الحكم من الكتالوج الحيّ ═══\n');
+    for (const r of rows) {
+      const sameShape = (r.qual ?? '').includes('app.company_id');
+      const verdict =
+        r.forced && sameShape
+          ? '🔴 نفس شكل `business_activities` المُثبَت عطبه ⇒ القراءة الخارجية عمياء'
+          : !r.forced
+            ? '⚠️ بلا FORCE — مالك الجدول يتجاوز السياسة'
+            : '⚠️ سياسةٌ بشكلٍ آخر — تحتاج فحصاً بعينها';
+      // eslint-disable-next-line no-console
+      console.log(`  ${r.table.padEnd(30)} FORCE=${String(r.forced).padEnd(5)}  ${verdict}`);
+      // eslint-disable-next-line no-console
+      console.log(`  ${''.padEnd(30)} السياسة: ${r.qual ?? '(لا سياسة)'}\n`);
+    }
+
+    // حارسٌ للقياس: لو لم يُرجِع الكتالوج شيئاً فالاستعلام هو المعطوب.
+    expect(rows.length).toBeGreaterThanOrEqual(TABLES.length);
+  }, 60000);
+
   it('⭐ وحارسٌ للقياس نفسه: السياق يغيّر النتيجة فعلاً على جدولٍ معلوم', async () => {
     // لو لم يغيّر السياق شيئاً في أي جدول، فالقياس لا يقيس — إما أن الدور
     // يتجاوز RLS كلياً، أو أن `set_config` لم يصل. وحينها كل أحكام الاختبار
