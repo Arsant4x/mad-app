@@ -9,7 +9,7 @@ import { AppModule } from '../src/app.module';
  * Files attached to a lease, stored in object storage.
  *
  * The property worth protecting is the same as the contract ledger itself: a
- * signed lease and an ID scan are exactly the documents one company must never
+ * signed lease and a clearance letter are exactly the documents one must never
  * be able to list, open, or delete on another company's contract — not even by
  * guessing an id, since object storage has no RLS of its own.
  */

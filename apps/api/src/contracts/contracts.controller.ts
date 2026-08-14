@@ -39,7 +39,7 @@ export class ContractsController {
     return this.contractsService.list(tenant.companyId, query);
   }
 
-  // ---- Attachments (signed lease PDFs, ID scans, annexes) ----
+  // ---- Attachments (signed lease PDFs, annexes, clearance letters) ----
   // The static `attachments/...` routes are declared before `:id`-based ones so
   // the router never reads "attachments" as a contract id.
 

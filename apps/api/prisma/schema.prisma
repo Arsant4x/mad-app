@@ -2102,11 +2102,18 @@ model Contract {
   @@map("contracts")
 }
 
-/// A file stored against a contract — a signed lease PDF, an ID scan, an
-/// annex. The bytes live in object storage (MinIO); this row is the metadata
-/// and the tenant-scoped handle the app lists and authorizes against. The
-/// storage key is re-verified under the company prefix on every download, the
-/// same way logo keys are — object storage has no RLS.
+/// A file stored against a contract — a signed lease PDF, an annex, a
+/// clearance letter. The bytes live in object storage (MinIO); this row is
+/// the metadata and the tenant-scoped handle the app lists and authorizes
+/// against. The storage key is re-verified under the company prefix on every
+/// download, the same way logo keys are — object storage has no RLS.
+///
+/// ⚠️ This example list used to read "an ID scan". It no longer does, and it
+/// must not again: لائحة مرفق الضيافة السياحي (2289) م.٢٨/١٤ obliges the
+/// licensed operator to verify identity from the original and record its data
+/// **«دون طلب أو أخذ نسخة منها»** — no copy taken. The obligation binds our
+/// customer, not us; but a schema that names an ID scan as a use case pushes
+/// that customer into the breach. The upload UI carries the matching warning.
 model ContractAttachment {
   id        String  @id @default(uuid())
   companyId String

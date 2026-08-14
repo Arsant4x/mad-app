@@ -16,7 +16,8 @@ const ATTACHMENT_SELECT = {
 } as const;
 
 /**
- * Files attached to a lease — the signed PDF, an ID scan, an annex.
+ * Files attached to a lease — the signed PDF, an annex, a clearance letter.
+ * Deliberately not "an ID scan": see the ContractAttachment model comment.
  *
  * The bytes live in object storage; this keeps the tenant-scoped metadata row
  * and is the single place that authorizes access. Every method runs inside the

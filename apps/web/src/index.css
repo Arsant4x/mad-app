@@ -776,6 +776,14 @@ tr:last-child td {
   margin: 0;
 }
 
+/* تحذير لا خطأ: الإجراء لم يفشل، لكن المستخدم على وشك فعل ما لا ينبغي.
+   الوردي محجوز للفشل — ولو استُعمل هنا لضاع الفرق بين «سقط» و«انتبه». */
+.warn-text {
+  color: var(--gold);
+  font-size: 12px;
+  margin: 0;
+}
+
 .status-screen {
   min-height: 100vh;
   display: flex;
