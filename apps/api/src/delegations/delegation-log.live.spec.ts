@@ -52,15 +52,50 @@ d('حرّاس سجل التفويض — إثباتٌ حيّ على قاعدة ح
      * منشأةٍ واحدة يجعل إثبات أحدهما مستحيلاً. فتحديدُ الترتيب هنا هو ما
      * يضمن أنهما لا تلتقيان.
      */
-    const company = await prisma.company.findFirstOrThrow({ select: { id: true }, orderBy: { createdAt: 'asc' } });
-    companyId = company.id;
+    /**
+     * ⚠️ **تصحيح 2026-08-15 — كان يقرأ المنشأة الأولى المبذورة، فكان يُسمّم نفسه.**
+     *
+     * الصياغة السابقة تأخذ أقدم منشأة وتُدرج فيها `seq` = 1‏،2‏،3. والقيد
+     * `delegation_logs_companyId_seq_key` فريد — **فيمرّ المجسّ أول مرة ويسقط
+     * في كل تشغيلٍ بعدها** بـ`23505`. وتعليقه القديم كان يقرّ بذلك ويبرّره:
+     * «بضعة صفوف في قاعدة CI **تموت مع الوظيفة**» — وهو صحيحٌ في السير،
+     * **وباطلٌ على أي قاعدةٍ تعيش**. أي فرضيةُ بيئةٍ واحدة كُتبت كقاعدة عامة.
+     *
+     * ولا يُعالَج بالتنظيف: الجدول يمنع الحذف بمُشغِّل (الاختبار ①)، والشركة
+     * تُرفض بـ`RESTRICT` ما دامت لها سجلات (الاختبار ③). **فلا مخرج بالحذف —
+     * والمخرج بالعزل**: منشأةٌ جديدة لكل تشغيل، فـ`seq` حرّة فيها دائماً.
+     *
+     * ⚠️ **وثمنه معلَن**: منشأةٌ يتيمة و٣ صفوف لكل تشغيل، **لا تُحذف**. وهو
+     * أرخص من مجسٍّ يمرّ مرة واحدة — و«مجسّ يمرّ مرة واحدة ليس مجسّاً».
+     *
+     * وتُنشأ بالمسار الحقيقي (`loginIdentity.create` بشركةٍ متداخلة) لا بتركيبٍ
+     * يدوي — فالاختبار يحرس المسار لا نسخته منه. وهو ما نبّه إليه التعليق
+     * الأصلي وبقي صحيحاً.
+     */
+    const template = await prisma.permissionTemplate.findFirstOrThrow({
+      where: { companyId: null },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const identity = await prisma.loginIdentity.create({
+      data: {
+        username: `probe-delegation-log-${stamp}`,
+        passwordHash: 'probe-not-a-real-hash',
+        actorType: 'COMPANY',
+        company: { create: { orgName: `probe-delegation-log-${stamp}`, permissionTemplateId: template.id } },
+      },
+      include: { company: { select: { id: true } } },
+    });
+    companyId = identity.company!.id;
   });
 
   /**
-   * ⚠️ التنظيف بالختم لا بالحذف — فالجدول نفسه يمنع الحذف، وهو المقصود.
-   * الصفوف المضافة تبقى: بضعة صفوف في قاعدة CI تموت مع الوظيفة.
+   * ⚠️ **لا تنظيف — وهو قيدٌ لا إهمال.**
+   *
+   * سجلات التفويض لا تُحذف (المُشغِّل)، والشركة لا تُحذف ما دامت لها سجلات
+   * (`RESTRICT`). فالمنشأة تبقى، **وعزلُها هو ما يجعل التشغيل التالي أخضر**.
    */
-
   afterAll(async () => {
     await prisma.$disconnect();
   });

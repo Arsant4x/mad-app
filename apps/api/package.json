@@ -73,6 +73,9 @@
   },
   "jest": {
     "rootDir": ".",
+    "setupFiles": [
+      "<rootDir>/test/load-test-env.ts"
+    ],
     "testRegex": ".*\\.(spec|e2e-spec)\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
