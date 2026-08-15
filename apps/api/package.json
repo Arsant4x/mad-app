@@ -8,6 +8,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
+    "pretest": "node scripts/check-test-env.mjs",
     "test": "jest --testPathIgnorePatterns=e2e-spec",
     "test:watch": "jest --watch --testPathIgnorePatterns=e2e-spec",
     "test:e2e": "jest --testPathPattern=e2e-spec --forceExit --runInBand",
