@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+
+// مهلة مقيسة لا افتراضية — وهذا الملف بعينه هو الأسوأ قياساً (3687 ms من 5000).
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * إثباتٌ **حيّ** لحرّاس سجل التفويض — على قاعدة بيانات حقيقية.
