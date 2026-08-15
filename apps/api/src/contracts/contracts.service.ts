@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
+import { documentYear } from '../common/document-year.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -120,7 +121,7 @@ export class ContractsService {
         const isDraft = dto.draft ?? false;
         if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, dto.tenant);
 
-        const no = await this.nextContractNumber(tx);
+        const no = await this.nextContractNumber(tx, start);
         const customerId = isDraft ? null : (await this.syncTenantCustomer(tx, dto.tenant, dto.phone)).id;
 
         const created = await tx.contract.create({
@@ -448,7 +449,9 @@ export class ContractsService {
 
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
-        const no = dto.no?.trim() || (await this.nextContractNumber(tx));
+        // التجديد: بادئته من بداية العقد **الجديد** لا الأصل — فهو مستندٌ قائم
+        // بذاته بمدّته الخاصة.
+        const no = dto.no?.trim() || (await this.nextContractNumber(tx, start));
         if (dto.no?.trim()) {
           const taken = await tx.contract.findFirst({ where: { no } });
           if (taken) throw new ConflictException(formatMessage(MSG.contract_no_taken, { contractNo: no }));
@@ -895,8 +898,19 @@ export class ContractsService {
   /** `EJ-<year>-<seq>`, same max-based scheme as invoice/purchase/journal
    * numbering — see InvoicesService.nextInvoiceNumber for why count() would
    * be wrong here. */
-  private async nextContractNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const year = new Date().getFullYear();
+  /**
+   * بادئة رقم العقد من **`startDate`** — قرار المالك 2026-08-15.
+   *
+   * ولا تاريخ توقيع في نموذج العقد أصلاً (`create-contract.dto.ts` يحمل `start`
+   * و`end` لا غير). والحجّة: **تاريخ العقد الفعلي الذي يعرفه الطرفان ويظهر في
+   * المستند — ولا يعتمد على ساعة الخادم إطلاقاً.**
+   *
+   * ⚠️ و`signedAt` بندٌ مسجَّل بلا بدء (نماذج التسليم والتوقيع الرقمي). **وحين
+   * يُضاف لا تنتقل البادئة إليه تلقائياً** — تغييرُ أساس الترقيم بعد إصدار أرقام
+   * قرارٌ مستقل يُعاد فتحه، لا أثرٌ جانبي لحقلٍ جديد.
+   */
+  private async nextContractNumber(tx: Prisma.TransactionClient, startDate: Date): Promise<string> {
+    const year = documentYear(startDate);
     const prefix = `EJ-${year}-`;
     const rows = await tx.contract.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
     const maxSeq = rows.reduce((max, r) => {
