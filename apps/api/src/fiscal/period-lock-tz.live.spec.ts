@@ -2,6 +2,10 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { assertPeriodOpen } from './period-lock.util';
 import { createJournalEntry } from '../journal/journal-posting.util';
 import { postInvoiceEntry, postPurchaseEntry, postCustomerPaymentEntry, purchaseExpenseAccountCode } from '../journal/auto-posting.util';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+
+// مهلة مقيسة لا افتراضية — `beforeAll` هنا يُنشئ ١٢ فترة و٧ حسابات (1606 ms).
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * قفل الفترة تحت انزياح المنطقة الزمنية — **إثباتٌ على أربعة مسارات لا على واحد**.

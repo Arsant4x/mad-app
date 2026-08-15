@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+
+// مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * إثباتٌ **حيّ** لحرّاس سجل المهام — على قاعدة بيانات حقيقية.
