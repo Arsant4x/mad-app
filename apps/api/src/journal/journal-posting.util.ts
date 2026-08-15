@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { documentYear } from '../common/document-year.util';
 import { MSG } from '../common/i18n/messages';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 
@@ -54,8 +55,8 @@ export async function applyLinesToBalances(
 
 /** `JE-<year>-<seq>`, same max-based scheme as invoice/purchase numbering —
  * see InvoicesService.nextInvoiceNumber for why count() would be wrong here. */
-async function nextJournalNumber(tx: Prisma.TransactionClient): Promise<string> {
-  const year = new Date().getFullYear();
+async function nextJournalNumber(tx: Prisma.TransactionClient, entryDate: Date): Promise<string> {
+  const year = documentYear(entryDate);
   const prefix = `JE-${year}-`;
   const rows = await tx.journalEntry.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
   const maxSeq = rows.reduce((max, r) => {
@@ -107,7 +108,7 @@ export async function createJournalEntry(
   const accountTypes = await fetchAccountTypes(tx, [...new Set(input.lines.map((l) => l.accountId))]);
 
   const { currency, exchangeRate } = resolveCurrency(input);
-  const no = await nextJournalNumber(tx);
+  const no = await nextJournalNumber(tx, input.date);
   const entry = await tx.journalEntry.create({
     data: {
       companyId: input.companyId,

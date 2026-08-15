@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { documentYear } from '../common/document-year.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -74,7 +75,7 @@ export class QuotesService {
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 
-        const no = await this.nextQuoteNumber(tx);
+        const no = await this.nextQuoteNumber(tx, new Date(dto.issueDate));
         return tx.quote.create({
           data: {
             companyId,
@@ -228,8 +229,8 @@ export class QuotesService {
 
   /** تسلسل Q- مستقل تماماً عن INV/CN: يُشتق من جدول العروض وحده (شرط صاحب
    * المشروع) — إصدار عرض لا يستهلك رقم فاتورة أبداً. */
-  private async nextQuoteNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const year = new Date().getFullYear();
+  private async nextQuoteNumber(tx: Prisma.TransactionClient, issueDate: Date): Promise<string> {
+    const year = documentYear(issueDate);
     const prefix = `Q-${year}-`;
     const rows = await tx.quote.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
     const maxSeq = rows.reduce((max, r) => {

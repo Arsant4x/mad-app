@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { documentYear } from '../common/document-year.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -96,7 +97,7 @@ export class PaymentsService {
 
         const invoices = await this.assertAllocationsFit(tx, amount, currency, dto.customerId, allocations);
 
-        const no = await this.nextPaymentNumber(tx);
+        const no = await this.nextPaymentNumber(tx, new Date(dto.date));
         const payment = await tx.payment.create({
           data: {
             companyId,
@@ -177,7 +178,10 @@ export class PaymentsService {
 
         const amount = round2(-Number(original.amount));
         const rate = Number(original.exchangeRate);
-        const no = await this.nextPaymentNumber(tx);
+        // لحظةٌ واحدة للرقم وللصفّ معاً. ونداءان منفصلان لـ`new Date()` قد
+        // يقعان على طرفَي منتصف الليل، فيحمل السند رقم سنةٍ وتاريخَ أخرى.
+        const reversalDate = new Date();
+        const no = await this.nextPaymentNumber(tx, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
@@ -199,7 +203,7 @@ export class PaymentsService {
             customerId: original.customerId,
             // فرع العكس هو فرع الأصل حتماً — لا يُشتق من جلسة من يضغط الزر.
             branchId: original.branchId,
-            date: new Date(),
+            date: reversalDate,
             amount,
             method: original.method,
             bankId: original.bankId,
@@ -390,8 +394,8 @@ export class PaymentsService {
   }
 
   /** تسلسل سندات القبض مستقل عن الفواتير — يُشتق من جدول الدفعات وحده. */
-  private async nextPaymentNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const year = new Date().getFullYear();
+  private async nextPaymentNumber(tx: Prisma.TransactionClient, paymentDate: Date): Promise<string> {
+    const year = documentYear(paymentDate);
     const prefix = `RCV-${year}-`;
     const rows = await tx.payment.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
     const maxSeq = rows.reduce((max, r) => {
