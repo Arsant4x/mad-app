@@ -204,9 +204,25 @@ export class ZatcaService {
         }),
       });
 
-      const body = (await res.json().catch(() => ({}))) as { message?: string };
+      // كان يُقرأ `message` وحده — وهو **ليس من حقول استجابة هاتين النقطتين**.
+      // فالمخزَّن عند أي رفض كان النصّ «HTTP 409» فقط، و`validationResults`
+      // بكل رسائل الهيئة **تُهدَر**. ولا نقطة استعلام حالة لدى الهيئة (مؤكَّد
+      // بفحص البوّابة حيّاً 2026-08-15)، فما لا يُخزَّن هنا **لا يُستعاد أبداً**.
+      //
+      // ⚠️ وهذا **تسجيلٌ لا تفسير**: القرار ما زال `res.ok` كما هو. تغييرُ ما
+      // يُعدّ نجاحاً — و208 و409 خاصةً — قرارٌ مسجَّل بلا بدء، ولا يُتخذ هنا.
+      // والنصّ يُقصّ عند ٥٠٠ حرف كسابقة `zatca-onboarding.service.ts:248`.
+      const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const cleared = res.ok;
-      await this.recordResult(companyId, invoiceId, cleared, body.message ?? (cleared ? null : `HTTP ${res.status}`));
+      const detail =
+        typeof body.message === 'string' && body.message
+          ? body.message
+          : Object.keys(body).length > 0
+            ? `HTTP ${res.status} — ${JSON.stringify(body)}`.slice(0, 500)
+            : cleared
+              ? null
+              : `HTTP ${res.status}`;
+      await this.recordResult(companyId, invoiceId, cleared, detail);
       return this.statusOf(companyId, invoiceId);
     } catch (e) {
       const message = (e as Error).message;

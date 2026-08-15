@@ -42,6 +42,23 @@ export interface CreateCompanyAccountInput {
   subEnd?: Date;
   /** مدة التجربة بالأيام — تُقرأ من البيئة لدى المستدعي لا هنا (قرار تجاري بلا نشر). */
   trialDays: number;
+  /**
+   * هل القناة **عامّة بلا مصادقة**؟ يقرّر **رسالة تكرار اسم المستخدم** وحدها.
+   *
+   * لماذا وسيطٌ لا فرعٌ في الشيفرة: التمييز **في القناة لا في الفعل**. الفعل
+   * واحد (اسمٌ مأخوذ)، والمسموح كشفه يختلف:
+   *
+   * · **لوحة المدير / لوحة التاجر** — فاعلٌ موثَّق يُدير حساباتٍ يملكها، فردٌّ
+   *   صريح باسمه **مساعدة**: «اسم المستخدم "س" مستخدَم بالفعل».
+   * · **`/auth/register`** — بوّابة مفتوحة، فالردّ الصريح يجعلها **أداة تعداد
+   *   حسابات**: يُجرَّب اسمٌ ويُقرأ الجواب. لا فارق زمنٍ يُقاس ولا حدّ معدّل
+   *   يُراوَغ — إجابةٌ مباشرة.
+   *
+   * ⚠️ **وظهر هذا التمييز في تعارض دمج، لا في تصميم**: نُقل الفحص إلى النواة
+   * (البند ٠) بينما كان يُعدَّل في `register` (الموجة صفر). ولولا التعارض
+   * لبقيت رسالةٌ واحدة للقناتين — وهو ما كان قبل اليوم.
+   */
+  publicChannel?: boolean;
 }
 
 /**
@@ -55,7 +72,13 @@ export async function createCompanyAccount(
   input: CreateCompanyAccountInput,
 ): Promise<{ companyId: string; identityId: string }> {
   const clash = await prisma.loginIdentity.findUnique({ where: { username: input.username } });
-  if (clash) throw new ConflictException(formatMessage(MSG.username_taken, { username: input.username }));
+  if (clash) {
+    throw new ConflictException(
+      input.publicChannel
+        ? MSG.register_username_unavailable
+        : formatMessage(MSG.username_taken, { username: input.username }),
+    );
+  }
 
   const subStart = input.subStart ?? new Date();
   const subEnd = input.subEnd ?? addDays(subStart, input.trialDays);

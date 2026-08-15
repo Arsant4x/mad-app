@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { AccountStatus } from '@prisma/client';
@@ -59,6 +59,8 @@ interface IdentityWithProfiles {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -74,7 +76,25 @@ export class AuthService {
 
     // Same generic message whether the username doesn't exist or the
     // password is wrong — never reveal which one failed.
-    if (!identity) throw new UnauthorizedException(MSG.invalid_credentials);
+    //
+    // والرسالة وحدها لا تكفي: **الزمن كان يكشف ما تُخفيه الرسالة**. الخروج
+    // المبكّر عند غياب المستخدم يتخطّى `argon2.verify` كاملاً، فيردّ الخادم
+    // في جزءٍ من الزمن. القياس (٦٠ طلباً لكل حالة عبر HTTP حقيقي، 2026-08-15):
+    //
+    //   موجود + كلمة خاطئة : p50 = 93.3ms · p95 = 111.4ms · min = 81.1ms
+    //   غير موجود          : p50 = 14.2ms · p95 =  18.9ms · max = 21.7ms
+    //
+    // **فصلٌ تام**: أبطأ «غير موجود» أسرع من أسرع «موجود» — أي أن **قياساً
+    // واحداً** يصنّف بلا خطأ، ولا يحتاج المهاجم تكراراً ولا إحصاءً. وحدّ
+    // المعدّل (١٠/دقيقة/IP) **يبطّئ التعداد ولا يمنعه**.
+    //
+    // فالمسار غير الموجود يستهلك الزمن نفسه على هاشٍ حقيقي. ومعاملاته يجب أن
+    // تطابق ما يُنتجه `argon2.hash` هنا، وإلا عاد الفرق من باب آخر — ولذلك
+    // يُولَّد الشبح **من نفس الدالة** لا من ثابتٍ منسوخ.
+    if (!identity) {
+      await argon2.verify(await this.decoyHash(), password).catch(() => false);
+      throw new UnauthorizedException(MSG.invalid_credentials);
+    }
     const passwordOk = await argon2.verify(identity.passwordHash, password);
     if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
 
@@ -246,7 +266,27 @@ export class AuthService {
    * company profile, and an employee's password is reset by the owner from
    * the employee-accounts screen (that path already exists).
    */
+  /**
+   * الردّ موحَّد دائماً (`{ok:true}`) — **والزمن لم يكن كذلك**.
+   *
+   * حسابٌ موجود بعنوان بريد يكلّف: حذف الرموز القديمة · توليد رمز · كتابته ·
+   * **ثم نداء SMTP**. وحسابٌ مجهول يخرج فوراً. فالفرق أضخم من فرق الدخول
+   * (٧٩ms) لأن فيه نداءً شبكياً — **والرسالة الموحَّدة تُخفي ما يفضحه الزمن**.
+   *
+   * ولا يُعالَج بمقارنة وهمية كالدخول: لا سبيل لمحاكاة زمن SMTP بثبات. فالعلاج
+   * **فصل العمل عن الردّ**: يُردّ فوراً، ويجري الباقي بعده. فيصير الزمن ثابتاً
+   * لكل مدخل — لا مساوياً فحسب بل **غير حاملٍ لأي إشارة**.
+   *
+   * ⚠️ وثمنه معلَن: عطلٌ في الإرسال لا يصل الطالب — **وهو المقصود أصلاً**، إذ
+   * إعلامه بالفشل يكشف أن الحساب موجود. فيُسجَّل في سجلّ الخادم وحده.
+   */
   async forgotPassword(username: string): Promise<void> {
+    void this.deliverPasswordReset(username).catch((e) => {
+      this.logger.warn(`password reset delivery failed: ${(e as Error).message}`);
+    });
+  }
+
+  private async deliverPasswordReset(username: string): Promise<void> {
     const identity = await this.prisma.loginIdentity.findUnique({
       where: { username },
       include: { company: { select: { email: true, orgName: true } } },
@@ -328,11 +368,28 @@ export class AuthService {
       email,
       permissionTemplateId: template.id,
       trialDays: parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10),
+      // بوّابة مفتوحة بلا مصادقة — فرسالة تكرار الاسم لا تسمّي ولا تؤكّد.
+      publicChannel: true,
     });
 
     // Reusing the full login path gives the new merchant a working session in
     // the same response — no second request, no divergent session logic.
     return this.login(username, password);
+  }
+
+  /**
+   * هاشٌ شبح للمقارنة الوهمية في `login`. يُولَّد **مرة واحدة عند أول حاجة**
+   * ويُحفظ: توليده في كل طلب يضيف زمن `hash` فوق زمن `verify` فيقلب الفرق
+   * بدل أن يمحوه — والهدف مساواة الزمنين لا تكبير أحدهما.
+   *
+   * ⚠️ ويُولَّد بـ`argon2.hash` نفسها بمعاملاتها الافتراضية — هي المستعملة في
+   * التسجيل وإعادة التعيين، فالتطابق مضمون بالبناء لا بالنسخ. وثابتٌ منسوخ من
+   * بيئةٍ أخرى قد يحمل معاملاتٍ أخفّ فيُعيد الفرق من حيث لا يُرى.
+   */
+  private decoyHashPromise: Promise<string> | null = null;
+  private decoyHash(): Promise<string> {
+    this.decoyHashPromise ??= argon2.hash(crypto.randomBytes(32).toString('hex'));
+    return this.decoyHashPromise;
   }
 
   private hashToken(token: string): string {

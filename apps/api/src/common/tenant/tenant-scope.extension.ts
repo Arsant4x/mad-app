@@ -9,10 +9,26 @@ import { Prisma } from '@prisma/client';
  * so treat this list as part of the schema itself.
  *
  * `CompanyUserBranch` is deliberately absent: it carries no `companyId` of its
- * own and is only reachable through a CompanyUser that is already scoped, so
- * there is nothing here to inject. Branch visibility is a *permission* filter
- * (owner sees all, employee sees the branches granted to them), not the
+ * own, so there is nothing here to inject. Branch visibility is a *permission*
+ * filter (owner sees all, employee sees the branches granted to them), not the
  * absolute company boundary this extension enforces.
+ *
+ * ⚠️ **تصحيح 2026-08-15 — المبرّر السابق كان باطلاً.** كان التعليق يقول إن
+ * `CompanyUserBranch` «لا يُبلَغ إلا عبر `CompanyUser` **المشمول بالنطاق**».
+ * و`CompanyUser` **ليس في هذه القائمة** — ولم يكن. فالمقدّمة التي بُني عليها
+ * الاستثناء كاذبة، والتعليق كان **يطمئن قارئه إلى أمانٍ غير قائم**.
+ *
+ * و`CompanyUser` نفسه **بلا `RLS` في القاعدة أيضاً** (`ENABLE`/`POLICY` صفر في
+ * الهجرات — مُثبَت 2026-08-15 على قاعدة مبنيّة من الهجرات وحدها، ومعه عبورٌ
+ * فعلي بين منشأتين). أي أن الطبقتين ساقطتان معاً عليه.
+ *
+ * ⬅️ **والقاعدة المستخلصة (مسجَّلة في CLAUDE.md §8.9):** استثناءٌ في طبقة بلا
+ * تعويضٍ في الأخرى **ليس استثناءً بل ثغرةٌ موثَّقة**. فالاستثناء هنا كان
+ * مبرَّراً بمسار الدخول — ولم يُضَف الضابط المعوِّض قط.
+ *
+ * ولا يُضاف `CompanyUser` إلى القائمة **قبل** حسم آلية التصريح في القاعدة
+ * (قرار المالك 2026-08-15: دورٌ ثانٍ بـ`BYPASSRLS` للدخول + سياسة صريحة لدور
+ * الإدارة لوضع الدعم) — لأن تفعيل طبقةٍ دون الأخرى يكسر الدخول بلا أن يعزل.
  */
 export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'BusinessActivity',
