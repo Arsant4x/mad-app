@@ -1,0 +1,102 @@
+#!/bin/sh
+#
+# تهيئة شجرة عاملة جديدة — تلقائياً وبلا تذكُّر.
+#
+# ## لماذا
+#
+# `git worktree add` يُنشئ شجرةً تولد **بلا اختبارات تعمل**، لأن شيئين لا
+# يأتيان مع git:
+#
+#   ① `node_modules` — الأشجار تتشارك حزم المستودع الرئيس برابط. وبدونه:
+#        Module ts-jest in the transform option was not found.
+#   ② `apps/api/.env.test` — متجاهَل بـ`.gitignore` (`.env.*`)، وبدونه لا
+#      `DATABASE_URL`، فتتخطّى المجسّات الحيّة أو تسقط لسببٍ بيئي بحت.
+#
+# وكلاهما **يُقرأ انحداراً في الشيفرة** لا نقصاً في التهيئة — وهي عائلة سوء
+# التشخيص التي كلّفت يوماً كاملاً (§8.12). فالعلاج أن تُهيَّأ الشجرة نفسها.
+#
+# ## لماذا `post-checkout`
+#
+# لأنه **يُطلَق فعلاً عند `git worktree add`** — مقيسٌ لا مفترَض:
+#
+#     checkout عادي   ⇒ إطلاقتان (لعمليتَي checkout)
+#     worktree add    ⇒ إطلاقة واحدة
+#
+# ⚠️ ويحتاج `core.hooksPath=.githooks` مضبوطاً في النسخة. (وهو مضبوط هنا —
+#    وأول مجسٍّ لهذا السؤال كان باطلاً لأنه كتب في `.git/hooks` حيث لا يقرأ git.)
+#
+# ## ثلاثة شروط — قرار المالك 2026-08-15
+#
+#   ١. **خامل ورخيص**: لا يعمل شيئاً إن كان الاثنان موجودين، ولا يبطّئ أي
+#      checkout. فالخروج المبكر أول ما يجري: اختبارا وجودٍ ثم `exit 0`.
+#   ٢. **لا يكتب سرّاً**: يَنسخ `.env.test.example` كما هي ولا يولّد مفتاحاً
+#      ولا كلمة مرور. وما لا قدوةَ له لا يُخترَع.
+#   ٣. **يُبلغ بما فعل**: سطرٌ واحد لكل إجراء — «من لا يعرف أن شيئاً حدث لا
+#      يثق به». ويصمت تماماً حين لا يفعل شيئاً.
+
+# `$3` = 1 لتبديل فرع، 0 لاستعادة ملفات. والثاني لا شأن له بالتهيئة.
+[ "$3" = "1" ] || exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -n "$root" ] || exit 0
+
+env_target="$root/apps/api/.env.test"
+
+# ── الشرط ١: الخروج المبكر ────────────────────────────────────────────────
+# اختباران على نظام الملفات ثم انصراف. لا `git` ولا شبكة ولا نسخ.
+if [ -e "$root/node_modules" ] && [ -e "$env_target" ]; then
+  exit 0
+fi
+
+# ── ① الحزم ───────────────────────────────────────────────────────────────
+if [ ! -e "$root/node_modules" ]; then
+  # المستودع الرئيس هو أب `--git-common-dir`؛ حزمه هي المصدر.
+  common=$(git rev-parse --git-common-dir 2>/dev/null)
+  case "$common" in
+    /*|[A-Za-z]:*) main_root=$(dirname "$common") ;;
+    *)             main_root=$(dirname "$root/$common") ;;
+  esac
+  source_modules="$main_root/node_modules"
+
+  if [ -d "$source_modules" ]; then
+    err=''
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        # ⚠️ وصلة مجلد (`mklink /J`) لا رابطاً رمزياً: الرمزي على ويندوز
+        # يحتاج صلاحية مدير — `ln -s` يردّ `Operation not permitted` —
+        # والوصلة لا تحتاجها. فرقٌ مقيس لا مفترَض.
+        #
+        # ⚠️ و`MSYS_NO_PATHCONV=1` مع `cmd /c` — **لا `cmd //c`**. وهذا
+        # مقيسٌ أيضاً بعد سقوطين: MSYS يترجم `/J` إلى مسار ويندوز فيردّ
+        # `Parameter format not correct`؛ ومنعُ الترجمة وحده يترك `//c`
+        # على حاله فيفتح cmd جلسةً تفاعلية بدل التنفيذ.
+        err=$(MSYS_NO_PATHCONV=1 cmd /c mklink /J \
+                "$(cygpath -w "$root/node_modules")" \
+                "$(cygpath -w "$source_modules")" </dev/null 2>&1)
+        ;;
+      *)
+        err=$(ln -s "$source_modules" "$root/node_modules" 2>&1)
+        ;;
+    esac
+
+    # ⚠️ يُقرأ **نظام الملفات** لا رمزُ خروج الأمر: أول صياغة اكتفت بتشغيل
+    # `mklink` وابتلعت مخرَجه، فسقط الربط **بلا سطرٍ واحد** — أسوأ من عدم
+    # المحاولة، لأن الشجرة تبدو مهيّأة. فالنجاح والفشل كلاهما يُعلَن.
+    if [ -e "$root/node_modules" ]; then
+      echo "تهيئة الشجرة: رُبطت node_modules ← $source_modules"
+    else
+      echo "تهيئة الشجرة: ✖ تعذّر ربط node_modules — $err"
+    fi
+  else
+    echo "تهيئة الشجرة: ⚠️ لا node_modules في $main_root — شغّل npm install في المستودع الرئيس"
+  fi
+fi
+
+# ── ② بيئة الاختبار ───────────────────────────────────────────────────────
+# الشرط ٢: نسخٌ حرفيّ للقدوة الملتزَمة. لا توليد، ولا قيمة تُخترَع هنا.
+if [ ! -e "$env_target" ] && [ -f "$root/apps/api/.env.test.example" ]; then
+  cp "$root/apps/api/.env.test.example" "$env_target" &&
+    echo "تهيئة الشجرة: نُسخت apps/api/.env.test من .env.test.example"
+fi
+
+exit 0

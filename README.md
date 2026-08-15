@@ -12,8 +12,14 @@ React web app, npm workspaces monorepo.
 
 ```bash
 npm install
+git config core.hooksPath .githooks   # مرّة واحدة لكل نسخة
 docker compose up -d
 ```
+
+`core.hooksPath` ليس تحسيناً: خطّافا المستودع يعيشان في `.githooks/`، وبلا
+هذا السطر **لا يعملان** — و`post-checkout` منهما هو ما يهيّئ كل شجرة عاملة
+جديدة تلقائياً (انظر «شجرة عاملة جديدة» أدناه). وبوّابة `pretest` تلتقط من
+نسي هذا السطر فتقول له ما ينقص، بدل أن يُقرأ النقص عطلاً في الشيفرة.
 
 Postgres's bootstrap user (`mad_app`, from `docker-compose.yml`) is a
 superuser, which would silently bypass Row-Level Security. The app must
@@ -61,6 +67,28 @@ cd apps/api
 npm test          # unit tests
 npm run test:e2e  # tenant-isolation e2e suite, needs docker compose + a seeded DB
 ```
+
+### شجرة عاملة جديدة (`git worktree add`)
+
+**لا خطوات يدوية** — `.githooks/post-checkout` يهيّئها عند إنشائها ويطبع ما فعل:
+
+```
+تهيئة الشجرة: رُبطت node_modules ← D:/mad-app/node_modules
+تهيئة الشجرة: نُسخت apps/api/.env.test من .env.test.example
+```
+
+وشيئان لا يأتيان مع git، وغيابُ كلٍّ منهما **يُقرأ انحداراً في الشيفرة**:
+
+| الناقص | ما يظهر بدله |
+|---|---|
+| `node_modules` (تُشارَك مع المستودع الرئيس بوصلة) | `Module ts-jest in the transform option was not found` |
+| `apps/api/.env.test` (متجاهَل بـ`.gitignore`) | مجسّات حيّة تتخطّى أو تسقط بـ`PrismaClientInitializationError` |
+
+والخطّاف **لا يولّد سرّاً**: ينسخ `.env.test.example` الملتزَمة كما هي. ولا
+يفعل شيئاً ولا يطبع حرفاً إن كان الاثنان موجودَين.
+
+وإن لم يعمل (نسيان `core.hooksPath`)، فبوّابة `pretest` تسقط بسطرٍ يقول ما
+ينقص وما يُشغَّل — لا بخطأ يُقرأ عطلاً في المنتَج.
 
 ## Tenant isolation
 
