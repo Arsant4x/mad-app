@@ -36,6 +36,7 @@ export const MSG = {
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
+  register_username_unavailable: 'auth.register_username_unavailable',
 
   // accounts / journal
   account_not_found: 'accounts.not_found',
@@ -306,6 +307,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.reset_token_invalid]: { ar: 'رابط الاستعادة غير صالح أو منتهي — اطلب رابطاً جديداً', en: 'This reset link is invalid or expired — request a new one' },
   [MSG.register_disabled]: { ar: 'التسجيل الذاتي غير متاح حالياً', en: 'Self-registration is currently disabled' },
   [MSG.register_unavailable]: { ar: 'التسجيل غير متاح مؤقتاً — تواصل مع الدعم', en: 'Registration is temporarily unavailable — contact support' },
+  // لا يردّ الاسم ولا يقول «مستخدَم» — `/auth/register` بوّابة عامّة، فردٌّ يؤكّد
+  // وجود حساب يجعلها أداة تعداد. و`username_taken` يبقى للوحتَي المدير والتاجر
+  // حيث الفاعل موثَّق ويُدير حساباتٍ يملكها.
+  [MSG.register_username_unavailable]: { ar: 'تعذّر إنشاء الحساب بهذا الاسم — جرّب اسماً آخر', en: 'Could not create an account with that username — try another' },
   [MSG.platform_admin_only]: { ar: 'هذا الإجراء متاح لحساب المطوّر فقط', en: 'This action is restricted to the platform administrator' },
 
   [MSG.account_not_found]: { ar: 'الحساب غير موجود', en: 'Account not found' },

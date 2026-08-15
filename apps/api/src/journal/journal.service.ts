@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { branchFilter } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -81,6 +82,11 @@ export class JournalService {
         // which never exposes a manual delete button for auto entries.
         throw new ConflictException(MSG.journal_auto_entry_undeletable);
       }
+      // قفل الفترة كان يحرس الكتابة ولا يحرس الحذف — مُثبَت بالتشغيل
+      // (2026-08-15): `POST /journal` إلى فترة مقفلة ⇒ 409، و`DELETE` لقيدٍ
+      // **داخل الفترة نفسها** ⇒ **204** والصفّ يختفي. أي أن القفل يمنع إضافة
+      // قيدٍ ويسمح بمحو قيدٍ قائم — وهو نقيض معناه.
+      await assertPeriodOpen(tx, existing.date);
       await reverseAndDeleteJournalEntry(tx, id);
     });
   }
