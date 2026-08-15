@@ -5,8 +5,7 @@ import { AccountStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { createDefaultChart } from '../accounts/default-chart';
-import { createCompanyDefaults } from '../companies/company-defaults';
+import { createCompanyAccount } from '../companies/create-company-account';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
@@ -342,58 +341,35 @@ export class AuthService {
   /**
    * A merchant signs itself up (CLAUDE.md §10: «العميل يسجّل بنفسه») and gets a
    * trial subscription. TRIAL_DAYS is env-config, not code — trial length is a
-   * commercial decision the owner adjusts without a deploy. Activity selection
-   * at signup (SPEC 15.3) is deliberately NOT here yet: it hangs on the
-   * unresolved 15.9 decision.
+   * commercial decision the owner adjusts without a deploy.
+   *
+   * الإنشاء نفسه في `createCompanyAccount` — **نواة واحدة** يتقاسمها هذا المسار
+   * ومسار لوحة المدير (قرار المالك 2026-08-14: القنوات الأخرى أدوارٌ على نموذجٍ
+   * واحد لا مسارات موازية). وما يخصّ التسجيل الذاتي وحده يبقى هنا: مفتاح
+   * الإطفاء · اختيار القالب الأوسع · مدة التجربة.
+   *
+   * واختيار النشاط عند التسجيل (بند ٢ في ترتيب التنفيذ المعتمد) لم يُبنَ بعد —
+   * وقد صار قراراً محسوماً لا معلَّقاً، فيُضاف **داخل** النواة لا هنا.
    */
   async register(orgName: string, username: string, password: string, email?: string): Promise<LoginResult> {
     if (this.config.get<string>('REGISTRATION_ENABLED', 'true') === 'false') {
       throw new ForbiddenException(MSG.register_disabled);
     }
 
-    const clash = await this.prisma.loginIdentity.findUnique({ where: { username } });
-    // ⚠️ **بوّابة عامّة — فالرسالة لا تردّ اسم المستخدم.** `MSG.username_taken`
-    // نصّه «اسم المستخدم "{username}" مستخدَم بالفعل»، وهو صالحٌ في لوحة المدير
-    // ولوحة التاجر (فاعلٌ موثَّق يُدير حساباتٍ يملكها) — **ولا يصلح هنا**:
-    // `/auth/register` مفتوح بلا مصادقة، فيصير أداة **تعداد حسابات** بردٍّ صريح
-    // لا بفارق زمن. مُثبَت 2026-08-15.
-    if (clash) throw new ConflictException(MSG.register_username_unavailable);
-
     // The broadest template: a new merchant sees the whole product during its
     // trial; narrowing is what employee sub-accounts are for.
     const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true, companyId: null }, orderBy: { createdAt: 'asc' } });
     if (!template) throw new ConflictException(MSG.register_unavailable);
 
-    const trialDays = parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);
-    const now = new Date();
-    const subEnd = new Date(now);
-    subEnd.setDate(subEnd.getDate() + trialDays);
-
-    // نفس ضمانة مسار لوحة المدير: الدليل يُولد مع المنشأة في معاملة واحدة،
-    // فالتاجر الذي سجّل بنفسه يصدر أول فاتورة ويجدها مرحَّلةً بلا أي إعداد.
-    await this.prisma.$transaction(async (tx) => {
-      const created = await tx.loginIdentity.create({
-        data: {
-          username,
-          passwordHash: await argon2.hash(password),
-          actorType: 'COMPANY',
-          company: {
-            create: {
-              orgName: orgName.trim(),
-              email: email?.trim() || null,
-              permissionTemplateId: template.id,
-              subStart: now,
-              subEnd,
-            },
-          },
-        },
-        include: { company: { select: { id: true } } },
-      });
-      await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
-      await createDefaultChart(tx, created.company!.id);
-      // نشاط افتراضي وصفّ عملة الأساس — نفس عائلة دليل الحسابات: منشأة
-      // تُولد ناقصة بصمت لأن مسار البذرة وحده كان يكملها.
-      await createCompanyDefaults(tx, created.company!.id);
+    await createCompanyAccount(this.prisma, {
+      username,
+      password,
+      orgName,
+      email,
+      permissionTemplateId: template.id,
+      trialDays: parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10),
+      // بوّابة مفتوحة بلا مصادقة — فرسالة تكرار الاسم لا تسمّي ولا تؤكّد.
+      publicChannel: true,
     });
 
     // Reusing the full login path gives the new merchant a working session in

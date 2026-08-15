@@ -1,9 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Company } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { ConfigService } from '@nestjs/config';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
-import { createDefaultChart } from '../accounts/default-chart';
-import { createCompanyDefaults } from './company-defaults';
+import { createCompanyAccount } from './create-company-account';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -29,7 +29,18 @@ function resolveSubStart(dtoSubStart?: string): Date {
 
 @Injectable()
 export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  /**
+   * نفس مصدر `AuthService.register` — لا رقمٌ ثانٍ. مدة التجربة قرار تجاري
+   * يُضبط من البيئة بلا نشر، وقناتان تقرآنه من موضعين تفترقان عند أول تغيير.
+   */
+  private trialDays(): number {
+    return parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);
+  }
 
   async list() {
     const companies = await this.prisma.company.findMany({ include: COMPANY_INCLUDE, orderBy: { createdAt: 'asc' } });
@@ -62,40 +73,27 @@ export class CompaniesService {
     // defines employees within a company, not the company itself.
     if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
 
-    const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-    if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
-
-    // المنشأة ودليلها يُولدان معاً في معاملة واحدة: منشأةٌ بلا دليل تصدر
-    // مستنداتها بنجاح ولا يُرحَّل منها شيء (التخطي الصامت في resolveAccountIds)،
-    // فالحالة الوسطى تلك أسوأ من فشل الإنشاء — ولذلك لا تُولد أصلاً.
-    const identity = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.loginIdentity.create({
-        data: {
-          username: dto.username,
-          passwordHash: await argon2.hash(dto.password),
-          actorType: 'COMPANY',
-          company: {
-            create: {
-              orgName: dto.orgName,
-              permissionTemplateId: dto.permissionTemplateId,
-              subStart: resolveSubStart(dto.subStart),
-              subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
-            },
-          },
-        },
-        include: { company: { include: COMPANY_INCLUDE } },
-      });
-      // سياسة RLS على accounts تفحص الإدراج أيضاً (WITH CHECK) — والسياق لا
-      // يمكن ضبطه قبل هذه اللحظة لأن المعرّف يولد مع الصف.
-      await tx.$executeRaw`SELECT set_config('app.company_id', ${created.company!.id}, true)`;
-      await createDefaultChart(tx, created.company!.id);
-      // نشاط افتراضي وصفّ عملة الأساس — نفس عائلة دليل الحسابات: منشأة
-      // تُولد ناقصة بصمت لأن مسار البذرة وحده كان يكملها.
-      await createCompanyDefaults(tx, created.company!.id);
-      return created;
+    // الإنشاء في `createCompanyAccount` — نواة واحدة يتقاسمها هذا المسار ومسار
+    // التسجيل الذاتي. وما يخصّ لوحة المدير وحدها يبقى هنا: التحقق من أن القالب
+    // عامّ، وقبول تواريخ اشتراك يدوية.
+    //
+    // ⚠️ و`subEnd` يبقى اختيارياً في العقد — لكن النواة **تسقط على مدة التجربة**
+    // عند غيابه بدل أن تُنتج منشأةً بلا تاريخ نهاية. الصفّ ذاك كان لا يتجمّد
+    // أبداً (`evaluateCompanyStatus` يعيد الحالة كما هي حين يغيب `subEnd`) — أي
+    // قناةُ إنشاءٍ خارج دورة الحياة كلها، وهو نقيض «نموذجٍ واحد».
+    const { companyId } = await createCompanyAccount(this.prisma, {
+      username: dto.username,
+      password: dto.password,
+      orgName: dto.orgName,
+      permissionTemplateId: dto.permissionTemplateId,
+      subStart: resolveSubStart(dto.subStart),
+      subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,
+      trialDays: this.trialDays(),
     });
 
-    return identity.company!;
+    // تُقرأ بعد الالتزام بالـ`include` الذي تحتاجه اللوحة — النواة تعيد المعرّف
+    // وحده عمداً لئلا يتفرّع توقيعها بحسب حاجة كل مستدعٍ.
+    return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, include: COMPANY_INCLUDE });
   }
 
   async update(id: string, dto: UpdateCompanyDto) {

@@ -6,7 +6,17 @@ export interface StatusBearing {
   subEnd: Date | null;
 }
 
-const FROZEN_TO_STOPPED_GRACE_DAYS = 30;
+/**
+ * مهلة السماح بين التجميد والإيقاف — **مصدرٌ واحد**.
+ *
+ * كانت مكتوبةً رقماً في ملفين (هنا وفي `subscription.service.ts`) بلا حارس يمنع
+ * افتراقهما: أحدهما يقرّر متى يُوقَف الحساب، والآخر يحسب العدّ التنازلي المعروض
+ * على الشاشة. فتغيير أحدهما وحده يجعل التاجر يرى مهلةً لا تطابق ما يفعله الحارس.
+ *
+ * ⚠️ والقرار المسجَّل (المالك 2026-08-14) **يغيّر هذا الرقم إلى ستة أشهر ويُقاس من
+ * `subEnd`** — فتوحيده قبل تغييره شرطٌ لا تحسين.
+ */
+export const FROZEN_TO_STOPPED_GRACE_DAYS = 30;
 
 /**
  * Mirrors the mockup's checkSubscriptionStatus(): a company transitions

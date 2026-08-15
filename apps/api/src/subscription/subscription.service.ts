@@ -1,9 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
+import { evaluateCompanyStatus, FROZEN_TO_STOPPED_GRACE_DAYS } from '../common/tenant/company-status.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
-
-const FROZEN_TO_STOPPED_GRACE_DAYS = 30;
 
 function addMonths(from: Date, months: number): Date {
   const d = new Date(from);
