@@ -1,5 +1,6 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
+import { AuditService } from '../audit/audit.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
@@ -25,9 +26,12 @@ function assertIsCompanyOwner(actorType: string): void {
 
 @Injectable()
 export class CompanyUsersService {
+  private readonly logger = new Logger(CompanyUsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly audit: AuditService,
   ) {}
 
   list(companyId: string, actorType: string) {
@@ -35,7 +39,7 @@ export class CompanyUsersService {
     return this.prisma.companyUser.findMany({ where: { companyId }, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } });
   }
 
-  async create(companyId: string, actorType: string, dto: CreateCompanyUserDto) {
+  async create(companyId: string, actorType: string, dto: CreateCompanyUserDto, actor?: { id: string; name: string }) {
     assertIsCompanyOwner(actorType);
 
     const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
@@ -49,7 +53,39 @@ export class CompanyUsersService {
     if (dto.branchIds?.length) await this.assertBranchIdsBelongToCompany(companyId, dto.branchIds);
 
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-    if (existing) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
+    if (existing) {
+      /**
+       * ⚠️ **الاصطدام يُسجَّل — وهو الإشارة الوحيدة على التعداد.**
+       *
+       * `AuditInterceptor` يسجّل بـ`tap((result) => …)` — **مسار النجاح
+       * وحده**. فالإخفاقات لا تترك أثراً إطلاقاً، و«تعدادُ الأسماء» **كلّه
+       * إخفاقات**: من يجرّب مئة اسم ليعرف أيّها موجود لا يُنشئ حساباً واحداً.
+       *
+       * أي أن الهجوم كان **غير مرئي بنيوياً** لا «غير ملحوظ».
+       *
+       * 📌 ولا يُسجَّل الاسم المطلوب في `details`: تسجيله يجعل سجل التدقيق
+       * نفسه **نسخةً ثانية من التسريب** يقرأها من يملك صلاحية التدقيق. فيُسجَّل
+       * **وقوع** الاصطدام لا موضوعه — والغرض كشف النمط لا حفظ المحاولة.
+       */
+      await this.audit
+        .record({
+          companyId,
+          actorType,
+          actorId: actor?.id ?? 'unknown',
+          actorName: actor?.name ?? 'unknown',
+          screen: 'users',
+          action: 'add',
+          entity: 'CompanyUser',
+          entityId: null,
+          method: 'POST',
+          path: '/company-users',
+          details: { outcome: 'username_conflict' },
+          ip: null,
+        })
+        .catch((e) => this.logger.error(`تعذّر تسجيل اصطدام اسم المستخدم: ${String(e)}`));
+
+      throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
+    }
 
     const identity = await this.prisma.loginIdentity.create({
       data: {
