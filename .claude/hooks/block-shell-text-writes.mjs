@@ -29,6 +29,10 @@
  * يمنع كل تفسير.
  */
 import { readFileSync } from 'node:fs';
+// ⚠️ استيرادٌ ثابت لا `require`: هذا الملف **وحدة ESM** (`.mjs` مع `import`)،
+// و`require` فيها غير معرَّفة. و`node --check` يمرّ عليها لأنها صياغةٌ سليمة —
+// **والفحص النحوي ليس تشغيلاً**. كُشف بتشغيل الخطّاف فعلاً لا بقراءته.
+import { spawnSync } from 'node:child_process';
 
 let payload;
 try {
@@ -210,6 +214,88 @@ if (DESTRUCTIVE.test(cmd) && !HAS_GATE.test(cmd) && !ABSOLUTE_TARGET.test(cmd)) 
     ].join('\n'),
   );
   process.exit(2);
+}
+
+/**
+ * ═══ بوّابة الدمج: حالة الطلب تُقرأ **قبل** الدمج لا معه ═══
+ *
+ * ## الحادثة (2026-08-16)
+ *
+ * طُلب دمج `#61`، فقُرئت حالته **في نفس الأمر الذي دمج**:
+ *
+ *     gh pr view 61 --json … && gh pr merge 61 --merge
+ *
+ * فطُبعت `UNSTABLE` **ومضى الدمج قبل أن تُقرأ**. و`db-integration` كانت ساقطة،
+ * فصارت `main` حمراء. والفحص كان بين اليدين **ولم يمنع شيئاً** لأنه مخرَجٌ
+ * يُقرأ لا شرطٌ يُختبَر — وهي عائلة §8.10: **الإعلان ليس قراءة**.
+ *
+ * ⚠️ **وأمرُ المالك بالدمج لا يُسقط قراءة ما بين يديك** (قراره 2026-08-16):
+ * فهو يأمر بالدمج على أساس أن الحالة سليمة، لا على أساس أن تُتجاهَل.
+ *
+ * ## ولماذا يستعلم هذا الحارس بنفسه
+ *
+ * حارسٌ يشترط «اقرأ الحالة أولاً» يعود عادةً بشرية تُنسى — وهي التي فشلت هنا.
+ * فيسأل **هو** ويمنع المضيّ (§8.11: كل قاعدة تُنفَّذ بوّابةً أو لا تُعتمد).
+ *
+ * ## الإذن الصريح
+ *
+ * `MERGE_UNSTABLE_OK=1` في نصّ الأمر — ولا تُكتب إلا بإذن المالك **في نفس
+ * رسالته**. فهي أثرٌ مقروء في السجل، لا مفتاحٌ صامت.
+ */
+const MERGE_CMD = /(^|[^\w-])gh\s+pr\s+merge(\s|$)/;
+
+if (MERGE_CMD.test(cmd)) {
+  if (/MERGE_UNSTABLE_OK=1/.test(cmd)) process.exit(0); // إذنٌ صريح، وأثرُه في الأمر
+
+  const prNumber = cmd.match(/gh\s+pr\s+merge\s+(\d+)/)?.[1] ?? '';
+  const args =['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'number,state,mergeStateStatus'];
+  const probe = spawnSync('gh', args, { encoding: 'utf8', shell: process.platform === 'win32' });
+
+  // ⚠️ **يُفحص نجاح الاستعلام قبل قراءة نتيجته** (§8.8): استعلامٌ فاشل يُقرأ
+  // حالةً فارغة — أي أن الحارس يمرّ على كل شيء وهو يظنّ نفسه يعمل.
+  let status = null;
+  let number = prNumber || '?';
+  if (probe.status === 0) {
+    try {
+      const parsed = JSON.parse(probe.stdout);
+      status = parsed.mergeStateStatus ?? null;
+      number = parsed.number ?? number;
+    } catch {
+      status = null;
+    }
+  }
+
+  if (status === null) {
+    console.error(
+      [
+        `⛔ تعذّر قراءة حالة الطلب #${number} قبل الدمج — والدمج ممنوع بلا قراءتها.`,
+        '',
+        '**والفشل مُغلِق لا مفتوح عمداً**: حالةٌ لم تُقرأ ليست حالةً سليمة.',
+        `تفصيل: ${String(probe.stderr || probe.error?.message || 'مخرَج غير مفهوم').trim().slice(0, 300)}`,
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
+
+  if (status === 'UNSTABLE' || status === 'BLOCKED') {
+    console.error(
+      [
+        `⛔ الطلب #${number} حالته ${status} — والدمج ممنوع.`,
+        '',
+        'UNSTABLE = فحصٌ ساقط أو لم يكتمل.  BLOCKED = مراجعةٌ أو حمايةٌ تمنع.',
+        '',
+        'الحادثة (2026-08-16): دُمج #61 وحالته UNSTABLE لأن الفحص قُرئ **في نفس',
+        'الأمر الذي دمج**، فطُبع ومضى قبل أن يُقرأ. وكانت db-integration ساقطة،',
+        'فصارت main حمراء.',
+        '',
+        'الطريق:',
+        `  ١. اقرأ السبب:   gh pr checks ${prNumber || '<رقم>'}`,
+        '  ٢. أصلحه، وانتظر اخضرار الفحوص، ثم أعد الأمر.',
+        '  ٣. أو بإذن المالك الصريح في رسالته: أضف MERGE_UNSTABLE_OK=1 إلى الأمر.',
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
 }
 
 process.exit(0);
