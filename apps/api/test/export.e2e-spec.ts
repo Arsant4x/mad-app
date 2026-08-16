@@ -3,6 +3,18 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+/**
+ * ⚠️ **يُقرأ اسم المفتاح من مصدره لا يُكتب حرفياً.**
+ *
+ * كانت هذه الحالات تكتب `res.body.data.customers` — وهو اسم القائمة اليدوية
+ * القديمة. ولمّا صار التصدير مشتقّاً من المخطط صارت المفاتيح **أسماء مندوبي
+ * Prisma** (`customer` لا `customers`)، فسقطت الحالتان في السير بـ
+ * `Cannot read properties of undefined (reading 'some')`.
+ *
+ * والاستيراد من `export-scope` يجعل الاختبار والشيفرة يقرآن **المصدر نفسه**،
+ * فلا يفترقان صامتين مرّةً أخرى.
+ */
+import { delegateName } from '../src/export/export-scope';
 
 /**
  * تصدير البيانات — نسخة التاجر من بياناته (النصف الآخر من «النسخ الاحتياطي»
@@ -83,11 +95,12 @@ describe('Data export (e2e)', () => {
     expect(res.body.format).toBe('mad-app-export');
     expect(res.body.company.orgName).toBeTruthy();
 
-    const customers = res.body.data.customers as { id: string; name: string }[];
+    const customers = res.body.data[delegateName('Customer')] as { id: string; name: string }[];
+    expect(customers).toBeDefined();
     expect(customers.some((c) => c.id === markerId && c.name === markerName)).toBe(true);
     // The big ledgers are present as collections, even if empty.
-    for (const key of ['accounts', 'invoices', 'journalEntries', 'contracts', 'products']) {
-      expect(Array.isArray(res.body.data[key])).toBe(true);
+    for (const model of ['Account', 'Invoice', 'JournalEntry', 'Contract', 'Product']) {
+      expect(Array.isArray(res.body.data[delegateName(model)])).toBe(true);
     }
   }, 60000);
 
@@ -97,7 +110,12 @@ describe('Data export (e2e)', () => {
 
   it("never carries another company's rows", async () => {
     const res = await request(app.getHttpServer()).get('/export').set('Authorization', `Bearer ${tokenB}`).expect(200);
-    const customers = res.body.data.customers as { id: string }[];
+    const customers = res.body.data[delegateName('Customer')] as { id: string }[];
+    // ⚠️ **الوجود يُتحقَّق قبل الغياب.** مفتاحٌ غير موجود يجعل `some` تسقط —
+    // وهو ما وقع فعلاً: تغيّرت أسماء المفاتيح فصار هذا التوكيد يقرأ `undefined`.
+    // ولو كان مكتوباً `customers?.some(...)` **لمرّ خضراءَ بلا أن يفحص شيئاً**،
+    // فيبدو عزلُ المستأجر مُثبَتاً وهو غير مفحوص أصلاً.
+    expect(customers).toBeDefined();
     expect(customers.some((c) => c.id === markerId)).toBe(false);
   }, 60000);
 });
