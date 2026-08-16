@@ -353,18 +353,26 @@ jobs:
           END $$;
           SQL
 
-      # ⚠️ الاسم يتّسع باتّساع ما تفعله الخطوة — «خطوةٌ باسمٍ أضيق ممّا تفعله
-      #    تُقرأ خطأً»، وهي الحجّة المكتوبة أصلاً لتوسيع اسم هذه الوظيفة.
-      #    أُضيف `icv-concurrency.live.spec.ts`: سباق عدّاد الهيئة على الخدمة
-      #    الحقيقية — إثباتٌ لا يقوم إلا على قاعدة حيّة باستدعاءين متزامنين.
-      - name: الإثبات الحيّ — السجلّان وRLS وسباق عدّاد الهيئة (blocking)
+      # ═══ الإثبات الحيّ — **مشتقٌّ من القرص لا مكتوبٌ بالمسار** ═══
+      #
+      # كانت الملفات تُسمّى واحداً واحداً. ومجسّ حيّ جديد يُنسى من القائمة
+      # **يمرّ صامتاً**: يوجد على القرص، أخضرُ محلياً، ولا يُشغَّل في السير
+      # أبداً — وهي عائلة العطل نفسها التي وُلد منها حارسا العدّ في هذا الملف.
+      #
+      # فالنمط يُشتقّ الآن (`--testPathPattern 'live\.spec'`)، والحارس بعده
+      # يطابق **ما على القرص** بمجموع ما نُفِّذ في الخطوتين.
+      #
+      # 📌 `period-lock-tz` مستثناة هنا **بسببٍ مكتوب لا بالسهو**: تحتاج
+      #    `TZ` غربية فتُشغَّل في خطوتها الخاصة أدناه — والحارس يعدّها هناك.
+      - name: الإثبات الحيّ — كل مجسّ حيّ إلا ما له بيئة خاصة (blocking)
         working-directory: apps/api
         shell: bash
         run: |
           set -o pipefail
-          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts src/activities/rls-probe.live.spec.ts src/zatca/icv-concurrency.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
+          npx jest --roots '<rootDir>/src' --testPathPattern 'live\.spec' \
+            --testPathIgnorePatterns 'period-lock-tz' --verbose 2>&1 | tee /tmp/live.log
 
-      - name: ملخّص خام (السجلّان)
+      - name: ملخّص خام (المجسّات الحيّة)
         if: always()
         run: grep -aE "✓|✗|√|×|Tests:|Suites:" /tmp/live.log || echo "(لا ملخّص)"
 
@@ -416,7 +424,36 @@ jobs:
           fi
           grep -aE "√|×|✓|✗|Tests:|Suites:" /tmp/period-tz.log || echo "(لا ملخّص)"
 
-      # ═══ الـ77 اختبار تكامل — أول تشغيل لها في السير على الإطلاق ═══
+      # حارسٌ للحارس: **كل مجسّ حيّ على القرص نُفِّذ في إحدى الخطوتين**.
+      #
+      # ⚠️ ويقرأ **القرص** لا مخرَج jest وحده — كنظيريه في هذا الملف. فالنمط
+      #    المشتقّ يحمي من النسيان، وهذا العدّ يحمي من انزلاق النمط نفسه:
+      #    ملفٌّ يُسمّى `*.live.test.ts` أو يقع خارج `--roots` يختفي **صامتاً**
+      #    من التشغيل ويبقى على القرص، والوظيفة خضراء وقد نقص حارس.
+      #
+      # 📌 والمجموع لا التطابق مع سجلٍّ واحد: المجسّات موزَّعة على خطوتين
+      #    (العامة · وقفل الفترة بمنطقتها). فأي ثالثةٍ تُضاف مستقبلاً تُضاف
+      #    إلى الجمع صراحةً — ولا تمرّ بالسهو.
+      - name: التحقق أن كل مجسّ حيّ نُفِّذ في إحدى الخطوتين
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          on_disk=$(find src -name '*.live.spec.ts' | wc -l)
+          suites() {
+            sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null \
+              | grep -aoE "Test Suites:.*[0-9]+ total" | grep -aoE "[0-9]+ total" \
+              | grep -aoE "^[0-9]+" || echo 0
+          }
+          ran_general=$(suites /tmp/live.log)
+          ran_tz=$(suites /tmp/period-tz.log)
+          ran=$(( ran_general + ran_tz ))
+          echo "على القرص: $on_disk · العامة: $ran_general · قفل الفترة: $ran_tz · المجموع: $ran"
+          if [ "$on_disk" != "$ran" ]; then
+            echo "::error::تفاوت: $on_disk مجسّاً حيّاً على القرص و$ran منفَّذ — مجسّ سقط خارج نطاق jest"
+            find src -name '*.live.spec.ts' | sort
+            exit 1
+          fi
       #
       # `npm run test:e2e` لا استدعاء jest مباشرةً: السكربت يحمل
       # `--runInBand --forceExit` وهما قرارا المشروع لا تفصيلتان. وإعادة
