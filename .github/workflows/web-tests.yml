@@ -9,7 +9,13 @@
 # 📌 ولا تُضف `continue-on-error` هنا مجدداً، ولا `| tee` بلا `pipefail`:
 #    كلاهما يُخضِّر وظيفةً ساقطة — والثاني أخفى لأنه لا يترك أثراً في الملف.
 #
-# 🔒 إصدار Node مثبَّت في موضعين — هنا وفي `engines` بكل package.json.
+# 🔒 إصدار Node مثبَّت في **ثلاثة** مواضع — هنا، وفي `engines` بكل
+#    package.json، **وفي صور الإنتاج** (`apps/*/Dockerfile`).
+#
+#    ⚠️ وكان مكتوباً هنا «موضعين» — والثالث هو **الذي يعمل في الإنتاج فعلاً**.
+#    وبقيت `apps/api/Dockerfile` على `node:20` حتى 2026-08-16، أي أن الحارس
+#    الذي وُضع لمنع تفاوت البيئتين **أُغفل عند أخطرها**. فالعدّ المكتوب هنا
+#    كان يطمئن قارئه إلى تغطيةٍ ناقصة — ولذلك أُضيف حارسٌ يعدّ من المصدر أدناه.
 #    السبب حادثة حقيقية: السير كان على 20 والتطوير على 24، فمرّت الاختبارات
 #    محلياً وسقطت الخمسة في CI عند التحميل بـ
 #    `TypeError: webidl.util.markAsUncloneable is not a function` — jsdom 30
@@ -61,6 +67,36 @@ jobs:
       #
       # 📌 ويحرس `pre-commit` بالذات، وهو **حارس الأسرار**: خطّافٌ ميت لا
       #    يمنع تسريباً، ويموت صامتاً.
+      # ⛔ إصدار Node في صور الإنتاج يطابق `engines` — وإلا اختبرنا على إصدار
+      #    وشغّلنا على آخر.
+      #
+      # وقع فعلاً: بقيت `apps/api/Dockerfile` على `node:20` بينما `engines`
+      # تشترط `>=22` والسير يثبّت `22`. فمرّت كل الاختبارات على 22 **والخادم
+      # يعمل على 20** — وهو التفاوت الذي وُضع القفل لمنعه.
+      #
+      # ⚠️ ويقرأ **الملفات** لا التعليق: القفل كان مكتوباً ولم يكن مفحوصاً،
+      #    وهذا بالضبط ما جعله يشيخ بلا أن يلاحظه أحد.
+      - name: حارس إصدار Node — الصور تطابق engines (blocking)
+        shell: bash
+        run: |
+          want=$(grep -ahoE '"node": ">=([0-9]+)' apps/*/package.json | grep -ohE '[0-9]+' | sort -u)
+          if [ "$(printf '%s\n' "$want" | wc -l)" -ne 1 ] || [ -z "$want" ]; then
+            echo "::error::engines غير متّسقة عبر الحزم أو غير مقروءة: [$want]"
+            exit 1
+          fi
+          fail=0
+          for df in apps/*/Dockerfile; do
+            [ -f "$df" ] || continue
+            for got in $(grep -ohE '^FROM node:([0-9]+)' "$df" | grep -ohE '[0-9]+'); do
+              if [ "$got" != "$want" ]; then
+                echo "::error::$df يبني على node:$got و engines تشترط >=$want"
+                fail=1
+              fi
+            done
+          done
+          [ "$fail" -eq 0 ] || exit 1
+          echo "كل صور الإنتاج على node:$want — مطابقة لـengines"
+
       - name: حارس نهايات الأسطر — لا CRLF في .githooks (blocking)
         shell: bash
         run: |

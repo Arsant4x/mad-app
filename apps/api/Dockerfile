@@ -3,8 +3,25 @@
 #
 # bookworm-slim rather than alpine: prisma's engines and argon2's native
 # binding both ship glibc prebuilds — musl/alpine means compiling from source.
+#
+# ⚠️ **إصدار Node هنا جزءٌ من القفل، لا تفصيلة صورة.**
+#
+# كانت هذه الصورة على `node:20` بينما `engines` في كل package.json تشترط
+# `>=22` والسير يثبّت `22` في ثلاثة مواضع. أي أن **الاختبارات كلها تجري على
+# 22 والخادم يعمل على 20** — فأي اعتماد على واجهة موجودة في 22 وغائبة في 20
+# يمرّ أخضرَ في السير ويسقط في الإنتاج وحده.
+#
+# وهو العطل الذي وُضع القفل أصلاً لمنعه: «تفاوت البيئتين هو العطل نفسه، فلا
+# يُثبَّت في أحدهما دون الآخر» (web-tests.yml). وقد أُغفل **موضعه الأهمّ**.
+#
+# والدليل كان في المخرَج ولم يُقرأ حتى نشر 2026-08-16:
+#     npm warn EBADENGINE required: { node: '>=22.0.0' }
+#     npm warn EBADENGINE current:  { node: 'v20.20.2' }
+#     [سجل الـAPI] for security updates please upgrade to node >=22
+#
+# 📌 وحارسٌ في السير يمنع عودة التفاوت — يقارن هذا السطر بـ`engines`.
 
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
@@ -19,7 +36,7 @@ COPY apps/api apps/api
 COPY packages/shared packages/shared
 RUN cd apps/api && npx prisma generate && npm run build
 
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 # openssl: prisma's engine needs it at runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
