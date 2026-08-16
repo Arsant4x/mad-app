@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { MSG } from '../common/i18n/messages';
 import { PrismaService } from '../prisma/prisma.service';
+import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
@@ -61,7 +62,39 @@ export class ZatcaService {
       throw new BadRequestException(MSG.zatca_not_onboarded);
     }
 
-    const unsigned = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    /**
+     * ⚠️ **إعادة المحاولة على `P2002` — وهي ما يجعل القيد الفريد على `zatcaIcv`
+     * علاجاً بدل عَرَضٍ آخر.**
+     *
+     * `nextIcv` يبني على `count()+1` بلا قفل، فجولتان متزامنتان تحسبان الموقع
+     * نفسه. والقياس قبل القيد (٢٠٢٦-٠٨-١٥): من ١٢ جولة، **١١ حملت ICV مكرَّراً**
+     * (`1,1,3,3,5,5,…`). ثم حوّل `@@unique([companyId, zatcaIcv])` الفسادَ
+     * الصامت إلى `P2002` **ظاهر** — وهذا اللفّ يجعله يتقارب بدل أن يردّ 500.
+     *
+     * ## ولماذا اللفّ آمنٌ هنا بالذات — ثلاث خصائص من المصدر لا من الظنّ
+     *
+     * ① **المعاملة تنتهي قبل الشبكة.** توقيعُ المستند وإرساله في `dispatch`
+     *    بعد إغلاقها، فالمحاولة المعادة تُعيد قراءاتٍ وبناءَ XML **فقط** —
+     *    لا توقيع، ولا `fetch`، ولا خطر إرسالٍ مزدوج إلى الهيئة.
+     *
+     * ② **الـ`P2002` هنا لا يكون إلا الـICV.** الكتابة الوحيدة تضبط
+     *    `zatcaUuid`/`zatcaPreviousHash`/`zatcaIcv`/`zatcaStatus`، و`zatcaUuid`
+     *    **بلا قيد فرادة**؛ و`@@unique([companyId, no])` و`[companyId,
+     *    clientSaleId]` لا يُكتب أيٌّ منهما هنا. فالدقّة **بنيوية**، ولا حاجة
+     *    إلى ترشيح `e.meta?.target` كما في `quotes.service.ts`.
+     *
+     * ③ **التقارب مضمون.** معاملة الخاسر ترتدّ كاملةً، فتُقرأ الفاتورة في
+     *    المحاولة التالية و`zatcaIcv` لا يزال `null`، ويعيد `nextIcv` العدّ وقد
+     *    التزم الفائز.
+     *
+     * ⚠️ **وحدُّه معلَن**: `zatcaPreviousHash` (PIH) يتفرّع بالسباق نفسه
+     * **ولا يمسّه هذا الإصلاح** — `latestChainHash` يقرأ المقبول (`CLEARED`)
+     * وحده، وهو لا يتغيّر أثناء السباق فيأخذ المتزامنان الـPIH نفسه قبلَه
+     * وبعدَه سواء. والعلاج المناظر **مستحيل**: تكرار PIH **مشروع** ومغطّى
+     * باختبار قائم. (بند متابعة مسجَّل.)
+     */
+    const unsigned = await retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
         include: { customer: true, lines: true, relatedInvoice: { select: { no: true } } },
@@ -72,6 +105,13 @@ export class ZatcaService {
       // The chain link is assigned once and kept: re-submitting a rejected
       // invoice must reuse its UUID, position and counter, not mint new ones,
       // or the chain would gain a gap.
+      //
+      // ⚠️ **ومحاولةٌ معادة بعد `P2002` تُولّد UUID جديداً — وهذا ليس مخالفةً
+      // للقاعدة أعلاه.** القاعدة عن مستندٍ **أُرسل ورُفض**: له وجودٌ لدى
+      // الهيئة وموقعٌ محجوز، فتغييرُ هويته يُحدث فجوة. والمحاولة المعادة هنا
+      // ارتدّت **قبل الشبكة** (`dispatch` بعد المعاملة) — فلم يُرسَل شيء، ولم
+      // يُلتزم صفّ، ولا وجود لمستندٍ تُحفظ هويته. والشرط `?? ` هو ما يحمي
+      // الحالة الأولى: صفٌّ ملتزَم يحمل UUID يُقرأ فيُعاد استعماله.
       const uuid = invoice.zatcaUuid ?? randomUUID();
       const previousHash = invoice.zatcaPreviousHash ?? (await latestChainHash(tx));
       const icv = invoice.zatcaIcv ?? (await nextIcv(tx));
@@ -136,7 +176,8 @@ export class ZatcaService {
           vatAmount: Number(invoice.taxTotal),
         },
       };
-    });
+      }),
+    );
 
     return this.dispatch(companyId, invoiceId, credential, unsigned);
   }
