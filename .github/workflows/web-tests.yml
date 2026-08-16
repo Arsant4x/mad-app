@@ -353,12 +353,16 @@ jobs:
           END $$;
           SQL
 
-      - name: الإثبات الحيّ — تسعة مسارات على السجلّين (blocking)
+      # ⚠️ الاسم يتّسع باتّساع ما تفعله الخطوة — «خطوةٌ باسمٍ أضيق ممّا تفعله
+      #    تُقرأ خطأً»، وهي الحجّة المكتوبة أصلاً لتوسيع اسم هذه الوظيفة.
+      #    أُضيف `icv-concurrency.live.spec.ts`: سباق عدّاد الهيئة على الخدمة
+      #    الحقيقية — إثباتٌ لا يقوم إلا على قاعدة حيّة باستدعاءين متزامنين.
+      - name: الإثبات الحيّ — السجلّان وRLS وسباق عدّاد الهيئة (blocking)
         working-directory: apps/api
         shell: bash
         run: |
           set -o pipefail
-          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts src/activities/rls-probe.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
+          npx jest src/delegations/delegation-log.live.spec.ts src/tasks/task-log.live.spec.ts src/activities/rls-probe.live.spec.ts src/zatca/icv-concurrency.live.spec.ts --verbose 2>&1 | tee /tmp/live.log
 
       - name: ملخّص خام (السجلّان)
         if: always()
