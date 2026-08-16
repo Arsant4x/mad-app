@@ -23,9 +23,31 @@ if (!API) {
   process.exit(1);
 }
 
-const DEMO_USER = 'rikz-demo-realestate';
-const DEMO_PASS = 'RikzDemo2026!';
-const ORG = 'شركة رِكز للاستثمار العقاري (عرض)';
+/**
+ * هوية المنشأة — **وسائط بقيمٍ افتراضية، لا ثوابت مثبَّتة**.
+ *
+ * كانت الثلاثة مكتوبةً في الشيفرة، فكان السكربت يبني **منشأةً واحدة بعينها**
+ * ولا شيء غيرها. وأول حاجةٍ إلى منشأةِ اختبارٍ ثانية اصطدمت بذلك: الخيار
+ * الوحيد كان تعديل الثوابت — أي المساس ببذرة العرض القائمة.
+ *
+ * فصارت تُقرأ من البيئة، **والافتراضي هو السلوك القديم حرفياً** — فمن يشغّله
+ * بلا متغيّرات يحصل على ما كان يحصل عليه.
+ *
+ *     SEED_USER=aa SEED_PASS='…' SEED_ORG='…' SEED_SECTOR=REALESTATE \
+ *       node seed-demo-realestate.mjs http://127.0.0.1:3000
+ */
+const DEMO_USER = process.env.SEED_USER || 'rikz-demo-realestate';
+const DEMO_PASS = process.env.SEED_PASS || 'RikzDemo2026!';
+const ORG = process.env.SEED_ORG || 'شركة رِكز للاستثمار العقاري (عرض)';
+
+/**
+ * القطاع (النشاط الرئيس) — **فارغٌ افتراضاً**، وضبطه يُشغّل ترشيح الشاشات.
+ *
+ * ⚠️ وبذرة العرض القائمة تتركه فارغاً **عمداً**: ضبط `activityType` على الوحدة
+ * يقيّد كل عقدٍ عليها بنوع نشاطها. لكنّ **النشاط الرئيس للمنشأة** شيءٌ آخر —
+ * يقرّر أي الشاشات تظهر، ولا يمسّ العقود. فتُفصَل الحالتان.
+ */
+const SEED_SECTOR = process.env.SEED_SECTOR || '';
 
 /**
  * اليوم كمرجع لكل التواريخ — فالبيانات تبقى منطقية مهما تأخر تشغيل السكربت.
@@ -264,12 +286,62 @@ async function main() {
   await api('POST', '/purchases', { supplierId: supStaff.id, date: day(-60), subtotal: 9000, category: 'رواتب' });
   log('  ✔ ٤ مصروفات (صيانة · خدمات مهنية · راتبان)');
 
+  // ── القطاع: يُشغّل ترشيح الشاشات ────────────────────────────────────────
+  //
+  // ⚠️ **نشاطُ المنشأة الرئيس غير `activityType` على الوحدة.** الثاني يقيّد كل
+  // عقدٍ على الوحدة بنوعها (ولذلك تتركه بذرة العرض فارغاً)، والأول يقرّر **أي
+  // الشاشات تظهر** ولا يمسّ العقود. فيُضبط هنا بلا أثرٍ على ما سبق.
+  //
+  // و`confirmed: true` لازم: المسار يعرض أولاً ثم يطبّق بتأكيد — نقطتان
+  // منفصلتان عمداً «لئلا يغيّر العرضُ الحالة».
+  if (SEED_SECTOR) {
+    const activity = await api('POST', '/activities', { name: 'النشاط الرئيس', sector: SEED_SECTOR });
+    await api('PATCH', '/activities/primary', { activityId: activity.id, confirmed: true });
+    log(`  ✔ القطاع: ${SEED_SECTOR} — الترشيح يعمل`);
+  }
+
+  // ── موظّف ومهامّ مسنَدة ──────────────────────────────────────────────────
+  //
+  // المهمة **تتطلّب `assigneeId` لمستخدم منشأة قائم** (`tasks.service.ts`)،
+  // فلا «مهمة مسنَدة» بلا موظّف. ولذلك يُنشأ هنا لا في شاشةٍ منفصلة.
+  //
+  // ⚠️ و`POST /company-users` عليه حدُّ **٥ طلبات/دقيقة** (تخفيف تسريب أسماء
+  // المستخدمين) — فموظّفٌ واحد كافٍ، وإنشاء أكثر يصطدم بالحدّ.
+  const templates = await api('GET', '/templates');
+  const template = templates.find((t) => t.isAllScreens && !t.isSystem) || templates.find((t) => !t.isSystem);
+  const employee = await api('POST', '/company-users', {
+    name: 'سارة العتيبي',
+    username: `${DEMO_USER}-emp`,
+    password: `${DEMO_PASS}emp`,
+    permissionTemplateId: template.id,
+  });
+  log(`  ✔ موظّف: سارة العتيبي (${DEMO_USER}-emp)`);
+
+  // `POST /company-users` يُعيد **صفّ `companyUser` مباشرةً** (`return
+  // identity.companyUser!`) لا الهوية الملتفّة حوله — مقروءٌ من الخدمة لا
+  // مفترَضاً. وأول صياغةٍ هنا كتبت `employee.companyUser?.id ?? employee.id`
+  // احتياطاً لشكلٍ لم يُقرأ، والاحتياط يُخفي الخطأ بدل أن يكشفه.
+  const empId = employee.id;
+  await api('POST', '/tasks', {
+    title: 'متابعة تحصيل قسط متأخر — الوحدة C-201',
+    assigneeId: empId,
+    note: 'المستأجر وعد بالسداد نهاية الأسبوع.',
+  });
+  await api('POST', '/tasks', {
+    title: 'جدولة صيانة المصعد قبل تجديد العقد',
+    assigneeId: empId,
+    note: 'بلاغ الصيانة المفتوح مرتبط بهذه الوحدة.',
+  });
+  log('  ✔ مهمّتان مسنَدتان إلى الموظّف');
+
   log('');
   log('════════════════════════════════════════════');
   log('  اكتملت بذرة منشأة العرض');
   log('════════════════════════════════════════════');
   log(`  المستخدم: ${DEMO_USER}`);
   log(`  كلمة المرور: ${DEMO_PASS}`);
+  log(`  الموظّف:   ${DEMO_USER}-emp / ${DEMO_PASS}emp`);
+  if (SEED_SECTOR) log(`  القطاع:    ${SEED_SECTOR}`);
   log('════════════════════════════════════════════');
 }
 
