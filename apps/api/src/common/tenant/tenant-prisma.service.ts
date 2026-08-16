@@ -27,11 +27,30 @@ export class TenantPrismaService {
    * expose a clean way to carry the exact extended type across a function
    * boundary like this.
    */
-  async runInTenantContext<T>(companyId: string, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  /**
+   * ⚠️ `options` تصل إلى `$transaction` **لا إلى جسد المعاملة** — وهذا شرطُ
+   * صحّتها لا تفصيلة أسلوب.
+   *
+   * `SET TRANSACTION ISOLATION LEVEL` يجب أن يسبق **أي** استعلام، وهذه الدالة
+   * تُنفّذ `set_config` أول شيء. فطلبُ اللقطة من داخل الجسد يردّه Postgres —
+   * مقيسٌ لا مفترَض:
+   *
+   *     BEGIN; SELECT set_config(…); SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+   *     ⇒ ERROR: SET TRANSACTION ISOLATION LEVEL must be called before any query
+   *
+   * فتُمرَّر إلى Prisma لتُضبط عند `BEGIN` نفسه. **والفرق ليس شكلياً**: مستدعٍ
+   * يطلب لقطةً ولا يحصل عليها يبني ضمانةً على وهم — وقد كاد يقع هنا: بيان
+   * التصدير كان سيُعلن `isolation: 'REPEATABLE READ'` ولا لقطة أصلاً.
+   */
+  async runInTenantContext<T>(
+    companyId: string,
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeout?: number; maxWait?: number },
+  ): Promise<T> {
     const scoped = this.prisma.$extends(tenantScopeExtension(companyId));
     return scoped.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
       return work(tx as unknown as Prisma.TransactionClient);
-    });
+    }, options);
   }
 }

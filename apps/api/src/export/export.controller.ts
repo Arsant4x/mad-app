@@ -21,6 +21,11 @@ export class ExportController {
 
   @Get()
   exportAll(@CurrentTenant() tenant: TenantContext) {
-    return this.exportService.exportAll(tenant.companyId, tenant.actorType);
+    // `profileId` هوية الفاعل في هذا النظام — تُمرَّر ليحمل أثرُ التدقيق **من**
+    // صدّر، لا «تمّ تصدير». وحدثٌ بلا فاعل لا يُجيب السؤال الذي يُسأل عنده.
+    return this.exportService.exportAll(tenant.companyId, tenant.actorType, {
+      id: tenant.profileId,
+      name: tenant.profileId,
+    });
   }
 }

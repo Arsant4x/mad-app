@@ -1,94 +1,181 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
+import { AuditService } from '../audit/audit.service';
+import { delegateName, exportedModels, ZATCA_LINK_FIELDS } from './export-scope';
 
-/**
- * Every tenant-owned collection the export carries, keyed by the name it gets
- * in the file. Flat on purpose: children (installments, journal lines…) are
- * their own arrays with foreign keys intact, so the export is a faithful copy
- * of the data rather than a lossy nested view.
- */
-const EXPORT_DELEGATES = [
-  ['activities', 'businessActivity'],
-  ['branches', 'branch'],
-  ['currencies', 'currency'],
-  ['exchangeRates', 'exchangeRate'],
-  ['fiscalYears', 'fiscalYear'],
-  ['fiscalPeriods', 'fiscalPeriod'],
-  ['accounts', 'account'],
-  ['journalEntries', 'journalEntry'],
-  ['journalLines', 'journalLine'],
-  ['customers', 'customer'],
-  ['invoices', 'invoice'],
-  ['invoiceLines', 'invoiceLine'],
-  ['suppliers', 'supplier'],
-  ['purchases', 'purchase'],
-  ['products', 'product'],
-  ['warehouses', 'warehouse'],
-  ['stockMovements', 'stockMovement'],
-  ['employees', 'employee'],
-  ['leaveTypes', 'leaveType'],
-  ['leaveRequests', 'leaveRequest'],
-  ['banks', 'bank'],
-  ['bankTransactions', 'bankTransaction'],
-  ['properties', 'property'],
-  ['units', 'unit'],
-  ['contracts', 'contract'],
-  ['installments', 'installment'],
-  ['rentPayments', 'rentPayment'],
-  ['contractDeposits', 'contractDeposit'],
-  ['depositDeductions', 'depositDeduction'],
-  ['contractClaims', 'contractClaim'],
-  ['contractKeyMoney', 'contractKeyMoney'],
-  ['contractHandovers', 'contractHandover'],
-  ['handoverItems', 'handoverItem'],
-  ['reservations', 'reservation'],
-  ['maintenanceRequests', 'maintenanceRequest'],
-  ['warranties', 'warranty'],
-  ['rentReminders', 'rentReminder'],
-  ['obligations', 'governmentObligation'],
-  ['messageScripts', 'messageScript'],
-] as const;
+type DelegateLike = {
+  findMany: (args?: unknown) => Promise<unknown[]>;
+  count: (args?: unknown) => Promise<number>;
+};
 
-type DelegateLike = { findMany: (args?: unknown) => Promise<unknown[]> };
+/** حدودٌ تُقال للتاجر في الحزمة نفسها — لا تُترك ليكتشفها. */
+const EXPORT_NOTES = {
+  المحذوفات:
+    'الصفوف المحذوفة تُصدَّر بعلامة `deletedAt`. والحذف الناعم مطبَّق على تسعة نماذج فقط؛ ' +
+    'وما عداها يُحذف فعلياً من القاعدة فلا وجود له ليُصدَّر. أي أن العلامة تعني «ما نعرف أنه حُذف».',
+  'أسرار الفوترة الإلكترونية':
+    'مفاتيح التوقيع وشهادات الهيئة **لا تُصدَّر إطلاقاً**. ويُصدَّر بدلها ملخّص الربط في `zatcaLink` ' +
+    '(الحالة والبيئة وتاريخ الربط) — فتعرف أنك كنت مربوطاً، ولا تحمل الحزمة ما يُنتحَل به توقيعك.',
+  المرفقات: 'هذه النسخة تحمل **بيانات** المرفقات (الاسم والحجم والنوع والمفتاح) لا الملفات نفسها.',
+} as const;
 
 @Injectable()
 export class ExportService {
+  private readonly logger = new Logger(ExportService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
-   * The company's data as one JSON document.
+   * ⚠️ **مقصورٌ على المالك — وهذا تضييقٌ مقصود لا سهو** (قرار المالك
+   * 2026-08-16).
    *
-   * Owner-only: an employee with a screen or two of permissions must not be
-   * able to walk out with the entire database. Works during the grace period by
-   * design — the owner's rule for a lapsed subscription is literally "view and
-   * **export** only", and a merchant deciding whether to leave needs its data
-   * to decide with.
+   * التصدير يُخرج **قاعدة البيانات كلها** في ملفٍ واحد. فجعلُه صلاحيةً
+   * مفوَّضة يعني أن موظّفاً بشاشتين يستطيع أن يمشي بها — **وهي ثغرة تسريبٍ
+   * بيد موظّف**، لا تفصيلةَ صلاحيات.
+   *
+   * وهو في دالةٍ مسمّاة لا فحصٍ مبثوثٍ في الجسد: موضعٌ واحد يُقرأ ويُختبَر
+   * ويظهر في أثر التدقيق باسمه.
    */
-  async exportAll(companyId: string, actorType: string) {
+  private assertMayExport(actorType: string): void {
     if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.export_owner_only);
+  }
+
+  /**
+   * نسخة المنشأة من بياناتها.
+   *
+   * تعمل أثناء التجميد بالتصميم — قاعدة المالك للاشتراك المنقضي «اطّلاع
+   * **وتصدير** فقط»، ومَن يقرّر الرحيل يحتاج بياناته ليقرّر بها.
+   */
+  async exportAll(companyId: string, actorType: string, actor?: { id: string; name: string }) {
+    this.assertMayExport(actorType);
 
     const company = await this.prisma.company.findUniqueOrThrow({
       where: { id: companyId },
       select: { orgName: true, legalName: true, vatNumber: true, crNumber: true, subStart: true, subEnd: true, createdAt: true },
     });
 
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+    const models = exportedModels();
+    const payload = await this.buildVerified(companyId, models);
+
+    // حدثٌ في سجل التدقيق: من · متى · الحجم. والفشل لا يُسقط التصدير — أثرٌ
+    // ناقص أهون من حرمان التاجر من بياناته، ويُسجَّل في السجل التقني.
+    await this.audit
+      .record({
+        companyId,
+        actorType,
+        actorId: actor?.id ?? 'unknown',
+        actorName: actor?.name ?? 'unknown',
+        screen: 'export',
+        action: 'export',
+        entity: 'CompanyData',
+        entityId: companyId,
+        method: 'GET',
+        path: '/export',
+        details: { tables: models.length, rows: payload.manifest.totalRows, bytes: payload.manifest.bytes },
+        ip: null,
+      })
+      .catch((e) => this.logger.error(`تعذّر تسجيل حدث التصدير: ${String(e)}`));
+
+    return {
+      format: 'mad-app-export',
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      company,
+      notes: EXPORT_NOTES,
+      ...payload,
+    };
+  }
+
+  /**
+   * يبني الحزمة **ويُطابقها بالقاعدة قبل تسليمها**.
+   *
+   * ## لماذا لقطة `REPEATABLE READ`
+   *
+   * المطابقة تقرأ القاعدة **مرّتين**: مرةً لتجمع الصفوف، ومرةً لتعدّها. وبين
+   * القراءتين نافذةٌ يكتب فيها المستخدمون — فيختلف العددان **بلا أي عطل**،
+   * ويسقط التصدير عشوائياً على المنشآت النشطة وحدها.
+   *
+   * وذلك أسوأ من غياب الحارس: **حارسٌ يُزعج يُعطَّل، وحارسٌ يُعطَّل لا يحرس.**
+   * فاللقطة تجعل المقياس والمقيس من **لحظةٍ واحدة**، فأي فرقٍ بعدها عطلٌ
+   * حقيقي لا سباق.
+   *
+   * ## ولماذا العدّ استعلامٌ مستقلّ لا `array.length` وحده
+   *
+   * `length` يقيس ما بنيناه بما بنيناه — يطابق نفسه دائماً. و`count()` سؤالٌ
+   * جديد للقاعدة، فهو **يقرأ المصدر لا المخرَج**. (وهي القاعدة التي انتُهكت
+   * مراراً هذا اليوم.)
+   */
+  private async buildVerified(companyId: string, models: string[]) {
+    return this.tenantPrisma.runInTenantContext(
+      companyId,
+      async (tx) => {
       const data: Record<string, unknown[]> = {};
-      for (const [key, delegate] of EXPORT_DELEGATES) {
-        data[key] = await ((tx as unknown as Record<string, DelegateLike>)[delegate]).findMany();
+      const rows: Record<string, number> = {};
+
+      for (const model of models) {
+        const delegate = (tx as unknown as Record<string, DelegateLike>)[delegateName(model)];
+        if (!delegate?.findMany) {
+          throw new InternalServerErrorException(`مندوب Prisma غير موجود للنموذج ${model}`);
+        }
+        data[delegateName(model)] = await delegate.findMany();
       }
+
+      // العدّ **بعد** الجمع وفي اللقطة نفسها — سؤالٌ مستقلّ عن نفس اللحظة.
+      const mismatches: string[] = [];
+      for (const model of models) {
+        const key = delegateName(model);
+        const delegate = (tx as unknown as Record<string, DelegateLike>)[key];
+        const counted = await delegate.count();
+        rows[key] = counted;
+        if (counted !== data[key].length) {
+          mismatches.push(`${key}: الحزمة ${data[key].length} · القاعدة ${counted}`);
+        }
+      }
+
+      if (mismatches.length > 0) {
+        // **ولا يُسلَّم ناقصاً.** حزمةٌ ناقصة تبدو كاملة أسوأ من تصديرٍ فاشل:
+        // التاجر يبني عليها قراره بالرحيل ولا يعرف ما ضاع.
+        throw new InternalServerErrorException(
+          `تفاوت بين الحزمة والقاعدة — لم تُسلَّم: ${mismatches.join(' | ')}`,
+        );
+      }
+
+      // ملخّص ربط الهيئة: **وجودٌ لا قيمة** — بقائمةٍ بيضاء من الحقول.
+      const credential = await (
+        tx as unknown as { zatcaCredential: { findUnique: (a: unknown) => Promise<Record<string, unknown> | null> } }
+      ).zatcaCredential.findUnique({ where: { companyId }, select: Object.fromEntries(ZATCA_LINK_FIELDS.map((f) => [f, true])) });
+
+      const bytes = Buffer.byteLength(JSON.stringify(data), 'utf8');
+      const totalRows = Object.values(rows).reduce((sum, n) => sum + n, 0);
+
       return {
-        format: 'mad-app-export',
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        company,
+        manifest: {
+          generatedAt: new Date().toISOString(),
+          tables: models.length,
+          totalRows,
+          bytes,
+          rows,
+          verifiedAgainstDatabase: true as const,
+          isolation: 'REPEATABLE READ' as const,
+        },
+        zatcaLink: credential,
         data,
       };
-    });
+      },
+      // ⚠️ **اللقطة تُطلب هنا لا في الجسد.** طلبها بعد بدء المعاملة يردّه
+      // Postgres بـ«must be called before any query» — فتمضي بلا لقطة ويُعلن
+      // البيانُ ضمانةً لا وجود لها. (مقيسٌ قبل الاعتماد.)
+      //
+      // والمهلة موسَّعة: التصدير يقرأ ستّين جدولاً مرّتين، ومهلة المستأجر
+      // الافتراضية (5s) مقيسةٌ لطلبٍ عادي لا لمسحٍ كامل.
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 120_000, maxWait: 10_000 },
+    );
   }
 }
