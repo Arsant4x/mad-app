@@ -103,6 +103,37 @@ async function seedDemoCompany(opts: {
   const existing = await prisma.loginIdentity.findUnique({ where: { username: opts.username }, include: { company: true } });
   if (existing?.company) return existing.company;
 
+  /**
+   * ⚠️ **هويّةٌ بلا منشأة — حالةٌ تقع بين الشرطين، وكانت تُعطّل ٨٠ مجموعة.**
+   *
+   * الشرط أعلاه على **وجود المنشأة** لا على وجود الهوية. فهويّةٌ يتيمة (حُذفت
+   * منشأتها، أو انقطع إنشاءٌ في منتصفه) لا ترجع مبكراً، ثم تسقط في `create`
+   * أدناه على تكرار اسم المستخدم. **فالبذرة تفشل كلّها، ولا تُصلح شيئاً.**
+   *
+   * والأثر ليس نظرياً: `demo-company-a` و`demo-company-b` كانتا يتيمتين على
+   * جهاز التطوير، فكانت **كل حزم e2e الداخلة بمنشأة مبذورة** تسقط في
+   * `beforeAll` بـ`Cannot read properties of undefined (reading 'companyId')`.
+   * أي أن ٨٠ مجموعة تكامل لا تعمل محلياً — **وهو ما أخفى عطلاً وصل `main`**
+   * يوم 2026-08-16 (تغيّرت مفاتيح التصدير ولم يكشفه إلا السير).
+   *
+   * والعلاج **في المصدر لا في الجهاز** (قرار المالك 2026-08-16): تُوصل المنشأة
+   * بالهوية القائمة بدل محاولة إنشاء هويةٍ موجودة. **بلا أي حذف.**
+   */
+  if (existing) {
+    const company = await prisma.company.create({
+      data: {
+        orgName: opts.orgName,
+        permissionTemplateId: opts.templateId,
+        status: 'ACTIVE',
+        // العلاقة أحاديّة الاتجاه في المخطط (`loginIdentityId @unique` بلا حقلٍ
+        // مقابل على `LoginIdentity`)، فتُوصَل بالمفتاح لا بـ`connect`.
+        loginIdentityId: existing.id,
+      },
+    });
+    console.log(`  ↻ هويةٌ بلا منشأة: ${opts.username} — وُصلت بمنشأة جديدة بدل السقوط`);
+    return company;
+  }
+
   const identity = await prisma.loginIdentity.create({
     data: {
       username: opts.username,
