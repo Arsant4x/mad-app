@@ -26,6 +26,8 @@ async function main() {
   // نفس التمهيد الذي يشغّله الإنتاج حرفياً — مصدر واحد، فلا يفترق ما يراه
   // المطوّر عمّا يُولد على الخادم.
   await bootstrapPlatform(prisma, { username: devUsername, password: devPassword });
+
+  await reconcileDevAdminPassword(devUsername, devPassword);
   const devTemplate = { id: 'dev-template', name: 'المطوّر' };
   const fullAccessTemplate = { id: 'full-access-template' };
 
@@ -92,6 +94,60 @@ async function main() {
   await seedSuppliers(companyB.id, [{ name: 'مؤسسة الصيانة العامة', vatNumber: '', phone: '0555333444', category: 'صيانة' }]);
 
   console.log(`Seeded. Platform admin username: ${devUsername} / dev template: ${devTemplate.name}`);
+}
+
+/**
+ * يُصالح كلمة مرور مدير المنصّة مع `.env` — **في بيئة التطوير وحدها**.
+ *
+ * ## العطل الذي يعالجه
+ *
+ * `bootstrapPlatform` **لا يُعيد ضبط كلمة مرور حسابٍ قائم**، وحجّته صحيحة
+ * ومكتوبة: «إعادة التشغيل بعد التحديث ستُرجع كلمة المرور إلى ما في ملف البيئة
+ * وتُبطل أي تدوير جرى بعده». وهي قاعدة **إنتاجٍ لا نقاش فيها**، والدالة
+ * مشتركة مع `bootstrap-production.ts` — فلا تُمسّ.
+ *
+ * لكن أثرها على جهاز التطوير أن الهوية تبقى بكلمة مرورٍ قديمة لا يعرفها أحد،
+ * فيسقط الدخول بـ`401`. والمقيس (2026-08-16):
+ *
+ *     اسم المدير في .env.test: Arsan_admin
+ *     كلمة المرور تطابق؟ **false**
+ *     platform-admin.e2e-spec.ts ⇒ expected 201, got 401 — 7 failed
+ *
+ * وأُثبت بشاهدٍ ضابط أنه **بيئيّ لا انحدار**: الحزمة نفسها على شجرةٍ بلا أي
+ * تغيير تعطي النتيجة نفسها بالضبط. وهو الوجه الثاني لجذرٍ واحد: **البذرة
+ * تُنشئ ولا تُصالح** — وأخفى بين يديه عطلاً وصل `main`.
+ *
+ * ## ⛔ والشرط جزءٌ من العلاج لا حاشية عليه
+ *
+ * «إعادة ضبط كلمة مرور قائمة» سلوكٌ **يجب ألّا يبلغ الإنتاج إطلاقاً**: هناك
+ * تُولَّد عشوائياً ولا تُوثَّق في أي ملف (قرار المالك). فبلا هذا الشرط **يصير
+ * الإصلاح ثغرة**.
+ *
+ * ⚠️ **والحارس هنا لا في رأس الملف وحده.** أعلى `main()` حارسٌ يمنع البذرة
+ * كلها في الإنتاج — وهو يكفي اليوم. لكن حارساً **في موضع الخطر نفسه** يبقى
+ * صحيحاً لو نُقلت هذه الدالة أو استُدعيت من مكانٍ آخر. والقاعدة: الحارس يقع
+ * حيث الخطر، لا حيث تصادف أن مرّ التنفيذ.
+ */
+async function reconcileDevAdminPassword(username: string, password: string): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'reconcileDevAdminPassword استُدعيت في الإنتاج — وهي تُعيد ضبط كلمة مرور قائمة.\n' +
+        'كلمة مرور مدير الإنتاج تُولَّد عشوائياً ولا تُشتقّ من ملف بيئة.',
+    );
+  }
+
+  const identity = await prisma.loginIdentity.findUnique({
+    where: { username },
+    select: { id: true, passwordHash: true },
+  });
+  if (!identity) return; // لم يُنشأ بعد — و`bootstrapPlatform` أنشأه بكلمة المرور الصحيحة.
+
+  const matches = await argon2.verify(identity.passwordHash, password).catch(() => false);
+  if (matches) return;
+
+  await prisma.loginIdentity.update({ where: { id: identity.id }, data: { passwordHash: await argon2.hash(password) } });
+  // يُعلَن صراحةً: تغييرُ اعتمادٍ يجري بصمت أسوأ من عدم إجرائه.
+  console.log(`  ↻ كلمة مرور مدير المنصّة (${username}) لم تطابق .env — أُعيد ضبطها [تطوير فقط]`);
 }
 
 async function seedDemoCompany(opts: {
