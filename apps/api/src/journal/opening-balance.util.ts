@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { round2 } from '../common/money/rounding';
 import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine } from './journal-posting.util';
 
 /**
@@ -21,10 +22,6 @@ import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine } from './journal-p
 
 export const OPENING_EQUITY_CODE = '3900';
 export const OPENING_EQUITY_NAME = 'الأرصدة الافتتاحية';
-
-export function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
 
 type AccountForOpening = { id: string; code: string; name: string; type: string };
 

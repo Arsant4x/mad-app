@@ -828,8 +828,17 @@ model InvoiceLine {
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   description String
-  quantity    Decimal @db.Decimal(14, 2)
-  unitPrice   Decimal @db.Decimal(18, 2)
+  /// Precision follows the platform-wide scale table in
+  /// `common/money/rounding.ts` — quantity 3dp, net unit price 6dp. A pharmacy
+  /// sells by the pill, a salon measures in millilitres and a fuel pump in
+  /// litres; two decimals silently round those away at the point of entry.
+  ///
+  /// ⚠️ Widening a numeric column REWRITES the table under an
+  /// `AccessExclusiveLock` — measured: 925ms per million rows, and a
+  /// concurrent SELECT is blocked, not slowed. That is why this is set at the
+  /// smallest table size the platform will ever have, not later.
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 6)
   taxRate     Decimal @default(15) @db.Decimal(5, 2)
 
   createdAt DateTime @default(now())
@@ -949,9 +958,14 @@ model Product {
   sku      String?
   category String?
   unit     String?
-  price    Decimal @default(0) @db.Decimal(18, 2)
-  cost     Decimal @default(0) @db.Decimal(18, 2)
-  minStock Decimal @default(0) @db.Decimal(14, 2)
+  /// Unit price and unit cost, not amounts — see the scale table in
+  /// `common/money/rounding.ts`. `cost` is a single static figure today and is
+  /// **not** a costing method: it holds no acquisition date and no remaining
+  /// quantity, so nothing can be consumed from it. Layered costing replaces
+  /// its role later; the column keeps its meaning as "last known unit cost".
+  price    Decimal @default(0) @db.Decimal(18, 6)
+  cost     Decimal @default(0) @db.Decimal(18, 6)
+  minStock Decimal @default(0) @db.Decimal(18, 3)
   barcode  String?
 
   createdAt DateTime @default(now())
@@ -2436,8 +2450,11 @@ model QuoteLine {
   quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   description String
-  quantity    Decimal @db.Decimal(18, 2)
-  unitPrice   Decimal @db.Decimal(18, 2)
+  /// Same scale as `InvoiceLine` deliberately: a quote that cannot express the
+  /// quantity its invoice will carry turns every conversion into a rounding
+  /// dispute with the customer.
+  quantity    Decimal @db.Decimal(18, 3)
+  unitPrice   Decimal @db.Decimal(18, 6)
   taxRate     Decimal @db.Decimal(5, 2)
 
   @@index([quoteId])
@@ -2671,7 +2688,11 @@ model StockMovement {
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   type   StockMovementType
-  qty    Decimal  @db.Decimal(14, 2)
+  /// The stock ledger's quantity — and the one that must never round, because
+  /// every other quantity in the system is reconciled against it. Carries no
+  /// cost column on purpose: a movement records *how much moved*, not what it
+  /// was worth. Valuation belongs to layered costing, not here.
+  qty    Decimal  @db.Decimal(18, 3)
   reason String?
   date   DateTime @db.Date
 

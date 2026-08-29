@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
+import { round2 } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -16,7 +17,6 @@ const PAYMENT_INCLUDE = {
 
 /** فرق أقل من هللة لا يُعتدّ به — المال يُقارن مقرَّباً لخانتين. */
 const EPS = 0.005;
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * المقبوضات وتخصيصها على الفواتير (4.5).

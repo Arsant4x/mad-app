@@ -3,6 +3,7 @@ import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/
 import { buildZatcaQr } from '../zatca/qr.util';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
+import { round2 } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
@@ -18,8 +19,6 @@ import { MSG } from '../common/i18n/messages';
  * without a second round-trip — number only, never the whole document. */
 const INVOICE_INCLUDE = { customer: true, lines: true, relatedInvoice: { select: { id: true, no: true } } } as const;
 
-/** Money is 2 decimals everywhere — the columns are `Decimal(18,2)`. */
-const round2 = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * Always derive totals from the lines server-side — a client-submitted total is
