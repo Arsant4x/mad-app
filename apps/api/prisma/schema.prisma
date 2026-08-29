@@ -305,6 +305,8 @@ model Company {
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   purchaseLines       PurchaseLine[]
+  inventoryLayers       InventoryLayer[]
+  inventoryConsumptions InventoryConsumption[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
   payments            Payment[]
@@ -863,6 +865,10 @@ model InvoiceLine {
 
   createdAt DateTime @default(now())
 
+  /// الحركات التي سبّبها هذا السطر — `Restrict` من الطرف الآخر: سطرٌ حرّك
+  /// مخزوناً لا يُحذف وتُترك حركته يتيمة.
+  stockMovements StockMovement[]
+
   @@index([companyId, productId])
   @@map("invoice_lines")
 }
@@ -1000,6 +1006,8 @@ model PurchaseLine {
 
   createdAt DateTime @default(now())
 
+  stockMovements StockMovement[]
+
   @@index([purchaseId])
   @@index([companyId, productId])
   @@map("purchase_lines")
@@ -1045,6 +1053,7 @@ model Product {
   invoiceLines  InvoiceLine[]
   quoteLines    QuoteLine[]
   purchaseLines PurchaseLine[]
+  inventoryLayers InventoryLayer[]
 
   /// Soft delete: set instead of removing the row, so it can be restored
   /// from the trash within 30 days. Reads filter it out centrally.
@@ -2732,6 +2741,8 @@ model Warehouse {
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
 
+  inventoryLayers InventoryLayer[]
+
   @@map("warehouses")
 }
 
@@ -2784,10 +2795,168 @@ model StockMovement {
   batchNo    String?
   expiryDate DateTime? @db.Date
 
+  /// ⭐ **سبب الحركة — والمستند الذي سبّبها، بمفتاحٍ حقيقي لا بمرجعٍ نصّي.**
+  ///
+  /// العطل الذي يمنعه: الكاشير كان يعرف الصنف ثم يحتفظ باسمه وحده، فتخرج
+  /// البضاعة من الرفّ ولا يقول المستند ماذا خرج. أُصلح المسار في `م١` —
+  /// **والمسار التالي كان سيكرّره** ما دام المنع انضباطاً يُتذكَّر.
+  ///
+  /// وعمودان منفصلان بمفتاحين أجنبيين، لا `sourceLineId` متعدّد الأشكال:
+  /// عدد أنواع السطور المسبِّبة **اثنان** (مقيس — `productId` يرد على أربعة
+  /// نماذج، و`QuoteLine` عرضٌ لا حركة، و`StockMovement` هو نفسه). ومفتاحٌ
+  /// حقيقي **يجعل المرجع غير القابل للحلّ مستحيلاً**: لا سطرَ محذوف ولا نوعَ
+  /// مجهول — بينما مرجعٌ نصّي يُكتب خطأً **فيصمت**.
+  ///
+  /// ⚠️ ولو صار الاستلام كياناً مستقلاً في `م٥` صار العدد ثلاثة — فيُضاف
+  /// عمود ويُوسَّع الشرط، **وإضافة عمود لا تعيد كتابة الجدول** (مقيس في `م٢`).
+  origin MovementOrigin @default(MANUAL)
+
+  invoiceLineId String?
+  invoiceLine   InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict)
+
+  purchaseLineId String?
+  purchaseLine   PurchaseLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
+  consumptions InventoryConsumption[]
+  layers       InventoryLayer[]
+
   @@index([expiryDate])
+  @@index([companyId, productId, warehouseId])
+  @@index([invoiceLineId])
+  @@index([purchaseLineId])
   @@map("stock_movements")
+}
+
+/// سبب الحركة — **يحدّده المسار الذي أنشأها، ويقيّده مُشغِّل القاعدة**.
+///
+/// ⚠️ وهو **ليس حصانةً كاملة**: من يكتب `MANUAL` على بيعٍ حقيقي يمرّ منه.
+/// وتلك بعينها الحالة التي يمسكها **حارس المطابقة** — فالمنع يحمي المسار
+/// المعروف، والكشف يمسك المسار الذي لم يُكتب بعد.
+enum MovementOrigin {
+  /// تسويةٌ أو إدخالٌ يدوي من شاشة المخزون — بلا مستند، وهو مشروع.
+  MANUAL
+  /// بيعٌ أو مرتجع — يلزمه سطر فاتورة (الإشعار الدائن يشارك جدول الفواتير).
+  SALE
+  /// استلام بضاعة — يلزمه سطر شراء (ق-١٩: الاستلام هو حدث التكلفة).
+  RECEIPT
+  /// نقلٌ بين مستودعين — طرفان بلا مستند بيعٍ ولا شراء.
+  TRANSFER
+  /// رصيدٌ افتتاحي من الهجرة — طبقته تحمل تاريخ اقتنائها لا تاريخ الهجرة.
+  OPENING
+}
+
+/// طريقة التكلفة — **تُخزَّن على الطبقة نفسها لا على إعدادٍ عام**.
+///
+/// تقرير سنةٍ سابقة يُقرأ **بالطريقة السارية حينها**، لا بالطريقة الحالية.
+/// و⛔ `LIFO` لا يُبنى: المعايير المعتمدة في المملكة تجيز الوارد-أولاً
+/// والمتوسط المرجّح فقط.
+enum CostingMethod {
+  FIFO
+  WEIGHTED_AVERAGE
+  SPECIFIC
+}
+
+/// مصدر الطبقة.
+enum LayerSource {
+  GOODS_RECEIPT
+  OPENING
+  RETURN
+  ADJUSTMENT
+}
+
+/// ⭐ **طبقة تكلفة — البنية الأساس، والمتوسط المرجّح دالةٌ فوقها لا مخطَّطٌ بديل.**
+///
+/// قرار المالك (ق-١): **الأدقّ يُبنى أولاً والأبسط دالةٌ فوقه، والعكس مستحيل**
+/// — من بدأ بالمتوسط لا يملك بياناتٍ يبني منها الطبقات، فالدفعات ذابت في رقم
+/// واحد.
+///
+/// والطبقة **لا تُحذف ولا يُعدَّل تاريخها**: `qtyRemaining` ينقص ويزيد،
+/// والتاريخ هو ما يرتّب الاستهلاك.
+model InventoryLayer {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  qtyReceived  Decimal @db.Decimal(18, 3)
+  /// المتبقّي في الطبقة — يُستهلك منه ويعود إليه المرتجع.
+  qtyRemaining Decimal @db.Decimal(18, 3)
+  unitCost     Decimal @db.Decimal(18, 6)
+
+  /// ⚠️ **تاريخ الاقتناء لا تاريخ الإدخال.** طبقةٌ مستوردة بتاريخ الهجرة
+  /// تنهار مع FIFO ومع FEFO ومع تقارير عمر المخزون — فيُحمل الأصلي ولو
+  /// تقريبياً بإقرار موثَّق.
+  acquiredAt DateTime
+
+  sourceType LayerSource
+  /// حركة الإدخال التي أنشأت الطبقة — إن وُجدت (الرصيد الافتتاحي بلا حركة).
+  sourceMovementId String?
+  sourceMovement   StockMovement? @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
+
+  /// الطريقة السارية لحظة الإنشاء — لا تُقرأ من إعدادٍ متغيّر عند التقرير.
+  costingMethod CostingMethod @default(FIFO)
+
+  createdAt DateTime @default(now())
+
+  consumptions InventoryConsumption[]
+
+  /// ترتيب الاستهلاك: `acquiredAt` ثم `createdAt` — والثاني فاصلٌ حاسم كي لا
+  /// يعتمد الترتيب على الصدفة حين تتساوى التواريخ.
+  @@index([companyId, productId, warehouseId, acquiredAt, createdAt])
+  @@map("inventory_layers")
+}
+
+/// ⭐ **سجلّ الاستهلاك — أيّ طبقةٍ خرجت ولأي حركة.**
+///
+/// **بدونه لا يُعكس مرتجع، ولا يُدقَّق COGS، ولا يُعاد إنتاج رقم سنةٍ مضت.**
+/// والرصيد المتبقّي في الطبقة مشتقٌّ منه منطقياً، ومخزَّنٌ فيها للأداء —
+/// والاثنان يجب أن يتّفقا، وحارسٌ يفحص ذلك.
+model InventoryConsumption {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// ⚠️ **فارغٌ للاستهلاك المؤقّت وحده** — وهو الحالة التي لا طبقةَ لها:
+  /// بيعٌ سبق استلامه. واختلاقُ طبقةٍ وهمية له كان سيُفسد «كم استلمنا فعلاً»،
+  /// فالكذبة تُحصر في التكلفة ولا تمتدّ إلى تاريخ الشراء.
+  layerId String?
+  layer   InventoryLayer? @relation(fields: [layerId], references: [id], onDelete: Restrict)
+
+  /// حركة الإخراج التي استهلكت — والمرتجع يعكسها بسطرٍ سالب لا بحذف.
+  movementId String
+  movement   StockMovement @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  qty      Decimal @db.Decimal(18, 3)
+  /// تكلفة الوحدة **وقت الاستهلاك** — تُثبَّت هنا ولا تُقرأ من الطبقة لاحقاً.
+  unitCost Decimal @db.Decimal(18, 6)
+
+  /// ⭐ **الاستهلاك الذي سوّى هذا المؤقّت — واقعةٌ لا حالة.**
+  ///
+  /// ⚠️ **ولا علَم `isProvisional`.** أوّل صياغةٍ حملت علَماً، وهو
+  /// `lineType: SERVICE` بعينه: **علَمٌ يستطيع أن يخالف الواقع**، فيلزم من
+  /// يحكم أيّهما يكذب. و«مؤقّت» ليس وصفاً يُضاف — هو **`layerId IS NULL`
+  /// نفسه**: استهلاكٌ لا طبقة له لأنه سبق استلامها.
+  ///
+  /// والتسوية **صفٌّ جديد يشير إلى الأصل**، لا تعديلٌ على الأصل: وقائع لا
+  /// حالات، كما في سجل المهام. فالمفتوح يُشتقّ ولا يُخزَّن:
+  ///
+  ///     layerId IS NULL  AND  NOT EXISTS (تسويةٌ تشير إليه)
+  settlesId String?               @unique
+  settles   InventoryConsumption? @relation("ProvisionalSettlement", fields: [settlesId], references: [id], onDelete: Restrict)
+  settledBy InventoryConsumption? @relation("ProvisionalSettlement")
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, layerId])
+  @@index([companyId, movementId])
+  @@map("inventory_consumptions")
 }
 
 /// A government-compliance checklist item — deliberately minimal, matching
