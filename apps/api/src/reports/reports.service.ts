@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { roundTo } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
@@ -190,13 +191,12 @@ export class ReportsService {
         }
       }
 
-      const round = (n: number) => Math.round(n * 100) / 100;
       const shape = (name: string, id: string | null, v: { revenue: number; expenses: number }) => ({
         branchId: id,
         branchName: name,
-        revenue: round(v.revenue),
-        expenses: round(v.expenses),
-        netIncome: round(v.revenue - v.expenses),
+        revenue: roundTo(v.revenue, 'LINE_AMOUNT'),
+        expenses: roundTo(v.expenses, 'LINE_AMOUNT'),
+        netIncome: roundTo(v.revenue - v.expenses, 'LINE_AMOUNT'),
       });
 
       return {

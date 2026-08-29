@@ -7,7 +7,8 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
-import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, round2 } from '../journal/opening-balance.util';
+import { round2 } from '../common/money/rounding';
+import { OPENING_EQUITY_CODE, postOpeningDeltaEntry } from '../journal/opening-balance.util';
 
 /**
  * Reference implementation for every future tenant-scoped module: all data
