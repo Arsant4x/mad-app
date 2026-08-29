@@ -9,7 +9,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { MSG } from '../common/i18n/messages';
 
-const PURCHASE_INCLUDE = { supplier: true } as const;
+const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
 const VAT_RATE = 0.15;
 
 /** The one category whose expenses may be amortized — matches the mockup, which
@@ -81,6 +81,26 @@ export class PurchasesService {
             baseSubtotal: toBaseAmount(dto.subtotal, exchangeRate),
             baseTaxAmount: toBaseAmount(tax, exchangeRate),
             baseTotal: toBaseAmount(total, exchangeRate),
+            /**
+             * البنود — تُكتب متداخلةً في نفس المعاملة، **و`companyId` مضبوطٌ
+             * على كل بند صراحةً** لا اتّكالاً على امتداد المستأجر: الكتابة
+             * المتداخلة تقع داخل استعلام الأب، فلا يمرّ عليها الامتداد.
+             * وسياسة RLS تفحص `companyId` — فبندٌ بلا شركةٍ يُرفض من القاعدة.
+             */
+            ...(dto.lines?.length
+              ? {
+                  lines: {
+                    create: dto.lines.map((line) => ({
+                      companyId,
+                      description: line.description,
+                      productId: line.productId ?? null,
+                      quantity: line.quantity,
+                      unitPrice: line.unitPrice,
+                      taxRate: line.taxRate ?? 15,
+                    })),
+                  },
+                }
+              : {}),
           } as unknown as Prisma.PurchaseUncheckedCreateInput,
           include: PURCHASE_INCLUDE,
         });

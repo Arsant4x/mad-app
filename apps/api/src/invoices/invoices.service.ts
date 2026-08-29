@@ -169,6 +169,7 @@ export class InvoicesService {
             create: dto.lines.map((l) => ({
               companyId,
               description: l.description,
+              productId: l.productId ?? null,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
               taxRate: l.taxRate,
@@ -289,6 +290,7 @@ export class InvoicesService {
           create: dto.lines.map((l) => ({
             companyId,
             description: l.description,
+            productId: l.productId ?? null,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             taxRate: l.taxRate,
@@ -367,6 +369,9 @@ export class InvoicesService {
         dto.lines ??
         original.lines.map((l) => ({
           description: l.description,
+          // ⚠️ يُنقل الصنف مع السطر: إشعارٌ دائن يفقد صنفه يعكس الإيراد ولا
+          // يستطيع عكس تكلفته — فيبقى المخزون منقوصاً بلا مقابل.
+          productId: l.productId ?? undefined,
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
           taxRate: Number(l.taxRate),
@@ -487,6 +492,7 @@ export class InvoicesService {
           create: note.lines.map((l) => ({
             companyId,
             description: l.description,
+            productId: l.productId ?? null,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             taxRate: l.taxRate,
