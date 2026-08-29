@@ -304,6 +304,7 @@ model Company {
   deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
+  purchaseLines       PurchaseLine[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
   payments            Payment[]
@@ -828,6 +829,25 @@ model InvoiceLine {
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   description String
+
+  /// ⭐ **The item this line sold — the link COGS needs and never had.**
+  ///
+  /// Nullable in the column, mandatory in the DTO for stocked lines. Three
+  /// populations share the table and the difference matters:
+  ///
+  ///   · rows written before this wave — NULL, and no COGS is computed for
+  ///     them, because nothing can say which item left the shelf;
+  ///   · service lines (rent, a consulting hour, a maintenance callout) —
+  ///     NULL by nature, and no COGS applies to them either;
+  ///   · stocked lines from here on — always set.
+  ///
+  /// ⚠️ The consequence is deliberate and must not be read as a defect: a
+  /// margin report over an old document shows revenue with no cost against it.
+  /// The alternative — inventing an item for a line that never had one — would
+  /// produce a *wrong* cost instead of an absent one.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+
   /// Precision follows the platform-wide scale table in
   /// `common/money/rounding.ts` — quantity 3dp, net unit price 6dp. A pharmacy
   /// sells by the pill, a salon measures in millilitres and a fuel pump in
@@ -843,6 +863,7 @@ model InvoiceLine {
 
   createdAt DateTime @default(now())
 
+  @@index([companyId, productId])
   @@map("invoice_lines")
 }
 
@@ -934,9 +955,54 @@ model Purchase {
   updatedAt DateTime @updatedAt
 
   attachments PurchaseAttachment[]
+  lines       PurchaseLine[]
 
   @@unique([companyId, no])
   @@map("purchases")
+}
+
+/// ⭐ **The purchase line — the row this platform never had.**
+///
+/// A purchase was a header: supplier, category, `subtotal`, `total`. Nothing
+/// on it said *what* was bought, so `postPurchaseToLedger` had one signal to
+/// route by — a free-text category string — and no event anywhere carried
+/// (item, quantity, cost) together. That absence is why inventory layers had
+/// no input and COGS had no trigger: not a missing feature, a missing row.
+///
+/// ⚠️ **This wave creates the row and stops there.** Posting still reads the
+/// header, exactly as before — the ledger does not change by one entry. What
+/// changes is that a later wave finally has something to read.
+///
+/// The split the plan calls for — `مخزني ← أصل · خدمي ← مصروف` — is expressed
+/// by `productId`: a line with an item is stocked, a line without one is a
+/// service. No separate flag, because a flag can disagree with the item and
+/// then something has to decide which lies.
+model PurchaseLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  description String
+
+  /// Set ⇒ stocked line. Null ⇒ service line, and **no COGS is ever computed
+  /// for it** — there is no item to consume a cost layer from.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  /// Born at the platform scale, not widened into it later — the guard in
+  /// `common/money/rounding.spec.ts` fails the build otherwise.
+  quantity  Decimal @db.Decimal(18, 3)
+  unitPrice Decimal @db.Decimal(18, 6)
+  taxRate   Decimal @default(15) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([companyId, productId])
+  @@map("purchase_lines")
 }
 
 /// Catalog item (product or service) used as a reference list when writing
@@ -973,6 +1039,12 @@ model Product {
 
   stockMovements StockMovement[]
 
+  /// Document lines that name this item. All three are `Restrict` on delete:
+  /// an item referenced by a posted document is history, and history does not
+  /// lose its subject. Archiving stays the way to retire an item.
+  invoiceLines  InvoiceLine[]
+  quoteLines    QuoteLine[]
+  purchaseLines PurchaseLine[]
 
   /// Soft delete: set instead of removing the row, so it can be restored
   /// from the trash within 30 days. Reads filter it out centrally.
@@ -2450,6 +2522,14 @@ model QuoteLine {
   quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   description String
+
+  /// Carried for the same reason as `InvoiceLine.productId`: a quote that
+  /// converts into an invoice must hand over *what* it quoted, not just its
+  /// wording. Without it the item is re-picked by hand at conversion — and a
+  /// mis-pick there is a wrong cost, not a wrong label.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+
   /// Same scale as `InvoiceLine` deliberately: a quote that cannot express the
   /// quantity its invoice will carry turns every conversion into a rounding
   /// dispute with the customer.
@@ -2458,6 +2538,7 @@ model QuoteLine {
   taxRate     Decimal @db.Decimal(5, 2)
 
   @@index([quoteId])
+  @@index([companyId, productId])
   @@map("quote_lines")
 }
 

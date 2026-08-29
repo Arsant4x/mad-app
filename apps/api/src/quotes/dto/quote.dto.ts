@@ -1,11 +1,21 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 
 /** بند عرض — بشكل بند الفاتورة حرفياً، فالتحويل نقلٌ لا إعادة إدخال. */
 export class QuoteLineDto {
   @IsString()
   description!: string;
+
+  /**
+   * الصنف — يُحمل هنا للسبب نفسه الذي حُمل لأجله في بند الفاتورة: **العرض
+   * الذي يتحوّل فاتورةً يجب أن يُسلّم ما عرضه، لا صياغته فقط.** وبدونه
+   * يُعاد اختيار الصنف يدوياً عند التحويل، وخطأُ الاختيار هناك **تكلفةٌ
+   * خاطئة لا تسميةٌ خاطئة**.
+   */
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
 
   @IsNumber()
   @IsPositive()

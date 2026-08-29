@@ -200,7 +200,24 @@ export class PosService {
         branchId: shift.branchId ?? undefined,
         lines: dto.lines.map((l) => {
           const p = byId.get(l.productId)!;
-          return { description: p.name, quantity: l.quantity, unitPrice: Number(p.price), taxRate: POS_TAX_RATE };
+          /**
+           * ⚠️ **`productId` يُنقل ولا يُترك عند الاسم.**
+           *
+           * الكاشير **يعرف الصنف يقيناً** — يبحث عنه هنا بالسطر الذي فوق —
+           * وكان يحتفظ باسمه وحده. فينتج سطرُ فاتورةٍ بلا صنف، أي «خدميّ»
+           * بتعريف الطبقة، **فلا تكلفةَ مبيعات له أبداً** مهما اكتملت
+           * الطبقات لاحقاً.
+           *
+           * وهو المسار الأخطر تحديداً لأنه **الوحيد الذي يخصم من المخزون**:
+           * فتخرج البضاعة من الرفّ ولا يخرج ما يقابلها من الدفتر.
+           */
+          return {
+            description: p.name,
+            productId: p.id,
+            quantity: l.quantity,
+            unitPrice: Number(p.price),
+            taxRate: POS_TAX_RATE,
+          };
         }),
       } as CreateInvoiceDto;
 
