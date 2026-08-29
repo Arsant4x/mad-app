@@ -89,6 +89,19 @@ describe('POS cashier (e2e)', () => {
     expect(res.body.customer.name).toBe('عميل نقدي');
     // وردية بلا فرع ⇒ لا مستودع خصم — تخطٍّ صريح مُعلَن، لا انهيار.
     expect(res.body.stockDeduction).toEqual({ deducted: false, reason: 'NO_BRANCH_WAREHOUSE' });
+
+    /**
+     * ⭐ **والسطر يحمل الصنف لا اسمه وحده.**
+     *
+     * الكاشير يعرف الصنف يقيناً — ويبحث عنه ليأخذ سعره — وكان يحتفظ بالاسم
+     * فقط. فينتج سطرٌ بلا `productId`، أي «خدميّ» بتعريف الطبقة، **فلا تكلفة
+     * مبيعات له أبداً** مهما اكتملت الطبقات.
+     *
+     * ⚠️ وهو المسار الأخطر لأنه **الوحيد الذي يخصم من المخزون**: فتخرج
+     * البضاعة من الرفّ ولا يخرج ما يقابلها من الدفتر.
+     */
+    expect(res.body.lines).toHaveLength(1);
+    expect(res.body.lines[0].productId).toBe(productId);
   }, 60000);
 
   it('rings a card sale and derives the drawer from the invoices', async () => {

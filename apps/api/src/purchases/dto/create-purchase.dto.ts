@@ -1,5 +1,7 @@
+import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { PurchaseLineDto } from './purchase-line.dto';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsString()
@@ -45,4 +47,19 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   incorpItem?: string;
+
+  /**
+   * بنود الشراء — **اختيارية في هذه الموجة، وستصير المصدر في التي بعدها**.
+   *
+   * ⚠️ **ولا تُغيّر الإجماليات**: `subtotal` يبقى مصدر الترحيل كما كان، ولا
+   * يُشتقّ من البنود هنا. اشتقاقُه تغييرٌ في الترحيل، وهذه الموجة لا تمسّه.
+   * فمن أرسل بنوداً لا تطابق `subtotal` **تُقبل منه** — والمطابقة تأتي مع
+   * الموجة التي تجعل البنود مصدر الحقيقة.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseLineDto)
+  lines?: PurchaseLineDto[];
 }

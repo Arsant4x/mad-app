@@ -95,7 +95,7 @@ export class QuotesService {
             baseTotal: toBaseAmount(total, exchangeRate),
             // companyId على كل بند صراحةً — الكتابة المتداخلة لا يراها امتداد
             // العزل (نفس تعليل InvoicesService)، وRLS يسند خلفها.
-            lines: { create: dto.lines.map((l) => ({ companyId, description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })) },
+            lines: { create: dto.lines.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })) },
           } as unknown as Prisma.QuoteUncheckedCreateInput,
           include: QUOTE_INCLUDE,
         });
@@ -130,7 +130,7 @@ export class QuotesService {
                 baseTotal: toBaseAmount(totals.total, Number(existing.exchangeRate)),
                 lines: {
                   deleteMany: {},
-                  create: dto.lines!.map((l) => ({ companyId, description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+                  create: dto.lines!.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })),
                 },
               }
             : {}),
@@ -191,6 +191,10 @@ export class QuotesService {
             exchangeRate: Number(quote.exchangeRate),
             lines: quote.lines.map((l) => ({
               description: l.description,
+              // ⚠️ الصنف ينتقل مع السطر — **وهذا هو سبب حمله على العرض
+              // أصلاً**. لو سقط هنا لصارت كل فاتورةٍ محوَّلة سطوراً بلا
+              // أصناف، فلا تكلفة لها مهما اكتملت الطبقات.
+              productId: l.productId ?? undefined,
               quantity: Number(l.quantity),
               unitPrice: Number(l.unitPrice),
               taxRate: Number(l.taxRate),
