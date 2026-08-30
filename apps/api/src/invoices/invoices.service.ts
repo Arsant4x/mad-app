@@ -4,9 +4,10 @@ import { buildZatcaQr } from '../zatca/qr.util';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { fulfilStockedLines } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import { postCogsEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { documentYear } from '../common/document-year.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
@@ -179,6 +180,29 @@ export class InvoicesService {
         include: INVOICE_INCLUDE,
       });
 
+      /**
+       * ⭐ **التسليم من هنا وحده** — حركة المخزون وتكلفتها من مالكٍ واحد هو
+       * سطر الفاتورة. والكاشير يمرّ من هذا المسار نفسه، فلا مسار ثانٍ يخصم.
+       *
+       * ⚠️ **وقيد التكلفة منفصل عن قيد الفاتورة**: الأول حدثٌ مخزنيّ والثاني
+       * إيرادي، وقد يقع أحدهما بلا الآخر (بيع خدمة · بضاعة بلا مستودع).
+       */
+      const fulfilment = await fulfilStockedLines(tx, {
+        companyId,
+        branchId: created.branchId,
+        date: created.issueDate,
+        documentNo: created.no,
+        lines: created.lines,
+      });
+      if (fulfilment.fulfilled) {
+        await postCogsEntry(tx, companyId, {
+          branchId: created.branchId,
+          no: created.no,
+          date: created.issueDate,
+          baseCost: toBaseAmount(fulfilment.totalCost, exchangeRate),
+        });
+      }
+
       // Auto-post to the ledger; soft-skip (journalEntryId stays null) if the
       // required accounts (1200/4100/2200) aren't set up for this company yet
       // — see the schema comment on Invoice.journalEntryId.
@@ -191,8 +215,14 @@ export class InvoicesService {
         baseTaxTotal: Number(created.baseTaxTotal),
         baseTotal: Number(created.baseTotal),
       });
-      if (!entry) return created;
-      return tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
+      /**
+       * `stockFulfilment` **حقلٌ عابر لا عمود** — لا يُخزَّن ولا يُقرأ لاحقاً:
+       * هو تقرير ما وقع في هذه المعاملة بعينها، يستهلكه الكاشير ليعرض للبائع
+       * سبب عدم الخصم إن لم يقع. **والحقيقة تبقى في دفتر الحركات وحده.**
+       */
+      if (!entry) return { ...created, stockFulfilment: fulfilment };
+      const saved = await tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
+      return { ...saved, stockFulfilment: fulfilment };
   }
 
   update(companyId: string, id: string, dto: UpdateInvoiceDto) {
