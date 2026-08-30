@@ -136,6 +136,42 @@ export async function postDebitNoteEntry(tx: Prisma.TransactionClient, companyId
   });
 }
 
+/**
+ * ⭐ **قيد تكلفة المبيعات — لحظة البيع لا لحظة الشراء.**
+ *
+ * مدين `5100 تكلفة المبيعات` · دائن `1300 المخزون`، بمجموع ما استُهلك من
+ * الطبقات فعلاً — **لا بسعر بيعٍ ولا بمتوسطٍ مفترَض**.
+ *
+ * وهو الطرف الثاني لما فعلته `م٥`: الشراء صار أصلاً، **وهنا يصير الأصلُ
+ * تكلفةً حين يخرج**. فالهامش يُقرأ لأول مرة: إيرادٌ وتكلفتُه في الفترة نفسها.
+ *
+ * ⚠️ **وقيدٌ منفصل عن قيد الفاتورة** لا سطران فيه: الفاتورة حدثٌ إيرادي
+ * والتكلفة حدثٌ مخزنيّ، وقد يقع أحدهما بلا الآخر (بيع خدمة · أو بضاعة بلا
+ * مستودع). ودمجُهما يجعل تعذّر أحدهما يُسقط الآخر.
+ */
+export async function postCogsEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; no: string; date: Date; baseCost: number },
+) {
+  if (c.baseCost <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['5100']);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `تكلفة مبيعات ${c.no}`,
+    lines: [
+      { accountId: ids.get('5100')!, debit: c.baseCost, credit: 0 },
+      { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: 0, credit: c.baseCost },
+    ],
+    auto: true,
+    branchId: c.branchId ?? null,
+  });
+}
+
 /** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
   branchId?: string | null;

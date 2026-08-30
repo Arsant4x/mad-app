@@ -7,7 +7,7 @@ import { computeTotals, InvoicesService } from '../invoices/invoices.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
-import { currentStockQty } from '../inventory/stock-quantity.util';
+import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
@@ -34,6 +34,20 @@ export type StockDeductionReport =
       belowZero: { productId: string; resultingQty: number }[];
     }
   | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
+/**
+ * يترجم تقرير التسليم (`م٦`) إلى شكل التقرير الذي يعرفه الكاشير.
+ *
+ * ⚠️ **والشكل يبقى كما هو عمداً**: الخصم انتقل مالكُه من الكاشير إلى سطر
+ * الفاتورة، **وهذا تغييرٌ داخليّ لا يخصّ من يقرأ الردّ**. فمن غيّر الشكل مع
+ * المالك أجبر كل واجهةٍ على تتبّع إعادة تنظيمٍ لا تعنيها.
+ */
+function toDeductionReport(f: FulfilmentResult | undefined): StockDeductionReport {
+  if (!f || !f.fulfilled) {
+    return { deducted: false, reason: f?.reason === 'NO_TRACKED_PRODUCTS' ? 'NO_TRACKED_PRODUCTS' : 'NO_BRANCH_WAREHOUSE' };
+  }
+  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero };
+}
 
 export interface ShiftTotals {
   salesCount: number;
@@ -272,17 +286,17 @@ export class PosService {
           providerRef: p.method === 'CARD' ? providerRef : null,
         })),
       });
-      // خصم المخزون داخل نفس معاملة إتمام البيع (موجز POS §6): لو خسرت
-      // مزامنةٌ سباقَ clientSaleId فسقطت هذه المعاملة، سقطت حركاتها معها —
-      // فلا خصم مزدوج بنيوياً. وإعادة الإرسال المتطابقة لا تصل هنا أصلاً
-      // (syncSale يعيد فاتورة الفائز قبل أي رنّ جديد).
-      const stockDeduction = await this.deductStock(tx, tenant.companyId, {
-        warehouseId: branchWarehouseId,
-        branchId: shiftBranchId,
-        lines: dto.lines,
-        date: invoiceDto.issueDate,
-        invoiceNo: invoice.no,
-      });
+      /**
+       * ⭐ **الخصم لم يعد هنا** — صار مالكه سطرَ الفاتورة (`م٦`).
+       *
+       * كان الكاشير يخصم بنفسه والفاتورة تُرحّل وحدها: **كتابتان لمالكين
+       * مختلفين**، ومنه جاء عطل `م١` — مسارٌ يعرف الصنف ثم يرميه. وبقاء
+       * الخصم هنا بعد `م٦` كان سيخصم **مرّتين**.
+       *
+       * والخصم ما زال داخل معاملة إتمام البيع نفسها (موجز POS §6): سقوطها
+       * يُسقط حركاتها معها، **فلا خصم مزدوج بنيوياً**.
+       */
+      const stockDeduction = toDeductionReport(invoice.stockFulfilment);
 
       const updated = await tx.invoice.update({
         where: { id: invoice.id },
@@ -299,55 +313,6 @@ export class PosService {
     });
   }
 
-  /**
-   * حركات OUT لبنود البيع المخزنية — على مستودع فرع الوردية.
-   *
-   * «مخزني» = له حركة واحدة على الأقل في دفتر الحركات (الرصيد هنا مشتق من
-   * الدفتر وحده، فبند بلا أي حركة — خدمة أو صنف لا تتعقبه المنشأة — لا معنى
-   * لخصمه، وخصمه كان سيلوّث شاشة الأرصدة بسوالب دائمة لكل خدمة تُباع).
-   *
-   * النقص لا يمنع البيع: السالب مسموح بتحذير ناعم، نفس سياسة إنشاء الحركة
-   * اليدوية في InventoryService — الكاشير لا يوقف طابور المحل على جرد.
-   */
-  private async deductStock(
-    tx: Prisma.TransactionClient,
-    companyId: string,
-    args: { warehouseId: string | null; branchId: string | null; lines: PosSaleLineDto[]; date: string; invoiceNo: string },
-  ): Promise<StockDeductionReport> {
-    if (!args.warehouseId) return { deducted: false, reason: 'NO_BRANCH_WAREHOUSE' };
-    const warehouseId = args.warehouseId;
-
-    const ids = [...new Set(args.lines.map((l) => l.productId))];
-    const tracked = new Set(
-      (await tx.stockMovement.findMany({ where: { productId: { in: ids } }, select: { productId: true }, distinct: ['productId'] })).map(
-        (m) => m.productId,
-      ),
-    );
-    const deductible = args.lines.filter((l) => tracked.has(l.productId));
-    if (!deductible.length) return { deducted: false, reason: 'NO_TRACKED_PRODUCTS' };
-
-    await tx.stockMovement.createMany({
-      // companyId صراحةً — createMany لا يمرّ على امتداد حقن المستأجر دائماً،
-      // نفس نمط posPayment.createMany أعلاه؛ RLS يسند الاثنين.
-      data: deductible.map((l) => ({
-        companyId,
-        productId: l.productId,
-        warehouseId,
-        branchId: args.branchId,
-        type: 'OUT' as const,
-        qty: l.quantity,
-        date: new Date(args.date),
-        reason: `بيع كاشير ${args.invoiceNo}`,
-      })),
-    });
-
-    const belowZero: { productId: string; resultingQty: number }[] = [];
-    for (const productId of new Set(deductible.map((l) => l.productId))) {
-      const resultingQty = await currentStockQty(tx, productId, warehouseId);
-      if (resultingQty < 0) belowZero.push({ productId, resultingQty });
-    }
-    return { deducted: true, warehouseId, movements: deductible.length, belowZero };
-  }
 
   private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotals> {
     // من صفوف الدفعات لا من الفواتير: الفاتورة المقسّمة تضع في الدرج

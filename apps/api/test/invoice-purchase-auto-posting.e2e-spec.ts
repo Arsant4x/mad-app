@@ -209,6 +209,67 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     expect(JSON.stringify(res.body)).toContain('مستودع');
   }, 60000);
 
+  /**
+   * ⭐⭐ **بوابة `م٦` — ومعيار القبول كما كتبه المالك.**
+   *
+   * «منشأة اشترت بـ١٠٠٬٠٠٠ وباعت نصفها — يظهر ميزانها: **مخزون ٥٠٬٠٠٠ ·
+   * تكلفة مبيعات ٥٠٬٠٠٠ · لا حساب مشتريات**».
+   *
+   * ⚠️ **و«لا حساب مشتريات» لا يُترجَم توكيداً على الاسم**: لا حساب بهذا
+   * الاسم في الدليل أصلاً، فالتوكيد كان سيمرّ على النظام المعطوب. **فيُقاس
+   * الرقم**: `5100` يساوي ٥٠٬٠٠٠ لا ١٠٠٬٠٠٠ (§8.14).
+   */
+  it('⭐⭐ م٦: اشترت بـ١٠٠٬٠٠٠ وباعت نصفها — مخزون ٥٠٬٠٠٠ وتكلفة مبيعات ٥٠٬٠٠٠', async () => {
+    const before = await balances();
+
+    const wh = await request(app.getHttpServer())
+      .post('/warehouses').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'مستودع بوابة م٦' }).expect(201);
+    const prod = await request(app.getHttpServer())
+      .post('/products').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'صنف بوابة م٦', price: 2000 }).expect(201);
+
+    // البيع يسحب من **مستودع الفرع** — نفس قاعدة الكاشير، فلا مسار ثانٍ.
+    const branches = await request(app.getHttpServer())
+      .get('/branches').set('Authorization', `Bearer ${token}`).expect(200);
+    const branchId = branches.body[0]?.id;
+    expect(branchId).toBeDefined();
+    await request(app.getHttpServer())
+      .patch(`/branches/${branchId}`).set('Authorization', `Bearer ${token}`)
+      .send({ warehouseId: wh.body.id }).expect(200);
+
+    // ① شراء ١٠٠ وحدة × ١٠٠٠ = ١٠٠٬٠٠٠
+    await request(app.getHttpServer())
+      .post('/purchases').set('Authorization', `Bearer ${token}`)
+      .send({
+        supplierId, date: '2026-07-24', subtotal: 100000, category: 'بضاعة',
+        warehouseId: wh.body.id, branchId,
+        lines: [{ description: 'بضاعة', productId: prod.body.id, quantity: 100, unitPrice: 1000 }],
+      })
+      .expect(201);
+
+    const afterBuy = await balances();
+    expect(Number(afterBuy['1300'].balance) - Number(before['1300']?.balance ?? 0)).toBeCloseTo(100000);
+    expect(Number(afterBuy['5100'].balance) - Number(before['5100'].balance)).toBeCloseTo(0);
+
+    // ② بيع النصف — ٥٠ وحدة
+    const inv = await request(app.getHttpServer())
+      .post('/invoices').set('Authorization', `Bearer ${token}`)
+      .send({
+        customerId, issueDate: '2026-07-25', dueDate: '2026-07-25', branchId,
+        lines: [{ description: 'بيع نصف البضاعة', productId: prod.body.id, quantity: 50, unitPrice: 2000, taxRate: 15 }],
+      })
+      .expect(201);
+    expect(inv.body.id).toBeTruthy();
+
+    const afterSell = await balances();
+    // ⭐ **الأرقام هي الفاصل** — والمتوسط أو LIFO كانا سيعطيان غيرها.
+    expect(Number(afterSell['1300'].balance) - Number(before['1300']?.balance ?? 0)).toBeCloseTo(50000);
+    expect(Number(afterSell['5100'].balance) - Number(before['5100'].balance)).toBeCloseTo(50000);
+    // والإيراد لم يُخلط بالتكلفة: قيدان منفصلان.
+    expect(Number(afterSell['4100'].balance) - Number(before['4100'].balance)).toBeCloseTo(100000);
+  }, 90000);
+
   it('⭐ م٥: بنودٌ لا تساوي الإجمالي تُرفض — فالبنود صارت مصدر الترحيل', async () => {
     const res = await request(app.getHttpServer())
       .post('/purchases').set('Authorization', `Bearer ${token}`)
