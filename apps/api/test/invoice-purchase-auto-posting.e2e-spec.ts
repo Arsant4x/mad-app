@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 
 /**
  * Proves invoices/purchases auto-post to the ledger through the real chart
@@ -26,6 +27,11 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    // ⚠️ مُرشِّح الترجمة **كان ناقصاً هنا**، فكانت الأخطاء تعود مفاتيح خام
+    // (`purchases.lines_total_mismatch {…}`) بينما الإنتاج يعيد عربية.
+    // ولم يظهر لأن لا توكيد في هذه المجموعة كان يقرأ نصّ خطأ. وأُضيف كي
+    // تفحص البوابة **ما يراه المستخدم** لا ما يراه المطوّر.
+    app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
@@ -117,20 +123,103 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
 
     const after = await balances();
     expect(Number(after['5300'].balance) - Number(before['5300'].balance)).toBeCloseTo(200);
-    // 2200 (VAT payable) is debited by input VAT on a purchase — it's a
-    // credit, offsetting what's owed to the authority, so its balance
-    // (credit-normal) goes *down*, mirroring how an invoice's output VAT
-    // credit made it go up in the previous test.
-    expect(Number(after['2200'].balance) - Number(before['2200'].balance)).toBeCloseTo(-30);
+    /**
+     * ⚠️ **تغيّر مقصود في `م٥`.** كان هذا التوكيد يقرأ `2200` ينزل ثلاثين —
+     * أي أن **حساباً واحداً يحمل المدخلات والمخرجات معاً**، فرصيده يصير سالباً
+     * كلما زادت المشتريات (مقيس على مجسّ حيّ: `-7500`). وحسابُ التزامٍ برصيدٍ
+     * سالب ليس التزاماً، والإقرار الضريبي يُقرأ منه.
+     *
+     * فصارت المدخلات **أصلاً** (`1250`) والمخرجات **التزاماً** (`2200`)،
+     * و`2200` **لا يتحرك على الشراء إطلاقاً**.
+     */
+    expect(Number(after['1250'].balance) - Number(before['1250']?.balance ?? 0)).toBeCloseTo(30);
+    expect(Number(after['2200'].balance) - Number(before['2200'].balance)).toBeCloseTo(0);
     expect(Number(after['2100'].balance) - Number(before['2100'].balance)).toBeCloseTo(230);
 
     await request(app.getHttpServer()).delete(`/purchases/${pur.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
 
     const restored = await balances();
     expect(Number(restored['5300'].balance)).toBeCloseTo(Number(before['5300'].balance));
-    expect(Number(restored['2200'].balance)).toBeCloseTo(Number(before['2200'].balance));
+    expect(Number(restored['1250'].balance)).toBeCloseTo(Number(before['1250']?.balance ?? 0));
     expect(Number(restored['2100'].balance)).toBeCloseTo(Number(before['2100'].balance));
   });
+
+  /**
+   * بوابة `م٥` — **الشراء المخزنيّ أصلٌ لا تكلفة**.
+   *
+   * والعطل الذي تعالجه مقيس: شراء بضاعة بـ١٠٠٬٠٠٠ كان يُمدِّن `5100 تكلفة
+   * المبيعات` مباشرةً. فبيعُ نصفها يعطي إيراداً بلا تكلفته وتكلفةً بلا
+   * إيرادها — **الهامش مقلوب لا غائب**.
+   */
+  it('⭐ م٥: بندٌ مخزني يُمدِّن المخزون لا تكلفة المبيعات — وطبقةٌ تُنشأ', async () => {
+    const before = await balances();
+
+    const wh = await request(app.getHttpServer())
+      .post('/warehouses').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'مستودع بوابة م٥' }).expect(201);
+    const prod = await request(app.getHttpServer())
+      .post('/products').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'صنف بوابة م٥', price: 150 }).expect(201);
+
+    const pur = await request(app.getHttpServer())
+      .post('/purchases').set('Authorization', `Bearer ${token}`)
+      .send({
+        supplierId, date: '2026-07-21', subtotal: 1000, category: 'بضاعة',
+        warehouseId: wh.body.id,
+        lines: [{ description: 'بضاعة للبيع', productId: prod.body.id, quantity: 10, unitPrice: 100 }],
+      })
+      .expect(201);
+
+    const after = await balances();
+    // ⭐ **الرقم هو الفاصل**: المخزون يرتفع ألفاً، و`5100` لا يتحرك.
+    expect(Number(after['1300'].balance) - Number(before['1300']?.balance ?? 0)).toBeCloseTo(1000);
+    expect(Number(after['5100'].balance) - Number(before['5100'].balance)).toBeCloseTo(0);
+    expect(Number(after['2100'].balance) - Number(before['2100'].balance)).toBeCloseTo(1150);
+
+    /**
+     * ⚠️ **والاستلام وقع فعلاً** — لا القيد وحده.
+     *
+     * وصياغةٌ أولى هنا اكتفت بـ`status < 400` على نقطة نهاية، **وهي لا تفحص
+     * شيئاً**: تمرّ على استجابةٍ فارغة كما تمرّ على صحيحة (§8.14). فيُقرأ
+     * **الرصيد** — عشر وحدات دخلت المستودع.
+     */
+    const levels = await request(app.getHttpServer())
+      .get('/inventory/stock-levels').set('Authorization', `Bearer ${token}`).expect(200);
+    const row = (levels.body as { productId: string; qty: string | number }[]).find((r) => r.productId === prod.body.id);
+    expect(row).toBeDefined();
+    expect(Number(row!.qty)).toBeCloseTo(10);
+
+    await request(app.getHttpServer()).delete(`/purchases/${pur.body.id}`).set('Authorization', `Bearer ${token}`);
+  }, 60000);
+
+  it('⭐ م٥: بندٌ مخزني بلا مستودع يُرفض — ولا يُتخطّى بصمت', async () => {
+    const prod = await request(app.getHttpServer())
+      .post('/products').set('Authorization', `Bearer ${token}`)
+      .send({ name: 'صنف بلا مستودع' }).expect(201);
+
+    // الفرع الافتراضي في البذرة بلا مستودع مربوط — فلا مستودع يُشتقّ.
+    const res = await request(app.getHttpServer())
+      .post('/purchases').set('Authorization', `Bearer ${token}`)
+      .send({
+        supplierId, date: '2026-07-22', subtotal: 500, category: 'بضاعة',
+        lines: [{ description: 'بضاعة بلا مستودع', productId: prod.body.id, quantity: 5, unitPrice: 100 }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain('مستودع');
+  }, 60000);
+
+  it('⭐ م٥: بنودٌ لا تساوي الإجمالي تُرفض — فالبنود صارت مصدر الترحيل', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/purchases').set('Authorization', `Bearer ${token}`)
+      .send({
+        supplierId, date: '2026-07-23', subtotal: 900,
+        lines: [{ description: 'خدمة', quantity: 1, unitPrice: 1000 }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain('لا يساوي الإجمالي');
+  }, 60000);
 
   it('cannot delete an auto-posted entry directly through the journal endpoint', async () => {
     const inv = await request(app.getHttpServer())
