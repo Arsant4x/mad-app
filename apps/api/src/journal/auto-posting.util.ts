@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { roundTo } from '../common/money/rounding';
+import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
 /** Resolves a set of account codes to ids, scoped by the tenant context
@@ -144,6 +146,13 @@ export interface PurchaseForPosting {
   baseSubtotal: number;
   baseTaxAmount: number;
   baseTotal: number;
+  /**
+   * نصيب البنود **المخزنية** من الإجمالي قبل الضريبة، بالعملة الأساسية.
+   *
+   * صفرٌ لشراءٍ خدميّ بالكامل — وهو حال كل مستندٍ كُتب قبل `م١`، فيُرحَّل
+   * كما كان يُرحَّل تماماً. **فالموجة لا تُعيد تفسير الماضي.**
+   */
+  baseStockedSubtotal?: number;
 }
 
 /** Debit the category's expense account for the subtotal, debit VAT (2200)
@@ -154,13 +163,37 @@ export interface PurchaseForPosting {
 export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId: string, p: PurchaseForPosting) {
   if (p.baseTotal <= 0) return null;
 
+  const stocked = roundTo(p.baseStockedSubtotal ?? 0, 'LINE_AMOUNT');
+  const serviceSubtotal = roundTo(p.baseSubtotal - stocked, 'LINE_AMOUNT');
+
   const expCode = purchaseExpenseAccountCode(p.category);
-  const needCodes = [expCode, '2100', ...(p.baseTaxAmount > 0 ? ['2200'] : [])];
+  const needCodes = ['2100', ...(serviceSubtotal !== 0 ? [expCode] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
 
-  const lines: PostingLine[] = [{ accountId: ids.get(expCode)!, debit: p.baseSubtotal, credit: 0 }];
-  if (p.baseTaxAmount > 0) lines.push({ accountId: ids.get('2200')!, debit: p.baseTaxAmount, credit: 0 });
+  const lines: PostingLine[] = [];
+
+  /**
+   * ⭐ **البند المخزني أصلٌ لا مصروف** — ولا يصير تكلفةً إلا لحظة البيع
+   * (`م٦`). وقبل هذه الموجة كان يذهب إلى `5100` مباشرةً، فالهامش **مقلوب لا
+   * غائب**: تكلفةٌ بلا إيرادها ثم إيرادٌ بلا تكلفته.
+   */
+  if (stocked > 0) {
+    lines.push({ accountId: await getOrCreateInventoryAccount(tx, companyId), debit: stocked, credit: 0 });
+  }
+  if (serviceSubtotal !== 0) {
+    lines.push({ accountId: ids.get(expCode)!, debit: serviceSubtotal, credit: 0 });
+  }
+  /**
+   * ⚠️ **ضريبة المدخلات إلى حسابها هي (`1250`) لا إلى `2200`.**
+   *
+   * كان حسابٌ واحد يحمل الاتجاهين: الشراء يُمدِّنه والبيع يُدائنه. **فرصيده
+   * يصير سالباً كلما زادت المشتريات** — مقيس على مجسّ حيّ: `-7500`. وحسابُ
+   * التزامٍ برصيدٍ سالب ليس التزاماً، والإقرار الضريبي يُقرأ منه.
+   */
+  if (p.baseTaxAmount > 0) {
+    lines.push({ accountId: await getOrCreateInputVatAccount(tx, companyId), debit: p.baseTaxAmount, credit: 0 });
+  }
   lines.push({ accountId: ids.get('2100')!, debit: 0, credit: p.baseTotal });
 
   return createJournalEntry(tx, {

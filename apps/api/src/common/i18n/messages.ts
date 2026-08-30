@@ -45,6 +45,9 @@ export const MSG = {
   account_has_journal_lines: 'accounts.has_journal_lines',
   account_opening_equity_protected: 'accounts.opening_equity_protected',
   account_opening_equity_type_conflict: 'accounts.opening_equity_type_conflict',
+  account_reserved_type_conflict: 'accounts.reserved_type_conflict',
+  purchase_lines_total_mismatch: 'purchases.lines_total_mismatch',
+  purchase_stocked_needs_warehouse: 'purchases.stocked_needs_warehouse',
   journal_entry_not_found: 'journal.entry_not_found',
   journal_entry_unbalanced: 'journal.entry_unbalanced',
   journal_line_account_not_found: 'journal.line_account_not_found',
@@ -327,6 +330,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_opening_equity_type_conflict]: {
     ar: 'الرمز {code} محجوز لحساب الأرصدة الافتتاحية (حقوق ملكية)، وهو موجود لديك بنوع مختلف — عدّل رمز ذلك الحساب أولاً',
     en: 'Code {code} is reserved for the opening-balances equity account, but it already exists with a different type — change that account\'s code first',
+  },
+  [MSG.account_reserved_type_conflict]: {
+    ar: 'الرمز {code} محجوز لحسابٍ من نوع «{type}»، وهو موجود لديك بنوع مختلف — عدّل رمز ذلك الحساب أولاً',
+    en: 'Code {code} is reserved for a "{type}" account but already exists with a different type — change that account\'s code first',
+  },
+  [MSG.purchase_lines_total_mismatch]: {
+    ar: 'مجموع بنود الشراء ({lines}) لا يساوي الإجمالي قبل الضريبة ({subtotal}) — والبنود هي ما يُرحَّل، فلا يُقبل اختلافهما',
+    en: 'Purchase lines total ({lines}) does not equal the subtotal ({subtotal}) — the lines drive posting, so they cannot disagree',
+  },
+  [MSG.purchase_stocked_needs_warehouse]: {
+    ar: 'بندٌ مخزني بلا مستودع — حدّد مستودعاً للشراء أو اربط مستودعاً بالفرع، فالبضاعة لا تُستلم في لا مكان',
+    en: 'A stocked line has no warehouse — set one on the purchase or link one to the branch; goods cannot be received into nowhere',
   },
   [MSG.journal_entry_not_found]: { ar: 'القيد غير موجود', en: 'Journal entry not found' },
   [MSG.journal_entry_unbalanced]: { ar: 'القيد غير متوازن — لا يمكن ترحيله', en: 'Journal entry is unbalanced — it cannot be posted' },

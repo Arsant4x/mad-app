@@ -4,10 +4,12 @@ import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { roundTo } from '../common/money/rounding';
 import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import { receiveStockedLines } from './purchase-receipt.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
 const VAT_RATE = 0.15;
@@ -48,11 +50,34 @@ export class PurchasesService {
     );
   }
 
+  /**
+   * ⚠️ **البنود صارت مصدر الترحيل — فمجموعها يجب أن يساوي الإجمالي.**
+   *
+   * كانت `م١` تقبل اختلافهما عمداً، **وأعلنت أن المطابقة تأتي مع الموجة التي
+   * تجعل البنود مصدر الحقيقة**. وهذه هي: بندٌ مخزنيّ يُمدِّن المخزون وخدميّ
+   * يُمدِّن المصروف، والفرق بينهما يُقرأ من المجموع — فاختلافُه عن الإجمالي
+   * يعني قيداً يوزّع مالاً لم يُدفع أو يُهمل مالاً دُفع.
+   */
+  private stockedSubtotal(dto: { subtotal: number; lines?: { productId?: string; quantity: number; unitPrice: number }[] }): number {
+    if (!dto.lines?.length) return 0;
+
+    const sum = (rows: typeof dto.lines) => roundTo(rows.reduce((t, l) => t + l.quantity * l.unitPrice, 0), 'LINE_AMOUNT');
+    const all = sum(dto.lines);
+    if (Math.abs(all - roundTo(dto.subtotal, 'LINE_AMOUNT')) > 0.005) {
+      throw new BadRequestException(
+        formatMessage(MSG.purchase_lines_total_mismatch, { lines: String(all), subtotal: String(dto.subtotal) }),
+      );
+    }
+    return sum(dto.lines.filter((l) => l.productId));
+  }
+
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
     const exempt = dto.exempt ?? false;
     const { tax, total } = computeTax(dto.subtotal, exempt);
     const { currency, exchangeRate } = resolveCurrency(dto);
     const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, dto.category, dto.amortizeMonths);
+    // يُحسب **قبل** المعاملة: خطأُ المطابقة يُردّ قبل أن يُكتب صفٌّ واحد.
+    const stockedSubtotal = this.stockedSubtotal(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextPurchaseNumber's comment.
     return retryOnUniqueConflict(() =>
@@ -108,6 +133,23 @@ export class PurchasesService {
         // Auto-post to the ledger; soft-skip (journalEntryId stays null) if
         // the required accounts (expense category/2100/2200) aren't set up
         // for this company yet.
+        /**
+         * ⚠️ **الاستلام يسبق الترحيل عمداً.**
+         *
+         * فإن رُفض (بندٌ مخزنيّ بلا مستودع) سقطت المعاملة كلها **قبل أن
+         * يُكتب قيد**. والعكس يترك قيداً يُمدِّن مخزوناً بلا طبقةٍ تقابله —
+         * وهو أسوأ من الرفض: ميزانيةٌ تعلن بضاعةً لا يستطيع أحد أن يبيعها
+         * بتكلفتها.
+         */
+        await receiveStockedLines(tx, {
+          companyId,
+          branchId: created.branchId,
+          warehouseId: dto.warehouseId ?? null,
+          date: created.date,
+          exchangeRate,
+          lines: created.lines,
+        });
+
         const entry = await postPurchaseEntry(tx, companyId, {
           branchId: created.branchId,
           no: created.no,
@@ -117,6 +159,7 @@ export class PurchasesService {
           baseSubtotal: Number(created.baseSubtotal),
           baseTaxAmount: Number(created.baseTaxAmount),
           baseTotal: Number(created.baseTotal),
+          baseStockedSubtotal: toBaseAmount(stockedSubtotal, exchangeRate),
         });
         if (!entry) return created;
         return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });

@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 import { PurchaseLineDto } from './purchase-line.dto';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
@@ -62,4 +62,15 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @ValidateNested({ each: true })
   @Type(() => PurchaseLineDto)
   lines?: PurchaseLineDto[];
+
+  /**
+   * مستودع الاستلام — يُشتقّ من الفرع إن تُرك فارغاً.
+   *
+   * ⚠️ وبندٌ مخزنيّ بلا مستودعٍ يُرفض ولا يُتخطّى: **البضاعة لا تُستلم في لا
+   * مكان**، ومخزونٌ في الميزانية بلا طبقةٍ تقابله يجعل أول بيعٍ استهلاكاً
+   * مؤقّتاً بلا سبب.
+   */
+  @IsOptional()
+  @IsUUID()
+  warehouseId?: string;
 }
