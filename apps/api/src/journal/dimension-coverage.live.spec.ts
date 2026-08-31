@@ -1,4 +1,8 @@
 import { PrismaClient } from '@prisma/client';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+
+// مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * حارس الأبعاد التحليلية — **يقرأ القاعدة لا الشيفرة**.
@@ -106,9 +110,23 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
       )
       .join(' UNION ALL ');
 
+    let contextProven = 0;
+
     for (const { id: companyId } of companies) {
       const found = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+        /**
+         * ⭐ **إثبات أن السياق وقع — لا الاكتفاء بأننا طلبناه.**
+         *
+         * العطل الذي سبق لم يكن في الاستعلام بل في أن السياق لم يُضبط، فرأى
+         * الحارس صفراً وشهد بالسلامة. وفحصُ عدد الصفوف **لا يميّز** ذلك عن
+         * قاعدةٍ فارغة حقاً — كلاهما صفر. فيُفحص **المِيكانيزم** لا أثرُه:
+         * يُقرأ الإعداد بعد ضبطه.
+         */
+        const [{ ctx }] = await tx.$queryRaw<{ ctx: string }[]>`
+          SELECT current_setting('app.company_id', true) AS ctx
+        `;
+        if (ctx === companyId) contextProven += 1;
         return tx.$queryRawUnsafe<
           { id: string; no: string; unit_id: string | null; created_at: Date; path: string }[]
         >(union);
@@ -125,9 +143,32 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
       }
     }
 
-    // ⭐ **الشرط الذي يمنع النجاح الأجوف**: حارسٌ لم يرَ سطراً واحداً لم يفحص
-    // شيئاً — فيسقط بدل أن يشهد. (وهو ما كان يخفيه غيابُ السياق أعلاه.)
-    expect(seenAnyLine).toBeGreaterThan(0);
+    /**
+     * ⭐ **الشرط الذي يمنع النجاح الأجوف — وقد أُصلح بعد أن أسقط CI.**
+     *
+     * كان مكتوباً `expect(seenAnyLine).toBeGreaterThan(0)` مطلقاً، فأسقط
+     * السير على قاعدةٍ **لا تحمل بيانات عقارية أصلاً**. والعلّة أنه خلط
+     * حالتين تتشابه ظاهرتُهما ويفترق حكمُهما:
+     *
+     *   ① **لم أرَ شيئاً لأنه لا شيء** — قاعدةٌ نظيفة بلا مستند عقد. صدقٌ لا
+     *      عطل، والسقوط عليه إنذارٌ كاذب يُدرَّب الناس على تجاهله.
+     *   ② **لم أرَ شيئاً رغم وجوده** — وهو العطل الحقيقي: عمى عزل الصفوف
+     *      الذي أنتج «فُحص 0 سطراً» خضراءَ في أول كتابةٍ لهذا الملف.
+     *
+     * فالتمييز بينهما يُقاس لا يُفترض: **يُعدّ المصدر أولاً**. فإن كان
+     * موجباً ولم يُرَ سطر، فالعمى قائمٌ ويجب السقوط. وإن كان صفراً، فالصفر
+     * هو الجواب الصحيح — **ويُعلَن**.
+     */
+    // ⭐ والسياق يُثبَت لكل شركة — فصفرُ الأسطر بعده صفرٌ حقيقيّ لا عمى.
+    expect(contextProven).toBe(companies.length);
+
+    if (seenAnyLine === 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[أبعاد] لا قيدَ من مستند عقد في هذه القاعدة — لا شيء يُفحص. ` +
+          `والسياق مُثبَتٌ على ${contextProven}/${companies.length} شركة، فالصفر صدقٌ لا عمى. مُعلَنٌ لا مُخفى.`,
+      );
+    }
 
     // يُعلَن ما استُثني — لا يُطرح صمتاً. (القاعدة: حدٌّ يُعلَن لا يُخفى.)
     // eslint-disable-next-line no-console

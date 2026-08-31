@@ -230,9 +230,21 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
       .send({ name: 'صنف بوابة م٦', price: 2000 }).expect(201);
 
     // البيع يسحب من **مستودع الفرع** — نفس قاعدة الكاشير، فلا مسار ثانٍ.
-    const branches = await request(app.getHttpServer())
+    //
+    // ⚠️ **والفرع يُنشأ إن لم يوجد، لا يُفترض.** كانت هذه البوابة تقرأ
+    // `branches.body[0]` وتسقط إن كان فارغاً — فكانت تمرّ على قاعدة التطوير
+    // (التي أنشأت اختباراتٌ أخرى فروعاً فيها) وتسقط على **قاعدةٍ معزولة
+    // نظيفة**. أي أن خضرتها كانت تعتمد على أثرِ غيرها، وهو اعتمادٌ لا يظهر
+    // حتى يُعزَل — وقد ظهر عند أول تشغيلٍ معزول.
+    const existing = await request(app.getHttpServer())
       .get('/branches').set('Authorization', `Bearer ${token}`).expect(200);
-    const branchId = branches.body[0]?.id;
+    const branchId =
+      existing.body[0]?.id ??
+      (
+        await request(app.getHttpServer())
+          .post('/branches').set('Authorization', `Bearer ${token}`)
+          .send({ name: `فرع بوابة م٦ ${Date.now()}` }).expect(201)
+      ).body.id;
     expect(branchId).toBeDefined();
     await request(app.getHttpServer())
       .patch(`/branches/${branchId}`).set('Authorization', `Bearer ${token}`)
