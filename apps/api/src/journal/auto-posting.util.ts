@@ -244,6 +244,18 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
 
 export interface RentPaymentForPosting {
   branchId?: string | null;
+  /**
+   * ⭐ **البُعد التحليلي — إلزاميّ عمداً لا اختياري.**
+   *
+   * كل حمولةٍ في هذا الملف تحمل نصوص عرضٍ (`contractNo` · `tenant`) تُبنى منها
+   * المذكّرة — **وهي لا تصلح بُعداً**: نصٌّ يتغيّر بتعديل اسم، ولا يُربط بصفّ.
+   * فأُضيف المعرّف نفسه.
+   *
+   * وإلزاميّتُه هي الحارس الأول: مسارُ ترحيلٍ جديد **لا يُترجم** بدونه، فيُمنع
+   * النسيان بنية لا يُكتشف بعد وقوعه. (والعقار يُشتقّ منه في
+   * `createJournalEntry` — لا يُمرَّر ولا يُكتب.)
+   */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -298,6 +310,7 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
     companyId,
     date: p.date,
     memo: `دفعة إيجار — عقد ${p.contractNo} — ${p.tenant}`,
+    unitId: p.unitId,
     lines,
     auto: true,
     branchId: p?.branchId ?? null,
@@ -374,6 +387,8 @@ export const TENANT_DEPOSITS_ACCOUNT = '2300';
 export const OTHER_INCOME_ACCOUNT = '4300';
 
 export interface DepositForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -406,6 +421,7 @@ export async function postDepositReceiptEntry(tx: Prisma.TransactionClient, comp
     companyId,
     date: d.date,
     memo: `${d.typeLabel} — عقد ${d.contractNo} — ${d.tenant}`,
+    unitId: d.unitId,
     lines: [
       { accountId: ids.get('1000')!, debit: d.baseAmount, credit: 0 },
       { accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: 0, credit: d.baseAmount },
@@ -415,6 +431,8 @@ export async function postDepositReceiptEntry(tx: Prisma.TransactionClient, comp
 }
 
 export interface DepositSettlementForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -478,12 +496,15 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
     companyId,
     date: s.date,
     memo: `تسوية ${s.typeLabel} — عقد ${s.contractNo} — ${s.tenant}${s.heldByCompany ? '' : ' (محجوز لدى إيجار)'}`,
+    unitId: s.unitId,
     lines,
     auto: true,
   });
 }
 
 export interface ContractSettlementForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -515,6 +536,7 @@ export async function postContractSettlementEntry(tx: Prisma.TransactionClient, 
     companyId,
     date: s.date,
     memo: `تسوية إلغاء عقد ${s.contractNo} — ${s.tenant}`,
+    unitId: s.unitId,
     lines: [
       { accountId: ids.get('1200')!, debit: s.baseAmount, credit: 0 },
       { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.baseAmount },
@@ -524,6 +546,8 @@ export async function postContractSettlementEntry(tx: Prisma.TransactionClient, 
 }
 
 export interface ClaimForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -548,6 +572,7 @@ export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyI
     companyId,
     date: c.date,
     memo: `مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    unitId: c.unitId,
     lines: [
       { accountId: ids.get('1200')!, debit: c.baseAmount, credit: 0 },
       { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: c.baseAmount },
@@ -567,6 +592,7 @@ export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, compan
     companyId,
     date: c.date,
     memo: `تحصيل مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    unitId: c.unitId,
     lines: [
       { accountId: ids.get('1000')!, debit: c.baseAmount, credit: 0 },
       { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
@@ -592,6 +618,7 @@ export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, company
     companyId,
     date: c.date,
     memo: `إسقاط مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
+    unitId: c.unitId,
     lines: [
       { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: c.baseAmount, credit: 0 },
       { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
@@ -605,6 +632,8 @@ export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, company
 export const KEY_MONEY_ASSET_ACCOUNT = '1600';
 
 export interface KeyMoneyForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
   contractNo: string;
   tenant: string;
   date: Date;
@@ -647,6 +676,7 @@ export async function postKeyMoneyEntry(tx: Prisma.TransactionClient, companyId:
     companyId,
     date: k.date,
     memo: `${k.received ? 'تقبيل مقبوض' : 'تقبيل مدفوع'} — عقد ${k.contractNo} — ${k.tenant}`,
+    unitId: k.unitId,
     lines,
     auto: true,
   });
@@ -657,6 +687,14 @@ export async function postKeyMoneyEntry(tx: Prisma.TransactionClient, companyId:
 export const MAINTENANCE_EXPENSE_ACCOUNT = '5700';
 
 export interface MaintenanceCostForPosting {
+  /**
+   * ⭐ البُعد التحليلي — **وهذا المسار وحده يقبل عقاراً بلا وحدة**.
+   * `MaintenanceRequest.propertyId` إلزاميّ و`unitId` اختياريّ في المخطَّط:
+   * بلاغٌ على مرفقٍ مشترك (مصعد · موقف) عقارُه معلوم ووحدتُه لا وجود لها.
+   * فإجبارُ وحدةٍ هنا كان سيلفّق انتماءً — والفراغ أصدق.
+   */
+  propertyId: string;
+  unitId?: string | null;
   title: string;
   propertyName: string;
   date: Date;
@@ -682,6 +720,10 @@ export async function postMaintenanceCostEntry(tx: Prisma.TransactionClient, com
     companyId,
     date: m.date,
     memo: `صيانة — ${m.propertyName} — ${m.title}`,
+    // المسار الوحيد الذي يمرّر عقاراً: بلاغُ مرفقٍ مشترك لا وحدة له.
+    // وحين توجد وحدة يُهمَل هذا ويُشتقّ العقار منها — انظر resolveDimensions.
+    propertyId: m.propertyId,
+    unitId: m.unitId ?? null,
     lines: [
       { accountId: ids.get(MAINTENANCE_EXPENSE_ACCOUNT)!, debit: m.baseAmount, credit: 0 },
       { accountId: ids.get('1000')!, debit: 0, credit: m.baseAmount },
