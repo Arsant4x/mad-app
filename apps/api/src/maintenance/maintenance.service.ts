@@ -162,6 +162,8 @@ export class MaintenanceService {
         const journalEntry =
           baseCost != null
             ? await postMaintenanceCostEntry(tx, companyId, {
+                propertyId: existing.propertyId,
+                unitId: existing.unitId,
                 title: existing.title,
                 propertyName: existing.property.name,
                 date: new Date(dto.completedAt),

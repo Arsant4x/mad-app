@@ -214,6 +214,7 @@ export class ContractsService {
         const settlementEntry =
           settlementAmount > 0
             ? await postContractSettlementEntry(tx, companyId, {
+                unitId: existing.unitId,
                 contractNo: existing.no,
                 tenant: existing.tenant,
                 date: cancelDate,
@@ -303,6 +304,7 @@ export class ContractsService {
         if (netAmount <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
         const journalEntry = await postRentPaymentEntry(tx, companyId, {
+          unitId: contract.unitId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.date),
@@ -657,6 +659,7 @@ export class ContractsService {
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
 
         const journalEntry = await postKeyMoneyEntry(tx, companyId, {
+          unitId: contract.unitId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.paidAt),
@@ -702,6 +705,7 @@ export class ContractsService {
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
 
         const journalEntry = await postClaimIssueEntry(tx, companyId, {
+          unitId: contract.unitId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.issuedAt),
@@ -748,6 +752,7 @@ export class ContractsService {
         if (claim.status !== 'OPEN') throw new ConflictException(MSG.claim_already_settled);
 
         const posting = {
+          unitId: claim.contract.unitId,
           contractNo: claim.contract.no,
           tenant: claim.contract.tenant,
           date,
@@ -795,6 +800,7 @@ export class ContractsService {
         const journalEntry =
           holder === 'COMPANY'
             ? await postDepositReceiptEntry(tx, companyId, {
+                unitId: contract.unitId,
                 contractNo: contract.no,
                 tenant: contract.tenant,
                 date: new Date(dto.receivedAt),
@@ -856,6 +862,7 @@ export class ContractsService {
         const refund = Math.round((held - deducted) * 100) / 100;
 
         const settlementEntry = await postDepositSettlementEntry(tx, companyId, {
+          unitId: deposit.contract.unitId,
           contractNo: deposit.contract.no,
           tenant: deposit.contract.tenant,
           date: new Date(dto.settledAt),

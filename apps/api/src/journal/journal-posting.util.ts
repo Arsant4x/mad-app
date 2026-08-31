@@ -79,6 +79,53 @@ export interface CreateJournalEntryInput {
   /** Marks this entry as an account's قيد افتتاحي (or opening-balance delta
    * entry) — see opening-balance.util.ts. */
   openingForAccountId?: string;
+
+  /**
+   * ── البُعد التحليلي: الوحدة المصدر ──────────────────────────────────
+   *
+   * **معرّفٌ واحد يمرّره المستدعي، والباقي يُشتقّ هنا.** فمن يملك عقداً يملك
+   * `unitId`؛ ولا يُطلب منه عقارٌ ولا فرع، ولا يُسمح له بتمريرهما.
+   *
+   * ولذلك `propertyId` أدناه **ليس بديلاً يختاره المستدعي**: هو للمسار الذي
+   * لا وحدة له أصلاً — بلاغ صيانةٍ على مرفقٍ مشترك، فـ`MaintenanceRequest`
+   * عقارُه إلزاميّ ووحدتُه اختيارية. وحين تُعطى وحدةٌ، **يُشتقّ العقار منها
+   * ويُهمَل ما مُرِّر** — فلا يمكن لسطرٍ أن يحمل وحدةً من عقارٍ وعقاراً من
+   * آخر مهما أخطأ المستدعي.
+   */
+  unitId?: string | null;
+  /** عقارٌ بلا وحدة — للمسار الذي لا وحدة له. يُهمَل متى أُعطيت `unitId`. */
+  propertyId?: string | null;
+}
+
+/**
+ * يشتقّ أبعاد السطر من الوحدة المصدر — **الموضع الوحيد الذي تُحسب فيه**.
+ *
+ * والقاعدة السادسة تعني هذا حرفياً: لا يكتب أحدٌ `propertyId` بيده، بل يُقرأ
+ * من `Unit.propertyId` في استعلامٍ واحد. فوحدةٌ نُقلت إلى عقارٍ آخر تُصحّح
+ * نفسها في القيد التالي، ولا تبقى نسخةٌ قديمة يتذكّرها أحد.
+ *
+ * ⚠️ ووحدةٌ لا تُقرأ (معرّفٌ من مستأجرٍ آخر، أو محذوفة) **لا تُسقط الترحيل ولا
+ * تُلفَّق**: يعود البُعد فارغاً. فالفراغ يقول «لا انتماء» — والقيد المحاسبي
+ * أهمّ من بُعدٍ تحليلي، فلا يُمنع قيدٌ صحيح لأجل تصنيف.
+ */
+async function resolveDimensions(
+  tx: Prisma.TransactionClient,
+  input: CreateJournalEntryInput,
+): Promise<{ branchId: string | null; propertyId: string | null; unitId: string | null }> {
+  const branchId = input.branchId ?? null;
+
+  if (input.unitId) {
+    const unit = await tx.unit.findUnique({ where: { id: input.unitId }, select: { id: true, propertyId: true } });
+    if (unit) return { branchId, propertyId: unit.propertyId, unitId: unit.id };
+    return { branchId, propertyId: null, unitId: null };
+  }
+
+  if (input.propertyId) {
+    const property = await tx.property.findUnique({ where: { id: input.propertyId }, select: { id: true } });
+    return { branchId, propertyId: property?.id ?? null, unitId: null };
+  }
+
+  return { branchId, propertyId: null, unitId: null };
 }
 
 /** Creates a balanced journal entry and immediately posts it to account
@@ -108,6 +155,9 @@ export async function createJournalEntry(
   const accountTypes = await fetchAccountTypes(tx, [...new Set(input.lines.map((l) => l.accountId))]);
 
   const { currency, exchangeRate } = resolveCurrency(input);
+  // البُعد يُحسب مرّة واحدة ويُختم على كل سطر — فلا يفترق سطرٌ عن قيده، ولا
+  // يُملأ في ستة عشر موضعاً فيُنسى في السابع عشر.
+  const dims = await resolveDimensions(tx, input);
   const no = await nextJournalNumber(tx, input.date);
   const entry = await tx.journalEntry.create({
     data: {
@@ -130,6 +180,9 @@ export async function createJournalEntry(
           accountId: l.accountId,
           debit: l.debit,
           credit: l.credit,
+          branchId: dims.branchId,
+          propertyId: dims.propertyId,
+          unitId: dims.unitId,
         })),
       },
     } as unknown as Prisma.JournalEntryUncheckedCreateInput,

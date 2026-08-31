@@ -463,6 +463,9 @@ model Branch {
 
   payments Payment[]
 
+  /// أسطر القيود المنسوبة إلى هذا الفرع — بُعدٌ تحليلي، انظر JournalLine.
+  journalLines JournalLine[]
+
   @@unique([companyId, name])
   @@map("branches")
 }
@@ -1425,6 +1428,35 @@ model JournalLine {
   debit  Decimal @default(0) @db.Decimal(18, 2)
   credit Decimal @default(0) @db.Decimal(18, 2)
 
+  /// ── الأبعاد التحليلية ────────────────────────────────────────────────
+  /// **تُشتقّ في `createJournalEntry` وحدها، ولا مدخل يدوي لها إطلاقاً.**
+  /// الغرض أن يُقرأ الدفتر بالعقار والوحدة والفرع لا بالحساب وحده — فتُعرف
+  /// ربحية وحدةٍ بعينها دون أن يعتمد ذلك على انضباطٍ يُتذكَّر عند كل ترحيل.
+  ///
+  /// ⚠️ **وكلّها اختيارية بلا قيمة افتراضية** — والفراغ يقول «لا انتماء».
+  /// أي افتراضيٍّ هنا (فرعٌ أول، عقارٌ أول) **يكذب**: ينسب قيداً عامّاً إلى
+  /// وحدةٍ لم تنشئه، فيلوّث كل تقرير ربحيةٍ بعده بلا أثرٍ يُقتفى.
+  ///
+  /// ومقيسٌ أن ٧٢٢ سطراً من ٢٢٤٦ (٣٢٪) تشتقّ بُعداً اليوم — وهي **١٠٠٪ من
+  /// قيود العقارات**. والباقي (فاتورة · شراء · مقبوض) **لا مصدر لاشتقاقه**:
+  /// `Invoice` لا تعرف عقداً ولا وحدة إطلاقاً. وحقلٌ هنا لا يصنع معلومةً
+  /// غائبةً في مصدرها — رفعُها بندٌ مسجَّل على `Invoice` نفسها.
+  ///
+  /// و`Restrict` لا `SetNull`: الدفتر سجلُّ واقعةٍ لا يُعدَّل. و`SetNull` كان
+  /// سيحوّل انتماءً حقيقياً إلى «بلا انتماء» صامتاً عند حذف وحدة — وهو
+  /// الكذب نفسه الذي يمنعه غيابُ الافتراضي أعلاه. (والحساب على هذا السطر
+  /// `Restrict` للسبب عينه.)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+
+  unitId String?
+  unit   Unit? @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, propertyId])
+  @@index([companyId, unitId])
   @@map("journal_lines")
 }
 
@@ -1484,6 +1516,9 @@ model Property {
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
 
+  /// أسطر القيود المنسوبة إلى هذا العقار — بُعدٌ تحليلي، انظر JournalLine.
+  journalLines JournalLine[]
+
   @@map("properties")
 }
 
@@ -1526,6 +1561,9 @@ model Unit {
   deletedAt DateTime?
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
+
+  /// أسطر القيود المنسوبة إلى هذه الوحدة — بُعدٌ تحليلي، انظر JournalLine.
+  journalLines JournalLine[]
 
   @@map("units")
 }
