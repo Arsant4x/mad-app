@@ -319,6 +319,9 @@ model Company {
   claimAttachments    ClaimAttachment[]
   handoverPhotos      HandoverPhoto[]
   settlementLines     ContractSettlementLine[]
+  tasks               Task[]
+  taskLogs            TaskLog[]
+  delegationLogs      DelegationLog[]
 
   @@map("companies")
 }
@@ -419,6 +422,9 @@ model BusinessActivity {
   branches Branch[]
   products Product[]
 
+  /// قائمٌ في القاعدة منذ ترحيلٍ سابق، ولم يكن في المخطَّط — فكان
+  /// `migrate diff` يقرأ غيابه نيّةَ حذف. يوصف هنا ولا يُنشأ من جديد.
+  @@index([companyId, sector])
   @@map("business_activities")
 }
 
@@ -3060,4 +3066,124 @@ model MessageScript {
   archived  Boolean  @default(false)
 
   @@map("message_scripts")
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// ثلاثة جداول كانت في القاعدة ولم تكن في المخطَّط
+// ═════════════════════════════════════════════════════════════════════════
+//
+// أُنشئت بترحيلاتٍ **مكتوبةٍ بيد** (`20260812150000_delegation_log` ·
+// `20260813180000_tasks`) لأنها تحمل ما لا يُعبَّر عنه في Prisma: مُشغِّلات
+// «ملحق فقط»، وعزل صفوف بـ`FORCE`، وقيود `CHECK`. ونماذجها **لم تُكتب قطّ**
+// — لا حُذفت: `git log -S "model Task {"` لا يجد التزاماً أضافها يوماً.
+//
+// فكان المخطَّط يجهل ثلاثة جداول تحمل بيانات (٤٠٥ صفوف في التطوير · ٥ على
+// خادم العرض)، وأثرُه ملموس: `prisma migrate diff` يقرأ الغياب **نيّةَ حذف**
+// فيولّد `DROP TABLE` لثلاثتها. وقد ولّدها فعلاً عند بناء `م٣`، ولولا قراءة
+// المولَّد قبل تمريره لمُحيت عند أول `migrate deploy`.
+//
+// ⚠️ **وهذه النماذج تصف ولا تمسّ.** لا ترحيل معها ولا تغيير بيانات — كل
+// عمودٍ وقيدٍ وفهرسٍ أدناه **قُرئ من `pg_attribute` و`pg_constraint`
+// و`pg_indexes` لحظة الكتابة**، لا من ذاكرةٍ ولا من الترحيل. والإثبات أن
+// `migrate diff` يعود **فارغاً** بعدها.
+//
+// وما لا تصفه Prisma يبقى حيث هو ويُحرَس بحرّاسه الحيّة: المُشغِّلات
+// و`FORCE RLS` وقيود `CHECK` الثلاثة على `tasks`
+// (`tasks_status_closed_list` · `tasks_target_both_or_neither` ·
+// `tasks_recurrence_needs_anchor`). و`migrate diff` لا يراها فلا يمسّها.
+
+/// المهمة — **الحالة الحاضرة**، وسجلُّها ([[TaskLog]]) يحمل كيف وصلت إليها.
+///
+/// والفصل مقصود: السجل ملحقٌ فقط لا يُعدَّل بحال (وقائع لا حالات)، والحالة
+/// تتغيّر. وخلطُهما يفرض أحد الشرَّين: سجلٌّ يُعدَّل، أو حالةٌ تُستنتج بقراءة
+/// كل الانتقالات عند كل عرض.
+///
+/// ⚠️ ولا حقل `canOpenTarget` هنا **عمداً**: يُحسب عند القراءة من التقاطع
+/// الحيّ. وتخزينه نسخةٌ تتقادم عند أول سحب — وهو العطل الذي تجنّبه التقاطع
+/// أصلاً. وحارسٌ في `apps/web` وآخر في `apps/api` يمنعان عودته.
+model Task {
+  id        String  @id
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  title        String
+  createdById  String
+  assigneeId   String
+  /// المستند المقصود — الاثنان معاً أو لا شيء، يحرسه
+  /// `tasks_target_both_or_neither` في القاعدة.
+  targetScreen String?
+  targetId     String?
+  /// نصٌّ لا `enum`: القائمة المغلقة يحرسها `tasks_status_closed_list` في
+  /// القاعدة، وهي المكان الذي تلتقي عنده كل مسارات الكتابة.
+  status       String  @default("OPEN")
+  note         String?
+  /// صفرٌ يعني «لا تكرار». و`dueAnchor` لازمٌ متى كان موجباً — يحرسه
+  /// `tasks_recurrence_needs_anchor`.
+  recurEveryDays Int      @default(0)
+  dueAnchor      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  @@index([companyId, assigneeId])
+  @@index([companyId, status])
+  @@index([companyId, targetScreen, targetId])
+  @@map("tasks")
+}
+
+/// سجل انتقالات المهمة — **ملحقٌ فقط**، والمنع في القاعدة لا في الخدمة.
+///
+/// ولا مفتاح أجنبي على `taskId` ولا `actorId` **عمداً**: سجلُّ واقعةٍ لا
+/// يُبطله حذفُ ما يشير إليه. وإضافةُ مفتاحٍ هنا تجعل حذف مهمةٍ يهدم تاريخها.
+model TaskLog {
+  id        String  @id
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  /// تسلسل لكل منشأة يبدأ من ١. الفهرس الفريد يمنع التكرار، وكاشف الفجوات
+  /// يكشف القفز — وهما شيئان مختلفان.
+  seq        Int
+  taskId     String
+  actorId    String
+  fromStatus String?
+  toStatus   String
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, seq])
+  @@index([companyId, taskId])
+  @@map("task_logs")
+}
+
+/// سجل التفويض — **ملحقٌ فقط**، والمنع في القاعدة لا في الخدمة.
+///
+/// ⚠️ لماذا في القاعدة لا في TypeScript (القاعدة السابعة): حارسٌ يفحص
+/// `DelegationLogService.remove()` لا يحرس شيئاً — يمرّ عليه
+/// `prisma.delegationLog.deleteMany()`، و`DELETE` خاماً عبر `$executeRaw`،
+/// و**الحذف المتسلسل** عبر `ON DELETE CASCADE`. والمسارات الثلاثة تلتقي عند
+/// القاعدة، فالمنع يقع حيث تلتقي.
+///
+/// والمصدر النصّي: الملحق (1) من قرار ZATCA تحت «Tampering of e-invoices or
+/// their associated notes or logs» — تعديل السجل أو حذفه · توليدٌ غير
+/// متسلسل · طوابع زمنية غير دقيقة.
+model DelegationLog {
+  id        String  @id
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  /// تسلسل لكل منشأة يبدأ من ١ — انظر [[TaskLog]].seq.
+  seq       Int
+  grantorId String
+  granteeId String
+  nodeKey   String
+  grants    String[]
+  state     String   @default("ACTIVE")
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@unique([companyId, seq])
+  @@index([companyId, createdAt])
+  @@map("delegation_logs")
 }
