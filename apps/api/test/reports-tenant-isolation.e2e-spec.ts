@@ -44,7 +44,7 @@ describe('Reports tenant isolation (e2e)', () => {
     await request(app.getHttpServer()).get('/reports/cash-flow').expect(401);
   });
 
-  it("a journal entry posted for company A shows up in A's income statement but never in B's", async () => {
+  it("[SPEC 10.2] a journal entry posted for company A shows up in A's income statement but never in B's", async () => {
     const accountsA = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
     const revenueAccount = accountsA.body.find((a: { code: string }) => a.code === '4100');
     const cashAccount = accountsA.body.find((a: { code: string }) => a.code === '1000');

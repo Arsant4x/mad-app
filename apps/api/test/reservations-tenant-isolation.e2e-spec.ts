@@ -41,7 +41,7 @@ describe('Reservations (e2e)', () => {
     return unit.body;
   }
 
-  it('reserves a vacant unit and rejects a second active reservation on the same unit', async () => {
+  it('[SPEC 16.6] reserves a vacant unit and rejects a second active reservation on the same unit', async () => {
     const unit = await setupUnit(tokenA);
 
     const reservation = await request(app.getHttpServer())
@@ -73,7 +73,7 @@ describe('Reservations (e2e)', () => {
       .expect(409);
   });
 
-  it('rejects a contract on a reserved unit under a different name, but converts the reservation when the name matches', async () => {
+  it('[SPEC 16.6] rejects a contract on a reserved unit under a different name, but converts the reservation when the name matches', async () => {
     const unit = await setupUnit(tokenA);
     await request(app.getHttpServer())
       .post('/reservations')

@@ -70,7 +70,7 @@ describe('Contract key money (e2e)', () => {
     await app.close();
   });
 
-  it('books key money received as income, not as a refundable deposit', async () => {
+  it('[SPEC 16.16] books key money received as income, not as a refundable deposit', async () => {
     const [cashBefore, otherIncomeBefore, depositsBefore, rentRevenueBefore] = await Promise.all([
       balance('1000'),
       balance('4300'),
@@ -96,7 +96,7 @@ describe('Contract key money (e2e)', () => {
     expect(await balance('4200')).toBeCloseTo(rentRevenueBefore);
   }, 30000);
 
-  it('capitalizes key money paid instead of expensing it in one month', async () => {
+  it('[SPEC 16.16] capitalizes key money paid instead of expensing it in one month', async () => {
     const [cashBefore, keyMoneyAssetBefore, otherIncomeBefore] = await Promise.all([balance('1000'), balance('1600'), balance('4300')]);
 
     const res = await request(app.getHttpServer())
@@ -115,7 +115,7 @@ describe('Contract key money (e2e)', () => {
     expect(await balance('4300')).toBeCloseTo(otherIncomeBefore);
   }, 30000);
 
-  it('keeps both directions on the same contract as separate records', async () => {
+  it('[SPEC 16.16] keeps both directions on the same contract as separate records', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
 
     // A tenancy can legitimately carry more than one — this is why key money is

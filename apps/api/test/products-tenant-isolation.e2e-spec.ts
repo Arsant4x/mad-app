@@ -26,7 +26,7 @@ describe('Products tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('auto-generates a barcode when none is given, and keeps the product invisible to and unreachable by company B', async () => {
+  it('[SPEC 8.1] auto-generates a barcode when none is given, and keeps the product invisible to and unreachable by company B', async () => {
     const created = await request(app.getHttpServer())
       .post('/products')
       .set('Authorization', `Bearer ${tokenA}`)

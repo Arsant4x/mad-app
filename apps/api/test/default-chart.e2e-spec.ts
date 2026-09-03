@@ -87,7 +87,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
       expect(accounts.length).toBeGreaterThanOrEqual(DEFAULT_CHART.length);
     }, 90000);
 
-    it('فاتورة أول يوم تُرحَّل — 1200 مديناً و4100/2200 دائنَين', async () => {
+    it('[SPEC 3.4] فاتورة أول يوم تُرحَّل — 1200 مديناً و4100/2200 دائنَين', async () => {
       const customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${suffix}` }).expect(201)).body.id;
       const inv = await auth(request(app.getHttpServer()).post('/invoices'))
         .send({ customerId, issueDate: '2026-07-20', dueDate: '2026-08-20', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })
@@ -104,7 +104,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
       expect(accounts['2200']).toBeCloseTo(15, 2);
     }, 90000);
 
-    it('مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً', async () => {
+    it('[SPEC 5.3] مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً', async () => {
       const supplierId = (await auth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورد ${suffix}` }).expect(201)).body.id;
       const pur = await auth(request(app.getHttpServer()).post('/purchases')).send({ supplierId, date: '2026-07-20', subtotal: 200 }).expect(201);
 

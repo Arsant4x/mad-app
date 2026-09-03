@@ -53,7 +53,7 @@ describe('Trash / soft delete (e2e)', () => {
     await app.close();
   });
 
-  it('a deleted record leaves the list but lands in the trash, still named', async () => {
+  it('[SPEC 12.6] a deleted record leaves the list but lands in the trash, still named', async () => {
     expect(await customerIds()).toContain(customerId);
 
     await authA(request(app.getHttpServer()).delete(`/customers/${customerId}`)).expect(204);
@@ -73,7 +73,7 @@ describe('Trash / soft delete (e2e)', () => {
     expect(item!.daysLeft).toBeLessThanOrEqual(30);
   }, 60000);
 
-  it('restores it intact', async () => {
+  it('[SPEC 12.6] restores it intact', async () => {
     await authA(request(app.getHttpServer()).post(`/trash/customers/${customerId}/restore`)).expect(201);
 
     expect(await customerIds()).toContain(customerId);

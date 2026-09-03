@@ -141,7 +141,7 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     expect(entriesFor(await listJournal(account.code), account.id)).toHaveLength(0);
   });
 
-  it('carries the opening amounts into the trial balance, which stays balanced', async () => {
+  it('[SPEC 10.4] carries the opening amounts into the trial balance, which stays balanced', async () => {
     const code = `OB-TB-${suffix()}`;
     const account = await createAccount({ code, name: 'حساب ميزان', type: 'asset', openingBalance: 1234.56 });
 

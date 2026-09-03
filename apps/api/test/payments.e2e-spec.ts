@@ -170,7 +170,7 @@ describe('Customer payments + allocations (e2e)', () => {
   }, 90000);
 
   // ── 6: القيد متوازن والصندوق زاد بفرع الدفعة ──
-  it('posts a balanced entry (debit cash / credit A-R) and raises the branch cash box', async () => {
+  it('[SPEC 3.3 7.3 7.5] posts a balanced entry (debit cash / credit A-R) and raises the branch cash box', async () => {
     const inv = await makeInvoice(250);
     const before = await bankBalance();
 

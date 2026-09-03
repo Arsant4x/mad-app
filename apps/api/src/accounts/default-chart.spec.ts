@@ -69,7 +69,7 @@ describe('الدليل الافتراضي يغطي كل ما يرحّل عليه
     expect({ missing, checked: codes.length }).toEqual({ missing: [], checked: codes.length });
   });
 
-  it('لا رمز مكرر، ولكل حساب نوع صالح', () => {
+  it('[SPEC 3.1] لا رمز مكرر، ولكل حساب نوع صالح', () => {
     expect(DEFAULT_CHART_CODES.size).toBe(DEFAULT_CHART.length);
     const validTypes = ['asset', 'liability', 'equity', 'revenue', 'expense'];
     for (const a of DEFAULT_CHART) {

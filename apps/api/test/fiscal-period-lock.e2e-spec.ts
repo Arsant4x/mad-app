@@ -55,7 +55,7 @@ describe('Fiscal year and period locking (e2e)', () => {
     return res.body;
   }
 
-  it('generates twelve monthly periods, all open, starting from the given date', async () => {
+  it('[SPEC 3.6] generates twelve monthly periods, all open, starting from the given date', async () => {
     const year = await createYear(tokenA, YEAR);
     createdYearIds.push(year.id);
 
@@ -65,7 +65,7 @@ describe('Fiscal year and period locking (e2e)', () => {
     expect(year.periods[11]).toMatchObject({ month: 12, year: YEAR });
   });
 
-  it('starts the twelve periods at a non-January start date and rolls into the next year', async () => {
+  it('[SPEC 3.6] starts the twelve periods at a non-January start date and rolls into the next year', async () => {
     const res = await request(app.getHttpServer())
       .post('/fiscal-years')
       .set('Authorization', `Bearer ${tokenA}`)

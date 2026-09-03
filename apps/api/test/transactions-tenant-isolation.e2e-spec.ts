@@ -26,7 +26,7 @@ describe('Bank transactions tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('adjusts the linked bank balance on create/update/delete and stays invisible to company B', async () => {
+  it('[SPEC 7.1 7.2] adjusts the linked bank balance on create/update/delete and stays invisible to company B', async () => {
     const bank = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)

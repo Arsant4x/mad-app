@@ -119,7 +119,7 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
     expect(res.body.message).toContain('تأكيد');
   });
 
-  it('⭐④ التطبيق يُرشِّح — والعنوان المباشر يُرفض بـ403 لا 404', async () => {
+  it('[SPEC 1.5] ⭐④ التطبيق يُرشِّح — والعنوان المباشر يُرفض بـ403 لا 404', async () => {
     await request(app.getHttpServer())
       .patch('/activities/primary')
       .set('Authorization', `Bearer ${token}`)
@@ -138,7 +138,7 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
     expect(denied.body.message).toContain('الإعدادات');
   });
 
-  it('⭐⑤ التغيير مسجَّل في سجل التدقيق بالأسماء العربية', async () => {
+  it('[SPEC 12.2] ⭐⑤ التغيير مسجَّل في سجل التدقيق بالأسماء العربية', async () => {
     const log = await request(app.getHttpServer()).get('/audit-log').set('Authorization', `Bearer ${token}`).expect(200);
     const rows = Array.isArray(log.body) ? log.body : (log.body.items ?? []);
     const entry = rows.find((r: { entity?: string }) => r.entity === 'primaryActivity');
@@ -146,7 +146,7 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
     expect(JSON.stringify(entry)).toContain('عروض الأسعار');
   });
 
-  it('⭐⑥ موظفٌ يعمل على شاشة ثم يُعطَّل نشاطها — يُرفض في **الطلب التالي** بلا إعادة دخول', async () => {
+  it('[SPEC 1.5] ⭐⑥ موظفٌ يعمل على شاشة ثم يُعطَّل نشاطها — يُرفض في **الطلب التالي** بلا إعادة دخول', async () => {
     // نفس متطلب `Absence of user session management` (الملحق 1): تغييرٌ في
     // السلطة ينفذ فوراً، لا عند انتهاء الجلسة.
     /**

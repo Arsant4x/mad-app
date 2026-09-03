@@ -62,7 +62,7 @@ describe('Granular action permissions (e2e)', () => {
     await app.close();
   });
 
-  it('a view-only employee reads contracts but cannot create one', async () => {
+  it('[SPEC 1.4] a view-only employee reads contracts but cannot create one', async () => {
     const tpl = await makeTemplate(`عرض العقود ${suffix}`, { allowedScreens: ['contracts'], screenActions: { contracts: ['view'] } });
     const token = await makeEmployeeToken(tpl);
     const emp = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -72,7 +72,7 @@ describe('Granular action permissions (e2e)', () => {
     expect(denied.body.code).toBe('ACTION_FORBIDDEN');
   }, 40000);
 
-  it('a view+add employee gets past the guard on create (reaches validation, not 403)', async () => {
+  it('[SPEC 1.4] a view+add employee gets past the guard on create (reaches validation, not 403)', async () => {
     const tpl = await makeTemplate(`إضافة العقود ${suffix}`, { allowedScreens: ['contracts'], screenActions: { contracts: ['view', 'add'] } });
     const token = await makeEmployeeToken(tpl);
     const emp = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);

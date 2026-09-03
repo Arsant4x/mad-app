@@ -81,7 +81,7 @@ describe('Contract deposits (e2e)', () => {
       .expect(201);
   }
 
-  it('books a received deposit as a liability, not as revenue', async () => {
+  it('[SPEC 16.7] books a received deposit as a liability, not as revenue', async () => {
     const [cashBefore, depositsBefore, rentRevenueBefore] = await Promise.all([balance('1000'), balance('2300'), balance('4200')]);
 
     const res = await recordDeposit('RENT', 3000);
@@ -97,7 +97,7 @@ describe('Contract deposits (e2e)', () => {
     expect(await balance('4200')).toBeCloseTo(rentRevenueBefore);
   }, 30000);
 
-  it('keeps the two deposit types independent', async () => {
+  it('[SPEC 16.7] keeps the two deposit types independent', async () => {
     const res = await recordDeposit('FACILITY', 1000);
 
     const held = res.body.deposits.filter((d: { status: string }) => d.status === 'HELD');
@@ -105,7 +105,7 @@ describe('Contract deposits (e2e)', () => {
     expect(held.map((d: { type: string }) => d.type).sort()).toEqual(['FACILITY', 'RENT']);
   }, 30000);
 
-  it('splits a settlement across receivable, income and cash', async () => {
+  it('[SPEC 16.8] splits a settlement across receivable, income and cash', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const rentDeposit = contract.body.deposits.find((d: { type: string; status: string }) => d.type === 'RENT' && d.status === 'HELD');
 
@@ -147,7 +147,7 @@ describe('Contract deposits (e2e)', () => {
     expect((await balance('1000')) - cashBefore).toBeCloseTo(-2200);
   }, 30000);
 
-  it('refunds the whole amount when there is nothing to deduct', async () => {
+  it('[SPEC 16.7] refunds the whole amount when there is nothing to deduct', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const facility = contract.body.deposits.find((d: { type: string; status: string }) => d.type === 'FACILITY' && d.status === 'HELD');
 
@@ -178,7 +178,7 @@ describe('Contract deposits (e2e)', () => {
     expect(res.body.message).toContain('تمت تسوية');
   }, 30000);
 
-  it('refuses deductions larger than the deposit', async () => {
+  it('[SPEC 16.8] refuses deductions larger than the deposit', async () => {
     const created = await recordDeposit('RENT', 500);
     const deposit = created.body.deposits.find((d: { status: string; type: string }) => d.status === 'HELD' && d.type === 'RENT');
 
@@ -264,7 +264,7 @@ describe('Contract deposits (e2e)', () => {
     }, 30000);
   });
 
-  it('rejects a deduction with no reason and a non-positive deposit', async () => {
+  it('[SPEC 16.8] rejects a deduction with no reason and a non-positive deposit', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const held = contract.body.deposits.find((d: { status: string }) => d.status === 'HELD');
 

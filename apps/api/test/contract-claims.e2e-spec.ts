@@ -76,7 +76,7 @@ describe('Contract claims (e2e)', () => {
     await app.close();
   });
 
-  it('becomes a receivable the moment it is raised, credited to other income', async () => {
+  it('[SPEC 16.13] becomes a receivable the moment it is raised, credited to other income', async () => {
     const [receivableBefore, otherIncomeBefore, rentRevenueBefore] = await Promise.all([balance('1200'), balance('4300'), balance('4200')]);
 
     const res = await raiseClaim(750);
@@ -92,7 +92,7 @@ describe('Contract claims (e2e)', () => {
     expect(await balance('4200')).toBeCloseTo(rentRevenueBefore);
   }, 30000);
 
-  it('clears the receivable into cash when collected', async () => {
+  it('[SPEC 16.13] clears the receivable into cash when collected', async () => {
     const raised = await raiseClaim(400, 'LATE_FEE');
     const claim = raised.body.claims.find((c: { status: string; amount: string }) => c.status === 'OPEN' && Number(c.amount) === 400);
 
@@ -115,7 +115,7 @@ describe('Contract claims (e2e)', () => {
     expect(await balance('4300')).toBeCloseTo(otherIncomeBefore);
   }, 30000);
 
-  it('reverses the income when a claim is written off, and keeps the record', async () => {
+  it('[SPEC 16.13] reverses the income when a claim is written off, and keeps the record', async () => {
     const raised = await raiseClaim(250, 'DAMAGE');
     const claim = raised.body.claims.find((c: { status: string; amount: string }) => c.status === 'OPEN' && Number(c.amount) === 250);
 

@@ -26,7 +26,7 @@ describe('Banks tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('creates a bank account for company A, invisible/unreachable by B, and preserves balance drift when opening balance is edited', async () => {
+  it('[SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and preserves balance drift when opening balance is edited', async () => {
     const created = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)

@@ -93,7 +93,7 @@ describe('Warranty expiry notifications (e2e)', () => {
     await app.close();
   });
 
-  it('warns only about cover lapsing soon — not far-off, not already-expired', async () => {
+  it('[SPEC 13.5] warns only about cover lapsing soon — not far-off, not already-expired', async () => {
     const res = await runWarrantyCheck();
     expect(res.body.raised).toBeGreaterThan(0);
     expect(res.body.noticeDays).toBe(30);

@@ -26,7 +26,7 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
     await app.close();
   });
 
-  it('auto-seeds the standard 9-item checklist across 3 entities on first read, idempotently', async () => {
+  it('[SPEC 6.9] auto-seeds the standard 9-item checklist across 3 entities on first read, idempotently', async () => {
     const first = await request(app.getHttpServer()).get('/obligations').set('Authorization', `Bearer ${tokenA}`).expect(200);
     expect(first.body).toHaveLength(9);
     const bodies = new Set(first.body.map((o: { body: string }) => o.body));
@@ -37,7 +37,7 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
     expect(second.body.map((o: { id: string }) => o.id).sort()).toEqual(first.body.map((o: { id: string }) => o.id).sort());
   });
 
-  it('toggles an obligation done/undone', async () => {
+  it('[SPEC 6.9] toggles an obligation done/undone', async () => {
     const list = await request(app.getHttpServer()).get('/obligations').set('Authorization', `Bearer ${tokenA}`).expect(200);
     const id = list.body[0].id;
 
@@ -48,7 +48,7 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
     expect(toggledBack.body.done).toBe(false);
   });
 
-  it('computes a VAT declaration from real invoice/purchase data for the given quarter', async () => {
+  it('[SPEC 6.1] computes a VAT declaration from real invoice/purchase data for the given quarter', async () => {
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)

@@ -41,7 +41,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     return { property: property.body, unit: unit.body };
   }
 
-  it('creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit', async () => {
+  it('[SPEC 16.2 16.6] creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit', async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
 
     const contract = await request(app.getHttpServer())
@@ -130,7 +130,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     expect(tx.matched).toBe(true);
   });
 
-  it('cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone', async () => {
+  it('[SPEC 16.2 16.5] cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone', async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
     const contract = await request(app.getHttpServer())
       .post('/contracts')

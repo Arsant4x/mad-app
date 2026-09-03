@@ -119,7 +119,7 @@ describe('POS cashier (e2e)', () => {
     expect(cur.body.expectedCash).toBeCloseTo(430, 2);
   }, 60000);
 
-  it('closes the shift computing the variance itself — and blocks further sales', async () => {
+  it('[SPEC 7.3] closes the shift computing the variance itself — and blocks further sales', async () => {
     const res = await auth(request(app.getHttpServer()).post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 400 }).expect(201);
     expect(res.body.status).toBe('CLOSED');
     // عدّ 400 والمتوقع 430 → عجز 30.
@@ -131,7 +131,7 @@ describe('POS cashier (e2e)', () => {
     await auth(request(app.getHttpServer()).post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 400 }).expect(409);
   }, 60000);
 
-  it('deducts branch-warehouse stock inside the sale — untracked lines are skipped explicitly', async () => {
+  it('[SPEC 8.2 8.10] deducts branch-warehouse stock inside the sale — untracked lines are skipped explicitly', async () => {
     // مستودع + فرع مربوط به (Branch.warehouseId) + صنف مخزني برصيد استلام 10.
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع كاشير ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع كاشير ${suffix}`, warehouseId }).expect(201)).body.id;

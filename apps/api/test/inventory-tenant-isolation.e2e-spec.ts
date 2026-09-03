@@ -46,7 +46,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     return { product: product.body, warehouseA: warehouseA.body, warehouseB: warehouseB.body };
   }
 
-  it('computes on-hand quantity live from IN/OUT/TRANSFER/ADJUSTMENT movements, with no stored balance', async () => {
+  it('[SPEC 8.2 8.10] computes on-hand quantity live from IN/OUT/TRANSFER/ADJUSTMENT movements, with no stored balance', async () => {
     const { product, warehouseA, warehouseB } = await setup(tokenA);
 
     await request(app.getHttpServer())
@@ -81,7 +81,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     expect(rowB.qty).toBe(10); // transfer in
   });
 
-  it('flags low and out-of-stock status based on Product.minStock, and allows going negative as a soft warning only', async () => {
+  it('[SPEC 8.1 8.10] flags low and out-of-stock status based on Product.minStock, and allows going negative as a soft warning only', async () => {
     const { product, warehouseA } = await setup(tokenA, 10);
 
     await request(app.getHttpServer())
@@ -126,7 +126,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
       .expect(400);
   });
 
-  it('blocks deleting a warehouse that still has stock movements', async () => {
+  it('[SPEC 8.2] blocks deleting a warehouse that still has stock movements', async () => {
     const { product, warehouseA } = await setup(tokenA);
     await request(app.getHttpServer())
       .post('/inventory/movements')

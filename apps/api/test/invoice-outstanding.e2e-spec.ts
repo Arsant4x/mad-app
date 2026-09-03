@@ -45,7 +45,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
     return rows.find((r) => r.id === id)!;
   };
 
-  it('a partly paid invoice reports its REMAINING amount, not its total', async () => {
+  it('[SPEC 4.4] a partly paid invoice reports its REMAINING amount, not its total', async () => {
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))
       .send({ customerId, issueDate: '2026-07-01', dueDate: '2026-08-01', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 1000, taxRate: 0 }] })
       .expect(201);

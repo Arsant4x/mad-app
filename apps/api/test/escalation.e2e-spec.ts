@@ -97,7 +97,7 @@ describe('Escalation and notifications (e2e)', () => {
     await app.close();
   });
 
-  it('escalates nothing until the company asks for it', async () => {
+  it('[SPEC 13.4] escalates nothing until the company asks for it', async () => {
     // Off by default: a new company should not inherit a bell full of arrears
     // it never asked to be told about.
     const policy = await auth(request(app.getHttpServer()).get('/reminders/policy')).expect(200);
@@ -109,7 +109,7 @@ describe('Escalation and notifications (e2e)', () => {
     expect(await mine()).toHaveLength(0);
   }, 30000);
 
-  it('raises one notification per arrear past the threshold', async () => {
+  it('[SPEC 13.4 13.5] raises one notification per arrear past the threshold', async () => {
     await setPolicy({ escalateAfterDays: 30 }).expect(200);
 
     const res = await runEscalation();
@@ -140,7 +140,7 @@ describe('Escalation and notifications (e2e)', () => {
     expect(after.length).toBe(before.length);
   }, 40000);
 
-  it('counts unread, and marking read is what stops the count', async () => {
+  it('[SPEC 13.5] counts unread, and marking read is what stops the count', async () => {
     const rows = await mine();
     const before = await auth(request(app.getHttpServer()).get('/notifications/unread-count')).expect(200);
     expect(before.body.unread).toBeGreaterThan(0);
