@@ -36,7 +36,7 @@ describe('Property coordinates (e2e)', () => {
     await app.close();
   });
 
-  it('stores coordinates on create and returns them in the list', async () => {
+  it('[SPEC 16.1 16.17] stores coordinates on create and returns them in the list', async () => {
     const created = await request(app.getHttpServer())
       .post('/properties')
       .set('Authorization', `Bearer ${token}`)
@@ -53,7 +53,7 @@ describe('Property coordinates (e2e)', () => {
     expect(row.lat).toBeCloseTo(24.7136);
   }, 30000);
 
-  it('adds coordinates to a property that had none', async () => {
+  it('[SPEC 16.17] adds coordinates to a property that had none', async () => {
     const created = await request(app.getHttpServer())
       .post('/properties')
       .set('Authorization', `Bearer ${token}`)

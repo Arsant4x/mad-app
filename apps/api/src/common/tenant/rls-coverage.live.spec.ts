@@ -93,7 +93,7 @@ d('تغطية RLS — كل جدول يملكه المستأجر مُلزَم ب�
     expect(tables.has('invoice_lines')).toBe(true);
   });
 
-  it('⭐ كل جدول مستأجر يحمل `ENABLE` و`FORCE` — من كتالوج القاعدة', async () => {
+  it('[SPEC 1.2] ⭐ كل جدول مستأجر يحمل `ENABLE` و`FORCE` — من كتالوج القاعدة', async () => {
     const tables = tenantTables();
     const names = [...tables.keys()];
 

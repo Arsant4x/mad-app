@@ -64,7 +64,7 @@ describe('Purchase VAT exclusion + amortization (e2e)', () => {
     await app.close();
   });
 
-  it('an excluded purchase never reduces the VAT owed, and is reported apart', async () => {
+  it('[SPEC 5.4] an excluded purchase never reduces the VAT owed, and is reported apart', async () => {
     const before = (await vatDeclaration()).body;
 
     // A normal taxable purchase does reduce net VAT (reclaimable input VAT).
@@ -83,7 +83,7 @@ describe('Purchase VAT exclusion + amortization (e2e)', () => {
     expect(afterExcluded.excludedCount).toBe((afterTaxable.excludedCount ?? 0) + 1);
   }, 60000);
 
-  it('stores excludeFromVat on the purchase itself', async () => {
+  it('[SPEC 5.4] stores excludeFromVat on the purchase itself', async () => {
     const res = await createPurchase({ subtotal: 500, category: 'مصروفات أخرى', excludeFromVat: true });
     expect(res.body.excludeFromVat).toBe(true);
     // VAT is still computed and (per the mockup) still posts to the ledger — the
@@ -91,7 +91,7 @@ describe('Purchase VAT exclusion + amortization (e2e)', () => {
     expect(Number(res.body.taxAmount)).toBeCloseTo(75, 2);
   }, 40000);
 
-  it('amortization is establishment-only, and needs a month count', async () => {
+  it('[SPEC 5.5] amortization is establishment-only, and needs a month count', async () => {
     // Wrong category → rejected.
     await createPurchase({ subtotal: 900, category: 'مواد خام', amortize: true, amortizeMonths: 12 }, 400);
     // Right category, no months → rejected.

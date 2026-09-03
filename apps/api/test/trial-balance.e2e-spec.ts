@@ -72,7 +72,7 @@ describe('Trial balance + CSV export (e2e)', () => {
     await app.close();
   });
 
-  it('balances by construction and honors the period filter', async () => {
+  it('[SPEC 10.4] balances by construction and honors the period filter', async () => {
     const res = await auth(request(app.getHttpServer()).get('/reports/trial-balance?from=2026-05-01&to=2026-05-31')).expect(200);
     expect(res.body.balanced).toBe(true);
     expect(res.body.totalDebit).toBeCloseTo(res.body.totalCredit, 2);
@@ -87,7 +87,7 @@ describe('Trial balance + CSV export (e2e)', () => {
     expect(revRow.balanceCredit).toBeCloseTo(750, 2);
   }, 60000);
 
-  it('honors the branch filter — the branchless entry disappears', async () => {
+  it('[SPEC 10.4] honors the branch filter — the branchless entry disappears', async () => {
     const res = await auth(request(app.getHttpServer()).get(`/reports/trial-balance?branchId=${branchId}`)).expect(200);
     const cashRow = res.body.rows.find((r: { code: string }) => r.code === cashCode);
     // القيد خارج الفترة بلا فرع — فلا يظهر هنا رغم غياب مرشّح التاريخ.

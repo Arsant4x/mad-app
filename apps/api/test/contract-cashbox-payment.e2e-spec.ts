@@ -71,7 +71,7 @@ describe('Cash rent payment into a branch cash box (e2e)', () => {
     await app.close();
   });
 
-  it('a cash receipt naming a box raises that box balance', async () => {
+  it('[SPEC 7.3] a cash receipt naming a box raises that box balance', async () => {
     const before = await boxBalance();
     await auth(request(app.getHttpServer()).post(`/contracts/${contractId}/payments`))
       .send({ date: '2025-02-01', amount: 1000, method: 'CASH', bankId: boxId })

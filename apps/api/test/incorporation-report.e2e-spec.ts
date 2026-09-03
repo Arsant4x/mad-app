@@ -61,7 +61,7 @@ describe('Incorporation expenses report (e2e)', () => {
     await app.close();
   });
 
-  it('counts only establishment purchases, grouped by line item', async () => {
+  it('[SPEC 5.5] counts only establishment purchases, grouped by line item', async () => {
     const before = await report();
 
     // Two on the same item, plus an unrelated category that must NOT appear.
@@ -80,7 +80,7 @@ describe('Incorporation expenses report (e2e)', () => {
     expect(row!.method).toBe('دفعة واحدة');
   }, 60000);
 
-  it('labels an amortized item with its period, and counts it', async () => {
+  it('[SPEC 5.5] labels an amortized item with its period, and counts it', async () => {
     const before = await report();
     const amortItem = `تجهيزات ${suffix}`;
     await buy({ subtotal: 2400, category: 'مصروفات تأسيس', incorpItem: amortItem, amortize: true, amortizeMonths: 24 });

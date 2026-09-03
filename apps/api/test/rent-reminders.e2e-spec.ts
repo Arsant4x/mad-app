@@ -89,7 +89,7 @@ describe('Rent reminders (e2e)', () => {
     await app.close();
   });
 
-  it('defaults to a sensible policy without creating a row', async () => {
+  it('[SPEC 13.2] defaults to a sensible policy without creating a row', async () => {
     const res = await request(app.getHttpServer()).get('/reminders/policy').set('Authorization', `Bearer ${token}`).expect(200);
 
     // Chase three days ahead, then weekly — not daily, which is how a reminder
@@ -99,7 +99,7 @@ describe('Rent reminders (e2e)', () => {
     expect(res.body.repeatEveryDays).toBe(7);
   }, 30000);
 
-  it('queues an overdue instalment with the message already rendered', async () => {
+  it('[SPEC 13.9] queues an overdue instalment with the message already rendered', async () => {
     const res = await due();
     const rows = mine(res.body.reminders);
 
@@ -114,7 +114,7 @@ describe('Rent reminders (e2e)', () => {
     expect(row.message).not.toContain('{amount}');
   }, 30000);
 
-  it('drops the instalment out of the queue once chased, and back in after the silence period', async () => {
+  it('[SPEC 13.2] drops the instalment out of the queue once chased, and back in after the silence period', async () => {
     const before = mine((await due()).body.reminders);
     const target = before.find((r) => r.installmentId === overdueInstallmentId)!;
 
@@ -140,7 +140,7 @@ describe('Rent reminders (e2e)', () => {
     await request(app.getHttpServer()).patch('/reminders/policy').set('Authorization', `Bearer ${token}`).send({ repeatEveryDays: 0 }).expect(400);
   }, 40000);
 
-  it('keeps a record of what was actually said', async () => {
+  it('[SPEC 13.9] keeps a record of what was actually said', async () => {
     const history = await request(app.getHttpServer())
       .get(`/reminders/installments/${overdueInstallmentId}/history`)
       .set('Authorization', `Bearer ${token}`)
@@ -153,7 +153,7 @@ describe('Rent reminders (e2e)', () => {
     expect(history.body[0].message).toContain(suffix);
   }, 30000);
 
-  it('leaves instalments outside the notice window alone', async () => {
+  it('[SPEC 13.2] leaves instalments outside the notice window alone', async () => {
     const property = await request(app.getHttpServer())
       .post('/properties')
       .set('Authorization', `Bearer ${token}`)

@@ -45,7 +45,7 @@ describe('Attendance (e2e)', () => {
     await app.close();
   });
 
-  it('records a check-in, and refuses a second one for the same day', async () => {
+  it('[SPEC 9.4] records a check-in, and refuses a second one for the same day', async () => {
     const res = await authA(request(app.getHttpServer()).post('/attendance'))
       .send({ employeeId, date: DAY, checkIn: '08:05' })
       .expect(201);
@@ -58,13 +58,13 @@ describe('Attendance (e2e)', () => {
     await authA(request(app.getHttpServer()).post('/attendance')).send({ employeeId, date: DAY, checkIn: '09:00' }).expect(409);
   }, 40000);
 
-  it('checkout lands on the same row', async () => {
+  it('[SPEC 9.4] checkout lands on the same row', async () => {
     const res = await authA(request(app.getHttpServer()).patch(`/attendance/${recordId}`)).send({ checkOut: '17:12' }).expect(200);
     expect(res.body.checkIn).toBe('08:05');
     expect(res.body.checkOut).toBe('17:12');
   }, 40000);
 
-  it('the day sheet filters by date', async () => {
+  it('[SPEC 9.4] the day sheet filters by date', async () => {
     const sheet = await authA(request(app.getHttpServer()).get(`/attendance?date=${DAY}`)).expect(200);
     expect((sheet.body as { id: string }[]).some((r) => r.id === recordId)).toBe(true);
 

@@ -79,7 +79,7 @@ describe('Audit log (e2e)', () => {
     await app.close();
   });
 
-  it('records a change automatically, as a readable Arabic sentence', async () => {
+  it('[SPEC 12.1 12.2] records a change automatically, as a readable Arabic sentence', async () => {
     const created = await authA(request(app.getHttpServer()).post('/customers')).send({ name: customerName }).expect(201);
     customerId = created.body.id;
 
@@ -93,7 +93,7 @@ describe('Audit log (e2e)', () => {
     expect(entry!.actorName).toBe('demo-company-a');
   }, 40000);
 
-  it('records an edit distinctly from the creation', async () => {
+  it('[SPEC 12.1] records an edit distinctly from the creation', async () => {
     await authA(request(app.getHttpServer()).patch(`/customers/${customerId}`)).send({ phone: '0500000000' }).expect(200);
 
     const actionsFor = (entries: Entry[]) => entries.filter((e) => e.entityId === customerId).map((e) => e.action);
@@ -128,7 +128,7 @@ describe('Audit log (e2e)', () => {
     expect((res.body as Entry[]).some((e) => e.entityId === customerId)).toBe(false);
   }, 40000);
 
-  it('is append-only — no endpoint can alter or remove an entry', async () => {
+  it('[SPEC 12.1] is append-only — no endpoint can alter or remove an entry', async () => {
     const entry = (await trail())[0];
     expect(entry).toBeTruthy();
     // Neither verb is routed at all, so the app answers 404 rather than

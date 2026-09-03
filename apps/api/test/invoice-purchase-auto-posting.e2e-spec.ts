@@ -53,7 +53,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     return accountByCode;
   }
 
-  it('posts a new invoice to A/R, revenue, and VAT, then reverses on delete', async () => {
+  it('[SPEC 3.4 4.4] posts a new invoice to A/R, revenue, and VAT, then reverses on delete', async () => {
     const before = await balances();
 
     const inv = await request(app.getHttpServer())
@@ -110,7 +110,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     await request(app.getHttpServer()).delete(`/invoices/${inv.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
   });
 
-  it('posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches', async () => {
+  it('[SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches', async () => {
     const before = await balances();
 
     const pur = await request(app.getHttpServer())

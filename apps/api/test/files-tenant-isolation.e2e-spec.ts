@@ -30,7 +30,7 @@ describe('File storage (e2e)', () => {
     await app.close();
   });
 
-  it('uploads a file and namespaces its key under the uploading company', async () => {
+  it('[SPEC 11.1] uploads a file and namespaces its key under the uploading company', async () => {
     const res = await request(app.getHttpServer())
       .post('/files')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -45,7 +45,7 @@ describe('File storage (e2e)', () => {
     uploadedKeyA = res.body.key;
   });
 
-  it('rejects a disallowed file type', async () => {
+  it('[SPEC 11.1] rejects a disallowed file type', async () => {
     await request(app.getHttpServer())
       .post('/files')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -53,7 +53,7 @@ describe('File storage (e2e)', () => {
       .expect(400);
   });
 
-  it('issues a short-lived download URL to the owning company', async () => {
+  it('[SPEC 11.1] issues a short-lived download URL to the owning company', async () => {
     const res = await request(app.getHttpServer())
       .get('/files/download-url')
       .query({ key: uploadedKeyA })

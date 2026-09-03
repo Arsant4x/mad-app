@@ -27,7 +27,7 @@ describe('سقف السلسلة يُشتقّ من القالب — لا يُعر
     expect(g.size).toBe(ALLOWED_SCREENS.length * SCREEN_ACTIONS.length);
   });
 
-  it('⭐ شاشةٌ مسموحة بلا تفصيل أفعال ⇒ **كل** أفعالها لا صفر', () => {
+  it('[SPEC 1.3] ⭐ شاشةٌ مسموحة بلا تفصيل أفعال ⇒ **كل** أفعالها لا صفر', () => {
     // الفخّ: قراءةٌ ساذجة لـ`screenActions` تُنتج مجموعةً فارغة لقالبٍ
     // يملك كل شيء على الشاشة — فيرى الموظف شاشته بلا زرّ واحد.
     const g = rootGrantsFrom(false, ['contracts'], null);
@@ -35,12 +35,12 @@ describe('سقف السلسلة يُشتقّ من القالب — لا يُعر
     for (const a of SCREEN_ACTIONS) expect(g.has(grant('contracts', a))).toBe(true);
   });
 
-  it('التفصيل الصريح يضيّق إلى ما فيه وحده', () => {
+  it('[SPEC 1.3] التفصيل الصريح يضيّق إلى ما فيه وحده', () => {
     const g = rootGrantsFrom(false, ['contracts'], { contracts: ['view', 'add'] });
     expect([...g].sort()).toEqual(['contracts:add', 'contracts:view']);
   });
 
-  it('⭐ لا تخترع زوجاً ترفضه `isActionAllowed` — ولا تُسقط زوجاً تقبله', () => {
+  it('[SPEC 1.3] ⭐ لا تخترع زوجاً ترفضه `isActionAllowed` — ولا تُسقط زوجاً تقبله', () => {
     // الحارس العكسي للاشتقاق نفسه: تُقارَن المجموعة كاملةً بالدالة التي
     // يستدعيها `tenant.guard.ts`. أي انحرافٍ بينهما يسقط هنا.
     const cases: [boolean, string[], Record<string, any> | null][] = [

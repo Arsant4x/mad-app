@@ -30,7 +30,7 @@ describe('Customers tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('creates, rejects duplicate name, updates, and deletes a customer scoped to company A only', async () => {
+  it('[SPEC 4.1] creates, rejects duplicate name, updates, and deletes a customer scoped to company A only', async () => {
     const uniqueName = `عميل اختبار ${Date.now()}`;
     const created = await request(app.getHttpServer())
       .post('/customers')
@@ -55,7 +55,7 @@ describe('Customers tenant isolation (e2e)', () => {
     await request(app.getHttpServer()).delete(`/customers/${created.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   }, 20000);
 
-  it('refuses to delete a customer that still has invoices', async () => {
+  it('[SPEC 4.1] refuses to delete a customer that still has invoices', async () => {
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)

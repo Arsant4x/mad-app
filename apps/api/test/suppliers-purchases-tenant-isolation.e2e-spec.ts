@@ -31,7 +31,7 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('creates a supplier, rejects a duplicate name, and keeps it invisible to company B', async () => {
+  it('[SPEC 5.1] creates a supplier, rejects a duplicate name, and keeps it invisible to company B', async () => {
     const uniqueName = `مورد اختبار ${Date.now()}`;
     const created = await request(app.getHttpServer()).post('/suppliers').set('Authorization', `Bearer ${tokenA}`).send({ name: uniqueName }).expect(201);
 
@@ -43,7 +43,7 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
     await request(app.getHttpServer()).delete(`/suppliers/${created.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   }, 20000);
 
-  it('computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists', async () => {
+  it('[SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists', async () => {
     const supplier = await request(app.getHttpServer())
       .post('/suppliers')
       .set('Authorization', `Bearer ${tokenA}`)

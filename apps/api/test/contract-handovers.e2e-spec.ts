@@ -70,7 +70,7 @@ describe('Contract handover forms (e2e)', () => {
     await app.close();
   });
 
-  it('starts as a draft with its items and meter readings', async () => {
+  it('[SPEC 16.14] starts as a draft with its items and meter readings', async () => {
     const res = await createHandover('DELIVERY', [
       { label: 'المطبخ', condition: 'GOOD' },
       { label: 'المكيّف', condition: 'FAIR', note: 'يحتاج تنظيف' },
@@ -84,7 +84,7 @@ describe('Contract handover forms (e2e)', () => {
     expect(handover.items.map((i: { condition: string }) => i.condition)).toEqual(['GOOD', 'FAIR']);
   }, 30000);
 
-  it('lets a draft be edited, replacing the item list wholesale', async () => {
+  it('[SPEC 16.14] lets a draft be edited, replacing the item list wholesale', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const draft = contract.body.handovers.find((h: { status: string }) => h.status === 'DRAFT');
 
@@ -104,7 +104,7 @@ describe('Contract handover forms (e2e)', () => {
     expect(updated.items[0].condition).toBe('DAMAGED');
   }, 30000);
 
-  it('stamps the signing time from the server clock, not the caller', async () => {
+  it('[SPEC 11.5 16.15] stamps the signing time from the server clock, not the caller', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const draft = contract.body.handovers.find((h: { status: string }) => h.status === 'DRAFT');
 
@@ -126,7 +126,7 @@ describe('Contract handover forms (e2e)', () => {
     expect(signedAt).toBeLessThanOrEqual(after + 1000);
   }, 30000);
 
-  it('refuses every change to a signed form', async () => {
+  it('[SPEC 11.5 16.15] refuses every change to a signed form', async () => {
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
     const signed = contract.body.handovers.find((h: { status: string }) => h.status === 'SIGNED');
 
@@ -167,7 +167,7 @@ describe('Contract handover forms (e2e)', () => {
     expect(res.body.handovers.find((h: { id: string }) => h.id === draft.id)).toBeUndefined();
   }, 30000);
 
-  it('keeps delivery and receipt as separate forms on the same lease', async () => {
+  it('[SPEC 16.14] keeps delivery and receipt as separate forms on the same lease', async () => {
     await createHandover('RECEIPT', [{ label: 'المطبخ', condition: 'GOOD' }]);
 
     const contract = await request(app.getHttpServer()).get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);

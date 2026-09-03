@@ -26,7 +26,7 @@ describe('Employees tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('creates an employee for company A, invisible and unreachable by company B', async () => {
+  it('[SPEC 9.1] creates an employee for company A, invisible and unreachable by company B', async () => {
     const created = await request(app.getHttpServer())
       .post('/employees')
       .set('Authorization', `Bearer ${tokenA}`)

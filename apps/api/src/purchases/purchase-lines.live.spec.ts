@@ -85,7 +85,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
     return captured;
   };
 
-  it('⭐ ① شراءٌ ببندين — مخزنيٍّ وخدميٍّ — يُحفظ ويُقرأ', async () => {
+  it('[SPEC 5.2] ⭐ ① شراءٌ ببندين — مخزنيٍّ وخدميٍّ — يُحفظ ويُقرأ', async () => {
     const lines = await withPurchase(({ tx, purchaseId }) =>
       tx.purchaseLine.findMany({ where: { purchaseId }, orderBy: { description: 'asc' } }),
     );
@@ -119,7 +119,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
     expect(legacy.every((l) => l.productId === null)).toBe(true);
   });
 
-  it('⭐ ③ والعزل: بندُ منشأةٍ لا يُقرأ من سياق منشأةٍ أخرى', async () => {
+  it('[SPEC 1.2] ⭐ ③ والعزل: بندُ منشأةٍ لا يُقرأ من سياق منشأةٍ أخرى', async () => {
     const seenByOther = await withPurchase(async ({ tx, purchaseId }) => {
       // نفس المعاملة، سياقٌ آخر — فالفحص يقع على السياسة لا على الاتصال.
       await tx.$executeRaw`SELECT set_config('app.company_id', ${companyB}, true)`;

@@ -71,7 +71,7 @@ describe('Contract renewal (e2e)', () => {
     await app.close();
   });
 
-  it('creates a linked follow-on contract and leaves the original intact', async () => {
+  it('[SPEC 16.2 16.10] creates a linked follow-on contract and leaves the original intact', async () => {
     const before = await request(app.getHttpServer()).get(`/contracts/${sourceId}`).set('Authorization', `Bearer ${token}`).expect(200);
 
     const res = await request(app.getHttpServer())
@@ -95,7 +95,7 @@ describe('Contract renewal (e2e)', () => {
     expect(after.body.installments).toHaveLength(before.body.installments.length);
   }, 30000);
 
-  it('marks a future renewal UPCOMING, not DUE', async () => {
+  it('[SPEC 16.10] marks a future renewal UPCOMING, not DUE', async () => {
     // The list is paginated now, so the renewal is located through the
     // server-side search (the suffix makes the tenant name unique to this run)
     // rather than assuming it lands on page 1.
@@ -118,7 +118,7 @@ describe('Contract renewal (e2e)', () => {
     expect(res.body.message).toContain('مجدَّد بالفعل');
   }, 30000);
 
-  it('carries a held deposit onto the renewal without posting anything', async () => {
+  it('[SPEC 16.12] carries a held deposit onto the renewal without posting anything', async () => {
     // A separate lease, so the source above keeps its single-renewal state.
     const other = await request(app.getHttpServer())
       .post('/contracts')
@@ -180,7 +180,7 @@ describe('Contract renewal (e2e)', () => {
     expect(await balance('2300')).toBeCloseTo(depositsBefore);
   }, 40000);
 
-  it('accepts a manually supplied contract number and rejects a duplicate', async () => {
+  it('[SPEC 16.11] accepts a manually supplied contract number and rejects a duplicate', async () => {
     const property = await request(app.getHttpServer())
       .post('/properties')
       .set('Authorization', `Bearer ${token}`)

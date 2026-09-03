@@ -219,7 +219,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
     expect(err.message).toContain(CLOSED_LABEL);
   };
 
-  it('① المسار اليدوي — createJournalEntry مباشرةً', async () => {
+  it('[SPEC 3.7] ① المسار اليدوي — createJournalEntry مباشرةً', async () => {
     const [cash, revenue] = await inTenant((tx) =>
       Promise.all([
         tx.account.findFirstOrThrow({ where: { code: '1000' }, select: { id: true } }),
@@ -241,7 +241,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
     );
   });
 
-  it('② مسار الفاتورة — postInvoiceEntry', async () =>
+  it('[SPEC 3.7] ② مسار الفاتورة — postInvoiceEntry', async () =>
     expectPeriodRefusal('فاتورة', () =>
       inTenant((tx) =>
         postInvoiceEntry(tx, companyId, {
@@ -283,7 +283,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
       ),
     ));
 
-  it('⑤ والبوابة نفسها ترفض التاريخ المنزاح', async () =>
+  it('[SPEC 3.7] ⑤ والبوابة نفسها ترفض التاريخ المنزاح', async () =>
     expectPeriodRefusal('البوابة مباشرةً', () => inTenant((tx) => assertPeriodOpen(tx, CLOSED_DATE))));
 
   it('⑥ والفترة المفتوحة تُقبل — الرفض ليس شاملاً', async () => {

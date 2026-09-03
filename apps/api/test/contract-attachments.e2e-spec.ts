@@ -62,7 +62,7 @@ describe('Contract attachments (e2e)', () => {
     await app.close();
   });
 
-  it('uploads a document and lists it back', async () => {
+  it('[SPEC 11.2] uploads a document and lists it back', async () => {
     const res = await authA(request(app.getHttpServer()).post(`/contracts/${contractId}/attachments`))
       .attach('file', Buffer.from('%PDF-1.4 signed lease'), { filename: `عقد موقّع ${suffix}.pdf`, contentType: 'application/pdf' })
       .expect(201);
@@ -75,7 +75,7 @@ describe('Contract attachments (e2e)', () => {
     expect((list.body as { id: string }[]).some((a) => a.id === attachmentId)).toBe(true);
   }, 40000);
 
-  it('hands back a short-lived signed download URL', async () => {
+  it('[SPEC 11.2] hands back a short-lived signed download URL', async () => {
     const res = await authA(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download-url`)).expect(200);
     expect(res.body.url).toMatch(/^https?:\/\//);
     expect(res.body.expiresInSeconds).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe('Contract attachments (e2e)', () => {
     expect((list.body as { id: string }[]).some((a) => a.id === attachmentId)).toBe(true);
   }, 40000);
 
-  it('deletes the attachment', async () => {
+  it('[SPEC 11.2] deletes the attachment', async () => {
     await authA(request(app.getHttpServer()).delete(`/contracts/attachments/${attachmentId}`)).expect(204);
     const list = await authA(request(app.getHttpServer()).get(`/contracts/${contractId}/attachments`)).expect(200);
     expect((list.body as { id: string }[]).some((a) => a.id === attachmentId)).toBe(false);

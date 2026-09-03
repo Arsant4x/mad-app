@@ -57,7 +57,7 @@ describe('Archive (e2e)', () => {
     await app.close();
   });
 
-  it('archives a customer out of the list, and back', async () => {
+  it('[SPEC 12.6] archives a customer out of the list, and back', async () => {
     expect(await listIds('/customers')).toContain(customerId);
 
     const res = await auth(request(app.getHttpServer()).patch(`/customers/${customerId}/archive`)).send({ archived: true }).expect(200);

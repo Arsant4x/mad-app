@@ -56,7 +56,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     await app.close();
   });
 
-  it('registers a merchant with an immediate session, a trial, and full isolation', async () => {
+  it('[SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation', async () => {
     const username = `reg-${suffix}`;
     const { accessToken, user } = await registerCompany(username);
 
@@ -76,7 +76,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     expect(user.companyId).toBeTruthy();
   }, 60000);
 
-  it('refuses a taken username', async () => {
+  it('[SPEC 1.7] refuses a taken username', async () => {
     const username = `reg-dup-${suffix}`;
     await registerCompany(username);
     await request(app.getHttpServer())
@@ -90,7 +90,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     expect(res.body).toEqual({ ok: true });
   }, 30000);
 
-  it('resets by token: single-use, kills old password and old sessions', async () => {
+  it('[SPEC 1.1] resets by token: single-use, kills old password and old sessions', async () => {
     const username = `reset-${suffix}`;
     await registerCompany(username);
 
@@ -118,7 +118,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     expect(live).toBe(0);
   }, 60000);
 
-  it('rejects an expired token outright', async () => {
+  it('[SPEC 1.1] rejects an expired token outright', async () => {
     const username = `reset-exp-${suffix}`;
     await registerCompany(username);
 

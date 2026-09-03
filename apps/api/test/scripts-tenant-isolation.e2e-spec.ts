@@ -26,7 +26,7 @@ describe('Message scripts / templates (e2e)', () => {
     await app.close();
   });
 
-  it('creates, edits, and deletes a message template', async () => {
+  it('[SPEC 13.9] creates, edits, and deletes a message template', async () => {
     const created = await request(app.getHttpServer())
       .post('/scripts')
       .set('Authorization', `Bearer ${tokenA}`)

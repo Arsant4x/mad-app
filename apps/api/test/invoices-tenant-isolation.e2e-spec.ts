@@ -42,7 +42,7 @@ describe('Invoices tenant isolation (e2e)', () => {
     expect(resB.body.some((c: { id: string }) => c.id === customerAId)).toBe(false);
   });
 
-  it('computes invoice totals server-side from lines, ignoring any client-submitted amounts', async () => {
+  it('[SPEC 4.4 6.1] computes invoice totals server-side from lines, ignoring any client-submitted amounts', async () => {
     const res = await request(app.getHttpServer())
       .post('/invoices')
       .set('Authorization', `Bearer ${tokenA}`)

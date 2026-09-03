@@ -57,7 +57,7 @@ describe('Owner-scoped permission templates (e2e)', () => {
     expect(res.body.screenActions).toEqual({ contracts: ['view', 'add'] });
   }, 40000);
 
-  it('that template governs the employee it is assigned to', async () => {
+  it('[SPEC 1.4 1.5] that template governs the employee it is assigned to', async () => {
     const username = `tpl-emp-${suffix}`;
     const created = await authA(request(app.getHttpServer()).post('/company-users'))
       .send({ name: `موظف ${username}`, username, password: 'TplPass123!', permissionTemplateId: tplId })

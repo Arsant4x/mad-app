@@ -45,7 +45,7 @@ describe('§16 completion batch (e2e)', () => {
     await app.close();
   });
 
-  it('roomDetails: stored on create, editable, returned in reads', async () => {
+  it('[SPEC 16.1] roomDetails: stored on create, editable, returned in reads', async () => {
     const res = await auth(request(app.getHttpServer()).post('/units'))
       .send({ propertyId, unitNo: `غ-${suffix}`, type: 'apartment', rentMonthly: 2000, roomDetails: 'صالة + غرفتان، مكيفات راكبة' })
       .expect(201);
@@ -56,7 +56,7 @@ describe('§16 completion batch (e2e)', () => {
     expect(upd.body.roomDetails).toBe('صالة + ثلاث غرف');
   }, 60000);
 
-  it('bulk creation: prefix+count, all-or-nothing on collision with named clashes', async () => {
+  it('[SPEC 16.1] bulk creation: prefix+count, all-or-nothing on collision with named clashes', async () => {
     const bulk = await auth(request(app.getHttpServer()).post('/units/bulk'))
       .send({ propertyId, prefix: `ب${suffix}-`, count: 3, type: 'office', rentMonthly: 1500 })
       .expect(201);
@@ -73,7 +73,7 @@ describe('§16 completion batch (e2e)', () => {
     expect(after).toBe(before);
   }, 60000);
 
-  it("upcoming contract flips the unit to 'upcoming' — stronger than a plain reservation", async () => {
+  it("[SPEC 16.10] upcoming contract flips the unit to 'upcoming' — stronger than a plain reservation", async () => {
     const nextMonth = new Date(Date.now() + 35 * 24 * 3600 * 1000);
     const end = new Date(nextMonth.getTime() + 365 * 24 * 3600 * 1000);
     const res = await auth(request(app.getHttpServer()).post('/contracts'))
@@ -116,7 +116,7 @@ describe('§16 completion batch (e2e)', () => {
     expect(clash.body.message).toContain('سلة المحذوفات');
   }, 60000);
 
-  it('cancellation settlement lines: mismatch refused, matching lines stored on the contract', async () => {
+  it('[SPEC 16.5] cancellation settlement lines: mismatch refused, matching lines stored on the contract', async () => {
     // عقد فعّال على وحدة مستقلة كي لا يزاحم عقد «القادم».
     const soloUnit = (await auth(request(app.getHttpServer()).post('/units')).send({ propertyId, unitNo: `س-${suffix}`, type: 'apartment', rentMonthly: 3000 }).expect(201)).body.id;
     const start = new Date(Date.now() - 60 * 24 * 3600 * 1000);
@@ -166,7 +166,7 @@ describe('§16 completion batch (e2e)', () => {
     expect(sum).toBeCloseTo(1000, 2);
   }, 60000);
 
-  it('claim attachments: upload → list → signed download URL → delete', async () => {
+  it('[SPEC 11.4] claim attachments: upload → list → signed download URL → delete', async () => {
     await auth(request(app.getHttpServer()).post(`/contracts/${upcomingContractId}/claims`))
       .send({ kind: 'DAMAGE', amount: 500, description: `كسر زجاج ${suffix}`, issuedAt: new Date().toISOString().slice(0, 10) })
       .expect(201);
@@ -190,7 +190,7 @@ describe('§16 completion batch (e2e)', () => {
     expect(after.body).toHaveLength(0);
   }, 60000);
 
-  it('handover photos: attach to an item, then signing locks add AND remove (16.15)', async () => {
+  it('[SPEC 11.5 16.15] handover photos: attach to an item, then signing locks add AND remove (16.15)', async () => {
     const created = await auth(request(app.getHttpServer()).post(`/contracts/${upcomingContractId}/handovers`))
       .send({ type: 'DELIVERY', date: new Date().toISOString().slice(0, 10), items: [{ label: 'الباب الرئيسي', condition: 'GOOD' }] })
       .expect(201);

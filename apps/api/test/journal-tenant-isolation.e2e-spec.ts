@@ -41,7 +41,7 @@ describe('Journal ledger + account posting (e2e)', () => {
     return { asset: asset.body, liability: liability.body };
   }
 
-  it('rejects an unbalanced manual entry and never touches balances', async () => {
+  it('[SPEC 3.3] rejects an unbalanced manual entry and never touches balances', async () => {
     const { asset, liability } = await createTestAccounts(tokenA);
     await request(app.getHttpServer())
       .post('/journal')
@@ -50,7 +50,7 @@ describe('Journal ledger + account posting (e2e)', () => {
       .expect(400);
   });
 
-  it('posts a balanced manual entry to account balances, then reverses on delete', async () => {
+  it('[SPEC 3.3] posts a balanced manual entry to account balances, then reverses on delete', async () => {
     const { asset, liability } = await createTestAccounts(tokenA);
 
     const entry = await request(app.getHttpServer())

@@ -46,7 +46,7 @@ describe('Purchase attachments (e2e)', () => {
     await app.close();
   });
 
-  it('uploads a founding-invoice document and lists it', async () => {
+  it('[SPEC 11.4] uploads a founding-invoice document and lists it', async () => {
     const res = await authA(request(app.getHttpServer()).post(`/purchases/${purchaseId}/attachments`))
       .attach('file', Buffer.from('%PDF-1.4 fake founding invoice'), { filename: `فاتورة-ترخيص-${suffix}.pdf`, contentType: 'application/pdf' })
       .expect(201);
@@ -57,7 +57,7 @@ describe('Purchase attachments (e2e)', () => {
     expect(list.body.map((a: { id: string }) => a.id)).toContain(attachmentId);
   }, 60000);
 
-  it('serves a signed download URL that actually returns the bytes', async () => {
+  it('[SPEC 11.4] serves a signed download URL that actually returns the bytes', async () => {
     const { body } = await authA(request(app.getHttpServer()).get(`/purchases/attachments/${attachmentId}/download-url`)).expect(200);
     expect(body.url).toBeTruthy();
     const download = await fetch(body.url);

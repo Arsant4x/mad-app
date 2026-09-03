@@ -26,7 +26,7 @@ describe('Company profile (e2e)', () => {
     await app.close();
   });
 
-  it('updates and reads back company A profile', async () => {
+  it('[SPEC 2.1] updates and reads back company A profile', async () => {
     const updated = await request(app.getHttpServer())
       .patch('/company-profile')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -46,7 +46,7 @@ describe('Company profile (e2e)', () => {
     expect(fetched.body.email).toBe('test-a@example.com');
   });
 
-  it('stores the national address as separate parts, not one line', async () => {
+  it('[SPEC 2.1] stores the national address as separate parts, not one line', async () => {
     // ZATCA reads street/building/district/city/postal code out of
     // cac:PostalAddress individually; a standard invoice is rejected without
     // them, and the free-text `address` cannot be split reliably after the
@@ -95,7 +95,7 @@ describe('Company profile (e2e)', () => {
       .expect(200);
   });
 
-  it('rejects an invalid VAT number (not 15 digits / wrong prefix-suffix)', async () => {
+  it('[SPEC 2.1] rejects an invalid VAT number (not 15 digits / wrong prefix-suffix)', async () => {
     await request(app.getHttpServer())
       .patch('/company-profile')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -140,7 +140,7 @@ describe('Company profile (e2e)', () => {
     expect(fetchedA.body.legalName).toBe('شركة اختبار العزل المحدودة');
   });
 
-  it('attaches an uploaded logo, serves it back, and clears it on request', async () => {
+  it('[SPEC 2.2 11.3] attaches an uploaded logo, serves it back, and clears it on request', async () => {
     const uploaded = await request(app.getHttpServer())
       .post('/files')
       .set('Authorization', `Bearer ${tokenA}`)

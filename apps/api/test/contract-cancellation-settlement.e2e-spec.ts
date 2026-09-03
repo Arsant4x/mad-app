@@ -70,7 +70,7 @@ describe('Contract cancellation settlement (e2e)', () => {
     await app.close();
   });
 
-  it('posts an agreed amount to other income, never to rent', async () => {
+  it('[SPEC 16.9] posts an agreed amount to other income, never to rent', async () => {
     const contract = await makeContract();
     const [receivableBefore, otherIncomeBefore, rentRevenueBefore] = await Promise.all([balance('1200'), balance('4300'), balance('4200')]);
 
@@ -97,7 +97,7 @@ describe('Contract cancellation settlement (e2e)', () => {
     expect(await balance('4200')).toBeCloseTo(rentRevenueBefore);
   }, 40000);
 
-  it('computes the settlement from the next N unpaid installments', async () => {
+  it('[SPEC 16.9] computes the settlement from the next N unpaid installments', async () => {
     const contract = await makeContract();
     const receivableBefore = await balance('1200');
 
@@ -118,7 +118,7 @@ describe('Contract cancellation settlement (e2e)', () => {
     expect((await balance('1200')) - receivableBefore).toBeCloseTo(2000);
   }, 40000);
 
-  it('computes "all" from every installment still unpaid from the cancel date', async () => {
+  it('[SPEC 16.5 16.9] computes "all" from every installment still unpaid from the cancel date', async () => {
     const contract = await makeContract();
 
     const res = await request(app.getHttpServer())

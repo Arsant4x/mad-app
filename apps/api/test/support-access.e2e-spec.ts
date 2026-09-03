@@ -49,7 +49,7 @@ describe('Support mode (e2e)', () => {
     await app.close();
   });
 
-  it('no consent, no entry — with or without the header', async () => {
+  it('[SPEC 1.10] no consent, no entry — with or without the header', async () => {
     await admin(request(app.getHttpServer()).get('/customers')).expect(401);
     await support(request(app.getHttpServer()).get('/customers')).expect(403);
   }, 30000);
@@ -69,7 +69,7 @@ describe('Support mode (e2e)', () => {
     await support(request(app.getHttpServer()).get('/customers')).expect(403);
   }, 30000);
 
-  it('the owner approves → read opens, writes stay closed', async () => {
+  it('[SPEC 1.10] the owner approves → read opens, writes stay closed', async () => {
     const pending = await owner(request(app.getHttpServer()).get('/support-access')).expect(200);
     const mine = (pending.body as { id: string; reason: string }[]).find((g) => g.id === grantId);
     expect(mine?.reason).toContain(suffix);
@@ -82,7 +82,7 @@ describe('Support mode (e2e)', () => {
     await support(request(app.getHttpServer()).post('/customers')).send({ name: 'محاولة كتابة' }).expect(403);
   }, 30000);
 
-  it('every support request lands in the owner-visible log, named and reasoned', async () => {
+  it('[SPEC 1.10] every support request lands in the owner-visible log, named and reasoned', async () => {
     const log = await owner(request(app.getHttpServer()).get('/support-access/log')).expect(200);
     const lines = log.body as { method: string; path: string; grant: { requestedByName: string; reason: string } }[];
     const read = lines.find((l) => l.path === '/customers' && l.method === 'GET');

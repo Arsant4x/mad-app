@@ -102,7 +102,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     await app.close();
   });
 
-  it('lets the owner see every branch', async () => {
+  it('[SPEC 2.4] lets the owner see every branch', async () => {
     const res = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${ownerToken}`).expect(200);
     const ids = res.body.map((b: { id: string }) => b.id);
     expect(ids).toEqual(expect.arrayContaining([branchNorthId, branchSouthId]));
@@ -115,7 +115,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     expect(north.activity.name).toBe('النشاط الرئيسي');
   });
 
-  it('rejects a duplicate branch name within the company', async () => {
+  it('[SPEC 2.4] rejects a duplicate branch name within the company', async () => {
     await request(app.getHttpServer())
       .post('/branches')
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -299,7 +299,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
       .expect(200);
   });
 
-  it('reports revenue per branch and a consolidated total that includes unassigned rows', async () => {
+  it('[SPEC 2.8] reports revenue per branch and a consolidated total that includes unassigned rows', async () => {
     const res = await request(app.getHttpServer())
       .get('/reports/branch-summary')
       .query({ from: '2026-04-01', to: '2026-04-30' })
@@ -316,7 +316,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     expect(summed).toBeCloseTo(res.body.consolidated.revenue, 2);
   });
 
-  it('shows a restricted employee only their own branch in the report', async () => {
+  it('[SPEC 2.8] shows a restricted employee only their own branch in the report', async () => {
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)
       .set('Authorization', `Bearer ${ownerToken}`)

@@ -52,7 +52,7 @@ describe('Leave management (e2e)', () => {
     await authA(request(app.getHttpServer()).post('/leaves/types')).send({ name: `سنوية ${suffix}`, annualDays: 30 }).expect(409);
   });
 
-  it('creates a request with inclusive days and defaults to pending', async () => {
+  it('[SPEC 9.5] creates a request with inclusive days and defaults to pending', async () => {
     const res = await authA(request(app.getHttpServer()).post('/leaves/requests'))
       .send({ employeeId, leaveTypeId: typeId, startDate: '2025-06-01', endDate: '2025-06-05', reason: 'سفر' })
       .expect(201);
@@ -61,7 +61,7 @@ describe('Leave management (e2e)', () => {
     expect(res.body.employee.id).toBe(employeeId);
   });
 
-  it('refuses an inverted date range and an overlapping period', async () => {
+  it('[SPEC 9.5] refuses an inverted date range and an overlapping period', async () => {
     await authA(request(app.getHttpServer()).post('/leaves/requests'))
       .send({ employeeId, leaveTypeId: typeId, startDate: '2025-07-10', endDate: '2025-07-01' })
       .expect(400);
@@ -71,7 +71,7 @@ describe('Leave management (e2e)', () => {
       .expect(409);
   });
 
-  it('approves once, and a second decision is refused; balance reflects the approval', async () => {
+  it('[SPEC 9.5] approves once, and a second decision is refused; balance reflects the approval', async () => {
     const list = await authA(request(app.getHttpServer()).get(`/leaves/requests?employeeId=${employeeId}`)).expect(200);
     const pending = (list.body as { id: string; status: string }[]).find((r) => r.status === 'PENDING');
     expect(pending).toBeTruthy();
