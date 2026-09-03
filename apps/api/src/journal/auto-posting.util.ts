@@ -172,6 +172,40 @@ export async function postCogsEntry(
   });
 }
 
+/**
+ * ⭐ **عكس تكلفة المبيعات عند المرتجع السليم** (`SPEC 30.4`، موجة أ — قرار المالك 2026-09-03).
+ *
+ * مدين `1300 المخزون` · دائن `5100 تكلفة المبيعات`، بمجموع ما **أُعيد إلى طبقاته الأصلية**
+ * فعلاً — لا بسعر البيع ولا بنسبةٍ من الفاتورة. فالبضاعة عادت إلى الرفّ بتكلفتها التي
+ * خرجت بها، والهامش يُقرأ صحيحاً في الفترة نفسها.
+ *
+ * **قيدٌ مستقل عن قيد الإشعار الدائن** (الذي يعكس الإيراد والضريبة والذمّة) — كما أن قيد
+ * التكلفة مستقلٌّ عن قيد الفاتورة: حدثٌ مخزنيّ وحدثٌ إيرادي، وقد يقع أحدهما بلا الآخر
+ * (مرتجعُ خدمة · مرتجعٌ تالف لا يعود للمخزون).
+ */
+export async function postCogsReversalEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; no: string; date: Date; baseCost: number },
+) {
+  if (c.baseCost <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['5100']);
+  if (!ids) return null;
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `عكس تكلفة مبيعات — مرتجع ${c.no}`,
+    lines: [
+      { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: c.baseCost, credit: 0 },
+      { accountId: ids.get('5100')!, debit: 0, credit: c.baseCost },
+    ],
+    auto: true,
+    branchId: c.branchId ?? null,
+  });
+}
+
 /** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
   branchId?: string | null;
@@ -328,6 +362,8 @@ export interface CustomerPaymentForPosting {
   baseReceivable: number;
   branchId?: string | null;
   reversal?: boolean;
+  /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): نقدٌ خارج وذمّةٌ تعود — نفس القيد بمبالغٍ سالبة، بمذكّرةٍ تسمّيه. */
+  refund?: boolean;
 }
 
 /**
@@ -372,7 +408,7 @@ export async function postCustomerPaymentEntry(tx: Prisma.TransactionClient, com
   return createJournalEntry(tx, {
     companyId,
     date: p.date,
-    memo: `${p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
     lines,
     auto: true,
     branchId: p.branchId ?? null,

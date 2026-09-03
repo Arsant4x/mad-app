@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { consumeFifo } from '../inventory/costing.util';
+import { consumeFifo, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
 
 /**
@@ -131,4 +131,116 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
     totalCost: roundTo(totalCost, 'LINE_AMOUNT'),
     provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
   };
+}
+
+// ---------------------------------------------------------------------------
+// المرتجع السليم — `SPEC 30.4` (موجة أ، قرار المالك 2026-09-03)
+// ---------------------------------------------------------------------------
+
+export interface ReturnLine {
+  id: string;
+  productId: string | null;
+  quantity: Prisma.Decimal | number;
+  /** سطر الفاتورة الأصلية الذي يُردّ — بلا هذا الرابط لا مخزونَ يُمسّ. */
+  returnsLineId: string | null;
+  returnCondition: 'GOOD' | 'DAMAGED' | 'REPAIRABLE' | null;
+}
+
+export interface ReturnArgs {
+  companyId: string;
+  branchId: string | null;
+  date: Date;
+  documentNo: string;
+  lines: ReturnLine[];
+}
+
+export interface ReturnResult {
+  /** ما عاد إلى الرفّ فعلاً — بسطره وكميته وتكلفته المستعادة. */
+  restored: { lineId: string; qty: number; cost: number }[];
+  /** ما لم يمسّ المخزون — **معلَناً بسببه** لا صامتاً. */
+  skipped: { lineId: string; reason: 'NO_RETURNS_LINE' | 'NOT_STOCKED' | 'NOT_GOOD' | 'NO_PRODUCT' }[];
+  totalCost: number;
+  provisionalQty: number;
+}
+
+/**
+ * **ردُّ البضاعة السليمة إلى المخزون** — من المالك الواحد نفسه لكتابتَي الحركة والتكلفة.
+ *
+ * لكل سطرٍ في الإشعار الدائن يشير إلى سطر بيعٍ أصليّ وحالته `GOOD`:
+ *   ① تُعرف حركةُ البيع الأصلية (`OUT` على `returnsLineId`) — فسطرٌ لم تُخصم له بضاعة
+ *      (خدمةٌ · صنفٌ غير متعقَّب) **لا يُعاد له شيء** ويُعلَن ذلك؛
+ *   ② يُحسب ما أُرجع سابقاً على السطر نفسه من إشعاراتٍ سابقة، ويُرفض ما يتجاوز المبيع؛
+ *   ③ تُكتب حركةُ `IN` بمصدر `SALE` تحمل سطر الإشعار (فالمُشغِّل يرفضها إن خالف الصنف)؛
+ *   ④ وتُعاد الكمية إلى **طبقاتها الأصلية** من آخر ما استُهلك (`restoreConsumptionPartial`).
+ *
+ * `DAMAGED`/`REPAIRABLE` تُحفظ حالةً على السطر ولا تمسّ المخزون هنا — معلَّقةٌ على بحث
+ * الضريبة (قرار المالك). والمستدعي يرحّل `totalCost` قيدَ عكسٍ للتكلفة.
+ */
+export async function returnStockedLines(tx: Tx, args: ReturnArgs): Promise<ReturnResult> {
+  const restored: ReturnResult['restored'] = [];
+  const skipped: ReturnResult['skipped'] = [];
+  let totalCost = 0;
+  let provisionalQty = 0;
+
+  for (const line of args.lines) {
+    if (!line.productId) { skipped.push({ lineId: line.id, reason: 'NO_PRODUCT' }); continue; }
+    if (!line.returnsLineId) { skipped.push({ lineId: line.id, reason: 'NO_RETURNS_LINE' }); continue; }
+    if ((line.returnCondition ?? 'GOOD') !== 'GOOD') { skipped.push({ lineId: line.id, reason: 'NOT_GOOD' }); continue; }
+
+    const original = await tx.stockMovement.findFirst({
+      where: { invoiceLineId: line.returnsLineId, type: 'OUT' },
+      select: { id: true, qty: true, warehouseId: true, productId: true },
+    });
+    if (!original) { skipped.push({ lineId: line.id, reason: 'NOT_STOCKED' }); continue; }
+    if (original.productId !== line.productId) {
+      throw new Error(`سطر المرتجع ${line.id} يحمل صنفاً غير صنف سطر البيع الأصلي ${line.returnsLineId}`);
+    }
+
+    const qty = roundTo(Number(line.quantity), 'DERIVED_QUANTITY');
+    const priorReturns = await tx.stockMovement.aggregate({
+      where: { type: 'IN', origin: 'SALE', invoiceLine: { returnsLineId: line.returnsLineId } },
+      _sum: { qty: true },
+    });
+    const sold = Number(original.qty);
+    const already = Number(priorReturns._sum.qty ?? 0);
+    if (roundTo(already + qty, 'DERIVED_QUANTITY') > roundTo(sold, 'DERIVED_QUANTITY')) {
+      throw new ReturnExceedsSoldError(line.returnsLineId, sold, already, qty);
+    }
+
+    const movement = await tx.stockMovement.create({
+      data: {
+        companyId: args.companyId,
+        productId: line.productId,
+        warehouseId: original.warehouseId,
+        branchId: args.branchId,
+        type: 'IN',
+        origin: 'SALE',
+        invoiceLineId: line.id,
+        qty,
+        date: args.date,
+        reason: `مرتجع ${args.documentNo}`,
+      },
+      select: { id: true },
+    });
+    void movement;
+
+    const back = await restoreConsumptionPartial(tx, args.companyId, original.id, qty);
+    restored.push({ lineId: line.id, qty, cost: back.reversedCost });
+    totalCost += back.reversedCost;
+    provisionalQty += back.provisionalQty;
+  }
+
+  return { restored, skipped, totalCost: roundTo(totalCost, 'LINE_AMOUNT'), provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY') };
+}
+
+/** يُترجَم في الخدمة إلى `BadRequestException` برسالةٍ مفهومة — الخطأ يحمل أرقامه. */
+export class ReturnExceedsSoldError extends Error {
+  constructor(
+    public readonly returnsLineId: string,
+    public readonly sold: number,
+    public readonly alreadyReturned: number,
+    public readonly requested: number,
+  ) {
+    super(`مرتجع ${requested} يتجاوز المتاح (${sold} مبيع − ${alreadyReturned} مُرجَع) على السطر ${returnsLineId}`);
+  }
 }

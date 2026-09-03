@@ -71,6 +71,17 @@ enum InvoiceDocType {
   DEBIT_NOTE
 }
 
+/// حالة البضاعة المرتجعة على سطر الإشعار الدائن (`SPEC 30.4–30.6`، قرار المالك 2026-09-03):
+/// `GOOD` تعود إلى المخزون المتاح وتُعكس تكلفتها · `DAMAGED` مصروفُ تلفٍ بسببٍ إلزامي
+/// (حساب `5800` — **معلَّق على بحث ضريبة القيمة المضافة للتالف**) · `REPAIRABLE` إلى مستودع
+/// الفحص (مستودعٌ حقيقي لكل فرع — لا حالةٌ على الطبقة). في موجة أ تُحفظ الأخيرتان حالةً
+/// ولا تمسّان المخزون.
+enum ReturnCondition {
+  GOOD
+  DAMAGED
+  REPAIRABLE
+}
+
 /// Which ZATCA environment a company's integration points at. Kept explicit
 /// so a sandbox test can never be mistaken for a real clearance.
 enum ZatcaEnvironment {
@@ -813,6 +824,9 @@ model Invoice {
 
   paymentAllocations PaymentAllocation[]
 
+  /// للإشعار الدائن: سندات الردّ النقدي المربوطة به (`SPEC 30.8`).
+  refunds Payment[] @relation("PaymentRefunds")
+
   @@unique([companyId, no])
   @@unique([companyId, clientSaleId])
   /// عدّاد فاتورة الهيئة (ICV) لا يتكرّر داخل المنشأة. `nextIcv` يبني على
@@ -878,7 +892,19 @@ model InvoiceLine {
   /// مخزوناً لا يُحذف وتُترك حركته يتيمة.
   stockMovements StockMovement[]
 
+  /// **لسطر الإشعار الدائن وحده** (`SPEC 30.2` · `30.4`، موجة أ 2026-09-03): سطرُ الفاتورة
+  /// الأصلية الذي يُردّ. به تُعرف حركةُ البيع الأصلية فتُعاد طبقاتها، ويُحسب ما أُرجع منه
+  /// سابقاً كي لا يُرجَع أكثر ممّا بِيع. `Restrict`: سطرُ بيعٍ رُدّ منه شيء لا يُحذف.
+  /// سطرُ إشعارٍ بلا هذا الرابط إشعارٌ محاسبيّ (خصم · تصحيح) لا يمسّ المخزون.
+  returnsLineId String?
+  returnsLine   InvoiceLine?  @relation("InvoiceLineReturns", fields: [returnsLineId], references: [id], onDelete: Restrict)
+  returnedBy    InvoiceLine[] @relation("InvoiceLineReturns")
+
+  /// حالة البضاعة المرتجعة — انظر `ReturnCondition`. فارغةٌ على سطور الفواتير والإشعارات المدينة.
+  returnCondition ReturnCondition?
+
   @@index([companyId, productId])
+  @@index([returnsLineId])
   @@map("invoice_lines")
 }
 
@@ -2678,13 +2704,29 @@ model Payment {
   reverses   Payment? @relation("PaymentReversal", fields: [reversesId], references: [id], onDelete: Restrict)
   reversedBy Payment? @relation("PaymentReversal")
 
+  /// نوع السند (`SPEC 30.8`، قرار المالك 2026-09-03): `RECEIPT` مقبوضٌ من عميل · `REFUND` ردُّ
+  /// مرتجعٍ نقداً — **سندٌ مستقل** مربوطٌ بإشعاره الدائن، يحمل مبلغاً سالباً (كالعكس) وليس عكساً
+  /// لسند القبض: العكس يمحو واقعة، والدفتر وقائع لا حالات.
+  kind PaymentKind @default(RECEIPT)
+
+  /// للردّ وحده: الإشعار الدائن الذي يُردّ نقداً. `Restrict` — إشعارٌ رُدّ لا يُحذف.
+  refundsInvoiceId String?
+  refundsInvoice   Invoice? @relation("PaymentRefunds", fields: [refundsInvoiceId], references: [id], onDelete: Restrict)
+
   allocations PaymentAllocation[]
 
   createdAt DateTime @default(now())
 
   @@unique([companyId, no])
   @@index([companyId, customerId])
+  @@index([refundsInvoiceId])
   @@map("payments")
+}
+
+/// انظر `Payment.kind`.
+enum PaymentKind {
+  RECEIPT
+  REFUND
 }
 
 /// تخصيص جزء من دفعة لفاتورة بعينها — هو مصدر الحقيقة الوحيد لـ«المدفوع».

@@ -7,11 +7,11 @@
 |---|---|
 | بنود SPEC | 273 |
 | منها في جداولٍ لها عمودُ حالة | 179 |
-| تقول الوثيقة ✅ | 74 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 68 |
+| تقول الوثيقة ✅ | 80 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 74 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 6 (منها 6 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 143 / 883 |
+| اختباراتٌ موسومة / كل الاختبارات | 150 / 890 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -156,17 +156,17 @@
 | 15.6 | باقات جاهزة أو باقة يصممها العميل | ⬜ | ⬜ | — |
 | 15.7 | تجربة مجانية | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation (e2e) |
 | 15.8 | تسعير معلن وشفاف | ⬜ | ⬜ | — |
-| 30.1 | **نوعان:** مرتجع مبيعات ⇒ **إشعار دائن** · مرتجع مشتريات ⇒ **إشعار مدين** | ⬜ | ⬜ | — |
-| 30.2 | **مرتبط بفاتورة أصلية إلزاماً** — لا مرتجع معلّق | ⬜ | ⬜ | — |
-| 30.3 | **إرجاع جزئي** مدعوم | ⬜ | ⬜ | — |
-| 30.4 | **سليمة** → تعود للمخزون المتاح | ⬜ | ⬜ | — |
+| 30.1 | **نوعان:** مرتجع مبيعات ⇒ **إشعار دائن** · مرتجع مشتريات ⇒ **إشعار مدين** | 🟨 | ⬜ | — |
+| 30.2 | **مرتبط بفاتورة أصلية إلزاماً** — لا مرتجع معلّق | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.2] سطرُ المرتجع يشير إلى سطرٍ من الفاتورة الأصلية نفسها — لا من فاتورةٍ أخرى (e2e) |
+| 30.3 | **إرجاع جزئي** مدعوم | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.3] إرجاعٌ جزئي يعيد جزءه — ولا يُرجَع عبر إشعاراتٍ متتابعة أكثر ممّا بِيع (e2e) |
+| 30.4 | **سليمة** → تعود للمخزون المتاح | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.4] إشعارٌ دائن كامل يعيد البضاعة السليمة إلى الرفّ ويعكس تكلفتها بقيدٍ مستقل (e2e) |
 | 30.5 | **تالفة** → مصروف تلف **بسبب إلزامي** | ⬜ | ⬜ | — |
 | 30.6 | **قابلة للإصلاح** → مخزون «قيد الفحص» **غير متاح للبيع** | ⬜ | ⬜ | — |
 | 30.7 | **صلاحية منفصلة للتالف** — الكاشير يسجّل المرتجع **ولا يقرّر التلف** | ⬜ | ⬜ | — |
-| 30.8 | الردّ **نقداً أو رصيداً** — وإن كانت الفاتورة **غير مسدَّدة فالخصم منها إلزاماً** | ⬜ | ⬜ | — |
-| 30.9 | **تقرير مرتجعات وتلف:** كم أُرجع · كم تلف · **ومن سجّله** | ⬜ | ⬜ | — |
+| 30.8 | الردّ **نقداً أو رصيداً** — وإن كانت الفاتورة **غير مسدَّدة فالخصم منها إلزاماً** | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.8] لا ردٌّ نقدي على إشعارٍ لفاتورةٍ غير مسدَّدة — الخصم منها إلزاميّ (e2e)<br>`api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.8] الفاتورة المسدَّدة: سندُ ردٍّ مستقل مربوطٌ بالإشعار، بمبلغٍ سالب ورقمٍ RFD — ومرةً واحدة (e2e) |
+| 30.9 | **تقرير مرتجعات وتلف:** كم أُرجع · كم تلف · **ومن سجّله** | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.9] تقرير المرتجعات: كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ · ومن سجّله (e2e) |
 | 30.10 | 🔴 **طابور المزامنة الأوفلاين يشمل الإشعارات** — مربوطاً بمهلة **24 ساعة** | ⬜ | ⬜ | — |
-| 30.11 | 🔴 **الإشعار يمرّ بمسار `zatca.service` كاملاً** — ختم · عدّاد · سلسلة تجزئة. **لا مسار مخ | ⬜ | ⬜ | — |
+| 30.11 | 🔴 **الإشعار يمرّ بمسار `zatca.service` كاملاً** — ختم · عدّاد · سلسلة تجزئة. **لا مسار مخ | ✅ | ✅ | `api/test/zatca-credit-notes.e2e-spec.ts` :: [SPEC 30.11] a credit note takes an ordinary position in the one hash chain (e2e) |
 | 16.1 | العقارات والوحدات | ✅ | ✅ | `api/test/property-coordinates.e2e-spec.ts` :: [SPEC 16.1 16.17] stores coordinates on create and returns them in the list (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] roomDetails: stored on create, editable, returned in reads (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] bulk creation: prefix+count, all-or-nothing on collision with named clashes (e2e) |
 | 16.2 | العقود وجداول الدفعات | ✅ | ✅ | `api/test/contract-renewal.e2e-spec.ts` :: [SPEC 16.2 16.10] creates a linked follow-on contract and leaves the original intact (e2e)<br>`api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.6] creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit (e2e)<br>`api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.5] cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone (e2e) |
 | 16.3 | الأقساط والسداد الجزئي | ⬜ | ⬜ | — |

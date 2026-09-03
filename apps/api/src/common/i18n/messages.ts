@@ -236,6 +236,13 @@ export const MSG = {
   credit_note_immutable: 'creditNotes.immutable',
   invoice_has_credit_notes: 'creditNotes.invoice_has_notes',
 
+  // returns (SPEC §30 — موجة أ)
+  return_line_not_original: 'returns.line_not_original',
+  return_exceeds_sold: 'returns.exceeds_sold',
+  refund_target_invalid: 'returns.refund_target_invalid',
+  refund_nothing_refundable: 'returns.refund_nothing_refundable',
+  refund_exceeds_refundable: 'returns.refund_exceeds_refundable',
+
   // branches / activities
   branch_not_found: 'branches.not_found',
   branch_name_taken: 'branches.name_taken',
@@ -594,6 +601,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة إشعار الدائن تتجاوز المتبقي من الفاتورة الأصلية', en: 'The credit note amount exceeds what remains of the original invoice' },
   [MSG.credit_note_immutable]: { ar: 'إشعار الدائن لا يُعدَّل بعد إصداره — احذفه وأصدر إشعاراً جديداً، أو أصدر إشعاراً مصححاً', en: 'A credit note cannot be edited after issue — delete and reissue it, or issue a correcting note' },
   [MSG.invoice_has_credit_notes]: { ar: 'لا يمكن حذف فاتورة صدرت عليها إشعارات دائن — احذف الإشعارات أولاً', en: 'An invoice with issued credit notes cannot be deleted — remove the notes first' },
+  [MSG.return_line_not_original]: { ar: 'سطر المرتجع يجب أن يشير إلى سطرٍ من الفاتورة الأصلية نفسها وبصنفه', en: 'A returned line must reference a line of the same original invoice, with its product' },
+  [MSG.return_exceeds_sold]: { ar: 'الكمية المرتجعة ({requested}) تتجاوز المتاح: بِيع {sold} وأُرجع منه {returned} من قبل', en: 'Returned quantity ({requested}) exceeds what is available: {sold} sold, {returned} already returned' },
+  [MSG.refund_target_invalid]: { ar: 'سند الردّ يُصدَر على إشعارٍ دائن مرتبطٍ بفاتورةٍ أصلية فقط', en: 'A refund is issued against a credit note linked to an original invoice only' },
+  [MSG.refund_nothing_refundable]: { ar: 'لا شيء قابلٌ للردّ: الإشعار خُصم من متبقي الفاتورة غير المسدَّد، أو رُدّ من قبل', en: 'Nothing is refundable: the note offset the unpaid balance of its invoice, or was already refunded' },
+  [MSG.refund_exceeds_refundable]: { ar: 'مبلغ الردّ ({amount}) يتجاوز القابل للردّ ({refundable}) — الخصم من الفاتورة غير المسدَّدة إلزاميّ أولاً', en: 'Refund ({amount}) exceeds the refundable amount ({refundable}) — the unpaid invoice balance must be offset first' },
   [MSG.zatca_invoice_chain_locked]: {
     ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
     en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',

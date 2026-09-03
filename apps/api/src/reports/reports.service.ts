@@ -600,6 +600,102 @@ export class ReportsService {
     });
   }
 
+  /**
+   * تقرير المرتجعات (`SPEC 30.9`، موجة أ 2026-09-03): **كم أُرجع · وكم عاد إلى الرفّ وبأي تكلفة ·
+   * وكم رُدّ نقداً · ومن سجّله.**
+   *
+   * كل رقمٍ مشتقّ: الإشعارات الدائنة في المدى، وحركاتُ `IN/SALE` المربوطة بسطورها (ما عاد فعلاً)،
+   * وسنداتُ `REFUND` المربوطة بها، والفاعلُ من سجل التدقيق لا من حقلٍ على المستند. **عمودُ التلف
+   * محفوظٌ بحالة السطر** (`DAMAGED`/`REPAIRABLE`) ولا مصروفَ له بعد — معلَّقٌ على بحث الضريبة.
+   */
+  returns(companyId: string, range: ReportRangeDto, branchId?: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const date = this.dateFilter(range);
+      const notes = await tx.invoice.findMany({
+        where: { docType: 'CREDIT_NOTE', ...(date ? { issueDate: date } : {}), ...(branchId ? { branchId } : {}) },
+        include: {
+          customer: { select: { name: true } },
+          relatedInvoice: { select: { no: true } },
+          lines: { select: { id: true, description: true, quantity: true, unitPrice: true, returnsLineId: true, returnCondition: true } },
+        },
+        orderBy: { issueDate: 'asc' },
+      });
+      const noteIds = notes.map((n) => n.id);
+      const lineIds = notes.flatMap((n) => n.lines.map((l) => l.id));
+
+      const restockMoves = lineIds.length
+        ? await tx.stockMovement.findMany({ where: { type: 'IN', origin: 'SALE', invoiceLineId: { in: lineIds } }, select: { invoiceLineId: true, qty: true, consumptions: { select: { qty: true, unitCost: true } } } })
+        : [];
+      const restockedByLine = new Map<string, { qty: number; cost: number }>();
+      for (const m of restockMoves) {
+        const cur = restockedByLine.get(m.invoiceLineId!) ?? { qty: 0, cost: 0 };
+        cur.qty = roundTo(cur.qty + Number(m.qty), 'DERIVED_QUANTITY');
+        restockedByLine.set(m.invoiceLineId!, cur);
+      }
+      // تكلفة ما عاد: قيدُ عكس التكلفة على الإشعار (مذكّرته تسمّيه) — من الدفتر لا من تقدير.
+      const reversalEntries = noteIds.length
+        ? await tx.journalEntry.findMany({ where: { memo: { in: notes.map((n) => `عكس تكلفة مبيعات — مرتجع ${n.no}`) } }, select: { memo: true, lines: { select: { debit: true } } } })
+        : [];
+      const reversedCostByNo = new Map(reversalEntries.map((e) => [e.memo, round2(e.lines.reduce((s, l) => s + Number(l.debit), 0))]));
+
+      const refunds = noteIds.length
+        ? await tx.payment.groupBy({ by: ['refundsInvoiceId'], where: { kind: 'REFUND', refundsInvoiceId: { in: noteIds } }, _sum: { amount: true } })
+        : [];
+      const refundedByNote = new Map(refunds.map((r) => [r.refundsInvoiceId!, round2(-Number(r._sum.amount ?? 0))]));
+
+      const actors = noteIds.length
+        ? await tx.auditLog.findMany({ where: { entity: 'invoices', entityId: { in: noteIds } }, select: { entityId: true, actorName: true, createdAt: true }, orderBy: { createdAt: 'asc' } })
+        : [];
+      const actorByNote = new Map<string, string>();
+      for (const a of actors) if (a.entityId && !actorByNote.has(a.entityId)) actorByNote.set(a.entityId, a.actorName);
+
+      const rows = notes.map((n) => {
+        const lines = n.lines.map((l) => {
+          const back = restockedByLine.get(l.id);
+          return {
+            description: l.description,
+            quantity: Number(l.quantity),
+            unitPrice: Number(l.unitPrice),
+            condition: l.returnCondition ?? (l.returnsLineId ? 'GOOD' : null),
+            linkedToSale: l.returnsLineId !== null,
+            restockedQty: back?.qty ?? 0,
+          };
+        });
+        return {
+          id: n.id,
+          no: n.no,
+          date: n.issueDate,
+          customerName: n.customer.name,
+          invoiceNo: n.relatedInvoice?.no ?? null,
+          reason: n.adjustmentReason,
+          total: Number(n.total),
+          restockedQty: roundTo(lines.reduce((s, l) => s + l.restockedQty, 0), 'DERIVED_QUANTITY'),
+          restockedCost: reversedCostByNo.get(`عكس تكلفة مبيعات — مرتجع ${n.no}`) ?? 0,
+          damagedLines: lines.filter((l) => l.condition === 'DAMAGED').length,
+          repairableLines: lines.filter((l) => l.condition === 'REPAIRABLE').length,
+          refunded: refundedByNote.get(n.id) ?? 0,
+          recordedBy: actorByNote.get(n.id) ?? null,
+          lines,
+        };
+      });
+
+      return {
+        from: range.from ?? null,
+        to: range.to ?? null,
+        branchId: branchId ?? null,
+        rows,
+        totals: {
+          count: rows.length,
+          total: round2(rows.reduce((s, r) => s + r.total, 0)),
+          restockedQty: roundTo(rows.reduce((s, r) => s + r.restockedQty, 0), 'DERIVED_QUANTITY'),
+          restockedCost: round2(rows.reduce((s, r) => s + r.restockedCost, 0)),
+          refunded: round2(rows.reduce((s, r) => s + r.refunded, 0)),
+          damagedLines: rows.reduce((s, r) => s + r.damagedLines, 0),
+        },
+      };
+    });
+  }
+
   private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {
     const date = this.dateFilter(range);
 

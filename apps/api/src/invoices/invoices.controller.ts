@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { AuditEntityFromResult } from '../audit/audit-entity-from-result.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -34,6 +35,7 @@ export class InvoicesController {
    * modified). */
   @Post(':id/credit-note')
   @RequiresAction('add')
+  @AuditEntityFromResult()
   issueCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateCreditNoteDto) {
     return this.invoicesService.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
@@ -42,6 +44,7 @@ export class InvoicesController {
    * invoice. Same 'add' gating rationale as the credit note. */
   @Post(':id/debit-note')
   @RequiresAction('add')
+  @AuditEntityFromResult()
   issueDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateDebitNoteDto) {
     return this.invoicesService.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }

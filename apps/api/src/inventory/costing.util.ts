@@ -205,6 +205,60 @@ export async function restoreConsumption(
 }
 
 /**
+ * إعادةُ **جزءٍ** ممّا استُهلك — للمرتجع الجزئي (`SPEC 30.3` + `30.4`، موجة أ 2026-09-03).
+ *
+ * نفس قاعدة `restoreConsumption`: **إلى الطبقة الأصلية لا إلى طبقةٍ جديدة**. والجزء يُعاد
+ * **من آخر ما استُهلك إلى أوله** (عكس ترتيب الاستهلاك): فبيعُ ٥ استهلك ٣ من طبقةٍ قديمة
+ * و٢ من أحدث، ومرتجعُ ٢ يعيد الاثنتين إلى الأحدث — **فتبقى الطبقة الأقدم مستهلَكةً كما
+ * كانت**، وتقرير عمر المخزون لا يكذب في أي الاتجاهين.
+ *
+ * ⚠️ الكمية المطلوبة لا تتجاوز ما استُهلك — والمستدعي يفحص ذلك **قبل** النداء بحساب ما
+ * أُعيد سابقاً على نفس الحركة؛ وهنا حارسٌ ثانٍ يرمي إن تجاوزها.
+ */
+export async function restoreConsumptionPartial(
+  tx: Tx,
+  companyId: string,
+  originalMovementId: string,
+  qty: number,
+): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number }> {
+  const consumptions = await tx.inventoryConsumption.findMany({
+    where: { movementId: originalMovementId },
+    orderBy: { createdAt: 'desc' },
+  });
+  const consumed = roundTo(consumptions.reduce((s, c) => s + Number(c.qty), 0), 'DERIVED_QUANTITY');
+  let remaining = roundTo(qty, 'DERIVED_QUANTITY');
+  if (remaining > consumed) throw new Error(`مرتجعٌ (${remaining}) يتجاوز ما استُهلك (${consumed}) على الحركة ${originalMovementId}`);
+
+  let restoredQty = 0;
+  let reversedCost = 0;
+  let provisionalQty = 0;
+
+  for (const c of consumptions) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, Number(c.qty));
+    remaining = roundTo(remaining - take, 'DERIVED_QUANTITY');
+    reversedCost += take * Number(c.unitCost);
+
+    if (c.layerId === null) {
+      provisionalQty += take;
+      continue;
+    }
+    const layer = await tx.inventoryLayer.findUniqueOrThrow({ where: { id: c.layerId }, select: { qtyRemaining: true } });
+    await tx.inventoryLayer.update({
+      where: { id: c.layerId },
+      data: { qtyRemaining: roundTo(Number(layer.qtyRemaining) + take, 'DERIVED_QUANTITY') },
+    });
+    restoredQty += take;
+  }
+
+  return {
+    restoredQty: roundTo(restoredQty, 'DERIVED_QUANTITY'),
+    reversedCost: roundTo(reversedCost, 'LINE_AMOUNT'),
+    provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
+  };
+}
+
+/**
  * المتوسط المرجّح — **دالة قراءة فوق الطبقات، لا مخطَّطٌ بديل**.
  *
  * وهذا هو قرار المالك مطبَّقاً لا موصوفاً: لا جدول، ولا إعداد، ولا موجة —
