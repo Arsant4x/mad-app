@@ -28,6 +28,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { FilesService } from '../files/files.service';
+import { round2, formatMoney } from '../common/money/rounding';
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
@@ -268,7 +269,7 @@ export class ContractsService {
       select: { amount: true },
     });
 
-    return Math.round(remaining.reduce((sum, i) => sum + Number(i.amount), 0) * 100) / 100;
+    return round2(remaining.reduce((sum, i) => sum + Number(i.amount), 0));
   }
 
   recordPayment(companyId: string, contractId: string, dto: RecordPaymentDto) {
@@ -300,7 +301,7 @@ export class ContractsService {
         const payRate = dto.exchangeRate ?? Number(contract.exchangeRate);
 
         const discount = dto.discount ?? 0;
-        const netAmount = Math.round((dto.amount - discount) * 100) / 100;
+        const netAmount = round2(dto.amount - discount);
         if (netAmount <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
         const journalEntry = await postRentPaymentEntry(tx, companyId, {
@@ -848,8 +849,8 @@ export class ContractsService {
         const deducted = dto.deductions.reduce((sum, d) => sum + d.amount, 0);
         // Rounded before comparing: two 2-decimal amounts can sum to a float
         // like 300.00000000000006 and spuriously exceed the deposit.
-        if (Math.round(deducted * 100) / 100 > held) {
-          throw new BadRequestException(formatMessage(MSG.deductions_exceed_deposit, { held: held.toFixed(2) }));
+        if (round2(deducted) > held) {
+          throw new BadRequestException(formatMessage(MSG.deductions_exceed_deposit, { held: formatMoney(held) }));
         }
 
         const rate = Number(deposit.exchangeRate);
@@ -859,7 +860,7 @@ export class ContractsService {
             rate,
           );
 
-        const refund = Math.round((held - deducted) * 100) / 100;
+        const refund = round2(held - deducted);
 
         const settlementEntry = await postDepositSettlementEntry(tx, companyId, {
           unitId: deposit.contract.unitId,

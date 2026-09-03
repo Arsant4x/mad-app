@@ -1,3 +1,4 @@
+import { round2 } from '../money/rounding';
 /**
  * Converting a transaction amount into the company's base currency.
  *
@@ -14,7 +15,7 @@ export const DEFAULT_EXCHANGE_RATE = 1;
  * here rather than left to the driver — an unrounded product of a 6-decimal
  * rate would otherwise be truncated inconsistently. */
 export function toBaseAmount(amount: number, exchangeRate: number): number {
-  return Math.round(amount * exchangeRate * 100) / 100;
+  return round2(amount * exchangeRate);
 }
 
 export interface CurrencyInput {

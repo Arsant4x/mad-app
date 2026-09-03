@@ -9,6 +9,7 @@ import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
+import { round2 } from '../common/money/rounding';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
@@ -134,7 +135,7 @@ export class PosService {
         ...closed,
         ...totals,
         /** موجب = زيادة في الدرج، سالب = عجز. */
-        variance: Number((dto.declaredClosing - totals.expectedCash).toFixed(2)),
+        variance: round2(dto.declaredClosing - totals.expectedCash),
       };
     });
   }
@@ -256,7 +257,7 @@ export class PosService {
             : 0;
       if (cardAmount > 0 && !opts.viaSync) {
         const result = await this.integrationsService.chargeCardIfConfigured(tx, {
-          amount: Number(cardAmount.toFixed(2)),
+          amount: round2(cardAmount),
           currency: 'SAR',
           reference: opts.clientSaleId ?? opts.offlineRef ?? `POS-${shift.id.slice(0, 8)}-${await tx.invoice.count({ where: { posShiftId: shift.id } })}`,
         });
@@ -334,9 +335,9 @@ export class PosService {
     }
     return {
       salesCount,
-      cashTotal: Number(cashTotal.toFixed(2)),
-      cardTotal: Number(cardTotal.toFixed(2)),
-      expectedCash: Number((openingFloat + cashTotal).toFixed(2)),
+      cashTotal: round2(cashTotal),
+      cardTotal: round2(cardTotal),
+      expectedCash: round2(openingFloat + cashTotal),
     };
   }
 

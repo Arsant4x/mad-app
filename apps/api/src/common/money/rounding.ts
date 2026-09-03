@@ -47,28 +47,43 @@ export const SCALE = {
 export type RoundingContext = keyof typeof SCALE;
 
 /**
- * التدوير الوحيد المسموح.
+ * يزيح الفاصلة العشرية `places` خانةً **عبر النصّ لا بالضرب** — فـ`1.005 × 100`
+ * في IEEE-754 يساوي `100.49999999999999`، بينما `Number('1.005e2')` يساوي
+ * `100.5` بالضبط: المحوِّل من النصّ يختار أقرب مضاعفٍ ثنائيٍّ للقيمة العشرية
+ * المكتوبة، فلا يتراكم خطأ الضرب. (وهي الطريقة التي توصي بها مراجع JavaScript
+ * للتدوير العشري الصحيح.)
+ */
+function shiftDecimal(value: number, places: number): number {
+  const [mantissa, exponent = '0'] = String(value).split('e');
+  return Number(`${mantissa}e${Number(exponent) + places}`);
+}
+
+/**
+ * التدوير الوحيد المسموح — **نصفٌ بعيداً عن الصفر، على القيمة العشرية لا الثنائية.**
  *
- * ## ⚠️ سلوكه اليوم = سلوك التعريفات الأربعة التي حلّ محلّها — **عمداً**
+ * ## ما أُصلح في كنسة التدوير (قرار المالك 2026-09-03) — وكان عيبَين مثبَّتَين
  *
- * هذه الموجة تُوحّد **مكان** التدوير ولا تغيّر **نتيجته**. وفيه عيبان معروفان
- * مثبَّتان في `rounding.spec.ts` بتوكيدات موسومة، ولكلٍّ بندٌ مسجَّل:
+ * **① حدّ IEEE-754.** كان `1.005` يُدوَّر إلى `1.00` لأن `1.005 * 100` يساوي
+ *    `100.49999999999999`. الآن تُزاح الفاصلة نصّياً فيصير `100.5` ثم `101` ثم `1.01`.
  *
- * **① حدّ IEEE-754.** `1.005 * 100` يساوي `100.49999999999999`، فيدوَّر
- *    نزولاً إلى `1.00` والصواب `1.01`.
+ * **② عدم التناظر حول الصفر.** كان `Math.round(-12.5)` يساوي `-12` (النصف نحو
+ *    `+∞`) بينما `Math.round(12.5)` يساوي `13` — فالفاتورة تحصّل `0.13` وإشعارها
+ *    الدائن يردّ `0.12`، **وهللةٌ تبقى لا تُقفَل أبداً وتتراكم على كل مرتجع**. الآن
+ *    يُدوَّر **المقدار** ثم تُعاد الإشارة: `roundTo(-x) === -roundTo(x)` دائماً.
  *
- * **② عدم التناظر حول الصفر.** `Math.round(-100.5)` يساوي `-100`: النصف
- *    يُقرَّب نحو `+∞` لا بعيداً عن الصفر. فالفاتورة تحصّل `1.01` والإشعار
- *    الدائن يردّ `1.00` — نصف هللة تبقى وتتراكم على كل مرتجع.
+ * **ولماذا كنسةً واحدة:** `zatca/ubl/invoice-xml.util.ts` و`qr.util.ts` و`xades.util.ts`
+ * كانت تدوّر بـ`Math.round` و`toFixed` الخام — فإصلاح الدفتر وحده كان سيجعل المستند
+ * المختوم لدى الهيئة يخالف الدفتر. فالثلاثة تمرّ الآن من هنا (`formatMoney`)، ومجاميع
+ * المستند من `totals.ts`، والحارس في `rounding.spec.ts` يُسقط أي تدويرٍ خارج هذا الملف.
  *
- * **ولماذا لا يُصلَحان هنا:** الإصلاح يغيّر ناتج المال. و`zatca/ubl/
- * invoice-xml.util.ts` يدوّر بـ`Math.round` الخام في موضعين — فإصلاح الدفتر
- * وحده **يجعل المستند المختوم يخالف الدفتر**، وهو أسوأ من العيب نفسه.
- * فالإصلاح الصحيح كنسةٌ واحدة تشمل كل مواضع التدوير، وهي موجتها لا هذه.
+ * `NaN` و`±Infinity` تعود كما هي — التدوير لا يخفي قيمةً فاسدة. ولا صفرٌ سالب.
  */
 export function roundTo(value: number, context: RoundingContext): number {
-  const factor = 10 ** SCALE[context];
-  return Math.round(value * factor) / factor;
+  if (!Number.isFinite(value)) return value;
+  const scale = SCALE[context];
+  const magnitude = shiftDecimal(Math.round(shiftDecimal(Math.abs(value), scale)), -scale);
+  if (magnitude === 0) return 0;
+  return value < 0 ? -magnitude : magnitude;
 }
 
 /**
@@ -76,3 +91,17 @@ export function roundTo(value: number, context: RoundingContext): number {
  * تغييرٌ واسع بلا عائد. **والسلوك الآن واحد لأن التعريف واحد**، وهو الغرض.
  */
 export const round2 = (value: number): number => roundTo(value, 'LINE_AMOUNT');
+
+/**
+ * نصُّ المبلغ كما يُكتب في مستندٍ أو رسالة — **يُدوَّر بالسياسة ثم يُنسَّق**، فلا يمرّ
+ * `toFixed` وحده على قيمةٍ خام (لـ`toFixed` تدويرُه الخاص الذي يخالف `Math.round`
+ * عند الأنصاف السالبة — وهذا بعينه كان الفرق بين المستند المختوم والدفتر).
+ */
+export function formatMoney(value: number, context: RoundingContext = 'INVOICE_TOTAL'): string {
+  return roundTo(value, context).toFixed(SCALE[context]);
+}
+
+/** المبلغ بالهللة عدداً صحيحاً موقَّعاً — بعد التدوير بالسياسة، فلا `100.49999` يُقرأ ٩٩. */
+export function toHalalas(value: number): number {
+  return Math.round(shiftDecimal(roundTo(value, 'LINE_AMOUNT'), 2));
+}

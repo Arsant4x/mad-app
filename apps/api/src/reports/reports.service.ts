@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { roundTo } from '../common/money/rounding';
+import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
@@ -70,9 +70,9 @@ async function collectionRate(tx: Prisma.TransactionClient, companyId: string, t
   const pct = (part: number) => (agg.dueAmount === 0 ? 0 : Math.round((part / agg.dueAmount) * 1000) / 10);
 
   return {
-    dueAmount: Math.round(agg.dueAmount * 100) / 100,
-    paidAmount: Math.round(agg.paidAmount * 100) / 100,
-    onTimeAmount: Math.round(agg.onTimeAmount * 100) / 100,
+    dueAmount: round2(agg.dueAmount),
+    paidAmount: round2(agg.paidAmount),
+    onTimeAmount: round2(agg.onTimeAmount),
     collectedRate: pct(agg.paidAmount),
     onTimeRate: pct(agg.onTimeAmount),
     /** Installments due and still unpaid — the follow-up list's length. */
@@ -472,7 +472,7 @@ export class ReportsService {
       for (const inv of invoices) {
         const rate = Number(inv.exchangeRate);
         const allocatedBase = (allocByInvoice.get(inv.id) ?? 0) * rate;
-        const remaining = Number((Number(inv.baseTotal) - allocatedBase + (noteAdjustment.get(inv.id) ?? 0)).toFixed(2));
+        const remaining = round2(Number(inv.baseTotal) - allocatedBase + (noteAdjustment.get(inv.id) ?? 0));
         // المسدَّدة كاملاً تُستبعد؛ والجزئية تدخل بمتبقيها وحده.
         if (Math.abs(remaining) < 0.005) continue;
 
@@ -495,17 +495,17 @@ export class ReportsService {
 
       const result = [...rows.values()].map((r) => ({
         ...r,
-        current: Number(r.current.toFixed(2)),
-        d1: Number(r.d1.toFixed(2)),
-        d31: Number(r.d31.toFixed(2)),
-        d61: Number(r.d61.toFixed(2)),
-        d90: Number(r.d90.toFixed(2)),
-        unapplied: Number(r.unapplied.toFixed(2)),
-        total: Number((r.current + r.d1 + r.d31 + r.d61 + r.d90 + r.unapplied).toFixed(2)),
+        current: round2(r.current),
+        d1: round2(r.d1),
+        d31: round2(r.d31),
+        d61: round2(r.d61),
+        d90: round2(r.d90),
+        unapplied: round2(r.unapplied),
+        total: round2(r.current + r.d1 + r.d31 + r.d61 + r.d90 + r.unapplied),
       }));
       result.sort((a, b) => b.total - a.total);
 
-      const sum = (pick: (r: (typeof result)[number]) => number) => Number(result.reduce((t, r) => t + pick(r), 0).toFixed(2));
+      const sum = (pick: (r: (typeof result)[number]) => number) => round2(result.reduce((t, r) => t + pick(r), 0));
       const totals = {
         current: sum((r) => r.current),
         d1: sum((r) => r.d1),
@@ -533,18 +533,18 @@ export class ReportsService {
    */
   private async reconcileAgainstReceivables(tx: Prisma.TransactionClient, asOf: Date, branchId: string | undefined, reportTotal: number) {
     const account = await tx.account.findFirst({ where: { code: RECEIVABLES_ACCOUNT }, select: { id: true } });
-    if (!account) return { ledgerBalance: 0, reportTotal, difference: Number((reportTotal * -1).toFixed(2)), accountMissing: true };
+    if (!account) return { ledgerBalance: 0, reportTotal, difference: round2(reportTotal * -1), accountMissing: true };
 
     const agg = await tx.journalLine.aggregate({
       where: { accountId: account.id, journalEntry: { date: { lte: asOf }, ...(branchId ? { branchId } : {}) } },
       _sum: { debit: true, credit: true },
     });
-    const ledgerBalance = Number((Number(agg._sum.debit ?? 0) - Number(agg._sum.credit ?? 0)).toFixed(2));
+    const ledgerBalance = round2(Number(agg._sum.debit ?? 0) - Number(agg._sum.credit ?? 0));
     return {
       ledgerBalance,
       reportTotal,
       /** موجب = الدفتر أكبر من التقرير (قيود يدوية على الذمم). */
-      difference: Number((ledgerBalance - reportTotal).toFixed(2)),
+      difference: round2(ledgerBalance - reportTotal),
       accountMissing: false,
     };
   }
@@ -576,15 +576,15 @@ export class ReportsService {
         return {
           code: a.code,
           name: a.name,
-          debitTotal: Number(m.debit.toFixed(2)),
-          creditTotal: Number(m.credit.toFixed(2)),
-          balanceDebit: net > 0 ? Number(net.toFixed(2)) : 0,
-          balanceCredit: net < 0 ? Number((-net).toFixed(2)) : 0,
+          debitTotal: round2(m.debit),
+          creditTotal: round2(m.credit),
+          balanceDebit: net > 0 ? round2(net) : 0,
+          balanceCredit: net < 0 ? round2(-net) : 0,
         };
       });
 
-      const totalDebit = Number(rows.reduce((s2, r) => s2 + r.debitTotal, 0).toFixed(2));
-      const totalCredit = Number(rows.reduce((s2, r) => s2 + r.creditTotal, 0).toFixed(2));
+      const totalDebit = round2(rows.reduce((s2, r) => s2 + r.debitTotal, 0));
+      const totalCredit = round2(rows.reduce((s2, r) => s2 + r.creditTotal, 0));
       return {
         from: filter.from ?? null,
         to: filter.to ?? null,
@@ -592,8 +592,8 @@ export class ReportsService {
         rows,
         totalDebit,
         totalCredit,
-        totalBalanceDebit: Number(rows.reduce((s2, r) => s2 + r.balanceDebit, 0).toFixed(2)),
-        totalBalanceCredit: Number(rows.reduce((s2, r) => s2 + r.balanceCredit, 0).toFixed(2)),
+        totalBalanceDebit: round2(rows.reduce((s2, r) => s2 + r.balanceDebit, 0)),
+        totalBalanceCredit: round2(rows.reduce((s2, r) => s2 + r.balanceCredit, 0)),
         /** عدم توازنه = عطب في القيود يستحق إنذاراً لا إخفاءً. */
         balanced: Math.abs(totalDebit - totalCredit) < 0.01,
       };

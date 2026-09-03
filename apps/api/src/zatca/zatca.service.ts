@@ -1,7 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { MSG } from '../common/i18n/messages';
+import { computeDocumentTotals } from '../common/money/totals';
 import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -121,6 +122,22 @@ export class ZatcaService {
         where: { id: invoiceId },
         data: { zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
       });
+
+      // كنسة التدوير (قرار المالك 2026-09-03): **المختوم = المرحَّل بالبناء** — المجاميع
+      // المخزَّنة تُعاد من البنود بالدالة نفسها التي يستعملها الدفتر والمستند. فإن اختلفت
+      // هللةً (فاتورةٌ قديمة بطريقةٍ سابقة، أو بنودٌ عُدّلت بلا إعادة حساب) **لا يُختم**
+      // المستند ويُعلَن الفرق — فمستندٌ مختوم يخالف الدفتر أسوأ من مستندٍ لم يُختم.
+      const recomputed = computeDocumentTotals(
+        invoice.lines.map((l) => ({ quantity: Number(l.quantity), unitPrice: Number(l.unitPrice), taxRate: Number(l.taxRate) })),
+      );
+      const stored = { subtotal: Number(invoice.subtotal), taxTotal: Number(invoice.taxTotal), total: Number(invoice.total) };
+      for (const key of ['subtotal', 'taxTotal', 'total'] as const) {
+        if (recomputed[key] !== stored[key]) {
+          throw new ConflictException(
+            `الفاتورة ${invoice.no}: ${key} المخزَّن ${stored[key]} لا يطابق المحسوب من بنودها ${recomputed[key]} — لا تُختم حتى تُصحَّح`,
+          );
+        }
+      }
 
       const xml = buildUnsignedInvoiceXml({
         number: invoice.no,

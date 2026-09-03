@@ -15,7 +15,16 @@
  *    invoice hash excludes, so hashing this document *before* they exist gives
  *    the same digest as applying ZATCA's XPath removals afterwards, without
  *    needing an XPath engine. `xades.util.ts` inserts them after hashing.
+ *
+ * **كنسة التدوير (قرار المالك 2026-09-03):** كل مبلغٍ هنا يمرّ من سياسة التدوير
+ * المركزية (`formatMoney`) ومجاميعُ البنود والنِّسَب من `computeDocumentTotals` —
+ * **الدالة نفسها التي يحسب بها الدفتر** — فلا يفترق المستند المختوم عن المرحَّل.
+ * كان هذا الملف يدوّر بـ`Math.round` و`toFixed` الخام، ولـ`toFixed` تدويرٌ يخالف
+ * `Math.round` عند الأنصاف السالبة (إشعارٌ دائن)، فكان الفرق هللةً لا تُقفل.
  */
+
+import { formatMoney } from '../../common/money/rounding';
+import { computeDocumentTotals, lineNet, lineTax } from '../../common/money/totals';
 
 export interface UblInvoiceLine {
   description: string;
@@ -113,9 +122,10 @@ function esc(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Money is always two decimals in UBL, regardless of the currency. */
+/** Money is always two decimals in UBL, regardless of the currency — rounded by
+ * the central policy first, then formatted; never `toFixed` on a raw value. */
 function money(value: number): string {
-  return value.toFixed(2);
+  return formatMoney(value);
 }
 
 function quantity(value: number): string {
@@ -163,8 +173,9 @@ function partyXml(tag: string, party: UblParty): string {
 }
 
 function lineXml(line: UblInvoiceLine, index: number, currency: string): string {
-  const lineExtension = Math.round(line.quantity * line.unitPrice * 100) / 100;
-  const lineTax = Math.round(lineExtension * (line.taxRate / 100) * 100) / 100;
+  // نفس صافي البند وضريبته اللذين يبني بهما الدفتر مجاميعه — لا حسابٌ ثانٍ هنا.
+  const lineExtension = lineNet(line);
+  const lineTaxAmount = lineTax(line);
 
   // S = standard rate, Z = zero-rated. A zero-rate line additionally needs an
   // exemption reason, which our data model does not capture yet.
@@ -176,8 +187,8 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
     `<cbc:InvoicedQuantity unitCode="PCE">${quantity(line.quantity)}</cbc:InvoicedQuantity>` +
     `<cbc:LineExtensionAmount currencyID="${esc(currency)}">${money(lineExtension)}</cbc:LineExtensionAmount>` +
     '<cac:TaxTotal>' +
-    `<cbc:TaxAmount currencyID="${esc(currency)}">${money(lineTax)}</cbc:TaxAmount>` +
-    `<cbc:RoundingAmount currencyID="${esc(currency)}">${money(lineExtension + lineTax)}</cbc:RoundingAmount>` +
+    `<cbc:TaxAmount currencyID="${esc(currency)}">${money(lineTaxAmount)}</cbc:TaxAmount>` +
+    `<cbc:RoundingAmount currencyID="${esc(currency)}">${money(lineExtension + lineTaxAmount)}</cbc:RoundingAmount>` +
     '</cac:TaxTotal>' +
     '<cac:Item>' +
     `<cbc:Name>${esc(line.description)}</cbc:Name>` +
@@ -225,21 +236,14 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
         '</cac:PaymentMeans>'
       : '';
 
-  // Tax is reported per category. One category per distinct rate keeps the
-  // subtotals reconcilable line by line.
-  const byRate = new Map<number, { taxable: number; tax: number }>();
-  for (const line of input.lines) {
-    const taxable = Math.round(line.quantity * line.unitPrice * 100) / 100;
-    const tax = Math.round(taxable * (line.taxRate / 100) * 100) / 100;
-    const bucket = byRate.get(line.taxRate) ?? { taxable: 0, tax: 0 };
-    bucket.taxable += taxable;
-    bucket.tax += tax;
-    byRate.set(line.taxRate, bucket);
-  }
+  // Tax is reported per category — one category per distinct rate, the
+  // taxable amount being the sum of that rate's rounded line nets and the tax
+  // being taxable × rate rounded once (BR-S-08/09), exactly as the ledger does.
+  const { byRate } = computeDocumentTotals(input.lines);
 
-  const subtotals = [...byRate.entries()]
+  const subtotals = byRate
     .map(
-      ([rate, { taxable, tax }]) =>
+      ({ rate, taxable, tax }) =>
         '<cac:TaxSubtotal>' +
         `<cbc:TaxableAmount currencyID="${esc(currency)}">${money(taxable)}</cbc:TaxableAmount>` +
         `<cbc:TaxAmount currencyID="${esc(currency)}">${money(tax)}</cbc:TaxAmount>` +

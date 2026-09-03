@@ -1,3 +1,4 @@
+import { round2 } from '../common/money/rounding';
 const CYCLE_STEP_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
 
 /** Splits `value` evenly across installments stepped by `cycle`, with any
@@ -18,8 +19,8 @@ export function generateInstallmentSchedule(start: Date, end: Date, value: numbe
 
   for (let i = 0; i < count; i++) {
     const isLast = i === count - 1;
-    const amount = isLast ? Math.round(remaining * 100) / 100 : base;
-    remaining = Math.round((remaining - amount) * 100) / 100;
+    const amount = isLast ? round2(remaining) : base;
+    remaining = round2(remaining - amount);
     schedule.push({ dueDate: new Date(dueDate), amount });
     dueDate.setMonth(dueDate.getMonth() + stepMonths);
   }

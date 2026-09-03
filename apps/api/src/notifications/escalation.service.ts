@@ -4,6 +4,7 @@ import { NotificationKind } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
+import { formatMoney } from '../common/money/rounding';
 
 /**
  * Late-rent escalation.
@@ -130,7 +131,7 @@ export class EscalationService {
           targetUserId: policy.escalateToUserId,
           title: `تأخر تحصيل ${late} يوم — ${i.contract.tenant}`,
           body:
-            `قسط بمبلغ ${Number(i.amount).toFixed(2)} مستحق منذ ${i.dueDate.toISOString().slice(0, 10)} ` +
+            `قسط بمبلغ ${formatMoney(Number(i.amount))} مستحق منذ ${i.dueDate.toISOString().slice(0, 10)} ` +
             `(${late} يوماً) على العقد ${i.contract.no} — ${i.contract.unit.property.name} وحدة ${i.contract.unit.unitNo}. ` +
             `تجاوز حد التصعيد المحدد (${threshold} يوم).`,
           linkScreen: 'contracts',
