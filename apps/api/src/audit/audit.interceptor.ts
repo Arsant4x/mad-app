@@ -5,7 +5,7 @@ import { Observable, tap } from 'rxjs';
 import { JwtPayload } from '../auth/types';
 import { REQUIRES_SCREEN_KEY } from '../common/tenant/requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from '../common/tenant/requires-action.decorator';
-import { AUDIT_ENTITY_FROM_RESULT_KEY } from './audit-entity-from-result.decorator';
+import { AUDIT_CREATED_ID_PATH_KEY, AUDIT_ENTITY_FROM_RESULT_KEY, idFromResultPath } from './audit-entity-from-result.decorator';
 import { NO_AUDIT_KEY } from './no-audit.decorator';
 import { AuditService } from './audit.service';
 
@@ -21,6 +21,30 @@ function isSecretKey(key: string): boolean {
 
 /** Copies a request body minus secrets, and minus anything large enough to
  * bloat the trail (file buffers, long text). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The parent this request acts on: the **first route parameter whose value is
+ * an id**, in the order the path declares them.
+ *
+ * This used to be `req.params.id ?? req.params.contractId` — two names written
+ * by hand. So attribution was decided by what a parameter was *called*, not by
+ * what the route does: `/contracts/:contractId/attachments` recorded the
+ * contract while `/purchases/:purchaseId/attachments` recorded the attachment,
+ * for the very same operation. Reading the value instead of the name removes
+ * the naming dependency, and skipping non-id segments keeps
+ * `/trash/:entity/:id/restore` pointing at the row rather than at the word
+ * "invoices". Falls back to the old two names, so a model whose id is not a
+ * uuid behaves exactly as before rather than silently changing.
+ */
+function parentIdFromParams(params: unknown): string | undefined {
+  if (!params || typeof params !== 'object') return undefined;
+  for (const value of Object.values(params as Record<string, unknown>)) {
+    if (typeof value === 'string' && UUID_RE.test(value)) return value;
+  }
+  return undefined;
+}
+
 function safeDetails(body: unknown): Record<string, unknown> | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const out: Record<string, unknown> = {};
@@ -82,11 +106,22 @@ export class AuditInterceptor implements NestInterceptor {
         const screen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]) ?? 'general';
         const action = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
 
-        const resultId = (result as { id?: string } | null)?.id;
-        const paramId = (req.params?.id as string | undefined) ?? (req.params?.contractId as string | undefined);
         // A handler may declare that the document it just created is the audited
         // entity — see AuditEntityFromResult for why the default is the reverse.
         const entityIsResult = this.reflector.getAllAndOverride<boolean | undefined>(AUDIT_ENTITY_FROM_RESULT_KEY, [context.getHandler(), context.getClass()]);
+        const resultId = idFromResultPath(result, 'id');
+        const paramId = parentIdFromParams(req.params) ?? (req.params?.id as string | undefined) ?? (req.params?.contractId as string | undefined);
+        const entityId = (entityIsResult ? resultId ?? paramId : paramId ?? resultId) ?? null;
+
+        // A row created *under* a parent's id would otherwise be unnameable: the
+        // entry says "something happened to contract X" while two payments on
+        // that lease look identical. Recording the child alongside keeps both
+        // questions answerable — "what happened to X" and "which child was it" —
+        // and costs no column, since details is already free-form. A handler
+        // whose created id is not on the result root declares where it lives.
+        const declaredPath = this.reflector.getAllAndOverride<string | undefined>(AUDIT_CREATED_ID_PATH_KEY, [context.getHandler(), context.getClass()]);
+        const created = declaredPath ? idFromResultPath(result, declaredPath) : resultId;
+        const createdId = created && created !== entityId ? created : null;
 
         this.audit
           .record({
@@ -97,10 +132,10 @@ export class AuditInterceptor implements NestInterceptor {
             screen,
             action: action ?? this.fallbackAction(method),
             entity: this.entityFromPath(req.path),
-            entityId: (entityIsResult ? resultId ?? paramId : paramId ?? resultId) ?? null,
+            entityId,
             method,
             path: req.path,
-            details: safeDetails(req.body),
+            details: createdId ? { ...safeDetails(req.body), createdId } : safeDetails(req.body),
             ip: req.ip ?? null,
           })
           .catch((e: Error) => this.logger.error(`Could not write audit entry for ${method} ${req.path}: ${e.message}`));
