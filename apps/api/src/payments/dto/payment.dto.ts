@@ -64,3 +64,39 @@ export class ReversePaymentDto {
   @IsString()
   reason?: string;
 }
+
+/**
+ * سندُ ردٍّ لمرتجع (`SPEC 30.8`، قرار المالك 2026-09-03): **سندٌ مستقل مربوطٌ بالإشعار الدائن**،
+ * لا عكسٌ لسند القبض — فالعكس يمحو واقعة، والدفتر وقائع لا حالات.
+ *
+ * القابل للردّ يحسبه الخادم: مجموع إشعارات الفاتورة ناقص ما يخصم متبقّيها غير المسدَّد
+ * (**الخصم من غير المسدَّدة إلزاميّ**) ناقص ما رُدّ سابقاً. `amount` اختياري = القابل للردّ كلّه.
+ */
+export class RefundDto extends CurrencyFieldsDto {
+  @IsString()
+  creditNoteId!: string;
+
+  @IsDateString()
+  date!: string;
+
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  amount?: number;
+
+  @IsIn(['CASH', 'BANK'])
+  method!: 'CASH' | 'BANK';
+
+  /** حساب البنك للتحويل، أو صندوق الفرع الذي يخرج منه النقد. */
+  @IsOptional()
+  @IsString()
+  bankId?: string;
+
+  @IsOptional()
+  @IsString()
+  reference?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}

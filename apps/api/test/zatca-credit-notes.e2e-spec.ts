@@ -250,7 +250,7 @@ describe('ZATCA credit notes (e2e)', () => {
       );
     }, 30000);
 
-    it('a credit note takes an ordinary position in the one hash chain', async () => {
+    it('[SPEC 30.11] a credit note takes an ordinary position in the one hash chain', async () => {
       const invoice = await makeInvoice();
       const a = await request(app.getHttpServer()).post(`/zatca/invoices/${invoice.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
       // Only an accepted document is handed on as the next PIH (see

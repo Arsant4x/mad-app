@@ -7,8 +7,8 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { postCustomerPaymentEntry } from '../journal/auto-posting.util';
-import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { AllocateDto, AllocationDto, CreatePaymentDto } from './dto/payment.dto';
+import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto } from './dto/payment.dto';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { id: true, name: true } },
@@ -238,6 +238,99 @@ export class PaymentsService {
     );
   }
 
+  /**
+   * سندُ ردٍّ لمرتجع (`SPEC 30.8`، قرار المالك 2026-09-03) — **سندٌ مستقل مربوطٌ بالإشعار الدائن**،
+   * لا عكسٌ لسند القبض: العكس يمحو واقعة، والدفتر وقائع لا حالات.
+   *
+   * **الخصم من غير المسدَّدة إلزاميّ:** القابل للردّ = مجموع إشعارات الفاتورة الأصلية − ما يخصم
+   * متبقّيها غير المسدَّد − ما رُدّ سابقاً على إشعاراتها. فإشعارٌ على فاتورةٍ لم تُسدَّد لا يردّ
+   * نقداً شيئاً حتى يُستهلك في الخصم. والمبلغ يُخزَّن **سالباً** (كالعكس) كي تصدق كل حسبةٍ تجمع
+   * الدفعات، و`kind = REFUND` و`refundsInvoiceId` يُبقيان الواقعة مسمّاةً لا عكساً مجهولاً.
+   * ترقيمُه سلسلةٌ مستقلة `RFD-` — فسند القبض والردّ لا يتزاحمان على عدّادٍ واحد.
+   */
+  refund(companyId: string, allowedBranchIds: string[] | 'all', dto: RefundDto) {
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const note = await tx.invoice.findUnique({
+          where: { id: dto.creditNoteId },
+          include: {
+            customer: { select: { id: true, name: true } },
+            relatedInvoice: { select: { id: true, total: true } },
+          },
+        });
+        if (!note || note.docType !== 'CREDIT_NOTE' || !note.relatedInvoice) throw new BadRequestException(MSG.refund_target_invalid);
+        assertBranchAllowed(allowedBranchIds, note.branchId);
+
+        if (dto.method === 'BANK' && !dto.bankId) throw new BadRequestException(MSG.bank_required);
+        const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
+        if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
+
+        const refundable = await this.refundableOf(tx, note.relatedInvoice);
+        if (refundable <= EPS) throw new BadRequestException(MSG.refund_nothing_refundable);
+        const amount = round2(dto.amount ?? refundable);
+        if (amount <= 0 || amount > refundable + EPS) {
+          throw new BadRequestException(formatMessage(MSG.refund_exceeds_refundable, { refundable: formatMoney(refundable), amount: formatMoney(amount) }));
+        }
+
+        const rate = Number(note.exchangeRate);
+        const date = new Date(dto.date);
+        const no = await this.nextPaymentNumber(tx, date, 'RFD');
+        const payment = await tx.payment.create({
+          data: {
+            companyId,
+            no,
+            kind: 'REFUND',
+            refundsInvoiceId: note.id,
+            customerId: note.customerId,
+            // فرع الردّ فرعُ الإشعار — لا فرعُ من ضغط الزر.
+            branchId: note.branchId,
+            date,
+            amount: -amount,
+            method: dto.method,
+            bankId: bank?.id,
+            reference: dto.reference,
+            notes: dto.notes ?? `ردّ مرتجع — إشعار دائن ${note.no}`,
+            currency: note.currency,
+            exchangeRate: rate,
+            baseAmount: round2(-toBaseAmount(amount, rate)),
+          } as unknown as Prisma.PaymentUncheckedCreateInput,
+        });
+
+        await this.postAndSettle(tx, companyId, payment.id, {
+          no,
+          customerName: note.customer.name,
+          date,
+          amount: -amount,
+          currency: note.currency,
+          exchangeRate: rate,
+          branchId: note.branchId,
+          bank,
+          baseReceivable: round2(-toBaseAmount(amount, rate)),
+          description: `ردّ مرتجع — سند ${no} — إشعار دائن ${note.no} — ${note.customer.name}`,
+          refund: true,
+        });
+
+        return tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE });
+      }),
+    );
+  }
+
+  /**
+   * القابل للردّ على فاتورةٍ أصلية (`SPEC 30.8`) — **من التخصيصات والإشعارات والردود، لا من حقل**:
+   * الإشعارات تخصم أولاً من غير المسدَّد، وما فاض هو ما يجوز ردُّه، ناقص ما رُدّ فعلاً.
+   */
+  private async refundableOf(tx: Prisma.TransactionClient, invoice: { id: string; total: Prisma.Decimal }): Promise<number> {
+    const paid = await this.allocatedFor(tx, invoice.id);
+    const credits = await tx.invoice.aggregate({ where: { relatedInvoiceId: invoice.id, docType: 'CREDIT_NOTE' }, _sum: { total: true } });
+    const creditsTotal = round2(Number(credits._sum.total ?? 0));
+    const unpaidBeforeCredits = round2(Number(invoice.total) - paid);
+    const offset = Math.min(creditsTotal, Math.max(0, unpaidBeforeCredits));
+    // الردود مخزَّنةٌ سالبة — فمجموعها سالبٌ ويُقلب.
+    const refunded = await tx.payment.aggregate({ where: { kind: 'REFUND', refundsInvoice: { relatedInvoiceId: invoice.id } }, _sum: { amount: true } });
+    const refundedTotal = round2(-Number(refunded._sum.amount ?? 0));
+    return round2(creditsTotal - offset - refundedTotal);
+  }
+
   // ---------------- الداخل ----------------
 
   /**
@@ -358,6 +451,8 @@ export class PaymentsService {
       baseReceivable: number;
       description: string;
       reversal?: boolean;
+      /** سندُ ردٍّ لمرتجع (`SPEC 30.8`) — مبلغه سالبٌ كالعكس، ومذكّرته تسمّيه. */
+      refund?: boolean;
     },
   ): Promise<void> {
     const entry = await postCustomerPaymentEntry(tx, companyId, {
@@ -368,6 +463,7 @@ export class PaymentsService {
       baseReceivable: p.baseReceivable,
       branchId: p.branchId,
       reversal: p.reversal,
+      refund: p.refund,
     });
     if (entry) await tx.payment.update({ where: { id: paymentId }, data: { journalEntryId: entry.id } });
 
@@ -393,10 +489,11 @@ export class PaymentsService {
     }
   }
 
-  /** تسلسل سندات القبض مستقل عن الفواتير — يُشتق من جدول الدفعات وحده. */
-  private async nextPaymentNumber(tx: Prisma.TransactionClient, paymentDate: Date): Promise<string> {
+  /** تسلسل سندات القبض مستقل عن الفواتير — يُشتق من جدول الدفعات وحده.
+   * وسندات الردّ سلسلةٌ ثانية `RFD-` (`SPEC 30.8`): لا يتزاحم المقبوض والمردود على عدّادٍ واحد. */
+  private async nextPaymentNumber(tx: Prisma.TransactionClient, paymentDate: Date, kind: 'RCV' | 'RFD' = 'RCV'): Promise<string> {
     const year = documentYear(paymentDate);
-    const prefix = `RCV-${year}-`;
+    const prefix = `${kind}-${year}-`;
     const rows = await tx.payment.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
     const maxSeq = rows.reduce((max, r) => {
       const n = parseInt(r.no.slice(prefix.length), 10);

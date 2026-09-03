@@ -5,17 +5,17 @@ import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { computeDocumentTotals } from '../common/money/totals';
-import { fulfilStockedLines } from './sale-fulfilment.util';
+import { fulfilStockedLines, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { postCogsEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { documentYear } from '../common/document-year.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 /** `relatedInvoice` so a credit note can show which invoice it adjusts
  * without a second round-trip — number only, never the whole document. */
@@ -403,7 +403,24 @@ export class InvoicesService {
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
           taxRate: Number(l.taxRate),
+          // إشعارٌ كامل = مرتجعٌ كامل سليم (`SPEC 30.4`): كل سطرٍ يشير إلى أصله ويعود إلى الرفّ.
+          returnsLineId: l.id,
+          returnCondition: 'GOOD' as const,
         }));
+
+      // `SPEC 30.2`: سطرُ مرتجعٍ يشير إلى سطرٍ من **هذه** الفاتورة الأصلية وحدها، وبكميةٍ لا
+      // تتجاوز ما فُوتر فيه — والتراكم عبر الإشعارات السابقة يفحصه `returnStockedLines` من
+      // الحركات. سطرٌ بلا `returnsLineId` إشعارٌ محاسبيّ لا يمسّ المخزون.
+      const originalLines = new Map(original.lines.map((l) => [l.id, l]));
+      for (const l of lines) {
+        if (!l.returnsLineId) continue;
+        const source = originalLines.get(l.returnsLineId);
+        if (!source) throw new BadRequestException(MSG.return_line_not_original);
+        if (l.quantity > Number(source.quantity) + 1e-9) {
+          throw new BadRequestException(formatMessage(MSG.return_exceeds_sold, { sold: Number(source.quantity), returned: 0, requested: l.quantity }));
+        }
+        if (source.productId && l.productId && l.productId !== source.productId) throw new BadRequestException(MSG.return_line_not_original);
+      }
       const totals = computeTotals(lines);
 
       // All credit notes on one invoice together must not exceed what it
@@ -524,11 +541,46 @@ export class InvoicesService {
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             taxRate: l.taxRate,
+            // رابطُ المرتجع وحالته على سطر الإشعار الدائن وحده (`SPEC 30.2` · `30.4`).
+            returnsLineId: note.docType === 'CREDIT_NOTE' ? (l.returnsLineId ?? null) : null,
+            returnCondition: note.docType === 'CREDIT_NOTE' ? (l.returnCondition ?? null) : null,
           })),
         },
       } as unknown as Prisma.InvoiceUncheckedCreateInput,
       include: INVOICE_INCLUDE,
     });
+
+    /**
+     * ⭐ **المرتجع السليم يعود إلى الرفّ وتُعكس تكلفته** (`SPEC 30.4`، موجة أ 2026-09-03) — من
+     * المالك الواحد نفسه لكتابتَي الحركة والتكلفة (`sale-fulfilment.util`)، لا من مسارٍ ثانٍ.
+     * قيدُ عكس التكلفة مستقلٌّ عن قيد الإشعار (الذي يعكس الإيراد والضريبة والذمّة) — كما أن قيد
+     * التكلفة مستقلٌّ عن قيد الفاتورة. وما لم يعد إلى الرفّ يُعلَن في `restocking.skipped` بسببه.
+     */
+    let restocking: ReturnResult | null = null;
+    if (note.docType === 'CREDIT_NOTE') {
+      try {
+        restocking = await returnStockedLines(tx, {
+          companyId,
+          branchId: created.branchId,
+          date: created.issueDate,
+          documentNo: created.no,
+          lines: created.lines,
+        });
+      } catch (e) {
+        if (e instanceof ReturnExceedsSoldError) {
+          throw new BadRequestException(formatMessage(MSG.return_exceeds_sold, { sold: e.sold, returned: e.alreadyReturned, requested: e.requested }));
+        }
+        throw e;
+      }
+      if (restocking.totalCost > 0) {
+        await postCogsReversalEntry(tx, companyId, {
+          branchId: created.branchId,
+          no: created.no,
+          date: created.issueDate,
+          baseCost: toBaseAmount(restocking.totalCost, rate),
+        });
+      }
+    }
 
     const entry = await note.post(tx, companyId, {
       branchId: created.branchId,

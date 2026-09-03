@@ -41,6 +41,13 @@ export class ReportsController {
     return this.reportsService.cashFlow(tenant.companyId, range);
   }
 
+  /** المرتجعات (30.9): كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ نقداً · ومن سجّله. */
+  @Get('returns')
+  @RequiresAction('view')
+  returns(@CurrentTenant() tenant: TenantContext, @Query() query: TrialBalanceDto) {
+    return this.reportsService.returns(tenant.companyId, query, query.branchId);
+  }
+
   /** ميزان المراجعة (10.4) — فترة + فرع اختياري. */
   /** أعمار ذمم العملاء (4.6) — شرائح التأخر إلى تاريخ التقرير. */
   @Get('receivables-aging')

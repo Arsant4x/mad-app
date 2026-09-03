@@ -5,6 +5,7 @@ import { Observable, tap } from 'rxjs';
 import { JwtPayload } from '../auth/types';
 import { REQUIRES_SCREEN_KEY } from '../common/tenant/requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from '../common/tenant/requires-action.decorator';
+import { AUDIT_ENTITY_FROM_RESULT_KEY } from './audit-entity-from-result.decorator';
 import { NO_AUDIT_KEY } from './no-audit.decorator';
 import { AuditService } from './audit.service';
 
@@ -83,6 +84,9 @@ export class AuditInterceptor implements NestInterceptor {
 
         const resultId = (result as { id?: string } | null)?.id;
         const paramId = (req.params?.id as string | undefined) ?? (req.params?.contractId as string | undefined);
+        // A handler may declare that the document it just created is the audited
+        // entity — see AuditEntityFromResult for why the default is the reverse.
+        const entityIsResult = this.reflector.getAllAndOverride<boolean | undefined>(AUDIT_ENTITY_FROM_RESULT_KEY, [context.getHandler(), context.getClass()]);
 
         this.audit
           .record({
@@ -93,7 +97,7 @@ export class AuditInterceptor implements NestInterceptor {
             screen,
             action: action ?? this.fallbackAction(method),
             entity: this.entityFromPath(req.path),
-            entityId: paramId ?? resultId ?? null,
+            entityId: (entityIsResult ? resultId ?? paramId : paramId ?? resultId) ?? null,
             method,
             path: req.path,
             details: safeDetails(req.body),

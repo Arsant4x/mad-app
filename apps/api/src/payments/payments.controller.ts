@@ -5,7 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { AllocateDto, CreatePaymentDto, ReversePaymentDto } from './dto/payment.dto';
+import { AllocateDto, CreatePaymentDto, RefundDto, ReversePaymentDto } from './dto/payment.dto';
 import { PaymentsService } from './payments.service';
 
 /**
@@ -44,6 +44,13 @@ export class PaymentsController {
   @RequiresAction('record')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePaymentDto) {
     return this.paymentsService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  }
+
+  /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): مستقلٌّ مربوطٌ بالإشعار الدائن — والقابل للردّ يحسبه الخادم. */
+  @Post('refund')
+  @RequiresAction('record')
+  refund(@CurrentTenant() tenant: TenantContext, @Body() dto: RefundDto) {
+    return this.paymentsService.refund(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   /** إعادة توزيع دفعة على فواتير أخرى — لا يمسّ مبلغها ولا قيدها. */
