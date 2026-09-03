@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
 import { fmt } from '../../lib/format';
+import { round2 } from '../../lib/money';
 
 interface CartLine {
   product: Product;
@@ -192,7 +193,7 @@ export function PosPage() {
   /** تقسيم: الكاشير يُدخل النقد، والبطاقة تكمل الباقي تلقائياً. */
   async function confirmSplit() {
     const cash = Number(splitCash || '0');
-    const card = Number((totals.total - cash).toFixed(2));
+    const card = round2(totals.total - cash);
     if (cash <= 0 || card <= 0) {
       setError('أدخل مبلغاً نقدياً أكبر من صفر وأقل من الإجمالي.');
       return;

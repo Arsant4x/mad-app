@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { computeDocumentTotals } from '../common/money/totals';
 import { documentYear } from '../common/document-year.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -11,11 +12,12 @@ import { CreateQuoteDto, QuoteLineDto, UpdateQuoteDto } from './dto/quote.dto';
 
 const QUOTE_INCLUDE = { customer: true, lines: true } as const;
 
-/** نفس رياضيات الفاتورة حرفياً — فما يراه العميل في العرض هو ما سيُفوتَر. */
+/** نفس رياضيات الفاتورة حرفياً — **الدالة نفسها** (`common/money/totals.ts`) لا نسخةٌ منها،
+ * فما يراه العميل في العرض هو ما سيُفوتَر هللةً بهللة. (كانت هنا نسخةٌ **غير مدوَّرة**
+ * تختلف عن الفاتورة عند التحويل — كنسة التدوير 2026-09-03.) */
 function computeTotals(lines: QuoteLineDto[]) {
-  const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
-  const taxTotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
-  return { subtotal, taxTotal, total: subtotal + taxTotal };
+  const { subtotal, taxTotal, total } = computeDocumentTotals(lines);
+  return { subtotal, taxTotal, total };
 }
 
 /** آخرُ يومِ الصلاحية مشمول: العرض يموت بعد نهاية يومه لا في صبيحته. */

@@ -4,6 +4,7 @@ import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
 import { createPayment, listOpenInvoices, type OpenInvoice, type PaymentMethod } from '../../api/payments';
 import { dfmt, fmt, today } from '../../lib/format';
+import { round2 } from '../../lib/money';
 
 /**
  * تسجيل سند قبض وتوزيعه على فواتير العميل المفتوحة.
@@ -46,7 +47,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
 
   const allocatedSum = useMemo(() => Object.values(alloc).reduce((s, v) => s + (parseFloat(v) || 0), 0), [alloc]);
   const paymentAmount = parseFloat(amount) || 0;
-  const unallocated = Math.round((paymentAmount - allocatedSum) * 100) / 100;
+  const unallocated = round2(paymentAmount - allocatedSum);
 
   /** توزيع تلقائي: الأقدم فالأقدم حتى ينفد المبلغ — يوفّر نقرات المحاسب. */
   function autoAllocate() {
@@ -56,8 +57,8 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
       if (left <= 0) break;
       const take = Math.min(left, inv.remaining);
       if (take > 0) {
-        next[inv.id] = String(Math.round(take * 100) / 100);
-        left = Math.round((left - take) * 100) / 100;
+        next[inv.id] = String(round2(take));
+        left = round2(left - take);
       }
     }
     setAlloc(next);

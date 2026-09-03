@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { roundTo } from '../common/money/rounding';
+import { roundTo, round2 } from '../common/money/rounding';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
@@ -286,9 +286,9 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
 
   // Rounded to the ledger's 2 decimals before comparing: a rate carries 6, so
   // an unrounded difference would post lines like 0.0000001 forever.
-  const cash = Math.round(p.baseNetAmount * 100) / 100;
-  const revenue = Math.round(p.baseExpectedAmount * 100) / 100;
-  const fxDifference = Math.round((cash - revenue) * 100) / 100;
+  const cash = round2(p.baseNetAmount);
+  const revenue = round2(p.baseExpectedAmount);
+  const fxDifference = round2(cash - revenue);
 
   const needCodes = ['1000', '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
@@ -347,11 +347,11 @@ export interface CustomerPaymentForPosting {
  * تُعيد null (تخطٍّ ناعم) إن لم تُهيَّأ الحسابات بعد — كسائر الترحيلات.
  */
 export async function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: CustomerPaymentForPosting) {
-  const cash = Math.round(p.baseCash * 100) / 100;
-  const receivable = Math.round(p.baseReceivable * 100) / 100;
+  const cash = round2(p.baseCash);
+  const receivable = round2(p.baseReceivable);
   if (cash === 0 && receivable === 0) return null;
 
-  const fxDifference = Math.round((cash - receivable) * 100) / 100;
+  const fxDifference = round2(cash - receivable);
   const needCodes = ['1000', '1200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
@@ -470,7 +470,7 @@ export interface DepositSettlementForPosting {
 export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: DepositSettlementForPosting) {
   if (s.baseAmount <= 0) return null;
 
-  const awarded = Math.round((s.againstReceivable + s.againstIncome) * 100) / 100;
+  const awarded = round2(s.againstReceivable + s.againstIncome);
   // Ejar refunding the tenant in full is a real, valid outcome that simply
   // never touches this company's books.
   if (!s.heldByCompany && awarded <= 0) return null;

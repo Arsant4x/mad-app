@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
-import { round2 } from '../common/money/rounding';
+import { round2, formatMoney } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -301,7 +301,7 @@ export class PaymentsService {
 
     const sum = round2(allocations.reduce((s, a) => s + a.amount, 0));
     if (sum > Math.abs(paymentAmount) + EPS) {
-      throw new BadRequestException(formatMessage(MSG.allocations_exceed_payment, { sum: sum.toFixed(2), amount: Math.abs(paymentAmount).toFixed(2) }));
+      throw new BadRequestException(formatMessage(MSG.allocations_exceed_payment, { sum: formatMoney(sum), amount: formatMoney(Math.abs(paymentAmount)) }));
     }
 
     for (const a of allocations) {
@@ -323,7 +323,7 @@ export class PaymentsService {
       const allocated = await this.allocatedFor(tx, a.invoiceId);
       const remaining = round2(Number(invoice.total) - allocated);
       if (a.amount > remaining + EPS) {
-        throw new BadRequestException(formatMessage(MSG.allocation_exceeds_remaining, { no: invoice.no, remaining: remaining.toFixed(2), amount: a.amount.toFixed(2) }));
+        throw new BadRequestException(formatMessage(MSG.allocation_exceeds_remaining, { no: invoice.no, remaining: formatMoney(remaining), amount: formatMoney(a.amount) }));
       }
       rates.set(a.invoiceId, { exchangeRate: Number(invoice.exchangeRate) });
     }

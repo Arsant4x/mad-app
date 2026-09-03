@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listPayments, reversePayment, type Payment } from '../../api/payments';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt, fmt } from '../../lib/format';
+import { round2 } from '../../lib/money';
 import { PaymentModal } from './PaymentModal';
 
 /**
@@ -100,7 +101,7 @@ export function PaymentsPage() {
             {rows.map((p) => {
               const allocated = allocatedOf(p);
               const isReversal = !!p.reversesId;
-              const onAccount = Math.round((Number(p.amount) - allocated) * 100) / 100;
+              const onAccount = round2(Number(p.amount) - allocated);
               return (
                 <tr key={p.id}>
                   <td className="num">

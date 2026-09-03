@@ -11,7 +11,7 @@
 | لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 68 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 6 (منها 6 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 139 / 856 |
+| اختباراتٌ موسومة / كل الاختبارات | 143 / 883 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -63,7 +63,7 @@
 | 5.4 | استثناء من الضريبة (`excludeFromVat`) | ✅ | ✅ | `api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.4] an excluded purchase never reduces the VAT owed, and is reported apart (e2e)<br>`api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.4] stores excludeFromVat on the purchase itself (e2e) |
 | 5.5 | مصروف مؤجَّل/تأسيس (`amortize`) | ✅ | ✅ | `api/test/incorporation-report.e2e-spec.ts` :: [SPEC 5.5] counts only establishment purchases, grouped by line item (e2e)<br>`api/test/incorporation-report.e2e-spec.ts` :: [SPEC 5.5] labels an amortized item with its period, and counts it (e2e)<br>`api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.5] amortization is establishment-only, and needs a month count (e2e) |
 | 5.6 | أوامر الشراء | ⬜ | ⬜ | — |
-| 6.1 | حساب ضريبة القيمة المضافة | ✅ | ✅ | `api/test/invoices-tenant-isolation.e2e-spec.ts` :: [SPEC 4.4 6.1] computes invoice totals server-side from lines, ignoring any client-submitted amounts (e2e)<br>`api/test/obligations-tenant-isolation.e2e-spec.ts` :: [SPEC 6.1] computes a VAT declaration from real invoice/purchase data for the given quarter (e2e)<br>`api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists (e2e) |
+| 6.1 | حساب ضريبة القيمة المضافة | ✅ | ✅ | `api/src/common/money/rounding.spec.ts` :: [SPEC 6.1] ⭐ حدّ IEEE-754 لا يخدعه: 1.005 تعطي 1.01 لا 1.00 — وكذلك على المقادير الكبيرة (وحدة)<br>`api/src/common/money/rounding.spec.ts` :: [SPEC 6.1] ⭐ متناظرٌ حول الصفر: الإشعار الدائن يردّ ما حصّلته الفاتورة بالضبط (وحدة)<br>`api/src/common/money/totals.spec.ts` :: [SPEC 6.1] ⭐ subtotal + taxTotal === total بالضبط، وsubtotal === Σ صوافي البنود، وtaxTotal === Σ ضريبة النِّسَب (وحدة)<br>`api/src/common/money/totals.spec.ts` :: [SPEC 6.1] ⭐ التناظر: إشعارٌ دائن ينفي البنود يعطي نفيَ المجاميع بالضبط — لا هللةٌ تبقى (وحدة)<br>`api/test/invoices-tenant-isolation.e2e-spec.ts` :: [SPEC 4.4 6.1] computes invoice totals server-side from lines, ignoring any client-submitted amounts (e2e)<br>`api/test/obligations-tenant-isolation.e2e-spec.ts` :: [SPEC 6.1] computes a VAT declaration from real invoice/purchase data for the given quarter (e2e)<br>`api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists (e2e) |
 | 6.2 | الإقرار الضريبي | 🟨 | ⬜ | — |
 | 6.3 | **ZATCA المرحلة 1 (QR)** | 🟨 | ⬜ | — |
 | 6.4 | **ZATCA المرحلة 2 (الربط والتوقيع)** | 🟨 | ⬜ | — |

@@ -4,6 +4,7 @@ import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import xpath from 'xpath';
 import { canonicalBytes, parseXml } from './canonicalize.util';
+import { formatMoney } from '../../common/money/rounding';
 
 /**
  * The XAdES enveloped signature ZATCA requires inside `ext:UBLExtensions`.
@@ -107,8 +108,8 @@ function buildPhase2Qr(input: {
     tlv(1, utf8(input.sellerName)),
     tlv(2, utf8(input.vatNumber)),
     tlv(3, utf8(input.issuedAt.toISOString())),
-    tlv(4, utf8(input.total.toFixed(2))),
-    tlv(5, utf8(input.vatAmount.toFixed(2))),
+    tlv(4, utf8(formatMoney(input.total))),
+    tlv(5, utf8(formatMoney(input.vatAmount))),
     // 6–9 are what makes this a phase-2 QR: they let anyone holding the code
     // verify the invoice against the certificate without contacting anyone.
     tlv(6, utf8(input.invoiceHash)),

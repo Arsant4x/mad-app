@@ -9,6 +9,7 @@ import {
   type DepositType,
 } from '../../api/contracts';
 import { fmt, dfmt } from '../../lib/format';
+import { round2 } from '../../lib/money';
 
 const TYPE_LABEL: Record<DepositType, string> = {
   RENT: 'تأمين إيجار',
@@ -246,7 +247,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
         (() => {
           const deposit = contract.deposits.find((d) => d.id === settlingId)!;
           const held = Number(deposit.amount);
-          const refund = Math.round((held - deducted) * 100) / 100;
+          const refund = round2(held - deducted);
           const over = deducted > held;
 
           return (

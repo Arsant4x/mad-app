@@ -5,6 +5,7 @@ import { BranchPicker } from '../../components/BranchPicker';
 import type { Purchase } from '../../api/purchases';
 import type { Supplier } from '../../api/suppliers';
 import { fmt, today } from '../../lib/format';
+import { round2 } from '../../lib/money';
 import i18n from '../../i18n';
 
 const CATEGORY_SUGGESTIONS = ['كهرباء', 'مياه', 'اتصالات وإنترنت', 'إيجار', 'رواتب', 'تكلفة مبيعات', 'مصروفات تأسيس', 'مصروفات أخرى'];
@@ -56,7 +57,7 @@ export function PurchaseModal({
 
   const preview = useMemo(() => {
     const sub = parseFloat(String(subtotal)) || 0;
-    const tax = exempt ? 0 : Math.round(sub * 0.15 * 100) / 100;
+    const tax = exempt ? 0 : round2(sub * 0.15);
     return { tax, total: sub + tax };
   }, [subtotal, exempt]);
 

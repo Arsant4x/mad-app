@@ -1,3 +1,5 @@
+import { toHalalas } from '../common/money/rounding';
+
 /**
  * عقد بوابة/جهاز الدفع (مستند §4): «طبقة تجريد تدعم أكثر من جهاز».
  *
@@ -33,7 +35,8 @@ export interface PaymentTerminalAdapter {
  */
 export class MockTerminalAdapter implements PaymentTerminalAdapter {
   async charge(_credentials: Record<string, string>, request: TerminalChargeRequest): Promise<TerminalChargeResult> {
-    const halalas = Math.round(request.amount * 100) % 100;
+    // بالسياسة المركزية لا بـ`Math.round` الخام: `1.13 * 100` في IEEE-754 ليس 113 دائماً.
+    const halalas = Math.abs(toHalalas(request.amount)) % 100;
     if (halalas === 13) {
       return { approved: false, declineReason: 'رفض تجريبي: المبلغ ينتهي بـ .13' };
     }

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { SendReminderDto, UpdateReminderPolicyDto } from './dto/reminder.dto';
+import { formatMoney } from '../common/money/rounding';
 
 /**
  * Rent-collection reminders.
@@ -130,7 +131,7 @@ export class RemindersService {
             daysSinceLast,
             message: renderTemplate(template, {
               tenant: i.contract.tenant,
-              amount: Number(i.amount).toFixed(2),
+              amount: formatMoney(Number(i.amount)),
               dueDate: i.dueDate.toISOString().slice(0, 10),
               unit: `${i.contract.unit.property.name} — ${i.contract.unit.unitNo}`,
               contractNo: i.contract.no,

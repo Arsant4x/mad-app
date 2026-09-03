@@ -1,3 +1,4 @@
+import { formatMoney } from '../common/money/rounding';
 /**
  * ZATCA Phase 1 ("Generation") QR code.
  *
@@ -25,7 +26,7 @@ export interface ZatcaQrInput {
 
 /** ZATCA expects amounts as plain decimal strings with 2 places. */
 function amount(value: number): string {
-  return value.toFixed(2);
+  return formatMoney(value);
 }
 
 function tlv(tag: number, value: string): Buffer {

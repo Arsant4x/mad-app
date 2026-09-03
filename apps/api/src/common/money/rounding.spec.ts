@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { roundTo, SCALE, type RoundingContext } from './rounding';
+import { formatMoney, roundTo, SCALE, toHalalas, type RoundingContext } from './rounding';
 
 /**
  * حارسان على سياسة التدوير — أحدهما سلوكي والآخر بنيوي.
@@ -92,24 +92,40 @@ const EXCLUSIONS: Record<string, string> = {
     'نظير `cost` بالعملة الأساسية — نفس الحجّة، ونفس المقياس، ويتحرّكان معاً.',
 };
 
-describe('سياسة التدوير — السلوك', () => {
+describe('سياسة التدوير — السلوك (بعد كنسة التدوير 2026-09-03)', () => {
   /**
-   * ⚠️ **التوكيدان التاليان يثبّتان عيباً قائماً لا سلوكاً مرغوباً.**
-   *
-   * الموجة توحّد مكان التدوير ولا تغيّر ناتجه — فلو تغيّر أحدهما بلا قصد
-   * سقط الاختبار وأعلن التغيير بدل أن يمرّ صامتاً في مبالغ فواتير.
-   * وإصلاحهما موجةٌ مستقلة تكنس كل مواضع التدوير معاً، منها ملفّا ZATCA.
+   * ⭐ العيبان اللذان كانا مثبَّتَين هنا «عيباً قائماً» صارا **سلوكاً مطلوباً**:
+   * الأول حدّ IEEE-754، والثاني عدم التناظر حول الصفر. والتوكيدات أدناه تحرس
+   * الإصلاح بالعكس — من أعاد `Math.round(x * 100) / 100` سقط هنا قبل أن يصل هللةٌ
+   * ضائعة إلى مرتجع.
    */
-  it('⚠️ عيبٌ مثبَّت: حدّ IEEE-754 يدوّر نزولاً — 1.005 تعطي 1.00 لا 1.01', () => {
-    expect(roundTo(1.005, 'LINE_AMOUNT')).toBe(1);
-    // ونفس ناتج التعريفات الأربعة التي حلّت الوحدة محلّها — لا انحراف.
-    expect(roundTo(1.005, 'LINE_AMOUNT')).toBe(Math.round(1.005 * 100) / 100);
+  it('[SPEC 6.1] ⭐ حدّ IEEE-754 لا يخدعه: 1.005 تعطي 1.01 لا 1.00 — وكذلك على المقادير الكبيرة', () => {
+    expect(roundTo(1.005, 'LINE_AMOUNT')).toBe(1.01);
+    expect(roundTo(2.675, 'LINE_AMOUNT')).toBe(2.68);
+    expect(roundTo(1234567.005, 'LINE_AMOUNT')).toBe(1234567.01); // إضافة EPSILON كانت ستفشل هنا
+    expect(roundTo(0.1 + 0.2, 'LINE_AMOUNT')).toBe(0.3);
+    // والدليل أن العيب كان قائماً: التعريف القديم يعطي 1.00
+    expect(Math.round(1.005 * 100) / 100).toBe(1);
   });
 
-  it('⚠️ عيبٌ مثبَّت: النصف السالب يُقرَّب نحو الصفر — الإشعار الدائن يخالف الفاتورة', () => {
-    expect(roundTo(1.005, 'LINE_AMOUNT')).toBe(1);
-    expect(roundTo(-1.005, 'LINE_AMOUNT')).toBe(-1);
-    // ⟵ لاحظ: القيمتان متساويتان في المقدار ومختلفتان في اتجاه التقريب.
+  it('[SPEC 6.1] ⭐ متناظرٌ حول الصفر: الإشعار الدائن يردّ ما حصّلته الفاتورة بالضبط', () => {
+    const samples = [1.005, 0.125, 0.375, 2.5, 0.015, 12345.675, 0.005, 1.115];
+    for (const x of samples) {
+      expect(roundTo(-x, 'LINE_AMOUNT')).toBe(-roundTo(x, 'LINE_AMOUNT'));
+    }
+    expect(roundTo(0.125, 'LINE_AMOUNT')).toBe(0.13);
+    expect(roundTo(-0.125, 'LINE_AMOUNT')).toBe(-0.13);
+    // والدليل أن العيب كان قائماً: Math.round(-12.5) = -12 و Math.round(12.5) = 13
+    expect(Math.round(-12.5)).toBe(-12);
+    expect(Math.round(12.5)).toBe(13);
+  });
+
+  it('لا صفرٌ سالب، والقيم غير المنتهية تعود كما هي لا مقنَّعة', () => {
+    expect(Object.is(roundTo(-0.001, 'LINE_AMOUNT'), 0)).toBe(true);
+    expect(Object.is(roundTo(-0, 'LINE_AMOUNT'), 0)).toBe(true);
+    expect(roundTo(Number.NaN, 'LINE_AMOUNT')).toBeNaN();
+    expect(roundTo(Number.POSITIVE_INFINITY, 'LINE_AMOUNT')).toBe(Number.POSITIVE_INFINITY);
+    expect(roundTo(1e-7, 'LINE_AMOUNT')).toBe(0); // صيغةٌ أسّية في String(value)
   });
 
   it('يدوّر ما دون النصف نزولاً وما فوقه صعوداً — السلوك القاعدي سليم', () => {
@@ -122,6 +138,25 @@ describe('سياسة التدوير — السلوك', () => {
     expect(roundTo(1.23456789, 'UNIT_PRICE')).toBe(1.234568);
     expect(roundTo(1.23456789, 'UNIT_COST')).toBe(1.234568);
     expect(roundTo(1.23456789, 'VAT_AMOUNT')).toBe(1.23);
+    expect(roundTo(1.0005, 'DERIVED_QUANTITY')).toBe(1.001); // نصفٌ على الخانة الثالثة
+  });
+
+  it('formatMoney يدوّر بالسياسة ثم ينسّق — لا toFixed على قيمةٍ خام', () => {
+    expect(formatMoney(1.005)).toBe('1.01');
+    expect(formatMoney(-1.005)).toBe('-1.01');
+    expect(formatMoney(-0.001)).toBe('0.00'); // لا "-0.00"
+    expect(formatMoney(280)).toBe('280.00');
+    expect(formatMoney(1.23456789, 'UNIT_PRICE')).toBe('1.234568');
+    // والدليل أن toFixed الخام كان يخالف Math.round على الأنصاف السالبة:
+    expect((-0.125).toFixed(2)).toBe('-0.13');
+    expect(Math.round(-0.125 * 100) / 100).toBe(-0.12);
+  });
+
+  it('toHalalas عددٌ صحيح موقَّع بعد التدوير — 1.13 تعطي 113 لا 112', () => {
+    expect(toHalalas(1.13)).toBe(113);
+    expect(toHalalas(-1.13)).toBe(-113);
+    expect(toHalalas(1.005)).toBe(101);
+    expect(toHalalas(0)).toBe(0);
   });
 });
 
@@ -190,5 +225,73 @@ describe('حارس: تعريف واحد للتدوير لا خمسة', () => {
     };
     walk(SRC_ROOT);
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * حارس كنسة التدوير (قرار المالك 2026-09-03) — **لا تدويرَ مالٍ خام خارج `common/money`**.
+ *
+ * التعريف الواحد لا يكفي: اثنان وخمسون موضعاً كانت تدوّر «بيدها» بـ`Math.round(x * 100) / 100`
+ * أو `Number(x.toFixed(2))` أو `x.toFixed(2)` في رسالة — بينها ملفّا ZATCA اللذان يختمان
+ * المستند. فمن أعاد واحداً منها أعاد الافتراقَ بين المختوم والمرحَّل بصمت. يمسح الخادم
+ * (`apps/api/src`) والواجهة (`apps/web/src` — فيها نسختها `lib/money.ts`) معاً، ويستثني
+ * ملفات الاختبار (تُثبت العيب القديم بذكره) وملفَّي السياسة نفسَيهما.
+ *
+ * حدّه معلَن: يحرس **الشكل** — `Math.round(x * 1000) / 10` للنِّسَب ليس مالاً ولا يُمسك،
+ * و`toFixed(1)` لأحجام الملفات كذلك. تدويرٌ ماليّ بشكلٍ آخر يُضاف هنا حين يُرى، لا يُفترض.
+ */
+describe('حارس كنسة التدوير: لا تدويرَ مالٍ خام خارج common/money', () => {
+  const WEB_ROOT = join(REPO_ROOT, 'apps', 'web', 'src');
+  const RAW_ROUNDING = [
+    { name: 'Math.round(x * 100) / 100', re: /Math\.round\([^\n;]*\*\s*100\s*\)\s*\/\s*100(?![\d.])/ },
+    { name: 'Number(x.toFixed(2))', re: /Number\([^\n;]*\.toFixed\(\s*2\s*\)\s*\)/ },
+    { name: 'x.toFixed(2)', re: /\.toFixed\(\s*2\s*\)/ },
+  ];
+  const POLICY_FILES = [join('common', 'money', 'rounding.ts'), join('lib', 'money.ts')];
+
+  function offendersIn(root: string): string[] {
+    const found: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) { if (entry !== 'node_modules' && entry !== 'dist') walk(path); continue; }
+        if (!/\.tsx?$/.test(entry) || /\.(spec|test)\.tsx?$/.test(entry)) continue;
+        if (POLICY_FILES.some((p) => path.endsWith(p))) continue;
+        const body = readFileSync(path, 'utf8');
+        for (const rule of RAW_ROUNDING) {
+          const m = rule.re.exec(body);
+          if (m) found.push(`${path.slice(REPO_ROOT.length + 1)} — ${rule.name}: ${m[0].slice(0, 60)}`);
+        }
+      }
+    };
+    walk(root);
+    return found;
+  }
+
+  it('⓪ السطح غير فارغ — وإلا فالحارس يفحص العدم', () => {
+    let files = 0;
+    const count = (dir: string) => { for (const e of readdirSync(dir)) { const p = join(dir, e); if (statSync(p).isDirectory()) { if (e !== 'node_modules') count(p); } else if (/\.tsx?$/.test(e)) files++; } };
+    count(SRC_ROOT);
+    count(WEB_ROOT);
+    expect(files).toBeGreaterThan(200);
+  });
+
+  it('⭐ الخادم: لا Math.round(x*100)/100 ولا toFixed(2) خارج السياسة', () => {
+    expect(offendersIn(SRC_ROOT)).toEqual([]);
+  });
+
+  it('⭐ الواجهة: لا Math.round(x*100)/100 ولا Number(x.toFixed(2)) خارج lib/money.ts', () => {
+    expect(offendersIn(WEB_ROOT)).toEqual([]);
+  });
+
+  it('الأنماط تمسك ما يجب وتترك ما يجب — مُثبَتةٌ بحالتَين', () => {
+    const hits = (s: string) => RAW_ROUNDING.filter((r) => r.re.test(s)).map((r) => r.name);
+    expect(hits('const a = Math.round(x * 100) / 100;')).toEqual(['Math.round(x * 100) / 100']);
+    expect(hits('const a = Number((x - y).toFixed(2));')).toEqual(['Number(x.toFixed(2))', 'x.toFixed(2)']);
+    expect(hits('`${n.toFixed(2)} ر.س`')).toEqual(['x.toFixed(2)']);
+    expect(hits('Math.round((part / total) * 1000) / 10')).toEqual([]); // نسبةٌ مئوية لا مال
+    expect(hits('Math.round(ms / 86400000)')).toEqual([]); // أيام
+    expect(hits('(bytes / 1048576).toFixed(1)')).toEqual([]); // حجم ملف
+    expect(hits('Math.round(amount * 1000) / 1000')).toEqual([]); // ثلاث خانات — ليس النمط المحروس (يُضاف حين يُرى)
   });
 });

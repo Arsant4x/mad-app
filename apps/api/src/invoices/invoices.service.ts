@@ -4,6 +4,7 @@ import { buildZatcaQr } from '../zatca/qr.util';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { computeDocumentTotals } from '../common/money/totals';
 import { fulfilStockedLines } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -25,19 +26,16 @@ const INVOICE_INCLUDE = { customer: true, lines: true, relatedInvoice: { select:
  * Always derive totals from the lines server-side — a client-submitted total is
  * never trusted (a client could otherwise bill an arbitrary amount).
  *
- * Rounded here, at the boundary, for two reasons. The columns are
- * `Decimal(18,2)`, so Postgres rounds anyway — leaving the raw float in memory
- * meant a value read back from the database no longer equalled the one just
- * computed, which is what made a *full* credit note (identical lines) look
- * like it exceeded its invoice. And `total` is built from the already-rounded
- * parts rather than rounded independently, so `subtotal + taxTotal === total`
- * exactly — the invoice XML states all three, and ZATCA rejects a document
- * whose monetary totals disagree by a hallala.
+ * **كنسة التدوير (قرار المالك 2026-09-03):** المجاميع تُحسب في `common/money/totals.ts`
+ * بالطريقة نفسها التي يبني بها `zatca/ubl/invoice-xml.util.ts` المستندَ المختوم —
+ * صافي كل بندٍ مدوَّراً، ثم الوعاء لكل نسبة، ثم ضريبة النسبة مدوَّرةً مرةً واحدة.
+ * كانت هذه الدالة تجمع البنود غير مدوَّرة ثم تدوّر المجموع، فاختلفت عن المستند
+ * بهللةٍ على بنودٍ ثلاثيةٍ مثل `0.335` — **بنفس سياسة التدوير**. الآن الدفتر
+ * والمستند دالةٌ واحدة، و`subtotal + taxTotal === total` بالضبط.
  */
 export function computeTotals(lines: InvoiceLineDto[]) {
-  const subtotal = round2(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0));
-  const taxTotal = round2(lines.reduce((sum, l) => sum + l.quantity * l.unitPrice * (l.taxRate / 100), 0));
-  return { subtotal, taxTotal, total: round2(subtotal + taxTotal) };
+  const { subtotal, taxTotal, total } = computeDocumentTotals(lines);
+  return { subtotal, taxTotal, total };
 }
 
 @Injectable()
