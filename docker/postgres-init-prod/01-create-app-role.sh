@@ -1,4 +1,6 @@
 #!/bin/bash
+# اللغة تُضبط أولاً — §8.7 الوجه السادس. ويحرسه `locale-gate.spec.ts`.
+export LC_ALL=C.UTF-8
 # Production twin of docker/postgres-init/01-create-app-role.sql, as a shell
 # script so the app role's password comes from the environment instead of
 # being committed. Same security reasoning: the bootstrap POSTGRES_USER is a
