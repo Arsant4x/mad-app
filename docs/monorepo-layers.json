@@ -1,0 +1,158 @@
+{
+  "_comment": "طبقات وحدات apps/api/src (القاعدة «أ» في CLAUDE.md §3 — قرار المالك 2026-09-03). التصنيف من ورشة ١٠٥ وكلاء (wf_15029ae7-6e8: مصنِّف ومعارض لكل وحدة وحكمٌ عند الخلاف) ومراجعةُ المالك تعلوه — يُعدَّل هنا بيد ويُقرأ بالحارس apps/api/src/common/import-direction.spec.ts. الرتبة: shared=0 · infra=core=1 · engine=2 · activity=3. baseline = الخروقات الموجودة يوم الاعتماد على مستوى الملف: تنقص ولا تزيد، وقيدٌ سُدّد يُحذف.",
+  "counts": {
+    "core": 32,
+    "infra": 6,
+    "activity": 7,
+    "engine": 6
+  },
+  "layers": {
+    "accounts": "core",
+    "activities": "core",
+    "attendance": "core",
+    "audit": "core",
+    "auth": "core",
+    "banks": "core",
+    "branches": "core",
+    "common": "infra",
+    "companies": "core",
+    "company-profile": "core",
+    "company-users": "core",
+    "contracts": "activity",
+    "currencies": "core",
+    "customers": "core",
+    "delegations": "core",
+    "deletion-requests": "core",
+    "employees": "core",
+    "export": "core",
+    "files": "infra",
+    "fiscal": "core",
+    "integrations": "core",
+    "inventory": "engine",
+    "invoices": "core",
+    "journal": "core",
+    "leaves": "core",
+    "maintenance": "activity",
+    "notifications": "core",
+    "obligations": "core",
+    "payments": "core",
+    "platform": "infra",
+    "pos": "engine",
+    "prisma": "infra",
+    "products": "engine",
+    "properties": "activity",
+    "purchases": "core",
+    "quotes": "engine",
+    "reminders": "activity",
+    "reports": "core",
+    "reservations": "activity",
+    "scripts": "core",
+    "subscription": "infra",
+    "suppliers": "core",
+    "support-access": "infra",
+    "tasks": "engine",
+    "templates": "core",
+    "transactions": "core",
+    "trash": "core",
+    "units": "activity",
+    "warehouses": "engine",
+    "warranties": "activity",
+    "zatca": "core"
+  },
+  "baseline": [
+    {
+      "file": "apps/api/src/invoices/sale-fulfilment.util.ts",
+      "to": "inventory",
+      "reason": "دَينٌ يوم الاعتماد 2026-09-03: core يستورد engine عبر ../inventory/costing.util"
+    }
+  ],
+  "ownerDecisions": {
+    "on": "2026-09-03",
+    "confirmed": "الأربع والأربعون عالية الثقة كما هي، وثمانيةٌ من العشر غير العالية كما صُنّفت.",
+    "overrides": [
+      {
+        "module": "tasks",
+        "from": "core",
+        "to": "engine",
+        "reason": "يُفعَّل بعلَم، والنظام يعمل بدونه — الفواتير والقيود لا تحتاج مهمة. الصلاحيات نواة، والمهام مستهلكٌ لها."
+      },
+      {
+        "module": "notifications",
+        "kept": "core",
+        "reason": "كل محرّك يُشعر، ولا محرّك يعمل بلا إشعار حين يلزم. القناة تُضبط لا الوجود."
+      }
+    ],
+    "firstMoveCandidate": {
+      "module": "inventory",
+      "reason": "محرّكٌ نقيّ يستورده اثنان فقط (invoices · warehouses) — يُنقل حين يُلمس لا قبله."
+    }
+  },
+  "exceptions": [
+    {
+      "name": "م٣ — اشتقاق أبعاد القيد (استثناءٌ مسمّى بحدّه، قرار المالك 2026-09-03)",
+      "scope": "apps/api/src/journal/journal-posting.util.ts → resolveDimensions()",
+      "knows": [
+        "Unit",
+        "Property"
+      ],
+      "reason": "الأبعاد تُشتقّ من unit/property لأنهما المصدر الوحيد للانتماء في الشيفرة اليوم — تصميمٌ معتمد (م٣). وحارسٌ يُسقط على تصميمٍ معتمد يُعطَّل بعد أسبوع.",
+      "limit": "resolveDimensions وحده يعرف unit/property داخل النواة. كل معرفةٍ عقاريةٍ أخرى في النواة دَينٌ مسجَّل أدناه، يُعمَّم حين يدخل نشاطٌ ثانٍ."
+    }
+  ],
+  "debt": [
+    {
+      "module": "journal",
+      "where": "apps/api/src/journal/auto-posting.util.ts",
+      "what": "دوال ترحيل الإيجار والتأمينات والخلو والمطالبات (postRentPaymentEntry وأخواتها) وثوابت حساباتها العقارية",
+      "settle": "تنتقل إلى نشاط العقارات وتستدعي النواة، حين يدخل نشاطٌ ثانٍ"
+    },
+    {
+      "module": "notifications",
+      "where": "apps/api/src/notifications/escalation.service.ts",
+      "what": "تصعيد تأخّر التحصيل يقرأ installment وcontract.unit.property",
+      "settle": "التصعيد يصير عاماً على «التزامٍ مستحق» والنشاط يزوّده"
+    },
+    {
+      "module": "reports",
+      "where": "apps/api/src/reports/reports.service.ts",
+      "what": "property-kpis وSQL خام على contract_installments وrent_payments",
+      "settle": "تقارير النشاط تُسجَّل من النشاط في سجلّ تقاريرٍ عام"
+    },
+    {
+      "module": "accounts",
+      "where": "apps/api/src/accounts/default-chart.ts",
+      "what": "مفرداتٌ عقارية في دليل الحسابات الافتراضي (تقبيل · تأمينات المستأجرين · إيرادات الإيجار)",
+      "settle": "الدليل الأساسي عام، والنشاط يضيف حساباته"
+    },
+    {
+      "module": "audit",
+      "where": "apps/api/src/audit/audit.service.ts",
+      "what": "أسماءٌ عربية لكيانات العقارات في سجلّ التدقيق",
+      "settle": "سجلّ أسماءٍ يزوّده النشاط"
+    },
+    {
+      "module": "trash",
+      "where": "apps/api/src/trash/trash.service.ts",
+      "what": "سجلّ الكيانات القابلة للاستعادة يسمّي properties/units",
+      "settle": "سجلٌّ يزوّده النشاط"
+    },
+    {
+      "module": "branches",
+      "where": "apps/api/src/branches/branches.service.ts",
+      "what": "propertyId على الفرع",
+      "settle": "يُراجَع عند تعميم الفروع"
+    },
+    {
+      "module": "currencies",
+      "where": "apps/api/src/currencies/currencies.service.ts",
+      "what": "عدُّ العقود عند فحص حذف عملة",
+      "settle": "فحص الاستعمال عبر سجلٍّ يزوّده النشاط"
+    },
+    {
+      "module": "delegations",
+      "where": "apps/api/src/delegations/permission-tree.ts",
+      "what": "عقدة realestate في شجرة الصلاحيات",
+      "settle": "الشجرة تُبنى من القطاعات المفعَّلة"
+    }
+  ]
+}
