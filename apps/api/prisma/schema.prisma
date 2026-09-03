@@ -953,7 +953,12 @@ model Purchase {
 
   date     DateTime  @db.Date
   dueDate  DateTime? @db.Date
+  /// اللافتة كما كتبها التاجر — للعرض. نصٌّ حرّ، فقد يكون فئةً لا يعرفها النظام.
   category String?
+  /// الرمز الذي **تُتَّخذ به القرارات** (الإطفاء · تقرير التأسيس · حساب الترحيل).
+  /// نصٌّ عربيّ حرفاً بحرف كان يقرّرها، فمسافةٌ لاحقة كانت تنقل الفاتورة من
+  /// تقريرٍ إلى لا شيء. المصدر الواحد: `common/purchase-categories.ts`.
+  categoryCode String?
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
@@ -999,6 +1004,7 @@ model Purchase {
   lines       PurchaseLine[]
 
   @@unique([companyId, no])
+  @@index([companyId, categoryCode])
   @@map("purchases")
 }
 

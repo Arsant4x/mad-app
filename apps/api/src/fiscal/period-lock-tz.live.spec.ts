@@ -262,7 +262,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
           no: 'PUR-PROBE-1',
           date: CLOSED_DATE,
           supplierName: 'مورّد فحص',
-          category: null,
+          categoryCode: null,
           baseSubtotal: 100,
           baseTaxAmount: 15,
           baseTotal: 115,

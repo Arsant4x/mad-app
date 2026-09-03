@@ -5,6 +5,7 @@ import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.ut
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { roundTo } from '../common/money/rounding';
+import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { receiveStockedLines } from './purchase-receipt.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
@@ -14,20 +15,20 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
 const VAT_RATE = 0.15;
 
-/** The one category whose expenses may be amortized — matches the mockup, which
- * only offers the amortization control when the category is establishment costs
- * (and maps that category to account 5500). */
-const INCORPORATION_CATEGORY = 'مصروفات تأسيس';
-
 /** Amortization is establishment-only and needs a real month count. Returns the
  * clean pair to store, or throws a localized error. `amortize=false` always
- * clears the month count so a stale value can't linger. */
-function resolveAmortization(amortize: boolean, category: string | null | undefined, months: number | null | undefined): {
+ * clears the month count so a stale value can't linger.
+ *
+ * Takes the **code**, not the label. The three places that used to decide off
+ * the Arabic string did not agree on whitespace — two trimmed, one did not — so
+ * `'مصروفات تأسيس '` passed this gate and then vanished from the incorporation
+ * report. See `common/purchase-categories.ts`. */
+function resolveAmortization(amortize: boolean, categoryCode: string | null | undefined, months: number | null | undefined): {
   amortize: boolean;
   amortizeMonths: number | null;
 } {
   if (!amortize) return { amortize: false, amortizeMonths: null };
-  if ((category ?? '').trim() !== INCORPORATION_CATEGORY || !months || months < 1) {
+  if (toPurchaseCategoryCode(categoryCode) !== AMORTIZABLE_CATEGORY || !months || months < 1) {
     throw new BadRequestException(MSG.purchase_amortize_requires_incorporation);
   }
   return { amortize: true, amortizeMonths: months };
@@ -75,7 +76,9 @@ export class PurchasesService {
     const exempt = dto.exempt ?? false;
     const { tax, total } = computeTax(dto.subtotal, exempt);
     const { currency, exchangeRate } = resolveCurrency(dto);
-    const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, dto.category, dto.amortizeMonths);
+    // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
+    const categoryCode = toPurchaseCategoryCode(dto.categoryCode ?? dto.category);
+    const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, categoryCode, dto.amortizeMonths);
     // يُحسب **قبل** المعاملة: خطأُ المطابقة يُردّ قبل أن يُكتب صفٌّ واحد.
     const stockedSubtotal = this.stockedSubtotal(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
@@ -92,7 +95,8 @@ export class PurchasesService {
             supplierId: dto.supplierId,
             date: new Date(dto.date),
             dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-            category: dto.category,
+            category: purchaseCategoryLabel(dto.categoryCode ?? dto.category),
+            categoryCode,
             subtotal: dto.subtotal,
             taxAmount: tax,
             exempt,
@@ -155,7 +159,7 @@ export class PurchasesService {
           no: created.no,
           date: created.date,
           supplierName: created.supplier.name,
-          category: created.category,
+          categoryCode: created.categoryCode,
           baseSubtotal: Number(created.baseSubtotal),
           baseTaxAmount: Number(created.baseTaxAmount),
           baseTotal: Number(created.baseTotal),
@@ -176,7 +180,12 @@ export class PurchasesService {
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;
       if (dto.date !== undefined) data.date = new Date(dto.date);
       if (dto.dueDate !== undefined) data.dueDate = new Date(dto.dueDate);
-      if (dto.category !== undefined) data.category = dto.category;
+      const categoryGiven = dto.categoryCode !== undefined || dto.category !== undefined;
+      if (categoryGiven) {
+        const raw = dto.categoryCode ?? dto.category;
+        data.category = purchaseCategoryLabel(raw);
+        data.categoryCode = toPurchaseCategoryCode(raw);
+      }
 
       if (dto.subtotal !== undefined || dto.exempt !== undefined) {
         const subtotal = dto.subtotal ?? Number(existing.subtotal);
@@ -208,8 +217,8 @@ export class PurchasesService {
       // Re-validate whenever amortize, its months, or the category changes: a
       // category moved away from establishment costs must invalidate an
       // amortization set earlier.
-      if (dto.amortize !== undefined || dto.amortizeMonths !== undefined || dto.category !== undefined) {
-        const effCategory = dto.category !== undefined ? dto.category : existing.category;
+      if (dto.amortize !== undefined || dto.amortizeMonths !== undefined || categoryGiven) {
+        const effCategory = categoryGiven ? (data.categoryCode as string | null) : existing.categoryCode;
         const effAmortize = dto.amortize ?? existing.amortize;
         const effMonths = dto.amortizeMonths ?? existing.amortizeMonths;
         const resolved = resolveAmortization(effAmortize, effCategory, effMonths);
@@ -222,7 +231,7 @@ export class PurchasesService {
       const affectsPosting =
         dto.supplierId !== undefined ||
         dto.date !== undefined ||
-        dto.category !== undefined ||
+        categoryGiven ||
         dto.subtotal !== undefined ||
         dto.exempt !== undefined;
       if (affectsPosting && existing.journalEntryId) {
@@ -238,7 +247,7 @@ export class PurchasesService {
         no: updated.no,
         date: updated.date,
         supplierName: updated.supplier.name,
-        category: updated.category,
+        categoryCode: updated.categoryCode,
         baseSubtotal: Number(updated.baseSubtotal),
         baseTaxAmount: Number(updated.baseTaxAmount),
         baseTotal: Number(updated.baseTotal),
@@ -262,7 +271,7 @@ export class PurchasesService {
   incorporationReport(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await tx.purchase.findMany({
-        where: { category: INCORPORATION_CATEGORY },
+        where: { categoryCode: AMORTIZABLE_CATEGORY },
         select: { incorpItem: true, baseTotal: true, amortize: true, amortizeMonths: true },
       });
 

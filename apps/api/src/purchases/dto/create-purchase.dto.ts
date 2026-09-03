@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 import { PurchaseLineDto } from './purchase-line.dto';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
@@ -15,9 +16,15 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsDateString()
   dueDate?: string;
 
+  /** لافتةٌ حرّة — تُقبل للتوافق مع عملاء قدامى، ويُشتقّ منها الرمز. */
   @IsOptional()
   @IsString()
   category?: string;
+
+  /** الرمز المعتمَد. `IsIn` يرفض المخترَع بدل أن يُرحَّل إلى المستقرّ صامتاً. */
+  @IsOptional()
+  @IsIn(PURCHASE_CATEGORY_CODES as string[])
+  categoryCode?: string;
 
   @IsNumber()
   @Min(0.01)

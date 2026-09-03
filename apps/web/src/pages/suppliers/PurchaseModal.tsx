@@ -8,7 +8,36 @@ import { fmt, today } from '../../lib/format';
 import { round2 } from '../../lib/money';
 import i18n from '../../i18n';
 
-const CATEGORY_SUGGESTIONS = ['كهرباء', 'مياه', 'اتصالات وإنترنت', 'إيجار', 'رواتب', 'تكلفة مبيعات', 'مصروفات تأسيس', 'مصروفات أخرى'];
+/**
+ * الفئات المعتمَدة — **الرمز هو ما يُرسَل**، واللافتة للعرض وحدها.
+ *
+ * الحقل يبقى حرّاً (التاجر يكتب فئته)، لكنّ ما يطابق لافتةً معروفة يُرسَل برمزه،
+ * فيقرّر الخادم به: جواز الإطفاء · تقرير التأسيس · حساب الترحيل. وكان القرار
+ * يُتَّخذ بمطابقة النصّ العربي، فمسافةٌ لاحقة تنقل الفاتورة من تقريرٍ إلى لا شيء.
+ *
+ * ⚠️ الرموز واللافتات مرآةٌ لـ`apps/api/src/common/purchase-categories.ts`،
+ * وحارسُه `purchase-categories.spec.ts` **يقرأ هذا الملف من القرص** ويثبت التطابق
+ * في الاتجاهين. فإضافة فئةٍ هنا بلا نظيرتها هناك تُسقط الحارس، والعكس.
+ */
+const CATEGORY_CODES = ['POWER', 'WATER', 'TELECOM', 'RENT', 'SALARIES', 'COGS', 'FORMATION', 'OTHER'] as const;
+
+const CATEGORY_LABELS: Record<(typeof CATEGORY_CODES)[number], string> = {
+  POWER: 'كهرباء',
+  WATER: 'مياه',
+  TELECOM: 'اتصالات وإنترنت',
+  RENT: 'إيجار',
+  SALARIES: 'رواتب',
+  COGS: 'تكلفة مبيعات',
+  FORMATION: 'مصروفات تأسيس',
+  OTHER: 'مصروفات أخرى',
+};
+
+const CATEGORY_SUGGESTIONS = CATEGORY_CODES.map((c) => CATEGORY_LABELS[c]);
+
+function categoryCodeOf(written: string): (typeof CATEGORY_CODES)[number] | undefined {
+  const v = written.trim();
+  return CATEGORY_CODES.find((c) => c === v || CATEGORY_LABELS[c] === v);
+}
 
 export function PurchaseModal({
   suppliers,
@@ -27,6 +56,7 @@ export function PurchaseModal({
     date: string;
     dueDate?: string;
     category?: string;
+    categoryCode?: string;
     subtotal: number;
     exempt: boolean;
     excludeFromVat: boolean;
@@ -53,7 +83,7 @@ export function PurchaseModal({
 
   // Amortization is offered only for establishment costs — matches the mockup,
   // which shows the control only when that category is selected.
-  const isIncorporation = category.trim() === 'مصروفات تأسيس';
+  const isIncorporation = categoryCodeOf(category) === 'FORMATION';
 
   const preview = useMemo(() => {
     const sub = parseFloat(String(subtotal)) || 0;
@@ -90,6 +120,7 @@ export function PurchaseModal({
         date,
         dueDate: dueDate || undefined,
         category: category.trim() || undefined,
+        categoryCode: categoryCodeOf(category),
         subtotal: sub,
         exempt,
         excludeFromVat,

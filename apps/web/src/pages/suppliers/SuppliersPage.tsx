@@ -106,6 +106,7 @@ export function SuppliersPage() {
     date: string;
     dueDate?: string;
     category?: string;
+    categoryCode?: string;
     subtotal: number;
     exempt: boolean;
     excludeFromVat: boolean;

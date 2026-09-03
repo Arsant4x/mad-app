@@ -28,7 +28,10 @@ export interface CreatePurchaseInput {
   branchId?: string;
   date: string;
   dueDate?: string;
+  /** لافتةٌ حرّة للعرض. */
   category?: string;
+  /** الرمز الذي يقرّر: الإطفاء · تقرير التأسيس · حساب الترحيل. */
+  categoryCode?: string;
   subtotal: number;
   exempt?: boolean;
   excludeFromVat?: boolean;
