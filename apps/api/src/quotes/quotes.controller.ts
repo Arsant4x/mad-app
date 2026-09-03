@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { AuditCreatedIdAt } from '../audit/audit-entity-from-result.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -60,6 +61,7 @@ export class QuoteConversionController {
 
   @Post(':id/convert')
   @RequiresAction('add')
+  @AuditCreatedIdAt('invoice.id')
   convert(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.quotesService.convert(tenant.companyId, tenant.allowedBranchIds, id);
   }
