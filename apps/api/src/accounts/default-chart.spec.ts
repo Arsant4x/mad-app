@@ -8,6 +8,7 @@ import {
   purchaseExpenseAccountCode,
   TENANT_DEPOSITS_ACCOUNT,
 } from '../journal/auto-posting.util';
+import { PURCHASE_CATEGORIES } from '../common/purchase-categories';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
 import { DEFAULT_CHART, DEFAULT_CHART_CODES } from './default-chart';
 
@@ -42,23 +43,47 @@ describe('الدليل الافتراضي يغطي كل ما يرحّل عليه
   });
 
   it('(أ) يغطي كل مستقرّ لخريطة فئات المشتريات — بما فيها فئة مجهولة', () => {
-    // الفئات مأخوذة من الخريطة الفعلية؛ والفئة المجهولة تُثبت أن المستقرّ
-    // الافتراضي (5300) موجود هو الآخر — وهو الأكثر إصابةً في الواقع.
-    const categories = ['رواتب', 'رواتب وأجور', 'تكلفة مبيعات', 'مواد خام', 'بضاعة', 'مصروفات أخرى', 'مصروفات تأسيس', 'فئة لا وجود لها', '', null, undefined];
+    // الفئات **تُقرأ من مصدرها** لا تُكتب هنا — قائمةٌ منسوخة تجعل الحارس يحرس
+    // نسخته لا النظام. واللافتات القديمة تُضاف صراحةً لأنها لم تعد في المصدر
+    // المعروض؛ والفئة المجهولة تُثبت أن المستقرّ (5300) موجود هو الآخر.
+    const categories: (string | null | undefined)[] = [
+      ...PURCHASE_CATEGORIES.map((c) => c.code),
+      ...PURCHASE_CATEGORIES.map((c) => c.label),
+      'رواتب وأجور',
+      'مواد خام',
+      'بضاعة',
+      'فئة لا وجود لها',
+      '',
+      null,
+      undefined,
+    ];
     const resolved = new Set(categories.map((c) => purchaseExpenseAccountCode(c)));
     expect(resolved.size).toBeGreaterThanOrEqual(5); // 5100..5500
     const missing = [...resolved].filter((code) => !DEFAULT_CHART_CODES.has(code));
     expect(missing).toEqual([]);
   });
 
-  it('(ب) يغطي كل رمز حساب مذكور نصاً في auto-posting.util.ts', () => {
-    const source = readFileSync(join(__dirname, '..', 'journal', 'auto-posting.util.ts'), 'utf8');
+  it('(ب) يغطي كل رمز حساب مذكور نصاً حيث تُكتب رموز الترحيل', () => {
+    // ⚠️ السطح **ملفّان**، لا ملفٌّ واحد. خريطة فئات الشراء خرجت من
+    // `auto-posting.util.ts` إلى مصدرها الواحد، فسقط عدُّ الرموز هنا تحت الحدّ
+    // الأدنى — **وهذا ما بُني له الحدّ**. فحين ينتقل المصدر ينتقل معه سطح
+    // الحارس، وإلا حرس نصف ما يظنّ أنه يحرسه (`§8.7`).
+    const sources = [
+      { path: join(__dirname, '..', 'journal', 'auto-posting.util.ts'), must: 'resolveAccountIds' },
+      { path: join(__dirname, '..', 'common', 'purchase-categories.ts'), must: 'PURCHASE_CATEGORIES' },
+    ];
 
     // توكيد السلامة أولاً: ملف مفقود أو أُعيدت تسميته يجب أن يُسقط الاختبار
     // صراحةً. بدونه يقرأ الاختبار فراغاً، فلا يجد رمزاً ناقصاً، فيمرّ — وهو
     // أسوأ من عدم وجوده أصلاً لأنه يمنح طمأنينة كاذبة.
-    expect(source.length).toBeGreaterThan(1000);
-    expect(source).toContain('resolveAccountIds');
+    const source = sources
+      .map((s) => {
+        const text = readFileSync(s.path, 'utf8');
+        expect(text.length).toBeGreaterThan(500);
+        expect(text).toContain(s.must);
+        return text;
+      })
+      .join('\n');
 
     const codes = [...new Set([...source.matchAll(/'(\d{4})'/g)].map((m) => m[1]))].sort();
     // الترحيل اليوم يمسّ 16 رمزاً. الحدّ الأدنى يحرس ضد تغيير صياغة يجعل
