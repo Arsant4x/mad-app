@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
+import { WRITEOFF_EXPENSE_ACCOUNT_CODE, WRITEOFF_EXPENSE_ACCOUNT_NAME } from '../journal/writeoff-account.util';
 
 /**
  * دليل الحسابات الافتراضي — المصدر الوحيد الذي تُولد به كل منشأة جديدة.
@@ -75,6 +76,9 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   { code: '5600', name: 'فروق عملة (ربح/خسارة)', type: 'expense' },
   // خارج 5300 عمداً: المؤجِّر يريد أن يرى ما تكلّفه المباني نفسها للتشغيل.
   { code: '5700', name: 'مصروفات صيانة', type: 'expense' },
+  // 5800 لا 5400 (قرار المالك 2026-09-03): خلطُ التلف بـ«مصروفات أخرى» **يُخفي
+  // رقماً يجب أن يُرى** — «كم أتلفتُ هذا الشهر؟» مؤشرُ سرقةٍ قبل الجرد.
+  { code: WRITEOFF_EXPENSE_ACCOUNT_CODE, name: WRITEOFF_EXPENSE_ACCOUNT_NAME, type: 'expense' },
 ];
 
 /** رموز الدليل الافتراضي — للمقارنة السريعة ولاختبار التغطية. */

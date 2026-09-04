@@ -52,6 +52,7 @@ export const MSG = {
   journal_entry_unbalanced: 'journal.entry_unbalanced',
   journal_line_account_not_found: 'journal.line_account_not_found',
   journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
+  writeoff_deemed_supply_not_built: 'journal.writeoff_deemed_supply_not_built',
 
   // customers / invoices
   customer_not_found: 'customers.not_found',
@@ -356,6 +357,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.journal_auto_entry_undeletable]: {
     ar: 'لا يمكن حذف قيد آلي مباشرة — احذف المستند المصدر (الفاتورة/فاتورة الشراء) بدلاً من ذلك',
     en: 'An automatic entry cannot be deleted directly — delete the source document (invoice/purchase) instead',
+  },
+  [MSG.writeoff_deemed_supply_not_built]: {
+    ar: 'سبب الشطب «{reason}» توريدٌ اعتباري يوجب ضريبة مخرجات، ومساره غير مبنيّ بعد — فلا يُرحَّل شطباً بلا ضريبة',
+    en: 'Write-off reason "{reason}" is a deemed supply that carries output VAT; that path is not built yet — it will not be posted as a plain write-off',
   },
 
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },

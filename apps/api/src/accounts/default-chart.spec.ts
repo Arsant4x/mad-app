@@ -71,6 +71,11 @@ describe('الدليل الافتراضي يغطي كل ما يرحّل عليه
     const sources = [
       { path: join(__dirname, '..', 'journal', 'auto-posting.util.ts'), must: 'resolveAccountIds' },
       { path: join(__dirname, '..', 'common', 'purchase-categories.ts'), must: 'PURCHASE_CATEGORIES' },
+      // ⚠️ والملفّان التاليان **ثقبٌ كان قائماً**: رموز المخزون وضريبة المدخلات
+      // خرجت إلى `inventory-accounts.util.ts` وحساب التلف وُلد في ملفه، **ولم
+      // ينتقل سطح الحارس معها** — وهي العلّة نفسها التي وثّقها التعليق أعلاه.
+      { path: join(__dirname, '..', 'journal', 'inventory-accounts.util.ts'), must: 'INVENTORY_ACCOUNT_CODE' },
+      { path: join(__dirname, '..', 'journal', 'writeoff-account.util.ts'), must: 'WRITEOFF_EXPENSE_ACCOUNT_CODE' },
     ];
 
     // توكيد السلامة أولاً: ملف مفقود أو أُعيدت تسميته يجب أن يُسقط الاختبار
@@ -86,9 +91,10 @@ describe('الدليل الافتراضي يغطي كل ما يرحّل عليه
       .join('\n');
 
     const codes = [...new Set([...source.matchAll(/'(\d{4})'/g)].map((m) => m[1]))].sort();
-    // الترحيل اليوم يمسّ 16 رمزاً. الحدّ الأدنى يحرس ضد تغيير صياغة يجعل
-    // النمط لا يلتقط شيئاً (رموز مبنية ديناميكياً مثلاً) فيمرّ الاختبار فارغاً.
-    expect(codes.length).toBeGreaterThanOrEqual(16);
+    // الترحيل اليوم يمسّ 19 رمزاً (كانت 16 قبل ضمّ ملفَّي الحسابات المُنشأة عند
+    // الحاجة). الحدّ الأدنى يحرس ضد تغيير صياغة يجعل النمط لا يلتقط شيئاً
+    // (رموز مبنية ديناميكياً مثلاً) فيمرّ الاختبار فارغاً.
+    expect(codes.length).toBeGreaterThanOrEqual(19);
 
     const missing = codes.filter((code) => !DEFAULT_CHART_CODES.has(code));
     expect({ missing, checked: codes.length }).toEqual({ missing: [], checked: codes.length });
