@@ -16,6 +16,8 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { NotificationsService } from '../notifications/notifications.service';
+import { deadlineView } from './note-deadline.util';
 
 /** `relatedInvoice` so a credit note can show which invoice it adjusts
  * without a second round-trip — number only, never the whole document. */
@@ -443,6 +445,7 @@ export class InvoicesService {
         numberKind: 'CN',
         reason: dto.reason,
         issueDate: dto.issueDate,
+        eventDate: dto.eventDate,
         lines,
         totals,
         // Nothing is receivable on a credit note — PAID keeps it out of
@@ -468,6 +471,7 @@ export class InvoicesService {
         numberKind: 'DN',
         reason: dto.reason,
         issueDate: dto.issueDate,
+        eventDate: dto.eventDate,
         lines: dto.lines,
         totals: computeTotals(dto.lines),
         status: 'DUE',
@@ -498,6 +502,8 @@ export class InvoicesService {
       numberKind: 'CN' | 'DN';
       reason: string;
       issueDate?: string;
+      /** يوم قبول الإعادة — تُحسب منه المهلة النظامية. راجع `note-deadline.util.ts`. */
+      eventDate?: string;
       lines: InvoiceLineDto[];
       totals: { subtotal: number; taxTotal: number; total: number };
       status: 'PAID' | 'DUE';
@@ -520,6 +526,8 @@ export class InvoicesService {
         docType: note.docType,
         relatedInvoiceId: original.id,
         adjustmentReason: note.reason,
+        // فارغٌ ⇒ الواقعة يوم الإصدار. ولا يُملأ رجعياً لما سبق (`ق-٥٣`).
+        adjustmentEventDate: note.eventDate ? new Date(note.eventDate) : issueDate,
         branchId: original.branchId,
         customerId: original.customerId,
         issueDate,
@@ -556,6 +564,28 @@ export class InvoicesService {
      * قيدُ عكس التكلفة مستقلٌّ عن قيد الإشعار (الذي يعكس الإيراد والضريبة والذمّة) — كما أن قيد
      * التكلفة مستقلٌّ عن قيد الفاتورة. وما لم يعد إلى الرفّ يُعلَن في `restocking.skipped` بسببه.
      */
+    /**
+     * ⚠️ **تنبيهُ التأخّر يُرفع ولا يمنع** (قرار المالك 2026-09-04، `م٥٤`).
+     *
+     * المستند يوجبه النظام، فردُّه بعد انقضاء المهلة **يزيد المخالفة لا يمنعها** —
+     * والتاجر المتأخّر ما زال ملزَماً بإصداره. فيصدر، ويُسجَّل التأخّر ليُرى.
+     * والمفتاح يحمل رقم المستند، فتكرارُ الحفظ لا يكرّر الجرس.
+     */
+    const deadline = deadlineView(created.adjustmentEventDate ?? created.issueDate, created.issueDate);
+    if (deadline.status === 'LATE') {
+      await NotificationsService.raise(tx, companyId, {
+        kind: 'NOTE_ISSUED_LATE',
+        dedupeKey: `note-late:${created.id}`,
+        title: `إشعارٌ صدر بعد مهلته — ${created.no}`,
+        body:
+          `واقعتُه ${created.adjustmentEventDate?.toISOString().slice(0, 10) ?? '—'} ومهلتُه ` +
+          `${deadline.deadline.toISOString().slice(0, 10)}، وصدر بعدها بـ${Math.abs(deadline.daysLeft)} يوماً. ` +
+          `والمهلة النظامية ١٥ يوماً من نهاية شهر الواقعة.`,
+        linkScreen: 'invoice',
+        linkId: created.id,
+      });
+    }
+
     let restocking: ReturnResult | null = null;
     if (note.docType === 'CREDIT_NOTE') {
       try {

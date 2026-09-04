@@ -16,6 +16,17 @@ export class CreateCreditNoteDto {
   @IsDateString()
   issueDate?: string;
 
+  /**
+   * **تاريخ الواقعة** — يوم قبول الإعادة، لا يوم كتابة المستند.
+   *
+   * والمهلة النظامية تُحسب منه (١٥ يوماً من نهاية شهره، م٥٤). فمن يسجّل إعادةً
+   * وقعت الشهر الماضي يظهر إشعارُه **متأخّراً** كما هو في الواقع، لا «في الموعد»
+   * لأن المستند كُتب اليوم. وحين يُهمَل فالواقعة يوم الإصدار.
+   */
+  @IsOptional()
+  @IsDateString()
+  eventDate?: string;
+
   /** Omitted = full credit, copying the original invoice's lines verbatim.
    * Provided = partial credit (e.g. one returned item of three). */
   @IsOptional()

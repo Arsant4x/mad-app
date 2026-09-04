@@ -48,6 +48,13 @@ export class ReportsController {
     return this.reportsService.returns(tenant.companyId, query, query.branchId);
   }
 
+  /** مهل الإشعارات (م٥٤): المتأخّر بوسمه، والمقترب قبل انقضائه. */
+  @Get('note-deadlines')
+  @RequiresAction('view')
+  noteDeadlines(@CurrentTenant() tenant: TenantContext, @Query() query: TrialBalanceDto) {
+    return this.reportsService.noteDeadlines(tenant.companyId, query, query.branchId);
+  }
+
   /** ميزان المراجعة (10.4) — فترة + فرع اختياري. */
   /** أعمار ذمم العملاء (4.6) — شرائح التأخر إلى تاريخ التقرير. */
   @Get('receivables-aging')

@@ -806,6 +806,14 @@ model Invoice {
   /// Credit/debit notes only (BR-KSA-17): why the adjustment was issued —
   /// travels to the authority as cac:PaymentMeans/cbc:InstructionNote.
   adjustmentReason String?
+  /// إشعارات فقط: **تاريخ الواقعة** — يوم قبول المورّد للإعادة، لا يوم كتابة
+  /// المستند. واللائحة تعلّق التعديل على قبول الإعادة (م٤٠(١)(د) و٤٠(٣))
+  /// وتوجب الإشعار **خلال ١٥ يوماً من نهاية شهر الواقعة** (م٥٤ بعد القرار
+  /// ٠١-٠٦-٢٤). فبلا هذا الحقل لا يُقاس التأخّر أصلاً: تاريخ المستند هو يوم
+  /// كتابته، ومقارنتُه بنفسه تعطي «في الموعد» دائماً.
+  /// فارغٌ ⇒ الواقعة يوم الإصدار — وهو حال كل إشعارٍ كُتب قبل هذا الحقل،
+  /// **ولا يُملأ رجعياً بتخمين** (نفس قاعدة `ق-٥٣`).
+  adjustmentEventDate DateTime? @db.Date
 
   /// Null when required accounts (1200/4100/2200) aren't set up yet for this
   /// company — the invoice itself is still created, just not posted (see
@@ -1739,6 +1747,10 @@ enum NotificationKind {
   RENT_ESCALATION
   /// Cover about to lapse on something still installed and still failing.
   WARRANTY_EXPIRING
+  /// إشعارٌ صدر بعد مهلته النظامية (١٥ يوماً من نهاية شهر الواقعة، م٥٤).
+  /// **تنبيهٌ لا حجز**: المستند يوجبه النظام، فمنعُه يزيد المخالفة لا يمنعها —
+  /// فيُصدَر ويُسجَّل التأخّر ليراه المالك، لا ليُمنع التاجر.
+  NOTE_ISSUED_LATE
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something

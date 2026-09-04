@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { deadlineView } from '../invoices/note-deadline.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
 
@@ -608,6 +609,74 @@ export class ReportsService {
    * وسنداتُ `REFUND` المربوطة بها، والفاعلُ من سجل التدقيق لا من حقلٍ على المستند. **عمودُ التلف
    * محفوظٌ بحالة السطر** (`DAMAGED`/`REPAIRABLE`) ولا مصروفَ له بعد — معلَّقٌ على بحث الضريبة.
    */
+  /**
+   * مهل الإشعارات (`م٥٤`) — **ما لا يُرى لا يُصدَر** (قرار المالك 2026-09-04).
+   *
+   * المهلة **تنبيهٌ لا حجز**: الإشعار مستندٌ يوجبه النظام، فحجبُه بعد انقضائها
+   * يزيد المخالفة لا يمنعها. فيُعرَض المتأخّر بوسمه، والمقترب قبل انقضائه.
+   *
+   * ⚠️ **وحدُّ هذا التقرير معلَن**: يقيس الإشعارات **الصادرة** — أي «هل صدر هذا
+   * في موعده». والنصف الآخر — **واقعةُ إعادةٍ قُبلت ولم يصدر لها إشعارٌ بعد** —
+   * لا يُقاس اليوم لأن الواقعة **لا تُسجَّل كياناً مستقلاً**؛ وبناؤه مسارٌ جديد
+   * يُنشئ مستنداً، وهو **موقوفٌ على حسم `ق-٣٩`** (ناقل الأحداث).
+   */
+  noteDeadlines(companyId: string, range: ReportRangeDto, branchId?: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const date = this.dateFilter(range);
+      const notes = await tx.invoice.findMany({
+        where: {
+          docType: { in: ['CREDIT_NOTE', 'DEBIT_NOTE'] },
+          ...(date ? { issueDate: date } : {}),
+          ...(branchId ? { branchId } : {}),
+        },
+        select: {
+          id: true,
+          no: true,
+          docType: true,
+          issueDate: true,
+          adjustmentEventDate: true,
+          adjustmentReason: true,
+          total: true,
+          customer: { select: { name: true } },
+          relatedInvoice: { select: { no: true } },
+        },
+        orderBy: { issueDate: 'asc' },
+      });
+
+      const rows = notes.map((n) => {
+        // فارغٌ ⇒ الواقعة يوم الإصدار: إشعارٌ كُتب قبل وجود الحقل، ولا يُخمَّن له
+        // تاريخٌ رجعيّ — فيقرأ «في الموعد» لأنه لا دليل على غيره، **وهذا معلَن**.
+        const eventDate = n.adjustmentEventDate ?? n.issueDate;
+        const view = deadlineView(eventDate, n.issueDate);
+        return {
+          id: n.id,
+          no: n.no,
+          docType: n.docType,
+          customer: n.customer?.name ?? null,
+          relatedInvoiceNo: n.relatedInvoice?.no ?? null,
+          reason: n.adjustmentReason,
+          total: Number(n.total),
+          eventDate: view.eventDate,
+          eventDateKnown: n.adjustmentEventDate !== null,
+          issueDate: n.issueDate,
+          deadline: view.deadline,
+          daysLeft: view.daysLeft,
+          status: view.status,
+        };
+      });
+
+      return {
+        rows,
+        totals: {
+          count: rows.length,
+          late: rows.filter((r) => r.status === 'LATE').length,
+          dueSoon: rows.filter((r) => r.status === 'DUE_SOON').length,
+          eventDateUnknown: rows.filter((r) => !r.eventDateKnown).length,
+        },
+      };
+    });
+  }
+
   returns(companyId: string, range: ReportRangeDto, branchId?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(range);

@@ -13,6 +13,12 @@ export class CreateDebitNoteDto {
   @IsDateString()
   issueDate?: string;
 
+  /** **تاريخ الواقعة** — تُحسب منه المهلة النظامية (م٥٤). كالإشعار الدائن، فالمادة
+   * تسوّي بين النوعين. وحين يُهمَل فالواقعة يوم الإصدار. */
+  @IsOptional()
+  @IsDateString()
+  eventDate?: string;
+
   /** REQUIRED, unlike the credit note's optional full-copy default: a debit
    * note bills additional amounts, and silently duplicating the whole
    * original invoice would be accidental double-billing, not a default. */
