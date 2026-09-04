@@ -319,6 +319,7 @@ model Company {
   purchaseLines       PurchaseLine[]
   inventoryLayers       InventoryLayer[]
   inventoryConsumptions InventoryConsumption[]
+  inventoryWriteOffs    InventoryWriteOff[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
   payments            Payment[]
@@ -476,6 +477,7 @@ model Branch {
   purchases        Purchase[]
   journalEntries   JournalEntry[]
   stockMovements   StockMovement[]
+  writeOffs        InventoryWriteOff[]
 
   quotes Quote[]
 
@@ -1104,6 +1106,7 @@ model Product {
   quoteLines    QuoteLine[]
   purchaseLines PurchaseLine[]
   inventoryLayers InventoryLayer[]
+  writeOffs       InventoryWriteOff[]
 
   /// Soft delete: set instead of removing the row, so it can be restored
   /// from the trash within 30 days. Reads filter it out centrally.
@@ -1450,6 +1453,7 @@ model JournalEntry {
   claimSettlements    ContractClaim[]   @relation("ClaimSettlement")
   keyMoneyEntries     ContractKeyMoney[] @relation("KeyMoney")
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
+  inventoryWriteOffs  InventoryWriteOff[]  @relation("InventoryWriteOffEntry")
 
   payments Payment[]
 
@@ -2847,6 +2851,7 @@ model Warehouse {
   archived  Boolean  @default(false)
 
   inventoryLayers InventoryLayer[]
+  writeOffs       InventoryWriteOff[]
 
   @@map("warehouses")
 }
@@ -2926,6 +2931,7 @@ model StockMovement {
 
   consumptions InventoryConsumption[]
   layers       InventoryLayer[]
+  writeOff     InventoryWriteOff? @relation("WriteOffMovement")
 
   @@index([expiryDate])
   @@index([companyId, productId, warehouseId])
@@ -2950,6 +2956,10 @@ enum MovementOrigin {
   TRANSFER
   /// رصيدٌ افتتاحي من الهجرة — طبقته تحمل تاريخ اقتنائها لا تاريخ الهجرة.
   OPENING
+  /// شطبُ تلفٍ أو فقد — **له مستندُه ([[InventoryWriteOff]]) فلا يُخلط بـ`MANUAL`**.
+  /// و`MANUAL` معرّفةٌ أعلاه بأنها «بلا مستند»، فوسمُ الشطب بها **يجعل الدفتر
+  /// يقول إن أحداً عدّل رصيداً** بينما الواقع أن بضاعةً أُعدمت باعتمادٍ موثَّق.
+  WRITEOFF
 }
 
 /// طريقة التكلفة — **تُخزَّن على الطبقة نفسها لا على إعدادٍ عام**.
@@ -3062,6 +3072,92 @@ model InventoryConsumption {
   @@index([companyId, layerId])
   @@index([companyId, movementId])
   @@map("inventory_consumptions")
+}
+
+/// حالة واقعة الشطب — **والاعتماد هو الحدث المحاسبي، لا التسجيل**.
+///
+/// من يستقبل البضاعة لا يُقرّر إعدامها (`SPEC 30.7`): الكاشير يسجّل بصلاحية
+/// `record`، وصاحب `review` يعتمد. **وقبل الاعتماد لا يخرج شيء من المخزون ولا
+/// يُرحَّل قيد** — فبضاعةٌ موسومةٌ للتلف ما تزال على الرفّ حتى يُقرَّر.
+enum WriteOffStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+/// ⭐ **واقعة شطب مخزون — تلفٌ أو فقدٌ أو سرقة** (`SPEC 30.5`).
+///
+/// ## لماذا كيانٌ مستقل لا علَمٌ على حركة
+///
+/// الشطب **قرارٌ يُعتمد** لا تسويةُ رصيد: له سببٌ إلزامي، وشاهدٌ سجّله، وآخر
+/// اعتمده، وتاريخُ وقوعٍ يسبق تسجيله. وحركةُ المخزون **أثرُه** لا هو — فمن
+/// يكتب الشطب حركةً بلا مستند يفقد كل ما سبق، **ويُفقد معه سؤال «كم أتلفنا
+/// ومن اعتمده»** الذي هو مؤشر سرقةٍ قبل الجرد.
+///
+/// ## ورمز السبب نصٌّ لا `enum` في القاعدة — عمداً
+///
+/// القائمة الحاكمة `apps/api/src/common/writeoff-reasons.ts`: كل رمزٍ يحمل
+/// **مساره الضريبي في تعريفه** (`ق-١٣٧`) وسنده النظامي. و`enum` في القاعدة
+/// كان سينسخ الأسماء بلا مساراتها، **فتصير نسختان تفترقان بصمت** — وأسوأ ما
+/// فيه أن الافتراق يقع في تصنيفٍ ضريبي لا في لافتة. والتحقّق يقع عند الكتابة
+/// من المصدر الواحد.
+///
+/// ⚠️ **والتاريخ تاريخُ الوقوع لا التسجيل** (`ق-١٢٩`): تلفٌ وقع أمس ويُسجَّل
+/// اليوم يُقيَّد بأمس، وإلا صارت تقارير التلف تقيس **نشاط الموظّف** لا الواقع.
+model InventoryWriteOff {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  /// سلسلةٌ مستقلة `WO-YYYY-NNNN` — لا يتزاحم الشطب مع الفواتير على عدّاد.
+  no String
+
+  qty Decimal @db.Decimal(18, 3)
+
+  /// رمزٌ من `WRITEOFF_REASONS` — يُتحقَّق منه عند الكتابة من المصدر الواحد.
+  reasonCode String
+  note       String?
+
+  /// تاريخ **وقوع** التلف.
+  occurredAt DateTime @db.Date
+
+  status WriteOffStatus @default(PENDING_REVIEW)
+
+  /// مَن سجّل ومَن اعتمد — **بلا مفتاحٍ أجنبي**، كسجل المهام: واقعةٌ لا
+  /// يُبطلها حذفُ من قام بها.
+  recordedById    String
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectionReason String?
+
+  /// تكلفة ما خرج من الطبقات فعلاً — **تُملأ عند الاعتماد ولا تُقدَّر قبله**.
+  baseCost Decimal? @db.Decimal(18, 2)
+
+  /// أثرا الاعتماد: الحركة والقيد. وكلاهما `@unique` — **فلا واقعةٌ تُعتمد
+  /// مرّتين** بحركتين أو قيدين.
+  movementId String?        @unique
+  movement   StockMovement? @relation("WriteOffMovement", fields: [movementId], references: [id], onDelete: Restrict)
+
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation("InventoryWriteOffEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, no])
+  @@index([companyId, status])
+  @@index([companyId, productId, warehouseId])
+  @@index([companyId, occurredAt])
+  @@map("inventory_write_offs")
 }
 
 /// A government-compliance checklist item — deliberately minimal, matching

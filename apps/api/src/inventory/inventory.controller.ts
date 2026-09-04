@@ -6,14 +6,20 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
+import { CreateWriteOffDto } from './dto/create-write-off.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
+import { RejectWriteOffDto } from './dto/reject-write-off.dto';
 import { InventoryService } from './inventory.service';
+import { WriteOffsService } from './write-offs.service';
 
 @Controller('inventory')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly writeOffs: WriteOffsService,
+  ) {}
 
   @Get('stock-levels')
   @RequiresAction('view')
@@ -46,5 +52,35 @@ export class InventoryController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.inventoryService.remove(tenant.companyId, id);
+  }
+
+  // ── واقعات الشطب (`SPEC 30.5` · `30.7`) ────────────────────────────────
+  //
+  // ⚠️ **القسمة هنا لا في الخدمة**: التسجيل بـ`record` والحسم بـ`review`.
+  // فمن يستقبل البضاعة يسجّل ما رآه، **ولا يقرّر إعدامها**. ووضعُ الفصل عند
+  // الباب يجعله **قابلاً للقراءة في سطرٍ واحد** لمن يراجع الصلاحيات.
+
+  @Get('write-offs')
+  @RequiresAction('view')
+  listWriteOffs(@CurrentTenant() tenant: TenantContext, @Query('status') status?: string) {
+    return this.writeOffs.list(tenant.companyId, tenant.allowedBranchIds, status);
+  }
+
+  @Post('write-offs')
+  @RequiresAction('record')
+  recordWriteOff(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateWriteOffDto) {
+    return this.writeOffs.create(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, dto);
+  }
+
+  @Post('write-offs/:id/approve')
+  @RequiresAction('review')
+  approveWriteOff(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.writeOffs.approve(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, id);
+  }
+
+  @Post('write-offs/:id/reject')
+  @RequiresAction('review')
+  rejectWriteOff(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RejectWriteOffDto) {
+    return this.writeOffs.reject(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, id, dto);
   }
 }
