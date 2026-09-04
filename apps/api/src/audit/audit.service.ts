@@ -142,6 +142,41 @@ export class AuditService {
     throw lastError;
   }
 
+  /**
+   * ⭐ **شهادةٌ تُكتب بمعاملة فاعلها** — بـ`tx` المستدعي لا بعميلٍ آخر (`ق-١٤٧`).
+   *
+   * ## متى تُستعمل هذه لا `record`
+   *
+   * `record` تكتب **بعد** الفعل وباتصالٍ مستقل، وتُعيد المحاولة، **ولا تُسقط
+   * طلب المستخدم** — وهو الصواب للمعترض: سطرٌ ضائع في سجلٍّ عامّ لا يُبطل
+   * فاتورةً صحيحة.
+   *
+   * **وهذه لِما لا يجوز أن يقع بلا شهادته**: فعلٌ حُفظ بلا أثرٍ يميّزه **هو
+   * الثغرة النظامية بعينها**. فتُكتب داخل المعاملة، **وفشلُها يُسقط العملية**
+   * كما في أحداث الامتثال (`ق-٣٩`).
+   *
+   * ⚠️ **ولا `set_config` هنا**: السياق مضبوطٌ على المعاملة نفسها من
+   * `runInTenantContext`، وإعادة ضبطه داخلها **عبثٌ يوهم بحمايةٍ ثانية**.
+   * ومن يستدعيها خارج سياق مستأجر **تردّه `RLS`** — وهو الصواب.
+   */
+  async recordWithinTx(tx: Prisma.TransactionClient, input: AuditEntryInput): Promise<void> {
+    await tx.auditLog.create({
+      data: {
+        companyId: input.companyId,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        actorName: input.actorName,
+        screen: input.screen,
+        action: input.action,
+        entity: input.entity,
+        entityId: input.entityId,
+        summary: buildSummary(input),
+        details: (input.details ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        ip: input.ip,
+      } as unknown as Prisma.AuditLogUncheckedCreateInput,
+    });
+  }
+
   /** One short-lived batch transaction: set the RLS variable, insert the row.
    * Deliberately NOT runInTenantContext — that opens an *interactive*
    * transaction held across client round-trips, and audit writes are frequent

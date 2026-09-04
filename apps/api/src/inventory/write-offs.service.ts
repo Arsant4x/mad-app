@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
@@ -54,8 +54,6 @@ const WRITE_OFF_INCLUDE = {
  */
 @Injectable()
 export class WriteOffsService {
-  private readonly logger = new Logger(WriteOffsService.name);
-
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly audit: AuditService,
@@ -215,26 +213,24 @@ export class WriteOffsService {
         } satisfies InventoryWrittenOffPayload,
       });
 
-      return { saved, selfApproved, recordedById: row.recordedById, provisionalQty: consumed.provisionalQty, baseCost: consumed.totalCost };
-    });
-
-    /**
-     * ⚖️ **والاعتماد الذاتي يُكتب حدثاً مميَّزاً في سجل التدقيق** (`ق-١٤٣`).
-     *
-     * المعترض يكتب `action: 'review'` كأي اعتماد — **فمن يدقّق كان عليه أن
-     * يقارن حقلين يدوياً في كل واقعة**. وفعلٌ باسمه (`self-review`) يجعلها
-     * **تُوجَد بحثاً**: `GET /audit-log?action=self-review`.
-     *
-     * ⚠️ **وخارج المعاملة عمداً**: السجل يشهد على **واقعةٍ ثبتت**، وكتابتُه
-     * داخلها (باتصالٍ آخر لا يتراجع معها) كانت ستُبقي شهادةً على فعلٍ لم يُحفظ.
-     *
-     * ⚠️ **ولا يُسقط الاعتماد إن تعذّرت كتابته**: البضاعة خرجت والقيد كُتب،
-     * وإلغاء ذلك لأجل سطرٍ في السجل **يخسر الحقيقتين معاً** — والفشل يُعلَن في
-     * السجلّ التقني، و`AuditService.record` تعيد المحاولة ثلاثاً أصلاً.
-     */
-    if (result.selfApproved) {
-      await this.audit
-        .record({
+      /**
+       * ⚖️ **والاعتماد الذاتي يُكتب حدثاً مميَّزاً — بمعاملته** (`ق-١٤٣` · `ق-١٤٧`).
+       *
+       * المعترض يكتب `action: 'review'` كأي اعتماد — **فمن يدقّق كان عليه أن
+       * يقارن حقلين يدوياً في كل واقعة**. وفعلٌ باسمه (`self-review`) يجعلها
+       * **تُوجَد بحثاً**: `GET /audit-log?action=self-review`.
+       *
+       * ⚠️ **وداخل المعاملة بـ`tx` — وفشلُه يُسقط الاعتماد** (حكم المالك
+       * 2026-09-04): كتبتُها أولاً خارجها بحجّة «شهادةٌ على فعلٍ لم يُحفَظ أسوأ
+       * من غيابها»، **والعكس أخطر**: **فعلٌ حُفظ بلا شهادة هو الثغرة النظامية
+       * بعينها**. فتُعامَل معاملةَ حدث الامتثال (`ق-٣٩`): تقع الثلاثة معاً —
+       * الحركة والقيد والشهادة — أو لا يقع شيء.
+       *
+       * **ولا مانعَ تقنيّ كان يمنعها**: `AuditLog` منطاقٌ بالمستأجر،
+       * و`app.company_id` مضبوطٌ على هذه المعاملة، فـ`RLS` تمرّ كما تمرّ خارجها.
+       */
+      if (selfApproved) {
+        await this.audit.recordWithinTx(tx, {
           companyId,
           actorType: actor.actorType,
           actorId,
@@ -242,14 +238,16 @@ export class WriteOffsService {
           screen: 'inventory',
           action: SELF_REVIEW_ACTION,
           entity: 'inventory-write-offs',
-          entityId: result.saved.id,
+          entityId: saved.id,
           method: 'POST',
-          path: `/inventory/write-offs/${result.saved.id}/approve`,
-          details: { no: result.saved.no, reasonCode: result.saved.reasonCode, baseCost: result.baseCost, recordedById: result.recordedById },
+          path: `/inventory/write-offs/${saved.id}/approve`,
+          details: { no: saved.no, reasonCode: saved.reasonCode, baseCost: consumed.totalCost, recordedById: row.recordedById },
           ip: null,
-        })
-        .catch((e: unknown) => this.logger.error(`تعذّر تسجيل الاعتماد الذاتي للواقعة ${result.saved.no}: ${String(e)}`));
-    }
+        });
+      }
+
+      return { saved, selfApproved, provisionalQty: consumed.provisionalQty };
+    });
 
     return { ...result.saved, selfApproved: result.selfApproved, provisionalQty: result.provisionalQty };
   }
