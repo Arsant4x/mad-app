@@ -108,7 +108,12 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
   afterAll(async () => {
     // شبكةُ أمانٍ ثانية على العلَم: لو سقط الاختبار قبل `finally` بقي مرفوعاً
     // على منشأة العرض — **فتسقط مجموعاتٌ لا علاقة لها بالتلف**.
-    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false });
+    const profile = await auth(request(app.getHttpServer()).get('/company-profile'));
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({
+      // `legalName` إلزاميّ في هذا المسار — ويُعاد كما هو لا كقيمةٍ جديدة.
+      legalName: profile.body?.legalName ?? profile.body?.orgName,
+      writeOffRequiresTwoPersons: false,
+    });
     if (cashierId) await auth(request(app.getHttpServer()).delete(`/company-users/${cashierId}`));
     if (templateId) await auth(request(app.getHttpServer()).delete(`/templates/${templateId}`));
     await app.close();
@@ -205,12 +210,20 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     const profile = await auth(request(app.getHttpServer()).get('/company-profile')).expect(200);
     expect(profile.body.writeOffRequiresTwoPersons).toBe(false); // الافتراضيّ معلَن، لا مفترَض
 
+    /**
+     * ⚠️ **`PATCH /company-profile` ليس تعديلاً جزئياً رغم اسمه**: `legalName`
+     * حقلٌ إلزامي فيه (`MinLength(1)`)، فطلبٌ بحقلٍ واحد يُرَدّ `400`. فيُعاد
+     * الاسم **كما قُرئ** — لا قيمةً جديدة تُغيّر حالةً تشترك فيها الحزمة.
+     * (اكتُشف بسقوطٍ في السير، لا بافتراض.)
+     */
+    const keepName = (on: boolean) => ({ legalName: profile.body.legalName ?? profile.body.orgName, writeOffRequiresTwoPersons: on });
+
     const created = await record({ qty: 1, note: 'تحت الاشتراط' }).expect(201);
     const { id } = created.body as { id: string };
     const before = await stockOf();
 
     try {
-      await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: true }).expect(200);
+      await auth(request(app.getHttpServer()).patch('/company-profile')).send(keepName(true)).expect(200);
       const blocked = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`));
       expect(blocked.status).toBe(403);
       expect(JSON.stringify(blocked.body)).toContain(created.body.no);
@@ -218,7 +231,7 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     } finally {
       // ⚠️ إعادةُ الإعداد شرطُ سلامة الحزمة كلّها: علَمٌ على مستوى المنشأة
       // يبقى مرفوعاً **يُسقط مجموعاتٍ أخرى تشترك في منشأة العرض نفسها**.
-      await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
+      await auth(request(app.getHttpServer()).patch('/company-profile')).send(keepName(false)).expect(200);
     }
 
     // وبعد الإطفاء يمرّ — فالمنع كان من الإعداد لا من عطل.
