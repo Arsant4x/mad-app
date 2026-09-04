@@ -56,6 +56,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'BankTransaction',
   'JournalEntry',
   'JournalLine',
+  'InventoryWriteOff',
   'Property',
   'Unit',
   'Contract',
