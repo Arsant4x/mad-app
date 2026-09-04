@@ -84,4 +84,10 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsBoolean()
   masterDataLocked?: boolean;
+
+  /// «يُشترط شخصان» على شطب المخزون — **مطفأٌ افتراضياً** (`ق-١٤٣`): حين
+  /// يُفعَّل، من سجّل الواقعة لا يعتمدها ولو ملك `review`.
+  @IsOptional()
+  @IsBoolean()
+  writeOffRequiresTwoPersons?: boolean;
 }

@@ -26,6 +26,7 @@ export class AuditController {
     @CurrentTenant() tenant: TenantContext,
     @Query('actorId') actorId?: string,
     @Query('screen') screen?: string,
+    @Query('action') action?: string,
     @Query('entityId') entityId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
@@ -34,6 +35,7 @@ export class AuditController {
     return this.auditService.list(tenant.companyId, {
       actorId,
       screen,
+      action,
       entityId,
       from,
       to,

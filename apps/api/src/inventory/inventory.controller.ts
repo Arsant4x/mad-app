@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantContext } from '../auth/types';
+import { JwtPayload, TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -74,8 +75,15 @@ export class InventoryController {
 
   @Post('write-offs/:id/approve')
   @RequiresAction('review')
-  approveWriteOff(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.writeOffs.approve(tenant.companyId, tenant.allowedBranchIds, tenant.profileId, id);
+  approveWriteOff(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    // الاسم يُمرَّر لأن الاعتماد الذاتي **يُكتب حدثاً باسم فاعله** — واسمُه
+    // يُخزَّن وقت الفعل لا يُحلّ لاحقاً (كما في بقية سجل التدقيق).
+    return this.writeOffs.approve(
+      tenant.companyId,
+      tenant.allowedBranchIds,
+      { id: tenant.profileId, actorType: tenant.actorType, name: user.username },
+      id,
+    );
   }
 
   @Post('write-offs/:id/reject')

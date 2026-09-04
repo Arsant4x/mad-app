@@ -194,6 +194,15 @@ model Company {
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
   masterDataLocked Boolean @default(false)
+  /// ⭐ **«يُشترط شخصان» على شطب المخزون — مطفأٌ افتراضياً** (`ق-١٤٣`).
+  ///
+  /// حين يُفعَّل: **من سجّل الواقعة لا يعتمدها**، ولو ملك `review`. ومطفأٌ
+  /// افتراضياً **لأن المنع الصارم يعطّل الميزة على متجرٍ صاحبُه وحده** — وهو
+  /// أكثر عملائنا، **وميزةٌ معطَّلة على الأغلبية ليست ضبطاً**.
+  ///
+  /// فالتشديد **خيارٌ معلوم** لمن عنده مستودعٌ وموظفون، والتطابق يبقى **مرئياً
+  /// للجميع** في تقرير التلف وسجل التدقيق — لا مدفوناً في حقلين.
+  writeOffRequiresTwoPersons Boolean @default(false)
   subStart        DateTime?
   subEnd          DateTime?
 

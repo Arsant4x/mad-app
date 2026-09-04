@@ -175,13 +175,19 @@ export class AuditService {
    * owner can answer "what did this employee do last week" — the question the
    * log exists for.
    */
-  list(companyId: string, filters: { actorId?: string; screen?: string; entityId?: string; from?: string; to?: string; limit?: number }) {
+  /**
+   * ⚠️ **ومرشّح `action` أُضيف لأن قراراً اشترط أن يُوجَد فعلٌ بحثاً**
+   * (`ق-١٤٣`، الاعتماد الذاتي): سجلٌّ يحمل الواقعة **ولا يُرشَّح عليها** يجعل
+   * المدقّق يقلّب الصفحات — **والقدرة على التسجيل ليست قدرةً على الإيجاد**.
+   */
+  list(companyId: string, filters: { actorId?: string; screen?: string; action?: string; entityId?: string; from?: string; to?: string; limit?: number }) {
     const take = Math.min(Math.max(filters.limit ?? 200, 1), 500);
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.auditLog.findMany({
         where: {
           ...(filters.actorId ? { actorId: filters.actorId } : {}),
           ...(filters.screen ? { screen: filters.screen } : {}),
+          ...(filters.action ? { action: filters.action } : {}),
           ...(filters.entityId ? { entityId: filters.entityId } : {}),
           ...(filters.from || filters.to
             ? {
