@@ -74,7 +74,9 @@ export class CompanyProfileService {
     const updated = await this.prisma.company.update({
       where: { id: companyId },
       data: {
-        legalName: dto.legalName.trim(),
+        // يُكتب إن أُرسل وحده — فالحقل الذي لم يُرسَل **يبقى كما هو**، وهو معنى
+        // `PATCH`. (وقبلها كان `dto.legalName.trim()` يفترض وجوده دائماً.)
+        ...(dto.legalName !== undefined ? { legalName: dto.legalName.trim() } : {}),
         vatNumber: emptyToNull(dto.vatNumber),
         crNumber: emptyToNull(dto.crNumber),
         phone: emptyToNull(dto.phone),

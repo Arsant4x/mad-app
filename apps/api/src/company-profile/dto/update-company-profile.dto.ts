@@ -2,9 +2,22 @@ import { IsBoolean, IsEmail, IsOptional, IsString, Matches, MinLength, ValidateI
 import { MSG } from '../../common/i18n/messages';
 
 export class UpdateCompanyProfileDto {
+  /**
+   * ⚠️ **اختياريٌّ في الإرسال، ممنوعٌ تفريغه حين يُرسَل** (`ق-١٤٦`).
+   *
+   * كان **إلزامياً** على مسارٍ اسمه `PATCH` — فطلبٌ يغيّر الهاتف وحده يُرَدّ
+   * `400` بلا سببٍ مفهوم، **ويُجبَر العميل على إعادة إرسال الاسم في كل حفظ**.
+   * وقِيس (2026-09-04): **من ٣٣ نوع `DTO` على مسارات `PATCH` كان هذا المخالف
+   * الوحيد** — والثلاثة الأخرى بحقولٍ إلزامية **أوامرُ حقلُها هو الأمر نفسه**
+   * (`archived` · `confirmed` · `to`).
+   *
+   * **والحماية الحقيقية بقيت**: `MinLength(1)` يمنع تفريغه بـ`''`، فالاسم
+   * **لا يُمحى** — وهو ما كان الإلزام يُظنّ أنه يحميه.
+   */
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  legalName!: string;
+  legalName?: string;
 
   /// 15 digits, must start and end with '3' (the Saudi VAT number format).
   /// @ValidateIf skips the @Matches check for '' (treated as "clear the

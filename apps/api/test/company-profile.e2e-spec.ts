@@ -119,8 +119,29 @@ describe('Company profile (e2e)', () => {
       .expect(400);
   });
 
-  it('rejects an update missing legalName', async () => {
-    await request(app.getHttpServer()).patch('/company-profile').set('Authorization', `Bearer ${tokenA}`).send({ phone: '0500000000' }).expect(400);
+  /**
+   * ⭐ **العقد الجديد** (`ق-١٤٦`): كان هذا التوكيد يقول `rejects an update
+   * missing legalName` — أي أن مساراً اسمه `PATCH` **يفرض إرسال الاسم في كل
+   * حفظ**. وقِيس أنه المخالف الوحيد بين ٣٣ نوع `DTO` على مسارات `PATCH`،
+   * فصُحّح **السلوك** لا الاسم.
+   *
+   * والحماية التي كان يُظنّ أن الإلزام يوفّرها **باقية**: الاسم لا يُفرَّغ.
+   */
+  it('[SPEC 2.1] يقبل تعديلاً جزئياً بلا legalName — ويترك الاسم كما هو', async () => {
+    const before = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenA}`).expect(200);
+
+    const patched = await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ phone: '0500000000' })
+      .expect(200);
+
+    expect(patched.body.phone).toBe('0500000000');
+    expect(patched.body.legalName).toBe(before.body.legalName);
+  });
+
+  it('🔴 ولا يُفرَّغ الاسم — فالاختياريّ في الإرسال ليس مباحاً في المحو', async () => {
+    await request(app.getHttpServer()).patch('/company-profile').set('Authorization', `Bearer ${tokenA}`).send({ legalName: '' }).expect(400);
   });
 
   it("keeps company B from seeing company A's profile data", async () => {
