@@ -76,7 +76,9 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
     const note = await makeNote(iso(old));
 
     const res = await auth(request(app.getHttpServer()).get('/notifications')).expect(200);
-    const list = (res.body.items ?? res.body) as { kind: string; linkId: string | null; title: string }[];
+    // المفتاح `notifications` — مقروءٌ من `NotificationsService.list` لا مخمَّناً.
+    const list = res.body.notifications as { kind: string; linkId: string | null; title: string }[];
+    expect(Array.isArray(list)).toBe(true);
     expect(list.some((n) => n.kind === 'NOTE_ISSUED_LATE' && n.title.includes(note.no))).toBe(true);
   });
 
