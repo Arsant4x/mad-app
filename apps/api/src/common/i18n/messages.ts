@@ -57,6 +57,7 @@ export const MSG = {
   writeoff_not_found: 'inventory.writeoff_not_found',
   writeoff_already_decided: 'inventory.writeoff_already_decided',
   writeoff_status_unknown: 'inventory.writeoff_status_unknown',
+  writeoff_two_persons_required: 'inventory.writeoff_two_persons_required',
 
   // customers / invoices
   customer_not_found: 'customers.not_found',
@@ -378,6 +379,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.writeoff_status_unknown]: {
     ar: 'حالة غير معروفة «{status}» — المتاح: {allowed}',
     en: 'Unknown status "{status}" — allowed: {allowed}',
+  },
+  [MSG.writeoff_two_persons_required]: {
+    ar: 'المنشأة تشترط شخصين على الشطب — فمن سجّل الواقعة {no} لا يعتمدها. اطلب اعتماد صاحب صلاحية آخر، أو أطفئ الاشتراط من إعدادات المنشأة',
+    en: 'This company requires two people for a write-off — whoever recorded {no} cannot approve it. Ask another authorised user to approve, or turn the requirement off in company settings',
   },
 
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },

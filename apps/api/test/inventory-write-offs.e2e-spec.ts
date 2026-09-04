@@ -106,6 +106,9 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
   }, 60000);
 
   afterAll(async () => {
+    // شبكةُ أمانٍ ثانية على العلَم: لو سقط الاختبار قبل `finally` بقي مرفوعاً
+    // على منشأة العرض — **فتسقط مجموعاتٌ لا علاقة لها بالتلف**.
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false });
     if (cashierId) await auth(request(app.getHttpServer()).delete(`/company-users/${cashierId}`));
     if (templateId) await auth(request(app.getHttpServer()).delete(`/templates/${templateId}`));
     await app.close();
@@ -161,6 +164,66 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     const again = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`));
     expect(again.status).toBe(409);
     expect(await stockOf()).toBe(before - 2);
+  });
+
+  /**
+   * ⚖️ **الاعتماد الذاتي — مسموحٌ، لكنه مرئيّ** (`ق-١٤٣`).
+   *
+   * القرار سمح به لأن منعَه **يعطّل الميزة على متجرٍ صاحبُه وحده**. وثمنُ
+   * السماح ثلاثة، وكلٌّ منها يُثبَت هنا: **عمودٌ في التقرير** · **حدثٌ يُوجَد
+   * بحثاً** · **وإعدادٌ يشدّد لمن أراد**.
+   */
+  it('🔴 الاعتماد الذاتي: عمودٌ في التقرير، وحدثٌ يُوجَد بحثاً، وإعدادٌ يمنعه لمن أراد', async () => {
+    const created = await record({ qty: 1, note: 'اعتمادٌ ذاتي' }).expect(201);
+    const { id, no } = created.body as { id: string; no: string };
+
+    // ① الاعتماد نفسه يُعلن أنه ذاتيّ — فلا يُستنتج من مقارنة حقلين.
+    const approved = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`)).expect(201);
+    expect(approved.body.selfApproved).toBe(true);
+
+    // ② وتقرير المرتجعات والتلف يحمله عموداً، ومعه المصروف لا الحالة وحدها.
+    const report = await auth(request(app.getHttpServer()).get('/reports/returns')).expect(200);
+    const row = (report.body.writeOffs as { no: string; selfApproved: boolean; cost: number; reason: string; recordedBy: string | null; reviewedBy: string | null }[]).find((w) => w.no === no);
+    expect(row).toBeDefined();
+    expect(row!.selfApproved).toBe(true);
+    expect(row!.cost).toBe(UNIT_COST);
+    expect(row!.reason).toBe(NO_ADJUSTMENT.label);
+    // والاسم يُحلّ للمالك أيضاً — ومعرّفه هو معرّف المنشأة لا معرّف موظّف.
+    expect(row!.recordedBy).not.toBeNull();
+    expect(row!.reviewedBy).toBe(row!.recordedBy);
+    expect(report.body.totals.selfApprovedWriteOffs).toBeGreaterThan(0);
+    expect(report.body.totals.writtenOffCost).toBeGreaterThanOrEqual(UNIT_COST);
+
+    // ③ وسجل التدقيق يجده **بحثاً** — لا بتقليب الصفحات ومقارنةٍ يدوية.
+    const trail = await auth(request(app.getHttpServer()).get('/audit-log?action=self-review')).expect(200);
+    const entry = (trail.body as { entityId: string | null; action: string; entity: string }[]).find((e) => e.entityId === id);
+    expect(entry).toBeDefined();
+    expect(`${entry!.action} · ${entry!.entity}`).toBe('self-review · inventory-write-offs');
+  });
+
+  it('🔴 وإعداد «يُشترط شخصان» يمنع الاعتماد الذاتي حين يُفعَّل — وهو مطفأٌ افتراضياً', async () => {
+    const profile = await auth(request(app.getHttpServer()).get('/company-profile')).expect(200);
+    expect(profile.body.writeOffRequiresTwoPersons).toBe(false); // الافتراضيّ معلَن، لا مفترَض
+
+    const created = await record({ qty: 1, note: 'تحت الاشتراط' }).expect(201);
+    const { id } = created.body as { id: string };
+    const before = await stockOf();
+
+    try {
+      await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: true }).expect(200);
+      const blocked = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`));
+      expect(blocked.status).toBe(403);
+      expect(JSON.stringify(blocked.body)).toContain(created.body.no);
+      expect(await stockOf()).toBe(before); // مُنع فعلاً — لا رفٌّ تحرّك
+    } finally {
+      // ⚠️ إعادةُ الإعداد شرطُ سلامة الحزمة كلّها: علَمٌ على مستوى المنشأة
+      // يبقى مرفوعاً **يُسقط مجموعاتٍ أخرى تشترك في منشأة العرض نفسها**.
+      await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
+    }
+
+    // وبعد الإطفاء يمرّ — فالمنع كان من الإعداد لا من عطل.
+    await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`)).expect(201);
+    expect(await stockOf()).toBe(before - 1);
   });
 
   it('🔴 الكاشير يسجّل ولا يقرّر — والرفض يحمل سببه (SPEC 30.7 خادمياً)', async () => {

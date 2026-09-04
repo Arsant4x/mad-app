@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { writeOffReason } from '../common/writeoff-reasons';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
@@ -748,11 +749,46 @@ export class ReportsService {
         };
       });
 
+      /**
+       * ⭐ **واقعات الشطب — بمصروفها لا بحالتها** (`SPEC 30.9`).
+       *
+       * كان عمود التلف يُعدّ **أسطراً موسومة** لأن الشطب لم يكن كياناً بعد.
+       * والآن له تكلفةٌ من الطبقات وقيدٌ في الدفتر، **فيُقرأ المبلغ لا العدّ**.
+       *
+       * ⚠️ **وعمود «سجّل = اعتمد» صريحٌ لا مستنتَج** (`ق-١٤٣`): الاعتماد الذاتي
+       * مسموحٌ افتراضياً — **فوجب أن يراه المالك بلا أن يقارن حقلين في كل صفّ**.
+       */
+      const writeOffRows = await tx.inventoryWriteOff.findMany({
+        where: { ...(date ? { occurredAt: date } : {}), ...(branchId ? { branchId } : {}) },
+        include: { product: { select: { name: true } }, warehouse: { select: { name: true } } },
+        orderBy: [{ occurredAt: 'asc' }, { no: 'asc' }],
+      });
+      const actorNames = await this.actorNames(tx, companyId, writeOffRows.flatMap((w) => [w.recordedById, w.reviewedById]));
+
+      const writeOffs = writeOffRows.map((w) => ({
+        id: w.id,
+        no: w.no,
+        date: w.occurredAt,
+        product: w.product.name,
+        warehouse: w.warehouse.name,
+        qty: Number(w.qty),
+        reasonCode: w.reasonCode,
+        reason: writeOffReason(w.reasonCode)?.label ?? w.reasonCode,
+        status: w.status,
+        cost: w.baseCost === null ? null : Number(w.baseCost),
+        recordedBy: actorNames.get(w.recordedById) ?? null,
+        reviewedBy: w.reviewedById ? (actorNames.get(w.reviewedById) ?? null) : null,
+        /** 🔴 **سجّل = اعتمد** — والمعتمَدة وحدها تحمله؛ المنتظِرة لم تُحسم بعد. */
+        selfApproved: w.status === 'APPROVED' && w.reviewedById !== null && w.reviewedById === w.recordedById,
+      }));
+      const approved = writeOffs.filter((w) => w.status === 'APPROVED');
+
       return {
         from: range.from ?? null,
         to: range.to ?? null,
         branchId: branchId ?? null,
         rows,
+        writeOffs,
         totals: {
           count: rows.length,
           total: round2(rows.reduce((s, r) => s + r.total, 0)),
@@ -760,9 +796,37 @@ export class ReportsService {
           restockedCost: round2(rows.reduce((s, r) => s + r.restockedCost, 0)),
           refunded: round2(rows.reduce((s, r) => s + r.refunded, 0)),
           damagedLines: rows.reduce((s, r) => s + r.damagedLines, 0),
+          /** كم أتلفنا فعلاً — **مبلغاً من الدفتر**، وهو سؤال `SPEC 30.9`. */
+          writtenOffCount: approved.length,
+          writtenOffQty: roundTo(approved.reduce((s, w) => s + w.qty, 0), 'DERIVED_QUANTITY'),
+          writtenOffCost: round2(approved.reduce((s, w) => s + (w.cost ?? 0), 0)),
+          pendingWriteOffs: writeOffs.filter((w) => w.status === 'PENDING_REVIEW').length,
+          /** 🔴 كم واقعةً اعتمدها من سجّلها — **رقمٌ يُقرأ لا يُستنتج**. */
+          selfApprovedWriteOffs: writeOffs.filter((w) => w.selfApproved).length,
         },
       };
     });
+  }
+
+  /**
+   * أسماء الفاعلين من معرّفاتهم — **والمالك معرّفه هو معرّف المنشأة**.
+   *
+   * (`profileId` للمالك = `company.id`، وللموظّف = `companyUser.id`. وخلطُهما
+   * كان سيُظهر «غير معروف» للمالك في كل صفّ — وهو أكثر من يعتمد.)
+   */
+  private async actorNames(tx: Prisma.TransactionClient, companyId: string, ids: (string | null)[]): Promise<Map<string, string>> {
+    const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+    const out = new Map<string, string>();
+    if (!wanted.length) return out;
+
+    const users = await tx.companyUser.findMany({ where: { companyId, id: { in: wanted } }, select: { id: true, name: true } });
+    for (const u of users) out.set(u.id, u.name);
+
+    if (wanted.includes(companyId)) {
+      const company = await tx.company.findUnique({ where: { id: companyId }, select: { orgName: true } });
+      out.set(companyId, company?.orgName ?? 'مالك المنشأة');
+    }
+    return out;
   }
 
   private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {

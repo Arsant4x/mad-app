@@ -1,5 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { documentYear } from '../common/document-year.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -12,6 +13,19 @@ import { INVENTORY_WRITTEN_OFF, type InventoryWrittenOffPayload } from '../share
 import { consumeFifo } from './costing.util';
 import { CreateWriteOffDto } from './dto/create-write-off.dto';
 import { RejectWriteOffDto } from './dto/reject-write-off.dto';
+
+/**
+ * ⚖️ **فعلُ الاعتماد الذاتي في سجل التدقيق** (`ق-١٤٣`) — **مُصدَّرٌ عمداً**:
+ * يقرؤه الاختبار والتقرير، **فلا تُكتب السلسلة في ثلاثة مواضع تفترق**.
+ */
+export const SELF_REVIEW_ACTION = 'self-review';
+
+/** ما يحتاجه سجل التدقيق عن المُعتمِد — **اسمه وقت الفعل لا معرّفه وحده**. */
+export interface Approver {
+  id: string;
+  actorType: string;
+  name: string;
+}
 
 /** الحالات الثلاث — **نصّاً واحداً يُقرأ منه المرشّح والرسالة**. */
 const WRITE_OFF_STATUSES = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const satisfies readonly string[] as readonly string[];
@@ -40,7 +54,12 @@ const WRITE_OFF_INCLUDE = {
  */
 @Injectable()
 export class WriteOffsService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  private readonly logger = new Logger(WriteOffsService.name);
+
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   list(companyId: string, allowedBranchIds: string[] | 'all', status?: string) {
     // ⚠️ **مرشّحٌ مجهول يُرَدّ ولا يُتجاهَل**: تجاهلُه يُظهر القائمة كاملةً
@@ -113,12 +132,27 @@ export class WriteOffsService {
    * فعلاً. وصفرٌ منها **ليس خطأً يُخفى** — يعني ألّا طبقةَ لها تكلفة، فتُعتمد
    * الواقعة بحركتها **بلا قيد**، ويظلّ `baseCost = 0` معلناً ذلك في التقرير.
    */
-  approve(companyId: string, allowedBranchIds: string[] | 'all', actorId: string, id: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  async approve(companyId: string, allowedBranchIds: string[] | 'all', actor: Approver, id: string) {
+    const actorId = actor.id;
+    const result = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const row = await this.pendingOrThrow(tx, allowedBranchIds, id);
       const reason = writeOffReason(row.reasonCode);
       // رمزٌ صار مجهولاً بعد التسجيل (حُذف من القائمة مثلاً) لا يُرحَّل بالظنّ.
       if (!reason) throw new BadRequestException(formatMessage(MSG.writeoff_reason_unknown, { code: row.reasonCode }));
+
+      /**
+       * ⚖️ **الاعتماد الذاتي: مسموحٌ افتراضياً، ممنوعٌ بإعداد** (`ق-١٤٣`).
+       *
+       * `Company` جدولُ هوية المستأجر — يُقرأ بالمعرّف من السياق المُتحقَّق منه،
+       * كما يفعل مسار الفاتورة حين يقرأ اسم المنشأة لرمز ZATCA.
+       */
+      const selfApproved = row.recordedById === actorId;
+      if (selfApproved) {
+        const company = await tx.company.findUnique({ where: { id: companyId }, select: { writeOffRequiresTwoPersons: true } });
+        if (company?.writeOffRequiresTwoPersons) {
+          throw new ForbiddenException(formatMessage(MSG.writeoff_two_persons_required, { no: row.no }));
+        }
+      }
 
       const qty = Number(row.qty);
       const movement = await tx.stockMovement.create({
@@ -181,8 +215,43 @@ export class WriteOffsService {
         } satisfies InventoryWrittenOffPayload,
       });
 
-      return { ...saved, provisionalQty: consumed.provisionalQty };
+      return { saved, selfApproved, recordedById: row.recordedById, provisionalQty: consumed.provisionalQty, baseCost: consumed.totalCost };
     });
+
+    /**
+     * ⚖️ **والاعتماد الذاتي يُكتب حدثاً مميَّزاً في سجل التدقيق** (`ق-١٤٣`).
+     *
+     * المعترض يكتب `action: 'review'` كأي اعتماد — **فمن يدقّق كان عليه أن
+     * يقارن حقلين يدوياً في كل واقعة**. وفعلٌ باسمه (`self-review`) يجعلها
+     * **تُوجَد بحثاً**: `GET /audit-log?action=self-review`.
+     *
+     * ⚠️ **وخارج المعاملة عمداً**: السجل يشهد على **واقعةٍ ثبتت**، وكتابتُه
+     * داخلها (باتصالٍ آخر لا يتراجع معها) كانت ستُبقي شهادةً على فعلٍ لم يُحفظ.
+     *
+     * ⚠️ **ولا يُسقط الاعتماد إن تعذّرت كتابته**: البضاعة خرجت والقيد كُتب،
+     * وإلغاء ذلك لأجل سطرٍ في السجل **يخسر الحقيقتين معاً** — والفشل يُعلَن في
+     * السجلّ التقني، و`AuditService.record` تعيد المحاولة ثلاثاً أصلاً.
+     */
+    if (result.selfApproved) {
+      await this.audit
+        .record({
+          companyId,
+          actorType: actor.actorType,
+          actorId,
+          actorName: actor.name,
+          screen: 'inventory',
+          action: SELF_REVIEW_ACTION,
+          entity: 'inventory-write-offs',
+          entityId: result.saved.id,
+          method: 'POST',
+          path: `/inventory/write-offs/${result.saved.id}/approve`,
+          details: { no: result.saved.no, reasonCode: result.saved.reasonCode, baseCost: result.baseCost, recordedById: result.recordedById },
+          ip: null,
+        })
+        .catch((e: unknown) => this.logger.error(`تعذّر تسجيل الاعتماد الذاتي للواقعة ${result.saved.no}: ${String(e)}`));
+    }
+
+    return { ...result.saved, selfApproved: result.selfApproved, provisionalQty: result.provisionalQty };
   }
 
   reject(companyId: string, allowedBranchIds: string[] | 'all', actorId: string, id: string, dto: RejectWriteOffDto) {

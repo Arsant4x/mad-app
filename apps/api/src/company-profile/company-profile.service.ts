@@ -23,6 +23,7 @@ const PROFILE_SELECT = {
   unitNumber: true,
   logoFileKey: true,
   masterDataLocked: true,
+  writeOffRequiresTwoPersons: true,
 } as const;
 
 /** Matches CompanyUsersService's assertIsCompanyOwner — only the company
@@ -89,6 +90,7 @@ export class CompanyProfileService {
         unitNumber: emptyToNull(dto.unitNumber),
         ...(logoFileKey !== undefined ? { logoFileKey } : {}),
         ...(dto.masterDataLocked !== undefined ? { masterDataLocked: dto.masterDataLocked } : {}),
+        ...(dto.writeOffRequiresTwoPersons !== undefined ? { writeOffRequiresTwoPersons: dto.writeOffRequiresTwoPersons } : {}),
       },
       select: PROFILE_SELECT,
     });
