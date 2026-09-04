@@ -18,6 +18,8 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
+import { events } from '../shared/events/event-bus';
+import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/domain-events';
 
 /** `relatedInvoice` so a credit note can show which invoice it adjusts
  * without a second round-trip — number only, never the whole document. */
@@ -220,6 +222,19 @@ export class InvoicesService {
        * هو تقرير ما وقع في هذه المعاملة بعينها، يستهلكه الكاشير ليعرض للبائع
        * سبب عدم الخصم إن لم يقع. **والحقيقة تبقى في دفتر الحركات وحده.**
        */
+      /**
+       * ⭐ **حدثُ الإصدار داخل المعاملة نفسها** (`ق-٣٩` · `ق-٤٩`).
+       *
+       * الطابور يُكتب هنا لا بعد الحفظ: **إن تعذّرت كتابته تُلغى الفاتورة**، فلا
+       * تبقى فاتورةٌ تنتظر الهيئة ولا أحد يعلم بها. وكان الإرسال نقرةً يدوية —
+       * أي أن فاتورةً تُنشأ **وتُنسى** بلا أثرٍ يقول إنها لم تصل.
+       */
+      await events.emitCompliance(tx, {
+        type: INVOICE_ISSUED,
+        companyId,
+        payload: { invoiceId: created.id, docType: created.docType, no: created.no } satisfies InvoiceIssuedPayload,
+      });
+
       if (!entry) return { ...created, stockFulfilment: fulfilment };
       const saved = await tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
       return { ...saved, stockFulfilment: fulfilment };

@@ -33,6 +33,9 @@ import { Prisma } from '@prisma/client';
 export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'BusinessActivity',
   'Branch',
+  // طابور الإرسال: صفوفه تحمل `companyId` وتُقرأ داخل سياق كل منشأة، فالطبقة
+  // الأولى تحقنه والثانية (RLS) تُبقيه صحيحاً لو أخطأت الأولى.
+  'OutboxEvent',
   'Currency',
   'ExchangeRate',
   'FiscalYear',

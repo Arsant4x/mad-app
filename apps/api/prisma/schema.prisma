@@ -312,6 +312,7 @@ model Company {
   leaveRequests    LeaveRequest[]
   attendance       AttendanceRecord[]
   auditLogs        AuditLog[]
+  outboxEvents     OutboxEvent[]
   deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
@@ -3246,4 +3247,50 @@ model DelegationLog {
   @@unique([companyId, seq])
   @@index([companyId, createdAt])
   @@map("delegation_logs")
+}
+
+/// حالة صفّ الـOutbox — تُقرأ بالتسلسل: PENDING ← SENT أو FAILED.
+enum OutboxStatus {
+  /// لم يُرسَل بعد، ويُلتقط حين يحلّ `availableAt`.
+  PENDING
+  /// أُرسل وقُبل — لا يُعاد.
+  SENT
+  /// استُنفدت المحاولات؛ يبقى ليُرى ويُعاد يدوياً، ولا يُحذف.
+  FAILED
+}
+
+/// ⭐ **نمط Outbox — الفاتورة وحدثُها في معاملةٍ واحدة** (`ق-٤٩` · `ق-١٢٨`).
+///
+/// العطل الذي يُغلقه: إرسال ZATCA اليوم **يدويّ** بنقطة `POST /zatca/invoices/:id/submit`.
+/// فما من شيءٍ يضمن أن فاتورةً أُنشئت ستصل الهيئة — **تُنشأ وتُنسى**. والإرسال
+/// المتزامن داخل الطلب ليس حلاً: انقطاع الشبكة يُسقط البيع نفسه.
+///
+/// فالصفّ يُكتب **في معاملة المستند** بوصفه حدث امتثال (`emitCompliance`): إن
+/// تعذّرت كتابته **تُلغى الفاتورة**، فلا تبقى فاتورةٌ بلا طابور. ثم يلتقطه
+/// موزّعٌ مستقل ويعيد المحاولة بتراجعٍ أُسّي.
+model OutboxEvent {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// نوع الحدث بمعناه (`invoice.issued`) — لا اسم دالّة ولا مسار.
+  type    String
+  /// حمولةٌ صغيرة: معرّفاتٌ لا نسخةٌ من المستند. المستند مصدره الجدول نفسه،
+  /// ونسخُه هنا يخلق نسختين تتباعدان.
+  payload Json
+
+  status   OutboxStatus @default(PENDING)
+  attempts Int          @default(0)
+  /// لا يُلتقط قبل هذا الوقت — به يقع التراجع الأُسّي بلا جدولٍ ثانٍ.
+  availableAt DateTime  @default(now())
+  /// آخر سببِ فشلٍ بنصّه — فمن يفتح الطابور يعرف لماذا وقف.
+  lastError   String?
+
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  /// الفهرس الذي يقرأه الموزّع في كل دورة.
+  @@index([status, availableAt])
+  @@index([companyId, type])
+  @@map("outbox_events")
 }
