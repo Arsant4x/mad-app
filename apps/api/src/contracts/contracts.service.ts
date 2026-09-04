@@ -29,6 +29,7 @@ import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
+import { moneyEquals, sumMoney } from '../common/money/allocation';
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
@@ -209,8 +210,11 @@ export class ContractsService {
         // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
         // يساويه = خطأ إدخال يُرفض قبل أي أثر.
         if (dto.settlementLines?.length) {
-          const sum = dto.settlementLines.reduce((acc, l) => acc + l.amount, 0);
-          if (Math.abs(sum - settlementAmount) > 0.01) throw new BadRequestException(MSG.settlement_lines_mismatch);
+          // الجمع مدوَّرٌ عند كل تراكم والمقارنة بالتسامح المركزي — وكانت هنا
+          // عتبةٌ مكتوبةٌ بيد على جمعٍ عائم، وهو ما كان يخترعه كل ملف لنفسه.
+          if (!moneyEquals(sumMoney(dto.settlementLines.map((l) => l.amount)), settlementAmount)) {
+            throw new BadRequestException(MSG.settlement_lines_mismatch);
+          }
         }
         const settlementEntry =
           settlementAmount > 0
@@ -846,17 +850,17 @@ export class ContractsService {
         if (deposit.status === 'SETTLED') throw new ConflictException(MSG.deposit_already_settled);
 
         const held = Number(deposit.amount);
-        const deducted = dto.deductions.reduce((sum, d) => sum + d.amount, 0);
-        // Rounded before comparing: two 2-decimal amounts can sum to a float
-        // like 300.00000000000006 and spuriously exceed the deposit.
-        if (round2(deducted) > held) {
+        // Rounded at every accumulation: two 2-decimal amounts can sum to a
+        // float like 300.00000000000006 and spuriously exceed the deposit.
+        const deducted = sumMoney(dto.deductions.map((d) => d.amount));
+        if (deducted > held) {
           throw new BadRequestException(formatMessage(MSG.deductions_exceed_deposit, { held: formatMoney(held) }));
         }
 
         const rate = Number(deposit.exchangeRate);
         const sumOf = (target: 'receivable' | 'income') =>
           toBaseAmount(
-            dto.deductions.filter((d) => deductionTarget(d.kind as DeductionKind) === target).reduce((sum, d) => sum + d.amount, 0),
+            sumMoney(dto.deductions.filter((d) => deductionTarget(d.kind as DeductionKind) === target).map((d) => d.amount)),
             rate,
           );
 

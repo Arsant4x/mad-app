@@ -242,12 +242,21 @@ describe('حارس: تعريف واحد للتدوير لا خمسة', () => {
  */
 describe('حارس كنسة التدوير: لا تدويرَ مالٍ خام خارج common/money', () => {
   const WEB_ROOT = join(REPO_ROOT, 'apps', 'web', 'src');
+  /**
+   * ⚠️ **الحارس يعرف أشكالاً، ولا يعرف المعنى** — فكل شكلٍ جديد يُضاف حين يُرى.
+   * وقد نجا `Math.floor(x * 100) / 100` منه سنةً كاملة في
+   * `installment-schedule.util.ts`، **وهو نفسه علّة رقمٍ خاطئ**: عقدٌ بـ`3.03` على
+   * ثلاثة يعطي `1.00 · 1.00 · 1.03`. فالقاعدة الآن **كل إزاحةٍ عشرية بالضرب في
+   * `100` ثم قسمةٍ عليها** أياً كانت دالّة التقريب (`round` · `floor` · `ceil` ·
+   * `trunc`)، **وكل `toFixed` بأي عدد منازل** — لا الاثنتين وحدهما.
+   */
   const RAW_ROUNDING = [
-    { name: 'Math.round(x * 100) / 100', re: /Math\.round\([^\n;]*\*\s*100\s*\)\s*\/\s*100(?![\d.])/ },
+    { name: 'Math.round/floor/ceil/trunc(x * 100) / 100', re: /Math\.(round|floor|ceil|trunc)\([^\n;]*\*\s*100\s*\)\s*\/\s*100(?![\d.])/ },
     { name: 'Number(x.toFixed(2))', re: /Number\([^\n;]*\.toFixed\(\s*2\s*\)\s*\)/ },
     { name: 'x.toFixed(2)', re: /\.toFixed\(\s*2\s*\)/ },
+    { name: '~~(x * 100) / 100', re: /~~\([^\n;]*\*\s*100\s*\)\s*\/\s*100(?![\d.])/ },
   ];
-  const POLICY_FILES = [join('common', 'money', 'rounding.ts'), join('lib', 'money.ts')];
+  const POLICY_FILES = [join('common', 'money', 'rounding.ts'), join('common', 'money', 'allocation.ts'), join('lib', 'money.ts')];
 
   function offendersIn(root: string): string[] {
     const found: string[] = [];
@@ -257,7 +266,12 @@ describe('حارس كنسة التدوير: لا تدويرَ مالٍ خام خ
         if (statSync(path).isDirectory()) { if (entry !== 'node_modules' && entry !== 'dist') walk(path); continue; }
         if (!/\.tsx?$/.test(entry) || /\.(spec|test)\.tsx?$/.test(entry)) continue;
         if (POLICY_FILES.some((p) => path.endsWith(p))) continue;
-        const body = readFileSync(path, 'utf8');
+        // ⚠️ التعليقات تُجرَّد قبل الفحص. **وإلا صار شرحُ العطل عطلاً**: تعليقٌ
+        // يقول «وكان هنا `Math.floor(...)`» يُقرأ مخالفةً، فيُدفع المؤلّف إلى
+        // حذف الشرح لا إلى إصلاح الشيفرة. وهي عائلةُ «الحارس يقرأ حرفياته».
+        const body = readFileSync(path, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:])\/\/.*$/gm, '$1');
         for (const rule of RAW_ROUNDING) {
           const m = rule.re.exec(body);
           if (m) found.push(`${path.slice(REPO_ROOT.length + 1)} — ${rule.name}: ${m[0].slice(0, 60)}`);
@@ -286,7 +300,12 @@ describe('حارس كنسة التدوير: لا تدويرَ مالٍ خام خ
 
   it('الأنماط تمسك ما يجب وتترك ما يجب — مُثبَتةٌ بحالتَين', () => {
     const hits = (s: string) => RAW_ROUNDING.filter((r) => r.re.test(s)).map((r) => r.name);
-    expect(hits('const a = Math.round(x * 100) / 100;')).toEqual(['Math.round(x * 100) / 100']);
+    const SHIFT = 'Math.round/floor/ceil/trunc(x * 100) / 100';
+    expect(hits('const a = Math.round(x * 100) / 100;')).toEqual([SHIFT]);
+    // الشكل الذي نجا سنةً: `floor` بدل `round` — علّةُ رقمٍ خاطئ في جدول الأقساط.
+    expect(hits('const base = Math.floor((value / count) * 100) / 100;')).toEqual([SHIFT]);
+    expect(hits('const a = Math.ceil(x * 100) / 100;')).toEqual([SHIFT]);
+    expect(hits('const a = ~~(x * 100) / 100;')).toEqual(['~~(x * 100) / 100']);
     expect(hits('const a = Number((x - y).toFixed(2));')).toEqual(['Number(x.toFixed(2))', 'x.toFixed(2)']);
     expect(hits('`${n.toFixed(2)} ر.س`')).toEqual(['x.toFixed(2)']);
     expect(hits('Math.round((part / total) * 1000) / 10')).toEqual([]); // نسبةٌ مئوية لا مال
