@@ -17,3 +17,19 @@ export interface InvoiceIssuedPayload {
   docType: string;
   no: string;
 }
+
+/**
+ * بضاعةٌ شُطبت باعتماد — **ولا جهةَ تنتظرها** (`ق-٩٥`: التلف لا يوجب تعديلاً
+ * ضريبياً). فهو حدثٌ **تشغيليّ**: يُخبر من يريد أن يعرف (إشعارٌ لمالكٍ · تقريرٌ
+ * يُحدَّث)، **ولا يُلغي فشلُ مستمعِه اعتماداً وقع**.
+ */
+export const INVENTORY_WRITTEN_OFF = 'inventory.written_off';
+
+export interface InventoryWrittenOffPayload {
+  writeOffId: string;
+  no: string;
+  /** رمزٌ من `WRITEOFF_REASONS` — ومساره الضريبي يُقرأ من تعريفه لا من هنا. */
+  reasonCode: string;
+  /** تكلفة ما خرج من الطبقات — وصفرٌ يعني ألّا طبقةَ لها تكلفة، لا خطأً. */
+  baseCost: number;
+}

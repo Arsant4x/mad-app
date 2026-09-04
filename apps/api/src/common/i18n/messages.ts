@@ -53,6 +53,10 @@ export const MSG = {
   journal_line_account_not_found: 'journal.line_account_not_found',
   journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
   writeoff_deemed_supply_not_built: 'journal.writeoff_deemed_supply_not_built',
+  writeoff_reason_unknown: 'inventory.writeoff_reason_unknown',
+  writeoff_not_found: 'inventory.writeoff_not_found',
+  writeoff_already_decided: 'inventory.writeoff_already_decided',
+  writeoff_status_unknown: 'inventory.writeoff_status_unknown',
 
   // customers / invoices
   customer_not_found: 'customers.not_found',
@@ -361,6 +365,19 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.writeoff_deemed_supply_not_built]: {
     ar: 'سبب الشطب «{reason}» توريدٌ اعتباري يوجب ضريبة مخرجات، ومساره غير مبنيّ بعد — فلا يُرحَّل شطباً بلا ضريبة',
     en: 'Write-off reason "{reason}" is a deemed supply that carries output VAT; that path is not built yet — it will not be posted as a plain write-off',
+  },
+  [MSG.writeoff_reason_unknown]: {
+    ar: 'رمز سبب الشطب «{code}» غير معروف — والسبب حقلٌ إلزامي يُختار من القائمة، ولا يُفترَض',
+    en: 'Write-off reason code "{code}" is unknown — the reason is mandatory and must come from the list, never assumed',
+  },
+  [MSG.writeoff_not_found]: { ar: 'واقعة الشطب غير موجودة', en: 'Write-off not found' },
+  [MSG.writeoff_already_decided]: {
+    ar: 'واقعة الشطب حُسمت من قبل — لا تُعتمد ولا تُرفض مرتين',
+    en: 'This write-off has already been decided — it cannot be approved or rejected twice',
+  },
+  [MSG.writeoff_status_unknown]: {
+    ar: 'حالة غير معروفة «{status}» — المتاح: {allowed}',
+    en: 'Unknown status "{status}" — allowed: {allowed}',
   },
 
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
