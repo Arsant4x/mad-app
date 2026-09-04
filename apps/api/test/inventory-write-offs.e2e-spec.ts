@@ -239,6 +239,45 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     expect(await stockOf()).toBe(before - 1);
   });
 
+  /**
+   * ⭐ **المرفق دليلٌ لا زينة** (`م٤٩(٥)`): القيد في السجلات كافٍ **وللهيئة طلب
+   * أدلة** — صورة البضاعة · محضر الإتلاف · تقرير الشرطة في السرقة.
+   */
+  it('🔴 مرفقات الواقعة: تُرفع وتُسرد وتُحذف — وتُقبل بعد الاعتماد أيضاً', async () => {
+    const created = await record({ qty: 1, note: 'مع دليلها' }).expect(201);
+    const { id } = created.body as { id: string };
+
+    const uploaded = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/attachments`))
+      .attach('file', Buffer.from('%PDF-1.4 محضر إتلاف'), { filename: 'محضر-إتلاف.pdf', contentType: 'application/pdf' })
+      .expect(201);
+    expect(uploaded.body.filename).toContain('.pdf');
+    expect(uploaded.body.size).toBeGreaterThan(0);
+    // ⚠️ ولا يُعاد `fileKey` إلى العميل: مفتاحُ التخزين ليس من شأنه، والتنزيل
+    // يمرّ برابطٍ موقَّت يُصدره الخادم.
+    expect(uploaded.body.fileKey).toBeUndefined();
+
+    const listed = await auth(request(app.getHttpServer()).get(`/inventory/write-offs/${id}/attachments`)).expect(200);
+    expect((listed.body as { id: string }[]).map((a) => a.id)).toContain(uploaded.body.id);
+
+    // ورابط التنزيل يُصدَر للمرفق نفسه — لا للمفتاح الخام.
+    await auth(request(app.getHttpServer()).get(`/inventory/write-offs/attachments/${uploaded.body.id}/download-url`)).expect(200);
+
+    // ⭐ **والاعتماد لا يُغلق باب الدليل**: محضر الإتلاف يصل بعده غالباً.
+    await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/approve`)).expect(201);
+    const after = await auth(request(app.getHttpServer()).post(`/inventory/write-offs/${id}/attachments`))
+      .attach('file', Buffer.from('%PDF-1.4 تقرير لاحق'), { filename: 'تقرير-لاحق.pdf', contentType: 'application/pdf' })
+      .expect(201);
+
+    await auth(request(app.getHttpServer()).delete(`/inventory/write-offs/attachments/${after.body.id}`)).expect(204);
+    const remaining = await auth(request(app.getHttpServer()).get(`/inventory/write-offs/${id}/attachments`)).expect(200);
+    expect((remaining.body as { id: string }[]).map((a) => a.id)).toEqual([uploaded.body.id]);
+
+    // وواقعةٌ لا وجود لها لا تقبل مرفقاً — فلا يُرفع ملفٌّ إلى العدم.
+    await auth(request(app.getHttpServer()).post('/inventory/write-offs/00000000-0000-0000-0000-000000000000/attachments'))
+      .attach('file', Buffer.from('x'), { filename: 'x.pdf', contentType: 'application/pdf' })
+      .expect(404);
+  });
+
   it('🔴 الكاشير يسجّل ولا يقرّر — والرفض يحمل سببه (SPEC 30.7 خادمياً)', async () => {
     const before = await stockOf();
     const created = await asCashier(request(app.getHttpServer()).post('/inventory/write-offs'))

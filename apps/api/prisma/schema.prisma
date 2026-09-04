@@ -329,6 +329,7 @@ model Company {
   inventoryLayers       InventoryLayer[]
   inventoryConsumptions InventoryConsumption[]
   inventoryWriteOffs    InventoryWriteOff[]
+  writeOffAttachments   InventoryWriteOffAttachment[]
   posShifts           PosShift[]
   posPayments         PosPayment[]
   payments            Payment[]
@@ -3162,11 +3163,44 @@ model InventoryWriteOff {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  attachments InventoryWriteOffAttachment[]
+
   @@unique([companyId, no])
   @@index([companyId, status])
   @@index([companyId, productId, warehouseId])
   @@index([companyId, occurredAt])
   @@map("inventory_write_offs")
+}
+
+/// مرفقات واقعة الشطب — **الدليل الذي تطلبه الهيئة إن سألت**.
+///
+/// `م٤٩(٥)` تجعل القيد في السجلات كافياً **وللهيئة طلب أدلة**: صورة البضاعة
+/// التالفة · محضر الإتلاف · **تقرير الشرطة في السرقة** (وهو من الأدلة
+/// المسمّاة). فالمرفق ليس زينةً بل **ما يُقدَّم عند الطلب**.
+///
+/// والبنية نفسها التي في `PurchaseAttachment`: البايتات في تخزين الكائنات،
+/// **والصفّ المنطاق بالمستأجر هو سجلّ التصريح**.
+///
+/// ⚠️ **ولا تُرفع صور الهويات** — القاعدة عامة في المنصة، وموضعها التحذير في
+/// الواجهة لا هنا.
+model InventoryWriteOffAttachment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  writeOffId String
+  writeOff   InventoryWriteOff @relation(fields: [writeOffId], references: [id], onDelete: Cascade)
+
+  /// مفتاح التخزين: companies/{companyId}/{uuid}-{filename}.
+  fileKey  String
+  filename String
+  size     Int
+  mimeType String
+
+  uploadedAt DateTime @default(now())
+
+  @@index([writeOffId])
+  @@map("inventory_write_off_attachments")
 }
 
 /// A government-compliance checklist item — deliberately minimal, matching
