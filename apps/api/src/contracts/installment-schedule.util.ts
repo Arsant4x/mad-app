@@ -1,4 +1,4 @@
-import { round2 } from '../common/money/rounding';
+import { allocateEvenly } from '../common/money/allocation';
 const CYCLE_STEP_MONTHS: Record<string, number> = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
 
 /** Splits `value` evenly across installments stepped by `cycle`, with any
@@ -12,16 +12,16 @@ export function generateInstallmentSchedule(start: Date, end: Date, value: numbe
   const totalMonths = Math.max(1, Math.round(totalDays / 30.44));
   const count = Math.max(1, Math.round(totalMonths / stepMonths));
 
-  const base = Math.floor((value / count) * 100) / 100;
+  // التوزيع من المحرّك: المجموع يساوي قيمة العقد بالضبط، والفرق على القسط
+  // الأخير وحده. وكان هنا `Math.floor((value / count) * 100) / 100` — فعقدٌ بـ
+  // `3.03` على ثلاثة يعطي `1.00 · 1.00 · 1.03` بدل `1.01` ثلاثاً، لأن
+  // `3.03/3 × 100` يساوي `100.99999999999999`. راجع `common/money/allocation.ts`.
+  const amounts = allocateEvenly(value, count);
   const schedule: { dueDate: Date; amount: number }[] = [];
-  let remaining = value;
   const dueDate = new Date(start);
 
   for (let i = 0; i < count; i++) {
-    const isLast = i === count - 1;
-    const amount = isLast ? round2(remaining) : base;
-    remaining = round2(remaining - amount);
-    schedule.push({ dueDate: new Date(dueDate), amount });
+    schedule.push({ dueDate: new Date(dueDate), amount: amounts[i] });
     dueDate.setMonth(dueDate.getMonth() + stepMonths);
   }
 
