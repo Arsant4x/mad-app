@@ -33,6 +33,7 @@ import { readFileSync } from 'node:fs';
 // و`require` فيها غير معرَّفة. و`node --check` يمرّ عليها لأنها صياغةٌ سليمة —
 // **والفحص النحوي ليس تشغيلاً**. كُشف بتشغيل الخطّاف فعلاً لا بقراءته.
 import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 let payload;
 try {
@@ -249,7 +250,20 @@ if (MERGE_CMD.test(cmd)) {
 
   const prNumber = cmd.match(/gh\s+pr\s+merge\s+(\d+)/)?.[1] ?? '';
   const args =['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'number,state,mergeStateStatus'];
-  const probe = spawnSync('gh', args, { encoding: 'utf8', shell: process.platform === 'win32' });
+  /**
+   * ⚠️ **يسأل من جذرٍ يملكه لا من جذر الجلسة** (2026-09-04).
+   *
+   * أول ما رُبط الخطّاف على مستوى المستخدم **منع كل دمج**: `gh` كان يُستدعى
+   * في مجلَّد الجلسة (`C:/…/Desktop/mad-app`) — **وليس مستودعاً**، فردّ
+   * `not a git repository`. والبوّابة **رفضت بحقّ** (الفشل مُغلِق)، لكنها
+   * كانت ترفض الصالح والفاسد معاً.
+   *
+   * والعلّة نفسها التي عالجها `ق-١٤٩`، **ظاهرةً هذه المرة داخل الخطّاف**:
+   * اعتمادٌ ضمنيّ على أن جذر الجلسة هو المستودع. والخطّاف يسكن المستودع الذي
+   * يحرسه، **فيسأل عنه من موضعه** — فلا يعود جذرُ الجلسة شرطاً هنا أيضاً.
+   */
+  const repoRoot = resolve(import.meta.dirname, '..', '..');
+  const probe = spawnSync('gh', args, { encoding: 'utf8', shell: process.platform === 'win32', cwd: repoRoot });
 
   // ⚠️ **يُفحص نجاح الاستعلام قبل قراءة نتيجته** (§8.8): استعلامٌ فاشل يُقرأ
   // حالةً فارغة — أي أن الحارس يمرّ على كل شيء وهو يظنّ نفسه يعمل.
