@@ -19,6 +19,13 @@ import { sharedSession } from './fixtures';
  * تُشغَّل على «دليل الحسابات» لأن كل منشأة جديدة تُنشأ بدليل افتراضي (18
  * حساباً) — صفوفٌ حقيقية بلا تهيئة وبلا اعتمادٍ على بيانات سابقة.
  */
+/**
+ * الحدّ الذي تُعدّ الفجوة تحته «ملتصقة» — **تعريفٌ واحد**: ينتظر عليه
+ * `settleReposition` ويؤكّد عليه التوكيد. ورقمان يفترقان يعني **انتظاراً على
+ * حدٍّ وحكماً بحدٍّ آخر** — أسوأ من غياب الانتظار.
+ */
+const GAP_LIMIT = 12;
+
 test.describe('RowMenu — قائمة الصف مشتركة بين عشرين شاشة', () => {
   /**
    * جلسةٌ واحدة للمجموعة — **والدخول كان في `beforeEach`**.
@@ -70,20 +77,61 @@ test.describe('RowMenu — قائمة الصف مشتركة بين عشرين ش
     await expect(menu).toHaveCount(1);
 
     const before = await geometry(page);
-    expect(before.gap, 'القائمة لا تلتصق بزرّها ابتداءً').toBeLessThan(12);
+    expect(before.gap, 'القائمة لا تلتصق بزرّها ابتداءً').toBeLessThan(GAP_LIMIT);
 
     const moved = await scrollRowsBy(page, 240);
     // شرطُ صحّة الاختبار نفسه: إن لم يتحرك الزر فلا شيء يُقاس، والتوكيد
     // التالي يمرّ بلا معنى — وهو بالضبط الحارس الذي يقف حيث لا خطر.
     expect(moved, 'لم يتحرك الصفّ بالتمرير — الاختبار لا يقيس شيئاً').toBeGreaterThan(20);
 
+    await settleReposition(page);
+
     if ((await menu.count()) === 0) return; // خرج الزر من الشاشة ⇒ الإغلاق سلوكٌ صحيح
 
     const after = await geometry(page);
     // ⚠️ هنا كان العطل: الفجوة تكبر بمقدار التمرير كله فتنفصل القائمة.
-    expect(after.gap, `القائمة انفصلت عن صفّها بعد تمرير ${Math.round(moved)}px (الفجوة ${Math.round(after.gap)}px)`).toBeLessThan(12);
+    expect(after.gap, `القائمة انفصلت عن صفّها بعد تمرير ${Math.round(moved)}px (الفجوة ${Math.round(after.gap)}px)`).toBeLessThan(GAP_LIMIT);
   });
 });
+
+/**
+ * ⭐ **ينتظر إعادةَ التموضع حالةً لا زمناً** (`ق-١٣٥` · `CLAUDE.md §8.2.1`).
+ *
+ * ## الآلية — مقيسةٌ لا مفترَضة
+ *
+ * `RowMenu` يؤجّل إعادة التموضع إلى `requestAnimationFrame` (تخفيفاً للتمرير).
+ * و`scrollRowsBy` يضبط `scrollTop` **ويقيس في نفس `evaluate`** — فالإطار لم
+ * يُرسَم بعد حين تعود. ثم يأتي قياسُ الفجوة في **جولةٍ ثانية**: أخذَ الإطارُ
+ * فرصته أم لم يأخذها **بحسب انشغال العدّاء** — وهو التذبذب بعينه.
+ *
+ * والقياس يثبته: الفجوة عند السقوط كانت **`244px` على تمرير `240px`** — أي
+ * **لم تُعِد تموضعها إطلاقاً**، لا «تأخّرت قليلاً».
+ *
+ * ## ولماذا انتظارُ حالةٍ لا مهلةٌ أطول
+ *
+ * المهلة **تخفي التذبذب ولا تزيله**: تجعله أندر وأبطأ وأصعب تشخيصاً، ويدفع
+ * كل تشغيلٍ ثمنَ الإخفاء. والانتظار هنا **يقف على الحالة نفسها** ويعود فور
+ * بلوغها.
+ *
+ * ⚠️ **ولا يخفي عطلاً حقيقياً**: لو لم تتموضع القائمة أبداً **نفدت النافذة
+ * وسقط التوكيد بعدها برقمه المقيس**. والالتقاط `catch` مقصود: بدونه تُقرأ
+ * رسالة «انتهت المهلة» بدل الفجوة الحقيقية — **ورسالةُ المهلة تُشخِّص الانتظار
+ * لا العطل**.
+ */
+async function settleReposition(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      (limit) => {
+        const btn = document.querySelector('.menu-btn');
+        const menu = document.querySelector('.action-menu');
+        if (!btn || !menu) return true; // أُغلقت — وهو سلوكٌ صحيح يفحصه ما بعده
+        return Math.abs(menu.getBoundingClientRect().top - btn.getBoundingClientRect().bottom) < limit;
+      },
+      GAP_LIMIT,
+      { timeout: 5000 },
+    )
+    .catch(() => {});
+}
 
 /** الفجوة الرأسية بين أسفل الزر وأعلى القائمة، وموضع الزر المطلق. */
 async function geometry(page: Page): Promise<{ gap: number; btnTop: number }> {
