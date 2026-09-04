@@ -61,6 +61,19 @@ describe('Incorporation expenses report (e2e)', () => {
     await app.close();
   });
 
+  it('فئةٌ بمسافةٍ لاحقة لا تسقط من التقرير — والقرار صار بالرمز لا بالنصّ', async () => {
+    // العلّة التي أُغلقت: `resolveAmortization` كان يشذّب و`incorporationReport` لا
+    // يشذّب. ففاتورةٌ فئتها 'مصروفات تأسيس ' **تمرّ من فحص الإطفاء وتغيب من التقرير**
+    // — لا خطأ ولا صفر ظاهر، بل مبلغٌ ناقص في مجموعٍ يقرأه التاجر.
+    const item = `بندٌ بمسافة ${Date.now()}`;
+    const before = await report();
+    await buy({ subtotal: 700, category: ' مصروفات تأسيس ', incorpItem: item, amortize: true, amortizeMonths: 12 });
+
+    const after = await report();
+    expect(after.invoiceCount).toBe(before.invoiceCount + 1);
+    expect(after.items.find((i) => i.item === item)?.count).toBe(1);
+  });
+
   it('[SPEC 5.5] counts only establishment purchases, grouped by line item', async () => {
     const before = await report();
 

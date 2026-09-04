@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { roundTo, round2 } from '../common/money/rounding';
+import { purchaseExpenseAccountCode } from '../common/purchase-categories';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
@@ -15,21 +16,14 @@ async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]):
   return codes.every((c) => ids.has(c)) ? ids : null;
 }
 
-const PURCHASE_CATEGORY_ACCOUNT: Record<string, string> = {
-  'رواتب': '5200',
-  'رواتب وأجور': '5200',
-  'تكلفة مبيعات': '5100',
-  'مواد خام': '5100',
-  'بضاعة': '5100',
-  'مصروفات أخرى': '5400',
-  'مصروفات تأسيس': '5500',
-};
-
-/** Default 5300 = "مصروفات إدارية وعمومية" (general & administrative),
- * matching the mockup's `purchaseExpenseAccount` fallback exactly. */
-export function purchaseExpenseAccountCode(category?: string | null): string {
-  return PURCHASE_CATEGORY_ACCOUNT[(category ?? '').trim()] ?? '5300';
-}
+/**
+ * حساب مصروف الشراء — **من `common/purchase-categories.ts`**، وكان هنا خريطةً
+ * ثانية بلافتاتٍ عربية. فأربعُ فئاتٍ تعرضها الواجهة (كهرباء · مياه · اتصالات ·
+ * إيجار) لم يكن لها مدخلٌ فيها إطلاقاً، فترحَّل ضمناً إلى المستقرّ **بلا أن
+ * يُعلَن ذلك في أي موضع**. الآن كلُّ فئةٍ معروضة لها مدخلٌ صريح، وحارسٌ يثبت
+ * التطابق في الاتجاهين.
+ */
+export { purchaseExpenseAccountCode };
 
 /** Currency gains and losses on settlement — the owner picked 5600 for this.
  * A single account carries both directions: a gain lands as a credit against
@@ -212,7 +206,8 @@ export interface PurchaseForPosting {
   no: string;
   date: Date;
   supplierName: string;
-  category: string | null;
+  /** الرمز لا اللافتة — القرار المحاسبي لا يُتَّخذ بنصٍّ عربيّ قابلٍ لمسافة. */
+  categoryCode: string | null;
   baseSubtotal: number;
   baseTaxAmount: number;
   baseTotal: number;
@@ -236,7 +231,7 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
   const stocked = roundTo(p.baseStockedSubtotal ?? 0, 'LINE_AMOUNT');
   const serviceSubtotal = roundTo(p.baseSubtotal - stocked, 'LINE_AMOUNT');
 
-  const expCode = purchaseExpenseAccountCode(p.category);
+  const expCode = purchaseExpenseAccountCode(p.categoryCode);
   const needCodes = ['2100', ...(serviceSubtotal !== 0 ? [expCode] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
