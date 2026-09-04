@@ -1,7 +1,11 @@
+import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo, round2 } from '../common/money/rounding';
 import { purchaseExpenseAccountCode } from '../common/purchase-categories';
+import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
+import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
 /** Resolves a set of account codes to ids, scoped by the tenant context
@@ -197,6 +201,99 @@ export async function postCogsReversalEntry(
     ],
     auto: true,
     branchId: c.branchId ?? null,
+  });
+}
+
+/**
+ * ⭐ **قيد شطب المخزون — بلا سطر ضريبة، وهذا سنده** (`SPEC 30.5` · `ق-١٣٨`).
+ *
+ * مدين `5800 مصروف تلف وفقد` · دائن `1300 المخزون`، **بتكلفة ما خرج من الطبقات**
+ * فعلاً — لا بسعر بيعٍ ولا بمتوسطٍ مفترَض، كما في قيد التكلفة تماماً.
+ *
+ * ## ⚠️ لماذا لا سطر ضريبة — والسند هنا لا في وثيقةٍ بعيدة
+ *
+ * الشائع في أنظمة ERP **عكسُ ضريبة المدخلات تلقائياً عند الإعدام** — وهو
+ * **مخالفٌ للنصّ السعودي**:
+ *
+ * | السند | ما يقوله |
+ * |---|---|
+ * | اللائحة `م١٥(٤)` | الإتلاف **ليس توريداً اعتبارياً** |
+ * | اللائحة `م٤٩(٥)` | التلف والفقد **لا يوجبان تعديل خصم المدخلات**؛ القيد في السجلات كافٍ وللهيئة طلب الأدلة |
+ * | دليل خصم المدخلات ط٣ — الأسئلة الشائعة `س٣` | لا اشتراط بتعديل الخصم على ما يجب إتلافه كجزء من النشاط |
+ *
+ * فمن قرأ هذا القيد بعد سنةٍ فظنّه ناقصاً: **هذا موضعه** — والسند مكتوبٌ هنا كي
+ * **يجد النصّ لا التخمين**، فلا «يُصلح» قيداً سليماً فيصنع إقراراً خاطئاً.
+ *
+ * ## والمسار الضريبي يُقرأ من تعريف الرمز، ولا يُقرَّر هنا (`ق-١٣٧`)
+ *
+ * `taxPathOf` **ترمي على المجهول ولا تستقرّ**: رمزٌ جديد بلا مسارٍ مُعلَن
+ * **يُوقف الترحيل** ولا يُصنَّف بالصمت. و`DEEMED_SUPPLY` (استخدامٌ شخصي ·
+ * هديةٌ فوق الحدّ · خروجٌ عن النشاط · احتفاظٌ عند التوقف) **يوجب ضريبة
+ * مخرجات**، ومساره **غير مبنيّ بعد** — فيُرفض صراحةً ولا يُرحَّل شطباً بلا
+ * ضريبة: **قيدٌ خاطئ في الضريبة أسوأ من غيابه** (قرار المالك على `٣٠٫٥`).
+ */
+export interface WriteOffForPosting {
+  branchId?: string | null;
+  /** مرجع واقعة الشطب — يظهر في بيان القيد فيُقرأ القيد إلى واقعته ومرفقاتها. */
+  ref: string;
+  date: Date;
+  /** تكلفة ما خرج من الطبقات فعلاً، بالعملة الأساسية. */
+  baseCost: number;
+  /** رمزٌ من `WRITEOFF_REASONS` — **ومساره الضريبي في تعريفه لا هنا**. */
+  reasonCode: string;
+}
+
+/**
+ * يُسقط ما لا يجوز ترحيله شطباً — **قبل أي إنشاء أو كتابة**.
+ *
+ * ويرمي على الرمز المجهول عبر `taxPathOf` نفسها: فمن أضاف رمزاً ولم يُعلن
+ * مساره **يُوقَف عند أول شطب**، لا يمرّ إلى الفرع الافتراضي.
+ */
+function assertPostableWriteOff(reasonCode: string): void {
+  if (taxPathOf(reasonCode) === 'NO_ADJUSTMENT') return;
+  throw new BadRequestException(
+    formatMessage(MSG.writeoff_deemed_supply_not_built, { reason: writeOffReason(reasonCode)?.label ?? reasonCode }),
+  );
+}
+
+/**
+ * سطرا القيد — **دالة نقيّة تُختبر بلا قاعدة بيانات**.
+ *
+ * وهي الموضع الذي يُثبَت فيه **غياب سطر الضريبة**: سطران اثنان لا ثالث لهما،
+ * ولا يظهر فيهما حساب ضريبةٍ بحال.
+ */
+export function writeOffPostingLines(
+  w: { baseCost: number; reasonCode: string },
+  ids: { expenseAccountId: string; inventoryAccountId: string },
+): PostingLine[] {
+  assertPostableWriteOff(w.reasonCode);
+  const cost = round2(w.baseCost);
+  return [
+    { accountId: ids.expenseAccountId, debit: cost, credit: 0 },
+    { accountId: ids.inventoryAccountId, debit: 0, credit: cost },
+  ];
+}
+
+export async function postWriteOffEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  w: WriteOffForPosting,
+) {
+  if (w.baseCost <= 0) return null;
+  // الفحص **قبل** إنشاء الحسابات: رفضٌ بعد إنشاءٍ يعتمد على تراجع المعاملة،
+  // ومن استدعاها خارج معاملةٍ يترك حساباً وُلد لقيدٍ لم يُكتب.
+  assertPostableWriteOff(w.reasonCode);
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: w.date,
+    memo: `شطب مخزون ${w.ref}`,
+    lines: writeOffPostingLines(w, {
+      expenseAccountId: await getOrCreateWriteOffAccount(tx, companyId),
+      inventoryAccountId: await getOrCreateInventoryAccount(tx, companyId),
+    }),
+    auto: true,
+    branchId: w.branchId ?? null,
   });
 }
 

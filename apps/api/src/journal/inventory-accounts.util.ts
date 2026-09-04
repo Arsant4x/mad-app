@@ -34,7 +34,14 @@ export const OUTPUT_VAT_ACCOUNT_CODE = '2200';
 
 type Tx = Prisma.TransactionClient;
 
-async function getOrCreate(tx: Tx, companyId: string, code: string, name: string, type: string): Promise<string> {
+/**
+ * إنشاءٌ عند الحاجة برمزٍ محجوز — **مُصدَّرة كي لا يخترع كل ملفٍ نسخته**.
+ *
+ * (حساب التلف `5800` يستعملها في `writeoff-account.util.ts`. وتكرارُ المنطق
+ * كان يعني أن فحص «رمزٌ قائم بنوعٍ مختلف» يُنسى في النسخة الثانية — وهو الفحص
+ * الذي يمنعنا من تغيير تصنيف حسابٍ يملكه المحاسب بلا علمه.)
+ */
+export async function getOrCreateAccount(tx: Tx, companyId: string, code: string, name: string, type: string): Promise<string> {
   const existing = await tx.account.findFirst({ where: { companyId, code } });
   if (existing) {
     // ⚠️ رمزٌ قائم بنوعٍ مختلف **لا يُستعمل ولا يُصحَّح تلقائياً**: تصحيحه
@@ -53,7 +60,7 @@ async function getOrCreate(tx: Tx, companyId: string, code: string, name: string
 }
 
 export const getOrCreateInventoryAccount = (tx: Tx, companyId: string) =>
-  getOrCreate(tx, companyId, INVENTORY_ACCOUNT_CODE, INVENTORY_ACCOUNT_NAME, 'asset');
+  getOrCreateAccount(tx, companyId, INVENTORY_ACCOUNT_CODE, INVENTORY_ACCOUNT_NAME, 'asset');
 
 export const getOrCreateInputVatAccount = (tx: Tx, companyId: string) =>
-  getOrCreate(tx, companyId, INPUT_VAT_ACCOUNT_CODE, INPUT_VAT_ACCOUNT_NAME, 'asset');
+  getOrCreateAccount(tx, companyId, INPUT_VAT_ACCOUNT_CODE, INPUT_VAT_ACCOUNT_NAME, 'asset');
