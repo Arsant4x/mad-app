@@ -1,12 +1,15 @@
 {
   "_comment": "طبقات وحدات apps/api/src (القاعدة «أ» في CLAUDE.md §3 — قرار المالك 2026-09-03). التصنيف من ورشة ١٠٥ وكلاء (wf_15029ae7-6e8: مصنِّف ومعارض لكل وحدة وحكمٌ عند الخلاف) ومراجعةُ المالك تعلوه — يُعدَّل هنا بيد ويُقرأ بالحارس apps/api/src/common/import-direction.spec.ts. الرتبة: shared=0 · infra=core=1 · engine=2 · activity=3. baseline = الخروقات الموجودة يوم الاعتماد على مستوى الملف: تنقص ولا تزيد، وقيدٌ سُدّد يُحذف.",
   "counts": {
-    "core": 32,
+    "shared": 1,
+    "core": 33,
     "infra": 6,
     "activity": 7,
     "engine": 6
   },
   "layers": {
+    "shared": "shared",
+    "outbox": "core",
     "accounts": "core",
     "activities": "core",
     "attendance": "core",
