@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
+import { getZatcaUnreported, type ZatcaUnreported } from '../api/zatca';
 import { useAuth } from '../auth/AuthContext';
 import { usePermissions } from '../auth/PermissionsContext';
 import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
@@ -140,6 +141,27 @@ export function AppShell() {
     };
   }, []);
 
+  /**
+   * «فواتيرك لا تصل الهيئة» — تحذيرٌ **ظاهرٌ ومستمر لا إشعارٌ يُغلق** (ق-١٨٢/١ · شرطُ
+   * قبول الختم المتزامن ق-١٩٦): بعد الختم يخرج الإيصال مكتملَ الشكل وإن لم يصل
+   * الهيئة — فهذا الشريط هو ما يُبقي العلّةَ مرئيّة. يُعرض لمنشأةٍ **مربوطة** فقط؛
+   * غيرُ المربوطة لا نعرف موجتها (حدٌّ معلَن)، وتقريرُها في ملف المنشأة.
+   */
+  const [unreported, setUnreported] = useState<ZatcaUnreported | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () =>
+      getZatcaUnreported()
+        .then((r) => !cancelled && setUnreported(r))
+        .catch(() => undefined);
+    poll();
+    const timer = setInterval(poll, UNREAD_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا. انظر
   // `PermissionsContext`: نسختان من قاعدةٍ واحدة تفترقان بلا شكوى.
   const { canSee } = usePermissions();
@@ -235,6 +257,36 @@ export function AppShell() {
         </button>
       </aside>
       <main className="main-content">
+        {/* ق-١٨٢/١: ظاهرٌ ومستمرٌ — بلا زرّ إغلاق عمداً. */}
+        {unreported && unreported.onboarded && unreported.count > 0 && (
+          <div
+            role="alert"
+            data-testid="zatca-unreported-banner"
+            style={{
+              background: '#fdecea',
+              color: '#8a1c13',
+              border: '1px solid #f3b6ae',
+              borderRadius: 8,
+              padding: '10px 14px',
+              marginBottom: 14,
+              fontSize: 13,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span>
+              فواتيرك لا تصل الهيئة — {unreported.count} مستنداً صادراً لم يُقبَل بعد
+              {unreported.oldestIssueDate ? `، أقدمها بتاريخ ${new Date(unreported.oldestIssueDate).toLocaleDateString('ar-SA')}` : ''}
+              {unreported.failedQueue > 0 ? ` · ${unreported.failedQueue} في الطابور استُنفدت محاولاته` : ''}
+            </span>
+            <NavLink to="/company-profile" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              تقرير «صادرٌ لم يصل»
+            </NavLink>
+          </div>
+        )}
         {user?.status === 'FROZEN' && (
           <div
             style={{

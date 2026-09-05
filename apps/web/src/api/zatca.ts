@@ -40,3 +40,17 @@ export interface ZatcaSubmissionResult {
 
 export const submitInvoiceToZatca = (invoiceId: string) =>
   apiClient.post<ZatcaSubmissionResult>(`/zatca/invoices/${invoiceId}/submit`).then((r) => r.data);
+
+/** «صادرٌ لم يصل» (ق-١٨٢/٢): ما أُصدر ولم تقبله الهيئة بعد — عدداً وأقدمَ وقائمةً. */
+export interface ZatcaUnreported {
+  /** مربوطةٌ بشهادة إنتاج — فغيابُ الوصول مخالفةٌ لا حالٌ طبيعي. */
+  onboarded: boolean;
+  count: number;
+  oldestIssueDate: string | null;
+  byStatus: Record<string, number>;
+  /** أحداثُ إصدارٍ استُنفدت محاولاتها في الطابور — تعود عند الربط. */
+  failedQueue: number;
+  items: { id: string; no: string; docType: string; issueDate: string; total: string; zatcaStatus: string; zatcaMessage: string | null }[];
+}
+
+export const getZatcaUnreported = () => apiClient.get<ZatcaUnreported>('/zatca/unreported').then((r) => r.data);

@@ -12,6 +12,7 @@ import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor } from './zatca-onboarding.service';
+import { INVOICE_ISSUED } from '../shared/events/domain-events';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
  * legal act on the merchant's behalf, not routine data entry. */
@@ -29,6 +30,49 @@ export class ZatcaService {
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
   ) {}
+
+  /**
+   * ⭐ **«صادرٌ لم يصل»** — تقريرُ ما أُصدر ولم تقبله الهيئة بعد (`ق-١٨٢`/٢ · شرطُ
+   * قبول ⑤ في `ق-١٩٦`).
+   *
+   * **لماذا**: منشأةٌ في المرحلة الثانية تُصدر فواتيرَ يفشل إرسالُها ستّ مراتٍ
+   * ثم `FAILED` **بصمت** — لا يراها أحدٌ إلا في جدول الطابور. وبعد الختم المتزامن
+   * يزول حتى العَرَض: الإيصال يخرج مكتملَ الشكل وإن لم يصل الهيئة أبداً. فهذا
+   * التقرير **هو ما يُبقي العلّةَ مرئيّة** — بعددها وأقدمها، لا بإشعارٍ يُغلق.
+   *
+   * **ما يُحسب «لم يصل»**: كل مستندٍ حالتُه غيرُ `CLEARED` — لم يُرسَل، أو معلَّقٌ
+   * في الإرسال، أو رُدّ. **و`onboarded`** يقول للواجهة إن كان الغيابُ مخالفةً
+   * (منشأةٌ مربوطة) أم حالاً طبيعياً لمنشأةٍ لم تدخل موجتها — **ولا نعرف الموجة**:
+   * حدٌّ معلَن، فحقلُ موجة المنشأة بندٌ مستقل.
+   */
+  async unreported(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const [credential, items, failedQueue] = await Promise.all([
+        tx.zatcaCredential.findUnique({ where: { companyId }, select: { productionCsidEnc: true } }),
+        tx.invoice.findMany({
+          where: { zatcaStatus: { not: 'CLEARED' } },
+          orderBy: [{ issueDate: 'asc' }, { createdAt: 'asc' }],
+          take: 200,
+          select: { id: true, no: true, docType: true, issueDate: true, total: true, zatcaStatus: true, zatcaMessage: true },
+        }),
+        tx.outboxEvent.count({ where: { type: INVOICE_ISSUED, status: 'FAILED' } }),
+      ]);
+      const count = await tx.invoice.count({ where: { zatcaStatus: { not: 'CLEARED' } } });
+      const byStatus: Record<string, number> = {};
+      for (const row of await tx.invoice.groupBy({ by: ['zatcaStatus'], where: { zatcaStatus: { not: 'CLEARED' } }, _count: { _all: true } })) {
+        byStatus[row.zatcaStatus] = row._count._all;
+      }
+      return {
+        onboarded: Boolean(credential && secretIsSet(credential.productionCsidEnc)),
+        count,
+        oldestIssueDate: items[0]?.issueDate ?? null,
+        byStatus,
+        /** أحداثُ إصدارٍ استُنفدت محاولاتها — تعود إلى الطابور عند الربط (`requeueFailedWithinTx`). */
+        failedQueue,
+        items,
+      };
+    });
+  }
 
   /**
    * Assembles everything the authority needs for one invoice, records the chain
