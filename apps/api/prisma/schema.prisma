@@ -205,6 +205,12 @@ model Company {
   /// فالتشديد **خيارٌ معلوم** لمن عنده مستودعٌ وموظفون، والتطابق يبقى **مرئياً
   /// للجميع** في تقرير التلف وسجل التدقيق — لا مدفوناً في حقلين.
   writeOffRequiresTwoPersons Boolean @default(false)
+  /// ⭐ **حدُّ فصل وقائع الانقطاع بالدقائق — إعدادٌ لا ثابت** (`ق-٢٠١`/٢).
+  ///
+  /// بيعٌ زُومن بعد رنّه بأكثر من هذا الحدّ يُعدّ من انقطاع؛ وبيعان يفصل بينهما
+  /// أكثر منه واقعتان. «الحدّ اجتهادٌ لا نصّ، وقد يختلف بين متجرٍ وآخر» — فهو
+  /// للتاجر، ويُعرَض في التقرير مع كل واقعة كي يُقرأ الاستنتاجُ استنتاجاً.
+  posOfflineGapMinutes Int @default(2)
   subStart        DateTime?
   subEnd          DateTime?
 
@@ -260,6 +266,7 @@ model Company {
   zatcaCredential ZatcaCredential?
   /// وحدات الإصدار (`EGS`) — الافتراضية للويب، وواحدةٌ لكل طرف بيع (`ق-١٦٩`).
   egsUnits        EgsUnit[]
+  posOfflineIncidents PosOfflineIncident[]
 
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
@@ -592,6 +599,36 @@ model ZatcaCredential {
 }
 
 /// نوع الوحدة — **الويب الإداري وحدةٌ افتراضية واحدة، وكل طرف بيعٍ وحدة** (`ق-١٦٩`).
+/// ⭐ **واقعةُ انقطاعٍ مستنتَجة على الخادم** (`ق-١٩٢`/ج · `ق-٢٠١`).
+///
+/// الهيئة توجب حفظَ السجلات عند تعطّل الحلّ (§10 · م ٧/٥) — «والتاجر قد يُسأل».
+/// ولا هويةَ طرفيةٍ عندنا (معلَّقة على ج/د)، فالواقعة **تُستنتَج من البيوع المزامَنة**:
+/// بيعٌ رنَّ قبل مزامنته بأكثر من حدّ الفصل يفتح نافذةً من **أزمنة الرنّ** — لا من
+/// ترتيب الوصول، فالمزامنة قد تصل مبعثرة (`ق-٢٠١`/٣) — وبيعٌ يقع ضمن حدّ الفصل من
+/// نافذةٍ قائمة يمدّها، وبيعٌ يجسر نافذتَين يدمجهما. **استنتاجٌ لا قياس**: حدُّه
+/// يُحفظ مع كل واقعة ويُعرَض في التقرير. وإبلاغُ الجهاز بنفسه بندٌ تالٍ.
+model PosOfflineIncident {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// أولُ رنٍّ وآخرُه داخل النافذة.
+  startedAt DateTime
+  endedAt   DateTime
+  /// أولُ مزامنةٍ أنشأت الواقعة — لحظةُ عودة الاتصال كما رآها الخادم.
+  firstSyncedAt DateTime
+  /// حدُّ الفصل الذي استُنتجت به — يُعرَض مع الواقعة لا يُخفى.
+  gapMinutes Int
+
+  invoices Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, startedAt])
+  @@map("pos_offline_incidents")
+}
+
 enum EgsUnitKind {
   /// الوحدة الافتراضية للمنشأة: الويب الإداري. تسلسليُّها `3-{companyId}` —
   /// **هو نفسه الذي في طلب الشهادة القائم**، فتبقى الشهادة صالحة بلا إعادة ربط.
@@ -907,6 +944,11 @@ model Invoice {
   /// `20260905120000_icv_per_unit` (Prisma لا تعبّر عن `CHECK`).
   egsUnitId         String?
   egsUnit           EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
+
+  /// واقعةُ الانقطاع التي استُنتج أن هذا البيع وقع فيها (`ق-١٩٢`/ج) — `SetNull`:
+  /// دمجُ واقعتَين يُعيد توجيه بيوعهما ثم يحذف الفارغة، ولا يُفقد بيعٌ صلتَه بغيره.
+  offlineIncidentId String?
+  offlineIncident   PosOfflineIncident? @relation(fields: [offlineIncidentId], references: [id], onDelete: SetNull)
 
   zatcaUuid         String?
   zatcaHash         String?

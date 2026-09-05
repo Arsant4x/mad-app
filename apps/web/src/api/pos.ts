@@ -58,6 +58,14 @@ export const closeShift = (id: string, declaredClosing: number, notes?: string) 
 export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMethod, customerId?: string) =>
   apiClient.post<PosSaleResponse>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
 
+/** وقائعُ الانقطاع المستنتَجة على الخادم (ق-١٩٢/ج · ق-٢٠١) — استنتاجٌ لا قياس، وحدُّه ظاهر. */
+export interface PosOfflineIncidents {
+  inferred: true;
+  gapMinutes: number;
+  items: { id: string; startedAt: string; endedAt: string; firstSyncedAt: string; gapMinutes: number; durationMinutes: number; salesCount: number }[];
+}
+export const getPosIncidents = () => apiClient.get<PosOfflineIncidents>('/pos/incidents').then((r) => r.data);
+
 /** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
 export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
   apiClient.post<PosSaleResponse>('/pos/sales/sync', sale).then((r) => r.data);

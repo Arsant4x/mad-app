@@ -31,6 +31,13 @@ export class PosController {
     return this.posService.currentShift(tenant);
   }
 
+  /** وقائعُ الانقطاع المستنتَجة — بمدّتها وعدد فواتيرها وحدّ استنتاجها (`ق-١٩٢`/ج · `ق-٢٠١`). */
+  @Get('incidents')
+  @RequiresAction('view')
+  incidents(@CurrentTenant() tenant: TenantContext) {
+    return this.posService.listIncidents(tenant.companyId);
+  }
+
   @Post('shifts')
   @RequiresAction('record')
   openShift(@CurrentTenant() tenant: TenantContext, @Body() dto: OpenShiftDto) {

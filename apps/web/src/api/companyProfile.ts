@@ -22,6 +22,8 @@ export interface CompanyProfile {
   logoFileKey: string | null;
   /** Freezes properties/contracts company-wide. */
   masterDataLocked: boolean;
+  /** حدُّ فصل وقائع الانقطاع بالدقائق — إعدادٌ للتاجر يُعرَض مع كل واقعة (ق-٢٠١). */
+  posOfflineGapMinutes: number;
 }
 
 export interface CompanyProfileInput {
@@ -42,6 +44,7 @@ export interface CompanyProfileInput {
   /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
   logoFileKey?: string;
   masterDataLocked?: boolean;
+  posOfflineGapMinutes?: number;
 }
 
 export const getCompanyProfile = () => apiClient.get<CompanyProfile>('/company-profile').then((r) => r.data);

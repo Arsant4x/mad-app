@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsOptional, IsString, Matches, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 
 export class UpdateCompanyProfileDto {
@@ -103,4 +103,12 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsBoolean()
   writeOffRequiresTwoPersons?: boolean;
+
+  /// حدُّ فصل وقائع الانقطاع بالدقائق (`ق-٢٠١`/٢) — إعدادٌ للتاجر لا ثابتٌ في الكود؛
+  /// بين دقيقةٍ ويوم: أقلُّ من دقيقةٍ يجعل كل تأخّرِ شبكةٍ انقطاعاً، وأكثرُ من يومٍ يمحو الوقائع.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  posOfflineGapMinutes?: number;
 }

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatMoney } from '../../lib/money';
+import { getPosIncidents, type PosOfflineIncidents } from '../../api/pos';
+import { updateCompanyProfile } from '../../api/companyProfile';
 import {
   getZatcaOnboarding,
   getZatcaUnreported,
@@ -35,6 +37,10 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
   const [otp, setOtp] = useState('');
   /** «صادرٌ لم يصل» (ق-١٨٢/٢) — يُقرأ مع الحالة، ويُعرض للمربوطة وغيرها بصياغةٍ مختلفة. */
   const [unreported, setUnreported] = useState<ZatcaUnreported | null>(null);
+  /** وقائعُ الانقطاع المستنتَجة (ق-١٩٢/ج · ق-٢٠١) وحدُّ فصلها — إعدادٌ للتاجر. */
+  const [incidents, setIncidents] = useState<PosOfflineIncidents | null>(null);
+  const [gapInput, setGapInput] = useState<string>('');
+  const [gapSaving, setGapSaving] = useState(false);
 
   useEffect(() => {
     getZatcaOnboarding()
@@ -44,7 +50,32 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
     getZatcaUnreported()
       .then(setUnreported)
       .catch(() => undefined);
+    getPosIncidents()
+      .then((r) => {
+        setIncidents(r);
+        setGapInput(String(r.gapMinutes));
+      })
+      .catch(() => undefined);
   }, []);
+
+  /** الحدّ إعدادٌ لا ثابت (ق-٢٠١/٢أ) — يُحفظ في ملف المنشأة، والـPATCH جزئيّ فلا يمسّ غيرَه. */
+  async function saveGap() {
+    const minutes = Number(gapInput);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
+      setError('حدُّ الفصل عددٌ صحيح من الدقائق بين ١ و١٤٤٠');
+      return;
+    }
+    setGapSaving(true);
+    setError(null);
+    try {
+      await updateCompanyProfile({ posOfflineGapMinutes: minutes });
+      setIncidents(await getPosIncidents());
+    } catch (e) {
+      setError(serverMessage(e, 'تعذّر حفظ حدّ الفصل'));
+    } finally {
+      setGapSaving(false);
+    }
+  }
 
   function serverMessage(e: unknown, fallback: string): string {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -183,6 +214,51 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
             </tbody>
           </table>
           {unreported.items.length > 50 && <p className="hint">يُعرض أول ٥٠ من {unreported.count}.</p>}
+        </div>
+      )}
+
+      {/* وقائع الانقطاع (ق-١٩٢/ج): مستنتَجةٌ على الخادم من أزمنة الرنّ — وحدُّ الاستنتاج ظاهرٌ مع التقرير (ق-٢٠١/٢ب). */}
+      {incidents && (
+        <div data-testid="pos-offline-incidents" style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>وقائع الانقطاع — مستنتَجة، والفصل {incidents.gapMinutes} دقيقة</div>
+          <p className="hint" style={{ marginBottom: 8 }}>
+            واقعةٌ مستنتَجة من أزمنة رنّ البيوع التي زُومنت بعد رنّها بأكثر من حدّ الفصل — استنتاجٌ لا قياسٌ من الجهاز. تحفظها المنشأة لأن الهيئة توجب حفظ السجلات عند تعطّل الحلّ وقد تسأل عنها.
+          </p>
+          {canEdit && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <label className="hint" htmlFor="pos-gap-minutes">حدّ الفصل (دقائق)</label>
+              <input id="pos-gap-minutes" type="number" min={1} max={1440} value={gapInput} onChange={(e) => setGapInput(e.target.value)} style={{ width: 90 }} />
+              <button className="btn btn-ghost btn-sm" disabled={gapSaving || busy} onClick={saveGap}>
+                حفظ
+              </button>
+            </div>
+          )}
+          {incidents.items.length === 0 ? (
+            <p className="hint">لا وقائعَ مستنتَجة.</p>
+          ) : (
+            <table className="table" style={{ fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th>من</th>
+                  <th>إلى</th>
+                  <th>المدة</th>
+                  <th>الفواتير</th>
+                  <th>الفصل</th>
+                </tr>
+              </thead>
+              <tbody>
+                {incidents.items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="num">{new Date(it.startedAt).toLocaleString('ar-SA')}</td>
+                    <td className="num">{new Date(it.endedAt).toLocaleString('ar-SA')}</td>
+                    <td className="num">{it.durationMinutes} د</td>
+                    <td className="num">{it.salesCount}</td>
+                    <td className="num">{it.gapMinutes} د</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </div>

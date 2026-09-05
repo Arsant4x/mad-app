@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantContext } from '../auth/types';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -72,6 +72,8 @@ export interface ShiftTotals {
  */
 @Injectable()
 export class PosService {
+  private readonly logger = new Logger(PosService.name);
+
   constructor(
     private readonly tenantPrisma: TenantPrismaService,
     private readonly invoicesService: InvoicesService,
@@ -159,7 +161,7 @@ export class PosService {
     const existing = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
     if (existing) return this.withReceiptQr(tenant.companyId, existing);
     try {
-      return await this.ring(tenant, dto, {
+      const sold = await this.ring(tenant, dto, {
         clientSaleId: dto.clientSaleId,
         offlineRef: dto.offlineRef,
         ringAt: dto.ringAt,
@@ -168,6 +170,12 @@ export class PosService {
         // عند المزامنة؛ البوابة تُستشار في البيع الحي فقط.
         viaSync: true,
       });
+      // (ج) `ق-١٩٢`: واقعةُ الانقطاع تُستنتَج بعد أن التزم البيع — وسقوطُ استنتاجها
+      // لا يُسقط بيعاً التزم؛ يُسجَّل ويُقاس لا يُعمّى.
+      await this.recordOfflineIncident(tenant.companyId, sold.id, dto.ringAt).catch((e: Error) =>
+        this.logger.warn(`تعذّر استنتاج واقعة الانقطاع للبيع ${sold.id}: ${e.message}`),
+      );
+      return sold;
     } catch (e) {
       // Two terminals racing the same clientSaleId: the loser reads the
       // winner's row — the caller cannot tell the difference, by design.
@@ -177,6 +185,84 @@ export class PosService {
       }
       throw e;
     }
+  }
+
+  /**
+   * ⭐ **واقعةُ انقطاعٍ مستنتَجة على الخادم** (`ق-١٩٢`/ج · `ق-٢٠١`).
+   *
+   * لا هويةَ طرفيةٍ عندنا، فالانقطاع يُستنتَج من البيوع المزامَنة: بيعٌ رنَّ قبل
+   * مزامنته بأكثر من **حدّ الفصل** (إعدادُ المنشأة `posOfflineGapMinutes`) وقع في
+   * انقطاع. **والنافذة من أزمنة الرنّ لا من ترتيب الوصول** (`ق-٢٠١`/٣): المزامنة
+   * تصل مبعثرةً — الأحدثُ قبل الأقدم، أو بيعٌ متأخّر يقع **بين** واقعتَين قائمتَين
+   * فيجسرهما — فتُلتقط كلُّ الوقائع التي تتقاطع نافذتُها `[الرنّ − الحدّ، الرنّ + الحدّ]`
+   * وتُدمَج في أولها؛ بيوعُ المدموجة تُعاد إلى الباقية **قبل** حذفها.
+   *
+   * حدُّ الاستنتاج يُحفظ مع الواقعة ويُعرَض في التقرير: **استنتاجٌ لا قياس**.
+   * وبيعٌ تأخّرُه دون الحدّ ليس انقطاعاً — بطء شبكةٍ لا غيابُها.
+   */
+  private async recordOfflineIncident(companyId: string, invoiceId: string, ringAtIso: string | undefined, now = new Date()): Promise<string | null> {
+    if (!ringAtIso) return null;
+    const ringAt = new Date(ringAtIso);
+    if (Number.isNaN(ringAt.getTime())) return null;
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } });
+      const gapMs = company.posOfflineGapMinutes * 60_000;
+      if (now.getTime() - ringAt.getTime() < gapMs) return null;
+
+      const lo = new Date(ringAt.getTime() - gapMs);
+      const hi = new Date(ringAt.getTime() + gapMs);
+      const overlapping = await tx.posOfflineIncident.findMany({
+        where: { startedAt: { lte: hi }, endedAt: { gte: lo } },
+        orderBy: { startedAt: 'asc' },
+      });
+
+      if (overlapping.length === 0) {
+        const created = await tx.posOfflineIncident.create({
+          data: { companyId, startedAt: ringAt, endedAt: ringAt, firstSyncedAt: now, gapMinutes: company.posOfflineGapMinutes },
+        });
+        await tx.invoice.update({ where: { id: invoiceId }, data: { offlineIncidentId: created.id } });
+        return created.id;
+      }
+
+      const [survivor, ...absorbed] = overlapping;
+      const times = [ringAt, ...overlapping.map((i) => i.startedAt), ...overlapping.map((i) => i.endedAt)].map((d) => d.getTime());
+      const startedAt = new Date(Math.min(...times));
+      const endedAt = new Date(Math.max(...times));
+      const firstSyncedAt = new Date(Math.min(now.getTime(), ...overlapping.map((i) => i.firstSyncedAt.getTime())));
+      if (absorbed.length > 0) {
+        // جَسْرٌ: بيعٌ متأخّر ربط واقعتَين — بيوعُهما تُعاد أولاً، ثم تُحذف الفارغة.
+        const ids = absorbed.map((a) => a.id);
+        await tx.invoice.updateMany({ where: { offlineIncidentId: { in: ids } }, data: { offlineIncidentId: survivor.id } });
+        await tx.posOfflineIncident.deleteMany({ where: { id: { in: ids } } });
+      }
+      await tx.posOfflineIncident.update({ where: { id: survivor.id }, data: { startedAt, endedAt, firstSyncedAt } });
+      await tx.invoice.update({ where: { id: invoiceId }, data: { offlineIncidentId: survivor.id } });
+      return survivor.id;
+    });
+  }
+
+  /** تقريرُ وقائع الانقطاع — بحدّ الاستنتاج ظاهراً مع كل واقعة (`ق-٢٠١`/٢ب). */
+  listIncidents(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const [company, rows] = await Promise.all([
+        tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } }),
+        tx.posOfflineIncident.findMany({ orderBy: { startedAt: 'desc' }, take: 100, include: { _count: { select: { invoices: true } } } }),
+      ]);
+      return {
+        /** استنتاجٌ من أزمنة رنّ البيوع المزامَنة — لا قياسٌ من الجهاز. */
+        inferred: true as const,
+        gapMinutes: company.posOfflineGapMinutes,
+        items: rows.map((r) => ({
+          id: r.id,
+          startedAt: r.startedAt,
+          endedAt: r.endedAt,
+          firstSyncedAt: r.firstSyncedAt,
+          gapMinutes: r.gapMinutes,
+          durationMinutes: Math.round((r.endedAt.getTime() - r.startedAt.getTime()) / 60_000),
+          salesCount: r._count.invoices,
+        })),
+      };
+    });
   }
 
   private findByClientSaleId(companyId: string, clientSaleId: string) {
