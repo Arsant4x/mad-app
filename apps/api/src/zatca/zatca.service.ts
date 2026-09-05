@@ -70,8 +70,9 @@ export class ZatcaService {
      *
      * `nextIcv` يبني على `count()+1` بلا قفل، فجولتان متزامنتان تحسبان الموقع
      * نفسه. والقياس قبل القيد (٢٠٢٦-٠٨-١٥): من ١٢ جولة، **١١ حملت ICV مكرَّراً**
-     * (`1,1,3,3,5,5,…`). ثم حوّل `@@unique([companyId, zatcaIcv])` الفسادَ
-     * الصامت إلى `P2002` **ظاهر** — وهذا اللفّ يجعله يتقارب بدل أن يردّ 500.
+     * (`1,1,3,3,5,5,…`). ثم حوّل القيدُ الفريد على الموقع الفسادَ الصامت إلى
+     * `P2002` **ظاهر** — وهذا اللفّ يجعله يتقارب بدل أن يردّ 500. (كان القيد على
+     * المنشأة، وصار في الدفعة (ب) على الوحدة: `@@unique([egsUnitId, zatcaIcv])`.)
      *
      * ## ولماذا اللفّ آمنٌ هنا بالذات — ثلاث خصائص من المصدر لا من الظنّ
      *
@@ -115,8 +116,23 @@ export class ZatcaService {
       // يُلتزم صفّ، ولا وجود لمستندٍ تُحفظ هويته. والشرط `?? ` هو ما يحمي
       // الحالة الأولى: صفٌّ ملتزَم يحمل UUID يُقرأ فيُعاد استعماله.
       const uuid = invoice.zatcaUuid ?? randomUUID();
-      const previousHash = invoice.zatcaPreviousHash ?? (await latestChainHash(tx));
-      const icv = invoice.zatcaIcv ?? (await nextIcv(tx));
+
+      /**
+       * ⭐ **الوحدة قبل العدّاد والسلسلة — لأنهما لها** (`ق-١٧٧`، الدفعة ب).
+       *
+       * الهيئة: «تسلسلٌ واحد لكل `EGS` ربطها» (الدليل الفني المفصّل v2)، و`ICV`
+       * يبدأ من `1` لكل `CSID` (موظف الهيئة، مجتمع فاتورة 7680). فالوحدة تُحسم
+       * **أولاً**، ثم يُعَدّ داخلها ويُقرأ آخر مقبولٍ فيها. واليوم وحدةٌ افتراضية
+       * واحدة لكل منشأة، فالأرقام لم تتغيّر — والتعبئة في (أ) هي ما جعل كل مستندٍ
+       * قائمٍ يحمل وحدته سلفاً، فلا مستندَ بلا وحدة يفلت من العدّ.
+       *
+       * ومستندٌ أُعيد إرساله يحمل وحدته وموقعه وسلفَه من المحاولة الأولى (`??`)،
+       * فلا يُعاد عدُّه — الوحدة الافتراضية تُنشأ إن غابت، لا افتراضٌ أن التعبئة
+       * أدركت هذه المنشأة.
+       */
+      const unit = await ensureDefaultUnit(tx, companyId);
+      const previousHash = invoice.zatcaPreviousHash ?? (await latestChainHash(tx, unit.id));
+      const icv = invoice.zatcaIcv ?? (await nextIcv(tx, unit.id));
       const invoiceType = invoiceTypeFor(invoice.customer.vatNumber);
 
       /**
@@ -156,14 +172,9 @@ export class ZatcaService {
         }
       }
 
-      /**
-       * ⭐ **الوحدة تُختم على المستند من الآن** (`ق-١٧١`، دفعة أ) — **والعدّاد
-       * والسلسلة ما زالا على المنشأة** (`nextIcv` · `latestChainHash` أعلاه بلا
-       * وحدة). فالختم هنا **إثباتُ التعبئة قبل أن يعتمد عليها شيء**: حين تنتقل
-       * (ب) إلى `(egsUnitId, icv)` يكون كل مستندٍ محاطٍ يحمل وحدته سلفاً.
-       * والافتراضية تُنشأ إن غابت — لا افتراضٌ أن التعبئة أدركت هذه المنشأة.
-       */
-      const unit = await ensureDefaultUnit(tx, companyId);
+      // الوحدة التي عُدَّ داخلها هي التي تُختم على المستند — كتابةٌ واحدة تحمل
+      // الوحدةَ والموقعَ والسلفَ معاً، و`CHECK "invoices_icv_requires_unit"` في
+      // القاعدة يرفض موقعاً بلا وحدة بالشكل لا بالفحص (`ق-١٥٩`).
       await tx.invoice.update({
         where: { id: invoiceId },
         data: { egsUnitId: unit.id, zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
