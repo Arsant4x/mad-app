@@ -663,4 +663,25 @@ export class InvoicesService {
     }, 0);
     return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
   }
+
+  /**
+   * الوسوم الخمسة لمستندٍ واحد — لإيصال الكاشير (`ق-١٨٦`): **البنّاءُ نفسه وساعةُ
+   * الحائط نفسها** التي تُصدَر بها قائمة الفواتير، فلا يفترق رمزُ الإيصال عن رمز
+   * القائمة يوماً أو حرفاً. مشتقٌّ لا مخزَّن، للسبب المشروح في `list()`.
+   */
+  async zatcaQrFor(
+    companyId: string,
+    inv: { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal | number; taxTotal: Prisma.Decimal | number },
+  ): Promise<string | null> {
+    const company = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.company.findUnique({ where: { id: companyId }, select: { legalName: true, vatNumber: true } }),
+    );
+    return buildZatcaQr({
+      sellerName: company?.legalName ?? '',
+      vatNumber: company?.vatNumber ?? '',
+      issued: issuedWallClock(inv),
+      total: Number(inv.total),
+      vatAmount: Number(inv.taxTotal),
+    });
+  }
 }
