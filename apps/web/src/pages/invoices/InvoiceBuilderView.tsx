@@ -49,7 +49,7 @@ export function InvoiceBuilderView({
   editing: Invoice | null;
   nextNumberHint: string;
   onCancel: () => void;
-  onSave: (data: { customerId: string; issueDate: string; dueDate: string; notes: string; branchId: string; lines: LineDraft[] }) => Promise<void>;
+  onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: LineDraft[] }) => Promise<void>;
   onCreateCustomer: (name: string) => Promise<Customer>;
 }) {
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
@@ -93,7 +93,10 @@ export function InvoiceBuilderView({
     try {
       let customer = customers.find((c) => c.name === name);
       if (!customer) customer = await onCreateCustomer(name);
-      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines });
+      // فاتورةٌ مؤرَّخةٌ باليوم تحمل لحظةَ الجهاز وانحرافَه؛ والمؤرَّخة بيدٍ في يومٍ آخر
+      // لا وقتَ معلوماً لها فلا يُخترَع (ق-١٨٥).
+      const stamped = issueDate === today() ? { issuedAt: new Date().toISOString(), issuedOffsetMin: -new Date().getTimezoneOffset() } : {};
+      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines, ...stamped });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_invoice_save')));
     } finally {

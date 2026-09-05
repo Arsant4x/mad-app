@@ -148,6 +148,8 @@ export function PosPage() {
       clientSaleId: newClientSaleId(),
       offlineRef: newOfflineRef(),
       ringAt: new Date().toISOString(),
+      // انحرافُ الجهاز مع اللحظة: يومُ الفاتورة ووقتُها يومُ التاجر لا يومُ UTC (ق-١٨٥).
+      ringOffsetMin: -new Date().getTimezoneOffset(),
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
       paymentMethod: method,
       payments,

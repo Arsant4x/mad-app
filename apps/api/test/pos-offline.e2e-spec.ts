@@ -59,8 +59,34 @@ describe('POS offline sync (e2e)', () => {
     expect(res.body.status).toBe('PAID');
     expect(res.body.no).toBeTruthy();
     expect(res.body.offlineRef).toBe('OFF-TEST1');
-    // يوم الرنّ، لا يوم المزامنة.
+    // يوم الرنّ، لا يوم المزامنة. (بلا انحرافٍ مُرسَل: يومُ UTC كما كان — الحدّ المعلَن.)
     expect(String(res.body.issueDate).slice(0, 10)).toBe('2026-08-06');
+    expect(res.body.issuedAt ?? null).toBeNull();
+  }, 60000);
+
+  it('يومُ الفاتورة يومُ الجهاز: بيعٌ في 01:15 بتوقيت الرياض يُؤرَّخ بيومه لا بأمس (ق-١٨٥)', async () => {
+    // 22:15Z = 01:15 من اليوم التالي على +03:00. كان يُؤرَّخ 2026-09-04 — فيُبلَّغ بأمس
+    // وقد يقع خارج نافذة الـ٢٤ ساعة ونحن من صنعها.
+    const ringAt = '2026-09-04T22:15:00.000Z';
+    const riyadh = await auth(request(app.getHttpServer()).post('/pos/sales/sync'))
+      .send({ clientSaleId: randomUUID(), ringAt, ringOffsetMin: 180, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' })
+      .expect(201);
+    invoiceIds.push(riyadh.body.id);
+    expect(String(riyadh.body.issueDate).slice(0, 10)).toBe('2026-09-05');
+    expect(new Date(riyadh.body.issuedAt).toISOString()).toBe(ringAt);
+    expect(riyadh.body.issuedOffsetMin).toBe(180);
+
+    // الوجه الثاني: اللحظة نفسها من جهازٍ على UTC تبقى في يومها — فالاختبار يمسك الانحراف لا الصدفة.
+    const utc = await auth(request(app.getHttpServer()).post('/pos/sales/sync'))
+      .send({ clientSaleId: randomUUID(), ringAt, ringOffsetMin: 0, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' })
+      .expect(201);
+    invoiceIds.push(utc.body.id);
+    expect(String(utc.body.issueDate).slice(0, 10)).toBe('2026-09-04');
+
+    // انحرافٌ بلا لحظة يُرفَض بالشكل: لا معنى له وحده.
+    await auth(request(app.getHttpServer()).post('/pos/sales/sync'))
+      .send({ clientSaleId: randomUUID(), ringOffsetMin: 180, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' })
+      .expect(400);
   }, 60000);
 
   it('resending the same sale returns the SAME invoice — never a duplicate', async () => {

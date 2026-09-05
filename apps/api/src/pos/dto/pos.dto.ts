@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 
 export class OpenShiftDto {
   /** العهدة الافتتاحية — what the drawer starts with. Zero is a valid float. */
@@ -63,6 +63,22 @@ export class CreatePosSaleDto {
   @IsOptional()
   @IsString()
   customerId?: string;
+
+  /**
+   * متى رُنّ البيع فعلاً (ISO) **وانحرافُ الجهاز عن UTC بالدقائق** (`ق-١٨٥`) —
+   * للبيع الحيّ والمزامَن سواء: منهما يُشتقّ يومُ الفاتورة **ووقتُها** كما يقرؤهما
+   * التاجر، لا تاريخُ UTC ولا منتصفُ الليل. **انحرافٌ بلا لحظةٍ يُرفَض** — لا معنى له
+   * وحده؛ ولحظةٌ بلا انحراف تُقبَل (طرفيةٌ أقدم) وتُعامَل بيوم UTC كما كانت.
+   */
+  @ValidateIf((o: CreatePosSaleDto) => o.ringAt !== undefined || o.ringOffsetMin !== undefined)
+  @IsDateString()
+  ringAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  ringOffsetMin?: number;
 }
 
 /** مزامنة بيع أوفلاين: نفس البيع + هوية الطرفية التي تجعل الإرسال آمن التكرار. */
@@ -75,9 +91,4 @@ export class SyncPosSaleDto extends CreatePosSaleDto {
   @IsOptional()
   @IsString()
   offlineRef?: string;
-
-  /** متى رُنّ البيع فعلاً (ISO) — يُحفظ تاريخَ الفاتورة لا تاريخ عودة الشبكة. */
-  @IsOptional()
-  @IsDateString()
-  ringAt?: string;
 }

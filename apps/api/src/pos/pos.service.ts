@@ -10,6 +10,7 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
+import { localDateOf } from '../common/wall-clock.util';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
@@ -142,7 +143,7 @@ export class PosService {
 
   /** بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة. */
   createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
-    return this.ring(tenant, dto, {});
+    return this.ring(tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin });
   }
 
   /**
@@ -159,7 +160,8 @@ export class PosService {
       return await this.ring(tenant, dto, {
         clientSaleId: dto.clientSaleId,
         offlineRef: dto.offlineRef,
-        issueDate: dto.ringAt?.slice(0, 10),
+        ringAt: dto.ringAt,
+        ringOffsetMin: dto.ringOffsetMin,
         // بيع أوفلاين أُخذت بطاقته على الجهاز وقت الانقطاع — لا نعيد تمريرها
         // عند المزامنة؛ البوابة تُستشار في البيع الحي فقط.
         viaSync: true,
@@ -184,7 +186,7 @@ export class PosService {
   private async ring(
     tenant: TenantContext,
     dto: CreatePosSaleDto,
-    opts: { clientSaleId?: string; offlineRef?: string; issueDate?: string; viaSync?: boolean },
+    opts: { clientSaleId?: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; viaSync?: boolean },
   ) {
     const { shiftId, shiftBranchId, branchWarehouseId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
@@ -203,13 +205,24 @@ export class PosService {
       if (missing) throw new NotFoundException(MSG.product_not_found);
 
       const customerId = dto.customerId ?? (await this.walkInCustomerId(tx));
-      const today = new Date().toISOString().slice(0, 10);
-      // An offline sale keeps the day it was actually rung, not the day the
-      // connection came back.
-      const issueDate = opts.issueDate ?? today;
+      /**
+       * ⭐ **يومُ الفاتورة يومُ الجهاز، لا يومُ UTC ولا يومُ عودة الشبكة** (`ق-١٨٥`).
+       *
+       * كان يُشتقّ من `toISOString().slice(0, 10)` — تاريخُ UTC — فبيعٌ في الواحدة
+       * صباحاً بتوقيت الرياض يُؤرَّخ **أمس**، وبيعٌ أوفلاين يُزامَن بعد يوم يُبلَّغ
+       * بتاريخٍ خارج نافذة الـ٢٤ ساعة **ونحن من صنعها**. الآن: اللحظة من الجهاز
+       * (`ringAt`) وانحرافُه معها، فيُحسب يومُه؛ وتُحفظ اللحظةُ والانحراف لمستند
+       * الهيئة. طرفيةٌ لم تُرسل انحرافاً (عميلٌ أقدم) تُعامَل كما كانت: يومُ UTC
+       * بلا وقتٍ معلوم — حدٌّ معلَن لا تخمين.
+       */
+      const rungAt = opts.ringAt ? new Date(opts.ringAt) : new Date();
+      const offsetKnown = opts.ringAt !== undefined && opts.ringOffsetMin !== undefined;
+      const issueDate = localDateOf(rungAt, offsetKnown ? opts.ringOffsetMin! : 0);
       const invoiceDto = {
         customerId,
         issueDate,
+        issuedAt: offsetKnown ? rungAt.toISOString() : undefined,
+        issuedOffsetMin: offsetKnown ? opts.ringOffsetMin : undefined,
         // Paid on the spot — due = issue keeps it out of every aging bucket.
         dueDate: issueDate,
         branchId: shift.branchId ?? undefined,

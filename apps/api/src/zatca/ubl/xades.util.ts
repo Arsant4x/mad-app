@@ -5,6 +5,7 @@ import * as x509 from '@peculiar/x509';
 import xpath from 'xpath';
 import { canonicalBytes, parseXml } from './canonicalize.util';
 import { formatMoney } from '../../common/money/rounding';
+import { qrTimestamp, type WallClock } from '../../common/wall-clock.util';
 
 /**
  * The XAdES enveloped signature ZATCA requires inside `ext:UBLExtensions`.
@@ -68,7 +69,7 @@ export interface SignInvoiceInput {
    * issues it — this is the `binarySecurityToken`. */
   certificateBase64: string;
   /** Seller/VAT/total/vat/timestamp for the QR. */
-  qr: { sellerName: string; vatNumber: string; issuedAt: Date; total: number; vatAmount: number };
+  qr: { sellerName: string; vatNumber: string; issued: WallClock; total: number; vatAmount: number };
   /** Fixed by the caller so a re-signed invoice is reproducible in tests. */
   signingTime?: Date;
 }
@@ -94,7 +95,7 @@ function tlv(tag: number, value: Buffer): Buffer {
 function buildPhase2Qr(input: {
   sellerName: string;
   vatNumber: string;
-  issuedAt: Date;
+  issued: WallClock;
   total: number;
   vatAmount: number;
   invoiceHash: string;
@@ -107,7 +108,8 @@ function buildPhase2Qr(input: {
   return Buffer.concat([
     tlv(1, utf8(input.sellerName)),
     tlv(2, utf8(input.vatNumber)),
-    tlv(3, utf8(input.issuedAt.toISOString())),
+    // الطابع الزمني = `IssueDate`T`IssueTime` حرفاً — اختلافُهما يُرَدّ `QRCODE_INVALID` (`ق-١٨٥`).
+    tlv(3, utf8(qrTimestamp(input.issued))),
     tlv(4, utf8(formatMoney(input.total))),
     tlv(5, utf8(formatMoney(input.vatAmount))),
     // 6–9 are what makes this a phase-2 QR: they let anyone holding the code

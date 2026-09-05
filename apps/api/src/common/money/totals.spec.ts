@@ -22,7 +22,7 @@ const ADVERSARIAL: MoneyLine[] = [
 const baseInput = (lines: MoneyLine[], totals = computeDocumentTotals(lines)): UblInvoiceInput => ({
   number: 'INV-1',
   uuid: '11111111-1111-1111-1111-111111111111',
-  issuedAt: new Date('2026-06-01T09:30:00.000Z'),
+  issued: { date: '2026-06-01', time: '09:30:00' },
   invoiceType: 'standard',
   icv: 1,
   pih: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==',

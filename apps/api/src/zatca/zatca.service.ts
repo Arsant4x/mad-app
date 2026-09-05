@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
+import { issuedWallClock, type WallClock } from '../common/wall-clock.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { computeDocumentTotals } from '../common/money/totals';
 import { PrismaService } from '../prisma/prisma.service';
@@ -196,10 +197,12 @@ export class ZatcaService {
         }
       }
 
+      // يومُ الإصدار ووقتُه من لحظة الجهاز وانحرافه — لا من عمود اليوم وحده (`ق-١٨٥`).
+      const issued = issuedWallClock(invoice);
       const xml = buildUnsignedInvoiceXml({
         number: invoice.no,
         uuid,
-        issuedAt: invoice.issueDate,
+        issued,
         invoiceType,
         // Credit/debit notes travel as the same Invoice structure with type
         // code 381/383 plus the original's reference and the reason — and
@@ -253,7 +256,7 @@ export class ZatcaService {
         qr: {
           sellerName: company.legalName!,
           vatNumber: company.vatNumber!,
-          issuedAt: invoice.issueDate,
+          issued,
           total: Number(invoice.total),
           vatAmount: Number(invoice.taxTotal),
         },
@@ -282,7 +285,7 @@ export class ZatcaService {
       xml: string;
       uuid: string;
       invoiceType: 'standard' | 'simplified';
-      qr: { sellerName: string; vatNumber: string; issuedAt: Date; total: number; vatAmount: number };
+      qr: { sellerName: string; vatNumber: string; issued: WallClock; total: number; vatAmount: number };
     },
   ) {
     try {

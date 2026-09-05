@@ -9,6 +9,7 @@ import { StartOnboardingDto, SubmitOtpDto } from './dto/onboarding.dto';
 import { csrToBase64, generateCsr, ZatcaEnv } from './csr.util';
 import { defaultUnitSerial, ensureDefaultUnit, SOLUTION_NAME } from './egs-unit.util';
 import { GENESIS_PREVIOUS_HASH } from './hash-chain.util';
+import { wallClockOf } from '../common/wall-clock.util';
 import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
 
@@ -329,7 +330,9 @@ export class ZatcaOnboardingService {
       postalCode: company.postalCode,
     };
     const privateKeyPem = decryptSecret(input.privateKeyEnc!);
-    const issuedAt = new Date();
+    // عيّناتُ الامتثال لا جهازَ لها، فتُصدَر UTC بلاحقة `Z` — صيغةٌ تُجيزها الهيئة
+    // بلا زعمِ محليٍّ لا نعرفه (`ق-١٨٥`).
+    const issued = wallClockOf(new Date(), 0);
 
     let pih = GENESIS_PREVIOUS_HASH;
     for (let i = 0; i < COMPLIANCE_SAMPLES.length; i++) {
@@ -343,7 +346,7 @@ export class ZatcaOnboardingService {
       const unsigned = buildUnsignedInvoiceXml({
         number,
         uuid,
-        issuedAt,
+        issued,
         invoiceType: sample.invoiceType,
         documentType: sample.documentType,
         billingReference: sample.documentType === 'invoice' ? undefined : { invoiceNumber: referencedInvoice },
@@ -369,7 +372,7 @@ export class ZatcaOnboardingService {
         unsignedXml: unsigned,
         privateKeyPem,
         certificateBase64: input.complianceCsid,
-        qr: { sellerName: seller.name, vatNumber: seller.vatNumber!, issuedAt, total: 115, vatAmount: 15 },
+        qr: { sellerName: seller.name, vatNumber: seller.vatNumber!, issued, total: 115, vatAmount: 15 },
       });
 
       const res = await fetch(`${apiBaseFor(input.environment)}/compliance/invoices`, {

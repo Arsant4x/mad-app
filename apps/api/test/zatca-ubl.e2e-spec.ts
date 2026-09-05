@@ -46,7 +46,8 @@ describe('ZATCA UBL 2.1 invoice and XAdES signature', () => {
   const baseInvoice: UblInvoiceInput = {
     number: 'INV-2026-0001',
     uuid: '3cf5ee18-ee25-44ea-a444-2c37ba7f28be',
-    issuedAt: new Date('2026-06-01T09:30:00.000Z'),
+    // ساعةُ حائطٍ محليّة بلا لاحقة — كما يُصدرها جهازٌ على توقيت المملكة (ق-١٨٥).
+    issued: { date: '2026-06-01', time: '09:30:00' },
     invoiceType: 'standard',
     icv: 1,
     pih: createHash('sha256').update('0').digest('base64'),
@@ -81,7 +82,7 @@ describe('ZATCA UBL 2.1 invoice and XAdES signature', () => {
       qr: {
         sellerName: input.seller.name,
         vatNumber: input.seller.vatNumber!,
-        issuedAt: input.issuedAt,
+        issued: input.issued,
         total: input.total,
         vatAmount: input.taxTotal,
       },

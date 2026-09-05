@@ -59,5 +59,5 @@ export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMet
   apiClient.post<PosSaleResponse>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
 
 /** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
-export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
+export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
   apiClient.post<PosSaleResponse>('/pos/sales/sync', sale).then((r) => r.data);
