@@ -892,20 +892,24 @@ model Invoice {
   /// authority requires: every invoice commits to its predecessor, so an
   /// altered or removed invoice breaks each hash after it. Both are **stored,
   /// never recomputed** — recomputing on read would defeat the whole point.
-  /// ⭐ **الوحدة التي أصدرت هذا المستند** (`ق-١٥٣` · `ق-١٧١`).
+  /// ⭐ **الوحدة التي أصدرت هذا المستند** (`ق-١٥٣` · `ق-١٧١` · `ق-١٧٧`).
   ///
-  /// الهيئة تعدّ العدّاد والسلسلة **داخل الوحدة** لا المنشأة. في الدفعة (أ)
-  /// يُملأ فقط: تعبئةً للقائم إلى الوحدة الافتراضية، وختماً عند كل إرسالٍ
-  /// جديد — **والعدّاد والسلسلة ما زالا على المنشأة** حتى (ب). فحضورُه هنا
-  /// **إثباتُ التعبئة قبل أن يعتمد عليها شيء**: إن اختلف شيءٌ فهي المتّهم
-  /// الوحيد. و`Restrict`: مستندٌ أُرسل لا يُترك بلا وحدةٍ بحذفها.
+  /// الهيئة تعدّ العدّاد والسلسلة **داخل الوحدة** لا المنشأة («تسلسلٌ واحد لكل
+  /// `EGS` ربطها» — الدليل الفني المفصّل v2). في الدفعة (أ) مُلئ فقط (تعبئةً
+  /// وختماً) بلا أن يعتمد عليه شيء؛ **وفي (ب) صار مفتاح العدّاد والسلسلة**:
+  /// `@@unique([egsUnitId, zatcaIcv])` أدناه، و`nextIcv`/`latestChainHash`
+  /// تشترطانه. و`Restrict`: مستندٌ أُرسل لا يُترك بلا وحدةٍ بحذفها.
+  ///
+  /// ⚠️ اختياريٌّ في النوع لأن مستنداً لم يُرسَل لا وحدةَ له بعد — لكن **موقعٌ
+  /// بلا وحدة مستحيلٌ بالشكل**: `CHECK "invoices_icv_requires_unit"` في الهجرة
+  /// `20260905120000_icv_per_unit` (Prisma لا تعبّر عن `CHECK`).
   egsUnitId         String?
   egsUnit           EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
 
   zatcaUuid         String?
   zatcaHash         String?
   zatcaPreviousHash String?
-  /// Invoice Counter Value — the position in this company's submission
+  /// Invoice Counter Value — the position in **this unit's** submission
   /// sequence, starting at 1. Stored rather than derived because a retry must
   /// keep the number it was first given; a gap or a repeat is a chain defect.
   zatcaIcv          Int?
@@ -960,13 +964,13 @@ model Invoice {
 
   @@unique([companyId, no])
   @@unique([companyId, clientSaleId])
-  /// عدّاد فاتورة الهيئة (ICV) لا يتكرّر داخل المنشأة. `nextIcv` يبني على
-  /// `count()+1` بلا قفل، فجولتان متزامنتان تُصدران الرقم نفسه — مُثبَت
-  /// تشغيلياً: ١١ من ١٢ جولة (2026-08-15). وهو نفس النمط الذي يحرسه
-  /// `@@unique([companyId, no])` أعلاه لرقم المستند — والفرق أن ذاك مصحوب
-  /// بإعادة محاولة على `P2002` وهذا ليس بعد (بند الموجة ١)، فأثره اليوم
-  /// **خطأ ظاهر** بدل رقمٍ مكرَّر صامت.
-  @@unique([companyId, zatcaIcv])
+  /// ⭐ عدّاد فاتورة الهيئة (ICV) لا يتكرّر **داخل الوحدة** (`ق-١٧٧`، الدفعة ب) —
+  /// كان على المنشأة (هجرة `20260815090000`)، والهيئة تعدّه لكل `EGS` مربوطة.
+  /// `nextIcv` يبني على `count()+1` بلا قفل، فجولتان متزامنتان تُصدران الرقم
+  /// نفسه — مُثبَت تشغيلياً: ١١ من ١٢ جولة (2026-08-15)؛ والقيد يحوّله إلى
+  /// `P2002` ظاهر تعالجه إعادة المحاولة في `ZatcaService`. **وحارسٌ يقرأ هذا
+  /// الملف** (`egs-unit.spec.ts`) يسقط إن عاد المفتاح إلى المنشأة.
+  @@unique([egsUnitId, zatcaIcv])
   @@index([relatedInvoiceId])
   @@map("invoices")
 }

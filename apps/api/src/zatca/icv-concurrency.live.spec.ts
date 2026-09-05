@@ -4,6 +4,7 @@ import { AppModule } from '../app.module';
 import { encryptSecret } from '../common/crypto/secret.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+import { GENESIS_PREVIOUS_HASH, latestChainHash, nextIcv } from './hash-chain.util';
 import { ZatcaService } from './zatca.service';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
@@ -19,8 +20,10 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  * نفسه. والقياس قبل القيد الفريد (2026-08-15): من ١٢ جولة **١١ حملت ICV
  * مكرَّراً** — `1,1,3,3,5,5,…`.
  *
- * ثم أضاف الترحيل `@@unique([companyId, zatcaIcv])` فصار التصادم **`P2002`
- * ظاهراً** بدل فسادٍ صامت في سلسلة الهيئة — وهو ما يقيسه الاختبار ② هنا.
+ * ثم أضاف الترحيل قيداً فريداً على الموقع فصار التصادم **`P2002` ظاهراً** بدل
+ * فسادٍ صامت في سلسلة الهيئة — وهو ما يقيسه الاختبار ② هنا. (كان القيد على
+ * المنشأة؛ ومنذ الدفعة (ب) على الوحدة: `invoices_egsUnitId_zatcaIcv_key` —
+ * `ق-١٧٧`. والاختبار ④ يقيس أن وحدةً ثانية تعدّ من `1` ومن الأساس.)
  * وهذا الملف يحرس الطبقة الثانية: **إعادة المحاولة تجعله يتقارب** بدل أن يردّ
  * خطأً على التاجر.
  *
@@ -203,7 +206,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
     // ⚠️ **تُقرأ القيمتان ولا تُفترضان.** أول صياغة كتبت `zatcaIcv: 1` على
     // الفاتورة الثانية — ولو كانت هي صاحبة الموقع ١ لكان التحديث **بلا
     // تغيير**، فلا ينتهك القيد ويُقرأ ذلك «القيد غير قائم» كذباً. والقيد كان
-    // قائماً فعلاً: `invoices_companyId_zatcaIcv_key UNIQUE`.
+    // قائماً فعلاً: `invoices_egsUnitId_zatcaIcv_key UNIQUE` (وقبل (ب): على المنشأة).
     const [first, second] = await Promise.all(invoiceIds.map(icvOf));
     expect(first.zatcaIcv).not.toBe(second.zatcaIcv);
 
@@ -216,7 +219,45 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
       .catch((e: Error) => e);
 
     if (!(err instanceof Error)) throw new Error('القيد الفريد على zatcaIcv غير قائم — التكرار مرّ');
-    expect(String(err.message)).toMatch(/invoices_companyId_zatcaIcv_key|Unique constraint/i);
+    expect(String(err.message)).toMatch(/invoices_egsUnitId_zatcaIcv_key|Unique constraint/i);
+  });
+
+  it('④ العدّاد والسلسلة داخل الوحدة: وحدةٌ ثانية تبدأ من ١ ومن الأساس — والأولى لا تتأثّر', async () => {
+    // الدفعة (ب) (`ق-١٧٧`): نصّ الهيئة «تسلسلٌ واحد لكل EGS ربطها». يُقاس على
+    // القاعدة الحقيقية لا على نسخة: بعد ① تحمل الوحدة الافتراضية موقعَين، فوحدةٌ
+    // ثانية في المنشأة نفسها **يجب** أن تعدّ من ١ وتقرأ الأساس — وإلا فالعدّ ما
+    // زال على المنشأة مهما قال المخطَّط.
+    const { defaultUnit, secondUnit, icvDefault, icvSecond, pihDefault, pihSecond } = await tenantPrisma.runInTenantContext(
+      companyId,
+      async (tx) => {
+        const defaultUnit = await tx.egsUnit.findFirstOrThrow({ where: { companyId, kind: 'DEFAULT_WEB' }, select: { id: true } });
+        const secondUnit = await tx.egsUnit.create({
+          data: { companyId, serial: `1-probe|2-pos|3-${companyId}-${Date.now()}`, kind: 'POS_TERMINAL', label: 'كاشير فحص' },
+          select: { id: true },
+        });
+        // سلفٌ مقبول في الافتراضية — كي يكون للسلسلة ما تُقرأ منه، لا الأساس وحده.
+        await tx.invoice.update({
+          where: { id: invoiceIds[0] },
+          data: { zatcaStatus: 'CLEARED', zatcaHash: 'probe-hash-unit-a', zatcaSubmittedAt: new Date() },
+        });
+        return {
+          defaultUnit,
+          secondUnit,
+          icvDefault: await nextIcv(tx, defaultUnit.id),
+          icvSecond: await nextIcv(tx, secondUnit.id),
+          pihDefault: await latestChainHash(tx, defaultUnit.id),
+          pihSecond: await latestChainHash(tx, secondUnit.id),
+        };
+      },
+    );
+
+    expect(defaultUnit.id).not.toBe(secondUnit.id);
+    // الافتراضية: موقعان محجوزان في ① ⇒ التالي ٣، وسلفُها التجزئة المقبولة.
+    expect(icvDefault).toBe(3);
+    expect(pihDefault).toBe('probe-hash-unit-a');
+    // الثانية: لا شيء بعد ⇒ ١ والأساس. **والافتراضية لم تتأثّر بوجودها.**
+    expect(icvSecond).toBe(1);
+    expect(pihSecond).toBe(GENESIS_PREVIOUS_HASH);
   });
 
   it('③ ولم تُلمس شبكة الهيئة ولا مرة — حارسُ هذا الملف بعينه', async () => {

@@ -31,3 +31,62 @@ describe('وحدة الإصدار الافتراضية — مصدرٌ واحد �
     expect(migration).toContain(`'1-${SOLUTION_NAME}|2-web|3-' || c."companyId"`);
   });
 });
+
+/**
+ * `ق-١٧٧` — **العدّاد والسلسلة داخل الوحدة، والحارس يقرأ المخطَّط** (الدفعة ب).
+ *
+ * نصّ الهيئة: «تسلسلٌ واحد لكل `EGS` ربطها». والخطر: مفتاحٌ يعود إلى المنشأة
+ * بعد سنة — فهرسٌ «ينظّف» أو عدٌّ يحذف شرط الوحدة — **فيمرّ كل اختبارٍ قائم**
+ * لأن المنشأة ذات الوحدة الواحدة لا تُظهر الفرق. فالحارس يقرأ **المصدر لا
+ * المخرَج** (`ق-١٤٨`): المخطَّط، وأداة السلسلة، والخدمة، والهجرة.
+ */
+describe('الدفعة (ب) — العدّاد والسلسلة داخل الوحدة', () => {
+  const api = join(__dirname, '..', '..');
+  /** سطور المخطَّط الفعّالة — بلا تعليقات `///`، كي لا يُقرأ تاريخٌ حكماً. */
+  const schemaDirectives = () =>
+    readFileSync(join(api, 'prisma', 'schema.prisma'), 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => !l.trim().startsWith('//'))
+      .join('\n');
+
+  it('🔴 المخطَّط: المفتاح على الوحدة لا المنشأة — ويسقط إن عاد `[companyId, zatcaIcv]`', () => {
+    const schema = schemaDirectives();
+    expect(schema.length).toBeGreaterThan(10_000);
+    expect(schema).toContain('@@unique([egsUnitId, zatcaIcv])');
+    expect(schema).not.toContain('@@unique([companyId, zatcaIcv])');
+  });
+
+  it('🔴 أداة السلسلة: `nextIcv` و`latestChainHash` تشترطان الوحدة في التوقيع وفي الشرط', () => {
+    const util = readFileSync(join(__dirname, 'hash-chain.util.ts'), 'utf8');
+    expect(util.length).toBeGreaterThan(1000);
+    expect(util).toMatch(/export async function nextIcv\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
+    expect(util).toMatch(/export async function latestChainHash\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
+    // الشرط نفسه يحمل الوحدة — توقيعٌ يقبلها ولا يستعملها عدٌّ على المنشأة بقناع.
+    expect(util).toMatch(/count\(\{ where: \{ egsUnitId, zatcaIcv: \{ not: null \} \} \}\)/);
+    expect(util).toMatch(/findFirst\(\{\s*where: \{ egsUnitId, zatcaHash: \{ not: null \}, zatcaStatus: 'CLEARED' \}/);
+  });
+
+  it('🔴 الخدمة: تعدّ داخل الوحدة التي تختمها — لا استدعاءَ بلا وحدة', () => {
+    const service = readFileSync(join(__dirname, 'zatca.service.ts'), 'utf8');
+    expect(service.length).toBeGreaterThan(5000);
+    expect(service).toContain('latestChainHash(tx, unit.id)');
+    expect(service).toContain('nextIcv(tx, unit.id)');
+    expect(service).not.toMatch(/nextIcv\(tx\)/);
+    expect(service).not.toMatch(/latestChainHash\(tx\)/);
+  });
+
+  it('🔴 الهجرة: تُبدّل المفتاح، وتمنع موقعاً بلا وحدة بالشكل، وتفحص القائم بعينٍ مفتوحة', () => {
+    const migration = readFileSync(join(api, 'prisma', 'migrations', '20260905120000_icv_per_unit', 'migration.sql'), 'utf8');
+    expect(migration.length).toBeGreaterThan(500);
+    expect(migration).toContain('DROP INDEX "invoices_companyId_zatcaIcv_key"');
+    expect(migration).toContain('CREATE UNIQUE INDEX "invoices_egsUnitId_zatcaIcv_key"');
+    expect(migration).toMatch(/CHECK \("zatcaIcv" IS NULL OR "egsUnitId" IS NOT NULL\)/);
+    // الفحص المسبق تحت FORCE RLS يرى صفراً بصمت — فيُرفع قبله ويُعاد بعده (`ق-١٤٩`).
+    const noForce = migration.indexOf('ALTER TABLE "invoices" NO FORCE ROW LEVEL SECURITY');
+    const preflight = migration.indexOf('RAISE EXCEPTION');
+    const reForce = migration.lastIndexOf('ALTER TABLE "invoices" FORCE ROW LEVEL SECURITY');
+    expect(noForce).toBeGreaterThan(-1);
+    expect(preflight).toBeGreaterThan(noForce);
+    expect(reForce).toBeGreaterThan(preflight);
+  });
+});
