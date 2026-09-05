@@ -70,6 +70,25 @@ env:
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
 
+# ⚠️ (ق-٢٤٥ · 2026-09-06) دفعتان متتابعتان على طلبٍ واحد: تُلغى السابقةُ — فدقائقُ
+# تشغيلٍ تجاوزه دفعٌ أحدث تُنفَق بلا حكمٍ يُقرأ. ولا يُلغى تشغيلُ `main` (الدمج)،
+# فكلُّ دمجٍ يستحقّ فحصَه الثقيلَ كاملاً.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# ═══ تقسيمُ السير — خفيفٌ على كل دفع، ثقيلٌ عند فتح الطلب ودمجه وحده (ق-٢٤٥) ═══
+#
+# خمسُ وظائفٍ على كل دفعٍ أنفقت حصةَ GitHub Actions المجانية في أسبوع (2026-09-06).
+# فالخفيف (`vitest` · `tsc` · بناءُ الويب · حرّاسُ المصدر كلُّها = `api-unit`) يعمل على
+# كل حدث؛ والثقيل (`db-integration` · `playwright` · `nginx-cache`) يعمل **عند فتح
+# الطلب** (opened · reopened · ready_for_review) **وعند الدمج** (الدفع إلى `main`) وحده.
+# «والحراسة لا تضعف بل تنتقل إلى موضعها — فما يُدمج هو ما يصل `main`.»
+#
+# ⚠️ الثمنُ المعلَن: خطأٌ في القاعدة أو المتصفّح يُكتشف عند فتح الطلب أو **بعد** الدمج
+# لا عند كل دفع — فدورةُ التغذية الراجعة تطول، وقد تصل `main` بخطأٍ يُصلَح بعده.
+# «مقبولٌ اليوم لا دائماً». والحارس `ci-split.spec.ts` يوجب أن كل وظيفةٍ تحمل قاعدةً
+# أو تبني صورةً تحمل هذا الشرط، وأن الخفيفةَ لا تحمله.
 jobs:
   vitest:
     runs-on: ubuntu-latest
@@ -167,6 +186,11 @@ jobs:
       - name: vitest (blocking)
         run: npm run test --workspace apps/web
 
+      # (ق-٢٤٥) بناءُ الويب على كل دفع — `tsc -b && vite build`: خطأُ نوعٍ في الواجهة
+      # يُكتشف هنا لا في بناء صورة nginx الثقيل الذي لا يعمل إلا عند الطلب والدمج.
+      - name: بناء الويب — tsc -b && vite build (blocking)
+        run: npm run build --workspace apps/web
+
   # اختبارات الخادم — **كانت غائبة عن السير كلياً حتى 2026-08-13**.
   #
   # 🔴 الاكتشاف: الاستدعاء الوحيد لـ`jest` في هذا الملف كان يسمّي ملفّين
@@ -202,6 +226,12 @@ jobs:
       - name: prisma generate (أنواع فقط، بلا قاعدة)
         working-directory: apps/api
         run: npx prisma generate
+
+      # (ق-٢٤٥) أنواعُ الخادم على كل دفع — يمسك ما لا تمسّه الوحدات النقيّة (المسارات
+      # والخدمات وملفات `test/` التي لا تعمل هنا بلا قاعدة لكنها تُترجَم).
+      - name: tsc — أنواع الخادم (blocking)
+        working-directory: apps/api
+        run: npx tsc --noEmit -p tsconfig.json
 
       # ⚠️ `--roots src` شرطٌ لا تحسين. `testRegex` في package.json هو
       # `.*\.(spec|e2e-spec)\.ts$` — فيلتقط **77** ملفاً في `test/` كلها
@@ -297,6 +327,8 @@ jobs:
   # ⛔ مانعة من أول يوم.
   db-integration:
     runs-on: ubuntu-latest
+    # (ق-٢٤٥) ثقيل: عند فتح الطلب وعند الدمج وحده.
+    if: github.event_name == 'push' || contains(fromJSON('["opened","reopened","ready_for_review"]'), github.event.action)
     # سقفٌ لئلا يلتهم تعليقٌ ستّ ساعات. خطّ الأساس 22 دقيقة، والضِّعف هامش.
     timeout-minutes: 60
 
@@ -586,6 +618,8 @@ jobs:
   # الإبلاغ لم يُنقذ حارساً قط، بل أخفى ستة سقوطات وأنتج دمجاً على أخضرَ كاذب.
   nginx-cache:
     runs-on: ubuntu-latest
+    # (ق-٢٤٥) ثقيل: عند فتح الطلب وعند الدمج وحده.
+    if: github.event_name == 'push' || contains(fromJSON('["opened","reopened","ready_for_review"]'), github.event.action)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -642,6 +676,8 @@ jobs:
 
   playwright:
     runs-on: ubuntu-latest
+    # (ق-٢٤٥) ثقيل: عند فتح الطلب وعند الدمج وحده.
+    if: github.event_name == 'push' || contains(fromJSON('["opened","reopened","ready_for_review"]'), github.event.action)
 
     # قاعدة بيانات حقيقية: اختبارات التخطيط تسجّل منشأة فعلية عبر الـAPI
     # (قرار المالك: العزل أهم من السرعة). وبدونها كانت تُتخطّى — أي أن السير
