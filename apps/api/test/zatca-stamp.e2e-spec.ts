@@ -116,6 +116,8 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
 
     const res = await sale().expect(201);
     invoiceIds.push(res.body.id);
+    // السببُ يُطبع قبل التوكيد — سقوطٌ بلا سببه يُقاس مرتَين.
+    if (!res.body.zatcaStamped) console.log(`stampError: ${res.body.stampError}`);
     expect(res.body.zatcaStamped).toBe(true);
     expect(res.body.stampError).toBeNull();
     const fields = decodeZatcaQr(res.body.zatcaQr);

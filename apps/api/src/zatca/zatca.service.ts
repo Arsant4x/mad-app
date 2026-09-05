@@ -118,7 +118,9 @@ export class ZatcaService {
   async submitInvoice(companyId: string, actorType: string, invoiceId: string) {
     assertIsCompanyOwner(actorType);
     const ctx = await this.requireOnboarded(companyId);
-    await this.stampIfNeeded(companyId, invoiceId, ctx);
+    const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
+    // سقوطُ التوقيع سُجِّل مردوداً بسببه — يُعاد وضعُ المستند لا استثناء، كما كان.
+    if (!stamped.qrPayload) return this.statusOf(companyId, invoiceId);
     return this.report(companyId, invoiceId, ctx.credential);
   }
 
@@ -140,8 +142,8 @@ export class ZatcaService {
       );
       if (!buyer) throw new NotFoundException(MSG.invoice_not_found);
       if (invoiceTypeFor(buyer.customer.vatNumber) === 'standard') return { qrPayload: null, error: null };
-      const { qrPayload } = await this.stampIfNeeded(companyId, invoiceId, ctx);
-      return { qrPayload, error: null };
+      const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
+      return { qrPayload: stamped.qrPayload, error: stamped.failure ?? null };
     } catch (e) {
       const message = (e as Error).message;
       this.logger.warn(`ZATCA stamp at sale failed for invoice ${invoiceId}: ${message}`);
@@ -207,7 +209,11 @@ export class ZatcaService {
    * يجعل من يفوز به المالكَ الوحيد للتوقيع، والآخر يُردّ `Conflict` (يعود الطابور
    * بعد دقيقة، والكاشير يطبع الوسوم الخمسة). **الامتناع بالشكل لا بالحظّ.**
    */
-  private async stampIfNeeded(companyId: string, invoiceId: string, ctx: { company: SellerRow; credential: CredentialRow }): Promise<{ qrPayload: string }> {
+  private async stampIfNeeded(
+    companyId: string,
+    invoiceId: string,
+    ctx: { company: SellerRow; credential: CredentialRow },
+  ): Promise<{ qrPayload: string; failure?: undefined } | { qrPayload: null; failure: string }> {
     const existing = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findUnique({ where: { id: invoiceId }, select: { zatcaStatus: true, zatcaSignedXml: true, zatcaQrPayload: true, zatcaHash: true } }),
     );
@@ -275,12 +281,14 @@ export class ZatcaService {
       );
       return { qrPayload: qrBase64 };
     } catch (e) {
-      // سقط التوقيعُ بعد حجز الموقع: يُسجَّل مردوداً بسببه، والموقعُ محفوظٌ للمحاولة
-      // التالية (`??` في `claimAndBuild`) — لا فجوةَ في السلسلة.
+      // سقط التوقيعُ بعد حجز الموقع: يُسجَّل مردوداً بسببه **ولا يُرمى** — كما كان
+      // `dispatch` يفعل — والموقعُ محفوظٌ للمحاولة التالية (`??` في `claimAndBuild`)،
+      // فلا فجوةَ في السلسلة. (أخطاءُ البناء والتحقّق قبل التوقيع تبقى استثناءاتٍ
+      // تُرمى: مستندٌ لا يُبنى ليس مردوداً بل مرفوضٌ قبل أن يُحجز له شيء.)
       const message = (e as Error).message;
       this.logger.warn(`ZATCA signing failed for invoice ${invoiceId}: ${message}`);
       await this.recordResult(companyId, invoiceId, false, message);
-      throw e;
+      return { qrPayload: null, failure: message };
     }
   }
 

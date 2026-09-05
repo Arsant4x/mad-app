@@ -62,7 +62,9 @@ describe('الدفعة (ب) — العدّاد والسلسلة داخل الو�
     expect(util).toMatch(/export async function nextIcv\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
     expect(util).toMatch(/export async function latestChainHash\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
     // الشرط نفسه يحمل الوحدة — توقيعٌ يقبلها ولا يستعملها عدٌّ على المنشأة بقناع.
-    expect(util).toMatch(/count\(\{ where: \{ egsUnitId, zatcaIcv: \{ not: null \} \} \}\)/);
+    // و`MAX+1` لا `count()+1`: عدٌّ يعود إلى العدّ يصطدم حتمياً بعد أول فجوة.
+    expect(util).toMatch(/aggregate\(\{ where: \{ egsUnitId, zatcaIcv: \{ not: null \} \}, _max: \{ zatcaIcv: true \} \}\)/);
+    expect(util).not.toMatch(/tx\.invoice\.count\(/);
     expect(util).toMatch(/findFirst\(\{\s*where: \{ egsUnitId, zatcaHash: \{ not: null \}, zatcaStatus: 'CLEARED' \}/);
   });
 
