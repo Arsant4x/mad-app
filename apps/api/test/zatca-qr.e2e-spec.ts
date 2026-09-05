@@ -36,7 +36,8 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
       const qr = buildZatcaQr({
         sellerName: 'Acme Trading',
         vatNumber: '300000000000003',
-        issuedAt: new Date('2026-03-01T10:00:00.000Z'),
+        // UTC بلاحقة Z — إحدى صيغتَي الهيئة؛ والطابع يساوي IssueDate T IssueTime حرفاً (ق-١٨٥).
+        issued: { date: '2026-03-01', time: '10:00:00Z' },
         total: 115,
         vatAmount: 15,
       })!;
@@ -44,7 +45,7 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
       const fields = decodeZatcaQr(qr);
       expect(fields[1]).toBe('Acme Trading');
       expect(fields[2]).toBe('300000000000003');
-      expect(fields[3]).toBe('2026-03-01T10:00:00.000Z');
+      expect(fields[3]).toBe('2026-03-01T10:00:00Z');
       expect(fields[4]).toBe('115.00');
       expect(fields[5]).toBe('15.00');
     });
@@ -54,7 +55,7 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
       const qr = buildZatcaQr({
         sellerName,
         vatNumber: '300000000000003',
-        issuedAt: new Date('2026-03-01T10:00:00.000Z'),
+        issued: { date: '2026-03-01', time: '10:00:00Z' },
         total: 100,
         vatAmount: 0,
       })!;
@@ -72,7 +73,7 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
       const qr = buildZatcaQr({
         sellerName: 'X',
         vatNumber: '3',
-        issuedAt: new Date('2026-03-01T10:00:00.000Z'),
+        issued: { date: '2026-03-01', time: '10:00:00Z' },
         total: 1234.5,
         vatAmount: 161.02174,
       })!;
@@ -82,7 +83,7 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
     });
 
     it('returns null when the seller name or VAT number is missing', () => {
-      const base = { issuedAt: new Date(), total: 100, vatAmount: 15 };
+      const base = { issued: { date: '2026-03-01', time: '10:00:00Z' }, total: 100, vatAmount: 15 };
       expect(buildZatcaQr({ ...base, sellerName: '', vatNumber: '300000000000003' })).toBeNull();
       expect(buildZatcaQr({ ...base, sellerName: 'Acme', vatNumber: '   ' })).toBeNull();
     });

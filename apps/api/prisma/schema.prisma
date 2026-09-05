@@ -909,6 +909,14 @@ model Invoice {
   zatcaUuid         String?
   zatcaHash         String?
   zatcaPreviousHash String?
+  /// ⭐ **لحظةُ الرنّ وانحرافُ الجهاز** (`ق-١٨٥`) — مصدرُ `IssueDate`/`IssueTime` في
+  /// مستند الهيئة والطابعِ الزمني في `QR`. `issueDate` أعلاه يومٌ بلا وقت، فكان
+  /// `IssueTime` منتصفَ الليل دائماً، وتاريخُ الكاشير من تاريخ UTC. الجهاز يرسل
+  /// اللحظة (`ringAt`) وانحرافه بالدقائق، ويُشتقّ منهما يومُه ووقتُه
+  /// (`common/wall-clock.util.ts`). فارغان ⇒ مستندٌ قبل هذا الحقل أو مؤرَّخٌ
+  /// بيدٍ بلا وقت — يُصدَر بيومه و`00:00:00` **بحدٍّ معلَن**، ولا يُملأ رجعياً.
+  issuedAt        DateTime?
+  issuedOffsetMin Int?
   /// Invoice Counter Value — the position in **this unit's** submission
   /// sequence, starting at 1. Stored rather than derived because a retry must
   /// keep the number it was first given; a gap or a repeat is a chain defect.

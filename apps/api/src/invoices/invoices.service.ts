@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr } from '../zatca/qr.util';
+import { issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
@@ -118,7 +119,7 @@ export class InvoicesService {
         zatcaQr: buildZatcaQr({
           sellerName: company?.legalName ?? '',
           vatNumber: company?.vatNumber ?? '',
-          issuedAt: inv.issueDate,
+          issued: issuedWallClock(inv),
           // ZATCA wants the figures as billed, in the invoice's own currency.
           total: Number(inv.total),
           vatAmount: Number(inv.taxTotal),
@@ -158,6 +159,9 @@ export class InvoicesService {
           branchId,
           customerId: dto.customerId,
           issueDate: new Date(dto.issueDate),
+          // لحظة الجهاز وانحرافه معاً أو لا شيء (`ق-١٨٥`) — الـDTO يضمن الاقتران.
+          issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
+          issuedOffsetMin: dto.issuedAt ? (dto.issuedOffsetMin ?? null) : null,
           dueDate: new Date(dto.dueDate),
           notes: dto.notes,
           subtotal,

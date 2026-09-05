@@ -25,6 +25,7 @@
 
 import { formatMoney } from '../../common/money/rounding';
 import { computeDocumentTotals, lineNet, lineTax } from '../../common/money/totals';
+import type { WallClock } from '../../common/wall-clock.util';
 
 export interface UblInvoiceLine {
   description: string;
@@ -51,7 +52,8 @@ export interface UblInvoiceInput {
   /** Human invoice number (cbc:ID) — not the UUID. */
   number: string;
   uuid: string;
-  issuedAt: Date;
+  /** يومُ الإصدار ووقتُه كما يقرؤهما الجهاز — `issuedWallClock`/`wallClockOf` (`ق-١٨٥`). */
+  issued: WallClock;
   /** 'standard' (B2B, cleared) or 'simplified' (B2C, reported). */
   invoiceType: 'standard' | 'simplified';
   /** Which of the three ZATCA document kinds this is. Defaults to 'invoice'.
@@ -130,15 +132,6 @@ function money(value: number): string {
 
 function quantity(value: number): string {
   return value.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
-}
-
-/** ZATCA takes the date and the time as separate elements, both UTC. */
-function datePart(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function timePart(d: Date): string {
-  return d.toISOString().slice(11, 19);
 }
 
 function partyXml(tag: string, party: UblParty): string {
@@ -261,8 +254,10 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
     `<cbc:ProfileID>${PROFILE_ID}</cbc:ProfileID>` +
     `<cbc:ID>${esc(input.number)}</cbc:ID>` +
     `<cbc:UUID>${esc(input.uuid)}</cbc:UUID>` +
-    `<cbc:IssueDate>${datePart(input.issuedAt)}</cbc:IssueDate>` +
-    `<cbc:IssueTime>${timePart(input.issuedAt)}</cbc:IssueTime>` +
+    // ساعةُ حائطٍ جاهزة من `wall-clock.util.ts` — لا حسابَ منطقةٍ هنا: محلّيةٌ بلا
+    // لاحقة أو UTC بـ`Z`، وهما الصيغتان الوحيدتان في معيار الهيئة (`ق-١٨٥`).
+    `<cbc:IssueDate>${esc(input.issued.date)}</cbc:IssueDate>` +
+    `<cbc:IssueTime>${esc(input.issued.time)}</cbc:IssueTime>` +
     `<cbc:InvoiceTypeCode name="${TRANSACTION_CODE[input.invoiceType]}">${DOCUMENT_TYPE_CODE[documentType]}</cbc:InvoiceTypeCode>` +
     `<cbc:DocumentCurrencyCode>${esc(currency)}</cbc:DocumentCurrencyCode>` +
     // Always SAR: the authority accounts for the tax in local currency even

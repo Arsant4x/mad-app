@@ -81,6 +81,9 @@ export interface InvoiceLineInput {
 export interface CreateInvoiceInput {
   customerId: string;
   issueDate: string;
+  /** لحظةُ الإصدار عند الجهاز وانحرافُه — يُرسَلان معاً حين يكون التاريخ اليوم (ق-١٨٥). */
+  issuedAt?: string;
+  issuedOffsetMin?: number;
   dueDate: string;
   notes?: string;
   /** Omit for a company-wide invoice; the server rejects a branch the signed-in

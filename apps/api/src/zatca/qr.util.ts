@@ -1,4 +1,5 @@
 import { formatMoney } from '../common/money/rounding';
+import { qrTimestamp, type WallClock } from '../common/wall-clock.util';
 /**
  * ZATCA Phase 1 ("Generation") QR code.
  *
@@ -17,8 +18,8 @@ import { formatMoney } from '../common/money/rounding';
 export interface ZatcaQrInput {
   sellerName: string;
   vatNumber: string;
-  /** Invoice issue timestamp. */
-  issuedAt: Date;
+  /** يومُ الإصدار ووقتُه — **نفس** ما في `cbc:IssueDate`/`cbc:IssueTime` حرفاً (`ق-١٨٥`). */
+  issued: WallClock;
   /** VAT-inclusive total. */
   total: number;
   vatAmount: number;
@@ -51,7 +52,7 @@ export function buildZatcaQr(input: ZatcaQrInput): string | null {
   return Buffer.concat([
     tlv(1, sellerName),
     tlv(2, vatNumber),
-    tlv(3, input.issuedAt.toISOString()),
+    tlv(3, qrTimestamp(input.issued)),
     tlv(4, amount(input.total)),
     tlv(5, amount(input.vatAmount)),
   ]).toString('base64');

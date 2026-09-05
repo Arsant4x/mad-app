@@ -14,6 +14,8 @@ export interface QueuedSale {
   clientSaleId: string;
   offlineRef: string;
   ringAt: string;
+  /** انحرافُ الجهاز عن UTC بالدقائق وقت الرنّ — منه يومُ الفاتورة ووقتُها (ق-١٨٥). */
+  ringOffsetMin: number;
   lines: PosSaleLine[];
   paymentMethod: PosPaymentMethod;
   payments?: PosPaymentPart[];

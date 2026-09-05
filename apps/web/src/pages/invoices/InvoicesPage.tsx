@@ -152,7 +152,7 @@ export function InvoicesPage() {
    * closing back to the list would throw away everything the user typed for a
    * save that never happened.
    */
-  async function handleSave(data: { customerId: string; issueDate: string; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] }) {
+  async function handleSave(data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] }) {
     // An empty picker means company-wide — send it as omitted, not as ''.
     const payload = { ...data, branchId: data.branchId || undefined };
     setSaveError(null);
