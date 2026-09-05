@@ -116,7 +116,8 @@ export class InvoicesService {
         /** How much of this invoice has been credited back, so a screen can
          * show the invoice as partly reversed without a second request. */
         creditedTotal: inv.docType === 'INVOICE' ? (creditedByInvoiceId.get(inv.id) ?? 0) : 0,
-        zatcaQr: buildZatcaQr({
+        // مستندٌ مختوم يعرض رمزَه التساعي المحفوظ؛ وغيرُه الوسومَ الخمسة المشتقّة (`ق-١٨٧`).
+        zatcaQr: inv.zatcaQrPayload ?? buildZatcaQr({
           sellerName: company?.legalName ?? '',
           vatNumber: company?.vatNumber ?? '',
           issued: issuedWallClock(inv),
@@ -671,8 +672,10 @@ export class InvoicesService {
    */
   async zatcaQrFor(
     companyId: string,
-    inv: { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal | number; taxTotal: Prisma.Decimal | number },
+    inv: { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal | number; taxTotal: Prisma.Decimal | number; zatcaQrPayload?: string | null },
   ): Promise<string | null> {
+    // مستندٌ مختوم: رمزُه التساعي المحفوظ لحظةَ الختم — لا يُبنى ثانيةً (`ق-١٨٧`).
+    if (inv.zatcaQrPayload) return inv.zatcaQrPayload;
     const company = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.company.findUnique({ where: { id: companyId }, select: { legalName: true, vatNumber: true } }),
     );

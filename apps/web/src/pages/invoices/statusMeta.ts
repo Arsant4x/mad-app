@@ -18,6 +18,7 @@ export const STATUS_ORDER: InvoiceStatus[] = ['DUE', 'PAID', 'OVERDUE'];
 export const ZATCA_STATUS_META: Record<ZatcaInvoiceStatus, { label: string; badgeClass: string }> = {
   NOT_SUBMITTED: { label: 'لم تُرسل', badgeClass: '' },
   SUBMITTING: { label: 'قيد الإرسال', badgeClass: 'due' },
+  STAMPED: { label: 'مختومة — بانتظار الإبلاغ', badgeClass: 'due' },
   CLEARED: { label: 'مصدَّقة', badgeClass: 'paid' },
   REJECTED: { label: 'مرفوضة', badgeClass: 'overdue' },
 };

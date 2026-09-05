@@ -11,6 +11,7 @@ import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
 import { localDateOf } from '../common/wall-clock.util';
+import { ZatcaService } from '../zatca/zatca.service';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
@@ -75,6 +76,7 @@ export class PosService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly invoicesService: InvoicesService,
     private readonly integrationsService: IntegrationsService,
+    private readonly zatca: ZatcaService,
   ) {}
 
   openShift(tenant: TenantContext, dto: OpenShiftDto) {
@@ -286,7 +288,7 @@ export class PosService {
     // outside the block above because it opens its own tenant transaction.
     const invoice = await this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, invoiceDto);
 
-    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+    const sold = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم
       // كما فصّله الكاشير — درجُ المناوبة يجمع صفوف النقد فقط.
       const parts = dto.paymentMethod === 'SPLIT' ? dto.payments! : [{ method: dto.paymentMethod, amount: Number(invoice.total) }];
@@ -326,6 +328,18 @@ export class PosService {
       // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).
       return { ...(await this.withReceiptQr(tenant.companyId, updated)), stockDeduction };
     });
+
+    /**
+     * ⭐ **الختمُ المتزامن — بعد معاملة البيع لا داخلها** (`ق-١٨٧` · `ق-١٩٦`).
+     *
+     * البيعُ التزم وخُتم مدفوعاً؛ الآن يُختم مستندُه (١٠–٣٦ مللي ثانية) فيخرج
+     * الإيصالُ بالوسوم التسعة — والإبلاغُ يبقى في الطابور. **وسقوطُ الختم لا يُسقط
+     * البيع** (`ق-١٩٦`/١): `stampForReceipt` لا يرمي، فيخرج الإيصال بالوسوم الخمسة
+     * ويُنبَّه الكاشير، والطابور يعيد الختم والإبلاغ. والمزامَن يمرّ هنا أيضاً —
+     * وهذا هو (`ق-١٩٢`/ب): الممتثلة بتاريخ المعاملة عند عودة الاتصال.
+     */
+    const stamp = await this.zatca.stampForReceipt(tenant.companyId, sold.id);
+    return { ...sold, zatcaQr: stamp.qrPayload ?? sold.zatcaQr, zatcaStamped: stamp.qrPayload !== null, stampError: stamp.error };
   }
 
   /**
@@ -338,11 +352,11 @@ export class PosService {
    * `null` حين يغيب الاسم القانوني أو الرقم الضريبي — والواجهة تُنبّه الكاشير
    * بدل رمزٍ يُقرأ ولا يصحّ.
    */
-  private async withReceiptQr<T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal }>(
-    companyId: string,
-    invoice: T,
-  ): Promise<T & { zatcaQr: string | null }> {
-    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice) };
+  private async withReceiptQr<
+    T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null },
+  >(companyId: string, invoice: T): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean }> {
+    // مستندٌ مختوم يعيد رمزَه التساعي المحفوظ — فإعادةُ المزامنة تطبع ما طُبع أولَ مرة حرفاً.
+    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice), zatcaStamped: Boolean(invoice.zatcaQrPayload) };
   }
 
 

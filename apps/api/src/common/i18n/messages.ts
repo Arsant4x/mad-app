@@ -229,6 +229,8 @@ export const MSG = {
   zatca_compliance_required: 'zatca.compliance_required',
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
+  zatca_stamp_in_progress: 'zatca.stamp_in_progress',
+  zatca_not_stamped: 'zatca.not_stamped',
   // chain integrity. Deletion is refused for any document that took a place
   // in the sequence; editing is refused only once the authority has accepted
   // it (or may be about to) — see InvoicesService.
@@ -629,6 +631,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
   [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
   [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
+  [MSG.zatca_stamp_in_progress]: { ar: 'المستند قيد الختم الآن من مسارٍ آخر — أعد المحاولة بعد لحظات', en: 'This document is being stamped by another process — retry shortly' },
+  [MSG.zatca_not_stamped]: { ar: 'لا مستندٌ موقَّعٌ محفوظٌ لهذه الفاتورة — تُختم أولاً ثم تُبلَّغ', en: 'No stored signed document for this invoice — it must be stamped before it is reported' },
   [MSG.credit_note_target_invalid]: { ar: 'إشعار الدائن يُصدَر على فاتورة أصلية فقط، لا على إشعار آخر', en: 'A credit note can only be issued against an original invoice, not another note' },
   [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة إشعار الدائن تتجاوز المتبقي من الفاتورة الأصلية', en: 'The credit note amount exceeds what remains of the original invoice' },
   [MSG.credit_note_immutable]: { ar: 'إشعار الدائن لا يُعدَّل بعد إصداره — احذفه وأصدر إشعاراً جديداً، أو أصدر إشعاراً مصححاً', en: 'A credit note cannot be edited after issue — delete and reissue it, or issue a correcting note' },

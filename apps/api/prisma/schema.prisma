@@ -57,6 +57,8 @@ enum InvoiceStatus {
 enum ZatcaStatus {
   NOT_SUBMITTED
   SUBMITTING
+  /// موقَّعٌ ومحفوظٌ لم يُبلَّغ بعد — الإيصال خرج به (`ق-١٨٧` · `ق-١٩٦`).
+  STAMPED
   CLEARED
   REJECTED
 }
@@ -922,6 +924,14 @@ model Invoice {
   /// keep the number it was first given; a gap or a repeat is a chain defect.
   zatcaIcv          Int?
   zatcaStatus       ZatcaStatus @default(NOT_SUBMITTED)
+  /// ⭐ **المستندُ الموقَّع كما سيُرسَل، ورمزُه التساعي كما طُبع** (`ق-١٨٧` · `ق-١٩٦`).
+  /// يُحفظان لحظةَ الختم لا يُبنيان لحظةَ الإرسال — فما على إيصال العميل هو ما
+  /// تصل الهيئة **حرفاً**؛ ومستندٌ محفوظ **لا يُوقَّع ثانيةً** (توقيعٌ جديد يُغيّر
+  /// الوسمَين ٧ و٩). وقبل الإرسال تُعاد تجزئةُ المخزون وتُقارَن بـ`zatcaHash` —
+  /// حارسُ التعديل يحمي من نيّة، وهذا من عطل.
+  zatcaSignedXml    String?   @db.Text
+  zatcaQrPayload    String?
+  zatcaStampedAt    DateTime?
   zatcaSubmittedAt  DateTime?
   /// Last clearance/rejection note from the authority, kept so a rejected
   /// invoice can actually be diagnosed.

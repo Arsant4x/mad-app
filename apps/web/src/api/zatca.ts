@@ -29,7 +29,7 @@ export const requestZatcaProduction = () => apiClient.post<ZatcaOnboarding>('/za
 export interface ZatcaSubmissionResult {
   id: string;
   no: string;
-  zatcaStatus: 'NOT_SUBMITTED' | 'SUBMITTING' | 'CLEARED' | 'REJECTED';
+  zatcaStatus: 'NOT_SUBMITTED' | 'SUBMITTING' | 'STAMPED' | 'CLEARED' | 'REJECTED';
   zatcaUuid: string | null;
   zatcaHash: string | null;
   zatcaPreviousHash: string | null;
