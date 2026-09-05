@@ -10,6 +10,8 @@ import { csrToBase64, generateCsr, ZatcaEnv } from './csr.util';
 import { defaultUnitSerial, ensureDefaultUnit, SOLUTION_NAME } from './egs-unit.util';
 import { GENESIS_PREVIOUS_HASH } from './hash-chain.util';
 import { wallClockOf } from '../common/wall-clock.util';
+import { requeueFailedWithinTx } from '../outbox/outbox.service';
+import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
 
@@ -459,8 +461,8 @@ export class ZatcaOnboardingService {
       // Destructured for the same narrowing reason as in `submitOtp`.
       const { binarySecurityToken, secret: productionSecret } = body;
 
-      await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.zatcaCredential.update({
+      const requeued = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        await tx.zatcaCredential.update({
           where: { companyId },
           data: {
             productionCsidEnc: encryptSecret(binarySecurityToken),
@@ -469,8 +471,13 @@ export class ZatcaOnboardingService {
             onboardedAt: new Date(),
             lastError: null,
           },
-        }),
-      );
+        });
+        // ⭐ الربطُ يُعيد ما فشل قبله (`ق-١٨٢`/٣): فواتيرُ منشأةٍ كانت تُصدر بلا
+        // شهادة سقطت في الطابور ستّ مراتٍ ثم `FAILED` — تعود كلُّها إلى الإرسال
+        // في المعاملة نفسها التي كتبت الشهادة، **فلا فاتورة تُنسى**.
+        return requeueFailedWithinTx(tx, INVOICE_ISSUED);
+      });
+      if (requeued > 0) this.logger.log(`ZATCA production CSID issued for company ${companyId}: أُعيد ${requeued} حدث إصدارٍ فاشل إلى الطابور`);
 
       return this.getStatus(companyId);
     } catch (e) {

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { formatMoney } from '../../lib/money';
 import {
   getZatcaOnboarding,
+  getZatcaUnreported,
   requestZatcaProduction,
   startZatcaOnboarding,
   submitZatcaOtp,
   type ZatcaOnboarding,
+  type ZatcaUnreported,
 } from '../../api/zatca';
 
 /**
@@ -30,12 +33,17 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
+  /** «صادرٌ لم يصل» (ق-١٨٢/٢) — يُقرأ مع الحالة، ويُعرض للمربوطة وغيرها بصياغةٍ مختلفة. */
+  const [unreported, setUnreported] = useState<ZatcaUnreported | null>(null);
 
   useEffect(() => {
     getZatcaOnboarding()
       .then(setState)
       .catch(() => setError('تعذّر قراءة حالة الربط'))
       .finally(() => setLoading(false));
+    getZatcaUnreported()
+      .then(setUnreported)
+      .catch(() => undefined);
   }, []);
 
   function serverMessage(e: unknown, fallback: string): string {
@@ -136,6 +144,45 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
               اطلب شهادة الإنتاج
             </button>
           )}
+        </div>
+      )}
+
+      {/* «صادرٌ لم يصل» (ق-١٨٢/٢): عدداً وأقدمَ وقائمةً — للمربوطة مخالفةٌ تُصحَّح، ولغيرها حالٌ يُعرَف. */}
+      {unreported && unreported.count > 0 && (
+        <div data-testid="zatca-unreported-report" style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            صادرٌ لم يصل الهيئة: {unreported.count} مستنداً
+            {unreported.oldestIssueDate ? ` — أقدمها ${new Date(unreported.oldestIssueDate).toLocaleDateString('ar-SA')}` : ''}
+            {unreported.failedQueue > 0 ? ` — ${unreported.failedQueue} في الطابور استُنفدت محاولاته وتعود عند الربط` : ''}
+          </div>
+          <p className="hint" style={{ marginBottom: 8 }}>
+            {unreported.onboarded
+              ? 'المنشأة مربوطة، فكلُّ مستندٍ هنا مخالفةٌ تُتدارك بالإبلاغ — يُعاد الإرسال تلقائياً، وما رُدّ يُصحَّح ثم يُعاد.'
+              : 'المنشأة غير مربوطة بعد — هذه المستندات لن تصل الهيئة حتى يتمّ الربط؛ وحين يتمّ تعود كلُّها إلى الإرسال تلقائياً.'}
+          </p>
+          <table className="table" style={{ fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th>الرقم</th>
+                <th>التاريخ</th>
+                <th>الحالة</th>
+                <th>الإجمالي</th>
+                <th>آخر رسالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unreported.items.slice(0, 50).map((it) => (
+                <tr key={it.id}>
+                  <td className="num">{it.no}</td>
+                  <td className="num">{new Date(it.issueDate).toLocaleDateString('ar-SA')}</td>
+                  <td>{it.zatcaStatus}</td>
+                  <td className="num">{formatMoney(Number(it.total))}</td>
+                  <td style={{ color: 'var(--muted)' }}>{it.zatcaMessage ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {unreported.items.length > 50 && <p className="hint">يُعرض أول ٥٠ من {unreported.count}.</p>}
         </div>
       )}
     </div>

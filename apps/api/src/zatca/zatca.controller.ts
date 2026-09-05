@@ -46,4 +46,10 @@ export class ZatcaController {
   submit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.zatcaService.submitInvoice(tenant.companyId, tenant.actorType, id);
   }
+
+  /** «صادرٌ لم يصل» — عدداً وأقدمَ وقائمةً (`ق-١٨٢`/٢). قراءةٌ لكل مستخدمي المنشأة: الكاشير يحتاج التحذير كالمالك. */
+  @Get('unreported')
+  unreported(@CurrentTenant() tenant: TenantContext) {
+    return this.zatcaService.unreported(tenant.companyId);
+  }
 }

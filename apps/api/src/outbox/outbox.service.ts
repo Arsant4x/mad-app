@@ -8,6 +8,23 @@ import { events, type DomainEvent } from '../shared/events/event-bus';
 export const MAX_ATTEMPTS = 6;
 
 /**
+ * ⭐ **`FAILED` لا يعني انتهاءً** (`ق-١٨٢`/٣): صفوفٌ استُنفدت محاولاتها تعود إلى
+ * الطابور حين يزول سببُ فشلها — كربطِ منشأةٍ كانت تُصدر بلا شهادة، فتعود كل
+ * فواتيرها إلى الإرسال **ولا فاتورة تُنسى**.
+ *
+ * دالةٌ خالصة على معاملةٍ يملكها المستدعي (سياق المنشأة نفسه الذي كتب الشهادة):
+ * فالربطُ والإعادةُ يقعان معاً أو لا يقعان. تُعيد عددَ ما أُعيد — رقمٌ يُقاس لا
+ * يُفترَض.
+ */
+export async function requeueFailedWithinTx(tx: Prisma.TransactionClient, type: string, now = new Date()): Promise<number> {
+  const result = await tx.outboxEvent.updateMany({
+    where: { type, status: 'FAILED' },
+    data: { status: 'PENDING', attempts: 0, availableAt: now, lastError: null },
+  });
+  return result.count;
+}
+
+/**
  * تراجعٌ أُسّي بحدٍّ أعلى: دقيقة · دقيقتان · أربع … حتى ساعة.
  *
  * ولا عشوائيةَ هنا عمداً: الموزّع واحد والصفوف تُلتقط دفعةً — فالتشتيت لا يمنع
