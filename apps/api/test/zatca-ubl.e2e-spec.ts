@@ -4,7 +4,7 @@ import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { canonicalize, parseXml } from '../src/zatca/ubl/canonicalize.util';
 import { buildUnsignedInvoiceXml, type UblInvoiceInput } from '../src/zatca/ubl/invoice-xml.util';
-import { signInvoice, verifySignedInvoice } from '../src/zatca/ubl/xades.util';
+import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from '../src/zatca/ubl/xades.util';
 
 /**
  * The authority is the only real verifier, so what these can prove is
@@ -158,6 +158,21 @@ describe('ZATCA UBL 2.1 invoice and XAdES signature', () => {
 
       // One S bucket (15%) and one Z bucket (0%) — not one per line.
       expect(doc.getElementsByTagName('cac:TaxSubtotal')).toHaveLength(2);
+    });
+  });
+
+  describe('سلامةُ المخزون قبل الإرسال (ق-١٩٦/٤)', () => {
+    it('تجزئةُ المستند الموقَّع تُعاد من بايتاته وتساوي ما وُقّع عليه — وتختلف إن مُسّ حرفٌ في المتن', async () => {
+      const signed = await sign();
+      // الوجه الأول: المخزونُ السليم يُعيد التجزئةَ نفسها التي حُفظت لحظةَ التوقيع.
+      expect(invoiceHashOfSigned(signed.signedXml)).toBe(signed.invoiceHash);
+
+      // الوجه الثاني: تلفٌ في متن الفاتورة (لا في SignedInfo) — التوقيع يبقى صحيحاً
+      // على SignedInfo، فيمرّ من `verifySignedInvoice` وحده؛ والتجزئة المعادة تكشفه.
+      const tampered = signed.signedXml.replace('شركة الأفق التجارية المحدودة', 'شركة الأفق التجارية المحدود');
+      expect(tampered).not.toBe(signed.signedXml);
+      expect(invoiceHashOfSigned(tampered)).not.toBe(signed.invoiceHash);
+      expect(await verifySignedInvoice(tampered)).toBe(true); // وهذا سببُ وجود الفحص الثاني
     });
   });
 

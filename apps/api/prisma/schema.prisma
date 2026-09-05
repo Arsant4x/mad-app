@@ -57,6 +57,8 @@ enum InvoiceStatus {
 enum ZatcaStatus {
   NOT_SUBMITTED
   SUBMITTING
+  /// موقَّعٌ ومحفوظٌ لم يُبلَّغ بعد — الإيصال خرج به (`ق-١٨٧` · `ق-١٩٦`).
+  STAMPED
   CLEARED
   REJECTED
 }
@@ -922,6 +924,14 @@ model Invoice {
   /// keep the number it was first given; a gap or a repeat is a chain defect.
   zatcaIcv          Int?
   zatcaStatus       ZatcaStatus @default(NOT_SUBMITTED)
+  /// ⭐ **المستندُ الموقَّع كما سيُرسَل، ورمزُه التساعي كما طُبع** (`ق-١٨٧` · `ق-١٩٦`).
+  /// يُحفظان لحظةَ الختم لا يُبنيان لحظةَ الإرسال — فما على إيصال العميل هو ما
+  /// تصل الهيئة **حرفاً**؛ ومستندٌ محفوظ **لا يُوقَّع ثانيةً** (توقيعٌ جديد يُغيّر
+  /// الوسمَين ٧ و٩). وقبل الإرسال تُعاد تجزئةُ المخزون وتُقارَن بـ`zatcaHash` —
+  /// حارسُ التعديل يحمي من نيّة، وهذا من عطل.
+  zatcaSignedXml    String?   @db.Text
+  zatcaQrPayload    String?
+  zatcaStampedAt    DateTime?
   zatcaSubmittedAt  DateTime?
   /// Last clearance/rejection note from the authority, kept so a rejected
   /// invoice can actually be diagnosed.
@@ -974,8 +984,9 @@ model Invoice {
   @@unique([companyId, clientSaleId])
   /// ⭐ عدّاد فاتورة الهيئة (ICV) لا يتكرّر **داخل الوحدة** (`ق-١٧٧`، الدفعة ب) —
   /// كان على المنشأة (هجرة `20260815090000`)، والهيئة تعدّه لكل `EGS` مربوطة.
-  /// `nextIcv` يبني على `count()+1` بلا قفل، فجولتان متزامنتان تُصدران الرقم
-  /// نفسه — مُثبَت تشغيلياً: ١١ من ١٢ جولة (2026-08-15)؛ والقيد يحوّله إلى
+  /// `nextIcv` يبني على `MAX+1` بلا قفل (كان `count()+1` فاصطدم حتمياً بعد أول
+  /// فجوة)، فجولتان متزامنتان تُصدران الرقم نفسه — مُثبَت تشغيلياً: ١١ من ١٢
+  /// جولة (2026-08-15)؛ والقيد يحوّله إلى
   /// `P2002` ظاهر تعالجه إعادة المحاولة في `ZatcaService`. **وحارسٌ يقرأ هذا
   /// الملف** (`egs-unit.spec.ts`) يسقط إن عاد المفتاح إلى المنشأة.
   @@unique([egsUnitId, zatcaIcv])

@@ -37,19 +37,24 @@ import type { Prisma } from '@prisma/client';
 export const GENESIS_PREVIOUS_HASH = createHash('sha256').update('0').digest('base64');
 
 /**
- * The next position in **this unit's** submission sequence.
+ * The next position in **this unit's** submission sequence: `MAX(zatcaIcv) + 1`.
  *
- * Counts invoices of the unit that already carry an ICV rather than reading a
- * counter, so it stays correct without a separate row to keep in step. A retry
- * must *not* call this — it keeps the number it was first given.
+ * ⚠️ **كان `count() + 1` — وهو عطلُ ترقيم المستندات بعينه** (`MAX` لا `count`): متى وُجدت
+ * فجوةٌ في المواقع (موقعٌ أُفرغ — كما تفعل تنظيفاتُ الاختبارات — أو صفٌّ سُحب)
+ * يُعطي `count()+1` رقماً **محجوزاً**، فيصطدم بـ`P2002`، **وتعيد المحاولةُ الرقمَ نفسه**
+ * ثماني مراتٍ ثم تسقط 500 — تصادمٌ حتميٌّ لا سباق. ظهر حين غيّر `jest` ترتيبَ
+ * الحزم على قاعدةٍ نظيفة (2026-09-05): تنظيفُ `zatca-invoice-edit-guard` أفرغ مواقعَ
+ * فسقطت `zatca-credit-notes` بعده. `MAX+1` لا يعرف الفجوة، فلا يصطدم إلا في السباق
+ * الحقيقي — وذاك ما تعالجه إعادةُ المحاولة.
  *
- * The count is unlocked, so two concurrent callers may compute the same
+ * A retry must *not* call this — it keeps the number it was first given (`??`).
+ * The read is unlocked, so two concurrent callers may still compute the same
  * position; `@@unique([egsUnitId, zatcaIcv])` turns that into a visible
  * `P2002` and `ZatcaService` retries — see the comment above its call.
  */
 export async function nextIcv(tx: Prisma.TransactionClient, egsUnitId: string): Promise<number> {
-  const submitted = await tx.invoice.count({ where: { egsUnitId, zatcaIcv: { not: null } } });
-  return submitted + 1;
+  const top = await tx.invoice.aggregate({ where: { egsUnitId, zatcaIcv: { not: null } }, _max: { zatcaIcv: true } });
+  return (top._max.zatcaIcv ?? 0) + 1;
 }
 
 /**

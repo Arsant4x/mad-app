@@ -578,6 +578,12 @@ export function PosPage() {
                 الإيصال بلا رمز الهيئة — أكمل الاسم القانوني والرقم الضريبي في ملف المنشأة.
               </p>
             )}
+            {/* ق-١٩٦/١: سقوطُ الختم لا يُسقط البيع — إيصالٌ بالوسوم الخمسة، وتنبيهٌ للكاشير خارج الإيصال. */}
+            {receipt.stampError && (
+              <p className="hint" style={{ color: 'var(--rose)' }}>
+                لم يُختم عند البيع — خرج الإيصال بالوسوم الخمسة؛ يُعاد الختم والإبلاغ تلقائياً. السبب: {receipt.stampError}
+              </p>
+            )}
             {stockWarnings.length > 0 && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
                 تنبيه: الرصيد الناتج سالب — {stockWarnings.map((w) => `${w.name} (${fmt(w.resultingQty)})`).join('، ')} — تحقق من الجرد

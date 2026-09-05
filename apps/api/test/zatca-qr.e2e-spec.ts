@@ -153,12 +153,20 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
         .send({ legalName: 'شركة الأفق التجارية المحدودة', vatNumber: '' })
         .expect(200);
 
+      type Row = { zatcaQr: string | null; zatcaQrPayload: string | null };
+      // مستندٌ مختوم (ق-١٨٧) يحمل رمزَه التساعي المحفوظ لحظةَ الختم — واقعةٌ نظاميةٌ لا
+      // يمحوها تعديلُ الملف بعدها؛ فالاشتقاقُ من الملف الحالي يخصّ غيرَ المختوم وحده.
+      const unstamped = (rows: Row[]) => rows.filter((i) => !i.zatcaQrPayload);
+      const stamped = (rows: Row[]) => rows.filter((i) => i.zatcaQrPayload);
+
       const list = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200);
-      expect(list.body.every((i: { zatcaQr: string | null }) => i.zatcaQr === null)).toBe(true);
+      expect(unstamped(list.body).every((i) => i.zatcaQr === null)).toBe(true);
+      expect(stamped(list.body).every((i) => i.zatcaQr === i.zatcaQrPayload)).toBe(true);
 
       // Restore, and confirm the QR comes back for invoices that already
       // existed — proof the QR follows the profile rather than being frozen
-      // at issue time.
+      // at issue time (for the unstamped; the stamped were never frozen by
+      // the profile in the first place).
       await request(app.getHttpServer())
         .patch('/company-profile')
         .set('Authorization', `Bearer ${token}`)
@@ -166,7 +174,7 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
         .expect(200);
 
       const after = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200);
-      expect(after.body.every((i: { zatcaQr: string | null }) => i.zatcaQr !== null)).toBe(true);
+      expect(after.body.every((i: Row) => i.zatcaQr !== null)).toBe(true);
     });
   });
 });

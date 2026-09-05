@@ -55,6 +55,11 @@ export interface Invoice {
   /** Base64 TLV for the ZATCA phase-1 QR, or null while the company profile
    * is missing its legal name or VAT number. Built server-side. */
   zatcaQr: string | null;
+  /** الرمز التساعي المحفوظ لحظةَ الختم — إن وُجد فهو `zatcaQr` نفسه (ق-١٨٧). */
+  zatcaQrPayload?: string | null;
+  /** ردُّ الكاشير فقط: هل خُتم عند البيع، وإن لم يُختم فلماذا (ق-١٩٦/١). */
+  zatcaStamped?: boolean;
+  stampError?: string | null;
 
   /** Phase 2 — where this invoice stands with the authority. All null/default
    * until it is submitted; the chain values are assigned at submission and
@@ -69,7 +74,7 @@ export interface Invoice {
   lines: InvoiceLine[];
 }
 
-export type ZatcaInvoiceStatus = 'NOT_SUBMITTED' | 'SUBMITTING' | 'CLEARED' | 'REJECTED';
+export type ZatcaInvoiceStatus = 'NOT_SUBMITTED' | 'SUBMITTING' | 'STAMPED' | 'CLEARED' | 'REJECTED';
 
 export interface InvoiceLineInput {
   description: string;

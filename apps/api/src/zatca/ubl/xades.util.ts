@@ -56,6 +56,37 @@ const SELECT = xpath.useNamespaces({
   xades: 'http://uri.etsi.org/01903/v1.3.2#',
 });
 
+const UBL_SELECT = xpath.useNamespaces({
+  ext: 'urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2',
+  cac: 'urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2',
+  cbc: 'urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2',
+});
+
+/**
+ * ⭐ **تجزئةُ المستند الموقَّع كما وُقّع عليه — من بايتاته المخزَّنة** (`ق-١٩٦`/٤).
+ *
+ * يُعيد ما فعله الموقِّع في خطوته الأولى: يحذف العقدَ الثلاث المستثناة من التجزئة
+ * (`ext:UBLExtensions` · مرجعُ `QR` · `cac:Signature`) ثم C14N 1.1 ثم SHA-256.
+ * فإن ساوى `zatcaHash` المحفوظَ لحظةَ التوقيع فالمخزونُ هو ما وُقّع عليه؛ وإن
+ * اختلف فقد تغيّر بعد التوقيع — **تلفٌ لا نيّة** — ولا يُرسَل.
+ *
+ * `verifySignedInvoice` وحده لا يكفي لهذا: يتحقّق من التوقيع على `SignedInfo`
+ * — فمتنُ الفاتورة قد يتلف وتبقى `SignedInfo` سليمةً والتوقيعُ صحيحاً.
+ */
+/** تجزئةُ مستندٍ غير موقَّع — الخطوةُ الأولى للموقِّع بعينها، مُصدَّرةً كي يُقارَن بها محتوىً أُعيد بناؤه. */
+export function invoiceHashOfUnsigned(unsignedXml: string): string {
+  return sha256Base64(canonicalBytes(parseXml(unsignedXml) as unknown as Node));
+}
+
+export function invoiceHashOfSigned(signedXml: string): string {
+  const doc = parseXml(signedXml);
+  for (const expression of ['//ext:UBLExtensions', "//cac:AdditionalDocumentReference[cbc:ID='QR']", '//cac:Signature']) {
+    const nodes = UBL_SELECT(expression, doc as unknown as Node) as unknown as Node[];
+    for (const node of nodes) node.parentNode?.removeChild(node);
+  }
+  return sha256Base64(canonicalBytes(doc as unknown as Node));
+}
+
 function sha256Base64(data: Buffer): string {
   return createHash('sha256').update(data).digest('base64');
 }
@@ -228,7 +259,7 @@ export async function signInvoice(input: SignInvoiceInput): Promise<SignedInvoic
 
   // Step 1 — the invoice hash, over a document that does not yet contain any of
   // the three excluded nodes.
-  const invoiceHash = sha256Base64(canonicalBytes(parseXml(input.unsignedXml) as unknown as Node));
+  const invoiceHash = invoiceHashOfUnsigned(input.unsignedXml);
 
   const signingTime = input.signingTime ?? new Date();
   const qualifyingProperties = qualifyingPropertiesXml(
