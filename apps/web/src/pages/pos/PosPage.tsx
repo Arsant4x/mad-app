@@ -6,6 +6,7 @@ import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, 
 import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
+import { ZatcaQr } from '../../components/ZatcaQr';
 import { fmt } from '../../lib/format';
 import { round2 } from '../../lib/money';
 
@@ -528,8 +529,19 @@ export function PosPage() {
                 {' · '}
                 {new Date().toLocaleString('ar-SA')}
               </p>
+              {/* رمز الهيئة على إيصال العميل — إلزاميٌّ توليداً وطباعةً (الملحق ١ · ق-١٨٦). داخل منطقة الطباعة عمداً. */}
+              {receipt.zatcaQr && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                  <ZatcaQr payload={receipt.zatcaQr} size={128} />
+                </div>
+              )}
             </div>
             {/* خارج .print-receipt عمداً — تنبيه للكاشير لا سطراً على إيصال العميل. */}
+            {!receipt.zatcaQr && (
+              <p className="hint" style={{ color: 'var(--rose)' }}>
+                الإيصال بلا رمز الهيئة — أكمل الاسم القانوني والرقم الضريبي في ملف المنشأة.
+              </p>
+            )}
             {stockWarnings.length > 0 && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
                 تنبيه: الرصيد الناتج سالب — {stockWarnings.map((w) => `${w.name} (${fmt(w.resultingQty)})`).join('، ')} — تحقق من الجرد

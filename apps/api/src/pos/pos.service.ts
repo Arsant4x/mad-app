@@ -155,7 +155,7 @@ export class PosService {
    */
   async syncSale(tenant: TenantContext, dto: SyncPosSaleDto) {
     const existing = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
-    if (existing) return existing;
+    if (existing) return this.withReceiptQr(tenant.companyId, existing);
     try {
       return await this.ring(tenant, dto, {
         clientSaleId: dto.clientSaleId,
@@ -171,7 +171,7 @@ export class PosService {
       // winner's row — the caller cannot tell the difference, by design.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         const winner = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
-        if (winner) return winner;
+        if (winner) return this.withReceiptQr(tenant.companyId, winner);
       }
       throw e;
     }
@@ -323,8 +323,26 @@ export class PosService {
         } as Prisma.InvoiceUncheckedUpdateInput,
         include: { lines: true, customer: true, posPayments: true },
       });
-      return { ...updated, stockDeduction };
+      // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).
+      return { ...(await this.withReceiptQr(tenant.companyId, updated)), stockDeduction };
     });
+  }
+
+  /**
+   * ⭐ **إيصالُ الكاشير يحمل رمز الهيئة في كل مساراته** — الحيّ والمزامَن والمكرَّر (`ق-١٨٦`).
+   *
+   * الملحق (١) من قرار التنفيذ: `QR` **إلزاميٌّ توليداً وطباعةً** على الفاتورة
+   * المبسّطة. وكان الرمز يُبنى لقائمة الفواتير وحدها، **والإيصالُ الذي يُسلَّم
+   * للعميل بلا رمزٍ إطلاقاً** — مخالفةٌ في كل بيعٍ في نقطة البيع. البنّاءُ نفسه
+   * وساعةُ الحائط نفسها (`ق-١٨٥`)، فلا يفترق رمزُ الإيصال عن رمز القائمة.
+   * `null` حين يغيب الاسم القانوني أو الرقم الضريبي — والواجهة تُنبّه الكاشير
+   * بدل رمزٍ يُقرأ ولا يصحّ.
+   */
+  private async withReceiptQr<T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal }>(
+    companyId: string,
+    invoice: T,
+  ): Promise<T & { zatcaQr: string | null }> {
+    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice) };
   }
 
 

@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { decodeZatcaQr } from '../src/zatca/qr.util';
 
 /**
  * الكاشير v1 (مستند §6): مناوبة تُفتح بعهدة، بيعٌ يصير فاتورة مدفوعة على نفس
@@ -205,5 +206,36 @@ describe('POS cashier (e2e)', () => {
 
     await auth(request(app.getHttpServer()).delete(`/company-users/${emp.body.id}`));
     await auth(request(app.getHttpServer()).delete(`/templates/${tpl.body.id}`));
+  }, 60000);
+
+  it('إيصال الكاشير يحمل الوسوم الخمسة — بساعة الحائط نفسها، وفي المسار المكرَّر أيضاً (ق-١٨٦)', async () => {
+    // الاسم القانوني والرقم الضريبي شرطُ الرمز — يُضبطان هنا لا يُفترَضان من البذرة.
+    const legalName = `مؤسسة الإيصال ${suffix}`;
+    const vatNumber = `3${String(Date.now()).padStart(13, '0').slice(-13)}3`;
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ legalName, vatNumber }).expect(200);
+
+    // مناوبةٌ مفتوحة إن لم تكن — الاختبار أخيرٌ في الملف فيُغلق ما فتحه.
+    const open = await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 });
+    const openedHere = open.status === 201;
+
+    const payload = { clientSaleId: randomUUID(), ringAt: '2026-09-04T22:15:00.000Z', ringOffsetMin: 180, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' };
+    const sale = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
+    invoiceIds.push(sale.body.id);
+
+    expect(sale.body.zatcaQr).toBeTruthy();
+    const fields = decodeZatcaQr(sale.body.zatcaQr);
+    expect(fields[1]).toBe(legalName);
+    expect(fields[2]).toBe(vatNumber);
+    // وسم ٣ = يومُ الجهاز ووقتُه محلياً بلا لاحقة (ق-١٨٥) — لا 22:15 ولا 00:00:00.
+    expect(fields[3]).toBe('2026-09-05T01:15:00');
+    expect(fields[4]).toBe(Number(sale.body.total).toFixed(2));
+    expect(fields[5]).toBe(Number(sale.body.taxTotal).toFixed(2));
+
+    // إعادةُ الإرسال تعيد الفاتورةَ نفسها **بإيصالٍ كامل** — فطرفيةٌ أعادت المزامنة تطبع رمزاً لا فراغاً.
+    const again = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
+    expect(again.body.id).toBe(sale.body.id);
+    expect(again.body.zatcaQr).toBe(sale.body.zatcaQr);
+
+    if (openedHere) await auth(request(app.getHttpServer()).post(`/pos/shifts/${open.body.id}/close`)).send({ declaredClosing: 0 });
   }, 60000);
 });
