@@ -256,6 +256,8 @@ model Company {
   /// certificate lives here rather than on infrastructure the merchant would
   /// otherwise have to run (CLAUDE.md §1).
   zatcaCredential ZatcaCredential?
+  /// وحدات الإصدار (`EGS`) — الافتراضية للويب، وواحدةٌ لكل طرف بيع (`ق-١٦٩`).
+  egsUnits        EgsUnit[]
 
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
@@ -538,8 +540,19 @@ model CompanyUserBranch {
 model ZatcaCredential {
   id        String  @id @default(uuid())
   /// One per company — a merchant has a single e-invoicing identity.
+  ///
+  /// ⚠️ **وهذا التعليق صار تاريخاً لا حكماً** (`ق-١٥٣` · `ق-١٦٩`): الهيئة تجعل
+  /// الهوية **للجهاز** (`EGS`) لا للمنشأة. الدفعة (أ) تربط هذا الصفّ بوحدةٍ
+  /// **افتراضية** واحدة بلا تغيير سلوك؛ والدفعات التالية تنقل الشهادة إلى
+  /// الوحدة. `@unique` هنا يبقى **حتى تنتهي (ج)** — وحذفُه قبلها يفتح باباً
+  /// لصفّين بلا مسارٍ يميّزهما.
   companyId String  @unique
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الوحدة التي تخصّها هذه الشهادة. اختياريٌّ في (أ) **للتعبئة فقط** — يصير
+  /// إلزامياً في (ب)، والفرادة تمنع شهادةً واحدةً على وحدتين (`ق-١٥٩` ③).
+  egsUnitId String?  @unique
+  egsUnit   EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
 
   /// The EC private key the platform generated for this merchant. Losing it
   /// means re-onboarding from scratch, so it is never regenerated once a
@@ -574,6 +587,72 @@ model ZatcaCredential {
   updatedAt DateTime @updatedAt
 
   @@map("zatca_credentials")
+}
+
+/// نوع الوحدة — **الويب الإداري وحدةٌ افتراضية واحدة، وكل طرف بيعٍ وحدة** (`ق-١٦٩`).
+enum EgsUnitKind {
+  /// الوحدة الافتراضية للمنشأة: الويب الإداري. تسلسليُّها `3-{companyId}` —
+  /// **هو نفسه الذي في طلب الشهادة القائم**، فتبقى الشهادة صالحة بلا إعادة ربط.
+  DEFAULT_WEB
+  /// طرف بيعٍ يُسجَّل عند أول تشغيل بتسلسليٍّ يُولَّد ويُخزَّن على الجهاز. (دفعة د)
+  POS_TERMINAL
+}
+
+enum EgsUnitStatus {
+  ACTIVE
+  /// جهازٌ أُخرج من الخدمة: تبقى فواتيره وسلسلته، **ولا يُصدر بعدها**.
+  RETIRED
+}
+
+/// ⭐ **وحدة الإصدار (`EGS`) — الجهاز الذي تعرفه الهيئة، لا المنشأة** (`ق-١٥٣`).
+///
+/// ## لماذا كيانٌ الآن والسلوك لم يتغيّر بعد (دفعة أ)
+///
+/// الهيئة تجعل **الشهادة والعدّاد والسلسلة لكل جهاز**، ونحن جعلناها للمنشأة
+/// في الطبقات الأربع (الشهادة · التسلسلي في طلبها · `zatcaIcv` · `latestChainHash`).
+/// **والتغيير أرخص ما يكون قبل أول تاجرٍ حقيقي**: بعده تصير هجرةَ سلاسل
+/// تجزئةٍ قائمة — وهي من صنف ما لا يُعكَس.
+///
+/// فتُبنى الوحدة **قبل** أن يعتمد عليها العدّاد (دفعة ب): كل منشأةٍ لها شهادةٌ
+/// تأخذ **وحدةً افتراضية واحدة** بالتسلسلي الذي في طلب شهادتها نفسه، وكل
+/// مستندٍ أُرسل يُنسب إليها. **فإن اختلف شيءٌ في (ب) فالتعبئة هي المتّهم
+/// الوحيد** — لأن (أ) لم تغيّر حساباً.
+///
+/// ## الثلاثة التي تُلبّى بالشكل لا بالفحص (`ق-١٥٩`)
+///
+/// - `serial @unique` — تسلسليّان متطابقان **يرفضهما القيد** لا `if`.
+/// - العدّاد `(egsUnitId, icv)` — **في (ب)**، وحارسٌ يمنع عودة عدّاد المنشأة.
+/// - لا حقلَ شهادةٍ هنا ولا في أي `DTO`: الشهادة تُصدَر **لمفتاحٍ وُلّد لهذه
+///   الوحدة** عبر مسار ربطها هي. **النسخ مستحيلٌ بالشكل لا ممنوعٌ بالتحقّق.**
+///
+/// ## ⚠️ والوحدة الافتراضية لا تُفكَّك رجعياً
+///
+/// تحمل السلسلة المدمجة التي كانت — تفكيكُها يعيد كتابة تجزئاتٍ قُبلت.
+/// **والأجهزة الجديدة وحداتٌ جديدة**، وأول مستندٍ في كلٍّ منها يبدأ من الأساس.
+model EgsUnit {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// `1-{الحل}|2-{الطراز}|3-{التسلسلي}` — **فريدٌ بقيدٍ في القاعدة** (`ق-١٥٩` ①).
+  /// وفرادتُه **عالمية** لا داخل المنشأة: تسلسليٌّ واحدٌ لا يُصدر لمنشأتين.
+  serial String @unique
+
+  kind   EgsUnitKind
+  status EgsUnitStatus @default(ACTIVE)
+  /// اسمٌ يفهمه التاجر: «الكاشير ٢ — فرع العليا».
+  label  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  credential ZatcaCredential?
+  invoices   Invoice[]
+
+  /// وحدةٌ افتراضية واحدة لكل منشأة — **بالقيد لا بالانضباط**: فهرسٌ جزئي في
+  /// الهجرة (`kind = DEFAULT_WEB`)، لأن Prisma لا تعبّر عن الشرط.
+  @@index([companyId, kind])
+  @@map("egs_units")
 }
 
 /// Per-company currency registry. `rate` is the "as of now" rate, used as a
@@ -813,6 +892,16 @@ model Invoice {
   /// authority requires: every invoice commits to its predecessor, so an
   /// altered or removed invoice breaks each hash after it. Both are **stored,
   /// never recomputed** — recomputing on read would defeat the whole point.
+  /// ⭐ **الوحدة التي أصدرت هذا المستند** (`ق-١٥٣` · `ق-١٧١`).
+  ///
+  /// الهيئة تعدّ العدّاد والسلسلة **داخل الوحدة** لا المنشأة. في الدفعة (أ)
+  /// يُملأ فقط: تعبئةً للقائم إلى الوحدة الافتراضية، وختماً عند كل إرسالٍ
+  /// جديد — **والعدّاد والسلسلة ما زالا على المنشأة** حتى (ب). فحضورُه هنا
+  /// **إثباتُ التعبئة قبل أن يعتمد عليها شيء**: إن اختلف شيءٌ فهي المتّهم
+  /// الوحيد. و`Restrict`: مستندٌ أُرسل لا يُترك بلا وحدةٍ بحذفها.
+  egsUnitId         String?
+  egsUnit           EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
+
   zatcaUuid         String?
   zatcaHash         String?
   zatcaPreviousHash String?

@@ -6,6 +6,7 @@ import { computeDocumentTotals } from '../common/money/totals';
 import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { ensureDefaultUnit } from './egs-unit.util';
 import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
@@ -155,9 +156,17 @@ export class ZatcaService {
         }
       }
 
+      /**
+       * ⭐ **الوحدة تُختم على المستند من الآن** (`ق-١٧١`، دفعة أ) — **والعدّاد
+       * والسلسلة ما زالا على المنشأة** (`nextIcv` · `latestChainHash` أعلاه بلا
+       * وحدة). فالختم هنا **إثباتُ التعبئة قبل أن يعتمد عليها شيء**: حين تنتقل
+       * (ب) إلى `(egsUnitId, icv)` يكون كل مستندٍ محاطٍ يحمل وحدته سلفاً.
+       * والافتراضية تُنشأ إن غابت — لا افتراضٌ أن التعبئة أدركت هذه المنشأة.
+       */
+      const unit = await ensureDefaultUnit(tx, companyId);
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
+        data: { egsUnitId: unit.id, zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
       });
 
       // كنسة التدوير (قرار المالك 2026-09-03): **المختوم = المرحَّل بالبناء** — المجاميع
