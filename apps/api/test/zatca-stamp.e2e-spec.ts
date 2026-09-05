@@ -30,6 +30,7 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
   let companyId: string;
   let tenantPrisma: TenantPrismaService;
   let productId: string;
+  let openedShiftId: string | null = null;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const invoiceIds: string[] = [];
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -93,10 +94,13 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `صنف ختم ${suffix}`, price: 100 }).expect(201)).body.id;
     const open = await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 });
     if (open.status !== 201 && open.status !== 409) throw new Error(`تعذّر فتح مناوبة: ${open.status}`);
+    if (open.status === 201) openedShiftId = open.body.id;
   }, 60000);
 
   afterAll(async () => {
     delete process.env.ZATCA_API_BASE_OVERRIDE;
+    // ما فُتح هنا يُغلق هنا — مناوبةٌ مفتوحة تُسقط حزمةَ الكاشير التالية بـ409 (قِيس على قاعدةٍ نظيفة).
+    if (openedShiftId) await auth(request(app.getHttpServer()).post(`/pos/shifts/${openedShiftId}/close`)).send({ declaredClosing: 0 }).catch(() => undefined);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } })).catch(() => undefined);
     // الفواتير المختومة تحمل موقعاً في السلسلة فلا تُحذف (حارس الحذف) — تبقى في
     // المنشأة التجريبية كغيرها من بقايا الاختبارات؛ والصنف يُحذف حذفاً ناعماً فقط،

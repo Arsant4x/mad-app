@@ -108,7 +108,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     return id;
   }
 
-  function setStatus(id: string, zatcaStatus: 'CLEARED' | 'SUBMITTING' | 'REJECTED') {
+  function setStatus(id: string, zatcaStatus: 'CLEARED' | 'SUBMITTING' | 'STAMPED' | 'REJECTED') {
     return tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id }, data: { zatcaStatus } }));
   }
 
@@ -281,6 +281,17 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
 
     const res = await patch(id, { lines: [{ description: 'بند أثناء الإرسال', quantity: 1, unitPrice: 150, taxRate: 15 }] }).expect(409);
     expect(res.body.message).toContain('قيد الإرسال');
+  }, 40000);
+
+  it('refuses to edit a STAMPED invoice — signed, its receipt is out, and the authority may accept it any moment (ق-١٨٧)', async () => {
+    const id = await makeRejectedInvoice();
+    await setStatus(id, 'STAMPED');
+
+    const res = await patch(id, { lines: [{ description: 'بند بعد الختم', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(409);
+    expect(res.body.message).toContain('مختومةٌ');
+    // والوجه الثاني: تعود مردودةً فتُصحَّح — الطريق المقرَّر للتعافي لم يُغلق.
+    await setStatus(id, 'REJECTED');
+    await patch(id, { lines: [{ description: 'بند بعد الردّ', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(200);
   }, 40000);
 
   it('refuses a line/amount edit on a CLEARED invoice', async () => {

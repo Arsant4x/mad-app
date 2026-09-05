@@ -11,7 +11,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
 import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
-import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
+import { invoiceHashOfSigned, invoiceHashOfUnsigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 
@@ -191,13 +191,16 @@ export class ZatcaService {
   }
 
   /**
-   * ⭐ **يختم مرةً واحدة، ويُعيد المحفوظَ بعدها** — مهما كانت الحالة.
+   * ⭐ **يختم مرةً، ويُعيد المحفوظَ ما لم يتغيّر المحتوى.**
    *
-   * مستندٌ له مستندٌ موقَّعٌ محفوظ **لا يُوقَّع ثانيةً** حتى لو رُدّ إرسالُه
-   * (انقطاعُ شبكةٍ مثلاً): توقيعٌ جديد يُغيّر الوسمَين ٧ و٩ في الرمز، **فيصير ما على
-   * إيصال العميل غيرَ ما تصل الهيئة**. فالتوقيع الثاني ممنوعٌ بالشكل: يُعاد
-   * المحفوظ. ولا يُوقَّع من جديد إلا مستندٌ بلا مستندٍ محفوظ — لم يُختم قط، أو سقط
-   * توقيعُه قبل الحفظ.
+   * توقيعٌ جديد يُغيّر الوسمَين ٧ و٩ في الرمز، **فيصير ما على إيصال العميل غيرَ ما
+   * تصل الهيئة**. فمستندٌ **مختوم** (`STAMPED`) لا يُوقَّع ثانيةً أبداً — يُعاد
+   * المحفوظ. ومستندٌ **مردود** (`REJECTED`) له مستندٌ محفوظ يُعاد بناءُ محتواه
+   * وتُقارَن تجزئتُه بالمحفوظة: **إن تساويا** فالردّ كان في الطريق لا في المحتوى
+   * (انقطاعُ شبكة) — تُرسَل البايتاتُ نفسها؛ **وإن اختلفا** فالمستند صُحِّح بعد
+   * الردّ — وهذا هو مسار التعافي المقرَّر («`REJECTED` لا وجودَ له نظاماً؛ تصحيحُ
+   * البيانات وإعادةُ الإرسال هو الطريق»)، فيُوقَّع من جديد **على الموقع نفسه**
+   * (`ICV`/`UUID`/`PIH` بـ`??`)، وإيصالُ المستند المردود لا يُعتدّ به أصلاً.
    *
    * **والادّعاءُ ذرّي**: مُعالِجُ الطابور يعمل كل دقيقة والكاشير يختم عند البيع —
    * فلو التقيا في نافذة الميلّي ثانية لوُقّع مرتَين. `updateMany` المشروطُ بالحالة
@@ -210,7 +213,13 @@ export class ZatcaService {
     );
     if (!existing) throw new NotFoundException(MSG.invoice_not_found);
     if (existing.zatcaStatus === 'CLEARED') throw new BadRequestException(MSG.zatca_already_cleared);
-    if (existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash) return { qrPayload: existing.zatcaQrPayload };
+    if (existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash) {
+      if (existing.zatcaStatus === 'STAMPED') return { qrPayload: existing.zatcaQrPayload };
+      // مردودٌ ومحفوظ: أعِد بناءَ المحتوى بلا ادّعاءٍ وقارن — تساوي التجزئتَين يعني
+      // أن المحتوى لم يُصحَّح، فالبايتاتُ المحفوظة هي ما يُرسَل ثانيةً.
+      const probe = await this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company, 'probe'));
+      if (invoiceHashOfUnsigned(probe.xml) === existing.zatcaHash) return { qrPayload: existing.zatcaQrPayload };
+    }
 
     /**
      * ⚠️ **إعادة المحاولة على `P2002` — وهي ما يجعل القيد الفريد على `zatcaIcv`
@@ -243,7 +252,7 @@ export class ZatcaService {
      * باختبار قائم. (بند متابعة مسجَّل.)
      */
     const unsigned = await retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company)),
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company, 'claim')),
     );
 
     try {
@@ -278,8 +287,9 @@ export class ZatcaService {
   /**
    * حجزُ الموقع في السلسلة وبناءُ المستند غير الموقَّع — داخل معاملةٍ واحدة.
    * الادّعاءُ في `updateMany` المشروط هو ما يمنع توقيعَين متزامنَين (انظر `stampIfNeeded`).
+   * وفي وضع `probe` يُبنى المستند **بلا ادّعاءٍ ولا كتابة** — لمقارنة محتوىً مردودٍ بمحفوظه.
    */
-  private async claimAndBuild(tx: Prisma.TransactionClient, companyId: string, invoiceId: string, company: SellerRow) {
+  private async claimAndBuild(tx: Prisma.TransactionClient, companyId: string, invoiceId: string, company: SellerRow, mode: 'claim' | 'probe') {
     const invoice = await tx.invoice.findUnique({
       where: { id: invoiceId },
       include: { customer: true, lines: true, relatedInvoice: { select: { no: true } } },
@@ -357,20 +367,22 @@ export class ZatcaService {
     // ⭐ **الادّعاء** (`ق-١٩٦`): الوحدةُ والموقعُ والسلفُ والحالةُ في كتابةٍ واحدة
     // **مشروطةٍ بأن لا أحدَ يختم الآن** — من يفوز بها يوقّع وحده. `CHECK
     // "invoices_icv_requires_unit"` في القاعدة يرفض موقعاً بلا وحدة بالشكل (`ق-١٥٩`).
-    const claimed = await tx.invoice.updateMany({
-      where: {
-        id: invoiceId,
-        OR: [
-          { zatcaStatus: { in: ['NOT_SUBMITTED', 'REJECTED'] } },
-          // مختومٌ بلا مستندٍ محفوظ لا يقع بالشكل — لكن إن وقع فلا يُترك عالقاً.
-          { zatcaStatus: 'STAMPED', zatcaSignedXml: null },
-          // ادّعاءٌ متروك: عمليةٌ سقطت بين الحجز والتوقيع.
-          { zatcaStatus: 'SUBMITTING', updatedAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) } },
-        ],
-      },
-      data: { egsUnitId: unit.id, zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
-    });
-    if (claimed.count === 0) throw new ConflictException(MSG.zatca_stamp_in_progress);
+    if (mode === 'claim') {
+      const claimed = await tx.invoice.updateMany({
+        where: {
+          id: invoiceId,
+          OR: [
+            { zatcaStatus: { in: ['NOT_SUBMITTED', 'REJECTED'] } },
+            // مختومٌ بلا مستندٍ محفوظ لا يقع بالشكل — لكن إن وقع فلا يُترك عالقاً.
+            { zatcaStatus: 'STAMPED', zatcaSignedXml: null },
+            // ادّعاءٌ متروك: عمليةٌ سقطت بين الحجز والتوقيع.
+            { zatcaStatus: 'SUBMITTING', updatedAt: { lt: new Date(Date.now() - STALE_CLAIM_MS) } },
+          ],
+        },
+        data: { egsUnitId: unit.id, zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
+      });
+      if (claimed.count === 0) throw new ConflictException(MSG.zatca_stamp_in_progress);
+    }
 
     // كنسة التدوير (قرار المالك 2026-09-03): **المختوم = المرحَّل بالبناء** — المجاميع
     // المخزَّنة تُعاد من البنود بالدالة نفسها التي يستعملها الدفتر والمستند. فإن اختلفت

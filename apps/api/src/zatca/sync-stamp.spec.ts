@@ -32,12 +32,14 @@ describe('الختم المتزامن — قرارات ق-١٩٦ في المصد
     expect(body).toContain("invoiceTypeFor(buyer.customer.vatNumber) === 'standard'");
   });
 
-  it('🔴 ٣ — مستندٌ محفوظ يُعاد قبل أي ادّعاءٍ أو توقيع', () => {
+  it('🔴 ٣ — المختومُ يُعاد محفوظُه قبل أي ادّعاء، والمردودُ لا يُوقَّع ثانيةً إلا إن تغيّر محتواه', () => {
     const start = service.indexOf('private async stampIfNeeded(');
     const claim = service.indexOf('retryOnUniqueConflict(', start);
-    const reuse = service.indexOf('if (existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash) return', start);
+    const reuse = service.indexOf("if (existing.zatcaStatus === 'STAMPED') return { qrPayload: existing.zatcaQrPayload }", start);
+    const probe = service.indexOf('if (invoiceHashOfUnsigned(probe.xml) === existing.zatcaHash) return', start);
     expect(reuse).toBeGreaterThan(start);
-    expect(claim).toBeGreaterThan(reuse);
+    expect(probe).toBeGreaterThan(reuse);
+    expect(claim).toBeGreaterThan(probe);
   });
 
   it('🔴 ٤ — التجزئةُ من المخزون والتوقيعُ يُفحصان قبل fetch في الإبلاغ', () => {
