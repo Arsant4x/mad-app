@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { StartOnboardingDto, SubmitOtpDto } from './dto/onboarding.dto';
 import { csrToBase64, generateCsr, ZatcaEnv } from './csr.util';
+import { defaultUnitSerial, ensureDefaultUnit, SOLUTION_NAME } from './egs-unit.util';
 import { GENESIS_PREVIOUS_HASH } from './hash-chain.util';
 import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
@@ -77,7 +78,8 @@ export const API_BASE: Record<ZatcaEnvironment, string> = {
 };
 
 /** Identifies this platform as the E-invoice Generation Solution. */
-const SOLUTION_NAME = 'mad-app';
+// `SOLUTION_NAME` وصيغةُ التسلسلي **مصدرهما `egs-unit.util.ts`** (`ق-١٦٩`): الجدول
+// وطلبُ الشهادة يقرآن نصّاً واحداً، فلا يفترق تسلسليُّ الشهادة عن تسلسليّ الوحدة.
 
 /**
  * The authority's conformance matrix: it will not issue a production CSID
@@ -180,32 +182,38 @@ export class ZatcaOnboardingService {
         commonName: `${SOLUTION_NAME}-${company.vatNumber.trim()}`,
         registeredAddress: dto.registeredAddress?.trim() || company.address?.trim() || 'Saudi Arabia',
         businessCategory: dto.businessCategory?.trim() || 'General',
-        // `1-<solution>|2-<model>|3-<serial>` identifies this EGS unit.
-        serialNumber: `1-${SOLUTION_NAME}|2-web|3-${companyId}`,
+        // `1-<solution>|2-<model>|3-<serial>` identifies this EGS unit — **the
+        // default one**; a POS terminal (wave د) gets its own serial and CSR.
+        serialNumber: defaultUnitSerial(companyId),
         invoiceType: dto.invoiceType?.trim() || '1100',
       },
       environment as ZatcaEnv,
     );
 
-    await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.zatcaCredential.upsert({
+    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // الوحدة الافتراضية أولاً — فالشهادة **لوحدة** لا لمنشأة (`ق-١٥٣`)، والصفّ
+      // يُربط بها من لحظة ولادته. عديمة الأثر إن وُجدت (تعبئة الهجرة أو ربطٌ سابق).
+      const unit = await ensureDefaultUnit(tx, companyId);
+      await tx.zatcaCredential.upsert({
         where: { companyId },
         create: {
           companyId,
+          egsUnitId: unit.id,
           privateKeyEnc: encryptSecret(privateKeyPem),
           csr: csrPem,
           environment,
           status: ZatcaOnboardingStatus.AWAITING_OTP,
         },
         update: {
+          egsUnitId: unit.id,
           privateKeyEnc: encryptSecret(privateKeyPem),
           csr: csrPem,
           environment,
           status: ZatcaOnboardingStatus.AWAITING_OTP,
           lastError: null,
         },
-      }),
-    );
+      });
+    });
 
     return this.getStatus(companyId);
   }

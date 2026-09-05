@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { GENESIS_PREVIOUS_HASH, invoiceTypeFor } from '../src/zatca/hash-chain.util';
+import { defaultUnitSerial } from '../src/zatca/egs-unit.util';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 
@@ -224,6 +225,30 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       // never appear in a response.
       expect(JSON.stringify(res.body)).not.toContain('PRIVATE KEY');
       expect(JSON.stringify(res.body)).not.toContain('privateKey');
+    }, 30000);
+
+    /**
+     * ⭐ **دفعة (أ) من `EGS`** (`ق-١٧١`): الربط يُنشئ **الوحدة الافتراضية**
+     * ويربط الشهادة بها — **بلا تغيير في العدّاد أو السلسلة**.
+     */
+    it('🔴 يُنشئ الوحدة الافتراضية بتسلسليّ طلب الشهادة نفسه، ويربط الشهادة بها', async () => {
+      const [unit, credential] = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        Promise.all([
+          tx.egsUnit.findFirst({ where: { companyId, kind: 'DEFAULT_WEB' } }),
+          tx.zatcaCredential.findUnique({ where: { companyId }, select: { egsUnitId: true, csr: true } }),
+        ]),
+      );
+
+      expect(unit).not.toBeNull();
+      // التسلسلي **هو الذي في طلب الشهادة** — فالشهادة الصادرة تبقى صالحة بلا
+      // إعادة ربط. ويُقرأ من المصدر الواحد لا يُكتب هنا ثانيةً.
+      expect(unit!.serial).toBe(defaultUnitSerial(companyId));
+      expect(credential!.egsUnitId).toBe(unit!.id);
+
+      // وبدءُ الربط ثانيةً **لا يُنشئ وحدةً ثانية** — الفهرس الجزئي يمنعها بالقيد.
+      await request(app.getHttpServer()).post('/zatca/onboarding/start').set('Authorization', `Bearer ${token}`).send({ environment: 'SANDBOX' }).expect(201);
+      const count = await tenantPrisma.runInTenantContext(companyId, (tx) => tx.egsUnit.count({ where: { companyId, kind: 'DEFAULT_WEB' } }));
+      expect(count).toBe(1);
     }, 30000);
 
     it('stores the private key encrypted, not in the clear', async () => {
