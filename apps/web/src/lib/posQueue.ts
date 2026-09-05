@@ -22,10 +22,37 @@ export interface QueuedSale {
   /** ما يلزم لعرض الإيصال أوفلاين — الأسماء والأسعار وقت البيع. */
   display: { name: string; quantity: number; unitPrice: number }[];
   total: number;
+  /** ضريبةُ البيع — الوسم الخامس في رمز الإيصال الأوفلاين (ق-١٨٨). */
+  vatAmount?: number;
+  /**
+   * رمزُ الهيئة (الوسوم الخمسة) **مبنيٌّ على الجهاز لحظةَ الرنّ** — يُطبع مع الإيصال
+   * الأوفلاين ويبقى ثابتاً مهما أُعيد عرضه. `null` إن غاب ملفُ المنشأة من المخبَّأ.
+   */
+  zatcaQr?: string | null;
+}
+
+/** ما يحتاجه رمزُ الهيئة من ملف المنشأة — يُخبَّأ عند كل اتصالٍ ناجح ويُقرأ أثناء الانقطاع. */
+export interface CachedSellerProfile {
+  legalName: string | null;
+  vatNumber: string | null;
 }
 
 const queueKey = (companyId: string) => `pos.queue.${companyId}`;
 const productsKey = (companyId: string) => `pos.products.${companyId}`;
+const sellerKey = (companyId: string) => `pos.seller.${companyId}`;
+
+export function cacheSellerProfile(companyId: string, profile: CachedSellerProfile): void {
+  localStorage.setItem(sellerKey(companyId), JSON.stringify(profile));
+}
+
+export function readCachedSellerProfile(companyId: string): CachedSellerProfile | null {
+  try {
+    const raw = localStorage.getItem(sellerKey(companyId));
+    return raw ? (JSON.parse(raw) as CachedSellerProfile) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function readQueue(companyId: string): QueuedSale[] {
   try {

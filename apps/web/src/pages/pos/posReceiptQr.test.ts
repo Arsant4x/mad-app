@@ -24,6 +24,20 @@ describe('إيصال الكاشير يحمل رمز الهيئة داخل منط
     expect(end).toBeGreaterThan(qr);
   });
 
+  it('🔴 والإيصالُ الأوفلاين كذلك: ZatcaQr داخل منطقة طباعته، مع نصّ «الممتثلة تصدر عند العودة» (ق-١٨٨ · ق-١٩٢/أ)', () => {
+    const start = source.indexOf('مرجع مؤقت:');
+    const notice = source.indexOf('تُصدَر الفاتورة الممتثلة تلقائياً بتاريخ هذا البيع فور عودة الاتصال', start);
+    const qr = source.indexOf('<ZatcaQr payload={offlineReceipt.zatcaQr}', start);
+    const end = source.indexOf('modal-foot', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(notice).toBeGreaterThan(start);
+    expect(qr).toBeGreaterThan(notice);
+    expect(end).toBeGreaterThan(qr);
+    // ويُبنى على الجهاز لا يُنتظر من الخادم — والطابع من ساعة الجهاز نفسها.
+    expect(source).toContain('buildPhase1Qr({');
+    expect(source).toContain('wallClockOf(new Date(sale.ringAt), sale.ringOffsetMin)');
+  });
+
   it('ولا يُستبدَل الرمزُ الغائب برمزٍ وهميّ — بل تنبيهٌ للكاشير خارج الإيصال', () => {
     // رمزٌ يُقرأ ولا يصحّ أسوأ من غيابه (قاعدة QR المرحلة الأولى)؛ فحين يكون
     // `zatcaQr` فارغاً لا يُرسم شيء، ويُنبَّه الكاشير إلى إكمال ملف المنشأة.
