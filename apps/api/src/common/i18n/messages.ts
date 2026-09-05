@@ -223,6 +223,7 @@ export const MSG = {
 
   // zatca
   zatca_profile_incomplete: 'zatca.profile_incomplete',
+  zatca_buyer_address_incomplete: 'zatca.buyer_address_incomplete',
   zatca_onboarding_not_started: 'zatca.onboarding_not_started',
   zatca_already_onboarded: 'zatca.already_onboarded',
   zatca_compliance_required: 'zatca.compliance_required',
@@ -619,6 +620,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
 
   [MSG.zatca_profile_incomplete]: { ar: 'أكمل الاسم القانوني والرقم الضريبي في بيانات المنشأة قبل الإرسال لهيئة الزكاة', en: 'Complete the legal name and VAT number in the company profile before submitting to ZATCA' },
+  [MSG.zatca_buyer_address_incomplete]: {
+    ar: 'الفاتورة القياسية تشترط عنوان المشتري كاملاً — وينقص من بطاقة «{customer}»: {missing}. أكملها ثم أعد الإرسال',
+    en: 'A standard invoice requires the buyer\'s full national address — missing from "{customer}": {missing}. Complete it and resubmit',
+  },
   [MSG.zatca_onboarding_not_started]: { ar: 'ابدأ ربط الفوترة الإلكترونية أولاً من إعدادات المنشأة', en: 'Start e-invoicing onboarding first' },
   [MSG.zatca_already_onboarded]: { ar: 'الربط مكتمل بالفعل — إعادة التوليد ستُبطل شهادتك الحالية', en: 'Onboarding is already complete — regenerating would invalidate your current certificate' },
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },

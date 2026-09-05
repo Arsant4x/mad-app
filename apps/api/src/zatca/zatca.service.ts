@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { computeDocumentTotals } from '../common/money/totals';
 import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -118,6 +118,43 @@ export class ZatcaService {
       const icv = invoice.zatcaIcv ?? (await nextIcv(tx));
       const invoiceType = invoiceTypeFor(invoice.customer.vatNumber);
 
+      /**
+       * ⭐ **بوّابة عنوان المشتري — قبل أول كتابة** (`BR-KSA-63`).
+       *
+       * الهيئة تشترط على **الفاتورة القياسية** لمشترٍ في السعودية عنواناً
+       * مبنيّاً كاملاً: الشارع · رقم المبنى · الحي · المدينة · الرمز البريدي.
+       * **ولا تشترطه على المبسطة** — فبيع الكاشير لا يُحمَّل ما ليس عليه.
+       *
+       * ⚠️ **والعطل الذي تمنعه كان صامتاً تماماً**: بانِي المستند يقبل هذه
+       * الحقول منذ كُتب، **ومصدرها لم يكن في `Customer` أصلاً** — فكان يُصدَّر
+       * `<cbc:StreetName></cbc:StreetName>` وأخواتها **فارغةً في كل فاتورة
+       * أعمال**. مستندٌ يبدو مكتملاً، يُرَدّ من الهيئة، **والسبب لا يظهر عندنا
+       * في أي موضع**.
+       *
+       * **وموضعها قبل `tx.invoice.update` عمداً**: لو وقعت بعده لاعتمدنا على
+       * ارتداد المعاملة لإلغاء `zatcaIcv` — وهو صحيحٌ اليوم **ويصير خاطئاً**
+       * يوم يُنقل الترقيم خارجها. فالبوّابة **لا تستند إلى ترتيبٍ قد يتغيّر**.
+       *
+       * والرسالة **تسمّي الناقص بالاسم** — فمن يصطدم بها يعرف ماذا يُكمل.
+       */
+      if (invoiceType === 'standard') {
+        const required: Record<string, string | null> = {
+          'الشارع': invoice.customer.street,
+          'رقم المبنى': invoice.customer.buildingNumber,
+          'الحي': invoice.customer.district,
+          'المدينة': invoice.customer.city,
+          'الرمز البريدي': invoice.customer.postalCode,
+        };
+        const missing = Object.entries(required)
+          .filter(([, value]) => !value?.trim())
+          .map(([label]) => label);
+        if (missing.length) {
+          throw new BadRequestException(
+            formatMessage(MSG.zatca_buyer_address_incomplete, { customer: invoice.customer.name, missing: missing.join(' · ') }),
+          );
+        }
+      }
+
       await tx.invoice.update({
         where: { id: invoiceId },
         data: { zatcaUuid: uuid, zatcaPreviousHash: previousHash, zatcaIcv: icv, zatcaStatus: 'SUBMITTING' },
@@ -165,7 +202,15 @@ export class ZatcaService {
           city: company.city,
           postalCode: company.postalCode,
         },
-        buyer: { name: invoice.customer.name, vatNumber: invoice.customer.vatNumber },
+        buyer: {
+          name: invoice.customer.name,
+          vatNumber: invoice.customer.vatNumber,
+          street: invoice.customer.street,
+          buildingNumber: invoice.customer.buildingNumber,
+          district: invoice.customer.district,
+          city: invoice.customer.city,
+          postalCode: invoice.customer.postalCode,
+        },
         lines: invoice.lines.map((l) => ({
           description: l.description,
           quantity: Number(l.quantity),
