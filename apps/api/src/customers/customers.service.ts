@@ -23,6 +23,13 @@ export class CustomersService {
           name: dto.name,
           vatNumber: dto.vatNumber || null,
           phone: dto.phone || null,
+          // العنوان الوطني — `''` تعني «فارغ» لا «نصٌّ فارغ»، فالمستند يقرأ
+          // `null` غياباً ويقرأ `''` قيمةً حاضرةً خاوية.
+          street: dto.street || null,
+          buildingNumber: dto.buildingNumber || null,
+          district: dto.district || null,
+          city: dto.city || null,
+          postalCode: dto.postalCode || null,
           creditLimit: dto.creditLimit ?? 0,
         } as unknown as Prisma.CustomerCreateInput,
       });
@@ -39,6 +46,11 @@ export class CustomersService {
       if (dto.name !== undefined) data.name = dto.name;
       if (dto.vatNumber !== undefined) data.vatNumber = dto.vatNumber || null;
       if (dto.phone !== undefined) data.phone = dto.phone || null;
+      if (dto.street !== undefined) data.street = dto.street || null;
+      if (dto.buildingNumber !== undefined) data.buildingNumber = dto.buildingNumber || null;
+      if (dto.district !== undefined) data.district = dto.district || null;
+      if (dto.city !== undefined) data.city = dto.city || null;
+      if (dto.postalCode !== undefined) data.postalCode = dto.postalCode || null;
       if (dto.creditLimit !== undefined) data.creditLimit = dto.creditLimit;
 
       return tx.customer.update({ where: { id }, data });

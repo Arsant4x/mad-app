@@ -289,6 +289,93 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(res.body.message).toContain('ربط الفوترة الإلكترونية');
     });
 
+    /**
+     * ⭐ **`BR-KSA-63` — عنوان المشتري شرطُ الفاتورة القياسية.**
+     *
+     * والعطل الذي تحرسه هذه الثلاثة كان **صامتاً**: `Customer` بلا حقول عنوان،
+     * وبانِي المستند يقبلها — فكان يُصدَّر `<cbc:StreetName></cbc:StreetName>`
+     * فارغاً في **كل فاتورة أعمال**، ويُرَدّ من الهيئة بلا أثرٍ عندنا.
+     */
+    describe('عنوان المشتري (BR-KSA-63)', () => {
+      /**
+       * عميلٌ برقمٍ ضريبي ⇒ **قياسية** (`invoiceTypeFor`) — وهي وحدها المشترِطة.
+       *
+       * ⚠️ **ورقمٌ فريد لكل عميل**: `assertNoDuplicate` يرفض تكرار الرقم
+       * الضريبي بـ`409`، فرقمٌ ثابت يُسقط ثاني نداءٍ **بعلّةٍ ليست موضوع
+       * الاختبار**. (وقع في السير، وهذا إصلاحه.) والصيغة تبقى صالحة
+       * (`^3\d{13}3$`) — فالفحص الجديد على البطاقة يمرّ.
+       */
+      let vatSeq = 0;
+      async function makeB2bCustomer(address: Record<string, string> = {}) {
+        const unique = String(Date.now() + vatSeq++).slice(-13);
+        const res = await request(app.getHttpServer())
+          .post('/customers')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: `منشأة مشترية ${unique}`, vatNumber: `3${unique}3`, ...address })
+          .expect(201);
+        return res.body.id as string;
+      }
+
+      async function submitFor(buyerId: string) {
+        const invoice = await request(app.getHttpServer())
+          .post('/invoices')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ customerId: buyerId, issueDate: '2026-06-01', dueDate: '2026-06-30', lines: [{ description: 'بند', quantity: 1, unitPrice: 100, taxRate: 15 }] })
+          .expect(201);
+        createdInvoiceIds.push(invoice.body.id);
+        return request(app.getHttpServer()).post(`/zatca/invoices/${invoice.body.id}/submit`).set('Authorization', `Bearer ${token}`);
+      }
+
+      const FULL_ADDRESS = { street: 'طريق الملك فهد', buildingNumber: '7001', district: 'العليا', city: 'الرياض', postalCode: '12211' };
+
+      it('🔴 يرفض القياسية بعنوانٍ ناقص — ويسمّي الناقص بالاسم', async () => {
+        await seedProductionCredential();
+        const res = await submitFor(await makeB2bCustomer());
+
+        expect(res.status).toBe(400);
+        // كل حقلٍ ناقص يُذكر — فمن يصطدم بالرسالة يعرف ماذا يُكمل.
+        for (const label of ['الشارع', 'رقم المبنى', 'الحي', 'المدينة', 'الرمز البريدي']) {
+          expect(JSON.stringify(res.body)).toContain(label);
+        }
+      }, 20000);
+
+      it('🔴 ويرفض النقص الجزئي كذلك — فأربعةٌ من خمسة ليست كاملاً', async () => {
+        await seedProductionCredential();
+        const { postalCode: _omitted, ...partial } = FULL_ADDRESS;
+        const res = await submitFor(await makeB2bCustomer(partial));
+
+        expect(res.status).toBe(400);
+        expect(JSON.stringify(res.body)).toContain('الرمز البريدي');
+        // وما اكتمل لا يُذكر — وإلا صارت الرسالة قائمةً لا تشخيصاً.
+        expect(JSON.stringify(res.body)).not.toContain('الشارع');
+      }, 20000);
+
+      it('والعنوان الكامل يمرّ البوّابة — فالمنع من النقص لا من نوع الفاتورة', async () => {
+        await seedProductionCredential();
+        const res = await submitFor(await makeB2bCustomer(FULL_ADDRESS));
+
+        // يصل مسار الإرسال (ويُرفض هناك لغياب التوقيع الحقيقي) — والمهم أنه
+        // **تجاوز البوّابة**: لا رسالة عنوانٍ ناقص.
+        expect(res.status).toBe(201);
+        expect(JSON.stringify(res.body)).not.toContain('عنوان المشتري');
+      }, 20000);
+
+      it('🔴 والمبسطة لا تُحمَّل ما ليس عليها — عميلٌ بلا رقمٍ ضريبي يمرّ بلا عنوان', async () => {
+        await seedProductionCredential();
+        const buyer = (
+          await request(app.getHttpServer())
+            .post('/customers')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ name: `مستهلك ${Date.now()}` })
+            .expect(201)
+        ).body.id as string;
+
+        const res = await submitFor(buyer);
+        expect(res.status).toBe(201);
+        expect(JSON.stringify(res.body)).not.toContain('عنوان المشتري');
+      }, 20000);
+    });
+
     it('records the chain and marks the invoice REJECTED when submission cannot complete', async () => {
       // A certificate exists, so the guard passes and the invoice reaches the
       // dispatch path — where signing is still unimplemented. That proves a
