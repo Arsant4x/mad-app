@@ -4,9 +4,12 @@ import { listBranches, type Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
-import { cacheProducts, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
+import { cacheProducts, cacheSellerProfile, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readCachedSellerProfile, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
+import { getCompanyProfile } from '../../api/companyProfile';
 import { ZatcaQr } from '../../components/ZatcaQr';
+import { buildPhase1Qr } from '../../lib/zatcaQr';
+import { wallClockOf } from '../../lib/wallClock';
 import { fmt } from '../../lib/format';
 import { round2 } from '../../lib/money';
 
@@ -68,6 +71,14 @@ export function PosPage() {
       setBranches(await listBranches());
     } catch {
       /* بلا فروع معروفة يختفي المُنتقي وتُفتح المناوبة على مستوى الشركة كما قبل. */
+    }
+    // ملفُ المنشأة يُخبَّأ عند كل اتصالٍ ناجح — فرمزُ الإيصال الأوفلاين يجد الاسمَ
+    // القانوني والرقمَ الضريبي حين لا خادم (ق-١٨٨). الفشل يترك المخبَّأ الأخير.
+    try {
+      const profile = await getCompanyProfile();
+      cacheSellerProfile(companyId, { legalName: profile.legalName, vatNumber: profile.vatNumber });
+    } catch {
+      /* أوفلاين أو ملفٌ لم يُكتب — يبقى آخر مخبَّأ، وغيابه يُنبَّه إليه على الإيصال. */
     }
     setQueueCount(readQueue(companyId).length);
   }
@@ -174,10 +185,22 @@ export function PosPage() {
     } catch (e) {
       if (isNetworkError(e)) {
         // انقطاع: البيع يصطفّ محلياً بإيصال مؤقت، ويتزامن وحده لاحقاً.
-        const queued = {
+        // رمزُ الهيئة يُبنى **هنا، على الجهاز، بلا مفاتيح** (ق-١٨٨): الوسوم الخمسة من
+        // ملف المنشأة المخبَّأ وساعة الجهاز نفسها التي سيأخذها الخادم للفاتورة
+        // الممتثلة — فالطابع على الإيصال هو طابعُ المستند القادم حرفاً.
+        const seller = readCachedSellerProfile(companyId);
+        const queued: QueuedSale = {
           ...sale,
           display: cart.map((l) => ({ name: l.product.name, quantity: l.quantity, unitPrice: Number(l.product.price) })),
           total: totals.total,
+          vatAmount: totals.tax,
+          zatcaQr: buildPhase1Qr({
+            sellerName: seller?.legalName,
+            vatNumber: seller?.vatNumber,
+            issued: wallClockOf(new Date(sale.ringAt), sale.ringOffsetMin),
+            total: totals.total,
+            vatAmount: totals.tax,
+          }),
         };
         enqueueSale(companyId, queued);
         setQueueCount(readQueue(companyId).length);
@@ -475,10 +498,23 @@ export function PosPage() {
                   </tr>
                 </tbody>
               </table>
+              {/* نصٌّ ظاهر على الإيصال — مسار الأوفلاين المعتمد (ق-١٩٢/أ): الممتثلة تصدر عند العودة بتاريخ هذا البيع. */}
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
-                سيُرقَّم كفاتورة رسمية تلقائياً فور عودة الاتصال
+                إيصالٌ مؤقّت — تُصدَر الفاتورة الممتثلة تلقائياً بتاريخ هذا البيع فور عودة الاتصال
               </p>
+              {/* رمز الهيئة للمرحلة الأولى — مبنيٌّ على الجهاز، داخل منطقة الطباعة (ق-١٨٨). */}
+              {offlineReceipt.zatcaQr && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                  <ZatcaQr payload={offlineReceipt.zatcaQr} size={128} />
+                </div>
+              )}
             </div>
+            {/* خارج منطقة الطباعة عمداً — تنبيهٌ للكاشير لا سطراً على إيصال العميل. */}
+            {!offlineReceipt.zatcaQr && (
+              <p className="hint" style={{ color: 'var(--rose)' }}>
+                الإيصال بلا رمز الهيئة — لم يُخبَّأ الاسم القانوني والرقم الضريبي قبل الانقطاع؛ أكملهما في ملف المنشأة عند عودة الاتصال.
+              </p>
+            )}
             <div className="modal-foot">
               <button className="btn btn-ghost" onClick={() => setOfflineReceipt(null)}>إغلاق</button>
               <button className="btn btn-primary" onClick={() => window.print()}>🖨 طباعة</button>
