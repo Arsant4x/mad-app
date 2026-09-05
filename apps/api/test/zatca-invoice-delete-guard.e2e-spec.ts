@@ -120,8 +120,32 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
-    customerId = customers.body[0].id;
+    /**
+     * ⚠️ **عميلٌ خاص بهذا الملف بدل `customers.body[0]`** (2026-09-05).
+     *
+     * كان يأخذ **أول ما يجده**، فيربط نتيجته بترتيب صفوفٍ لا يملكه — وهو
+     * الفخّ الذي وثّقه `zatca-phase2` في ملفّه. **وأسقطه بندٌ لا علاقة له
+     * بالحذف**: بوّابة `BR-KSA-63` صارت تشترط عنوان المشتري على القياسية،
+     * فأيّ عميلٍ برقمٍ ضريبي بلا عنوان يُرَدّ — **وهذا الملف يختبر الحذف لا
+     * العنوان**.
+     *
+     * فيُنشئ عميلَه **بعنوانٍ كامل**: شرطُ وصولِه إلى ما يختبره فعلاً.
+     */
+    customerId = (
+      await request(app.getHttpServer())
+        .post('/customers')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: `عميل حارس الحذف ${Date.now()}`,
+          vatNumber: `3${String(Date.now()).slice(-13)}3`,
+          street: 'طريق الملك عبدالعزيز',
+          buildingNumber: '3120',
+          district: 'الملز',
+          city: 'الرياض',
+          postalCode: '11564',
+        })
+        .expect(201)
+    ).body.id;
 
     await ensureCompanyProfile();
     await seedProductionCredential();

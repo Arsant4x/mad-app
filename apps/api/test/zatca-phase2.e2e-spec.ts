@@ -297,12 +297,21 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
      * فارغاً في **كل فاتورة أعمال**، ويُرَدّ من الهيئة بلا أثرٍ عندنا.
      */
     describe('عنوان المشتري (BR-KSA-63)', () => {
-      /** عميلٌ برقمٍ ضريبي ⇒ **قياسية** (`invoiceTypeFor`) — وهي وحدها المشترِطة. */
+      /**
+       * عميلٌ برقمٍ ضريبي ⇒ **قياسية** (`invoiceTypeFor`) — وهي وحدها المشترِطة.
+       *
+       * ⚠️ **ورقمٌ فريد لكل عميل**: `assertNoDuplicate` يرفض تكرار الرقم
+       * الضريبي بـ`409`، فرقمٌ ثابت يُسقط ثاني نداءٍ **بعلّةٍ ليست موضوع
+       * الاختبار**. (وقع في السير، وهذا إصلاحه.) والصيغة تبقى صالحة
+       * (`^3\d{13}3$`) — فالفحص الجديد على البطاقة يمرّ.
+       */
+      let vatSeq = 0;
       async function makeB2bCustomer(address: Record<string, string> = {}) {
+        const unique = String(Date.now() + vatSeq++).slice(-13);
         const res = await request(app.getHttpServer())
           .post('/customers')
           .set('Authorization', `Bearer ${token}`)
-          .send({ name: `منشأة مشترية ${Date.now()}`, vatNumber: '300000000000003', ...address })
+          .send({ name: `منشأة مشترية ${unique}`, vatNumber: `3${unique}3`, ...address })
           .expect(201);
         return res.body.id as string;
       }
