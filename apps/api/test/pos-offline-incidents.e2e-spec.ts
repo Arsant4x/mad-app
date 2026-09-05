@@ -54,8 +54,13 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
     invoiceIds.push(res.body.id);
     return res.body as { id: string };
   };
-  /** الواقعة المربوطة بالفاتورة — تُقرأ بعد المزامنة، فالاستنتاج يقع بعد التزام البيع لا قبله. */
-  const incidentOf = async (invoiceId: string): Promise<string | null> => (await auth(http().get(`/invoices/${invoiceId}`)).expect(200)).body.offlineIncidentId ?? null;
+  /** الواقعة المربوطة بالفاتورة — تُقرأ من القائمة بعد المزامنة (لا مسارَ لفاتورةٍ واحدة)، فالاستنتاج يقع بعد التزام البيع لا قبله. */
+  const incidentOf = async (invoiceId: string): Promise<string | null> => {
+    const list = (await auth(http().get('/invoices')).expect(200)).body as { id: string; offlineIncidentId?: string | null }[];
+    const inv = list.find((i) => i.id === invoiceId);
+    if (!inv) throw new Error(`invoice ${invoiceId} not in list`);
+    return inv.offlineIncidentId ?? null;
+  };
   const report = async (): Promise<IncidentReport> => (await auth(http().get('/pos/incidents')).expect(200)).body;
   const row = (rep: IncidentReport, id: string | null) => {
     const r = rep.items.find((i) => i.id === id);

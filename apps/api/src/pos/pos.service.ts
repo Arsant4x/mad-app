@@ -205,6 +205,10 @@ export class PosService {
     const ringAt = new Date(ringAtIso);
     if (Number.isNaN(ringAt.getTime())) return null;
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // قفلٌ استشاريّ على المنشأة داخل المعاملة (`ق-٢٠١`/٣): ثلاث مزامناتٍ تصل في
+      // لحظةٍ واحدة تقرأ «لا واقعةَ متقاطعة» ثلاثتُها فتُنشئ ثلاثاً. القياس (⑥) مرّ
+      // مرةً بلا قفل — والآلية لا تُترك للحظّ. يُحرَّر مع الالتزام.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'pos_offline_incident:' + companyId}))`;
       const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } });
       const gapMs = company.posOfflineGapMinutes * 60_000;
       if (now.getTime() - ringAt.getTime() < gapMs) return null;

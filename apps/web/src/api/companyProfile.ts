@@ -26,8 +26,9 @@ export interface CompanyProfile {
   posOfflineGapMinutes: number;
 }
 
+/** عقدُ `PATCH` كاملاً (ق-١٤٦): ما لم يُرسَل يبقى كما هو، وما أُرسل `''` يُمحى — فلا حقلَ واجبٌ في كل حفظ، وبطاقةٌ تحفظ إعداداً واحداً لا تحمل الملف كله. */
 export interface CompanyProfileInput {
-  legalName: string;
+  legalName?: string;
   vatNumber?: string;
   crNumber?: string;
   phone?: string;

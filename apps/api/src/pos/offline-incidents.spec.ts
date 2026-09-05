@@ -34,6 +34,10 @@ describe('(ج) وقائعُ الانقطاع — الحدُّ إعدادٌ وا�
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     const inference = service.slice(from, to);
+    // التزامن: القفل الاستشاريّ على المنشأة يسبق القراءة — وإلا أنشأت المزامناتُ المتزامنة وقائعَ مكرّرة.
+    const lock = inference.indexOf("pg_advisory_xact_lock(hashtext(${'pos_offline_incident:' + companyId}))");
+    expect(lock).toBeGreaterThan(-1);
+    expect(inference.indexOf('posOfflineIncident.findMany')).toBeGreaterThan(lock);
     expect(inference).toContain('const ringAt = new Date(ringAtIso)');
     expect(inference).toContain('startedAt: { lte: hi }, endedAt: { gte: lo }');
     expect(inference).not.toMatch(/findFirst/);
