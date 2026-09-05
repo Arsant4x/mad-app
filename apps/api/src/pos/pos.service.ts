@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { TenantContext } from '../auth/types';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
@@ -364,7 +365,10 @@ export class PosService {
         const result = await this.integrationsService.chargeCardIfConfigured(tx, {
           amount: round2(cardAmount),
           currency: 'SAR',
-          reference: opts.clientSaleId ?? opts.offlineRef ?? `POS-${shift.id.slice(0, 8)}-${await tx.invoice.count({ where: { posShiftId: shift.id } })}`,
+          // `ق-١٩٨` · `ق-٢٠٤`: كان المرجعُ `POS-<مناوبة>-<عددُ الصفوف>` — بيعان متزامنان
+          // بالبطاقة يتشاركان مرجعاً عند محوّلٍ حقيقي. لا تسلسلَ مطلوباً هنا، فالهويةُ
+          // عشوائيةٌ فريدة؛ والحارسُ المشتقّ (`count-numbering.spec`) يمسك عودةَ النمط.
+          reference: opts.clientSaleId ?? opts.offlineRef ?? randomUUID(),
         });
         if (result && !result.approved) {
           throw new BadRequestException(formatMessage(MSG.pos_terminal_declined, { reason: result.declineReason ?? '—' }));
