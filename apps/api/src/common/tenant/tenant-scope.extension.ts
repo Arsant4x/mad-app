@@ -60,6 +60,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'InventoryWriteOffAttachment',
   // وحدات الإصدار: تحمل companyId وتُقرأ داخل سياق المنشأة — وRLS بـFORCE.
   'EgsUnit',
+  'PosOfflineIncident',
   'Property',
   'Unit',
   'Contract',

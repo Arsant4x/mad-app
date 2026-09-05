@@ -144,6 +144,33 @@ describe('Company profile (e2e)', () => {
     await request(app.getHttpServer()).patch('/company-profile').set('Authorization', `Bearer ${tokenA}`).send({ legalName: '' }).expect(400);
   });
 
+  /**
+   * ⭐ **العقد نفسه لبقية الحقول** — وعليه تعتمد بطاقةٌ تحفظ إعداداً واحداً (حدُّ فصل
+   * وقائع الانقطاع، `ق-٢٠١`) من غير أن تحمل الملف كله: `emptyToNull(undefined)`
+   * يعيد `undefined` وPrisma يتركه. لو صار يعيد `null` لمُحي الرقم الضريبي والعنوان
+   * كلُّه بصمت مع كل حفظٍ لحقلٍ واحد — وهذا ما يسقط عليه هذا التوكيد (ثابتٌ بالعكس).
+   * المحوُ صريحٌ بالفراغ `''` لا بالإغفال — كما يرسله نموذجُ الملف.
+   */
+  it('🔴 وما لم يُرسَل من بقية الحقول يبقى — وما أُرسل فارغاً يُمحى وحده', async () => {
+    const patch = (body: Record<string, string | number>) => request(app.getHttpServer()).patch('/company-profile').set('Authorization', `Bearer ${tokenA}`).send(body);
+
+    await patch({ vatNumber: '300000000000003', crNumber: '1010123456', email: 'test-a@example.com', city: 'الرياض', postalCode: '12211' }).expect(200);
+
+    // حقلٌ واحد — والبقية كما هي.
+    const patched = await patch({ posOfflineGapMinutes: 2 }).expect(200);
+    expect(patched.body.vatNumber).toBe('300000000000003');
+    expect(patched.body.crNumber).toBe('1010123456');
+    expect(patched.body.email).toBe('test-a@example.com');
+    expect(patched.body.city).toBe('الرياض');
+    expect(patched.body.postalCode).toBe('12211');
+
+    // والمحوُ بالفراغ الصريح وحده — ولا يجرّ غيره.
+    const cleared = await patch({ city: '' }).expect(200);
+    expect(cleared.body.city).toBeNull();
+    expect(cleared.body.vatNumber).toBe('300000000000003');
+    expect(cleared.body.postalCode).toBe('12211');
+  });
+
   it("keeps company B from seeing company A's profile data", async () => {
     const fetchedB = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenB}`).expect(200);
     expect(fetchedB.body.legalName).not.toBe('شركة اختبار العزل المحدودة');

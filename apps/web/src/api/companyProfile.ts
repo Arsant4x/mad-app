@@ -22,10 +22,13 @@ export interface CompanyProfile {
   logoFileKey: string | null;
   /** Freezes properties/contracts company-wide. */
   masterDataLocked: boolean;
+  /** حدُّ فصل وقائع الانقطاع بالدقائق — إعدادٌ للتاجر يُعرَض مع كل واقعة (ق-٢٠١). */
+  posOfflineGapMinutes: number;
 }
 
+/** عقدُ `PATCH` كاملاً (ق-١٤٦): ما لم يُرسَل يبقى كما هو، وما أُرسل `''` يُمحى — فلا حقلَ واجبٌ في كل حفظ، وبطاقةٌ تحفظ إعداداً واحداً لا تحمل الملف كله. */
 export interface CompanyProfileInput {
-  legalName: string;
+  legalName?: string;
   vatNumber?: string;
   crNumber?: string;
   phone?: string;
@@ -42,6 +45,7 @@ export interface CompanyProfileInput {
   /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
   logoFileKey?: string;
   masterDataLocked?: boolean;
+  posOfflineGapMinutes?: number;
 }
 
 export const getCompanyProfile = () => apiClient.get<CompanyProfile>('/company-profile').then((r) => r.data);

@@ -24,6 +24,7 @@ const PROFILE_SELECT = {
   logoFileKey: true,
   masterDataLocked: true,
   writeOffRequiresTwoPersons: true,
+  posOfflineGapMinutes: true,
 } as const;
 
 /** Matches CompanyUsersService's assertIsCompanyOwner — only the company
@@ -93,6 +94,7 @@ export class CompanyProfileService {
         ...(logoFileKey !== undefined ? { logoFileKey } : {}),
         ...(dto.masterDataLocked !== undefined ? { masterDataLocked: dto.masterDataLocked } : {}),
         ...(dto.writeOffRequiresTwoPersons !== undefined ? { writeOffRequiresTwoPersons: dto.writeOffRequiresTwoPersons } : {}),
+        ...(dto.posOfflineGapMinutes !== undefined ? { posOfflineGapMinutes: dto.posOfflineGapMinutes } : {}),
       },
       select: PROFILE_SELECT,
     });
