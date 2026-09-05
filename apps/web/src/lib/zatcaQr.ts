@@ -1,4 +1,4 @@
-import { round2 } from './money';
+import { formatMoney } from './money';
 import { qrTimestamp, type WallClock } from './wallClock';
 
 /**
@@ -56,8 +56,8 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-/** المبلغ كما تكتبه الهيئة: منزلتان بعد التدوير بسياسة المنتج نفسها. */
-const amount = (value: number) => round2(value).toFixed(2);
+/** المبلغ كما تكتبه الهيئة: منزلتان بعد التدوير بسياسة المنتج — عبر `lib/money.ts` وحده (حارس كنسة التدوير). */
+const amount = (value: number) => formatMoney(value);
 
 export function buildPhase1Qr(input: Phase1QrInput): string | null {
   const sellerName = input.sellerName?.trim();
