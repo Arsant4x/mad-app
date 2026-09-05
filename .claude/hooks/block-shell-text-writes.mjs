@@ -249,7 +249,7 @@ if (MERGE_CMD.test(cmd)) {
   if (/MERGE_UNSTABLE_OK=1/.test(cmd)) process.exit(0); // إذنٌ صريح، وأثرُه في الأمر
 
   const prNumber = cmd.match(/gh\s+pr\s+merge\s+(\d+)/)?.[1] ?? '';
-  const args =['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'number,state,mergeStateStatus'];
+  const args =['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'number,state,mergeStateStatus,headRefName'];
   /**
    * ⚠️ **يسأل من جذرٍ يملكه لا من جذر الجلسة** (2026-09-04).
    *
@@ -269,13 +269,64 @@ if (MERGE_CMD.test(cmd)) {
   // حالةً فارغة — أي أن الحارس يمرّ على كل شيء وهو يظنّ نفسه يعمل.
   let status = null;
   let number = prNumber || '?';
+  let headRef = null;
   if (probe.status === 0) {
     try {
       const parsed = JSON.parse(probe.stdout);
       status = parsed.mergeStateStatus ?? null;
       number = parsed.number ?? number;
+      headRef = parsed.headRefName ?? null;
     } catch {
       status = null;
+    }
+  }
+
+  /**
+   * ⛔ **طلبٌ مكدَّسٌ على هذا الفرع يُغلَق تلقائياً بحذفه** (`ق-١٤٤` — وقعت مرتَين:
+   * #121 في 2026-08، و#151 في 2026-09-05 بعد أن أُعيد توجيه أخيه #150 **وحدَه**).
+   *
+   * القاعدة كانت في الذاكرة: «يُعاد توجيه المكدَّس إلى main قبل دمج قاعدته» —
+   * وذاكرةٌ تُطبَّق على طلبٍ وتُنسى عن الذي بجواره. فالبوّابة تسأل GitHub: أثمّة
+   * طلبٌ مفتوحٌ قاعدتُه فرعُ هذا الطلب؟ إن وُجد **رُفض الدمج بالاسم** حتى يُعاد
+   * توجيهه — والحذفُ (`--delete-branch`) ليس شرط الرفض: دمجُ القاعدة بالسحق يقطع
+   * أسلافَ المكدَّس فيحمل الموجةَ كلها (`ق-١٤٤`)، حُذف الفرع أو بقي.
+   *
+   * والفشلُ في هذا الاستعلام **مُغلِق** كسابقه: قائمةٌ لم تُقرأ ليست قائمةً فارغة.
+   */
+  if (headRef) {
+    const stacked = spawnSync('gh', ['pr', 'list', '--state', 'open', '--base', headRef, '--json', 'number,headRefName'], {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+      cwd: repoRoot,
+    });
+    let children = null;
+    if (stacked.status === 0) {
+      try {
+        children = JSON.parse(stacked.stdout);
+      } catch {
+        children = null;
+      }
+    }
+    if (children === null) {
+      console.error(`⛔ تعذّر قراءة الطلبات المكدَّسة على ${headRef} قبل دمج #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+      process.exit(2);
+    }
+    if (children.length > 0) {
+      const list = children.map((c) => `#${c.number} (${c.headRefName})`).join(' · ');
+      console.error(
+        [
+          `⛔ #${number} قاعدةٌ لطلبٍ مفتوح: ${list} — والدمج ممنوع حتى يُعاد توجيهه (ق-١٤٤).`,
+          '',
+          'الحادثتان: #121 (2026-08) و#151 (2026-09-05) أُغلقا تلقائياً بحذف قاعدتهما،',
+          'والثانية وقعت مع القاعدة في الذاكرة — فصارت بوّابةً.',
+          '',
+          'الطريق:',
+          ...children.map((c) => `  gh pr edit ${c.number} --base main`),
+          `  ثم أعد: gh pr merge ${number} …`,
+          '  وبعد الدمج: git rebase --onto origin/main <طرف القاعدة القديم> على كل فرعٍ مكدَّس.',
+        ].join('\n'),
+      );
+      process.exit(2);
     }
   }
 
