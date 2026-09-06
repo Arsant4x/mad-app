@@ -41,6 +41,24 @@ export function jobBlocks(yaml: string): JobBlock[] {
 export const isHeavy = (job: JobBlock) => /^\s{4}services:\s*$/m.test(job.body) || /docker build/.test(job.body) || /playwright/i.test(job.body);
 export const hasGate = (job: JobBlock) => GATE.test(job.body);
 
+/** الأفعالُ التي يسمّيها شرطُ الثقيل — تُقرأ من الشرط نفسه لا من قائمةٍ مكتوبة. */
+export function gateActions(yaml: string): string[] {
+  const m = yaml.match(/contains\(fromJSON\('\[([^\]]*)\]'\), github\.event\.action\)/);
+  if (!m) return [];
+  return m[1].split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
+}
+
+/** الأنواعُ المعلَنة تحت `pull_request:` — وغيابُ السطر يعني الافتراضيةَ الثلاث. */
+export function declaredTypes(yaml: string): string[] {
+  const at = yaml.indexOf('\n  pull_request:');
+  if (at < 0) return [];
+  const rest = yaml.slice(at + 1);
+  const end = rest.search(/\n(?![ \t#])\S/);
+  const block = end < 0 ? rest : rest.slice(0, end);
+  const m = block.replace(/^\s*#.*$/gm, '').match(/^\s{4}types:\s*\[([^\]]*)\]/m);
+  return m ? m[1].split(',').map((s) => s.trim()) : ['opened', 'synchronize', 'reopened'];
+}
+
 describe('تقسيمُ السير: الثقيلُ يحمل شرطَ الحدث والخفيفُ لا يحمله (ق-٢٤٥)', () => {
   const yaml = readFileSync(WORKFLOW, 'utf8');
   const jobs = jobBlocks(yaml);
@@ -71,5 +89,24 @@ describe('تقسيمُ السير: الثقيلُ يحمل شرطَ الحدث �
     expect(lightText).toContain('npm run build --workspace apps/web');
     // `\s+` بين الأسطر لا `\n` — فالمستودع على ويندوز قد يحمل CRLF، والشكلُ لا المسافةُ هو المحروس.
     expect(yaml).toMatch(/^concurrency:\s+group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/m);
+  });
+
+  // (ق-٢٤٧) الثقب الذي كاد يمرّ: الشرطُ يسمّي `ready_for_review` وهو **ليس من الأنواع
+  // الافتراضية**، فبلا إعلانه لا يصل الحدثُ السيرَ — بوّابةٌ على بابٍ لا يُطرَق.
+  it('قارئُ الأنواع والأفعال مُثبَت بحالتَين: معلَنةٌ تُقرأ، وغائبةٌ تعود للافتراضية', () => {
+    const withTypes = ['on:', '  push:', '    branches: [main]', '  pull_request:', '    types: [opened, ready_for_review]', '    paths:', "      - 'x'", 'env:', '  A: b', ''].join('\n');
+    const without = ['on:', '  push:', '    branches: [main]', '  pull_request:', '    paths:', "      - 'x'", 'env:', '  A: b', ''].join('\n');
+    expect(declaredTypes(withTypes)).toEqual(['opened', 'ready_for_review']);
+    expect(declaredTypes(without)).toEqual(['opened', 'synchronize', 'reopened']);
+    expect(gateActions(`if: contains(fromJSON('["opened","reopened"]'), github.event.action)`)).toEqual(['opened', 'reopened']);
+    expect(gateActions('if: always()')).toEqual([]);
+  });
+
+  it('🔴 كل فعلٍ يسمّيه الشرطُ الثقيل معلَنٌ في أنواع `pull_request` — و`synchronize` معلَنةٌ كي يعمل الخفيفُ على كل دفع', () => {
+    const types = declaredTypes(yaml);
+    const named = gateActions(yaml);
+    expect(named.length).toBeGreaterThan(0);
+    expect(named.filter((a) => !types.includes(a))).toEqual([]);
+    expect(types).toContain('synchronize');
   });
 });

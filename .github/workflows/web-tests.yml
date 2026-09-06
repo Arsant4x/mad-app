@@ -27,6 +27,12 @@ on:
   push:
     branches: [main]
   pull_request:
+    # ⚠️ (ق-٢٤٧) الأنواعُ تُعلَن صراحةً لأن الشرطَ الثقيل يسمّي `ready_for_review`،
+    #    **وهو ليس من الأنواع الافتراضية** (opened · synchronize · reopened وحدها).
+    #    فبلا هذا السطر يسمّي الشرطُ حدثاً **لا يصل السيرَ أصلاً** — بوّابةٌ على بابٍ
+    #    لا يُطرَق: مسوّدةٌ تُرفَع إلى «جاهز» فلا يعمل عليها ثقيلٌ ولا خفيف.
+    #    ويحرسه `ci-split.spec.ts`: كل فعلٍ يسمّيه الشرطُ يجب أن يكون معلَناً هنا.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'apps/web/**'
       - 'apps/api/**'
