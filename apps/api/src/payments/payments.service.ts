@@ -447,7 +447,8 @@ export class PaymentsService {
       currency: string;
       exchangeRate: number;
       branchId: string | null;
-      bank: { id: string } | null;
+      /** `accountId` لازمٌ لا تكميلي (`ق-٢٧٧`): هو الطرفُ المدين في القيد. */
+      bank: { id: string; accountId: string } | null;
       baseReceivable: number;
       description: string;
       reversal?: boolean;
@@ -464,6 +465,9 @@ export class PaymentsService {
       branchId: p.branchId,
       reversal: p.reversal,
       refund: p.refund,
+      // (ق-٢٧٧) النقدُ يدخل **حسابَ البنك** حين تُقبض الدفعة على بنك — وقبلَه
+      // كان يدخل `1000` دائماً، فيُعدّ نقدُ البنك صندوقاً (ق-٢٧٦).
+      cashAccountId: p.bank?.accountId ?? null,
     });
     if (entry) await tx.payment.update({ where: { id: paymentId }, data: { journalEntryId: entry.id } });
 
