@@ -261,6 +261,8 @@ export const MSG = {
   cash_drawer_has_open_shift: 'cash_drawers.has_open_shift',
   cash_drawer_code_range_full: 'cash_drawers.code_range_full',
   cash_drawer_has_movements: 'cash_drawers.has_movements',
+  cash_drawer_inactive: 'cash_drawers.inactive',
+  cash_drawer_branch_mismatch: 'cash_drawers.branch_mismatch',
   // branches / activities
   branch_not_found: 'branches.not_found',
   branch_name_taken: 'branches.name_taken',
@@ -688,6 +690,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.cash_drawer_has_movements]: {
     ar: 'لا يمكن حذف درج تحرّك حسابه — عطّله بدل حذفه',
     en: 'A drawer whose account has postings cannot be deleted — deactivate it instead',
+  },
+  [MSG.cash_drawer_inactive]: {
+    ar: 'الدرج "{name}" معطَّل — فعّله أو اختر درجاً آخر',
+    en: 'Drawer "{name}" is inactive — activate it or pick another',
+  },
+  [MSG.cash_drawer_branch_mismatch]: {
+    ar: 'الدرج "{name}" يخصّ فرعاً آخر — اختر درجاً من فرع المناوبة',
+    en: 'Drawer "{name}" belongs to another branch — pick one from the shift branch',
   },
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },

@@ -10,6 +10,14 @@ export class OpenShiftDto {
   @IsOptional()
   @IsString()
   branchId?: string;
+
+  /**
+   * الدرجُ الذي تُفتح عليه المناوبة (`ق-٢١٨`). يُترك فارغاً فيُؤخذ **الدرجُ
+   * الافتراضيُّ لفرعها** — فالكاشيرُ لا يختار حساباً، والتفصيلُ يبقى قائماً.
+   */
+  @IsOptional()
+  @IsString()
+  drawerId?: string;
 }
 
 export class CloseShiftDto {
