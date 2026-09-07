@@ -26,7 +26,15 @@ describe('Bank transactions tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('[SPEC 7.1 7.2] adjusts the linked bank balance on create/update/delete and stays invisible to company B', async () => {
+  /**
+   * ⚠️ (ق-٢٨١ · ق-٢٨٢ · ق-٢٨٥) **كان عنوانُ هذا الاختبار «تُعدِّل رصيدَ البنك
+   * عند الإنشاء والتعديل والحذف» — وكان يوثّق العطل**: رقمٌ يتحرك بلا قيدٍ
+   * يسنده. والسطرُ البنكيُّ اليدويّ **سطرُ مطابقةٍ لا مصدرُ قيد** (لا يحمل طرفاً
+   * مقابلاً)، والرصيدُ **مرآةٌ تتبع الأستاذ**.
+   *
+   * فصار يؤكّد الحكمَ الجديد: **الرصيدُ لا يتحرّك**، والعزلُ كما كان.
+   */
+  it('[SPEC 7.1 7.2] leaves the bank balance to the ledger and stays invisible to company B', async () => {
     const bank = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -43,7 +51,8 @@ describe('Bank transactions tenant isolation (e2e)', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ bankId: bank.body.id, date: '2026-01-02', description, amount: -200 })
       .expect(201);
-    expect(Number(tx.body.bank.balance)).toBe(800);
+    // الرصيدُ كما كان: السطرُ سجَّل حركةً ولم يمسّ الأستاذ.
+    expect(Number(tx.body.bank.balance)).toBe(1000);
 
     const resB = await request(app.getHttpServer())
       .get('/transactions')
@@ -56,13 +65,14 @@ describe('Bank transactions tenant isolation (e2e)', () => {
     await request(app.getHttpServer()).patch(`/transactions/${tx.body.id}`).set('Authorization', `Bearer ${tokenB}`).send({ amount: 1 }).expect(404);
     await request(app.getHttpServer()).delete(`/transactions/${tx.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
 
-    // -200 -> -50 is a delta of +150, so the bank balance should go 800 -> 950.
+    // والتعديلُ كذلك: المبلغُ يتغيّر في السطر، والرصيدُ لا يتحرّك.
     const updatedTx = await request(app.getHttpServer())
       .patch(`/transactions/${tx.body.id}`)
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ amount: -50 })
       .expect(200);
-    expect(Number(updatedTx.body.bank.balance)).toBe(950);
+    expect(Number(updatedTx.body.amount)).toBe(-50);
+    expect(Number(updatedTx.body.bank.balance)).toBe(1000);
 
     await request(app.getHttpServer()).delete(`/transactions/${tx.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
 

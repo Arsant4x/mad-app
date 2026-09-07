@@ -62,6 +62,12 @@ export function TransactionModal({
             ✕
           </button>
         </div>
+        {/* (ق-٢٨٥) التاجرُ يرى ما تغيّر: كان هذا السطر يحرّك الرصيد بيدٍ بلا قيد،
+            فصار سطرَ مطابقةٍ والرصيدُ يتبع الأستاذ. ومنعٌ بلا إعلانٍ يُقرأ عطلاً. */}
+        <p className="hint" data-testid="tx-mirror-notice">
+          هذا السطر <strong>للمطابقة مع كشف البنك</strong> — ولا يحرّك الرصيد.
+          والرصيد يتبع القيود المحاسبية (الدفعات والإيجارات والقيود اليدوية).
+        </p>
         <div className="field">
           <label>الحساب البنكي</label>
           <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
