@@ -152,7 +152,8 @@ export async function createJournalEntry(
 
   // Validate every referenced account belongs to this tenant *before*
   // writing anything — see fetchAccountTypes for why this must come first.
-  const accountTypes = await fetchAccountTypes(tx, [...new Set(input.lines.map((l) => l.accountId))]);
+  const accountIds = [...new Set(input.lines.map((l) => l.accountId))];
+  const accountTypes = await fetchAccountTypes(tx, accountIds);
 
   const { currency, exchangeRate } = resolveCurrency(input);
   // البُعد يُحسب مرّة واحدة ويُختم على كل سطر — فلا يفترق سطرٌ عن قيده، ولا

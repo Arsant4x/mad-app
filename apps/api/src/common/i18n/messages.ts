@@ -52,6 +52,7 @@ export const MSG = {
   journal_entry_unbalanced: 'journal.entry_unbalanced',
   journal_line_account_not_found: 'journal.line_account_not_found',
   journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
+  account_opening_after_movement: 'accounts.opening_after_movement',
   writeoff_deemed_supply_not_built: 'journal.writeoff_deemed_supply_not_built',
   writeoff_reason_unknown: 'inventory.writeoff_reason_unknown',
   writeoff_not_found: 'inventory.writeoff_not_found',
@@ -377,6 +378,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.journal_auto_entry_undeletable]: {
     ar: 'لا يمكن حذف قيد آلي مباشرة — احذف المستند المصدر (الفاتورة/فاتورة الشراء) بدلاً من ذلك',
     en: 'An automatic entry cannot be deleted directly — delete the source document (invoice/purchase) instead',
+  },
+  [MSG.account_opening_after_movement]: {
+    ar: 'الحساب {code} — {name} له حركة بتاريخ {moved} (القيد {entry})، وهي تسبق تاريخ الافتتاح {opening} — فالرصيد الافتتاحي سيُحتسب مرتين. المخرج: اجعل الرصيد الافتتاحي صفراً وأدخل الرصيد بقيد يدوي بتاريخه، أو ابدأ سنة مالية تبدأ قبل أقدم حركة',
+    en: 'Account {code} — {name} has movement dated {moved} (entry {entry}), before the opening date {opening} — the opening balance would be counted twice. Either leave the opening balance at zero and post the balance as a dated manual entry, or start a fiscal year that begins before the earliest movement',
   },
   [MSG.writeoff_deemed_supply_not_built]: {
     ar: 'سبب الشطب «{reason}» توريدٌ اعتباري يوجب ضريبة مخرجات، ومساره غير مبنيّ بعد — فلا يُرحَّل شطباً بلا ضريبة',
