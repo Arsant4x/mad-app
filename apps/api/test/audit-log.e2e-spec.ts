@@ -107,7 +107,10 @@ describe('Audit log (e2e)', () => {
     const username = `audit-emp-${suffix}`;
     const templates = await authA(request(app.getHttpServer()).get('/templates')).expect(200);
     const tpl = (templates.body as { id: string; isSystem: boolean }[]).find((t) => !t.isSystem);
-    if (!tpl) return; // no assignable template in this DB — nothing to prove here
+    // ⚠️ (ق-٢٦٨) كان هنا `if (!tpl) return;` — **اختبارٌ يمرّ بلا أن يحكم**، وهو
+    //    أخطرُ من الساقط: الساقطُ يُرى والمنسحبُ يُعدّ نجاحاً. والبذرةُ تُنشئ قالباً
+    //    قابلاً للإسناد دائماً، فغيابُه **حالةُ بيئةٍ تُعلَن لا تُبتلَع**.
+    if (!tpl) throw new Error('لا قالب صلاحيات قابل للإسناد في هذه القاعدة — البذرة تُنشئه، فغيابه عطلٌ لا حالةُ تخطٍّ');
 
     const created = await authA(request(app.getHttpServer()).post('/company-users'))
       .send({ name: `موظف ${username}`, username, password: 'SecretPass123!', permissionTemplateId: tpl.id })
