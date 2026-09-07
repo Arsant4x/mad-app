@@ -45,10 +45,27 @@ describe('البوّابات التشغيلية موجودة ومربوطة (§8
     ['python كعبُ المتجر', 'WindowsApps'],
     ['القاعدة التاسعة — هدفٌ مثبَّت', 'DESTRUCTIVE.test(cmd)'],
     ['الاقتباس العكسي في الوسائط', 'stripSafeSpans(cmd)'],
+    // (ق-٢٥٤) طلبٌ يمسّ شيفرةً بلا فحصٍ ثقيلٍ في تاريخه — الثقبُ الذي فتحه
+    // تقسيمُ السير بالمسار: الفتحُ مضى و`synchronize` لا تُشغّل الثقيل.
+    ['الفحصُ الثقيل في تاريخ الطلب', 'const codeFiles = prFiles.filter(touches)'],
   ];
 
   it.each(GATES)('بوّابة «%s» قائمة', (_name, marker) => {
     expect(readFileSync(hookPath, 'utf8')).toContain(marker);
+  });
+
+  /**
+   * ⚠️ (ق-٢٥٤) **البوّابةُ تقرأ أسماءَ الوظائف الثقيلة ومساراتِها من المُشغِّل
+   * نفسه** — لا من قائمةٍ في الخطّاف. فقائمةٌ ثانية تفترق عن الأولى يوماً،
+   * وحينها تحرس البوّابةُ وظائفَ لم تعد موجودة وتُغفل ما حلّ محلَّها **صامتةً**.
+   * فإن ظهر اسمُ وظيفةٍ ثقيلة مكتوباً في الخطّاف — سقط هذا الاختبار.
+   */
+  it('🔴 بوّابةُ الفحص الثقيل مشتقّةٌ من ملفّ السير لا من قائمةٍ فيها', () => {
+    const src = readFileSync(hookPath, 'utf8');
+    expect(src).toContain("resolve(repoRoot, '.github', 'workflows', 'web-tests.yml')");
+    const heavyJobs = ['db-integration', 'nginx-cache', 'playwright'];
+    const code = src.replace(/^\s*(\/\/.*|\*.*|\/\*.*)$/gm, ''); // التعليقُ يشرح، والشيفرةُ تحكم
+    expect(heavyJobs.filter((j) => code.includes(`'${j}'`) || code.includes(`"${j}"`))).toEqual([]);
   });
 
   it('كلٌّ منها يرفض بـexit 2 — لا تحذيراً يمرّ', () => {
