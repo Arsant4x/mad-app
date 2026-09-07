@@ -36,6 +36,7 @@
 #    محلياً وسقطت الخمسة في CI بـ
 #    `TypeError: webidl.util.markAsUncloneable is not a function` — jsdom 30
 #    يستدعي عبر undici دالةً موجودة في Node 22+ وغائبة في 20.
+# (سطرُ مجسٍّ مؤقّت — يمسّ مساراً شيفرياً على دفعةٍ لاحقة، ويُحذف مع فرع المجسّ.)
 name: web-tests
 
 on:
