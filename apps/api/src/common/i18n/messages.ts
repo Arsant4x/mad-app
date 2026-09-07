@@ -109,6 +109,7 @@ export const MSG = {
   sub_owner_only: 'subscription.owner_only',
   sub_renew_months_invalid: 'subscription.renew_months_invalid',
   bank_not_found: 'banks.not_found',
+  bank_code_range_full: 'banks.code_range_full',
   bank_required: 'banks.required',
   bank_transaction_not_found: 'transactions.not_found',
 
@@ -457,6 +458,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.sub_owner_only]: { ar: 'إدارة الاشتراك متاحة لمالك المنشأة فقط', en: 'Only the company owner can manage the subscription' },
   [MSG.sub_renew_months_invalid]: { ar: 'مدة التجديد يجب أن تكون بين شهر و36 شهراً', en: 'Renewal duration must be between 1 and 36 months' },
   [MSG.bank_not_found]: { ar: 'الحساب البنكي غير موجود', en: 'Bank account not found' },
+  [MSG.bank_code_range_full]: {
+    ar: 'نطاق رموز حسابات البنوك (1100–1199) ممتلئ — احذف بنكاً غير مستعمل أو وسّع النطاق بقرار',
+    en: 'The bank account code range (1100–1199) is full — remove an unused bank or widen the range by decision',
+  },
   [MSG.bank_required]: { ar: 'الرجاء اختيار الحساب البنكي', en: 'Please choose a bank account' },
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
 
