@@ -135,6 +135,91 @@ export class ReportsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   /**
+   * **تقريرُ الفرق** (`ق-٢٨٥/٣`) — «الرصيدُ الدفتريّ مقابل ما كان يُعرض،
+   * **فينتقل التاجرُ بلا صدمة**».
+   *
+   * الحركةُ البنكية اليدوية **لم تعد تحرّك شيئاً** (`ق-٢٨١` · `ق-٢٨٥`)، وما
+   * حرّكته **قبل ذلك باقٍ في العمود** — فرقمٌ في شاشة البنوك قد يفارق الأستاذ
+   * بلا أن يعرف التاجرُ لماذا. **وهذا التقرير يُظهر الفرقَ ويسمّي سببَه.**
+   *
+   * ⚠️ **والسطرُ اليدويُّ يُعرَف بغياب `entryNo` لا بقيمة `source`**: `source`
+   * حقلٌ **يكتبه المستخدم** (`CreateTransactionDto`)، فمن كتب فيه
+   * `customer-payment` بيده كان سيسقط من العدّ صامتاً. **و`entryNo` يُكتب من
+   * مسار الترحيل وحده** — فغيابُه يعني حرفياً «سطرٌ لا يعرفه الأستاذ»، وهو
+   * **الدعوى نفسها** التي يقيسها التقرير.
+   *
+   * ⚠️ **وإعلانُ `ق-٢٨٣` يخرج من هنا**: «ما قبل تاريخ التحويل يشمل نقدَ
+   * البنوك». **والتاريخُ مشتقٌّ لا مكتوب**: أوّلُ قيدٍ رُحِّل إلى حسابِ بنك
+   * (`1100+`) هو اليومُ الذي انفصل فيه نقدُ البنوك عن `1000` **في بيانات هذه
+   * المنشأة وحدها**. ولا شاشةَ باسم «تقرير الصندوق» في النظام اليوم، **وهذا
+   * هو التقريرُ الذي يؤدّي غرضَها** — فالإعلانُ فيه لا في وثيقةٍ جانبية
+   * (`ق-٢٧٥`).
+   */
+  bankDifference(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const banks = await tx.bank.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' } });
+      const accounts = await tx.account.findMany({
+        where: { id: { in: banks.map((b) => b.accountId).filter(Boolean) as string[] } },
+        select: { id: true, code: true, name: true, balance: true },
+      });
+      const accountById = new Map(accounts.map((a) => [a.id, a]));
+
+      // أسطرٌ لا يعرفها الأستاذ — تُجمع بالبنك، ومجموعها هو تفسيرُ الفرق.
+      const unposted = await tx.bankTransaction.groupBy({
+        by: ['bankId'],
+        where: { entryNo: null },
+        _sum: { amount: true },
+        _count: { _all: true },
+      });
+      const unpostedByBank = new Map(unposted.map((u) => [u.bankId, u]));
+
+      const rows = banks.map((bank) => {
+        const account = accountById.get(bank.accountId);
+        const ledger = round2(Number(account?.balance ?? 0));
+        const shown = round2(Number(bank.balance));
+        const u = unpostedByBank.get(bank.id);
+        return {
+          bankId: bank.id,
+          bankName: bank.name,
+          accountCode: account?.code ?? null,
+          ledgerBalance: ledger,
+          shownBalance: shown,
+          difference: round2(shown - ledger),
+          unpostedCount: u?._count._all ?? 0,
+          unpostedSum: round2(Number(u?._sum.amount ?? 0)),
+        };
+      });
+
+      // ⚠️ **الإعلانُ يقرأ البنوكَ كلَّها لا المعروضةَ منها**: بنكٌ حُذف
+      // بقيت قيودُه في الأستاذ، **واليومُ الذي انفصل فيه نقدُ البنوك واقعةٌ
+      // لا تُمحى بحذف صفّ**. والصفوفُ أعلاه تعرض القائمَ وحده — سؤالان
+      // مختلفان على مجموعتين مختلفتين، عمداً.
+      const everBankAccountIds = (await tx.bank.findMany({ select: { accountId: true } }))
+        .map((b) => b.accountId)
+        .filter(Boolean) as string[];
+      const firstBankEntry = everBankAccountIds.length
+        ? await tx.journalEntry.findFirst({
+            where: { lines: { some: { accountId: { in: everBankAccountIds } } } },
+            orderBy: { date: 'asc' },
+            select: { date: true },
+          })
+        : null;
+
+      return {
+        rows,
+        totals: {
+          ledgerBalance: round2(rows.reduce((s, r) => s + r.ledgerBalance, 0)),
+          shownBalance: round2(rows.reduce((s, r) => s + r.shownBalance, 0)),
+          difference: round2(rows.reduce((s, r) => s + r.difference, 0)),
+          unpostedCount: rows.reduce((s, r) => s + r.unpostedCount, 0),
+        },
+        /** `null` حين لا قيدَ على بنكٍ بعد — **فلا يُعلَن تاريخٌ لم يقع**. */
+        bankCashSeparatedOn: firstBankEntry ? firstBankEntry.date.toISOString().slice(0, 10) : null,
+      };
+    });
+  }
+
+  /**
    * Revenue/expense per branch, plus a consolidated total — the owner's view
    * across the whole company (CLAUDE.md 6.8's "تقرير لكل فرع + مجمَّع للمالك").
    *

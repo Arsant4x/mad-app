@@ -82,6 +82,25 @@ export const getIncomeStatement = (range: ReportRange) => apiClient.get<IncomeSt
 export const getBalanceSheet = () => apiClient.get<BalanceSheet>('/reports/balance-sheet').then((r) => r.data);
 export const getCashFlow = (range: ReportRange) => apiClient.get<CashFlow>('/reports/cash-flow', { params: range }).then((r) => r.data);
 
+/** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض. */
+export interface BankDifference {
+  rows: {
+    bankId: string;
+    bankName: string;
+    accountCode: string | null;
+    ledgerBalance: number;
+    shownBalance: number;
+    difference: number;
+    unpostedCount: number;
+    unpostedSum: number;
+  }[];
+  totals: { ledgerBalance: number; shownBalance: number; difference: number; unpostedCount: number };
+  /** إعلانُ ق-٢٨٣ — `null` حين لا قيدَ على بنكٍ بعد. */
+  bankCashSeparatedOn: string | null;
+}
+
+export const getBankDifference = () => apiClient.get<BankDifference>('/reports/bank-difference').then((r) => r.data);
+
 export interface TrialBalanceRow {
   code: string;
   name: string;

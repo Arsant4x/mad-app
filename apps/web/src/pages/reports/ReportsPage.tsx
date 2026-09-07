@@ -12,12 +12,14 @@ import {
   getTrialBalance,
   downloadTrialBalanceCsv,
   type TrialBalance,
+  getBankDifference,
+  type BankDifference,
 } from '../../api/reports';
 import { dfmt, fmt } from '../../lib/format';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging' | 'bankdiff';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -31,6 +33,7 @@ export function ReportsPage() {
   const [branchSummary, setBranchSummary] = useState<BranchSummary | null>(null);
   const [kpis, setKpis] = useState<PropertyKpis | null>(null);
   const [trial, setTrial] = useState<TrialBalance | null>(null);
+  const [bankDiff, setBankDiff] = useState<BankDifference | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
@@ -55,14 +58,17 @@ export function ReportsPage() {
       // about the selected reporting period.
       getPropertyKpis(),
       getTrialBalance({ from: from ?? undefined, to }),
+      // خارج المدى عمداً: الفرقُ حالةٌ قائمة اليوم لا حركةُ فترة.
+      getBankDifference(),
     ])
-      .then(([inc, bal, cf, br, pk, tb]) => {
+      .then(([inc, bal, cf, br, pk, tb, bd]) => {
         setIncome(inc);
         setBalance(bal);
         setCash(cf);
         setBranchSummary(br);
         setKpis(pk);
         setTrial(tb);
+        setBankDiff(bd);
       })
       .finally(() => setLoading(false));
   }, [from, to]);
@@ -136,6 +142,12 @@ export function ReportsPage() {
         <button className={tab === 'aging' ? 'tab active' : 'tab'} onClick={() => setTab('aging')}>
           أعمار الذمم
         </button>
+        {/* لا يُعرض لمن لا بنكَ له — تبويبٌ فارغ يسأل عن سؤالٍ لا يخصّه. */}
+        {(bankDiff?.rows.length ?? 0) > 0 && (
+          <button className={tab === 'bankdiff' ? 'tab active' : 'tab'} onClick={() => setTab('bankdiff')}>
+            فروق البنوك
+          </button>
+        )}
         {/* Only for landlords: a business with no properties has nothing here. */}
         {(kpis?.occupancy.length ?? 0) > 0 && (
           <button className={tab === 'property' ? 'tab active' : 'tab'} onClick={() => setTab('property')}>
@@ -346,6 +358,57 @@ export function ReportsPage() {
         )}
 
         {tab === 'aging' && <ReceivablesAgingSection />}
+
+        {/* تقريرُ الفرق (ق-٢٨٥/٣): «الرصيدُ الدفتريّ مقابل ما كان يُعرض،
+            فينتقل التاجرُ بلا صدمة» — ومعه إعلانُ ق-٢٨٣. */}
+        {tab === 'bankdiff' && bankDiff && (
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 8 }}>
+              فروق البنوك — الرصيد الدفتري مقابل المعروض
+            </div>
+            <div className="page-sub" style={{ marginBottom: 14 }}>
+              الرصيدُ الدفتري يأتي من دفتر الأستاذ. والحركة البنكية اليدوية للمطابقة ولا تُرحَّل، فلا تحرّك الرصيد — وما حرّكته قبل ذلك يظهر هنا فرقاً.
+            </div>
+            {bankDiff.bankCashSeparatedOn && (
+              <div className="page-sub" style={{ marginBottom: 14 }}>
+                ⚠ ما قبل {dfmt(bankDiff.bankCashSeparatedOn)} يشمل مقبوضات البنوك ضمن الصندوق — قبل ذلك التاريخ لم يكن للبنوك حساباتٌ في الدليل.
+              </div>
+            )}
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>البنك</th>
+                  <th>الحساب</th>
+                  <th>الرصيد الدفتري</th>
+                  <th>المعروض</th>
+                  <th>الفرق</th>
+                  <th>أسطر بلا قيد</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bankDiff.rows.map((r) => (
+                  <tr key={r.bankId}>
+                    <td>{r.bankName}</td>
+                    <td>{r.accountCode ?? '—'}</td>
+                    <td>{fmt(r.ledgerBalance)}</td>
+                    <td>{fmt(r.shownBalance)}</td>
+                    <td>{r.difference === 0 ? '—' : <span className="badge overdue">{fmt(r.difference)}</span>}</td>
+                    <td>{r.unpostedCount === 0 ? '—' : `${r.unpostedCount} بمجموع ${fmt(r.unpostedSum)}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th colSpan={2}>الإجمالي</th>
+                  <th>{fmt(bankDiff.totals.ledgerBalance)}</th>
+                  <th>{fmt(bankDiff.totals.shownBalance)}</th>
+                  <th>{fmt(bankDiff.totals.difference)}</th>
+                  <th>{bankDiff.totals.unpostedCount || '—'}</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
 
         {tab === 'trial' && trial && (
           <div className="card">
