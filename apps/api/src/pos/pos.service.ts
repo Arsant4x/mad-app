@@ -94,15 +94,47 @@ export class PosService {
         if (!branch) throw new NotFoundException(MSG.branch_not_found);
       }
 
+      const drawerId = await this.resolveDrawerId(tx, dto);
+
       return tx.posShift.create({
         data: {
           branchId: dto.branchId,
+          drawerId,
           openedById: tenant.profileId,
           openedByName: await this.actorName(tx, tenant),
           openingFloat: dto.openingFloat,
         } as unknown as Prisma.PosShiftUncheckedCreateInput,
       });
     });
+  }
+
+  /**
+   * درجُ المناوبة (`ق-٢١٨` · `ق-٢٦١`): **مُسمّىً إن اختاره الكاشير، وإلا فالدرجُ
+   * الافتراضيُّ لفرعها**.
+   *
+   * ⚠️ **وفراغُه معلَنٌ لا مسكوتٌ عنه**: منشأةٌ بلا أدراجٍ بعدُ تفتح مناوبةً بلا
+   * درج — فلا يُخترع لها درجٌ من فتح مناوبة. والدرجُ يُنشئه المالك من الإعدادات،
+   * والترحيلُ إلى حسابه يأتي في الدفعة التالية.
+   */
+  private async resolveDrawerId(tx: Prisma.TransactionClient, dto: OpenShiftDto): Promise<string | null> {
+    if (dto.drawerId) {
+      const chosen = await tx.cashDrawer.findUnique({ where: { id: dto.drawerId } });
+      if (!chosen) throw new NotFoundException(MSG.cash_drawer_not_found);
+      if (!chosen.isActive) throw new ConflictException(formatMessage(MSG.cash_drawer_inactive, { name: chosen.name }));
+      // درجٌ لفرعٍ آخر يجعل نقدَ فرعٍ في حساب فرعٍ ثانٍ — وهو عينُ ما بُني الدرجُ لمنعه.
+      if ((chosen.branchId ?? null) !== (dto.branchId ?? null)) {
+        throw new ConflictException(formatMessage(MSG.cash_drawer_branch_mismatch, { name: chosen.name }));
+      }
+      return chosen.id;
+    }
+    const preferred = await tx.cashDrawer.findFirst({ where: { branchId: dto.branchId ?? null, isDefault: true, isActive: true } });
+    if (preferred) return preferred.id;
+
+    // ولا افتراضيَّ للفرع (منشأةٌ أنشأت أدراجَها بيدها): **درجٌ نشِطٌ واحدٌ يُؤخذ،
+    // وأكثرُ من واحدٍ يُترك للاختيار** — فاختيارُ الأول من عدّةٍ يزعم ترتيباً لا
+    // معنى له، ويضع نقدَ درجٍ في حساب آخر بلا أن يُسأل أحد.
+    const active = await tx.cashDrawer.findMany({ where: { branchId: dto.branchId ?? null, isActive: true }, take: 2 });
+    return active.length === 1 ? active[0].id : null;
   }
 
   /** The caller's open shift with live drawer math — null when none is open. */
