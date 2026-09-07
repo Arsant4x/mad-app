@@ -58,11 +58,11 @@ export class TransactionsService {
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateTransactionDto) {
     const { currency, exchangeRate } = resolveCurrency(dto);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      // Bank balance is updated first so the `bank` relation included below
-      // reflects the post-transaction balance (both statements run inside
-      // the same DB transaction, so the create sees the just-applied update).
+      // ⚠️ (ق-٢٨١ · ق-٢٨٢ · ق-٢٨٥) **لا يُحرَّك رصيدُ البنك هنا**: كان السطرُ
+      //    اليدويّ يزيد الرصيدَ بيدٍ بلا قيدٍ يسنده. وهو **سطرُ مطابقةٍ لا مصدرُ
+      //    قيد** — لا يحمل حساباً ثانياً، **وترحيلُه يخترع الطرفَ المقابل**.
+      //    فالرصيدُ **مرآةٌ تتبع الأستاذ**، تُكتب من مسار الترحيل وحده.
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-      await tx.bank.update({ where: { id: dto.bankId }, data: { balance: { increment: dto.amount } } });
       return tx.bankTransaction.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
@@ -87,14 +87,12 @@ export class TransactionsService {
       const existing = await tx.bankTransaction.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.bank_transaction_not_found);
 
-      // Reverse the old amount from the old bank, then apply the new amount
-      // to the (possibly different) new bank — matches the mockup exactly,
-      // and correctly nets out to just the delta when the bank is unchanged.
-      await tx.bank.update({ where: { id: existing.bankId }, data: { balance: { decrement: existing.amount } } });
-      const newBankId = dto.bankId ?? existing.bankId;
-      const newAmount = dto.amount ?? Number(existing.amount);
-      await tx.bank.update({ where: { id: newBankId }, data: { balance: { increment: newAmount } } });
-
+      // ⚠️ (ق-٢٨١ · ق-٢٨٢ · ق-٢٨٥) **لا يُحرَّك رصيدُ البنك هنا**: كان هذا
+      //    الموضعُ يعكس المبلغَ القديم ويطبّق الجديد بيدٍ — **ورقمٌ يتحرك بلا
+      //    قيدٍ يسنده هو تعريفُ العطل الذي أُصلح**. والسطرُ البنكيُّ اليدويّ
+      //    **سطرُ مطابقةٍ لا مصدرُ قيد** (لا يحمل طرفاً مقابلاً أصلاً)، والرصيدُ
+      //    **مرآةٌ تتبع الأستاذ** فيُكتب من مسار الترحيل وحده — يحرسه
+      //    `bank-mirror.spec.ts`.
       const data: Prisma.BankTransactionUncheckedUpdateInput = {};
       if (dto.bankId !== undefined) data.bankId = dto.bankId;
       if (dto.date !== undefined) data.date = new Date(dto.date);
@@ -115,7 +113,7 @@ export class TransactionsService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.bankTransaction.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.bank_transaction_not_found);
-      await tx.bank.update({ where: { id: existing.bankId }, data: { balance: { decrement: existing.amount } } });
+      // ولا يُحرَّك الرصيدُ هنا كذلك (ق-٢٨٢): حذفُ سطرِ مطابقةٍ لا يمسّ الأستاذ.
       await tx.bankTransaction.delete({ where: { id } });
     });
   }
