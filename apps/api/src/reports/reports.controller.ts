@@ -41,6 +41,13 @@ export class ReportsController {
     return this.reportsService.cashFlow(tenant.companyId, range);
   }
 
+  /** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض — وإعلانُ ق-٢٨٣ معه. */
+  @Get('bank-difference')
+  @RequiresAction('view')
+  bankDifference(@CurrentTenant() tenant: TenantContext) {
+    return this.reportsService.bankDifference(tenant.companyId);
+  }
+
   /** المرتجعات (30.9): كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ نقداً · ومن سجّله. */
   @Get('returns')
   @RequiresAction('view')
