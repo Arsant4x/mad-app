@@ -26,7 +26,7 @@ describe('Banks tenant isolation (e2e)', () => {
     await app.close();
   });
 
-  it('[SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and preserves balance drift when opening balance is edited', async () => {
+  it('[SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and posts a delta entry when the opening balance is edited', async () => {
     const created = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -41,13 +41,22 @@ describe('Banks tenant isolation (e2e)', () => {
     await request(app.getHttpServer()).patch(`/banks/${created.body.id}`).set('Authorization', `Bearer ${tokenB}`).send({ name: 'hijack' }).expect(404);
     await request(app.getHttpServer()).delete(`/banks/${created.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
 
-    // Opening balance +500 should shift the current balance by the same delta.
+    // ⚠️ (ق-٢٧٧ · ق-٢٨٧) **الفرقُ يُرحَّل قيداً، والمرآةُ تتبعه** — لا إزاحةَ
+    //    عمودٍ بيد. وكان عنوانُ هذه الحالة «يحفظ انحرافَ الرصيد» فوصف الإزاحةَ
+    //    ميزةً؛ والانحرافُ يبقى محفوظاً، **لكن بقيدٍ يسنده لا برقمٍ يُزاح**.
     const updated = await request(app.getHttpServer())
       .patch(`/banks/${created.body.id}`)
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ openingBalance: 1500 })
       .expect(200);
     expect(Number(updated.body.balance)).toBe(1500);
+
+    // وحسابُ البنك في الأستاذ يحمل الرصيدَ نفسَه — فالمرآةُ والحساب لا يفترقان.
+    const accountsA = (await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200))
+      .body as { id: string; balance: string }[];
+    const bankAccount = accountsA.find((a) => a.id === created.body.accountId);
+    expect(bankAccount).toBeTruthy();
+    expect(Number(bankAccount!.balance)).toBe(1500);
 
     await request(app.getHttpServer()).delete(`/banks/${created.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   }, 20000);
