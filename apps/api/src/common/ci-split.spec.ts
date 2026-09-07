@@ -1,20 +1,38 @@
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 /**
- * `ق-٢٤٥` — **تقسيمُ السير بوّابةً لا تعليقاً**: الخفيفُ على كل دفع، والثقيلُ عند فتح
- * الطلب ودمجه وحده. حصةُ GitHub Actions المجانية نفدت في أسبوعٍ بخمس وظائفٍ على كل دفع.
+ * `ق-٢٤٥` · `ق-٢٥٠` · `ق-٢٥١` — **تقسيمُ السير بوّابةً لا تعليقاً**.
  *
- * مشتقٌّ لا قائمة: **الوظيفةُ الثقيلة هي التي تحمل قاعدةً** (`services:`) **أو تبني
- * صورةً** (`docker build`) **أو تشغّل متصفّحاً** (`playwright`) — فيجب أن تحمل شرطَ
- * الحدث؛ **والوظيفةُ التي لا تحمل شيئاً من ذلك خفيفةٌ** فيجب ألّا تحمله — وإلا صار
- * الدفعُ بلا فحصٍ أصلاً. ويوجب `concurrency` كي لا تُنفَق دقائقُ تشغيلٍ تجاوزه دفعٌ أحدث.
+ * الخفيفُ (`web-tests-light.yml`) على كل دفع؛ والثقيلُ (`web-tests.yml`) عند **فتح**
+ * الطلب لما يمسّ شيفرة، **وعند الدمج مطلقاً**. وحصةُ GitHub Actions نفدت في أسبوعين
+ * بخمس وظائفٍ على كل دفع، فصار التفريقُ **بالمسار لا بالنيّة** (حكم المالك 2026-09-07).
  *
- * حدُّه المعلَن: يقرأ الملفَّ نصّاً بتقسيمه إلى كتل الوظائف؛ وظيفةٌ تُنشئ قاعدةً بطريقةٍ
- * لا تُسمّى `services:` ولا `docker` لا يراها — فتُوسَّع الإشارات لا القائمة.
+ * **ولماذا مُشغِّلان لا شرطٌ على الوظائف**: `paths` لا تعيش على الوظيفة، **ووظيفةٌ
+ * تسأل عن الملفات المتغيّرة تكون قد بدأت فتُحاسَب**. فالتصفيةُ بالمسار لا تكون إلا
+ * على المُشغِّل — ولذلك حُذفت شروطُ `if` من الوظائف: آليّتان تحكمان الشيءَ نفسه
+ * تفترقان يوماً.
+ *
+ * مشتقٌّ لا قائمة، في ثلاثة أوجه:
+ *   ① **الوظيفةُ الثقيلة** هي التي تحمل قاعدةً (`services:`) أو تبني صورةً
+ *     (`docker build`) أو تشغّل متصفّحاً (`playwright`) — فيجب أن تكون في الملفّ
+ *     الثقيل، وما سواها في الخفيف.
+ *   ② **كلُّ فعلٍ يسمّيه مُشغِّلٌ يجب أن يكون معلَناً** (ق-٢٥٠: «بوّابةٌ على بابٍ لا
+ *     يُطرَق» — `ready_for_review` ليست من الأنواع الافتراضية الثلاث).
+ *   ③ **سطحُ التشغيل يغطّي سطحَ القراءة** (§8.7): كلُّ مدخلٍ في جذر المستودع
+ *     **يسمّيه حارسٌ في `src/common`** يجب أن تغطّيه مساراتُ الخفيف — وإلا مرّ
+ *     تغييرٌ يكسر حارساً بلا أن يعمل. وهكذا انكشف `.claude/**` و`deploy.sh`.
+ *
+ * حدُّه المعلَن: يقرأ الملفَّين نصّاً. ووظيفةٌ تُنشئ قاعدةً بطريقةٍ لا تُسمّى
+ * `services:` ولا `docker` لا يراها — فتُوسَّع الإشارات لا القائمة. والوجهُ ③
+ * **يُفرِط في التغطية عمداً**: يطالب بمسارٍ لكل مدخلٍ يُذكر اسمُه ولو في تعليق —
+ * لأن تغطيةً زائدةً تكلّف تشغيلاً خفيفاً، وتغطيةً ناقصةً تكلّف حارساً أعمى.
  */
-const WORKFLOW = join(__dirname, '..', '..', '..', '..', '.github', 'workflows', 'web-tests.yml');
-const GATE = /if:\s*github\.event_name == 'push' \|\| contains\(fromJSON\('\["opened","reopened","ready_for_review"\]'\), github\.event\.action\)/;
+const WORKFLOWS = join(__dirname, '..', '..', '..', '..', '.github', 'workflows');
+const HEAVY = join(WORKFLOWS, 'web-tests.yml');
+const LIGHT = join(WORKFLOWS, 'web-tests-light.yml');
+const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
+const COMMON = __dirname;
 
 export interface JobBlock {
   name: string;
@@ -39,74 +57,103 @@ export function jobBlocks(yaml: string): JobBlock[] {
 }
 
 export const isHeavy = (job: JobBlock) => /^\s{4}services:\s*$/m.test(job.body) || /docker build/.test(job.body) || /playwright/i.test(job.body);
-export const hasGate = (job: JobBlock) => GATE.test(job.body);
 
-/** الأفعالُ التي يسمّيها شرطُ الثقيل — تُقرأ من الشرط نفسه لا من قائمةٍ مكتوبة. */
-export function gateActions(yaml: string): string[] {
-  const m = yaml.match(/contains\(fromJSON\('\[([^\]]*)\]'\), github\.event\.action\)/);
-  if (!m) return [];
-  return m[1].split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
+/** كتلةُ `pull_request:` تحت `on:` — بلا تعليقات. */
+function prBlock(yaml: string): string {
+  const clean = yaml
+    .split(/\r?\n/)
+    .filter((l) => !/^\s*#/.test(l))
+    .join('\n');
+  const at = clean.indexOf('\n  pull_request:');
+  if (at < 0) return '';
+  const rest = clean.slice(at + 1);
+  const end = rest.slice(1).search(/\n {0,2}\S/) + 1;
+  return end <= 0 ? rest : rest.slice(0, end);
 }
 
-/** الأنواعُ المعلَنة تحت `pull_request:` — وغيابُ السطر يعني الافتراضيةَ الثلاث. */
+/** الأنواعُ المعلَنة — وغيابُ السطر يعني الافتراضيةَ الثلاث (وهي **لا** تشمل `ready_for_review`). */
 export function declaredTypes(yaml: string): string[] {
-  const at = yaml.indexOf('\n  pull_request:');
-  if (at < 0) return [];
-  const rest = yaml.slice(at + 1);
-  const end = rest.search(/\n(?![ \t#])\S/);
-  const block = end < 0 ? rest : rest.slice(0, end);
-  const m = block.replace(/^\s*#.*$/gm, '').match(/^\s{4}types:\s*\[([^\]]*)\]/m);
+  const m = prBlock(yaml).match(/^\s{4}types:\s*\[([^\]]*)\]/m);
   return m ? m[1].split(',').map((s) => s.trim()) : ['opened', 'synchronize', 'reopened'];
 }
 
-describe('تقسيمُ السير: الثقيلُ يحمل شرطَ الحدث والخفيفُ لا يحمله (ق-٢٤٥)', () => {
-  const yaml = readFileSync(WORKFLOW, 'utf8');
-  const jobs = jobBlocks(yaml);
+/** مساراتُ `pull_request` — وغيابُ `paths:` يعني «كلَّ مسار». */
+export function declaredPaths(yaml: string): string[] | null {
+  const block = prBlock(yaml);
+  if (!/^\s{4}paths:\s*$/m.test(block)) return null;
+  return [...block.matchAll(/^\s{6}- '([^']+)'/gm)].map((m) => m[1]);
+}
 
-  it('المُقسِّم مُثبَت بحالتَين: يفصل الكتل ويميّز الثقيل', () => {
-    const sample = ['on: push', 'jobs:', '  a:', '    runs-on: x', '    services:', '      db: {}', '  b:', '    runs-on: x', '    steps: []', ''].join('\n');
+/** هل يغطّي مسارٌ من القائمة هذا المدخلَ الجذريّ؟ */
+export const covers = (paths: string[], entry: string) => paths.some((p) => p === entry || p.startsWith(`${entry}/`));
+
+/** مداخلُ الجذر التي **يسمّيها** حارسٌ في `src/common` — مشتقّةٌ من القرص والمصدر معاً. */
+export function namedRootEntries(): string[] {
+  const specs = readdirSync(COMMON, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.spec.ts'))
+    .map((f) => readFileSync(join(COMMON, f), 'utf8'))
+    .join('\n');
+  return readdirSync(REPO_ROOT)
+    .filter((e) => e !== 'node_modules' && e !== '.git')
+    .filter((e) => specs.includes(`'${e}'`));
+}
+
+describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مسارات الشيفرة، والخفيفُ على كل دفع (ق-٢٤٥ · ق-٢٥٠ · ق-٢٥١)', () => {
+  const heavy = readFileSync(HEAVY, 'utf8');
+  const light = readFileSync(LIGHT, 'utf8');
+
+  it('المُقسِّم والقارئون مُثبَتون بحالتَين لكلٍّ', () => {
+    const sample = ['on:', '  push:', '    branches: [main]', '  pull_request:', '    types: [opened, ready_for_review]', '    paths:', "      - 'apps/**'", 'env:', '  A: b', 'jobs:', '  a:', '    runs-on: x', '    services:', '      db: {}', '  b:', '    runs-on: x', '    steps: []', ''].join('\n');
+    const bare = sample.replace('    types: [opened, ready_for_review]\n', '').replace("    paths:\n      - 'apps/**'\n", '');
     const blocks = jobBlocks(sample);
     expect(blocks.map((b) => b.name)).toEqual(['a', 'b']);
     expect(isHeavy(blocks[0])).toBe(true);
     expect(isHeavy(blocks[1])).toBe(false);
-    expect(hasGate(blocks[0])).toBe(false);
+    expect(declaredTypes(sample)).toEqual(['opened', 'ready_for_review']);
+    expect(declaredTypes(bare)).toEqual(['opened', 'synchronize', 'reopened']);
+    expect(declaredPaths(sample)).toEqual(['apps/**']);
+    expect(declaredPaths(bare)).toBeNull();
+    expect(covers(['docs/**'], 'docs')).toBe(true);
+    expect(covers(['docsx/**'], 'docs')).toBe(false);
   });
 
-  it('السطح غير فارغ — خمسُ وظائف، ثلاثٌ ثقيلة', () => {
-    expect(jobs.map((j) => j.name).sort()).toEqual(['api-unit', 'db-integration', 'nginx-cache', 'playwright', 'vitest']);
-    expect(jobs.filter(isHeavy).map((j) => j.name).sort()).toEqual(['db-integration', 'nginx-cache', 'playwright']);
+  it('السطح غير فارغ — ثلاثُ وظائفٍ ثقيلة في ملفّها، واثنتان خفيفتان في ملفّهما', () => {
+    expect(jobBlocks(heavy).map((j) => j.name).sort()).toEqual(['db-integration', 'nginx-cache', 'playwright']);
+    expect(jobBlocks(light).map((j) => j.name).sort()).toEqual(['api-unit', 'vitest']);
   });
 
-  it('🔴 كل وظيفةٍ ثقيلة تحمل الشرط — وكل خفيفةٍ لا تحمله', () => {
-    const wrong = jobs.filter((j) => isHeavy(j) !== hasGate(j)).map((j) => `${j.name}: heavy=${isHeavy(j)} gate=${hasGate(j)}`);
-    expect(wrong).toEqual([]);
+  it('🔴 كلُّ وظيفةٍ ثقيلة في الملفّ الثقيل، وكلُّ وظيفةٍ في الخفيف ليست ثقيلة', () => {
+    expect(jobBlocks(heavy).filter((j) => !isHeavy(j)).map((j) => j.name)).toEqual([]);
+    expect(jobBlocks(light).filter(isHeavy).map((j) => j.name)).toEqual([]);
   });
 
-  it('🔴 والخفيفُ يحمل tsc وبناءَ الويب، والملفُّ يحمل concurrency يُلغي تشغيلَ الطلب المتجاوَز لا تشغيلَ main', () => {
-    const light = jobs.filter((j) => !isHeavy(j));
-    const lightText = light.map((j) => j.body).join('\n');
+  it('🔴 مُشغِّلُ الثقيل: لا `synchronize`، ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بلا تصفية', () => {
+    expect(declaredTypes(heavy)).not.toContain('synchronize');
+    expect(declaredTypes(heavy)).toContain('opened');
+    const paths = declaredPaths(heavy) ?? [];
+    expect(paths.length).toBeGreaterThan(0);
+    // وثائقيٌّ في مسارات الثقيل يُبطل «الوثائقيُّ عند الدمج وحده».
+    expect(paths.filter((p) => p.endsWith('.md') || p.startsWith('docs/'))).toEqual([]);
+    // الدمجُ يفحص ما وصل مهما كان مسارُه: `push` بلا `paths`.
+    expect(/^on:\n(?:.*\n)*?  push:\n    branches: \[main\]\n(?=  pull_request:)/m.test(heavy.replace(/^\s*#.*$/gm, '').replace(/\n{2,}/g, '\n'))).toBe(true);
+  });
+
+  it('🔴 مُشغِّلُ الخفيف: `synchronize` معلَنةٌ، وكلُّ فعلٍ مسمّىً معلَنٌ، ويحمل tsc وبناءَ الويب و`concurrency`', () => {
+    expect(declaredTypes(light)).toContain('synchronize');
+    const lightText = jobBlocks(light).map((j) => j.body).join('\n');
     expect(lightText).toContain('npx tsc --noEmit -p tsconfig.json');
     expect(lightText).toContain('npm run build --workspace apps/web');
-    // `\s+` بين الأسطر لا `\n` — فالمستودع على ويندوز قد يحمل CRLF، والشكلُ لا المسافةُ هو المحروس.
-    expect(yaml).toMatch(/^concurrency:\s+group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/m);
+    expect(lightText).toContain("npx jest --roots '<rootDir>/src'");
+    for (const yaml of [heavy, light]) {
+      // `\s+` بين الأسطر لا `\n` — فالمستودع على ويندوز قد يحمل CRLF.
+      expect(yaml).toMatch(/^concurrency:\s+group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/m);
+    }
   });
 
-  // (ق-٢٤٧) الثقب الذي كاد يمرّ: الشرطُ يسمّي `ready_for_review` وهو **ليس من الأنواع
-  // الافتراضية**، فبلا إعلانه لا يصل الحدثُ السيرَ — بوّابةٌ على بابٍ لا يُطرَق.
-  it('قارئُ الأنواع والأفعال مُثبَت بحالتَين: معلَنةٌ تُقرأ، وغائبةٌ تعود للافتراضية', () => {
-    const withTypes = ['on:', '  push:', '    branches: [main]', '  pull_request:', '    types: [opened, ready_for_review]', '    paths:', "      - 'x'", 'env:', '  A: b', ''].join('\n');
-    const without = ['on:', '  push:', '    branches: [main]', '  pull_request:', '    paths:', "      - 'x'", 'env:', '  A: b', ''].join('\n');
-    expect(declaredTypes(withTypes)).toEqual(['opened', 'ready_for_review']);
-    expect(declaredTypes(without)).toEqual(['opened', 'synchronize', 'reopened']);
-    expect(gateActions(`if: contains(fromJSON('["opened","reopened"]'), github.event.action)`)).toEqual(['opened', 'reopened']);
-    expect(gateActions('if: always()')).toEqual([]);
-  });
-
-  it('🔴 كل فعلٍ يسمّيه الشرطُ الثقيل معلَنٌ في أنواع `pull_request` — و`synchronize` معلَنةٌ كي يعمل الخفيفُ على كل دفع', () => {
-    const types = declaredTypes(yaml);
-    const named = gateActions(yaml);
-    expect(named.length).toBeGreaterThan(0);
-    expect(named.filter((a) => !types.includes(a))).toEqual([]);
-    expect(types).toContain('synchronize');
+  it('🔴 سطحُ التشغيل يغطّي سطحَ القراءة: كلُّ مدخلٍ جذريٍّ يسمّيه حارسٌ في `src/common` له مسارٌ في الخفيف', () => {
+    const named = namedRootEntries();
+    expect(named.length).toBeGreaterThan(3); // مجسٌّ يرى صفراً ليس مجسّاً
+    const paths = declaredPaths(light) ?? [];
+    expect(named.filter((e) => !covers(paths, e))).toEqual([]);
   });
 });

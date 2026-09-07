@@ -1,0 +1,280 @@
+# الخفيف — يعمل على **كل دفع**: vitest · بناء الويب · tsc · وحرّاس المصدر كلّها.
+#
+# ═══ لماذا ملفّان (ق-٢٥١ · حكم المالك 2026-09-07) ═══
+#
+# «الثقيلُ عند الفتح وعند الدمج **لما يمسّ شيفرة**، والوثائقيُّ عند الدمج وحده —
+#  **ويُقاس بالمسار لا بالنيّة**.»
+#
+# و`paths` **لا تعيش على الوظيفة** بل على المُشغِّل، **ووظيفةٌ تسأل عن الملفات
+# المتغيّرة تكون قد بدأت فتُحاسَب** — فالتفريقُ بالمسار لا يكون إلا بمُشغِّلَين.
+# فهنا الخفيف بمساراتٍ واسعة، وفي `web-tests.yml` الثقيل بمسارات الشيفرة وحدها.
+#
+# ⚠️ **وسطحُ التشغيل هنا يجب أن يغطّي سطحَ القراءة** (§8.7 · ق-٢٥٠): حرّاسنا
+#    يقرؤون الوثائق والخطّافات وملفّات `.claude` و`deploy.sh` — فكلُّ ما يقرؤه
+#    حارسٌ في `src/common` **يجب أن يكون في `paths` أدناه**، وإلا مرّ تغييرٌ
+#    يكسر حارساً بلا أن يعمل. ويحرسه `ci-split.spec.ts` مشتقّاً من المصدر.
+#
+# ⛔ ولا تُضف `continue-on-error` هنا، ولا `| tee` بلا `pipefail`: كلاهما
+#    يُخضِّر وظيفةً ساقطة — والثاني أخفى لأنه لا يترك أثراً في الملف.
+#
+# 🔒 إصدار Node مثبَّت في **ثلاثة** مواضع — هنا، وفي `engines` بكل package.json،
+#    **وفي صور الإنتاج** (`apps/*/Dockerfile`) — ويحرسه أولُ خطوةٍ أدناه.
+name: web-tests-light
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # الأنواعُ معلَنةٌ صراحةً — و`synchronize` منها، فالخفيفُ على **كل دفع**.
+    # (ق-٢٥٠: شرطٌ يسمّي نوعاً غيرَ معلَنٍ هو بوّابةٌ على بابٍ لا يُطرَق.)
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'docker/**'
+      - '.github/workflows/**'
+      # ⚠️ لازمٌ لا تكميلي — والثقب انكشف مرتين في يومٍ واحد (2026-09-04):
+      #    أربعةٌ من حرّاسنا **يقرؤون الوثائق** لا الشيفرة: `no-id-scan` يمسح
+      #    المستودع كلّه، و`registry-numbering` يقرأ `decisions.md`/`engines.md`،
+      #    و`spec-tags` يقرأ `SPEC.md`، و`moved-paths` يقرأ `monorepo-moves.json`.
+      #    فطلبٌ وثائقيٌّ محض **لم يكن يشغّل حزمة الخادم أصلاً** — فمرّ تغييرٌ
+      #    يكسر حارساً، **وظهر `main` أحمرَ عند أول فرعٍ يمسّ `apps/api`**.
+      - 'docs/**'
+      - 'SPEC.md'
+      - 'CLAUDE.md'
+      - 'README.md'
+      - 'DEPLOY.md'
+      # ⚠️ لازمٌ لا تكميلي — حارس نهايات الأسطر يحرس هذين الموضعين بعينهما،
+      #    فبدونهما **تعديلُ خطّافٍ لا يُشغّل حارسه**.
+      - '.githooks/**'
+      - '.gitattributes'
+      # ⚠️ (ق-٢٥٠ · 2026-09-07) والثقبان اللذان كشفهما الحارسُ المشتقّ:
+      #    `hooks-present.spec` يقرأ `.claude/hooks/*` و`.claude/settings.json`،
+      #    و`locale-gate.spec` يقرأ `deploy.sh` — وكلاهما **لم يكن هنا**، أي أن
+      #    تعديلهما كان يمرّ بلا أن يعمل حارسُه. وهو §8.7 نفسه: سطحُ التشغيل
+      #    ضاق عن سطحِ القراءة.
+      - '.claude/**'
+      - 'deploy.sh'
+      - 'package.json'
+      - 'package-lock.json'
+
+# ⛔ بوّابةٌ لا تذكير — قرار المالك (2026-09-03)، §8.7 الوجه السادس.
+# `grep` بلا لغةٍ مضبوطة يعامل النمط بايتاتٍ لا أحرفاً، فصنفٌ حرفيّ عربيّ يعود
+# صفراً بلا خطأ — ويُقرأ «غير موجود». ويحرسها `locale-gate.spec.ts`.
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+# دفعتان متتابعتان على طلبٍ واحد: تُلغى السابقة — ولا يُلغى تشغيلُ `main`.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⛔ خطّافات git بنهايات CRLF — عطلٌ **يختبئ خلف نظام تشغيل**.
+      #
+      # يعمل على ويندوز (MSYS يتسامح مع `\r` في السطر الأول) **ويموت على
+      # لينكس**، والرسالة لا تذكر نهاياتِ الأسطر بحرف:
+      #
+      #     LF   ⇒ LF_HOOK_RAN
+      #     CRLF ⇒ sh: /probe/crlf-hook: not found
+      #
+      # وقد وقع فعلاً: `pre-commit` كان مسحوباً `# ! / b i n / s h \r \n`.
+      # والسبب أن `.gitattributes` يثبّت `*.sh text eol=lf` **والخطّافات بلا
+      # امتداد** — فتسقط من كل قاعدة تُبنى على الامتداد.
+      #
+      # ⚠️ ويُقرأ **بايتُ الملف** لا `.gitattributes`: القاعدة مكتوبةٌ نيّةً،
+      #    والبايت هو ما يُنفَّذ. وقاعدةٌ صحيحة مع بلوب قديمٍ بـCRLF تمرّ من
+      #    فحصِ النيّة وتسقط عند التشغيل — فالحارس يقرأ ما يُنفَّذ.
+      #
+      # 📌 ويحرس `pre-commit` بالذات، وهو **حارس الأسرار**: خطّافٌ ميت لا
+      #    يمنع تسريباً، ويموت صامتاً.
+      # ⛔ إصدار Node في صور الإنتاج يطابق `engines` — وإلا اختبرنا على إصدار
+      #    وشغّلنا على آخر.
+      #
+      # وقع فعلاً: بقيت `apps/api/Dockerfile` على `node:20` بينما `engines`
+      # تشترط `>=22` والسير يثبّت `22`. فمرّت كل الاختبارات على 22 **والخادم
+      # يعمل على 20** — وهو التفاوت الذي وُضع القفل لمنعه.
+      #
+      # ⚠️ ويقرأ **الملفات** لا التعليق: القفل كان مكتوباً ولم يكن مفحوصاً،
+      #    وهذا بالضبط ما جعله يشيخ بلا أن يلاحظه أحد.
+      - name: حارس إصدار Node — الصور تطابق engines (blocking)
+        shell: bash
+        run: |
+          want=$(grep -ahoE '"node": ">=([0-9]+)' apps/*/package.json | grep -ohE '[0-9]+' | sort -u)
+          if [ "$(printf '%s\n' "$want" | wc -l)" -ne 1 ] || [ -z "$want" ]; then
+            echo "::error::engines غير متّسقة عبر الحزم أو غير مقروءة: [$want]"
+            exit 1
+          fi
+          fail=0
+          for df in apps/*/Dockerfile; do
+            [ -f "$df" ] || continue
+            for got in $(grep -ohE '^FROM node:([0-9]+)' "$df" | grep -ohE '[0-9]+'); do
+              if [ "$got" != "$want" ]; then
+                echo "::error::$df يبني على node:$got و engines تشترط >=$want"
+                fail=1
+              fi
+            done
+          done
+          [ "$fail" -eq 0 ] || exit 1
+          echo "كل صور الإنتاج على node:$want — مطابقة لـengines"
+
+      - name: حارس نهايات الأسطر — لا CRLF في .githooks (blocking)
+        shell: bash
+        run: |
+          count=$(find .githooks -type f | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::لا ملفات في .githooks — إمّا حُذفت أو انتقل موضعها"
+            exit 1
+          fi
+          # ⚠️ `$(printf '\r')` لا `$'\r'` — مقيسٌ بحالتين معروفتَي النتيجة:
+          #    الصياغة الثانية تنحلّ إلى الحرف `r` فتطابق **كل ملف نصّي**،
+          #    فتُعطي حارساً يسقط دائماً. ولا يكشفها إلا الحالة السليمة:
+          #
+          #      grep -lI $'\r'              LF:طابق  CRLF:طابق   ✖
+          #      grep -lIU "$(printf '\r')"  LF:لا     CRLF:طابق   ✓
+          #
+          #    فالكسر وحده لا يُثبت حارساً — لأن الحارس الذي يسقط على كل شيء
+          #    يسقط على الكسر أيضاً، ويبدو عاملاً.
+          CR=$(printf '\r')
+          bad=$(find .githooks -type f -exec grep -lIU "$CR" {} + 2>/dev/null || true)
+          if [ -n "$bad" ]; then
+            echo "::error::خطّافات بنهايات CRLF — تعمل على ويندوز وتموت على لينكس:"
+            echo "$bad"
+            echo "العلاج: أضف النمط إلى .gitattributes ثم:  git add --renormalize .githooks"
+            exit 1
+          fi
+          echo "كل خطّافات .githooks بنهايات LF: $count ملفاً"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      # --ignore-scripts: ثنائي esbuild يصل عبر optionalDependencies (حزمة
+      # المنصة @esbuild/linux-x64)، لا عبر postinstall — فالسكربت احتياطٌ لا
+      # حاجة إليه، وتخطّيه يجعل التثبيت حتمياً ويُسكت تحذير allow-scripts.
+      # مُتحقَّق منه: npm ci بلا موافقة سكربتات يترك esbuild عاملاً (--version).
+      - run: npm ci --ignore-scripts
+      # ⛔ vitest **تمنع من اليوم** (قرار المالك 2026-08-11): لا اعتماد خارجي
+      # لها — لا قاعدة ولا شبكة ولا متصفح — فلا عذر لسقوطها، ولا معنى لتأجيل
+      # صرامةٍ على اختباراتٍ حتمية. (ومنذ 2026-08-12 صارت Playwright مانعةً
+      # كذلك، فلم يبقَ في هذا الملف حارسٌ في وضع الإبلاغ.)
+      - name: vitest (blocking)
+        run: npm run test --workspace apps/web
+
+      # (ق-٢٤٥) بناءُ الويب على كل دفع — `tsc -b && vite build`: خطأُ نوعٍ في الواجهة
+      # يُكتشف هنا لا في بناء صورة nginx الثقيل الذي لا يعمل إلا عند الطلب والدمج.
+      - name: بناء الويب — tsc -b && vite build (blocking)
+        run: npm run build --workspace apps/web
+
+  # اختبارات الخادم — **كانت غائبة عن السير كلياً حتى 2026-08-13**.
+  #
+  # 🔴 الاكتشاف: الاستدعاء الوحيد لـ`jest` في هذا الملف كان يسمّي ملفّين
+  #    بعينهما (`delegation-log.live` و`task-log.live`). أي أن **92** ملف
+  #    اختبار في `apps/api` لم يُنفَّذ في السير قطّ: **15** وحدةً نقيّة في
+  #    `src/` (تُشغَّل هنا) و**77** اختبار تكاملٍ في `test/` تحتاج قاعدةً
+  #    حيّة (تعمل في `web-tests.yml` الثقيل).
+  #
+  #    ومن الخمسة عشر:
+  #      · `zatca/environment-guard.spec.ts`      (التزام نظامي)
+  #      · `integrations/mock-provider-guard.spec.ts` (الثغرة المالية)
+  #      · `common/config/production-secrets.spec.ts`
+  #      · كل حرّاس المرحلتين الأولى والثانية (التقاطع · الشجرة · الدورات ·
+  #        السجل · نموذج المهمة · رؤية المهمة)
+  #
+  #    كلٌّ منها حارسٌ طُلب صراحةً وأُثبت بالعكس محلياً — ثم لم يُشغَّل حيث
+  #    يهمّ. وهو نفس درس الاختبار ٧: **حارسٌ لا يعمل ليس حارساً**، وسقوطه
+  #    الذي لا يُرى لا يمنع شيئاً.
+  #
+  # ⛔ مانعة من أول يوم — لا اعتماد خارجي لها (لا قاعدة ولا شبكة)، فلا عذر.
+  api-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+
+      # أنواع Prisma فقط — لا اتصال بقاعدة. الاختبارات هنا نقيّة كلها،
+      # لكنها تستورد أنواعاً مولَّدة (`@prisma/client`) فتفشل الترجمة بدونها.
+      - name: prisma generate (أنواع فقط، بلا قاعدة)
+        working-directory: apps/api
+        run: npx prisma generate
+
+      # (ق-٢٤٥) أنواعُ الخادم على كل دفع — يمسك ما لا تمسّه الوحدات النقيّة (المسارات
+      # والخدمات وملفات `test/` التي لا تعمل هنا بلا قاعدة لكنها تُترجَم).
+      - name: tsc — أنواع الخادم (blocking)
+        working-directory: apps/api
+        run: npx tsc --noEmit -p tsconfig.json
+
+      # ⚠️ `--roots src` شرطٌ لا تحسين. `testRegex` في package.json هو
+      # `.*\.(spec|e2e-spec)\.ts$` — فيلتقط **77** ملفاً في `test/` كلها
+      # تحتاج قاعدةً حيّة. تشغيلها هنا يعني 21 مجموعة حمراء لأسبابٍ بيئية،
+      # فتُقرأ الوظيفة على أنها عطبٌ في الشيفرة وتُعطَّل خلال أسبوع.
+      #
+      # النطاق هنا: **الوحدات النقيّة وحدها** — وهي حرّاسُ المصدر كلُّها،
+      # وبها يتحقّق نصُّ التوجيه: «وحرّاس المصدر كلّها على كل دفع».
+      - name: jest — وحدات الخادم النقيّة (blocking)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -o pipefail
+          npx jest --roots '<rootDir>/src' --testPathIgnorePatterns "live\.spec" --verbose 2>&1 | tee /tmp/api-unit.log
+
+      # حارسٌ للحارس: عددُ الملفات المنفَّذة يطابق الموجودة على القرص.
+      #
+      # ⚠️ يقرأ **القرص** لا مخرَج jest وحده. فنمطٌ يتغيّر (`.spec` ⇒ `.test`)
+      # أو ملفٌّ يقع خارج `testMatch` يختفي **صامتاً**: تبقى الوظيفة خضراء
+      # وقد نقص حارس. وهي عائلة العطل نفسها التي أخفت هذه الوظيفة سنةً —
+      # ولا يكشفها إلا عدٌّ من المصدر.
+      - name: التحقق أن كل ملفات الاختبار نُفِّذت فعلاً
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          on_disk=$(find src -name '*.spec.ts' ! -name '*live.spec.ts' | wc -l)
+          ran=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/api-unit.log \
+            | grep -aoE "Test Suites:.*[0-9]+ total" | grep -aoE "[0-9]+ total" | grep -aoE "^[0-9]+" || echo 0)
+          echo "على القرص: $on_disk · نُفِّذ: $ran"
+          if [ "$on_disk" != "$ran" ]; then
+            echo "::error::تفاوت: $on_disk ملف اختبار على القرص و$ran منفَّذ — حارسٌ سقط خارج نطاق jest"
+            exit 1
+          fi
+          grep -aE "Tests:|Test Suites:" /tmp/api-unit.log || echo "(لا ملخّص)"
+
+      # كل مجسّ حيّ يرفع مهلته صراحةً — وإلا ورث 5000 ms صامتاً.
+      #
+      # الافتراضية تسري على الخطّاف كما على الاختبار، و`beforeAll` في هذه
+      # الملفات يُهيّئ منشأةً كاملة على قاعدةٍ حقيقية تحت سبعة عمّال. وأسوأ
+      # قياسٍ **سليم** بلغ 3687 ms — أي ٧٤٪ من الحدّ. فملفٌّ جديد ينسى السطر
+      # يمرّ اليوم ويسقط عند أول تشغيلٍ أبطأ، **ويُقرأ عطلاً في المنتَج**.
+      #
+      # ⚠️ ويقرأ **المصدر** لا مخرَج jest: المهلة لا أثر لها في المخرَج حين
+      #    لا تُتجاوَز، فلا يكشف غيابَها إلا عدٌّ من الملفات نفسها.
+      - name: التحقق أن كل مجسّ حيّ يرفع مهلته صراحةً
+        if: always()
+        working-directory: apps/api
+        shell: bash
+        run: |
+          # ⚠️ `xargs -0 -r` لا `$(find …)`: لو خلا المجلد من المجسّات لصار
+          #    `grep -L` بلا ملفات فيقرأ المدخل القياسي **ويُعلّق الوظيفة**.
+          #    و`-r` يمنع تشغيله أصلاً حين لا مدخلات.
+          count=$(find src -name '*.live.spec.ts' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::لا مجسّات حيّة على القرص إطلاقاً — إمّا حُذفت أو تغيّر نمط تسميتها"
+            exit 1
+          fi
+          missing=$(find src -name '*.live.spec.ts' -print0 | xargs -0 -r grep -L "LIVE_SPEC_TIMEOUT_MS" || true)
+          if [ -n "$missing" ]; then
+            echo "::error::مجسّات حيّة بلا مهلة صريحة — سترث 5000 ms وتسقط تحت الضغط:"
+            echo "$missing"
+            exit 1
+          fi
+          echo "كل المجسّات الحيّة ترفع مهلتها: $count ملفاً"
