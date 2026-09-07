@@ -71,6 +71,58 @@ export function openingDeltaLines(account: { id: string; type: string }, equityA
   ];
 }
 
+/**
+ * **لا يُعلَن افتتاحيٌّ فوق حركةٍ سبقته** (`ق-٢٩١`).
+ *
+ * القيدُ الافتتاحي يقول «هذا موقفُ الحساب عند هذا التاريخ، وكلُّ ما قبله
+ * مطويٌّ فيه». فإن كانت للحساب **حركةٌ مرحَّلةٌ قبل ذلك التاريخ**، صار الرصيدُ
+ * **معدوداً مرّتين** — مرّةً في الافتتاحيّ ومرّةً في حركته — **والميزانُ يبقى
+ * متوازناً فلا ينبّه أحد**.
+ *
+ * ⚠️ **والاتجاه مقصود**: يُمنع **خلقُ** التناقض، **ولا يُعاقَب ما وقع قبل
+ * القاعدة**. والصيغةُ المعكوسة (رفضُ كلِّ قيدٍ يسبق الافتتاحيّ) قِيست فأسقطت
+ * **١٤ مجموعة و٣٠ توكيداً** — لا لعطلٍ فيها بل لأن مِرساتها مصطنعة: تواريخُ
+ * الافتتاحيّات القائمة **يومُ تشغيل الترحيل الرجعيّ** لا يومٌ يعنيه تاجر
+ * (`ق-٢٩١`، وحكمُ المالك).
+ *
+ * ⚠️ **وحسابٌ له افتتاحيٌّ سلفاً يمرّ**: تعديلُ الرصيد يُرحَّل **قيدَ فرقٍ**
+ * على إعلانٍ قائم، لا إعلاناً جديداً — **فمنعُه معاقبةٌ على ما وقع قبل
+ * القاعدة**، وهو ما اُستُثني نصّاً.
+ *
+ * ⚠️ **وحدٌّ معلَن**: تاريخُ الافتتاح **مشتقٌّ** (بداية السنة المالية أو
+ * اليوم) لأن **الحساب لا يحمل تاريخَ افتتاحٍ يُدخله التاجر — والبنكُ يحمله**.
+ * **فقاعدتان حيث أردنا واحدة**، وتُوحَّدان حين يُبنى الحقل (`ق-٢٩١`/أ).
+ */
+export async function assertNoMovementBeforeOpening(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  account: AccountForOpening,
+  openingDate: Date,
+): Promise<void> {
+  const alreadyDeclared = await tx.journalEntry.findFirst({
+    where: { companyId, openingForAccountId: account.id },
+    select: { id: true },
+  });
+  if (alreadyDeclared) return;
+
+  const prior = await tx.journalLine.findFirst({
+    where: { companyId, accountId: account.id, journalEntry: { date: { lt: openingDate } } },
+    orderBy: { journalEntry: { date: 'asc' } },
+    select: { journalEntry: { select: { date: true, no: true } } },
+  });
+  if (!prior) return;
+
+  throw new ConflictException(
+    formatMessage(MSG.account_opening_after_movement, {
+      code: account.code,
+      name: account.name,
+      opening: openingDate.toISOString().slice(0, 10),
+      moved: prior.journalEntry.date.toISOString().slice(0, 10),
+      entry: prior.journalEntry.no,
+    }),
+  );
+}
+
 export interface OpeningDeltaInput {
   companyId: string;
   account: AccountForOpening;
@@ -87,6 +139,9 @@ export async function postOpeningDeltaEntry(tx: Prisma.TransactionClient, input:
   const delta = round2(input.delta);
   if (delta === 0) return null;
 
+  const date = await openingEntryDate(tx, input.companyId);
+  await assertNoMovementBeforeOpening(tx, input.companyId, input.account, date);
+
   const equity = await getOrCreateOpeningEquityAccount(tx, input.companyId);
   if (equity.id === input.account.id) {
     // Backstop — the service guards this by code, but the counterpart of an
@@ -96,7 +151,7 @@ export async function postOpeningDeltaEntry(tx: Prisma.TransactionClient, input:
 
   return createJournalEntry(tx, {
     companyId: input.companyId,
-    date: await openingEntryDate(tx, input.companyId),
+    date,
     memo: input.memo ?? `قيد افتتاحي — ${input.account.name} (${input.account.code})`,
     auto: true,
     openingForAccountId: input.account.id,
