@@ -107,16 +107,70 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
 
   it('⭐ ② والمستندات القائمة تُقرأ كما هي — `productId` فيها فارغ لا خاطئ', async () => {
     /**
-     * كل سطر فاتورة كُتب قبل هذه الموجة يجب أن يُقرأ بلا انفجار. والقراءة
-     * وحدها لا تكفي: يُفحص أن العمود **موجود وفارغ** — لأن سطراً بصنفٍ
-     * مخترَع أسوأ من سطرٍ بلا صنف.
+     * دعواان، **ولكلٍّ سطحُه** (`ق-٢٨٦`):
+     *
+     *   (أ) **القراءة لا تنفجر والعمود موجود** — تُقاس على أسطرٍ قائمة، ولا
+     *       تدّعي شيئاً عن قيمتها.
+     *   (ب) **وسطرٌ بلا صنف يُقرأ فارغاً لا مخترَعاً** — يُقاس على سطرٍ
+     *       **يزرعه الاختبارُ بنفسه**، فالنتيجة لا تتعلّق بما في القاعدة.
+     *
+     * ⚠️ **وكان توكيدٌ واحد يخلط الاثنين**: `every(productId === null)` على
+     * **أيَّ عشرين سطراً**. ودعواه «الأسطرُ القديمة» وسطحُه «كلُّ الأسطر» —
+     * وبيعُ الكاشير يكتب أسطراً **بأصنافٍ حقيقية**. فكان يمرّ على قاعدةٍ
+     * فارغة ويسقط حين تمتلئ، **فبدا تقلّباً وهو خطأٌ ثابت** (`ق-٢٨٦`).
+     *
+     * ⚠️ **ولا يُقاس (ب) على «ما قبل الموجة» بالتاريخ**: قاعدةٌ نظيفة تُهيّأ
+     * **بعد** الترحيلات، فلا صفَّ أقدمَ منها — والتوكيدُ يمرّ على **الفراغ**،
+     * وهو نجاحٌ لا يشهد لشيء.
      */
-    const legacy = await prisma.$transaction(async (tx) => {
+    const existing = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.company_id', ${companyA}, true)`;
       return tx.invoiceLine.findMany({ select: { id: true, productId: true }, take: 20 });
     });
+    expect(existing.every((l) => 'productId' in l)).toBe(true);
 
-    expect(legacy.every((l) => l.productId === null)).toBe(true);
+    const seeded = await prisma
+      .$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${companyA}, true)`;
+        // ⚠️ **تُصنع الفاتورةُ ولا تُلتقط من القاعدة**: «أوّلُ ما تجده» يربط
+        // النتيجةَ ببيانات لا يملكها هذا الملف — وقد سقط التوكيدُ فعلاً حين
+        // كانت أوّلُ منشأةٍ بلا فواتير. والملفُّ كلُّه يصنع ما يفحصه.
+        const customer = await tx.customer.create({ data: { companyId: companyA, name: 'عميل بوابة L0-0' } });
+        const invoice = await tx.invoice.create({
+          data: {
+            companyId: companyA,
+            no: `IL-${randomUUID().slice(0, 8)}`,
+            customerId: customer.id,
+            issueDate: new Date(),
+            dueDate: new Date(),
+            subtotal: 50,
+            taxTotal: 7.5,
+            total: 57.5,
+            baseSubtotal: 50,
+            baseTaxTotal: 7.5,
+            baseTotal: 57.5,
+          },
+        });
+        const line = await tx.invoiceLine.create({
+          data: {
+            companyId: companyA,
+            invoiceId: invoice.id,
+            description: 'بند خدمي بلا صنف — بوابة L0-0',
+            quantity: '1',
+            unitPrice: '50',
+            taxRate: 15,
+          },
+          select: { id: true, productId: true },
+        });
+        throw new RollbackSignal(JSON.stringify(line));
+      })
+      .catch((e: unknown) => {
+        if (e instanceof RollbackSignal) return JSON.parse(e.message) as { id: string; productId: string | null };
+        throw e;
+      });
+
+    // ⚠️ **فارغٌ لا مخترَع**: عمودٌ يُملأ بصنفٍ لم يُطلب أسوأ من عمودٍ فارغ.
+    expect(seeded.productId).toBeNull();
   });
 
   it('[SPEC 1.2] ⭐ ③ والعزل: بندُ منشأةٍ لا يُقرأ من سياق منشأةٍ أخرى', async () => {
@@ -134,10 +188,16 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
 
   it('⭐ ④ ولا يبقى صفٌّ بعد البوابة — الإلغاء وقع فعلاً', async () => {
     // §8.8: يُفحص وقوع الإلغاء قبل الوثوق بنتيجة ما قبله.
+    // ⚠️ **ويشمل ما يكتبه التوكيد ② أيضاً**: فاتورةٌ وعميلٌ وسطرٌ يُصنعون
+    // داخل معاملةٍ تُلغى — وحارسٌ يعدّ نوعاً واحداً يشهد لنوعٍ واحد.
     const left = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.company_id', ${companyA}, true)`;
-      return tx.purchaseLine.count({ where: { description: { startsWith: 'بند ' } } });
+      return {
+        purchaseLines: await tx.purchaseLine.count({ where: { description: { startsWith: 'بند ' } } }),
+        invoiceLines: await tx.invoiceLine.count({ where: { description: { startsWith: 'بند خدمي بلا صنف' } } }),
+        customers: await tx.customer.count({ where: { name: 'عميل بوابة L0-0' } }),
+      };
     });
-    expect(left).toBe(0);
+    expect(left).toEqual({ purchaseLines: 0, invoiceLines: 0, customers: 0 });
   });
 });
