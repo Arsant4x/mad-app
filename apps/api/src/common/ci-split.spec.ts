@@ -85,6 +85,13 @@ export function declaredTypes(yaml: string): string[] {
   return m ? m[1].split(',').map((s) => s.trim()) : ['opened', 'synchronize', 'reopened'];
 }
 
+/** مساراتُ `push` — وغيابُها يعني «كلَّ دمجٍ يُفحص»، وهو ما صُحِّح في ق-٢٧٢. */
+export function pushPaths(yaml: string): string[] | null {
+  const block = pushBlock(yaml);
+  if (!/^\s{4}paths:\s*$/m.test(block)) return null;
+  return [...block.matchAll(/^\s{6}- '([^']+)'/gm)].map((m) => m[1]);
+}
+
 /** مساراتُ `pull_request` — وغيابُ `paths:` يعني «كلَّ مسار». */
 export function declaredPaths(yaml: string): string[] | null {
   const block = prBlock(yaml);
@@ -126,6 +133,10 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     // والقارئُ يعمل على `CRLF` كما على `LF` — الحالتان معروفتا النتيجة.
     expect(pushBlock(sample)).toContain('branches: [main]');
     expect(pushBlock(sample.replace(/\n/g, '\r\n'))).toContain('branches: [main]');
+    // وقارئُ مسارات `push` مُثبَتٌ بحالتَين: معلَنةٌ تُقرأ، وغائبةٌ تعود فراغاً.
+    const withPushPaths = ['on:', '  push:', '    branches: [main]', '    paths:', "      - 'apps/**'", '  pull_request:', '    types: [opened]', 'env:', '  A: b', ''].join('\n');
+    expect(pushPaths(withPushPaths)).toEqual(['apps/**']);
+    expect(pushPaths(sample)).toBeNull();
   });
 
   it('السطح غير فارغ — ثلاثُ وظائفٍ ثقيلة في ملفّها، واثنتان خفيفتان في ملفّهما', () => {
@@ -138,16 +149,19 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     expect(jobBlocks(light).filter(isHeavy).map((j) => j.name)).toEqual([]);
   });
 
-  it('🔴 مُشغِّلُ الثقيل: لا `synchronize`، ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بلا تصفية', () => {
+  it('🔴 مُشغِّلُ الثقيل: لا `synchronize`، ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بالمسارات نفسها (ق-٢٧٢)', () => {
     expect(declaredTypes(heavy)).not.toContain('synchronize');
     expect(declaredTypes(heavy)).toContain('opened');
     const paths = declaredPaths(heavy) ?? [];
     expect(paths.length).toBeGreaterThan(0);
     // وثائقيٌّ في مسارات الثقيل يُبطل «الوثائقيُّ عند الدمج وحده».
     expect(paths.filter((p) => p.endsWith('.md') || p.startsWith('docs/'))).toEqual([]);
-    // الدمجُ يفحص ما وصل مهما كان مسارُه: `push` على `main` **بلا `paths`**.
+    // ⚠️ (ق-٢٧٢) **«ما يصل `main` يُفحص بما يخصّه»** — تصحيحُ ق-٢٥١ بقياس: كان
+    //    هنا «`push` **بلا** `paths`»، فدفع الدمجُ الوثائقيُّ ثقيلاً كاملاً بلا
+    //    شيءٍ يُفحص (٤ من ١٥ دمجةً في يوم ≈ ٣٦ دقيقة). **والمساراتُ واحدةٌ لا
+    //    قائمتان**: تطابقُ `push` و`pull_request` محروسٌ هنا، فقائمتان تفترقان يوماً.
     expect(pushBlock(heavy)).toContain('branches: [main]');
-    expect(pushBlock(heavy)).not.toContain('paths:');
+    expect(pushPaths(heavy)).toEqual(paths);
   });
 
   it('🔴 مُشغِّلُ الخفيف: `synchronize` معلَنةٌ، وكلُّ فعلٍ مسمّىً معلَنٌ، ويحمل tsc وبناءَ الويب و`concurrency`', () => {
