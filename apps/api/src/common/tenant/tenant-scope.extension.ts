@@ -61,6 +61,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // وحدات الإصدار: تحمل companyId وتُقرأ داخل سياق المنشأة — وRLS بـFORCE.
   'EgsUnit',
   'PosOfflineIncident',
+  // درجُ الكاشير (ق-٢١٨ · ق-٢٦١): يحمل companyId، وحسابُه في الدليل واحدٌ لواحد.
+  'CashDrawer',
   'Property',
   'Unit',
   'Contract',
