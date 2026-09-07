@@ -20,6 +20,8 @@ import { join, relative } from 'path';
 const ROOTS = [join(__dirname, '..'), join(__dirname, '..', '..', 'prisma')];
 /** حقلٌ اسمُه رقمٌ أو مرجع — إسنادُ قالبٍ فيه `count` إليه ترقيمٌ لا رسالة. */
 const ID_FIELD = /\b(?:reference|ref|no|number|serial|icv|seq|sequence|counter|code)\w*\s*[:=]/i;
+/** اسمٌ من **عائلة الهويّة** — ما يُسنَد إليه رقمٌ يُميّز صفّاً، لا عددٌ يُعرض (ق-٢٦٦). */
+const IDENTITY_NAME = /^(?:next|code|no|number|serial|icv|seq|sequence|reference|ref|counter)\w*$/i;
 
 export interface CountOffence {
   file: string;
@@ -58,6 +60,26 @@ export function countNumberingOffences(source: string, file = '<inline>'): Count
       out.push({ file, line, reason: `«${name}» من count() يدخل في ترقيم` });
     }
   }
+
+  // ④ (ق-٢٦٦) **العدُّ يدخل أيَّ حسابٍ يُنتج هويّة** — لا `+1` وحدها.
+  //
+  // الثغرة المقيسة (2026-09-07): `const next = DRAWER_CODE_MIN + drawerCount;` مرّ
+  // على ①–③ كلِّها — وهي **أقربُ صياغةٍ لترقيمٍ داخل نطاق**، أي أن سطح الكشف كان
+  // أضيقَ من القاعدة. فيُلتقط كلُّ إسنادٍ **اسمُه من عائلة الهويّة** وقيمتُه حسابٌ
+  // يدخله متغيّرٌ مأخوذٌ من `count()`.
+  for (const m of code.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*\(?\s*await\s+[\w.]+\.count\(/g)) {
+    const name = m[1];
+    const assigned = new RegExp(`(?:(?:const|let|var)\\s+(\\w+)\\s*=|(\\w+)\\s*:)\\s*([^;,\\n]*\\b${name}\\b[^;,\\n]*)`, 'g');
+    for (const a of code.matchAll(assigned)) {
+      const target = a[1] ?? a[2] ?? '';
+      const expr = a[3] ?? '';
+      if (!IDENTITY_NAME.test(target)) continue;
+      if (!/[+\-*]/.test(expr)) continue; // إسنادٌ مجرّد (`code: n`) يُترك للقاعدة ②/③
+      const line = lineOf(a.index ?? 0);
+      if (out.some((o) => o.line === line && o.file === file)) continue; // لا يُعدّ مرتَين
+      out.push({ file, line, reason: `«${target}» يُحسب من «${name}» المأخوذ من count()` });
+    }
+  }
   return out;
 }
 
@@ -79,6 +101,12 @@ describe('لا مولّدَ ترقيمٍ من `count()` — حارسٌ مشتق�
     expect(countNumberingOffences('return (await tx.invoice.count({ where: { companyId } })) + 1;')).toHaveLength(1);
     expect(countNumberingOffences('reference: opts.ref ?? `POS-${shift.id.slice(0, 8)}-${await tx.invoice.count({ where: { posShiftId: shift.id } })}`,')).toHaveLength(1);
     expect(countNumberingOffences('const seq = await tx.x.count(); const code = `C-${seq}`;')).toHaveLength(1);
+    // (ق-٢٦٦ · ق-٢٦٧) **الصياغةُ الواقعية** التي مرّت قبل التوسيع — لا كسرٌ مصطنع:
+    expect(countNumberingOffences('const drawerCount = await tx.cashDrawer.count(); const next = DRAWER_CODE_MIN + drawerCount;')).toHaveLength(1);
+    expect(countNumberingOffences('const n = await tx.x.count(); return { code: 1010 + n };')).toHaveLength(1);
+    // وما ليس من عائلة الهويّة يمرّ — عددٌ يُعرض أو يُحسب لا رقمٌ يُميّز صفّاً.
+    expect(countNumberingOffences('const n = await tx.x.count(); const remaining = limit - n;')).toEqual([]);
+    expect(countNumberingOffences('const n = await tx.x.count(); const average = total / (n + 0);')).toEqual([]);
     // والإحصاءُ والوجودُ والصفحاتُ والرسائلُ لا تُمسَك.
     expect(countNumberingOffences('const total = await tx.contract.count({ where }); return { items, total };')).toEqual([]);
     expect(countNumberingOffences('if ((await tx.journalLine.count({ where: { accountId: id } })) > 0) throw new ConflictException(MSG.x);')).toEqual([]);
