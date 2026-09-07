@@ -7,6 +7,7 @@ import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
 import { MSG } from '../common/i18n/messages';
 import { postOpeningDeltaEntry } from '../journal/opening-balance.util';
+import { round2 } from '../common/money/rounding';
 
 /** نطاقُ رموز حسابات البنوك (`ق-٢٥٣`) — متجاورٌ لا متداخل مع `1000` (`ق-٢٧٥`). */
 export const BANK_CODE_MIN = 1100;
@@ -106,15 +107,32 @@ export class BanksService {
       if (dto.openingDate !== undefined) data.openingDate = new Date(dto.openingDate);
 
       if (dto.openingBalance !== undefined) {
-        // Preserve any drift already reflected in `balance` (e.g. from a
-        // future Transactions module) by shifting it by the same delta,
-        // rather than overwriting it outright — matches the mockup exactly.
-        const delta = dto.openingBalance - Number(existing.openingBalance);
+        /**
+         * ⚠️ (ق-٢٧٧ · ق-٢٨٢) **التعديلُ قيدُ فرقٍ لا إزاحةُ عمود.**
+         *
+         * كان هذا الموضعُ يزيح `balance` بالفارق «حفظاً للانحراف» — **ورقمٌ
+         * يتحرك بلا قيدٍ يسنده هو العطلُ نفسه**. فصار الفرقُ يُرحَّل مقابل
+         * `3900` **بالمسار المبنيّ للحسابات** (`postOpeningDeltaEntry`): لا
+         * مسارَ ثانٍ، ولا تاريخٌ يُكتب فوق تاريخ — **القيدُ الأصلي يبقى ويُضاف
+         * إليه فرق**. والمرآةُ تتبع القيد.
+         */
+        const delta = round2(dto.openingBalance - Number(existing.openingBalance));
         const rate = Number(existing.exchangeRate);
         data.openingBalance = dto.openingBalance;
-        data.balance = Number(existing.balance) + delta;
         data.baseOpeningBalance = toBaseAmount(dto.openingBalance, rate);
-        data.baseBalance = toBaseAmount(Number(existing.balance) + delta, rate);
+
+        if (delta !== 0) {
+          const account = await tx.account.findUniqueOrThrow({ where: { id: existing.accountId } });
+          await postOpeningDeltaEntry(tx, {
+            companyId,
+            account,
+            delta,
+            memo: `تعديل الرصيد الافتتاحي — ${existing.name} (${account.code})`,
+          });
+          await tx.account.update({ where: { id: account.id }, data: { openingBalance: dto.openingBalance } });
+          data.balance = Number(existing.balance) + delta;
+          data.baseBalance = toBaseAmount(Number(existing.balance) + delta, rate);
+        }
       }
 
       return tx.bank.update({ where: { id }, data });
