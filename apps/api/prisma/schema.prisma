@@ -821,6 +821,8 @@ model Account {
   openingEntries JournalEntry[] @relation("OpeningEntries")
   /// الدرجُ الذي يملك هذا الحساب — واحدٌ لواحد (`ق-٢١٨`)، وفارغٌ لسائر الحسابات.
   cashDrawer CashDrawer?
+  /// والبنكُ الذي يملكه — واحدٌ لواحد كذلك (`ق-٢٧٧`).
+  bank       Bank?
 
   @@unique([companyId, code])
   @@map("accounts")
@@ -1533,6 +1535,13 @@ model Bank {
   exchangeRate       Decimal @default(1) @db.Decimal(18, 6)
   baseBalance        Decimal @default(0) @db.Decimal(18, 2)
   baseOpeningBalance Decimal @default(0) @db.Decimal(18, 2)
+
+  /// حسابُ البنك في الدليل — **واحدٌ لواحد** (`ق-٢٥٣` · `ق-٢٧٧`)، يُنشأ مع البنك
+  /// برمزٍ في نطاق `1100`–`1199` (`MAX+1` تحت قيدٍ فريد). وبه يُقفل `ق-١٦`:
+  /// قبلَه كان نقدُ البنوك يُرحَّل إلى `1000` فيُعدّ صندوقاً، ورصيدُ البنك يعيش
+  /// في عمودٍ خارج الأستاذ.
+  accountId String  @unique
+  account   Account @relation(fields: [accountId], references: [id])
 
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
