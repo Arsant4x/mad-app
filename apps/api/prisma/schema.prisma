@@ -342,6 +342,7 @@ model Company {
   inventoryWriteOffs    InventoryWriteOff[]
   writeOffAttachments   InventoryWriteOffAttachment[]
   posShifts           PosShift[]
+  cashDrawers         CashDrawer[]
   posPayments         PosPayment[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
@@ -494,6 +495,7 @@ model Branch {
   banks            Bank[]
   bankTransactions BankTransaction[]
   posShifts PosShift[]
+  cashDrawers CashDrawer[]
   invoices         Invoice[]
   purchases        Purchase[]
   journalEntries   JournalEntry[]
@@ -817,6 +819,8 @@ model Account {
   /// This account's opening entry plus any delta entries posted by later
   /// opening-balance edits — see JournalEntry.openingForAccountId.
   openingEntries JournalEntry[] @relation("OpeningEntries")
+  /// الدرجُ الذي يملك هذا الحساب — واحدٌ لواحد (`ق-٢١٨`)، وفارغٌ لسائر الحسابات.
+  cashDrawer CashDrawer?
 
   @@unique([companyId, code])
   @@map("accounts")
@@ -2635,8 +2639,55 @@ model PosShift {
 
   invoices Invoice[]
 
+  /// الدرج الذي فُتحت عليه المناوبة (`ق-٢١٨` · `ق-٢٦١`). يقبل الفراغ **للمناوبات
+  /// التي سبقت الكيان وحدها** — والمناوبات القائمة تُنسب في الترحيل إلى الدرج
+  /// الافتراضي لفرعها، فالزوجُ (فرع، كاشير) مجسٌّ لا هويّة: الكاشير ليس درجاً.
+  drawerId String?
+  drawer   CashDrawer? @relation(fields: [drawerId], references: [id], onDelete: SetNull)
+
   @@index([companyId, status])
+  @@index([drawerId])
   @@map("pos_shifts")
+}
+
+/// **درجُ الكاشير كياناً وحساباً** (`ق-٢١٨` بحكم صاحب المشروع: «المفصَّل يُجمَّع
+/// دائماً والمجمَّع لا يُفصَّل أبداً» · والرموز في `ق-٢٥٣`).
+///
+/// كان الدرج **ضمنياً** حتى 2026-09-07: زوجُ (فرع، كاشير) على المناوبة، بلا كيانٍ
+/// ولا حساب — وكلُّ نقدٍ يُرحَّل إلى `1000` وحده، فسؤالُ «أيُّ درجٍ عجز؟» بلا جوابٍ
+/// رجعيّ.
+///
+/// **وحسابُه يُنشأ معه تلقائياً** في نطاق `1010`–`1099` بـ`MAX+1` **تحت قيدٍ فريد**
+/// (`ق-١٩٨`: لا `count()`؛ والتصادمُ يظهر `P2002` فيُعاد الترقيم لا يُخمَّن) —
+/// فلا يُدخِل التاجرُ رمزاً بيده ولا يُترك الدرجُ بلا مقابلٍ في الأستاذ.
+model CashDrawer {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الفرع الذي يقف فيه الدرج — يقبل الفراغ لمنشأةٍ بلا فروع.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  name     String
+  isActive Boolean @default(true)
+
+  /// **درجُ الفرع الافتراضي** — يُنشأ في الترحيل لكل فرعٍ له مناوبات، وتُنسب إليه
+  /// المناوباتُ السابقة على الكيان. والتفصيل يبدأ من أول درجٍ يُنشئه التاجر.
+  isDefault Boolean @default(false)
+
+  /// حسابُ الدرج في الدليل — واحدٌ لواحد، ولا يُشارَك.
+  accountId String  @unique
+  account   Account @relation(fields: [accountId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shifts PosShift[]
+
+  @@unique([companyId, branchId, name])
+  @@index([companyId, isActive])
+  @@map("cash_drawers")
 }
 
 /// دفعة واحدة من فاتورة كاشير (مستند §4): الفاتورة الواحدة قد تُدفع نقداً

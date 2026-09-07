@@ -1,0 +1,155 @@
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { formatMoney } from '../common/money/rounding';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
+import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
+
+/**
+ * **درجُ الكاشير: كيانٌ وحساب** (`ق-٢١٨` بحكم صاحب المشروع: «المفصَّل يُجمَّع دائماً
+ * والمجمَّع لا يُفصَّل أبداً» · والرموز في `ق-٢٥٣` · وحدُّ التعطيل في `ق-٢٦٥`).
+ *
+ * الحسابُ يُنشأ **مع الدرج لا بعده**: درجٌ بلا حساب لا يستقبل ترحيلاً، ورمزٌ يُدخله
+ * التاجر بيده يصطدم بدليلٍ لا يراه.
+ */
+export const DRAWER_CODE_MIN = 1010;
+export const DRAWER_CODE_MAX = 1099;
+
+const DRAWER_INCLUDE = { account: { select: { id: true, code: true, name: true, balance: true } }, branch: { select: { id: true, name: true } } } as const;
+
+/** إدارةُ الأدراج فعلُ مالك — كالفروع: كاشيرٌ يُنشئ درجاً يُنشئ حساباً في الدليل. */
+function assertIsCompanyOwner(actorType: string): void {
+  if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.cash_drawer_forbidden);
+}
+
+/**
+ * الرمزُ التالي في نطاق الأدراج — **`MAX+1` من المصدر، لا `count()`** (`ق-١٩٨`).
+ *
+ * يقرأ رموزَ حسابات المنشأة ويأخذ أكبرَ ما يقع في النطاق: **فالفجوةُ لا تُعاد
+ * تعبئتُها**، وحسابٌ يُنشئه التاجر يدوياً داخل النطاق يدفع التاليَ فوقه. والتصادمُ
+ * في سباقٍ حقيقيّ يظهر `P2002` على `(companyId, code)` فيُعاد الحساب — لا يُخمَّن.
+ */
+export async function nextDrawerCode(tx: Prisma.TransactionClient): Promise<string> {
+  const accounts = await tx.account.findMany({ select: { code: true } });
+  const inRange = accounts
+    .map((a) => Number(a.code))
+    .filter((n) => Number.isInteger(n) && n >= DRAWER_CODE_MIN && n <= DRAWER_CODE_MAX);
+  const next = (inRange.length ? Math.max(...inRange) : DRAWER_CODE_MIN - 1) + 1;
+  if (next > DRAWER_CODE_MAX) throw new ConflictException(MSG.cash_drawer_code_range_full);
+  return String(next);
+}
+
+@Injectable()
+export class CashDrawersService {
+  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  list(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.cashDrawer.findMany({ include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+    );
+  }
+
+  /**
+   * ⚠️ **إعادةُ المحاولة تلفّ المعاملة لا تقع داخلها**: معاملةٌ سقطت بـ`P2002`
+   * **مُجهَضة**، فأيّ استعلامٍ بعدها فيها يسقط كذلك. فتُعاد المعاملةُ كاملةً —
+   * وهو نمطُ `ZatcaService` مع `nextIcv` نفسه.
+   */
+  async create(companyId: string, actorType: string, dto: CreateCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+    const name = dto.name.trim();
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          if (dto.branchId) {
+            const branch = await tx.branch.findUnique({ where: { id: dto.branchId } });
+            if (!branch) throw new NotFoundException(MSG.branch_not_found);
+          }
+
+          const code = await nextDrawerCode(tx);
+          const account = await tx.account.create({
+            data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput,
+          });
+          const created = await tx.cashDrawer.create({
+            data: { name, branchId: dto.branchId ?? null, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
+          });
+          return tx.cashDrawer.findUniqueOrThrow({ where: { id: created.id }, include: DRAWER_INCLUDE });
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          const target = String((e.meta as { target?: string | string[] } | undefined)?.target ?? '');
+          // اسمُ الدرج مأخوذ ⇒ خطأُ المستعمل، لا سباق: لا تُعاد المحاولة.
+          if (target.includes('name')) throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name }));
+          if (attempt < 2) continue; // سباقٌ على الرمز — يُعاد بقراءةٍ جديدة
+        }
+        throw e;
+      }
+    }
+  }
+
+  /**
+   * التعديل — والتعطيلُ مشروطٌ بشرطَين، **ورسالةُ كلٍّ تسمّي المانع وتدلّ على
+   * المخرج** (`ق-٢٦٥`): فمنعٌ بلا مخرجٍ يُلتفّ عليه — يُعطَّل الدرجُ من القاعدة،
+   * أو يُترك مفتوحاً بلا استعمال، أو يُنشأ ثانٍ ويُهمل الأول.
+   */
+  async update(companyId: string, actorType: string, id: string, dto: UpdateCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.cashDrawer.findUnique({ where: { id }, include: DRAWER_INCLUDE });
+      if (!existing) throw new NotFoundException(MSG.cash_drawer_not_found);
+
+      if (dto.isActive === false && existing.isActive) {
+        const openShift = await tx.posShift.findFirst({ where: { drawerId: id, status: 'OPEN' }, orderBy: { openedAt: 'asc' } });
+        if (openShift) {
+          throw new ConflictException(
+            formatMessage(MSG.cash_drawer_has_open_shift, {
+              cashier: openShift.openedByName,
+              since: openShift.openedAt.toISOString().slice(0, 16).replace('T', ' '),
+            }),
+          );
+        }
+        // الرصيدُ يُقرأ من الحساب لا من عمودٍ على الدرج — مصدرٌ واحد (ق-٢٥٣/②).
+        if (!existing.account.balance.equals(0)) {
+          const company = await tx.company.findUnique({ where: { id: companyId }, select: { baseCurrency: true } });
+          throw new ConflictException(
+            formatMessage(MSG.cash_drawer_has_balance, {
+              // `formatMoney` لا `toFixed`: التدويرُ بالسياسة لا بيدٍ في كل موضع
+              // (حارس `money/rounding` أسقطها هنا فعلاً عند أول كتابة).
+              balance: `${formatMoney(existing.account.balance.toNumber())} ${company?.baseCurrency ?? 'SAR'}`,
+            }),
+          );
+        }
+      }
+
+      const name = dto.name?.trim();
+      try {
+        await tx.cashDrawer.update({ where: { id }, data: { ...(name ? { name } : {}), ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }) } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name: name ?? existing.name }));
+        }
+        throw e;
+      }
+      return tx.cashDrawer.findUniqueOrThrow({ where: { id }, include: DRAWER_INCLUDE });
+    });
+  }
+
+  /** الحذفُ يرثه `RESTRICT` من `journal_lines`: درجٌ تحرّك حسابُه يُعطَّل ولا يُحذف. */
+  async remove(companyId: string, actorType: string, id: string): Promise<void> {
+    assertIsCompanyOwner(actorType);
+    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.cashDrawer.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.cash_drawer_not_found);
+      await tx.cashDrawer.delete({ where: { id } });
+      try {
+        await tx.account.delete({ where: { id: existing.accountId } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+          throw new ConflictException(MSG.cash_drawer_has_movements);
+        }
+        throw e;
+      }
+    });
+  }
+}

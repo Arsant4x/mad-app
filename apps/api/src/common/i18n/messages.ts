@@ -253,6 +253,14 @@ export const MSG = {
   refund_nothing_refundable: 'returns.refund_nothing_refundable',
   refund_exceeds_refundable: 'returns.refund_exceeds_refundable',
 
+  // أدراج الكاشير (ق-٢١٨ · ق-٢٦٥)
+  cash_drawer_not_found: 'cash_drawers.not_found',
+  cash_drawer_name_taken: 'cash_drawers.name_taken',
+  cash_drawer_forbidden: 'cash_drawers.forbidden',
+  cash_drawer_has_balance: 'cash_drawers.has_balance',
+  cash_drawer_has_open_shift: 'cash_drawers.has_open_shift',
+  cash_drawer_code_range_full: 'cash_drawers.code_range_full',
+  cash_drawer_has_movements: 'cash_drawers.has_movements',
   // branches / activities
   branch_not_found: 'branches.not_found',
   branch_name_taken: 'branches.name_taken',
@@ -661,6 +669,26 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'This rejected invoice cannot be edited: a later document is already chained to it in the authority’s sequence and editing it would break that link — resubmit it as is, or correct it with a credit note',
   },
 
+  [MSG.cash_drawer_not_found]: { ar: 'الدرج غير موجود', en: 'Cash drawer not found' },
+  [MSG.cash_drawer_name_taken]: { ar: 'يوجد درج بالاسم "{name}" في هذا الفرع بالفعل', en: 'A drawer named "{name}" already exists in this branch' },
+  [MSG.cash_drawer_forbidden]: { ar: 'إدارة الأدراج لمالك المنشأة', en: 'Managing drawers is limited to the company owner' },
+  // ⚠️ (ق-٢٦٥) المنعُ يسمّي الرصيد **ويدلّ على المخرج** — فمنعٌ بلا مخرجٍ يُلتفّ عليه.
+  [MSG.cash_drawer_has_balance]: {
+    ar: 'الدرج فيه {balance} · انقلها إلى درج آخر أو إلى البنك ثم عطّله',
+    en: 'The drawer holds {balance} · move it to another drawer or to the bank, then deactivate it',
+  },
+  [MSG.cash_drawer_has_open_shift]: {
+    ar: 'على الدرج مناوبة مفتوحة لـ{cashier} منذ {since} · أقفلها ثم عطّل الدرج',
+    en: 'The drawer has an open shift for {cashier} since {since} · close it, then deactivate the drawer',
+  },
+  [MSG.cash_drawer_code_range_full]: {
+    ar: 'نطاق رموز الأدراج (1010–1099) ممتلئ — احذف درجاً غير مستعمل أو وسّع النطاق بقرار',
+    en: 'The drawer code range (1010–1099) is full — remove an unused drawer or widen the range by decision',
+  },
+  [MSG.cash_drawer_has_movements]: {
+    ar: 'لا يمكن حذف درج تحرّك حسابه — عطّله بدل حذفه',
+    en: 'A drawer whose account has postings cannot be deleted — deactivate it instead',
+  },
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
   [MSG.branch_forbidden]: { ar: 'لا تملك صلاحية الوصول إلى هذا الفرع', en: 'You do not have permission to access this branch' },

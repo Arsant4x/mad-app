@@ -28,6 +28,7 @@ import { ExportModule } from './export/export.module';
 import { FilesModule } from './files/files.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { BranchesModule } from './branches/branches.module';
+import { CashDrawersModule } from './cash-drawers/cash-drawers.module';
 import { CurrenciesModule } from './currencies/currencies.module';
 import { ZatcaModule } from './zatca/zatca.module';
 import { FiscalModule } from './fiscal/fiscal.module';
@@ -119,6 +120,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     ScriptsModule,
     FiscalModule,
     BranchesModule,
+    CashDrawersModule,
     ActivitiesModule,
     CurrenciesModule,
     ZatcaModule,
