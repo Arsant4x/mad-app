@@ -17,6 +17,7 @@
     "auth": "core",
     "banks": "core",
     "branches": "core",
+    "cash-drawers": "core",
     "common": "infra",
     "companies": "core",
     "company-profile": "core",
