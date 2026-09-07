@@ -444,10 +444,24 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       const b = await request(app.getHttpServer()).post(`/zatca/invoices/${idB}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
 
       expect(b.body.zatcaPreviousHash).toBe(a.body.zatcaHash);
-      // The counter advances by exactly one — the authority reads it as the
-      // invoice's position, so a skip is a chain defect.
-      expect(b.body.zatcaIcv).toBe(a.body.zatcaIcv + 1);
       expect(b.body.zatcaHash).not.toBe(a.body.zatcaHash);
+
+      // العدّادُ لا يقفز — **والدعوى على تسلسل الوحدة كلِّه لا على هاتين
+      // الوثيقتين**: `OutboxDispatcherJob` يرسل كلَّ دقيقة (`@Cron`، وغيرُ
+      // معطَّلٍ تحت الاختبار)، **فقد يستهلك `icv` بين الإرسالين** — و`b = a+1`
+      // كانت تسقط بلا عطل. والتسلسلُ المتّصل هو المطلب الحقيقي للهيئة: أرقامٌ
+      // متتابعة بلا فجوة، **أرسلها الاختبارُ أو أرسلتها الكنسة**.
+      expect(b.body.zatcaIcv).toBeGreaterThan(a.body.zatcaIcv);
+      const icvs = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.invoice.findMany({
+          where: { egsUnitId: { not: null }, zatcaIcv: { not: null } },
+          select: { zatcaIcv: true, egsUnitId: true },
+          orderBy: { zatcaIcv: 'asc' },
+        }),
+      );
+      const ofUnit = icvs.filter((i) => i.egsUnitId === icvs.find((x) => x.zatcaIcv === b.body.zatcaIcv)!.egsUnitId).map((i) => i.zatcaIcv!);
+      expect(ofUnit.length).toBeGreaterThan(1);
+      expect(ofUnit).toEqual(Array.from({ length: ofUnit.length }, (_, i) => ofUnit[0] + i));
     }, 30000);
 
     it('never hands a rejected invoice\'s hash to the next document — it inherits the last accepted one', async () => {
