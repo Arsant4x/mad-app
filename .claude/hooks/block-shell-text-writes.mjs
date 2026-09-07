@@ -379,6 +379,116 @@ if (MERGE_CMD.test(cmd)) {
     );
     process.exit(2);
   }
+
+  /**
+   * ⛔ **طلبٌ يمسّ شيفرةً ولم يعمل عليه فحصٌ ثقيل قطّ** (`ق-٢٥٤` — يُغلق الثقبَ
+   * المعلَن في `ق-٢٥١`).
+   *
+   * بعد تقسيم السير بالمسار، الثقيلُ يعمل **عند فتح الطلب لما يمسّ شيفرة**
+   * وعند الدمج. فطلبٌ يُفتح **وثائقياً** ثم تُدفع فيه **شيفرة** لا يعمل عليه
+   * ثقيلٌ قبل الدمج: الفتحُ مضى، و`synchronize` مستثناة من مُشغِّله. والفحوصُ
+   * تبدو خضراء — لأن الخفيفَ وحده عمل، **وأخضرُ ناقصٌ يُقرأ أخضرَ تامّاً**.
+   *
+   * والبوّابة تسأل سؤالين ولا تفترض جواباً:
+   *   ① أيمسّ الطلبُ مساراً شيفرياً؟ — **والمسارات تُقرأ من المُشغِّل الثقيل
+   *      نفسه** لا من قائمةٍ هنا: قائمةٌ ثانية تفترق عن الأولى يوماً.
+   *   ② أفي **أيٍّ من تواريخ الطلب** فحصٌ باسم وظيفةٍ ثقيلة؟ — لا على الرأس
+   *      وحده: الثقيلُ يعمل عند الفتح، والرأسُ قد تقدّم بعده بدفعةٍ خفيفة،
+   *      وهذا **مقبولٌ بالتصميم** (ق-٢٥١) — المرفوضُ أن **لا يكون عمل قطّ**.
+   *
+   * حدُّها المعلَن: مطابقةُ المسارات تفهم `x/**` والاسمَ الصريح — وهي كلُّ ما
+   * يستعمله المُشغِّل اليوم؛ ونمطٌ أعقد يُقرأ **غيرَ مطابق** فتُرفَض بحقٍّ زائد
+   * لا بسماحٍ ناقص. والفشلُ في أي استعلام **مُغلِق** كسابقَيه.
+   */
+  const heavyFile = resolve(repoRoot, '.github', 'workflows', 'web-tests.yml');
+  let heavyPaths = null;
+  let heavyJobs = null;
+  try {
+    const yaml = readFileSync(heavyFile, 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+    const pr = yaml.slice(yaml.indexOf('\n  pull_request:') + 1);
+    const prBlock = pr.slice(0, pr.slice(1).search(/\n {0,2}\S/) + 1);
+    heavyPaths = [...prBlock.matchAll(/^\s{6}- '([^']+)'/gm)].map((m) => m[1]);
+    const jobsAt = yaml.indexOf('\njobs:\n');
+    heavyJobs = [...yaml.slice(jobsAt).matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)].map((m) => m[1]);
+  } catch {
+    heavyPaths = null;
+  }
+  if (!heavyPaths?.length || !heavyJobs?.length) {
+    console.error(`⛔ تعذّرت قراءة مسارات المُشغِّل الثقيل أو وظائفه من ${heavyFile} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+    process.exit(2);
+  }
+
+  const touches = (file) => heavyPaths.some((p) => (p.endsWith('/**') ? file.startsWith(p.slice(0, -2)) : file === p));
+  const filesProbe = spawnSync('gh', ['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'files,commits'], {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+    cwd: repoRoot,
+  });
+  let prFiles = null;
+  let commits = null;
+  if (filesProbe.status === 0) {
+    try {
+      const parsed = JSON.parse(filesProbe.stdout);
+      prFiles = (parsed.files ?? []).map((f) => f.path);
+      commits = (parsed.commits ?? []).map((c) => c.oid);
+    } catch {
+      prFiles = null;
+    }
+  }
+  if (prFiles === null || commits === null) {
+    console.error(`⛔ تعذّرت قراءة ملفات #${number} أو تواريخه قبل الدمج — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+    process.exit(2);
+  }
+
+  const codeFiles = prFiles.filter(touches);
+  if (codeFiles.length > 0) {
+    let found = null;
+    for (const sha of commits.slice(-20)) {
+      const runs = spawnSync('gh', ['api', `repos/{owner}/{repo}/commits/${sha}/check-runs`], {
+        encoding: 'utf8',
+        shell: process.platform === 'win32',
+        cwd: repoRoot,
+      });
+      if (runs.status !== 0) {
+        console.error(`⛔ تعذّرت قراءة فحوص ${sha.slice(0, 7)} في #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+        process.exit(2);
+      }
+      try {
+        const names = (JSON.parse(runs.stdout).check_runs ?? []).map((r) => r.name);
+        const hit = names.find((n) => heavyJobs.includes(n));
+        if (hit) {
+          found = `${hit} على ${sha.slice(0, 7)}`;
+          break;
+        }
+      } catch {
+        console.error(`⛔ مخرَجُ فحوص ${sha.slice(0, 7)} غير مفهوم — والدمج ممنوع (الفشل مُغلِق).`);
+        process.exit(2);
+      }
+    }
+    if (!found) {
+      console.error(
+        [
+          `⛔ #${number} يمسّ شيفرةً ولم يعمل عليه فحصٌ ثقيل قطّ — والدمج ممنوع (ق-٢٥٤).`,
+          '',
+          `الملفات الشيفرية: ${codeFiles.slice(0, 5).join(' · ')}${codeFiles.length > 5 ? ` … (+${codeFiles.length - 5})` : ''}`,
+          `الوظائف الثقيلة المنتظَرة: ${heavyJobs.join(' · ')}`,
+          `فُحص ${commits.length} تاريخاً ولم يُوجد أيٌّ منها.`,
+          '',
+          'السبب البنيوي: الثقيلُ يعمل عند **فتح** الطلب لما يمسّ شيفرة، ودفعةٌ',
+          'لاحقة (synchronize) لا تُشغّله. فطلبٌ فُتح وثائقياً ثم دُفعت فيه شيفرة',
+          'يصل الدمجَ بأخضرَ **ناقص**.',
+          '',
+          'الطريق:',
+          `  gh pr close ${prNumber || '<رقم>'} && gh pr reopen ${prNumber || '<رقم>'}   ⟵ إعادةُ الفتح تُشغّل الثقيل`,
+          '  ثم انتظر اخضراره وأعد الدمج.',
+        ].join('\n'),
+      );
+      process.exit(2);
+    }
+  }
 }
 
 process.exit(0);

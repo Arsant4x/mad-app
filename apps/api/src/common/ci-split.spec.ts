@@ -59,17 +59,25 @@ export function jobBlocks(yaml: string): JobBlock[] {
 export const isHeavy = (job: JobBlock) => /^\s{4}services:\s*$/m.test(job.body) || /docker build/.test(job.body) || /playwright/i.test(job.body);
 
 /** كتلةُ `pull_request:` تحت `on:` — بلا تعليقات. */
-function prBlock(yaml: string): string {
+function eventBlock(yaml: string, event: 'pull_request' | 'push'): string {
+  // ⚠️ يُوحَّد سطرُ النهاية أولاً: نسخةُ العمل على ويندوز تحمل `CRLF` بعد
+  //    `checkout`، فنمطٌ يكتب `\n` صراحةً **يمرّ محلياً حين كُتب ويسقط بعد
+  //    أول تربيع** — وقد وقع فعلاً على هذا الملفّ (§8.7: البيئة جزءٌ من المجسّ).
   const clean = yaml
     .split(/\r?\n/)
     .filter((l) => !/^\s*#/.test(l))
     .join('\n');
-  const at = clean.indexOf('\n  pull_request:');
+  const at = clean.indexOf(`\n  ${event}:`);
   if (at < 0) return '';
   const rest = clean.slice(at + 1);
   const end = rest.slice(1).search(/\n {0,2}\S/) + 1;
   return end <= 0 ? rest : rest.slice(0, end);
 }
+
+const prBlock = (yaml: string) => eventBlock(yaml, 'pull_request');
+
+/** كتلةُ `push:` — يُقرأ منها أن الدمجَ بلا تصفيةِ مسارات. */
+export const pushBlock = (yaml: string) => eventBlock(yaml, 'push');
 
 /** الأنواعُ المعلَنة — وغيابُ السطر يعني الافتراضيةَ الثلاث (وهي **لا** تشمل `ready_for_review`). */
 export function declaredTypes(yaml: string): string[] {
@@ -115,6 +123,9 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     expect(declaredPaths(bare)).toBeNull();
     expect(covers(['docs/**'], 'docs')).toBe(true);
     expect(covers(['docsx/**'], 'docs')).toBe(false);
+    // والقارئُ يعمل على `CRLF` كما على `LF` — الحالتان معروفتا النتيجة.
+    expect(pushBlock(sample)).toContain('branches: [main]');
+    expect(pushBlock(sample.replace(/\n/g, '\r\n'))).toContain('branches: [main]');
   });
 
   it('السطح غير فارغ — ثلاثُ وظائفٍ ثقيلة في ملفّها، واثنتان خفيفتان في ملفّهما', () => {
@@ -134,8 +145,9 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     expect(paths.length).toBeGreaterThan(0);
     // وثائقيٌّ في مسارات الثقيل يُبطل «الوثائقيُّ عند الدمج وحده».
     expect(paths.filter((p) => p.endsWith('.md') || p.startsWith('docs/'))).toEqual([]);
-    // الدمجُ يفحص ما وصل مهما كان مسارُه: `push` بلا `paths`.
-    expect(/^on:\n(?:.*\n)*?  push:\n    branches: \[main\]\n(?=  pull_request:)/m.test(heavy.replace(/^\s*#.*$/gm, '').replace(/\n{2,}/g, '\n'))).toBe(true);
+    // الدمجُ يفحص ما وصل مهما كان مسارُه: `push` على `main` **بلا `paths`**.
+    expect(pushBlock(heavy)).toContain('branches: [main]');
+    expect(pushBlock(heavy)).not.toContain('paths:');
   });
 
   it('🔴 مُشغِّلُ الخفيف: `synchronize` معلَنةٌ، وكلُّ فعلٍ مسمّىً معلَنٌ، ويحمل tsc وبناءَ الويب و`concurrency`', () => {
