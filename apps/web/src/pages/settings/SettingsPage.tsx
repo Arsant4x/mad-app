@@ -22,6 +22,7 @@ import {
 } from '../../api/currencies';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { useAuth } from '../../auth/AuthContext';
+import { CashDrawersCard } from './CashDrawersCard';
 import { IntegrationsCard } from './IntegrationsCard';
 import { SupportAccessCard } from './SupportAccessCard';
 import i18n from '../../i18n';
@@ -519,6 +520,8 @@ export function SettingsPage() {
           onCancel={() => setPendingCurrencyDelete(null)}
         />
       )}
+      {/* أدراج الكاشير — للمالك فقط: إنشاءُ درجٍ يُنشئ حساباً في الدليل (ق-٢١٨). */}
+      {user?.actorType === 'COMPANY' && <CashDrawersCard />}
       {/* الربط والتكاملات — تظهر للمالك فقط: المفاتيح ملكه (قاعدة §3.5). */}
       {user?.actorType === 'COMPANY' && <IntegrationsCard />}
       {user?.actorType === 'COMPANY' && <SupportAccessCard />}
