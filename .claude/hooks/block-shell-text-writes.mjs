@@ -282,6 +282,57 @@ if (MERGE_CMD.test(cmd)) {
   }
 
   /**
+   * ⏳ **`UNKNOWN` تُنتظَر، لا تُقبل ولا تُرفض فوراً** (`ق-٢٦٠` — قرار المالك 2026-09-07).
+   *
+   * بعد كل دمج يُبطل GitHub حسابَ القابلية ويعيده `UNKNOWN` دقائقَ حتى يفرغ من
+   * حسابه. **والقبولُ الفوري عطل**: دمجٌ قبل أن يُعرف شيء — وهو ما بُنيت هذه
+   * البوّابة لمنعه (حادثة #61). **والرفضُ الفوري خطأٌ آخر**: يوقف دمجاً صالحاً
+   * ويجعل كلَّ طلبٍ بعد طلبٍ يفشل مرةً بلا سبب.
+   *
+   * فالبوّابة **تنتظر بثلاث محاولات** بفواصل متصاعدة، ثم ترفض **مسمّيةً الحالة
+   * والمهلة** — لأن رسالةً تقول «مجهولة» بلا رقمٍ تُقرأ عطلاً في الأداة.
+   *
+   * ⚠️ وكان هذا **عادةً بشرية**: صادفتُها قبل دمج #169 فانتظرتُ بيدي حتى صارت
+   *    `CLEAN`. **والانتظارُ عادةٌ تُنسى، وهذه بوّابة** (§8.11).
+   */
+  const UNKNOWN_TRIES = 3;
+  const UNKNOWN_WAIT_MS = [2000, 4000, 6000];
+  const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  let waitedMs = 0;
+  for (let i = 0; status === 'UNKNOWN' && i < UNKNOWN_TRIES; i += 1) {
+    sleepSync(UNKNOWN_WAIT_MS[i]);
+    waitedMs += UNKNOWN_WAIT_MS[i];
+    const again = spawnSync('gh', args, { encoding: 'utf8', shell: process.platform === 'win32', cwd: repoRoot });
+    if (again.status !== 0) break; // استعلامٌ فاشل يُترك للبوّابة أدناه: الفشل مُغلِق
+    try {
+      const parsed = JSON.parse(again.stdout);
+      status = parsed.mergeStateStatus ?? null;
+      number = parsed.number ?? number;
+      headRef = parsed.headRefName ?? headRef;
+    } catch {
+      status = null;
+      break;
+    }
+  }
+  if (status === 'UNKNOWN') {
+    console.error(
+      [
+        `⛔ حالة الطلب #${number} ما زالت **UNKNOWN** بعد ${UNKNOWN_TRIES} محاولاتٍ و${Math.round(waitedMs / 1000)} ثانيةً — والدمج ممنوع (ق-٢٦٠).`,
+        '',
+        'UNKNOWN = GitHub **لم يفرغ من حساب القابلية** — لا أنها سليمة ولا أنها ساقطة.',
+        'ويقع هذا عادةً **بعد دمجٍ سابق** يُبطل الحساب لكل طلبٍ مفتوح.',
+        '',
+        'والدمجُ عليها دمجٌ **قبل أن يُعرف شيء** — وهو ما بُنيت هذه البوّابة لمنعه.',
+        '',
+        'الطريق:',
+        `  ١. أعد الأمر بعد قليل — أو اقرأ الحالة أولاً:  gh pr view ${prNumber || '<رقم>'} --json mergeStateStatus`,
+        '  ٢. فإن بقيت UNKNOWN دقائقَ طويلة، فالمشكلة عند GitHub لا في الطلب.',
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
+
+  /**
    * ⛔ **طلبٌ مكدَّسٌ على هذا الفرع يُغلَق تلقائياً بحذفه** (`ق-١٤٤` — وقعت مرتَين:
    * #121 في 2026-08، و#151 في 2026-09-05 بعد أن أُعيد توجيه أخيه #150 **وحدَه**).
    *
