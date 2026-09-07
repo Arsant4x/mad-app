@@ -370,6 +370,8 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
 
 export interface RentPaymentForPosting {
   branchId?: string | null;
+  /** حسابُ النقد المستقبِل — حسابُ البنك حين يُقبض على بنك، و`1000` نقداً (`ق-٢٧٧`). */
+  cashAccountId?: string | null;
   /**
    * ⭐ **البُعد التحليلي — إلزاميّ عمداً لا اختياري.**
    *
@@ -416,12 +418,13 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
   const revenue = round2(p.baseExpectedAmount);
   const fxDifference = round2(cash - revenue);
 
-  const needCodes = ['1000', '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  // كسابقتها (ق-٢٧٧): الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك.
+  const needCodes = [...(p.cashAccountId ? [] : ['1000']), '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
 
   const lines: PostingLine[] = [
-    { accountId: ids.get('1000')!, debit: cash, credit: 0 },
+    { accountId: p.cashAccountId ?? ids.get('1000')!, debit: cash, credit: 0 },
     { accountId: ids.get('4200')!, debit: 0, credit: revenue },
   ];
 
@@ -456,6 +459,15 @@ export interface CustomerPaymentForPosting {
   reversal?: boolean;
   /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): نقدٌ خارج وذمّةٌ تعود — نفس القيد بمبالغٍ سالبة، بمذكّرةٍ تسمّيه. */
   refund?: boolean;
+  /**
+   * حسابُ النقد المستقبِل — **حسابُ البنك حين تُقبض الدفعة على بنك** (`ق-٢٧٧`)،
+   * و`1000` حين تُقبض نقداً. وقبلَ هذا كان الطرفُ المدين `1000` دائماً، **فنقدُ
+   * البنك يُعدّ صندوقاً** (`ق-٢٧٦` — عائقُ إطلاق).
+   *
+   * ويُمرَّر مُحلّاً من الخدمة لا يُستنتَج هنا: الأداةُ تبني القيد ولا تسأل عن
+   * البنوك.
+   */
+  cashAccountId?: string | null;
 }
 
 /**
@@ -480,13 +492,16 @@ export async function postCustomerPaymentEntry(tx: Prisma.TransactionClient, com
   if (cash === 0 && receivable === 0) return null;
 
   const fxDifference = round2(cash - receivable);
-  const needCodes = ['1000', '1200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  // `1000` لا يُطلَب حين يُمرَّر حسابُ بنك: منشأةٌ بلا `1000` لا يُسقَط قيدُها
+  // البنكيّ لأجل رمزٍ لا يدخل فيه.
+  const needCodes = [...(p.cashAccountId ? [] : ['1000']), '1200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
+  const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
 
   // الموجب يعني نقداً داخلاً وذمّةً تنقص؛ السالب (العكس) يقلبهما معاً.
   const lines: PostingLine[] = [
-    { accountId: ids.get('1000')!, debit: cash > 0 ? cash : 0, credit: cash < 0 ? -cash : 0 },
+    { accountId: cashAccountId, debit: cash > 0 ? cash : 0, credit: cash < 0 ? -cash : 0 },
     { accountId: ids.get('1200')!, debit: receivable < 0 ? -receivable : 0, credit: receivable > 0 ? receivable : 0 },
   ];
 

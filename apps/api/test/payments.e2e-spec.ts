@@ -60,7 +60,13 @@ describe('Customer payments + allocations (e2e)', () => {
   const entryOf = async (journalEntryId: string, paymentNo: string) => {
     const res = (await auth(request(app.getHttpServer()).get(`/journal?search=${encodeURIComponent(paymentNo)}&pageSize=50`)).expect(200)).body;
     const rows = res.items as { id: string }[];
-    return rows.find((r) => r.id === journalEntryId) as unknown as { id: string; branchId: string | null; lines: { debit: string; credit: string; account: { code: string } }[] };
+    // `accountId` معلَنٌ في النوع: القيدُ يُقرأ بحسابه لا برمزه وحده — فرموزُ
+    // الصناديق والبنوك تُولَّد لكلٍّ على حدة (ق-٢٧٧).
+    return rows.find((r) => r.id === journalEntryId) as unknown as {
+      id: string;
+      branchId: string | null;
+      lines: { accountId: string; debit: string; credit: string; account: { code: string } }[];
+    };
   };
 
   beforeAll(async () => {
@@ -187,9 +193,16 @@ describe('Customer payments + allocations (e2e)', () => {
     expect(entry.branchId).toBe(branchId);
     // لا إيراد في قيد التحصيل — الإيراد اعتُرف يوم الفاتورة.
     const codes = entry.lines.map((l: { account: { code: string } }) => l.account.code);
-    expect(codes).toContain('1000');
     expect(codes).toContain('1200');
     expect(codes).not.toContain('4100');
+
+    // ⚠️ (ق-٢٧٦ · ق-٢٧٧) **الطرفُ المدين حسابُ الصندوق نفسِه لا `1000`**: كان
+    //    هذا التوكيد يشترط `1000` — أي أن نقدَ كل صندوقٍ وبنكٍ يُلمّ في حسابٍ
+    //    واحد، وهو العطلُ الذي أُغلق. والدفعةُ هنا تُقبض على صندوق فرعٍ (Bank)،
+    //    فيَدين حسابُه هو.
+    const boxes = (await auth(request(app.getHttpServer()).get('/banks')).expect(200)).body as { id: string; accountId: string }[];
+    const box = boxes.find((b) => b.id === cashBoxId)!;
+    expect(entry.lines.some((l: { accountId: string; debit: string }) => l.accountId === box.accountId && Number(l.debit) === 250)).toBe(true);
 
     expect(await bankBalance()).toBeCloseTo(before + 250, 2);
   }, 90000);
@@ -241,7 +254,12 @@ describe('Customer payments + allocations (e2e)', () => {
       entry.lines.map((l: { account: { code: string }; debit: string; credit: string }) => [l.account.code, { debit: Number(l.debit), credit: Number(l.credit) }]),
     );
     // النقد بسعر الدفعة، والذمّة بسعر فاتورتها، والفارق على 5600.
-    expect(byCode.get('1000')!.debit).toBeCloseTo(380, 2);
+    // (ق-٢٧٧) والنقدُ في حساب الصندوق المستقبِل لا في `1000` — يُقرأ بمعرّفه
+    // لا برمزٍ ثابت، فالرمزُ يُولَّد لكل صندوق.
+    const boxesFx = (await auth(request(app.getHttpServer()).get('/banks')).expect(200)).body as { id: string; accountId: string }[];
+    const boxFx = boxesFx.find((b) => b.id === cashBoxId)!;
+    const cashLine = entry.lines.find((l: { accountId: string }) => l.accountId === boxFx.accountId)!;
+    expect(Number(cashLine.debit)).toBeCloseTo(380, 2);
     expect(byCode.get('1200')!.credit).toBeCloseTo(370, 2);
     expect(byCode.get('5600')!.credit).toBeCloseTo(10, 2);
 

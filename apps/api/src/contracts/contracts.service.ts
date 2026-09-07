@@ -319,6 +319,8 @@ export class ContractsService {
           // currency altogether has no rate difference to recognize.
           baseExpectedAmount:
             payCurrency === contract.currency ? toBaseAmount(netAmount, Number(contract.exchangeRate)) : toBaseAmount(netAmount, payRate),
+          // (ق-٢٧٧) الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك — لا `1000`.
+          cashAccountId: bank?.accountId ?? null,
         });
 
         if (bank) {
