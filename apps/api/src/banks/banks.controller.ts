@@ -22,6 +22,19 @@ export class BanksController {
     return this.banksService.list(tenant.companyId, tenant.allowedBranchIds, includeArchived === 'true');
   }
 
+  /**
+   * سقفُ نطاق رموز البنوك (`ق-٢٩٥`) — **يُنذر قبل الاصطدام لا عنده**.
+   *
+   * وموضعُه هنا لا في `accounts`: **من يرى البنوك قد لا يرى الدليل**، وإنذارٌ
+   * خلف شاشةٍ لا يفتحها صاحبُ الشأن إنذارٌ لا يصل. **ومسارٌ ثابتٌ قبل `:id`**
+   * كي لا يبتلعه المُعرِّف.
+   */
+  @Get('code-band')
+  @RequiresAction('view')
+  codeBand(@CurrentTenant() tenant: TenantContext) {
+    return this.banksService.codeBand(tenant.companyId);
+  }
+
   @Post()
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateBankDto) {

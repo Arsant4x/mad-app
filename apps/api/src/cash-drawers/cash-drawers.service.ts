@@ -5,6 +5,7 @@ import { formatMoney } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
 import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
+import { DRAWER_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
 
 /**
  * **درجُ الكاشير: كيانٌ وحساب** (`ق-٢١٨` بحكم صاحب المشروع: «المفصَّل يُجمَّع دائماً
@@ -13,9 +14,6 @@ import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
  * الحسابُ يُنشأ **مع الدرج لا بعده**: درجٌ بلا حساب لا يستقبل ترحيلاً، ورمزٌ يُدخله
  * التاجر بيده يصطدم بدليلٍ لا يراه.
  */
-export const DRAWER_CODE_MIN = 1010;
-export const DRAWER_CODE_MAX = 1099;
-
 const DRAWER_INCLUDE = { account: { select: { id: true, code: true, name: true, balance: true } }, branch: { select: { id: true, name: true } } } as const;
 
 /** إدارةُ الأدراج فعلُ مالك — كالفروع: كاشيرٌ يُنشئ درجاً يُنشئ حساباً في الدليل. */
@@ -29,14 +27,15 @@ function assertIsCompanyOwner(actorType: string): void {
  * يقرأ رموزَ حسابات المنشأة ويأخذ أكبرَ ما يقع في النطاق: **فالفجوةُ لا تُعاد
  * تعبئتُها**، وحسابٌ يُنشئه التاجر يدوياً داخل النطاق يدفع التاليَ فوقه. والتصادمُ
  * في سباقٍ حقيقيّ يظهر `P2002` على `(companyId, code)` فيُعاد الحساب — لا يُخمَّن.
+ *
+ * ⚠️ **والنطاقُ وسقفُه في `accounts/code-bands.ts`** (`ق-٢٩٥`) — موضعٌ واحد
+ * يجمع التعريفَ والإنذار، **فالأدراجُ عند `1082` من `1099`** ولا يكفي أن
+ * تُنذر البنوكُ وحدها.
  */
 export async function nextDrawerCode(tx: Prisma.TransactionClient): Promise<string> {
   const accounts = await tx.account.findMany({ select: { code: true } });
-  const inRange = accounts
-    .map((a) => Number(a.code))
-    .filter((n) => Number.isInteger(n) && n >= DRAWER_CODE_MIN && n <= DRAWER_CODE_MAX);
-  const next = (inRange.length ? Math.max(...inRange) : DRAWER_CODE_MIN - 1) + 1;
-  if (next > DRAWER_CODE_MAX) throw new ConflictException(MSG.cash_drawer_code_range_full);
+  const next = nextCodeInBands(accounts.map((a) => a.code), DRAWER_BANDS);
+  if (next === null) throw new ConflictException(MSG.cash_drawer_code_range_full);
   return String(next);
 }
 
@@ -48,6 +47,14 @@ export class CashDrawersService {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.cashDrawer.findMany({ include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
     );
+  }
+
+  /** حالةُ نطاق رموز الأدراج — تُقرأ من الدليل لحظةَ السؤال (`ق-٢٩٥`). */
+  codeBand(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const accounts = await tx.account.findMany({ select: { code: true } });
+      return bandStatus(accounts.map((a) => a.code), bandGroup('drawer'));
+    });
   }
 
   /**
