@@ -12,13 +12,31 @@ import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
 import { toBaseAmount } from '../common/currency/base-amount.util';
-import { postPosSettlementEntry, postShiftVarianceEntry } from '../journal/pos-settlement.util';
+import {
+  NETWORK_RECEIVABLE_CODE,
+  NETWORK_RECEIVABLE_NAME,
+  getOrCreateAccountByCode,
+  postShiftVarianceEntry,
+} from '../journal/pos-settlement.util';
+import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
 import { ZatcaService } from '../zatca/zatca.service';
 
 /** KSA standard VAT — the cashier rings retail lines at the standard rate,
  * matching the invoice screen's default. */
 const POS_TAX_RATE = 15;
+
+/**
+ * اليومُ التقويميُّ المحلّي عند منتصف ليل `UTC` — الشكلُ الذي يقرؤه `@db.Date`.
+ *
+ * ⚠️ **ولا `toISOString().slice(0,10)`**: حارسُ `zatca/issue-time` يمنعها في هذا
+ * الملفّ بعينه — **فهي يومُ `UTC` متنكّراً في زيّ يومٍ محلّي**، ومناوبةٌ تُقفل
+ * الحاديةَ صباحاً بتوقيت الرياض تُؤرَّخ بالأمس. وهو نمطُ `openingEntryDate`.
+ */
+function todayAsDate(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
 
 /** اسم عميل المرور الافتراضي — created once per company, then reused. */
 const WALK_IN_CUSTOMER = 'عميل نقدي';
@@ -82,6 +100,8 @@ export class PosService {
     private readonly invoicesService: InvoicesService,
     private readonly integrationsService: IntegrationsService,
     private readonly zatca: ZatcaService,
+    // سندُ قبض البيع بالمسار المبنيّ لا بمسارٍ ثانٍ (ق-٣١٦).
+    private readonly payments: PaymentsService,
   ) {}
 
   openShift(tenant: TenantContext, dto: OpenShiftDto) {
@@ -187,9 +207,11 @@ export class PosService {
         : null;
       await postShiftVarianceEntry(tx, tenant.companyId, {
         shiftNo: shift.id.slice(0, 8),
-        // تاريخُ الإقفال يومَ وقوعه — لا لحظةٌ بتوقيت الخادم: `@db.Date` يقرأ
-        // اليومَ وحده، ومناوبةٌ تُقفل بعد منتصف الليل تُؤرَّخ بيومها لا بأمسها.
-        date: new Date(new Date().toISOString().slice(0, 10)),
+        // ⚠️ **يومُ الجهاز لا `UTC` متنكّراً** (وحارسُ `issue-time` أسقطها
+        // فعلاً حين كُتبت `toISOString().slice(0,10)`): التاريخُ التقويميُّ
+        // المحلّي عند منتصف ليل `UTC` — وهو نمطُ `openingEntryDate` نفسُه،
+        // فـ`@db.Date` يقرأ اليومَ وحده.
+        date: todayAsDate(),
         branchId: shift.branchId,
         drawerAccountId: drawer?.accountId ?? null,
         variance,
@@ -463,29 +485,40 @@ export class PosService {
       });
 
       /**
-       * ⭐ **تحصيلُ البيع يُرحَّل هنا** (`ق-٣٠٩`) — وكان لا يُرحَّل إطلاقاً.
+       * ⭐ **تحصيلُ البيع سندُ قبضٍ حقيقيّ** (`ق-٣١٦`) — وكان لا يُرحَّل إطلاقاً.
        *
        * الفاتورةُ رحّلت `مدين 1200 / دائن 4100 + 2200`، **وصفوفُ الدفع تُكتب
-       * ولا تُرحَّل** — فالذمّةُ لا تُسدَّد والنقدُ لا يدخل الأستاذ. والآن:
-       * `مدين درجُ المناوبة` (النقد) · `مدين 1251` (الشبكة) · `دائن 1200`.
+       * ولا تُرحَّل**. وأولُ إصلاحٍ رحّل القيدَ مباشرةً — **فكان مساراً ثانياً**:
+       * يُصلح الأستاذَ ويترك **الأعمارَ تعدّه ديناً والردَّ يرفضه**. فصار
+       * **سنداً بالمسار المبنيّ**، فتُغلق الثلاثةُ معاً.
        *
-       * ⚠️ **وفي المعاملة نفسها**: سقوطُه يُسقط البيعَ كلَّه — فبيعٌ يمرّ
-       * بذمّةٍ لا تُسدَّد هو العطلُ الذي أُغلق.
+       * ⚠️ **وسندٌ لكل طريقة**: النقدُ إلى حساب الدرج، **والشبكةُ إلى `1251`**
+       * — والبيعُ المختلط سندان، وهو ما يقوله الواقع.
+       *
+       * ⚠️ **وفي معاملة البيع نفسها**: سقوطُه يُسقط البيعَ كلَّه.
        */
-      const rate = Number(invoice.exchangeRate);
-      const baseOf = (method: string) =>
-        toBaseAmount(
-          parts.filter((p) => (method === 'CASH' ? p.method === 'CASH' : p.method !== 'CASH')).reduce((s, p) => s + p.amount, 0),
-          rate,
-        );
-      await postPosSettlementEntry(tx, tenant.companyId, {
-        no: invoice.no,
-        date: invoice.issueDate,
-        branchId: shiftBranchId,
-        drawerAccountId,
-        baseCash: baseOf('CASH'),
-        baseCard: baseOf('CARD'),
-      });
+      const network = await getOrCreateAccountByCode(tx, tenant.companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset');
+      const byMethod = new Map<'CASH' | 'CARD', number>();
+      for (const p of parts) {
+        const key = p.method === 'CASH' ? 'CASH' : 'CARD';
+        byMethod.set(key, round2((byMethod.get(key) ?? 0) + p.amount));
+      }
+      for (const [method, amount] of byMethod) {
+        await this.payments.recordPosReceipt(tx, tenant.companyId, {
+          invoiceId: invoice.id,
+          invoiceNo: invoice.no,
+          customerId: invoice.customerId,
+          customerName: invoice.customer.name,
+          date: invoice.issueDate,
+          branchId: shiftBranchId,
+          currency: invoice.currency,
+          exchangeRate: Number(invoice.exchangeRate),
+          method,
+          amount,
+          drawerAccountId,
+          networkAccountId: network.id,
+        });
+      }
       /**
        * ⭐ **الخصم لم يعد هنا** — صار مالكه سطرَ الفاتورة (`م٦`).
        *

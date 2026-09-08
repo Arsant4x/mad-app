@@ -137,6 +137,81 @@ export class PaymentsService {
     );
   }
 
+  /**
+   * ⭐ **سندُ قبضٍ لبيع الكاشير — بالمسار المبنيّ لا بمسارٍ ثانٍ** (`ق-٣١٦`).
+   *
+   * ── لماذا سندٌ حقيقيّ ─────────────────────────────────────────────────
+   *
+   * كان بيعُ الكاشير يُنشئ `posPayment` **ولا يُنشئ دفعة**، فيبقى **غيرَ مرئيٍّ
+   * لوحدة الدفعات كلِّها**: الأستاذُ لا يرى نقده (`ق-٣٠٩`)، **والأعمارُ تعدّه
+   * ديناً**، **والردُّ يرفضه** (`refundableOf` يقيس المسدَّد من صفوف الدفعات،
+   * فيعود القابلُ للردّ صفراً). **وثلاثتها تُغلق بسندٍ واحد.**
+   *
+   * ⚠️ **ويعمل داخل معاملة المستدعي** (`tx` مُمرَّرة): البيعُ والسندُ يقعان
+   * معاً أو لا يقع أيّهما — **فبيعٌ بلا سند هو العطلُ الذي أُغلق**.
+   *
+   * ⚠️ **وسندٌ لكل طريقةٍ لا سندٌ يجمعها**: `Payment.method` واحدةٌ للصفّ،
+   * **والبيعُ المختلط دفعتان حقيقيّتان** — نقدٌ إلى حساب الدرج وشبكةٌ إلى
+   * `1251`. وهو ما يقوله الواقع: العميلُ دفع مرّتين.
+   */
+  async recordPosReceipt(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    input: {
+      invoiceId: string;
+      invoiceNo: string;
+      customerId: string;
+      customerName: string;
+      date: Date;
+      branchId: string | null;
+      currency: string;
+      exchangeRate: number;
+      method: 'CASH' | 'CARD';
+      amount: number;
+      /** حسابُ درج المناوبة للنقد — و`null` يسقط إلى `1000` بإعلان. */
+      drawerAccountId: string | null;
+      /** حسابُ `1251` للشبكة. */
+      networkAccountId: string;
+    },
+  ): Promise<void> {
+    const amount = round2(input.amount);
+    if (amount === 0) return;
+
+    const no = await this.nextPaymentNumber(tx, input.date);
+    const payment = await tx.payment.create({
+      data: {
+        companyId,
+        no,
+        customerId: input.customerId,
+        branchId: input.branchId,
+        date: input.date,
+        amount,
+        method: input.method,
+        notes: `تحصيل بيع كاشير — ${input.invoiceNo}`,
+        currency: input.currency,
+        exchangeRate: input.exchangeRate,
+        baseAmount: toBaseAmount(amount, input.exchangeRate),
+        allocations: { create: [{ companyId, invoiceId: input.invoiceId, amount }] },
+      } as unknown as Prisma.PaymentUncheckedCreateInput,
+    });
+
+    await this.postAndSettle(tx, companyId, payment.id, {
+      no,
+      customerName: input.customerName,
+      date: input.date,
+      amount,
+      currency: input.currency,
+      exchangeRate: input.exchangeRate,
+      branchId: input.branchId,
+      bank: null,
+      drawerAccountId: input.method === 'CARD' ? input.networkAccountId : input.drawerAccountId,
+      baseReceivable: toBaseAmount(amount, input.exchangeRate),
+      description: `تحصيل بيع كاشير — سند ${no} — ${input.invoiceNo}`,
+    });
+
+    await this.recomputeInvoiceStatus(tx, input.invoiceId);
+  }
+
   /** إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها. */
   allocate(companyId: string, id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

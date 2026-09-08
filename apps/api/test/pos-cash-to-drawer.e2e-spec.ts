@@ -48,10 +48,18 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
    * درجاً جديداً**: كلُّ توكيدٍ يقرأ الرصيدَ قبله ويقيس الفرق.
    */
   let drawer = { id: '', accountId: '' };
+  let branchId = '';
 
   /**
    * ⚠️ **ويُعاد استعمالُ درجٍ قائمٍ إن وُجد**: النطاقُ نفد فعلاً على قاعدة
    * التطوير — **وهو الجدارُ الذي أنذر منه `ق-٢٩٥`، وقد بلغناه**.
+   */
+  /**
+   * ⚠️ **درجُ هذه المجموعة على فرعها الخاصّ** — لا درجٌ بلا فرع.
+   *
+   * درجٌ بلا فرعٍ **يغيّر عالمَ مجموعةٍ أخرى**: `resolveDrawerId` يأخذ «الدرجَ
+   * النشِطَ الوحيد» للفرع الفارغ، **فمجموعةُ `pos-shift-drawer` التي تتوقّع
+   * فراغاً تجده مملوءاً بتركةِ هذه**. **وتركةُ مجموعةٍ ليست بيئةَ أخرى.**
    */
   async function ensureDrawer(): Promise<{ id: string; accountId: string }> {
     const list = (await auth(http().get('/cash-drawers')).expect(200)).body as {
@@ -60,12 +68,19 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
       branchId: string | null;
       account: { id: string };
     }[];
-    // بلا فرعٍ عمداً: مناوبةُ هذه المجموعة بلا فرع، ودرجُ فرعٍ آخر يُردّ
-    // بـ`cash_drawer_branch_mismatch` — وهو `409` كالمناوبة المفتوحة تماماً
-    // (ق-٢٩٤: رمزٌ يُشارَك بين علّتين يُخفي إحداهما).
-    const usable = list.find((d) => d.isActive && d.branchId === null);
-    if (usable) return { id: usable.id, accountId: usable.account.id };
-    const res = await auth(http().post('/cash-drawers')).send({ name: `درج القياس ${suffix}` }).expect(201);
+
+    // ⚠️ **يُعاد استعمالُ درجٍ قائمٍ على فرعه قبل إنشاء أيّ شيء**: نطاقُ
+    // `1010–1099` **تسعون خانةً لا تُعاد** (`ق-٢٩٥`) — **وقد نفد فعلاً على
+    // قاعدة التطوير**، فمجموعةٌ تُنشئ درجاً في كل تشغيل تُشارك في استهلاكه.
+    const existing = list.find((d) => d.isActive && d.branchId !== null);
+    if (existing) {
+      branchId = existing.branchId!;
+      return { id: existing.id, accountId: existing.account.id };
+    }
+
+    const branch = (await auth(http().post('/branches')).send({ name: `فرعُ قياس الدرج ${suffix}` }).expect(201)).body as { id: string };
+    branchId = branch.id;
+    const res = await auth(http().post('/cash-drawers')).send({ name: `درج القياس ${suffix}`, branchId }).expect(201);
     return { id: res.body.id, accountId: res.body.account.id };
   }
 
@@ -79,7 +94,7 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
     if (current.body?.id) {
       await auth(http().post(`/pos/shifts/${current.body.id}/close`)).send({ declaredClosing: Number(current.body.expectedCash ?? 0) });
     }
-    return (await auth(http().post('/pos/shifts')).send({ openingFloat: float, drawerId }).expect(201)).body as { id: string };
+    return (await auth(http().post('/pos/shifts')).send({ openingFloat: float, drawerId, branchId }).expect(201)).body as { id: string };
   }
 
   /** صنفٌ بسعرٍ معلوم — والبيعُ يُطلب بالكميّة، فالمبلغُ مشتقٌّ لا مُرسَل. */
@@ -163,19 +178,26 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
     expect(await codeBalance('5900')).toBe(varianceBefore - 15);
   }, 60000);
 
-  /**
-   * ⛔ **وجهٌ ثالثٌ للعطل نفسه — لم يُبنَ له توكيدٌ عمداً** (يُعرض على المالك):
-   *
-   * **الردُّ النقديُّ لبيع كاشير مستحيلٌ اليوم**: `refundableOf` يقيس المسدَّد
-   * من صفوف `Payment`، **وبيعُ الكاشير لا يُنشئ صفَّ دفعةٍ إطلاقاً** — فيبدو
-   * غيرَ مسدَّد، فيُستهلك الإشعارُ الدائن في «خصم غير المسدَّد» ويعود القابلُ
-   * للردّ **صفراً** (`400 refund_nothing_refundable`، مقيسٌ في هذه المجموعة).
-   *
-   * ⟵ **فالعلّةُ أعمقُ من غياب القيد**: بيعُ الكاشير **غيرُ مرئيٍّ لوحدة
-   * الدفعات كلِّها** — الأعمارُ تعدّه ديناً، والردُّ يرفضه. **وتوجيهُ الردّ
-   * إلى الدرج مبنيٌّ هنا وينشط ساعةَ يصير للبيع صفُّ دفعة** — ولا يُختبر قبلها
-   * كي **لا يُثبَّت عطلٌ في توكيد** (`ق-٢٨٤`).
-   */
+  it('🔴 والردُّ النقديُّ يخرج من الدرج لا من `1000` — نصفُ الإصلاح لا زيادةٌ عليه', async () => {
+    await openShift(drawer.id, 100);
+    const sale = (await ringCash(1).expect(201)).body as { id: string };
+
+    const note = (await auth(http().post(`/invoices/${sale.id}/credit-note`)).send({ reason: `ردٌّ نقديّ ${suffix}` }).expect(201))
+      .body as { id: string };
+
+    const drawerBefore = await balanceOf(drawer.accountId);
+    const cashBefore = await codeBalance('1000');
+
+    await auth(http().post('/payments/refund'))
+      .send({ creditNoteId: note.id, method: 'CASH', date: new Date().toISOString().slice(0, 10) })
+      .expect(201);
+
+    // ⚠️ **الدرجُ ينقص و`1000` لا يُمَسّ**: لو خرج الردُّ من `1000` لأظهر
+    // الجردُ فائضاً كاذباً في الدرج — **واتّهم الكاشيرَ بفرقٍ صنعه النظام**.
+    expect(await balanceOf(drawer.accountId)).toBe(drawerBefore - 115);
+    expect(await codeBalance('1000')).toBe(cashBefore);
+  }, 60000);
+
   it('وصفرُ الفرق لا يُرحَّل قيداً — فقيدٌ بصفر ضجيجٌ في الأستاذ', async () => {
     const shift = await openShift(drawer.id, 100);
     await ringCash(2).expect(201); // ٢٠٠ + ضريبة ١٥٪ = ٢٣٠
