@@ -12,6 +12,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
@@ -145,7 +146,7 @@ export class InvoicesService {
     const { subtotal, taxTotal, total } = computeTotals(dto.lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-      const no = await this.nextDocumentNumber(tx, 'INV', new Date(dto.issueDate));
+      const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       const created = await tx.invoice.create({
         // `companyId` (top-level and on each nested line) is set explicitly
         // rather than relying on the tenant-scope extension: nested relation
@@ -539,7 +540,7 @@ export class InvoicesService {
     const rate = Number(original.exchangeRate);
     // التاريخ يسبق الرقم — فالبادئة تُشتقّ منه.
     const issueDate = note.issueDate ? new Date(note.issueDate) : new Date();
-    const no = await this.nextDocumentNumber(tx, note.numberKind, issueDate);
+    const no = await this.nextDocumentNumber(tx, companyId, note.numberKind, issueDate);
     const { subtotal, taxTotal, total } = note.totals;
 
     const created = await tx.invoice.create({
@@ -657,15 +658,14 @@ export class InvoicesService {
    * no])` turns that into a P2002 instead of a silent duplicate, and the
    * callers retry the whole transaction on that error (see
    * retryOnUniqueConflict). */
-  private async nextDocumentNumber(tx: Prisma.TransactionClient, kind: 'INV' | 'CN' | 'DN', issueDate: Date): Promise<string> {
-    const year = documentYear(issueDate);
-    const prefix = `${kind}-${year}-`;
-    const rows = await tx.invoice.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  private async nextDocumentNumber(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    kind: 'INV' | 'CN' | 'DN',
+    issueDate: Date,
+  ): Promise<string> {
+    // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — والبذرُ من أعلى قائمٍ مرّةً واحدة.
+    return nextDocumentNumber(tx, companyId, issueDate, { kind, pad: 4 }, (prefix) => highestSequenceOf(tx.invoice, prefix));
   }
 
   /**

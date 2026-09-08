@@ -3,6 +3,7 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { roundTo } from '../common/money/rounding';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
@@ -86,7 +87,7 @@ export class PurchasesService {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-        const no = await this.nextPurchaseNumber(tx);
+        const no = await this.nextPurchaseNumber(tx, companyId);
         const created = await tx.purchase.create({
           data: {
             companyId,
@@ -318,13 +319,11 @@ export class PurchasesService {
   /** `PUR-<seq>`, matching the original mockup's numbering. Based on the
    * highest existing sequence, not `count()` — see InvoicesService's
    * equivalent comment for why count() breaks once any purchase is deleted. */
-  private async nextPurchaseNumber(tx: Prisma.TransactionClient): Promise<string> {
-    const prefix = 'PUR-';
-    const rows = await tx.purchase.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+  private async nextPurchaseNumber(tx: Prisma.TransactionClient, companyId: string): Promise<string> {
+    // عدّادٌ ذرّيّ لا مسحٌ كامل (ق-٣٢٨). ⚠️ **وهذه السلسلة عمريّةٌ لا سنوية**
+    // (`PUR-###` بلا سنة) — فمفتاحُ السنة صفرٌ والشكلُ يبقى كما هو.
+    return nextDocumentNumber(tx, companyId, new Date(), { kind: 'PUR', pad: 3, perYear: false }, (prefix) =>
+      highestSequenceOf(tx.purchase, prefix),
+    );
   }
 }

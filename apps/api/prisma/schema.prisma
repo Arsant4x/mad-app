@@ -333,6 +333,8 @@ model Company {
   attendance       AttendanceRecord[]
   auditLogs        AuditLog[]
   outboxEvents     OutboxEvent[]
+  /// عدّاداتُ تسلسل المستندات (`ق-٣٢٨`) — واحدٌ لكل نوعٍ وسنة.
+  documentSequences DocumentSequence[]
   deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
@@ -3708,4 +3710,44 @@ model OutboxEvent {
   @@index([status, availableAt])
   @@index([companyId, type])
   @@map("outbox_events")
+}
+
+/// ⭐ **عدّادُ تسلسل المستندات** (`ق-٣٢٨`) — رقمٌ يُشتقّ من عدّادٍ لا من مسح.
+///
+/// ── العلّة ────────────────────────────────────────────────────────────────
+///
+/// كان كلُّ ترقيمٍ يقرأ **كلَّ صفوف السنة** ثم يأخذ الأعلى: **سبعةُ مواضع**
+/// (فاتورة · قيد · سند · عقد · شراء · إعدام · **عرضُ سعر**) — والسابعُ وجده
+/// الحارسُ المشتقُّ بعد أن قال القياسُ ستة. **فمتجرٌ بمئة بيعةٍ يومياً يقرأ
+/// ملايينَ الصفوف** — ثلاثَ مرّاتٍ في كل بيعة — **والبطءُ يتضاعف حتى يتوقّف
+/// الكاشير**، ولا يظهر في السير لأن قاعدته فارغة (`ق-٣١٨`).
+///
+/// ⚠️ **والقراءةُ السريعة لا تُصلحها**: صفٌّ واحد بـ`ORDER BY no DESC` **ترتيبٌ
+/// نصّيّ** — و`…-9999` يسبق `…-10000` أبجدياً، **فيُعطي رقماً مستعمَلاً**.
+/// **فالمشكلتان واحدة، والعدّادُ يُلغي الترتيبَ النصّيَّ أصلاً.**
+///
+/// ⚠️ **والتزامنُ بنيةٌ لا محاولةٌ تُعاد**: `UPDATE … RETURNING` يقفل الصفَّ
+/// فيُسلسل الطالبَين — **بخلاف `MAX+1` الذي يظلّ محتاجاً القيدَ الفريد وإعادةَ
+/// المحاولة مهما سرُع** (درسُ `ICV`).
+model DocumentSequence {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// مفتاحُ السلسلة — **عشرةٌ مقروءةٌ من مواضعها لا من الذاكرة**: `INV` ·
+  /// `CN` · `DN` · `JE` · `RCV` · `RFD` · `EJ` · `PUR` · `WO` · `Q`.
+  kind String
+  /// سنةُ المستند — التسلسل يبدأ من جديدٍ كلَّ سنة، كما كان.
+  year Int
+
+  /// **آخرُ رقمٍ صدر** — لا التالي: فما لا يُبذَر يبدأ من صفرٍ فأولُ رقمٍ `1`.
+  last Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// ⚠️ **القيدُ الفريد هو ما يجعل البذرَ مرّةً واحدة بنيةً لا انضباطاً**:
+  /// الإدراجُ الثاني يصطدم به، فتشغيلٌ ثانٍ للبذر **لا يغيّر شيئاً**.
+  @@unique([companyId, kind, year])
+  @@map("document_sequences")
 }

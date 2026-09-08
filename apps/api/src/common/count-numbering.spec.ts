@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import { sourceFiles, stripComments } from './source-scan.util';
 
 /**
  * `ق-١٩٨` · `ق-٢٠٤` — **حارسٌ مشتقّ**: أي مولّد ترقيمٍ يشتقّ رقماً أو مرجعاً من `count()`
@@ -28,9 +29,6 @@ export interface CountOffence {
   line: number;
   reason: string;
 }
-
-/** الكود بلا تعليقاته — كي لا يُحسب مثالٌ مكتوب في تعليقٍ عودةً للعطل؛ والأسطرُ محفوظةٌ كي يصدق رقمُ السطر. */
-const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, '')).replace(/^\s*\/\/.*$/gm, '');
 
 export function countNumberingOffences(source: string, file = '<inline>'): CountOffence[] {
   const code = stripComments(source);
@@ -83,17 +81,6 @@ export function countNumberingOffences(source: string, file = '<inline>'): Count
   return out;
 }
 
-/** كل ملفات `.ts` تحت الجذور — بلا اختبارات وبلا تعريفات. */
-function sourceFiles(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (name === 'node_modules' || name === 'dist') continue;
-    if (statSync(full).isDirectory()) sourceFiles(full, out);
-    else if (/\.ts$/.test(name) && !/\.spec\.ts$|\.d\.ts$/.test(name)) out.push(full);
-  }
-  return out;
-}
-
 describe('لا مولّدَ ترقيمٍ من `count()` — حارسٌ مشتقٌّ يمسح الشجرة', () => {
   it('المُكتشِف مُثبَت بحالتَين: يمسك الشكل ويترك الإحصاء', () => {
     // الأشكال الثلاثة تُمسَك.
@@ -114,6 +101,15 @@ describe('لا مولّدَ ترقيمٍ من `count()` — حارسٌ مشتق�
     expect(countNumberingOffences('hasAny: (await tx.journalEntry.count()) > 0,')).toEqual([]);
     // والتعليقُ لا يُدان.
     expect(countNumberingOffences('// كان: `${await tx.invoice.count()}` — reference: x\nconst reference = randomUUID();')).toEqual([]);
+  });
+
+  it('🔴 ورقمُ السطر يصدق — العطلُ الذي شاركه هذا الحارس (ق-٣٢٨)', () => {
+    // ⚠️ **كان `stripComments` هنا نسخةً فيها `^\s*//`** — و`\s` يبتلع السطرَ
+    // الجديد، فتُلتهم الأسطرُ الفارغة قبل كل تعليق: **٩٩٣ سطراً تصير ٩٠٨**.
+    // **ولم يظهر لأن هذا الحارسَ أخضر**: رقمُ السطر لا يُقرأ إلا لحظةَ السقوط.
+    // فصار المصدرُ واحداً في `source-scan.util`، **ويُثبَت هنا بسطرٍ معلوم**.
+    const source = ['const a = 1;', '', '  // تعليقٌ بعد سطرٍ فارغ', '', 'return (await tx.invoice.count({ where })) + 1;'].join('\n');
+    expect(countNumberingOffences(source)).toEqual([expect.objectContaining({ line: 5 })]);
   });
 
   it('السطح غير فارغ — الشجرةُ تُقرأ فعلاً ومنها خدمةُ الكاشير', () => {

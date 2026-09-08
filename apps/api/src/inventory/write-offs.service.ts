@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -106,7 +107,7 @@ export class WriteOffsService {
             branchId,
             productId: dto.productId,
             warehouseId: dto.warehouseId,
-            no: await this.nextWriteOffNumber(tx, occurredAt),
+            no: await this.nextWriteOffNumber(tx, companyId, occurredAt),
             qty: new Prisma.Decimal(dto.qty),
             reasonCode: reason.code,
             note: dto.note ?? null,
@@ -274,13 +275,10 @@ export class WriteOffsService {
   }
 
   /** سلسلةٌ مستقلة `WO-YYYY-NNNN` — بسنة **وقوع** التلف لا ساعة الخادم. */
-  private async nextWriteOffNumber(tx: Prisma.TransactionClient, occurredAt: Date): Promise<string> {
-    const prefix = `WO-${documentYear(occurredAt)}-`;
-    const rows = await tx.inventoryWriteOff.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  private async nextWriteOffNumber(tx: Prisma.TransactionClient, companyId: string, occurredAt: Date): Promise<string> {
+    // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — بسنة **وقوع** التلف كما كان.
+    return nextDocumentNumber(tx, companyId, occurredAt, { kind: 'WO', pad: 4 }, (prefix) =>
+      highestSequenceOf(tx.inventoryWriteOff, prefix),
+    );
   }
 }

@@ -2,6 +2,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 
@@ -55,15 +56,9 @@ export async function applyLinesToBalances(
 
 /** `JE-<year>-<seq>`, same max-based scheme as invoice/purchase numbering —
  * see InvoicesService.nextInvoiceNumber for why count() would be wrong here. */
-async function nextJournalNumber(tx: Prisma.TransactionClient, entryDate: Date): Promise<string> {
-  const year = documentYear(entryDate);
-  const prefix = `JE-${year}-`;
-  const rows = await tx.journalEntry.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-  const maxSeq = rows.reduce((max, r) => {
-    const n = parseInt(r.no.slice(prefix.length), 10);
-    return Number.isFinite(n) && n > max ? n : max;
-  }, 0);
-  return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+async function nextJournalNumber(tx: Prisma.TransactionClient, companyId: string, entryDate: Date): Promise<string> {
+  // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — والبذرُ من أعلى قائمٍ مرّةً واحدة.
+  return nextDocumentNumber(tx, companyId, entryDate, { kind: 'JE', pad: 4 }, (prefix) => highestSequenceOf(tx.journalEntry, prefix));
 }
 
 export interface CreateJournalEntryInput {
@@ -159,7 +154,7 @@ export async function createJournalEntry(
   // البُعد يُحسب مرّة واحدة ويُختم على كل سطر — فلا يفترق سطرٌ عن قيده، ولا
   // يُملأ في ستة عشر موضعاً فيُنسى في السابع عشر.
   const dims = await resolveDimensions(tx, input);
-  const no = await nextJournalNumber(tx, input.date);
+  const no = await nextJournalNumber(tx, input.companyId, input.date);
   const entry = await tx.journalEntry.create({
     data: {
       companyId: input.companyId,

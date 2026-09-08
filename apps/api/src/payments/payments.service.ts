@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -97,7 +98,7 @@ export class PaymentsService {
 
         const invoices = await this.assertAllocationsFit(tx, amount, currency, dto.customerId, allocations);
 
-        const no = await this.nextPaymentNumber(tx, new Date(dto.date));
+        const no = await this.nextPaymentNumber(tx, companyId, new Date(dto.date));
         const payment = await tx.payment.create({
           data: {
             companyId,
@@ -177,7 +178,7 @@ export class PaymentsService {
     const amount = round2(input.amount);
     if (amount === 0) return;
 
-    const no = await this.nextPaymentNumber(tx, input.date);
+    const no = await this.nextPaymentNumber(tx, companyId, input.date);
     const payment = await tx.payment.create({
       data: {
         companyId,
@@ -256,7 +257,7 @@ export class PaymentsService {
         // لحظةٌ واحدة للرقم وللصفّ معاً. ونداءان منفصلان لـ`new Date()` قد
         // يقعان على طرفَي منتصف الليل، فيحمل السند رقم سنةٍ وتاريخَ أخرى.
         const reversalDate = new Date();
-        const no = await this.nextPaymentNumber(tx, reversalDate);
+        const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
@@ -349,7 +350,7 @@ export class PaymentsService {
 
         const rate = Number(note.exchangeRate);
         const date = new Date(dto.date);
-        const no = await this.nextPaymentNumber(tx, date, 'RFD');
+        const no = await this.nextPaymentNumber(tx, companyId, date, 'RFD');
         const payment = await tx.payment.create({
           data: {
             companyId,
@@ -598,14 +599,13 @@ export class PaymentsService {
 
   /** تسلسل سندات القبض مستقل عن الفواتير — يُشتق من جدول الدفعات وحده.
    * وسندات الردّ سلسلةٌ ثانية `RFD-` (`SPEC 30.8`): لا يتزاحم المقبوض والمردود على عدّادٍ واحد. */
-  private async nextPaymentNumber(tx: Prisma.TransactionClient, paymentDate: Date, kind: 'RCV' | 'RFD' = 'RCV'): Promise<string> {
-    const year = documentYear(paymentDate);
-    const prefix = `${kind}-${year}-`;
-    const rows = await tx.payment.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  private async nextPaymentNumber(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    paymentDate: Date,
+    kind: 'RCV' | 'RFD' = 'RCV',
+  ): Promise<string> {
+    // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — والبذرُ من أعلى قائمٍ مرّةً واحدة.
+    return nextDocumentNumber(tx, companyId, paymentDate, { kind, pad: 4 }, (prefix) => highestSequenceOf(tx.payment, prefix));
   }
 }
