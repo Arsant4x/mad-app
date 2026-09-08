@@ -7,30 +7,37 @@ import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
 import { MSG } from '../common/i18n/messages';
 import { postOpeningDeltaEntry } from '../journal/opening-balance.util';
+import { BANK_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
 import { round2 } from '../common/money/rounding';
-
-/** نطاقُ رموز حسابات البنوك (`ق-٢٥٣`) — متجاورٌ لا متداخل مع `1000` (`ق-٢٧٥`). */
-export const BANK_CODE_MIN = 1100;
-export const BANK_CODE_MAX = 1199;
 
 /**
  * الرمزُ التالي لحساب بنك — **`MAX+1` من المصدر لا `count()`** (`ق-١٩٨`): يقرأ
  * رموزَ حسابات المنشأة ويأخذ أكبرَ ما يقع في النطاق، **فالفجوةُ لا تُعاد
  * تعبئتُها**، وحسابٌ يدويٌّ داخل النطاق يدفع التاليَ فوقه.
+ *
+ * ⚠️ **والنطاقاتُ صارت اثنين** (`ق-٢٩٥`): `1100–1199` ثم `1601–1999` — يُملأ
+ * الأول ثم يُنتقل إلى الثاني، **فالرموزُ القديمة تبقى متجاورةً كما كانت**.
+ * وتعريفُهما وسقفُهما وإنذارُهما في `accounts/code-bands.ts` — **موضعٌ واحد**،
+ * فنطاقٌ يُضاف غداً يرث الإنذار بلا سطرٍ يُكتب هنا.
  */
 export async function nextBankCode(tx: Prisma.TransactionClient): Promise<string> {
   const accounts = await tx.account.findMany({ select: { code: true } });
-  const inRange = accounts
-    .map((a) => Number(a.code))
-    .filter((n) => Number.isInteger(n) && n >= BANK_CODE_MIN && n <= BANK_CODE_MAX);
-  const next = (inRange.length ? Math.max(...inRange) : BANK_CODE_MIN - 1) + 1;
-  if (next > BANK_CODE_MAX) throw new ConflictException(MSG.bank_code_range_full);
+  const next = nextCodeInBands(accounts.map((a) => a.code), BANK_BANDS);
+  if (next === null) throw new ConflictException(MSG.bank_code_range_full);
   return String(next);
 }
 
 @Injectable()
 export class BanksService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  /** حالةُ نطاق رموز البنوك — تُقرأ من الدليل لحظةَ السؤال (`ق-٢٩٥`). */
+  codeBand(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const accounts = await tx.account.findMany({ select: { code: true } });
+      return bandStatus(accounts.map((a) => a.code), bandGroup('bank'));
+    });
+  }
 
   list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.bank.findMany({ where: { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }) }, orderBy: { name: 'asc' } }));

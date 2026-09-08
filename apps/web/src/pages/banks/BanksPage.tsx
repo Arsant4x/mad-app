@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
-import { createBank, deleteBank, listBanks, setBankArchived, updateBank, type Bank, type BankInput } from '../../api/banks';
+import { createBank, deleteBank, getBankCodeBand, listBanks, setBankArchived, updateBank, type Bank, type BankInput, type CodeBandStatus } from '../../api/banks';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -15,9 +15,12 @@ export function BanksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Bank | null>(null);
+  const [codeBand, setCodeBand] = useState<CodeBandStatus | null>(null);
 
   async function reload() {
     setBanks(await listBanks(showArchived));
+    // سقفُ نطاق الرموز يُقرأ مع كل تحميل — فالإنذار يتبع الحالة لا لحظةَ الفتح.
+    setCodeBand(await getBankCodeBand());
   }
 
   useEffect(() => {
@@ -65,6 +68,16 @@ export function BanksPage() {
           </button>
         </div>
       </div>
+
+      {/* إنذارُ سقف الرموز (ق-٢٩٥) — **قبل الجدار لا عنده**: رمزُ الحساب لا
+          يعود بحذف البنك، فالنطاق يمشي في اتجاهٍ واحد. */}
+      {codeBand?.warn && (
+        <div className="page-sub" style={{ marginBottom: 14 }}>
+          {codeBand.remaining > 0
+            ? `⚠ بقيت ${codeBand.remaining} من ${codeBand.capacity} خانة في نطاق رموز ${codeBand.name} — والرمز لا يعود بحذف الحساب. راجعنا قبل أن ينفد.`
+            : `⛔ نفدت خانات نطاق رموز ${codeBand.name} — لا يمكن إنشاء حساب بنكي جديد حتى يُوسَّع النطاق. راجعنا.`}
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="search-box">

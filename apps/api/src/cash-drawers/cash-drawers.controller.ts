@@ -19,6 +19,12 @@ export class CashDrawersController {
     return this.cashDrawers.list(tenant.companyId);
   }
 
+  /** سقفُ نطاق رموز الأدراج (`ق-٢٩٥`) — مسارٌ ثابتٌ قبل `:id`. */
+  @Get('code-band')
+  codeBand(@CurrentTenant() tenant: TenantContext) {
+    return this.cashDrawers.codeBand(tenant.companyId);
+  }
+
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDrawerDto) {
     return this.cashDrawers.create(tenant.companyId, tenant.actorType, dto);

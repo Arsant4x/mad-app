@@ -21,6 +21,19 @@ export interface BankInput {
 }
 
 export const listBanks = (includeArchived = false) => apiClient.get<Bank[]>('/banks', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
+
+/** سقفُ نطاق رموز الحسابات (ق-٢٩٥) — يُنذر قبل الاصطدام لا عنده. */
+export interface CodeBandStatus {
+  key: string;
+  name: string;
+  capacity: number;
+  remaining: number;
+  next: string | null;
+  warnThreshold: number;
+  warn: boolean;
+}
+
+export const getBankCodeBand = () => apiClient.get<CodeBandStatus>('/banks/code-band').then((r) => r.data);
 export const createBank = (dto: BankInput) => apiClient.post<Bank>('/banks', dto).then((r) => r.data);
 export const updateBank = (id: string, dto: Partial<BankInput>) => apiClient.patch<Bank>(`/banks/${id}`, dto).then((r) => r.data);
 export const deleteBank = (id: string) => apiClient.delete(`/banks/${id}`);

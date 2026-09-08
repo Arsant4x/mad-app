@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CashDrawersCard } from './CashDrawersCard';
 import * as api from '../../api/cashDrawers';
+import type { CodeBandStatus } from '../../api/banks';
 import { listBranches } from '../../api/branches';
 
 vi.mock('../../api/cashDrawers');
@@ -27,9 +28,42 @@ const drawer = (over: Partial<api.CashDrawer> = {}): api.CashDrawer => ({
 describe('بطاقةُ أدراج الكاشير', () => {
   // ⚠️ `restoreMocks: true` في إعداد vitest **يمسح التنفيذَ المكتوب في المصنع**
   //    قبل كل اختبار — فيُعاد هنا لا هناك، وإلا عادت الدالةُ `undefined` صامتةً.
+  const band = (over: Partial<CodeBandStatus> = {}): CodeBandStatus => ({
+    key: 'drawer',
+    name: 'حسابات الأدراج',
+    capacity: 90,
+    remaining: 40,
+    next: '1060',
+    warnThreshold: 10,
+    warn: false,
+    ...over,
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listBranches).mockResolvedValue([]);
+    // ⚠️ **بلا هذا يعود التنفيذُ `undefined` صامتاً** فلا يُختبر الإنذار أصلاً.
+    vi.mocked(api.getDrawerCodeBand).mockResolvedValue(band());
+  });
+
+  it('🔴 تُنذر قبل نفاد نطاق الرموز — لا عنده (ق-٢٩٥)', async () => {
+    vi.mocked(api.listCashDrawers).mockResolvedValue([drawer()]);
+    vi.mocked(api.getDrawerCodeBand).mockResolvedValue(band({ remaining: 8, warn: true }));
+    render(<CashDrawersCard />);
+
+    const warning = await screen.findByTestId('drawer-code-band-warning');
+    // الرقمُ والسعةُ في النصّ — فإنذارٌ بلا عددٍ لا يُقاس عليه قرار.
+    expect(warning).toHaveTextContent('8');
+    expect(warning).toHaveTextContent('90');
+  });
+
+  it('ولا تُنذر ما دام فوق العتبة — فإنذارٌ دائم يُهجَر', async () => {
+    vi.mocked(api.listCashDrawers).mockResolvedValue([drawer()]);
+    vi.mocked(api.getDrawerCodeBand).mockResolvedValue(band({ remaining: 40, warn: false }));
+    render(<CashDrawersCard />);
+
+    await screen.findByText(/1010/);
+    expect(screen.queryByTestId('drawer-code-band-warning')).toBeNull();
   });
 
   it('تعرض الدرجَ بحسابه ورمزه — والرمزُ يأتي من الخادم لا يُدخَل', async () => {

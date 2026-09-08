@@ -1,0 +1,144 @@
+import { Prisma } from '@prisma/client';
+
+/**
+ * **نطاقاتُ الترقيم المشتقّ — ومعها سقفُها** (`ق-٢٩٥`).
+ *
+ * ── العلّة ────────────────────────────────────────────────────────────────
+ *
+ * `MAX+1` (`ق-١٩٨`) **يستهلك النطاق بأعلى رمزٍ صدر لا بعدد الأحياء**: الفجوةُ
+ * لا تُعاد تعبئتُها، وحسابٌ حُذف كيانُه **يبقى رمزُه مشغولاً** — بل **حسابٌ له
+ * أسطرُ قيدٍ لا يُحذف أصلاً**. ⟵ **فتحريرُ فجوةٍ لا يُنزل السقف**، وكلُّ نطاقٍ
+ * في النظام يمشي في اتجاهٍ واحد نحو جداره.
+ *
+ * **والمقيس** (2026-09-08): نطاقُ البنوك `1100–1199` **نفد** عند `1199` في
+ * منشأةٍ واحدة، **والأدراج عند `1082` — تسعَ عشرةَ خانة**. **واصطدامٌ صامتٌ
+ * دائم** — لا مخرجَ منه في المنتج.
+ *
+ * ── الحلّ: نطاقٌ ثانٍ، وإنذارٌ قبل الجدار ─────────────────────────────────
+ *
+ * **① نطاقٌ ثانٍ للبنوك `1601–1999`** (حكمُ المالك): التوسيعُ في مكانه مستحيل
+ * — `1200` (الذمم المدينة) فوقه مباشرةً وهو في كل تقريرٍ ودليلٍ افتراضيّ،
+ * و`1010–1099` (الأدراج) تحته. **والنطاقُ الثاني لا يُغيّر رمزاً قائماً.**
+ *
+ * **② وإنذارٌ قبل الاصطدام لا عنده**: «تاجرٌ يصطدم بجدارٍ صامت أسوأ من تاجرٍ
+ * يُنذَر قبله بعشر خانات» (نصّ المالك). **والمعيار مُعلَن**: يُنذَر عند بقاء
+ * **عشر خانات** — ولنطاقٍ صغيرٍ (سعتُه دون عشرين) عند **نصف سعته**، فإنذارٌ
+ * يبدأ فوق نصف السعة إنذارٌ دائم، والدائمُ يُهجَر.
+ *
+ * ⚠️ **والترتيبُ داخل المجموعة معنويّ**: يُملأ النطاق الأول ثم الذي يليه —
+ * فرموزُ البنوك القديمة تبقى متجاورةً كما كانت.
+ */
+export interface CodeBand {
+  min: number;
+  max: number;
+}
+
+export interface CodeBandGroup {
+  /** مفتاحٌ ثابت تقرؤه الواجهة. */
+  key: string;
+  /** اسمٌ يُعرض للتاجر. */
+  name: string;
+  bands: CodeBand[];
+}
+
+export const BANK_BANDS: CodeBand[] = [
+  { min: 1100, max: 1199 },
+  // النطاق الثاني (ق-٢٩٥) — يبدأ بعد `1600` (تقبيل وحقوق انتفاع) وينتهي دون
+  // `2000` (بداية الخصوم في الدليل الافتراضي).
+  { min: 1601, max: 1999 },
+];
+
+export const DRAWER_BANDS: CodeBand[] = [{ min: 1010, max: 1099 }];
+
+export const CODE_BAND_GROUPS: CodeBandGroup[] = [
+  { key: 'bank', name: 'حسابات البنوك', bands: BANK_BANDS },
+  { key: 'drawer', name: 'حسابات الأدراج', bands: DRAWER_BANDS },
+];
+
+/** الرموزُ الصحيحةُ الواقعة في أيٍّ من نطاقات المجموعة. */
+function numericCodes(codes: string[], bands: CodeBand[]): number[] {
+  return codes
+    .map((c) => Number(c))
+    .filter((n) => Number.isInteger(n) && bands.some((b) => n >= b.min && n <= b.max));
+}
+
+/**
+ * الرمزُ التالي — **`MAX+1` داخل النطاق، ثم انتقالٌ إلى الذي يليه**.
+ * يعود `null` حين تنفد النطاقاتُ كلُّها.
+ */
+export function nextCodeInBands(codes: string[], bands: CodeBand[]): number | null {
+  const used = numericCodes(codes, bands);
+  for (const band of bands) {
+    const inBand = used.filter((n) => n >= band.min && n <= band.max);
+    const candidate = (inBand.length ? Math.max(...inBand) : band.min - 1) + 1;
+    if (candidate <= band.max) return candidate;
+  }
+  return null;
+}
+
+/** السعةُ الكلّية للمجموعة — مجموعُ خانات نطاقاتها. */
+export function bandCapacity(bands: CodeBand[]): number {
+  return bands.reduce((sum, b) => sum + (b.max - b.min + 1), 0);
+}
+
+/**
+ * **ما تبقّى فعلاً تحت `MAX+1`** — لا عددُ الخانات الفارغة.
+ *
+ * لكلِّ نطاق: `max − أعلى ما صدر فيه` (أو سعتُه كاملةً إن لم يصدر منه شيء).
+ * **فالفجواتُ لا تُحسب**، لأن المولّد لا يعود إليها — وهذا هو الفرقُ الذي
+ * جعل الجدارَ يقترب بلا أن يشعر أحد.
+ */
+export function bandRemaining(codes: string[], bands: CodeBand[]): number {
+  const used = numericCodes(codes, bands);
+  return bands.reduce((sum, b) => {
+    const inBand = used.filter((n) => n >= b.min && n <= b.max);
+    const highest = inBand.length ? Math.max(...inBand) : b.min - 1;
+    return sum + (b.max - highest);
+  }, 0);
+}
+
+/** عتبةُ الإنذار: عشرُ خانات — أو نصفُ السعة لنطاقٍ سعتُه دون عشرين. */
+export function warnThreshold(capacity: number): number {
+  return Math.min(10, Math.floor(capacity / 2));
+}
+
+export interface BandStatus {
+  key: string;
+  name: string;
+  capacity: number;
+  remaining: number;
+  /** الرمزُ الذي سيصدر تالياً — `null` حين نفدت النطاقات. */
+  next: string | null;
+  warnThreshold: number;
+  warn: boolean;
+}
+
+export function bandStatus(codes: string[], group: CodeBandGroup): BandStatus {
+  const capacity = bandCapacity(group.bands);
+  const remaining = bandRemaining(codes, group.bands);
+  const next = nextCodeInBands(codes, group.bands);
+  const threshold = warnThreshold(capacity);
+  return {
+    key: group.key,
+    name: group.name,
+    capacity,
+    remaining,
+    next: next === null ? null : String(next),
+    warnThreshold: threshold,
+    warn: remaining <= threshold,
+  };
+}
+
+/** حالةُ كل مجموعةٍ لمنشأةٍ واحدة — تُقرأ من دليلها لحظةَ السؤال. */
+export async function codeBandStatuses(tx: Prisma.TransactionClient): Promise<BandStatus[]> {
+  const accounts = await tx.account.findMany({ select: { code: true } });
+  const codes = accounts.map((a) => a.code);
+  return CODE_BAND_GROUPS.map((g) => bandStatus(codes, g));
+}
+
+/** مجموعةٌ بمفتاحها — **يسقط صراحةً** لمفتاحٍ لا وجودَ له، فلا إنذارٌ صامت. */
+export function bandGroup(key: string): CodeBandGroup {
+  const group = CODE_BAND_GROUPS.find((g) => g.key === key);
+  if (!group) throw new Error(`مجموعةُ نطاقٍ غير مسجَّلة: ${key}`);
+  return group;
+}

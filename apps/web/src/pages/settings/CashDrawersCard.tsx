@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { createCashDrawer, listCashDrawers, updateCashDrawer, type CashDrawer } from '../../api/cashDrawers';
+import { createCashDrawer, getDrawerCodeBand, listCashDrawers, updateCashDrawer, type CashDrawer } from '../../api/cashDrawers';
+import type { CodeBandStatus } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 
 /**
@@ -20,9 +21,12 @@ export function CashDrawersCard() {
   const [branchId, setBranchId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeBand, setCodeBand] = useState<CodeBandStatus | null>(null);
 
   async function reload() {
     setDrawers(await listCashDrawers());
+    // سقفُ نطاق الرموز يُقرأ مع كل تحميل — فالإنذار يتبع الحالة لا لحظةَ الفتح.
+    setCodeBand(await getDrawerCodeBand());
   }
 
   useEffect(() => {
@@ -77,6 +81,15 @@ export function CashDrawersCard() {
       <p className="muted">
         لكل درجٍ حسابٌ في الدليل يُنشأ معه — فيُعرف عجزُ كل درجٍ على حدة. والمناوبات السابقة منسوبةٌ إلى «الدرج الافتراضي» لفرعها.
       </p>
+
+      {/* إنذارُ سقف الرموز (ق-٢٩٥) — قبل الجدار لا عنده. */}
+      {codeBand?.warn && (
+        <p className="muted" role="status" data-testid="drawer-code-band-warning">
+          {codeBand.remaining > 0
+            ? `⚠ بقيت ${codeBand.remaining} من ${codeBand.capacity} خانة في نطاق رموز ${codeBand.name} — والرمز لا يعود بحذف الدرج. راجعنا قبل أن ينفد.`
+            : `⛔ نفدت خانات نطاق رموز ${codeBand.name} — لا يمكن إنشاء درج جديد حتى يُوسَّع النطاق. راجعنا.`}
+        </p>
+      )}
 
       {error && (
         <p className="error" role="alert" data-testid="cash-drawer-error">
