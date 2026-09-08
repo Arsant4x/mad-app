@@ -99,6 +99,23 @@ describe('ZATCA onboarding — six-document compliance check (e2e)', () => {
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
 
+    /**
+     * ── اكتفاءٌ ذاتي: لا تفترض ما لم تصنعه ─────────────────────────────────
+     *
+     * `/zatca/onboarding/start` يرفض بـ`400` (`zatca_profile_incomplete`) ما
+     * لم يكن للمنشأة **اسمٌ نظاميّ ورقمٌ ضريبي**، **والبذرةُ لا تملؤهما**.
+     * فكانت هذه المجموعة تنجح **فقط إن سبقتها** مجموعةٌ تكتب ملفَّ المنشأة.
+     *
+     * ⚠️ **وظهر حين تغيّر ترتيبُ الملفات** بإضافة مجموعةٍ جديدة — **لا بعطلٍ
+     * في الميزة**: وهي عائلةُ «توكيدٌ يفترض ما تركه غيرُه» (`ق-٢٩٨`)، ونظيرُها
+     * موثَّقٌ في `zatca-phase2` بنصّه.
+     */
+    await request(app.getHttpServer())
+      .patch('/company-profile')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ legalName: 'شركة الأفق التجارية', vatNumber: '300000000000003' })
+      .expect(200);
+
     await clearCredential();
   }, 30000);
 
