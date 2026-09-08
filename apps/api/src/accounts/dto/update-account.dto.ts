@@ -1,4 +1,4 @@
-import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'revenue', 'expense'] as const;
 
@@ -14,4 +14,9 @@ export class UpdateAccountDto {
   @IsOptional()
   @IsNumber()
   openingBalance?: number;
+
+  /** تاريخُ الافتتاح المعلَن (`ق-٢٩٦`) — يُقبل ما دام الحساب بلا حركةٍ غير افتتاحيّه. */
+  @IsOptional()
+  @IsDateString()
+  openingDate?: string;
 }

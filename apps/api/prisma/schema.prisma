@@ -807,6 +807,24 @@ model Account {
   /// report reads it from the ledger like any other posting. Edits post a
   /// delta entry — never a silent mutation (see AccountsService.update).
   openingBalance Decimal @default(0) @db.Decimal(18, 2)
+
+  /// ⭐ **تاريخُ الافتتاح الذي يعلنه التاجر** (`ق-٢٩٦`) — **والفراغُ يعني «لم يُعلَن»**.
+  ///
+  /// كان تاريخُ القيد الافتتاحيّ **يُشتقّ** (بداية السنة المالية أو اليوم)،
+  /// **فصار أثرَ توقيتِ سكربت لا يوماً يعنيه أحد**: افتتاحيّاتُ قاعدة التطوير
+  /// كلُّها بتاريخ **يوم تشغيل الترحيل الرجعيّ** (`ق-٢٩١`).
+  ///
+  /// ⚠️ **والفراغُ مقصودٌ لا كسل**: `NULL` = **مشتقٌّ** (يُقرأ عند العرض من
+  /// تاريخ القيد الافتتاحيّ نفسه) · وقيمةٌ = **معلَنٌ من التاجر**. **والمقيس**
+  /// (`ق-٢٩٦/⑤`): من ١٣١ حساباً ذا افتتاحيّ **٣٥ (٢٧٪) له حركةٌ بعده** فيُقفَل
+  /// تاريخُه؛ **ومن ١٢ حسابَ بنكٍ يحمل تاريخاً أعلنه التاجر، ١٢ يخالف تاريخَ
+  /// قيده** — فمِلءُ العمود بالمشتقّ كان **يمحو الفرق بين ما أعلنه التاجر وما
+  /// حسبه سكربت**.
+  ///
+  /// ⚠️ **ولا يُملأ لحسابٍ قائم**: `NULL` يعني «اقرأه من الأستاذ» — فالعرضُ
+  /// صادقٌ من أول يوم **بلا كتابة صفٍّ واحد**.
+  openingDate    DateTime? @db.Date
+
   /// Running balance, moved exclusively by posted journal lines (see
   /// journal-posting.util.ts) — the opening entry included, so it starts at 0
   /// and reaches `openingBalance` through the ledger, not by seeding.

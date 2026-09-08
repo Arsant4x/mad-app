@@ -8,6 +8,10 @@ export interface Account {
   name: string;
   type: AccountType;
   openingBalance: string;
+  /** تاريخُ الافتتاح (ق-٢٩٦) — يُشتقّ من القيد حين لم يُعلَن. */
+  openingDate: string | null;
+  /** `false` = مشتقٌّ من الأستاذ، `true` = أعلنه التاجر. */
+  openingDateDeclared: boolean;
   balance: string;
 }
 
@@ -16,6 +20,7 @@ export interface AccountInput {
   name: string;
   type: AccountType;
   openingBalance?: number;
+  openingDate?: string;
 }
 
 export const listAccounts = () => apiClient.get<Account[]>('/accounts').then((r) => r.data);
