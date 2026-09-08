@@ -8,7 +8,12 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
 import { round2 } from '../common/money/rounding';
-import { OPENING_EQUITY_CODE, postOpeningDeltaEntry } from '../journal/opening-balance.util';
+import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
+
+/** مقارنةُ يومٍ بيوم — `@db.Date` بلا لحظة، و`null` لا يساوي تاريخاً. */
+function sameDay(a: Date, b: Date | null): boolean {
+  return b !== null && a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10);
+}
 
 /**
  * Reference implementation for every future tenant-scoped module: all data
@@ -26,8 +31,31 @@ import { OPENING_EQUITY_CODE, postOpeningDeltaEntry } from '../journal/opening-b
 export class AccountsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
+  /**
+   * القائمة — **وتاريخُ الافتتاح يُشتقّ حين لم يُعلَن** (`ق-٢٩٦`).
+   *
+   * `openingDate` فارغةٌ تعني «لم يعلنها التاجر»، **فتُقرأ من تاريخ القيد
+   * الافتتاحيّ نفسه**: العرضُ صادقٌ من أول يوم **بلا كتابة صفٍّ واحد**،
+   * ويبقى في الصفّ ما يميّز المُعلَن من المشتقّ (`openingDateDeclared`).
+   */
   list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.account.findMany({ orderBy: { code: 'asc' } }));
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
+      const openings = await tx.journalEntry.findMany({
+        where: { openingForAccountId: { in: accounts.map((a) => a.id) } },
+        orderBy: { date: 'asc' },
+        select: { date: true, openingForAccountId: true },
+      });
+      // أوّلُ افتتاحيٍّ لكل حساب — والترتيبُ تصاعديّ، فأوّلُ ما يُسجَّل هو الأقدم.
+      const firstOpening = new Map<string, Date>();
+      for (const e of openings) if (e.openingForAccountId && !firstOpening.has(e.openingForAccountId)) firstOpening.set(e.openingForAccountId, e.date);
+
+      return accounts.map((a) => ({
+        ...a,
+        openingDate: a.openingDate ?? firstOpening.get(a.id) ?? null,
+        openingDateDeclared: a.openingDate !== null,
+      }));
+    });
   }
 
   create(companyId: string, dto: CreateAccountDto) {
@@ -49,11 +77,20 @@ export class AccountsService {
             name: dto.name,
             type: dto.type,
             openingBalance,
+            // ⚠️ **يُخزَّن ما أعلنه التاجر وحده** (ق-٢٩٦): غيابُه يترك العمود
+            // فارغاً، والفراغُ يعني «اقرأه من الأستاذ» — فلا يُكتب مشتقٌّ في
+            // خانةِ إعلان.
+            openingDate: dto.openingDate ? new Date(dto.openingDate) : null,
           } as unknown as Prisma.AccountCreateInput,
         });
 
         if (openingBalance !== 0) {
-          await postOpeningDeltaEntry(tx, { companyId, account, delta: openingBalance });
+          await postOpeningDeltaEntry(tx, {
+            companyId,
+            account,
+            delta: openingBalance,
+            declaredDate: dto.openingDate ? new Date(dto.openingDate) : null,
+          });
           // Re-read so the response carries the balance the entry just posted.
           return tx.account.findUniqueOrThrow({ where: { id: account.id } });
         }
@@ -92,15 +129,39 @@ export class AccountsService {
           data.openingBalance = round2(dto.openingBalance!);
         }
 
+        // ⭐ **تاريخُ الافتتاح: يُعلَن ما دام الحسابُ ساكناً** (ق-٢٩٦/④).
+        //
+        // تغييرُه يعني **إعادةَ تأريخ القيد الافتتاحيّ**، وهو تاريخٌ لا يُكتب
+        // فوقه متى صارت عليه حركة. فيُسمح ما دام الحسابُ **بلا حركةٍ غير
+        // افتتاحيّه**، ويُرفض بعدها **برسالةٍ تسمّي الحركة وتدلّ على مخرجٍ
+        // مبنيّ**: «أدخل الفرق بقيدٍ بتاريخه» (كما في ق-٢٩١).
+        const declaredDate = dto.openingDate === undefined ? undefined : new Date(dto.openingDate);
+        if (declaredDate !== undefined && !sameDay(declaredDate, existing.openingDate)) {
+          data.openingDate = declaredDate;
+        }
+
         // Row first, entry second: a same-request type change must be in
         // effect before the delta entry picks its debit/credit side from
         // `type` — posting from the old type would contradict the account.
         const updated = await tx.account.update({ where: { id }, data });
+
+        if (data.openingDate !== undefined) {
+          // مسارٌ واحد للحساب والبنك — البوّابةُ وإعادةُ الترحيل فيه (ق-٢٩٦/④).
+          await redeclareOpeningDate(tx, {
+            companyId,
+            account: updated,
+            openingBalance: Number(updated.openingBalance),
+            declaredDate: declaredDate!,
+          });
+          return tx.account.findUniqueOrThrow({ where: { id } });
+        }
+
         if (delta !== 0) {
           await postOpeningDeltaEntry(tx, {
             companyId,
             account: updated,
             delta,
+            declaredDate: updated.openingDate,
             memo: `تعديل الرصيد الافتتاحي — ${updated.name} (${updated.code})`,
           });
           // Re-read so the response carries the balance the entry just moved.

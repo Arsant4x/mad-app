@@ -23,6 +23,9 @@ export function AccountModal({
   const [code, setCode] = useState(editing?.code ?? '');
   const [type, setType] = useState<AccountType>(editing?.type ?? 'asset');
   const [openingBalance, setOpeningBalance] = useState(editing?.openingBalance ?? '');
+  // المشتقُّ يُعرض في الحقل كما يُعرض المُعلَن — فالتاجر يرى التاريخ نفسه،
+  // والفرقُ في التلميح تحته لا في الرقم.
+  const [openingDate, setOpeningDate] = useState(editing?.openingDate?.slice(0, 10) ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +37,15 @@ export function AccountModal({
     }
     setSaving(true);
     try {
-      await onSave({ code: code.trim(), name: name.trim(), type, openingBalance: parseFloat(String(openingBalance)) || 0 });
+      await onSave({
+        code: code.trim(),
+        name: name.trim(),
+        type,
+        openingBalance: parseFloat(String(openingBalance)) || 0,
+        // ⚠️ **لا يُرسَل إلا ما غيّره التاجر**: إرسالُ المشتقِّ كما هو يحوّله
+        // إلى إعلانٍ لم يُعلنه (ق-٢٩٦/⑤).
+        ...(openingDate && openingDate !== editing?.openingDate?.slice(0, 10) ? { openingDate } : {}),
+      });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? i18n.t('err_account_save'));
@@ -78,7 +89,19 @@ export function AccountModal({
           <p className="hint" style={{ marginTop: 4 }}>
             {editing
               ? 'تغيير الرصيد الافتتاحي يُرحَّل بقيد تسوية جديد مقابل حساب الأرصدة الافتتاحية (3900) — القيد الأصلي يبقى كما هو.'
-              : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900)، بتاريخ بداية السنة المالية إن وُجدت.'}
+              : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900).'}
+          </p>
+        </div>
+        {/* ⭐ تاريخُ الافتتاح (ق-٢٩٦): الحقلُ المجاور للرصيد — كزوجِه في شاشة
+            البنوك. وفراغُه يعني «لم يُعلَن» فيُشتقّ، ولا يُكتب مشتقٌّ في خانةِ
+            إعلان. */}
+        <div className="field">
+          <label>تاريخ الافتتاح</label>
+          <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
+          <p className="hint" style={{ marginTop: 4 }}>
+            {editing && !editing.openingDateDeclared
+              ? 'هذا التاريخ مأخوذ من القيد الافتتاحي نفسه ولم تُدخله أنت — أدخِله ليصبح إعلانك.'
+              : 'تاريخ القيد الافتتاحي. اتركه فارغاً ليُحسب من السنة المالية أو تاريخ اليوم. ولا يُعدَّل بعد أول حركة على الحساب.'}
           </p>
         </div>
         {error && <p className="error-text">{error}</p>}

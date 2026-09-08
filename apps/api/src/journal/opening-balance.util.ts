@@ -2,7 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
-import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine } from './journal-posting.util';
+import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
 /**
  * Opening balances as real postings (closes the named 3.8 debt): an account's
@@ -129,6 +129,15 @@ export interface OpeningDeltaInput {
   /** Signed change to the account's opening balance, on its normal side. */
   delta: number;
   memo?: string;
+  /**
+   * **التاريخُ الذي أعلنه التاجر** (`ق-٢٩٦`) — وغيابُه يعني «لم يُعلَن»،
+   * فيُشتقّ بـ`openingEntryDate` كما كان.
+   *
+   * ⚠️ **وبه يحيا حقلُ البنك الميت**: `bank.openingDate` كان يُخزَّن **ولا يصل
+   * الأستاذ إطلاقاً** — والمقيس: **١٢ من ١٢ حساب بنكٍ تاريخُ قيده يخالف تاريخَ
+   * فتحه المعلَن** (سبتمبر مقابل يناير). فصار المُعلَنُ **هو** تاريخَ القيد.
+   */
+  declaredDate?: Date | null;
 }
 
 /** Posts the قيد افتتاحي (or a delta entry for an edit). Returns null when the
@@ -139,7 +148,7 @@ export async function postOpeningDeltaEntry(tx: Prisma.TransactionClient, input:
   const delta = round2(input.delta);
   if (delta === 0) return null;
 
-  const date = await openingEntryDate(tx, input.companyId);
+  const date = input.declaredDate ?? (await openingEntryDate(tx, input.companyId));
   await assertNoMovementBeforeOpening(tx, input.companyId, input.account, date);
 
   const equity = await getOrCreateOpeningEquityAccount(tx, input.companyId);
@@ -156,6 +165,54 @@ export async function postOpeningDeltaEntry(tx: Prisma.TransactionClient, input:
     auto: true,
     openingForAccountId: input.account.id,
     lines: openingDeltaLines(input.account, equity.id, delta),
+  });
+}
+
+/**
+ * **إعادةُ إعلان تاريخ الافتتاح** (`ق-٢٩٦/④`) — **مسارٌ واحد للحساب والبنك**.
+ *
+ * تغييرُ التاريخ يعني إعادةَ تأريخ القيد الافتتاحيّ. **فيُشترط سكونُ الحساب**:
+ * لا سطرَ عليه خارج قيدٍ افتتاحيٍّ له. **والرفضُ يسمّي الحركة ويدلّ على مخرجٍ
+ * مبنيّ** — «أدخل الفرق بقيدٍ بتاريخه» (كما في `ق-٢٩١`).
+ *
+ * ⚠️ **والقيدُ يُعاد ترحيلُه لا يُعدَّل تاريخُه**: رقمُه يحمل سنتَه
+ * (`JE-<سنة>-<تسلسل>`)، **فتاريخٌ يُكتب فوقه يفارق رقمَه** عند عبور السنة.
+ * والحسابُ ساكنٌ بحكم البوّابة، فالحذفُ والإعادةُ لا يمسّان حركةَ أحد.
+ */
+export async function redeclareOpeningDate(
+  tx: Prisma.TransactionClient,
+  input: { companyId: string; account: AccountForOpening; openingBalance: number; declaredDate: Date },
+): Promise<void> {
+  const moved = await tx.journalLine.findFirst({
+    where: { companyId: input.companyId, accountId: input.account.id, journalEntry: { openingForAccountId: null } },
+    orderBy: { journalEntry: { date: 'asc' } },
+    select: { journalEntry: { select: { date: true, no: true } } },
+  });
+  if (moved) {
+    throw new ConflictException(
+      formatMessage(MSG.account_opening_date_locked, {
+        code: input.account.code,
+        name: input.account.name,
+        moved: moved.journalEntry.date.toISOString().slice(0, 10),
+        entry: moved.journalEntry.no,
+      }),
+    );
+  }
+
+  const openings = await tx.journalEntry.findMany({
+    where: { companyId: input.companyId, openingForAccountId: input.account.id },
+    select: { id: true },
+  });
+  for (const entry of openings) await reverseAndDeleteJournalEntry(tx, entry.id);
+
+  const amount = round2(input.openingBalance);
+  if (amount === 0) return;
+  await postOpeningDeltaEntry(tx, {
+    companyId: input.companyId,
+    account: input.account,
+    delta: amount,
+    declaredDate: input.declaredDate,
+    memo: `الرصيد الافتتاحي — ${input.account.name} (${input.account.code})`,
   });
 }
 

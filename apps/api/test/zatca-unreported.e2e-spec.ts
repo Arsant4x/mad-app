@@ -39,10 +39,13 @@ describe('ZATCA unreported report + requeue (e2e)', () => {
     companyId = login.body.user.companyId;
   }, 60000);
 
+  // ⚠️ **مهلةٌ صريحة كأخواتها**: التنظيفُ يحذف فواتيرَ ويعكس قيودَها ثم يُغلق
+  // التطبيق — وافتراضُ `jest` خمسُ ثوانٍ. **ومهلةٌ ضمنيّة تمرّ على قاعدةٍ
+  // صغيرة وتسقط حين تكبر**، وهي عائلةُ «الاختبارُ يفترض قاعدةً فارغة» نفسها.
   afterAll(async () => {
     for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`)).catch(() => undefined);
     await app.close();
-  });
+  }, 60000);
 
   it('يعدّ ما لم يُقبَل، ولا يعدّ ما قُبل — بوجهَين (ق-١٨٢/٢)', async () => {
     const customers = await auth(request(app.getHttpServer()).get('/customers')).expect(200);

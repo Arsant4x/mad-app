@@ -6,7 +6,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
 import { MSG } from '../common/i18n/messages';
-import { postOpeningDeltaEntry } from '../journal/opening-balance.util';
+import { postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
 import { BANK_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
 import { round2 } from '../common/money/rounding';
 
@@ -86,10 +86,14 @@ export class BanksService {
           });
 
           if (openingBalance !== 0) {
+            // ⭐ **تاريخُ فتح البنك يصل الأستاذ أخيراً** (ق-٢٩٦): كان يُخزَّن
+            // ويُهمَل، والقيدُ يُؤرَّخ باشتقاق — **والمقيس: ١٢ من ١٢ حساب بنكٍ
+            // تاريخُ قيده يخالف تاريخَ فتحه المعلَن** (سبتمبر مقابل يناير).
             await postOpeningDeltaEntry(tx, {
               companyId,
               account,
               delta: openingBalance,
+              declaredDate: new Date(dto.openingDate),
               memo: `الرصيد الافتتاحي — ${dto.name} (${code})`,
             });
             await tx.account.update({ where: { id: account.id }, data: { openingBalance } });
@@ -111,7 +115,13 @@ export class BanksService {
       const data: Prisma.BankUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
       if (dto.iban !== undefined) data.iban = dto.iban || null;
-      if (dto.openingDate !== undefined) data.openingDate = new Date(dto.openingDate);
+
+      // ⭐ تاريخُ الفتح صار إعلاناً يصل الأستاذ (ق-٢٩٦): تغييرُه يُعيد ترحيلَ
+      // القيد الافتتاحيّ **بالمسار الواحد** — بوّابةُ السكون فيه لا هنا.
+      const newOpeningDate = dto.openingDate === undefined ? null : new Date(dto.openingDate);
+      const dateChanged =
+        newOpeningDate !== null && newOpeningDate.toISOString().slice(0, 10) !== existing.openingDate.toISOString().slice(0, 10);
+      if (dto.openingDate !== undefined) data.openingDate = newOpeningDate!;
 
       if (dto.openingBalance !== undefined) {
         /**
@@ -142,7 +152,18 @@ export class BanksService {
         }
       }
 
-      return tx.bank.update({ where: { id }, data });
+      const updated = await tx.bank.update({ where: { id }, data });
+
+      if (dateChanged) {
+        const account = await tx.account.findUniqueOrThrow({ where: { id: existing.accountId } });
+        await redeclareOpeningDate(tx, {
+          companyId,
+          account,
+          openingBalance: Number(updated.openingBalance),
+          declaredDate: newOpeningDate!,
+        });
+      }
+      return updated;
     });
   }
 

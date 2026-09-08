@@ -3,7 +3,12 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { BANK_BANDS, type CodeBand } from '../src/accounts/code-bands';
 import { AppModule } from '../src/app.module';
+
+/** رموزُ الدليل الواقعةُ في نطاقٍ بعينه — تُقرأ من القاعدة لحظةَ السؤال. */
+const codesIn = (list: { code: string }[], band: CodeBand): number[] =>
+  list.map((a) => Number(a.code)).filter((n) => Number.isInteger(n) && n >= band.min && n <= band.max);
 
 interface Account {
   id: string;
@@ -56,25 +61,36 @@ describe('Bank ↔ ledger account (e2e)', () => {
     await app.close();
   });
 
-  it('① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في نطاق 1100–1199، وباسمه', async () => {
+  it('① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في أحد نطاقات البنوك، وباسمه', async () => {
     const bank = (await createBank(`بنك الاختبار ${suffix}`).expect(201)).body as Bank;
     banks.push(bank.id);
 
     expect(bank.accountId).toBeTruthy();
     const account = await accountOf(bank);
     expect(account).toBeTruthy();
+    // ⚠️ **النطاقُ يُقرأ من مصدره لا يُكتب رقماً** (ق-٢٩٥): صارت للبنوك
+    // نطاقانِ (`1100–1199` ثم `1601–1999`)، **وتوكيدٌ مثبَّتٌ على `1199` يمرّ
+    // على قاعدةٍ فارغة ويسقط على قاعدةٍ نفد أولُ نطاقها** — وهو ما وقع.
     const code = Number(account!.code);
-    expect(code).toBeGreaterThanOrEqual(1100);
-    expect(code).toBeLessThanOrEqual(1199);
+    expect(BANK_BANDS.some((b) => code >= b.min && code <= b.max)).toBe(true);
     expect(account!.name).toContain(bank.name);
   });
 
   it('② والترقيمُ `MAX+1` لا عدّاً: حسابٌ مزروع فوق الأعلى يدفع التاليَ فوقه، والفجوةُ تبقى', async () => {
     // يُقرأ الأعلى **من القاعدة** لا يُفترض رقمٌ ثابت: الحزمةُ تعمل على قاعدةٍ
     // تحمل بنوكاً سابقة، ورقمٌ مكتوب هنا يصدق مرةً ويكذب في التشغيل التالي.
-    const inRange = (list: Account[]) => list.map((a) => Number(a.code)).filter((n) => n >= 1100 && n <= 1199);
-    const before = Math.max(...inRange(await accounts()), 1099);
+    const all = await accounts();
+    // ⚠️ **والنطاقُ الفاعل يُقرأ من المصدر** (ق-٢٩٥): يُزرع في النطاق الذي
+    // سيصدر منه الرمزُ التالي فعلاً — فزرعٌ في نطاقٍ نفد لا يدفع شيئاً.
+    const active = BANK_BANDS.find((b) => {
+      const used = codesIn(all, b);
+      return (used.length ? Math.max(...used) : b.min - 1) + 1 <= b.max;
+    });
+    if (!active) throw new Error('نطاقاتُ رموز البنوك نفدت كلُّها — والتوكيد يحتاج خانتين');
+    const usedInActive = codesIn(all, active);
+    const before = Math.max(...usedInActive, active.min - 1);
     const plantedCode = String(before + 7); // فجوةٌ مقصودة بين الأعلى والمزروع
+    if (before + 8 > active.max) throw new Error('لا تتّسع الخانات الباقية في النطاق للفجوة المقصودة');
 
     const planted = (await auth(http().post('/accounts')).send({ code: plantedCode, name: `حسابٌ مزروع ${suffix}`, type: 'asset' }).expect(201)).body as Account;
 
@@ -103,7 +119,13 @@ describe('Bank ↔ ledger account (e2e)', () => {
 
     // وقيدٌ افتتاحيٌّ للحساب موجودٌ فعلاً في دفتر اليومية — والقائمةُ مُصفّحة
     // (`{ items, total }`) لا مصفوفةً عارية، فتُقرأ كما تُعيدها الخدمة.
-    const page = (await auth(http().get('/journal?pageSize=100')).expect(200)).body as {
+    //
+    // ⚠️ **ويُبحث عنه برمزه لا بأول مئة صفّ** (ق-٢٨٦، الوجه الثالث): كان
+    // يقرأ الصفحة الأولى ويشترط وجودَه فيها — **ودعواه «القيد موجود» وسطحُه
+    // «القيد في أحدث مئة»**. ومرّ ما دام الافتتاحيُّ يُؤرَّخ باليوم؛ **فلمّا
+    // صار يحمل تاريخ فتح البنك المعلَن** (ق-٢٩٦) نزل في الترتيب وسقط
+    // التوكيد — **بلا عطلٍ في الميزة**.
+    const page = (await auth(http().get('/journal').query({ search: account!.code, pageSize: 100 })).expect(200)).body as {
       items: { lines?: { accountId: string }[] }[];
       total: number;
     };

@@ -39,7 +39,13 @@ export function AccountsPage() {
 
   async function handleSave(data: AccountInput) {
     if (modal?.mode === 'edit') {
-      await updateAccount(modal.account.id, { name: data.name, type: data.type, openingBalance: data.openingBalance });
+      await updateAccount(modal.account.id, {
+        name: data.name,
+        type: data.type,
+        openingBalance: data.openingBalance,
+        // يُمرَّر فقط حين أرسله النموذج — أي حين غيّره التاجر (ق-٢٩٦).
+        ...(data.openingDate ? { openingDate: data.openingDate } : {}),
+      });
     } else {
       await createAccount(data);
     }
