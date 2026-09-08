@@ -63,7 +63,23 @@ import { WarrantiesModule } from './warranties/warranties.module';
     // Runs the daily escalation sweep in-process. Safe under multiple
     // instances because every notification it raises is deduplicated by a
     // unique key — see EscalationService.
-    ScheduleModule.forRoot(),
+    //
+    // ⚠️ **ومعطَّلٌ تحت الاختبار** (`ق-٢٩٢`): `OutboxDispatcherJob` يعمل **كل
+    // دقيقة** ويرسل فواتير ZATCA، **فيلتهم `icv` بين توكيدٍ وسابقه** — وهو ما
+    // أسقط `db-integration` على طلبٍ لا عطلَ فيه. **والمقيس: ٥١ توكيداً
+    // نسبياً في ٢٦ ملفاً**، خمسةٌ منها مكشوفةٌ لهذه المهمة، **ومهمّتان
+    // يوميّتان مكشوفتان بالساعة** (٣ص · ٧ص) — وCI يعمل في كل ساعة.
+    //
+    // **والعزلُ رُفض بنيةً لا انضباطاً** (حكم المالك): يُصلح خمسةً ويترك
+    // التزاماً دائماً على كل اختبارٍ يُكتب بعد اليوم، **ولا يُصلح انكشافَ
+    // الساعة أصلاً**. ولا اختبارَ يفقد شيئاً: الترقيةُ تُستدعى بـ
+    // `POST /notifications/run-escalation`، والصندوقُ الصادر بدوالّه مباشرةً.
+    //
+    // ⚠️ **وحارسٌ يمنع أن يصير التعطيلُ نسياناً**:
+    // `src/common/scheduler-registered.spec.ts` يثبت أن التسجيل قائمٌ وأن
+    // بوّابتَه **بيئةُ الاختبار وحدها** — فمهمّةٌ لا تعمل في الإنتاج أسوأ من
+    // اختبارٍ متقلّب.
+    ...(process.env.NODE_ENV === 'test' ? [] : [ScheduleModule.forRoot()]),
     // Flood protection: a generous global ceiling (normal use never hits it),
     // with a much stricter per-route limit on login (see AuthController) so
     // password guessing is throttled hard. Skipped entirely under Jest — the

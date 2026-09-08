@@ -7,6 +7,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -229,6 +230,7 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     const b = await makeInvoice();
     const submittedB = await submit(b);
     expect(submittedB.body.zatcaPreviousHash).toBe(submittedA.body.zatcaHash);
-    expect(submittedB.body.zatcaIcv).toBe(submittedA.body.zatcaIcv + 1);
+    // ولا وثيقةَ بينهما — الدعوى محلّيةٌ فتُقاس محلّياً (ق-٢٩٢).
+    await expectNothingBetweenIcv(tenantPrisma, companyId, submittedA.body.zatcaIcv, submittedB.body.zatcaIcv);
   }, 40000);
 });

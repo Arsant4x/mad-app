@@ -6,6 +6,7 @@ import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { encryptSecret } from '../src/common/crypto/secret.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -263,9 +264,10 @@ describe('ZATCA credit notes (e2e)', () => {
       const b = await request(app.getHttpServer()).post(`/zatca/invoices/${note.body.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
 
       // The chain does not fork per document type: the note chains onto the
-      // invoice's hash and advances the one counter by exactly one.
+      // invoice's hash and takes the next counter — **ولا أحدَ بينهما**
+      // (`ق-٢٩٢`: الدعوى محلّيةٌ فتُقاس محلّياً، لا بفارقٍ عدديّ مطلق).
       expect(b.body.zatcaPreviousHash).toBe(a.body.zatcaHash);
-      expect(b.body.zatcaIcv).toBe(a.body.zatcaIcv + 1);
+      await expectNothingBetweenIcv(tenantPrisma, companyId, a.body.zatcaIcv, b.body.zatcaIcv);
       expect(b.body.zatcaHash).toBeTruthy();
       expect(b.body.zatcaHash).not.toBe(a.body.zatcaHash);
     }, 30000);

@@ -72,7 +72,11 @@ describe('ZATCA unreported report + requeue (e2e)', () => {
     const idsAfter = after.body.items.map((i: { id: string }) => i.id);
     expect(idsAfter).not.toContain(older);
     expect(idsAfter).toContain(newer);
-    expect(after.body.count).toBe(before.body.count - 1);
+    // ⚠️ **والعدُّ يَنقص ولا يُشترط `-1` بالضبط** (ق-٢٩٢): `count` عدٌّ على
+    // المنشأة كلِّها، **ودعوى هذا التوكيد وثيقتاه** — وقد حملها السطران
+    // أعلاه. فاشتراطُ فارقٍ مطلقٍ على عدٍّ عامّ **سطحُه أوسعُ من دعواه**،
+    // ويسقط متى قَبِلت الهيئةُ مستنداً آخر بين القراءتين.
+    expect(after.body.count).toBeLessThan(before.body.count);
   }, 60000);
 
   it('FAILED يعود إلى الطابور عند الربط، وSENT لا يُمسّ (ق-١٨٢/٣)', async () => {
