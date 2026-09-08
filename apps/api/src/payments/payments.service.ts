@@ -255,7 +255,7 @@ export class PaymentsService {
           where: { id: dto.creditNoteId },
           include: {
             customer: { select: { id: true, name: true } },
-            relatedInvoice: { select: { id: true, total: true } },
+            relatedInvoice: { select: { id: true, total: true, posShiftId: true } },
           },
         });
         if (!note || note.docType !== 'CREDIT_NOTE' || !note.relatedInvoice) throw new BadRequestException(MSG.refund_target_invalid);
@@ -296,6 +296,24 @@ export class PaymentsService {
           } as unknown as Prisma.PaymentUncheckedCreateInput,
         });
 
+        /**
+         * ⭐ **الردُّ النقديُّ يخرج من الدرج الذي دخله البيع** (`ق-٣١٠`).
+         *
+         * **ومن مناوبةٍ ما زالت مفتوحة وحدها**: مناوبةٌ أُقفلت جُرد درجُها
+         * ورُحّل فرقُها (`ق-٣٠٨`) — **فمسُّ حسابها بعد الإقفال يفسد عدّاً
+         * مُغلقاً**. وما عداه يخرج من `1000` كما كان.
+         *
+         * ⚠️ **وليس زيادةً على `ق-٣٠٩` بل نصفُه**: البيعُ يدخل الدرج، **فلو
+         * خرج الردُّ من `1000` لأظهر الجردُ فائضاً كاذباً واتّهم الكاشيرَ
+         * بفرقٍ صنعه النظام**.
+         */
+        const openShift = note.relatedInvoice.posShiftId
+          ? await tx.posShift.findFirst({
+              where: { id: note.relatedInvoice.posShiftId, status: 'OPEN' },
+              select: { drawer: { select: { accountId: true } } },
+            })
+          : null;
+
         await this.postAndSettle(tx, companyId, payment.id, {
           no,
           customerName: note.customer.name,
@@ -305,6 +323,7 @@ export class PaymentsService {
           exchangeRate: rate,
           branchId: note.branchId,
           bank,
+          drawerAccountId: openShift?.drawer?.accountId ?? null,
           baseReceivable: round2(-toBaseAmount(amount, rate)),
           description: `ردّ مرتجع — سند ${no} — إشعار دائن ${note.no} — ${note.customer.name}`,
           refund: true,
@@ -454,6 +473,14 @@ export class PaymentsService {
       reversal?: boolean;
       /** سندُ ردٍّ لمرتجع (`SPEC 30.8`) — مبلغه سالبٌ كالعكس، ومذكّرته تسمّيه. */
       refund?: boolean;
+      /**
+       * ⭐ **نقدُ المناوبة يخرج من درجها** (`ق-٣٠٩`/`ق-٣١٠`) — لا من `1000`.
+       *
+       * ⚠️ **وهو نصفُ الإصلاح لا زيادةٌ عليه**: البيعُ صار يدخل حسابَ الدرج،
+       * **فلو خرج الردُّ من `1000` أظهر الجردُ فائضاً كاذباً في الدرج وعجزاً
+       * في `1000`** — **واتّهم `ق-٣٠٨` الكاشيرَ بفرقٍ صنعه النظام**.
+       */
+      drawerAccountId?: string | null;
     },
   ): Promise<void> {
     const entry = await postCustomerPaymentEntry(tx, companyId, {
@@ -467,7 +494,8 @@ export class PaymentsService {
       refund: p.refund,
       // (ق-٢٧٧) النقدُ يدخل **حسابَ البنك** حين تُقبض الدفعة على بنك — وقبلَه
       // كان يدخل `1000` دائماً، فيُعدّ نقدُ البنك صندوقاً (ق-٢٧٦).
-      cashAccountId: p.bank?.accountId ?? null,
+      // و(ق-٣٠٩) نقداً على مناوبةٍ مفتوحة ⟵ **حسابُ درجها**، وإلا `1000`.
+      cashAccountId: p.bank?.accountId ?? p.drawerAccountId ?? null,
     });
     if (entry) await tx.payment.update({ where: { id: paymentId }, data: { journalEntryId: entry.id } });
 

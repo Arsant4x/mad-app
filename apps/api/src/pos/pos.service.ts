@@ -11,6 +11,8 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
+import { toBaseAmount } from '../common/currency/base-amount.util';
+import { postPosSettlementEntry, postShiftVarianceEntry } from '../journal/pos-settlement.util';
 import { localDateOf } from '../common/wall-clock.util';
 import { ZatcaService } from '../zatca/zatca.service';
 
@@ -165,16 +167,35 @@ export class PosService {
       }
 
       const totals = await this.totalsFor(tx, shift.id, Number(shift.openingFloat));
+      /** موجب = زيادة في الدرج، سالب = عجز. */
+      const variance = round2(dto.declaredClosing - totals.expectedCash);
+
       const closed = await tx.posShift.update({
         where: { id },
-        data: { status: 'CLOSED', closedAt: new Date(), declaredClosing: dto.declaredClosing, notes: dto.notes },
+        data: { status: 'CLOSED', closedAt: new Date(), declaredClosing: dto.declaredClosing, notes: dto.notes, variance },
       });
-      return {
-        ...closed,
-        ...totals,
-        /** موجب = زيادة في الدرج، سالب = عجز. */
-        variance: round2(dto.declaredClosing - totals.expectedCash),
-      };
+
+      /**
+       * ⭐ **العمودُ والقيدُ في المعاملة نفسها** (`ق-٣٠٨`، شرطُ المالك الأول).
+       *
+       * سقوطُ أحدهما يُسقط الإقفال: **تخزينُ الفرق بلا ترحيله يُعيد إنتاج
+       * «رقمٍ يتحرك بلا قيدٍ يسنده»** — وهو العطلُ الذي أُغلقت الكتلةُ لأجله.
+       * **وصفرُ الفرق لا يُرحَّل قيداً** (الشرط الثاني) — الدالّةُ تعيد `null`.
+       */
+      const drawer = shift.drawerId
+        ? await tx.cashDrawer.findUnique({ where: { id: shift.drawerId }, select: { accountId: true } })
+        : null;
+      await postShiftVarianceEntry(tx, tenant.companyId, {
+        shiftNo: shift.id.slice(0, 8),
+        // تاريخُ الإقفال يومَ وقوعه — لا لحظةٌ بتوقيت الخادم: `@db.Date` يقرأ
+        // اليومَ وحده، ومناوبةٌ تُقفل بعد منتصف الليل تُؤرَّخ بيومها لا بأمسها.
+        date: new Date(new Date().toISOString().slice(0, 10)),
+        branchId: shift.branchId,
+        drawerAccountId: drawer?.accountId ?? null,
+        variance,
+      });
+
+      return { ...closed, ...totals, variance };
     });
   }
 
@@ -313,7 +334,7 @@ export class PosService {
     dto: CreatePosSaleDto,
     opts: { clientSaleId?: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; viaSync?: boolean },
   ) {
-    const { shiftId, shiftBranchId, branchWarehouseId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+    const { shiftId, shiftBranchId, drawerAccountId, branchWarehouseId, invoiceDto, providerRef } = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
 
@@ -407,7 +428,19 @@ export class PosService {
         }
         providerRef = result?.providerRef ?? null;
       }
-      return { shiftId: shift.id, shiftBranchId: shift.branchId, branchWarehouseId, invoiceDto, providerRef };
+      // حسابُ درج المناوبة — إليه يدخل نقدُ البيع (ق-٣٠٩). و`null` لمناوبةٍ
+      // سبقت موجةَ الأدراج: تسقط إلى `1000` بإعلانٍ في مُرحِّلها.
+      const drawer = shift.drawerId
+        ? await tx.cashDrawer.findUnique({ where: { id: shift.drawerId }, select: { accountId: true } })
+        : null;
+      return {
+        shiftId: shift.id,
+        shiftBranchId: shift.branchId,
+        drawerAccountId: drawer?.accountId ?? null,
+        branchWarehouseId,
+        invoiceDto,
+        providerRef,
+      };
     });
 
     // Same path a hand-written invoice takes (numbering retry included) —
@@ -427,6 +460,31 @@ export class PosService {
           // مرجع البوابة يلتصق بصف البطاقة وحده.
           providerRef: p.method === 'CARD' ? providerRef : null,
         })),
+      });
+
+      /**
+       * ⭐ **تحصيلُ البيع يُرحَّل هنا** (`ق-٣٠٩`) — وكان لا يُرحَّل إطلاقاً.
+       *
+       * الفاتورةُ رحّلت `مدين 1200 / دائن 4100 + 2200`، **وصفوفُ الدفع تُكتب
+       * ولا تُرحَّل** — فالذمّةُ لا تُسدَّد والنقدُ لا يدخل الأستاذ. والآن:
+       * `مدين درجُ المناوبة` (النقد) · `مدين 1251` (الشبكة) · `دائن 1200`.
+       *
+       * ⚠️ **وفي المعاملة نفسها**: سقوطُه يُسقط البيعَ كلَّه — فبيعٌ يمرّ
+       * بذمّةٍ لا تُسدَّد هو العطلُ الذي أُغلق.
+       */
+      const rate = Number(invoice.exchangeRate);
+      const baseOf = (method: string) =>
+        toBaseAmount(
+          parts.filter((p) => (method === 'CASH' ? p.method === 'CASH' : p.method !== 'CASH')).reduce((s, p) => s + p.amount, 0),
+          rate,
+        );
+      await postPosSettlementEntry(tx, tenant.companyId, {
+        no: invoice.no,
+        date: invoice.issueDate,
+        branchId: shiftBranchId,
+        drawerAccountId,
+        baseCash: baseOf('CASH'),
+        baseCard: baseOf('CARD'),
       });
       /**
        * ⭐ **الخصم لم يعد هنا** — صار مالكه سطرَ الفاتورة (`م٦`).
