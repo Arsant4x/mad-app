@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): المقروءُ **قيمٌ نصّية معلَنة**
+// لا أنماطُ شيفرة — **فتجريدُ النصوص يُعميه**.
+readsDeclaredStrings();
 
 const API = join(__dirname, '..');
 const read = (...p: string[]) =>

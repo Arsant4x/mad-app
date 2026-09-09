@@ -1,5 +1,10 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): التصنيفاتُ **سلاسلُ عربية معلَنة**
+// تُقارن بين مصدرين — **فتجريدُ النصوص يُفرغهما**.
+readsDeclaredStrings();
 import {
   AMORTIZABLE_CATEGORY,
   DEFAULT_EXPENSE_ACCOUNT,

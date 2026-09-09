@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): القيمُ المقروءة **سلاسلُ نصّية
+// معلَنة** لا أنماطُ شيفرة — **فتجريدُ النصوص يُعميه**.
+readsDeclaredStrings();
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { SetPrimaryActivityDto } from './dto/set-primary-activity.dto';

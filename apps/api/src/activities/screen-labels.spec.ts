@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
 import { ALLOWED_SCREENS } from '../templates/screens';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): التسمياتُ تُستخرَج من **داخل
+// السلاسل نفسها** (`key: 'label'`) — **فتجريدُ النصوص يعيده بخريطةٍ فارغة،
+// فيقارن `{}` بالسجل ويمرّ عمىً**. والنصُّ هنا **بياناتُه لا شيفرتُه**.
+readsDeclaredStrings();
 import { SCREEN_LABELS } from './screen-labels';
 
 /** يستخرج خريطة `مفتاح: 'قيمة'` من نصّ ملفٍّ مصدري. */
