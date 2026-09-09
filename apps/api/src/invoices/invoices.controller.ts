@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantContext } from '../auth/types';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtPayload, TenantContext } from '../auth/types';
 import { AuditEntityFromResult } from '../audit/audit-entity-from-result.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -24,10 +25,17 @@ export class InvoicesController {
     return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
+  /**
+   * ⚖️ **الفاتورةُ المباشرة تفتح ذمّةً — فتُصرَّح `ON_ACCOUNT`** (`ق-٣٣٨`).
+   *
+   * والاسمُ يُمرَّر لأن التجاوز **يُكتب حدثاً باسم فاعله**، **واسمُه يُخزَّن
+   * وقتَ الفعل لا يُحلّ لاحقاً** — كما في بقية سجل التدقيق.
+   */
   @Post()
   @RequiresAction('add')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateInvoiceDto) {
-    return this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  async create(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: CreateInvoiceDto) {
+    const credit = await this.invoicesService.creditContextFor(tenant, user.username, dto, 'ON_ACCOUNT');
+    return this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, dto, credit);
   }
 
   /** Issues a ZATCA 381 credit note against this invoice — gated by 'add'

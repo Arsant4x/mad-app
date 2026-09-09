@@ -14,8 +14,22 @@
 
 /** شكل ردّ الخطأ من NestJS كما يصل عبر axios. */
 interface ApiErrorShape {
-  response?: { data?: { message?: unknown } };
+  response?: { data?: { message?: unknown; code?: unknown } };
   message?: unknown;
+}
+
+/**
+ * ⭐ **رمزُ الخطأ الثابت — لا نصُّه** (`ق-٣٣٩`).
+ *
+ * ⚠️ **ولماذا لا تُطابَق الرسالة**: الرسائلُ **مترجَمةٌ ومصاغةٌ للتاجر**،
+ * فمطابقتُها **تنكسر بأول تحسينِ صياغةٍ أو بتبديل اللغة** — **وتنكسر صامتةً**:
+ * يختفي الزرُّ ويبقى الرفضُ فيُقرأ منعاً لا يُتجاوَز وهو ليس كذلك.
+ *
+ * و`undefined` هو الغالب: أكثرُ الأخطاء لا رمزَ لها.
+ */
+export function apiErrorCode(error: unknown): string | undefined {
+  const code = (error as ApiErrorShape)?.response?.data?.code;
+  return typeof code === 'string' && code ? code : undefined;
 }
 
 /**

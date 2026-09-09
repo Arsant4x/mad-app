@@ -467,7 +467,26 @@ export class PosService {
 
     // Same path a hand-written invoice takes (numbering retry included) —
     // outside the block above because it opens its own tenant transaction.
-    const invoice = await this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, invoiceDto);
+    /**
+     * ⚖️ **`IMMEDIATE` — والبيعُ المسدَّدُ فوراً لا يُفحص على الحدّ** (`ق-٣٣٨`).
+     *
+     * «**وحدٌّ يمنع بيعاً نقدياً عطلٌ يصنعه لا يمنعه**»: السندُ يُنشأ بعد هذا
+     * السطر، **فعند لحظة الفحص تكون الذمّةُ ارتفعت والدفعةُ لم تصل** — فيُرفض
+     * بيعُ عميلٍ عند حدّه **نقداً**، وهو عطلٌ نصنعه.
+     *
+     * ⚠️ **وحدُّ هذا التصريح مُعلَنٌ في `credit-context.ts` ولا يُلتفّ عليه**:
+     * إن سقطت معاملةُ السند بقيت فاتورةٌ مفتوحةٌ أُعفيت من الحدّ — **بيعةٌ
+     * واحدة، ويظهر تعرّضُها في الفحص التالي**.
+     *
+     * ⚠️ **ولا تجاوزَ يُطلب هنا**: بيعُ الكاشير لا يُفحص أصلاً، **فتصريحُ
+     * تجاوزٍ فيه يوهم بقرارٍ لم يقع**.
+     */
+    const invoice = await this.invoicesService.create(tenant.companyId, tenant.allowedBranchIds, invoiceDto, {
+      settlement: 'IMMEDIATE',
+      actor: null,
+      overrideRequested: false,
+      canOverride: false,
+    });
 
     const sold = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم

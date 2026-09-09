@@ -95,7 +95,22 @@ export interface CreateInvoiceInput {
    * user isn't allowed to write to. */
   branchId?: string;
   lines: InvoiceLineInput[];
+  /**
+   * ⚖️ **تصريحُ تجاوز حدّ الائتمان** — **لا يُرسَل إلا بعد رفضٍ قرأه التاجر**
+   * (`ق-٣٣٩`). والخادمُ يتحقّق أن صاحبَه يملك صلاحية الاعتماد، **ويُخزّن
+   * تجاوزَه على الفاتورة** ويكتب حدثاً باسمه في سجل التدقيق.
+   */
+  creditOverride?: boolean;
 }
+
+/**
+ * ⭐ **رمزُ «تجاوز الحدّ ممكن»** — يُقرأ من ردّ الخادم **لا من نصّ الرسالة**.
+ *
+ * ⚠️ **والنصُّ لا يُطابَق**: مترجَمٌ ومصاغٌ للتاجر، **فمطابقتُه تنكسر صامتةً**
+ * بأول تحسينِ صياغة — **فيختفي زرُّ التجاوز ويُقرأ الرفضُ منعاً صلباً وهو
+ * ليس كذلك**. وقيمتُه مصدرُها `apps/api/src/invoices/credit-context.ts`.
+ */
+export const CREDIT_LIMIT_EXCEEDED = 'CREDIT_LIMIT_EXCEEDED';
 
 export type UpdateInvoiceInput = Partial<CreateInvoiceInput> & { status?: InvoiceStatus };
 
