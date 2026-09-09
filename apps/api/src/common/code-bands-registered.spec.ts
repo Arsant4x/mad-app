@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { dirname, join } from 'path';
+import { stripCommentsAndStrings } from './source-scan.util';
 import { CODE_BAND_GROUPS } from '../accounts/code-bands';
 
 /**
@@ -23,12 +24,15 @@ const SRC = join(__dirname, '..');
 const BANDS_FILE = join(SRC, 'accounts', 'code-bands.ts');
 
 /** يُفرِّغ التعليقات والنصوص — **فحارسٌ يقرأ نصّاً بلا هذا يُدين أمثلته** (`ق-٢٨١/ب`). */
-export function blankNonCode(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
-    .replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g, (m) => m.replace(/[^\n]/g, ' '));
-}
+/**
+ * ⚠️ **كانت نسخةً خامسة — سليمةً هذه المرّة** (`ق-٣٧٥`): تُفرِّغ التعليقاتِ
+ * والنصوصَ بفراغٍ فتحفظ السطرَ والعمود، **مطابقةً للمصدر الواحد سلوكاً**.
+ * **فوُحِّدت لا لأنها معطوبة بل لئلّا تنحدر** — فأربعُ نسخٍ من الخمس حملت
+ * عطلاً، وواحدةٌ نجت بالمصادفة.
+ *
+ * **والاسمُ يبقى** لأن كاشفَ هذا الحارس واختبارَه يستعملانه.
+ */
+export const blankNonCode = stripCommentsAndStrings;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
