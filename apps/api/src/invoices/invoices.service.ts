@@ -676,12 +676,29 @@ export class InvoicesService {
   async zatcaQrFor(
     companyId: string,
     inv: { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal | number; taxTotal: Prisma.Decimal | number; zatcaQrPayload?: string | null },
+    /** معاملةُ المستدعي حين يكون داخل واحدة — فلا تُفتح ثانيةٌ فوقها. */
+    tx?: Prisma.TransactionClient,
   ): Promise<string | null> {
     // مستندٌ مختوم: رمزُه التساعي المحفوظ لحظةَ الختم — لا يُبنى ثانيةً (`ق-١٨٧`).
     if (inv.zatcaQrPayload) return inv.zatcaQrPayload;
-    const company = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.company.findUnique({ where: { id: companyId }, select: { legalName: true, vatNumber: true } }),
-    );
+
+    /**
+     * ⚠️ **معاملةُ المستدعي تُستعمل إن وُجدت — ولا تُفتح ثانيةٌ داخلها**
+     * (`ق-٣٦٠`).
+     *
+     * **العطلُ المقيس**: `PosService.ring` يفتح معاملةً، ثم يُنادي هذه من
+     * داخلها، **فكانت تفتح معاملةً ثانية**. ⇒ **كلُّ بيعةٍ طائرة تمسك اتصالاً
+     * وتطلب ثانياً** — وثلاثُ بيعاتٍ متزامنة تطلب ستةً وتمسك ثلاثة. **فإن كان
+     * مجموعُ الاتصالات دونها وقع تجويعٌ تامّ**: كلٌّ ينتظر ما لن يُفرَج عنه،
+     * حتى تنتهي مهلةُ بدء المعاملة ويعود `500`.
+     *
+     * **ولا يظهر على جهازٍ بأنويةٍ كثيرة** (المجموع يُشتقّ من عددها) — **ظهر
+     * على عتاد السير وحده**، وأصاب **ثلاث بيعاتٍ متزامنة: الحالةَ العادية في
+     * متجرٍ نشط لا النادرة**.
+     */
+    const readCompany = (tx: Prisma.TransactionClient) =>
+      tx.company.findUnique({ where: { id: companyId }, select: { legalName: true, vatNumber: true } });
+    const company = tx ? await readCompany(tx) : await this.tenantPrisma.runInTenantContext(companyId, readCompany);
     return buildZatcaQr({
       sellerName: company?.legalName ?? '',
       vatNumber: company?.vatNumber ?? '',
