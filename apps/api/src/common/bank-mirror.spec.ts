@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { stripCommentsAndStrings } from './source-scan.util';
 
 /**
  * `ق-٢٨٢` — **`Bank.balance` مرآةٌ تُكتب من مسار الترحيل وحده.**
@@ -27,16 +28,14 @@ export interface MirrorOffence {
   line: number;
 }
 
-/** يُفرَّغ التعليقُ والسلاسل — فحرّاسُنا وتعليقاتُنا تقتبس ما تمنعه (ق-٢٧٤). */
-export function blankNonCode(src: string): string {
-  const keep = (s: string) => s.replace(/[^\n]/g, ' ');
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, keep)
-    .replace(/\/\/[^\n]*/g, keep)
-    .replace(/`(?:\\.|[^`\\])*`/g, keep)
-    .replace(/'(?:\\.|[^'\\\n])*'/g, keep)
-    .replace(/"(?:\\.|[^"\\\n])*"/g, keep);
-}
+/**
+ * يُفرَّغ التعليقُ والسلاسل — فحرّاسُنا وتعليقاتُنا تقتبس ما تمنعه (`ق-٢٧٤`).
+ *
+ * ⚠️ **كانت السابعةَ من سبعِ كتاباتٍ مستقلّة** (`ق-٣٨١`) — **وهي أصلُ الصياغة
+ * السليمة** (المِلءُ بفراغٍ يحفظ السطرَ والعمود). **وُحِّدت لئلّا تُنسخ ثامنةً**
+ * — فثلاثٌ من السبع حملت العطل، **وكلُّها كُتبت بعد هذه**.
+ */
+export const blankNonCode = stripCommentsAndStrings;
 
 export function mirrorOffences(source: string, file = '<inline>'): MirrorOffence[] {
   const code = blankNonCode(source);
