@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
 import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -123,7 +124,7 @@ export class ContractsService {
         const isDraft = dto.draft ?? false;
         if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, dto.tenant);
 
-        const no = await this.nextContractNumber(tx, start);
+        const no = await this.nextContractNumber(tx, companyId, start);
         const customerId = isDraft ? null : (await this.syncTenantCustomer(tx, dto.tenant, dto.phone)).id;
 
         const created = await tx.contract.create({
@@ -460,7 +461,7 @@ export class ContractsService {
         const cycle = dto.cycle ?? source.cycle;
         // التجديد: بادئته من بداية العقد **الجديد** لا الأصل — فهو مستندٌ قائم
         // بذاته بمدّته الخاصة.
-        const no = dto.no?.trim() || (await this.nextContractNumber(tx, start));
+        const no = dto.no?.trim() || (await this.nextContractNumber(tx, companyId, start));
         if (dto.no?.trim()) {
           const taken = await tx.contract.findFirst({ where: { no } });
           if (taken) throw new ConflictException(formatMessage(MSG.contract_no_taken, { contractNo: no }));
@@ -923,15 +924,9 @@ export class ContractsService {
    * يُضاف لا تنتقل البادئة إليه تلقائياً** — تغييرُ أساس الترقيم بعد إصدار أرقام
    * قرارٌ مستقل يُعاد فتحه، لا أثرٌ جانبي لحقلٍ جديد.
    */
-  private async nextContractNumber(tx: Prisma.TransactionClient, startDate: Date): Promise<string> {
-    const year = documentYear(startDate);
-    const prefix = `EJ-${year}-`;
-    const rows = await tx.contract.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  private async nextContractNumber(tx: Prisma.TransactionClient, companyId: string, startDate: Date): Promise<string> {
+    // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — والبذرُ من أعلى قائمٍ مرّةً واحدة.
+    return nextDocumentNumber(tx, companyId, startDate, { kind: 'EJ', pad: 4 }, (prefix) => highestSequenceOf(tx.contract, prefix));
   }
 
   /** Lazily flips DUE -> LATE for any installment whose due date has passed

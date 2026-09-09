@@ -543,7 +543,7 @@ export class PosService {
         include: { lines: true, customer: true, posPayments: true },
       });
       // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).
-      return { ...(await this.withReceiptQr(tenant.companyId, updated)), stockDeduction };
+      return { ...(await this.withReceiptQr(tenant.companyId, updated, tx)), stockDeduction };
     });
 
     /**
@@ -571,9 +571,13 @@ export class PosService {
    */
   private async withReceiptQr<
     T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null },
-  >(companyId: string, invoice: T): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean }> {
+  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean }> {
     // مستندٌ مختوم يعيد رمزَه التساعي المحفوظ — فإعادةُ المزامنة تطبع ما طُبع أولَ مرة حرفاً.
-    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice), zatcaStamped: Boolean(invoice.zatcaQrPayload) };
+    //
+    // ⚠️ **و`tx` تُمرَّر حين نكون داخل معاملة** (`ق-٣٦٠`): بدونها كانت تُفتح
+    // معاملةٌ ثانية فوق الأولى، **فتمسك البيعةُ اتصالاً وتطلب ثانياً** — وثلاثُ
+    // بيعاتٍ متزامنة تُجوّع المجموعَ فيعود `500`.
+    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), zatcaStamped: Boolean(invoice.zatcaQrPayload) };
   }
 
 

@@ -36,6 +36,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // طابور الإرسال: صفوفه تحمل `companyId` وتُقرأ داخل سياق كل منشأة، فالطبقة
   // الأولى تحقنه والثانية (RLS) تُبقيه صحيحاً لو أخطأت الأولى.
   'OutboxEvent',
+  // عدّادُ تسلسل المستندات (`ق-٣٢٨`): صفٌّ لكل (منشأة · نوع · سنة) — وترقيمُ
+  // منشأةٍ لا يُقرأ ولا يُكتب من سياق أخرى، كأيّ صفٍّ يحمل `companyId`.
+  'DocumentSequence',
   'Currency',
   'ExchangeRate',
   'FiscalYear',

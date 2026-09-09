@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { computeDocumentTotals } from '../common/money/totals';
-import { documentYear } from '../common/document-year.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -77,7 +77,7 @@ export class QuotesService {
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 
-        const no = await this.nextQuoteNumber(tx, new Date(dto.issueDate));
+        const no = await this.nextQuoteNumber(tx, companyId, new Date(dto.issueDate));
         return tx.quote.create({
           data: {
             companyId,
@@ -233,17 +233,16 @@ export class QuotesService {
     });
   }
 
-  /** تسلسل Q- مستقل تماماً عن INV/CN: يُشتق من جدول العروض وحده (شرط صاحب
-   * المشروع) — إصدار عرض لا يستهلك رقم فاتورة أبداً. */
-  private async nextQuoteNumber(tx: Prisma.TransactionClient, issueDate: Date): Promise<string> {
-    const year = documentYear(issueDate);
-    const prefix = `Q-${year}-`;
-    const rows = await tx.quote.findMany({ where: { no: { startsWith: prefix } }, select: { no: true } });
-    const maxSeq = rows.reduce((max, r) => {
-      const n = parseInt(r.no.slice(prefix.length), 10);
-      return Number.isFinite(n) && n > max ? n : max;
-    }, 0);
-    return `${prefix}${String(maxSeq + 1).padStart(4, '0')}`;
+  /**
+   * تسلسل Q- مستقل تماماً عن INV/CN: يُشتق من جدول العروض وحده (شرط صاحب
+   * المشروع) — إصدار عرض لا يستهلك رقم فاتورة أبداً.
+   *
+   * ⚠️ **وهذا الموضعُ السابع** (ق-٣٢٨): القياسُ الذي عُرض على المالك قال ستة،
+   * **فوجده الحارسُ المشتقُّ سابعاً** — وهو عينُ حجّة القرار: «تركُ اثنين
+   * للاحقٍ يترك مسارين». **ومفتاحُه `Q` مستقلٌّ في العدّاد** فلا يمسّ `INV`.
+   */
+  private async nextQuoteNumber(tx: Prisma.TransactionClient, companyId: string, issueDate: Date): Promise<string> {
+    return nextDocumentNumber(tx, companyId, issueDate, { kind: 'Q', pad: 4 }, (prefix) => highestSequenceOf(tx.quote, prefix));
   }
 
   private async convertedInvoiceNo(tx: Prisma.TransactionClient, quote: Pick<Quote, 'convertedInvoiceId'>): Promise<string> {
