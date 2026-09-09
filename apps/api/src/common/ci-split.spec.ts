@@ -1,5 +1,10 @@
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): يقرأ **ملفّات سير `YAML`** وأسماءَ
+// أوامرَ مكتوبةً نصّاً — **ولا شيفرةَ `TypeScript` يبحث فيها عن نمط**.
+readsDeclaredStrings();
 
 /**
  * `ق-٢٤٥` · `ق-٢٥٠` · `ق-٢٥١` — **تقسيمُ السير بوّابةً لا تعليقاً**.

@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
+import { stripCommentsAndStrings } from './source-scan.util';
 
 /**
  * **التعطيلُ تحت الاختبار لا يصير نسياناً** (`ق-٢٩٢`، شرطُ المالك).
@@ -24,12 +25,13 @@ const SRC = join(__dirname, '..');
 const APP_MODULE = join(SRC, 'app.module.ts');
 
 /** يُفرِّغ التعليقات والنصوص — **فحارسٌ يقرأ نصّاً بلا هذا يُدين أمثلته** (`ق-٢٨١/ب`). */
-export function blankNonCode(src: string): string {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
-    .replace(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g, (m) => m.replace(/[^\n]/g, ' '));
-}
+/**
+ * ⚠️ **كانت السادسةَ من سبعِ كتاباتٍ مستقلّة** (`ق-٣٨١`) — **سليمةً**: تُفرِّغ
+ * بفراغٍ فتحفظ السطرَ والعمود. **وُحِّدت لا لأنها معطوبة بل لئلّا تُنسخ غداً
+ * بيدٍ ثالثة** — فثلاثٌ من السبع حملت العطلَ نفسَه، **والسلامةُ لا تنتقل
+ * بالنسخ والعطلُ ينتقل**.
+ */
+export const blankNonCode = stripCommentsAndStrings;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

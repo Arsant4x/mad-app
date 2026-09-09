@@ -1,5 +1,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): يبحث عن `actorType: 'COMPANY'`
+// — **والقيمةُ داخل اقتباس**، فتجريدُ النصوص يمحوها ويُعمي الفحص.
+readsDeclaredStrings();
 
 /**
  * حارسان نصّيان على البند ٠ من ترتيب التنفيذ المعتمد — **نواة إنشاء واحدة**.

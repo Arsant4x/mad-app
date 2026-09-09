@@ -1,5 +1,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): المسارُ المنقول يُبحث عنه **في
+// جملة الاستيراد** — و**مسارُ الاستيراد سلسلةٌ نصّية**. **فتجريدُ النصوص يمحو
+// كلَّ مسارٍ فلا يبقى ما يُطابَق.**
+readsDeclaredStrings();
 
 /**
  * حارس التدرّج — **ملفٌ نُقل لا يُستورد من موضعه القديم.**

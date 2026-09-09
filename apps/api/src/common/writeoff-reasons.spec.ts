@@ -1,5 +1,11 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): نمطُه **يطلب علاماتِ الاقتباس
+// صراحةً** — `['"\`]${code}['"\`]` — فهو يبحث عن الرمز **داخل سلسلة**.
+// **وتجريدُ النصوص يجعله لا يطابق شيئاً أبداً.**
+readsDeclaredStrings();
 import { taxPathOf, WRITEOFF_REASONS, writeOffReason, type TaxPath } from './writeoff-reasons';
 
 /**

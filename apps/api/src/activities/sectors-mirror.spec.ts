@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): المرآةُ تُقارن **قيماً نصّية**
+// بين مصدرين — **فتجريدُ النصوص يُفرغ الطرفين ويُنتج تطابقاً كاذباً**.
+readsDeclaredStrings();
 import { SECTORS, SECTOR_LABELS, Sector } from './sectors';
 
 /**

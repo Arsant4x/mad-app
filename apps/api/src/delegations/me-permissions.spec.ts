@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripComments } from '../common/source-scan.util';
 import { ALLOWED_SCREENS, SCREEN_ACTIONS, isActionAllowed } from '../templates/screens';
 import { Grant, grant } from './permission-tree';
 import { DelegationLink } from './intersection';
@@ -208,7 +209,16 @@ describe('السلاسل تُطوى من الصفوف الخام', () => {
 
 describe('الشرط ①: تُحسب حيّاً — ولا تُذكَّر مؤقتاً', () => {
   const service = readFileSync(join(__dirname, 'permissions.service.ts'), 'utf8');
-  const code = service.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // ⚠️ **كان مُجرِّداً يدويّاً ثامناً وفيه عطلُ `ق-٣٣١`**: نمطُ التعليق السطريّ
+  //    بدأ بـ`^` ثم `\s` مكرّرة، **وهي تبتلع السطر الجديد** — **فتُلتهم الأسطرُ
+  //    الفارغة قبل كل تعليق ويُزاح كلُّ ما بعدها**. والنمطُ أدناه **مربوطٌ ببداية
+  //    السطر** (`^\s{2}`)، فإزاحةُ الأسطر تغيّر ما يُطابَق. **فصار من المصدر الواحد.**
+  //
+  // ⚠️ **والصنفُ ثالثٌ لا أوّل**: توكيدٌ هنا يبحث عن `delegation_logs` — **اسمُ
+  //    جدولٍ داخل قالبِ `SQL` نصّيّ**. **فتجريدُ النصوص محاه وأسقط الحارس** حين
+  //    جُرِّب أوّلاً. **فالتعليقاتُ تُجرَّد والنصوصُ تبقى** — وهو ما تُثبته
+  //    الحالتان أدناه.
+  const code = stripComments(service);
 
   it('⭐ لا حالةَ تعيش بين طلبين في الخدمة', () => {
     // `@Injectable()` في NestJS مفردةٌ افتراضياً: الكائن **واحد لكل التطبيق**.

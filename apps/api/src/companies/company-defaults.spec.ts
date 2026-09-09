@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): يقرأ **العملةَ الافتراضية من
+// `@default("SAR")` في المخطَّط** — وهي **داخل اقتباس**؛ **فتجريدُ النصوص
+// يمحوها**.
+readsDeclaredStrings();
 import { Prisma } from '@prisma/client';
 import { createCompanyDefaults, DEFAULT_ACTIVITY_NAME, DEFAULT_CURRENCY } from './company-defaults';
 

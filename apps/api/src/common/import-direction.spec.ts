@@ -1,5 +1,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): اتجاهُ الاستيراد يُقرأ من **مسار
+// الوحدة داخل جملة `import`** — **وهو سلسلةٌ نصّية**. **فتجريدُ النصوص يمحو
+// المسارات فيعود الحارسُ بلا استيرادٍ واحد.**
+readsDeclaredStrings();
 
 /**
  * حارس اتجاه الاستيراد — **`activities → engines → core → shared` ولا عكس.**

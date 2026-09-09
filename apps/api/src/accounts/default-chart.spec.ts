@@ -1,5 +1,11 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): يستخرج رموزَ الحسابات بـ
+// `/'(\d{4})'/` — **من داخل السلاسل نفسها**، **فتجريدُ النصوص يعيده بصفر
+// رمزٍ فيمرّ عمىً** (وحدُّه الأدنى المكتوب أدناه يمنع ذلك، لكنّ الإعلان أصدق).
+readsDeclaredStrings();
 import {
   FX_DIFFERENCE_ACCOUNT,
   KEY_MONEY_ASSET_ACCOUNT,

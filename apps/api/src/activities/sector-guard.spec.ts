@@ -1,12 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripComments } from '../common/source-scan.util';
 
 const API = join(__dirname, '..');
-const read = (...p: string[]) =>
-  readFileSync(join(API, ...p), 'utf8')
-    .replace(/\r\n/g, '\n')
-    .replace(/\/\*\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+
+/**
+ * ⚠️ **يبحث عن أنماطٍ برمجية، فيُجرَّد من التعليقات — والنصوصُ تبقى** (`ق-٣٧٥`):
+ * توكيدٌ يقرأ **رسالةً عربية من داخل سلسلة** وآخرُ يمنع **أسماءَ شاشاتٍ
+ * مكتوبةً نصّاً** داخل دالّة — **فكلاهما يحتاج النصَّ سليماً**.
+ *
+ * 🔴 **وكان هنا مُجرِّدٌ يدويّ فيه عطلُ `ق-٣٣١`**: نمطُ التعليق السطريّ بدأ
+ * بـ`^` ثم `\s` مكرّرة، **وهي تبتلع السطر الجديد** — **فاستُبدل بالمصدر الواحد**.
+ */
+const read = (...p: string[]) => stripComments(readFileSync(join(API, ...p), 'utf8').replace(/\r\n/g, '\n'));
 
 const guard = () => read('common', 'tenant', 'tenant.guard.ts');
 const permissions = () => read('delegations', 'permissions.service.ts');

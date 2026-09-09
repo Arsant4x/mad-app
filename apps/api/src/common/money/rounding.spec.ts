@@ -1,5 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): مقروءُه **مخطَّطُ Prisma** — أسماءُ
+// أعمدةٍ وأنواعُها — **لا شيفرةَ `TypeScript` يبحث فيها عن نمطٍ برمجيّ**.
+readsDeclaredStrings();
 import { formatMoney, roundTo, SCALE, toHalalas, type RoundingContext } from './rounding';
 
 /**

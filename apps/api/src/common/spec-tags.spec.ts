@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): الوسمُ `[SPEC N.N]` يعيش **في اسم
+// الاختبار** — أي **داخل سلسلةٍ نصّية**. **فتجريدُ النصوص يمحو كلَّ وسمٍ في
+// الشجرة**، فيعود الحارسُ بصفرِ وسمٍ ويُقرأ ذلك «لا تخلّف» — **عمىً تامّاً**.
+readsDeclaredStrings();
 import { collectTags, listTestFiles, normalizeStatus, parseSpec, TAG_RE, type SpecRow } from './spec-tags.util';
 
 /**

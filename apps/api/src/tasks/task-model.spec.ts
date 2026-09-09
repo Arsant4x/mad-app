@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): يمنع **قائمةً مكتوبةً بيدٍ** —
+// `= ['a', 'b']` — **فالاقتباسُ هو مناطُ الفحص نفسُه**، وتجريدُ النصوص يمحو
+// ما بُني ليمسكه. ويقرأ كذلك قيوداً من ملفّ الهجرة (`SQL`).
+readsDeclaredStrings();
 import { ALLOWED_SCREENS } from '../templates/screens';
 import { DelegationLink, RootGrants } from '../delegations/intersection';
 import { Grant } from '../delegations/permission-tree';
