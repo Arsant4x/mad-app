@@ -74,16 +74,6 @@ export function verdictOf(path, threw) {
 }
 
 /**
- * **عددُ ملفات الاختبار التي يطابقها النمط** — من مخرَج `jest --listTests`.
- *
- * ⚠️ **ثغرةٌ كشفها الإثباتُ بالعكس**: نمطٌ **لا يطابق شيئاً** يُخرج جيست
- * بغير صفرٍ **ولا يكتب حصيلة** — **فيبدو انقطاعاً وهو ليس كذلك**، فتُبتلع
- * حالةُ «شُغِّل صفرُ اختبار» في عذرٍ. **وهي عينُ عطل `ci-split`**: أمرٌ يبدو
- * أنه يفحص وهو لا يفحص شيئاً.
- *
- * فيُسأل النمطُ **قبل التشغيل**، ويصير الغيابُ بعده **انقطاعاً حقيقياً**.
- */
-/**
  * ⭐ **سقفُ كومة `V8` مشتقٌّ من سعة المضيف** (`ق-٤٠٢`).
  *
  * ⚠️ **ورقمٌ ثابتٌ خطأٌ في الاتجاهين**: `6144` على مضيفٍ سعتُه `7.79 GB`
@@ -120,12 +110,80 @@ export function combineVerdicts(verdicts) {
   return 'PASS';
 }
 
+/**
+ * **عددُ ملفات الاختبار التي يطابقها النمط** — من مخرَج `jest --listTests`.
+ *
+ * ⚠️ **ثغرةٌ كشفها الإثباتُ بالعكس**: نمطٌ **لا يطابق شيئاً** يُخرج جيست
+ * بغير صفرٍ **ولا يكتب حصيلة** — **فيبدو انقطاعاً وهو ليس كذلك**، فتُبتلع
+ * حالةُ «شُغِّل صفرُ اختبار» في عذرٍ. **وهي عينُ عطل `ci-split`**: أمرٌ يبدو
+ * أنه يفحص وهو لا يفحص شيئاً.
+ *
+ * فيُسأل النمطُ **قبل التشغيل**، ويصير الغيابُ بعده **انقطاعاً حقيقياً**.
+ */
 export function countListedTests(stdout) {
   if (!stdout) return 0;
   return stdout
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => /\.(spec|e2e-spec)\.ts$/.test(l)).length;
+}
+
+/**
+ * ⭐ **ملفُّ الكاشف المستثنى — يُسمّى صراحةً لا بنمط** (`ق-٤١٥`①).
+ *
+ * ⚠️ **ونمطٌ مثل `/probe/` مرفوضٌ بحجّةٍ قائمة**: يتّسع بعد شهور إلى **كلِّ
+ * ما ينتهي بـ`probe`** — **فيُعمي البوّابةَ عن ملفٍّ لم يوجد بعد**، وهو عينُ
+ * «استثناءٌ يوسّع الباب بلا أن يُقرأ».
+ */
+export const PROBE_OWN_SPEC = 'nested-transaction-probe.spec.ts';
+
+/**
+ * ⭐ **عددُ بلاغات المعاملة المتداخلة — من أداةٍ مُصادَقة لا من `grep`**
+ * (`ق-٤١٥`② · `ق-٤١٦`).
+ *
+ * ── العطل الذي بُنيت له ──────────────────────────────────────────────────
+ *
+ * `grep` على نصّ السجل أعطى **ستّة**، **والحقيقة ثلاثة**: **نصفُها سطرُ
+ * `console.warn` في الشيفرة كما يعرضه جيست في أثر التوكيد** — **لا بلاغاً**.
+ * ⇒ **فالنمطُ النصّيُّ صادقُ الصيغة كاذبُ المعنى**، وهو ما يفصله هذا العادّ:
+ * **البلاغُ سطرٌ يحمل رقماً محلولاً (`بلاغٌ ٣/٥٠`)**، **والسطرُ المعروض يحمل
+ * القالبَ نفسَه غيرَ محلول**.
+ *
+ * ── والنسبةُ لا العدد وحده ───────────────────────────────────────────────
+ *
+ * ⚠️ **بلاغٌ من حالات الكاشف الموجبة ليس عطلاً تطبيقياً** — **وحارسٌ لا
+ * يُبلّغ عن نفسه حارسٌ لا يعمل** (حكمُ المالك). **فيُنسب كلُّ بلاغٍ إلى
+ * مصدره من أثره**: `own` لما يسمّي ملفَّ الكاشف، و`foreign` لما لا يسمّيه.
+ *
+ * **والبوّابة**: `foreign === 0` — **و`own` يُقرأ رقماً**: **زيادتُه عن ثلاثة
+ * تعني بلاغاً جديداً داخل الحارس نفسِه** فيُفحص.
+ */
+export function nestedReports(log) {
+  const lines = String(log ?? '').split(/\r?\n/);
+  // ⚠️ **رقمٌ محلولٌ شرطُ التمييز**: `\d+/\d+` لا `${...}` — **وهو الفرقُ
+  //    بين بلاغٍ وقع وسطرِ شيفرةٍ يُعرض**.
+  const header = /معاملةٌ داخل معاملة .*بلاغٌ\s+\d+\s*\/\s*\d+/;
+  const reports = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!header.test(lines[i])) continue;
+    /**
+     * **الأثرُ يُجمَع حتى الترويسةِ التالية أو أوّلِ قسمٍ من جيست**.
+     *
+     * ⚠️ **ولا يُكسَر عند أوّل سطرٍ ليس إطاراً** — **وهذه صياغةٌ أولى سقطت
+     * بالقياس**: `new Error().stack` **يبدأ بسطر `Error:`**، فكُسر الجمعُ
+     * عنده **فجاءت الأطرُ فارغةً ونُسب كلُّ بلاغٍ إلى التطبيق**. **والعكسُ
+     * تماماً هو الصحيح.** ⇒ **فالفاصلُ ما يُعلن قسماً جديداً، لا ما ليس إطاراً.**
+     */
+    const frames = [];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const stripped = lines[j].replace(/\x1b\[[0-9;]*m/g, '').trim();
+      if (header.test(stripped) || /^(PASS|FAIL|Tests:|Test Suites:|console\.)/.test(stripped)) break;
+      if (stripped.startsWith('at ')) frames.push(stripped);
+    }
+    reports.push({ own: frames.some((f) => f.includes(PROBE_OWN_SPEC)), frames });
+  }
+  const own = reports.filter((r) => r.own).length;
+  return { total: reports.length, own, foreign: reports.length - own };
 }
 
 // أداةٌ حين تُستدعى مباشرة — وهذا ما يمتحنه الاختبار بحالاتٍ معلومة.
@@ -138,6 +196,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stdout.write(combineVerdicts(second ? second.split(',').filter(Boolean) : []));
   } else if (first === 'heap') {
     process.stdout.write(String(heapCapMb(Number(second))));
+  } else if (first === 'reports') {
+    // يقرأ سجلَّ الحزمة من المدخل ويطبع `total own foreign`.
+    let stdin = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (c) => (stdin += c));
+    process.stdin.on('end', () => {
+      const r = nestedReports(stdin);
+      process.stdout.write(`${r.total} ${r.own} ${r.foreign}`);
+    });
   } else if (first === 'count') {
     let stdin = '';
     process.stdin.setEncoding('utf8');
