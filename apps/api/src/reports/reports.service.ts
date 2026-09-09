@@ -6,6 +6,7 @@ import { writeOffReason } from '../common/writeoff-reasons';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { customerExposure } from './receivables-exposure.util';
 
 interface Movement {
   debit: number;
@@ -488,108 +489,11 @@ export class ReportsService {
       const asOf = filter.asOf ? new Date(filter.asOf) : new Date();
       asOf.setHours(23, 59, 59, 999);
 
-      const branchWhere = filter.branchId ? { branchId: filter.branchId } : {};
-      const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
-
-      // كل مستندات الذمم حتى تاريخ التقرير: الفواتير وإشعاراتها معاً —
-      // فالإشعار يعدّل ذمّة فاتورته لا ذمّةً مستقلة.
-      const documents = await tx.invoice.findMany({
-        where: { issueDate: { lte: asOf }, ...branchWhere, ...customerWhere },
-        select: {
-          id: true,
-          no: true,
-          docType: true,
-          relatedInvoiceId: true,
-          customerId: true,
-          customer: { select: { id: true, name: true } },
-          issueDate: true,
-          dueDate: true,
-          total: true,
-          baseTotal: true,
-          exchangeRate: true,
-          currency: true,
-        },
-      });
-
-      const invoices = documents.filter((d) => d.docType === 'INVOICE');
-      const notes = documents.filter((d) => d.docType !== 'INVOICE');
-
-      // تخصيصات السندات حتى التاريخ — بمبلغ المستند، يُترجم بسعر فاتورته.
-      const allocations = await tx.paymentAllocation.groupBy({
-        by: ['invoiceId'],
-        where: { payment: { date: { lte: asOf } } },
-        _sum: { amount: true },
-      });
-      const allocByInvoice = new Map(allocations.map((a) => [a.invoiceId, Number(a._sum.amount ?? 0)]));
-
-      // إشعارات منسوبة لفواتيرها، وأخرى بلا فاتورة (تُطرح من رصيد عميلها).
-      const noteAdjustment = new Map<string, number>();
-      const unappliedByCustomer = new Map<string, number>();
-      for (const n of notes) {
-        const base = Number(n.baseTotal);
-        const signed = n.docType === 'CREDIT_NOTE' ? -base : base;
-        if (n.relatedInvoiceId) noteAdjustment.set(n.relatedInvoiceId, (noteAdjustment.get(n.relatedInvoiceId) ?? 0) + signed);
-        else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);
-      }
-
-      // دفعات لم تُخصَّص: خفّضت 1200 بلا فاتورة تنتمي إليها.
-      const payments = await tx.payment.findMany({
-        where: { date: { lte: asOf }, ...branchWhere, ...customerWhere },
-        select: { customerId: true, amount: true, exchangeRate: true, allocations: { select: { amount: true } } },
-      });
-      for (const p of payments) {
-        const allocated = p.allocations.reduce((sum, a) => sum + Number(a.amount), 0);
-        const onAccount = Number(p.amount) - allocated;
-        if (Math.abs(onAccount) > 0.005) {
-          unappliedByCustomer.set(p.customerId, (unappliedByCustomer.get(p.customerId) ?? 0) - onAccount * Number(p.exchangeRate));
-        }
-      }
-
-      const buckets = () => ({ current: 0, d1: 0, d31: 0, d61: 0, d90: 0 });
-      const rows = new Map<string, { customerId: string; customerName: string; current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number }>();
-      const rowFor = (customerId: string, customerName: string) => {
-        let r = rows.get(customerId);
-        if (!r) {
-          r = { customerId, customerName, ...buckets(), unapplied: 0, total: 0 };
-          rows.set(customerId, r);
-        }
-        return r;
-      };
-
-      for (const inv of invoices) {
-        const rate = Number(inv.exchangeRate);
-        const allocatedBase = (allocByInvoice.get(inv.id) ?? 0) * rate;
-        const remaining = round2(Number(inv.baseTotal) - allocatedBase + (noteAdjustment.get(inv.id) ?? 0));
-        // المسدَّدة كاملاً تُستبعد؛ والجزئية تدخل بمتبقيها وحده.
-        if (Math.abs(remaining) < 0.005) continue;
-
-        const r = rowFor(inv.customerId, inv.customer.name);
-        // العمر من الاستحقاق إلى تاريخ التقرير — لا من اليوم دائماً.
-        const days = Math.floor((asOf.getTime() - new Date(inv.dueDate).getTime()) / 86400000);
-        if (days <= 0) r.current += remaining;
-        else if (days <= 30) r.d1 += remaining;
-        else if (days <= 60) r.d31 += remaining;
-        else if (days <= 90) r.d61 += remaining;
-        else r.d90 += remaining;
-      }
-
-      for (const [customerId, amount] of unappliedByCustomer) {
-        if (Math.abs(amount) < 0.005) continue;
-        const customer = documents.find((d) => d.customerId === customerId)?.customer ?? (await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true } }));
-        if (!customer) continue;
-        rowFor(customerId, customer.name).unapplied += amount;
-      }
-
-      const result = [...rows.values()].map((r) => ({
-        ...r,
-        current: round2(r.current),
-        d1: round2(r.d1),
-        d31: round2(r.d31),
-        d61: round2(r.d61),
-        d90: round2(r.d90),
-        unapplied: round2(r.unapplied),
-        total: round2(r.current + r.d1 + r.d31 + r.d61 + r.d90 + r.unapplied),
-      }));
+      // ⚠️ **المصدرُ الواحد لِـ«كم يدين لنا»** (`ق-٣٤١`): كان هذا التقريرُ يحسب
+      //    المتبقّي بنفسه، **وحدُّ الائتمان كان سيصير رابعاً** — **وتاجرٌ يقرأ
+      //    في الأعمار رقماً وفي رسالة المنع آخرَ يفقد الثقة في الاثنين**.
+      //    **فاستُخرج الحسابُ إلى `receivables-exposure.util`، ويقرأ الاثنان منه.**
+      const result = await customerExposure(tx, { asOf, branchId: filter.branchId, customerId: filter.customerId });
       result.sort((a, b) => b.total - a.total);
 
       const sum = (pick: (r: (typeof result)[number]) => number) => round2(result.reduce((t, r) => t + pick(r), 0));
