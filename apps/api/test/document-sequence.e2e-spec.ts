@@ -158,6 +158,54 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
     expect((await counterRow(kind))?.last).toBe(9);
   }, 30000);
 
+  it('🔴 ومعاملةٌ تسقط تحرق رقماً — الخاصيّةُ الجديدة تُثبَت لا تُوصف', async () => {
+    // ⚠️ **انقلبت بـ`ق-٣٤٤`**: كانت الزيادةُ داخل معاملة العمل فترتدّ معها،
+    // **وكان ثمنُها أن يُسلسل قفلُ الصفِّ معاملةَ البيع كاملةً** حتى سقطت ثلاثُ
+    // بيوعٍ متزامنة على `CI` (`ق-٣٤٢`). **فصارت على منفذٍ يلتزم فوراً**،
+    // **والفجوةُ ثمنٌ معلَن** من صنفِ ما أُقرّ في `ق-٣٣٢`.
+    const kind = freshKind('F');
+    expect(await issue(kind, 0)).toBe(`${kind}-${YEAR}-0001`);
+
+    await expect(
+      tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        await nextDocumentNumber(tx, companyId, DATE, { kind, pad: 4 }, async () => 0);
+        throw new Error('إسقاطٌ متعمَّد');
+      }),
+    ).rejects.toThrow('إسقاطٌ متعمَّد');
+
+    // **الرقمُ ‎0002‎ أُخذ ولم يُستعمل** — فالتالي ‎0003‎ لا ‎0002‎.
+    expect(await issue(kind, 0)).toBe(`${kind}-${YEAR}-0003`);
+  }, 30000);
+
+  it('🔴 والعزلُ على هذا المسار تحديداً — حيّاً لا بقراءة الهجرة', async () => {
+    // ⚠️ **المنفذُ يتجاوز امتدادَ العزل**، فتبقى `FORCE ROW LEVEL SECURITY`
+    // وحدها. **وقد قِيس خمس مراتٍ أنها هي الفارق** — فتُقاس هنا على المنفذ
+    // نفسه لا على الجدول عموماً (`ق-٣٤٩`).
+    const kind = freshKind('G');
+    expect(await issue(kind, 40)).toBe(`${kind}-${YEAR}-0041`);
+
+    const loginB = await http().post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
+    const companyB = loginB.body.user.companyId as string;
+    expect(companyB).not.toBe(companyId);
+
+    // **عدّادُ «أ» لا يُقرأ من سياق «ب»** — والصفُّ موجودٌ فعلاً (أُثبت أعلاه).
+    const seenByB = await tenantPrisma.runInTenantContext(companyB, (tx) =>
+      tx.documentSequence.findFirst({ where: { kind, year: YEAR }, select: { last: true } }),
+    );
+    expect(seenByB).toBeNull();
+
+    // **ولا يُكتب فوقه**: «ب» يبدأ سلسلتَه من صفرٍ بمفتاحٍ متطابق.
+    const bFirst = await tenantPrisma.runInTenantContext(companyB, (tx) =>
+      nextDocumentNumber(tx, companyB, DATE, { kind, pad: 4 }, async () => 0),
+    );
+    expect(bFirst).toBe(`${kind}-${YEAR}-0001`);
+
+    // **و«أ» لم يتأثّر** — عدّادان مستقلّان تحت مفتاحٍ واحد.
+    expect(await issue(kind, 40)).toBe(`${kind}-${YEAR}-0042`);
+
+    await tenantPrisma.runInTenantContext(companyB, (tx) => tx.documentSequence.deleteMany({ where: { kind, year: YEAR } }));
+  }, 40000);
+
   it('🔴 والمسارُ الحقيقيّ عبر HTTP: الشكلُ باقٍ والأرقامُ متتالية صاعدة', async () => {
     // **ولا شكلَ يتغيّر ولا رقمٌ صدر**: الفاتورةُ تبقى `INV-<سنة>-####`،
     // والرقمُ الجديد **أعلى** مما في القاعدة لا مساوٍ له.

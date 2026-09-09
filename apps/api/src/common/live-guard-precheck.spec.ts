@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { driftMessage, migrationDrift, migrationsOnDisk } from '../../test/live-db-migrations';
+import { stripCommentsAndStrings } from './source-scan.util';
 
 /**
  * `ق-٢٠٨` — **حارسٌ يقرأ المصدر** على شرط الحرّاس الحيّة: القاعدةُ على آخر هجرة قبل الحكم.
@@ -55,8 +56,23 @@ describe('الحارسُ الحيّ يتحقّق أن القاعدة على آخ
     const offenders = [join(API, 'src'), join(API, 'test')]
       .flatMap((root) => files(root))
       .filter((f) => /\.spec\.ts$/.test(f) && !/\.live\.spec\.ts$|\.e2e-spec\.ts$/.test(f))
-      .filter((f) => /new PrismaClient\(/.test(readFileSync(f, 'utf8')))
+      // ⚠️ **الكودُ لا النصّ** (`ق-٣٤٩`): مثالٌ مكتوبٌ داخل سلسلةٍ نصّية في
+      // مُكتشِفِ حارسٍ آخر **ليس فتحاً لعميل** — وقد أدانه هذا الحارسُ فعلاً.
+      .filter((f) => /new PrismaClient\(/.test(stripCommentsAndStrings(readFileSync(f, 'utf8'))))
       .map((f) => relative(API, f).split('\\').join('/'));
     expect(offenders).toEqual([]);
+  });
+
+  it('🔴 والتخفيفُ لا يفتح ثغرة: فتحٌ حقيقيّ يُمسَك، ومثالٌ في نصٍّ يمرّ', () => {
+    // ⚠️ **حارسٌ خُفِّف بلا حالةٍ تسقط يصير عمىً**. فالحالتان معاً:
+    const real = 'const client = new PrismaClient({ datasources: { db: { url } } });';
+    expect(/new PrismaClient\(/.test(stripCommentsAndStrings(real))).toBe(true);
+
+    // **والصياغةُ الواقعية** — منقولةٌ عن مُكتشِف `sequence-port-sealed`:
+    const fixture = ["expect(opensOwnClient('const c = new PrismaClient({ d });')).toBe(true);"].join('\n');
+    expect(/new PrismaClient\(/.test(stripCommentsAndStrings(fixture))).toBe(false);
+
+    // والتعليقُ كذلك يمرّ — وهو ما كان يُدان قبل `ق-٣٤٩`.
+    expect(/new PrismaClient\(/.test(stripCommentsAndStrings('// كان: new PrismaClient()'))).toBe(false);
   });
 });

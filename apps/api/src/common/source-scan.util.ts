@@ -26,6 +26,27 @@ import { join } from 'path';
 export const stripComments = (s: string): string =>
   s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, '')).replace(/^[^\S\r\n]*\/\/.*$/gm, '');
 
+/**
+ * الكود بلا تعليقاته **وبلا نصوصه** — **والسطرُ والعمودُ محفوظان** (`ق-٣٤٩`).
+ *
+ * ⚠️ **العطلُ الذي أضافها**: `live-guard-precheck` كان يبحث عن `new
+ * PrismaClient(` في **نصّ الملف**، **فأدان مثالاً مكتوباً داخل سلسلةٍ نصّية**
+ * في مُكتشِفِ حارسٍ آخر. **ومثالُ الكسر في الاختبار ليس كسراً في الشيفرة** —
+ * وهو عينُ ما أوجب `ق-٣٣١`: **الحارسُ يقرأ الكود لا النصّ**.
+ *
+ * **والمحذوفُ يُملأ فراغاً** (لا يُحذف) — الصياغةُ المُثبَتة في
+ * `no-silent-skip` منذ نشأته: فيبقى السطرُ والعمودُ صادقَين.
+ */
+export const stripCommentsAndStrings = (s: string): string => {
+  const blank = (m: string) => m.replace(/[^\n]/g, ' ');
+  return s
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/\/\/[^\n]*/g, blank)
+    .replace(/`(?:\\.|[^`\\])*`/g, blank)
+    .replace(/'(?:\\.|[^'\\\n])*'/g, blank)
+    .replace(/"(?:\\.|[^"\\\n])*"/g, blank);
+};
+
 /** كل ملفات `.ts` تحت الجذر — بلا اختبارات وبلا تعريفات. */
 export function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

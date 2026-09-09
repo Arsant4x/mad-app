@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { documentYear } from './document-year.util';
+import { allocateSequence } from './sequence-allocator';
 
 /**
  * **رقمُ المستند التالي — من عدّادٍ ذرّيّ لا من مسح** (`ق-٣٢٨`).
@@ -98,28 +99,13 @@ export async function nextDocumentNumber(
   const year = perYear ? documentYear(date) : 0;
   const prefix = perYear ? `${spec.kind}-${year}-` : `${spec.kind}-`;
 
-  // ① الزيادةُ الذرّية — قفلُ الصفّ يُسلسل الطالبَين. وهذا **المسارُ المعتاد
-  //    وحده**: استعلامٌ واحد، بلا قراءةٍ ولا مسح.
-  const bump = () => tx.$queryRaw<{ last: number }[]>`
-    UPDATE "document_sequences" SET "last" = "last" + 1, "updatedAt" = NOW()
-    WHERE "companyId" = ${companyId} AND "kind" = ${spec.kind} AND "year" = ${year}
-    RETURNING "last"
-  `;
+  // ⚠️ **الزيادةُ على منفذٍ خاصّ لا على `tx`** (`ق-٣٤٨`): لو جرت على معاملة
+  // العمل لبقي قفلُ الصفّ حتى التزامها، **فتُسلسل معاملةَ البيع كاملةً** لا
+  // خطوةَ الترقيم — وهو ما أسقط `#206` على `CI` (`ق-٣٤٢`).
+  //
+  // **و`tx` يبقى للبذر وحده**: قراءةُ أعلى رقمٍ قائمٍ قراءةُ **مستندات** لا
+  // عدّاد، فموضعُها معاملةُ العمل.
+  const last = await allocateSequence(companyId, spec.kind, year, () => highestExisting(prefix));
 
-  let rows = await bump();
-
-  if (!rows.length) {
-    // ② أول طلبٍ لهذه السلسلة وحده: يُقرأ الأعلى القائم **مرّةً في عمرها**،
-    //    والقيدُ الفريد يجعل بذراً ثانياً بلا أثر.
-    const seed = await highestExisting(prefix);
-    await tx.$executeRaw`
-      INSERT INTO "document_sequences" ("id", "companyId", "kind", "year", "last", "updatedAt")
-      VALUES (gen_random_uuid(), ${companyId}, ${spec.kind}, ${year}, ${seed}, NOW())
-      ON CONFLICT ("companyId", "kind", "year") DO NOTHING
-    `;
-    rows = await bump();
-    if (!rows.length) throw new Error(`عدّادُ التسلسل غائبٌ بعد إدراجه: ${spec.kind}-${year}`);
-  }
-
-  return `${prefix}${String(rows[0].last).padStart(spec.pad, '0')}`;
+  return `${prefix}${String(last).padStart(spec.pad, '0')}`;
 }
