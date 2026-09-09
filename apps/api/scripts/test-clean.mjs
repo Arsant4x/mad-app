@@ -15,6 +15,10 @@
  * يتطلب أن تكون حاويات التطوير تعمل (docker compose up -d).
  */
 import { execSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { countListedTests, verdictOf } from './clean-verdict.mjs';
 
 const DB = process.env.TEST_CLEAN_DB ?? 'mad_app_clean';
 const SUPER = process.env.TEST_CLEAN_SUPERUSER ?? 'mad_app';
@@ -58,11 +62,56 @@ step('الهجرات', () => execSync('npx prisma migrate deploy', { stdio: 'pip
 step('البذرة', () => execSync('npx prisma db seed', { stdio: 'pipe', env }));
 
 console.log(`\n▶ الحزمة على ${DB} (قاعدة عمرها ثوانٍ — هذا ما يواجهه CI)\n`);
+
+// ⚠️ **حصيلةٌ تُكتب بعد الاكتمال وحده** (`ق-٣٣٤`): وجودُها صالحةً هو «سطرُ
+// النتيجة»، **وغيابُها انقطاعٌ لا فشل**. و`--json` **لا يُخفي المخرَج الحيّ**
+// — قِيس: الملخّصُ يُطبع كما كان والملفُّ يُكتب معه.
+// ⚠️ **ويُسأل النمطُ قبل التشغيل** (`ق-٣٣٤`): نمطٌ لا يطابق شيئاً يُخرج جيست
+// بغير صفرٍ **بلا حصيلة** — فيبدو انقطاعاً، **فتُبتلع حالةُ «صفرُ اختبار»**.
+const listed = (() => {
+  try {
+    return execSync(`npx jest --listTests ${pattern.join(' ')}`, { env, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+  } catch {
+    return '';
+  }
+})();
+if (countListedTests(listed) === 0) {
+  console.error(`\n✘ النمط «${pattern.join(' ') || '(الكل)'}» لا يطابق ملفَّ اختبارٍ واحداً — فصفرُ اختبارٍ ليس نجاحاً ولا انقطاعاً.`);
+  process.exit(1);
+}
+
+const RESULT = join(tmpdir(), `mad-app-clean-result-${process.pid}.json`);
+let threw = false;
 try {
-  run(`npx jest --runInBand ${pattern.join(' ')}`);
-  console.log('\n✔ الحزمة تخضرّ على قاعدة نظيفة.');
+  run(`npx jest --runInBand --json --outputFile="${RESULT}" ${pattern.join(' ')}`);
 } catch {
+  threw = true;
+}
+
+const verdict = verdictOf(RESULT, threw);
+rmSync(RESULT, { force: true });
+
+if (verdict === 'INTERRUPTED') {
+  // 🔴 **انقطاعٌ لا نتيجة**: لا حصيلةَ أصلاً، فلا يُنسب شيءٌ إلى الشيفرة.
+  console.error('\n⛔ انقطاع — لا نتيجة. الحزمةُ لم تكمل، فلا حكمَ على الشيفرة.');
+  console.error('  ولا تقرأه فشلاً: تشغيلٌ سابق سقط هكذا وسببُه كان **إعادةَ تشغيل محرّك الحاويات**');
+  console.error('  من تحت الحزمة (توقّفٌ نظيف وبدءٌ بعده بثانيتين، بلا OOM وبلا انهيار).');
+  console.error('  اقرأ السبب قبل أن تنسبه: docker inspect mad-app-postgres-1 --format "{{.State.StartedAt}} {{.State.OOMKilled}} {{.RestartCount}}"');
+  console.error('  ثم أعد التشغيل — فالانقطاعُ يُعاد ولا يُصلَح في الشيفرة.');
+  process.exit(2);
+}
+
+if (verdict === 'EMPTY') {
+  // ⚠️ **خضرةٌ لا تعني شيئاً**: الحزمةُ اكتملت ولم يركض توكيدٌ واحد.
+  console.error('\n✘ لم يركض توكيدٌ واحد — والحزمةُ اكتملت. فخضرةٌ بلا تشغيلٍ ليست نجاحاً.');
+  console.error('  راجع مرشّح الاسم (-t) أو النمط: كلُّ الاختبارات تُخطّيت.');
+  process.exit(1);
+}
+
+if (verdict === 'FAIL') {
   console.error('\n✘ سقطت على قاعدة نظيفة — اعتماديةٌ خفية على حالةٍ متراكمة.');
   console.error('  المجموعة الساقطة تفترض ما لم تصنعه. اجعلها تهيّئ ما تحتاجه في beforeAll.');
   process.exit(1);
 }
+
+console.log('\n✔ الحزمة تخضرّ على قاعدة نظيفة.');

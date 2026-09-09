@@ -1,0 +1,106 @@
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+/**
+ * **حكمُ التشغيل: نتيجةٌ أم انقطاع؟** (`ق-٣٣٤`).
+ *
+ * ── العطل الذي أنشأ هذا الملف ────────────────────────────────────────────
+ *
+ * سقطت الحزمةُ النظيفة **بلا مجموعةٍ ساقطة**: ٣٧ مجموعةً خضراء ثم انقطاعٌ بلا
+ * ملخّص. **والسببُ خارجها**: `docker inspect` أعطى `FinishedAt=23:48:05` ثم
+ * `StartedAt=23:48:07` — **إعادةُ تشغيلٍ لمحرّك الحاويات من تحتها**، بلا
+ * `OOMKilled` وبلا انهيار.
+ *
+ * ⚠️ **وتوقيعُه توقيعُ `ق-٣٢٣`**: شيفرةٌ خضراء تبدو حمراء لسببٍ ليس فيها —
+ * **وقد كانت خضراء فعلاً قبله وبعده**. **والفرقُ أن هذا لا يُمنَع بانضباط**:
+ * لا يملك أحدٌ منعَ المحرّك من إعادة التشغيل. **فالعلاجُ تمييزٌ لا منع.**
+ *
+ * ── ولماذا ملفُّ نتيجةٍ لا قراءةُ سطر ─────────────────────────────────────
+ *
+ * **الإشارةُ بنيويّة لا نصّية**: `jest --json --outputFile` يكتب حصيلةً
+ * **بعد اكتمال التشغيل وحده**. فوجودُ الملفِّ صالحاً **هو** «سطرُ النتيجة»،
+ * **وغيابُه انقطاعٌ لا فشل** — ولا يعتمد على صياغةٍ في مخرَجٍ قد تتغيّر.
+ *
+ * ⚠️ **ورمزُ الخروج لا يكفي**: تشغيلٌ قُتل أعطى `4`، وجيست يعطي `1` على
+ * السقوط — **وكلاهما «غير صفر»**. فالتمييزُ من الحصيلة لا من الرمز.
+ *
+ * ── ويُستدعى مباشرةً كأداةٍ كي يُثبَت بالعكس ──────────────────────────────
+ *
+ * `node scripts/clean-verdict.mjs <مسار الحصيلة> <سقط:0|1>` يطبع الحكم —
+ * **فيمتحنه اختبارٌ بثلاث حالاتٍ معلومة**، لا بثقةٍ في قراءة.
+ */
+
+/** الحصيلةُ نصّاً، أو `null` حين لا ملفّ. */
+export function classify(raw, threw) {
+  if (raw === null) return 'INTERRUPTED';
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // ⚠️ **ملفٌّ نصفُ مكتوب انقطاعٌ أيضاً**: القتلُ أثناء الكتابة يترك `JSON`
+    // مبتوراً — **وقراءتُه فشلاً كذبٌ كقراءة الغياب فشلاً**.
+    return 'INTERRUPTED';
+  }
+
+  // والحصيلةُ تُتحقَّق بحقلَين لا بوجودِ كائن: ملفٌّ صالحٌ لشيءٍ آخر ليس حصيلة.
+  if (typeof parsed?.success !== 'boolean' || typeof parsed?.numTotalTests !== 'number') return 'INTERRUPTED';
+
+  // ⚠️ **وصفرُ اختبارٍ ليس نجاحاً**: مرشّحُ اسمٍ لا يطابق شيئاً يُعطي حصيلةً
+  // `success: true` **بلا توكيدٍ واحد** — **وهي خضرةٌ لا تعني شيئاً**، عينُ
+  // عطل `ci-split`: أمرٌ يبدو أنه يفحص وهو لا يفحص.
+  //
+  // ⚠️ **والحقلُ المقيس هو `numPassedTests` لا `numTotalTests`**: أوّلُ صياغةٍ
+  // فحصت المجموع **فمرّت خضراء**، لأن جيست يعدّ المتخطَّى في المجموع. القياس:
+  // `{ total: 20, passed: 0, failed: 0, pending: 20, success: true }`.
+  const ran = (parsed.numPassedTests ?? 0) + (parsed.numFailedTests ?? 0);
+  if (ran === 0) return 'EMPTY';
+
+  // وتناقضٌ بين الحصيلة والخروج يُقرأ سقوطاً — **الأشدُّ يُغلِّب**.
+  return parsed.success && !threw ? 'PASS' : 'FAIL';
+}
+
+/** يقرأ الحصيلة إن وُجدت، ويعيد `null` بلا رمي — فالغيابُ حالةٌ لا خطأ. */
+export function readResult(path) {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+export function verdictOf(path, threw) {
+  return classify(readResult(path), threw);
+}
+
+/**
+ * **عددُ ملفات الاختبار التي يطابقها النمط** — من مخرَج `jest --listTests`.
+ *
+ * ⚠️ **ثغرةٌ كشفها الإثباتُ بالعكس**: نمطٌ **لا يطابق شيئاً** يُخرج جيست
+ * بغير صفرٍ **ولا يكتب حصيلة** — **فيبدو انقطاعاً وهو ليس كذلك**، فتُبتلع
+ * حالةُ «شُغِّل صفرُ اختبار» في عذرٍ. **وهي عينُ عطل `ci-split`**: أمرٌ يبدو
+ * أنه يفحص وهو لا يفحص شيئاً.
+ *
+ * فيُسأل النمطُ **قبل التشغيل**، ويصير الغيابُ بعده **انقطاعاً حقيقياً**.
+ */
+export function countListedTests(stdout) {
+  if (!stdout) return 0;
+  return stdout
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /\.(spec|e2e-spec)\.ts$/.test(l)).length;
+}
+
+// أداةٌ حين تُستدعى مباشرة — وهذا ما يمتحنه الاختبار بحالاتٍ معلومة.
+// `verdict <مسار> <سقط:0|1>` · `count` يقرأ مخرَج `--listTests` من المدخل.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [, , first, second] = process.argv;
+  if (first === 'count') {
+    let stdin = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (c) => (stdin += c));
+    process.stdin.on('end', () => process.stdout.write(String(countListedTests(stdin))));
+  } else {
+    process.stdout.write(verdictOf(first, second === '1'));
+  }
+}
