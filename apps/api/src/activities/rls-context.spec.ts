@@ -1,5 +1,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): مقروءُه **ملفّاتُ هجرةٍ بـ`SQL`**
+// يستخرج منها أسماءَ جداولٍ من `ALTER TABLE "…"` — **لا شيفرةَ `TypeScript`**،
+// **والاقتباسُ جزءُ ما يبحث عنه**.
+readsDeclaredStrings();
 
 const SRC = join(__dirname, '..');
 const MIGRATIONS = join(__dirname, '..', '..', 'prisma', 'migrations');
