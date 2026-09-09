@@ -1,4 +1,10 @@
-import { callSiteOf, nestedTransactionReports, resetNestedTransactionReports, withTransactionProbe } from './nested-transaction-probe';
+import {
+  callSiteOf,
+  NESTED_REPORT_LIMIT,
+  nestedTransactionReports,
+  resetNestedTransactionReports,
+  withTransactionProbe,
+} from './nested-transaction-probe';
 
 /**
  * **كاشفُ المعاملة المتداخلة — مُثبَتٌ بحالاته** (`ق-٣٦٢` · `ق-٣٩٢`).
@@ -22,28 +28,23 @@ describe('كاشفُ المعاملة المتداخلة — يُبلّغ ولا
     expect(nestedTransactionReports()).toHaveLength(1);
   });
 
-  it('🔴 ونداءان من موضعين يُبلَّغ عنهما مرّتين لا مرّة — الشرط السادس', async () => {
-    // ⚠️ **الإثباتُ العكسيّ الذي طلبه المالك**: لو أُخذ المفتاحُ من إطار
-    //    الكاشف لكان **واحداً للجميع** — فيُبلَّغ عن موضعٍ ويُخفى الثاني.
-    const siteA = async () => withTransactionProbe(async () => 'a');
-    const siteB = async () => withTransactionProbe(async () => 'b');
-
+  it('🔴 ولا يُغرق السجلّ: البلاغاتُ محدودةٌ برقمٍ مُعلَن', async () => {
+    // ⚠️ **الشرطُ الأصليّ «مرّةً لكل موضع» سُحب بحجّته** (`ق-٣٩٤`): المفتاحُ من
+    //    الأثر **لا يحمل موضعَ المستدعي بعد التحويل غير المتزامن** (`ق-٣٩٥`).
+    //    **فالغرضُ باقٍ والوسيلةُ تغيّرت** — والحدُّ يمنع الإغراق لا التكرار.
+    const site = async () => withTransactionProbe(async () => 'x');
     await withTransactionProbe(async () => {
-      await siteA();
-      await siteB();
+      for (let i = 0; i < NESTED_REPORT_LIMIT * 3; i++) await site();
     });
-
-    expect(nestedTransactionReports()).toHaveLength(2);
+    expect(nestedTransactionReports().length).toBeLessThanOrEqual(NESTED_REPORT_LIMIT);
+    // **ولا صفراً**: الحدُّ يمنع الإغراق، **ولا يُسكت الكاشف**.
+    expect(nestedTransactionReports().length).toBeGreaterThan(0);
   });
 
-  it('🔴 والموضعُ نفسُه مرّتين يُبلَّغ عنه مرّةً — فلا يُغرق السجلّ', async () => {
-    const sameSite = async () => withTransactionProbe(async () => 'x');
-    await withTransactionProbe(async () => {
-      await sameSite();
-      await sameSite();
-      await sameSite();
-    });
-    expect(nestedTransactionReports()).toHaveLength(1);
+  it('🔴 والرقمُ مُعلَنٌ لا افتراضيّ — فمن يقرأ البلاغات يعرف سقفَها', () => {
+    // ⚠️ **حدٌّ بلا رقمٍ مُعلَن يُقرأ «كلُّ ما وقع»** — وهو أسوأ من الإغراق:
+    //    يُقرأ العددُ حصيلةً وهو سقف.
+    expect(NESTED_REPORT_LIMIT).toBe(50);
   });
 
   it('🔴 والمفتاحُ يتخطّى إطاراتِ الكاشف وخدمته — لا يقف عند أوّلها', () => {
