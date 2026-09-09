@@ -982,7 +982,8 @@ export class ContractsService {
     const items = await tx.contract.findMany({
       where,
       include: { unit: { include: { property: true } } },
-      orderBy: { start: 'desc' },
+      // ترتيبٌ تامّ لا جزئيّ (`ق-٣٥٦`) — `start` بدقّة اليوم فيتعادل، و`id` يحسم.
+      orderBy: [{ start: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });

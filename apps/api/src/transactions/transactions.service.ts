@@ -46,7 +46,8 @@ export class TransactionsService {
       const items = await tx.bankTransaction.findMany({
         where,
         include: TX_INCLUDE,
-        orderBy: { date: 'desc' },
+        // ترتيبٌ تامّ لا جزئيّ (`ق-٣٥٦`) — ولا `createdAt` على هذا النموذج، فـ`id` وحده يحسم.
+        orderBy: [{ date: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       });

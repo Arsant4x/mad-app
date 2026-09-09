@@ -45,7 +45,8 @@ export class InventoryService {
       const items = await tx.stockMovement.findMany({
         where,
         include: MOVEMENT_INCLUDE,
-        orderBy: { date: 'desc' },
+        // ترتيبٌ تامّ لا جزئيّ (`ق-٣٥٦`) — `date` بدقّة اليوم فيتعادل، و`id` يحسم.
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       });
