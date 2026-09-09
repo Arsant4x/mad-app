@@ -83,6 +83,43 @@ export function verdictOf(path, threw) {
  *
  * فيُسأل النمطُ **قبل التشغيل**، ويصير الغيابُ بعده **انقطاعاً حقيقياً**.
  */
+/**
+ * ⭐ **سقفُ كومة `V8` مشتقٌّ من سعة المضيف** (`ق-٤٠٢`).
+ *
+ * ⚠️ **ورقمٌ ثابتٌ خطأٌ في الاتجاهين**: `6144` على مضيفٍ سعتُه `7.79 GB`
+ * **أوقف الحزمة عند ٢٧ مجموعة** — لأن `V8` يؤجّل الكنس حتى يقارب سقفَه،
+ * **فيبتلع ما يحتاجه محرّكُ Prisma الأصليّ وحاوياتُ القاعدة**. والعكسُ
+ * يُهدر مضيفاً واسعاً.
+ *
+ * **والثلث حصّةٌ معلَنة لا مثلى**: يترك للمضيف ثلثيه — **للحاويات (`~1 GB`)
+ * ولمحرّكات Prisma الأصليّة (خارج الكومة) ولنظام التشغيل**. **وقِيس على
+ * المضيف الحالي**: `7.79 GB` ⇒ `2560` تقريباً، **وهو ما ضاعف ما اكتمل**
+ * (٢٧ ⇒ ٦٢). **والحدّان يمنعان السخف**: لا أقلَّ من `1024` فلا تكفي
+ * `ts-jest`، ولا أكثرَ من `8192` فلا فائدة بعده لهذه الحزمة.
+ */
+export function heapCapMb(totalBytes) {
+  const third = Math.floor(totalBytes / 3 / 1024 / 1024);
+  return Math.min(8192, Math.max(1024, third));
+}
+
+/**
+ * ⭐ **حكمُ الشرائح مجتمعةً — والأشدُّ يُغلِّب** (`ق-٤٠٢`).
+ *
+ * ⚠️ **والانقطاعُ أشدُّ من السقوط**: شريحةٌ لم تُكمل **تُبطل الحكم كلَّه** —
+ * فما لم يُشغَّل لا يُقال عنه شيء، **وقراءةُ الباقي نجاحاً هي عينُ الخضرة
+ * الكاذبة**. **ثم السقوط، ثم الفراغ، ثم النجاح.**
+ *
+ * ⚠️ **و`PASS` تحتاج كلَّ الشرائح**: واحدةٌ `EMPTY` تعني نمطاً لم يطابق
+ * شيئاً فيها — **وهو حكمٌ على النمط لا على الشيفرة**.
+ */
+export function combineVerdicts(verdicts) {
+  if (verdicts.length === 0) return 'INTERRUPTED';
+  for (const worst of ['INTERRUPTED', 'FAIL', 'EMPTY']) {
+    if (verdicts.includes(worst)) return worst;
+  }
+  return 'PASS';
+}
+
 export function countListedTests(stdout) {
   if (!stdout) return 0;
   return stdout
@@ -95,7 +132,13 @@ export function countListedTests(stdout) {
 // `verdict <مسار> <سقط:0|1>` · `count` يقرأ مخرَج `--listTests` من المدخل.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [, , first, second] = process.argv;
-  if (first === 'count') {
+  // ⚠️ **يُستدعيان كأداةٍ كذلك** (`ق-٤٠٢`): الاختبارُ يشغّل **هذا الملفّ**
+  //    لا نسخةً من منطقه — **فنسخةٌ تُثبت النسخة**.
+  if (first === 'combine') {
+    process.stdout.write(combineVerdicts(second ? second.split(',').filter(Boolean) : []));
+  } else if (first === 'heap') {
+    process.stdout.write(String(heapCapMb(Number(second))));
+  } else if (first === 'count') {
     let stdin = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (c) => (stdin += c));
