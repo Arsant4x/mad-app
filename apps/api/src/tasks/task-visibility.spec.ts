@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripCommentsAndStrings } from '../common/source-scan.util';
 import { ALLOWED_SCREENS } from '../templates/screens';
 import { DelegationLink, RootGrants } from '../delegations/intersection';
 import { Grant } from '../delegations/permission-tree';
@@ -85,7 +86,9 @@ describe('المهام — تُبنى فوق التفويض لا بجواره', 
     const dir = __dirname;
     const offenders: string[] = [];
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts') && !x.endsWith('.spec.ts'))) {
-      const src = readFileSync(join(dir, f), 'utf8');
+      // ⚠️ **الكودُ لا النصّ** (`ق-٣٧٥`): هذا نمطٌ **برمجيّ**، **ومثالٌ مكتوبٌ
+      //    في تعليقٍ أو سلسلةٍ ليس منحاً**. وقد أدان نظيرُه السليمَ ثلاث مرات.
+      const src = stripCommentsAndStrings(readFileSync(join(dir, f), 'utf8'));
       // إضافةٌ إلى مجموعة منح، أو بناء منحة من عدم.
       for (const m of src.matchAll(/(\w*[Gg]rants?)\s*\.\s*add\s*\(/g)) offenders.push(`${f}: ${m[1]}.add()`);
     }

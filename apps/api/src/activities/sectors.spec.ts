@@ -1,5 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): المقروءُ **أسماءُ شاشاتٍ وقطاعاتٍ
+// معلَنةٌ نصّاً** — **لا نمطٌ برمجيّ**، فتجريدُ النصوص يُفرغ ما يقارنه.
+readsDeclaredStrings();
 import { ALLOWED_SCREENS } from '../templates/screens';
 import {
   CORE_SCREENS,

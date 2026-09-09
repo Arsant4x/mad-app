@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripComments } from '../common/source-scan.util';
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ALLOWED_SCREENS, SCREEN_ACTIONS } from '../templates/screens';
@@ -48,7 +49,11 @@ describe('مفردات التفويض مشتقّة من مصدرها — لا م
     // وقد خُرقت في أول صياغة لهذا الملف بعينه — كُتبت أسماء النطاقات
     // التسعة يدوياً.
     const src = readFileSync(join(__dirname, 'dto', 'create-delegation.dto.ts'), 'utf8');
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+    // ⚠️ **الصنفُ الثالث** (`ق-٣٧٥`): التعليقاتُ تُجرَّد **والنصوصُ تبقى** —
+    //    فالنمطُ أدناه **يطلب علاماتِ الاقتباس صراحةً**، أي أن مناطَ الفحص
+    //    اسمٌ مكتوبٌ **داخل سلسلة**. **وكان مُجرِّداً يدويّاً تاسعاً** يحذف
+    //    الأسطرَ حذفاً (فيغيّر عددَها)، **فصار من المصدر الواحد** (`ق-٣٨٢`).
+    const code = stripComments(src);
     for (const name of RAW_DOMAINS.map((d) => d.key)) {
       expect({ name, hardcoded: new RegExp(`['"\`]${name}['"\`]`).test(code) }).toEqual({ name, hardcoded: false });
     }
