@@ -1,19 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readsDeclaredStrings } from '../common/source-scan.util';
-
-// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): القيمُ المقروءة **سلاسلُ نصّية
-// معلَنة** لا أنماطُ شيفرة — **فتجريدُ النصوص يُعميه**.
-readsDeclaredStrings();
+import { stripComments } from '../common/source-scan.util';
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { SetPrimaryActivityDto } from './dto/set-primary-activity.dto';
 
-const read = (...p: string[]) =>
-  readFileSync(join(__dirname, ...p), 'utf8')
-    .replace(/\r\n/g, '\n')
-    .replace(/\/\*\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+/**
+ * ⚠️ **يبحث عن أنماطٍ برمجية، فيُجرَّد من التعليقات — والنصوصُ تبقى** (`ق-٣٧٥`):
+ * توكيدٌ واحد يقرأ **رسالةً عربية من داخل سلسلةٍ نصّية** (`messages.ts`)،
+ * **فتجريدُ النصوص يُعميه**. فهذا هو **الصنف الثالث**.
+ *
+ * 🔴 **وكان هنا مُجرِّدٌ يدويّ فيه عطلُ `ق-٣٣١`**: نمطُ التعليق السطريّ بدأ
+ * بـ`^` ثم `\s` مكرّرة — **و`\s` تبتلع السطر الجديد** فتُلتهم الأسطرُ الفارغة
+ * قبل كل تعليق. **فاستُبدل بالمصدر الواحد**، ولا تُعاد كتابتُه.
+ */
+const read = (...p: string[]) => stripComments(readFileSync(join(__dirname, ...p), 'utf8').replace(/\r\n/g, '\n'));
 
 const service = () => read('primary-activity.service.ts');
 const controller = () => read('activities.controller.ts');
