@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { nextDocumentNumber } from '../src/common/document-sequence.util';
+import { isSequencePortReady } from '../src/common/sequence-allocator';
 
 /**
  * **العدّادُ الذرّيّ للمستندات** (`ق-٣٢٨`) — والبذرُ **بنيةً لا انضباطاً**.
@@ -96,6 +97,17 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
     for (const kind of kinds) await dropCounter(kind);
     await app.close();
   }, 30000);
+
+  it('🔴 والمنفذُ متصلٌ قبل أول مستند — فالكلفةُ على الإقلاع لا على تاجر', () => {
+    // ⚠️ **العطلُ المقيس** (`ق-٣٥٥`): الاتصالُ الكسول جعل **أول إنشاء مستندٍ
+    // في الملف يدفع كلفةَ الفتح** — فسقطت مجموعتان بمهلة الخمس ثوانٍ، **وفي
+    // المنشورة تقع على أول فاتورةٍ بعد كل نشر**.
+    //
+    // ⚠️ **ويُثبَت بالآليّة لا بالزمن**: «الطلبُ الأول سريع» يقيس عتادَ الجهاز
+    // ويسقط على سيرٍ بطيء. **فيُقرأ أن الاتصال قائمٌ فعلاً** — ولم يُطلب هنا
+    // رقمٌ بعدُ، فالجاهزيّةُ من الإقلاع وحده.
+    expect(isSequencePortReady()).toBe(true);
+  });
 
   it('🔴 وما لا يُبذَر يبدأ من صفر: أولُ رقمٍ ‎0001‎ لا ‎0002‎', async () => {
     const kind = freshKind('A');

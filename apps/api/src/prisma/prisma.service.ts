@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { disconnectSequencePort } from '../common/sequence-allocator';
+import { connectSequencePort, disconnectSequencePort } from '../common/sequence-allocator';
 
 /**
  * Raw, unscoped Prisma client. Only ever used for:
@@ -15,6 +15,9 @@ import { disconnectSequencePort } from '../common/sequence-allocator';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.$connect();
+    // ومنفذُ العدّاد يتصل معه (`ق-٣٥٥`) — **فالكلفةُ على الإقلاع لا على أول
+    // فاتورة**. ولا يُسقط الإقلاع إن تعذّر: يُسجَّل وتُعاد المحاولة.
+    await connectSequencePort();
   }
 
   async onModuleDestroy() {

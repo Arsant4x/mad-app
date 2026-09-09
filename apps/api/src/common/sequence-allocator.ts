@@ -49,6 +49,18 @@ import { PrismaClient } from '@prisma/client';
 export const SEQUENCE_PORT_CONNECTION_LIMIT = 2;
 
 let port: PrismaClient | null = null;
+let ready = false;
+
+/**
+ * **هل فُتح الاتصالُ عند الإقلاع؟** — يُقرأ في الإثبات العكسيّ (`ق-٣٥٥`).
+ *
+ * ⚠️ **ويُثبَت بالآليّة لا بالزمن**: توكيدٌ على «الطلبُ الأول سريع» **يقيس
+ * عتادَ الجهاز لا الإصلاح** ويسقط على سيرٍ بطيء. **فيُقرأ أن الاتصال قائمٌ
+ * فعلاً** — وهو ما بُني ليقع.
+ */
+export function isSequencePortReady(): boolean {
+  return ready;
+}
 
 /** يُنشأ عند أول طلبٍ ولا يُعاد إنشاؤه — والحدُّ يُحقن في العنوان نفسه. */
 function sequencePort(): PrismaClient {
@@ -62,10 +74,34 @@ function sequencePort(): PrismaClient {
   return port;
 }
 
+/**
+ * **يُفتح الاتصالُ عند إقلاع الوحدة لا عند أول فاتورة** (`ق-٣٥٥`).
+ *
+ * ⚠️ **العطلُ المقيس**: الاتصالُ الكسول يجعل **كلفةَ الفتح تقع على أول إنشاء
+ * مستندٍ** — فسقطت مجموعتان في الحزمة النظيفة بمهلة الخمس ثوانٍ، **وفي
+ * المنشورة تقع على أول فاتورةٍ بعد كل نشر**. **ومجموعٌ من اثنين يجعلها
+ * متكرّرة لا مرّةً واحدة** (`ق-٣٥٤`).
+ *
+ * ⚠️ **ولا يمنع الإقلاع** (شرطُ المالك الأول): فشلُ الاتصال **يُسجَّل ويُمضى**
+ * — **وتُعاد المحاولة عند أول طلبٍ** لأن `sequencePort()` كسولةٌ أصلاً.
+ * **وإلا صار عطلٌ في القاعدة يمنع النظام من القيام أصلاً** — وهو أسوأ من
+ * بطءِ أول فاتورة.
+ */
+export async function connectSequencePort(): Promise<void> {
+  try {
+    await sequencePort().$connect();
+    ready = true;
+  } catch (e) {
+    // ولا يُبتلع صامتاً: يُسمّى بما هو، **ويبقى المسارُ عاملاً بإعادة المحاولة**.
+    console.error(`⚠️ منفذُ العدّاد لم يتصل عند الإقلاع — تُعاد المحاولة عند أول طلب: ${String(e)}`);
+  }
+}
+
 /** يُغلق مع دورة حياة التطبيق — فلا يبقى اتصالٌ معلّقٌ بعد الإغلاق. */
 export async function disconnectSequencePort(): Promise<void> {
   const open = port;
   port = null;
+  ready = false;
   if (open) await open.$disconnect();
 }
 
