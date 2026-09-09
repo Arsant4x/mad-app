@@ -16,14 +16,43 @@
  */
 import { execSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
-import { countListedTests, verdictOf } from './clean-verdict.mjs';
+import { combineVerdicts, countListedTests, heapCapMb, verdictOf } from './clean-verdict.mjs';
 
 const DB = process.env.TEST_CLEAN_DB ?? 'mad_app_clean';
 const SUPER = process.env.TEST_CLEAN_SUPERUSER ?? 'mad_app';
 const CONTAINER = process.env.TEST_CLEAN_CONTAINER ?? 'mad-app-postgres-1';
 const pattern = process.argv.slice(2);
+
+/**
+ * ⭐ **الشرائحُ تُعيد الذاكرة إلى الصفر بين الأجزاء** (`ق-٤٠٢`).
+ *
+ * ── العطل الذي بُنيت له ──────────────────────────────────────────────────
+ *
+ * `--runInBand` يُشغّل الحزمة كلَّها **في عمليةِ `node` واحدة**، وكلُّ مجموعةِ
+ * `e2e` تُقلع `AppModule` ومحرّكَ Prisma. **فالذاكرةُ تتراكم عبر ١٣٠ مجموعة**،
+ * **وتنقطع الحزمةُ قبل أن تكمل** — مرّتين في يومٍ واحد:
+ *
+ *   · سقفُ `V8` عند `6144` على مضيفٍ سعتُه `7.79 GB` ⇒ **٢٧ مجموعة**.
+ *   · وبعد خفضه إلى `2560` ⇒ **٦٢ مجموعة**.
+ *
+ * **والرسالةُ `memory allocation … failed` مُخصِّصُ `Rust`** — أي **محرّكُ
+ * Prisma لا كومةُ `V8`**: **المضيفُ نفدَ لا الكومة**. ⇒ **فخفضُ السقف وحده
+ * يؤجّل الانقطاع ولا يمنعه**، لأن ما يتراكم **خارج الكومة** كذلك.
+ *
+ * ⚠️ **وانقطاعٌ ليس نتيجةً سيّئة بل لا نتيجة**: «**حزمةٌ تنقطع تُبطل كلَّ
+ * قياسٍ بعدها**» (حكمُ المالك) — **وكلُّ مجموعةٍ سقطت قبل الانقطاع تبعيّة**:
+ * أربعٌ فُحصت وحدَها على قاعدةٍ نظيفة **فخضرَّت كلُّها**.
+ *
+ * ── وثمنُها معلَن ────────────────────────────────────────────────────────
+ *
+ * ⚠️ **القاعدةُ تُنشأ مرّةً واحدة** — فالحالةُ المتراكمة تُقاس كما كانت.
+ * **لكنّ ترتيبَ التشغيل يُحفَظ داخل الشريحة لا عبرها**: مجموعةٌ تعتمد على
+ * أخرى في شريحةٍ أخرى **لن تُكتشف هنا**. ⇒ **وهذا إضعافٌ يُعلَن**: شريحةٌ
+ * واحدة (`TEST_CLEAN_SHARDS=1`) تبقى الأقوى، **وتُستعمل حين يتّسع المضيف**.
+ */
+const SHARDS = Number(process.env.TEST_CLEAN_SHARDS ?? 4);
 
 const psql = (db, sql) =>
   execSync(`docker exec -u postgres ${CONTAINER} psql -U ${SUPER} -d ${db} -v ON_ERROR_STOP=1 -c "${sql}"`, { stdio: 'pipe' }).toString();
@@ -75,21 +104,50 @@ const listed = (() => {
     return '';
   }
 })();
-if (countListedTests(listed) === 0) {
+const fileCount = countListedTests(listed);
+if (fileCount === 0) {
   console.error(`\n✘ النمط «${pattern.join(' ') || '(الكل)'}» لا يطابق ملفَّ اختبارٍ واحداً — فصفرُ اختبارٍ ليس نجاحاً ولا انقطاعاً.`);
   process.exit(1);
 }
 
-const RESULT = join(tmpdir(), `mad-app-clean-result-${process.pid}.json`);
-let threw = false;
-try {
-  run(`npx jest --runInBand --json --outputFile="${RESULT}" ${pattern.join(' ')}`);
-} catch {
-  threw = true;
+/**
+ * ⚠️ **ولا تُشرَّح حزمةٌ أصغر من شرائحها** (`ق-٤٠٢`): أربعُ شرائحَ على ملفَّين
+ * تترك **شريحتين فارغتين**، **وجيست يُخرجهما `EMPTY`** — **فيصير الحكمُ
+ * `EMPTY` والحزمةُ خضراء**. وهي خضرةٌ كاذبةٌ مقلوبة: **حمرةٌ كاذبة تُنسب إلى
+ * الشيفرة وسببُها التشريح**.
+ *
+ * **فالشرائحُ تُحدّ بعدد الملفات**: ملفّان لكل شريحةٍ على الأقلّ.
+ */
+const shardCount = Math.max(1, Math.min(SHARDS, Math.floor(fileCount / 2)));
+
+/**
+ * ⚠️ **السقفُ يُشتقّ من المضيف ولا يُترك** (`ق-٤٠٢`): رقمٌ ثابتٌ يناسب جهازاً
+ * **يقتل جهازاً أصغر ويُهدر أكبر**. **ويُطبع كي يُقرأ مع النتيجة** — فمن يقرأ
+ * انقطاعاً بعد شهر يحتاج أن يعرف تحت أيّ سقفٍ وقع.
+ */
+const capMb = heapCapMb(totalmem());
+const shardEnv = { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS ?? ''} --max-old-space-size=${capMb}`.trim() };
+console.log(`▶ سقفُ الكومة ${capMb} م.ب (مضيفٌ ${Math.round(totalmem() / 1024 ** 3)} ج.ب) · شرائح: ${shardCount}\n`);
+
+const verdicts = [];
+for (let shard = 1; shard <= shardCount; shard += 1) {
+  const RESULT = join(tmpdir(), `mad-app-clean-result-${process.pid}-${shard}.json`);
+  // **كلُّ شريحةٍ عمليةُ `node` جديدة** — فالذاكرةُ تعود إلى الصفر بينها،
+  // **وهو الفرقُ الذي يجعل الحزمة تكمل**.
+  const shardArg = shardCount > 1 ? `--shard=${shard}/${shardCount}` : '';
+  if (shardCount > 1) console.log(`\n▶ الشريحة ${shard}/${shardCount}\n`);
+  let threw = false;
+  try {
+    execSync(`npx jest --runInBand ${shardArg} --json --outputFile="${RESULT}" ${pattern.join(' ')}`, { stdio: 'inherit', env: shardEnv });
+  } catch {
+    threw = true;
+  }
+  verdicts.push(verdictOf(RESULT, threw));
+  rmSync(RESULT, { force: true });
 }
 
-const verdict = verdictOf(RESULT, threw);
-rmSync(RESULT, { force: true });
+const verdict = combineVerdicts(verdicts);
+if (shardCount > 1) console.log(`\n▶ أحكامُ الشرائح: ${verdicts.join(' · ')} ⇒ ${verdict}`);
 
 if (verdict === 'INTERRUPTED') {
   // 🔴 **انقطاعٌ لا نتيجة**: لا حصيلةَ أصلاً، فلا يُنسب شيءٌ إلى الشيفرة.

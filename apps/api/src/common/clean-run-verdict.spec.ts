@@ -90,3 +90,51 @@ describe('حكمُ التشغيل: انقطاعٌ لا فشل — بوّابةٌ
     expect(count(['Determining test suites to run...', 'D:\\mad-app\\apps\\api\\src\\common\\ci-split.spec.ts'].join('\n'))).toBe('1');
   });
 });
+
+/**
+ * **حكمُ الشرائح وسقفُ الكومة — مُثبَتان بحالاتٍ معلومة** (`ق-٤٠٢`).
+ *
+ * ⚠️ **وكلاهما يُصدر حكماً، فيُصادَق في الاتجاهين** (`ق-٣٩٩`): `combineVerdicts`
+ * تقرّر أن الحزمة نجحت أم لا، و`heapCapMb` تقرّر تحت أيّ سقفٍ تركض —
+ * **ورقمٌ من أداةٍ لم تُصادَق لا يُقرأ**.
+ */
+describe('الشرائحُ وسقفُ الكومة — أداتان تُصدران حكماً فتُصادَقان', () => {
+  /** ⚠️ **الملفُّ الحقيقيّ يُستدعى** — لا نسخةٌ من منطقه. */
+  const TOOL = join(__dirname, '..', '..', 'scripts', 'clean-verdict.mjs');
+  const combineVerdicts = (v: string[]) => execFileSync(process.execPath, [TOOL, 'combine', v.join(',')], { encoding: 'utf8' }).trim();
+  const heapCapMb = (bytes: number) => Number(execFileSync(process.execPath, [TOOL, 'heap', String(bytes)], { encoding: 'utf8' }).trim());
+
+  it('🔴 الأشدُّ يُغلِّب: انقطاعُ شريحةٍ واحدة يُبطل حكم الحزمة كلَّها', () => {
+    // ⚠️ **وهذا مناطُ الأداة**: ثلاثُ شرائحَ خضراء ورابعةٌ لم تكمل **ليست
+    //    ثلاثةَ أرباع نجاح** — **فما لم يُشغَّل لا يُقال عنه شيء**.
+    expect(combineVerdicts(['PASS', 'PASS', 'PASS', 'INTERRUPTED'])).toBe('INTERRUPTED');
+    // والانقطاعُ أشدُّ من السقوط — فسقوطٌ مع انقطاعٍ لا يُقرأ سقوطاً محسوماً.
+    expect(combineVerdicts(['FAIL', 'INTERRUPTED'])).toBe('INTERRUPTED');
+    expect(combineVerdicts(['PASS', 'FAIL'])).toBe('FAIL');
+    expect(combineVerdicts(['PASS', 'EMPTY'])).toBe('EMPTY');
+    // 🔴 **والحالةُ السالبة**: كلُّها خضراء ⇒ خضراء — وإلا كانت الأداةُ حمراءَ دائماً.
+    expect(combineVerdicts(['PASS', 'PASS'])).toBe('PASS');
+    // ولا شرائحَ أصلاً ⇒ انقطاع: **غيابُ الحكم ليس حكماً بالنجاح**.
+    expect(combineVerdicts([])).toBe('INTERRUPTED');
+  });
+
+  it('🔴 والسقفُ يُشتقّ من المضيف — ولا يُترك رقماً ثابتاً', () => {
+    const gb = (n: number) => n * 1024 ** 3;
+    // **المضيفُ الذي انقطعت عليه الحزمة مرّتين**: `7.79 GB` ⇒ ثلثُه.
+    //
+    // ⚠️ **والمدى لا الرقمُ الواحد عمداً**: الحسابُ اليدويّ يعطي `٢٦٥٩` والأداةُ
+    //    `٢٦٥٨` — **فرقُ تقريبٍ في القسمة**. **ولو ثُبِّت رقمُ الأداة لصار
+    //    التوكيدُ يُثبت الأداةَ بنفسها** (`ق-٣٨٧`)، فيُثبَّت **ما حُسب يدوياً**
+    //    بهامشٍ لا يبتلع خطأً حقيقياً.
+    expect(heapCapMb(gb(7.79))).toBeGreaterThan(2600);
+    expect(heapCapMb(gb(7.79))).toBeLessThan(2700);
+    // **وهو أقلُّ من `6144` الذي انقطعت تحته** — وهذا مناطُ الاشتقاق كلِّه.
+    expect(heapCapMb(gb(7.79))).toBeLessThan(6144);
+    // 🔴 **والحدّان يمنعان السخف في الطرفين**: مضيفٌ صغيرٌ لا يُخنق…
+    expect(heapCapMb(gb(1))).toBe(1024);
+    // …ومضيفٌ ضخمٌ لا يُعطى سقفاً بلا فائدة.
+    expect(heapCapMb(gb(64))).toBe(8192);
+    // **ويكبر بكبر المضيف** — فالاشتقاقُ اشتقاقٌ لا شرطان.
+    expect(heapCapMb(gb(24))).toBeGreaterThan(heapCapMb(gb(12)));
+  });
+});
