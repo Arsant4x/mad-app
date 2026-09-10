@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
 interface IncidentRow {
   id: string;
@@ -32,6 +33,8 @@ interface IncidentReport {
 describe('POS offline incidents — inferred on the server (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  let companyId: string;
+  let tenantPrisma: TenantPrismaService;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let productId: string;
   let shiftId: string;
@@ -78,7 +81,11 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    tenantPrisma = app.get(TenantPrismaService);
+
+    const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
+    token = login.body.accessToken;
+    companyId = login.body.user.companyId;
     productId = (await auth(http().post('/products')).send({ name: `عصير برتقال ${suffix}`, price: 12 }).expect(201)).body.id;
     shiftId = (await auth(http().post('/pos/shifts')).send({ openingFloat: 100 }).expect(201)).body.id;
 
@@ -92,6 +99,31 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
     for (const id of invoiceIds) await auth(http().delete(`/invoices/${id}`));
     await auth(http().delete(`/products/${productId}`));
     await auth(http().delete(`/trash/products/${productId}`));
+
+    /**
+     * 🔴 **وما استُنبط يُحذف مع ما أنشأه** (`ق-٤٩٥`).
+     *
+     * **الفاتورةُ تُحذف والواقعةُ تبقى**: `onDelete: SetNull` يفكّ الرابط ولا
+     * يمسّها، **ولا مسارَ في الواجهة يحذف واقعة** — فهي مستنبَطة لا مُدخَلة.
+     *
+     * **والمقيس** (2026-09-10): **٦١ واقعةً متراكمة عبر ثلاثة أيام**، **٢٦
+     * منها من تشغيلات يومٍ واحد**.
+     *
+     * ⚠️ **والعشوائيةُ دفاعٌ يضعف بالتراكم**: الأساسُ يُعشَّى في أربعَ عشرةَ
+     * ساعة، **ونافذةُ التشغيل الواحد تمتدّ ثلاثَ ساعاتٍ** (الحالةُ ② قبل
+     * الأساس بـ١٨٠ دقيقة) — **فاحتمالُ التقاطع مع واقعةٍ متروكة يقترب من
+     * اليقين كلّما تراكمت**. **فالتنظيفُ حتميٌّ والعشوائيةُ للتزامن وحده.**
+     *
+     * ⚠️ **ولا يُمسّ إلا ما أنشأته هذه المجموعة**: **اليومُ الصناعيّ
+     * `2026-08-20` لها وحدها** — بنصّ تعليقها عند اختيار الأساس. **وحذفٌ
+     * أوسعُ يمحو وقائعَ منشأةٍ حقيقية، وهي بياناتٌ لا أثرُ تشغيل.**
+     */
+    const dayStart = new Date(Date.UTC(2026, 7, 20, 0, 0, 0));
+    const dayEnd = new Date(Date.UTC(2026, 7, 21, 0, 0, 0));
+    await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.posOfflineIncident.deleteMany({ where: { startedAt: { gte: dayStart, lt: dayEnd } } }),
+    );
+
     await app.close();
   });
 
