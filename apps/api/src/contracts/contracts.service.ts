@@ -312,11 +312,16 @@ export class ContractsService {
         const netAmount = round2(dto.amount - discount);
         if (netAmount <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
-        const journalEntry = await postRentPaymentEntry(tx, companyId, {
+        const posting = await postRentPaymentEntry(tx, companyId, {
           unitId: contract.unitId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.date),
+          // فترةُ خدمةِ القسط — وبلا قسطٍ مرتبط لا فترةَ تُعرف (ق-٤٧٣).
+          service:
+            installment?.serviceStart && installment?.serviceEnd
+              ? { start: installment.serviceStart, end: installment.serviceEnd }
+              : null,
           baseNetAmount: toBaseAmount(netAmount, payRate),
           // Priced at the contract's rate — but only when the payment is in
           // the contract's own currency. A payment made in a different
@@ -326,6 +331,7 @@ export class ContractsService {
           // (ق-٢٧٧) الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك — لا `1000`.
           cashAccountId: bank?.accountId ?? null,
         });
+        const journalEntry = posting.entry;
 
         if (bank) {
           await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: netAmount } } });
@@ -368,7 +374,12 @@ export class ContractsService {
         });
 
         if (installment) {
-          await tx.installment.update({ where: { id: installment.id }, data: { status: 'PAID' } });
+          await tx.installment.update({
+            where: { id: installment.id },
+            // العدّادُ يُزاد بما اعتُرف به **في هذا القيد وحده** — وصفرٌ حين
+            // تخطّى الترحيلُ لنقص حساب، فلا يُسجَّل اعترافٌ لم يقع (ق-٤٦٨).
+            data: { status: 'PAID', baseRecognized: { increment: posting.earned } },
+          });
         }
 
         return tx.rentPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { installment: true } });

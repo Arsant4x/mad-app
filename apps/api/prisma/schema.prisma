@@ -2994,6 +2994,13 @@ model Installment {
   serviceStart DateTime? @db.Date
   serviceEnd   DateTime? @db.Date
 
+  /// ما اعتُرف به **إيراداً** من مقبوض هذا القسط، بعملة الدفتر (`ق-٤٦٨`).
+  ///
+  /// **والالتزامُ القائم = المقبوضُ − هذا.** فالتحوّلُ الشهريّ يقارن هدفَه
+  /// التراكميّ بهذا الرقم ويُرحّل الفرق — **فتشغيلٌ مكرَّرٌ يُرحّل صفراً،
+  /// وشهرٌ فائتٌ يُعوَّض في التشغيل التالي بتاريخه**.
+  baseRecognized Decimal @default(0) @db.Decimal(18, 2)
+
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
   baseAmount   Decimal @db.Decimal(18, 2)

@@ -4,9 +4,11 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo, round2 } from '../common/money/rounding';
 import { purchaseExpenseAccountCode } from '../common/purchase-categories';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
+import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.util';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
+import { ServicePeriod, splitAtCollection } from './rent-recognition.util';
 
 /** Resolves a set of account codes to ids, scoped by the tenant context
  * already baked into `tx`. Returns `null` (soft-skip signal) if any code
@@ -387,6 +389,16 @@ export interface RentPaymentForPosting {
   contractNo: string;
   tenant: string;
   date: Date;
+  /**
+   * ⭐ **فترةُ الخدمة التي يغطّيها القسط المقبوض** — وعليها وحدها يُقسَم الإيراد
+   * (`ق-٤٧٤`).
+   *
+   * ⚠️ **و`null` ليست إهمالاً بل حالةٌ مقيسة**: **٢٩٪ من دفعات الإيجار بلا قسطٍ
+   * مرتبط** — **فلا فترةَ خدمةٍ تُعرف لها إطلاقاً**، وتُعترَف فوراً كما اليوم
+   * **بحدٍّ معلَنٍ في شاشة القبض** (`ق-٤٧٣`). **والمنعُ رُفض**: يكسر مساراً
+   * يستعمله ثلثُ الدفعات ويُلتفّ عليه بقسطٍ صوريّ.
+   */
+  service?: ServicePeriod | null;
   /// Cash received, valued at the **settlement** rate.
   baseNetAmount: number;
   /// The same cash valued at the rate the **contract** was priced at. Equal to
@@ -407,10 +419,36 @@ export interface RentPaymentForPosting {
  * it as revenue instead would overstate the business's operating performance
  * with something the market did.
  *
- * Returns `null` (soft-skip) if a required account isn't set up yet.
+ * ## وما تغيّر: الإيرادُ يُقسَم على فترة خدمته (`ق-٤٦٨` · `ق-٤٧٤`)
+ *
+ * **ما مضى من فترة القسط إيرادٌ (`4200`)، وما بقي التزامٌ (`2400`)** — يتحوّل
+ * إيراداً شهراً بشهر. **والقسمةُ بالتواريخ لا باسم الدورة**: القسطُ يستحقّ في
+ * أوّلِ فترته، **فكلُّ قبضٍ في موعده قبضٌ عن خدمةٍ لم تُقدَّم**.
+ *
+ * ⭐ **وأثرُه محدودٌ عمداً**: دفعةٌ عن فترةٍ انقضت كلُّها تعطي `deferred = 0`
+ * **فقيدُها هو قيدُ الأمس حرفياً**، ودفعةٌ **بلا قسطٍ مرتبط** (٢٩٪ من الدفعات
+ * المقيسة) **لا فترةَ لها فتُعترَف فوراً بحدٍّ معلَن** (`ق-٤٧٣`).
+ *
+ * ⚠️ **وفرقُ الصرف يبقى إيراداً/خسارةً فوريّةً لا يؤجَّل**: هو ما فعله السوقُ
+ * لا ما قدّمته المنشأة من خدمة — **فلا فترةَ خدمةٍ له يُقسَم عليها**.
+ *
+ * Returns `entry: null` (soft-skip) if a required account isn't set up yet.
  */
-export async function postRentPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: RentPaymentForPosting) {
-  if (p.baseNetAmount <= 0) return null;
+export interface RentPostingResult {
+  entry: Awaited<ReturnType<typeof createJournalEntry>> | null;
+  /** ما اعتُرف به إيراداً في هذا القيد — صفرٌ حين لا قيد. */
+  earned: number;
+  /** وما دخل الالتزام. */
+  deferred: number;
+}
+
+export async function postRentPaymentEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: RentPaymentForPosting,
+): Promise<RentPostingResult> {
+  const skipped: RentPostingResult = { entry: null, earned: 0, deferred: 0 };
+  if (p.baseNetAmount <= 0) return skipped;
 
   // Rounded to the ledger's 2 decimals before comparing: a rate carries 6, so
   // an unrounded difference would post lines like 0.0000001 forever.
@@ -418,15 +456,23 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
   const revenue = round2(p.baseExpectedAmount);
   const fxDifference = round2(cash - revenue);
 
+  // **الدالّةُ الواحدة التي تقرّر وجهةَ المبلغ** (`ق-٤٦٩`) — وبلا فترةٍ لا
+  // قسمةَ ممكنة، فالمبلغُ كلُّه إيرادٌ كما كان (`ق-٤٧٣`).
+  const split = p.service ? splitAtCollection(p.service, revenue, p.date) : { earned: revenue, deferred: 0 };
+
   // كسابقتها (ق-٢٧٧): الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك.
   const needCodes = [...(p.cashAccountId ? [] : ['1000']), '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
+  if (!ids) return skipped;
 
-  const lines: PostingLine[] = [
-    { accountId: p.cashAccountId ?? ids.get('1000')!, debit: cash, credit: 0 },
-    { accountId: ids.get('4200')!, debit: 0, credit: revenue },
-  ];
+  const lines: PostingLine[] = [{ accountId: p.cashAccountId ?? ids.get('1000')!, debit: cash, credit: 0 }];
+  if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
+  if (split.deferred > 0) {
+    // ⚠️ `getOrCreate` لا `resolveAccountIds`: المنشآتُ القائمة لا تحمل `2400`
+    // في دليلها، **والتخطّي الصامت هنا يعني قبضاً بلا قيدٍ أصلاً** (ق-٤٧١).
+    const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+    lines.push({ accountId: deferredId, debit: 0, credit: split.deferred });
+  }
 
   if (fxDifference > 0) {
     // More cash than the contract priced — a gain, credited against 5600.
@@ -435,7 +481,7 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
     lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: -fxDifference, credit: 0 });
   }
 
-  return createJournalEntry(tx, {
+  const entry = await createJournalEntry(tx, {
     companyId,
     date: p.date,
     memo: `دفعة إيجار — عقد ${p.contractNo} — ${p.tenant}`,
@@ -443,6 +489,54 @@ export async function postRentPaymentEntry(tx: Prisma.TransactionClient, company
     lines,
     auto: true,
     branchId: p?.branchId ?? null,
+  });
+
+  return { entry, earned: split.earned, deferred: split.deferred };
+}
+
+export interface DeferredRecognitionForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
+  branchId?: string | null;
+  contractNo: string;
+  tenant: string;
+  /** تاريخُ القيد — **نهايةُ الشهر أو ختامُ فترة الخدمة، لا يومُ التشغيل**. */
+  date: Date;
+  /** حصّةُ هذا الشهر من الالتزام، بعملة الدفتر. */
+  baseAmount: number;
+  /** يُكتب في المذكّرة فيُقرأ القيدُ بلا فتح العقد. */
+  periodLabel: string;
+}
+
+/**
+ * **تحوّلُ الالتزام إيراداً**: مدين `2400`، دائن `4200`.
+ *
+ * وهو الطرفُ الثاني من `postRentPaymentEntry` — **ولا يُبنى المسارُ بأحدهما**:
+ * مالٌ يدخل التزاماً بلا مخرجٍ يُنتج ميزانيةً كاذبة كما يُنتجه الاعترافُ
+ * الفوريّ (حكمُ المالك).
+ *
+ * ⚠️ **والحسابان يُنشآن عند الحاجة لا يُتخطّيان**: `2400` بـ`getOrCreate`
+ * (`ق-٤٧١`)، و`4200` من الدليل — **وغيابُه وحده يوقف التحوّل**، فهو حسابُ
+ * الإيجار الأصليّ الذي لا يخلو منه دليلُ منشأةٍ تُؤجّر.
+ */
+export async function postDeferredRecognitionEntry(tx: Prisma.TransactionClient, companyId: string, r: DeferredRecognitionForPosting) {
+  if (r.baseAmount <= 0) return null;
+
+  const ids = await resolveAccountIds(tx, ['4200']);
+  if (!ids) return null;
+  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: r.date,
+    memo: `تحوّل إيراد مؤجَّل — عقد ${r.contractNo} — ${r.tenant} — ${r.periodLabel}`,
+    unitId: r.unitId,
+    lines: [
+      { accountId: deferredId, debit: r.baseAmount, credit: 0 },
+      { accountId: ids.get('4200')!, debit: 0, credit: r.baseAmount },
+    ],
+    auto: true,
+    branchId: r.branchId ?? null,
   });
 }
 
