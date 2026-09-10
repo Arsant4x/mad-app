@@ -241,6 +241,27 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
       .expect(201);
   }, 40000);
 
+  it('🔴 ⑫ ووصفُ القيد يحمل حدَّ المحرّك — في الدفتر لا في وثيقة (ق-٤٨٠)', async () => {
+    const contract = await makeContract();
+    const march = installmentDue(contract, '2026-03');
+    await auth(http().post(`/contracts/${contract.id}/payments`))
+      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .expect(201);
+
+    await recognition.runForCompany(companyId, new Date('2026-03-31T00:00:00'));
+
+    const journal = (await auth(http().get('/journal').query({ search: contract.no, pageSize: 50 })).expect(200)).body as {
+      items: { memo: string }[];
+    };
+    const conversion = journal.items.filter((r) => r.memo.includes('تحوّل إيراد مؤجَّل'));
+
+    // مجسٌّ للمجسّ: صفرُ قيودٍ يعني أن البحثَ أخفق لا أن الوصف غاب.
+    expect(conversion.length).toBeGreaterThan(0);
+    // ⭐ والحدُّ منصوصٌ حيث يُقرأ: «كاملاً» تقول إن الشهرَ الجاري ينتظر اكتماله.
+    expect(conversion[0].memo).toContain('حصّة شهر 2026-03 كاملاً');
+    expect(conversion[0].memo).toContain(contract.no);
+  }, 60000);
+
   it('🔴 ⑪ والتقريرُ يسرد الالتزامَ القائم وما لم يمرّ به — شرطُ ق-٤٧٣', async () => {
     const contract = await makeContract();
     const march = installmentDue(contract, '2026-03');
