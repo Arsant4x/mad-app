@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { tenantScopeExtension } from './tenant-scope.extension';
+import { withTransactionProbe } from './nested-transaction-probe';
 
 @Injectable()
 export class TenantPrismaService {
@@ -48,9 +49,14 @@ export class TenantPrismaService {
     options?: { isolationLevel?: Prisma.TransactionIsolationLevel; timeout?: number; maxWait?: number },
   ): Promise<T> {
     const scoped = this.prisma.$extends(tenantScopeExtension(companyId));
-    return scoped.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
-      return work(tx as unknown as Prisma.TransactionClient);
-    }, options);
+    // ⚠️ **كاشفُ المعاملة المتداخلة** (`ق-٣٦٢`): **يُبلّغ ولا يُسقط**، فالقياسُ
+    //    يسبق المنع. **والمسارُ المعتاد قراءةٌ واحدة** من الحالة الجارية —
+    //    ولا يُلتقط أثرُ النداء إلا عند التداخل، وهو نادر.
+    return withTransactionProbe(() =>
+      scoped.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+        return work(tx as unknown as Prisma.TransactionClient);
+      }, options),
+    );
   }
 }
