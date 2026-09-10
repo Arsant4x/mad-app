@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { clientDrift, clientModels, schemaModels } from '../../test/prisma-client-fingerprint';
-import { relativeCost } from './relative-cost.util';
+import { relativeCost, relativeCostVerdict } from './relative-cost.util';
 import { readsDeclaredStrings } from './source-scan.util';
 
 /**
@@ -32,7 +32,6 @@ const MESSAGES_PATH = join(__dirname, 'i18n', 'messages.ts');
  * يُسكَت عنه.**
  */
 const MAX_FINGERPRINT_RATIO = 6;
-
 
 describe('بصمةُ العميل — تُدين النقصَ وتترك الزيادة', () => {
   it('🔴 حقلٌ في المخطّط لا يعرفه العميل يُدان **باسمه**', () => {
@@ -102,8 +101,12 @@ describe('بصمةُ العميل — تُدين النقصَ وتترك الز�
       const cost = relativeCost(fingerprint, reference, 10);
       // eslint-disable-next-line no-console
       console.log(
-        `\n▶ كلفةُ البصمة: ${cost.subjectMs.toFixed(2)} م.ث · والمرجع ${cost.referenceMs.toFixed(2)} م.ث ⇒ ${cost.ratio.toFixed(2)}× (السقف ${MAX_FINGERPRINT_RATIO}×)\n`,
+        `\n▶ كلفةُ البصمة: ${cost.subjectMs.toFixed(1)} م.ث · والمرجع ${cost.referenceMs.toFixed(1)} م.ث ⇒ ${cost.ratio.toFixed(1)}× (السقف ${MAX_FINGERPRINT_RATIO}×)\n`,
       );
+      // **الحكمُ بوجهه** (`ق-٤٩٠`): من يراه أحمرَ بعد شهرٍ يقرأ الرسالة لا
+      // السجل — **وأسهلُ ما يفعله حينها أسوأُ ما يفعله**.
+      const verdict = relativeCostVerdict(cost, MAX_FINGERPRINT_RATIO, 'كلفةُ بصمة العميل', 'مرجعٌ من جنسها');
+      if (verdict) throw new Error(verdict);
       expect(cost.ratio).toBeLessThan(MAX_FINGERPRINT_RATIO);
     });
 
