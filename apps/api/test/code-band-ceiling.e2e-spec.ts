@@ -60,7 +60,9 @@ describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
     const body = (await auth(http().get('/cash-drawers/code-band')).expect(200)).body as BandStatus;
 
     expect(body.key).toBe('drawer');
-    expect(body.capacity).toBe(90);
+    // ٩٠ (1010–1099) + ١٠٠ (1500–1599) — والنطاقُ الثاني حكمُ ق-٤٨٢ بعد أن
+    // نفد الأولُ فعلاً في منشأة العرض عند `1099`.
+    expect(body.capacity).toBe(190);
     expect(body.warnThreshold).toBe(10);
     expect(body.warn).toBe(body.remaining <= body.warnThreshold);
   }, 20000);
