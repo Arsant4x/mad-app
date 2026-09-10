@@ -41,20 +41,32 @@ describe('نطاقاتُ الترقيم وسقفُها (ق-٢٩٥)', () => {
 
   it('🔴 ويُنذر قبل الجدار لا عنده — وحالتان معلومتان', () => {
     const drawer = bandGroup('drawer');
-    // ٨٠ خانةً صدرت من ٩٠ ⟵ عشرٌ باقية = العتبة بالضبط ⟵ إنذار.
-    const atThreshold = bandStatus(range(1010, 1089), drawer);
+    // ١٨٠ خانةً صدرت من ١٩٠ ⟵ عشرٌ باقية = العتبة بالضبط ⟵ إنذار.
+    const atThreshold = bandStatus([...range(1010, 1099), ...range(1500, 1589)], drawer);
     expect(atThreshold.remaining).toBe(10);
     expect(atThreshold.warn).toBe(true);
-    expect(atThreshold.next).toBe('1090');
+    expect(atThreshold.next).toBe('1590');
 
     // وخانةٌ واحدة فوقها ⟵ لا إنذار.
-    const belowThreshold = bandStatus(range(1010, 1088), drawer);
+    const belowThreshold = bandStatus([...range(1010, 1099), ...range(1500, 1588)], drawer);
     expect(belowThreshold.remaining).toBe(11);
     expect(belowThreshold.warn).toBe(false);
   });
 
-  it('ونفادُ النطاق يعطي `next` فارغاً لا رقماً مخترَعاً', () => {
+  /**
+   * ⭐ **الحالةُ التي بُني لها النطاقُ الثاني** (`ق-٤٨٢`): **منشأةٌ بلغت `1099`
+   * كانت تُردّ بـ`409` لا مخرجَ منه** — **والآن تنتقل إلى `1500` وينطفئ
+   * إنذارُها**، بالقاعدة نفسِها بلا استثناءٍ يُكتب.
+   */
+  it('🔴 ومن بلغ سقفَ الأول ينتقل إلى الثاني — وينطفئ إنذارُه', () => {
     const status = bandStatus(range(1010, 1099), bandGroup('drawer'));
+    expect(status.next).toBe('1500');
+    expect(status.remaining).toBe(100);
+    expect(status.warn).toBe(false);
+  });
+
+  it('ونفادُ النطاقَين معاً يعطي `next` فارغاً لا رقماً مخترَعاً', () => {
+    const status = bandStatus([...range(1010, 1099), ...range(1500, 1599)], bandGroup('drawer'));
     expect(status.remaining).toBe(0);
     expect(status.next).toBeNull();
     expect(status.warn).toBe(true);

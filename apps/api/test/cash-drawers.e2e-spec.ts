@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { DRAWER_BANDS } from '../src/accounts/code-bands';
 
 interface Drawer {
   id: string;
@@ -52,7 +53,7 @@ describe('Cash drawers — entity, derived numbering, and the deactivation gate 
     await app.close();
   });
 
-  it('① الإنشاء يُنشئ حساب الدرج معه في نطاق 1010–1099 — ولا رمزَ يُدخله التاجر', async () => {
+  it('① الإنشاء يُنشئ حساب الدرج معه في نطاقٍ من نطاقاته — ولا رمزَ يُدخله التاجر', async () => {
     const res = await createDrawer(`درج الواجهة ${suffix}`).expect(201);
     const drawer = res.body as Drawer;
     created.push(drawer.id);
@@ -60,22 +61,32 @@ describe('Cash drawers — entity, derived numbering, and the deactivation gate 
     expect(drawer.account).toBeTruthy();
     const code = Number(drawer.account.code);
     expect(Number.isInteger(code)).toBe(true);
-    expect(code).toBeGreaterThanOrEqual(1010);
-    expect(code).toBeLessThanOrEqual(1099);
+    // ⚠️ **النطاقاتُ تُقرأ من مصدرها لا تُكتب رقمَين** (`ق-٤٨٢`): للأدراج
+    // نطاقان بعد أن نفد الأولُ فعلاً، **وحدٌّ مكتوبٌ بيدٍ كان سيُدين المولّدَ
+    // الصحيح** حين ينتقل إلى الثاني.
+    expect(DRAWER_BANDS.some((b) => code >= b.min && code <= b.max)).toBe(true);
     expect(drawer.account.name).toContain(drawer.name);
     expect(drawer.isActive).toBe(true);
   });
 
-  it('② الترقيم `MAX+1` لا `count()`: رمزٌ مزروع في وسط النطاق يدفع التاليَ فوقه، والفجوةُ تبقى', async () => {
-    // حسابٌ يدويّ في وسط النطاق — لا يمرّ به درج، فهو «فجوة» لعدّادٍ يعدّ الصفوف.
+  it('② الترقيم `MAX+1` لا `count()`: رمزٌ مزروع فوق التالي يدفعه، والفجوةُ تبقى', async () => {
+    // ⚠️ **الحالةُ تبني شرطَها بنفسها**: كان الرمزُ المزروع مكتوباً (`1077`)،
+    // **فتوقّف على قاعدةٍ نظيفة** — وعلى قاعدةٍ استُهلك نطاقُها الأولُ صار
+    // يقيس تقادمَ القاعدة لا `MAX+1`. **فيُقرأ التالي المُعلَن ثم يُزرع فوقه.**
+    const announced = (await auth(http().get('/cash-drawers/code-band')).expect(200)).body as { next: string | null };
+    if (!announced.next) throw new Error('نطاقا الأدراج نفدا معاً — لا رمزَ تالياً يُقاس عليه');
+
+    // فجوةٌ متعمَّدة: يُزرع فوق التالي بخانتَين، فما بينهما لا يُعاد إليه أبداً.
+    const plantedCode = String(Number(announced.next) + 2);
     const planted = await auth(http().post('/accounts'))
-      .send({ code: '1077', name: `حسابٌ مزروع ${suffix}`, type: 'asset' })
+      .send({ code: plantedCode, name: `حسابٌ مزروع ${suffix}`, type: 'asset' })
       .expect(201);
     plantedAccountId = planted.body.id;
 
     const next = (await createDrawer(`درج ما بعد الفجوة ${suffix}`).expect(201)).body as Drawer;
     created.push(next.id);
-    expect(Number(next.account.code)).toBe(1078);
+    // عدّادٌ يعدّ الصفوف كان سيعطي `announced.next` — والمقيسُ أنه تجاوز المزروع.
+    expect(Number(next.account.code)).toBe(Number(plantedCode) + 1);
   });
 
   it('🔴 ③ التعطيل يُرفض برصيدٍ غير صفر — والرسالةُ تسمّي الرصيد وتدلّ على المخرج (ق-٢٦٥)', async () => {
