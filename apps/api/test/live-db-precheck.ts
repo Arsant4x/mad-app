@@ -1,4 +1,5 @@
 import { assertDbAtLatestMigration } from './live-db-migrations';
+import { assertClientMatchesSchema } from './prisma-client-fingerprint';
 
 /**
  * `ق-٢٠٨` — **يُوصَل الشرطُ بكل حارسٍ حيّ من اسمه**، لا بيدٍ في كل ملف: ما يُلصَق في
@@ -10,6 +11,16 @@ import { assertDbAtLatestMigration } from './live-db-migrations';
  * والحارسُ الساكن `src/common/live-guard-precheck.spec.ts` يوجب بقاءَ هذا الملف موصولاً
  * في `package.json`، وأن كل اختبارٍ يفتح عميلَ قاعدةٍ يحمل اسماً يمرّ من هنا.
  */
+/**
+ * ⭐ **وبصمةُ العميل قبل كل شيء** (`ق-٤١٧`): **مصدرٌ واحد يُنادى من هنا**
+ * (`ق-٤٢١`) — **فما يُلصَق في كل مُهيِّئ يُنسى في أحدها**.
+ *
+ * ⚠️ **ولا تُقيَّد بـ`DATABASE_URL`**: العطلُ الذي وقع ثلاثاً **أسقط البذرة**،
+ * **وحرّاسٌ نصّيةٌ تستورد `@prisma/client` تسقط برسالةٍ خام** — فالنسبةُ
+ * الخاطئة تقع قبل أن تُفتح قاعدة.
+ */
+assertClientMatchesSchema();
+
 const testPath = (expect.getState().testPath ?? '').split('\\').join('/');
 if (/\.live\.spec\.ts$/.test(testPath) && process.env.DATABASE_URL) {
   beforeAll(async () => {
