@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Prisma } from '@prisma/client';
 import { clientDrift, clientModels, schemaModels } from '../../test/prisma-client-fingerprint';
+import { relativeCost } from './relative-cost.util';
+import { readsDeclaredStrings } from './source-scan.util';
 
 /**
  * **بصمةُ عميل Prisma — مُثبَتةٌ في الاتجاهين** (`ق-٤١٧` · `ق-٤١٨`).
@@ -11,7 +13,26 @@ import { clientDrift, clientModels, schemaModels } from '../../test/prisma-clien
  * عادُّ بلاغاتٍ مرّ بخمس حالاتٍ مصنوعة **وهو أعمى**، لأن أُطُرَه لم تحمل السطرَ
  * الذي يبدأ به الأثرُ الحقيقيّ. **فالمقاطعُ هنا مقتطعةٌ من `schema.prisma`.**
  */
-const SCHEMA = readFileSync(join(__dirname, '..', '..', 'prisma', 'schema.prisma'), 'utf8');
+const SCHEMA_PATH = join(__dirname, '..', '..', 'prisma', 'schema.prisma');
+const SCHEMA = readFileSync(SCHEMA_PATH, 'utf8');
+
+/** مُدخَلُ المرجع — **ملفٌّ لا صلةَ له بـPrisma ولا بالمخطّط**، وحجمُه من حجمه. */
+const MESSAGES_PATH = join(__dirname, 'i18n', 'messages.ts');
+
+/**
+ * **السقفُ النسبيّ — رقمٌ لا وصف** (شرطُ المالك ②).
+ *
+ * **والاختيارُ مقيس** (2026-09-10): المخطّطُ **١٦٨ ك.ب** وملفُّ الرسائل **٦٩
+ * ك.ب** — **فالنسبةُ الطبيعية تدور حول اثنين إلى ثلاثة** بحكم الحجم والعمل.
+ * **وستّةٌ تترك ضعفَي هامشٍ للتذبذب** — **وتمسك تدهوراً يضاعف الكلفة**، وهو
+ * أقلُّ تدهورٍ يستحقّ أن يُسأل عنه.
+ *
+ * ⚠️ **ولا يُرفع حين يسقط**: **سقوطُه دعوى** — إمّا أن البصمة تدهورت، **أو أن
+ * المرجعَ لم يعد من جنسها** (ملفُّ الرسائل انكمش مثلاً). **وكلاهما يُقرأ لا
+ * يُسكَت عنه.**
+ */
+const MAX_FINGERPRINT_RATIO = 6;
+
 
 describe('بصمةُ العميل — تُدين النقصَ وتترك الزيادة', () => {
   it('🔴 حقلٌ في المخطّط لا يعرفه العميل يُدان **باسمه**', () => {
@@ -47,14 +68,61 @@ describe('بصمةُ العميل — تُدين النقصَ وتترك الز�
     expect(clientDrift(schemaModels(SCHEMA), clientModels(Prisma.dmmf))).toEqual([]);
   });
 
-  it('🔬 وكلفتُه مقيسةٌ لا مقدَّرة — مرّةً لكل عملية jest', () => {
-    // ⚠️ **شرطُ المالك ③**: «مرّةً لكل عملية jest — وقد صارت أربعاً بالتشريح».
-    const t0 = process.hrtime.bigint();
-    clientDrift(schemaModels(readFileSync(join(__dirname, '..', '..', 'prisma', 'schema.prisma'), 'utf8')), clientModels(Prisma.dmmf));
-    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    // eslint-disable-next-line no-console
-    console.log(`\n▶ كلفةُ البصمة: ${ms.toFixed(1)} م.ث لكل عملية · ${(ms * 4).toFixed(1)} م.ث لأربع شرائح\n`);
-    // **حدٌّ مُعلَن**: عُشرُ ثانيةٍ سقفٌ سخيٌّ لقراءةِ ملفٍّ ومرورٍ على نماذج.
-    expect(ms).toBeLessThan(100);
+  describe('🔬 وكلفتُه مقيسةٌ نسبةً إلى مرجعٍ في التشغيل نفسه (ق-٤٨٨)', () => {
+    /**
+     * **الموضوع**: البصمةُ كاملةً — قراءةُ المخطّط، واشتقاقُ نماذجه، ومقارنتُها
+     * بنماذج العميل. **وهي ما يُشغَّل فعلاً مرّةً لكلّ عملية `jest`.**
+     */
+    const fingerprint = () => clientDrift(schemaModels(readFileSync(SCHEMA_PATH, 'utf8')), clientModels(Prisma.dmmf));
+
+    /**
+     * **والمرجعُ من الجنس نفسه ولا صلةَ له بالبصمة** (شرطُ المالك ①): **قراءةُ
+     * ملفٍّ من القرص ثم بناءُ خريطةِ مطابقاتٍ منه** — وهو ما تفعله البصمة
+     * بالضبط، **على مُدخَلٍ لا يمسّ Prisma ولا المخطّط**: ملفُّ الرسائل.
+     *
+     * ⚠️ **ولا رقمَ محفوظٌ من تشغيلٍ سابق**: **محفوظٌ يعيدنا إلى السقف المطلق
+     * من بابٍ آخر** — فيُقاس المرجعُ في التشغيل عينه وبالتناوب.
+     */
+    const reference = () => {
+      // ⚠️ **إعلانُ الصنف** (`ق-٣٧٥`): **يقرأ نصّاً عمداً لا كوداً** — فليس
+      // يبحث عن نمطٍ برمجيّ يُدين به أحداً، **بل يؤدّي شغلاً من جنس البصمة
+      // على مُدخَلٍ لا صلةَ له بها**. **والتجريدُ هنا يُنقص الشغلَ فيُفسد
+      // المرجع** — وهو مقياسُ كلفةٍ لا حارس.
+      readsDeclaredStrings();
+      const text = readFileSync(MESSAGES_PATH, 'utf8');
+      const map = new Map<string, Set<string>>();
+      for (const m of text.matchAll(/\b([a-z_][a-z0-9_]*)\s*:\s*'([^']*)'/gi)) {
+        if (!map.has(m[1])) map.set(m[1], new Set());
+        map.get(m[1])!.add(m[2]);
+      }
+      return map;
+    };
+
+    it('🔴 البصمةُ رخيصةٌ نسبةً إلى ما حولها', () => {
+      const cost = relativeCost(fingerprint, reference, 10);
+      // eslint-disable-next-line no-console
+      console.log(
+        `\n▶ كلفةُ البصمة: ${cost.subjectMs.toFixed(2)} م.ث · والمرجع ${cost.referenceMs.toFixed(2)} م.ث ⇒ ${cost.ratio.toFixed(2)}× (السقف ${MAX_FINGERPRINT_RATIO}×)\n`,
+      );
+      expect(cost.ratio).toBeLessThan(MAX_FINGERPRINT_RATIO);
+    });
+
+    it('🔴 ومُثبَتةٌ بالعكس: بصمةٌ أُبطئت عمداً تُسقط التأكيد', () => {
+      /**
+       * ⚠️ **والإبطاءُ يُقاس بالمرجع لا بالملّي ثانية** — **وكانت أوّلُ صياغةٍ
+       * تُبطئ خمسين ملّي ثانية ثابتة، فسقط الإثباتُ العكسيّ تحت الحِمل**:
+       * **المرجعُ نفسُه صار ٣٩ م.ث** (من ١٫٦)، **فخمسون لم تعد إبطاءً**.
+       *
+       * ⇒ **وهو الداءُ نفسُه الذي نعالجه، وقع داخل إثباته**: **مقدارٌ مطلقٌ
+       * في مقياسٍ نسبيّ**. **فالإبطاءُ صار تكراراً للمرجع نفسِه** — ثمانيةَ
+       * أضعافٍ تتجاوز السقفَ حتماً مهما كان حِملُ المضيف.
+       */
+      const slowed = () => {
+        fingerprint();
+        for (let i = 0; i < MAX_FINGERPRINT_RATIO + 2; i++) reference();
+      };
+      const cost = relativeCost(slowed, reference, 3);
+      expect(cost.ratio).toBeGreaterThanOrEqual(MAX_FINGERPRINT_RATIO);
+    });
   });
 });
