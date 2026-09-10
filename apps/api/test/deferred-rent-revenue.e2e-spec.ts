@@ -61,7 +61,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
       await auth(http().post('/contracts'))
         .send({ unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
         .expect(201)
-    ).body as { id: string; installments: E2eInstallment[] };
+    ).body as { id: string; no: string; installments: E2eInstallment[] };
   }
 
   const installmentDue = (contract: { installments: E2eInstallment[] }, month: string) =>
@@ -240,6 +240,38 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
       .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
       .expect(201);
   }, 40000);
+
+  it('🔴 ⑪ والتقريرُ يسرد الالتزامَ القائم وما لم يمرّ به — شرطُ ق-٤٧٣', async () => {
+    const contract = await makeContract();
+    const march = installmentDue(contract, '2026-03');
+    // ① التزامٌ قائم: دفعٌ مقدَّمٌ لم يُحوَّل بعد.
+    await auth(http().post(`/contracts/${contract.id}/payments`))
+      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .expect(201);
+    // ② ودفعةٌ بلا قسط — لا فترةَ خدمةٍ تُعرف لها.
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: '2026-02-21', amount: 250, method: 'CASH' }).expect(201);
+
+    const report = (await auth(http().get('/reports/deferred-revenue')).expect(200)).body as {
+      outstanding: { contractNo: string; deferred: number }[];
+      totalDeferred: number;
+      unlinked: { contractNo: string; baseNetAmount: number }[];
+      totalUnlinked: number;
+      unlinkedNote: string;
+    };
+
+    const mine = report.outstanding.filter((r) => r.contractNo === contract.no);
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine[0].deferred).toBeCloseTo(1000, 2);
+
+    const myUnlinked = report.unlinked.filter((r) => r.contractNo === contract.no);
+    expect(myUnlinked).toHaveLength(1);
+    expect(myUnlinked[0].baseNetAmount).toBeCloseTo(250, 2);
+
+    // ⚠️ والحدُّ منصوصٌ في التقرير نفسِه لا في وثيقةٍ بعيدة.
+    expect(report.unlinkedNote).toContain('لا تُعرف لها فترة خدمة');
+    expect(report.totalDeferred).toBeGreaterThanOrEqual(1000);
+    expect(report.totalUnlinked).toBeGreaterThanOrEqual(250);
+  }, 60000);
 
   it('⑥ ودفعةٌ بلا قسطٍ مرتبط تُعترَف فوراً — حدٌّ معلَنٌ لا عطل (ق-٤٧٣)', async () => {
     const contract = await makeContract();
