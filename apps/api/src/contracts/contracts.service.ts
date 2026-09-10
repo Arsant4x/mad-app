@@ -158,6 +158,9 @@ export class ContractsService {
               contractId: created.id,
               dueDate: s.dueDate,
               amount: s.amount,
+              // فترةُ الخدمة تُثبَّت لحظةَ التوليد ولا تُشتقّ لاحقاً (ق-٤٧٥/②).
+              serviceStart: s.serviceStart,
+              serviceEnd: s.serviceEnd,
               currency,
               exchangeRate,
               baseAmount: toBaseAmount(s.amount, exchangeRate),
@@ -499,6 +502,9 @@ export class ContractsService {
             contractId: created.id,
             dueDate: s.dueDate,
             amount: s.amount,
+            // كسابقتها في `create` — الفترةُ تُثبَّت لا تُشتقّ (ق-٤٧٥/②).
+            serviceStart: s.serviceStart,
+            serviceEnd: s.serviceEnd,
             currency: source.currency,
             exchangeRate,
             baseAmount: toBaseAmount(s.amount, exchangeRate),
