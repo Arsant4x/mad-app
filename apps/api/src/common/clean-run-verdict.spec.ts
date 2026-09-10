@@ -138,3 +138,73 @@ describe('الشرائحُ وسقفُ الكومة — أداتان تُصدرا
     expect(heapCapMb(gb(24))).toBeGreaterThan(heapCapMb(gb(12)));
   });
 });
+
+/**
+ * **عدُّ بلاغات المعاملة المتداخلة — أداةٌ تحلّ محلَّ `grep`** (`ق-٤١٥` · `ق-٤١٦`).
+ *
+ * ⚠️ **والحالةُ التي تُثبت الأداةَ هي التي أسقطت `grep`**: **سطرُ
+ * `console.warn` في الشيفرة كما يعرضه جيست** — يحمل النصَّ نفسَه **والقالبَ
+ * غيرَ محلول**. **فعدَّه `grep` بلاغاً، فصار الرقمُ ضعفَ الحقيقة.**
+ */
+describe('عدُّ البلاغات — يفصل البلاغَ عن سطرِ الشيفرة، والحارسَ عن التطبيق', () => {
+  const TOOL = join(__dirname, '..', '..', 'scripts', 'clean-verdict.mjs');
+  const reports = (log: string) => execFileSync(process.execPath, [TOOL, 'reports'], { input: log, encoding: 'utf8' }).trim();
+
+  /**
+   * ترويسةُ بلاغٍ **بصياغتها الواقعية — منقولةً عن سجلٍّ حقيقيّ**.
+   *
+   * ⚠️ **وسطرُ `Error:` جزءٌ منها لا زينة**: `new Error().stack` يبدأ به،
+   * **وأوّلُ صياغةٍ للعادّ كُسرت عنده** — فجاءت الأطرُ فارغةً **ونُسبت
+   * بلاغاتُ الحارس كلُّها إلى التطبيق**. **ولم تكشفه أُطُرٌ مصنوعةٌ بيدٍ
+   * لأنها لم تحمله** — **فالصياغةُ تُنقَل عن سجلٍّ لا تُخترَع** (`ق-٣٩٠`).
+   */
+  const report = (frames: string[]) =>
+    ['    console.warn', '      ⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 1/50', '      Error: ', ...frames.map((f) => `          ${f}`)].join('\n');
+
+  it('🔴 سطرُ الشيفرة المعروض لا يُعدّ بلاغاً — وهو ما أسقط العدَّ النصّيّ', () => {
+    // ⚠️ **منقولٌ عن سجلٍّ حقيقيّ**: جيست يعرض سطرَ `console.warn` في أثر
+    //    التوكيد، **والقالبُ فيه غيرُ محلول** — فلا رقمَ فيه.
+    const echoed = [
+      '     113 |       // ① **الأثرُ كاملاً**',
+      '   > 116 |       console.warn(`⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ ${reported.size}/${NESTED_REPORT_LIMIT}\\n${stack}`);',
+      '     117 |     }',
+    ].join('\n');
+    expect(reports(echoed)).toBe('0 0 0');
+  });
+
+  it('🔴 وبلاغٌ من حالات الحارس يُنسب إليه — لا إلى التطبيق', () => {
+    const own = report([
+      'at withTransactionProbe (D:\\mad-app\\apps\\api\\src\\common\\tenant\\nested-transaction-probe.ts:111:19)',
+      'at Object.<anonymous> (D:\\mad-app\\apps\\api\\src\\common\\tenant\\nested-transaction-probe.spec.ts:25:45)',
+    ]);
+    expect(reports(own)).toBe('1 1 0');
+  });
+
+  it('🔴 وبلاغٌ من مسارٍ تطبيقيّ غريبٌ — وهو وحده ما يمنع الدمج', () => {
+    // **الحالةُ التي بُني الكاشفُ لها**: `ring` تفتح معاملة و`zatcaQrFor` ثانية.
+    const foreign = report([
+      'at withTransactionProbe (D:\\mad-app\\apps\\api\\src\\common\\tenant\\nested-transaction-probe.ts:111:19)',
+      'at InvoicesService.zatcaQrFor (D:\\mad-app\\apps\\api\\src\\invoices\\invoices.service.ts:682:21)',
+      'at PosService.ring (D:\\mad-app\\apps\\api\\src\\pos\\pos.service.ts:472:18)',
+    ]);
+    expect(reports(foreign)).toBe('1 0 1');
+  });
+
+  it('🔴 والخلطُ يُفرَز: ثلاثةٌ من الحارس وواحدٌ غريب في سجلٍّ واحد', () => {
+    const ownFrames = ['at Object.<anonymous> (D:\\x\\nested-transaction-probe.spec.ts:25:45)'];
+    const log = [
+      report(ownFrames),
+      'PASS src/common/tenant/nested-transaction-probe.spec.ts',
+      report(ownFrames),
+      report(['at PosService.ring (D:\\x\\pos.service.ts:472:18)']),
+      report(ownFrames),
+    ].join('\n');
+    // **ثلاثةٌ للحارس وواحدٌ غريب** — والبوّابةُ تقرأ الغريبَ وحده.
+    expect(reports(log)).toBe('4 3 1');
+  });
+
+  it('🔴 وسجلٌّ بلا بلاغٍ يُعطي أصفاراً — وإلا كانت الأداةُ ترى ما ليس فيه', () => {
+    expect(reports('')).toBe('0 0 0');
+    expect(reports(['PASS src/common/hooks-present.spec.ts', 'Tests: 1081 passed'].join('\n'))).toBe('0 0 0');
+  });
+});

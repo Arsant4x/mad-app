@@ -118,7 +118,7 @@ if (fileCount === 0) {
  */
 // ⚠️ **ومنطقُ التشريح مصدرٌ واحد** (`ق-٤٢١`): يستهلكه هذا السكربتُ وخطوةُ
 //    السير معاً — **فحارسٌ يُنسخ يومَ يحتاجه ثانٍ هو `ق-٣٥٣` بعينها**.
-const { verdict } = runShardedJest({
+const { verdict } = await runShardedJest({
   jestArgs: `--runInBand ${pattern.join(' ')}`.trim(),
   env,
   shards: SHARDS,
