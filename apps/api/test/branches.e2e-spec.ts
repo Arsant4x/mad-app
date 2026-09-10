@@ -156,6 +156,59 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     expect(branchIds).not.toContain(branchSouthId);
   });
 
+  /**
+   * 🔴 **العزلُ يمنع الكتابةَ كما يمنع القراءة** (`ق-٥١٢`).
+   *
+   * **وكان يمنع القراءةَ وحدها**: الموظّفُ المقصور يرى فرعَه فقط — **ويكتب على
+   * أيّ فرع**. **فيفتح مناوبةً على فرعٍ ليس له، ونقدُه يقع في درجٍ ليس له**؛
+   * **ويُنشئ عرضاً على فرعٍ آخر يتحوّل فاتورةً تحمله**.
+   *
+   * ⚠️ **ولا يُكشَف بالاستعمال**: الصفُّ يبدو سليماً لمن يراه — **ويظهر أثرُه
+   * في تقريرٍ بالفرع بعد شهور**.
+   */
+  it('🔴 ويمنع الكتابةَ على فرعٍ ليس له — مناوبةً وعرضَ سعر', async () => {
+    await request(app.getHttpServer())
+      .patch(`/company-users/${employeeId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ branchIds: [branchNorthId] })
+      .expect(200);
+
+    // ① مناوبةٌ على الفرع الجنوبيّ — وهو ليس من فروعه.
+    await request(app.getHttpServer())
+      .post('/pos/shifts')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({ openingFloat: 100, branchId: branchSouthId })
+      .expect(403);
+
+    // ② وعرضُ سعرٍ عليه كذلك — فالمنعُ في المصدر الواحد لا في مسارٍ بعينه.
+    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    const customerId = (customers.body as { id: string }[])[0]?.id;
+    if (!customerId) throw new Error('لا عميلَ في المنشأة — والحالةُ تحتاج واحداً');
+
+    await request(app.getHttpServer())
+      .post('/quotes')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({
+        customerId,
+        branchId: branchSouthId,
+        issueDate: '2026-01-01',
+        validUntil: '2026-02-01',
+        lines: [{ description: 'بندٌ للقياس', quantity: 1, unitPrice: 10, taxRate: 15 }],
+      })
+      .expect(403);
+
+    // ⭐ وفرعُه هو يمرّ — فالمنعُ بالعزل لا بتعطيل المسار.
+    const mine = await request(app.getHttpServer())
+      .post('/pos/shifts')
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({ openingFloat: 100, branchId: branchNorthId })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/pos/shifts/${mine.body.id}/close`)
+      .set('Authorization', `Bearer ${employeeToken}`)
+      .send({ declaredClosing: 100 });
+  });
+
   it('restores unrestricted visibility when the assignment is cleared', async () => {
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)

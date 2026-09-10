@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { TenantContext } from '../auth/types';
+import { resolveBranchId } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { computeTotals, InvoicesService } from '../invoices/invoices.service';
@@ -111,16 +112,23 @@ export class PosService {
       const open = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (open) throw new ConflictException(MSG.pos_shift_already_open);
 
-      if (dto.branchId) {
-        const branch = await tx.branch.findUnique({ where: { id: dto.branchId } });
-        if (!branch) throw new NotFoundException(MSG.branch_not_found);
-      }
+      /**
+       * 🔴 **الفرعُ يُقاس على فروع المستخدم لا على وجوده وحده** (`ق-٥١٢`).
+       *
+       * **كان هنا فحصُ وجودٍ وحده** — **فمستخدمٌ مقصورٌ على فرعٍ يفتح مناوبةً
+       * على فرعٍ آخر**، **ونقدُه يقع في درجٍ ليس له**. **ولا يُكشَف بالاستعمال**:
+       * البياناتُ تبدو صحيحةً لمن يراها.
+       *
+       * ⇒ **والمصدرُ الواحد هو `resolveBranchId`** — يتحقّق من الوجود **ثم من
+       * الإذن** (`assertBranchAllowed`)، **وهو ما تمرّ به تسعُ خدماتٍ أخرى**.
+       */
+      const branchId = await resolveBranchId(tx, dto.branchId, tenant.allowedBranchIds);
 
-      const drawerId = await this.resolveDrawerId(tx, dto);
+      const drawerId = await this.resolveDrawerId(tx, dto, branchId);
 
       return tx.posShift.create({
         data: {
-          branchId: dto.branchId,
+          branchId,
           drawerId,
           openedById: tenant.profileId,
           openedByName: await this.actorName(tx, tenant),
@@ -138,24 +146,24 @@ export class PosService {
    * درج — فلا يُخترع لها درجٌ من فتح مناوبة. والدرجُ يُنشئه المالك من الإعدادات،
    * والترحيلُ إلى حسابه يأتي في الدفعة التالية.
    */
-  private async resolveDrawerId(tx: Prisma.TransactionClient, dto: OpenShiftDto): Promise<string | null> {
+  private async resolveDrawerId(tx: Prisma.TransactionClient, dto: OpenShiftDto, branchId: string | null): Promise<string | null> {
     if (dto.drawerId) {
       const chosen = await tx.cashDrawer.findUnique({ where: { id: dto.drawerId } });
       if (!chosen) throw new NotFoundException(MSG.cash_drawer_not_found);
       if (!chosen.isActive) throw new ConflictException(formatMessage(MSG.cash_drawer_inactive, { name: chosen.name }));
       // درجٌ لفرعٍ آخر يجعل نقدَ فرعٍ في حساب فرعٍ ثانٍ — وهو عينُ ما بُني الدرجُ لمنعه.
-      if ((chosen.branchId ?? null) !== (dto.branchId ?? null)) {
+      if ((chosen.branchId ?? null) !== branchId) {
         throw new ConflictException(formatMessage(MSG.cash_drawer_branch_mismatch, { name: chosen.name }));
       }
       return chosen.id;
     }
-    const preferred = await tx.cashDrawer.findFirst({ where: { branchId: dto.branchId ?? null, isDefault: true, isActive: true } });
+    const preferred = await tx.cashDrawer.findFirst({ where: { branchId, isDefault: true, isActive: true } });
     if (preferred) return preferred.id;
 
     // ولا افتراضيَّ للفرع (منشأةٌ أنشأت أدراجَها بيدها): **درجٌ نشِطٌ واحدٌ يُؤخذ،
     // وأكثرُ من واحدٍ يُترك للاختيار** — فاختيارُ الأول من عدّةٍ يزعم ترتيباً لا
     // معنى له، ويضع نقدَ درجٍ في حساب آخر بلا أن يُسأل أحد.
-    const active = await tx.cashDrawer.findMany({ where: { branchId: dto.branchId ?? null, isActive: true }, take: 2 });
+    const active = await tx.cashDrawer.findMany({ where: { branchId, isActive: true }, take: 2 });
     return active.length === 1 ? active[0].id : null;
   }
 

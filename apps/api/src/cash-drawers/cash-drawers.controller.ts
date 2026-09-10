@@ -27,7 +27,7 @@ export class CashDrawersController {
 
   @Post()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDrawerDto) {
-    return this.cashDrawers.create(tenant.companyId, tenant.actorType, dto);
+    return this.cashDrawers.create(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

@@ -34,7 +34,7 @@ export class QuotesController {
   @Post()
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateQuoteDto) {
-    return this.quotesService.create(tenant.companyId, dto);
+    return this.quotesService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')
