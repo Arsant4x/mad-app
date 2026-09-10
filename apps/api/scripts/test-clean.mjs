@@ -15,10 +15,8 @@
  * يتطلب أن تكون حاويات التطوير تعمل (docker compose up -d).
  */
 import { execSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
-import { tmpdir, totalmem } from 'node:os';
-import { join } from 'node:path';
-import { combineVerdicts, countListedTests, heapCapMb, verdictOf } from './clean-verdict.mjs';
+import { countListedTests } from './clean-verdict.mjs';
+import { runShardedJest } from './sharded-jest.mjs';
 
 const DB = process.env.TEST_CLEAN_DB ?? 'mad_app_clean';
 const SUPER = process.env.TEST_CLEAN_SUPERUSER ?? 'mad_app';
@@ -118,36 +116,14 @@ if (fileCount === 0) {
  *
  * **فالشرائحُ تُحدّ بعدد الملفات**: ملفّان لكل شريحةٍ على الأقلّ.
  */
-const shardCount = Math.max(1, Math.min(SHARDS, Math.floor(fileCount / 2)));
-
-/**
- * ⚠️ **السقفُ يُشتقّ من المضيف ولا يُترك** (`ق-٤٠٢`): رقمٌ ثابتٌ يناسب جهازاً
- * **يقتل جهازاً أصغر ويُهدر أكبر**. **ويُطبع كي يُقرأ مع النتيجة** — فمن يقرأ
- * انقطاعاً بعد شهر يحتاج أن يعرف تحت أيّ سقفٍ وقع.
- */
-const capMb = heapCapMb(totalmem());
-const shardEnv = { ...env, NODE_OPTIONS: `${env.NODE_OPTIONS ?? ''} --max-old-space-size=${capMb}`.trim() };
-console.log(`▶ سقفُ الكومة ${capMb} م.ب (مضيفٌ ${Math.round(totalmem() / 1024 ** 3)} ج.ب) · شرائح: ${shardCount}\n`);
-
-const verdicts = [];
-for (let shard = 1; shard <= shardCount; shard += 1) {
-  const RESULT = join(tmpdir(), `mad-app-clean-result-${process.pid}-${shard}.json`);
-  // **كلُّ شريحةٍ عمليةُ `node` جديدة** — فالذاكرةُ تعود إلى الصفر بينها،
-  // **وهو الفرقُ الذي يجعل الحزمة تكمل**.
-  const shardArg = shardCount > 1 ? `--shard=${shard}/${shardCount}` : '';
-  if (shardCount > 1) console.log(`\n▶ الشريحة ${shard}/${shardCount}\n`);
-  let threw = false;
-  try {
-    execSync(`npx jest --runInBand ${shardArg} --json --outputFile="${RESULT}" ${pattern.join(' ')}`, { stdio: 'inherit', env: shardEnv });
-  } catch {
-    threw = true;
-  }
-  verdicts.push(verdictOf(RESULT, threw));
-  rmSync(RESULT, { force: true });
-}
-
-const verdict = combineVerdicts(verdicts);
-if (shardCount > 1) console.log(`\n▶ أحكامُ الشرائح: ${verdicts.join(' · ')} ⇒ ${verdict}`);
+// ⚠️ **ومنطقُ التشريح مصدرٌ واحد** (`ق-٤٢١`): يستهلكه هذا السكربتُ وخطوةُ
+//    السير معاً — **فحارسٌ يُنسخ يومَ يحتاجه ثانٍ هو `ق-٣٥٣` بعينها**.
+const { verdict } = runShardedJest({
+  jestArgs: `--runInBand ${pattern.join(' ')}`.trim(),
+  env,
+  shards: SHARDS,
+  label: `الحزمة على ${DB}`,
+});
 
 if (verdict === 'INTERRUPTED') {
   // 🔴 **انقطاعٌ لا نتيجة**: لا حصيلةَ أصلاً، فلا يُنسب شيءٌ إلى الشيفرة.
