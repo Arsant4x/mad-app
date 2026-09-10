@@ -89,6 +89,38 @@ export function recognitionDates(p: ServicePeriod, asOf: Date): Date[] {
   return out;
 }
 
+/** `2026-03` — الشهرُ بصيغةٍ تُقرأ وتُفرَز. */
+export function monthLabel(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** `2026-03-31`. */
+function dayLabel(d: Date): string {
+  return `${monthLabel(d)}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * **وصفُ الحصّة في مذكّرة القيد — وهو موضعُ إعلان الحدّ** (`ق-٤٨٠`).
+ *
+ * الحدُّ: **الاعترافُ شهريٌّ لا يوميّ**. تشغيلٌ في منتصف مارس يعترف بما اكتمل
+ * **ويترك مارس إلى آخره** — **فقيدان في شهرٍ واحدٍ يُقرآن تكراراً**.
+ *
+ * ⭐ **وليس نقصاً بل شكلاً، ومن يقرأ الدفتر يحتاج أن يعرفه** (حكمُ المالك) —
+ * **فيُعلَن في وصف القيد نفسِه لا في وثيقةٍ جانبية** (`ق-٤٤٩` مطبَّقةً على
+ * الدفتر: **واجهةُ القيد هي مذكّرتُه**).
+ *
+ * ⇒ **فالوصفُ يقول «شهراً كاملاً»** — **فيعرف القارئُ أن غيابَ قيدٍ للشهر
+ * الجاري ليس نقصاً بل انتظارَ اكتماله**. **وختامُ فترة الخدمة استثناءٌ يُسمّى
+ * باسمه**: فترةٌ تنتهي في ١٤ أبريل تُقفَل في يومها لا في آخر الشهر.
+ */
+export function recognitionShareLabel(date: Date, periodEnd: Date): string {
+  const closesPeriod = dayNumber(date) >= dayNumber(periodEnd);
+  const wholeMonth = dayNumber(date) === dayNumber(monthEnd(date));
+  if (wholeMonth && !closesPeriod) return `حصّة شهر ${monthLabel(date)} كاملاً`;
+  if (wholeMonth) return `حصّة شهر ${monthLabel(date)} كاملاً — ختام فترة الخدمة`;
+  return `حصّة ${monthLabel(date)} حتى ${dayLabel(date)} — ختام فترة الخدمة`;
+}
+
 export interface RecognitionStep {
   /** تاريخُ القيد — نهايةُ الشهر أو ختامُ الفترة. */
   date: Date;

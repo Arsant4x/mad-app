@@ -5,7 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { round2 } from '../common/money/rounding';
 import { postDeferredRecognitionEntry } from '../journal/auto-posting.util';
-import { recognitionSchedule } from '../journal/rent-recognition.util';
+import { recognitionSchedule, recognitionShareLabel } from '../journal/rent-recognition.util';
 
 /**
  * **تحوّلُ الإيراد المؤجَّل — الطرفُ الثاني من القاعدة** (`ق-٤٦٨` · `ق-٤٧٥/①`).
@@ -80,11 +80,6 @@ export class RentRecognitionService {
   }
 }
 
-/** `2026-03` — يُقرأ في المذكّرة بلا فتح العقد. */
-function monthLabel(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 /**
  * **المحرّكُ نفسُه داخل معاملةٍ قائمة** — كي يستعمله الإلغاءُ بلا معاملةٍ ثانية.
  *
@@ -133,7 +128,8 @@ export async function recognizeDueWithinTx(
         tenant: i.contract.tenant,
         date: step.date,
         baseAmount: delta,
-        periodLabel: monthLabel(step.date),
+        // الحدُّ يُعلَن في وصف القيد نفسِه لا في وثيقة (ق-٤٨٠).
+        periodLabel: recognitionShareLabel(step.date, period.end),
       });
       // تخطٍّ صامتٌ لنقص حسابٍ لا يُسجَّل اعترافاً: العدّادُ يتبع الدفترَ
       // لا العكس، **وإلّا ضاع التزامٌ لم يخرج من الميزانية أبداً**.

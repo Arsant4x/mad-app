@@ -5,6 +5,7 @@ import {
   periodDays,
   recognitionDates,
   recognitionSchedule,
+  recognitionShareLabel,
   splitAtCollection,
 } from './rent-recognition.util';
 
@@ -98,6 +99,29 @@ describe('قاعدةُ الاعتراف بإيراد الإيجار (ق-٤٦٨ �
       expect(isoOf(monthEnd(d('2024-02-10')))).toBe('2024-02-29');
       expect(isoOf(monthEnd(d('2026-02-10')))).toBe('2026-02-28');
       expect(isoOf(monthEnd(d('2026-12-05')))).toBe('2026-12-31');
+    });
+  });
+
+  describe('وصفُ القيد يحمل الحدَّ (ق-٤٨٠)', () => {
+    it('🔴 «شهراً كاملاً» — فيعرف قارئُ الدفتر أن غيابَ قيدٍ للشهر الجاري انتظارُ اكتماله لا نقص', () => {
+      const period = { start: d('2026-01-01'), end: d('2026-12-31') };
+      expect(recognitionShareLabel(d('2026-03-31'), period.end)).toBe('حصّة شهر 2026-03 كاملاً');
+    });
+
+    it('وختامُ الفترة يُسمّى باسمه — فترةٌ تنتهي في منتصف شهرٍ تُقفَل في يومها', () => {
+      const period = { start: d('2026-03-15'), end: d('2026-04-14') };
+      expect(recognitionShareLabel(d('2026-04-14'), period.end)).toBe('حصّة 2026-04 حتى 2026-04-14 — ختام فترة الخدمة');
+    });
+
+    it('وفترةٌ تنتهي بآخر الشهر تجمع الوصفَين بلا تناقض', () => {
+      const period = { start: d('2026-01-01'), end: d('2026-12-31') };
+      expect(recognitionShareLabel(d('2026-12-31'), period.end)).toBe('حصّة شهر 2026-12 كاملاً — ختام فترة الخدمة');
+    });
+
+    it('ولا وصفَ واحدٌ لحالتَين مختلفتَين — مجسٌّ للمجسّ', () => {
+      const wholeMonth = recognitionShareLabel(d('2026-03-31'), d('2026-12-31'));
+      const periodClose = recognitionShareLabel(d('2026-04-14'), d('2026-04-14'));
+      expect(wholeMonth).not.toBe(periodClose);
     });
   });
 
