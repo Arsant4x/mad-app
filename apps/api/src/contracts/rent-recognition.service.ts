@@ -50,59 +50,7 @@ export class RentRecognitionService {
    * هدفٌ تراكميّ، **والمُرحَّلُ فرقُه عمّا سبق** — فلا يُعاد ولا يُنسى.
    */
   async runForCompany(companyId: string, asOf: Date = new Date()): Promise<{ entries: number; recognized: number }> {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      // مرشّحون: أقساطٌ بدأت خدمتُها، وقُبض منها أكثرُ ممّا اعتُرف به.
-      const candidates = await tx.installment.findMany({
-        where: { serviceStart: { not: null, lte: asOf }, serviceEnd: { not: null } },
-        select: {
-          id: true,
-          serviceStart: true,
-          serviceEnd: true,
-          baseRecognized: true,
-          contract: { select: { no: true, tenant: true, unitId: true } },
-          payments: { select: { baseNetAmount: true } },
-        },
-      });
-
-      let entries = 0;
-      let recognized = 0;
-
-      for (const i of candidates) {
-        const collected = round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
-        if (collected <= 0) continue;
-
-        const period = { start: i.serviceStart!, end: i.serviceEnd! };
-        let already = Number(i.baseRecognized);
-        if (already >= collected) continue;
-
-        for (const step of recognitionSchedule(period, collected, asOf)) {
-          const delta = round2(step.cumulative - already);
-          if (delta <= 0) continue;
-
-          const entry = await postDeferredRecognitionEntry(tx, companyId, {
-            unitId: i.contract.unitId,
-            contractNo: i.contract.no,
-            tenant: i.contract.tenant,
-            date: step.date,
-            baseAmount: delta,
-            periodLabel: monthLabel(step.date),
-          });
-          // تخطٍّ صامتٌ لنقص حسابٍ لا يُسجَّل اعترافاً: العدّادُ يتبع الدفترَ
-          // لا العكس، **وإلّا ضاع التزامٌ لم يخرج من الميزانية أبداً**.
-          if (!entry) break;
-
-          already = round2(already + delta);
-          entries += 1;
-          recognized = round2(recognized + delta);
-        }
-
-        if (already !== Number(i.baseRecognized)) {
-          await tx.installment.update({ where: { id: i.id }, data: { baseRecognized: new Prisma.Decimal(already) } });
-        }
-      }
-
-      return { entries, recognized };
-    });
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => recognizeDueWithinTx(tx, companyId, asOf));
   }
 
   /**
@@ -135,4 +83,112 @@ export class RentRecognitionService {
 /** `2026-03` — يُقرأ في المذكّرة بلا فتح العقد. */
 function monthLabel(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * **المحرّكُ نفسُه داخل معاملةٍ قائمة** — كي يستعمله الإلغاءُ بلا معاملةٍ ثانية.
+ *
+ * ⭐ **ومصدرٌ واحدٌ للقاعدة** (`ق-٤٦٩`): الكنسُ الشهريّ والإلغاءُ يمرّان بهذه
+ * الدالّة عينِها — **فلا تتباعد قاعدتان تفعلان الشيءَ نفسه**.
+ *
+ * `contractId` يقصُرها على عقدٍ واحد؛ وبدونه تكنس المنشأة كلَّها.
+ */
+export async function recognizeDueWithinTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  asOf: Date,
+  contractId?: string,
+): Promise<{ entries: number; recognized: number }> {
+  // مرشّحون: أقساطٌ بدأت خدمتُها، وقُبض منها أكثرُ ممّا اعتُرف به.
+  const candidates = await tx.installment.findMany({
+    where: { serviceStart: { not: null, lte: asOf }, serviceEnd: { not: null }, ...(contractId ? { contractId } : {}) },
+    select: {
+      id: true,
+      serviceStart: true,
+      serviceEnd: true,
+      baseRecognized: true,
+      contract: { select: { no: true, tenant: true, unitId: true } },
+      payments: { select: { baseNetAmount: true } },
+    },
+  });
+
+  let entries = 0;
+  let recognized = 0;
+
+  for (const i of candidates) {
+    const collected = round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
+    if (collected <= 0) continue;
+
+    const period = { start: i.serviceStart!, end: i.serviceEnd! };
+    let already = Number(i.baseRecognized);
+    if (already >= collected) continue;
+
+    for (const step of recognitionSchedule(period, collected, asOf)) {
+      const delta = round2(step.cumulative - already);
+      if (delta <= 0) continue;
+
+      const entry = await postDeferredRecognitionEntry(tx, companyId, {
+        unitId: i.contract.unitId,
+        contractNo: i.contract.no,
+        tenant: i.contract.tenant,
+        date: step.date,
+        baseAmount: delta,
+        periodLabel: monthLabel(step.date),
+      });
+      // تخطٍّ صامتٌ لنقص حسابٍ لا يُسجَّل اعترافاً: العدّادُ يتبع الدفترَ
+      // لا العكس، **وإلّا ضاع التزامٌ لم يخرج من الميزانية أبداً**.
+      if (!entry) break;
+
+      already = round2(already + delta);
+      entries += 1;
+      recognized = round2(recognized + delta);
+    }
+
+    if (already !== Number(i.baseRecognized)) {
+      await tx.installment.update({ where: { id: i.id }, data: { baseRecognized: new Prisma.Decimal(already) } });
+    }
+  }
+
+  return { entries, recognized };
+}
+
+/**
+ * **الالتزامُ الباقي على عقدٍ** = المقبوضُ − المعترَفُ به، لكلِّ أقساطه.
+ *
+ * يُقرأ **بعد** `recognizeDueWithinTx` حتى تاريخ الإلغاء — **فما بقي بعدها
+ * مقبوضٌ عن مدّةٍ لن تُقدَّم**، وهو وحده موضوعُ السؤال (`ق-٤٧٢`).
+ */
+export async function outstandingDeferredWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<number> {
+  const installments = await tx.installment.findMany({
+    where: { contractId },
+    select: { baseRecognized: true, payments: { select: { baseNetAmount: true } } },
+  });
+
+  return round2(
+    installments.reduce((sum, i) => {
+      const collected = i.payments.reduce((s, p) => s + Number(p.baseNetAmount), 0);
+      return sum + Math.max(0, collected - Number(i.baseRecognized));
+    }, 0),
+  );
+}
+
+/**
+ * **يُغلق العدّاد بعد إقفال الالتزام بقيدٍ واحد** — فلا يعود الكنسُ الشهريّ
+ * يرى التزاماً خرج بالفعل، **فيُرحّله ثانيةً بلا مقابل**.
+ *
+ * ⚠️ **والعدّادُ يقول «ما خرج من الالتزام» لا «ما صار إيراداً»**: الخارجُ قد
+ * يكون إيراداً شهرياً، **أو ردّاً للمستأجر، أو دخلاً آخر عند الإلغاء** — وهي
+ * وجهاتٌ ثلاثٌ لالتزامٍ واحد.
+ */
+export async function closeDeferredWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<void> {
+  const installments = await tx.installment.findMany({
+    where: { contractId },
+    select: { id: true, baseRecognized: true, payments: { select: { baseNetAmount: true } } },
+  });
+
+  for (const i of installments) {
+    const collected = round2(i.payments.reduce((s, p) => s + Number(p.baseNetAmount), 0));
+    if (collected <= Number(i.baseRecognized)) continue;
+    await tx.installment.update({ where: { id: i.id }, data: { baseRecognized: new Prisma.Decimal(collected) } });
+  }
 }

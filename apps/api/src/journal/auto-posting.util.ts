@@ -739,6 +739,51 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
   });
 }
 
+export interface DeferredSettlementForPosting {
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  /** الالتزامُ الباقي كلُّه — **ينتهي هنا مهما كانت وجهةُ المال**. */
+  baseAmount: number;
+  /** `refund` نقدٌ يخرج · `income` يُحتجَز بشرط العقد. */
+  disposition: 'refund' | 'income';
+}
+
+/**
+ * **إقفالُ الإيراد المؤجَّل عند إلغاء العقد** (`ق-٤٧٢`).
+ *
+ * مدين `2400` بكامل الباقي — **فالالتزامُ ينتهي هنا مهما ذهب المال** — ثم
+ * دائنٌ واحد: **`1000` إن رُدّ**، **أو `4300` إن احتُجز بشرط العقد**.
+ *
+ * **⛔ ولا `4200` بحال**: إيرادُ الإيجار يُكتسب بتأجير العقارِ مدّةً، **وهذه
+ * مدّةٌ لا يشغلها المستأجر** — وهي حجّةُ `postContractSettlementEntry` نفسُها،
+ * ووديعةٌ محتجَزة تسلك المسلك عينَه إلى `4300`.
+ *
+ * ⚠️ **والوجهةُ مُدخَلةٌ لا مُفترَضة**: `cancel` يمنع الإلغاء حتى تُختار.
+ */
+export async function postDeferredSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: DeferredSettlementForPosting) {
+  if (s.baseAmount <= 0) return null;
+
+  const destination = s.disposition === 'refund' ? '1000' : OTHER_INCOME_ACCOUNT;
+  const ids = await resolveAccountIds(tx, [destination]);
+  if (!ids) return null;
+  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: s.date,
+    memo: `إقفال إيراد مؤجَّل عند الإلغاء — عقد ${s.contractNo} — ${s.tenant} — ${s.disposition === 'refund' ? 'ردٌّ للمستأجر' : 'احتجازٌ بشرط العقد'}`,
+    unitId: s.unitId,
+    lines: [
+      { accountId: deferredId, debit: s.baseAmount, credit: 0 },
+      { accountId: ids.get(destination)!, debit: 0, credit: s.baseAmount },
+    ],
+    auto: true,
+  });
+}
+
 export interface ContractSettlementForPosting {
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;

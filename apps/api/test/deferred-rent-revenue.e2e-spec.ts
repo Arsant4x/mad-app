@@ -168,6 +168,79 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
     expect(await balance(DEFERRED_REVENUE_ACCOUNT_CODE)).toBeCloseTo(deferredBefore, 2);
   }, 40000);
 
+  it('🔴 ⑦ والإلغاءُ على التزامٍ قائمٍ يُمنع حتى تُختار وجهتُه — ولا افتراض (ق-٤٧٢)', async () => {
+    const contract = await makeContract();
+    const december = installmentDue(contract, '2026-12');
+    await auth(http().post(`/contracts/${contract.id}/payments`))
+      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .expect(201);
+
+    const res = await auth(http().post(`/contracts/${contract.id}/cancel`))
+      .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
+      .expect(400);
+
+    // ⚠️ والرسالةُ تحمل الرقم — فمنعٌ بلا رقمٍ يُضغَط بلا قراءة.
+    expect(String(res.body.message)).toContain('1000');
+    // وتحمل الوجهتَين معاً، فلا يُخمَّن ما هو المطلوب.
+    expect(String(res.body.message)).toContain('يُردّ');
+    expect(String(res.body.message)).toContain('يُحتجَز');
+  }, 40000);
+
+  it('🔴 ⑧ فإن احتُجز بشرط العقد ذهب دخلاً آخر — ⛔ ولا يمسّ إيرادَ الإيجار', async () => {
+    const contract = await makeContract();
+    const december = installmentDue(contract, '2026-12');
+    await auth(http().post(`/contracts/${contract.id}/payments`))
+      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .expect(201);
+
+    const [rentBefore, otherBefore, deferredBefore] = [await balance('4200'), await balance('4300'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
+
+    await auth(http().post(`/contracts/${contract.id}/cancel`))
+      .send({
+        cancelDate: '2026-06-30',
+        cancelReason: 'إخلاء مبكر',
+        installmentDisposition: 'cancel',
+        unearnedDisposition: 'income',
+      })
+      .expect(201);
+
+    expect((await balance('4300')) - otherBefore).toBeCloseTo(1000, 2);
+    expect((await balance(DEFERRED_REVENUE_ACCOUNT_CODE)) - deferredBefore).toBeCloseTo(-1000, 2);
+    // السطرُ الذي يهمّ أكثر من غيره: العقارُ لم يُشغَل تلك المدّة.
+    expect(await balance('4200')).toBeCloseTo(rentBefore, 2);
+  }, 60000);
+
+  it('🔴 ⑨ وإن رُدّ خرج نقداً — والالتزامُ ينتهي في الحالين', async () => {
+    const contract = await makeContract();
+    const december = installmentDue(contract, '2026-12');
+    await auth(http().post(`/contracts/${contract.id}/payments`))
+      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .expect(201);
+
+    const [cashBefore, deferredBefore, rentBefore] = [await balance('1000'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE), await balance('4200')];
+
+    await auth(http().post(`/contracts/${contract.id}/cancel`))
+      .send({
+        cancelDate: '2026-06-30',
+        cancelReason: 'إخلاء مبكر',
+        installmentDisposition: 'cancel',
+        unearnedDisposition: 'refund',
+      })
+      .expect(201);
+
+    expect((await balance('1000')) - cashBefore).toBeCloseTo(-1000, 2);
+    expect((await balance(DEFERRED_REVENUE_ACCOUNT_CODE)) - deferredBefore).toBeCloseTo(-1000, 2);
+    expect(await balance('4200')).toBeCloseTo(rentBefore, 2);
+  }, 60000);
+
+  it('⑩ وإلغاءٌ بلا التزامٍ قائم لا يُسأل عن وجهةٍ — فسؤالٌ بلا موضوعٍ يُضغَط بلا قراءة', async () => {
+    const contract = await makeContract();
+
+    await auth(http().post(`/contracts/${contract.id}/cancel`))
+      .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
+      .expect(201);
+  }, 40000);
+
   it('⑥ ودفعةٌ بلا قسطٍ مرتبط تُعترَف فوراً — حدٌّ معلَنٌ لا عطل (ق-٤٧٣)', async () => {
     const contract = await makeContract();
     const [rentBefore, deferredBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];

@@ -11,10 +11,12 @@ import {
   postClaimPaymentEntry,
   postClaimWaiverEntry,
   postContractSettlementEntry,
+  postDeferredSettlementEntry,
   postDepositReceiptEntry,
   postDepositSettlementEntry,
   postRentPaymentEntry,
 } from '../journal/auto-posting.util';
+import { closeDeferredWithinTx, outstandingDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
 import { activeReservationForUnit, expireStaleReservations } from '../reservations/reservations.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
@@ -210,6 +212,16 @@ export class ContractsService {
         // 'installments' read the very rows that `installmentDisposition:
         // 'cancel'` is about to void, and voiding them first would settle at
         // zero.
+        // ⚖️ **قبل كلِّ شيء: يُعترَف بما قُدِّم حتى تاريخ الإلغاء** — بالمحرّك
+        // نفسِه لا بقاعدةٍ ثانية (`ق-٤٦٩`). **فما بقي بعدها مقبوضٌ عن مدّةٍ لن
+        // تُقدَّم**، وهو وحده موضوعُ السؤال.
+        await recognizeDueWithinTx(tx, companyId, cancelDate, id);
+        const unearned = await outstandingDeferredWithinTx(tx, id);
+        if (unearned > 0 && !dto.unearnedDisposition) {
+          // ⛔ **ولا افتراض** (`ق-٤٧٢`): «كلا الخيارين يكذب على نصف الحالات».
+          throw new BadRequestException(formatMessage(MSG.unearned_disposition_required, { amount: formatMoney(unearned) }));
+        }
+
         const settlementAmount = await this.resolveSettlementAmount(tx, id, cancelDate, dto);
         // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
         // يساويه = خطأ إدخال يُرفض قبل أي أثر.
@@ -255,6 +267,22 @@ export class ContractsService {
             where: { contractId: id, status: { in: ['DUE', 'LATE'] }, dueDate: { gte: cancelDate } },
             data: { status: 'CANCELLED' },
           });
+        }
+
+        // إقفالُ الالتزام الباقي — **بعد تعديل الأقساط**، فالمبلغُ مقروءٌ قبلها
+        // ولا تغيّره حالةُ قسطٍ لم يُقبض منه شيء.
+        if (unearned > 0 && dto.unearnedDisposition) {
+          await postDeferredSettlementEntry(tx, companyId, {
+            unitId: existing.unitId,
+            contractNo: existing.no,
+            tenant: existing.tenant,
+            date: cancelDate,
+            baseAmount: unearned,
+            disposition: dto.unearnedDisposition,
+          });
+          // العدّادُ يُغلق: ما خرج من الالتزام لا يعود مرشَّحاً للتحوّل — وإلّا
+          // رحّل الكنسُ الشهريّ التزاماً أُقفل بالفعل.
+          await closeDeferredWithinTx(tx, id);
         }
 
         return tx.contract.findUniqueOrThrow({ where: { id }, include: CONTRACT_INCLUDE });

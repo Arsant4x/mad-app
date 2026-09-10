@@ -344,7 +344,12 @@ describe('Activities, currencies and FX difference (e2e)', () => {
     }
 
     it('posts the gap between the contract rate and the settlement rate to 5600', async () => {
-      const [cashBefore, revenueBefore, fxBefore] = await Promise.all([accountBalance('1000'), accountBalance('4200'), accountBalance('5600')]);
+      const [cashBefore, revenueBefore, deferredBefore, fxBefore] = await Promise.all([
+        accountBalance('1000'),
+        accountBalance('4200'),
+        accountBalance('2400'),
+        accountBalance('5600'),
+      ]);
 
       // 1000 units priced at 3.75 but settled at 3.80: 3800 arrives, 3750 was
       // earned, and the extra 50 is a currency gain — not rental revenue.
@@ -352,9 +357,19 @@ describe('Activities, currencies and FX difference (e2e)', () => {
       expect(payment.body.journalEntryId).not.toBeNull();
 
       expect((await accountBalance('1000')) - cashBefore).toBeCloseTo(3800);
-      expect((await accountBalance('4200')) - revenueBefore).toBeCloseTo(3750);
       // Credit against an expense account: the balance moves by -50.
       expect((await accountBalance('5600')) - fxBefore).toBeCloseTo(-50);
+
+      // ⚖️ **والـ3750 لم تعد كلُّها إيراداً لحظتَها** (`ق-٤٦٨`): القسطُ يغطّي
+      // يناير كلَّه ودُفع في خامسه — **فخمسةُ أيامٍ من واحدٍ وثلاثين إيراد،
+      // والباقي التزامٌ** يتحوّل شهراً بشهر.
+      //
+      // ⭐ **وفرقُ الصرف لا يُقسَم**: هو ما فعله السوقُ لا ما قدّمته المنشأةُ
+      // من خدمة — **فلا فترةَ خدمةٍ له**، ويبقى كلُّه في `5600` لحظتَه.
+      const revenueDelta = (await accountBalance('4200')) - revenueBefore;
+      const deferredDelta = (await accountBalance('2400')) - deferredBefore;
+      expect(revenueDelta + deferredDelta).toBeCloseTo(3750, 2);
+      expect(deferredDelta).toBeGreaterThan(0);
     }, 40000);
 
     it('posts a loss to 5600 when the currency moved the other way', async () => {
