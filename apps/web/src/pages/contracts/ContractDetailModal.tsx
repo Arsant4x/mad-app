@@ -516,12 +516,24 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
         </table>
 
         {payingInstallmentId && (
-          <PaymentForm
-            banks={banks}
-            defaultAmount={payingInstallmentId !== 'free' ? (contract.installments.find((i) => i.id === payingInstallmentId)?.amount ?? '') : ''}
-            onCancel={() => setPayingInstallmentId(null)}
-            onSubmit={handlePayment}
-          />
+          <>
+            {/* ⚠️ **حدُّ المحرّك يُعلَن حيث يُقرأ لا في وثيقته** (`ق-٤٤٩` · `ق-٤٧٣`).
+                إيرادُ الإيجار يُقسَم على فترة خدمة القسط — **ودفعةٌ بلا قسطٍ لا
+                فترةَ خدمةٍ تُعرف لها إطلاقاً**، فتُعترَف إيراداً فوراً. وهي
+                **٢٩٪ من الدفعات المقيسة**، فليست حالةً نادرة تُترك بلا بيان. */}
+            {payingInstallmentId === 'free' && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                دفعة غير مرتبطة بقسط: لا تُعرف لها فترة خدمة، فتُعترف <strong>إيراداً فوراً</strong> ولا تمرّ بالإيراد المؤجَّل. اربطها بقسط
+                ليُوزَّع إيرادها على أشهره.
+              </p>
+            )}
+            <PaymentForm
+              banks={banks}
+              defaultAmount={payingInstallmentId !== 'free' ? (contract.installments.find((i) => i.id === payingInstallmentId)?.amount ?? '') : ''}
+              onCancel={() => setPayingInstallmentId(null)}
+              onSubmit={handlePayment}
+            />
+          </>
         )}
 
         {!payingInstallmentId && contract.status !== 'CANCELLED' && (

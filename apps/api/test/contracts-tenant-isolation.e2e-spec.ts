@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { round2 } from '../src/common/money/rounding';
 
 describe('Properties/Units/Contracts (e2e)', () => {
   let app: INestApplication;
@@ -82,6 +83,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const accountsBefore = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
     const cashBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '1000')?.balance ?? 0);
     const revenueBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '4200')?.balance ?? 0);
+    const deferredBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '2400')?.balance ?? 0);
 
     const cashPayment = await request(app.getHttpServer())
       .post(`/contracts/${contract.body.id}/payments`)
@@ -93,7 +95,17 @@ describe('Properties/Units/Contracts (e2e)', () => {
 
     const accountsAfter = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
     expect(Number(accountsAfter.body.find((a: { code: string }) => a.code === '1000').balance) - cashBefore).toBeCloseTo(1000);
-    expect(Number(accountsAfter.body.find((a: { code: string }) => a.code === '4200').balance) - revenueBefore).toBeCloseTo(1000);
+
+    // ⚖️ **وكان هذا السطر يتوقّع الألفَ كلَّه إيراداً** — وهو العطلُ الذي بُني له
+    // `ق-٤٦٨`: القسطُ يستحقّ في **أوّلِ** فترته (`2026-01-01` … `2026-01-31`)،
+    // **فالقبضُ في يومه قبضٌ عن ثلاثين يوماً لم تُقدَّم**. فيُعترَف بيومٍ واحدٍ
+    // من واحدٍ وثلاثين، **والباقي التزامٌ يتحوّل شهراً بشهر**.
+    const deferredAfter = Number(accountsAfter.body.find((a: { code: string }) => a.code === '2400')?.balance ?? 0);
+    const revenueDelta = Number(accountsAfter.body.find((a: { code: string }) => a.code === '4200').balance) - revenueBefore;
+    expect(revenueDelta).toBeCloseTo(round2(1000 / 31), 2);
+    expect(deferredAfter - deferredBefore).toBeCloseTo(round2(1000 - round2(1000 / 31)), 2);
+    // ولا ريالَ يضيع بين الوجهتَين.
+    expect(revenueDelta + (deferredAfter - deferredBefore)).toBeCloseTo(1000, 2);
 
     // Create the bank this test needs instead of assuming one already exists:
     // seed.ts creates no banks at all, and banks-tenant-isolation deletes the

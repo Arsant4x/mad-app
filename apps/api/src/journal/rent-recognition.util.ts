@@ -1,0 +1,122 @@
+import { round2 } from '../common/money/rounding';
+
+/**
+ * **قاعدةُ الاعتراف بإيراد الإيجار — واحدةٌ لا فرعان** (`ق-٤٦٨` · `ق-٤٧٤`).
+ *
+ * ## القاعدة
+ *
+ * **ما لم يُقدَّم بعدُ التزامٌ، وما قُدِّم إيراد.** تُطبَّق على **التواريخ** لا
+ * على اسم الدورة — **فالشهريّ والربعيّ والسنويّ يمرّون بها جميعاً، والفرقُ في
+ * مخرَجِها لا في مسارها**.
+ *
+ * ## ولماذا لا مسارَ ثانٍ للشهريّ
+ *
+ * كان الترجيحُ الأوّل أن الشهريَّ يُعترَف مباشرةً — **والقياس أسقطه**: القسطُ
+ * يستحقّ في **أوّلِ** فترته، **و٢١٪ من الدفعات الشهرية قُبضت قبل بداية شهر
+ * خدمتها** (٢٤ من ١١٤)، **و٣٧٨ قسطاً فترتُه تعبر حدَّ الشهر بالبناء**. ⇒ فمسارُ
+ * «الشهريُّ مباشرةً» **ليس مساراً ثانياً فحسب — بل خاطئٌ في تلك الحالات**.
+ *
+ * ## والتقسيمُ باليوم والاعترافُ بالشهر
+ *
+ * **الكسرُ يُحسب بالأيام** — فهو الوحيدُ الذي يقسم فترةً تعبر حدَّ الشهر قسمةً
+ * صحيحة (١٧ يوماً في مارس و١٤ في أبريل). **والقيدُ يُكتب عند نهاية كل شهر** —
+ * فهو ما يقرؤه التاجر.
+ *
+ * ⭐ **والتراكمُ لا الفروق**: كلُّ خطوةٍ تحمل **المكتسَبَ الكلّي حتى تاريخها**
+ * مدوَّراً، **والمرحَّلُ فرقُ ما بينها وبين ما سبق اعترافُه**. ⇒ **فلا ينحرف
+ * التقريبُ عبر اثني عشر شهراً، ويُغلَق الالتزامُ عند الصفر بالضبط.**
+ */
+export interface ServicePeriod {
+  start: Date;
+  end: Date;
+}
+
+/** رقمُ اليوم بالتقويم المحلّي — **بلا ساعاتٍ ولا توقيتٍ صيفيّ يزحزح يوماً**. */
+export function dayNumber(d: Date): number {
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+}
+
+/** أيامُ الفترة **شاملةً طرفيها** — فترةُ يومٍ واحدٍ يومٌ لا صفر. */
+export function periodDays(p: ServicePeriod): number {
+  return Math.max(1, dayNumber(p.end) - dayNumber(p.start) + 1);
+}
+
+/**
+ * الكسرُ المكتسَب حتى `asOf` — **صفرٌ قبل أوّل يومٍ من الفترة، وواحدٌ من آخر
+ * يومٍ فيها**. واليومُ الجاري محسوبٌ مكتسَباً: **من سكن يوماً استحقّ يومَه**.
+ */
+export function earnedFraction(p: ServicePeriod, asOf: Date): number {
+  const elapsed = dayNumber(asOf) - dayNumber(p.start) + 1;
+  if (elapsed <= 0) return 0;
+  const total = periodDays(p);
+  return elapsed >= total ? 1 : elapsed / total;
+}
+
+/** آخرُ يومٍ في شهرِ `d` — بالتقويم المحلّي. */
+export function monthEnd(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+}
+
+/**
+ * **مواعيدُ الاعتراف**: نهايةُ كلِّ شهرٍ تمسّه الفترةُ حتى `asOf` — **وآخرُ يومٍ
+ * في الفترة نفسِها ختاماً**.
+ *
+ * ⚠️ **وهي مواعيدُ استحقاقٍ لا نبضاتُ مُجدوِل** (`ق-٤٧٥/①`): **شهرٌ فات لأن
+ * المهمّة تعطّلت يعود في القائمة نفسِها بتاريخه** — **فيُرحَّل إلى شهره لا إلى
+ * شهرِ التعافي**. وهذا هو الفرقُ بين `dispatchDue` ونبضةٍ تُنسى.
+ *
+ * ⚠️ **ولا يُعترَف بشهرٍ لم يكتمل**: تشغيلٌ في منتصف مارس يعترف بيناير وفبراير
+ * **ويترك مارس إلى آخره** — **فقيدان في شهرٍ واحدٍ يُقرآن تكراراً**، والقائمةُ
+ * الشهرية تُقرأ عند إقفال الشهر لا في وسطه. **وختامُ الفترة نفسُه استثناءُ هذا**:
+ * فترةٌ تنتهي في ١٤ أبريل تُقفَل في يومها لا في آخر أبريل — **وإلّا بقي التزامٌ
+ * لخدمةٍ انتهت**.
+ */
+export function recognitionDates(p: ServicePeriod, asOf: Date): Date[] {
+  if (dayNumber(asOf) < dayNumber(p.start)) return [];
+  const out: Date[] = [];
+  let cursor = monthEnd(p.start);
+  const limit = Math.min(dayNumber(asOf), dayNumber(p.end));
+  while (dayNumber(cursor) <= limit) {
+    out.push(new Date(cursor));
+    // آخرُ يومٍ في الشهر التالي — **يُبنى من أوّل الشهر التالي لا بالجمع على
+    // اليوم**: فبراير المنتهي في ٢٨ يقفز بالجمع إلى مارس ويسقط شهرٌ كامل.
+    cursor = monthEnd(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
+  }
+  // ختامُ الفترة نفسُه إن بلغه `asOf` ولم يكن آخرَ يومٍ في شهره.
+  if (limit === dayNumber(p.end) && (out.length === 0 || dayNumber(out[out.length - 1]) < dayNumber(p.end))) {
+    out.push(new Date(p.end));
+  }
+  return out;
+}
+
+export interface RecognitionStep {
+  /** تاريخُ القيد — نهايةُ الشهر أو ختامُ الفترة. */
+  date: Date;
+  /** **المكتسَبُ الكلّي** حتى هذا التاريخ، مدوَّراً. */
+  cumulative: number;
+}
+
+/**
+ * جدولُ الاعتراف لمبلغٍ **مقبوضٍ** عن فترةٍ — **تراكمياً**.
+ *
+ * `collectedBase` هو المقبوضُ فعلاً بعملة الدفتر: **هذا المسارُ يعترف بما قُبض
+ * لا بما استُحقّ** — فالإيجارُ يُرحَّل عند القبض (`1000/4200`) لا عند الاستحقاق،
+ * **وما نغيّره توقيتُ الاعتراف لا أساسَه**.
+ */
+export function recognitionSchedule(p: ServicePeriod, collectedBase: number, asOf: Date): RecognitionStep[] {
+  return recognitionDates(p, asOf).map((date) => ({
+    date,
+    cumulative: round2(collectedBase * earnedFraction(p, date)),
+  }));
+}
+
+/**
+ * **القسمةُ لحظةَ القبض**: ما مضى من الفترة إيرادٌ، وما بقي التزام.
+ *
+ * ⭐ **وأثرُها المحدود عمداً**: دفعةٌ عن فترةٍ انقضت كلُّها تعطي `deferred = 0`
+ * — **فقيدُها هو قيدُ اليوم حرفياً**. **فالتغييرُ لا يمسّ إلا ما لم يُقدَّم بعد.**
+ */
+export function splitAtCollection(p: ServicePeriod, baseAmount: number, asOf: Date): { earned: number; deferred: number } {
+  const earned = round2(baseAmount * earnedFraction(p, asOf));
+  return { earned, deferred: round2(baseAmount - earned) };
+}

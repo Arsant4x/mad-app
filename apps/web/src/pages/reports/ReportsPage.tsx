@@ -14,12 +14,14 @@ import {
   type TrialBalance,
   getBankDifference,
   type BankDifference,
+  getDeferredRevenue,
+  type DeferredRevenue,
 } from '../../api/reports';
 import { dfmt, fmt } from '../../lib/format';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging' | 'bankdiff';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging' | 'bankdiff' | 'deferred';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -34,6 +36,7 @@ export function ReportsPage() {
   const [kpis, setKpis] = useState<PropertyKpis | null>(null);
   const [trial, setTrial] = useState<TrialBalance | null>(null);
   const [bankDiff, setBankDiff] = useState<BankDifference | null>(null);
+  const [deferred, setDeferred] = useState<DeferredRevenue | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
@@ -60,8 +63,10 @@ export function ReportsPage() {
       getTrialBalance({ from: from ?? undefined, to }),
       // خارج المدى عمداً: الفرقُ حالةٌ قائمة اليوم لا حركةُ فترة.
       getBankDifference(),
+      // وكذلك الالتزام: رصيدٌ قائمٌ اليوم لا حركةُ فترة.
+      getDeferredRevenue(),
     ])
-      .then(([inc, bal, cf, br, pk, tb, bd]) => {
+      .then(([inc, bal, cf, br, pk, tb, bd, dr]) => {
         setIncome(inc);
         setBalance(bal);
         setCash(cf);
@@ -69,6 +74,7 @@ export function ReportsPage() {
         setKpis(pk);
         setTrial(tb);
         setBankDiff(bd);
+        setDeferred(dr);
       })
       .finally(() => setLoading(false));
   }, [from, to]);
@@ -146,6 +152,13 @@ export function ReportsPage() {
         {(bankDiff?.rows.length ?? 0) > 0 && (
           <button className={tab === 'bankdiff' ? 'tab active' : 'tab'} onClick={() => setTab('bankdiff')}>
             فروق البنوك
+          </button>
+        )}
+        {/* لا يُعرض لمن لا التزامَ له ولا دفعةً حرّة — تبويبٌ فارغ يسأل عن سؤالٍ
+            لا يخصّه، كسابقه في فروق البنوك. */}
+        {((deferred?.outstanding.length ?? 0) > 0 || (deferred?.unlinked.length ?? 0) > 0) && (
+          <button className={tab === 'deferred' ? 'tab active' : 'tab'} onClick={() => setTab('deferred')}>
+            الإيراد المؤجَّل
           </button>
         )}
         {/* Only for landlords: a business with no properties has nothing here. */}
@@ -358,6 +371,85 @@ export function ReportsPage() {
         )}
 
         {tab === 'aging' && <ReceivablesAgingSection />}
+
+        {/* الإيرادُ المؤجَّل (ق-٤٦٨): رصيدُ `2400` رقمٌ واحدٌ لا يقول ممّن تكوّن
+            — فيُفصَّل بعقده وفترته. ومعه شرطُ المالك (ق-٤٧٣): «من يقرأ إيرادَه
+            يعرف كم منه لم يمرّ بالالتزام». */}
+        {tab === 'deferred' && deferred && (
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 8 }}>
+              الإيراد المؤجَّل — التزامٌ عن مدّة لم تُقدَّم بعد
+            </div>
+            <div className="page-sub" style={{ marginBottom: 14 }}>
+              القسط يستحقّ في أوّل فترته، فما يُقبض عن مدّة لم تُقدَّم يبقى التزاماً ويتحوّل إيراداً شهراً بشهر. الإجمالي القائم:{' '}
+              <strong>{fmt(deferred.totalDeferred)}</strong>
+            </div>
+            {deferred.outstanding.length > 0 && (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>العقد</th>
+                    <th>المستأجر</th>
+                    <th>الوحدة</th>
+                    <th>فترة الخدمة</th>
+                    <th>المقبوض</th>
+                    <th>المعترَف به</th>
+                    <th>المتبقّي التزاماً</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deferred.outstanding.map((r, idx) => (
+                    <tr key={`${r.contractNo}-${idx}`}>
+                      <td>{r.contractNo}</td>
+                      <td>{r.tenant}</td>
+                      <td>{r.unitNo ?? '—'}</td>
+                      <td>
+                        {dfmt(r.serviceStart)} — {dfmt(r.serviceEnd)}
+                      </td>
+                      <td>{fmt(r.collected)}</td>
+                      <td>{fmt(r.recognized)}</td>
+                      <td>
+                        <strong>{fmt(r.deferred)}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* ⚠️ الحدُّ المعلَن — يُعرض ولو كان الجدولُ فارغاً، فالصفرُ خبرٌ أيضاً. */}
+            <div className="card-title" style={{ marginTop: 20, marginBottom: 8 }}>
+              دفعات لم تمرّ بالإيراد المؤجَّل
+            </div>
+            <div className="page-sub" style={{ marginBottom: 14 }}>
+              {deferred.unlinkedNote}. الإجمالي: <strong>{fmt(deferred.totalUnlinked)}</strong>
+            </div>
+            {deferred.unlinked.length === 0 ? (
+              <div className="page-sub">لا دفعات من هذا النوع.</div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>التاريخ</th>
+                    <th>العقد</th>
+                    <th>المستأجر</th>
+                    <th>المبلغ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deferred.unlinked.map((r, idx) => (
+                    <tr key={`${r.contractNo}-${r.date}-${idx}`}>
+                      <td>{dfmt(r.date)}</td>
+                      <td>{r.contractNo}</td>
+                      <td>{r.tenant}</td>
+                      <td>{fmt(r.baseNetAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
 
         {/* تقريرُ الفرق (ق-٢٨٥/٣): «الرصيدُ الدفتريّ مقابل ما كان يُعرض،
             فينتقل التاجرُ بلا صدمة» — ومعه إعلانُ ق-٢٨٣. */}

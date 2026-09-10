@@ -150,6 +150,7 @@ export const MSG = {
   handover_signed_immutable: 'handovers.signed_immutable',
   handover_item_not_found: 'contracts.handover_item_not_found',
   settlement_lines_mismatch: 'contracts.settlement_lines_mismatch',
+  unearned_disposition_required: 'contracts.unearned_disposition_required',
   bulk_units_collision: 'units.bulk_collision',
   claim_not_found: 'claims.not_found',
   claim_already_settled: 'claims.already_settled',
@@ -652,6 +653,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.support_grant_not_active]: { ar: 'لا توجد نافذة دعم فعّالة لقطعها', en: 'No active support window to revoke' },
   [MSG.handover_item_not_found]: { ar: 'بند النموذج غير موجود في هذا النموذج', en: 'Checklist item not found on this handover' },
   [MSG.settlement_lines_mismatch]: { ar: 'مجموع بنود التسوية لا يساوي مبلغ التسوية', en: 'Settlement lines do not add up to the settlement amount' },
+  [MSG.unearned_disposition_required]: {
+    ar: 'بقي {amount} مقبوضاً عن مدّة لم تُقدَّم — حدّد وجهته: يُردّ للمستأجر أم يُحتجَز دخلاً بشرط العقد',
+    en: 'A collected amount of {amount} covers a period not served — choose its destination: refunded to the tenant, or kept as income under the contract',
+  },
   [MSG.bulk_units_collision]: { ar: 'أرقام وحدات موجودة مسبقاً ضمن النطاق المطلوب: {units}', en: 'Unit numbers already exist in the requested range: {units}' },
   [MSG.templates_owner_only]: { ar: 'إدارة نماذج الصلاحيات متاحة لمالك المنشأة أو مدير المنصة فقط', en: 'Only the company owner or the platform admin can manage permission templates' },
   [MSG.templates_read_forbidden]: { ar: 'لا تملك صلاحية عرض قوالب الصلاحيات', en: 'You do not have permission to view permission templates' },

@@ -41,6 +41,17 @@ export class ReportsController {
     return this.reportsService.cashFlow(tenant.companyId, range);
   }
 
+  /**
+   * الإيرادُ المؤجَّل (`ق-٤٦٨`): **الالتزامُ القائم بعقده وفترته** — ومعه
+   * **الدفعاتُ التي لم تمرّ به** (`ق-٤٧٣`)، فمن يقرأ إيرادَه يعرف كم منه
+   * اعتُرف به فوراً بلا فترةِ خدمةٍ تُعرف.
+   */
+  @Get('deferred-revenue')
+  @RequiresAction('view')
+  deferredRevenue(@CurrentTenant() tenant: TenantContext) {
+    return this.reportsService.deferredRevenue(tenant.companyId);
+  }
+
   /** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض — وإعلانُ ق-٢٨٣ معه. */
   @Get('bank-difference')
   @RequiresAction('view')

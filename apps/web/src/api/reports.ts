@@ -101,6 +101,29 @@ export interface BankDifference {
 
 export const getBankDifference = () => apiClient.get<BankDifference>('/reports/bank-difference').then((r) => r.data);
 
+/**
+ * الإيرادُ المؤجَّل (`ق-٤٦٨`) — **الالتزامُ القائم بتفصيله**، ومعه **ما لم يمرّ
+ * به** (`ق-٤٧٣`): دفعاتٌ بلا قسطٍ مرتبط اعتُرف بها إيراداً فوراً.
+ */
+export interface DeferredRevenue {
+  outstanding: {
+    contractNo: string;
+    tenant: string;
+    unitNo: string | null;
+    serviceStart: string;
+    serviceEnd: string;
+    collected: number;
+    recognized: number;
+    deferred: number;
+  }[];
+  totalDeferred: number;
+  unlinked: { date: string; contractNo: string; tenant: string; baseNetAmount: number }[];
+  totalUnlinked: number;
+  unlinkedNote: string;
+}
+
+export const getDeferredRevenue = () => apiClient.get<DeferredRevenue>('/reports/deferred-revenue').then((r) => r.data);
+
 export interface TrialBalanceRow {
   code: string;
   name: string;

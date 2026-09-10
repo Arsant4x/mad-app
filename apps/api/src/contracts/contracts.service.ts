@@ -11,10 +11,12 @@ import {
   postClaimPaymentEntry,
   postClaimWaiverEntry,
   postContractSettlementEntry,
+  postDeferredSettlementEntry,
   postDepositReceiptEntry,
   postDepositSettlementEntry,
   postRentPaymentEntry,
 } from '../journal/auto-posting.util';
+import { closeDeferredWithinTx, outstandingDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
 import { activeReservationForUnit, expireStaleReservations } from '../reservations/reservations.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
@@ -158,6 +160,9 @@ export class ContractsService {
               contractId: created.id,
               dueDate: s.dueDate,
               amount: s.amount,
+              // فترةُ الخدمة تُثبَّت لحظةَ التوليد ولا تُشتقّ لاحقاً (ق-٤٧٥/②).
+              serviceStart: s.serviceStart,
+              serviceEnd: s.serviceEnd,
               currency,
               exchangeRate,
               baseAmount: toBaseAmount(s.amount, exchangeRate),
@@ -207,6 +212,16 @@ export class ContractsService {
         // 'installments' read the very rows that `installmentDisposition:
         // 'cancel'` is about to void, and voiding them first would settle at
         // zero.
+        // ⚖️ **قبل كلِّ شيء: يُعترَف بما قُدِّم حتى تاريخ الإلغاء** — بالمحرّك
+        // نفسِه لا بقاعدةٍ ثانية (`ق-٤٦٩`). **فما بقي بعدها مقبوضٌ عن مدّةٍ لن
+        // تُقدَّم**، وهو وحده موضوعُ السؤال.
+        await recognizeDueWithinTx(tx, companyId, cancelDate, id);
+        const unearned = await outstandingDeferredWithinTx(tx, id);
+        if (unearned > 0 && !dto.unearnedDisposition) {
+          // ⛔ **ولا افتراض** (`ق-٤٧٢`): «كلا الخيارين يكذب على نصف الحالات».
+          throw new BadRequestException(formatMessage(MSG.unearned_disposition_required, { amount: formatMoney(unearned) }));
+        }
+
         const settlementAmount = await this.resolveSettlementAmount(tx, id, cancelDate, dto);
         // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
         // يساويه = خطأ إدخال يُرفض قبل أي أثر.
@@ -252,6 +267,22 @@ export class ContractsService {
             where: { contractId: id, status: { in: ['DUE', 'LATE'] }, dueDate: { gte: cancelDate } },
             data: { status: 'CANCELLED' },
           });
+        }
+
+        // إقفالُ الالتزام الباقي — **بعد تعديل الأقساط**، فالمبلغُ مقروءٌ قبلها
+        // ولا تغيّره حالةُ قسطٍ لم يُقبض منه شيء.
+        if (unearned > 0 && dto.unearnedDisposition) {
+          await postDeferredSettlementEntry(tx, companyId, {
+            unitId: existing.unitId,
+            contractNo: existing.no,
+            tenant: existing.tenant,
+            date: cancelDate,
+            baseAmount: unearned,
+            disposition: dto.unearnedDisposition,
+          });
+          // العدّادُ يُغلق: ما خرج من الالتزام لا يعود مرشَّحاً للتحوّل — وإلّا
+          // رحّل الكنسُ الشهريّ التزاماً أُقفل بالفعل.
+          await closeDeferredWithinTx(tx, id);
         }
 
         return tx.contract.findUniqueOrThrow({ where: { id }, include: CONTRACT_INCLUDE });
@@ -309,11 +340,16 @@ export class ContractsService {
         const netAmount = round2(dto.amount - discount);
         if (netAmount <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
-        const journalEntry = await postRentPaymentEntry(tx, companyId, {
+        const posting = await postRentPaymentEntry(tx, companyId, {
           unitId: contract.unitId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.date),
+          // فترةُ خدمةِ القسط — وبلا قسطٍ مرتبط لا فترةَ تُعرف (ق-٤٧٣).
+          service:
+            installment?.serviceStart && installment?.serviceEnd
+              ? { start: installment.serviceStart, end: installment.serviceEnd }
+              : null,
           baseNetAmount: toBaseAmount(netAmount, payRate),
           // Priced at the contract's rate — but only when the payment is in
           // the contract's own currency. A payment made in a different
@@ -323,6 +359,7 @@ export class ContractsService {
           // (ق-٢٧٧) الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك — لا `1000`.
           cashAccountId: bank?.accountId ?? null,
         });
+        const journalEntry = posting.entry;
 
         if (bank) {
           await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: netAmount } } });
@@ -365,7 +402,12 @@ export class ContractsService {
         });
 
         if (installment) {
-          await tx.installment.update({ where: { id: installment.id }, data: { status: 'PAID' } });
+          await tx.installment.update({
+            where: { id: installment.id },
+            // العدّادُ يُزاد بما اعتُرف به **في هذا القيد وحده** — وصفرٌ حين
+            // تخطّى الترحيلُ لنقص حساب، فلا يُسجَّل اعترافٌ لم يقع (ق-٤٦٨).
+            data: { status: 'PAID', baseRecognized: { increment: posting.earned } },
+          });
         }
 
         return tx.rentPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { installment: true } });
@@ -499,6 +541,9 @@ export class ContractsService {
             contractId: created.id,
             dueDate: s.dueDate,
             amount: s.amount,
+            // كسابقتها في `create` — الفترةُ تُثبَّت لا تُشتقّ (ق-٤٧٥/②).
+            serviceStart: s.serviceStart,
+            serviceEnd: s.serviceEnd,
             currency: source.currency,
             exchangeRate,
             baseAmount: toBaseAmount(s.amount, exchangeRate),

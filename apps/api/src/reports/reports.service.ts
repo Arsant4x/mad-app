@@ -156,6 +156,77 @@ export class ReportsService {
    * هو التقريرُ الذي يؤدّي غرضَها** — فالإعلانُ فيه لا في وثيقةٍ جانبية
    * (`ق-٢٧٥`).
    */
+  /**
+   * **الإيرادُ المؤجَّل — وما لم يمرّ به** (`ق-٤٦٨` · `ق-٤٧٣`).
+   *
+   * قسمان لا واحد:
+   *
+   *   ① **الالتزامُ القائم** بعقده وفترته — **فرصيدُ `2400` رقمٌ واحدٌ لا
+   *      يقول ممّن تكوّن**، ومن يُسأل عن التزامه يحتاج تفصيله.
+   *   ② **ودفعاتٌ بلا قسطٍ مرتبط** — **لا فترةَ خدمةٍ تُعرف لها، فاعتُرف بها
+   *      إيراداً فوراً**. ⚠️ **وهذا شرطُ المالك**: «**فمن يقرأ إيرادَه يعرف كم
+   *      منه لم يمرّ بالالتزام**» — **فحدٌّ يُعلَن في وثيقةٍ لا يُقرأ**.
+   */
+  deferredRevenue(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const installments = await tx.installment.findMany({
+        where: { serviceStart: { not: null }, serviceEnd: { not: null } },
+        select: {
+          dueDate: true,
+          serviceStart: true,
+          serviceEnd: true,
+          baseRecognized: true,
+          contract: { select: { no: true, tenant: true, unit: { select: { unitNo: true } } } },
+          payments: { select: { baseNetAmount: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+      });
+
+      const outstanding = installments
+        .map((i) => {
+          const collected = round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
+          return {
+            contractNo: i.contract.no,
+            tenant: i.contract.tenant,
+            unitNo: i.contract.unit?.unitNo ?? null,
+            serviceStart: i.serviceStart,
+            serviceEnd: i.serviceEnd,
+            collected,
+            recognized: round2(Number(i.baseRecognized)),
+            // ما لم يخرج من الالتزام بعد — إيراداً كان أو ردّاً أو دخلاً آخر.
+            deferred: round2(collected - Number(i.baseRecognized)),
+          };
+        })
+        .filter((r) => r.deferred > 0);
+
+      const unlinkedRows = await tx.rentPayment.findMany({
+        where: { installmentId: null },
+        select: {
+          date: true,
+          baseNetAmount: true,
+          contract: { select: { no: true, tenant: true } },
+        },
+        orderBy: { date: 'desc' },
+      });
+
+      const unlinked = unlinkedRows.map((p) => ({
+        date: p.date,
+        contractNo: p.contract.no,
+        tenant: p.contract.tenant,
+        baseNetAmount: round2(Number(p.baseNetAmount)),
+      }));
+
+      return {
+        outstanding,
+        totalDeferred: round2(outstanding.reduce((sum, r) => sum + r.deferred, 0)),
+        unlinked,
+        totalUnlinked: round2(unlinked.reduce((sum, r) => sum + r.baseNetAmount, 0)),
+        /** ⚠️ **حدٌّ معلَن**: هذه اعتُرف بها إيراداً فوراً — **لا فترةَ خدمةٍ تُعرف لها**. */
+        unlinkedNote: 'دفعات غير مرتبطة بأقساط: لا تُعرف لها فترة خدمة، فاعتُرف بها إيراداً فوراً ولم تمرّ بالإيراد المؤجَّل',
+      };
+    });
+  }
+
   bankDifference(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const banks = await tx.bank.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' } });
