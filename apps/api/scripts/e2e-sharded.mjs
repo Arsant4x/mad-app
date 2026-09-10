@@ -25,7 +25,7 @@ import { runShardedJest } from './sharded-jest.mjs';
  */
 const SHARDS = Number(process.env.E2E_SHARDS ?? 4);
 
-const { verdict, verdicts, fileCount, shardCount } = runShardedJest({
+const { verdict, verdicts, fileCount, shardCount } = await runShardedJest({
   // ⚠️ **الوسائطُ نفسُها التي كانت في `test:e2e`** — **فالمقيسُ هو التشريحُ
   //    وحده**، ولا يختلط به تغييرُ نطاق.
   jestArgs: '--testPathPattern=e2e-spec --forceExit --runInBand',
