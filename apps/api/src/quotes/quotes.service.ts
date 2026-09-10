@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
+import { resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { computeDocumentTotals } from '../common/money/totals';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
@@ -68,7 +69,16 @@ export class QuotesService {
     return { ...quote, derivedStatus: deriveStatus(quote) };
   }
 
-  create(companyId: string, dto: CreateQuoteDto) {
+  /**
+   * 🔴 **`allowedBranchIds` لازمٌ لا اختياريّ** (`ق-٥١٢`).
+   *
+   * **كان الفرعُ يُكتب من الطلب كما وصل** — **فموظّفٌ مقصورٌ على فرعٍ يُنشئ
+   * عرضاً على فرعٍ آخر**. **ولا يُكشَف بالاستعمال**: العرضُ يبدو سليماً، ثم
+   * **يتحوّل فاتورةً تحمل الفرعَ نفسَه** فيدخل الدفترَ في غير موضعه.
+   *
+   * ⇒ **والمصدرُ الواحد `resolveBranchId`** — وجودٌ ثم إذن.
+   */
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateQuoteDto) {
     const { subtotal, taxTotal, total } = computeTotals(dto.lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
     // نفس عقد الترقيم المتسابق للفواتير: قيد (companyId, no) الفريد يحسم،
@@ -78,13 +88,15 @@ export class QuotesService {
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 
+        const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+
         const no = await this.nextQuoteNumber(tx, companyId, new Date(dto.issueDate));
         return tx.quote.create({
           data: {
             companyId,
             no,
             customerId: dto.customerId,
-            branchId: dto.branchId,
+            branchId,
             issueDate: new Date(dto.issueDate),
             validUntil: new Date(dto.validUntil),
             notes: dto.notes,

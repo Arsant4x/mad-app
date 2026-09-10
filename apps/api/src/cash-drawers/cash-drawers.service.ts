@@ -1,5 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { resolveBranchId } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { formatMoney } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -62,24 +63,29 @@ export class CashDrawersService {
    * **مُجهَضة**، فأيّ استعلامٍ بعدها فيها يسقط كذلك. فتُعاد المعاملةُ كاملةً —
    * وهو نمطُ `ZatcaService` مع `nextIcv` نفسه.
    */
-  async create(companyId: string, actorType: string, dto: CreateCashDrawerDto) {
+  /**
+   * ⚠️ **البوّابةُ هنا ملكيّةٌ لا فرع** — **ومالكُ المنشأة نطاقُه `all`**، فلا
+   * يقع تجاوزٌ عبر هذا المسار اليوم (مقيسٌ `ق-٥١٢`).
+   *
+   * ⭐ **ويمرّ بـ`resolveBranchId` رغم ذلك**: **حارسٌ يعتمد على بوّابةٍ أخرى
+   * يسقط يوم تُفتَح تلك البوّابة** — **والتحقّقُ في موضعه لا في جاره**. وهو
+   * اليومَ لا يمنع شيئاً، **وغداً يمنع ما لم نره**.
+   */
+  async create(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', dto: CreateCashDrawerDto) {
     assertIsCompanyOwner(actorType);
     const name = dto.name.trim();
 
     for (let attempt = 0; ; attempt += 1) {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-          if (dto.branchId) {
-            const branch = await tx.branch.findUnique({ where: { id: dto.branchId } });
-            if (!branch) throw new NotFoundException(MSG.branch_not_found);
-          }
+          const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
 
           const code = await nextDrawerCode(tx);
           const account = await tx.account.create({
             data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput,
           });
           const created = await tx.cashDrawer.create({
-            data: { name, branchId: dto.branchId ?? null, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
+            data: { name, branchId, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
           });
           return tx.cashDrawer.findUniqueOrThrow({ where: { id: created.id }, include: DRAWER_INCLUDE });
         });
