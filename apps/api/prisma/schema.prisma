@@ -156,6 +156,7 @@ model PlatformAdmin {
 /// A permission template controls which screens/modules an actor can access.
 /// The developer template (isSystem = true) always grants all screens and
 /// cannot be edited or deleted, mirroring TEMPLATES['0001'] in the mockup.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: قالبُ صلاحياتٍ يُنشئه ويحذفه بنفسه.
 model PermissionTemplate {
   id             String   @id @default(uuid())
   /// null = a platform-wide preset the developer panel manages. Set = owned
@@ -429,6 +430,7 @@ model RefreshToken {
 /// hangs off it, so the concept is invisible until it's needed. Building the
 /// column later would have meant re-touching every financial table — exactly
 /// what this one migration wave exists to avoid.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: تشير إليه الفروعُ والمنتجات ولا يشير هو إلى أحد.
 model BusinessActivity {
   id        String  @id @default(uuid())
   companyId String
@@ -621,6 +623,9 @@ model ZatcaCredential {
 /// ترتيب الوصول، فالمزامنة قد تصل مبعثرة (`ق-٢٠١`/٣) — وبيعٌ يقع ضمن حدّ الفصل من
 /// نافذةٍ قائمة يمدّها، وبيعٌ يجسر نافذتَين يدمجهما. **استنتاجٌ لا قياس**: حدُّه
 /// يُحفظ مع كل واقعة ويُعرَض في التقرير. وإبلاغُ الجهاز بنفسه بندٌ تالٍ.
+/// **بلا أبٍ** — مستنبَطٌ من أزمنة رنّ البيوع: تشير إليه الفواتيرُ ولا يشير إلى
+/// أحد، **وحذفُها لا يمسّه** (`onDelete: SetNull`). فمن أنشأه في اختبارٍ يحذفه
+/// بنفسه (`ق-٤٩٥`)، وفي الإنتاج يبقى سجلَّ انقطاعٍ يقرؤه التاجر.
 model PosOfflineIncident {
   id        String  @id @default(uuid())
   companyId String
@@ -710,6 +715,7 @@ model EgsUnit {
 
 /// Per-company currency registry. `rate` is the "as of now" rate, used as a
 /// fallback when a transaction has no more specific dated ExchangeRate.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: سجلُّ عملات المنشأة.
 model Currency {
   id        String  @id @default(uuid())
   companyId String
@@ -731,6 +737,8 @@ model Currency {
 /// A dated rate snapshot between two currency codes — separate from
 /// Currency.rate so a past transaction can always be traced back to the exact
 /// rate that applied on its own date.
+/// **بلا أبٍ** — كيانٌ جذريّ: لقطةُ سعرٍ مؤرَّخة بين رمزَي عملة. **بالرمز لا
+/// بمفتاحٍ أجنبيّ عمداً** كي يبقى سعرُ معاملةٍ قديمة مقروءاً بعد تغيّر السجل.
 model ExchangeRate {
   id        String  @id @default(uuid())
   companyId String
@@ -749,6 +757,7 @@ model ExchangeRate {
 
 /// A financial year. Its start is deliberately a full date, not a month
 /// number: a Saudi company's year does not have to begin in January.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: سنةٌ مالية.
 model FiscalYear {
   id        String  @id @default(uuid())
   companyId String
@@ -861,6 +870,7 @@ model Account {
 /// A customer the company invoices. Deliberately minimal — full customer
 /// management (statements, aging, ...) is a separate future screen; this is
 /// just enough to give Invoice a real `customerId` FK instead of free text.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: تشير إليه الفواتيرُ ولا يشير إلى أحد.
 model Customer {
   id        String  @id @default(uuid())
   companyId String
@@ -1161,6 +1171,7 @@ model InvoiceLine {
 
 /// A purchase supplier / service provider. Same shape and role as Customer,
 /// just for the purchase side.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: نظيرُ `Customer` في جهة الشراء.
 model Supplier {
   id        String  @id @default(uuid())
   companyId String
@@ -1399,6 +1410,8 @@ model Employee {
 /// can be trusted to be complete. There is deliberately **no update or delete**
 /// path anywhere in the app: a tamperable audit trail is worse than none,
 /// because it looks like evidence.
+/// **بلا أبٍ** — سجلُّ واقعةٍ لا يُحذف بحال (`ق-١١٠`): **ولا مفتاحَ أجنبيّ
+/// عمداً** كي لا يُبطله حذفُ ما يشير إليه.
 model AuditLog {
   id        String  @id @default(uuid())
   companyId String
@@ -1447,6 +1460,7 @@ enum DeletionRequestStatus {
 /// SaaS rule: the merchant never wipes its own database — it files a request,
 /// and the platform (support) reviews and executes it. The request itself is
 /// the audit trail of that decision, so it survives on the platform side.
+/// **بلا أبٍ** — كيانٌ جذريّ يُنشئه التاجر: طلبٌ تراجعه المنصّة وتنفّذه.
 model AccountDeletionRequest {
   id        String  @id @default(uuid())
   companyId String
@@ -1480,6 +1494,7 @@ enum LeaveRequestStatus {
 /// sets them rather than the code guessing (and guessing wrong is a compliance
 /// risk). `annualDays = 0` means "no fixed entitlement" (e.g. unpaid leave),
 /// which the balance treats as unlimited rather than zero.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: نوعُ إجازةٍ يضبطه بنفسه.
 model LeaveType {
   id        String  @id @default(uuid())
   companyId String
@@ -1766,6 +1781,7 @@ model JournalLine {
 /// one is built). Deleting a property with units is blocked (`onDelete:
 /// Restrict` on Unit.propertyId) — simpler and safer than the mockup, which
 /// allows it and leaves the units dangling.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: تشير إليه الوحداتُ ولا يشير إلى أحد.
 model Property {
   id        String  @id @default(uuid())
   companyId String
@@ -2803,6 +2819,7 @@ enum IntegrationKind {
 /// ربط منشأة بمزوّد خارجي (مستند: «كل تكامل خارجي طبقة قابلة للاستبدال»).
 /// المفاتيح ملك التاجر وتُخزَّن مشفّرة AES-256-GCM (انظر credentials.crypto.ts)
 /// ولا تُقرأ مفكوكة إلا لحظة استدعاء المزوّد — القراءات تُرجع قناعاً فقط.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: ربطُ منشأةٍ بمزوّدٍ خارجيّ.
 model IntegrationConnection {
   id        String  @id @default(uuid())
   companyId String
@@ -2834,6 +2851,7 @@ enum SupportGrantStatus {
 /// وضع الدعم الفني (احتياجات §1.10): دخول مدير المنصة لبيانات منشأة
 /// **بموافقتها الصريحة فقط**، لمدة محددة، للقراءة فقط، وبسجل كامل تراه
 /// المنشأة. الإنفاذ تقني في TenantGuard — لا سياسةً على الورق.
+/// **بلا أبٍ** — كيانٌ جذريّ تمنحه المنشأة: نافذةُ دعمٍ محدودةُ المدة.
 model SupportAccessGrant {
   id        String  @id @default(uuid())
   companyId String
@@ -3172,6 +3190,7 @@ model RentPayment {
 /// (`onDelete: Restrict` on both `StockMovement.warehouse` and
 /// `.toWarehouse`), unlike the mockup, which allows it and leaves movements
 /// pointing at a warehouse id that no longer exists.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: تشير إليه الحركاتُ ولا يشير إلى أحد.
 model Warehouse {
   id        String  @id @default(uuid())
   companyId String
@@ -3545,6 +3564,7 @@ model InventoryWriteOffAttachment {
 /// automatic reset. The standard 9-item checklist (ZATCA/MOC/GOSI) is
 /// auto-seeded per company on first read (`ObligationsService.list`) rather
 /// than at signup, so it works regardless of how the company was created.
+/// **بلا أبٍ** — كيانٌ جذريّ للمنشأة: قائمةٌ تُبذَر لها عند أوّل قراءة.
 model GovernmentObligation {
   id        String  @id @default(uuid())
   companyId String
@@ -3581,6 +3601,7 @@ enum ScriptAudience {
 /// wa.me. That WhatsApp wiring itself is a browser-only cosmetic hook spread
 /// across the Customers/Contracts/Employees screens and is deliberately not
 /// ported here — this model only backs the standalone CRUD screen.
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: نصُّ رسالةٍ جاهز.
 model MessageScript {
   id        String  @id @default(uuid())
   companyId String
@@ -3636,6 +3657,9 @@ model MessageScript {
 /// ⚠️ ولا حقل `canOpenTarget` هنا **عمداً**: يُحسب عند القراءة من التقاطع
 /// الحيّ. وتخزينه نسخةٌ تتقادم عند أول سحب — وهو العطل الذي تجنّبه التقاطع
 /// أصلاً. وحارسٌ في `apps/web` وآخر في `apps/api` يمنعان عودته.
+///
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: **ولا مفتاحَ أجنبيّ إلى هدفها**،
+/// فالهدفُ يُشار إليه بنوعه ومعرّفه ويُقرأ حيّاً عند الفتح.
 model Task {
   id        String  @id
   companyId String
@@ -3670,6 +3694,8 @@ model Task {
 ///
 /// ولا مفتاح أجنبي على `taskId` ولا `actorId` **عمداً**: سجلُّ واقعةٍ لا
 /// يُبطله حذفُ ما يشير إليه. وإضافةُ مفتاحٍ هنا تجعل حذف مهمةٍ يهدم تاريخها.
+/// **بلا أبٍ** — سجلُّ واقعةٍ لا يُحذف (`ق-١١٠`): **ولا مفتاحَ أجنبيّ عمداً**،
+/// فحذفُ مهمّةٍ لا يهدم تاريخها.
 model TaskLog {
   id        String  @id
   companyId String
@@ -3702,6 +3728,8 @@ model TaskLog {
 /// والمصدر النصّي: الملحق (1) من قرار ZATCA تحت «Tampering of e-invoices or
 /// their associated notes or logs» — تعديل السجل أو حذفه · توليدٌ غير
 /// متسلسل · طوابع زمنية غير دقيقة.
+/// **بلا أبٍ** — سجلُّ واقعةٍ لا يُعدَّل ولا يُحذف بسندٍ نظاميّ (ملحق ZATCA):
+/// **ولا مفتاحَ أجنبيّ عمداً** كي لا يُبطله حذفُ ما يشير إليه.
 model DelegationLog {
   id        String  @id
   companyId String
@@ -3742,6 +3770,8 @@ enum OutboxStatus {
 /// فالصفّ يُكتب **في معاملة المستند** بوصفه حدث امتثال (`emitCompliance`): إن
 /// تعذّرت كتابته **تُلغى الفاتورة**، فلا تبقى فاتورةٌ بلا طابور. ثم يلتقطه
 /// موزّعٌ مستقل ويعيد المحاولة بتراجعٍ أُسّي.
+/// **بلا أبٍ** — مستنبَطٌ **يُدار بحالته لا بحذفه**: `PENDING` ⟵ `SENT`/`FAILED`.
+/// **ولا مفتاحَ أجنبيّ إلى مستنَده عمداً**: يُكتب في معاملته ويبقى بعده أثراً.
 model OutboxEvent {
   id        String  @id @default(uuid())
   companyId String
@@ -3786,6 +3816,8 @@ model OutboxEvent {
 /// ⚠️ **والتزامنُ بنيةٌ لا محاولةٌ تُعاد**: `UPDATE … RETURNING` يقفل الصفَّ
 /// فيُسلسل الطالبَين — **بخلاف `MAX+1` الذي يظلّ محتاجاً القيدَ الفريد وإعادةَ
 /// المحاولة مهما سرُع** (درسُ `ICV`).
+/// **بلا أبٍ** — عدّادٌ **يتراكم بحكمٍ مقصود**: رقمٌ صدر لا يُعاد استعمالُه،
+/// فحذفُ المستند لا يُنزل العدّاد ولا ينبغي.
 model DocumentSequence {
   id        String  @id @default(uuid())
   companyId String
