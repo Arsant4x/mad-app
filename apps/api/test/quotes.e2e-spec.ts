@@ -17,6 +17,8 @@ describe('Quotes → invoice conversion (e2e)', () => {
   let branchId: string;
   let productPriceThen: number;
   const cleanupInvoiceIds: string[] = [];
+  /** عملاءُ هذا الملفّ الذين أُعطوا حدّاً — **يُعادون صفراً في النهاية**. */
+  const limitedCustomerIds: string[] = [];
 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const today = () => new Date().toISOString().slice(0, 10);
@@ -52,6 +54,11 @@ describe('Quotes → invoice conversion (e2e)', () => {
 
   afterAll(async () => {
     for (const id of cleanupInvoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // ⚠️ **ولا يُترك عميلٌ محدودٌ خلفنا** — **وهذا جديدٌ بجدّة الحدّ نفسِه**:
+    //    كان تركُه بلا أثرٍ يومَ لم يكن للحقل قارئ، **وصار اليوم يُسقط مجموعةً
+    //    أخرى** تأخذ `customers[0]` بلا ترشيح. **وقد قِيس** — سقطت ثلاثٌ على
+    //    قاعدة التطوير وخضرَّت على النظيفة.
+    for (const id of limitedCustomerIds) await auth(request(app.getHttpServer()).patch(`/customers/${id}`)).send({ creditLimit: 0 });
     await app.close();
   });
 
@@ -132,21 +139,44 @@ describe('Quotes → invoice conversion (e2e)', () => {
   }, 60000);
 
   // ── تحقق 5 (بصيغته المعتمدة): تكافؤ القنوات — التحويل يسلك سلوك الفوترة المباشرة حرفياً ──
-  it('parity: conversion behaves exactly like direct invoicing for an over-limit customer (both unblocked today)', async () => {
-    // عميل حدُّه 100 وفاتورة مباشرة بـ3450 تمرّ (لا حجب مبنيّاً اليوم) —
-    // فالتحويل يجب أن يمرّ بمثلها حرفياً: نفس الخدمة نفس السلوك. حين
-    // يُفعَّل الحجب (مرشح مسجَّل + بند متابعة) يرثه هذا المسار تلقائياً.
+  /**
+   * ⚖️ **وصيغتُه تغيّرت يوم فُعِّل الحدّ — والغرضُ لم يتغيّر** (`ق-٣٣٦` · `ق-٣٣٨`).
+   *
+   * كان يقيس **تكافؤ المرور** («both unblocked today») **بنصٍّ يَعِد**: «حين
+   * يُفعَّل الحجب يرثه هذا المسار تلقائياً». **وقد فُعِّل — فصار يقيس تكافؤ
+   * المنع**، وهو ما وُعد به.
+   *
+   * ⚠️ **وسقوطُه يومَ التفعيل كان صواباً لا انحداراً**: توكيدٌ يقول «يمرّ» على
+   * ميزةٍ لم تُبنَ بعد **يصير كاذباً بمجرّد بنائها** — **فيُعاد كتابتُه عمداً،
+   * ولا يُطفأ ولا يُستثنى العميلُ منه**.
+   */
+  it('parity: conversion is blocked exactly like direct invoicing for an over-limit customer', async () => {
     const tightCustomer = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `محدود ${suffix}`, creditLimit: 100 }).expect(201)).body.id;
+    limitedCustomerIds.push(tightCustomer);
+    const overLimitLines = [{ description: 'مباشر', quantity: 2, unitPrice: 1000, taxRate: 15 }];
 
-    const direct = await auth(request(app.getHttpServer()).post('/invoices'))
-      .send({ customerId: tightCustomer, issueDate: today(), dueDate: today(), lines: [{ description: 'مباشر', quantity: 2, unitPrice: 1000, taxRate: 15 }] })
-      .expect(201);
-    cleanupInvoiceIds.push(direct.body.id);
+    // ① **القناتان تُردّان بـ409** — والرسالةُ تحمل الأرقام لا كلمةَ «تجاوزت».
+    const refusedDirect = await auth(request(app.getHttpServer()).post('/invoices'))
+      .send({ customerId: tightCustomer, issueDate: today(), dueDate: today(), lines: overLimitLines })
+      .expect(409);
+    expect(String(refusedDirect.body.message)).toContain('2,300.00');
 
     const quote = (await makeQuote({ customerId: tightCustomer }).expect(201)).body;
-    const converted = await auth(request(app.getHttpServer()).post(`/quotes/${quote.id}/convert`)).expect(201);
+    await auth(request(app.getHttpServer()).post(`/quotes/${quote.id}/convert`)).send({}).expect(409);
+
+    // ② **والتجاوزُ يمرّ في القناتين معاً — ويُخزَّن على الفاتورة**.
+    const direct = await auth(request(app.getHttpServer()).post('/invoices'))
+      .send({ customerId: tightCustomer, issueDate: today(), dueDate: today(), lines: overLimitLines, creditOverride: true })
+      .expect(201);
+    cleanupInvoiceIds.push(direct.body.id);
+    expect(direct.body.creditOverrideById).toBeTruthy();
+    expect(Number(direct.body.creditOverrideLimit)).toBe(100);
+
+    const converted = await auth(request(app.getHttpServer()).post(`/quotes/${quote.id}/convert`)).send({ creditOverride: true }).expect(201);
     cleanupInvoiceIds.push(converted.body.invoice.id);
     expect(converted.body.invoice.customerId).toBe(tightCustomer);
+    // ⭐ **التكافؤُ في التجاوز كما في المنع** — فلا يصير التحويلُ باباً خلفياً.
+    expect(converted.body.invoice.creditOverrideById).toBeTruthy();
   }, 60000);
 
   // ── تحقق 6: حذف المحوَّل ممنوع باسم فاتورته ──

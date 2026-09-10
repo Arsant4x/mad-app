@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
+import { PermissionsService } from '../delegations/permissions.service';
+import { checkCreditLimit } from './credit-limit.util';
+import { CREDIT_CODE, CREDIT_OVERRIDE_ACTION, CREDIT_OVERRIDE_SCREEN, type CreditContext } from './credit-context';
+import { grant } from '../delegations/permission-tree';
+import { TenantContext } from '../auth/types';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr } from '../zatca/qr.util';
 import { issuedWallClock } from '../common/wall-clock.util';
@@ -46,7 +52,11 @@ export function computeTotals(lines: InvoiceLineDto[]) {
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly audit: AuditService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
   /**
    * What each document still leaves the customer owing.
@@ -130,10 +140,111 @@ export class InvoicesService {
     });
   }
 
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto) {
+  /**
+   * ⭐ **يبني سياقَ الائتمان لمسارٍ يفتح ذمّة** — **مصدرٌ واحدٌ للتصريح**.
+   *
+   * ⚠️ **وصلاحيةُ التجاوز تُقرأ من `PermissionsService.forActor` وحدها** —
+   * **وهي عينُ ما تقرؤه الواجهة**، فلا يرى المستخدمُ زرّاً يرفضه الخادم ولا
+   * العكس. **ولا حسابَ صلاحياتٍ محلّيّ ثانٍ يفترق عنه عند أول تعديل.**
+   *
+   * ⚠️ **ولا تُقرأ إلا حين يُصرَّح بالتجاوز**: قراءةُ الصلاحيات ليست مجّانية،
+   * **والتصريحُ نادر** — فلا تُدفع كلفتُها على كل فاتورة. **وهي خارج المعاملة
+   * عمداً**: `forActor` تفتح معاملتَها، **وقراءتُها داخل معاملة الفاتورة
+   * معاملةٌ داخل معاملة** — وهو العطل الذي أوقف الكاشير (`ق-٣٥٩`).
+   */
+  async creditContextFor(
+    tenant: TenantContext,
+    actorName: string,
+    dto: { creditOverride?: boolean },
+    settlement: CreditContext['settlement'],
+  ): Promise<CreditContext> {
+    const overrideRequested = Boolean(dto.creditOverride);
+    // ⚠️ **المفتاحُ يُبنى بـ`grant()` لا يُكتب نصّاً**: صيغةُ `شاشة:فعل` مصدرُها
+    //    واحد، **ونصٌّ مكتوبٌ بيدٍ يفترق عنها بصمتٍ فيصير الفحصُ دائمَ الكذب**.
+    const canOverride = overrideRequested
+      ? (await this.permissions.forActor(tenant)).grants.includes(grant(CREDIT_OVERRIDE_SCREEN, 'review'))
+      : false;
+    return {
+      settlement,
+      actor: { id: tenant.profileId, actorType: tenant.actorType, name: actorName },
+      overrideRequested,
+      canOverride,
+    };
+  }
+
+  async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto, credit: CreditContext) {
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextInvoiceNumber's comment.
-    return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, (tx) => this.createWithinTx(tx, companyId, allowedBranchIds, dto)));
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.createWithinTx(tx, companyId, allowedBranchIds, dto, credit)),
+    );
+  }
+
+  /**
+   * ⭐ **بوّابةُ حدّ الائتمان — على `createWithinTx` وحدها** (`ق-٣٣٦` … `ق-٣٤٠`).
+   *
+   * **والمدخلُ واحدٌ مقيسٌ لا مفترَض**: الفاتورةُ المباشرة · تحويلُ عرض السعر ·
+   * **وبيعُ الكاشير** (عبر `create`) — **ثلاثتُها تمرّ من هنا، فلا مسارَ يفلت**.
+   *
+   * **والترتيبُ مقصود**: يُفحص **قبل** `tx.invoice.create` — فبوّابةٌ تُفحص بعد
+   * الإنشاء **تصير تقريراً لا منعاً**، وتترك رقمَ مستندٍ محروقاً في كل رفض.
+   */
+  private async gateCreditLimit(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    args: { customerId: string; issueDate: Date; addingBase: number },
+    credit: CreditContext,
+  ): Promise<{ by: string; at: Date; exposure: number; limit: number } | null> {
+    // ⚠️ **`ق-٣٣٨`**: ما يُسدَّد في الطلب نفسه لا يُفحص — **وحدٌّ يمنع بيعاً
+    //    نقدياً عطلٌ يصنعه لا يمنعه**. وحدُّ هذا التصريح مُعلَنٌ في
+    //    `credit-context.ts` ولا يُلتفّ عليه.
+    if (credit.settlement === 'IMMEDIATE') return null;
+
+    const check = await checkCreditLimit(tx, {
+      customerId: args.customerId,
+      asOf: args.issueDate,
+      addingBase: args.addingBase,
+    });
+    if (!check.exceeded) return null;
+
+    const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const numbers = {
+      customer: check.customerName,
+      limit: money(check.limit),
+      exposure: money(check.exposure),
+      adding: money(check.adding),
+      after: money(check.after),
+    };
+
+    // ⚖️ **المنعُ الصلب إعدادٌ يختاره التاجر** (`ق-٣٤٠`) — **ولا تجاوزَ معه
+    //    لأحد ولو ملك `review`**، وهو معنى «صلب».
+    const company = await tx.company.findUnique({ where: { id: companyId }, select: { creditLimitHardBlock: true } });
+    if (company?.creditLimitHardBlock) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: formatMessage(MSG.credit_limit_hard_block, numbers),
+        code: CREDIT_CODE.hardBlock,
+      });
+    }
+
+    // ⚠️ **والرفضُ يسبق التجاوز**: طلبٌ لم يصرّح **يُردّ برسالةٍ تحمل الأرقام**
+    //    — فالواجهة تسأل التاجر، **ولا يمرّ تجاوزٌ لم يقصده أحد**.
+    if (!credit.overrideRequested) {
+      throw new ConflictException({
+        statusCode: HttpStatus.CONFLICT,
+        message: formatMessage(MSG.credit_limit_exceeded, numbers),
+        code: CREDIT_CODE.exceeded,
+      });
+    }
+    if (!credit.canOverride || !credit.actor) {
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        message: formatMessage(MSG.credit_limit_override_forbidden, {}),
+        code: CREDIT_CODE.forbidden,
+      });
+    }
+
+    return { by: credit.actor.id, at: new Date(), exposure: check.exposure, limit: check.limit };
   }
 
   /**
@@ -142,9 +253,26 @@ export class InvoicesService {
    * حرفياً — لا تغيير سلوك للمسار القائم، واختباراته القديمة حكمُ ذلك.
    * ملاحظة: من يستدعيها مسؤول عن retryOnUniqueConflict حول معاملته كلها.
    */
-  async createWithinTx(tx: Prisma.TransactionClient, companyId: string, allowedBranchIds: string[] | 'all', dto: CreateInvoiceDto) {
+  async createWithinTx(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    allowedBranchIds: string[] | 'all',
+    dto: CreateInvoiceDto,
+    credit: CreditContext,
+  ) {
     const { subtotal, taxTotal, total } = computeTotals(dto.lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
+      /**
+       * ⚖️ **الحدُّ يُفحص قبل أي كتابة** (`ق-٣٣٦`) — قبل الترقيم نفسِه:
+       * **رفضٌ بعد `nextDocumentNumber` يحرق رقماً في كل محاولة**، والعدّادُ
+       * ذرّيٌّ لا يعيد المحروق (`ق-٣٣١`③). فيُفحص أولاً، **ولا فجوةَ من رفض**.
+       */
+      const override = await this.gateCreditLimit(
+        tx,
+        companyId,
+        { customerId: dto.customerId, issueDate: new Date(dto.issueDate), addingBase: toBaseAmount(total, exchangeRate) },
+        credit,
+      );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       const created = await tx.invoice.create({
@@ -166,6 +294,13 @@ export class InvoicesService {
           issuedOffsetMin: dto.issuedAt ? (dto.issuedOffsetMin ?? null) : null,
           dueDate: new Date(dto.dueDate),
           notes: dto.notes,
+          // ⚖️ **التجاوزُ يُخزَّن على الفاتورة** (`ق-٣٣٩`) — الأربعةُ معاً أو
+          //    `null` كلُّها. **والحفظُ في نفس الكتابة**: تجاوزٌ يُلحق بعدها
+          //    قد لا يُلحق، **ففاتورةٌ متجاوِزةٌ بلا شهادةٍ هي الثغرة بعينها**.
+          creditOverrideById: override?.by ?? null,
+          creditOverrideAt: override?.at ?? null,
+          creditOverrideExposure: override ? new Prisma.Decimal(override.exposure) : null,
+          creditOverrideLimit: override ? new Prisma.Decimal(override.limit) : null,
           subtotal,
           taxTotal,
           total,
@@ -187,6 +322,40 @@ export class InvoicesService {
         } as unknown as Prisma.InvoiceUncheckedCreateInput,
         include: INVOICE_INCLUDE,
       });
+
+      /**
+       * ⚖️ **وحدثٌ باسمه في سجل التدقيق — بمعاملته** (`ق-٣٣٩`).
+       *
+       * ⚠️ **داخل المعاملة لا بعدها**، على سابقة `self-review` نصّاً: «**فعلٌ
+       * حُفظ بلا شهادة هو الثغرة النظامية بعينها**». فتقع الفاتورةُ وشهادةُ
+       * تجاوزها معاً، **أو لا يقع شيء**.
+       *
+       * **والفعلُ باسمه** (`credit-override`) **لا `add` عامّاً**: فيجده
+       * المدقّق بحثاً — `GET /audit-log?action=credit-override` — **لا
+       * بمقارنة حقلين يدوياً في كل فاتورة**.
+       */
+      if (override && credit.actor) {
+        await this.audit.recordWithinTx(tx, {
+          companyId,
+          actorType: credit.actor.actorType,
+          actorId: credit.actor.id,
+          actorName: credit.actor.name,
+          screen: 'invoice',
+          action: CREDIT_OVERRIDE_ACTION,
+          entity: 'invoices',
+          entityId: created.id,
+          method: 'POST',
+          path: '/invoices',
+          details: {
+            no: created.no,
+            customerId: created.customerId,
+            limit: override.limit,
+            exposureBefore: override.exposure,
+            adding: Number(created.baseTotal),
+          },
+          ip: null,
+        });
+      }
 
       /**
        * ⭐ **التسليم من هنا وحده** — حركة المخزون وتكلفتها من مالكٍ واحد هو

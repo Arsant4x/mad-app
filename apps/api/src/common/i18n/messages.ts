@@ -62,6 +62,9 @@ export const MSG = {
   writeoff_two_persons_required: 'inventory.writeoff_two_persons_required',
 
   // customers / invoices
+  credit_limit_exceeded: 'customers.credit_limit_exceeded',
+  credit_limit_hard_block: 'customers.credit_limit_hard_block',
+  credit_limit_override_forbidden: 'customers.credit_limit_override_forbidden',
   customer_not_found: 'customers.not_found',
   customer_has_invoices: 'customers.has_invoices',
   invoice_not_found: 'invoices.not_found',
@@ -410,6 +413,21 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'This company requires two people for a write-off — whoever recorded {no} cannot approve it. Ask another authorised user to approve, or turn the requirement off in company settings',
   },
 
+  // ⚠️ **الرسالةُ تحمل الأرقام الثلاثة** — الحدَّ والقائمَ والمطلوب: تحذيرٌ
+  //    يقول «تجاوزتَ الحدّ» بلا رقمٍ **يُضغَط بلا قراءة**، وهو عينُ «شيءٍ يُرى
+  //    ولا يفعل» الذي بُنيت الميزةُ لعلاجه (`ق-٣٣٩`).
+  [MSG.credit_limit_exceeded]: {
+    ar: 'حدّ ائتمان {customer} {limit} وعليه {exposure}، وهذه الفاتورة {adding} — فيصير {after}. من يملك صلاحية الاعتماد يتجاوز الحدّ، ويُسجَّل تجاوزه على الفاتورة',
+    en: "{customer}'s credit limit is {limit} with {exposure} outstanding, and this invoice adds {adding} — reaching {after}. An authorised approver may override, and the override is recorded on the invoice",
+  },
+  [MSG.credit_limit_hard_block]: {
+    ar: 'حدّ ائتمان {customer} {limit} وعليه {exposure}، وهذه الفاتورة {adding} — فيصير {after}. والمنشأة تمنع التجاوز منعاً صلباً: حصِّل من العميل أو ارفع حدّه أو أطفئ المنع الصلب من إعدادات المنشأة',
+    en: "{customer}'s credit limit is {limit} with {exposure} outstanding, and this invoice adds {adding} — reaching {after}. This company enforces a hard block: collect from the customer, raise their limit, or turn the hard block off in company settings",
+  },
+  [MSG.credit_limit_override_forbidden]: {
+    ar: 'تجاوز حدّ الائتمان يملكه صاحب صلاحية الاعتماد وحده — اطلب من يملكها',
+    en: 'Only a user with approval permission may override a credit limit — ask someone who has it',
+  },
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
   [MSG.customer_has_invoices]: {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',

@@ -104,6 +104,12 @@ export class UpdateCompanyProfileDto {
   @IsBoolean()
   writeOffRequiresTwoPersons?: boolean;
 
+  /// المنعُ الصلب لحدّ الائتمان — **مطفأٌ افتراضياً** (`ق-٣٤٠`): مطفأً يتجاوزه
+  /// صاحبُ `review` بتصريحٍ يُخزَّن على الفاتورة؛ مُشعَلاً **لا تجاوزَ لأحد**.
+  @IsOptional()
+  @IsBoolean()
+  creditLimitHardBlock?: boolean;
+
   /// حدُّ فصل وقائع الانقطاع بالدقائق (`ق-٢٠١`/٢) — إعدادٌ للتاجر لا ثابتٌ في الكود؛
   /// بين دقيقةٍ ويوم: أقلُّ من دقيقةٍ يجعل كل تأخّرِ شبكةٍ انقطاعاً، وأكثرُ من يومٍ يمحو الوقائع.
   @IsOptional()

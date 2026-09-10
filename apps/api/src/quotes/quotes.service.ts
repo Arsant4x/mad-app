@@ -4,6 +4,7 @@ import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.ut
 import { computeDocumentTotals } from '../common/money/totals';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { type CreditContext } from '../invoices/credit-context';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { InvoicesService } from '../invoices/invoices.service';
@@ -163,7 +164,7 @@ export class QuotesService {
    * العرض بشرطِ ما-زال-قابلاً — الخاسر في سباق النقرتين يتراجع كلياً
    * (فاتورته تُلغى مع المعاملة) ويعيد 409 باسم فاتورة الفائز (قرار 6.12).
    */
-  convert(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+  convert(companyId: string, allowedBranchIds: string[] | 'all', id: string, credit: CreditContext) {
     return retryOnUniqueConflict(async () => {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -203,7 +204,10 @@ export class QuotesService {
             })),
           } as CreateInvoiceDto;
 
-          const invoice = await this.invoicesService.createWithinTx(tx, companyId, allowedBranchIds, invoiceDto);
+          // ⚖️ **التحويل يفتح ذمّةً كالفاتورة المباشرة** — فيمرّ ببوّابة الحدّ
+          //    بتصريح المستدعي نفسِه (`ق-٣٣٨`). **ولا مسارَ فوترةٍ موازٍ**،
+          //    فالتكافؤُ يبقى محفوظاً حتى في المنع.
+          const invoice = await this.invoicesService.createWithinTx(tx, companyId, allowedBranchIds, invoiceDto, credit);
 
           // شرط ما-زال-قابلاً داخل نفس المعاملة: صفر صفوف = سبقنا متسابق —
           // نقرأ فاتورته ونتراجع بإلقاءٍ يفكّ المعاملة كلها (فاتورتنا معها).

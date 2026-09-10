@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { useLocation } from 'react-router-dom';
 import { createCustomer, listCustomers, type Customer } from '../../api/customers';
+import { apiErrorCode } from '../../lib/apiError';
 import {
+  CREDIT_LIMIT_EXCEEDED,
   createInvoice,
   deleteInvoice,
   type Invoice,
@@ -38,6 +40,14 @@ export function InvoicesPage() {
   const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /**
+   * مسوّدةُ الفاتورة المرفوضة **لتجاوزٍ ممكن** — تُحفظ لتُعاد بتصريح.
+   *
+   * ⚠️ **وتُحفظ المسوّدةُ لا علَمٌ منطقيّ**: التاجرُ ما زال في المُنشئ وبياناتُه
+   * فيه، **وإعادةُ الإرسال تحتاج ما أُرسل بعينه** — فلو حُفظ علَمٌ وحده لوجب
+   * على المُنشئ أن يُرسل ثانيةً، **وهو ما لا يقع ما دام الخطأُ مُلتقَطاً هنا**.
+   */
+  const [overridable, setOverridable] = useState<Parameters<typeof handleSave>[0] | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
   const [creditNoteFor, setCreditNoteFor] = useState<Invoice | null>(null);
   const [debitNoteFor, setDebitNoteFor] = useState<Invoice | null>(null);
@@ -152,10 +162,25 @@ export function InvoicesPage() {
    * closing back to the list would throw away everything the user typed for a
    * save that never happened.
    */
-  async function handleSave(data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] }) {
+  /**
+   * ⚖️ **ورفضُ حدّ الائتمان يُعرض بزرِّ تجاوزٍ لا بـ«حسناً» وحدها** (`ق-٣٣٩`).
+   *
+   * **الرسالةُ تحمل الحدَّ والقائمَ والمطلوب**، فيقرؤها التاجر **ثم يقرّر**.
+   * ⚠️ **ولا يُرسَل التصريحُ مع أول طلب**: تصريحٌ مسبقٌ يجعل الحدَّ زخرفةً —
+   * وهو عينُ «شيءٍ يُرى ولا يفعل» الذي بُنيت الميزةُ لعلاجه.
+   *
+   * ⚠️ **والزرُّ يُعرض على `CREDIT_LIMIT_EXCEEDED` وحده**: المنعُ الصلب ورفضُ
+   * الصلاحية **يُقرآن ولا زرَّ لهما** — **وزرٌّ يُعرض ويُرفض دائماً أسوأ من
+   * غيابه**، فيُقرأ النظامُ عابثاً.
+   */
+  async function handleSave(
+    data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] },
+    creditOverride = false,
+  ) {
     // An empty picker means company-wide — send it as omitted, not as ''.
-    const payload = { ...data, branchId: data.branchId || undefined };
+    const payload = { ...data, branchId: data.branchId || undefined, ...(creditOverride ? { creditOverride: true } : {}) };
     setSaveError(null);
+    setOverridable(null);
     try {
       if (view.mode === 'builder' && view.editing) {
         await updateInvoice(view.editing.id, payload);
@@ -165,6 +190,8 @@ export function InvoicesPage() {
     } catch (e) {
       const body = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? 'تعذّر حفظ الفاتورة'));
+      // **الرمزُ يقرّر لا نصُّ الرسالة** — فالنصُّ مترجَمٌ ويتغيّر بلا شكوى.
+      if (apiErrorCode(e) === CREDIT_LIMIT_EXCEEDED) setOverridable(data);
       return;
     }
     setView({ mode: 'list' });
@@ -185,8 +212,20 @@ export function InvoicesPage() {
           onSave={handleSave}
           onCreateCustomer={handleCreateCustomer}
         />
-        {saveError && (
+        {saveError && !overridable && (
           <ConfirmModal title="تعذّر الحفظ" body={saveError} confirmLabel="حسناً" hideCancel onCancel={() => setSaveError(null)} onConfirm={() => setSaveError(null)} />
+        )}
+        {saveError && overridable && (
+          <ConfirmModal
+            title="تجاوز حدّ الائتمان؟"
+            body={saveError}
+            confirmLabel="تجاوز وإصدار — ويُسجَّل باسمك"
+            onCancel={() => {
+              setSaveError(null);
+              setOverridable(null);
+            }}
+            onConfirm={() => void handleSave(overridable, true)}
+          />
         )}
       </>
     );

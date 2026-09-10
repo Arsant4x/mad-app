@@ -1,6 +1,6 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { InvoiceLineDto } from './invoice-line.dto';
 
 export class CreateInvoiceDto extends CurrencyFieldsDto {
@@ -33,6 +33,19 @@ export class CreateInvoiceDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /**
+   * ⚖️ **تصريحٌ بتجاوز حدّ الائتمان** (`ق-٣٣٩` · `ق-٣٤٠`).
+   *
+   * ⚠️ **نيّةٌ لا إذن**: الخادمُ يتحقّق أن صاحبَها يملك `invoice:review`،
+   * **ويرفض إن لم يملك**. **وغيابُها هو الغالب** — فالطلبُ الأول يُردّ برسالةٍ
+   * تحمل الأرقام، **ثم يُعاد بها بعد أن يقرأ التاجرُ ما يتجاوزه**.
+   *
+   * **فلا يمرّ تجاوزٌ لم يقصده أحد** — وهو ما يجعل التحذيرَ فعلاً لا زخرفة.
+   */
+  @IsOptional()
+  @IsBoolean()
+  creditOverride?: boolean;
 
   @ValidateNested({ each: true })
   @Type(() => InvoiceLineDto)

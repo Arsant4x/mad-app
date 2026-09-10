@@ -1,7 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuditCreatedIdAt } from '../audit/audit-entity-from-result.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantContext } from '../auth/types';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtPayload, TenantContext } from '../auth/types';
+import { ConvertQuoteDto } from './dto/convert-quote.dto';
+import { InvoicesService } from '../invoices/invoices.service';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -57,12 +60,23 @@ export class QuotesController {
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('invoice')
 export class QuoteConversionController {
-  constructor(private readonly quotesService: QuotesService) {}
+  constructor(
+    private readonly quotesService: QuotesService,
+    private readonly invoicesService: InvoicesService,
+  ) {}
 
   @Post(':id/convert')
   @RequiresAction('add')
   @AuditCreatedIdAt('invoice.id')
-  convert(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.quotesService.convert(tenant.companyId, tenant.allowedBranchIds, id);
+  async convert(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ConvertQuoteDto,
+  ) {
+    // ⚖️ **`ON_ACCOUNT` كالفاتورة المباشرة** — **والتصريحُ من نفس الدالّة**،
+    //    فلا تفترق القناتان في المنع ولا في التجاوز (`ق-٣٣٨`).
+    const credit = await this.invoicesService.creditContextFor(tenant, user.username, dto, 'ON_ACCOUNT');
+    return this.quotesService.convert(tenant.companyId, tenant.allowedBranchIds, id, credit);
   }
 }
