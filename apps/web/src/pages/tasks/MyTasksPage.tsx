@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SCREEN_ROUTES, listMyTasks, transitionTask, type MyTask, type TaskStatus } from '../../api/tasks';
+import { SCREEN_ROUTES, commentTask, listMyTasks, listTaskLog, transitionTask, type MyTask, type TaskLogLine, type TaskPriority, type TaskStatus } from '../../api/tasks';
 import { SCREEN_LABELS } from '../../api/templates';
 import { apiErrorMessage } from '../../lib/apiError';
 
@@ -35,6 +35,13 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   CANCELLED: 'أُلغيت',
 };
 
+/** الأولوية (SPEC 14.2) — تسمياتُ العرض للقائمة المغلقة في الخادم. */
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  URGENT: 'عاجل',
+  HIGH: 'مرتفع',
+  NORMAL: 'عادي',
+};
+
 const TRANSITION_LABELS: Record<TaskStatus, string> = {
   OPEN: 'إعادة فتح',
   IN_PROGRESS: 'ابدأ',
@@ -47,6 +54,40 @@ export function MyTasksPage() {
   const [tasks, setTasks] = useState<MyTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // حوارُ المهمّة (SPEC 1.11): السجلُّ يُفتح لمهمّةٍ واحدة، والتعليقُ سطرٌ فيه بلا انتقال.
+  const [openLog, setOpenLog] = useState<string | null>(null);
+  const [log, setLog] = useState<TaskLogLine[]>([]);
+  const [draft, setDraft] = useState('');
+
+  const showLog = async (id: string) => {
+    if (openLog === id) {
+      setOpenLog(null);
+      return;
+    }
+    setError(null);
+    try {
+      setLog(await listTaskLog(id));
+      setOpenLog(id);
+      setDraft('');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر تحميل سجل المهمة'));
+    }
+  };
+
+  const sendComment = async (id: string) => {
+    if (!draft.trim()) return;
+    setBusy(id);
+    setError(null);
+    try {
+      await commentTask(id, draft.trim());
+      setLog(await listTaskLog(id));
+      setDraft('');
+    } catch (e) {
+      setError(apiErrorMessage(e, 'تعذّر إرسال التعليق'));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const load = () =>
     listMyTasks()
@@ -92,6 +133,8 @@ export function MyTasksPage() {
             <thead>
               <tr>
                 <th>المهمة</th>
+                <th>الأولوية</th>
+                <th>القسم</th>
                 <th>المستند</th>
                 <th>الحالة</th>
                 <th>الموعد</th>
@@ -102,6 +145,12 @@ export function MyTasksPage() {
               {[...live, ...closed].map((t) => (
                 <tr key={t.id} data-testid={`task-${t.id}`} data-status={t.status} data-overdue={t.isOverdue}>
                   <td>{t.title}</td>
+                  <td data-testid={`priority-${t.id}`}>
+                    <span className={t.priority === 'URGENT' ? 'badge overdue' : t.priority === 'HIGH' ? 'badge sealed' : 'badge'}>
+                      {PRIORITY_LABELS[t.priority] ?? '—'}
+                    </span>
+                  </td>
+                  <td data-testid={`department-${t.id}`}>{t.department || <span className="muted">—</span>}</td>
                   <td>
                     {/* ⭐ **القاعدة بالعين**: لا هدف ⇒ شرطة · هدفٌ يُفتح ⇒ رابط ·
                       * هدفٌ لا يُفتح ⇒ **اسم الشاشة نصّاً بلا رابط**. والثالثة هي
@@ -150,9 +199,37 @@ export function MyTasksPage() {
                         </button>
                       ))
                     )}
+                    {/* حوارُ المهمّة — تعليقٌ بلا انتقال (SPEC 1.11). */}
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => showLog(t.id)} data-testid={`log-${t.id}`}>
+                      💬
+                    </button>
                   </td>
                 </tr>
               ))}
+              {openLog && (
+                <tr data-testid={`thread-${openLog}`}>
+                  <td colSpan={7}>
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {log.length === 0 && <span className="muted">لا سطور بعد</span>}
+                      {log.map((l) => (
+                        <div key={l.id} style={{ fontSize: 13 }}>
+                          <span className="muted">
+                            #{l.seq} · {new Date(l.createdAt).toLocaleString('ar-SA')} ·{' '}
+                            {l.fromStatus === l.toStatus ? 'تعليق' : `${l.fromStatus ? STATUS_LABELS[l.fromStatus] : 'إنشاء'} ← ${STATUS_LABELS[l.toStatus]}`}
+                          </span>
+                          {l.note && <div>{l.note}</div>}
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="تعليقٌ لطرف المهمّة الآخر — لا يغيّر حالتها" style={{ flex: 1 }} data-testid={`draft-${openLog}`} />
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy === openLog || !draft.trim()} onClick={() => sendComment(openLog)} data-testid={`send-${openLog}`}>
+                          أرسل
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </>

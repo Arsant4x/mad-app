@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { TaskPriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
@@ -44,6 +45,8 @@ interface TaskRow {
   targetScreen: string | null;
   targetId: string | null;
   status: TaskStatus;
+  priority: TaskPriority;
+  department: string | null;
   note: string | null;
   recurEveryDays: number;
   dueAnchor: Date | null;
@@ -51,8 +54,22 @@ interface TaskRow {
   updatedAt: Date;
 }
 
+/** سطرٌ من سجل المهمّة — انتقالٌ أو تعليق (من وإلى سواء). */
+export interface TaskLogView {
+  id: string;
+  seq: number;
+  actorId: string;
+  fromStatus: string | null;
+  toStatus: string;
+  note: string | null;
+  createdAt: Date;
+}
+
 export interface MyTaskView extends TaskView {
   status: TaskStatus;
+  /** التذكرةُ الداخلية (`SPEC 1.11`): أولويةٌ وقسم — حقلان لا محرّك. */
+  priority: TaskPriority;
+  department: string | null;
   assigneeId: string;
   createdById: string;
   /** الموعد الحالي — مشتقٌّ، و`null` لمهمةٍ بلا موعد. */
@@ -102,7 +119,7 @@ export class TasksService {
   /** يُسند مهمة — والإسناد **لا يمنح شيئاً**. */
   async create(
     tenant: TenantContext,
-    dto: { title: string; assigneeId: string; targetScreen?: string; targetId?: string; note?: string; recurEveryDays?: number; dueAnchor?: string },
+    dto: { title: string; assigneeId: string; targetScreen?: string; targetId?: string; note?: string; recurEveryDays?: number; dueAnchor?: string; priority?: string; department?: string },
     now: Date,
   ): Promise<MyTaskView> {
     const assignee = await this.prisma.companyUser.findFirst({ where: { id: dto.assigneeId, companyId: tenant.companyId }, select: { id: true } });
@@ -129,11 +146,14 @@ export class TasksService {
     }
 
     const row = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      // الأولويةُ من نوع القاعدة (`TaskPriority`) — والقسمُ نصٌّ فارغُه `null` لا `''`.
+      const priority = (dto.priority ?? 'NORMAL') as TaskPriority;
+      const department = dto.department?.trim() || null;
       const [created] = await tx.$queryRaw<TaskRow[]>`
-        INSERT INTO "tasks" ("id", "companyId", "title", "createdById", "assigneeId", "targetScreen", "targetId", "status", "note", "recurEveryDays", "dueAnchor")
+        INSERT INTO "tasks" ("id", "companyId", "title", "createdById", "assigneeId", "targetScreen", "targetId", "status", "note", "recurEveryDays", "dueAnchor", "priority", "department")
         VALUES (gen_random_uuid()::text, ${tenant.companyId}, ${dto.title}, ${tenant.profileId}, ${dto.assigneeId},
                 ${dto.targetScreen ?? null}, ${dto.targetId ?? null}, 'OPEN', ${dto.note ?? null}, ${recur},
-                ${dto.dueAnchor ? new Date(dto.dueAnchor) : null})
+                ${dto.dueAnchor ? new Date(dto.dueAnchor) : null}, ${priority}::"TaskPriority", ${department})
         RETURNING *
       `;
       await this.appendLog(tx, tenant, created.id, null, 'OPEN', dto.note ?? null);
@@ -174,7 +194,39 @@ export class TasksService {
     return this.toView(updated, grants, now);
   }
 
+  /**
+   * **تعليقٌ بلا انتقال** (`SPEC 1.11` · `ق-٥٣٢`): سطرٌ في السجل حالتُه من وإلى
+   * سواء — **والحالةُ لا تُمسّ**. **ولطرفَي المهمّة وحدهما** (المكلَّفُ والمُسنِد):
+   * فالتذكرةُ حوارٌ بين من رفعها ومن يعالجها، **ولا يُفتح على غيرهما** —
+   * والمحرّكُ لا يُبنى ثانياً، حقلٌ وسطرٌ فيه.
+   */
+  async comment(tenant: TenantContext, id: string, note: string, now: Date): Promise<MyTaskView> {
+    const task = await this.partyTask(tenant, id);
+    await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.appendLog(tx, tenant, id, task.status, task.status, note));
+    return this.toView(task, await this.grantsOf(tenant), now);
+  }
+
+  /** سجلُّ المهمّة — انتقالاتُها وتعليقاتُها بترتيبها، **لطرفيها وحدهما**. */
+  async log(tenant: TenantContext, id: string): Promise<TaskLogView[]> {
+    await this.partyTask(tenant, id);
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.$queryRaw<TaskLogView[]>`
+        SELECT "id", "seq", "actorId", "fromStatus", "toStatus", "note", "createdAt"
+          FROM "task_logs" WHERE "taskId" = ${id} ORDER BY "seq" ASC
+      `,
+    );
+  }
+
   // ═══════════════════ الداخلية ═══════════════════
+
+  /** المهمّةُ بطرفيها — وغيرُهما يُردّ `403` لا `404`: وجودُها معلومٌ من الإسناد، وحوارُها ليس له. */
+  private async partyTask(tenant: TenantContext, id: string): Promise<TaskRow> {
+    const rows = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "id" = ${id}`);
+    const task = rows[0];
+    if (!task) throw new NotFoundException(MSG.task_not_found);
+    if (task.assigneeId !== tenant.profileId && task.createdById !== tenant.profileId) throw new ForbiddenException(MSG.task_comment_forbidden);
+    return task;
+  }
 
   /**
    * ⚠️ تحت سياق المستأجر — `tasks` عليه `RLS ENABLE + FORCE`، وقراءةٌ
@@ -210,6 +262,8 @@ export class TasksService {
     return {
       ...base,
       status: r.status,
+      priority: r.priority,
+      department: r.department,
       assigneeId: r.assigneeId,
       createdById: r.createdById,
       dueAt,

@@ -4,6 +4,7 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { TenantContext } from '../auth/types';
 import { TasksService } from './tasks.service';
+import { CommentTaskDto } from './dto/comment-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TransitionTaskDto } from './dto/transition-task.dto';
 import { TaskStatus } from './task-model';
@@ -57,5 +58,17 @@ export class TasksController {
   @Patch(':id/status')
   transition(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransitionTaskDto) {
     return this.tasks.transition(tenant, id, dto.to as TaskStatus, dto.note ?? null, new Date());
+  }
+
+  /** تعليقٌ بلا انتقال (`SPEC 1.11` · `ق-٥٣٢`) — سطرٌ في السجل حالتُه من وإلى سواء، لطرفَي المهمّة. */
+  @Post(':id/comments')
+  comment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CommentTaskDto) {
+    return this.tasks.comment(tenant, id, dto.note, new Date());
+  }
+
+  /** سجلُّ المهمّة — انتقالاتُها وتعليقاتُها بترتيبها، لطرفيها وحدهما. */
+  @Get(':id/log')
+  log(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.tasks.log(tenant, id);
   }
 }
