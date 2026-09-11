@@ -30,7 +30,7 @@ export class SupportAccessService {
 
   /** `screens`: نطاقُ ما يُرى — يُخزَّن كما اختاره الطالب ليقرأه المالكُ قبل قراره (`ق-٥٢٧`). */
   async request(admin: { id: string; username: string }, companyId: string, reason: string, durationMinutes: number, screens: string[]) {
-    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    const company = await this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, orgName: true } });
     if (!company) throw new NotFoundException(MSG.company_not_found);
 
     const duration = Math.min(Math.max(Math.trunc(durationMinutes), 5), MAX_DURATION_MINUTES);
@@ -44,6 +44,8 @@ export class SupportAccessService {
     return this.prisma.supportAccessGrant.create({
       data: {
         companyId,
+        // يُحفظ لأن صفَّ المنشأة يزول بحذفها والإذنُ يبقى (ق-٥٣١).
+        companyName: company.orgName,
         requestedById: admin.id,
         requestedByName: admin.username,
         reason,
@@ -54,11 +56,10 @@ export class SupportAccessService {
     });
   }
 
-  /** كل الطلبات عبر المنشآت — للوحة المطوّر. */
+  /** كل الطلبات عبر المنشآت — للوحة المطوّر. **والاسمُ من الإذن نفسِه**: منشأةٌ حُذفت تبقى مسمّاةً هنا (`ق-٥٣١`). */
   adminList() {
     return this.prisma.supportAccessGrant.findMany({
       orderBy: { requestedAt: 'desc' },
-      include: { company: { select: { orgName: true } } },
       take: 100,
     });
   }

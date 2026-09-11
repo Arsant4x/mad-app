@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * حذف الحساب بصيغة SaaS (قاعدة المالك 2026-08-07): التاجر لا يمسح بياناته
@@ -15,6 +16,7 @@ import { AppModule } from '../src/app.module';
  */
 describe('Account deletion requests (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let adminToken: string;
   let templateId: string;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -107,6 +109,45 @@ describe('Account deletion requests (e2e)', () => {
     expect((companies.body as { id: string }[]).some((c) => c.id === co.id)).toBe(false);
     // Drop from cleanup — already deleted.
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
+  }, 60000);
+
+  /**
+   * 🔴 **إذنُ الدعم وسجلُّه يبقيان بعد حذف المنشأة** (`ق-٥٣١`).
+   *
+   * **الحذفُ صلب** — مقيس: مساران (`DELETE /companies/:id` وموافقةُ طلب الحذف)
+   * ومسلكٌ واحد (حذفُ هويّة الدخول ← `Cascade` على ٦٩ علاقة). **وكان إذنُ الدعم
+   * وسجلُّه بينها**: أثرُ دخول المعالج إلى بيانات جهة التحكم — الذي يلزمه النظامُ
+   * (م٨ · م٣١) — **يُمحى في أسوأ وقتٍ ممكن** (`ق-٨٠`). فلا مفتاحَ أجنبيَّ إلى
+   * المنشأة، والاسمُ محفوظٌ على الإذن.
+   */
+  it('🔴 support consent and its access log survive the company deletion', async () => {
+    prisma = app.get(PrismaService);
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+
+    // إذنٌ يُطلب ويُوافَق عليه ويُستعمل مرّةً — فيقوم سطرٌ في السجل.
+    const grant = await admin(request(app.getHttpServer()).post('/support-access/admin'))
+      .send({ companyId: co.id, reason: `فحص قبل الحذف ${suffix}`, durationMinutes: 30, screens: ['customers'] })
+      .expect(201);
+    await auth(request(app.getHttpServer()).post(`/support-access/${grant.body.id}/approve`)).expect(201);
+    await admin(request(app.getHttpServer()).get('/customers')).set('X-Support-Company', co.id).expect(200);
+
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
+    expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeNull();
+
+    // ⭐ والإذنُ باقٍ باسم المنشأة، والسطرُ باقٍ تحته — ولوحةُ المطوّر ما زالت تراه مسمّىً.
+    const kept = await prisma.supportAccessGrant.findUnique({ where: { id: grant.body.id }, include: { logs: true } });
+    expect(kept).toBeTruthy();
+    expect(kept!.companyName).toContain('منشأة حذف');
+    expect(kept!.logs.some((l) => l.path === '/customers')).toBe(true);
+    const listed = await admin(request(app.getHttpServer()).get('/support-access/admin')).expect(200);
+    expect((listed.body as { id: string; companyName: string }[]).find((g) => g.id === grant.body.id)?.companyName).toContain('منشأة حذف');
+
+    // تنظيفُ ما بقي عمداً — من حيث بقي.
+    await prisma.supportAccessLog.deleteMany({ where: { grantId: grant.body.id } });
+    await prisma.supportAccessGrant.delete({ where: { id: grant.body.id } });
   }, 60000);
 
   it('an ordinary tenant can never reach the support endpoints', async () => {

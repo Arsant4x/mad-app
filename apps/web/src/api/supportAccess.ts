@@ -16,8 +16,8 @@ export interface SupportGrant {
   expiresAt: string | null;
   /** جانب المالك فقط: محسوبة لحظة القراءة. */
   active?: boolean;
-  /** جانب المدير فقط. */
-  company?: { orgName: string };
+  /** اسمُ المنشأة لحظةَ الطلب — يبقى بعد حذفها (ق-٥٣١). */
+  companyName: string;
 }
 
 export interface SupportLogLine {

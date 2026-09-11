@@ -71,7 +71,7 @@ export function SupportAccessSection() {
   }
 
   function enter(g: SupportGrant) {
-    enterSupportMode(g.companyId, g.company?.orgName ?? '');
+    enterSupportMode(g.companyId, g.companyName);
     navigate('/');
     // RoleAwareIndex switches to the tenant view on next render.
     window.location.reload();
@@ -111,7 +111,7 @@ export function SupportAccessSection() {
             const active = isActive(g);
             return (
               <tr key={g.id}>
-                <td>{g.company?.orgName ?? g.companyId}</td>
+                <td>{g.companyName || g.companyId}</td>
                 <td style={{ fontSize: 12, color: 'var(--muted)' }}>{g.reason}</td>
                 <td>
                   <span className={`badge ${active ? 'paid' : st.cls}`}>{active ? st.label : g.status === 'APPROVED' ? 'انقضت' : st.label}</span>
