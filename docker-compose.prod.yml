@@ -36,7 +36,11 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # 🔴 **من `quay.io` لا من Docker Hub** (`ق-٦٠٠`): السحبُ المجهولُ من Docker Hub صار
+    #    يُردّ — **فإعادةُ نشرٍ اليومَ لا تُعيد بناءَ المخزن**، والعطلُ كامنٌ حتى يُحتاج.
+    # 🔒 **والوسمُ هو نسخةُ الإنتاج العاملة نفسُها** (قُرئت من الخادم: `minio --version`)
+    #    — فلا تُنزَّل درجةً ولا تُرفع بلا قرار، و`latest` يُبدّلها عند كلِّ إقلاع.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:

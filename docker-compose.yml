@@ -31,7 +31,12 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # 🔴 **من `quay.io` لا من Docker Hub** (`ق-٦٠٠`): سحبُ `minio/minio` مجهولاً صار
+    #    يُردّ (`pull access denied … may require 'docker login'`) — **وأسقط السيرَ
+    #    مرّتين متتاليتين**، والإنتاجُ يصطدم به عند أوّل إعادة بناء.
+    # 🔒 **وبوسمٍ صريحٍ هو نسخةُ الإنتاج العاملة** — مقروءةٌ من الخادم لا مفترَضة:
+    #    وسمٌ أقدمُ يُنزِل المخزنَ درجةً وقد يرفض قراءةَ بياناته، و`latest` يُبدّله تحتنا.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
