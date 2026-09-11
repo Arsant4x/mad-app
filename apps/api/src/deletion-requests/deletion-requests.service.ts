@@ -217,7 +217,9 @@ export class DeletionRequestsService {
     // في الطبقة الثالثة (`ق-٥٥٦`) لا هنا: **الحذفُ الفوريُّ عند الموافقة محوٌ قبل أن ينال
     // صاحبُه نسختَه** (`ق-٥٥٤`)، فأُرجئ إلى انقضاء الأجل.
     const retainUntil = report.hasMovement ? retentionDeadline(closedAt, report.models) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
-    const archiveExpiresAt = new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
+    // مدّةُ الإتاحة = مدّةُ الحفظ (`ق-٥٥٨/ج`): ما دمنا نحفظ يصل التاجرُ نسختَه — فقطعُ وصوله قبل
+    // انقضاء التزامه يتركه مسؤولاً عمّا لا يبلغه. وبلا حركةٍ النافذةُ هي الأجل نفسُه.
+    const archiveExpiresAt = retainUntil;
 
     // ① النسخةُ أولاً — ولا يسبقها شيء: إن سقط إنتاجُها سقطت الموافقةُ قبل أن تمسّ الحساب.
     const manifest = await this.archive.produce(company.id, decider, archiveExpiresAt);

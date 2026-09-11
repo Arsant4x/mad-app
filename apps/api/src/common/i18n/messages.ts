@@ -807,8 +807,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.account_closed]: {
-    ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى',
-    en: 'Your account is closed at your request; your data is retained under the statutory retention periods until at least {retainUntil}, then erased',
+    ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى — ويكتمل الإتلافُ خلال أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية',
+    en: 'Your account is closed at your request; your data is retained under the statutory retention periods until at least {retainUntil}, then erased — destruction completes within fourteen days as backups rotate',
   },
   [MSG.deletion_company_closed]: { ar: 'الحساب مغلق بالفعل — يمكنك طلب إعادة فتحه', en: 'The account is already closed — you may request reopening' },
   [MSG.reopen_not_closed]: { ar: 'إعادة الفتح لحسابٍ مغلق فقط', en: 'Reopening applies to a closed account only' },

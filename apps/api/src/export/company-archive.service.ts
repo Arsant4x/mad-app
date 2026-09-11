@@ -27,11 +27,19 @@ import { ExportService } from './export.service';
  * نموذجٍ يشير إليها بعلاقةٍ مفردة (سطورُ الفاتورة والقيد، أقساطُ العقد، مدفوعاتُ الوردية…)؛
  * والسنةُ من أوّل حقلِ تاريخٍ يملكه النموذج بترتيب `YEAR_FIELDS`، مقروءاً من `DMMF`.
  *
- * **حدُّه المعلَن**: العقدُ العابرُ للسنوات يُكتب بسنة بدايته، وأقساطُه ودفعاتُه بسنواتها —
- * وهو اختيارٌ معروضٌ للحكم لا مُقرّ (موجزُ `ق-٥٥٤`). والصيغةُ JSON مضغوطةً (مهيكلة) مع
- * `README` مقروء — وجدولٌ للإنسان (CSV/XLSX) معروضٌ في الموجز نفسِه.
+ * **أحكامُ المالك على موجزها** (`ق-٥٥٨`):
+ * - **الأصلُ يتكرّر في كلِّ سنةٍ يقع فيها تابعٌ له** — فالغرضُ ملفُّ سنةٍ يُسلَّم للهيئة، وعقدٌ
+ *   مُشارٌ إليه غيرُ حاضرٍ نقصٌ لا حجم (العقودُ بحكمه، والقاعدةُ نفسُها لكلِّ أصلٍ يُشار إليه).
+ * - **الحزمةُ مقروءةٌ آلياً، ولا عرضَ بشريٌّ للجداول**: `JSON` هي «الصيغةُ الشائعة» و`XML`
+ *   ما تطلبه الهيئة — وتحويلٌ ثالثٌ قد يُخفي حقلاً؛ حدٌّ معلَنٌ في `README`.
+ * - **وتُتاح ما دمنا نحفظ** — مدّةُ الإتاحة = مدّةُ الحفظ (`retainUntil`)؛ وبلا حركةٍ التسعون
+ *   هي الأجل ثم الحذفُ الصلب.
  */
+/** نافذةُ النسخة **للمنشأة بلا حركة** فقط (`ق-٥٥٨/ج`): لا التزامَ حفظٍ عليها، فبعدها الحذفُ الصلب. */
 export const ARCHIVE_WINDOW_DAYS = 90;
+
+/** دورةُ النسخ الاحتياطية على المنشور — مقيسة (`ق-٥٦٠`): يكتمل الإتلافُ بعد دورانها. */
+export const BACKUP_CYCLE_DAYS = 14;
 
 /** حقولُ التاريخ التي تحدّد سنةَ الصفّ — بترتيب الأولوية، وتُقرأ أسماؤها من `DMMF` كلِّ نموذج. */
 export const YEAR_FIELDS = ['issueDate', 'date', 'occurredAt', 'start', 'openedAt', 'dueDate', 'createdAt'] as const;
@@ -76,6 +84,55 @@ export function yearFieldOf(model: string): string | null {
   if (!m) return null;
   const dates = new Set(m.fields.filter((f) => f.type === 'DateTime').map((f) => f.name));
   return YEAR_FIELDS.find((f) => dates.has(f)) ?? null;
+}
+
+/** روابطُ التابع بأصله بين النماذج السنوية — مشتقّةٌ من `DMMF`: علاقةٌ مفردة ومفتاحُها العدديّ. */
+export interface ParentLink {
+  childDelegate: string;
+  parentDelegate: string;
+  fk: string;
+}
+
+export function parentLinks(): ParentLink[] {
+  const yearly = yearlyModels();
+  const links: ParentLink[] = [];
+  for (const m of Prisma.dmmf.datamodel.models) {
+    if (!yearly.has(m.name)) continue;
+    for (const f of m.fields) {
+      if (f.kind !== 'object' || f.isList || !yearly.has(f.type) || f.type === m.name) continue;
+      const fk = f.relationFromFields?.[0];
+      if (fk) links.push({ childDelegate: delegateName(m.name), parentDelegate: delegateName(f.type), fk });
+    }
+  }
+  return links;
+}
+
+/**
+ * الأصلُ يُكرَّر في كلِّ سنةٍ يقع فيها تابعٌ له (`ق-٥٥٨/أ`): عقدٌ بدأ في 2024 وله قسطٌ في 2026
+ * يظهر في ملفّ 2026 أيضاً — فيكتمل الملفُّ بذاته. تُعيد عددَ ما كُرِّر، ولا تُكرّر ما هو حاضر.
+ */
+export function repeatParentsIntoChildYears(years: Record<number, Record<string, unknown[]>>, links: ParentLink[]): number {
+  const byId = new Map<string, unknown>();
+  for (const table of Object.values(years)) {
+    for (const link of links) for (const row of table[link.parentDelegate] ?? []) byId.set(`${link.parentDelegate}:${String((row as { id?: unknown }).id)}`, row);
+  }
+  let repeated = 0;
+  for (const [yearKey, table] of Object.entries(years)) {
+    const year = Number(yearKey);
+    for (const link of links) {
+      const present = new Set((table[link.parentDelegate] ?? []).map((r) => String((r as { id?: unknown }).id)));
+      for (const child of table[link.childDelegate] ?? []) {
+        const parentId = (child as Record<string, unknown>)[link.fk];
+        if (parentId == null || present.has(String(parentId))) continue;
+        const parent = byId.get(`${link.parentDelegate}:${String(parentId)}`);
+        if (!parent) continue;
+        (years[year][link.parentDelegate] ??= []).push(parent);
+        present.add(String(parentId));
+        repeated += 1;
+      }
+    }
+  }
+  return repeated;
 }
 
 const yearOf = (value: unknown): number | null => {
@@ -133,6 +190,9 @@ export class CompanyArchiveService {
       }
     }
 
+    // ①ب الأصلُ يُكرَّر في سنوات توابعه — فكلُّ ملفِّ سنةٍ مكتملٌ بذاته (`ق-٥٥٨/أ`).
+    const repeated = repeatParentsIntoChildYears(years, parentLinks());
+
     // ② الملفّات — كلُّ واحدٍ ببصمته.
     const bodies: { name: string; body: Buffer; contentType: string }[] = [];
     bodies.push({ name: 'master-data.json.gz', body: gzipSync(Buffer.from(JSON.stringify(master), 'utf8')), contentType: 'application/gzip' });
@@ -150,7 +210,12 @@ export class CompanyArchiveService {
     }
 
     const files: ArchiveFile[] = bodies.map((b) => ({ name: b.name, key: prefix + b.name, bytes: b.body.byteLength, contentType: b.contentType, sha256: sha256(b.body) }));
-    const notes = { ...ExportService.notes } as Record<string, string>;
+    const notes: Record<string, string> = {
+      ...ExportService.notes,
+      الصيغة: 'الحزمةُ مقروءةٌ آلياً (JSON مضغوط، والمختومُ XML كما هو) — ولا عرضَ بشريٌّ للجداول: تحويلٌ ثالثٌ قد يُخفي حقلاً.',
+      'تكرارُ الأصول': `الأصلُ (كالعقد) يُكرَّر في كلِّ سنةٍ يقع فيها تابعٌ له — فكلُّ ملفِّ سنةٍ مكتملٌ بذاته (${repeated} تكراراً هنا).`,
+      الإتلاف: `يكتمل الإتلافُ خلال ${BACKUP_CYCLE_DAYS} يوماً من دوران النسخ الاحتياطية — فالمقلبُ لا يُمحى منه صفٌّ انتقائياً.`,
+    };
     const manifest: ArchiveManifest = {
       version: 1,
       producedAt: producedAt.toISOString(),
@@ -218,7 +283,7 @@ export class CompanyArchiveService {
     const lines = [
       `# نسخةُ بيانات المنشأة — ${m.company.orgName}`,
       '',
-      `أُنتجت في ${m.producedAt.slice(0, 10)} عند إغلاق الحساب بطلبك، وتُتاح للتنزيل حتى ${m.expiresAt.slice(0, 10)}.`,
+      `أُنتجت في ${m.producedAt.slice(0, 10)} عند إغلاق الحساب بطلبك، وتُتاح للتنزيل ما دمنا نحفظ بياناتك — حتى ${m.expiresAt.slice(0, 10)} على الأقلّ.`,
       '',
       '## ما في النسخة',
       '',
@@ -232,7 +297,9 @@ export class CompanyArchiveService {
       '## حدودٌ تُقال هنا لا تُكتشف',
       '',
       ...Object.entries(m.notes).map(([k, v]) => `- **${k}**: ${v}`),
-      '- **العقدُ العابرُ للسنوات** يُكتب بسنة بدايته، وأقساطُه ودفعاتُه بسنواتها.',
+      '- **العقدُ العابرُ للسنوات** يظهر في ملفّ كلِّ سنةٍ له فيها قسطٌ أو دفعة — فكلُّ ملفِّ سنةٍ مكتملٌ بذاته.',
+      '- **لا عرضَ بشريٌّ للجداول** (CSV/XLSX): الحزمةُ مقروءةٌ آلياً، والتحويلُ الثالث قد يُخفي حقلاً.',
+      `- **وحين يُمحى** — يكتمل الإتلافُ خلال ${BACKUP_CYCLE_DAYS} يوماً من دوران النسخ الاحتياطية.`,
       '',
       '## سندُها',
       '',
