@@ -55,6 +55,11 @@ on:
       #    ضاق عن سطحِ القراءة.
       - '.claude/**'
       - 'deploy.sh'
+      # ⚠️ (ق-٥٧٧ · 2026-09-11) والثقبُ الثالث من الجنس نفسِه: `offsite-backup.spec`
+      #    يقرأ سكربتات `ops/backup/*` و`docker-compose.prod.yml` — فبدونهما يمرّ
+      #    تعديلٌ يُسقط أحدَ شروط النسخة الخمسة **بلا أن يعمل حارسُه**.
+      - 'ops/**'
+      - 'docker-compose.prod.yml'
       - 'package.json'
       - 'package-lock.json'
 
