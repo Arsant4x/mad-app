@@ -25,6 +25,8 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
   let employeeId: string;
   let employeeToken: string;
   const createdInvoiceIds: string[] = [];
+  const createdQuoteIds: string[] = [];
+  const createdDrawerIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -95,12 +97,86 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     for (const id of createdInvoiceIds) {
       await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${ownerToken}`);
     }
+    // ⚠️ **والمشتقُّ يُحذف مع أصله** (`ق-٤٩٥`): حذفُ الدرج يحذف حسابَه في
+    //    الدليل — وتركُه يُراكم حساباتٍ في نطاق الأدراج حتى ينفد النطاق.
+    for (const id of createdQuoteIds) {
+      await request(app.getHttpServer()).delete(`/quotes/${id}`).set('Authorization', `Bearer ${ownerToken}`);
+    }
+    for (const id of createdDrawerIds) {
+      await request(app.getHttpServer()).delete(`/cash-drawers/${id}`).set('Authorization', `Bearer ${ownerToken}`);
+    }
     if (employeeId) await request(app.getHttpServer()).delete(`/company-users/${employeeId}`).set('Authorization', `Bearer ${ownerToken}`);
     for (const id of [branchNorthId, branchSouthId]) {
       if (id) await request(app.getHttpServer()).delete(`/branches/${id}`).set('Authorization', `Bearer ${ownerToken}`);
     }
     await app.close();
   });
+
+  /** يُعاد التقييدُ في كل حالةٍ تحتاجه — فحالةٌ تعتمد على ترتيب أختها تسقط وحدها. */
+  async function restrictEmployeeToNorth(): Promise<void> {
+    await request(app.getHttpServer())
+      .patch(`/company-users/${employeeId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ branchIds: [branchNorthId] })
+      .expect(200);
+  }
+
+  /** عرضٌ في الشمال وآخرُ في الجنوب وثالثٌ بلا فرع — ثلاثةٌ تفصل الأحوال الثلاثة. */
+  async function seedQuotesInEveryBranch(): Promise<string[]> {
+    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    const customerId = (customers.body as { id: string }[])[0]?.id;
+    if (!customerId) throw new Error('لا عميلَ في المنشأة — والحالةُ تحتاج واحداً');
+
+    const ids: string[] = [];
+    for (const branchId of [branchNorthId, branchSouthId, null]) {
+      const res = await request(app.getHttpServer())
+        .post('/quotes')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          customerId,
+          ...(branchId ? { branchId } : {}),
+          issueDate: '2026-05-01',
+          validUntil: '2026-06-01',
+          lines: [{ description: 'بندُ العزل', quantity: 1, unitPrice: 50, taxRate: 15 }],
+        })
+        .expect(201);
+      ids.push(res.body.id);
+      createdQuoteIds.push(res.body.id);
+    }
+    return ids;
+  }
+
+  /**
+   * ⚠️ **الأدراجُ تُزرع في القاعدة لا عبر `POST /cash-drawers`** — ونمطُ
+   * الفواتير أعلاه نفسُه.
+   *
+   * **والسببُ مقيس**: رمزُ الدرج يُخصَّص `MAX+1` من نطاقٍ محدود (`ق-٢٩٥`/
+   * `ق-٤٨٢`)، **والفجوةُ لا يُعاد ملؤها**. فحالةٌ تُنشئ ثلاثةَ أدراجٍ في كل
+   * تشغيل **تدفع السقفَ ثلاثاً وإن حُذفت** — والنطاقُ الأوّل (`1010–1099`)
+   * **نفد فعلاً في منشأة العرض**، والثاني عند `1538` من `1599` (مقيسٌ
+   * 2026-09-11).
+   *
+   * ⇒ **ولا يظهر في السير**: قاعدتُه تُنشأ جديدةً كلَّ مرّة، **فيسقط على
+   * الجهاز وحده بعد عشرين تشغيلاً** — وهو `ق-٤٩٥` بعينه: **الحالةُ تتراكم في
+   * الأثر لا في المصدر**.
+   */
+  async function seedDrawersInEveryBranch(): Promise<string[]> {
+    const ids: string[] = [];
+    for (const [i, branchId] of [branchNorthId, branchSouthId, null].entries()) {
+      const id = await tenantPrisma.runInTenantContext(companyAId, async (tx) => {
+        const account = await tx.account.create({
+          data: { code: `9${String(Date.now()).slice(-3)}${i}`, name: `حساب درج العزل ${i} ${suffix}`, type: 'asset' } as never,
+        });
+        const drawer = await tx.cashDrawer.create({
+          data: { name: `درج العزل ${i} ${suffix}`, branchId, accountId: account.id } as never,
+        });
+        return drawer.id;
+      });
+      ids.push(id);
+      createdDrawerIds.push(id);
+    }
+    return ids;
+  }
 
   it('[SPEC 2.4] lets the owner see every branch', async () => {
     const res = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${ownerToken}`).expect(200);
@@ -208,6 +284,56 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
       .set('Authorization', `Bearer ${employeeToken}`)
       .send({ declaredClosing: 100 });
   });
+
+  /**
+   * 🔴 **والقراءةُ تُغلق حيث أُغلقت الكتابة — وإلّا فالمنعُ إعلانٌ لا عزل.**
+   *
+   * `quotes.create` و`cash-drawers.create` صارا يمرّان بـ`resolveBranchId`
+   * (`ق-٥١٢`/`ق-٥١٣`)، **و`list` في الاثنين بقي يقرأ كلّ فروع المنشأة**. فمن
+   * يُمنع من الكتابة على فرعٍ **يقرأ بياناته كاملةً** — وهو ما يبيع المنتجُ
+   * حجبَه.
+   *
+   * ⚠️ **وقائمةُ الأدراج أثقل**: صفُّها يحمل **رصيدَ حساب الدرج** — فكاشيرُ فرعٍ
+   * كان يقرأ **نقديّةَ كلّ فرعٍ آخر** لحظةً بلحظة.
+   *
+   * وتُقاس الثلاثةُ معاً في كل قائمة: **فرعُه يُرى** · **وما بلا فرعٍ يُرى**
+   * (`ق-٢٩٠`: الصفوفُ السابقةُ للفروع تبقى مرئيّة) · **وفرعُ غيره لا يُرى**.
+   *
+   * ⚠️ **وحالتان لا واحدة**: أوّلُ صياغةٍ جمعت القائمتين في حالةٍ واحدة —
+   * **فسقوطُ العروض يُنهيها قبل أن تُقاس الأدراج**، فيبقى نصفُ الدعوى بلا
+   * إثباتٍ عكسيّ (`ق-٤١٨`).
+   */
+  it('🔴 ويُخفي عن قائمة العروض ما لا يملك فرعَه', async () => {
+    await restrictEmployeeToNorth();
+    const branchIds = await seedQuotesInEveryBranch();
+
+    const res = await request(app.getHttpServer()).get('/quotes').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    const seen = (res.body as { id: string; branchId: string | null }[]).filter((q) => branchIds.includes(q.id)).map((q) => q.branchId);
+
+    expect(seen).toContain(branchNorthId);
+    expect(seen).toContain(null);
+    expect(seen).not.toContain(branchSouthId);
+  }, 60000);
+
+  /**
+   * 🔴 **وهذه أثقل**: صفُّ الدرج يحمل **رصيدَ حسابه** — فكاشيرُ فرعٍ كان يقرأ
+   * **نقديّةَ كلّ فرعٍ آخر** لحظةً بلحظة، لا أسماءَ الأدراج فحسب.
+   */
+  it('🔴 ويُخفي عن قائمة الأدراج ما لا يملك فرعَه — ومعها أرصدةُ نقده', async () => {
+    await restrictEmployeeToNorth();
+    const drawerIds = await seedDrawersInEveryBranch();
+
+    const res = await request(app.getHttpServer()).get('/cash-drawers').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    const seen = (res.body as { id: string; branchId: string | null }[]).filter((d) => drawerIds.includes(d.id)).map((d) => d.branchId);
+
+    expect(seen).toContain(branchNorthId);
+    expect(seen).toContain(null);
+    expect(seen).not.toContain(branchSouthId);
+
+    // ⭐ والمالكُ يرى الثلاثة — فالحجبُ بالعزل لا بكسر القائمة.
+    const ownerRes = await request(app.getHttpServer()).get('/cash-drawers').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    expect((ownerRes.body as { id: string }[]).map((d) => d.id)).toEqual(expect.arrayContaining(drawerIds));
+  }, 60000);
 
   it('restores unrestricted visibility when the assignment is cleared', async () => {
     await request(app.getHttpServer())

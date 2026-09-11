@@ -16,7 +16,7 @@ export class CashDrawersController {
 
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.cashDrawers.list(tenant.companyId);
+    return this.cashDrawers.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   /** سقفُ نطاق رموز الأدراج (`ق-٢٩٥`) — مسارٌ ثابتٌ قبل `:id`. */

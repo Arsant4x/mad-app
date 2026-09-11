@@ -22,7 +22,7 @@ export class QuotesController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.quotesService.list(tenant.companyId);
+    return this.quotesService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Get(':id')

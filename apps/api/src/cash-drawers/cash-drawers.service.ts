@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { resolveBranchId } from '../branches/branch-scope.util';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { formatMoney } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -44,9 +44,17 @@ export async function nextDrawerCode(tx: Prisma.TransactionClient): Promise<stri
 export class CashDrawersService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  /**
+   * ⚠️ **وهذه أثقلُ من العروض**: `DRAWER_INCLUDE` يحمل **رصيدَ حساب الدرج** —
+   * فكاشيرُ فرعٍ كان يقرأ **نقديّةَ كلّ فرعٍ آخر** لحظةً بلحظة، لا أسماءَ
+   * الأدراج فحسب.
+   *
+   * والقائمةُ تبقى مقروءةً لكلّ فاعل (تغذّي مُنتقي الدرج عند فتح المناوبة) —
+   * **يتغيّر ما تُظهره لا من يقرؤها**.
+   */
+  list(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.cashDrawer.findMany({ include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+      tx.cashDrawer.findMany({ where: branchFilter(allowedBranchIds), include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
     );
   }
 

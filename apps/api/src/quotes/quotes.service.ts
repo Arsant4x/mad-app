@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
-import { resolveBranchId } from '../branches/branch-scope.util';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { computeDocumentTotals } from '../common/money/totals';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
@@ -54,9 +54,17 @@ export class QuotesService {
     private readonly invoicesService: InvoicesService,
   ) {}
 
-  async list(companyId: string) {
+  /**
+   * ⚠️ **الكتابةُ أُغلقت والقراءةُ بقيت مفتوحة** (`ق-٥١٢`/`ق-٥١٣`): `create`
+   * صار يمرّ بـ`resolveBranchId`، و`list` ظلّ يقرأ **كلَّ فروع المنشأة** —
+   * فموظّفُ فرعٍ يرى عروضَ الفروع الأخرى وأسعارَها.
+   *
+   * ⇒ **والمنعُ بلا إخفاء ليس عزلاً**: من يُمنع من الكتابة في فرعٍ ويقرأ بياناته
+   * يملك ما يبيعه المنتجُ حجبَه.
+   */
+  async list(companyId: string, allowedBranchIds: string[] | 'all') {
     const quotes = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.quote.findMany({ include: QUOTE_INCLUDE, orderBy: { createdAt: 'desc' } }),
+      tx.quote.findMany({ where: branchFilter(allowedBranchIds), include: QUOTE_INCLUDE, orderBy: { createdAt: 'desc' } }),
     );
     return quotes.map((q) => ({ ...q, derivedStatus: deriveStatus(q) }));
   }
