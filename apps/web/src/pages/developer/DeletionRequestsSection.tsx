@@ -80,12 +80,13 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
           <tbody>
             {requests.map((r) => (
               <tr key={r.id}>
-                <td>{r.company?.orgName ?? '—'}</td>
+                <td>{r.companyName || '—'}</td>
                 <td>{r.reason ?? '—'}</td>
                 <td className="num">{dfmt(r.createdAt)}</td>
                 <td>
                   <span className={`badge ${badgeAltOf(STATUS_META, r.status).badge}`}>{badgeAltOf(STATUS_META, r.status).label}</span>
                   {r.decidedNote && <div className="hint">{r.decidedNote}</div>}
+                  {r.decidedByName && <div className="hint">بقرار: {r.decidedByName}</div>}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {r.status === 'PENDING' && (
@@ -119,7 +120,7 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
       {confirming && (
         <ConfirmModal
           title="تنفيذ حذف الحساب"
-          body={`سيُحذف حساب "${confirming.company?.orgName}" وكل بياناته نهائياً — لا رجعة بعدها. هل تريد التنفيذ؟`}
+          body={`سيُحذف حساب "${confirming.companyName}" وكل بياناته نهائياً — لا رجعة بعدها. هل تريد التنفيذ؟`}
           confirmLabel="تنفيذ الحذف"
           onConfirm={() => {
             const target = confirming;
