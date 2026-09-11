@@ -308,6 +308,9 @@ export const MSG = {
   account_closed: 'tenant.account_closed',
   deletion_company_closed: 'deletion.company_closed',
   reopen_not_closed: 'deletion.reopen_not_closed',
+  reopen_window_closed: 'deletion.reopen_window_closed',
+  erasure_only_closed: 'deletion.erasure_only_closed',
+  erasure_already_done: 'deletion.erasure_already_done',
   screen_forbidden: 'tenant.screen_forbidden',
   screen_not_in_sector: 'tenant.screen_not_in_sector',
   primary_activity_needs_confirmation: 'activity.primary_needs_confirmation',
@@ -807,11 +810,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
   [MSG.account_closed]: {
-    ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى — ويكتمل الإتلافُ خلال أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية',
-    en: 'Your account is closed at your request; your data is retained under the statutory retention periods until at least {retainUntil}, then erased — destruction completes within fourteen days as backups rotate',
+    ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى — ويكتمل الإتلافُ خلال أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية. ويمكنك طلبُ إعادة الفتح حتى {reopenUntil}، وبعدها تُمحى بياناتُك غيرُ الملزِمة آلياً ولا عودة',
+    en: 'Your account is closed at your request; your data is retained under the statutory retention periods until at least {retainUntil}, then erased — destruction completes within fourteen days as backups rotate. You may request reopening until {reopenUntil}; after that, non-mandatory data is erased automatically and reopening is no longer possible',
   },
   [MSG.deletion_company_closed]: { ar: 'الحساب مغلق بالفعل — يمكنك طلب إعادة فتحه', en: 'The account is already closed — you may request reopening' },
   [MSG.reopen_not_closed]: { ar: 'إعادة الفتح لحسابٍ مغلق فقط', en: 'Reopening applies to a closed account only' },
+  [MSG.reopen_window_closed]: { ar: 'انقضت نافذةُ إعادة الفتح ({reopenUntil}) — وبياناتُك الملزِمة محفوظةٌ حتى أجلها', en: 'The reopening window has closed ({reopenUntil}) — mandatory records stay retained until their deadline' },
+  [MSG.erasure_only_closed]: { ar: 'محوُ البيانات غير الملزِمة لحسابٍ مغلق فقط', en: 'Erasure of non-mandatory data applies to a closed account only' },
+  [MSG.erasure_already_done]: { ar: 'مُحي غيرُ الملزِم من بيانات هذا الحساب بالفعل', en: 'Non-mandatory data of this account has already been erased' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
   /**
    * ⚠️ الرسالة تقول **ثلاثة** لا واحداً: الشاشة موجودة · وغير مفعّلة

@@ -200,6 +200,8 @@ model Company {
   /// **على الأقلّ** (أطولُ مدد الحفظ المقروءة لصنفها — `ق-٥٤٧`).
   closedAt    DateTime?
   retainUntil DateTime?
+  /// متى مُحي غيرُ الملزِم من بياناتها الشخصية (`ق-٥٥٩`) — بطلبٍ صريح أو بانقضاء نافذة العودة.
+  erasedAt DateTime?
   /// When on, the master records (properties/units) are frozen company-wide:
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
@@ -1463,17 +1465,20 @@ enum DeletionRequestStatus {
   CANCELLED
 }
 
-/// نوعُ الطلب (`ق-٥٤٨`): حذفٌ — أو **إعادةُ فتحٍ** لمنشأةٍ مغلقة، بالمسار نفسِه والأثر نفسِه.
+/// نوعُ الطلب (`ق-٥٤٨` · `ق-٥٥٩`): حذفٌ — أو **إعادةُ فتحٍ** لمنشأةٍ مغلقة — أو **إتلافٌ صريحٌ** لغير
+/// الملزِم (حقٌّ منصوص: م٤/٥) — بالمسار نفسِه والأثر نفسِه.
 enum AccountRequestKind {
   DELETION
   REOPENING
+  ERASURE
 }
 
-/// ما وقع بالموافقة (`ق-٥٤٢`): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها.
+/// ما وقع بالموافقة (`ق-٥٤٢`): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها · مُحي غيرُ الملزِم.
 enum AccountRequestOutcome {
   DELETED
   CLOSED
   REOPENED
+  ERASED
 }
 
 /// A merchant asking for its account (and all its data) to be deleted.

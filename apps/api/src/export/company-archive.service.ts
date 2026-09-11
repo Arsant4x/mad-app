@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib';
 import { AuditService } from '../audit/audit.service';
 import { movementSources } from '../companies/company-movement.service';
 import { MSG } from '../common/i18n/messages';
+import { REOPEN_WINDOW_DAYS } from '../common/tenant/reopen-window';
 import { ARCHIVE_PREFIX, FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { delegateName } from './export-scope';
@@ -36,7 +37,7 @@ import { ExportService } from './export.service';
  *   هي الأجل ثم الحذفُ الصلب.
  */
 /** نافذةُ النسخة **للمنشأة بلا حركة** فقط (`ق-٥٥٨/ج`): لا التزامَ حفظٍ عليها، فبعدها الحذفُ الصلب. */
-export const ARCHIVE_WINDOW_DAYS = 90;
+export const ARCHIVE_WINDOW_DAYS = REOPEN_WINDOW_DAYS;
 
 /** دورةُ النسخ الاحتياطية على المنشور — مقيسة (`ق-٥٦٠`): يكتمل الإتلافُ بعد دورانها. */
 export const BACKUP_CYCLE_DAYS = 14;
@@ -215,6 +216,7 @@ export class CompanyArchiveService {
       الصيغة: 'الحزمةُ مقروءةٌ آلياً (JSON مضغوط، والمختومُ XML كما هو) — ولا عرضَ بشريٌّ للجداول: تحويلٌ ثالثٌ قد يُخفي حقلاً.',
       'تكرارُ الأصول': `الأصلُ (كالعقد) يُكرَّر في كلِّ سنةٍ يقع فيها تابعٌ له — فكلُّ ملفِّ سنةٍ مكتملٌ بذاته (${repeated} تكراراً هنا).`,
       الإتلاف: `يكتمل الإتلافُ خلال ${BACKUP_CYCLE_DAYS} يوماً من دوران النسخ الاحتياطية — فالمقلبُ لا يُمحى منه صفٌّ انتقائياً.`,
+      'نافذةُ إعادة الفتح': `طلبُ إعادة الفتح يُقبل ${REOPEN_WINDOW_DAYS} يوماً من الإغلاق — وبعدها تُمحى بياناتُك غيرُ الملزِمة (الهواتفُ وبياناتُ التواصل) آلياً ويبقى الملزِم إلى أجله؛ ويمكنك طلبُ محوها قبل ذلك، ولا عودةَ بعد المحو.`,
     };
     const manifest: ArchiveManifest = {
       version: 1,

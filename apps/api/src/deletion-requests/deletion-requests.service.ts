@@ -5,7 +5,9 @@ import { CompanyMovementService, retentionDeadline } from '../companies/company-
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ARCHIVE_WINDOW_DAYS, ArchiveManifest, CompanyArchiveService } from '../export/company-archive.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { PersonalDataErasureService } from './personal-data-erasure.service';
+import { reopenUntil } from '../common/tenant/reopen-window';
 
 /** من قرّر — مديرُ المنصّة الذي وافق أو رفض؛ يُكتب على القرار نفسه (`ق-٥٣٧`). */
 export interface DecisionActor {
@@ -49,6 +51,7 @@ export class DeletionRequestsService {
     private readonly companiesService: CompaniesService,
     private readonly movement: CompanyMovementService,
     private readonly archive: CompanyArchiveService,
+    private readonly erasure: PersonalDataErasureService,
   ) {}
 
   // ---------- Merchant side ----------
@@ -65,9 +68,16 @@ export class DeletionRequestsService {
     );
   }
 
-  /** حالُ الحساب للتاجر — يُقرأ وهو مغلق (`ق-٥٤٧`): متى أُغلق، وحتى متى يبقى أثرُه على الأقلّ. */
-  account(companyId: string) {
-    return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { status: true, closedAt: true, retainUntil: true } });
+  /**
+   * حالُ الحساب للتاجر — يُقرأ وهو مغلق (`ق-٥٤٧`): متى أُغلق، وحتى متى يبقى أثرُه على الأقلّ،
+   * **وحتى متى تُقبل العودة** (`ق-٥٥٩`)، وهل مُحي غيرُ الملزِم.
+   */
+  async account(companyId: string) {
+    const company = await this.prisma.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: { status: true, closedAt: true, retainUntil: true, erasedAt: true },
+    });
+    return { ...company, reopenUntil: company.closedAt ? reopenUntil(company.closedAt) : null };
   }
 
   /**
@@ -109,16 +119,46 @@ export class DeletionRequestsService {
     });
   }
 
-  /** طلبُ إعادة الفتح (`ق-٥٤٨`): لحسابٍ مغلقٍ فقط، بالمسار نفسِه والأثر نفسِه — ومن قرّر يُكتب على القرار. */
+  /**
+   * طلبُ إعادة الفتح (`ق-٥٤٨`): لحسابٍ مغلقٍ فقط، بالمسار نفسِه والأثر نفسِه — ومن قرّر يُكتب على القرار.
+   * **وللنافذة أجل** (`ق-٥٥٩`): بعده يكون غيرُ الملزِم قد مُحي، فلا عودةَ — والرفضُ يسمّي الأجل.
+   */
   requestReopening(companyId: string, actorType: string) {
     this.assertOwner(actorType);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true, status: true } });
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true, status: true, closedAt: true, erasedAt: true } });
       if (company.status !== 'CLOSED') throw new ConflictException(MSG.reopen_not_closed);
+      this.assertReopenWindowOpen(company);
       const open = await tx.accountDeletionRequest.findFirst({ where: { status: 'PENDING' } });
       if (open) throw new ConflictException(MSG.deletion_already_pending);
       return tx.accountDeletionRequest.create({
         data: { reason: null, companyName: company.orgName, kind: 'REOPENING' } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
+      });
+    });
+  }
+
+  /** نافذةُ العودة تُغلق بانقضاء أجلها **أو بمحو غير الملزِم** — أيّهما وقع أولاً؛ فما مُحي لا يعود. */
+  private assertReopenWindowOpen(company: { closedAt: Date | null; erasedAt: Date | null }): void {
+    const deadline = company.closedAt ? reopenUntil(company.closedAt) : null;
+    if (company.erasedAt || (deadline && deadline < new Date())) {
+      throw new ConflictException(formatMessage(MSG.reopen_window_closed, { reopenUntil: (deadline ?? company.erasedAt!).toISOString().slice(0, 10) }));
+    }
+  }
+
+  /**
+   * طلبُ إتلافٍ صريح (`ق-٥٥٩/ب` — م٤/٥): صاحبُ الحساب المغلق يطلب محوَ غير الملزِم **الآن** لا بعد
+   * النافذة. يُقرَّر بالمسار نفسِه ومن قرّر يُكتب — **ويُغلق نافذةَ العودة بتنفيذه**، فيُقال ذلك قبل الطلب.
+   */
+  requestErasure(companyId: string, actorType: string) {
+    this.assertOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true, status: true, erasedAt: true } });
+      if (company.status !== 'CLOSED') throw new ConflictException(MSG.erasure_only_closed);
+      if (company.erasedAt) throw new ConflictException(MSG.erasure_already_done);
+      const open = await tx.accountDeletionRequest.findFirst({ where: { status: 'PENDING' } });
+      if (open) throw new ConflictException(MSG.deletion_already_pending);
+      return tx.accountDeletionRequest.create({
+        data: { reason: null, companyName: company.orgName, kind: 'ERASURE' } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
       });
     });
   }
@@ -190,7 +230,10 @@ export class DeletionRequestsService {
     if (!existing) throw new NotFoundException(MSG.deletion_request_not_found);
     if (existing.status !== 'PENDING') throw new ConflictException(MSG.deletion_not_pending);
     // المنشأةُ تُقرأ بمعرّفها لا بضمّة — فقد تكون زالت، وعندها لا تنفيذَ (الحدُّ المعلَن أعلاه).
-    const company = await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { id: true, orgName: true, status: true } });
+    const company = await this.prisma.company.findUnique({
+      where: { id: existing.companyId },
+      select: { id: true, orgName: true, status: true, closedAt: true, retainUntil: true, erasedAt: true },
+    });
     if (!company) throw new NotFoundException(MSG.company_not_found);
 
     const decision = {
@@ -203,12 +246,24 @@ export class DeletionRequestsService {
 
     if (existing.kind === 'REOPENING') {
       if (company.status !== 'CLOSED') throw new ConflictException(MSG.reopen_not_closed);
+      // النافذةُ تُقرأ عند القرار أيضاً: طلبٌ قُدِّم قبل الأجل وقُرِّر بعده — أو بعد المحو — لا يُعيد ما مُحي.
+      this.assertReopenWindowOpen(company);
       this.logger.warn(`Reopening company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
       await this.prisma.$transaction([
         this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'REOPENED' } }),
         this.prisma.company.update({ where: { id: company.id }, data: { status: 'ACTIVE', closedAt: null, retainUntil: null } }),
       ]);
       return { executed: true, outcome: 'REOPENED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: null };
+    }
+
+    if (existing.kind === 'ERASURE') {
+      if (company.status !== 'CLOSED') throw new ConflictException(MSG.erasure_only_closed);
+      if (company.erasedAt) throw new ConflictException(MSG.erasure_already_done);
+      // الوسمُ بعد التنفيذ لا قبله (`ق-٥٤١`): إن سقط المحوُ بقي الطلبُ معلّقاً — ولا «مُوافَقٌ» كاذب.
+      const report = await this.erasure.erase(company.id, decider, 'REQUEST');
+      await this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'ERASED' } });
+      this.logger.warn(`Erased non-mandatory data of company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
+      return { executed: true, outcome: 'ERASED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: company.retainUntil, erased: report.counts };
     }
 
     const report = await this.movement.describe(company.id);

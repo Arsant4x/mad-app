@@ -8,6 +8,7 @@ import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
 import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
 import { ALLOW_WHILE_CLOSED_KEY } from './allow-while-closed.decorator';
+import { reopenUntil } from './reopen-window';
 import { SECTORS, Sector, screensFor } from '../../activities/sectors';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
@@ -115,10 +116,13 @@ export class TenantGuard implements CanActivate {
     const subscriptionSelfService = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_INACTIVE_KEY, [context.getHandler(), context.getClass()]);
 
     // CLOSED (`ق-٥٤٧`): الوصولُ مقطوعٌ إلا حالُ الطلب وطلبُ إعادة الفتح — ولا يعود بالدفع،
-    // فلا يمرّ بثقب الاشتراك. والرسالةُ تحمل أجلَ الحفظ الأدنى.
+    // فلا يمرّ بثقب الاشتراك. والرسالةُ تحمل أجلَ الحفظ الأدنى وأجلَ العودة (`ق-٥٥٩`).
     if (company.status === 'CLOSED') {
       const allowWhileClosed = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_CLOSED_KEY, [context.getHandler(), context.getClass()]);
-      if (!allowWhileClosed) throw new AccountClosedException(company.retainUntil ? company.retainUntil.toISOString().slice(0, 10) : '—');
+      if (!allowWhileClosed) {
+        const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '—');
+        throw new AccountClosedException(day(company.retainUntil), day(company.closedAt ? reopenUntil(company.closedAt) : null));
+      }
     }
 
     // STOPPED is a full lock-out — except subscription self-service.

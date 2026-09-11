@@ -9,6 +9,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { CompaniesService } from '../src/companies/companies.service';
 import { CompanyMovementService } from '../src/companies/company-movement.service';
 import { FilesService } from '../src/files/files.service';
+import { PersonalDataErasureService, REOPEN_WINDOW_DAYS } from '../src/deletion-requests/personal-data-erasure.service';
 import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
@@ -441,6 +442,149 @@ describe('Account deletion requests (e2e)', () => {
     await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${closedToken}`).expect(200);
     await request(app.getHttpServer()).post('/deletion-request/reopen').set('Authorization', `Bearer ${closedToken}`).expect(409);
   }, 90000);
+
+  /** يُغلق حساباً بطلبٍ وموافقة، ويعيد رمزَ دخوله المغلق. */
+  async function closeCompany(co: { id: string; token: string; username: string }): Promise<string> {
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    expect(login.body.user.status).toBe('CLOSED');
+    return login.body.accessToken as string;
+  }
+
+  /**
+   * ⚖️ **الإتلافُ حقٌّ يُطلب** (`ق-٥٥٩/ب` — م٤/٥): صاحبُ الحساب المغلق يطلب محوَ غير الملزِم الآن،
+   * فيُقرَّر باسم من قرّر ويُنفَّذ: **الهواتفُ تُمحى والأسماءُ تبقى** — فالفاتورةُ تشترط الاسمَ
+   * والعنوانَ لا الهاتف (م٥٣). **والوسمُ بعد التنفيذ** (`ق-٥٤١`)، **وما مُحي لا يعود**: نافذةُ
+   * العودة تُغلق بالمحو ولو لم ينقضِ أجلُها — ويُقال ذلك في الرفض بتاريخه.
+   */
+  it('⚖️ explicit erasure: phones go, names stay, the act is audited — and reopening is refused afterwards', async () => {
+    const tenantPrisma = app.get(TenantPrismaService);
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    // وهو نشطٌ لا إتلافَ — الطلبُ لحسابٍ مغلقٍ فقط.
+    await auth(request(app.getHttpServer()).post('/deletion-request/erase')).expect(409);
+
+    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل هاتف ${suffix}`, phone: '0500000001' }).expect(201);
+    await prisma.company.update({ where: { id: co.id }, data: { phone: '0112223344', email: `owner-${suffix}@example.test`, address: 'الرياض — حي الملقا' } });
+    const closedToken = await closeCompany(co);
+    const closed = (r: request.Test) => r.set('Authorization', `Bearer ${closedToken}`);
+
+    const filed = await closed(request(app.getHttpServer()).post('/deletion-request/erase')).expect(201);
+    expect(filed.body.kind).toBe('ERASURE');
+    expect(filed.body.status).toBe('PENDING');
+    // ولا طلبَ ثانياً وهذا معلّق.
+    await closed(request(app.getHttpServer()).post('/deletion-request/reopen')).expect(409);
+
+    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'مُحي' }).expect(201);
+    expect(approved.body.outcome).toBe('ERASED');
+    expect(approved.body.erased['Customer.phone']).toBe(1);
+
+    // ⭐ الهاتفُ مُحي والاسمُ باقٍ — يُقرأ تحت السياق (الجدولُ تحت `FORCE`).
+    const kept = await tenantPrisma.runInTenantContext(co.id, (tx) => tx.customer.findUniqueOrThrow({ where: { id: customer.body.id } }));
+    expect(kept.phone).toBeNull();
+    expect(kept.name).toBe(`عميل هاتف ${suffix}`);
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: co.id } });
+    expect(company.phone).toBeNull();
+    expect(company.email).toBeNull();
+    expect(company.address).toBe('الرياض — حي الملقا');
+    expect(company.erasedAt).toBeTruthy();
+    expect(company.status).toBe('CLOSED');
+    // والأثرُ مكتوبٌ باسم من قرّر وبسبب التأخير المكتوب.
+    const audit = await tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.findFirst({ where: { action: 'erase' } }));
+    expect(audit?.actorName).toBe(process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan');
+    expect((audit?.details as { trigger: string }).trigger).toBe('REQUEST');
+    const trail = await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } });
+    expect(trail?.outcome).toBe('ERASED');
+    expect(trail?.decidedByName).toBe(process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan');
+
+    // ⚖️ ما مُحي لا يعود: الرفضُ يسمّي الأجل — ولا محوَ ثانياً.
+    const refused = await closed(request(app.getHttpServer()).post('/deletion-request/reopen')).expect(409);
+    expect(refused.body.message).toContain('انقضت نافذةُ إعادة الفتح');
+    await closed(request(app.getHttpServer()).post('/deletion-request/erase')).expect(409);
+    const account = await closed(request(app.getHttpServer()).get('/deletion-request/account')).expect(200);
+    expect(account.body.erasedAt).toBeTruthy();
+    expect(account.body.reopenUntil).toBeTruthy();
+  }, 90000);
+
+  /**
+   * ⚖️ **والسياسةُ حين لا يطلب أحد** (`ق-٥٥٩/ج`): المسحُ اليوميّ يمحو غيرَ الملزِم بعد نافذة
+   * العودة — **لا قبلها** — ويُتلف الحسابَ ونسختَه عند `retainUntil`؛ **وما ترفض القاعدةُ حذفَه
+   * (سجلٌّ ملحق — `ق-١١٠`) يُعلَن تعذّرُه ولا يُلتفّ عليه**. الأزمنةُ تُدفع إلى الماضي على
+   * صفوف هذا الاختبار وحدها — والساعةُ الحقيقية هي المقياس.
+   */
+  it('⚖️ the daily sweep erases after the window, not before; destroys at retainUntil; and declares what Restrict refuses', async () => {
+    const tenantPrisma = app.get(TenantPrismaService);
+    const sweeper = app.get(PersonalDataErasureService);
+    const day = 24 * 3600 * 1000;
+
+    // ① انقضت نافذتُها — يُمحى غيرُ الملزِم.
+    const past = await makeCompany();
+    const pastCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${past.token}`).send({ name: `عميل ماضٍ ${suffix}`, phone: '0500000002' }).expect(201);
+    await closeCompany(past);
+    await prisma.company.update({ where: { id: past.id }, data: { closedAt: new Date(Date.now() - (REOPEN_WINDOW_DAYS + 1) * day) } });
+
+    // ② أُغلقت أمس — تبقى كما هي.
+    const fresh = await makeCompany();
+    const freshCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${fresh.token}`).send({ name: `عميل حديث ${suffix}`, phone: '0500000003' }).expect(201);
+    await closeCompany(fresh);
+    await prisma.company.update({ where: { id: fresh.id }, data: { closedAt: new Date(Date.now() - day) } });
+
+    // ③ انقضى أجلُ حفظها — تُتلف هي ونسختُها.
+    const expired = await makeCompany();
+    const expiredToken = await closeCompany(expired);
+    const archive = await request(app.getHttpServer()).get('/deletion-request/archive').set('Authorization', `Bearer ${expiredToken}`).expect(200);
+    const yearUrl = (archive.body.files as { name: string; url: string }[]).find((f) => f.name === 'master-data.json.gz')!.url;
+    expect((await fetch(yearUrl)).status).toBe(200);
+    await prisma.company.update({ where: { id: expired.id }, data: { closedAt: new Date(Date.now() - 100 * day), retainUntil: new Date(Date.now() - day) } });
+
+    // ④ انقضى أجلُها ولها مهمّة — القاعدةُ ترفض، والمسحُ يعلن.
+    const kept = await makeCompany();
+    const keptAuth = (r: request.Test) => r.set('Authorization', `Bearer ${kept.token}`);
+    const tpl = await keptAuth(request(app.getHttpServer()).post('/templates'))
+      .send({ name: `كاتب-محو-${suffix}`, isAllScreens: false, allowedScreens: ['dashboard'], screenActions: { dashboard: ['view'] } })
+      .expect(201);
+    const clerk = await keptAuth(request(app.getHttpServer()).post('/company-users'))
+      .send({ name: 'كاتب', username: `erase-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
+      .expect(201);
+    await keptAuth(request(app.getHttpServer()).post('/tasks')).send({ title: 'مهمّة باقية', assigneeId: clerk.body.id, targetScreen: 'contracts', targetId: 'c-2' }).expect(201);
+    await closeCompany(kept);
+    await prisma.company.update({ where: { id: kept.id }, data: { closedAt: new Date(Date.now() - 100 * day), retainUntil: new Date(Date.now() - day) } });
+
+    const result = await sweeper.sweep();
+
+    // ① مُحي — والاسمُ باقٍ، والأثرُ باسم المحو الآليّ وبسببه.
+    expect(result.erased).toContain(past.id);
+    const pastKept = await tenantPrisma.runInTenantContext(past.id, (tx) => tx.customer.findUniqueOrThrow({ where: { id: pastCustomer.body.id } }));
+    expect(pastKept.phone).toBeNull();
+    expect(pastKept.name).toBe(`عميل ماضٍ ${suffix}`);
+    expect((await prisma.company.findUniqueOrThrow({ where: { id: past.id } })).erasedAt).toBeTruthy();
+    const audit = await tenantPrisma.runInTenantContext(past.id, (tx) => tx.auditLog.findFirst({ where: { action: 'erase' } }));
+    expect(audit?.actorType).toBe('SYSTEM');
+    expect((audit?.details as { deferralReason: string }).deferralReason).toContain('لأن الغرض — إمكانُ العودة — لم ينتهِ بعد');
+
+    // ② لم يُمسّ.
+    expect(result.erased).not.toContain(fresh.id);
+    const freshKept = await tenantPrisma.runInTenantContext(fresh.id, (tx) => tx.customer.findUniqueOrThrow({ where: { id: freshCustomer.body.id } }));
+    expect(freshKept.phone).toBe('0500000003');
+    expect((await prisma.company.findUniqueOrThrow({ where: { id: fresh.id } })).erasedAt).toBeNull();
+
+    // ③ أُتلفت هي ونسختُها — والطلبُ باقٍ يشهد (`ق-٥٣٧`).
+    expect(result.deleted).toContain(expired.id);
+    expect(await prisma.company.findUnique({ where: { id: expired.id } })).toBeNull();
+    expect((await fetch(yearUrl)).status).toBe(404);
+    expect(await prisma.accountDeletionRequest.count({ where: { companyId: expired.id, outcome: 'CLOSED' } })).toBe(1);
+    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(expired.id), 1);
+
+    // ④ مُعلَنٌ تعذّرُها — باقيةٌ مغلقةً بسجلّها، وغيرُ الملزِم فيها مُحي.
+    expect(result.blocked).toContain(kept.id);
+    const blocked = await prisma.company.findUniqueOrThrow({ where: { id: kept.id } });
+    expect(blocked.status).toBe('CLOSED');
+    expect(blocked.erasedAt).toBeTruthy();
+    // ⚠️ تبقى على القاعدة عمداً — مهامُّها لا تُحذف (`ق-١١٠`) — فتُسقط من التنظيف.
+    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(kept.id), 1);
+  }, 120000);
 
   it('an ordinary tenant can never reach the support endpoints', async () => {
     const co = await makeCompany();
