@@ -38,6 +38,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MaintenanceModule } from './maintenance/maintenance.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ConsentModule } from './consent/consent.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { JournalModule } from './journal/journal.module';
 import { ObligationsModule } from './obligations/obligations.module';
@@ -104,6 +105,7 @@ import { WarrantiesModule } from './warranties/warranties.module';
     PaymentsModule,
     MaintenanceModule,
     NotificationsModule,
+    ConsentModule,
     RemindersModule,
     SuppliersModule,
     PurchasesModule,

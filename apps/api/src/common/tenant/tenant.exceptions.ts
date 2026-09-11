@@ -28,6 +28,19 @@ export class AccountClosedException extends ForbiddenException {
   }
 }
 
+/**
+ * بوّابةُ الموافقة على المعالجين الفرعيين (`ق-٥٨٩`) — **اختيارٌ لا حجب**.
+ *
+ * ⚠️ **والرسالةُ تحمل البابَين**: من يقرأ «ممنوع» بلا مخرجٍ يقرأ حجزاً؛ ومن يقرأ
+ * «اقبل أو خذ بياناتك واخرج» **يعلم أن أمامه قراراً**. والرمزُ ثابتٌ لأن الواجهة
+ * تفرّع عليه كما تفرّع على المغلق والمجمَّد.
+ */
+export class ConsentRequiredException extends ForbiddenException {
+  constructor(effectiveFrom: string) {
+    super({ code: 'CONSENT_REQUIRED', message: formatMessage(MSG.consent_required, { effectiveFrom }) });
+  }
+}
+
 export class ScreenForbiddenException extends ForbiddenException {
   constructor(screen: string) {
     super({ code: 'SCREEN_FORBIDDEN', message: formatMessage(MSG.screen_forbidden, { screen }) });

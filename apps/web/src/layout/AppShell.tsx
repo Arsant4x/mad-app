@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ClosedAccountView } from '../pages/subscription/ClosedAccountView';
+import { ConsentRequiredView } from '../pages/subscription/ConsentRequiredView';
+import { getConsentState, type ConsentState } from '../api/consent';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { getZatcaUnreported, type ZatcaUnreported } from '../api/zatca';
@@ -163,6 +165,22 @@ export function AppShell() {
     };
   }, []);
 
+  /**
+   * موافقةُ المعالجين الفرعيين (`ق-٥٨٩`) — **تُقرأ مرّةً عند فتح الشاشة**: تتغيّر مرّاتٍ
+   * في السنة، ولا معنى لاستطلاعها كالإشعارات. وسقوطُ القراءة **لا يمنع** شيئاً: الخادمُ
+   * هو البوّابة، وهذه الشاشةُ وجهُها لا حارسُها.
+   */
+  const [consent, setConsent] = useState<ConsentState | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getConsentState()
+      .then((s) => !cancelled && setConsent(s))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا. انظر
   // `PermissionsContext`: نسختان من قاعدةٍ واحدة تفترقان بلا شكوى.
   const { canSee } = usePermissions();
@@ -311,8 +329,16 @@ export function AppShell() {
             </NavLink>
           </div>
         )}
-        {/* الحالةُ الرابعة (ق-٥٤٧): المغلقُ لا يرى شاشةً سوى حاله وطلبِ إعادة الفتح. */}
-        {user?.status === 'CLOSED' ? <ClosedAccountView onLogout={logout} /> : <Outlet />}
+        {/* الحالةُ الرابعة (ق-٥٤٧): المغلقُ لا يرى شاشةً سوى حاله وطلبِ إعادة الفتح.
+            ثم الموافقةُ على المعالجين الفرعيين (ق-٥٨٩): **اختيارٌ لا حجب** — والمغلقُ
+            لا يُسأل موافقةً على معالجةٍ لم تعد تقع له، فترتيبُهما مقصود. */}
+        {user?.status === 'CLOSED' ? (
+          <ClosedAccountView onLogout={logout} />
+        ) : consent?.blocked ? (
+          <ConsentRequiredView state={consent} onAccepted={setConsent} onLogout={logout} />
+        ) : (
+          <Outlet />
+        )}
       </main>
     </div>
   );

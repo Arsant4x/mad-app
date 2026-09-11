@@ -39,6 +39,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // عدّادُ تسلسل المستندات (`ق-٣٢٨`): صفٌّ لكل (منشأة · نوع · سنة) — وترقيمُ
   // منشأةٍ لا يُقرأ ولا يُكتب من سياق أخرى، كأيّ صفٍّ يحمل `companyId`.
   'DocumentSequence',
+  // قبولُ التاجر لقائمة المعالجين الفرعيين (`ق-٥٨٩`): صفٌّ يحمل `companyId` ويُقرأ تحت
+  // سياق منشأته — وقبولُ منشأةٍ لا يُقرأ ولا يُكتب من سياق أخرى.
+  'ProcessingAgreementAcceptance',
   'Currency',
   'ExchangeRate',
   'FiscalYear',

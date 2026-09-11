@@ -24,6 +24,7 @@
     "company-users": "core",
     "contracts": "activity",
     "currencies": "core",
+    "consent": "core",
     "customers": "core",
     "delegations": "core",
     "deletion-requests": "core",
