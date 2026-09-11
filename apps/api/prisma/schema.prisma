@@ -360,8 +360,6 @@ model Company {
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
   integrations        IntegrationConnection[]
-  supportGrants       SupportAccessGrant[]
-  supportLogs         SupportAccessLog[]
   quotes              Quote[]
   quoteLines          QuoteLine[]
   claimAttachments    ClaimAttachment[]
@@ -2852,10 +2850,18 @@ enum SupportGrantStatus {
 /// **بموافقتها الصريحة فقط**، لمدة محددة، للقراءة فقط، وبسجل كامل تراه
 /// المنشأة. الإنفاذ تقني في TenantGuard — لا سياسةً على الورق.
 /// **بلا أبٍ** — كيانٌ جذريّ تمنحه المنشأة: نافذةُ دعمٍ محدودةُ المدة.
+///
+/// ⚠️ **ولا مفتاحَ أجنبيّ إلى المنشأة عمداً** (`ق-٥٣١`): حذفُ المنشأة صلبٌ
+/// (`companiesService.remove` عبر هويّة الدخول ← `Cascade` على ٦٩ علاقة)،
+/// **وأثرُ دخول الدعم إلى بياناتها هو سجلُّ المعالج نفسِه** — يلزمه النظام
+/// (م٨: تحقّقُ جهة التحكم · م٣١: سجلّاتُ المعالجة) **ويُمحى مع المنشأة في أسوأ
+/// وقت** (`ق-٨٠`). فالعمودُ `companyId` قائمٌ بلا رابط، **والاسمُ يُحفظ هنا**
+/// لأن الصفَّ الذي كان يُقرأ منه يزول.
 model SupportAccessGrant {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// اسمُ المنشأة لحظةَ الطلب — يبقى بعد حذفها.
+  companyName String @default("")
 
   requestedById   String
   requestedByName String
@@ -2884,10 +2890,10 @@ model SupportAccessGrant {
 }
 
 /// كل طلب HTTP نفّذه الدعم أثناء نافذته — سطرٌ لا يُمحى يراه المالك.
+/// **ولا مفتاحَ أجنبيّ إلى المنشأة عمداً** (`ق-٥٣١`) — يبقى بعد حذفها مع إذنه.
 model SupportAccessLog {
   id        String @id @default(uuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   grantId String
   grant   SupportAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
