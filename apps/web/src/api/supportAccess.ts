@@ -14,6 +14,8 @@ export interface SupportGrant {
   requestedAt: string;
   decidedAt: string | null;
   expiresAt: string | null;
+  /** أوّلُ دخولٍ فعليّ تحت الإذن (ق-٥٣٠) — فارغٌ حتى يقع. */
+  firstEntryAt: string | null;
   /** جانب المالك فقط: محسوبة لحظة القراءة. */
   active?: boolean;
   /** اسمُ المنشأة لحظةَ الطلب — يبقى بعد حذفها (ق-٥٣١). */

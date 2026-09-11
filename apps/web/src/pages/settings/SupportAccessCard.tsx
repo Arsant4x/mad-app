@@ -84,6 +84,8 @@ export function SupportAccessCard() {
               <b>نافذة دعم فعّالة الآن ({g.requestedByName})</b>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                 تنتهي: {g.expiresAt ? new Date(g.expiresAt).toLocaleString('ar-SA') : '—'} · قراءة فقط · النطاق: {scopeLabel(g.screens)}
+                {' · '}
+                {g.firstEntryAt ? `دخل أوّلَ مرّة: ${new Date(g.firstEntryAt).toLocaleString('ar-SA')}` : 'لم يدخل بعد'}
               </div>
             </div>
             <button className="btn btn-danger btn-sm" onClick={() => act(revokeSupport, g.id)}>
