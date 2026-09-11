@@ -221,11 +221,13 @@ jobs:
       # ⚠️ **و`quay.io` مرآةٌ رسمية لـMinIO** — جُرِّبت بالسحب فعلاً قبل الاعتماد.
       # 🔒 **وبوسمٍ صريح لا `latest`**: سحبٌ مجهولٌ من وسمٍ متحرّك يجعل الحزمةَ تتبدّل
       #    تحتنا بلا التزام.
+      # 🔒 **والوسمُ هو نسخةُ الإنتاج العاملة** (`ق-٦٠٠`): ملفّا التركيب والسيرُ على
+      #    نسخةٍ واحدةٍ — فما يُختبَر هو ما يُشغَّل، ولا يُكتشف فرقُ نسخةٍ يوم النشر.
       - name: تشغيل MinIO وانتظار جاهزيته
         run: |
           docker run -d --name minio -p 9100:9000 \
             -e MINIO_ROOT_USER=mad_app -e MINIO_ROOT_PASSWORD=mad_app_dev_password \
-            quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z server /data
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null http://localhost:9100/minio/health/live; then echo "MinIO جاهز بعد ${i}s"; exit 0; fi
             sleep 1
