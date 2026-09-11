@@ -6,15 +6,20 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
+import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';
 import { DeletionRequestDecisionDto, SubmitDeletionRequestDto } from './dto/deletion-request.dto';
 import { DecisionActor, DeletionRequestsService } from './deletion-requests.service';
 
 /**
- * Merchant side: file / follow / withdraw a deletion request.
+ * Merchant side: file / follow / withdraw a deletion request — and, once closed,
+ * ask to reopen (`ق-٥٤٨`).
  *
  * @AllowWhileInactive — a company whose subscription lapsed is exactly the one
  * most likely to want out; locking the exit behind an active subscription would
  * force it to pay to leave.
+ *
+ * @AllowWhileClosed — على أربعةٍ فقط: حالُ الطلب، وحالُ الحساب، وطلبُ إعادة الفتح، وسحبُه.
+ * فالمغلقُ لا يقرأ بياناته ولا يجدّد اشتراكه — ويعود بطلبٍ وقرار.
  */
 @Controller('deletion-request')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -23,8 +28,16 @@ export class DeletionRequestsController {
   constructor(private readonly service: DeletionRequestsService) {}
 
   @Get()
+  @AllowWhileClosed()
   mine(@CurrentTenant() tenant: TenantContext) {
     return this.service.myRequest(tenant.companyId);
+  }
+
+  /** حالُ الحساب: مغلقٌ منذ متى، وحتى متى يبقى أثرُه على الأقلّ (`ق-٥٤٧`). */
+  @Get('account')
+  @AllowWhileClosed()
+  account(@CurrentTenant() tenant: TenantContext) {
+    return this.service.account(tenant.companyId);
   }
 
   @Post()
@@ -32,7 +45,14 @@ export class DeletionRequestsController {
     return this.service.submit(tenant.companyId, tenant.actorType, dto.reason);
   }
 
+  @Post('reopen')
+  @AllowWhileClosed()
+  reopen(@CurrentTenant() tenant: TenantContext) {
+    return this.service.requestReopening(tenant.companyId, tenant.actorType);
+  }
+
   @Post(':id/cancel')
+  @AllowWhileClosed()
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.service.cancel(tenant.companyId, tenant.actorType, id);
   }
@@ -60,7 +80,7 @@ export class AdminDeletionRequestsController {
     return this.service.reject(id, dto.note, decider(req));
   }
 
-  /** Approve AND execute — the one endpoint that actually deletes a company. */
+  /** Approve AND execute — يقيس ثم يقرّر: حذفٌ لبلا حركة، وإغلاقٌ لذات الحركة، وإعادةُ فتحٍ لطلبها. */
   @Post(':id/approve')
   approve(@Req() req: Request, @Param('id') id: string, @Body() dto: DeletionRequestDecisionDto) {
     return this.service.approveAndExecute(id, dto.note, decider(req));

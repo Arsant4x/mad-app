@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
 
 /**
  * Subscription lifecycle — the owner's three rules:
@@ -62,7 +64,9 @@ describe('Subscription lifecycle (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    for (const id of createdCompanyIds) await admin(request(app.getHttpServer()).delete(`/companies/${id}`));
+    // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
+    const prisma = app.get(PrismaService);
+    for (const id of createdCompanyIds) await hardDeleteCompanyForTest(prisma, id);
     await app.close();
   });
 

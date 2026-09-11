@@ -10,7 +10,8 @@ function currentLanguage(): string {
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export type ActorType = 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
-export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED';
+/** `CLOSED` الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — لا يعود بالدفع، بل بطلبٍ وقرار. */
+export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
 
 export interface AuthUser {
   id: string;

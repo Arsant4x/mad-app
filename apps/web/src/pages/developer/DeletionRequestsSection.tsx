@@ -4,6 +4,7 @@ import {
   approveDeletionRequest,
   listDeletionRequests,
   rejectDeletionRequest,
+  type AccountRequestOutcome,
   type AdminDeletionRequest,
   type DeletionRequestStatus,
 } from '../../api/deletionRequests';
@@ -12,15 +13,37 @@ import { dfmt } from '../../lib/format';
 
 const STATUS_META: Record<DeletionRequestStatus, { label: string; badge: string }> = {
   PENDING: { label: 'قيد المراجعة', badge: 'due' },
-  APPROVED: { label: 'نُفِّذ', badge: 'overdue' },
+  APPROVED: { label: 'مُوافَق', badge: 'overdue' },
   REJECTED: { label: 'مرفوض', badge: 'draft' },
   CANCELLED: { label: 'مسحوب', badge: 'draft' },
 };
 
+/** ما وقع فعلاً — لا «نُفِّذ» لكل موافقة (ق-٥٤٢). */
+const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string }> = {
+  DELETED: { label: 'حُذفت نهائياً', badge: 'overdue' },
+  CLOSED: { label: 'أُغلقت — والبيانات باقية', badge: 'overdue' },
+  REOPENED: { label: 'أُعيد فتحها', badge: 'paid' },
+};
+
+/** الوجهُ الذي يُقرأ: الموافقةُ تُعرَض بما وقع، والباقي بحالته. */
+function statusOf(r: AdminDeletionRequest) {
+  return r.status === 'APPROVED' && r.outcome ? badgeAltOf(OUTCOME_META, r.outcome) : badgeAltOf(STATUS_META, r.status);
+}
+
+/** نصُّ التأكيد يقول الحقيقة قبل الضغطة (ق-٥٤٦): أتُحذف أم تُغلَق، ولماذا. */
+function confirmBody(r: AdminDeletionRequest): string {
+  if (r.kind === 'REOPENING') return `سيُعاد فتح حساب "${r.companyName}" ويعود الدخول إليه. هل تريد التنفيذ؟`;
+  if (r.preview?.outcome === 'CLOSE') {
+    return `للمنشأة "${r.companyName}" حركة (${r.preview.movement.join(' · ')}) — فستُغلق ولا تُحذف: يُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية. هل تريد التنفيذ؟`;
+  }
+  return `المنشأة "${r.companyName}" بلا حركة — سيُحذف حسابها وكل بياناتها نهائياً، لا رجعة بعدها. هل تريد التنفيذ؟`;
+}
+
 /**
- * قائمة عمل الدعم: طلبات حذف الحسابات عبر كل المنشآت. الموافقة هنا **تنفّذ**
- * الحذف فعلاً — لذلك خلف تأكيد يسمّي المنشأة باسمها، ويطلب سبباً يُعاد للتاجر
- * عند الرفض. onExecuted يُخطر اللوحة لتحدّث قائمة المنشآت (المحذوفة تختفي).
+ * قائمة عمل الدعم: طلبات حذف الحسابات وإعادة فتحها عبر كل المنشآت. الموافقة هنا
+ * **تقيس ثم تنفّذ** (ق-٥٤٢): بلا حركةٍ حذفٌ، وبحركةٍ إغلاق — والتأكيدُ يسمّي المنشأة
+ * ويقول ما سيقع قبل الضغطة. ولا زرَّ حذفٍ مباشراً في اللوحة (ق-٥٤٨): المسارُ الوحيد هنا.
+ * onExecuted يُخطر اللوحة لتحدّث قائمة المنشآت (المحذوفة تختفي والمغلقة تُوسَم).
  */
 export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void }) {
   const [requests, setRequests] = useState<AdminDeletionRequest[]>([]);
@@ -58,19 +81,20 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-head">
         <div className="card-title">
-          طلبات حذف الحسابات {pending.length > 0 && <span className="badge overdue">{pending.length} بانتظار المراجعة</span>}
+          طلبات حذف الحسابات وإعادة فتحها {pending.length > 0 && <span className="badge overdue">{pending.length} بانتظار المراجعة</span>}
         </div>
       </div>
 
       {error && <p className="error-text">{error}</p>}
 
       {requests.length === 0 ? (
-        <p className="hint">لا طلبات حذف.</p>
+        <p className="hint">لا طلبات.</p>
       ) : (
         <table>
           <thead>
             <tr>
               <th>المنشأة</th>
+              <th>الطلب</th>
               <th>السبب</th>
               <th>التاريخ</th>
               <th>الحالة</th>
@@ -81,10 +105,17 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
             {requests.map((r) => (
               <tr key={r.id}>
                 <td>{r.companyName || '—'}</td>
+                <td>{r.kind === 'REOPENING' ? 'إعادة فتح' : 'حذف'}</td>
                 <td>{r.reason ?? '—'}</td>
                 <td className="num">{dfmt(r.createdAt)}</td>
                 <td>
-                  <span className={`badge ${badgeAltOf(STATUS_META, r.status).badge}`}>{badgeAltOf(STATUS_META, r.status).label}</span>
+                  <span className={`badge ${statusOf(r).badge}`}>{statusOf(r).label}</span>
+                  {r.status === 'PENDING' && r.preview && (
+                    <div className="hint">
+                      {r.preview.outcome === 'CLOSE' ? `لها حركة: ${r.preview.movement.join(' · ')} — ستُغلق` : 'بلا حركة — ستُحذف'}
+                    </div>
+                  )}
+                  {r.outcome === 'CLOSED' && r.movement.length > 0 && <div className="hint">الحركة: {r.movement.join(' · ')}</div>}
                   {r.decidedNote && <div className="hint">{r.decidedNote}</div>}
                   {r.decidedByName && <div className="hint">بقرار: {r.decidedByName}</div>}
                 </td>
@@ -92,7 +123,7 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
                   {r.status === 'PENDING' && (
                     <>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(r)}>
-                        موافقة وتنفيذ
+                        {r.kind === 'REOPENING' ? 'موافقة وإعادة فتح' : 'موافقة وتنفيذ'}
                       </button>{' '}
                       <button
                         className="btn btn-ghost btn-sm"
@@ -119,9 +150,9 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
 
       {confirming && (
         <ConfirmModal
-          title="تنفيذ حذف الحساب"
-          body={`سيُحذف حساب "${confirming.companyName}" وكل بياناته نهائياً — لا رجعة بعدها. هل تريد التنفيذ؟`}
-          confirmLabel="تنفيذ الحذف"
+          title={confirming.kind === 'REOPENING' ? 'إعادة فتح الحساب' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق الحساب' : 'تنفيذ حذف الحساب'}
+          body={confirmBody(confirming)}
+          confirmLabel={confirming.kind === 'REOPENING' ? 'إعادة الفتح' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق' : 'تنفيذ الحذف'}
           onConfirm={() => {
             const target = confirming;
             setConfirming(null);

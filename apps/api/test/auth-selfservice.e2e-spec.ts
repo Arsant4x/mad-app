@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
 
 /**
  * Self-service auth — the SaaS front door:
@@ -52,7 +53,8 @@ describe('Auth self-service: register + password reset (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    for (const id of cleanupCompanyIds) await admin(request(app.getHttpServer()).delete(`/companies/${id}`));
+    // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
+    for (const id of cleanupCompanyIds) await hardDeleteCompanyForTest(prisma, id);
     await app.close();
   });
 

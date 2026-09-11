@@ -1,14 +1,29 @@
 import { apiClient } from './client';
+import type { AccountStatus } from './client';
 
 export type DeletionRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+/** نوعُ الطلب: حذفٌ — أو إعادةُ فتحٍ لحسابٍ مغلق (ق-٥٤٨). */
+export type AccountRequestKind = 'DELETION' | 'REOPENING';
+/** ما وقع بالموافقة (ق-٥٤٢): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها. */
+export type AccountRequestOutcome = 'DELETED' | 'CLOSED' | 'REOPENED';
 
 export interface DeletionRequest {
   id: string;
+  kind: AccountRequestKind;
   reason: string | null;
   status: DeletionRequestStatus;
+  outcome: AccountRequestOutcome | null;
+  /** الحركةُ التي أوجبت الإغلاقَ — بأسمائها، على القرار نفسه. */
+  movement: string[];
   decidedAt: string | null;
   decidedNote: string | null;
   createdAt: string;
+}
+
+/** ما يراه مديرُ المنصّة قبل الموافقة — الحقيقةُ قبل الضغطة: أتُحذف أم تُغلَق، ولماذا. */
+export interface DecisionPreview {
+  outcome: 'DELETE' | 'CLOSE';
+  movement: string[];
 }
 
 export interface AdminDeletionRequest extends DeletionRequest {
@@ -17,15 +32,35 @@ export interface AdminDeletionRequest extends DeletionRequest {
   companyName: string;
   /** من قرّر — مديرُ المنصّة الذي وافق أو رفض. */
   decidedByName: string | null;
+  /** على طلبات الحذف المعلَّقة فقط. */
+  preview?: DecisionPreview;
+}
+
+/** حالُ الحساب للتاجر — يُقرأ وهو مغلق (ق-٥٤٧). */
+export interface AccountClosureState {
+  status: AccountStatus;
+  closedAt: string | null;
+  retainUntil: string | null;
+}
+
+export interface ApprovalResult {
+  executed: boolean;
+  outcome: AccountRequestOutcome;
+  companyId: string;
+  orgName: string;
+  movement: string[];
+  retainUntil: string | null;
 }
 
 // Merchant side
 export const getMyDeletionRequest = () => apiClient.get<DeletionRequest | null>('/deletion-request').then((r) => r.data);
+export const getAccountClosureState = () => apiClient.get<AccountClosureState>('/deletion-request/account').then((r) => r.data);
 export const submitDeletionRequest = (reason?: string) => apiClient.post<DeletionRequest>('/deletion-request', { reason }).then((r) => r.data);
+export const requestReopening = () => apiClient.post<DeletionRequest>('/deletion-request/reopen').then((r) => r.data);
 export const cancelDeletionRequest = (id: string) => apiClient.post<DeletionRequest>(`/deletion-request/${id}/cancel`).then((r) => r.data);
 
 // Support side
 export const listDeletionRequests = () => apiClient.get<AdminDeletionRequest[]>('/admin/deletion-requests').then((r) => r.data);
 export const rejectDeletionRequest = (id: string, note?: string) => apiClient.post<AdminDeletionRequest>(`/admin/deletion-requests/${id}/reject`, { note }).then((r) => r.data);
 export const approveDeletionRequest = (id: string, note?: string) =>
-  apiClient.post<{ executed: boolean; companyId: string; orgName: string }>(`/admin/deletion-requests/${id}/approve`, { note }).then((r) => r.data);
+  apiClient.post<ApprovalResult>(`/admin/deletion-requests/${id}/approve`, { note }).then((r) => r.data);

@@ -139,7 +139,8 @@ export class CompaniesService {
     // in the future, treat it as a manual reactivation rather than leaving a
     // frozen/stopped company stuck (evaluateCompanyStatus only ever moves
     // ACTIVE -> FROZEN -> STOPPED forward, it never un-freezes on its own).
-    const reactivate = dto.subEnd && existing.status !== 'ACTIVE' && newSubEnd! > new Date();
+    // ⛔ والمغلقُ لا يعود بالدفع ولا بتمديد الاشتراك (`ق-٥٤٧`) — يعود بطلبٍ وقرارٍ مسجَّل وحده.
+    const reactivate = dto.subEnd && existing.status !== 'ACTIVE' && existing.status !== 'CLOSED' && newSubEnd! > new Date();
 
     return this.prisma.company.update({
       where: { id },

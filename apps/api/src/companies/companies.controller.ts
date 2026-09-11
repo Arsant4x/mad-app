@@ -1,10 +1,15 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 
+/**
+ * ⛔ **لا مسارَ حذفٍ مباشراً** (`ق-٥٤٨`): إغلاقُ منشأةٍ أو حذفُها واقعةٌ تمسّ التاجر، فلا
+ * تقع بضغطةٍ بلا طلبٍ منه وأثرٍ يحمل من قرّر — **المسارُ الوحيد طلبُ الحذف وموافقتُه**
+ * (`/admin/deletion-requests`). كان هنا `DELETE /companies/:id` وحُذف.
+ */
 @Controller('companies')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
 export class CompaniesController {
@@ -23,11 +28,5 @@ export class CompaniesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateCompanyDto) {
     return this.companiesService.update(id, dto);
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id') id: string) {
-    return this.companiesService.remove(id);
   }
 }

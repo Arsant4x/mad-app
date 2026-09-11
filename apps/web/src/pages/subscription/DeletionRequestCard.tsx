@@ -4,6 +4,7 @@ import {
   cancelDeletionRequest,
   getMyDeletionRequest,
   submitDeletionRequest,
+  type AccountRequestOutcome,
   type DeletionRequest,
   type DeletionRequestStatus,
 } from '../../api/deletionRequests';
@@ -12,15 +13,25 @@ import { dfmt } from '../../lib/format';
 
 const STATUS_META: Record<DeletionRequestStatus, { label: string; badge: string }> = {
   PENDING: { label: 'قيد المراجعة', badge: 'due' },
-  APPROVED: { label: 'نُفِّذ', badge: 'overdue' },
+  APPROVED: { label: 'مُوافَق', badge: 'overdue' },
   REJECTED: { label: 'مرفوض', badge: 'draft' },
   CANCELLED: { label: 'مسحوب', badge: 'draft' },
+};
+
+/** ما وقع فعلاً — «نُفِّذ» لمن حُذفت، و«أُغلق» لمن لها حركة (ق-٥٤٢). */
+const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string }> = {
+  DELETED: { label: 'نُفِّذ', badge: 'overdue' },
+  CLOSED: { label: 'أُغلق', badge: 'overdue' },
+  REOPENED: { label: 'أُعيد الفتح', badge: 'paid' },
 };
 
 /**
  * حذف الحساب، بصيغة SaaS: التاجر يقدّم طلباً والدعم هو من ينفّذه — لا زرّ
  * «امسح كل شيء». يعيش في صفحة الاشتراك لأن هذا هو المكان الذي يُدار منه
  * وجود الحساب نفسه.
+ *
+ * والحقيقةُ قبل الطلب (ق-٥٤٧): منشأةٌ لها حركة تُغلَق ولا تُحذف — فيُقال ذلك هنا،
+ * لا بعد الموافقة.
  */
 export function DeletionRequestCard() {
   const [req, setReq] = useState<DeletionRequest | null>(null);
@@ -54,15 +65,18 @@ export function DeletionRequestCard() {
   if (loading) return null;
 
   const open = req?.status === 'PENDING';
+  const shown = req ? (req.status === 'APPROVED' && req.outcome ? badgeAltOf(OUTCOME_META, req.outcome) : badgeAltOf(STATUS_META, req.status)) : null;
 
   return (
     <div className="card" style={{ marginTop: 14, borderColor: 'rgba(180, 65, 60, 0.35)' }}>
       <div className="card-title" style={{ marginBottom: 10 }}>حذف الحساب</div>
 
-      {req && (
+      {req && shown && (
         <div style={{ marginBottom: 10 }}>
-          <span className={`badge ${badgeAltOf(STATUS_META, req.status).badge}`}>{badgeAltOf(STATUS_META, req.status).label}</span>{' '}
-          <span className="hint">قُدِّم في {dfmt(req.createdAt)}</span>
+          <span className={`badge ${shown.badge}`}>{shown.label}</span>{' '}
+          <span className="hint">
+            {req.kind === 'REOPENING' ? 'طلب إعادة فتح' : 'طلب حذف'} — قُدِّم في {dfmt(req.createdAt)}
+          </span>
           {req.decidedNote && <p className="hint" style={{ marginTop: 6 }}>ردّ الدعم: {req.decidedNote}</p>}
         </div>
       )}
@@ -87,7 +101,7 @@ export function DeletionRequestCard() {
       ) : (
         <>
           <p className="hint" style={{ marginBottom: 10 }}>
-            حذف الحساب لا يتم مباشرةً: تقدّم طلباً يراجعه دعم المنصة ثم ينفّذه. تُحذف بعدها كل بياناتك نهائياً.
+            حذف الحساب لا يتم مباشرةً: تقدّم طلباً يراجعه دعم المنصة ثم ينفّذه. منشأةٌ بلا حركة تُحذف بياناتها نهائياً؛ ومنشأةٌ لها حركة (فواتير · قيود · سندات · عقود · مهامّ…) تُغلق ولا تُحذف — يُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية ثم تُمحى. ويمكنك طلب إعادة الفتح لاحقاً.
           </p>
           <button className="btn btn-ghost btn-sm" onClick={() => setAsking(true)}>
             طلب حذف الحساب
@@ -100,7 +114,7 @@ export function DeletionRequestCard() {
       {confirming && (
         <ConfirmModal
           title="تقديم طلب حذف الحساب"
-          body="سيُراجع دعم المنصة طلبك، وعند تنفيذه تُحذف كل بيانات منشأتك نهائياً ولا يمكن استرجاعها. هل أنت متأكد؟"
+          body="سيُراجع دعم المنصة طلبك. إن كانت منشأتك بلا حركة تُحذف كل بياناتها نهائياً ولا يمكن استرجاعها؛ وإن كانت لها حركة تُغلق ويُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية. هل أنت متأكد؟"
           confirmLabel="نعم، قدِّم الطلب"
           onConfirm={() => {
             setConfirming(false);

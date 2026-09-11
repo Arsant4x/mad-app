@@ -6,6 +6,8 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { CompanyMovementService } from '../src/companies/company-movement.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
 
 /**
  * حذف الحساب بصيغة SaaS (قاعدة المالك 2026-08-07): التاجر لا يمسح بياناته
@@ -62,7 +64,8 @@ describe('Account deletion requests (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    for (const id of cleanupCompanyIds) await admin(request(app.getHttpServer()).delete(`/companies/${id}`));
+    // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
+    for (const id of cleanupCompanyIds) await hardDeleteCompanyForTest(prisma, id);
     // الطلباتُ تبقى بعد حذف المنشأة عمداً (`ق-٥٣٧`) — فتُنظَّف من حيث بقيت؛ والجدولُ `ENABLE` لا `FORCE` فالمالكُ يراها بلا سياق.
     await prisma.accountDeletionRequest.deleteMany({ where: { companyId: { in: madeCompanyIds } } });
     await app.close();
@@ -254,7 +257,7 @@ describe('Account deletion requests (e2e)', () => {
    * لا إعادةَ (`409`) ولا سحبَ (`409`)، **والتاجرُ يقرأ «نُفِّذ» كذباً** (مقيسٌ في `ق-٥٣٨`).
    * والوجهُ كان `500` بلا اسم — **والرفضُ يسمّي المانعَ** (`ق-٢٦٥`).
    */
-  it('🔴 a company with a task: approval is refused by name, the request stays PENDING, and the company lives', async () => {
+  it('🔴 a company with a task is closed, not deleted — the record names the movement, and the direct platform path is gone', async () => {
     const co = await makeCompany();
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
 
@@ -270,29 +273,98 @@ describe('Account deletion requests (e2e)', () => {
       .expect(201);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولة' }).expect(409);
-    expect(refused.body.message).toMatch(/سجلّ المهام|المهامّ/);
+    // ⚖️ ما ترفض القاعدةُ حذفَه حركةٌ من الصنف الأوّل (`ق-٥٤٦`) — فالموافقةُ تُغلق لا تحذف، **بلا 409 ولا 500**.
+    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'لها سجلّات' }).expect(201);
+    expect(approved.body.outcome).toBe('CLOSED');
+    expect(approved.body.movement.join(' ')).toMatch(/سجلّ المهام|مهامّ/);
 
-    // ⭐ الطلبُ باقٍ قيد المراجعة — لا «مُوافَقاً» كذباً — والمنشأةُ حيّة، والتاجرُ يرى الحقيقة.
+    // ⭐ والطلبُ صادق: مُوافَقٌ ووقع الإغلاقُ فعلاً — والمنشأةُ حيّةٌ مغلقة، والحركةُ مكتوبةٌ على القرار.
     const kept = await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } });
-    expect(kept!.status).toBe('PENDING');
-    expect(kept!.decidedAt).toBeNull();
-    expect(kept!.decidedByName).toBeNull();
-    expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeTruthy();
-    const mine = await auth(request(app.getHttpServer()).get('/deletion-request')).expect(200);
-    expect(mine.body.status).toBe('PENDING');
+    expect(kept!.status).toBe('APPROVED');
+    expect(kept!.outcome).toBe('CLOSED');
+    expect(kept!.movement.join(' ')).toMatch(/سجلّ المهام|مهامّ/);
+    expect(kept!.decidedByName).toBe(process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan');
+    const company = await prisma.company.findUnique({ where: { id: co.id } });
+    expect(company?.status).toBe('CLOSED');
+    expect(company?.closedAt).toBeTruthy();
 
-    // ومسارُ لوحة المنصّة يرفض بالاسم نفسه — لا `500`.
-    const direct = await admin(request(app.getHttpServer()).delete(`/companies/${co.id}`)).expect(409);
-    expect(direct.body.message).toMatch(/سجلّ المهام|المهامّ/);
-
-    // والمخرجُ اليوم: الرفضُ بملاحظةٍ يُغلق الطلبَ صادقاً.
-    const rejected = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/reject`)).send({ note: 'المنشأة لها سجلّات لا تُحذف' }).expect(201);
-    expect(rejected.body.status).toBe('REJECTED');
+    // ⛔ ولا مسارَ مباشراً للمنصّة (`ق-٥٤٨`): الطريقُ الذي كان يحذف لم يعد موجوداً.
+    await admin(request(app.getHttpServer()).delete(`/companies/${co.id}`)).expect(404);
 
     // ⚠️ المنشأةُ تبقى على القاعدة عمداً — مهامُّها لا تُحذف (`ق-١١٠`) — فتُسقط من التنظيف.
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
   }, 60000);
+
+  /**
+   * ⚖️ **المنشأةُ ذاتُ الحركة تُغلَق لا تُحذف — ثم تُفتح بطلبٍ وقرار** (`ق-٥٤٢` · `ق-٥٤٦` · `ق-٥٤٧` · `ق-٥٤٨`).
+   *
+   * الحركةُ هنا **عرضُ سعرٍ واحد** — **الجدولُ الخامس** الذي أوقع الأمرَ الأضيق (`ق-٥٤٥`): لا مهمّةٌ
+   * ولا تفويضٌ ولا فاتورةٌ ولا قيد، وقد كان يُحذف. فتُغلَق: الدخولُ يُقطع برسالةٍ تحمل أجلَ
+   * الحفظ الأدنى، والبياناتُ تبقى، والطلبُ يحمل ما وقع والحركةَ ومن قرّر — **وتعود بطلبٍ وقرار**.
+   *
+   * ⚠️ **والمعيارُ يُقرأ تحت سياق المنشأة**: الجدولُ تحت `FORCE`، فالعدُّ بلا سياقٍ صفرٌ بلا
+   * خطأ (`ق-٢٦٢`) — **ويُثبَت هنا أن الصفرَ بلا سياقٍ عمىً والوجودَ تحت السياق حقيقة**.
+   */
+  it('⚖️ a company with one quote is closed, not deleted — the message carries the deadline, and reopening is by request and recorded decision', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل عرض ${suffix}` }).expect(201);
+    const today = new Date().toISOString().slice(0, 10);
+    const inTwoWeeks = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    await auth(request(app.getHttpServer()).post('/quotes'))
+      .send({ customerId: customer.body.id, issueDate: today, validUntil: inTwoWeeks, lines: [{ description: `تصميم ${suffix}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })
+      .expect(201);
+
+    // ⓪ المجسُّ: بلا سياقٍ صفرٌ (عمى) — وتحت السياق واحدٌ (حقيقة) — فالمعيارُ يقرأ تحت السياق.
+    expect(await prisma.quote.count({ where: { companyId: co.id } })).toBe(0);
+    const report = await app.get(CompanyMovementService).describe(co.id);
+    expect(report.hasMovement).toBe(true);
+    expect(report.labels).toEqual(['عروض أسعار']);
+
+    // ① المعاينةُ قبل الضغطة تقول الحقيقة.
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+    const worklist = await admin(request(app.getHttpServer()).get('/admin/deletion-requests')).expect(200);
+    const listed = (worklist.body as { id: string; preview?: { outcome: string; movement: string[] } }[]).find((r) => r.id === filed.body.id);
+    expect(listed?.preview).toEqual({ outcome: 'CLOSE', movement: ['عروض أسعار'] });
+
+    // ② الموافقةُ تُغلق — وأجلُ الحفظ عشرُ سنواتٍ من الإغلاق (لا عقار).
+    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    expect(approved.body.outcome).toBe('CLOSED');
+    const company = await prisma.company.findUnique({ where: { id: co.id } });
+    expect(company?.status).toBe('CLOSED');
+    expect(company?.retainUntil?.getFullYear()).toBe(company!.closedAt!.getFullYear() + 10);
+    expect(await prisma.quote.count()).toBeGreaterThanOrEqual(0); // البياناتُ تبقى — لا حذف.
+
+    // ③ الدخولُ مقطوع — والرسالةُ تجيب «وأين بياناتي؟» وبأجل — والتاجرُ يقرأ حالَه وحالَ طلبه.
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    expect(login.body.user.status).toBe('CLOSED');
+    const closedToken = login.body.accessToken as string;
+    const blocked = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${closedToken}`).expect(403);
+    expect(blocked.body.code).toBe('ACCOUNT_CLOSED');
+    expect(blocked.body.message).toContain('محفوظةٌ بمدد الحفظ النظامية حتى');
+    expect(blocked.body.message).toContain(company!.retainUntil!.toISOString().slice(0, 10));
+    await request(app.getHttpServer()).post('/subscription/renew').set('Authorization', `Bearer ${closedToken}`).send({ months: 1 }).expect(403);
+    const account = await request(app.getHttpServer()).get('/deletion-request/account').set('Authorization', `Bearer ${closedToken}`).expect(200);
+    expect(account.body.status).toBe('CLOSED');
+    const mine = await request(app.getHttpServer()).get('/deletion-request').set('Authorization', `Bearer ${closedToken}`).expect(200);
+    expect(mine.body.outcome).toBe('CLOSED');
+    // ولا طلبَ حذفٍ ثانياً وهو مغلق — الوصولُ مقطوعٌ قبل الخدمة (403 بالرمز)، والخدمةُ خلفه دفاعٌ ثانٍ (409).
+    const again = await request(app.getHttpServer()).post('/deletion-request').set('Authorization', `Bearer ${closedToken}`).send({}).expect(403);
+    expect(again.body.code).toBe('ACCOUNT_CLOSED');
+
+    // ④ إعادةُ الفتح: بطلبٍ من التاجر، وقرارٍ يحمل اسمَ من قرّر — ثم يعود الدخول.
+    const reopen = await request(app.getHttpServer()).post('/deletion-request/reopen').set('Authorization', `Bearer ${closedToken}`).expect(201);
+    expect(reopen.body.kind).toBe('REOPENING');
+    expect(reopen.body.status).toBe('PENDING');
+    const reopened = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${reopen.body.id}/approve`)).send({ note: 'عاد' }).expect(201);
+    expect(reopened.body.outcome).toBe('REOPENED');
+    const trail = await prisma.accountDeletionRequest.findUnique({ where: { id: reopen.body.id } });
+    expect(trail?.outcome).toBe('REOPENED');
+    expect(trail?.decidedByName).toBe(process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan');
+    expect((await prisma.company.findUnique({ where: { id: co.id } }))?.status).toBe('ACTIVE');
+    await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${closedToken}`).expect(200);
+    await request(app.getHttpServer()).post('/deletion-request/reopen').set('Authorization', `Bearer ${closedToken}`).expect(409);
+  }, 90000);
 
   it('an ordinary tenant can never reach the support endpoints', async () => {
     const co = await makeCompany();
