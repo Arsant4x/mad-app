@@ -1503,6 +1503,13 @@ model AccountDeletionRequest {
   outcome  AccountRequestOutcome?
   movement String[]              @default([])
 
+  /// النسخةُ الكاملة (`ق-٥٥٤`): **تُنتَج قبل أيّ إغلاقٍ أو محو — ولا يُمحى شيءٌ قبل أن ينال
+  /// صاحبُه نسختَه**. البيانُ يحمل الملفّاتِ (سنويةً + الأساسية + المختومُ كما هو) بمفاتيحها
+  /// وأحجامها وبصماتها، والأجلُ آخرُ يومٍ يُتاح فيه التنزيل.
+  archiveManifest   Json?
+  archiveProducedAt DateTime?
+  archiveExpiresAt  DateTime?
+
   /// Set when support decides; the note is what gets communicated back.
   decidedAt   DateTime?
   decidedNote String?

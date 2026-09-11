@@ -40,6 +40,13 @@ export class DeletionRequestsController {
     return this.service.account(tenant.companyId);
   }
 
+  /** نسخةُ الإغلاق (`ق-٥٥٤`): ملفّاتُها بروابطَ موقَّعة — للمالك، وهو مغلق. */
+  @Get('archive')
+  @AllowWhileClosed()
+  archive(@CurrentTenant() tenant: TenantContext) {
+    return this.service.closureArchive(tenant.companyId, tenant.actorType);
+  }
+
   @Post()
   submit(@CurrentTenant() tenant: TenantContext, @Body() dto: SubmitDeletionRequestDto) {
     return this.service.submit(tenant.companyId, tenant.actorType, dto.reason);

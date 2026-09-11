@@ -153,4 +153,33 @@ export class FilesService implements OnModuleInit {
     assertKeyBelongsToCompany(key, companyId);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
+
+  /**
+   * كتابةُ كائنٍ بمفتاحٍ يحدّده المستدعي — **للنُّسخ المنتَجة على الخادم** (نسخةُ الإغلاق
+   * `ق-٥٥٤`) لا لمرفقات المستخدم: لا حدَّ حجمٍ ولا قائمةَ أنواع، لأن المصدرَ الخادمُ نفسُه.
+   * والمفتاحُ يُشترط تحت بادئة النُّسخ كي لا يُكتب فوق مرفقٍ.
+   */
+  async putObject(key: string, body: Buffer, contentType: string): Promise<{ key: string; bytes: number }> {
+    if (!key.startsWith(ARCHIVE_PREFIX)) throw new ForbiddenException(MSG.file_access_denied);
+    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }));
+    return { key, bytes: body.byteLength };
+  }
+
+  /** حذفُ كائنٍ من النُّسخ — للتنظيف وللمحو عند انقضاء الأجل (`ق-٥٥٦`)؛ لا يمسّ مرفقاً. */
+  async deleteArchiveObject(key: string): Promise<void> {
+    if (!key.startsWith(ARCHIVE_PREFIX)) throw new ForbiddenException(MSG.file_access_denied);
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /** رابطٌ موقَّعٌ قصيرُ العمر لكائنٍ من النُّسخ — بالعنوان العام كما في `downloadUrl`. */
+  async archiveUrl(key: string): Promise<{ url: string; expiresInSeconds: number }> {
+    if (!key.startsWith(ARCHIVE_PREFIX)) throw new ForbiddenException(MSG.file_access_denied);
+    const url = await getSignedUrl(this.signingClient, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+      expiresIn: DOWNLOAD_URL_TTL_SECONDS,
+    });
+    return { url, expiresInSeconds: DOWNLOAD_URL_TTL_SECONDS };
+  }
 }
+
+/** بادئةُ نُسخ الإغلاق — منفصلةٌ عن مرفقات المنشآت (`companies/…`) بالاسم. */
+export const ARCHIVE_PREFIX = 'archives/';
