@@ -61,6 +61,11 @@ export class WarehousesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: حذفُ المستودع يُمنع بحركاته كلِّها في
+   * الاتجاهين — والحركةُ تُنسب إلى مستودعٍ لا إلى فرع القارئ، ومستودعٌ استقبل
+   * بضاعةً من فرعٍ محجوبٍ ليس فارغاً.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.warehouse.findUnique({ where: { id } });

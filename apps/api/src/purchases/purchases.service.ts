@@ -268,6 +268,10 @@ export class PurchasesService {
    *
    * Amounts are base-currency, so a company that paid a foreign supplier still
    * gets one comparable total.
+   *
+   * **على مستوى المنشأة بحقّها**: مصاريفُ التأسيس استثمارُ المنشأة الواحد لا
+   * مصروفُ فرع — والتقريرُ يجمعها كلَّها ليُقارَن بسنة التشغيل الأولى، وتقسيمُها
+   * على الفروع يُخفي ما بُنيت به المنشأة.
    */
   incorporationReport(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

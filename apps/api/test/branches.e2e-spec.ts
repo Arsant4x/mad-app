@@ -27,6 +27,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
   const createdInvoiceIds: string[] = [];
   const createdQuoteIds: string[] = [];
   const createdDrawerIds: string[] = [];
+  const seededShiftIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -104,6 +105,10 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     }
     for (const id of createdDrawerIds) {
       await request(app.getHttpServer()).delete(`/cash-drawers/${id}`).set('Authorization', `Bearer ${ownerToken}`);
+    }
+    // لا مسارَ حذفٍ للمناوبات — فالمزروعُ يُحذف من حيث زُرع.
+    if (seededShiftIds.length) {
+      await tenantPrisma.runInTenantContext(companyAId, (tx) => tx.posShift.deleteMany({ where: { id: { in: seededShiftIds } } }));
     }
     if (employeeId) await request(app.getHttpServer()).delete(`/company-users/${employeeId}`).set('Authorization', `Bearer ${ownerToken}`);
     for (const id of [branchNorthId, branchSouthId]) {
@@ -333,6 +338,41 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     // ⭐ والمالكُ يرى الثلاثة — فالحجبُ بالعزل لا بكسر القائمة.
     const ownerRes = await request(app.getHttpServer()).get('/cash-drawers').set('Authorization', `Bearer ${ownerToken}`).expect(200);
     expect((ownerRes.body as { id: string }[]).map((d) => d.id)).toEqual(expect.arrayContaining(drawerIds));
+  }, 60000);
+
+  /**
+   * 🔴 **ولا بابَ جانبياً** (`ق-٥١٧`): ما تحجبه القائمةُ بالفرع **لا يعرضه
+   * تقريرٌ باسم الفرع ولا قائمةُ مناوبات**.
+   *
+   * كانت قائمةُ المناوبات تعرض مناوباتِ المنشأة كلِّها بمجاميع نقدها لكلّ من
+   * يملك الشاشة، **وكانت التقاريرُ تأخذ `?branchId=` كما وصل** — فموظّفُ الشمال
+   * يطلب مرتجعاتِ الجنوب باسمه فيراها.
+   *
+   * والمناوبةُ تُزرع في القاعدة مُقفلةً — فمناوبةٌ تُفتح بالمسار تبقى مفتوحةً إن
+   * سقطت الحالةُ قبل إقفالها، **وتمنع فتحَ التالية** (`ق-٤٩٥`).
+   */
+  it('🔴 ولا يفتح له تقريرٌ باسم الفرع ولا قائمةُ المناوبات ما أُغلق في القائمة', async () => {
+    await restrictEmployeeToNorth();
+
+    const southShiftId = await tenantPrisma.runInTenantContext(companyAId, async (tx) => {
+      const shift = await tx.posShift.create({
+        data: { branchId: branchSouthId, openedById: companyAId, openedByName: 'مالك المنشأة', status: 'CLOSED', closedAt: new Date(), openingFloat: 50, declaredClosing: 50 } as never,
+      });
+      return shift.id;
+    });
+    seededShiftIds.push(southShiftId);
+
+    const shifts = await request(app.getHttpServer()).get('/pos/shifts').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    expect((shifts.body as { id: string }[]).map((s) => s.id)).not.toContain(southShiftId);
+    const ownerShifts = await request(app.getHttpServer()).get('/pos/shifts').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    expect((ownerShifts.body as { id: string }[]).map((s) => s.id)).toContain(southShiftId);
+
+    // فرعٌ يُطلب باسمه يُقاس على فروع القارئ: الجنوبُ يُرفض، والشمالُ يمرّ، والمالكُ يمرّ بالاثنين.
+    for (const path of ['/reports/returns', '/reports/note-deadlines', '/reports/trial-balance', '/reports/receivables-aging']) {
+      await request(app.getHttpServer()).get(path).query({ branchId: branchSouthId }).set('Authorization', `Bearer ${employeeToken}`).expect(403);
+      await request(app.getHttpServer()).get(path).query({ branchId: branchNorthId }).set('Authorization', `Bearer ${employeeToken}`).expect(200);
+      await request(app.getHttpServer()).get(path).query({ branchId: branchSouthId }).set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    }
   }, 60000);
 
   it('restores unrestricted visibility when the assignment is cleared', async () => {

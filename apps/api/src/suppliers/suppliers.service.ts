@@ -55,6 +55,10 @@ export class SuppliersService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: حذفُ المورّد يُمنع بمشترياته في أيّ فرع —
+   * فالمورّدُ كيانُ منشأة، وشراءٌ في فرعٍ محجوبٍ عن القارئ يبقى مانعاً.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.supplier.findUnique({ where: { id } });

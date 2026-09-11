@@ -37,6 +37,10 @@ export class AccountsService {
    * `openingDate` فارغةٌ تعني «لم يعلنها التاجر»، **فتُقرأ من تاريخ القيد
    * الافتتاحيّ نفسه**: العرضُ صادقٌ من أول يوم **بلا كتابة صفٍّ واحد**،
    * ويبقى في الصفّ ما يميّز المُعلَن من المشتقّ (`openingDateDeclared`).
+   *
+   * **على مستوى المنشأة بحقّها**: تاريخُ افتتاح الحساب صفةٌ للحساب في دليلٍ
+   * واحد للمنشأة — والقيدُ الافتتاحيّ يُقرأ ليُشتقّ منه التاريخُ لا لتُعرض
+   * قيمتُه، فلا معنى لفرعٍ فيه.
    */
   list(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -99,6 +103,11 @@ export class AccountsService {
     );
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: قفلُ نوع الحساب يقوم على أيّ سطرٍ مرحَّلٍ
+   * عليه في أيّ فرع — فتغييرُ الجهة يقلب كلَّ ترحيلٍ سابق أينما وقع، وسطرٌ
+   * محجوبٌ عن القارئ يبقى مانعاً.
+   */
   update(companyId: string, id: string, dto: UpdateAccountDto) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -172,6 +181,11 @@ export class AccountsService {
     );
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: قيودُ افتتاح الحساب مملوكةٌ للحساب لا
+   * للفرع، وحذفُه يعكسها كلَّها — فمن يحذف حساباً يحذفه من دفتر المنشأة لا
+   * من فرعه.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.account.findUnique({ where: { id } });

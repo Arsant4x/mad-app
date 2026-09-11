@@ -95,7 +95,7 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
     expect(target).toBeTruthy();
 
     const narrowed = await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      customerExposure(tx, { asOf: endOfToday(), customerId: target.customerId }),
+      customerExposure(tx, { asOf: endOfToday(), allowedBranchIds: 'all', customerId: target.customerId }),
     );
     expect(narrowed).toHaveLength(1);
     expect(narrowed[0].total).toBe(target.total);

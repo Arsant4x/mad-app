@@ -85,6 +85,11 @@ export class BranchesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: العدُّ على الفرع المحذوف نفسِه لا على فروع
+   * القارئ — والحذفُ فعلُ مالكٍ نطاقُه الكلّ، ومنعُه يقوم على تاريخ الفرع
+   * كاملاً وإن حُجب عن غيره.
+   */
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
     assertIsCompanyOwner(actorType);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

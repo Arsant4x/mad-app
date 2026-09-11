@@ -51,6 +51,10 @@ export const GENESIS_PREVIOUS_HASH = createHash('sha256').update('0').digest('ba
  * The read is unlocked, so two concurrent callers may still compute the same
  * position; `@@unique([egsUnitId, zatcaIcv])` turns that into a visible
  * `P2002` and `ZatcaService` retries — see the comment above its call.
+ *
+ * **على مستوى المنشأة بحقّها**: موقعُ الإصدار التالي يُقرأ على وحدة الإصدار
+ * (`egsUnitId`) — والسلسلةُ سلسلةُ الوحدة عند الهيئة لا سلسلةُ فرع، وموقعٌ
+ * محجوبٌ يُعطي رقماً محجوزاً فيصطدم.
  */
 export async function nextIcv(tx: Prisma.TransactionClient, egsUnitId: string): Promise<number> {
   const top = await tx.invoice.aggregate({ where: { egsUnitId, zatcaIcv: { not: null } }, _max: { zatcaIcv: true } });
@@ -78,6 +82,9 @@ export async function nextIcv(tx: Prisma.TransactionClient, egsUnitId: string): 
  *
  * SUBMITTING is excluded for the same reason — nothing is accepted yet, and a
  * retry in flight still carries the *previous* attempt's stale hash.
+ *
+ * **على مستوى المنشأة بحقّها**: آخرُ بصمةٍ مقبولةٍ تُقرأ على وحدة الإصدار
+ * كلِّها — فبصمةٌ محجوبةٌ عن القارئ تكسر السلسلةَ عند الهيئة التي تحفظها كاملة.
  */
 export async function latestChainHash(tx: Prisma.TransactionClient, egsUnitId: string): Promise<string> {
   const previous = await tx.invoice.findFirst({

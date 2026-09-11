@@ -22,7 +22,7 @@ export class PosController {
   @Get('shifts')
   @RequiresAction('view')
   listShifts(@CurrentTenant() tenant: TenantContext) {
-    return this.posService.listShifts(tenant.companyId);
+    return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Get('shifts/current')
