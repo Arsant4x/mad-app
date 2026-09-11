@@ -2,7 +2,7 @@ import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { SupportAccessSection } from './SupportAccessSection';
-import { createCompany, deleteCompany, listCompanies, updateCompany, type Company, type CompanyInput } from '../../api/companies';
+import { createCompany, listCompanies, updateCompany, type Company, type CompanyInput } from '../../api/companies';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -15,6 +15,7 @@ const STATUS_META: Record<Company['status'], { label: string; badgeClass: string
   ACTIVE: { label: 'نشط', badgeClass: 'paid' },
   FROZEN: { label: 'مجمّد', badgeClass: 'due' },
   STOPPED: { label: 'متوقف', badgeClass: 'overdue' },
+  CLOSED: { label: 'مغلق', badgeClass: 'overdue' },
 };
 
 export function DeveloperPanelPage() {
@@ -23,7 +24,6 @@ export function DeveloperPanelPage() {
   const [loading, setLoading] = useState(true);
   const [companyModal, setCompanyModal] = useState<{ mode: 'create' } | { mode: 'edit'; company: Company } | null>(null);
   const [templateModal, setTemplateModal] = useState<{ mode: 'create' } | { mode: 'edit'; template: PermissionTemplate } | null>(null);
-  const [pendingDeleteCompany, setPendingDeleteCompany] = useState<Company | null>(null);
   const [pendingDeleteTemplate, setPendingDeleteTemplate] = useState<PermissionTemplate | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -73,18 +73,7 @@ export function DeveloperPanelPage() {
     await reload();
   }
 
-  async function confirmDeleteCompany() {
-    if (!pendingDeleteCompany) return;
-    setDeleteError(null);
-    try {
-      await deleteCompany(pendingDeleteCompany.id);
-      setPendingDeleteCompany(null);
-      await reload();
-    } catch (e) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? i18n.t('err_account_delete'));
-    }
-  }
+  // ⛔ لا حذفَ مباشراً للحساب من هنا (ق-٥٤٨): المسارُ الوحيد طلبُ التاجر وموافقتُه في قسم الطلبات أدناه.
 
   async function confirmDeleteTemplate() {
     if (!pendingDeleteTemplate) return;
@@ -206,7 +195,6 @@ export function DeveloperPanelPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setCompanyModal({ mode: 'edit', company: c }) },
-                      { label: '🗑 حذف الحساب', onClick: () => setPendingDeleteCompany(c), danger: true },
                     ]}
                   />
                 </td>
@@ -230,19 +218,6 @@ export function DeveloperPanelPage() {
 
       {templateModal && (
         <TemplateModal editing={templateModal.mode === 'edit' ? templateModal.template : null} onCancel={() => setTemplateModal(null)} onSave={handleSaveTemplate} />
-      )}
-
-      {pendingDeleteCompany && (
-        <ConfirmModal
-          title="حذف الحساب"
-          body={deleteError ?? `حذف حساب "${pendingDeleteCompany.orgName}"؟ لن يستطيع تسجيل الدخول بعدها، وستُحذف كل بياناته نهائياً.`}
-          confirmLabel="حذف"
-          onCancel={() => {
-            setPendingDeleteCompany(null);
-            setDeleteError(null);
-          }}
-          onConfirm={confirmDeleteCompany}
-        />
       )}
 
       {pendingDeleteTemplate && (

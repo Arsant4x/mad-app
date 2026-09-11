@@ -9,6 +9,7 @@ const STATUS_META: Record<SubscriptionStatus['status'], { label: string; badge: 
   ACTIVE: { label: 'نشط', badge: 'paid' },
   FROZEN: { label: 'فترة سماح (اطلاع فقط)', badge: 'due' },
   STOPPED: { label: 'متوقف', badge: 'overdue' },
+  CLOSED: { label: 'مغلق بطلبك', badge: 'overdue' },
 };
 
 const MONTH_OPTIONS = [1, 3, 6, 12];

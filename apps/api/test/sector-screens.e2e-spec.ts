@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
 
 /**
  * ترشيح الشاشات بالنشاط — **سلوكياً على قاعدة حيّة**.
@@ -54,9 +56,8 @@ describe('ترشيح الشاشات بالنشاط (e2e)', () => {
   }, 120000);
 
   afterAll(async () => {
-    if (companyId && adminToken) {
-      await request(app.getHttpServer()).delete(`/companies/${companyId}`).set('Authorization', `Bearer ${adminToken}`);
-    }
+    // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
+    if (companyId) await hardDeleteCompanyForTest(app.get(PrismaService), companyId);
     await app.close();
   });
 

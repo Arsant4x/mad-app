@@ -305,6 +305,9 @@ export const MSG = {
   // tenant status / screen access
   account_frozen: 'tenant.account_frozen',
   account_stopped: 'tenant.account_stopped',
+  account_closed: 'tenant.account_closed',
+  deletion_company_closed: 'deletion.company_closed',
+  reopen_not_closed: 'deletion.reopen_not_closed',
   screen_forbidden: 'tenant.screen_forbidden',
   screen_not_in_sector: 'tenant.screen_not_in_sector',
   primary_activity_needs_confirmation: 'activity.primary_needs_confirmation',
@@ -800,6 +803,12 @@ const CATALOG: Record<string, Record<Language, string>> = {
 
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
   [MSG.account_stopped]: { ar: 'الحساب متوقف', en: 'Account is stopped' },
+  [MSG.account_closed]: {
+    ar: 'حسابُك مغلقٌ بطلبك، وبياناتُك محفوظةٌ بمدد الحفظ النظامية حتى {retainUntil} على الأقلّ ثم تُمحى',
+    en: 'Your account is closed at your request; your data is retained under the statutory retention periods until at least {retainUntil}, then erased',
+  },
+  [MSG.deletion_company_closed]: { ar: 'الحساب مغلق بالفعل — يمكنك طلب إعادة فتحه', en: 'The account is already closed — you may request reopening' },
+  [MSG.reopen_not_closed]: { ar: 'إعادة الفتح لحسابٍ مغلق فقط', en: 'Reopening applies to a closed account only' },
   [MSG.screen_forbidden]: { ar: 'لا تملك صلاحية الوصول لشاشة "{screen}"', en: 'You do not have permission to access the "{screen}" screen' },
   /**
    * ⚠️ الرسالة تقول **ثلاثة** لا واحداً: الشاشة موجودة · وغير مفعّلة

@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 export interface SubscriptionStatus {
   orgName: string;
-  status: 'ACTIVE' | 'FROZEN' | 'STOPPED';
+  status: 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
   subStart: string | null;
   subEnd: string | null;
   /** Days of paid subscription left (negative once past the end date). */

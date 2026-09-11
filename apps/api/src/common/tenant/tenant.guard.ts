@@ -6,7 +6,8 @@ import { TenantPrismaService } from './tenant-prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
+import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
+import { ALLOW_WHILE_CLOSED_KEY } from './allow-while-closed.decorator';
 import { SECTORS, Sector, screensFor } from '../../activities/sectors';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
@@ -112,6 +113,13 @@ export class TenantGuard implements CanActivate {
     // Subscription self-service (view + renew/pay) is the one thing a lapsed
     // tenant may always reach, so it can reactivate from inside the platform.
     const subscriptionSelfService = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_INACTIVE_KEY, [context.getHandler(), context.getClass()]);
+
+    // CLOSED (`ق-٥٤٧`): الوصولُ مقطوعٌ إلا حالُ الطلب وطلبُ إعادة الفتح — ولا يعود بالدفع،
+    // فلا يمرّ بثقب الاشتراك. والرسالةُ تحمل أجلَ الحفظ الأدنى.
+    if (company.status === 'CLOSED') {
+      const allowWhileClosed = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_CLOSED_KEY, [context.getHandler(), context.getClass()]);
+      if (!allowWhileClosed) throw new AccountClosedException(company.retainUntil ? company.retainUntil.toISOString().slice(0, 10) : '—');
+    }
 
     // STOPPED is a full lock-out — except subscription self-service.
     if (evaluated.status === 'STOPPED' && !subscriptionSelfService) throw new AccountStoppedException();

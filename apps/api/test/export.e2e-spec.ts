@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
 /**
  * ⚠️ **يُقرأ اسم المفتاح من مصدره لا يُكتب حرفياً.**
  *
@@ -84,9 +86,9 @@ describe('Data export (e2e)', () => {
 
   afterAll(async () => {
     // Deleting the companies cascades through employees, identities, and rows.
-    for (const id of cleanupCompanyIds) {
-      await request(app.getHttpServer()).delete(`/companies/${id}`).set('Authorization', `Bearer ${adminToken}`);
-    }
+    // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
+    const prisma = app.get(PrismaService);
+    for (const id of cleanupCompanyIds) await hardDeleteCompanyForTest(prisma, id);
     await app.close();
   });
 

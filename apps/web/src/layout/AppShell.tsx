@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ClosedAccountView } from '../pages/subscription/ClosedAccountView';
 import { useTranslation } from 'react-i18next';
 import { getUnreadCount } from '../api/notifications';
 import { getZatcaUnreported, type ZatcaUnreported } from '../api/zatca';
@@ -310,7 +311,8 @@ export function AppShell() {
             </NavLink>
           </div>
         )}
-        <Outlet />
+        {/* الحالةُ الرابعة (ق-٥٤٧): المغلقُ لا يرى شاشةً سوى حاله وطلبِ إعادة الفتح. */}
+        {user?.status === 'CLOSED' ? <ClosedAccountView onLogout={logout} /> : <Outlet />}
       </main>
     </div>
   );

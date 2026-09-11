@@ -28,10 +28,13 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+/// `CLOSED` الحالةُ الرابعة (`ق-٥٤٧`): الثلاثُ الأولى دورةُ اشتراكٍ تعود بالدفع، **وهذه لا
+/// تعود إلا بطلبٍ من التاجر وقرارٍ مسجَّل** (`ق-٥٤٨`). الدخولُ يُقطع والبياناتُ تبقى.
 enum AccountStatus {
   ACTIVE
   FROZEN
   STOPPED
+  CLOSED
 }
 
 enum ActorType {
@@ -193,6 +196,10 @@ model Company {
   orgName         String
   status          AccountStatus @default(ACTIVE)
   frozenAt        DateTime?
+  /// الإغلاقُ (`ق-٥٤٢`): منشأةٌ لها حركةٌ تُغلَق لا تُحذف — متى، وحتى متى يبقى أثرُها
+  /// **على الأقلّ** (أطولُ مدد الحفظ المقروءة لصنفها — `ق-٥٤٧`).
+  closedAt    DateTime?
+  retainUntil DateTime?
   /// When on, the master records (properties/units) are frozen company-wide:
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
@@ -1456,6 +1463,19 @@ enum DeletionRequestStatus {
   CANCELLED
 }
 
+/// نوعُ الطلب (`ق-٥٤٨`): حذفٌ — أو **إعادةُ فتحٍ** لمنشأةٍ مغلقة، بالمسار نفسِه والأثر نفسِه.
+enum AccountRequestKind {
+  DELETION
+  REOPENING
+}
+
+/// ما وقع بالموافقة (`ق-٥٤٢`): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها.
+enum AccountRequestOutcome {
+  DELETED
+  CLOSED
+  REOPENED
+}
+
 /// A merchant asking for its account (and all its data) to be deleted.
 /// SaaS rule: the merchant never wipes its own database — it files a request,
 /// and the platform (support) reviews and executes it. The request itself is
@@ -1476,7 +1496,12 @@ model AccountDeletionRequest {
   /// Why the merchant is leaving — worth reading before executing.
   reason String?
 
+  kind AccountRequestKind @default(DELETION)
+
   status DeletionRequestStatus @default(PENDING)
+  /// ما وقع بالموافقة — **والحركةُ التي أوجبت الإغلاقَ مكتوبةٌ على القرار** بأسمائها.
+  outcome  AccountRequestOutcome?
+  movement String[]              @default([])
 
   /// Set when support decides; the note is what gets communicated back.
   decidedAt   DateTime?

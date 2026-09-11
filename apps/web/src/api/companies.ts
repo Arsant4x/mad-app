@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
 
-export type CompanyStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED';
+export type CompanyStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
 
 export interface Company {
   id: string;
@@ -26,4 +26,4 @@ export interface CompanyInput {
 export const listCompanies = () => apiClient.get<Company[]>('/companies').then((r) => r.data);
 export const createCompany = (dto: CompanyInput) => apiClient.post<Company>('/companies', dto).then((r) => r.data);
 export const updateCompany = (id: string, dto: Partial<CompanyInput>) => apiClient.patch<Company>(`/companies/${id}`, dto).then((r) => r.data);
-export const deleteCompany = (id: string) => apiClient.delete(`/companies/${id}`);
+// ⛔ لا حذفَ مباشراً من المنصّة (`ق-٥٤٨`): المسارُ الوحيد طلبُ الحذف وموافقتُه — انظر `deletionRequests.ts`.

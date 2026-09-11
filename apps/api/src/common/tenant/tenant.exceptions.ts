@@ -17,6 +17,16 @@ export class AccountStoppedException extends ForbiddenException {
   }
 }
 
+/**
+ * الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — **والرسالةُ تجيب «وأين بياناتي؟» وبأجل**،
+ * فرسالةٌ تقول «محفوظة» بلا أجلٍ تُقرأ «إلى الأبد».
+ */
+export class AccountClosedException extends ForbiddenException {
+  constructor(retainUntil: string) {
+    super({ code: 'ACCOUNT_CLOSED', message: formatMessage(MSG.account_closed, { retainUntil }) });
+  }
+}
+
 export class ScreenForbiddenException extends ForbiddenException {
   constructor(screen: string) {
     super({ code: 'SCREEN_FORBIDDEN', message: formatMessage(MSG.screen_forbidden, { screen }) });

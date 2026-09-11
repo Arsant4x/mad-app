@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
+import { CompanyMovementService, retentionDeadline } from '../companies/company-movement.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
@@ -9,6 +10,12 @@ import { MSG } from '../common/i18n/messages';
 export interface DecisionActor {
   id: string;
   username: string;
+}
+
+/** ما يراه مديرُ المنصّة قبل الموافقة — **الحقيقةُ قبل الضغطة**: أتُحذف أم تُغلَق، ولماذا. */
+export interface DecisionPreview {
+  outcome: 'DELETE' | 'CLOSE';
+  movement: string[];
 }
 
 /**
@@ -22,9 +29,14 @@ export interface DecisionActor {
  * cross-tenant platform job, same pattern as the companies list.
  *
  * ⚠️ **ولا مفتاحَ أجنبيّ إلى المنشأة** (`ق-٥٣٧`): الطلبُ وقرارُه يبقيان بعد حذفها —
- * فالاسمُ يُحفظ على الطلب عند تقديمه، **ومن قرّر يُكتب على القرار**. **حدُّه المعلَن**:
- * طلبٌ معلّقٌ لمنشأةٍ زالت من مسارٍ آخر (`DELETE /companies/:id`) يبقى معلّقاً،
- * وتنفيذُه يُرفض `404` — **ومخرجُه الرفضُ بملاحظة**.
+ * فالاسمُ يُحفظ على الطلب عند تقديمه، **ومن قرّر يُكتب على القرار**.
+ *
+ * **والموافقةُ تقيس ثم تقرّر** (`ق-٥٤٢` · `ق-٥٤٦`): منشأةٌ **بلا حركة** تُحذف صلباً؛
+ * **وذاتُ حركة تُغلَق**: الدخولُ يُقطع والبياناتُ تبقى بأجل حفظٍ أدنى يُقرأ للتاجر
+ * (`ق-٥٤٧`). **وإعادةُ الفتح بطلبٍ من التاجر وقرارٍ مسجَّل** بالمسار نفسِه (`ق-٥٤٨`).
+ *
+ * **حدُّه المعلَن**: طلبٌ معلّقٌ لمنشأةٍ زالت من مسارٍ آخر يبقى معلّقاً وتنفيذُه يُرفض
+ * `404` — ومخرجُه الرفضُ بملاحظة. (ولم يبقَ مسارٌ آخر للحذف بعد `ق-٥٤٨`.)
  */
 @Injectable()
 export class DeletionRequestsService {
@@ -34,33 +46,54 @@ export class DeletionRequestsService {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly prisma: PrismaService,
     private readonly companiesService: CompaniesService,
+    private readonly movement: CompanyMovementService,
   ) {}
 
   // ---------- Merchant side ----------
 
-  /** Only the company owner may ask for the company to be deleted. */
+  /** Only the company owner may ask for the company to be deleted — or reopened. */
   private assertOwner(actorType: string): void {
     if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.deletion_owner_only);
   }
 
-  /** The merchant's own view: its current (or last) request, if any. */
+  /** The merchant's own view: its current (or last) request of any kind, if any. */
   myRequest(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.accountDeletionRequest.findFirst({ orderBy: { createdAt: 'desc' } }),
     );
   }
 
+  /** حالُ الحساب للتاجر — يُقرأ وهو مغلق (`ق-٥٤٧`): متى أُغلق، وحتى متى يبقى أثرُه على الأقلّ. */
+  account(companyId: string) {
+    return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { status: true, closedAt: true, retainUntil: true } });
+  }
+
   submit(companyId: string, actorType: string, reason?: string) {
     this.assertOwner(actorType);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // الاسمُ يُحفظ على الطلب وقتَ تقديمه — فصفُّ المنشأة يزول مع التنفيذ (`ق-٥٣٧`)؛ و`companies` بلا RLS.
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true, status: true } });
+      if (company.status === 'CLOSED') throw new ConflictException(MSG.deletion_company_closed);
       // One open request at a time — a second "please delete us" adds nothing
       // but confusion about which one support is acting on.
       const open = await tx.accountDeletionRequest.findFirst({ where: { status: 'PENDING' } });
       if (open) throw new ConflictException(MSG.deletion_already_pending);
-      // الاسمُ يُحفظ على الطلب وقتَ تقديمه — فصفُّ المنشأة يزول مع التنفيذ (`ق-٥٣٧`)؛ و`companies` بلا RLS.
-      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true } });
       return tx.accountDeletionRequest.create({
-        data: { reason: reason?.trim() || null, companyName: company.orgName } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
+        data: { reason: reason?.trim() || null, companyName: company.orgName, kind: 'DELETION' } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
+      });
+    });
+  }
+
+  /** طلبُ إعادة الفتح (`ق-٥٤٨`): لحسابٍ مغلقٍ فقط، بالمسار نفسِه والأثر نفسِه — ومن قرّر يُكتب على القرار. */
+  requestReopening(companyId: string, actorType: string) {
+    this.assertOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true, status: true } });
+      if (company.status !== 'CLOSED') throw new ConflictException(MSG.reopen_not_closed);
+      const open = await tx.accountDeletionRequest.findFirst({ where: { status: 'PENDING' } });
+      if (open) throw new ConflictException(MSG.deletion_already_pending);
+      return tx.accountDeletionRequest.create({
+        data: { reason: null, companyName: company.orgName, kind: 'REOPENING' } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
       });
     });
   }
@@ -81,11 +114,25 @@ export class DeletionRequestsService {
   /**
    * Every request across tenants, pending first — support's worklist.
    * الاسمُ على الصفّ نفسه لا في ضمّة — فالمنشأةُ قد تكون زالت (`ق-٥٣٧`).
+   * **ومعاينةُ القرار على كل طلب حذفٍ معلَّق**: أتُحذف أم تُغلَق، ولماذا — قبل الضغطة.
    */
-  listAll() {
-    return this.prisma.accountDeletionRequest.findMany({
+  async listAll() {
+    const rows = await this.prisma.accountDeletionRequest.findMany({
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
+    return Promise.all(
+      rows.map(async (row) => {
+        if (row.status !== 'PENDING' || row.kind !== 'DELETION') return row;
+        const company = await this.prisma.company.findUnique({ where: { id: row.companyId }, select: { id: true } });
+        return company ? { ...row, preview: await this.preview(row.companyId) } : row;
+      }),
+    );
+  }
+
+  /** الحقيقةُ قبل الضغطة (`ق-٥٤٦`): يُقاس الأثرُ تحت سياق المنشأة. */
+  async preview(companyId: string): Promise<DecisionPreview> {
+    const report = await this.movement.describe(companyId);
+    return { outcome: report.hasMovement ? 'CLOSE' : 'DELETE', movement: report.labels };
   }
 
   async reject(id: string, note: string | undefined, decider: DecisionActor) {
@@ -105,39 +152,60 @@ export class DeletionRequestsService {
   }
 
   /**
-   * Approves AND executes: the company and everything under it is deleted via
-   * the same cascade the developer panel uses. **والصفُّ يبقى** (`ق-٥٣٧`) — بلا
-   * مفتاحٍ أجنبيّ إلى المنشأة، حاملاً اسمَها ومن قرّر ومتى وبأيّ ملاحظة: **هو الأثرُ
-   * الدائم على قرار الإعدام**، وسطرُ سجلّ الخادم تكملةٌ لا بديل.
+   * Approves AND executes — **يقيس ثم يقرّر** (`ق-٥٤٢`):
+   * - طلبُ إعادة فتح ⟵ الحسابُ يعود نشطاً (ودورةُ الاشتراك تُقيَّم في طلبه التالي).
+   * - طلبُ حذفٍ لمنشأةٍ **بلا حركة** ⟵ حذفٌ صلبٌ عبر المسلك الواحد.
+   * - طلبُ حذفٍ لمنشأةٍ **لها حركة** ⟵ إغلاق: `CLOSED` · `closedAt` · `retainUntil`.
+   *
+   * **والوسمُ والتنفيذُ في معاملةٍ واحدة** (`ق-٥٤١`) — يسقطان معاً أو ينجحان معاً. **والصفُّ
+   * يبقى** (`ق-٥٣٧`) حاملاً ما وقع (`outcome`) والحركةَ التي أوجبت الإغلاقَ ومن قرّر.
    */
   async approveAndExecute(id: string, note: string | undefined, decider: DecisionActor) {
     const existing = await this.prisma.accountDeletionRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.deletion_request_not_found);
     if (existing.status !== 'PENDING') throw new ConflictException(MSG.deletion_not_pending);
-    // المنشأةُ تُقرأ بمعرّفها لا بضمّة — فقد تكون زالت من مسارٍ آخر، وعندها لا تنفيذَ (الحدُّ المعلَن أعلاه).
-    const company = await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { id: true, orgName: true } });
+    // المنشأةُ تُقرأ بمعرّفها لا بضمّة — فقد تكون زالت، وعندها لا تنفيذَ (الحدُّ المعلَن أعلاه).
+    const company = await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { id: true, orgName: true, status: true } });
     if (!company) throw new NotFoundException(MSG.company_not_found);
 
-    this.logger.warn(`Executing account deletion for company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
-    // الوسمُ والتنفيذُ في معاملةٍ واحدة (`ق-٥٤١`): يسقطان معاً أو ينجحان معاً — فلا «مُوافَق»
-    // على منشأةٍ حيّة. كان الوسمُ يسبق التنفيذَ، فإذا رفضت القاعدةُ الحذفَ بقي الطلبُ
-    // «مُوافَقاً» والمنشأةُ حيّة: لا إعادةَ ولا سحبَ، والتاجرُ يقرأ «نُفِّذ» كذباً (`ق-٥٣٨`).
-    await this.prisma.$transaction(
-      async (tx) => {
-        await tx.accountDeletionRequest.update({
-          where: { id },
-          data: {
-            status: 'APPROVED',
-            decidedAt: new Date(),
-            decidedNote: note?.trim() || null,
-            decidedById: decider.id,
-            decidedByName: decider.username,
-          },
-        });
-        await this.companiesService.remove(company.id, tx);
-      },
-      { timeout: 60_000 },
-    );
-    return { executed: true, companyId: company.id, orgName: company.orgName };
+    const decision = {
+      status: 'APPROVED' as const,
+      decidedAt: new Date(),
+      decidedNote: note?.trim() || null,
+      decidedById: decider.id,
+      decidedByName: decider.username,
+    };
+
+    if (existing.kind === 'REOPENING') {
+      if (company.status !== 'CLOSED') throw new ConflictException(MSG.reopen_not_closed);
+      this.logger.warn(`Reopening company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
+      await this.prisma.$transaction([
+        this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'REOPENED' } }),
+        this.prisma.company.update({ where: { id: company.id }, data: { status: 'ACTIVE', closedAt: null, retainUntil: null } }),
+      ]);
+      return { executed: true, outcome: 'REOPENED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: null };
+    }
+
+    const report = await this.movement.describe(company.id);
+    if (!report.hasMovement) {
+      this.logger.warn(`Executing account deletion for company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'DELETED', movement: [] } });
+          await this.companiesService.remove(company.id, tx);
+        },
+        { timeout: 60_000 },
+      );
+      return { executed: true, outcome: 'DELETED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: null };
+    }
+
+    const closedAt = decision.decidedAt;
+    const retainUntil = retentionDeadline(closedAt, report.models);
+    this.logger.warn(`Closing company ${company.id} ("${company.orgName}") — movement: ${report.labels.join(', ')} — approved request ${id} by ${decider.username}`);
+    await this.prisma.$transaction([
+      this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'CLOSED', movement: report.labels } }),
+      this.prisma.company.update({ where: { id: company.id }, data: { status: 'CLOSED', closedAt, retainUntil } }),
+    ]);
+    return { executed: true, outcome: 'CLOSED' as const, companyId: company.id, orgName: company.orgName, movement: report.labels, retainUntil };
   }
 }
