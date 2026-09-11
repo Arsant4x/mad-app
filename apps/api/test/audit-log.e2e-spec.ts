@@ -102,6 +102,40 @@ describe('Audit log (e2e)', () => {
     expect(actions).toContain('edit');
   }, 40000);
 
+  /**
+   * 🔴 **المحاولةُ المرفوضة تُسجَّل** (`ق-٥١١`).
+   *
+   * **كان المسجِّلُ يعمل على مسار النجاح وحده** — **فكلُّ تعديلٍ مرفوض لا يترك
+   * أثراً إطلاقاً**. ⇒ **فهجومٌ أخفق غيرُ مرئيٍّ بنيوياً لا «غيرُ ملحوظ»**.
+   *
+   * ⚠️ **ولا يُسجَّل جسمُ الطلب** — **فتسجيلُ ما حاوله يجعل السجلَّ نسخةً ثانية
+   * من التسريب**: يُسجَّل **وقوعُ** الرفض وسببُه لا موضوعُه.
+   */
+  it('🔴 يسجّل المحاولةَ المرفوضة بالحالة — ولا يسجّل ما حاوله', async () => {
+    // ⚠️ **قالبٌ حقيقيّ** — **وأوّلُ صياغةٍ مرّرت `'x'` فجاء `404` قبل فحص
+    // الاسم**: الحالةُ كانت تقيس رفضاً آخر غير الذي تدّعيه.
+    const templates = await authA(request(app.getHttpServer()).get('/templates')).expect(200);
+    const template = (templates.body as { id: string; isSystem: boolean }[]).find((t) => !t.isSystem);
+    if (!template) throw new Error('لا قالبَ صلاحياتٍ في المنشأة — والحالةُ تحتاج واحداً');
+
+    // اسمٌ مأخوذٌ فعلاً ⇒ `409`. والمحاولةُ هي الحدث، لا الحساب.
+    await authA(request(app.getHttpServer()).post('/company-users'))
+      .send({ name: 'محاولةٌ مرفوضة', username: 'demo-company-a', password: 'AnyPass123!', permissionTemplateId: template.id })
+      .expect((res) => {
+        if (res.status !== 409 && res.status !== 403) throw new Error(`توقّعنا رفضاً بالحالة أو الصلاحية، فجاء ${res.status}`);
+      });
+
+    const isRefusal = (e: Entry) => e.entity === 'company-users' && (e.details as { outcome?: string } | null)?.outcome === 'rejected';
+    const entry = (await trailUntil((entries) => entries.some(isRefusal))).find(isRefusal);
+    expect(entry).toBeTruthy();
+
+    // ⭐ والسببُ في القيد — فمن يقرؤه يعرف أنه رفضٌ لا تغيير.
+    expect((entry!.details as { status?: number }).status).toBeGreaterThanOrEqual(400);
+    // ⚠️ ولا اسمَ محاولٍ ولا كلمةَ مرور — والقيدُ لا يحمل جسمَ الطلب أصلاً.
+    expect(JSON.stringify(entry!.details)).not.toContain('demo-company-a');
+    expect(JSON.stringify(entry!.details)).not.toContain('AnyPass123!');
+  }, 40000);
+
   it('never stores a secret, even when the request carried one', async () => {
     // Creating an employee sub-account sends a password; it must be redacted.
     const username = `audit-emp-${suffix}`;
