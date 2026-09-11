@@ -82,14 +82,41 @@ describe('تاريخُ الافتتاح المعلَن (e2e)', () => {
     expect(row.openingDateDeclared).toBe(true);
     expect(row.openingDate?.slice(0, 10)).toBe('2026-03-15');
 
-    // والقيدُ نفسُه بالتاريخ المعلَن — **يُبحث عنه برمزه لا بترتيب الصفحة**:
-    // القائمةُ مصفَّحة، و«أوّلُ ما تجده» يربط النتيجةَ بترتيبٍ لا يملكه الاختبار.
+    // والقيدُ نفسُه بالتاريخ المعلَن — **يُبحث عنه بمفتاحه لا بنصّه ولا بترتيب الصفحة**.
+    //
+    // ⚠️ **كان المفتاحُ `memo.includes(account.code)`** — **مطابقةٌ نصّيّةٌ جزئية**
+    //    (`ق-٥٠٦`): رمزُ الحساب يقع داخل مذكّرةِ قيدٍ آخر لا يخصّه، **فيُقرأ تاريخُ
+    //    غيره** — وسقط في السير على قاعدةٍ جديدة (`Expected 2026-03-15 · Received
+    //    2026-12-31`)، **فليس تراكماً بل عطلاً يقع على نظيف** (`ق-٥٣٣`).
+    //    **والمفتاحُ القويّ هو الرابطُ نفسُه**: `openingForAccountId` على القيد.
+    //
+    // ⭐ **والطُّعمُ مبنيٌّ في الحالة**: قيدٌ يدويّ لاحقُ التاريخ تحمل مذكّرتُه رمزَ
+    //    الحساب — **يتصدّر القائمةَ (الأحدثُ أوّلاً) فيلتقطه المفتاحُ النصّيّ ويتركه
+    //    المفتاحُ القويّ**. فالكسرُ الذي وقع في السير يُعاد هنا عمداً في كلّ تشغيل.
+    const decoyA = await makeAccount(`طُعمٌ أ ${suffix}`);
+    const decoyB = await makeAccount(`طُعمٌ ب ${suffix}`);
+    const decoy = await auth(http().post('/journal'))
+      .send({
+        date: '2026-12-31',
+        memo: `قيدٌ يحمل الرمز ${account.code} في مذكّرته ${suffix}`,
+        lines: [
+          { accountId: decoyA.id, debit: 1, credit: 0 },
+          { accountId: decoyB.id, debit: 0, credit: 1 },
+        ],
+      })
+      .expect(201);
+
     const listed = (await auth(http().get('/journal').query({ search: account.code, pageSize: 50 })).expect(200)).body as {
-      items: { date: string; memo: string }[];
+      items: { id: string; date: string; memo: string; openingForAccountId: string | null }[];
     };
-    const opening = listed.items.find((e) => e.memo.includes(account.code));
+    // الطُّعمُ حاضرٌ في القائمة فعلاً — وإلا فالحالةُ لا تقيس ما تدّعيه (ق-٤١٨).
+    expect(listed.items.some((e) => e.id === decoy.body.id)).toBe(true);
+    const opening = listed.items.find((e) => e.openingForAccountId === account.id);
     if (!opening) throw new Error('لا قيدَ افتتاحيّ للحساب — وقد أُنشئ برصيد');
     expect(opening.date.slice(0, 10)).toBe('2026-03-15');
+
+    // والمشتقُّ يُحذف مع أصله (ق-٤٩٥) — فحساباتُ الطُّعم لا تُحذف وعليها سطر.
+    await auth(http().delete(`/journal/${decoy.body.id}`)).expect(204);
   }, 20000);
 
   it('🔴 وحسابٌ بلا تاريخٍ معلَن: العمودُ فارغ، والعرضُ يشتقّه من القيد', async () => {
