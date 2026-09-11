@@ -1,13 +1,25 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
 import { CreateLeaveRequestDto, CreateLeaveTypeDto, UpdateLeaveTypeDto } from './dto/leave.dto';
 
 const REQUEST_INCLUDE = {
   employee: { select: { id: true, fullName: true } },
   leaveType: { select: { id: true, name: true, paid: true, annualDays: true } },
 } as const;
+
+/**
+ * ما يحتاجه الصفُّ والسجلُّ عن الفاعل — **اسمُه وقتَ الفعل لا معرّفُه وحده**،
+ * على صيغة `Approver` في مسار الشطب نصّاً (`ق-٦٢١`/① — فلا نمطان حيث نمطٌ قائم).
+ */
+export interface LeaveActor {
+  id: string;
+  actorType: string;
+  name: string;
+}
 
 /** Inclusive calendar days between two dates — a one-day leave (start === end)
  * counts as 1. Leave in Saudi practice is counted in calendar days, and keeping
@@ -19,7 +31,10 @@ function inclusiveDays(start: Date, end: Date): number {
 
 @Injectable()
 export class LeavesService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   // ---- Leave types ----
 
@@ -85,7 +100,7 @@ export class LeavesService {
     );
   }
 
-  createRequest(companyId: string, dto: CreateLeaveRequestDto) {
+  createRequest(companyId: string, actor: LeaveActor, dto: CreateLeaveRequestDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const start = new Date(dto.startDate);
       const end = new Date(dto.endDate);
@@ -119,24 +134,107 @@ export class LeavesService {
           days: inclusiveDays(start, end),
           reason: dto.reason,
           status: 'PENDING',
+          // ⭐ **من قدّم — بهويّة الفاعل**: هو الطرفُ الذي يُقارَن به المقرِّر،
+          //    و`employeeId` أعلاه صاحبُ الإجازة **لا هويّةَ دخولٍ له**.
+          requestedById: actor.id,
+          requestedByName: actor.name,
         } as unknown as Prisma.LeaveRequestUncheckedCreateInput,
         include: REQUEST_INCLUDE,
       });
     });
   }
 
-  /** Approve or reject — only a PENDING request can be decided, so a repeat call
-   * or a race can't flip an already-settled one. */
-  decide(companyId: string, id: string, status: 'APPROVED' | 'REJECTED', note?: string) {
+  /**
+   * ⭐ **الاعتماد أو الرفض — ومعه الفصلُ بين من قدّم ومن قرّر** (`ق-٦٢١`).
+   *
+   * والمعلَّقُ وحدَه يُبَتّ فيه، فنداءٌ مكرَّرٌ أو سباقٌ لا يقلب محسوماً.
+   *
+   * ## ما كان ناقصاً — والفصلُ لا الأثر
+   *
+   * `AuditInterceptor` عامٌّ ويكتب المعتمِدَ في كلّ حال، **فالأثرُ كان قائماً**.
+   * **والناقصُ كان الفصل**: لا حقلَ على الصفّ يُقارَن به، **فلا حارسَ يمنع ولا
+   * شاشةَ تعرض «اعتمده فلان» بلا نبش السجلّ بالمعرّف**.
+   *
+   * ## ⚠️ ولماذا لا يُقارَن المقرِّرُ بـ`employeeId`
+   *
+   * **`Employee` لا يرتبط بهويّة دخولٍ بأيّ حقل** — لا `CompanyUser` ولا
+   * `LoginIdentity` (مقيسٌ من المخطط: يشير إليه `Company` و`Branch`
+   * و`LeaveRequest` و`AttendanceRecord` فحسب). ⇒ **فمقارنةُ `decidedById`
+   * بـ`employeeId` مقارنةُ فضاءَي هويّةٍ مختلفَين، تمرّ دائماً ولا تعني شيئاً**.
+   * **فالمقارنةُ على `requestedById`** — نظيرِ `recordedById` في الشطب.
+   *
+   * ## ⚖️ والمنعُ إعدادٌ لا أصل — بعددٍ لا بترجيح
+   *
+   * **بالبنية أولاً**: منشأةٌ تُنشأ **بفاعلٍ واحدٍ هو المالك**، والحساباتُ
+   * الفرعية تُضاف بعدُ. ⇒ **ففيها يكون مُقدِّمُ الطلب هو الباتَّ بالضرورة**،
+   * **ومنعٌ دائمٌ يعطّل الميزةَ لا يضبطها**. **ويُسنده عددٌ** (2026-09-12):
+   * `493` من `512` منشأةً في قاعدة التطوير بلا حسابٍ فرعيٍّ واحد — ⚠️ **وهي
+   * ليست عيّنةَ عملاء، فتشهد لشيوع الشكل لا لنسبةٍ في السوق**.
+   *
+   * ⇒ فالتشديدُ **خيارٌ معلوم** — و**الدائمُ هو فعلُ التسجيل لا المنع** (`ق-١٤٣`).
+   */
+  async decide(companyId: string, actor: LeaveActor, id: string, status: 'APPROVED' | 'REJECTED', note?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.leaveRequest.findUnique({ where: { id } });
+      const existing = await tx.leaveRequest.findUnique({ where: { id }, include: REQUEST_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.leave_request_not_found);
       if (existing.status !== 'PENDING') throw new ConflictException(MSG.leave_request_not_pending);
-      return tx.leaveRequest.update({
+
+      // ⚠️ **والفارغُ غيرُ مقصود**: صفٌّ سُجّل قبل هذا الحقل لا يحمل قائلاً،
+      //    **وفراغُه «غيرُ معلوم» فلا يُقارَن** — لا «ليس هو».
+      const selfApproved = existing.requestedById !== null && existing.requestedById === actor.id;
+      if (selfApproved) {
+        const company = await tx.company.findUnique({ where: { id: companyId }, select: { leaveApprovalRequiresTwoPersons: true } });
+        if (company?.leaveApprovalRequiresTwoPersons) {
+          throw new ForbiddenException(formatMessage(MSG.leave_two_persons_required, { employee: existing.employee.fullName }));
+        }
+      }
+
+      const saved = await tx.leaveRequest.update({
         where: { id },
-        data: { status, decidedAt: new Date(), decidedNote: note?.trim() || null },
+        data: {
+          status,
+          decidedAt: new Date(),
+          decidedNote: note?.trim() || null,
+          decidedById: actor.id,
+          decidedByName: actor.name,
+        },
         include: REQUEST_INCLUDE,
       });
+
+      /**
+       * ⭐ **والفعلُ باسمه داخلَ المعاملة لا بعدها** — على سابقة الشطب نصّاً:
+       * **قرارٌ وقع وشهادةٌ لم تُكتب أسوأُ من ألّا يقع** (`ق-١٤٧`). و`AuditLog`
+       * منطاقٌ بالمستأجر و`app.company_id` مضبوطٌ على هذه المعاملة، فـ`RLS`
+       * تمرّ كما تمرّ خارجها.
+       *
+       * 📌 **والاسمُ `self-review` نفسُه لا مشتقٌّ منه**: سؤالٌ واحدٌ
+       * (`GET /audit-log?action=self-review`) **يُجيب عن كلّ اعتمادٍ ذاتيٍّ في
+       * المنشأة**، ويميّز المسارَ حقلُ `entity`.
+       */
+      if (selfApproved) {
+        await this.audit.recordWithinTx(tx, {
+          companyId,
+          actorType: actor.actorType,
+          actorId: actor.id,
+          actorName: actor.name,
+          screen: 'employees',
+          action: SELF_REVIEW_ACTION,
+          entity: SELF_REVIEW_ENTITY.leaveRequest,
+          entityId: saved.id,
+          method: 'POST',
+          path: `/leaves/requests/${saved.id}/${status === 'APPROVED' ? 'approve' : 'reject'}`,
+          details: {
+            status,
+            employeeId: saved.employeeId,
+            employee: saved.employee.fullName,
+            days: saved.days,
+            requestedById: existing.requestedById,
+          },
+          ip: null,
+        });
+      }
+
+      return { ...saved, selfApproved };
     });
   }
 

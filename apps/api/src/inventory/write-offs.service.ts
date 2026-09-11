@@ -6,6 +6,7 @@ import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { postWriteOffEntry } from '../journal/auto-posting.util';
@@ -16,10 +17,16 @@ import { CreateWriteOffDto } from './dto/create-write-off.dto';
 import { RejectWriteOffDto } from './dto/reject-write-off.dto';
 
 /**
- * ⚖️ **فعلُ الاعتماد الذاتي في سجل التدقيق** (`ق-١٤٣`) — **مُصدَّرٌ عمداً**:
- * يقرؤه الاختبار والتقرير، **فلا تُكتب السلسلة في ثلاثة مواضع تفترق**.
+ * 📌 **فعلُ الاعتماد الذاتي انتقل إلى `common/self-review.ts`** (`ق-١٤٣` · `ق-٦٢١`).
+ *
+ * كان يُعرَّف هنا **لأن الشطب كان مساره الوحيد**. ولمّا لزم مسارَ الإجازات صار
+ * أمامنا بابان: أن تستورد `leaves` من `inventory` — **وهو خرقُ اتجاه** (النواةُ
+ * لا تستورد من المحرّك) — أو **أن تُكتب السلسلةُ مرّتين فتفترقا**.
+ *
+ * ⛔ **ولا يُترك تصديرٌ ناسخٌ هنا**: مسارانِ لاسمٍ واحدٍ هما **بنيةٌ ثانية** لا
+ * يُعرف أيُّها الأصل — وهي عينُ العلّة التي بُني لها حارسُ المسارات المنقولة.
  */
-export const SELF_REVIEW_ACTION = 'self-review';
+
 
 /** ما يحتاجه سجل التدقيق عن المُعتمِد — **اسمه وقت الفعل لا معرّفه وحده**. */
 export interface Approver {
@@ -238,7 +245,7 @@ export class WriteOffsService {
           actorName: actor.name,
           screen: 'inventory',
           action: SELF_REVIEW_ACTION,
-          entity: 'inventory-write-offs',
+          entity: SELF_REVIEW_ENTITY.writeOff,
           entityId: saved.id,
           method: 'POST',
           path: `/inventory/write-offs/${saved.id}/approve`,

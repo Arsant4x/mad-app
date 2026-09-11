@@ -24,6 +24,7 @@ const PROFILE_SELECT = {
   logoFileKey: true,
   masterDataLocked: true,
   writeOffRequiresTwoPersons: true,
+  leaveApprovalRequiresTwoPersons: true,
   creditLimitHardBlock: true,
   posOfflineGapMinutes: true,
 } as const;
@@ -95,6 +96,7 @@ export class CompanyProfileService {
         ...(logoFileKey !== undefined ? { logoFileKey } : {}),
         ...(dto.masterDataLocked !== undefined ? { masterDataLocked: dto.masterDataLocked } : {}),
         ...(dto.writeOffRequiresTwoPersons !== undefined ? { writeOffRequiresTwoPersons: dto.writeOffRequiresTwoPersons } : {}),
+        ...(dto.leaveApprovalRequiresTwoPersons !== undefined ? { leaveApprovalRequiresTwoPersons: dto.leaveApprovalRequiresTwoPersons } : {}),
         ...(dto.creditLimitHardBlock !== undefined ? { creditLimitHardBlock: dto.creditLimitHardBlock } : {}),
         ...(dto.posOfflineGapMinutes !== undefined ? { posOfflineGapMinutes: dto.posOfflineGapMinutes } : {}),
       },

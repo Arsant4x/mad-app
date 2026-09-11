@@ -22,8 +22,14 @@ export interface LeaveRequest {
   days: number;
   reason: string | null;
   status: LeaveStatus;
+  /** من قدّم الطلب — **بهويّة الفاعل لا الموظَّف** (`ق-٦٢١`). فارغٌ في صفوفٍ سبقت الحقل. */
+  requestedById: string | null;
+  requestedByName: string | null;
   decidedAt: string | null;
   decidedNote: string | null;
+  /** ومن قرّر — **على الصفّ** كي تُعرَض «اعتمده فلان» بلا نبش سجلّ التدقيق. */
+  decidedById: string | null;
+  decidedByName: string | null;
   employee: { id: string; fullName: string };
   leaveType: { id: string; name: string; paid: boolean; annualDays: number };
 }

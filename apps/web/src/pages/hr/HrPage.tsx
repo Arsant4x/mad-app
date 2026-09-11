@@ -425,6 +425,17 @@ export function HrPage() {
                   <td className="num">{r.days}</td>
                   <td>
                     <span className={`badge ${badgeAltOf(STATUS_META, r.status).badge}`}>{badgeAltOf(STATUS_META, r.status).label}</span>
+                    {/* ⭐ **من قرّر يُقرأ من الصفّ** (`ق-٦٢١`): كان الاسمُ في سجلّ
+                        التدقيق وحدَه، **فـ«اعتمده فلان» تحتاج نبشاً بالمعرّف**.
+                        وحين يكون المقرِّرُ هو من قدّم يُقال ذلك صراحةً — **فالتطابقُ
+                        مرئيٌّ لمن يقرأ لا مدفونٌ في حقلين**. */}
+                    {r.decidedByName && (
+                      <div className="muted" style={{ fontSize: '0.85em', marginTop: 2 }}>
+                        {r.decidedById && r.requestedById && r.decidedById === r.requestedById
+                          ? `بتٌّ ذاتيّ — قدّمه وبتّ فيه ${r.decidedByName}`
+                          : `بقرار ${r.decidedByName}`}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {r.status === 'PENDING' && (
