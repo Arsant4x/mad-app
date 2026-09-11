@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminListSupportGrants, requestSupportAccess, type SupportGrant } from '../../api/supportAccess';
 import { listCompanies, type Company } from '../../api/companies';
+import { ALLOWED_SCREENS, SCREEN_LABELS } from '../../api/templates';
 import { enterSupportMode } from '../../lib/supportMode';
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
@@ -28,7 +29,13 @@ export function SupportAccessSection() {
   const [companyId, setCompanyId] = useState('');
   const [reason, setReason] = useState('');
   const [duration, setDuration] = useState('60');
+  /** نطاقُ ما يُرى — يختاره الطالب هنا ويراه المالك قبل قراره (ق-٥٢٧). */
+  const [screens, setScreens] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  function toggleScreen(screen: string) {
+    setScreens((cur) => (cur.includes(screen) ? cur.filter((s) => s !== screen) : [...cur, screen]));
+  }
 
   async function reload() {
     const [g, c] = await Promise.all([adminListSupportGrants(), listCompanies()]);
@@ -46,11 +53,16 @@ export function SupportAccessSection() {
       setError('اختر المنشأة واكتب سبباً واضحاً (٥ أحرف فأكثر) — يظهر للمالك حرفياً.');
       return;
     }
+    if (screens.length === 0) {
+      setError('حدّد الشاشات التي يحتاجها الفحص — إذنٌ بلا نطاقٍ ليس تعليمة، والمالك يراها قبل قراره.');
+      return;
+    }
     try {
-      await requestSupportAccess(companyId, reason.trim(), Number(duration));
+      await requestSupportAccess(companyId, reason.trim(), Number(duration), screens);
       setRequesting(false);
       setCompanyId('');
       setReason('');
+      setScreens([]);
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
@@ -143,6 +155,17 @@ export function SupportAccessSection() {
             <div className="field">
               <label>السبب (يظهر للمالك)</label>
               <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: فحص شكوى ترقيم فواتير" />
+            </div>
+            <div className="field">
+              <label>نطاق الشاشات (يراه المالك قبل موافقته — وما ليس فيه لا يُفتح)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {ALLOWED_SCREENS.map((s) => (
+                  <label key={s} className={`badge ${screens.includes(s) ? 'paid' : 'draft'}`} style={{ cursor: 'pointer' }}>
+                    <input type="checkbox" checked={screens.includes(s)} onChange={() => toggleScreen(s)} style={{ marginInlineEnd: 4 }} />
+                    {SCREEN_LABELS[s]}
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="field">
               <label>المدة</label>

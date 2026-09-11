@@ -11,6 +11,7 @@ import { SECTORS, Sector, screensFor } from '../../activities/sectors';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
+import { SUPPORT_SHELL_KEY } from './support-shell.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
 
@@ -54,6 +55,23 @@ export class TenantGuard implements CanActivate {
       const method = req.method.toUpperCase();
       if (method !== 'GET' && method !== 'HEAD') throw new ForbiddenException(MSG.support_read_only);
 
+      /**
+       * 🔴 **النطاقُ يُنفَذ هنا لا يُعرض فحسب** (`ق-٥٢٧`).
+       *
+       * **كان الدعمُ يرى كلَّ شيء** (`allowedScreens: 'all'`) — والإذنُ يحمل
+       * الغرضَ والمدةَ **ولا يحمل فئاتِ البيانات** التي توجبها اللائحةُ
+       * التنفيذية (م١٧/١/ب). **وم١٧/٤ أثقل**: من خالف التعليمةَ عُدّ في حكم
+       * جهة التحكم — **فالإنفاذُ التقنيُّ هو ما يُبقينا معالجاً**.
+       *
+       * ⚠️ **ومغلقٌ افتراضياً**: مسارٌ بلا شاشةٍ معلَنة لا يُقرأ — إلا ما أعلن
+       * نفسَه `@SupportShell()` لأنه يُعيد هويّةَ السائل لا بيانات المنشأة.
+       * **وهذا الفرعُ يعود قبل فحوص الشاشة العامّة أدناه** — فلا يُتَّكل عليها.
+       */
+      const requiredScreen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]);
+      const supportShell = this.reflector.getAllAndOverride<boolean | undefined>(SUPPORT_SHELL_KEY, [context.getHandler(), context.getClass()]);
+      if (!requiredScreen && !supportShell) throw new ForbiddenException(MSG.support_scope_undeclared);
+      if (requiredScreen && !grant.screens.includes(requiredScreen)) throw new ForbiddenException(MSG.support_scope_forbidden);
+
       // The log line is part of the access itself — if it can't be written,
       // the access doesn't happen.
       await this.supportAccessService.logAccess(grant.id, supportCompanyId, method, req.path);
@@ -62,7 +80,7 @@ export class TenantGuard implements CanActivate {
         companyId: supportCompanyId,
         actorType: payload.actorType,
         profileId: payload.profileId,
-        allowedScreens: 'all',
+        allowedScreens: grant.screens,
         allowedBranchIds: 'all',
       };
       return true;

@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { SupportShell } from '../common/tenant/support-shell.decorator';
 import { TenantContext } from '../auth/types';
 import { MePermissions, PermissionsService } from './permissions.service';
 
@@ -17,9 +18,14 @@ import { MePermissions, PermissionsService } from './permissions.service';
  *
  * ⚠️ و`TenantGuard` باقٍ رغم ذلك: هو مَن يتحقّق من حياة الحساب وحالة
  * الاشتراك ويضع `req.tenant`. حذفُه يجعل حساباً موقوفاً يقرأ صلاحياته.
+ *
+ * **و`@SupportShell()` للسبب نفسه** (`ق-٥٢٧`): وضعُ الدعم مغلقٌ على ما لا
+ * يُعلن شاشتَه، وهذا المسارُ يُعيد صلاحياتِ الداخل نفسِه — **لا صفّاً من بيانات
+ * المنشأة** — وبدونه لا ترسم الواجهةُ للدعم زرّاً واحداً.
  */
 @Controller('me')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@SupportShell()
 export class PermissionsController {
   constructor(private readonly permissions: PermissionsService) {}
 
