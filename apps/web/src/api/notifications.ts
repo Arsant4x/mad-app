@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 /** What the notification is about. Drives both the icon and where clicking it
  * takes you — a free-text title could not do either. */
-export type NotificationKind = 'RENT_ESCALATION' | 'WARRANTY_EXPIRING';
+export type NotificationKind = 'RENT_ESCALATION' | 'WARRANTY_EXPIRING' | 'NOTE_ISSUED_LATE' | 'SUPPORT_REQUESTED' | 'SUPPORT_ENTERED';
 
 export interface AppNotification {
   id: string;

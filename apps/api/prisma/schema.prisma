@@ -2026,6 +2026,11 @@ enum NotificationKind {
   /// **تنبيهٌ لا حجز**: المستند يوجبه النظام، فمنعُه يزيد المخالفة لا يمنعها —
   /// فيُصدَر ويُسجَّل التأخّر ليراه المالك، لا ليُمنع التاجر.
   NOTE_ISSUED_LATE
+  /// الدعمُ الفنيّ يطلب الدخولَ — القرارُ للمالك (`ق-٥٣٠`): **من لا يعلم لا
+  /// يتحقّق** (النظام م٨: على جهة التحكم التحقّقُ من التزام جهة المعالجة).
+  SUPPORT_REQUESTED
+  /// الدعمُ دخل فعلاً أوّلَ مرّةٍ تحت إذنٍ فعّال — مرّةً لكل إذن.
+  SUPPORT_ENTERED
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something
@@ -2882,6 +2887,8 @@ model SupportAccessGrant {
   decidedAt   DateTime?
   /// نهاية النافذة — انقضاؤها يميت الجلسة ولو بقي status=APPROVED.
   expiresAt   DateTime?
+  /// أوّلُ دخولٍ فعليّ تحت الإذن (`ق-٥٣٠`) — يُكتب مرّةً، وعليه يُخطَر المالك.
+  firstEntryAt DateTime?
 
   logs SupportAccessLog[]
 

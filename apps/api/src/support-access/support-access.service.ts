@@ -1,8 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SupportAccessGrant } from '@prisma/client';
+import { NotificationKind, Prisma, SupportAccessGrant } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
+import { NotificationsService } from '../notifications/notifications.service';
+import { ALLOWED_SCREENS } from '../templates/screens';
 
 /** أقصى نافذة يُسمح بطلبها: يوم واحد — الدعم زيارة، لا إقامة. */
 const MAX_DURATION_MINUTES = 24 * 60;
@@ -41,7 +43,7 @@ export class SupportAccessService {
     });
     if (existing) throw new ConflictException(MSG.support_request_exists);
 
-    return this.prisma.supportAccessGrant.create({
+    const grant = await this.prisma.supportAccessGrant.create({
       data: {
         companyId,
         // يُحفظ لأن صفَّ المنشأة يزول بحذفها والإذنُ يبقى (ق-٥٣١).
@@ -51,9 +53,26 @@ export class SupportAccessService {
         reason,
         durationMinutes: duration,
         // بلا تكرارٍ وبترتيب القائمة المعتمدة — فما يراه المالك هو ما يُنفَذ حرفياً.
-        screens: [...new Set(screens)],
+        screens: ALLOWED_SCREENS.filter((s) => screens.includes(s)),
       } as unknown as Prisma.SupportAccessGrantUncheckedCreateInput,
     });
+
+    /**
+     * **المالكُ يُخطَر عند الطلب** (`ق-٥٣٠`): الطلبُ المعلّق كان لا يراه إلا إن
+     * فتح الإعدادات. **ومن لا يعلم لا يتحقّق** — والنظامُ (م٨) يُلزمه التحقّقَ من
+     * التزام جهة المعالجة. **والإشعارُ تحت سياق المستأجر** لأن `notifications`
+     * تحت `FORCE`، ومفتاحُ التكرار هو الإذن — فلا يتكرّر بإعادة المحاولة.
+     */
+    await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      NotificationsService.raise(tx, companyId, {
+        kind: NotificationKind.SUPPORT_REQUESTED,
+        dedupeKey: `support-requested:${grant.id}`,
+        title: 'طلبُ دخولٍ من الدعم الفنيّ بانتظار قرارك',
+        body: `${admin.username} يطلب الدخولَ لمدة ${duration} دقيقة (قراءةً فقط) — السبب: ${reason} — الشاشات: ${grant.screens.join('، ')}`,
+        linkScreen: 'settings',
+      }),
+    );
+    return grant;
   }
 
   /** كل الطلبات عبر المنشآت — للوحة المطوّر. **والاسمُ من الإذن نفسِه**: منشأةٌ حُذفت تبقى مسمّاةً هنا (`ق-٥٣١`). */
@@ -75,10 +94,29 @@ export class SupportAccessService {
    * سطر السجل — unscoped عمداً: يُكتب أثناء طلبِ مديرٍ لا يملك سياق مستأجر.
    * **و`actor` هو الداخلُ نفسُه** (`ق-٥٢٨`) — لا طالبُ الإذن الذي يُقرأ من `grant`.
    */
-  logAccess(grantId: string, companyId: string, method: string, path: string, actor: { id: string; name: string }) {
-    return this.prisma.supportAccessLog.create({
+  async logAccess(grantId: string, companyId: string, method: string, path: string, actor: { id: string; name: string }) {
+    const line = await this.prisma.supportAccessLog.create({
       data: { grantId, companyId, method, path, actorId: actor.id, actorName: actor.name } as unknown as Prisma.SupportAccessLogUncheckedCreateInput,
     });
+
+    /**
+     * **والمالكُ يُخطَر عند أوّل دخول** (`ق-٥٣٠`) — لا عند كلّ طلب: كتابةٌ واحدة
+     * مشروطة (`firstEntryAt: null`) تقول إن كان هذا أوّلَ دخول، **فلا عدٌّ ولا
+     * ذاكرة** — والإشعارُ مرّةً لكل إذن.
+     */
+    const first = await this.prisma.supportAccessGrant.updateMany({ where: { id: grantId, firstEntryAt: null }, data: { firstEntryAt: new Date() } });
+    if (first.count === 1) {
+      await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+        NotificationsService.raise(tx, companyId, {
+          kind: NotificationKind.SUPPORT_ENTERED,
+          dedupeKey: `support-entered:${grantId}`,
+          title: 'الدعمُ الفنيّ دخل بياناتك الآن',
+          body: `${actor.name} بدأ القراءةَ تحت الإذن الذي وافقتَ عليه — وكلُّ ما يفتحه في سجل الوصول`,
+          linkScreen: 'settings',
+        }),
+      );
+    }
+    return line;
   }
 
   // ---------- جانب مالك المنشأة ----------

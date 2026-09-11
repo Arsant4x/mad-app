@@ -5,6 +5,7 @@ import request from 'supertest';
 import * as argon2 from 'argon2';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -45,6 +46,11 @@ describe('Support mode (e2e)', () => {
 
   afterAll(async () => {
     // تنظيف: سجلات وطلبات هذا الاختبار فقط (unscoped — نمط جانب المدير).
+    const mine = await prisma.supportAccessGrant.findMany({ where: { reason: { contains: suffix } }, select: { id: true } });
+    // ⚠️ **والمشتقُّ يُحذف مع أصله** (`ق-٤٩٥`): إشعاراتُ الطلب والدخول مفتاحُها الإذن —
+    //    و`notifications` تحت `FORCE`، فتُحذف تحت سياق المستأجر لا بالعميل الخام.
+    const keys = mine.flatMap((g) => [`support-requested:${g.id}`, `support-entered:${g.id}`]);
+    if (keys.length) await app.get(TenantPrismaService).runInTenantContext(companyId, (tx) => tx.notification.deleteMany({ where: { dedupeKey: { in: keys } } }));
     await prisma.supportAccessLog.deleteMany({ where: { grant: { reason: { contains: suffix } } } });
     await prisma.supportAccessGrant.deleteMany({ where: { reason: { contains: suffix } } });
     await app.close();
@@ -71,6 +77,13 @@ describe('Support mode (e2e)', () => {
     expect(res.body.status).toBe('PENDING');
     expect(res.body.screens).toEqual(['customers']);
 
+    // ⭐ **والمالكُ يُخطَر عند الطلب** (`ق-٥٣٠`) — لا حين يفتح الإعدادات صدفةً.
+    const notes = await owner(request(app.getHttpServer()).get('/notifications')).expect(200);
+    const requested = (notes.body.notifications as { kind: string; body: string; linkScreen: string | null }[]).find((n) => n.kind === 'SUPPORT_REQUESTED' && n.body.includes(suffix));
+    expect(requested).toBeTruthy();
+    expect(requested!.linkScreen).toBe('settings');
+    expect(requested!.body).toContain('customers');
+
     await admin(request(app.getHttpServer()).post('/support-access/admin'))
       .send({ companyId, reason: `طلب ثانٍ ${suffix}`, durationMinutes: 30, screens: ['customers'] })
       .expect(409);
@@ -92,6 +105,14 @@ describe('Support mode (e2e)', () => {
 
     await support(request(app.getHttpServer()).get('/customers')).expect(200);
     await support(request(app.getHttpServer()).post('/customers')).send({ name: 'محاولة كتابة' }).expect(403);
+
+    // ⭐ **ويُخطَر عند أوّل دخولٍ — مرّةً لكل إذن** (`ق-٥٣٠`): قراءةٌ ثانية لا تُكرّره.
+    await support(request(app.getHttpServer()).get('/customers')).expect(200);
+    const notes = await owner(request(app.getHttpServer()).get('/notifications')).expect(200);
+    const entered = (notes.body.notifications as { kind: string; body: string }[]).filter((n) => n.kind === 'SUPPORT_ENTERED');
+    expect(entered.length).toBe(1);
+    const overview = await owner(request(app.getHttpServer()).get('/support-access')).expect(200);
+    expect((overview.body as { id: string; firstEntryAt: string | null }[]).find((g) => g.id === grantId)?.firstEntryAt).toBeTruthy();
   }, 30000);
 
   /**
