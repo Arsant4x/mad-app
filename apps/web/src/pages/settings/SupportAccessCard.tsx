@@ -118,7 +118,8 @@ export function SupportAccessCard() {
                 <td className="num" style={{ fontSize: 12 }}>
                   {new Date(l.at).toLocaleString('ar-SA')}
                 </td>
-                <td style={{ fontSize: 12 }}>{l.grant.requestedByName}</td>
+                {/* من دخل فعلاً (ق-٥٢٨) — والطالبُ يبقى على الإذن نفسه. */}
+                <td style={{ fontSize: 12 }}>{l.actorName || l.grant.requestedByName}</td>
                 <td className="num" style={{ fontSize: 12 }}>
                   {l.method} {l.path}
                 </td>

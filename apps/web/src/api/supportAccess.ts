@@ -25,6 +25,8 @@ export interface SupportLogLine {
   method: string;
   path: string;
   at: string;
+  /** من دخل فعلاً (ق-٥٢٨) — لا طالبُ الإذن الذي يحمله `grant`. */
+  actorName: string;
   grant: { requestedByName: string; reason: string };
 }
 
