@@ -26,6 +26,7 @@ const read = (...p: string[]) => readFileSync(join(REPO_ROOT, ...p), 'utf8');
 const BACKUP = read('ops', 'backup', 'offsite-backup.sh');
 const DRILL = read('ops', 'backup', 'restore-drill.sh');
 const FRESH = read('ops', 'backup', 'check-freshness.sh');
+const OBJECT = read('ops', 'backup', 'check-repo-object.sh');
 const COMPOSE = read('docker-compose.prod.yml');
 
 /** الخدمةُ في ملفّ التركيب — تُقرأ ككتلةٍ مستقلّة لا بالبحث في الملفّ كلِّه. */
@@ -40,8 +41,8 @@ function composeService(name: string): string {
 describe('النسخةُ خارج المضيف — خمسةُ شروطٍ محروسة (ق-٥٧٣ … ق-٥٧٧)', () => {
   const service = composeService('backup-offsite');
 
-  it('⓪ حارسٌ على المجسّ: الملفّاتُ الأربعةُ قُرئت فعلاً وليست فارغة', () => {
-    for (const [name, body] of [['offsite-backup.sh', BACKUP], ['restore-drill.sh', DRILL], ['check-freshness.sh', FRESH]] as const) {
+  it('⓪ حارسٌ على المجسّ: الملفّاتُ الخمسةُ قُرئت فعلاً وليست فارغة', () => {
+    for (const [name, body] of [['offsite-backup.sh', BACKUP], ['restore-drill.sh', DRILL], ['check-freshness.sh', FRESH], ['check-repo-object.sh', OBJECT]] as const) {
       expect(`${name}:${body.length > 400}`).toBe(`${name}:true`);
     }
     expect(service.length).toBeGreaterThan(200);
@@ -113,6 +114,26 @@ describe('النسخةُ خارج المضيف — خمسةُ شروطٍ محر�
     // ثلاثةُ مخارجَ متمايزة: حديثةٌ · متقادمةٌ أو معدومة · تعذّر البلوغ — ولا حكمَ بالصمت.
     expect(FRESH).toContain('exit 1');
     expect(FRESH).toContain('exit 2');
+  });
+
+  /**
+   * ⑤ب **وفحصُ الجدولة لا يُسلّم المفتاح** (`ق-٥٨٠`): يسأل الدلوَ عن **وجود** أحدثِ كائن،
+   * ولا يذكر كلمةَ المستودع أصلاً — **فاعتمادُ قراءةٍ فقط لا يفتح النسخة ولو سُرّب**.
+   * **وحدُّه مكتوبٌ فيه**: وجودٌ لا سلامة.
+   */
+  it('⑤ب فحصُ الجدولة يسأل الدلوَ بلا كلمة المستودع، ويعلن حدَّه، ويشتقّ الوجهةَ من مصدرٍ واحد', () => {
+    expect(OBJECT).not.toContain('RESTIC_PASSWORD');
+    expect(OBJECT).toContain('AWS_ACCESS_KEY_ID');
+    // الوجهةُ تُشتقّ من `RESTIC_REPOSITORY` — فلا يفترق ما يُفحص عمّا يُكتب.
+    expect(OBJECT).toContain('${RESTIC_REPOSITORY:?');
+    // ثلاثةُ مخارجَ متمايزة: وُجد · لم يُوجد أو تقادم · تعذّر السؤال.
+    expect(OBJECT).toContain('exit 1');
+    expect(OBJECT).toContain('exit 2');
+    // والحدُّ معلَنٌ في مخرَجه لا في وثيقةٍ بعيدة.
+    expect(OBJECT).toContain('وجودٌ لا سلامة');
+    const fallback = /MAX_AGE_HOURS:-(\d+)/.exec(OBJECT);
+    expect(fallback).not.toBeNull();
+    expect(Number(fallback![1])).toBeLessThanOrEqual(48);
   });
 
   /** ⑥ وغيرُ المهيّأة **تُعلن نفسَها** ولا تنهار ولا تصمت (`ق-٥٧٧`). */

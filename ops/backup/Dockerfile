@@ -10,7 +10,8 @@ FROM restic/restic:0.17.3 AS restic
 FROM postgres:16-alpine
 COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 # `coreutils` لأجل `date -d` في فحص الطزاجة — وصيغةُ `busybox` منه لا تقرأ ISO-8601.
-RUN apk add --no-cache coreutils ca-certificates
-COPY offsite-backup.sh check-freshness.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/offsite-backup.sh /usr/local/bin/check-freshness.sh
+# و`openssl`+`curl` لأجل فحص الوجود بتوقيع `SigV4` بلا مفتاح المستودع (`ق-٥٨٠`).
+RUN apk add --no-cache coreutils ca-certificates openssl curl
+COPY offsite-backup.sh check-freshness.sh check-repo-object.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/offsite-backup.sh /usr/local/bin/check-freshness.sh /usr/local/bin/check-repo-object.sh
 ENTRYPOINT ["/bin/sh"]
