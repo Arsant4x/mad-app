@@ -202,6 +202,11 @@ model Company {
   retainUntil DateTime?
   /// متى مُحي غيرُ الملزِم من بياناتها الشخصية (`ق-٥٥٩`) — بطلبٍ صريح أو بانقضاء نافذة العودة.
   erasedAt DateTime?
+  /// آخرُ نسخةٍ من قائمة المعالجين الفرعيين قبِلها التاجر (`ق-٥٨٩`).
+  ///
+  /// ⚠️ **صورةٌ لا أصل**: الأصلُ صفُّ `ProcessingAgreementAcceptance`، وهذا يُكتب معه
+  /// **في المعاملة نفسِها** ليقرأه حارسُ المستأجر بلا استعلامٍ ثانٍ في كلِّ طلب.
+  consentedListVersion Int?
   /// When on, the master records (properties/units) are frozen company-wide:
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
@@ -342,6 +347,7 @@ model Company {
   reminderPolicy   ReminderPolicy?
   rentReminders    RentReminder[]
   notifications    Notification[]
+  consentAcceptances ProcessingAgreementAcceptance[]
   warranties       Warranty[]
   warehouses       Warehouse[]
   stockMovements   StockMovement[]
@@ -2080,6 +2086,9 @@ enum NotificationKind {
   SUPPORT_REQUESTED
   /// الدعمُ دخل فعلاً أوّلَ مرّةٍ تحت إذنٍ فعّال — مرّةً لكل إذن.
   SUPPORT_ENTERED
+  /// قائمةُ المعالجين الفرعيين تغيّرت وتلزم موافقةُ التاجر (`ق-٥٨٩`) — **تذكيرٌ متكرّرٌ
+  /// لا إشعارٌ واحد**: عند النشر، وقبل السريان بأربعةَ عشرَ يوماً وبسبعةٍ وبيوم، ثم أسبوعياً.
+  SUBPROCESSOR_CONSENT
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something
@@ -3933,3 +3942,70 @@ model DocumentSequence {
   @@unique([companyId, kind, year])
   @@map("document_sequences")
 }
+
+/// ═══ موافقةُ التاجر على المعالجين الفرعيين (`ق-٥٨١` · `ق-٥٨٩`) ═══
+///
+/// معالجٌ فرعيٌّ نستعين به في معالجة بيانات التجّار — **واللائحةُ توجب موافقةَ جهة التحكم
+/// المسبقة قبل التعاقد معه** (م١٧/٥/ج)، **وجهةُ التحكم هي التاجر لا نحن**.
+///
+/// ⚠️ **جدولُ منصّةٍ لا مستأجر** — **بلا أبٍ عمداً (كيانٌ جذريٌّ تملكه المنصّة)**: قائمةٌ
+/// واحدةٌ لكلِّ التجّار، فلا `companyId` فيها ولا عزلَ مستأجر.
+model SubProcessor {
+  id      String @id @default(uuid())
+  name    String
+  purpose String
+  /// **الموقعُ الجغرافيّ** — وهو ما يحكم النقلَ خارج المملكة، فلا يُحذف من العرض.
+  location String
+  /// فئاتُ البيانات التي يعالجها (م١٧/١/ب).
+  dataCategories String[]
+
+  addedAt   DateTime  @default(now())
+  /// يُرفع من القائمة ولا يُحذف صفُّه — فما وقعت الموافقةُ عليه يبقى مقروءاً.
+  removedAt DateTime?
+
+  @@map("sub_processors")
+}
+
+/// نسخةٌ **منشورة** من القائمة — **والموافقةُ تقع على نصٍّ ثابتٍ لا على جدولٍ متحرّك**:
+/// فلو قُبلت «القائمة» لصار تعديلُ صفٍّ فيها تغييراً لِما وُوفق عليه بلا موافقةٍ جديدة.
+///
+/// ⚠️ **جدولُ منصّةٍ لا مستأجر — بلا أبٍ عمداً (كيانٌ جذريٌّ تملكه المنصّة)**.
+model SubProcessorListVersion {
+  id      String @id @default(uuid())
+  version Int    @unique
+
+  publishedAt DateTime @default(now())
+  /// **لا تُلزِم قبل هذا التاريخ** — ومهلتُه **ثلاثون يوماً على الأقلّ** من النشر
+  /// (`ق-٥٨٩/①`): فتغييرُ معالجٍ فرعيٍّ يُعرف قبل وقوعه ولا يُعلَن يومَه.
+  effectiveFrom DateTime
+
+  /// ما تغيّر في هذه النسخة — بلغةِ التاجر لا بلغة الجدول.
+  summary String
+  /// **لقطةُ القائمة وقتَ النشر** — هي نصُّ ما وُوفق عليه.
+  entries Json
+
+  acceptances ProcessingAgreementAcceptance[]
+
+  @@map("sub_processor_list_versions")
+}
+
+/// قبولُ التاجر لنسخةٍ بعينها — **صفٌّ يُثبت لا ادّعاءٌ يُحكى**: من قبِل، ومتى، ومن أيّ عنوان.
+model ProcessingAgreementAcceptance {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  version     Int
+  listVersion SubProcessorListVersion @relation(fields: [version], references: [version], onDelete: Restrict)
+
+  acceptedAt     DateTime @default(now())
+  /// من قبِل — **الاسمُ وقتَ القبول**، فتغييرُ اسمٍ لاحقاً لا يُعيد كتابة التاريخ.
+  acceptedById   String
+  acceptedByName String
+  ip             String?
+
+  /// قبولٌ واحدٌ لكلِّ نسخة — والقيدُ هو الضمانة لا الشيفرة.
+  @@unique([companyId, version])
+  @@map("processing_agreement_acceptances")
+}
+

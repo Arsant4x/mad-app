@@ -6,8 +6,10 @@ import { TenantPrismaService } from './tenant-prisma.service';
 import { SupportAccessService } from '../../support-access/support-access.service';
 import { JwtPayload } from '../../auth/types';
 import { evaluateCompanyStatus } from './company-status.util';
-import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
+import { AccountClosedException, AccountFrozenException, AccountStoppedException, ActionForbiddenException, ConsentRequiredException, MasterDataLockedException, ScreenForbiddenException, ScreenNotInSectorException } from './tenant.exceptions';
 import { ALLOW_WHILE_CLOSED_KEY } from './allow-while-closed.decorator';
+import { ALLOW_WHILE_CONSENT_PENDING_KEY } from './allow-while-consent-pending.decorator';
+import { ConsentService } from '../../consent/consent.service';
 import { reopenUntil } from './reopen-window';
 import { SECTORS, Sector, screensFor } from '../../activities/sectors';
 import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
@@ -36,6 +38,7 @@ export class TenantGuard implements CanActivate {
     private readonly tenantPrisma: TenantPrismaService,
     private readonly reflector: Reflector,
     private readonly supportAccessService: SupportAccessService,
+    private readonly consent: ConsentService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -123,6 +126,18 @@ export class TenantGuard implements CanActivate {
         const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : '—');
         throw new AccountClosedException(day(company.retainUntil), day(company.closedAt ? reopenUntil(company.closedAt) : null));
       }
+    }
+
+    // ⭐ موافقةُ المعالجين الفرعيين (`ق-٥٨٩`) — **اختيارٌ لا حجب**: من لم يقبل النسخةَ
+    // السارية لا تمرّ بياناتُه بمعالجٍ لم يأذن به (اللائحة م١٧/٥) — **ويبقى أمامه بابان**:
+    // يقبل من مساره، أو يصدّر ويُغلق (وكلاهما معلَّمٌ `@AllowWhileConsentPending`).
+    //
+    // ⚠️ **وبعد `CLOSED` عمداً**: المغلقُ لا يُسأل موافقةً على معالجةٍ لم تعد تقع له،
+    // ورسالةُ الإغلاق أولى بالقراءة من رسالة الموافقة.
+    const effective = await this.consent.effectiveVersion();
+    if (effective.version !== null && company.consentedListVersion !== effective.version) {
+      const allowWhileConsentPending = this.reflector.getAllAndOverride<boolean | undefined>(ALLOW_WHILE_CONSENT_PENDING_KEY, [context.getHandler(), context.getClass()]);
+      if (!allowWhileConsentPending) throw new ConsentRequiredException(effective.effectiveFrom ? effective.effectiveFrom.toISOString().slice(0, 10) : '—');
     }
 
     // STOPPED is a full lock-out — except subscription self-service.

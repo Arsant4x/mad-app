@@ -7,6 +7,7 @@ import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guar
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';
+import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { DeletionRequestDecisionDto, SubmitDeletionRequestDto } from './dto/deletion-request.dto';
 import { DecisionActor, DeletionRequestsService } from './deletion-requests.service';
 
@@ -24,6 +25,9 @@ import { DecisionActor, DeletionRequestsService } from './deletion-requests.serv
 @Controller('deletion-request')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
+// ⭐ **ومنفذُ الخروج لا يُغلق** (`ق-٥٨٩/④`): «أغلق حسابي» يعمل والتاجرُ ممنوعٌ حتى يقبل
+// قائمةَ المعالجين الفرعيين — **فمن لم يوافق يخرج بنسخته، ولا يُحبس داخل حسابه**.
+@AllowWhileConsentPending()
 export class DeletionRequestsController {
   constructor(private readonly service: DeletionRequestsService) {}
 

@@ -2,6 +2,7 @@ import { Controller, Get, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
+import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { ExportService } from './export.service';
@@ -13,6 +14,11 @@ import { ExportService } from './export.service';
  * stopped merchant deciding whether to renew or leave still owns its data.
  * Owner-only, enforced in the service.
  */
+/**
+ * ⭐ **ومنفذُ الخروج لا يُغلق** (`ق-٥٨٩/④`): «نزّل بياناتك» ليست وعداً في نصٍّ بل مسارٌ
+ * **يعمل والتاجرُ ممنوعٌ حتى يقبل قائمةَ المعالجين الفرعيين** — فبلا هذا صار الاختيارُ حجزاً.
+ */
+@AllowWhileConsentPending()
 @Controller('export')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
