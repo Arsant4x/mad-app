@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
+import { CallHandler, ExecutionContext, HttpException, HttpStatus, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { Observable, tap } from 'rxjs';
@@ -96,6 +96,9 @@ export class AuditInterceptor implements NestInterceptor {
     if (skip) return next.handle();
 
     return next.handle().pipe(
+      tap({
+        error: (err: unknown) => this.recordRefusal(context, req, method, err),
+      }),
       tap((result) => {
         // Only successful calls reach here — a rejected request never happened,
         // so recording it as a change would be a lie.
@@ -141,6 +144,64 @@ export class AuditInterceptor implements NestInterceptor {
           .catch((e: Error) => this.logger.error(`Could not write audit entry for ${method} ${req.path}: ${e.message}`));
       }),
     );
+  }
+
+  /**
+   * **المحاولةُ المرفوضة تُسجَّل — بمعيارٍ محسوم** (`ق-٥١١`).
+   *
+   * ── العلّة ──────────────────────────────────────────────────────────────
+   *
+   * كان المسجِّلُ `tap((result) => …)` **بمعالجٍ واحدٍ يعمل على النجاح وحده**
+   * — **فكلُّ تعديلٍ مرفوض لا يترك أثراً إطلاقاً**. ⇒ **فهجومٌ أخفق غيرُ مرئيٍّ
+   * بنيوياً لا «غيرُ ملحوظ»**، **ومنعٌ متكرّرٌ لمن يحاول ما ليس له لا يُقرأ في
+   * أيّ شاشة**.
+   *
+   * ── والمعيار (حكمُ المالك) ──────────────────────────────────────────────
+   *
+   *   · **المرفوضُ بالصلاحية** (`403`) — **ومنه رفضُ العزل، وهو أهمُّ ما يُرى**.
+   *   · **والمرفوضُ بالحالة** (`409`) — كاصطدام اسمٍ أو حالةٍ نهائية.
+   *   · **ولا يُسجَّل المرفوضُ بشكل المُدخَل** (`400`/`422`) — **ضجيجٌ يُغرق
+   *     السجل**، وخطأُ حقلٍ ليس محاولةَ تجاوز.
+   *
+   * ⚠️ **و`404` خارجٌ عمداً وحدُّه معلَن**: **هو حالةٌ كذلك** — **لكنه أكثرُ
+   * الإخفاقات وقوعاً بلا سوء نيّة** (رابطٌ قديم، صفٌّ حُذف)، **فيُغرق النمطَ
+   * الذي بُني السجلُّ لكشفه**. **ويُضاف حين يُطلَب لا افتراضاً.**
+   *
+   * ── ولا يُسجَّل جسمُ الطلب في الرفض ────────────────────────────────────
+   *
+   * 📌 **وهي قاعدةُ `company-users` معمَّمة**: **تسجيلُ ما حاوله يجعل السجلَّ
+   * نسخةً ثانية من التسريب يقرأها من يملك صلاحية التدقيق**. ⇒ **فيُسجَّل وقوعُ
+   * الرفض وسببُه، لا موضوعُه** — **والغرضُ كشفُ النمط لا حفظُ المحاولة**.
+   */
+  private recordRefusal(context: ExecutionContext, req: Request, method: string, err: unknown): void {
+    const status = err instanceof HttpException ? err.getStatus() : 500;
+    if (status !== HttpStatus.FORBIDDEN && status !== HttpStatus.CONFLICT) return;
+
+    const tenant = req.tenant;
+    const payload = req.user as JwtPayload | undefined;
+    if (!tenant?.companyId || !payload) return;
+
+    const screen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]) ?? 'general';
+    const action = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_ACTION_KEY, [context.getHandler(), context.getClass()]);
+    const entityId = parentIdFromParams(req.params) ?? (req.params?.id as string | undefined) ?? null;
+
+    this.audit
+      .record({
+        companyId: tenant.companyId,
+        actorType: tenant.actorType,
+        actorId: tenant.profileId,
+        actorName: payload.username,
+        screen,
+        action: action ?? this.fallbackAction(method),
+        entity: this.entityFromPath(req.path),
+        entityId,
+        method,
+        path: req.path,
+        // **وقوعُ الرفض وسببُه لا موضوعُه** — ولا جسمَ طلبٍ هنا بحال.
+        details: { outcome: 'rejected', status },
+        ip: req.ip ?? null,
+      })
+      .catch((e: Error) => this.logger.error(`Could not write refusal audit entry for ${method} ${req.path}: ${e.message}`));
   }
 
   /** Used only for endpoints that haven't declared an action yet, so the trail

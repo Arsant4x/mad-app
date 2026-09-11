@@ -37,7 +37,7 @@ export class CompanyUsersController {
   @Post()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCompanyUserDto) {
-    return this.companyUsersService.create(tenant.companyId, tenant.actorType, dto, {
+    return this.companyUsersService.create(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, dto, {
       id: tenant.profileId,
       name: tenant.profileId,
     });
@@ -45,7 +45,7 @@ export class CompanyUsersController {
 
   @Patch(':id')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCompanyUserDto) {
-    return this.companyUsersService.update(tenant.companyId, tenant.actorType, id, dto);
+    return this.companyUsersService.update(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')

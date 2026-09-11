@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
+import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
@@ -39,7 +40,13 @@ export class CompanyUsersService {
     return this.prisma.companyUser.findMany({ where: { companyId }, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } });
   }
 
-  async create(companyId: string, actorType: string, dto: CreateCompanyUserDto, actor?: { id: string; name: string }) {
+  async create(
+    companyId: string,
+    actorType: string,
+    allowedBranchIds: string[] | 'all',
+    dto: CreateCompanyUserDto,
+    actor?: { id: string; name: string },
+  ) {
     assertIsCompanyOwner(actorType);
 
     const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
@@ -50,40 +57,24 @@ export class CompanyUsersService {
 
     // قبل إنشاء أي شيء — فرع مرفوض بعد إنشاء الحساب كان سيترك حساباً
     // نصف مُنشأ، وإعادة المحاولة تصطدم بـusername_taken.
-    if (dto.branchIds?.length) await this.assertBranchIdsBelongToCompany(companyId, dto.branchIds);
+    if (dto.branchIds?.length) await this.assertBranchIdsAssignable(companyId, allowedBranchIds, dto.branchIds);
 
     const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
     if (existing) {
       /**
-       * ⚠️ **الاصطدام يُسجَّل — وهو الإشارة الوحيدة على التعداد.**
+       * ⚠️ **الاصطدام يُسجَّل — وقد صار يُسجَّل بنيةً لا بيدٍ هنا** (`ق-٥١١`).
        *
-       * `AuditInterceptor` يسجّل بـ`tap((result) => …)` — **مسار النجاح
-       * وحده**. فالإخفاقات لا تترك أثراً إطلاقاً، و«تعدادُ الأسماء» **كلّه
+       * **كان `AuditInterceptor` يسجّل بـ`tap((result) => …)` — مسار النجاح
+       * وحده**، **فالإخفاقات لا تترك أثراً إطلاقاً**، و«تعدادُ الأسماء» **كلّه
        * إخفاقات**: من يجرّب مئة اسم ليعرف أيّها موجود لا يُنشئ حساباً واحداً.
+       * **أي أن الهجوم كان غير مرئيٍّ بنيوياً لا «غير ملحوظ»** — **فسُجِّل هنا
+       * بيدٍ، في موضعٍ واحدٍ من عشرات**.
        *
-       * أي أن الهجوم كان **غير مرئي بنيوياً** لا «غير ملحوظ».
-       *
-       * 📌 ولا يُسجَّل الاسم المطلوب في `details`: تسجيله يجعل سجل التدقيق
-       * نفسه **نسخةً ثانية من التسريب** يقرأها من يملك صلاحية التدقيق. فيُسجَّل
-       * **وقوع** الاصطدام لا موضوعه — والغرض كشف النمط لا حفظ المحاولة.
+       * ⇒ **والآن يسجّله المسجِّلُ نفسُه لكلّ `409` و`403`** — **فحُذف التسجيلُ
+       * اليدويّ لئلّا يُكتب القيدُ مرّتين**. 📌 **وقاعدتُه الثانية عُمّمت معه**:
+       * **لا يُسجَّل جسمُ الطلب في الرفض** — **فتسجيلُ ما حاوله يجعل السجلَّ
+       * نسخةً ثانية من التسريب**، والغرضُ كشفُ النمط لا حفظُ المحاولة.
        */
-      await this.audit
-        .record({
-          companyId,
-          actorType,
-          actorId: actor?.id ?? 'unknown',
-          actorName: actor?.name ?? 'unknown',
-          screen: 'users',
-          action: 'add',
-          entity: 'CompanyUser',
-          entityId: null,
-          method: 'POST',
-          path: '/company-users',
-          details: { outcome: 'username_conflict' },
-          ip: null,
-        })
-        .catch((e) => this.logger.error(`تعذّر تسجيل اصطدام اسم المستخدم: ${String(e)}`));
-
       throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
     }
 
@@ -104,7 +95,7 @@ export class CompanyUsersService {
     return identity.companyUser!;
   }
 
-  async update(companyId: string, actorType: string, id: string, dto: UpdateCompanyUserDto) {
+  async update(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateCompanyUserDto) {
     assertIsCompanyOwner(actorType);
 
     const existing = await this.prisma.companyUser.findUnique({ where: { id } });
@@ -128,7 +119,7 @@ export class CompanyUsersService {
     }
 
     if (dto.branchIds !== undefined) {
-      await this.assertBranchIdsBelongToCompany(companyId, dto.branchIds);
+      await this.assertBranchIdsAssignable(companyId, allowedBranchIds, dto.branchIds);
       await this.replaceBranchAssignments(id, dto.branchIds);
     }
 
@@ -148,12 +139,27 @@ export class CompanyUsersService {
    * raw PrismaService this service otherwise uses (its own tables,
    * company_users/login_identities, carry no RLS) would see zero rows here and
    * reject every valid id. */
-  private async assertBranchIdsBelongToCompany(companyId: string, branchIds: string[]): Promise<void> {
+  /**
+   * **الفروعُ للمنشأة — ومن فروع المُسنِد** (`ق-٥١٤`).
+   *
+   * **كان الفحصُ الأوّلَ وحده**: أن الفروع للمنشأة. ⇒ **فمن يُسنِد فرعاً لا
+   * يملكه يمنح صلاحيةً دائمةً عليه** — **وأثرُه يبقى بعد الفعل**، بخلاف من
+   * يُنشئ صفّاً في فرعٍ آخر مرّةً واحدة.
+   *
+   * ⚠️ **ولا يتغيّر شيءٌ اليوم**: المسارُ كلُّه مغلقٌ على مالك المنشأة
+   * (`assertIsCompanyOwner`) **ونطاقُه `all`** — **مقيسٌ**. **فالتحقّقُ هنا
+   * سلامةٌ ذاتيّةٌ تحلّ محلَّ سلامةٍ مستعارة** (`ق-٥١٣`): **حارسٌ يعتمد على
+   * بوّابةٍ أخرى يسقط يوم تُفتَح تلك البوّابة، ولا يشتكي**.
+   */
+  private async assertBranchIdsAssignable(companyId: string, allowedBranchIds: string[] | 'all', branchIds: string[]): Promise<void> {
     if (branchIds.length === 0) return;
     const valid = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } }),
     );
     if (valid.length !== branchIds.length) throw new NotFoundException(MSG.branch_not_found);
+
+    // والإذنُ بعد الوجود — بالمصدر الواحد نفسِه الذي تمرّ به الخدماتُ الأخرى.
+    for (const id of branchIds) assertBranchAllowed(allowedBranchIds, id);
   }
 
   /** Replace-all: the payload is the complete desired set, so diffing would
