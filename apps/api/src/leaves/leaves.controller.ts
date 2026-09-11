@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantContext } from '../auth/types';
+import { JwtPayload, TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -49,22 +50,24 @@ export class LeavesController {
     return this.leavesService.listRequests(tenant.companyId, employeeId, status);
   }
 
+  // ⭐ **الفاعلُ يُمرَّر عند التقديم وعند القرار** (`ق-٦٢١`): الطرفان اللذان
+  //    يُقارَنان، **واسمُه يُخزَّن وقتَ الفعل لا يُحلّ لاحقاً** — كما في الشطب.
   @Post('requests')
   @RequiresAction('add')
-  createRequest(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateLeaveRequestDto) {
-    return this.leavesService.createRequest(tenant.companyId, dto);
+  createRequest(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: CreateLeaveRequestDto) {
+    return this.leavesService.createRequest(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, dto);
   }
 
   @Post('requests/:id/approve')
   @RequiresAction('review')
-  approve(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
-    return this.leavesService.decide(tenant.companyId, id, 'APPROVED', dto.note);
+  approve(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
+    return this.leavesService.decide(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'APPROVED', dto.note);
   }
 
   @Post('requests/:id/reject')
   @RequiresAction('review')
-  reject(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
-    return this.leavesService.decide(tenant.companyId, id, 'REJECTED', dto.note);
+  reject(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
+    return this.leavesService.decide(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'REJECTED', dto.note);
   }
 
   @Delete('requests/:id')

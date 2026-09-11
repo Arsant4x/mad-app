@@ -108,6 +108,7 @@ export const MSG = {
   leave_request_not_pending: 'leaves.request_not_pending',
   leave_dates_invalid: 'leaves.dates_invalid',
   leave_overlap: 'leaves.overlap',
+  leave_two_persons_required: 'leaves.two_persons_required',
   attendance_not_found: 'attendance.not_found',
   attendance_already_recorded: 'attendance.already_recorded',
   sub_start_no_backdate: 'subscription.start_no_backdate',
@@ -503,6 +504,12 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.attendance_not_found]: { ar: 'سجل الحضور غير موجود', en: 'Attendance record not found' },
   [MSG.attendance_already_recorded]: { ar: 'سُجِّل حضور هذا الموظف لهذا اليوم بالفعل — عدِّل السجل القائم', en: 'Attendance for this employee on this day is already recorded — edit the existing row' },
   [MSG.leave_overlap]: { ar: 'للموظف إجازة أخرى تتداخل مع هذه الفترة', en: 'The employee already has leave overlapping this period' },
+  // ⚠️ **الرسالةُ تسمّي المخرج** كما في الشطب: من مُنع يحتاج أن يعرف **ما يفعل**
+  //    لا أن يُقال له «ممنوع» — فإمّا معتمِدٌ آخر، وإمّا إطفاء الاشتراط.
+  [MSG.leave_two_persons_required]: {
+    ar: 'المنشأة تشترط شخصين على اعتماد الإجازة — فمن قدّم طلب {employee} لا يعتمده. اطلب اعتماد صاحب صلاحية آخر، أو أطفئ الاشتراط من إعدادات المنشأة',
+    en: 'This company requires two people to approve leave — whoever filed {employee}’s request cannot approve it. Ask another authorised user to approve, or turn the requirement off in company settings',
+  },
   [MSG.sub_start_no_backdate]: { ar: 'تاريخ بداية الاشتراك يُثبَّت في يوم التفعيل ولا يقبل تاريخاً سابقاً', en: 'Subscription start is fixed to the activation day and cannot be backdated' },
   [MSG.sub_owner_only]: { ar: 'إدارة الاشتراك متاحة لمالك المنشأة فقط', en: 'Only the company owner can manage the subscription' },
   [MSG.sub_renew_months_invalid]: { ar: 'مدة التجديد يجب أن تكون بين شهر و36 شهراً', en: 'Renewal duration must be between 1 and 36 months' },
