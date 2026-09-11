@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
@@ -44,6 +45,8 @@ describe('Account deletion requests (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+    // المرشّحُ العامّ كما في التشغيل — فالوجهُ الذي يُقاس هو ما يراه المستخدم لا ما يراه الاختبار.
+    app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
     prisma = app.get(PrismaService);
 
@@ -241,6 +244,54 @@ describe('Account deletion requests (e2e)', () => {
     const row = (listed.body as { id: string; companyName: string; decidedByName: string | null }[]).find((r) => r.id === filed.body.id);
     expect(row?.companyName).toContain('منشأة حذف');
     expect(row?.decidedByName).toBeTruthy();
+  }, 60000);
+
+  /**
+   * 🔴 **الوسمُ والتنفيذُ يسقطان معاً** (`ق-٥٤١`).
+   *
+   * كان الطلبُ يُوسَم «مُوافَقاً» **قبل** التنفيذ، فإذا رفضت القاعدةُ الحذفَ — سجلٌّ لا
+   * يُحذف بحال يشير إلى المنشأة (`Restrict` · `ق-١١٠`) — بقي «مُوافَقاً» والمنشأةُ حيّة:
+   * لا إعادةَ (`409`) ولا سحبَ (`409`)، **والتاجرُ يقرأ «نُفِّذ» كذباً** (مقيسٌ في `ق-٥٣٨`).
+   * والوجهُ كان `500` بلا اسم — **والرفضُ يسمّي المانعَ** (`ق-٢٦٥`).
+   */
+  it('🔴 a company with a task: approval is refused by name, the request stays PENDING, and the company lives', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+
+    // مهمّةٌ واحدة تكفي — سطرُها في السجل لا يُحذف بحال.
+    const tpl = await auth(request(app.getHttpServer()).post('/templates'))
+      .send({ name: `كاتب-${suffix}`, isAllScreens: false, allowedScreens: ['dashboard'], screenActions: { dashboard: ['view'] } })
+      .expect(201);
+    const clerk = await auth(request(app.getHttpServer()).post('/company-users'))
+      .send({ name: 'كاتب', username: `del-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
+      .expect(201);
+    await auth(request(app.getHttpServer()).post('/tasks'))
+      .send({ title: 'مهمّة قبل الحذف', assigneeId: clerk.body.id, targetScreen: 'contracts', targetId: 'c-1' })
+      .expect(201);
+
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+    const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولة' }).expect(409);
+    expect(refused.body.message).toMatch(/سجلّ المهام|المهامّ/);
+
+    // ⭐ الطلبُ باقٍ قيد المراجعة — لا «مُوافَقاً» كذباً — والمنشأةُ حيّة، والتاجرُ يرى الحقيقة.
+    const kept = await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } });
+    expect(kept!.status).toBe('PENDING');
+    expect(kept!.decidedAt).toBeNull();
+    expect(kept!.decidedByName).toBeNull();
+    expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeTruthy();
+    const mine = await auth(request(app.getHttpServer()).get('/deletion-request')).expect(200);
+    expect(mine.body.status).toBe('PENDING');
+
+    // ومسارُ لوحة المنصّة يرفض بالاسم نفسه — لا `500`.
+    const direct = await admin(request(app.getHttpServer()).delete(`/companies/${co.id}`)).expect(409);
+    expect(direct.body.message).toMatch(/سجلّ المهام|المهامّ/);
+
+    // والمخرجُ اليوم: الرفضُ بملاحظةٍ يُغلق الطلبَ صادقاً.
+    const rejected = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/reject`)).send({ note: 'المنشأة لها سجلّات لا تُحذف' }).expect(201);
+    expect(rejected.body.status).toBe('REJECTED');
+
+    // ⚠️ المنشأةُ تبقى على القاعدة عمداً — مهامُّها لا تُحذف (`ق-١١٠`) — فتُسقط من التنظيف.
+    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
   }, 60000);
 
   it('an ordinary tenant can never reach the support endpoints', async () => {
