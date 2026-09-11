@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
-import { cancelDeletionRequest, getAccountClosureState, getMyDeletionRequest, requestReopening, type AccountClosureState, type DeletionRequest } from '../../api/deletionRequests';
+import {
+  cancelDeletionRequest,
+  getAccountClosureState,
+  getClosureArchive,
+  getMyDeletionRequest,
+  requestReopening,
+  type AccountClosureState,
+  type ClosureArchive,
+  type DeletionRequest,
+} from '../../api/deletionRequests';
 import { dfmt } from '../../lib/format';
+
+const kb = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} م.ب` : `${Math.max(1, Math.round(bytes / 1024))} ك.ب`);
 
 /**
  * ما يراه صاحبُ منشأةٍ مغلقة (ق-٥٤٧): لا شاشةَ سوى هذه — الرسالةُ تجيب «وأين بياناتي؟»
@@ -9,12 +20,15 @@ import { dfmt } from '../../lib/format';
 export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
   const [account, setAccount] = useState<AccountClosureState | null>(null);
   const [req, setReq] = useState<DeletionRequest | null>(null);
+  const [archive, setArchive] = useState<ClosureArchive | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getAccountClosureState().then(setAccount).catch(() => undefined);
     getMyDeletionRequest().then(setReq).catch(() => undefined);
+    // الروابطُ قصيرةُ العمر — تُطلب عند فتح الشاشة، وتُعاد بإعادة فتحها.
+    getClosureArchive().then(setArchive).catch(() => undefined);
   }, []);
 
   async function run(fn: () => Promise<DeletionRequest>, fallback: string) {
@@ -41,6 +55,25 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
         بياناتُك محفوظةٌ بمدد الحفظ النظامية{retainUntil ? ` حتى ${retainUntil} على الأقلّ` : ''} ثم تُمحى. لا يمكن الدخول إليها أو تعديلها ما دام الحساب مغلقاً.
       </p>
       {req?.kind === 'REOPENING' && req.decidedNote && <p className="hint">ردّ الدعم: {req.decidedNote}</p>}
+
+      {archive && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-title" style={{ marginBottom: 6 }}>نسختُك الكاملة — جاهزةٌ للتنزيل حتى {archive.expiresAt.slice(0, 10)}</div>
+          <p className="hint">
+            ملفّاتٌ سنوية ({archive.years.join(' · ') || '—'}) وملفٌّ أساسيّ، و{archive.stampedInvoices} فاتورةً مختومةً كما هي، و{archive.totalRows} صفّاً — مع `README` يشرح المحتوى و`manifest` ببصمة كلِّ ملفّ.
+          </p>
+          <ul style={{ paddingInlineStart: 18 }}>
+            {archive.files.map((f) => (
+              <li key={f.name}>
+                <a href={f.url} target="_blank" rel="noreferrer">
+                  {f.name}
+                </a>{' '}
+                <span className="hint">({kb(f.bytes)})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {reopenPending ? (

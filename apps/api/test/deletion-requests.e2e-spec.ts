@@ -6,7 +6,10 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { CompaniesService } from '../src/companies/companies.service';
 import { CompanyMovementService } from '../src/companies/company-movement.service';
+import { FilesService } from '../src/files/files.service';
+import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
 /**
@@ -66,6 +69,12 @@ describe('Account deletion requests (e2e)', () => {
   afterAll(async () => {
     // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
     for (const id of cleanupCompanyIds) await hardDeleteCompanyForTest(prisma, id);
+    // نُسخُ الإغلاق المرفوعة للمنشآت المصنوعة هنا — تُحذف من المخزن من حيث رُفعت.
+    const files = app.get(FilesService);
+    const archived = await prisma.accountDeletionRequest.findMany({ where: { companyId: { in: madeCompanyIds }, archiveProducedAt: { not: null } } });
+    for (const row of archived) {
+      for (const f of ((row.archiveManifest as { files?: { key: string }[] } | null)?.files ?? [])) await files.deleteArchiveObject(f.key).catch(() => undefined);
+    }
     // الطلباتُ تبقى بعد حذف المنشأة عمداً (`ق-٥٣٧`) — فتُنظَّف من حيث بقيت؛ والجدولُ `ENABLE` لا `FORCE` فالمالكُ يراها بلا سياق.
     await prisma.accountDeletionRequest.deleteMany({ where: { companyId: { in: madeCompanyIds } } });
     await app.close();
@@ -108,22 +117,59 @@ describe('Account deletion requests (e2e)', () => {
     await auth(request(app.getHttpServer()).get('/customers')).expect(200);
   }, 60000);
 
-  it('approval executes: the company is gone, login and all', async () => {
+  /**
+   * ⚖️ **النسخةُ قبل أيّ شيء** (`ق-٥٥٤`): منشأةٌ بلا حركةٍ كانت تُحذف عند الموافقة — **وذاك محوٌ
+   * قبل أن ينال صاحبُه نسختَه**. فصارت الموافقةُ تُنتج النسخةَ أولاً ثم تُغلق، ويُرجأ الحذفُ
+   * الصلبُ إلى انقضاء نافذة النسخة (الطبقةُ الثالثة — `ق-٥٥٦`).
+   */
+  it('⚖️ approval produces the full copy first, then closes — hard deletion is deferred to the copy window', async () => {
     const co = await makeCompany();
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
 
     const executed = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
     expect(executed.body.executed).toBe(true);
-    expect(executed.body.companyId).toBe(co.id);
+    expect(executed.body.outcome).toBe('CLOSED');
+    expect(executed.body.movement).toEqual([]);
+    expect(executed.body.archive.files).toBeGreaterThanOrEqual(3);
 
-    // Login is dead — the account really is gone.
-    await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(401);
-    // And it no longer appears in the companies list.
+    // لا حذفَ: المنشأةُ باقيةٌ مغلقةً، وأجلُها نافذةُ النسخة لا مددُ الحفظ (لا حركة).
+    const company = await prisma.company.findUnique({ where: { id: co.id } });
+    expect(company?.status).toBe('CLOSED');
+    expect(company!.retainUntil!.getTime() - company!.closedAt!.getTime()).toBe(90 * 24 * 3600 * 1000);
+    const row = await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } });
+    expect(row?.archiveProducedAt).toBeTruthy();
+    expect(row?.archiveExpiresAt?.getTime()).toBe(company!.retainUntil!.getTime());
+    // والدخولُ باقٍ — إلى شاشة المغلق ونسختها.
+    await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
+    // ولوحةُ المنصّة ما زالت تراها — مغلقةً لا محذوفة.
     const companies = await admin(request(app.getHttpServer()).get('/companies')).expect(200);
-    expect((companies.body as { id: string }[]).some((c) => c.id === co.id)).toBe(false);
-    // Drop from cleanup — already deleted.
-    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
+    expect((companies.body as { id: string; status: string }[]).find((c) => c.id === co.id)?.status).toBe('CLOSED');
+  }, 60000);
+
+  /**
+   * ⭐ **طُعمٌ دائم** (`ق-٥٣٦`): لو سبق الإغلاقُ النسخةَ يوماً — بإعادة ترتيبٍ أو بتغاضٍ عن سقوط
+   * الرفع — سقطت هذه الحالة. المخزنُ يُعطَّل داخل الاختبار، فلا يُغلق شيء ولا يُمسّ الطلب.
+   */
+  it('⭐ when the copy cannot be produced, nothing closes: 503, the request stays PENDING and the company ACTIVE', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+
+    const files = app.get(FilesService);
+    const original = files.putObject.bind(files);
+    files.putObject = async () => {
+      throw new Error('storage down (test bait)');
+    };
+    try {
+      const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولة' }).expect(503);
+      expect(refused.body.message).toContain('لا يُغلق الحساب ولا يُمحى شيءٌ قبلها');
+    } finally {
+      files.putObject = original;
+    }
+    expect((await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } }))?.status).toBe('PENDING');
+    expect((await prisma.company.findUnique({ where: { id: co.id } }))?.status).toBe('ACTIVE');
+    await auth(request(app.getHttpServer()).get('/customers')).expect(200);
   }, 60000);
 
   /**
@@ -149,6 +195,8 @@ describe('Account deletion requests (e2e)', () => {
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
     await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    // الموافقةُ تُنتج النسخةَ وتُغلق (`ق-٥٥٤`)؛ والحذفُ الصلبُ يقع بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا مباشرةً ليُقاس البقاءُ بعده.
+    await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
     expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeNull();
 
@@ -196,6 +244,8 @@ describe('Account deletion requests (e2e)', () => {
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
     await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
+    await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
     expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeNull();
 
@@ -228,13 +278,16 @@ describe('Account deletion requests (e2e)', () => {
     expect(filed.body.companyName).toContain('منشأة حذف');
 
     await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
+    // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
+    await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
     expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeNull();
 
-    // ⭐ والصفُّ باقٍ بعد زوال المنشأة — بحالته وقراره **ومن قرّر**.
+    // ⭐ والصفُّ باقٍ بعد زوال المنشأة — بحالته وقراره **ومن قرّر** — وبنسخته.
     const kept = await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } });
     expect(kept).toBeTruthy();
     expect(kept!.status).toBe('APPROVED');
+    expect(kept!.archiveProducedAt).toBeTruthy();
     expect(kept!.companyId).toBe(co.id);
     expect(kept!.companyName).toContain('منشأة حذف');
     expect(kept!.decidedNote).toBe('نُفِّذ بعد التأكد');
@@ -327,13 +380,27 @@ describe('Account deletion requests (e2e)', () => {
     const listed = (worklist.body as { id: string; preview?: { outcome: string; movement: string[] } }[]).find((r) => r.id === filed.body.id);
     expect(listed?.preview).toEqual({ outcome: 'CLOSE', movement: ['عروض أسعار'] });
 
-    // ② الموافقةُ تُغلق — وأجلُ الحفظ عشرُ سنواتٍ من الإغلاق (لا عقار).
+    // ② الموافقةُ تُنتج النسخةَ ثم تُغلق — وأجلُ الحفظ عشرُ سنواتٍ من الإغلاق (لا عقار).
     const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
     expect(approved.body.outcome).toBe('CLOSED');
+    const thisYear = new Date().getUTCFullYear();
+    expect(approved.body.archive.years).toContain(thisYear);
     const company = await prisma.company.findUnique({ where: { id: co.id } });
     expect(company?.status).toBe('CLOSED');
     expect(company?.retainUntil?.getFullYear()).toBe(company!.closedAt!.getFullYear() + 10);
-    expect(await prisma.quote.count()).toBeGreaterThanOrEqual(0); // البياناتُ تبقى — لا حذف.
+
+    // ⭐ النسخةُ حقيقيةٌ لا بيان: الملفُّ السنويُّ يُنزَّل من رابطه الموقَّع ويُفكّ ويُقرأ فيه عرضُ السعر.
+    const archive = await request(app.getHttpServer()).get('/deletion-request/archive').set('Authorization', `Bearer ${(await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' })).body.accessToken}`).expect(200);
+    const names = (archive.body.files as { name: string }[]).map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(['README.md', 'manifest.json', 'master-data.json.gz', `years/${thisYear}.json.gz`]));
+    const yearFile = (archive.body.files as { name: string; url: string; sha256: string }[]).find((f) => f.name === `years/${thisYear}.json.gz`)!;
+    const downloaded = Buffer.from(await (await fetch(yearFile.url)).arrayBuffer());
+    const year = JSON.parse(gunzipSync(downloaded).toString('utf8')) as Record<string, { customerId?: string }[]>;
+    expect(year.quote).toHaveLength(1);
+    expect(year.quote[0].customerId).toBe(customer.body.id);
+    const masterFile = (archive.body.files as { name: string; url: string }[]).find((f) => f.name === 'master-data.json.gz')!;
+    const master = JSON.parse(gunzipSync(Buffer.from(await (await fetch(masterFile.url)).arrayBuffer())).toString('utf8')) as Record<string, { id: string }[]>;
+    expect(master.customer.some((c) => c.id === customer.body.id)).toBe(true);
 
     // ③ الدخولُ مقطوع — والرسالةُ تجيب «وأين بياناتي؟» وبأجل — والتاجرُ يقرأ حالَه وحالَ طلبه.
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);

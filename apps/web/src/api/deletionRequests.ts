@@ -52,8 +52,19 @@ export interface ApprovalResult {
   retainUntil: string | null;
 }
 
+/** نسخةُ الإغلاق (ق-٥٥٤): ملفّاتٌ سنوية + الأساسية + المختومُ كما هو، بروابطَ موقَّعةٍ قصيرة العمر. */
+export interface ClosureArchive {
+  producedAt: string;
+  expiresAt: string;
+  years: number[];
+  totalRows: number;
+  stampedInvoices: number;
+  files: { name: string; bytes: number; sha256: string; url: string; expiresInSeconds: number }[];
+}
+
 // Merchant side
 export const getMyDeletionRequest = () => apiClient.get<DeletionRequest | null>('/deletion-request').then((r) => r.data);
+export const getClosureArchive = () => apiClient.get<ClosureArchive>('/deletion-request/archive').then((r) => r.data);
 export const getAccountClosureState = () => apiClient.get<AccountClosureState>('/deletion-request/account').then((r) => r.data);
 export const submitDeletionRequest = (reason?: string) => apiClient.post<DeletionRequest>('/deletion-request', { reason }).then((r) => r.data);
 export const requestReopening = () => apiClient.post<DeletionRequest>('/deletion-request/reopen').then((r) => r.data);

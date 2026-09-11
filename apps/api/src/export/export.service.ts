@@ -62,7 +62,7 @@ export class ExportService {
     });
 
     const models = exportedModels();
-    const payload = await this.buildVerified(companyId, models);
+    const payload = await this.snapshot(companyId);
 
     // حدثٌ في سجل التدقيق: من · متى · الحجم. والفشل لا يُسقط التصدير — أثرٌ
     // ناقص أهون من حرمان التاجر من بياناته، ويُسجَّل في السجل التقني.
@@ -112,6 +112,19 @@ export class ExportService {
    * جديد للقاعدة، فهو **يقرأ المصدر لا المخرَج**. (وهي القاعدة التي انتُهكت
    * مراراً هذا اليوم.)
    */
+  /**
+   * اللقطةُ المطابَقة وحدَها — بلا تدقيقٍ ولا ترويسة — **لنسخة الإغلاق** (`ق-٥٥٤`) التي تُنتَج
+   * على الخادم عند الموافقة لا بطلب التاجر: المصدرُ الواحدُ نفسُه، فلا حزمتان تتباعدان.
+   */
+  snapshot(companyId: string) {
+    return this.buildVerified(companyId, exportedModels());
+  }
+
+  /** ملاحظاتُ الحدود — تُكتب في الحزمة وفي نسخة الإغلاق سواء. */
+  static get notes() {
+    return EXPORT_NOTES;
+  }
+
   private async buildVerified(companyId: string, models: string[]) {
     return this.tenantPrisma.runInTenantContext(
       companyId,

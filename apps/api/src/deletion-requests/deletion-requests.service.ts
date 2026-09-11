@@ -1,8 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, GoneException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { CompaniesService } from '../companies/companies.service';
 import { CompanyMovementService, retentionDeadline } from '../companies/company-movement.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { ARCHIVE_WINDOW_DAYS, ArchiveManifest, CompanyArchiveService } from '../export/company-archive.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
 
@@ -47,6 +48,7 @@ export class DeletionRequestsService {
     private readonly prisma: PrismaService,
     private readonly companiesService: CompaniesService,
     private readonly movement: CompanyMovementService,
+    private readonly archive: CompanyArchiveService,
   ) {}
 
   // ---------- Merchant side ----------
@@ -66,6 +68,29 @@ export class DeletionRequestsService {
   /** حالُ الحساب للتاجر — يُقرأ وهو مغلق (`ق-٥٤٧`): متى أُغلق، وحتى متى يبقى أثرُه على الأقلّ. */
   account(companyId: string) {
     return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { status: true, closedAt: true, retainUntil: true } });
+  }
+
+  /**
+   * نسخةُ الإغلاق للتاجر (`ق-٥٥٤`): روابطُ تنزيلٍ موقَّعة لملفّاتها ما دام الأجلُ لم ينقضِ.
+   * تُقرأ من آخر طلبٍ حُسم بالإغلاق — فالنسخةُ على الطلب نفسِه، وتبقى بعده.
+   */
+  async closureArchive(companyId: string, actorType: string) {
+    this.assertOwner(actorType);
+    const latest = await this.prisma.accountDeletionRequest.findFirst({
+      where: { companyId, archiveProducedAt: { not: null } },
+      orderBy: { archiveProducedAt: 'desc' },
+    });
+    if (!latest?.archiveManifest || !latest.archiveExpiresAt) throw new NotFoundException(MSG.archive_not_ready);
+    if (latest.archiveExpiresAt < new Date()) throw new GoneException(MSG.archive_expired);
+    const manifest = latest.archiveManifest as unknown as ArchiveManifest;
+    return {
+      producedAt: manifest.producedAt,
+      expiresAt: manifest.expiresAt,
+      years: manifest.years,
+      totalRows: manifest.totalRows,
+      stampedInvoices: manifest.stampedInvoices,
+      files: await this.archive.links(manifest),
+    };
   }
 
   submit(companyId: string, actorType: string, reason?: string) {
@@ -187,25 +212,41 @@ export class DeletionRequestsService {
     }
 
     const report = await this.movement.describe(company.id);
-    if (!report.hasMovement) {
-      this.logger.warn(`Executing account deletion for company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
-      await this.prisma.$transaction(
-        async (tx) => {
-          await tx.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'DELETED', movement: [] } });
-          await this.companiesService.remove(company.id, tx);
-        },
-        { timeout: 60_000 },
-      );
-      return { executed: true, outcome: 'DELETED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: null };
-    }
-
     const closedAt = decision.decidedAt;
-    const retainUntil = retentionDeadline(closedAt, report.models);
-    this.logger.warn(`Closing company ${company.id} ("${company.orgName}") — movement: ${report.labels.join(', ')} — approved request ${id} by ${decider.username}`);
+    // ذاتُ الحركة تبقى بمدد الحفظ (`ق-٥٤٧`)؛ وبلا حركةٍ تبقى نافذةَ النسخة فقط — ثم يُمحى
+    // في الطبقة الثالثة (`ق-٥٥٦`) لا هنا: **الحذفُ الفوريُّ عند الموافقة محوٌ قبل أن ينال
+    // صاحبُه نسختَه** (`ق-٥٥٤`)، فأُرجئ إلى انقضاء الأجل.
+    const retainUntil = report.hasMovement ? retentionDeadline(closedAt, report.models) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
+    const archiveExpiresAt = new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
+
+    // ① النسخةُ أولاً — ولا يسبقها شيء: إن سقط إنتاجُها سقطت الموافقةُ قبل أن تمسّ الحساب.
+    const manifest = await this.archive.produce(company.id, decider, archiveExpiresAt);
+
+    this.logger.warn(
+      `Closing company ${company.id} ("${company.orgName}") — movement: ${report.labels.join(', ') || 'none'} — archive ${manifest.files.length} files — approved request ${id} by ${decider.username}`,
+    );
     await this.prisma.$transaction([
-      this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'CLOSED', movement: report.labels } }),
+      this.prisma.accountDeletionRequest.update({
+        where: { id },
+        data: {
+          ...decision,
+          outcome: 'CLOSED',
+          movement: report.labels,
+          archiveManifest: manifest as unknown as Prisma.InputJsonValue,
+          archiveProducedAt: new Date(manifest.producedAt),
+          archiveExpiresAt,
+        },
+      }),
       this.prisma.company.update({ where: { id: company.id }, data: { status: 'CLOSED', closedAt, retainUntil } }),
     ]);
-    return { executed: true, outcome: 'CLOSED' as const, companyId: company.id, orgName: company.orgName, movement: report.labels, retainUntil };
+    return {
+      executed: true,
+      outcome: 'CLOSED' as const,
+      companyId: company.id,
+      orgName: company.orgName,
+      movement: report.labels,
+      retainUntil,
+      archive: { files: manifest.files.length, years: manifest.years, expiresAt: archiveExpiresAt },
+    };
   }
 }
