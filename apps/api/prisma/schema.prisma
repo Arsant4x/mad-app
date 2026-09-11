@@ -342,7 +342,6 @@ model Company {
   leaveTypes       LeaveType[]
   leaveRequests    LeaveRequest[]
   attendance       AttendanceRecord[]
-  auditLogs        AuditLog[]
   outboxEvents     OutboxEvent[]
   /// عدّاداتُ تسلسل المستندات (`ق-٣٢٨`) — واحدٌ لكل نوعٍ وسنة.
   documentSequences DocumentSequence[]
@@ -1410,10 +1409,14 @@ model Employee {
 /// because it looks like evidence.
 /// **بلا أبٍ** — سجلُّ واقعةٍ لا يُحذف بحال (`ق-١١٠`): **ولا مفتاحَ أجنبيّ
 /// عمداً** كي لا يُبطله حذفُ ما يشير إليه.
+/// ⚠️ **ولا مفتاحَ أجنبيّ إلى المنشأة عمداً** (`ق-٨٠` · `ق-٥٣٥`): حذفُ المنشأة
+/// صلبٌ (`Cascade` عبر هويّة الدخول)، **وأثرُ آخر عمليةٍ قبل الحذف كان يُمحى مع
+/// الحذف نفسه — أسوأ توقيتٍ ممكن**. وقد بُني بقاءُ سجلّ الدعم (`ق-٥٣١`) قبل
+/// هذا، **فكانت قاعدتين حيث أردنا واحدة** (`ق-٢٧٨`). العمودُ `companyId` قائمٌ
+/// بلا رابط، والسياسةُ عليه كما هي — **فالسجلُّ يبقى مقروءاً تحت سياق منشأةٍ زالت**.
 model AuditLog {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   /// COMPANY (owner) or COMPANY_USER (employee).
   actorType String
