@@ -182,6 +182,61 @@ services:
           sleep "$$nap"
         done
 
+  # ═══ النسخةُ خارج المضيف (ق-٥٧٣ … ق-٥٧٧) ═══
+  #
+  # 🔴 **الغرضُ بقاءٌ لا خصوصية**: زوالُ هذا المضيف يُزيل القاعدةَ وأربعَ عشرةَ نسخةً
+  #    معها — فما يُبنى في الحفظ والإتلاف يسقط كلُّه بعطلٍ واحد.
+  #
+  # ⚠️ **ولا تُنتج مقلباً ثانياً**: تشحن ما تحقّقت منه الوظيفةُ المحلّية أعلاه، وتضيف
+  #    إليه **الأدوارَ** (لا يصدّرها `pg_dump`) و**مخزنَ الملفّات** و**أسرارَ التشغيل** —
+  #    والثلاثةُ لا اثنان (`ق-٥٧٤`): مقلبٌ بلا مفتاحه يُستعاد ولا يُقرأ.
+  #
+  # ⚠️ **والوجهةُ والمفتاحُ من البيئة لا من الصورة** (`ق-٥٧٣` · `ق-٥٧٥`): `RESTIC_REPOSITORY`
+  #    يشير إلى مستودعٍ **داخل المملكة ومن غير مزوّد هذا المضيف**، و`RESTIC_PASSWORD`
+  #    عند صاحب المشروع — **ولا يُكتب في ملفٍّ على المضيف** (يُمرَّر عند الإقلاع).
+  #
+  # ⚠️ **وغيرُ المهيّأة تُعلن نفسَها كلَّ ساعة** ولا تنهار ولا تصمت (`ق-٥٧٧`).
+  backup-offsite:
+    build:
+      context: ./ops/backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${OFFSITE_ACCESS_KEY:-}
+      AWS_SECRET_ACCESS_KEY: ${OFFSITE_SECRET_KEY:-}
+      BACKUP_HOST: mad-app-prod
+    volumes:
+      # المقالبُ المحلّية تُقرأ، وملفُّ الحال يُكتب بجانبها.
+      - ./backups:/backups
+      # مخزنُ الملفّات — **للقراءة فقط**: فيه المختومُ ونسخُ الإغلاق، ولا تكتب فيه وظيفةُ نسخ.
+      - minio_data:/minio-data:ro
+      # أسرارُ التشغيل — **للقراءة فقط**، وبدونها النسخةُ تُستعاد ولا تُقرأ.
+      - ./.env.production:/secrets/.env.production:ro
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        while true; do
+          if [ -z "$${RESTIC_REPOSITORY:-}" ] || [ -z "$${RESTIC_PASSWORD:-}" ]; then
+            echo "offsite-backup UNCONFIGURED: لا RESTIC_REPOSITORY/RESTIC_PASSWORD — لا نسخةَ خارج المضيف (ق-٥٧٣ · ق-٥٧٥)" >&2
+            printf '{"ok":false,"at":"%s","message":"unconfigured"}\n' "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /backups/offsite-status.json || true
+            sleep 3600
+            continue
+          fi
+          nap=86400
+          /usr/local/bin/offsite-backup.sh || nap=1800
+          sleep "$$nap"
+        done
+
 volumes:
   postgres_data:
   redis_data:

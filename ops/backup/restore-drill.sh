@@ -1,0 +1,109 @@
+#!/bin/sh
+# ═══ الاستعادةُ مُثبَتةٌ لا مفترَضة — شرطُ قبولٍ لا حاشية (ق-٥٧٦) ═══
+#
+# ⭐ **على قاعدةٍ فارغةٍ جديدة** — وهو مسارُ يوم الكارثة بعينه، **وهو وحده الذي يكشف
+#    نقصَ الأدوار**: `pg_dump` لا يصدّرها، فاستعادةٌ على قاعدةٍ قائمةٍ تنجح كذباً
+#    لأن الدورَ موجودٌ أصلاً، وعلى قاعدةٍ فارغةٍ تسقط.
+#
+# يُثبِت خمسةً — **وكلُّها تُقارَن ببيان النسخة لا بالذاكرة**:
+#   ① الأدوارُ تُنشأ · ② المقلبُ يُستعاد · ③ الجداولُ والهجراتُ بعددها
+#   ④ المستنداتُ بعددها (فواتيرُ وقيود) · ⑤ **والمفتاحُ يفكّ** — بشيفرة التطبيق
+#      نفسِها لا بنسخةٍ منها (`ق-٣٧٥`: الحارسُ يقرأ المصدر لا نظيرَه).
+#
+# ⚠️ **ولا تخطٍّ صامت**: كلُّ توكيدٍ يتعذّر **يُسقط التجربة** ويُطبع سببُه.
+#
+# الاستعمال: RESTIC_REPOSITORY=… RESTIC_PASSWORD=… ./restore-drill.sh
+set -eu
+
+: "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY غير مضبوط}"
+: "${RESTIC_PASSWORD:?RESTIC_PASSWORD غير مضبوط}"
+RESTIC_IMAGE="${RESTIC_IMAGE:-restic/restic:latest}"
+PG_IMAGE="${PG_IMAGE:-postgres:16-alpine}"
+API_IMAGE="${API_IMAGE:-mad-app-api}"
+DRILL_DIR="${DRILL_DIR:-$(mktemp -d)}"
+DRILL_DB="${DRILL_DB:-mad_app}"
+DRILL_USER="${DRILL_USER:-mad_app}"
+DRILL_PASS="${DRILL_PASS:-drill-$(date +%s)}"
+CONTAINER="restore-drill-$(date +%s)"
+DOCKER_NET="${DOCKER_NET:-}"
+REPORT="${REPORT:-$DRILL_DIR/drill-report.json}"
+
+fail() { echo "restore-drill FAILED: $1" >&2; cleanup; exit 1; }
+cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+net_arg=""
+[ -n "$DOCKER_NET" ] && net_arg="--network $DOCKER_NET"
+
+# ① تُستعاد أحدثُ لقطةٍ من المستودع — **بلا مساسٍ بالقاعدة الحيّة**.
+docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+  -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --target /out >/dev/null \
+  || fail "تعذّرت الاستعادةُ من المستودع"
+
+dump=$(find "$DRILL_DIR" -name db.dump | head -1)
+globals=$(find "$DRILL_DIR" -name globals.sql | head -1)
+manifest=$(find "$DRILL_DIR" -name manifest.json | head -1)
+envfile=$(find "$DRILL_DIR" -name env.production | head -1)
+[ -n "$dump" ] || fail "اللقطةُ بلا db.dump"
+[ -n "$globals" ] || fail "اللقطةُ بلا globals.sql — والأدوارُ لا يصدّرها pg_dump"
+[ -n "$manifest" ] || fail "اللقطةُ بلا manifest.json — فلا رقمَ يُقارَن به"
+[ -n "$envfile" ] || fail "اللقطةُ بلا env.production — ونسخةٌ بلا ما يفكّها ليست نسخة (ق-٥٧٤)"
+
+want() { sed -n 's/.*"'"$1"'":\([0-9]*\).*/\1/p' "$manifest" | head -1; }
+want_s() { sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p' "$manifest" | head -1; }
+
+# ⓪ بصمةُ المقلب — **قبل الاستعادة**: بايتٌ تبدّل في الطريق يُكتشف هنا لا بعد ساعتين.
+got_sha=$(sha256sum "$dump" | cut -d' ' -f1)
+[ "$got_sha" = "$(want_s sha256)" ] || fail "بصمةُ المقلب لا تطابق البيان ($got_sha)"
+
+# ② قاعدةٌ **فارغةٌ جديدة** — لا القائمة.
+docker run -d --name "$CONTAINER" $net_arg -e POSTGRES_PASSWORD="$DRILL_PASS" -e POSTGRES_USER="$DRILL_USER" -e POSTGRES_DB="$DRILL_DB" "$PG_IMAGE" >/dev/null \
+  || fail "تعذّر إقلاعُ قاعدة التجربة"
+i=0
+until docker exec "$CONTAINER" pg_isready -U "$DRILL_USER" -d "$DRILL_DB" >/dev/null 2>&1; do
+  i=$((i+1)); [ "$i" -gt 60 ] && fail "قاعدةُ التجربة لم تجهز خلال ٦٠ ثانية"; sleep 1
+done
+
+docker cp "$globals" "$CONTAINER:/tmp/globals.sql" >/dev/null || fail "تعذّر نقلُ ملفّ الأدوار"
+docker cp "$dump" "$CONTAINER:/tmp/db.dump" >/dev/null || fail "تعذّر نقلُ المقلب"
+# ③ الأدوارُ أولاً — وبدونها يسقط ما بعدها، وهو المقصودُ إظهارُه.
+docker exec "$CONTAINER" psql -U "$DRILL_USER" -d "$DRILL_DB" -v ON_ERROR_STOP=0 -f /tmp/globals.sql >/dev/null 2>&1 \
+  || fail "تعذّر تطبيقُ الأدوار"
+docker exec "$CONTAINER" pg_restore -U "$DRILL_USER" -d "$DRILL_DB" --no-owner /tmp/db.dump >/dev/null 2>&1 || true
+# `pg_restore` يُنذر على امتيازاتٍ لا تخصّ التجربة — فالحكمُ من محتوى القاعدة لا من خروجه.
+
+sql() { docker exec "$CONTAINER" psql -U "$DRILL_USER" -d "$DRILL_DB" -tAc "$1" 2>/dev/null | tr -d ' \r'; }
+tables=$(sql "select count(*) from pg_tables where schemaname='public'")
+migrations=$(sql 'select count(*) from _prisma_migrations')
+invoices=$(sql 'select count(*) from invoices')
+entries=$(sql 'select count(*) from journal_entries')
+roles=$(sql "select count(*) from pg_roles where rolname='app_user'")
+
+[ "${tables:-0}" = "$(want publicTables)" ] || fail "الجداولُ ${tables:-0} والبيانُ يقول $(want publicTables)"
+[ "${migrations:-0}" = "$(want migrations)" ] || fail "الهجراتُ ${migrations:-0} والبيانُ يقول $(want migrations)"
+[ "${invoices:-0}" = "$(want invoices)" ] || fail "الفواتيرُ ${invoices:-0} والبيانُ يقول $(want invoices)"
+[ "${entries:-0}" = "$(want journalEntries)" ] || fail "القيودُ ${entries:-0} والبيانُ يقول $(want journalEntries)"
+[ "${roles:-0}" != "0" ] || fail "دورُ app_user غائبٌ بعد الاستعادة — وهذا ما تكشفه القاعدةُ الفارغة وحدَها"
+
+# ④ **والمفتاحُ يفكّ** (`ق-٥٧٤`) — بشيفرة التطبيق نفسِها: `decryptSecret` من صورة الخدمة.
+key=$(grep '^SECRETS_ENCRYPTION_KEY=' "$envfile" | cut -d= -f2- | tr -d '"')
+[ -n "$key" ] || fail "المفتاحُ SECRETS_ENCRYPTION_KEY غائبٌ في النسخة"
+cipher=$(sql "select coalesce((select \"privateKeyEnc\" from zatca_credentials where \"privateKeyEnc\" is not null limit 1),'')")
+if [ -n "$cipher" ]; then
+  docker run --rm -e SECRETS_ENCRYPTION_KEY="$key" -e CIPHER="$cipher" "$API_IMAGE" \
+    node -e 'const{decryptSecret}=require("./dist/src/common/crypto/secret.util");const v=decryptSecret(process.env.CIPHER);if(!v||v.length<8)throw new Error("فكٌّ فارغ");console.log("decrypted:"+v.length+" حرفاً")' \
+    || fail "المفتاحُ المستعاد لا يفكّ سرّاً مخزَّناً — فالنسخةُ تُستعاد ولا تُقرأ (ق-٥٧٤)"
+  decrypted=stored-secret
+else
+  # ⚠️ لا سرَّ مخزَّنٌ بعد (لا شهادةَ فوترة) — **فيُثبَت المفتاحُ بدورةٍ كاملة بشيفرة التطبيق**،
+  #    ويُعلَن في التقرير أن المقارنة كانت على قيمةٍ مصنوعةٍ لا على صفٍّ قائم.
+  docker run --rm -e SECRETS_ENCRYPTION_KEY="$key" "$API_IMAGE" \
+    node -e 'const{encryptSecret,decryptSecret}=require("./dist/src/common/crypto/secret.util");const s="canary-"+Date.now();if(decryptSecret(encryptSecret(s))!==s)throw new Error("دورةُ التشفير لا تُغلق");console.log("canary ok")' \
+    || fail "المفتاحُ المستعاد لا يعمل بشيفرة التطبيق"
+  decrypted=canary-no-stored-secret
+fi
+
+printf '{"at":"%s","publicTables":%s,"migrations":%s,"invoices":%s,"journalEntries":%s,"appUserRole":%s,"decryption":"%s","sha256":"%s"}\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$tables" "$migrations" "$invoices" "$entries" "$roles" "$decrypted" "$got_sha" > "$REPORT"
+echo "restore-drill ok: $tables جدولاً · $migrations هجرة · $invoices فاتورة · $entries قيداً · الأدوار ✔ · الفكّ $decrypted"
+echo "التقرير: $REPORT"
