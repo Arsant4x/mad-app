@@ -2892,6 +2892,12 @@ model SupportAccessLog {
   grantId String
   grant   SupportAccessGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
 
+  /// **من دخل — لا من طلب** (`ق-٥٢٨`): كان الاسمُ يُقرأ من الإذن (`requestedByName`)،
+  /// **فأيُّ مدير منصّةٍ يدخل بإذن غيره يُنسب إلى الطالب**. والحارسُ يردّ غيرَ
+  /// الطالب بـ`403` — وهذا السطرُ يسمّي الداخلَ نفسَه في كل حال.
+  actorId   String
+  actorName String
+
   method String
   path   String
   at     DateTime @default(now())

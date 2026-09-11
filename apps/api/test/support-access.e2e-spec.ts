@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import * as argon2 from 'argon2';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
@@ -120,13 +121,48 @@ describe('Support mode (e2e)', () => {
 
   it('[SPEC 1.10] every support request lands in the owner-visible log, named and reasoned', async () => {
     const log = await owner(request(app.getHttpServer()).get('/support-access/log')).expect(200);
-    const lines = log.body as { method: string; path: string; grant: { requestedByName: string; reason: string } }[];
+    const lines = log.body as { method: string; path: string; actorName: string; grant: { requestedByName: string; reason: string } }[];
     const read = lines.find((l) => l.path === '/customers' && l.method === 'GET');
     expect(read).toBeTruthy();
     expect(read!.grant.reason).toContain(suffix);
     expect(read!.grant.requestedByName.length).toBeGreaterThan(0);
+    // ⭐ **السطرُ يسمّي من دخل** (`ق-٥٢٨`) — وهو هنا الطالبُ نفسُه، فيتطابقان.
+    expect(read!.actorName).toBe(read!.grant.requestedByName);
     // محاولة الكتابة المرفوضة لا تظهر كوصول — لم تصل للبيانات أصلاً.
     expect(lines.some((l) => l.method === 'POST' && l.path === '/customers')).toBe(false);
+  }, 30000);
+
+  /**
+   * 🔴 **الإذنُ لطالبه لا لكلّ مدير منصّة** (`ق-٥٢٨`).
+   *
+   * **كانت السلامةُ مستعارةً من العدد**: مديرٌ واحد في البذرة، فلم يُقس دخولُ
+   * مديرٍ بإذن غيره قط — **ومديرٌ ثانٍ يكسرها**: يدخل بإذنٍ وافق عليه المالكُ
+   * لاسمٍ آخر، **ويُنسب ما قرأه إلى الطالب**. فيُصنع مديرٌ ثانٍ هنا ويُردّ.
+   */
+  it('[SPEC 1.10] 🔴 a second platform admin cannot enter on another admin\'s consent', async () => {
+    const username = `second-admin-${suffix}`;
+    const identity = await prisma.loginIdentity.create({
+      data: {
+        username,
+        passwordHash: await argon2.hash('SecondAdmin123!'),
+        actorType: 'PLATFORM_ADMIN',
+        platformAdmin: { create: { displayName: 'مدير ثانٍ للقياس' } },
+      },
+    });
+    try {
+      const secondToken = (await request(app.getHttpServer()).post('/auth/login').send({ username, password: 'SecondAdmin123!' })).body.accessToken;
+      expect(typeof secondToken).toBe('string');
+
+      // الإذنُ الفعّال لهذه المنشأة مُنح للمدير الأوّل — الثاني يُردّ، ولا يُسجَّل له وصول.
+      await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${secondToken}`).set('X-Support-Company', companyId).expect(403);
+      const log = await owner(request(app.getHttpServer()).get('/support-access/log')).expect(200);
+      expect((log.body as { actorName: string }[]).some((l) => l.actorName === username)).toBe(false);
+
+      // ⭐ والأوّلُ ما زال يدخل — فالردُّ بالهويّة لا بتعطيل المسار.
+      await support(request(app.getHttpServer()).get('/customers')).expect(200);
+    } finally {
+      await prisma.loginIdentity.delete({ where: { id: identity.id } });
+    }
   }, 30000);
 
   it('the owner revokes mid-window → the door shuts immediately', async () => {

@@ -51,6 +51,12 @@ export class TenantGuard implements CanActivate {
 
       const grant = await this.supportAccessService.activeGrantFor(supportCompanyId);
       if (!grant) throw new ForbiddenException(MSG.support_no_active_grant);
+      /**
+       * 🔴 **الإذنُ لطالبه لا لكلّ مدير منصّة** (`ق-٥٢٨`): المالكُ وافق على اسمٍ
+       * وسببٍ ونطاق — **ومديرٌ آخر يدخل بإذن غيره يقلب السجلَ كذباً**. كانت
+       * السلامةُ مستعارةً من العدد (مديرٌ واحد) — **ومديرٌ ثانٍ يكسرها**.
+       */
+      if (grant.requestedById !== payload.profileId) throw new ForbiddenException(MSG.support_grant_not_yours);
 
       const method = req.method.toUpperCase();
       if (method !== 'GET' && method !== 'HEAD') throw new ForbiddenException(MSG.support_read_only);
@@ -74,7 +80,7 @@ export class TenantGuard implements CanActivate {
 
       // The log line is part of the access itself — if it can't be written,
       // the access doesn't happen.
-      await this.supportAccessService.logAccess(grant.id, supportCompanyId, method, req.path);
+      await this.supportAccessService.logAccess(grant.id, supportCompanyId, method, req.path, { id: payload.profileId, name: payload.username });
 
       req.tenant = {
         companyId: supportCompanyId,

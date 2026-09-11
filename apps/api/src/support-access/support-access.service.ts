@@ -70,10 +70,13 @@ export class SupportAccessService {
     });
   }
 
-  /** سطر السجل — unscoped عمداً: يُكتب أثناء طلبِ مديرٍ لا يملك سياق مستأجر. */
-  logAccess(grantId: string, companyId: string, method: string, path: string) {
+  /**
+   * سطر السجل — unscoped عمداً: يُكتب أثناء طلبِ مديرٍ لا يملك سياق مستأجر.
+   * **و`actor` هو الداخلُ نفسُه** (`ق-٥٢٨`) — لا طالبُ الإذن الذي يُقرأ من `grant`.
+   */
+  logAccess(grantId: string, companyId: string, method: string, path: string, actor: { id: string; name: string }) {
     return this.prisma.supportAccessLog.create({
-      data: { grantId, companyId, method, path } as unknown as Prisma.SupportAccessLogUncheckedCreateInput,
+      data: { grantId, companyId, method, path, actorId: actor.id, actorName: actor.name } as unknown as Prisma.SupportAccessLogUncheckedCreateInput,
     });
   }
 
