@@ -23,7 +23,11 @@ const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string
   DELETED: { label: 'حُذفت نهائياً', badge: 'overdue' },
   CLOSED: { label: 'أُغلقت — والبيانات باقية', badge: 'overdue' },
   REOPENED: { label: 'أُعيد فتحها', badge: 'paid' },
+  ERASED: { label: 'مُحي غيرُ الملزِم — والملزِم باقٍ', badge: 'overdue' },
 };
+
+/** نوعُ الطلب كما يُقرأ في القائمة (ق-٥٥٩). */
+const KIND_LABEL: Record<AdminDeletionRequest['kind'], string> = { DELETION: 'حذف', REOPENING: 'إعادة فتح', ERASURE: 'محو غير الملزِم' };
 
 /** الوجهُ الذي يُقرأ: الموافقةُ تُعرَض بما وقع، والباقي بحالته. */
 function statusOf(r: AdminDeletionRequest) {
@@ -33,6 +37,9 @@ function statusOf(r: AdminDeletionRequest) {
 /** نصُّ التأكيد يقول الحقيقة قبل الضغطة (ق-٥٤٦): أتُحذف أم تُغلَق، ولماذا. */
 function confirmBody(r: AdminDeletionRequest): string {
   if (r.kind === 'REOPENING') return `سيُعاد فتح حساب "${r.companyName}" ويعود الدخول إليه. هل تريد التنفيذ؟`;
+  if (r.kind === 'ERASURE') {
+    return `ستُمحى الآن البيانات غير الملزِمة لمنشأة "${r.companyName}" (الهواتف وبيانات التواصل) ويبقى الملزِم إلى أجله — ولا إعادة فتح بعدها. هل تريد التنفيذ؟`;
+  }
   if (r.preview?.outcome === 'CLOSE') {
     return `للمنشأة "${r.companyName}" حركة (${r.preview.movement.join(' · ')}) — فستُغلق ولا تُحذف: يُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية. هل تريد التنفيذ؟`;
   }
@@ -105,7 +112,7 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
             {requests.map((r) => (
               <tr key={r.id}>
                 <td>{r.companyName || '—'}</td>
-                <td>{r.kind === 'REOPENING' ? 'إعادة فتح' : 'حذف'}</td>
+                <td>{KIND_LABEL[r.kind]}</td>
                 <td>{r.reason ?? '—'}</td>
                 <td className="num">{dfmt(r.createdAt)}</td>
                 <td>
@@ -123,7 +130,7 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
                   {r.status === 'PENDING' && (
                     <>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(r)}>
-                        {r.kind === 'REOPENING' ? 'موافقة وإعادة فتح' : 'موافقة وتنفيذ'}
+                        {r.kind === 'REOPENING' ? 'موافقة وإعادة فتح' : r.kind === 'ERASURE' ? 'موافقة ومحو' : 'موافقة وتنفيذ'}
                       </button>{' '}
                       <button
                         className="btn btn-ghost btn-sm"
@@ -150,9 +157,17 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
 
       {confirming && (
         <ConfirmModal
-          title={confirming.kind === 'REOPENING' ? 'إعادة فتح الحساب' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق الحساب' : 'تنفيذ حذف الحساب'}
+          title={
+            confirming.kind === 'REOPENING'
+              ? 'إعادة فتح الحساب'
+              : confirming.kind === 'ERASURE'
+                ? 'محو البيانات غير الملزِمة'
+                : confirming.preview?.outcome === 'CLOSE'
+                  ? 'إغلاق الحساب'
+                  : 'تنفيذ حذف الحساب'
+          }
           body={confirmBody(confirming)}
-          confirmLabel={confirming.kind === 'REOPENING' ? 'إعادة الفتح' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق' : 'تنفيذ الحذف'}
+          confirmLabel={confirming.kind === 'REOPENING' ? 'إعادة الفتح' : confirming.kind === 'ERASURE' ? 'محو' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق' : 'تنفيذ الحذف'}
           onConfirm={() => {
             const target = confirming;
             setConfirming(null);

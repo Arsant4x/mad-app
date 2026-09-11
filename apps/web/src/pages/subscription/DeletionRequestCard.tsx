@@ -23,7 +23,10 @@ const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string
   DELETED: { label: 'نُفِّذ', badge: 'overdue' },
   CLOSED: { label: 'أُغلق', badge: 'overdue' },
   REOPENED: { label: 'أُعيد الفتح', badge: 'paid' },
+  ERASED: { label: 'مُحي غيرُ الملزِم', badge: 'overdue' },
 };
+
+const KIND_LABEL: Record<DeletionRequest['kind'], string> = { DELETION: 'طلب حذف', REOPENING: 'طلب إعادة فتح', ERASURE: 'طلب محو غير الملزِم' };
 
 /**
  * حذف الحساب، بصيغة SaaS: التاجر يقدّم طلباً والدعم هو من ينفّذه — لا زرّ
@@ -75,7 +78,7 @@ export function DeletionRequestCard() {
         <div style={{ marginBottom: 10 }}>
           <span className={`badge ${shown.badge}`}>{shown.label}</span>{' '}
           <span className="hint">
-            {req.kind === 'REOPENING' ? 'طلب إعادة فتح' : 'طلب حذف'} — قُدِّم في {dfmt(req.createdAt)}
+            {KIND_LABEL[req.kind]} — قُدِّم في {dfmt(req.createdAt)}
           </span>
           {req.decidedNote && <p className="hint" style={{ marginTop: 6 }}>ردّ الدعم: {req.decidedNote}</p>}
         </div>

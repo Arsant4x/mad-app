@@ -2,10 +2,10 @@ import { apiClient } from './client';
 import type { AccountStatus } from './client';
 
 export type DeletionRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
-/** نوعُ الطلب: حذفٌ — أو إعادةُ فتحٍ لحسابٍ مغلق (ق-٥٤٨). */
-export type AccountRequestKind = 'DELETION' | 'REOPENING';
-/** ما وقع بالموافقة (ق-٥٤٢): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها. */
-export type AccountRequestOutcome = 'DELETED' | 'CLOSED' | 'REOPENED';
+/** نوعُ الطلب: حذفٌ — أو إعادةُ فتحٍ لحسابٍ مغلق (ق-٥٤٨) — أو إتلافٌ صريحٌ لغير الملزِم (ق-٥٥٩). */
+export type AccountRequestKind = 'DELETION' | 'REOPENING' | 'ERASURE';
+/** ما وقع بالموافقة (ق-٥٤٢): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها · مُحي غيرُ الملزِم. */
+export type AccountRequestOutcome = 'DELETED' | 'CLOSED' | 'REOPENED' | 'ERASED';
 
 export interface DeletionRequest {
   id: string;
@@ -36,11 +36,13 @@ export interface AdminDeletionRequest extends DeletionRequest {
   preview?: DecisionPreview;
 }
 
-/** حالُ الحساب للتاجر — يُقرأ وهو مغلق (ق-٥٤٧). */
+/** حالُ الحساب للتاجر — يُقرأ وهو مغلق (ق-٥٤٧): وحتى متى تُقبل العودة، وهل مُحي غيرُ الملزِم (ق-٥٥٩). */
 export interface AccountClosureState {
   status: AccountStatus;
   closedAt: string | null;
   retainUntil: string | null;
+  reopenUntil: string | null;
+  erasedAt: string | null;
 }
 
 export interface ApprovalResult {
@@ -68,6 +70,8 @@ export const getClosureArchive = () => apiClient.get<ClosureArchive>('/deletion-
 export const getAccountClosureState = () => apiClient.get<AccountClosureState>('/deletion-request/account').then((r) => r.data);
 export const submitDeletionRequest = (reason?: string) => apiClient.post<DeletionRequest>('/deletion-request', { reason }).then((r) => r.data);
 export const requestReopening = () => apiClient.post<DeletionRequest>('/deletion-request/reopen').then((r) => r.data);
+/** طلبُ إتلافٍ صريح (ق-٥٥٩): محوُ غير الملزِم الآن — ويُغلق نافذةَ العودة. */
+export const requestErasure = () => apiClient.post<DeletionRequest>('/deletion-request/erase').then((r) => r.data);
 export const cancelDeletionRequest = (id: string) => apiClient.post<DeletionRequest>(`/deletion-request/${id}/cancel`).then((r) => r.data);
 
 // Support side

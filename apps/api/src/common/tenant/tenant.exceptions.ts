@@ -19,11 +19,12 @@ export class AccountStoppedException extends ForbiddenException {
 
 /**
  * الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — **والرسالةُ تجيب «وأين بياناتي؟» وبأجل**،
- * فرسالةٌ تقول «محفوظة» بلا أجلٍ تُقرأ «إلى الأبد».
+ * فرسالةٌ تقول «محفوظة» بلا أجلٍ تُقرأ «إلى الأبد». **وتقول حتى متى يعود** (`ق-٥٥٩`): فبعد
+ * النافذة يُمحى غيرُ الملزِم — ويُعلَن ذلك ولا يُخفى.
  */
 export class AccountClosedException extends ForbiddenException {
-  constructor(retainUntil: string) {
-    super({ code: 'ACCOUNT_CLOSED', message: formatMessage(MSG.account_closed, { retainUntil }) });
+  constructor(retainUntil: string, reopenUntil: string) {
+    super({ code: 'ACCOUNT_CLOSED', message: formatMessage(MSG.account_closed, { retainUntil, reopenUntil }) });
   }
 }
 

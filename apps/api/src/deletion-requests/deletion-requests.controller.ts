@@ -18,8 +18,8 @@ import { DecisionActor, DeletionRequestsService } from './deletion-requests.serv
  * most likely to want out; locking the exit behind an active subscription would
  * force it to pay to leave.
  *
- * @AllowWhileClosed — على أربعةٍ فقط: حالُ الطلب، وحالُ الحساب، وطلبُ إعادة الفتح، وسحبُه.
- * فالمغلقُ لا يقرأ بياناته ولا يجدّد اشتراكه — ويعود بطلبٍ وقرار.
+ * @AllowWhileClosed — على ستّةٍ فقط: حالُ الطلب، وحالُ الحساب، ونسختُه، وطلبُ إعادة الفتح، وطلبُ
+ * الإتلاف (`ق-٥٥٩`)، وسحبُ الطلب. فالمغلقُ لا يقرأ بياناته ولا يجدّد اشتراكه — ويعود بطلبٍ وقرار.
  */
 @Controller('deletion-request')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -56,6 +56,13 @@ export class DeletionRequestsController {
   @AllowWhileClosed()
   reopen(@CurrentTenant() tenant: TenantContext) {
     return this.service.requestReopening(tenant.companyId, tenant.actorType);
+  }
+
+  /** طلبُ إتلافٍ صريح (`ق-٥٥٩/ب` — م٤/٥): محوُ غير الملزِم الآن لا بعد النافذة — لحسابٍ مغلق. */
+  @Post('erase')
+  @AllowWhileClosed()
+  erase(@CurrentTenant() tenant: TenantContext) {
+    return this.service.requestErasure(tenant.companyId, tenant.actorType);
   }
 
   @Post(':id/cancel')
