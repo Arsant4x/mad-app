@@ -388,6 +388,8 @@ describe('Account deletion requests (e2e)', () => {
     const company = await prisma.company.findUnique({ where: { id: co.id } });
     expect(company?.status).toBe('CLOSED');
     expect(company?.retainUntil?.getFullYear()).toBe(company!.closedAt!.getFullYear() + 10);
+    // ⚖️ مدّةُ الإتاحة = مدّةُ الحفظ (`ق-٥٥٨/ج`) — لا تسعين: ما دمنا نحفظ يصل التاجرُ نسختَه.
+    expect((await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } }))?.archiveExpiresAt).toEqual(company!.retainUntil);
 
     // ⭐ النسخةُ حقيقيةٌ لا بيان: الملفُّ السنويُّ يُنزَّل من رابطه الموقَّع ويُفكّ ويُقرأ فيه عرضُ السعر.
     const archive = await request(app.getHttpServer()).get('/deletion-request/archive').set('Authorization', `Bearer ${(await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' })).body.accessToken}`).expect(200);
@@ -401,6 +403,11 @@ describe('Account deletion requests (e2e)', () => {
     const masterFile = (archive.body.files as { name: string; url: string }[]).find((f) => f.name === 'master-data.json.gz')!;
     const master = JSON.parse(gunzipSync(Buffer.from(await (await fetch(masterFile.url)).arrayBuffer())).toString('utf8')) as Record<string, { id: string }[]>;
     expect(master.customer.some((c) => c.id === customer.body.id)).toBe(true);
+    // والحدودُ تُقال في `README` نفسِه (`ق-٥٥٨/ب` · `ق-٥٦٠`): لا عرضَ بشريٌّ للجداول، والإتلافُ يكتمل بدوران النسخ.
+    const readmeFile = (archive.body.files as { name: string; url: string }[]).find((f) => f.name === 'README.md')!;
+    const readme = await (await fetch(readmeFile.url)).text();
+    expect(readme).toContain('لا عرضَ بشريٌّ للجداول');
+    expect(readme).toContain('من دوران النسخ الاحتياطية');
 
     // ③ الدخولُ مقطوع — والرسالةُ تجيب «وأين بياناتي؟» وبأجل — والتاجرُ يقرأ حالَه وحالَ طلبه.
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
@@ -410,6 +417,8 @@ describe('Account deletion requests (e2e)', () => {
     expect(blocked.body.code).toBe('ACCOUNT_CLOSED');
     expect(blocked.body.message).toContain('محفوظةٌ بمدد الحفظ النظامية حتى');
     expect(blocked.body.message).toContain(company!.retainUntil!.toISOString().slice(0, 10));
+    // ودورةُ النسخ تُعلَن في الرسالة لا تُخفى (`ق-٥٦٠`).
+    expect(blocked.body.message).toContain('أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية');
     await request(app.getHttpServer()).post('/subscription/renew').set('Authorization', `Bearer ${closedToken}`).send({ months: 1 }).expect(403);
     const account = await request(app.getHttpServer()).get('/deletion-request/account').set('Authorization', `Bearer ${closedToken}`).expect(200);
     expect(account.body.status).toBe('CLOSED');
