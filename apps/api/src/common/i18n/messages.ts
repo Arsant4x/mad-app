@@ -170,6 +170,7 @@ export const MSG = {
 
   // platform admin / templates / company users
   company_not_found: 'companies.not_found',
+  company_delete_blocked: 'companies.delete_blocked',
   username_taken: 'companies.username_taken',
   template_not_found: 'templates.not_found',
   template_name_required: 'templates.name_required',
@@ -584,6 +585,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.obligation_not_found]: { ar: 'البند غير موجود', en: 'Obligation item not found' },
 
   [MSG.company_not_found]: { ar: 'الشركة غير موجودة', en: 'Company not found' },
+  [MSG.company_delete_blocked]: {
+    ar: 'لا يمكن حذف المنشأة: لها سجلّاتٌ لا تُحذف بحال ({records}) — وبياناتُها تبقى',
+    en: 'The company cannot be deleted: it holds records that are never deleted ({records}) — its data stays',
+  },
   [MSG.username_taken]: { ar: 'اسم المستخدم "{username}" مستخدَم بالفعل', en: 'Username "{username}" is already taken' },
   [MSG.template_not_found]: { ar: 'القالب غير موجود', en: 'Permission template not found' },
   [MSG.template_name_required]: { ar: 'اسم النموذج مطلوب', en: 'Template name is required' },

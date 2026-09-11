@@ -118,19 +118,26 @@ export class DeletionRequestsService {
     const company = await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { id: true, orgName: true } });
     if (!company) throw new NotFoundException(MSG.company_not_found);
 
-    await this.prisma.accountDeletionRequest.update({
-      where: { id },
-      data: {
-        status: 'APPROVED',
-        decidedAt: new Date(),
-        decidedNote: note?.trim() || null,
-        decidedById: decider.id,
-        decidedByName: decider.username,
-      },
-    });
-
     this.logger.warn(`Executing account deletion for company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
-    await this.companiesService.remove(company.id);
+    // الوسمُ والتنفيذُ في معاملةٍ واحدة (`ق-٥٤١`): يسقطان معاً أو ينجحان معاً — فلا «مُوافَق»
+    // على منشأةٍ حيّة. كان الوسمُ يسبق التنفيذَ، فإذا رفضت القاعدةُ الحذفَ بقي الطلبُ
+    // «مُوافَقاً» والمنشأةُ حيّة: لا إعادةَ ولا سحبَ، والتاجرُ يقرأ «نُفِّذ» كذباً (`ق-٥٣٨`).
+    await this.prisma.$transaction(
+      async (tx) => {
+        await tx.accountDeletionRequest.update({
+          where: { id },
+          data: {
+            status: 'APPROVED',
+            decidedAt: new Date(),
+            decidedNote: note?.trim() || null,
+            decidedById: decider.id,
+            decidedByName: decider.username,
+          },
+        });
+        await this.companiesService.remove(company.id, tx);
+      },
+      { timeout: 60_000 },
+    );
     return { executed: true, companyId: company.id, orgName: company.orgName };
   }
 }

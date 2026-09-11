@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Company } from '@prisma/client';
+import { Company, Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
@@ -10,6 +10,23 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 const COMPANY_INCLUDE = { permissionTemplate: true } as const;
+
+/**
+ * أسماءُ السجلّات التي ترفض القاعدةُ حذفَ المنشأة لأجلها — **للرسالة لا للحكم**.
+ * يُشتقّ اسمُ الجدول من اسم القيد الذي أبلغت به القاعدة (`<table>_companyId_fkey`)،
+ * ويُترجَم المعروفُ منه؛ وما لم يُعرف يُعرَض باسمه الخام لا يُخفى.
+ */
+const RECORD_NAMES: Record<string, string> = {
+  task_logs: 'سجلّ المهام',
+  tasks: 'المهامّ',
+  delegation_logs: 'سجلّ التفويض',
+};
+
+export function blockingRecordsFrom(fieldName: unknown): string {
+  const match = /^([a-z_]+)_companyId_fkey/.exec(String(fieldName ?? ''));
+  const table = match?.[1] ?? String(fieldName ?? 'unknown');
+  return RECORD_NAMES[table] ?? table;
+}
 
 /**
  * Subscription start is anchored to the **actual** activation day and never
@@ -138,13 +155,29 @@ export class CompaniesService {
     });
   }
 
-  async remove(id: string): Promise<void> {
-    const existing = await this.prisma.company.findUnique({ where: { id } });
+  /**
+   * Hard delete. Cascades through every business table via Company's
+   * onDelete: Cascade relations (the frontend owns the confirm dialog).
+   *
+   * `client` يقبل عميلَ معاملةٍ (`ق-٥٤١`): فموافقةُ طلب الحذف توسم وتنفّذ في
+   * معاملةٍ واحدة — يسقطان معاً أو ينجحان معاً.
+   *
+   * ⚠️ وسجلٌّ لا يُحذف بحال يشير إلى المنشأة (`Restrict` — `ق-١١٠`: المهامُّ
+   * وسجلُّها وسجلُّ التفويض) يجعل القاعدةَ ترفض الحذفَ بـ`P2003`. **والرفضُ يسمّي
+   * المانعَ** (`ق-٢٦٥`) — لا وجهَ `500` (مقيسٌ في `ق-٥٣٨`). **والحكمُ في القاعدة لا
+   * هنا**: هذه ترجمةُ الرفض لا قرارُه.
+   */
+  async remove(id: string, client: Prisma.TransactionClient | PrismaService = this.prisma): Promise<void> {
+    const existing = await client.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
-    // Cascades through every business table via Company's onDelete: Cascade
-    // relations — deleting a company wipes all of its data, matching the
-    // mockup's deleteUserAccount (no confirmation short-circuit server-side;
-    // the frontend is responsible for a confirm dialog before calling this).
-    await this.prisma.loginIdentity.delete({ where: { id: existing.loginIdentityId } });
+    try {
+      await client.loginIdentity.delete({ where: { id: existing.loginIdentityId } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+        const fieldName = (e.meta as { field_name?: unknown } | undefined)?.field_name;
+        throw new ConflictException(formatMessage(MSG.company_delete_blocked, { records: blockingRecordsFrom(fieldName) }));
+      }
+      throw e;
+    }
   }
 }
