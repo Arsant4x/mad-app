@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
 /**
  * حذف الحساب بصيغة SaaS (قاعدة المالك 2026-08-07): التاجر لا يمسح بياناته
@@ -148,6 +149,51 @@ describe('Account deletion requests (e2e)', () => {
     // تنظيفُ ما بقي عمداً — من حيث بقي.
     await prisma.supportAccessLog.deleteMany({ where: { grantId: grant.body.id } });
     await prisma.supportAccessGrant.delete({ where: { id: grant.body.id } });
+  }, 60000);
+
+  /**
+   * 🔴 **سجلُّ التدقيق يبقى بعد حذف المنشأة** (`ق-٨٠` · `ق-٥٣٥`).
+   *
+   * **كان `Cascade`**: أثرُ آخر عمليةٍ قبل الحذف — «من فعل ماذا» — **يُمحى مع
+   * الحذف نفسه، في أسوأ توقيتٍ ممكن**. وقد بُني بقاءُ سجلّ الدعم قبل هذا
+   * (`ق-٥٣١`) **فكانت قاعدتين حيث أردنا واحدة** (`ق-٢٧٨`).
+   *
+   * والجدولُ تحت `FORCE` — فيُقرأ تحت سياق المنشأة الزائلة: **المعرّفُ في السياسة
+   * نصٌّ، والصفُّ الذي زال لا يمنع القراءةَ به**.
+   */
+  it('🔴 the audit trail survives the company deletion — the last act before deletion stays recorded', async () => {
+    prisma = app.get(PrismaService);
+    const tenantPrisma = app.get(TenantPrismaService);
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+
+    // فعلٌ مُدقَّق قبل الحذف — إنشاءُ عميل يمرّ بالمعترض العامّ.
+    await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميلٌ قبل الحذف ${suffix}` }).expect(201);
+    // ⚠️ كتابةُ التدقيق لا تُنتظَر في الطلب (`AuditInterceptor` يسجّل ولا يُبطئ الردّ) —
+    //    فيُستطلَع السطرُ حتى يهبط، كما في `audit-log.e2e`؛ وأوّلُ صياغةٍ عدّت فوراً فوجدت صفراً.
+    const countAudit = () => tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.count());
+    const deadline = Date.now() + 5000;
+    let before = await countAudit();
+    while (before === 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+      before = await countAudit();
+    }
+    expect(before).toBeGreaterThan(0);
+
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
+    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
+    expect(await prisma.company.findUnique({ where: { id: co.id } })).toBeNull();
+
+    // ⭐ والأثرُ باقٍ بعد زوال المنشأة — **بمفتاحه لا بعدّه وحده**: فطلبُ الحذف نفسُه فعلٌ
+    //    مُدقَّق يزيد العدّ (أوّلُ صياغةٍ ساوت العدّين فسقطت بـ`2 ≠ 1`)، والمقصودُ أن
+    //    آخرَ ما فعله التاجر قبل الحذف — إنشاءُ العميل — ما زال مكتوباً.
+    const kept = await tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.findMany({ select: { entity: true, action: true } }));
+    expect(kept.length).toBeGreaterThanOrEqual(before);
+    expect(kept.some((r) => r.entity === 'customers' && r.action === 'add')).toBe(true);
+
+    // تنظيفُ ما بقي عمداً — من حيث بقي.
+    await tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.deleteMany({}));
   }, 60000);
 
   it('an ordinary tenant can never reach the support endpoints', async () => {
