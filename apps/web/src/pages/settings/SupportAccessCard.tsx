@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { approveSupport, denySupport, ownerSupportLog, ownerSupportOverview, revokeSupport, type SupportGrant, type SupportLogLine } from '../../api/supportAccess';
+import { SCREEN_LABELS } from '../../api/templates';
+
+/** نطاقُ الإذن بأسماء شاشاته — يُعرض في شاشة القرار لا في السجل وحده (ق-٥٢٧). */
+function scopeLabel(screens: string[]): string {
+  if (screens.length === 0) return 'بلا نطاق — لا تُفتح شاشة';
+  return screens.map((s) => SCREEN_LABELS[s as keyof typeof SCREEN_LABELS] ?? s).join(' · ');
+}
 
 /**
  * سيادة المالك على وضع الدعم (§1.10): يوافق أو يرفض، يقطع النافذة متى شاء،
@@ -56,6 +63,9 @@ export function SupportAccessCard() {
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                 السبب: {g.reason} · المدة المطلوبة: {g.durationMinutes} دقيقة
               </div>
+              <div style={{ fontSize: 13 }}>
+                <b>ما سيراه (قراءةً فقط):</b> {scopeLabel(g.screens)}
+              </div>
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => act(approveSupport, g.id)}>
               ✓ موافقة
@@ -73,7 +83,7 @@ export function SupportAccessCard() {
             <div style={{ flex: 1, minWidth: 220 }}>
               <b>نافذة دعم فعّالة الآن ({g.requestedByName})</b>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                تنتهي: {g.expiresAt ? new Date(g.expiresAt).toLocaleString('ar-SA') : '—'} · قراءة فقط
+                تنتهي: {g.expiresAt ? new Date(g.expiresAt).toLocaleString('ar-SA') : '—'} · قراءة فقط · النطاق: {scopeLabel(g.screens)}
               </div>
             </div>
             <button className="btn btn-danger btn-sm" onClick={() => act(revokeSupport, g.id)}>

@@ -55,14 +55,23 @@ describe('Support mode (e2e)', () => {
   }, 30000);
 
   it('the admin requests; a duplicate is refused while one is pending', async () => {
+    // ⛔ **إذنٌ بلا نطاقٍ ليس تعليمة** (`ق-٥٢٧`): الطلبُ بلا شاشاتٍ يُرفض قبل أن يصل المالك.
+    await admin(request(app.getHttpServer()).post('/support-access/admin'))
+      .send({ companyId, reason: `بلا نطاق ${suffix}`, durationMinutes: 30 })
+      .expect(400);
+    await admin(request(app.getHttpServer()).post('/support-access/admin'))
+      .send({ companyId, reason: `شاشة مخترَعة ${suffix}`, durationMinutes: 30, screens: ['everything'] })
+      .expect(400);
+
     const res = await admin(request(app.getHttpServer()).post('/support-access/admin'))
-      .send({ companyId, reason: `فحص شكوى ترقيم ${suffix}`, durationMinutes: 30 })
+      .send({ companyId, reason: `فحص شكوى ترقيم ${suffix}`, durationMinutes: 30, screens: ['customers'] })
       .expect(201);
     grantId = res.body.id;
     expect(res.body.status).toBe('PENDING');
+    expect(res.body.screens).toEqual(['customers']);
 
     await admin(request(app.getHttpServer()).post('/support-access/admin'))
-      .send({ companyId, reason: `طلب ثانٍ ${suffix}`, durationMinutes: 30 })
+      .send({ companyId, reason: `طلب ثانٍ ${suffix}`, durationMinutes: 30, screens: ['customers'] })
       .expect(409);
 
     // وما زال الدخول ممنوعاً — الطلب ليس موافقة.
@@ -71,8 +80,10 @@ describe('Support mode (e2e)', () => {
 
   it('[SPEC 1.10] the owner approves → read opens, writes stay closed', async () => {
     const pending = await owner(request(app.getHttpServer()).get('/support-access')).expect(200);
-    const mine = (pending.body as { id: string; reason: string }[]).find((g) => g.id === grantId);
+    const mine = (pending.body as { id: string; reason: string; screens: string[] }[]).find((g) => g.id === grantId);
     expect(mine?.reason).toContain(suffix);
+    // ⭐ **المالكُ يرى النطاقَ في شاشة القرار قبل موافقته** — لا في السجل بعدها (شرطُ المالك، `ق-٥٢٧`).
+    expect(mine?.screens).toEqual(['customers']);
 
     const approved = await owner(request(app.getHttpServer()).post(`/support-access/${grantId}/approve`)).expect(201);
     expect(approved.body.status).toBe('APPROVED');
@@ -80,6 +91,31 @@ describe('Support mode (e2e)', () => {
 
     await support(request(app.getHttpServer()).get('/customers')).expect(200);
     await support(request(app.getHttpServer()).post('/customers')).send({ name: 'محاولة كتابة' }).expect(403);
+  }, 30000);
+
+  /**
+   * 🔴 **النطاقُ يُنفَذ لا يُعرض فحسب** (`ق-٥٢٧`) — وهو «فئاتُ البيانات الشخصية
+   * المعالجة» التي توجب اللائحةُ التنفيذية (م١٧/١/ب) أن يتضمّنها اتفاقُ
+   * المعالجة، **وم١٧/٤**: من خالف التعليمةَ عُدّ في حكم جهة التحكم.
+   *
+   * ثلاثةُ أبواب: **شاشةٌ خارج النطاق** تُغلق · **ومسارٌ لا يُعلن شاشتَه** يُغلق
+   * (مغلقٌ افتراضياً) · **وصلاحياتُ الداخل نفسِه** (`@SupportShell`) تُقرأ —
+   * فبها ترسم الواجهةُ أزرارَها ولا تكشف صفّاً من بيانات المنشأة.
+   */
+  it('[SPEC 1.10] 🔴 the scope is enforced: outside it 403, undeclared routes 403, the shell 200', async () => {
+    // خارج النطاق — الفواتيرُ لم تُطلب ولم يوافق عليها المالك.
+    await support(request(app.getHttpServer()).get('/invoices')).expect(403);
+    await support(request(app.getHttpServer()).get('/reports/trial-balance')).expect(403);
+    // مسارٌ بلا شاشةٍ معلَنة — الإشعاراتُ بياناتُ منشأةٍ ولا شاشةَ لها، فتُغلق.
+    await support(request(app.getHttpServer()).get('/notifications')).expect(403);
+    // والصدفةُ: صلاحياتُ الداخل نفسِه تُقرأ.
+    await support(request(app.getHttpServer()).get('/me/permissions')).expect(200);
+
+    // ⚠️ والمغلقُ لا يُسجَّل وصولاً — لم يصل للبيانات أصلاً.
+    const log = await owner(request(app.getHttpServer()).get('/support-access/log')).expect(200);
+    const lines = log.body as { method: string; path: string }[];
+    expect(lines.some((l) => l.path === '/invoices')).toBe(false);
+    expect(lines.some((l) => l.path === '/notifications')).toBe(false);
   }, 30000);
 
   it('[SPEC 1.10] every support request lands in the owner-visible log, named and reasoned', async () => {
@@ -100,7 +136,7 @@ describe('Support mode (e2e)', () => {
 
   it('expiry alone kills the window — no one has to remember to revoke', async () => {
     const res = await admin(request(app.getHttpServer()).post('/support-access/admin'))
-      .send({ companyId, reason: `نافذة قصيرة ${suffix}`, durationMinutes: 30 })
+      .send({ companyId, reason: `نافذة قصيرة ${suffix}`, durationMinutes: 30, screens: ['customers'] })
       .expect(201);
     await owner(request(app.getHttpServer()).post(`/support-access/${res.body.id}/approve`)).expect(201);
     await support(request(app.getHttpServer()).get('/customers')).expect(200);

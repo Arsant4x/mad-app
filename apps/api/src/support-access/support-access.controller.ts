@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { IsInt, IsString, Max, Min, MinLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsIn, IsInt, IsString, Max, Min, MinLength } from 'class-validator';
+import { ALLOWED_SCREENS } from '../templates/screens';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
@@ -23,6 +24,15 @@ class RequestSupportAccessDto {
   @Min(5)
   @Max(1440)
   durationMinutes!: number;
+
+  /**
+   * **نطاقُ ما يُرى** (`ق-٥٢٧`) — شاشاتٌ من `ALLOWED_SCREENS` **مقروءةً لا
+   * منسوخة**، واحدةٌ على الأقلّ: إذنٌ بلا نطاقٍ ليس تعليمةً (اللائحة م١٧/١/ب).
+   */
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsIn(ALLOWED_SCREENS as readonly string[], { each: true })
+  screens!: string[];
 }
 
 /**
@@ -42,7 +52,7 @@ export class SupportAccessAdminController {
   @Post()
   request(@Req() req: Request, @Body() dto: RequestSupportAccessDto) {
     const payload = req.user as JwtPayload;
-    return this.supportAccessService.request({ id: payload.profileId, username: payload.username }, dto.companyId, dto.reason, dto.durationMinutes);
+    return this.supportAccessService.request({ id: payload.profileId, username: payload.username }, dto.companyId, dto.reason, dto.durationMinutes, dto.screens);
   }
 }
 

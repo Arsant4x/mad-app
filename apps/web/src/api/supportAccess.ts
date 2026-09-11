@@ -8,6 +8,8 @@ export interface SupportGrant {
   requestedByName: string;
   reason: string;
   durationMinutes: number;
+  /** نطاقُ ما يُرى — شاشاتٌ يختارها الطالب ويراها المالك قبل قراره (ق-٥٢٧). */
+  screens: string[];
   status: SupportGrantStatus;
   requestedAt: string;
   decidedAt: string | null;
@@ -28,8 +30,8 @@ export interface SupportLogLine {
 
 // ---- جانب مدير المنصة ----
 export const adminListSupportGrants = () => apiClient.get<SupportGrant[]>('/support-access/admin').then((r) => r.data);
-export const requestSupportAccess = (companyId: string, reason: string, durationMinutes: number) =>
-  apiClient.post<SupportGrant>('/support-access/admin', { companyId, reason, durationMinutes }).then((r) => r.data);
+export const requestSupportAccess = (companyId: string, reason: string, durationMinutes: number, screens: string[]) =>
+  apiClient.post<SupportGrant>('/support-access/admin', { companyId, reason, durationMinutes, screens }).then((r) => r.data);
 
 // ---- جانب مالك المنشأة ----
 export const ownerSupportOverview = () => apiClient.get<SupportGrant[]>('/support-access').then((r) => r.data);

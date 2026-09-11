@@ -224,6 +224,8 @@ export const MSG = {
   support_grant_not_found: 'support.grant_not_found',
   support_grant_not_pending: 'support.grant_not_pending',
   support_grant_not_active: 'support.grant_not_active',
+  support_scope_forbidden: 'support.scope_forbidden',
+  support_scope_undeclared: 'support.scope_undeclared',
   company_user_not_found: 'companyUsers.not_found',
   company_users_owner_only: 'companyUsers.owner_only',
   company_profile_owner_only: 'companyProfile.owner_only',
@@ -651,6 +653,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.support_grant_not_found]: { ar: 'طلب الدعم غير موجود', en: 'Support request not found' },
   [MSG.support_grant_not_pending]: { ar: 'طلب الدعم محسوم بالفعل', en: 'This support request was already decided' },
   [MSG.support_grant_not_active]: { ar: 'لا توجد نافذة دعم فعّالة لقطعها', en: 'No active support window to revoke' },
+  [MSG.support_scope_forbidden]: { ar: 'هذه الشاشة خارج نطاق إذن الدعم الذي وافقت عليه المنشأة', en: 'This screen is outside the support scope the company approved' },
+  [MSG.support_scope_undeclared]: { ar: 'هذا المسار لا يُعلن شاشته، فلا يُقرأ في وضع الدعم', en: 'This route declares no screen, so it cannot be read in support mode' },
   [MSG.handover_item_not_found]: { ar: 'بند النموذج غير موجود في هذا النموذج', en: 'Checklist item not found on this handover' },
   [MSG.settlement_lines_mismatch]: { ar: 'مجموع بنود التسوية لا يساوي مبلغ التسوية', en: 'Settlement lines do not add up to the settlement amount' },
   [MSG.unearned_disposition_required]: {
