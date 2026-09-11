@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { requestedBranchFilter } from '../branches/branch-scope.util';
 import { round2 } from '../common/money/rounding';
 
 /**
@@ -31,6 +32,12 @@ import { round2 } from '../common/money/rounding';
 export interface ExposureFilter {
   /** تاريخُ القياس — يُضبط على آخر اللحظة من يومه قبل الاستدعاء. */
   asOf: Date;
+  /**
+   * فروعُ القارئ — **لازمةٌ لا اختياريّة** (`ق-٥١٧`): فرعٌ يُطلب باسمه يُقاس
+   * عليها قبل أن يُرشَّح، وبلا فرعٍ مطلوب تُرشَّح بها. **فتقريرُ الأعمار لا يصير
+   * باباً جانبياً إلى فواتيرَ تحجبها القائمة.**
+   */
+  allowedBranchIds: string[] | 'all';
   branchId?: string | null;
   customerId?: string | null;
 }
@@ -63,7 +70,7 @@ export interface ExposureRow {
  */
 export async function customerExposure(tx: Prisma.TransactionClient, filter: ExposureFilter): Promise<ExposureRow[]> {
   const { asOf } = filter;
-  const branchWhere = filter.branchId ? { branchId: filter.branchId } : {};
+  const branchWhere = requestedBranchFilter(filter.allowedBranchIds, filter.branchId);
   const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
 
   // كل مستندات الذمم حتى تاريخ القياس: الفواتير وإشعاراتها معاً —
@@ -176,6 +183,8 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
  * **وغيابُ الصفّ يعني صفراً لا «غيرَ معروف»**.
  */
 export async function exposureOf(tx: Prisma.TransactionClient, customerId: string, asOf: Date): Promise<number> {
-  const rows = await customerExposure(tx, { asOf, customerId });
+  // حدُّ الائتمان يقيس دَينَ العميل على المنشأة كلِّها — فتعرّضٌ يحجب فرعاً
+  // يُجيز بيعاً فوق الحدّ من فرعٍ آخر؛ لذلك `'all'` هنا صريحةٌ لا افتراضية.
+  const rows = await customerExposure(tx, { asOf, allowedBranchIds: 'all', customerId });
   return rows.find((r) => r.customerId === customerId)?.total ?? 0;
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { writeOffReason } from '../common/writeoff-reasons';
@@ -227,9 +228,15 @@ export class ReportsService {
     });
   }
 
-  bankDifference(companyId: string) {
+  /**
+   * ⚠️ **الصفوفُ مقصورةٌ على فروع القارئ** (`ق-٥١٧`): قائمةُ البنوك تحجب بنوكَ
+   * الفروع الأخرى بأرصدتها — **وكان هذا التقريرُ يعرضها كلَّها بابًا جانبياً**.
+   * وتاريخُ انفصال نقد البنوك (أدناه) يبقى على البنوك كلِّها عمداً — **فهو
+   * واقعةٌ للمنشأة لا رصيدٌ يُقرأ**.
+   */
+  bankDifference(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const banks = await tx.bank.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' } });
+      const banks = await tx.bank.findMany({ where: { deletedAt: null, ...branchFilter(allowedBranchIds) }, orderBy: { name: 'asc' } });
       const accounts = await tx.account.findMany({
         where: { id: { in: banks.map((b) => b.accountId).filter(Boolean) as string[] } },
         select: { id: true, code: true, name: true, balance: true },
@@ -314,8 +321,11 @@ export class ReportsService {
       const accountType = new Map(accounts.map((a) => [a.id, a.type]));
 
       const date = this.dateFilter(range);
+      // تُرشَّح عند القراءة لا بعدها (`ق-٥١٧`): كانت الأسطرُ تُقرأ كلُّها ثم
+      // تُسقَط في الحلقة — والنتيجةُ واحدة، لكن المرشِّحَ في الاستعلام هو ما
+      // يقرؤه الحارس، والصفوفُ المقروءةُ أقلّ.
       const lines = await tx.journalLine.findMany({
-        where: date ? { journalEntry: { date } } : undefined,
+        where: { journalEntry: { ...branchFilter(allowedBranchIds), ...(date ? { date } : {}) } },
         select: { accountId: true, debit: true, credit: true, journalEntry: { select: { branchId: true } } },
       });
 
@@ -435,6 +445,11 @@ export class ReportsService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: قائمةُ الدخل قائمةُ المنشأة الواحدة من دفترٍ
+   * واحد — **ولا تُشتقّ قائمةُ دخلٍ من نصف دفتر**؛ والفرعُ له تقريرُه المقصورُ
+   * على فروع القارئ (`branchSummary`). و«هل ثمّة قيدٌ مرحَّل» سؤالٌ عن الدفتر كلِّه.
+   */
   incomeStatement(companyId: string, range: ReportRangeDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
@@ -554,7 +569,7 @@ export class ReportsService {
    * يخفّضان 1200 دون أن ينتميا لعمرٍ ما — فيظهران في عمود مستقل يُطرح من
    * إجمالي العميل، لا يُحشران في شريحة كذباً.
    */
-  receivablesAging(companyId: string, filter: AgingDto) {
+  receivablesAging(companyId: string, allowedBranchIds: string[] | 'all', filter: AgingDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // تاريخ التقرير: كأي تقرير يقبل فترة — الافتراض اليوم.
       const asOf = filter.asOf ? new Date(filter.asOf) : new Date();
@@ -564,7 +579,7 @@ export class ReportsService {
       //    المتبقّي بنفسه، **وحدُّ الائتمان كان سيصير رابعاً** — **وتاجرٌ يقرأ
       //    في الأعمار رقماً وفي رسالة المنع آخرَ يفقد الثقة في الاثنين**.
       //    **فاستُخرج الحسابُ إلى `receivables-exposure.util`، ويقرأ الاثنان منه.**
-      const result = await customerExposure(tx, { asOf, branchId: filter.branchId, customerId: filter.customerId });
+      const result = await customerExposure(tx, { asOf, allowedBranchIds, branchId: filter.branchId, customerId: filter.customerId });
       result.sort((a, b) => b.total - a.total);
 
       const sum = (pick: (r: (typeof result)[number]) => number) => round2(result.reduce((t, r) => t + pick(r), 0));
@@ -580,7 +595,7 @@ export class ReportsService {
 
       // المطابقة عند الطلب فقط: مسحُ دفتر اليومية أثقل من التقرير نفسه،
       // فلا يُدفع ثمنه في كل تحميل (زر «طابق مع ميزان المراجعة»).
-      const reconciliation = filter.reconcile ? await this.reconcileAgainstReceivables(tx, asOf, filter.branchId, totals.total) : null;
+      const reconciliation = filter.reconcile ? await this.reconcileAgainstReceivables(tx, asOf, allowedBranchIds, filter.branchId, totals.total) : null;
 
       return { asOf: asOf.toISOString().slice(0, 10), branchId: filter.branchId ?? null, customerId: filter.customerId ?? null, rows: result, totals, reconciliation };
     });
@@ -593,12 +608,13 @@ export class ReportsService {
    * لا يقابله مستند. عرضه صراحةً يجعل المحاسب يعرف مصدره بدل أن يظن
    * التقرير خاطئاً.
    */
-  private async reconcileAgainstReceivables(tx: Prisma.TransactionClient, asOf: Date, branchId: string | undefined, reportTotal: number) {
+  private async reconcileAgainstReceivables(tx: Prisma.TransactionClient, asOf: Date, allowedBranchIds: string[] | 'all', branchId: string | undefined, reportTotal: number) {
     const account = await tx.account.findFirst({ where: { code: RECEIVABLES_ACCOUNT }, select: { id: true } });
     if (!account) return { ledgerBalance: 0, reportTotal, difference: round2(reportTotal * -1), accountMissing: true };
 
+    // على نطاق التقرير نفسِه — وإلا قورن مجموعُ فروعٍ برصيد المنشأة فظهر فرقٌ كاذب.
     const agg = await tx.journalLine.aggregate({
-      where: { accountId: account.id, journalEntry: { date: { lte: asOf }, ...(branchId ? { branchId } : {}) } },
+      where: { accountId: account.id, journalEntry: { date: { lte: asOf }, ...requestedBranchFilter(allowedBranchIds, branchId) } },
       _sum: { debit: true, credit: true },
     });
     const ledgerBalance = round2(Number(agg._sum.debit ?? 0) - Number(agg._sum.credit ?? 0));
@@ -610,7 +626,14 @@ export class ReportsService {
       accountMissing: false,
     };
   }
-  trialBalance(companyId: string, filter: TrialBalanceDto) {
+  /**
+   * **على مستوى المنشأة بحقّها**: ميزانُ المراجعة قائمةٌ من الدفتر كلِّه —
+   * **وتوازنُه لا يُقاس على نصف دفتر**، فالقيدُ الواحد قد يمسّ فرعَين وما لا فرعَ
+   * له. والفرعُ إن طُلب باسمه (`?branchId=`) **يُقاس على فروع القارئ قبل أن
+   * يُرشَّح** — فلا يصير الميزانُ باباً جانبياً إلى فرعٍ محجوب (`ق-٥١٧`).
+   */
+  trialBalance(companyId: string, allowedBranchIds: string[] | 'all', filter: TrialBalanceDto) {
+    if (filter.branchId) assertBranchAllowed(allowedBranchIds, filter.branchId);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(filter);
       const lines = await tx.journalLine.findMany({
@@ -681,14 +704,15 @@ export class ReportsService {
    * لا يُقاس اليوم لأن الواقعة **لا تُسجَّل كياناً مستقلاً**؛ وبناؤه مسارٌ جديد
    * يُنشئ مستنداً، وهو **موقوفٌ على حسم `ق-٣٩`** (ناقل الأحداث).
    */
-  noteDeadlines(companyId: string, range: ReportRangeDto, branchId?: string) {
+  noteDeadlines(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto, branchId?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(range);
       const notes = await tx.invoice.findMany({
         where: {
           docType: { in: ['CREDIT_NOTE', 'DEBIT_NOTE'] },
           ...(date ? { issueDate: date } : {}),
-          ...(branchId ? { branchId } : {}),
+          // الإشعاراتُ مستنداتٌ تحجبها قائمةُ الفواتير بالفرع — فلا يعرضها التقريرُ من بابٍ جانبيّ (`ق-٥١٧`).
+          ...requestedBranchFilter(allowedBranchIds, branchId),
         },
         select: {
           id: true,
@@ -738,11 +762,13 @@ export class ReportsService {
     });
   }
 
-  returns(companyId: string, range: ReportRangeDto, branchId?: string) {
+  returns(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto, branchId?: string) {
+    // فرعٌ مطلوبٌ يُقاس على فروع القارئ، وبلا طلبٍ تُرشَّح بها — كالقائمة (`ق-٥١٧`).
+    const scope = requestedBranchFilter(allowedBranchIds, branchId);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(range);
       const notes = await tx.invoice.findMany({
-        where: { docType: 'CREDIT_NOTE', ...(date ? { issueDate: date } : {}), ...(branchId ? { branchId } : {}) },
+        where: { docType: 'CREDIT_NOTE', ...(date ? { issueDate: date } : {}), ...scope },
         include: {
           customer: { select: { name: true } },
           relatedInvoice: { select: { no: true } },
@@ -819,7 +845,7 @@ export class ReportsService {
        * مسموحٌ افتراضياً — **فوجب أن يراه المالك بلا أن يقارن حقلين في كل صفّ**.
        */
       const writeOffRows = await tx.inventoryWriteOff.findMany({
-        where: { ...(date ? { occurredAt: date } : {}), ...(branchId ? { branchId } : {}) },
+        where: { ...(date ? { occurredAt: date } : {}), ...scope },
         include: { product: { select: { name: true } }, warehouse: { select: { name: true } } },
         orderBy: [{ occurredAt: 'asc' }, { no: 'asc' }],
       });
@@ -889,6 +915,11 @@ export class ReportsService {
     return out;
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: حركةُ كلّ حسابٍ في الفترة تُغذّي القوائمَ
+   * المالية (الدخل · المركز · التدفّق) — **وهي قوائمُ منشأةٍ لا فرع**: مركزٌ ماليٌّ
+   * لنصف الفروع لا يتوازن، لأن حقوقَ الملكية والالتزاماتِ للمنشأة كلِّها.
+   */
   private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {
     const date = this.dateFilter(range);
 

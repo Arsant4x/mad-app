@@ -22,6 +22,26 @@ export function branchFilter(allowedBranchIds: string[] | 'all'): { branchId?: {
   return { OR: [{ branchId: { in: allowedBranchIds } }, { branchId: null }] } as never;
 }
 
+/**
+ * **فرعٌ يطلبه التقرير من الاستعلام** — `?branchId=` — **يُقاس على فروع القارئ
+ * قبل أن يصير مرشِّحاً** (`ق-٥١٧`).
+ *
+ * كانت التقاريرُ تأخذ `query.branchId` كما وصل: **فموظّفٌ مقصورٌ على فرعٍ يطلب
+ * مرتجعاتِ فرعٍ آخر باسمه فيراها** — **بابٌ جانبيٌّ إلى الصفوف نفسِها التي
+ * تحجبها القائمة**. وبلا فرعٍ مطلوب تُرشَّح بفروع القارئ كالقائمة سواء.
+ *
+ * ⚠️ **وحارسُ القراءة يقرأ من هذا الملفّ كلَّ دالّةٍ مُصدَّرةٍ ينتهي اسمُها
+ * بـ`Filter` مرشِّحاً** — فمرشِّحٌ جديد يُكتب هنا بهذا الاسم ويدخل الحراسةَ
+ * بلا لمس الحارس، **ودالّةٌ باسمٍ آخر لا تُقرأ مرشِّحاً ولو رشّحت**.
+ */
+export function requestedBranchFilter(allowedBranchIds: string[] | 'all', branchId: string | null | undefined): { branchId: string } | ReturnType<typeof branchFilter> {
+  if (branchId) {
+    assertBranchAllowed(allowedBranchIds, branchId);
+    return { branchId };
+  }
+  return branchFilter(allowedBranchIds);
+}
+
 /** Guards a *write* aimed at a specific branch. Reads are filtered; writes are
  * rejected outright, because silently dropping a write the caller believes
  * succeeded is worse than an explicit refusal. */

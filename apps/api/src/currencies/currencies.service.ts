@@ -75,6 +75,11 @@ export class CurrenciesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: حذفُ العملة يُمنع بأيّ مستندٍ يحملها في
+   * المنشأة كلِّها — فعملةٌ يستعملها فرعٌ محجوبٌ عن القارئ ليست حرّةً لأنه لا
+   * يراه.
+   */
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
     assertIsCompanyOwner(actorType);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

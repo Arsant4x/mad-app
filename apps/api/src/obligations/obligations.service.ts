@@ -47,6 +47,11 @@ export class ObligationsService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: إقرارُ الضريبة يُقدَّم عن المنشأة برقمها
+   * الضريبيّ الواحد — فمبيعاتُ الفروع كلِّها ومشترياتُها تدخل فيه، وإقرارٌ يحجب
+   * فرعاً إقرارٌ ناقصٌ أمام الهيئة.
+   */
   vatDeclaration(companyId: string, query: VatDeclarationQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const quarterMonths: Record<number, [number, number]> = { 1: [1, 3], 2: [4, 6], 3: [7, 9], 4: [10, 12] };

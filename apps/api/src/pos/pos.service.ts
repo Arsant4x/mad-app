@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { TenantContext } from '../auth/types';
-import { resolveBranchId } from '../branches/branch-scope.util';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { computeTotals, InvoicesService } from '../invoices/invoices.service';
@@ -105,6 +105,11 @@ export class PosService {
     private readonly payments: PaymentsService,
   ) {}
 
+  /**
+   * **على مستوى المنشأة بحقّها**: مناوبةُ الكاشير المفتوحة تُبحث بهويّته لا
+   * بفرعه — فمناوبةٌ فتحها في فرعٍ لم يعد يراه تبقى مفتوحةً ويجب أن تمنعه من
+   * ثانية، والفرعُ الجديد يُقاس بعدها بـ`resolveBranchId`.
+   */
   openShift(tenant: TenantContext, dto: OpenShiftDto) {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       // One open drawer per cashier: a second float with the first still open
@@ -145,6 +150,10 @@ export class PosService {
    * ⚠️ **وفراغُه معلَنٌ لا مسكوتٌ عنه**: منشأةٌ بلا أدراجٍ بعدُ تفتح مناوبةً بلا
    * درج — فلا يُخترع لها درجٌ من فتح مناوبة. والدرجُ يُنشئه المالك من الإعدادات،
    * والترحيلُ إلى حسابه يأتي في الدفعة التالية.
+   *
+   * **على مستوى المنشأة بحقّها**: الفرعُ هنا مُحلَّلٌ بـ`resolveBranchId` قبل
+   * الاستدعاء — فالمرشِّحُ معرّفُ فرعٍ مأذونٍ للكاشير لا قائمةُ رؤيته، والدرجُ
+   * المختارُ يُقاس على الفرع نفسِه.
    */
   private async resolveDrawerId(tx: Prisma.TransactionClient, dto: OpenShiftDto, branchId: string | null): Promise<string | null> {
     if (dto.drawerId) {
@@ -167,7 +176,12 @@ export class PosService {
     return active.length === 1 ? active[0].id : null;
   }
 
-  /** The caller's open shift with live drawer math — null when none is open. */
+  /**
+   * The caller's open shift with live drawer math — null when none is open.
+   *
+   * **على مستوى المنشأة بحقّها**: المناوبةُ الحالية هي مناوبةُ الكاشير نفسِه —
+   * مفتاحُها هويّتُه لا فرعُه، ولا تُعرض مناوبةُ غيره من هذا المسار.
+   */
   currentShift(tenant: TenantContext) {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
@@ -176,10 +190,16 @@ export class PosService {
     });
   }
 
-  listShifts(companyId: string) {
+  /**
+   * ⚠️ **كانت تعرض مناوباتِ المنشأة كلِّها بمجاميع نقدها** — لكلّ من يملك شاشةَ
+   * نقطة البيع. **فكاشيرُ فرعٍ يقرأ صندوقَ كلّ فرعٍ آخر مناوبةً مناوبة** (`ق-٥١٧`).
+   * والآن مقصورةٌ على فروع القارئ — كالفواتير والأدراج سواء.
+   */
+  listShifts(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const shifts = await tx.posShift.findMany({ orderBy: { openedAt: 'desc' } });
-      return Promise.all(shifts.map(async (s) => ({ ...s, ...(await this.totalsFor(tx, s.id, Number(s.openingFloat))) })));
+      const shifts = await tx.posShift.findMany({ where: branchFilter(allowedBranchIds), orderBy: { openedAt: 'desc' } });
+      const totals = await this.totalsForMany(tx, shifts);
+      return shifts.map((s) => ({ ...s, ...totals.get(s.id)! }));
     });
   }
 
@@ -353,12 +373,22 @@ export class PosService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: مفتاحُ البيع من الجهاز (`clientSaleId`) فريدٌ
+   * في المنشأة، والبحثُ به يمنع تكرارَ البيعة عند المزامنة أياً كان فرعُها —
+   * وحجبُه يُصدر الفاتورةَ مرّتين.
+   */
   private findByClientSaleId(companyId: string, clientSaleId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findFirst({ where: { clientSaleId }, include: { lines: true, customer: true, posPayments: true } }),
     );
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: البيعُ يقع في مناوبة الكاشير المفتوحة —
+   * مفتاحُها هويّتُه، وفرعُ المناوبة هو ما يُقاس عليه البيعُ لا العكس، فلا
+   * قائمةَ فروعٍ في هذا الاستعلام أصلاً.
+   */
   private async ring(
     tenant: TenantContext,
     dto: CreatePosSaleDto,
@@ -608,30 +638,58 @@ export class PosService {
   }
 
 
+  /** مناوبةٌ واحدة — حالةٌ خاصّة من الجمع، لا حسابٌ ثانٍ (`totalsForMany`). */
   private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotals> {
-    // من صفوف الدفعات لا من الفواتير: الفاتورة المقسّمة تضع في الدرج
-    // جزءها النقدي فقط.
-    const [groups, salesCount] = await Promise.all([
-      tx.posPayment.groupBy({
-        by: ['method'],
-        where: { invoice: { posShiftId: shiftId } },
-        _sum: { amount: true },
-      }),
-      tx.invoice.count({ where: { posShiftId: shiftId } }),
-    ]);
-    let cashTotal = 0;
-    let cardTotal = 0;
-    for (const g of groups) {
-      const sum = Number(g._sum.amount ?? 0);
-      if (g.method === 'CASH') cashTotal += sum;
-      else cardTotal += sum;
+    return (await this.totalsForMany(tx, [{ id: shiftId, openingFloat }])).get(shiftId)!;
+  }
+
+  /**
+   * مجاميعُ مناوباتٍ كثيرة **باستعلامَين لا باستعلامَين لكلّ مناوبة**.
+   *
+   * 🔴 كانت القائمةُ تسأل مرّتين عن كلّ مناوبة، **فبثلاثمئةٍ وستٍّ متراكمةٍ في
+   * منشأة العرض تجاوزت معاملةُ الخمس ثوانٍ فسقطت `500`** (مقيسٌ 2026-09-11 —
+   * `Transaction already closed … 5025 ms`). **ولا يظهر في السير** لأن قاعدتَه
+   * تُنشأ جديدةً كلَّ مرّة (`ق-٤٩٥`)، **ويظهر عند أوّل تاجرٍ يعمل سنة**.
+   *
+   * ومن صفوف الدفعات لا من الفواتير: الفاتورةُ المقسّمة تضع في الدرج جزءها
+   * النقديَّ فقط.
+   *
+   * **على مستوى المنشأة بحقّها**: المجاميعُ تُقرأ بمعرّفات مناوباتٍ مُمرَّرةٍ من
+   * مستدعٍ قرأها مرشَّحةً أو تحقّق منها — فالمرشِّحُ هنا مجموعةُ معرّفاتٍ لا
+   * قائمةُ رؤية.
+   */
+  private async totalsForMany(tx: Prisma.TransactionClient, shifts: { id: string; openingFloat: number | Prisma.Decimal }[]): Promise<Map<string, ShiftTotals>> {
+    const ids = shifts.map((s) => s.id);
+    const [payments, counts] = ids.length
+      ? await Promise.all([
+          tx.posPayment.findMany({
+            where: { invoice: { posShiftId: { in: ids } } },
+            select: { method: true, amount: true, invoice: { select: { posShiftId: true } } },
+          }),
+          tx.invoice.groupBy({ by: ['posShiftId'], where: { posShiftId: { in: ids } }, _count: { _all: true } }),
+        ])
+      : [[], []];
+
+    const cash = new Map<string, number>();
+    const card = new Map<string, number>();
+    for (const p of payments) {
+      const shiftId = p.invoice.posShiftId!;
+      const bucket = p.method === 'CASH' ? cash : card;
+      bucket.set(shiftId, (bucket.get(shiftId) ?? 0) + Number(p.amount));
     }
-    return {
-      salesCount,
-      cashTotal: round2(cashTotal),
-      cardTotal: round2(cardTotal),
-      expectedCash: round2(openingFloat + cashTotal),
-    };
+    const salesCount = new Map(counts.map((c) => [c.posShiftId!, c._count._all]));
+
+    const totals = new Map<string, ShiftTotals>();
+    for (const s of shifts) {
+      const cashTotal = cash.get(s.id) ?? 0;
+      totals.set(s.id, {
+        salesCount: salesCount.get(s.id) ?? 0,
+        cashTotal: round2(cashTotal),
+        cardTotal: round2(card.get(s.id) ?? 0),
+        expectedCash: round2(Number(s.openingFloat) + cashTotal),
+      });
+    }
+    return totals;
   }
 
   private async walkInCustomerId(tx: Prisma.TransactionClient): Promise<string> {

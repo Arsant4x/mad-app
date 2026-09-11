@@ -8,7 +8,11 @@ export function stockQuantityKey(productId: string, warehouseId: string): string
  * full stock movement ledger — there is no materialized balance table (see
  * the schema comment on `StockMovement`); this is the single source of truth
  * everywhere a "current quantity" is needed, matching the mockup's
- * `getStockQty` exactly. */
+ * `getStockQty` exactly.
+ *
+ * **على مستوى المنشأة بحقّها**: الكميةُ القائمة تُحسب من دفتر الحركات كلِّه
+ * لكلّ (صنف، مستودع) — فالمستودعُ لا الفرعُ وحدةُ المخزون، وحركةٌ محجوبةٌ
+ * تُعطي رصيداً كاذباً يبيع ما ليس في الرفّ. */
 export async function computeStockQuantities(tx: Prisma.TransactionClient): Promise<Map<string, number>> {
   const movements = await tx.stockMovement.findMany({
     select: { productId: true, warehouseId: true, toWarehouseId: true, type: true, qty: true },
@@ -34,7 +38,11 @@ export async function computeStockQuantities(tx: Prisma.TransactionClient): Prom
 /** Point lookup for a single (productId, warehouseId) pair — used by
  * `InventoryService.create` to know the current balance before posting a
  * new OUT/TRANSFER movement. Cheaper than `computeStockQuantities` (which
- * scans every movement for every pair) when only one pair is needed. */
+ * scans every movement for every pair) when only one pair is needed.
+ *
+ * **على مستوى المنشأة بحقّها**: رصيدُ الصنف في مستودعٍ يجمع حركاتِه كلَّها
+ * أياً كان فرعُ مستندها — فالخصمُ يقع على الرفّ نفسِه، ورصيدٌ ناقصُ فرعٍ يُجيز
+ * بيعاً بلا بضاعة. */
 export async function currentStockQty(tx: Prisma.TransactionClient, productId: string, warehouseId: string): Promise<number> {
   const movements = await tx.stockMovement.findMany({
     where: { productId, OR: [{ warehouseId }, { toWarehouseId: warehouseId }] },

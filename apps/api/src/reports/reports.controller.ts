@@ -56,21 +56,21 @@ export class ReportsController {
   @Get('bank-difference')
   @RequiresAction('view')
   bankDifference(@CurrentTenant() tenant: TenantContext) {
-    return this.reportsService.bankDifference(tenant.companyId);
+    return this.reportsService.bankDifference(tenant.companyId, tenant.allowedBranchIds);
   }
 
   /** المرتجعات (30.9): كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ نقداً · ومن سجّله. */
   @Get('returns')
   @RequiresAction('view')
   returns(@CurrentTenant() tenant: TenantContext, @Query() query: TrialBalanceDto) {
-    return this.reportsService.returns(tenant.companyId, query, query.branchId);
+    return this.reportsService.returns(tenant.companyId, tenant.allowedBranchIds, query, query.branchId);
   }
 
   /** مهل الإشعارات (م٥٤): المتأخّر بوسمه، والمقترب قبل انقضائه. */
   @Get('note-deadlines')
   @RequiresAction('view')
   noteDeadlines(@CurrentTenant() tenant: TenantContext, @Query() query: TrialBalanceDto) {
-    return this.reportsService.noteDeadlines(tenant.companyId, query, query.branchId);
+    return this.reportsService.noteDeadlines(tenant.companyId, tenant.allowedBranchIds, query, query.branchId);
   }
 
   /** ميزان المراجعة (10.4) — فترة + فرع اختياري. */
@@ -78,14 +78,14 @@ export class ReportsController {
   @Get('receivables-aging')
   @RequiresAction('view')
   receivablesAging(@CurrentTenant() tenant: TenantContext, @Query() filter: AgingDto) {
-    return this.reportsService.receivablesAging(tenant.companyId, { ...filter, reconcile: filter.reconcile } as never);
+    return this.reportsService.receivablesAging(tenant.companyId, tenant.allowedBranchIds, { ...filter, reconcile: filter.reconcile } as never);
   }
 
   /** تصدير 10.12 — CSV بـBOM ليفتح عربياً سليماً في Excel. */
   @Get('receivables-aging/export')
   @RequiresAction('view')
   async receivablesAgingCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: AgingDto, @Res() res: Response) {
-    const report = await this.reportsService.receivablesAging(tenant.companyId, filter as never);
+    const report = await this.reportsService.receivablesAging(tenant.companyId, tenant.allowedBranchIds, filter as never);
     const csv = buildCsv(
       [
         { label: 'العميل', value: (r: (typeof report.rows)[number]) => r.customerName },
@@ -107,14 +107,14 @@ export class ReportsController {
   @Get('trial-balance')
   @RequiresAction('view')
   trialBalance(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto) {
-    return this.reportsService.trialBalance(tenant.companyId, filter);
+    return this.reportsService.trialBalance(tenant.companyId, tenant.allowedBranchIds, filter);
   }
 
   /** تصدير 10.12 — CSV بـBOM ليفتح عربياً سليماً في Excel. */
   @Get('trial-balance/export')
   @RequiresAction('view')
   async trialBalanceCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto, @Res() res: Response) {
-    const report = await this.reportsService.trialBalance(tenant.companyId, filter);
+    const report = await this.reportsService.trialBalance(tenant.companyId, tenant.allowedBranchIds, filter);
     const csv = buildCsv(
       [
         { label: 'رمز الحساب', value: (r: (typeof report.rows)[number]) => r.code },

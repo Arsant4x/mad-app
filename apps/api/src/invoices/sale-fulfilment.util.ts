@@ -56,6 +56,11 @@ export type FulfilmentResult =
     }
   | { fulfilled: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
+/**
+ * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
+ * كلّ الحركات — فالمستودعُ وحدةُ المخزون لا الفرع، والخصمُ من رفٍّ لا يرى
+ * القارئ نصفَه يُنزل الرصيدَ تحت الصفر بصمت.
+ */
 export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<FulfilmentResult> {
   const warehouseId =
     args.warehouseId ??
@@ -175,6 +180,10 @@ export interface ReturnResult {
  *
  * `DAMAGED`/`REPAIRABLE` تُحفظ حالةً على السطر ولا تمسّ المخزون هنا — معلَّقةٌ على بحث
  * الضريبة (قرار المالك). والمستدعي يرحّل `totalCost` قيدَ عكسٍ للتكلفة.
+ *
+ * **على مستوى المنشأة بحقّها**: حركةُ البيع الأصلية وما أُرجع عليها تُقرآن
+ * بسطر الفاتورة لا بفرع القارئ — فالمرتجعُ يعود إلى طبقاته حيث بيعت، وإرجاعٌ
+ * يُقاس على فرعٍ آخر يُعيد مرّتين.
  */
 export async function returnStockedLines(tx: Tx, args: ReturnArgs): Promise<ReturnResult> {
   const restored: ReturnResult['restored'] = [];

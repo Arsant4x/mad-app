@@ -67,6 +67,11 @@ export class CustomersService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: حذفُ العميل يُمنع بفواتيره في أيّ فرع —
+   * فالعميلُ كيانُ منشأة، وفاتورةٌ في فرعٍ لا يراه القارئ تبقى مانعاً لا
+   * يُتجاوَز.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });

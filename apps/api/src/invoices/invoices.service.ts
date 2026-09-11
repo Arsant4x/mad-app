@@ -415,6 +415,11 @@ export class InvoicesService {
       return { ...saved, stockFulfilment: fulfilment };
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: الخلَفُ في سلسلة الهيئة يُبحث عنه ببصمة
+   * الفاتورة أينما كان فرعُه — فالسلسلةُ سلسلةُ وحدة الإصدار عند الهيئة،
+   * وخلَفٌ محجوبٌ يُجيز تعديلاً يكسرها.
+   */
   update(companyId: string, id: string, dto: UpdateInvoiceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.invoice.findUnique({ where: { id } });
@@ -550,6 +555,11 @@ export class InvoicesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: الإشعاراتُ المرتبطة بالفاتورة تمنع حذفَها
+   * أياً كان فرعُها — فالرابطُ رابطُ مستندٍ بمستند، وإشعارٌ في فرعٍ محجوبٍ يبقى
+   * معلَّقاً بها.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.invoice.findUnique({ where: { id } });
@@ -583,6 +593,11 @@ export class InvoicesService {
    * direction comes from the docType, exactly as the UBL document ZATCA
    * receives carries positive amounts under type code 381 — and it posts its
    * own reversing journal entry.
+   *
+   * **على مستوى المنشأة بحقّها**: سقفُ الإشعارات الدائنة يُحسب من كلّ إشعارات
+   * الفاتورة — وإشعارٌ في فرعٍ محجوبٍ عن القارئ يبقى مخصوماً من السقف، وإلا
+   * جاز أن يُعتمد أكثرُ مما فُوتر. والأصلُ نفسُه يُقاس على فروع القارئ في
+   * `adjustableOriginal`.
    */
   issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateCreditNoteDto) {
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
