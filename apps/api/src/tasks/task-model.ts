@@ -1,4 +1,11 @@
+import { TaskPriority } from '@prisma/client';
 import { ALLOWED_SCREENS, ScreenAction } from '../templates/screens';
+
+/**
+ * الأولويات — **مقروءةً من نوع القاعدة لا منسوخة** (`SPEC 14.2`): القائمةُ
+ * المغلقةُ في `TaskPriority` هي المصدر، وهذه إسقاطُها للتحقّق في `DTO`.
+ */
+export const TASK_PRIORITIES = Object.values(TaskPriority) as readonly TaskPriority[];
 import { Grant, grant } from '../delegations/permission-tree';
 import { DelegationLink, hasGrant, RootGrants } from '../delegations/intersection';
 

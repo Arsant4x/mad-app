@@ -217,6 +217,7 @@ export const MSG = {
   task_recurrence_needs_anchor: 'task.recurrence_needs_anchor',
   task_not_found: 'task.not_found',
   task_transition_forbidden: 'task.transition_forbidden',
+  task_comment_forbidden: 'task.comment_forbidden',
   owner_only: 'common.owner_only',
   support_no_active_grant: 'support.no_active_grant',
   support_read_only: 'support.read_only',
@@ -634,6 +635,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.task_recurrence_needs_anchor]: { ar: 'المهمة المتكرّرة تحتاج أول موعد استحقاق', en: 'A recurring task needs a first due date' },
   [MSG.task_not_found]: { ar: 'المهمة غير موجودة', en: 'Task not found' },
+  [MSG.task_comment_forbidden]: { ar: 'حوارُ المهمة لطرفيها وحدهما — المكلَّف ومن أسندها', en: 'Only the assignee and the assigner may take part in this task thread' },
   [MSG.task_transition_forbidden]: {
     ar: 'لا تملك صلاحية هذا الانتقال على شاشة المستند — والإسناد لا يمنح صلاحية',
     en: 'You lack the permission for this transition on the document screen — assignment grants none',

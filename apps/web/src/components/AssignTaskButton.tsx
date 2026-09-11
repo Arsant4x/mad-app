@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createTask } from '../api/tasks';
+import { createTask, type TaskPriority } from '../api/tasks';
 import { listCompanyUsers, type CompanyUser } from '../api/companyUsers';
 import { usePermissions } from '../auth/PermissionsContext';
 import { apiErrorMessage } from '../lib/apiError';
@@ -37,6 +37,9 @@ export function AssignTaskButton({ screen, entityId }: { screen: string; entityI
   const [assigneeId, setAssigneeId] = useState('');
   const [dueAnchor, setDueAnchor] = useState('');
   const [recurEveryDays, setRecurEveryDays] = useState(0);
+  // التذكرةُ الداخلية (SPEC 1.11 · 14.2): أولويةٌ وقسم — حقلان على المهمّة نفسِها.
+  const [priority, setPriority] = useState<TaskPriority>('NORMAL');
+  const [department, setDepartment] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
@@ -63,6 +66,8 @@ export function AssignTaskButton({ screen, entityId }: { screen: string; entityI
         recurEveryDays: recurEveryDays > 0 ? recurEveryDays : undefined,
         // مهمةٌ متكرّرة تحتاج مرساة — والقاعدة تفرضها بقيدٍ أيضاً.
         dueAnchor: dueAnchor ? new Date(dueAnchor).toISOString() : undefined,
+        priority,
+        department: department.trim() || undefined,
       });
       setDone(true);
       setOpen(false);
@@ -107,6 +112,21 @@ export function AssignTaskButton({ screen, entityId }: { screen: string; entityI
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="two-col">
+              <div className="field">
+                <label>الأولوية</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} data-testid="assign-priority">
+                  <option value="NORMAL">عادي</option>
+                  <option value="HIGH">مرتفع</option>
+                  <option value="URGENT">عاجل</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>القسم المختصّ (اختياري)</label>
+                <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="مثال: محاسبة" maxLength={60} data-testid="assign-department" />
+              </div>
             </div>
 
             <div className="two-col">

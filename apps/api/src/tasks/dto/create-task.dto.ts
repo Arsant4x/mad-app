@@ -1,5 +1,6 @@
 import { IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { ALLOWED_SCREENS } from '../../templates/screens';
+import { TASK_PRIORITIES } from '../task-model';
 
 /**
  * ⚠️ `targetScreen` من `ALLOWED_SCREENS` **مقروءةً لا منسوخة**.
@@ -29,6 +30,17 @@ export class CreateTaskDto {
   @IsString()
   @MaxLength(2000)
   note?: string;
+
+  /** الأولوية من القائمة المغلقة **مقروءةً من نوع القاعدة** (`SPEC 14.2`) — والافتراضُ عادي. */
+  @IsOptional()
+  @IsIn(TASK_PRIORITIES as readonly string[])
+  priority?: string;
+
+  /** القسمُ المختصّ (`SPEC 1.11`) — نصٌّ حرّ قصير. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  department?: string;
 
   @IsOptional()
   @IsInt()

@@ -184,6 +184,74 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     expect(mine.body.every((t: { assigneeId: string }) => t.assigneeId === clerkId)).toBe(true);
   });
 
+  /**
+   * التذكرةُ الداخلية (`SPEC 1.11`) **مهمّةٌ بحقلين لا محرّكٌ ثانٍ** (`ق-٥٣٢`):
+   * أولويةٌ من قائمةٍ مغلقةٍ في القاعدة (وهي `SPEC 14.2` نفسُها) · وقسمٌ ·
+   * وتعليقٌ بلا انتقال — والمسؤولُ والحالةُ والرابطُ والسجلُّ قائمةٌ أصلاً.
+   */
+  it('[SPEC 14.2] ⭐⑩ الأولويةُ من قائمةٍ مغلقة — تُحفظ وتُعرض للمكلَّف، والمخترَعةُ تُرفض، والافتراضُ عادي', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: `مهمّةٌ عاجلة ${suffix}`, assigneeId: clerkId, priority: 'URGENT', department: 'محاسبة' })
+      .expect(201);
+    expect(res.body.priority).toBe('URGENT');
+    expect(res.body.department).toBe('محاسبة');
+
+    const mine = await request(app.getHttpServer()).get('/tasks/mine').set('Authorization', `Bearer ${clerkToken}`).expect(200);
+    const seen = (mine.body as { id: string; priority: string; department: string | null }[]).find((t) => t.id === res.body.id);
+    expect(seen?.priority).toBe('URGENT');
+    expect(seen?.department).toBe('محاسبة');
+
+    // المخترَعةُ تُرفض قبل الخدمة — والقائمةُ مقروءةٌ من نوع القاعدة لا منسوخة.
+    await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: `أولويةٌ مخترَعة ${suffix}`, assigneeId: clerkId, priority: 'حرج' })
+      .expect(400);
+
+    const plain = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: `بلا أولوية ${suffix}`, assigneeId: clerkId })
+      .expect(201);
+    expect(plain.body.priority).toBe('NORMAL');
+    expect(plain.body.department).toBeNull();
+  });
+
+  it('[SPEC 1.11] ⭐⑪ تعليقٌ بلا انتقال — سطرٌ في السجل لا يغيّر الحالة، لطرفَي المهمّة وحدهما', async () => {
+    const t = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: `تذكرةُ عميل ${suffix}`, assigneeId: clerkId, department: 'دعم', note: 'العميل يسأل عن فاتورة يوليو' })
+      .expect(201);
+
+    // المكلَّفُ يعلّق — والحالةُ كما هي.
+    const after = await request(app.getHttpServer())
+      .post(`/tasks/${t.body.id}/comments`)
+      .set('Authorization', `Bearer ${clerkToken}`)
+      .send({ note: `تواصلتُ مع العميل ${suffix}` })
+      .expect(201);
+    expect(after.body.status).toBe('OPEN');
+
+    // والمُسنِدُ يقرأ السجلَّ ويعلّق: سطرُ الإنشاء أوّلاً، ثم التعليقُ حالتُه من وإلى سواء.
+    const log = await request(app.getHttpServer()).get(`/tasks/${t.body.id}/log`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    const lines = log.body as { seq: number; fromStatus: string | null; toStatus: string; note: string | null }[];
+    expect(lines[0].fromStatus).toBeNull();
+    expect(lines[0].toStatus).toBe('OPEN');
+    const comment = lines.find((l) => l.note?.includes(suffix) && l.fromStatus === 'OPEN' && l.toStatus === 'OPEN');
+    expect(comment).toBeTruthy();
+    expect(lines.map((l) => l.seq)).toEqual([...lines.map((l) => l.seq)].sort((a, b) => a - b));
+    await request(app.getHttpServer()).post(`/tasks/${t.body.id}/comments`).set('Authorization', `Bearer ${ownerToken}`).send({ note: 'شكراً — تابع' }).expect(201);
+
+    // 🔴 وغيرُ الطرفين يُردّ — لا يعلّق ولا يقرأ: الحوارُ للمكلَّف ومن أسنده.
+    await request(app.getHttpServer()).post(`/tasks/${t.body.id}/comments`).set('Authorization', `Bearer ${mgrToken}`).send({ note: 'دخيل' }).expect(403);
+    await request(app.getHttpServer()).get(`/tasks/${t.body.id}/log`).set('Authorization', `Bearer ${mgrToken}`).expect(403);
+
+    // وتعليقٌ فارغٌ يُرفض قبل الخدمة.
+    await request(app.getHttpServer()).post(`/tasks/${t.body.id}/comments`).set('Authorization', `Bearer ${clerkToken}`).send({ note: '' }).expect(400);
+  });
+
   it('⭐⑨ المفردات المخترَعة مرفوضة قبل أن تصل الخدمة', async () => {
     for (const bad of [
       { targetScreen: 'invoices', targetId: 'x' },
