@@ -345,7 +345,6 @@ model Company {
   outboxEvents     OutboxEvent[]
   /// عدّاداتُ تسلسل المستندات (`ق-٣٢٨`) — واحدٌ لكل نوعٍ وسنة.
   documentSequences DocumentSequence[]
-  deletionRequests AccountDeletionRequest[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   purchaseLines       PurchaseLine[]
@@ -1462,10 +1461,17 @@ enum DeletionRequestStatus {
 /// and the platform (support) reviews and executes it. The request itself is
 /// the audit trail of that decision, so it survives on the platform side.
 /// **بلا أبٍ** — كيانٌ جذريّ يُنشئه التاجر: طلبٌ تراجعه المنصّة وتنفّذه.
+/// ⚠️ **ولا مفتاحَ أجنبيّ إلى المنشأة عمداً** (`ق-٥٣٧`): الحذفُ صلبٌ (`Cascade`
+/// عبر هويّة الدخول)، **وكان الطلبُ وقرارُه يزولان مع المنشأة نفسِها — فلا أثرَ
+/// لمن أذن بإتلاف بياناتها إلا سطرُ تحذيرٍ في سجلّ خادم**. وهو أثقلُ من بقاء
+/// سجلّ الدعم (`ق-٥٣١`) والتدقيق (`ق-٥٣٥`): ذانك يشهدان على ما جرى داخل
+/// المنشأة، **وهذا يشهد على قرار إعدامها**. فالعمودُ `companyId` قائمٌ بلا رابط،
+/// والاسمُ محفوظٌ على الطلب، **ومن قرّر — باسمه ومعرّفه — مكتوبٌ على القرار**.
 model AccountDeletionRequest {
-  id        String  @id @default(uuid())
+  id        String @id @default(uuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// اسمُ المنشأة وقتَ الطلب — فالصفُّ الذي كان يُقرأ منه يزول مع الحذف.
+  companyName String @default("")
 
   /// Why the merchant is leaving — worth reading before executing.
   reason String?
@@ -1475,6 +1481,9 @@ model AccountDeletionRequest {
   /// Set when support decides; the note is what gets communicated back.
   decidedAt   DateTime?
   decidedNote String?
+  /// من قرّر (مديرُ المنصّة): معرّفُه واسمُه وقتَ القرار — **فجوابُ «من أذن؟» على الصفّ نفسه**.
+  decidedById   String?
+  decidedByName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

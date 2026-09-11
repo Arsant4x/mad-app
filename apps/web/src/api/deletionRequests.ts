@@ -12,7 +12,11 @@ export interface DeletionRequest {
 }
 
 export interface AdminDeletionRequest extends DeletionRequest {
-  company: { id: string; orgName: string; status: string; subEnd: string | null };
+  companyId: string;
+  /** اسمُ المنشأة وقتَ الطلب — على الصفّ نفسه، فيبقى بعد حذفها (ق-٥٣٧). */
+  companyName: string;
+  /** من قرّر — مديرُ المنصّة الذي وافق أو رفض. */
+  decidedByName: string | null;
 }
 
 // Merchant side

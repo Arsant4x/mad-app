@@ -5,6 +5,12 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
 
+/** من قرّر — مديرُ المنصّة الذي وافق أو رفض؛ يُكتب على القرار نفسه (`ق-٥٣٧`). */
+export interface DecisionActor {
+  id: string;
+  username: string;
+}
+
 /**
  * Account deletion, the SaaS way (owner's rule, 2026-08-07): the merchant never
  * wipes its own database. It **files a request**; the platform's support
@@ -14,6 +20,11 @@ import { MSG } from '../common/i18n/messages';
  * Merchant-side methods run in the tenant context (isolated like everything
  * else). Support-side methods run unscoped on purpose — reviewing requests is a
  * cross-tenant platform job, same pattern as the companies list.
+ *
+ * ⚠️ **ولا مفتاحَ أجنبيّ إلى المنشأة** (`ق-٥٣٧`): الطلبُ وقرارُه يبقيان بعد حذفها —
+ * فالاسمُ يُحفظ على الطلب عند تقديمه، **ومن قرّر يُكتب على القرار**. **حدُّه المعلَن**:
+ * طلبٌ معلّقٌ لمنشأةٍ زالت من مسارٍ آخر (`DELETE /companies/:id`) يبقى معلّقاً،
+ * وتنفيذُه يُرفض `404` — **ومخرجُه الرفضُ بملاحظة**.
  */
 @Injectable()
 export class DeletionRequestsService {
@@ -46,8 +57,10 @@ export class DeletionRequestsService {
       // but confusion about which one support is acting on.
       const open = await tx.accountDeletionRequest.findFirst({ where: { status: 'PENDING' } });
       if (open) throw new ConflictException(MSG.deletion_already_pending);
+      // الاسمُ يُحفظ على الطلب وقتَ تقديمه — فصفُّ المنشأة يزول مع التنفيذ (`ق-٥٣٧`)؛ و`companies` بلا RLS.
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { orgName: true } });
       return tx.accountDeletionRequest.create({
-        data: { reason: reason?.trim() || null } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
+        data: { reason: reason?.trim() || null, companyName: company.orgName } as unknown as Prisma.AccountDeletionRequestUncheckedCreateInput,
       });
     });
   }
@@ -65,46 +78,59 @@ export class DeletionRequestsService {
 
   // ---------- Support (platform admin) side ----------
 
-  /** Every request across tenants, pending first — support's worklist. */
+  /**
+   * Every request across tenants, pending first — support's worklist.
+   * الاسمُ على الصفّ نفسه لا في ضمّة — فالمنشأةُ قد تكون زالت (`ق-٥٣٧`).
+   */
   listAll() {
     return this.prisma.accountDeletionRequest.findMany({
-      include: { company: { select: { id: true, orgName: true, status: true, subEnd: true } } },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
-  async reject(id: string, note?: string) {
+  async reject(id: string, note: string | undefined, decider: DecisionActor) {
     const existing = await this.prisma.accountDeletionRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.deletion_request_not_found);
     if (existing.status !== 'PENDING') throw new ConflictException(MSG.deletion_not_pending);
     return this.prisma.accountDeletionRequest.update({
       where: { id },
-      data: { status: 'REJECTED', decidedAt: new Date(), decidedNote: note?.trim() || null },
+      data: {
+        status: 'REJECTED',
+        decidedAt: new Date(),
+        decidedNote: note?.trim() || null,
+        decidedById: decider.id,
+        decidedByName: decider.username,
+      },
     });
   }
 
   /**
    * Approves AND executes: the company and everything under it is deleted via
-   * the same cascade the developer panel uses. The request row itself would go
-   * with the company (FK cascade), so it is marked APPROVED first and kept by
-   * detaching is impossible — instead we log the execution; the platform's own
-   * records (this log) are the durable trace.
+   * the same cascade the developer panel uses. **والصفُّ يبقى** (`ق-٥٣٧`) — بلا
+   * مفتاحٍ أجنبيّ إلى المنشأة، حاملاً اسمَها ومن قرّر ومتى وبأيّ ملاحظة: **هو الأثرُ
+   * الدائم على قرار الإعدام**، وسطرُ سجلّ الخادم تكملةٌ لا بديل.
    */
-  async approveAndExecute(id: string, note?: string) {
-    const existing = await this.prisma.accountDeletionRequest.findUnique({
-      where: { id },
-      include: { company: { select: { id: true, orgName: true } } },
-    });
+  async approveAndExecute(id: string, note: string | undefined, decider: DecisionActor) {
+    const existing = await this.prisma.accountDeletionRequest.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.deletion_request_not_found);
     if (existing.status !== 'PENDING') throw new ConflictException(MSG.deletion_not_pending);
+    // المنشأةُ تُقرأ بمعرّفها لا بضمّة — فقد تكون زالت من مسارٍ آخر، وعندها لا تنفيذَ (الحدُّ المعلَن أعلاه).
+    const company = await this.prisma.company.findUnique({ where: { id: existing.companyId }, select: { id: true, orgName: true } });
+    if (!company) throw new NotFoundException(MSG.company_not_found);
 
     await this.prisma.accountDeletionRequest.update({
       where: { id },
-      data: { status: 'APPROVED', decidedAt: new Date(), decidedNote: note?.trim() || null },
+      data: {
+        status: 'APPROVED',
+        decidedAt: new Date(),
+        decidedNote: note?.trim() || null,
+        decidedById: decider.id,
+        decidedByName: decider.username,
+      },
     });
 
-    this.logger.warn(`Executing account deletion for company ${existing.company.id} ("${existing.company.orgName}") — approved request ${id}`);
-    await this.companiesService.remove(existing.company.id);
-    return { executed: true, companyId: existing.company.id, orgName: existing.company.orgName };
+    this.logger.warn(`Executing account deletion for company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
+    await this.companiesService.remove(company.id);
+    return { executed: true, companyId: company.id, orgName: company.orgName };
   }
 }
