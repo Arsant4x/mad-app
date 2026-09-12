@@ -131,12 +131,49 @@ describe('التفويض — المنح والسحب والسجل (e2e)', () => 
       .expect(400);
   });
 
-  it('موظف منشأةٍ أخرى مرفوض — لا صفّ يتيم في سجلٍّ لا يُحذف منه', async () => {
-    await request(app.getHttpServer())
-      .post('/delegations')
-      .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ granteeId: '00000000-0000-0000-0000-000000000000', nodeKey: 'contracts', grants: ['contracts:view'] })
-      .expect(404);
+  /**
+   * 🔴 **المفوَّضُ إليه من فضاء المنشأة نفسِها — بطُعمٍ حقيقيٍّ لا بمعرّفٍ معدوم** (`ق-٦٤٥`).
+   *
+   * كان الطُعمُ هنا معرّفاً صفرياً **لا صفَّ له في أيّ منشأة** — فيُرفض ولو حُذف شرطُ
+   * المنشأة من الاستعلام، **والاختبارُ يمرّ على حارسٍ لا يحرس**. فالطُعمُ الآن **حسابٌ
+   * فرعيٌّ حقيقيٌّ في منشأةٍ أخرى** (ومالكُها كذلك): ما تحجبه القائمةُ يُطلَب بمعرّفه —
+   * **ويُردّ `404`**، ولا صفَّ يتيمَ في سجلٍّ لا يُحذف منه.
+   */
+  it('🔴 موظفُ منشأةٍ أخرى — ومالكُها — مرفوضان بمعرّفَيهما الحقيقيَّين (ق-٦٤٥)', async () => {
+    // منشأةٌ ثانية بمالكها وحسابٍ فرعيٍّ حقيقيّ.
+    const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
+    const tokenB = loginB.body.accessToken as string;
+    const companyB = (await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${tokenB}`).expect(200)).body.id as string;
+    const tplB = await request(app.getHttpServer())
+      .post('/templates')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: `ب-${suffix}`, isAllScreens: false, allowedScreens: ['dashboard'], screenActions: { dashboard: ['view'] } })
+      .expect(201);
+    const userB = await request(app.getHttpServer())
+      .post('/company-users')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ name: 'غريب', username: `stranger-${suffix}`, password: 'DelegPass123!', permissionTemplateId: tplB.body.id })
+      .expect(201);
+
+    try {
+      // ① حسابٌ فرعيٌّ حقيقيٌّ من منشأةٍ أخرى — بمعرّفه.
+      await request(app.getHttpServer())
+        .post('/delegations')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ granteeId: userB.body.id, nodeKey: 'contracts', grants: ['contracts:view'] })
+        .expect(404);
+      // ② ومالكُ المنشأة الأخرى — بمعرّف منشأته (فضاءٌ آخر أصلاً).
+      await request(app.getHttpServer())
+        .post('/delegations')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({ granteeId: companyB, nodeKey: 'contracts', grants: ['contracts:view'] })
+        .expect(404);
+      // ③ ولا أثرَ في سجلّ منشأتنا — فالسجلُّ لا يُحذف منه.
+      const log = await request(app.getHttpServer()).get('/delegations/log').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+      expect(JSON.stringify(log.body)).not.toContain(userB.body.id);
+    } finally {
+      await request(app.getHttpServer()).delete(`/company-users/${userB.body.id}`).set('Authorization', `Bearer ${tokenB}`);
+    }
   });
 
   it('⭐⑥ السحب المتتالي بنيويّ — سحبٌ من المدير يطفئ ما وزّعه في الطلب التالي', async () => {
