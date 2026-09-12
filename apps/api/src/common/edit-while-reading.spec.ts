@@ -148,6 +148,32 @@ describe('حارسُ «لا تُمسّ شجرةٌ تُقرأ» (ق-٦٣١)', () 
     }
   });
 
+  /**
+   * ⚠️ **تعذّرُ السؤال يبقى مفتوحاً — بإعلانٍ صاخبٍ وعدّ** (`ق-٦٦٩`).
+   *
+   * التعذّرُ يُصنَع بلا بابٍ خلفيّ: `PATH` فارغٌ فلا يُوجد `powershell` ولا `ps`
+   * (`spawnSync` يعود بـ`ENOENT`) — وهو عينُ ما يقع حين تتجاوز الأداةُ مهلتَها.
+   * فيُقاس أن الحارس **يقول إنه لم يحكم** (لافتةٌ لا سطرُ سجلّ)، **ويعدّ**: الأولى
+   * `اليوم: 1`، والثانية `اليوم: 2` — فالتكرارُ يُرى لا يُستنتَج.
+   */
+  it('⚠️ تعذّرُ سؤال النظام ⇒ يمرّ بلافتةٍ صاخبة تقول «لم يحكم» وتعدّ التعذّرات — والعدُّ ينمو', () => {
+    const noTools = { ...process.env, PATH: '', Path: '' };
+    const first = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(editInRoot()), encoding: 'utf8', cwd: root, timeout: 30000, env: noTools });
+    expect(first.status).toBe(0);
+    expect(first.stderr).toContain('لم يحكم');
+    expect(first.stderr).toContain('╔'); // لافتةٌ لا سطر
+    expect(first.stderr).toContain('التعذّراتُ اليوم: 1 · الإجمال: 1');
+    const entries = readFileSync(join(root, '.claude', 'edit-while-reading.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { kind: string; scanMs?: number; error?: string });
+    const failed = entries.filter((e) => e.kind === 'scan-failed');
+    expect(failed).toHaveLength(1);
+    expect(typeof failed[0].scanMs).toBe('number');
+    expect(failed[0].error).toContain('ENOENT');
+
+    const second = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(editInRoot()), encoding: 'utf8', cwd: root, timeout: 30000, env: noTools });
+    expect(second.status).toBe(0);
+    expect(second.stderr).toContain('التعذّراتُ اليوم: 2 · الإجمال: 2');
+  });
+
   it('لا قارئ ⇒ يمرّ — الحالةُ الثانية المعلومة', async () => {
     reader!.kill();
     reader = null;
