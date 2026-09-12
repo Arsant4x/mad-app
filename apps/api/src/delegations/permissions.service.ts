@@ -157,10 +157,13 @@ export class PermissionsService {
    */
   private async rootFor(tenant: TenantContext): Promise<RootGrants> {
     if (tenant.actorType === 'COMPANY_USER') {
-      const user = await this.prisma.companyUser.findUniqueOrThrow({
-        where: { id: tenant.profileId },
-        include: { permissionTemplate: true },
-      });
+      // تحت سياق المنشأة (`ق-٦٥٧` · المرحلة ①) — كما صار يقرأ `tenant.guard.ts` نفسُه.
+      const user = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+        tx.companyUser.findUniqueOrThrow({
+          where: { id: tenant.profileId },
+          include: { permissionTemplate: true },
+        }),
+      );
       const t = user.permissionTemplate;
       return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
     }

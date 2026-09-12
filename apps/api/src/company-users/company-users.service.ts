@@ -1,19 +1,23 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
 import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 /** `branches` is the join rows only — deliberately not `include: { branch: true }`.
- * This service runs on the raw PrismaService (its own tables carry no RLS), and
- * `branches` *is* RLS-protected, so nesting it here makes every read of a
- * company user fail. The client already loads the branch list for its picker
- * and can resolve the names from these ids. */
+ * The client already loads the branch list for its picker and resolves the
+ * names from these ids, so the lighter shape is the contract.
+ *
+ * (Until `ق-٦٥٧` المرحلة ① this service ran on the raw PrismaService and the
+ * nested `branch` would have failed under RLS; every read now runs under the
+ * tenant context, but the response shape stays as it was.) */
 const COMPANY_USER_INCLUDE = { permissionTemplate: true, branches: { select: { branchId: true } } } as const;
+
+type Tx = Prisma.TransactionClient;
 
 /** Sub-accounts are managed only by the company owner itself (actorType
  * COMPANY), not by another employee sub-account — matches the mockup's
@@ -25,19 +29,30 @@ function assertIsCompanyOwner(actorType: string): void {
   }
 }
 
+/**
+ * 🔴 **كلُّ قراءةٍ وكتابةٍ هنا تحت سياق المنشأة** (`ق-٦٥٧` · المرحلة ①).
+ *
+ * `company_users` و`company_user_branches` بلا `RLS` اليوم، **وكانت هذه الخدمةُ
+ * تقرؤهما بلا سياق** — فإغلاقُهما (المرحلة ④) كان سيُسقطها: `deleteMany` يمسّ
+ * صفراً صامتاً، و`createMany` يصرخ بانتهاك السياسة، والقراءةُ تعود فارغةً بنجاح.
+ * **القياسُ الحيّ**: تسعةٌ من عشرين في `branches.e2e` حمراءُ تحت الطُّعم قبل
+ * النقل، وخضراءُ كلُّها بعده. السياقُ لا يغيّر شيئاً اليوم — ويجعل الإغلاقَ ممكناً.
+ */
 @Injectable()
 export class CompanyUsersService {
   private readonly logger = new Logger(CompanyUsersService.name);
 
+  // لا `PrismaService` خامٌ هنا بعد المرحلة ①: كلُّ نداءٍ يمرّ بسياق المنشأة.
   constructor(
-    private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly audit: AuditService,
   ) {}
 
   list(companyId: string, actorType: string) {
     assertIsCompanyOwner(actorType);
-    return this.prisma.companyUser.findMany({ where: { companyId }, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } });
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.companyUser.findMany({ where: { companyId }, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } }),
+    );
   }
 
   async create(
@@ -49,84 +64,88 @@ export class CompanyUsersService {
   ) {
     assertIsCompanyOwner(actorType);
 
-    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const template = await tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
       // Global preset or this company's own — a guessed id must never smuggle
       // in another company's template (actor rule, §3.5).
       if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
-    if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
+      if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
 
-    // قبل إنشاء أي شيء — فرع مرفوض بعد إنشاء الحساب كان سيترك حساباً
-    // نصف مُنشأ، وإعادة المحاولة تصطدم بـusername_taken.
-    if (dto.branchIds?.length) await this.assertBranchIdsAssignable(companyId, allowedBranchIds, dto.branchIds);
+      // قبل إنشاء أي شيء — فرع مرفوض بعد إنشاء الحساب كان سيترك حساباً
+      // نصف مُنشأ، وإعادة المحاولة تصطدم بـusername_taken.
+      if (dto.branchIds?.length) await this.assertBranchIdsAssignable(tx, allowedBranchIds, dto.branchIds);
 
-    const existing = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-    if (existing) {
-      /**
-       * ⚠️ **الاصطدام يُسجَّل — وقد صار يُسجَّل بنيةً لا بيدٍ هنا** (`ق-٥١١`).
-       *
-       * **كان `AuditInterceptor` يسجّل بـ`tap((result) => …)` — مسار النجاح
-       * وحده**، **فالإخفاقات لا تترك أثراً إطلاقاً**، و«تعدادُ الأسماء» **كلّه
-       * إخفاقات**: من يجرّب مئة اسم ليعرف أيّها موجود لا يُنشئ حساباً واحداً.
-       * **أي أن الهجوم كان غير مرئيٍّ بنيوياً لا «غير ملحوظ»** — **فسُجِّل هنا
-       * بيدٍ، في موضعٍ واحدٍ من عشرات**.
-       *
-       * ⇒ **والآن يسجّله المسجِّلُ نفسُه لكلّ `409` و`403`** — **فحُذف التسجيلُ
-       * اليدويّ لئلّا يُكتب القيدُ مرّتين**. 📌 **وقاعدتُه الثانية عُمّمت معه**:
-       * **لا يُسجَّل جسمُ الطلب في الرفض** — **فتسجيلُ ما حاوله يجعل السجلَّ
-       * نسخةً ثانية من التسريب**، والغرضُ كشفُ النمط لا حفظُ المحاولة.
-       */
-      throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
-    }
+      const existing = await tx.loginIdentity.findUnique({ where: { username: dto.username } });
+      if (existing) {
+        /**
+         * ⚠️ **الاصطدام يُسجَّل — وقد صار يُسجَّل بنيةً لا بيدٍ هنا** (`ق-٥١١`).
+         *
+         * **كان `AuditInterceptor` يسجّل بـ`tap((result) => …)` — مسار النجاح
+         * وحده**، **فالإخفاقات لا تترك أثراً إطلاقاً**، و«تعدادُ الأسماء» **كلّه
+         * إخفاقات**: من يجرّب مئة اسم ليعرف أيّها موجود لا يُنشئ حساباً واحداً.
+         * **أي أن الهجوم كان غير مرئيٍّ بنيوياً لا «غير ملحوظ»** — **فسُجِّل هنا
+         * بيدٍ، في موضعٍ واحدٍ من عشرات**.
+         *
+         * ⇒ **والآن يسجّله المسجِّلُ نفسُه لكلّ `409` و`403`** — **فحُذف التسجيلُ
+         * اليدويّ لئلّا يُكتب القيدُ مرّتين**. 📌 **وقاعدتُه الثانية عُمّمت معه**:
+         * **لا يُسجَّل جسمُ الطلب في الرفض** — **فتسجيلُ ما حاوله يجعل السجلَّ
+         * نسخةً ثانية من التسريب**، والغرضُ كشفُ النمط لا حفظُ المحاولة.
+         */
+        throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
+      }
 
-    const identity = await this.prisma.loginIdentity.create({
-      data: {
-        username: dto.username,
-        passwordHash: await argon2.hash(dto.password),
-        actorType: 'COMPANY_USER',
-        companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId } },
-      },
-      include: { companyUser: { include: COMPANY_USER_INCLUDE } },
+      const identity = await tx.loginIdentity.create({
+        data: {
+          username: dto.username,
+          passwordHash: await argon2.hash(dto.password),
+          actorType: 'COMPANY_USER',
+          companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId } },
+        },
+        include: { companyUser: { include: COMPANY_USER_INCLUDE } },
+      });
+
+      if (dto.branchIds?.length) {
+        await this.replaceBranchAssignments(tx, identity.companyUser!.id, dto.branchIds);
+        return tx.companyUser.findUniqueOrThrow({ where: { id: identity.companyUser!.id }, include: COMPANY_USER_INCLUDE });
+      }
+      return identity.companyUser!;
     });
-
-    if (dto.branchIds?.length) {
-      await this.replaceBranchAssignments(identity.companyUser!.id, dto.branchIds);
-      return this.prisma.companyUser.findUniqueOrThrow({ where: { id: identity.companyUser!.id }, include: COMPANY_USER_INCLUDE });
-    }
-    return identity.companyUser!;
   }
 
   async update(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateCompanyUserDto) {
     assertIsCompanyOwner(actorType);
 
-    const existing = await this.prisma.companyUser.findUnique({ where: { id } });
-    if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.companyUser.findUnique({ where: { id } });
+      if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
 
-    if (dto.permissionTemplateId) {
-      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
-      // Global preset or this company's own — a guessed id must never smuggle
-      // in another company's template (actor rule, §3.5).
-      if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
-      if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
-    }
+      if (dto.permissionTemplateId) {
+        const template = await tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true, isSystem: true } });
+        // Global preset or this company's own — a guessed id must never smuggle
+        // in another company's template (actor rule, §3.5).
+        if (!template || (template.companyId !== null && template.companyId !== companyId)) throw new NotFoundException(MSG.template_not_found);
+        if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_assignable);
+      }
 
-    if (dto.username) {
-      const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });
-      if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
-      await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
-    }
-    if (dto.password) {
-      await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
-    }
+      if (dto.username) {
+        const clash = await tx.loginIdentity.findUnique({ where: { username: dto.username } });
+        if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
+        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
+      }
+      if (dto.password) {
+        await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
+      }
 
-    if (dto.branchIds !== undefined) {
-      await this.assertBranchIdsAssignable(companyId, allowedBranchIds, dto.branchIds);
-      await this.replaceBranchAssignments(id, dto.branchIds);
-    }
+      if (dto.branchIds !== undefined) {
+        await this.assertBranchIdsAssignable(tx, allowedBranchIds, dto.branchIds);
+        await this.replaceBranchAssignments(tx, id, dto.branchIds);
+      }
 
-    return this.prisma.companyUser.update({
-      where: { id },
-      data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
-      include: COMPANY_USER_INCLUDE,
+      return tx.companyUser.update({
+        where: { id },
+        data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
+        include: COMPANY_USER_INCLUDE,
+      });
     });
   }
 
@@ -135,10 +154,8 @@ export class CompanyUsersService {
    * Same re-validation rule as any foreign id off a request body (see the
    * journal cross-tenant lesson).
    *
-   * Read via the *tenant-scoped* client: `branches` is RLS-protected, and the
-   * raw PrismaService this service otherwise uses (its own tables,
-   * company_users/login_identities, carry no RLS) would see zero rows here and
-   * reject every valid id. */
+   * Reads `branches` (RLS-protected) through the caller's tenant transaction —
+   * outside a context it would see zero rows and reject every valid id. */
   /**
    * **الفروعُ للمنشأة — ومن فروع المُسنِد** (`ق-٥١٤`).
    *
@@ -151,11 +168,9 @@ export class CompanyUsersService {
    * سلامةٌ ذاتيّةٌ تحلّ محلَّ سلامةٍ مستعارة** (`ق-٥١٣`): **حارسٌ يعتمد على
    * بوّابةٍ أخرى يسقط يوم تُفتَح تلك البوّابة، ولا يشتكي**.
    */
-  private async assertBranchIdsAssignable(companyId: string, allowedBranchIds: string[] | 'all', branchIds: string[]): Promise<void> {
+  private async assertBranchIdsAssignable(tx: Tx, allowedBranchIds: string[] | 'all', branchIds: string[]): Promise<void> {
     if (branchIds.length === 0) return;
-    const valid = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } }),
-    );
+    const valid = await tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } });
     if (valid.length !== branchIds.length) throw new NotFoundException(MSG.branch_not_found);
 
     // والإذنُ بعد الوجود — بالمصدر الواحد نفسِه الذي تمرّ به الخدماتُ الأخرى.
@@ -164,19 +179,21 @@ export class CompanyUsersService {
 
   /** Replace-all: the payload is the complete desired set, so diffing would
    * only add a way for the two to drift apart. Empty = unrestricted. */
-  private async replaceBranchAssignments(companyUserId: string, branchIds: string[]): Promise<void> {
-    await this.prisma.companyUserBranch.deleteMany({ where: { companyUserId } });
+  private async replaceBranchAssignments(tx: Tx, companyUserId: string, branchIds: string[]): Promise<void> {
+    await tx.companyUserBranch.deleteMany({ where: { companyUserId } });
     if (branchIds.length > 0) {
-      await this.prisma.companyUserBranch.createMany({ data: branchIds.map((branchId) => ({ companyUserId, branchId })) });
+      await tx.companyUserBranch.createMany({ data: branchIds.map((branchId) => ({ companyUserId, branchId })) });
     }
   }
 
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
     assertIsCompanyOwner(actorType);
 
-    const existing = await this.prisma.companyUser.findUnique({ where: { id } });
-    if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
+    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.companyUser.findUnique({ where: { id } });
+      if (!existing || existing.companyId !== companyId) throw new NotFoundException(MSG.company_user_not_found);
 
-    await this.prisma.loginIdentity.delete({ where: { id: existing.loginIdentityId } });
+      await tx.loginIdentity.delete({ where: { id: existing.loginIdentityId } });
+    });
   }
 }

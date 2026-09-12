@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SCREEN_ACTIONS, type ScreenAction, type ScreenActionMap } from './screens';
@@ -33,7 +34,10 @@ function sanitizeScreenActions(input: Record<string, string[]> | undefined, allo
 
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenantPrisma: TenantPrismaService,
+  ) {}
 
   /** What this caller may see: a company gets the global presets PLUS its own
    * templates — never a neighbour's. The platform admin sees everything. */
@@ -102,9 +106,22 @@ export class TemplatesService {
     const existing = await this.getOwned(id, scope);
     if (existing.isSystem) throw new ForbiddenException(MSG.template_system_undeletable);
 
+    /**
+     * 🔴 **عدُّ الحسابات الفرعية تحت سياق المنشأة حين يكون لها سياق** (`ق-٦٥٧` · المرحلة ①).
+     *
+     * قالبُ منشأةٍ لا يُسنَد إلا لحساباتها (`assertAssignable`) — فعدُّه داخل
+     * سياقها يعطي الجوابَ نفسَه اليوم، **ويبقى صادقاً يوم يُغلق `company_users`**.
+     *
+     * ⚠️ **والقالبُ العامّ (`scope.companyId === null`) يُعدّ بلا سياقٍ عمداً**:
+     * مدير المنصّة يحذف قالباً عامّاً قد تركبه حساباتٌ في **كلّ** المنشآت،
+     * **فعدٌّ تحت سياقٍ واحدٍ يكذب** (يرى منشأةً ويعمي عن الباقي). هذا مسارُ
+     * منصّةٍ يقرأ عبر المستأجرين — **ويُحسم في المرحلة ④ بقرارٍ لا هنا**:
+     * تحت `FORCE` سيعود صفراً ويُحذف قالبٌ مستعمَل. مُعلَنٌ لا مُرجَّح.
+     */
+    const countUsers = () => this.prisma.companyUser.count({ where: { permissionTemplateId: id } });
     const [companyCount, companyUserCount] = await Promise.all([
       this.prisma.company.count({ where: { permissionTemplateId: id } }),
-      this.prisma.companyUser.count({ where: { permissionTemplateId: id } }),
+      scope.companyId ? this.tenantPrisma.runInTenantContext(scope.companyId, (tx) => tx.companyUser.count({ where: { permissionTemplateId: id } })) : countUsers(),
     ]);
     if (companyCount + companyUserCount > 0) {
       throw new ConflictException(MSG.template_in_use);
