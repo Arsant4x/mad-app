@@ -2,6 +2,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): ما يُقرأ هنا **مخرَجُ الخطّاف وسطورُ
+// سجلّه** — رسالةُ الرفض بالاسم، وسطرُ `bypassed` بالسبب — وهي نصٌّ هو البيانات،
+// لا شيفرةٌ تُجرَّد. (والملفُّ لا يمسح `.ts` أصلاً — لكنّ حارسَ الإعلان يراه
+// قارئاً ومطابِقاً فيطلب الإعلان، **وإعلانٌ واعٍ خيرٌ من استثناء**.)
+readsDeclaredStrings();
 
 /**
  * ⭐ حارسُ «لا تُمسّ شجرةٌ تُقرأ» — **يُثبَت بالتشغيل لا بالقراءة** (`ق-٦٢٦` · `ق-٦٣١`).
@@ -73,9 +80,11 @@ describe('حارسُ «لا تُمسّ شجرةٌ تُقرأ» (ق-٦٣١)', () 
 
   it('🔴 قارئٌ يعمل + أمرُ صدفةٍ يغيّر الشجرة ⇒ يرفض — والجذرُ يُقرأ من نصّ الأمر لا من مجلد العمل', () => {
     // مجلدُ العمل مجلدٌ مؤقّتٌ **بلا `.git`** — كما في الجلسة الحقيقية — فلو
-    // قُرئ الجذرُ منه لعمي الحارس. والمسارُ في الأمر بصيغة MSYS كما يُكتب فعلاً.
-    const msys = '/' + root.replace(/^([A-Za-z]):/, (_m, d: string) => d.toLowerCase()).replace(/\\/g, '/');
-    const v = runHook({ tool_name: 'Bash', tool_input: { command: `cd ${msys} && git checkout main 2>&1 | tail -1` } }, tmpdir());
+    // قُرئ الجذرُ منه لعمي الحارس. والمسارُ في الأمر كما يُكتب فعلاً على كلّ
+    // مضيف: بصيغة MSYS على ويندوز (`/c/Users/…`)، ومطلقاً عادياً على غيره
+    // (`/tmp/…`) — ⚠️ **وأمسك السيرُ على لينكس أن الصيغةَ الثانية لم تكن تُقرأ**.
+    const shellPath = /^[A-Za-z]:/.test(root) ? '/' + root.replace(/^([A-Za-z]):/, (_m, d: string) => d.toLowerCase()).replace(/\\/g, '/') : root;
+    const v = runHook({ tool_name: 'Bash', tool_input: { command: `cd ${shellPath} && git checkout main 2>&1 | tail -1` } }, tmpdir());
     expect(v.status).toBe(2);
     expect(v.stderr).toContain(String(reader!.pid));
   });

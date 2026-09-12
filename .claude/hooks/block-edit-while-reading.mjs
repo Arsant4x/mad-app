@@ -95,8 +95,16 @@ function rootsFromCommand(cmd) {
     const r = repoRootOf(resolve(p));
     if (r) roots.add(r);
   };
-  for (const m of cmd.matchAll(/(?<![\w:])\/([a-zA-Z])\/([^\s'"&|;()]+)/g)) add(`${m[1].toUpperCase()}:\\${m[2].replace(/\//g, '\\')}`);
-  for (const m of cmd.matchAll(/\b([A-Za-z]):[\\/]([^\s'"&|;()]+)/g)) add(`${m[1].toUpperCase()}:\\${m[2].replace(/\//g, '\\')}`);
+  if (process.platform === 'win32') {
+    // صيغةُ `MSYS` (`/d/mad-app`) وصيغةُ ويندوز (`D:\mad-app` أو `D:/mad-app`).
+    for (const m of cmd.matchAll(/(?<![\w:])\/([a-zA-Z])\/([^\s'"&|;()]+)/g)) add(`${m[1].toUpperCase()}:\\${m[2].replace(/\//g, '\\')}`);
+    for (const m of cmd.matchAll(/\b([A-Za-z]):[\\/]([^\s'"&|;()]+)/g)) add(`${m[1].toUpperCase()}:\\${m[2].replace(/\//g, '\\')}`);
+  } else {
+    // ⚠️ **ومسارٌ مطلقٌ عاديٌّ على غير ويندوز** (`/home/dev/mad-app` · `/tmp/…`):
+    //    أمسكه السيرُ على لينكس — كانت الصيغتان أعلاه وحدَهما، **فحارسُ الصدفة
+    //    كان أعمى على كلّ مضيفٍ غير ويندوز** ولم يُرَ ذلك على جهاز التطوير.
+    for (const m of cmd.matchAll(/(?<![\w:.])\/[^\s'"&|;()]+/g)) add(m[0]);
+  }
   add(process.cwd());
   return [...roots];
 }
