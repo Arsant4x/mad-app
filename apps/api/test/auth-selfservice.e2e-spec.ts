@@ -76,6 +76,15 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     // And it can write — a real account, not a viewer.
     await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${accessToken}`).send({ name: `عميل ${username}` }).expect(201);
     expect(user.companyId).toBeTruthy();
+
+    // 🔴 (ق-٦٤٤) **القالبُ الذي يركب عليه التاجرُ ليس نظامياً**: كان التسجيلُ يأخذ
+    //    «أوّلَ قالبٍ عامٍّ شامل» بترتيب الإنشاء — وقالبُ المطوّر (`isSystem`) يسبقُ
+    //    القالبَ العامَّ بأجزاء ثانية في التأسيس. مقيسٌ: ٢٤٠ من ٥١٤ في التطوير
+    //    و٦ من ٦ في المنشور على قالب المطوّر. فوسمٌ «نظاميّ» يُمنح لمن يُنشئ نفسَه
+    //    لا يعني شيئاً، وكلُّ فحصٍ يعتمده يصير أعمى.
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: user.companyId! }, select: { permissionTemplate: { select: { id: true, isSystem: true, isAllScreens: true } } } });
+    expect(company.permissionTemplate.isSystem).toBe(false);
+    expect(company.permissionTemplate.isAllScreens).toBe(true);
   }, 60000);
 
   it('[SPEC 1.7] refuses a taken username', async () => {

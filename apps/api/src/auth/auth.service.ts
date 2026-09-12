@@ -358,7 +358,14 @@ export class AuthService {
 
     // The broadest template: a new merchant sees the whole product during its
     // trial; narrowing is what employee sub-accounts are for.
-    const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true, companyId: null }, orderBy: { createdAt: 'asc' } });
+    //
+    // 🔴 **وليس النظاميَّ** (`ق-٦٤٤`): كان الاختيارُ «أوّلَ قالبٍ عامٍّ شامل» بترتيب
+    // الإنشاء — وقالبُ المطوّر (`isSystem`) يُنشأ في التأسيس **قبل** القالب العامّ
+    // بأجزاء ثانية، فكان كلُّ تاجرٍ يُسجّل نفسَه يركب قالبَ المطوّر. مقيسٌ 2026-09-12:
+    // **٢٤٠ من ٥١٤** في التطوير **و٦ من ٦** في المنشور. **فوسمٌ «نظاميّ» يُمنح لمن يُنشئ
+    // نفسَه لا يعني شيئاً** — وكلُّ فحصٍ يعتمده (لا يُسنَد لحسابٍ فرعيّ · لا يُعدَّل ·
+    // لا يُحذف) يصير أعمى. والشرطُ صريحٌ هنا لا معلَّقٌ على ترتيب صفوفٍ لا نملكه.
+    const template = await this.prisma.permissionTemplate.findFirst({ where: { isAllScreens: true, companyId: null, isSystem: false }, orderBy: { createdAt: 'asc' } });
     if (!template) throw new ConflictException(MSG.register_unavailable);
 
     await createCompanyAccount(this.prisma, {
