@@ -130,17 +130,22 @@ export class SupportAccessService {
     });
   }
 
-  decide(companyId: string, grantId: string, approve: boolean) {
+  /**
+   * القرارُ — **ومعه من قرّر على الصفّ** (`ق-٦٤٦`): الطالبُ مديرُ منصّةٍ والمقرِّرُ
+   * المالكُ ببنية المسارَين، **فالفصلُ قائمٌ بالحرّاس** — لكنّ الصفَّ كان يحمل
+   * `decidedAt` بلا قائل، والاستدلالُ على المالك الواحد **ليس تسجيلاً**. بالشكل
+   * نفسِه الذي في الإجازات والشطب: **اسمُه وقتَ الفعل لا يُحلّ لاحقاً**.
+   */
+  decide(companyId: string, grantId: string, approve: boolean, decider: { id: string; name: string }) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const grant = await tx.supportAccessGrant.findUnique({ where: { id: grantId } });
       if (!grant) throw new NotFoundException(MSG.support_grant_not_found);
       if (grant.status !== 'PENDING') throw new ConflictException(MSG.support_grant_not_pending);
 
+      const decided = { decidedAt: new Date(), decidedById: decider.id, decidedByName: decider.name };
       return tx.supportAccessGrant.update({
         where: { id: grantId },
-        data: approve
-          ? { status: 'APPROVED', decidedAt: new Date(), expiresAt: new Date(Date.now() + grant.durationMinutes * 60_000) }
-          : { status: 'DENIED', decidedAt: new Date() },
+        data: approve ? { status: 'APPROVED', ...decided, expiresAt: new Date(Date.now() + grant.durationMinutes * 60_000) } : { status: 'DENIED', ...decided },
       });
     });
   }

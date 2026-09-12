@@ -2979,6 +2979,12 @@ model SupportAccessGrant {
   status      SupportGrantStatus @default(PENDING)
   requestedAt DateTime           @default(now())
   decidedAt   DateTime?
+  /// **ومن قرّر — على الصفّ لا استدلالاً** (`ق-٦٤٦`): كان الصفُّ يحمل من طلب ومتى
+  /// قُرّر **ولا يحمل من قرّر**؛ والمالكُ واحدٌ فيُستدلّ عليه — **والاستدلالُ ليس
+  /// تسجيلاً**. بالشكل نفسِه الذي في الإجازات والشطب — ثالثُها، ولا نمطان.
+  /// والفارغُ في صفوفٍ سبقت الحقل «غيرُ معلوم» لا «لا أحد» — ولا يُملأ بالظنّ.
+  decidedById   String?
+  decidedByName String?
   /// نهاية النافذة — انقضاؤها يميت الجلسة ولو بقي status=APPROVED.
   expiresAt   DateTime?
   /// أوّلُ دخولٍ فعليّ تحت الإذن (`ق-٥٣٠`) — يُكتب مرّةً، وعليه يُخطَر المالك.
