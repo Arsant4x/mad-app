@@ -31,13 +31,36 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-const HOOK = resolve(import.meta.dirname, 'block-shell-text-writes.mjs').replace(/\\/g, '/');
+/**
+ * ⭐ **البوّاباتُ تُقرأ من ملفّ الإعدادات المتتبَّع لا من قائمةٍ هنا** (`ق-٦٣١`).
+ *
+ * كان هذا الملفُّ يعرف بوّابةً واحدةً بالاسم. ولمّا أُضيفت ثانية (`block-edit-while-reading`)
+ * صار أمامنا أن نكتب اسمها هنا أيضاً — **قائمةٌ ثانية تفترق عن الأولى يوماً**
+ * فتُربط بوّابةٌ ولا تُربط أختُها **صامتةً**. ⇒ فيُقرأ ربطُ كلّ بوّابةٍ ومطابِقُها
+ * من `.claude/settings.json` نفسِه، **ويُحوَّل مسارُها النسبيّ إلى مطلق** — لا أكثر.
+ */
+const HOOKS_DIR = resolve(import.meta.dirname).replace(/\\/g, '/');
+const REPO_SETTINGS = resolve(import.meta.dirname, '..', 'settings.json');
 const SETTINGS_DIR = join(homedir(), '.claude');
 const SETTINGS = join(SETTINGS_DIR, 'settings.json');
-const COMMAND = `node ${HOOK}`;
 
-if (!existsSync(HOOK)) {
-  console.error(`⛔ ملف البوّابة غير موجود: ${HOOK}`);
+const repo = JSON.parse(readFileSync(REPO_SETTINGS, 'utf8'));
+/** `[{ matcher, command(absolute), file }]` — لكلّ أمرٍ في كلّ مطابِق. */
+const wanted = [];
+for (const entry of repo.hooks?.PreToolUse ?? []) {
+  for (const h of entry.hooks ?? []) {
+    const m = String(h.command ?? '').match(/^node\s+\.claude\/hooks\/([\w.-]+\.mjs)$/);
+    if (!m) continue;
+    const file = m[1];
+    if (!existsSync(join(HOOKS_DIR, file))) {
+      console.error(`⛔ ملف البوّابة غير موجود: ${join(HOOKS_DIR, file)}`);
+      process.exit(1);
+    }
+    wanted.push({ matcher: entry.matcher, command: `node ${HOOKS_DIR}/${file}`, file });
+  }
+}
+if (wanted.length === 0) {
+  console.error(`⛔ لا بوّابةَ مربوطةً في ${REPO_SETTINGS} — لا شيءَ يُثبَّت.`);
   process.exit(1);
 }
 
@@ -57,22 +80,37 @@ if (existsSync(SETTINGS)) {
 settings.hooks ??= {};
 settings.hooks.PreToolUse ??= [];
 
-const already = settings.hooks.PreToolUse.some((entry) =>
-  entry?.matcher === 'Bash' && (entry.hooks ?? []).some((h) => String(h?.command ?? '').includes('block-shell-text-writes.mjs')),
-);
+let added = 0;
+for (const w of wanted) {
+  const present = settings.hooks.PreToolUse.some(
+    (entry) => entry?.matcher === w.matcher && (entry.hooks ?? []).some((h) => String(h?.command ?? '').includes(w.file)),
+  );
+  if (present) continue;
+  let entry = settings.hooks.PreToolUse.find((e) => e?.matcher === w.matcher);
+  if (!entry) {
+    entry = { matcher: w.matcher, hooks: [] };
+    settings.hooks.PreToolUse.push(entry);
+  }
+  entry.hooks ??= [];
+  entry.hooks.push({ type: 'command', command: w.command });
+  added += 1;
+}
 
-if (already) {
-  console.log('✅ الربط قائمٌ على مستوى المستخدم — لا تغيير.');
+if (added === 0) {
+  console.log(`✅ الربطُ قائمٌ على مستوى المستخدم لكلّ البوّابات (${wanted.length}) — لا تغيير.`);
   process.exit(0);
 }
 
-settings.hooks.PreToolUse.push({ matcher: 'Bash', hooks: [{ type: 'command', command: COMMAND }] });
 writeFileSync(SETTINGS, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
 
 // **يُقرأ ما كُتب** — «نجح الأمر» ليس دليلاً على أن الناتج صحيح.
 const back = JSON.parse(readFileSync(SETTINGS, 'utf8'));
-const wired = (back.hooks?.PreToolUse ?? []).some((entry) =>
-  (entry.hooks ?? []).some((h) => String(h?.command ?? '').includes('block-shell-text-writes.mjs')),
+const missing = wanted.filter(
+  (w) => !(back.hooks?.PreToolUse ?? []).some((entry) => entry?.matcher === w.matcher && (entry.hooks ?? []).some((h) => String(h?.command ?? '').includes(w.file))),
 );
-console.log(wired ? `✅ رُبطت البوّابة في ${SETTINGS}\n   ${COMMAND}` : '⛔ كُتب الملف ولم يظهر الربط عند القراءة');
-process.exit(wired ? 0 : 1);
+if (missing.length) {
+  console.log(`⛔ كُتب الملف ولم يظهر عند القراءة: ${missing.map((w) => `${w.matcher} → ${w.file}`).join(' · ')}`);
+  process.exit(1);
+}
+console.log(`✅ رُبطت ${added} بوّابة/بوّابات في ${SETTINGS}:\n${wanted.map((w) => `   [${w.matcher}] ${w.command}`).join('\n')}`);
+process.exit(0);
