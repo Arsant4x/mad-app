@@ -1,5 +1,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from './source-scan.util';
+
+// 🔴 **يقرأ نصوصاً معلَنة عمداً** (`ق-٣٧٥`): البوّاباتُ تُثبَت **بعلاماتٍ حرفيّة**
+// في ملفّ الخطّاف (`TREE_MUTATION.test(cmd)` وأخواتها) — وهي سلاسلُ نصّية،
+// **فتجريدُ النصوص يمحو العلاماتِ فيعود الحارسُ بلا بوّابةٍ واحدة**.
+readsDeclaredStrings();
 
 /**
  * حارسٌ على **البوّابات نفسها** — تطبيقاً لـ§8.11.
@@ -91,15 +97,64 @@ describe('البوّابات التشغيلية موجودة ومربوطة (§8
    * فإعدادات المستخدم خارج المستودع، ولا يراها السير. وهو تمييز `§8.5` نفسه:
    * «مكتوبة» ليست «تعمل»، **والمكتوبُ هنا أن للإصلاح أمراً واحداً يُعاد**.
    */
-  it('ومُنفِّذ الربط على مستوى المستخدم موجودٌ ويشير إلى البوّابة نفسها', () => {
+  it('ومُنفِّذ الربط على مستوى المستخدم موجودٌ ويقرأ البوّاباتِ من settings.json لا من قائمةٍ فيه', () => {
     const installer = join(repoRoot, '.claude', 'hooks', 'install-user-hooks.mjs');
     expect(existsSync(installer)).toBe(true);
 
     const src = readFileSync(installer, 'utf8');
-    expect(src).toContain('block-shell-text-writes.mjs');
+    // ⭐ (ق-٦٣١) **لا قائمةَ ثانية**: كان يسمّي بوّابةً واحدةً بالاسم، فلمّا أُضيفت
+    //    ثانية صار يقرأ الربطَ كلَّه من ملفّ الإعدادات المتتبَّع — فاسمُ بوّابةٍ
+    //    مكتوبٌ هنا (خارج التعليق) يعني قائمةً تفترق يوماً عن الأولى.
+    expect(src).toContain("resolve(import.meta.dirname, '..', 'settings.json')");
+    const code = src.replace(/^\s*(\/\/.*|\*.*|\/\*.*)$/gm, '');
+    expect(code).not.toContain('block-shell-text-writes.mjs');
+    expect(code).not.toContain('block-edit-while-reading.mjs');
     // مسارٌ مطلق لا نسبيّ — وإلا أعاد العلّة التي بُني لها.
     expect(src).toContain('resolve(import.meta.dirname');
     // ولا يستبدل إعدادات المستخدم: يقرأ ثم يضيف.
     expect(src).toContain('settings.hooks.PreToolUse ??= []');
+  });
+});
+
+/**
+ * البوّابةُ الثانية — «لا تُمسّ شجرةٌ تُقرأ» (`ق-٦٢٦` · `ق-٦٣١`).
+ *
+ * وجودُها وربطُها هنا؛ **وسلوكُها يُثبَت بالتشغيل** في `edit-while-reading.spec.ts`
+ * — فهذا الملفّ يمنع الاختفاء لا الانحراف.
+ */
+describe('بوّابةُ «لا تُمسّ شجرةٌ تُقرأ» موجودةٌ ومربوطة (ق-٦٣١)', () => {
+  const repoRoot = join(__dirname, '..', '..', '..', '..');
+  const hookPath = join(repoRoot, '.claude', 'hooks', 'block-edit-while-reading.mjs');
+  const settingsPath = join(repoRoot, '.claude', 'settings.json');
+
+  it('ملف الخطّاف موجود', () => {
+    expect(existsSync(hookPath)).toBe(true);
+  });
+
+  it.each(['Bash', 'Edit|Write|MultiEdit|NotebookEdit'])('مربوطٌ في settings.json على PreToolUse لمطابِق «%s»', (matcher) => {
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+    const pre = settings?.hooks?.PreToolUse ?? [];
+    const entries = pre.filter((e: { matcher?: string }) => e.matcher === matcher);
+    expect(entries.length).toBeGreaterThan(0);
+    const commands = entries.flatMap((e: { hooks?: { command?: string }[] }) => (e.hooks ?? []).map((h) => h.command ?? ''));
+    expect(commands.some((c: string) => c.includes('block-edit-while-reading.mjs'))).toBe(true);
+  });
+
+  /** الشروطُ الحاكمة — تُقرأ من الملف لا تُوصف. */
+  const GATES: ReadonlyArray<readonly [string, string]> = [
+    ['أوامرُ الصدفة التي تغيّر الشجرة', 'TREE_MUTATION.test(cmd)'],
+    ['الجذورُ تُقرأ من نصّ الأمر لا من مجلد العمل', 'rootsFromCommand(cmd)'],
+    ['المنفذُ بأجلٍ لا دائم', 'ageMs <= BYPASS_TTL_MS'],
+    ['تعذّرُ السؤال يُعلَن ويُسجَّل لا يُقرأ نفياً', "trace('scan-failed'"],
+    ['الرفضُ يسمّي الحزمةَ العاملة', 'scan.readers.map((p) => `  · [${p.pid}]'],
+  ];
+
+  it.each(GATES)('بوّابة «%s» قائمة', (_name, marker) => {
+    expect(readFileSync(hookPath, 'utf8')).toContain(marker);
+  });
+
+  it('يرفض بـexit 2 — لا تحذيراً يمرّ', () => {
+    const src = readFileSync(hookPath, 'utf8');
+    expect((src.match(/process\.exit\(2\)/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 });

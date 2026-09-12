@@ -7,6 +7,19 @@
           {
             "type": "command",
             "command": "node .claude/hooks/block-shell-text-writes.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/block-edit-while-reading.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/block-edit-while-reading.mjs"
           }
         ]
       }
