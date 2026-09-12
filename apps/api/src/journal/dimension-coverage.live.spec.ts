@@ -30,7 +30,19 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  * كم استثنى.
  */
 
-const prisma = new PrismaClient();
+/**
+ * ⚠️ **بلا ذاكرة عباراتٍ محضَّرة في العميل** — مقيسٌ 2026-09-12 على قاعدة التطوير (`537` منشأة):
+ *
+ * الاستعلامُ الموحَّد نفسُه، على الاتصال نفسِه، **بعد ستّ تنفيذاتٍ لمنشآتٍ فارغة** يأخذ
+ * للمنشأة الكبيرة **`13–21 s`** (فتسقط المعاملةُ بمهلتها `5 s`) — بينما يأخذ **`35 ms`**
+ * منفرداً، و**`16 ms`** في `psql` بعبارةٍ محضَّرة بالتسلسل نفسِه. و`SET LOCAL
+ * plan_cache_mode = force_custom_plan` **لا يغيّر شيئاً** (`13 s`)؛ وتعطيلُ ذاكرة العبارات
+ * في عميل Prisma (`statement_cache_size=0`) **يعيده إلى `35 ms`**. فالعلّةُ في ذاكرة
+ * العميل لا في مخطّط القاعدة — وحدُّها معلَن: لا يُرى في `CI` (منشآتٌ قليلة).
+ */
+const withoutStatementCache = (url: string | undefined): string | undefined =>
+  url ? `${url}${url.includes('?') ? '&' : '?'}statement_cache_size=0` : url;
+const prisma = new PrismaClient({ datasources: { db: { url: withoutStatementCache(process.env.DATABASE_URL) } } });
 
 /** بداية سريان الموجة: الترحيل الذي أضاف الأعمدة. ما قبله لا بُعد له بحكم
  * الزمن لا بحكم عطل — ويُعلَن عدده بدل أن يُطرح صمتاً. */
