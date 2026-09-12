@@ -120,4 +120,35 @@ describe('Data export (e2e)', () => {
     expect(customers).toBeDefined();
     expect(customers.some((c) => c.id === markerId)).toBe(false);
   }, 60000);
+
+  /**
+   * 🔴 **النموذجان خارج قائمة العزل — بصفوفٍ حقيقيةٍ لمنشأةٍ أخرى** (2026-09-12).
+   *
+   * `Customer` في `TENANT_SCOPED_MODELS` فيُرشَّح بالامتداد — **والاختبارُ أعلاه كان
+   * يمرّ عليه وحدَه**. أمّا `CompanyUser` و`PermissionTemplate` فليسا في القائمة ولا
+   * سياسةَ عليهما، **فكانت حزمةُ المالك تحمل حساباتِ وقوالبَ كلّ المنشآت** (مقيسٌ:
+   * ٢٠ و٢٠ لغيره على منشأة العرض). **والطُعمُ حقيقيّ** (`ق-٦٥٠`): موظفُ المنشأة «أ»
+   * موجودٌ فعلاً — يظهر في حزمة «أ» ولا يظهر في حزمة «ب».
+   */
+  it('🔴 ولا حساباتِ ولا قوالبَ منشأةٍ أخرى — النموذجان اللذان لا يرشّحهما الامتداد', async () => {
+    const empName = `موظف exp-emp-${suffix}`;
+    const [a, b] = await Promise.all([
+      authA(request(app.getHttpServer()).get('/export')).expect(200),
+      request(app.getHttpServer()).get('/export').set('Authorization', `Bearer ${tokenB}`).expect(200),
+    ]);
+    const usersA = a.body.data[delegateName('CompanyUser')] as { name: string; companyId: string }[];
+    const usersB = b.body.data[delegateName('CompanyUser')] as { name: string; companyId: string }[];
+    const templatesB = b.body.data[delegateName('PermissionTemplate')] as { companyId: string | null }[];
+    expect(usersA).toBeDefined();
+    expect(usersB).toBeDefined();
+    expect(templatesB).toBeDefined();
+
+    // الوجودُ أولاً: موظفُ «أ» في حزمة «أ» — فالطُعمُ يصل.
+    expect(usersA.some((u) => u.name === empName)).toBe(true);
+    // ثم الغياب: لا يظهر في حزمة «ب»، **ولا أيُّ صفٍّ لمنشأةٍ غيرِ «ب» في النموذجين**.
+    const companyB = (JSON.parse(Buffer.from(tokenB.split('.')[1], 'base64').toString()) as { companyId: string }).companyId;
+    expect(usersB.some((u) => u.name === empName)).toBe(false);
+    expect(usersB.every((u) => u.companyId === companyB)).toBe(true);
+    expect(templatesB.every((t) => t.companyId === companyB)).toBe(true);
+  }, 60000);
 });

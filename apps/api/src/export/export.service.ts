@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { TENANT_SCOPED_MODELS } from '../common/tenant/tenant-scope.extension';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { AuditService } from '../audit/audit.service';
@@ -132,12 +133,29 @@ export class ExportService {
       const data: Record<string, unknown[]> = {};
       const rows: Record<string, number> = {};
 
+      /**
+       * 🔴 **المرشّحُ يُكتب صراحةً لما لا يحقنه الامتداد** (2026-09-12).
+       *
+       * `findMany()` بلا وسائط داخل سياق المستأجر **يُرشَّح بالامتداد لنماذج
+       * `TENANT_SCOPED_MODELS` وحدَها** — و`CompanyUser` و`PermissionTemplate` ليسا
+       * فيها (عمداً، حتى يُحسم مبدأ القاعدة) **وبلا سياسةٍ في القاعدة أيضاً**.
+       * فكانت الحزمةُ تحمل **حساباتِ الموظفين وقوالبَ كلّ المنشآت**: مقيسٌ بالتشغيل
+       * على منشأة العرض — `42` حساباً منها `20` لغيرها، و`130` قالباً منها `20` لغيرها.
+       * **تسريبٌ بين مستأجرين عبر تصدير المالك ولقطة الإغلاق** — كان التعليقُ في
+       * `export-scope` يقول «المرشّحُ الطبيعيُّ `companyId` يتكفّل به»، **وهو لا يوجد**.
+       *
+       * فالمرشّحُ هنا **يُشتقّ من القائمة نفسِها**: ما ليس فيها يُقيَّد بـ`companyId`
+       * صراحةً — والعدُّ بالمرشّح نفسِه كي تبقى المطابقةُ سؤالاً عن الشيء نفسِه.
+       */
+      const argsFor = (model: string): { where: { companyId: string } } | undefined =>
+        TENANT_SCOPED_MODELS.has(model as Prisma.ModelName) ? undefined : { where: { companyId } };
+
       for (const model of models) {
         const delegate = (tx as unknown as Record<string, DelegateLike>)[delegateName(model)];
         if (!delegate?.findMany) {
           throw new InternalServerErrorException(`مندوب Prisma غير موجود للنموذج ${model}`);
         }
-        data[delegateName(model)] = await delegate.findMany();
+        data[delegateName(model)] = await delegate.findMany(argsFor(model));
       }
 
       // العدّ **بعد** الجمع وفي اللقطة نفسها — سؤالٌ مستقلّ عن نفس اللحظة.
@@ -145,7 +163,7 @@ export class ExportService {
       for (const model of models) {
         const key = delegateName(model);
         const delegate = (tx as unknown as Record<string, DelegateLike>)[key];
-        const counted = await delegate.count();
+        const counted = await delegate.count(argsFor(model));
         rows[key] = counted;
         if (counted !== data[key].length) {
           mismatches.push(`${key}: الحزمة ${data[key].length} · القاعدة ${counted}`);
