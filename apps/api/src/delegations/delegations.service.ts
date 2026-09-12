@@ -150,7 +150,10 @@ export class DelegationsService {
     if (granteeId === tenant.profileId) throw new BadRequestException(MSG.delegation_self);
 
     // الموظف موجودٌ في **هذه** المنشأة — لا معرّفٌ يُرسَل بيد.
-    const grantee = await this.prisma.companyUser.findFirst({ where: { id: granteeId, companyId: tenant.companyId }, select: { id: true } });
+    // وتحت سياقها (`ق-٦٥٧` · المرحلة ①): الجوابُ نفسُه اليوم، ويبقى يوم يُغلق `company_users`.
+    const grantee = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.companyUser.findFirst({ where: { id: granteeId, companyId: tenant.companyId }, select: { id: true } }),
+    );
     if (!grantee) throw new NotFoundException(MSG.delegation_grantee_not_found);
 
     const rows = await this.rows(tenant.companyId);
@@ -242,7 +245,10 @@ export class DelegationsService {
   /** سقف القالب — بنفس المصدر الذي يقرأه `tenant.guard.ts`. */
   private async rootFor(tenant: TenantContext) {
     if (tenant.actorType === 'COMPANY_USER') {
-      const u = await this.prisma.companyUser.findUniqueOrThrow({ where: { id: tenant.profileId }, include: { permissionTemplate: true } });
+      // تحت سياق المنشأة (`ق-٦٥٧` · المرحلة ①) — كما صار يقرأ `tenant.guard.ts` نفسُه.
+      const u = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+        tx.companyUser.findUniqueOrThrow({ where: { id: tenant.profileId }, include: { permissionTemplate: true } }),
+      );
       return rootGrantsFrom(u.permissionTemplate.isAllScreens, u.permissionTemplate.allowedScreens, u.permissionTemplate.screenActions as ScreenActionMap | null);
     }
     const c = await this.prisma.company.findUniqueOrThrow({ where: { id: tenant.companyId }, include: { permissionTemplate: true } });

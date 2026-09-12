@@ -160,10 +160,21 @@ export class TenantGuard implements CanActivate {
     let canEditMasterData = false;
 
     if (payload.actorType === 'COMPANY_USER') {
-      const companyUser = await this.prisma.companyUser.findUniqueOrThrow({
-        where: { id: payload.profileId },
-        include: { permissionTemplate: true, branches: { select: { branchId: true } } },
-      });
+      /**
+       * 🔴 **تحت سياق المنشأة لا خارجه** (`ق-٦٥٧` · المرحلة ①).
+       *
+       * كانت هذه القراءةُ بلا سياق، **وهي التي تحمل فروعَ الموظّف**: لو رُفع
+       * `FORCE` على `company_user_branches` (المرحلة ④) لعادت `branches` **فارغةً
+       * بنجاح** — فيُقرأ الموظّفُ المضيَّق **«بلا تضييق»** ويصير `allowedBranchIds`
+       * `'all'`: **أسوأُ كسورِ العائق المقيسة**. السياقُ هنا لا يغيّر شيئاً اليوم
+       * (لا سياسةَ بعد) — ويجعل الإغلاقَ ممكناً غداً.
+       */
+      const companyUser = await this.tenantPrisma.runInTenantContext(payload.companyId, (tx) =>
+        tx.companyUser.findUniqueOrThrow({
+          where: { id: payload.profileId },
+          include: { permissionTemplate: true, branches: { select: { branchId: true } } },
+        }),
+      );
       if (companyUser.status !== 'ACTIVE') {
         throw new AccountFrozenException();
       }

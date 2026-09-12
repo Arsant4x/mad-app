@@ -141,7 +141,10 @@ export class TasksService {
     if (kind === TaskAssigneeKind.OWNER) {
       if (dto.assigneeId !== tenant.companyId) throw new NotFoundException(MSG.task_assignee_not_found);
     } else {
-      const assignee = await this.prisma.companyUser.findFirst({ where: { id: dto.assigneeId, companyId: tenant.companyId }, select: { id: true } });
+      // تحت سياق المنشأة (`ق-٦٥٧` · المرحلة ①) — الجوابُ نفسُه اليوم، ويبقى يوم يُغلق `company_users`.
+      const assignee = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+        tx.companyUser.findFirst({ where: { id: dto.assigneeId, companyId: tenant.companyId }, select: { id: true } }),
+      );
       if (!assignee) throw new NotFoundException(MSG.task_assignee_not_found);
     }
 
