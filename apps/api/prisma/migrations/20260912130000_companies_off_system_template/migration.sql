@@ -11,6 +11,11 @@
 --   ③ على التطوير أولاً، والمنشورُ مع أوّل إعادة نشرٍ بهذه الهجرة — لا بيدٍ على صفوفه.
 --
 -- "companies" بلا RLS (لا companyId فيه) — فلا رفعَ لـFORCE هنا، والعدُّ يرى الصفوفَ كلَّها.
+--
+-- ⚠️ العدُّ قبل البحث عن الهدف (ق-٦٥٩): على قاعدةٍ فارغة (CI · نشرٌ من الصفر) لا قوالبَ
+-- بعدُ لأن البذرة تلي الهجرات — وصياغةٌ أولى بحثت عن الهدف أولاً فصرخت على قاعدةٍ لا
+-- منشأةَ فيها تُنقل، وأسقطت db-integration وplaywright في #325. فلا شيءَ يُنقل = لا
+-- هدفَ يلزم؛ ولا هدفَ مع شيءٍ يُنقل = صراخ.
 DO $$
 DECLARE
   target_id    TEXT;
@@ -18,18 +23,23 @@ DECLARE
   moved        INTEGER;
   after_count  INTEGER;
 BEGIN
+  SELECT count(*) INTO before_count
+    FROM companies c JOIN permission_templates t ON t.id = c."permissionTemplateId"
+   WHERE t."isSystem" = true;
+
+  IF before_count = 0 THEN
+    RAISE NOTICE 'ق-٦٥١: لا منشأةَ على قالبٍ نظاميّ — لا شيءَ يُنقل';
+    RETURN;
+  END IF;
+
   SELECT id INTO target_id
     FROM permission_templates
    WHERE "companyId" IS NULL AND "isSystem" = false AND "isAllScreens" = true
    ORDER BY "createdAt" ASC
    LIMIT 1;
   IF target_id IS NULL THEN
-    RAISE EXCEPTION 'ق-٦٥١: لا قالبَ عامّاً شاملاً غيرَ نظاميّ — لا تعبئةَ بالظنّ';
+    RAISE EXCEPTION 'ق-٦٥١: % منشأة على قالبٍ نظاميّ ولا قالبَ عامّاً شاملاً غيرَ نظاميّ — لا تعبئةَ بالظنّ', before_count;
   END IF;
-
-  SELECT count(*) INTO before_count
-    FROM companies c JOIN permission_templates t ON t.id = c."permissionTemplateId"
-   WHERE t."isSystem" = true;
 
   UPDATE companies c
      SET "permissionTemplateId" = target_id
