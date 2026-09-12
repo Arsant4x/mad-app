@@ -11,6 +11,11 @@ import { apiClient } from './client';
 export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CANCELLED';
 /** الأولوية (SPEC 14.2) — القائمةُ المغلقة في الخادم، وهذه نسختُها للعرض. */
 export type TaskPriority = 'URGENT' | 'HIGH' | 'NORMAL';
+/**
+ * وسمُ فضاء المكلَّف (`ق-٦٣٩`): `OWNER` ⇒ `assigneeId` هو معرّفُ المنشأة (المالك)،
+ * `USER` ⇒ معرّفُ حسابٍ فرعيّ. **إلزاميٌّ عند الإنشاء** — والخادمُ يردّ `400` بدونه.
+ */
+export type TaskAssigneeKind = 'OWNER' | 'USER';
 
 /** سطرٌ من سجل المهمّة — انتقالٌ، أو تعليقٌ حين يستوي الطرفان. */
 export interface TaskLogLine {
@@ -39,6 +44,7 @@ export interface MyTask {
   priority: TaskPriority;
   department: string | null;
   assigneeId: string;
+  assigneeKind: TaskAssigneeKind;
   createdById: string;
   dueAt: string | null;
   isOverdue: boolean;
@@ -54,6 +60,7 @@ export interface TaskCounters {
 export interface CreateTaskInput {
   title: string;
   assigneeId: string;
+  assigneeKind: TaskAssigneeKind;
   targetScreen?: string;
   targetId?: string;
   note?: string;

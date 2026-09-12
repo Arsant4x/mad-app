@@ -8,7 +8,7 @@ readsDeclaredStrings();
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { ALLOWED_SCREENS } from '../templates/screens';
-import { TASK_STATUSES } from './task-model';
+import { TASK_ASSIGNEE_KINDS, TASK_STATUSES } from './task-model';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { TransitionTaskDto } from './dto/transition-task.dto';
 
@@ -76,9 +76,13 @@ describe('القاعدة ①: المكلَّف يرى وجود المهمة ول
     }
   });
 
-  it('⭐ الاستعلام مقيَّدٌ بالمكلَّف — لا يقرأ مهام غيره', () => {
+  it('⭐ الاستعلام مقيَّدٌ بالمكلَّف — بالوسم والمعرّف معاً، لا يقرأ مهام غيره', () => {
+    // (ق-٦٣٩) كان القيدُ `"assigneeId" = profileId` وحدَه — وللمالك profileId معرّفُ
+    // المنشأة الذي لا يكتبه الإسناد قطّ، فعادت «مهامي» فارغةً له بنجاح. فالقيدُ الآن
+    // على الفضاء والمعرّف معاً — **وقيدٌ على المعرّف وحدَه يُسقط هذا الحارس**.
     const code = service();
-    expect(code).toMatch(/FROM "tasks" WHERE "assigneeId" = /);
+    expect(code).toMatch(/FROM "tasks" WHERE "assigneeKind" = \$\{kind\}::"TaskAssigneeKind" AND "assigneeId" = /);
+    expect(code).not.toMatch(/FROM "tasks" WHERE "assigneeId" = /);
   });
 
   it('⭐ والمُسنِد لا يربط مستنداً لا يراه — الطرف الآخر من القاعدة', () => {
@@ -152,8 +156,20 @@ describe('القاعدة الرابعة: الحالة والرابطة من قا
 
 describe('مفردات الـDTO مشتقّة من مصدرها', () => {
   const dto = (over: Partial<CreateTaskDto> = {}) =>
-    plainToInstance(CreateTaskDto, { title: 'مراجعة عقد', assigneeId: 'u1', ...over });
+    plainToInstance(CreateTaskDto, { title: 'مراجعة عقد', assigneeId: 'u1', assigneeKind: 'USER', ...over });
   const errs = (d: CreateTaskDto) => validateSync(d).map((e) => e.property);
+
+  /**
+   * ⭐ (ق-٦٣٩/①) **الوسمُ إلزاميٌّ بلا افتراضٍ صامت**: طلبٌ بلا `assigneeKind` يُردّ
+   * عند الباب، ووسمٌ مخترَعٌ كذلك — والقائمةُ **مقروءةٌ من نوع القاعدة** لا منسوخة.
+   */
+  it('🔴 وسمُ المكلَّف إلزاميٌّ — والفراغُ والمخترَعُ مرفوضان، وكلُّ قيمةٍ في النوع مقبولة', () => {
+    expect(errs(plainToInstance(CreateTaskDto, { title: 'مراجعة عقد', assigneeId: 'u1' }))).toContain('assigneeKind');
+    expect(errs(dto({ assigneeKind: 'MANAGER' }))).toContain('assigneeKind');
+    for (const k of TASK_ASSIGNEE_KINDS) {
+      expect({ k, bad: errs(dto({ assigneeKind: k })) }).toEqual({ k, bad: [] });
+    }
+  });
 
   it('⭐ كل شاشة في `ALLOWED_SCREENS` مقبولة، والمخترَع مرفوض', () => {
     const rejected = ALLOWED_SCREENS.filter((s) => errs(dto({ targetScreen: s, targetId: 'x' })).includes('targetScreen'));

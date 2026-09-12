@@ -1,4 +1,4 @@
-import { TaskPriority } from '@prisma/client';
+import { TaskAssigneeKind, TaskPriority } from '@prisma/client';
 import { ALLOWED_SCREENS, ScreenAction } from '../templates/screens';
 
 /**
@@ -6,6 +6,26 @@ import { ALLOWED_SCREENS, ScreenAction } from '../templates/screens';
  * المغلقةُ في `TaskPriority` هي المصدر، وهذه إسقاطُها للتحقّق في `DTO`.
  */
 export const TASK_PRIORITIES = Object.values(TaskPriority) as readonly TaskPriority[];
+
+/**
+ * ⭐ **وسمُ فضاء المكلَّف** (`ق-٦٣٩`) — **مقروءٌ من نوع القاعدة لا منسوخ**.
+ *
+ * `assigneeId` حقلٌ نصّيٌّ بلا مفتاحٍ أجنبيّ؛ **والوسمُ يقول أيَّ فضاءٍ يحمله**:
+ * `OWNER` ⇒ معرّفُ المنشأة نفسِها، `USER` ⇒ معرّفُ حسابٍ فرعيّ. **وبلا وسمٍ
+ * تعود المقارنةُ بـ`profileId` مقارنةَ فضاءَين** (`ق-٦٢٩`) — تصحّ في شكلٍ وتكذب في آخر.
+ */
+export const TASK_ASSIGNEE_KINDS = Object.values(TaskAssigneeKind) as readonly TaskAssigneeKind[];
+
+/**
+ * فضاءُ الفاعل الحاليّ — **مشتقٌّ من نوعه لا مُرسَل**: المالكُ (`COMPANY`) في فضاء
+ * `OWNER`، والحسابُ الفرعيّ في فضاء `USER`. **ومديرُ المنصّة ليس مكلَّفاً ممكناً** —
+ * فلا فضاءَ له، والسؤالُ عنه يُردّ `null` لا وسماً مخترَعاً.
+ */
+export function assigneeKindOf(actorType: string): TaskAssigneeKind | null {
+  if (actorType === 'COMPANY') return TaskAssigneeKind.OWNER;
+  if (actorType === 'COMPANY_USER') return TaskAssigneeKind.USER;
+  return null;
+}
 import { Grant, grant } from '../delegations/permission-tree';
 import { DelegationLink, hasGrant, RootGrants } from '../delegations/intersection';
 

@@ -1,12 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { TaskPriority } from '@prisma/client';
+import { TaskAssigneeKind, TaskPriority } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { TenantContext } from '../auth/types';
 import { Grant } from '../delegations/permission-tree';
 import { PermissionsService } from '../delegations/permissions.service';
-import { TaskStatus, currentDueDate, mayTransition } from './task-model';
+import { TaskStatus, assigneeKindOf, currentDueDate, mayTransition } from './task-model';
 import { TaskView, viewFor } from './task-visibility';
 
 /**
@@ -42,6 +42,8 @@ interface TaskRow {
   title: string;
   createdById: string;
   assigneeId: string;
+  /** فضاءُ `assigneeId` — `OWNER` معرّفُ المنشأة، `USER` معرّفُ حسابٍ فرعيّ (`ق-٦٣٩`). */
+  assigneeKind: TaskAssigneeKind;
   targetScreen: string | null;
   targetId: string | null;
   status: TaskStatus;
@@ -71,6 +73,7 @@ export interface MyTaskView extends TaskView {
   priority: TaskPriority;
   department: string | null;
   assigneeId: string;
+  assigneeKind: TaskAssigneeKind;
   createdById: string;
   /** الموعد الحالي — مشتقٌّ، و`null` لمهمةٍ بلا موعد. */
   dueAt: Date | null;
@@ -94,9 +97,15 @@ export class TasksService {
     private readonly permissions: PermissionsService,
   ) {}
 
-  /** مهام الفاعل — **ما كُلِّف به**، لا كل مهام المنشأة. */
+  /**
+   * مهام الفاعل — **ما كُلِّف به**، لا كل مهام المنشأة (`ق-٦٣٤`: الاسمُ يحمل معناه).
+   *
+   * ⭐ **والقراءةُ بالوسم والمعرّف معاً** (`ق-٦٣٩`): كان الاستعلامُ `assigneeId = profileId`
+   * وحدَه — **وللمالك `profileId` معرّفُ المنشأة الذي لا يكتبه الإسنادُ قطّ**، فعادت
+   * «مهامي» فارغةً له **بنجاحٍ وبنيوياً**. والوسمُ يجعل الطرفَين في فضاءٍ واحدٍ بالبناء.
+   */
   async mine(tenant: TenantContext, now: Date): Promise<MyTaskView[]> {
-    const rows = await this.rowsFor(tenant.companyId, tenant.profileId);
+    const rows = await this.rowsFor(tenant);
     const grants = await this.grantsOf(tenant);
     return rows.map((r) => this.toView(r, grants, now));
   }
@@ -108,7 +117,7 @@ export class TasksService {
    * يوجد. التأخّر دالةُ الزمن، وعمودٌ يحمله يصير كذباً بمرور يوم.
    */
   async counters(tenant: TenantContext, now: Date): Promise<TaskCounters> {
-    const rows = await this.rowsFor(tenant.companyId, tenant.profileId);
+    const rows = await this.rowsFor(tenant); // الاستعلامُ نفسُه الذي تقرأ به «مهامي» — فيتبعانها بالبناء (`ق-٦٣٤`)
     const live = rows.filter((r) => r.status !== 'DONE' && r.status !== 'CANCELLED');
     return {
       open: live.length,
@@ -119,11 +128,22 @@ export class TasksService {
   /** يُسند مهمة — والإسناد **لا يمنح شيئاً**. */
   async create(
     tenant: TenantContext,
-    dto: { title: string; assigneeId: string; targetScreen?: string; targetId?: string; note?: string; recurEveryDays?: number; dueAnchor?: string; priority?: string; department?: string },
+    dto: { title: string; assigneeId: string; assigneeKind: string; targetScreen?: string; targetId?: string; note?: string; recurEveryDays?: number; dueAnchor?: string; priority?: string; department?: string },
     now: Date,
   ): Promise<MyTaskView> {
-    const assignee = await this.prisma.companyUser.findFirst({ where: { id: dto.assigneeId, companyId: tenant.companyId }, select: { id: true } });
-    if (!assignee) throw new NotFoundException(MSG.task_assignee_not_found);
+    /**
+     * ⭐ **المكلَّفُ يُتحقَّق منه في فضائه الذي وُسم به** (`ق-٦٣٩`) — لا في فضاءٍ واحدٍ للجميع:
+     *   · `USER`  ⇒ حسابٌ فرعيٌّ في هذه المنشأة (كما كان).
+     *   · `OWNER` ⇒ **معرّفُ المنشأة نفسِها لا غير** — فالمالكُ واحدٌ ومعرّفُه معلوم،
+     *     **ومعرّفُ حسابٍ فرعيٍّ موسومٌ `OWNER` يُرفض** (والقيدُ في القاعدة يمسكه ثانيةً).
+     */
+    const kind = dto.assigneeKind as TaskAssigneeKind;
+    if (kind === TaskAssigneeKind.OWNER) {
+      if (dto.assigneeId !== tenant.companyId) throw new NotFoundException(MSG.task_assignee_not_found);
+    } else {
+      const assignee = await this.prisma.companyUser.findFirst({ where: { id: dto.assigneeId, companyId: tenant.companyId }, select: { id: true } });
+      if (!assignee) throw new NotFoundException(MSG.task_assignee_not_found);
+    }
 
     // ⚠️ الرابطة كلٌّ أو لا شيء — تُفحص هنا **وفي القاعدة**. الفحص هنا
     // يعطي رسالةً عربية، والقيد هناك يمسك ما لا يمرّ بهذه الدالة.
@@ -150,8 +170,8 @@ export class TasksService {
       const priority = (dto.priority ?? 'NORMAL') as TaskPriority;
       const department = dto.department?.trim() || null;
       const [created] = await tx.$queryRaw<TaskRow[]>`
-        INSERT INTO "tasks" ("id", "companyId", "title", "createdById", "assigneeId", "targetScreen", "targetId", "status", "note", "recurEveryDays", "dueAnchor", "priority", "department")
-        VALUES (gen_random_uuid()::text, ${tenant.companyId}, ${dto.title}, ${tenant.profileId}, ${dto.assigneeId},
+        INSERT INTO "tasks" ("id", "companyId", "title", "createdById", "assigneeId", "assigneeKind", "targetScreen", "targetId", "status", "note", "recurEveryDays", "dueAnchor", "priority", "department")
+        VALUES (gen_random_uuid()::text, ${tenant.companyId}, ${dto.title}, ${tenant.profileId}, ${dto.assigneeId}, ${kind}::"TaskAssigneeKind",
                 ${dto.targetScreen ?? null}, ${dto.targetId ?? null}, 'OPEN', ${dto.note ?? null}, ${recur},
                 ${dto.dueAnchor ? new Date(dto.dueAnchor) : null}, ${priority}::"TaskPriority", ${department})
         RETURNING *
@@ -230,27 +250,39 @@ export class TasksService {
   /**
    * المهمّةُ بطرفيها — وغيرُهما يُردّ `403` لا `404`: وجودُها معلومٌ من الإسناد، وحوارُها ليس له.
    *
-   * ⚠️ **والمقارنةُ في فضاء `profileId`**: `assigneeId` يُكتب من `company_users`
-   * و`createdById` من `profileId` — **فللمالك (`profileId` = معرّفُ المنشأة)
-   * لا يلتقي الطرفُ الأول أبداً** (`ق-٦٢٩`)، **ويلتقي الثاني حين يكون هو المُسنِد**.
-   * ومن استثنى المالكَ (`ownerExempt`) قال ذلك صراحةً، لا سهواً.
+   * ⭐ **والمكلَّفُ يُقارَن في فضائه الموسوم** (`ق-٦٣٩`): `(assigneeKind, assigneeId)` مع
+   * `(فضاءُ الفاعل, profileId)` — فلا تعود مقارنةَ فضاءَين تمرّ دائماً (`ق-٦٢٩`).
+   * **و`createdById` يُكتب من `profileId` فيُقارَن به في فضائه نفسِه** — وهو من الأعمدة
+   * التسعة والأربعين بلا وسم (`ق-٦٤١`)، يُقاس أثرُها حين يُمسّ. ومن استثنى المالكَ
+   * (`ownerExempt`) قال ذلك صراحةً، لا سهواً.
    */
   private async partyTask(tenant: TenantContext, id: string, opts: { ownerExempt?: boolean; message?: string } = {}): Promise<TaskRow> {
     const rows = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "id" = ${id}`);
     const task = rows[0];
     if (!task) throw new NotFoundException(MSG.task_not_found);
     if (opts.ownerExempt && tenant.actorType === 'COMPANY') return task;
-    if (task.assigneeId !== tenant.profileId && task.createdById !== tenant.profileId) throw new ForbiddenException(opts.message ?? MSG.task_comment_forbidden);
+    if (!this.isAssignee(task, tenant) && task.createdById !== tenant.profileId) throw new ForbiddenException(opts.message ?? MSG.task_comment_forbidden);
     return task;
+  }
+
+  /** الفاعلُ هو المكلَّف — **بالوسم والمعرّف معاً**، لا بالمعرّف وحدَه. */
+  private isAssignee(task: TaskRow, tenant: TenantContext): boolean {
+    const kind = assigneeKindOf(tenant.actorType);
+    return kind !== null && task.assigneeKind === kind && task.assigneeId === tenant.profileId;
   }
 
   /**
    * ⚠️ تحت سياق المستأجر — `tasks` عليه `RLS ENABLE + FORCE`، وقراءةٌ
    * خارجه تعود **فارغةً بنجاح**: «لا مهام» و«لم أرَ شيئاً» يبدوان سواء.
+   *
+   * ⭐ **والاستعلامُ بالوسم والمعرّف معاً** (`ق-٦٣٩`): فاعلٌ لا فضاءَ له (مديرُ منصّة)
+   * يُردّ فارغاً **بقرارٍ لا بعمى** — فهو ليس مكلَّفاً ممكناً أصلاً.
    */
-  private rowsFor(companyId: string, assigneeId: string): Promise<TaskRow[]> {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "assigneeId" = ${assigneeId} ORDER BY "createdAt" DESC`,
+  private rowsFor(tenant: TenantContext): Promise<TaskRow[]> {
+    const kind = assigneeKindOf(tenant.actorType);
+    if (kind === null) return Promise.resolve([]);
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "assigneeKind" = ${kind}::"TaskAssigneeKind" AND "assigneeId" = ${tenant.profileId} ORDER BY "createdAt" DESC`,
     );
   }
 
@@ -281,6 +313,7 @@ export class TasksService {
       priority: r.priority,
       department: r.department,
       assigneeId: r.assigneeId,
+      assigneeKind: r.assigneeKind,
       createdById: r.createdById,
       dueAt,
       isOverdue: dueAt !== null && dueAt < now && r.status !== 'DONE' && r.status !== 'CANCELLED',
