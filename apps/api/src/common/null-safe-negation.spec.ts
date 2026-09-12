@@ -124,9 +124,10 @@ describe('نفيٌ في مرشِّحٍ يستثني المجهولَ معه (ق-
     expect(nullable.size).toBeGreaterThan(20);
     expect(nullable.has('id')).toBe(false);
     // ⚠️ **و`companyId` منها** — `PermissionTemplate` يقبل الفراغ فيه (قالبُ منصّةٍ بلا
-    //    منشأة). **وهذا بعينه ما يجعل البوّابةَ تُطابق بالاسم لا بالنموذج**: نفيٌ على
-    //    `companyId` في أيّ استعلامٍ يمرّ بهذا الاسم يستحقّ قراءةً لا عبوراً.
-    expect(nullable.get('companyId')).toEqual(['PermissionTemplate']);
+    //    منشأة)، و`LoginIdentity` كذلك (مديرُ المنصّة بلا منشأة — `ق-٦٦٦`). **وهذا
+    //    بعينه ما يجعل البوّابةَ تُطابق بالاسم لا بالنموذج**: نفيٌ على `companyId` في
+    //    أيّ استعلامٍ يمرّ بهذا الاسم يستحقّ قراءةً لا عبوراً.
+    expect(nullable.get('companyId')).toEqual(['LoginIdentity', 'PermissionTemplate']);
   });
 
   /**

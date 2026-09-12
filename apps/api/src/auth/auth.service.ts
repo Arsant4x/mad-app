@@ -5,6 +5,7 @@ import { AccountStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { createCompanyAccount } from '../companies/create-company-account';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
@@ -31,11 +32,24 @@ export interface LoginResult {
 
 const REFRESH_TOKEN_BYTES = 32;
 
-const IDENTITY_INCLUDE = {
-  platformAdmin: true,
-  company: { include: { permissionTemplate: true } },
-  companyUser: { include: { company: true, permissionTemplate: true } },
-} as const;
+/**
+ * 🔴 **المصادقةُ على خطوتين — الهويّةُ ثم ملفُّها تحت سياق منشأتها** (`ق-٦٦٦` · المرحلة ②).
+ *
+ * كانت خطوةً واحدة: `login_identities` **مع تضمين** `companies` و`company_users`
+ * و`permission_templates` **قبل أن يُعرف أيُّ سياق** — فإغلاقُ تلك الجداول بـ`FORCE`
+ * كان يُعيد الملفَّ فارغاً **ويُبطل جلسةَ كلِّ موظّف** (مقيس: `11/20` حمراء تحت الطُّعم).
+ *
+ * الآن تحمل الهويّةُ منشأتَها (`companyId` — تملؤه القاعدةُ بمشغِّل، لا الشيفرة)،
+ * **فتُقرأ بلا سياق** ثم يُقرأ ملفُّها تحت `runInTenantContext(identity.companyId)`.
+ * الثمنُ مقيس ومقبول (`ق-٦٦٧`): `+1.2–2.1 ms` لكلّ نداء.
+ */
+interface IdentityRow {
+  id: string;
+  username: string;
+  actorType: 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
+  passwordHash: string;
+  companyId: string | null;
+}
 
 interface IdentityWithProfiles {
   id: string;
@@ -63,16 +77,36 @@ export class AuthService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenantPrisma: TenantPrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
   ) {}
 
-  async login(username: string, password: string): Promise<LoginResult> {
-    const identity = await this.prisma.loginIdentity.findUnique({
-      where: { username },
-      include: IDENTITY_INCLUDE,
+  /**
+   * الخطوةُ الثانية: ملفُّ الهويّة **تحت سياق منشأتها**. مديرُ المنصّة يُقرأ من
+   * جدوله المنصّيّ بلا سياق (لا `RLS` عليه). وهويّةٌ بلا منشأة وليست مديراً
+   * (يتيمةٌ — `ق-٦٦٨`) تعود بلا ملفٍّ فيرفضها `buildSessionFromIdentity` كما كان.
+   */
+  private async loadProfiles(identity: IdentityRow): Promise<IdentityWithProfiles> {
+    const base: IdentityWithProfiles = { id: identity.id, username: identity.username, actorType: identity.actorType, platformAdmin: null, company: null, companyUser: null };
+    if (identity.actorType === 'PLATFORM_ADMIN') {
+      base.platformAdmin = await this.prisma.platformAdmin.findUnique({ where: { loginIdentityId: identity.id }, select: { id: true, displayName: true } });
+      return base;
+    }
+    if (!identity.companyId) return base;
+    return this.tenantPrisma.runInTenantContext(identity.companyId, async (tx) => {
+      if (identity.actorType === 'COMPANY') {
+        base.company = await tx.company.findUnique({ where: { loginIdentityId: identity.id }, include: { permissionTemplate: true } });
+      } else {
+        base.companyUser = await tx.companyUser.findUnique({ where: { loginIdentityId: identity.id }, include: { company: true, permissionTemplate: true } });
+      }
+      return base;
     });
+  }
+
+  async login(username: string, password: string): Promise<LoginResult> {
+    const identity = await this.prisma.loginIdentity.findUnique({ where: { username } });
 
     // Same generic message whether the username doesn't exist or the
     // password is wrong — never reveal which one failed.
@@ -95,10 +129,13 @@ export class AuthService {
       await argon2.verify(await this.decoyHash(), password).catch(() => false);
       throw new UnauthorizedException(MSG.invalid_credentials);
     }
+    // الملفُّ قبل التحقّق من كلمة المرور — كما كان يُضمَّن في الاستعلام نفسِه: فالزيادةُ
+    // (`≈ +2 ms`) تقع قبل `argon2` في المسارين ولا تُضاف إلى فرق الزمن بينهما.
+    const profiles = await this.loadProfiles(identity);
     const passwordOk = await argon2.verify(identity.passwordHash, password);
     if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
 
-    return this.buildSessionFromIdentity(identity as unknown as IdentityWithProfiles);
+    return this.buildSessionFromIdentity(profiles);
   }
 
   /** Rotates a refresh token: the old one is revoked and a new pair is issued. */
@@ -106,7 +143,7 @@ export class AuthService {
     const tokenHash = this.hashToken(presentedToken);
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { loginIdentity: { include: IDENTITY_INCLUDE } },
+      include: { loginIdentity: true },
     });
 
     if (!stored) throw new UnauthorizedException(MSG.session_invalid);
@@ -125,17 +162,15 @@ export class AuthService {
 
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
 
-    return this.buildSessionFromIdentity(stored.loginIdentity as unknown as IdentityWithProfiles);
+    return this.buildSessionFromIdentity(await this.loadProfiles(stored.loginIdentity));
   }
 
   /** Re-derives the current user's view from a valid access token payload,
    * without rotating any tokens — used by GET /auth/me on app load. */
   async whoAmI(payload: JwtPayload): Promise<AuthUserView> {
-    const identity = await this.prisma.loginIdentity.findUnique({
-      where: { id: payload.sub },
-      include: IDENTITY_INCLUDE,
-    });
-    if (!identity) throw new UnauthorizedException(MSG.session_invalid);
+    const row = await this.prisma.loginIdentity.findUnique({ where: { id: payload.sub } });
+    if (!row) throw new UnauthorizedException(MSG.session_invalid);
+    const identity = await this.loadProfiles(row);
 
     if (identity.actorType === 'PLATFORM_ADMIN' && identity.platformAdmin) {
       return { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all' };

@@ -84,6 +84,9 @@ export async function createCompanyAccount(
   const subEnd = input.subEnd ?? addDays(subStart, input.trialDays);
 
   return prisma.$transaction(async (tx) => {
+    // منشأةُ الهويّة (`login_identities.companyId` — `ق-٦٦٦`) **تملؤها القاعدةُ** هنا:
+    // مشغِّلُ `companies_identity_follows` يكتبها بعد إدراج صفّ المنشأة — فالهويّةُ
+    // تُدرَج أولاً ولا معرّفَ لمنشأتها بعدُ، والمفتاحُ الأجنبيُّ لا يقبل معرّفاً لم يُدرَج.
     const created = await tx.loginIdentity.create({
       data: {
         username: input.username,
