@@ -31,7 +31,9 @@ export async function bootstrapPlatform(prisma: PrismaClient, admin: { username:
   });
 
   // القالب العام الذي تركب عليه كل منشأة جديدة — مسار التسجيل الذاتي يبحث
-  // عن قالب عام `isAllScreens` وبدونه يرفض التسجيل بـ register_unavailable.
+  // عن قالب عام `isAllScreens` **غيرِ نظاميّ** (`isSystem: false` — ق-٦٤٤) وبدونه
+  // يرفض التسجيل بـ register_unavailable. ⚠️ فقالبُ المطوّر أعلاه، وإن كان شاملاً،
+  // **لا يركب عليه تاجر**: كان الترتيبُ وحدَه يفصل بينهما فركب ستٌّ من ستٍّ عليه.
   await prisma.permissionTemplate.upsert({
     where: { id: 'full-access-template' },
     update: {},
