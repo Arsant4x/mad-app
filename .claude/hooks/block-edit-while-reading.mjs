@@ -137,13 +137,26 @@ const isReaderOfRoot = (cmd) => {
   return rootNorms.some((r) => c.includes(r));
 };
 
+/**
+ * مهلةُ سؤال النظام عن العمليات — **رقمٌ مقيس لا مريح** (`ق-٦٦٠`).
+ *
+ * كانت `8 s` تقديراً. والقياس (2026-09-12، ويندوز، `Get-CimInstance Win32_Process`):
+ *   خاملاً                          0.47–0.51 s
+ *   تحت ثمانية عمّال `jest`        4.65–12.0 s (سؤالٌ واحد)
+ *   ثلاثةُ أسئلةٍ متزامنة تحته     13.9–31.1 s · والأسوأ المرصود 35.4 s
+ * **فسقط الحارسُ في 2 من 4 تشغيلاتٍ للحزمة الكاملة بـ`ETIMEDOUT` ومرّ التعديلُ بلا
+ * حكم** — في اللحظة التي بُني ليغلقها. المهلةُ الآن تغطّي الأسوأَ المرصودَ بهامش
+ * `1.7×`؛ **والمرورُ عند التعذّر يبقى معلِناً** (قرارُ فتحه أو إغلاقه للمالك).
+ */
+const SCAN_TIMEOUT_MS = 60_000;
+
 /** يعيد `{ ok: true, readers: [{pid, cmd}] }` أو `{ ok: false, error }` — ولا يخترع جواباً. */
 function scanReaders() {
   if (process.platform === 'win32') {
     const r = spawnSync(
       'powershell',
       ['-NoProfile', '-NonInteractive', '-Command', 'Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress'],
-      { encoding: 'utf8', timeout: 8000, windowsHide: true },
+      { encoding: 'utf8', timeout: SCAN_TIMEOUT_MS, windowsHide: true },
     );
     if (r.status !== 0 || !r.stdout) return { ok: false, error: (r.stderr || r.error?.message || `exit ${r.status}`).trim() };
     let list;
@@ -161,7 +174,7 @@ function scanReaders() {
     };
   }
 
-  const r = spawnSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: 8000 });
+  const r = spawnSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: SCAN_TIMEOUT_MS });
   if (r.status !== 0 || !r.stdout) return { ok: false, error: (r.stderr || r.error?.message || `exit ${r.status}`).trim() };
   const readers = r.stdout
     .split('\n')
@@ -180,8 +193,10 @@ const root = roots[0];
 const LOG = join(root, '.claude', 'edit-while-reading.log');
 const MARKER = join(root, '.claude', 'allow-edit-while-reading');
 
+// كلُّ سطرٍ في السجلّ يحمل زمنَ السؤال (`scanMs`) — فالمهلةُ تُقاس من الأثر لا من مختبر.
+const scanStartedAt = Date.now();
 function trace(kind, extra) {
-  const line = JSON.stringify({ at: new Date().toISOString(), kind, tool, what, ...extra });
+  const line = JSON.stringify({ at: new Date().toISOString(), kind, tool, what, scanMs: Date.now() - scanStartedAt, ...extra });
   try {
     appendFileSync(LOG, line + '\n', 'utf8');
   } catch {
