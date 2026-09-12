@@ -219,6 +219,7 @@ export const MSG = {
   task_recurrence_needs_anchor: 'task.recurrence_needs_anchor',
   task_not_found: 'task.not_found',
   task_transition_forbidden: 'task.transition_forbidden',
+  task_transition_not_party: 'task.transition_not_party',
   task_comment_forbidden: 'task.comment_forbidden',
   owner_only: 'common.owner_only',
   support_no_active_grant: 'support.no_active_grant',
@@ -666,6 +667,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.task_transition_forbidden]: {
     ar: 'لا تملك صلاحية هذا الانتقال على شاشة المستند — والإسناد لا يمنح صلاحية',
     en: 'You lack the permission for this transition on the document screen — assignment grants none',
+  },
+  // (ق-٦٣٦) **الصلاحيةُ شرطٌ لا مفتاح**: تُغيَّر حالةُ مهمّةٍ أنت طرفُها — المكلَّف أو من أسندها.
+  [MSG.task_transition_not_party]: {
+    ar: 'حالةُ المهمة يغيّرها طرفاها وحدهما — المكلَّف ومن أسندها؛ والصلاحيةُ على الشاشة لا تجعلك طرفاً',
+    en: 'Only the parties to a task — its assignee and its assigner — may change its status; a screen permission does not make you a party',
   },
   [MSG.delegation_sequence_conflict]: {
     ar: 'تفويضٌ آخر سُجِّل في اللحظة نفسها — أعد المحاولة',

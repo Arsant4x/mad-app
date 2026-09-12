@@ -152,6 +152,58 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     expect(done.body.status).toBe('DONE');
   });
 
+  /**
+   * 🔴 **ما تحجبه القائمةُ يفتحه مسارٌ بمعرّف** (`ق-٦٣٦`) — من عائلة عزل الفروع.
+   *
+   * «مهامي» تعرض ما كُلِّف به الفاعل. **لكنّ انتقالَ الحالة كان يفحص التفويضَ
+   * وحدَه** — فحسابٌ فرعيٌّ يملك `edit` على شاشة المستند **يغيّر حالةَ مهمّةٍ
+   * ليست له** إن عرف معرّفَها. **والتفويضُ يبقى شرطاً** (⭐⑤ أعلاه) **ويُضاف
+   * إليه الفاعل**: المكلَّفُ أو المُنشئ — كقاعدة التعليق نصّاً — **والمالكُ
+   * معفىً** كما في ورديات نقطة البيع.
+   */
+  it('🔴 حسابٌ فرعيٌّ يملك التفويضَ لا يغيّر حالةَ مهمّةٍ ليست له بمعرّفها (ق-٦٣٦)', async () => {
+    // مهمّةٌ على العقود **مكلَّفُها الكاتب** — والمشرفُ يملك `contracts:edit`.
+    const res = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: 'ليست للمشرف', assigneeId: clerkId, targetScreen: 'contracts', targetId: 'c-2' })
+      .expect(201);
+    created.push(res.body.id);
+
+    // المشرفُ ليس مكلَّفاً ولا مُنشئاً — **والتفويضُ وحدَه كان يكفيه**.
+    const denied = await request(app.getHttpServer())
+      .patch(`/tasks/${res.body.id}/status`)
+      .set('Authorization', `Bearer ${mgrToken}`)
+      .send({ to: 'IN_PROGRESS' });
+    expect(denied.status).toBe(403);
+
+    // ⚠️ **ومُنع فعلاً لا شكلاً**: الحالةُ لم تتغيّر — يقرؤها المالك من سجلّ المهمّة.
+    const log = await request(app.getHttpServer()).get(`/tasks/${res.body.id}/log`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    expect((log.body as { toStatus: string }[]).some((e) => e.toStatus === 'IN_PROGRESS')).toBe(false);
+
+    // والمالكُ — الفاعلُ الذي أنشأها — يُغيّرها؛ **فالمنعُ على الغريب لا على القاعدة**.
+    await request(app.getHttpServer())
+      .patch(`/tasks/${res.body.id}/status`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ to: 'CANCELLED' })
+      .expect(200);
+
+    // ⚖️ **والمالكُ معفىً ولو لم يكن طرفاً** — كما في ورديات نقطة البيع: مهمّةٌ
+    // أنشأها المشرفُ وكلّف بها الكاتبَ، **والمالكُ ليس مُنشئَها ولا مكلَّفَها**،
+    // فيغيّرها — **ولا يُنقَص منه ما كان له**؛ ومصيرُ علاقته بالمهامّ يحسمه `ق-٦٣٥`.
+    const byMgr = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${mgrToken}`)
+      .send({ title: 'من المشرف إلى الكاتب', assigneeId: clerkId })
+      .expect(201);
+    created.push(byMgr.body.id);
+    await request(app.getHttpServer())
+      .patch(`/tasks/${byMgr.body.id}/status`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ to: 'CANCELLED' })
+      .expect(200);
+  });
+
   it('⭐⑥ الحالة النهائية لا يُنتقل منها — إعادة الفتح مهمةٌ جديدة', async () => {
     const closed = created[created.length - 1];
     await request(app.getHttpServer())
