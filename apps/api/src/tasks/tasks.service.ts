@@ -164,19 +164,27 @@ export class TasksService {
   }
 
   /**
-   * ينقل الحالة — **بالتفويض على شاشة المستند لا بملكية المهمة**.
+   * ينقل الحالة — **بالتفويض على شاشة المستند، ولطرفَي المهمّة** (`ق-٦٣٦`).
    *
-   * فمكلَّفٌ بلا `review` لا يُقفل، ومَن يملك `review` على تلك الشاشة يُقفل
-   * ولو لم تُسنَد إليه. والملكية تحدّد **مَن يراها**، والتفويض يحدّد **ما
-   * يفعله بها** — خلطُهما يجعل الإسناد يمنح صلاحية، وهو ما تنفيه
-   * `grantsFromAssignment` صراحةً.
+   * فمكلَّفٌ بلا `review` لا يُقفل: **الإسنادُ لا يمنح صلاحية**، وهو ما تنفيه
+   * `grantsFromAssignment` صراحةً. **والصلاحيةُ لا تجعل الغريبَ طرفاً**: كان
+   * النصُّ هنا «ومَن يملك `review` على تلك الشاشة يُقفل ولو لم تُسنَد إليه» —
+   * **فحسابٌ فرعيٌّ يملك `edit` على العقود كان يغيّر حالةَ مهمّةِ غيره بمعرّفها**،
+   * وهي التي لا تعرضها له «مهامي». **قِيس بالتشغيل**: `Expected 403 · Received 200`.
+   *
+   * ⚠️ **ومن عائلة عزل الفروع**: **ما تحجبه القائمةُ يفتحه مسارٌ بمعرّف** —
+   * فالحراسةُ على المسار لا على القائمة.
+   *
+   * ## الشرطان معاً، والمالكُ معفى
+   *
+   * **①** الفاعلُ طرفٌ (المكلَّف أو المُسنِد) — **على قاعدة التعليق والسجلّ نصّاً**
+   * (`partyTask`)، **والمالكُ معفىً كما في ورديات نقطة البيع** (`pos.service.ts`:
+   * `openedById !== profileId && actorType !== 'COMPANY'`) — فلا يُنقَص منه ما كان
+   * له، **ومصيرُ علاقته بالمهامّ يحسمه `ق-٦٣٥` لا هذا الإصلاح**.
+   * **②** ثمّ التفويضُ على شاشة المستند كما كان.
    */
   async transition(tenant: TenantContext, id: string, to: TaskStatus, note: string | null, now: Date): Promise<MyTaskView> {
-    const rows = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
-      tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "id" = ${id}`,
-    );
-    const task = rows[0];
-    if (!task) throw new NotFoundException(MSG.task_not_found);
+    const task = await this.partyTask(tenant, id, { ownerExempt: true, message: MSG.task_transition_not_party });
 
     const grants = await this.grantsOf(tenant);
     if (!mayTransition(task.status, to, task.targetScreen as never, grants, [])) {
@@ -219,12 +227,20 @@ export class TasksService {
 
   // ═══════════════════ الداخلية ═══════════════════
 
-  /** المهمّةُ بطرفيها — وغيرُهما يُردّ `403` لا `404`: وجودُها معلومٌ من الإسناد، وحوارُها ليس له. */
-  private async partyTask(tenant: TenantContext, id: string): Promise<TaskRow> {
+  /**
+   * المهمّةُ بطرفيها — وغيرُهما يُردّ `403` لا `404`: وجودُها معلومٌ من الإسناد، وحوارُها ليس له.
+   *
+   * ⚠️ **والمقارنةُ في فضاء `profileId`**: `assigneeId` يُكتب من `company_users`
+   * و`createdById` من `profileId` — **فللمالك (`profileId` = معرّفُ المنشأة)
+   * لا يلتقي الطرفُ الأول أبداً** (`ق-٦٢٩`)، **ويلتقي الثاني حين يكون هو المُسنِد**.
+   * ومن استثنى المالكَ (`ownerExempt`) قال ذلك صراحةً، لا سهواً.
+   */
+  private async partyTask(tenant: TenantContext, id: string, opts: { ownerExempt?: boolean; message?: string } = {}): Promise<TaskRow> {
     const rows = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "id" = ${id}`);
     const task = rows[0];
     if (!task) throw new NotFoundException(MSG.task_not_found);
-    if (task.assigneeId !== tenant.profileId && task.createdById !== tenant.profileId) throw new ForbiddenException(MSG.task_comment_forbidden);
+    if (opts.ownerExempt && tenant.actorType === 'COMPANY') return task;
+    if (task.assigneeId !== tenant.profileId && task.createdById !== tenant.profileId) throw new ForbiddenException(opts.message ?? MSG.task_comment_forbidden);
     return task;
   }
 

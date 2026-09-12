@@ -187,6 +187,21 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ to: 'CANCELLED' })
       .expect(200);
+
+    // ⚖️ **والمالكُ معفىً ولو لم يكن طرفاً** — كما في ورديات نقطة البيع: مهمّةٌ
+    // أنشأها المشرفُ وكلّف بها الكاتبَ، **والمالكُ ليس مُنشئَها ولا مكلَّفَها**،
+    // فيغيّرها — **ولا يُنقَص منه ما كان له**؛ ومصيرُ علاقته بالمهامّ يحسمه `ق-٦٣٥`.
+    const byMgr = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${mgrToken}`)
+      .send({ title: 'من المشرف إلى الكاتب', assigneeId: clerkId })
+      .expect(201);
+    created.push(byMgr.body.id);
+    await request(app.getHttpServer())
+      .patch(`/tasks/${byMgr.body.id}/status`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ to: 'CANCELLED' })
+      .expect(200);
   });
 
   it('⭐⑥ الحالة النهائية لا يُنتقل منها — إعادة الفتح مهمةٌ جديدة', async () => {
