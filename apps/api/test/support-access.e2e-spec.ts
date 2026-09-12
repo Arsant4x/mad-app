@@ -102,6 +102,10 @@ describe('Support mode (e2e)', () => {
     const approved = await owner(request(app.getHttpServer()).post(`/support-access/${grantId}/approve`)).expect(201);
     expect(approved.body.status).toBe('APPROVED');
     expect(new Date(approved.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    // (ق-٦٤٦) **ومن قرّر على الصفّ** — لا يُستدلّ عليه من كون المالك واحداً.
+    expect(approved.body.decidedById).toBeTruthy();
+    expect(approved.body.decidedByName).toBe('demo-company-a');
+    expect(approved.body.decidedById).not.toBe(approved.body.requestedById); // الطالبُ مديرُ منصّة — فضاءٌ آخر
 
     await support(request(app.getHttpServer()).get('/customers')).expect(200);
     await support(request(app.getHttpServer()).post('/customers')).send({ name: 'محاولة كتابة' }).expect(403);

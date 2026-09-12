@@ -76,14 +76,18 @@ export class SupportAccessOwnerController {
     return this.supportAccessService.ownerLog(tenant.companyId);
   }
 
+  // (ق-٦٤٦) **الاسمُ يُمرَّر لأن القرارَ يُكتب باسم قائله** — وقتَ الفعل لا يُحلّ لاحقاً،
+  // كما في اعتماد الإجازة والشطب.
   @Post(':id/approve')
-  approve(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.supportAccessService.decide(tenant.companyId, id, true);
+  approve(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string) {
+    const payload = req.user as JwtPayload;
+    return this.supportAccessService.decide(tenant.companyId, id, true, { id: tenant.profileId, name: payload.username });
   }
 
   @Post(':id/deny')
-  deny(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.supportAccessService.decide(tenant.companyId, id, false);
+  deny(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string) {
+    const payload = req.user as JwtPayload;
+    return this.supportAccessService.decide(tenant.companyId, id, false, { id: tenant.profileId, name: payload.username });
   }
 
   @Post(':id/revoke')
