@@ -99,6 +99,9 @@ export class CompanyUsersService {
           username: dto.username,
           passwordHash: await argon2.hash(dto.password),
           actorType: 'COMPANY_USER',
+          // منشأةُ الهويّة (`ق-٦٦٦`) — تُكتب هنا إعلاناً، **والقاعدةُ تفرضها**: مشغِّلُ
+          // `company_users_identity_follows` يرفض صفَّ حسابٍ لهويّةٍ منشأتُها غيرُ منشأته.
+          companyId,
           companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId } },
         },
         include: { companyUser: { include: COMPANY_USER_INCLUDE } },

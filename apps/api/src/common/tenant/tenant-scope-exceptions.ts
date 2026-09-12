@@ -79,6 +79,11 @@ export const TENANT_SCOPE_EXCEPTIONS: Partial<Record<Prisma.ModelName, ScopeExce
     layer: 'none',
     why: 'يحمل قوالبَ عامّةً بلا منشأة (companyId null) وخاصّةً بمنشأة؛ فسياسةٌ ساذجة على app.company_id تُخفي العامّ، ويلزم صياغةٌ تسمح بالعامّ وتمنع قالبَ الغير — وهو بندٌ لا سطر. عائقُ إطلاقٍ مسجَّل (KNOWN_WEAK).',
   },
+  // ── بلا طبقة بتصميمه — مصدرُ السياق نفسُه (ق-٦٦٦) ──
+  LoginIdentity: {
+    layer: 'none',
+    why: 'جدولُ الدخول: يُقرأ قبل أن يُعرف أيُّ سياق — وهو الذي يعطي السياقَ (companyId على الهويّة، تملؤه القاعدةُ بمشغِّل وترفض مخالفتَه). لا يُعزل بالسياسة لأن كلَّ عزلٍ يبدأ منه؛ وعزلُه هو ألّا يُقرأ منه إلا اسمُ الدخول وهاشُه ومنشأتُه، ثم يُقرأ الملفُّ تحت سياقها (auth.service.loadProfiles). مديرُ المنصّة بلا منشأة عمداً.',
+  },
 };
 
 /**
@@ -87,4 +92,8 @@ export const TENANT_SCOPE_EXCEPTIONS: Partial<Record<Prisma.ModelName, ScopeExce
  */
 export const BORROWED_FROM_EXPOSED: Partial<Record<Prisma.ModelName, string>> = {
   CompanyUserBranch: 'بلا companyId ويُبلَغ عبر CompanyUser المكشوف — وهو ما يقرّر ما يرى الموظف من فروع؛ يُغلق مع أبيه لا قبله (ق-٦٥٣).',
+  // ── أبناءُ الهويّة (ق-٦٦٦): جداولُ منصّةٍ تُبلَغ عبر login_identities الذي صار يحمل companyId ──
+  RefreshToken: 'رموزُ تدويرٍ لهويّةٍ — جدولُ منصّةٍ بلا منشأة، يُبلَغ عبر الهويّة التي هي مصدرُ السياق لا بياناتُ مستأجر؛ لا يُقرأ إلا بهاشِ الرمز نفسِه (auth.service).',
+  PasswordResetToken: 'رموزُ استعادةٍ لهويّةٍ — كسابقه: جدولُ منصّةٍ يُقرأ بهاشِ الرمز وحدَه، ولا صلةَ له بعزل المستأجر.',
+  PlatformAdmin: 'ملفُّ مدير المنصّة — بلا منشأةٍ بتعريفه (هويّتُه companyId = NULL)، ولا يُبلَغ من مسار مستأجر.',
 };

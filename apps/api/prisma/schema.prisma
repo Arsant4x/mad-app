@@ -116,12 +116,22 @@ model LoginIdentity {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  /// **منشأةُ الهويّة — مصدرُ سياق المصادقة** (`ق-٦٦٦`): تُقرأ قبل أن يُعرف أيُّ
+  /// سياق، ثم يُقرأ الملفُّ (`companies`/`company_users`) تحت `runInTenantContext`
+  /// بها. فارغةٌ لمدير المنصّة وحدَه. **تملؤها القاعدةُ لا الشيفرة** عند كتابة
+  /// صفِّ الملفّ، **وتُرفض إن خالفت ملفَّها** (مشغِّلاتُ الهجرة `identity_company`) —
+  /// فهويّةٌ واحدة لا تصل إلى منشأتين لا في الشيفرة ولا في القاعدة. وتتبع
+  /// منشأتَها في الحذف (`onDelete: Cascade`) — فلا هويّةَ يتيمةً تحجز اسمَها (`ق-٦٦٨`).
+  companyId String?
+  memberOf  Company? @relation("CompanyIdentities", fields: [companyId], references: [id], onDelete: Cascade)
+
   platformAdmin PlatformAdmin?
   company       Company?
   companyUser   CompanyUser?
   refreshTokens RefreshToken[]
   passwordResetTokens PasswordResetToken[]
 
+  @@index([companyId])
   @@map("login_identities")
 }
 
@@ -317,6 +327,8 @@ model Company {
   updatedAt DateTime @updatedAt
 
   users            CompanyUser[]
+  /// كلُّ هويّات الدخول التي تنتمي لهذه المنشأة — المالكُ وحساباتُه الفرعية (`ق-٦٦٦`).
+  identities       LoginIdentity[] @relation("CompanyIdentities")
   activities       BusinessActivity[]
 
   /// النشاط الرئيسي — **مفتاح الترشيح كله**.
