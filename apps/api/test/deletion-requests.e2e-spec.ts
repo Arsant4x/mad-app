@@ -323,7 +323,7 @@ describe('Account deletion requests (e2e)', () => {
       .send({ name: 'كاتب', username: `del-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
       .expect(201);
     await auth(request(app.getHttpServer()).post('/tasks'))
-      .send({ title: 'مهمّة قبل الحذف', assigneeId: clerk.body.id, targetScreen: 'contracts', targetId: 'c-1' })
+      .send({ title: 'مهمّة قبل الحذف', assigneeId: clerk.body.id, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-1' })
       .expect(201);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
@@ -548,7 +548,7 @@ describe('Account deletion requests (e2e)', () => {
     const clerk = await keptAuth(request(app.getHttpServer()).post('/company-users'))
       .send({ name: 'كاتب', username: `erase-clerk-${suffix}`, password: 'DelPass123!', permissionTemplateId: tpl.body.id })
       .expect(201);
-    await keptAuth(request(app.getHttpServer()).post('/tasks')).send({ title: 'مهمّة باقية', assigneeId: clerk.body.id, targetScreen: 'contracts', targetId: 'c-2' }).expect(201);
+    await keptAuth(request(app.getHttpServer()).post('/tasks')).send({ title: 'مهمّة باقية', assigneeId: clerk.body.id, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-2' }).expect(201);
     await closeCompany(kept);
     await prisma.company.update({ where: { id: kept.id }, data: { closedAt: new Date(Date.now() - 100 * day), retainUntil: new Date(Date.now() - day) } });
 

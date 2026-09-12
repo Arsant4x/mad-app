@@ -1,6 +1,6 @@
 import { IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { ALLOWED_SCREENS } from '../../templates/screens';
-import { TASK_PRIORITIES } from '../task-model';
+import { TASK_ASSIGNEE_KINDS, TASK_PRIORITIES } from '../task-model';
 
 /**
  * ⚠️ `targetScreen` من `ALLOWED_SCREENS` **مقروءةً لا منسوخة**.
@@ -16,6 +16,13 @@ export class CreateTaskDto {
 
   @IsString()
   assigneeId!: string;
+
+  /**
+   * ⭐ **وسمُ فضاء المكلَّف — إلزاميٌّ بلا افتراضٍ صامت** (`ق-٦٣٩`/①): `OWNER` أو
+   * `USER`، **مقروءاً من نوع القاعدة**. فطلبٌ بلا وسمٍ يُردّ `400` هنا، لا يُملأ بالظنّ.
+   */
+  @IsIn(TASK_ASSIGNEE_KINDS as readonly string[])
+  assigneeKind!: string;
 
   @IsOptional()
   @IsIn(ALLOWED_SCREENS as readonly string[])

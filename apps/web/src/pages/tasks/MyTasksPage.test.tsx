@@ -19,6 +19,7 @@ const task = (over: Record<string, unknown> = {}) => ({
   canOpenTarget: false,
   status: 'OPEN',
   assigneeId: 'emp',
+  assigneeKind: 'USER',
   createdById: 'owner',
   dueAt: null,
   isOverdue: false,

@@ -3802,6 +3802,11 @@ model Task {
   title        String
   createdById  String
   assigneeId   String
+  /// ⭐ **وسمُ فضاء المكلَّف** (`ق-٦٣٩`): `OWNER` ⇒ `assigneeId` هو معرّفُ المنشأة
+  /// نفسِها؛ `USER` ⇒ معرّفُ حسابٍ فرعيّ. **إلزاميٌّ بلا افتراض** — فحقلٌ يقبل
+  /// فراغاً يعود إلى الحقل المتعدّد الشكل (`ق-٦٢٩`) من بابٍ آخر. والقيدُ
+  /// `tasks_owner_assignee_is_company` في القاعدة يمسك ما لا يمرّ بالخدمة.
+  assigneeKind TaskAssigneeKind
   /// الأولوية — من قائمةٍ مغلقةٍ في القاعدة (نوعُ `TaskPriority`)، والافتراضُ عادي.
   priority     TaskPriority @default(NORMAL)
   /// القسمُ المختصّ — نصٌّ حرّ يُرشَّح منه في الواجهة؛ فارغٌ لمهمّةٍ بلا قسم.
@@ -3823,9 +3828,16 @@ model Task {
   updatedAt DateTime @default(now())
 
   @@index([companyId, assigneeId])
+  @@index([companyId, assigneeKind, assigneeId])
   @@index([companyId, status])
   @@index([companyId, targetScreen, targetId])
   @@map("tasks")
+}
+
+/// فضاءُ معرّف المكلَّف في المهمّة (`ق-٦٣٩`) — يُقرأ منه `DTO` والخدمة، لا يُنسخ.
+enum TaskAssigneeKind {
+  OWNER
+  USER
 }
 
 /// سجل انتقالات المهمة — **ملحقٌ فقط**، والمنع في القاعدة لا في الخدمة.

@@ -75,7 +75,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'راجع بند التأمين', assigneeId: clerkId, targetScreen: 'contracts', targetId: 'c-123' })
+      .send({ title: 'راجع بند التأمين', assigneeId: clerkId, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-123' })
       .expect(201);
     created.push(res.body.id);
 
@@ -101,7 +101,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'راجع نفس العقد', assigneeId: mgrId, targetScreen: 'contracts', targetId: 'c-123' })
+      .send({ title: 'راجع نفس العقد', assigneeId: mgrId, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-123' })
       .expect(201);
     created.push(res.body.id);
 
@@ -115,7 +115,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${clerkToken}`)
-      .send({ title: 'محاولة ربط', assigneeId: mgrId, targetScreen: 'contracts', targetId: 'c-999' })
+      .send({ title: 'محاولة ربط', assigneeId: mgrId, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-999' })
       .expect(403);
     expect(res.body.message).toContain('لا تراه');
   });
@@ -124,7 +124,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'أقفلني', assigneeId: mgrId, targetScreen: 'contracts', targetId: 'c-1' })
+      .send({ title: 'أقفلني', assigneeId: mgrId, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-1' })
       .expect(201);
     created.push(res.body.id);
 
@@ -166,7 +166,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'ليست للمشرف', assigneeId: clerkId, targetScreen: 'contracts', targetId: 'c-2' })
+      .send({ title: 'ليست للمشرف', assigneeId: clerkId, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-2' })
       .expect(201);
     created.push(res.body.id);
 
@@ -194,7 +194,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const byMgr = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${mgrToken}`)
-      .send({ title: 'من المشرف إلى الكاتب', assigneeId: clerkId })
+      .send({ title: 'من المشرف إلى الكاتب', assigneeId: clerkId, assigneeKind: 'USER' })
       .expect(201);
     created.push(byMgr.body.id);
     await request(app.getHttpServer())
@@ -202,6 +202,50 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({ to: 'CANCELLED' })
       .expect(200);
+  });
+
+  /**
+   * ⭐ **وسمُ المكلَّف — الثقبُ الأسود يُغلق** (`ق-٦٣٩`/②).
+   *
+   * كان المالكُ غيرَ قابلٍ للتكليف، و«مهامي» له فارغةً بنيوياً (`ق-٦٣٠`). **والإصلاحُ
+   * الخطِر** كان أن يُقبل معرّفُ المنشأة في `assigneeId` بلا وسم — **فتُقبل مهمّةٌ لا
+   * يراها أحد** (الإسنادُ يكتب معرّفاً و«مهامي» تقرأ آخر). **فالإثباتُ هنا هو الرؤية
+   * نفسُها**: مهمّةٌ مُسنَدةٌ للمالك **تظهر في «مهامي» وعدّادِه** — وإلا فهو الثقبُ الأسود بعينه.
+   */
+  it('🔴 مهمّةٌ مُسنَدةٌ للمالك بوسم OWNER تظهر في «مهامي» وعدّاده — ولا تظهر لغيره (ق-٦٣٩)', async () => {
+    const profile = await request(app.getHttpServer()).get('/company-profile').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    const companyId = profile.body.id as string;
+
+    const before = await request(app.getHttpServer()).get('/tasks/counters').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+
+    const res = await request(app.getHttpServer())
+      .post('/tasks')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ title: `للمالك نفسِه ${suffix}`, assigneeId: companyId, assigneeKind: 'OWNER' })
+      .expect(201);
+    created.push(res.body.id);
+    expect(res.body.assigneeKind).toBe('OWNER');
+
+    // ① تظهر في «مهامي» — للمالك.
+    const mine = await request(app.getHttpServer()).get('/tasks/mine').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    expect((mine.body as { id: string }[]).some((t) => t.id === res.body.id)).toBe(true);
+
+    // ② والعدّادُ يتبع الشاشةَ بالبناء — يرتفع بواحد.
+    const after = await request(app.getHttpServer()).get('/tasks/counters').set('Authorization', `Bearer ${ownerToken}`).expect(200);
+    expect(after.body.open).toBe(before.body.open + 1);
+
+    // ③ ولا تظهر لحسابٍ فرعيّ — **فالفضاءان لا يختلطان**.
+    const notMine = await request(app.getHttpServer()).get('/tasks/mine').set('Authorization', `Bearer ${clerkToken}`).expect(200);
+    expect((notMine.body as { id: string }[]).some((t) => t.id === res.body.id)).toBe(false);
+
+    // ④ والوسمُ إلزاميٌّ بلا افتراض — والمعرّفُ يُتحقَّق منه في فضائه الموسوم لا في غيره.
+    await request(app.getHttpServer()).post('/tasks').set('Authorization', `Bearer ${ownerToken}`).send({ title: 'بلا وسم', assigneeId: clerkId }).expect(400);
+    await request(app.getHttpServer()).post('/tasks').set('Authorization', `Bearer ${ownerToken}`).send({ title: 'حسابٌ موسومٌ مالكاً', assigneeId: clerkId, assigneeKind: 'OWNER' }).expect(404);
+    await request(app.getHttpServer()).post('/tasks').set('Authorization', `Bearer ${ownerToken}`).send({ title: 'منشأةٌ موسومةٌ حساباً', assigneeId: companyId, assigneeKind: 'USER' }).expect(404);
+
+    // ⑤ والمالكُ طرفٌ فيها مكلَّفاً — يعلّق ويقرأ سجلَّها.
+    await request(app.getHttpServer()).post(`/tasks/${res.body.id}/comments`).set('Authorization', `Bearer ${ownerToken}`).send({ note: 'إلى نفسي' }).expect(201);
+    await request(app.getHttpServer()).patch(`/tasks/${res.body.id}/status`).set('Authorization', `Bearer ${ownerToken}`).send({ to: 'CANCELLED' }).expect(200);
   });
 
   it('⭐⑥ الحالة النهائية لا يُنتقل منها — إعادة الفتح مهمةٌ جديدة', async () => {
@@ -218,7 +262,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: 'متأخّرة', assigneeId: mgrId, recurEveryDays: 0, dueAnchor: past })
+      .send({ title: 'متأخّرة', assigneeId: mgrId, assigneeKind: 'USER', recurEveryDays: 0, dueAnchor: past })
       .expect(201);
     created.push(res.body.id);
 
@@ -245,7 +289,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const res = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: `مهمّةٌ عاجلة ${suffix}`, assigneeId: clerkId, priority: 'URGENT', department: 'محاسبة' })
+      .send({ title: `مهمّةٌ عاجلة ${suffix}`, assigneeId: clerkId, assigneeKind: 'USER', priority: 'URGENT', department: 'محاسبة' })
       .expect(201);
     expect(res.body.priority).toBe('URGENT');
     expect(res.body.department).toBe('محاسبة');
@@ -259,13 +303,13 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: `أولويةٌ مخترَعة ${suffix}`, assigneeId: clerkId, priority: 'حرج' })
+      .send({ title: `أولويةٌ مخترَعة ${suffix}`, assigneeId: clerkId, assigneeKind: 'USER', priority: 'حرج' })
       .expect(400);
 
     const plain = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: `بلا أولوية ${suffix}`, assigneeId: clerkId })
+      .send({ title: `بلا أولوية ${suffix}`, assigneeId: clerkId, assigneeKind: 'USER' })
       .expect(201);
     expect(plain.body.priority).toBe('NORMAL');
     expect(plain.body.department).toBeNull();
@@ -275,7 +319,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
     const t = await request(app.getHttpServer())
       .post('/tasks')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ title: `تذكرةُ عميل ${suffix}`, assigneeId: clerkId, department: 'دعم', note: 'العميل يسأل عن فاتورة يوليو' })
+      .send({ title: `تذكرةُ عميل ${suffix}`, assigneeId: clerkId, assigneeKind: 'USER', department: 'دعم', note: 'العميل يسأل عن فاتورة يوليو' })
       .expect(201);
 
     // المكلَّفُ يعلّق — والحالةُ كما هي.
@@ -313,7 +357,7 @@ describe('المهام — الرؤية والانتقال والاشتقاق (e
       await request(app.getHttpServer())
         .post('/tasks')
         .set('Authorization', `Bearer ${ownerToken}`)
-        .send({ title: 'خطأ', assigneeId: mgrId, ...bad })
+        .send({ title: 'خطأ', assigneeId: mgrId, assigneeKind: 'USER', ...bad })
         .expect(400);
     }
     await request(app.getHttpServer())
