@@ -59,4 +59,25 @@ export class TenantPrismaService {
       }, options),
     );
   }
+
+  /**
+   * **مسنَدُ الإدارة** (`ق-٦٧٥`): معاملةٌ لمدير المنصّة **لا لمستأجر** — تضبط
+   * `app.platform_admin = 'true'` للمعاملة وحدَها، فتقبل سياساتُ الجداول ثنائية
+   * النطاق ما هو للمنصّة (كتابةُ قالبٍ عامٍّ `companyId IS NULL` · قراءةٌ عبر
+   * المنشآت حيث تنصّ السياسةُ على ذلك).
+   *
+   * ⚠️ **ليس مفتاحاً ثانياً لعزل المستأجر** — ما رُفض في `ق-٦٦٤` (ج) كان مفتاحاً
+   * يفتح صفوفَ مستأجرٍ بغير سياقه. هذا مسارُ المنصّة الذي أُعلن دَيناً في
+   * `KNOWN_WEAK` («حتى يُبنى للمنصّة مسارٌ بسياق أو دورٌ ثانٍ»): **مسارٌ بسياق**،
+   * لا دورَ يتجاوز العزل. **ويُستدعى بعد أن يثبت الحارسُ هويّةَ مدير المنصّة** —
+   * لا من مسارٍ يخدم مستأجراً. ولا امتدادَ حقنٍ هنا: العميلُ خامٌ داخل المعاملة.
+   */
+  async runAsPlatformAdmin<T>(work: (tx: Prisma.TransactionClient) => Promise<T>, options?: { timeout?: number; maxWait?: number }): Promise<T> {
+    return withTransactionProbe(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.platform_admin', 'true', true)`;
+        return work(tx);
+      }, options),
+    );
+  }
 }

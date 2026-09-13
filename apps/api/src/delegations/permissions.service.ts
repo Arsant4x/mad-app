@@ -167,10 +167,13 @@ export class PermissionsService {
       const t = user.permissionTemplate;
       return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
     }
-    const company = await this.prisma.company.findUniqueOrThrow({
-      where: { id: tenant.companyId },
-      include: { permissionTemplate: true },
-    });
+    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
+    const company = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.company.findUniqueOrThrow({
+        where: { id: tenant.companyId },
+        include: { permissionTemplate: true },
+      }),
+    );
     const t = company.permissionTemplate;
     return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
   }

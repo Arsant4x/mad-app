@@ -60,13 +60,9 @@ export function rawCompanyUserCalls(source: string): RawCall[] {
 
 /** المُعلَن بحجّته — كلُّ سطرٍ هنا موضعٌ قائمٌ يُقرأ خاماً عمداً. */
 const DECLARED: { file: string; receiver: string; model: string; op: string; why: string }[] = [
-  {
-    file: 'src/templates/templates.service.ts',
-    receiver: 'this.prisma',
-    model: 'companyUser',
-    op: 'count',
-    why: 'حذفُ قالبٍ عامٍّ بيد مدير المنصّة: الحساباتُ الراكبةُ عليه في كلّ المنشآت — عدٌّ تحت سياقٍ واحدٍ يكذب؛ مسارُ منصّةٍ يُحسم في المرحلة ④',
-  },
+  // كان هنا موضعٌ واحد: عدُّ الحسابات الراكبة على قالبٍ عامٍّ عند حذفه (`templates.service.ts`)
+  // بالعميل الخام — وخرج في المرحلة ③ (`ق-٦٧٥`): صار يُعدّ **بمسنَد الإدارة** (`runAsPlatformAdmin`)
+  // فيرى كلَّ المنشآت اليومَ، ويبقى صادقاً يوم يُغلق `company_users` في ④ بسياسةٍ تقرأ المسنَد.
 ];
 
 describe('حارس المرحلة ① — company_users وcompany_user_branches تحت سياق المنشأة', () => {

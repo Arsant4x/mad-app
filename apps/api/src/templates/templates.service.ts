@@ -1,6 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
@@ -32,22 +31,42 @@ function sanitizeScreenActions(input: Record<string, string[]> | undefined, allo
   return Object.keys(out).length ? out : null;
 }
 
+type Tx = Prisma.TransactionClient;
+
+/**
+ * 🔴 **كلُّ عمليةٍ هنا في معاملة نطاقها** (`ق-٦٧٥` · المرحلة ③).
+ *
+ * `permission_templates` تحت `FORCE` بصياغةٍ فريدة: **العامُّ** (`companyId IS NULL`)
+ * يُرى من كلّ سياقٍ ومن غير سياق (التسجيلُ يقرؤه قبل أيّ سياق)، **والخاصُّ** لصاحبه
+ * وحدَه؛ **والكتابةُ**: المنشأةُ على قوالبها، **ومسنَدُ الإدارة** وحدَه على العامّ.
+ *
+ *   · نطاقُ منشأة ⇒ `runInTenantContext(companyId)` — ترى العامَّ وقوالبَها.
+ *   · نطاقُ المنصّة ⇒ `runAsPlatformAdmin()` — تكتب العامَّ وترى الكلَّ (إشرافاً).
+ *
+ * **القياسُ الحيّ**: تحت الطُّعم قبل النقل `23/54` حمراء (`new row violates
+ * row-level security policy for table "permission_templates"`) — وبعده خضراء.
+ */
 @Injectable()
 export class TemplatesService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly tenantPrisma: TenantPrismaService,
-  ) {}
+  // لا `PrismaService` خامٌ هنا بعد المرحلة ③: كلُّ نداءٍ في معاملة نطاقه.
+  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  /** معاملةُ النطاق: منشأةٌ تحت سياقها، أو المنصّةُ بمسنَدها. */
+  private inScope<T>(scope: TemplateScope | undefined, work: (tx: Tx) => Promise<T>): Promise<T> {
+    return scope?.companyId ? this.tenantPrisma.runInTenantContext(scope.companyId, work) : this.tenantPrisma.runAsPlatformAdmin(work);
+  }
 
   /** What this caller may see: a company gets the global presets PLUS its own
    * templates — never a neighbour's. The platform admin sees everything. */
   list(scope?: TemplateScope) {
-    if (!scope || scope.companyId === null) {
-      return this.prisma.permissionTemplate.findMany({ orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }] });
-    }
-    return this.prisma.permissionTemplate.findMany({
-      where: { OR: [{ companyId: null }, { companyId: scope.companyId }] },
-      orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }],
+    return this.inScope(scope, (tx) => {
+      if (!scope || scope.companyId === null) {
+        return tx.permissionTemplate.findMany({ orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }] });
+      }
+      return tx.permissionTemplate.findMany({
+        where: { OR: [{ companyId: null }, { companyId: scope.companyId }] },
+        orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }],
+      });
     });
   }
 
@@ -55,86 +74,92 @@ export class TemplatesService {
     const name = dto.name?.trim();
     if (!name) throw new ConflictException(MSG.template_name_required);
 
-    // Two-layer uniqueness (6.6) within the caller's own scope: an owner's
-    // names can't clash with each other, but CAN match another company's —
-    // scopes never see one another.
-    const duplicate = await this.prisma.permissionTemplate.findFirst({ where: { name, companyId: scope.companyId } });
-    if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name }));
+    return this.inScope(scope, async (tx) => {
+      // Two-layer uniqueness (6.6) within the caller's own scope: an owner's
+      // names can't clash with each other, but CAN match another company's —
+      // scopes never see one another.
+      const duplicate = await tx.permissionTemplate.findFirst({ where: { name, companyId: scope.companyId } });
+      if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name }));
 
-    const isAllScreens = dto.isAllScreens ?? false;
-    const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? []);
-    const screenActions = sanitizeScreenActions(dto.screenActions, allowedScreens, isAllScreens);
-    return this.prisma.permissionTemplate.create({
-      data: {
-        name,
-        companyId: scope.companyId,
-        isAllScreens,
-        allowedScreens,
-        screenActions: screenActions ?? Prisma.DbNull,
-      },
+      const isAllScreens = dto.isAllScreens ?? false;
+      const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? []);
+      const screenActions = sanitizeScreenActions(dto.screenActions, allowedScreens, isAllScreens);
+      return tx.permissionTemplate.create({
+        data: {
+          name,
+          companyId: scope.companyId,
+          isAllScreens,
+          allowedScreens,
+          screenActions: screenActions ?? Prisma.DbNull,
+        },
+      });
     });
   }
 
   async update(id: string, dto: UpdateTemplateDto, scope: TemplateScope) {
-    const existing = await this.getOwned(id, scope);
-    if (existing.isSystem) throw new ForbiddenException(MSG.template_system_immutable);
+    return this.inScope(scope, async (tx) => {
+      const existing = await this.getOwned(tx, id, scope);
+      if (existing.isSystem) throw new ForbiddenException(MSG.template_system_immutable);
 
-    const newName = dto.name?.trim();
-    if (newName && newName !== existing.name) {
-      const duplicate = await this.prisma.permissionTemplate.findFirst({ where: { name: newName, companyId: scope.companyId } });
-      if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name: newName }));
-    }
+      const newName = dto.name?.trim();
+      if (newName && newName !== existing.name) {
+        const duplicate = await tx.permissionTemplate.findFirst({ where: { name: newName, companyId: scope.companyId } });
+        if (duplicate) throw new ConflictException(formatMessage(MSG.template_name_taken, { name: newName }));
+      }
 
-    const isAllScreens = dto.isAllScreens ?? existing.isAllScreens;
-    const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? existing.allowedScreens);
-    // Re-sanitize against the (possibly new) screen set so an action for a
-    // screen just removed from the template doesn't linger.
-    const sourceActions = dto.screenActions ?? ((existing.screenActions as Record<string, string[]> | null) ?? undefined);
-    const screenActions = sanitizeScreenActions(sourceActions, allowedScreens, isAllScreens);
-    return this.prisma.permissionTemplate.update({
-      where: { id },
-      data: {
-        name: newName ?? existing.name,
-        isAllScreens,
-        allowedScreens,
-        screenActions: screenActions ?? Prisma.DbNull,
-      },
+      const isAllScreens = dto.isAllScreens ?? existing.isAllScreens;
+      const allowedScreens = isAllScreens ? [] : (dto.allowedScreens ?? existing.allowedScreens);
+      // Re-sanitize against the (possibly new) screen set so an action for a
+      // screen just removed from the template doesn't linger.
+      const sourceActions = dto.screenActions ?? ((existing.screenActions as Record<string, string[]> | null) ?? undefined);
+      const screenActions = sanitizeScreenActions(sourceActions, allowedScreens, isAllScreens);
+      return tx.permissionTemplate.update({
+        where: { id },
+        data: {
+          name: newName ?? existing.name,
+          isAllScreens,
+          allowedScreens,
+          screenActions: screenActions ?? Prisma.DbNull,
+        },
+      });
     });
   }
 
   async remove(id: string, scope: TemplateScope): Promise<void> {
-    const existing = await this.getOwned(id, scope);
-    if (existing.isSystem) throw new ForbiddenException(MSG.template_system_undeletable);
+    await this.inScope(scope, async (tx) => {
+      const existing = await this.getOwned(tx, id, scope);
+      if (existing.isSystem) throw new ForbiddenException(MSG.template_system_undeletable);
 
-    /**
-     * 🔴 **عدُّ الحسابات الفرعية تحت سياق المنشأة حين يكون لها سياق** (`ق-٦٥٧` · المرحلة ①).
-     *
-     * قالبُ منشأةٍ لا يُسنَد إلا لحساباتها (`assertAssignable`) — فعدُّه داخل
-     * سياقها يعطي الجوابَ نفسَه اليوم، **ويبقى صادقاً يوم يُغلق `company_users`**.
-     *
-     * ⚠️ **والقالبُ العامّ (`scope.companyId === null`) يُعدّ بلا سياقٍ عمداً**:
-     * مدير المنصّة يحذف قالباً عامّاً قد تركبه حساباتٌ في **كلّ** المنشآت،
-     * **فعدٌّ تحت سياقٍ واحدٍ يكذب** (يرى منشأةً ويعمي عن الباقي). هذا مسارُ
-     * منصّةٍ يقرأ عبر المستأجرين — **ويُحسم في المرحلة ④ بقرارٍ لا هنا**:
-     * تحت `FORCE` سيعود صفراً ويُحذف قالبٌ مستعمَل. مُعلَنٌ لا مُرجَّح.
-     */
-    const countUsers = () => this.prisma.companyUser.count({ where: { permissionTemplateId: id } });
-    const [companyCount, companyUserCount] = await Promise.all([
-      this.prisma.company.count({ where: { permissionTemplateId: id } }),
-      scope.companyId ? this.tenantPrisma.runInTenantContext(scope.companyId, (tx) => tx.companyUser.count({ where: { permissionTemplateId: id } })) : countUsers(),
-    ]);
-    if (companyCount + companyUserCount > 0) {
-      throw new ConflictException(MSG.template_in_use);
-    }
+      /**
+       * 🔴 **عدُّ ما يركب على القالب في معاملة نطاقه** (`ق-٦٥٧` · `ق-٦٦٢`).
+       *
+       * قالبُ منشأةٍ لا يُسنَد إلا لحساباتها (`assertAssignable`) — فعدُّه داخل
+       * سياقها يعطي الجوابَ نفسَه، **ويبقى صادقاً يوم يُغلق `company_users`**.
+       *
+       * ⚠️ **والقالبُ العامّ**: مدير المنصّة يحذف قالباً عامّاً قد تركبه حساباتٌ في
+       * **كلّ** المنشآت — فيُعدّ **بمسنَد الإدارة** (`runAsPlatformAdmin`): اليومَ
+       * `company_users` بلا سياسة فالعدُّ يرى الكلَّ؛ ويوم يُغلق في ④ **تُقرأ سياستُه
+       * مسنَدَ الإدارة** فيبقى العدُّ صادقاً — لا صفراً يُخفي قالباً مستعمَلاً.
+       */
+      const [companyCount, companyUserCount] = await Promise.all([
+        tx.company.count({ where: { permissionTemplateId: id } }),
+        tx.companyUser.count({ where: { permissionTemplateId: id } }),
+      ]);
+      if (companyCount + companyUserCount > 0) {
+        throw new ConflictException(MSG.template_in_use);
+      }
 
-    await this.prisma.permissionTemplate.delete({ where: { id } });
+      await tx.permissionTemplate.delete({ where: { id } });
+    });
   }
 
   /** A template usable by this company when assigning an employee: a global
    * preset, or one of its own — never another company's (guessing an id must
    * not smuggle in a foreign template). */
   async assertAssignable(templateId: string, companyId: string): Promise<void> {
-    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: templateId }, select: { companyId: true } });
+    const template = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.permissionTemplate.findUnique({ where: { id: templateId }, select: { companyId: true } }),
+    );
     if (!template || (template.companyId !== null && template.companyId !== companyId)) {
       throw new NotFoundException(MSG.template_not_found);
     }
@@ -143,8 +168,8 @@ export class TemplatesService {
   /** The caller's own scope only: an owner reaches its company's templates,
    * the admin reaches global ones. Anything else reads as "not found" — the
    * same non-enumeration stance the rest of the app takes. */
-  private async getOwned(id: string, scope: TemplateScope) {
-    const existing = await this.prisma.permissionTemplate.findUnique({ where: { id } });
+  private async getOwned(tx: Tx, id: string, scope: TemplateScope) {
+    const existing = await tx.permissionTemplate.findUnique({ where: { id } });
     if (!existing || existing.companyId !== scope.companyId) throw new NotFoundException(MSG.template_not_found);
     return existing;
   }

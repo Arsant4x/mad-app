@@ -101,10 +101,16 @@ export class TenantGuard implements CanActivate {
       throw new UnauthorizedException(MSG.company_login_required);
     }
 
-    const company = await this.prisma.company.findUniqueOrThrow({
-      where: { id: payload.companyId },
-      include: { permissionTemplate: true },
-    });
+    // 🔴 المنشأةُ وقالبُها **تحت سياقها** (`ق-٦٧٥` · المرحلة ③): `permission_templates` تحت
+    //    `FORCE` — قالبُ منشأةٍ خاصٌّ لا يُرى بلا سياق فيعود التضمينُ فارغاً ويسقط الحارسُ.
+    //    `companies` بلا سياسة، فالقراءةُ داخل السياق تعطي الصفَّ نفسَه.
+    const tenantCompanyId = payload.companyId;
+    const company = await this.tenantPrisma.runInTenantContext(tenantCompanyId, (tx) =>
+      tx.company.findUniqueOrThrow({
+        where: { id: tenantCompanyId },
+        include: { permissionTemplate: true },
+      }),
+    );
 
     const evaluated = evaluateCompanyStatus(company);
     if (evaluated.status !== company.status || evaluated.frozenAt?.getTime() !== company.frozenAt?.getTime()) {
