@@ -1,6 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * `ق-٧٠٧` — **دورُ التطبيق يخطّط لكلّ تنفيذٍ خطّةً مخصَّصة: `plan_cache_mode = force_custom_plan` — مقروءاً من القاعدة.**
