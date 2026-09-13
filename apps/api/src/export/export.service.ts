@@ -21,6 +21,9 @@ const EXPORT_NOTES = {
     'مفاتيح التوقيع وشهادات الهيئة **لا تُصدَّر إطلاقاً**. ويُصدَّر بدلها ملخّص الربط في `zatcaLink` ' +
     '(الحالة والبيئة وتاريخ الربط) — فتعرف أنك كنت مربوطاً، ولا تحمل الحزمة ما يُنتحَل به توقيعك.',
   المرفقات: 'هذه النسخة تحمل **بيانات** المرفقات (الاسم والحجم والنوع والمفتاح) لا الملفات نفسها.',
+  'أسماء الدخول':
+    'كلُّ حسابٍ فرعيّ يحمل اسمَ دخوله في `companyUser.username` — لتُعاد صلاحياتُ موظّفيك بأسمائهم. ' +
+    'ولا تحمل الحزمةُ كلماتِ السرّ (ولا هاشاتها) ولا رموزَ الاستعادة والتدوير: أسرارُ مصادقةٍ لا تُصدَّر.',
 } as const;
 
 @Injectable()
@@ -176,6 +179,25 @@ export class ExportService {
         throw new InternalServerErrorException(
           `تفاوت بين الحزمة والقاعدة — لم تُسلَّم: ${mismatches.join(' | ')}`,
         );
+      }
+
+      /**
+       * 🔴 **اسمُ دخول الحساب الفرعيّ — الاسمُ وحدَه** (`ق-٦٧٢`).
+       *
+       * حزمةُ الإغلاق بُنيت لتُمكّن التاجر من الوفاء بحفظه (`ق-٥٥٤`)، **وحزمةٌ تُعيد
+       * صلاحياتِ موظّفٍ بلا اسم دخوله لا تُمكّنه من شيء**. والاسمُ يعيش في
+       * `login_identities` (لا يُصدَّر: هاشُ كلمة السرّ سرُّ مصادقة) — فيُلحق بصفّ
+       * الحساب **بقائمةٍ بيضاء من حقلٍ واحد**، كما يُلحق ملخّصُ الهيئة أدناه:
+       * وجودُ الهويّة واسمُها لا ما يُنتحَل به. **والصفوفُ صفوفُ هذه المنشأة وحدَها**
+       * (رُشّحت أعلاه) فلا تُقرأ هويّةٌ لغيرها.
+       */
+      const companyUsers = (data[delegateName('CompanyUser')] ?? []) as { loginIdentityId: string; username?: string }[];
+      if (companyUsers.length > 0) {
+        const identities = await (
+          tx as unknown as { loginIdentity: { findMany: (a: unknown) => Promise<{ id: string; username: string }[]> } }
+        ).loginIdentity.findMany({ where: { id: { in: companyUsers.map((u) => u.loginIdentityId) } }, select: { id: true, username: true } });
+        const usernameOf = new Map(identities.map((i) => [i.id, i.username]));
+        for (const u of companyUsers) u.username = usernameOf.get(u.loginIdentityId);
       }
 
       // ملخّص ربط الهيئة: **وجودٌ لا قيمة** — بقائمةٍ بيضاء من الحقول.

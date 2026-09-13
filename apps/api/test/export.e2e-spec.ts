@@ -151,4 +151,28 @@ describe('Data export (e2e)', () => {
     expect(usersB.every((u) => u.companyId === companyB)).toBe(true);
     expect(templatesB.every((t) => t.companyId === companyB)).toBe(true);
   }, 60000);
+
+  /**
+   * 🔴 **اسمُ دخول الحساب الفرعيّ في الحزمة — ولا هاشَ ولا رمزَ استعادة** (`ق-٦٧٢`).
+   *
+   * حزمةُ الإغلاق بُنيت لتُمكّن التاجر من الوفاء بحفظه (`ق-٥٥٤`)؛ **وحزمةٌ تُعيد
+   * صلاحياتِ موظّفٍ بلا اسم دخوله لا تُمكّنه من شيء** — حقٌّ نظاميٌّ لا راحةُ استعمال.
+   * والاسمُ يعيش في `login_identities` لا في صفّ الحساب، **فلم يظهر قطّ**.
+   *
+   * ⚠️ **والطُّعمُ الدائم على الجهة الأخرى**: هاشُ كلمة السرّ سرُّ مصادقةٍ — يُبحث عنه
+   * في **نصّ الحزمة كلِّه** (المفتاحُ وبصمةُ `argon2`) لا في نموذجٍ بعينه.
+   */
+  it('🔴 يحمل اسمَ دخول الحساب الفرعيّ — ولا يحمل هاشاً ولا رمزَ استعادة في نصّه كلِّه', async () => {
+    const res = await authA(request(app.getHttpServer()).get('/export')).expect(200);
+    const users = res.body.data[delegateName('CompanyUser')] as { name: string; username?: string }[];
+    const row = users.find((u) => u.name === `موظف exp-emp-${suffix}`);
+    expect(row).toBeDefined();
+    expect(row!.username).toBe(`exp-emp-${suffix}`);
+
+    const text = JSON.stringify(res.body);
+    expect(text).not.toContain('passwordHash');
+    expect(text).not.toContain('$argon2');
+    expect(text).not.toContain('tokenHash');
+    expect(res.body.data[delegateName('LoginIdentity')]).toBeUndefined();
+  }, 60000);
 });
