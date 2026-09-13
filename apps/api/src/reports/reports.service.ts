@@ -168,34 +168,66 @@ export class ReportsService {
    *      إيراداً فوراً**. ⚠️ **وهذا شرطُ المالك**: «**فمن يقرأ إيرادَه يعرف كم
    *      منه لم يمرّ بالالتزام**» — **فحدٌّ يُعلَن في وثيقةٍ لا يُقرأ**.
    */
+  /**
+   * ⚠️ **الترشيحُ في القاعدة لا في العميل** (`ق-٧٠٦`): كان التقريرُ يحمّل **كلَّ** قسطٍ له فترةُ
+   * خدمةٍ بعلاقاته الثلاث ليُرشَّح في JS إلى ما مؤجَّلُه موجب — **`22,872` قسطاً لتُخرج `4`**،
+   * وزمنُ القاعدة `90–170 ms` من `2.3–7.4 s`: `≥ 94٪` في محرّك Prisma يبني الكائناتِ داخل نافذة
+   * المعاملة (`ق-٧٠٤`)، **فيسقط بـ`500` عند مهلتها** — والمعاملةُ حاملةُ سياق العزل فلا تُزال ولا
+   * تُطال (`ق-٧٠٥`). فالمحصَّلُ يُجمع والفرقُ يُرشَّح في `SQL` (كـ`collectionRate` أعلاه)، **ولا يصل
+   * إلى العميل إلا ما سيُعرض**. عزلُ الصفوف يسري على الخام (الطبقةُ الثانية)، و`companyId` مقيَّدٌ
+   * صراحةً (الطبقةُ الأولى).
+   *
+   * **والناتجُ يطابق ما كان رقماً رقماً** (شرطُ المالك): المبالغُ `DECIMAL(18,2)` فمجموعُها ودرجةُ
+   * تقريبه هما ما كانا، ويُعاد الحسابُ نفسُه في JS على الصفوف العائدة (`round2` على المحصَّل ثم على
+   * الفرق) — والترشيحُ في `HAVING` مُقدِّمةٌ لا بديل. ويحرسه `deferred-revenue.live.spec.ts`: يقارن
+   * الناتجَ بالشكل القديم على أكبر منشأةٍ في القاعدة (`22,872` قسطاً على التطوير) ويثبت النسبةَ بالعكس.
+   */
   deferredRevenue(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const installments = await tx.installment.findMany({
-        where: { serviceStart: { not: null }, serviceEnd: { not: null } },
-        select: {
-          dueDate: true,
-          serviceStart: true,
-          serviceEnd: true,
-          baseRecognized: true,
-          contract: { select: { no: true, tenant: true, unit: { select: { unitNo: true } } } },
-          payments: { select: { baseNetAmount: true } },
-        },
-        orderBy: { dueDate: 'asc' },
-      });
+      const rows = await tx.$queryRaw<
+        {
+          contractNo: string;
+          tenant: string;
+          unitNo: string | null;
+          serviceStart: Date;
+          serviceEnd: Date;
+          collected: number;
+          baseRecognized: number;
+        }[]
+      >`
+        SELECT
+          c.no                                            AS "contractNo",
+          c.tenant                                        AS "tenant",
+          u."unitNo"                                      AS "unitNo",
+          i."serviceStart"                                AS "serviceStart",
+          i."serviceEnd"                                  AS "serviceEnd",
+          COALESCE(SUM(p."baseNetAmount"), 0)::float8     AS "collected",
+          i."baseRecognized"::float8                      AS "baseRecognized"
+        FROM "contract_installments" i
+        JOIN "contracts" c ON c.id = i."contractId"
+        LEFT JOIN "units" u ON u.id = c."unitId"
+        LEFT JOIN "rent_payments" p ON p."installmentId" = i.id AND p."companyId" = ${companyId}
+        WHERE i."companyId" = ${companyId}
+          AND i."serviceStart" IS NOT NULL
+          AND i."serviceEnd" IS NOT NULL
+        GROUP BY i.id, c.id, u.id
+        HAVING COALESCE(SUM(p."baseNetAmount"), 0) - i."baseRecognized" > 0
+        ORDER BY i."dueDate" ASC, i.id ASC
+      `;
 
-      const outstanding = installments
-        .map((i) => {
-          const collected = round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
+      const outstanding = rows
+        .map((r) => {
+          const collected = round2(r.collected);
           return {
-            contractNo: i.contract.no,
-            tenant: i.contract.tenant,
-            unitNo: i.contract.unit?.unitNo ?? null,
-            serviceStart: i.serviceStart,
-            serviceEnd: i.serviceEnd,
+            contractNo: r.contractNo,
+            tenant: r.tenant,
+            unitNo: r.unitNo ?? null,
+            serviceStart: r.serviceStart,
+            serviceEnd: r.serviceEnd,
             collected,
-            recognized: round2(Number(i.baseRecognized)),
+            recognized: round2(r.baseRecognized),
             // ما لم يخرج من الالتزام بعد — إيراداً كان أو ردّاً أو دخلاً آخر.
-            deferred: round2(collected - Number(i.baseRecognized)),
+            deferred: round2(collected - r.baseRecognized),
           };
         })
         .filter((r) => r.deferred > 0);
