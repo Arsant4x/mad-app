@@ -49,7 +49,8 @@ BEGIN
    WHERE li."companyId" IS NULL;
 
   IF owners_before + members_before = 0 THEN
-    RAISE NOTICE 'ق-٦٦٦: لا هويّةَ تُعبَّأ — قاعدةٌ فارغة أو معبَّأة';
+    -- WARNING لا NOTICE (ق-٦٩٥): Prisma لا يطبع NOTICE وسجلُّ القاعدة يقف عند warning — فما تقوله الهجرةُ بـNOTICE لا يقرؤه أحد.
+    RAISE WARNING 'ق-٦٦٦: لا هويّةَ تُعبَّأ — قاعدةٌ فارغة أو معبَّأة';
   ELSE
     UPDATE login_identities li SET "companyId" = c.id
       FROM companies c
@@ -71,7 +72,7 @@ BEGIN
       RAISE EXCEPTION 'ق-٦٦٦: العدُّ لا يطابق — مالكون قبل % نُقل % · حساباتٌ قبل % نُقل % · بقي بلا تعبئة %',
         owners_before, owners_moved, members_before, members_moved, left_unfilled;
     END IF;
-    RAISE NOTICE 'ق-٦٦٦: عُبّئت % هويّة مالك و% هويّة حساب فرعيّ', owners_moved, members_moved;
+    RAISE WARNING 'ق-٦٦٦: عُبّئت % هويّة مالك و% هويّة حساب فرعيّ', owners_moved, members_moved;
   END IF;
 END $$;
 

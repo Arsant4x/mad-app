@@ -28,7 +28,8 @@ BEGIN
    WHERE t."isSystem" = true;
 
   IF before_count = 0 THEN
-    RAISE NOTICE 'ق-٦٥١: لا منشأةَ على قالبٍ نظاميّ — لا شيءَ يُنقل';
+    -- WARNING لا NOTICE (ق-٦٩٥): Prisma لا يطبع NOTICE وسجلُّ القاعدة يقف عند warning — فما تقوله الهجرةُ بـNOTICE لا يقرؤه أحد.
+    RAISE WARNING 'ق-٦٥١: لا منشأةَ على قالبٍ نظاميّ — لا شيءَ يُنقل';
     RETURN;
   END IF;
 
@@ -57,5 +58,5 @@ BEGIN
     RAISE EXCEPTION 'ق-٦٥١: العدُّ لا يطابق — قبل % · نُقل % · بعد % (منشأةٌ على قالبٍ نظاميٍّ غيرِ شامل؟ لا تُنقل بالظنّ)', before_count, moved, after_count;
   END IF;
 
-  RAISE NOTICE 'ق-٦٥١: نُقلت % منشأة من القالب النظاميّ إلى %', moved, target_id;
+  RAISE WARNING 'ق-٦٥١: نُقلت % منشأة من القالب النظاميّ إلى %', moved, target_id;
 END $$;
