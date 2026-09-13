@@ -251,7 +251,10 @@ export class DelegationsService {
       );
       return rootGrantsFrom(u.permissionTemplate.isAllScreens, u.permissionTemplate.allowedScreens, u.permissionTemplate.screenActions as ScreenActionMap | null);
     }
-    const c = await this.prisma.company.findUniqueOrThrow({ where: { id: tenant.companyId }, include: { permissionTemplate: true } });
+    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
+    const c = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.company.findUniqueOrThrow({ where: { id: tenant.companyId }, include: { permissionTemplate: true } }),
+    );
     return rootGrantsFrom(c.permissionTemplate.isAllScreens, c.permissionTemplate.allowedScreens, c.permissionTemplate.screenActions as ScreenActionMap | null);
   }
 

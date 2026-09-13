@@ -29,10 +29,9 @@ import { TENANT_SCOPED_MODELS } from '../src/common/tenant/tenant-scope.extensio
  * لا ثغرة في إحداهما.
  */
 const DELIBERATE_EXCEPTIONS: Record<string, string> = {
-  // companyId فيه **قابل للعدم**: القوالب العامة (presets) تحمل null، وهي ما
-  // يبحث عنه التسجيل الذاتي. سياسة `companyId = current_setting(...)` لا
-  // تطابق NULL أبداً، فتفعيل RLS هنا يُخفي القوالب العامة ويكسر التسجيل.
-  permission_templates: 'ثنائي النطاق عمداً — القوالب العامة companyId = NULL',
+  // `permission_templates` خرج من الاستثناءات في المرحلة ③ (`ق-٦٧٥`): صار تحت FORCE
+  // بسياسةٍ فريدة تسمح بالعامّ (companyId = NULL) من كلّ سياق وتحصر الخاصَّ في صاحبه —
+  // فلم يعد تفعيلُ RLS يُخفي القوالبَ العامّة ولا يكسر التسجيل.
   // يُقرأ **قبل** وجود سياق مستأجر: المصادقة تجد المستخدم أولاً ثم تشتقّ
   // شركته منه. سياسة تعتمد على app.company_id تمنع الدخول نفسه.
   //

@@ -23,21 +23,28 @@ export interface BootstrapResult {
 export async function bootstrapPlatform(prisma: PrismaClient, admin: { username: string; password: string }): Promise<BootstrapResult> {
   if (!admin.password) throw new Error('كلمة مرور مدير المنصة مطلوبة — لا قيمة افتراضية لها.');
 
-  // قالب المطوّر: صلاحية كل الشاشات، نظاميّ فلا يُحذف من الواجهة.
-  await prisma.permissionTemplate.upsert({
-    where: { id: 'dev-template' },
-    update: {},
-    create: { id: 'dev-template', name: 'المطوّر', isSystem: true, isAllScreens: true },
-  });
+  // 🔴 القوالبُ العامّة تُكتب **بمسنَد الإدارة** (`ق-٦٧٥` · المرحلة ③): `permission_templates`
+  //    تحت `FORCE`، وسياستُها لا تقبل كتابةَ صفٍّ بلا منشأة إلا في معاملةٍ تحمل
+  //    `app.platform_admin = 'true'` — والتمهيدُ فعلُ المنصّة نفسِها.
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.platform_admin', 'true', true)`;
 
-  // القالب العام الذي تركب عليه كل منشأة جديدة — مسار التسجيل الذاتي يبحث
-  // عن قالب عام `isAllScreens` **غيرِ نظاميّ** (`isSystem: false` — ق-٦٤٤) وبدونه
-  // يرفض التسجيل بـ register_unavailable. ⚠️ فقالبُ المطوّر أعلاه، وإن كان شاملاً،
-  // **لا يركب عليه تاجر**: كان الترتيبُ وحدَه يفصل بينهما فركب ستٌّ من ستٍّ عليه.
-  await prisma.permissionTemplate.upsert({
-    where: { id: 'full-access-template' },
-    update: {},
-    create: { id: 'full-access-template', name: 'المستخدم الأول (شامل)', isSystem: false, isAllScreens: true },
+    // قالب المطوّر: صلاحية كل الشاشات، نظاميّ فلا يُحذف من الواجهة.
+    await tx.permissionTemplate.upsert({
+      where: { id: 'dev-template' },
+      update: {},
+      create: { id: 'dev-template', name: 'المطوّر', isSystem: true, isAllScreens: true },
+    });
+
+    // القالب العام الذي تركب عليه كل منشأة جديدة — مسار التسجيل الذاتي يبحث
+    // عن قالب عام `isAllScreens` **غيرِ نظاميّ** (`isSystem: false` — ق-٦٤٤) وبدونه
+    // يرفض التسجيل بـ register_unavailable. ⚠️ فقالبُ المطوّر أعلاه، وإن كان شاملاً،
+    // **لا يركب عليه تاجر**: كان الترتيبُ وحدَه يفصل بينهما فركب ستٌّ من ستٍّ عليه.
+    await tx.permissionTemplate.upsert({
+      where: { id: 'full-access-template' },
+      update: {},
+      create: { id: 'full-access-template', name: 'المستخدم الأول (شامل)', isSystem: false, isAllScreens: true },
+    });
   });
 
   const existing = await prisma.loginIdentity.findUnique({ where: { username: admin.username }, select: { id: true } });
