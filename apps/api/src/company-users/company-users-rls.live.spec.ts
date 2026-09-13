@@ -142,16 +142,22 @@ d('عزلُ company_users وcompany_user_branches — الحسابُ لمنشأ�
   it('⭐ ④ مسنَدُ الإدارة يرى حسابات كلّ المنشآت (عدُّ الراكبين على قالبٍ عامّ) — ولا يكتب', async () => {
     const out = await rolledBack(prisma, async (tx) => {
       const { memberId } = await memberOfAWithBranch(tx);
+      // وحسابٌ في «ب» أيضاً — فالمسنَدُ يُقاس على منشأتين صُنعتا هنا لا على ما في القاعدة.
+      await asCompany(tx, companyB);
+      const memberB = await tx.loginIdentity.create({
+        data: { username: `cu-rls-probe-b-${Date.now()}`, passwordHash: 'x', actorType: 'COMPANY_USER', companyId: companyB, companyUser: { create: { companyId: companyB, name: 'probe-b', permissionTemplateId: templateId } } },
+        include: { companyUser: { select: { id: true } } },
+      });
       await asCompany(tx, null);
       await asPlatformAdmin(tx, true);
       const seesA = await countWhere(tx, `SELECT count(*)::bigint AS n FROM company_users WHERE id = '${memberId}'`);
-      const companiesSeen = await countWhere(tx, 'SELECT count(DISTINCT "companyId")::bigint AS n FROM company_users');
+      const companiesSeen = await countWhere(tx, `SELECT count(DISTINCT "companyId")::bigint AS n FROM company_users WHERE id IN ('${memberId}', '${memberB.companyUser!.id}')`);
       const identity = await tx.loginIdentity.create({ data: { username: `cu-rls-admin-${Date.now()}`, passwordHash: 'x', actorType: 'COMPANY_USER' } });
       const writes = await attempt(tx.$executeRaw`INSERT INTO company_users (id, "loginIdentityId", "companyId", name, "permissionTemplateId", "updatedAt") VALUES (gen_random_uuid()::text, ${identity.id}, ${companyB}, 'probe-admin', ${templateId}, now())`);
       return { seesA, companiesSeen, writes };
     });
     expect(out.seesA).toBe(1);
-    expect(out.companiesSeen).toBeGreaterThan(1);
+    expect(out.companiesSeen).toBe(2);
     expect(out.writes).toContain('row-level security policy');
   });
 });

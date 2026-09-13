@@ -94,12 +94,22 @@ d('منشأةُ هويّة الدخول — الانحرافُ صفر، والي
    */
   async function asPlatformAdmin<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     return rolledBack(prisma, async (tx) => {
-      const blind = await count(tx, 'SELECT count(*)::bigint AS n FROM company_users');
+      // ⚠️ الآليةُ تُثبَت على صفٍّ يُصنع هنا — لا على صفوفٍ قائمة (قاعدةُ السير قد تكون بلا حساباتٍ فرعية).
+      const template = await tx.permissionTemplate.findFirstOrThrow({ where: { companyId: null, isSystem: false }, select: { id: true } });
+      await asCompany(tx, companyA);
+      const probe = await tx.loginIdentity.create({
+        data: { username: `identity-company-admin-probe-${Date.now()}`, passwordHash: 'x', actorType: 'COMPANY_USER', companyId: companyA, companyUser: { create: { companyId: companyA, name: 'probe', permissionTemplateId: template.id } } },
+        include: { companyUser: { select: { id: true } } },
+      });
+      await tx.$executeRaw`SELECT set_config('app.company_id', '', true)`;
+      const blind = await count(tx, `SELECT count(*)::bigint AS n FROM company_users WHERE id = '${probe.companyUser!.id}'`);
       await tx.$executeRaw`SELECT set_config('app.platform_admin', 'true', true)`;
       const [{ flag }] = await tx.$queryRaw<{ flag: string }[]>`SELECT current_setting('app.platform_admin', true) AS flag`;
       if (flag !== 'true') throw new Error(`المسنَدُ لم يُضبط: ${flag}`);
-      const seen = await count(tx, 'SELECT count(*)::bigint AS n FROM company_users');
-      if (blind !== 0 || seen === 0) throw new Error(`آليةُ المسنَد لم تُثبَت — بلا مسنَد ${blind} · به ${seen}`);
+      const seen = await count(tx, `SELECT count(*)::bigint AS n FROM company_users WHERE id = '${probe.companyUser!.id}'`);
+      if (blind !== 0 || seen !== 1) throw new Error(`آليةُ المسنَد لم تُثبَت — بلا مسنَد ${blind} · به ${seen}`);
+      // ويُزال المسبارُ قبل الفحص كي لا يُحسب فيه — والمعاملةُ تُرجَع كلُّها على أيّ حال.
+      await tx.$executeRaw`DELETE FROM login_identities WHERE id = ${probe.id}`;
       return fn(tx);
     });
   }
