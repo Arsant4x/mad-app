@@ -2,7 +2,11 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { round2 } from '../common/money/rounding';
+import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { ReportsService } from './reports.service';
+
+// المهلةُ صريحة (بوّابةُ السير) — والاختباراتُ الثقيلة ترفعها فوقها بمهلتها الخاصّة (الشكلُ القديم على 22,872 قسطاً).
+jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * `ق-٧٠٦` — **تقريرُ الإيراد المؤجَّل يُرشِّح في القاعدة — والناتجُ يطابق الشكلَ القديم رقماً رقماً،
