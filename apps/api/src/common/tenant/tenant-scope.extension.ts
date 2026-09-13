@@ -106,6 +106,11 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Reservation',
   'MessageScript',
   'ZatcaCredential',
+  // الحساباتُ الفرعية (المرحلة ④ · ق-٦٧٥): كانت خارج القائمة عمداً حتى يُحسم مسارُ
+  // الدخول الذي يقرؤها قبل معرفة المستأجر — وحُسم في ② (الهويّةُ تحمل منشأتَها، ق-٦٦٦)
+  // ونُقلت قراءاتُها كلُّها إلى سياقها في ① (ق-٦٥٧). فتُحقن هنا وتُحرَس في القاعدة معاً.
+  // (`CompanyUserBranch` بلا companyId — يُبلَغ عبر أبيه وسياستُه EXISTS عليه.)
+  'CompanyUser',
 ]);
 
 const READ_OR_MUTATE_BY_WHERE = new Set([
