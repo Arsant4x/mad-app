@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';
 import { createCompanyAccount } from './create-company-account';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -48,6 +49,7 @@ function resolveSubStart(dtoSubStart?: string): Date {
 export class CompaniesService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly tenantPrisma: TenantPrismaService,
     private readonly config: ConfigService,
   ) {}
 
@@ -85,7 +87,9 @@ export class CompaniesService {
   }
 
   async create(dto: CreateCompanyDto) {
-    const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } });
+    // قراءةُ القالب **بمسنَد الإدارة** (المرحلة ③ · `ق-٦٧٥`): هذا مسارُ المنصّة. القالبُ العامُّ
+    // يُرى بلا سياقٍ بنصّ السياسة أصلاً — لكن السياقَ يُسمّى لا يُترك للسياسة أن تسامحه.
+    const template = await this.tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } }));
     // A company account rides on a GLOBAL preset — a company-owned template
     // defines employees within a company, not the company itself.
     if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
@@ -118,7 +122,7 @@ export class CompaniesService {
     if (!existing) throw new NotFoundException(MSG.company_not_found);
 
     if (dto.permissionTemplateId) {
-      const template = await this.prisma.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } });
+      const template = await this.tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } }));
     // A company account rides on a GLOBAL preset — a company-owned template
     // defines employees within a company, not the company itself.
     if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);

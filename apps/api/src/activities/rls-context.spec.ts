@@ -173,13 +173,27 @@ describe('جدولٌ محميّ بـRLS لا يُقرأ خارج سياق الم
    */
   const KNOWN_DEBT: string[] = [];
 
+  /**
+   * **قراءةٌ تُقرّها السياسةُ بنصّها — لا دَينٌ ولا سياق** (المرحلة ③ · `ق-٦٧٥`).
+   *
+   * `permission_templates` صار تحت `FORCE` بصياغةٍ فريدة: `USING ("companyId" IS NULL OR …)`
+   * — **فالقالبُ العامُّ يُرى بلا أيّ سياقٍ بنصّ السياسة**، لا بتسامح. والتسجيلُ الذاتيّ
+   * يقرأ قالباً عامّاً **قبل أن توجد منشأةٌ تُعطى سياقاً** — فلا سياقَ يُصطنع له، ولا
+   * مسنَدَ إدارةٍ (المسجِّلُ ليس المنصّة). ⚠️ **وحدُّه معلَن**: القراءةُ تُرشِّح `companyId: null`
+   * صراحةً، **ويحرسها حيّاً** `permission-templates-rls.live.spec` ② (العامُّ يُرى بلا سياق).
+   * موضعٌ واحد بحجّته — وقراءةٌ خامّةٌ أخرى لهذا النموذج **تُدان**.
+   */
+  const POLICY_ADMITTED: string[] = ['auth/auth.service.ts ⟵ this.prisma.permissionTemplate'];
+
   it('⭐ لا `this.prisma.<نموذج محميّ>` جديد — والدَّين القائم لا يزيد', () => {
     // `runInTenantContext` يضع `app.company_id` قبل الاستعلام؛ وبدونه
     // تعود السياسة بمجموعةٍ فارغة **بنجاح** — و«لا صفوف» و«لم أرَ شيئاً»
     // يبدوان سواء.
     const found = scanViolations(files, tables);
     // الجديد وحده يُسقط — والدَّين المُعلَن يبقى مرئياً في هذا الملف.
-    expect(found.filter((f) => !KNOWN_DEBT.includes(f))).toEqual([]);
+    expect(found.filter((f) => !KNOWN_DEBT.includes(f) && !POLICY_ADMITTED.includes(f))).toEqual([]);
+    // ⚠️ والمُعلَنُ مُسنَّن: إعلانٌ لموضعٍ زال يبقى كذباً هنا حتى يُحذف.
+    expect(POLICY_ADMITTED.filter((f) => !found.includes(f))).toEqual([]);
   });
 
   it('⭐ ويفرّق بين طريقَي إقامة السياق — لا يُدين `audit_logs` ظلماً', () => {
