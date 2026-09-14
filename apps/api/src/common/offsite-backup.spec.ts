@@ -27,6 +27,7 @@ const BACKUP = read('ops', 'backup', 'offsite-backup.sh');
 const DRILL = read('ops', 'backup', 'restore-drill.sh');
 const FRESH = read('ops', 'backup', 'check-freshness.sh');
 const OBJECT = read('ops', 'backup', 'check-repo-object.sh');
+const PROOF = read('ops', 'backup', 'policy-proof.sh');
 const COMPOSE = read('docker-compose.prod.yml');
 
 /** الخدمةُ في ملفّ التركيب — تُقرأ ككتلةٍ مستقلّة لا بالبحث في الملفّ كلِّه. */
@@ -99,6 +100,8 @@ describe('النسخةُ خارج المضيف — خمسةُ شروطٍ محر�
     // وكلُّ توكيدٍ يتعذّر يُسقط التجربة: لا `|| true` على حكمٍ، ولا تخطٍّ صامت.
     expect(DRILL).toContain('fail "المفتاحُ المستعاد لا يفكّ');
     expect(DRILL).not.toContain('skip');
+    // وتُستعاد لقطةُ الخدمة لا أحدثُ لقطةٍ أيّاً كانت — فلقطةُ إثبات السياسة الرميّة (`ق-٧٦٠`) لا تُلتقط.
+    expect(DRILL).toMatch(/restore latest --host "\$\{BACKUP_HOST:-mad-app\}"/);
   });
 
   /**
@@ -201,6 +204,44 @@ describe('المخزَّنُ يُقاس شهرياً في تجربة الاست�
     // وبلوغُ الحدّ إنذارٌ مسمّىً بقراره لا سقوط
     expect(DRILL).toContain('بلغ المخزَّنُ حدَّ المراجعة');
     expect(DRILL.indexOf('بلغ المخزَّنُ حدَّ المراجعة')).toBeGreaterThan(DRILL.indexOf('stats --mode raw-data'));
+  });
+});
+
+/**
+ * `ق-٧٦٠` — **«يكتب ولا يحذف» مُثبَتاً لا مُدَّعىً — بـ`restic` نفسِه.**
+ *
+ * الكتابةُ = `backup` رميٌّ ينجح (ومعه إنشاءُ القفل وإزالتُه)، والحذفُ = `forget` لتلك اللقطة يُرفض
+ * باسمه (`AccessDenied`) وتبقى مسرودة. **ولا سرَّ يُطبع**: القيمُ تُقرأ من ملفّ البيئة بلا `source`
+ * (فقيمةٌ فيها `(` أو `!` تُسقط الصدفةَ أو تُنفَّذ)، وتصل الحاويةَ بـ`-e` بلا قيمةٍ في سطر الأمر.
+ * وثلاثةُ مخارجَ متمايزة: الكتابةُ سقطت · الحذفُ نجح · تعذّر السؤال — ولا حكمَ بالصمت.
+ */
+describe('إثباتُ السياسة: الكتابةُ تنجح والحذفُ يُرفض — بلا طباعة سرّ (ق-٧٦٠)', () => {
+  it('السكربتُ يقرأ البيئةَ بلا source ولا set -x، ولا يضع قيمةً في سطر أمر', () => {
+    expect(PROOF.length).toBeGreaterThan(400);
+    expect(PROOF).not.toMatch(/^\s*(\.|source)\s+"?\$ENV_FILE/m);
+    expect(PROOF).not.toContain('set -x');
+    expect(PROOF).not.toMatch(/echo[^\n]*\$(RESTIC_PASSWORD|AWS_SECRET_ACCESS_KEY|OFFSITE_SECRET_KEY)/);
+    // القيمُ تصل الحاويةَ من البيئة: `-e VAR` بلا `=قيمة`
+    expect(PROOF).toMatch(/docker run --rm -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION/);
+    expect(PROOF).not.toMatch(/-e RESTIC_PASSWORD=/);
+    // والمفاتيحُ الستّةُ تُقرأ بأسمائها كما في المثال
+    for (const k of ['RESTIC_REPOSITORY', 'RESTIC_PASSWORD', 'OFFSITE_ACCESS_KEY', 'OFFSITE_SECRET_KEY', 'OFFSITE_REGION']) {
+      expect(PROOF).toContain(`envval ${k}`);
+    }
+  });
+
+  it('الحالتان بـ restic نفسِه: backup رميٌّ بمضيفٍ مميَّز ينجح، وforget له يُرفض بـ AccessDenied وتبقى اللقطة', () => {
+    expect(PROOF).toMatch(/backup --tag policy-proof --host policy-proof/);
+    expect(PROOF).toMatch(/forget "\$snap"/);
+    expect(PROOF).toContain('AccessDenied');
+    // بعد الرفض تُسرد اللقطةُ ثانيةً — فالحكمُ من المستودع لا من رسالة الخطأ وحدها
+    expect(PROOF.indexOf('snapshots "$snap"')).toBeGreaterThan(PROOF.indexOf('forget "$snap"'));
+    // والصورةُ بالوسم نفسِه الذي تُبنى عليه الخدمة
+    const pinned = /FROM restic\/restic:([0-9.]+)/.exec(read('ops', 'backup', 'Dockerfile'));
+    expect(pinned).not.toBeNull();
+    expect(PROOF).toContain(`restic/restic:${pinned![1]}`);
+    // ثلاثةُ مخارجَ متمايزة
+    for (const code of ['exit 1', 'exit 2', 'exit 3']) expect(PROOF).toContain(code);
   });
 });
 
