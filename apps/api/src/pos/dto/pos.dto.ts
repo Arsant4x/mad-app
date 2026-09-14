@@ -30,6 +30,17 @@ export class CloseShiftDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /**
+   * **انحرافُ الطرفية عن `UTC` بالدقائق** لحظةَ الإقفال — كما يُرسَل مع البيع (`ringOffsetMin`) — فيُؤرَّخ
+   * قيدُ التسوية **بيوم الكاشير** لا بيوم الخادم (`ق-٧٣٦`): بين منتصف الليل والثالثة فجراً بتوقيت
+   * المملكة كان يقع في اليوم السابق. طرفيةٌ أقدم لا تُرسله تُعامَل بيوم `UTC` كما كانت — حدٌّ معلَن.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  closedOffsetMin?: number;
 }
 
 export class PosPaymentPartDto {

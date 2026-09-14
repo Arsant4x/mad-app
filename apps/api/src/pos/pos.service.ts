@@ -28,15 +28,16 @@ import { ZatcaService } from '../zatca/zatca.service';
 const POS_TAX_RATE = 15;
 
 /**
- * اليومُ التقويميُّ المحلّي عند منتصف ليل `UTC` — الشكلُ الذي يقرؤه `@db.Date`.
+ * يومُ الإقفال **بتقويم الكاشير** عند منتصف ليل `UTC` — الشكلُ الذي يقرؤه `@db.Date` (`ق-٧٣٦`).
  *
- * ⚠️ **ولا `toISOString().slice(0,10)`**: حارسُ `zatca/issue-time` يمنعها في هذا
- * الملفّ بعينه — **فهي يومُ `UTC` متنكّراً في زيّ يومٍ محلّي**، ومناوبةٌ تُقفل
- * الحاديةَ صباحاً بتوقيت الرياض تُؤرَّخ بالأمس. وهو نمطُ `openingEntryDate`.
+ * ⚠️ كان هنا `new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))` بحسبان أنه «يومُ
+ * الجهاز» — **وهو يومُ الخادم**، والخادمُ المنشور بلا منطقة (`UTC`) — فكان يومَ `UTC` متنكّراً في زيّ يومٍ
+ * محلّي: مناوبةٌ تُقفل الحاديةَ صباحاً بتوقيت الرياض تُؤرَّخ بالأمس، وإن كان شهرُه مقفلاً رُفض الإقفال.
+ * فالمصدرُ الصحيح **انحرافُ الطرفية** كما في البيع (`ringOffsetMin`)؛ وبلا انحرافٍ (طرفيةٌ أقدم) يومُ `UTC`
+ * **صراحةً** لا خلسةً — حدٌّ معلَن.
  */
-function todayAsDate(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+export function settlementDate(offsetMin: number | undefined, now = new Date()): Date {
+  return new Date(`${localDateOf(now, offsetMin ?? 0)}T00:00:00.000Z`);
 }
 
 /** اسم عميل المرور الافتراضي — created once per company, then reused. */
@@ -235,11 +236,8 @@ export class PosService {
         : null;
       await postShiftVarianceEntry(tx, tenant.companyId, {
         shiftNo: shift.id.slice(0, 8),
-        // ⚠️ **يومُ الجهاز لا `UTC` متنكّراً** (وحارسُ `issue-time` أسقطها
-        // فعلاً حين كُتبت `toISOString().slice(0,10)`): التاريخُ التقويميُّ
-        // المحلّي عند منتصف ليل `UTC` — وهو نمطُ `openingEntryDate` نفسُه،
-        // فـ`@db.Date` يقرأ اليومَ وحده.
-        date: todayAsDate(),
+        // ⚖️ يومُ الكاشير من انحراف طرفيته (`ق-٧٣٦`) — لا يومُ الخادم؛ وبلا انحرافٍ يومُ `UTC` صراحةً.
+        date: settlementDate(dto.closedOffsetMin),
         branchId: shift.branchId,
         drawerAccountId: drawer?.accountId ?? null,
         variance,

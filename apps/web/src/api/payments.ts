@@ -1,3 +1,4 @@
+import { today } from '../lib/format';
 import { apiClient } from './client';
 
 export type PaymentMethod = 'CASH' | 'BANK';
@@ -69,5 +70,6 @@ export const listOpenInvoices = (customerId: string) => apiClient.get<OpenInvoic
 export const createPayment = (dto: PaymentInput) => apiClient.post<Payment>('/payments', dto).then((r) => r.data);
 export const allocatePayment = (id: string, allocations: AllocationInput[]) =>
   apiClient.post<Payment>(`/payments/${id}/allocate`, { allocations }).then((r) => r.data);
-/** التصحيح الوحيد: سند عكسي — لا حذف ولا تعديل لمرحَّل. */
-export const reversePayment = (id: string, reason?: string) => apiClient.post<Payment>(`/payments/${id}/reverse`, { reason }).then((r) => r.data);
+/** التصحيح الوحيد: سند عكسي — لا حذف ولا تعديل لمرحَّل. ويومُه يومُ التاجر (`today()` بتقويم الجهاز) لا يومُ الخادم (ق-٧٣٦). */
+export const reversePayment = (id: string, reason?: string) =>
+  apiClient.post<Payment>(`/payments/${id}/reverse`, { reason, date: today() }).then((r) => r.data);
