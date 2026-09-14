@@ -1,5 +1,7 @@
 import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
+import { MaxUtf8Bytes } from '../../common/dto/max-utf8-bytes.decorator';
 import { MSG } from '../../common/i18n/messages';
+import { ZATCA_QR_MAX_VALUE_BYTES } from '../../zatca/qr.util';
 
 export class UpdateCompanyProfileDto {
   /**
@@ -17,6 +19,9 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
+  // الاسمُ القانونيُّ هو وسمُ `QR` الأوّل — وطولُه في `TLV` بايتٌ واحد (`ق-٧٣٥`): يُرفض هنا باسمه حيث يُكتب،
+  // لا عند إصدار الفاتورة بعد شهر. والبايتاتُ لا الحروف — الحرفُ العربيُّ بايتان.
+  @MaxUtf8Bytes(ZATCA_QR_MAX_VALUE_BYTES, { message: MSG.legal_name_too_long_for_qr })
   legalName?: string;
 
   /// 15 digits, must start and end with '3' (the Saudi VAT number format).

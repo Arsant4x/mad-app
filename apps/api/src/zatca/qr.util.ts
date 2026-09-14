@@ -30,8 +30,30 @@ function amount(value: number): string {
   return formatMoney(value);
 }
 
+/**
+ * **حدُّ قيمة الوسم: `255` بايتاً** — الطولُ في `TLV` الهيئة **بايتٌ واحدٌ** (معيارُ خصائص الأمان v1.2)،
+ * ولا صيغةَ ممتدّةً في المواصفة — فقيمةٌ أطول **لا تُرمَّز** بل تُرفض باسمها (`ق-٧٣٥`).
+ *
+ * الواقعة (2026-09-14): `Buffer.from([tag, 256])` **يلفّ** الطولَ إلى `0` (و`300 → 44`) فتُقرأ بايتاتُ الاسم
+ * وسوماً — **رمزٌ يُمسح ويُسلَّم ويُقرأ سليماً حتى يفحصه أحد**. والوسمُ الوحيدُ الذي يبلغه هو اسمُ البائع
+ * (`companies.legalName` بلا حدٍّ): `128` حرفاً عربياً فأكثر = `256` بايتاً.
+ */
+export const ZATCA_QR_MAX_VALUE_BYTES = 255;
+
+/** رفضٌ مسمّى — يحمل الوسمَ وعددَ البايتات ليصل الخطأُ من يقرؤه بحدّه لا بـ«فشل». */
+export class ZatcaQrValueTooLongError extends Error {
+  constructor(
+    readonly tag: number,
+    readonly bytes: number,
+  ) {
+    super(`ZATCA QR tag ${tag}: value is ${bytes} bytes — TLV length is a single byte (max ${ZATCA_QR_MAX_VALUE_BYTES})`);
+    this.name = 'ZatcaQrValueTooLongError';
+  }
+}
+
 function tlv(tag: number, value: string): Buffer {
   const encoded = Buffer.from(value, 'utf8');
+  if (encoded.length > ZATCA_QR_MAX_VALUE_BYTES) throw new ZatcaQrValueTooLongError(tag, encoded.length);
   return Buffer.concat([Buffer.from([tag, encoded.length]), encoded]);
 }
 
@@ -43,6 +65,9 @@ function tlv(tag: number, value: string): Buffer {
  * Returning null rather than an empty-field QR is deliberate: a scannable but
  * invalid QR on a printed invoice is worse than none, because it looks
  * compliant while failing inspection.
+ *
+ * ⚠️ **ويرمي `ZatcaQrValueTooLongError`** لقيمةٍ فوق `255` بايتاً — لا `null` ولا رمزاً فاسداً: الغيابُ
+ * حالٌ معلَنة (اسمٌ أو رقمٌ ناقص) والطولُ خطأٌ يُسمّى لمن يُصدر المستند (`ق-٧٣٥`).
  */
 export function buildZatcaQr(input: ZatcaQrInput): string | null {
   const sellerName = input.sellerName?.trim();

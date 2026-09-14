@@ -6,7 +6,7 @@ import { CREDIT_CODE, CREDIT_OVERRIDE_ACTION, CREDIT_OVERRIDE_SCREEN, type Credi
 import { grant } from '../delegations/permission-tree';
 import { TenantContext } from '../auth/types';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { buildZatcaQr } from '../zatca/qr.util';
+import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
 import { issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
@@ -883,12 +883,18 @@ export class InvoicesService {
     const readCompany = (tx: Prisma.TransactionClient) =>
       tx.company.findUnique({ where: { id: companyId }, select: { legalName: true, vatNumber: true } });
     const company = tx ? await readCompany(tx) : await this.tenantPrisma.runInTenantContext(companyId, readCompany);
-    return buildZatcaQr({
-      sellerName: company?.legalName ?? '',
-      vatNumber: company?.vatNumber ?? '',
-      issued: issuedWallClock(inv),
-      total: Number(inv.total),
-      vatAmount: Number(inv.taxTotal),
-    });
+    try {
+      return buildZatcaQr({
+        sellerName: company?.legalName ?? '',
+        vatNumber: company?.vatNumber ?? '',
+        issued: issuedWallClock(inv),
+        total: Number(inv.total),
+        vatAmount: Number(inv.taxTotal),
+      });
+    } catch (e) {
+      // رفضٌ مسمّى لمن يُصدر المستند — لا رمزٌ فاسدٌ يُطبع ولا `500` بلا اسم (`ق-٧٣٥`).
+      if (e instanceof ZatcaQrValueTooLongError) throw new ConflictException(formatMessage(MSG.zatca_qr_value_too_long, { tag: e.tag, bytes: e.bytes }));
+      throw e;
+    }
   }
 }
