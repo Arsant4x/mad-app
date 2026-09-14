@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * الأرشفة (gap-analysis §1): hidden from day-to-day lists, still in the books.
@@ -16,6 +17,8 @@ import { AppModule } from '../src/app.module';
 describe('Archive (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): البنكُ يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let customerId: string;
   let bankId: string;
@@ -34,7 +37,8 @@ describe('Archive (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'archive');
+    token = company.token;
 
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الأرشيف ${suffix}` }).expect(201)).body.id;
     bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `بنك الأرشيف ${suffix}`, openingBalance: 0, openingDate: '2025-01-01' }).expect(201)).body.id;
@@ -54,8 +58,9 @@ describe('Archive (e2e)', () => {
     // Purge from trash too, keeping the dev DB tidy.
     await auth(request(app.getHttpServer()).delete(`/trash/customers/${customerId}`));
     await auth(request(app.getHttpServer()).delete(`/trash/banks/${bankId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('[SPEC 12.6] archives a customer out of the list, and back', async () => {
     expect(await listIds('/customers')).toContain(customerId);

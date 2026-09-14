@@ -4,6 +4,9 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * أعمار الذمم (4.6).
@@ -15,6 +18,8 @@ import { AppModule } from '../src/app.module';
 describe('Receivables aging (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الصندوقُ (بنكٌ) وعملاءُ الأعمار في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let customerId: string;
   let cashBoxId: string;
@@ -55,14 +60,18 @@ describe('Receivables aging (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'aging');
+    token = company.token;
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الأعمار ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
       .send({ name: `صندوق الأعمار ${suffix}`, openingBalance: 0, openingDate: dayStr(0) })
       .expect(201)).body.id;
   }, 90000);
 
-  afterAll(async () => app.close());
+  afterAll(async () => {
+    await removeIsolatedCompany(app, company);
+    await app.close();
+  }, 60000);
 
   // ── 1: مستحقة قبل 45 يوماً بمتبقٍّ 600 ⇒ شريحة 31-60 بـ600 ──
   it('a 45-day-overdue invoice with 600 remaining lands in the 31-60 bucket', async () => {
@@ -185,6 +194,11 @@ describe('Receivables aging (e2e)', () => {
     // وهو نفسه رصيد 1200 في الدفتر — لا فرق غير منسوب على منشأة نظيفة.
     expect(report.reconciliation.ledgerBalance).toBeCloseTo(report.reconciliation.reportTotal, 2);
     expect(report.reconciliation.difference).toBeCloseTo(0, 2);
+
+    // والمنشأةُ المخصوصة تُزال بعد أن أدّت — لا تبقى بصندوقها في القاعدة (ق-٧٢٢).
+    const meRes = await co(request(app.getHttpServer()).get('/auth/me')).expect(200);
+    await hardDeleteCompanyForTest(app.get(PrismaService), meRes.body.companyId);
+    expect(await app.get(PrismaService).company.count({ where: { id: meRes.body.companyId } })).toBe(0);
   }, 180000);
 
   // ── 6: سطر التسوية يكشف القيد اليدوي بدل أن يخفيه ──

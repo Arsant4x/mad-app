@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * A cash rent receipt can name the branch cash box it landed in.
@@ -18,6 +19,8 @@ import { AppModule } from '../src/app.module';
 describe('Cash rent payment into a branch cash box (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الصندوقُ (بنكٌ) يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   let contractId: string;
   let boxId: string;
 
@@ -41,8 +44,8 @@ describe('Cash rent payment into a branch cash box (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
+    company = await registerIsolatedCompany(app, 'cashbox');
+    token = company.token;
 
     const property = await auth(request(app.getHttpServer()).post('/properties')).send({ name: `عقار الصندوق ${suffix}`, ownership: 'owned' }).expect(201);
     const unit = await auth(request(app.getHttpServer()).post('/units'))
@@ -66,10 +69,11 @@ describe('Cash rent payment into a branch cash box (e2e)', () => {
       installmentDisposition: 'cancel',
     });
     // The box carries a rent transaction now, so deletion may be refused — best
-    // effort only.
+    // effort only; the isolated company's hard delete takes the rest with it.
     await auth(request(app.getHttpServer()).delete(`/banks/${boxId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('[SPEC 7.3] a cash receipt naming a box raises that box balance', async () => {
     const before = await boxBalance();

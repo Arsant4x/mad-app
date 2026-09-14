@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * **تاريخُ الافتتاح يُعلَن ولا يُشتقّ** (`ق-٢٩٦`).
@@ -15,6 +16,8 @@ import { AppModule } from '../src/app.module';
 describe('تاريخُ الافتتاح المعلَن (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الحساباتُ والبنوكُ تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const accounts: string[] = [];
   const banks: string[] = [];
   const suffix = Date.now();
@@ -65,15 +68,16 @@ describe('تاريخُ الافتتاح المعلَن (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
+    company = await registerIsolatedCompany(app, 'opening-date');
+    token = company.token;
   }, 30000);
 
   afterAll(async () => {
     for (const id of banks) await auth(http().delete(`/banks/${id}`));
     for (const id of accounts) await auth(http().delete(`/accounts/${id}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('🔴 تاريخٌ يعلنه التاجر يصير تاريخَ القيد الافتتاحيّ', async () => {
     const account = await makeAccount(`حسابٌ بتاريخٍ معلَن ${suffix}`, { openingBalance: 500, openingDate: '2026-03-15' });

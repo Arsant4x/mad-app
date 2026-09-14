@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * **نقدُ الكاشير يدخل حسابَ درجه، وفرقُ الجرد يُرحَّل** (`ق-٣٠٩` · `ق-٣٠٨`).
@@ -20,6 +21,8 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الدرجُ والمناوباتُ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = Date.now();
 
   const http = () => request(app.getHttpServer());
@@ -114,15 +117,16 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
     await app.init();
     tenantPrisma = app.get(TenantPrismaService);
 
-    const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
-    companyId = login.body.user.companyId;
+    company = await registerIsolatedCompany(app, 'pos-cash');
+    token = company.token;
+    companyId = company.companyId;
 
     productId = (await auth(http().post('/products')).send({ name: `صنفُ الدرج ${suffix}`, price: UNIT_PRICE }).expect(201)).body.id;
     drawer = await ensureDrawer();
   }, 60000);
 
   afterAll(async () => {
+    await removeIsolatedCompany(app, company);
     await app.close();
   }, 60000);
 

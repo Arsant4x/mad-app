@@ -3,11 +3,15 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 describe('Banks tenant isolation (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;
   let tokenB: string;
+  // منشأتان معزولتان (ق-٧٢٢): «أ» تُنشئ البنكَ و«ب» الغريبةُ — كلتاهما يصنعها الاختبارُ ويزيلها، لا منشأتا العرض.
+  let companyA: IsolatedCompany;
+  let companyB: IsolatedCompany;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -16,15 +20,17 @@ describe('Banks tenant isolation (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
-    const loginA = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
-    tokenA = loginA.body.accessToken;
-    tokenB = loginB.body.accessToken;
+    companyA = await registerIsolatedCompany(app, 'banks-iso-a');
+    companyB = await registerIsolatedCompany(app, 'banks-iso-b');
+    tokenA = companyA.token;
+    tokenB = companyB.token;
   }, 30000);
 
   afterAll(async () => {
+    await removeIsolatedCompany(app, companyA);
+    await removeIsolatedCompany(app, companyB);
     await app.close();
-  });
+  }, 60000);
 
   it('[SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and posts a delta entry when the opening balance is edited', async () => {
     const created = await request(app.getHttpServer())

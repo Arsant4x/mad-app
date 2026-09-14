@@ -4,11 +4,15 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { round2 } from '../src/common/money/rounding';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 describe('Properties/Units/Contracts (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;
   let tokenB: string;
+  // منشأتان معزولتان (ق-٧٢٢): العقودُ والبنكُ تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأتَي العرض.
+  let companyA: IsolatedCompany;
+  let companyB: IsolatedCompany;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -17,15 +21,17 @@ describe('Properties/Units/Contracts (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
-    const loginA = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
-    tokenA = loginA.body.accessToken;
-    tokenB = loginB.body.accessToken;
+    companyA = await registerIsolatedCompany(app, 'contracts-a');
+    companyB = await registerIsolatedCompany(app, 'contracts-b');
+    tokenA = companyA.token;
+    tokenB = companyB.token;
   }, 30000);
 
   afterAll(async () => {
+    await removeIsolatedCompany(app, companyA);
+    await removeIsolatedCompany(app, companyB);
     await app.close();
-  });
+  }, 60000);
 
   async function setupPropertyAndUnit(token: string, opts: { activityType?: string; unitType?: string } = {}) {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

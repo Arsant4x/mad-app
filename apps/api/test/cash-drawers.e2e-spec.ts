@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { DRAWER_BANDS } from '../src/accounts/code-bands';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 interface Drawer {
   id: string;
@@ -28,6 +29,8 @@ interface Drawer {
 describe('Cash drawers — entity, derived numbering, and the deactivation gate (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الأدراجُ تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const http = () => request(app.getHttpServer());
@@ -44,14 +47,16 @@ describe('Cash drawers — entity, derived numbering, and the deactivation gate 
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'cash-drawers');
+    token = company.token;
   }, 60000);
 
   afterAll(async () => {
     for (const id of created) await auth(http().delete(`/cash-drawers/${id}`));
     if (plantedAccountId) await auth(http().delete(`/accounts/${plantedAccountId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('① الإنشاء يُنشئ حساب الدرج معه في نطاقٍ من نطاقاته — ولا رمزَ يُدخله التاجر', async () => {
     const res = await createDrawer(`درج الواجهة ${suffix}`).expect(201);
