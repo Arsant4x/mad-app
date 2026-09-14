@@ -10,7 +10,7 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
 
 /**
  * `ق-٧٠٦` — **تقريرُ الإيراد المؤجَّل يُرشِّح في القاعدة — والناتجُ يطابق الشكلَ القديم رقماً رقماً،
- * على أكبر منشأةٍ في القاعدة لا على عيّنة.**
+ * على صفوفٍ يصنعها الحارسُ بنفسه ويعرف جوابَها يداً، ثم على أكبر منشأةٍ في القاعدة لا على عيّنة.**
  *
  * الواقعة (`ق-٦٩٩` · `ق-٧٠٤`): الشكلُ القديم حمّل `22,872` قسطاً بعلاقاته ليُخرج `4` صفوف — `≥ 94٪`
  * من زمن المعاملة في العميل — فسقط بـ`500` عند مهلة المعاملة الحاملة لسياق العزل.
@@ -21,6 +21,11 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  *      الكامل يُسقط شرطَ النسبة** (الجديد أسرع أربعَ مرّاتٍ على الأقلّ عند `≥ 10,000` قسط).
  *   ② **الناتجُ يطابق ما يُعطيه اليوم**: الشكلُ القديم يُحسب هنا حرفياً (كما كان في الخدمة قبل
  *      `ق-٧٠٦`) ويُقارَن بالجديد قيمةً قيمة — الصفوفُ والمجاميعُ والدفعاتُ غيرُ المرتبطة.
+ *
+ * **والمجسُّ يصنع صفوفَه** (السقطةُ الأولى في السير 2026-09-14: قاعدةُ السير مبذورةٌ بلا أقساط، فلم
+ * يجد منشأةً وسقط حارسُ المجسّ — «مجسٌّ يعتمد على حالِ قاعدةٍ ليس مجسّاً»): منشأةٌ تُنشأ بالمسار
+ * الحقيقيّ (`loginIdentity.create` بشركةٍ متداخلة) وفيها أربعةُ أقساطٍ ودفعاتٌ **جوابُها معروفٌ يداً**
+ * — فيُثبت الحارسُ الدلالةَ لا المطابقةَ وحدَها (مطابقةُ شكلَين خاطئَين معاً تمرّ)، ثم تُزال المنشأةُ.
  *
  * **حدُّه المعلَن**: شرطُ النسبة يُقاس حيث توجد الأقساط (التطوير)؛ على قاعدةٍ صغيرة (السير) يُعلَن
  * تخطّيه ولا يُدّعى — وشرطُ المطابقة يعمل على أيّ حجم.
@@ -90,43 +95,150 @@ async function legacyDeferredRevenue(tenant: TenantPrismaService, companyId: str
   );
 }
 
+/**
+ * منشأةُ المجسّ — بالمسار الحقيقيّ، وصفوفُها معروفةُ الجواب:
+ *   ① قسطٌ بفترة خدمة، معترَفٌ به `400`، عليه دفعتان `600 + 400` ⇒ محصَّل `1000` ومؤجَّل **`600`** (يظهر)
+ *   ② قسطٌ بفترة خدمة، معترَفٌ به `500`، عليه دفعة `500` ⇒ مؤجَّل `0` (يُرشَّح)
+ *   ③ قسطٌ بفترة خدمة بلا دفعة ⇒ محصَّل `0` (يُرشَّح)
+ *   ④ قسطٌ **بلا** فترة خدمة عليه دفعة `200` ⇒ خارج التقرير كلّه
+ *   ودفعةٌ غيرُ مرتبطةٍ بقسط `300` ⇒ في قائمة غير المرتبط وحدَها.
+ */
+const PROBE = {
+  contractNo: 'DR-PROBE-1',
+  tenant: 'مستأجر مجسّ الإيراد المؤجَّل',
+  unitNo: 'DR-A1',
+  outstanding: { collected: 1000, recognized: 400, deferred: 600, serviceStart: '2026-01-01', serviceEnd: '2026-01-31' },
+  unlinked: 300,
+};
+
+async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService): Promise<{ companyId: string; identityId: string }> {
+  const template = await raw.permissionTemplate.findFirstOrThrow({ where: { companyId: null }, select: { id: true }, orderBy: { createdAt: 'asc' } });
+  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const identity = await raw.loginIdentity.create({
+    data: {
+      username: `probe-deferred-revenue-${stamp}`,
+      passwordHash: 'probe-not-a-real-hash',
+      actorType: 'COMPANY',
+      company: { create: { orgName: `probe-deferred-revenue-${stamp}`, permissionTemplateId: template.id } },
+    },
+    include: { company: { select: { id: true } } },
+  });
+  const companyId = identity.company!.id;
+  await tenant.runInTenantContext(companyId, async (tx) => {
+    const property = await tx.property.create({ data: { companyId, name: 'عقار المجسّ', ownership: 'owned' } });
+    const unit = await tx.unit.create({ data: { companyId, propertyId: property.id, unitNo: PROBE.unitNo, type: 'شقة', rentMonthly: 1000 } });
+    const contract = await tx.contract.create({
+      data: { companyId, unitId: unit.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31') },
+    });
+    const installment = (dueDate: string, service: { start: string; end: string } | null, baseRecognized: number) =>
+      tx.installment.create({
+        data: {
+          companyId,
+          contractId: contract.id,
+          dueDate: new Date(dueDate),
+          amount: 1000,
+          baseAmount: 1000,
+          baseRecognized,
+          serviceStart: service ? new Date(service.start) : null,
+          serviceEnd: service ? new Date(service.end) : null,
+        },
+      });
+    const payment = (installmentId: string | null, date: string, amount: number) =>
+      tx.rentPayment.create({
+        data: { companyId, contractId: contract.id, installmentId, date: new Date(date), amount, netAmount: amount, baseAmount: amount, baseNetAmount: amount, method: 'CASH' },
+      });
+    const i1 = await installment('2026-01-01', { start: PROBE.outstanding.serviceStart, end: PROBE.outstanding.serviceEnd }, PROBE.outstanding.recognized);
+    const i2 = await installment('2026-02-01', { start: '2026-02-01', end: '2026-02-28' }, 500);
+    await installment('2026-03-01', { start: '2026-03-01', end: '2026-03-31' }, 0);
+    const i4 = await installment('2026-04-01', null, 0);
+    await payment(i1.id, '2026-01-05', 600);
+    await payment(i1.id, '2026-01-20', 400);
+    await payment(i2.id, '2026-02-05', 500);
+    await payment(i4.id, '2026-04-05', 200);
+    await payment(null, '2026-05-01', PROBE.unlinked);
+  });
+  return { companyId, identityId: identity.id };
+}
+
 /** مفتاحٌ قانونيٌّ للمقارنة كمجموعة — ترتيبُ المتساوين في تاريخ الاستحقاق غيرُ محدَّدٍ في الشكلين. */
 const key = (r: OutstandingRow) =>
   [r.contractNo, r.tenant, r.unitNo ?? '', r.serviceStart?.toISOString() ?? '', r.serviceEnd?.toISOString() ?? '', r.collected, r.recognized, r.deferred].join('|');
 
-d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعدة — مطابقٌ للشكل القديم على أكبر منشأة (ق-٧٠٦)', () => {
+const day = (x: Date | null) => x?.toISOString().slice(0, 10) ?? null;
+
+d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعدة — مطابقٌ للشكل القديم على صفوفٍ معلومة وعلى أكبر منشأة (ق-٧٠٦)', () => {
   const prisma = new PrismaService();
   const tenant = new TenantPrismaService(prisma);
   const reports = new ReportsService(tenant);
   const raw = new PrismaClient();
-  let companyId = '';
-  let installments = 0;
+  let probeCompanyId = '';
+  let probeIdentityId = '';
+  let largestCompanyId = '';
+  let largestInstallments = 0;
 
   beforeAll(async () => {
-    // أكبرُ منشأةٍ بأقساطها — تُقرأ من القاعدة (كلُّ منشأةٍ تحت سياقها؛ `companies` بلا عزل).
+    const probe = await createProbeCompany(raw, tenant);
+    probeCompanyId = probe.companyId;
+    probeIdentityId = probe.identityId;
+    // أكبرُ منشأةٍ بأقساطها — تُقرأ من القاعدة (كلُّ منشأةٍ تحت سياقها؛ `companies` بلا عزل). على السير هي منشأةُ المجسّ نفسُها.
     const companies = await raw.company.findMany({ select: { id: true } });
     for (const c of companies) {
       const n = await tenant.runInTenantContext(c.id, (tx) => tx.installment.count({ where: { serviceStart: { not: null }, serviceEnd: { not: null } } }));
-      if (n > installments) {
-        installments = n;
-        companyId = c.id;
+      if (n > largestInstallments) {
+        largestInstallments = n;
+        largestCompanyId = c.id;
       }
     }
   }, 120_000);
 
   afterAll(async () => {
+    // إزالةُ منشأة المجسّ: حذفُ الهويّة يتسلسل إلى المنشأة وإلى كلّ صفوفها (المفاتيحُ `Cascade`، وقيودُ الإحالة تتخطّى العزل).
+    if (probeIdentityId) {
+      await raw.loginIdentity.delete({ where: { id: probeIdentityId } });
+      const left = await raw.company.count({ where: { id: probeCompanyId } });
+      if (left !== 0) throw new Error(`منشأةُ المجسّ ${probeCompanyId} لم تُزَل`);
+    }
     await raw.$disconnect();
     await prisma.$disconnect();
   });
 
-  it('⓪ حارسٌ على المجسّ: وُجدت منشأةٌ ذاتُ أقساطٍ بفترات خدمة', () => {
-    expect(companyId).not.toBe('');
-    expect(installments).toBeGreaterThan(0);
+  it('⓪ حارسٌ على المجسّ: منشأةُ المجسّ أُنشئت بأقساطها الأربعة — ووُجدت أكبرُ منشأةٍ في القاعدة', async () => {
+    expect(probeCompanyId).not.toBe('');
+    const n = await tenant.runInTenantContext(probeCompanyId, (tx) => tx.installment.count());
+    expect(n).toBe(4);
+    expect(largestCompanyId).not.toBe('');
+    expect(largestInstallments).toBeGreaterThanOrEqual(3);
   });
 
-  it('⭐ ② الناتجُ يطابق الشكلَ القديم رقماً رقماً — الصفوفُ والمجاميعُ والدفعاتُ غيرُ المرتبطة', async () => {
-    const legacy = await legacyDeferredRevenue(tenant, companyId);
-    const current = await reports.deferredRevenue(companyId);
+  it('⭐ ② على صفوفٍ معلومة الجواب: صفٌّ واحدٌ مؤجَّلُه 600، والمرشَّحان لا يظهران، وغيرُ المرتبط 300 — والشكلُ القديم يقول الشيءَ نفسَه', async () => {
+    const current = await reports.deferredRevenue(probeCompanyId);
+    expect(current.outstanding).toHaveLength(1);
+    const row = current.outstanding[0];
+    expect(row.contractNo).toBe(PROBE.contractNo);
+    expect(row.tenant).toBe(PROBE.tenant);
+    expect(row.unitNo).toBe(PROBE.unitNo);
+    expect(day(row.serviceStart)).toBe(PROBE.outstanding.serviceStart);
+    expect(day(row.serviceEnd)).toBe(PROBE.outstanding.serviceEnd);
+    expect(row.collected).toBe(PROBE.outstanding.collected);
+    expect(row.recognized).toBe(PROBE.outstanding.recognized);
+    expect(row.deferred).toBe(PROBE.outstanding.deferred);
+    expect(current.totalDeferred).toBe(PROBE.outstanding.deferred);
+    expect(current.unlinked).toHaveLength(1);
+    expect(current.unlinked[0].baseNetAmount).toBe(PROBE.unlinked);
+    expect(current.unlinked[0].contractNo).toBe(PROBE.contractNo);
+    expect(current.totalUnlinked).toBe(PROBE.unlinked);
+
+    const legacy = await legacyDeferredRevenue(tenant, probeCompanyId);
+    expect(legacy.installmentsLoaded).toBe(3); // القديمُ يحمّل الثلاثةَ ذاتَ الفترة ليُخرج واحداً — وهذه هي العلّة
+    expect(current.outstanding.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
+    expect(current.totalDeferred).toBe(legacy.totalDeferred);
+    expect(current.unlinked).toEqual(legacy.unlinked);
+    expect(current.totalUnlinked).toBe(legacy.totalUnlinked);
+  });
+
+  it('⭐ ② على أكبر منشأةٍ في القاعدة: الناتجُ يطابق الشكلَ القديم رقماً رقماً — الصفوفُ والمجاميعُ والدفعاتُ غيرُ المرتبطة', async () => {
+    const legacy = await legacyDeferredRevenue(tenant, largestCompanyId);
+    const current = await reports.deferredRevenue(largestCompanyId);
 
     expect(current.outstanding.length).toBe(legacy.outstanding.length);
     expect(current.outstanding.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
@@ -134,18 +246,18 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
     expect(current.unlinked).toEqual(legacy.unlinked);
     expect(current.totalUnlinked).toBe(legacy.totalUnlinked);
     // eslint-disable-next-line no-console
-    console.log(`  ق-٧٠٦ · المنشأة ${companyId} · أقساطٌ بفترة خدمة ${legacy.installmentsLoaded} · مؤجَّلٌ موجب ${current.outstanding.length} · غيرُ مرتبط ${current.unlinked.length}`);
+    console.log(`  ق-٧٠٦ · المنشأة ${largestCompanyId} · أقساطٌ بفترة خدمة ${legacy.installmentsLoaded} · مؤجَّلٌ موجب ${current.outstanding.length} · غيرُ مرتبط ${current.unlinked.length}`);
   }, 300_000);
 
   it('⭐ ① بالعكس على الحجم الحقيقيّ: الجديدُ أسرعُ من القديم أربعَ مرّاتٍ على الأقلّ عند ≥ 10,000 قسط', async () => {
-    if (installments < RATIO_MIN_INSTALLMENTS) {
+    if (largestInstallments < RATIO_MIN_INSTALLMENTS) {
       // eslint-disable-next-line no-console
-      console.log(`  ⚠️ شرطُ النسبة لم يُقَس: ${installments} قسطاً دون ${RATIO_MIN_INSTALLMENTS} — يُقاس حيث توجد الأقساط (التطوير)`);
+      console.log(`  ⚠️ شرطُ النسبة لم يُقَس: ${largestInstallments} قسطاً دون ${RATIO_MIN_INSTALLMENTS} — يُقاس حيث توجد الأقساط (التطوير)`);
       return;
     }
     // إحماءٌ لكليهما ثم وسيطُ ثلاث قياسات — فالباردُ ضجيجُه كبير.
-    await reports.deferredRevenue(companyId);
-    await legacyDeferredRevenue(tenant, companyId);
+    await reports.deferredRevenue(largestCompanyId);
+    await legacyDeferredRevenue(tenant, largestCompanyId);
     const time = async (fn: () => Promise<unknown>) => {
       const xs: number[] = [];
       for (let i = 0; i < 3; i++) {
@@ -155,10 +267,10 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
       }
       return xs.sort((a, b) => a - b)[1];
     };
-    const legacyMs = await time(() => legacyDeferredRevenue(tenant, companyId));
-    const currentMs = await time(() => reports.deferredRevenue(companyId));
+    const legacyMs = await time(() => legacyDeferredRevenue(tenant, largestCompanyId));
+    const currentMs = await time(() => reports.deferredRevenue(largestCompanyId));
     // eslint-disable-next-line no-console
-    console.log(`  ق-٧٠٦ · ${installments} قسطاً: القديم ${legacyMs.toFixed(0)} ms · الجديد ${currentMs.toFixed(0)} ms · النسبة ${(legacyMs / currentMs).toFixed(1)}×`);
+    console.log(`  ق-٧٠٦ · ${largestInstallments} قسطاً: القديم ${legacyMs.toFixed(0)} ms · الجديد ${currentMs.toFixed(0)} ms · النسبة ${(legacyMs / currentMs).toFixed(1)}×`);
     expect(currentMs).toBeLessThan(legacyMs / 4);
   }, 600_000);
 });
