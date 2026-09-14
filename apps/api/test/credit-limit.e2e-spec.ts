@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { CREDIT_CODE, CREDIT_OVERRIDE_ACTION } from '../src/invoices/credit-context';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * ⚖️ **حدُّ الائتمان — من حقلٍ يُرى إلى حدٍّ يفعل** (`ق-٣٣٦` … `ق-٣٤١`).
@@ -29,6 +30,8 @@ import { CREDIT_CODE, CREDIT_OVERRIDE_ACTION } from '../src/invoices/credit-cont
 describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز بأثر، ويُصلَّب بإعداد (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الصندوقُ والعلَمُ الصلبُ والعملاءُ المحدودون في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   let clerkToken: string;
   let branchId: string;
   let cashBoxId: string;
@@ -78,8 +81,8 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
-    const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
+    company = await registerIsolatedCompany(app, 'credit-limit');
+    token = company.token;
 
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع الائتمان ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
@@ -107,8 +110,9 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
     for (const id of limited) await auth(request(app.getHttpServer()).patch(`/customers/${id}`)).send({ creditLimit: 0 });
     if (clerkId) await auth(request(app.getHttpServer()).delete(`/company-users/${clerkId}`));
     if (templateId) await auth(request(app.getHttpServer()).delete(`/templates/${templateId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('① عميلٌ بلا حدّ (صفر) لا يُمنَع — وإلا كسرت الميزةُ كلَّ عميلٍ قائم', async () => {
     const open = await customerWithLimit(0, 'بلا حدّ');

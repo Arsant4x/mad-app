@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { BANK_BANDS, type CodeBand } from '../src/accounts/code-bands';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /** رموزُ الدليل الواقعةُ في نطاقٍ بعينه — تُقرأ من القاعدة لحظةَ السؤال. */
 const codesIn = (list: { code: string }[], band: CodeBand): number[] =>
@@ -36,6 +37,8 @@ interface Bank {
 describe('Bank ↔ ledger account (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): البنوكُ تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const http = () => request(app.getHttpServer());
@@ -53,13 +56,15 @@ describe('Bank ↔ ledger account (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
-    token = (await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'bank-link');
+    token = company.token;
   }, 60000);
 
   afterAll(async () => {
     for (const id of banks) await auth(http().delete(`/banks/${id}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في أحد نطاقات البنوك، وباسمه', async () => {
     const bank = (await createBank(`بنك الاختبار ${suffix}`).expect(201)).body as Bank;

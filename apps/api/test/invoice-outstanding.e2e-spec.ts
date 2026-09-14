@@ -5,6 +5,7 @@ import request from 'supertest';
 import { InvoiceStatus } from '@prisma/client';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * `outstanding` على قائمة الفواتير — وتطابق التعدادات بين المخطط والواجهة.
@@ -18,6 +19,8 @@ import { AppModule } from '../src/app.module';
 describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الصندوقُ (بنكٌ) يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   let customerId: string;
   let bankId: string;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -31,14 +34,18 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'invoice-outstanding');
+    token = company.token;
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل المتبقي ${suffix}` }).expect(201)).body.id;
     bankId = (
       await auth(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق المتبقي ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201)
     ).body.id;
   }, 90000);
 
-  afterAll(async () => app.close());
+  afterAll(async () => {
+    await removeIsolatedCompany(app, company);
+    await app.close();
+  }, 60000);
 
   const listed = async (id: string) => {
     const rows = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; status: string; outstanding: number }[];

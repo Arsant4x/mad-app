@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * تقريرُ الفرق (`ق-٢٨٥/٣`) — «الرصيدُ الدفتريّ مقابل ما كان يُعرض».
@@ -19,6 +20,8 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
+  // منشأةٌ معزولة (ق-٧٢٢): البنكُ يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   let bankId: string;
 
   const http = () => request(app.getHttpServer());
@@ -34,9 +37,9 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
     await app.init();
     tenantPrisma = app.get(TenantPrismaService);
 
-    const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
-    companyId = login.body.user.companyId;
+    company = await registerIsolatedCompany(app, 'bank-diff');
+    token = company.token;
+    companyId = company.companyId;
 
     const bank = (
       await auth(http().post('/banks'))
@@ -48,8 +51,9 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
 
   afterAll(async () => {
     await auth(http().delete(`/banks/${bankId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   interface Row {
     bankId: string;

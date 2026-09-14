@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * المقبوضات وتخصيصها (4.5) — بنود تحقق الموجز السبعة + الثامن (الانحراف).
@@ -15,6 +16,8 @@ import { AppModule } from '../src/app.module';
 describe('Customer payments + allocations (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الصندوقُ (بنكٌ) يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let customerId: string;
   let branchId: string;
@@ -77,7 +80,8 @@ describe('Customer payments + allocations (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'payments');
+    token = company.token;
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل مقبوضات ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع المقبوضات ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
@@ -85,7 +89,10 @@ describe('Customer payments + allocations (e2e)', () => {
       .expect(201)).body.id;
   }, 90000);
 
-  afterAll(async () => app.close());
+  afterAll(async () => {
+    await removeIsolatedCompany(app, company);
+    await app.close();
+  }, 60000);
 
   // ── 1: 1000 → دفعة 400 ⇒ PARTIAL والمتبقي 600 ──
   it('a 400 payment against a 1000 invoice leaves it PARTIAL with 600 remaining', async () => {

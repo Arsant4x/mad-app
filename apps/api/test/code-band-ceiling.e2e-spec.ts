@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * **سقفُ نطاق الرموز يُعلَن قبل الاصطدام** (`ق-٢٩٥`).
@@ -15,6 +16,8 @@ import { AppModule } from '../src/app.module';
 describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): البنوكُ تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض التي استُنفد نطاقُها.
+  let company: IsolatedCompany;
 
   const http = () => request(app.getHttpServer());
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -37,13 +40,14 @@ describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    token = login.body.accessToken;
+    company = await registerIsolatedCompany(app, 'code-band');
+    token = company.token;
   }, 30000);
 
   afterAll(async () => {
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('🔴 شاشةُ البنوك تُعلن سقفَها — والنطاقُ الثاني داخلٌ في السعة', async () => {
     const body = (await auth(http().get('/banks/code-band')).expect(200)).body as BandStatus;

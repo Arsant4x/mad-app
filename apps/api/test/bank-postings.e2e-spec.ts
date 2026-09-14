@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 interface Account { id: string; code: string; balance: string }
 interface Bank { id: string; name: string; accountId: string }
@@ -19,6 +20,8 @@ interface JournalEntry { id: string; no: string; lines?: JournalLine[] }
 describe('Bank postings — cash lands in the bank account (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): البنكُ يُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const http = () => request(app.getHttpServer());
@@ -38,7 +41,8 @@ describe('Bank postings — cash lands in the bank account (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'bank-postings');
+    token = company.token;
     bank = (await auth(http().post('/banks')).send({ name: `بنك الترحيل ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body;
     cleanup.banks.push(bank.id);
     customerId = (await auth(http().post('/customers')).send({ name: `عميل الترحيل ${suffix}` }).expect(201)).body.id;
@@ -51,8 +55,9 @@ describe('Bank postings — cash lands in the bank account (e2e)', () => {
       await auth(http().delete(`/customers/${customerId}`));
       await auth(http().delete(`/trash/customers/${customerId}`));
     }
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('🔴 ① دفعةُ عميلٍ على بنك: القيدُ يُدين **حساب البنك** لا `1000`', async () => {
     const cashBefore = (await accounts()).find((a) => a.code === '1000');

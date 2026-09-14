@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * Branch visibility is a *permission* filter, not the absolute company
@@ -18,6 +19,10 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
   let ownerToken: string;
   let companyAId: string;
   let tokenB: string;
+  // منشأتان معزولتان (ق-٧٢٢): الأدراجُ والفواتيرُ تُزرع في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأتَي العرض.
+  let companyA: IsolatedCompany;
+  let companyB: IsolatedCompany;
+  let fixtureCustomerId: string;
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let branchNorthId: string;
@@ -38,11 +43,11 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     await app.init();
     tenantPrisma = app.get(TenantPrismaService);
 
-    const loginA = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
-    ownerToken = loginA.body.accessToken;
-    companyAId = loginA.body.user.companyId;
-    tokenB = loginB.body.accessToken;
+    companyA = await registerIsolatedCompany(app, 'branches-a');
+    companyB = await registerIsolatedCompany(app, 'branches-b');
+    ownerToken = companyA.token;
+    companyAId = companyA.companyId;
+    tokenB = companyB.token;
 
     const north = await request(app.getHttpServer())
       .post('/branches')
@@ -59,8 +64,11 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     branchSouthId = south.body.id;
 
     // One invoice in each branch, plus one company-wide (no branch).
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${ownerToken}`);
-    const customerId = customers.body[0].id;
+    // العميلُ يُصنع هنا لا يُلتقط من القاعدة — كان `customers.body[0]` يعتمد على عميلٍ تركته بذرةُ العرض (ق-٧٢٢).
+    fixtureCustomerId = (
+      await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${ownerToken}`).send({ name: `عميل الفروع ${suffix}` }).expect(201)
+    ).body.id;
+    const customerId = fixtureCustomerId;
     const line = { description: 'بند', quantity: 1, unitPrice: 100, taxRate: 15 };
 
     for (const branchId of [branchNorthId, branchSouthId, null]) {
@@ -114,8 +122,10 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     for (const id of [branchNorthId, branchSouthId]) {
       if (id) await request(app.getHttpServer()).delete(`/branches/${id}`).set('Authorization', `Bearer ${ownerToken}`);
     }
+    await removeIsolatedCompany(app, companyA);
+    await removeIsolatedCompany(app, companyB);
     await app.close();
-  });
+  }, 90000);
 
   /** يُعاد التقييدُ في كل حالةٍ تحتاجه — فحالةٌ تعتمد على ترتيب أختها تسقط وحدها. */
   async function restrictEmployeeToNorth(): Promise<void> {
@@ -467,12 +477,11 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
   });
 
   it('stamps the branch on a document created with one, and on its auto-posted entry', async () => {
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${ownerToken}`);
     const res = await request(app.getHttpServer())
       .post('/invoices')
       .set('Authorization', `Bearer ${ownerToken}`)
       .send({
-        customerId: customers.body[0].id,
+        customerId: fixtureCustomerId,
         issueDate: '2026-04-05',
         dueDate: '2026-05-05',
         branchId: branchSouthId,
@@ -498,12 +507,11 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
       .send({ branchIds: [branchNorthId] })
       .expect(200);
 
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${employeeToken}`);
     await request(app.getHttpServer())
       .post('/invoices')
       .set('Authorization', `Bearer ${employeeToken}`)
       .send({
-        customerId: customers.body[0].id,
+        customerId: fixtureCustomerId,
         issueDate: '2026-04-06',
         dueDate: '2026-05-06',
         branchId: branchSouthId,

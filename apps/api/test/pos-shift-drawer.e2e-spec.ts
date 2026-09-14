@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 interface Drawer {
   id: string;
@@ -27,6 +28,8 @@ interface Shift {
 describe('POS shift ↔ cash drawer (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  // منشأةٌ معزولة (ق-٧٢٢): الأدراجُ الأربعة تُنشأ في منشأةٍ يصنعها الاختبارُ ويزيلها — لا في منشأة العرض.
+  let company: IsolatedCompany;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const http = () => request(app.getHttpServer());
@@ -48,7 +51,8 @@ describe('POS shift ↔ cash drawer (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
 
-    token = (await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
+    company = await registerIsolatedCompany(app, 'pos-shift');
+    token = company.token;
     branchId = (await auth(http().post('/branches')).send({ name: `فرع الأدراج ${suffix}` }).expect(201)).body.id;
     await closeAllOpen();
   }, 60000);
@@ -57,8 +61,9 @@ describe('POS shift ↔ cash drawer (e2e)', () => {
     await closeAllOpen();
     for (const id of drawers) await auth(http().delete(`/cash-drawers/${id}`));
     await auth(http().delete(`/branches/${branchId}`));
+    await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 60000);
 
   it('① الدرجُ المسمّى يُقبل، ويُقرأ على المناوبة', async () => {
     const drawer = (await auth(http().post('/cash-drawers')).send({ name: `درج ١ ${suffix}`, branchId }).expect(201)).body as Drawer;
