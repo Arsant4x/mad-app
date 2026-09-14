@@ -38,6 +38,11 @@ STATUS_FILE="${STATUS_FILE:-/backups/offsite-status.json}"
 KEEP_DAILY="${KEEP_DAILY:-14}"
 KEEP_WEEKLY="${KEEP_WEEKLY:-8}"
 KEEP_MONTHLY="${KEEP_MONTHLY:-12}"
+# ⑥ **«يكتب ولا يحذف»** (`ق-٧٣٤`): مفتاحُ الرفع يُقيَّد في سياسة الدلو فلا يحذف إلا أقفالَ `restic`
+#    (`locks/*`) — فـ`forget --prune` **يحتاج حذفاً** ولا مكانَ له في الوظيفة اليومية بهذا المفتاح:
+#    يُشغَّل شهرياً بمفتاحٍ يملك الحذف مع تجربة الاستعادة. `OFFSITE_APPEND_ONLY=1` يُسقط
+#    الخطوةَ **ويُعلن** ذلك في السطر والحال — لا يصمت. والافتراضُ هو السلوكُ القديم.
+OFFSITE_APPEND_ONLY="${OFFSITE_APPEND_ONLY:-0}"
 MIN_TABLES="${MIN_TABLES:-50}"
 MIN_BYTES="${MIN_BYTES:-51200}"
 
@@ -101,10 +106,17 @@ restic backup --tag mad-app --tag offsite --host "${BACKUP_HOST:-mad-app}" "$sta
 
 snapshot=$(restic snapshots --latest 1 --json 2>/dev/null | sed -n 's/.*"short_id":"\([0-9a-f]*\)".*/\1/p' | head -1 || true)
 
-restic forget --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune \
-  || fail "تعذّر تطبيقُ سياسة الاحتفاظ"
+if [ "$OFFSITE_APPEND_ONLY" = "1" ]; then
+  # مفتاحٌ لا يحذف ⇒ لا تقليمَ هنا؛ يُقال في السطر والحال كي لا يُقرأ الاحتفاظُ نافذاً وهو معطَّل.
+  echo "offsite-backup: append-only — لا forget/prune بهذا المفتاح (يُشغَّل شهرياً بمفتاح الحذف — ق-٧٣٤)"
+  prune_note=" · بلا تقليم (append-only)"
+else
+  restic forget --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune \
+    || fail "تعذّر تطبيقُ سياسة الاحتفاظ"
+  prune_note=""
+fi
 restic check || fail "المستودعُ لا يجتاز فحصَ سلامته"
 
 rm -rf "$stage"
-status ok "نسخةٌ خارج المضيف: $tables جدولاً · $bytes بايت · $invoices فاتورة" "${snapshot:-}"
-echo "offsite-backup ok: snapshot ${snapshot:-?} · $tables جدولاً · $bytes بايت"
+status ok "نسخةٌ خارج المضيف: $tables جدولاً · $bytes بايت · $invoices فاتورة$prune_note" "${snapshot:-}"
+echo "offsite-backup ok: snapshot ${snapshot:-?} · $tables جدولاً · $bytes بايت$prune_note"

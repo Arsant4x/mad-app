@@ -45,6 +45,52 @@ OFFSITE_SECRET_KEY=<من لوحة المزوّد>
 RESTIC_PASSWORD='...' docker compose -f docker-compose.prod.yml up -d backup-offsite
 ```
 
+⚠️ **وحدُّ هذه الطريقة — مقروءٌ من `deploy.sh` (`ق-٧٣٤`)**: كلُّ نشرٍ يُعيد إنشاءَ الحاويات (`up -d --build`)
+من صدفةٍ **لا تحمل** `RESTIC_PASSWORD`، فتعود الخدمةُ `unconfigured` بعد أوّل نشرٍ **بلا أن يشتكي أحدٌ إلا
+ملفُّ الحال**. فإمّا أن يُكتب في `.env.production` (`600` · جذرٌ فقط — وهو الملفُّ الذي يحمل مفاتيحَ
+القاعدة والتشفير أصلاً، **ونسخةُ المالك منه خارج المضيف هي ما يشترطه `ق-٥٧٥`** لا غيابُه عن المضيف)،
+وإمّا أن يُمرَّر يدوياً بعد كلِّ نشر. **القرارُ للمالك — ولا يُدَّعى أن الخدمة مهيّأةٌ إلا بقراءة `offsite-status.json` بعد النشر.**
+
+### أوراكل (`OCI Object Storage`) — الرياض (`ق-٧٣٤` · 2026-09-14)
+
+| البند | القيمة |
+|---|---|
+| المنطقة | `me-riyadh-1` — داخل المملكة، ومن غير مزوّد المضيف (`ق-٥٧٣`) |
+| فضاءُ الأسماء | `axz4dynwf97p` |
+| الدلو | `rikz-backups` (الحجرة `alqadi1423 (root)`) |
+| العنوانُ المتوافق مع `S3` | `https://axz4dynwf97p.compat.objectstorage.me-riyadh-1.oraclecloud.com` — **مقيسٌ من الخادم: يستجيب بشهادةٍ صالحة** |
+| `RESTIC_REPOSITORY` | `s3:https://axz4dynwf97p.compat.objectstorage.me-riyadh-1.oraclecloud.com/rikz-backups` |
+| `OFFSITE_REGION` | `me-riyadh-1` — **لازمٌ** لتوقيع `SigV4` (الافتراضُ `us-east-1` يُرفض) — ويُمرَّر `AWS_DEFAULT_REGION` للخدمة و`AWS_REGION` لفحص الطزاجة |
+
+**«يكتب ولا يحذف» — مقيسٌ من وثائق أوراكل** ([Securing Object Storage](https://docs.oracle.com/en-us/iaas/Content/Security/Reference/objectstorage_security.htm)): مفاتيحُ `S3` («Customer Secret Keys») تتبع مستخدمَ `IAM`، **والسياسةُ تُقيّد المستخدمَ لا المفتاح** — فالفصلُ ممكنٌ بالسياسة وإن لم يكن في المفتاح:
+
+```
+# مجموعةُ الرفع: تُنشئ وتقرأ وتسرد — وتحذف أقفالَ restic وحدَها (locks/*) لأن كلَّ عمليةٍ تُنشئ قفلاً وتُزيله
+Allow group rikz-backup-writers to read buckets in compartment alqadi1423 where target.bucket.name='rikz-backups'
+Allow group rikz-backup-writers to manage objects in compartment alqadi1423
+  where all { target.bucket.name='rikz-backups',
+              any { request.permission='OBJECT_INSPECT', request.permission='OBJECT_READ', request.permission='OBJECT_CREATE',
+                    all { request.permission='OBJECT_DELETE', target.object.name='locks/*' } } }
+
+# مجموعةُ فحص الطزاجة (ق-٥٨٠): تسرد وتقرأ فقط — بلا كلمة المستودع
+Allow group rikz-backup-readers to read buckets in compartment alqadi1423 where target.bucket.name='rikz-backups'
+Allow group rikz-backup-readers to manage objects in compartment alqadi1423
+  where all { target.bucket.name='rikz-backups', any { request.permission='OBJECT_INSPECT', request.permission='OBJECT_READ' } }
+```
+
+- **ما يترتّب على `restic`**: `backup` يُنشئ `locks/<id>` ويُزيله — فالاستثناءُ `locks/*` شرطُ نجاح الرفع؛ **و`forget --prune` يحذف حزمَ بياناتٍ ولقطاتٍ ⇒ لا يعمل بمفتاح الرفع** — لذلك `OFFSITE_APPEND_ONLY=1` يُسقطه من الوظيفة اليومية **ويُعلن ذلك**، ويُشغَّل شهرياً بمفتاحِ حذفٍ مع تجربة الاستعادة (`ق-٥٧٦`).
+- **قاعدةُ احتفاظٍ على الدلو** (`Retention Rule`) أقوى — تمنع الحذفَ والكتابةَ فوق الكائن حتى عن المديرين — **لكنها تمنع إزالةَ الأقفال أيضاً** فتتراكم ويرفض `restic` العملَ حتى تُزال يدوياً؛ **فلا تُطبَّق على دلو `restic` بلا قياسٍ أوّلاً**.
+- **وحدُّ ما قِيس**: السياسةُ من نصّ وثيقة أوراكل، **ولم تُجرَّب بعد على هذا الدلو** — تُثبَت بحالتين عند التهيئة: رفعٌ يمرّ، وحذفُ كائنٍ خارج `locks/` يُرفض باسمه.
+
+**وشروطُ القبول الأربعة** (لا يتحوّل `offsite-status.json` عن `unconfigured` قبلها):
+
+| # | الشرط | كيف يُقرأ |
+|---|---|---|
+| ١ | نسخةٌ تُرفع | وجودُ كائناتٍ تحت `snapshots/` **يُقرأ من الدلو** بـ`check-repo-object.sh` بمفتاح القراءة — لا من مخرَج `restic` |
+| ٢ | استعادةٌ تقع | `restore-drill.sh` على قاعدةٍ فارغة، **وتُعدّ الصفوفُ** كما في بروفة الترقية |
+| ٣ | `.env` فيها | `manifest.json` في اللقطة يذكره، ويُستخرج ويُقارَن تجزئتُه بالأصل |
+| ٤ | الفحصُ اليوميّ باعتماد القراءة | `check-repo-object.sh` من خارج المضيف بمفتاح `rikz-backup-readers` — **بلا `RESTIC_PASSWORD`** |
+
 ---
 
 ## التشغيل
