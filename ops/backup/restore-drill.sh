@@ -37,9 +37,11 @@ trap cleanup EXIT
 net_arg=""
 [ -n "$DOCKER_NET" ] && net_arg="--network $DOCKER_NET"
 
-# ① تُستعاد أحدثُ لقطةٍ من المستودع — **بلا مساسٍ بالقاعدة الحيّة**.
+# ① تُستعاد أحدثُ لقطةٍ **للخدمة** من المستودع — **بلا مساسٍ بالقاعدة الحيّة**. وتُقيَّد بمضيف الخدمة
+#    (`BACKUP_HOST` — كما يُوسم في `offsite-backup.sh`) لئلّا تُلتقط لقطةُ إثبات السياسة الرميّة
+#    (`--host policy-proof` — `ق-٧٦٠`) بوصفها «الأحدث» فتسقط التجربةُ كذباً على لقطةٍ بلا مقلب.
 docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-  -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --target /out >/dev/null \
+  -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --host "${BACKUP_HOST:-mad-app}" --target /out >/dev/null \
   || fail "تعذّرت الاستعادةُ من المستودع"
 
 dump=$(find "$DRILL_DIR" -name db.dump | head -1)
