@@ -9,6 +9,8 @@
 #   ① الأدوارُ تُنشأ · ② المقلبُ يُستعاد · ③ الجداولُ والهجراتُ بعددها
 #   ④ المستنداتُ بعددها (فواتيرُ وقيود) · ⑤ **والمفتاحُ يفكّ** — بشيفرة التطبيق
 #      نفسِها لا بنسخةٍ منها (`ق-٣٧٥`: الحارسُ يقرأ المصدر لا نظيرَه).
+#   **ويقيس واحداً**: المخزَّنَ في المستودع مقابل حدّ المراجعة (`ق-٧٤٣` · `ق-٧٥١`) —
+#      فالقياسُ الشهريُّ يعيش هنا لا في وثيقة.
 #
 # ⚠️ **ولا تخطٍّ صامت**: كلُّ توكيدٍ يتعذّر **يُسقط التجربة** ويُطبع سببُه.
 #
@@ -103,7 +105,26 @@ else
   decrypted=canary-no-stored-secret
 fi
 
-printf '{"at":"%s","publicTables":%s,"migrations":%s,"invoices":%s,"journalEntries":%s,"appUserRole":%s,"decryption":"%s","sha256":"%s"}\n' \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$tables" "$migrations" "$invoices" "$entries" "$roles" "$decrypted" "$got_sha" > "$REPORT"
-echo "restore-drill ok: $tables جدولاً · $migrations هجرة · $invoices فاتورة · $entries قيداً · الأدوار ✔ · الفكّ $decrypted"
+# ⑤ **والمخزَّنُ يُقاس شهرياً هنا لا في وثيقة** (`ق-٧٤٣` · `ق-٧٥١`): «يكتب ولا يحذف» يُراكم بلا تقليمٍ
+#    يوميّ، **وبندُ متابعةٍ بلا قياسٍ دوريٍّ يُقرأ عند بلوغه لا قبله**. يُقرأ من المستودع نفسِه
+#    (`restic stats` — حجمُ الحزم المخزَّنة) ويُقارَن بالحدّ (`10 GB` — حيث تنتهي حصّةُ أوراكل المجّانية
+#    وتبدأ الكلفة)، **ويُكتب في التقرير** فيُقرأ الاتجاهُ شهراً بعد شهر. بلوغُ الحدّ **إنذارٌ مسمّىً بقراره
+#    لا سقوطٌ للتجربة** — وتعذُّرُ القياس نفسِه يُسقطها، فلا شهرَ بلا رقم.
+VOLUME_THRESHOLD_GB="${OFFSITE_VOLUME_THRESHOLD_GB:-10}"
+stats=$(docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+  "$RESTIC_IMAGE" stats --mode raw-data --json 2>/dev/null) || fail "تعذّر قياسُ المخزَّن (restic stats) — ولا شهرَ بلا رقم"
+stored=$(printf '%s' "$stats" | sed -n 's/.*"total_size":\([0-9]*\).*/\1/p' | head -1)
+[ -n "$stored" ] || fail "restic stats بلا total_size — فلا رقمَ يُقارَن بالحدّ"
+threshold_bytes=$((VOLUME_THRESHOLD_GB * 1000000000))   # جيجابايت عشرية — الأشدُّ حذراً
+stored_mb=$((stored / 1000000))
+if [ "$stored" -ge "$threshold_bytes" ]; then
+  volume_note="⚠️ بلغ المخزَّنُ حدَّ المراجعة (${stored_mb} MB ≥ ${VOLUME_THRESHOLD_GB} GB) — يُعاد النظرُ في «يكتب ولا يحذف» (ق-٧٤٣)"
+  echo "restore-drill: $volume_note" >&2
+else
+  volume_note="المخزَّنُ ${stored_mb} MB من حدّ المراجعة ${VOLUME_THRESHOLD_GB} GB (ق-٧٤٣)"
+fi
+
+printf '{"at":"%s","publicTables":%s,"migrations":%s,"invoices":%s,"journalEntries":%s,"appUserRole":%s,"decryption":"%s","sha256":"%s","storedBytes":%s,"volumeThresholdGb":%s}\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$tables" "$migrations" "$invoices" "$entries" "$roles" "$decrypted" "$got_sha" "$stored" "$VOLUME_THRESHOLD_GB" > "$REPORT"
+echo "restore-drill ok: $tables جدولاً · $migrations هجرة · $invoices فاتورة · $entries قيداً · الأدوار ✔ · الفكّ $decrypted · $volume_note"
 echo "التقرير: $REPORT"
