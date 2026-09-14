@@ -38,6 +38,11 @@ die()  { printf '\n%s✖ %s%s\n' "$RED" "$*" "$RST" >&2; exit 1; }
 
 dc() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
 
+# دوالُّ حارس إعادة الإنشاء المشروط بسياق البناء (ق-٧١٧) — في ملفٍّ يُختبر وحدَه.
+[[ -f ./ops/deploy/recreate-guard.sh ]] || die "لا أجد ops/deploy/recreate-guard.sh — الحارسُ بلا دوالّه."
+# shellcheck source=ops/deploy/recreate-guard.sh
+source ./ops/deploy/recreate-guard.sh
+
 # مِن داخل حاوية الواجهة — بصمة الحزمة التي يقدّمها nginx فعلاً.
 bundle_hash() {
   local cid; cid="$(dc ps -q web 2>/dev/null || true)"
@@ -71,8 +76,13 @@ head_ "خط الأساس"
 
 before_commit="$(git rev-parse HEAD)"
 before_hash="$(bundle_hash)"
-declare -A before_id=()
-for s in "${MUST_RECREATE[@]}"; do before_id["$s"]="$(dc ps -q "$s" 2>/dev/null || true)"; done
+declare -A before_id=() before_img=() img_name=()
+for s in "${MUST_RECREATE[@]}"; do
+  before_id["$s"]="$(dc ps -q "$s" 2>/dev/null || true)"
+  # الصورةُ التي تعمل بها الحاوية الآن، واسمُها (الوسم) — يُقارَن بما يُبنى (ق-٧١٧).
+  before_img["$s"]="$(docker inspect -f '{{.Image}}' "${before_id[$s]}" 2>/dev/null || true)"
+  img_name["$s"]="$(docker inspect -f '{{.Config.Image}}' "${before_id[$s]}" 2>/dev/null || true)"
+done
 
 say "الالتزام:     $(git log -1 --format='%h %s' 2>/dev/null)"
 say "هاش الواجهة:  $before_hash"
@@ -100,6 +110,8 @@ else
   # الحارس ولا فحص إعادة الإنشاء. كشفه الإثبات العكسي (ب).
   git log --oneline "${before_commit}..${after_commit}" 2>/dev/null | head -10 | sed 's/^/    /' || true
 fi
+# المساراتُ المتغيّرة بين الالتزامين — يقرؤها حارسُ إعادة الإنشاء (ق-٧١٧). فارغةٌ إن لم يصل التزام.
+changed_files="$(git diff --name-only "$before_commit" "$after_commit" 2>/dev/null || true)"
 
 # ═══ ٣ب) مقلبٌ قبل الهجرات — يسبق البناءَ ولا يمرّ إن فشل (ق-٦٨٧) ═══════════════
 # الحاويةُ تُطبّق الهجراتِ عند إقلاعها، فالمقلبُ هنا هو الحالُ الذي يُرجَع إليه إن سقطت
@@ -118,8 +130,15 @@ dc up -d --build
 # يقرأ حالة الحاوية من `docker inspect` مباشرةً — لا من مخرجات `ps` المنسّقة.
 # دليل إعادة الإنشاء أحد أمرين: تبدّل معرّف الحاوية، أو StartedAt بعد لحظة
 # انطلاق النشر. أيّهما تحقّق كفى.
+#
+# ⚖️ ومشروطٌ بسياق البناء (ق-٧١٧ — قرار المالك 2026-09-14): حاويةٌ لم تُعَد **ولا ملفَّ من
+# مصادر بنائها تغيّر** (أسطرُ COPY في Dockerfile نفسِه + الملفُّ + .dockerignore) **والصورةُ
+# نفسُها** — بقاؤها مشروعٌ ويُقال؛ أمّا إن تغيّرت مصادرُها أو بُنيت صورةٌ جديدة ولم تُعَد فذلك
+# حادثةُ 2026-08-14 بعينها ويُسقِط. قبل هذا كان الحارسُ غيرَ مشروط، فأنذر كاذباً في نشر
+# 2026-09-14 (web بلا تغيير) — «وإنذارٌ كاذبٌ يُقرأ يدوياً مرّةً يُقرأ «معروفاً» بعد ثلاث».
 head_ "حارس إعادة الإنشاء"
 
+compose_config="$(dc config 2>/dev/null || true)"
 violations=()
 for s in "${MUST_RECREATE[@]}"; do
   cid="$(dc ps -q "$s" 2>/dev/null || true)"
@@ -143,26 +162,31 @@ for s in "${MUST_RECREATE[@]}"; do
   elif (( started_epoch >= deploy_start )); then
     say "${GRN}✔${RST} «$s»: نفس الحاوية لكن أُعيد تشغيلها الآن"
   else
+    # نفس الحاوية ولم تُشغَّل الآن — مشروعٌ أم حادثة؟ يُقرأ من سياق البناء لا من الافتراض (ق-٧١٧).
     age=$(( (deploy_start - started_epoch) / 60 ))
-    violations+=("«$s»: لم تُمَسّ — نفس المعرّف (${cid:0:12}) وتعمل منذ ${age} دقيقة قبل بدء النشر.")
+    df="$(printf '%s\n' "$compose_config" | service_dockerfile "$s" "$(pwd)")"
+    [[ -n "$df" ]] || df="apps/$s/Dockerfile"
+    touched="$(printf '%s\n' "$changed_files" | touching_sources "$df" || true)"
+    built_img="$(image_tag_id "${img_name[$s]}")"
+    if [[ -n "$touched" ]]; then
+      violations+=("«$s»: لم تُمَسّ — نفس المعرّف (${cid:0:12}) مع أن مصادرَ بنائها تغيّرت: $(tr '\n' ' ' <<<"$touched")")
+    elif [[ -n "$built_img" && -n "${before_img[$s]}" && "$built_img" != "${before_img[$s]}" ]]; then
+      violations+=("«$s»: لم تُمَسّ — نفس المعرّف (${cid:0:12}) مع أن صورةً جديدة بُنيت (${before_img[$s]:7:12} ← ${built_img:7:12}).")
+    else
+      say "${YLW}○${RST} «$s»: لم تُعَد إنشاؤها — ولا ملفَّ من مصادر بنائها ($df · COPY) تغيّر، والصورةُ نفسُها؛ بقاؤها مشروع (تعمل منذ ${age} دقيقة)."
+    fi
   fi
 done
 
+# كلُّ ما بقي في القائمة حادثةٌ لا حالةٌ مشروعة — فلا يُقال بالأصفر ولا يمرّ، وصل التزامٌ أو لم يصل:
+# حاويةٌ غائبة أو واقفة، أو مصادرُ تغيّرت وصورةٌ بُنيت ولم تُعَد الحاوية. (ما كان يُقال بالأصفر —
+# «لا التزام جديد فالبقاءُ مشروع» — صار يُقرأ من سياق البناء نفسِه فوق: ○.)
 if (( ${#violations[@]} > 0 )); then
-  if (( code_changed == 1 )); then
-    printf '\n%s✖ الحارس أسقط النشر — api/web لم يُعادا إنشاؤهما:%s\n' "$RED" "$RST" >&2
-    printf '   %s\n' "${violations[@]}" >&2
-    die "وصل التزام جديد (${before_commit:0:7} ← ${after_commit:0:7}) ولم تُعَد الحاويتان.
+  printf '\n%s✖ الحارس أسقط النشر — api/web لم يُعادا إنشاؤهما:%s\n' "$RED" "$RST" >&2
+  printf '   %s\n' "${violations[@]}" >&2
+  die "النشر (${before_commit:0:7} ← ${after_commit:0:7}) ولم تُعَد الحاويتان.
    الشيفرة الجديدة **ليست منشورة**. لا تُبلغ عن نجاح.
    افحص: dc logs api  ·  dc logs web  ·  docker compose -f $COMPOSE_FILE ps"
-  fi
-  # لا التزام جديد ⇒ عدم إعادة الإنشاء سلوك مشروع لا خلل. يُقال ولا يُسقِط —
-  # وبالأصفر لا بالأحمر: أحمرُ يُتجاهَل في الحالة السليمة يفقد معناه في الحالة
-  # المعطوبة. (كشفه تشغيل السكربت السليم بعد الإثبات العكسي.)
-  printf '\n%s⚠ api/web لم يُعادا إنشاؤهما — ولا التزام جديد وصل، فهذا سلوك مشروع:%s\n' "$YLW" "$RST"
-  printf '   %s\n' "${violations[@]}"
-else
-  : # لا مخالفة
 fi
 
 # ═══ ٦) الحصيلة ══════════════════════════════════════════════════════════
