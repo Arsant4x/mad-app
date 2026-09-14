@@ -151,6 +151,37 @@ describe('النسخةُ خارج المضيف — خمسةُ شروطٍ محر�
  * النسخ والخارجيّة) جذرٌ، ولا فتحاتٍ ولا `cron` — فلا شيءَ ينكسر. **والتضييقُ يعيش في خدمة
  * النسخ نفسِها** (تُطبّقه كلَّ دورة) لا في يدٍ على الخادم — فربطٌ يُعاد تركيبُه يُنشئ المجلّدَ `755` من جديد.
  */
+/**
+ * `ق-٧٣٤` — **«يكتب ولا يحذف»: مفتاحُ الرفع لا يحذف إلا أقفالَ `restic` — فالتقليمُ لا يعيش في الوظيفة اليومية.**
+ *
+ * أوراكل لا تفصل الكتابةَ عن الحذف في مفتاح `S3`، لكن سياسةَ `IAM` تفصلهما على المستخدم. و`forget --prune`
+ * يحذف حزمَ بياناتٍ ⇒ يسقط بمفتاح الرفع **ويُسقط الوظيفةَ كلَّها** (`fail`) لو بقي فيها. فـ`OFFSITE_APPEND_ONLY=1`
+ * يُسقطه **ويُعلن** في السطر والحال — والافتراضُ يبقي السلوكَ القديم. ويُمرَّر مع منطقة التوقيع من ملفّ التركيب.
+ */
+describe('append-only — لا تقليمَ بمفتاحٍ لا يحذف، ويُعلَن (ق-٧٣٤)', () => {
+  const offsite = composeService('backup-offsite');
+  const EXAMPLE = read('.env.production.example');
+
+  it('السكربتُ يُسقط forget --prune تحت OFFSITE_APPEND_ONLY=1 ويُعلن ذلك — والافتراضُ 0', () => {
+    expect(BACKUP).toMatch(/OFFSITE_APPEND_ONLY="\$\{OFFSITE_APPEND_ONLY:-0\}"/);
+    expect(BACKUP).toMatch(/if \[ "\$OFFSITE_APPEND_ONLY" = "1" \]; then[\s\S]*append-only[\s\S]*else[\s\S]*restic forget --keep-daily/);
+    // الإعلانُ يصل ملفَّ الحال لا السطرَ وحده
+    expect(BACKUP).toContain('prune_note');
+    expect(BACKUP).toMatch(/status ok "[^"]*\$prune_note"/);
+  });
+
+  it('ملفُّ التركيب يمرّر الرايةَ ومنطقةَ التوقيع، ومثالُ البيئة يوثّق المفاتيح', () => {
+    expect(offsite).toContain('OFFSITE_APPEND_ONLY: ${OFFSITE_APPEND_ONLY:-0}');
+    expect(offsite).toContain('AWS_DEFAULT_REGION: ${OFFSITE_REGION:-us-east-1}');
+    for (const k of ['RESTIC_REPOSITORY=', 'RESTIC_PASSWORD=', 'OFFSITE_ACCESS_KEY=', 'OFFSITE_SECRET_KEY=', 'OFFSITE_REGION=', 'OFFSITE_APPEND_ONLY=']) {
+      expect(EXAMPLE).toContain(k);
+    }
+    // ولا قيمةَ سرّيةً في المثال — القيمُ من صاحب المشروع مباشرةً
+    expect(EXAMPLE).toMatch(/^RESTIC_PASSWORD=$/m);
+    expect(EXAMPLE).toMatch(/^OFFSITE_SECRET_KEY=$/m);
+  });
+});
+
 describe('مجلّدُ المقالب 700 — تُطبّقه خدمةُ النسخ كلَّ دورة (ق-٧٢٩)', () => {
   const backup = composeService('backup');
 

@@ -229,6 +229,10 @@ services:
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
       AWS_ACCESS_KEY_ID: ${OFFSITE_ACCESS_KEY:-}
       AWS_SECRET_ACCESS_KEY: ${OFFSITE_SECRET_KEY:-}
+      # المنطقةُ لتوقيع `SigV4` — مزوّدٌ متوافقٌ مع `S3` (أوراكل `me-riyadh-1`) يرفض توقيعاً بمنطقةٍ أخرى.
+      AWS_DEFAULT_REGION: ${OFFSITE_REGION:-us-east-1}
+      # `1` = مفتاحُ الرفع لا يحذف (سياسةُ الدلو) فلا تقليمَ في الوظيفة اليومية — يُعلَن ولا يصمت (ق-٧٣٤).
+      OFFSITE_APPEND_ONLY: ${OFFSITE_APPEND_ONLY:-0}
       BACKUP_HOST: mad-app-prod
     volumes:
       # المقالبُ المحلّية تُقرأ، وملفُّ الحال يُكتب بجانبها.
