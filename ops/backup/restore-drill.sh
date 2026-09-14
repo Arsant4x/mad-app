@@ -19,9 +19,13 @@ set -eu
 
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY غير مضبوط}"
 : "${RESTIC_PASSWORD:?RESTIC_PASSWORD غير مضبوط}"
-RESTIC_IMAGE="${RESTIC_IMAGE:-restic/restic:latest}"
+RESTIC_IMAGE="${RESTIC_IMAGE:-restic/restic:0.17.3}"   # الوسمُ نفسُه الذي تُبنى عليه الخدمة (Dockerfile)
 PG_IMAGE="${PG_IMAGE:-postgres:16-alpine}"
 API_IMAGE="${API_IMAGE:-mad-app-api}"
+# مضيفُ لقطات الخدمة كما يضبطه ملفُّ التركيب (`BACKUP_HOST: mad-app-prod`) — قِيس 2026-09-14: افتراضٌ آخر لا يجد لقطة.
+BACKUP_HOST="${BACKUP_HOST:-mad-app-prod}"
+# منطقةُ التوقيع كما تُمرَّر للخدمة (`AWS_DEFAULT_REGION`) — تُمرَّر لحاويات التجربة أيضاً (فارغةً لا تضرّ).
+AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-}"; export AWS_DEFAULT_REGION
 DRILL_DIR="${DRILL_DIR:-$(mktemp -d)}"
 DRILL_DB="${DRILL_DB:-mad_app}"
 DRILL_USER="${DRILL_USER:-mad_app}"
@@ -40,8 +44,8 @@ net_arg=""
 # ① تُستعاد أحدثُ لقطةٍ **للخدمة** من المستودع — **بلا مساسٍ بالقاعدة الحيّة**. وتُقيَّد بمضيف الخدمة
 #    (`BACKUP_HOST` — كما يُوسم في `offsite-backup.sh`) لئلّا تُلتقط لقطةُ إثبات السياسة الرميّة
 #    (`--host policy-proof` — `ق-٧٦٠`) بوصفها «الأحدث» فتسقط التجربةُ كذباً على لقطةٍ بلا مقلب.
-docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-  -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --host "${BACKUP_HOST:-mad-app}" --target /out >/dev/null \
+docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+  -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --host "$BACKUP_HOST" --target /out >/dev/null \
   || fail "تعذّرت الاستعادةُ من المستودع"
 
 dump=$(find "$DRILL_DIR" -name db.dump | head -1)
@@ -113,8 +117,8 @@ fi
 #    وتبدأ الكلفة)، **ويُكتب في التقرير** فيُقرأ الاتجاهُ شهراً بعد شهر. بلوغُ الحدّ **إنذارٌ مسمّىً بقراره
 #    لا سقوطٌ للتجربة** — وتعذُّرُ القياس نفسِه يُسقطها، فلا شهرَ بلا رقم.
 VOLUME_THRESHOLD_GB="${OFFSITE_VOLUME_THRESHOLD_GB:-10}"
-stats=$(docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
-  "$RESTIC_IMAGE" stats --mode raw-data --json 2>/dev/null) || fail "تعذّر قياسُ المخزَّن (restic stats) — ولا شهرَ بلا رقم"
+stats=$(docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+  "$RESTIC_IMAGE" stats --mode raw-data --no-lock --json 2>/dev/null) || fail "تعذّر قياسُ المخزَّن (restic stats) — ولا شهرَ بلا رقم"
 stored=$(printf '%s' "$stats" | sed -n 's/.*"total_size":\([0-9]*\).*/\1/p' | head -1)
 [ -n "$stored" ] || fail "restic stats بلا total_size — فلا رقمَ يُقارَن بالحدّ"
 threshold_bytes=$((VOLUME_THRESHOLD_GB * 1000000000))   # جيجابايت عشرية — الأشدُّ حذراً
