@@ -240,6 +240,7 @@ export const MSG = {
   zatca_buyer_address_incomplete: 'zatca.buyer_address_incomplete',
   zatca_onboarding_not_started: 'zatca.onboarding_not_started',
   zatca_already_onboarded: 'zatca.already_onboarded',
+  zatca_qr_value_too_long: 'zatca.qr_value_too_long',
   zatca_compliance_required: 'zatca.compliance_required',
   zatca_not_onboarded: 'zatca.not_onboarded',
   zatca_already_cleared: 'zatca.already_cleared',
@@ -350,6 +351,7 @@ export const MSG = {
   additional_number_invalid: 'validation.additional_number_invalid',
   email_invalid: 'validation.email',
   legal_name_required: 'validation.legal_name_required',
+  legal_name_too_long_for_qr: 'validation.legal_name_too_long_for_qr',
   file_key_required: 'validation.file_key_required',
 } as const;
 
@@ -717,6 +719,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'A standard invoice requires the buyer\'s full national address — missing from "{customer}": {missing}. Complete it and resubmit',
   },
   [MSG.zatca_onboarding_not_started]: { ar: 'ابدأ ربط الفوترة الإلكترونية أولاً من إعدادات المنشأة', en: 'Start e-invoicing onboarding first' },
+  [MSG.zatca_qr_value_too_long]: {
+    ar: 'تعذّر توليد رمز الاستجابة: قيمة الوسم {tag} تبلغ {bytes} بايتاً وحدّ المواصفة 255 — قصّر الاسم القانوني في بيانات المنشأة',
+    en: 'Cannot build the QR code: tag {tag} is {bytes} bytes and the specification allows 255 — shorten the legal name in the company profile',
+  },
   [MSG.zatca_already_onboarded]: { ar: 'الربط مكتمل بالفعل — إعادة التوليد ستُبطل شهادتك الحالية', en: 'Onboarding is already complete — regenerating would invalidate your current certificate' },
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
   [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
@@ -898,6 +904,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.additional_number_invalid]: { ar: 'الرقم الإضافي يجب أن يكون أربع خانات', en: 'The additional number must be four digits' },
   [MSG.email_invalid]: { ar: 'صيغة البريد الإلكتروني غير صحيحة', en: 'Email address format is invalid' },
   [MSG.legal_name_required]: { ar: 'الاسم القانوني مطلوب', en: 'Legal name is required' },
+  [MSG.legal_name_too_long_for_qr]: {
+    ar: 'الاسم القانوني أطول من حدّ رمز الاستجابة لهيئة الزكاة (255 بايتاً — الحرف العربي بايتان، أي نحو 127 حرفاً)',
+    en: 'Legal name exceeds the ZATCA QR limit (255 bytes — Arabic letters are two bytes each, about 127 characters)',
+  },
   [MSG.file_key_required]: { ar: 'مفتاح الملف مطلوب', en: 'File key is required' },
 };
 
