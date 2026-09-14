@@ -64,6 +64,6 @@ export class PaymentsController {
   @Post(':id/reverse')
   @RequiresAction('record')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReversePaymentDto) {
-    return this.paymentsService.reverse(tenant.companyId, id, dto.reason);
+    return this.paymentsService.reverse(tenant.companyId, id, dto.reason, dto.date);
   }
 }

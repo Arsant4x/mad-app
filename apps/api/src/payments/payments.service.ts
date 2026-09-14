@@ -252,7 +252,7 @@ export class PaymentsService {
    * تخصيصاته هو — روابطُ مستندٍ لا قوائمُ رؤية، وحجبُ فاتورةٍ منها يعكس نصفَ
    * السند ويترك الذمّةَ مختلّة.
    */
-  reverse(companyId: string, id: string, reason?: string) {
+  reverse(companyId: string, id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const original = await tx.payment.findUnique({ where: { id }, include: { allocations: true, customer: { select: { name: true } } } });
@@ -265,7 +265,9 @@ export class PaymentsService {
         const rate = Number(original.exchangeRate);
         // لحظةٌ واحدة للرقم وللصفّ معاً. ونداءان منفصلان لـ`new Date()` قد
         // يقعان على طرفَي منتصف الليل، فيحمل السند رقم سنةٍ وتاريخَ أخرى.
-        const reversalDate = new Date();
+        // ⚖️ **ويومُ التاجر أوّلاً** (`ق-٧٣٦`): يُقرأ من الطلب (`YYYY-MM-DD` → منتصفُ ليل `UTC` كسائر
+        //    المستندات)، ولا يُشتقّ من ساعة الخادم إلا لعميلٍ لم يُرسله — حدٌّ معلَن.
+        const reversalDate = date ? new Date(date) : new Date();
         const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
 
@@ -305,7 +307,8 @@ export class PaymentsService {
         await this.postAndSettle(tx, companyId, reversal.id, {
           no,
           customerName: original.customer.name,
-          date: new Date(),
+          // القيدُ بيوم السند نفسِه — لا `new Date()` ثانيةٌ قد تقع على طرف منتصف الليل الآخر (`ق-٧٣٦`).
+          date: reversalDate,
           amount,
           currency: original.currency,
           exchangeRate: rate,

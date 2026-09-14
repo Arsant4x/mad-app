@@ -53,8 +53,11 @@ export const getCurrentShift = () => apiClient.get<PosShift | null>('/pos/shifts
 export const listShifts = () => apiClient.get<PosShift[]>('/pos/shifts').then((r) => r.data);
 export const openShift = (openingFloat: number, branchId?: string) =>
   apiClient.post<PosShift>('/pos/shifts', { openingFloat, branchId }).then((r) => r.data);
+// انحرافُ الطرفية لحظةَ الإقفال — فيُؤرَّخ قيدُ التسوية بيوم الكاشير لا بيوم الخادم (ق-٧٣٦)، كما في البيع.
 export const closeShift = (id: string, declaredClosing: number, notes?: string) =>
-  apiClient.post<ClosedShift>(`/pos/shifts/${id}/close`, { declaredClosing, notes }).then((r) => r.data);
+  apiClient
+    .post<ClosedShift>(`/pos/shifts/${id}/close`, { declaredClosing, notes, closedOffsetMin: -new Date().getTimezoneOffset() })
+    .then((r) => r.data);
 export const createPosSale = (lines: PosSaleLine[], paymentMethod: PosPaymentMethod, customerId?: string) =>
   apiClient.post<PosSaleResponse>('/pos/sales', { lines, paymentMethod, customerId }).then((r) => r.data);
 
