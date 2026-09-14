@@ -100,8 +100,17 @@ describe('النسخةُ خارج المضيف — خمسةُ شروطٍ محر�
     // وكلُّ توكيدٍ يتعذّر يُسقط التجربة: لا `|| true` على حكمٍ، ولا تخطٍّ صامت.
     expect(DRILL).toContain('fail "المفتاحُ المستعاد لا يفكّ');
     expect(DRILL).not.toContain('skip');
-    // وتُستعاد لقطةُ الخدمة لا أحدثُ لقطةٍ أيّاً كانت — فلقطةُ إثبات السياسة الرميّة (`ق-٧٦٠`) لا تُلتقط.
-    expect(DRILL).toMatch(/restore latest --host "\$\{BACKUP_HOST:-mad-app\}"/);
+    // وتُستعاد لقطةُ الخدمة لا أحدثُ لقطةٍ أيّاً كانت — فلقطةُ إثبات السياسة الرميّة (`ق-٧٦٠`) لا تُلتقط؛
+    // ومضيفُ الخدمة يُقرأ من ملفّ التركيب لا من الذاكرة (قِيس 2026-09-14: افتراضٌ آخر لا يجد لقطة).
+    const composeHost = /BACKUP_HOST:\s*([a-z0-9-]+)/.exec(service);
+    expect(composeHost).not.toBeNull();
+    expect(DRILL).toContain(`BACKUP_HOST="\${BACKUP_HOST:-${composeHost![1]}}"`);
+    expect(DRILL).toMatch(/restore latest --host "\$BACKUP_HOST"/);
+    // ومنطقةُ التوقيع تصل حاويات التجربة كما تصل الخدمة (أمرُ الاستعادة على سطرين: البيئةُ ثم الأمر)
+    const lines = DRILL.split('\n');
+    const restoreAt = lines.findIndex((l) => l.includes('restore latest --host'));
+    expect(restoreAt).toBeGreaterThan(0);
+    expect(lines[restoreAt - 1]).toContain('-e AWS_DEFAULT_REGION');
   });
 
   /**
@@ -195,7 +204,7 @@ describe('append-only — لا تقليمَ بمفتاحٍ لا يحذف، وي�
 describe('المخزَّنُ يُقاس شهرياً في تجربة الاستعادة مقابل حدّ المراجعة (ق-٧٤٣ · ق-٧٥١)', () => {
   it('التجربةُ تقرأ المخزَّنَ بـ restic stats وتقارنه بحدٍّ افتراضيُّه 10 GB وتكتبه في التقرير', () => {
     expect(DRILL).toMatch(/OFFSITE_VOLUME_THRESHOLD_GB:-10\}/);
-    expect(DRILL).toMatch(/"\$RESTIC_IMAGE" stats --mode raw-data --json/);
+    expect(DRILL).toMatch(/"\$RESTIC_IMAGE" stats --mode raw-data --no-lock --json/);
     expect(DRILL).toContain('"total_size"');
     // تعذُّرُ القياس يُسقط التجربة — لا شهرَ بلا رقم
     expect(DRILL).toMatch(/\|\| fail "تعذّر قياسُ المخزَّن/);
@@ -230,18 +239,39 @@ describe('إثباتُ السياسة: الكتابةُ تنجح والحذفُ 
     }
   });
 
-  it('الحالتان بـ restic نفسِه: backup رميٌّ بمضيفٍ مميَّز ينجح، وforget له يُرفض بـ AccessDenied وتبقى اللقطة', () => {
+  it('الحالتان بـ restic نفسِه: backup رميٌّ بمضيفٍ مميَّز ينجح، وforget له يُرفض باسمه وتبقى اللقطة', () => {
     expect(PROOF).toMatch(/backup --tag policy-proof --host policy-proof/);
     expect(PROOF).toMatch(/forget "\$snap"/);
+    // رسالةُ الرفض بلغة المزوّدَين: AWS وأوراكل («not authorized» — مقيسةٌ على الدلو 2026-09-14)
     expect(PROOF).toContain('AccessDenied');
+    expect(PROOF).toContain('not authorized');
     // بعد الرفض تُسرد اللقطةُ ثانيةً — فالحكمُ من المستودع لا من رسالة الخطأ وحدها
-    expect(PROOF.indexOf('snapshots "$snap"')).toBeGreaterThan(PROOF.indexOf('forget "$snap"'));
+    expect(PROOF.indexOf('snapshots --no-lock "$snap"')).toBeGreaterThan(PROOF.indexOf('forget "$snap"'));
     // والصورةُ بالوسم نفسِه الذي تُبنى عليه الخدمة
     const pinned = /FROM restic\/restic:([0-9.]+)/.exec(read('ops', 'backup', 'Dockerfile'));
     expect(pinned).not.toBeNull();
     expect(PROOF).toContain(`restic/restic:${pinned![1]}`);
-    // ثلاثةُ مخارجَ متمايزة
-    for (const code of ['exit 1', 'exit 2', 'exit 3']) expect(PROOF).toContain(code);
+    // أربعةُ مخارجَ متمايزة
+    for (const code of ['exit 1', 'exit 2', 'exit 3', 'exit 4']) expect(PROOF).toContain(code);
+  });
+
+  /**
+   * ما كشفه أوّلُ تشغيلٍ حقيقيّ (2026-09-14 · `ق-٧٧٩`): `backup` يعود `0` ولو عجز عن إزالة قفله — فالقفلُ يُقرأ من
+   * سجلّه لا من خروجه؛ والقراءاتُ بلا `--no-lock` تترك أقفالاً عالقةً تمنع `forget` قبل أن يُحاوَل الحذف — فيُقال «لا حكم»
+   * لا «مرفوض»؛ والسببُ يُكتب في المخرَج محجوباً — لا يُرمى.
+   */
+  it('القفلُ يُقرأ من سجلّ backup، والقراءاتُ بلا قفل، والأقفالُ العالقة «لا حكم» لا «مرفوض»، والسببُ في المخرَج محجوباً', () => {
+    expect(PROOF).toContain("grep -q 'Remove(<lock/' \"$probe/backup.out\"");
+    expect(PROOF).toMatch(/cat config --no-lock/);
+    expect(PROOF).toMatch(/snapshots --no-lock --host policy-proof/);
+    expect(PROOF).toMatch(/grep -qi 'already locked' "\$probe\/forget\.out"/);
+    // أقفالٌ عالقة بلا شاهدٍ على الرفض ⇒ لا حكم (3)، ومعه شاهدٌ من إزالة القفل ⇒ مرفوضٌ مشهود
+    expect(PROOF).toMatch(/already locked[\s\S]*\[ "\$lock" = denied \][\s\S]*exit 3/);
+    // السببُ يصل المخرَج محجوباً من أيّ رمزٍ يشبه مفتاحاً
+    expect(PROOF).toContain('"reason":"%s"');
+    expect(PROOF).toMatch(/reason\(\) \{[^\n]*\[masked\]/);
+    // وقفلٌ لا يُزال حكمٌ باسمه (4) لا نجاحٌ صامت
+    expect(PROOF).toMatch(/\[ "\$lock" = denied \]; then[\s\S]*exit 4/);
   });
 });
 
