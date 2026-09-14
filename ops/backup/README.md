@@ -66,17 +66,24 @@ RESTIC_PASSWORD='...' docker compose -f docker-compose.prod.yml up -d backup-off
 
 ```
 # مجموعةُ الرفع: تُنشئ وتقرأ وتسرد — وتحذف أقفالَ restic وحدَها (locks/*) لأن كلَّ عمليةٍ تُنشئ قفلاً وتُزيله
+# — عبارتان بالصيغة الموثَّقة عند أوراكل (أدناه)، لا عبارةٌ واحدةٌ متداخلةٌ ثلاثَ طبقات
 Allow group rikz-backup-writers to read buckets in compartment alqadi1423 where target.bucket.name='rikz-backups'
 Allow group rikz-backup-writers to manage objects in compartment alqadi1423
-  where all { target.bucket.name='rikz-backups',
-              any { request.permission='OBJECT_INSPECT', request.permission='OBJECT_READ', request.permission='OBJECT_CREATE',
-                    all { request.permission='OBJECT_DELETE', target.object.name='locks/*' } } }
+  where all { target.bucket.name='rikz-backups', any { request.permission='OBJECT_INSPECT', request.permission='OBJECT_READ', request.permission='OBJECT_CREATE' } }
+Allow group rikz-backup-writers to manage objects in compartment alqadi1423
+  where all { target.bucket.name='rikz-backups', target.object.name='locks/*', any { request.permission='OBJECT_DELETE' } }
 
 # مجموعةُ فحص الطزاجة (ق-٥٨٠): تسرد وتقرأ فقط — بلا كلمة المستودع
 Allow group rikz-backup-readers to read buckets in compartment alqadi1423 where target.bucket.name='rikz-backups'
 Allow group rikz-backup-readers to manage objects in compartment alqadi1423
   where all { target.bucket.name='rikz-backups', any { request.permission='OBJECT_INSPECT', request.permission='OBJECT_READ' } }
 ```
+
+**صيغةُ الاستثناء — مقيسةٌ من وثائق أوراكل لا مرجَّحة** (`ق-٧٨٢` · 2026-09-15):
+- **المتغيّر**: مرجعُ سياسات التخزين ([Details for Object Storage](https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/objectstoragepolicyreference.htm)) يعدّد `target.object.name` لعمليات `objects` بنوع **«String and Patterns»** — «Use this variable to control access to a specific object or object patterns».
+- **صيغةُ البادئة**: السياساتُ الشائعة ([Common Policies](https://docs.oracle.com/en-us/iaas/Content/Identity/policiescommon/commonpolicies.htm) — «Folder Access») تكتبها بعلامتَي اقتباسٍ ونجمة: `target.object.name = 'prod/*'` — ومثالُها الحرفيّ للكتابة بلا قراءةٍ ولا حذف: `ALLOW group test-group TO manage objects IN TENANCY where all {target.bucket.name = 'test-bucket', target.object.name = 'prod/*', any{request.permission='OBJECT_CREATE'}}`؛ وصفحةُ صيغة السياسات ([Policy Syntax](https://docs.oracle.com/en-us/iaas/Content/Identity/Concepts/policysyntax.htm)) تذكر الأنماطَ بين شرطتين أيضاً: «`/HR*/` (matches strings that start with "HR")».
+- **التداخل**: `all { …, any { … } }` موثَّقٌ في المثال نفسِه — فالعبارتان أعلاه بطبقتين لا ثلاث.
+- **ما قِيس على الدلو** (2026-09-14): سياسةٌ بلا هذا الاستثناء تُنجح الرفعَ وتُبقي القفل — فالاستثناءُ شرطُ عملٍ لا تفضيل؛ **وصيغةُ العبارة نفسُها تُثبَت عند تطبيقها** (رفعٌ يمرّ · قفلٌ يُزال · حذفُ كائنٍ خارج `locks/` يُرفض — `policy-proof.sh` بمخرج `0`).
 
 - **ما يترتّب على `restic`**: `backup` يُنشئ `locks/<id>` ويُزيله — فالاستثناءُ `locks/*` شرطُ نجاح الرفع؛ **و`forget --prune` يحذف حزمَ بياناتٍ ولقطاتٍ ⇒ لا يعمل بمفتاح الرفع** — لذلك `OFFSITE_APPEND_ONLY=1` يُسقطه من الوظيفة اليومية **ويُعلن ذلك**، ويُشغَّل شهرياً بمفتاحِ حذفٍ مع تجربة الاستعادة (`ق-٥٧٦`).
 - **قاعدةُ احتفاظٍ على الدلو** (`Retention Rule`) أقوى — تمنع الحذفَ والكتابةَ فوق الكائن حتى عن المديرين — **لكنها تمنع إزالةَ الأقفال أيضاً** فتتراكم ويرفض `restic` العملَ حتى تُزال يدوياً؛ **فلا تُطبَّق على دلو `restic` بلا قياسٍ أوّلاً**.
