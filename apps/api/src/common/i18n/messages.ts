@@ -87,6 +87,10 @@ export const MSG = {
   supplier_has_purchases: 'suppliers.has_purchases',
   purchase_not_found: 'purchases.not_found',
   purchase_amortize_requires_incorporation: 'purchases.amortize_requires_incorporation',
+  purchase_has_payments: 'purchases.has_payments',
+  purchase_total_below_allocated: 'purchases.total_below_allocated',
+  supplier_payment_not_found: 'supplier_payments.not_found',
+  allocation_wrong_supplier: 'supplier_payments.allocation_wrong_supplier',
 
   // products / inventory
   product_not_found: 'products.not_found',
@@ -483,6 +487,16 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'الاستهلاك على فترة متاح فقط لمصروفات التأسيس، مع عدد أشهر صحيح.',
     en: 'Amortization is only available for establishment expenses, with a valid number of months.',
   },
+  [MSG.purchase_has_payments]: {
+    ar: 'فاتورة الشراء {no} عليها سندات صرف — اعكس سنداتها أولاً',
+    en: 'Purchase invoice {no} has supplier payments allocated — reverse them first',
+  },
+  [MSG.purchase_total_below_allocated]: {
+    ar: 'إجمالي الفاتورة {no} الجديد {total} أقل مما سُدِّد عليها فعلاً {allocated}',
+    en: 'The new total {total} of purchase invoice {no} is below what has already been paid on it ({allocated})',
+  },
+  [MSG.supplier_payment_not_found]: { ar: 'سند الصرف غير موجود', en: 'Supplier payment not found' },
+  [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },
 
   [MSG.product_not_found]: { ar: 'المنتج غير موجود', en: 'Product not found' },
   [MSG.warehouse_not_found]: { ar: 'المستودع غير موجود', en: 'Warehouse not found' },

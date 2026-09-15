@@ -51,6 +51,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Invoice',
   'Payment',
   'PaymentAllocation',
+  // سندُ الصرف للمورّد وتخصيصاتُه (ق-٨٧١): مرآةُ سند القبض في جدولٍ مستقلّ — وطبقتا العزل نفسُهما.
+  'SupplierPayment',
+  'SupplierPaymentAllocation',
   'Quote',
   'QuoteLine',
   'InvoiceLine',

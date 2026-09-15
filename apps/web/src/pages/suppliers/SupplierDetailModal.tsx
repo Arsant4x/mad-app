@@ -18,7 +18,8 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
   );
 
   const totalBilled = filtered.reduce((s, p) => s + Number(p.total), 0);
-  const totalPaid = filtered.filter((p) => p.paid).reduce((s, p) => s + Number(p.total), 0);
+  // المسدَّدُ من تخصيصات سندات الصرف كما يحسبه الخادم (ق-٨٧٢) — لا من علَمٍ على الصفّ.
+  const totalPaid = filtered.reduce((s, p) => s + Number(p.allocated), 0);
   const totalDue = totalBilled - totalPaid;
 
   return (

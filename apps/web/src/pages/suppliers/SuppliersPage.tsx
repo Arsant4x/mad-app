@@ -5,7 +5,7 @@ import { createSupplier, deleteSupplier, listSuppliers, setSupplierArchived, upd
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
-import { PayPurchaseModal } from './PayPurchaseModal';
+import { SupplierPaymentModal } from './SupplierPaymentModal';
 import { PurchaseModal } from './PurchaseModal';
 import { PurchaseAttachmentsModal } from './PurchaseAttachmentsModal';
 import { purchaseStatus } from './purchaseStatus';
@@ -41,7 +41,7 @@ export function SuppliersPage() {
   const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
   const [attachmentsFor, setAttachmentsFor] = useState<Purchase | null>(null);
   const [pendingDeletePurchase, setPendingDeletePurchase] = useState<Purchase | null>(null);
-  const [pendingUnpay, setPendingUnpay] = useState<Purchase | null>(null);
+  const [purchaseDeleteError, setPurchaseDeleteError] = useState<string | null>(null);
 
   async function reload() {
     const [sup, pur] = await Promise.all([listSuppliers(showArchived), listPurchases()]);
@@ -126,22 +126,21 @@ export function SuppliersPage() {
 
   async function confirmDeletePurchase() {
     if (!pendingDeletePurchase) return;
-    await deletePurchase(pendingDeletePurchase.id);
+    try {
+      await deletePurchase(pendingDeletePurchase.id);
+    } catch (e) {
+      // فاتورةٌ عليها سندُ صرفٍ لا تُحذف (409 مسمّاة) — تُعرض رسالةُ الخادم ولا يُبتلع الرفض.
+      const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
+      setPurchaseDeleteError(d?.message ?? 'تعذّر حذف الفاتورة');
+      return;
+    }
     setPendingDeletePurchase(null);
     await reload();
   }
 
-  async function confirmPay(paidDate: string) {
-    if (!payingPurchase) return;
-    await updatePurchase(payingPurchase.id, { paid: true, paidDate });
+  /** السدادُ سندُ صرفٍ يُرحَّل (ق-٨٦٦) — لا علَمٌ يُقلب ولا «تراجعٌ» يمحوه؛ التصحيحُ بسندٍ عاكس. */
+  async function afterPaymentSaved() {
     setPayingPurchase(null);
-    await reload();
-  }
-
-  async function confirmUnpay() {
-    if (!pendingUnpay) return;
-    await updatePurchase(pendingUnpay.id, { paid: false });
-    setPendingUnpay(null);
     await reload();
   }
 
@@ -294,10 +293,7 @@ export function SuppliersPage() {
                   <td>
                     <RowMenu
                       actions={[
-                        p.paid
-                          ? { label: '✎ تعديل بيانات السداد', onClick: () => setPayingPurchase(p) }
-                          : { label: '💳 تسديد الفاتورة', onClick: () => setPayingPurchase(p) },
-                        ...(p.paid ? [{ label: '↺ التراجع عن السداد', onClick: () => setPendingUnpay(p) }] : []),
+                        ...(p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
                         { label: '✎ تعديل', onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
                         { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
                         '-',
@@ -344,25 +340,18 @@ export function SuppliersPage() {
 
       {attachmentsFor && <PurchaseAttachmentsModal purchase={attachmentsFor} onClose={() => setAttachmentsFor(null)} />}
 
-      {payingPurchase && <PayPurchaseModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onConfirm={confirmPay} />}
+      {payingPurchase && <SupplierPaymentModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onSaved={afterPaymentSaved} />}
 
       {pendingDeletePurchase && (
         <ConfirmModal
           title="حذف فاتورة الشراء"
-          body={`حذف الفاتورة ${pendingDeletePurchase.no}؟ لا يمكن التراجع عن هذا الإجراء.`}
+          body={purchaseDeleteError ?? `حذف الفاتورة ${pendingDeletePurchase.no}؟ لا يمكن التراجع عن هذا الإجراء.`}
           confirmLabel="حذف"
-          onCancel={() => setPendingDeletePurchase(null)}
+          onCancel={() => {
+            setPendingDeletePurchase(null);
+            setPurchaseDeleteError(null);
+          }}
           onConfirm={confirmDeletePurchase}
-        />
-      )}
-
-      {pendingUnpay && (
-        <ConfirmModal
-          title="التراجع عن السداد"
-          body={`التراجع عن سداد الفاتورة ${pendingUnpay.no}؟`}
-          confirmLabel="تراجع"
-          onCancel={() => setPendingUnpay(null)}
-          onConfirm={confirmUnpay}
         />
       )}
     </div>

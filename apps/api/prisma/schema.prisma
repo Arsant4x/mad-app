@@ -400,6 +400,8 @@ model Company {
   posPayments         PosPayment[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
+  supplierPayments           SupplierPayment[]
+  supplierPaymentAllocations SupplierPaymentAllocation[]
   integrations        IntegrationConnection[]
   quotes              Quote[]
   quoteLines          QuoteLine[]
@@ -557,7 +559,8 @@ model Branch {
 
   quotes Quote[]
 
-  payments Payment[]
+  payments         Payment[]
+  supplierPayments SupplierPayment[]
 
   /// أسطر القيود المنسوبة إلى هذا الفرع — بُعدٌ تحليلي، انظر JournalLine.
   journalLines JournalLine[]
@@ -1227,6 +1230,8 @@ model Supplier {
   updatedAt DateTime @updatedAt
 
   purchases Purchase[]
+  /// سندات الصرف للمورّد (`ق-٨٧١`) — `Restrict` على المورّد: من صُرف له لا يُحذف.
+  payments  SupplierPayment[]
 
   @@unique([companyId, name])
 
@@ -1239,10 +1244,23 @@ model Supplier {
   @@map("suppliers")
 }
 
+/// حالةُ سداد فاتورة الشراء — **مشتقّةٌ مخزَّنة** (`ق-٨٧٢`) من مجموع تخصيصات
+/// سندات الصرف مقابل الإجمالي، كـ`InvoiceStatus` حرفياً: `recomputePurchaseStatus`
+/// هي المدخلُ الوحيد لكتابتها داخل معاملة كل تغيير تخصيص، وحارسُ انحرافٍ يقارن
+/// المخزَّنَ بالمحسوب. ولا `OVERDUE` هنا: التأخّرُ يُقرأ من `dueDate` لحظةَ العرض
+/// ولا يُخزَّن — فحالةٌ زمنية مخزَّنة تشيخ بين تغييرَين.
+enum PurchaseStatus {
+  DUE
+  PARTIAL
+  PAID
+}
+
 /// A purchase invoice / recurring obligation (utilities, rent, payroll...).
-/// `paid` + `paidDate` are the whole payment lifecycle here — there's no
-/// linked bank account or journal entry yet (Banks/Journal aren't built),
-/// unlike the original mockup which posts a full payment journal entry.
+///
+/// السدادُ **مستندٌ يُرحَّل** (`ق-٨٦٦` · `ق-٨٧١`): `SupplierPayment` وتخصيصاتُه هما
+/// مصدرُ «المسدَّد» و«المتبقّي» — ولا حقلَ مبلغٍ مسدَّد هنا. وكان علَمان
+/// (`paid` · `paidDate`) يقولان «سُدِّد» بلا حسابٍ ولا مبلغٍ ولا قيد، فبقي `2100`
+/// لا ينقص أبداً؛ **حُذفا** ولم يبقيا مشتقَّين بالاسم الثنائيّ (عائلة `?? MOCK`).
 model Purchase {
   id        String  @id @default(uuid())
   companyId String
@@ -1290,13 +1308,16 @@ model Purchase {
   baseTaxAmount Decimal @db.Decimal(18, 2)
   baseTotal     Decimal @db.Decimal(18, 2)
 
-  paid     Boolean   @default(false)
-  paidDate DateTime? @db.Date
+  /// مشتقّةٌ مخزَّنة — انظر `PurchaseStatus`. تُكتب من `recomputePurchaseStatus` وحدها.
+  status PurchaseStatus @default(DUE)
 
   /// Same deal as Invoice.journalEntryId — null if required accounts aren't
   /// set up yet, Restrict so the entry can't be deleted out from under it.
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  /// تخصيصاتُ سندات الصرف عليها — مصدرُ الحقيقة الوحيد لـ«المسدَّد».
+  paymentAllocations SupplierPaymentAllocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1720,7 +1741,8 @@ model Bank {
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
 
-  payments Payment[]
+  payments         Payment[]
+  supplierPayments SupplierPayment[]
 
   @@map("banks")
 }
@@ -1818,7 +1840,8 @@ model JournalEntry {
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
   inventoryWriteOffs  InventoryWriteOff[]  @relation("InventoryWriteOffEntry")
 
-  payments Payment[]
+  payments         Payment[]
+  supplierPayments SupplierPayment[]
 
   @@unique([companyId, no])
   @@index([openingForAccountId])
@@ -3274,6 +3297,90 @@ model PaymentAllocation {
   @@unique([paymentId, invoiceId])
   @@index([invoiceId])
   @@map("payment_allocations")
+}
+
+/// ⭐ **سندُ صرفٍ لمورّد — مستندٌ يُرحَّل لا علَمٌ على الصفّ** (`ق-٨٦٦` · `ق-٨٧١`).
+///
+/// **مرآةُ `Payment` في جدولٍ مستقلّ عمداً** — لا نوعٌ ثالثٌ فيه: `Payment.customerId`
+/// إلزاميٌّ بـ`Restrict` وهو ما يحمي رياضياتِ ذمم العملاء (أعمارُ الذمم تقرأ جدولَ
+/// الدفعات **بلا مرشّح نوع**)؛ فتوسيعُه يُنزع عنه `NOT NULL` ويُدخل سندَ مورّدٍ في
+/// تقريرِ ذممِ عملاءَ بمفتاحٍ فارغ — خطأٌ صامتٌ في تقريرٍ يراه التاجر. **والفصلُ يجعله
+/// مستحيلاً بنيةً.** والمسارُ واحد (تخصيصٌ بقفلِ صفّ · حالةٌ مشتقّة · عكسٌ لا حذف ·
+/// ترقيمٌ ذرّيّ) **مستخرَجٌ في `common/settlement` لا منسوخ** — شرطُ القبول.
+///
+/// القيد: مدين `2100` (الذمّة المسوّاة بسعر **فاتورة الشراء**) · دائن نقد/بنك (بسعر
+/// يوم السداد) · والفارقُ صرفٌ محقَّق على `5600`. **والفائضُ غيرُ المخصَّص «دفعةٌ على
+/// الحساب»**: يمدين `2100` كاملاً فيصير رصيدُ المورّد فيه **مديناً** (رصيدٌ لنا عليه)
+/// حتى يُخصَّص على شراءٍ لاحق — لا حسابَ أصلٍ ثانياً له.
+model SupplierPayment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  no String
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  /// فرع السند — والقيدُ يُختم به.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  date   DateTime      @db.Date
+  amount Decimal       @db.Decimal(18, 2)
+  method PaymentMethod
+
+  /// حسابُ البنك المسدِّد، أو صندوقُ الفرع (صندوق = Bank مربوط بفرع). **ولا درج**:
+  /// الدرجُ للكاشير لا للمورّد (`ق-٨٧٢`) — ومن يدفع نقداً بلا صندوقٍ مسمّى يدفع من `1000`.
+  bankId String?
+  bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+
+  /// رقم الحوالة/الشيك/المرجع لدى البنك.
+  reference String?
+  notes     String?
+
+  currency     String  @default("SAR")
+  exchangeRate Decimal @default(1) @db.Decimal(18, 6)
+  baseAmount   Decimal @db.Decimal(18, 2)
+
+  /// سندٌ مرحَّل لا يُعدَّل ولا يُحذف — التصحيحُ بسندٍ عاكس يشير إلى الأصل.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  /// السندُ العاكس يحمل مبلغاً سالباً ويشير إلى ما يصحّحه.
+  reversesId String?          @unique
+  reverses   SupplierPayment? @relation("SupplierPaymentReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  reversedBy SupplierPayment? @relation("SupplierPaymentReversal")
+
+  allocations SupplierPaymentAllocation[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, no])
+  @@index([companyId, supplierId])
+  @@map("supplier_payments")
+}
+
+/// تخصيصُ جزءٍ من سند صرفٍ لفاتورة شراءٍ بعينها — مصدرُ الحقيقة الوحيد لـ«المسدَّد»
+/// (مرآةُ `PaymentAllocation`). صفٌّ واحد لكل (سند، فاتورة).
+model SupplierPaymentAllocation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  paymentId String
+  payment   SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  amount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([paymentId, purchaseId])
+  @@index([purchaseId])
+  @@map("supplier_payment_allocations")
 }
 
 model RentPayment {
