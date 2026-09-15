@@ -149,6 +149,7 @@ export class PaymentsService {
         await this.postAndSettle(tx, companyId, payment.id, {
           no,
           customerName: customer.name,
+          customerId: customer.id,
           date: new Date(dto.date),
           amount,
           currency,
@@ -227,6 +228,7 @@ export class PaymentsService {
     await this.postAndSettle(tx, companyId, payment.id, {
       no,
       customerName: input.customerName,
+      customerId: input.customerId,
       date: input.date,
       amount,
       currency: input.currency,
@@ -337,6 +339,7 @@ export class PaymentsService {
         await this.postAndSettle(tx, companyId, reversal.id, {
           no,
           customerName: original.customer.name,
+          customerId: original.customerId,
           // القيدُ بيوم السند نفسِه — لا `new Date()` ثانيةٌ قد تقع على طرف منتصف الليل الآخر (`ق-٧٣٦`).
           date: reversalDate,
           amount,
@@ -439,6 +442,7 @@ export class PaymentsService {
         await this.postAndSettle(tx, companyId, payment.id, {
           no,
           customerName: note.customer.name,
+          customerId: note.customerId,
           date,
           amount: -amount,
           currency: note.currency,
@@ -514,6 +518,8 @@ export class PaymentsService {
     p: {
       no: string;
       customerName: string;
+      /** عميلُ السند — يُختم على أسطر القيد (ق-٨٧٣). */
+      customerId: string;
       date: Date;
       amount: number;
       currency: string;
@@ -537,6 +543,7 @@ export class PaymentsService {
     },
   ): Promise<void> {
     const entry = await postCustomerPaymentEntry(tx, companyId, {
+      customerId: p.customerId,
       paymentNo: p.no,
       customerName: p.customerName,
       date: p.date,

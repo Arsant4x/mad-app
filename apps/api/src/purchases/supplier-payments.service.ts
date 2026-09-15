@@ -135,6 +135,7 @@ export class SupplierPaymentsService {
         await this.postAndSettle(tx, companyId, payment.id, {
           no,
           supplierName: supplier.name,
+          supplierId: supplier.id,
           date: new Date(dto.date),
           amount,
           currency,
@@ -248,6 +249,7 @@ export class SupplierPaymentsService {
         await this.postAndSettle(tx, companyId, reversal.id, {
           no,
           supplierName: original.supplier.name,
+          supplierId: original.supplierId,
           date: reversalDate,
           amount,
           currency: original.currency,
@@ -276,6 +278,8 @@ export class SupplierPaymentsService {
     p: {
       no: string;
       supplierName: string;
+      /** مورّدُ السند — يُختم على أسطر القيد (ق-٨٧٣). */
+      supplierId: string;
       date: Date;
       amount: number;
       currency: string;
@@ -289,6 +293,7 @@ export class SupplierPaymentsService {
     },
   ): Promise<void> {
     const entry = await postSupplierPaymentEntry(tx, companyId, {
+      supplierId: p.supplierId,
       paymentNo: p.no,
       supplierName: p.supplierName,
       date: p.date,

@@ -90,6 +90,26 @@ export interface CreateJournalEntryInput {
   unitId?: string | null;
   /** عقارٌ بلا وحدة — للمسار الذي لا وحدة له. يُهمَل متى أُعطيت `unitId`. */
   propertyId?: string | null;
+
+  /**
+   * ── بُعدُ الطرف (`ق-٨٧٣`) ──────────────────────────────────────────────
+   *
+   * **معرّفُ الطرف من مصدر القيد** — عميلُ الفاتورة/سند القبض، مورّدُ الشراء/سند الصرف،
+   * عميلُ العقد فيما يتبعه — **ويُتحقَّق منه هنا لا يُكتب بيد**: يُقرأ الصفُّ في سياق
+   * المستأجر، فطرفٌ لا يُقرأ (معرّفٌ من منشأةٍ أخرى أو محذوف) يعود فراغاً ولا يُسقط القيد.
+   * والفراغُ يقول «لا طرف» — لا افتراضيّ. (وحارسُ التغطية يقيس أن كل سطرٍ يشير إليه مستندٌ
+   * له طرف يحمل طرفَه.)
+   */
+  customerId?: string | null;
+  supplierId?: string | null;
+}
+
+export interface EntryDimensions {
+  branchId: string | null;
+  propertyId: string | null;
+  unitId: string | null;
+  customerId: string | null;
+  supplierId: string | null;
 }
 
 /**
@@ -103,24 +123,32 @@ export interface CreateJournalEntryInput {
  * تُلفَّق**: يعود البُعد فارغاً. فالفراغ يقول «لا انتماء» — والقيد المحاسبي
  * أهمّ من بُعدٍ تحليلي، فلا يُمنع قيدٌ صحيح لأجل تصنيف.
  */
-async function resolveDimensions(
-  tx: Prisma.TransactionClient,
-  input: CreateJournalEntryInput,
-): Promise<{ branchId: string | null; propertyId: string | null; unitId: string | null }> {
+async function resolveDimensions(tx: Prisma.TransactionClient, input: CreateJournalEntryInput): Promise<EntryDimensions> {
   const branchId = input.branchId ?? null;
+  const party = await resolveParty(tx, input);
 
   if (input.unitId) {
     const unit = await tx.unit.findUnique({ where: { id: input.unitId }, select: { id: true, propertyId: true } });
-    if (unit) return { branchId, propertyId: unit.propertyId, unitId: unit.id };
-    return { branchId, propertyId: null, unitId: null };
+    if (unit) return { branchId, propertyId: unit.propertyId, unitId: unit.id, ...party };
+    return { branchId, propertyId: null, unitId: null, ...party };
   }
 
   if (input.propertyId) {
     const property = await tx.property.findUnique({ where: { id: input.propertyId }, select: { id: true } });
-    return { branchId, propertyId: property?.id ?? null, unitId: null };
+    return { branchId, propertyId: property?.id ?? null, unitId: null, ...party };
   }
 
-  return { branchId, propertyId: null, unitId: null };
+  return { branchId, propertyId: null, unitId: null, ...party };
+}
+
+/**
+ * الطرفُ يُقرأ في سياق المستأجر ويُختم مقروءاً لا مُمرَّراً (`ق-٨٧٣`): عميلٌ أو مورّدٌ لا يُقرأ
+ * يعود فراغاً بلا إسقاطٍ للقيد — القيدُ المحاسبي أهمّ من بُعدٍ تحليلي.
+ */
+async function resolveParty(tx: Prisma.TransactionClient, input: CreateJournalEntryInput): Promise<{ customerId: string | null; supplierId: string | null }> {
+  const customer = input.customerId ? await tx.customer.findUnique({ where: { id: input.customerId }, select: { id: true } }) : null;
+  const supplier = input.supplierId ? await tx.supplier.findUnique({ where: { id: input.supplierId }, select: { id: true } }) : null;
+  return { customerId: customer?.id ?? null, supplierId: supplier?.id ?? null };
 }
 
 /** Creates a balanced journal entry and immediately posts it to account
@@ -179,6 +207,8 @@ export async function createJournalEntry(
           branchId: dims.branchId,
           propertyId: dims.propertyId,
           unitId: dims.unitId,
+          customerId: dims.customerId,
+          supplierId: dims.supplierId,
         })),
       },
     } as unknown as Prisma.JournalEntryUncheckedCreateInput,

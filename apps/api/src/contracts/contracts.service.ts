@@ -236,6 +236,7 @@ export class ContractsService {
           settlementAmount > 0
             ? await postContractSettlementEntry(tx, companyId, {
                 unitId: existing.unitId,
+                customerId: existing.customerId,
                 contractNo: existing.no,
                 tenant: existing.tenant,
                 date: cancelDate,
@@ -274,6 +275,7 @@ export class ContractsService {
         if (unearned > 0 && dto.unearnedDisposition) {
           await postDeferredSettlementEntry(tx, companyId, {
             unitId: existing.unitId,
+            customerId: existing.customerId,
             contractNo: existing.no,
             tenant: existing.tenant,
             date: cancelDate,
@@ -342,6 +344,7 @@ export class ContractsService {
 
         const posting = await postRentPaymentEntry(tx, companyId, {
           unitId: contract.unitId,
+          customerId: contract.customerId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.date),
@@ -713,6 +716,7 @@ export class ContractsService {
 
         const journalEntry = await postKeyMoneyEntry(tx, companyId, {
           unitId: contract.unitId,
+          customerId: contract.customerId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.paidAt),
@@ -759,6 +763,7 @@ export class ContractsService {
 
         const journalEntry = await postClaimIssueEntry(tx, companyId, {
           unitId: contract.unitId,
+          customerId: contract.customerId,
           contractNo: contract.no,
           tenant: contract.tenant,
           date: new Date(dto.issuedAt),
@@ -806,6 +811,7 @@ export class ContractsService {
 
         const posting = {
           unitId: claim.contract.unitId,
+          customerId: claim.contract.customerId,
           contractNo: claim.contract.no,
           tenant: claim.contract.tenant,
           date,
@@ -854,6 +860,7 @@ export class ContractsService {
           holder === 'COMPANY'
             ? await postDepositReceiptEntry(tx, companyId, {
                 unitId: contract.unitId,
+                customerId: contract.customerId,
                 contractNo: contract.no,
                 tenant: contract.tenant,
                 date: new Date(dto.receivedAt),
@@ -916,6 +923,7 @@ export class ContractsService {
 
         const settlementEntry = await postDepositSettlementEntry(tx, companyId, {
           unitId: deposit.contract.unitId,
+          customerId: deposit.contract.customerId,
           contractNo: deposit.contract.no,
           tenant: deposit.contract.tenant,
           date: new Date(dto.settledAt),

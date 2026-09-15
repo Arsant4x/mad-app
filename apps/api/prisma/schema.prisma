@@ -953,6 +953,8 @@ model Customer {
   quotes Quote[]
 
   payments Payment[]
+  /// أسطرُ القيود المنسوبة إلى هذا العميل — بُعدٌ تحليلي (`ق-٨٧٣`)، انظر JournalLine.
+  journalLines JournalLine[]
 
   @@unique([companyId, name])
 
@@ -1232,6 +1234,8 @@ model Supplier {
   purchases Purchase[]
   /// سندات الصرف للمورّد (`ق-٨٧١`) — `Restrict` على المورّد: من صُرف له لا يُحذف.
   payments  SupplierPayment[]
+  /// أسطرُ القيود المنسوبة إلى هذا المورّد — بُعدٌ تحليلي (`ق-٨٧٣`)، انظر JournalLine.
+  journalLines JournalLine[]
 
   @@unique([companyId, name])
 
@@ -1892,8 +1896,23 @@ model JournalLine {
   unitId String?
   unit   Unit? @relation(fields: [unitId], references: [id], onDelete: Restrict)
 
+  /// ── بُعدُ الطرف (`ق-٨٧٣`) — بحدّه الأدنى ────────────────────────────────
+  /// **يُملأ من `resolveDimensions()` لا بيد**: الفاتورةُ والإشعارُ وسندُ القبض ⇒ عميلُها،
+  /// الشراءُ وسندُ الصرف ⇒ مورّدُه، وما يتبع عقداً له عميلٌ مسجَّل ⇒ عميلُ العقد — ويُختم على
+  /// كل سطر كسائر الأبعاد. لأن `1200`/`2100` مجمَّعان ولا يُعرف لمن ندين، وحصّةُ مالك
+  /// العقار تُقيَّد بلا مستندِ شراءٍ تُخصَّص عليه — فسطرُ القيد وحدَه يعرفها.
+  /// والفراغُ يقول «لا طرف» (قيدٌ يدويّ · افتتاحيّ · عقدٌ بلا عميل) ولا يُلفَّق افتراضيّ.
+  /// `Restrict` كالوحدة: طرفٌ له سطور لا يُحذف.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
   @@index([companyId, propertyId])
   @@index([companyId, unitId])
+  @@index([companyId, customerId])
+  @@index([companyId, supplierId])
   @@map("journal_lines")
 }
 

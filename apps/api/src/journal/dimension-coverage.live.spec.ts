@@ -208,4 +208,210 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
     `;
     expect(Number(invented[0].n)).toBe(0);
   });
+
+  /**
+   * ── بُعدُ الطرف (`ق-٨٧٣`) — حارسٌ مشتقٌّ لا بقائمة ─────────────────────────
+   *
+   * المسارات من مفاتيح القاعدة: كلُّ جدولٍ يشير إلى قيدٍ **ويحمل عمودَ طرفٍ** (`customerId`
+   * أو `supplierId`) يدخل مباشرةً؛ وكلُّ جدولٍ يشير إلى قيدٍ **وإلى عقد** يدخل عبر عميل العقد
+   * إن سُجِّل. والقاعدة: **كلُّ سطرٍ من قيدٍ يشير إليه مستندٌ له طرفٌ يحمل ذلك الطرف** — لا
+   * فارغاً ولا طرفاً آخر. وما لا مستندَ له بطرف (يدويّ · افتتاحيّ · عقدٌ بلا عميل) يبقى بلا طرف
+   * **ويُعلَن عددُه** على `1200`/`2100` — لا يُطرح صمتاً.
+   */
+  describe('بُعدُ الطرف (ق-٨٧٣)', () => {
+    const PARTY_MIGRATION = '20260916090000_journal_line_party';
+    let partyAppliedAt: Date | null = null;
+
+    interface PartySource {
+      table: string;
+      entryCol: string;
+      /** عمودُ الطرف على المستند نفسه — أو `null` لمسارٍ يمرّ بالعقد. */
+      partyCol: 'customerId' | 'supplierId' | null;
+      /** عمودُ العقد على المستند — للمسار الذي يمرّ بالعقد. */
+      contractCol: string | null;
+    }
+
+    /** المصادرُ مشتقّةٌ من الكتالوج: مفاتيحُ `journal_entries` مع أعمدة الطرف/العقد على الجدول نفسِه. */
+    async function partySources(): Promise<PartySource[]> {
+      const fks = await prisma.$queryRaw<{ table_name: string; column_name: string; referenced: string }[]>`
+        SELECT fk.table_name, fk.column_name, ccu.table_name AS referenced
+        FROM information_schema.key_column_usage fk
+        JOIN information_schema.referential_constraints rc ON rc.constraint_name = fk.constraint_name
+        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = rc.unique_constraint_name
+        WHERE ccu.table_name IN ('journal_entries', 'contracts', 'customers', 'suppliers')
+          AND fk.table_name <> 'journal_lines'
+      `;
+      const byTable = new Map<string, { entryCols: string[]; contractCol: string | null; partyCol: PartySource['partyCol'] }>();
+      for (const fk of fks) {
+        const t = byTable.get(fk.table_name) ?? { entryCols: [], contractCol: null, partyCol: null };
+        if (fk.referenced === 'journal_entries') t.entryCols.push(fk.column_name);
+        if (fk.referenced === 'contracts' && fk.table_name !== 'contracts') t.contractCol = fk.column_name;
+        if (fk.referenced === 'customers' && fk.column_name === 'customerId') t.partyCol = 'customerId';
+        if (fk.referenced === 'suppliers' && fk.column_name === 'supplierId') t.partyCol = 'supplierId';
+        byTable.set(fk.table_name, t);
+      }
+      const out: PartySource[] = [];
+      for (const [table, t] of byTable) {
+        if (!t.entryCols.length) continue;
+        if (!t.partyCol && !t.contractCol) continue;
+        for (const entryCol of t.entryCols) out.push({ table, entryCol, partyCol: t.partyCol, contractCol: t.partyCol ? null : t.contractCol });
+      }
+      return out;
+    }
+
+    /** الاستعلامُ الموحَّد: لكل سطرٍ الطرفُ المتوقَّع من مستنده والفعليُّ على السطر. */
+    function unionSql(sources: PartySource[]): string {
+      return sources
+        .map((s) =>
+          s.partyCol
+            ? `SELECT l.id, e.no, e."createdAt" AS created_at, '${s.table}.${s.entryCol}' AS path,
+                      d."${s.partyCol}"::text AS expected, l."${s.partyCol}"::text AS actual
+                 FROM "${s.table}" d
+                 JOIN journal_entries e ON e.id = d."${s.entryCol}"
+                 JOIN journal_lines   l ON l."journalEntryId" = e.id`
+            : `SELECT l.id, e.no, e."createdAt" AS created_at, '${s.table}.${s.entryCol}' AS path,
+                      c."customerId"::text AS expected, l."customerId"::text AS actual
+                 FROM "${s.table}" d
+                 JOIN contracts c ON c.id = d."${s.contractCol}"
+                 JOIN journal_entries e ON e.id = d."${s.entryCol}"
+                 JOIN journal_lines   l ON l."journalEntryId" = e.id
+                WHERE c."customerId" IS NOT NULL`,
+        )
+        .join(' UNION ALL ');
+    }
+
+    beforeAll(async () => {
+      const row = await prisma.$queryRaw<{ finished_at: Date | null }[]>`
+        SELECT finished_at FROM _prisma_migrations WHERE migration_name = ${PARTY_MIGRATION} LIMIT 1
+      `;
+      partyAppliedAt = row[0]?.finished_at ?? null;
+    });
+
+    it('هجرةُ الطرف مطبَّقة — وإلا فالحارس يقيس قاعدةً لا تحمل العمودين', () => {
+      expect(partyAppliedAt).not.toBeNull();
+    });
+
+    it('المصادرُ مشتقّةٌ من الكتالوج وتشمل المستنداتِ الأربعة والعقود', async () => {
+      const sources = await partySources();
+      const paths = sources.map((s) => `${s.table}.${s.entryCol}`);
+      // مسبارٌ يُفحص بحالاتٍ معلومة (§8.7 الوجه الحادي عشر): يجب أن يجد هذه، وألّا يجد ما لا طرفَ له.
+      for (const must of ['invoices.journalEntryId', 'payments.journalEntryId', 'purchases.journalEntryId', 'supplier_payments.journalEntryId', 'contracts.settlementEntryId', 'rent_payments.journalEntryId']) {
+        expect({ must, found: paths.includes(must) }).toEqual({ must, found: true });
+      }
+      expect(paths).not.toContain('inventory_write_offs.journalEntryId');
+      expect(paths).not.toContain('maintenance_requests.journalEntryId');
+    });
+
+    it('⭐ كلُّ سطرٍ من قيدٍ يشير إليه مستندٌ له طرفٌ يحمل ذلك الطرف — وما لا طرفَ له يُعلَن عددُه', async () => {
+      const sources = await partySources();
+      const union = unionSql(sources);
+      const companies = await prisma.company.findMany({ select: { id: true } });
+      expect(companies.length).toBeGreaterThan(0);
+
+      const offenders: string[] = [];
+      let checked = 0;
+      let skippedPreWave = 0;
+      let contextProven = 0;
+      let unattributed1200 = 0;
+      let unattributed2100 = 0;
+
+      for (const { id: companyId } of companies) {
+        const { found, left } = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+          const [{ ctx }] = await tx.$queryRaw<{ ctx: string }[]>`SELECT current_setting('app.company_id', true) AS ctx`;
+          if (ctx === companyId) contextProven += 1;
+          const found = await tx.$queryRawUnsafe<{ id: string; no: string; created_at: Date; path: string; expected: string | null; actual: string | null }[]>(union);
+          const left = await tx.$queryRaw<{ code: string; n: bigint }[]>`
+            SELECT a.code, count(*) AS n
+              FROM journal_lines l JOIN accounts a ON a.id = l."accountId"
+             WHERE (a.code = '1200' AND l."customerId" IS NULL) OR (a.code = '2100' AND l."supplierId" IS NULL)
+             GROUP BY a.code`;
+          return { found, left };
+        });
+        for (const row of left) {
+          if (row.code === '1200') unattributed1200 += Number(row.n);
+          if (row.code === '2100') unattributed2100 += Number(row.n);
+        }
+        for (const line of found) {
+          if (partyAppliedAt && line.created_at < partyAppliedAt) {
+            skippedPreWave += 1;
+            continue;
+          }
+          checked += 1;
+          if (line.expected !== null && line.actual !== line.expected) {
+            offenders.push(`${line.path} → قيد ${line.no} سطر ${line.id}: متوقَّع ${line.expected} · فعليّ ${line.actual ?? 'فراغ'}`);
+          }
+        }
+      }
+
+      expect(contextProven).toBe(companies.length);
+      // يُعلَن ما استُثني وما بقي بلا طرف — لا يُطرح صمتاً (ق-٨٧٣: «وما لا يُنسب يبقى بلا طرفٍ ويُعلَن عدده»).
+      // eslint-disable-next-line no-console
+      console.log(
+        `[طرف] فُحص ${checked} سطراً · استُثني ${skippedPreWave} سابقاً لهجرة الطرف · ${sources.length} مسار · ` +
+          `بلا طرفٍ (كلُّ الزمن): على 1200 ${unattributed1200} · على 2100 ${unattributed2100}`,
+      );
+      expect(offenders).toEqual([]);
+    }, 120_000);
+
+    it('⭐ الحارسُ يرى — مسبارٌ في معاملةٍ مُرجَعة: سطرٌ بلا طرفه يُمسَك، وبعد ختمه لا', async () => {
+      // إثباتُ الآليّة لا الأثر (§8.5): صفوفٌ من صنعه لا من البذرة — مورّدٌ وقيدٌ وسطرٌ وسندُ صرفٍ يشير
+      // إليه — والسطرُ بلا `supplierId` فيُمسَك؛ ثم يُختم فلا يُمسَك. وتُرجَع المعاملةُ كلُّها.
+      // منشأةٌ لها حسابٌ واحد على الأقلّ — تُقرأ في سياقها (منشآتُ الاختبار قد تُولد بلا دليل).
+      let company: { id: string } | null = null;
+      let accountId: string | null = null;
+      for (const c of await prisma.company.findMany({ select: { id: true }, orderBy: { createdAt: 'asc' } })) {
+        accountId = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.company_id', ${c.id}, true)`;
+          return (await tx.account.findFirst({ where: { companyId: c.id }, select: { id: true } }))?.id ?? null;
+        });
+        if (accountId) {
+          company = c;
+          break;
+        }
+      }
+      if (!company || !accountId) throw new Error('لا منشأةَ لها حساب — المسبارُ يحتاج حساباً واحداً');
+      const account = { id: accountId };
+      const sources = await partySources();
+      const union = unionSql(sources);
+      const stamp = `probe-${Date.now()}`;
+
+      const seen = await prisma
+        .$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT set_config('app.company_id', ${company!.id}, true)`;
+          const supplierId = `${stamp}-sup`;
+          const entryId = `${stamp}-je`;
+          const lineId = `${stamp}-jl`;
+          await tx.$executeRaw`INSERT INTO suppliers (id, "companyId", name, "updatedAt") VALUES (${supplierId}, ${company!.id}, ${stamp}, now())`;
+          await tx.$executeRaw`INSERT INTO journal_entries (id, "companyId", no, date, memo, "totalDebit", "totalCredit", "baseTotalDebit", "baseTotalCredit")
+            VALUES (${entryId}, ${company!.id}, ${stamp}, now(), ${stamp}, 1, 1, 1, 1)`;
+          await tx.$executeRaw`INSERT INTO journal_lines (id, "companyId", "journalEntryId", "accountId", debit, credit)
+            VALUES (${lineId}, ${company!.id}, ${entryId}, ${account.id}, 1, 0)`;
+          await tx.$executeRaw`INSERT INTO supplier_payments (id, "companyId", no, "supplierId", date, amount, method, "baseAmount", "journalEntryId")
+            VALUES (${`${stamp}-pay`}, ${company!.id}, ${stamp}, ${supplierId}, now(), 1, 'CASH', 1, ${entryId})`;
+
+          const rows = await tx.$queryRawUnsafe<{ id: string; expected: string | null; actual: string | null }[]>(union);
+          const before = rows.filter((r) => r.id === lineId && r.expected !== null && r.actual !== r.expected).length;
+
+          await tx.$executeRaw`UPDATE journal_lines SET "supplierId" = ${supplierId} WHERE id = ${lineId}`;
+          const after = (await tx.$queryRawUnsafe<{ id: string; expected: string | null; actual: string | null }[]>(union)).filter(
+            (r) => r.id === lineId && r.expected !== null && r.actual !== r.expected,
+          ).length;
+
+          throw { rollback: true, before, after };
+        })
+        .catch((e: { rollback?: boolean; before?: number; after?: number }) => {
+          if (!e?.rollback) throw e;
+          return { before: e.before, after: e.after };
+        });
+
+      expect(seen).toEqual({ before: 1, after: 0 });
+      // ولا أثرَ بعد الإرجاع — يُعدّ **في سياق المنشأة** (عدٌّ بلا سياقٍ صفرٌ أعمى، §8.5).
+      const leftover = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${company!.id}, true)`;
+        return tx.supplier.count({ where: { name: stamp } });
+      });
+      expect(leftover).toBe(0);
+    }, 60_000);
+  });
 });

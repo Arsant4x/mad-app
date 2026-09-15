@@ -245,6 +245,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
     expectPeriodRefusal('فاتورة', () =>
       inTenant((tx) =>
         postInvoiceEntry(tx, companyId, {
+          customerId: 'probe-customer',
           no: 'INV-PROBE-1',
           issueDate: CLOSED_DATE,
           customerName: 'عميل فحص',
@@ -259,6 +260,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
     expectPeriodRefusal('مشترى', () =>
       inTenant((tx) =>
         postPurchaseEntry(tx, companyId, {
+          supplierId: 'probe-supplier',
           no: 'PUR-PROBE-1',
           date: CLOSED_DATE,
           supplierName: 'مورّد فحص',
@@ -274,6 +276,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
     expectPeriodRefusal('سند قبض', () =>
       inTenant((tx) =>
         postCustomerPaymentEntry(tx, companyId, {
+          customerId: 'probe-customer',
           paymentNo: 'RCV-PROBE-1',
           date: CLOSED_DATE,
           customerName: 'عميل فحص',
