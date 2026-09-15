@@ -86,42 +86,77 @@ async function lastKnownUnitCost(tx: Tx, productId: string, warehouseId: string)
  * ويُسوَّى عند وصول الاستلام الحقيقي، ويُسرَد في تقرير المفتوحة — **فما لا
  * يُرى لا يُسوَّى**.
  */
-export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs): Promise<ConsumeResult> {
-  const layers = await tx.inventoryLayer.findMany({
-    where: { productId: args.productId, warehouseId: args.warehouseId, qtyRemaining: { gt: 0 } },
-    orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
-  });
+/**
+ * ⭐ **الكتابةُ نقصانٌ ذرّيٌّ مشروط — لا قيمةٌ مطلقة من قراءةٍ قد تقادمت** (ق-٨١٤).
+ *
+ * الواقعةُ المقيسة (2026-09-15 · ق-٨٠٦): بيعتان متزامنتان بثلاثٍ على طبقةٍ بعشر —
+ * قرأ الاثنان `10` وكتب الاثنان `7`، فبقيت الطبقةُ تُعلن `3` وحداتٍ لا وجود لها،
+ * **في `20/20` جولة**. (وطبقاتُ التطوير التي بدت مخالفةً للمعادلة قبل القياس كانت مرتجعاتٍ
+ * مشروعة — الإعادةُ تزيد الطبقةَ بلا صفّ استهلاكٍ سالب — لا سباقاتٍ صامتة؛ قِيس 2026-09-15.)
+ *
+ * والعلاج: `updateMany` بشرط `qtyRemaining >= take` ونقصانٍ بالفرق. تحت
+ * `READ COMMITTED` تنتظر المعاملةُ الثانية قفلَ الصفّ ثم **تعيد تقويمَ الشرط على
+ * القيمة الملتزَمة** — فإن كفى المتبقّي كُتب الفرق، وإلا لم يُكتب شيء
+ * (`count = 0`) فتُعاد قراءةُ الطبقات وتُستأنف الدورةُ من الأقدم. فتصحّ الكتابةُ
+ * ولو تقادمت القراءة، **والانتظارُ من الكتابة لا من القراءة** — ذيلُ المعاملة
+ * وعلى الصنف الواحد، لا كلُّ البيوع (خلاف قفل العدّاد في ق-٣٤٢).
+ *
+ * ولماذا لا `decrement` بلا شرط: يقود المتبقّي إلى السالب؛ ولا `FOR UPDATE` عند
+ * القراءة: يحتاج `SQL` خاماً ويطيل الانتظار إلى القراءة بلا ضمانٍ إضافيّ مقيس.
+ */
+const MAX_CONSUME_PASSES = 8;
 
+export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs): Promise<ConsumeResult> {
   let outstanding = args.qty;
   let totalCost = 0;
   const consumptionIds: string[] = [];
 
-  for (const layer of layers) {
-    if (outstanding <= 0) break;
-    const available = Number(layer.qtyRemaining);
-    const take = Math.min(available, outstanding);
-    if (take <= 0) continue;
-
-    const unitCost = Number(layer.unitCost);
-    const created = await tx.inventoryConsumption.create({
-      data: {
-        companyId,
-        layerId: layer.id,
-        movementId: args.movementId,
-        qty: take,
-        unitCost,
-      },
-      select: { id: true },
+  // كلُّ دورةٍ تقرأ ما بقي فيه شيء وتأخذ منه بكتابةٍ مشروطة، من الأقدم. كتابةٌ لم تقع
+  // (`count = 0`) تعني أن الطبقةَ تغيّرت تحت أيدينا — فتُقطع الدورةُ وتُعاد القراءة
+  // كي يبقى الترتيبُ FIFO لا «ما تيسّر». ودورةٌ لم تأخذ شيئاً تعني أن الطبقات نفدت
+  // بالتزامن — فيبقى الباقي استهلاكاً مؤقّتاً كما لو أنه بيعٌ سبق استلامه.
+  for (let pass = 0; pass < MAX_CONSUME_PASSES && outstanding > 0; pass++) {
+    const layers = await tx.inventoryLayer.findMany({
+      where: { productId: args.productId, warehouseId: args.warehouseId, qtyRemaining: { gt: 0 } },
+      orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
     });
-    consumptionIds.push(created.id);
+    if (layers.length === 0) break;
 
-    await tx.inventoryLayer.update({
-      where: { id: layer.id },
-      data: { qtyRemaining: roundTo(available - take, 'DERIVED_QUANTITY') },
-    });
+    let tookAny = false;
+    let raced = false;
+    for (const layer of layers) {
+      if (outstanding <= 0) break;
+      const available = Number(layer.qtyRemaining);
+      const take = Math.min(available, outstanding);
+      if (take <= 0) continue;
 
-    totalCost += take * unitCost;
-    outstanding = roundTo(outstanding - take, 'DERIVED_QUANTITY');
+      const { count } = await tx.inventoryLayer.updateMany({
+        where: { id: layer.id, qtyRemaining: { gte: take } },
+        data: { qtyRemaining: { decrement: take } },
+      });
+      if (count === 0) {
+        raced = true;
+        break;
+      }
+
+      const unitCost = Number(layer.unitCost);
+      const created = await tx.inventoryConsumption.create({
+        data: {
+          companyId,
+          layerId: layer.id,
+          movementId: args.movementId,
+          qty: take,
+          unitCost,
+        },
+        select: { id: true },
+      });
+      consumptionIds.push(created.id);
+      tookAny = true;
+
+      totalCost += take * unitCost;
+      outstanding = roundTo(outstanding - take, 'DERIVED_QUANTITY');
+    }
+    if (!tookAny && !raced) break;
   }
 
   let provisionalUnitCost: number | null = null;
@@ -189,10 +224,10 @@ export async function restoreConsumption(
       continue;
     }
 
-    const layer = await tx.inventoryLayer.findUniqueOrThrow({ where: { id: c.layerId }, select: { qtyRemaining: true } });
+    // زيادةٌ ذرّية لا قراءةٌ ثم قيمةٌ مطلقة — الموضعُ الثاني من ثلاثة (ق-٨١٤).
     await tx.inventoryLayer.update({
       where: { id: c.layerId },
-      data: { qtyRemaining: roundTo(Number(layer.qtyRemaining) + qty, 'DERIVED_QUANTITY') },
+      data: { qtyRemaining: { increment: qty } },
     });
     restoredQty += qty;
   }
@@ -243,10 +278,10 @@ export async function restoreConsumptionPartial(
       provisionalQty += take;
       continue;
     }
-    const layer = await tx.inventoryLayer.findUniqueOrThrow({ where: { id: c.layerId }, select: { qtyRemaining: true } });
+    // زيادةٌ ذرّية — الموضعُ الثالث من ثلاثة (ق-٨١٤).
     await tx.inventoryLayer.update({
       where: { id: c.layerId },
-      data: { qtyRemaining: roundTo(Number(layer.qtyRemaining) + take, 'DERIVED_QUANTITY') },
+      data: { qtyRemaining: { increment: take } },
     });
     restoredQty += take;
   }
