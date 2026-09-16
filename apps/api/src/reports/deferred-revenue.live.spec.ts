@@ -128,7 +128,7 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
     const property = await tx.property.create({ data: { companyId, name: 'عقار المجسّ', ownership: 'owned' } });
     const unit = await tx.unit.create({ data: { companyId, propertyId: property.id, unitNo: PROBE.unitNo, type: 'شقة', rentMonthly: 1000 } });
     const contract = await tx.contract.create({
-      data: { companyId, unitId: unit.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31') },
+      data: { companyId, unitId: unit.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31'), classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' },
     });
     const installment = (dueDate: string, service: { start: string; end: string } | null, baseRecognized: number) =>
       tx.installment.create({

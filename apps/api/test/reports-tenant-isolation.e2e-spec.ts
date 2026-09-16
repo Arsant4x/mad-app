@@ -94,7 +94,7 @@ describe('Reports tenant isolation (e2e)', () => {
       const contract = await request(app.getHttpServer())
         .post('/contracts')
         .set('Authorization', `Bearer ${token}`)
-        .send({ unitId: unit.body.id, tenant: `مستأجر العزل ${tag} ${suffix}`, value: annual, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر العزل ${tag} ${suffix}`, value: annual, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
         .expect(201);
       const first = contract.body.installments[0];
       await request(app.getHttpServer())

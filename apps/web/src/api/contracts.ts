@@ -4,6 +4,13 @@ import type { Unit } from './units';
 export type ContractStatus = 'DRAFT' | 'UPCOMING' | 'DUE' | 'LATE' | 'CANCELLED';
 export type ContractCycle = 'monthly' | 'quarterly' | 'semiannual' | 'annual';
 export type Furnished = 'unfurnished' | 'furnished' | 'partial';
+/** تصنيفُ العقد للضريبة — على العقد لا العقار ولا الوحدة (ق-٨٩١)؛ والقيمةُ القديمة للصفوف
+ * التي سبقت الهجرة وحدَها، ولا يقبلها الخادمُ لعقدٍ جديد. */
+export type ContractClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCLASSIFIED';
+/** أقيمةُ العقد شاملةٌ لضريبة القيمة المضافة أم لا — تُعلَن ولا تُفترض (ق-٨٩٢). */
+export type ContractVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';
+export type DeclaredClassification = Exclude<ContractClassification, 'LEGACY_UNCLASSIFIED'>;
+export type DeclaredVatInclusion = Exclude<ContractVatInclusion, 'LEGACY_UNDECLARED'>;
 export type InstallmentStatus = 'DUE' | 'LATE' | 'PAID' | 'CANCELLED';
 export type PaymentMethod = 'CASH' | 'BANK';
 
@@ -44,6 +51,8 @@ export interface Contract {
   deposit: string;
   services: string | null;
   furnished: Furnished | null;
+  classification: ContractClassification;
+  vatInclusion: ContractVatInclusion;
   status: ContractStatus;
   cancelDate: string | null;
   cancelReason: string | null;
@@ -212,10 +221,16 @@ export interface CreateContractInput {
   services?: string;
   furnished?: Furnished;
   ejarNo?: string;
+  /** إلزاميان — بلا قيمةٍ مسبقة في النموذج. */
+  classification: DeclaredClassification;
+  vatInclusion: DeclaredVatInclusion;
   draft?: boolean;
 }
 
 export interface UpdateContractInput {
+  /** لعقدٍ قديم: إلزاميان قبل أي تعديل — الخادمُ يرفض بدونهما. */
+  classification?: DeclaredClassification;
+  vatInclusion?: DeclaredVatInclusion;
   tenant?: string;
   phone?: string;
   services?: string;
@@ -278,6 +293,9 @@ export const recordPayment = (contractId: string, dto: RecordPaymentInput) => ap
 export interface RenewContractInput {
   start: string;
   end: string;
+  /** يُعلَنان للعقد الجديد — لا يرثهما الخادمُ من الأصل. */
+  classification: DeclaredClassification;
+  vatInclusion: DeclaredVatInclusion;
   value?: number;
   cycle?: ContractCycle;
   /** Overrides the server's own numbering, for externally-issued references. */

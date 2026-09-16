@@ -51,6 +51,7 @@ describe('Contract handover forms (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر التسليم ${suffix}`,
         value: 12000,

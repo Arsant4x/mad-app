@@ -47,7 +47,7 @@ describe('Contract attachments (e2e)', () => {
       .send({ propertyId: property.body.id, unitNo: `ATT-${suffix}`, type: 'سكني', rentMonthly: 1000 })
       .expect(201);
     const contract = await authA(request(app.getHttpServer()).post('/contracts'))
-      .send({ unitId: unit.body.id, tenant: `مستأجر ${suffix}`, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر ${suffix}`, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
       .expect(201);
     contractId = contract.body.id;
   }, 60000);

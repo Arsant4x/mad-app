@@ -57,6 +57,7 @@ describe('Contract claims (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر المطالبات ${suffix}`,
         value: 12000,

@@ -172,18 +172,19 @@ async function main() {
   // ── العقود ──────────────────────────────────────────────────────────────
   // منطق زمني مقصود: المنتهي يسبق الساري، والأقساط تتولّد من تاريخ البداية
   // فتُنتج ماضياً حقيقياً (مسدَّد ومتأخر) لا أرقاماً مصطنعة.
-  const contract = (unitId, tenant, phone, value, cycle, start, end, extra = {}) =>
-    api('POST', '/contracts', { unitId, tenant, phone, value, cycle, start, end, ...extra });
+  // التصنيفُ يُعلَن لكل عقد (ق-٨٩١): تجاريٌّ للمحال والمكاتب، سكنيٌّ للشقق — والقيمةُ غيرُ شاملةٍ للضريبة.
+  const contract = (unitId, tenant, phone, value, cycle, start, end, classification, extra = {}) =>
+    api('POST', '/contracts', { unitId, tenant, phone, value, cycle, start, end, classification, vatInclusion: 'EXCLUSIVE', ...extra });
 
   // (١) عقد منتهٍ — انتهى قبل شهرين
-  const expired = await contract(u.off2.id, 'مؤسسة الأفق للتجارة', '0551000111', 66000, 'monthly', monthsFromToday(-14), monthsFromToday(-2, 28));
+  const expired = await contract(u.off2.id, 'مؤسسة الأفق للتجارة', '0551000111', 66000, 'monthly', monthsFromToday(-14), monthsFromToday(-2, 28), 'COMMERCIAL');
   // (٢) عقد سارٍ شهري بدأ قبل ٦ أشهر — أقساطه الماضية مادّة السداد والتأخر
-  const activeMonthly = await contract(u.shop1.id, 'شركة النخبة للأغذية', '0552000222', 96000, 'monthly', monthsFromToday(-6), monthsFromToday(6, 28), { deposit: 8000 });
+  const activeMonthly = await contract(u.shop1.id, 'شركة النخبة للأغذية', '0552000222', 96000, 'monthly', monthsFromToday(-6), monthsFromToday(6, 28), 'COMMERCIAL', { deposit: 8000 });
   // (٣) عقد سارٍ ربع سنوي
-  const activeQuarterly = await contract(u.off1.id, 'مكتب البيان للاستشارات', '0553000333', 72000, 'quarterly', monthsFromToday(-4), monthsFromToday(8, 28));
+  const activeQuarterly = await contract(u.off1.id, 'مكتب البيان للاستشارات', '0553000333', 72000, 'quarterly', monthsFromToday(-4), monthsFromToday(8, 28), 'COMMERCIAL');
   // (٤) عقدان سكنيان
-  const apt1c = await contract(u.apt1.id, 'عبدالله محمد الحربي', '0554000444', 42000, 'monthly', monthsFromToday(-5), monthsFromToday(7, 28));
-  const apt3c = await contract(u.apt3.id, 'سارة عبدالعزيز القحطاني', '0555000555', 48000, 'monthly', monthsFromToday(-3), monthsFromToday(9, 28));
+  const apt1c = await contract(u.apt1.id, 'عبدالله محمد الحربي', '0554000444', 42000, 'monthly', monthsFromToday(-5), monthsFromToday(7, 28), 'RESIDENTIAL');
+  const apt3c = await contract(u.apt3.id, 'سارة عبدالعزيز القحطاني', '0555000555', 48000, 'monthly', monthsFromToday(-3), monthsFromToday(9, 28), 'RESIDENTIAL');
   log('  ✔ ٥ عقود (١ منتهٍ · ٤ سارية) — والأقساط تولّدت تلقائياً');
 
   // ── الأقساط: سدّد الماضي جزئياً واترك الباقي متأخراً ────────────────────

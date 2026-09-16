@@ -78,17 +78,11 @@ function deductionTarget(kind: DeductionKind): 'receivable' | 'income' {
   return kind === 'UNPAID_RENT' ? 'receivable' : 'income';
 }
 
-/** Maps a Unit's free-text `type` to the same activity-type space as
- * Property.activityType, so the two can be compared. Custom/unrecognized
- * unit types simply skip the check (see validateContract) — there's no way
- * to validate an arbitrary free-text type against the fixed property enum. */
-const UNIT_TYPE_TO_ACTIVITY: Record<string, string> = {
-  'سكني': 'residential',
-  'محل': 'shop',
-  'معرض': 'showroom',
-  'مكتب': 'office',
-  'مخزن': 'warehouse',
-};
+// ⛔ كانت هنا خريطةُ كلماتٍ خمس تحوّل `Unit.type` الحرَّ إلى تعداد العقار لفحص اتساقٍ عند
+// إنشاء العقد — **وتتخطّى ما لا تعرفه صامتةً** (`office` بالحرف اللاتينيّ غيرُ مرئيٍّ لها).
+// حُذفت بحكم المالك (`ق-٨٩٨`): التصنيفُ حقلٌ مهيكلٌ إلزاميٌّ على العقد (`Contract.classification`)
+// **ولا يُستنبَط من نصّ** — ولا تُبقى الخريطةُ «لفحص الاتساق» فبقاؤها يُبقي الاستنباط.
+// حارسٌ يُسقط الحزمة على عودتها: `no-word-classification.spec.ts`.
 
 @Injectable()
 export class ContractsService {
@@ -144,6 +138,9 @@ export class ContractsService {
             deposit: dto.deposit ?? 0,
             services: dto.services,
             furnished: dto.furnished,
+            // إلزاميان من الـDTO وحدَه — لا افتراضَ ولا استنباط (ق-٨٩١ · ق-٨٩٢).
+            classification: dto.classification,
+            vatInclusion: dto.vatInclusion,
             status: isDraft ? 'DRAFT' : 'DUE',
             currency,
             exchangeRate,
@@ -187,7 +184,18 @@ export class ContractsService {
       const existing = await tx.contract.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.contract_not_found);
 
+      // عقدٌ سبق الهجرة يحمل قيمةً قديمةً معلَنة — وأوّلُ تعديلٍ له يوجب إعلانَ ما لم
+      // يُعلَن (ق-٨٩٨): «يُعلَن ولا يُصحَّح رجعياً، ويُنقص بيدٍ عند لمس العقد».
+      if (existing.classification === 'LEGACY_UNCLASSIFIED' && dto.classification === undefined) {
+        throw new BadRequestException(MSG.contract_classification_required);
+      }
+      if (existing.vatInclusion === 'LEGACY_UNDECLARED' && dto.vatInclusion === undefined) {
+        throw new BadRequestException(MSG.contract_vat_inclusion_required);
+      }
+
       const data: Prisma.ContractUncheckedUpdateInput = {};
+      if (dto.classification !== undefined) data.classification = dto.classification;
+      if (dto.vatInclusion !== undefined) data.vatInclusion = dto.vatInclusion;
       if (dto.tenant !== undefined) data.tenant = dto.tenant;
       if (dto.phone !== undefined) data.phone = dto.phone;
       if (dto.services !== undefined) data.services = dto.services;
@@ -421,12 +429,6 @@ export class ContractsService {
   private async validateContract(tx: Prisma.TransactionClient, unit: Unit, property: Property, start: Date, end: Date, tenantName: string, excludeContractId?: string): Promise<void> {
     if (start > end) throw new BadRequestException(MSG.contract_start_after_end);
 
-    if (property.activityType && property.activityType !== 'mixed') {
-      const mapped = UNIT_TYPE_TO_ACTIVITY[unit.type];
-      if (mapped && mapped !== property.activityType) {
-        throw new ConflictException(MSG.unit_type_activity_mismatch);
-      }
-    }
     if (property.activityType === 'residential' && property.activitySubtype && unit.subtype && unit.subtype !== property.activitySubtype) {
       throw new ConflictException(MSG.unit_subtype_mismatch);
     }
@@ -530,6 +532,9 @@ export class ContractsService {
             deposit: source.deposit,
             services: source.services,
             furnished: source.furnished,
+            // يُعلَنان في طلب التجديد لا يُورَّثان من الأصل (ق-٨٩١).
+            classification: dto.classification,
+            vatInclusion: dto.vatInclusion,
             status: start > new Date() ? 'UPCOMING' : 'DUE',
             currency: source.currency,
             exchangeRate,

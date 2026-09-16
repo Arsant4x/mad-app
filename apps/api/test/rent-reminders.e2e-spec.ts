@@ -68,6 +68,7 @@ describe('Rent reminders (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر التذكيرات ${suffix}`,
         phone: '0500000000',
@@ -169,6 +170,7 @@ describe('Rent reminders (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر بعيد ${suffix}`,
         value: 12000,
