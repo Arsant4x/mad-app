@@ -4,6 +4,7 @@ import { round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
+import { VatFiledDto } from './dto/vat-filed.dto';
 import { MSG } from '../common/i18n/messages';
 
 /**
@@ -93,7 +94,39 @@ export class ObligationsService {
    * فرعاً إقرارٌ ناقصٌ أمام الهيئة.
    */
   vatDeclaration(companyId: string, query: VatDeclarationQueryDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.declarationWithinTx(tx, query));
+  }
+
+  /**
+   * **علَمُ «قُدِّم»** (`ق-٩١٩`): يُوسَم الربعُ بصافيه كما قُرئ الآن — فتُقاس عليه قراءاتُ الغد.
+   * وسمٌ ثانٍ يُحدّث اللحظةَ والصافي (قدّم تصحيحاً فوسم من جديد).
+   */
+  markFiled(companyId: string, dto: VatFiledDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const declaration = await this.declarationWithinTx(tx, dto);
+      const filing = await tx.vatReturnFiling.upsert({
+        where: { companyId_year_quarter: { companyId, year: dto.year, quarter: dto.quarter } },
+        create: { companyId, year: dto.year, quarter: dto.quarter, netVat: declaration.netVat, filedAt: new Date() },
+        update: { netVat: declaration.netVat, filedAt: new Date() },
+      });
+      return { year: filing.year, quarter: filing.quarter, filedAt: filing.filedAt, netVat: Number(filing.netVat) };
+    });
+  }
+
+  unmarkFiled(companyId: string, dto: VatFiledDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await tx.vatReturnFiling.deleteMany({ where: { year: dto.year, quarter: dto.quarter } });
+      return { year: dto.year, quarter: dto.quarter, filed: null };
+    });
+  }
+
+  /**
+   * **على مستوى المنشأة بحقّها**: إقرارُ الضريبة يُقدَّم عن المنشأة برقمها الضريبيّ الواحد —
+   * فمبيعاتُ الفروع كلِّها ومشترياتُها تدخل فيه (الإعلانُ على المتحكِّم العامّ أعلاه، ويُعاد هنا
+   * على الدالّة التي تقرأ — فحارسُ `ق-٥١٧` يقرأ النطاقَ الذي تقع فيه القراءة).
+   */
+  private async declarationWithinTx(tx: Prisma.TransactionClient, query: VatDeclarationQueryDto) {
+    {
       const quarterMonths: Record<number, [number, number]> = { 1: [1, 3], 2: [4, 6], 3: [7, 9], 4: [10, 12] };
       const [startMonth, endMonth] = quarterMonths[query.quarter];
       const from = new Date(Date.UTC(query.year, startMonth - 1, 1));
@@ -130,6 +163,12 @@ export class ObligationsService {
       const purchasesExempt = exemptPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
       const purchasesExcluded = excludedPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
 
+      const netVat = round2(salesStandardVat - purchasesStandardVat);
+      // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.
+      const filing = await tx.vatReturnFiling.findFirst({ where: { year: query.year, quarter: query.quarter } });
+      const filed = filing ? { filedAt: filing.filedAt, netVat: round2(Number(filing.netVat)) } : null;
+      const changedSinceFiled = filed !== null && Math.abs(filed.netVat - netVat) >= 0.005;
+
       return {
         year: query.year,
         quarter: query.quarter,
@@ -145,11 +184,17 @@ export class ObligationsService {
         purchasesExcluded,
         excludedCount: excludedPurchases.length,
         totalPurchases: purchasesStandard + purchasesExempt,
-        netVat: round2(salesStandardVat - purchasesStandardVat),
+        netVat,
         invoiceCount: invoices.length,
         purchaseCount: purchases.length,
+        filed,
+        changedSinceFiled,
+        /** يُعرض حين `changedSinceFiled` وحدَه — نصُّ م٦٣ حيث يُقرأ الرقم (ق-٤٤٩). */
+        filedNote: changedSinceFiled
+          ? `تغيّر هذا الإقرارُ بعد تقديمه (قُدِّم بصافي ${filed!.netVat}): تصحيحُه واجبٌ خلال عشرين يوماً من العلم (م٦٣/١)؛ ونقصٌ دون 15,000 ريال يجوز إدراجُه في الإقرار التالي (م٦٣/٣)`
+          : null,
       };
-    });
+    }
   }
 
   /** قسمُ الإيجار — انظر `RentDeclarationSection`. */

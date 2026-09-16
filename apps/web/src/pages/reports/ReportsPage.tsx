@@ -303,6 +303,15 @@ export function ReportsPage() {
                   <td>التغير في الذمم الدائنة</td>
                   <td className="num">{fmt(cash.payablesChange)}</td>
                 </tr>
+                {/* ⭐ التزامان كانا خارج المعادلة (ق-٩٢٣ · ق-٩٢٥/③): قبضٌ يُؤجَّل، وضريبةٌ مستحقّة لم تُسدَّد — نقدٌ في اليد لم يمرّ بالربح. */}
+                <tr>
+                  <td>التغير في الإيراد المؤجَّل (قبضٌ عن خدمةٍ لم تُقدَّم)</td>
+                  <td className="num">{fmt(cash.deferredRevenueChange)}</td>
+                </tr>
+                <tr>
+                  <td>التغير في ضريبة القيمة المضافة المستحقة</td>
+                  <td className="num">{fmt(cash.outputVatChange)}</td>
+                </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
                   <td>صافي التدفق من الأنشطة التشغيلية</td>
                   <td className="num">{fmt(cash.operatingCashFlow)}</td>

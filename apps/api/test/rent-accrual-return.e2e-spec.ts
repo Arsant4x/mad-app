@@ -24,6 +24,9 @@ import { OUTPUT_VAT_ACCOUNT } from '../src/journal/auto-posting.util';
  *      «ما سبق اللحظةَ: في الإقرار لا في الدفتر» (`ق-٩٢٦`) بعدِّه ونصِّه.
  *   ⑥ عقارُ تشغيل ⇒ لا `2200` ويُعدّ ويُعلَن.
  *   ⑦ والإلغاءُ يعكس المُسقَط — في الدفتر والإقرار معاً (`ق-٩٢٥/②`).
+ *   ⑧ الأعمارُ بصفَّين: القسطُ المستحقُّ غيرُ المقبوض يظهر بعمره ويدخل المطابقةَ، ويخرج بالقبض (`ق-٩٢٥/④`).
+ *   ⑨ التدفّقُ بالتزامَين: استحقاقٌ بلا نقدٍ لا يحرّك التشغيليَّ، والقبضُ يحرّكه بقدره (`ق-٩٢٣` · `ق-٩٢٥/③`).
+ *   ⑩ علَمُ «قُدِّم»: بعده يُعلَن التغيّرُ لمن قدّم وحدَه — بنصّ م٦٣ (`ق-٩١٩`).
  *
  * ⚠️ **التواريخُ نسبيّةٌ إلى اليوم** لا ثابتة: الاستحقاقُ «حلّ» بالساعة الحقيقية، فاختبارٌ
  * بتاريخٍ ثابتٍ يصدق شهراً ويكذب بعده.
@@ -315,6 +318,87 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     expect(d.outputVat).toBeCloseTo(0, 2);
     // الإيرادُ نفسُه يُستحقّ صافياً (بحدّ موجز التشغيل) والذمّةُ بالقسط.
     expect(d.receivable).toBeCloseTo(1000 * n, 2);
+  }, 60000);
+
+  interface AgingReport {
+    rentRows: { contractNo: string; installmentId: string; remaining: number; bucket: string }[];
+    totals: { total: number; rent: number };
+    reconciliation: { difference: number } | null;
+  }
+  const aging = async () => (await auth(http().get('/reports/receivables-aging')).query({ reconcile: '1' }).expect(200)).body as AgingReport;
+
+  interface CashFlow {
+    netProfit: number;
+    receivablesChange: number;
+    deferredRevenueChange: number;
+    outputVatChange: number;
+    operatingCashFlow: number;
+  }
+  const cashFlow = async () => (await auth(http().get('/reports/cash-flow')).expect(200)).body as CashFlow;
+
+  it('🔴 ⑧ الأعمارُ بصفَّين: القسطُ المستحقُّ غيرُ المقبوض يظهر بعمره ويدخل المطابقة — ويخرج بالقبض (ق-٩٢٥/④)', async () => {
+    const before = await aging();
+    const contract = await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
+    const due = dueByToday(contract);
+    const after = await aging();
+
+    const mine = after.rentRows.filter((r) => r.contractNo === contract.no);
+    expect(mine).toHaveLength(due.length);
+    for (const r of mine) expect(r.remaining).toBeCloseTo(1150, 2);
+    expect(after.totals.rent - before.totals.rent).toBeCloseTo(1150 * due.length, 2);
+    expect(after.totals.total - before.totals.total).toBeCloseTo(1150 * due.length, 2);
+    // ⭐ والمطابقةُ لا ترى «فرقاً غير منسوب»: الذمّةُ في التقرير كما هي في 1200.
+    expect(after.reconciliation!.difference - before.reconciliation!.difference).toBeCloseTo(0, 2);
+
+    // القبضُ يُخرج القسطَ من الصفّ.
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ installmentId: due[0].id, date: iso(today), amount: 1150, method: 'CASH' }).expect(201);
+    const paid = await aging();
+    expect(paid.rentRows.filter((r) => r.contractNo === contract.no)).toHaveLength(due.length - 1);
+    expect(paid.reconciliation!.difference - before.reconciliation!.difference).toBeCloseTo(0, 2);
+  }, 60000);
+
+  it('🔴 ⑨ التدفّقُ بالتزامَين: استحقاقٌ بلا نقدٍ لا يحرّك التشغيليَّ — والقبضُ يحرّكه بقدره (ق-٩٢٣ · ق-٩٢٥/③)', async () => {
+    const before = await cashFlow();
+    const contract = await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
+    const due = dueByToday(contract);
+    const accrued = await cashFlow();
+
+    // الاستحقاقُ رفع الربحَ (ما مضى) والذمّةَ (الإجمالي) والالتزامَين (المؤجَّل والضريبة) — ولا نقدَ تحرّك.
+    expect(accrued.receivablesChange - before.receivablesChange).toBeCloseTo(1150 * due.length, 2);
+    expect(accrued.outputVatChange - before.outputVatChange).toBeCloseTo(150 * due.length, 2);
+    expect(accrued.deferredRevenueChange + accrued.netProfit - (before.deferredRevenueChange + before.netProfit)).toBeCloseTo(1000 * due.length, 2);
+    expect(accrued.operatingCashFlow - before.operatingCashFlow).toBeCloseTo(0, 2);
+
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ installmentId: due[0].id, date: iso(today), amount: 1150, method: 'CASH' }).expect(201);
+    const paid = await cashFlow();
+    expect(paid.operatingCashFlow - accrued.operatingCashFlow).toBeCloseTo(1150, 2);
+  }, 60000);
+
+  it('🔴 ⑩ علَمُ «قُدِّم»: بعده يُعلَن التغيّرُ لمن قدّم وحدَه — بنصّ م٦٣ (ق-٩١٩)', async () => {
+    const filedRes = await auth(http().post('/obligations/vat-declaration/filed')).send(thisQuarter).expect(201);
+    expect(filedRes.body.filedAt).toBeTruthy();
+    const marked = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as Declaration & {
+      filed: { filedAt: string; netVat: number } | null;
+      changedSinceFiled: boolean;
+      filedNote: string | null;
+    };
+    expect(marked.filed).not.toBeNull();
+    expect(marked.changedSinceFiled).toBe(false);
+    expect(marked.filedNote).toBeNull();
+    expect(marked.filed!.netVat).toBeCloseTo(marked.netVat, 2);
+
+    // ثم يتغيّر الربعُ بعقدٍ حلّ فيه استحقاق — فتُعرض رسالةُ التصحيح بنصّها.
+    await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
+    const changed = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as typeof marked;
+    expect(changed.changedSinceFiled).toBe(true);
+    expect(String(changed.filedNote)).toContain('م٦٣');
+    expect(String(changed.filedNote)).toContain('عشرين يوماً');
+
+    // وإلغاءُ الوسم يُسكت الرسالة — فبلاه لا يعرف النظامُ ما قُدِّم.
+    await auth(http().delete('/obligations/vat-declaration/filed')).query(thisQuarter).expect(200);
+    const unmarked = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as typeof marked;
+    expect(unmarked.filed).toBeNull();
+    expect(unmarked.changedSinceFiled).toBe(false);
   }, 60000);
 
   it('🔴 ⑦ والإلغاءُ يعكس المُسقَط — في الدفتر والإقرار معاً (ق-٩٢٥/②)', async () => {

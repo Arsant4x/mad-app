@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
+import { VatFiledDto } from './dto/vat-filed.dto';
 import { ObligationsService } from './obligations.service';
 
 @Controller('obligations')
@@ -24,6 +25,19 @@ export class ObligationsController {
   @RequiresAction('view')
   vatDeclaration(@CurrentTenant() tenant: TenantContext, @Query() query: VatDeclarationQueryDto) {
     return this.obligationsService.vatDeclaration(tenant.companyId, query);
+  }
+
+  /** علَمُ «قُدِّم» (ق-٩١٩): يضعه التاجرُ بيده بعد التقديم — والنظامُ لا يعرف ما قُدِّم. */
+  @Post('vat-declaration/filed')
+  @RequiresAction('record')
+  markFiled(@CurrentTenant() tenant: TenantContext, @Body() dto: VatFiledDto) {
+    return this.obligationsService.markFiled(tenant.companyId, dto);
+  }
+
+  @Delete('vat-declaration/filed')
+  @RequiresAction('record')
+  unmarkFiled(@CurrentTenant() tenant: TenantContext, @Query() dto: VatFiledDto) {
+    return this.obligationsService.unmarkFiled(tenant.companyId, dto);
   }
 
   @Patch(':id/toggle')
