@@ -8,23 +8,28 @@ import { RentRecognitionService } from '../src/contracts/rent-recognition.servic
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
 
 /**
- * ⚖️ **الإيرادُ المؤجَّل — من اعترافٍ لحظةَ القبض إلى اعترافٍ على مدّة الخدمة**
- * (`ق-٤٦٨` · `ق-٤٧٠` … `ق-٤٧٥`).
+ * ⚖️ **الإيرادُ المؤجَّل — يُحتجَز بالاستحقاق ويخرج بالخدمة**
+ * (`ق-٤٦٨` · `ق-٤٧٠` … `ق-٤٧٥` · ثم `ق-٩١٧`).
  *
  * **العطلُ الذي بُني له**: القسطُ يستحقّ في **أوّلِ** فترته، **فكلُّ قبضٍ قبضٌ
  * عن خدمةٍ لم تُقدَّم بعد** — **و٢٤ من ١١٤ دفعة (٢١٪) في البيانات القائمة
  * قُبضت قبل بداية شهر خدمتها**، فسُجّلت إيراداً في شهرٍ سابقٍ لشهر الخدمة.
  *
- * **وخمسةٌ تُقاس هنا، كلٌّ منها كان يمكن أن يقع عكسُه بصمت**:
+ * **ثم انتقلت لحظةُ القيد من القبض إلى نقطة الضريبة** (`ق-٩١٧`): القسطُ ذمّةٌ على
+ * المستأجر عند استحقاقه — أو عند قبضٍ يسبقه بقدره (`ق-٩٢٤`) — وصافيه يدخل الالتزامَ
+ * (`2400`) ويخرج إيراداً بالخدمة كما كان؛ **والقبضُ يسدّد الذمّةَ ولا يمسّ الإيراد**.
+ * فمبدأُ الاعتراف واحد، وما تغيّر هو اللحظة.
  *
- *   ① **الدفعُ المقدَّم يدخل التزاماً لا إيراداً** — وهو الحالةُ المقيسة.
- *   ② **والحسابُ `2400` يُنشأ عند أوّل تحوّلٍ لمنشأةٍ لا تحمله** (`ق-٤٧١`) —
- *      **وإلّا سقط القيدُ صامتاً**: `resolveAccountIds` يعيد `null` بلا رسالة.
- *   ③ **والالتزامُ يخرج إيراداً عند اكتمال الشهر** — فمالٌ يدخل بلا مخرجٍ
- *      يُنتج ميزانيةً كاذبة كما يُنتجه الاعترافُ الفوريّ.
+ * **وما يُقاس هنا**:
+ *
+ *   ① **فترةُ الخدمة تُخزَّن على القسط** والقسطُ يستحقّ في أوّلها.
+ *   ② **الدفعُ المقدَّم يُنشئ استحقاقاً بقدره يدخل الالتزامَ لا الإيراد** — وحسابُ `2400`
+ *      يُنشأ عند أوّل حاجةٍ إليه (`ق-٤٧١`).
+ *   ③ **والالتزامُ يخرج إيراداً عند اكتمال الشهر** — فمالٌ يدخل بلا مخرجٍ يُنتج ميزانيةً كاذبة.
  *   ④ **وتشغيلٌ ثانٍ يُرحّل صفراً** — الهدفُ تراكميّ لا فرقُ نبضة.
- *   ⑤ **ودفعةٌ عن فترةٍ انقضت تبقى كما كانت** — **فالتغييرُ لا يمسّ إلا ما لم
- *      يُقدَّم بعد**، والعقودُ القائمة لا يُعاد ترحيلُ قيدٍ منها (`ق-٤٦٧`).
+ *   ⑤ **ودفعةٌ عن قسطٍ استُحقّ تسدّد ذمّتَه** ولا تمسّ الإيرادَ ولا الالتزام.
+ *
+ * ⚠️ **التواريخُ نسبيّةٌ إلى اليوم** حيث يلزم: «استُحقّ» و«لم يستحقّ بعد» بالساعة الحقيقية.
  */
 interface E2eInstallment {
   id: string;
@@ -33,7 +38,11 @@ interface E2eInstallment {
   serviceEnd: string;
 }
 
-describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقبض ويخرج بالخدمة (e2e)', () => {
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const monthStart = (d: Date, offsetMonths: number) => new Date(d.getFullYear(), d.getMonth() + offsetMonths, 1);
+const monthEndOf = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاستحقاق ويخرج بالخدمة (e2e)', () => {
   let app: INestApplication;
   let token: string;
   let companyId: string;
@@ -41,27 +50,36 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   let seq = 0;
+  /** ما أنشأته هذه المجموعة — يُصرَّف في الختام عقداً عقداً لا منشأةً كاملة (المنشأةُ على التطوير بآلاف الأقساط). */
+  const created: string[] = [];
 
   const http = () => request(app.getHttpServer());
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
+
+  const today = new Date();
+  /** أوّلُ الشهر بعد القادم — عقدٌ يبدأ فيه لا قسطَ له حلّ اليوم، ودفعةٌ اليوم على أوّل أقساطه مقدَّمةٌ بيقين. */
+  const futureStart = monthStart(today, 2);
 
   async function balance(code: string): Promise<number> {
     const accounts = await auth(http().get('/accounts')).expect(200);
     return Number(accounts.body.find((a: { code: string }) => a.code === code)?.balance ?? 0);
   }
 
-  /** عقدٌ سنويٌّ بدورةٍ شهرية: اثنا عشرَ قسطاً بألفٍ لكلِّ شهرٍ من ٢٠٢٦. */
-  async function makeContract() {
+  /** عقدٌ سنويٌّ بدورةٍ شهرية: اثنا عشرَ قسطاً بألفٍ لكلِّ شهر من `start`. */
+  async function makeContract(start = new Date('2026-01-01')) {
     const tag = `${suffix}-${++seq}`;
     const property = (await auth(http().post('/properties')).send({ name: `عقار التأجيل ${tag}`, ownership: 'owned' }).expect(201)).body;
     const unit = (
       await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `DR-${tag}`, type: 'سكني', rentMonthly: 1000 }).expect(201)
     ).body;
-    return (
+    const end = new Date(start.getFullYear() + 1, start.getMonth(), 0);
+    const contract = (
       await auth(http().post('/contracts'))
-        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: iso(start), end: iso(end) })
         .expect(201)
     ).body as { id: string; no: string; installments: E2eInstallment[] };
+    created.push(contract.id);
+    return contract;
   }
 
   const installmentDue = (contract: { installments: E2eInstallment[] }, month: string) =>
@@ -83,12 +101,13 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
 
   afterAll(async () => {
     // ⚠️ **ما فتحته هذه المجموعة يُغلَق**: التزاماتٌ تُترك في منشأة العرض
-    // تُقرأ رصيداً بلا سببٍ ظاهر. وفتراتُ عقودها تنتهي بنهاية ٢٠٢٦، فتشغيلٌ
+    // تُقرأ رصيداً بلا سببٍ ظاهر. وفتراتُ عقودها تنتهي بعد عامٍ ونيّف، فتشغيلٌ
     // بعدها يُخرجها كلَّها إيراداً. **وثلاثُ مجموعاتٍ سقطت مرّةً لحالةٍ
     // متراكمة تركها ملفٌّ في هذه المنشأة نفسِها.**
-    await recognition.runForCompany(companyId, new Date('2027-01-01T00:00:00'));
+    const far = new Date(today.getFullYear() + 2, 0, 1);
+    for (const id of created) await recognition.runForContract(companyId, id, far);
     await app.close();
-  });
+  }, 120000);
 
   it('① فترةُ الخدمة تُخزَّن على القسط — والقسطُ يستحقّ في أوّلها', async () => {
     const contract = await makeContract();
@@ -100,36 +119,35 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
     expect(march.dueDate.slice(0, 10)).toBe(march.serviceStart.slice(0, 10));
   }, 40000);
 
-  it('🔴 ② الدفعُ المقدَّم يدخل الالتزام — والحسابُ يُنشأ عند أوّل حاجةٍ إليه', async () => {
-    const contract = await makeContract();
-    const march = installmentDue(contract, '2026-03');
-    const [rentBefore, deferredBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
+  it('🔴 ② الدفعُ المقدَّم يُنشئ استحقاقاً بقدره يدخل الالتزامَ لا الإيراد — والحسابُ يُنشأ عند أوّل حاجةٍ إليه', async () => {
+    const contract = await makeContract(futureStart);
+    const first = contract.installments[0];
+    const [rentBefore, deferredBefore, receivableBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE), await balance('1200')];
 
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      // قبل بداية فترة الخدمة بتسعة أيام — وهي حالةُ الـ٢١٪ المقيسة.
-      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      // قبل بداية فترة الخدمة بشهرٍ ونيّف — وهي حالةُ الـ٢١٪ المقيسة.
+      .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
     // ولا ريالَ في الإيراد: لم تُقدَّم الخدمةُ بعد.
     expect(await balance('4200')).toBeCloseTo(rentBefore, 2);
     expect((await balance(DEFERRED_REVENUE_ACCOUNT_CODE)) - deferredBefore).toBeCloseTo(1000, 2);
+    // واستحقاقٌ بقدر المقبوض سُدِّد في يومه — فالذمّةُ صفر (ق-٩٢٤).
+    expect(await balance('1200')).toBeCloseTo(receivableBefore, 2);
   }, 40000);
 
   it('🔴 ③ ثم يخرج إيراداً عند اكتمال الشهر — ولا يمسّ القائمَ من العقود', async () => {
-    const asOf = new Date('2026-03-31T00:00:00');
-    // ⚠️ تصريفٌ أوّلاً: التحوّلُ يكنس المنشأة كلَّها، **وحالةُ ما قبله ليست
-    // فراغاً** — وقد أدانت هذه الحالةُ نفسَها بـ`2000` حين قيست بلا تصريف
-    // (التزامُ الحالة ② ما زال قائماً). **فالمقيسُ أثرُ هذه الحالة وحدها.**
-    await recognition.runForCompany(companyId, asOf);
-
-    const contract = await makeContract();
-    const march = installmentDue(contract, '2026-03');
+    const asOf = monthEndOf(futureStart);
+    // ⚠️ على العقد وحده: التحوّلُ على المنشأة كلِّها يجرف التزاماتِ عقودٍ أخرى قائمة (وقد أدانت هذه
+    // الحالةُ نفسَها بـ`2000` حين قيست على المنشأة) — **فالمقيسُ أثرُ هذا العقد وحده.**
+    const contract = await makeContract(futureStart);
+    const first = contract.installments[0];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
     const [rentBefore, deferredBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
-    await recognition.runForCompany(companyId, asOf);
+    await recognition.runForContract(companyId, contract.id, asOf);
 
     // ألفٌ بالضبط — **لا أكثر**: والزيادةُ عليه تعني أن التحوّل جرف أقساطاً
     // قائمةً اعتُرف بها بالقاعدة القديمة (ق-٤٦٧).
@@ -138,45 +156,53 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
   }, 60000);
 
   it('🔴 ④ وتشغيلٌ ثانٍ بالتاريخ نفسه يُرحّل صفراً — الهدفُ تراكميّ', async () => {
-    const contract = await makeContract();
-    const march = installmentDue(contract, '2026-03');
+    const contract = await makeContract(futureStart);
+    const first = contract.installments[0];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
-    const asOf = new Date('2026-03-31T00:00:00');
-    await recognition.runForCompany(companyId, asOf);
+    const asOf = monthEndOf(futureStart);
+    await recognition.runForContract(companyId, contract.id, asOf);
     const [rentAfterFirst, deferredAfterFirst] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
 
-    const second = await recognition.runForCompany(companyId, asOf);
+    const second = await recognition.runForContract(companyId, contract.id, asOf);
     expect(second.entries).toBe(0);
     expect(await balance('4200')).toBeCloseTo(rentAfterFirst, 2);
     expect(await balance(DEFERRED_REVENUE_ACCOUNT_CODE)).toBeCloseTo(deferredAfterFirst, 2);
   }, 60000);
 
-  it('⑤ ودفعةٌ عن فترةٍ انقضت تبقى كما كانت — إيراداً فوريّاً بلا التزام', async () => {
+  it('⑤ ودفعةٌ عن قسطٍ استُحقّ تسدّد ذمّتَه — ولا تمسّ الإيرادَ ولا الالتزام (ق-٩١٧)', async () => {
     const contract = await makeContract();
     const january = installmentDue(contract, '2026-01');
-    const [rentBefore, deferredBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
+    // استُحقّ عند الإنشاء (حلّ موعدُه) — فالذمّةُ قائمةٌ قبل القبض.
+    const [rentBefore, deferredBefore, receivableBefore, cashBefore] = [
+      await balance('4200'),
+      await balance(DEFERRED_REVENUE_ACCOUNT_CODE),
+      await balance('1200'),
+      await balance('1000'),
+    ];
 
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      // بعد انقضاء فترة الخدمة كلِّها — فلا شيءَ يُؤجَّل.
+      // بعد انقضاء فترة الخدمة كلِّها — والقبضُ تسديدٌ لا اعتراف.
       .send({ installmentId: january.id, date: '2026-02-05', amount: 1000, method: 'CASH' })
       .expect(201);
 
-    expect((await balance('4200')) - rentBefore).toBeCloseTo(1000, 2);
+    expect((await balance('1000')) - cashBefore).toBeCloseTo(1000, 2);
+    expect((await balance('1200')) - receivableBefore).toBeCloseTo(-1000, 2);
+    expect(await balance('4200')).toBeCloseTo(rentBefore, 2);
     expect(await balance(DEFERRED_REVENUE_ACCOUNT_CODE)).toBeCloseTo(deferredBefore, 2);
   }, 40000);
 
   it('🔴 ⑦ والإلغاءُ على التزامٍ قائمٍ يُمنع حتى تُختار وجهتُه — ولا افتراض (ق-٤٧٢)', async () => {
-    const contract = await makeContract();
-    const december = installmentDue(contract, '2026-12');
+    const contract = await makeContract(futureStart);
+    const last = contract.installments[contract.installments.length - 1];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .send({ installmentId: last.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
     const res = await auth(http().post(`/contracts/${contract.id}/cancel`))
-      .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
+      .send({ cancelDate: iso(today), cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
       .expect(400);
 
     // ⚠️ والرسالةُ تحمل الرقم — فمنعٌ بلا رقمٍ يُضغَط بلا قراءة.
@@ -187,17 +213,17 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
   }, 40000);
 
   it('🔴 ⑧ فإن احتُجز بشرط العقد ذهب دخلاً آخر — ⛔ ولا يمسّ إيرادَ الإيجار', async () => {
-    const contract = await makeContract();
-    const december = installmentDue(contract, '2026-12');
+    const contract = await makeContract(futureStart);
+    const last = contract.installments[contract.installments.length - 1];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .send({ installmentId: last.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
     const [rentBefore, otherBefore, deferredBefore] = [await balance('4200'), await balance('4300'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
 
     await auth(http().post(`/contracts/${contract.id}/cancel`))
       .send({
-        cancelDate: '2026-06-30',
+        cancelDate: iso(today),
         cancelReason: 'إخلاء مبكر',
         installmentDisposition: 'cancel',
         unearnedDisposition: 'income',
@@ -211,17 +237,17 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
   }, 60000);
 
   it('🔴 ⑨ وإن رُدّ خرج نقداً — والالتزامُ ينتهي في الحالين', async () => {
-    const contract = await makeContract();
-    const december = installmentDue(contract, '2026-12');
+    const contract = await makeContract(futureStart);
+    const last = contract.installments[contract.installments.length - 1];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: december.id, date: '2026-06-01', amount: 1000, method: 'CASH' })
+      .send({ installmentId: last.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
     const [cashBefore, deferredBefore, rentBefore] = [await balance('1000'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE), await balance('4200')];
 
     await auth(http().post(`/contracts/${contract.id}/cancel`))
       .send({
-        cancelDate: '2026-06-30',
+        cancelDate: iso(today),
         cancelReason: 'إخلاء مبكر',
         installmentDisposition: 'cancel',
         unearnedDisposition: 'refund',
@@ -234,21 +260,22 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
   }, 60000);
 
   it('⑩ وإلغاءٌ بلا التزامٍ قائم لا يُسأل عن وجهةٍ — فسؤالٌ بلا موضوعٍ يُضغَط بلا قراءة', async () => {
-    const contract = await makeContract();
+    const contract = await makeContract(futureStart);
 
     await auth(http().post(`/contracts/${contract.id}/cancel`))
-      .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
+      .send({ cancelDate: iso(today), cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
       .expect(201);
   }, 40000);
 
   it('🔴 ⑫ ووصفُ القيد يحمل حدَّ المحرّك — في الدفتر لا في وثيقة (ق-٤٨٠)', async () => {
-    const contract = await makeContract();
-    const march = installmentDue(contract, '2026-03');
+    const contract = await makeContract(futureStart);
+    const first = contract.installments[0];
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
 
-    await recognition.runForCompany(companyId, new Date('2026-03-31T00:00:00'));
+    const asOf = monthEndOf(futureStart);
+    await recognition.runForContract(companyId, contract.id, asOf);
 
     const journal = (await auth(http().get('/journal').query({ search: contract.no, pageSize: 50 })).expect(200)).body as {
       items: { memo: string }[];
@@ -258,22 +285,23 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
     // مجسٌّ للمجسّ: صفرُ قيودٍ يعني أن البحثَ أخفق لا أن الوصف غاب.
     expect(conversion.length).toBeGreaterThan(0);
     // ⭐ والحدُّ منصوصٌ حيث يُقرأ: «كاملاً» تقول إن الشهرَ الجاري ينتظر اكتماله.
-    expect(conversion[0].memo).toContain('حصّة شهر 2026-03 كاملاً');
+    const label = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}`;
+    expect(conversion[0].memo).toContain(`حصّة شهر ${label} كاملاً`);
     expect(conversion[0].memo).toContain(contract.no);
   }, 60000);
 
   it('🔴 ⑪ والتقريرُ يسرد الالتزامَ القائم وما لم يمرّ به — شرطُ ق-٤٧٣', async () => {
-    const contract = await makeContract();
-    const march = installmentDue(contract, '2026-03');
+    const contract = await makeContract(futureStart);
+    const first = contract.installments[0];
     // ① التزامٌ قائم: دفعٌ مقدَّمٌ لم يُحوَّل بعد.
     await auth(http().post(`/contracts/${contract.id}/payments`))
-      .send({ installmentId: march.id, date: '2026-02-20', amount: 1000, method: 'CASH' })
+      .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
     // ② ودفعةٌ بلا قسط — لا فترةَ خدمةٍ تُعرف لها.
-    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: '2026-02-21', amount: 250, method: 'CASH' }).expect(201);
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 250, method: 'CASH' }).expect(201);
 
     const report = (await auth(http().get('/reports/deferred-revenue')).expect(200)).body as {
-      outstanding: { contractNo: string; deferred: number }[];
+      outstanding: { contractNo: string; deferred: number; accrualBasis: string }[];
       totalDeferred: number;
       unlinked: { contractNo: string; baseNetAmount: number }[];
       totalUnlinked: number;
@@ -283,6 +311,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
     const mine = report.outstanding.filter((r) => r.contractNo === contract.no);
     expect(mine.length).toBeGreaterThan(0);
     expect(mine[0].deferred).toBeCloseTo(1000, 2);
+    expect(mine[0].accrualBasis).toBe('ACCRUAL');
 
     const myUnlinked = report.unlinked.filter((r) => r.contractNo === contract.no);
     expect(myUnlinked).toHaveLength(1);
@@ -295,13 +324,14 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
   }, 60000);
 
   it('⑥ ودفعةٌ بلا قسطٍ مرتبط تُعترَف فوراً — حدٌّ معلَنٌ لا عطل (ق-٤٧٣)', async () => {
-    const contract = await makeContract();
-    const [rentBefore, deferredBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE)];
+    const contract = await makeContract(futureStart);
+    const [rentBefore, deferredBefore, receivableBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE), await balance('1200')];
 
-    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: '2026-02-20', amount: 500, method: 'CASH' }).expect(201);
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 500, method: 'CASH' }).expect(201);
 
-    // لا فترةَ خدمةٍ تُعرف لها إطلاقاً — فلا قسمةَ ممكنة.
+    // لا فترةَ خدمةٍ تُعرف لها إطلاقاً — فلا قسمةَ ممكنة: استحقاقٌ بقدرها يُعترَف فوراً ويُسدَّد.
     expect((await balance('4200')) - rentBefore).toBeCloseTo(500, 2);
     expect(await balance(DEFERRED_REVENUE_ACCOUNT_CODE)).toBeCloseTo(deferredBefore, 2);
+    expect(await balance('1200')).toBeCloseTo(receivableBefore, 2);
   }, 40000);
 });

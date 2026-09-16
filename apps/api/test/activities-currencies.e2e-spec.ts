@@ -345,11 +345,12 @@ describe('Activities, currencies and FX difference (e2e)', () => {
     }
 
     it('posts the gap between the contract rate and the settlement rate to 5600', async () => {
-      const [cashBefore, revenueBefore, deferredBefore, fxBefore] = await Promise.all([
+      const [cashBefore, revenueBefore, deferredBefore, fxBefore, receivableBefore] = await Promise.all([
         accountBalance('1000'),
         accountBalance('4200'),
         accountBalance('2400'),
         accountBalance('5600'),
+        accountBalance('1200'),
       ]);
 
       // 1000 units priced at 3.75 but settled at 3.80: 3800 arrives, 3750 was
@@ -367,10 +368,14 @@ describe('Activities, currencies and FX difference (e2e)', () => {
       //
       // ⭐ **وفرقُ الصرف لا يُقسَم**: هو ما فعله السوقُ لا ما قدّمته المنشأةُ
       // من خدمة — **فلا فترةَ خدمةٍ له**، ويبقى كلُّه في `5600` لحظتَه.
+      //
+      // ⭐ **ثم صار الإيرادُ يُستحقّ عند نقطة الضريبة لا عند القبض** (`ق-٩١٧`): الـ3750 قُيّدت
+      // ذمّةً على المستأجر بسعر العقد لحظةَ الاستحقاق (عند الإنشاء — فالأقساطُ حلّت)، والقبضُ
+      // يسدّدها بسعر يومه — **فلا يمسّ `4200` ولا `2400`**، وفرقُ الصرف وحدَه لحظتَه.
       const revenueDelta = (await accountBalance('4200')) - revenueBefore;
       const deferredDelta = (await accountBalance('2400')) - deferredBefore;
-      expect(revenueDelta + deferredDelta).toBeCloseTo(3750, 2);
-      expect(deferredDelta).toBeGreaterThan(0);
+      expect(revenueDelta + deferredDelta).toBeCloseTo(0, 2);
+      expect((await accountBalance('1200')) - receivableBefore).toBeCloseTo(-3750, 2);
     }, 40000);
 
     it('posts a loss to 5600 when the currency moved the other way', async () => {

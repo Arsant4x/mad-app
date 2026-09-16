@@ -76,7 +76,8 @@ describe('Property KPIs (e2e)', () => {
         .send({ cancelDate: '2030-12-31', cancelReason: 'تنظيف بيانات الاختبار', installmentDisposition: 'cancel' });
     }
     await app.close();
-  });
+    // عقودٌ بعشر سنواتٍ مضى منها ستٌّ: الاستحقاقُ عند الإنشاء والاعترافُ عند الإلغاء قيدٌ لكلِّ شهر (ق-٩١٧).
+  }, 180000);
 
   it('reports an empty property as 0% occupied without dividing by zero', async () => {
     const res = await kpis();

@@ -555,6 +555,169 @@ export async function postDeferredRecognitionEntry(tx: Prisma.TransactionClient,
   });
 }
 
+/** حسابُ مخرجات ضريبة القيمة المضافة — الحسابُ القائم للفواتير، بلا حسابٍ جديد (`ق-٩١٨`). */
+export const OUTPUT_VAT_ACCOUNT = '2200';
+
+export interface RentAccrualForPosting {
+  /** عميلُ العقد — يُختم على كل سطر (ق-٨٧٣). */
+  customerId?: string | null;
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
+  branchId?: string | null;
+  contractNo: string;
+  tenant: string;
+  /** نقطةُ الضريبة — تاريخُ القيد. */
+  date: Date;
+  /** فترةُ خدمة القسط؛ و`null` لدفعةٍ بلا قسط فتُعترَف فوراً (`ق-٤٧٣`). */
+  service?: ServicePeriod | null;
+  /** بعملة الدفتر: ما يدين به المستأجر · الإيرادُ · الضريبة. */
+  baseGross: number;
+  baseNet: number;
+  baseTax: number;
+  /** يُكتب في المذكّرة: «حلّ الاستحقاق» · «دفعةٌ مقدَّمة» · «دفعةٌ بلا قسط». */
+  kindLabel: string;
+}
+
+/**
+ * ⭐ **استحقاقُ الإيجار عند نقطة الضريبة** (`ق-٩١٧` · `ق-٩٢٧/١`).
+ *
+ * مدين `1200` **بالإجمالي** (الطرفُ عميلُ العقد · البُعدُ الوحدة) ⇄ دائن `4200` بما مضى من
+ * فترة الخدمة حتى النقطة + دائن `2400` بما بقي + دائن `2200` بالضريبة. **فالقيدُ ينتقل من
+ * القبض إلى نقطة الضريبة ولا يغيّر مبدأَ الاعتراف**: القسمةُ على فترة الخدمة هي نفسُها
+ * (`splitAtCollection` على النقطة بدل يوم القبض)، والتحوّلُ الشهريُّ يُكمل ما بقي.
+ *
+ * **وبه يستوي الدفترُ والإقرارُ**: صفُّ الاستحقاق الذي أنتج هذا القيد هو ما يجمعه الإقرارُ
+ * بتاريخه (`ق-٩١٥`). المعفى وعقارُ التشغيل: `baseTax = 0` فلا سطرَ `2200`.
+ *
+ * Returns `entry: null` (soft-skip) if a required account isn't set up yet — كسابقاتها؛
+ * والصفُّ يبقى بلا قيدٍ ويُعدّ في الإقرار لا يُخفى.
+ */
+export async function postRentAccrualEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  a: RentAccrualForPosting,
+): Promise<RentPostingResult> {
+  const skipped: RentPostingResult = { entry: null, earned: 0, deferred: 0 };
+  const gross = round2(a.baseGross);
+  const net = round2(a.baseNet);
+  const tax = round2(a.baseTax);
+  if (gross <= 0) return skipped;
+
+  const split = a.service ? splitAtCollection(a.service, net, a.date) : { earned: net, deferred: 0 };
+
+  const needCodes = ['1200', '4200', ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return skipped;
+
+  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: gross, credit: 0 }];
+  if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
+  if (split.deferred > 0) {
+    const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+    lines.push({ accountId: deferredId, debit: 0, credit: split.deferred });
+  }
+  if (tax > 0) lines.push({ accountId: ids.get(OUTPUT_VAT_ACCOUNT)!, debit: 0, credit: tax });
+
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    date: a.date,
+    memo: `استحقاق إيجار — عقد ${a.contractNo} — ${a.tenant} — ${a.kindLabel}`,
+    unitId: a.unitId,
+    lines,
+    auto: true,
+    branchId: a.branchId ?? null,
+    customerId: a.customerId ?? null,
+  });
+
+  return { entry, earned: split.earned, deferred: split.deferred };
+}
+
+export interface RentAccrualReversalForPosting {
+  customerId?: string | null;
+  unitId: string;
+  branchId?: string | null;
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  /** ما يُنقص من ذمّة المستأجر (`1200`). */
+  baseGross: number;
+  /** الصافي — مقسوماً بين ما لم يُعترَف به بعد (`2400`) وما اعتُرف (`4200`). */
+  baseNetFromDeferred: number;
+  baseNetFromRevenue: number;
+  baseTax: number;
+  /** «إلغاء» · «خصم عند القبض» · «إسقاطٌ عن مدّةٍ بعد الإلغاء». */
+  reasonLabel: string;
+}
+
+/**
+ * **عكسُ استحقاقٍ — نظيرُ الإشعار الدائن** (`ق-٩٢٥/②` · `ق-٩٢٧/٦`): مدين `2400` بما لم
+ * يُعترَف به ومدين `4200` بما اعتُرف (إن كان) ومدين `2200` بالضريبة ⇄ دائن `1200` بالإجمالي.
+ * الخصمُ عند القبض يسلك المسلكَ نفسَه — تعديلُ مقابلٍ يُنقص الثلاثة، لا إهمالٌ صامت.
+ */
+export async function postRentAccrualReversalEntry(tx: Prisma.TransactionClient, companyId: string, r: RentAccrualReversalForPosting) {
+  const gross = round2(r.baseGross);
+  const fromDeferred = round2(r.baseNetFromDeferred);
+  const fromRevenue = round2(r.baseNetFromRevenue);
+  const tax = round2(r.baseTax);
+  if (gross <= 0) return null;
+
+  const needCodes = ['1200', ...(fromRevenue > 0 ? ['4200'] : []), ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+
+  const lines: PostingLine[] = [];
+  if (fromDeferred > 0) {
+    const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+    lines.push({ accountId: deferredId, debit: fromDeferred, credit: 0 });
+  }
+  if (fromRevenue > 0) lines.push({ accountId: ids.get('4200')!, debit: fromRevenue, credit: 0 });
+  if (tax > 0) lines.push({ accountId: ids.get(OUTPUT_VAT_ACCOUNT)!, debit: tax, credit: 0 });
+  lines.push({ accountId: ids.get('1200')!, debit: 0, credit: gross });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: r.date,
+    memo: `عكس استحقاق إيجار — عقد ${r.contractNo} — ${r.tenant} — ${r.reasonLabel}`,
+    unitId: r.unitId,
+    lines,
+    auto: true,
+    branchId: r.branchId ?? null,
+    customerId: r.customerId ?? null,
+  });
+}
+
+export interface DeferredToOtherIncomeForPosting {
+  customerId?: string | null;
+  unitId: string;
+  contractNo: string;
+  tenant: string;
+  date: Date;
+  baseAmount: number;
+}
+
+/**
+ * **مستحقٌّ غيرُ مقبوض عن مدّةٍ بعد الإلغاء يُحتجَز بشرط العقد** (`ق-٩٢٧/٧`): مدين `2400`
+ * ⇄ دائن `4300` — الذمّةُ باقيةٌ على المستأجر، والالتزامُ يصير دخلاً آخر لا إيجاراً
+ * (**⛔ لا `4200`**: مدّةٌ لا يشغلها المستأجر — حجّةُ `postDeferredSettlementEntry` نفسُها).
+ */
+export async function postDeferredToOtherIncomeEntry(tx: Prisma.TransactionClient, companyId: string, s: DeferredToOtherIncomeForPosting) {
+  if (s.baseAmount <= 0) return null;
+  const ids = await resolveAccountIds(tx, [OTHER_INCOME_ACCOUNT]);
+  if (!ids) return null;
+  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  return createJournalEntry(tx, {
+    companyId,
+    date: s.date,
+    memo: `احتجاز مستحقٍّ عن مدّةٍ بعد الإلغاء — عقد ${s.contractNo} — ${s.tenant} — بشرط العقد`,
+    unitId: s.unitId,
+    lines: [
+      { accountId: deferredId, debit: s.baseAmount, credit: 0 },
+      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.baseAmount },
+    ],
+    auto: true,
+    customerId: s.customerId ?? null,
+  });
+}
+
 export interface CustomerPaymentForPosting {
   /** عميلُ السند — يُختم على كل سطر (ق-٨٧٣)؛ إلزاميّ. */
   customerId: string;
@@ -609,6 +772,8 @@ export interface PartySettlementForPosting {
   branchId?: string | null;
   /** حسابُ النقد — حسابُ البنك/الصندوق حين يُسمّى، و`1000` نقداً. يُمرَّر مُحلّاً من الخدمة. */
   cashAccountId?: string | null;
+  /** البُعدُ التحليلي حين تُسوّى ذمّةُ إيجار (`ق-٩١٧`): وحدةُ العقد — والعقارُ يُشتقّ منها. */
+  unitId?: string | null;
 }
 
 /** سطرُ قيدٍ من مبلغٍ موقَّع: الموجبُ على الجانب المعلَن، والسالبُ على قرينه. */
@@ -648,6 +813,7 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
     branchId: p.branchId ?? null,
     customerId: p.customerId ?? null,
     supplierId: p.supplierId ?? null,
+    ...(p.unitId ? { unitId: p.unitId } : {}),
   });
 }
 

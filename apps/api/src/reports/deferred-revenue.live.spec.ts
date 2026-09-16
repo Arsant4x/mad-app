@@ -50,8 +50,10 @@ async function legacyDeferredRevenue(tenant: TenantPrismaService, companyId: str
   return tenant.runInTenantContext(
     companyId,
     async (tx) => {
+      // ⚠️ على أساس القبض وحدَه (ق-٩٢٧/٢): الشكلُ القديم يقرأ المقبوضَ، وهو أساسُ ما سبق البناء
+      // فقط — والأقساطُ الاستحقاقية تُثبَت بصفوفٍ معلومة الجواب لا بمطابقة شكلٍ لم يعرفها.
       const installments = await tx.installment.findMany({
-        where: { serviceStart: { not: null }, serviceEnd: { not: null } },
+        where: { serviceStart: { not: null }, serviceEnd: { not: null }, accrualBasis: 'LEGACY_COLLECTED' },
         select: {
           dueDate: true,
           serviceStart: true,
@@ -108,6 +110,8 @@ const PROBE = {
   tenant: 'مستأجر مجسّ الإيراد المؤجَّل',
   unitNo: 'DR-A1',
   outstanding: { collected: 1000, recognized: 400, deferred: 600, serviceStart: '2026-01-01', serviceEnd: '2026-01-31' },
+  /** ⑤ قسطٌ على أساس الاستحقاق (ق-٩٢٧/٢): استُحقّ صافياً 1000 واعتُرف بـ250 **ولم يُقبض شيء** ⇒ مؤجَّل **750** يظهر — فالالتزامُ من الاستحقاق لا من القبض. */
+  accrual: { accrued: 1000, recognized: 250, deferred: 750, serviceStart: '2026-06-01', serviceEnd: '2026-06-30' },
   unlinked: 300,
 };
 
@@ -130,6 +134,7 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
     const contract = await tx.contract.create({
       data: { companyId, unitId: unit.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31'), classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' },
     });
+    // الأقساطُ القديمة على أساس القبض — بتاريخ إنشاءٍ يسبق لحظةَ البناء (قيدُ CHECK يحبس القيمةَ القديمة على ما سبق).
     const installment = (dueDate: string, service: { start: string; end: string } | null, baseRecognized: number) =>
       tx.installment.create({
         data: {
@@ -139,6 +144,8 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
           amount: 1000,
           baseAmount: 1000,
           baseRecognized,
+          accrualBasis: 'LEGACY_COLLECTED',
+          createdAt: new Date('2020-01-01T00:00:00Z'),
           serviceStart: service ? new Date(service.start) : null,
           serviceEnd: service ? new Date(service.end) : null,
         },
@@ -151,6 +158,22 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
     const i2 = await installment('2026-02-01', { start: '2026-02-01', end: '2026-02-28' }, 500);
     await installment('2026-03-01', { start: '2026-03-01', end: '2026-03-31' }, 0);
     const i4 = await installment('2026-04-01', null, 0);
+    // ⑤ قسطٌ استحقاقيّ بلا دفعة: الالتزامُ من المستحقّ.
+    await tx.installment.create({
+      data: {
+        companyId,
+        contractId: contract.id,
+        dueDate: new Date('2026-06-01'),
+        amount: 1000,
+        baseAmount: 1000,
+        accrualBasis: 'ACCRUAL',
+        baseAccruedGross: PROBE.accrual.accrued,
+        baseAccruedNet: PROBE.accrual.accrued,
+        baseRecognized: PROBE.accrual.recognized,
+        serviceStart: new Date(PROBE.accrual.serviceStart),
+        serviceEnd: new Date(PROBE.accrual.serviceEnd),
+      },
+    });
     await payment(i1.id, '2026-01-05', 600);
     await payment(i1.id, '2026-01-20', 400);
     await payment(i2.id, '2026-02-05', 500);
@@ -202,18 +225,19 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
     await prisma.$disconnect();
   });
 
-  it('⓪ حارسٌ على المجسّ: منشأةُ المجسّ أُنشئت بأقساطها الأربعة — ووُجدت أكبرُ منشأةٍ في القاعدة', async () => {
+  it('⓪ حارسٌ على المجسّ: منشأةُ المجسّ أُنشئت بأقساطها الخمسة — ووُجدت أكبرُ منشأةٍ في القاعدة', async () => {
     expect(probeCompanyId).not.toBe('');
     const n = await tenant.runInTenantContext(probeCompanyId, (tx) => tx.installment.count());
-    expect(n).toBe(4);
+    expect(n).toBe(5);
     expect(largestCompanyId).not.toBe('');
     expect(largestInstallments).toBeGreaterThanOrEqual(3);
   });
 
-  it('⭐ ② على صفوفٍ معلومة الجواب: صفٌّ واحدٌ مؤجَّلُه 600، والمرشَّحان لا يظهران، وغيرُ المرتبط 300 — والشكلُ القديم يقول الشيءَ نفسَه', async () => {
+  it('⭐ ② على صفوفٍ معلومة الجواب: صفٌّ قديم مؤجَّلُه 600 وصفٌّ استحقاقيّ مؤجَّلُه 750 بلا قبض، والمرشَّحان لا يظهران، وغيرُ المرتبط 300 — والشكلُ القديم يقول الشيءَ نفسَه عن القديم', async () => {
     const current = await reports.deferredRevenue(probeCompanyId);
-    expect(current.outstanding).toHaveLength(1);
-    const row = current.outstanding[0];
+    expect(current.outstanding).toHaveLength(2);
+    const row = current.outstanding.find((r) => r.accrualBasis === 'LEGACY_COLLECTED')!;
+    expect(row).toBeDefined();
     expect(row.contractNo).toBe(PROBE.contractNo);
     expect(row.tenant).toBe(PROBE.tenant);
     expect(row.unitNo).toBe(PROBE.unitNo);
@@ -222,7 +246,17 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
     expect(row.collected).toBe(PROBE.outstanding.collected);
     expect(row.recognized).toBe(PROBE.outstanding.recognized);
     expect(row.deferred).toBe(PROBE.outstanding.deferred);
-    expect(current.totalDeferred).toBe(PROBE.outstanding.deferred);
+
+    // ⭐ الصفُّ الاستحقاقيّ: التزامٌ بلا قبضٍ — من المستحقّ (ق-٩١٧ · ق-٩٢٧/٢).
+    const accrual = current.outstanding.find((r) => r.accrualBasis === 'ACCRUAL')!;
+    expect(accrual).toBeDefined();
+    expect(day(accrual.serviceStart)).toBe(PROBE.accrual.serviceStart);
+    expect(accrual.collected).toBe(0);
+    expect(accrual.accrued).toBe(PROBE.accrual.accrued);
+    expect(accrual.recognized).toBe(PROBE.accrual.recognized);
+    expect(accrual.deferred).toBe(PROBE.accrual.deferred);
+
+    expect(current.totalDeferred).toBe(PROBE.outstanding.deferred + PROBE.accrual.deferred);
     expect(current.unlinked).toHaveLength(1);
     expect(current.unlinked[0].baseNetAmount).toBe(PROBE.unlinked);
     expect(current.unlinked[0].contractNo).toBe(PROBE.contractNo);
@@ -230,8 +264,9 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
 
     const legacy = await legacyDeferredRevenue(tenant, probeCompanyId);
     expect(legacy.installmentsLoaded).toBe(3); // القديمُ يحمّل الثلاثةَ ذاتَ الفترة ليُخرج واحداً — وهذه هي العلّة
-    expect(current.outstanding.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
-    expect(current.totalDeferred).toBe(legacy.totalDeferred);
+    const currentLegacyRows = current.outstanding.filter((r) => r.accrualBasis === 'LEGACY_COLLECTED');
+    expect(currentLegacyRows.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
+    expect(round2(currentLegacyRows.reduce((sum, r) => sum + r.deferred, 0))).toBe(legacy.totalDeferred);
     expect(current.unlinked).toEqual(legacy.unlinked);
     expect(current.totalUnlinked).toBe(legacy.totalUnlinked);
   });
@@ -240,9 +275,11 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
     const legacy = await legacyDeferredRevenue(tenant, largestCompanyId);
     const current = await reports.deferredRevenue(largestCompanyId);
 
-    expect(current.outstanding.length).toBe(legacy.outstanding.length);
-    expect(current.outstanding.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
-    expect(current.totalDeferred).toBe(legacy.totalDeferred);
+    // على أساس القبض وحدَه: الشكلُ القديم لا يعرف الاستحقاق (ق-٩٢٧/٢)، فالمطابقةُ على صفوفه.
+    const currentLegacyRows = current.outstanding.filter((r) => r.accrualBasis === 'LEGACY_COLLECTED');
+    expect(currentLegacyRows.length).toBe(legacy.outstanding.length);
+    expect(currentLegacyRows.map(key).sort()).toEqual(legacy.outstanding.map(key).sort());
+    expect(round2(currentLegacyRows.reduce((sum, r) => sum + r.deferred, 0))).toBe(legacy.totalDeferred);
     expect(current.unlinked).toEqual(legacy.unlinked);
     expect(current.totalUnlinked).toBe(legacy.totalUnlinked);
     // eslint-disable-next-line no-console

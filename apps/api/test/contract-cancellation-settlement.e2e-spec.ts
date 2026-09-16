@@ -25,6 +25,19 @@ describe('Contract cancellation settlement (e2e)', () => {
     return Number(accounts.body.find((a: { code: string }) => a.code === code)?.balance ?? 0);
   }
 
+  /**
+   * ⚖️ **ما يُعكس عند الإلغاء** (`ق-٩٢٥/②`): أقساطٌ حلّت (استُحقّت ذمّةً عند الإنشاء — `ق-٩١٧`)
+   * ولم تُقبض وتُسقَط بالإلغاء ⇒ تُردّ ذمّتُها. فأثرُ الإلغاء على `1200` = التسويةُ − المُسقَطُ
+   * المستحقّ — **ويُحسب من الجدول لا يُكتب رقماً**، فما «حلّ» يتبع الساعةَ الحقيقية.
+   */
+  function accruedVoidedBy(contract: { installments: { dueDate: string; amount: string | number; status: string }[] }, cancelDate: string) {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    return contract.installments
+      .filter((i) => i.status !== 'PAID' && new Date(i.dueDate) >= new Date(cancelDate) && new Date(i.dueDate) <= today)
+      .reduce((sum, i) => sum + Number(i.amount), 0);
+  }
+
   /** A fresh property/unit/contract per case: cancellation is terminal, so no
    * two cases can share one lease. */
   async function makeContract() {
@@ -91,11 +104,19 @@ describe('Contract cancellation settlement (e2e)', () => {
     expect(res.body.settlementEntryId).toBeTruthy();
 
     // A receivable, not cash: agreeing the settlement and collecting it are
-    // separate events.
-    expect((await balance('1200')) - receivableBefore).toBeCloseTo(2000);
+    // separate events. (والمُسقَطُ المستحقّ يُعكس في النداء نفسِه — ق-٩٢٥/②.)
+    expect((await balance('1200')) - receivableBefore).toBeCloseTo(2000 - accruedVoidedBy(contract, '2026-06-30'), 2);
     expect((await balance('4300')) - otherIncomeBefore).toBeCloseTo(2000);
-    // The line that matters most.
-    expect(await balance('4200')).toBeCloseTo(rentRevenueBefore);
+    // The line that matters most: the settlement entry itself never touches 4200.
+    // (والإلغاءُ يعترف بما قُدِّم حتى تاريخه على المسار القائم — `ق-٤٦٩` — فرصيدُ `4200`
+    // يتحرّك بالخدمة المقدَّمة لا بالتسوية؛ فيُقرأ قيدُ التسوية نفسُه لا الرصيد.)
+    const journal = (await request(app.getHttpServer()).get('/journal').query({ search: contract.no, pageSize: 100 }).set('Authorization', `Bearer ${token}`).expect(200)).body as {
+      items: { id: string; lines: { account: { code: string } }[] }[];
+    };
+    const settlementEntry = journal.items.find((e) => e.id === res.body.settlementEntryId);
+    expect(settlementEntry).toBeDefined();
+    expect(settlementEntry!.lines.map((l) => l.account.code).sort()).toEqual(['1200', '4300']);
+    expect(rentRevenueBefore).toBeDefined();
   }, 40000);
 
   it('[SPEC 16.9] computes the settlement from the next N unpaid installments', async () => {
@@ -116,7 +137,7 @@ describe('Contract cancellation settlement (e2e)', () => {
 
     // 12,000 a year over 12 monthly installments = 1,000 each.
     expect(Number(res.body.settlementAmount)).toBeCloseTo(2000);
-    expect((await balance('1200')) - receivableBefore).toBeCloseTo(2000);
+    expect((await balance('1200')) - receivableBefore).toBeCloseTo(2000 - accruedVoidedBy(contract, '2026-06-30'), 2);
   }, 40000);
 
   it('[SPEC 16.5 16.9] computes "all" from every installment still unpaid from the cancel date', async () => {
@@ -149,7 +170,8 @@ describe('Contract cancellation settlement (e2e)', () => {
 
     expect(res.body.settlementAmount).toBeNull();
     expect(res.body.settlementEntryId).toBeNull();
-    expect(await balance('1200')).toBeCloseTo(receivableBefore);
+    // لا تسويةَ — ويبقى عكسُ المُسقَط المستحقّ وحدَه على الذمّة.
+    expect((await balance('1200')) - receivableBefore).toBeCloseTo(-accruedVoidedBy(contract, '2026-06-30'), 2);
     expect(await balance('4300')).toBeCloseTo(otherIncomeBefore);
   }, 40000);
 

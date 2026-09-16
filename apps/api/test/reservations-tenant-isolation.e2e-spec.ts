@@ -71,7 +71,8 @@ describe('Reservations (e2e)', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ unitId: unit.id, name: 'محاولة حجز', expiryDate: '2036-01-01' })
       .expect(409);
-  });
+    // عقدٌ من 2020: ما حلّ من أقساطه يُستحقّ عند الإنشاء قيداً قيداً (ق-٩١٧) — فالمهلةُ أطول من الافتراض.
+  }, 120000);
 
   it('[SPEC 16.6] rejects a contract on a reserved unit under a different name, but converts the reservation when the name matches', async () => {
     const unit = await setupUnit(tokenA);
@@ -106,7 +107,8 @@ describe('Reservations (e2e)', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ unitId: unit.id, name: 'شخص جديد', expiryDate: '2030-01-01' })
       .expect(409);
-  });
+    // عقدُ 2026 يستحقّ أقساطَه التي حلّت عند الإنشاء (ق-٩١٧) — فالمهلةُ أطول من الافتراض.
+  }, 60000);
 
   it('cancelling a reservation frees the unit up for a new reservation', async () => {
     const unit = await setupUnit(tokenA);

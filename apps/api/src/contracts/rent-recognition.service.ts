@@ -34,6 +34,9 @@ import { recognitionSchedule, recognitionShareLabel } from '../journal/rent-reco
  * ⚠️ **ومثيلان من الخادم يشغّلانها مرّتين** — **وهو غيرُ ضارٍّ بالبناء**: الهدفُ
  * التراكميّ يجعل الثانيةَ لا تُرحّل شيئاً، تماماً كخاصّية `escalation`.
  */
+/** مهلةُ معاملةِ الكنس الدفعيّ (الاعترافُ والاستحقاق) — يقرأ منها `RentAccrualService` أيضاً. */
+export const BATCH_TX_OPTIONS = { timeout: 600_000, maxWait: 30_000 };
+
 @Injectable()
 export class RentRecognitionService {
   private readonly logger = new Logger(RentRecognitionService.name);
@@ -50,7 +53,13 @@ export class RentRecognitionService {
    * هدفٌ تراكميّ، **والمُرحَّلُ فرقُه عمّا سبق** — فلا يُعاد ولا يُنسى.
    */
   async runForCompany(companyId: string, asOf: Date = new Date()): Promise<{ entries: number; recognized: number }> {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => recognizeDueWithinTx(tx, companyId, asOf));
+    // كنسٌ دفعيّ لا طلبٌ: قيدٌ لكلِّ شهرٍ لكلِّ قسطٍ قائم — فمهلتُه مهلةُ دفعةٍ لا خمسُ ثوانٍ.
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => recognizeDueWithinTx(tx, companyId, asOf), BATCH_TX_OPTIONS);
+  }
+
+  /** عقدٌ واحد — للاختبارات وللمسارات التي تعرف عقدَها. */
+  async runForContract(companyId: string, contractId: string, asOf: Date = new Date()): Promise<{ entries: number; recognized: number }> {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => recognizeDueWithinTx(tx, companyId, asOf, contractId), BATCH_TX_OPTIONS);
   }
 
   /**
@@ -94,14 +103,33 @@ export async function recognizeDueWithinTx(
   asOf: Date,
   contractId?: string,
 ): Promise<{ entries: number; recognized: number }> {
-  // مرشّحون: أقساطٌ بدأت خدمتُها، وقُبض منها أكثرُ ممّا اعتُرف به.
+  // مرشّحون: أقساطٌ بدأت خدمتُها، وأساسُها (المستحقُّ أو المقبوض) أكثرُ ممّا اعتُرف به —
+  // **يُرشَّحون في القاعدة لا في العميل** (ق-٧٠٦ بروحه): كان الكنسُ يحمّل كلَّ قسطٍ بدأت خدمتُه
+  // بدفعاته (عشراتُ الآلاف على التطوير) ليُخرج بضعةً، فيقترب من مهلة معاملة العزل (ق-٧٠٤).
+  const ids = await tx.$queryRaw<{ id: string }[]>`
+    SELECT i.id
+    FROM "contract_installments" i
+    LEFT JOIN (
+      SELECT p."installmentId", SUM(p."baseNetAmount") AS collected
+      FROM "rent_payments" p
+      WHERE p."companyId" = ${companyId} AND p."installmentId" IS NOT NULL
+      GROUP BY p."installmentId"
+    ) p ON p."installmentId" = i.id
+    WHERE i."companyId" = ${companyId}
+      AND i."serviceStart" IS NOT NULL AND i."serviceStart" <= ${asOf}
+      AND i."serviceEnd" IS NOT NULL
+      ${contractId ? Prisma.sql`AND i."contractId" = ${contractId}` : Prisma.empty}
+      AND (CASE WHEN i."accrualBasis" = 'ACCRUAL' THEN i."baseAccruedNet" ELSE COALESCE(p.collected, 0) END) > i."baseRecognized"
+  `;
   const candidates = await tx.installment.findMany({
-    where: { serviceStart: { not: null, lte: asOf }, serviceEnd: { not: null }, ...(contractId ? { contractId } : {}) },
+    where: { id: { in: ids.map((r) => r.id) } },
     select: {
       id: true,
       serviceStart: true,
       serviceEnd: true,
       baseRecognized: true,
+      accrualBasis: true,
+      baseAccruedNet: true,
       contract: { select: { no: true, tenant: true, unitId: true, customerId: true } },
       payments: { select: { baseNetAmount: true } },
     },
@@ -111,14 +139,15 @@ export async function recognizeDueWithinTx(
   let recognized = 0;
 
   for (const i of candidates) {
-    const collected = round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
-    if (collected <= 0) continue;
+    // الأساسُ: المستحقُّ صافياً لقسطٍ على أساس الاستحقاق، والمقبوضُ لما سبق البناء (ق-٩٢٧/٢).
+    const basis = recognitionBasis(i);
+    if (basis <= 0) continue;
 
     const period = { start: i.serviceStart!, end: i.serviceEnd! };
     let already = Number(i.baseRecognized);
-    if (already >= collected) continue;
+    if (already >= basis) continue;
 
-    for (const step of recognitionSchedule(period, collected, asOf)) {
+    for (const step of recognitionSchedule(period, basis, asOf)) {
       const delta = round2(step.cumulative - already);
       if (delta <= 0) continue;
 
@@ -158,15 +187,24 @@ export async function recognizeDueWithinTx(
 export async function outstandingDeferredWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<number> {
   const installments = await tx.installment.findMany({
     where: { contractId },
-    select: { baseRecognized: true, payments: { select: { baseNetAmount: true } } },
+    select: { baseRecognized: true, accrualBasis: true, baseAccruedNet: true, payments: { select: { baseNetAmount: true } } },
   });
 
-  return round2(
-    installments.reduce((sum, i) => {
-      const collected = i.payments.reduce((s, p) => s + Number(p.baseNetAmount), 0);
-      return sum + Math.max(0, collected - Number(i.baseRecognized));
-    }, 0),
-  );
+  return round2(installments.reduce((sum, i) => sum + Math.max(0, recognitionBasis(i) - Number(i.baseRecognized)), 0));
+}
+
+/**
+ * **أساسُ الاعتراف لقسطٍ** (`ق-٩٢٧/٢`): **المستحقُّ صافياً** على أساس الاستحقاق (`ق-٩١٧`:
+ * الاستحقاقُ ينقل لحظةَ القيد ولا يغيّر مبدأَ الاعتراف)، **والمقبوضُ** لقسطٍ سبق البناءَ
+ * (`LEGACY_COLLECTED`) — دالّةٌ واحدة يقرأ منها الكنسُ والإلغاءُ والإقفال.
+ */
+export function recognitionBasis(i: {
+  accrualBasis: 'ACCRUAL' | 'LEGACY_COLLECTED';
+  baseAccruedNet: Prisma.Decimal | number;
+  payments: { baseNetAmount: Prisma.Decimal | number }[];
+}): number {
+  if (i.accrualBasis === 'ACCRUAL') return round2(Number(i.baseAccruedNet));
+  return round2(i.payments.reduce((sum, p) => sum + Number(p.baseNetAmount), 0));
 }
 
 /**
@@ -180,12 +218,12 @@ export async function outstandingDeferredWithinTx(tx: Prisma.TransactionClient, 
 export async function closeDeferredWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<void> {
   const installments = await tx.installment.findMany({
     where: { contractId },
-    select: { id: true, baseRecognized: true, payments: { select: { baseNetAmount: true } } },
+    select: { id: true, baseRecognized: true, accrualBasis: true, baseAccruedNet: true, payments: { select: { baseNetAmount: true } } },
   });
 
   for (const i of installments) {
-    const collected = round2(i.payments.reduce((s, p) => s + Number(p.baseNetAmount), 0));
-    if (collected <= Number(i.baseRecognized)) continue;
-    await tx.installment.update({ where: { id: i.id }, data: { baseRecognized: new Prisma.Decimal(collected) } });
+    const basis = recognitionBasis(i);
+    if (basis <= Number(i.baseRecognized)) continue;
+    await tx.installment.update({ where: { id: i.id }, data: { baseRecognized: new Prisma.Decimal(basis) } });
   }
 }
