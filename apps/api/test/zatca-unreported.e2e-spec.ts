@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { requeueFailedWithinTx } from '../src/outbox/outbox.service';
@@ -43,7 +44,8 @@ describe('ZATCA unreported report + requeue (e2e)', () => {
   // التطبيق — وافتراضُ `jest` خمسُ ثوانٍ. **ومهلةٌ ضمنيّة تمرّ على قاعدةٍ
   // صغيرة وتسقط حين تكبر**، وهي عائلةُ «الاختبارُ يفترض قاعدةً فارغة» نفسها.
   afterAll(async () => {
-    for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`)).catch(() => undefined);
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, invoiceIds).catch(() => undefined);
     await app.close();
   }, 60000);
 

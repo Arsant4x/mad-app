@@ -179,12 +179,21 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   const allocByInvoice = new Map(allocations.map((a) => [a.invoiceId, Number(a._sum.amount ?? 0)]));
 
   // إشعارات منسوبة لفواتيرها، وأخرى بلا فاتورة (تُطرح من رصيد عميلها).
+  // وإشعارٌ يصحّح إشعاراً (`ق-٩٥٢`: مدينٌ على دائنٍ زائد، دائنٌ على مدينٍ زائد) يُنسب إلى
+  // **فاتورة الجذر** — فالتصحيحُ يعود على ذمّة الفاتورة التي عُدِّلت، لا على الإشعار نفسِه.
+  const noteById = new Map(notes.map((n) => [n.id, n]));
+  const rootInvoiceOf = (relatedId: string): string | null => {
+    let current: string | null = relatedId;
+    for (let hops = 0; current !== null && noteById.has(current) && hops < 8; hops++) current = noteById.get(current)!.relatedInvoiceId;
+    return current;
+  };
   const noteAdjustment = new Map<string, number>();
   const unappliedByCustomer = new Map<string, number>();
   for (const n of notes) {
     const base = Number(n.baseTotal);
     const signed = n.docType === 'CREDIT_NOTE' ? -base : base;
-    if (n.relatedInvoiceId) noteAdjustment.set(n.relatedInvoiceId, (noteAdjustment.get(n.relatedInvoiceId) ?? 0) + signed);
+    const root = n.relatedInvoiceId ? rootInvoiceOf(n.relatedInvoiceId) : null;
+    if (root) noteAdjustment.set(root, (noteAdjustment.get(root) ?? 0) + signed);
     else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);
   }
 

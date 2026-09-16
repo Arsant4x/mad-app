@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * الأوفلاين (مستند §6 v2): «دون فقدان أو تكرار بيانات» حرفياً —
@@ -37,7 +39,8 @@ describe('POS offline sync (e2e)', () => {
 
   afterAll(async () => {
     await auth(request(app.getHttpServer()).post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 0 });
-    for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), invoiceIds);
     await auth(request(app.getHttpServer()).delete(`/products/${productId}`));
     await auth(request(app.getHttpServer()).delete(`/trash/products/${productId}`));
     await app.close();

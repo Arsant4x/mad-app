@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { nextDocumentNumber } from '../src/common/document-sequence.util';
 import { isSequencePortReady } from '../src/common/sequence-allocator';
@@ -255,7 +256,7 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
     expect(n1).toBeGreaterThan(highestBefore);
     expect(n2).toBe(n1 + 1);
 
-    await auth(http().delete(`/invoices/${second.id}`));
-    await auth(http().delete(`/invoices/${first.id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, [second.id, first.id]);
   }, 40000);
 });

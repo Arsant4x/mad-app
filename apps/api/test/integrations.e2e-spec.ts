@@ -5,6 +5,8 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * طبقة التكاملات (المستند: adapters قابلة للاستبدال + «تشفير أي مفاتيح API»):
@@ -43,7 +45,8 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
 
   afterAll(async () => {
     if (shiftId) await auth(request(app.getHttpServer()).post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 0 });
-    for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), invoiceIds);
     if (connectionId) await auth(request(app.getHttpServer()).delete(`/integrations/${connectionId}`));
     await auth(request(app.getHttpServer()).delete(`/products/${productId}`));
     await auth(request(app.getHttpServer()).delete(`/trash/products/${productId}`));

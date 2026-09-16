@@ -8,6 +8,7 @@ import { encryptSecret } from '../src/common/crypto/secret.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * Credit notes as documents: issued against an invoice, never touching it,
@@ -88,16 +89,9 @@ describe('ZATCA credit notes (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    // The chain guard refuses deleting documents with an assigned ICV/hash —
-    // unmark the test rows first (they were never really at the authority).
-    await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.updateMany({ where: { id: { in: createdInvoiceIds } }, data: { zatcaIcv: null, zatcaHash: null, zatcaStatus: 'NOT_SUBMITTED' } }),
-    );
-    // Notes reference their invoices with a Restrict FK — delete newest-first
-    // so every note goes before the invoice it points at.
-    for (const id of [...createdInvoiceIds].reverse()) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣):
+    // الإشعاراتُ قبل فواتيرها، وقيودُها تُعكس.
+    await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     delete process.env.ZATCA_API_BASE_OVERRIDE;
     await app.close();
@@ -191,18 +185,18 @@ describe('ZATCA credit notes (e2e)', () => {
     await issueNote(invoice.id, { reason: '' }).expect(400);
   });
 
-  it('blocks deleting an invoice that has notes, until the notes are deleted first', async () => {
+  it('refuses to delete the invoice and its note alike — both issued, both corrected by a note (ق-٩٤٣ · ق-٩٥٢)', async () => {
     const invoice = await makeInvoice();
     const note = await issueNote(invoice.id).expect(201);
+    createdInvoiceIds.push(note.body.id);
 
-    const blocked = await request(app.getHttpServer()).delete(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).expect(409);
-    expect(blocked.body.message).toContain('creditNotes.invoice_has_notes');
+    // هذه الحزمةُ بلا مرشِّح الترجمة — فالرسالةُ مفتاحُها (النصُّ العربيّ يُطابَق في `issued-invoice-immutable`).
+    const blockedInvoice = await request(app.getHttpServer()).delete(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).expect(409);
+    expect(blockedInvoice.body.message).toContain('invoices.issued_locked');
 
-    // Deleting the note reverses its ledger entry and frees the invoice.
-    await request(app.getHttpServer()).delete(`/invoices/${note.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    await request(app.getHttpServer()).delete(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    // Both already gone — keep afterAll from failing on them.
-    createdInvoiceIds.splice(createdInvoiceIds.indexOf(invoice.id), 1);
+    // الإشعارُ صادرٌ برقمه يدخل السلسلة — ورسالتُه تسمّي الإشعارَ المقابل لا الحذف.
+    const blockedNote = await request(app.getHttpServer()).delete(`/invoices/${note.body.id}`).set('Authorization', `Bearer ${token}`).expect(409);
+    expect(blockedNote.body.message).toContain('creditNotes.immutable');
   });
 
   it('enters the VAT declaration with a flipped sign, cancelling its invoice out', async () => {
@@ -219,7 +213,8 @@ describe('ZATCA credit notes (e2e)', () => {
     // +300 from the invoice, −300 from the note: the pair nets to zero.
     expect(after.body.salesStandard).toBeCloseTo(before.body.salesStandard, 2);
     expect(after.body.salesStandardVat).toBeCloseTo(before.body.salesStandardVat, 2);
-  });
+    // مهلةٌ صريحة: الإقرارُ يقرأ قسمَ الإيجار ويعدّ ما لم يُرحَّل (ق-٩٢٧) — وعلى قاعدة التطوير الكبيرة يجاوز الخمسَ ثوانٍ.
+  }, 30000);
 
   describe('ZATCA submission', () => {
     /** Same stand-in credential as zatca-phase2.e2e-spec.ts: a real secp256k1
@@ -282,7 +277,7 @@ describe('ZATCA credit notes (e2e)', () => {
       // position is burned either way. Deleting it would leave the next
       // document chained onto a hash that no longer exists locally.
       const res = await request(app.getHttpServer()).delete(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).expect(409);
-      expect(res.body.message).toContain('zatca.invoice_chain_locked');
+      expect(res.body.message).toContain('invoices.issued_locked');
     }, 30000);
 
     it('freezes a CLEARED invoice against data edits, while REJECTED stays fixable and payment status stays free', async () => {
@@ -306,7 +301,7 @@ describe('ZATCA credit notes (e2e)', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({ lines: [{ description: 'تلاعب بعد التصديق', quantity: 1, unitPrice: 1, taxRate: 15 }] })
         .expect(409);
-      expect(frozen.body.message).toContain('zatca.invoice_cleared_locked');
+      expect(frozen.body.message).toContain('invoices.issued_locked');
       await request(app.getHttpServer()).patch(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(200);
     }, 30000);
   });

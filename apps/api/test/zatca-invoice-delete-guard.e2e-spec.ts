@@ -9,6 +9,7 @@ import * as x509 from '@peculiar/x509';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * Deleting a document that holds a ZATCA chain link would leave a gap the
@@ -162,22 +163,24 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
         data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
       }),
     );
-    for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     delete process.env.ZATCA_API_BASE_OVERRIDE;
     await app.close();
   });
 
-  it('still deletes an invoice that was never submitted', async () => {
+  it('refuses to delete an issued invoice that was never submitted — issued is issued, stamped or not (ق-٩٤٣)', async () => {
     const id = await makeInvoice();
-    await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    createdInvoiceIds.splice(createdInvoiceIds.indexOf(id), 1);
+    // ⚖️ كانت هذه الحالةُ تمرّ («لم تُرسَل قطّ فتُحذف») — والحكمُ: الحذفُ كالتعديل، فالعميلُ
+    // يحمل رقمَها والتسلسلُ يفقده (ق-٩٤٥/٣)؛ والرسالةُ تسمّي المخرج (ق-٢٦٥).
+    const res = await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(409);
+    expect(res.body.message).toContain('صدرت');
+    expect(res.body.message).toContain('إشعار دائن');
 
     const list = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200);
-    expect(list.body.some((inv: { id: string }) => inv.id === id)).toBe(false);
-  });
+    expect(list.body.some((inv: { id: string }) => inv.id === id)).toBe(true);
+  }, 30000);
 
   it('refuses to delete a REJECTED invoice whose chain link was recorded', async () => {
     const id = await makeInvoice();

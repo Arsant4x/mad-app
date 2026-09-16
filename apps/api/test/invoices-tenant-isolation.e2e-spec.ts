@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * Same proof as tenant-isolation.e2e-spec.ts, but for the Invoices feature:
@@ -74,6 +76,8 @@ describe('Invoices tenant isolation (e2e)', () => {
     const stillDue = resA.body.find((i: { id: string }) => i.id === invoiceId);
     expect(stillDue.status).toBe('DUE');
 
-    await request(app.getHttpServer()).delete(`/invoices/${invoiceId}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // الصادرُ لا يُحذف عبر الواجهة ولو من صاحبه (ق-٩٤٣) — 409 لا 204؛ والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await request(app.getHttpServer()).delete(`/invoices/${invoiceId}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(tokenA), [invoiceId]);
   }, 15000);
 });

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
@@ -103,9 +104,8 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
   }, 60000);
 
   afterAll(async () => {
-    for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${ownerToken}`);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyAId, createdInvoiceIds);
     // ⚠️ **والمشتقُّ يُحذف مع أصله** (`ق-٤٩٥`): حذفُ الدرج يحذف حسابَه في
     //    الدليل — وتركُه يُراكم حساباتٍ في نطاق الأدراج حتى ينفد النطاق.
     for (const id of createdQuoteIds) {

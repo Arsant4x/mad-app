@@ -12,6 +12,7 @@ import { defaultUnitSerial } from '../src/zatca/egs-unit.util';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * Phase 2 cannot clear a real invoice without a certificate issued by the
@@ -133,9 +134,8 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
         data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
       }),
     );
-    for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     for (const id of createdCompanyUserIds) {
       await request(app.getHttpServer()).delete(`/company-users/${id}`).set('Authorization', `Bearer ${token}`);
     }

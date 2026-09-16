@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
@@ -52,7 +54,8 @@ describe('Archive (e2e)', () => {
   afterAll(async () => {
     // Unarchive so cleanup deletes work through the normal paths.
     await auth(request(app.getHttpServer()).patch(`/customers/${customerId}/archive`)).send({ archived: false });
-    await auth(request(app.getHttpServer()).delete(`/invoices/${invoiceId}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), company.companyId, [invoiceId]);
     await auth(request(app.getHttpServer()).delete(`/customers/${customerId}`));
     await auth(request(app.getHttpServer()).delete(`/banks/${bankId}`));
     // Purge from trash too, keeping the dev DB tidy.

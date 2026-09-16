@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * 4.9 — عروض الأسعار والتحويل بنقرة: بنود تحقق الموجز السبعة + شرطا
@@ -53,7 +55,8 @@ describe('Quotes → invoice conversion (e2e)', () => {
   }, 60000);
 
   afterAll(async () => {
-    for (const id of cleanupInvoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), cleanupInvoiceIds);
     // ⚠️ **ولا يُترك عميلٌ محدودٌ خلفنا** — **وهذا جديدٌ بجدّة الحدّ نفسِه**:
     //    كان تركُه بلا أثرٍ يومَ لم يكن للحقل قارئ، **وصار اليوم يُسقط مجموعةً
     //    أخرى** تأخذ `customers[0]` بلا ترشيح. **وقد قِيس** — سقطت ثلاثٌ على
