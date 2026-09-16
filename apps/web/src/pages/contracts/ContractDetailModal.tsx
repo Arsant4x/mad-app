@@ -18,6 +18,7 @@ import {
   type SettlementBasis,
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
+import { formatMoney, round2 } from '../../lib/money';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
@@ -33,14 +34,43 @@ const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeC
   CANCELLED: { label: 'ملغية', badgeClass: 'draft' },
 };
 
+/** الإجماليُّ الذي يدين به المستأجر عن قسطٍ — بحسب الشمول (م٤٥/٢ · ق-٩١٨): غيرُ الشامل يزيد 15%. */
+function suggestedGross(contract: { classification: string; vatInclusion: string }, amount: string | number | undefined): string {
+  if (amount === undefined || amount === null || amount === '') return '';
+  const a = Number(amount);
+  // التدويرُ من `lib/money` وحده (كنسةُ التدوير — ق-٦٥ بروحها): لا تدويرَ خام في الشاشات.
+  if (contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE') return formatMoney(round2(a * 1.15));
+  return formatMoney(a);
+}
+
+/** نصُّ الإعلان في شاشة القبض — الشاملُ وغيرُ الشامل والمعفى، بأرقامها (ق-٩٢٧/②). */
+function paymentDeclaration(contract: { classification: string; vatInclusion: string }, amount: string | number | undefined): string | null {
+  if (amount === undefined || amount === null || amount === '') return null;
+  const a = Number(amount);
+  if (contract.classification === 'RESIDENTIAL') return `عقدٌ سكنيّ معفى — المبلغُ المقترَح هو القسطُ ${formatMoney(a)} بلا ضريبة.`;
+  if (contract.classification !== 'COMMERCIAL') return 'عقدٌ قديم بلا تصنيف — لا تُحسب له ضريبةٌ حتى يُصنَّف من بطاقته؛ والقبضُ على المسار القائم.';
+  if (contract.vatInclusion === 'INCLUSIVE') {
+    const tax = round2((a * 15) / 115);
+    return `قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
+  }
+  if (contract.vatInclusion === 'EXCLUSIVE') {
+    const tax = round2(a * 0.15);
+    return `قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
+  }
+  return 'عقدٌ قديم غيرُ معلَنِ الشمول — لا تُحسب له ضريبةٌ حتى يُعلَن من بطاقته.';
+}
+
 function PaymentForm({
   banks,
   defaultAmount,
+  declaration,
   onCancel,
   onSubmit,
 }: {
   banks: Bank[];
   defaultAmount: string;
+  /** ⭐ الشاملُ وغيرُ الشامل يُعلنان في شاشة القبض — فالمقترَحُ إجماليٌّ لا قسط (ق-٩٢٧/②). */
+  declaration?: string | null;
   onCancel: () => void;
   onSubmit: (dto: RecordPaymentInput) => Promise<void>;
 }) {
@@ -82,6 +112,11 @@ function PaymentForm({
 
   return (
     <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
+      {declaration && (
+        <p className="hint" style={{ marginBottom: 8 }}>
+          {declaration}
+        </p>
+      )}
       <div className="two-col">
         <div className="field">
           <label>تاريخ الدفعة</label>
@@ -642,7 +677,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             )}
             <PaymentForm
               banks={banks}
-              defaultAmount={payingInstallmentId !== 'free' ? (contract.installments.find((i) => i.id === payingInstallmentId)?.amount ?? '') : ''}
+              defaultAmount={payingInstallmentId !== 'free' ? suggestedGross(contract, contract.installments.find((i) => i.id === payingInstallmentId)?.amount) : ''}
+              declaration={payingInstallmentId !== 'free' ? paymentDeclaration(contract, contract.installments.find((i) => i.id === payingInstallmentId)?.amount) : null}
               onCancel={() => setPayingInstallmentId(null)}
               onSubmit={handlePayment}
             />

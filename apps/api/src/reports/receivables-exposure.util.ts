@@ -68,7 +68,81 @@ export interface ExposureRow {
  * ⚠️ **و`tx` معاملةُ المستدعي**: فمن يقرأ التعرّضَ **داخل معاملة إنشاء فاتورة**
  * يرى ما تراه معاملتُه — **ولا تُفتح معاملةٌ ثانية** (`ق-٣٥٩`).
  */
-export async function customerExposure(tx: Prisma.TransactionClient, filter: ExposureFilter): Promise<ExposureRow[]> {
+/** قسطُ إيجارٍ استُحقّ ولم يُقبض — الصفُّ الثاني في الأعمار (`ق-٩٢٥/④`). */
+export interface RentReceivableRow {
+  customerId: string;
+  customerName: string;
+  contractNo: string;
+  tenant: string;
+  unitNo: string | null;
+  installmentId: string;
+  dueDate: Date;
+  /** ما استُحقّ إجمالاً (موقَّعاً — الخصمُ والعكسُ يُنقصانه) حتى تاريخ القياس. */
+  accrued: number;
+  /** ما سُدِّد منه بسعر العقد — كما خُفِّض `1200`. */
+  paid: number;
+  remaining: number;
+  bucket: 'current' | 'd1' | 'd31' | 'd61' | 'd90';
+}
+
+/**
+ * **ذممُ الإيجار** — أقساطٌ على أساس الاستحقاق (`ق-٩١٧`) استُحقّت حتى `asOf` ولم تُسدَّد كلُّها.
+ *
+ * المتبقّي = مجموعُ صفوف الاستحقاق (موقَّعةً) − ما سُدِّد **بسعر العقد** — وهو ما رحّله قيدُ القبض على
+ * `1200` (`postPartySettlementEntry`: الذمّةُ بسعر مستندها وفرقُ الصرف على `5600`)، فالمطابقةُ تصحّ
+ * رياضياً. والعمرُ من `dueDate`؛ والمقدَّمةُ استُحقّت وسُدِّدت في يومها فلا تظهر. **وعلى مستوى المنشأة
+ * لا الفرع**: العقودُ بلا فرع، فلا تدخل تقريرَ فرعٍ بعينه ولا تقريرَ قارئٍ مقصورٍ على فروعه.
+ */
+export async function rentReceivables(tx: Prisma.TransactionClient, filter: ExposureFilter): Promise<RentReceivableRow[]> {
+  if (filter.allowedBranchIds !== 'all' || filter.branchId) return [];
+  const { asOf } = filter;
+  const installments = await tx.installment.findMany({
+    where: {
+      accrualBasis: 'ACCRUAL',
+      contract: { customerId: filter.customerId ? filter.customerId : { not: null } },
+      accruals: { some: { date: { lte: asOf } } },
+    },
+    select: {
+      id: true,
+      dueDate: true,
+      contract: {
+        select: { no: true, tenant: true, customerId: true, currency: true, exchangeRate: true, customer: { select: { name: true } }, unit: { select: { unitNo: true } } },
+      },
+      accruals: { where: { date: { lte: asOf } }, select: { baseGross: true } },
+      payments: { where: { date: { lte: asOf } }, select: { netAmount: true, baseNetAmount: true, currency: true } },
+    },
+    orderBy: { dueDate: 'asc' },
+  });
+
+  const rows: RentReceivableRow[] = [];
+  for (const i of installments) {
+    const c = i.contract;
+    if (!c.customerId || !c.customer) continue;
+    const rate = Number(c.exchangeRate) || 1;
+    const accrued = round2(i.accruals.reduce((s, a) => s + Number(a.baseGross), 0));
+    const paid = round2(i.payments.reduce((s, p) => s + (p.currency === c.currency ? round2(Number(p.netAmount) * rate) : Number(p.baseNetAmount)), 0));
+    const remaining = round2(accrued - paid);
+    if (Math.abs(remaining) < 0.005) continue;
+    const days = Math.floor((asOf.getTime() - new Date(i.dueDate).getTime()) / 86400000);
+    const bucket = days <= 0 ? 'current' : days <= 30 ? 'd1' : days <= 60 ? 'd31' : days <= 90 ? 'd61' : 'd90';
+    rows.push({
+      customerId: c.customerId,
+      customerName: c.customer.name,
+      contractNo: c.no,
+      tenant: c.tenant,
+      unitNo: c.unit?.unitNo ?? null,
+      installmentId: i.id,
+      dueDate: i.dueDate,
+      accrued,
+      paid,
+      remaining,
+      bucket,
+    });
+  }
+  return rows;
+}
+
+export async function customerExposure(tx: Prisma.TransactionClient, filter: ExposureFilter, rentSink?: RentReceivableRow[]): Promise<ExposureRow[]> {
   const { asOf } = filter;
   const branchWhere = requestedBranchFilter(filter.allowedBranchIds, filter.branchId);
   const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
@@ -154,6 +228,14 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
     else if (days <= 90) r.d61 += remaining;
     else r.d90 += remaining;
   }
+
+  // ذممُ الإيجار تدخل شرائحَ عميلها (ق-٩٢٥/④) — فحدُّ الائتمان والأعمارُ يقرآن رقماً واحداً (ق-٣٤١).
+  const rent = await rentReceivables(tx, filter);
+  for (const r of rent) {
+    const row = rowFor(r.customerId, r.customerName);
+    row[r.bucket] += r.remaining;
+  }
+  if (rentSink) rentSink.push(...rent);
 
   for (const [customerId, amount] of unappliedByCustomer) {
     if (Math.abs(amount) < 0.005) continue;

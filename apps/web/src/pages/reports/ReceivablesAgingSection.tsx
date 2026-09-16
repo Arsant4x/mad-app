@@ -158,6 +158,59 @@ export function ReceivablesAgingSection() {
         </table>
       </div>
 
+      {/* ⭐ الصفُّ الثاني (ق-٩٢٥/④): أقساطُ إيجارٍ استُحقّت ذمّةً ولم تُقبض — قسطاً قسطاً بعمره؛
+          وهي مضمَّنةٌ في شرائح عميلها أعلاه وفي المطابقة، فتقريرٌ يسمّي الحقيقةَ «فرقاً غير منسوب» أسوأُ من نقصه. */}
+      <div className="card" style={{ padding: 0, marginTop: 12 }}>
+        <div style={{ padding: '10px 12px', fontWeight: 600 }}>
+          أقساطُ الإيجار المستحقّة غيرُ المقبوضة
+          <span className="hint" style={{ fontWeight: 400, marginInlineStart: 8 }}>{report.rentNote}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>المستأجر</th>
+              <th>العقد</th>
+              <th>الوحدة</th>
+              <th>الاستحقاق</th>
+              <th>المستحقّ</th>
+              <th>المسدَّد</th>
+              <th>المتبقّي</th>
+              <th>الشريحة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.rentRows.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <div className="empty-state">لا أقساط إيجار مستحقّة غير مقبوضة حتى هذا التاريخ</div>
+                </td>
+              </tr>
+            )}
+            {report.rentRows.map((r) => (
+              <tr key={r.installmentId}>
+                <td>{r.customerName}</td>
+                <td>{r.contractNo}</td>
+                <td>{r.unitNo ?? '—'}</td>
+                <td>{r.dueDate.slice(0, 10)}</td>
+                <td className="num">{fmt(r.accrued)}</td>
+                <td className="num">{fmt(r.paid)}</td>
+                <td className="num" style={{ fontWeight: 700 }}>{fmt(r.remaining)}</td>
+                <td>{{ current: 'جارٍ', d1: '1-30', d31: '31-60', d61: '61-90', d90: 'أكثر من 90' }[r.bucket]}</td>
+              </tr>
+            ))}
+          </tbody>
+          {report.rentRows.length > 0 && (
+            <tfoot>
+              <tr>
+                <td colSpan={6} style={{ fontWeight: 700 }}>مجموع ذمم الإيجار</td>
+                <td className="num" style={{ fontWeight: 700 }}>{fmt(t.rent)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+
       {/* سطر التسوية: يظهر عند الطلب وحده. المطابقة طمأنةٌ تُعرض كما يُعرض
           الفرق — والفرق واقعٌ يحتاج تفسيراً لا خطأٌ يُنبَّه عليه. */}
       {rec && (

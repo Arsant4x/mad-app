@@ -30,6 +30,10 @@ export interface CashFlow {
   netProfit: number;
   receivablesChange: number;
   payablesChange: number;
+  /** Δ2400 — قبضٌ يُؤجَّل (كان ناقصاً منذ بُني الإيراد المؤجَّل — ق-٩٢٣). */
+  deferredRevenueChange: number;
+  /** Δ2200 — ضريبةٌ مستحقّة لم تُسدَّد. */
+  outputVatChange: number;
   operatingCashFlow: number;
   fixedAssetChange: number;
   netCashChange: number;
@@ -173,12 +177,29 @@ export interface AgingRow {
   total: number;
 }
 
+/** قسطُ إيجارٍ استُحقّ ولم يُقبض — الصفُّ الثاني في الأعمار (ق-٩٢٥/④). */
+export interface RentAgingRow {
+  customerId: string;
+  customerName: string;
+  contractNo: string;
+  tenant: string;
+  unitNo: string | null;
+  installmentId: string;
+  dueDate: string;
+  accrued: number;
+  paid: number;
+  remaining: number;
+  bucket: 'current' | 'd1' | 'd31' | 'd61' | 'd90';
+}
+
 export interface AgingReport {
   asOf: string;
   branchId: string | null;
   customerId: string | null;
   rows: AgingRow[];
-  totals: Omit<AgingRow, 'customerId' | 'customerName'>;
+  rentRows: RentAgingRow[];
+  rentNote: string;
+  totals: Omit<AgingRow, 'customerId' | 'customerName'> & { rent: number };
   /** يُحسب عند الطلب فقط — مسح الدفتر أثقل من التقرير نفسه. */
   reconciliation: { ledgerBalance: number; reportTotal: number; difference: number; accountMissing: boolean } | null;
 }

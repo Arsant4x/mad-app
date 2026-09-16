@@ -136,6 +136,22 @@ export function ContractModal({
                 </option>
               ))}
             </select>
+            {/* ⚠️ يُعلَن عند الاختيار لا بعده (ق-٩١٨): الشاملُ يُنقص الإيرادَ عن القسط، وغيرُ الشامل يزيد ما يدين به المستأجر. */}
+            {classification === 'COMMERCIAL' && vatInclusion === 'INCLUSIVE' && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                شاملةٌ للضريبة: الضريبةُ 15/115 من كلِّ قسط — <b>فالإيرادُ أقلُّ من القسط</b>، والمستأجرُ يدفع القسطَ نفسَه.
+              </p>
+            )}
+            {classification === 'COMMERCIAL' && vatInclusion === 'EXCLUSIVE' && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                غيرُ شاملة: تُضاف 15% فوق كلِّ قسط — <b>فما يدين به المستأجرُ أكثرُ من القسط</b>، والإيرادُ هو القسط.
+              </p>
+            )}
+            {classification === 'RESIDENTIAL' && vatInclusion !== '' && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                سكنيٌّ معفى: لا ضريبةَ على الأقساط — يدخل الإقرارَ في صفّ المبيعات المعفاة.
+              </p>
+            )}
           </div>
         </div>
         <div className="two-col">

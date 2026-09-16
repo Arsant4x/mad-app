@@ -365,6 +365,7 @@ model Company {
   installments     Installment[]
   rentPayments     RentPayment[]
   rentAccruals     RentAccrual[]
+  vatReturnFilings VatReturnFiling[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -3590,6 +3591,30 @@ model RentAccrual {
   @@index([installmentId])
   @@index([contractId])
   @@map("rent_accruals")
+}
+
+/// **بلا أبٍ** — كيانٌ جذريّ يملكه التاجر: وسمٌ يضعه على ربع سنةٍ ويرفعه بنفسه، ولا مستندَ يحذفه معه.
+///
+/// ⭐ **علَمُ «قُدِّم» على ربع السنة** (`ق-٩١٩`): سطرٌ واحد يضعه التاجرُ بيده — فالنظامُ لا يعرف ما
+/// قُدِّم للهيئة. بلاه تُعرض رسالةُ التصحيح لكلِّ ربعٍ تغيّر رقمُه فتصير ضجيجاً يُتجاهَل؛ وبه تُعرض
+/// لمن قدّم وحدَه، مع صافي ما قُدِّم لتُقارَن به قراءةُ اليوم (م٦٣: تصحيحٌ خلال عشرين يوماً من العلم،
+/// ودون 15,000 ريال يجوز إدراجُه في الإقرار التالي).
+model VatReturnFiling {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  year    Int
+  quarter Int
+  /// لحظةُ الوسم — التاجرُ يضعه بعد التقديم فعلاً.
+  filedAt DateTime @default(now())
+  /// صافي الضريبة كما قرأته الشاشةُ لحظةَ الوسم — المرجعُ الذي يُقاس عليه «تغيّر بعد التقديم».
+  netVat  Decimal  @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, year, quarter])
+  @@map("vat_return_filings")
 }
 
 /// A storage location. `manager` is a free-text name, not a real Employee FK

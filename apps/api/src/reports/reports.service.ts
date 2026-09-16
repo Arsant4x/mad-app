@@ -5,9 +5,10 @@ import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { writeOffReason } from '../common/writeoff-reasons';
 import { deadlineView } from '../invoices/note-deadline.util';
+import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
-import { customerExposure } from './receivables-exposure.util';
+import { customerExposure, RentReceivableRow } from './receivables-exposure.util';
 
 interface Movement {
   debit: number;
@@ -22,7 +23,16 @@ const CASH_FLOW_ACCOUNTS = [
   { code: '1200', name: 'الذمم المدينة' },
   { code: '2100', name: 'الذمم الدائنة' },
   { code: '1400', name: 'الأصول الثابتة' },
+  /** ضريبةُ المخرجات المستحقّة — التزامٌ لم يُسدَّد بعد (`ق-٩٢٥/③`). */
+  { code: '2200', name: 'ضريبة القيمة المضافة المستحقة' },
 ];
+
+/**
+ * الإيرادُ المؤجَّل — التزامٌ ينشأ عند الاستحقاق ويُقبض قبل أن يُعترَف به: **كان ناقصاً من التدفّق
+ * منذ بُني** (`ق-٩٢٣` — ثقبٌ قائم لا أثرٌ للاستحقاق). يُنشأ عند أوّل حاجة (`ق-٤٧١`) فغيابُه ليس
+ * نقصاً في الدليل يُعلَن، بل صفرٌ صادق. ورمزُه من ملفّه وحده (`ق-٤٦٩`).
+ */
+const DEFERRED_REVENUE_CASH_FLOW_CODE = DEFERRED_REVENUE_ACCOUNT_CODE;
 
 /** Dates are compared day-to-day, so the time part is stripped: an installment
  * due today must not count as late because the clock says 14:00. */
@@ -566,15 +576,21 @@ export class ReportsService {
       const receivablesChange = changeFor('1200');
       const payablesChange = changeFor('2100');
       const fixedAssetChange = changeFor('1400');
-      const operatingCashFlow = netProfit - receivablesChange + payablesChange;
+      // الطريقةُ غيرُ المباشرة بالتزامَين (ق-٩٢٥/③): ما قُبض ولم يُعترَف به (`Δ2400`) وما استُحقّ من
+      // ضريبةٍ ولم يُسدَّد (`Δ2200`) نقدٌ في اليد لم يمرّ بالربح — يُضاف كما يُضاف `Δ2100`.
+      const deferredRevenueChange = changeFor(DEFERRED_REVENUE_CASH_FLOW_CODE);
+      const outputVatChange = changeFor('2200');
+      const operatingCashFlow = round2(netProfit - receivablesChange + payablesChange + deferredRevenueChange + outputVatChange);
 
       return {
         netProfit,
         receivablesChange,
         payablesChange,
+        deferredRevenueChange,
+        outputVatChange,
         operatingCashFlow,
         fixedAssetChange,
-        netCashChange: operatingCashFlow - fixedAssetChange,
+        netCashChange: round2(operatingCashFlow - fixedAssetChange),
         missingAccounts: missing,
       };
     });
@@ -621,7 +637,10 @@ export class ReportsService {
       //    المتبقّي بنفسه، **وحدُّ الائتمان كان سيصير رابعاً** — **وتاجرٌ يقرأ
       //    في الأعمار رقماً وفي رسالة المنع آخرَ يفقد الثقة في الاثنين**.
       //    **فاستُخرج الحسابُ إلى `receivables-exposure.util`، ويقرأ الاثنان منه.**
-      const result = await customerExposure(tx, { asOf, allowedBranchIds, branchId: filter.branchId, customerId: filter.customerId });
+      // ⭐ صفَّان لا صفّ (ق-٩٢٥/④): الفواتيرُ وأقساطُ الإيجار المستحقّةُ غيرُ المقبوضة — كلاهما ذمّةٌ على
+      // `1200`؛ والمطابقةُ على الاثنين، وإلا سمّى التقريرُ الحقيقةَ «فرقاً غير منسوب».
+      const rent: RentReceivableRow[] = [];
+      const result = await customerExposure(tx, { asOf, allowedBranchIds, branchId: filter.branchId, customerId: filter.customerId }, rent);
       result.sort((a, b) => b.total - a.total);
 
       const sum = (pick: (r: (typeof result)[number]) => number) => round2(result.reduce((t, r) => t + pick(r), 0));
@@ -633,13 +652,28 @@ export class ReportsService {
         d90: sum((r) => r.d90),
         unapplied: sum((r) => r.unapplied),
         total: sum((r) => r.total),
+        /** منها ذممُ إيجارٍ (أقساطٌ استُحقّت ولم تُقبض) — مضمَّنةٌ في الشرائح والإجمالي أعلاه. */
+        rent: round2(rent.reduce((t, r) => t + r.remaining, 0)),
       };
 
       // المطابقة عند الطلب فقط: مسحُ دفتر اليومية أثقل من التقرير نفسه،
       // فلا يُدفع ثمنه في كل تحميل (زر «طابق مع ميزان المراجعة»).
       const reconciliation = filter.reconcile ? await this.reconcileAgainstReceivables(tx, asOf, allowedBranchIds, filter.branchId, totals.total) : null;
 
-      return { asOf: asOf.toISOString().slice(0, 10), branchId: filter.branchId ?? null, customerId: filter.customerId ?? null, rows: result, totals, reconciliation };
+      return {
+        asOf: asOf.toISOString().slice(0, 10),
+        branchId: filter.branchId ?? null,
+        customerId: filter.customerId ?? null,
+        rows: result,
+        /** الصفُّ الثاني: قسطٌ قسطاً، بعمره من استحقاقه. */
+        rentRows: rent,
+        rentNote:
+          allowedBranchIds === 'all' && !filter.branchId
+            ? 'أقساطُ إيجارٍ استُحقّت ذمّةً على المستأجر ولم تُقبض — تدخل شرائح عميلها وإجماليَّه ومطابقةَ 1200'
+            : 'ذممُ الإيجار على مستوى المنشأة لا الفرع — تظهر في التقرير المجمَّع وحده',
+        totals,
+        reconciliation,
+      };
     });
   }
 
