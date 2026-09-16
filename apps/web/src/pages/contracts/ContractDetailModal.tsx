@@ -6,8 +6,11 @@ import {
   getContract,
   recordPayment,
   renewContract,
+  updateContract,
   type CancelContractInput,
   type Contract,
+  type DeclaredClassification,
+  type DeclaredVatInclusion,
   type InstallmentStatus,
   type PaymentMethod,
   type RecordPaymentInput,
@@ -20,7 +23,7 @@ import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
 import { HandoversSection } from './HandoversSection';
 import { KeyMoneySection } from './KeyMoneySection';
-import { CYCLE_LABEL } from './contractMeta';
+import { CLASSIFICATION_LABEL, CLASSIFICATION_OPTIONS, CYCLE_LABEL, VAT_INCLUSION_LABEL, VAT_INCLUSION_OPTIONS, isLegacyContract } from './contractMeta';
 import i18n from '../../i18n';
 
 const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeClass: string }> = {
@@ -323,6 +326,9 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
   const [no, setNo] = useState('');
   const [ejarNo, setEjarNo] = useState('');
   const [carryDeposits, setCarryDeposits] = useState(true);
+  // تُعبّأ من الأصل ليُراجَعا — والخادمُ يوجبهما ولا يرثهما؛ وإن كان الأصلُ قديماً فلا قيمةَ مسبقة.
+  const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
+  const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -330,11 +336,17 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
 
   async function submit() {
     setError(null);
+    if (!classification || !vatInclusion) {
+      setError(i18n.t('err_contract_classification'));
+      return;
+    }
     setSaving(true);
     try {
       await onSubmit({
         start,
         end,
+        classification,
+        vatInclusion,
         value: parseFloat(value) || undefined,
         no: no.trim() || undefined,
         ejarNo: ejarNo.trim() || undefined,
@@ -371,6 +383,30 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
           <input value={no} onChange={(e) => setNo(e.target.value)} placeholder="يُولَّد تلقائياً إن تُرك فارغاً" />
         </div>
       </div>
+      <div className="two-col">
+        <div className="field">
+          <label>تصنيف العقد الجديد للضريبة</label>
+          <select value={classification} onChange={(e) => setClassification(e.target.value as DeclaredClassification | '')}>
+            <option value="">— اختر —</option>
+            {CLASSIFICATION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>قيمته والضريبة</label>
+          <select value={vatInclusion} onChange={(e) => setVatInclusion(e.target.value as DeclaredVatInclusion | '')}>
+            <option value="">— اختر —</option>
+            {VAT_INCLUSION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       <div className="field">
         <label>رقم عقد إيجار (اختياري)</label>
         <input value={ejarNo} onChange={(e) => setEjarNo(e.target.value)} />
@@ -396,6 +432,71 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={saving}>
           تأكيد التجديد
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * عقدٌ سبق الهجرة يحمل قيمةً قديمةً معلَنة («غير مصنَّف» / «غير معلَن») — يُنقصها التاجرُ بيدٍ
+ * هنا؛ ولا شيءَ يُفترض: الخياران فارغان حتى يُختارا (ق-٨٩٨).
+ */
+function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; onDeclared: () => Promise<void> }) {
+  const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
+  const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function declare() {
+    setError(null);
+    if (!classification || !vatInclusion) {
+      setError(i18n.t('err_contract_classification'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateContract(contract.id, { classification, vatInclusion });
+      await onDeclared();
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ التصنيف'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ background: '#fff8e6', marginBottom: 10 }}>
+      <p className="hint" style={{ marginTop: 0 }}>عقدٌ سُجِّل قبل اعتماد التصنيف — اختر تصنيفه وهل قيمته شاملة للضريبة؛ لا يُعدَّل قبل ذلك.</p>
+      <div className="two-col">
+        <div className="field">
+          <label>تصنيف العقد للضريبة</label>
+          <select value={classification} onChange={(e) => setClassification(e.target.value as DeclaredClassification | '')}>
+            <option value="">— اختر —</option>
+            {CLASSIFICATION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label>القيمة والضريبة</label>
+          <select value={vatInclusion} onChange={(e) => setVatInclusion(e.target.value as DeclaredVatInclusion | '')}>
+            <option value="">— اختر —</option>
+            {VAT_INCLUSION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {error && <p className="error-text">{error}</p>}
+      <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
+        <button className="btn btn-primary" onClick={declare} disabled={saving}>
+          حفظ التصنيف
         </button>
       </div>
     </div>
@@ -476,6 +577,18 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             </p>
           </div>
         </div>
+
+        <div className="two-col" style={{ marginBottom: 6 }}>
+          <div className="field">
+            <label>التصنيف للضريبة</label>
+            <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>{CLASSIFICATION_LABEL[contract.classification]}</p>
+          </div>
+          <div className="field">
+            <label>القيمة والضريبة</label>
+            <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>{VAT_INCLUSION_LABEL[contract.vatInclusion]}</p>
+          </div>
+        </div>
+        {isLegacyContract(contract) && <LegacyDeclarationForm contract={contract} onDeclared={reload} />}
 
         {contract.status === 'CANCELLED' && (
           <p className="hint" style={{ color: 'var(--rose)', marginBottom: 10 }}>

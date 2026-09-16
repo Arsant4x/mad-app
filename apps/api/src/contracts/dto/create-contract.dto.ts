@@ -4,10 +4,28 @@ import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from
 export const CONTRACT_CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as const;
 
+/**
+ * ⭐ تصنيفُ العقد للضريبة — **مغلقٌ بلا القيمة القديمة** (`ق-٨٩١` · `ق-٨٩٨`):
+ * `LEGACY_UNCLASSIFIED` للصفوف التي سبقت الهجرة وحدَها، ولا يقبلها الخادمُ لعقدٍ
+ * جديدٍ أو تعديل — «قيمةٌ قديمة يقبلها الخادمُ لعقدٍ جديد افتراضٌ صامتٌ باسمٍ جديد».
+ * والقاعدةُ تحبسها بقيد `CHECK` على `createdAt` طبقةً ثانية.
+ */
+export const CONTRACT_CLASSIFICATIONS = ['RESIDENTIAL', 'COMMERCIAL'] as const;
+/** أشاملٌ `value` لضريبة القيمة المضافة أم لا — يُعلَن ولا يُفترض (`ق-٨٩٢`). */
+export const CONTRACT_VAT_INCLUSIONS = ['INCLUSIVE', 'EXCLUSIVE'] as const;
+
 export class CreateContractDto extends CurrencyFieldsDto {
   @IsString()
   @IsNotEmpty()
   unitId!: string;
+
+  /** إلزاميٌّ بلا افتراض: عقدٌ بلا تصنيفٍ يُرفض — سكنيٌّ معفى أو تجاريٌّ خاضع. */
+  @IsIn(CONTRACT_CLASSIFICATIONS)
+  classification!: (typeof CONTRACT_CLASSIFICATIONS)[number];
+
+  /** إلزاميٌّ كذلك: قيمةُ العقد شاملةٌ للضريبة أم غيرُ شاملة. */
+  @IsIn(CONTRACT_VAT_INCLUSIONS)
+  vatInclusion!: (typeof CONTRACT_VAT_INCLUSIONS)[number];
 
   @IsString()
   @IsNotEmpty()

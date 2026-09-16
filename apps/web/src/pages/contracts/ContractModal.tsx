@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { Property } from '../../api/properties';
 import type { Unit } from '../../api/units';
-import type { ContractCycle, CreateContractInput, Furnished } from '../../api/contracts';
+import type { ContractCycle, CreateContractInput, DeclaredClassification, DeclaredVatInclusion, Furnished } from '../../api/contracts';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
+import { CLASSIFICATION_OPTIONS, VAT_INCLUSION_OPTIONS } from './contractMeta';
 
 const CYCLE_OPTIONS: { value: ContractCycle; label: string }[] = [
   { value: 'monthly', label: 'شهرية' },
@@ -41,6 +42,9 @@ export function ContractModal({
   const [services, setServices] = useState('');
   const [furnished, setFurnished] = useState<Furnished | ''>('');
   const [ejarNo, setEjarNo] = useState('');
+  // بلا قيمةٍ مسبقة عمداً: التصنيفُ وشمولُ الضريبة يُعلَنان لا يُفترضان (ق-٨٩١ · ق-٨٩٢).
+  const [classification, setClassification] = useState<DeclaredClassification | ''>('');
+  const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +52,10 @@ export function ContractModal({
     setError(null);
     if (!unitId || !tenant.trim() || !value) {
       setError(i18n.t('err_contract_fields'));
+      return;
+    }
+    if (!classification || !vatInclusion) {
+      setError(i18n.t('err_contract_classification'));
       return;
     }
     setSaving(true);
@@ -64,6 +72,8 @@ export function ContractModal({
         services: services.trim() || undefined,
         furnished: furnished || undefined,
         ejarNo: ejarNo.trim() || undefined,
+        classification,
+        vatInclusion,
         draft,
       });
     } catch (e) {
@@ -102,6 +112,30 @@ export function ContractModal({
           <div className="field">
             <label>الجوال</label>
             <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05xxxxxxxx" />
+          </div>
+        </div>
+        <div className="two-col">
+          <div className="field">
+            <label>تصنيف العقد للضريبة</label>
+            <select value={classification} onChange={(e) => setClassification(e.target.value as DeclaredClassification | '')}>
+              <option value="">— اختر —</option>
+              {CLASSIFICATION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>قيمة العقد والضريبة</label>
+            <select value={vatInclusion} onChange={(e) => setVatInclusion(e.target.value as DeclaredVatInclusion | '')}>
+              <option value="">— اختر —</option>
+              {VAT_INCLUSION_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="two-col">

@@ -68,6 +68,7 @@
   "err_cancel_reason_required": "Please enter a cancellation reason",
   "err_payment_record": "Could not record the payment",
   "err_contract_cancel": "Could not cancel the contract",
+  "err_contract_classification": "Please choose the contract's VAT classification and whether its value includes VAT — neither is assumed",
   "err_contract_fields": "Please choose a unit and enter the tenant name and value",
   "err_contract_save": "Could not save the contract",
   "err_customer_name_required": "Please enter the customer name",

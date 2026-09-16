@@ -51,6 +51,7 @@ describe('Contract renewal (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId,
         tenant: `مستأجر التجديد ${suffix}`,
         value: 12000,
@@ -77,7 +78,7 @@ describe('Contract renewal (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post(`/contracts/${sourceId}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2027-01-01', end: '2027-12-31', value: 13200 })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2027-01-01', end: '2027-12-31', value: 13200 })
       .expect(201);
     createdContractIds.push(res.body.id);
 
@@ -111,7 +112,7 @@ describe('Contract renewal (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post(`/contracts/${sourceId}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2027-01-01', end: '2027-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2027-01-01', end: '2027-12-31' })
       .expect(409);
 
     // Names the existing renewal so the user can find it.
@@ -124,6 +125,7 @@ describe('Contract renewal (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: (
           await request(app.getHttpServer())
             .post('/units')
@@ -162,7 +164,7 @@ describe('Contract renewal (e2e)', () => {
     const renewal = await request(app.getHttpServer())
       .post(`/contracts/${other.body.id}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2027-01-01', end: '2027-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2027-01-01', end: '2027-12-31' })
       .expect(201);
     createdContractIds.push(renewal.body.id);
 
@@ -194,7 +196,7 @@ describe('Contract renewal (e2e)', () => {
     const base = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
-      .send({ unitId: unit.body.id, tenant: `مستأجر الترقيم ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر الترقيم ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(201);
     createdContractIds.push(base.body.id);
 
@@ -202,7 +204,7 @@ describe('Contract renewal (e2e)', () => {
     const renewed = await request(app.getHttpServer())
       .post(`/contracts/${base.body.id}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2027-01-01', end: '2027-12-31', no: manualNo })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2027-01-01', end: '2027-12-31', no: manualNo })
       .expect(201);
     createdContractIds.push(renewed.body.id);
     expect(renewed.body.no).toBe(manualNo);
@@ -211,7 +213,7 @@ describe('Contract renewal (e2e)', () => {
     const dup = await request(app.getHttpServer())
       .post(`/contracts/${renewed.body.id}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2028-01-01', end: '2028-12-31', no: manualNo })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2028-01-01', end: '2028-12-31', no: manualNo })
       .expect(409);
     expect(dup.body.message).toContain(manualNo);
   }, 40000);
@@ -230,7 +232,7 @@ describe('Contract renewal (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
-      .send({ unitId: unit.body.id, tenant: `مستأجر ملغى ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر ملغى ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(201);
     createdContractIds.push(contract.body.id);
 
@@ -243,7 +245,7 @@ describe('Contract renewal (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post(`/contracts/${contract.body.id}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: '2027-01-01', end: '2027-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: '2027-01-01', end: '2027-12-31' })
       .expect(409);
     expect(res.body.message).toContain('ملغى');
   }, 40000);

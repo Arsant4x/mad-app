@@ -71,7 +71,7 @@ describe('الأبعاد التحليلية على سطر القيد (e2e)', () 
     unitId = unit.body.id;
 
     const contract = await auth(request(app.getHttpServer()).post('/contracts'))
-      .send({ unitId, tenant: `مستأجر الأبعاد ${suffix}`, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId, tenant: `مستأجر الأبعاد ${suffix}`, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
       .expect(201);
     contractId = contract.body.id;
   }, 90000);

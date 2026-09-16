@@ -95,6 +95,7 @@ describe('Property KPIs (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: rented.id,
         tenant: `مستأجر المؤشرات ${suffix}`,
         value: 12000,
@@ -131,6 +132,7 @@ describe('Property KPIs (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
         tenant: `مستأجر مستقبلي ${suffix}`,
         value: 120000,
@@ -154,6 +156,7 @@ describe('Property KPIs (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
         tenant: `مستأجر التحصيل ${suffix}`,
         value: 24000,
@@ -201,6 +204,7 @@ describe('Property KPIs (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
         tenant: `مستأجر منتهٍ ${suffix}`,
         value: 12000,
@@ -237,7 +241,7 @@ describe('Property KPIs (e2e)', () => {
     const renewal = await request(app.getHttpServer())
       .post(`/contracts/${target.id}/renew`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ start: renewalStart.toISOString().slice(0, 10), end: renewalEnd.toISOString().slice(0, 10) })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: renewalStart.toISOString().slice(0, 10), end: renewalEnd.toISOString().slice(0, 10) })
       .expect(201);
     createdContractIds.push(renewal.body.id);
 

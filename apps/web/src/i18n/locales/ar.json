@@ -68,6 +68,7 @@
   "err_cancel_reason_required": "الرجاء إدخال سبب الإلغاء",
   "err_payment_record": "تعذّر تسجيل الدفعة",
   "err_contract_cancel": "تعذّر إلغاء العقد",
+  "err_contract_classification": "الرجاء اختيار تصنيف العقد للضريبة وهل قيمته شاملة للضريبة — لا يُفترض أيٌّ منهما",
   "err_contract_fields": "الرجاء اختيار الوحدة وإدخال اسم المستأجر والقيمة",
   "err_contract_save": "تعذّر حفظ العقد",
   "err_customer_name_required": "الرجاء إدخال اسم العميل",

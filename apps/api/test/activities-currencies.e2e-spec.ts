@@ -299,6 +299,7 @@ describe('Activities, currencies and FX difference (e2e)', () => {
         .post('/contracts')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
           unitId: unit.body.id,
           tenant: 'مستأجر بالعملة الأجنبية',
           value: 12000,

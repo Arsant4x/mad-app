@@ -2068,6 +2068,34 @@ enum ContractStatus {
   CANCELLED
 }
 
+/// ⭐ **تصنيفُ العقد للضريبة — على العقد لا العقار ولا الوحدة** (`ق-٨٩١`):
+/// العقارُ المختلط يحمل الاثنين، والوحدةُ نصٌّ حرٌّ قبل الخادمُ فيه أيَّ كلمة،
+/// **والعقدُ هو الواقعةُ الخاضعة — فالضريبةُ على التوريد لا على المبنى**.
+///
+/// **ولا يُستنبَط من نصّ**: كانت هنا خريطةُ كلماتٍ خمس تحوّل `Unit.type` إلى
+/// تصنيفٍ **وتتخطّى ما لا تعرفه صامتةً** — فحُذفت (`ق-٨٩٨`)، وحارسٌ يُسقط
+/// الحزمة على عودتها.
+///
+/// `LEGACY_UNCLASSIFIED` **للصفوف التي سبقت الهجرة وحدَها** — حالٌ معلَنة تُعدّ
+/// لا افتراضٌ صامت؛ والقاعدةُ تحبسها على ما سبق لحظةَ الهجرة بقيد `CHECK`
+/// على `createdAt`، والخادمُ لا يقبلها لعقدٍ جديد.
+enum ContractClassification {
+  /// سكنيٌّ — توريدٌ معفىً من ضريبة القيمة المضافة (اللائحة م٣٠/١/ب).
+  RESIDENTIAL
+  /// تجاريٌّ — توريدٌ خاضع بالنسبة الأساسية.
+  COMMERCIAL
+  LEGACY_UNCLASSIFIED
+}
+
+/// هل `Contract.value` شاملٌ لضريبة القيمة المضافة أم غيرُ شامل (`ق-٨٩٢`) —
+/// **يُعلَن ولا يُفترض في الحالين**؛ و`LEGACY_UNDECLARED` لما سبق الهجرة وحدَه،
+/// محبوسٌ بالقيد نفسِه.
+enum ContractVatInclusion {
+  INCLUSIVE
+  EXCLUSIVE
+  LEGACY_UNDECLARED
+}
+
 enum InstallmentStatus {
   DUE
   LATE
@@ -2682,6 +2710,11 @@ model Contract {
   services  String?
   /// 'unfurnished' | 'furnished' | 'partial'.
   furnished String?
+
+  /// إلزاميٌّ بلا افتراضٍ صامت — لا `@default`: عقدٌ بلا تصنيفٍ يُرفض (`ق-٨٩١`).
+  classification ContractClassification
+  /// إلزاميٌّ كذلك — أشاملٌ `value` للضريبة أم لا (`ق-٨٩٢`).
+  vatInclusion   ContractVatInclusion
 
   status       ContractStatus @default(DUE)
   cancelDate   DateTime?      @db.Date

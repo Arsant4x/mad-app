@@ -63,7 +63,7 @@ describe('Reservations (e2e)', () => {
     await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ unitId: unit.id, tenant: 'مستأجر حالي', value: 1000, cycle: 'monthly', start: '2020-01-01', end: '2035-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'مستأجر حالي', value: 1000, cycle: 'monthly', start: '2020-01-01', end: '2035-12-31' })
       .expect(201);
 
     await request(app.getHttpServer())
@@ -84,13 +84,13 @@ describe('Reservations (e2e)', () => {
     await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ unitId: unit.id, tenant: 'مستأجر مختلف', value: 1000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'مستأجر مختلف', value: 1000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(409);
 
     await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ unitId: unit.id, tenant: 'سعود العتيبي', value: 1000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'سعود العتيبي', value: 1000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(201);
 
     const reservations = await request(app.getHttpServer()).get('/reservations').set('Authorization', `Bearer ${tokenA}`).expect(200);

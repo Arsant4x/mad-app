@@ -43,6 +43,7 @@ describe('Contract cancellation settlement (e2e)', () => {
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر التسوية ${tag}`,
         value: 12000,

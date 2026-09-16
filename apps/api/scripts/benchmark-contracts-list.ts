@@ -74,6 +74,8 @@ async function seed(companyId: string): Promise<void> {
         tenant: `مستأجر بنشمارك ${i}`,
         value: 12000,
         cycle: 'monthly',
+        classification: 'RESIDENTIAL' as const,
+        vatInclusion: 'EXCLUSIVE' as const,
         start: new Date(Date.UTC(startYear, startMonth - 1, 1)),
         end: new Date(Date.UTC(startYear + 1, startMonth - 1, 1)),
         baseValue: 12000,

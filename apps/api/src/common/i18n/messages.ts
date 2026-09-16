@@ -129,9 +129,10 @@ export const MSG = {
   unit_not_found: 'units.not_found',
   unit_number_taken: 'units.number_taken',
   unit_has_contracts: 'units.has_contracts',
-  unit_type_activity_mismatch: 'units.type_activity_mismatch',
   unit_subtype_mismatch: 'units.subtype_mismatch',
   contract_not_found: 'contracts.not_found',
+  contract_classification_required: 'contracts.classification_required',
+  contract_vat_inclusion_required: 'contracts.vat_inclusion_required',
   contract_already_cancelled: 'contracts.already_cancelled',
   contract_start_after_end: 'contracts.start_after_end',
   contract_outside_head_lease: 'contracts.outside_head_lease',
@@ -549,12 +550,19 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'لا يمكن حذف وحدة مرتبطة بعقود — احذف عقودها أولاً',
     en: 'Cannot delete a unit that has contracts — delete its contracts first',
   },
-  [MSG.unit_type_activity_mismatch]: { ar: 'نوع الوحدة لا يتوافق مع نشاط العقار المحدَّد', en: "Unit type does not match the property's designated activity" },
   [MSG.unit_subtype_mismatch]: {
     ar: 'فئة الوحدة لا تتوافق مع الفئة السكنية المحدَّدة للعقار',
     en: "Unit category does not match the property's designated residential category",
   },
   [MSG.contract_not_found]: { ar: 'العقد غير موجود', en: 'Contract not found' },
+  [MSG.contract_classification_required]: {
+    ar: 'عقدٌ قديم بلا تصنيف — اختر تصنيفه (سكني معفى / تجاري خاضع) قبل أي تعديل',
+    en: 'Legacy contract without a classification — choose residential (exempt) or commercial (taxable) before editing it',
+  },
+  [MSG.contract_vat_inclusion_required]: {
+    ar: 'عقدٌ قديم لم يُعلَن شمولُ قيمته للضريبة — اختر «شاملة» أو «غير شاملة» قبل أي تعديل',
+    en: 'Legacy contract without a declared VAT inclusion — choose inclusive or exclusive before editing it',
+  },
   [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
   [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },
   [MSG.contract_outside_head_lease]: {

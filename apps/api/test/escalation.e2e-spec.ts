@@ -76,6 +76,7 @@ describe('Escalation and notifications (e2e)', () => {
     // Starts well in the past, so its instalments are long overdue.
     const contract = await auth(request(app.getHttpServer()).post('/contracts'))
       .send({
+        classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
         tenant: `مستأجر التصعيد ${suffix}`,
         value: 12000,

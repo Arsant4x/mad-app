@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
-import { FURNISHED_OPTIONS } from './create-contract.dto';
+import { CONTRACT_CLASSIFICATIONS, CONTRACT_VAT_INCLUSIONS, FURNISHED_OPTIONS } from './create-contract.dto';
 
 /** Deliberately narrow: unit/value/dates/cycle can't be changed after
  * creation (that would require reconciling already-generated installments)
@@ -24,4 +24,17 @@ export class UpdateContractDto {
   @IsOptional()
   @IsString()
   ejarNo?: string;
+
+  /**
+   * التصنيفُ وشمولُ الضريبة — اختياريان هنا **لعقدٍ مصنَّف**، **وإلزاميان لعقدٍ قديم**:
+   * أوّلُ تعديلٍ لعقدٍ سبق الهجرة يوجب إعلانَهما (`ق-٨٩٨` — «يُنقص بيدٍ عند لمس العقد»)،
+   * والخدمةُ ترفض التعديلَ بدونهما. والتعدادُ مغلقٌ بلا القيمة القديمة.
+   */
+  @IsOptional()
+  @IsIn(CONTRACT_CLASSIFICATIONS)
+  classification?: (typeof CONTRACT_CLASSIFICATIONS)[number];
+
+  @IsOptional()
+  @IsIn(CONTRACT_VAT_INCLUSIONS)
+  vatInclusion?: (typeof CONTRACT_VAT_INCLUSIONS)[number];
 }

@@ -1,4 +1,5 @@
 import { IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
+import { CONTRACT_CLASSIFICATIONS, CONTRACT_VAT_INCLUSIONS } from './create-contract.dto';
 
 const CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 
@@ -8,6 +9,16 @@ export class RenewContractDto {
 
   @IsDateString()
   end!: string;
+
+  /**
+   * التجديدُ عقدٌ جديد — فتصنيفُه وشمولُ قيمته **يُعلَنان لا يُورَّثان** (`ق-٨٩١`:
+   * إلزاميٌّ بلا افتراضٍ صامت). الواجهةُ تُعبّئهما من العقد الأصل ليُراجَعا، لا الخادم.
+   */
+  @IsIn(CONTRACT_CLASSIFICATIONS)
+  classification!: (typeof CONTRACT_CLASSIFICATIONS)[number];
+
+  @IsIn(CONTRACT_VAT_INCLUSIONS)
+  vatInclusion!: (typeof CONTRACT_VAT_INCLUSIONS)[number];
 
   /// Omitted means "same rent as before" — the common renewal. Sent when the
   /// rent was re-negotiated.

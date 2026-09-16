@@ -59,7 +59,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالقب
     ).body;
     return (
       await auth(http().post('/contracts'))
-        .send({ unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
         .expect(201)
     ).body as { id: string; no: string; installments: E2eInstallment[] };
   }
