@@ -33,7 +33,7 @@ describe('Supplier payments + allocations (e2e)', () => {
   const today = () => new Date().toISOString().slice(0, 10);
 
   /** فاتورةُ شراءٍ معفاة بإجماليٍّ محدَّد — فالحسابُ صريح: الإجماليُّ هو ما يُقيَّد على `2100`. */
-  const makePurchase = async (total: number, currency?: string, exchangeRate?: number): Promise<{ id: string; no: string }> => {
+  const makePurchase = async (total: number, currency?: string, exchangeRate?: number): Promise<{ id: string; no: string; journalEntryId: string | null }> => {
     const res = await auth(request(app.getHttpServer()).post('/purchases'))
       .send({
         supplierId,
@@ -45,7 +45,7 @@ describe('Supplier payments + allocations (e2e)', () => {
         ...(currency ? { currency, exchangeRate } : {}),
       })
       .expect(201);
-    return { id: res.body.id, no: res.body.no };
+    return { id: res.body.id, no: res.body.no, journalEntryId: res.body.journalEntryId as string | null };
   };
 
   const purchaseOf = async (id: string) => {
@@ -86,7 +86,7 @@ describe('Supplier payments + allocations (e2e)', () => {
       id: string;
       branchId: string | null;
       memo: string;
-      lines: { accountId: string; debit: string; credit: string; account: { code: string } }[];
+      lines: { accountId: string; debit: string; credit: string; supplierId: string | null; customerId: string | null; account: { code: string } }[];
     };
   };
 
@@ -145,8 +145,15 @@ describe('Supplier payments + allocations (e2e)', () => {
     expect(await balanceOf('2100')).toBeCloseTo(payablesBefore + 600, 2);
     expect(await bankBalance()).toBeCloseTo(boxBefore - 400, 2);
 
+    // بُعدُ الطرف (ق-٨٧٣): قيدُ الشراء وقيدُ السداد يحملان المورّدَ على كلِّ سطر — مختوماً من `resolveDimensions()`.
+    expect(purchase.journalEntryId).toBeTruthy();
+    const purchaseEntry = await entryOf(purchase.journalEntryId!, purchase.no);
+    expect(purchaseEntry.lines.map((l) => l.supplierId)).toEqual(purchaseEntry.lines.map(() => supplierId));
+
     // القيدُ: مدين `2100` ٤٠٠ · دائن حسابُ الصندوق نفسِه ٤٠٠ — لا `1000` ولا مصروف.
     const entry = await entryOf(first.body.journalEntryId, first.body.no);
+    expect(entry.lines.map((l) => l.supplierId)).toEqual(entry.lines.map(() => supplierId));
+    expect(entry.lines.every((l) => l.customerId === null)).toBe(true);
     expect(sums(entry.lines)).toEqual({ debit: 400, credit: 400 });
     expect(entry.branchId).toBe(branchId);
     expect(entry.lines.some((l) => l.account.code === '2100' && Number(l.debit) === 400)).toBe(true);

@@ -168,6 +168,7 @@ export class PurchasesService {
         });
 
         const entry = await postPurchaseEntry(tx, companyId, {
+          supplierId: created.supplierId,
           branchId: created.branchId,
           no: created.no,
           date: created.date,
@@ -262,6 +263,7 @@ export class PurchasesService {
 
       if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
       const entry = await postPurchaseEntry(tx, companyId, {
+        supplierId: updated.supplierId,
         branchId: updated.branchId,
         no: updated.no,
         date: updated.date,

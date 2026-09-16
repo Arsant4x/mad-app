@@ -47,6 +47,8 @@ export const FX_DIFFERENCE_ACCOUNT = '5600';
  * 100 SAR would make every report meaningless.
  */
 export interface InvoiceForPosting {
+  /** عميلُ الفاتورة — يُختم على كل سطرٍ من `resolveDimensions()` (ق-٨٧٣)؛ إلزاميٌّ فمسارُ ترحيلٍ جديد لا يُترجم بدونه. */
+  customerId: string;
   branchId?: string | null;
   no: string;
   issueDate: Date;
@@ -78,6 +80,7 @@ export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: 
     lines,
     auto: true,
     branchId: inv?.branchId ?? null,
+    customerId: inv.customerId,
   });
 }
 
@@ -110,6 +113,7 @@ export async function postCreditNoteEntry(tx: Prisma.TransactionClient, companyI
     lines,
     auto: true,
     branchId: note.branchId ?? null,
+    customerId: note.customerId,
   });
 }
 
@@ -134,6 +138,7 @@ export async function postDebitNoteEntry(tx: Prisma.TransactionClient, companyId
     lines,
     auto: true,
     branchId: note.branchId ?? null,
+    customerId: note.customerId,
   });
 }
 
@@ -302,6 +307,8 @@ export async function postWriteOffEntry(
 
 /** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
+  /** مورّدُ الشراء — يُختم على كل سطر (ق-٨٧٣)؛ إلزاميّ. */
+  supplierId: string;
   branchId?: string | null;
   no: string;
   date: Date;
@@ -368,10 +375,13 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
     lines,
     auto: true,
     branchId: p.branchId ?? null,
+    supplierId: p.supplierId,
   });
 }
 
 export interface RentPaymentForPosting {
+  /** عميلُ العقد إن سُجِّل (`Contract.customerId`) — يُختم على كل سطر (ق-٨٧٣)؛ وعقدٌ بلا عميلٍ يبقى بلا طرف. */
+  customerId?: string | null;
   branchId?: string | null;
   /** حسابُ النقد المستقبِل — حسابُ البنك حين يُقبض على بنك، و`1000` نقداً (`ق-٢٧٧`). */
   cashAccountId?: string | null;
@@ -490,12 +500,15 @@ export async function postRentPaymentEntry(
     lines,
     auto: true,
     branchId: p?.branchId ?? null,
+    customerId: p.customerId ?? null,
   });
 
   return { entry, earned: split.earned, deferred: split.deferred };
 }
 
 export interface DeferredRecognitionForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   branchId?: string | null;
@@ -538,10 +551,13 @@ export async function postDeferredRecognitionEntry(tx: Prisma.TransactionClient,
     ],
     auto: true,
     branchId: r.branchId ?? null,
+    customerId: r.customerId ?? null,
   });
 }
 
 export interface CustomerPaymentForPosting {
+  /** عميلُ السند — يُختم على كل سطر (ق-٨٧٣)؛ إلزاميّ. */
+  customerId: string;
   paymentNo: string;
   customerName: string;
   date: Date;
@@ -579,6 +595,9 @@ export interface CustomerPaymentForPosting {
  * تقلّ الأساسيةُ المدفوعة عمّا قُيّد.
  */
 export interface PartySettlementForPosting {
+  /** طرفُ التسوية (ق-٨٧٣) — أحدُهما بحسب الجانب. */
+  customerId?: string | null;
+  supplierId?: string | null;
   /** أيُّ دفترٍ يُسوّى: ذممُ العملاء (`1200`) أم ذممُ المورّدين (`2100`). */
   side: 'RECEIVABLE' | 'PAYABLE';
   date: Date;
@@ -627,6 +646,8 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
     lines,
     auto: true,
     branchId: p.branchId ?? null,
+    customerId: p.customerId ?? null,
+    supplierId: p.supplierId ?? null,
   });
 }
 
@@ -673,12 +694,15 @@ export function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId
     memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
     baseCash: p.baseCash,
     baseSettled: p.baseReceivable,
+    customerId: p.customerId,
     branchId: p.branchId,
     cashAccountId: p.cashAccountId,
   });
 }
 
 export interface SupplierPaymentForPosting {
+  /** مورّدُ السند — يُختم على كل سطر (ق-٨٧٣)؛ إلزاميّ. */
+  supplierId: string;
   paymentNo: string;
   supplierName: string;
   date: Date;
@@ -707,6 +731,7 @@ export function postSupplierPaymentEntry(tx: Prisma.TransactionClient, companyId
     memo: `${p.reversal ? 'عكس سداد لمورّد' : 'سداد لمورّد'} — سند ${p.paymentNo} — ${p.supplierName}`,
     baseCash: p.baseCash,
     baseSettled: p.basePayable,
+    supplierId: p.supplierId,
     branchId: p.branchId,
     cashAccountId: p.cashAccountId,
   });
@@ -720,6 +745,8 @@ export const TENANT_DEPOSITS_ACCOUNT = '2300';
 export const OTHER_INCOME_ACCOUNT = '4300';
 
 export interface DepositForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -760,10 +787,13 @@ export async function postDepositReceiptEntry(tx: Prisma.TransactionClient, comp
       { accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: 0, credit: d.baseAmount },
     ],
     auto: true,
+    customerId: d.customerId ?? null,
   });
 }
 
 export interface DepositSettlementForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -832,10 +862,13 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
     unitId: s.unitId,
     lines,
     auto: true,
+    customerId: s.customerId ?? null,
   });
 }
 
 export interface DeferredSettlementForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -877,10 +910,13 @@ export async function postDeferredSettlementEntry(tx: Prisma.TransactionClient, 
       { accountId: ids.get(destination)!, debit: 0, credit: s.baseAmount },
     ],
     auto: true,
+    customerId: s.customerId ?? null,
   });
 }
 
 export interface ContractSettlementForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -920,10 +956,13 @@ export async function postContractSettlementEntry(tx: Prisma.TransactionClient, 
       { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.baseAmount },
     ],
     auto: true,
+    customerId: s.customerId ?? null,
   });
 }
 
 export interface ClaimForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -956,6 +995,7 @@ export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyI
       { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: c.baseAmount },
     ],
     auto: true,
+    customerId: c.customerId ?? null,
   });
 }
 
@@ -976,6 +1016,7 @@ export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, compan
       { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
     ],
     auto: true,
+    customerId: c.customerId ?? null,
   });
 }
 
@@ -1002,6 +1043,7 @@ export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, company
       { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
     ],
     auto: true,
+    customerId: c.customerId ?? null,
   });
 }
 
@@ -1010,6 +1052,8 @@ export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, company
 export const KEY_MONEY_ASSET_ACCOUNT = '1600';
 
 export interface KeyMoneyForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
   /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
   unitId: string;
   contractNo: string;
@@ -1057,6 +1101,7 @@ export async function postKeyMoneyEntry(tx: Prisma.TransactionClient, companyId:
     unitId: k.unitId,
     lines,
     auto: true,
+    customerId: k.customerId ?? null,
   });
 }
 

@@ -102,7 +102,7 @@ export async function recognizeDueWithinTx(
       serviceStart: true,
       serviceEnd: true,
       baseRecognized: true,
-      contract: { select: { no: true, tenant: true, unitId: true } },
+      contract: { select: { no: true, tenant: true, unitId: true, customerId: true } },
       payments: { select: { baseNetAmount: true } },
     },
   });
@@ -124,6 +124,7 @@ export async function recognizeDueWithinTx(
 
       const entry = await postDeferredRecognitionEntry(tx, companyId, {
         unitId: i.contract.unitId,
+        customerId: i.contract.customerId,
         contractNo: i.contract.no,
         tenant: i.contract.tenant,
         date: step.date,

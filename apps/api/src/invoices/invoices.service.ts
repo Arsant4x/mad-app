@@ -384,6 +384,7 @@ export class InvoicesService {
       // required accounts (1200/4100/2200) aren't set up for this company yet
       // — see the schema comment on Invoice.journalEntryId.
       const entry = await postInvoiceEntry(tx, companyId, {
+        customerId: created.customerId,
         branchId: created.branchId,
         no: created.no,
         issueDate: created.issueDate,
@@ -542,6 +543,7 @@ export class InvoicesService {
 
       if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
       const entry = await postInvoiceEntry(tx, companyId, {
+        customerId: updated.customerId,
         branchId: updated.branchId,
         no: updated.no,
         issueDate: updated.issueDate,
@@ -821,6 +823,7 @@ export class InvoicesService {
     }
 
     const entry = await note.post(tx, companyId, {
+      customerId: created.customerId,
       branchId: created.branchId,
       no: created.no,
       issueDate: created.issueDate,

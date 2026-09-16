@@ -68,7 +68,7 @@ describe('Customer payments + allocations (e2e)', () => {
     return rows.find((r) => r.id === journalEntryId) as unknown as {
       id: string;
       branchId: string | null;
-      lines: { accountId: string; debit: string; credit: string; account: { code: string } }[];
+      lines: { accountId: string; debit: string; credit: string; customerId: string | null; supplierId: string | null; account: { code: string } }[];
     };
   };
 
@@ -193,6 +193,9 @@ describe('Customer payments + allocations (e2e)', () => {
     expect(pay.body.journalEntryId).toBeTruthy();
 
     const entry = await entryOf(pay.body.journalEntryId, pay.body.no);
+    // بُعدُ الطرف (ق-٨٧٣): قيدُ القبض يحمل العميلَ على كلِّ سطر — مختوماً من `resolveDimensions()` لا بيد.
+    expect(entry.lines.map((l) => l.customerId)).toEqual(entry.lines.map(() => customerId));
+    expect(entry.lines.every((l) => l.supplierId === null)).toBe(true);
     const debit = entry.lines.reduce((s: number, l: { debit: string }) => s + Number(l.debit), 0);
     const credit = entry.lines.reduce((s: number, l: { credit: string }) => s + Number(l.credit), 0);
     expect(debit).toBeCloseTo(credit, 2);
