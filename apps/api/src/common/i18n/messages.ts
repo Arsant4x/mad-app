@@ -252,20 +252,16 @@ export const MSG = {
   zatca_already_cleared: 'zatca.already_cleared',
   zatca_stamp_in_progress: 'zatca.stamp_in_progress',
   zatca_not_stamped: 'zatca.not_stamped',
-  zatca_invoice_stamped_locked: 'zatca.invoice_stamped_locked',
   // chain integrity. Deletion is refused for any document that took a place
   // in the sequence; editing is refused only once the authority has accepted
   // it (or may be about to) — see InvoicesService.
-  zatca_invoice_chain_locked: 'zatca.invoice_chain_locked',
-  zatca_invoice_cleared_locked: 'zatca.invoice_cleared_locked',
-  zatca_invoice_submitting_locked: 'zatca.invoice_submitting_locked',
-  zatca_invoice_successor_locked: 'zatca.invoice_successor_locked',
+  /** ⚖️ الصادرُ لا يُعدَّل ولا يُحذف — مختومةً كانت أو لا (`ق-٩٤٣`)، ورسالةٌ واحدةٌ للجميع تسمّي المخرج (`ق-٩٥٠` · `ق-٢٦٥`). */
+  invoice_issued_locked: 'invoices.issued_locked',
 
   // credit/debit notes
   credit_note_target_invalid: 'creditNotes.target_invalid',
   credit_note_exceeds_remaining: 'creditNotes.exceeds_remaining',
   credit_note_immutable: 'creditNotes.immutable',
-  invoice_has_credit_notes: 'creditNotes.invoice_has_notes',
 
   // returns (SPEC §30 — موجة أ)
   return_line_not_original: 'returns.line_not_original',
@@ -756,31 +752,24 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
   [MSG.zatca_stamp_in_progress]: { ar: 'المستند قيد الختم الآن من مسارٍ آخر — أعد المحاولة بعد لحظات', en: 'This document is being stamped by another process — retry shortly' },
   [MSG.zatca_not_stamped]: { ar: 'لا مستندٌ موقَّعٌ محفوظٌ لهذه الفاتورة — تُختم أولاً ثم تُبلَّغ', en: 'No stored signed document for this invoice — it must be stamped before it is reported' },
-  [MSG.zatca_invoice_stamped_locked]: { ar: 'الفاتورة مختومةٌ وبانتظار إبلاغ الهيئة — لا تُعدَّل؛ إن رُدّت تُصحَّح ثم تُعاد', en: 'This invoice is stamped and awaiting the authority — it cannot be edited; if rejected, correct it and resubmit' },
-  [MSG.credit_note_target_invalid]: { ar: 'إشعار الدائن يُصدَر على فاتورة أصلية فقط، لا على إشعار آخر', en: 'A credit note can only be issued against an original invoice, not another note' },
-  [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة إشعار الدائن تتجاوز المتبقي من الفاتورة الأصلية', en: 'The credit note amount exceeds what remains of the original invoice' },
-  [MSG.credit_note_immutable]: { ar: 'إشعار الدائن لا يُعدَّل بعد إصداره — احذفه وأصدر إشعاراً جديداً، أو أصدر إشعاراً مصححاً', en: 'A credit note cannot be edited after issue — delete and reissue it, or issue a correcting note' },
-  [MSG.invoice_has_credit_notes]: { ar: 'لا يمكن حذف فاتورة صدرت عليها إشعارات دائن — احذف الإشعارات أولاً', en: 'An invoice with issued credit notes cannot be deleted — remove the notes first' },
+  // ⚖️ الإشعارُ على إشعارٍ مقابل لا على إشعارٍ من نوعه (`ق-٩٥٢`) — والمخرجُ مسمّىً في رسالة المنع (`ق-٢٦٥`).
+  [MSG.credit_note_target_invalid]: { ar: 'الإشعار يُصدَر على فاتورة أصلية أو على إشعار مقابل (مدين يصحّح دائناً، ودائن يصحّح مديناً) — لا على إشعار من نوعه', en: 'A note is issued against an original invoice or against the opposite kind of note (a debit note correcting a credit note, or a credit note correcting a debit note) — never against a note of its own kind' },
+  [MSG.credit_note_exceeds_remaining]: { ar: 'قيمة الإشعار تتجاوز المتبقي من المستند الذي يصحّحه', en: 'The note amount exceeds what remains of the document it corrects' },
+  [MSG.credit_note_immutable]: { ar: 'الإشعار صدر فلا يُعدَّل ولا يُحذف — صحّحه بإشعار مقابل: إشعار مدين لدائن زائد، وإشعار دائن لمدين زائد', en: 'This note has been issued and can be neither edited nor deleted — correct it with the opposite note: a debit note for an excess credit note, a credit note for an excess debit note' },
   [MSG.return_line_not_original]: { ar: 'سطر المرتجع يجب أن يشير إلى سطرٍ من الفاتورة الأصلية نفسها وبصنفه', en: 'A returned line must reference a line of the same original invoice, with its product' },
   [MSG.return_exceeds_sold]: { ar: 'الكمية المرتجعة ({requested}) تتجاوز المتاح: بِيع {sold} وأُرجع منه {returned} من قبل', en: 'Returned quantity ({requested}) exceeds what is available: {sold} sold, {returned} already returned' },
   [MSG.refund_target_invalid]: { ar: 'سند الردّ يُصدَر على إشعارٍ دائن مرتبطٍ بفاتورةٍ أصلية فقط', en: 'A refund is issued against a credit note linked to an original invoice only' },
   [MSG.refund_nothing_refundable]: { ar: 'لا شيء قابلٌ للردّ: الإشعار خُصم من متبقي الفاتورة غير المسدَّد، أو رُدّ من قبل', en: 'Nothing is refundable: the note offset the unpaid balance of its invoice, or was already refunded' },
   [MSG.refund_exceeds_refundable]: { ar: 'مبلغ الردّ ({amount}) يتجاوز القابل للردّ ({refundable}) — الخصم من الفاتورة غير المسدَّدة إلزاميّ أولاً', en: 'Refund ({amount}) exceeds the refundable amount ({refundable}) — the unpaid invoice balance must be offset first' },
-  [MSG.zatca_invoice_chain_locked]: {
-    ar: 'لا يمكن حذف فاتورة دخلت سلسلة الفوترة الإلكترونية — حذفها يكسر ترابط السلسلة الذي تتحقق منه هيئة الزكاة، والتصحيح يكون بإشعار دائن',
-    en: 'An invoice that has entered the e-invoicing chain cannot be deleted — removing it would break the hash chain ZATCA verifies; issue a credit note to correct it',
-  },
-  [MSG.zatca_invoice_cleared_locked]: {
-    ar: 'لا يمكن تعديل بيانات فاتورة مصدَّقة لدى هيئة الزكاة — هي مستند قانوني قائم، والتصحيح يكون بإشعار دائن. (تعديل الملاحظات وحالة السداد يبقى متاحاً)',
-    en: 'An invoice cleared by ZATCA cannot have its content edited — it is a standing legal document; correct it with a credit note. (Notes and payment status can still be changed.)',
-  },
-  [MSG.zatca_invoice_submitting_locked]: {
-    ar: 'الفاتورة قيد الإرسال إلى هيئة الزكاة — انتظر نتيجة الإرسال قبل تعديلها؛ فإن صُدِّقت صار التصحيح بإشعار دائن',
-    en: 'This invoice is being submitted to ZATCA — wait for the result before editing it; if it clears, correction is by credit note',
-  },
-  [MSG.zatca_invoice_successor_locked]: {
-    ar: 'لا يمكن تعديل هذه الفاتورة المرفوضة: صدر بعدها مستند يرتبط بها في سلسلة الهيئة، وتعديلها يقطع ارتباطه — أرسلها كما هي أو صحّح بإشعار دائن',
-    en: 'This rejected invoice cannot be edited: a later document is already chained to it in the authority’s sequence and editing it would break that link — resubmit it as is, or correct it with a credit note',
+  /**
+   * ⚖️ **الفاتورةُ الصادرة لا تُعدَّل ولا تُحذف — مختومةً كانت أو لا** (`ق-٩٤٣`): العميلُ يحمل رقمَها ورمزَها
+   * منذ لحظة الإصدار، وإيصالُ الكاشير يخرج قبل الإجازة، ولا نافذةَ ضيّقة حيث لا تسجيل. **ورسالةٌ واحدة
+   * للجميع** (`ق-٩٥٠`): السببُ (مصدَّقةٌ · قيدَ الإرسال · مختومةٌ · لها خَلَف) لا يغيّر الحكمَ ولا المخرج،
+   * والمخرجُ مسمّىً (`ق-٢٦٥`). والملاحظاتُ وحالةُ السداد تبقى متاحتَين — لا تدخلان المستند.
+   */
+  [MSG.invoice_issued_locked]: {
+    ar: 'الفاتورة صدرت فلا تُعدَّل ولا تُحذف — صحّحها بإشعار دائن (يخفّضها أو يلغيها) أو إشعار مدين (يزيدها). (الملاحظات وحالة السداد تبقى متاحتَين)',
+    en: 'This invoice has been issued and can be neither edited nor deleted — correct it with a credit note (to reduce or cancel it) or a debit note (to increase it). (Notes and payment status can still be changed.)',
   },
 
   [MSG.cash_drawer_not_found]: { ar: 'الدرج غير موجود', en: 'Cash drawer not found' },

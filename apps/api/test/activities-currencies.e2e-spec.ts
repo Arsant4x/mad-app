@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * The last of the structural wave: the activity and currency registries a
@@ -233,7 +235,8 @@ describe('Activities, currencies and FX difference (e2e)', () => {
       // would stop this on its own.
       await request(app.getHttpServer()).delete(`/currencies/${currency.body.id}`).set('Authorization', `Bearer ${token}`).expect(409);
 
-      await request(app.getHttpServer()).delete(`/invoices/${invoice.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
+      // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+      await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), [invoice.body.id]);
     }, 20000);
 
     it('records one rate per day and overwrites a re-recorded day', async () => {

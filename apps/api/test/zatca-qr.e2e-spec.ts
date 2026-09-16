@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { buildZatcaQr, decodeZatcaQr } from '../src/zatca/qr.util';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 describe('ZATCA phase 1 — invoice QR (e2e)', () => {
   let app: INestApplication;
@@ -25,9 +27,8 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), createdInvoiceIds);
     await app.close();
   });
 

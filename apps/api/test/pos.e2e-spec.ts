@@ -5,6 +5,8 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { decodeZatcaQr } from '../src/zatca/qr.util';
 
 /**
@@ -47,7 +49,8 @@ describe('POS cashier (e2e)', () => {
 
   afterAll(async () => {
     if (invShiftId) await auth(request(app.getHttpServer()).post(`/pos/shifts/${invShiftId}/close`)).send({ declaredClosing: 0 });
-    for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), invoiceIds);
     // حركات المخزون أولاً — Restrict يمنع حذف صنف/مستودع له تاريخ حركات.
     if (trackedProductId) {
       // القائمة مقسّمة صفحات الآن — البحث بلاحقة التشغيل الفريدة (اسم الصنف

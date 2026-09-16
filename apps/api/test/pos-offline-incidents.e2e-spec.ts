@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
 interface IncidentRow {
@@ -96,7 +97,8 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
   afterAll(async () => {
     await setGap(2);
     await auth(http().post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 0 });
-    for (const id of invoiceIds) await auth(http().delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, invoiceIds);
     await auth(http().delete(`/products/${productId}`));
     await auth(http().delete(`/trash/products/${productId}`));
 

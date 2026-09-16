@@ -81,7 +81,8 @@ export class InvoicesService {
   ): number {
     if (inv.docType === 'CREDIT_NOTE') return 0;
     if (inv.status === 'PAID') return 0;
-    const credited = inv.docType === 'INVOICE' ? (creditedByInvoiceId.get(inv.id) ?? 0) : 0;
+    // الدائنُ يخفّض فاتورتَه — أو الإشعارَ المدينَ الذي يصحّحه (`ق-٩٥٢`).
+    const credited = creditedByInvoiceId.get(inv.id) ?? 0;
     // المقبوض يُطرح كما يُطرح الإشعار الدائن — وإغفاله كان يجعل الفاتورة
     // المسدَّدة جزئياً تُحتسب بكامل قيمتها، فيطالَب العميل بما دفعه.
     // (قاعدة 4.5: أي رقم يعرض «المتبقي» يُحسب من التخصيصات لا من حقل.)
@@ -126,7 +127,7 @@ export class InvoicesService {
         outstanding: this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId),
         /** How much of this invoice has been credited back, so a screen can
          * show the invoice as partly reversed without a second request. */
-        creditedTotal: inv.docType === 'INVOICE' ? (creditedByInvoiceId.get(inv.id) ?? 0) : 0,
+        creditedTotal: inv.docType === 'CREDIT_NOTE' ? 0 : (creditedByInvoiceId.get(inv.id) ?? 0),
         // مستندٌ مختوم يعرض رمزَه التساعي المحفوظ؛ وغيرُه الوسومَ الخمسة المشتقّة (`ق-١٨٧`).
         zatcaQr: inv.zatcaQrPayload ?? buildZatcaQr({
           sellerName: company?.legalName ?? '',
@@ -449,46 +450,33 @@ export class InvoicesService {
         dto.currency !== undefined ||
         dto.exchangeRate !== undefined;
 
-      // A credit note adjusts a document as it stood — editing it afterwards
-      // would silently change what was adjusted. Delete + reissue instead. A
-      // debit note is receivable, so its payment status may still move.
+      // الإشعارُ مستندٌ صادرٌ برقمه يدخل السلسلة — لا يُعدَّل ولا يُحذف، ومخرجُه إشعارٌ
+      // مقابل (`ق-٩٥٢`). الدائنُ لا حالةَ سدادٍ له فيُرفض كلُّه؛ والمدينُ ذمّةٌ فتتحرّك حالتُه.
       if (existing.docType === 'CREDIT_NOTE') throw new BadRequestException(MSG.credit_note_immutable);
       if (existing.docType === 'DEBIT_NOTE' && changesSignedContent) throw new BadRequestException(MSG.credit_note_immutable);
 
       if (changesSignedContent) {
-        // The line is acceptance, not whether the chain was touched. A
-        // CLEARED invoice is a standing legal document and the authority
-        // holds its signed XML — editing the row would make the two disagree,
-        // so correction is by credit note. A REJECTED one has no legal
-        // existence at all: fixing the data and resubmitting is the intended
-        // recovery, and a credit note against a document the authority never
-        // accepted would be a note against nothing. (Deletion stays refused
-        // for both — see remove(): a rejected invoice has still burned its
-        // ICV slot, and editing keeps that slot while deleting leaves a gap.)
-        if (existing.zatcaStatus === 'CLEARED') throw new ConflictException(MSG.zatca_invoice_cleared_locked);
-        // In flight: the request may already be at the authority and may come
-        // back CLEARED, which would leave the row disagreeing with the XML
-        // just as an edit-after-clearance does. Brief by design — the status
-        // is set immediately before dispatch and overwritten by the outcome.
-        if (existing.zatcaStatus === 'SUBMITTING') throw new ConflictException(MSG.zatca_invoice_submitting_locked);
-        // مختومٌ بانتظار الإبلاغ (`ق-١٨٧`): مستندٌ موقَّعٌ خرج إيصالُه — «قد تقبله الهيئة
-        // في أي لحظة»، فيُقفل كالقيد الإرسال؛ وإن رُدّ صار قابلاً للتصحيح كسائر المردود.
-        if (existing.zatcaStatus === 'STAMPED') throw new ConflictException(MSG.zatca_invoice_stamped_locked);
-
-        // Second layer. `latestChainHash` no longer hands a rejected
-        // invoice's hash to the next document, so the normal path can no
-        // longer produce this shape — but rows recorded before that rule, and
-        // any future path that sets a PIH another way, still can. Where a
-        // successor has committed to this document's hash, recomputing it on
-        // resubmission would leave that successor pointing at a hash that
-        // exists nowhere. Testing for the successor directly (rather than
-        // "is there a higher ICV") keeps the common case — fix the rejection
-        // and retry immediately — open, and refuses only when something is
-        // genuinely attached.
-        if (existing.zatcaHash !== null) {
-          const successors = await tx.invoice.count({ where: { zatcaPreviousHash: existing.zatcaHash } });
-          if (successors > 0) throw new ConflictException(MSG.zatca_invoice_successor_locked);
-        }
+        /**
+         * ⚖️ **الفاتورةُ الصادرة لا تُعدَّل — مختومةً كانت أو لا** (`ق-٩٤٣`).
+         *
+         * لا مسوّدةَ للفاتورة: تصدر لحظةَ إنشائها مرقَّمةً من تسلسل المنشأة، مرحَّلةً،
+         * وقد حرّكت مخزونَها، وحدثُها في الطابور إلى الهيئة (`ق-٩٣٥`). والعميلُ يحمل رقمَها
+         * ورمزَ المرحلة الأولى منذ الإصدار، وإيصالُ الكاشير للقياسية يخرج قبل الإجازة،
+         * ولا نافذةَ ضيّقة حيث لا تسجيل — المنشورُ كلُّه بلا ختمٍ منذ شهر (`ق-٩٤١`).
+         * فتعديلُها يجعل ما بيد العميل يخالف ما عندنا **صامتاً**. والمخرجُ الإشعاران.
+         *
+         * **حارسٌ واحدٌ ورسالةٌ واحدة** (`ق-٩٥٠`): الشروطُ الأربعة التي كانت هنا
+         * (`CLEARED` · `SUBMITTING` · `STAMPED` · مردودةٌ لها خَلَف) محتواةٌ فيه —
+         * السببُ لا يغيّر الحكمَ ولا المخرج.
+         *
+         * ⏸️ **والمردودةُ وحدَها معلَّقةٌ على حكم المالك بعد كتالوج الهيئة** (`ق-٩٥١`):
+         * تبقى على مسارها القائم — تُصحَّح وتُعاد على موقعها — ما لم يلتزم خَلَفٌ
+         * بتجزئتها (فإعادةُ حسابها تترك خَلَفَها يشير إلى تجزئةٍ لا وجودَ لها).
+         */
+        const rejectedAwaitingRuling =
+          existing.zatcaStatus === 'REJECTED' &&
+          (existing.zatcaHash === null || (await tx.invoice.count({ where: { zatcaPreviousHash: existing.zatcaHash } })) === 0);
+        if (!rejectedAwaitingRuling) throw new ConflictException(MSG.invoice_issued_locked);
       }
 
       const data: Prisma.InvoiceUncheckedUpdateInput = {};
@@ -562,27 +550,22 @@ export class InvoicesService {
    * أياً كان فرعُها — فالرابطُ رابطُ مستندٍ بمستند، وإشعارٌ في فرعٍ محجوبٍ يبقى
    * معلَّقاً بها.
    */
+  /**
+   * ⚖️ **الصادرُ لا يُزال — الحذفُ كالتعديل** (`ق-٩٤٣` · `ق-٩٤٥/٣`).
+   *
+   * الإزالةُ تعديلٌ إلى العدم: العميلُ يحمل رقمَ المستند، والتسلسلُ يفقده. وما كان هنا
+   * من شروطٍ (موقعٌ في السلسلة · إشعاراتٌ عليه) صار محتوىً في المنع — ومسارُ المفتاح
+   * الأجنبيّ الذي فشل به الحذفُ (بندُ ① من المراجعة الخارجية) **لا يُبلَغ أصلاً**.
+   * والمخرجُ إشعارٌ: على الفاتورة، وعلى الإشعار إشعارٌ مقابل (`ق-٩٥٢`).
+   *
+   * ⛔ ولا استثناءَ للاختبار هنا (`ق-٩٥٣`): تنظيفُه بمسارٍ في سياق المستأجر
+   * (`test/purge-invoices.ts`) — فاستثناءٌ له يجعله يشهد لِما لا يقع.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.invoice.findUnique({ where: { id } });
+      const existing = await tx.invoice.findUnique({ where: { id }, select: { docType: true } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
-      // An assigned ICV means this document occupies a position in the
-      // authority's hash chain — CLEARED or REJECTED alike (a retry reuses
-      // the position, so even a rejected one has burned it). A submission
-      // interrupted after the ICV was stamped but before the hash was
-      // recorded is covered by the same condition. Deleting the row would
-      // leave the next document chained onto a hash that no longer exists
-      // locally. Reversal is a credit note, not a delete.
-      if (existing.zatcaIcv !== null || existing.zatcaHash !== null) throw new ConflictException(MSG.zatca_invoice_chain_locked);
-      // The FK is Restrict, so this would fail anyway — checked here to give
-      // a diagnosable 409 instead of a raw constraint error.
-      const adjustments = await tx.invoice.count({ where: { relatedInvoiceId: id } });
-      if (adjustments > 0) throw new ConflictException(MSG.invoice_has_credit_notes);
-      await tx.invoice.delete({ where: { id } });
-      // Deleting the invoice first removes the only row referencing the
-      // entry, so it can now be reversed and deleted without hitting the
-      // Restrict FK.
-      await unpostIfLinked(tx, existing.journalEntryId);
+      throw new ConflictException(existing.docType === 'INVOICE' ? MSG.invoice_issued_locked : MSG.credit_note_immutable);
     });
   }
 
@@ -603,7 +586,9 @@ export class InvoicesService {
    */
   issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateCreditNoteDto) {
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds);
+      const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds, 'CREDIT_NOTE');
+      // دائنٌ على مدينٍ زائد (`ق-٩٥٢`): يعكس فوترةً إضافية لا بيعاً — فلا مرتجعَ فيه ولا رفّ.
+      const correctsDebitNote = original.docType === 'DEBIT_NOTE';
 
       const lines: InvoiceLineDto[] =
         dto.lines ??
@@ -616,9 +601,9 @@ export class InvoicesService {
           unitPrice: Number(l.unitPrice),
           taxRate: Number(l.taxRate),
           // إشعارٌ كامل = مرتجعٌ كامل سليم (`SPEC 30.4`): كل سطرٍ يشير إلى أصله ويعود إلى الرفّ.
-          returnsLineId: l.id,
-          returnCondition: 'GOOD' as const,
+          ...(correctsDebitNote ? {} : { returnsLineId: l.id, returnCondition: 'GOOD' as const }),
         }));
+      if (correctsDebitNote && lines.some((l) => l.returnsLineId)) throw new BadRequestException(MSG.return_line_not_original);
 
       // `SPEC 30.2`: سطرُ مرتجعٍ يشير إلى سطرٍ من **هذه** الفاتورة الأصلية وحدها، وبكميةٍ لا
       // تتجاوز ما فُوتر فيه — والتراكم عبر الإشعارات السابقة يفحصه `returnStockedLines` من
@@ -672,10 +657,23 @@ export class InvoicesService {
    * document mechanics as the credit note, opposite economics: it posts in
    * the invoice's own direction and IS receivable, so it starts DUE and its
    * payment status may later move to PAID.
+   *
+   * **على مستوى المنشأة بحقّها**: سقفُ المدين على الدائن الزائد (`ق-٩٥٢`) يُحسب من كلّ
+   * الإشعارات المدينة على ذلك الدائن — وإشعارٌ في فرعٍ محجوبٍ عن القارئ يبقى مخصوماً من
+   * السقف، وإلا جاز أن يُصحَّح أكثرُ مما زاد. والهدفُ نفسُه يُقاس على فروع القارئ في
+   * `adjustableOriginal`.
    */
   issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateDebitNoteDto) {
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds);
+      const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds, 'DEBIT_NOTE');
+      const totals = computeTotals(dto.lines);
+      // مدينٌ على دائنٍ زائد (`ق-٩٥٢`): يصحّح ما زاد في الإشعار الدائن — فلا يتجاوز ما بقي
+      // منه بعد ما صُحِّح قبلَه. (على الفاتورة نفسِها لا سقفَ: فوترةٌ إضافية بلا حدٍّ حسابيّ.)
+      if (original.docType === 'CREDIT_NOTE') {
+        const already = await tx.invoice.aggregate({ where: { relatedInvoiceId: invoiceId, docType: 'DEBIT_NOTE' }, _sum: { total: true } });
+        const remaining = round2(Number(original.total) - Number(already._sum.total ?? 0));
+        if (round2(totals.total) > remaining + 0.001) throw new BadRequestException(MSG.credit_note_exceeds_remaining);
+      }
       return this.createAdjustmentNote(tx, companyId, original, {
         docType: 'DEBIT_NOTE',
         numberKind: 'DN',
@@ -683,20 +681,32 @@ export class InvoicesService {
         issueDate: dto.issueDate,
         eventDate: dto.eventDate,
         lines: dto.lines,
-        totals: computeTotals(dto.lines),
+        totals,
         status: 'DUE',
         post: postDebitNoteEntry,
       });
     }));
   }
 
-  /** The one invoice a note may point at: exists, is a real invoice (a chain
-   * of notes must all reference the one original — adjusting an adjustment
-   * would compound), and sits in a branch the caller may write to. */
-  private async adjustableOriginal(tx: Prisma.TransactionClient, invoiceId: string, allowedBranchIds: string[] | 'all') {
+  /**
+   * الهدفُ الذي يجوز أن يشير إليه الإشعار: **فاتورةٌ أصلية، أو إشعارٌ مقابل** (`ق-٩٥٢`).
+   *
+   * الإشعارُ مستندٌ صادرٌ برقمه يدخل السلسلة — لا يُعدَّل ولا يُحذف — فالإشعارُ الخاطئ
+   * يُصحَّح بإشعارٍ عليه: **المدينُ يصحّح دائناً زائداً، والدائنُ يصحّح مديناً زائداً**.
+   * وهو امتدادُ الآلية القائمة لا محرّكٌ ثانٍ: **القيدُ في نوع الهدف وحدَه** — ولا إشعارَ
+   * على إشعارٍ من نوعه (دائنٌ على دائنٍ يعكس مرّتين، ومدينٌ على مدينٍ يفوتر مرّتين).
+   * ويسكن الهدفُ في فرعٍ يحقّ للمستدعي الكتابةُ فيه.
+   */
+  private async adjustableOriginal(
+    tx: Prisma.TransactionClient,
+    invoiceId: string,
+    allowedBranchIds: string[] | 'all',
+    noteKind: 'CREDIT_NOTE' | 'DEBIT_NOTE',
+  ) {
     const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: true } });
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
-    if (original.docType !== 'INVOICE') throw new BadRequestException(MSG.credit_note_target_invalid);
+    const opposite = noteKind === 'CREDIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE';
+    if (original.docType !== 'INVOICE' && original.docType !== opposite) throw new BadRequestException(MSG.credit_note_target_invalid);
     assertBranchAllowed(allowedBranchIds, original.branchId);
     return original;
   }

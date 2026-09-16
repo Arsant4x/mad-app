@@ -21,7 +21,9 @@ export function CreditNoteModal({ invoice, onCancel, onConfirm }: { invoice: Inv
           </button>
         </div>
         <div className="hint" style={{ marginBottom: 10 }}>
-          إشعار دائن بكامل قيمة الفاتورة {invoice.no} ({fmt(invoice.total)}) — يعكس أثرها في الدفاتر دون تعديل الفاتورة الأصلية، ويُرسَل للهيئة كمستند 381 مرتبطاً بها.
+          {invoice.docType === 'DEBIT_NOTE'
+            ? `إشعار دائن يصحّح الإشعار المدين ${invoice.no} (${fmt(invoice.total)}) بكامل قيمته — فالإشعار الصادر لا يُعدَّل ولا يُحذف، ومخرجه إشعار مقابل؛ ويُرسَل للهيئة كمستند 381 مرتبطاً به.`
+            : `إشعار دائن بكامل قيمة الفاتورة ${invoice.no} (${fmt(invoice.total)}) — يعكس أثرها في الدفاتر دون تعديل الفاتورة الأصلية، ويُرسَل للهيئة كمستند 381 مرتبطاً بها.`}
         </div>
         <div className="field">
           <label>سبب الإصدار (إلزامي لهيئة الزكاة)</label>

@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 
 /**
@@ -73,7 +75,8 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     expect(Number(after['4100'].balance) - Number(before['4100'].balance)).toBeCloseTo(100);
     expect(Number(after['2200'].balance) - Number(before['2200'].balance)).toBeCloseTo(15);
 
-    await request(app.getHttpServer()).delete(`/invoices/${inv.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر يعكس قيدَه (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), [inv.body.id]);
 
     const restored = await balances();
     expect(Number(restored['1200'].balance)).toBeCloseTo(Number(before['1200'].balance));
@@ -84,7 +87,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     await request(app.getHttpServer()).delete(`/journal/${inv.body.journalEntryId}`).set('Authorization', `Bearer ${token}`).expect(404);
   });
 
-  it('re-posts fresh (reversing the old entry) when an invoice is edited', async () => {
+  it('refuses to edit an issued invoice — the first posting stays (ق-٩٤٣)', async () => {
     const before = await balances();
 
     const inv = await request(app.getHttpServer())
@@ -94,21 +97,28 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
       .expect(201);
     const firstEntryId = inv.body.journalEntryId;
 
-    const updated = await request(app.getHttpServer())
+    // ⚖️ كان التعديلُ يعيد الترحيل (يعكس القيدَ الأوّل ويرحّل الثاني) — والحكمُ: الصادرةُ لا
+    // تُعدَّل (ق-٩٤٣)، فيُرفض قبل أي كتابة ويبقى القيدُ الأوّل هو القيد.
+    const refused = await request(app.getHttpServer())
       .patch(`/invoices/${inv.body.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ lines: [{ description: 'v2', quantity: 1, unitPrice: 200, taxRate: 15 }] })
-      .expect(200);
-    expect(updated.body.journalEntryId).not.toBe(firstEntryId);
+      .expect(409);
+    expect(refused.body.message).toContain('إشعار دائن');
+    const kept = await app
+      .get(TenantPrismaService)
+      .runInTenantContext(companyIdOfToken(token), (tx) => tx.invoice.findUniqueOrThrow({ where: { id: inv.body.id }, select: { journalEntryId: true } }));
+    expect(kept.journalEntryId).toBe(firstEntryId);
 
-    // Only the final (v2) totals should be reflected — not v1 + v2 both applied.
+    // الأثرُ المرحَّل هو أثرُ v1 وحدَه — لا v2 ولا كلاهما.
     const after = await balances();
-    expect(Number(after['1200'].balance) - Number(before['1200'].balance)).toBeCloseTo(230);
-    expect(Number(after['4100'].balance) - Number(before['4100'].balance)).toBeCloseTo(200);
-    expect(Number(after['2200'].balance) - Number(before['2200'].balance)).toBeCloseTo(30);
+    expect(Number(after['1200'].balance) - Number(before['1200'].balance)).toBeCloseTo(115);
+    expect(Number(after['4100'].balance) - Number(before['4100'].balance)).toBeCloseTo(100);
+    expect(Number(after['2200'].balance) - Number(before['2200'].balance)).toBeCloseTo(15);
 
-    await request(app.getHttpServer()).delete(`/invoices/${inv.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
-  });
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر يعكس قيدَه (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), [inv.body.id]);
+  }, 30000);
 
   it('[SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches', async () => {
     const before = await balances();
@@ -303,6 +313,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
 
     await request(app.getHttpServer()).delete(`/journal/${inv.body.journalEntryId}`).set('Authorization', `Bearer ${token}`).expect(409);
 
-    await request(app.getHttpServer()).delete(`/invoices/${inv.body.id}`).set('Authorization', `Bearer ${token}`).expect(204);
-  });
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر يعكس قيدَه (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), [inv.body.id]);
+  }, 30000);
 });

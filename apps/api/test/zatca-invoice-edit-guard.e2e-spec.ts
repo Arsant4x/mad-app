@@ -8,6 +8,7 @@ import { Crypto } from '@peculiar/webcrypto';
 import * as x509 from '@peculiar/x509';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * What may be edited after submission is decided by **acceptance**, not by
@@ -181,30 +182,36 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
         data: { zatcaUuid: null, zatcaHash: null, zatcaPreviousHash: null, zatcaIcv: null, zatcaStatus: 'NOT_SUBMITTED', zatcaSubmittedAt: null, zatcaMessage: null },
       }),
     );
-    for (const id of createdInvoiceIds) {
-      await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(204);
-    }
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     delete process.env.ZATCA_API_BASE_OVERRIDE;
     await app.close();
   });
 
-  it('still edits an invoice that was never submitted', async () => {
+  it('refuses to edit an issued invoice that was never submitted — issued is issued, stamped or not (ق-٩٤٣)', async () => {
     const id = await makeInvoice();
+    const before = await getInvoice(id);
 
+    // ⚖️ كانت هذه الحالةُ تمرّ («لم تُرسَل قطّ فتُعدَّل») — والحكمُ: الصادرةُ لا تُعدَّل
+    // مختومةً كانت أو لا، فالعميلُ يحمل رقمَها ورمزَها منذ الإصدار (ق-٩٤٣ · ق-٩٤١).
     const res = await patch(id, {
       customerId: otherCustomerId,
       issueDate: '2026-07-01',
       dueDate: '2026-07-31',
       lines: [{ description: 'بند معدَّل', quantity: 2, unitPrice: 250, taxRate: 15 }],
-    }).expect(200);
+    }).expect(409);
+    expect(res.body.message).toContain('صدرت');
+    expect(res.body.message).toContain('إشعار دائن');
 
-    expect(res.body.customerId).toBe(otherCustomerId);
-    expect(Number(res.body.total)).toBe(575);
-    expect(res.body.lines).toHaveLength(1);
-    expect(res.body.lines[0].description).toBe('بند معدَّل');
+    const after = await getInvoice(id);
+    expect(after!.customerId).toBe(before!.customerId);
+    expect(after!.total.toString()).toBe(before!.total.toString());
+    expect(after!.lines.map((l) => l.id)).toEqual(before!.lines.map((l) => l.id));
   }, 30000);
 
+  // ⏸️ المردودةُ معلَّقةٌ على حكم المالك بعد كتالوج الهيئة (ق-٩٥١) — تبقى الحالاتُ الثلاثُ
+  // التالية على المسار القائم (تُصحَّح وتُعاد على موقعها) حتى يُحكم.
   it('edits a REJECTED invoice freely — fixing the data is the recovery path', async () => {
     const id = await makeRejectedInvoice();
     const before = await getInvoice(id);
@@ -249,7 +256,9 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     await patch(id, { lines: [{ description: 'بند', quantity: 1, unitPrice: 120, taxRate: 15 }] }).expect(200);
     // ...but the ICV slot is burned, so removal would still leave a gap.
     const res = await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(409);
-    expect(res.body.message).toContain('سلسلة الفوترة الإلكترونية');
+    // رسالةٌ واحدة للجميع تسمّي المخرج (ق-٩٥٠).
+    expect(res.body.message).toContain('صدرت');
+    expect(res.body.message).toContain('إشعار دائن');
   }, 40000);
 
   it('refuses to edit a REJECTED invoice once a later document is chained to it', async () => {
@@ -269,7 +278,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     );
 
     const res = await patch(a, { lines: [{ description: 'بند متأخر', quantity: 1, unitPrice: 300, taxRate: 15 }] }).expect(409);
-    expect(res.body.message).toContain('يقطع ارتباطه');
+    expect(res.body.message).toContain('صدرت');
 
     // B, with nothing chained onto it, is still editable.
     await patch(b, { lines: [{ description: 'بند طرف السلسلة', quantity: 1, unitPrice: 310, taxRate: 15 }] }).expect(200);
@@ -280,7 +289,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     await setStatus(id, 'SUBMITTING');
 
     const res = await patch(id, { lines: [{ description: 'بند أثناء الإرسال', quantity: 1, unitPrice: 150, taxRate: 15 }] }).expect(409);
-    expect(res.body.message).toContain('قيد الإرسال');
+    expect(res.body.message).toContain('صدرت');
   }, 40000);
 
   it('refuses to edit a STAMPED invoice — signed, its receipt is out, and the authority may accept it any moment (ق-١٨٧)', async () => {
@@ -288,7 +297,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     await setStatus(id, 'STAMPED');
 
     const res = await patch(id, { lines: [{ description: 'بند بعد الختم', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(409);
-    expect(res.body.message).toContain('مختومةٌ');
+    expect(res.body.message).toContain('صدرت');
     // والوجه الثاني: تعود مردودةً فتُصحَّح — الطريق المقرَّر للتعافي لم يُغلق.
     await setStatus(id, 'REJECTED');
     await patch(id, { lines: [{ description: 'بند بعد الردّ', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(200);
@@ -299,7 +308,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     const before = await getInvoice(id);
 
     const res = await patch(id, { lines: [{ description: 'بند مزوَّر', quantity: 9, unitPrice: 999, taxRate: 15 }] }).expect(409);
-    expect(res.body.message).toContain('مصدَّقة');
+    expect(res.body.message).toContain('صدرت');
     // The remedy has to be in the message — a merchant blocked without being
     // told what to do instead will reach for the delete button next.
     expect(res.body.message).toContain('إشعار دائن');

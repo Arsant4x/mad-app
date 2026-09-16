@@ -25,8 +25,6 @@ function sortValue(inv: Invoice, key: SortKey): string | number {
 export function InvoiceListView({
   invoices,
   onNew,
-  onEdit,
-  onDelete,
   onChangeStatus,
   onSubmitToZatca,
   onIssueCreditNote,
@@ -36,8 +34,6 @@ export function InvoiceListView({
 }: {
   invoices: Invoice[];
   onNew: () => void;
-  onEdit: (invoice: Invoice) => void;
-  onDelete: (invoice: Invoice) => void;
   onChangeStatus: (invoice: Invoice, status: InvoiceStatus) => void;
   onSubmitToZatca: (invoice: Invoice) => void;
   onIssueCreditNote: (invoice: Invoice) => void;
@@ -206,19 +202,17 @@ export function InvoiceListView({
                 <td>
                   <RowMenu
                     actions={[
-                      // A note is immutable after issue (the server refuses the
-                      // edit), and crediting a credit note is meaningless — both
-                      // actions exist only on real invoices.
+                      // ⚖️ الصادرُ لا يُعدَّل ولا يُحذف — مختومةً كانت أو لا (ق-٩٤٣): لا زرَّ
+                      // تعديلٍ ولا حذف؛ والمخرجُ الإشعاران. وعلى الإشعار إشعارٌ مقابلٌ
+                      // يصحّحه (ق-٩٥٢): مدينٌ لدائنٍ زائد، ودائنٌ لمدينٍ زائد — لا من نوعه.
                       ...(inv.docType === 'INVOICE'
                         ? [
-                            // A cleared invoice's data is frozen (the server
-                            // refuses the edit) — correcting it is exactly
-                            // what the two notes below are for.
-                            ...(inv.zatcaStatus !== 'CLEARED' ? [{ label: '✎ تعديل الفاتورة', onClick: () => onEdit(inv) }] : []),
                             { label: '↩ إشعار دائن', onClick: () => onIssueCreditNote(inv) },
                             { label: '↪ إشعار مدين', onClick: () => onIssueDebitNote(inv) },
                           ]
-                        : []),
+                        : inv.docType === 'CREDIT_NOTE'
+                          ? [{ label: '↪ إشعار مدين يصحّحه', onClick: () => onIssueDebitNote(inv) }]
+                          : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED'
@@ -230,8 +224,6 @@ export function InvoiceListView({
                             },
                           ]
                         : []),
-                      '-',
-                      { label: '🗑 حذف', onClick: () => onDelete(inv), danger: true },
                     ]}
                   />
                 </td>

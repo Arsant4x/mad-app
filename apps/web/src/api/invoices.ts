@@ -126,8 +126,8 @@ export interface CreateCreditNoteInput {
 
 export const listInvoices = () => apiClient.get<Invoice[]>('/invoices').then((r) => r.data);
 export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice>('/invoices', dto).then((r) => r.data);
+/** الملاحظاتُ وحالةُ السداد وحدَهما — المحتوى الموقَّع لا يُعدَّل بعد الإصدار (الخادم يرفضه بـ409 · ق-٩٤٣)، ولا حذفَ لمستندٍ صادر. */
 export const updateInvoice = (id: string, dto: UpdateInvoiceInput) => apiClient.patch<Invoice>(`/invoices/${id}`, dto).then((r) => r.data);
-export const deleteInvoice = (id: string) => apiClient.delete(`/invoices/${id}`);
 export const issueCreditNote = (invoiceId: string, dto: CreateCreditNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/credit-note`, dto).then((r) => r.data);
 
 export interface CreateDebitNoteInput {

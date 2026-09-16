@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * The structural wave (activities + branches, multi-currency, fiscal year) has
@@ -125,7 +126,8 @@ describe('Structural wave — isolation and base amounts (e2e)', () => {
     expect(Number(row.baseSubtotal)).toBeCloseTo(Number(row.subtotal), 2);
     expect(Number(row.baseTotal)).toBeCloseTo(Number(row.total), 2);
 
-    await request(app.getHttpServer()).delete(`/invoices/${res.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyAId, [res.body.id]);
   });
 
   it('converts to the base currency when the invoice is issued in a foreign one', async () => {
@@ -153,7 +155,8 @@ describe('Structural wave — isolation and base amounts (e2e)', () => {
     expect(Number(row.baseTotal)).toBeCloseTo(431.25, 2);
     expect(Number(row.baseSubtotal)).toBeCloseTo(375, 2);
 
-    await request(app.getHttpServer()).delete(`/invoices/${res.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(tenantPrisma, companyAId, [res.body.id]);
   });
 
   it('rejects a malformed currency code or a non-positive rate', async () => {

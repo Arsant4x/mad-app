@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
 /**
  * مهلة الإشعار (`م٥٤`): **خمسة عشر يوماً من نهاية شهر الواقعة** — **تنبيهٌ لا حجز**.
@@ -43,7 +45,8 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
-    for (const id of [...created].reverse()) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`));
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
+    await purgeInvoicesForTest(app.get(TenantPrismaService), companyIdOfToken(token), created);
     await app.close();
   });
 

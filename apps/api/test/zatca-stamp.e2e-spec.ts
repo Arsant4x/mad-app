@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { purgeInvoicesForTest } from './purge-invoices';
 import { encryptSecret } from '../src/common/crypto/secret.util';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
@@ -102,10 +103,9 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     // ما فُتح هنا يُغلق هنا — مناوبةٌ مفتوحة تُسقط حزمةَ الكاشير التالية بـ409 (قِيس على قاعدةٍ نظيفة).
     if (openedShiftId) await auth(request(app.getHttpServer()).post(`/pos/shifts/${openedShiftId}/close`)).send({ declaredClosing: 0 }).catch(() => undefined);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } })).catch(() => undefined);
-    // الفواتير المختومة تحمل موقعاً في السلسلة فلا تُحذف (حارس الحذف) — تبقى في
-    // المنشأة التجريبية كغيرها من بقايا الاختبارات؛ والصنف يُحذف حذفاً ناعماً فقط،
-    // فبنودُها تشير إليه ومسحُه من السلة يُرفض بالقيد المرجعي (سلوكٌ مقصود).
-    for (const id of invoiceIds) await auth(request(app.getHttpServer()).delete(`/invoices/${id}`)).catch(() => undefined);
+    // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣)،
+    // فلا تبقى الفواتيرُ المختومة رواسبَ كما كانت.
+    await purgeInvoicesForTest(tenantPrisma, companyId, invoiceIds).catch(() => undefined);
     await auth(request(app.getHttpServer()).delete(`/products/${productId}`)).catch(() => undefined);
     await app.close();
   });

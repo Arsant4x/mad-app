@@ -6,7 +6,6 @@ import { apiErrorCode } from '../../lib/apiError';
 import {
   CREDIT_LIMIT_EXCEEDED,
   createInvoice,
-  deleteInvoice,
   type Invoice,
   type InvoiceLineInput,
   type InvoiceStatus,
@@ -24,7 +23,8 @@ import { DebitNoteModal } from './DebitNoteModal';
 import { InvoiceBuilderView } from './InvoiceBuilderView';
 import { InvoiceListView } from './InvoiceListView';
 
-type View = { mode: 'list' } | { mode: 'builder'; editing: Invoice | null };
+/** البنّاءُ للإنشاء وحدَه: الصادرُ لا يُعدَّل ولا يُحذف (ق-٩٤٣) — والمخرجُ الإشعاران. */
+type View = { mode: 'list' } | { mode: 'builder' };
 
 export function InvoicesPage() {
   const location = useLocation();
@@ -36,9 +36,7 @@ export function InvoicesPage() {
   // Dashboard's "+ فاتورة جديدة" navigates here with this nav state to jump
   // straight into the builder, matching the mockup's goTo('invoice');
   // showInvoiceBuilder() combo.
-  const [view, setView] = useState<View>((location.state as { openBuilder?: boolean } | null)?.openBuilder ? { mode: 'builder', editing: null } : { mode: 'list' });
-  const [pendingDelete, setPendingDelete] = useState<Invoice | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [view, setView] = useState<View>((location.state as { openBuilder?: boolean } | null)?.openBuilder ? { mode: 'builder' } : { mode: 'list' });
   const [saveError, setSaveError] = useState<string | null>(null);
   /**
    * مسوّدةُ الفاتورة المرفوضة **لتجاوزٍ ممكن** — تُحفظ لتُعاد بتصريح.
@@ -66,24 +64,6 @@ export function InvoicesPage() {
   useEffect(() => {
     reload().finally(() => setLoading(false));
   }, []);
-
-  /**
-   * The server refuses to delete an invoice that entered the ZATCA chain
-   * (409) — that refusal must reach the user as its Arabic reason, not
-   * disappear as an unhandled rejection leaving the row silently in place.
-   */
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const invoice = pendingDelete;
-    setPendingDelete(null);
-    try {
-      await deleteInvoice(invoice.id);
-    } catch (e) {
-      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setDeleteError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حذف الفاتورة'));
-    }
-    await reload();
-  }
 
   async function handleChangeStatus(invoice: Invoice, status: InvoiceStatus) {
     await updateInvoice(invoice.id, { status });
@@ -182,11 +162,7 @@ export function InvoicesPage() {
     setSaveError(null);
     setOverridable(null);
     try {
-      if (view.mode === 'builder' && view.editing) {
-        await updateInvoice(view.editing.id, payload);
-      } else {
-        await createInvoice(payload);
-      }
+      await createInvoice(payload);
     } catch (e) {
       const body = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? 'تعذّر حفظ الفاتورة'));
@@ -206,7 +182,7 @@ export function InvoicesPage() {
         <InvoiceBuilderView
           customers={customers}
           branches={branches}
-          editing={view.editing}
+          editing={null}
           nextNumberHint={`INV-${new Date().getFullYear()}-${String(invoices.filter((i) => i.docType === 'INVOICE').length + 1).padStart(4, '0')}`}
           onCancel={() => setView({ mode: 'list' })}
           onSave={handleSave}
@@ -235,9 +211,7 @@ export function InvoicesPage() {
     <>
       <InvoiceListView
         invoices={invoices}
-        onNew={() => setView({ mode: 'builder', editing: null })}
-        onEdit={(invoice) => setView({ mode: 'builder', editing: invoice })}
-        onDelete={(invoice) => setPendingDelete(invoice)}
+        onNew={() => setView({ mode: 'builder' })}
         onChangeStatus={handleChangeStatus}
         onSubmitToZatca={(invoice) => setPendingSubmit(invoice)}
         onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
@@ -258,18 +232,6 @@ export function InvoicesPage() {
       )}
       {submitError && (
         <ConfirmModal title="تعذّر الإرسال" body={submitError} confirmLabel="حسناً" hideCancel onCancel={() => setSubmitError(null)} onConfirm={() => setSubmitError(null)} />
-      )}
-      {pendingDelete && (
-        <ConfirmModal
-          title="حذف الفاتورة"
-          body={`حذف الفاتورة ${pendingDelete.no}؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
-          onCancel={() => setPendingDelete(null)}
-          onConfirm={confirmDelete}
-        />
-      )}
-      {deleteError && (
-        <ConfirmModal title="تعذّر الحذف" body={deleteError} confirmLabel="حسناً" hideCancel onCancel={() => setDeleteError(null)} onConfirm={() => setDeleteError(null)} />
       )}
     </>
   );
