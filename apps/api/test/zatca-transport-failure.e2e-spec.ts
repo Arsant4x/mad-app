@@ -174,7 +174,7 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     // السببُ مخزَّنٌ نصّاً مقروءاً (لا فاصلَ ترجمةٍ صفريّاً — فعمودُ النصّ يرفضه ويُسقط الدورة كلَّها).
     expect(String(after.lastError)).toMatch(/fetch failed|ECONNREFUSED/i);
     expect(String(after.lastError)).toContain('سيُعاد');
-    expect(String(after.lastError)).not.toContain(' ');
+    expect(String(after.lastError)).not.toContain(String.fromCharCode(0));
 
     const r = await row(firstId);
     expect(r.zatcaStatus).toBe('STAMPED');
