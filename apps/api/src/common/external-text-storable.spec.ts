@@ -181,8 +181,13 @@ export function scanSource(source: string, fields: ExternalTextField[]): ScanRes
     const op = m[2];
     const open = m.index + m[0].length - 1;
     const close = matchingClose(masked, open);
-    if (close === -1) continue;
     result.examined += 1;
+    if (close === -1) {
+      // نداءٌ لا يستطيع الحارسُ قراءتَه (أقواسٌ غير متوازنة بعد التقنيع) يُدان لا يُتخطّى — فتخطّيه صامتاً
+      // يُخفي ما بُني ليراه (كسرٌ لا يُترجم مرّ منه في إثباتٍ بالعكس 2026-09-17 قبل هذا السطر).
+      result.violations.push({ line: lineOf(open), accessor, op, field: '*', value: 'نداءٌ لم يُقرأ — أقواسٌ غير متوازنة' });
+      continue;
+    }
     const args = masked.slice(open + 1, close);
     const keys = op === 'upsert' ? ['create', 'update'] : ['data'];
     for (const key of keys) {
@@ -268,6 +273,7 @@ describe('حارسٌ مشتقّ — كلُّ كتابةِ نصٍّ من جهةٍ
       'const f = tx.outboxEvent.update({ where: { id }, data: { lastError: message } });',
       `const g = tx.outboxEvent.upsert({ where: { id }, create: { lastError: ${BT}x ${BT} }, update: { lastError: storableError(e) } });`,
       'const h = tx.customer.update({ where: { id }, data: { name: "zatcaMessage: raw" } });',
+      'const i = tx.invoice.update({ where: { id }, data: { zatcaMessage: raw } // قوسُ النداء مفقود',
     ].join('\n');
     const fx: ExternalTextField[] = [
       { model: 'Invoice', field: 'zatcaMessage' },
@@ -275,8 +281,8 @@ describe('حارسٌ مشتقّ — كلُّ كتابةِ نصٍّ من جهةٍ
       { model: 'OutboxEvent', field: 'lastError' },
     ];
     const r = scanSource(fixture, fx);
-    expect(r.examined).toBe(6);
-    expect(r.violations.map((v) => `${v.line}:${v.field}`)).toEqual(['1:zatcaMessage', '6:complianceRequestId', '7:lastError', '8:lastError']);
+    expect(r.examined).toBe(7);
+    expect(r.violations.map((v) => `${v.line}:${v.field}`)).toEqual(['1:zatcaMessage', '6:complianceRequestId', '7:lastError', '8:lastError', '10:*']);
     expect(rawSqlMentions('await tx.$executeRaw`UPDATE invoices SET "zatcaMessage" = ${x}`', fx)).toEqual([1]);
     expect(rawSqlMentions('const s = { zatcaMessage: 1 };', fx)).toEqual([]);
   });
