@@ -9,6 +9,7 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
 /**
  * Credit notes as documents: issued against an invoice, never touching it,
@@ -21,6 +22,7 @@ import { purgeInvoicesForTest } from './purge-invoices';
  */
 describe('ZATCA credit notes (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
@@ -56,9 +58,9 @@ describe('ZATCA credit notes (e2e)', () => {
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    // Dead port: dispatch runs for real (build, sign, chain) and only the
-    // outbound call fails — no test traffic reaches the authority.
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    // خادمٌ محلّيّ يمثّل الهيئة ويجيب بالردّ `400` (ق-٩٧١): الإرسال يبني ويوقّع ويسجّل السلسلة
+    // فعلاً، والمردودةُ ردٌّ حقيقيُّ الشكل لا سقوطُ نقل — ولا حركةَ تصل الهيئة.
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -93,7 +95,7 @@ describe('ZATCA credit notes (e2e)', () => {
     // الإشعاراتُ قبل فواتيرها، وقيودُها تُعكس.
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     await app.close();
   });
 

@@ -10,6 +10,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
 /**
  * Deleting a document that holds a ZATCA chain link would leave a gap the
@@ -18,8 +19,8 @@ import { purgeInvoicesForTest } from './purge-invoices';
  *
  * These tests lock in the delete guard: any invoice carrying a chain link
  * (ICV/hash) refuses deletion with a localized 409 — whatever its status,
- * because a REJECTED document keeps its link for retry and a CLEARED one is
- * final — while an unsubmitted invoice stays freely deletable.
+ * because a REJECTED document is closed with its link (ق-٩٥٨) and a CLEARED
+ * one is final — and an issued invoice is never deleted at all (ق-٩٤٣).
  *
  * Same setup as zatca-phase2.e2e-spec.ts: a locally seeded self-signed
  * credential and an unroutable API base, so signing and chaining run for real
@@ -27,6 +28,7 @@ import { purgeInvoicesForTest } from './purge-invoices';
  */
 describe('ZATCA chain — invoice delete guard (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
@@ -106,9 +108,9 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    // Nothing listens on port 9: dispatch builds, signs and records the chain
-    // for real, and only the outbound call fails — REJECTED with a stored link.
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    // خادمٌ محلّيّ يمثّل الهيئة ويجيب بالردّ `400` (ق-٩٧١): يُبنى ويُوقَّع ويُسجَّل الموقعُ
+    // فعلاً، والردُّ جوابٌ حقيقيُّ الشكل — REJECTED بموقعٍ محفوظ، لا سقوطُ نقلٍ يُعاد.
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -166,7 +168,7 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
     // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     await app.close();
   });
 

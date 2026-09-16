@@ -13,6 +13,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
 /**
  * Phase 2 cannot clear a real invoice without a certificate issued by the
@@ -27,6 +28,7 @@ import { purgeInvoicesForTest } from './purge-invoices';
  */
 describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
@@ -80,10 +82,10 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    // Nothing listens on port 9. Dispatch therefore runs for real — building
-    // and signing the document — and only the outbound call fails, so no test
-    // traffic ever reaches gw-fatoora.zatca.gov.sa.
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    // خادمٌ محلّيّ يمثّل الهيئة ويجيب بالردّ `400` (ق-٩٧١): الإرسال يبني ويوقّع ويسجّل السلسلة
+    // فعلاً، والجوابُ ردٌّ حقيقيُّ الشكل — فالمردودةُ هنا ردٌّ لا سقوطُ نقل (الذي صار يُرمى
+    // ويُعاد). ولا حركةَ تصل gw-fatoora.zatca.gov.sa.
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -140,7 +142,7 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       await request(app.getHttpServer()).delete(`/company-users/${id}`).set('Authorization', `Bearer ${token}`);
     }
     await clearCredential();
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     await app.close();
   });
 
@@ -402,11 +404,13 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       }, 20000);
     });
 
-    it('records the chain and marks the invoice REJECTED when submission cannot complete', async () => {
-      // A certificate exists, so the guard passes and the invoice reaches the
-      // dispatch path — where signing is still unimplemented. That proves a
-      // failed send leaves a diagnosable REJECTED row rather than an invoice
-      // stuck on SUBMITTING.
+    it('records the chain and marks the invoice REJECTED when the authority answers with a rejection (ق-٩٧١)', async () => {
+      // A certificate exists, so the guard passes and the invoice is built,
+      // signed and sent for real — and the local authority answers 400. That
+      // proves an authority rejection leaves a diagnosable REJECTED row with
+      // its chain link, rather than an invoice stuck on SUBMITTING. (A send
+      // that gets no answer is a different thing now: it is thrown and
+      // retried — test/zatca-transport-failure.e2e-spec.ts.)
       await seedProductionCredential();
 
       const id = await makeInvoice();

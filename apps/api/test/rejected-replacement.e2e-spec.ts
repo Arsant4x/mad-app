@@ -11,12 +11,13 @@ import { localDateOf } from '../src/common/wall-clock.util';
 import { customerExposure } from '../src/reports/receivables-exposure.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 /**
  * ⚖️ **المردودةُ تُغلق ولا تُمسّ، ويُصدَر بدلاً منها جديد** (`ق-٩٥٨` · `ق-٩٦٣` … `ق-٩٦٧`) —
- * الحارسُ الحيّ بسبعته على المسار الحقيقيّ (توقيعٌ فعليّ بشهادةٍ محلّية، والإرسالُ إلى منفذٍ
- * لا يصغي فيُردّ المستند):
+ * الحارسُ الحيّ بسبعته على المسار الحقيقيّ (توقيعٌ فعليّ بشهادةٍ محلّية، والإرسالُ إلى خادمٍ
+ * محلّيٍّ يمثّل الهيئة ويجيب بالردّ `400` — فالمردودةُ ردٌّ لا سقوطُ نقل، `ق-٩٧١`):
  *
  *   ① البدلُ رقمٌ جديد من التسلسل **بلا لاحقة**، يحمل الإحالةَ في الصفّ ولا يحملها أمام الهيئة
  *      (**لا `BillingReference`** في مستنده الموقَّع)، بعدّادٍ وتجزئةٍ جديدَين وسلفٍ من آخر مقبول
@@ -34,6 +35,7 @@ import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-compa
  */
 describe('المردودةُ تُغلق ويُصدَر بدلاً منها جديد (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let tenantPrisma: TenantPrismaService;
   // منشأةٌ معزولةٌ تُولد وتموت مع الحزمة: نطاقُ أرقام الصناديق في منشأة العرض ممتلئٌ على
   // قاعدة التطوير (ركامُ تشغيلات)، ودفترُها وطبقاتُها لا يشاركهما أحد فتُقاس الفروقُ بلا ضجيج.
@@ -129,7 +131,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     return auth(request(server()).post(`/zatca/invoices/${id}/submit`));
   }
 
-  /** مردودةٌ حقيقية: توقيعٌ فعليّ ثم إرسالٌ يسقط على منفذٍ لا يصغي. */
+  /** مردودةٌ حقيقية: توقيعٌ فعليّ ثم إرسالٌ يجيب عنه الخادمُ المحلّيّ بالردّ `400`. */
   async function makeRejected(customerId: string, line: Record<string, unknown>, extra: Record<string, unknown> = {}): Promise<Row> {
     const id = await makeInvoice(customerId, line, extra);
     const res = await submit(id).expect(201);
@@ -185,8 +187,9 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    // لا أحدَ يصغي على المنفذ ٩: يُبنى ويُوقَّع ويُسجَّل الموقعُ فعلاً، ويسقط الإرسالُ وحده.
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    // خادمٌ محلّيّ يمثّل الهيئة ويجيب بالردّ `400`: يُبنى ويُوقَّع ويُسجَّل الموقعُ فعلاً، والجوابُ
+    // ردٌّ حقيقيُّ الشكل (ق-٩٧١) — ولا حركةَ تصل الهيئة.
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -226,7 +229,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     await purgeInvoicesForTest(tenantPrisma, companyId, created);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
     await removeIsolatedCompany(app, company);
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     await app.close();
   }, 60000);
 
@@ -416,7 +419,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     expect(second.status).toBe(409);
     expect(second.body.message).toContain(replacementStd.no);
 
-    // البدلُ نفسُه مردودٌ الآن (المنفذُ لا يصغي) فبدلُه جائز — أمّا غيرُ المردود فلا.
+    // البدلُ نفسُه مردودٌ الآن (الخادمُ المحلّيّ يردّه) فبدلُه جائز — أمّا غيرُ المردود فلا.
     const fresh = await makeInvoice(simpleCustomerId, SERVICE);
     const notRejected = await replace(fresh);
     expect(notRejected.status).toBe(400);

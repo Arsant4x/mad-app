@@ -9,6 +9,7 @@ import * as x509 from '@peculiar/x509';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
 /**
  * What may be edited after submission is decided by **acceptance**, not by
@@ -35,6 +36,7 @@ import { purgeInvoicesForTest } from './purge-invoices';
  */
 describe('ZATCA chain — invoice edit guard (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let tenantPrisma: TenantPrismaService;
   let token: string;
   let companyId: string;
@@ -85,8 +87,8 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     return res.body.id;
   }
 
-  /** A submitted invoice. The send fails (nothing listens on port 9), so the
-   * authority's verdict is REJECTED — but the chain link is recorded before
+  /** A submitted invoice the local authority answers with 400, so the
+   * authority's verdict is REJECTED — and the chain link is recorded before
    * the call, which is the state the guard reasons about. */
   async function makeRejectedInvoice(): Promise<string> {
     const id = await makeInvoice();
@@ -131,9 +133,9 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    // Nothing listens on port 9: dispatch builds, signs and records the chain
-    // for real, and only the outbound call fails — REJECTED with a stored link.
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    // خادمٌ محلّيّ يمثّل الهيئة ويجيب بالردّ `400` (ق-٩٧١): يُبنى ويُوقَّع ويُسجَّل الموقعُ
+    // فعلاً، والردُّ جوابٌ حقيقيُّ الشكل — REJECTED بموقعٍ محفوظ، لا سقوطُ نقلٍ يُعاد.
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -182,7 +184,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     // الصادرُ لا يُحذف عبر الواجهة (ق-٩٤٣) — والتنظيفُ بمسارٍ في سياق المستأجر (ق-٩٥٣).
     await purgeInvoicesForTest(tenantPrisma, companyId, createdInvoiceIds);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } }));
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     await app.close();
   });
 

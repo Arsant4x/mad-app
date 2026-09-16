@@ -197,6 +197,11 @@ export function InvoiceListView({
                       rejection, so it is shown rather than hidden behind the
                       badge alone. */}
                   {inv.zatcaStatus === 'REJECTED' && inv.zatcaMessage && <div className="hint zatca-reason">{inv.zatcaMessage}</div>}
+                  {/* ⚖️ سقوطُ المحاولة ليس جواباً (ق-٩٧١): المستندُ كما هو ويُعاد آلياً — والسببُ الأخير
+                      يُعلَن هنا لا يُخفى، فما لا يُرى لا يُتابَع. */}
+                  {inv.zatcaStatus !== 'REJECTED' && inv.zatcaStatus !== 'CLEARED' && inv.zatcaMessage && (
+                    <div className="hint">آخر محاولة: {inv.zatcaMessage}</div>
+                  )}
                   {inv.zatcaIcv !== null && <div className="hint">تسلسل: {inv.zatcaIcv}</div>}
                 </td>
                 {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في

@@ -5,7 +5,7 @@ import { encryptSecret } from '../common/crypto/secret.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { GENESIS_PREVIOUS_HASH, latestChainHash, nextIcv } from './hash-chain.util';
-import { ZatcaService } from './zatca.service';
+import { ZatcaAttemptFailedException, ZatcaService } from './zatca.service';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -54,9 +54,9 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  * كله** (قرار المالك 2026-08-16).
  *
  * وبيانات الاعتماد **فاسدة عمداً**: `signInvoice` يسقط قبل `fetch` أصلاً،
- * و`dispatch` يلتقط أي سقوط ويختم الفاتورة `REJECTED` — «Any failure marks the
- * invoice REJECTED with the reason rather than leaving it stuck on SUBMITTING».
- * فموقع السلسلة يُلتزم قبل الإرسال، وهو بالضبط ما نقيسه.
+ * وسقوطُ التوقيع **ليس جواباً من الهيئة** (`ق-٩٧١`): يُحرَّر الادّعاء والموقعُ محفوظ،
+ * ويُرمى باسمه (`ZatcaAttemptFailedException`) لا يُكتب مردوداً. فموقع السلسلة
+ * يُلتزم قبل الإرسال، وهو بالضبط ما نقيسه.
  */
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
@@ -180,8 +180,11 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
       invoiceIds.map((id) => zatca.submitInvoice(companyId, 'COMPANY', id)),
     );
 
-    // **لا رفض**: قبل إعادة المحاولة كان الخاسر يردّ `P2002` خام.
-    const rejected = results.filter((r) => r.status === 'rejected');
+    // **لا رفضَ إلا المسمّى**: التوقيعُ يسقط بالمفتاح الفاسد فيُرمى باسمه (`ق-٩٧١`) — وهو
+    // المتوقَّع؛ وأيُّ رفضٍ آخر عطلٌ (قبل إعادة المحاولة كان الخاسر يردّ `P2002` خام).
+    const rejected = results.filter(
+      (r) => r.status === 'rejected' && !((r as PromiseRejectedResult).reason instanceof ZatcaAttemptFailedException),
+    );
     if (rejected.length > 0) {
       const reasons = rejected.map((r) => String((r as PromiseRejectedResult).reason?.message ?? r)).join(' | ');
       throw new Error(`استدعاء تزامنيّ رُفض بدل أن يتقارب — ${reasons}`);
