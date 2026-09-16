@@ -10,6 +10,7 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { InvoicesService } from './invoices.service';
 
@@ -55,6 +56,18 @@ export class InvoicesController {
   @AuditEntityFromResult()
   issueDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateDebitNoteDto) {
     return this.invoicesService.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
+
+  /**
+   * ⚖️ **بدلٌ عن مردودة** (`ق-٩٥٨`): مستندٌ جديدٌ بعدّادٍ وتجزئةٍ جديدَين يحلّ محلَّ فاتورةٍ
+   * ردّتها الهيئة، والمردودةُ تُغلق ولا تُمسّ. بوّابتُه `add` كالإشعارَين (يُنشئ مستنداً)،
+   * والفاعلُ يُمرَّر لأن نقلَ المقبوض يُكتب حدثاً باسمه (`ق-٩٦٦`).
+   */
+  @Post(':id/replacement')
+  @RequiresAction('add')
+  @AuditEntityFromResult()
+  issueReplacement(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: IssueReplacementDto) {
+    return this.invoicesService.issueReplacement(tenant, user.username, id, dto);
   }
 
   @Patch(':id')

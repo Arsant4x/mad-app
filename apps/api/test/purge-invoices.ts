@@ -9,7 +9,7 @@ import { unpostIfLinked } from '../src/journal/auto-posting.util';
  * المستأجر، كما تفكّ حزمةُ حارس التعديل السلسلةَ قبل الحذف.
  *
  * ما يُزال، بالترتيب الذي تفرضه المفاتيح (`Restrict`):
- *   ① الإشعاراتُ قبل فواتيرها (`relatedInvoiceId`).
+ *   ① الإشعاراتُ قبل فواتيرها (`relatedInvoiceId`)، والبدلُ قبل مردودته (`replacesInvoiceId`).
  *   ② لكلِّ مستند: مرتجعُه (حركةُ `IN` بمصدر `SALE`) يُردّ عن طبقاته — لأن الإرجاع زاد
  *      الطبقةَ بلا صفِّ استهلاك (`restoreConsumptionPartial`) — ثم استهلاكاتُ حركاته مع ردِّ
  *      الكمية إلى طبقتها، ثم الحركاتُ نفسُها؛ فلا يُترك دفترُ الطبقات مخالفاً لمعادلته
@@ -36,16 +36,20 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
         id: true,
         no: true,
         journalEntryId: true,
+        reversalJournalEntryId: true,
         relatedInvoiceId: true,
+        replacesInvoiceId: true,
         lines: { select: { id: true, returnsLineId: true } },
       },
     });
     // الأوراقُ أولاً: ما لا يشير إليه صفٌّ باقٍ — فإشعارٌ على إشعارٍ (`ق-٩٥٢`) يُزال قبل الإشعار
-    // الذي يصحّحه، والإشعارُ قبل فاتورته.
+    // الذي يصحّحه، والإشعارُ قبل فاتورته، والبدلُ قبل مردودته (`replacesInvoiceId` بـ`Restrict`).
     const remaining = new Map(rows.map((r) => [r.id, r]));
     const ordered: typeof rows = [];
     while (remaining.size > 0) {
-      const referenced = new Set([...remaining.values()].map((r) => r.relatedInvoiceId).filter((x): x is string => x !== null));
+      const referenced = new Set(
+        [...remaining.values()].flatMap((r) => [r.relatedInvoiceId, r.replacesInvoiceId]).filter((x): x is string => x !== null),
+      );
       const leaves = [...remaining.values()].filter((r) => !referenced.has(r.id));
       if (leaves.length === 0) throw new Error('purgeInvoicesForTest: دورةٌ في إحالات الإشعارات — لا ورقةَ تُزال');
       for (const leaf of leaves) {
@@ -63,8 +67,9 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
       // ② المرتجعُ يُردّ عن طبقاته أولاً — بالتوزيع نفسِه الذي زادها به (الأحدثُ استهلاكاً أولاً).
       for (const m of movements.filter((x) => x.type === 'IN' && x.origin === 'SALE')) {
         const line = inv.lines.find((l) => l.id === m.invoiceLineId);
-        if (!line?.returnsLineId) continue;
-        const sale = await tx.stockMovement.findFirst({ where: { invoiceLineId: line.returnsLineId, type: 'OUT' }, select: { id: true } });
+        if (!line) continue;
+        // مرتجعُ إشعارٍ يردّ سطرَ فاتورته؛ وإغلاقُ مردودةٍ ببدل يردّ السطرَ نفسَه (`ق-٩٦٥`).
+        const sale = await tx.stockMovement.findFirst({ where: { invoiceLineId: line.returnsLineId ?? line.id, type: 'OUT' }, select: { id: true } });
         if (!sale) continue;
         const consumptions = await tx.inventoryConsumption.findMany({ where: { movementId: sale.id, layerId: { not: null } }, orderBy: { createdAt: 'desc' } });
         let remaining = Number(m.qty);
@@ -102,11 +107,13 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
       }
       await tx.quote.updateMany({ where: { convertedInvoiceId: inv.id }, data: { convertedInvoiceId: null } });
 
-      // ④ الصفُّ ثم قيودُه — كما كان `remove()` يفعل قبل أن يُغلَق.
+      // ④ الصفُّ ثم قيودُه — كما كان `remove()` يفعل قبل أن يُغلَق. ومردودةٌ أُغلقت ببدلٍ تحمل
+      //    قيدَ عكسها (`ق-٩٦٥`) وقيدَ عكس تكلفتها (بذكره) — يُزالان معها.
       await tx.invoice.delete({ where: { id: inv.id } });
       await unpostIfLinked(tx, inv.journalEntryId);
+      await unpostIfLinked(tx, inv.reversalJournalEntryId);
       const costEntries = await tx.journalEntry.findMany({
-        where: { memo: { in: [`تكلفة مبيعات ${inv.no}`, `عكس تكلفة مبيعات — مرتجع ${inv.no}`] } },
+        where: { memo: { in: [`تكلفة مبيعات ${inv.no}`, `عكس تكلفة مبيعات — مرتجع ${inv.no}`, `عكس تكلفة مبيعات — إغلاقُ مردودة ${inv.no}`] } },
         select: { id: true },
       });
       for (const e of costEntries) await unpostIfLinked(tx, e.id);

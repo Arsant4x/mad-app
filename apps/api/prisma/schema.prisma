@@ -1101,6 +1101,19 @@ model Invoice {
   relatedInvoiceId String?
   relatedInvoice   Invoice?  @relation("InvoiceAdjustments", fields: [relatedInvoiceId], references: [id], onDelete: Restrict)
   adjustments      Invoice[] @relation("InvoiceAdjustments")
+  /// ⚖️ **بدلٌ عن مردودة** (`ق-٩٥٨` · `ق-٩٦٣`): المردودةُ التي يحلّ هذا المستندُ محلَّها — رابطٌ
+  /// **مخصَّصٌ لا `relatedInvoiceId`**: ذاك يُخرج `BillingReference` إلى الهيئة، والبدلُ **لا
+  /// يحيل إلى المردودة أمامها** («does not need to have any link» — الكتالوج)؛ الإحالةُ للشاشة
+  /// والتقارير وحدَهما. **فريد**: مردودةٌ لها بدلٌ واحد — والثاني يُرفض بالشكل. **`Restrict`**:
+  /// مردودةٌ صدر بدلُها تبقى على السجلّ. **و«مغلقة» مشتقّةٌ لا مكتوبة** (`ق-٩٦٤`): وجودُ
+  /// `replacedBy` هو الإغلاق، ولا عمودَ حالةٍ يُكتب فيكذب.
+  replacesInvoiceId String?  @unique
+  replacesInvoice   Invoice? @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id], onDelete: Restrict)
+  replacedBy        Invoice? @relation("InvoiceReplacement")
+  /// قيدُ **عكس** المردودة عند إغلاقها (`ق-٩٦٥` — عكسٌ لا حذف): قيدُ الفاتورة يبقى كما رُحِّل،
+  /// وهذا يعكسه بتاريخ الإغلاق فيبقى الدفترُ يروي ما وقع. `Restrict` كقيد الفاتورة نفسه.
+  reversalJournalEntryId String?
+  reversalJournalEntry   JournalEntry? @relation("InvoiceReversal", fields: [reversalJournalEntryId], references: [id], onDelete: Restrict)
   /// Credit/debit notes only (BR-KSA-17): why the adjustment was issued —
   /// travels to the authority as cac:PaymentMeans/cbc:InstructionNote.
   adjustmentReason String?
@@ -1833,6 +1846,8 @@ model JournalEntry {
 
   lines        JournalLine[]
   invoices     Invoice[]
+  /// المردوداتُ التي يعكس هذا القيدُ قيودَها عند الإغلاق (`ق-٩٦٥`).
+  reversedInvoices Invoice[] @relation("InvoiceReversal")
   purchases    Purchase[]
   rentPayments RentPayment[]
   rentAccruals RentAccrual[] @relation("RentAccrualEntry")

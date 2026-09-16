@@ -58,6 +58,46 @@ export interface InvoiceForPosting {
   baseTotal: number;
 }
 
+/**
+ * ⚖️ **قيدُ عكسٍ لقيدٍ مرحَّل — لا حذفٌ له** (`ق-٩٦٥`).
+ *
+ * السطورُ نفسُها بأطرافها مقلوبةً، **بتاريخ الإغلاق لا بتاريخ الأصل**، وبأبعاد الأصل (الفرعُ
+ * والعميلُ/المورّدُ والوحدةُ تُقرأ من سطوره). فيبقى الأصلُ كما رُحِّل ويروي الدفترُ ما وقع —
+ * بخلاف `reverseAndDeleteJournalEntry` التي تمحو الأثر (مسارُ الحذف قبل أن يُغلَق `ق-٩٤٣`).
+ * ويسقط بالفترة المقفلة كأيّ قيد (`assertPeriodOpen` داخل `createJournalEntry`).
+ */
+export async function postReversalEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  r: { entryId: string; date: Date; memo: string },
+) {
+  const original = await tx.journalEntry.findUnique({
+    where: { id: r.entryId },
+    select: {
+      branchId: true,
+      currency: true,
+      exchangeRate: true,
+      lines: { select: { accountId: true, debit: true, credit: true, customerId: true, supplierId: true, unitId: true, propertyId: true } },
+    },
+  });
+  if (!original || original.lines.length === 0) return null;
+  const dims = original.lines[0];
+  return createJournalEntry(tx, {
+    companyId,
+    date: r.date,
+    memo: r.memo,
+    lines: original.lines.map((l) => ({ accountId: l.accountId, debit: Number(l.credit), credit: Number(l.debit) })),
+    auto: true,
+    currency: original.currency,
+    exchangeRate: Number(original.exchangeRate),
+    branchId: original.branchId,
+    customerId: dims.customerId,
+    supplierId: dims.supplierId,
+    unitId: dims.unitId,
+    propertyId: dims.unitId ? null : dims.propertyId,
+  });
+}
+
 /** Debit A/R (1200) for the total, credit Revenue (4100) for the subtotal,
  * credit VAT payable (2200) for the tax — matches the mockup's
  * `invoicePostingLines`/`postInvoiceToLedger`. Returns `null` (soft-skip) if
@@ -192,7 +232,7 @@ export async function postCogsEntry(
 export async function postCogsReversalEntry(
   tx: Prisma.TransactionClient,
   companyId: string,
-  c: { branchId?: string | null; no: string; date: Date; baseCost: number },
+  c: { branchId?: string | null; no: string; date: Date; baseCost: number; memo?: string },
 ) {
   if (c.baseCost <= 0) return null;
 
@@ -202,7 +242,7 @@ export async function postCogsReversalEntry(
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
-    memo: `عكس تكلفة مبيعات — مرتجع ${c.no}`,
+    memo: c.memo ?? `عكس تكلفة مبيعات — مرتجع ${c.no}`,
     lines: [
       { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: c.baseCost, credit: 0 },
       { accountId: ids.get('5100')!, debit: 0, credit: c.baseCost },

@@ -32,14 +32,22 @@ describe('الختم المتزامن — قرارات ق-١٩٦ في المصد
     expect(body).toContain("invoiceTypeFor(buyer.customer.vatNumber) === 'standard'");
   });
 
-  it('🔴 ٣ — المختومُ يُعاد محفوظُه قبل أي ادّعاء، والمردودُ لا يُوقَّع ثانيةً إلا إن تغيّر محتواه', () => {
+  it('🔴 ٣ — المردودُ يُرفض باسمه قبل أي ادّعاء، والمختومُ يُعاد محفوظُه قبل الادّعاء — ولا توقيعَ ثانياً لمردود (ق-٩٦٤)', () => {
     const start = service.indexOf('private async stampIfNeeded(');
-    const claim = service.indexOf('retryOnUniqueConflict(', start);
-    const reuse = service.indexOf("if (existing.zatcaStatus === 'STAMPED') return { qrPayload: existing.zatcaQrPayload }", start);
-    const probe = service.indexOf('if (invoiceHashOfUnsigned(probe.xml) === existing.zatcaHash) return', start);
-    expect(reuse).toBeGreaterThan(start);
-    expect(probe).toBeGreaterThan(reuse);
-    expect(claim).toBeGreaterThan(probe);
+    const end = service.indexOf('private async claimAndBuild(', start);
+    const body = service.slice(start, end);
+    const claim = body.indexOf('retryOnUniqueConflict(');
+    const refuse = body.indexOf("if (existing.zatcaStatus === 'REJECTED') throw new BadRequestException(MSG.zatca_rejected_not_resubmittable)");
+    const reuse = body.indexOf("if (existing.zatcaStatus === 'STAMPED' && existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash)");
+    expect(refuse).toBeGreaterThan(-1);
+    expect(reuse).toBeGreaterThan(refuse);
+    expect(claim).toBeGreaterThan(reuse);
+    // ولا مسبارَ يعيد بناءَ المردود ليوقّعه على موقعه — ذهب مع التعديل الذي كان يُجيزه.
+    expect(body).not.toContain("'probe'");
+    // والادّعاءُ لا يجد المردودة: القائمةُ بلا `REJECTED`.
+    const claimWhere = service.slice(end);
+    expect(claimWhere).toContain("{ zatcaStatus: 'NOT_SUBMITTED' }");
+    expect(claimWhere).not.toContain("in: ['NOT_SUBMITTED', 'REJECTED']");
   });
 
   it('🔴 ٤ — التجزئةُ من المخزون والتوقيعُ يُفحصان قبل fetch في الإبلاغ', () => {

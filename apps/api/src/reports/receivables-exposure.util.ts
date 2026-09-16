@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { requestedBranchFilter } from '../branches/branch-scope.util';
 import { round2 } from '../common/money/rounding';
+import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 
 /**
  * ⭐ **تعرّضُ العميل — المصدرُ الواحد لِـ«كم يدين لنا»** (`ق-٣٤١`).
@@ -148,9 +149,10 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
 
   // كل مستندات الذمم حتى تاريخ القياس: الفواتير وإشعاراتها معاً —
-  // فالإشعار يعدّل ذمّة فاتورته لا ذمّةً مستقلة.
+  // فالإشعار يعدّل ذمّة فاتورته لا ذمّةً مستقلة. والمردودةُ التي صدر بدلُها
+  // تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
   const documents = await tx.invoice.findMany({
-    where: { issueDate: { lte: asOf }, ...branchWhere, ...customerWhere },
+    where: { issueDate: { lte: asOf }, ...branchWhere, ...customerWhere, ...NOT_REPLACED_REJECTED },
     select: {
       id: true,
       no: true,

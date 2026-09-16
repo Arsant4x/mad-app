@@ -6,6 +6,7 @@ import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallme
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { MSG } from '../common/i18n/messages';
+import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 
 /**
  * ⭐ **قسمُ الإيجار في الإقرار** (`ق-٩١٧` · `ق-٩١٨` · `ق-٩٢٦`).
@@ -134,8 +135,9 @@ export class ObligationsService {
 
       // الإقرارُ يقرأ ولا يُرحّل: الاستحقاقُ يُكتب عند الإنشاء والتجديد والقبض وبالكنس اليوميّ
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
+      // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
       const [invoices, purchases, rent] = await Promise.all([
-        tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to } }, select: { subtotal: true, taxTotal: true, docType: true } }),
+        tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED }, select: { subtotal: true, taxTotal: true, docType: true } }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true } }),
         this.rentSection(tx, from, to),
       ]);

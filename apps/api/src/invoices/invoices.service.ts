@@ -15,8 +15,13 @@ import { computeDocumentTotals } from '../common/money/totals';
 import { fulfilStockedLines, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, postReversalEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
+import { IssueReplacementDto } from './dto/issue-replacement.dto';
+import { isReplacedRejected } from './active-documents.util';
+import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { localDateOf } from '../common/wall-clock.util';
+import { deriveSettlementStatus } from '../common/settlement/settlement.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
@@ -30,8 +35,16 @@ import { events } from '../shared/events/event-bus';
 import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/domain-events';
 
 /** `relatedInvoice` so a credit note can show which invoice it adjusts
- * without a second round-trip — number only, never the whole document. */
-const INVOICE_INCLUDE = { customer: true, lines: true, relatedInvoice: { select: { id: true, no: true } } } as const;
+ * without a second round-trip — number only, never the whole document.
+ * و`replacesInvoice`/`replacedBy` كذلك: البدلُ يسمّي مردودتَه والمردودةُ بدلَها (`ق-٩٦٣`)،
+ * ومنهما تُشتقّ «مغلقة» (`ق-٩٦٤`). */
+const INVOICE_INCLUDE = {
+  customer: true,
+  lines: true,
+  relatedInvoice: { select: { id: true, no: true } },
+  replacesInvoice: { select: { id: true, no: true } },
+  replacedBy: { select: { id: true, no: true } },
+} as const;
 
 
 /**
@@ -75,11 +88,13 @@ export class InvoicesService {
    * not read as the customer being owed money.
    */
   private outstandingOf(
-    inv: { docType: string; status: string; total: Prisma.Decimal; id: string },
+    inv: { docType: string; status: string; total: Prisma.Decimal; id: string; zatcaStatus: string; replacedBy: { id: string } | null },
     creditedByInvoiceId: Map<string, number>,
     allocatedByInvoiceId: Map<string, number>,
   ): number {
     if (inv.docType === 'CREDIT_NOTE') return 0;
+    // المردودةُ التي صدر بدلُها لا ذمّةَ عليها — ذمّتُها انتقلت إلى البدل (`ق-٩٦٧/١`).
+    if (isReplacedRejected(inv)) return 0;
     if (inv.status === 'PAID') return 0;
     // الدائنُ يخفّض فاتورتَه — أو الإشعارَ المدينَ الذي يصحّحه (`ق-٩٥٢`).
     const credited = creditedByInvoiceId.get(inv.id) ?? 0;
@@ -182,6 +197,180 @@ export class InvoicesService {
   }
 
   /**
+   * ⚖️ **بدلٌ عن مردودة — المردودةُ تُغلق ولا تُمسّ ويُصدَر مستندٌ جديد** (`ق-٩٥٨` · `ق-٩٦٣` … `ق-٩٦٧`).
+   *
+   * الهيئة: تجزئةُ المردود وعدّادُه لا يُغيَّران ولا يُعاد استعمالُهما، والتصحيحُ مستندٌ جديد
+   * بعدّادٍ وتجزئةٍ جديدَين، **ولا رابطَ أمامها** — فلا `BillingReference` (الرابطُ عمودٌ مخصَّص
+   * `replacesInvoiceId` لا `relatedInvoiceId`). **معاملةٌ واحدة** — إمّا يقع كلُّه أو لا شيء:
+   *
+   *   ① **المخزون — إعادةٌ إلى الرفّ ثم خصمٌ جديد** (`ق-٩٦٥`): حركةُ `IN` على سطور المردودة
+   *      بتكلفتها المستعادة (وقيدُ عكس تكلفتها)، **قبل** البدل كي يجد ما يخصمه؛ ثم البدلُ يخصم
+   *      كأيّ بيعٍ جديد. **ولا توريثَ للحركات**.
+   *   ② **القيد — عكسٌ لا حذف**: قيدُ المردودة يبقى كما رُحِّل ويُعكَس بقيدٍ مستقلٍّ يُربط بها
+   *      (`reversalJournalEntryId`)، **بتاريخ البدل** لا بتاريخ اليوم — فيستوي الدفترُ في الفترة
+   *      نفسها (البيعُ مرّةً)، وفترةٌ مقفلة ترفض العكسَ والبدلَ معاً لا أحدَهما.
+   *   ③ **البدل — بالمسار القائم بعينه** (`createWithinTx`): رقمٌ جديد من التسلسل **بلا لاحقة**،
+   *      والبنودُ والعميلُ والفرعُ والعملةُ والملاحظاتُ من المردودة. **والتاريخُ بالنوع**: القياسيةُ
+   *      يومُ الإصدار الجديد (فالمردودة «ليست فاتورةً ضريبيةً صحيحة» والإجازةُ عليها ولحظةُ
+   *      الجهاز تُرسَل كما في الإنشاء)، والمبسَّطةُ يومُ المعاملة الأصليّ ولحظتُها (ولا تُعاد
+   *      للعميل). وحدثُ إصداره في الطابور يُبلغ الهيئةَ كأيّ جديد. ولا يُفحص الحدُّ (`REPLACEMENT`):
+   *      الذمّةُ تنتقل لا تزيد.
+   *   ④ **المقبوض — تخصيصاتُ المردودة تُنقل إلى البدل** (`ق-٩٦٦`): لا سندَ يُلغى ولا يُعاد
+   *      قبضُه، وحالةُ السداد تُشتقّ للاثنين، **وأثرٌ في السجلّ باسم الفاعل** (`replace`): من
+   *      نقل ومتى ومن أيّ مستندٍ إلى أيّ.
+   *
+   * و«مغلقة» مشتقّةٌ من `replacedBy` (`ق-٩٦٤`) — والبدلُ الثاني يُرفض بالفحص وبالقيد الفريد معاً؛
+   * وما يقرأ المستنداتِ (الإقرار · التعرّض · المتبقّي) يُخرج المردودةَ المغلقة من مصدرٍ واحد
+   * (`active-documents.util`) ويُبقي المردودةَ التي لا بدلَ لها.
+   */
+  async issueReplacement(tenant: TenantContext, actorName: string, invoiceId: string, dto: IssueReplacementDto) {
+    const companyId = tenant.companyId;
+    const credit: CreditContext = {
+      settlement: 'REPLACEMENT',
+      actor: { id: tenant.profileId, actorType: tenant.actorType, name: actorName },
+      overrideRequested: false,
+      canOverride: false,
+    };
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const rejected = await tx.invoice.findUnique({
+          where: { id: invoiceId },
+          include: { customer: { select: { vatNumber: true } }, lines: true, replacedBy: { select: { no: true } } },
+        });
+        if (!rejected) throw new NotFoundException(MSG.invoice_not_found);
+        assertBranchAllowed(tenant.allowedBranchIds, rejected.branchId);
+        if (rejected.docType !== 'INVOICE' || rejected.zatcaStatus !== 'REJECTED') {
+          throw new BadRequestException(MSG.invoice_replacement_only_rejected);
+        }
+        if (rejected.replacedBy) throw new ConflictException(formatMessage(MSG.invoice_already_replaced, { no: rejected.replacedBy.no }));
+
+        // ③ التاريخُ بالنوع — يُحسم أولاً لأن الإعادةَ والعكسَ يؤرَّخان به.
+        const standard = invoiceTypeFor(rejected.customer.vatNumber) === 'standard';
+        const now = new Date();
+        const clock = standard
+          ? { issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null, issuedOffsetMin: dto.issuedAt ? (dto.issuedOffsetMin ?? null) : null }
+          : { issuedAt: rejected.issuedAt, issuedOffsetMin: rejected.issuedOffsetMin };
+        const issueDate = standard
+          ? clock.issuedAt && clock.issuedOffsetMin !== null
+            ? new Date(localDateOf(clock.issuedAt, clock.issuedOffsetMin))
+            : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+          : rejected.issueDate;
+        const dueDate = rejected.dueDate > issueDate ? rejected.dueDate : issueDate;
+        const rate = Number(rejected.exchangeRate);
+
+        // ① الإعادةُ إلى الرفّ — قبل البدل. السطرُ يردّ نفسَه (`returnsLineId = id`) فتعود
+        //    الكميةُ إلى طبقاتها الأصلية بتكلفتها، لا بسعر البيع.
+        const returned = await returnStockedLines(tx, {
+          companyId,
+          branchId: rejected.branchId,
+          date: issueDate,
+          documentNo: rejected.no,
+          lines: rejected.lines.map((l) => ({ id: l.id, productId: l.productId, quantity: l.quantity, returnsLineId: l.id, returnCondition: 'GOOD' as const })),
+        });
+        if (returned.totalCost > 0) {
+          await postCogsReversalEntry(tx, companyId, {
+            branchId: rejected.branchId,
+            no: rejected.no,
+            date: issueDate,
+            baseCost: toBaseAmount(returned.totalCost, rate),
+            memo: `عكس تكلفة مبيعات — إغلاقُ مردودة ${rejected.no}`,
+          });
+        }
+
+        // ② عكسُ القيد — لا حذفُه.
+        let reversalJournalEntryId: string | null = null;
+        if (rejected.journalEntryId) {
+          const reversal = await postReversalEntry(tx, companyId, {
+            entryId: rejected.journalEntryId,
+            date: issueDate,
+            memo: `عكس فاتورة مبيعات ${rejected.no} — مردودةٌ أُغلقت ببدل`,
+          });
+          reversalJournalEntryId = reversal?.id ?? null;
+          if (reversalJournalEntryId) await tx.invoice.update({ where: { id: rejected.id }, data: { reversalJournalEntryId } });
+        }
+
+        // ③ البدلُ — بالمسار القائم بعينه، والرابطُ في كتابة الإنشاء نفسها.
+        const replacement = await this.createWithinTx(
+          tx,
+          companyId,
+          tenant.allowedBranchIds,
+          {
+            customerId: rejected.customerId,
+            issueDate: issueDate.toISOString(),
+            issuedAt: clock.issuedAt ? clock.issuedAt.toISOString() : undefined,
+            issuedOffsetMin: clock.issuedAt ? (clock.issuedOffsetMin ?? undefined) : undefined,
+            dueDate: dueDate.toISOString(),
+            notes: rejected.notes ?? undefined,
+            branchId: rejected.branchId ?? undefined,
+            currency: rejected.currency,
+            exchangeRate: rate,
+            lines: rejected.lines.map((l) => ({
+              description: l.description,
+              productId: l.productId ?? undefined,
+              quantity: Number(l.quantity),
+              unitPrice: Number(l.unitPrice),
+              taxRate: Number(l.taxRate),
+            })),
+          },
+          credit,
+          { replacesInvoiceId: rejected.id },
+        );
+
+        // ④ المقبوضُ يُنقل — والحالةُ تُشتقّ للاثنين، والأثرُ في السجلّ باسم الفاعل.
+        const allocations = await tx.paymentAllocation.findMany({ where: { invoiceId: rejected.id }, select: { paymentId: true, amount: true } });
+        const amountMoved = round2(allocations.reduce((s, a) => s + Number(a.amount), 0));
+        if (allocations.length > 0) await tx.paymentAllocation.updateMany({ where: { invoiceId: rejected.id }, data: { invoiceId: replacement.id } });
+        await this.syncSettlementStatus(tx, rejected.id, now);
+        await this.syncSettlementStatus(tx, replacement.id, now);
+        await this.audit.recordWithinTx(tx, {
+          companyId,
+          actorType: tenant.actorType,
+          actorId: tenant.profileId,
+          actorName,
+          screen: 'invoice',
+          action: 'replace',
+          entity: 'invoices',
+          entityId: replacement.id,
+          method: 'POST',
+          path: `/invoices/${rejected.id}/replacement`,
+          details: {
+            from: rejected.no,
+            to: replacement.no,
+            allocationsMoved: allocations.length,
+            amountMoved,
+            reversalJournalEntryId,
+            stockReturnedLines: returned.restored.length,
+          },
+          ip: null,
+        });
+
+        const row = await tx.invoice.findUniqueOrThrow({ where: { id: replacement.id }, include: INVOICE_INCLUDE });
+        return {
+          ...row,
+          stockFulfilment: replacement.stockFulfilment,
+          closure: { returned: returned.restored, reversalJournalEntryId, allocationsMoved: allocations.length, amountMoved },
+        };
+      }),
+    );
+  }
+
+  /**
+   * حالةُ السداد المشتقّة — كما تكتبها `PaymentsService.recomputeInvoiceStatus` حرفاً: من
+   * التخصيصات لا من حقل، و`OVERDUE` على المستحقّ الذي فات موعدُه. تُستدعى بعد نقل التخصيصات
+   * للطرفين معاً كي لا يفترق المخزَّنُ عن المحسوب (حارسُ الانحراف في `invoice-outstanding`).
+   */
+  private async syncSettlementStatus(tx: Prisma.TransactionClient, invoiceId: string, now: Date): Promise<void> {
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { total: true, status: true, dueDate: true } });
+    if (!invoice) return;
+    const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId }, _sum: { amount: true } });
+    const derived = deriveSettlementStatus(Number(allocated._sum.amount ?? 0), Number(invoice.total));
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
+    if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
+  }
+
+  /**
    * ⭐ **بوّابةُ حدّ الائتمان — على `createWithinTx` وحدها** (`ق-٣٣٦` … `ق-٣٤٠`).
    *
    * **والمدخلُ واحدٌ مقيسٌ لا مفترَض**: الفاتورةُ المباشرة · تحويلُ عرض السعر ·
@@ -200,6 +389,8 @@ export class InvoicesService {
     //    نقدياً عطلٌ يصنعه لا يمنعه**. وحدُّ هذا التصريح مُعلَنٌ في
     //    `credit-context.ts` ولا يُلتفّ عليه.
     if (credit.settlement === 'IMMEDIATE') return null;
+    // والبدلُ عن مردودة ذمّةٌ تنتقل لا تزيد (`ق-٩٥٨`) — حدُّه `credit-context.ts`.
+    if (credit.settlement === 'REPLACEMENT') return null;
 
     const check = await checkCreditLimit(tx, {
       customerId: args.customerId,
@@ -260,6 +451,8 @@ export class InvoicesService {
     allowedBranchIds: string[] | 'all',
     dto: CreateInvoiceDto,
     credit: CreditContext,
+    /** بدلٌ عن مردودة (`ق-٩٦٣`): الرابطُ يُكتب في كتابة الإنشاء نفسها — لا يُلحق بعدها. */
+    link: { replacesInvoiceId: string } | null = null,
   ) {
     const { subtotal, taxTotal, total } = computeTotals(dto.lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
@@ -302,6 +495,7 @@ export class InvoicesService {
           creditOverrideAt: override?.at ?? null,
           creditOverrideExposure: override ? new Prisma.Decimal(override.exposure) : null,
           creditOverrideLimit: override ? new Prisma.Decimal(override.limit) : null,
+          replacesInvoiceId: link?.replacesInvoiceId ?? null,
           subtotal,
           taxTotal,
           total,
@@ -469,14 +663,11 @@ export class InvoicesService {
          * (`CLEARED` · `SUBMITTING` · `STAMPED` · مردودةٌ لها خَلَف) محتواةٌ فيه —
          * السببُ لا يغيّر الحكمَ ولا المخرج.
          *
-         * ⏸️ **والمردودةُ وحدَها معلَّقةٌ على حكم المالك بعد كتالوج الهيئة** (`ق-٩٥١`):
-         * تبقى على مسارها القائم — تُصحَّح وتُعاد على موقعها — ما لم يلتزم خَلَفٌ
-         * بتجزئتها (فإعادةُ حسابها تترك خَلَفَها يشير إلى تجزئةٍ لا وجودَ لها).
+         * ⚖️ **والمردودةُ كذلك — بلا استثناء** (`ق-٩٥٨` · `ق-٩٦٤`): كان لها استثناءٌ
+         * معلَّقٌ على الكتالوج («تُصحَّح وتُعاد على موقعها»)، والكتالوجُ أسقطه: عدّادُها
+         * وتجزئتُها لا يُمسّان، والتصحيحُ مستندٌ جديد — `issueReplacement`.
          */
-        const rejectedAwaitingRuling =
-          existing.zatcaStatus === 'REJECTED' &&
-          (existing.zatcaHash === null || (await tx.invoice.count({ where: { zatcaPreviousHash: existing.zatcaHash } })) === 0);
-        if (!rejectedAwaitingRuling) throw new ConflictException(MSG.invoice_issued_locked);
+        throw new ConflictException(MSG.invoice_issued_locked);
       }
 
       const data: Prisma.InvoiceUncheckedUpdateInput = {};
@@ -707,6 +898,8 @@ export class InvoicesService {
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
     const opposite = noteKind === 'CREDIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE';
     if (original.docType !== 'INVOICE' && original.docType !== opposite) throw new BadRequestException(MSG.credit_note_target_invalid);
+    // ⚖️ لا إشعارَ على مردودة (`ق-٩٥٨`): ليست فاتورةً صحيحة، ومخرجُها بدلٌ — ثم يُصحَّح البدلُ إن لزم.
+    if (original.zatcaStatus === 'REJECTED') throw new BadRequestException(MSG.credit_note_target_rejected);
     assertBranchAllowed(allowedBranchIds, original.branchId);
     return original;
   }
