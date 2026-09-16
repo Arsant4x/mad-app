@@ -657,6 +657,11 @@ export class InvoicesService {
    * document mechanics as the credit note, opposite economics: it posts in
    * the invoice's own direction and IS receivable, so it starts DUE and its
    * payment status may later move to PAID.
+   *
+   * **على مستوى المنشأة بحقّها**: سقفُ المدين على الدائن الزائد (`ق-٩٥٢`) يُحسب من كلّ
+   * الإشعارات المدينة على ذلك الدائن — وإشعارٌ في فرعٍ محجوبٍ عن القارئ يبقى مخصوماً من
+   * السقف، وإلا جاز أن يُصحَّح أكثرُ مما زاد. والهدفُ نفسُه يُقاس على فروع القارئ في
+   * `adjustableOriginal`.
    */
   issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateDebitNoteDto) {
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

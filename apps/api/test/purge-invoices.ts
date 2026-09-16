@@ -14,11 +14,12 @@ import { unpostIfLinked } from '../src/journal/auto-posting.util';
  *      الطبقةَ بلا صفِّ استهلاك (`restoreConsumptionPartial`) — ثم استهلاكاتُ حركاته مع ردِّ
  *      الكمية إلى طبقتها، ثم الحركاتُ نفسُها؛ فلا يُترك دفترُ الطبقات مخالفاً لمعادلته
  *      (`qtyRemaining = received − Σ consumed + returned`).
- *   ③ الصفُّ نفسُه (وسطورُه تتبعه)، ثم قيدُه عكساً وحذفاً (ما كان `remove()` يفعله)، وقيدُ
- *      تكلفته وعكسِها (يُعرفان بذكرهما — لا مفتاحَ يربطهما)، وحدثُ الطابور.
+ *   ③ ما يشير إليه بـ`Restrict`: تخصيصاتُ السداد (ومعها سندُها إن لم يبقَ له تخصيصٌ على
+ *      مستندٍ آخر — وقيدُه يُعكس)، وسندُ ردٍّ يردّه، وعرضُ سعرٍ تحوّل إليه (يُفكّ رابطُه).
+ *   ④ الصفُّ نفسُه (وسطورُه ودفعاتُ الكاشير تتبعه)، ثم قيدُه عكساً وحذفاً (ما كان `remove()`
+ *      يفعله)، وقيدُ تكلفته وعكسِها (يُعرفان بذكرهما — لا مفتاحَ يربطهما)، وحدثُ الطابور.
  *
- * ما لا يُزال: تخصيصُ سدادٍ أو سندُ ردٍّ يشير إلى المستند — يُزيله اختبارُه أولاً، وإلا
- * أسقط `Restrict` الحذفَ **بصوت** لا بصمت.
+ * وما يبقى يشير إليه بغير ذلك يُسقط `Restrict` الحذفَ **بصوت** لا بصمت — فيُزيله اختبارُه.
  */
 /** معرّفُ المنشأة من رمز الدخول — للحزم التي لا تحتفظ به (المسلكُ نفسُه في `integrations.e2e-spec`). */
 export function companyIdOfToken(token: string): string {
@@ -89,7 +90,19 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
         await tx.stockMovement.deleteMany({ where: { id: { in: movementIds } } });
       }
 
-      // ③ الصفُّ ثم قيودُه — كما كان `remove()` يفعل قبل أن يُغلَق.
+      // ③ ما يشير إليه بـ`Restrict`: التخصيصاتُ وسنداتُها اليتيمة (وقيودُها)، وسنداتُ الردّ، وروابطُ عروض السعر.
+      const allocations = await tx.paymentAllocation.findMany({ where: { invoiceId: inv.id }, select: { paymentId: true } });
+      await tx.paymentAllocation.deleteMany({ where: { invoiceId: inv.id } });
+      const refunds = await tx.payment.findMany({ where: { refundsInvoiceId: inv.id }, select: { id: true } });
+      for (const pid of new Set([...allocations.map((a) => a.paymentId), ...refunds.map((r) => r.id)])) {
+        if ((await tx.paymentAllocation.count({ where: { paymentId: pid } })) > 0) continue; // سندٌ يخصّ مستنداً آخر أيضاً — يبقى
+        const payment = await tx.payment.findUnique({ where: { id: pid }, select: { journalEntryId: true } });
+        await tx.payment.delete({ where: { id: pid } });
+        await unpostIfLinked(tx, payment?.journalEntryId ?? null);
+      }
+      await tx.quote.updateMany({ where: { convertedInvoiceId: inv.id }, data: { convertedInvoiceId: null } });
+
+      // ④ الصفُّ ثم قيودُه — كما كان `remove()` يفعل قبل أن يُغلَق.
       await tx.invoice.delete({ where: { id: inv.id } });
       await unpostIfLinked(tx, inv.journalEntryId);
       const costEntries = await tx.journalEntry.findMany({
