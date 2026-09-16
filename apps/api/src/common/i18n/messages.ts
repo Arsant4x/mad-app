@@ -257,6 +257,11 @@ export const MSG = {
   // it (or may be about to) — see InvoicesService.
   /** ⚖️ الصادرُ لا يُعدَّل ولا يُحذف — مختومةً كانت أو لا (`ق-٩٤٣`)، ورسالةٌ واحدةٌ للجميع تسمّي المخرج (`ق-٩٥٠` · `ق-٢٦٥`). */
   invoice_issued_locked: 'invoices.issued_locked',
+  /** ⚖️ المردودةُ تُغلق ولا تُمسّ ويُصدَر بدلاً منها جديد (`ق-٩٥٨`) — والمنعُ بالشكل: لا إعادةَ ولا ادّعاءَ ولا إشعارَ عليها (`ق-٩٦٤`). */
+  invoice_replacement_only_rejected: 'invoices.replacement_only_rejected',
+  invoice_already_replaced: 'invoices.already_replaced',
+  zatca_rejected_not_resubmittable: 'zatca.rejected_not_resubmittable',
+  credit_note_target_rejected: 'creditNotes.target_rejected',
 
   // credit/debit notes
   credit_note_target_invalid: 'creditNotes.target_invalid',
@@ -771,6 +776,15 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'الفاتورة صدرت فلا تُعدَّل ولا تُحذف — صحّحها بإشعار دائن (يخفّضها أو يلغيها) أو إشعار مدين (يزيدها). (الملاحظات وحالة السداد تبقى متاحتَين)',
     en: 'This invoice has been issued and can be neither edited nor deleted — correct it with a credit note (to reduce or cancel it) or a debit note (to increase it). (Notes and payment status can still be changed.)',
   },
+  /**
+   * ⚖️ **المردودةُ تُغلق ولا تُمسّ، ويُصدَر بدلاً منها جديد** (`ق-٩٥٨`): بنصّ الهيئة لا يُمسّ عدّادُها ولا تجزئتُها،
+   * والتصحيحُ مستندٌ جديد بعدّادٍ وتجزئةٍ جديدَين — لا تعديلٌ ولا إعادةُ إرسال؛ ولا إشعارَ عليها لأنها ليست فاتورةً صحيحة.
+   * والرسائلُ تسمّي المخرج (`ق-٢٦٥`): «أصدِر بدلاً».
+   */
+  [MSG.invoice_replacement_only_rejected]: { ar: 'لا يُصدَر بدلٌ إلا عن فاتورة مردودة من هيئة الزكاة', en: 'A replacement can only be issued for an invoice rejected by ZATCA' },
+  [MSG.invoice_already_replaced]: { ar: 'صدر بدلُ هذه الفاتورة المردودة من قبل: {no} — والمردودة مغلقة لا تُمسّ', en: 'A replacement for this rejected invoice was already issued: {no} — the rejected one is closed and untouched' },
+  [MSG.zatca_rejected_not_resubmittable]: { ar: 'الفاتورة المردودة لا تُعاد إلى الهيئة ولا تُوقَّع ثانيةً — عدّادها وتجزئتها كما هما؛ أصدِر بدلاً عنها', en: 'A rejected invoice is not resubmitted or re-signed — its counter and hash stay as they are; issue a replacement instead' },
+  [MSG.credit_note_target_rejected]: { ar: 'لا إشعار على فاتورة مردودة — فهي ليست فاتورة ضريبية صحيحة؛ أصدِر بدلاً عنها ثم صحّح البدل إن لزم', en: 'No note can be issued against a rejected invoice — it is not a valid tax invoice; issue a replacement, then correct the replacement if needed' },
 
   [MSG.cash_drawer_not_found]: { ar: 'الدرج غير موجود', en: 'Cash drawer not found' },
   [MSG.cash_drawer_name_taken]: { ar: 'يوجد درج بالاسم "{name}" في هذا الفرع بالفعل', en: 'A drawer named "{name}" already exists in this branch' },

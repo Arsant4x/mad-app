@@ -280,16 +280,24 @@ describe('ZATCA credit notes (e2e)', () => {
       expect(res.body.message).toContain('invoices.issued_locked');
     }, 30000);
 
-    it('freezes a CLEARED invoice against data edits, while REJECTED stays fixable and payment status stays free', async () => {
+    it('freezes a CLEARED invoice against data edits — REJECTED is frozen too (its exit is a replacement), and payment status stays free', async () => {
       const invoice = await makeInvoice();
       await request(app.getHttpServer()).post(`/zatca/invoices/${invoice.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
 
-      // REJECTED is the fix-and-retry state — editing the data is the point.
-      await request(app.getHttpServer())
+      // المردودةُ تُغلق ولا تُمسّ (ق-٩٥٨): لا تصحيحَ على موقعها — والمخرجُ بدلٌ جديد.
+      const rejectedEdit = await request(app.getHttpServer())
         .patch(`/invoices/${invoice.id}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ lines: [{ description: 'بند مُصحَّح', quantity: 1, unitPrice: 120, taxRate: 15 }] })
-        .expect(200);
+        .expect(409);
+      expect(rejectedEdit.body.message).toContain('invoices.issued_locked');
+      // ولا إشعارَ عليها — ليست فاتورةً صحيحة.
+      const noteOnRejected = await request(app.getHttpServer())
+        .post(`/invoices/${invoice.id}/credit-note`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ reason: 'إشعارٌ على مردودة' })
+        .expect(400);
+      expect(String(noteOnRejected.body.message)).toContain('creditNotes.target_rejected');
 
       // CLEARED cannot be reached without the authority — stamped directly.
       await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: invoice.id }, data: { zatcaStatus: 'CLEARED' } }));

@@ -28,6 +28,10 @@ export interface Invoice {
   docType: InvoiceDocType;
   /** Credit/debit notes only: the invoice this note adjusts. */
   relatedInvoice: { id: string; no: string } | null;
+  /** بدلٌ عن مردودة (ق-٩٥٨): المردودةُ التي يحلّ محلَّها — والإحالةُ تظهر في الشاشة والمستند (ق-٩٦٣). */
+  replacesInvoice: { id: string; no: string } | null;
+  /** مردودةٌ صدر بدلُها — «مغلقة» مشتقّةٌ من وجوده لا من حالةٍ تُكتب (ق-٩٦٤). */
+  replacedBy: { id: string; no: string } | null;
   /** Credit/debit notes only: the reason the note was issued (goes to ZATCA). */
   adjustmentReason: string | null;
   /** POS فقط: كيف دُفعت (CASH/CARD) وأي مناوبة سجّلتها. */
@@ -138,4 +142,7 @@ export interface CreateDebitNoteInput {
   lines: InvoiceLineInput[];
 }
 
+/** بدلٌ عن مردودة (ق-٩٥٨): مستندٌ جديدٌ بعدّادٍ وتجزئةٍ جديدَين، والمردودةُ تُغلق ولا تُمسّ؛ يُرسَل معه ساعةُ الجهاز كما في الإنشاء. */
+export const issueReplacement = (invoiceId: string, dto: { issuedAt?: string; issuedOffsetMin?: number } = {}) =>
+  apiClient.post<Invoice>(`/invoices/${invoiceId}/replacement`, dto).then((r) => r.data);
 export const issueDebitNote = (invoiceId: string, dto: CreateDebitNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/debit-note`, dto).then((r) => r.data);

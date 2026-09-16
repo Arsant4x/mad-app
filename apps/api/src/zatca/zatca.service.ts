@@ -11,7 +11,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
 import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
-import { invoiceHashOfSigned, invoiceHashOfUnsigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
+import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 
@@ -201,12 +201,10 @@ export class ZatcaService {
    *
    * توقيعٌ جديد يُغيّر الوسمَين ٧ و٩ في الرمز، **فيصير ما على إيصال العميل غيرَ ما
    * تصل الهيئة**. فمستندٌ **مختوم** (`STAMPED`) لا يُوقَّع ثانيةً أبداً — يُعاد
-   * المحفوظ. ومستندٌ **مردود** (`REJECTED`) له مستندٌ محفوظ يُعاد بناءُ محتواه
-   * وتُقارَن تجزئتُه بالمحفوظة: **إن تساويا** فالردّ كان في الطريق لا في المحتوى
-   * (انقطاعُ شبكة) — تُرسَل البايتاتُ نفسها؛ **وإن اختلفا** فالمستند صُحِّح بعد
-   * الردّ — وهذا هو مسار التعافي المقرَّر («`REJECTED` لا وجودَ له نظاماً؛ تصحيحُ
-   * البيانات وإعادةُ الإرسال هو الطريق»)، فيُوقَّع من جديد **على الموقع نفسه**
-   * (`ICV`/`UUID`/`PIH` بـ`??`)، وإيصالُ المستند المردود لا يُعتدّ به أصلاً.
+   * المحفوظ. ومستندٌ **مردود** (`REJECTED`) **لا يُوقَّع ولا يُعاد** (`ق-٩٥٨` · `ق-٩٦٤`):
+   * الهيئةُ تُبقي عدّادَه وتجزئتَه كما هما، والتصحيحُ مستندٌ جديد بعدّادٍ وتجزئةٍ جديدَين
+   * (`InvoicesService.issueReplacement`) — فالنداءُ عليه يُرفض باسمه. (وكان قبل الحكم
+   * يُعاد بناءُ محتواه ويُوقَّع على موقعه إن تغيّر — ذهب مع التعديل الذي كان يُجيزه.)
    *
    * **والادّعاءُ ذرّي**: مُعالِجُ الطابور يعمل كل دقيقة والكاشير يختم عند البيع —
    * فلو التقيا في نافذة الميلّي ثانية لوُقّع مرتَين. `updateMany` المشروطُ بالحالة
@@ -223,12 +221,13 @@ export class ZatcaService {
     );
     if (!existing) throw new NotFoundException(MSG.invoice_not_found);
     if (existing.zatcaStatus === 'CLEARED') throw new BadRequestException(MSG.zatca_already_cleared);
-    if (existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash) {
-      if (existing.zatcaStatus === 'STAMPED') return { qrPayload: existing.zatcaQrPayload };
-      // مردودٌ ومحفوظ: أعِد بناءَ المحتوى بلا ادّعاءٍ وقارن — تساوي التجزئتَين يعني
-      // أن المحتوى لم يُصحَّح، فالبايتاتُ المحفوظة هي ما يُرسَل ثانيةً.
-      const probe = await this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company, 'probe'));
-      if (invoiceHashOfUnsigned(probe.xml) === existing.zatcaHash) return { qrPayload: existing.zatcaQrPayload };
+    // ⚖️ **المردودةُ تُغلق ولا تُمسّ** (`ق-٩٥٨` · `ق-٩٦٤`): لا إعادةَ إرسال ولا توقيعَ ثانياً —
+    // الهيئة: تجزئةُ المردود وعدّادُه لا يُغيَّران ولا يُعاد استعمالُهما، والتصحيحُ مستندٌ
+    // جديد. فالرفضُ باسمه يسمّي المخرج: أصدِر بدلاً. (وكان هنا مسبارٌ يعيد توقيعَها إن
+    // تغيّر محتواها — ذهب مع التعديل الذي كان يُجيزه.)
+    if (existing.zatcaStatus === 'REJECTED') throw new BadRequestException(MSG.zatca_rejected_not_resubmittable);
+    if (existing.zatcaStatus === 'STAMPED' && existing.zatcaSignedXml && existing.zatcaQrPayload && existing.zatcaHash) {
+      return { qrPayload: existing.zatcaQrPayload };
     }
 
     /**
@@ -262,7 +261,7 @@ export class ZatcaService {
      * باختبار قائم. (بند متابعة مسجَّل.)
      */
     const unsigned = await retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company, 'claim')),
+      this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company)),
     );
 
     try {
@@ -299,9 +298,9 @@ export class ZatcaService {
   /**
    * حجزُ الموقع في السلسلة وبناءُ المستند غير الموقَّع — داخل معاملةٍ واحدة.
    * الادّعاءُ في `updateMany` المشروط هو ما يمنع توقيعَين متزامنَين (انظر `stampIfNeeded`).
-   * وفي وضع `probe` يُبنى المستند **بلا ادّعاءٍ ولا كتابة** — لمقارنة محتوىً مردودٍ بمحفوظه.
+   * (كان له وضعُ `probe` يبني المردودَ بلا ادّعاءٍ ليقارنه بمحفوظه — ذهب مع إعادة توقيع المردود، `ق-٩٦٤`.)
    */
-  private async claimAndBuild(tx: Prisma.TransactionClient, companyId: string, invoiceId: string, company: SellerRow, mode: 'claim' | 'probe') {
+  private async claimAndBuild(tx: Prisma.TransactionClient, companyId: string, invoiceId: string, company: SellerRow) {
     const invoice = await tx.invoice.findUnique({
       where: { id: invoiceId },
       include: { customer: true, lines: true, relatedInvoice: { select: { no: true } } },
@@ -379,12 +378,14 @@ export class ZatcaService {
     // ⭐ **الادّعاء** (`ق-١٩٦`): الوحدةُ والموقعُ والسلفُ والحالةُ في كتابةٍ واحدة
     // **مشروطةٍ بأن لا أحدَ يختم الآن** — من يفوز بها يوقّع وحده. `CHECK
     // "invoices_icv_requires_unit"` في القاعدة يرفض موقعاً بلا وحدة بالشكل (`ق-١٥٩`).
-    if (mode === 'claim') {
+    {
       const claimed = await tx.invoice.updateMany({
         where: {
           id: invoiceId,
           OR: [
-            { zatcaStatus: { in: ['NOT_SUBMITTED', 'REJECTED'] } },
+            // ⚖️ **لا `REJECTED` هنا** (`ق-٩٦٤`): المردودةُ لا تُدّعى ولا تُوقَّع ثانيةً — عدّادُها
+            // وتجزئتُها كما هما، ومخرجُها بدلٌ جديد. المنعُ بالشكل: `updateMany` لا يجدها.
+            { zatcaStatus: 'NOT_SUBMITTED' },
             // مختومٌ بلا مستندٍ محفوظ لا يقع بالشكل — لكن إن وقع فلا يُترك عالقاً.
             { zatcaStatus: 'STAMPED', zatcaSignedXml: null },
             // ادّعاءٌ متروك: عمليةٌ سقطت بين الحجز والتوقيع.

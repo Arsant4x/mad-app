@@ -421,16 +421,21 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(res.body.zatcaPreviousHash).toBeTruthy();
     }, 20000);
 
-    it('reuses the same UUID and chain position when a rejected invoice is retried', async () => {
+    it('refuses to retry a rejected invoice — its UUID, counter and hash stay as recorded (ق-٩٥٨)', async () => {
       const id = await makeInvoice();
       const first = await request(app.getHttpServer()).post(`/zatca/invoices/${id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
-      const second = await request(app.getHttpServer()).post(`/zatca/invoices/${id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      expect(first.body.zatcaStatus).toBe('REJECTED');
 
-      // Minting a new UUID or counter on retry would leave a gap in the chain.
-      expect(second.body.zatcaUuid).toBe(first.body.zatcaUuid);
-      expect(second.body.zatcaIcv).toBe(first.body.zatcaIcv);
-      expect(second.body.zatcaPreviousHash).toBe(first.body.zatcaPreviousHash);
-      expect(second.body.zatcaHash).toBe(first.body.zatcaHash);
+      // المردودةُ لا تُعاد ولا تُوقَّع ثانيةً — التصحيحُ بدلٌ جديد، والرفضُ يسمّيه.
+      const second = await request(app.getHttpServer()).post(`/zatca/invoices/${id}/submit`).set('Authorization', `Bearer ${token}`).expect(400);
+      expect(String(second.body.message)).toContain('أصدِر بدلاً');
+
+      const row = await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.findUniqueOrThrow({ where: { id } }));
+      expect(row.zatcaUuid).toBe(first.body.zatcaUuid);
+      expect(row.zatcaIcv).toBe(first.body.zatcaIcv);
+      expect(row.zatcaPreviousHash).toBe(first.body.zatcaPreviousHash);
+      expect(row.zatcaHash).toBe(first.body.zatcaHash);
+      expect(row.zatcaStatus).toBe('REJECTED');
     }, 30000);
 
     it('chains each new invoice onto the previous accepted one', async () => {

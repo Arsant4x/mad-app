@@ -11,6 +11,7 @@ import {
   type InvoiceStatus,
   issueCreditNote,
   issueDebitNote,
+  issueReplacement,
   listInvoices,
   updateInvoice,
 } from '../../api/invoices';
@@ -49,6 +50,7 @@ export function InvoicesPage() {
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
   const [creditNoteFor, setCreditNoteFor] = useState<Invoice | null>(null);
   const [debitNoteFor, setDebitNoteFor] = useState<Invoice | null>(null);
+  const [replacementFor, setReplacementFor] = useState<Invoice | null>(null);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -124,6 +126,25 @@ export function InvoicesPage() {
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار الإشعار المدين'));
+    } finally {
+      await reload();
+    }
+  }
+
+  /**
+   * ⚖️ بدلٌ عن مردودة (ق-٩٥٨): الخادمُ ينسخ البيعَ كلَّه من المردودة ويُغلقها — لا بنودَ
+   * تُرسَل. وتُرسَل ساعةُ الجهاز كما في الإنشاء (ق-١٨٥) للقياسية التي يُحدَّث تاريخُها.
+   */
+  async function confirmReplacement() {
+    if (!replacementFor) return;
+    const invoice = replacementFor;
+    setReplacementFor(null);
+    try {
+      const now = new Date();
+      await issueReplacement(invoice.id, { issuedAt: now.toISOString(), issuedOffsetMin: -now.getTimezoneOffset() });
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار البدل'));
     } finally {
       await reload();
     }
@@ -216,11 +237,21 @@ export function InvoicesPage() {
         onSubmitToZatca={(invoice) => setPendingSubmit(invoice)}
         onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
         onIssueDebitNote={(invoice) => setDebitNoteFor(invoice)}
+        onIssueReplacement={(invoice) => setReplacementFor(invoice)}
         canSubmitToZatca={user?.actorType === 'COMPANY'}
         submittingId={submittingId}
       />
       {creditNoteFor && <CreditNoteModal invoice={creditNoteFor} onCancel={() => setCreditNoteFor(null)} onConfirm={handleIssueCreditNote} />}
       {debitNoteFor && <DebitNoteModal invoice={debitNoteFor} onCancel={() => setDebitNoteFor(null)} onConfirm={handleIssueDebitNote} />}
+      {replacementFor && (
+        <ConfirmModal
+          title="إصدار بدل عن الفاتورة المردودة"
+          body={`تُغلق الفاتورة ${replacementFor.no} كما هي (عدّادها وتجزئتها لا يُمسّان)، ويصدر بدلها مستند جديد برقم جديد بالبنود نفسها؛ يُعكس قيدها وتعود بضاعتها إلى الرفّ ثم تُخصم للبدل، ويُنقل ما قُبض عليها إلى البدل ويُسجَّل النقل باسمك. ${replacementFor.customer.vatNumber ? 'فاتورة قياسية: يحمل البدل تاريخ اليوم.' : 'فاتورة مبسَّطة: يحتفظ البدل بتاريخ المعاملة الأصلي ولا يُعاد للعميل.'}`}
+          confirmLabel="إصدار البدل"
+          onCancel={() => setReplacementFor(null)}
+          onConfirm={confirmReplacement}
+        />
+      )}
       {pendingSubmit && (
         <ConfirmModal
           title="إرسال الفاتورة لهيئة الزكاة"

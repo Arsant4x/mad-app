@@ -17,20 +17,17 @@ import { purgeInvoicesForTest } from './purge-invoices';
  * - CLEARED — a standing legal document whose signed XML the authority holds.
  *   Editing the row would make the two disagree, so content is frozen and
  *   correction is by credit note.
- * - REJECTED — no legal existence at all. Fixing the data and resubmitting is
- *   the intended recovery (the retry reuses the same UUID/ICV/PIH), and a
- *   credit note against a document the authority never accepted would be a
- *   note against nothing.
+ * - REJECTED — closed as it is (ق-٩٥٨ · ق-٩٦٤): the authority keeps its counter
+ *   and hash untouched, so it is neither edited nor resubmitted; the correction
+ *   is a replacement document with a new number, counter and hash
+ *   (`test/rejected-replacement.e2e-spec.ts`), and no note may target it.
  * - Deletion stays refused for both — a rejected invoice has still burned its
- *   ICV slot, so deleting leaves a gap while editing keeps the slot. That is
- *   the delete guard's own spec; the pairing is asserted here too, because it
- *   is exactly the invariant a future change to either guard would break.
+ *   ICV slot. That is the delete guard's own spec; the pairing is asserted
+ *   here too, because it is exactly the invariant a future change to either
+ *   guard would break.
  *
- * Two cases sit outside those three lines and are locked deliberately:
- * SUBMITTING (in flight — the outcome may yet be CLEARED) and a rejected
- * invoice that something has already chained onto (`latestChainHash` hands
- * out the most recent submission's hash whether or not it cleared, so a
- * successor's PIH may already commit to this one's hash).
+ * SUBMITTING (in flight — the outcome may yet be CLEARED) and STAMPED are
+ * locked as well: one guard, one message (ق-٩٥٠).
  *
  * Same setup as the delete-guard spec: a locally seeded self-signed
  * credential and an unroutable API base, so signing and chaining run for real
@@ -210,9 +207,10 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     expect(after!.lines.map((l) => l.id)).toEqual(before!.lines.map((l) => l.id));
   }, 30000);
 
-  // ⏸️ المردودةُ معلَّقةٌ على حكم المالك بعد كتالوج الهيئة (ق-٩٥١) — تبقى الحالاتُ الثلاثُ
-  // التالية على المسار القائم (تُصحَّح وتُعاد على موقعها) حتى يُحكم.
-  it('edits a REJECTED invoice freely — fixing the data is the recovery path', async () => {
+  // ⚖️ المردودةُ تُغلق ولا تُمسّ ويُصدَر بدلاً منها جديد (ق-٩٥٨ · ق-٩٦٤): كانت الحالاتُ الأربعُ
+  // التالية تُجيز التصحيحَ وإعادةَ الإرسال على الموقع نفسه — وقُلبت بحكم الكتالوج: عدّادُ المردود
+  // وتجزئتُه لا يُمسّان، والتصحيحُ مستندٌ جديد (test/rejected-replacement.e2e-spec.ts).
+  it('refuses to edit a REJECTED invoice — closed as it is, the correction is a replacement (ق-٩٥٨)', async () => {
     const id = await makeRejectedInvoice();
     const before = await getInvoice(id);
 
@@ -221,58 +219,51 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
       issueDate: '2026-07-05',
       dueDate: '2026-07-25',
       lines: [{ description: 'بند مصحَّح', quantity: 3, unitPrice: 200, taxRate: 15 }],
-    }).expect(200);
+    }).expect(409);
+    expect(res.body.message).toContain('صدرت');
 
-    expect(res.body.customerId).toBe(otherCustomerId);
-    expect(Number(res.body.total)).toBe(690);
-    expect(res.body.lines[0].description).toBe('بند مصحَّح');
-
-    // The correction must not have cost the document its place in the
-    // sequence: the retry has to reuse the position it already burned.
+    // المردودةُ كما هي: بنودُها وموقعُها وتجزئتُها.
     const after = await getInvoice(id);
+    expect(after!.customerId).toBe(before!.customerId);
+    expect(after!.total.toString()).toBe(before!.total.toString());
+    expect(after!.lines.map((l) => l.id)).toEqual(before!.lines.map((l) => l.id));
     expect(after!.zatcaIcv).toBe(before!.zatcaIcv);
     expect(after!.zatcaUuid).toBe(before!.zatcaUuid);
+    expect(after!.zatcaHash).toBe(before!.zatcaHash);
     expect(after!.zatcaPreviousHash).toBe(before!.zatcaPreviousHash);
   }, 40000);
 
-  it('resubmits a corrected REJECTED invoice on the same ICV and UUID', async () => {
+  it('refuses to resubmit a REJECTED invoice — no second signature on the same slot; the message names the exit', async () => {
     const id = await makeRejectedInvoice();
     const before = await getInvoice(id);
 
-    await patch(id, { lines: [{ description: 'بند بعد التصحيح', quantity: 1, unitPrice: 400, taxRate: 15 }] }).expect(200);
-    const resubmitted = await submit(id);
+    const res = await request(app.getHttpServer()).post(`/zatca/invoices/${id}/submit`).set('Authorization', `Bearer ${token}`).expect(400);
+    expect(res.body.message).toContain('أصدِر بدلاً');
 
-    expect(resubmitted.body.zatcaIcv).toBe(before!.zatcaIcv);
-    expect(resubmitted.body.zatcaUuid).toBe(before!.zatcaUuid);
-    // The hash is recomputed over the corrected content — that is the whole
-    // point of allowing the edit.
-    expect(resubmitted.body.zatcaHash).not.toBe(before!.zatcaHash);
+    const after = await getInvoice(id);
+    expect(after!.zatcaStatus).toBe('REJECTED');
+    expect(after!.zatcaIcv).toBe(before!.zatcaIcv);
+    expect(after!.zatcaUuid).toBe(before!.zatcaUuid);
+    expect(after!.zatcaHash).toBe(before!.zatcaHash);
+    expect(after!.zatcaSignedXml).toBe(before!.zatcaSignedXml);
   }, 40000);
 
-  it('still refuses to DELETE a REJECTED invoice, even though editing it is allowed', async () => {
+  it('still refuses to DELETE a REJECTED invoice — the slot is burned, and closed is closed', async () => {
     const id = await makeRejectedInvoice();
 
-    // Editable...
-    await patch(id, { lines: [{ description: 'بند', quantity: 1, unitPrice: 120, taxRate: 15 }] }).expect(200);
-    // ...but the ICV slot is burned, so removal would still leave a gap.
     const res = await request(app.getHttpServer()).delete(`/invoices/${id}`).set('Authorization', `Bearer ${token}`).expect(409);
     // رسالةٌ واحدة للجميع تسمّي المخرج (ق-٩٥٠).
     expect(res.body.message).toContain('صدرت');
     expect(res.body.message).toContain('إشعار دائن');
   }, 40000);
 
-  it('refuses to edit a REJECTED invoice once a later document is chained to it', async () => {
+  it('refuses to edit a REJECTED invoice whether or not a later document is chained to it', async () => {
     const a = await makeRejectedInvoice();
     const first = await getInvoice(a);
     const b = await makeRejectedInvoice();
 
-    // The link is set explicitly rather than by submitting B normally,
-    // because `latestChainHash` no longer hands a rejected invoice's hash to
-    // the next document — that fix at the source is covered in
-    // zatca-phase2 ("never hands a rejected invoice's hash to the next
-    // document"). This guard remains as the second layer: rows recorded
-    // before that rule, or any future path that sets a PIH another way, can
-    // still present this shape, and editing A would orphan B's PIH.
+    // كان الخَلَفُ المتسلسل هو ما يقفل المردودةَ وحدَه — والآن الردُّ نفسُه يقفلها (ق-٩٥٨)؛
+    // يبقى الشكلُ هنا كي يُثبَت أن الحكم واحدٌ في الحالين.
     await tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.update({ where: { id: b }, data: { zatcaPreviousHash: first!.zatcaHash } }),
     );
@@ -280,8 +271,9 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     const res = await patch(a, { lines: [{ description: 'بند متأخر', quantity: 1, unitPrice: 300, taxRate: 15 }] }).expect(409);
     expect(res.body.message).toContain('صدرت');
 
-    // B, with nothing chained onto it, is still editable.
-    await patch(b, { lines: [{ description: 'بند طرف السلسلة', quantity: 1, unitPrice: 310, taxRate: 15 }] }).expect(200);
+    // وB — لا خَلَفَ لها — مردودةٌ كذلك فلا تُعدَّل.
+    const tail = await patch(b, { lines: [{ description: 'بند طرف السلسلة', quantity: 1, unitPrice: 310, taxRate: 15 }] }).expect(409);
+    expect(tail.body.message).toContain('صدرت');
   }, 60000);
 
   it('refuses to edit an invoice that is mid-submission', async () => {
@@ -298,9 +290,10 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
 
     const res = await patch(id, { lines: [{ description: 'بند بعد الختم', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(409);
     expect(res.body.message).toContain('صدرت');
-    // والوجه الثاني: تعود مردودةً فتُصحَّح — الطريق المقرَّر للتعافي لم يُغلق.
+    // والوجه الثاني: تعود مردودةً فتبقى مقفلةً كذلك — التعافي بدلٌ جديد لا تصحيحٌ عليها (ق-٩٥٨).
     await setStatus(id, 'REJECTED');
-    await patch(id, { lines: [{ description: 'بند بعد الردّ', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(200);
+    const rejected = await patch(id, { lines: [{ description: 'بند بعد الردّ', quantity: 1, unitPrice: 160, taxRate: 15 }] }).expect(409);
+    expect(rejected.body.message).toContain('صدرت');
   }, 40000);
 
   it('refuses a line/amount edit on a CLEARED invoice', async () => {

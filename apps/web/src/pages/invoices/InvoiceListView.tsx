@@ -29,6 +29,7 @@ export function InvoiceListView({
   onSubmitToZatca,
   onIssueCreditNote,
   onIssueDebitNote,
+  onIssueReplacement,
   canSubmitToZatca,
   submittingId,
 }: {
@@ -38,6 +39,8 @@ export function InvoiceListView({
   onSubmitToZatca: (invoice: Invoice) => void;
   onIssueCreditNote: (invoice: Invoice) => void;
   onIssueDebitNote: (invoice: Invoice) => void;
+  /** بدلٌ عن مردودة (ق-٩٥٨) — يُعرض على المردودة التي لم يصدر بدلُها بعد. */
+  onIssueReplacement: (invoice: Invoice) => void;
   canSubmitToZatca: boolean;
   /** The invoice currently being sent, so its row can say so — submission is a
    * network round-trip to the authority, not an instant local change. */
@@ -160,6 +163,10 @@ export function InvoiceListView({
                       {inv.relatedInvoice && <div className="hint">على الفاتورة {inv.relatedInvoice.no}</div>}
                     </>
                   )}
+                  {/* ⚖️ الإحالةُ في الشاشة (ق-٩٦٣): البدلُ يسمّي مردودتَه، والمردودةُ تسمّي
+                      بدلَها — فلا يُقرأ البيعُ مرّتين ولا تُطلَب المردودةُ من العميل. */}
+                  {inv.replacesInvoice && <div className="hint">بدلٌ عن المردودة {inv.replacesInvoice.no}</div>}
+                  {inv.replacedBy && <div className="hint">مغلقة — صدر بدلها {inv.replacedBy.no}</div>}
                 </td>
                 <td className="num">{dfmt(inv.issueDate)}</td>
                 <td className="num">{dfmt(inv.dueDate)}</td>
@@ -205,17 +212,23 @@ export function InvoiceListView({
                       // ⚖️ الصادرُ لا يُعدَّل ولا يُحذف — مختومةً كانت أو لا (ق-٩٤٣): لا زرَّ
                       // تعديلٍ ولا حذف؛ والمخرجُ الإشعاران. وعلى الإشعار إشعارٌ مقابلٌ
                       // يصحّحه (ق-٩٥٢): مدينٌ لدائنٍ زائد، ودائنٌ لمدينٍ زائد — لا من نوعه.
-                      ...(inv.docType === 'INVOICE'
-                        ? [
-                            { label: '↩ إشعار دائن', onClick: () => onIssueCreditNote(inv) },
-                            { label: '↪ إشعار مدين', onClick: () => onIssueDebitNote(inv) },
-                          ]
-                        : inv.docType === 'CREDIT_NOTE'
-                          ? [{ label: '↪ إشعار مدين يصحّحه', onClick: () => onIssueDebitNote(inv) }]
-                          : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
+                      // ⚖️ والمردودةُ تُغلق ولا تُمسّ (ق-٩٥٨): لا إشعارَ عليها ولا إعادةَ إرسال —
+                      // مخرجُها الوحيد بدلٌ جديد، ومردودةٌ صدر بدلُها لا فعلَ عليها.
+                      ...(inv.zatcaStatus === 'REJECTED'
+                        ? inv.docType === 'INVOICE' && !inv.replacedBy
+                          ? [{ label: '🔁 إصدار بدل عنها', onClick: () => onIssueReplacement(inv) }]
+                          : []
+                        : inv.docType === 'INVOICE'
+                          ? [
+                              { label: '↩ إشعار دائن', onClick: () => onIssueCreditNote(inv) },
+                              { label: '↪ إشعار مدين', onClick: () => onIssueDebitNote(inv) },
+                            ]
+                          : inv.docType === 'CREDIT_NOTE'
+                            ? [{ label: '↪ إشعار مدين يصحّحه', onClick: () => onIssueDebitNote(inv) }]
+                            : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
-                      ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED'
+                      ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED' && inv.zatcaStatus !== 'REJECTED'
                         ? [
                             '-' as const,
                             {
