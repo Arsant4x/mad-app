@@ -48,6 +48,8 @@ describe('Properties/Units/Contracts (e2e)', () => {
     return { property: property.body, unit: unit.body };
   }
 
+  // ⚠️ المهلُ صريحة: إنشاءُ العقد يستحقّ أقساطَه التي حلّت في المعاملة نفسِها (ق-٩١٧) — قيدٌ لكلِّ قسط،
+  // فعقدُ 2026 وقد مضى منه تسعةُ أشهرٍ يتجاوز الخمسَ ثوانٍ الافتراضية على قاعدةٍ باردة.
   it('[SPEC 16.2 16.6] creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit', async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
 
@@ -65,7 +67,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'مستأجر آخر', value: 6000, cycle: 'monthly', start: '2026-06-01', end: '2026-08-31' })
       .expect(409);
-  });
+  }, 60000);
 
   // كان هنا «قفلُ نشاط العقار»: يُرفض عقدٌ على وحدةٍ كلمةُ نوعها لا تطابق نشاطَ العقار — بخريطة كلماتٍ
   // خمس تتخطّى ما لا تعرفه. حُذفت بحكم المالك (ق-٨٩٨): التصنيفُ يُعلَن على العقد ولا يُستنبَط من كلمة —
@@ -79,10 +81,16 @@ describe('Properties/Units/Contracts (e2e)', () => {
       .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'محل تجاري', value: 3000, cycle: 'monthly', start: '2026-01-01', end: '2026-06-30' })
       .expect(201);
     expect(created.body.classification).toBe('COMMERCIAL');
-  });
+  }, 60000);
 
   it('records a cash rent payment (posts to the ledger, marks the installment paid) and a bank payment (updates the bank balance and creates a matched BankTransaction)', async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
+    const readBalances = async () => {
+      const accounts = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
+      const of = (code: string) => Number(accounts.body.find((a: { code: string }) => a.code === code)?.balance ?? 0);
+      return { cash: of('1000'), receivable: of('1200'), revenue: of('4200'), deferred: of('2400') };
+    };
+    const beforeContract = await readBalances();
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -90,10 +98,12 @@ describe('Properties/Units/Contracts (e2e)', () => {
       .expect(201);
     const installmentId = contract.body.installments[0].id;
 
-    const accountsBefore = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    const cashBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '1000')?.balance ?? 0);
-    const revenueBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '4200')?.balance ?? 0);
-    const deferredBefore = Number(accountsBefore.body.find((a: { code: string }) => a.code === '2400')?.balance ?? 0);
+    // ⚖️ **الاستحقاقُ عند الإنشاء لما حلّ** (ق-٩١٧): ثلاثةُ أقساطٍ حلّت ⇒ ذمّةٌ على المستأجر
+    // بالثلاثة آلاف، وصافيها بين `4200` (ما مضى من كلِّ فترةٍ حتى نقطتها) و`2400` (الباقي)
+    // — والقبضُ بعدها يسدّد الذمّةَ ولا يمسّ الإيراد.
+    const accrued = await readBalances();
+    expect(accrued.receivable - beforeContract.receivable).toBeCloseTo(3000, 2);
+    expect(accrued.revenue + accrued.deferred - (beforeContract.revenue + beforeContract.deferred)).toBeCloseTo(3000, 2);
 
     const cashPayment = await request(app.getHttpServer())
       .post(`/contracts/${contract.body.id}/payments`)
@@ -103,19 +113,11 @@ describe('Properties/Units/Contracts (e2e)', () => {
     expect(cashPayment.body.journalEntryId).not.toBeNull();
     expect(cashPayment.body.installment.status).toBe('PAID');
 
-    const accountsAfter = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    expect(Number(accountsAfter.body.find((a: { code: string }) => a.code === '1000').balance) - cashBefore).toBeCloseTo(1000);
-
-    // ⚖️ **وكان هذا السطر يتوقّع الألفَ كلَّه إيراداً** — وهو العطلُ الذي بُني له
-    // `ق-٤٦٨`: القسطُ يستحقّ في **أوّلِ** فترته (`2026-01-01` … `2026-01-31`)،
-    // **فالقبضُ في يومه قبضٌ عن ثلاثين يوماً لم تُقدَّم**. فيُعترَف بيومٍ واحدٍ
-    // من واحدٍ وثلاثين، **والباقي التزامٌ يتحوّل شهراً بشهر**.
-    const deferredAfter = Number(accountsAfter.body.find((a: { code: string }) => a.code === '2400')?.balance ?? 0);
-    const revenueDelta = Number(accountsAfter.body.find((a: { code: string }) => a.code === '4200').balance) - revenueBefore;
-    expect(revenueDelta).toBeCloseTo(round2(1000 / 31), 2);
-    expect(deferredAfter - deferredBefore).toBeCloseTo(round2(1000 - round2(1000 / 31)), 2);
-    // ولا ريالَ يضيع بين الوجهتَين.
-    expect(revenueDelta + (deferredAfter - deferredBefore)).toBeCloseTo(1000, 2);
+    const paid = await readBalances();
+    expect(paid.cash - accrued.cash).toBeCloseTo(1000);
+    expect(paid.receivable - accrued.receivable).toBeCloseTo(-1000, 2);
+    // ولا ريالَ من القبض يذهب إلى الإيراد أو الالتزام — فقد استُحقّا قبله.
+    expect(paid.revenue + paid.deferred - (accrued.revenue + accrued.deferred)).toBeCloseTo(0, 2);
 
     // Create the bank this test needs instead of assuming one already exists:
     // seed.ts creates no banks at all, and banks-tenant-isolation deletes the
@@ -150,7 +152,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const tx = transactions.body.items.find((t: { amount: string }) => Number(t.amount) === 900);
     expect(tx).toBeDefined();
     expect(tx.matched).toBe(true);
-  });
+  }, 60000);
 
   it('[SPEC 16.2 16.5] cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone', async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
@@ -172,7 +174,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     expect(byDueDate('2030-01-01').status).toBe('DUE');
     expect(byDueDate('2030-02-01').status).toBe('CANCELLED');
     expect(byDueDate('2030-03-01').status).toBe('CANCELLED');
-  });
+  }, 60000);
 
   it("keeps company B from seeing, fetching, or referencing company A's units/contracts", async () => {
     const { unit } = await setupPropertyAndUnit(tokenA);
@@ -200,5 +202,5 @@ describe('Properties/Units/Contracts (e2e)', () => {
       .set('Authorization', `Bearer ${tokenB}`)
       .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'محاولة عبور الشركات', value: 500, cycle: 'monthly', start: '2032-01-01', end: '2032-06-30' })
       .expect(404);
-  });
+  }, 60000);
 });

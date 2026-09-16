@@ -129,12 +129,15 @@ describe('§16 completion batch (e2e)', () => {
     ).body.id;
 
     const today = new Date().toISOString().slice(0, 10);
+    // القسطُ الجاري استُحقّ ذمّةً (ق-٩١٧) وبقي منه ما لم يُقدَّم بعد تاريخ الإلغاء — فوجهتُه
+    // تُختار (ق-٩٢٧/٧) كي يبقى الرفضُ الأوّل رفضَ البنود لا رفضَ الوجهة.
     // بنود لا تجمع للمبلغ → رفض قبل أي أثر.
     await auth(request(app.getHttpServer()).post(`/contracts/${activeContractId}/cancel`))
       .send({
         cancelDate: today,
         cancelReason: 'اختبار البنود',
         installmentDisposition: 'cancel',
+        unearnedDisposition: 'income',
         settlementBasis: 'amount',
         settlementAmount: 1000,
         settlementLines: [
@@ -150,6 +153,7 @@ describe('§16 completion batch (e2e)', () => {
         cancelDate: today,
         cancelReason: 'إنهاء مبكر متفق عليه',
         installmentDisposition: 'cancel',
+        unearnedDisposition: 'income',
         settlementBasis: 'amount',
         settlementAmount: 1000,
         settlementLines: [

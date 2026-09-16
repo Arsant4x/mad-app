@@ -191,7 +191,9 @@ export class ReportsService {
           unitNo: string | null;
           serviceStart: Date;
           serviceEnd: Date;
+          accrualBasis: 'ACCRUAL' | 'LEGACY_COLLECTED';
           collected: number;
+          accrued: number;
           baseRecognized: number;
         }[]
       >`
@@ -201,7 +203,9 @@ export class ReportsService {
           u."unitNo"                                      AS "unitNo",
           i."serviceStart"                                AS "serviceStart",
           i."serviceEnd"                                  AS "serviceEnd",
+          i."accrualBasis"                                AS "accrualBasis",
           COALESCE(SUM(p."baseNetAmount"), 0)::float8     AS "collected",
+          i."baseAccruedNet"::float8                      AS "accrued",
           i."baseRecognized"::float8                      AS "baseRecognized"
         FROM "contract_installments" i
         JOIN "contracts" c ON c.id = i."contractId"
@@ -211,23 +215,29 @@ export class ReportsService {
           AND i."serviceStart" IS NOT NULL
           AND i."serviceEnd" IS NOT NULL
         GROUP BY i.id, c.id, u.id
-        HAVING COALESCE(SUM(p."baseNetAmount"), 0) - i."baseRecognized" > 0
+        HAVING (CASE WHEN i."accrualBasis" = 'ACCRUAL' THEN i."baseAccruedNet" ELSE COALESCE(SUM(p."baseNetAmount"), 0) END) - i."baseRecognized" > 0
         ORDER BY i."dueDate" ASC, i.id ASC
       `;
 
+      // الأساسُ (ق-٩٢٧/٢): المستحقُّ صافياً لقسطٍ على أساس الاستحقاق — فالالتزامُ ينشأ عند نقطة
+      // الضريبة لا عند القبض (ق-٩١٧) — والمقبوضُ لما سبق البناء. والترشيحُ في القاعدة كما كان.
       const outstanding = rows
         .map((r) => {
           const collected = round2(r.collected);
+          const accrued = round2(r.accrued);
+          const basis = r.accrualBasis === 'ACCRUAL' ? accrued : collected;
           return {
             contractNo: r.contractNo,
             tenant: r.tenant,
             unitNo: r.unitNo ?? null,
             serviceStart: r.serviceStart,
             serviceEnd: r.serviceEnd,
+            accrualBasis: r.accrualBasis,
             collected,
+            accrued,
             recognized: round2(r.baseRecognized),
             // ما لم يخرج من الالتزام بعد — إيراداً كان أو ردّاً أو دخلاً آخر.
-            deferred: round2(collected - r.baseRecognized),
+            deferred: round2(basis - r.baseRecognized),
           };
         })
         .filter((r) => r.deferred > 0);

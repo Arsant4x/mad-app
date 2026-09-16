@@ -364,6 +364,7 @@ model Company {
   contracts        Contract[]
   installments     Installment[]
   rentPayments     RentPayment[]
+  rentAccruals     RentAccrual[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -1833,6 +1834,7 @@ model JournalEntry {
   invoices     Invoice[]
   purchases    Purchase[]
   rentPayments RentPayment[]
+  rentAccruals RentAccrual[] @relation("RentAccrualEntry")
   /// A deposit posts twice over its life — once on receipt, once on
   /// settlement — so it needs two named relations, not one.
   depositReceipts     ContractDeposit[] @relation("DepositReceipt")
@@ -2101,6 +2103,30 @@ enum InstallmentStatus {
   LATE
   PAID
   CANCELLED
+}
+
+/// **أساسُ القسط في الدفتر** (`ق-٩٢٧/٢`): `ACCRUAL` = يُستحقّ ذمّةً عند نقطة ضريبته
+/// (`1200` ⇄ `2400`/`4200` + `2200`) والقبضُ يسدّدها؛ `LEGACY_COLLECTED` = سبقت نقطةُ
+/// ضريبته لحظةَ البناء فيبقى على مسار القبض القائم (نقدٌ ⇄ `4200`/`2400`) **ويُحسب في
+/// الإقرار ولا يُرحَّل رجعياً** — «ما سبق اللحظةَ: في الإقرار لا في الدفتر» (`ق-٩٢٦`).
+/// القيمةُ القديمة محبوسةٌ بقيد `CHECK` على `createdAt` كقيد التصنيف (`ق-٨٩٨`).
+enum InstallmentAccrualBasis {
+  ACCRUAL
+  LEGACY_COLLECTED
+}
+
+/// نوعُ صفّ الاستحقاق — **ما الذي أنشأ نقطةَ الضريبة** (`ق-٩٢٤` · `ق-٩٢٧/١`).
+enum RentAccrualKind {
+  /// حلّ الاستحقاقُ (`dueDate`) — الباقي غيرُ المستحقّ من القسط.
+  DUE
+  /// دفعةٌ قبل الاستحقاق — بقدرها بتاريخها (م٢٠/٢).
+  PREPAYMENT
+  /// دفعةٌ بلا قسطٍ مرتبط — بقدرها بتاريخها؛ لا فترةَ خدمةٍ لها فتُعترَف فوراً.
+  UNLINKED
+  /// عكسُ استحقاقٍ أُسقط عند الإلغاء — نظيرُ الإشعار الدائن (مبالغُه سالبة).
+  REVERSAL
+  /// خصمٌ عند القبض — تعديلُ مقابلٍ يُنقص الذمّةَ والصافيَ والضريبة (مبالغُه سالبة).
+  DISCOUNT
 }
 
 enum PaymentMethod {
@@ -2739,6 +2765,7 @@ model Contract {
 
   installments Installment[]
   payments     RentPayment[]
+  accruals     RentAccrual[]
   attachments  ContractAttachment[]
   deposits     ContractDeposit[]
   claims       ContractClaim[]
@@ -3238,6 +3265,21 @@ model Installment {
   /// يُنتج رقماً صحيحَ الشكل كاذبَ المعنى (`ق-٤٦١`).
   baseRecognized Decimal @default(0) @db.Decimal(18, 2)
 
+  /// أساسُ القسط في الدفتر — انظر التعداد. الافتراضُ `ACCRUAL` لكلِّ صفٍّ يُنشأ بعد البناء،
+  /// و`LEGACY_COLLECTED` لا يُكتب إلا من الهجرة (والقيدُ يحبسه على ما سبق لحظتها).
+  accrualBasis InstallmentAccrualBasis @default(ACCRUAL)
+
+  /// **ما استُحقّ من هذا القسط حتى الآن** بعملة الدفتر — مجموعُ صفوف `accruals` موقَّعاً
+  /// (الإجماليُّ على `1200` · الصافي على `2400`/`4200` · الضريبةُ على `2200`). تُخزَّن
+  /// تراكمياً كي يبقى الكنسُ اليوميّ انتقائياً (`baseAccruedGross < gross`) لا مسحاً.
+  /// **والالتزامُ القائم لقسطٍ `ACCRUAL` = `baseAccruedNet − baseRecognized`.**
+  baseAccruedGross Decimal @default(0) @db.Decimal(18, 2)
+  baseAccruedNet   Decimal @default(0) @db.Decimal(18, 2)
+  baseAccruedTax   Decimal @default(0) @db.Decimal(18, 2)
+  /// **لا نقطةَ ضريبةٍ بعدها**: حلّ الاستحقاقُ وكُتب باقيه، أو غطّت المقدَّماتُ الإجماليَّ كلَّه.
+  /// يُختم كي يبقى الكنسُ اليوميُّ انتقائياً (`IS NULL`) لا مسحاً يعيد فحصَ ما اكتمل.
+  accrualCompletedAt DateTime?
+
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
   baseAmount   Decimal @db.Decimal(18, 2)
@@ -3246,12 +3288,15 @@ model Installment {
 
   payments  RentPayment[]
   reminders RentReminder[]
+  accruals  RentAccrual[]
 
   /// For loading one contract's schedule (findOne) — Postgres does not index
   /// FK columns on its own, so at ~30k installments each lookup was a scan.
   @@index([contractId])
   /// For the lazy DUE→LATE refresh that runs on every contracts read.
   @@index([companyId, status, dueDate])
+  /// الكنسُ اليوميّ للاستحقاق: ما حلّ ولم يُستحقّ بعد (`ق-٩٢٧/٥`).
+  @@index([companyId, accrualBasis, dueDate])
   @@map("contract_installments")
 }
 
@@ -3468,6 +3513,9 @@ model RentPayment {
 
   createdAt DateTime @default(now())
 
+  /// الاستحقاقاتُ التي أنشأتها هذه الدفعة (مقدَّمةٌ أو بلا قسط) أو خصمُها.
+  accruals RentAccrual[]
+
   /// Same reasoning as Installment's contractId index.
   @@index([contractId])
   /// NOT for the property-KPIs aggregate — that subquery groups the whole
@@ -3479,6 +3527,69 @@ model RentPayment {
   /// table (measured: 60,000 scans for 60,000 deleted installments).
   @@index([installmentId])
   @@map("rent_payments")
+}
+
+/// ⭐ **صفُّ استحقاق الإيجار — ما يقرؤه الدفترُ والإقرارُ معاً** (`ق-٩١٧` · `ق-٩٢٧/١`).
+///
+/// **نقطةُ الضريبة** لكلِّ مبلغٍ (م٢٠): الأسبقُ من استحقاق القسط وسداده — وبقدر المقبوض
+/// حين يسبق السدادُ الاستحقاقَ (`ق-٩٢٤`)، فالقسطُ الواحد قد يحمل أكثرَ من صفّ. **قيدٌ واحد
+/// لكلِّ صفّ** (`1200` إجمالاً ⇄ `2400`/`4200` صافياً + `2200` ضريبةً) **والإقرارُ يجمع
+/// الصفوفَ بتاريخها** — فيستوي الدفترُ والإقرارُ بالبناء لا بحارسٍ يعلن فرقَهما (`ق-٩١٥`).
+///
+/// **المبالغُ موقَّعة**: `REVERSAL` و`DISCOUNT` سالبة — فربعُ الإلغاء يُنقص كما يُنقص الإشعارُ
+/// الدائن، ولا يُعدَّل صفٌّ رُحِّل. **والتصنيفُ وقابليةُ الضريبة لقطةٌ لحظةَ الاستحقاق**: عقارٌ
+/// يتغيّر تشغيلُه لاحقاً لا يعيد كتابةَ إقرارٍ مضى.
+model RentAccrual {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  /// فارغٌ لدفعةٍ بلا قسط (`UNLINKED`).
+  installmentId String?
+  installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+
+  /// الدفعةُ التي أنشأت الصفّ — لمقدَّمةٍ أو بلا قسطٍ أو خصم.
+  paymentId String?
+  payment   RentPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  kind RentAccrualKind
+  /// نقطةُ الضريبة — تاريخُ القيد وتاريخُ الإقرار معاً.
+  date DateTime @db.Date
+
+  /// لقطةُ التصنيف: `RESIDENTIAL` معفى · `COMMERCIAL` خاضع — ولا صفَّ لعقدٍ غيرِ مصنَّف.
+  classification ContractClassification
+  /// خاضعٌ فعلاً: تجاريٌّ **و**العقارُ `owned`/`leased`؛ و`managed` تجاريٌّ بلا ضريبة
+  /// (توريدُ مالكه — `ق-٩١٨`) يُعدّ في الإقرار ولا يدخله.
+  taxable Boolean
+  /// عقارُ تشغيل — يُعدّ ويُعلَن.
+  managed Boolean @default(false)
+
+  /// بعملة العقد: الإجماليُّ (ما يدين به المستأجر) · الصافي (الإيراد) · الضريبة.
+  amountGross Decimal @db.Decimal(18, 2)
+  amountNet   Decimal @db.Decimal(18, 2)
+  amountTax   Decimal @db.Decimal(18, 2)
+
+  currency     String  @default("SAR")
+  exchangeRate Decimal @default(1) @db.Decimal(18, 6)
+  /// وبعملة الدفتر — وهي ما يُرحَّل ويُقرأ في الإقرار.
+  baseGross Decimal @db.Decimal(18, 2)
+  baseNet   Decimal @db.Decimal(18, 2)
+  baseTax   Decimal @db.Decimal(18, 2)
+
+  /// فارغٌ حين تخطّى الترحيلُ لنقص حسابٍ في الدليل — ويُعدّ في الإقرار «بلا قيد» لا يُخفى.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("RentAccrualEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  /// الإقرارُ يقرأ ربعَ سنةٍ بتاريخ نقطة الضريبة.
+  @@index([companyId, date])
+  @@index([installmentId])
+  @@index([contractId])
+  @@map("rent_accruals")
 }
 
 /// A storage location. `manager` is a free-text name, not a real Employee FK

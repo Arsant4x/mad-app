@@ -5,11 +5,12 @@ import { ClaimAttachmentsService } from './claim-attachments.service';
 import { HandoverPhotosService } from './handover-photos.service';
 import { ContractsController } from './contracts.controller';
 import { ContractsService } from './contracts.service';
+import { RentAccrualService } from './rent-accrual.service';
 import { RentRecognitionService } from './rent-recognition.service';
 
 @Module({
   imports: [FilesModule],
   controllers: [ContractsController],
-  providers: [ContractsService, ContractAttachmentsService, ClaimAttachmentsService, HandoverPhotosService, RentRecognitionService],
+  providers: [ContractsService, ContractAttachmentsService, ClaimAttachmentsService, HandoverPhotosService, RentRecognitionService, RentAccrualService],
 })
 export class ContractsModule {}

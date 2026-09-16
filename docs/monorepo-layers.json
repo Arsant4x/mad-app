@@ -158,6 +158,18 @@
       "where": "apps/api/src/delegations/permission-tree.ts",
       "what": "عقدة realestate في شجرة الصلاحيات",
       "settle": "الشجرة تُبنى من القطاعات المفعَّلة"
+    },
+    {
+      "module": "journal",
+      "where": "apps/api/src/journal/rent-tax-point.util.ts · apps/api/src/journal/rent-accrual.util.ts",
+      "what": "محرّكُ نقطة ضريبة الإيجار (م٢٠ · ق-٩٢٤) واستحقاقُه ذمّةً (ق-٩١٧ · ق-٩٢٧) — يعرفان contract/installment/rent_payment/property.ownership عبر المخطَّط",
+      "settle": "ينتقلان إلى نشاط العقارات مع دوالّ ترحيل الإيجار، والنواةُ تُبقي واجهةَ «نقطة ضريبة لتوريدٍ مستمرّ» عامة، حين يدخل نشاطٌ ثانٍ"
+    },
+    {
+      "module": "obligations",
+      "where": "apps/api/src/obligations/obligations.service.ts",
+      "what": "قسمُ الإيجار في إقرار الضريبة يقرأ rent_accruals وcontract_installments وrent_payments (ق-٩١٨ · ق-٩٢٦)",
+      "settle": "الإقرارُ يجمع «مصادرَ توريد» يسجّلها كلُّ نشاطٍ في سجلٍّ عام، والإيجارُ أحدُها"
     }
   ]
 }

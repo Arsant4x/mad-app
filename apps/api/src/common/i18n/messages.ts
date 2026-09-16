@@ -164,6 +164,7 @@ export const MSG = {
   deposit_already_settled: 'deposits.already_settled',
   deductions_exceed_deposit: 'deposits.deductions_exceed',
   payment_net_must_be_positive: 'contracts.payment_net_must_be_positive',
+  rent_accrual_period_locked: 'contracts.rent_accrual_period_locked',
 
   // reservations
   reservation_not_found: 'reservations.not_found',
@@ -614,6 +615,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Deductions exceed the deposit amount ({held})',
   },
   [MSG.payment_net_must_be_positive]: { ar: 'المبلغ الصافي يجب أن يكون أكبر من صفر', en: 'Net amount must be greater than zero' },
+  [MSG.rent_accrual_period_locked]: {
+    ar: 'لا يمكن قبض هذه الدفعة: استحقاقُ القسط يقع في فترةٍ مقفلة — افتح الفترة أو قيّد الاستحقاق بقيدٍ عكسيّ في فترةٍ مفتوحة',
+    en: 'This payment cannot be recorded: the installment accrues inside a closed period — reopen it, or post the accrual in an open period',
+  },
 
   [MSG.reservation_not_found]: { ar: 'الحجز غير موجود', en: 'Reservation not found' },
   [MSG.reservation_unit_rented]: {
@@ -719,8 +724,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.handover_item_not_found]: { ar: 'بند النموذج غير موجود في هذا النموذج', en: 'Checklist item not found on this handover' },
   [MSG.settlement_lines_mismatch]: { ar: 'مجموع بنود التسوية لا يساوي مبلغ التسوية', en: 'Settlement lines do not add up to the settlement amount' },
   [MSG.unearned_disposition_required]: {
-    ar: 'بقي {amount} مقبوضاً عن مدّة لم تُقدَّم — حدّد وجهته: يُردّ للمستأجر أم يُحتجَز دخلاً بشرط العقد',
-    en: 'A collected amount of {amount} covers a period not served — choose its destination: refunded to the tenant, or kept as income under the contract',
+    ar: 'بقي {amount} مستحقّاً أو مقبوضاً عن مدّة لم تُقدَّم — حدّد وجهته: يُردّ للمستأجر (ولا يدين بما لم يُقبض) أم يُحتجَز دخلاً بشرط العقد',
+    en: 'An amount of {amount} — accrued or collected — covers a period not served: choose its destination: refunded to the tenant (and not owed where unpaid), or kept as income under the contract',
   },
   [MSG.bulk_units_collision]: { ar: 'أرقام وحدات موجودة مسبقاً ضمن النطاق المطلوب: {units}', en: 'Unit numbers already exist in the requested range: {units}' },
   [MSG.templates_owner_only]: { ar: 'إدارة نماذج الصلاحيات متاحة لمالك المنشأة أو مدير المنصة فقط', en: 'Only the company owner or the platform admin can manage permission templates' },

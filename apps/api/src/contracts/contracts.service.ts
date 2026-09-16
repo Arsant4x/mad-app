@@ -14,9 +14,20 @@ import {
   postDeferredSettlementEntry,
   postDepositReceiptEntry,
   postDepositSettlementEntry,
+  postPartySettlementEntry,
   postRentPaymentEntry,
 } from '../journal/auto-posting.util';
-import { closeDeferredWithinTx, outstandingDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
+import {
+  ACCRUAL_CONTRACT_SELECT,
+  accrueDueWithinTx,
+  accrueForPaymentWithinTx,
+  discountAccrualWithinTx,
+  reverseVoidedInstallmentsWithinTx,
+  settleUnpaidUnearnedWithinTx,
+  treatmentOf,
+  unearnedDetailWithinTx,
+} from '../journal/rent-accrual.util';
+import { closeDeferredWithinTx, recognizeDueWithinTx } from './rent-recognition.service';
 import { activeReservationForUnit, expireStaleReservations } from '../reservations/reservations.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
@@ -33,6 +44,9 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
+
+/** مهلةُ معاملةٍ تستحقّ جدولاً كاملاً (الإنشاءُ والتجديد) — لا الافتراضُ الخمس ثوانٍ. */
+const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
@@ -110,8 +124,12 @@ export class ContractsService {
     const { currency, exchangeRate } = resolveCurrency(dto);
     // Retries the whole transaction on a "no" collision from a concurrent
     // create — same reasoning as InvoicesService.create.
+    // ⚠️ مهلةٌ أطول من الافتراض: عقدٌ يُدخَل بتاريخٍ مضى يستحقّ أقساطَه التي حلّت في المعاملة
+    // نفسِها (ق-٩٢٧/٥) — وقيدٌ لكلِّ قسط؛ فمهلةُ الخمس ثوانٍ تُسقط ترحيلَ عقدٍ بعشرين قسطاً.
     return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      this.tenantPrisma.runInTenantContext(
+        companyId,
+        async (tx) => {
         const unit = await tx.unit.findUnique({ where: { id: dto.unitId }, include: { property: true } });
         if (!unit) throw new NotFoundException(MSG.unit_not_found);
 
@@ -172,10 +190,17 @@ export class ContractsService {
           // names were already rejected above by validateContract.
           const rsv = await activeReservationForUnit(tx, dto.unitId);
           if (rsv) await tx.reservation.update({ where: { id: rsv.id }, data: { status: 'CONVERTED' } });
+
+          // ⭐ ما حلّ استحقاقُه من الجدول يُستحقّ ذمّةً في اللحظة نفسِها (ق-٩١٧ · ق-٩٢٧/٥):
+          // عقدٌ يُدخَل بتاريخٍ مضى يحمل أقساطاً حلّت، وكلٌّ منها نقطةُ ضريبةٍ بتاريخها —
+          // لا ينتظر الكنسَ اليوميّ. والمقفلُ من الفترات يُتخطّى ويُعدّ لا يوقف الإنشاء.
+          await accrueDueWithinTx(tx, companyId, new Date(), created.id);
         }
 
         return tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE });
-      }),
+        },
+        ACCRUAL_TX_OPTIONS,
+      ),
     );
   }
 
@@ -208,13 +233,18 @@ export class ContractsService {
 
   cancel(companyId: string, id: string, dto: CancelContractDto) {
     // Retries on a journal-entry "no" collision when a settlement is posted.
+    // ⚠️ ومهلةُ الدفعة كالإنشاء: الإلغاءُ يعترف بما قُدِّم حتى تاريخه ويعكس المُسقَط — قيدٌ لكلِّ
+    // شهرٍ ولكلِّ قسطٍ مُسقَط، وعقدٌ طويل يتجاوز بها الخمسَ ثوانٍ.
     return retryOnUniqueConflict(() =>
-      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      this.tenantPrisma.runInTenantContext(
+        companyId,
+        async (tx) => {
         const existing = await tx.contract.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException(MSG.contract_not_found);
         if (existing.status === 'CANCELLED') throw new ConflictException(MSG.contract_already_cancelled);
 
         const cancelDate = new Date(dto.cancelDate);
+        const accrualContract = await tx.contract.findUniqueOrThrow({ where: { id }, select: ACCRUAL_CONTRACT_SELECT });
 
         // Worked out **before** the installments are touched: 'all' and
         // 'installments' read the very rows that `installmentDisposition:
@@ -224,7 +254,14 @@ export class ContractsService {
         // نفسِه لا بقاعدةٍ ثانية (`ق-٤٦٩`). **فما بقي بعدها مقبوضٌ عن مدّةٍ لن
         // تُقدَّم**، وهو وحده موضوعُ السؤال.
         await recognizeDueWithinTx(tx, companyId, cancelDate, id);
-        const unearned = await outstandingDeferredWithinTx(tx, id);
+
+        // ⭐ ثم **يُعكس استحقاقُ ما سيُسقَط** (ق-٩٢٥/②): قسطٌ حلّ بعد تاريخ الإلغاء ولم يُقبض
+        // منه شيء ويُسقَط — تُردّ ذمّتُه وضريبتُه وإيرادُه كإشعارٍ دائن، **قبل** أن يُقرأ
+        // الالتزامُ الباقي فلا يُسأل عن وجهةِ ما لم يعد التزاماً.
+        if (dto.installmentDisposition === 'cancel') await reverseVoidedInstallmentsWithinTx(tx, companyId, accrualContract, cancelDate);
+
+        const unearnedDetail = await unearnedDetailWithinTx(tx, id);
+        const unearned = unearnedDetail.total;
         if (unearned > 0 && !dto.unearnedDisposition) {
           // ⛔ **ولا افتراض** (`ق-٤٧٢`): «كلا الخيارين يكذب على نصف الحالات».
           throw new BadRequestException(formatMessage(MSG.unearned_disposition_required, { amount: formatMoney(unearned) }));
@@ -281,22 +318,30 @@ export class ContractsService {
         // إقفالُ الالتزام الباقي — **بعد تعديل الأقساط**، فالمبلغُ مقروءٌ قبلها
         // ولا تغيّره حالةُ قسطٍ لم يُقبض منه شيء.
         if (unearned > 0 && dto.unearnedDisposition) {
-          await postDeferredSettlementEntry(tx, companyId, {
-            unitId: existing.unitId,
-            customerId: existing.customerId,
-            contractNo: existing.no,
-            tenant: existing.tenant,
-            date: cancelDate,
-            baseAmount: unearned,
-            disposition: dto.unearnedDisposition,
-          });
+          // ما **قُبض** عن مدّةٍ لن تُقدَّم: يُردّ أو يُحتجَز — كما كان (ق-٤٧٢).
+          if (unearnedDetail.collected > 0) {
+            await postDeferredSettlementEntry(tx, companyId, {
+              unitId: existing.unitId,
+              customerId: existing.customerId,
+              contractNo: existing.no,
+              tenant: existing.tenant,
+              date: cancelDate,
+              baseAmount: unearnedDetail.collected,
+              disposition: dto.unearnedDisposition,
+            });
+          }
+          // وما **استُحقّ ولم يُقبض** عن مدّةٍ بعد الإلغاء يتبع الوجهةَ نفسَها (ق-٩٢٧/٧):
+          // `refund` ⇒ لا يدين به المستأجر فيُعكس؛ `income` ⇒ يبقى ذمّةً ويصير دخلاً آخر.
+          await settleUnpaidUnearnedWithinTx(tx, companyId, accrualContract, unearnedDetail, cancelDate, dto.unearnedDisposition);
           // العدّادُ يُغلق: ما خرج من الالتزام لا يعود مرشَّحاً للتحوّل — وإلّا
           // رحّل الكنسُ الشهريّ التزاماً أُقفل بالفعل.
           await closeDeferredWithinTx(tx, id);
         }
 
         return tx.contract.findUniqueOrThrow({ where: { id }, include: CONTRACT_INCLUDE });
-      }),
+        },
+        ACCRUAL_TX_OPTIONS,
+      ),
     );
   }
 
@@ -350,44 +395,46 @@ export class ContractsService {
         const netAmount = round2(dto.amount - discount);
         if (netAmount <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
-        const posting = await postRentPaymentEntry(tx, companyId, {
-          unitId: contract.unitId,
-          customerId: contract.customerId,
-          contractNo: contract.no,
-          tenant: contract.tenant,
-          date: new Date(dto.date),
-          // فترةُ خدمةِ القسط — وبلا قسطٍ مرتبط لا فترةَ تُعرف (ق-٤٧٣).
-          service:
-            installment?.serviceStart && installment?.serviceEnd
-              ? { start: installment.serviceStart, end: installment.serviceEnd }
-              : null,
-          baseNetAmount: toBaseAmount(netAmount, payRate),
-          // Priced at the contract's rate — but only when the payment is in
-          // the contract's own currency. A payment made in a different
-          // currency altogether has no rate difference to recognize.
-          baseExpectedAmount:
-            payCurrency === contract.currency ? toBaseAmount(netAmount, Number(contract.exchangeRate)) : toBaseAmount(netAmount, payRate),
-          // (ق-٢٧٧) الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك — لا `1000`.
-          cashAccountId: bank?.accountId ?? null,
-        });
-        const journalEntry = posting.entry;
+        // ⭐ **مساران بحدٍّ معلَن** (ق-٩٢٦ · ق-٩٢٧/٢·٣): القبضُ على قسطٍ استحقاقيّ لعقدٍ مصنَّف
+        // **يسدّد ذمّةً** (نقدٌ ⇄ `1200`) بعد أن يُستحقّ ما يلزم؛ وما سبق البناءَ (أساسُ
+        // القبض) أو عقدٌ لم يُصنَّف بعد يبقى على مسار القبض القائم (نقدٌ ⇄ `4200`/`2400`)
+        // — ويُحسب في الإقرار ويُعدّ باسمه، ولا يُرحَّل رجعياً.
+        const accrualContract = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, select: ACCRUAL_CONTRACT_SELECT });
+        const treatment = treatmentOf(accrualContract);
+        const accrualPath = treatment !== null && (installment === null || installment.accrualBasis === 'ACCRUAL');
+        // الإجماليُّ بمقياس عملة العقد — قبل الخصم، فالخصمُ تعديلُ مقابلٍ لاحق.
+        const baseExpected = payCurrency === contract.currency ? toBaseAmount(netAmount, Number(contract.exchangeRate)) : toBaseAmount(netAmount, payRate);
+        const grossInContractCurrency = payCurrency === contract.currency ? dto.amount : round2(toBaseAmount(dto.amount, payRate) / (Number(contract.exchangeRate) || 1));
 
-        if (bank) {
-          await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: netAmount } } });
-          await tx.bankTransaction.create({
-            data: {
-              bankId: bank.id,
-              date: new Date(dto.date),
-              description: `دفعة إيجار — عقد ${contract.no} — ${contract.tenant}`,
-              amount: netAmount,
-              source: 'rent',
-              matched: !!journalEntry,
-              entryNo: journalEntry?.no ?? null,
-              currency: payCurrency,
-              exchangeRate: payRate,
-              baseAmount: toBaseAmount(netAmount, payRate),
-            } as unknown as Prisma.BankTransactionUncheckedCreateInput,
+        let journalEntry: { id: string; no: string } | null = null;
+        let earnedNow = 0;
+        if (!accrualPath) {
+          const posting = await postRentPaymentEntry(tx, companyId, {
+            unitId: contract.unitId,
+            customerId: contract.customerId,
+            contractNo: contract.no,
+            tenant: contract.tenant,
+            date: new Date(dto.date),
+            // فترةُ خدمةِ القسط — وبلا قسطٍ مرتبط لا فترةَ تُعرف (ق-٤٧٣).
+            service:
+              installment?.serviceStart && installment?.serviceEnd
+                ? { start: installment.serviceStart, end: installment.serviceEnd }
+                : null,
+            baseNetAmount: toBaseAmount(netAmount, payRate),
+            // Priced at the contract's rate — but only when the payment is in
+            // the contract's own currency. A payment made in a different
+            // currency altogether has no rate difference to recognize.
+            baseExpectedAmount: baseExpected,
+            // (ق-٢٧٧) الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك — لا `1000`.
+            cashAccountId: bank?.accountId ?? null,
           });
+          journalEntry = posting.entry;
+          earnedNow = posting.earned;
+          // قسطٌ استحقاقيٌّ لعقدٍ لم يُصنَّف قُبض على المسار القائم — فيُثبَّت على أساس القبض
+          // كي لا يستحقّه الكنسُ ثانيةً بعد التصنيف (والصفُّ سابقٌ للبناء فالقيدُ يقبله).
+          if (installment && installment.accrualBasis === 'ACCRUAL') {
+            await tx.installment.update({ where: { id: installment.id }, data: { accrualBasis: 'LEGACY_COLLECTED' } });
+          }
         }
 
         const payment = await tx.rentPayment.create({
@@ -412,12 +459,76 @@ export class ContractsService {
           } as unknown as Prisma.RentPaymentUncheckedCreateInput,
         });
 
+        if (accrualPath && treatment) {
+          // ① يُستحقّ ما يلزم — بعد كتابة الدفعة كي يقرأها المحرّك: نقطتُها المقدَّمة بقدرها
+          //    إن سبقت الاستحقاق، أو باقي القسط إن حلّ، وما فاض عنه بقدره (م٢٠/٢ · ق-٩٢٤).
+          const accrued = await accrueForPaymentWithinTx(
+            tx,
+            companyId,
+            accrualContract,
+            treatment,
+            { id: payment.id, date: new Date(dto.date), grossInContractCurrency, installmentId: installment?.id ?? null },
+            new Date(),
+          );
+          if (!accrued) throw new BadRequestException(MSG.rent_accrual_period_locked);
+
+          // ② الخصمُ تعديلُ مقابلٍ (ق-٩٢٧/٦): يُنقص الذمّةَ والصافيَ والضريبة — لا يُهمَل.
+          if (discount > 0) {
+            const fresh = installment
+              ? await tx.installment.findUniqueOrThrow({
+                  where: { id: installment.id },
+                  select: { id: true, baseAccruedGross: true, baseAccruedNet: true, baseAccruedTax: true, baseRecognized: true },
+                })
+              : null;
+            const discountGross = payCurrency === contract.currency ? discount : round2(toBaseAmount(discount, payRate) / (Number(contract.exchangeRate) || 1));
+            await discountAccrualWithinTx(tx, companyId, accrualContract, treatment, fresh, {
+              date: new Date(dto.date),
+              gross: discountGross,
+              paymentId: payment.id,
+            });
+          }
+
+          // ③ ثم القبضُ يسدّد الذمّة: نقدٌ بسعر يومه ⇄ `1200` بسعر العقد، وفرقُ الصرف على
+          //    `5600` — كسند القبض على فاتورة (ق-٨٧١).
+          const settlement = await postPartySettlementEntry(tx, companyId, {
+            customerId: contract.customerId,
+            side: 'RECEIVABLE',
+            date: new Date(dto.date),
+            memo: `قبض إيجار — عقد ${contract.no} — ${contract.tenant}`,
+            baseCash: toBaseAmount(netAmount, payRate),
+            baseSettled: baseExpected,
+            cashAccountId: bank?.accountId ?? null,
+            unitId: contract.unitId,
+          });
+          journalEntry = settlement;
+          if (settlement) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: settlement.id } });
+        }
+
+        // مرآةُ البنك/الصندوق — بعد أن يُعرف قيدُ القبض على المسارَين (رقمُه في الحركة).
+        if (bank) {
+          await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: netAmount } } });
+          await tx.bankTransaction.create({
+            data: {
+              bankId: bank.id,
+              date: new Date(dto.date),
+              description: `دفعة إيجار — عقد ${contract.no} — ${contract.tenant}`,
+              amount: netAmount,
+              source: 'rent',
+              matched: !!journalEntry,
+              entryNo: journalEntry?.no ?? null,
+              currency: payCurrency,
+              exchangeRate: payRate,
+              baseAmount: toBaseAmount(netAmount, payRate),
+            } as unknown as Prisma.BankTransactionUncheckedCreateInput,
+          });
+        }
+
         if (installment) {
           await tx.installment.update({
             where: { id: installment.id },
-            // العدّادُ يُزاد بما اعتُرف به **في هذا القيد وحده** — وصفرٌ حين
-            // تخطّى الترحيلُ لنقص حساب، فلا يُسجَّل اعترافٌ لم يقع (ق-٤٦٨).
-            data: { status: 'PAID', baseRecognized: { increment: posting.earned } },
+            // العدّادُ يُزاد بما اعتُرف به **في قيد القبض القائم وحده** — وصفرٌ على مسار
+            // الاستحقاق (الاعترافُ هناك من الاستحقاق لا من القبض) وحين تخطّى الترحيل (ق-٤٦٨).
+            data: { status: 'PAID', baseRecognized: { increment: earnedNow } },
           });
         }
 
@@ -569,8 +680,13 @@ export class ContractsService {
           });
         }
 
+        // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
+        await accrueDueWithinTx(tx, companyId, new Date(), created.id);
+
         return tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE });
-      }),
+        },
+        ACCRUAL_TX_OPTIONS,
+      ),
     );
   }
 
