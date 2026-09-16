@@ -640,6 +640,7 @@ model ZatcaCredential {
   /// (our row id, say) means the production certificate is never issued, so
   /// it is captured at the OTP step and kept. Not a secret: it identifies a
   /// request, it does not authenticate one.
+  /// @external-text
   complianceRequestId String?
   /// Issued once conformance passes; this is what signs real invoices.
   productionCsidEnc   String?
@@ -649,6 +650,7 @@ model ZatcaCredential {
   environment ZatcaEnvironment      @default(SANDBOX)
   /// Why onboarding failed, so a merchant can be told something actionable
   /// rather than "try again".
+  /// @external-text
   lastError   String?
   onboardedAt DateTime?
 
@@ -1088,6 +1090,7 @@ model Invoice {
   zatcaSubmittedAt  DateTime?
   /// Last clearance/rejection note from the authority, kept so a rejected
   /// invoice can actually be diagnosed.
+  /// @external-text
   zatcaMessage      String?
 
   /// ZATCA document kind — see the enum's comment for why notes share this
@@ -4266,6 +4269,7 @@ model OutboxEvent {
   /// لا يُلتقط قبل هذا الوقت — به يقع التراجع الأُسّي بلا جدولٍ ثانٍ.
   availableAt DateTime  @default(now())
   /// آخر سببِ فشلٍ بنصّه — فمن يفتح الطابور يعرف لماذا وقف.
+  /// @external-text
   lastError   String?
 
   createdAt DateTime  @default(now())

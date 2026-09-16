@@ -46,9 +46,8 @@ export class OutboxModule implements OnModuleInit {
   onModuleInit(): void {
     this.outbox.register(INVOICE_ISSUED, async (row) => {
       const { invoiceId } = row.payload as InvoiceIssuedPayload;
-      // `actorType` = COMPANY: الإرسال فعلُ المنشأة لا فعلُ مستخدمٍ بعينه،
-      // والصفّ لا يحمل فاعلاً لأن الواقعة وقعت وقت الإنشاء لا وقت الإرسال.
-      await this.zatca.submitInvoice(row.companyId, 'COMPANY', invoiceId);
+      // مستندٌ أجابت عنه الهيئةُ مُوصَلٌ فيُختم الحدثُ بلا إرسال (`ق-٩٨٣`) — وإلا أُرسل.
+      await this.zatca.deliverIssued(row.companyId, invoiceId);
     });
   }
 }

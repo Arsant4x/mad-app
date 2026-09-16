@@ -12,6 +12,7 @@ import { GENESIS_PREVIOUS_HASH } from './hash-chain.util';
 import { wallClockOf } from '../common/wall-clock.util';
 import { requeueFailedWithinTx } from '../outbox/outbox.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
+import { storableText } from '../common/i18n/storable-text';
 import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
 
@@ -263,7 +264,6 @@ export class ZatcaOnboardingService {
       // narrowing inside a closure, so `body.secret` would read as possibly
       // undefined there despite the guard above.
       const { binarySecurityToken, secret } = body;
-      const complianceRequestId = body.requestID === undefined || body.requestID === null ? null : String(body.requestID);
 
       await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
         tx.zatcaCredential.update({
@@ -271,7 +271,9 @@ export class ZatcaOnboardingService {
           data: {
             complianceCsidEnc: encryptSecret(binarySecurityToken),
             complianceSecretEnc: encryptSecret(secret),
-            complianceRequestId,
+            // معرّفٌ من الهيئة يُكتب نصّاً: النداءُ في موضع الكتابة نفسِه (`ق-٩٨٢`) — فحارسُ الأعمدة
+            // المعلَنة يقرأ الشكلَ لا المتغيّر، واختصارُ الخاصّية كان يخفي عنه ما مرّ بالمصدر وما لم يمرّ.
+            complianceRequestId: storableText(body.requestID),
             status: ZatcaOnboardingStatus.COMPLIANCE_ISSUED,
             lastError: null,
           },
@@ -487,12 +489,13 @@ export class ZatcaOnboardingService {
   }
 
   /** Records why onboarding stopped so the merchant sees something actionable
-   * rather than a generic retry prompt. */
+   * rather than a generic retry prompt. النصُّ من جواب الهيئة أو من `fetch` — فيمرّ بـ`storableText`
+   * (`ق-٩٨٢`): بايتٌ صفريٌّ فيه كان يُسقط الكتابةَ ويُبقي الحالةَ بلا سبب. */
   private async fail(companyId: string, message: string) {
     await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.zatcaCredential.update({
         where: { companyId },
-        data: { status: ZatcaOnboardingStatus.FAILED, lastError: message },
+        data: { status: ZatcaOnboardingStatus.FAILED, lastError: storableText(message) },
       }),
     );
     return this.getStatus(companyId);
