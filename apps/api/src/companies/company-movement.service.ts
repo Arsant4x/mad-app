@@ -53,6 +53,7 @@ export const NUMBERED_DOCUMENTS: ReadonlyArray<{ model: Prisma.ModelName; kinds:
   { model: 'Invoice', kinds: ['INV'], label: 'فواتير' },
   { model: 'JournalEntry', kinds: ['JE'], label: 'قيود' },
   { model: 'Payment', kinds: ['RCV', 'REFUND'], label: 'سندات' },
+  { model: 'SupplierPayment', kinds: ['PAY'], label: 'سندات صرف' },
   { model: 'Purchase', kinds: ['PUR'], label: 'مشتريات' },
   { model: 'InventoryWriteOff', kinds: ['WO'], label: 'إعدام مخزون' },
   { model: 'Quote', kinds: ['Q'], label: 'عروض أسعار' },

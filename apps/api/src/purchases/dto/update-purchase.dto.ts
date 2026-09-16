@@ -53,11 +53,6 @@ export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsString()
   incorpItem?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  paid?: boolean;
-
-  @IsOptional()
-  @IsDateString()
-  paidDate?: string;
+  // ⛔ لا `paid` ولا `paidDate` هنا (`ق-٨٧٤`): السدادُ سندُ صرفٍ يُرحَّل (`POST /supplier-payments`)،
+  // والحالةُ مشتقّةٌ من تخصيصاته. وعميلٌ يرسل العلَمَ القديم يُردّ بـ400 من الصمّام لا يُتجاهل صامتاً.
 }

@@ -64,14 +64,20 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
 
     await request(app.getHttpServer()).delete(`/suppliers/${supplier.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
 
-    // Marking paid, then deleting the purchase, then the now-unblocked supplier.
-    const paid = await request(app.getHttpServer())
+    // الحالةُ مشتقّةٌ من تخصيصات سندات الصرف (ق-٨٧٢) — شراءٌ جديد `DUE` بلا مسدَّد، والعلَمُ
+    // القديم (`paid`) صار مرفوضاً من الصمّام لا متجاهَلاً (ق-٨٧٤).
+    expect(purchase.body.status).toBe('DUE');
+    const listed = (await request(app.getHttpServer()).get('/purchases').set('Authorization', `Bearer ${tokenA}`).expect(200)).body.find(
+      (p: { id: string }) => p.id === purchase.body.id,
+    );
+    expect({ allocated: listed.allocated, remaining: listed.remaining }).toEqual({ allocated: 0, remaining: 920 });
+    await request(app.getHttpServer())
       .patch(`/purchases/${purchase.body.id}`)
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ paid: true, paidDate: '2026-07-05' })
-      .expect(200);
-    expect(paid.body.paid).toBe(true);
+      .expect(400);
 
+    // Deleting the purchase, then the now-unblocked supplier.
     await request(app.getHttpServer()).delete(`/purchases/${purchase.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
     await request(app.getHttpServer()).delete(`/suppliers/${supplier.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   }, 20000);

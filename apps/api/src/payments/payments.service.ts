@@ -1,13 +1,23 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
-import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import {
+  allocatedByDocument,
+  allocatedFor,
+  assertReversible,
+  baseSettledOf,
+  deriveSettlementStatus,
+  lockAndAssertAllocationsFit,
+  SETTLEMENT_EPS as EPS,
+  SettlementTarget,
+  withRemaining,
+} from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { postCustomerPaymentEntry } from '../journal/auto-posting.util';
+import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto } from './dto/payment.dto';
 
@@ -16,8 +26,18 @@ const PAYMENT_INCLUDE = {
   allocations: { include: { invoice: { select: { id: true, no: true, total: true, currency: true } } } },
 } as const;
 
-/** فرق أقل من هللة لا يُعتدّ به — المال يُقارن مقرَّباً لخانتين. */
-const EPS = 0.005;
+/** هدفُ التسوية: الفواتير بمفتاح العميل — والآليةُ المشتركة في `common/settlement` (`ق-٨٧١`). */
+const invoiceTarget = (tx: Prisma.TransactionClient): SettlementTarget => ({
+  table: 'invoices',
+  partyColumn: 'customerId',
+  documentKey: 'invoiceId',
+  allocations: tx.paymentAllocation,
+  documentNotFound: MSG.invoice_not_found,
+  wrongParty: MSG.allocation_wrong_customer,
+});
+
+/** تخصيصاتُ الطلب بمفردات التسوية المشتركة. */
+const toSettlementAllocations = (allocations: AllocationDto[]) => allocations.map((a) => ({ documentId: a.invoiceId, amount: a.amount }));
 
 /**
  * المقبوضات وتخصيصها على الفواتير (4.5).
@@ -31,6 +51,10 @@ const EPS = 0.005;
  * **لا حذف ولا تعديل لدفعة**: لا مسار في هذه الخدمة ولا في متحكّمها يفعل ذلك؛
  * التصحيح بدفعة عكسية حصراً. حارس `assertNotPosted` شبكة أمان ثانية إن أُضيف
  * مساران يوماً — والقيد `Cascade` في المخطط شبكة ثالثة لا باب.
+ *
+ * **والآليةُ مشتركة مع سند الصرف للمورّد** (`ق-٨٧١`): القفلُ والتخصيصُ والحالةُ المشتقّة
+ * والذمّةُ بسعر المستند وأثرُ البنك وحرّاسُ العكس — كلُّها في `common/settlement`، وهنا
+ * ما يخصّ العميلَ وحدَه: الردُّ والدرجُ والترقيمُ `RCV`/`RFD`.
  */
 @Injectable()
 export class PaymentsService {
@@ -68,13 +92,7 @@ export class PaymentsService {
         select: { id: true, no: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
         orderBy: { issueDate: 'asc' },
       });
-      const allocated = await this.allocatedByInvoice(tx, invoices.map((i) => i.id));
-      return invoices
-        .map((inv) => {
-          const paid = allocated.get(inv.id) ?? 0;
-          return { ...inv, allocated: paid, remaining: round2(Number(inv.total) - paid) };
-        })
-        .filter((i) => i.remaining > EPS);
+      return withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), invoices.map((i) => i.id)));
     });
   }
 
@@ -101,7 +119,12 @@ export class PaymentsService {
         const amount = round2(dto.amount);
         const allocations = (dto.allocations ?? []).map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
 
-        const invoices = await this.assertAllocationsFit(tx, amount, currency, dto.customerId, allocations);
+        const invoices = await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
+          amount,
+          currency,
+          partyId: dto.customerId,
+          allocations: toSettlementAllocations(allocations),
+        });
 
         const no = await this.nextPaymentNumber(tx, companyId, new Date(dto.date));
         const payment = await tx.payment.create({
@@ -132,7 +155,7 @@ export class PaymentsService {
           exchangeRate,
           branchId,
           bank,
-          baseReceivable: this.baseReceivableOf(amount, exchangeRate, allocations, invoices),
+          baseReceivable: baseSettledOf(amount, exchangeRate, toSettlementAllocations(allocations), invoices),
           description: `مقبوض من عميل — سند ${no} — ${customer.name}`,
         });
 
@@ -230,7 +253,12 @@ export class PaymentsService {
 
       // القديمة تُطرح أولاً — وإلا رفضنا إعادةَ توزيعٍ لا تتجاوز شيئاً حقيقةً.
       await tx.paymentAllocation.deleteMany({ where: { paymentId: id } });
-      await this.assertAllocationsFit(tx, round2(Number(payment.amount)), payment.currency, payment.customerId, requested);
+      await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
+        amount: round2(Number(payment.amount)),
+        currency: payment.currency,
+        partyId: payment.customerId,
+        allocations: toSettlementAllocations(requested),
+      });
 
       if (requested.length) {
         await tx.paymentAllocation.createMany({ data: requested.map((a) => ({ companyId, paymentId: id, invoiceId: a.invoiceId, amount: a.amount })) });
@@ -257,9 +285,7 @@ export class PaymentsService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const original = await tx.payment.findUnique({ where: { id }, include: { allocations: true, customer: { select: { name: true } } } });
         if (!original) throw new NotFoundException(MSG.payment_not_found);
-        if (original.reversesId) throw new ConflictException(MSG.payment_reversal_immutable);
-        const existing = await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } });
-        if (existing) throw new ConflictException(formatMessage(MSG.payment_already_reversed, { no: existing.no }));
+        assertReversible(original, await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
         const amount = round2(-Number(original.amount));
         const rate = Number(original.exchangeRate);
@@ -272,15 +298,19 @@ export class PaymentsService {
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
-        // القيدان طرفاً بطرف ويعود 5600 إلى ما كان.
+        // القيدان طرفاً بطرف ويعود 5600 إلى ما كان: الحسبةُ نفسُها التي سوّت الأصل، مقلوبةَ الإشارة.
         const invoices = await tx.invoice.findMany({
           where: { id: { in: original.allocations.map((a) => a.invoiceId) } },
           select: { id: true, exchangeRate: true },
         });
-        const rateByInvoice = new Map(invoices.map((i) => [i.id, Number(i.exchangeRate)]));
+        const rateByInvoice = new Map(invoices.map((i) => [i.id, { exchangeRate: Number(i.exchangeRate) }]));
         const baseReceivable = round2(
-          -original.allocations.reduce((s, a) => s + toBaseAmount(Number(a.amount), rateByInvoice.get(a.invoiceId) ?? rate), 0) -
-            toBaseAmount(round2(Number(original.amount) - original.allocations.reduce((s, a) => s + Number(a.amount), 0)), rate),
+          -baseSettledOf(
+            round2(Number(original.amount)),
+            rate,
+            original.allocations.map((a) => ({ documentId: a.invoiceId, amount: round2(Number(a.amount)) })),
+            rateByInvoice,
+          ),
         );
 
         const reversal = await tx.payment.create({
@@ -435,7 +465,7 @@ export class PaymentsService {
    * مرّتين.
    */
   private async refundableOf(tx: Prisma.TransactionClient, invoice: { id: string; total: Prisma.Decimal }): Promise<number> {
-    const paid = await this.allocatedFor(tx, invoice.id);
+    const paid = await allocatedFor(invoiceTarget(tx), invoice.id);
     const credits = await tx.invoice.aggregate({ where: { relatedInvoiceId: invoice.id, docType: 'CREDIT_NOTE' }, _sum: { total: true } });
     const creditsTotal = round2(Number(credits._sum.total ?? 0));
     const unpaidBeforeCredits = round2(Number(invoice.total) - paid);
@@ -458,95 +488,22 @@ export class PaymentsService {
     if (payment.journalEntryId) throw new ConflictException(formatMessage(MSG.payment_posted_immutable, { no: payment.no }));
   }
 
-  /** مجموع المخصَّص لكل فاتورة — مصدر الحقيقة الوحيد لـ«المدفوع». */
-  private async allocatedByInvoice(tx: Prisma.TransactionClient, invoiceIds: string[]): Promise<Map<string, number>> {
-    if (!invoiceIds.length) return new Map();
-    const rows = await tx.paymentAllocation.groupBy({ by: ['invoiceId'], where: { invoiceId: { in: invoiceIds } }, _sum: { amount: true } });
-    return new Map(rows.map((r) => [r.invoiceId, round2(Number(r._sum.amount ?? 0))]));
-  }
-
-  private async allocatedFor(tx: Prisma.TransactionClient, invoiceId: string): Promise<number> {
-    const agg = await tx.paymentAllocation.aggregate({ where: { invoiceId }, _sum: { amount: true } });
-    return round2(Number(agg._sum.amount ?? 0));
-  }
-
   /**
    * إعادة حساب حالة الفاتورة من تخصيصاتها — **المدخل الوحيد** لكتابة الحالة.
    *
    * المدفوع يتقدّم على التأخر: فاتورة مسدَّدة جزئياً ومتأخرة تُقرأ PARTIAL،
-   * والأعمار (4.6) هي من يفصل التأخر لاحقاً.
+   * والأعمار (4.6) هي من يفصل التأخر لاحقاً. **والاشتقاقُ مشترك** (`deriveSettlementStatus`)؛
+   * وما يخصّ الفاتورةَ وحدَها هو `OVERDUE` على المستحقّ الذي فات موعدُه.
    */
   private async recomputeInvoiceStatus(tx: Prisma.TransactionClient, invoiceId: string): Promise<void> {
     const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, total: true, status: true, dueDate: true } });
     if (!invoice) return;
-    const allocated = await this.allocatedFor(tx, invoiceId);
-    const total = round2(Number(invoice.total));
+    const derived = deriveSettlementStatus(await allocatedFor(invoiceTarget(tx), invoiceId), Number(invoice.total));
 
-    let status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
-    if (allocated >= total - EPS) status = 'PAID';
-    else if (allocated > EPS) status = 'PARTIAL';
-    else {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      status = invoice.dueDate < today ? 'OVERDUE' : 'DUE';
-    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
     if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
-  }
-
-  /**
-   * يقفل صفوف الفواتير المستهدفة ثم يتحقق من الحدّين:
-   * مجموع التخصيصات ≤ مبلغ الدفعة · وكل تخصيص ≤ متبقي فاتورته.
-   */
-  private async assertAllocationsFit(
-    tx: Prisma.TransactionClient,
-    paymentAmount: number,
-    paymentCurrency: string,
-    customerId: string,
-    allocations: AllocationDto[],
-  ): Promise<Map<string, { exchangeRate: number }>> {
-    const rates = new Map<string, { exchangeRate: number }>();
-    if (!allocations.length) return rates;
-
-    const sum = round2(allocations.reduce((s, a) => s + a.amount, 0));
-    if (sum > Math.abs(paymentAmount) + EPS) {
-      throw new BadRequestException(formatMessage(MSG.allocations_exceed_payment, { sum: formatMoney(sum), amount: formatMoney(Math.abs(paymentAmount)) }));
-    }
-
-    for (const a of allocations) {
-      // قفل الصف داخل المعاملة (قرار 6.12): المتسابق الثاني ينتظر هنا، ثم
-      // يقرأ المتبقي بعد خصم الأول — فيُرفض بدل أن يتجاوزه.
-      const locked = await tx.$queryRaw<{ id: string; no: string; total: string; currency: string; customerId: string; exchangeRate: string }[]>`
-        SELECT id, no, total::text, currency, "customerId", "exchangeRate"::text
-        FROM invoices WHERE id = ${a.invoiceId} FOR UPDATE`;
-      if (!locked.length) throw new NotFoundException(MSG.invoice_not_found);
-      const invoice = locked[0];
-
-      if (invoice.customerId !== customerId) throw new BadRequestException(formatMessage(MSG.allocation_wrong_customer, { no: invoice.no }));
-      // عملتان مختلفتان تجعلان «المتبقي» و«المخصَّص» بمقياسين — رفضٌ صريح
-      // خيرٌ من تخصيصٍ صامت خاطئ (التخصيص عبر العملات مرشَّح مسجَّل).
-      if (invoice.currency !== paymentCurrency) {
-        throw new BadRequestException(formatMessage(MSG.allocation_currency_mismatch, { no: invoice.no, invoiceCurrency: invoice.currency, paymentCurrency }));
-      }
-
-      const allocated = await this.allocatedFor(tx, a.invoiceId);
-      const remaining = round2(Number(invoice.total) - allocated);
-      if (a.amount > remaining + EPS) {
-        throw new BadRequestException(formatMessage(MSG.allocation_exceeds_remaining, { no: invoice.no, remaining: formatMoney(remaining), amount: formatMoney(a.amount) }));
-      }
-      rates.set(a.invoiceId, { exchangeRate: Number(invoice.exchangeRate) });
-    }
-    return rates;
-  }
-
-  /**
-   * الذمّة المسوّاة بالعملة الأساسية: كل تخصيص بسعر **فاتورته** (فذمّتها
-   * قُيّدت بذلك السعر)، وما لم يُخصَّص بسعر الدفعة (لا فاتورة يُنسب إليها).
-   */
-  private baseReceivableOf(amount: number, paymentRate: number, allocations: AllocationDto[], invoices: Map<string, { exchangeRate: number }>): number {
-    const allocatedSum = round2(allocations.reduce((s, a) => s + a.amount, 0));
-    const fromAllocations = allocations.reduce((s, a) => s + toBaseAmount(a.amount, invoices.get(a.invoiceId)?.exchangeRate ?? paymentRate), 0);
-    const onAccount = toBaseAmount(round2(amount - allocatedSum), paymentRate);
-    return round2(fromAllocations + onAccount);
   }
 
   /** الترحيل + أثر الصندوق/البنك — مسار واحد للدفعة وعكسها. */
@@ -598,23 +555,15 @@ export class PaymentsService {
     // النقد يدخل صندوق فرع الدفعة (صندوق = Bank مربوط بفرع) — نفس نمط
     // مقبوضات الإيجار: رصيد يتحرك وحركة بنكية تُسجَّل. العكس ينقص الرصيد
     // لأن مبلغه سالب.
-    if (p.bank) {
-      await tx.bank.update({ where: { id: p.bank.id }, data: { balance: { increment: p.amount } } });
-      await tx.bankTransaction.create({
-        data: {
-          bankId: p.bank.id,
-          date: p.date,
-          description: p.description,
-          amount: p.amount,
-          source: 'customer-payment',
-          matched: !!entry,
-          entryNo: entry?.no ?? null,
-          currency: p.currency,
-          exchangeRate: p.exchangeRate,
-          baseAmount: toBaseAmount(p.amount, p.exchangeRate),
-        } as unknown as Prisma.BankTransactionUncheckedCreateInput,
-      });
-    }
+    await mirrorBankMovement(tx, p.bank, {
+      date: p.date,
+      description: p.description,
+      amount: p.amount,
+      source: 'customer-payment',
+      currency: p.currency,
+      exchangeRate: p.exchangeRate,
+      entryNo: entry?.no ?? null,
+    });
   }
 
   /** تسلسل سندات القبض مستقل عن الفواتير — يُشتق من جدول الدفعات وحده.

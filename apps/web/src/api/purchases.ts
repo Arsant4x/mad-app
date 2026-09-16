@@ -18,9 +18,15 @@ export interface Purchase {
   amortizeMonths: number | null;
   incorpItem: string | null;
   total: string;
-  paid: boolean;
-  paidDate: string | null;
+  currency: string;
+  /** مشتقّةٌ مخزَّنة من تخصيصات سندات الصرف (`ق-٨٧٢`) — لا علَمَ يُكتب بيد. */
+  status: PurchaseStatus;
+  /** المسدَّدُ والمتبقّي — **محسوبان في الخادم من التخصيصات** لا من حقل. */
+  allocated: number;
+  remaining: number;
 }
+
+export type PurchaseStatus = 'DUE' | 'PARTIAL' | 'PAID';
 
 export interface CreatePurchaseInput {
   supplierId: string;
@@ -40,7 +46,8 @@ export interface CreatePurchaseInput {
   incorpItem?: string;
 }
 
-export type UpdatePurchaseInput = Partial<CreatePurchaseInput> & { paid?: boolean; paidDate?: string };
+/** لا `paid` هنا (`ق-٨٧٤`): السدادُ سندُ صرفٍ (`supplierPayments.ts`) — والخادمُ يرفض العلَمَ القديم بـ400. */
+export type UpdatePurchaseInput = Partial<CreatePurchaseInput>;
 
 export const listPurchases = () => apiClient.get<Purchase[]>('/purchases').then((r) => r.data);
 export const createPurchase = (dto: CreatePurchaseInput) => apiClient.post<Purchase>('/purchases', dto).then((r) => r.data);

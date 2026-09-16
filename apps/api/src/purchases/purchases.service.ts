@@ -1,16 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { roundTo } from '../common/money/rounding';
+import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
+import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
 import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { receiveStockedLines } from './purchase-receipt.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
+import { purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
@@ -46,10 +48,20 @@ function computeTax(subtotal: number, exempt: boolean) {
 export class PurchasesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
+  /**
+   * القائمة **بمسدَّدها ومتبقّيها محسوبَين من التخصيصات** (`ق-٨٧٢`) — في استعلامٍ واحد لكل
+   * الصفوف، كما تحسب قائمةُ الفواتير مقبوضَها. لا حقلَ مبلغٍ مسدَّد على الشراء إطلاقاً؛
+   * و`status` مرآةٌ مشتقّةٌ لهذين الرقمين للفرز وحدَه.
+   */
   list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.purchase.findMany({ where: branchFilter(allowedBranchIds), include: PURCHASE_INCLUDE, orderBy: { date: 'desc' } }),
-    );
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const purchases = await tx.purchase.findMany({ where: branchFilter(allowedBranchIds), include: PURCHASE_INCLUDE, orderBy: { date: 'desc' } });
+      const allocated = await allocatedByDocument(purchaseTarget(tx), purchases.map((p) => p.id));
+      return purchases.map((p) => {
+        const paid = allocated.get(p.id) ?? 0;
+        return { ...p, allocated: paid, remaining: round2(Number(p.total) - paid) };
+      });
+    });
   }
 
   /**
@@ -188,10 +200,19 @@ export class PurchasesService {
         data.categoryCode = toPurchaseCategoryCode(raw);
       }
 
-      if (dto.subtotal !== undefined || dto.exempt !== undefined) {
+      const amountsGiven = dto.subtotal !== undefined || dto.exempt !== undefined;
+      if (amountsGiven) {
         const subtotal = dto.subtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
         const { tax, total } = computeTax(subtotal, exempt);
+        // إجماليٌّ ينزل تحت ما سُدِّد عليه فعلاً يجعل الحالةَ تكذب (مسدَّدةٌ بأكثر من قيمتها)
+        // — رفضٌ مسمّىً، والتصحيحُ بعكس السند أولاً.
+        const paidSoFar = await allocatedFor(purchaseTarget(tx), id);
+        if (paidSoFar > round2(total) + SETTLEMENT_EPS) {
+          throw new ConflictException(
+            formatMessage(MSG.purchase_total_below_allocated, { no: existing.no, total: formatMoney(total), allocated: formatMoney(paidSoFar) }),
+          );
+        }
         // Keep the rate the purchase was recorded at unless explicitly changed.
         const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
         data.subtotal = subtotal;
@@ -203,11 +224,6 @@ export class PurchasesService {
         data.baseTotal = toBaseAmount(total, rate);
         if (dto.currency) data.currency = dto.currency;
         if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
-      }
-
-      if (dto.paid !== undefined) {
-        data.paid = dto.paid;
-        data.paidDate = dto.paid ? new Date(dto.paidDate ?? new Date().toISOString().slice(0, 10)) : null;
       }
 
       // Declaration exclusion and amortization are metadata only — neither
@@ -240,6 +256,8 @@ export class PurchasesService {
       }
 
       const updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
+      // الإجماليُّ تغيّر فالحالةُ المشتقّة تُعاد من التخصيصات في المعاملة نفسِها — لا تنحرف لحظة.
+      if (amountsGiven) await recomputePurchaseStatus(tx, id);
       if (!affectsPosting) return updated;
 
       if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
@@ -315,6 +333,10 @@ export class PurchasesService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
+      // المفتاحُ `Restrict` يرفضها على كل حال — يُفحص هنا ليُردَّ `409` مسمّىً لا خطأَ قيدٍ خاماً:
+      // شراءٌ عليه سندُ صرفٍ لا يُمحى وسندُه قائم، والتصحيحُ بعكس السند.
+      const allocations = await tx.supplierPaymentAllocation.count({ where: { purchaseId: id } });
+      if (allocations > 0) throw new ConflictException(formatMessage(MSG.purchase_has_payments, { no: existing.no }));
       await tx.purchase.delete({ where: { id } });
       await unpostIfLinked(tx, existing.journalEntryId);
     });

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo, round2 } from '../common/money/rounding';
 import { purchaseExpenseAccountCode } from '../common/purchase-categories';
@@ -565,54 +566,149 @@ export interface CustomerPaymentForPosting {
 }
 
 /**
- * مقبوض من عميل (4.5): مدين الصندوق/البنك 1000 · دائن ذمم العملاء 1200.
+ * ⭐ **تسويةُ ذمّةِ طرفٍ بسند — قيدٌ واحد للقبض من عميل وللصرف لمورّد** (`ق-٨٧١`).
  *
- * **لا إيراد هنا إطلاقاً** — الإيراد اعتُرف به يوم الفاتورة
- * (postInvoiceEntry). التحصيل تسويةُ ذمّة لا بيعٌ جديد، وخلطهما يضاعف
- * إيراد السنة.
+ * الجانبان مرآةٌ: `RECEIVABLE` نقدٌ يدخل وذممُ العملاء `1200` تنقص · `PAYABLE` ذممُ
+ * المورّدين `2100` تنقص ونقدٌ يخرج. **والمنطقُ واحدٌ مستخرَجٌ لا منسوخ** — الإشارةُ
+ * وحدَها تتبدّل: `debitWhenPositive` على النقد والذمّة يُقلب بالجانب، والعكسُ (مبالغُ
+ * سالبة) يقلبهما معاً فيخرج قيدٌ مضادٌّ يُبقي الأصلَ كما هو (المرحَّل لا يُعدَّل ولا يُحذف).
  *
- * فرق العملة: الفاتورة قيّدت ذمّتها بسعر يومها، والنقد يدخل بسعر يوم
- * الدفعة — فما بينهما فرقٌ **محقَّق** يُرحَّل على 5600 تماماً كما في سداد
- * الإيجار، بدل أن يتضخّم أو ينكمش به النقد أو الذمّة.
- *
- * الدفعة العكسية تمرّ بنفس الدالة بمبالغ سالبة فتنقلب الأطراف — قيدٌ مضاد
- * يُبقي الأصل كما هو (المرحَّل لا يُعدَّل ولا يُحذف).
- *
- * تُعيد null (تخطٍّ ناعم) إن لم تُهيَّأ الحسابات بعد — كسائر الترحيلات.
+ * فرقُ العملة **محقَّق** على `5600` (كما في سداد الإيجار): الذمّةُ قُيّدت بسعر مستندِها
+ * والنقدُ بسعر يومه، وما بينهما ربحٌ أو خسارة — لا إيرادٌ ولا مصروفٌ ولا تضخّمٌ في الذمّة.
+ * **وإشارةُ الربح تتبع الجانب**: للقبض ربحٌ حين يزيد النقدُ على الذمّة، وللصرف ربحٌ حين
+ * تقلّ الأساسيةُ المدفوعة عمّا قُيّد.
  */
-export async function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: CustomerPaymentForPosting) {
-  const cash = round2(p.baseCash);
-  const receivable = round2(p.baseReceivable);
-  if (cash === 0 && receivable === 0) return null;
+export interface PartySettlementForPosting {
+  /** أيُّ دفترٍ يُسوّى: ذممُ العملاء (`1200`) أم ذممُ المورّدين (`2100`). */
+  side: 'RECEIVABLE' | 'PAYABLE';
+  date: Date;
+  memo: string;
+  /** النقدُ بالعملة الأساسية = مبلغُ السند × سعر يومه. موجبٌ في اتجاه السند الطبيعيّ، سالبٌ في العكس. */
+  baseCash: number;
+  /** الذمّةُ المسوّاة بالعملة الأساسية = كلُّ تخصيصٍ × سعر **مستندِه**، لا سعر السند. */
+  baseSettled: number;
+  branchId?: string | null;
+  /** حسابُ النقد — حسابُ البنك/الصندوق حين يُسمّى، و`1000` نقداً. يُمرَّر مُحلّاً من الخدمة. */
+  cashAccountId?: string | null;
+}
 
-  const fxDifference = round2(cash - receivable);
+/** سطرُ قيدٍ من مبلغٍ موقَّع: الموجبُ على الجانب المعلَن، والسالبُ على قرينه. */
+function signedLine(accountId: string, amount: number, debitWhenPositive: boolean): PostingLine {
+  const debit = debitWhenPositive ? amount > 0 : amount < 0;
+  return { accountId, debit: debit ? Math.abs(amount) : 0, credit: debit ? 0 : Math.abs(amount) };
+}
+
+export async function postPartySettlementEntry(tx: Prisma.TransactionClient, companyId: string, p: PartySettlementForPosting) {
+  const cash = round2(p.baseCash);
+  const settled = round2(p.baseSettled);
+  if (cash === 0 && settled === 0) return null;
+
+  const receivable = p.side === 'RECEIVABLE';
+  const partyCode = receivable ? '1200' : '2100';
+  // ربحُ الصرف: قبضٌ بنقدٍ يفوق الذمّة، أو صرفٌ بنقدٍ يقلّ عنها.
+  const fxGain = round2(receivable ? cash - settled : settled - cash);
   // `1000` لا يُطلَب حين يُمرَّر حسابُ بنك: منشأةٌ بلا `1000` لا يُسقَط قيدُها
   // البنكيّ لأجل رمزٍ لا يدخل فيه.
-  const needCodes = [...(p.cashAccountId ? [] : ['1000']), '1200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  const needCodes = [...(p.cashAccountId ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   if (!ids) return null;
   const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
 
-  // الموجب يعني نقداً داخلاً وذمّةً تنقص؛ السالب (العكس) يقلبهما معاً.
   const lines: PostingLine[] = [
-    { accountId: cashAccountId, debit: cash > 0 ? cash : 0, credit: cash < 0 ? -cash : 0 },
-    { accountId: ids.get('1200')!, debit: receivable < 0 ? -receivable : 0, credit: receivable > 0 ? receivable : 0 },
+    signedLine(cashAccountId, cash, receivable),
+    signedLine(ids.get(partyCode)!, settled, !receivable),
   ];
-
-  if (fxDifference > 0) {
-    // نقدٌ أكثر مما قُيّدت به الذمّة — ربح صرف محقَّق.
-    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: 0, credit: fxDifference });
-  } else if (fxDifference < 0) {
-    lines.push({ accountId: ids.get(FX_DIFFERENCE_ACCOUNT)!, debit: -fxDifference, credit: 0 });
-  }
+  if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
 
   return createJournalEntry(tx, {
     companyId,
     date: p.date,
-    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    memo: p.memo,
     lines,
     auto: true,
     branchId: p.branchId ?? null,
+  });
+}
+
+/**
+ * أثرُ سند التسوية على **مرآة البنك/الصندوق** (`ق-٢٨٢`: تُكتب من مسار الترحيل وحدَه — ولذلك
+ * تسكن هذا الملفّ): رصيدٌ يتحرّك وحركةٌ بنكية تُسجَّل مربوطةً برقم القيد، بمبلغٍ **موقَّع**
+ * (موجبٌ يدخل، سالبٌ يخرج؛ والعكسُ يقلب الإشارة). لا شيء حين لا بنك (نقدٌ على `1000`).
+ * مشتركةٌ بين سند القبض وسند الصرف (`ق-٨٧١`).
+ */
+export async function mirrorBankMovement(
+  tx: Prisma.TransactionClient,
+  bank: { id: string } | null,
+  movement: { date: Date; description: string; amount: number; source: string; currency: string; exchangeRate: number; entryNo: string | null },
+): Promise<void> {
+  if (!bank) return;
+  await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: movement.amount } } });
+  await tx.bankTransaction.create({
+    data: {
+      bankId: bank.id,
+      date: movement.date,
+      description: movement.description,
+      amount: movement.amount,
+      source: movement.source,
+      matched: movement.entryNo !== null,
+      entryNo: movement.entryNo,
+      currency: movement.currency,
+      exchangeRate: movement.exchangeRate,
+      baseAmount: toBaseAmount(movement.amount, movement.exchangeRate),
+    } as unknown as Prisma.BankTransactionUncheckedCreateInput,
+  });
+}
+
+/**
+ * مقبوض من عميل (4.5): مدين الصندوق/البنك · دائن ذمم العملاء 1200.
+ *
+ * **لا إيراد هنا إطلاقاً** — الإيراد اعتُرف به يوم الفاتورة
+ * (postInvoiceEntry). التحصيل تسويةُ ذمّة لا بيعٌ جديد، وخلطهما يضاعف
+ * إيراد السنة. تُعيد null (تخطٍّ ناعم) إن لم تُهيَّأ الحسابات بعد — كسائر الترحيلات.
+ */
+export function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: CustomerPaymentForPosting) {
+  return postPartySettlementEntry(tx, companyId, {
+    side: 'RECEIVABLE',
+    date: p.date,
+    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    baseCash: p.baseCash,
+    baseSettled: p.baseReceivable,
+    branchId: p.branchId,
+    cashAccountId: p.cashAccountId,
+  });
+}
+
+export interface SupplierPaymentForPosting {
+  paymentNo: string;
+  supplierName: string;
+  date: Date;
+  /** النقدُ الخارج بالعملة الأساسية = مبلغُ السند × سعر يومه. سالبٌ في العكس. */
+  baseCash: number;
+  /** الذمّةُ المسوّاة = كلُّ تخصيصٍ × سعر **فاتورة الشراء**، وما لم يُخصَّص بسعر السند. */
+  basePayable: number;
+  branchId?: string | null;
+  reversal?: boolean;
+  /** حسابُ البنك/الصندوق المسدِّد، و`1000` نقداً — **ولا درج** (`ق-٨٧٢`). */
+  cashAccountId?: string | null;
+}
+
+/**
+ * سدادٌ لمورّد (`ق-٨٦٦`): مدين ذمم المورّدين 2100 · دائن الصندوق/البنك.
+ *
+ * **لا مصروف هنا إطلاقاً** — المصروفُ (أو الأصلُ) اعتُرف به يوم فاتورة الشراء
+ * (postPurchaseEntry). السدادُ تسويةُ ذمّة، وهو ما كان غائباً: `2100` لم ينقص قطّ
+ * (`ق-٨٦٣`). **والفائضُ غيرُ المخصَّص يمدين `2100` كذلك** — دفعةٌ على الحساب تُبقي
+ * للمورّد رصيداً مديناً حتى تُخصَّص.
+ */
+export function postSupplierPaymentEntry(tx: Prisma.TransactionClient, companyId: string, p: SupplierPaymentForPosting) {
+  return postPartySettlementEntry(tx, companyId, {
+    side: 'PAYABLE',
+    date: p.date,
+    memo: `${p.reversal ? 'عكس سداد لمورّد' : 'سداد لمورّد'} — سند ${p.paymentNo} — ${p.supplierName}`,
+    baseCash: p.baseCash,
+    baseSettled: p.basePayable,
+    branchId: p.branchId,
+    cashAccountId: p.cashAccountId,
   });
 }
 
