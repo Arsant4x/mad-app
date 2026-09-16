@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
@@ -49,8 +49,35 @@ type CredentialRow = {
  */
 const STALE_CLAIM_MS = 10 * 60_000;
 
-/** يُخزَّن نصاً في `zatcaMessage` كسائر أسباب الردّ — فالواجهة تعرضه كما هو. */
+/** يُخزَّن نصاً في `zatcaMessage` كسائر الأسباب — فالواجهة تعرضه كما هو. */
 export const STORED_DOC_CORRUPT = 'تلفٌ في المستند المخزَّن: تجزئته لا تطابق ما وُقّع عليه — لم يُرسَل';
+
+/**
+ * ⚖️ **جوابُ الهيئة يُقرأ من رمز الحالة لا من النصّ** (`ق-٩٧١`/١).
+ *
+ * قبولٌ (`2xx`) أو ردٌّ (`400` — «لم تُجَز/لم تُبلَّغ» بنتائج التحقّق) **جوابٌ على المستند**
+ * فيُكتب `CLEARED`/`REJECTED`. **وما عداه ليس جواباً عليه**: اعتمادٌ مرفوض (`401`/`403`)
+ * أو تكرارٌ (`409`) أو حصارٌ (`429`) أو خادمٌ معطَّل (`5xx`) أو رمزٌ لا نعرفه — **فيُرمى
+ * ويعود الطابورُ إليه بتراجعه**، والمستندُ كما هو. **والشكُّ يُعيد ولا يُغلق**: `REJECTED`
+ * صار إغلاقاً (`ق-٩٥٨`) لا يُفتح إلا ببدلٍ برقمٍ جديد، فجوابٌ لم يصدر لا يُكتب.
+ */
+export function authorityVerdict(status: number): 'accepted' | 'rejected' | null {
+  if (status >= 200 && status < 300) return 'accepted';
+  if (status === 400) return 'rejected';
+  return null;
+}
+
+/**
+ * ⚖️ **سقوطُ المحاولة ليس جواباً** (`ق-٩٧١`): يُرمى — فالطابورُ يعدّ المحاولةَ ويعود بتراجعه
+ * (`PENDING` ثم `FAILED` **معلَناً** عند الاستنفاد، لا `REJECTED` — «فالتعذّرُ ليس جواباً»)،
+ * والإرسالُ اليدويّ يردّه `503` برسالةٍ تسمّي ما وقع وما سيقع. والسببُ الأخير يُكتب في
+ * `zatcaMessage` كي يُرى في الصفّ — وحالةُ المستند لا تُمسّ.
+ */
+export class ZatcaAttemptFailedException extends ServiceUnavailableException {
+  constructor(public readonly reason: string) {
+    super(formatMessage(MSG.zatca_attempt_failed, { reason }));
+  }
+}
 
 @Injectable()
 export class ZatcaService {
@@ -118,13 +145,16 @@ export class ZatcaService {
    *
    * يستدعيه المالكُ من الشاشة **ومُعالِجُ الطابور** (`INVOICE_ISSUED`): مستندٌ ختمه
    * الكاشير عند البيع يجد ختمَه محفوظاً فيُبلَّغ فقط؛ ومستندٌ لم يُختم يُختم هنا.
+   *
+   * ⚖️ **وسقوطُ المحاولة يُرمى** (`ق-٩٧١`) — توقيعاً كان أو نقلاً أو جواباً ليس على المستند:
+   * فالطابورُ يعود إليه بتراجعه، والشاشةُ تقرأ `503` بسببه، والمستندُ كما هو. و`REJECTED`
+   * لا يُكتب إلا على جوابٍ من الهيئة (`report`).
    */
   async submitInvoice(companyId: string, actorType: string, invoiceId: string) {
     assertIsCompanyOwner(actorType);
     const ctx = await this.requireOnboarded(companyId);
     const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
-    // سقوطُ التوقيع سُجِّل مردوداً بسببه — يُعاد وضعُ المستند لا استثناء، كما كان.
-    if (!stamped.qrPayload) return this.statusOf(companyId, invoiceId);
+    if (stamped.qrPayload === null) throw new ZatcaAttemptFailedException(stamped.failure);
     return this.report(companyId, invoiceId, ctx.credential);
   }
 
@@ -284,13 +314,15 @@ export class ZatcaService {
       );
       return { qrPayload: qrBase64 };
     } catch (e) {
-      // سقط التوقيعُ بعد حجز الموقع: يُسجَّل مردوداً بسببه **ولا يُرمى** — كما كان
-      // `dispatch` يفعل — والموقعُ محفوظٌ للمحاولة التالية (`??` في `claimAndBuild`)،
-      // فلا فجوةَ في السلسلة. (أخطاءُ البناء والتحقّق قبل التوقيع تبقى استثناءاتٍ
-      // تُرمى: مستندٌ لا يُبنى ليس مردوداً بل مرفوضٌ قبل أن يُحجز له شيء.)
+      // سقط التوقيعُ بعد حجز الموقع: **ليس جواباً من الهيئة** (`ق-٩٧١`) فلا يُكتب مردوداً —
+      // يُحرَّر الادّعاء (`NOT_SUBMITTED`) **والموقعُ محفوظٌ** للمحاولة التالية (`??` في
+      // `claimAndBuild`) فلا فجوةَ في السلسلة، ويُكتب السبب. **ولا يُرمى هنا**: الكاشير يطبع
+      // الوسوم الخمسة، و`submitInvoice` يرمي من بعدُ للطابور والشاشة. (أخطاءُ البناء والتحقّق
+      // قبل التوقيع تبقى استثناءاتٍ تُرمى: مستندٌ لا يُبنى ليس مردوداً بل مرفوضٌ قبل أن يُحجز
+      // له شيء.)
       const message = (e as Error).message;
       this.logger.warn(`ZATCA signing failed for invoice ${invoiceId}: ${message}`);
-      await this.recordResult(companyId, invoiceId, false, message);
+      await this.releaseClaim(companyId, invoiceId, message);
       return { qrPayload: null, failure: message };
     }
   }
@@ -485,8 +517,11 @@ export class ZatcaService {
    * «حارسٌ يمنع الكتابة لا يكشف فساداً في التخزين»: حارسُ التعديل يحمي **من نيّة**،
    * وهذا يحمي **من عطل** — تُعاد تجزئةُ المستند من بايتاته المخزَّنة (بلا العقد
    * الثلاث المستثناة) وتُقارَن بـ`zatcaHash` الذي حُفظ لحظةَ التوقيع، ويُتحقَّق
-   * التوقيعُ نفسه بشهادته. مستندٌ لا يطابق **لا يُرسَل**: يُسجَّل مردوداً بسببٍ
-   * مسمّى، ويبقى ظاهراً في «صادرٌ لم يصل» حتى يُنظَر فيه.
+   * التوقيعُ نفسه بشهادته. مستندٌ لا يطابق **لا يُرسَل**: يُرمى بسببٍ مسمّى (`ق-٩٧١` —
+   * ليس جواباً من الهيئة فلا يُكتب مردوداً)، ويبقى ظاهراً في «صادرٌ لم يصل» حتى يُنظَر فيه.
+   *
+   * ⚖️ **والجوابُ يُقرأ من رمز الحالة** (`authorityVerdict`): قبولٌ أو ردٌّ يُكتبان؛ وما ليس
+   * جواباً على المستند — سقوطُ `fetch` · اعتمادٌ · حصارٌ · خادمٌ — **يُرمى** فيعود الطابور.
    */
   private async report(companyId: string, invoiceId: string, credential: CredentialRow) {
     const stored = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
@@ -502,8 +537,8 @@ export class ZatcaService {
     const signatureOk = await verifySignedInvoice(stored.zatcaSignedXml).catch(() => false);
     if (recomputed !== stored.zatcaHash || !signatureOk) {
       this.logger.error(`ZATCA stored document for invoice ${invoiceId} failed integrity: hash ${recomputed === stored.zatcaHash ? 'ok' : 'MISMATCH'}, signature ${signatureOk ? 'ok' : 'INVALID'}`);
-      await this.recordResult(companyId, invoiceId, false, STORED_DOC_CORRUPT);
-      return this.statusOf(companyId, invoiceId);
+      await this.recordAttempt(companyId, invoiceId, STORED_DOC_CORRUPT);
+      throw new ZatcaAttemptFailedException(STORED_DOC_CORRUPT);
     }
 
     try {
@@ -537,27 +572,52 @@ export class ZatcaService {
       // بكل رسائل الهيئة **تُهدَر**. ولا نقطة استعلام حالة لدى الهيئة (مؤكَّد
       // بفحص البوّابة حيّاً 2026-08-15)، فما لا يُخزَّن هنا **لا يُستعاد أبداً**.
       //
-      // ⚠️ وهذا **تسجيلٌ لا تفسير**: القرار ما زال `res.ok` كما هو. تغييرُ ما
-      // يُعدّ نجاحاً — و208 و409 خاصةً — قرارٌ مسجَّل بلا بدء، ولا يُتخذ هنا.
-      // والنصّ يُقصّ عند ٥٠٠ حرف كسابقة `zatca-onboarding.service.ts:248`.
+      // ⚖️ والقرارُ من رمز الحالة لا من النصّ (`ق-٩٧١`/١ — `authorityVerdict`): `2xx` قبولٌ
+      // و`400` ردٌّ، **وما عداه ليس جواباً على المستند** (`401`/`403`/`409`/`429`/`5xx`)
+      // فيُرمى ويعود الطابور — والنصّ يبقى للسجلّ لا للحكم، ويُقصّ عند ٥٠٠ حرف
+      // كسابقة `zatca-onboarding.service.ts:248`.
       const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      const cleared = res.ok;
+      const verdict = authorityVerdict(res.status);
       const detail =
         typeof body.message === 'string' && body.message
           ? body.message
           : Object.keys(body).length > 0
             ? `HTTP ${res.status} — ${JSON.stringify(body)}`.slice(0, 500)
-            : cleared
+            : verdict === 'accepted'
               ? null
               : `HTTP ${res.status}`;
-      await this.recordResult(companyId, invoiceId, cleared, detail);
+      if (verdict === null) {
+        // الرمزُ في أول السبب دائماً — فهو الفيصل، والنصُّ بعده للسجلّ.
+        const reason = detail && !detail.startsWith(`HTTP ${res.status}`) ? `HTTP ${res.status} — ${detail}` : (detail ?? `HTTP ${res.status}`);
+        this.logger.warn(`ZATCA answered ${res.status} for invoice ${invoiceId} — not a verdict on the document, will retry: ${reason}`);
+        await this.recordAttempt(companyId, invoiceId, reason);
+        throw new ZatcaAttemptFailedException(reason);
+      }
+      await this.recordResult(companyId, invoiceId, verdict === 'accepted', detail);
       return this.statusOf(companyId, invoiceId);
     } catch (e) {
+      if (e instanceof ZatcaAttemptFailedException) throw e;
+      // سقوطُ النقل — `fetch` رمى (انقطاعٌ · منفذٌ لا يصغي · مهلة): لا جوابَ فلا `REJECTED`
+      // (`ق-٩٧١`)؛ يُكتب السببُ ويُرمى فيعود الطابورُ إليه بتراجعه.
       const message = (e as Error).message;
       this.logger.warn(`ZATCA submission failed for invoice ${invoiceId}: ${message}`);
-      await this.recordResult(companyId, invoiceId, false, message);
-      return this.statusOf(companyId, invoiceId);
+      await this.recordAttempt(companyId, invoiceId, message);
+      throw new ZatcaAttemptFailedException(message);
     }
+  }
+
+  /** سببُ آخر محاولةٍ لم تُجب عنها الهيئة — يُرى في الصفّ؛ والحالةُ ولحظةُ الإرسال لا تُمسّان. */
+  private recordAttempt(companyId: string, invoiceId: string, reason: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaMessage: reason.slice(0, 500) } }),
+    );
+  }
+
+  /** تحريرُ ادّعاء الختم بعد سقوط التوقيع — الموقعُ (`ICV`/`UUID`/`PIH`) يبقى ليُعاد استعمالُه. */
+  private releaseClaim(companyId: string, invoiceId: string, reason: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaStatus: 'NOT_SUBMITTED', zatcaMessage: reason.slice(0, 500) } }),
+    );
   }
 
   private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null) {

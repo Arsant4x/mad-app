@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
+import { startAuthorityStub, STUB_REJECTION_MESSAGE, type AuthorityStub } from './zatca-authority-stub';
 import { encryptSecret } from '../src/common/crypto/secret.util';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
@@ -22,11 +23,12 @@ import { STORED_DOC_CORRUPT } from '../src/zatca/zatca.service';
  * ③ سقوطُ الختم (مفتاحٌ معطوب) **لا يُسقط البيع**: إيصالٌ بالوسوم الخمسة وسببٌ للكاشير
  *    (`ق-١٩٦`/١).
  *
- * ⛔ لا شبكةَ هيئة: `ZATCA_API_BASE_OVERRIDE` على منفذٍ لا يستمع أحدٌ عليه — التوقيع
- * حقيقي، والإرسال وحده يسقط (كحزمة `zatca-phase2`).
+ * ⛔ لا شبكةَ هيئة: `ZATCA_API_BASE_OVERRIDE` على خادمٍ محلّيٍّ يمثّل الهيئة ويجيب بالردّ `400`
+ * (`ق-٩٧١`) — التوقيع حقيقي، والجوابُ ردٌّ حقيقيُّ الشكل (كحزمة `zatca-phase2`).
  */
 describe('ZATCA synchronous stamp at sale (e2e)', () => {
   let app: INestApplication;
+  let authority: AuthorityStub;
   let token: string;
   let companyId: string;
   let tenantPrisma: TenantPrismaService;
@@ -74,7 +76,7 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
 
   beforeAll(async () => {
     process.env.SECRETS_ENCRYPTION_KEY ??= 'test-secrets-key-at-least-32-characters-long';
-    process.env.ZATCA_API_BASE_OVERRIDE = 'http://127.0.0.1:9';
+    authority = await startAuthorityStub('reject');
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -99,7 +101,7 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
   }, 60000);
 
   afterAll(async () => {
-    delete process.env.ZATCA_API_BASE_OVERRIDE;
+    await authority.close();
     // ما فُتح هنا يُغلق هنا — مناوبةٌ مفتوحة تُسقط حزمةَ الكاشير التالية بـ409 (قِيس على قاعدةٍ نظيفة).
     if (openedShiftId) await auth(request(app.getHttpServer()).post(`/pos/shifts/${openedShiftId}/close`)).send({ declaredClosing: 0 }).catch(() => undefined);
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.zatcaCredential.deleteMany({ where: { companyId } })).catch(() => undefined);
@@ -157,17 +159,27 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
       await tx.invoice.update({ where: { id: res.body.id }, data: { zatcaSignedXml: corrupted } });
     });
 
-    const submit = await auth(request(app.getHttpServer()).post(`/zatca/invoices/${res.body.id}/submit`)).expect(201);
-    expect(submit.body.zatcaStatus).toBe('REJECTED');
-    expect(submit.body.zatcaMessage).toBe(STORED_DOC_CORRUPT);
+    // التلفُ عطلٌ عندنا لا جوابٌ من الهيئة (ق-٩٧١): يُرمى بسببه ولا يُكتب مردوداً — المستندُ
+    // مختومٌ كما كان، والسببُ مكتوبٌ ليُرى، والخادمُ المحلّيّ لم يُطرَق.
+    const before = authority.requests.length;
+    const submit = await auth(request(app.getHttpServer()).post(`/zatca/invoices/${res.body.id}/submit`)).expect(503);
+    expect(String(submit.body.message)).toContain(STORED_DOC_CORRUPT);
+    const corruptRow = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.findUniqueOrThrow({ where: { id: res.body.id }, select: { zatcaStatus: true, zatcaMessage: true, zatcaSubmittedAt: true } }),
+    );
+    expect(corruptRow.zatcaStatus).toBe('STAMPED');
+    expect(corruptRow.zatcaMessage).toBe(STORED_DOC_CORRUPT);
+    expect(corruptRow.zatcaSubmittedAt).toBeNull();
+    expect(authority.requests.length).toBe(before);
 
-    // الوجه الثاني: مستندٌ سليم يمرّ من الفحص ويصل إلى الشبكة — فيسقط هناك (المنفذ ٩) لا في الفحص.
+    // الوجه الثاني: مستندٌ سليم يمرّ من الفحص ويصل الخادمَ — فيُردّ هناك (جواب 400) لا في الفحص.
     const healthy = await sale().expect(201);
     invoiceIds.push(healthy.body.id);
     const submitted = await auth(request(app.getHttpServer()).post(`/zatca/invoices/${healthy.body.id}/submit`)).expect(201);
     expect(submitted.body.zatcaStatus).toBe('REJECTED');
     expect(submitted.body.zatcaMessage).not.toBe(STORED_DOC_CORRUPT);
-    expect(String(submitted.body.zatcaMessage)).toMatch(/fetch|ECONNREFUSED|failed/i);
+    expect(String(submitted.body.zatcaMessage)).toContain(STUB_REJECTION_MESSAGE);
+    expect(authority.requests.length).toBe(before + 1);
   }, 60000);
 
   it('③ سقوطُ الختم لا يُسقط البيع: مفتاحٌ معطوب ⇒ إيصالٌ بالوسوم الخمسة وسببٌ للكاشير (ق-١٩٦/١)', async () => {
@@ -184,10 +196,14 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     expect(Object.keys(fields).map(Number).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
 
     const stored = await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.findUniqueOrThrow({ where: { id: res.body.id }, select: { zatcaStatus: true, zatcaSignedXml: true, status: true } }),
+      tx.invoice.findUniqueOrThrow({ where: { id: res.body.id }, select: { zatcaStatus: true, zatcaSignedXml: true, status: true, zatcaMessage: true, zatcaIcv: true } }),
     );
     expect(stored.status).toBe('PAID'); // البيع تمّ
     expect(stored.zatcaSignedXml).toBeNull();
-    expect(stored.zatcaStatus).toBe('REJECTED'); // مردودٌ بسببه، والموقع محفوظ للمحاولة التالية
+    // سقوطُ التوقيع ليس جواباً من الهيئة (ق-٩٧١): يُحرَّر الادّعاء ويُكتب السبب — لا مردودة.
+    expect(stored.zatcaStatus).toBe('NOT_SUBMITTED');
+    expect(stored.zatcaMessage).toBeTruthy();
+    // والموقعُ محفوظٌ للمحاولة التالية.
+    expect(stored.zatcaIcv).not.toBeNull();
   }, 60000);
 });

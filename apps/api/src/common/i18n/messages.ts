@@ -252,6 +252,8 @@ export const MSG = {
   zatca_already_cleared: 'zatca.already_cleared',
   zatca_stamp_in_progress: 'zatca.stamp_in_progress',
   zatca_not_stamped: 'zatca.not_stamped',
+  /** ⚖️ سقوطُ المحاولة ليس جواباً من الهيئة (`ق-٩٧١`): يُرمى فيعود الطابور، ولا يُكتب `REJECTED`. */
+  zatca_attempt_failed: 'zatca.attempt_failed',
   // chain integrity. Deletion is refused for any document that took a place
   // in the sequence; editing is refused only once the authority has accepted
   // it (or may be about to) — see InvoicesService.
@@ -755,7 +757,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_compliance_required]: { ar: 'يجب الحصول على شهادة الامتثال أولاً بإدخال رمز التحقق من بوابة فاتورة', en: 'Obtain the compliance certificate first by entering the OTP from the Fatoora portal' },
   [MSG.zatca_not_onboarded]: { ar: 'لم يكتمل ربط الفوترة الإلكترونية مع هيئة الزكاة بعد', en: 'E-invoicing onboarding with the authority is not complete yet' },
   [MSG.zatca_already_cleared]: { ar: 'الفاتورة مُصدَّقة بالفعل لدى الهيئة — لا يمكن إعادة إرسالها', en: 'This invoice is already cleared by the authority and cannot be resubmitted' },
-  [MSG.zatca_stamp_in_progress]: { ar: 'المستند قيد الختم الآن من مسارٍ آخر — أعد المحاولة بعد لحظات', en: 'This document is being stamped by another process — retry shortly' },
+  [MSG.zatca_attempt_failed]: {
+    ar: 'تعذّرت المحاولة ولم تُجب الهيئة على المستند ({reason}) — المستند كما هو، وسيُعاد الإرسال آلياً بتراجع؛ وإن استُنفدت المحاولات بقي مُعلَناً في «صادرٌ لم يصل» ويُعاد يدوياً',
+    en: 'The attempt failed without an answer from the authority ({reason}) — the document is unchanged and will be resent automatically with backoff; if the attempts run out it stays declared under "issued, not delivered" and can be resent manually',
+  },
+  [MSG.zatca_stamp_in_progress]: { ar: 'المستند قيد الختم الآن من مسارٍ آخر — أعد المحاولة بعد لحظات', en: 'This document is being stamped by anotherprocess — retry shortly' },
   [MSG.zatca_not_stamped]: { ar: 'لا مستندٌ موقَّعٌ محفوظٌ لهذه الفاتورة — تُختم أولاً ثم تُبلَّغ', en: 'No stored signed document for this invoice — it must be stamped before it is reported' },
   // ⚖️ الإشعارُ على إشعارٍ مقابل لا على إشعارٍ من نوعه (`ق-٩٥٢`) — والمخرجُ مسمّىً في رسالة المنع (`ق-٢٦٥`).
   [MSG.credit_note_target_invalid]: { ar: 'الإشعار يُصدَر على فاتورة أصلية أو على إشعار مقابل (مدين يصحّح دائناً، ودائن يصحّح مديناً) — لا على إشعار من نوعه', en: 'A note is issued against an original invoice or against the opposite kind of note (a debit note correcting a credit note, or a credit note correcting a debit note) — never against a note of its own kind' },
