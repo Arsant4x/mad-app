@@ -11,7 +11,8 @@ export type ContractClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCL
 export type ContractVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';
 export type DeclaredClassification = Exclude<ContractClassification, 'LEGACY_UNCLASSIFIED'>;
 export type DeclaredVatInclusion = Exclude<ContractVatInclusion, 'LEGACY_UNDECLARED'>;
-export type InstallmentStatus = 'DUE' | 'LATE' | 'PAID' | 'CANCELLED';
+/** منسوخٌ بيدٍ من `InstallmentStatus` في المخطّط (دَينُ 4.5) — `PARTIAL` مسدَّدٌ بعضُه، تُشتقّ من المقبوض مقابل الإجماليّ (ق-١٠٤٠). */
+export type InstallmentStatus = 'DUE' | 'LATE' | 'PARTIAL' | 'PAID' | 'CANCELLED';
 export type PaymentMethod = 'CASH' | 'BANK';
 
 export interface Installment {

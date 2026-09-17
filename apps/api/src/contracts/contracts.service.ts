@@ -41,6 +41,8 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { deriveSettlementStatus } from '../common/settlement/settlement.util';
+import { rentAmountsOf } from '../journal/rent-tax-point.util';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
@@ -555,11 +557,21 @@ export class ContractsService {
         }
 
         if (installment) {
+          // **الحالةُ تُشتقّ من المقبوض مقابل الإجماليّ** — كما الفاتورة (`SPEC 4.5` · `ق-١٠٤٠`): لا ختمٌ ثابت.
+          // الإجماليُّ بالضريبة من الدالّة نفسِها التي يقيس بها الاستحقاق (`rentAmountsOf`)، والقديمُ غيرُ
+          // المصنَّف بمبلغه؛ والمقبوضُ مجموعُ دفعات القسط (الصافي + الخصم — فالخصمُ يُنقص المستحقَّ في
+          // المحرّك `ق-٤٦٩`). و`PARTIAL` تتقدّم على `LATE` — المدفوعُ يتقدّم على كلِّ شيء — والتأخّرُ يُقرأ
+          // من التاريخ. ⛔ ولا تُقرأ الحالةُ في الاستحقاق ولا في الأعمار ولا في الإقرار — بنقطة الضريبة وحدَها.
+          const settledAgg = await tx.rentPayment.aggregate({ where: { installmentId: installment.id }, _sum: { netAmount: true, discount: true } });
+          const settled = round2(Number(settledAgg._sum.netAmount ?? 0) + Number(settledAgg._sum.discount ?? 0));
+          const gross = treatment ? rentAmountsOf(Number(installment.amount), treatment).gross : round2(Number(installment.amount));
+          const derived = deriveSettlementStatus(settled, gross);
+          const status = derived === 'PAID' ? 'PAID' : derived === 'PARTIAL' ? 'PARTIAL' : installment.status;
           await tx.installment.update({
             where: { id: installment.id },
             // العدّادُ يُزاد بما اعتُرف به **في قيد القبض القائم وحده** — وصفرٌ على مسار
             // الاستحقاق (الاعترافُ هناك من الاستحقاق لا من القبض) وحين تخطّى الترحيل (ق-٤٦٨).
-            data: { status: 'PAID', baseRecognized: { increment: earnedNow } },
+            data: { status, baseRecognized: { increment: earnedNow } },
           });
         }
 
