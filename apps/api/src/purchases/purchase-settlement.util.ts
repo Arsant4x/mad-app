@@ -6,6 +6,9 @@ import { allocatedFor, deriveSettlementStatus, SettlementTarget } from '../commo
 /**
  * ما ائتمن به المورّد على كلِّ مستند — مجموعُ إشعاراته الدائنة عليه (`ق-١٠٠٦`/⑤). يقرؤه المتبقّي مع
  * التخصيصات في المصدر الواحد (`outstandingAfterNotes`)، كما تُقرأ الإشعاراتُ الدائنة على الفاتورة.
+ *
+ * **على مستوى المنشأة بحقّها**: ما ائتمن به المورّد يخفّض متبقّي مستنده أياً كان فرعُ الإشعار — وإشعارٌ في
+ * فرعٍ محجوبٍ عن القارئ يبقى مخصوماً، وإلا طُولب المورّدُ بسدادٍ فوق ما بقي عليه.
  */
 export async function creditedByPurchase(tx: Prisma.TransactionClient, purchaseIds: string[]): Promise<Map<string, number>> {
   if (purchaseIds.length === 0) return new Map();

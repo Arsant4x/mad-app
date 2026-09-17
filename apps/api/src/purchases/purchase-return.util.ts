@@ -48,6 +48,12 @@ export interface SupplierNoteStockResult {
   returned: { lineId: string; qty: number; layerId: string }[];
 }
 
+/**
+ * يطبّق أثرَ إشعار المورّد على الرفّ سطراً سطراً — انظر رأسَ الملفّ.
+ *
+ * **على مستوى المنشأة بحقّها**: طبقةُ الاستلام تُقرأ بسطر الشراء الأصليّ لا بفرع القارئ — فالمُعادةُ تخرج
+ * من حيث استُلمت، كما يعود المرتجعُ إلى طبقاته حيث بيعت؛ وإعادةٌ تُقاس على فرعٍ آخر تُخرج مرّتين.
+ */
 export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockArgs): Promise<SupplierNoteStockResult> {
   let baseInventory = 0;
   let baseCogs = 0;

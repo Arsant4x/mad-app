@@ -342,6 +342,10 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: الشراءُ الذي صدرت عليه إشعاراتٌ لا يُحذف — والعدُّ يقرأ إشعاراتِه في أيّ
+   * فرعٍ كانت، كما يُمنع حذفُ العميل بفواتيره في أيّ فرع؛ وعدٌّ مقصورٌ على فروع القارئ يحذف ما أُشير إليه.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });

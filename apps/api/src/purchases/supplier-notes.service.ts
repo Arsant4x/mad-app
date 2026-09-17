@@ -55,6 +55,13 @@ export class SupplierNotesService {
     return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'debit');
   }
 
+  /**
+   * الجذعُ المشترك للدائن والمدين — كلُّ ما يختلف بينهما يصل مقرَّراً في `side`.
+   *
+   * **على مستوى المنشأة بحقّها**: سقفُ الإشعارات (`ق-١٠٠٦`/⑤) يُحسب من كلّ إشعارات الأصل — وإشعارٌ في فرعٍ
+   * محجوبٍ عن القارئ يبقى مخصوماً من السقف، وإلا جاز أن يُقبل من المورّد أكثرُ مما فُوتر؛ والأصلُ نفسُه يُقاس
+   * على فروع القارئ بـ`assertBranchAllowed` قبل أيّ كتابة.
+   */
   private issue(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, side: NoteSide) {
     const docType = side === 'credit' ? PURCHASE_NOTE_KINDS.credit : PURCHASE_NOTE_KINDS.debit;
     return retryOnUniqueConflict(() =>
