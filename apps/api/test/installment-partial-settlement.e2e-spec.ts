@@ -17,6 +17,7 @@ import { createTenantCustomer } from './tenant-customer';
  * ③ خصمٌ + قبضٌ يُكملان الإجماليَّ ⇒ `PAID` — الخصمُ يُنقص المستحقَّ في المحرّك.
  * ④ ⛔ الاستحقاقُ لا يُمسّ: `rent_accruals` قبل الدفعة الجزئية وبعدها وبعد الكنس كما تقوله نقطةُ الضريبة وحدَها.
  * ⑤ العقدُ الشامل: الإجماليُّ هو المبلغ.
+ * ⑦ غيرُ الشامل: قبضُ المبلغ (1,000) لا يسدّد القسطَ — المقارَنُ به الإجماليُّ بالضريبة (1,150).
  * ⑥ حارسُ الانحراف: لكلِّ قسطٍ في المنشأة المخزَّنُ = المحسوبُ من دفعاته وإجماليّه.
  * منشأةٌ معزولة تُزال في الختام.
  */
@@ -132,6 +133,15 @@ describe('السدادُ الجزئي للقسط — PARTIAL مشتقّةٌ من
     const inst = firstInstallment(c);
     expect((await pay(c.id, inst.id, 400)).installment.status).toBe('PARTIAL');
     expect((await pay(c.id, inst.id, 600)).installment.status).toBe('PAID');
+  }, 120000);
+
+  it('⑦ غيرُ الشامل: قبضُ المبلغ 1,000 لا يسدّد القسطَ — الإجماليُّ بالضريبة 1,150 هو المقارَنُ به لا المبلغ', async () => {
+    // مطوّرٌ يقارن بالمبلغ بدل الإجماليّ يختم هذه PAID — والباقي 150 يغيب عن التذكيرات والتصعيد
+    const c = await makeContract({ vatInclusion: 'EXCLUSIVE' });
+    const inst = firstInstallment(c);
+    expect((await pay(c.id, inst.id, 1000)).installment.status).toBe('PARTIAL');
+    expect((await remindersDue(c.id)).some((r) => r.installmentId === inst.id)).toBe(true);
+    expect((await pay(c.id, inst.id, 150)).installment.status).toBe('PAID');
   }, 120000);
 
   it('⑥ حارسُ الانحراف: لكلِّ قسطٍ في المنشأة المخزَّنُ = المحسوبُ من دفعاته وإجماليّه', async () => {
