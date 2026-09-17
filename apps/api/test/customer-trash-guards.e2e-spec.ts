@@ -53,10 +53,11 @@ describe('حرّاسُ سلة العملاء — الحذفُ بعقود، وا�
     token = company.token;
   }, 120000);
 
+  // الإزالةُ تمسح عقوداً وقيوداً واستحقاقاتٍ — تتجاوز الخمسَ ثوانٍ الافتراضية تحت الحِمل (وقع في إثباتٍ عكسيّ).
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
     await app.close();
-  });
+  }, 120000);
 
   it('[SPEC 4.1] ① عميلٌ له عقدٌ حيّ لا يُحذف — 409 تسمّي الأرشفةَ مخرجاً', async () => {
     const c = await makeContract(`مستأجر حيّ ${Date.now()}`, '0500000101');
