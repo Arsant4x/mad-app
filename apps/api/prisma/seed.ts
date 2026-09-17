@@ -17,8 +17,12 @@ async function main() {
     );
   }
 
-  const devUsername = process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan';
+  // لا اسمَ يُكتب صامتاً (ق-١٠٣٩/③): كان هنا افتراضيٌّ حرفيٌّ يعمل حين يغيب المتغيّر — فالبذرةُ تقرأه أو تسقط مسمّيةً إيّاه.
+  const devUsername = process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME;
   const devPassword = process.env.DEV_SEED_PLATFORM_ADMIN_PASSWORD;
+  if (!devUsername) {
+    throw new Error('DEV_SEED_PLATFORM_ADMIN_USERNAME must be set in .env before seeding');
+  }
   if (!devPassword) {
     throw new Error('DEV_SEED_PLATFORM_ADMIN_PASSWORD must be set in .env before seeding');
   }
