@@ -2,6 +2,7 @@ import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useRef, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
+import { createCustomer, listCustomers, type Customer, type CustomerInput } from '../../api/customers';
 import {
   createContract,
   getContract,
@@ -35,6 +36,8 @@ export function ContractsPage() {
   const [page, setPage] = useState(1);
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+  // العملاءُ الأحياء لمنتقي المستأجر — العقدُ يُربط بمعرّف العميل لا باسمه (ق-١٠٢٨/①).
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -52,10 +55,18 @@ export function ContractsPage() {
   }
 
   async function reloadAll() {
-    const [, u, p, b] = await Promise.all([reloadPage(page, search), listUnits(), listProperties(), listBanks()]);
+    const [, u, p, b, c] = await Promise.all([reloadPage(page, search), listUnits(), listProperties(), listBanks(), listCustomers()]);
     setUnits(u);
     setProperties(p);
     setBanks(b);
+    setCustomers(c);
+  }
+
+  /** عميلٌ جديد من داخل نموذج العقد — عبر مسار العملاء نفسِه، ثم يُضاف إلى القائمة ليُختار. */
+  async function handleCreateCustomer(data: CustomerInput): Promise<Customer> {
+    const created = await createCustomer(data);
+    setCustomers((prev) => [created, ...prev]);
+    return created;
   }
 
   useEffect(() => {
@@ -182,7 +193,9 @@ export function ContractsPage() {
         </>
       )}
 
-      {showBuilder && <ContractModal units={units} properties={properties} onCancel={() => setShowBuilder(false)} onSave={handleSave} />}
+      {showBuilder && (
+        <ContractModal units={units} properties={properties} customers={customers} onCancel={() => setShowBuilder(false)} onSave={handleSave} onCreateCustomer={handleCreateCustomer} />
+      )}
 
       {detailContract && (
         <ContractDetailModal

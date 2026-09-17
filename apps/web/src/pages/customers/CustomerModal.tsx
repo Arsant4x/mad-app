@@ -2,6 +2,10 @@ import { useState } from 'react';
 import type { Customer, CustomerInput } from '../../api/customers';
 import i18n from '../../i18n';
 
+/** رسالةُ الخادم وحالتُه من خطأ محور — كما تقرؤها بقيّةُ الشاشات. */
+const serverMessage = (e: unknown): string | undefined => (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+const serverStatus = (e: unknown): number | undefined => (e as { response?: { status?: number } })?.response?.status;
+
 export function CustomerModal({
   editing,
   onCancel,
@@ -17,8 +21,10 @@ export function CustomerModal({
   const [creditLimit, setCreditLimit] = useState(editing?.creditLimit ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // **الاسمُ المكرَّر تنبيهٌ لا قيد** (ق-١٠٢٨/⑤): الخادمُ يردّ «أهو نفسُه؟» فيُعرض السؤالُ ولا يُفترض الجواب.
+  const [sameNameAsk, setSameNameAsk] = useState<string | null>(null);
 
-  async function handleSubmit() {
+  async function handleSubmit(allowSameName = false) {
     setError(null);
     if (!name.trim()) {
       setError(i18n.t('err_customer_name_required'));
@@ -31,10 +37,16 @@ export function CustomerModal({
         vatNumber: vatNumber.trim() || undefined,
         phone: phone.trim() || undefined,
         creditLimit: parseFloat(creditLimit as string) || 0,
+        ...(allowSameName ? { allowSameName: true } : {}),
       });
+      setSameNameAsk(null);
     } catch (e) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? i18n.t('err_customer_save'));
+      const message = serverMessage(e);
+      if (serverStatus(e) === 409 && message && message.includes('أهو نفسُه')) {
+        setSameNameAsk(message);
+      } else {
+        setError(message ?? i18n.t('err_customer_save'));
+      }
     } finally {
       setSaving(false);
     }
@@ -68,13 +80,29 @@ export function CustomerModal({
           </div>
         </div>
         {error && <p className="error-text">{error}</p>}
+        {sameNameAsk && (
+          <div className="field">
+            <p className="hint">{sameNameAsk}</p>
+          </div>
+        )}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
             إلغاء
           </button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة العميل'}
-          </button>
+          {sameNameAsk ? (
+            <>
+              <button className="btn btn-ghost" onClick={() => setSameNameAsk(null)} disabled={saving}>
+                لا — أراجع القائمة
+              </button>
+              <button className="btn btn-primary" onClick={() => handleSubmit(true)} disabled={saving}>
+                نعم، شخصٌ آخر بالاسم نفسِه — {editing ? 'احفظ' : 'أنشئه'}
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => handleSubmit(false)} disabled={saving}>
+              {editing ? 'حفظ التعديل' : 'إضافة العميل'}
+            </button>
+          )}
         </div>
       </div>
     </div>
