@@ -150,7 +150,7 @@ describe('تعديلُ فاتورة الشراء بعكسٍ وتجميدُها �
     expect(before.stock).toBe(6);
 
     for (const body of [
-      { subtotal: 300, lines: [{ description: 'x', productId, quantity: 7, unitPrice: 42 }] },
+      { subtotal: 294, lines: [{ description: 'x', productId, quantity: 7, unitPrice: 42 }] },
       { subtotal: 300 },
       { exchangeRate: 2 },
       { warehouseId },
