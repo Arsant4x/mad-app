@@ -985,6 +985,17 @@ export class InvoicesService {
      * والتاجر المتأخّر ما زال ملزَماً بإصداره. فيصدر، ويُسجَّل التأخّر ليُرى.
      * والمفتاح يحمل رقم المستند، فتكرارُ الحفظ لا يكرّر الجرس.
      */
+    /**
+     * 🔴 **حدثُ الإصدار للإشعار كما للفاتورة** (`ق-١٠٠٧` — وكان الإشعارُ يبلغ الهيئةَ بالإرسال اليدويّ
+     * وحدَه): إشعارٌ دائنٌ أو مدينٌ صادرٌ مستندٌ خاضعٌ للفوترة بنصّها، فحدثُه يُكتب **داخل المعاملة
+     * نفسها** (`ق-٤٩`) — إن تعذّرت كتابتُه أُلغي الإشعار، ولا يبقى إشعارٌ لا يعلم به الطابور.
+     */
+    await events.emitCompliance(tx, {
+      type: INVOICE_ISSUED,
+      companyId,
+      payload: { invoiceId: created.id, docType: created.docType, no: created.no } satisfies InvoiceIssuedPayload,
+    });
+
     const deadline = deadlineView(created.adjustmentEventDate ?? created.issueDate, created.issueDate);
     if (deadline.status === 'LATE') {
       await NotificationsService.raise(tx, companyId, {
