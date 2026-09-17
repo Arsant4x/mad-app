@@ -6,6 +6,8 @@ import { fmt, today } from '../../lib/format';
  * والتأخّرُ وحدَه يُقرأ هنا من تاريخ الاستحقاق لحظةَ العرض لأنه لا يُخزَّن.
  */
 export function purchaseStatus(p: Purchase): { label: string; badgeClass: string } {
+  // المُلغاةُ بقيد عكس: باقيةٌ في السجلّ ولا ذمّةَ عليها.
+  if (p.voidedAt) return { label: 'مُلغاة بقيد عكس', badgeClass: 'draft' };
   // الإشعارُ الدائن لا يُسدَّد — هو التخفيض؛ حالتُه `PAID` بنيةً وليست «مسدَّدة» في العرض.
   if (p.docType === 'SUPPLIER_CREDIT_NOTE') return { label: 'يخفّض ذمّة المورّد', badgeClass: 'paid' };
   if (p.status === 'PAID') return { label: 'مسدَّدة', badgeClass: 'paid' };

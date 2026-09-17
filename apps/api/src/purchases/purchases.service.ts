@@ -9,14 +9,16 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
-import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import { postPurchaseEntry, postReversalEntry } from '../journal/auto-posting.util';
 import { receiveStockedLines } from './purchase-receipt.util';
+import { receiptConsumed, reverseReceipt } from './purchase-receipt-reversal.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
-const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
+/** البنودُ الحيّة وحدَها — المتجاوَزُ بتعديلٍ قبل الاستهلاك (`supersededAt`) محفوظٌ للدفتر لا للعرض. */
+const PURCHASE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } } as const;
 const VAT_RATE = 0.15;
 
 /** Amortization is establishment-only and needs a real month count. Returns the
@@ -65,7 +67,9 @@ export class PurchasesService {
       return purchases.map((p) => {
         const paid = allocated.get(p.id) ?? 0;
         const creditedTotal = p.docType === 'SUPPLIER_CREDIT_NOTE' ? 0 : (credited.get(p.id) ?? 0);
-        return { ...p, allocated: paid, credited: creditedTotal, remaining: outstandingAfterNotes(p, creditedTotal, paid, 'SUPPLIER_CREDIT_NOTE') };
+        // والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
+        const remaining = p.voidedAt ? 0 : outstandingAfterNotes(p, creditedTotal, paid, 'SUPPLIER_CREDIT_NOTE');
+        return { ...p, allocated: paid, credited: creditedTotal, remaining };
       });
     });
   }
@@ -193,12 +197,39 @@ export class PurchasesService {
     );
   }
 
+  /**
+   * ⚖️ **تعديلُ فاتورة الشراء — بعكسٍ لا بحذف، والمفصلُ محكوم** (`ق-٩٩٧` · `ق-١٠٠٦`/⑥):
+   *
+   * ① **قبل أيّ استهلاك يُعدَّل كلُّ شيء**: القيدُ يُعكس (`postReversalEntry` — قائمٌ لا محذوف، `ق-٩٦٥`)
+   *    ويُعاد بتاريخ المستند من بنوده الحيّة؛ والرفُّ يتبع: الاستلامُ يُعكس بحركةٍ خارجة من طبقته ويُعاد
+   *    بطبقةٍ جديدة، والسطرُ القديم **يُحفظ متجاوَزاً** (`supersededAt`) لأن حركاتِه تشير إليه — وقائعُ لا حالات.
+   * ② **بعد استهلاكٍ ولو جزئيّ** (بيعاً أو إعادةً إلى المورّد) **أو إشعارٍ صدر عليه**: الكميةُ والتكلفةُ
+   *    مجمَّدتان — البنودُ والإجماليُّ والعملةُ وسعرُها والمستودع — والرفضُ `409` **يسمّي المخرج**: إشعارٌ من
+   *    المورّد (`ق-٢٦٥`). وما عداهما يُعدَّل: المورّدُ والتاريخان والفئةُ والإعفاءُ والاستبعادُ والمرجع.
+   * ③ والمُلغى مُغلَق.
+   *
+   * والاستهلاكُ **بالحال** (`ق-٩٩٩`): طبقةُ الاستلام ناقصةٌ عمّا استُلم — أياً كان ما أنقصها.
+   *
+   * **على مستوى المنشأة بحقّها**: إشعاراتُ الشراء تُعدّ في أيّ فرعٍ كانت لتجميد كميته وتكلفته — فإشعارٌ في
+   * فرعٍ محجوبٍ عن القارئ يجمّده كما يجمّده إشعارُ فرعه، وإلا عُدِّل مستندٌ صُحِّح من فرعٍ آخر.
+   */
   update(companyId: string, id: string, dto: UpdatePurchaseDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.purchase.findUnique({ where: { id } });
+      const existing = await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
       // ⚖️ إشعارُ المورّد حدثٌ مرحَّل — لا يُعدَّل بعد ترحيله (`ق-١٠٠٦`/②)، والتصحيحُ بإشعارٍ مقابل.
       if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);
+      if (existing.voidedAt) throw new ConflictException(formatMessage(MSG.purchase_voided, { no: existing.no }));
+
+      // ② الكميةُ والتكلفةُ: ما يمسّهما يُرفض مسمّىً بعد استهلاكٍ أو إشعار.
+      const quantityOrCostGiven =
+        dto.lines !== undefined || dto.subtotal !== undefined || dto.currency !== undefined || dto.exchangeRate !== undefined || dto.warehouseId !== undefined;
+      if (quantityOrCostGiven) {
+        const notes = await tx.purchase.count({ where: { relatedPurchaseId: id } });
+        if (notes > 0 || (await receiptConsumed(tx, existing.lines))) {
+          throw new ConflictException(formatMessage(MSG.purchase_frozen_after_consumption, { no: existing.no }));
+        }
+      }
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;
@@ -212,9 +243,14 @@ export class PurchasesService {
         data.categoryCode = toPurchaseCategoryCode(raw);
       }
 
-      const amountsGiven = dto.subtotal !== undefined || dto.exempt !== undefined;
+      // البنودُ مصدرُ الإجمالي كالإنشاء: إن أُرسلت اشتُقّ منها، وإن أُرسل معها إجماليٌّ وجب أن يطابقها.
+      const linesSubtotal = dto.lines ? roundTo(dto.lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0), 'LINE_AMOUNT') : null;
+      if (dto.lines) this.stockedSubtotal({ subtotal: dto.subtotal ?? linesSubtotal!, lines: dto.lines });
+      const amountsGiven =
+        dto.subtotal !== undefined || dto.exempt !== undefined || dto.lines !== undefined || dto.exchangeRate !== undefined || dto.currency !== undefined;
+      const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
       if (amountsGiven) {
-        const subtotal = dto.subtotal ?? Number(existing.subtotal);
+        const subtotal = dto.subtotal ?? linesSubtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
         const { tax, total } = computePurchaseTax(subtotal, exempt);
         // إجماليٌّ ينزل تحت ما سُدِّد عليه فعلاً يجعل الحالةَ تكذب (مسدَّدةٌ بأكثر من قيمتها)
@@ -225,8 +261,6 @@ export class PurchasesService {
             formatMessage(MSG.purchase_total_below_allocated, { no: existing.no, total: formatMoney(total), allocated: formatMoney(paidSoFar) }),
           );
         }
-        // Keep the rate the purchase was recorded at unless explicitly changed.
-        const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
         data.subtotal = subtotal;
         data.exempt = exempt;
         data.taxAmount = tax;
@@ -257,22 +291,55 @@ export class PurchasesService {
 
       // Anything that changes who/what/how-much gets reversed and re-posted
       // fresh rather than patched in place — same reasoning as InvoicesService.
-      const affectsPosting =
-        dto.supplierId !== undefined ||
-        dto.date !== undefined ||
-        categoryGiven ||
-        dto.subtotal !== undefined ||
-        dto.exempt !== undefined;
-      if (affectsPosting && existing.journalEntryId) {
-        data.journalEntryId = null;
+      const affectsPosting = dto.supplierId !== undefined || dto.date !== undefined || categoryGiven || amountsGiven;
+
+      let updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
+
+      if (dto.lines !== undefined) {
+        // ① الرفُّ يتبع: الاستلامُ القديم يُعكس بحركةٍ خارجة (لا يُحذف)، والقديمُ يُحفظ متجاوَزاً، والجديدُ يُستلم.
+        const { warehouseId } = await reverseReceipt(tx, {
+          companyId,
+          branchId: existing.branchId,
+          date: updated.date,
+          documentNo: existing.no,
+          reason: `تعديلُ فاتورة شراء ${existing.no}`,
+          lines: existing.lines,
+        });
+        await tx.purchaseLine.updateMany({ where: { purchaseId: id, supersededAt: null }, data: { supersededAt: new Date() } });
+        await tx.purchaseLine.createMany({
+          data: dto.lines.map((line) => ({
+            companyId,
+            purchaseId: id,
+            description: line.description,
+            productId: line.productId ?? null,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            taxRate: line.taxRate ?? 15,
+          })),
+        });
+        updated = (await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE }))!;
+        await receiveStockedLines(tx, {
+          companyId,
+          branchId: updated.branchId,
+          warehouseId: dto.warehouseId ?? warehouseId,
+          date: updated.date,
+          exchangeRate: rate,
+          lines: updated.lines,
+        });
       }
 
-      const updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
       // الإجماليُّ تغيّر فالحالةُ المشتقّة تُعاد من التخصيصات في المعاملة نفسِها — لا تنحرف لحظة.
       if (amountsGiven) await recomputePurchaseStatus(tx, id);
       if (!affectsPosting) return updated;
 
-      if (existing.journalEntryId) await unpostIfLinked(tx, existing.journalEntryId);
+      // ① القيدُ يُعكس ولا يُحذف (`ق-٩٦٥`) — بتاريخ المستند (`ق-٩٧٢`) — ثم يُعاد من بنوده الحيّة.
+      if (existing.journalEntryId) {
+        await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: updated.date, memo: `عكسُ فاتورة شراء ${existing.no} — تعديل` });
+      }
+      const stocked = roundTo(
+        updated.lines.filter((l) => l.productId).reduce((t, l) => t + Number(l.quantity) * Number(l.unitPrice), 0),
+        'LINE_AMOUNT',
+      );
       const entry = await postPurchaseEntry(tx, companyId, {
         supplierId: updated.supplierId,
         branchId: updated.branchId,
@@ -283,9 +350,10 @@ export class PurchasesService {
         baseSubtotal: Number(updated.baseSubtotal),
         baseTaxAmount: Number(updated.baseTaxAmount),
         baseTotal: Number(updated.baseTotal),
+        // كان يُعاد الترحيلُ بلا نصيب المخزون فيذهب الشراءُ المخزنيُّ كلُّه إلى المصروف (`ق-٩٩٣`) — الآن من بنوده الحيّة.
+        baseStockedSubtotal: toBaseAmount(stocked, rate),
       });
-      if (!entry) return updated;
-      return tx.purchase.update({ where: { id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
+      return tx.purchase.update({ where: { id }, data: { journalEntryId: entry?.id ?? null }, include: PURCHASE_INCLUDE });
     });
   }
 
@@ -307,7 +375,8 @@ export class PurchasesService {
   incorporationReport(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await tx.purchase.findMany({
-        where: { categoryCode: AMORTIZABLE_CATEGORY },
+        // والمُلغى بقيد عكسٍ ليس مصروفاً (`ق-٩٩٧`/②).
+        where: { categoryCode: AMORTIZABLE_CATEGORY, voidedAt: null },
         select: { incorpItem: true, baseTotal: true, amortize: true, amortizeMonths: true },
       });
 
@@ -343,23 +412,33 @@ export class PurchasesService {
   }
 
   /**
-   * **على مستوى المنشأة بحقّها**: الشراءُ الذي صدرت عليه إشعاراتٌ لا يُحذف — والعدُّ يقرأ إشعاراتِه في أيّ
-   * فرعٍ كانت، كما يُمنع حذفُ العميل بفواتيره في أيّ فرع؛ وعدٌّ مقصورٌ على فروع القارئ يحذف ما أُشير إليه.
+   * ⚖️ **الحذفُ إلغاءٌ بقيد عكس — لا محوٌ ولا `500`** (`ق-٩٩٧`/②): الصفُّ يبقى مُلغىً (`voidedAt`)، والقيدُ
+   * يُعكس بتاريخ الإلغاء (قائمٌ لا محذوف)، والاستلامُ يُعكس بحركةٍ خارجة من طبقته. **ولا يُلغى ما استُهلك منه**
+   * (المخرجُ إشعارُ المورّد على ما بقي)، ولا ما عليه سندُ صرفٍ (عكسُ السند أولاً)، ولا ما صدرت عليه إشعارات.
+   *
+   * **على مستوى المنشأة بحقّها**: الشراءُ الذي صدرت عليه إشعاراتٌ لا يُلغى — والعدُّ يقرأ إشعاراتِه في أيّ
+   * فرعٍ كانت، كما يُمنع حذفُ العميل بفواتيره في أيّ فرع؛ وعدٌّ مقصورٌ على فروع القارئ يُلغي ما أُشير إليه.
    */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.purchase.findUnique({ where: { id } });
+      const existing = await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
       // ⚖️ إشعارُ المورّد يُعكس ولا يُحذف (`ق-١٠٠٦`/②) — والشراءُ الذي صدرت عليه إشعاراتٌ يبقى (`Restrict`).
       if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);
+      if (existing.voidedAt) throw new ConflictException(formatMessage(MSG.purchase_voided, { no: existing.no }));
       const notes = await tx.purchase.count({ where: { relatedPurchaseId: id } });
       if (notes > 0) throw new ConflictException(formatMessage(MSG.purchase_has_notes, { no: existing.no }));
-      // المفتاحُ `Restrict` يرفضها على كل حال — يُفحص هنا ليُردَّ `409` مسمّىً لا خطأَ قيدٍ خاماً:
-      // شراءٌ عليه سندُ صرفٍ لا يُمحى وسندُه قائم، والتصحيحُ بعكس السند.
+      // شراءٌ عليه سندُ صرفٍ لا يُلغى وسندُه قائم، والتصحيحُ بعكس السند — `409` مسمّىً لا خطأَ قيدٍ خاماً.
       const allocations = await tx.supplierPaymentAllocation.count({ where: { purchaseId: id } });
       if (allocations > 0) throw new ConflictException(formatMessage(MSG.purchase_has_payments, { no: existing.no }));
-      await tx.purchase.delete({ where: { id } });
-      await unpostIfLinked(tx, existing.journalEntryId);
+      if (await receiptConsumed(tx, existing.lines)) throw new ConflictException(formatMessage(MSG.purchase_void_consumed, { no: existing.no }));
+
+      const voidedAt = new Date();
+      await reverseReceipt(tx, { companyId, branchId: existing.branchId, date: voidedAt, documentNo: existing.no, reason: `إلغاءُ فاتورة شراء ${existing.no}`, lines: existing.lines });
+      if (existing.journalEntryId) {
+        await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: voidedAt, memo: `إلغاءُ فاتورة شراء ${existing.no}` });
+      }
+      await tx.purchase.update({ where: { id }, data: { voidedAt } });
     });
   }
 

@@ -28,7 +28,8 @@ export const PURCHASE_NOTE_KINDS: NoteKinds<'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' 
   debit: 'SUPPLIER_DEBIT_NOTE',
 };
 
-const NOTE_INCLUDE = { supplier: true, lines: true } as const;
+/** البنودُ الحيّة وحدَها — المتجاوَزُ بتعديلٍ قبل الاستهلاك (`supersededAt`) لا يُشار إليه بإشعار. */
+const NOTE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } } as const;
 
 /**
  * ⚖️ **إشعارُ المورّد — مستندُه يُسجَّل، وقيدُه قيدُنا** (`ق-١٠٠٠` · `ق-١٠٠٦`).
@@ -69,11 +70,11 @@ export class SupplierNotesService {
         const original = await tx.purchase.findUnique({ where: { id: purchaseId }, include: NOTE_INCLUDE });
         if (!original) throw new NotFoundException(MSG.purchase_not_found);
         const { correctsOpposite } = assertAdjustableTarget(
-          // ① الأصلُ شراءٌ أو إشعارٌ مقابل. والإلغاءُ (`voidedAt`) يأتي مع ③ في طلبه — فلا مُغلَقَ هنا بعد.
-          { docType: original.docType, closed: false },
+          // ① الأصلُ شراءٌ أو إشعارٌ مقابل — والمُلغى بقيد عكسٍ مُغلَقٌ (`ق-٩٩٧`/②) كالمردودة في البيع.
+          { docType: original.docType, closed: original.voidedAt !== null },
           side,
           PURCHASE_NOTE_KINDS,
-          { invalid: MSG.supplier_note_target_invalid, closed: MSG.supplier_note_target_invalid },
+          { invalid: MSG.supplier_note_target_invalid, closed: MSG.supplier_note_target_voided },
         );
         assertBranchAllowed(allowedBranchIds, original.branchId);
 

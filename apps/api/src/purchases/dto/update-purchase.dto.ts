@@ -1,8 +1,26 @@
+import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { PurchaseLineDto } from './purchase-line.dto';
 
 export class UpdatePurchaseDto extends CurrencyFieldsDto {
+  /**
+   * البنودُ — **تُعدَّل قبل أيّ استهلاكٍ وحدَه** (`ق-٩٩٧`/①): يُعكس استلامُ القديم بحركةٍ خارجة ويُستلم الجديد،
+   * والقديمُ يُحفظ متجاوَزاً. وبعد استهلاكٍ ولو جزئيّ تُرفض مع الإجمالي والعملة وسعرها بـ`409` يسمّي المخرج.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseLineDto)
+  lines?: PurchaseLineDto[];
+
+  /** مستودعُ الاستلام الجديد عند تعديل البنود — وإلا فمستودعُ الاستلام الأصليّ ثم مستودعُ الفرع. */
+  @IsOptional()
+  @IsUUID()
+  warehouseId?: string;
+
   @IsOptional()
   @IsString()
   supplierId?: string;
