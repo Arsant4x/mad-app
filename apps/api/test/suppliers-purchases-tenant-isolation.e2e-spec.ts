@@ -77,8 +77,13 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
       .send({ paid: true, paidDate: '2026-07-05' })
       .expect(400);
 
-    // Deleting the purchase, then the now-unblocked supplier.
+    // ⚖️ الحذفُ إلغاءٌ بقيد عكس (`ق-٩٩٧`/②): الصفُّ يبقى مُلغىً — فمورّدُه يبقى محجوزاً بمستنده ولا يُحذف.
     await request(app.getHttpServer()).delete(`/purchases/${purchase.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
-    await request(app.getHttpServer()).delete(`/suppliers/${supplier.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    const voided = (await request(app.getHttpServer()).get('/purchases').set('Authorization', `Bearer ${tokenA}`).expect(200)).body.find(
+      (p: { id: string }) => p.id === purchase.body.id,
+    );
+    expect(voided.voidedAt).toBeTruthy();
+    expect(voided.remaining).toBe(0);
+    await request(app.getHttpServer()).delete(`/suppliers/${supplier.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
   }, 20000);
 });

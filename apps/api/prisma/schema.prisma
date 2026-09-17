@@ -1357,6 +1357,10 @@ model Purchase {
   /// مشتقّةٌ مخزَّنة — انظر `PurchaseStatus`. تُكتب من `recomputePurchaseStatus` وحدها.
   status PurchaseStatus @default(DUE)
 
+  /// ⚖️ **الحذفُ إلغاءٌ بقيد عكس لا محو** (`ق-٩٩٧`/②): لحظةُ الإلغاء. الصفُّ يبقى بقيده وقيدِ عكسه، ولا يقبل
+  /// تعديلاً ولا إشعاراً ولا يدخل المفتوحة، والإقرارُ يقرأ الإلغاءَ في ربعه لا في ربع الأصل.
+  voidedAt DateTime?
+
   /// Same deal as Invoice.journalEntryId — null if required accounts aren't
   /// set up yet, Restrict so the entry can't be deleted out from under it.
   journalEntryId String?
@@ -1424,6 +1428,10 @@ model PurchaseLine {
   /// هل **أُعيدت البضاعةُ فعلاً** إلى المورّد (تخرج من الرفّ) — أم أنه إشعارُ سعرٍ بلا بضاعة
   /// (الرفُّ يبقى وتكلفتُه تتبع). على الإشعار الدائن وحده؛ والمدينُ فوترةٌ لا بضاعةَ تُعاد فيه.
   goodsReturned Boolean @default(false)
+
+  /// ⚖️ **السطرُ المُعدَّل يُحفظ متجاوَزاً لا محذوفاً** (`ق-٩٩٧`/①): تعديلُ البنود قبل الاستهلاك يعكس استلامَ
+  /// السطر بحركةٍ خارجة تشير إليه ثم يستلم الجديد — فالقديمُ يبقى لأن دفترَ المخزون يرويه. الحيُّ ما كان هذا فارغاً.
+  supersededAt DateTime?
 
   createdAt DateTime @default(now())
 

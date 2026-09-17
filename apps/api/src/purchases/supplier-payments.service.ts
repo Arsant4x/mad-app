@@ -79,7 +79,8 @@ export class SupplierPaymentsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // الإشعارُ الدائن من المورّد `PAID` بطبيعته فلا يدخل؛ والمدينُ مستحقٌّ يُسدَّد كالشراء (`ق-١٠٠٦`/②).
       const purchases = await tx.purchase.findMany({
-        where: { supplierId, status: { not: 'PAID' } },
+        // والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
+        where: { supplierId, status: { not: 'PAID' }, voidedAt: null },
         select: { id: true, no: true, date: true, dueDate: true, total: true, currency: true, status: true, docType: true },
         orderBy: { date: 'asc' },
       });

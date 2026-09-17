@@ -277,6 +277,10 @@ export const MSG = {
   supplier_return_exceeds_stock: 'supplierNotes.return_exceeds_stock',
   supplier_note_debit_no_goods: 'supplierNotes.debit_no_goods',
   supplier_note_immutable: 'supplierNotes.immutable',
+  purchase_frozen_after_consumption: 'purchases.frozen_after_consumption',
+  purchase_voided: 'purchases.voided',
+  purchase_void_consumed: 'purchases.void_consumed',
+  supplier_note_target_voided: 'supplierNotes.target_voided',
 
   // returns (SPEC §30 — موجة أ)
   return_line_not_original: 'returns.line_not_original',
@@ -782,6 +786,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.supplier_return_exceeds_stock]: { ar: 'لا يمكن إعادة {requested} إلى المورّد — على الرفّ من هذه الفاتورة {remaining} فقط، وما بيع لا يُعاد', en: 'Cannot return {requested} to the supplier — only {remaining} of this invoice remains on the shelf, and what was sold cannot be returned' },
   [MSG.supplier_note_debit_no_goods]: { ar: 'الإشعار المدين من المورّد فوترةٌ إضافية — لا بضاعة تُعاد فيه', en: 'A supplier debit note is additional billing — goods are not returned on it' },
   [MSG.supplier_note_immutable]: { ar: 'إشعار المورّد رُحِّل فلا يُعدَّل ولا يُحذف — صحّحه بإشعار مقابل: مدين لدائن زائد، ودائن لمدين زائد', en: 'This supplier note is posted and cannot be edited or deleted — correct it with an opposite note: a debit note for an excess credit, a credit note for an excess debit' },
+  [MSG.purchase_frozen_after_consumption]: { ar: 'الكمية والتكلفة في فاتورة الشراء {no} مجمَّدتان — استُهلك من بضاعتها أو صدر عليها إشعار، فالتصحيح بإشعار من المورّد (دائن أو مدين على الفاتورة) لا بتعديلها؛ وما عداهما يُعدَّل', en: 'Quantity and cost on purchase invoice {no} are frozen — some of its goods were consumed or a note was recorded against it, so corrections go through a supplier note (credit or debit against the invoice), not an edit; everything else stays editable' },
+  [MSG.purchase_voided]: { ar: 'فاتورة الشراء {no} مُلغاة بقيد عكس — لا تُعدَّل ولا تُلغى ثانية', en: 'Purchase invoice {no} was voided by a reversing entry — it cannot be edited or voided again' },
+  [MSG.purchase_void_consumed]: { ar: 'فاتورة الشراء {no} لا تُلغى — استُهلك من بضاعتها، والمخرج إشعار من المورّد على ما بقي', en: 'Purchase invoice {no} cannot be voided — some of its goods were consumed; the way out is a supplier note for what remains' },
+  [MSG.supplier_note_target_voided]: { ar: 'فاتورة الشراء مُلغاة — لا إشعار على مُلغاة', en: 'The purchase invoice was voided — no note can be recorded against it' },
   [MSG.credit_note_immutable]: { ar: 'الإشعار صدر فلا يُعدَّل ولا يُحذف — صحّحه بإشعار مقابل: إشعار مدين لدائن زائد، وإشعار دائن لمدين زائد', en: 'This note has been issued and can be neither edited nor deleted — correct it with the opposite note: a debit note for an excess credit note, a credit note for an excess debit note' },
   [MSG.return_line_not_original]: { ar: 'سطر المرتجع يجب أن يشير إلى سطرٍ من الفاتورة الأصلية نفسها وبصنفه', en: 'A returned line must reference a line of the same original invoice, with its product' },
   [MSG.return_exceeds_sold]: { ar: 'الكمية المرتجعة ({requested}) تتجاوز المتاح: بِيع {sold} وأُرجع منه {returned} من قبل', en: 'Returned quantity ({requested}) exceeds what is available: {sold} sold, {returned} already returned' },

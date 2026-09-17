@@ -14,6 +14,8 @@ export interface Purchase {
   adjustmentReason: string | null;
   /** رقمُ مستند المورّد كما على ورقته — مرجعٌ خارجيٌّ لا رقمُنا. */
   supplierRef: string | null;
+  /** مُلغاةٌ بقيد عكس (`ق-٩٩٧`/②) — الصفُّ يبقى ولا يُعدَّل ولا يقبل إشعاراً. */
+  voidedAt: string | null;
   supplierId: string;
   supplier: Supplier;
   date: string;

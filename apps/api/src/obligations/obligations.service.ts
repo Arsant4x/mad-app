@@ -137,18 +137,22 @@ export class ObligationsService {
       // الإقرارُ يقرأ ولا يُرحّل: الاستحقاقُ يُكتب عند الإنشاء والتجديد والقبض وبالكنس اليوميّ
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
-      const [invoices, purchases, rent] = await Promise.all([
+      const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } as const;
+      const [invoices, purchaseRows, voidedRows, rent] = await Promise.all([
         tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED }, select: { subtotal: true, taxTotal: true, docType: true } }),
-        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } }),
+        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: purchaseSelect }),
+        // ⚖️ الإلغاءُ بقيد عكسٍ يدخل الإقرارَ **في ربعه** كما دخل الأصلُ في ربعه (`ق-٩٩٧`/②) — لا يُعاد كتابةُ ربعٍ مضى.
+        tx.purchase.findMany({ where: { voidedAt: { gte: from, lt: new Date(to.getTime() + 86_400_000) } }, select: purchaseSelect }),
         this.rentSection(tx, from, to),
       ]);
+      const purchases = [...purchaseRows.map((p) => ({ ...p, voidSign: 1 })), ...voidedRows.map((p) => ({ ...p, voidSign: -1 }))];
 
       // A credit note reduces the quarter's output VAT — its stored amounts are positive (the
       // docType carries the direction), so it enters the declaration with a flipped sign rather
       // than adding to sales. المصدرُ الواحد ⑤ مع إشعار المورّد (`ق-١٠٠٨`/١).
       const sign = (docType: string) => adjustmentSign(docType, 'CREDIT_NOTE');
       // ⚖️ وإشعارُ المورّد الدائن يعكس ضريبةَ المدخلات بإشارته في فترة تاريخه (`ق-١٠٠٦`/④) — لا يُعاد كتابةُ ربعٍ مضى.
-      const purchaseSign = (docType: string) => adjustmentSign(docType, 'SUPPLIER_CREDIT_NOTE');
+      const purchaseSign = (p: { docType: string; voidSign: number }) => adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * p.voidSign;
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
       // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز).
       const salesStandard = round2(invoices.reduce((s, v) => s + sign(v.docType) * Number(v.subtotal), 0) + rent.standard + rent.legacyStandard);
@@ -163,10 +167,10 @@ export class ObligationsService {
 
       const taxablePurchases = declarablePurchases.filter((p) => !p.exempt);
       const exemptPurchases = declarablePurchases.filter((p) => p.exempt);
-      const purchasesStandard = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
-      const purchasesStandardVat = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.taxAmount), 0));
-      const purchasesExempt = round2(exemptPurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
-      const purchasesExcluded = round2(excludedPurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
+      const purchasesStandard = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
+      const purchasesStandardVat = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0));
+      const purchasesExempt = round2(exemptPurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
+      const purchasesExcluded = round2(excludedPurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
 
       const netVat = round2(salesStandardVat - purchasesStandardVat);
       // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.

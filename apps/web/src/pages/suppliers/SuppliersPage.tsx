@@ -318,7 +318,10 @@ export function SuppliersPage() {
                     <RowMenu
                       actions={
                         // ⚖️ الإشعارُ مرحَّلٌ لا يُعدَّل ولا يُحذف (`ق-١٠٠٦`/②) — فلا تعديلَ ولا حذفَ عليه، وتصحيحُه بإشعارٍ مقابل.
-                        p.docType === 'PURCHASE'
+                        // والمُلغاةُ بقيد عكس (`ق-٩٩٧`/②) مُغلَقة: مستنداتُها تُقرأ ولا شيءَ يُكتب عليها.
+                        p.voidedAt
+                          ? [{ label: '📎 المستندات', onClick: () => setAttachmentsFor(p) }]
+                          : p.docType === 'PURCHASE'
                           ? [
                               ...(p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
                               { label: '↩ إشعار دائن من المورّد', onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
@@ -384,9 +387,12 @@ export function SuppliersPage() {
 
       {pendingDeletePurchase && (
         <ConfirmModal
-          title="حذف فاتورة الشراء"
-          body={purchaseDeleteError ?? `حذف الفاتورة ${pendingDeletePurchase.no}؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title="إلغاء فاتورة الشراء"
+          body={
+            purchaseDeleteError ??
+            `إلغاء الفاتورة ${pendingDeletePurchase.no}؟ يُعكس قيدُها بقيدٍ بتاريخ اليوم ويعود ما استُلم من رفّها، ويبقى الصفُّ مُلغىً في السجلّ. وما استُهلك من بضاعتها لا يُلغى — مخرجُه إشعارٌ من المورّد.`
+          }
+          confirmLabel="إلغاء الفاتورة"
           onCancel={() => {
             setPendingDeletePurchase(null);
             setPurchaseDeleteError(null);
