@@ -5,7 +5,7 @@ React web app, npm workspaces monorepo.
 
 ## Prerequisites
 
-- Node.js 20+, npm
+- Node.js 22+, npm — كما تشترط `engines` في كل `package.json` والسير (`jsdom 30` يستدعي واجهةً غائبةً في 20)
 - Docker Desktop (Postgres, Redis, MinIO run via `docker-compose.yml`)
 
 ## First-time setup

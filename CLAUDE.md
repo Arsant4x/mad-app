@@ -1320,7 +1320,7 @@ mad-app/
 │   │   ├── src/
 │   │   └── test/     اختبارات e2e
 │   └── web/          React + Vite     (الواجهة)
-├── packages/shared/  كود مشترك
+├── packages/shared/  مقصدٌ لم يُنفَّذ بعد — ملفّان بلا مستورِد (مرشَّحُ توليد التعدادات من Prisma، §4)
 ├── docker/           تهيئة Postgres
 └── docker-compose.yml
 ```
