@@ -49,6 +49,11 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
   });
 
   it('[SPEC 6.1] computes a VAT declaration from real invoice/purchase data for the given quarter', async () => {
+    const readDeclaration = () =>
+      request(app.getHttpServer()).get('/obligations/vat-declaration').query({ year: 2026, quarter: 3 }).set('Authorization', `Bearer ${tokenA}`).expect(200);
+    // الربعُ يحمل ما تركته حِزمٌ أخرى على منشأة العرض — ومنها إلغاءاتُ مشترياتٍ قديمة تُقرأ **في ربع الإلغاء بإشارةٍ
+    // سالبة** (`ق-٩٩٧`/②)، فقد يهبط رقمُ الربع تحت ما يضيفه هذا الاختبار. فيُقاس **ما أضافه** هو لا رقمٌ مطلق.
+    const before = await readDeclaration();
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)
@@ -76,17 +81,14 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
       .send({ supplierId: supplier.body.id, date: '2026-08-20', subtotal: 400 })
       .expect(201);
 
-    const declaration = await request(app.getHttpServer())
-      .get('/obligations/vat-declaration')
-      .query({ year: 2026, quarter: 3 })
-      .set('Authorization', `Bearer ${tokenA}`)
-      .expect(200);
+    const declaration = await readDeclaration();
 
     expect(declaration.body.from).toBe('2026-07-01');
     expect(declaration.body.to).toBe('2026-09-30');
-    expect(declaration.body.salesStandard).toBeGreaterThanOrEqual(1000);
-    expect(declaration.body.salesStandardVat).toBeGreaterThanOrEqual(150);
-    expect(declaration.body.purchasesStandard).toBeGreaterThanOrEqual(400);
+    expect(declaration.body.salesStandard - before.body.salesStandard).toBeCloseTo(1000, 2);
+    expect(declaration.body.salesStandardVat - before.body.salesStandardVat).toBeCloseTo(150, 2);
+    expect(declaration.body.purchasesStandard - before.body.purchasesStandard).toBeCloseTo(400, 2);
+    expect(declaration.body.purchasesStandardVat - before.body.purchasesStandardVat).toBeCloseTo(60, 2);
     expect(declaration.body.netVat).toBeCloseTo(declaration.body.salesStandardVat - declaration.body.purchasesStandardVat);
   });
 
