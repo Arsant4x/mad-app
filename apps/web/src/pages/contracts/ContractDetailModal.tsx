@@ -30,17 +30,35 @@ import i18n from '../../i18n';
 const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeClass: string }> = {
   DUE: { label: 'مستحقة', badgeClass: 'due' },
   LATE: { label: 'متأخرة', badgeClass: 'overdue' },
+  // مسدَّدٌ بعضُه — تُشتقّ في الخادم من المقبوض مقابل الإجماليّ (ق-١٠٤٠)؛ والباقي يُقبض من زرّ القبض نفسِه.
+  PARTIAL: { label: 'مسدَّدة جزئياً', badgeClass: 'due' },
   PAID: { label: 'مدفوعة', badgeClass: 'paid' },
   CANCELLED: { label: 'ملغية', badgeClass: 'draft' },
 };
 
 /** الإجماليُّ الذي يدين به المستأجر عن قسطٍ — بحسب الشمول (م٤٥/٢ · ق-٩١٨): غيرُ الشامل يزيد 15%. */
-function suggestedGross(contract: { classification: string; vatInclusion: string }, amount: string | number | undefined): string {
-  if (amount === undefined || amount === null || amount === '') return '';
+/** إجماليُّ القسط رقماً — غيرُ الشامل الخاضع +15%، والباقي المبلغُ نفسُه (التدويرُ من `lib/money` وحده — ق-٦٥ بروحها). */
+function grossNumberOf(contract: { classification: string; vatInclusion: string }, amount: string | number): number {
   const a = Number(amount);
-  // التدويرُ من `lib/money` وحده (كنسةُ التدوير — ق-٦٥ بروحها): لا تدويرَ خام في الشاشات.
-  if (contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE') return formatMoney(round2(a * 1.15));
-  return formatMoney(a);
+  return contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE' ? round2(a * 1.15) : round2(a);
+}
+
+/**
+ * المقترَحُ للقسط المسدَّد بعضُه هو **الباقي** لا القسطُ كلُّه (ق-١٠٤٠): الإجماليُّ بالضريبة ناقصَ ما
+ * قُبض عليه (صافي الدفعة + خصمُها — كما يشتقّ الخادمُ الحالة). القسطُ الذي لم يُقبض عليه شيءٌ يبقى على
+ * اقتراحه الكامل.
+ */
+function suggestedRemainingGross(
+  contract: { classification: string; vatInclusion: string; payments: { installmentId: string | null; netAmount: string; discount: string }[] },
+  installment: { id: string; amount: string | number } | undefined,
+): string {
+  if (!installment) return '';
+  const gross = grossNumberOf(contract, installment.amount);
+  const settled = contract.payments
+    .filter((p) => p.installmentId === installment.id)
+    .reduce((sum, p) => sum + Number(p.netAmount) + Number(p.discount), 0);
+  const remaining = round2(gross - settled);
+  return formatMoney(settled > 0 && remaining > 0 ? remaining : gross);
 }
 
 /** نصُّ الإعلان في شاشة القبض — الشاملُ وغيرُ الشامل والمعفى، بأرقامها (ق-٩٢٧/②). */
@@ -652,7 +670,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
                   <span className={`badge ${badgeOf(INSTALLMENT_STATUS_META, i.status).badgeClass}`}>{badgeOf(INSTALLMENT_STATUS_META, i.status).label}</span>
                 </td>
                 <td>
-                  {(i.status === 'DUE' || i.status === 'LATE') && contract.status !== 'CANCELLED' && (
+                  {(i.status === 'DUE' || i.status === 'LATE' || i.status === 'PARTIAL') && contract.status !== 'CANCELLED' && (
                     <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11.5 }} onClick={() => setPayingInstallmentId(i.id)}>
                       تسجيل دفعة
                     </button>
@@ -677,7 +695,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
             )}
             <PaymentForm
               banks={banks}
-              defaultAmount={payingInstallmentId !== 'free' ? suggestedGross(contract, contract.installments.find((i) => i.id === payingInstallmentId)?.amount) : ''}
+              defaultAmount={payingInstallmentId !== 'free' ? suggestedRemainingGross(contract, contract.installments.find((i) => i.id === payingInstallmentId)) : ''}
               declaration={payingInstallmentId !== 'free' ? paymentDeclaration(contract, contract.installments.find((i) => i.id === payingInstallmentId)?.amount) : null}
               onCancel={() => setPayingInstallmentId(null)}
               onSubmit={handlePayment}

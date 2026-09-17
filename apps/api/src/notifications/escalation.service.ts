@@ -92,7 +92,8 @@ export class EscalationService {
 
       const overdue = await tx.installment.findMany({
         where: {
-          status: { in: ['DUE', 'LATE'] },
+          // الجزئيُّ يُصعَّد كالمتأخّر — باقيه دَينٌ تجاوز عتبةَ التأخّر (`ق-١٠٤٠`/٢).
+          status: { in: ['DUE', 'LATE', 'PARTIAL'] },
           dueDate: { lt: cutoff },
           // Narrowing to one lease is how a collector pushes a specific case
           // up now, rather than waiting for the nightly sweep to reach it.

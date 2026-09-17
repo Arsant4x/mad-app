@@ -92,7 +92,8 @@ export class RemindersService {
 
       const installments = await tx.installment.findMany({
         where: {
-          status: { in: ['DUE', 'LATE'] },
+          // الجزئيُّ يبقى في التذكير — قسطٌ قُبض بعضُه ما زال مستحقّاً بباقيه (`ق-١٠٤٠`/٢).
+          status: { in: ['DUE', 'LATE', 'PARTIAL'] },
           // Everything already overdue, plus the ones coming up inside the
           // notice window.
           dueDate: { lte: horizon },

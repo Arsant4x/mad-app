@@ -63,19 +63,25 @@ async function collectionRate(tx: Prisma.TransactionClient, companyId: string, t
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const [agg] = await tx.$queryRaw<{ dueAmount: number; paidAmount: number; onTimeAmount: number; overdueCount: number }[]>`
+    -- نسبةُ التحصيل تقرأ **المقبوضَ** لا حالةَ القسط (ق-١٠٤٠/٢): كانت تجمع مبلغَ كلِّ قسطٍ مختومٍ PAID
+    -- كاملاً — فقسطٌ قُبض عُشرُه عُدّ محصَّلاً كلُّه. صار المقبوضُ على كلِّ قسطٍ (الصافي + الخصم)
+    -- مسقوفاً بمبلغه، والمقبوضُ في وقته ما وقع بتاريخٍ لا يتجاوز الاستحقاق، والمتأخّرُ ما لم يُسدَّد
+    -- كاملاً بعد حلوله — والجزئيُّ منها.
     SELECT
-      COALESCE(SUM(i.amount), 0)::float8                                  AS "dueAmount",
-      COALESCE(SUM(i.amount) FILTER (WHERE i.status = 'PAID'), 0)::float8 AS "paidAmount",
-      COALESCE(SUM(i.amount) FILTER (WHERE i.status = 'PAID' AND fp."firstDate" <= i."dueDate"), 0)::float8
-                                                                          AS "onTimeAmount",
-      (COUNT(*) FILTER (WHERE i.status <> 'PAID'))::int                   AS "overdueCount"
+      COALESCE(SUM(i.amount), 0)::float8                                                   AS "dueAmount",
+      COALESCE(SUM(LEAST(COALESCE(pp.settled, 0), i.amount)), 0)::float8                    AS "paidAmount",
+      COALESCE(SUM(LEAST(COALESCE(pp."settledOnTime", 0), i.amount)), 0)::float8            AS "onTimeAmount",
+      (COUNT(*) FILTER (WHERE i.status IN ('DUE', 'LATE', 'PARTIAL')))::int                 AS "overdueCount"
     FROM "contract_installments" i
     LEFT JOIN (
-      SELECT p."installmentId", MIN(p.date) AS "firstDate"
+      SELECT p."installmentId",
+             SUM(p."netAmount" + p.discount)                                                    AS settled,
+             SUM(p."netAmount" + p.discount) FILTER (WHERE p.date <= ci."dueDate")               AS "settledOnTime"
       FROM "rent_payments" p
+      JOIN "contract_installments" ci ON ci.id = p."installmentId"
       WHERE p."companyId" = ${companyId} AND p."installmentId" IS NOT NULL
       GROUP BY p."installmentId"
-    ) fp ON fp."installmentId" = i.id
+    ) pp ON pp."installmentId" = i.id
     WHERE i."companyId" = ${companyId}
       AND i.status <> 'CANCELLED'
       AND i."dueDate" <= ${todayIso}::date
