@@ -14,6 +14,8 @@ export interface CustomerInput {
   vatNumber?: string;
   phone?: string;
   creditLimit?: number;
+  /** تأكيدُ «شخصٌ آخر بالاسم نفسِه» بعد تنبيه الخادم «أهو نفسُه؟» (ق-١٠٢٨/⑤). */
+  allowSameName?: boolean;
 }
 
 export const listCustomers = (includeArchived = false) => apiClient.get<Customer[]>('/customers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { Customer, CustomerInput } from '../../api/customers';
 import type { Property } from '../../api/properties';
 import type { Unit } from '../../api/units';
 import type { ContractCycle, CreateContractInput, DeclaredClassification, DeclaredVatInclusion, Furnished } from '../../api/contracts';
@@ -19,21 +20,38 @@ const FURNISHED_OPTIONS: { value: Furnished; label: string }[] = [
   { value: 'partial', label: 'مفروشة جزئياً' },
 ];
 
+/** رسالةُ الخادم من خطأ محور — كما تقرؤها بقيّةُ الشاشات. */
+const serverMessage = (e: unknown): string | undefined => (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+const serverStatus = (e: unknown): number | undefined => (e as { response?: { status?: number } })?.response?.status;
+
 export function ContractModal({
   units,
   properties,
+  customers,
   onCancel,
   onSave,
+  onCreateCustomer,
 }: {
   units: Unit[];
   properties: Property[];
+  /** العملاءُ الأحياء — المستأجرُ **يُختار منهم بمعرّفه** أو يُنشأ صراحةً (ق-١٠٢٨/①). */
+  customers: Customer[];
   onCancel: () => void;
   onSave: (data: CreateContractInput) => Promise<void>;
+  onCreateCustomer: (data: CustomerInput) => Promise<Customer>;
 }) {
   const propertyById = new Map(properties.map((p) => [p.id, p]));
   const [unitId, setUnitId] = useState(units[0]?.id ?? '');
-  const [tenant, setTenant] = useState('');
-  const [phone, setPhone] = useState('');
+  // المستأجر: عميلٌ بمعرّفه — لا اسمٌ يُكتب ولا هاتفٌ يُدهس (ق-٤٩٧ · §6.3).
+  const [customerId, setCustomerId] = useState('');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [createdCustomers, setCreatedCustomers] = useState<Customer[]>([]);
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [sameNameAsk, setSameNameAsk] = useState<string | null>(null);
+  const [customerError, setCustomerError] = useState<string | null>(null);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [value, setValue] = useState('');
   const [cycle, setCycle] = useState<ContractCycle>('monthly');
   const [start, setStart] = useState(today());
@@ -48,9 +66,49 @@ export function ContractModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const allCustomers = useMemo(() => [...createdCustomers, ...customers.filter((c) => !createdCustomers.some((n) => n.id === c.id))], [customers, createdCustomers]);
+  const visibleCustomers = useMemo(() => {
+    const q = customerFilter.trim().toLowerCase();
+    const live = allCustomers.filter((c) => !c.archived);
+    if (!q) return live;
+    return live.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q));
+  }, [allCustomers, customerFilter]);
+
+  /**
+   * إنشاءُ عميلٍ من داخل نموذج العقد — عبر مسار العملاء نفسِه: الاسمُ المكرَّر يعود `409` «أهو نفسُه؟»
+   * فيُعرض السؤالُ ولا يُفترض الجواب؛ والتأكيدُ يعيد الطلبَ بعلَم `allowSameName` (ق-١٠٢٨/⑤).
+   */
+  async function createCustomerInline(allowSameName = false) {
+    const name = newName.trim();
+    if (!name) {
+      setCustomerError(i18n.t('err_customer_name_required'));
+      return;
+    }
+    setCustomerError(null);
+    setCreatingCustomer(true);
+    try {
+      const created = await onCreateCustomer({ name, phone: newPhone.trim() || undefined, ...(allowSameName ? { allowSameName: true } : {}) });
+      setCreatedCustomers((prev) => [created, ...prev]);
+      setCustomerId(created.id);
+      setSameNameAsk(null);
+      setNewCustomerOpen(false);
+      setNewName('');
+      setNewPhone('');
+    } catch (e) {
+      const message = serverMessage(e);
+      if (serverStatus(e) === 409 && message && message.includes('أهو نفسُه')) {
+        setSameNameAsk(message);
+      } else {
+        setCustomerError(message ?? i18n.t('err_customer_save'));
+      }
+    } finally {
+      setCreatingCustomer(false);
+    }
+  }
+
   async function submit(draft: boolean) {
     setError(null);
-    if (!unitId || !tenant.trim() || !value) {
+    if (!unitId || !customerId || !value) {
       setError(i18n.t('err_contract_fields'));
       return;
     }
@@ -62,8 +120,7 @@ export function ContractModal({
     try {
       await onSave({
         unitId,
-        tenant: tenant.trim(),
-        phone: phone.trim() || undefined,
+        customerId,
         value: parseFloat(value) || 0,
         cycle,
         start,
@@ -77,8 +134,7 @@ export function ContractModal({
         draft,
       });
     } catch (e) {
-      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? i18n.t('err_contract_save'));
+      setError(serverMessage(e) ?? i18n.t('err_contract_save'));
     } finally {
       setSaving(false);
     }
@@ -104,15 +160,59 @@ export function ContractModal({
             ))}
           </select>
         </div>
-        <div className="two-col">
-          <div className="field">
-            <label>اسم المستأجر</label>
-            <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="اسم المستأجر" />
-          </div>
-          <div className="field">
-            <label>الجوال</label>
-            <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05xxxxxxxx" />
-          </div>
+
+        <div className="field">
+          <label>المستأجر — عميلٌ من قائمة العملاء</label>
+          <input value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)} placeholder="اكتب للتصفية بالاسم أو الجوال..." />
+          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} size={Math.min(6, Math.max(2, visibleCustomers.length + 1))} style={{ marginTop: 6 }}>
+            <option value="">— اختر العميل —</option>
+            {visibleCustomers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.phone ? ` — ${c.phone}` : ''}
+              </option>
+            ))}
+          </select>
+          {!newCustomerOpen && (
+            <button type="button" className="btn btn-ghost" style={{ marginTop: 6 }} onClick={() => setNewCustomerOpen(true)}>
+              + عميلٌ جديد
+            </button>
+          )}
+          {newCustomerOpen && (
+            <div className="two-col" style={{ marginTop: 8 }}>
+              <div className="field">
+                <label>اسم العميل الجديد</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="اسم المستأجر" />
+              </div>
+              <div className="field">
+                <label>الجوال</label>
+                <input className="num" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="05xxxxxxxx" />
+              </div>
+              {sameNameAsk ? (
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <p className="hint">{sameNameAsk}</p>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" className="btn btn-ghost" onClick={() => setSameNameAsk(null)} disabled={creatingCustomer}>
+                      لا — أختاره من القائمة
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={() => createCustomerInline(true)} disabled={creatingCustomer}>
+                      نعم، شخصٌ آخر بالاسم نفسِه — أنشئه
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="field" style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => createCustomerInline(false)} disabled={creatingCustomer}>
+                    حفظ العميل واختياره
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setNewCustomerOpen(false); setCustomerError(null); }} disabled={creatingCustomer}>
+                    إلغاء
+                  </button>
+                </div>
+              )}
+              {customerError && <p className="error-text" style={{ gridColumn: '1 / -1' }}>{customerError}</p>}
+            </div>
+          )}
         </div>
         <div className="two-col">
           <div className="field">

@@ -40,6 +40,8 @@ export interface Contract {
   unitId: string;
   unit: Unit & { property: { id: string; name: string } };
   customerId: string | null;
+  /** بطاقةُ العميل — مصدرُ الحقيقة؛ `tenant`/`phone` أدناه مشتقّان منها عند القراءة (ق-١٠٢٨/①⑥). */
+  customer?: { id: string; name: string; phone: string | null; archived: boolean } | null;
   no: string;
   ejarNo: string | null;
   tenant: string;
@@ -211,8 +213,8 @@ export interface SettleDepositInput {
 
 export interface CreateContractInput {
   unitId: string;
-  tenant: string;
-  phone?: string;
+  /** المستأجرُ عميلٌ يُختار بمعرّفه — لا اسمٌ ولا هاتفٌ يُرسَلان (ق-١٠٢٨/①). */
+  customerId: string;
   value: number;
   cycle: ContractCycle;
   start: string;
@@ -231,8 +233,8 @@ export interface UpdateContractInput {
   /** لعقدٍ قديم: إلزاميان قبل أي تعديل — الخادمُ يرفض بدونهما. */
   classification?: DeclaredClassification;
   vatInclusion?: DeclaredVatInclusion;
-  tenant?: string;
-  phone?: string;
+  /** تغييرُ الطرف بمعرّفه — قبل أوّل ترحيلٍ فقط، والخادمُ يرفض بعده برسالةٍ تسمّي المخرج (ق-١٠٢٨/③). */
+  customerId?: string;
   services?: string;
   furnished?: Furnished;
   ejarNo?: string;
