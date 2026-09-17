@@ -7,9 +7,11 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
+import { CreateSupplierNoteDto } from './dto/create-supplier-note.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { PurchasesService } from './purchases.service';
 import { PurchaseAttachmentsService } from './purchase-attachments.service';
+import { SupplierNotesService } from './supplier-notes.service';
 import { MAX_FILE_BYTES } from '../files/files.service';
 
 @Controller('purchases')
@@ -19,7 +21,22 @@ export class PurchasesController {
   constructor(
     private readonly purchasesService: PurchasesService,
     private readonly attachments: PurchaseAttachmentsService,
+    private readonly supplierNotes: SupplierNotesService,
   ) {}
+
+  // ---- إشعاراتُ المورّد (`ق-١٠٠٦`) — مستندُه يُسجَّل على شرائه، وقيدُه قيدُنا ----
+
+  @Post(':id/supplier-credit-note')
+  @RequiresAction('add')
+  supplierCreditNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto) {
+    return this.supplierNotes.issueCreditNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
+
+  @Post(':id/supplier-debit-note')
+  @RequiresAction('add')
+  supplierDebitNote(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateSupplierNoteDto) {
+    return this.supplierNotes.issueDebitNote(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
 
   /** تقرير مصاريف التأسيس. Declared before the plain list so the router never
    * reads "incorporation-report" as anything else. */

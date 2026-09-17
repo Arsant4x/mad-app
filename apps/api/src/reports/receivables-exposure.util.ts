@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { requestedBranchFilter } from '../branches/branch-scope.util';
+import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { round2 } from '../common/money/rounding';
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 
@@ -193,7 +194,7 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   const unappliedByCustomer = new Map<string, number>();
   for (const n of notes) {
     const base = Number(n.baseTotal);
-    const signed = n.docType === 'CREDIT_NOTE' ? -base : base;
+    const signed = adjustmentSign(n.docType, 'CREDIT_NOTE') * base;
     const root = n.relatedInvoiceId ? rootInvoiceOf(n.relatedInvoiceId) : null;
     if (root) noteAdjustment.set(root, (noteAdjustment.get(root) ?? 0) + signed);
     else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);

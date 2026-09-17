@@ -17,7 +17,8 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
     [allForSupplier, from, to],
   );
 
-  const totalBilled = filtered.reduce((s, p) => s + Number(p.total), 0);
+  // إشعارُ المورّد الدائن يخفّض ما فُوتر — بإشارته (المبالغُ مخزَّنةٌ موجبةً والنوعُ يحمل الاتجاه).
+  const totalBilled = filtered.reduce((s, p) => s + (p.docType === 'SUPPLIER_CREDIT_NOTE' ? -1 : 1) * Number(p.total), 0);
   // المسدَّدُ من تخصيصات سندات الصرف كما يحسبه الخادم (ق-٨٧٢) — لا من علَمٍ على الصفّ.
   const totalPaid = filtered.reduce((s, p) => s + Number(p.allocated), 0);
   const totalDue = totalBilled - totalPaid;

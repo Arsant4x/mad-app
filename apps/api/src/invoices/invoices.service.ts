@@ -9,6 +9,14 @@ import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/
 import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
 import { issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@prisma/client';
+import {
+  assertAdjustableTarget,
+  assertReturnLinesBelong,
+  assertWithinRemaining,
+  linesFromOriginal,
+  outstandingAfterNotes,
+  type NoteKinds,
+} from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { computeDocumentTotals } from '../common/money/totals';
@@ -33,6 +41,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
 import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/domain-events';
+
+/** أنواعُ مستند البيع — الأساسُ وإشعاراه؛ نظيرُها في الشراء `PURCHASE_NOTE_KINDS` (المصدرُ الواحد `ق-١٠٠٨`/١). */
+const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = { base: 'INVOICE', credit: 'CREDIT_NOTE', debit: 'DEBIT_NOTE' };
 
 /** `relatedInvoice` so a credit note can show which invoice it adjusts
  * without a second round-trip — number only, never the whole document.
@@ -92,17 +103,15 @@ export class InvoicesService {
     creditedByInvoiceId: Map<string, number>,
     allocatedByInvoiceId: Map<string, number>,
   ): number {
-    if (inv.docType === 'CREDIT_NOTE') return 0;
     // المردودةُ التي صدر بدلُها لا ذمّةَ عليها — ذمّتُها انتقلت إلى البدل (`ق-٩٦٧/١`).
     if (isReplacedRejected(inv)) return 0;
     if (inv.status === 'PAID') return 0;
-    // الدائنُ يخفّض فاتورتَه — أو الإشعارَ المدينَ الذي يصحّحه (`ق-٩٥٢`).
+    // الدائنُ يخفّض فاتورتَه — أو الإشعارَ المدينَ الذي يصحّحه (`ق-٩٥٢`)؛ والمقبوض يُطرح كما يُطرح
+    // الإشعار الدائن — وإغفاله كان يجعل الفاتورة المسدَّدة جزئياً تُحتسب بكامل قيمتها (قاعدة 4.5).
+    // المصدرُ الواحد ⑥ مع متبقّي الشراء (`ق-١٠٠٨`/١).
     const credited = creditedByInvoiceId.get(inv.id) ?? 0;
-    // المقبوض يُطرح كما يُطرح الإشعار الدائن — وإغفاله كان يجعل الفاتورة
-    // المسدَّدة جزئياً تُحتسب بكامل قيمتها، فيطالَب العميل بما دفعه.
-    // (قاعدة 4.5: أي رقم يعرض «المتبقي» يُحسب من التخصيصات لا من حقل.)
     const allocated = allocatedByInvoiceId.get(inv.id) ?? 0;
-    return Math.max(0, round2(Number(inv.total) - credited - allocated));
+    return outstandingAfterNotes(inv, credited, allocated, 'CREDIT_NOTE');
   }
 
   list(companyId: string, allowedBranchIds: string[] | 'all') {
@@ -782,50 +791,30 @@ export class InvoicesService {
       // دائنٌ على مدينٍ زائد (`ق-٩٥٢`): يعكس فوترةً إضافية لا بيعاً — فلا مرتجعَ فيه ولا رفّ.
       const correctsDebitNote = original.docType === 'DEBIT_NOTE';
 
+      // المصدرُ الواحد ② — والصنفُ يُنقل مع السطر: إشعارٌ دائن يفقد صنفه يعكس الإيراد ولا يستطيع عكس
+      // تكلفته. وإشعارٌ كامل = مرتجعٌ كامل سليم (`SPEC 30.4`): كل سطرٍ يشير إلى أصله ويعود إلى الرفّ.
       const lines: InvoiceLineDto[] =
-        dto.lines ??
-        original.lines.map((l) => ({
-          description: l.description,
-          // ⚠️ يُنقل الصنف مع السطر: إشعارٌ دائن يفقد صنفه يعكس الإيراد ولا
-          // يستطيع عكس تكلفته — فيبقى المخزون منقوصاً بلا مقابل.
-          productId: l.productId ?? undefined,
-          quantity: Number(l.quantity),
-          unitPrice: Number(l.unitPrice),
-          taxRate: Number(l.taxRate),
-          // إشعارٌ كامل = مرتجعٌ كامل سليم (`SPEC 30.4`): كل سطرٍ يشير إلى أصله ويعود إلى الرفّ.
-          ...(correctsDebitNote ? {} : { returnsLineId: l.id, returnCondition: 'GOOD' as const }),
-        }));
+        dto.lines ?? linesFromOriginal(original.lines, (l) => (correctsDebitNote ? {} : { returnsLineId: l.id, returnCondition: 'GOOD' as const }));
       if (correctsDebitNote && lines.some((l) => l.returnsLineId)) throw new BadRequestException(MSG.return_line_not_original);
 
-      // `SPEC 30.2`: سطرُ مرتجعٍ يشير إلى سطرٍ من **هذه** الفاتورة الأصلية وحدها، وبكميةٍ لا
-      // تتجاوز ما فُوتر فيه — والتراكم عبر الإشعارات السابقة يفحصه `returnStockedLines` من
-      // الحركات. سطرٌ بلا `returnsLineId` إشعارٌ محاسبيّ لا يمسّ المخزون.
-      const originalLines = new Map(original.lines.map((l) => [l.id, l]));
-      for (const l of lines) {
-        if (!l.returnsLineId) continue;
-        const source = originalLines.get(l.returnsLineId);
-        if (!source) throw new BadRequestException(MSG.return_line_not_original);
-        if (l.quantity > Number(source.quantity) + 1e-9) {
-          throw new BadRequestException(formatMessage(MSG.return_exceeds_sold, { sold: Number(source.quantity), returned: 0, requested: l.quantity }));
-        }
-        if (source.productId && l.productId && l.productId !== source.productId) throw new BadRequestException(MSG.return_line_not_original);
-      }
+      // `SPEC 30.2` (المصدرُ الواحد ③): سطرُ مرتجعٍ يشير إلى سطرٍ من **هذه** الفاتورة الأصلية وحدها، وبكميةٍ
+      // لا تتجاوز ما فُوتر فيه — والتراكم عبر الإشعارات السابقة يفحصه `returnStockedLines` من الحركات.
+      // سطرٌ بلا `returnsLineId` إشعارٌ محاسبيّ لا يمسّ المخزون.
+      assertReturnLinesBelong(
+        lines.map((l) => ({ returnsId: l.returnsLineId, productId: l.productId, quantity: l.quantity })),
+        original.lines,
+        { notOriginal: MSG.return_line_not_original, exceeds: MSG.return_exceeds_sold },
+      );
       const totals = computeTotals(lines);
 
-      // All credit notes on one invoice together must not exceed what it
-      // billed — crediting more than was ever invoiced is a bookkeeping
-      // error, not a judgment call. (No such cap exists for debit notes:
-      // additional billing has no arithmetic ceiling.)
+      // All credit notes on one invoice together must not exceed what it billed — crediting more
+      // than was ever invoiced is a bookkeeping error, not a judgment call (المصدرُ الواحد ④). (No
+      // such cap exists for debit notes on an invoice: additional billing has no arithmetic ceiling.)
       const already = await tx.invoice.aggregate({
         where: { relatedInvoiceId: invoiceId, docType: 'CREDIT_NOTE' },
         _sum: { total: true },
       });
-      // Both sides rounded to the money scale before comparing: `remaining`
-      // comes back from Decimal columns, `totals.total` from computeTotals.
-      // The epsilon then only absorbs float representation, not a rounding
-      // difference — which is what used to reject a legitimate full credit.
-      const remaining = round2(Number(original.total) - Number(already._sum.total ?? 0));
-      if (round2(totals.total) > remaining + 0.001) throw new BadRequestException(MSG.credit_note_exceeds_remaining);
+      assertWithinRemaining(totals.total, Number(original.total), Number(already._sum.total ?? 0), MSG.credit_note_exceeds_remaining);
 
       return this.createAdjustmentNote(tx, companyId, original, {
         docType: 'CREDIT_NOTE',
@@ -863,8 +852,7 @@ export class InvoicesService {
       // منه بعد ما صُحِّح قبلَه. (على الفاتورة نفسِها لا سقفَ: فوترةٌ إضافية بلا حدٍّ حسابيّ.)
       if (original.docType === 'CREDIT_NOTE') {
         const already = await tx.invoice.aggregate({ where: { relatedInvoiceId: invoiceId, docType: 'DEBIT_NOTE' }, _sum: { total: true } });
-        const remaining = round2(Number(original.total) - Number(already._sum.total ?? 0));
-        if (round2(totals.total) > remaining + 0.001) throw new BadRequestException(MSG.credit_note_exceeds_remaining);
+        assertWithinRemaining(totals.total, Number(original.total), Number(already._sum.total ?? 0), MSG.credit_note_exceeds_remaining);
       }
       return this.createAdjustmentNote(tx, companyId, original, {
         docType: 'DEBIT_NOTE',
@@ -897,10 +885,14 @@ export class InvoicesService {
   ) {
     const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: true } });
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
-    const opposite = noteKind === 'CREDIT_NOTE' ? 'DEBIT_NOTE' : 'CREDIT_NOTE';
-    if (original.docType !== 'INVOICE' && original.docType !== opposite) throw new BadRequestException(MSG.credit_note_target_invalid);
-    // ⚖️ لا إشعارَ على مردودة (`ق-٩٥٨`): ليست فاتورةً صحيحة، ومخرجُها بدلٌ — ثم يُصحَّح البدلُ إن لزم.
-    if (original.zatcaStatus === 'REJECTED') throw new BadRequestException(MSG.credit_note_target_rejected);
+    // المصدرُ الواحد مع إشعار المورّد (`ق-١٠٠٨`/١ — ①). ⚖️ ولا إشعارَ على مردودة (`ق-٩٥٨`): ليست فاتورةً
+    // صحيحة، ومخرجُها بدلٌ — ثم يُصحَّح البدلُ إن لزم.
+    assertAdjustableTarget(
+      { docType: original.docType, closed: original.zatcaStatus === 'REJECTED' },
+      noteKind === 'CREDIT_NOTE' ? 'credit' : 'debit',
+      INVOICE_NOTE_KINDS,
+      { invalid: MSG.credit_note_target_invalid, closed: MSG.credit_note_target_rejected },
+    );
     assertBranchAllowed(allowedBranchIds, original.branchId);
     return original;
   }

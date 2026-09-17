@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { PurchaseLineDto } from './purchase-line.dto';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
@@ -15,6 +15,12 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  /** رقمُ فاتورة المورّد كما على ورقته — مرجعٌ خارجيٌّ يُسجَّل، لا رقمٌ نُصدره (`ق-١٠٠٦`/①). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  supplierRef?: string;
 
   /** لافتةٌ حرّة — تُقبل للتوافق مع عملاء قدامى، ويُشتقّ منها الرمز. */
   @IsOptional()

@@ -16,7 +16,8 @@ import {
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { mirrorBankMovement, postSupplierPaymentEntry } from '../journal/auto-posting.util';
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, SupplierAllocationDto } from './dto/supplier-payment.dto';
-import { purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
+import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
+import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 
 const SUPPLIER_PAYMENT_INCLUDE = {
   supplier: { select: { id: true, name: true } },
@@ -76,12 +77,19 @@ export class SupplierPaymentsService {
    */
   openPurchases(companyId: string, supplierId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // الإشعارُ الدائن من المورّد `PAID` بطبيعته فلا يدخل؛ والمدينُ مستحقٌّ يُسدَّد كالشراء (`ق-١٠٠٦`/②).
       const purchases = await tx.purchase.findMany({
         where: { supplierId, status: { not: 'PAID' } },
-        select: { id: true, no: true, date: true, dueDate: true, total: true, currency: true, status: true },
+        select: { id: true, no: true, date: true, dueDate: true, total: true, currency: true, status: true, docType: true },
         orderBy: { date: 'asc' },
       });
-      return withRemaining(purchases, await allocatedByDocument(purchaseTarget(tx), purchases.map((p) => p.id)));
+      const ids = purchases.map((p) => p.id);
+      // المتبقّي بعد ما ائتمن به المورّد — المصدرُ الواحد ⑥ مع الفاتورة (`ق-١٠٠٨`/١).
+      const credited = await creditedByPurchase(tx, ids);
+      return withRemaining(purchases, await allocatedByDocument(purchaseTarget(tx), ids)).map((p) => {
+        const creditedTotal = credited.get(p.id) ?? 0;
+        return { ...p, credited: creditedTotal, remaining: outstandingAfterNotes(p, creditedTotal, p.allocated, 'SUPPLIER_CREDIT_NOTE') };
+      });
     });
   }
 

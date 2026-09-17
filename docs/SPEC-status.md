@@ -5,18 +5,18 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 273 |
-| منها في جداولٍ لها عمودُ حالة | 179 |
-| تقول الوثيقة ✅ | 80 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 74 |
-| ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 6 (منها 6 معلَنة) |
+| بنود SPEC | 274 |
+| منها في جداولٍ لها عمودُ حالة | 180 |
+| تقول الوثيقة ✅ | 84 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 79 |
+| ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 5 (منها 5 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 150 / 890 |
+| اختباراتٌ موسومة / كل الاختبارات | 160 / 1500 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
 | 1.1 | تسجيل دخول آمن (argon2) | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.1] resets by token: single-use, kills old password and old sessions (e2e)<br>`api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.1] rejects an expired token outright (e2e) |
-| 1.2 | عزل المنشآت بطبقتين (App + RLS) | ✅ | ✅ | `api/src/common/tenant/rls-coverage.live.spec.ts` :: [SPEC 1.2] ⭐ كل جدول مستأجر يحمل `ENABLE` و`FORCE` — من كتالوج القاعدة (حيّ)<br>`api/src/purchases/purchase-lines.live.spec.ts` :: [SPEC 1.2] ⭐ ③ والعزل: بندُ منشأةٍ لا يُقرأ من سياق منشأةٍ أخرى (حيّ) |
+| 1.2 | عزل المنشآت بطبقتين (App + RLS) | ✅ | ✅ | `api/src/common/tenant/rls-coverage.live.spec.ts` :: [SPEC 1.2] ⭐ كل جدول مستأجر يحمل `ENABLE` و`FORCE` — من كتالوج القاعدة (حيّ)<br>`api/src/purchases/purchase-lines.live.spec.ts` :: [SPEC 1.2] ⭐ ③ والعزل: بندُ منشأةٍ لا يُقرأ من سياق منشأةٍ أخرى (حيّ)<br>`api/test/supplier-payments.e2e-spec.ts` :: [SPEC 1.2] a supplier payment is invisible to another company (e2e) |
 | 1.3 | قوالب صلاحيات (نماذج) | ✅ | ✅ | `api/src/delegations/me-permissions.spec.ts` :: [SPEC 1.3] ⭐ شاشةٌ مسموحة بلا تفصيل أفعال ⇒ **كل** أفعالها لا صفر (وحدة)<br>`api/src/delegations/me-permissions.spec.ts` :: [SPEC 1.3] التفصيل الصريح يضيّق إلى ما فيه وحده (وحدة)<br>`api/src/delegations/me-permissions.spec.ts` :: [SPEC 1.3] ⭐ لا تخترع زوجاً ترفضه `isActionAllowed` — ولا تُسقط زوجاً تقبله (وحدة) |
 | 1.4 | حسابات موظفين بصلاحيات محدودة | ✅ | ✅ | `api/test/owner-templates.e2e-spec.ts` :: [SPEC 1.4 1.5] that template governs the employee it is assigned to (e2e)<br>`api/test/permission-actions.e2e-spec.ts` :: [SPEC 1.4] a view-only employee reads contracts but cannot create one (e2e)<br>`api/test/permission-actions.e2e-spec.ts` :: [SPEC 1.4] a view+add employee gets past the guard on create (reaches validation, not 403) (e2e) |
 | 1.5 | حراسة الشاشات (ScreenGuard) | ✅ | ✅ | `api/test/owner-templates.e2e-spec.ts` :: [SPEC 1.4 1.5] that template governs the employee it is assigned to (e2e)<br>`api/test/sector-screens.e2e-spec.ts` :: [SPEC 1.5] ⭐④ التطبيق يُرشِّح — والعنوان المباشر يُرفض بـ403 لا 404 (e2e)<br>`api/test/sector-screens.e2e-spec.ts` :: [SPEC 1.5] ⭐⑥ موظفٌ يعمل على شاشة ثم يُعطَّل نشاطها — يُرفض في **الطلب التالي** بلا إعادة دخول (e2e) |
@@ -24,9 +24,9 @@
 | 1.7 | التسجيل الذاتي للعميل | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation (e2e)<br>`api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7] refuses a taken username (e2e) |
 | 1.8 | OTP: تسجيل · جهاز جديد · عملية حساسة | ⬜ | ⬜ | — |
 | 1.9 | قفل المستخدم (User Lock) للكاشير | ⬜ | ⬜ | — |
-| 1.10 | وضع الدعم الفني بإذن العميل + سجل | ✅ | ✅ | `api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] no consent, no entry — with or without the header (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] the owner approves → read opens, writes stay closed (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] every support request lands in the owner-visible log, named and reasoned (e2e) |
-| 1.11 | **جديد (v20):** تذاكر دعم داخلية للعميل (قسم · أولوية · مسؤول · حالة) — مختلفة عن 1.10 (تل | ⬜ | ⬜ | — |
-| 2.1 | بيانات المنشأة (اسم · ضريبي · سجل · عنوان) | ✅ | ✅ | `api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] updates and reads back company A profile (e2e)<br>`api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] stores the national address as separate parts, not one line (e2e)<br>`api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] rejects an invalid VAT number (not 15 digits / wrong prefix-suffix) (e2e) |
+| 1.10 | وضع الدعم الفني بإذن العميل + سجل | ✅ | ✅ | `api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] no consent, no entry — with or without the header (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] the owner approves → read opens, writes stay closed (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] 🔴 the scope is enforced: outside it 403, undeclared routes 403, the shell 200 (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] every support request lands in the owner-visible log, named and reasoned (e2e)<br>`api/test/support-access.e2e-spec.ts` :: [SPEC 1.10] 🔴 a second platform admin cannot enter on another admin\'s consent (e2e) |
+| 1.11 | **جديد (v20):** تذاكر دعم داخلية للعميل (قسم · أولوية · مسؤول · حالة) — مختلفة عن 1.10 (تل | ✅ | ✅ | `api/test/tasks.e2e-spec.ts` :: [SPEC 1.11] ⭐⑪ تعليقٌ بلا انتقال — سطرٌ في السجل لا يغيّر الحالة، لطرفَي المهمّة وحدهما (e2e) |
+| 2.1 | بيانات المنشأة (اسم · ضريبي · سجل · عنوان) | ✅ | ✅ | `api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] updates and reads back company A profile (e2e)<br>`api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] stores the national address as separate parts, not one line (e2e)<br>`api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] rejects an invalid VAT number (not 15 digits / wrong prefix-suffix) (e2e)<br>`api/test/company-profile.e2e-spec.ts` :: [SPEC 2.1] يقبل تعديلاً جزئياً بلا legalName — ويترك الاسم كما هو (e2e) |
 | 2.2 | شعار المنشأة | ✅ | ✅ | `api/test/company-profile.e2e-spec.ts` :: [SPEC 2.2 11.3] attaches an uploaded logo, serves it back, and clears it on request (e2e) |
 | 2.3 | العنوان الوطني (7 حقول رسمية) | 🟨 | ⬜ | — |
 | 2.4 | **الفروع — المستوى 2** | ✅ | ✅ | `api/test/branches.e2e-spec.ts` :: [SPEC 2.4] lets the owner see every branch (e2e)<br>`api/test/branches.e2e-spec.ts` :: [SPEC 2.4] rejects a duplicate branch name within the company (e2e) |
@@ -59,7 +59,7 @@
 | 4.9 | عروض الأسعار | ⬜ | ⬜ | — |
 | 5.1 | سجل الموردين | ✅ | ✅ | `api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1] creates a supplier, rejects a duplicate name, and keeps it invisible to company B (e2e)<br>`api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists (e2e) |
 | 5.2 | فواتير المشتريات | ✅ | ✅ | `api/src/purchases/purchase-lines.live.spec.ts` :: [SPEC 5.2] ⭐ ① شراءٌ ببندين — مخزنيٍّ وخدميٍّ — يُحفظ ويُقرأ (حيّ) |
-| 5.3 | المدفوعات والذمم الدائنة | ✅ | ✅ | `api/test/default-chart.e2e-spec.ts` :: [SPEC 5.3] مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches (e2e) |
+| 5.3 | المدفوعات والذمم الدائنة | ✅ | ✅ | `api/test/default-chart.e2e-spec.ts` :: [SPEC 5.3] مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches (e2e)<br>`api/test/supplier-payments.e2e-spec.ts` :: [SPEC 5.3 10.3] 1,000 purchase → 400 payment (600 · PARTIAL) → 600 payment (0 · PAID) → reversal (600 · PARTIAL): 2100 and the cash-flow report follow every step (e2e) |
 | 5.4 | استثناء من الضريبة (`excludeFromVat`) | ✅ | ✅ | `api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.4] an excluded purchase never reduces the VAT owed, and is reported apart (e2e)<br>`api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.4] stores excludeFromVat on the purchase itself (e2e) |
 | 5.5 | مصروف مؤجَّل/تأسيس (`amortize`) | ✅ | ✅ | `api/test/incorporation-report.e2e-spec.ts` :: [SPEC 5.5] counts only establishment purchases, grouped by line item (e2e)<br>`api/test/incorporation-report.e2e-spec.ts` :: [SPEC 5.5] labels an amortized item with its period, and counts it (e2e)<br>`api/test/purchase-vat-amortize.e2e-spec.ts` :: [SPEC 5.5] amortization is establishment-only, and needs a month count (e2e) |
 | 5.6 | أوامر الشراء | ⬜ | ⬜ | — |
@@ -75,11 +75,12 @@
 | 6.10 | تنبيه قرب انتهاء الترخيص/السجل | ⬜ | ⬜ | — |
 | 6.11 | جدولة الالتزامات المتكررة | ⬜ | ⬜ | — |
 | 6.12 | الزكاة وضريبة الدخل | ⬜ | ⬜ | — |
-| 7.1 | حسابات بنكية متعددة | ✅ | ✅ | `api/test/banks-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and preserves balance drift when opening balance is edited (e2e)<br>`api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] adjusts the linked bank balance on create/update/delete and stays invisible to company B (e2e) |
-| 7.2 | الحركات البنكية | ✅ | ✅ | `api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] adjusts the linked bank balance on create/update/delete and stays invisible to company B (e2e) |
+| 7.1 | حسابات بنكية متعددة | ✅ | ✅ | `api/test/banks-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and posts a delta entry when the opening balance is edited (e2e)<br>`api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] leaves the bank balance to the ledger and stays invisible to company B (e2e) |
+| 7.2 | الحركات البنكية | ✅ | ✅ | `api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] leaves the bank balance to the ledger and stays invisible to company B (e2e) |
 | 7.3 | الصندوق النقدي | ✅ | ✅ | `api/test/contract-cashbox-payment.e2e-spec.ts` :: [SPEC 7.3] a cash receipt naming a box raises that box balance (e2e)<br>`api/test/payments.e2e-spec.ts` :: [SPEC 3.3 7.3 7.5] posts a balanced entry (debit cash / credit A-R) and raises the branch cash box (e2e)<br>`api/test/pos.e2e-spec.ts` :: [SPEC 7.3] closes the shift computing the variance itself — and blocks further sales (e2e) |
 | 7.4 | التسوية البنكية | 🟨 | ⬜ | — |
 | 7.5 | صندوق مستقل لكل فرع | ✅ | ✅ | `api/test/payments.e2e-spec.ts` :: [SPEC 3.3 7.3 7.5] posts a balanced entry (debit cash / credit A-R) and raises the branch cash box (e2e) |
+| 7.6 | **ترحيلُ البنك إلى الأستاذ** *(حسابٌ لكل بنك · حركةٌ تُنتج قيداً · رصيدٌ مشتقّ)* | ⬜ | ⬜ | — |
 | 8.1 | المنتجات والأصناف | ✅ | ✅ | `api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.1 8.10] flags low and out-of-stock status based on Product.minStock, and allows going negative as a soft warning only (e2e)<br>`api/test/products-tenant-isolation.e2e-spec.ts` :: [SPEC 8.1] auto-generates a barcode when none is given, and keeps the product invisible to and unreachable by company B (e2e) |
 | 8.2 | المستودعات | ✅ | ✅ | `api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.2 8.10] computes on-hand quantity live from IN/OUT/TRANSFER/ADJUSTMENT movements, with no stored balance (e2e)<br>`api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.2] blocks deleting a warehouse that still has stock movements (e2e)<br>`api/test/pos.e2e-spec.ts` :: [SPEC 8.2 8.10] deducts branch-warehouse stock inside the sale — untracked lines are skipped explicitly (e2e) |
 | 8.3 | حركات المخزون | ✅ | ✅ | `api/src/inventory/quantity-precision.live.spec.ts` :: [SPEC 8.3] ⭐ 100.125 تُخزَّن كما هي — لا 100.13 (حيّ) |
@@ -103,7 +104,7 @@
 | 9.8 | تتبّع المتقدمين للوظائف (ATS) | ⬜ | ⬜ | — |
 | 10.1 | الميزانية العمومية | ✅ | ⬜ (دَين معلَن) | ⚠️ الميزانية العمومية — reports-tenant-isolation.e2e-spec.ts:162 يوكّد بنية الردّ لا رقماً محسوباً ولا معادلة الميزانية. يلزم اختبارٌ يرحّل قيداً ويقيس أثره. |
 | 10.2 | قائمة الدخل | ✅ | ✅ | `api/test/reports-tenant-isolation.e2e-spec.ts` :: [SPEC 10.2] a journal entry posted for company A shows up in A's income statement but never in B's (e2e) |
-| 10.3 | التدفق النقدي | ✅ | ⬜ (دَين معلَن) | ⚠️ التدفق النقدي — المسار محروسٌ بـ401 فقط (reports-tenant-isolation.e2e-spec.ts:44)؛ لا اختبار يستدعيه موثَّقاً. يلزم اختبار. |
+| 10.3 | التدفق النقدي | ✅ | ✅ | `api/test/supplier-payments.e2e-spec.ts` :: [SPEC 5.3 10.3] 1,000 purchase → 400 payment (600 · PARTIAL) → 600 payment (0 · PAID) → reversal (600 · PARTIAL): 2100 and the cash-flow report follow every step (e2e) |
 | 10.4 | ميزان المراجعة | ✅ | ✅ | `api/test/opening-balance-entries.e2e-spec.ts` :: [SPEC 10.4] carries the opening amounts into the trial balance, which stays balanced (e2e)<br>`api/test/trial-balance.e2e-spec.ts` :: [SPEC 10.4] balances by construction and honors the period filter (e2e)<br>`api/test/trial-balance.e2e-spec.ts` :: [SPEC 10.4] honors the branch filter — the branchless entry disappears (e2e) |
 | 10.5 | **لوحة تحكم بمؤشرات** | 🟨 | ⬜ | — |
 | 10.6 | **مقارنة بالفترة السابقة (+18%)** | ⬜ | ⬜ | — |
@@ -142,7 +143,7 @@
 | 13.11 | إرسال جماعي للعملاء | ⬜ | ⬜ | — |
 | 13.12 | قنوات متعددة (واتساب · SMS · بريد) | ⬜ | ⬜ | — |
 | 14.1 | **قائمة مهام موحّدة (صيانة · دفعات · عقود)** | ⬜ | ⬜ | — |
-| 14.2 | أولوية المهمة (عاجل · مرتفع · عادي) | ⬜ | ⬜ | — |
+| 14.2 | أولوية المهمة (عاجل · مرتفع · عادي) | ✅ | ✅ | `api/test/tasks.e2e-spec.ts` :: [SPEC 14.2] ⭐⑩ الأولويةُ من قائمةٍ مغلقة — تُحفظ وتُعرض للمكلَّف، والمخترَعةُ تُرفض، والافتراضُ عادي (e2e) |
 | 14.3 | حالة المهمة (مفتوح · قيد التنفيذ · مكتمل) | ⬜ | ⬜ | — |
 | 14.4 | **المهام المتكررة** | ⬜ | ⬜ | — |
 | 14.5 | تعيين المهمة لموظف | ⬜ | ⬜ | — |
@@ -156,13 +157,13 @@
 | 15.6 | باقات جاهزة أو باقة يصممها العميل | ⬜ | ⬜ | — |
 | 15.7 | تجربة مجانية | ✅ | ✅ | `api/test/auth-selfservice.e2e-spec.ts` :: [SPEC 1.7 15.7] registers a merchant with an immediate session, a trial, and full isolation (e2e) |
 | 15.8 | تسعير معلن وشفاف | ⬜ | ⬜ | — |
-| 30.1 | **نوعان:** مرتجع مبيعات ⇒ **إشعار دائن** · مرتجع مشتريات ⇒ **إشعار مدين** | 🟨 | ⬜ | — |
+| 30.1 | **نوعان:** مرتجع مبيعات ⇒ **إشعار دائن** · مرتجع مشتريات ⇒ **إشعار مدين** | ✅ | ✅ | `api/test/supplier-notes.e2e-spec.ts` :: [SPEC 30.1] ② إعادةُ ٤ إلى المورّد بإشعاره الدائن — تخرج من طبقتها الأصلية، والذمّةُ والمدخلاتُ والإقرارُ تنخفض بإشارتها (e2e) |
 | 30.2 | **مرتبط بفاتورة أصلية إلزاماً** — لا مرتجع معلّق | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.2] سطرُ المرتجع يشير إلى سطرٍ من الفاتورة الأصلية نفسها — لا من فاتورةٍ أخرى (e2e) |
 | 30.3 | **إرجاع جزئي** مدعوم | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.3] إرجاعٌ جزئي يعيد جزءه — ولا يُرجَع عبر إشعاراتٍ متتابعة أكثر ممّا بِيع (e2e) |
 | 30.4 | **سليمة** → تعود للمخزون المتاح | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.4] إشعارٌ دائن كامل يعيد البضاعة السليمة إلى الرفّ ويعكس تكلفتها بقيدٍ مستقل (e2e) |
-| 30.5 | **تالفة** → مصروف تلف **بسبب إلزامي** | ⬜ | ⬜ | — |
+| 30.5 | **تالفة** → مصروف تلف **بسبب إلزامي** | ✅ | ✅ | `api/test/inventory-write-offs.e2e-spec.ts` :: [SPEC 30.5] السبب إلزاميّ ويُقرأ من مصدره — والرمز المجهول يُرَدّ باسمه (e2e)<br>`api/test/inventory-write-offs.e2e-spec.ts` :: [SPEC 30.5] التسجيل لا يمسّ المخزون ولا الدفتر — والاعتماد هو الحدث، بقيدٍ بلا ضريبة (e2e) |
 | 30.6 | **قابلة للإصلاح** → مخزون «قيد الفحص» **غير متاح للبيع** | ⬜ | ⬜ | — |
-| 30.7 | **صلاحية منفصلة للتالف** — الكاشير يسجّل المرتجع **ولا يقرّر التلف** | ⬜ | ⬜ | — |
+| 30.7 | **صلاحية منفصلة للتالف** — الكاشير يسجّل المرتجع **ولا يقرّر التلف** | 🟨 | ⬜ | — |
 | 30.8 | الردّ **نقداً أو رصيداً** — وإن كانت الفاتورة **غير مسدَّدة فالخصم منها إلزاماً** | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.8] لا ردٌّ نقدي على إشعارٍ لفاتورةٍ غير مسدَّدة — الخصم منها إلزاميّ (e2e)<br>`api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.8] الفاتورة المسدَّدة: سندُ ردٍّ مستقل مربوطٌ بالإشعار، بمبلغٍ سالب ورقمٍ RFD — ومرةً واحدة (e2e) |
 | 30.9 | **تقرير مرتجعات وتلف:** كم أُرجع · كم تلف · **ومن سجّله** | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.9] تقرير المرتجعات: كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ · ومن سجّله (e2e) |
 | 30.10 | 🔴 **طابور المزامنة الأوفلاين يشمل الإشعارات** — مربوطاً بمهلة **24 ساعة** | ⬜ | ⬜ | — |

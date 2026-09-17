@@ -1,10 +1,19 @@
 import { apiClient } from './client';
 import type { Supplier } from './suppliers';
 
+/** نوعُ مستند الشراء — الأصلُ وإشعارا المورّد عليه (`ق-١٠٠٦`): صفٌّ في الجدول نفسِه بنوعه، كإشعار البيع. */
+export type PurchaseDocType = 'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' | 'SUPPLIER_DEBIT_NOTE';
+
 export interface Purchase {
   id: string;
   branchId: string | null;
   no: string;
+  docType: PurchaseDocType;
+  /** الإشعاراتُ وحدَها: الشراءُ (أو الإشعارُ المقابل) الذي يصحّحه. */
+  relatedPurchaseId: string | null;
+  adjustmentReason: string | null;
+  /** رقمُ مستند المورّد كما على ورقته — مرجعٌ خارجيٌّ لا رقمُنا. */
+  supplierRef: string | null;
   supplierId: string;
   supplier: Supplier;
   date: string;
@@ -23,6 +32,8 @@ export interface Purchase {
   status: PurchaseStatus;
   /** المسدَّدُ والمتبقّي — **محسوبان في الخادم من التخصيصات** لا من حقل. */
   allocated: number;
+  /** ما ائتمن به المورّد على هذا المستند بإشعاراته الدائنة — يخفّض المتبقّي كما يخفّضه الإشعارُ الدائن على الفاتورة. */
+  credited: number;
   remaining: number;
 }
 
@@ -34,6 +45,8 @@ export interface CreatePurchaseInput {
   branchId?: string;
   date: string;
   dueDate?: string;
+  /** رقمُ فاتورة المورّد — مرجعٌ خارجيٌّ يُسجَّل. */
+  supplierRef?: string;
   /** لافتةٌ حرّة للعرض. */
   category?: string;
   /** الرمز الذي يقرّر: الإطفاء · تقرير التأسيس · حساب الترحيل. */
@@ -53,6 +66,30 @@ export const listPurchases = () => apiClient.get<Purchase[]>('/purchases').then(
 export const createPurchase = (dto: CreatePurchaseInput) => apiClient.post<Purchase>('/purchases', dto).then((r) => r.data);
 export const updatePurchase = (id: string, dto: UpdatePurchaseInput) => apiClient.patch<Purchase>(`/purchases/${id}`, dto).then((r) => r.data);
 export const deletePurchase = (id: string) => apiClient.delete(`/purchases/${id}`);
+
+/** سطرُ إشعارٍ من المورّد — يشير إلى سطر الشراء الأصليّ، ويقول إن كانت البضاعةُ أُعيدت فعلاً أم أنه إشعارُ سعر. */
+export interface SupplierNoteLineInput {
+  description: string;
+  productId?: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number;
+  returnsPurchaseLineId?: string;
+  goodsReturned?: boolean;
+}
+
+/** إشعارٌ من المورّد على شراء — مستندُه يُسجَّل لا يُصدَر: سببُه وتاريخُه ورقمُه عنده، وبنودٌ أو الإشعارُ الكامل. */
+export interface SupplierNoteInput {
+  reason: string;
+  date?: string;
+  supplierRef?: string;
+  lines?: SupplierNoteLineInput[];
+}
+
+export const issueSupplierCreditNote = (purchaseId: string, dto: SupplierNoteInput) =>
+  apiClient.post<Purchase>(`/purchases/${purchaseId}/supplier-credit-note`, dto).then((r) => r.data);
+export const issueSupplierDebitNote = (purchaseId: string, dto: SupplierNoteInput) =>
+  apiClient.post<Purchase>(`/purchases/${purchaseId}/supplier-debit-note`, dto).then((r) => r.data);
 
 /** تقرير مصاريف التأسيس — grouped by line item, base currency. */
 export interface IncorporationReport {

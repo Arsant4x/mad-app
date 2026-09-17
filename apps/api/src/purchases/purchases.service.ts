@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
+import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
@@ -12,7 +13,7 @@ import { postPurchaseEntry, unpostIfLinked } from '../journal/auto-posting.util'
 import { receiveStockedLines } from './purchase-receipt.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
-import { purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
+import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 const PURCHASE_INCLUDE = { supplier: true, lines: true } as const;
@@ -38,8 +39,9 @@ function resolveAmortization(amortize: boolean, categoryCode: string | null | un
 }
 
 /** Always derive tax/total server-side from subtotal + exempt — never trust
- * a client-submitted amount (same reasoning as invoices). */
-function computeTax(subtotal: number, exempt: boolean) {
+ * a client-submitted amount (same reasoning as invoices). يستعمله إشعارُ المورّد أيضاً
+ * (`supplier-notes.service`) — فضريبةُ الشراء تُحسب بطريقةٍ واحدة في الجانبين. */
+export function computePurchaseTax(subtotal: number, exempt: boolean) {
   const tax = exempt ? 0 : subtotal * VAT_RATE;
   return { tax, total: subtotal + tax };
 }
@@ -56,10 +58,14 @@ export class PurchasesService {
   list(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const purchases = await tx.purchase.findMany({ where: branchFilter(allowedBranchIds), include: PURCHASE_INCLUDE, orderBy: { date: 'desc' } });
-      const allocated = await allocatedByDocument(purchaseTarget(tx), purchases.map((p) => p.id));
+      const ids = purchases.map((p) => p.id);
+      const allocated = await allocatedByDocument(purchaseTarget(tx), ids);
+      // ما ائتمن به المورّد يخفّض المتبقّي كما يخفّضه الإشعارُ الدائن على الفاتورة — المصدرُ الواحد ⑥ (`ق-١٠٠٨`/١).
+      const credited = await creditedByPurchase(tx, ids);
       return purchases.map((p) => {
         const paid = allocated.get(p.id) ?? 0;
-        return { ...p, allocated: paid, remaining: round2(Number(p.total) - paid) };
+        const creditedTotal = p.docType === 'SUPPLIER_CREDIT_NOTE' ? 0 : (credited.get(p.id) ?? 0);
+        return { ...p, allocated: paid, credited: creditedTotal, remaining: outstandingAfterNotes(p, creditedTotal, paid, 'SUPPLIER_CREDIT_NOTE') };
       });
     });
   }
@@ -87,7 +93,7 @@ export class PurchasesService {
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
     const exempt = dto.exempt ?? false;
-    const { tax, total } = computeTax(dto.subtotal, exempt);
+    const { tax, total } = computePurchaseTax(dto.subtotal, exempt);
     const { currency, exchangeRate } = resolveCurrency(dto);
     // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
     const categoryCode = toPurchaseCategoryCode(dto.categoryCode ?? dto.category);
@@ -110,6 +116,8 @@ export class PurchasesService {
             dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
             category: purchaseCategoryLabel(dto.categoryCode ?? dto.category),
             categoryCode,
+            // رقمُ فاتورة المورّد — مرجعٌ خارجيٌّ يُسجَّل لا رقمٌ يُصدَر (`ق-١٠٠٦`/①).
+            supplierRef: dto.supplierRef?.trim() || null,
             subtotal: dto.subtotal,
             taxAmount: tax,
             exempt,
@@ -189,11 +197,14 @@ export class PurchasesService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
+      // ⚖️ إشعارُ المورّد حدثٌ مرحَّل — لا يُعدَّل بعد ترحيله (`ق-١٠٠٦`/②)، والتصحيحُ بإشعارٍ مقابل.
+      if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;
       if (dto.date !== undefined) data.date = new Date(dto.date);
       if (dto.dueDate !== undefined) data.dueDate = new Date(dto.dueDate);
+      if (dto.supplierRef !== undefined) data.supplierRef = dto.supplierRef.trim() || null;
       const categoryGiven = dto.categoryCode !== undefined || dto.category !== undefined;
       if (categoryGiven) {
         const raw = dto.categoryCode ?? dto.category;
@@ -205,7 +216,7 @@ export class PurchasesService {
       if (amountsGiven) {
         const subtotal = dto.subtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
-        const { tax, total } = computeTax(subtotal, exempt);
+        const { tax, total } = computePurchaseTax(subtotal, exempt);
         // إجماليٌّ ينزل تحت ما سُدِّد عليه فعلاً يجعل الحالةَ تكذب (مسدَّدةٌ بأكثر من قيمتها)
         // — رفضٌ مسمّىً، والتصحيحُ بعكس السند أولاً.
         const paidSoFar = await allocatedFor(purchaseTarget(tx), id);
@@ -331,10 +342,18 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها**: الشراءُ الذي صدرت عليه إشعاراتٌ لا يُحذف — والعدُّ يقرأ إشعاراتِه في أيّ
+   * فرعٍ كانت، كما يُمنع حذفُ العميل بفواتيره في أيّ فرع؛ وعدٌّ مقصورٌ على فروع القارئ يحذف ما أُشير إليه.
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.purchase.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
+      // ⚖️ إشعارُ المورّد يُعكس ولا يُحذف (`ق-١٠٠٦`/②) — والشراءُ الذي صدرت عليه إشعاراتٌ يبقى (`Restrict`).
+      if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);
+      const notes = await tx.purchase.count({ where: { relatedPurchaseId: id } });
+      if (notes > 0) throw new ConflictException(formatMessage(MSG.purchase_has_notes, { no: existing.no }));
       // المفتاحُ `Restrict` يرفضها على كل حال — يُفحص هنا ليُردَّ `409` مسمّىً لا خطأَ قيدٍ خاماً:
       // شراءٌ عليه سندُ صرفٍ لا يُمحى وسندُه قائم، والتصحيحُ بعكس السند.
       const allocations = await tx.supplierPaymentAllocation.count({ where: { purchaseId: id } });
