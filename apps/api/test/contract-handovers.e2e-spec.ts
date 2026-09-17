@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * The condition-of-unit form. Its entire value is being unarguable later — so
@@ -53,7 +54,7 @@ describe('Contract handover forms (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التسليم ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التسليم ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',

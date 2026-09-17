@@ -41,7 +41,6 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { assertCustomerNotInTrash } from '../customers/customer-trash.util';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
@@ -51,6 +50,8 @@ const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
+  // بطاقةُ العميل — مصدرُ الحقيقة لاسم المستأجر وهاتفه (`ق-١٠٢٨`/①⑥)؛ الحقلان على العقد ذاكرةٌ مشتقّة.
+  customer: { select: { id: true, name: true, phone: true, archived: true } },
   installments: { orderBy: { dueDate: 'asc' as const } },
   payments: { orderBy: { date: 'desc' as const } },
   deposits: { include: { deductions: true }, orderBy: { receivedAt: 'asc' as const } },
@@ -67,6 +68,16 @@ const CONTRACT_INCLUDE = {
     orderBy: { date: 'asc' as const },
   },
 };
+
+/**
+ * **العميلُ مصدرُ الحقيقة لاسم المستأجر وهاتفه** (`ق-١٠٢٨`/①⑥): الحقلان على العقد ذاكرةٌ مشتقّةٌ تُكتب
+ * عند الربط وتُحدَّث في معاملة تعديل العميل — وعند القراءة يُقدَّم ما في بطاقته، فيُصحَّح ما افترق
+ * قبل هذا البناء بالاشتقاق لا بهجرةٍ تكتبه. عقدٌ بلا عميل (مسوّدةٌ قديمة) يُقرأ كما كُتب.
+ */
+function withPartyFromCustomer<T extends { tenant: string; phone: string | null; customer?: { name: string; phone: string | null } | null }>(contract: T): T {
+  if (!contract.customer) return contract;
+  return { ...contract, tenant: contract.customer.name, phone: contract.customer.phone };
+}
 
 /** Arabic labels for the ledger memo — permanent record, so not translated at
  * read time. Same reasoning as DEPOSIT_TYPE_LABEL below. */
@@ -117,7 +128,9 @@ export class ContractsService {
       await this.refreshInstallmentStatuses(tx, id);
       const contract = await tx.contract.findUnique({ where: { id }, include: CONTRACT_INCLUDE });
       if (!contract) throw new NotFoundException(MSG.contract_not_found);
-      return contract;
+      // العميلُ مصدرُ الحقيقة (`ق-١٠٢٨`/⑥): ما افترق على العقد قبل هذا البناء يُصحَّح بالاشتقاق عند
+      // القراءة — لا بهجرةٍ تكتبه — وما بعده تُبقيه الكتابةُ متطابقاً.
+      return withPartyFromCustomer(contract);
     });
   }
 
@@ -137,19 +150,21 @@ export class ContractsService {
         const start = new Date(dto.start);
         const end = new Date(dto.end);
         const isDraft = dto.draft ?? false;
-        if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, dto.tenant);
+        // **العميلُ يُختار بمعرّفه — للمسوّدة كما للحيّ** (`ق-١٠٢٨`/①②): لا بحثَ بالاسم ولا إنشاءَ ضمنيّ.
+        const customer = await this.linkableCustomer(tx, dto.customerId);
+        if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, customer.name);
 
         const no = await this.nextContractNumber(tx, companyId, start);
-        const customerId = isDraft ? null : (await this.syncTenantCustomer(tx, dto.tenant, dto.phone)).id;
 
         const created = await tx.contract.create({
           data: {
             unitId: dto.unitId,
-            customerId,
+            customerId: customer.id,
             no,
             ejarNo: dto.ejarNo,
-            tenant: dto.tenant,
-            phone: dto.phone,
+            // مشتقّان من بطاقة العميل — ذاكرةٌ تُحدَّث مع تعديله، لا لقطةٌ تشيخ (`ق-١٠٢٨`/①⑥).
+            tenant: customer.name,
+            phone: customer.phone,
             value: dto.value,
             cycle: dto.cycle,
             start,
@@ -222,8 +237,23 @@ export class ContractsService {
       const data: Prisma.ContractUncheckedUpdateInput = {};
       if (dto.classification !== undefined) data.classification = dto.classification;
       if (dto.vatInclusion !== undefined) data.vatInclusion = dto.vatInclusion;
-      if (dto.tenant !== undefined) data.tenant = dto.tenant;
-      if (dto.phone !== undefined) data.phone = dto.phone;
+      // **تغييرُ الطرف قبل أوّل ترحيلٍ فقط** (`ق-١٠٢٨`/③): بعده ذمّةٌ وقيودٌ نُسبت إليه — استحقاقٌ رُحِّل،
+      // أو قبضٌ، أو وديعةٌ أو مطالبةٌ أو خلوّ — وتحويلُها إعادةُ كتابة تاريخ (`§6.4`). والمخرجُ تسمّيه
+      // الرسالة: إنهاءُ العقد وعقدٌ جديد. أمّا الاسمُ والهاتفُ فمشتقّان من العميل لا مُدخَلان.
+      if (dto.customerId !== undefined && dto.customerId !== existing.customerId) {
+        const party = await this.linkableCustomer(tx, dto.customerId);
+        const [accrued, paid, deposits, claims, keyMoney] = await Promise.all([
+          tx.rentAccrual.count({ where: { contractId: id, journalEntryId: { not: null } } }),
+          tx.rentPayment.count({ where: { contractId: id } }),
+          tx.contractDeposit.count({ where: { contractId: id } }),
+          tx.contractClaim.count({ where: { contractId: id } }),
+          tx.contractKeyMoney.count({ where: { contractId: id } }),
+        ]);
+        if (accrued + paid + deposits + claims + keyMoney > 0) throw new ConflictException(MSG.contract_party_locked_after_posting);
+        data.customerId = party.id;
+        data.tenant = party.name;
+        data.phone = party.phone;
+      }
       if (dto.services !== undefined) data.services = dto.services;
       if (dto.furnished !== undefined) data.furnished = dto.furnished;
       if (dto.ejarNo !== undefined) data.ejarNo = dto.ejarNo;
@@ -573,18 +603,16 @@ export class ContractsService {
     }
   }
 
-  private async syncTenantCustomer(tx: Prisma.TransactionClient, name: string, phone?: string) {
-    const existing = await tx.customer.findFirst({ where: { name } });
-    if (existing) {
-      if (phone && phone !== existing.phone) {
-        return tx.customer.update({ where: { id: existing.id }, data: { phone } });
-      }
-      return existing;
-    }
-    // السلةُ صراحةً قبل الإنشاء (`§6.12` · `ق-١٠٢٩`/①): عميلٌ محذوفٌ ناعماً بهذا الاسم لا يراه
-    // `findFirst` أعلاه ويراه الفهرسُ الفريد — فكان يسقط هنا بـ`P2002` خامٍ (`500`).
-    await assertCustomerNotInTrash(tx, name);
-    return tx.customer.create({ data: { name, phone } as unknown as Prisma.CustomerCreateInput });
+  /**
+   * **العميلُ الذي يصحّ ربطُ عقدٍ به** (`ق-١٠٢٨`/①): يُقرأ **بمعرّفه** داخل سياق المنشأة — فالغائبُ
+   * والمحذوفُ ناعماً (يُخفيه الامتداد) `404`، والمؤرشَفُ `409` تسمّي المخرج. لا بحثَ بالاسم ولا
+   * إنشاءَ ضمنيّاً — بابُ الإنشاء وحدةُ العملاء (حارسُه `no-name-linking.spec.ts`).
+   */
+  private async linkableCustomer(tx: Prisma.TransactionClient, customerId: string): Promise<{ id: string; name: string; phone: string | null }> {
+    const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true, phone: true, archived: true } });
+    if (!customer) throw new NotFoundException(MSG.customer_not_found);
+    if (customer.archived) throw new ConflictException(MSG.customer_archived_cannot_link);
+    return { id: customer.id, name: customer.name, phone: customer.phone };
   }
 
   /**
@@ -617,7 +645,9 @@ export class ContractsService {
         // source itself is excluded: a renewal starting the day after it ends
         // is precisely the point, and an early renewal signed while the old
         // lease still runs must not collide with it either.
-        await this.validateContract(tx, source.unit, source.unit.property, start, end, source.tenant, source.id);
+        // الطرفُ يُقرأ من بطاقة العميل لحظةَ التجديد — لا من نصّ العقد الأصل (`ق-١٠٢٨`/①⑥).
+        const party = source.customerId ? await this.linkableCustomer(tx, source.customerId) : null;
+        await this.validateContract(tx, source.unit, source.unit.property, start, end, party?.name ?? source.tenant, source.id);
 
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
@@ -636,8 +666,8 @@ export class ContractsService {
             customerId: source.customerId,
             no,
             ejarNo: dto.ejarNo ?? null,
-            tenant: source.tenant,
-            phone: source.phone,
+            tenant: party?.name ?? source.tenant,
+            phone: party?.phone ?? source.phone,
             value,
             cycle,
             start,
@@ -1157,14 +1187,17 @@ export class ContractsService {
     // Sequential on purpose: an interactive transaction runs on a single
     // connection, so concurrent queries on `tx` would only race for it.
     const total = await tx.contract.count({ where });
-    const items = await tx.contract.findMany({
+    const rows = await tx.contract.findMany({
       where,
-      include: { unit: { include: { property: true } } },
+      include: { unit: { include: { property: true } }, customer: { select: { id: true, name: true, phone: true, archived: true } } },
       // ترتيبٌ تامّ لا جزئيّ (`ق-٣٥٦`) — `start` بدقّة اليوم فيتعادل، و`id` يحسم.
       orderBy: [{ start: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     });
+    // الاسمُ والهاتفُ من بطاقة العميل عند القراءة (`ق-١٠٢٨`/⑥) — والبحثُ أعلاه على الذاكرة المشتقّة
+    // التي تُحدَّث مع تعديل العميل، فلا تتخلّف إلا لعقودٍ افترقت قبل هذا البناء.
+    const items = rows.map(withPartyFromCustomer);
 
     return { items, total, page, pageSize };
   }

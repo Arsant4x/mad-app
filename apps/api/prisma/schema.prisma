@@ -960,7 +960,10 @@ model Customer {
   /// أسطرُ القيود المنسوبة إلى هذا العميل — بُعدٌ تحليلي (`ق-٨٧٣`)، انظر JournalLine.
   journalLines JournalLine[]
 
-  @@unique([companyId, name])
+  /// فرادةُ الاسم **أُسقطت قيداً وصارت تنبيهاً** (`ق-١٠٢٨`/⑤): غرضُها كان منعَ التكرار الضمنيّ حين كان
+  /// العقدُ يُنشئ عميلَه بالاسم — وقد زال بالربط الصريح بالمعرّف؛ فبقي ضررُها وحدَه (شخصان حقيقيان
+  /// بالاسم نفسِه لا يكونان عميلين). الفهرسُ للبحث، والتنبيهُ «أهو نفسُه؟» في الخدمة.
+  @@index([companyId, name])
 
   /// Soft delete: set instead of removing the row, so it can be restored
   /// from the trash within 30 days. Reads filter it out centrally.

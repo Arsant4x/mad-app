@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * تصنيفُ العقد للضريبة وشمولُ قيمته (ق-٨٩١ · ق-٨٩٢ · ق-٨٩٨):
@@ -20,6 +21,7 @@ describe('Contract classification (e2e)', () => {
   let tenantPrisma: TenantPrismaService;
   let company: IsolatedCompany;
   let token: string;
+  let tenantCustomerId: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -31,6 +33,8 @@ describe('Contract classification (e2e)', () => {
     tenantPrisma = app.get(TenantPrismaService);
     company = await registerIsolatedCompany(app, 'contract-class');
     token = company.token;
+    // المستأجرُ عميلٌ يُنشأ صراحةً ثم يُربط بمعرّفه (ق-١٠٢٩/②) — عميلٌ واحد لكلِّ عقود هذه الحزمة.
+    tenantCustomerId = await createTenantCustomer(app, token, 'مستأجر التصنيف');
   }, 30000);
 
   afterAll(async () => {
@@ -49,7 +53,7 @@ describe('Contract classification (e2e)', () => {
     return unit.body.id as string;
   }
 
-  const base = (unitId: string) => ({ unitId, tenant: 'مستأجر التصنيف', value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' });
+  const base = (unitId: string) => ({ unitId, customerId: tenantCustomerId, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' });
 
   it('عقدٌ بلا تصنيفٍ أو بلا إعلانِ شمولٍ يُرفض — ولا افتراضَ صامت', async () => {
     const unitId = await makeUnit();
@@ -108,17 +112,20 @@ describe('Contract classification (e2e)', () => {
     const legacy = await auth(request(app.getHttpServer()).get(`/contracts/${id}`)).expect(200);
     expect(legacy.body.classification).toBe('LEGACY_UNCLASSIFIED');
 
-    const blocked = await auth(request(app.getHttpServer()).patch(`/contracts/${id}`)).send({ tenant: 'اسمٌ جديد' }).expect(400);
+    // حقلٌ وصفيٌّ مقبول (`services`) — فالاسمُ مشتقٌّ من العميل ولم يعد مُدخَلاً (ق-١٠٢٨/①)
+    const blocked = await auth(request(app.getHttpServer()).patch(`/contracts/${id}`)).send({ services: 'خدمةٌ جديدة' }).expect(400);
     expect(String(blocked.body.message)).toContain('تصنيف');
     const halfBlocked = await auth(request(app.getHttpServer()).patch(`/contracts/${id}`)).send({ classification: 'COMMERCIAL' }).expect(400);
     expect(String(halfBlocked.body.message)).toContain('شمول');
 
     const declared = await auth(request(app.getHttpServer()).patch(`/contracts/${id}`))
-      .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', tenant: 'اسمٌ جديد' })
+      .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', services: 'خدمةٌ جديدة' })
       .expect(200);
     expect(declared.body.classification).toBe('COMMERCIAL');
     expect(declared.body.vatInclusion).toBe('EXCLUSIVE');
-    expect(declared.body.tenant).toBe('اسمٌ جديد');
+    expect(declared.body.services).toBe('خدمةٌ جديدة');
+    // الاسمُ مشتقٌّ من العميل — لا يُعدَّل من العقد (ق-١٠٢٨/①)
+    expect(declared.body.tenant).toBe('مستأجر التصنيف');
   });
 
   it('⭐ الحبسُ في القاعدة: صفٌّ جديد بالقيمة القديمة يرفضه قيدُ CHECK ولو تجاوز الخادم', async () => {

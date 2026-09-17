@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * A deposit is the one piece of rental money that is **not** income: it belongs
@@ -53,7 +54,7 @@ describe('Contract deposits (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التأمينات ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التأمينات ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',

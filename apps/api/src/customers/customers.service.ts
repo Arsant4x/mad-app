@@ -16,7 +16,7 @@ export class CustomersService {
 
   create(companyId: string, dto: CreateCustomerDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      await this.assertNoDuplicate(tx, dto.name, dto.vatNumber);
+      await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, undefined, dto.allowSameName === true);
       return tx.customer.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
@@ -41,7 +41,7 @@ export class CustomersService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.customer_not_found);
-      await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, id);
+      await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, id, dto.allowSameName === true);
 
       const data: Prisma.CustomerUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -54,7 +54,13 @@ export class CustomersService {
       if (dto.postalCode !== undefined) data.postalCode = dto.postalCode || null;
       if (dto.creditLimit !== undefined) data.creditLimit = dto.creditLimit;
 
-      return tx.customer.update({ where: { id }, data });
+      const updated = await tx.customer.update({ where: { id }, data });
+      // **اسمُ العقد وهاتفُه مشتقّان من العميل** (`ق-١٠٢٨`/①⑥): يُحدَّثان في المعاملة نفسِها على كلِّ
+      // عقدٍ يحمل معرّفَه — فالعميلُ مصدرُ الحقيقة والحقلُ ذاكرةٌ مشتقّة، لا لقطةٌ تشيخ ولا هجرةٌ تكتبها.
+      if (dto.name !== undefined || dto.phone !== undefined) {
+        await tx.contract.updateMany({ where: { customerId: id }, data: { tenant: updated.name, phone: updated.phone } });
+      }
+      return updated;
     });
   }
 
@@ -93,20 +99,27 @@ export class CustomersService {
     });
   }
 
-  /** Mirrors the mockup's duplicate-name/duplicate-VAT check in createCustomer(). */
-  private async assertNoDuplicate(tx: Prisma.TransactionClient, name?: string, vatNumber?: string, excludeId?: string): Promise<void> {
+  /**
+   * **الرقمُ الضريبي فريدٌ قيداً، والاسمُ فريدٌ تنبيهاً** (`ق-١٠٢٨`/⑤): كانت فرادةُ الاسم قيداً في
+   * القاعدة والخدمة لأن العقدَ كان يُنشئ عميلَه بالاسم فيمنع التكرارَ الضمنيّ — وقد زال بالربط
+   * الصريح، فبقي ضررُها وحدَه: شخصان حقيقيان بالاسم نفسِه لا يكونان عميلين. فصار الاسمُ المطابق
+   * (حيّاً أو في السلة) `409` مسمّىً «أهو نفسُه؟» **حتى يُؤكَّد** بـ`allowSameName`؛ والرقمُ الضريبي
+   * يبقى مانعاً — حيّاً كان صاحبُه أو في السلة (`§6.12`: يُقرأ المحذوفُ ناعماً صراحةً).
+   * ⛔ ولا تمييزَ بالهاتف — يُشارَك ويتغيّر، مفتاحٌ ضعيفٌ آخر.
+   */
+  private async assertNoDuplicate(tx: Prisma.TransactionClient, name?: string, vatNumber?: string, excludeId?: string, allowSameName = false): Promise<void> {
     if (!name && !vatNumber) return;
-    const or: Prisma.CustomerWhereInput[] = [];
-    if (name) or.push({ name });
-    if (vatNumber) or.push({ vatNumber });
-
-    const existing = await tx.customer.findFirst({
-      where: { OR: or, ...(excludeId ? { id: { not: excludeId } } : {}) },
-    });
-    if (existing) {
-      throw new ConflictException(existing.name === name ? `يوجد عميل بنفس الاسم "${name}" بالفعل` : 'يوجد عميل بنفس الرقم الضريبي بالفعل');
+    const notSelf = excludeId ? { id: { not: excludeId } } : {};
+    if (vatNumber) {
+      const live = await tx.customer.findFirst({ where: { vatNumber, ...notSelf }, select: { id: true } });
+      if (live) throw new ConflictException('يوجد عميل بنفس الرقم الضريبي بالفعل');
+      await assertCustomerNotInTrash(tx, undefined, vatNumber, excludeId);
     }
-    // ثم السلةُ صراحةً — فالفهرسُ الفريد يرى المحذوفَ ناعماً وهذا الفحصُ لا يراه إلا بالاسم (`§6.12`).
-    await assertCustomerNotInTrash(tx, name, vatNumber, excludeId);
+    if (name && !allowSameName) {
+      const live = await tx.customer.findFirst({ where: { name, ...notSelf }, select: { id: true } });
+      if (live) throw new ConflictException(MSG.customer_same_name_exists);
+      const trashed = await tx.customer.findFirst({ where: { name, deletedAt: { not: null }, ...notSelf }, select: { id: true } });
+      if (trashed) throw new ConflictException(MSG.customer_same_name_in_trash);
+    }
   }
 }

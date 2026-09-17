@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * Reports are pure read-side computations over Account/JournalEntry data
@@ -94,7 +95,7 @@ describe('Reports tenant isolation (e2e)', () => {
       const contract = await request(app.getHttpServer())
         .post('/contracts')
         .set('Authorization', `Bearer ${token}`)
-        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر العزل ${tag} ${suffix}`, value: annual, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, customerId: await createTenantCustomer(app, token, `مستأجر العزل ${tag} ${suffix}`), value: annual, cycle: 'monthly', start: '2024-01-01', end: '2024-12-31' })
         .expect(201);
       const first = contract.body.installments[0];
       await request(app.getHttpServer())

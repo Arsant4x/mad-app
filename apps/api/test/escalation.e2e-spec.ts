@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * Late-rent escalation and the in-system notifications it raises.
@@ -78,7 +79,7 @@ describe('Escalation and notifications (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التصعيد ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التصعيد ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2024-01-01',

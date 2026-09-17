@@ -1,5 +1,5 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 export const CONTRACT_CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as const;
@@ -27,13 +27,12 @@ export class CreateContractDto extends CurrencyFieldsDto {
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion!: (typeof CONTRACT_VAT_INCLUSIONS)[number];
 
-  @IsString()
-  @IsNotEmpty()
-  tenant!: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
+  /**
+   * **المستأجرُ عميلٌ يُختار بمعرّفه** (`§6.3` · `ق-٤٩٧` · `ق-١٠٢٨`/①②) — لا اسمٌ يُبحث عنه ولا
+   * هاتفٌ يُدهس؛ والمسوّدةُ تُربط كالعقد الحيّ. اسمُ العقد وهاتفُه يُشتقّان من بطاقة العميل.
+   */
+  @IsUUID()
+  customerId!: string;
 
   @IsNumber()
   @Min(0.01)

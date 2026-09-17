@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { RentRecognitionService } from '../src/contracts/rent-recognition.service';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * ⚖️ **الإيرادُ المؤجَّل — يُحتجَز بالاستحقاق ويخرج بالخدمة**
@@ -75,7 +76,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     const end = new Date(start.getFullYear() + 1, start.getMonth(), 0);
     const contract = (
       await auth(http().post('/contracts'))
-        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: `مستأجر التأجيل ${tag}`, value: 12000, cycle: 'monthly', start: iso(start), end: iso(end) })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, token, `مستأجر التأجيل ${tag}`), value: 12000, cycle: 'monthly', start: iso(start), end: iso(end) })
         .expect(201)
     ).body as { id: string; no: string; installments: E2eInstallment[] };
     created.push(contract.id);

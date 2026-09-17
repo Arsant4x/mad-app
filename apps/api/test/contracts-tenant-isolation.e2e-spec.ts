@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { round2 } from '../src/common/money/rounding';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
+import { createTenantCustomer } from './tenant-customer';
 
 describe('Properties/Units/Contracts (e2e)', () => {
   let app: INestApplication;
@@ -56,7 +57,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'مستأجر اختبار', value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31', deposit: 1000 })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'مستأجر اختبار'), value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31', deposit: 1000 })
       .expect(201);
     expect(contract.body.installments).toHaveLength(12);
     expect(contract.body.installments.every((i: { amount: string }) => Number(i.amount) === 1000)).toBe(true);
@@ -65,7 +66,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'مستأجر آخر', value: 6000, cycle: 'monthly', start: '2026-06-01', end: '2026-08-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'مستأجر آخر'), value: 6000, cycle: 'monthly', start: '2026-06-01', end: '2026-08-31' })
       .expect(409);
   }, 60000);
 
@@ -78,7 +79,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'محل تجاري', value: 3000, cycle: 'monthly', start: '2026-01-01', end: '2026-06-30' })
+      .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'محل تجاري'), value: 3000, cycle: 'monthly', start: '2026-01-01', end: '2026-06-30' })
       .expect(201);
     expect(created.body.classification).toBe('COMMERCIAL');
   }, 60000);
@@ -94,7 +95,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'دافع الإيجار', value: 3000, cycle: 'monthly', start: '2026-01-01', end: '2026-03-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'دافع الإيجار'), value: 3000, cycle: 'monthly', start: '2026-01-01', end: '2026-03-31' })
       .expect(201);
     const installmentId = contract.body.installments[0].id;
 
@@ -159,7 +160,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'عقد للإلغاء', value: 3000, cycle: 'monthly', start: '2030-01-01', end: '2030-03-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'عقد للإلغاء'), value: 3000, cycle: 'monthly', start: '2030-01-01', end: '2030-03-31' })
       .expect(201);
 
     const cancelled = await request(app.getHttpServer())
@@ -181,7 +182,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'عزل بين الشركات', value: 1200, cycle: 'monthly', start: '2031-01-01', end: '2031-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'عزل بين الشركات'), value: 1200, cycle: 'monthly', start: '2031-01-01', end: '2031-12-31' })
       .expect(201);
 
     // Searched by the exact tenant name rather than scanning page 1 — with the
@@ -200,7 +201,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
     await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${tokenB}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant: 'محاولة عبور الشركات', value: 500, cycle: 'monthly', start: '2032-01-01', end: '2032-06-30' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, tokenA, 'محاولة عبور الشركات'), value: 500, cycle: 'monthly', start: '2032-01-01', end: '2032-06-30' })
       .expect(404);
   }, 60000);
 });

@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * ثقبُ الحذف الناعم في العملاء — `§6.12` واقعةً (`ق-١٠٢٠` · `ق-١٠٢٨`/④ · `ق-١٠٢٩`/①):
@@ -32,13 +33,16 @@ describe('حرّاسُ سلة العملاء — الحذفُ بعقود، وا�
     const property = (await auth(http().post('/properties')).send({ name: `عقار ${tag}`, ownership: 'owned' }).expect(201)).body as { id: string };
     return (await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `T-${tag}`, type: 'تجاري', rentMonthly: 1000 }).expect(201)).body as { id: string };
   }
-  const contractPayload = async (tenant: string, phone: string) => {
+  // العقدُ يُربط بعميلٍ بمعرّفه (ق-١٠٢٩/②) — والمستأجرُ يُنشأ عميلاً صراحةً أولاً.
+  const contractPayload = async (customerId: string) => {
     const unit = await makeUnit();
     const start = monthStart();
-    return { classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, tenant, phone, value: 12000, cycle: 'monthly', start: iso(start), end: iso(dayBefore(addMonths(start, 12))) };
+    return { classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId, value: 12000, cycle: 'monthly', start: iso(start), end: iso(dayBefore(addMonths(start, 12))) };
   };
-  const makeContract = async (tenant: string, phone: string) =>
-    (await auth(http().post('/contracts')).send(await contractPayload(tenant, phone)).expect(201)).body as { id: string; customerId: string };
+  const makeContract = async (tenant: string, phone: string) => {
+    const customerId = await createTenantCustomer(app, token, tenant, phone);
+    return (await auth(http().post('/contracts')).send(await contractPayload(customerId)).expect(201)).body as { id: string; customerId: string };
+  };
   const message = (r: request.Response) => String((r.body as { message?: unknown }).message ?? '');
 
   beforeAll(async () => {
@@ -94,14 +98,14 @@ describe('حرّاسُ سلة العملاء — الحذفُ بعقود، وا�
     expect(viaCustomers.status).toBe(409);
     expect(message(viaCustomers)).toContain('سلة المحذوفات');
 
-    // بابُ العقود — الاسمُ نفسُه مستأجراً
-    const viaContracts = await auth(http().post('/contracts')).send(await contractPayload(name, '0500000105'));
-    expect(viaContracts.status).toBe(409);
-    expect(message(viaContracts)).toContain('سلة المحذوفات');
+    // بابُ العقود — لا اسمَ يُبحث عنه بعد الربط بالمعرّف (ق-١٠٢٩/②): معرّفُ المحذوف ناعماً غائبٌ عن
+    // القراءة المرشَّحة فيُرفض مسمّىً لا بخطأِ خادم
+    const viaContracts = await auth(http().post('/contracts')).send(await contractPayload(trashed.id));
+    expect(viaContracts.status).toBe(404);
 
-    // ④ وبعد الاستعادة يعود الاسمُ يعمل، والعقدُ الجديد يرتبط بالمستعاد لا بعميلٍ ثانٍ
+    // ④ وبعد الاستعادة يعود العميلُ يُربط بمعرّفه
     await auth(http().post(`/trash/customers/${trashed.id}/restore`)).expect(201);
-    const after = await makeContract(name, '0500000106');
+    const after = (await auth(http().post('/contracts')).send(await contractPayload(trashed.id)).expect(201)).body as { customerId: string };
     expect(after.customerId).toBe(trashed.id);
   }, 90000);
 

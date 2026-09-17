@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * The last of the structural wave: the activity and currency registries a
@@ -304,7 +305,7 @@ describe('Activities, currencies and FX difference (e2e)', () => {
         .send({
           classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
           unitId: unit.body.id,
-          tenant: 'مستأجر بالعملة الأجنبية',
+          customerId: await createTenantCustomer(app, token, 'مستأجر بالعملة الأجنبية'),
           value: 12000,
           cycle: 'monthly',
           start: '2026-01-01',

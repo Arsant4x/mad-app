@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 
 export class UpdateCustomerDto {
@@ -42,4 +42,9 @@ export class UpdateCustomerDto {
   @IsNumber()
   @Min(0)
   creditLimit?: number;
+
+  /** كما الإنشاء — إعادةُ التسمية إلى اسمٍ قائم تنبيهٌ يُؤكَّد (`ق-١٠٢٨`/⑤). */
+  @IsOptional()
+  @IsBoolean()
+  allowSameName?: boolean;
 }
