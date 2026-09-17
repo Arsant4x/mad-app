@@ -67,6 +67,8 @@ export const MSG = {
   credit_limit_override_forbidden: 'customers.credit_limit_override_forbidden',
   customer_not_found: 'customers.not_found',
   customer_has_invoices: 'customers.has_invoices',
+  customer_has_contracts: 'customers.has_contracts',
+  customer_in_trash: 'customers.in_trash',
   invoice_not_found: 'invoices.not_found',
   payment_not_found: 'payments.not_found',
   payment_posted_immutable: 'payments.posted_immutable',
@@ -478,6 +480,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.customer_has_invoices]: {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',
     en: 'Cannot delete a customer that has invoices — delete their invoices first',
+  },
+  [MSG.customer_has_contracts]: {
+    ar: 'لا يمكن حذف عميلٍ له عقودُ إيجار — ولو مُلغاة، فقيودُها منسوبةٌ إليه — أرشِفه بدل حذفه',
+    en: 'Cannot delete a customer that has lease contracts — even cancelled ones keep their entries under that customer — archive the customer instead',
+  },
+  [MSG.customer_in_trash]: {
+    ar: 'يوجد عميلٌ بهذا الاسم أو الرقم الضريبي في سلة المحذوفات — استعِده من السلة أو اختر اسماً آخر',
+    en: 'A customer with this name or VAT number is in the trash — restore it from the trash or choose another name',
   },
   [MSG.quote_not_found]: { ar: 'عرض السعر غير موجود', en: 'Quote not found' },
   [MSG.quote_expired]: { ar: 'انتهت صلاحية العرض بتاريخ {date} — أصدر عرضاً محدَّثاً', en: 'The quote expired on {date} — issue an updated one' },

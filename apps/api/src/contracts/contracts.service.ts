@@ -41,6 +41,7 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertCustomerNotInTrash } from '../customers/customer-trash.util';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
@@ -580,6 +581,9 @@ export class ContractsService {
       }
       return existing;
     }
+    // السلةُ صراحةً قبل الإنشاء (`§6.12` · `ق-١٠٢٩`/①): عميلٌ محذوفٌ ناعماً بهذا الاسم لا يراه
+    // `findFirst` أعلاه ويراه الفهرسُ الفريد — فكان يسقط هنا بـ`P2002` خامٍ (`500`).
+    await assertCustomerNotInTrash(tx, name);
     return tx.customer.create({ data: { name, phone } as unknown as Prisma.CustomerCreateInput });
   }
 

@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { MSG } from '../common/i18n/messages';
+import { assertCustomerNotInTrash } from './customer-trash.util';
 
 @Injectable()
 export class CustomersService {
@@ -81,6 +82,11 @@ export class CustomersService {
       // refusing this. Same rule (CLAUDE.md 6.4), enforced where it's visible.
       const invoiceCount = await tx.invoice.count({ where: { customerId: id } });
       if (invoiceCount > 0) throw new ConflictException(MSG.customer_has_invoices);
+      // والعقودُ كذلك — **بأيّ حالةٍ ولو مُلغاة** (`ق-١٠٢٨`/④): قيودُ الملغى منسوبةٌ إليه، و`Restrict`
+      // على `Contract.customer` يجعل محوَه النهائيَّ يفشل بصمت فيبقى في السلة إلى الأبد مربوطاً
+      // بعقودٍ لا تراه. والرسالةُ تسمّي المخرج: الأرشفةُ لا الحذف.
+      const contractCount = await tx.contract.count({ where: { customerId: id } });
+      if (contractCount > 0) throw new ConflictException(MSG.customer_has_contracts);
 
       // Soft delete — recoverable from the trash for 30 days.
       await tx.customer.update({ where: { id }, data: { deletedAt: new Date() } });
@@ -100,5 +106,7 @@ export class CustomersService {
     if (existing) {
       throw new ConflictException(existing.name === name ? `يوجد عميل بنفس الاسم "${name}" بالفعل` : 'يوجد عميل بنفس الرقم الضريبي بالفعل');
     }
+    // ثم السلةُ صراحةً — فالفهرسُ الفريد يرى المحذوفَ ناعماً وهذا الفحصُ لا يراه إلا بالاسم (`§6.12`).
+    await assertCustomerNotInTrash(tx, name, vatNumber, excludeId);
   }
 }
