@@ -13,6 +13,12 @@ import type { AddressInfo } from 'node:net';
 export type AuthorityVerdict =
   /** `400` بنتائج تحقّق — ردٌّ على المستند (`REJECTED`). */
   | 'reject'
+  /**
+   * `400` برسالةٍ **عليا** تحمل بايتاً صفريّاً — ردٌّ على المستند، ونصُّه يرفضه عمودُ النصّ
+   * (`ق-٩٨٢`): فالعيّنةُ تُنسخ من الواقع الذي قِيس (`ق-٩٧٩`) — رسالةٌ عليا لا داخل `validationResults`
+   * (تلك يهرّبها `JSON.stringify` فتُكتب سليمة).
+   */
+  | 'reject-nul'
   /** `200` — قبول (`CLEARED`). */
   | 'clear'
   /** `503` — خادمُ الهيئة معطَّل: ليس جواباً على المستند. */
@@ -30,6 +36,13 @@ export interface AuthorityStub {
 }
 
 export const STUB_REJECTION_MESSAGE = 'رفضٌ من خادمٍ محلّيٍّ يمثّل الهيئة — BR-KSA-STUB';
+
+// البايتُ الصفريّ يُسمّى بالرمز لا يُكتب حرفاً (`ق-٩٧٤`) — يقع **وسط** الرسالة كي يُثبَت أن ما بعده يبقى.
+const NUL = String.fromCharCode(0);
+/** ما يُخزَّن بعد التنقية — الرسالةُ نفسُها بلا البايت، لا شيءَ غيرُه يُحذف. */
+export const STUB_NUL_MESSAGE_STORED = 'رفضٌ برسالةٍ عليا تحمل بايتاً صفريّاً — BR-KSA-STUB-NUL — وما بعده يبقى';
+/** ما يُرسله الخادمُ في حقل `message` العلويّ: الرسالةُ المخزَّنة وبايتٌ صفريٌّ في وسطها. */
+export const STUB_NUL_MESSAGE_SENT = STUB_NUL_MESSAGE_STORED.replace(' — BR-KSA-STUB-NUL', ` ${NUL}— BR-KSA-STUB-NUL`);
 
 /** يُشغَّل في `beforeAll` ويُغلق في `afterAll`؛ ويضبط `ZATCA_API_BASE_OVERRIDE` بنفسه. */
 export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): Promise<AuthorityStub> {
@@ -59,6 +72,16 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
             JSON.stringify({
               ...(reporting ? { reportingStatus: 'NOT_REPORTED' } : { clearanceStatus: 'NOT_CLEARED' }),
               validationResults: { status: 'ERROR', errorMessages: [{ type: 'ERROR', code: 'BR-KSA-STUB', category: 'STUB', message: STUB_REJECTION_MESSAGE, status: 'ERROR' }] },
+            }),
+          );
+          return;
+        case 'reject-nul':
+          res.statusCode = 400;
+          res.end(
+            JSON.stringify({
+              ...(reporting ? { reportingStatus: 'NOT_REPORTED' } : { clearanceStatus: 'NOT_CLEARED' }),
+              message: STUB_NUL_MESSAGE_SENT,
+              validationResults: { status: 'ERROR', errorMessages: [{ type: 'ERROR', code: 'BR-KSA-STUB-NUL', category: 'STUB', message: STUB_REJECTION_MESSAGE, status: 'ERROR' }] },
             }),
           );
           return;

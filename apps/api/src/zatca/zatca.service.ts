@@ -14,6 +14,7 @@ import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
+import { storableText } from '../common/i18n/storable-text';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
  * legal act on the merchant's behalf, not routine data entry. */
@@ -156,6 +157,23 @@ export class ZatcaService {
     const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
     if (stamped.qrPayload === null) throw new ZatcaAttemptFailedException(stamped.failure);
     return this.report(companyId, invoiceId, ctx.credential);
+  }
+
+  /**
+   * 📌 **جوابُ الهيئة يختم حدثَ الطابور** (`ق-٩٨٣`) — مدخلُ مُعالِج الطابور (`INVOICE_ISSUED`).
+   *
+   * عقدُ الحدث: «أوصِل المستندَ إلى الهيئة». فمستندٌ **أجابت عنه** (`CLEARED`/`REJECTED` — يدوياً
+   * من الشاشة أو من دورةٍ سابقة) مُوصَلٌ، ويعود حدثُه `SENT` بلا إرسال. وكان الطابورُ يعود إلى
+   * مردودةٍ رُدّت يدوياً فيسقط بـ«لا تُعاد» ستّاً ثم `FAILED` — ضجيجٌ في «صادرٌ لم يصل» عن مستندٍ
+   * وصل ورُدّ (قِيس في `ق-٩٧٩`). `actorType` = COMPANY: الإرسال فعلُ المنشأة لا فعلُ مستخدمٍ
+   * بعينه، والصفّ لا يحمل فاعلاً لأن الواقعة وقعت وقت الإنشاء لا وقت الإرسال.
+   */
+  async deliverIssued(companyId: string, invoiceId: string): Promise<void> {
+    const existing = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.findUnique({ where: { id: invoiceId }, select: { zatcaStatus: true } }),
+    );
+    if (existing?.zatcaStatus === 'CLEARED' || existing?.zatcaStatus === 'REJECTED') return;
+    await this.submitInvoice(companyId, 'COMPANY', invoiceId);
   }
 
   /**
@@ -606,17 +624,22 @@ export class ZatcaService {
     }
   }
 
-  /** سببُ آخر محاولةٍ لم تُجب عنها الهيئة — يُرى في الصفّ؛ والحالةُ ولحظةُ الإرسال لا تُمسّان. */
+  /**
+   * سببُ آخر محاولةٍ لم تُجب عنها الهيئة — يُرى في الصفّ؛ والحالةُ ولحظةُ الإرسال لا تُمسّان.
+   *
+   * ⚖️ كلُّ ما يُكتب في `zatcaMessage` يمرّ بـ`storableText` (`ق-٩٨٢`): نصٌّ من الهيئة أو من `fetch`
+   * يحمل بايتاً صفريّاً كان يُسقط الكتابةَ كلَّها فيضيع الردُّ ويُكتب نصُّ `Prisma` في صفّ التاجر.
+   */
   private recordAttempt(companyId: string, invoiceId: string, reason: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaMessage: reason.slice(0, 500) } }),
+      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaMessage: storableText(reason) } }),
     );
   }
 
   /** تحريرُ ادّعاء الختم بعد سقوط التوقيع — الموقعُ (`ICV`/`UUID`/`PIH`) يبقى ليُعاد استعمالُه. */
   private releaseClaim(companyId: string, invoiceId: string, reason: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaStatus: 'NOT_SUBMITTED', zatcaMessage: reason.slice(0, 500) } }),
+      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaStatus: 'NOT_SUBMITTED', zatcaMessage: storableText(reason) } }),
     );
   }
 
@@ -627,7 +650,7 @@ export class ZatcaService {
         data: {
           zatcaStatus: cleared ? 'CLEARED' : 'REJECTED',
           zatcaSubmittedAt: new Date(),
-          zatcaMessage: message,
+          zatcaMessage: storableText(message),
         },
       }),
     );

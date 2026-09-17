@@ -3,19 +3,8 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { events, type DomainEvent } from '../shared/events/event-bus';
-import { resolveMessage } from '../common/i18n/messages';
-
-/**
- * ⚖️ **سببٌ يُخزَّن ويُقرأ** (`ق-٩٧١`): رسائلُ `formatMessage` تحمل مفتاحاً وفاصلاً **صفريّاً**
- * ومعامِلاتٍ — يحلّها مُرشِّح الاستثناءات للشاشة، **وعمودُ النصّ في القاعدة يرفض البايتَ الصفري**
- * (`22021`) فتسقط كتابةُ `lastError` ومعها دورةُ المنشأة كلُّها. فيُحلّ السببُ إلى نصّه العربيّ
- * قبل التخزين، ويُجرَّد ما بقي من أصفار، ويُقصّ عند ٥٠٠ حرف.
- */
-export function storableError(e: unknown): string {
-  const raw = e instanceof Error ? e.message : String(e);
-  // البايتُ الصفريّ يُسمّى بالرمز لا يُكتب حرفاً — حرفٌ صفريّ في المصدر يجعل الملفَّ ثنائياً عند git.
-  return resolveMessage(raw, 'ar').split(String.fromCharCode(0)).join('').slice(0, 500);
-}
+// ⚖️ سببٌ يُخزَّن ويُقرأ (`ق-٩٧١`) — كان هنا، وصار المصدرَ الواحدَ لكلّ نصٍّ خارجيٍّ يُكتب (`ق-٩٨٢`).
+import { storableError, storableText } from '../common/i18n/storable-text';
 
 /** كم محاولة قبل أن يُعلَن الصفّ فاشلاً ويبقى ليُرى. */
 export const MAX_ATTEMPTS = 6;
@@ -157,7 +146,7 @@ export class OutboxService {
         const dispatcher = this.dispatchers.get(row.type);
         if (!dispatcher) {
           // نوعٌ بلا مرسِل يُعلَن فاشلاً **صراحةً** ولا يبقى يدور إلى الأبد.
-          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'FAILED', lastError: `لا مرسِل مسجَّل للنوع ${row.type}` } });
+          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'FAILED', lastError: storableText(`لا مرسِل مسجَّل للنوع ${row.type}`) } });
           result = { ...result, failed: result.failed + 1 };
           continue;
         }
@@ -167,12 +156,12 @@ export class OutboxService {
           await tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'SENT', sentAt: new Date(), lastError: null } });
           result = { ...result, sent: result.sent + 1 };
         } catch (e) {
-          const message = storableError(e);
           const exhausted = row.attempts + 1 >= MAX_ATTEMPTS;
-          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: exhausted ? 'FAILED' : 'PENDING', lastError: message } });
+          // النداءُ في موضع الكتابة نفسِه — فحارسُ الأعمدة المعلَنة يقرأ الشكلَ لا المتغيّر.
+          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: exhausted ? 'FAILED' : 'PENDING', lastError: storableError(e) } });
           if (exhausted) {
             result = { ...result, failed: result.failed + 1 };
-            this.logger.error(`Outbox ${row.type} ${row.id} استُنفدت محاولاته: ${message}`);
+            this.logger.error(`Outbox ${row.type} ${row.id} استُنفدت محاولاته: ${storableError(e)}`);
           } else {
             result = { ...result, retried: result.retried + 1 };
           }
