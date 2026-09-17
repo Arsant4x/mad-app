@@ -345,6 +345,69 @@ export async function postWriteOffEntry(
   });
 }
 
+export interface SupplierNoteForPosting {
+  side: 'credit' | 'debit';
+  supplierId: string;
+  branchId?: string | null;
+  no: string;
+  date: Date;
+  supplierName: string;
+  categoryCode: string | null;
+  baseSubtotal: number;
+  baseTaxAmount: number;
+  baseTotal: number;
+  /** ما يمسّ `1300`: تكلفةُ ما خرج من الطبقة + حصّةُ ما على الرفّ من فرق السعر (`purchase-return.util`). */
+  baseInventory: number;
+  /** ما يمسّ `5100` في فترة الإشعار: حصّةُ المستهلَك من فرق السعر + فرقُ سعر المُعاد عن تكلفة طبقته. */
+  baseCogs: number;
+}
+
+/**
+ * ⚖️ **قيدُ إشعار المورّد — مرآةُ قيد الشراء بحدّ الإشعار** (`ق-١٠٠٦`/①②④).
+ *
+ * الدائنُ من المورّد يخفّض ما ندين به: **مدين `2100`** · دائن `1250` (المدخلاتُ تُعكس بإشارتها —
+ * `ق-١٠٠٦`/④) · دائن `1300` (ما خرج من الرفّ وما على الرفّ من فرق السعر) · دائن `5100` (حصّةُ
+ * المستهلَك — في فترة الإشعار لا فترة البيع) · دائن حسابِ الفئة (الخدميّ وفرقُ التدوير). **والمدينُ
+ * العكس** حرفاً. ولا حسابَ جديداً: الفرقُ على المستهلَك تكلفةُ مبيعاتٍ لأنه كان تكلفةَ مبيعاتٍ حين
+ * بيع (`ق-٩٩٠`). والإشارةُ السالبةُ تُقلب سطراً لا تُكتب: فرقُ سعرٍ لصالحنا على بضاعةٍ أُعيدت يصير
+ * مديناً على `5100`. وبقيّةُ الإجمالي — لا `baseSubtotal` — تُقيَّد على الفئة، فيتوازن القيدُ ولو
+ * دُوِّرت المبالغُ الأساسية كلٌّ على حدة.
+ */
+export async function postSupplierNoteEntry(tx: Prisma.TransactionClient, companyId: string, n: SupplierNoteForPosting) {
+  if (n.baseTotal <= 0) return null;
+
+  const expCode = purchaseExpenseAccountCode(n.categoryCode);
+  const ids = await resolveAccountIds(tx, ['2100', '5100', expCode]);
+  if (!ids) return null;
+  const inventoryId = await getOrCreateInventoryAccount(tx, companyId);
+  const inputVatId = await getOrCreateInputVatAccount(tx, companyId);
+
+  // موجبٌ = دائنٌ في الإشعار الدائن ومدينٌ في المدين؛ والسالبُ يقلب الطرف.
+  const dir = n.side === 'credit' ? 1 : -1;
+  const lines: PostingLine[] = [];
+  const push = (accountId: string, amount: number) => {
+    const a = roundTo(amount, 'LINE_AMOUNT');
+    if (a === 0) return;
+    const credit = a * dir;
+    lines.push(credit > 0 ? { accountId, debit: 0, credit } : { accountId, debit: -credit, credit: 0 });
+  };
+  push(ids.get('2100')!, -n.baseTotal);
+  push(inputVatId, n.baseTaxAmount);
+  push(inventoryId, n.baseInventory);
+  push(ids.get('5100')!, n.baseCogs);
+  push(ids.get(expCode)!, n.baseTotal - n.baseTaxAmount - n.baseInventory - n.baseCogs);
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: n.date,
+    memo: `${n.side === 'credit' ? 'إشعارٌ دائن' : 'إشعارٌ مدين'} من المورّد ${n.no} — ${n.supplierName}`,
+    lines,
+    auto: true,
+    branchId: n.branchId ?? null,
+    supplierId: n.supplierId,
+  });
+}
+
 /** Base-currency amounts, for the reason given on `InvoiceForPosting`. */
 export interface PurchaseForPosting {
   /** مورّدُ الشراء — يُختم على كل سطر (ق-٨٧٣)؛ إلزاميّ. */

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
@@ -138,14 +139,16 @@ export class ObligationsService {
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
       const [invoices, purchases, rent] = await Promise.all([
         tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED }, select: { subtotal: true, taxTotal: true, docType: true } }),
-        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true } }),
+        tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } }),
         this.rentSection(tx, from, to),
       ]);
 
-      // A credit note reduces the quarter's output VAT — its stored amounts
-      // are positive (the docType carries the direction), so it enters the
-      // declaration with a flipped sign rather than adding to sales.
-      const sign = (docType: string) => (docType === 'CREDIT_NOTE' ? -1 : 1);
+      // A credit note reduces the quarter's output VAT — its stored amounts are positive (the
+      // docType carries the direction), so it enters the declaration with a flipped sign rather
+      // than adding to sales. المصدرُ الواحد ⑤ مع إشعار المورّد (`ق-١٠٠٨`/١).
+      const sign = (docType: string) => adjustmentSign(docType, 'CREDIT_NOTE');
+      // ⚖️ وإشعارُ المورّد الدائن يعكس ضريبةَ المدخلات بإشارته في فترة تاريخه (`ق-١٠٠٦`/④) — لا يُعاد كتابةُ ربعٍ مضى.
+      const purchaseSign = (docType: string) => adjustmentSign(docType, 'SUPPLIER_CREDIT_NOTE');
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
       // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز).
       const salesStandard = round2(invoices.reduce((s, v) => s + sign(v.docType) * Number(v.subtotal), 0) + rent.standard + rent.legacyStandard);
@@ -160,10 +163,10 @@ export class ObligationsService {
 
       const taxablePurchases = declarablePurchases.filter((p) => !p.exempt);
       const exemptPurchases = declarablePurchases.filter((p) => p.exempt);
-      const purchasesStandard = taxablePurchases.reduce((s, p) => s + Number(p.subtotal), 0);
-      const purchasesStandardVat = taxablePurchases.reduce((s, p) => s + Number(p.taxAmount), 0);
-      const purchasesExempt = exemptPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
-      const purchasesExcluded = excludedPurchases.reduce((s, p) => s + Number(p.subtotal), 0);
+      const purchasesStandard = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
+      const purchasesStandardVat = round2(taxablePurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.taxAmount), 0));
+      const purchasesExempt = round2(exemptPurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
+      const purchasesExcluded = round2(excludedPurchases.reduce((s, p) => s + purchaseSign(p.docType) * Number(p.subtotal), 0));
 
       const netVat = round2(salesStandardVat - purchasesStandardVat);
       // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
-import { createPurchase, deletePurchase, listPurchases, updatePurchase, type Purchase } from '../../api/purchases';
+import { createPurchase, deletePurchase, issueSupplierCreditNote, issueSupplierDebitNote, listPurchases, updatePurchase, type Purchase, type SupplierNoteInput } from '../../api/purchases';
 import { createSupplier, deleteSupplier, listSuppliers, setSupplierArchived, updateSupplier, type Supplier, type SupplierInput } from '../../api/suppliers';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { SupplierPaymentModal } from './SupplierPaymentModal';
+import { SupplierNoteModal } from './SupplierNoteModal';
 import { PurchaseModal } from './PurchaseModal';
 import { PurchaseAttachmentsModal } from './PurchaseAttachmentsModal';
 import { purchaseStatus } from './purchaseStatus';
@@ -39,6 +40,7 @@ export function SuppliersPage() {
 
   const [purchaseModal, setPurchaseModal] = useState<{ mode: 'create' } | { mode: 'edit'; purchase: Purchase } | null>(null);
   const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
+  const [noteFor, setNoteFor] = useState<{ purchase: Purchase; side: 'credit' | 'debit' } | null>(null);
   const [attachmentsFor, setAttachmentsFor] = useState<Purchase | null>(null);
   const [pendingDeletePurchase, setPendingDeletePurchase] = useState<Purchase | null>(null);
   const [purchaseDeleteError, setPurchaseDeleteError] = useState<string | null>(null);
@@ -101,10 +103,19 @@ export function SuppliersPage() {
     return supplier;
   }
 
+  async function handleIssueSupplierNote(data: SupplierNoteInput) {
+    if (!noteFor) return;
+    if (noteFor.side === 'credit') await issueSupplierCreditNote(noteFor.purchase.id, data);
+    else await issueSupplierDebitNote(noteFor.purchase.id, data);
+    setNoteFor(null);
+    await reload();
+  }
+
   async function handleSavePurchase(data: {
     supplierId: string;
     date: string;
     dueDate?: string;
+    supplierRef?: string;
     category?: string;
     categoryCode?: string;
     subtotal: number;
@@ -268,7 +279,20 @@ export function SuppliersPage() {
               const status = purchaseStatus(p);
               return (
                 <tr key={p.id}>
-                  <td className="num">{p.no}</td>
+                  <td className="num">
+                    {p.no}
+                    {p.docType === 'SUPPLIER_CREDIT_NOTE' && (
+                      <span className="badge paid" style={{ fontSize: 9, marginRight: 4 }}>
+                        إشعار دائن من المورّد
+                      </span>
+                    )}
+                    {p.docType === 'SUPPLIER_DEBIT_NOTE' && (
+                      <span className="badge due" style={{ fontSize: 9, marginRight: 4 }}>
+                        إشعار مدين من المورّد
+                      </span>
+                    )}
+                    {p.supplierRef && <div className="hint">مرجع المورّد: {p.supplierRef}</div>}
+                  </td>
                   <td>{p.supplier.name}</td>
                   <td className="num">{dfmt(p.date)}</td>
                   <td>
@@ -292,13 +316,27 @@ export function SuppliersPage() {
                   </td>
                   <td>
                     <RowMenu
-                      actions={[
-                        ...(p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
-                        { label: '✎ تعديل', onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
-                        { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
-                        '-',
-                        { label: '🗑 حذف', onClick: () => setPendingDeletePurchase(p), danger: true },
-                      ]}
+                      actions={
+                        // ⚖️ الإشعارُ مرحَّلٌ لا يُعدَّل ولا يُحذف (`ق-١٠٠٦`/②) — فلا تعديلَ ولا حذفَ عليه، وتصحيحُه بإشعارٍ مقابل.
+                        p.docType === 'PURCHASE'
+                          ? [
+                              ...(p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
+                              { label: '↩ إشعار دائن من المورّد', onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
+                              { label: '↪ إشعار مدين من المورّد', onClick: () => setNoteFor({ purchase: p, side: 'debit' }) },
+                              { label: '✎ تعديل', onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
+                              { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
+                              '-',
+                              { label: '🗑 حذف', onClick: () => setPendingDeletePurchase(p), danger: true },
+                            ]
+                          : [
+                              ...(p.docType === 'SUPPLIER_DEBIT_NOTE' && p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
+                              {
+                                label: p.docType === 'SUPPLIER_CREDIT_NOTE' ? '↪ إشعار مدين يصحّحه' : '↩ إشعار دائن يصحّحه',
+                                onClick: () => setNoteFor({ purchase: p, side: p.docType === 'SUPPLIER_CREDIT_NOTE' ? 'debit' : 'credit' }),
+                              },
+                              { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
+                            ]
+                      }
                     />
                   </td>
                 </tr>
@@ -341,6 +379,8 @@ export function SuppliersPage() {
       {attachmentsFor && <PurchaseAttachmentsModal purchase={attachmentsFor} onClose={() => setAttachmentsFor(null)} />}
 
       {payingPurchase && <SupplierPaymentModal purchase={payingPurchase} onCancel={() => setPayingPurchase(null)} onSaved={afterPaymentSaved} />}
+
+      {noteFor && <SupplierNoteModal purchase={noteFor.purchase} side={noteFor.side} onCancel={() => setNoteFor(null)} onConfirm={handleIssueSupplierNote} />}
 
       {pendingDeletePurchase && (
         <ConfirmModal

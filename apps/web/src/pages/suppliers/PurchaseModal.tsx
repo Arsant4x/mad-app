@@ -55,6 +55,7 @@ export function PurchaseModal({
     supplierId: string;
     date: string;
     dueDate?: string;
+    supplierRef?: string;
     category?: string;
     categoryCode?: string;
     subtotal: number;
@@ -70,6 +71,7 @@ export function PurchaseModal({
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');
   const [date, setDate] = useState(editing ? editing.date.slice(0, 10) : today());
   const [dueDate, setDueDate] = useState(editing?.dueDate?.slice(0, 10) ?? '');
+  const [supplierRef, setSupplierRef] = useState(editing?.supplierRef ?? '');
   const [category, setCategory] = useState(editing?.category ?? '');
   const [subtotal, setSubtotal] = useState(editing ? editing.subtotal : '');
   const [exempt, setExempt] = useState(editing?.exempt ?? false);
@@ -119,6 +121,7 @@ export function PurchaseModal({
         supplierId: supplier.id,
         date,
         dueDate: dueDate || undefined,
+        supplierRef: supplierRef.trim() || undefined,
         category: category.trim() || undefined,
         categoryCode: categoryCodeOf(category),
         subtotal: sub,
@@ -164,6 +167,10 @@ export function PurchaseModal({
             <label>تاريخ الاستحقاق (آخر موعد سداد)</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
+        </div>
+        <div className="field">
+          <label>رقم فاتورة المورّد (مرجع خارجي — كما على ورقته)</label>
+          <input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="اختياري" />
         </div>
         <div className="field">
           <label>الفئة</label>

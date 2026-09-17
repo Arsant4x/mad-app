@@ -1,0 +1,192 @@
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { assertBranchAllowed } from '../branches/branch-scope.util';
+import {
+  assertAdjustableTarget,
+  assertReturnLinesBelong,
+  assertWithinRemaining,
+  linesFromOriginal,
+  type NoteKinds,
+  type NoteSide,
+} from '../common/adjustment/adjustment-note.util';
+import { toBaseAmount } from '../common/currency/base-amount.util';
+import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
+import { MSG } from '../common/i18n/messages';
+import { round2, roundTo } from '../common/money/rounding';
+import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { postSupplierNoteEntry } from '../journal/auto-posting.util';
+import { CreateSupplierNoteDto, SupplierNoteLineDto } from './dto/create-supplier-note.dto';
+import { applySupplierNoteToStock } from './purchase-return.util';
+import { recomputePurchaseStatus } from './purchase-settlement.util';
+import { computePurchaseTax } from './purchases.service';
+
+/** أنواعُ مستند الشراء — الأساسُ وإشعاراه، كما للفاتورة `INVOICE`/`CREDIT_NOTE`/`DEBIT_NOTE`. */
+export const PURCHASE_NOTE_KINDS: NoteKinds<'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' | 'SUPPLIER_DEBIT_NOTE'> = {
+  base: 'PURCHASE',
+  credit: 'SUPPLIER_CREDIT_NOTE',
+  debit: 'SUPPLIER_DEBIT_NOTE',
+};
+
+const NOTE_INCLUDE = { supplier: true, lines: true } as const;
+
+/**
+ * ⚖️ **إشعارُ المورّد — مستندُه يُسجَّل، وقيدُه قيدُنا** (`ق-١٠٠٠` · `ق-١٠٠٦`).
+ *
+ * بنمط إشعار البيع فيما يشتركان فيه (المصدرُ الواحد `common/adjustment/adjustment-note.util`):
+ * أصلٌ يُفحص، وبنودٌ من الأصل، ومرتجعٌ يُتحقَّق منه، وسقفٌ من الأصل، وإشارةٌ في الإقرار، ومتبقٍّ
+ * يُخفَّض. **وما يسقط يسقط لسببٍ واحد — أنه مستندُ المورّد لا مستندُنا**: لا رقمَ منّا يُصدَر (رقمُنا
+ * مرجعٌ داخليّ `SCN-`/`SDN-` ورقمُه مرجعٌ خارجيّ `supplierRef`)، ولا ختمَ ولا سلسلةَ ولا أنبوبَ هيئة
+ * ولا مهلةَ إصدار ولا حدثَ طابور. **وما ينقلب**: الاتجاهُ الدفتريّ (`2100` ⇄ `1300`/الفئة/`1250`)،
+ * والرفُّ يخرج من طبقة الاستلام الأصلية لا يعود إليها، والضريبةُ مدخلاتٌ بإشارتها، والذمّةُ ذمّةُ المورّد.
+ *
+ * والإشعارُ حدثٌ محاسبيٌّ مرحَّل (`ق-١٠٠٦`/②): **يُعكس ولا يُحذف ولا يُعدَّل** — والعكسُ بإشعارٍ مقابل
+ * (دائنٌ على مدينٍ زائد وعكسُه)، كما في البيع. والحرّاسُ في `PurchasesService.update/remove`.
+ */
+@Injectable()
+export class SupplierNotesService {
+  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  issueCreditNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto) {
+    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'credit');
+  }
+
+  issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto) {
+    return this.issue(companyId, allowedBranchIds, purchaseId, dto, 'debit');
+  }
+
+  private issue(companyId: string, allowedBranchIds: string[] | 'all', purchaseId: string, dto: CreateSupplierNoteDto, side: NoteSide) {
+    const docType = side === 'credit' ? PURCHASE_NOTE_KINDS.credit : PURCHASE_NOTE_KINDS.debit;
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const original = await tx.purchase.findUnique({ where: { id: purchaseId }, include: NOTE_INCLUDE });
+        if (!original) throw new NotFoundException(MSG.purchase_not_found);
+        const { correctsOpposite } = assertAdjustableTarget(
+          // ① الأصلُ شراءٌ أو إشعارٌ مقابل. والإلغاءُ (`voidedAt`) يأتي مع ③ في طلبه — فلا مُغلَقَ هنا بعد.
+          { docType: original.docType, closed: false },
+          side,
+          PURCHASE_NOTE_KINDS,
+          { invalid: MSG.supplier_note_target_invalid, closed: MSG.supplier_note_target_invalid },
+        );
+        assertBranchAllowed(allowedBranchIds, original.branchId);
+
+        // ② الإشعارُ الكامل من الأصل: في الدائن تُعاد البضاعةُ المخزنيةُ كلُّها؛ وعلى إشعارٍ مقابل لا رفَّ ولا إشارة.
+        const byOriginalLine = new Map(original.lines.map((l) => [l.id, l]));
+        const lines: SupplierNoteLineDto[] = (
+          dto.lines ??
+          linesFromOriginal(original.lines, (l) =>
+            correctsOpposite ? {} : { returnsPurchaseLineId: l.id, goodsReturned: side === 'credit' && l.productId !== null },
+          )
+        ).map((l) => ({
+          ...l,
+          // الصنفُ يُنقل مع السطر من أصله إن أُغفل — فسطرٌ يشير إلى استلامٍ ولا يعرف صنفَه يرفضه مُشغِّل الحركة.
+          productId: l.productId ?? (l.returnsPurchaseLineId ? (byOriginalLine.get(l.returnsPurchaseLineId)?.productId ?? undefined) : undefined),
+        }));
+        if (correctsOpposite && lines.some((l) => l.returnsPurchaseLineId)) throw new BadRequestException(MSG.supplier_return_line_not_original);
+        // الإشعارُ المدين من المورّد فوترةٌ إضافية — لا بضاعةَ تُعاد فيه.
+        if (side === 'debit' && lines.some((l) => l.goodsReturned)) throw new BadRequestException(MSG.supplier_note_debit_no_goods);
+        // ③ سطرُ الإعادة من الأصل نفسِه وبصنفه وبحدّ ما استُلم.
+        assertReturnLinesBelong(
+          lines.map((l) => ({ returnsId: l.returnsPurchaseLineId, productId: l.productId, quantity: l.quantity })),
+          original.lines,
+          { notOriginal: MSG.supplier_return_line_not_original, exceeds: MSG.supplier_return_exceeds_received },
+        );
+
+        // مجاميعُ الشراء بطريقته: مجموعُ البنود ثم ضريبةٌ بعلَم الإعفاء الموروث من الأصل.
+        const subtotal = roundTo(
+          lines.reduce((t, l) => t + l.quantity * l.unitPrice, 0),
+          'LINE_AMOUNT',
+        );
+        const { tax, total } = computePurchaseTax(subtotal, original.exempt);
+        const taxAmount = round2(tax);
+        const noteTotal = round2(total);
+
+        // ④ السقفُ من الأصل (`ق-١٠٠٦`/⑤): الدائنُ على الشراء، والمدينُ على دائنٍ زائد — لا يتجاوزان ما تبقّى.
+        if (side === 'credit' || correctsOpposite) {
+          const prior = await tx.purchase.aggregate({ where: { relatedPurchaseId: original.id, docType }, _sum: { total: true } });
+          assertWithinRemaining(noteTotal, Number(original.total), Number(prior._sum.total ?? 0), MSG.supplier_note_exceeds_remaining);
+        }
+
+        const rate = Number(original.exchangeRate);
+        const date = dto.date ? new Date(dto.date) : new Date();
+        // رقمُنا مرجعٌ داخليّ من العدّاد الذرّيّ (ق-٣٢٨)، عمريٌّ كرقم الشراء — ورقمُ المورّد في `supplierRef`.
+        const no = await nextDocumentNumber(tx, companyId, date, { kind: side === 'credit' ? 'SCN' : 'SDN', pad: 3, perYear: false }, (prefix) =>
+          highestSequenceOf(tx.purchase, prefix),
+        );
+
+        const created = await tx.purchase.create({
+          data: {
+            companyId,
+            no,
+            docType,
+            relatedPurchaseId: original.id,
+            adjustmentReason: dto.reason,
+            supplierRef: dto.supplierRef?.trim() || null,
+            branchId: original.branchId,
+            supplierId: original.supplierId,
+            date,
+            dueDate: date,
+            category: original.category,
+            categoryCode: original.categoryCode,
+            subtotal,
+            taxAmount,
+            exempt: original.exempt,
+            excludeFromVat: original.excludeFromVat,
+            total: noteTotal,
+            currency: original.currency,
+            exchangeRate: rate,
+            baseSubtotal: toBaseAmount(subtotal, rate),
+            baseTaxAmount: toBaseAmount(taxAmount, rate),
+            baseTotal: toBaseAmount(noteTotal, rate),
+            // الدائنُ لا يُسدَّد فلا يدخل المتبقّي؛ والمدينُ مستحقٌّ يُسدَّد بسند صرفٍ كالشراء.
+            status: side === 'credit' ? 'PAID' : 'DUE',
+            lines: {
+              create: lines.map((l) => ({
+                companyId,
+                description: l.description,
+                productId: l.productId ?? null,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                taxRate: l.taxRate ?? 15,
+                returnsPurchaseLineId: l.returnsPurchaseLineId ?? null,
+                goodsReturned: side === 'credit' ? (l.goodsReturned ?? false) : false,
+              })),
+            },
+          } as unknown as Prisma.PurchaseUncheckedCreateInput,
+          include: NOTE_INCLUDE,
+        });
+
+        // الرفُّ أولاً ثم القيد — كالإنشاء: رفضٌ في الرفّ يُسقط المعاملةَ قبل أن يُكتب قيد.
+        const stock = await applySupplierNoteToStock(tx, {
+          companyId,
+          branchId: created.branchId,
+          date: created.date,
+          documentNo: created.no,
+          side,
+          exchangeRate: rate,
+          lines: created.lines,
+        });
+
+        const entry = await postSupplierNoteEntry(tx, companyId, {
+          side,
+          supplierId: created.supplierId,
+          branchId: created.branchId,
+          no: created.no,
+          date: created.date,
+          supplierName: created.supplier.name,
+          categoryCode: created.categoryCode,
+          baseSubtotal: Number(created.baseSubtotal),
+          baseTaxAmount: Number(created.baseTaxAmount),
+          baseTotal: Number(created.baseTotal),
+          baseInventory: stock.baseInventory,
+          baseCogs: stock.baseCogs,
+        });
+        // ⑥ الدائنُ يخفّض متبقّي أصله فتُشتقّ حالتُه من جديد في المعاملة نفسِها (`ق-٨٧٢`).
+        if (side === 'credit') await recomputePurchaseStatus(tx, original.id);
+
+        if (!entry) return created;
+        return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: NOTE_INCLUDE });
+      }),
+    );
+  }
+}

@@ -1277,6 +1277,15 @@ enum PurchaseStatus {
   PAID
 }
 
+/// نوعُ مستند الشراء — كما `InvoiceDocType` للبيع (`ق-١٠٠٦`/③: «ولا نمطَ ثانٍ»): الشراءُ الأصل،
+/// **وإشعارُ المورّد الدائن** (يخفّض ما ندين به: إعادةُ بضاعةٍ أو تخفيضُ سعر)، **وإشعارُه المدين**
+/// (فوترةٌ إضافية). المبالغُ مخزَّنةٌ موجبةً والنوعُ يحمل الاتجاه — كالبيع حرفاً.
+enum PurchaseDocType {
+  PURCHASE
+  SUPPLIER_CREDIT_NOTE
+  SUPPLIER_DEBIT_NOTE
+}
+
 /// A purchase invoice / recurring obligation (utilities, rent, payroll...).
 ///
 /// السدادُ **مستندٌ يُرحَّل** (`ق-٨٦٦` · `ق-٨٧١`): `SupplierPayment` وتخصيصاتُه هما
@@ -1291,6 +1300,21 @@ model Purchase {
   no         String
   supplierId String
   supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  /// ⚖️ **إشعارُ المورّد صفٌّ في جدول الشراء نفسِه بنوعه** (`ق-١٠٠٦`/③ — «كما في إشعار البيع،
+  /// ولا نمطَ ثانٍ»): مستندُه هو، **وقيدُه قيدُنا** (`ق-١٠٠٦`/①). لا رقمَ منّا يُصدَر له
+  /// (رقمُنا `SCN-`/`SDN-` مرجعٌ داخليّ) ولا ختمَ ولا سلسلةَ — ورقمُه في `supplierRef`.
+  docType PurchaseDocType @default(PURCHASE)
+  /// الإشعاراتُ وحدَها: الشراءُ الذي يصحّحه هذا الإشعار — أو الإشعارُ المقابل الذي يصحّحه
+  /// (دائنٌ على مدينٍ زائد وعكسُه). `Restrict`: شراءٌ صدر عليه إشعارٌ يبقى في الملفّ.
+  relatedPurchaseId String?
+  relatedPurchase   Purchase?  @relation("PurchaseAdjustments", fields: [relatedPurchaseId], references: [id], onDelete: Restrict)
+  adjustments       Purchase[] @relation("PurchaseAdjustments")
+  /// سببُ الإشعار كما على مستند المورّد.
+  adjustmentReason String?
+  /// **رقمُ مستند المورّد** كما على ورقته — فاتورتُه أو إشعارُه — **مرجعٌ خارجيٌّ لا رقمُنا**
+  /// (`ق-١٠٠٦`/①: «يُسجَّل مرجعاً خارجياً كما يُسجَّل رقمُ فاتورة الشراء»).
+  supplierRef String?
 
   date     DateTime  @db.Date
   dueDate  DateTime? @db.Date
@@ -1349,6 +1373,7 @@ model Purchase {
 
   @@unique([companyId, no])
   @@index([companyId, categoryCode])
+  @@index([relatedPurchaseId])
   @@map("purchases")
 }
 
@@ -1389,12 +1414,24 @@ model PurchaseLine {
   unitPrice Decimal @db.Decimal(18, 6)
   taxRate   Decimal @default(15) @db.Decimal(5, 2)
 
+  /// **لسطر إشعار المورّد وحده** — مرآةُ `InvoiceLine.returnsLineId`: سطرُ الشراء الأصليّ الذي
+  /// يصحّحه. به تُعرف طبقةُ الاستلام الأصلية فتخرج منها المُعادة أو يُعدَّل سعرُها
+  /// (`ق-١٠٠٦`/③)، ويُحسب ما أُعيد منه سابقاً. `Restrict`: سطرُ شراءٍ صُحِّح لا يُحذف.
+  /// سطرٌ بلا هذا الرابط إشعارٌ محاسبيّ لا يمسّ الرفّ.
+  returnsPurchaseLineId String?
+  returnsPurchaseLine   PurchaseLine?  @relation("PurchaseLineReturns", fields: [returnsPurchaseLineId], references: [id], onDelete: Restrict)
+  returnedBy            PurchaseLine[] @relation("PurchaseLineReturns")
+  /// هل **أُعيدت البضاعةُ فعلاً** إلى المورّد (تخرج من الرفّ) — أم أنه إشعارُ سعرٍ بلا بضاعة
+  /// (الرفُّ يبقى وتكلفتُه تتبع). على الإشعار الدائن وحده؛ والمدينُ فوترةٌ لا بضاعةَ تُعاد فيه.
+  goodsReturned Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   stockMovements StockMovement[]
 
   @@index([purchaseId])
   @@index([companyId, productId])
+  @@index([returnsPurchaseLineId])
   @@map("purchase_lines")
 }
 

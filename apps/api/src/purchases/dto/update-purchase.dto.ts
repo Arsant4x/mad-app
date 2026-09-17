@@ -1,6 +1,6 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
@@ -14,6 +14,12 @@ export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  /** رقمُ فاتورة المورّد — مرجعٌ خارجيّ يُعدَّل على الشراء (لا على الإشعار: مرحَّلٌ لا يُمسّ). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  supplierRef?: string;
 
   /** لافتةٌ حرّة — تُقبل للتوافق مع عملاء قدامى، ويُشتقّ منها الرمز. */
   @IsOptional()
