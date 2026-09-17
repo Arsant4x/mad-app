@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * Early termination: what the tenant owes for walking away.
@@ -58,7 +59,7 @@ describe('Contract cancellation settlement (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التسوية ${tag}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التسوية ${tag}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',

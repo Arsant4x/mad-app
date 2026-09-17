@@ -131,8 +131,10 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
   await tenant.runInTenantContext(companyId, async (tx) => {
     const property = await tx.property.create({ data: { companyId, name: 'عقار المجسّ', ownership: 'owned' } });
     const unit = await tx.unit.create({ data: { companyId, propertyId: property.id, unitNo: PROBE.unitNo, type: 'شقة', rentMonthly: 1000 } });
+    // العقدُ الحيّ لا يكون بلا عميل — قيدُ CHECK في القاعدة (ق-١٠٢٩/②) — فالمستأجرُ عميلٌ يُنشأ ويُربط بمعرّفه.
+    const customer = await tx.customer.create({ data: { companyId, name: PROBE.tenant } });
     const contract = await tx.contract.create({
-      data: { companyId, unitId: unit.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31'), classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' },
+      data: { companyId, unitId: unit.id, customerId: customer.id, no: PROBE.contractNo, tenant: PROBE.tenant, value: 12000, baseValue: 12000, cycle: 'monthly', start: new Date('2026-01-01'), end: new Date('2026-12-31'), classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' },
     });
     // الأقساطُ القديمة على أساس القبض — بتاريخ إنشاءٍ يسبق لحظةَ البناء (قيدُ CHECK يحبس القيمةَ القديمة على ما سبق).
     const installment = (dueDate: string, service: { start: string; end: string } | null, baseRecognized: number) =>

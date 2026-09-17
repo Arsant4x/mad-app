@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * Renewal creates a *new* contract rather than stretching the old one's dates.
@@ -53,7 +54,7 @@ describe('Contract renewal (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId,
-        tenant: `مستأجر التجديد ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التجديد ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',
@@ -70,7 +71,8 @@ describe('Contract renewal (e2e)', () => {
       await request(app.getHttpServer()).post(`/contracts/${id}/cancel`).set('Authorization', `Bearer ${token}`).send({ cancelDate: '2028-12-31', cancelReason: 'تنظيف بيانات الاختبار', installmentDisposition: 'cancel' });
     }
     await app.close();
-  });
+    // إلغاءُ كلِّ عقدٍ يرحّل تسويةً واستحقاقاً — يتجاوز الخمسَ ثوانٍ الافتراضية على قاعدةٍ معمَّرة.
+  }, 120000);
 
   it('[SPEC 16.2 16.10] creates a linked follow-on contract and leaves the original intact', async () => {
     const before = await request(app.getHttpServer()).get(`/contracts/${sourceId}`).set('Authorization', `Bearer ${token}`).expect(200);
@@ -144,7 +146,7 @@ describe('Contract renewal (e2e)', () => {
             })
             .expect(201)
         ).body.id,
-        tenant: `مستأجر التجديد ب ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التجديد ب ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',
@@ -196,7 +198,7 @@ describe('Contract renewal (e2e)', () => {
     const base = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر الترقيم ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, customerId: await createTenantCustomer(app, token, `مستأجر الترقيم ${suffix}`), value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(201);
     createdContractIds.push(base.body.id);
 
@@ -232,7 +234,7 @@ describe('Contract renewal (e2e)', () => {
     const contract = await request(app.getHttpServer())
       .post('/contracts')
       .set('Authorization', `Bearer ${token}`)
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, tenant: `مستأجر ملغى ${suffix}`, value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.body.id, customerId: await createTenantCustomer(app, token, `مستأجر ملغى ${suffix}`), value: 12000, cycle: 'monthly', start: '2026-01-01', end: '2026-12-31' })
       .expect(201);
     createdContractIds.push(contract.body.id);
 

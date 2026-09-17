@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * Claims are money demanded of the tenant outside the rent schedule.
@@ -59,7 +60,7 @@ describe('Contract claims (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر المطالبات ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر المطالبات ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',

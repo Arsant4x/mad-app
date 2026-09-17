@@ -69,6 +69,9 @@ export const MSG = {
   customer_has_invoices: 'customers.has_invoices',
   customer_has_contracts: 'customers.has_contracts',
   customer_in_trash: 'customers.in_trash',
+  customer_same_name_exists: 'customers.same_name_exists',
+  customer_same_name_in_trash: 'customers.same_name_in_trash',
+  customer_archived_cannot_link: 'customers.archived_cannot_link',
   invoice_not_found: 'invoices.not_found',
   payment_not_found: 'payments.not_found',
   payment_posted_immutable: 'payments.posted_immutable',
@@ -143,6 +146,7 @@ export const MSG = {
   contract_cancelled_cannot_renew: 'contracts.cancelled_cannot_renew',
   contract_already_renewed: 'contracts.already_renewed',
   contract_no_taken: 'contracts.no_taken',
+  contract_party_locked_after_posting: 'contracts.party_locked_after_posting',
   renewal_must_start_after_source: 'contracts.renewal_start_before_source',
   warranty_not_found: 'warranties.not_found',
   warranty_end_before_start: 'warranties.end_before_start',
@@ -489,6 +493,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'يوجد عميلٌ بهذا الاسم أو الرقم الضريبي في سلة المحذوفات — استعِده من السلة أو اختر اسماً آخر',
     en: 'A customer with this name or VAT number is in the trash — restore it from the trash or choose another name',
   },
+  [MSG.customer_same_name_exists]: {
+    ar: 'يوجد عميلٌ بهذا الاسم — أهو نفسُه؟ اختره من القائمة، أو أكِّد الإنشاء إن كان شخصاً آخر بالاسم نفسِه',
+    en: 'A customer with this name already exists — is it the same one? Pick it from the list, or confirm creation if this is a different person with the same name',
+  },
+  [MSG.customer_same_name_in_trash]: {
+    ar: 'يوجد عميلٌ بهذا الاسم في سلة المحذوفات — استعِده من السلة، أو أكِّد إنشاءَ عميلٍ آخر بالاسم نفسِه',
+    en: 'A customer with this name is in the trash — restore it, or confirm creating another customer with the same name',
+  },
+  [MSG.customer_archived_cannot_link]: {
+    ar: 'العميلُ مؤرشَف — أعِد تفعيله من شاشة العملاء قبل ربط عقدٍ به',
+    en: 'This customer is archived — unarchive them on the customers screen before linking a contract',
+  },
   [MSG.quote_not_found]: { ar: 'عرض السعر غير موجود', en: 'Quote not found' },
   [MSG.quote_expired]: { ar: 'انتهت صلاحية العرض بتاريخ {date} — أصدر عرضاً محدَّثاً', en: 'The quote expired on {date} — issue an updated one' },
   [MSG.quote_already_converted]: { ar: 'حُوِّل سابقاً إلى الفاتورة {invoiceNo}', en: 'Already converted to invoice {invoiceNo}' },
@@ -601,6 +617,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.installment_not_found]: { ar: 'القسط غير موجود', en: 'Installment not found' },
   [MSG.contract_cancelled_cannot_renew]: { ar: 'لا يمكن تجديد عقد ملغى', en: 'A cancelled contract cannot be renewed' },
+  [MSG.contract_party_locked_after_posting]: {
+    ar: 'لا يُغيَّر طرفُ العقد بعد أوّل ترحيل — ذمّتُه وقيودُه منسوبةٌ إليه؛ أنهِ هذا العقدَ وأنشئ عقداً جديداً باسم الطرف الصحيح',
+    en: 'The contract party cannot change after the first posting — its receivable and entries are attributed to it; end this contract and create a new one for the right party',
+  },
   [MSG.contract_already_renewed]: {
     ar: 'هذا العقد مجدَّد بالفعل بالعقد {contractNo}',
     en: 'This contract has already been renewed as {contractNo}',

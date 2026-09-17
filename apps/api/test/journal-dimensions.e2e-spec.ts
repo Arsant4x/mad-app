@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * الأبعاد التحليلية على سطر القيد — الموجة ٣ من L0.
@@ -71,7 +72,7 @@ describe('الأبعاد التحليلية على سطر القيد (e2e)', () 
     unitId = unit.body.id;
 
     const contract = await auth(request(app.getHttpServer()).post('/contracts'))
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId, tenant: `مستأجر الأبعاد ${suffix}`, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId, customerId: await createTenantCustomer(app, token, `مستأجر الأبعاد ${suffix}`), value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
       .expect(201);
     contractId = contract.body.id;
   }, 90000);

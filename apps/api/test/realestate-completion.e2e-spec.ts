@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * إكمال §16 — البنود السبعة الأخيرة دفعةً واحدة:
@@ -80,7 +81,7 @@ describe('§16 completion batch (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId,
-        tenant: `مستأجر قادم ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر قادم ${suffix}`),
         value: 24000,
         cycle: 'monthly',
         start: nextMonth.toISOString().slice(0, 10),
@@ -100,7 +101,7 @@ describe('§16 completion batch (e2e)', () => {
     const nextMonth = new Date(Date.now() + 40 * 24 * 3600 * 1000);
     const end = new Date(nextMonth.getTime() + 365 * 24 * 3600 * 1000);
     await auth(request(app.getHttpServer()).post('/contracts'))
-      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: draftUnit, tenant: `مسودة ${suffix}`, value: 12000, cycle: 'monthly', start: nextMonth.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), draft: true })
+      .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: draftUnit, customerId: await createTenantCustomer(app, token, `مسودة ${suffix}`), value: 12000, cycle: 'monthly', start: nextMonth.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), draft: true })
       .expect(201);
     const units = await auth(request(app.getHttpServer()).get('/units')).expect(200);
     const u = units.body.find((x: { id: string }) => x.id === draftUnit);
@@ -124,7 +125,7 @@ describe('§16 completion batch (e2e)', () => {
     const end = new Date(Date.now() + 305 * 24 * 3600 * 1000);
     activeContractId = (
       await auth(request(app.getHttpServer()).post('/contracts'))
-        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: soloUnit, tenant: `مستأجر تسوية ${suffix}`, value: 36000, cycle: 'monthly', start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) })
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: soloUnit, customerId: await createTenantCustomer(app, token, `مستأجر تسوية ${suffix}`), value: 36000, cycle: 'monthly', start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) })
         .expect(201)
     ).body.id;
 

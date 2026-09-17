@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * The portfolio KPIs. Every figure is derived at read time, so these check the
@@ -98,7 +99,7 @@ describe('Property KPIs (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: rented.id,
-        tenant: `مستأجر المؤشرات ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر المؤشرات ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2020-01-01',
@@ -135,7 +136,7 @@ describe('Property KPIs (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
-        tenant: `مستأجر مستقبلي ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر مستقبلي ${suffix}`),
         value: 120000,
         cycle: 'monthly',
         start: '2029-01-01',
@@ -159,7 +160,7 @@ describe('Property KPIs (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
-        tenant: `مستأجر التحصيل ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التحصيل ${suffix}`),
         value: 24000,
         cycle: 'monthly',
         start: '2024-01-01',
@@ -207,7 +208,7 @@ describe('Property KPIs (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.id,
-        tenant: `مستأجر منتهٍ ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر منتهٍ ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: new Date(Date.now() - 86400000 * 30).toISOString().slice(0, 10),

@@ -8,6 +8,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
 import { OUTPUT_VAT_ACCOUNT } from '../src/journal/auto-posting.util';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * ⭐ **الحارسُ الحيّ لاستحقاق الإيجار — يقرأ الدفترَ والإقرارَ معاً في كلِّ مرحلة**
@@ -120,7 +121,7 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
           classification: opts.classification,
           vatInclusion: opts.vatInclusion,
           unitId: unit.id,
-          tenant: `مستأجر الاستحقاق ${tag}`,
+          customerId: await createTenantCustomer(app, token, `مستأجر الاستحقاق ${tag}`),
           value: opts.value,
           cycle: 'monthly',
           start: iso(opts.start),

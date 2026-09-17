@@ -173,8 +173,11 @@ async function main() {
   // منطق زمني مقصود: المنتهي يسبق الساري، والأقساط تتولّد من تاريخ البداية
   // فتُنتج ماضياً حقيقياً (مسدَّد ومتأخر) لا أرقاماً مصطنعة.
   // التصنيفُ يُعلَن لكل عقد (ق-٨٩١): تجاريٌّ للمحال والمكاتب، سكنيٌّ للشقق — والقيمةُ غيرُ شاملةٍ للضريبة.
-  const contract = (unitId, tenant, phone, value, cycle, start, end, classification, extra = {}) =>
-    api('POST', '/contracts', { unitId, tenant, phone, value, cycle, start, end, classification, vatInclusion: 'EXCLUSIVE', ...extra });
+  // المستأجرُ عميلٌ يُنشأ صراحةً ثم يُربط بمعرّفه (ق-١٠٢٨/①) — لا اسمٌ يبحث عنه العقد.
+  const contract = async (unitId, tenant, phone, value, cycle, start, end, classification, extra = {}) => {
+    const customer = await api('POST', '/customers', { name: tenant, phone, allowSameName: true });
+    return api('POST', '/contracts', { unitId, customerId: customer.id, value, cycle, start, end, classification, vatInclusion: 'EXCLUSIVE', ...extra });
+  };
 
   // (١) عقد منتهٍ — انتهى قبل شهرين
   const expired = await contract(u.off2.id, 'مؤسسة الأفق للتجارة', '0551000111', 66000, 'monthly', monthsFromToday(-14), monthsFromToday(-2, 28), 'COMMERCIAL');
@@ -248,10 +251,8 @@ async function main() {
 
   // ── فواتير ومقبوضات جزئية ───────────────────────────────────────────────
   // خدمات تُفوتر خارج عقد الإيجار (نظافة/تشغيل) — وهي ما يُنتج ذمماً بأعمار.
-  // ⚠️ لا تُنشأ هنا: إنشاء العقد يُنشئ عميلاً باسم المستأجر تلقائياً
-  // (contracts.service.ts يطابق على الاسم+الجوال)، فمحاولة الإنشاء ثانيةً
-  // ترتدّ بـ409. نجلب القائمة ونطابق بالاسم — وهذا أيضاً ما يجعل السكربت
-  // يعكس الواقع: المستأجر والعميل كيانٌ واحد لا اثنان.
+  // العملاءُ أُنشئوا صراحةً أعلاه قبل عقودهم (ق-١٠٢٨/①) — فتُجلب القائمةُ ويُطابَق بالاسم هنا
+  // لأن أسماءَ البذرة فريدةٌ بالبناء؛ وهذا ما يجعل السكربت يعكس الواقع: المستأجر والعميل كيانٌ واحد.
   const existingCustomers = await api('GET', '/customers');
   const byName = (name) => {
     const hit = existingCustomers.find((c) => c.name === name);

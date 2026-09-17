@@ -1,17 +1,18 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
 import { CONTRACT_CLASSIFICATIONS, CONTRACT_VAT_INCLUSIONS, FURNISHED_OPTIONS } from './create-contract.dto';
 
 /** Deliberately narrow: unit/value/dates/cycle can't be changed after
  * creation (that would require reconciling already-generated installments)
  * — only descriptive fields. Cancellation is its own endpoint. */
 export class UpdateContractDto {
+  /**
+   * **تغييرُ الطرف** — بمعرّفه، **وقبل أوّل ترحيلٍ فقط** (`ق-١٠٢٨`/③): بعده ذمّةٌ وقيودٌ نُسبت إليه،
+   * والخدمةُ ترفض وتسمّي المخرج (إنهاءُ العقد وعقدٌ جديد). أمّا `tenant`/`phone` فمشتقّان من
+   * العميل لا مُدخَلان — تصحيحُ اسمٍ يقع في بطاقة العميل ويصل عقودَه.
+   */
   @IsOptional()
-  @IsString()
-  tenant?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
+  @IsUUID()
+  customerId?: string;
 
   @IsOptional()
   @IsString()

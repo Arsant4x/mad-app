@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * The collection queue. Nothing here sends anything — the platform decides who
@@ -70,8 +71,7 @@ describe('Rent reminders (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التذكيرات ${suffix}`,
-        phone: '0500000000',
+        customerId: await createTenantCustomer(app, token, `مستأجر التذكيرات ${suffix}`, '0500000000'),
         value: 12000,
         cycle: 'monthly',
         start: '2025-01-01',
@@ -172,7 +172,7 @@ describe('Rent reminders (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر بعيد ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر بعيد ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2029-01-01',

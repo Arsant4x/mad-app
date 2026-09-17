@@ -275,11 +275,10 @@ async function seedCustomers(companyId: string, customers: { name: string; vatNu
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     for (const c of customers) {
-      await tx.customer.upsert({
-        where: { companyId_name: { companyId, name: c.name } },
-        update: {},
-        create: { companyId, name: c.name, vatNumber: c.vatNumber || null, phone: c.phone || null },
-      });
+      // فرادةُ الاسم لم تعد قيداً (`ق-١٠٢٨`/⑤) فلا مفتاحَ مركّباً يُرفع به — يُقرأ بالاسم ثم يُنشأ إن غاب.
+      const existing = await tx.customer.findFirst({ where: { companyId, name: c.name }, select: { id: true } });
+      if (existing) continue;
+      await tx.customer.create({ data: { companyId, name: c.name, vatNumber: c.vatNumber || null, phone: c.phone || null } });
     }
   });
 }

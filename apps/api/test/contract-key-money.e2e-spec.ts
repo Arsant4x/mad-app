@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { createTenantCustomer } from './tenant-customer';
 
 /**
  * التقبيل — a lump sum for the *right to a commercial location*, and the third
@@ -53,7 +54,7 @@ describe('Contract key money (e2e)', () => {
       .send({
         classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        tenant: `مستأجر التقبيل ${suffix}`,
+        customerId: await createTenantCustomer(app, token, `مستأجر التقبيل ${suffix}`),
         value: 24000,
         cycle: 'monthly',
         start: '2026-01-01',

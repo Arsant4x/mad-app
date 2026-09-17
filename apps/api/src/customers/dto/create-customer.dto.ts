@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 
 export class CreateCustomerDto {
@@ -55,4 +55,12 @@ export class CreateCustomerDto {
   @IsNumber()
   @Min(0)
   creditLimit?: number;
+
+  /**
+   * **الاسمُ المكرَّر تنبيهٌ لا قيد** (`ق-١٠٢٨`/⑤): عميلٌ حيٌّ (أو في السلة) بالاسم نفسِه يردّ `409`
+   * «أهو نفسُه؟» حتى يؤكّد المُنشئ أنه شخصٌ آخر بهذا العلَم. ⛔ ولا يُميَّز بالهاتف — مفتاحٌ ضعيفٌ آخر.
+   */
+  @IsOptional()
+  @IsBoolean()
+  allowSameName?: boolean;
 }
