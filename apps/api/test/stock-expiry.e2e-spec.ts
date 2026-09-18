@@ -34,7 +34,7 @@ describe('Stock batch/expiry (e2e)', () => {
 
   async function receive(body: Record<string, unknown>) {
     return authA(request(app.getHttpServer()).post('/inventory/movements'))
-      .send({ productId, warehouseId, type: 'IN', qty: 10, date: iso(0), ...body })
+      .send({ productId, warehouseId, type: 'IN', qty: 10, unitCost: 5, date: iso(0), ...body })
       .expect(201);
   }
 

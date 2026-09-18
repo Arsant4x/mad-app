@@ -177,6 +177,7 @@ export class PurchasesService {
           date: created.date,
           exchangeRate,
           lines: created.lines,
+          ref: created.no,
         });
 
         const entry = await postPurchaseEntry(tx, companyId, {
@@ -325,6 +326,7 @@ export class PurchasesService {
           date: updated.date,
           exchangeRate: rate,
           lines: updated.lines,
+          ref: updated.no,
         });
       }
 

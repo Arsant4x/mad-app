@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
+import { settleProvisionalConsumptions } from '../inventory/costing.util';
+import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 
 /**
  * **الاستلام الضمني** — قرار المالك (ق-١٩).
@@ -44,6 +46,8 @@ export interface ReceiveArgs {
   /** سعر الصرف: الطبقة تُقوَّم بالعملة الأساسية كالدفتر. */
   exchangeRate: number;
   lines: ReceiptLine[];
+  /** مرجعُ المستند لقيد تسوية المؤقّت — رقمُ الشراء (ق-١٠٦٣/١). */
+  ref?: string;
 }
 
 /** ينشئ حركة استلام وطبقة تكلفة لكل بندٍ مخزني. */
@@ -78,7 +82,7 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
       select: { id: true },
     });
 
-    await tx.inventoryLayer.create({
+    const layer = await tx.inventoryLayer.create({
       data: {
         companyId: args.companyId,
         productId: line.productId!,
@@ -91,7 +95,15 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
         sourceType: 'GOODS_RECEIPT',
         sourceMovementId: movement.id,
       },
+      select: { id: true },
     });
+
+    // ㉘ الوعدُ يُنفَّذ (ق-١٠٦٣/١): ما بيع قبل هذا الاستلام بتكلفةٍ مؤقّتة يُسوَّى الآن بطبقته الحقيقية، وفرقُ
+    // التكلفة يُرحَّل على 5100/1300 — كان هذا السطرُ تعليقاً في `consumeFifo` بلا كاتب.
+    const settled = await settleProvisionalConsumptions(tx, args.companyId, { productId: line.productId!, warehouseId, layerId: layer.id });
+    if (settled.settled > 0) {
+      await postCogsSettlementEntry(tx, args.companyId, { branchId: args.branchId, ref: `استلام ${args.ref ?? ''}`.trim(), date: args.date, baseDelta: settled.costDelta });
+    }
   }
 
   return { layers: stocked.length };

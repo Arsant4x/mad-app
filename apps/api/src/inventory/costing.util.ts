@@ -209,6 +209,7 @@ export async function restoreConsumption(
   const consumptions = await tx.inventoryConsumption.findMany({
     where: { movementId: originalMovementId },
     orderBy: { createdAt: 'asc' },
+    include: { settledBy: { select: { id: true } } },
   });
 
   let restoredQty = 0;
@@ -216,6 +217,8 @@ export async function restoreConsumption(
   let provisionalQty = 0;
 
   for (const c of consumptions) {
+    // ㉘ مؤقّتٌ سُوِّي: صفُّ تسويته — بطبقةٍ حقيقية وتكلفتها — هو الذي يُعاد ويُحسب، لا الأصلُ (ق-١٠٦٣/١).
+    if (c.layerId === null && c.settledBy) continue;
     const qty = Number(c.qty);
     reversedCost += qty * Number(c.unitCost);
 
@@ -256,10 +259,13 @@ export async function restoreConsumptionPartial(
   originalMovementId: string,
   qty: number,
 ): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number }> {
-  const consumptions = await tx.inventoryConsumption.findMany({
+  const all = await tx.inventoryConsumption.findMany({
     where: { movementId: originalMovementId },
     orderBy: { createdAt: 'desc' },
+    include: { settledBy: { select: { id: true } } },
   });
+  // ㉘ المؤقّتُ المُسوَّى لا يُعدّ ولا يُعاد — صفُّ تسويته يمثّله (ق-١٠٦٣/١).
+  const consumptions = all.filter((c) => !(c.layerId === null && c.settledBy));
   const consumed = roundTo(consumptions.reduce((s, c) => s + Number(c.qty), 0), 'DERIVED_QUANTITY');
   let remaining = roundTo(qty, 'DERIVED_QUANTITY');
   if (remaining > consumed) throw new Error(`مرتجعٌ (${remaining}) يتجاوز ما استُهلك (${consumed}) على الحركة ${originalMovementId}`);
@@ -314,6 +320,121 @@ export function openProvisionalConsumptions(tx: Tx) {
     where: { layerId: null, settledBy: { is: null } },
     orderBy: { createdAt: 'asc' },
   });
+}
+
+/**
+ * ㉘ **طبقةٌ من حركةٍ يدوية** (`ق-١٠٦٣`): إدخالٌ يدويّ أو تسويةٌ موجبة تُنشئ طبقةً بتكلفةٍ **مُدخَلة** —
+ * لا من البطاقة (`ق-١٠٦٣/٣`: لا صفرَ صامت). كانت الكمّيةُ تتحرّك والقيمةُ لا: `229` إدخالاً يدوياً بلا طبقة
+ * على قاعدة التطوير يومَ البناء (`ق-١٠٦٢`).
+ */
+export async function createLayerFromMovement(
+  tx: Tx,
+  companyId: string,
+  args: { productId: string; warehouseId: string; qty: number; unitCost: number; acquiredAt: Date; sourceType: 'ADJUSTMENT' | 'TRANSFER' | 'OPENING' | 'RETURN'; movementId: string },
+): Promise<string> {
+  const layer = await tx.inventoryLayer.create({
+    data: {
+      companyId,
+      productId: args.productId,
+      warehouseId: args.warehouseId,
+      qtyReceived: args.qty,
+      qtyRemaining: args.qty,
+      unitCost: args.unitCost,
+      acquiredAt: args.acquiredAt,
+      sourceType: args.sourceType,
+      sourceMovementId: args.movementId,
+    },
+    select: { id: true },
+  });
+  return layer.id;
+}
+
+export interface SettlementRow {
+  provisionalId: string;
+  settlementId: string;
+  qty: number;
+  provisionalUnitCost: number;
+  actualUnitCost: number;
+}
+
+/**
+ * ㉘ **كاتبُ تسوية الاستهلاك المؤقّت — الوعدُ الذي كان في الشيفرة بلا كاتب** (`ق-١٠٦٢` · `ق-١٠٦٣/١`).
+ *
+ * كانت `consumeFifo` تعد بأن المؤقّت «يُسوَّى عند وصول الاستلام الحقيقي» ولا كاتبَ للتسوية في الشيفرة كلِّها —
+ * فبقي `123` استهلاكاً مؤقّتاً على قاعدة التطوير مفتوحاً أبداً ولا يُرى. وهذا الكاتب: عند وصول طبقةٍ جديدة
+ * (استلامُ شراءٍ أو إدخالٌ يدويّ) تُسوّى المؤقّتاتُ المفتوحة على الصنف والمستودع **من الأقدم** — صفٌّ جديد يشير
+ * إلى الأصل (`settlesId`) بالطبقة الحقيقية وتكلفتها، ونقصانٌ ذرّيٌّ مشروط من الطبقة (`ق-٨١٤`).
+ *
+ * ⚠️ **ولا يُسوَّى صفٌّ إلا كاملاً**: `settlesId` فريد، فما لا تكفيه الطبقةُ يبقى مفتوحاً إلى طبقةٍ تكفيه.
+ * ويُعاد فرقُ التكلفة (الحقيقية − المؤقّتة) × الكمّية ليرحّله المستدعي على `5100`/`1300` — فقائمةُ الدخل
+ * كانت تحمل تقديراً، والتسويةُ تجعله رقماً.
+ */
+export async function settleProvisionalConsumptions(
+  tx: Tx,
+  companyId: string,
+  args: { productId: string; warehouseId: string; layerId: string },
+): Promise<{ settled: number; costDelta: number; settlements: SettlementRow[] }> {
+  const open = await tx.inventoryConsumption.findMany({
+    where: { companyId, layerId: null, settledBy: { is: null }, movement: { productId: args.productId, warehouseId: args.warehouseId } },
+    orderBy: { createdAt: 'asc' },
+  });
+  const settlements: SettlementRow[] = [];
+  let costDelta = 0;
+  for (const p of open) {
+    const qty = Number(p.qty);
+    const layer = await tx.inventoryLayer.findUnique({ where: { id: args.layerId }, select: { qtyRemaining: true, unitCost: true } });
+    if (!layer || Number(layer.qtyRemaining) < qty) break;
+    const { count } = await tx.inventoryLayer.updateMany({
+      where: { id: args.layerId, qtyRemaining: { gte: qty } },
+      data: { qtyRemaining: { decrement: qty } },
+    });
+    if (count === 0) break;
+    const actualUnitCost = Number(layer.unitCost);
+    const created = await tx.inventoryConsumption.create({
+      data: { companyId, layerId: args.layerId, movementId: p.movementId, qty, unitCost: actualUnitCost, settlesId: p.id },
+      select: { id: true },
+    });
+    const provisionalUnitCost = Number(p.unitCost);
+    costDelta += (actualUnitCost - provisionalUnitCost) * qty;
+    settlements.push({ provisionalId: p.id, settlementId: created.id, qty, provisionalUnitCost, actualUnitCost });
+  }
+  return { settled: settlements.length, costDelta: roundTo(costDelta, 'LINE_AMOUNT'), settlements };
+}
+
+/**
+ * ㉘ **التحويلُ ينقل الطبقةَ لا الكمّيةَ وحدَها** (`ق-١٠٦٣/٢`): يُستهلك من طبقات المصدر `FIFO` — استهلاكاً
+ * مسجَّلاً على حركة التحويل — وتُنشأ في المقصِد طبقةٌ لكلِّ شريحةٍ **بتكلفتها وتاريخ اقتناء أصلها**، فلا يشيخ
+ * المخزونُ ولا يتجدّد بالنقل. وما لم يجد طبقةً في المصدر (استهلاكٌ مؤقّت) تُنشأ له في المقصِد طبقةٌ بتكلفته
+ * المؤقّتة وتاريخ النقل — ويبقى المؤقّتُ مفتوحاً على المصدر حتى يصله استلامُه. (`33` تحويلاً على قاعدة
+ * التطوير سبقت هذا فتركت طبقاتِها في المصدر — تُعلَن وتُعدّ ولا تُرحَّل بلا حكم.)
+ */
+export async function transferLayers(
+  tx: Tx,
+  companyId: string,
+  args: { productId: string; fromWarehouseId: string; toWarehouseId: string; qty: number; movementId: string; date: Date },
+): Promise<{ consumed: ConsumeResult; createdLayers: number }> {
+  const consumed = await consumeFifo(tx, companyId, { productId: args.productId, warehouseId: args.fromWarehouseId, qty: args.qty, movementId: args.movementId });
+  const slices = await tx.inventoryConsumption.findMany({
+    where: { id: { in: consumed.consumptionIds } },
+    orderBy: { createdAt: 'asc' },
+    include: { layer: { select: { acquiredAt: true } } },
+  });
+  for (const s of slices) {
+    await tx.inventoryLayer.create({
+      data: {
+        companyId,
+        productId: args.productId,
+        warehouseId: args.toWarehouseId,
+        qtyReceived: s.qty,
+        qtyRemaining: s.qty,
+        unitCost: s.unitCost,
+        acquiredAt: s.layer?.acquiredAt ?? args.date,
+        sourceType: 'TRANSFER',
+        sourceMovementId: args.movementId,
+      },
+    });
+  }
+  return { consumed, createdLayers: slices.length };
 }
 
 export async function weightedAverageCost(tx: Tx, productId: string, warehouseId: string): Promise<number> {

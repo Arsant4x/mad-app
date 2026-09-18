@@ -32,6 +32,7 @@ export function StockMovementModal({
   const [reason, setReason] = useState('');
   const [batchNo, setBatchNo] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [unitCost, setUnitCost] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -45,6 +46,13 @@ export function StockMovementModal({
       setError(i18n.t('err_movement_fields'));
       return;
     }
+    // ㉘ ما يدخل المخزونَ يحمل تكلفتَه المُدخَلة — لا تؤخذ من البطاقة، فصفرُها صفرٌ صامت (ق-١٠٦٣/٣).
+    const entering = type === 'IN' || (type === 'ADJUSTMENT' && qtyNum > 0);
+    const unitCostNum = parseFloat(unitCost);
+    if (entering && (unitCost.trim() === '' || Number.isNaN(unitCostNum) || unitCostNum < 0)) {
+      setError('تكلفة الوحدة مطلوبة للإدخال — لا تؤخذ من بطاقة الصنف');
+      return;
+    }
     setSaving(true);
     try {
       const result = await onSave({
@@ -54,6 +62,7 @@ export function StockMovementModal({
         type,
         qty: qtyNum,
         date,
+        unitCost: entering ? unitCostNum : undefined,
         reason: reason.trim() || undefined,
         // Batch/expiry only apply to received stock.
         batchNo: type === 'IN' ? batchNo.trim() || undefined : undefined,
@@ -140,6 +149,12 @@ export function StockMovementModal({
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
+        {(type === 'IN' || type === 'ADJUSTMENT') && (
+          <div className="field">
+            <label>تكلفة الوحدة — مطلوبة لما يدخل المخزون (لا تؤخذ من بطاقة الصنف)</label>
+            <input className="num" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="0.00" />
+          </div>
+        )}
         {type === 'IN' && (
           <div className="two-col">
             <div className="field">

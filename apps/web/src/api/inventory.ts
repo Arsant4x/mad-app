@@ -30,6 +30,8 @@ export interface StockMovementInput {
   /** Batch/lot + expiry — used on receiving (IN) perishables. */
   batchNo?: string;
   expiryDate?: string;
+  /** تكلفةُ الوحدة — مطلوبةٌ للإدخال والتسوية الموجبة؛ لا تؤخذ من البطاقة (ق-١٠٦٣/٣). */
+  unitCost?: number;
 }
 
 export interface ExpiringBatch {

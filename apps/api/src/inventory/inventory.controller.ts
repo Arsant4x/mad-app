@@ -46,6 +46,13 @@ export class InventoryController {
     return this.inventoryService.expiringStock(tenant.companyId, tenant.allowedBranchIds, days);
   }
 
+  /** ㉘ الاستهلاكاتُ المؤقّتة المفتوحة — ما سبق استلامَه ولم يُسوَّ بعد (ق-١٠٦٢). */
+  @Get('provisional')
+  @RequiresAction('view')
+  provisional(@CurrentTenant() tenant: TenantContext) {
+    return this.inventoryService.openProvisional(tenant.companyId, tenant.allowedBranchIds);
+  }
+
   @Post('movements')
   @RequiresAction('record')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateStockMovementDto) {
