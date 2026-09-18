@@ -8,6 +8,7 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type CreditContext } from '../invoices/credit-context';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CreateQuoteDto, QuoteLineDto, UpdateQuoteDto } from './dto/quote.dto';
@@ -99,6 +100,8 @@ export class QuotesService {
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
 
         const no = await this.nextQuoteNumber(tx, companyId, new Date(dto.issueDate));
+        // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.
+        const unitCodes = await unitCodesFor(tx, dto.lines);
         return tx.quote.create({
           data: {
             companyId,
@@ -118,7 +121,7 @@ export class QuotesService {
             baseTotal: toBaseAmount(total, exchangeRate),
             // companyId على كل بند صراحةً — الكتابة المتداخلة لا يراها امتداد
             // العزل (نفس تعليل InvoicesService)، وRLS يسند خلفها.
-            lines: { create: dto.lines.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })) },
+            lines: { create: dto.lines.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, unitCode: unitCodeOf(unitCodes, l.productId), quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })) },
           } as unknown as Prisma.QuoteUncheckedCreateInput,
           include: QUOTE_INCLUDE,
         });
@@ -135,6 +138,7 @@ export class QuotesService {
       }
 
       const totals = dto.lines ? computeTotals(dto.lines) : null;
+      const unitCodes = dto.lines ? await unitCodesFor(tx, dto.lines) : new Map<string, string | null>();
       const updated = await tx.quote.update({
         where: { id },
         data: {
@@ -153,7 +157,7 @@ export class QuotesService {
                 baseTotal: toBaseAmount(totals.total, Number(existing.exchangeRate)),
                 lines: {
                   deleteMany: {},
-                  create: dto.lines!.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+                  create: dto.lines!.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, unitCode: unitCodeOf(unitCodes, l.productId), quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })),
                 },
               }
             : {}),

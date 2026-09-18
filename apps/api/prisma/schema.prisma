@@ -1209,6 +1209,9 @@ model InvoiceLine {
   /// concurrent SELECT is blocked, not slowed. That is why this is set at the
   /// smallest table size the platform will ever have, not later.
   quantity    Decimal @db.Decimal(18, 3)
+  /// وحدةُ الكمّية كما كانت على الصنف لحظةَ كتابة السطر — تُنسخ ولا تُقرأ من الصنف لاحقاً،
+  /// فالمستندُ يذكر وحدتَه ولو تغيّر الصنف؛ `null` لما كُتب قبل ① أو لصنفٍ لم يُعلن وحدتَه.
+  unitCode    String?
   unitPrice   Decimal @db.Decimal(18, 6)
   taxRate     Decimal @default(15) @db.Decimal(5, 2)
 
@@ -1418,6 +1421,8 @@ model PurchaseLine {
   /// Born at the platform scale, not widened into it later — the guard in
   /// `common/money/rounding.spec.ts` fails the build otherwise.
   quantity  Decimal @db.Decimal(18, 3)
+  /// وحدةُ الكمّية منسوخةً من الصنف لحظةَ الكتابة (كما في `InvoiceLine.unitCode`).
+  unitCode  String?
   unitPrice Decimal @db.Decimal(18, 6)
   taxRate   Decimal @default(15) @db.Decimal(5, 2)
 
@@ -1464,7 +1469,11 @@ model Product {
   name     String
   sku      String?
   category String?
+  /// نصٌّ حرٌّ قديم لا يقرؤه أحد — بقي كما هو ولا يُخمَّن منه رمز؛ الوحدةُ الحقيقية `unitCode`.
   unit     String?
+  /// ① وحدةُ القياس الأساس مرمَّزةً (UN/ECE Rec 20 من القائمة المغلقة في `common/units/units.ts`).
+  /// تُعلَن عند الإنشاء ولا تُفترض؛ والقائمُ بلا وحدةٍ يبقى `null` حتى يُعلنها التاجرُ — لا تخمين (ق-١٠٦٩).
+  unitCode String?
   /// Unit price and unit cost, not amounts — see the scale table in
   /// `common/money/rounding.ts`. `cost` is a single static figure today and is
   /// **not** a costing method: it holds no acquisition date and no remaining
@@ -3281,6 +3290,8 @@ model QuoteLine {
   /// quantity its invoice will carry turns every conversion into a rounding
   /// dispute with the customer.
   quantity    Decimal @db.Decimal(18, 3)
+  /// وحدةُ الكمّية منسوخةً من الصنف لحظةَ الكتابة (كما في `InvoiceLine.unitCode`).
+  unitCode    String?
   unitPrice   Decimal @db.Decimal(18, 6)
   taxRate     Decimal @db.Decimal(5, 2)
 

@@ -40,7 +40,7 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
     token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
     tokenB = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' })).body.accessToken;
     // 100 → مع الضريبة 115.00 (موافقة)؛ 0.113 يُدبَّر لاحقاً لمبلغ .13 (رفض).
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `منتج بوابة ${suffix}`, price: 100 }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `منتج بوابة ${suffix}`, price: 100 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {
@@ -129,7 +129,7 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
     // subtotal = X/1.15 حيث X.13؛ خذ X=9.13 ⇒ subtotal=7.939130435 — ليس سعراً نظيفاً.
     // لذلك نختبر الرفض بسعر يعطي total مضبوطاً: 7.94 × 1.15 = 9.131 → هللات 13.1؟
     // Math.round(9.131*100)%100 = 913%100 = 13 ✓ (913.0999 يقرَّب 913).
-    const declineProduct = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `رفض ${suffix}`, price: 7.94 }).expect(201)).body.id;
+    const declineProduct = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `رفض ${suffix}`, price: 7.94 }).expect(201)).body.id;
 
     const before = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body.length;
     const res = await auth(request(app.getHttpServer()).post('/pos/sales'))

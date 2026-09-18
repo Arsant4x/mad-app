@@ -12,6 +12,7 @@ import {
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
+import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -122,6 +123,8 @@ export class SupplierNotesService {
           highestSequenceOf(tx.purchase, prefix),
         );
 
+        // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.
+        const unitCodes = await unitCodesFor(tx, lines);
         const created = await tx.purchase.create({
           data: {
             companyId,
@@ -153,6 +156,7 @@ export class SupplierNotesService {
                 companyId,
                 description: l.description,
                 productId: l.productId ?? null,
+                unitCode: unitCodeOf(unitCodes, l.productId),
                 quantity: l.quantity,
                 unitPrice: l.unitPrice,
                 taxRate: l.taxRate ?? 15,

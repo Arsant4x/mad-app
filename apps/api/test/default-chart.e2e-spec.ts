@@ -132,7 +132,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     }, 90000);
 
     it('بيع نقطة بيع أول يوم يُرحَّل كفاتورة مدفوعة', async () => {
-      const productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `صنف ${suffix}`, price: 50 }).expect(201)).body.id;
+      const productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `صنف ${suffix}`, price: 50 }).expect(201)).body.id;
       await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
 
       const sale = await auth(request(app.getHttpServer()).post('/pos/sales')).send({ lines: [{ productId, quantity: 2 }], paymentMethod: 'CASH' }).expect(201);

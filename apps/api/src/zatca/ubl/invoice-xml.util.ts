@@ -30,6 +30,9 @@ import type { WallClock } from '../../common/wall-clock.util';
 export interface UblInvoiceLine {
   description: string;
   quantity: number;
+  /** ① رمزُ وحدة الكمّية كما كُتب على السطر (UN/ECE Rec 20)؛ `null` ⇒ لا تُرسَل السمةُ أصلاً —
+   * فهي اختياريةٌ في قاموس الهيئة (`BT-130`، `0..1`)، ولا يُرسَل `PCE` صامتاً لما لم يُعلَن. */
+  unitCode?: string | null;
   unitPrice: number;
   /** Percentage, e.g. 15. */
   taxRate: number;
@@ -174,10 +177,14 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
   // exemption reason, which our data model does not capture yet.
   const category = line.taxRate > 0 ? 'S' : 'Z';
 
+  // ① وحدةُ الكمّية تُقرأ من السطر لا تُثبَّت: كان `unitCode="PCE"` ثابتاً لكلِّ سطر (حدٌّ أُعلن في
+  // ق-١٠٦٠ وقِيس في ق-١٠٦٩). سطرٌ بلا وحدةٍ معلَنة يخرج بلا السمة — لا برمزٍ مخمَّن.
+  const unit = line.unitCode ? ` unitCode="${esc(line.unitCode)}"` : '';
+
   return (
     '<cac:InvoiceLine>' +
     `<cbc:ID>${index + 1}</cbc:ID>` +
-    `<cbc:InvoicedQuantity unitCode="PCE">${quantity(line.quantity)}</cbc:InvoicedQuantity>` +
+    `<cbc:InvoicedQuantity${unit}>${quantity(line.quantity)}</cbc:InvoicedQuantity>` +
     `<cbc:LineExtensionAmount currencyID="${esc(currency)}">${money(lineExtension)}</cbc:LineExtensionAmount>` +
     '<cac:TaxTotal>' +
     `<cbc:TaxAmount currencyID="${esc(currency)}">${money(lineTaxAmount)}</cbc:TaxAmount>` +

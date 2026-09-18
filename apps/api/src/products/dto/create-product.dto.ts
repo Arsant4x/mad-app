@@ -13,9 +13,11 @@ export class CreateProductDto {
   @IsString()
   category?: string;
 
+  /** ① وحدةُ القياس الأساس — رمزٌ من القائمة المغلقة (`common/units/units.ts`). مطلوبٌ عند
+   * الإنشاء ويُفحص في الخدمة برسالةٍ مسمّاة؛ ولا يُقبل نصٌّ حرّ بعد اليوم. */
   @IsOptional()
   @IsString()
-  unit?: string;
+  unitCode?: string;
 
   @IsOptional()
   @IsNumber()

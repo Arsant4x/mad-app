@@ -6,7 +6,10 @@ export interface Product {
   name: string;
   sku: string | null;
   category: string | null;
+  /** نصٌّ حرٌّ قديم — يُعرض تلميحاً عند الإعلان ولا يُخمَّن منه رمز. */
   unit: string | null;
+  /** ① وحدةُ القياس الأساس رمزاً من القائمة المغلقة (`lib/units.ts`)؛ `null` = لم تُعلَن بعد. */
+  unitCode: string | null;
   price: string;
   cost: string;
   minStock: string;
@@ -17,7 +20,7 @@ export interface ProductInput {
   name: string;
   sku?: string;
   category?: string;
-  unit?: string;
+  unitCode?: string;
   price?: number;
   cost?: number;
   minStock?: number;

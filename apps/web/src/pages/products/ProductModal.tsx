@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Product, ProductInput } from '../../api/products';
+import { UNITS_OF_MEASURE } from '../../lib/units';
 import i18n from '../../i18n';
 
 export function ProductModal({
@@ -15,7 +16,8 @@ export function ProductModal({
   const [name, setName] = useState(editing?.name ?? '');
   const [sku, setSku] = useState(editing?.sku ?? '');
   const [category, setCategory] = useState(editing?.category ?? '');
-  const [unit, setUnit] = useState(editing?.unit ?? '');
+  // ① الوحدةُ تُعلَن من القائمة المغلقة — لا نصٌّ حرّ ولا افتراض: صنفٌ قائم بلا إعلان يبقى فارغاً حتى يُعلَن.
+  const [unitCode, setUnitCode] = useState(editing?.unitCode ?? '');
   const [price, setPrice] = useState(editing?.price ?? '');
   const [cost, setCost] = useState(editing?.cost ?? '');
   const [minStock, setMinStock] = useState(editing?.minStock ?? '');
@@ -29,13 +31,17 @@ export function ProductModal({
       setError(i18n.t('err_product_name_required'));
       return;
     }
+    if (!unitCode) {
+      setError('وحدة القياس مطلوبة — تُعلَن من القائمة ولا تُفترض');
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
         name: name.trim(),
         sku: sku.trim() || undefined,
         category: category.trim() || undefined,
-        unit: unit.trim() || undefined,
+        unitCode,
         price: parseFloat(String(price)) || 0,
         cost: parseFloat(String(cost)) || 0,
         minStock: parseFloat(String(minStock)) || 0,
@@ -73,8 +79,18 @@ export function ProductModal({
         </div>
         <div className="two-col">
           <div className="field">
-            <label>الوحدة</label>
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="خدمة / قطعة" />
+            <label>وحدة القياس</label>
+            <select value={unitCode} onChange={(e) => setUnitCode(e.target.value)} aria-label="وحدة القياس">
+              <option value="">— تُعلَن من القائمة —</option>
+              {UNITS_OF_MEASURE.map((u) => (
+                <option key={u.code} value={u.code}>
+                  {u.ar} ({u.code})
+                </option>
+              ))}
+            </select>
+            {editing && !editing.unitCode && (
+              <div className="hint">لم تُعلَن وحدةُ هذا الصنف بعد{editing.unit ? ` — النصُّ القديم: «${editing.unit}»` : ''}؛ لا تُخمَّن، تُختار.</div>
+            )}
           </div>
           <div className="field">
             <label>سعر الوحدة</label>

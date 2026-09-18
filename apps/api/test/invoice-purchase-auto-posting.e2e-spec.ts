@@ -169,7 +169,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
       .send({ name: 'مستودع بوابة م٥' }).expect(201);
     const prod = await request(app.getHttpServer())
       .post('/products').set('Authorization', `Bearer ${token}`)
-      .send({ name: 'صنف بوابة م٥', price: 150 }).expect(201);
+      .send({ unitCode: 'H87', name: 'صنف بوابة م٥', price: 150 }).expect(201);
 
     const pur = await request(app.getHttpServer())
       .post('/purchases').set('Authorization', `Bearer ${token}`)
@@ -205,7 +205,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
   it('⭐ م٥: بندٌ مخزني بلا مستودع يُرفض — ولا يُتخطّى بصمت', async () => {
     const prod = await request(app.getHttpServer())
       .post('/products').set('Authorization', `Bearer ${token}`)
-      .send({ name: 'صنف بلا مستودع' }).expect(201);
+      .send({ unitCode: 'H87', name: 'صنف بلا مستودع' }).expect(201);
 
     // الفرع الافتراضي في البذرة بلا مستودع مربوط — فلا مستودع يُشتقّ.
     const res = await request(app.getHttpServer())
@@ -237,7 +237,7 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
       .send({ name: 'مستودع بوابة م٦' }).expect(201);
     const prod = await request(app.getHttpServer())
       .post('/products').set('Authorization', `Bearer ${token}`)
-      .send({ name: 'صنف بوابة م٦', price: 2000 }).expect(201);
+      .send({ unitCode: 'H87', name: 'صنف بوابة م٦', price: 2000 }).expect(201);
 
     // البيع يسحب من **مستودع الفرع** — نفس قاعدة الكاشير، فلا مسار ثانٍ.
     //

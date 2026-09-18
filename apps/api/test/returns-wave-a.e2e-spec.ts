@@ -71,7 +71,7 @@ describe('§30 المرتجعات — موجة أ (e2e)', () => {
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل مرتجعات ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع مرتجعات ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع مرتجعات ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `صنف مرتجعات ${suffix}`, price: 100, cost: UNIT_COST }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `صنف مرتجعات ${suffix}`, price: 100, cost: UNIT_COST }).expect(201)).body.id;
     // طبقةٌ حقيقية واحدة بعشر وحدات عبر إيصال شراء (حركة IN اليدوية لا تصنع طبقة) —
     // فتكلفة كل وحدةٍ تخرج وتعود معلومة، و«العودة إلى الطبقة الأصلية» قابلةٌ للإثبات.
     const supplierId = (await auth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورّد مرتجعات ${suffix}` }).expect(201)).body.id;

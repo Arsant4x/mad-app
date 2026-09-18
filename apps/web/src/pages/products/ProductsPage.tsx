@@ -3,6 +3,7 @@ import { createProduct, deleteProduct, listProducts, setProductArchived, updateP
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
+import { unitLabel } from '../../lib/units';
 import { ProductModal } from './ProductModal';
 
 export function ProductsPage() {
@@ -31,10 +32,13 @@ export function ProductsPage() {
         p.name.toLowerCase().includes(q) ||
         (p.sku ?? '').toLowerCase().includes(q) ||
         (p.category ?? '').toLowerCase().includes(q) ||
-        (p.unit ?? '').toLowerCase().includes(q) ||
+        (unitLabel(p.unitCode) ?? '').toLowerCase().includes(q) ||
         (p.barcode ?? '').includes(q),
     );
   }, [products, search]);
+
+  // ① القائمُ بلا وحدةٍ معلَنة يُعدّ ويُعرض — لا يُخمَّن له رمز.
+  const undeclaredUnits = useMemo(() => products.filter((p) => !p.unitCode).length, [products]);
 
   async function handleSave(data: ProductInput) {
     if (modal?.mode === 'edit') {
@@ -68,6 +72,12 @@ export function ProductsPage() {
           </button>
         </div>
       </div>
+
+      {undeclaredUnits > 0 && (
+        <div className="hint" style={{ marginBottom: 8 }}>
+          {undeclaredUnits} صنفاً بلا وحدةِ قياسٍ معلَنة — تُعلَن من بطاقة كلِّ صنف ولا تُخمَّن؛ وحتى تُعلَن يخرج سطرُ الصنف في مستند الهيئة بلا وحدة.
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="search-box">
@@ -109,7 +119,7 @@ export function ProductsPage() {
                 <td>{p.name}{p.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td className="num">{p.sku || '—'}</td>
                 <td>{p.category || '—'}</td>
-                <td>{p.unit || '—'}</td>
+                <td>{p.unitCode ? unitLabel(p.unitCode) : <span className="badge draft" title="لم تُعلَن وحدةُ القياس بعد — تُعلَن من بطاقة الصنف ولا تُخمَّن">بلا وحدةٍ معلَنة</span>}</td>
                 <td className="num">{fmt(p.price)}</td>
                 <td className="num">{fmt(p.cost)}</td>
                 <td className="num">{p.barcode || '—'}</td>

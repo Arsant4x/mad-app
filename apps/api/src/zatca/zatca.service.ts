@@ -503,6 +503,7 @@ export class ZatcaService {
       lines: invoice.lines.map((l) => ({
         description: l.description,
         quantity: Number(l.quantity),
+        unitCode: l.unitCode ?? null,
         unitPrice: Number(l.unitPrice),
         taxRate: Number(l.taxRate),
       })),
