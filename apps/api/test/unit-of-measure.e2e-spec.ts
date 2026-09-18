@@ -75,7 +75,8 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
     expect(String(pce.body.message)).toContain('ليست من القائمة');
     // النصُّ الحرّ لم يعد باباً — الحقلُ القديم يُرفض في الطلب.
     await auth(http().post('/products')).send({ name: `نصّ ${suffix}`, price: 10, unit: 'قطعة' }).expect(400);
-    const created = await auth(http().post('/products')).send({ name: `أرزّ ${suffix}`, price: 100, unitCode: 'KGM' }).expect(201);
+    // ٥+٦: التتبّعُ بالدفعة والانتهاء يُعلَن كذلك عند الإنشاء (ق-١٠٨١) — كما الوحدة.
+    const created = await auth(http().post('/products')).send({ name: `أرزّ ${suffix}`, price: 100, unitCode: 'KGM', expiryTracked: false }).expect(201);
     expect(created.body.unitCode).toBe('KGM');
     declaredId = created.body.id;
   });
