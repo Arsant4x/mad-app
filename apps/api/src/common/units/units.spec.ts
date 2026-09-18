@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readsDeclaredStrings } from '../source-scan.util';
 import { UNITS_OF_MEASURE, isUnitCode, unitLabel } from './units';
+
+// يقرأ ملفَّ الواجهة نصّاً لأن **بياناتِه** سلاسلُ معلَنة (رموزُ الوحدات وأسماؤها) — إعلانُ الصنف (ق-٣٧٥).
+readsDeclaredStrings();
 
 /**
  * ① وحداتُ القياس — القائمةُ مغلقةٌ ومكرَّرةٌ في الواجهة بيد (`apps/web/src/lib/units.ts`)؛
