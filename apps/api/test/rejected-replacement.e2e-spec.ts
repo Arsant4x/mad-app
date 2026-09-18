@@ -33,6 +33,9 @@ import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-compa
  *   ⑦ المنعُ بالشكل: لا إعادةَ إرسال، ولا إشعارَ على مردودة، ولا بدلَ ثانياً، ولا بدلَ عن غير
  *      مردودة، ولا تعديلَ ولا حذفَ للمردودة.
  */
+/** الإزاحةُ المعلَنة على البدل والمبسَّطة — الرياض (+03:00). ونافذةُ التعرّض تُبنى منها لا من منطقة العملية (ق-١٠٥٦). */
+const ISSUED_OFFSET_MIN = 180;
+
 describe('المردودةُ تُغلق ويُصدَر بدلاً منها جديد (e2e)', () => {
   let app: INestApplication;
   let authority: AuthorityStub;
@@ -152,9 +155,18 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     return Number(res.body.salesStandard);
   }
 
+  /**
+   * نهايةُ اليوم التقويميّ **في الإزاحة المعلَنة** التي يُختم بها البدل (`issuedOffsetMin`) — لا نهايةُ يوم منطقة
+   * العملية (ق-١٠٥٦): على سيرٍ يعمل بـ`UTC` بين `21:00` و`24:00` يكون يومُ الرياض تالياً ليومه، فيُختم البدلُ بتاريخ
+   * الغد ويسقط من نافذةٍ تنتهي اليوم — وقد سقط هذا التوكيدُ مرّتين داخل تلك النافذة ومرّ خارجها بلا تغيير حرف.
+   */
+  function endOfDeclaredDay(instant: Date, offsetMin: number): Date {
+    const shifted = new Date(instant.getTime() + offsetMin * 60_000);
+    return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), 23, 59, 59, 999));
+  }
+
   function exposureOf(customerId: string): Promise<number> {
-    const asOf = new Date();
-    asOf.setHours(23, 59, 59, 999);
+    const asOf = endOfDeclaredDay(new Date(), ISSUED_OFFSET_MIN);
     return tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await customerExposure(tx, { asOf, allowedBranchIds: 'all', customerId });
       return rows.filter((r) => r.customerId === customerId).reduce((s, r) => s + r.total, 0);
@@ -242,7 +254,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     const sealed = sealedView(rejectedStd);
 
     const now = new Date();
-    const res = await replace(rejectedStd.id, { issuedAt: now.toISOString(), issuedOffsetMin: 180 });
+    const res = await replace(rejectedStd.id, { issuedAt: now.toISOString(), issuedOffsetMin: ISSUED_OFFSET_MIN });
     expect(res.status).toBe(201);
     replacementStd = (await getInvoice(res.body.id))!;
 
@@ -359,7 +371,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
   let replacementSimple: Row;
 
   it('⑤ المقبوض: تخصيصُ المردودة يُنقل إلى البدل، والحالةُ تُشتقّ للاثنين، والنقلُ في السجلّ باسم فاعله', async () => {
-    rejectedSimple = await makeRejected(simpleCustomerId, SERVICE, { issuedAt: '2026-06-01T10:00:00.000Z', issuedOffsetMin: 180 });
+    rejectedSimple = await makeRejected(simpleCustomerId, SERVICE, { issuedAt: '2026-06-01T10:00:00.000Z', issuedOffsetMin: ISSUED_OFFSET_MIN });
     const pay = await auth(request(server()).post('/payments'))
       .send({ customerId: simpleCustomerId, branchId, date: '2026-06-02', amount: 100, method: 'CASH', bankId: cashBoxId, allocations: [{ invoiceId: rejectedSimple.id, amount: 100 }] })
       .expect(201);
@@ -391,7 +403,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
   it('⑥ المبسَّطةُ تحتفظ بيوم المعاملة الأصليّ ولحظتها — وقيدُ العكس بتاريخها', async () => {
     expect(replacementSimple.issueDate.toISOString().slice(0, 10)).toBe('2026-06-01');
     expect(replacementSimple.issuedAt?.toISOString()).toBe('2026-06-01T10:00:00.000Z');
-    expect(replacementSimple.issuedOffsetMin).toBe(180);
+    expect(replacementSimple.issuedOffsetMin).toBe(ISSUED_OFFSET_MIN);
     const sent = await submit(replacementSimple.id).expect(201);
     expect(sent.body.zatcaStatus).toBe('REJECTED');
     const row = (await getInvoice(replacementSimple.id))!;
