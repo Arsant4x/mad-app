@@ -51,7 +51,8 @@ describe('Stock batch/expiry (e2e)', () => {
     tokenA = loginA.body.accessToken;
     tokenB = loginB.body.accessToken;
 
-    const product = await authA(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: productName, sku: `SKU-${suffix}` }).expect(201);
+    // ٥+٦ الصنفُ معلَنٌ تتبّعُه — فالدفعةُ على الإدخال كيانٌ والتقريرُ يقرأ المتبقّي من طبقاتها (ق-١٠٨٦).
+    const product = await authA(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: true, name: productName, sku: `SKU-${suffix}` }).expect(201);
     productId = product.body.id;
     const warehouse = await authA(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع ${suffix}` }).expect(201);
     warehouseId = warehouse.body.id;
@@ -72,7 +73,11 @@ describe('Stock batch/expiry (e2e)', () => {
     await receive({ batchNo: `B-FAR-${suffix}`, expiryDate: iso(400) });
 
     const res = await authA(request(app.getHttpServer()).get('/inventory/expiring?withinDays=90')).expect(200);
-    const mine = (res.body as { productName: string; batchNo: string; daysLeft: number; expired: boolean }[]).filter((r) => r.productName === productName);
+    // ٥+٦ الصفوفُ بالمتبقّي من الطبقات (`qtyKind: REMAINING`)، ومعها الحدودُ الثلاثة المعلَنة (ق-١٠٨٥).
+    expect(Array.isArray(res.body.rows)).toBe(true);
+    expect(res.body.declaredLimits).toHaveLength(3);
+    const mine = (res.body.rows as { productName: string; batchNo: string; qty: number; qtyKind: string; daysLeft: number; expired: boolean }[]).filter((r) => r.productName === productName);
+    expect(mine.every((r) => r.qtyKind === 'REMAINING' && r.qty === 10)).toBe(true);
 
     const batches = mine.map((r) => r.batchNo);
     expect(batches).toContain(`B-SOON-${suffix}`);
@@ -87,6 +92,6 @@ describe('Stock batch/expiry (e2e)', () => {
 
   it('never shows one company another\'s expiring batches', async () => {
     const res = await authB(request(app.getHttpServer()).get('/inventory/expiring?withinDays=90')).expect(200);
-    expect((res.body as { productName: string }[]).some((r) => r.productName === productName)).toBe(false);
+    expect((res.body.rows as { productName: string }[]).some((r) => r.productName === productName)).toBe(false);
   });
 });

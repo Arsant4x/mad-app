@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -17,6 +17,11 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   unitCode?: string;
+
+  /** ٥+٦ إعلانُ التتبّع للقائم عند لمس الصنف — نعم أو لا. */
+  @IsOptional()
+  @IsBoolean()
+  expiryTracked?: boolean;
 
   @IsOptional()
   @IsNumber()

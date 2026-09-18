@@ -9,6 +9,8 @@ import { MSG } from '../common/i18n/messages';
 import { closeLayerExactly, consumeFifo, createLayerFromMovement, restoreConsumption, transferLayers } from './costing.util';
 import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
+import { BATCH_FEFO_DECLARED_LIMITS } from '../common/batches/declared-limits';
+import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 
@@ -83,6 +85,17 @@ export class InventoryService {
       const entering = dto.type === 'IN' || (dto.type === 'ADJUSTMENT' && dto.qty > 0);
       if (entering && (dto.unitCost === undefined || dto.unitCost === null)) throw new BadRequestException(MSG.unit_cost_required);
 
+      // ٥+٦ الدفعةُ تُحلّ كياناً **قبل** الكتابة (`ق-١٠٨٦`): لصنفٍ معلَنٍ تتبّعُه بلا دفعة، أو لرقمٍ قائمٍ بانتهاءٍ آخر،
+      // يُردّ الطلبُ مسمًّى ولا يُكتب شيء — فالحكمُ فيهما للمالك (الموجز `§٤/٣` و`§٤/٤`).
+      const batchId = entering
+        ? await resolveReceiptBatch(tx, companyId, {
+            productId: dto.productId,
+            expiryTracked: product.expiryTracked,
+            batchNo: dto.batchNo,
+            expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+          })
+        : null;
+
       const movement = await tx.stockMovement.create({
         data: {
           branchId: await resolveBranchId(tx, dto.branchId, allowedBranchIds),
@@ -93,10 +106,10 @@ export class InventoryService {
           qty: dto.type === 'ADJUSTMENT' ? dto.qty : Math.abs(dto.qty),
           date: new Date(dto.date),
           reason: dto.reason,
-          // Batch/expiry are meaningful on receiving stock; ignored on OUT so a
-          // sale never re-stamps a batch it's drawing down.
-          batchNo: dto.type === 'IN' ? dto.batchNo : undefined,
-          expiryDate: dto.type === 'IN' && dto.expiryDate ? new Date(dto.expiryDate) : undefined,
+          // نصُّ الدفعة على الحركة الداخلة كما كان يُقرأ في القائمة — والكيانُ على الطبقة (`batchId`)؛ ولا يُختم
+          // خروجٌ بدفعة: البيعُ لا يعيد وسمَ ما يسحبه.
+          batchNo: batchId ? dto.batchNo?.trim() : undefined,
+          expiryDate: batchId && dto.expiryDate ? new Date(dto.expiryDate) : undefined,
         } as unknown as Prisma.StockMovementUncheckedCreateInput,
         include: MOVEMENT_INCLUDE,
       });
@@ -112,13 +125,15 @@ export class InventoryService {
           acquiredAt: when,
           sourceType: 'ADJUSTMENT',
           movementId: movement.id,
+          batchId,
         });
         const settled = await settleProvisionalConsumptions(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, layerId });
         if (settled.settled > 0) {
           await postCogsSettlementEntry(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, baseDelta: settled.costDelta });
         }
       } else if (dto.type === 'OUT' || dto.type === 'ADJUSTMENT') {
-        await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id });
+        // ٥+٦ الإخراجُ اليدويّ ليس بيعاً — المنتهي يمرّ منه (`ق-١٠٨٢`).
+        await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id, exit: 'OTHER', date: when });
       } else if (dto.type === 'TRANSFER') {
         await transferLayers(tx, companyId, {
           productId: dto.productId,
@@ -167,44 +182,90 @@ export class InventoryService {
   }
 
   /**
-   * Batches approaching expiry (or already past it), for the perishable side of
-   * inventory — pharmacies above all.
+   * ٥+٦ **قربُ الانتهاء بالمتبقّي لا بالمستلَم** (`ق-١٠٨٠` · `ق-١٠٨٦`): كان التقريرُ يقرأ حركاتِ الإدخال بالكمّية
+   * الواردة — «فصيدليةٌ باعت شحنةً كاملةً ما زالت ترى «سينتهي قريباً»». الآن الصفُّ دفعةٌ في مستودع بما بقي في
+   * طبقاتها (`qtyRemaining > 0`)؛ وما بيع أو شُطب لا يظهر.
    *
-   * Reads receiving (IN) movements that carry an expiry within the horizon. It
-   * reports the batch as **received**, not the live remaining quantity of that
-   * exact batch — per-batch depletion (FEFO) is a larger feature — so `qty` is
-   * what came in. Still the actionable list: what to pull or discount before it
-   * lapses. Ordered soonest-first; already-expired ones come first (negative
-   * `daysLeft`).
+   * **والحركاتُ القديمة بدفعةٍ نصّاً** (`96` على التطوير يومَ البناء — الموجز `§٤/٥` ينتظر الحكم) **تبقى وتُعدّ ولا
+   * تُخمَّن**: تُدرَج صفوفاً مسمّاةً `LEGACY_MOVEMENT` بكمّيتها **الواردة** لا المتبقّية — والقارئ يقرأ نوعَ الكمّية من
+   * `qtyKind`. **على مستوى المنشأة بحقّها**: الطبقاتُ لا تحمل فرعاً، فتُرشَّح بفرع حركة مصدرها.
+   *
+   * ويُردّ مع الصفوف **الحدودُ الثلاثة المعلَنة** (`ق-١٠٨٥`) — فمن يستعمل التقرير يقرأ حدَّه.
    */
   expiringStock(companyId: string, allowedBranchIds: string[] | 'all', withinDays = 90) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = toDateOnly(new Date());
       const horizon = new Date(today);
-      horizon.setDate(horizon.getDate() + withinDays);
+      horizon.setUTCDate(horizon.getUTCDate() + withinDays);
+      const daysLeftOf = (expiry: Date) => Math.round((toDateOnly(expiry).getTime() - today.getTime()) / 86400000);
 
-      const rows = await tx.stockMovement.findMany({
-        where: { ...branchFilter(allowedBranchIds), type: 'IN', expiryDate: { not: null, lte: horizon } },
-        include: { product: { select: { name: true, sku: true } }, warehouse: { select: { name: true } } },
-        orderBy: { expiryDate: 'asc' },
+      const layers = await tx.inventoryLayer.findMany({
+        where: {
+          batchId: { not: null },
+          qtyRemaining: { gt: 0 },
+          batch: { expiryDate: { lte: horizon } },
+          // القارئُ المقصورُ على فروعٍ يرى طبقاتِ حركاتِ فروعه (أو بلا فرع) — و«الكلّ» بلا مرشِّحٍ على العلاقة أصلاً.
+          ...(allowedBranchIds === 'all' ? {} : { sourceMovement: branchFilter(allowedBranchIds) }),
+        },
+        include: {
+          batch: { select: { id: true, batchNo: true, expiryDate: true } },
+          product: { select: { id: true, name: true, sku: true } },
+          warehouse: { select: { id: true, name: true } },
+        },
+      });
+      const grouped = new Map<string, { batchId: string; productId: string; productName: string; sku: string | null; warehouseId: string; warehouseName: string; batchNo: string; expiryDate: Date; qty: number }>();
+      for (const l of layers) {
+        const b = l.batch!;
+        const key = `${b.id}|${l.warehouseId}`;
+        const row = grouped.get(key) ?? { batchId: b.id, productId: l.product.id, productName: l.product.name, sku: l.product.sku, warehouseId: l.warehouseId, warehouseName: l.warehouse.name, batchNo: b.batchNo, expiryDate: b.expiryDate, qty: 0 };
+        row.qty += Number(l.qtyRemaining);
+        grouped.set(key, row);
+      }
+      const batchRows = [...grouped.values()].map((r) => {
+        const daysLeft = daysLeftOf(r.expiryDate);
+        return {
+          id: `${r.batchId}|${r.warehouseId}`,
+          source: 'BATCH' as const,
+          productId: r.productId,
+          productName: r.productName,
+          sku: r.sku,
+          warehouseName: r.warehouseName,
+          batchNo: r.batchNo as string | null,
+          qty: r.qty,
+          qtyKind: 'REMAINING' as const,
+          expiryDate: r.expiryDate.toISOString().slice(0, 10),
+          daysLeft,
+          expired: daysLeft < 0,
+        };
       });
 
-      return rows.map((m) => {
+      // ما سبق البناء: حركةُ إدخالٍ بنصّ دفعةٍ ولا طبقةَ لها بدفعة — تبقى نصّاً وتُعدّ.
+      const legacy = await tx.stockMovement.findMany({
+        where: { ...branchFilter(allowedBranchIds), type: 'IN', expiryDate: { not: null, lte: horizon }, layers: { none: { batchId: { not: null } } } },
+        include: { product: { select: { id: true, name: true, sku: true } }, warehouse: { select: { name: true } } },
+        orderBy: { expiryDate: 'asc' },
+      });
+      const legacyRows = legacy.map((m) => {
         const expiry = m.expiryDate as Date;
-        const daysLeft = Math.round((expiry.getTime() - today.getTime()) / 86400000);
+        const daysLeft = daysLeftOf(expiry);
         return {
           id: m.id,
+          source: 'LEGACY_MOVEMENT' as const,
+          productId: m.product.id,
           productName: m.product.name,
           sku: m.product.sku,
           warehouseName: m.warehouse.name,
           batchNo: m.batchNo,
           qty: Number(m.qty),
+          qtyKind: 'RECEIVED' as const,
           expiryDate: expiry.toISOString().slice(0, 10),
           daysLeft,
           expired: daysLeft < 0,
         };
       });
+
+      const rows = [...batchRows, ...legacyRows].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate) || a.productName.localeCompare(b.productName));
+      return { rows, declaredLimits: BATCH_FEFO_DECLARED_LIMITS };
     });
   }
 

@@ -39,6 +39,8 @@ export function ProductsPage() {
 
   // ① القائمُ بلا وحدةٍ معلَنة يُعدّ ويُعرض — لا يُخمَّن له رمز.
   const undeclaredUnits = useMemo(() => products.filter((p) => !p.unitCode).length, [products]);
+  // ٥+٦ القائمُ بلا إعلانِ تتبّعٍ يُعدّ ويُعرض — يُعلَن عند لمس الصنف لا بشاشةٍ جماعية (ق-١٠٨٣).
+  const undeclaredTracking = useMemo(() => products.filter((p) => p.expiryTracked === null || p.expiryTracked === undefined).length, [products]);
 
   async function handleSave(data: ProductInput) {
     if (modal?.mode === 'edit') {
@@ -76,6 +78,11 @@ export function ProductsPage() {
       {undeclaredUnits > 0 && (
         <div className="hint" style={{ marginBottom: 8 }}>
           {undeclaredUnits} صنفاً بلا وحدةِ قياسٍ معلَنة — تُعلَن من بطاقة كلِّ صنف ولا تُخمَّن؛ وحتى تُعلَن يخرج سطرُ الصنف في مستند الهيئة بلا وحدة.
+        </div>
+      )}
+      {undeclaredTracking > 0 && (
+        <div className="hint" style={{ marginBottom: 8 }}>
+          {undeclaredTracking} صنفاً لم يُعلَن أيُتتبَّع بالدفعة والانتهاء أم لا — يُعلَن من بطاقة كلِّ صنف عند لمسه (لا شاشةَ جماعية)؛ وحتى يُعلَن يُصرَف بالأقدم كما كان ولا يُرفض منه منتهٍ.
         </div>
       )}
 
@@ -119,7 +126,11 @@ export function ProductsPage() {
                 <td>{p.name}{p.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
                 <td className="num">{p.sku || '—'}</td>
                 <td>{p.category || '—'}</td>
-                <td>{p.unitCode ? unitLabel(p.unitCode) : <span className="badge draft" title="لم تُعلَن وحدةُ القياس بعد — تُعلَن من بطاقة الصنف ولا تُخمَّن">بلا وحدةٍ معلَنة</span>}</td>
+                <td>
+                  {p.unitCode ? unitLabel(p.unitCode) : <span className="badge draft" title="لم تُعلَن وحدةُ القياس بعد — تُعلَن من بطاقة الصنف ولا تُخمَّن">بلا وحدةٍ معلَنة</span>}
+                  {p.expiryTracked === true && <span className="badge due" style={{ marginInlineStart: 6 }} title="يُصرَف بالأقرب انتهاءً ولا يُباع منه المنتهي">دفعة وانتهاء</span>}
+                  {(p.expiryTracked === null || p.expiryTracked === undefined) && <span className="badge draft" style={{ marginInlineStart: 6 }} title="لم يُعلَن التتبّع بالدفعة والانتهاء بعد — يُعلَن من بطاقة الصنف ولا يُخمَّن">بلا إعلانِ تتبّع</span>}
+                </td>
                 <td className="num">{fmt(p.price)}</td>
                 <td className="num">{fmt(p.cost)}</td>
                 <td className="num">{p.barcode || '—'}</td>

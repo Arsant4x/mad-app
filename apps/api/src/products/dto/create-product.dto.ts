@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
@@ -18,6 +18,11 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   unitCode?: string;
+
+  /** ٥+٦ «يُتتبَّع بالدفعة والانتهاء؟» — علَمٌ ثنائيّ يُعلَن عند الإنشاء ولا يُخمَّن؛ غيابُه يُردّ في الخدمة باسمه. */
+  @IsOptional()
+  @IsBoolean()
+  expiryTracked?: boolean;
 
   @IsOptional()
   @IsNumber()

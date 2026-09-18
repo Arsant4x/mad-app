@@ -60,6 +60,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Supplier',
   'Purchase',
   'Product',
+  'StockBatch',
   'Employee',
   'Bank',
   'BankTransaction',

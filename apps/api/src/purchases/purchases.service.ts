@@ -155,6 +155,9 @@ export class PurchasesService {
                       quantity: line.quantity,
                       unitPrice: line.unitPrice,
                       taxRate: line.taxRate ?? 15,
+                      // ٥+٦ الدفعةُ على السطر كما وصلت — والاستلامُ يحلّها كياناً أو يردّها مسمّاةً.
+                      batchNo: line.batchNo?.trim() || null,
+                      expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
                     })),
                   },
                 }
@@ -322,6 +325,8 @@ export class PurchasesService {
             quantity: line.quantity,
             unitPrice: line.unitPrice,
             taxRate: line.taxRate ?? 15,
+            batchNo: line.batchNo?.trim() || null,
+            expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
           })),
         });
         updated = (await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE }))!;

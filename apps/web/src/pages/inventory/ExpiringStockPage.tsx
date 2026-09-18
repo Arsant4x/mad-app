@@ -5,30 +5,44 @@ import { dfmt } from '../../lib/format';
 const HORIZONS = [30, 60, 90, 180];
 
 /**
- * The perishable watch-list: batches expiring soon or already expired, so a
- * pharmacy pulls or discounts stock before it lapses. Shows received quantity
- * per batch (per-batch depletion is a later feature).
+ * ٥+٦ قربُ الانتهاء **بالمتبقّي لا بالمستلَم** (ق-١٠٨٠ · ق-١٠٨٦): كلُّ صفٍّ دفعةٌ في مستودع بما بقي في طبقاتها؛ وما بيع أو
+ * شُطب لا يظهر. والحركاتُ القديمة بدفعةٍ نصّاً تبقى وتُعدّ بكمّيتها الواردة — موسومةً كذلك. والحدودُ الثلاثة المعلَنة
+ * يردّها الخادم وتُعرض هنا (ق-١٠٨٥) — فمن يستعمل التقرير يقرأ حدَّه.
  */
 export function ExpiringStockPage() {
   const [withinDays, setWithinDays] = useState(90);
   const [rows, setRows] = useState<ExpiringBatch[]>([]);
+  const [limits, setLimits] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     getExpiringStock(withinDays)
-      .then(setRows)
+      .then((res) => {
+        setRows(res.rows);
+        setLimits(res.declaredLimits);
+      })
       .finally(() => setLoading(false));
   }, [withinDays]);
+
+  const legacyCount = rows.filter((r) => r.source === 'LEGACY_MOVEMENT').length;
 
   return (
     <div>
       <div className="topbar">
         <div>
           <div className="page-title">قرب انتهاء الصلاحية</div>
-          <div className="page-sub">دفعات بلغت أو تقترب من تاريخ انتهائها — الأقدم أولاً</div>
+          <div className="page-sub">دفعات بلغت أو تقترب من تاريخ انتهائها — بما بقي منها على الرفّ، الأقرب انتهاءً أولاً</div>
         </div>
       </div>
+
+      {limits.length > 0 && (
+        <ul className="hint" style={{ margin: '0 0 12px', paddingInlineStart: 18 }} aria-label="حدودٌ معلَنة">
+          {limits.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="chip-group" style={{ marginBottom: 12 }}>
         {HORIZONS.map((d) => (
@@ -37,6 +51,12 @@ export function ExpiringStockPage() {
           </button>
         ))}
       </div>
+
+      {legacyCount > 0 && (
+        <p className="hint">
+          {legacyCount} صفّاً من حركاتِ إدخالٍ قديمة بدفعةٍ نصّاً — لا طبقةَ لها فيُعرض الواردُ لا المتبقّي؛ تبقى وتُعدّ ولا تُخمَّن دفعتُها.
+        </p>
+      )}
 
       {loading ? (
         <p className="hint">جارٍ التحميل…</p>
@@ -48,11 +68,11 @@ export function ExpiringStockPage() {
             <thead>
               <tr>
                 <th>المنتج</th>
-                <th>التشغيلة</th>
+                <th>الدفعة</th>
                 <th>المستودع</th>
-                <th>الكمية الواردة</th>
+                <th>الكمية</th>
                 <th>تاريخ الانتهاء</th>
-                <th>المتبقّي</th>
+                <th>المتبقّي من المهلة</th>
               </tr>
             </thead>
             <tbody>
@@ -61,9 +81,18 @@ export function ExpiringStockPage() {
                   <td>
                     {r.productName} {r.sku ? <span className="hint">({r.sku})</span> : null}
                   </td>
-                  <td>{r.batchNo ?? '—'}</td>
+                  <td>
+                    {r.batchNo ?? '—'}
+                    {r.source === 'LEGACY_MOVEMENT' && (
+                      <span className="badge draft" style={{ marginInlineStart: 6 }} title="حركةُ إدخالٍ قديمة بدفعةٍ نصّاً — بلا طبقة">
+                        قديمة
+                      </span>
+                    )}
+                  </td>
                   <td>{r.warehouseName}</td>
-                  <td className="num">{r.qty}</td>
+                  <td className="num" title={r.qtyKind === 'REMAINING' ? 'المتبقّي من الطبقات' : 'الواردُ على الحركة — لا يُعرف متبقّيها'}>
+                    {r.qty} {r.qtyKind === 'REMAINING' ? <span className="hint">متبقٍّ</span> : <span className="hint">وارد</span>}
+                  </td>
                   <td className="num">{dfmt(r.expiryDate)}</td>
                   <td>
                     {r.expired ? (

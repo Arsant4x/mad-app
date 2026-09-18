@@ -10,6 +10,8 @@ export interface Product {
   unit: string | null;
   /** ① وحدةُ القياس الأساس رمزاً من القائمة المغلقة (`lib/units.ts`)؛ `null` = لم تُعلَن بعد. */
   unitCode: string | null;
+  /** ٥+٦ «يُتتبَّع بالدفعة والانتهاء؟» — علَمٌ ثنائيّ يُعلَن ولا يُخمَّن؛ `null` = لم يُعلَن بعد (يُعدّ ويُعلَن عند لمس الصنف). */
+  expiryTracked: boolean | null;
   price: string;
   cost: string;
   minStock: string;
@@ -21,6 +23,7 @@ export interface ProductInput {
   sku?: string;
   category?: string;
   unitCode?: string;
+  expiryTracked?: boolean;
   price?: number;
   cost?: number;
   minStock?: number;

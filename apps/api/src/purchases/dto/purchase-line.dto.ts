@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 /**
  * بند شراء — **الصفّ الذي لم يكن**.
@@ -39,4 +39,18 @@ export class PurchaseLineDto {
   @Min(0)
   @Max(100)
   taxRate?: number;
+
+  /**
+   * ٥+٦ الدفعةُ والانتهاءُ على سطر الاستلام (`ق-١٠٨٦`) — يصنع منهما الاستلامُ كيانَ الدفعة ويربط طبقتَه به.
+   * لصنفٍ معلَنٍ تتبّعُه غيابُهما يُردّ مسمًّى (والحكمُ في قبوله بلا دفعة ينتظر المالك — الموجز `§٤/٤`)؛ ورقمٌ بلا
+   * انتهاءٍ يُردّ: الدفعةُ تُعلَن بانتهائها.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  batchNo?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expiryDate?: string;
 }

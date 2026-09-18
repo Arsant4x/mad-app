@@ -1,4 +1,7 @@
+import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { isExpiredOn } from '../common/batches/stock-batch.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo } from '../common/money/rounding';
 
 /**
@@ -23,6 +26,12 @@ import { roundTo } from '../common/money/rounding';
 
 type Tx = Prisma.TransactionClient;
 
+/** ٥+٦ نوعُ الإخراج: **البيعُ وحدَه** يُرفض منه المنتهي (`ق-١٠٨٢`)؛ وما عداه — شطبٌ · إعادةٌ إلى المورّد · تحويلٌ · تسويةٌ · إخراجٌ يدويّ — يمرّ، وهو المخرجُ الوحيد لمنتهٍ على الرفّ. */
+export type ExitKind = 'SALE' | 'OTHER';
+
+/** ٥+٦ سياسةُ الصرف — **تُقرأ من بطاقة الصنف لا ثابت** (`ق-١٠٧٦`/٢): `FEFO` للمعلَن تتبّعُه، و`FIFO` لغيره ولما لم يُعلَن بعد. */
+export type ConsumptionPolicy = 'FIFO' | 'FEFO';
+
 export interface ConsumeArgs {
   productId: string;
   warehouseId: string;
@@ -30,6 +39,34 @@ export interface ConsumeArgs {
   qty: number;
   /** حركة الإخراج التي تستهلك. */
   movementId: string;
+  /** نوعُ الإخراج — افتراضُه `OTHER`؛ والبيعُ يسمّي نفسَه. */
+  exit?: ExitKind;
+  /** يومُ الحركة — به يُقاس انتهاءُ الدفعة؛ افتراضُه الآن. */
+  date?: Date;
+}
+
+interface OrderableLayer {
+  acquiredAt: Date;
+  createdAt: Date;
+  batch: { expiryDate: Date } | null;
+}
+
+/**
+ * ٥+٦ **ترتيبُ الطبقات للاستهلاك بالسياسة** — دالةٌ نقيّة تُختبر وحدَها.
+ *
+ * `FIFO`: `acquiredAt` ثم `createdAt` كما كان. `FEFO`: **ما لا دفعةَ له أوّلاً بعمره** — فالطبقاتُ التي سبقت
+ * البناء لا تُخمَّن دفعتُها (`ق-١٠٧٦`/٣) وهي أقدمُ ما على الرفّ فتخرج كما كانت تخرج — ثم الدفعاتُ **بالأقرب انتهاءً**
+ * فالعمر. والمنتهيةُ أقربُ الكلّ فتتصدّر: وهو المطلوبُ للشطب والإعادة، ويُستثنى منه البيعُ في `consumeFifo`.
+ */
+export function orderLayersForConsumption<L extends OrderableLayer>(layers: readonly L[], policy: ConsumptionPolicy): L[] {
+  const byAge = (a: L, b: L) => a.acquiredAt.getTime() - b.acquiredAt.getTime() || a.createdAt.getTime() - b.createdAt.getTime();
+  if (policy === 'FIFO') return [...layers].sort(byAge);
+  return [...layers].sort((a, b) => {
+    if (!a.batch && !b.batch) return byAge(a, b);
+    if (!a.batch) return -1;
+    if (!b.batch) return 1;
+    return a.batch.expiryDate.getTime() - b.batch.expiryDate.getTime() || byAge(a, b);
+  });
 }
 
 export interface ConsumeResult {
@@ -111,15 +148,36 @@ export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs):
   let totalCost = 0;
   const consumptionIds: string[] = [];
 
+  /**
+   * ٥+٦ السياسةُ تُقرأ من البطاقة (`ق-١٠٧٦`/٢): المعلَنُ تتبّعُه يُصرَف بالأقرب انتهاءً، وغيرُه بالأقدم كما كان.
+   * وفي **البيع** وحدَه (`ق-١٠٨٢`) تُستبعد الدفعاتُ المنتهية يومَ الحركة من المرشَّحات؛ فإن لم يكفِ غيرُ المنتهي
+   * **وكان على الرفّ منتهٍ** رُفض البيعُ باسمه بدل أن يُباع منتهٍ أو يُقيَّد مؤقّتاً وهو موجود. أمّا نقصٌ بلا منتهٍ
+   * على الرفّ فبيعٌ سبق استلامَه كما كان: يُقيَّد مؤقّتاً ويُسوَّى حين يصل.
+   */
+  const product = await tx.product.findUnique({ where: { id: args.productId }, select: { expiryTracked: true, name: true } });
+  const policy: ConsumptionPolicy = product?.expiryTracked === true ? 'FEFO' : 'FIFO';
+  const exit: ExitKind = args.exit ?? 'OTHER';
+  const on = args.date ?? new Date();
+  const refuseExpired = policy === 'FEFO' && exit === 'SALE';
+  let unexpiredAvailable = 0;
+  let expiredOnShelf = 0;
+
   // كلُّ دورةٍ تقرأ ما بقي فيه شيء وتأخذ منه بكتابةٍ مشروطة، من الأقدم. كتابةٌ لم تقع
   // (`count = 0`) تعني أن الطبقةَ تغيّرت تحت أيدينا — فتُقطع الدورةُ وتُعاد القراءة
   // كي يبقى الترتيبُ FIFO لا «ما تيسّر». ودورةٌ لم تأخذ شيئاً تعني أن الطبقات نفدت
   // بالتزامن — فيبقى الباقي استهلاكاً مؤقّتاً كما لو أنه بيعٌ سبق استلامه.
   for (let pass = 0; pass < MAX_CONSUME_PASSES && outstanding > 0; pass++) {
-    const layers = await tx.inventoryLayer.findMany({
+    const all = await tx.inventoryLayer.findMany({
       where: { productId: args.productId, warehouseId: args.warehouseId, qtyRemaining: { gt: 0 } },
       orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }],
+      include: { batch: { select: { expiryDate: true } } },
     });
+    const ordered = orderLayersForConsumption(all, policy);
+    const layers = refuseExpired ? ordered.filter((l) => !l.batch || !isExpiredOn(l.batch.expiryDate, on)) : ordered;
+    if (pass === 0 && refuseExpired) {
+      unexpiredAvailable = roundTo(layers.reduce((s, l) => s + Number(l.qtyRemaining), 0), 'DERIVED_QUANTITY');
+      expiredOnShelf = roundTo(ordered.reduce((s, l) => s + (layers.includes(l) ? 0 : Number(l.qtyRemaining)), 0), 'DERIVED_QUANTITY');
+    }
     if (layers.length === 0) break;
 
     let tookAny = false;
@@ -157,6 +215,13 @@ export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs):
       outstanding = roundTo(outstanding - take, 'DERIVED_QUANTITY');
     }
     if (!tookAny && !raced) break;
+  }
+
+  // ٥+٦ رفضٌ مسمًّى في البيع وحدَه (`ق-١٠٨٢`): ما بقي مطلوباً ولا يغطّيه إلا منتهٍ على الرفّ لا يُباع ولا يُقيَّد مؤقّتاً.
+  if (refuseExpired && outstanding > 0 && expiredOnShelf > 0) {
+    throw new ConflictException(
+      formatMessage(MSG.expired_stock_sale_refused, { product: product?.name ?? args.productId, available: unexpiredAvailable, requested: args.qty }),
+    );
   }
 
   let provisionalUnitCost: number | null = null;
@@ -330,7 +395,7 @@ export function openProvisionalConsumptions(tx: Tx) {
 export async function createLayerFromMovement(
   tx: Tx,
   companyId: string,
-  args: { productId: string; warehouseId: string; qty: number; unitCost: number; acquiredAt: Date; sourceType: 'ADJUSTMENT' | 'TRANSFER' | 'OPENING' | 'RETURN'; movementId: string },
+  args: { productId: string; warehouseId: string; qty: number; unitCost: number; acquiredAt: Date; sourceType: 'ADJUSTMENT' | 'TRANSFER' | 'OPENING' | 'RETURN'; movementId: string; batchId?: string | null },
 ): Promise<string> {
   const layer = await tx.inventoryLayer.create({
     data: {
@@ -343,6 +408,8 @@ export async function createLayerFromMovement(
       acquiredAt: args.acquiredAt,
       sourceType: args.sourceType,
       sourceMovementId: args.movementId,
+      // ٥+٦ الدفعةُ على الطبقة — كيانٌ حُلّ قبل النداء (`resolveReceiptBatch`)، أو `null` لما لا دفعةَ له.
+      batchId: args.batchId ?? null,
     },
     select: { id: true },
   });
@@ -361,11 +428,12 @@ export async function transferLayers(
   companyId: string,
   args: { productId: string; fromWarehouseId: string; toWarehouseId: string; qty: number; movementId: string; date: Date },
 ): Promise<{ consumed: ConsumeResult; createdLayers: number }> {
-  const consumed = await consumeFifo(tx, companyId, { productId: args.productId, warehouseId: args.fromWarehouseId, qty: args.qty, movementId: args.movementId });
+  // التحويلُ ليس بيعاً: المنتهي ينتقل مع طبقته (`ق-١٠٨٢`) — ولا يُباع في مقصِده أيضاً.
+  const consumed = await consumeFifo(tx, companyId, { productId: args.productId, warehouseId: args.fromWarehouseId, qty: args.qty, movementId: args.movementId, exit: 'OTHER', date: args.date });
   const slices = await tx.inventoryConsumption.findMany({
     where: { id: { in: consumed.consumptionIds } },
     orderBy: { createdAt: 'asc' },
-    include: { layer: { select: { acquiredAt: true } } },
+    include: { layer: { select: { acquiredAt: true, batchId: true } } },
   });
   for (const s of slices) {
     await tx.inventoryLayer.create({
@@ -379,6 +447,8 @@ export async function transferLayers(
         acquiredAt: s.layer?.acquiredAt ?? args.date,
         sourceType: 'TRANSFER',
         sourceMovementId: args.movementId,
+        // ٥+٦ الدفعةُ تنتقل مع الطبقة (`ق-١٠٨٦`) — فالمقصِدُ يعرف انتهاءَها كما عرفه المصدر.
+        batchId: s.layer?.batchId ?? null,
       },
     });
   }
