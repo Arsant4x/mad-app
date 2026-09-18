@@ -3799,6 +3799,11 @@ model StockMovement {
   layers       InventoryLayer[]
   writeOff     InventoryWriteOff? @relation("WriteOffMovement")
 
+  /// ㉙ عكسُ حركةٍ سابقة (ق-١٠٦٣): حركةٌ مقابلة تشير إلى أصلها — لا حذف؛ فريدٌ فلا يُعكَس أصلٌ مرّتين، و`Restrict` فلا يُحذف.
+  reversalOfId String?        @unique
+  reversalOf   StockMovement? @relation("MovementReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy   StockMovement? @relation("MovementReversal")
+
   @@index([expiryDate])
   @@index([companyId, productId, warehouseId])
   @@index([invoiceLineId])

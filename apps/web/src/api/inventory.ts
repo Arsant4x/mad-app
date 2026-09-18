@@ -72,7 +72,8 @@ export interface ListStockMovementsParams {
 export const listStockMovements = (params: ListStockMovementsParams = {}) =>
   apiClient.get<StockMovementListResponse>('/inventory/movements', { params }).then((r) => r.data);
 export const createStockMovement = (dto: StockMovementInput) => apiClient.post<StockMovement & { resultingQty: number }>('/inventory/movements', dto).then((r) => r.data);
-export const deleteStockMovement = (id: string) => apiClient.delete(`/inventory/movements/${id}`);
+/** ㉙ عكسُ الحركة بحركةٍ مقابلة — لا حذف (ق-١٠٦٣): تاريخُ المخزون لا يُمحى. */
+export const reverseStockMovement = (id: string) => apiClient.post<StockMovement & { resultingQty: number }>(`/inventory/movements/${id}/reverse`, {}).then((r) => r.data);
 export const getStockLevels = () => apiClient.get<StockLevelRow[]>('/inventory/stock-levels').then((r) => r.data);
 export const getExpiringStock = (withinDays = 90) =>
   apiClient.get<ExpiringBatch[]>('/inventory/expiring', { params: { withinDays } }).then((r) => r.data);

@@ -59,11 +59,11 @@ export class InventoryController {
     return this.inventoryService.create(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
-  @Delete('movements/:id')
+  /** ㉙ عكسُ الحركة بحركةٍ مقابلة — لا حذف (ق-١٠٦٣): تاريخُ المخزون لا يُمحى. */
+  @Post('movements/:id/reverse')
   @RequiresAction('delete')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.inventoryService.remove(tenant.companyId, id);
+  reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.inventoryService.reverse(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   // ── واقعات الشطب (`SPEC 30.5` · `30.7`) ────────────────────────────────

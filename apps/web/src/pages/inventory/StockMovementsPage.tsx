@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createStockMovement, deleteStockMovement, listStockMovements, type StockMovement, type StockMovementInput } from '../../api/inventory';
+import { createStockMovement, listStockMovements, reverseStockMovement, type StockMovement, type StockMovementInput } from '../../api/inventory';
 import { listProducts, type Product } from '../../api/products';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -62,9 +62,10 @@ export function StockMovementsPage() {
     return result;
   }
 
-  async function confirmDelete() {
+  // ㉙ لا حذفَ لحركة: تُعكَس بحركةٍ مقابلة تشير إليها وتبقى الاثنتان (ق-١٠٦٣).
+  async function confirmReverse() {
     if (!pendingDelete) return;
-    await deleteStockMovement(pendingDelete.id);
+    await reverseStockMovement(pendingDelete.id);
     setPendingDelete(null);
     await reloadPage(page, search);
   }
@@ -129,7 +130,7 @@ export function StockMovementsPage() {
                     <td className="num">{fmt(m.qty)}</td>
                     <td>{m.reason || '—'}</td>
                     <td>
-                      <RowMenu actions={[{ label: '🗑 حذف', onClick: () => setPendingDelete(m), danger: true }]} />
+                      <RowMenu actions={[{ label: '↩ عكس الحركة', onClick: () => setPendingDelete(m), danger: true }]} />
                     </td>
                   </tr>
                 ))}
@@ -145,11 +146,11 @@ export function StockMovementsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الحركة"
-          body="حذف هذه الحركة؟ سيؤثر ذلك على الرصيد المحسوب لهذا الصنف. لا يمكن التراجع عن هذا الإجراء."
-          confirmLabel="حذف"
+          title="عكس الحركة"
+          body="تُنشأ حركةٌ مقابلة تشير إلى هذه الحركة وتعيد أثرها على الرصيد والتكلفة، وتبقى الاثنتان في السجلّ — لا حذف. ما له مستند (بيع أو استلام أو شطب) يُعكَس من مستنده، وما استُهلكت طبقته لا يُعكَس."
+          confirmLabel="عكس"
           onCancel={() => setPendingDelete(null)}
-          onConfirm={confirmDelete}
+          onConfirm={confirmReverse}
         />
       )}
     </div>

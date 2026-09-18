@@ -55,11 +55,8 @@ describe('POS cashier (e2e)', () => {
     if (trackedProductId) {
       // القائمة مقسّمة صفحات الآن — البحث بلاحقة التشغيل الفريدة (اسم الصنف
       // والمستودع يحملانها) يعيد حركات هذا الاختبار وحدها بدل مسح صفحة واحدة.
-      const movements = (await auth(request(app.getHttpServer()).get('/inventory/movements')).query({ search: suffix, pageSize: 100 })).body.items as { id: string; productId: string }[];
-      for (const m of movements.filter((m) => m.productId === trackedProductId)) {
-        await auth(request(app.getHttpServer()).delete(`/inventory/movements/${m.id}`));
-      }
-      await auth(request(app.getHttpServer()).delete(`/products/${trackedProductId}`));
+      // ㉙ لا حذفَ لحركةٍ بعد اليوم (ق-١٠٦٣): حركاتُ هذا الاختبار — إدخالُه اليدويّ وبيعُه — تبقى في سجلّ منشأة العرض
+      // كما تبقى فواتيرُه، والصنفُ معها (حركاتُه تحميه من الحذف بـRestrict).
       await auth(request(app.getHttpServer()).delete(`/trash/products/${trackedProductId}`));
     }
     await auth(request(app.getHttpServer()).delete(`/products/${productId}`));
