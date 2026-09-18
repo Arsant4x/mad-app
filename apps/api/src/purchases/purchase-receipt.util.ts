@@ -1,8 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
-import { settleProvisionalConsumptions } from '../inventory/costing.util';
 import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
 /**
  * **الاستلام الضمني** — قرار المالك (ق-١٩).

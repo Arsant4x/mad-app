@@ -6,8 +6,9 @@ import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
-import { consumeFifo, createLayerFromMovement, settleProvisionalConsumptions, transferLayers } from './costing.util';
+import { consumeFifo, createLayerFromMovement, transferLayers } from './costing.util';
 import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 

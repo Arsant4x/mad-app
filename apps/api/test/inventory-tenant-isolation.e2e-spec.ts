@@ -131,7 +131,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     await request(app.getHttpServer())
       .post('/inventory/movements')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 1, date: '2026-01-01' })
+      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 1, unitCost: 10, date: '2026-01-01' })
       .expect(201);
 
     await request(app.getHttpServer()).delete(`/warehouses/${warehouseA.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
@@ -142,7 +142,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     await request(app.getHttpServer())
       .post('/inventory/movements')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 5, date: '2026-01-01' })
+      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 5, unitCost: 10, date: '2026-01-01' })
       .expect(201);
 
     const warehousesB = await request(app.getHttpServer()).get('/warehouses').set('Authorization', `Bearer ${tokenB}`).expect(200);
@@ -154,7 +154,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     await request(app.getHttpServer())
       .post('/inventory/movements')
       .set('Authorization', `Bearer ${tokenB}`)
-      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 1, date: '2026-01-01' })
+      .send({ productId: product.id, warehouseId: warehouseA.id, type: 'IN', qty: 1, unitCost: 10, date: '2026-01-01' })
       .expect(404);
 
     await request(app.getHttpServer()).delete(`/warehouses/${warehouseA.id}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
