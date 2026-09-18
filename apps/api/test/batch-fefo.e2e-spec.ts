@@ -119,12 +119,12 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
   it('② الاستلامُ يحمل الدفعةَ كياناً — والمعلَنُ بلا دفعةٍ يُردّ مسمًّى بلا كتابة (الحكمُ للمالك)، ورقمٌ بلا انتهاءٍ يُردّ', async () => {
     const p = await product('معلَنٌ تتبّعُه', true);
     const noBatch = await purchase([{ productId: p, quantity: 5, unitPrice: 10 }]).expect(400);
-    expect(String(noBatch.body.message)).toContain('ينتظر حكم المالك');
+    expect(String(noBatch.body.message)).toContain('لا يُستلم بلا رقم دفعةٍ');
     expect(await tenantPrisma.runInTenantContext(companyId, (tx) => tx.purchase.count({ where: { lines: { some: { productId: p } } } }))).toBe(0);
     expect(await layersOf(p)).toEqual([]);
 
     const manualNoBatch = await move({ productId: p, warehouseId: whA, type: 'IN', qty: 5, unitCost: 10 }).expect(400);
-    expect(String(manualNoBatch.body.message)).toContain('ينتظر حكم المالك');
+    expect(String(manualNoBatch.body.message)).toContain('لا يُستلم بلا رقم دفعةٍ');
     const noExpiry = await move({ productId: p, warehouseId: whA, type: 'IN', qty: 5, unitCost: 10, batchNo: `L-${suffix}` }).expect(400);
     expect(String(noExpiry.body.message)).toContain('بانتهائها');
     expect(await batchesOf(p)).toEqual([]);
@@ -157,9 +157,15 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     expect(layers.map((l) => l.batchId)).toEqual([batches[0].id, batches[0].id]);
 
     const conflict = await purchase([{ productId: p, quantity: 1, unitPrice: 10, batchNo: `R-${suffix}`, expiryDate: iso(91) }]).expect(409);
-    expect(String(conflict.body.message)).toContain('ينتظر قرار المالك');
+    expect(String(conflict.body.message)).toContain('الدفعةُ هويّةٌ');
     expect(await batchesOf(p)).toHaveLength(1);
     expect(await layersOf(p)).toHaveLength(2);
+
+    // ⚖️ والمفتاحُ محسومٌ في القاعدة نفسِها (ق-١٠٩٠): صنفٌ ورقمٌ — فإدراجٌ خامٌ للرقم نفسِه بانتهاءٍ آخر يُرفض من القيد لا من الشيفرة.
+    await expect(
+      tenantPrisma.runInTenantContext(companyId, (tx) => tx.stockBatch.create({ data: { companyId, productId: p, batchNo: `R-${suffix}`, expiryDate: new Date(iso(92)) } })),
+    ).rejects.toMatchObject({ code: 'P2002' });
+    expect(await batchesOf(p)).toHaveLength(1);
   });
 
   it('④ الصرفُ سياسةٌ تُقرأ من البطاقة: المعلَنُ بالأقرب انتهاءً، وغيرُ المعلَن بالأقدم كما كان', async () => {
