@@ -94,7 +94,7 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     await auth(request(app.getHttpServer()).patch('/company-profile'))
       .send({ legalName: `مؤسسة الختم ${suffix}`, vatNumber: `3${String(Date.now()).padStart(13, '0').slice(-13)}3` })
       .expect(200);
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `صنف ختم ${suffix}`, price: 100 }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, name: `صنف ختم ${suffix}`, price: 100 }).expect(201)).body.id;
     const open = await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 });
     if (open.status !== 201 && open.status !== 409) throw new Error(`تعذّر فتح مناوبة: ${open.status}`);
     if (open.status === 201) openedShiftId = open.body.id;

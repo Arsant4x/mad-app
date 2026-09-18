@@ -3,6 +3,7 @@ import type { StockMovementInput, StockMovementType } from '../../api/inventory'
 import type { Product } from '../../api/products';
 import type { Warehouse } from '../../api/warehouses';
 import { today } from '../../lib/format';
+import { BATCH_FEFO_DECLARED_LIMITS } from '../../lib/batchLimits';
 import i18n from '../../i18n';
 
 const TYPE_OPTIONS: { value: StockMovementType; label: string }[] = [
@@ -37,6 +38,8 @@ export function StockMovementModal({
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // ٥+٦ الصنفُ المعلَنُ تتبّعُه يوجب الدفعةَ والانتهاءَ على الإدخال — والخادمُ يردّ بلا كتابة إن غابا (ق-١٠٨٦).
+  const selectedTracked = products.find((p) => p.id === productId)?.expiryTracked === true;
 
   async function handleSubmit() {
     setError(null);
@@ -156,16 +159,25 @@ export function StockMovementModal({
           </div>
         )}
         {type === 'IN' && (
-          <div className="two-col">
-            <div className="field">
-              <label>رقم التشغيلة (اختياري)</label>
-              <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="Batch / Lot" />
+          <>
+            <div className="two-col">
+              <div className="field">
+                <label>{selectedTracked ? 'رقم الدفعة — مطلوب لصنفٍ معلَنٍ تتبّعُه' : 'رقم الدفعة (اختياري — ومع تاريخ انتهائها)'}</label>
+                <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="Batch / Lot" />
+              </div>
+              <div className="field">
+                <label>{selectedTracked ? 'تاريخ الانتهاء — مطلوب' : 'تاريخ الانتهاء (مع رقم الدفعة)'}</label>
+                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+              </div>
             </div>
-            <div className="field">
-              <label>تاريخ الانتهاء (اختياري)</label>
-              <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-            </div>
-          </div>
+            {selectedTracked && (
+              <ul className="hint" style={{ margin: '0 0 8px', paddingInlineStart: 18 }}>
+                {BATCH_FEFO_DECLARED_LIMITS.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
         <div className="field">
           <label>السبب / ملاحظات</label>

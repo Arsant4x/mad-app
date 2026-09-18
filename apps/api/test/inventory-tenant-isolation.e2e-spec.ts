@@ -31,7 +31,7 @@ describe('Inventory: warehouses, stock movements, stock levels (e2e)', () => {
     const product = await request(app.getHttpServer())
       .post('/products')
       .set('Authorization', `Bearer ${token}`)
-      .send({ unitCode: 'H87', name: `منتج اختبار ${suffix}`, sku: `SKU-${suffix}`, minStock })
+      .send({ unitCode: 'H87', expiryTracked: false, name: `منتج اختبار ${suffix}`, sku: `SKU-${suffix}`, minStock })
       .expect(201);
     const warehouseA = await request(app.getHttpServer())
       .post('/warehouses')

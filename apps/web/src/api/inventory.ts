@@ -36,14 +36,25 @@ export interface StockMovementInput {
 
 export interface ExpiringBatch {
   id: string;
+  /** ٥+٦ `BATCH`: دفعةٌ كيانٌ بما بقي في طبقاتها · `LEGACY_MOVEMENT`: حركةُ إدخالٍ قديمة بدفعةٍ نصّاً — تبقى وتُعدّ ولا تُخمَّن. */
+  source: 'BATCH' | 'LEGACY_MOVEMENT';
+  productId: string;
   productName: string;
   sku: string | null;
   warehouseName: string;
   batchNo: string | null;
   qty: number;
+  /** `REMAINING` المتبقّي من الطبقات · `RECEIVED` الواردُ على حركةٍ قديمة (لا يُعرف متبقّيها). */
+  qtyKind: 'REMAINING' | 'RECEIVED';
   expiryDate: string;
   daysLeft: number;
   expired: boolean;
+}
+
+export interface ExpiringStockResponse {
+  rows: ExpiringBatch[];
+  /** الحدودُ الثلاثة المعلَنة في وجه ما بُني (ق-١٠٨٥) — يردّها الخادم مع الصفوف. */
+  declaredLimits: string[];
 }
 
 export interface StockLevelRow {
@@ -76,4 +87,4 @@ export const createStockMovement = (dto: StockMovementInput) => apiClient.post<S
 export const reverseStockMovement = (id: string) => apiClient.post<StockMovement & { resultingQty: number }>(`/inventory/movements/${id}/reverse`, {}).then((r) => r.data);
 export const getStockLevels = () => apiClient.get<StockLevelRow[]>('/inventory/stock-levels').then((r) => r.data);
 export const getExpiringStock = (withinDays = 90) =>
-  apiClient.get<ExpiringBatch[]>('/inventory/expiring', { params: { withinDays } }).then((r) => r.data);
+  apiClient.get<ExpiringStockResponse>('/inventory/expiring', { params: { withinDays } }).then((r) => r.data);

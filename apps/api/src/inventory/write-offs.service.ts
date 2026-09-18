@@ -176,11 +176,14 @@ export class WriteOffsService {
         select: { id: true },
       });
 
+      // ٥+٦ الشطبُ ليس بيعاً: المنتهي **يمرّ** منه — بل يتصدّر الصرفَ لصنفٍ معلَنٍ تتبّعُه، فهو المخرجُ لما على الرفّ (`ق-١٠٨٢`).
       const consumed = await consumeFifo(tx, companyId, {
         productId: row.productId,
         warehouseId: row.warehouseId,
         qty,
         movementId: movement.id,
+        exit: 'OTHER',
+        date: row.occurredAt,
       });
 
       const entry = await postWriteOffEntry(tx, companyId, {

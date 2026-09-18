@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { resolveReceiptBatch } from '../common/batches/stock-batch.util';
 import { MSG } from '../common/i18n/messages';
 import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
@@ -35,6 +36,9 @@ export interface ReceiptLine {
   productId: string | null;
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
+  /** ٥+٦ الدفعةُ كما وصلت على السطر — الاستلامُ يصنع منها الكيانَ ويربط طبقتَه به (`ق-١٠٨٦`). */
+  batchNo?: string | null;
+  expiryDate?: Date | null;
 }
 
 export interface ReceiveArgs {
@@ -67,6 +71,16 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
     const qty = Number(line.quantity);
     const unitCost = Number(line.unitPrice) * args.exchangeRate;
 
+    // ٥+٦ الدفعةُ تُحلّ **قبل** أن يُكتب شيء (`ق-١٠٨٦`): صنفٌ معلَنٌ تتبّعُه بلا دفعة، أو رقمٌ قائمٌ بانتهاءٍ آخر —
+    // يُردّان مسمَّيَين والحكمُ فيهما للمالك؛ فلا حركةَ ولا طبقة.
+    const product = await tx.product.findUnique({ where: { id: line.productId! }, select: { expiryTracked: true } });
+    const batchId = await resolveReceiptBatch(tx, args.companyId, {
+      productId: line.productId!,
+      expiryTracked: product?.expiryTracked ?? null,
+      batchNo: line.batchNo ?? null,
+      expiryDate: line.expiryDate ?? null,
+    });
+
     const movement = await tx.stockMovement.create({
       data: {
         companyId: args.companyId,
@@ -78,6 +92,9 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
         purchaseLineId: line.id,
         qty,
         date: args.date,
+        // نصُّ الدفعة على الحركة كما كان يُقرأ في قائمة الحركات — والكيانُ على الطبقة.
+        batchNo: batchId ? (line.batchNo?.trim() ?? null) : null,
+        expiryDate: batchId ? (line.expiryDate ?? null) : null,
       },
       select: { id: true },
     });
@@ -94,6 +111,7 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
         acquiredAt: args.date,
         sourceType: 'GOODS_RECEIPT',
         sourceMovementId: movement.id,
+        batchId,
       },
       select: { id: true },
     });

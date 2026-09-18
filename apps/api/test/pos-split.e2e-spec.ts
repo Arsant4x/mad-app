@@ -31,7 +31,7 @@ describe('POS split payment (e2e)', () => {
     await app.init();
 
     token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `عصير ${suffix}`, price: 40 }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, name: `عصير ${suffix}`, price: 40 }).expect(201)).body.id;
     shiftId = (await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 50 }).expect(201)).body.id;
   }, 60000);
 

@@ -26,6 +26,8 @@ export class ProductsService {
     // ① الوحدةُ تُعلَن ولا تُفترض: صنفٌ جديد بلا رمزٍ من القائمة يُرفض باسمه — لا «قطعة» صامتة.
     if (dto.unitCode === undefined || dto.unitCode === null || dto.unitCode === '') throw new BadRequestException(MSG.unit_code_required);
     if (!isUnitCode(dto.unitCode)) throw new BadRequestException(MSG.unit_code_unknown);
+    // ٥+٦ التتبّعُ بالدفعة والانتهاء يُعلَن (نعم أو لا) ولا يُخمَّن — كالوحدة (`ق-١٠٨١` · `ق-١٠٧٦`/١).
+    if (typeof dto.expiryTracked !== 'boolean') throw new BadRequestException(MSG.expiry_tracked_required);
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.product.create({
         // companyId omitted on purpose — injected at runtime by the tenant
@@ -35,6 +37,7 @@ export class ProductsService {
           sku: dto.sku || null,
           category: dto.category || null,
           unitCode: dto.unitCode,
+          expiryTracked: dto.expiryTracked,
           price: dto.price ?? 0,
           cost: dto.cost ?? 0,
           minStock: dto.minStock ?? 0,
@@ -58,6 +61,8 @@ export class ProductsService {
         if (!isUnitCode(dto.unitCode)) throw new BadRequestException(MSG.unit_code_unknown);
         data.unitCode = dto.unitCode;
       }
+      // ٥+٦ إعلانُ التتبّع للقائم يمرّ من هنا عند لمس الصنف (`ق-١٠٨٣`) — نعم أو لا؛ ولا يُمحى إعلانٌ قائم.
+      if (dto.expiryTracked !== undefined) data.expiryTracked = dto.expiryTracked;
       if (dto.price !== undefined) data.price = dto.price;
       if (dto.cost !== undefined) data.cost = dto.cost;
       if (dto.minStock !== undefined) data.minStock = dto.minStock;

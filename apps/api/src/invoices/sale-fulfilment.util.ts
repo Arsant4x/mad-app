@@ -111,11 +111,14 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
       select: { id: true },
     });
 
+    // ٥+٦ البيعُ يسمّي نفسَه: منه وحدَه يُرفض المنتهي مسمًّى (`ق-١٠٨٢`) — والانتهاءُ يُقاس بيوم المستند.
     const consumed = await consumeFifo(tx, args.companyId, {
       productId: line.productId!,
       warehouseId,
       qty,
       movementId: movement.id,
+      exit: 'SALE',
+      date: args.date,
     });
     totalCost += consumed.totalCost;
     provisionalQty += consumed.provisionalQty;
