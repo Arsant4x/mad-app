@@ -385,6 +385,22 @@ export async function transferLayers(
   return { consumed, createdLayers: slices.length };
 }
 
+/**
+ * ㉙ **إقفالُ طبقةٍ بعينها عند عكس إدخالها** (`ق-١٠٦٣`): عكسُ إدخالٍ يدويّ لم تُستهلك طبقتُه يُقفل تلك الطبقةَ
+ * هي — لا `FIFO` من غيرها — بنقصانٍ ذرّيٍّ مشروط (`ق-٨١٤`) وصفِّ استهلاكٍ على حركة العكس بتكلفتها.
+ * والمستدعي يفحص قبلُ أن الطبقةَ كاملة؛ وهنا حارسٌ ثانٍ يرمي إن كانت الكتابةُ لم تقع.
+ */
+export async function closeLayerExactly(tx: Tx, companyId: string, args: { layerId: string; movementId: string }): Promise<{ qty: number; unitCost: number }> {
+  const layer = await tx.inventoryLayer.findUniqueOrThrow({ where: { id: args.layerId }, select: { qtyRemaining: true, qtyReceived: true, unitCost: true } });
+  const qty = Number(layer.qtyRemaining);
+  if (qty !== Number(layer.qtyReceived)) throw new Error(`الطبقةُ ${args.layerId} استُهلك منها — لا تُقفل بعكس إدخالها`);
+  const { count } = await tx.inventoryLayer.updateMany({ where: { id: args.layerId, qtyRemaining: { gte: qty } }, data: { qtyRemaining: { decrement: qty } } });
+  if (count === 0) throw new Error(`الطبقةُ ${args.layerId} تغيّرت تحت أيدينا — لم تُقفل`);
+  const unitCost = Number(layer.unitCost);
+  await tx.inventoryConsumption.create({ data: { companyId, layerId: args.layerId, movementId: args.movementId, qty, unitCost } });
+  return { qty, unitCost };
+}
+
 export async function weightedAverageCost(tx: Tx, productId: string, warehouseId: string): Promise<number> {
   const layers = await tx.inventoryLayer.findMany({
     where: { productId, warehouseId, qtyRemaining: { gt: 0 } },

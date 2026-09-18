@@ -1,12 +1,12 @@
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
-import { consumeFifo, createLayerFromMovement, transferLayers } from './costing.util';
+import { closeLayerExactly, consumeFifo, createLayerFromMovement, restoreConsumption, transferLayers } from './costing.util';
 import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
@@ -208,11 +208,53 @@ export class InventoryService {
     });
   }
 
-  async remove(companyId: string, id: string): Promise<void> {
-    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.stockMovement.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.movement_not_found);
-      await tx.stockMovement.delete({ where: { id } });
+  /**
+   * ㉙ **عكسُ الحركة بحركةٍ مقابلة — لا حذف** (`ق-١٠٦٣`): تاريخُ المخزون لا يُمحى؛ الحركةُ الخاطئة تُعكَس بحركةٍ
+   * تشير إليها وتبقى الاثنتان. ولا يُعكَس ما له مستند (بيعٌ · استلامٌ · شطب) إلا من مستنده، ولا ما استُهلكت
+   * طبقتُه (فالتاريخُ الذي بُني عليه لا يُعاد)، ولا تُعكَس الحركةُ مرّتين، ولا يُعكَس العكس.
+   *   - إخراجٌ ⟵ إدخالٌ مقابل يعيد الاستهلاكَ إلى طبقاته الأصلية (`restoreConsumption`) — لا طبقةً جديدة.
+   *   - إدخالٌ ⟵ إخراجٌ يُقفل طبقتَه هو بعينها (`closeLayerExactly`).
+   *   - تحويلٌ ⟵ تحويلٌ مقابل: طبقاتُ المقصِد تُقفل والمصدرُ يستعيد طبقاتِه بتاريخها.
+   * ولا قيدَ في الدفتر — كما لم يكن للحركة اليدوية قيد (قراءةٌ معلَنة في ㉘).
+   */
+  reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const original = await tx.stockMovement.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { reversedBy: { select: { id: true } } } });
+      if (!original) throw new NotFoundException(MSG.movement_not_found);
+      if (original.reversalOfId) throw new ConflictException(MSG.movement_is_reversal);
+      if (original.reversedBy) throw new ConflictException(MSG.movement_already_reversed);
+      if (original.origin !== 'MANUAL') throw new ConflictException(MSG.movement_has_document);
+
+      const signedQty = Number(original.qty);
+      const qty = Math.abs(signedQty);
+      const entering = original.type === 'IN' || (original.type === 'ADJUSTMENT' && signedQty > 0);
+      const reason = `عكسُ الحركة ${original.id.slice(0, 8)}${original.reason ? ` — ${original.reason}` : ''}`;
+      const base = { companyId, branchId: original.branchId, productId: original.productId, date: new Date(), reason, origin: 'MANUAL' as const, reversalOfId: original.id };
+
+      if (entering) {
+        const layers = await tx.inventoryLayer.findMany({ where: { sourceMovementId: original.id } });
+        if (layers.some((l) => Number(l.qtyRemaining) !== Number(l.qtyReceived))) throw new ConflictException(MSG.movement_layer_consumed);
+        const reversal = await tx.stockMovement.create({ data: { ...base, warehouseId: original.warehouseId, type: 'OUT', qty }, include: MOVEMENT_INCLUDE });
+        for (const l of layers) await closeLayerExactly(tx, companyId, { layerId: l.id, movementId: reversal.id });
+        return { ...reversal, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
+      }
+
+      if (original.type === 'OUT' || original.type === 'ADJUSTMENT') {
+        await restoreConsumption(tx, companyId, original.id);
+        const reversal = await tx.stockMovement.create({ data: { ...base, warehouseId: original.warehouseId, type: 'IN', qty }, include: MOVEMENT_INCLUDE });
+        return { ...reversal, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
+      }
+
+      // TRANSFER: طبقاتُ المقصِد التي أنشأها التحويل تُقفل، والمصدرُ يستعيد ما استُهلك منه.
+      const dest = await tx.inventoryLayer.findMany({ where: { sourceMovementId: original.id, warehouseId: original.toWarehouseId! } });
+      if (dest.some((l) => Number(l.qtyRemaining) !== Number(l.qtyReceived))) throw new ConflictException(MSG.movement_layer_consumed);
+      const reversal = await tx.stockMovement.create({
+        data: { ...base, warehouseId: original.toWarehouseId!, toWarehouseId: original.warehouseId, type: 'TRANSFER', qty },
+        include: MOVEMENT_INCLUDE,
+      });
+      for (const l of dest) await closeLayerExactly(tx, companyId, { layerId: l.id, movementId: reversal.id });
+      await restoreConsumption(tx, companyId, original.id);
+      return { ...reversal, resultingQty: await currentStockQty(tx, original.productId, original.toWarehouseId!) };
     });
   }
 

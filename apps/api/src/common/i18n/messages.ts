@@ -108,6 +108,10 @@ export const MSG = {
   quantity_must_be_positive: 'inventory.quantity_must_be_positive',
   adjustment_cannot_be_zero: 'inventory.adjustment_cannot_be_zero',
   unit_cost_required: 'inventory.unit_cost_required',
+  movement_is_reversal: 'inventory.movement_is_reversal',
+  movement_already_reversed: 'inventory.movement_already_reversed',
+  movement_has_document: 'inventory.movement_has_document',
+  movement_layer_consumed: 'inventory.movement_layer_consumed',
 
   // employees / banks
   employee_not_found: 'employees.not_found',
@@ -555,6 +559,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.quantity_must_be_positive]: { ar: 'الكمية يجب أن تكون أكبر من صفر', en: 'Quantity must be greater than zero' },
   [MSG.adjustment_cannot_be_zero]: { ar: 'قيمة التسوية يجب ألا تساوي صفراً', en: 'Adjustment amount cannot be zero' },
   [MSG.unit_cost_required]: { ar: 'تكلفة الوحدة مطلوبة للإدخال اليدوي — لا تؤخذ من بطاقة الصنف', en: 'Unit cost is required for manual stock entry — it is not taken from the product card' },
+  [MSG.movement_is_reversal]: { ar: 'هذه الحركة عكسٌ لحركةٍ أخرى — لا يُعكَس العكس، والتصحيح بحركةٍ جديدة', en: 'This movement is itself a reversal — reversals are not reversed; correct with a new movement' },
+  [MSG.movement_already_reversed]: { ar: 'عُكست هذه الحركة من قبل — ولا تُعكَس مرّتين', en: 'This movement has already been reversed' },
+  [MSG.movement_has_document]: { ar: 'الحركة لها مستند (بيع أو استلام أو شطب) — تُعكَس من مستندها لا من هنا', en: 'This movement belongs to a document (sale, receipt or write-off) — reverse it from its document' },
+  [MSG.movement_layer_consumed]: { ar: 'طبقة هذه الحركة استُهلك منها — لا تُعكَس، والتصحيح بحركةٍ جديدة', en: 'The cost layer of this movement has been consumed — it cannot be reversed; correct with a new movement' },
 
   [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
   [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
