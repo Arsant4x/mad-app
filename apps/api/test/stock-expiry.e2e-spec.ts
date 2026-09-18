@@ -51,7 +51,7 @@ describe('Stock batch/expiry (e2e)', () => {
     tokenA = loginA.body.accessToken;
     tokenB = loginB.body.accessToken;
 
-    const product = await authA(request(app.getHttpServer()).post('/products')).send({ name: productName, sku: `SKU-${suffix}` }).expect(201);
+    const product = await authA(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: productName, sku: `SKU-${suffix}` }).expect(201);
     productId = product.body.id;
     const warehouse = await authA(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع ${suffix}` }).expect(201);
     warehouseId = warehouse.body.id;

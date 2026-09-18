@@ -87,7 +87,7 @@ describe('POS offline incidents — inferred on the server (e2e)', () => {
     const login = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
-    productId = (await auth(http().post('/products')).send({ name: `عصير برتقال ${suffix}`, price: 12 }).expect(201)).body.id;
+    productId = (await auth(http().post('/products')).send({ unitCode: 'H87', name: `عصير برتقال ${suffix}`, price: 12 }).expect(201)).body.id;
     shiftId = (await auth(http().post('/pos/shifts')).send({ openingFloat: 100 }).expect(201)).body.id;
 
     const profile = (await auth(http().get('/company-profile')).expect(200)).body;

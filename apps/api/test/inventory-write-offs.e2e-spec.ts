@@ -83,7 +83,7 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     const suffix = Date.now();
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع تلف ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع تلف ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `صنف تلف ${suffix}`, price: 100, cost: UNIT_COST }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `صنف تلف ${suffix}`, price: 100, cost: UNIT_COST }).expect(201)).body.id;
 
     // طبقةٌ حقيقية بعشر وحدات عبر إيصال شراء — فتكلفة ما يُشطب معلومةٌ سلفاً.
     const supplierId = (await auth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورّد تلف ${suffix}` }).expect(201)).body.id;

@@ -44,7 +44,7 @@ describe('POS cashier (e2e)', () => {
     await app.init();
 
     token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `قهوة مختصة ${suffix}`, price: 100 }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `قهوة مختصة ${suffix}`, price: 100 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {
@@ -136,7 +136,7 @@ describe('POS cashier (e2e)', () => {
     // مستودع + فرع مربوط به (Branch.warehouseId) + صنف مخزني برصيد استلام 10.
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع كاشير ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع كاشير ${suffix}`, warehouseId }).expect(201)).body.id;
-    trackedProductId = (await auth(request(app.getHttpServer()).post('/products')).send({ name: `عصير برتقال ${suffix}`, price: 50 }).expect(201)).body.id;
+    trackedProductId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', name: `عصير برتقال ${suffix}`, price: 50 }).expect(201)).body.id;
     await auth(request(app.getHttpServer()).post('/inventory/movements'))
       .send({ productId: trackedProductId, warehouseId, type: 'IN', qty: 10, unitCost: 20, date: new Date().toISOString().slice(0, 10) })
       .expect(201);

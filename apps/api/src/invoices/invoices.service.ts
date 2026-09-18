@@ -37,6 +37,7 @@ import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
@@ -479,6 +480,8 @@ export class InvoicesService {
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
+      // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — وصنفٌ لم يُعلن وحدتَه يترك السطرَ بلا وحدة، لا برمزٍ مخمَّن.
+      const unitCodes = await unitCodesFor(tx, dto.lines);
       const created = await tx.invoice.create({
         // `companyId` (top-level and on each nested line) is set explicitly
         // rather than relying on the tenant-scope extension: nested relation
@@ -519,6 +522,7 @@ export class InvoicesService {
               companyId,
               description: l.description,
               productId: l.productId ?? null,
+              unitCode: unitCodeOf(unitCodes, l.productId),
               quantity: l.quantity,
               unitPrice: l.unitPrice,
               taxRate: l.taxRate,
@@ -704,11 +708,13 @@ export class InvoicesService {
         // Replace-all rather than diffing line-by-line — simplest correct
         // approach, and invoices are edited as a whole in the UI anyway.
         await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
+        const unitCodes = await unitCodesFor(tx, dto.lines);
         data.lines = {
           create: dto.lines.map((l) => ({
             companyId,
             description: l.description,
             productId: l.productId ?? null,
+            unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             taxRate: l.taxRate,
@@ -925,6 +931,7 @@ export class InvoicesService {
     const no = await this.nextDocumentNumber(tx, companyId, note.numberKind, issueDate);
     const { subtotal, taxTotal, total } = note.totals;
 
+    const unitCodes = await unitCodesFor(tx, note.lines);
     const created = await tx.invoice.create({
       data: {
         companyId,
@@ -952,6 +959,7 @@ export class InvoicesService {
             companyId,
             description: l.description,
             productId: l.productId ?? null,
+            unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
             taxRate: l.taxRate,

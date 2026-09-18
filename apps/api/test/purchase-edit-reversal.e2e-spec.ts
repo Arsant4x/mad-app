@@ -94,7 +94,7 @@ describe('تعديلُ فاتورة الشراء بعكسٍ وتجميدُها �
     customerId = (await post('/customers').send({ name: `عميل تعديل ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع تعديل ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع تعديل ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await post('/products').send({ name: `صنف تعديل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
+    productId = (await post('/products').send({ unitCode: 'H87', name: `صنف تعديل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {

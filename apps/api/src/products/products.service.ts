@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { isUnitCode } from '../common/units/units';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { MSG } from '../common/i18n/messages';
@@ -22,6 +23,9 @@ export class ProductsService {
   }
 
   create(companyId: string, dto: CreateProductDto) {
+    // ① الوحدةُ تُعلَن ولا تُفترض: صنفٌ جديد بلا رمزٍ من القائمة يُرفض باسمه — لا «قطعة» صامتة.
+    if (dto.unitCode === undefined || dto.unitCode === null || dto.unitCode === '') throw new BadRequestException(MSG.unit_code_required);
+    if (!isUnitCode(dto.unitCode)) throw new BadRequestException(MSG.unit_code_unknown);
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.product.create({
         // companyId omitted on purpose — injected at runtime by the tenant
@@ -30,7 +34,7 @@ export class ProductsService {
           name: dto.name,
           sku: dto.sku || null,
           category: dto.category || null,
-          unit: dto.unit || null,
+          unitCode: dto.unitCode,
           price: dto.price ?? 0,
           cost: dto.cost ?? 0,
           minStock: dto.minStock ?? 0,
@@ -49,7 +53,11 @@ export class ProductsService {
       if (dto.name !== undefined) data.name = dto.name;
       if (dto.sku !== undefined) data.sku = dto.sku || null;
       if (dto.category !== undefined) data.category = dto.category || null;
-      if (dto.unit !== undefined) data.unit = dto.unit || null;
+      // إعلانُ الوحدة للقائم يمرّ من هنا — رمزٌ من القائمة أو رفضٌ مسمًّى؛ ولا يُمحى إعلانٌ قائم.
+      if (dto.unitCode !== undefined) {
+        if (!isUnitCode(dto.unitCode)) throw new BadRequestException(MSG.unit_code_unknown);
+        data.unitCode = dto.unitCode;
+      }
       if (dto.price !== undefined) data.price = dto.price;
       if (dto.cost !== undefined) data.cost = dto.cost;
       if (dto.minStock !== undefined) data.minStock = dto.minStock;

@@ -13,9 +13,10 @@ export class UpdateProductDto {
   @IsString()
   category?: string;
 
+  /** إعلانُ الوحدة للقائم أو تغييرُها — رمزٌ من القائمة المغلقة، يُفحص في الخدمة. */
   @IsOptional()
   @IsString()
-  unit?: string;
+  unitCode?: string;
 
   @IsOptional()
   @IsNumber()

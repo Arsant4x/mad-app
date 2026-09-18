@@ -16,6 +16,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 
 /** البنودُ الحيّة وحدَها — المتجاوَزُ بتعديلٍ قبل الاستهلاك (`supersededAt`) محفوظٌ للدفتر لا للعرض. */
 const PURCHASE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } } as const;
@@ -110,6 +111,8 @@ export class PurchasesService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
         const no = await this.nextPurchaseNumber(tx, companyId);
+        // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.
+        const unitCodes = await unitCodesFor(tx, dto.lines ?? []);
         const created = await tx.purchase.create({
           data: {
             companyId,
@@ -148,6 +151,7 @@ export class PurchasesService {
                       companyId,
                       description: line.description,
                       productId: line.productId ?? null,
+                      unitCode: unitCodeOf(unitCodes, line.productId),
                       quantity: line.quantity,
                       unitPrice: line.unitPrice,
                       taxRate: line.taxRate ?? 15,
@@ -307,12 +311,14 @@ export class PurchasesService {
           lines: existing.lines,
         });
         await tx.purchaseLine.updateMany({ where: { purchaseId: id, supersededAt: null }, data: { supersededAt: new Date() } });
+        const unitCodes = await unitCodesFor(tx, dto.lines);
         await tx.purchaseLine.createMany({
           data: dto.lines.map((line) => ({
             companyId,
             purchaseId: id,
             description: line.description,
             productId: line.productId ?? null,
+            unitCode: unitCodeOf(unitCodes, line.productId),
             quantity: line.quantity,
             unitPrice: line.unitPrice,
             taxRate: line.taxRate ?? 15,

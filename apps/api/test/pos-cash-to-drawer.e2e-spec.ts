@@ -121,7 +121,7 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
     token = company.token;
     companyId = company.companyId;
 
-    productId = (await auth(http().post('/products')).send({ name: `صنفُ الدرج ${suffix}`, price: UNIT_PRICE }).expect(201)).body.id;
+    productId = (await auth(http().post('/products')).send({ unitCode: 'H87', name: `صنفُ الدرج ${suffix}`, price: UNIT_PRICE }).expect(201)).body.id;
     drawer = await ensureDrawer();
   }, 60000);
 

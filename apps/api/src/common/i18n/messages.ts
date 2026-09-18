@@ -99,6 +99,8 @@ export const MSG = {
 
   // products / inventory
   product_not_found: 'products.not_found',
+  unit_code_required: 'products.unit_code_required',
+  unit_code_unknown: 'products.unit_code_unknown',
   warehouse_not_found: 'warehouses.not_found',
   warehouse_has_movements: 'warehouses.has_movements',
   destination_warehouse_required: 'inventory.destination_required',
@@ -547,6 +549,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },
 
   [MSG.product_not_found]: { ar: 'المنتج غير موجود', en: 'Product not found' },
+  [MSG.unit_code_required]: { ar: 'وحدة القياس مطلوبة — تُعلَن من القائمة ولا تُفترض', en: 'Unit of measure is required — declare it from the list; none is assumed' },
+  [MSG.unit_code_unknown]: { ar: 'وحدة القياس ليست من القائمة المعتمدة (رموز UN/ECE Rec 20)', en: 'Unit of measure is not in the approved list (UN/ECE Rec 20 codes)' },
   [MSG.warehouse_not_found]: { ar: 'المستودع غير موجود', en: 'Warehouse not found' },
   [MSG.warehouse_has_movements]: {
     ar: 'لا يمكن حذف مستودع له حركات مخزون — احذف حركاته أولاً',

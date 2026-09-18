@@ -446,6 +446,8 @@ export class PosService {
           return {
             description: p.name,
             productId: p.id,
+            // ① وحدةُ الكمّية من بطاقة الصنف لحظةَ البيع — ولا رمزَ لصنفٍ لم يُعلنها.
+            unitCode: p.unitCode ?? null,
             quantity: l.quantity,
             unitPrice: Number(p.price),
             taxRate: POS_TAX_RATE,
