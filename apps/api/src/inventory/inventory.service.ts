@@ -6,6 +6,9 @@ import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
+import { consumeFifo, createLayerFromMovement, transferLayers } from './costing.util';
+import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 
@@ -75,6 +78,11 @@ export class InventoryService {
         throw new BadRequestException(MSG.quantity_must_be_positive);
       }
 
+      // ㉘ القيمةُ تتحرّك مع الكمّية (ق-١٠٦٣): ما يدخل يُنشئ طبقةً بتكلفةٍ **مُدخَلة** — لا من البطاقة،
+      // فصفرُها صفرٌ صامت يصير تكلفةَ مبيعاتٍ لاحقاً (ق-١٠٦٣/٣). يُرفض قبل أن يُكتب شيء.
+      const entering = dto.type === 'IN' || (dto.type === 'ADJUSTMENT' && dto.qty > 0);
+      if (entering && (dto.unitCost === undefined || dto.unitCost === null)) throw new BadRequestException(MSG.unit_cost_required);
+
       const movement = await tx.stockMovement.create({
         data: {
           branchId: await resolveBranchId(tx, dto.branchId, allowedBranchIds),
@@ -93,12 +101,68 @@ export class InventoryService {
         include: MOVEMENT_INCLUDE,
       });
 
+      // ㉘ طبقةٌ للداخل (وتسويةُ المؤقّت المفتوح بها)، استهلاكٌ للخارج، ونقلُ طبقاتٍ للتحويل — كما الاستلامُ والبيع.
+      const when = new Date(dto.date);
+      if (entering) {
+        const layerId = await createLayerFromMovement(tx, companyId, {
+          productId: dto.productId,
+          warehouseId: dto.warehouseId,
+          qty: Math.abs(dto.qty),
+          unitCost: dto.unitCost!,
+          acquiredAt: when,
+          sourceType: 'ADJUSTMENT',
+          movementId: movement.id,
+        });
+        const settled = await settleProvisionalConsumptions(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, layerId });
+        if (settled.settled > 0) {
+          await postCogsSettlementEntry(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, baseDelta: settled.costDelta });
+        }
+      } else if (dto.type === 'OUT' || dto.type === 'ADJUSTMENT') {
+        await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id });
+      } else if (dto.type === 'TRANSFER') {
+        await transferLayers(tx, companyId, {
+          productId: dto.productId,
+          fromWarehouseId: dto.warehouseId,
+          toWarehouseId: dto.toWarehouseId!,
+          qty: dto.qty,
+          movementId: movement.id,
+          date: when,
+        });
+      }
+
       // Soft warning only — matches the mockup's non-blocking "quantity
       // exceeds available balance, continue anyway?" confirm: the movement
       // is never rejected for going negative, the frontend just gets enough
       // information to flag it if it wants to.
       const resultingQty = await currentStockQty(tx, dto.productId, dto.warehouseId);
       return { ...movement, resultingQty };
+    });
+  }
+
+  /**
+   * ㉘ الاستهلاكاتُ المؤقّتة **المفتوحة** — التقريرُ الذي وعدت به الشيفرة ولم يقرأه أحد (ق-١٠٦٢): بيعٌ أو إخراجٌ
+   * سبق استلامَه فقُيّد بآخر تكلفةٍ معروفة ولم يصله استلامُه بعد. «فما لا يُرى لا يُسوَّى».
+   */
+  openProvisional(companyId: string, allowedBranchIds: string[] | 'all') {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const rows = await tx.inventoryConsumption.findMany({
+        where: { layerId: null, settledBy: { is: null }, movement: branchFilter(allowedBranchIds) },
+        orderBy: { createdAt: 'asc' },
+        include: { movement: { include: { product: { select: { name: true } }, warehouse: { select: { name: true } } } } },
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        movementId: r.movementId,
+        productId: r.movement.productId,
+        productName: r.movement.product.name,
+        warehouseId: r.movement.warehouseId,
+        warehouseName: r.movement.warehouse.name,
+        branchId: r.movement.branchId,
+        date: r.movement.date,
+        qty: Number(r.qty),
+        unitCost: Number(r.unitCost),
+        createdAt: r.createdAt,
+      }));
     });
   }
 

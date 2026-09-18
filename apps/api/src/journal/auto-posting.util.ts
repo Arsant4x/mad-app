@@ -253,6 +253,44 @@ export async function postCogsReversalEntry(
 }
 
 /**
+ * ㉘ **قيد تسوية الاستهلاك المؤقّت** (`ق-١٠٦٣/١`): بيعٌ سبق استلامَه رُحّلت تكلفتُه بآخر تكلفةٍ معروفة، ثم وصل
+ * الاستلامُ بتكلفةٍ حقيقية — فالفرقُ (الحقيقية − المؤقّتة) × الكمّية يُرحَّل الآن: موجبُه مدين `5100` دائن `1300`،
+ * وسالبُه العكس. **قيدٌ مستقلّ** عن قيد التكلفة الأصليّ كما أن قيدَ التكلفة مستقلٌّ عن الفاتورة.
+ */
+export async function postCogsSettlementEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; ref: string; date: Date; baseDelta: number },
+) {
+  const delta = round2(c.baseDelta);
+  if (Math.abs(delta) < 0.005) return null;
+
+  const ids = await resolveAccountIds(tx, ['5100']);
+  if (!ids) return null;
+  const inventoryAccountId = await getOrCreateInventoryAccount(tx, companyId);
+  const amount = Math.abs(delta);
+  const lines: PostingLine[] =
+    delta > 0
+      ? [
+          { accountId: ids.get('5100')!, debit: amount, credit: 0 },
+          { accountId: inventoryAccountId, debit: 0, credit: amount },
+        ]
+      : [
+          { accountId: inventoryAccountId, debit: amount, credit: 0 },
+          { accountId: ids.get('5100')!, debit: 0, credit: amount },
+        ];
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `تسوية استهلاكٍ مؤقّت — ${c.ref}`,
+    lines,
+    auto: true,
+    branchId: c.branchId ?? null,
+  });
+}
+
+/**
  * ⭐ **قيد شطب المخزون — بلا سطر ضريبة، وهذا سنده** (`SPEC 30.5` · `ق-١٣٨`).
  *
  * مدين `5800 مصروف تلف وفقد` · دائن `1300 المخزون`، **بتكلفة ما خرج من الطبقات**

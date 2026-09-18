@@ -1,5 +1,5 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
-import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export const STOCK_MOVEMENT_TYPES = ['IN', 'OUT', 'TRANSFER', 'ADJUSTMENT'] as const;
 
@@ -29,6 +29,16 @@ export class CreateStockMovementDto extends BranchFieldDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  /**
+   * تكلفةُ الوحدة لما يدخل المخزونَ يدوياً (`IN` أو تسويةٌ موجبة) — **تُدخَل أو يُرفض** (ق-١٠٦٣/٣):
+   * لا تؤخذ من بطاقة الصنف، فصفرُ البطاقة صفرٌ صامتٌ يصير تكلفةَ مبيعاتٍ لاحقاً. والصفرُ المُدخَل
+   * صراحةً مقبول (عيّناتٌ مجّانية) — المرفوضُ هو الغياب.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  unitCost?: number;
 
   /// Batch/lot number and expiry — used on receiving (IN) perishables.
   @IsOptional()

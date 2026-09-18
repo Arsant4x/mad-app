@@ -107,6 +107,7 @@ export const MSG = {
   movement_not_found: 'inventory.movement_not_found',
   quantity_must_be_positive: 'inventory.quantity_must_be_positive',
   adjustment_cannot_be_zero: 'inventory.adjustment_cannot_be_zero',
+  unit_cost_required: 'inventory.unit_cost_required',
 
   // employees / banks
   employee_not_found: 'employees.not_found',
@@ -553,6 +554,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.movement_not_found]: { ar: 'الحركة غير موجودة', en: 'Stock movement not found' },
   [MSG.quantity_must_be_positive]: { ar: 'الكمية يجب أن تكون أكبر من صفر', en: 'Quantity must be greater than zero' },
   [MSG.adjustment_cannot_be_zero]: { ar: 'قيمة التسوية يجب ألا تساوي صفراً', en: 'Adjustment amount cannot be zero' },
+  [MSG.unit_cost_required]: { ar: 'تكلفة الوحدة مطلوبة للإدخال اليدوي — لا تؤخذ من بطاقة الصنف', en: 'Unit cost is required for manual stock entry — it is not taken from the product card' },
 
   [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
   [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
