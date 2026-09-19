@@ -217,6 +217,17 @@ model Company {
   /// ⚠️ **صورةٌ لا أصل**: الأصلُ صفُّ `ProcessingAgreementAcceptance`، وهذا يُكتب معه
   /// **في المعاملة نفسِها** ليقرأه حارسُ المستأجر بلا استعلامٍ ثانٍ في كلِّ طلب.
   consentedListVersion Int?
+  /// ٢٥ **وسيطُ الاستلام** (بضاعةٌ مستلَمة غيرُ مفوترة — `ق-١١٢١`): حسابٌ يُنشأ عند أوّل شراءٍ مخزنيّ
+  /// **برمزٍ مشتقٍّ `MAX+1` في نطاق `2101–2199`** كالأدراج والبنوك (`accounts/code-bands.ts`)، ويُشار
+  /// إليه هنا **بالمعرّف لا بالرمز ولا بالاسم** (`§6.3`) — فتاجرٌ رقّم حسابَه اليدويّ `2101` يدفع الوسيطَ إلى
+  /// `2102` ويبقى الرابطُ صحيحاً. `Restrict`: حسابٌ تعلّقت به هذه المنشأة لا يُحذف.
+  ///
+  /// ⚠️ **بلا فهرسٍ فريد عمداً** (مقيس): تحديثُ عمودٍ داخل فهرسٍ فريد يقفل صفَّ المنشأة `FOR UPDATE`، وعدّادُ
+  /// أرقام المستندات (`ق-٣٤٨`) يُدرج على منفذٍ خاصّ صفّاً يشير إلى المنشأة فينتظر `KEY SHARE` عليها —
+  /// فتقف معاملةُ الشراء حتى مهلتها (`5 s`). وبلا الفهرس يكون القفلُ `NO KEY UPDATE` ولا تعارض.
+  /// والواحدُ لواحد مضمونٌ بالبناء: يُكتب مرّةً عند أوّل حاجة ولا يُبدَّل.
+  receiptClearingAccountId String?
+  receiptClearingAccount   Account? @relation("ReceiptClearingAccount", fields: [receiptClearingAccountId], references: [id], onDelete: Restrict)
   /// When on, the master records (properties/units) are frozen company-wide:
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
@@ -393,6 +404,8 @@ model Company {
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   purchaseLines       PurchaseLine[]
+  goodsReceipts       GoodsReceipt[]
+  goodsReceiptLines   GoodsReceiptLine[]
   inventoryLayers       InventoryLayer[]
   stockBatches          StockBatch[]
   inventoryConsumptions InventoryConsumption[]
@@ -559,6 +572,7 @@ model Branch {
   journalEntries   JournalEntry[]
   stockMovements   StockMovement[]
   writeOffs        InventoryWriteOff[]
+  goodsReceipts    GoodsReceipt[]
 
   quotes Quote[]
 
@@ -909,6 +923,9 @@ model Account {
   cashDrawer CashDrawer?
   /// والبنكُ الذي يملكه — واحدٌ لواحد كذلك (`ق-٢٧٧`).
   bank       Bank?
+  /// ٢٥ والمنشأةُ التي هذا وسيطُ استلامها (`Company.receiptClearingAccountId`) — واحدةٌ بالبناء، والقائمةُ
+  /// لأن الفهرسَ الفريد أُسقط عمداً (انظر العمودَ هناك).
+  receiptClearingFor Company[] @relation("ReceiptClearingAccount")
 
   @@unique([companyId, code])
   @@map("accounts")
@@ -1381,6 +1398,8 @@ model Purchase {
 
   attachments PurchaseAttachment[]
   lines       PurchaseLine[]
+  /// ٢٥ استلاماتُ هذا الشراء — الضمنيُّ الواحد، أو استلاماتٌ مسجَّلة على مرّات (وما أُلغي يبقى بـ`voidedAt`).
+  receipts    GoodsReceipt[]
 
   @@unique([companyId, no])
   @@index([companyId, categoryCode])
@@ -1451,10 +1470,109 @@ model PurchaseLine {
 
   stockMovements StockMovement[]
 
+  /// ٢٥ استلاماتُ هذا السطر — كاملةً أو على مرّات (`ق-١١٢٢`/②)؛ والمتبقّي للاستلام = `quantity − Σ` غيرِ الملغى منها.
+  receiptLines GoodsReceiptLine[]
+
   @@index([purchaseId])
   @@index([companyId, productId])
   @@index([returnsPurchaseLineId])
   @@map("purchase_lines")
+}
+
+/// ⭐ **الاستلامُ المستقلّ — كيانٌ فوق الشراء لا بدلَه** (`٢٥` · `ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`).
+///
+/// كان الاستلامُ ضمنيّاً داخل إنشاء الشراء: لا جدولَ ولا رقمَ ولا استلامَ جزئيّ، والطبقةُ مؤرَّخةٌ
+/// **بتاريخ فاتورة المورّد** لا بوصول البضاعة (`ق-١٩` يفرّق بين الحدثين والمبنيُّ كان يجمعهما).
+/// الآن لكلِّ وصولٍ مستندُه: رقمٌ `GR-YYYY-NNNN` من العدّاد الذرّيّ (`ق-٣٢٨`)، ومستودعٌ وتاريخُ
+/// استلامٍ **هو تاريخُ الطبقة** (`acquiredAt = receivedAt`)، وسطورٌ تشير إلى سطور الشراء بالكمّية
+/// المستلَمة — فشراءٌ يُستلم على مرّاتٍ له استلاماتٌ عدّة، وما لم يُستلم لا طبقةَ له ولا مخزونَ في الميزانية.
+///
+/// ## المحاسبة — قيدان لا قيد (`ق-١١٢١`)
+/// الفاتورةُ: مدينٌ **وسيطُ الاستلام** (بضاعةٌ مستلَمة غيرُ مفوترة) بقيمة البنود المخزنية / دائنٌ `2100`.
+/// وكلُّ استلامٍ — ضمنيّاً كان أو مسجَّلاً — مدينٌ `1300` / دائنٌ الوسيط بما استُلم. فيتصافى الوسيطُ حين
+/// يلتقي الحدثان، ويبقى فيه ما فُوتر ولم يُستلم (مدين) أو ما استُلم ولم يُفوتر (دائن — لا يقع اليوم لأن
+/// مرجعَ الشراء إلزاميّ). وحارسُ الرصيد يقرأ ما بقي فيه **من المستندات** ويطابقه بالدفتر (`goods-receipts.service`).
+///
+/// ## الضمنيُّ يبقى الافتراض (`ق-١١٢٢`/⑤)
+/// إنشاءُ شراءٍ بسطورٍ مخزنية يُنشئ استلاماً كاملاً بتاريخ الشراء (`implicit = true`) ما لم يُطلب غيرُه
+/// (`receiveNow: false` على الطلب — لا علَمَ على المنشأة). والقائمُ قبل البناء (`213` سطراً على التطوير)
+/// كُتبت له صفوفُ استلامٍ **من حركاته القائمة** في الهجرة — تاريخُ الحركة ومستودعُها وكمّيتُها، قراءةً لا
+/// تخميناً — والطبقاتُ لم تُمسّ (`ق-١١٢٢`/③) وقيودُها بقيت على `1300` مباشرةً.
+///
+/// ## ما يُؤجَّل معلَناً (`ق-١١٢٢`/④)
+/// الاستلامُ قبل الفاتورة (أمرُ الشراء) بابٌ لا يُفتح: `purchaseId` **إلزاميٌّ اليوم**، ويُرخى العمودُ
+/// بهجرةٍ حين يُبنى أمرُ الشراء — لا عمودٌ فارغٌ ينتظر مساراً لا وجودَ له.
+model GoodsReceipt {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// `GR-YYYY-NNNN` — من العدّاد الذرّيّ لا من `count()` (`ق-٣٢٨`).
+  no String
+
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  /// تاريخُ وصول البضاعة — **وهو تاريخُ الطبقة** الذي يرتّب الرفّ (`FIFO`/`FEFO`).
+  receivedAt DateTime @db.Date
+
+  /// وُلد مع الشراء (الافتراضُ الضمنيّ) أو من صفوف ما قبل البناء — لا بيدٍ على شاشة الاستلام.
+  /// تعديلُ بنود الشراء يعكس الضمنيَّ ويُعيده؛ والمسجَّلُ بيدٍ يجمّد البنود حتى يُعكس هو أوّلاً.
+  implicit Boolean @default(false)
+
+  notes String?
+
+  /// قيدُ الاستلام (مدين `1300` / دائن الوسيط) — `null` لاستلامات ما قبل البناء التي رُحِّلت داخل قيد شرائها.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("GoodsReceiptEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  /// ⚖️ الإلغاءُ عكسٌ لا محو: الصفُّ يبقى، والطبقاتُ تُفرَغ بحركاتٍ خارجة، والقيدُ يُعكس.
+  voidedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines GoodsReceiptLine[]
+
+  @@unique([companyId, no])
+  @@index([purchaseId])
+  @@index([companyId, receivedAt])
+  @@map("goods_receipts")
+}
+
+/// سطرُ الاستلام — كمّيةٌ مستلَمة من سطر شراءٍ بعينه، وحركةُ الإدخال تشير إليه **وإلى سطر الشراء معاً**
+/// فلا ينكسر ما يقرأ `purchaseLineId` (الإعادةُ إلى المورّد · إشعارُ السعر · العكس).
+model GoodsReceiptLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+
+  purchaseLineId String
+  purchaseLine   PurchaseLine @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+
+  /// الكمّيةُ المستلَمة في هذا الاستلام — موجبةٌ (قيدُ `CHECK`) ولا تتجاوز ما بقي من السطر (الخدمة).
+  quantity Decimal @db.Decimal(18, 3)
+
+  /// ما رُحِّل لهذا السطر بالعملة الأساسية (مدين `1300`). **والاستلامُ الذي يُكمل السطر يرحّل الفرقَ** عمّا
+  /// رُحِّل قبله — لا كمّيتَه مضروبةً مدوَّرةً — فيتصافى الوسيطُ بلا هللةٍ عالقة من تدويرٍ متكرّر.
+  baseAmount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  stockMovements StockMovement[]
+
+  @@index([goodsReceiptId])
+  @@index([purchaseLineId])
+  @@map("goods_receipt_lines")
 }
 
 /// Catalog item (product or service) used as a reference list when writing
@@ -1932,6 +2050,7 @@ model JournalEntry {
   keyMoneyEntries     ContractKeyMoney[] @relation("KeyMoney")
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
   inventoryWriteOffs  InventoryWriteOff[]  @relation("InventoryWriteOffEntry")
+  goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
 
   payments         Payment[]
   supplierPayments SupplierPayment[]
@@ -3740,6 +3859,7 @@ model Warehouse {
 
   inventoryLayers InventoryLayer[]
   writeOffs       InventoryWriteOff[]
+  goodsReceipts   GoodsReceipt[]
 
   @@map("warehouses")
 }
@@ -3815,6 +3935,13 @@ model StockMovement {
   purchaseLineId String?
   purchaseLine   PurchaseLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
 
+  /// ٢٥ سطرُ الاستلام الذي أدخل هذه البضاعة (أو أخرجها عكساً) — **مع** `purchaseLineId` لا بدلَه (فالعدُّ
+  /// «اثنان» أعلاه بقي: مصدرُ الحركة سطرُ الشراء، والاستلامُ مستندُ الوصول). قيدُ `CHECK`: لا يُملأ إلا على
+  /// `RECEIPT`، والمُشغِّلُ يوجب أن يكون سطرُ الاستلام على سطر الشراء نفسِه. `null` لحركات ما قبل البناء
+  /// التي لم تُكتب لها صفوفُ استلام (الحركاتُ الخارجة القديمة) ولحركات الإعادة إلى المورّد.
+  goodsReceiptLineId String?
+  goodsReceiptLine   GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id], onDelete: Restrict)
+
   createdAt DateTime @default(now())
 
   consumptions InventoryConsumption[]
@@ -3830,6 +3957,7 @@ model StockMovement {
   @@index([companyId, productId, warehouseId])
   @@index([invoiceLineId])
   @@index([purchaseLineId])
+  @@index([goodsReceiptLineId])
   @@map("stock_movements")
 }
 

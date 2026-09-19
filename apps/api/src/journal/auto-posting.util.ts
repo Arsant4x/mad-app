@@ -7,6 +7,7 @@ import { purchaseExpenseAccountCode } from '../common/purchase-categories';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.util';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
+import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 import { ServicePeriod, splitAtCollection } from './rent-recognition.util';
@@ -490,9 +491,14 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
    * ⭐ **البند المخزني أصلٌ لا مصروف** — ولا يصير تكلفةً إلا لحظة البيع
    * (`م٦`). وقبل هذه الموجة كان يذهب إلى `5100` مباشرةً، فالهامش **مقلوب لا
    * غائب**: تكلفةٌ بلا إيرادها ثم إيرادٌ بلا تكلفته.
+   *
+   * ⚖️ **ومنذ `٢٥` تُمدين الفاتورةُ وسيطَ الاستلام لا `1300`** (`ق-١١٢١`): المخزونُ
+   * يُمدينه **الاستلامُ** بقيده (`postGoodsReceiptEntry`) حين تصل البضاعة — ضمنيّاً
+   * في اللحظة نفسِها أو مسجَّلاً بعدها — فيتصافى الوسيطُ عند التقاء الحدثين، ويبقى
+   * فيه ما فُوتر ولم يُستلم. وما رُحِّل قبل البناء على `1300` مباشرةً يبقى كما هو.
    */
   if (stocked > 0) {
-    lines.push({ accountId: await getOrCreateInventoryAccount(tx, companyId), debit: stocked, credit: 0 });
+    lines.push({ accountId: await getOrCreateReceiptClearingAccount(tx, companyId), debit: stocked, credit: 0 });
   }
   if (serviceSubtotal !== 0) {
     lines.push({ accountId: ids.get(expCode)!, debit: serviceSubtotal, credit: 0 });
@@ -517,6 +523,44 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
     auto: true,
     branchId: p.branchId ?? null,
     supplierId: p.supplierId,
+  });
+}
+
+export interface GoodsReceiptForPosting {
+  /** مورّدُ الشراء المستلَم — يُختم على السطرين (ق-٨٧٣) فيُقرأ الاستلامُ في كشف المورّد كما يُقرأ شراؤه. */
+  supplierId: string;
+  branchId?: string | null;
+  /** رقمُ الاستلام `GR-…` ورقمُ شرائه — للمذكّرة. */
+  no: string;
+  purchaseNo: string;
+  /** تاريخُ الاستلام — تاريخُ الطبقة والقيد معاً. */
+  date: Date;
+  /** ما استُلم بالعملة الأساسية (Σ `baseAmount` سطور الاستلام). */
+  baseAmount: number;
+}
+
+/**
+ * ٢٥ **قيدُ الاستلام** (`ق-١١٢١`): مدين `1300` / دائن وسيط الاستلام بقيمة ما وصل.
+ *
+ * يُكتب لكلِّ استلام — ضمنيّاً كان (مع الشراء) أو مسجَّلاً بعده — **قيدٌ واحد لا فرعان**:
+ * توحيدُ المسار أرخصُ من تمييز الضمنيّ بقيدٍ مصافى، والوسيطُ يظهر في الدفتر عند كل شراءٍ
+ * مخزنيّ فيُقرأ ما بقي فيه من الدفتر كما يُقرأ من المستندات (`goods-receipts.service`).
+ * وصفرٌ لا يُرحَّل — استلامُ سطورٍ رُحِّل لها كلُّ شيءٍ من قبل (لا يقع إلا بتدويرٍ عند الحدّ).
+ */
+export async function postGoodsReceiptEntry(tx: Prisma.TransactionClient, companyId: string, r: GoodsReceiptForPosting) {
+  const amount = round2(r.baseAmount);
+  if (amount <= 0) return null;
+  return createJournalEntry(tx, {
+    companyId,
+    date: r.date,
+    memo: `استلام ${r.no} — فاتورة شراء ${r.purchaseNo}`,
+    lines: [
+      { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: amount, credit: 0 },
+      { accountId: await getOrCreateReceiptClearingAccount(tx, companyId), debit: 0, credit: amount },
+    ],
+    auto: true,
+    branchId: r.branchId ?? null,
+    supplierId: r.supplierId,
   });
 }
 

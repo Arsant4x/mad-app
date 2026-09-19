@@ -6,10 +6,11 @@ import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
 /**
- * **الاستلام الضمني** — قرار المالك (ق-١٩).
+ * **الاستلام — حدثُ التكلفة** (ق-١٩)، وله كيانُه منذ `٢٥` (ق-١١٣١).
  *
- * حدث التكلفة هو **الاستلام** لا الفوترة. ولا كيانَ استلامٍ مستقلاً بعد، فمن
- * لم يفعّل دورة أوامر الشراء يُولَّد له استلامٌ ضمنيّ من الشراء نفسه —
+ * حدث التكلفة هو **الاستلام** لا الفوترة. وكان الاستلامُ ضمنيّاً بلا كيان؛ فصار
+ * لكلِّ وصولٍ مستندُه (`GoodsReceipt`) وهذا الملفُّ يكتب **رفَّه**: حركةً وطبقةً
+ * لكلِّ سطرِ استلام. والضمنيُّ باقٍ افتراضاً (يُولَّد مع الشراء ما لم يُطلب غيرُه) —
  * «الصيدلية ترى تجربة اليوم، وتاجر الجملة يرى الدورة، **بمخطط واحد**».
  *
  * ## ⭐ والقاعدة البنيوية مطبَّقة هنا لا موصوفة
@@ -31,8 +32,15 @@ import { settleProvisionalConsumptions } from '../journal/provisional-settlement
 
 type Tx = Prisma.TransactionClient;
 
+/**
+ * ٢٥ سطرُ استلامٍ يُكتب رفّاً: سطرُ الشراء (المصدرُ الذي يوجبه المُشغِّل) وسطرُ الاستلام (المستندُ)
+ * **معاً** على الحركة، والكمّيةُ كمّيةُ **هذا الاستلام** لا كمّيةُ السطر — فالجزئيُّ مقبول (`ق-١١٢٢`/②).
+ */
 export interface ReceiptLine {
+  /** سطرُ الشراء. */
   id: string;
+  /** سطرُ الاستلام الذي تُكتب له الحركة. */
+  goodsReceiptLineId: string;
   productId: string | null;
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
@@ -44,28 +52,34 @@ export interface ReceiptLine {
 export interface ReceiveArgs {
   companyId: string;
   branchId: string | null;
-  /** مستودع الشراء إن حُدِّد صراحةً — وإلا فمستودع الفرع. */
-  warehouseId?: string | null;
+  /** مستودعُ الاستلام — محلولٌ قبل النداء (`resolveReceiptWarehouse`). */
+  warehouseId: string;
+  /** تاريخُ الاستلام — **وهو تاريخُ الطبقة** (`acquiredAt`)، لا تاريخُ الفاتورة. */
   date: Date;
   /** سعر الصرف: الطبقة تُقوَّم بالعملة الأساسية كالدفتر. */
   exchangeRate: number;
   lines: ReceiptLine[];
-  /** مرجعُ المستند لقيد تسوية المؤقّت — رقمُ الشراء (ق-١٠٦٣/١). */
+  /** مرجعُ المستند لقيد تسوية المؤقّت — رقمُ الاستلام (ق-١٠٦٣/١). */
   ref?: string;
 }
 
-/** ينشئ حركة استلام وطبقة تكلفة لكل بندٍ مخزني. */
+/**
+ * مستودعُ الاستلام: ما حُدِّد صراحةً، وإلا فمستودعُ الفرع — **وبضاعةٌ بلا مستودع تُرفض ولا تُتخطّى**
+ * (انظر رأس الملفّ).
+ */
+export async function resolveReceiptWarehouse(tx: Tx, explicit: string | null | undefined, branchId: string | null): Promise<string> {
+  const warehouseId =
+    explicit ??
+    (branchId ? (await tx.branch.findUnique({ where: { id: branchId }, select: { warehouseId: true } }))?.warehouseId ?? null : null);
+  if (!warehouseId) throw new BadRequestException(MSG.purchase_stocked_needs_warehouse);
+  return warehouseId;
+}
+
+/** ينشئ حركة استلام وطبقة تكلفة لكل سطرِ استلامٍ مخزنيّ. */
 export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ layers: number }> {
   const stocked = args.lines.filter((l) => l.productId !== null);
   if (stocked.length === 0) return { layers: 0 };
-
-  const warehouseId =
-    args.warehouseId ??
-    (args.branchId
-      ? (await tx.branch.findUnique({ where: { id: args.branchId }, select: { warehouseId: true } }))?.warehouseId ?? null
-      : null);
-
-  if (!warehouseId) throw new BadRequestException(MSG.purchase_stocked_needs_warehouse);
+  const warehouseId = args.warehouseId;
 
   for (const line of stocked) {
     const qty = Number(line.quantity);
@@ -90,6 +104,7 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
         type: 'IN',
         origin: 'RECEIPT',
         purchaseLineId: line.id,
+        goodsReceiptLineId: line.goodsReceiptLineId,
         qty,
         date: args.date,
         // نصُّ الدفعة على الحركة كما كان يُقرأ في قائمة الحركات — والكيانُ على الطبقة.

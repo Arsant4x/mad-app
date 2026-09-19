@@ -74,6 +74,16 @@ export const DRAWER_BANDS: CodeBand[] = [
   { min: 1500, max: 1599 },
 ];
 
+/**
+ * ٢٥ **وسيطُ الاستلام** (بضاعةٌ مستلَمة غيرُ مفوترة — `ق-١١٢١`): حسابٌ واحد لكل منشأة يُنشأ عند أوّل
+ * شراءٍ مخزنيّ **برمزٍ مشتقٍّ `MAX+1`** كالأدراج والبنوك (حكمُ المالك) — أوّلُ رمزٍ حرٍّ بعد `2100`
+ * (الذمم الدائنة) ودون `2200` (ضريبة المخرجات)؛ فتاجرٌ رقّم حساباً يدوياً `2101` يدفع الوسيطَ إلى `2102`.
+ *
+ * ⚠️ ليس في `CODE_BAND_GROUPS`: النطاقُ لحسابٍ واحد، فإنذارُ «بقي عشرُ خانات» لا معنى له عليه —
+ * والمنشأةُ تشير إلى حسابها بالمعرّف (`Company.receiptClearingAccountId`) لا بهذا النطاق.
+ */
+export const RECEIPT_CLEARING_BANDS: CodeBand[] = [{ min: 2101, max: 2199 }];
+
 export const CODE_BAND_GROUPS: CodeBandGroup[] = [
   { key: 'bank', name: 'حسابات البنوك', bands: BANK_BANDS },
   { key: 'drawer', name: 'حسابات الأدراج', bands: DRAWER_BANDS },
