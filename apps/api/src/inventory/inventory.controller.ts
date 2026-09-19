@@ -10,9 +10,11 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { CreateWriteOffDto } from './dto/create-write-off.dto';
+import { DeclareStockOpeningDto } from './dto/declare-stock-opening.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { RejectWriteOffDto } from './dto/reject-write-off.dto';
 import { InventoryService } from './inventory.service';
+import { StockOpeningsService } from './stock-openings.service';
 import { WriteOffAttachmentsService } from './write-off-attachments.service';
 import { WriteOffsService } from './write-offs.service';
 
@@ -24,7 +26,40 @@ export class InventoryController {
     private readonly inventoryService: InventoryService,
     private readonly writeOffs: WriteOffsService,
     private readonly writeOffAttachments: WriteOffAttachmentsService,
+    private readonly stockOpenings: StockOpeningsService,
   ) {}
+
+  // ── ٣٠ الأرصدةُ الافتتاحية بالطبقات (ق-١١٧٧ · ق-١١٧٩) — خادمٌ ومسارٌ بلا شاشة (ق-١١٧٦) ──
+  //
+  // الإعلانُ بفعل `record` (من يُدخل البضاعة يُعلن رصيدَها)، والإلغاءُ بفعل `delete` كعكس الحركات؛
+  // والتقريرُ بـ`view`. والمسارُ الثابت `opening` قبل `opening/:id`.
+
+  /** تقريرُ الافتتاح: الإعلاناتُ مختومةً، وما بلا سندٍ مُعلَناً، وطبقاتُ التسوية القائمة عدّاً خارج المجموع. */
+  @Get('opening')
+  @RequiresAction('view')
+  listOpenings(@CurrentTenant() tenant: TenantContext) {
+    return this.stockOpenings.list(tenant.companyId);
+  }
+
+  @Get('opening/:id')
+  @RequiresAction('view')
+  getOpening(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.stockOpenings.get(tenant.companyId, id);
+  }
+
+  /** الاسمُ يُمرَّر لأن الإعلانَ **يُختم باسم مُعلِنه** وقتَ الفعل لا يُحلّ لاحقاً (كما سجلّ التدقيق). */
+  @Post('opening')
+  @RequiresAction('record')
+  declareOpening(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: DeclareStockOpeningDto) {
+    return this.stockOpenings.declare(tenant.companyId, tenant.allowedBranchIds, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, dto);
+  }
+
+  /** إلغاءُ سطرٍ — عكسٌ لا محو، ويُرفض بعد استهلاك. */
+  @Post('opening/:id/lines/:lineId/void')
+  @RequiresAction('delete')
+  voidOpeningLine(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('lineId') lineId: string) {
+    return this.stockOpenings.voidLine(tenant.companyId, tenant.allowedBranchIds, id, lineId);
+  }
 
   @Get('stock-levels')
   @RequiresAction('view')

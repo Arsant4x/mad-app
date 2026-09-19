@@ -9,6 +9,7 @@ import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
 import { round2 } from '../common/money/rounding';
 import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
+import { INVENTORY_ACCOUNT_CODE } from '../journal/inventory-accounts.util';
 
 /** مقارنةُ يومٍ بيوم — `@db.Date` بلا لحظة، و`null` لا يساوي تاريخاً. */
 function sameDay(a: Date, b: Date | null): boolean {
@@ -68,6 +69,7 @@ export class AccountsService {
         await this.assertNoDuplicateCode(tx, dto.code);
         const openingBalance = round2(dto.openingBalance ?? 0);
         this.assertNotOpeningEquity(dto.code, openingBalance !== 0);
+        this.assertNotInventoryOpening(dto.code, openingBalance !== 0);
 
         const account = await tx.account.create({
           // `companyId` is intentionally omitted here — the tenant-scope
@@ -135,6 +137,7 @@ export class AccountsService {
         const delta = dto.openingBalance === undefined ? 0 : round2(dto.openingBalance) - round2(Number(existing.openingBalance));
         if (delta !== 0) {
           this.assertNotOpeningEquity(existing.code, true);
+          this.assertNotInventoryOpening(existing.code, true);
           data.openingBalance = round2(dto.openingBalance!);
         }
 
@@ -225,6 +228,17 @@ export class AccountsService {
   private assertNotOpeningEquity(code: string, hasOpening: boolean): void {
     if (hasOpening && code === OPENING_EQUITY_CODE) {
       throw new ConflictException(formatMessage(MSG.account_opening_equity_protected, { code: OPENING_EQUITY_CODE }));
+    }
+  }
+
+  /**
+   * ⭐ `٣٠` **مصدرٌ واحد لرصيد المخزون** (`ق-١١٧٧/②`): الرصيدُ الافتتاحيُّ لحساب المخزون يُعلَن من المخزون
+   * بطبقاته (إعلانُ الرصيد الافتتاحي — `POST inventory/opening`) لا من هنا؛ وإلا ازدوج المصدران بصمت: رصيدٌ على
+   * الحساب هنا وطبقاتٌ هناك. **يُبنى مع الإعلان لا بعده** — وصفرُ حسابٍ متأثّر يومَ البناء هو ما جعله رخيصاً.
+   */
+  private assertNotInventoryOpening(code: string, hasOpening: boolean): void {
+    if (hasOpening && code === INVENTORY_ACCOUNT_CODE) {
+      throw new ConflictException(formatMessage(MSG.account_opening_inventory_via_stock, { code: INVENTORY_ACCOUNT_CODE }));
     }
   }
 }

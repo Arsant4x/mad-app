@@ -69,22 +69,21 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
   it('⭐ كل سطر قيدٍ من مستندٍ يحمل عقداً يحمل وحدةً — ولا واحد فارغ', async () => {
     // المسارات مشتقّة من مفاتيح القاعدة: أي جدولٍ يشير إلى قيدٍ **وإلى عقد**
     // يدخل هنا تلقائياً. ولا اسم دالةِ ترحيلٍ مكتوبٌ في هذا الاستعلام.
+    //
+    // ⚠️ **من `pg_catalog` لا من `information_schema`** (2026-09-19 · مع `٣٠`): الصيغةُ القديمة على
+    // `information_schema.constraint_column_usage` أخذت على السير `158 s` ثم `115 s` (سقفُ الاختبار `120 s`)
+    // بعد إضافة جدولين بسبعة مفاتيح — مقابل `10 s` قبلها — ومحلّياً `700 ms`؛ والمكافئُ على `pg_constraint`
+    // يعيد الصفوفَ نفسَها (`8` هنا · `37` في مصادر الطرف، مقارنةً صفّاً صفّاً) في `4 ms`. فالكتالوجُ يُقرأ من
+    // مصدره لا من واجهةٍ تُعيد بناءه لكلِّ صفّ.
     const rows = await prisma.$queryRaw<{ table_name: string; entry_col: string }[]>`
-      SELECT DISTINCT fk_entry.table_name, fk_entry.column_name AS entry_col
-      FROM information_schema.key_column_usage fk_entry
-      JOIN information_schema.referential_constraints rc_e
-        ON rc_e.constraint_name = fk_entry.constraint_name
-      JOIN information_schema.constraint_column_usage ccu_e
-        ON ccu_e.constraint_name = rc_e.unique_constraint_name
-      WHERE ccu_e.table_name = 'journal_entries'
-        AND fk_entry.table_name IN (
-          SELECT fk_c.table_name
-          FROM information_schema.key_column_usage fk_c
-          JOIN information_schema.referential_constraints rc_c
-            ON rc_c.constraint_name = fk_c.constraint_name
-          JOIN information_schema.constraint_column_usage ccu_c
-            ON ccu_c.constraint_name = rc_c.unique_constraint_name
-          WHERE ccu_c.table_name = 'contracts'
+      SELECT DISTINCT c.conrelid::regclass::text AS table_name, a.attname AS entry_col
+      FROM pg_constraint c
+      JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+      WHERE c.contype = 'f'
+        AND c.confrelid = 'journal_entries'::regclass
+        AND EXISTS (
+          SELECT 1 FROM pg_constraint c2
+          WHERE c2.contype = 'f' AND c2.conrelid = c.conrelid AND c2.confrelid = 'contracts'::regclass
         )
     `;
 
@@ -233,13 +232,14 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
 
     /** المصادرُ مشتقّةٌ من الكتالوج: مفاتيحُ `journal_entries` مع أعمدة الطرف/العقد على الجدول نفسِه. */
     async function partySources(): Promise<PartySource[]> {
+      // من `pg_catalog` لا `information_schema` — السببُ والقياسُ في مسارات الوحدة أعلاه (الصفوفُ نفسُها: `37`).
       const fks = await prisma.$queryRaw<{ table_name: string; column_name: string; referenced: string }[]>`
-        SELECT fk.table_name, fk.column_name, ccu.table_name AS referenced
-        FROM information_schema.key_column_usage fk
-        JOIN information_schema.referential_constraints rc ON rc.constraint_name = fk.constraint_name
-        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = rc.unique_constraint_name
-        WHERE ccu.table_name IN ('journal_entries', 'contracts', 'customers', 'suppliers')
-          AND fk.table_name <> 'journal_lines'
+        SELECT c.conrelid::regclass::text AS table_name, a.attname AS column_name, c.confrelid::regclass::text AS referenced
+        FROM pg_constraint c
+        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+        WHERE c.contype = 'f'
+          AND c.confrelid IN ('journal_entries'::regclass, 'contracts'::regclass, 'customers'::regclass, 'suppliers'::regclass)
+          AND c.conrelid <> 'journal_lines'::regclass
       `;
       const byTable = new Map<string, { entryCols: string[]; contractCol: string | null; partyCol: PartySource['partyCol'] }>();
       for (const fk of fks) {

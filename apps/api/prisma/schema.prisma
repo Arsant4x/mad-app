@@ -408,6 +408,8 @@ model Company {
   goodsReceiptLines   GoodsReceiptLine[]
   landedCostDistributions LandedCostDistribution[]
   landedCostLines         LandedCostLine[]
+  stockOpenings           StockOpening[]
+  stockOpeningLines       StockOpeningLine[]
   inventoryLayers       InventoryLayer[]
   stockBatches          StockBatch[]
   inventoryConsumptions InventoryConsumption[]
@@ -1690,6 +1692,103 @@ model LandedCostLine {
   @@map("landed_cost_lines")
 }
 
+/// ⭐ **`٣٠` إعلانُ الأرصدة الافتتاحية للمخزون** (`ق-١١٧٧` · `ق-١١٧٩`) — رأسٌ لكلِّ إعلان.
+///
+/// ## ما يحلّه
+/// التاجرُ الذي يدخل ببضاعةٍ على رفّه كان يُدخلها **حركةً يدوية**: طبقةُ `ADJUSTMENT` بتاريخ الحركة لا تاريخ
+/// الاقتناء (فيبدأ `FIFO` عنده مقلوباً)، وبتكلفةٍ بلا ختمِ مُعلِن، **وبلا قيدٍ على `1300`**. الإعلانُ هنا:
+/// سطورٌ حركاتُها `IN` بمصدر `OPENING` وطبقاتُها `OPENING` **بتاريخ اقتناءٍ لكلِّ سطرٍ `≤` تاريخ الافتتاح**،
+/// وقيدٌ واحد للإعلان مدين `1300` / دائن `3900` (حسابُ `3.8` نفسُه) مربوطٌ به، خاضعٌ لقفل الفترات.
+///
+/// ## تاريخٌ واحد للمنشأة (`ق-١١٧٧/④`)
+/// `openingDate` هو تاريخُ القيد — كما `3.8`: بدايةُ السنة المالية التي تغطّي اليوم أو تاريخٌ يُعلنه المالك
+/// مرّةً؛ **وكلُّ إعلاناتِ المنشأة تحمل التاريخَ نفسَه** (الخدمةُ تردّ `409` على تاريخٍ ثانٍ)، ولا حركةَ مخزونٍ
+/// على صنفٍ يُعلَن **قبله** (نظيرُ `assertNoMovementBeforeOpening` في الحسابات).
+///
+/// ## مختومٌ بمن أعلن ومتى (`ق-١١٧٧/①`)
+/// يُقبل بلا سند — فالسندُ شرطُ خصم ضريبة المدخلات لا شرطُ الرصيد (اللائحةُ التنفيذية، مادّةُ الخصم ف٣ وف٧) —
+/// ويُختم بالمُعلِن وزمنه، ويُعلَن «بلا سند» في تقرير الافتتاح لكلِّ سطرٍ بلا `evidenceRef`.
+///
+/// ## مصدرٌ واحد لرصيد `1300` (`ق-١١٧٧/②`)
+/// `openingBalance` على حساب المخزون من شاشة الحسابات **مرفوضٌ** — فالرصيدُ الافتتاحيُّ للمخزون يُشتقّ من
+/// طبقات الافتتاح وحدَها، وإلا ازدوج المصدران بصمت.
+model StockOpening {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// `SO-YYYY-NNNN` من العدّاد الذرّيّ (`ق-٣٢٨`).
+  no String
+
+  /// تاريخُ الافتتاح — تاريخُ القيد، واحدٌ لكلِّ إعلانات المنشأة.
+  openingDate DateTime @db.Date
+
+  /// الختم: من أعلن (ملفُّه ونوعُه واسمُه لحظةَ الإعلان) — يُخزَّن وقتَ الفعل لا يُحلّ لاحقاً.
+  declaredById   String
+  declaredByType String
+  declaredByName String?
+
+  notes String?
+
+  /// قيدُ الإعلان — مدين `1300` / دائن `3900` — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation("StockOpeningEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  lines StockOpeningLine[]
+
+  @@unique([companyId, no])
+  @@index([companyId, openingDate])
+  @@map("stock_openings")
+}
+
+/// سطرُ الإعلان — يملك ما أُعلن (الكمّيةُ بوحدة الصنف · تكلفةُ الوحدة الصريحة · تاريخُ الاقتناء · السند)
+/// ويشير إلى حركته وطبقته؛ والإلغاءُ عكسٌ لا محو (`voidedAt` وحركةُ عكسٍ وقيدُ عكس)، ويُرفض بعد استهلاك.
+model StockOpeningLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  openingId String
+  opening   StockOpening @relation(fields: [openingId], references: [id], onDelete: Cascade)
+
+  /// حركةُ `IN` بمصدر `OPENING` — واحدةٌ لكلِّ سطر.
+  movementId String        @unique
+  movement   StockMovement @relation("OpeningLineMovement", fields: [movementId], references: [id], onDelete: Restrict)
+
+  /// طبقةُ `OPENING` التي أنشأتها الحركة — واحدةٌ لكلِّ سطر.
+  layerId String         @unique
+  layer   InventoryLayer @relation("OpeningLineLayer", fields: [layerId], references: [id], onDelete: Restrict)
+
+  productId   String
+  warehouseId String
+
+  qty        Decimal @db.Decimal(18, 3)
+  unitCost   Decimal @db.Decimal(18, 6)
+  /// `round2(qty × unitCost)` — ما دخل به السطرُ في قيد الإعلان.
+  baseAmount Decimal @db.Decimal(18, 2)
+
+  /// تاريخُ الاقتناء المُعلَن — `≤` تاريخ الافتتاح (قيدُ `CHECK` في الهجرة)؛ به يُرتَّب `FIFO`.
+  acquiredAt DateTime @db.Date
+
+  /// سندُ التكلفة إن وُجد (رقمُ فاتورةٍ أو مرجع) — وغيابُه يُعلَن «بلا سند» ولا يمنع الإعلان.
+  evidenceRef String?
+
+  /// ⚖️ الإلغاءُ عكسٌ لا محو: حركةُ إخراجٍ تُقفل الطبقةَ بعينها، وقيدٌ يعكس نصيبَ السطر من قيد الإعلان.
+  voidedAt           DateTime?
+  voidMovementId     String?       @unique
+  voidMovement       StockMovement? @relation("OpeningLineVoidMovement", fields: [voidMovementId], references: [id], onDelete: Restrict)
+  voidJournalEntryId String?       @unique
+  voidJournalEntry   JournalEntry? @relation("StockOpeningLineVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, openingId])
+  @@index([productId, warehouseId])
+  @@map("stock_opening_lines")
+}
+
 /// Catalog item (product or service) used as a reference list when writing
 /// invoice line items. Deliberately not a hard FK from InvoiceLine — invoice
 /// lines stay free-text (matching the original mockup), this is just the
@@ -2168,6 +2267,8 @@ model JournalEntry {
   goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
   landedCosts         LandedCostDistribution[] @relation("LandedCostEntry")
   landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
+  stockOpening        StockOpening?            @relation("StockOpeningEntry")
+  stockOpeningLineVoid StockOpeningLine?       @relation("StockOpeningLineVoidEntry")
 
   payments         Payment[]
   supplierPayments SupplierPayment[]
@@ -4064,6 +4165,9 @@ model StockMovement {
   consumptions InventoryConsumption[]
   layers       InventoryLayer[]
   writeOff     InventoryWriteOff? @relation("WriteOffMovement")
+  /// ٣٠ سطرُ الإعلان الافتتاحيّ الذي أدخل هذه الحركة — أو الذي عكسته.
+  openingLine     StockOpeningLine? @relation("OpeningLineMovement")
+  openingLineVoid StockOpeningLine? @relation("OpeningLineVoidMovement")
 
   /// ㉙ عكسُ حركةٍ سابقة (ق-١٠٦٣): حركةٌ مقابلة تشير إلى أصلها — لا حذف؛ فريدٌ فلا يُعكَس أصلٌ مرّتين، و`Restrict` فلا يُحذف.
   reversalOfId String?        @unique
@@ -4170,6 +4274,8 @@ model InventoryLayer {
   consumptions InventoryConsumption[]
   /// ٧ نصيبُ هذه الطبقة من تكاليفَ محمَّلة وُزِّعت عليها (`Restrict`: طبقةٌ عليها توزيعٌ لا تُحذف).
   landedCostLines LandedCostLine[]
+  /// ٣٠ سطرُ الإعلان الافتتاحيّ الذي أنشأ هذه الطبقة (`OPENING`).
+  openingLine     StockOpeningLine? @relation("OpeningLineLayer")
 
   /// ترتيب الاستهلاك: `acquiredAt` ثم `createdAt` — والثاني فاصلٌ حاسم كي لا
   /// يعتمد الترتيب على الصدفة حين تتساوى التواريخ.

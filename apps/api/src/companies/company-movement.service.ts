@@ -57,6 +57,8 @@ export const NUMBERED_DOCUMENTS: ReadonlyArray<{ model: Prisma.ModelName; kinds:
   { model: 'Purchase', kinds: ['PUR'], label: 'مشتريات' },
   // ٢٥ الاستلامُ المستقلّ (ق-١١٣١): مستندُ وصول البضاعة — سلسلةٌ سنوية `GR-YYYY-NNNN`، وأثرُه حركةُ منشأة كالشراء.
   { model: 'GoodsReceipt', kinds: ['GR'], label: 'استلامات بضاعة' },
+  // ٣٠ إعلانُ الرصيد الافتتاحي للمخزون (ق-١١٧٩): مستندٌ مختومٌ بسلسلةٍ سنوية `SO-YYYY-NNNN`، وأثرُه حركةُ منشأة كالاستلام.
+  { model: 'StockOpening', kinds: ['SO'], label: 'أرصدة افتتاحية للمخزون' },
   { model: 'InventoryWriteOff', kinds: ['WO'], label: 'إعدام مخزون' },
   { model: 'Quote', kinds: ['Q'], label: 'عروض أسعار' },
   { model: 'Contract', kinds: ['EJ'], label: 'عقود' },
