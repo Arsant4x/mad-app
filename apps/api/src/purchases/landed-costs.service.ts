@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { branchFilter } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { round2 } from '../common/money/rounding';
+import { formatMoney, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postLandedCostEntry, postReversalEntry } from '../journal/auto-posting.util';
 import { CreateLandedCostDto } from './dto/create-landed-cost.dto';
@@ -56,6 +56,10 @@ export class LandedCostsService {
   /**
    * الطبقاتُ المرشَّحة: بمعرّفاتها و/أو طبقاتُ الاستلامات المسمّاة — وكلُّها من استلامٍ قائم (`GOODS_RECEIPT`
    * وحركتُها تحمل سطرَ استلامٍ غيرِ ملغى)، وإلا رُدّت باسمها. والتكرارُ يُرفض لا يُدمج.
+   *
+   * **على مستوى المنشأة بحقّها**: الاستلاماتُ تُقرأ بمعرّفاتها التي سمّاها الطالب لا بفرع القارئ — فإرساليةٌ
+   * تصل فرعين توزَّع عليهما معاً، وقصرُها على فروع القارئ يُسقط طبقاتٍ صامتاً فيُوزَّع المبلغُ كلُّه على بعضها؛
+   * والشراءُ الخدميّ نفسُه قُصر على فروع القارئ قبل الوصول هنا، والعزلُ بين المنشآت بالطبقتين.
    */
   private async candidateLayers(tx: Tx, layerIds: string[], goodsReceiptIds: string[]): Promise<CandidateLayer[]> {
     const wanted: string[] = [];
@@ -158,7 +162,7 @@ export class LandedCostsService {
         shares = dto.lines.map((l) => round2(l.baseAmount));
         const given = round2(shares.reduce((t, s) => t + s, 0));
         if (Math.abs(given - lineBase) > SUM_EPS) {
-          throw new ConflictException(formatMessage(MSG.landed_cost_manual_sum_mismatch, { expected: lineBase.toFixed(2), given: given.toFixed(2) }));
+          throw new ConflictException(formatMessage(MSG.landed_cost_manual_sum_mismatch, { expected: formatMoney(lineBase), given: formatMoney(given) }));
         }
       } else {
         layers = await this.candidateLayers(tx, dto.layerIds ?? [], dto.goodsReceiptIds ?? []);
