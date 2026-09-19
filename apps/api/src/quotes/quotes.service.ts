@@ -12,6 +12,7 @@ import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.uti
 import { InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CreateQuoteDto, QuoteLineDto, UpdateQuoteDto } from './dto/quote.dto';
+import { isQuoteExpired } from './quote-expiry.util';
 
 const QUOTE_INCLUDE = { customer: true, lines: true } as const;
 
@@ -23,12 +24,13 @@ function computeTotals(lines: QuoteLineDto[]) {
   return { subtotal, taxTotal, total };
 }
 
-/** آخرُ يومِ الصلاحية مشمول: العرض يموت بعد نهاية يومه لا في صبيحته. */
+/**
+ * آخرُ يومِ الصلاحية مشمول: العرض يموت بعد نهاية يومه لا في صبيحته — **ويومُه يُقاس بيومٍ معلَن لا بتوقيت
+ * العملية** (`quote-expiry.util.ts` · `ق-١١٨٣`): كان هنا `setHours(23, 59, 59, 999)` بمنطقة الخادم، فانقضى
+ * العرضُ على خادم الرياض قبل نهاية يومه المعلَن بثلاث ساعات.
+ */
 function isExpired(quote: Pick<Quote, 'validUntil' | 'status'>, now = new Date()): boolean {
-  if (quote.status === 'CONVERTED') return false;
-  const endOfDay = new Date(quote.validUntil);
-  endOfDay.setHours(23, 59, 59, 999);
-  return endOfDay < now;
+  return isQuoteExpired(quote, now);
 }
 
 /** الحالة المعروضة: EXPIRED مشتقة قراءةً (نمط الحجوزات) — لا cron يلزم. */
