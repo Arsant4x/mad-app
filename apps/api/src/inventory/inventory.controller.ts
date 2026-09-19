@@ -38,6 +38,13 @@ export class InventoryController {
     return this.inventoryService.listMovements(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
+  /** ٥+٦ الرصيدُ بالدفعة — المتبقّي لكلِّ (صنفٍ · مستودعٍ · دفعة) من الطبقات، وما لا دفعةَ له مسمًّى (ق-١٠٩٩). */
+  @Get('batch-balances')
+  @RequiresAction('view')
+  batchBalances(@CurrentTenant() tenant: TenantContext, @Query('productId') productId?: string) {
+    return this.inventoryService.batchBalances(tenant.companyId, tenant.allowedBranchIds, productId?.trim() || undefined);
+  }
+
   /** Batches expiring within `withinDays` (default 90), already-expired first. */
   @Get('expiring')
   @RequiresAction('view')

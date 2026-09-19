@@ -75,7 +75,7 @@ describe('Stock batch/expiry (e2e)', () => {
     const res = await authA(request(app.getHttpServer()).get('/inventory/expiring?withinDays=90')).expect(200);
     // ٥+٦ الصفوفُ بالمتبقّي من الطبقات (`qtyKind: REMAINING`)، ومعها الحدودُ الثلاثة المعلَنة (ق-١٠٨٥).
     expect(Array.isArray(res.body.rows)).toBe(true);
-    expect(res.body.declaredLimits).toHaveLength(3);
+    expect(res.body.declaredLimits).toHaveLength(4);
     const mine = (res.body.rows as { productName: string; batchNo: string; qty: number; qtyKind: string; daysLeft: number; expired: boolean }[]).filter((r) => r.productName === productName);
     expect(mine.every((r) => r.qtyKind === 'REMAINING' && r.qty === 10)).toBe(true);
 
