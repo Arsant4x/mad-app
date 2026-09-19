@@ -340,6 +340,9 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
       await tx.$executeRaw`DELETE FROM goods_receipts WHERE "purchaseId" = ${purchaseId}`;
       const beforeReplay = await tx.goodsReceipt.count({ where: { purchaseId } });
       await tx.$executeRawUnsafe(doBlock);
+      // الكتلةُ تدور على المنشآت كلِّها وتترك سياقَ آخرِها — فيُعاد سياقُنا قبل القراءة، وإلا قرأت RLS منشأةً أخرى
+      // (سقط مرّةً بعد مرورين — ترتيبُ المنشآت غيرُ محدَّد؛ §8.13: مجسٌّ يمرّ مرّةً ليس مجسّاً).
+      await tx.$executeRaw`SELECT set_config('app.company_id', ${cid}, true)`;
       const receipts = await tx.goodsReceipt.findMany({ where: { purchaseId }, include: { lines: true } });
       const movement = await tx.stockMovement.findFirst({ where: { purchaseLineId: lineId, type: 'IN', origin: 'RECEIPT' }, select: { goodsReceiptLineId: true, date: true, warehouseId: true } });
       // ثم تُرجَع المعاملة — الحالةُ الحقيقية (① بقيدها) لا تُمسّ.

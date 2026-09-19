@@ -34,7 +34,7 @@ import { allocateSequence } from './sequence-allocator';
  * **والصفُّ يُنشأ عند أول طلبٍ** لا عند بذرٍ شاملٍ لكل منشأة.
  */
 export interface SequenceSpec {
-  /** مفتاحُ السلسلة في العدّاد: `INV` · `CN` · `DN` · `JE` · `RCV` · `RFD` · `EJ` · `PUR` · `WO`. */
+  /** مفتاحُ السلسلة في العدّاد: `INV` · `CN` · `DN` · `JE` · `RCV` · `RFD` · `EJ` · `PUR` · `WO` · `GR` (استلامُ بضاعة — `٢٥`). */
   kind: string;
   /** عرضُ الحشو — **يبقى كما كان لكل سلسلة، فلا شكلَ يتغيّر**. */
   pad: number;

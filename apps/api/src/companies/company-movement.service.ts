@@ -55,6 +55,8 @@ export const NUMBERED_DOCUMENTS: ReadonlyArray<{ model: Prisma.ModelName; kinds:
   { model: 'Payment', kinds: ['RCV', 'REFUND'], label: 'سندات' },
   { model: 'SupplierPayment', kinds: ['PAY'], label: 'سندات صرف' },
   { model: 'Purchase', kinds: ['PUR'], label: 'مشتريات' },
+  // ٢٥ الاستلامُ المستقلّ (ق-١١٣١): مستندُ وصول البضاعة — سلسلةٌ سنوية `GR-YYYY-NNNN`، وأثرُه حركةُ منشأة كالشراء.
+  { model: 'GoodsReceipt', kinds: ['GR'], label: 'استلامات بضاعة' },
   { model: 'InventoryWriteOff', kinds: ['WO'], label: 'إعدام مخزون' },
   { model: 'Quote', kinds: ['Q'], label: 'عروض أسعار' },
   { model: 'Contract', kinds: ['EJ'], label: 'عقود' },

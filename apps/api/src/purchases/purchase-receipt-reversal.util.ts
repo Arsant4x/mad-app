@@ -65,11 +65,14 @@ export interface ReverseGoodsReceiptArgs {
 /**
  * يعكس استلاماً واحداً بسطوره كلِّها: الطبقاتُ تُفرَغ بشرطها، والحركاتُ الخارجة تُكتب بسطريها، والقيدُ يُعكس،
  * والاستلامُ يُختم. يرمي مسمّىً إن كان شيءٌ منه قد استُهلك، ويعيد مستودعَه وتكلفةَ ما عُكس.
+ *
+ * **على مستوى المنشأة بحقّها**: حركةُ الاستلام تُقرأ بسطر استلامها لا بفرع القارئ — فالعكسُ يُخرج البضاعةَ من
+ * المستودع الذي استُلمت فيه، وعكسٌ يُقاس على فرعٍ آخر يترك طبقةً معلَّقةً بلا مستند (كما في العكس بسطر الشراء).
  */
 export async function reverseGoodsReceipt(tx: Tx, args: ReverseGoodsReceiptArgs): Promise<{ warehouseId: string; reversedCost: number }> {
   const receipt = await tx.goodsReceipt.findUnique({
     where: { id: args.receiptId },
-    select: { id: true, warehouseId: true, voidedAt: true, journalEntryId: true, lines: { select: { id: true, purchaseLineId: true } } },
+    select: { id: true, no: true, warehouseId: true, voidedAt: true, journalEntryId: true, lines: { select: { id: true, purchaseLineId: true } } },
   });
   if (!receipt) throw new ConflictException(MSG.goods_receipt_not_found);
   if (receipt.voidedAt) throw new ConflictException(MSG.goods_receipt_voided);
@@ -111,8 +114,9 @@ export async function reverseGoodsReceipt(tx: Tx, args: ReverseGoodsReceiptArgs)
   }
 
   // القيدُ يُعكس ولا يُحذف (`ق-٩٦٥`) — واستلامُ ما قبل البناء بلا قيدٍ خاصّ: رُحِّل داخل قيد شرائه.
+  // والمذكّرةُ تسمّي الاستلامَ لا سببَه: قيدُ عكس الشراء يحمل «إلغاءُ فاتورة شراء …» وحدَه، فلا يُعدّ هذا معه.
   if (receipt.journalEntryId) {
-    await postReversalEntry(tx, args.companyId, { entryId: receipt.journalEntryId, date: args.date, memo: `عكسُ ${args.reason}` });
+    await postReversalEntry(tx, args.companyId, { entryId: receipt.journalEntryId, date: args.date, memo: `عكسُ قيد استلام ${receipt.no}` });
   }
   await tx.goodsReceipt.update({ where: { id: receipt.id }, data: { voidedAt: args.date } });
   return { warehouseId: receipt.warehouseId, reversedCost };
@@ -130,6 +134,9 @@ export interface ReverseAllReceiptsArgs {
 /**
  * يعكس استلاماتِ الشراء الحيّةَ كلَّها (تعديلُ البنود · الإلغاء) — ويعيد مستودعَ آخرِها ليُستلم فيه الجديد،
  * وهل كان بينها ضمنيٌّ (فيُعاد الضمنيُّ بعد تعديل البنود كما كان، ولا يُستلم ما لم يكن مستلَماً).
+ *
+ * **على مستوى المنشأة بحقّها**: استلاماتُ الشراء تُقرأ بمعرّفه لا بفرع القارئ — فشراءٌ يُعدَّل أو يُلغى تُعكس
+ * استلاماتُه كلُّها في أيّ فرعٍ كانت، وإلا بقي رفٌّ في فرعٍ محجوب لشراءٍ لم يعد له وجود.
  */
 export async function reverseAllReceipts(tx: Tx, args: ReverseAllReceiptsArgs): Promise<{ warehouseId: string | null; hadImplicit: boolean; reversedCost: number }> {
   const receipts = await tx.goodsReceipt.findMany({
