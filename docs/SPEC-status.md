@@ -7,11 +7,11 @@
 |---|---|
 | بنود SPEC | 274 |
 | منها في جداولٍ لها عمودُ حالة | 180 |
-| تقول الوثيقة ✅ | 84 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 79 |
+| تقول الوثيقة ✅ | 85 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 80 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 5 (منها 5 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 160 / 1500 |
+| اختباراتٌ موسومة / كل الاختبارات | 163 / 1582 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -48,7 +48,7 @@
 | 3.10 | فروق العملة (ربح/خسارة) | 🟨 | ⬜ | — |
 | 3.11 | قيود الإقفال السنوي التلقائية | ⬜ | ⬜ | — |
 | 3.12 | **الأصول الثابتة والإهلاك** | ⬜ | ⬜ | — |
-| 4.1 | سجل العملاء | ✅ | ✅ | `api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] creates, rejects duplicate name, updates, and deletes a customer scoped to company A only (e2e)<br>`api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] refuses to delete a customer that still has invoices (e2e) |
+| 4.1 | سجل العملاء | ✅ | ✅ | `api/test/customer-trash-guards.e2e-spec.ts` :: [SPEC 4.1] ① عميلٌ له عقدٌ حيّ لا يُحذف — 409 تسمّي الأرشفةَ مخرجاً (e2e)<br>`api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] creates, rejects duplicate name, updates, and deletes a customer scoped to company A only (e2e)<br>`api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] refuses to delete a customer that still has invoices (e2e) |
 | 4.2 | كشف حساب العميل | ✅ | ⬜ (دَين معلَن) | ⚠️ كشف حساب العميل — CustomerDetailModal لا يُفتح في أي اختبار؛ CustomersPage.test.tsx يوكّد خلية «الرصيد المستحق» في جدول العملاء لا الكشف بفواتيره ومقبوضه. يلزم اختبار. |
 | 4.3 | حد الائتمان | 🟨 | ⬜ | — |
 | 4.4 | الفواتير وبنودها | ✅ | ✅ | `api/test/invoice-outstanding.e2e-spec.ts` :: [SPEC 4.4] a partly paid invoice reports its REMAINING amount, not its total (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 3.4 4.4] posts a new invoice to A/R, revenue, and VAT, then reverses on delete (e2e)<br>`api/test/invoices-tenant-isolation.e2e-spec.ts` :: [SPEC 4.4 6.1] computes invoice totals server-side from lines, ignoring any client-submitted amounts (e2e) |
@@ -168,9 +168,9 @@
 | 30.9 | **تقرير مرتجعات وتلف:** كم أُرجع · كم تلف · **ومن سجّله** | ✅ | ✅ | `api/test/returns-wave-a.e2e-spec.ts` :: [SPEC 30.9] تقرير المرتجعات: كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ · ومن سجّله (e2e) |
 | 30.10 | 🔴 **طابور المزامنة الأوفلاين يشمل الإشعارات** — مربوطاً بمهلة **24 ساعة** | ⬜ | ⬜ | — |
 | 30.11 | 🔴 **الإشعار يمرّ بمسار `zatca.service` كاملاً** — ختم · عدّاد · سلسلة تجزئة. **لا مسار مخ | ✅ | ✅ | `api/test/zatca-credit-notes.e2e-spec.ts` :: [SPEC 30.11] a credit note takes an ordinary position in the one hash chain (e2e) |
-| 16.1 | العقارات والوحدات | ✅ | ✅ | `api/test/property-coordinates.e2e-spec.ts` :: [SPEC 16.1 16.17] stores coordinates on create and returns them in the list (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] roomDetails: stored on create, editable, returned in reads (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] bulk creation: prefix+count, all-or-nothing on collision with named clashes (e2e) |
+| 16.1 | العقارات والوحدات | ✅ | ✅ | `api/test/contract-customer-link.e2e-spec.ts` :: [SPEC 16.1] ① عميلان بالاسم نفسِه بعقدين لا يندمجان — وهاتفُ كلٍّ محفوظ ومشتقٌّ على عقده (e2e)<br>`api/test/property-coordinates.e2e-spec.ts` :: [SPEC 16.1 16.17] stores coordinates on create and returns them in the list (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] roomDetails: stored on create, editable, returned in reads (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.1] bulk creation: prefix+count, all-or-nothing on collision with named clashes (e2e) |
 | 16.2 | العقود وجداول الدفعات | ✅ | ✅ | `api/test/contract-renewal.e2e-spec.ts` :: [SPEC 16.2 16.10] creates a linked follow-on contract and leaves the original intact (e2e)<br>`api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.6] creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit (e2e)<br>`api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.5] cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone (e2e) |
-| 16.3 | الأقساط والسداد الجزئي | ⬜ | ⬜ | — |
+| 16.3 | الأقساط والسداد الجزئي | ✅ | ✅ | `api/test/installment-partial-settlement.e2e-spec.ts` :: [SPEC 16.3] ① دفعةٌ جزئية ⇒ PARTIAL لا PAID — ويبقى في التذكيرات، ونسبةُ التحصيل تقرأ المقبوضَ لا القسطَ كلَّه (e2e) |
 | 16.4 | الحجوزات بعربون | ✅ | ⬜ (دَين معلَن) | ⚠️ الحجوزات بعربون — الحجز مُثبَت (reservations-tenant-isolation.e2e-spec.ts:52) والعربون يُرسَل بلا أي expect عليه ولا أثرٍ محاسبي. يلزم اختبارٌ على العربون. |
 | 16.5 | إلغاء العقد وتقصير المدة | ✅ | ✅ | `api/test/contract-cancellation-settlement.e2e-spec.ts` :: [SPEC 16.5 16.9] computes "all" from every installment still unpaid from the cancel date (e2e)<br>`api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.5] cancelling a contract shrinks its end date and cancels future unpaid installments while leaving already-due ones alone (e2e)<br>`api/test/realestate-completion.e2e-spec.ts` :: [SPEC 16.5] cancellation settlement lines: mismatch refused, matching lines stored on the contract (e2e) |
 | 16.6 | منع الحجز المزدوج للوحدة | ✅ | ✅ | `api/test/contracts-tenant-isolation.e2e-spec.ts` :: [SPEC 16.2 16.6] creates a contract, generates an even installment schedule, and rejects an overlapping contract on the same unit (e2e)<br>`api/test/reservations-tenant-isolation.e2e-spec.ts` :: [SPEC 16.6] reserves a vacant unit and rejects a second active reservation on the same unit (e2e)<br>`api/test/reservations-tenant-isolation.e2e-spec.ts` :: [SPEC 16.6] rejects a contract on a reserved unit under a different name, but converts the reservation when the name matches (e2e) |

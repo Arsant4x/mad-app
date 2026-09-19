@@ -86,4 +86,15 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsUUID()
   warehouseId?: string;
+
+  /**
+   * ٢٥ **الاستلامُ الضمنيّ — حقلٌ على الطلب لا علَمٌ على المنشأة** (`ق-١١٢٢`/⑤).
+   *
+   * الافتراضُ `true`: إنشاءُ الشراء بسطورٍ مخزنية يُنشئ استلاماً كاملاً بتاريخ الشراء — تجربةُ اليوم
+   * كما هي. و`false`: الفاتورةُ تُسجَّل ويُمدين وسيطُ الاستلام، والبضاعةُ تُستلم حين تصل
+   * (`POST /purchases/:id/receipts`) كاملةً أو على مرّات. ولا أثرَ له على شراءٍ خدميّ.
+   */
+  @IsOptional()
+  @IsBoolean()
+  receiveNow?: boolean;
 }

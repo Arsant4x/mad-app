@@ -59,6 +59,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'InvoiceLine',
   'Supplier',
   'Purchase',
+  // ٢٥ الاستلامُ وسطورُه (ق-١١٣١): يحملان companyId وتحتهما RLS بـFORCE — طبقتان كالشراء.
+  'GoodsReceipt',
+  'GoodsReceiptLine',
   'Product',
   'StockBatch',
   'Employee',

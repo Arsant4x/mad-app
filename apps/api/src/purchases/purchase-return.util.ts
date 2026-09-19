@@ -61,11 +61,26 @@ export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockAr
 
   for (const line of args.lines) {
     if (!line.returnsPurchaseLineId) continue;
+    // ٢٥ حدٌّ معلَن لا صامت (`ق-١١٣١`/ز): الإشعارُ يعمل على **طبقة الاستلام الأصلية الواحدة** — فسطرٌ لم
+    // يُستلم كاملاً (قيمتُه على الوسيط لا على الرفّ) أو استُلم على أكثر من استلامٍ يُردّ مسمّىً حتى يُعمَّم.
+    const original = await tx.purchaseLine.findUnique({
+      where: { id: line.returnsPurchaseLineId },
+      select: { productId: true, quantity: true, receiptLines: { where: { goodsReceipt: { voidedAt: null } }, select: { goodsReceiptId: true, quantity: true } } },
+    });
+    // بندٌ خدميّ — قيمتُه إلى حساب الفئة، ولا رفَّ له.
+    if (!original?.productId) continue;
+    const receivedQty = original.receiptLines.reduce((t, r) => t + Number(r.quantity), 0);
+    if (roundTo(Number(original.quantity) - receivedQty, 'DERIVED_QUANTITY') > 0) {
+      throw new BadRequestException(formatMessage(MSG.supplier_note_line_not_received, { no: args.documentNo }));
+    }
+    if (new Set(original.receiptLines.map((r) => r.goodsReceiptId)).size > 1) {
+      throw new BadRequestException(formatMessage(MSG.supplier_note_line_multi_receipt, { no: args.documentNo }));
+    }
     const receipt = await tx.stockMovement.findFirst({
-      where: { purchaseLineId: line.returnsPurchaseLineId, type: 'IN', origin: 'RECEIPT' },
+      where: { purchaseLineId: line.returnsPurchaseLineId, type: 'IN', origin: 'RECEIPT', OR: [{ goodsReceiptLineId: null }, { goodsReceiptLine: { goodsReceipt: { voidedAt: null } } }] },
       select: { id: true, productId: true, warehouseId: true },
     });
-    // بندٌ بلا استلام (خدميّ) — قيمتُه إلى حساب الفئة، ولا رفَّ له.
+    // سطرٌ استُلم بلا حركةٍ تُقرأ (لا يقع بعد البناء) — كما كان: لا رفَّ له.
     if (!receipt) continue;
     const layer = await tx.inventoryLayer.findFirst({
       where: { sourceMovementId: receipt.id },

@@ -6,9 +6,11 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateSupplierNoteDto } from './dto/create-supplier-note.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
+import { GoodsReceiptsService } from './goods-receipts.service';
 import { PurchasesService } from './purchases.service';
 import { PurchaseAttachmentsService } from './purchase-attachments.service';
 import { SupplierNotesService } from './supplier-notes.service';
@@ -22,7 +24,38 @@ export class PurchasesController {
     private readonly purchasesService: PurchasesService,
     private readonly attachments: PurchaseAttachmentsService,
     private readonly supplierNotes: SupplierNotesService,
+    private readonly receipts: GoodsReceiptsService,
   ) {}
+
+  // ---- ٢٥ الاستلامُ المستقلّ (`ق-١١٣١`) — الفاعل: مالكُ المنشأة وموظّفوه على شاشة المشتريات ----
+
+  /** حارسُ الرصيد: ما بقي في وسيط الاستلام من المستندات مطابَقاً بالدفتر. Static route — before `:id`. */
+  @Get('receipts/reconciliation')
+  @RequiresAction('view')
+  receiptsReconciliation(@CurrentTenant() tenant: TenantContext) {
+    return this.receipts.reconciliation(tenant.companyId);
+  }
+
+  @Get(':id/receipts')
+  @RequiresAction('view')
+  listReceipts(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.receipts.listForPurchase(tenant.companyId, tenant.allowedBranchIds, id);
+  }
+
+  /** استلامٌ مسجَّل — جزئيٌّ أو مكمِّل — بفعل «تسجيل» كسائر وقائع التشغيل. */
+  @Post(':id/receipts')
+  @RequiresAction('record')
+  recordReceipt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateGoodsReceiptDto) {
+    return this.receipts.record(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
+
+  /** إلغاءُ استلامٍ — عكسٌ لا محو، ولا يُلغى ما استُهلك منه. */
+  @Delete(':id/receipts/:receiptId')
+  @RequiresAction('delete')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  voidReceipt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('receiptId') receiptId: string) {
+    return this.receipts.voidReceipt(tenant.companyId, tenant.allowedBranchIds, id, receiptId);
+  }
 
   // ---- إشعاراتُ المورّد (`ق-١٠٠٦`) — مستندُه يُسجَّل على شرائه، وقيدُه قيدُنا ----
 

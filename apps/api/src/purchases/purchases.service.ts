@@ -10,8 +10,8 @@ import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
 import { postPurchaseEntry, postReversalEntry } from '../journal/auto-posting.util';
-import { receiveStockedLines } from './purchase-receipt.util';
-import { receiptConsumed, reverseReceipt } from './purchase-receipt-reversal.util';
+import { GoodsReceiptsService, stockedBaseOf } from './goods-receipts.service';
+import { receiptConsumed, reverseAllReceipts } from './purchase-receipt-reversal.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
@@ -51,7 +51,10 @@ export function computePurchaseTax(subtotal: number, exempt: boolean) {
 
 @Injectable()
 export class PurchasesService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly receipts: GoodsReceiptsService,
+  ) {}
 
   /**
    * القائمة **بمسدَّدها ومتبقّيها محسوبَين من التخصيصات** (`ق-٨٧٢`) — في استعلامٍ واحد لكل
@@ -103,8 +106,9 @@ export class PurchasesService {
     // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
     const categoryCode = toPurchaseCategoryCode(dto.categoryCode ?? dto.category);
     const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, categoryCode, dto.amortizeMonths);
-    // يُحسب **قبل** المعاملة: خطأُ المطابقة يُردّ قبل أن يُكتب صفٌّ واحد.
-    const stockedSubtotal = this.stockedSubtotal(dto);
+    // تُطابَق **قبل** المعاملة: خطأُ المطابقة يُردّ قبل أن يُكتب صفٌّ واحد (والنصيبُ المخزنيُّ للقيد يُحسب
+    // من السطور المكتوبة سطراً سطراً — `stockedBaseOf`).
+    this.stockedSubtotal(dto);
     // Retries the whole transaction (fresh count() each time) on a "no"
     // collision from a concurrent create — see nextPurchaseNumber's comment.
     return retryOnUniqueConflict(() =>
@@ -176,16 +180,18 @@ export class PurchasesService {
          * يُكتب قيد**. والعكس يترك قيداً يُمدِّن مخزوناً بلا طبقةٍ تقابله —
          * وهو أسوأ من الرفض: ميزانيةٌ تعلن بضاعةً لا يستطيع أحد أن يبيعها
          * بتكلفتها.
+         *
+         * ٢٥ والاستلامُ الضمنيُّ افتراضٌ على الطلب (`ق-١١٢٢`/⑤): `receiveNow: false`
+         * يسجّل الفاتورةَ على الوسيط وتُستلم البضاعةُ حين تصل (`POST /purchases/:id/receipts`).
          */
-        await receiveStockedLines(tx, {
-          companyId,
-          branchId: created.branchId,
-          warehouseId: dto.warehouseId ?? null,
-          date: created.date,
-          exchangeRate,
-          lines: created.lines,
-          ref: created.no,
-        });
+        if (dto.receiveNow ?? true) {
+          await this.receipts.createImplicitWithinTx(
+            tx,
+            companyId,
+            { ...created, supplierName: created.supplier.name, exchangeRate: Number(created.exchangeRate) },
+            dto.warehouseId ?? null,
+          );
+        }
 
         const entry = await postPurchaseEntry(tx, companyId, {
           supplierId: created.supplierId,
@@ -197,7 +203,8 @@ export class PurchasesService {
           baseSubtotal: Number(created.baseSubtotal),
           baseTaxAmount: Number(created.baseTaxAmount),
           baseTotal: Number(created.baseTotal),
-          baseStockedSubtotal: toBaseAmount(stockedSubtotal, exchangeRate),
+          // ٢٥ Σ قيمة السطور المخزنية **سطراً سطراً** — كما ترحّلها استلاماتُها، فيتصافى الوسيطُ بلا هللة.
+          baseStockedSubtotal: stockedBaseOf(created.lines, Number(created.exchangeRate)),
         });
         if (!entry) return created;
         return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
@@ -237,6 +244,10 @@ export class PurchasesService {
         if (notes > 0 || (await receiptConsumed(tx, existing.lines))) {
           throw new ConflictException(formatMessage(MSG.purchase_frozen_after_consumption, { no: existing.no }));
         }
+        // ٢٥ استلامٌ مسجَّل بيدٍ مستندٌ قائم بتاريخه ومستودعه — لا يُعاد كتابتُه ضمنيّاً بتعديل البنود؛
+        // يُعكس أوّلاً (`DELETE …/receipts/:id`) ثم تُعدَّل. والضمنيُّ وحدَه يُعكس ويُعاد مع البنود كما كان.
+        const recorded = await tx.goodsReceipt.count({ where: { purchaseId: id, voidedAt: null, implicit: false } });
+        if (recorded > 0) throw new ConflictException(formatMessage(MSG.purchase_lines_frozen_after_receipt, { no: existing.no }));
       }
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
@@ -303,15 +314,17 @@ export class PurchasesService {
 
       let updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
 
+      let reReceive: { warehouseId: string | null; hadImplicit: boolean } | null = null;
       if (dto.lines !== undefined) {
         // ① الرفُّ يتبع: الاستلامُ القديم يُعكس بحركةٍ خارجة (لا يُحذف)، والقديمُ يُحفظ متجاوَزاً، والجديدُ يُستلم.
-        const { warehouseId } = await reverseReceipt(tx, {
+        // ٢٥ ويُعكس **استلاماتِ** الشراء الحيّةَ (كلُّها ضمنيّة هنا — المسجَّلُ رُفض أعلاه) بقيودها.
+        reReceive = await reverseAllReceipts(tx, {
           companyId,
           branchId: existing.branchId,
           date: updated.date,
           documentNo: existing.no,
           reason: `تعديلُ فاتورة شراء ${existing.no}`,
-          lines: existing.lines,
+          purchaseId: id,
         });
         await tx.purchaseLine.updateMany({ where: { purchaseId: id, supersededAt: null }, data: { supersededAt: new Date() } });
         const unitCodes = await unitCodesFor(tx, dto.lines);
@@ -330,15 +343,16 @@ export class PurchasesService {
           })),
         });
         updated = (await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE }))!;
-        await receiveStockedLines(tx, {
-          companyId,
-          branchId: updated.branchId,
-          warehouseId: dto.warehouseId ?? warehouseId,
-          date: updated.date,
-          exchangeRate: rate,
-          lines: updated.lines,
-          ref: updated.no,
-        });
+        // يُعاد الضمنيُّ كما كان — وشراءٌ لم يكن مستلَماً (`receiveNow: false`، أو سطورٌ سبقت طبقاتِ م٤ بلا
+        // حركة) يبقى غيرَ مستلَم بعد التعديل، ويُستلم حين يُسجَّل استلامُه.
+        if (reReceive.hadImplicit) {
+          await this.receipts.createImplicitWithinTx(
+            tx,
+            companyId,
+            { ...updated, supplierName: updated.supplier.name, exchangeRate: rate },
+            dto.warehouseId ?? reReceive.warehouseId,
+          );
+        }
       }
 
       // الإجماليُّ تغيّر فالحالةُ المشتقّة تُعاد من التخصيصات في المعاملة نفسِها — لا تنحرف لحظة.
@@ -349,10 +363,6 @@ export class PurchasesService {
       if (existing.journalEntryId) {
         await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: updated.date, memo: `عكسُ فاتورة شراء ${existing.no} — تعديل` });
       }
-      const stocked = roundTo(
-        updated.lines.filter((l) => l.productId).reduce((t, l) => t + Number(l.quantity) * Number(l.unitPrice), 0),
-        'LINE_AMOUNT',
-      );
       const entry = await postPurchaseEntry(tx, companyId, {
         supplierId: updated.supplierId,
         branchId: updated.branchId,
@@ -363,9 +373,13 @@ export class PurchasesService {
         baseSubtotal: Number(updated.baseSubtotal),
         baseTaxAmount: Number(updated.baseTaxAmount),
         baseTotal: Number(updated.baseTotal),
-        // كان يُعاد الترحيلُ بلا نصيب المخزون فيذهب الشراءُ المخزنيُّ كلُّه إلى المصروف (`ق-٩٩٣`) — الآن من بنوده الحيّة.
-        baseStockedSubtotal: toBaseAmount(stocked, rate),
+        // كان يُعاد الترحيلُ بلا نصيب المخزون فيذهب الشراءُ المخزنيُّ كلُّه إلى المصروف (`ق-٩٩٣`) — الآن من بنوده الحيّة،
+        // سطراً سطراً كما ترحّلها استلاماتُها (`٢٥`).
+        baseStockedSubtotal: stockedBaseOf(updated.lines, rate),
       });
+      // ٢٥ الشراءُ صار قيدُه على الوسيط — فاستلاماتُه التي رُحِّلت داخل قيده القديم (ما قبل البناء) تأخذ قيودَها الآن،
+      // وإلا بقي مخزونٌ على الرفّ بلا `1300` يقابله.
+      await this.receipts.postPendingReceiptEntriesWithinTx(tx, companyId, { ...updated, supplierName: updated.supplier.name, exchangeRate: rate });
       return tx.purchase.update({ where: { id }, data: { journalEntryId: entry?.id ?? null }, include: PURCHASE_INCLUDE });
     });
   }
@@ -447,7 +461,8 @@ export class PurchasesService {
       if (await receiptConsumed(tx, existing.lines)) throw new ConflictException(formatMessage(MSG.purchase_void_consumed, { no: existing.no }));
 
       const voidedAt = new Date();
-      await reverseReceipt(tx, { companyId, branchId: existing.branchId, date: voidedAt, documentNo: existing.no, reason: `إلغاءُ فاتورة شراء ${existing.no}`, lines: existing.lines });
+      // ٢٥ استلاماتُه الحيّةُ كلُّها تُعكس بقيودها — ضمنيّةً كانت أو مسجَّلة — فلا يبقى رفٌّ لشراءٍ مُلغى.
+      await reverseAllReceipts(tx, { companyId, branchId: existing.branchId, date: voidedAt, documentNo: existing.no, reason: `إلغاءُ فاتورة شراء ${existing.no}`, purchaseId: id });
       if (existing.journalEntryId) {
         await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: voidedAt, memo: `إلغاءُ فاتورة شراء ${existing.no}` });
       }
