@@ -102,3 +102,15 @@ Adding a new tenant-scoped table means: add it to `TENANT_SCOPED_MODELS` in
 `tenant-scope.extension.ts`, and add the matching `ENABLE/FORCE ROW LEVEL
 SECURITY` + `CREATE POLICY` statements to a migration (see the comment block
 at the bottom of the initial migration for the exact pattern).
+
+## عن هذا الفرع — About this branch
+
+١. أنه لقطةٌ من `main` عند `9b242fe` **ولا يُدمج فيه شيءٌ بعده.**
+٢. **ولا يُدمج في `main` أبداً.**
+٣. وأن وثائقَ الحكم وثمانيةَ حرّاسٍ حُذفت **عمداً** — **فلا يُقرأ نقصاً.**
+٤. والغرض: **مراجعةٌ بشريةٌ خارجية.**
+
+1. A snapshot of `main` at `9b242fe` — **nothing is merged into it afterwards.**
+2. **It is never merged into `main`.**
+3. The project's decision documents and eight guards that read them were removed **deliberately** — **not to be read as missing.**
+4. Purpose: **an external human review.**
