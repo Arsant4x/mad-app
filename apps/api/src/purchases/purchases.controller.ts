@@ -7,10 +7,12 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
+import { CreateLandedCostDto } from './dto/create-landed-cost.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { CreateSupplierNoteDto } from './dto/create-supplier-note.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { GoodsReceiptsService } from './goods-receipts.service';
+import { LandedCostsService } from './landed-costs.service';
 import { PurchasesService } from './purchases.service';
 import { PurchaseAttachmentsService } from './purchase-attachments.service';
 import { SupplierNotesService } from './supplier-notes.service';
@@ -25,7 +27,31 @@ export class PurchasesController {
     private readonly attachments: PurchaseAttachmentsService,
     private readonly supplierNotes: SupplierNotesService,
     private readonly receipts: GoodsReceiptsService,
+    private readonly landedCosts: LandedCostsService,
   ) {}
+
+  // ---- ٧ التكاليفُ المحمَّلة (`ق-١١٤٥`) — توزيعُ سطرٍ خدميّ على طبقاتٍ مسمّاة؛ الفاعلُ نفسُه ----
+
+  @Get(':id/landed-costs')
+  @RequiresAction('view')
+  listLandedCosts(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.landedCosts.listForPurchase(tenant.companyId, tenant.allowedBranchIds, id);
+  }
+
+  /** توزيعُ سطرٍ خدميّ (شحنٌ · تخليصٌ · رسوم) على طبقاتٍ — بفعل «تسجيل» كسائر وقائع التشغيل. */
+  @Post(':id/landed-costs')
+  @RequiresAction('record')
+  distributeLandedCost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CreateLandedCostDto) {
+    return this.landedCosts.distribute(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
+
+  /** إلغاءُ توزيعٍ — عكسٌ لا محو، ويُرفض بعد استهلاكٍ لاحق من طبقاته. */
+  @Delete(':id/landed-costs/:distributionId')
+  @RequiresAction('delete')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  voidLandedCost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('distributionId') distributionId: string) {
+    return this.landedCosts.voidDistribution(tenant.companyId, tenant.allowedBranchIds, id, distributionId);
+  }
 
   // ---- ٢٥ الاستلامُ المستقلّ (`ق-١١٣١`) — الفاعل: مالكُ المنشأة وموظّفوه على شاشة المشتريات ----
 

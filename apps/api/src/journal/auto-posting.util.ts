@@ -564,6 +564,55 @@ export async function postGoodsReceiptEntry(tx: Prisma.TransactionClient, compan
   });
 }
 
+export interface LandedCostForPosting {
+  /** مورّدُ الشراء الخدميّ (الناقل/المخلّص) — يُختم على السطور (ق-٨٧٣) فيُقرأ التوزيعُ في كشفه كما يُقرأ شراؤه. */
+  supplierId: string;
+  branchId?: string | null;
+  /** رقمُ الشراء الخدميّ ووصفُ سطره — للمذكّرة. */
+  purchaseNo: string;
+  lineDescription: string;
+  /** فئةُ الشراء الخدميّ — حسابُها هو الدائنُ (ما رُحِّل إليه مصروفاً يُعاد تصنيفُه). */
+  categoryCode: string | null;
+  date: Date;
+  /** Σ حصّة ما على الرفّ (مدين `1300`) و Σ حصّة ما استُهلك (مدين `5100`)، بالعملة الأساسية. */
+  baseInventory: number;
+  baseCogs: number;
+  layersCount: number;
+}
+
+/**
+ * ٧ **قيدُ التكلفة المحمَّلة — إعادةُ تصنيفٍ مستقلّة، وقيدُ الشراء لا يُمسّ** (`ق-١١٤٥` · `ق-١٠٧٥`).
+ *
+ * فاتورةُ الناقل رُحِّلت مصروفاً على حساب فئتها حين أُنشئت (`postPurchaseEntry`). وحين تُوزَّع على طبقاتٍ
+ * يُقيَّد: مدين `1300` بحصّة ما على الرفّ · مدين `5100` بحصّة ما استُهلك قبل الوصول (في فترة التوزيع لا
+ * فترة البيع — كما إشعارُ السعر) · دائن حسابِ الفئة بما وُزِّع. والمذكّرةُ تسمّي الشراءَ والسطرَ وعددَ الطبقات
+ * («يُعلَن الفرقُ في وجهه»). وصفرٌ لا يُرحَّل.
+ */
+export async function postLandedCostEntry(tx: Prisma.TransactionClient, companyId: string, c: LandedCostForPosting) {
+  const inventory = round2(c.baseInventory);
+  const cogs = round2(c.baseCogs);
+  const total = round2(inventory + cogs);
+  if (total <= 0) return null;
+
+  const expCode = purchaseExpenseAccountCode(c.categoryCode);
+  const ids = await resolveAccountIds(tx, ['5100', expCode]);
+  if (!ids) return null;
+  const lines: PostingLine[] = [];
+  if (inventory > 0) lines.push({ accountId: await getOrCreateInventoryAccount(tx, companyId), debit: inventory, credit: 0 });
+  if (cogs > 0) lines.push({ accountId: ids.get('5100')!, debit: cogs, credit: 0 });
+  lines.push({ accountId: ids.get(expCode)!, debit: 0, credit: total });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `تكلفةٌ محمَّلة — فاتورة شراء ${c.purchaseNo} — «${c.lineDescription}» على ${c.layersCount} طبقة`,
+    lines,
+    auto: true,
+    branchId: c.branchId ?? null,
+    supplierId: c.supplierId,
+  });
+}
+
 export interface RentPaymentForPosting {
   /** عميلُ العقد إن سُجِّل (`Contract.customerId`) — يُختم على كل سطر (ق-٨٧٣)؛ وعقدٌ بلا عميلٍ يبقى بلا طرف. */
   customerId?: string | null;

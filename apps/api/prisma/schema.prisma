@@ -406,6 +406,8 @@ model Company {
   purchaseLines       PurchaseLine[]
   goodsReceipts       GoodsReceipt[]
   goodsReceiptLines   GoodsReceiptLine[]
+  landedCostDistributions LandedCostDistribution[]
+  landedCostLines         LandedCostLine[]
   inventoryLayers       InventoryLayer[]
   stockBatches          StockBatch[]
   inventoryConsumptions InventoryConsumption[]
@@ -1400,6 +1402,8 @@ model Purchase {
   lines       PurchaseLine[]
   /// ٢٥ استلاماتُ هذا الشراء — الضمنيُّ الواحد، أو استلاماتٌ مسجَّلة على مرّات (وما أُلغي يبقى بـ`voidedAt`).
   receipts    GoodsReceipt[]
+  /// ٧ توزيعاتُ التكلفة المحمَّلة التي يحملها هذا الشراء الخدميّ (فاتورةُ ناقلٍ أو مخلّص).
+  landedCostDistributions LandedCostDistribution[]
 
   @@unique([companyId, no])
   @@index([companyId, categoryCode])
@@ -1472,6 +1476,8 @@ model PurchaseLine {
 
   /// ٢٥ استلاماتُ هذا السطر — كاملةً أو على مرّات (`ق-١١٢٢`/②)؛ والمتبقّي للاستلام = `quantity − Σ` غيرِ الملغى منها.
   receiptLines GoodsReceiptLine[]
+  /// ٧ توزيعُ هذا السطر الخدميّ على طبقاتٍ — واحدٌ فعّال (فهرسٌ جزئيّ في الهجرة)، وما أُلغي يبقى.
+  landedCostDistributions LandedCostDistribution[]
 
   @@index([purchaseId])
   @@index([companyId, productId])
@@ -1573,6 +1579,115 @@ model GoodsReceiptLine {
   @@index([goodsReceiptId])
   @@index([purchaseLineId])
   @@map("goods_receipt_lines")
+}
+
+/// طريقةُ توزيع التكلفة المحمَّلة على الطبقات — **لكلِّ توزيعٍ لا للمنشأة** (خطّةُ الأجهزة `§٧.٢`).
+enum LandedCostMethod {
+  /// بالقيمة: نصيبُ كلِّ طبقةٍ بنسبة قيمة سطر استلامها الأساسية (الافتراض).
+  VALUE
+  /// بالكمّية: بنسبة الكمّية المستلَمة في الطبقة.
+  QUANTITY
+  /// يدوياً: مبالغُ لكلِّ طبقة، ومجموعُها قيمةُ السطر.
+  MANUAL
+}
+
+/// ⭐ **التكلفةُ المحمَّلة — توزيعُ فاتورةٍ خدمية على طبقاتٍ مسمّاة** (`٧` · `ق-١١٤٥` · `ق-١١٤٦`).
+///
+/// فاتورةُ الناقل أو المخلّص أو الجمارك **شراءٌ خدميٌّ كما هي** (مورّدُها الناقل، ذمّتُها `2100`، ضريبتُها
+/// `1250`، ومصروفُها حسابُ فئتها) — **ولا نوعَ مستندٍ ثالث ولا رقمَ تسلسل**. وما يُضاف توزيعٌ: سطرُ شراءٍ
+/// خدميّ ⟵ طبقاتٌ (كلُّ طبقةٍ سطرُ استلامٍ بعينه — `1:1` مقيساً `219/219`) ⟵ مبلغٌ بالعملة الأساسية.
+///
+/// ## نقطةُ التعليق الطبقةُ لا الشراء (`ق-١١٤٦`)
+/// الوصلةُ من سطر الاستلام إلى طبقته تمرّ بحركته (`goods_receipt_line ⟵ stock_movement ⟵ inventory_layer`)
+/// ولا مفتاحَ مباشراً — فالصفُّ هنا يشير إلى **الطبقة** (وحدةُ التكلفة التي تتغيّر) ويُقرأ استلامُها وشراؤها
+/// من خلالها. وإرساليةٌ تصل استلاماتٍ عدّة تُوزَّع على طبقاتِ استلاماتٍ عدّة بلا بابٍ جديد.
+///
+/// ## المحاسبة — قيدُ إعادة تصنيفٍ مستقلّ، وقيدُ الشراء لا يُمسّ (`ق-١٠٧٥`)
+/// مدينٌ `1300` بحصّة ما على الرفّ · مدينٌ `5100` بحصّة ما استُهلك قبل الوصول (في فترة التوزيع لا فترة
+/// البيع) · دائنٌ حسابُ فئة الشراء الخدميّ بما وُزِّع. **والنمطُ نمطُ إشعار السعر** (`layer-cost-spread.util`):
+/// تكلفةُ الوحدة تزيد بنصيبها، وما استُهلك يذهب إلى تكلفة المبيعات الآن.
+///
+/// ## حدودٌ مسمّاة
+/// - توزيعٌ واحد فعّال لكلِّ سطر شراء — **فهرسٌ جزئيّ في الهجرة** (`WHERE "voidedAt" IS NULL`) لأن Prisma لا تعبّر
+///   عن الشرط، والخدمةُ تردّ `409` باسمه قبله.
+/// - الإلغاءُ عكسٌ لا محو، **ويُرفض بعد استهلاكٍ لاحق** من طبقاته (المتبقّي لحظةَ التوزيع محفوظٌ على السطر) —
+///   حتى يُبنى بابُه؛ وتعديلُ الشراء الخدميّ أو إلغاءُ استلامٍ على طبقته توزيعٌ قائم يُرفض مسمّىً.
+/// - لا تقديرَ مبدئيّاً ولا وزنَ/حجمَ (`ق-١١٤٥`/②④) — والتوزيعُ بالقيمة أو الكمّية أو يدوياً.
+model LandedCostDistribution {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الشراءُ الخدميّ (فاتورةُ الناقل/المخلّص) — للقراءة بمساره؛ وسطرُه الموزَّع أدناه.
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  /// سطرُ الشراء الخدميّ الموزَّع (بلا `productId`) — واحدٌ فعّال لكلِّ سطر (فهرسٌ جزئيّ في الهجرة).
+  purchaseLineId String
+  purchaseLine   PurchaseLine @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+
+  method LandedCostMethod
+
+  /// تاريخُ التوزيع — تاريخُ قيده، ويخضع لقفل الفترات كأيّ قيد.
+  date DateTime @db.Date
+
+  /// ما وُزِّع بالعملة الأساسية = قيمةُ السطر الأساسية (Σ سطور التوزيع).
+  baseAmount Decimal @db.Decimal(18, 2)
+  /// Σ حصّة ما على الرفّ (مدين `1300`).
+  baseInventory Decimal @db.Decimal(18, 2)
+  /// Σ حصّة ما استُهلك قبل الوصول (مدين `5100`).
+  baseCogs Decimal @db.Decimal(18, 2)
+
+  /// قيدُ إعادة التصنيف — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("LandedCostEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  /// ⚖️ الإلغاءُ عكسٌ لا محو: الصفُّ يبقى، وتكلفةُ الطبقات تُعاد، والقيدُ يُعكس بقيدٍ مسجَّلٍ هنا.
+  voidedAt           DateTime?
+  voidJournalEntryId String?
+  voidJournalEntry   JournalEntry? @relation("LandedCostVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines LandedCostLine[]
+
+  @@index([companyId, purchaseId])
+  @@index([purchaseLineId])
+  @@map("landed_cost_distributions")
+}
+
+/// سطرُ التوزيع — نصيبُ طبقةٍ بعينها، مع ما يلزم لإلغائه بلا تخمين: متبقّي الطبقة وتكلفتُها قبل التوزيع وبعده.
+model LandedCostLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  distributionId String
+  distribution   LandedCostDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+
+  layerId String
+  layer   InventoryLayer @relation(fields: [layerId], references: [id], onDelete: Restrict)
+
+  /// نصيبُ الطبقة بالعملة الأساسية — غيرُ سالب (قيدُ `CHECK`).
+  baseAmount Decimal @db.Decimal(18, 2)
+  /// حصّةُ ما على الرفّ منه (تُضاف إلى تكلفة الطبقة).
+  baseInventory Decimal @db.Decimal(18, 2)
+  /// حصّةُ ما استُهلك قبل الوصول (إلى `5100` الآن).
+  baseCogs Decimal @db.Decimal(18, 2)
+
+  /// المتبقّي في الطبقة لحظةَ التوزيع — الإلغاءُ يشترط ألّا يتغيّر (استهلاكٌ لاحق يمنعه مسمّىً).
+  qtyRemainingAt Decimal @db.Decimal(18, 3)
+  unitCostBefore Decimal @db.Decimal(18, 6)
+  unitCostAfter  Decimal @db.Decimal(18, 6)
+
+  createdAt DateTime @default(now())
+
+  @@index([distributionId])
+  @@index([layerId])
+  @@map("landed_cost_lines")
 }
 
 /// Catalog item (product or service) used as a reference list when writing
@@ -2051,6 +2166,8 @@ model JournalEntry {
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
   inventoryWriteOffs  InventoryWriteOff[]  @relation("InventoryWriteOffEntry")
   goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
+  landedCosts         LandedCostDistribution[] @relation("LandedCostEntry")
+  landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
 
   payments         Payment[]
   supplierPayments SupplierPayment[]
@@ -4051,6 +4168,8 @@ model InventoryLayer {
   createdAt DateTime @default(now())
 
   consumptions InventoryConsumption[]
+  /// ٧ نصيبُ هذه الطبقة من تكاليفَ محمَّلة وُزِّعت عليها (`Restrict`: طبقةٌ عليها توزيعٌ لا تُحذف).
+  landedCostLines LandedCostLine[]
 
   /// ترتيب الاستهلاك: `acquiredAt` ثم `createdAt` — والثاني فاصلٌ حاسم كي لا
   /// يعتمد الترتيب على الصدفة حين تتساوى التواريخ.
