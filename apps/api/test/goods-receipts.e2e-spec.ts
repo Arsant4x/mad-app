@@ -10,7 +10,7 @@ import { postReversalEntry } from '../src/journal/auto-posting.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
 /**
- * [SPEC 5.2 8.3] ٢٥ **الاستلامُ المستقلّ** (`ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`) — الحارسُ الحيّ يقرأ **الدفترَ والرفَّ والمطابقةَ معاً** في كلِّ مرحلة:
+ * ٢٥ **الاستلامُ المستقلّ** (`ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`) — الحارسُ الحيّ يقرأ **الدفترَ والرفَّ والمطابقةَ معاً** في كلِّ مرحلة:
  *
  *   ① الضمنيُّ افتراضاً: شراءٌ مخزنيٌّ يُنشئ استلاماً كاملاً بتاريخ الشراء، وقيدين (فاتورةٌ على الوسيط · استلامٌ على `1300`)، والوسيطُ يتصافى.
  *   ② `receiveNow: false`: فاتورةٌ بلا رفّ — لا طبقة، والوسيطُ يحمل ما فُوتر ولم يُستلم، والمطابقةُ تعدّه.
@@ -99,7 +99,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     await app.close();
   });
 
-  it('① الضمنيُّ افتراضاً: استلامٌ كامل بتاريخ الشراء برقم GR، وقيدان، والوسيطُ يتصافى، والمطابقةُ صفر', async () => {
+  it('[SPEC 5.7] ① الضمنيُّ افتراضاً: استلامٌ كامل بتاريخ الشراء برقم GR، وقيدان، والوسيطُ يتصافى، والمطابقةُ صفر', async () => {
     const before = await ledger();
     const created = await post('/purchases').send(stockedPurchase()).expect(201);
     const purchaseId: string = created.body.id;
@@ -137,7 +137,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect(rec).toEqual(expect.objectContaining({ ledgerBalance: 0, expected: 0, difference: 0, invoicedNotReceived: 0, receivedNotInvoiced: 0, linesOpen: 0 }));
   });
 
-  it('② `receiveNow: false`: فاتورةٌ بلا رفّ — لا طبقة، والوسيطُ مدينٌ بما فُوتر ولم يُستلم، والمطابقةُ تعدّه', async () => {
+  it('[SPEC 5.7] ② `receiveNow: false`: فاتورةٌ بلا رفّ — لا طبقة، والوسيطُ مدينٌ بما فُوتر ولم يُستلم، والمطابقةُ تعدّه', async () => {
     const before = await ledger();
     const created = await post('/purchases')
       .send(stockedPurchase({ subtotal: 500, lines: [{ description: 'صنف', productId, quantity: 5, unitPrice: 100, taxRate: 15 }], receiveNow: false }))
@@ -157,7 +157,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect(delta(after, before, rec.account!.code)).toBe(-500);
   });
 
-  it('③ الاستلامُ الجزئيّ ثم المكمِّل: الطبقةُ بتاريخ الوصول، والمكمِّلُ يرحّل الفرقَ — 3 × 0.333 تتصافى بلا هللة', async () => {
+  it('[SPEC 5.7] ③ الاستلامُ الجزئيّ ثم المكمِّل: الطبقةُ بتاريخ الوصول، والمكمِّلُ يرحّل الفرقَ — 3 × 0.333 تتصافى بلا هللة', async () => {
     const created = await post('/purchases')
       .send(stockedPurchase({ subtotal: 1, date: daysAgo(10), lines: [{ description: 'صنف', productId, quantity: 3, unitPrice: 0.333, taxRate: 15 }], receiveNow: false }))
       .expect(201);
@@ -194,7 +194,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect(listed.body.remaining).toEqual([expect.objectContaining({ ordered: 3, received: 3, remaining: 0, baseAmount: 1, basePosted: 1 })]);
   });
 
-  it('④ الحدودُ المسمّاة: فوق المتبقّي · خدميّ · من شراءٍ آخر · مكرَّر · على إشعار — ولا يُكتب شيء', async () => {
+  it('[SPEC 5.7] ④ الحدودُ المسمّاة: فوق المتبقّي · خدميّ · من شراءٍ آخر · مكرَّر · على إشعار — ولا يُكتب شيء', async () => {
     const created = await post('/purchases')
       .send(stockedPurchase({ subtotal: 250, lines: [{ description: 'صنف', productId, quantity: 2, unitPrice: 100, taxRate: 15 }, { description: 'خدمة نقل', quantity: 1, unitPrice: 50, taxRate: 15 }], receiveNow: false }))
       .expect(201);
@@ -229,7 +229,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect((await get(`/purchases/${purchaseId}/receipts`).expect(200)).body.receipts).toHaveLength(0);
   });
 
-  it('⑤ الإلغاءُ عكسٌ لا محو: الطبقةُ تُفرَغ بحركةٍ خارجة والقيدُ يُعكس والمطابقةُ صفر — ولا يُلغى ما استُهلك، وبنودُ الشراء مجمَّدةٌ حتى يُعكس المسجَّل', async () => {
+  it('[SPEC 5.7] ⑤ الإلغاءُ عكسٌ لا محو: الطبقةُ تُفرَغ بحركةٍ خارجة والقيدُ يُعكس والمطابقةُ صفر — ولا يُلغى ما استُهلك، وبنودُ الشراء مجمَّدةٌ حتى يُعكس المسجَّل', async () => {
     const created = await post('/purchases')
       .send(stockedPurchase({ subtotal: 400, lines: [{ description: 'صنف', productId, quantity: 4, unitPrice: 100, taxRate: 15 }], receiveNow: false }))
       .expect(201);
@@ -277,7 +277,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect((await reconciliation()).difference).toBe(0);
   });
 
-  it('⑥ إشعارُ المورّد على سطرٍ لم يُستلم كاملاً أو استُلم على مرّتين يُردّ مسمّىً — حدٌّ معلَن لا صامت', async () => {
+  it('[SPEC 5.7] ⑥ إشعارُ المورّد على سطرٍ لم يُستلم كاملاً أو استُلم على مرّتين يُردّ مسمّىً — حدٌّ معلَن لا صامت', async () => {
     const pending = await post('/purchases')
       .send(stockedPurchase({ subtotal: 200, lines: [{ description: 'صنف', productId, quantity: 2, unitPrice: 100, taxRate: 15 }], receiveNow: false }))
       .expect(201);
@@ -297,7 +297,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect((await reconciliation()).difference).toBe(0);
   });
 
-  it('⑦ العزل: منشأةٌ أخرى لا ترى الاستلامَ ولا تسجّله ولا تُلغيه — 404 لا 403', async () => {
+  it('[SPEC 5.7] ⑦ العزل: منشأةٌ أخرى لا ترى الاستلامَ ولا تسجّله ولا تُلغيه — 404 لا 403', async () => {
     const created = await post('/purchases').send(stockedPurchase({ receiveNow: false })).expect(201);
     const lineId: string = created.body.lines[0].id;
     expect((await get(`/purchases/${created.body.id}/receipts`, other!.token)).status).toBe(404);
@@ -309,7 +309,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect(theirs.body).toEqual(expect.objectContaining({ account: null, ledgerBalance: 0, expected: 0, difference: 0, linesOpen: 0 }));
   });
 
-  it('⑧ القائم: صفوفُ ما قبل البناء تُكتب من حركاتها بالهجرة نفسِها (حالةٌ معلومة في معاملةٍ تُرجَع)، وقيدُ استلامها يُكتب حين يُعاد ترحيلُ شرائها', async () => {
+  it('[SPEC 5.7] ⑧ القائم: صفوفُ ما قبل البناء تُكتب من حركاتها بالهجرة نفسِها (حالةٌ معلومة في معاملةٍ تُرجَع)، وقيدُ استلامها يُكتب حين يُعاد ترحيلُ شرائها', async () => {
     legacyCompany = await registerIsolatedCompany(app, 'goods-receipts-legacy');
     const t = legacyCompany.token;
     const cid = legacyCompany.companyId;
