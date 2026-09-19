@@ -54,17 +54,20 @@ interface OrderableLayer {
 /**
  * ٥+٦ **ترتيبُ الطبقات للاستهلاك بالسياسة** — دالةٌ نقيّة تُختبر وحدَها.
  *
- * `FIFO`: `acquiredAt` ثم `createdAt` كما كان. `FEFO`: **ما لا دفعةَ له أوّلاً بعمره** — فالطبقاتُ التي سبقت
- * البناء لا تُخمَّن دفعتُها (`ق-١٠٧٦`/٣) وهي أقدمُ ما على الرفّ فتخرج كما كانت تخرج — ثم الدفعاتُ **بالأقرب انتهاءً**
- * فالعمر. والمنتهيةُ أقربُ الكلّ فتتصدّر: وهو المطلوبُ للشطب والإعادة، ويُستثنى منه البيعُ في `consumeFifo`.
+ * `FIFO`: `acquiredAt` ثم `createdAt` كما كان. `FEFO`: الدفعاتُ **بالأقرب انتهاءً** فالعمر أوّلاً، **ثم ما لا دفعةَ له
+ * بعمره** — بحكم المالك `ق-١١٠٢` (الموجزُ `§٣.٤` أصحّ): الطبقةُ بلا دفعةٍ **مجهولةُ الانتهاء لا قديمةٌ فحسب**، فإخراجُها
+ * أوّلاً قد يبيع منتهياً لا نعرف أنه منتهٍ بينما ما له انتهاءٌ معلومٌ باقٍ صالحاً؛ وغرضُ `FEFO` أن يُصرَف ما يقرب انتهاؤه،
+ * وما لا انتهاءَ له لا يقرب فيؤخَّر. (كانت تخرج أوّلاً بعمرها حتى الحكم — مخالفةٌ للموجز أُعلنت فعُكست.) ولا تُخمَّن
+ * دفعتُها (`ق-١٠٧٦`/٣). والمنتهيةُ أقربُ الكلّ فتتصدّر: وهو المطلوبُ للشطب والإعادة، ويُستثنى منه البيعُ في `consumeFifo`.
  */
 export function orderLayersForConsumption<L extends OrderableLayer>(layers: readonly L[], policy: ConsumptionPolicy): L[] {
   const byAge = (a: L, b: L) => a.acquiredAt.getTime() - b.acquiredAt.getTime() || a.createdAt.getTime() - b.createdAt.getTime();
   if (policy === 'FIFO') return [...layers].sort(byAge);
   return [...layers].sort((a, b) => {
     if (!a.batch && !b.batch) return byAge(a, b);
-    if (!a.batch) return -1;
-    if (!b.batch) return 1;
+    // ما لا انتهاءَ له يُصرَف بعد ما له انتهاء (ق-١١٠٢).
+    if (!a.batch) return 1;
+    if (!b.batch) return -1;
     return a.batch.expiryDate.getTime() - b.batch.expiryDate.getTime() || byAge(a, b);
   });
 }

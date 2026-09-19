@@ -11,6 +11,7 @@ import { postCogsSettlementEntry } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../common/batches/declared-limits';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
+import { roundTo } from '../common/money/rounding';
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 
@@ -192,6 +193,84 @@ export class InventoryService {
    *
    * ويُردّ مع الصفوف **الحدودُ الثلاثة المعلَنة** (`ق-١٠٨٥`) — فمن يستعمل التقرير يقرأ حدَّه.
    */
+  /**
+   * ٥+٦ **الرصيدُ بالدفعة** (`ق-١٠٩٩` — بنصّ المالك: «فبلا معرفة المتبقّي لكلِّ دفعة، لا يُقرأ `FEFO` ولا قربُ الانتهاء
+   * ⇒ وهو تتمّةُ ما بُني لا بابٌ جديد»): لكلِّ (صنفٍ · مستودعٍ · دفعة) المتبقّي من طبقاتها (`Σ qtyRemaining`) مع الانتهاء
+   * وما بقي من مهلته؛ **وما لا دفعةَ له صفٌّ مسمًّى** بالمتبقّي كذلك — يُعدّ ولا تُخمَّن دفعتُه (`ق-١٠٧٦`/٣). يُقرأ من
+   * الطبقات وحدَها لا من الحركات، فما بيع أو شُطب لا يظهر. الترتيبُ كترتيب الصرف تحت `FEFO`: الأقربُ انتهاءً أوّلاً،
+   * وما لا دفعةَ له أخيراً (`ق-١١٠٢`). **على مستوى المنشأة بحقّها**: الطبقاتُ لا تحمل فرعاً، فتُرشَّح بفرع حركة مصدرها.
+   * ويُردّ مع الصفوف الحدودُ المعلَنة (`ق-١٠٨٥`).
+   */
+  batchBalances(companyId: string, allowedBranchIds: string[] | 'all', productId?: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const today = toDateOnly(new Date());
+      const layers = await tx.inventoryLayer.findMany({
+        where: {
+          qtyRemaining: { gt: 0 },
+          ...(productId ? { productId } : {}),
+          ...(allowedBranchIds === 'all' ? {} : { sourceMovement: branchFilter(allowedBranchIds) }),
+        },
+        include: {
+          batch: { select: { id: true, batchNo: true, expiryDate: true } },
+          product: { select: { id: true, name: true, sku: true, expiryTracked: true } },
+          warehouse: { select: { id: true, name: true } },
+        },
+      });
+      type Row = {
+        id: string;
+        productId: string;
+        productName: string;
+        sku: string | null;
+        expiryTracked: boolean | null;
+        warehouseId: string;
+        warehouseName: string;
+        batchId: string | null;
+        batchNo: string | null;
+        expiryDate: string | null;
+        daysLeft: number | null;
+        expired: boolean;
+        qty: number;
+        layers: number;
+      };
+      const grouped = new Map<string, Row>();
+      for (const l of layers) {
+        const key = `${l.product.id}|${l.warehouseId}|${l.batch?.id ?? 'none'}`;
+        const daysLeft = l.batch ? Math.round((toDateOnly(l.batch.expiryDate).getTime() - today.getTime()) / 86400000) : null;
+        const row =
+          grouped.get(key) ??
+          {
+            id: key,
+            productId: l.product.id,
+            productName: l.product.name,
+            sku: l.product.sku,
+            expiryTracked: l.product.expiryTracked,
+            warehouseId: l.warehouseId,
+            warehouseName: l.warehouse.name,
+            batchId: l.batch?.id ?? null,
+            batchNo: l.batch?.batchNo ?? null,
+            expiryDate: l.batch ? l.batch.expiryDate.toISOString().slice(0, 10) : null,
+            daysLeft,
+            expired: daysLeft !== null && daysLeft < 0,
+            qty: 0,
+            layers: 0,
+          };
+        row.qty = roundTo(row.qty + Number(l.qtyRemaining), 'DERIVED_QUANTITY');
+        row.layers += 1;
+        grouped.set(key, row);
+      }
+      const rows = [...grouped.values()].sort((a, b) => {
+        const byName = a.productName.localeCompare(b.productName) || a.warehouseName.localeCompare(b.warehouseName);
+        if (byName !== 0) return byName;
+        if (a.expiryDate === null && b.expiryDate === null) return 0;
+        if (a.expiryDate === null) return 1;
+        if (b.expiryDate === null) return -1;
+        return a.expiryDate.localeCompare(b.expiryDate);
+      });
+      const noBatchRows = rows.filter((r) => r.batchId === null).length;
+      return { rows, noBatchRows, declaredLimits: BATCH_FEFO_DECLARED_LIMITS };
+    });
+  }
+
   expiringStock(companyId: string, allowedBranchIds: string[] | 'all', withinDays = 90) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const today = toDateOnly(new Date());

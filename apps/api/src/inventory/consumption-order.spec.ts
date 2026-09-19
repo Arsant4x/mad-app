@@ -2,8 +2,9 @@ import { orderLayersForConsumption } from './costing.util';
 
 /**
  * ٥+٦ ترتيبُ الصرف بالسياسة (`ق-١٠٧٦`/٢ · `ق-١٠٨٦`) — الدالةُ النقيّة وحدَها:
- *   `FIFO` بالعمر كما كان؛ و`FEFO` ما لا دفعةَ له أوّلاً بعمره (لا تُخمَّن دفعتُه — `ق-١٠٧٦`/٣) ثم الدفعاتُ بالأقرب
- *   انتهاءً فالعمر. والمنتهيةُ أقربُ الكلّ فتتصدّر — للشطب والإعادة؛ والبيعُ يستثنيها في `consumeFifo` لا هنا.
+ *   `FIFO` بالعمر كما كان؛ و`FEFO` الدفعاتُ بالأقرب انتهاءً فالعمر، **ثم** ما لا دفعةَ له بعمره (`ق-١١٠٢`: مجهولُ
+ *   الانتهاء يؤخَّر ولا تُخمَّن دفعتُه — `ق-١٠٧٦`/٣). والمنتهيةُ أقربُ الكلّ فتتصدّر — للشطب والإعادة؛ والبيعُ
+ *   يستثنيها في `consumeFifo` لا هنا.
  */
 const day = (n: number) => new Date(Date.UTC(2026, 8, 1 + n));
 const layer = (id: string, acquired: number, created: number, expiry: number | null) => ({
@@ -23,8 +24,13 @@ describe('٥+٦ ترتيبُ الطبقات للاستهلاك — سياسةٌ 
     expect(orderLayersForConsumption([fresh, expired, legacy, old], 'FIFO').map((l) => l.id)).toEqual(['old', 'expired', 'fresh', 'legacy']);
   });
 
-  it('FEFO: بلا دفعةٍ أوّلاً بعمره، ثم بالأقرب انتهاءً — والمنتهيةُ تتصدّر الدفعات', () => {
-    expect(orderLayersForConsumption([fresh, expired, legacy, old], 'FEFO').map((l) => l.id)).toEqual(['legacy', 'expired', 'fresh', 'old']);
+  it('FEFO: بالأقرب انتهاءً — والمنتهيةُ تتصدّر — ثم ما لا دفعةَ له بعمره أخيراً (ق-١١٠٢: مجهولُ الانتهاء يؤخَّر)', () => {
+    expect(orderLayersForConsumption([fresh, expired, legacy, old], 'FEFO').map((l) => l.id)).toEqual(['expired', 'fresh', 'old', 'legacy']);
+  });
+
+  it('FEFO: طبقتان بلا دفعة تُرتَّبان بينهما بالعمر — بعد كلِّ ما له انتهاء', () => {
+    const legacyOlder = layer('legacy-older', 2, 2, null);
+    expect(orderLayersForConsumption([legacy, old, legacyOlder], 'FEFO').map((l) => l.id)).toEqual(['old', 'legacy-older', 'legacy']);
   });
 
   it('FEFO: انتهاءان متساويان يُفصَل بينهما بالعمر ثم بلحظة الإنشاء', () => {

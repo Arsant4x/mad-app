@@ -241,7 +241,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
       }),
     );
     const res = await auth(http().get('/inventory/expiring')).query({ withinDays: 90 }).expect(200);
-    expect(res.body.declaredLimits).toHaveLength(3);
+    expect(res.body.declaredLimits).toHaveLength(4);
     expect(String(res.body.declaredLimits[0])).toContain('حدٌّ معلَن ①');
     const rows = (res.body.rows as { batchNo: string; source: string; qty: number; qtyKind: string; expired: boolean }[]).filter((x) => x.batchNo.endsWith(suffix));
     const h = rows.find((x) => x.batchNo === `H-${suffix}`)!;
@@ -266,5 +266,59 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     const res = await auth(http().get('/inventory/expiring')).query({ withinDays: 90 }).expect(200);
     const mine = (res.body.rows as { batchNo: string; warehouseName: string; qty: number }[]).filter((x) => x.batchNo === `T-${suffix}`);
     expect(mine.map((x) => x.qty).sort((a, b) => a - b)).toEqual([2, 8]);
+  });
+
+  it('⑧ عكسُ الإدخال اليدويّ يُقفل طبقتَه هي بدفعتها — والدفعةُ الأخرى لا تُمسّ (ق-١١٠٠)', async () => {
+    const r = await product('عكس', true);
+    await move({ productId: r, warehouseId: whA, type: 'IN', qty: 5, unitCost: 10, batchNo: `K1-${suffix}`, expiryDate: iso(30) }).expect(201);
+    const second = await move({ productId: r, warehouseId: whA, type: 'IN', qty: 3, unitCost: 12, batchNo: `K2-${suffix}`, expiryDate: iso(60) }).expect(201);
+    const before = await layersOf(r);
+    expect(before.map((l) => [l.batch?.batchNo, num(l.qtyRemaining)])).toEqual([[`K1-${suffix}`, 5], [`K2-${suffix}`, 3]]);
+
+    await auth(http().post(`/inventory/movements/${second.body.id}/reverse`)).send({}).expect(201);
+    const after = await layersOf(r);
+    // الطبقةُ الثانية أُقفلت هي بعينها وبقيت على دفعتها؛ والأولى — الأقربُ انتهاءً، والتي كان FEFO سيأخذ منها — لم تُمسّ.
+    expect(after.map((l) => [l.batch?.batchNo, num(l.qtyRemaining)])).toEqual([[`K1-${suffix}`, 5], [`K2-${suffix}`, 0]]);
+    expect(after[1].batchId).toBe(before[1].batchId);
+    const closing = await tenantPrisma.runInTenantContext(companyId, (tx) => tx.inventoryConsumption.findMany({ where: { layerId: before[1].id } }));
+    expect(closing).toHaveLength(1);
+    expect(num(closing[0].qty)).toBe(3);
+  });
+
+  it('⑨ تحت FEFO ما لا انتهاءَ له يُصرَف بعد ما له انتهاء (ق-١١٠٢) — والرصيدُ بالدفعة يقرأ المتبقّي ويسمّي ما لا دفعةَ له (ق-١٠٩٩)', async () => {
+    const r = await product('مجهولُ الانتهاء', true);
+    // طبقةٌ بلا دفعة أقدمُ من الدفعة — كما تركتها الأيام قبل الإعلان: تُكتب مباشرةً لأن المسارَ يرفض استلامَ المعلَن بلا دفعة.
+    const legacyMovement = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.stockMovement.create({
+        data: { companyId, productId: r, warehouseId: whA, type: 'IN', origin: 'MANUAL', qty: 4, date: new Date(iso(-30)) } as unknown as Prisma.StockMovementUncheckedCreateInput,
+        select: { id: true },
+      }),
+    );
+    await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.inventoryLayer.create({
+        data: { companyId, productId: r, warehouseId: whA, qtyReceived: 4, qtyRemaining: 4, unitCost: 5, acquiredAt: new Date(iso(-30)), sourceType: 'ADJUSTMENT', sourceMovementId: legacyMovement.id, batchId: null },
+      }),
+    );
+    await purchase([{ productId: r, quantity: 6, unitPrice: 10, batchNo: `N-${suffix}`, expiryDate: iso(40) }]).expect(201);
+
+    const balances = await auth(http().get('/inventory/batch-balances')).query({ productId: r }).expect(200);
+    expect(balances.body.declaredLimits).toHaveLength(4);
+    expect(balances.body.noBatchRows).toBe(1);
+    const mine = balances.body.rows as { batchNo: string | null; qty: number; expiryDate: string | null; daysLeft: number | null; layers: number }[];
+    expect(mine).toHaveLength(2);
+    // الدفعةُ أوّلاً وما لا دفعةَ له بعدها — كترتيب الصرف.
+    expect(mine[0]).toMatchObject({ batchNo: `N-${suffix}`, qty: 6, expiryDate: iso(40), layers: 1 });
+    expect(mine[1]).toMatchObject({ batchNo: null, qty: 4, expiryDate: null, daysLeft: null });
+
+    // البيعُ يأخذ من الدفعة (الأحدثِ اقتناءً) لا من الطبقة الأقدم مجهولةِ الانتهاء.
+    const sold = await sale(r, 5).expect(201);
+    expect(sold.body.stockFulfilment.totalCost).toBe(50);
+    const cons = await lastSaleConsumptions(r);
+    expect(cons).toHaveLength(1);
+    const batchLayer = (await layersOf(r)).find((l) => l.batch?.batchNo === `N-${suffix}`)!;
+    expect(cons[0].layerId).toBe(batchLayer.id);
+
+    const afterSale = (await auth(http().get('/inventory/batch-balances')).query({ productId: r }).expect(200)).body.rows as { batchNo: string | null; qty: number }[];
+    expect(afterSale.map((x) => [x.batchNo, x.qty])).toEqual([[`N-${suffix}`, 1], [null, 4]]);
   });
 });
