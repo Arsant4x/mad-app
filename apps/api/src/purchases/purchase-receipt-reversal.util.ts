@@ -86,6 +86,10 @@ export async function reverseGoodsReceipt(tx: Tx, args: ReverseGoodsReceiptArgs)
     if (!movement) continue;
     const layer = await tx.inventoryLayer.findFirst({ where: { sourceMovementId: movement.id }, select: { id: true, qtyReceived: true, unitCost: true } });
     if (!layer) continue;
+    // ٧ طبقةٌ عليها توزيعُ تكلفةٍ محمَّلة قائم لا تُعكس — يُلغى التوزيعُ أوّلاً (`DELETE …/landed-costs/:id`) وإلا بقي
+    // قيدُ إعادة تصنيفٍ على رفٍّ لم يعد له وجود. رفضٌ مسمّىً لا خطأَ قيدٍ خاماً.
+    const distributed = await tx.landedCostLine.count({ where: { layerId: layer.id, distribution: { voidedAt: null } } });
+    if (distributed > 0) throw new ConflictException(formatMessage(MSG.goods_receipt_void_with_landed_cost, { no: args.documentNo }));
     const qty = Number(layer.qtyReceived);
     // الطبقةُ الكاملة وحدَها تُعكس — والشرطُ في الكتابة نفسِها لا في قراءةٍ سبقتها (`ق-٨١٤`).
     const { count } = await tx.inventoryLayer.updateMany({

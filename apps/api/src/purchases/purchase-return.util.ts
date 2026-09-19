@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo } from '../common/money/rounding';
+import { spreadCostOverLayer } from './layer-cost-spread.util';
 
 /**
  * ⚖️ **أثرُ إشعار المورّد على الرفّ — على طبقة الاستلام الأصلية نفسِها** (`ق-١٠٠٦`/③ · `ق-٩٩٠`).
@@ -130,16 +131,13 @@ export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockAr
     }
 
     // إشعارُ سعرٍ بلا بضاعة (دائنٌ يخفّض التكلفة، ومدينٌ يزيدها): ما على الرفّ يتبع الطبقة، وما استُهلك إلى 5100.
-    const onShelf = Math.min(qty, remaining);
-    const consumed = roundTo(qty - onShelf, 'DERIVED_QUANTITY');
-    const shelfPart = onShelf * unitBase;
-    if (onShelf > 0) {
-      const sign = args.side === 'credit' ? -1 : 1;
-      const newUnitCost = roundTo((remaining * layerCost + sign * shelfPart) / remaining, 'UNIT_COST');
-      await tx.inventoryLayer.update({ where: { id: layer.id }, data: { unitCost: newUnitCost } });
-      baseInventory += shelfPart;
+    // ٧ الحكمُ دالّةٌ واحدة تخدم التكلفةَ المحمَّلة أيضاً (`layer-cost-spread.util`) — لا نسخةً.
+    const spread = spreadCostOverLayer({ unitsAffected: qty, perUnitAmount: unitBase, direction: args.side === 'credit' ? -1 : 1, qtyRemaining: remaining, unitCost: layerCost });
+    if (spread.onShelfQty > 0) {
+      await tx.inventoryLayer.update({ where: { id: layer.id }, data: { unitCost: spread.newUnitCost } });
+      baseInventory += spread.baseInventory;
     }
-    baseCogs += consumed * unitBase;
+    baseCogs += spread.baseCogs;
   }
 
   return { baseInventory: roundTo(baseInventory, 'LINE_AMOUNT'), baseCogs: roundTo(baseCogs, 'LINE_AMOUNT'), returned };

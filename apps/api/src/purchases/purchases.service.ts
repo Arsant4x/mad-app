@@ -311,6 +311,11 @@ export class PurchasesService {
       // Anything that changes who/what/how-much gets reversed and re-posted
       // fresh rather than patched in place — same reasoning as InvoicesService.
       const affectsPosting = dto.supplierId !== undefined || dto.date !== undefined || categoryGiven || amountsGiven;
+      // ٧ شراءٌ خدميّ وُزِّع سطرٌ منه على طبقات: قيدُ التوزيع أعاد تصنيفَ حساب فئته، فتعديلٌ يُعيد ترحيلَه (فئةً أو
+      // مبالغَ أو بنوداً) يُرفض مسمّىً حتى يُلغى التوزيعُ أوّلاً — لا يُترك قيدُ إعادة تصنيفٍ يشير إلى قيدٍ لم يعد.
+      if (affectsPosting && (await tx.landedCostDistribution.count({ where: { purchaseId: id, voidedAt: null } })) > 0) {
+        throw new ConflictException(formatMessage(MSG.purchase_frozen_by_landed_costs, { no: existing.no }));
+      }
 
       let updated = await tx.purchase.update({ where: { id }, data, include: PURCHASE_INCLUDE });
 
@@ -459,6 +464,10 @@ export class PurchasesService {
       const allocations = await tx.supplierPaymentAllocation.count({ where: { purchaseId: id } });
       if (allocations > 0) throw new ConflictException(formatMessage(MSG.purchase_has_payments, { no: existing.no }));
       if (await receiptConsumed(tx, existing.lines)) throw new ConflictException(formatMessage(MSG.purchase_void_consumed, { no: existing.no }));
+      // ٧ شراءٌ خدميّ عليه توزيعٌ قائم لا يُلغى — يُلغى التوزيعُ أوّلاً فيُعكس قيدُه، ثم الشراء.
+      if ((await tx.landedCostDistribution.count({ where: { purchaseId: id, voidedAt: null } })) > 0) {
+        throw new ConflictException(formatMessage(MSG.purchase_frozen_by_landed_costs, { no: existing.no }));
+      }
 
       const voidedAt = new Date();
       // ٢٥ استلاماتُه الحيّةُ كلُّها تُعكس بقيودها — ضمنيّةً كانت أو مسجَّلة — فلا يبقى رفٌّ لشراءٍ مُلغى.

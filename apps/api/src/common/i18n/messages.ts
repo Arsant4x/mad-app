@@ -315,6 +315,25 @@ export const MSG = {
   supplier_note_line_not_received: 'supplierNotes.line_not_received',
   supplier_note_line_multi_receipt: 'supplierNotes.line_multi_receipt',
 
+  // ٧ التكاليفُ المحمَّلة (ق-١١٤٥) — كلُّ رفضٍ مسمّىً: التاجر يعرف لماذا
+  landed_cost_not_found: 'landedCosts.not_found',
+  landed_cost_voided: 'landedCosts.voided',
+  landed_cost_on_note: 'landedCosts.on_note',
+  landed_cost_purchase_not_posted: 'landedCosts.purchase_not_posted',
+  landed_cost_line_not_of_purchase: 'landedCosts.line_not_of_purchase',
+  landed_cost_line_not_service: 'landedCosts.line_not_service',
+  landed_cost_line_zero: 'landedCosts.line_zero',
+  landed_cost_line_already_distributed: 'landedCosts.line_already_distributed',
+  landed_cost_no_layers: 'landedCosts.no_layers',
+  landed_cost_layer_repeated: 'landedCosts.layer_repeated',
+  landed_cost_layer_not_receipt: 'landedCosts.layer_not_receipt',
+  landed_cost_layer_changed: 'landedCosts.layer_changed',
+  landed_cost_manual_sum_mismatch: 'landedCosts.manual_sum_mismatch',
+  landed_cost_manual_lines_required: 'landedCosts.manual_lines_required',
+  landed_cost_void_after_consumption: 'landedCosts.void_after_consumption',
+  purchase_frozen_by_landed_costs: 'purchases.frozen_by_landed_costs',
+  goods_receipt_void_with_landed_cost: 'goodsReceipts.void_with_landed_cost',
+
   // returns (SPEC §30 — موجة أ)
   return_line_not_original: 'returns.line_not_original',
   return_exceeds_sold: 'returns.exceeds_sold',
