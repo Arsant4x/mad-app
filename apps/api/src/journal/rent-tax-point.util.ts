@@ -173,7 +173,7 @@ export function pendingTaxPoints(points: TaxPoint[], alreadyAccruedGross: number
   return out;
 }
 
-/** ربعُ السنة الذي تقع فيه نقطةٌ — بالتقويم المحلّي كـ`dayNumber` وبقيّة محرّك الاعتراف. */
+/** ربعُ السنة الذي تقع فيه نقطةٌ — من يومِ `UTC` كـ`dayNumber` وبقيّة محرّك الاعتراف (`ق-١١٩٠`). */
 export function quarterOf(d: Date): { year: number; quarter: number } {
-  return { year: d.getFullYear(), quarter: Math.floor(d.getMonth() / 3) + 1 };
+  return { year: d.getUTCFullYear(), quarter: Math.floor(d.getUTCMonth() / 3) + 1 };
 }

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayStartOf } from '../common/wall-clock.util';
 import { SendReminderDto, UpdateReminderPolicyDto } from './dto/reminder.dto';
 import { formatMoney } from '../common/money/rounding';
 
@@ -34,9 +35,8 @@ const DEFAULT_POLICY = {
 const FALLBACK_TEMPLATE =
   'عزيزنا {tenant}، نذكّركم بقسط الإيجار البالغ {amount} المستحق بتاريخ {dueDate} عن {unit}. شاكرين لكم حسن تعاونكم.';
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+/** يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فأيامُ التأخّر رقمٌ يقرؤه التاجر. */
+const startOfDay = (d: Date): Date => dayStartOf(d);
 
 function daysBetween(from: Date, to: Date): number {
   return Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / 86400000);

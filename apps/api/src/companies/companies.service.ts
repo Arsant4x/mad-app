@@ -35,6 +35,10 @@ export function blockingRecordsFrom(fieldName: unknown): string {
  * shorter or already-lapsed subscription and muddy every grace-period
  * calculation. A missing value means "activate now"; a future value (scheduled
  * start) is allowed, an earlier one is refused.
+ *
+ * يومُ منطقة العملية بحقّه: الرفضُ هنا يقرؤه مديرُ المنصّة وحدَه عند تأريخ اشتراكٍ رجعياً — لا رقمٌ
+ * يقرؤه التاجر ولا يبني عليه (قسمةُ المالك ② في `ق-١١٩٠`: يُعلَن بحجّته ولا يُصلَح). والأثرُ
+ * الأقصى ثلاثُ ساعاتٍ عند حدّ اليوم على خادمٍ بتوقيت الرياض، في رفضٍ يُعاد بتاريخ اليوم.
  */
 function resolveSubStart(dtoSubStart?: string): Date {
   if (!dtoSubStart) return new Date();

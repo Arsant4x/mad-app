@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { writeOffReason } from '../common/writeoff-reasons';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
@@ -35,10 +36,9 @@ const CASH_FLOW_ACCOUNTS = [
 const DEFERRED_REVENUE_CASH_FLOW_CODE = DEFERRED_REVENUE_ACCOUNT_CODE;
 
 /** Dates are compared day-to-day, so the time part is stripped: an installment
- * due today must not count as late because the clock says 14:00. */
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+ * due today must not count as late because the clock says 14:00.
+ * يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — كان `new Date(y, m, d)` محلّياً. */
+const startOfDay = (d: Date): Date => dayStartOf(d);
 
 /**
  * On-time collection: of the rent that has actually fallen due, how much was
@@ -60,7 +60,8 @@ function startOfDay(d: Date): Date {
  * calendar-date one, matching the old startOfDay() semantics.
  */
 async function collectionRate(tx: Prisma.TransactionClient, companyId: string, today: Date) {
-  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  // `today` بدايةُ يومٍ معلَن (`dayStartOf`) — فيومُه يُقرأ كما يُقرأ `@db.Date`: UTC حصراً (`ق-١١٩٠`).
+  const todayIso = today.toISOString().slice(0, 10);
 
   const [agg] = await tx.$queryRaw<{ dueAmount: number; paidAmount: number; onTimeAmount: number; overdueCount: number }[]>`
     -- نسبةُ التحصيل تقرأ **المقبوضَ** لا حالةَ القسط (ق-١٠٤٠/٢): كانت تجمع مبلغَ كلِّ قسطٍ مختومٍ PAID
@@ -635,9 +636,9 @@ export class ReportsService {
    */
   receivablesAging(companyId: string, allowedBranchIds: string[] | 'all', filter: AgingDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      // تاريخ التقرير: كأي تقرير يقبل فترة — الافتراض اليوم.
-      const asOf = filter.asOf ? new Date(filter.asOf) : new Date();
-      asOf.setHours(23, 59, 59, 999);
+      // تاريخ التقرير: كأي تقرير يقبل فترة — الافتراض اليوم. **وآخرُ لحظةٍ في يومٍ معلَن** لا
+      // `setHours(23, 59, 59, 999)` بمنطقة العملية (`ق-١١٩٠`) — فالأعمارُ رقمٌ يقرؤه التاجر.
+      const asOf = dayEndOf(filter.asOf ? new Date(filter.asOf) : new Date());
 
       // ⚠️ **المصدرُ الواحد لِـ«كم يدين لنا»** (`ق-٣٤١`): كان هذا التقريرُ يحسب
       //    المتبقّي بنفسه، **وحدُّ الائتمان كان سيصير رابعاً** — **وتاجرٌ يقرأ

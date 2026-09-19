@@ -9,9 +9,10 @@ import {
   splitAtCollection,
 } from './rent-recognition.util';
 
-const d = (iso: string) => new Date(iso + 'T00:00:00');
-const isoOf = (x: Date) =>
-  `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+// التواريخُ على هيئة `@db.Date` — منتصفُ ليل `UTC` — كما تصل المحرّكَ من الأعمدة المخزَّنة (`ق-١١٩٠`).
+// كانت تُبنى محلّياً (`T00:00:00` بلا لاحقة) فتشهد للمحرّك في منطقة العملية وحدَها.
+const d = (iso: string) => new Date(iso);
+const isoOf = (x: Date) => x.toISOString().slice(0, 10);
 
 describe('قاعدةُ الاعتراف بإيراد الإيجار (ق-٤٦٨ · ق-٤٧٤)', () => {
   describe('الكسرُ بالأيام', () => {

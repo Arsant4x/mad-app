@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
+import { dayStartOf } from '../common/wall-clock.util';
 import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
 /**
@@ -51,10 +52,10 @@ export async function getOrCreateOpeningEquityAccount(
  * exists. Without one there is no year start to anchor to, so today is used
  * (and, as everywhere else, no calendar means no period restriction). */
 export async function openingEntryDate(tx: Prisma.TransactionClient, companyId: string): Promise<Date> {
-  const now = new Date();
-  // Local calendar date at UTC midnight — the same shape a '2026-08-08' DTO
-  // string parses to, so @db.Date comparisons behave identically.
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // Today at UTC midnight — the same shape a '2026-08-08' DTO string parses to,
+  // so @db.Date comparisons behave identically. يومٌ معلَن لا يومُ منطقة العملية
+  // (`ق-١١٩٠`): كان يُبنى من `getFullYear()/getMonth()/getDate()` المحلّية.
+  const today = dayStartOf(new Date());
   const year = await tx.fiscalYear.findFirst({ where: { companyId, start: { lte: today }, end: { gte: today } } });
   return year ? new Date(year.start) : today;
 }

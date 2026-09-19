@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayStartOf } from '../common/wall-clock.util';
 import { CreateWarrantyDto, UpdateWarrantyDto } from './dto/warranty.dto';
 
 /**
@@ -20,9 +21,8 @@ const WARRANTY_INCLUDE = {
   _count: { select: { claims: true } },
 };
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+/** يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فـ`daysLeft` رقمٌ يقرؤه التاجر. */
+const startOfDay = (d: Date): Date => dayStartOf(d);
 
 function daysUntil(date: Date, from: Date): number {
   return Math.round((startOfDay(date).getTime() - startOfDay(from).getTime()) / 86400000);

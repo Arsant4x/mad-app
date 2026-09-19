@@ -6,6 +6,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { localYearOf } from '../common/wall-clock.util';
 import { CreateLeaveRequestDto, CreateLeaveTypeDto, DecideLeaveRequestDto, UpdateLeaveTypeDto } from './dto/leave.dto';
 import { LeavesService } from './leaves.service';
 
@@ -81,7 +82,8 @@ export class LeavesController {
   @Get('balance')
   @RequiresAction('view')
   balance(@CurrentTenant() tenant: TenantContext, @Query('employeeId') employeeId: string, @Query('year') year?: string) {
-    const y = year ? parseInt(year, 10) : new Date().getFullYear();
+    // سنةُ اليوم المعلَن لا `getFullYear()` بمنطقة العملية (`ق-١١٩٠`) — فرصيدُ الإجازات رقمٌ يقرؤه التاجر.
+    const y = year ? parseInt(year, 10) : localYearOf(new Date());
     return this.leavesService.balance(tenant.companyId, employeeId, y);
   }
 }

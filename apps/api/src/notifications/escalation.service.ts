@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationKind } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayStartOf } from '../common/wall-clock.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 import { formatMoney } from '../common/money/rounding';
@@ -32,12 +33,9 @@ function daysOverdue(dueDate: Date, today: Date): number {
 /** Midnight today. Warranty `endDate` is a bare date (no time), so comparing it
  * against a `new Date()` that carries the current clock time would drop a
  * warranty that expires *today* the moment the clock passes its stored 00:00.
- * Anchoring to the start of the day keeps "expires today" inside the window. */
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+ * Anchoring to the start of the day keeps "expires today" inside the window.
+ * يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — كان `setHours(0, 0, 0, 0)` محلّياً. */
+const startOfToday = (): Date => dayStartOf(new Date());
 
 /**
  * Most escalations a single run may raise.

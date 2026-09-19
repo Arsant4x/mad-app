@@ -4,6 +4,7 @@ import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.ut
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { dayStartOf } from '../common/wall-clock.util';
 import {
   allocatedByDocument,
   allocatedFor,
@@ -504,8 +505,8 @@ export class PaymentsService {
     if (!invoice) return;
     const derived = deriveSettlementStatus(await allocatedFor(invoiceTarget(tx), invoiceId), Number(invoice.total));
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.
+    const today = dayStartOf(new Date());
     const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
     if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
   }

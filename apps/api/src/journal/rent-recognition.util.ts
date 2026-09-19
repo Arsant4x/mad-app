@@ -31,9 +31,13 @@ export interface ServicePeriod {
   end: Date;
 }
 
-/** رقمُ اليوم بالتقويم المحلّي — **بلا ساعاتٍ ولا توقيتٍ صيفيّ يزحزح يوماً**. */
+/**
+ * رقمُ اليوم — **يومُ `UTC` للحظة**: فتواريخُ الخدمة أعمدةُ `@db.Date` تُقرأ `UTC` حصراً، و`asOf`
+ * يومُه المعلَن بلا إزاحة (`ق-١١٩٠`). كان يُقرأ بدوالّ اليوم المحلّية — فيصدق شرقَ غرينتش ويزحزح
+ * يوماً غربَه. **وبلا ساعاتٍ ولا توقيتٍ صيفيّ**.
+ */
 export function dayNumber(d: Date): number {
-  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  return Math.floor(d.getTime() / 86400000);
 }
 
 /** أيامُ الفترة **شاملةً طرفيها** — فترةُ يومٍ واحدٍ يومٌ لا صفر. */
@@ -52,9 +56,13 @@ export function earnedFraction(p: ServicePeriod, asOf: Date): number {
   return elapsed >= total ? 1 : elapsed / total;
 }
 
-/** آخرُ يومٍ في شهرِ `d` — بالتقويم المحلّي. */
+/**
+ * آخرُ يومٍ في شهرِ `d` — على هيئة `@db.Date` (منتصفُ ليل `UTC`) كما يُخزَّن تاريخُ القيد (`ق-١١٩٠`).
+ * كان يُبنى بـ`new Date(y, m + 1, 0)` محلّياً: فعلى خادمٍ شرقَ غرينتش تقع لحظتُه في اليوم السابق
+ * بتوقيت `UTC` — وهو اليومُ الذي يُقرأ منه العمودُ المخزَّن.
+ */
 export function monthEnd(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 }
 
 /**
@@ -80,7 +88,7 @@ export function recognitionDates(p: ServicePeriod, asOf: Date): Date[] {
     out.push(new Date(cursor));
     // آخرُ يومٍ في الشهر التالي — **يُبنى من أوّل الشهر التالي لا بالجمع على
     // اليوم**: فبراير المنتهي في ٢٨ يقفز بالجمع إلى مارس ويسقط شهرٌ كامل.
-    cursor = monthEnd(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1));
+    cursor = monthEnd(new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1)));
   }
   // ختامُ الفترة نفسُه إن بلغه `asOf` ولم يكن آخرَ يومٍ في شهره.
   if (limit === dayNumber(p.end) && (out.length === 0 || dayNumber(out[out.length - 1]) < dayNumber(p.end))) {
@@ -89,14 +97,14 @@ export function recognitionDates(p: ServicePeriod, asOf: Date): Date[] {
   return out;
 }
 
-/** `2026-03` — الشهرُ بصيغةٍ تُقرأ وتُفرَز. */
+/** `2026-03` — الشهرُ بصيغةٍ تُقرأ وتُفرَز؛ من يومِ `UTC` كبقيّة المحرّك (`ق-١١٩٠`). */
 export function monthLabel(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return d.toISOString().slice(0, 7);
 }
 
 /** `2026-03-31`. */
 function dayLabel(d: Date): string {
-  return `${monthLabel(d)}-${String(d.getDate()).padStart(2, '0')}`;
+  return d.toISOString().slice(0, 10);
 }
 
 /**
