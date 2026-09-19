@@ -5,29 +5,16 @@ React web app, npm workspaces monorepo.
 
 ## Prerequisites
 
-- Node.js 22+, npm — كما تشترط `engines` في كل `package.json` والسير (`jsdom 30` يستدعي واجهةً غائبةً في 20)
+- Node.js 22+, npm — as required by `engines` in every `package.json`
 - Docker Desktop (Postgres, Redis, MinIO run via `docker-compose.yml`)
 
 ## First-time setup
 
 ```bash
 npm install
-git config core.hooksPath .githooks              # مرّة واحدة لكل نسخة
-node .claude/hooks/install-user-hooks.mjs        # مرّة واحدة لكل **جهاز**
+git config core.hooksPath .githooks              # once per clone — repo hooks live in .githooks/
 docker compose up -d
 ```
-
-⚠️ **والسطر الثاني يخصّ الجهاز لا النسخة** (`ق-١٤٩`): بوّابات `.claude/hooks/`
-مربوطةٌ في `.claude/settings.json` **بمسارٍ نسبيّ**، فلا تُقرأ إلا في جلسةٍ
-**جذرُها هذا المستودع**. وجلسةٌ جذرُها مجلَّدٌ آخر تمضي **بلا بوّابة** — وقد
-وقع ذلك فعلاً: أربع حوادثِ اقتباسٍ عكسي **والبوّابة قائمةٌ وصحيحة، لم تُحمَّل
-مرّةً واحدة**. والسطر أعلاه يربطها على مستوى المستخدم بمسارٍ مطلق، وهو
-**عديم الأثر عند التكرار**.
-
-`core.hooksPath` ليس تحسيناً: خطّافا المستودع يعيشان في `.githooks/`، وبلا
-هذا السطر **لا يعملان** — و`post-checkout` منهما هو ما يهيّئ كل شجرة عاملة
-جديدة تلقائياً (انظر «شجرة عاملة جديدة» أدناه). وبوّابة `pretest` تلتقط من
-نسي هذا السطر فتقول له ما ينقص، بدل أن يُقرأ النقص عطلاً في الشيفرة.
 
 Postgres's bootstrap user (`mad_app`, from `docker-compose.yml`) is a
 superuser, which would silently bypass Row-Level Security. The app must
@@ -56,11 +43,11 @@ cp .env.example .env
 ## Running
 
 ```bash
-npm run start:dev --workspace apps/api   # http://localhost:3000 (Swagger at /docs)
-npm run dev --workspace apps/web         # http://localhost:5173
+npm run dev:api   # http://localhost:3000 (Swagger at /docs outside production)
+npm run dev:web   # http://localhost:5173
 ```
 
-## Demo accounts (from `prisma/seed.ts`)
+## Demo accounts (from `apps/api/prisma/seed.ts`)
 
 | username | password | role |
 |---|---|---|
@@ -72,37 +59,36 @@ npm run dev --workspace apps/web         # http://localhost:5173
 
 ```bash
 cd apps/api
-npm test          # unit tests
-npm run test:e2e  # tenant-isolation e2e suite, needs docker compose + a seeded DB
+npm test              # unit tests and static guards (no database)
+npm run test:e2e      # e2e suite — needs docker compose + a migrated, seeded DB (apps/api/.env.test)
+npm run test:clean    # the same e2e suite on a database created from scratch
+
+cd apps/web
+npm test              # vitest
+npm run test:e2e      # playwright — needs the API running
 ```
 
-### شجرة عاملة جديدة (`git worktree add`)
+`apps/api/.env.test` is not tracked; `.githooks/post-checkout` copies it from
+`.env.test.example` when a worktree is created, and the `pretest` gate says
+what is missing if it was not.
 
-**لا خطوات يدوية** — `.githooks/post-checkout` يهيّئها عند إنشائها ويطبع ما فعل:
+### New worktree (`git worktree add`)
 
-```
-تهيئة الشجرة: رُبطت node_modules ← D:/mad-app/node_modules
-تهيئة الشجرة: نُسخت apps/api/.env.test من .env.test.example
-```
+`.githooks/post-checkout` prepares it and prints what it did: it links
+`node_modules` to the main clone's and copies `apps/api/.env.test` from
+`.env.test.example`. Neither comes with git; without them tests fail on
+`Module ts-jest in the transform option was not found` or
+`PrismaClientInitializationError`.
 
-وشيئان لا يأتيان مع git، وغيابُ كلٍّ منهما **يُقرأ انحداراً في الشيفرة**:
+## Deployment
 
-| الناقص | ما يظهر بدله |
-|---|---|
-| `node_modules` (تُشارَك مع المستودع الرئيس بوصلة) | `Module ts-jest in the transform option was not found` |
-| `apps/api/.env.test` (متجاهَل بـ`.gitignore`) | مجسّات حيّة تتخطّى أو تسقط بـ`PrismaClientInitializationError` |
-
-والخطّاف **لا يولّد سرّاً**: ينسخ `.env.test.example` الملتزَمة كما هي. ولا
-يفعل شيئاً ولا يطبع حرفاً إن كان الاثنان موجودَين.
-
-وإن لم يعمل (نسيان `core.hooksPath`)، فبوّابة `pretest` تسقط بسطرٍ يقول ما
-ينقص وما يُشغَّل — لا بخطأ يُقرأ عطلاً في المنتَج.
+See [DEPLOY.md](DEPLOY.md) — `deploy.sh` is the only deployment path.
 
 ## Tenant isolation
 
-Every tenant-scoped table (starting with `Account`) is protected on two
-independent layers — see [tenant-scope.extension.ts](apps/api/src/common/tenant/tenant-scope.extension.ts)
-and the RLS policies appended to the initial migration:
+Every tenant-scoped table is protected on two independent layers — see
+[tenant-scope.extension.ts](apps/api/src/common/tenant/tenant-scope.extension.ts)
+and the RLS policies in the migrations:
 
 1. **Application**: a Prisma Client extension auto-injects `companyId` into
    every query for tenant-scoped models. All tenant data access goes through
