@@ -24,7 +24,8 @@
       "Bash(npm install *)",
       "PowerShell(Get-Volume | Select-Object DriveLetter, FileSystemLabel, @{N='FreeGB';E={[math]::Round\\($_.SizeRemaining/1GB,2\\)}}, @{N='SizeGB';E={[math]::Round\\($_.Size/1GB,2\\)}})",
       "PowerShell(robocopy \"C:\\\\Users\\\\mnqad\\\\Desktop\\\\mad-app\" \"D:\\\\mad-app\" /E /COPYALL /XJ /R:2 /W:1)",
-      "PowerShell(robocopy \"C:\\\\Users\\\\mnqad\\\\Desktop\\\\mad-app\" \"D:\\\\mad-app\" /E /XJ /R:2 /W:1)"
+      "PowerShell(robocopy \"C:\\\\Users\\\\mnqad\\\\Desktop\\\\mad-app\" \"D:\\\\mad-app\" /E /XJ /R:2 /W:1)",
+      "Bash(ssh root@test-api.rikzapp.com:*)"
     ]
   }
 }
