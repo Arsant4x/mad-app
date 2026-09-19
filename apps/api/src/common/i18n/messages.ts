@@ -334,6 +334,17 @@ export const MSG = {
   purchase_frozen_by_landed_costs: 'purchases.frozen_by_landed_costs',
   goods_receipt_void_with_landed_cost: 'goodsReceipts.void_with_landed_cost',
 
+  // ٣٠ الأرصدةُ الافتتاحية بالطبقات (ق-١١٧٧ · ق-١١٧٩)
+  stock_opening_not_found: 'stockOpenings.not_found',
+  stock_opening_lines_required: 'stockOpenings.lines_required',
+  stock_opening_date_mismatch: 'stockOpenings.date_mismatch',
+  stock_opening_acquired_after_opening: 'stockOpenings.acquired_after_opening',
+  stock_opening_after_movement: 'stockOpenings.after_movement',
+  stock_opening_line_not_found: 'stockOpenings.line_not_found',
+  stock_opening_line_voided: 'stockOpenings.line_voided',
+  stock_opening_line_consumed: 'stockOpenings.line_consumed',
+  account_opening_inventory_via_stock: 'accounts.opening_inventory_via_stock',
+
   // returns (SPEC §30 — موجة أ)
   return_line_not_original: 'returns.line_not_original',
   return_exceeds_sold: 'returns.exceeds_sold',
@@ -889,6 +900,17 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.goods_receipt_migration_missing]: { ar: 'هجرة الاستلام المستقلّ غير مطبَّقة — المطابقة لا تقيس قاعدةً بلا وسيط', en: 'The goods-receipt migration is not applied — the reconciliation cannot measure a database without the clearing account' },
   [MSG.receipt_clearing_account_type_conflict]: { ar: 'حساب وسيط الاستلام غُيِّر نوعه في الدليل — أعده إلى «التزام» أو راجع المحاسب', en: 'The receipt clearing account was reclassified in the chart — restore it to a liability or consult the accountant' },
   [MSG.receipt_clearing_code_range_full]: { ar: 'لا رمز حرّ لوسيط الاستلام في النطاق 2101–2199', en: 'No free code for the receipt clearing account in the 2101–2199 range' },
+
+  // ٣٠ الأرصدةُ الافتتاحية بالطبقات (ق-١١٧٧ · ق-١١٧٩)
+  [MSG.stock_opening_not_found]: { ar: 'إعلان الرصيد الافتتاحي غير موجود', en: 'Opening stock declaration not found' },
+  [MSG.stock_opening_lines_required]: { ar: 'إعلان الرصيد الافتتاحي يحتاج سطراً واحداً على الأقل', en: 'An opening stock declaration needs at least one line' },
+  [MSG.stock_opening_date_mismatch]: { ar: 'تاريخ الافتتاح واحدٌ للمنشأة: أُعلن من قبل على {declared} ولا يُعلَن ثانيةً على {requested} — أضف السطور بالتاريخ المعلَن', en: 'The opening date is one per company: it was declared as {declared} and cannot be declared again as {requested} — add the lines under the declared date' },
+  [MSG.stock_opening_acquired_after_opening]: { ar: 'تاريخ اقتناء السطر ({acquired}) يأتي بعد تاريخ الافتتاح ({opening}) — ما اقتُني بعد الافتتاح يدخل استلاماً أو حركةً لا رصيداً افتتاحياً', en: 'The line acquisition date ({acquired}) is after the opening date ({opening}) — stock acquired after the opening enters as a receipt or a movement, not as opening stock' },
+  [MSG.stock_opening_after_movement]: { ar: 'للصنف حركة مخزون بتاريخ {moved} قبل تاريخ الافتتاح ({opening}) — الافتتاح يسبق كل حركة، فأعلن بتاريخ افتتاحٍ لا يسبقها أو أدخلها حركةً', en: 'The product has a stock movement dated {moved}, before the opening date ({opening}) — the opening precedes every movement; declare an opening date not preceded by it, or enter it as a movement' },
+  [MSG.stock_opening_line_not_found]: { ar: 'سطر الإعلان الافتتاحي غير موجود', en: 'Opening stock line not found' },
+  [MSG.stock_opening_line_voided]: { ar: 'سطر الإعلان الافتتاحي مُلغى من قبل', en: 'This opening stock line has already been voided' },
+  [MSG.stock_opening_line_consumed]: { ar: 'طبقة هذا السطر الافتتاحي استُهلك منها — لا يُلغى، والتصحيح بسطر افتتاحٍ جديد أو تسوية', en: 'The cost layer of this opening line has been consumed — it cannot be voided; correct with a new opening line or an adjustment' },
+  [MSG.account_opening_inventory_via_stock]: { ar: 'الرصيد الافتتاحي لحساب المخزون ({code}) يُعلَن من المخزون بطبقاته (إعلان الرصيد الافتتاحي) لا من شاشة الحسابات — وإلا ازدوج المصدران', en: 'The opening balance of the inventory account ({code}) is declared from inventory by its layers (opening stock declaration), not from the accounts screen — otherwise the two sources double-count' },
   [MSG.supplier_note_line_not_received]: { ar: 'إشعار المورّد {no} يشير إلى سطر لم يُستلم كاملاً بعد — يُسجَّل الاستلام أولاً ثم الإشعار', en: 'Supplier note {no} references a line not fully received yet — record the receipt first, then the note' },
   [MSG.supplier_note_line_multi_receipt]: { ar: 'إشعار المورّد {no} يشير إلى سطر استُلم على أكثر من استلام — لا يُحسم على طبقة واحدة، ويُعمَّم حين يُطلب', en: 'Supplier note {no} references a line received across several receipts — it cannot be settled on a single layer yet' },
   [MSG.credit_note_immutable]: { ar: 'الإشعار صدر فلا يُعدَّل ولا يُحذف — صحّحه بإشعار مقابل: إشعار مدين لدائن زائد، وإشعار دائن لمدين زائد', en: 'This note has been issued and can be neither edited nor deleted — correct it with the opposite note: a debit note for an excess credit note, a credit note for an excess debit note' },
