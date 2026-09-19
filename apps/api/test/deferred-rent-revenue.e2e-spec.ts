@@ -39,9 +39,12 @@ interface E2eInstallment {
   serviceEnd: string;
 }
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const monthStart = (d: Date, offsetMonths: number) => new Date(d.getFullYear(), d.getMonth() + offsetMonths, 1);
-const monthEndOf = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+// الأيامُ على هيئة `@db.Date` (`UTC`) — كما يقرؤها الخادمُ بيومه المعلَن (`ق-١١٩٠`): كانت تُبنى من منطقة العملية،
+// فبين `21:00` و`24:00 UTC` على جهازٍ بتوقيت الرياض كان «اليوم» هنا غدَ الخادم، فتُؤرَّخ الدفعةُ في المستقبل
+// ولا تُنشئ نقطةَ ضريبة — سبعُ مراحل سقطت في `test:clean` لهذا وحدَه (2026-09-20).
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const monthStart = (d: Date, offsetMonths: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offsetMonths, 1));
+const monthEndOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
 
 describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاستحقاق ويخرج بالخدمة (e2e)', () => {
   let app: INestApplication;
@@ -73,7 +76,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     const unit = (
       await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `DR-${tag}`, type: 'سكني', rentMonthly: 1000 }).expect(201)
     ).body;
-    const end = new Date(start.getFullYear() + 1, start.getMonth(), 0);
+    const end = new Date(Date.UTC(start.getUTCFullYear() + 1, start.getUTCMonth(), 0));
     const contract = (
       await auth(http().post('/contracts'))
         .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId: await createTenantCustomer(app, token, `مستأجر التأجيل ${tag}`), value: 12000, cycle: 'monthly', start: iso(start), end: iso(end) })
@@ -105,7 +108,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     // تُقرأ رصيداً بلا سببٍ ظاهر. وفتراتُ عقودها تنتهي بعد عامٍ ونيّف، فتشغيلٌ
     // بعدها يُخرجها كلَّها إيراداً. **وثلاثُ مجموعاتٍ سقطت مرّةً لحالةٍ
     // متراكمة تركها ملفٌّ في هذه المنشأة نفسِها.**
-    const far = new Date(today.getFullYear() + 2, 0, 1);
+    const far = new Date(Date.UTC(today.getUTCFullYear() + 2, 0, 1));
     for (const id of created) await recognition.runForContract(companyId, id, far);
     await app.close();
   }, 120000);
@@ -286,7 +289,7 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     // مجسٌّ للمجسّ: صفرُ قيودٍ يعني أن البحثَ أخفق لا أن الوصف غاب.
     expect(conversion.length).toBeGreaterThan(0);
     // ⭐ والحدُّ منصوصٌ حيث يُقرأ: «كاملاً» تقول إن الشهرَ الجاري ينتظر اكتماله.
-    const label = `${asOf.getFullYear()}-${String(asOf.getMonth() + 1).padStart(2, '0')}`;
+    const label = asOf.toISOString().slice(0, 7);
     expect(conversion[0].memo).toContain(`حصّة شهر ${label} كاملاً`);
     expect(conversion[0].memo).toContain(contract.no);
   }, 60000);

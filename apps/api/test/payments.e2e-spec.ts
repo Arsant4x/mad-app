@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { dayStartOf } from '../src/common/wall-clock.util';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
@@ -324,7 +325,9 @@ describe('Customer payments + allocations (e2e)', () => {
       const detail = await invoiceOf(inv.id);
       const allocated = Math.round((allocatedByInvoice.get(inv.id) ?? 0) * 100) / 100;
       const total = Math.round(Number(detail.total) * 100) / 100;
-      const computed = allocated >= total - 0.005 ? 'PAID' : allocated > 0.005 ? 'PARTIAL' : new Date(detail.dueDate) < new Date(new Date().toDateString()) ? 'OVERDUE' : 'DUE';
+      // «متأخّرة» بيومِ الخادم المعلَن (`dayStartOf` · ق-١١٩٠) لا بمنتصف الليل المحلّي (`new Date(d.toDateString())`):
+      // بين `21:00` و`24:00 UTC` على جهازٍ بتوقيت الرياض كان الحسابُ هنا يسبق الخادمَ بيوم، فسقط هذا التوكيدُ في `test:clean`.
+      const computed = allocated >= total - 0.005 ? 'PAID' : allocated > 0.005 ? 'PARTIAL' : new Date(detail.dueDate) < dayStartOf(new Date()) ? 'OVERDUE' : 'DUE';
       expect({ invoice: inv.no, status: detail.status }).toEqual({ invoice: inv.no, status: computed });
     }
   }, 120000);

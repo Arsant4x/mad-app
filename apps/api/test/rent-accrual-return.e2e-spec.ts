@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { dayEndOf } from '../src/common/wall-clock.util';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
 import { OUTPUT_VAT_ACCOUNT } from '../src/journal/auto-posting.util';
 import { createTenantCustomer } from './tenant-customer';
@@ -63,11 +64,14 @@ interface Declaration {
   rent: RentSection;
 }
 
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const quarterOf = (d: Date) => ({ year: d.getFullYear(), quarter: Math.floor(d.getMonth() / 3) + 1 });
-const quarterStart = (d: Date) => new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1);
-const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
-const dayBefore = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+// الأيامُ على هيئة `@db.Date` (`UTC`) — كما يقرؤها الخادمُ بيومه المعلَن (`ق-١١٩٠`): كانت تُبنى من منطقة العملية،
+// فبين `21:00` و`24:00 UTC` على جهازٍ بتوقيت الرياض كان «اليوم» هنا غدَ الخادم — فدفعةٌ «اليوم» تُؤرَّخ في المستقبل
+// ولا تكون نقطةَ قبضٍ (②) ولا تدخل الأعمارَ (⑧)؛ سقطتا في `test:clean` لهذا وحدَه (2026-09-20).
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const quarterOf = (d: Date) => ({ year: d.getUTCFullYear(), quarter: Math.floor(d.getUTCMonth() / 3) + 1 });
+const quarterStart = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1));
+const addMonths = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()));
+const dayBefore = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - 1));
 
 describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ معاً — استحقاقُ الإيجار (e2e)', () => {
   let app: INestApplication;
@@ -81,9 +85,9 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
   const http = () => request(app.getHttpServer());
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
 
-  // آخرُ لحظةٍ من اليوم المحلّي: قسطٌ حلّ اليوم (منتصفَ ليل UTC) يُعدّ حالّاً كما يعدّه الخادم.
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  // آخرُ لحظةٍ من اليوم المعلَن (يومُ UTC بلا إزاحة — `dayEndOf` · ق-١١٩٠): قسطٌ حلّ اليوم (منتصفَ ليل UTC)
+  // يُعدّ حالّاً كما يعدّه الخادم — لا بمنطقة العملية.
+  const today = dayEndOf(new Date());
   const thisQuarter = quarterOf(today);
   const thisQuarterStart = quarterStart(today);
   const nextQuarterStart = addMonths(thisQuarterStart, 3);
