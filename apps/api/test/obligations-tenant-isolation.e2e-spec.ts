@@ -85,11 +85,13 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
 
     expect(declaration.body.from).toBe('2026-07-01');
     expect(declaration.body.to).toBe('2026-09-30');
-    expect(declaration.body.salesStandard - before.body.salesStandard).toBeCloseTo(1000, 2);
-    expect(declaration.body.salesStandardVat - before.body.salesStandardVat).toBeCloseTo(150, 2);
-    expect(declaration.body.purchasesStandard - before.body.purchasesStandard).toBeCloseTo(400, 2);
-    expect(declaration.body.purchasesStandardVat - before.body.purchasesStandardVat).toBeCloseTo(60, 2);
-    expect(declaration.body.netVat).toBeCloseTo(declaration.body.salesStandardVat - declaration.body.purchasesStandardVat);
+    // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`): الشكلُ يُثبَت حرفاً، والفروقُ تُقرأ رقماً.
+    expect(declaration.body.salesStandard).toMatch(/^-?\d+\.\d{2}$/);
+    expect(Number(declaration.body.salesStandard) - Number(before.body.salesStandard)).toBeCloseTo(1000, 2);
+    expect(Number(declaration.body.salesStandardVat) - Number(before.body.salesStandardVat)).toBeCloseTo(150, 2);
+    expect(Number(declaration.body.purchasesStandard) - Number(before.body.purchasesStandard)).toBeCloseTo(400, 2);
+    expect(Number(declaration.body.purchasesStandardVat) - Number(before.body.purchasesStandardVat)).toBeCloseTo(60, 2);
+    expect(Number(declaration.body.netVat)).toBeCloseTo(Number(declaration.body.salesStandardVat) - Number(declaration.body.purchasesStandardVat));
   });
 
   it("gives company B its own separate seeded checklist and blocks it from toggling company A's items", async () => {

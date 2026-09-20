@@ -146,21 +146,22 @@ describe('⑧ فئةُ ضريبة الصنف — من البطاقة إلى ال
     const now = new Date();
     const quarter = Math.floor(now.getUTCMonth() / 3) + 1;
     const d = await auth(http().get('/obligations/vat-declaration')).query({ year: now.getUTCFullYear(), quarter }).expect(200);
-    expect(d.body.boxes['1']).toEqual({ net: 400, vat: 60 }); // 200 قهوة + 200 استشارة
-    expect(d.body.boxes['3']).toEqual({ net: 120 }); // الدواء
-    expect(d.body.boxes['4']).toEqual({ net: 0 });
-    expect(d.body.boxes['5']).toEqual({ net: 50 }); // المعفى
-    expect(d.body.boxes['2']).toEqual({ net: 0, vat: 0, supported: false });
-    expect(d.body.salesCitizens).toBe(0);
+    // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`) — الحقولُ تُقارَن حرفاً لا بعد تحويل، فالشكلُ جزءٌ من العقد.
+    expect(d.body.boxes['1']).toEqual({ net: '400.00', vat: '60.00' }); // 200 قهوة + 200 استشارة
+    expect(d.body.boxes['3']).toEqual({ net: '120.00' }); // الدواء
+    expect(d.body.boxes['4']).toEqual({ net: '0.00' });
+    expect(d.body.boxes['5']).toEqual({ net: '50.00' }); // المعفى
+    expect(d.body.boxes['2']).toEqual({ net: '0.00', vat: '0.00', supported: false });
+    expect(d.body.salesCitizens).toBe('0.00');
     expect(String(d.body.salesCitizensNote)).toContain('تتبع هويّةَ المشتري');
-    expect(d.body.salesOutOfScope).toEqual({ lineCount: 1, net: 10 });
-    expect(d.body.legacyZeroLines).toEqual({ lineCount: 0, net: 0 });
-    expect(d.body.legacyStandardLines).toEqual({ lineCount: 0, net: 0 });
-    expect(d.body.salesStandard).toBe(400);
-    expect(d.body.salesStandardVat).toBe(60);
-    expect(d.body.salesExempt).toBe(50);
-    expect(d.body.totalSales).toBe(570);
-    expect(d.body.boxes['6']).toEqual({ net: 570 });
+    expect(d.body.salesOutOfScope).toEqual({ lineCount: 1, net: '10.00' });
+    expect(d.body.legacyZeroLines).toEqual({ lineCount: 0, net: '0.00' });
+    expect(d.body.legacyStandardLines).toEqual({ lineCount: 0, net: '0.00' });
+    expect(d.body.salesStandard).toBe('400.00');
+    expect(d.body.salesStandardVat).toBe('60.00');
+    expect(d.body.salesExempt).toBe('50.00');
+    expect(d.body.totalSales).toBe('570.00');
+    expect(d.body.boxes['6']).toEqual({ net: '570.00' });
   });
 
   it('⑥ قيدُ CHECK يحبس القيمةَ القديمة على ما سبق الهجرة — بمسبارٍ يُقبل فيه صفٌّ قديم ويُرفض الجديد', async () => {

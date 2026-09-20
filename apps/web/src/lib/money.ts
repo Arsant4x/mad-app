@@ -28,3 +28,35 @@ export const round2 = (value: number): number => roundMoney(value, 2);
 export function formatMoney(value: number, scale = 2): string {
   return roundMoney(value, scale).toFixed(scale);
 }
+
+// ─── ② المالُ نصّاً بدقّة صنفه (`ق-١٢٣٥`) — مرآةُ الأنواع وقراءتُها ─────────────────────────────
+
+/**
+ * **نصٌّ عشريّ بدقّة صنفه يأتي من الخادم** — `"1234.50"` للمال · `"0.125"` للكمّية · `"3.750000"` لسعر الصرف
+ * · `"15.00"` للنسبة (`apps/api/src/common/money/text.ts`). الأسماءُ أسماءُ أصنافٍ لا شكل: الحارسُ الشجريّ
+ * (`moneyTextGuard.test.ts`) يقرأ **الاسمَ المُعلَن على الحقل** فيُسقط أيَّ `+` أو مقارنةٍ عليه — لأن
+ * `"100.00" + "50.00"` وصلٌ لا جمع، و`"9.00" > "10.00"` مقارنةُ حروف. فالحقلُ **يُقرأ بـ`num()` قبل أي حساب**،
+ * ويُعرض بـ`fmt()` كما هو (تقبل النصّ).
+ */
+export type MoneyText = string;
+export type QtyText = string;
+export type RateText = string;
+export type PercentText = string;
+
+/** يقرأ النصَّ العشريَّ رقماً — والغائبُ (`null`) والفارغُ والفاسدُ تعود `null` لا صفراً: الصفرُ قرارُ المستدعي. */
+export function num(text: MoneyText | QtyText | RateText | PercentText | number | null | undefined): number | null {
+  if (text === null || text === undefined) return null;
+  if (typeof text === 'number') return Number.isFinite(text) ? text : null;
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** كالسابقة والغائبُ صفر — للمجاميع والمقارنات التي صفرُها صحيح. */
+export const num0 = (text: MoneyText | QtyText | RateText | PercentText | number | null | undefined): number => num(text) ?? 0;
+
+/** مجموعُ نصوصٍ مالية مدوَّراً بالسياسة — فلا يتراكم خطأُ الجمع الثنائي على صفوفٍ كثيرة. */
+export function sumMoney(values: readonly (MoneyText | number | null | undefined)[]): number {
+  return round2(values.reduce<number>((s, v) => s + num0(v), 0));
+}

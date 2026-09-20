@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVatDeclaration, markVatFiled, unmarkVatFiled, type VatDeclaration } from '../../api/obligations';
 import { dfmt, fmt } from '../../lib/format';
+import { num0, sumMoney } from '../../lib/money';
 
 const QUARTER_OPTIONS = [
   { value: 1, label: 'الربع الأول (يناير - مارس)' },
@@ -44,6 +45,8 @@ export function VatDeclarationPage() {
   }
 
   const years = useMemo(() => [currentYear - 1, currentYear, currentYear + 1], [currentYear]);
+  // ② الصافي نصٌّ بخانتين من الخادم — يُقرأ رقماً مرّةً واحدة للإشارة والمقدار (`ق-١٢٣٥`).
+  const netVat = num0(declaration?.netVat);
 
   return (
     <div>
@@ -110,11 +113,12 @@ export function VatDeclarationPage() {
                   <td className="num">{fmt(declaration.salesStandardVat)}</td>
                 </tr>
                 {/* ⭐ الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته (ق-٩١٧ · ق-٩١٨) — ويُفصَل هنا ليُقرأ. */}
-                {(declaration.rent.standard !== 0 || declaration.rent.legacyStandard !== 0) && (
+                {/* ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`): تُعرض كما هي، وتُجمع بـ`sumMoney` لا بـ`+` (وصلٌ لا جمع). */}
+                {(num0(declaration.rent.standard) !== 0 || num0(declaration.rent.legacyStandard) !== 0) && (
                   <tr>
                     <td style={{ paddingRight: 36, color: 'var(--muted)' }}>منها إيجاراتٌ تجارية مستحقّة (من الدفتر {fmt(declaration.rent.standard)} · وما سبق البناء {fmt(declaration.rent.legacyStandard)})</td>
-                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.rent.standard + declaration.rent.legacyStandard)}</td>
-                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.rent.standardVat + declaration.rent.legacyStandardVat)}</td>
+                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(sumMoney([declaration.rent.standard, declaration.rent.legacyStandard]))}</td>
+                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(sumMoney([declaration.rent.standardVat, declaration.rent.legacyStandardVat]))}</td>
                   </tr>
                 )}
                 {declaration.legacyStandardLines.lineCount > 0 && (
@@ -182,10 +186,10 @@ export function VatDeclarationPage() {
                   <td className="num">{fmt(declaration.totalPurchases)}</td>
                   <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
-                <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: declaration.netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
-                  <td>{declaration.netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
+                <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
+                  <td>{netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
                   <td></td>
-                  <td className="num">{fmt(Math.abs(declaration.netVat))}</td>
+                  <td className="num">{fmt(Math.abs(netVat))}</td>
                 </tr>
               </tbody>
             </table>
@@ -207,7 +211,7 @@ export function VatDeclarationPage() {
             {declaration.rent.legacyCount > 0 && (
               <p className="hint" style={{ marginTop: 10 }}>
                 <b>{declaration.rent.legacyCount}</b> قسطاً/دفعةً سبقت بناءَ الاستحقاق: <b>في الإقرار لا في الدفتر</b> — {declaration.rent.legacyNote}
-                {declaration.rent.legacyExempt > 0 ? ` (معفى: ${fmt(declaration.rent.legacyExempt)})` : ''}
+                {num0(declaration.rent.legacyExempt) > 0 ? ` (معفى: ${fmt(declaration.rent.legacyExempt)})` : ''}
               </p>
             )}
             {declaration.rent.unclassifiedCount > 0 && (

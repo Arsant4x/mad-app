@@ -98,8 +98,23 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     return Number(accounts.body.find((a: { code: string }) => a.code === code)?.balance ?? 0);
   }
 
+  /**
+   * ② المالُ نصّاً بخانتين (`ق-١٢٣٥`): الحقولُ تصل نصّاً (`"1500.00"`) **وتُقرأ رقماً هنا مرّةً واحدة** فتبقى
+   * توكيداتُ الفروق حسابيةً كما هي — والشكلُ يُثبَت حرفاً على حقلٍ واحدٍ في كل قراءة.
+   */
+  const MONEY_FIELDS = ['salesStandard', 'salesStandardVat', 'salesExempt', 'netVat'] as const;
+  const RENT_MONEY_FIELDS = ['standard', 'standardVat', 'exempt', 'managedExcluded', 'legacyStandard', 'legacyStandardVat', 'legacyExempt'] as const;
+  function numericDeclaration(body: Record<string, unknown>): Declaration {
+    expect(String(body.netVat)).toMatch(/^-?\d+\.\d{2}$/);
+    const rent = body.rent as Record<string, unknown>;
+    const out = { ...body } as unknown as Declaration;
+    for (const f of MONEY_FIELDS) out[f] = Number(body[f]);
+    out.rent = { ...(rent as unknown as RentSection) };
+    for (const f of RENT_MONEY_FIELDS) out.rent[f] = Number(rent[f]);
+    return out;
+  }
   async function declaration(q: { year: number; quarter: number }): Promise<Declaration> {
-    return (await auth(http().get('/obligations/vat-declaration')).query(q).expect(200)).body as Declaration;
+    return numericDeclaration((await auth(http().get('/obligations/vat-declaration')).query(q).expect(200)).body);
   }
 
   async function makeProperty(ownership: 'owned' | 'leased' | 'managed') {
@@ -383,14 +398,16 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     const filedRes = await auth(http().post('/obligations/vat-declaration/filed')).send(thisQuarter).expect(201);
     expect(filedRes.body.filedAt).toBeTruthy();
     const marked = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as Declaration & {
-      filed: { filedAt: string; netVat: number } | null;
+      filed: { filedAt: string; netVat: string } | null;
       changedSinceFiled: boolean;
       filedNote: string | null;
     };
     expect(marked.filed).not.toBeNull();
     expect(marked.changedSinceFiled).toBe(false);
     expect(marked.filedNote).toBeNull();
-    expect(marked.filed!.netVat).toBeCloseTo(marked.netVat, 2);
+    // ② صافي «قُدِّم» نصٌّ بخانتين كصافي الإقرار — يتطابقان حرفاً.
+    expect(marked.filed!.netVat).toMatch(/^-?\d+\.\d{2}$/);
+    expect(marked.filed!.netVat).toBe(String(marked.netVat));
 
     // ثم يتغيّر الربعُ بعقدٍ حلّ فيه استحقاق — فتُعرض رسالةُ التصحيح بنصّها.
     await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
