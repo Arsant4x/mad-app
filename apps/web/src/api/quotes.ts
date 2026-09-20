@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
+import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
 
 export type QuoteStatus = 'DRAFT' | 'SENT' | 'CONVERTED';
 /** EXPIRED مشتقة قراءةً من validUntil — لا تُخزَّن. */
@@ -10,7 +11,11 @@ export interface QuoteLine {
   description: string;
   quantity: string;
   unitPrice: string;
+  /** ⑧ مشتقّةٌ من الفئة — للقراءة. */
   taxRate: string;
+  taxCategory: TaxCategory;
+  taxExemptionReasonCode: string | null;
+  taxExemptionReason: string | null;
 }
 
 export interface Quote {
@@ -38,7 +43,10 @@ export interface QuoteLineInput {
   description: string;
   quantity: number;
   unitPrice: number;
-  taxRate: number;
+  /** ⑧ الفئةُ والسبب — كما في بند الفاتورة؛ والنسبةُ يشتقّها الخادم. */
+  taxCategory: DeclarableTaxCategory;
+  taxExemptionReasonCode?: string;
+  taxExemptionReason?: string;
 }
 
 export interface QuoteInput {

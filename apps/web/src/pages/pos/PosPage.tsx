@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listProducts, type Product } from '../../api/products';
 import { listBranches, type Branch } from '../../api/branches';
-import { STANDARD_VAT_RATE } from '../../lib/vat';
+import { rateForCategory } from '../../lib/vat';
 import { BranchPicker } from '../../components/BranchPicker';
 import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
@@ -126,8 +126,10 @@ export function PosPage() {
 
   const totals = useMemo(() => {
     const subtotal = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity, 0);
-    // ⑧ معاينةٌ بالنسبة الأساسية من المصدر الواحد؛ والخادمُ يشتقّ نسبةَ كلِّ سطرٍ من فئة صنفه ويعيد المجاميع المعتمَدة.
-    const tax = (subtotal * STANDARD_VAT_RATE) / 100;
+    // ⑧ الضريبةُ من فئة كلِّ صنف (`rateForCategory`) لا نسبةً واحدة على السلة — فسلةٌ فيها دواءٌ بنسبة الصفر لا
+    // تُحمَّل ضريبتَه؛ والخادمُ يشتقّ النسبةَ نفسَها من الفئة ويعيد المجاميع المعتمَدة. ⚠️ ورمزُ الإيصال المؤقّت
+    // أوفلاين يُبنى من هذا الرقم (ق-١٨٨) فيلزم أن يطابق ما سيحسبه الخادم للسلة نفسِها.
+    const tax = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity * (rateForCategory(l.product.taxCategory) / 100), 0);
     return { subtotal, tax, total: subtotal + tax };
   }, [cart]);
 

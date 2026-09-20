@@ -1,8 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
-import { EXEMPTION_REASONS, exemptionReasonByCode, OUT_OF_SCOPE_REASON_CODE } from './exemption-reasons';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { EXEMPTION_REASONS, exemptionReasonByCode, OUT_OF_SCOPE_REASON_CODE, OUT_OF_SCOPE_REASON_MAX, OUT_OF_SCOPE_REASON_MIN } from './exemption-reasons';
 import { lineTaxFromStored, rateForCategory, reasonCountByCategory, resolveDeclaredLineTax, resolveLineTax, validateDeclaredTax } from './line-tax.util';
 import { STANDARD_VAT_RATE } from './standard-rate';
 import { MSG } from '../i18n/messages';
+import { readsDeclaredStrings } from '../source-scan.util';
+
+// مرآةُ الواجهة أدناه تقرأ **بياناتٍ معلَنة داخل السلاسل** (رموزٌ ونصوصٌ) — فالنصُّ هو بياناتُها (`ق-٣٧٥`).
+readsDeclaredStrings();
 
 /**
  * ⑧ حارسُ قائمة الهيئة والفئة المشتقّة (`ق-١٢١٢` · `ق-١٢٢٢` · `ق-١٢٢٥`).
@@ -102,5 +108,28 @@ describe('⑧ الفئةُ تُعلَن والنسبةُ تُشتقّ', () => {
   it('النسخُ من سطرٍ مخزَّن: القديمُ بالأساسية يُنسخ كما هو، والقديمُ بصفرٍ لا يُنسخ إلى صفٍّ جديد', () => {
     expect(lineTaxFromStored({ taxCategory: 'LEGACY_STANDARD', taxExemptionReasonCode: null, taxExemptionReason: null })).toEqual({ taxCategory: 'LEGACY_STANDARD', taxExemptionReasonCode: null, taxExemptionReason: null, taxRate: STANDARD_VAT_RATE });
     expect(bad(() => lineTaxFromStored({ taxCategory: 'LEGACY_ZERO', taxExemptionReasonCode: null, taxExemptionReason: null }))).toBe(MSG.line_legacy_zero_needs_category);
+  });
+});
+
+/**
+ * ⑧ مرآةُ الواجهة (`apps/web/src/lib/vat.ts`): القائمةُ منسوخةٌ هناك بيدٍ بلا رابطٍ آليّ — فتُطابَق هنا رمزاً
+ * وفئةً ونصّاً وقابليةً، وحدّا نصّ «خارج النطاق». والقراءةُ نصّية (لا يُستورد ملفُّ الواجهة في jest الخادم)
+ * **فتُثبَت أولاً أنها رأت القائمةَ كاملة** (`16` صفّاً) قبل أن تُصدَّق المطابقة (`§8.7` — الحارسُ يقرأ شيئاً).
+ */
+describe('⑧ نسخةُ الواجهة تطابق قائمةَ الخادم', () => {
+  const WEB_VAT = join(__dirname, '..', '..', '..', '..', 'web', 'src', 'lib', 'vat.ts');
+  const source = readFileSync(WEB_VAT, 'utf8');
+
+  it('الرموزُ والفئاتُ والنصوصُ والقابليةُ — صفّاً بصفّ وبالترتيب نفسِه', () => {
+    const rowPattern = /\{ code: (?:'([^']+)'|(OUT_OF_SCOPE_REASON_CODE)), category: '([ZEO])', ar: '([^']*)', selectable: (true|false) \}/g;
+    const rows = [...source.matchAll(rowPattern)].map((m) => ({ code: m[2] ? OUT_OF_SCOPE_REASON_CODE : m[1], category: m[3], ar: m[4], selectable: m[5] === 'true' }));
+    expect(rows).toHaveLength(EXEMPTION_REASONS.length);
+    expect(rows).toEqual(EXEMPTION_REASONS.map((r) => ({ code: r.code, category: r.category, ar: r.ar, selectable: r.selectable })));
+  });
+
+  it('رمزُ خارج النطاق وحدّا نصّه', () => {
+    expect(source).toContain(`export const OUT_OF_SCOPE_REASON_CODE = '${OUT_OF_SCOPE_REASON_CODE}';`);
+    expect(source).toContain(`export const OUT_OF_SCOPE_REASON_MIN = ${OUT_OF_SCOPE_REASON_MIN};`);
+    expect(source).toContain(`export const OUT_OF_SCOPE_REASON_MAX = ${OUT_OF_SCOPE_REASON_MAX};`);
   });
 });

@@ -168,7 +168,7 @@ export function InvoicesPage() {
    * غيابه**، فيُقرأ النظامُ عابثاً.
    */
   async function handleSave(
-    data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: { description: string; quantity: number; unitPrice: number; taxRate: number }[] },
+    data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[] },
     creditOverride = false,
   ) {
     // An empty picker means company-wide — send it as omitted, not as ''.

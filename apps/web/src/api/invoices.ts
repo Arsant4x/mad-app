@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Customer } from './customers';
+import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
 
 export type { Customer } from './customers';
 
@@ -8,7 +9,12 @@ export interface InvoiceLine {
   description: string;
   quantity: string;
   unitPrice: string;
+  /** ⑧ مشتقّةٌ من الفئة — للقراءة. */
   taxRate: string;
+  /** ⑧ الفئةُ والسبب كما نُسخا لحظةَ البيع (من الصنف أو من إعلان السطر). */
+  taxCategory: TaxCategory;
+  taxExemptionReasonCode: string | null;
+  taxExemptionReason: string | null;
 }
 
 /**
@@ -84,7 +90,10 @@ export interface InvoiceLineInput {
   description: string;
   quantity: number;
   unitPrice: number;
-  taxRate: number;
+  /** ⑧ الفئةُ والسبب لسطرٍ بلا صنف — يُلزَم بهما (`ق-١٢١١`/③)؛ والنسبةُ يشتقّها الخادم ولا تُرسَل. */
+  taxCategory: DeclarableTaxCategory;
+  taxExemptionReasonCode?: string;
+  taxExemptionReason?: string;
 }
 
 export interface CreateInvoiceInput {

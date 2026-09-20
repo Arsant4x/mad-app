@@ -89,60 +89,119 @@ export function VatDeclarationPage() {
             <table>
               <tbody>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>المبيعات</td>
-                  <td></td>
+                  <td>المبيعات — خاناتُ نموذج الهيئة</td>
+                  <td className="num" style={{ color: 'var(--muted)', fontWeight: 400 }}>
+                    الصافي
+                  </td>
+                  <td className="num" style={{ color: 'var(--muted)', fontWeight: 400 }}>
+                    الضريبة
+                  </td>
                 </tr>
+                {/* ⑧ الخاناتُ من فئات السطور (ق-١٢١١/⑤): 1 الأساسية · 2 المواطنون (معطَّلة) · 3 الصفر الداخلي · 4 الصادرات · 5 المعفاة · 6 المجموع. */}
                 <tr>
                   <td style={{ paddingRight: 20 }}>
-                    إجمالي المبيعات الخاضعة ({declaration.invoiceCount} فاتورة
+                    <span className="num">1</span> — المبيعات الخاضعة للنسبة الأساسية ({declaration.invoiceCount} فاتورة
                     {declaration.rent.accrualCount + declaration.rent.legacyCount > 0
                       ? ` · ${declaration.rent.accrualCount + declaration.rent.legacyCount} استحقاق إيجار`
                       : ''}
                     )
                   </td>
                   <td className="num">{fmt(declaration.salesStandard)}</td>
+                  <td className="num">{fmt(declaration.salesStandardVat)}</td>
                 </tr>
                 {/* ⭐ الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته (ق-٩١٧ · ق-٩١٨) — ويُفصَل هنا ليُقرأ. */}
                 {(declaration.rent.standard !== 0 || declaration.rent.legacyStandard !== 0) && (
                   <tr>
                     <td style={{ paddingRight: 36, color: 'var(--muted)' }}>منها إيجاراتٌ تجارية مستحقّة (من الدفتر {fmt(declaration.rent.standard)} · وما سبق البناء {fmt(declaration.rent.legacyStandard)})</td>
                     <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.rent.standard + declaration.rent.legacyStandard)}</td>
+                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.rent.standardVat + declaration.rent.legacyStandardVat)}</td>
                   </tr>
                 )}
-                <tr>
-                  <td style={{ paddingRight: 20 }}>ضريبة المبيعات المستحقة</td>
-                  <td className="num">{fmt(declaration.salesStandardVat)}</td>
+                {declaration.legacyStandardLines.lineCount > 0 && (
+                  <tr>
+                    <td style={{ paddingRight: 36, color: 'var(--muted)' }}>
+                      منها {declaration.legacyStandardLines.lineCount} سطراً على صنفٍ لم تُعلَن فئتُه — تُرَنّ بالأساسية كما كانت حتى تُعلَن من بطاقة الصنف
+                    </td>
+                    <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.legacyStandardLines.net)}</td>
+                    <td></td>
+                  </tr>
+                )}
+                {/* الخانةُ 2 معروضةٌ ومعطَّلة بسببها (ق-١٢٢٢/③): تابعةٌ للمشتري لا الصنف — صفرٌ معلَن لا يُدمَج في 3. */}
+                <tr style={{ color: 'var(--muted)' }} title={declaration.salesCitizensNote}>
+                  <td style={{ paddingRight: 20 }}>
+                    <span className="num">2</span> — المبيعات للمواطنين (الخدمات الصحية الخاصة / التعليم الأهلي الخاص) <span className="badge draft">غير مدعومة — تتبع المشتري</span>
+                  </td>
+                  <td className="num">{fmt(declaration.salesCitizens)}</td>
+                  <td className="num">{fmt(declaration.boxes[2].vat)}</td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>المبيعات المعفاة (إيجاراتٌ سكنية — م٦٢/٢/ز)</td>
+                  <td style={{ paddingRight: 20 }}>
+                    <span className="num">3</span> — المبيعات المحلية الخاضعة لنسبة الصفر
+                  </td>
+                  <td className="num">{fmt(declaration.salesZeroRatedDomestic)}</td>
+                  <td className="num">{fmt(0)}</td>
+                </tr>
+                <tr>
+                  <td style={{ paddingRight: 20 }}>
+                    <span className="num">4</span> — الصادرات
+                  </td>
+                  <td className="num">{fmt(declaration.salesExports)}</td>
+                  <td className="num">{fmt(0)}</td>
+                </tr>
+                <tr>
+                  <td style={{ paddingRight: 20 }}>
+                    <span className="num">5</span> — المبيعات المعفاة (ومنها الإيجاراتُ السكنية — م٦٢/٢/ز)
+                  </td>
                   <td className="num">{fmt(declaration.salesExempt)}</td>
+                  <td className="num">{fmt(0)}</td>
+                </tr>
+                <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
+                  <td>
+                    <span className="num">6</span> — إجمالي المبيعات
+                  </td>
+                  <td className="num">{fmt(declaration.totalSales)}</td>
+                  <td className="num">{fmt(declaration.salesStandardVat)}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
                   <td>المشتريات</td>
+                  <td></td>
                   <td></td>
                 </tr>
                 <tr>
                   <td style={{ paddingRight: 20 }}>المشتريات الخاضعة ({declaration.purchaseCount} فاتورة شراء)</td>
                   <td className="num">{fmt(declaration.purchasesStandard)}</td>
-                </tr>
-                <tr>
-                  <td style={{ paddingRight: 20 }}>ضريبة المشتريات القابلة للخصم</td>
                   <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
                 <tr>
                   <td style={{ paddingRight: 20 }}>المشتريات المعفاة</td>
                   <td className="num">{fmt(declaration.purchasesExempt)}</td>
+                  <td className="num">{fmt(0)}</td>
                 </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
                   <td>إجمالي المشتريات</td>
                   <td className="num">{fmt(declaration.totalPurchases)}</td>
+                  <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: declaration.netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
                   <td>{declaration.netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
+                  <td></td>
                   <td className="num">{fmt(Math.abs(declaration.netVat))}</td>
                 </tr>
               </tbody>
             </table>
+
+            {/* ⑧ ما يُعدّ ولا يدخل الخانات — يُعلَن حيث يُقرأ الرقم (ق-١٢١١/⑤ · ق-١٢٢٥). */}
+            <p className="hint" style={{ marginTop: 10, color: 'var(--muted)' }}>{declaration.salesCitizensNote}</p>
+            {declaration.salesOutOfScope.lineCount > 0 && (
+              <p className="hint" style={{ marginTop: 6 }}>
+                <b>{declaration.salesOutOfScope.lineCount}</b> سطراً خارجَ نطاق الضريبة ({fmt(declaration.salesOutOfScope.net)}) — يُعدّ ولا يدخل خانات الإقرار.
+              </p>
+            )}
+            {declaration.legacyZeroLines.lineCount > 0 && (
+              <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
+                <b>{declaration.legacyZeroLines.lineCount}</b> سطراً بنسبة صفر سبقت البناء بلا فئةٍ معلَنة ({fmt(declaration.legacyZeroLines.net)}) — لا يُعرف أهي صفرٌ أم معفاةٌ أم خارجَ النطاق، فتُعدّ ولا تدخل الخانات؛ ومستندُها لا يُختم حتى يُعاد إصدارُه بفئة.
+              </p>
+            )}
 
             {/* ⚠️ حدودُ الإيجار تُعلَن حيث يُقرأ الرقم لا في وثيقة (ق-٤٤٩ · ق-٩١٨ · ق-٩٢٦). */}
             {declaration.rent.legacyCount > 0 && (
