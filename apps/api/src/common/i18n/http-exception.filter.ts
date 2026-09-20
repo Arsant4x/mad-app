@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { requestIdOf } from '../request-id/request-id.middleware';
 import { resolveLanguage } from './language.util';
 import { Language, MSG, resolveMessage } from './messages';
 import { localizeValidation } from './validation.util';
@@ -8,6 +9,8 @@ interface NestErrorBody {
   statusCode: number;
   message: string | string[];
   error?: string;
+  /** معرِّفُ الطلب (`ق-١٢٣٧`) — كما على الرأس `x-request-id`، فيُبلَّغ به الدعمُ من جسم الخطأ أيضاً. */
+  requestId?: string;
 }
 
 /**
@@ -30,14 +33,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
     const language = resolveLanguage(request.headers['accept-language']);
+    // المعرِّفُ يُقرأ من الطلب حيث كتبه الوسيط؛ وغيابُه (تطبيقُ اختبارٍ بلا وسيط) لا يُخترَع.
+    const requestId = requestIdOf(request);
+    const withId = <T extends object>(body: T): T & { requestId?: string } => (requestId ? { ...body, requestId } : body);
 
     if (!(exception instanceof HttpException)) {
-      this.logger.error(exception instanceof Error ? exception.stack : String(exception));
-      response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: resolveMessage(MSG.internal_error, language),
-        error: 'Internal Server Error',
-      });
+      this.logger.error(`${requestId ? `[${requestId}] ` : ''}${exception instanceof Error ? exception.stack : String(exception)}`);
+      response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(
+        withId({
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          message: resolveMessage(MSG.internal_error, language),
+          error: 'Internal Server Error',
+        }),
+      );
       return;
     }
 
@@ -45,9 +53,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const body = exception.getResponse();
 
     response.status(status).json(
-      typeof body === 'string'
-        ? { statusCode: status, message: resolveMessage(body, language) }
-        : this.translateBody(body as NestErrorBody, language),
+      withId(
+        typeof body === 'string'
+          ? { statusCode: status, message: resolveMessage(body, language) }
+          : this.translateBody(body as NestErrorBody, language),
+      ),
     );
   }
 

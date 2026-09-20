@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { apiErrorMessage } from './apiError';
+import { apiErrorMessage, apiRequestId } from './apiError';
 
 /** خطأ axios مصطنع بشكل الردّ الحقيقي. */
 const axiosError = (message: unknown) => ({ response: { data: { message } } });
@@ -37,6 +37,23 @@ describe('apiErrorMessage — استخراج رسالة الخادم', () => {
     expect(apiErrorMessage(null, 'احتياطي')).toBe('احتياطي');
     expect(apiErrorMessage(axiosError(undefined), 'احتياطي')).toBe('احتياطي');
     expect(apiErrorMessage(axiosError({ nested: true }), 'احتياطي')).toBe('احتياطي');
+  });
+});
+
+describe('معرِّفُ الطلب (ق-١٢٣٧)', () => {
+  const id = '6f1d2c3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f';
+
+  it('يُقرأ من الرأس أوّلاً ثم من جسم الخطأ — ولا يُخترَع بلا ردّ', () => {
+    expect(apiRequestId({ response: { headers: { 'x-request-id': id }, data: {} } })).toBe(id);
+    expect(apiRequestId({ response: { headers: {}, data: { requestId: id } } })).toBe(id);
+    expect(apiRequestId(new Error('Network Error'))).toBeUndefined();
+    expect(apiRequestId(null)).toBeUndefined();
+  });
+
+  it('خطأُ الخادم (5xx) يحمل رقمَ الطلب في رسالته — و4xx لا يحمله', () => {
+    expect(apiErrorMessage({ response: { status: 500, headers: { 'x-request-id': id }, data: { message: 'خطأ داخلي' } } }, 'احتياطي')).toBe(`خطأ داخلي (رقم الطلب: ${id})`);
+    expect(apiErrorMessage({ response: { status: 503, headers: { 'x-request-id': id }, data: {} } }, 'احتياطي')).toBe(`احتياطي (رقم الطلب: ${id})`);
+    expect(apiErrorMessage({ response: { status: 400, headers: { 'x-request-id': id }, data: { message: 'الحقل مطلوب' } } }, 'احتياطي')).toBe('الحقل مطلوب');
   });
 });
 
