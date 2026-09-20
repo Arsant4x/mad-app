@@ -49,10 +49,10 @@ describe('Warranty expiry notifications (e2e)', () => {
     return auth(request(app.getHttpServer()).post('/notifications/run-warranty-check')).expect(201);
   }
 
+  /** يومُ UTC ± أيام — كما يقيسه الفحصُ نفسُه (`startOfToday = dayStartOf(new Date())` · `ق-١١٩٠`)، لا يومُ منطقة العملية. */
   function isoDaysFromToday(days: number): string {
     const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + days);
+    d.setUTCDate(d.getUTCDate() + days);
     return d.toISOString().slice(0, 10);
   }
 

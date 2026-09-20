@@ -35,9 +35,13 @@ import { sourceFiles } from './source-scan.util';
  * `${d.getFullYear()}` داخلها — **وثلاثةُ أسطرٍ من هذا الشكل فاتته** (`monthLabel` · `dayLabel` · `todayIso`).
  * الشجرةُ ترى الاستدعاءَ حيث كان، ولا ترى ما في تعليقٍ أو سلسلة (`ق-٣٣١`).
  *
- * ⚠️ **و`test/` خارج نطاقه** (`sourceFiles` تستثني `.spec.ts`): مساعداتُ الاختبار التي تبني يومَ الآن من
- * منطقة العملية أسقطت ثلاثةَ ملفّاتٍ في `test:clean` داخل نافذة `21:00–24:00 UTC` يومَ بُني هذا الحارس —
- * وأُصلحت إلى اليوم المعلَن كما `ق-١٠٥٦`؛ **وحارسٌ على `test/` بابٌ يُفتح بأمر**.
+ * ── و`test/` داخل نطاقه (`ق-١١٩٥` — بأمر المالك: «حارسُ `test/` يُبنى مع الحزمة الأولى لا وحدَه») ──
+ *
+ * مساعداتُ الاختبار التي تبني يومَ الآن من منطقة العملية **تمرّ لأن الخادمَ يشاركها المنطقة** —
+ * فلمّا صار الخادمُ يقرأ يومَ `UTC` (`ق-١١٩٠`) سقطت ثلاثةُ ملفّاتٍ في `test:clean` داخل نافذة
+ * `21:00–24:00 UTC` على جهازٍ بتوقيت الرياض. **فالقاعدةُ نفسُها على الجذرين**: يومُ الاختبار من
+ * `toISOString().slice(0, 10)` أو `Date.UTC(…)` أو `dayStartOf`/`dayEndOf` — **لا من منطقة العملية**.
+ * ويُستثنى بالإعلان ما لا يحمل يوماً أصلاً (كتوقيتٍ يُعلَن للمخرَج وحده).
  *
  * ── حدودُه المعلَنة ───────────────────────────────────────────────────────
  *
@@ -47,6 +51,10 @@ import { sourceFiles } from './source-scan.util';
  * والحارسُ بلا مدقّقِ أنواعٍ لا يفرّق — فبقيت خارجَ القائمة بحدٍّ معلَن.
  */
 const SRC = join(__dirname, '..');
+const TEST = join(__dirname, '..', '..', 'test');
+/** الجذران معاً — الشيفرةُ ومساعداتُ الاختبار ومساراتُه (`sourceFiles` لا تستثني `.e2e-spec.ts`). */
+const ROOTS = [SRC, TEST];
+const API = join(__dirname, '..', '..');
 
 /** دوالُّ اليوم المحلّية — ما يقرأ يوماً أو يكتبه بمنطقة العملية. */
 export const LOCAL_DAY_METHODS = [
@@ -176,19 +184,23 @@ export function undeclaredLocalDayCalls(source: string, file = 'inline.ts'): Loc
 
 function treeCalls(): (LocalDayCall & { file: string })[] {
   const out: (LocalDayCall & { file: string })[] = [];
-  for (const f of sourceFiles(SRC)) {
-    const file = relative(SRC, f).replace(/\\/g, '/');
-    for (const c of localDayCalls(readFileSync(f, 'utf8'), f)) out.push({ ...c, file });
+  for (const root of ROOTS) {
+    for (const f of sourceFiles(root)) {
+      const file = relative(API, f).replace(/\\/g, '/');
+      for (const c of localDayCalls(readFileSync(f, 'utf8'), f)) out.push({ ...c, file });
+    }
   }
   return out;
 }
 
 describe('يومٌ يُقاس بمنطقة العملية يُصلَح أو يُعلَن (ق-١١٩٠)', () => {
-  const FILES = sourceFiles(SRC);
+  const FILES = ROOTS.flatMap((r) => sourceFiles(r));
   const CALLS = treeCalls();
 
-  it('يقرأ الشجرةَ فعلاً — ملفّاتٌ بالمئات، وحسابُ الأيام المستثنى موجودٌ فيها', () => {
+  it('يقرأ الشجرةَ فعلاً — ملفّاتٌ بالمئات في الجذرين، وحسابُ الأيام المستثنى موجودٌ فيها', () => {
     expect(FILES.length).toBeGreaterThan(200);
+    // والجذرُ الثاني يُقرأ فعلاً لا يُفترض — مسارٌ حيٌّ معلوم فيه (`ق-١١٩٥`).
+    expect(FILES.some((f) => f.endsWith(join('test', 'payments.e2e-spec.ts')))).toBe(true);
     // ثلاثةَ عشرَ موضعَ حسابٍ مقيسة (`ق-١١٨٧`) — فحارسٌ لا يرى واحداً منها لا يقرأ الشجرة.
     expect(CALLS.filter((c) => c.arithmetic).length).toBeGreaterThan(0);
   });

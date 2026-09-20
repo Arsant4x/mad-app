@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { ConflictException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**
  * ZATCA phase-2 invoice hash chain.
@@ -62,37 +64,48 @@ export async function nextIcv(tx: Prisma.TransactionClient, egsUnitId: string): 
 }
 
 /**
- * The hash the next invoice must chain onto: the most recently *accepted*
- * invoice **of this unit**, or the genesis value if the unit has none.
+ * The hash the document at position `icv` must chain onto: **the hash of the
+ * document at `icv − 1` in this unit's sequence — whatever the authority said
+ * about it** (`ق-١١٩٨`/⑦ — مراجعةٌ خارجية).
  *
- * Ordered by `zatcaSubmittedAt` rather than creation time, because the chain
- * follows submission order — an invoice created earlier but submitted later
- * belongs later in the chain.
+ * ── لماذا لا «آخرُ مقبول» (القاعدةُ السابقة، 2026-08-08) ─────────────────
  *
- * **Only CLEARED documents are eligible.** A document the authority did not
- * accept never entered its records, so it cannot be anyone's predecessor:
- * the authority recomputes the chain from what it holds, and expects the next
- * PIH to be the hash of the last document it actually accepted. Handing out a
- * rejected invoice's hash also made that hash load-bearing while the invoice
- * was still being corrected — fixing it recomputes the hash and orphans
- * whatever chained onto the old one, which is the defect
- * InvoicesService.update's successor check exists to catch. That check stays
- * as a second layer (it still guards data recorded before this rule, and any
- * path that sets a PIH by other means); this is the fix at the source.
+ * كان السلفُ آخرَ مستندٍ **قبلته** الهيئة (`CLEARED`). والختمُ يقع عند الإصدار
+ * والإبلاغُ من الطابور بعده (`ق-٩٣٥`)، فمستندٌ `n` مختومٌ لم يُبلَّغ بعد — أو سقط
+ * إبلاغُه سقوطَ نقل — **لا يكون سلفاً**، فيُختم `n + 1` على بصمة `n − 1`؛ ثم يُقبل
+ * `n` فتحمل الهيئةُ مستندَين سلفُهما واحد: **السلسلةُ تتفرّع** حين يسقط الإبلاغ بعد
+ * الختم. وحجّةُ القاعدة السابقة زالت: كانت تخشى أن يُعدَّل مردودٌ فتُعاد بصمتُه —
+ * **والصادرُ لا يُعدَّل** (`ق-٩٤٣`)، والمردودُ يُغلق ويُصدَر بدلُه جديداً برقمٍ وبصمةٍ
+ * جديدتَين (`ق-٩٥٨`). فبصمةُ الموقع لا تتغيّر أبداً — وهي السلف.
  *
- * SUBMITTING is excluded for the same reason — nothing is accepted yet, and a
- * retry in flight still carries the *previous* attempt's stale hash.
+ * ── القاعدة ───────────────────────────────────────────────────────────────
  *
- * **على مستوى المنشأة بحقّها**: آخرُ بصمةٍ مقبولةٍ تُقرأ على وحدة الإصدار
- * كلِّها — فبصمةٌ محجوبةٌ عن القارئ تكسر السلسلةَ عند الهيئة التي تحفظها كاملة.
+ * - `icv = 1` ⟵ بصمةُ الأصل (`GENESIS`).
+ * - الموقعُ `icv − 1` مختومٌ ⟵ بصمتُه، **أيّاً كانت حالتُه** (`STAMPED` · `SUBMITTING`
+ *   · `REJECTED` · `FAILED` · `CLEARED`).
+ * - الموقعُ `icv − 1` محجوزٌ **ولم يُختم بعد** (توقيعٌ جارٍ أو سقط) ⟵ **يُرفض الختمُ الآن**
+ *   (`ConflictException`) فيعود الطابورُ إليه بعد أن يُختم سلفُه — **فالسلسلةُ لا تتخطّى
+ *   موقعاً**؛ ⚠️ **وحدُّه معلَن**: موقعٌ لا يُختم أبداً (شهادةٌ فاسدة) يحبس ما بعده حتى
+ *   يُعالَج — وهو الصدقُ لا العطل، فتخطّيه يصنع التفرّعَ الذي يُمنع هنا.
+ * - الموقعُ `icv − 1` **غائب** (صفٌّ أُزيل — كما تفعل تنظيفاتُ الاختبارات؛ ولا يقع في
+ *   الإنتاج فحارسُ الحذف يحفظ المختوم) ⟵ أعلى موقعٍ مختومٍ دونه، وإلا الأصل.
+ *
+ * **على مستوى المنشأة بحقّها**: الموقعُ السابق يُقرأ على وحدة الإصدار كلِّها —
+ * فبصمةٌ محجوبةٌ عن القارئ تكسر السلسلةَ عند الهيئة التي تحفظها كاملة.
  */
-export async function latestChainHash(tx: Prisma.TransactionClient, egsUnitId: string): Promise<string> {
-  const previous = await tx.invoice.findFirst({
-    where: { egsUnitId, zatcaHash: { not: null }, zatcaStatus: 'CLEARED' },
-    orderBy: [{ zatcaSubmittedAt: 'desc' }],
+export async function previousChainHash(tx: Prisma.TransactionClient, egsUnitId: string, icv: number): Promise<string> {
+  if (icv <= 1) return GENESIS_PREVIOUS_HASH;
+  const previous = await tx.invoice.findFirst({ where: { egsUnitId, zatcaIcv: icv - 1 }, select: { zatcaHash: true, no: true } });
+  if (previous) {
+    if (previous.zatcaHash) return previous.zatcaHash;
+    throw new ConflictException(formatMessage(MSG.zatca_previous_unstamped, { no: previous.no, icv: String(icv - 1) }));
+  }
+  const below = await tx.invoice.findFirst({
+    where: { egsUnitId, zatcaIcv: { lt: icv }, zatcaHash: { not: null } },
+    orderBy: [{ zatcaIcv: 'desc' }],
     select: { zatcaHash: true },
   });
-  return previous?.zatcaHash ?? GENESIS_PREVIOUS_HASH;
+  return below?.zatcaHash ?? GENESIS_PREVIOUS_HASH;
 }
 
 /**

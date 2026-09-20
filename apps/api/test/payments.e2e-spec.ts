@@ -249,6 +249,16 @@ describe('Customer payments + allocations (e2e)', () => {
     await auth(request(app.getHttpServer()).post(`/payments/${rev.body.id}/reverse`)).send({}).expect(409);
     const again = await auth(request(app.getHttpServer()).post(`/payments/${second.body.id}/reverse`)).send({}).expect(409);
     expect(String(again.body.message)).toContain(rev.body.no);
+
+    // 🔴 ولا يُعاد توزيعُ سندٍ عُكس (`ق-١١٩٨`/⑤ — مراجعةٌ خارجية): كان يمرّ `201` فتُختم فاتورةٌ
+    //    أخرى مسدَّدةً بمالٍ رُدّ، وعكسُه يحمل مرآةَ التوزيع القديم على الفاتورة الأولى.
+    const other = await makeInvoice(500);
+    const realloc = await auth(request(app.getHttpServer()).post(`/payments/${second.body.id}/allocate`))
+      .send({ allocations: [{ invoiceId: other.id, amount: 500 }] })
+      .expect(409);
+    expect(String(realloc.body.message)).toContain(rev.body.no);
+    expect(await invoiceStatus(other.id)).toBe('DUE');
+    expect(await invoiceStatus(inv.id)).toBe('PARTIAL');
   }, 90000);
 
   // ── 8 (تنبيه ٢): عملة غير الأساسية ⇒ الترحيل بالأساسية والفرق على 5600 ──

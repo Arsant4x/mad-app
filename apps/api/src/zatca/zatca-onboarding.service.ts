@@ -73,6 +73,28 @@ export function apiBaseFor(environment: ZatcaEnvironment): string {
   return process.env.ZATCA_API_BASE_OVERRIDE?.trim() || API_BASE[environment];
 }
 
+/**
+ * ⏱ **مهلةٌ على كلّ اتصالٍ بالهيئة** (`ق-١١٩٨`/③ — مراجعةٌ خارجية).
+ *
+ * `fetch` بلا `signal` يبقى معلَّقاً ما بقي الاتصالُ مفتوحاً — و`undici` لا يقطعه قبل خمس
+ * دقائقَ من صمتٍ على الترويسات. والإبلاغُ يجري من الطابور **منشأةً منشأةً في معاملةٍ واحدة**
+ * (`OutboxService.dispatchForCompany`)، فاتصالٌ معلَّقٌ يوقف طابورَ المنشأة كلَّه بمدّته. صارت
+ * الأربعةُ (الامتثال · عيّناتُه · الإنتاج · الإبلاغ) تحمل `AbortSignal.timeout` — والمهلةُ من
+ * البيئة كي يقيسها الاختبارُ بلحظاتٍ لا بدقائق. **وانقضاؤها ليس جواباً** (`ق-٩٧١`): يُرمى
+ * فيعود الطابورُ إليه بتراجعه.
+ */
+export const ZATCA_HTTP_TIMEOUT_MS_DEFAULT = 30_000;
+
+export function zatcaHttpTimeoutMs(): number {
+  const raw = Number(process.env.ZATCA_HTTP_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : ZATCA_HTTP_TIMEOUT_MS_DEFAULT;
+}
+
+/** إشارةُ الإلغاء لنداءٍ واحد — تُصنع عند كلّ نداء، فالمهلةُ تبدأ من لحظته. */
+export function zatcaFetchSignal(): AbortSignal {
+  return AbortSignal.timeout(zatcaHttpTimeoutMs());
+}
+
 /** Per-environment API base. Kept beside the certificate template names in
  * csr.util so the two can't drift apart. */
 export const API_BASE: Record<ZatcaEnvironment, string> = {
@@ -237,6 +259,7 @@ export class ZatcaOnboardingService {
     try {
       const res = await fetch(`${apiBaseFor(credential.environment)}/compliance`, {
         method: 'POST',
+        signal: zatcaFetchSignal(),
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -381,6 +404,7 @@ export class ZatcaOnboardingService {
 
       const res = await fetch(`${apiBaseFor(input.environment)}/compliance/invoices`, {
         method: 'POST',
+        signal: zatcaFetchSignal(),
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -437,6 +461,7 @@ export class ZatcaOnboardingService {
     try {
       const res = await fetch(`${apiBaseFor(credential.environment)}/production/csids`, {
         method: 'POST',
+        signal: zatcaFetchSignal(),
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',

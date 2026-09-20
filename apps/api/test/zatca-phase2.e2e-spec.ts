@@ -442,17 +442,17 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(row.zatcaStatus).toBe('REJECTED');
     }, 30000);
 
-    it('chains each new invoice onto the previous accepted one', async () => {
+    it('🔴 chains each new invoice onto the document at ICV − 1 — whatever the authority said about it (ق-١١٩٨/⑦)', async () => {
+      // A is REJECTED by the stub and stays so: under the old rule ("last CLEARED
+      // only") it was skipped, and B chained onto an older document — the fork.
       const idA = await makeInvoice();
       const a = await request(app.getHttpServer()).post(`/zatca/invoices/${idA}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
-      // Only an accepted document can be a predecessor, and clearance needs a
-      // certificate only the authority can issue — so it is simulated on top
-      // of a real submission (same chain link, accepted status).
-      await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: idA }, data: { zatcaStatus: 'CLEARED' } }));
+      expect(a.body.zatcaStatus).toBe('REJECTED');
 
       const idB = await makeInvoice();
       const b = await request(app.getHttpServer()).post(`/zatca/invoices/${idB}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
 
+      expect(b.body.zatcaIcv).toBe(a.body.zatcaIcv + 1);
       expect(b.body.zatcaPreviousHash).toBe(a.body.zatcaHash);
       expect(b.body.zatcaHash).not.toBe(a.body.zatcaHash);
 
@@ -465,32 +465,36 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       await expectNothingBetweenIcv(tenantPrisma, companyId, a.body.zatcaIcv, b.body.zatcaIcv);
     }, 30000);
 
-    it('never hands a rejected invoice\'s hash to the next document — it inherits the last accepted one', async () => {
-      // An accepted document to inherit from...
+    it('🔴 a document stamped but not yet answered is still the predecessor — the fork the review named (ق-١١٩٨/⑦)', async () => {
+      // An accepted document first, so the old rule has something to fall back to.
       const idCleared = await makeInvoice();
       const cleared = await request(app.getHttpServer()).post(`/zatca/invoices/${idCleared}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
       await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: idCleared }, data: { zatcaStatus: 'CLEARED' } }));
 
-      // ...then a rejected one submitted after it. It burns its ICV slot (so
-      // it can never be deleted) but the authority never recorded it.
-      const idRejected = await makeInvoice();
-      const rejected = await request(app.getHttpServer()).post(`/zatca/invoices/${idRejected}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
-      expect(rejected.body.zatcaStatus).toBe('REJECTED');
-      expect(rejected.body.zatcaHash).toBeTruthy();
+      // Then one whose reporting fails after stamping (authority outage — not a
+      // verdict, ق-٩٧١): stamped, hashed, its slot taken, but not CLEARED.
+      authority.set('outage');
+      const idStuck = await makeInvoice();
+      await request(app.getHttpServer()).post(`/zatca/invoices/${idStuck}/submit`).set('Authorization', `Bearer ${token}`).expect(503);
+      authority.set('reject');
+      const stuck = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.invoice.findUniqueOrThrow({ where: { id: idStuck }, select: { zatcaStatus: true, zatcaHash: true, zatcaIcv: true } }),
+      );
+      expect(stuck.zatcaStatus).not.toBe('CLEARED');
+      expect(stuck.zatcaStatus).not.toBe('REJECTED');
+      expect(stuck.zatcaHash).toBeTruthy();
 
       const idNext = await makeInvoice();
       const next = await request(app.getHttpServer()).post(`/zatca/invoices/${idNext}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
 
-      // The rejected invoice is not a predecessor: it is skipped, and the last
-      // accepted document is inherited instead. Were its hash handed on,
-      // correcting and resubmitting it would recompute that hash and orphan
-      // this document's PIH.
-      expect(next.body.zatcaPreviousHash).not.toBe(rejected.body.zatcaHash);
-      expect(next.body.zatcaPreviousHash).toBe(cleared.body.zatcaHash);
-      // The skip is in the hash chain only — the counter still counts the
-      // rejected document, because its position is genuinely taken: nothing
-      // sits between the two (ق-٢٩٢).
-      await expectNothingBetweenIcv(tenantPrisma, companyId, rejected.body.zatcaIcv, next.body.zatcaIcv);
+      // Under "last CLEARED only" the stuck document was skipped and `next`
+      // chained onto `cleared` — then, once the stuck one was retried and
+      // accepted, the authority held two documents with the same predecessor.
+      // Now the chain follows the position: PIH = hash(ICV − 1), always.
+      expect(next.body.zatcaIcv).toBe(stuck.zatcaIcv! + 1);
+      expect(next.body.zatcaPreviousHash).toBe(stuck.zatcaHash);
+      expect(next.body.zatcaPreviousHash).not.toBe(cleared.body.zatcaHash);
+      await expectNothingBetweenIcv(tenantPrisma, companyId, stuck.zatcaIcv!, next.body.zatcaIcv);
     }, 40000);
   });
 });

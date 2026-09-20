@@ -4,7 +4,7 @@ import { AppModule } from '../app.module';
 import { encryptSecret } from '../common/crypto/secret.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
-import { GENESIS_PREVIOUS_HASH, latestChainHash, nextIcv } from './hash-chain.util';
+import { GENESIS_PREVIOUS_HASH, nextIcv, previousChainHash } from './hash-chain.util';
 import { ZatcaAttemptFailedException, ZatcaService } from './zatca.service';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
@@ -238,24 +238,27 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
           data: { companyId, serial: `1-probe|2-pos|3-${companyId}-${Date.now()}`, kind: 'POS_TERMINAL', label: 'كاشير فحص' },
           select: { id: true },
         });
-        // سلفٌ مقبول في الافتراضية — كي يكون للسلسلة ما تُقرأ منه، لا الأساس وحده.
-        await tx.invoice.update({
-          where: { id: invoiceIds[0] },
-          data: { zatcaStatus: 'CLEARED', zatcaHash: 'probe-hash-unit-a', zatcaSubmittedAt: new Date() },
+        // سلفٌ مختومٌ في الافتراضية — الموقعُ ٢ بعينه (ق-١١٩٨/⑦: السلفُ `ICV − 1` أيّاً كانت
+        // حالتُه — يُختم `STAMPED` لا `CLEARED` عمداً) كي يكون للسلسلة ما تُقرأ منه، لا الأساس وحده.
+        await tx.invoice.updateMany({
+          where: { id: { in: invoiceIds }, zatcaIcv: 2 },
+          data: { zatcaStatus: 'STAMPED', zatcaHash: 'probe-hash-unit-a', zatcaSubmittedAt: new Date() },
         });
+        const icvDefault = await nextIcv(tx, defaultUnit.id);
+        const icvSecond = await nextIcv(tx, secondUnit.id);
         return {
           defaultUnit,
           secondUnit,
-          icvDefault: await nextIcv(tx, defaultUnit.id),
-          icvSecond: await nextIcv(tx, secondUnit.id),
-          pihDefault: await latestChainHash(tx, defaultUnit.id),
-          pihSecond: await latestChainHash(tx, secondUnit.id),
+          icvDefault,
+          icvSecond,
+          pihDefault: await previousChainHash(tx, defaultUnit.id, icvDefault),
+          pihSecond: await previousChainHash(tx, secondUnit.id, icvSecond),
         };
       },
     );
 
     expect(defaultUnit.id).not.toBe(secondUnit.id);
-    // الافتراضية: موقعان محجوزان في ① ⇒ التالي ٣، وسلفُها التجزئة المقبولة.
+    // الافتراضية: موقعان محجوزان في ① ⇒ التالي ٣، وسلفُها بصمةُ الموقع ٢ — مختوماً لا مقبولاً.
     expect(icvDefault).toBe(3);
     expect(pihDefault).toBe('probe-hash-unit-a');
     // الثانية: لا شيء بعد ⇒ ١ والأساس. **والافتراضية لم تتأثّر بوجودها.**

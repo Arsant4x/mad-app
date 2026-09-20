@@ -4,6 +4,7 @@ import { TenantContext } from '../auth/types';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { ExportService } from './export.service';
 
@@ -12,7 +13,8 @@ import { ExportService } from './export.service';
  *
  * @AllowWhileInactive: the grace-period rule is "view and export only", and a
  * stopped merchant deciding whether to renew or leave still owns its data.
- * Owner-only, enforced in the service.
+ * Owner-only — declared in the guard (`@OwnerOnly`) and enforced again in the
+ * service (`ق-١١٩٨`/①).
  */
 /**
  * ⭐ **ومنفذُ الخروج لا يُغلق** (`ق-٥٨٩/④`): «نزّل بياناتك» ليست وعداً في نصٍّ بل مسارٌ
@@ -22,6 +24,7 @@ import { ExportService } from './export.service';
 @Controller('export')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
+@OwnerOnly()
 export class ExportController {
   constructor(private readonly exportService: ExportService) {}
 

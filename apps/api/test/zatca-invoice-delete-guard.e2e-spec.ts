@@ -15,7 +15,7 @@ import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 /**
  * Deleting a document that holds a ZATCA chain link would leave a gap the
  * authority can see: the next document's PIH commits to the deleted hash, and
- * `latestChainHash` would chain new submissions onto the wrong predecessor.
+ * `previousChainHash` would chain new submissions onto the wrong predecessor.
  *
  * These tests lock in the delete guard: any invoice carrying a chain link
  * (ICV/hash) refuses deletion with a localized 409 — whatever its status,
@@ -224,14 +224,14 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
   it('keeps the chain intact after a refused delete — the next invoice still finds its predecessor', async () => {
     const a = await makeInvoice();
     const submittedA = await submit(a);
-    // Cleared, because only an accepted document is handed on as the next
-    // PIH (see latestChainHash) — a rejected one is skipped, so a rejected A
-    // would make this assertion pass for the wrong reason.
+    // Cleared so the case reads as the common one; the predecessor is the
+    // document at ICV − 1 whatever its status (`previousChainHash`, ق-١١٩٨/⑦).
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: a }, data: { zatcaStatus: 'CLEARED' } }));
     await request(app.getHttpServer()).delete(`/invoices/${a}`).set('Authorization', `Bearer ${token}`).expect(409);
 
-    // Had the delete gone through, latestChainHash would have picked an older
-    // predecessor and the PIH here would not match A's hash.
+    // Had the delete gone through, previousChainHash would have found no row at
+    // ICV − 1 and fallen back to an older predecessor — the PIH here would not
+    // match A's hash.
     const b = await makeInvoice();
     const submittedB = await submit(b);
     expect(submittedB.body.zatcaPreviousHash).toBe(submittedA.body.zatcaHash);

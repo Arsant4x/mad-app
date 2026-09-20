@@ -116,7 +116,8 @@ export interface CreateInvoiceInput {
  */
 export const CREDIT_LIMIT_EXCEEDED = 'CREDIT_LIMIT_EXCEEDED';
 
-export type UpdateInvoiceInput = Partial<CreateInvoiceInput> & { status?: InvoiceStatus };
+/** لا `status` هنا (`ق-١١٩٨`/②): حالةُ السداد تُشتقّ من المقبوضات ولا تُرسَل من الواجهة. */
+export type UpdateInvoiceInput = Partial<CreateInvoiceInput>;
 
 export interface CreateCreditNoteInput {
   /** Required — ZATCA rejects a credit note without its reason. */

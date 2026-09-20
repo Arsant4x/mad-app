@@ -199,6 +199,13 @@ describe('Supplier payments + allocations (e2e)', () => {
     await auth(request(app.getHttpServer()).post(`/supplier-payments/${reversal.body.id}/reverse`)).send({}).expect(409);
     const again = await auth(request(app.getHttpServer()).post(`/supplier-payments/${second.body.id}/reverse`)).send({}).expect(409);
     expect(String(again.body.message)).toContain(reversal.body.no);
+
+    // 🔴 ولا يُعاد توزيعُ سندٍ عُكس — المرآةُ نفسُها (`ق-١١٩٨`/⑤): كان يُمرَّر `null` فيمرّ `201`.
+    const other = await makePurchase(600);
+    const realloc = await auth(request(app.getHttpServer()).post(`/supplier-payments/${second.body.id}/allocate`))
+      .send({ allocations: [{ purchaseId: other.id, amount: 600 }] })
+      .expect(409);
+    expect(String(realloc.body.message)).toContain(reversal.body.no);
   }, 120000);
 
   // ── الفائضُ «دفعةٌ على الحساب»: يمدين `2100` كاملاً — رصيدٌ مدينٌ للمورّد لا أصلٌ ثانٍ (ق-٨٧٢) ──

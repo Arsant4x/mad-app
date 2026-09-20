@@ -388,7 +388,9 @@ describe('Account deletion requests (e2e)', () => {
     expect(approved.body.archive.years).toContain(thisYear);
     const company = await prisma.company.findUnique({ where: { id: co.id } });
     expect(company?.status).toBe('CLOSED');
-    expect(company?.retainUntil?.getFullYear()).toBe(company!.closedAt!.getFullYear() + 10);
+    // بسنة UTC كما قُرئ `thisYear` أعلاه لا بسنة منطقة العملية (`ق-١١٩٠`) — والفرقُ عشرٌ في أي إطار،
+    // لأن `retentionDeadline` تحسب السنواتِ في الإطار نفسِه (`setFullYear(getFullYear() + n)` — مستثنًى بشكله).
+    expect(company?.retainUntil?.getUTCFullYear()).toBe(company!.closedAt!.getUTCFullYear() + 10);
     // ⚖️ مدّةُ الإتاحة = مدّةُ الحفظ (`ق-٥٥٨/ج`) — لا تسعين: ما دمنا نحفظ يصل التاجرُ نسختَه.
     expect((await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } }))?.archiveExpiresAt).toEqual(company!.retainUntil);
 

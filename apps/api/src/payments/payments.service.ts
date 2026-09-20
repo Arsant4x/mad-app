@@ -249,7 +249,10 @@ export class PaymentsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id }, include: { allocations: true } });
       if (!payment) throw new NotFoundException(MSG.payment_not_found);
-      if (payment.reversesId) throw new ConflictException(MSG.payment_reversal_immutable);
+      // ⚖️ سندٌ له عكسٌ لا يُعاد توزيعُه (`ق-١١٩٨`/⑤ — مراجعةٌ خارجية): كان الفحصُ على «هو عكسٌ»
+      //    وحدَه، فسندٌ عُكس كان يُعاد توزيعُه على فاتورةٍ أخرى — وعكسُه يحمل مرآةَ التوزيع
+      //    القديم، فتُختم فاتورةٌ مسدَّدةً بمالٍ رُدّ. الفحصُ نفسُه الذي يحرس العكسَ الثاني.
+      assertReversible(payment, await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
       const requested = dto.allocations.map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
       const touched = new Set<string>([...payment.allocations.map((a) => a.invoiceId), ...requested.map((a) => a.invoiceId)]);

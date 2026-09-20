@@ -23,10 +23,10 @@ describe('Subscription lifecycle (e2e)', () => {
 
   const admin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`);
 
+  /** يومُ UTC ± أيام — يومُ الخادم المعلَن (`ق-١١٩٠`) لا يومُ منطقة العملية. */
   function iso(daysFromToday: number): string {
     const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + daysFromToday);
+    d.setUTCDate(d.getUTCDate() + daysFromToday);
     return d.toISOString().slice(0, 10);
   }
 

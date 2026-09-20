@@ -167,7 +167,8 @@ export class SupplierPaymentsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.supplierPayment.findUnique({ where: { id }, include: { allocations: true } });
       if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
-      assertReversible(payment, null);
+      // ⚖️ مرآةُ سند القبض (`ق-١١٩٨`/⑤): كان يُمرَّر `null` فيُعاد توزيعُ سندٍ عُكس فعلاً.
+      assertReversible(payment, await tx.supplierPayment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
       const requested = dto.allocations.map((a) => ({ purchaseId: a.purchaseId, amount: round2(a.amount) }));
       const touched = new Set<string>([...payment.allocations.map((a) => a.purchaseId), ...requested.map((a) => a.purchaseId)]);

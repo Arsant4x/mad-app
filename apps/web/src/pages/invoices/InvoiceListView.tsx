@@ -5,7 +5,6 @@ import { ZatcaQr } from '../../components/ZatcaQr';
 import type { Invoice, InvoiceStatus } from '../../api/invoices';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
-import { InvoiceStatusModal } from './InvoiceStatusModal';
 import { STATUS_META, ZATCA_STATUS_META } from './statusMeta';
 
 type SortKey = 'issueDate' | 'no' | 'total' | 'customer';
@@ -25,7 +24,6 @@ function sortValue(inv: Invoice, key: SortKey): string | number {
 export function InvoiceListView({
   invoices,
   onNew,
-  onChangeStatus,
   onSubmitToZatca,
   onIssueCreditNote,
   onIssueDebitNote,
@@ -35,7 +33,6 @@ export function InvoiceListView({
 }: {
   invoices: Invoice[];
   onNew: () => void;
-  onChangeStatus: (invoice: Invoice, status: InvoiceStatus) => void;
   onSubmitToZatca: (invoice: Invoice) => void;
   onIssueCreditNote: (invoice: Invoice) => void;
   onIssueDebitNote: (invoice: Invoice) => void;
@@ -50,7 +47,6 @@ export function InvoiceListView({
   const [statusFilter, setStatusFilter] = useState<'all' | InvoiceStatus>('all');
   const [sortKey, setSortKey] = useState<SortKey>('issueDate');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [statusModalFor, setStatusModalFor] = useState<Invoice | null>(null);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -171,11 +167,11 @@ export function InvoiceListView({
                 <td className="num">{dfmt(inv.issueDate)}</td>
                 <td className="num">{dfmt(inv.dueDate)}</td>
                 <td>
-                  {/* A credit note has no payment lifecycle — the server
-                      refuses the edit, so the affordance isn't offered. A
-                      debit note IS receivable: its status stays clickable. */}
+                  {/* الحالةُ مشتقّةٌ من المقبوضات ولا تُكتب بيد (`ق-١١٩٨`/②): كانت هنا نافذةُ
+                      «تغيير الحالة» تُرسل `status` فتُختم فاتورةٌ «مسدَّدة» بلا ريال — والسدادُ
+                      يُسجَّل من شاشة المقبوضات. والإشعارُ الدائن بلا دورة سداد أصلاً. */}
                   {inv.docType !== 'CREDIT_NOTE' ? (
-                    <span style={{ cursor: 'pointer' }} title="اضغط لتغيير الحالة" onClick={() => setStatusModalFor(inv)}>
+                    <span title="الحالةُ تُشتقّ من المقبوضات — سجّل السداد من شاشة المقبوضات">
                       <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
                     </span>
                   ) : (
@@ -251,16 +247,6 @@ export function InvoiceListView({
         </table>
       </div>
 
-      {statusModalFor && (
-        <InvoiceStatusModal
-          currentStatus={statusModalFor.status}
-          onCancel={() => setStatusModalFor(null)}
-          onSave={(status) => {
-            onChangeStatus(statusModalFor, status);
-            setStatusModalFor(null);
-          }}
-        />
-      )}
     </div>
   );
 }

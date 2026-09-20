@@ -16,6 +16,8 @@ import { REQUIRES_SCREEN_KEY } from './requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
 import { SUPPORT_SHELL_KEY } from './support-shell.decorator';
+import { TENANT_WIDE_KEY } from './tenant-wide.decorator';
+import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
 
@@ -201,6 +203,24 @@ export class TenantGuard implements CanActivate {
     // manually while testing the new permission-template feature: a
     // limited-template CompanyUser could reach any screen's endpoints.
     const requiredScreen = this.reflector.getAllAndOverride<string | undefined>(REQUIRES_SCREEN_KEY, [context.getHandler(), context.getClass()]);
+
+    /**
+     * 🔴 **مغلقٌ افتراضياً — كوضع الدعم أعلاه** (`ق-١١٩٨`/①، مراجعةٌ خارجية).
+     *
+     * مسارٌ لا يُعلن شاشتَه كان يمرّ من هنا **بكلّ فاعل** إلى خدمته، والحمايةُ
+     * الوحيدة أن تتذكّر الخدمةُ `assertIsCompanyOwner` — سبعةُ متحكّماتٍ كانت
+     * كذلك، وكلُّها تذكّرت (مقيس: الموظّفُ يُردّ `403` على سعر الصرف والرقم الضريبي
+     * ومستودع الفرع)؛ **والثامنُ الذي لا يتذكّر لا يُنبّه عنه شيء**. فصار المسارُ يُعلن
+     * نفسَه: شاشةٌ (`@RequiresScreen`) · أو للمالك وحدَه (`@OwnerOnly` — يُنفَذ هنا) ·
+     * أو مفتوحٌ لكلّ فاعلٍ بسببٍ مكتوب (`@TenantWide`) · أو قشرةُ الهويّة (`@SupportShell`).
+     * وما عداه يُرفض — والحارسُ الساكن `tenant-guard-declared.spec` يُدين المتحكّمَ
+     * الجديد قبل أن يبلغ السير.
+     */
+    const ownerOnly = this.reflector.getAllAndOverride<boolean | undefined>(OWNER_ONLY_KEY, [context.getHandler(), context.getClass()]);
+    const tenantWide = this.reflector.getAllAndOverride<string | undefined>(TENANT_WIDE_KEY, [context.getHandler(), context.getClass()]);
+    const supportShell = this.reflector.getAllAndOverride<boolean | undefined>(SUPPORT_SHELL_KEY, [context.getHandler(), context.getClass()]);
+    if (!requiredScreen && !ownerOnly && !tenantWide && !supportShell) throw new ForbiddenException(MSG.screen_undeclared);
+    if (ownerOnly && payload.actorType !== 'COMPANY') throw new ForbiddenException(MSG.owner_only);
 
     /**
      * ⚠️ **ترشيح النشاط قبل فحص القالب — والترتيب مقصود.**

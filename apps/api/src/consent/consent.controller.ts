@@ -6,6 +6,8 @@ import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guar
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { ConsentService } from './consent.service';
 import { AcceptConsentDto, PublishVersionDto, UpsertSubProcessorDto } from './dto/consent.dto';
@@ -15,11 +17,14 @@ import { AcceptConsentDto, PublishVersionDto, UpsertSubProcessorDto } from './dt
  * بالتصدير أو بطلب الإغلاق من مسارَيهما (وكلاهما يعمل وهو ممنوع).
  *
  * `@AllowWhileConsentPending` على الاثنين معاً — **فبوّابةٌ لا يُقرأ سببُها حجزٌ لا اختيار**.
+ * والقراءةُ لكلّ فاعل (الحارسُ يحجب الجميع حتى يقبل المالك، فالموظّفُ يقرأ ما ينتظره)،
+ * والقبولُ للمالك وحدَه — معلَناً في الحارس ومؤكَّداً في الخدمة (`ق-١١٩٨`/①).
  */
 @Controller('processing-agreement')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
 @AllowWhileConsentPending()
+@TenantWide('حالُ الموافقة تُقرأ لكلّ فاعل: الحارسُ يحجب الجميعَ حتى يقبل المالك، فالموظّفُ يقرأ ما ينتظره — والقبولُ للمالك وحدَه')
 export class ConsentController {
   constructor(private readonly service: ConsentService) {}
 
@@ -29,6 +34,7 @@ export class ConsentController {
   }
 
   @Post('accept')
+  @OwnerOnly()
   accept(@Req() req: Request, @CurrentTenant() tenant: TenantContext, @Body() dto: AcceptConsentDto) {
     const payload = req.user as JwtPayload;
     // العنوانُ الشبكيّ يُكتب على القبول كما يُكتب على سطر التدقيق — شاهدٌ لا تتبّع.

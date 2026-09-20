@@ -175,11 +175,12 @@ describe('ZATCA credit notes (e2e)', () => {
     const onNote = await issueNote(note.body.id).expect(400);
     expect(onNote.body.message).toContain('creditNotes.target_invalid');
 
-    // A note adjusts a document as it stood — it is never edited afterwards.
+    // A note adjusts a document as it stood — it is never edited afterwards
+    // (payment status is no PATCH field at all — `ق-١١٩٨`/② — so the probe is a note).
     const edit = await request(app.getHttpServer())
       .patch(`/invoices/${note.body.id}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ status: 'DUE' })
+      .send({ notes: 'تعديل على إشعار' })
       .expect(400);
     expect(edit.body.message).toContain('creditNotes.immutable');
 
@@ -251,9 +252,9 @@ describe('ZATCA credit notes (e2e)', () => {
     it('[SPEC 30.11] a credit note takes an ordinary position in the one hash chain', async () => {
       const invoice = await makeInvoice();
       const a = await request(app.getHttpServer()).post(`/zatca/invoices/${invoice.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
-      // Only an accepted document is handed on as the next PIH (see
-      // latestChainHash) — a rejected one is skipped, so the invoice is
-      // cleared here to make it a genuine predecessor.
+      // The predecessor is the document at ICV − 1 whatever its status
+      // (`previousChainHash`, ق-١١٩٨/⑦); it is cleared here only so the case
+      // reads as the common one — an accepted invoice followed by its note.
       await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: invoice.id }, data: { zatcaStatus: 'CLEARED' } }));
 
       const note = await issueNote(invoice.id).expect(201);
@@ -305,14 +306,22 @@ describe('ZATCA credit notes (e2e)', () => {
       await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.update({ where: { id: invoice.id }, data: { zatcaStatus: 'CLEARED' } }));
 
       // The XML the authority holds is now the legal document: data edits are
-      // refused, the local payment status still moves.
+      // refused, the local payment status still moves — through a receipt, never
+      // through PATCH (`ق-١١٩٨`/②: status is derived from allocations).
       const frozen = await request(app.getHttpServer())
         .patch(`/invoices/${invoice.id}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ lines: [{ description: 'تلاعب بعد التصديق', quantity: 1, unitPrice: 1, taxRate: 15 }] })
         .expect(409);
       expect(frozen.body.message).toContain('invoices.issued_locked');
-      await request(app.getHttpServer()).patch(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(200);
+      await request(app.getHttpServer()).patch(`/invoices/${invoice.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(400);
+      await request(app.getHttpServer())
+        .post('/payments')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ customerId, date: new Date().toISOString().slice(0, 10), amount: Number(invoice.total), method: 'CASH', allocations: [{ invoiceId: invoice.id, amount: Number(invoice.total) }] })
+        .expect(201);
+      const paid = (await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200)).body.find((i: { id: string }) => i.id === invoice.id);
+      expect(paid.status).toBe('PAID');
     }, 30000);
   });
 
@@ -349,7 +358,7 @@ describe('ZATCA credit notes (e2e)', () => {
       await issueDebit(invoice.id, { reason: '', lines: [{ description: 'x', quantity: 1, unitPrice: 10, taxRate: 15 }] }).expect(400);
     });
 
-    it('allows the payment status to move but nothing else', async () => {
+    it('allows the payment status to move (through a receipt) but nothing else', async () => {
       const invoice = await makeInvoice();
       const note = await issueDebit(invoice.id, {
         reason: 'فرق سعر',
@@ -357,7 +366,15 @@ describe('ZATCA credit notes (e2e)', () => {
       }).expect(201);
       createdInvoiceIds.push(note.body.id);
 
-      await request(app.getHttpServer()).patch(`/invoices/${note.body.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(200);
+      // A debit note IS receivable — its status moves like an invoice's: by allocation, never by PATCH (`ق-١١٩٨`/②).
+      await request(app.getHttpServer()).patch(`/invoices/${note.body.id}`).set('Authorization', `Bearer ${token}`).send({ status: 'PAID' }).expect(400);
+      await request(app.getHttpServer())
+        .post('/payments')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ customerId, date: new Date().toISOString().slice(0, 10), amount: Number(note.body.total), method: 'CASH', allocations: [{ invoiceId: note.body.id, amount: Number(note.body.total) }] })
+        .expect(201);
+      const paidNote = (await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${token}`).expect(200)).body.find((i: { id: string }) => i.id === note.body.id);
+      expect(paidNote.status).toBe('PAID');
       const edit = await request(app.getHttpServer())
         .patch(`/invoices/${note.body.id}`)
         .set('Authorization', `Bearer ${token}`)

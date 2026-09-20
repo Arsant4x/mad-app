@@ -271,15 +271,18 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     expect(replacementStd.zatcaStatus).toBe('NOT_SUBMITTED');
     expect(replacementStd.zatcaIcv).toBeNull();
 
-    // ثم يُرسَل كأيّ جديد: عدّادٌ وهويّةٌ وتجزئةٌ جديدة، والسلفُ من آخر مقبول لا من المردودة.
+    // ثم يُرسَل كأيّ جديد: عدّادٌ وهويّةٌ وتجزئةٌ جديدة — وسلفُه بصمةُ الموقع السابق بعينه
+    // (`ق-١١٩٨`/⑦): المردودةُ التي سبقته مباشرةً، لا «آخرُ مقبول» — فالسلسلةُ لا تتخطّى موقعاً.
     const sent = await submit(replacementStd.id).expect(201);
     replacementStd = (await getInvoice(replacementStd.id))!;
     expect(sent.body.zatcaStatus).toBe('REJECTED');
     expect(replacementStd.zatcaIcv).toBeGreaterThan(rejectedStd.zatcaIcv!);
     expect(replacementStd.zatcaUuid).not.toBe(rejectedStd.zatcaUuid);
     expect(replacementStd.zatcaHash).not.toBe(rejectedStd.zatcaHash);
-    expect(replacementStd.zatcaPreviousHash).not.toBe(rejectedStd.zatcaHash);
-    expect(replacementStd.zatcaPreviousHash).toBe(rejectedStd.zatcaPreviousHash);
+    const predecessor = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.findFirstOrThrow({ where: { egsUnitId: replacementStd.egsUnitId!, zatcaIcv: replacementStd.zatcaIcv! - 1 }, select: { zatcaHash: true } }),
+    );
+    expect(replacementStd.zatcaPreviousHash).toBe(predecessor.zatcaHash);
     // ولا إحالةَ أمام الهيئة — لا `BillingReference` ولا رقمُ المردودة في المستند.
     const xml = replacementStd.zatcaSignedXml!;
     expect(xml).not.toContain('BillingReference');

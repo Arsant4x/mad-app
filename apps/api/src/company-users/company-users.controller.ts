@@ -3,13 +3,17 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CompanyUsersService } from './company-users.service';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
 import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
 
+/** حساباتُ الموظفين قرارُ المالك وحدَه — قراءةً وكتابة (`§3.5`): معلَنٌ في الحارس
+ * (`@OwnerOnly`) ومؤكَّدٌ في الخدمة (`ق-١١٩٨`/①). */
 @Controller('company-users')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@OwnerOnly()
 export class CompanyUsersController {
   constructor(private readonly companyUsersService: CompanyUsersService) {}
 

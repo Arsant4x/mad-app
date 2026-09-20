@@ -402,11 +402,16 @@ export class ContractsService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
+        // ⚖️ لا قبضَ على عقدٍ ملغى ولا على قسطٍ ملغى (`ق-١١٩٨`/⑥ — مراجعةٌ خارجية): الإلغاءُ سوّى
+        //    العقدَ وأسقط أقساطَه وعكس ما استُحقّ منها، فقبضٌ بعده يُرحّل استحقاقاً واعترافاً على
+        //    التزامٍ لم يعد قائماً — كان يمرّ `201` (مقيس).
+        if (contract.status === 'CANCELLED') throw new ConflictException(MSG.contract_cancelled_no_payment);
 
         let installment = null;
         if (dto.installmentId) {
           installment = await tx.installment.findUnique({ where: { id: dto.installmentId } });
           if (!installment || installment.contractId !== contractId) throw new NotFoundException(MSG.installment_not_found);
+          if (installment.status === 'CANCELLED') throw new ConflictException(MSG.installment_cancelled_no_payment);
         }
 
         if (dto.method === 'BANK' && !dto.bankId) throw new BadRequestException(MSG.bank_required);

@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { ActivitiesService } from './activities.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
@@ -10,9 +12,13 @@ import { SetPrimaryActivityDto } from './dto/set-primary-activity.dto';
 import { PrimaryActivityService } from './primary-activity.service';
 
 /** No @RequiresScreen: the activity list feeds pickers on other screens, so any
- * tenant actor reads it. Writes are owner-only, enforced in the service. */
+ * tenant actor reads it. Writes are owner-only — declared on each write
+ * (`@OwnerOnly`, enforced in the guard) and asserted again in the service.
+ * ⚠️ وتعيينُ النشاط الرئيسي كان بلا تأكيدٍ في الخدمة (مقيس `ق-١١٩٨`/①): أيُّ موظّفٍ
+ * كان يبدّل شاشاتِ المنشأة كلِّها — والواجهةُ تعرضه للمالك وحدَه؛ صار للمالك في الحارس. */
 @Controller('activities')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('قائمةُ الأنشطة ومعاينةُ أثرِ الترشيح تُقرآن لكلّ فاعل (منتقياتُ الفروع والمنتجات) — والكتابةُ للمالك وحدَه')
 export class ActivitiesController {
   constructor(
     private readonly activitiesService: ActivitiesService,
@@ -45,21 +51,25 @@ export class ActivitiesController {
    * تعود في الطلب التالي بلا إعادة دخول. والبيانات لم تُمسّ أصلاً.
    */
   @Patch('primary')
+  @OwnerOnly()
   setPrimary(@CurrentTenant() tenant: TenantContext, @Body() dto: SetPrimaryActivityDto) {
     return this.primaryActivity.apply(tenant, dto.activityId ?? null, dto.confirmed);
   }
 
   @Post()
+  @OwnerOnly()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateActivityDto) {
     return this.activitiesService.create(tenant.companyId, tenant.actorType, dto);
   }
 
   @Patch(':id')
+  @OwnerOnly()
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateActivityDto) {
     return this.activitiesService.update(tenant.companyId, tenant.actorType, id, dto);
   }
 
   @Delete(':id')
+  @OwnerOnly()
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.activitiesService.remove(tenant.companyId, tenant.actorType, id);

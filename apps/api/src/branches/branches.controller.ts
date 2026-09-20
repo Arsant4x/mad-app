@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { BranchesService } from './branches.service';
 import { CreateBranchDto } from './dto/create-branch.dto';
@@ -9,9 +11,11 @@ import { UpdateBranchDto } from './dto/update-branch.dto';
 
 /** No @RequiresScreen: the branch list feeds the branch picker on other
  * screens, so any tenant actor needs to read it. Who may *change* branches is
- * enforced in the service (owner only). */
+ * declared on each write (`@OwnerOnly`, enforced in the guard) and asserted
+ * again in the service (`ق-١١٩٨`/①). */
 @Controller('branches')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('قائمةُ الفروع تغذّي منتقي الفرع في كلّ شاشة، مصفّاةً بفروع القارئ — والكتابةُ للمالك وحدَه')
 export class BranchesController {
   constructor(private readonly branchesService: BranchesService) {}
 
@@ -21,16 +25,19 @@ export class BranchesController {
   }
 
   @Post()
+  @OwnerOnly()
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateBranchDto) {
     return this.branchesService.create(tenant.companyId, tenant.actorType, dto);
   }
 
   @Patch(':id')
+  @OwnerOnly()
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateBranchDto) {
     return this.branchesService.update(tenant.companyId, tenant.actorType, id, dto);
   }
 
   @Delete(':id')
+  @OwnerOnly()
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.branchesService.remove(tenant.companyId, tenant.actorType, id);

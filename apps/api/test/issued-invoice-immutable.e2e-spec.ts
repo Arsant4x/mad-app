@@ -126,13 +126,18 @@ describe('الفاتورةُ الصادرة لا تُعدَّل ولا تُحذ�
     expect(await snapshot(inv.id)).toEqual(before);
   }, 30000);
 
-  it('③ الملاحظاتُ وحالةُ السداد تمرّ — لا تدخلان المستندَ الموقَّع', async () => {
+  it('③ الملاحظاتُ تمرّ وحالةُ السداد تتحرّك بالقبض — ولا يدخل أيٌّ منهما المستندَ الموقَّع', async () => {
     const inv = await makeInvoice();
     const before = await snapshot(inv.id);
     const notes = await auth(request(app.getHttpServer()).patch(`/invoices/${inv.id}`)).send({ notes: 'ملاحظةٌ بعد الإصدار' }).expect(200);
     expect(notes.body.notes).toBe('ملاحظةٌ بعد الإصدار');
-    const paid = await auth(request(app.getHttpServer()).patch(`/invoices/${inv.id}`)).send({ status: 'PAID' }).expect(200);
-    expect(paid.body.status).toBe('PAID');
+    // الحالةُ ليست حقلَ تعديل (`ق-١١٩٨`/②) — تُشتقّ من التخصيصات، فالقبضُ هو ما يحرّكها.
+    await auth(request(app.getHttpServer()).patch(`/invoices/${inv.id}`)).send({ status: 'PAID' }).expect(400);
+    await auth(request(app.getHttpServer()).post('/payments'))
+      .send({ customerId, date: today(), amount: Number(inv.total), method: 'CASH', allocations: [{ invoiceId: inv.id, amount: Number(inv.total) }] })
+      .expect(201);
+    const rows = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; status: string }[];
+    expect(rows.find((r) => r.id === inv.id)!.status).toBe('PAID');
     expect(await snapshot(inv.id)).toEqual(before);
   });
 
@@ -188,7 +193,7 @@ describe('الفاتورةُ الصادرة لا تُعدَّل ولا تُحذ�
     const credit = await auth(request(app.getHttpServer()).post(`/invoices/${inv.id}/credit-note`)).send({ reason: 'إلغاء' }).expect(201);
     created.push(credit.body.id);
 
-    const edit = await auth(request(app.getHttpServer()).patch(`/invoices/${credit.body.id}`)).send({ status: 'DUE' }).expect(400);
+    const edit = await auth(request(app.getHttpServer()).patch(`/invoices/${credit.body.id}`)).send({ notes: 'تعديلُ إشعار' }).expect(400);
     expect(edit.body.message).toContain('إشعار مقابل');
     const del = await auth(request(app.getHttpServer()).delete(`/invoices/${credit.body.id}`)).expect(409);
     expect(del.body.message).toContain('إشعار مقابل');

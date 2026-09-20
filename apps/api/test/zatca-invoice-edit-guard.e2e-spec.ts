@@ -356,15 +356,22 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     expect(Number(after!.total)).toBe(Number(before!.total));
   }, 40000);
 
-  it('still allows a status-only edit — a cleared invoice must remain markable PAID', async () => {
+  it('a cleared invoice still becomes PAID — through a receipt, never through PATCH (ق-١١٩٨/②)', async () => {
     const id = await makeClearedInvoice();
+    const before = await getInvoice(id);
 
-    const res = await patch(id, { status: 'PAID' }).expect(200);
-    expect(res.body.status).toBe('PAID');
+    // الحالةُ ليست حقلَ تعديل: تُردّ بالقائمة البيضاء قبل أن تبلغ الخدمة.
+    await patch(id, { status: 'PAID' }).expect(400);
+    await request(app.getHttpServer())
+      .post('/payments')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ customerId, date: new Date().toISOString().slice(0, 10), amount: Number(before!.total), method: 'CASH', allocations: [{ invoiceId: id, amount: Number(before!.total) }] })
+      .expect(201);
 
     const after = await getInvoice(id);
+    expect(after!.status).toBe('PAID');
     expect(after!.zatcaStatus).toBe('CLEARED');
-    expect(after!.zatcaHash).toBeTruthy();
+    expect(after!.zatcaHash).toBe(before!.zatcaHash);
   }, 40000);
 
   it('leaves the invoice and its posted journal entry untouched after a refused edit', async () => {
