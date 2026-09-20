@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { isUnitCode } from '../common/units/units';
+import { validateDeclaredTax } from '../common/vat/line-tax.util';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { MSG } from '../common/i18n/messages';
@@ -28,6 +29,8 @@ export class ProductsService {
     if (!isUnitCode(dto.unitCode)) throw new BadRequestException(MSG.unit_code_unknown);
     // ٥+٦ التتبّعُ بالدفعة والانتهاء يُعلَن (نعم أو لا) ولا يُخمَّن — كالوحدة (`ق-١٠٨١` · `ق-١٠٧٦`/١).
     if (typeof dto.expiryTracked !== 'boolean') throw new BadRequestException(MSG.expiry_tracked_required);
+    // ⑧ فئةُ الضريبة تُعلَن عند الإنشاء ولا تُخمَّن — والسببُ من قائمة الهيئة بقواعدها (`ق-١٢١١` · `ق-١٢٢٢`).
+    const tax = validateDeclaredTax(dto);
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.product.create({
         // companyId omitted on purpose — injected at runtime by the tenant
@@ -38,6 +41,7 @@ export class ProductsService {
           category: dto.category || null,
           unitCode: dto.unitCode,
           expiryTracked: dto.expiryTracked,
+          ...tax,
           price: dto.price ?? 0,
           cost: dto.cost ?? 0,
           minStock: dto.minStock ?? 0,
@@ -63,6 +67,20 @@ export class ProductsService {
       }
       // ٥+٦ إعلانُ التتبّع للقائم يمرّ من هنا عند لمس الصنف (`ق-١٠٨٣`) — نعم أو لا؛ ولا يُمحى إعلانٌ قائم.
       if (dto.expiryTracked !== undefined) data.expiryTracked = dto.expiryTracked;
+      // ⑧ إعلانُ الفئة للقائم (`LEGACY_STANDARD` ⟵ فئةٌ معلَنة) أو تغييرُها — الثلاثةُ تُفحص معاً على ما سيصير
+      // عليه الصنفُ لا على الجزء المرسَل: تغييرُ الفئة وحدَها مع سببٍ قائم من فئةٍ أخرى مخالفةٌ لا نسيان.
+      // ولا يُعاد صنفٌ إلى القيمة القديمة (الـDTO لا يقبلها). وإعادةُ التصنيف لا تمسّ مستنداً صادراً —
+      // السطورُ نسخت فئتَها لحظةَ البيع.
+      if (dto.taxCategory !== undefined || dto.taxExemptionReasonCode !== undefined || dto.taxExemptionReason !== undefined) {
+        const merged = validateDeclaredTax({
+          taxCategory: dto.taxCategory ?? (existing.taxCategory === 'LEGACY_STANDARD' ? null : existing.taxCategory),
+          taxExemptionReasonCode: dto.taxExemptionReasonCode !== undefined ? dto.taxExemptionReasonCode : existing.taxExemptionReasonCode,
+          taxExemptionReason: dto.taxExemptionReason !== undefined ? dto.taxExemptionReason : existing.taxExemptionReason,
+        });
+        data.taxCategory = merged.taxCategory;
+        data.taxExemptionReasonCode = merged.taxExemptionReasonCode;
+        data.taxExemptionReason = merged.taxExemptionReason;
+      }
       if (dto.price !== undefined) data.price = dto.price;
       if (dto.cost !== undefined) data.cost = dto.cost;
       if (dto.minStock !== undefined) data.minStock = dto.minStock;

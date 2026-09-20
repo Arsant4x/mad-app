@@ -34,7 +34,7 @@ describe('Receivables aging (e2e)', () => {
         customerId,
         issueDate: dayStr(dueOffset),
         dueDate: dayStr(dueOffset),
-        lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: total, taxRate: 0 }],
+        lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: total, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }],
         ...over,
       })
       .expect(201);
@@ -122,7 +122,7 @@ describe('Receivables aging (e2e)', () => {
     expect((await myRow())!.total).toBeCloseTo(before + 900, 2);
 
     await auth(request(app.getHttpServer()).post(`/invoices/${inv.id}/credit-note`))
-      .send({ issueDate: dayStr(0), reason: `خصم تسوية ${suffix}`, lines: [{ description: `إشعار ${suffix}`, quantity: 1, unitPrice: 300, taxRate: 0 }] })
+      .send({ issueDate: dayStr(0), reason: `خصم تسوية ${suffix}`, lines: [{ description: `إشعار ${suffix}`, quantity: 1, unitPrice: 300, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
     // 900 − 300 = 600 تُضاف لا 900.
@@ -164,7 +164,7 @@ describe('Receivables aging (e2e)', () => {
     const mk = async (total: number, issueOffset: number, dueOffset: number) =>
       (
         await co(request(app.getHttpServer()).post('/invoices'))
-          .send({ customerId: buyer, issueDate: dayStr(issueOffset), dueDate: dayStr(dueOffset), lines: [{ description: 'بند', quantity: 1, unitPrice: total, taxRate: 0 }] })
+          .send({ customerId: buyer, issueDate: dayStr(issueOffset), dueDate: dayStr(dueOffset), lines: [{ description: 'بند', quantity: 1, unitPrice: total, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
           .expect(201)
       ).body;
 
@@ -180,7 +180,7 @@ describe('Receivables aging (e2e)', () => {
     await co(request(app.getHttpServer()).post('/payments')).send({ customerId: buyer, date: dayStr(0), amount: 150, method: 'CASH', bankId: box }).expect(201);
     // وإشعار دائن على فاتورة.
     await co(request(app.getHttpServer()).post(`/invoices/${i2.id}/credit-note`))
-      .send({ issueDate: dayStr(0), reason: 'مرتجع', lines: [{ description: 'مرتجع', quantity: 1, unitPrice: 100, taxRate: 0 }] })
+      .send({ issueDate: dayStr(0), reason: 'مرتجع', lines: [{ description: 'مرتجع', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
     const report = (await co(request(app.getHttpServer()).get('/reports/receivables-aging?reconcile=true')).expect(200)).body as {

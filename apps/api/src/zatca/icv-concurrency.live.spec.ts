@@ -1,10 +1,13 @@
+import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../app.module';
+import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { seedProductionCredential } from '../../test/zatca-credential';
 import { GENESIS_PREVIOUS_HASH, nextIcv, previousChainHash } from './hash-chain.util';
+import * as xades from './ubl/xades.util';
 import { ZatcaAttemptFailedException, ZatcaService } from './zatca.service';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
@@ -143,7 +146,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
             baseTaxTotal: 15,
             baseTotal: 115,
             lines: {
-              create: [{ companyId, description: 'بند فحص', quantity: 1, unitPrice: 100, taxRate: 15 }],
+              create: [{ companyId, description: 'بند فحص', quantity: 1, unitPrice: 100, taxRate: 15, taxCategory: 'S' }],
             },
           },
         });
@@ -171,12 +174,70 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
     expect(b.zatcaIcv).toBeNull();
   });
 
-  it('① استدعاءان متزامنان يُنتجان موقعين مختلفين — لا تصادم ولا خطأ', async () => {
-    const results = await Promise.allSettled(
-      invoiceIds.map((id) => zatca.submitInvoice(companyId, 'COMPANY', id)),
-    );
+  /**
+   * «الطابورُ يعود إليه بعد أن يُختم سلفُه» (`ق-١١٩٨`/⑦ — تعليقُ `stampIfNeeded`): الخاسرُ في السباق
+   * يقرأ سلفَه محجوزاً بلا بصمة **في النافذة بين التزام ادّعاء الفائز وحفظ بصمته** فيُرفض باسمه
+   * (`ConflictException` لا `P2002` — فلا يلفّه `retryOnUniqueConflict`). هذا يمثّل الطابور: على
+   * ذلك الرفض بعينه **ينتظر حالةً لا زمناً** (لا موقعَ محجوزاً بلا بصمة — قراءةٌ من القاعدة) ثم يعيد
+   * الإرسال. وأيُّ رفضٍ آخر يُرمى كما هو.
+   *
+   * ⚠️ **وكان الاختبارُ يعتمد على مصادفة التوقيت** بعد `ق-١١٩٨`: أخضرُ حين يصل الخاسرُ بعد حفظ البصمة،
+   * وأحمرُ حين يصل قبلها (`§8.2.1` — سقط على السير `35516939838` وهو نفسُه على الشجرة نفسِها مرّ مرّتين).
+   */
+  let chainWaits = 0;
+  const waitUntilNoClaimWithoutHash = async () => {
+    for (let poll = 0; poll < 400; poll += 1) {
+      const pending = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.invoice.count({ where: { id: { in: invoiceIds }, zatcaIcv: { not: null }, zatcaHash: null } }),
+      );
+      if (pending === 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error('سلفٌ محجوزٌ بلا بصمة لم يُختم خلال ١٠ ثوانٍ — الطابورُ لا يجد ما يعود إليه');
+  };
+  const submitAsTheQueueWould = async (id: string) => {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await zatca.submitInvoice(companyId, 'COMPANY', id);
+      } catch (e) {
+        if (e instanceof ConflictException && String(e.message).startsWith(MSG.zatca_previous_unstamped)) {
+          chainWaits += 1;
+          await waitUntilNoClaimWithoutHash();
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw new Error('لم يتقارب بعد ثلاث عودات — السلفُ يُختم ولا يُرفع الحبس');
+  };
 
-    // **لا رفضَ إلا المسمّى**: التوقيعُ يسقط بالمفتاح الفاسد فيُرمى باسمه (`ق-٩٧١`) — وهو
+  it('① استدعاءان متزامنان يُنتجان موقعين مختلفين — الخاسرُ يُرفض باسمه ويعود بعد ختم سلفه، ولا تصادم', async () => {
+    // إلزامُ التداخل (`§8.8` الوجه الثالث — `ق-٨٢٠`): أوّلُ توقيعٍ (الفائزُ بالادّعاء) يُبطَّأ فيبقى
+    // موقعُه محجوزاً بلا بصمةٍ حتى يصل الخاسرُ إلى `previousChainHash` — **في كل تشغيل لا في بعضه**.
+    // والدالّةُ الحقيقيةُ تُستدعى بعد الإبطاء، فالختمُ ختمٌ حقيقيّ.
+    const realSign = xades.signInvoice;
+    let delayedOnce = false;
+    const sign = jest.spyOn(xades, 'signInvoice').mockImplementation(async (input) => {
+      if (!delayedOnce) {
+        delayedOnce = true;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+      return realSign(input);
+    });
+
+    let results: PromiseSettledResult<unknown>[];
+    let signCalls = 0;
+    try {
+      results = await Promise.allSettled(invoiceIds.map(submitAsTheQueueWould));
+      signCalls = sign.mock.calls.length;
+    } finally {
+      // ⚠️ `mockRestore` يمسح سجلَّ النداءات مع الاستعادة — فالعدُّ يُلتقط قبله لا بعده.
+      sign.mockRestore();
+    }
+    // حارسٌ على المجسّ: التوقيعُ استُدعي مرّةً لكلِّ فاتورة عبر البديل — فالإبطاءُ وقع على المسار فعلاً.
+    expect(signCalls).toBe(invoiceIds.length);
+
+    // **لا رفضَ إلا المسمّى**: النقلُ يسقط على `fetch` المعترَض فيُرمى باسمه (`ق-٩٧١`) — وهو
     // المتوقَّع؛ وأيُّ رفضٍ آخر عطلٌ (قبل إعادة المحاولة كان الخاسر يردّ `P2002` خام).
     const rejected = results.filter(
       (r) => r.status === 'rejected' && !((r as PromiseRejectedResult).reason instanceof ZatcaAttemptFailedException),
@@ -185,6 +246,10 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
       const reasons = rejected.map((r) => String((r as PromiseRejectedResult).reason?.message ?? r)).join(' | ');
       throw new Error(`استدعاء تزامنيّ رُفض بدل أن يتقارب — ${reasons}`);
     }
+
+    // **والرفضُ المسمّى وقع مرّةً بالضبط**: الخاسرُ قرأ سلفَه محجوزاً بلا بصمة فرُفض ثم عاد — لا صفراً
+    // (تخطّى السلفَ إلى الأصل: التفرّعُ الذي تمنعه `ق-١١٩٨`) ولا أكثر (لم يُرفع الحبسُ بعد الختم).
+    expect(chainWaits).toBe(1);
 
     const [a, b] = await Promise.all(invoiceIds.map(icvOf));
 
@@ -196,6 +261,14 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
 
     // ومتتاليان من ١: لا فجوة في السلسلة — الفجوة عطلٌ مستقل عن التكرار.
     expect([a.zatcaIcv, b.zatcaIcv].sort((x, y) => (x ?? 0) - (y ?? 0))).toEqual([1, 2]);
+
+    // وسلفُ الموقع ٢ بصمةُ الموقع ١ بعينها — لا الأصل: السلسلةُ لم تتفرّع بالسباق.
+    const chain = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.invoice.findMany({ where: { id: { in: invoiceIds } }, select: { zatcaIcv: true, zatcaHash: true, zatcaPreviousHash: true }, orderBy: { zatcaIcv: 'asc' } }),
+    );
+    expect(chain[0].zatcaPreviousHash).toBe(GENESIS_PREVIOUS_HASH);
+    expect(chain[0].zatcaHash).toBeTruthy();
+    expect(chain[1].zatcaPreviousHash).toBe(chain[0].zatcaHash);
   });
 
   it('② القيد الفريد قائم فعلاً — الطبقة الأولى تحت إعادة المحاولة', async () => {

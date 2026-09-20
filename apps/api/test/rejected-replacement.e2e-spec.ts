@@ -222,7 +222,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     simpleCustomerId = (await auth(request(server()).post('/customers')).send({ name: `عميل مبسَّط ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(request(server()).post('/warehouses')).send({ name: `مستودع البدل ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(server()).post('/branches')).send({ name: `فرع البدل ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await auth(request(server()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, name: `صنف البدل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
+    productId = (await auth(request(server()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف البدل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
     const supplierId = (await auth(request(server()).post('/suppliers')).send({ name: `مورّد البدل ${suffix}` }).expect(201)).body.id;
     await auth(request(server()).post('/purchases'))
       .send({ supplierId, date: '2026-05-01', subtotal: 400, warehouseId, branchId, lines: [{ description: 'صنفٌ مخزني', productId, quantity: 10, unitPrice: 40, taxRate: 15 }] })

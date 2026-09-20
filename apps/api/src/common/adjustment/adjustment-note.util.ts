@@ -45,11 +45,16 @@ export interface OriginalLine {
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
   taxRate: Prisma.Decimal | number;
+  /** ⑧ فئةُ الضريبة وسببُها كما كُتبت على الأصل — تُنقل مع السطر لا تُقرأ من البطاقة (سطرُ الشراء بلا فئةٍ بعد). */
+  taxCategory?: string | null;
+  taxExemptionReasonCode?: string | null;
+  taxExemptionReason?: string | null;
 }
 
 /**
  * ② **الإشعارُ الكامل يُعبَّأ من بنود الأصل** — والصنفُ يُنقل مع السطر: إشعارٌ يفقد صنفه يعكس
  * القيمةَ ولا يستطيع عكس تكلفته. و`extra` ما يضيفه كلُّ جانبٍ على سطره (رابطُ المرتجع وحالتُه).
+ * ⑧ وفئةُ الضريبة تُنقل كما كُتبت: الإشعارُ يعكس ما فُوتر لا ما على البطاقة اليوم.
  */
 export function linesFromOriginal<L extends OriginalLine, X extends object>(lines: readonly L[], extra: (line: L) => X) {
   return lines.map((l) => ({
@@ -58,6 +63,9 @@ export function linesFromOriginal<L extends OriginalLine, X extends object>(line
     quantity: Number(l.quantity),
     unitPrice: Number(l.unitPrice),
     taxRate: Number(l.taxRate),
+    ...(l.taxCategory
+      ? { taxCategory: l.taxCategory as 'S' | 'Z' | 'E' | 'O', taxExemptionReasonCode: l.taxExemptionReasonCode ?? undefined, taxExemptionReason: l.taxExemptionReason ?? undefined }
+      : {}),
     ...extra(l),
   }));
 }

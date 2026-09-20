@@ -18,9 +18,9 @@ describe('مستندُ الهيئة — وحدةُ الكمّية من السط�
     seller: { name: 'شركة الأفق التجارية المحدودة', vatNumber: '300000000000003', crNumber: '1010101010', street: 'طريق الملك فهد', buildingNumber: '1234', district: 'العليا', city: 'الرياض', postalCode: '12345' },
     buyer: { name: 'مؤسسة المشتري', vatNumber: '311111111111113' },
     lines: [
-      { description: 'أرزّ بالكيلو', quantity: 2, unitCode: 'KGM', unitPrice: 100, taxRate: 15 },
-      { description: 'صنفٌ قديم بلا وحدةٍ معلَنة', quantity: 1, unitCode: null, unitPrice: 50, taxRate: 15 },
-      { description: 'خدمةٌ بلا صنف', quantity: 1, unitPrice: 30, taxRate: 15 },
+      { description: 'أرزّ بالكيلو', quantity: 2, unitCode: 'KGM', unitPrice: 100, taxRate: 15, taxCategory: 'S' },
+      { description: 'صنفٌ قديم بلا وحدةٍ معلَنة', quantity: 1, unitCode: null, unitPrice: 50, taxRate: 15, taxCategory: 'S' },
+      { description: 'خدمةٌ بلا صنف', quantity: 1, unitPrice: 30, taxRate: 15, taxCategory: 'S' },
     ],
     currency: 'SAR',
     subtotal: 280,
@@ -40,7 +40,7 @@ describe('مستندُ الهيئة — وحدةُ الكمّية من السط�
   });
 
   it('الرمزُ يُهرَّب كأيِّ سمة — لا حقنَ من رمزٍ شاذّ', () => {
-    const xml = buildUnsignedInvoiceXml({ ...base, lines: [{ description: 'x', quantity: 1, unitCode: 'A"B', unitPrice: 1, taxRate: 15 }] });
+    const xml = buildUnsignedInvoiceXml({ ...base, lines: [{ description: 'x', quantity: 1, unitCode: 'A"B', unitPrice: 1, taxRate: 15, taxCategory: 'S' }] });
     expect(xml).toContain('unitCode="A&quot;B"');
   });
 });

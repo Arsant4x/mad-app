@@ -25,9 +25,24 @@ export class QuoteLineDto {
   @Min(0)
   unitPrice!: number;
 
+  /** ⑧ مشتقّةٌ من الفئة — كما في بند الفاتورة: تُقبل مساويةً الأساسية إعلاناً لـ`S`، وتُطابَق مع فئةٍ معلَنة. */
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  taxRate!: number;
+  taxRate?: number;
+
+  /** ⑧ الفئةُ لبندٍ بلا صنف؛ وبندٌ بصنفٍ يرثها من بطاقته لحظةَ كتابة العرض. */
+  @IsOptional()
+  @IsIn(['S', 'Z', 'E', 'O'])
+  taxCategory?: 'S' | 'Z' | 'E' | 'O';
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReasonCode?: string;
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReason?: string;
 }
 
 export class CreateQuoteDto extends CurrencyFieldsDto {

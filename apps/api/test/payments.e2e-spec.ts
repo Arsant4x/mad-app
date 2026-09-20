@@ -36,7 +36,7 @@ describe('Customer payments + allocations (e2e)', () => {
         issueDate: today(),
         dueDate: today(),
         ...(currency ? { currency, exchangeRate } : {}),
-        lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: total, taxRate: 0 }],
+        lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: total, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }],
       })
       .expect(201);
     return { id: res.body.id, no: res.body.no };

@@ -63,8 +63,9 @@ describe('ZATCA UBL 2.1 invoice and XAdES signature', () => {
     },
     buyer: { name: 'مؤسسة المشتري', vatNumber: '311111111111113' },
     lines: [
-      { description: 'خدمة استشارية', quantity: 2, unitPrice: 100, taxRate: 15 },
-      { description: 'بند معفى', quantity: 1, unitPrice: 50, taxRate: 0 },
+      { description: 'خدمة استشارية', quantity: 2, unitPrice: 100, taxRate: 15, taxCategory: 'S' },
+      // ⑧ «معفى» بفئته وسببه — كان يخرج «نسبةَ صفر» بلا سبب.
+      { description: 'بند معفى', quantity: 1, unitPrice: 50, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' },
     ],
     currency: 'SAR',
     subtotal: 250,

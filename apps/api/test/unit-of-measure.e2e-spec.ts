@@ -38,7 +38,7 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const today = () => new Date().toISOString().slice(0, 10);
   const invoiceLines = (invoiceId: string) =>
-    tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoiceLine.findMany({ where: { invoiceId }, orderBy: { createdAt: 'asc' }, select: { productId: true, unitCode: true, description: true, quantity: true, unitPrice: true, taxRate: true } }));
+    tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoiceLine.findMany({ where: { invoiceId }, orderBy: { createdAt: 'asc' }, select: { productId: true, unitCode: true, description: true, quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } }));
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -76,7 +76,7 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
     // النصُّ الحرّ لم يعد باباً — الحقلُ القديم يُرفض في الطلب.
     await auth(http().post('/products')).send({ name: `نصّ ${suffix}`, price: 10, unit: 'قطعة' }).expect(400);
     // ٥+٦: التتبّعُ بالدفعة والانتهاء يُعلَن كذلك عند الإنشاء (ق-١٠٨١) — كما الوحدة.
-    const created = await auth(http().post('/products')).send({ name: `أرزّ ${suffix}`, price: 100, unitCode: 'KGM', expiryTracked: false }).expect(201);
+    const created = await auth(http().post('/products')).send({ name: `أرزّ ${suffix}`, price: 100, unitCode: 'KGM', expiryTracked: false, taxCategory: 'S' }).expect(201);
     expect(created.body.unitCode).toBe('KGM');
     declaredId = created.body.id;
   });
@@ -85,7 +85,8 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
     // صفٌّ كما تركته الهجرة: نصٌّ قديم «كرتون» وبلا رمز.
     legacyId = (
       await tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unit: 'كرتون', price: 25, cost: 0 } as unknown as Prisma.ProductUncheckedCreateInput }),
+        // ⑧ وفئةٌ قديمة (`LEGACY_STANDARD`) بتاريخٍ يسبق لحظةَ الهجرة — فقيدُ `CHECK` يقبلها لما سبق وحدَه؛ والسطرُ الذي يبيعه يرثها.
+        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unit: 'كرتون', price: 25, cost: 0, taxCategory: 'LEGACY_STANDARD', createdAt: new Date('2000-01-01T00:00:00Z') } as unknown as Prisma.ProductUncheckedCreateInput }),
       )
     ).id;
     const list = (await auth(http().get('/products')).expect(200)).body as { id: string; unitCode: string | null; unit: string | null }[];
@@ -158,7 +159,16 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
       pih: createHash('sha256').update('0').digest('base64'),
       seller: { name: 'منشأة الوحدات', vatNumber: '300000000000003' },
       buyer: { name: 'عميل', vatNumber: null },
-      lines: rows.map((l) => ({ description: l.description, quantity: Number(l.quantity), unitCode: l.unitCode ?? null, unitPrice: Number(l.unitPrice), taxRate: Number(l.taxRate) })),
+      lines: rows.map((l) => ({
+        description: l.description,
+        quantity: Number(l.quantity),
+        unitCode: l.unitCode ?? null,
+        unitPrice: Number(l.unitPrice),
+        taxRate: Number(l.taxRate),
+        taxCategory: l.taxCategory,
+        taxExemptionReasonCode: l.taxExemptionReasonCode,
+        taxExemptionReason: l.taxExemptionReason,
+      })),
       currency: 'SAR',
       subtotal: 225,
       taxTotal: 33.75,

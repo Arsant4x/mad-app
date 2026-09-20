@@ -92,8 +92,8 @@ describe('التكاليفُ المحمَّلة — توزيعُ فاتورةٍ 
     customerId = (await post('/customers').send({ name: `عميل تكلفة ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع تكلفة ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع تكلفة ${suffix}`, warehouseId }).expect(201)).body.id;
-    productA = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف أ ${suffix}`, price: 150, cost: 40 }).expect(201)).body.id;
-    productB = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف ب ${suffix}`, price: 150, cost: 20 }).expect(201)).body.id;
+    productA = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف أ ${suffix}`, price: 150, cost: 40 }).expect(201)).body.id;
+    productB = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف ب ${suffix}`, price: 150, cost: 20 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {

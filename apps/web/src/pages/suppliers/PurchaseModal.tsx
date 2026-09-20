@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
+import { STANDARD_VAT_RATE } from '../../lib/vat';
 import type { Purchase } from '../../api/purchases';
 import type { Supplier } from '../../api/suppliers';
 import { fmt, today } from '../../lib/format';
@@ -89,7 +90,7 @@ export function PurchaseModal({
 
   const preview = useMemo(() => {
     const sub = parseFloat(String(subtotal)) || 0;
-    const tax = exempt ? 0 : round2(sub * 0.15);
+    const tax = exempt ? 0 : round2((sub * STANDARD_VAT_RATE) / 100);
     return { tax, total: sub + tax };
   }, [subtotal, exempt]);
 

@@ -54,7 +54,7 @@ describe('Invoices tenant isolation (e2e)', () => {
         dueDate: '2026-07-31',
         lines: [
           { description: 'بند 1', quantity: 2, unitPrice: 100, taxRate: 15 },
-          { description: 'بند 2', quantity: 1, unitPrice: 50, taxRate: 0 },
+          { description: 'بند 2', quantity: 1, unitPrice: 50, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' },
         ],
       })
       .expect(201);

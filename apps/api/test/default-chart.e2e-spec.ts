@@ -119,7 +119,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     it('سند قبض أول يوم يُرحَّل — 1000 مديناً و1200 دائناً', async () => {
       const customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل قبض ${suffix}` }).expect(201)).body.id;
       const inv = await auth(request(app.getHttpServer()).post('/invoices'))
-        .send({ customerId, issueDate: '2026-07-20', dueDate: '2026-08-20', lines: [{ description: `بند قبض ${suffix}`, quantity: 1, unitPrice: 300, taxRate: 0 }] })
+        .send({ customerId, issueDate: '2026-07-20', dueDate: '2026-08-20', lines: [{ description: `بند قبض ${suffix}`, quantity: 1, unitPrice: 300, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
         .expect(201);
       const bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, openingBalance: 0, openingDate: '2026-07-01' }).expect(201)).body.id;
 
@@ -132,7 +132,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
     }, 90000);
 
     it('بيع نقطة بيع أول يوم يُرحَّل كفاتورة مدفوعة', async () => {
-      const productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, name: `صنف ${suffix}`, price: 50 }).expect(201)).body.id;
+      const productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف ${suffix}`, price: 50 }).expect(201)).body.id;
       await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
 
       const sale = await auth(request(app.getHttpServer()).post('/pos/sales')).send({ lines: [{ productId, quantity: 2 }], paymentMethod: 'CASH' }).expect(201);

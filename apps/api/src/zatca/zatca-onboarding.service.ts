@@ -13,8 +13,10 @@ import { wallClockOf } from '../common/wall-clock.util';
 import { requeueFailedWithinTx } from '../outbox/outbox.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
-import { buildUnsignedInvoiceXml, UblDocumentType } from './ubl/invoice-xml.util';
+import { buildUnsignedInvoiceXml, UblDocumentType, type UblInvoiceLine } from './ubl/invoice-xml.util';
 import { signInvoice } from './ubl/xades.util';
+import { computeDocumentTotals } from '../common/money/totals';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 
 /**
  * Fatoora onboarding, run by the platform on the merchant's behalf.
@@ -370,6 +372,18 @@ export class ZatcaOnboardingService {
       const referencedInvoice = sample.invoiceType === 'standard' ? 'CMP-1' : 'CMP-4';
       const uuid = randomUUID();
 
+      // ⑧ عيّنةُ الفاتورة المبسَّطة تحمل سطراً بنسبة الصفر بسببه (`VATEX-SA-35` — الأدوية والمعدات
+      // الطبية): فيُثبَت مسارُ الفئة والسبب **أمام الهيئة** لا أمامنا (الموجز §٤-ج). والمجاميعُ
+      // من الدالّة الواحدة لا أرقاماً مكتوبة. ⚠️ لم يُجرَّب على بيئة الاختبار بعد — أوّلُ تشغيلٍ
+      // حيٍّ للامتثال هو الإثبات، ويُردّ السطرُ بسطرٍ إن رفضته الهيئة.
+      const sampleLines: UblInvoiceLine[] = [
+        { description: 'عينة فحص الامتثال', quantity: 1, unitPrice: 100, taxRate: STANDARD_VAT_RATE, taxCategory: 'S' },
+        ...(sample.invoiceType === 'simplified' && sample.documentType === 'invoice'
+          ? [{ description: 'عينة نسبة الصفر — دواء', quantity: 1, unitPrice: 50, taxRate: 0, taxCategory: 'Z' as const, taxExemptionReasonCode: 'VATEX-SA-35' }]
+          : []),
+      ];
+      const sampleTotals = computeDocumentTotals(sampleLines);
+
       const unsigned = buildUnsignedInvoiceXml({
         number,
         uuid,
@@ -387,19 +401,19 @@ export class ZatcaOnboardingService {
           sample.invoiceType === 'standard'
             ? { name: 'شركة عينة الامتثال', vatNumber: '399999999900003', street: 'طريق العينة', buildingNumber: '1111', district: 'حي العينة', city: 'الرياض', postalCode: '12345' }
             : { name: 'عميل نقدي', vatNumber: null },
-        lines: [{ description: 'عينة فحص الامتثال', quantity: 1, unitPrice: 100, taxRate: 15 }],
+        lines: sampleLines,
         currency: 'SAR',
-        subtotal: 100,
-        taxTotal: 15,
-        total: 115,
-        taxTotalSar: 15,
+        subtotal: sampleTotals.subtotal,
+        taxTotal: sampleTotals.taxTotal,
+        total: sampleTotals.total,
+        taxTotalSar: sampleTotals.taxTotal,
       });
 
       const { signedXml, invoiceHash } = await signInvoice({
         unsignedXml: unsigned,
         privateKeyPem,
         certificateBase64: input.complianceCsid,
-        qr: { sellerName: seller.name, vatNumber: seller.vatNumber!, issued, total: 115, vatAmount: 15 },
+        qr: { sellerName: seller.name, vatNumber: seller.vatNumber!, issued, total: sampleTotals.total, vatAmount: sampleTotals.taxTotal },
       });
 
       const res = await fetch(`${apiBaseFor(input.environment)}/compliance/invoices`, {

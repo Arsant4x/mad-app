@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
+import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { computeDocumentTotals, lineNet } from '../common/money/totals';
+import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
@@ -139,7 +142,16 @@ export class ObligationsService {
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
       const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } as const;
       const [invoices, purchaseRows, voidedRows, rent] = await Promise.all([
-        tx.invoice.findMany({ where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED }, select: { subtotal: true, taxTotal: true, docType: true } }),
+        // ⑧ الإقرارُ يقرأ **السطورَ** لا مجموعَ الفاتورة (`ق-١٢٢٣`): كان كلُّ مبيعٍ في الخانة `1` بمجموعه ولو كان
+        // فيه سطرٌ بنسبة الصفر أو معفى — فلا يصحّ إقرارُ صيدليةٍ ولا مصدِّر. والمبالغُ بالريال عبر سعر الفاتورة.
+        tx.invoice.findMany({
+          where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED },
+          select: {
+            docType: true,
+            exchangeRate: true,
+            lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
+          },
+        }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: purchaseSelect }),
         // ⚖️ الإلغاءُ بقيد عكسٍ يدخل الإقرارَ **في ربعه** كما دخل الأصلُ في ربعه (`ق-٩٩٧`/②) — لا يُعاد كتابةُ ربعٍ مضى.
         tx.purchase.findMany({ where: { voidedAt: { gte: from, lt: new Date(to.getTime() + 86_400_000) } }, select: purchaseSelect }),
@@ -153,11 +165,21 @@ export class ObligationsService {
       const sign = (docType: string) => adjustmentSign(docType, 'CREDIT_NOTE');
       // ⚖️ وإشعارُ المورّد الدائن يعكس ضريبةَ المدخلات بإشارته في فترة تاريخه (`ق-١٠٠٦`/④) — لا يُعاد كتابةُ ربعٍ مضى.
       const purchaseSign = (p: { docType: string; voidSign: number }) => adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * p.voidSign;
+      // ⑧ توزيعُ السطور على خانات النموذج (دليلُ الإقرار — الموجز §٢-د · `exemption-reasons.ts`):
+      //   `1` الخاضعُ بالنسبة الأساسية (`S`، ومعه ما بيع من صنفٍ لم يُعلَن `LEGACY_STANDARD` — يُعدّ ويُعلَن)
+      //   `2` المبيعاتُ للمواطنين — **تابعةٌ للمشتري، غيرُ مدعومة: صفرٌ معلَن** (`ق-١٢٢٣`)، لا تُترك في `3`
+      //   `3` الصفرُ المحليّ · `4` الصادرات · `5` المعفى · وخارجُ النطاق (`O`) لا يدخل الإقرار ويُعدّ
+      //   و`LEGACY_ZERO` — سطرٌ قديم بصفرٍ لا يُعرف أزيروٌ هو أم معفىً أم خارج النطاق: **يُعدّ ويُعلَن ولا
+      //   يُنسب إلى خانة** — أوّلُ صفٍّ يقول «لا أعرف» بدل أن يختار.
+      const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: sign(v.docType), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
       // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز).
-      const salesStandard = round2(invoices.reduce((s, v) => s + sign(v.docType) * Number(v.subtotal), 0) + rent.standard + rent.legacyStandard);
-      const salesStandardVat = round2(invoices.reduce((s, v) => s + sign(v.docType) * Number(v.taxTotal), 0) + rent.standardVat + rent.legacyStandardVat);
-      const salesExempt = round2(rent.exempt + rent.legacyExempt);
+      const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard);
+      const salesStandardVat = round2(boxes.box1.vat + rent.standardVat + rent.legacyStandardVat);
+      const salesExempt = round2(boxes.box5.net + rent.exempt + rent.legacyExempt);
+      const salesZeroRatedDomestic = boxes.box3.net;
+      const salesExports = boxes.box4.net;
+      const totalSales = round2(salesStandard + boxes.box2.net + salesZeroRatedDomestic + salesExports + salesExempt);
 
       // A purchase with no valid tax invoice is dropped from the declaration
       // entirely (matching the mockup): its input VAT can't be reclaimed, so it
@@ -186,6 +208,23 @@ export class ObligationsService {
         salesStandard,
         salesStandardVat,
         salesExempt,
+        /** ⑧ الخاناتُ من السطور — و`2` صفرٌ معلَن بنصّه، والقديمُ وخارجُ النطاق عدّاً معلَناً لا خانةً. */
+        salesZeroRatedDomestic,
+        salesExports,
+        salesCitizens: boxes.box2.net,
+        salesCitizensNote: 'المبيعاتُ للمواطنين (الخدمات الصحية الخاصة / التعليم الأهلي الخاص) تتبع هويّةَ المشتري لا الصنف — غيرُ مدعومة بعد؛ الخانةُ صفرٌ معلَن ولا تُدمَج في الخانة 3',
+        totalSales,
+        salesOutOfScope: boxes.outOfScope,
+        legacyZeroLines: boxes.legacyZero,
+        legacyStandardLines: boxes.legacyStandard,
+        boxes: {
+          1: boxes.box1,
+          2: { ...boxes.box2, supported: false },
+          3: boxes.box3,
+          4: boxes.box4,
+          5: boxes.box5,
+          6: { net: totalSales },
+        },
         rent,
         purchasesStandard,
         purchasesStandardVat,
@@ -319,4 +358,91 @@ export class ObligationsService {
       section.legacyExempt = round2(section.legacyExempt + net);
     }
   }
+}
+
+/** ⑧ سطرُ مستندٍ كما يقرؤه الإقرار — الحقولُ التي نُسخت لحظةَ البيع. */
+interface DeclarationLine {
+  quantity: Prisma.Decimal | number;
+  unitPrice: Prisma.Decimal | number;
+  taxRate: Prisma.Decimal | number;
+  taxCategory: string;
+  taxExemptionReasonCode: string | null;
+  taxExemptionReason: string | null;
+}
+
+export interface SalesBoxes {
+  box1: { net: number; vat: number };
+  box2: { net: number; vat: number };
+  box3: { net: number };
+  box4: { net: number };
+  box5: { net: number };
+  /** خارجُ النطاق — لا يدخل الإقرار، ويُعدّ. */
+  outOfScope: { lineCount: number; net: number };
+  /** سطورٌ قديمة بصفرٍ بلا فئة — تُعدّ وتُعلَن ولا تُنسب إلى خانة. */
+  legacyZero: { lineCount: number; net: number };
+  /** ما بيع من صنفٍ لم يُعلَن — دخل الخانة `1` كالخاضع ويُعدّ («بيعٌ بقيمةٍ قديمة»). */
+  legacyStandard: { lineCount: number; net: number };
+}
+
+/**
+ * ⑧ توزيعُ سطور المبيعات على خانات النموذج — بالدالّة التي يبني بها الدفترُ والمستندُ مجاميعَهما
+ * (`computeDocumentTotals`: وعاءٌ لكل فئةٍ ونسبةٍ وسبب)، فما يُقرّ هو ما رُحِّل وما خُتم هللةً بهللة؛
+ * والمبالغُ بالريال بسعر الفاتورة نفسِها، والإشعارُ الدائن بإشارته.
+ */
+export function salesBoxesFromLines(invoices: readonly { sign: number; exchangeRate: number; lines: readonly DeclarationLine[] }[]): SalesBoxes {
+  const boxes: SalesBoxes = {
+    box1: { net: 0, vat: 0 },
+    box2: { net: 0, vat: 0 },
+    box3: { net: 0 },
+    box4: { net: 0 },
+    box5: { net: 0 },
+    outOfScope: { lineCount: 0, net: 0 },
+    legacyZero: { lineCount: 0, net: 0 },
+    legacyStandard: { lineCount: 0, net: 0 },
+  };
+  for (const inv of invoices) {
+    const lines = inv.lines.map((l) => ({
+      quantity: Number(l.quantity),
+      unitPrice: Number(l.unitPrice),
+      taxRate: Number(l.taxRate),
+      taxCategory: l.taxCategory,
+      taxExemptionReasonCode: l.taxExemptionReasonCode,
+      taxExemptionReason: l.taxExemptionReason,
+    }));
+    const base = (amount: number) => toBaseAmount(amount, inv.exchangeRate) * inv.sign;
+    for (const bucket of computeDocumentTotals(lines).byRate) {
+      const net = base(bucket.taxable);
+      switch (bucket.category) {
+        case 'S':
+          boxes.box1.net = round2(boxes.box1.net + net);
+          boxes.box1.vat = round2(boxes.box1.vat + base(bucket.tax));
+          break;
+        case 'Z': {
+          const box = exemptionReasonByCode(bucket.reasonCode)?.box ?? 3;
+          if (box === 4) boxes.box4.net = round2(boxes.box4.net + net);
+          else if (box === 2) boxes.box2.net = round2(boxes.box2.net + net);
+          else boxes.box3.net = round2(boxes.box3.net + net);
+          break;
+        }
+        case 'E':
+          boxes.box5.net = round2(boxes.box5.net + net);
+          break;
+        case 'O':
+          boxes.outOfScope.net = round2(boxes.outOfScope.net + net);
+          break;
+        case 'LEGACY_ZERO':
+          boxes.legacyZero.net = round2(boxes.legacyZero.net + net);
+          break;
+      }
+    }
+    for (const l of lines) {
+      if (l.taxCategory === 'LEGACY_ZERO') boxes.legacyZero.lineCount += 1;
+      else if (l.taxCategory === 'O') boxes.outOfScope.lineCount += 1;
+      else if (l.taxCategory === 'LEGACY_STANDARD') {
+        boxes.legacyStandard.lineCount += 1;
+        boxes.legacyStandard.net = round2(boxes.legacyStandard.net + base(lineNet(l)));
+      }
+    }
+  }
+  return boxes;
 }

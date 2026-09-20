@@ -96,10 +96,10 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
     const suffix = Date.now();
     warehouseId = (await post('/warehouses').send({ name: `مستودع افتتاح ${suffix}` }).expect(201)).body.id;
     supplierId = (await post('/suppliers').send({ name: `مورّد افتتاح ${suffix}` }).expect(201)).body.id;
-    plainProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف افتتاح ${suffix}`, price: 10, cost: 4 }).expect(201)).body.id;
-    trackedProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: true, name: `دواء افتتاح ${suffix}`, price: 9, cost: 2.5 }).expect(201)).body.id;
-    provisionalProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف مؤقّت ${suffix}`, price: 20, cost: 7 }).expect(201)).body.id;
-    movedProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف متحرّك ${suffix}`, price: 5, cost: 1 }).expect(201)).body.id;
+    plainProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف افتتاح ${suffix}`, price: 10, cost: 4 }).expect(201)).body.id;
+    trackedProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: true, taxCategory: 'S', name: `دواء افتتاح ${suffix}`, price: 9, cost: 2.5 }).expect(201)).body.id;
+    provisionalProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف مؤقّت ${suffix}`, price: 20, cost: 7 }).expect(201)).body.id;
+    movedProductId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف متحرّك ${suffix}`, price: 5, cost: 1 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {
@@ -275,7 +275,7 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
     const cid = lockCompany.companyId;
     const suffix = Date.now();
     const wh = (await post('/warehouses', t).send({ name: `مستودع مقفل ${suffix}` }).expect(201)).body.id;
-    const prod = (await post('/products', t).send({ unitCode: 'H87', expiryTracked: false, name: `صنف مقفل ${suffix}`, price: 5, cost: 2 }).expect(201)).body.id;
+    const prod = (await post('/products', t).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف مقفل ${suffix}`, price: 5, cost: 2 }).expect(201)).body.id;
     const year = await post('/fiscal-years', t).send({ name: 'سنة الافتتاح', start: '2026-01-01', end: '2026-12-31' }).expect(201);
     const january = year.body.periods.find((p: { month: number }) => p.month === 1);
     await patch(`/fiscal-years/periods/${january.id}/close`, t).expect(200);

@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -22,6 +22,19 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   expiryTracked?: boolean;
+
+  /** ⑧ إعلانُ الفئة للقائم (`LEGACY_STANDARD` ⟵ `S`/`Z`/`E`/`O`) أو تغييرُها — ولا يُعاد صنفٌ إلى القيمة القديمة. */
+  @IsOptional()
+  @IsIn(['S', 'Z', 'E', 'O'])
+  taxCategory?: 'S' | 'Z' | 'E' | 'O';
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReasonCode?: string;
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReason?: string;
 
   @IsOptional()
   @IsNumber()

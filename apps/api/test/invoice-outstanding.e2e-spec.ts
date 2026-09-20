@@ -54,7 +54,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
 
   it('[SPEC 4.4] a partly paid invoice reports its REMAINING amount, not its total', async () => {
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))
-      .send({ customerId, issueDate: '2026-07-01', dueDate: '2026-08-01', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 1000, taxRate: 0 }] })
+      .send({ customerId, issueDate: '2026-07-01', dueDate: '2026-08-01', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 1000, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
     expect((await listed(inv.body.id)).outstanding).toBeCloseTo(1000, 2);
@@ -71,7 +71,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
 
   it('a fully paid invoice reports zero', async () => {
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))
-      .send({ customerId, issueDate: '2026-07-02', dueDate: '2026-08-02', lines: [{ description: `بند كامل ${suffix}`, quantity: 1, unitPrice: 500, taxRate: 0 }] })
+      .send({ customerId, issueDate: '2026-07-02', dueDate: '2026-08-02', lines: [{ description: `بند كامل ${suffix}`, quantity: 1, unitPrice: 500, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
     await auth(request(app.getHttpServer()).post('/payments'))

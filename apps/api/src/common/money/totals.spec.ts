@@ -1,4 +1,4 @@
-import { buildUnsignedInvoiceXml, type UblInvoiceInput } from '../../zatca/ubl/invoice-xml.util';
+import { buildUnsignedInvoiceXml, type UblInvoiceInput, type UblInvoiceLine } from '../../zatca/ubl/invoice-xml.util';
 import { formatMoney, roundTo } from './rounding';
 import { computeDocumentTotals, lineNet, lineTax, type MoneyLine } from './totals';
 
@@ -12,12 +12,23 @@ import { computeDocumentTotals, lineNet, lineTax, type MoneyLine } from './total
  */
 
 const ADVERSARIAL: MoneyLine[] = [
-  { quantity: 3, unitPrice: 0.335, taxRate: 15 }, // ثلاثة بنودٍ نصفية: 1.005 ← صافيها 1.01 لا 1.00
-  { quantity: 1.5, unitPrice: 0.67, taxRate: 15 }, // 1.005
-  { quantity: 2.333, unitPrice: 1.234567, taxRate: 15 }, // كميةٌ بثلاث وسعرٌ بست
-  { quantity: 1, unitPrice: 0.125, taxRate: 0 }, // نصفٌ ثنائيٌّ دقيق على نسبة صفر
-  { quantity: 7, unitPrice: 0.015, taxRate: 15 }, // 0.105
+  { quantity: 3, unitPrice: 0.335, taxRate: 15, taxCategory: 'S' }, // ثلاثة بنودٍ نصفية: 1.005 ← صافيها 1.01 لا 1.00
+  { quantity: 1.5, unitPrice: 0.67, taxRate: 15, taxCategory: 'S' }, // 1.005
+  { quantity: 2.333, unitPrice: 1.234567, taxRate: 15, taxCategory: 'S' }, // كميةٌ بثلاث وسعرٌ بست
+  { quantity: 1, unitPrice: 0.125, taxRate: 0, taxCategory: 'Z', taxExemptionReasonCode: 'VATEX-SA-35' }, // نصفٌ ثنائيٌّ دقيق على نسبة صفر
+  { quantity: 7, unitPrice: 0.015, taxRate: 15, taxCategory: 'S' }, // 0.105
 ];
+
+/** ⑧ سطرُ المستند يحمل فئتَه: بندٌ بلا فئةٍ في هذه العيّنات يُصنَّف من نسبته (`S` للأساسية · `Z` بسبب الأدوية للصفر). */
+const ublLine = (l: MoneyLine, i: number): UblInvoiceLine => ({
+  description: `بند ${i + 1}`,
+  quantity: l.quantity,
+  unitPrice: l.unitPrice,
+  taxRate: l.taxRate,
+  taxCategory: (l.taxCategory as UblInvoiceLine['taxCategory']) ?? (l.taxRate > 0 ? 'S' : 'Z'),
+  taxExemptionReasonCode: l.taxExemptionReasonCode ?? (l.taxRate > 0 ? null : 'VATEX-SA-35'),
+  taxExemptionReason: l.taxExemptionReason ?? null,
+});
 
 const baseInput = (lines: MoneyLine[], totals = computeDocumentTotals(lines)): UblInvoiceInput => ({
   number: 'INV-1',
@@ -28,7 +39,7 @@ const baseInput = (lines: MoneyLine[], totals = computeDocumentTotals(lines)): U
   pih: 'NWZlY2ViNjZmZmM4NmYzOGQ5NTI3ODZjNmQ2OTZjNzljMmRiYzIzOWRkNGU5MWI0NjcyOWQ3M2EyN2ZiNTdlOQ==',
   seller: { name: 'بائع', vatNumber: '300000000000003' },
   buyer: { name: 'مشترٍ', vatNumber: '300000000000003' },
-  lines: lines.map((l, i) => ({ description: `بند ${i + 1}`, ...l })),
+  lines: lines.map(ublLine),
   currency: 'SAR',
   subtotal: totals.subtotal,
   taxTotal: totals.taxTotal,
@@ -116,6 +127,36 @@ describe('⭐⭐ المختوم = المرحَّل — يُقرأ المستند
     expect(xml).toContain('<cbc:PayableAmount currencyID="SAR">280.00</cbc:PayableAmount>');
     expect(xml).toContain('<cbc:TaxableAmount currencyID="SAR">200.00</cbc:TaxableAmount>');
     expect(xml).toContain('<cbc:TaxableAmount currencyID="SAR">50.00</cbc:TaxableAmount>');
+  });
+
+  it('[SPEC 6.1] ⑧ الوعاءُ بالمفتاح الثلاثي: بندان بصفرٍ بفئتين (Z · E) صفّان في التفصيل لا صفّ — وبندا O بسببين صفّان', () => {
+    const lines: MoneyLine[] = [
+      { quantity: 1, unitPrice: 100, taxRate: 15, taxCategory: 'S' },
+      { quantity: 1, unitPrice: 40, taxRate: 0, taxCategory: 'Z', taxExemptionReasonCode: 'VATEX-SA-35' },
+      { quantity: 1, unitPrice: 60, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' },
+      { quantity: 1, unitPrice: 10, taxRate: 0, taxCategory: 'O', taxExemptionReasonCode: 'VATEX-SA-OOS', taxExemptionReason: 'رسوم حكومية مُحصَّلة نيابةً' },
+      { quantity: 1, unitPrice: 5, taxRate: 0, taxCategory: 'O', taxExemptionReasonCode: 'VATEX-SA-OOS', taxExemptionReason: 'تعويضٌ لا يقابله توريد' },
+      // وسطرٌ يُباع من صنفٍ لم يُعلَن — قديمٌ بالأساسية — يقع في وعاء `S` نفسِه لا في وعاءٍ رابع.
+      { quantity: 1, unitPrice: 20, taxRate: 15, taxCategory: 'LEGACY_STANDARD' },
+    ];
+    const t = computeDocumentTotals(lines);
+    expect(t.byRate.map((b) => [b.category, b.reasonCode, b.taxable, b.tax])).toEqual([
+      ['S', null, 120, 18],
+      ['Z', 'VATEX-SA-35', 40, 0],
+      ['E', 'VATEX-SA-29', 60, 0],
+      ['O', 'VATEX-SA-OOS', 10, 0],
+      ['O', 'VATEX-SA-OOS', 5, 0],
+    ]);
+    expect([t.subtotal, t.taxTotal, t.total]).toEqual([235, 18, 253]);
+    // والدفترُ لم يتغيّر: ضريبةُ الثلاث صفرٌ، والمجموعُ مجموعُ الأوعية.
+    const xml = buildUnsignedInvoiceXml(baseInput(lines, t));
+    expect(xml.match(/<cac:TaxSubtotal>/g)).toHaveLength(5);
+    expect(xml).toContain('<cbc:TaxExemptionReasonCode>VATEX-SA-35</cbc:TaxExemptionReasonCode><cbc:TaxExemptionReason>الأدوية والمعدات الطبية</cbc:TaxExemptionReason>');
+    expect(xml).toContain('<cbc:TaxExemptionReasonCode>VATEX-SA-29</cbc:TaxExemptionReasonCode><cbc:TaxExemptionReason>الخدمات المالية</cbc:TaxExemptionReason>');
+    expect(xml).toContain('<cbc:TaxExemptionReason>رسوم حكومية مُحصَّلة نيابةً</cbc:TaxExemptionReason>');
+    // فئةُ `O` بلا نسبة — على السطر وفي التفصيل (BR-O-05 · BR-O-06).
+    expect(xml).toContain('<cac:TaxCategory><cbc:ID>O</cbc:ID><cbc:TaxExemptionReasonCode>');
+    expect(xml).toContain('<cac:ClassifiedTaxCategory><cbc:ID>O</cbc:ID><cac:TaxScheme>');
   });
 
   it('lineTax للعرض على السطر فقط — ضريبة النسبة تُحسب من الوعاء لا من مجموع ضرائب البنود', () => {

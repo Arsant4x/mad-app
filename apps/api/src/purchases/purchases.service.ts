@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { Prisma } from '@prisma/client';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
@@ -20,7 +21,8 @@ import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.uti
 
 /** البنودُ الحيّة وحدَها — المتجاوَزُ بتعديلٍ قبل الاستهلاك (`supersededAt`) محفوظٌ للدفتر لا للعرض. */
 const PURCHASE_INCLUDE = { supplier: true, lines: { where: { supersededAt: null } } } as const;
-const VAT_RATE = 0.15;
+// ⑧ من المصدر الواحد (`ق-١٢١٢`) — جانبُ المدخلات نفسُه لم يُمسّ (موجزٌ مستقلّ)؛ الرقمُ وحدَه لم يعد مكتوباً هنا.
+const VAT_RATE = STANDARD_VAT_RATE / 100;
 
 /** Amortization is establishment-only and needs a real month count. Returns the
  * clean pair to store, or throws a localized error. `amortize=false` always
@@ -158,7 +160,7 @@ export class PurchasesService {
                       unitCode: unitCodeOf(unitCodes, line.productId),
                       quantity: line.quantity,
                       unitPrice: line.unitPrice,
-                      taxRate: line.taxRate ?? 15,
+                      taxRate: line.taxRate ?? STANDARD_VAT_RATE,
                       // ٥+٦ الدفعةُ على السطر كما وصلت — والاستلامُ يحلّها كياناً أو يردّها مسمّاةً.
                       batchNo: line.batchNo?.trim() || null,
                       expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
@@ -342,7 +344,7 @@ export class PurchasesService {
             unitCode: unitCodeOf(unitCodes, line.productId),
             quantity: line.quantity,
             unitPrice: line.unitPrice,
-            taxRate: line.taxRate ?? 15,
+            taxRate: line.taxRate ?? STANDARD_VAT_RATE,
             batchNo: line.batchNo?.trim() || null,
             expiryDate: line.expiryDate ? new Date(line.expiryDate) : null,
           })),

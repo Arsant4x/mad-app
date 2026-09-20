@@ -50,7 +50,7 @@ d('L0-2 — طبقات التكلفة على قاعدة حيّة', () => {
       prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyA}, true)`;
         const warehouse = await tx.warehouse.create({ data: { companyId: companyA, name: 'مستودع بوابة م٤' } });
-        const product = await tx.product.create({ data: { companyId: companyA, name: 'صنف بوابة م٤', cost: 7 } });
+        const product = await tx.product.create({ data: { companyId: companyA, name: 'صنف بوابة م٤', cost: 7, taxCategory: 'S' } });
 
         // ثلاث طبقات بثلاث تكاليف وثلاثة تواريخ اقتناء.
         const day = (n: number) => new Date(Date.UTC(2026, 0, n));
@@ -187,7 +187,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
     await expect(
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ منع ١' } });
-        const p = await tx.product.create({ data: { companyId, name: 'صنف منع ١' } });
+        const p = await tx.product.create({ data: { companyId, name: 'صنف منع ١', taxCategory: 'S' } });
         await tx.stockMovement.create({
           data: { companyId, productId: p.id, warehouseId: w.id, type: 'OUT', qty: 1, date: new Date(), origin: 'SALE' },
         });
@@ -199,14 +199,14 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
     await expect(
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ منع ٢' } });
-        const p = await tx.product.create({ data: { companyId, name: 'صنف منع ٢' } });
+        const p = await tx.product.create({ data: { companyId, name: 'صنف منع ٢', taxCategory: 'S' } });
         const customer = await tx.customer.create({ data: { companyId, name: 'عميل منع ٢' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP2-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر خدمي بلا صنف', quantity: 1, unitPrice: 1, taxRate: 15 }] },
+            lines: { create: [{ companyId, description: 'سطر خدمي بلا صنف', quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });
@@ -224,15 +224,15 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
     await expect(
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ منع ٣' } });
-        const sold = await tx.product.create({ data: { companyId, name: 'الصنف المبيع' } });
-        const other = await tx.product.create({ data: { companyId, name: 'صنفٌ آخر' } });
+        const sold = await tx.product.create({ data: { companyId, name: 'الصنف المبيع', taxCategory: 'S' } });
+        const other = await tx.product.create({ data: { companyId, name: 'صنفٌ آخر', taxCategory: 'S' } });
         const customer = await tx.customer.create({ data: { companyId, name: 'عميل منع ٣' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP3-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر بصنف', productId: sold.id, quantity: 1, unitPrice: 1, taxRate: 15 }] },
+            lines: { create: [{ companyId, description: 'سطر بصنف', productId: sold.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });
@@ -251,14 +251,14 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
     await expect(
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ قبول' } });
-        const p = await tx.product.create({ data: { companyId, name: 'صنف القبول' } });
+        const p = await tx.product.create({ data: { companyId, name: 'صنف القبول', taxCategory: 'S' } });
         const customer = await tx.customer.create({ data: { companyId, name: 'عميل القبول' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP4-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر بصنف', productId: p.id, quantity: 1, unitPrice: 1, taxRate: 15 }] },
+            lines: { create: [{ companyId, description: 'سطر بصنف', productId: p.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });

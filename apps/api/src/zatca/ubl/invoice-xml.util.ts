@@ -24,8 +24,12 @@
  */
 
 import { formatMoney } from '../../common/money/rounding';
-import { computeDocumentTotals, lineNet, lineTax } from '../../common/money/totals';
+import { computeDocumentTotals, lineNet, lineTax, type BucketCategory } from '../../common/money/totals';
+import { exemptionReasonByCode } from '../../common/vat/exemption-reasons';
 import type { WallClock } from '../../common/wall-clock.util';
+
+/** ⑧ فئةُ السطر كما على المستند — `LEGACY_STANDARD` يخرج `S`؛ و`LEGACY_ZERO` لا يخرج أبداً (يُرفض قبل الختم). */
+export type UblTaxCategory = 'S' | 'Z' | 'E' | 'O' | 'LEGACY_STANDARD' | 'LEGACY_ZERO';
 
 export interface UblInvoiceLine {
   description: string;
@@ -36,6 +40,30 @@ export interface UblInvoiceLine {
   unitPrice: number;
   /** Percentage, e.g. 15. */
   taxRate: number;
+  /** ⑧ فئةُ ضريبة القيمة المضافة (`BT-151` على السطر · `BT-118` في التفصيل) — إلزاميّة. */
+  taxCategory: UblTaxCategory;
+  /** ⑧ رمزُ سبب الإعفاء (`BT-121`) — إلزاميٌّ لغير `S` (`BR-KSA-CL-04`)، ممنوعٌ على `S` (`BR-S`). */
+  taxExemptionReasonCode?: string | null;
+  /** ⑧ نصُّ السبب (`BT-120`): نصُّ `O` الحرّ؛ ولغيرها يُشتقّ من القائمة إن غاب. */
+  taxExemptionReason?: string | null;
+}
+
+/**
+ * ⑧ الفئةُ كما تُكتب في `cbc:ID`، بعد فحص ما تشترطه الهيئة — يُرمى **قبل الختم** لا يُكتشف رفضاً بعد أسابيع:
+ * `LEGACY_ZERO` لا فئةَ له فلا يُختم؛ و`Z`/`E`/`O` بلا سبب مخالفةٌ لـ`BR-KSA-CL-04`؛ و`S` لا يحمل سبباً.
+ */
+export function ublCategoryOf(line: Pick<UblInvoiceLine, 'taxCategory' | 'taxExemptionReasonCode'>): 'S' | 'Z' | 'E' | 'O' {
+  if (line.taxCategory === 'LEGACY_ZERO') throw new Error('A legacy zero-rate line has no VAT category — it cannot be stamped (declare its category on a new document).');
+  const category = line.taxCategory === 'LEGACY_STANDARD' ? 'S' : line.taxCategory;
+  if (category === 'S' && line.taxExemptionReasonCode) throw new Error('A standard-rated line must not carry an exemption reason (BR-S).');
+  if (category !== 'S' && !line.taxExemptionReasonCode) throw new Error(`A ${category} line requires a VAT exemption reason code (BR-KSA-CL-04).`);
+  return category;
+}
+
+/** نصُّ السبب كما يخرج: نصُّ السطر إن وُجد (خارج النطاق)، وإلا النصُّ العربي للرمز من قائمة الهيئة. */
+function reasonTextFor(category: BucketCategory, code: string | null, text: string | null): string | null {
+  if (category === 'S' || category === 'LEGACY_ZERO') return null;
+  return text ?? exemptionReasonByCode(code)?.ar ?? null;
 }
 
 export interface UblParty {
@@ -173,9 +201,11 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
   const lineExtension = lineNet(line);
   const lineTaxAmount = lineTax(line);
 
-  // S = standard rate, Z = zero-rated. A zero-rate line additionally needs an
-  // exemption reason, which our data model does not capture yet.
-  const category = line.taxRate > 0 ? 'S' : 'Z';
+  // ⑧ الفئةُ من السطر كما نُسخت لحظةَ البيع (كانت تُشتقّ من النسبة: `S` لما فوق الصفر و`Z` لغيره —
+  // فخرج المعفى «نسبةَ صفر» بلا سبب). والسببُ يُكتب في تفصيل الضريبة (`BG-23`) لا على السطر؛
+  // ولفئة `O` لا تُكتب النسبةُ أصلاً (`BR-O-05`).
+  const category = ublCategoryOf(line);
+  const percent = category === 'O' ? '' : `<cbc:Percent>${money(line.taxRate)}</cbc:Percent>`;
 
   // ① وحدةُ الكمّية تُقرأ من السطر لا تُثبَّت: كان `unitCode="PCE"` ثابتاً لكلِّ سطر (حدٌّ أُعلن في
   // ق-١٠٦٠ وقِيس في ق-١٠٦٩). سطرٌ بلا وحدةٍ معلَنة يخرج بلا السمة — لا برمزٍ مخمَّن.
@@ -194,7 +224,7 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
     `<cbc:Name>${esc(line.description)}</cbc:Name>` +
     '<cac:ClassifiedTaxCategory>' +
     `<cbc:ID>${category}</cbc:ID>` +
-    `<cbc:Percent>${money(line.taxRate)}</cbc:Percent>` +
+    percent +
     '<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>' +
     '</cac:ClassifiedTaxCategory>' +
     '</cac:Item>' +
@@ -236,24 +266,36 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
         '</cac:PaymentMeans>'
       : '';
 
-  // Tax is reported per category — one category per distinct rate, the
-  // taxable amount being the sum of that rate's rounded line nets and the tax
-  // being taxable × rate rounded once (BR-S-08/09), exactly as the ledger does.
+  // ⑧ كلُّ سطرٍ يُفحص قبل التفصيل — فمستندٌ فيه سطرٌ لا يُختم يُرمى هنا لا في منتصف بنائه.
+  input.lines.forEach(ublCategoryOf);
+
+  // Tax is reported per category — ⑧ one `TaxSubtotal` per (category · rate · reason), the
+  // taxable amount being the sum of that key's rounded line nets and the tax being
+  // taxable × rate rounded once (BR-S-08/09), exactly as the ledger does. The exemption
+  // reason (BT-121 code, BT-120 text) lives here in the VAT breakdown (BG-23) per
+  // BR-KSA-23…26 — not on the line; and a category-O breakdown carries no rate (BR-O-06).
   const { byRate } = computeDocumentTotals(input.lines);
 
   const subtotals = byRate
-    .map(
-      ({ rate, taxable, tax }) =>
+    .map(({ category, rate, reasonCode, reasonText, taxable, tax }) => {
+      const text = reasonTextFor(category, reasonCode, reasonText);
+      const reason =
+        category === 'S' || category === 'LEGACY_ZERO'
+          ? ''
+          : `<cbc:TaxExemptionReasonCode>${esc(reasonCode ?? '')}</cbc:TaxExemptionReasonCode>` + (text ? `<cbc:TaxExemptionReason>${esc(text)}</cbc:TaxExemptionReason>` : '');
+      return (
         '<cac:TaxSubtotal>' +
         `<cbc:TaxableAmount currencyID="${esc(currency)}">${money(taxable)}</cbc:TaxableAmount>` +
         `<cbc:TaxAmount currencyID="${esc(currency)}">${money(tax)}</cbc:TaxAmount>` +
         '<cac:TaxCategory>' +
-        `<cbc:ID>${rate > 0 ? 'S' : 'Z'}</cbc:ID>` +
-        `<cbc:Percent>${money(rate)}</cbc:Percent>` +
+        `<cbc:ID>${category}</cbc:ID>` +
+        (category === 'O' ? '' : `<cbc:Percent>${money(rate)}</cbc:Percent>`) +
+        reason +
         '<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>' +
         '</cac:TaxCategory>' +
-        '</cac:TaxSubtotal>',
-    )
+        '</cac:TaxSubtotal>'
+      );
+    })
     .join('');
 
   return (

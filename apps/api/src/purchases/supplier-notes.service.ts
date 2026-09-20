@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import {
   assertAdjustableTarget,
   assertReturnLinesBelong,
@@ -159,7 +160,7 @@ export class SupplierNotesService {
                 unitCode: unitCodeOf(unitCodes, l.productId),
                 quantity: l.quantity,
                 unitPrice: l.unitPrice,
-                taxRate: l.taxRate ?? 15,
+                taxRate: l.taxRate ?? STANDARD_VAT_RATE,
                 returnsPurchaseLineId: l.returnsPurchaseLineId ?? null,
                 goodsReturned: side === 'credit' ? (l.goodsReturned ?? false) : false,
               })),

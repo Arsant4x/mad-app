@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Invoice, InvoiceLineInput } from '../../api/invoices';
 import { fmt } from '../../lib/format';
+import { STANDARD_VAT_RATE } from '../../lib/vat';
 
 /**
  * Issues a ZATCA 383 debit note — additional billing against an already-issued
@@ -21,7 +22,7 @@ export function DebitNoteModal({
   onConfirm: (reason: string, lines: InvoiceLineInput[]) => void;
 }) {
   const [reason, setReason] = useState('');
-  const [lines, setLines] = useState<InvoiceLineInput[]>([{ description: '', quantity: 1, unitPrice: 0, taxRate: 15 }]);
+  const [lines, setLines] = useState<InvoiceLineInput[]>([{ description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }]);
 
   function updateLine(index: number, patch: Partial<InvoiceLineInput>) {
     setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)));
@@ -76,7 +77,7 @@ export function DebitNoteModal({
                 </td>
                 <td>
                   <select value={l.taxRate} onChange={(e) => updateLine(i, { taxRate: parseFloat(e.target.value) })}>
-                    <option value={15}>15٪</option>
+                    <option value={STANDARD_VAT_RATE}>{STANDARD_VAT_RATE}٪</option>
                     <option value={0}>0٪ (معفى)</option>
                   </select>
                 </td>
@@ -91,7 +92,7 @@ export function DebitNoteModal({
             ))}
           </tbody>
         </table>
-        <button className="add-line" onClick={() => setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: 15 }])}>
+        <button className="add-line" onClick={() => setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }])}>
           + إضافة بند جديد
         </button>
 
