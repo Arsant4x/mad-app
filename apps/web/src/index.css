@@ -1095,3 +1095,14 @@ html[dir="ltr"] .rz-panel { box-shadow: 8px 0 24px rgba(0,0,0,.12); }
 .rz-facts dt { color: var(--muted); font-size: 12px; margin: 0; }
 .rz-facts dd { margin: 0; }
 .rz-declare { margin-bottom: 12px; background: #fff8e6; }
+
+/* الكثيفُ يبقى كثيفاً تحت 860 — قاعدةُ الجوال القديمة (th, td { padding:7px 8px !important }) كانت ترفع الصفَّ إلى 37px */
+@media (max-width: 860px) {
+  .rz-table th, .rz-table td { padding: 0 12px !important; height: 32px; white-space: nowrap; }
+  .rz-table { font-size: 13.5px; }
+}
+/* الصفُّ المصفوف: سطران بارتفاع 48px بالضبط — سطرٌ 1.4 × 13.5 ≈ 19px ×٢ + حشوة 4+4 */
+.rz-stack__row { padding: 4px 10px; min-height: 48px; box-sizing: border-box; }
+.rz-stack__line { line-height: 1.4; }
+.rz-stack__cell--grow { flex: 1 1 auto; }
+.rz-stack__cell:not(.rz-stack__cell--grow) { flex: 0 0 auto; }

@@ -23,9 +23,9 @@ import { CLASSIFICATION_META, CONTRACT_STATUS_META } from './contractsMeta';
  */
 const COLUMNS: Column<ContractRow>[] = [
   { key: 'no', header: 'رقم العقد', kind: 'id', minWidth: 115, priority: 1, stack: 'line1', cell: (c) => <span className="num">{c.no}</span> },
-  { key: 'tenant', header: 'المستأجر', kind: 'text', minWidth: 190, priority: 1, stack: 'line2', cell: (c) => c.tenant },
-  { key: 'unit', header: 'الوحدة · العقار', kind: 'text', minWidth: 166, priority: 1, stack: 'line2', cell: (c) => `${c.unitNo} · ${c.propertyName}` },
-  { key: 'end', header: 'النهاية', kind: 'date', minWidth: 100, priority: 1, stack: 'line2', cell: (c) => <span className="num">{dfmt(c.end)}</span> },
+  { key: 'tenant', header: 'المستأجر', kind: 'text', minWidth: 190, priority: 1, stack: 'line2', stackGrow: true, cell: (c) => c.tenant },
+  { key: 'unit', header: 'الوحدة · العقار', kind: 'text', minWidth: 166, priority: 1, stack: 'line2', cell: (c) => `${c.unitNo} · ${c.propertyName}`, stackCell: (c) => c.unitNo },
+  { key: 'end', header: 'النهاية', kind: 'date', minWidth: 100, priority: 1, stack: 'line2', cell: (c) => <span className="num">{dfmt(c.end)}</span>, stackCell: (c) => <span className="num">→ {dfmt(c.end)}</span> },
   { key: 'status', header: 'الحالة', kind: 'status', minWidth: 91, priority: 1, stack: 'line1', cell: (c) => <span className={`badge ${badgeOf(CONTRACT_STATUS_META, c.status).badgeClass}`}>{badgeOf(CONTRACT_STATUS_META, c.status).label}</span> },
   { key: 'value', header: 'قيمة العقد', kind: 'money', minWidth: 108, priority: 2, stack: 'line1', cell: (c) => <MoneyCell value={c.value} /> },
   { key: 'classification', header: 'التصنيف', kind: 'status', minWidth: 94, priority: 2, cell: (c) => <span className={`badge ${badgeOf(CLASSIFICATION_META, c.classification).badgeClass}`}>{badgeOf(CLASSIFICATION_META, c.classification).label}</span> },

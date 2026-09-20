@@ -29,6 +29,10 @@ export interface Column<T> {
   priority: 1 | 2 | 3;
   /** موضعُه في الصفّ المصفوف عند الضيق — وإلا فاللوحة. */
   stack?: 'line1' | 'line2';
+  /** صورةٌ أضيق للخلية في الصفّ المصفوف (الوحدةُ بلا العقار · التاريخُ بلا تسمية) — المقيس: السطرُ الثاني 282px بها و348px بدونها. */
+  stackCell?: (row: T) => ReactNode;
+  /** الخليةُ الأولى في سطرها تتمدّد وتُقصّ بنقاط؛ ما عداها لا ينكمش. */
+  stackGrow?: boolean;
 }
 
 export interface RowAction<T> {
@@ -123,15 +127,15 @@ export function DataTable<T>({ r, columns, rowKey, what, onRow, onPage, actions 
             <div key={rowKey(row)} className="rz-stack__row" role={onRow ? 'button' : undefined} tabIndex={onRow ? 0 : undefined} onClick={onRow ? () => onRow(row) : undefined}>
               <div className="rz-stack__line">
                 {line1.map((c) => (
-                  <span key={c.key} className={`rz-stack__cell rz-stack__cell--${c.kind ?? 'text'}`}>
-                    {c.cell(row)}
+                  <span key={c.key} className={`rz-stack__cell rz-stack__cell--${c.kind ?? 'text'} ${c.stackGrow ? 'rz-stack__cell--grow' : ''}`}>
+                    {(c.stackCell ?? c.cell)(row)}
                   </span>
                 ))}
               </div>
               <div className="rz-stack__line rz-stack__line--2">
                 {line2.map((c) => (
-                  <span key={c.key} className={`rz-stack__cell rz-stack__cell--${c.kind ?? 'text'}`}>
-                    <span className="rz-stack__lbl">{c.header}</span> {c.cell(row)}
+                  <span key={c.key} className={`rz-stack__cell rz-stack__cell--${c.kind ?? 'text'} ${c.stackGrow ? 'rz-stack__cell--grow' : ''}`} title={c.header}>
+                    {(c.stackCell ?? c.cell)(row)}
                   </span>
                 ))}
               </div>
