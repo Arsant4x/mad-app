@@ -28,6 +28,8 @@ backups/
 *.sql
 !apps/api/prisma/migrations/**/*.sql
 !docker/postgres-init/*.sql
+# بذرُ قياس المراجع الخارجيّ — مصدرٌ لا بيانات؛ استثناءٌ بالمسار الكامل بإذن المالك 2026-09-20 (ق-١٢١٧)، ويقابله السطرُ نفسُه في .githooks/pre-commit
+!bench/external-review-2026-09/seed.sql
 
 # ---- مفاتيح وشهادات ----
 *.pem
