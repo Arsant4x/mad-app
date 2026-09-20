@@ -5,6 +5,10 @@ import { EXEMPTION_REASONS, exemptionReasonByCode, OUT_OF_SCOPE_REASON_CODE, OUT
 import { lineTaxFromStored, rateForCategory, reasonCountByCategory, resolveDeclaredLineTax, resolveLineTax, validateDeclaredTax } from './line-tax.util';
 import { STANDARD_VAT_RATE } from './standard-rate';
 import { MSG } from '../i18n/messages';
+import { readsDeclaredStrings } from '../source-scan.util';
+
+// مرآةُ الواجهة أدناه تقرأ **بياناتٍ معلَنة داخل السلاسل** (رموزٌ ونصوصٌ) — فالنصُّ هو بياناتُها (`ق-٣٧٥`).
+readsDeclaredStrings();
 
 /**
  * ⑧ حارسُ قائمة الهيئة والفئة المشتقّة (`ق-١٢١٢` · `ق-١٢٢٢` · `ق-١٢٢٥`).
