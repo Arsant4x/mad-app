@@ -77,7 +77,7 @@ describe('الفاتورةُ الصادرة لا تُعدَّل ولا تُحذ�
     otherCustomerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الصادرة ب ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع الصادرة ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع الصادرة ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, name: `صنف الصادرة ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
+    productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف الصادرة ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
     const supplierId = (await auth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورّد الصادرة ${suffix}` }).expect(201)).body.id;
     // طبقةٌ حقيقية بعشر وحدات — فالفاتورةُ المخزنية تحرّك المخزونَ فعلاً (`م٥`).
     await auth(request(app.getHttpServer()).post('/purchases'))

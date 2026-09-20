@@ -57,7 +57,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
       prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyA}, true)`;
         const supplier = await tx.supplier.create({ data: { companyId: companyA, name: 'مورّد بوابة L0-0' } });
-        const product = await tx.product.create({ data: { companyId: companyA, name: 'صنف بوابة L0-0' } });
+        const product = await tx.product.create({ data: { companyId: companyA, name: 'صنف بوابة L0-0', taxCategory: 'S' } });
         const purchase = await tx.purchase.create({
           data: {
             companyId: companyA,
@@ -159,6 +159,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
             quantity: '1',
             unitPrice: '50',
             taxRate: 15,
+            taxCategory: 'S',
           },
           select: { id: true, productId: true },
         });

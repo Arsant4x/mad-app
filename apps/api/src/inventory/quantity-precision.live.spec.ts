@@ -51,7 +51,7 @@ d('L0-4 — دقّة الكمية على قاعدة حيّة', () => {
       prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
         const warehouse = await tx.warehouse.create({ data: { companyId, name: 'مستودع مجسّ الدقة' } });
-        const product = await tx.product.create({ data: { companyId, name: 'صنف مجسّ الدقة' } });
+        const product = await tx.product.create({ data: { companyId, name: 'صنف مجسّ الدقة', taxCategory: 'S' } });
         const movement = await tx.stockMovement.create({
           data: { companyId, productId: product.id, warehouseId: warehouse.id, type: 'IN', qty, date: new Date() },
         });

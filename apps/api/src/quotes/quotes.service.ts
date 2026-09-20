@@ -2,7 +2,8 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
-import { computeDocumentTotals } from '../common/money/totals';
+import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
+import { resolveLineTaxes, type LineTax } from '../common/vat/line-tax.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type CreditContext } from '../invoices/credit-context';
@@ -19,9 +20,32 @@ const QUOTE_INCLUDE = { customer: true, lines: true } as const;
 /** نفس رياضيات الفاتورة حرفياً — **الدالة نفسها** (`common/money/totals.ts`) لا نسخةٌ منها،
  * فما يراه العميل في العرض هو ما سيُفوتَر هللةً بهللة. (كانت هنا نسخةٌ **غير مدوَّرة**
  * تختلف عن الفاتورة عند التحويل — كنسة التدوير 2026-09-03.) */
-function computeTotals(lines: QuoteLineDto[]) {
+function computeTotals(lines: readonly MoneyLine[]) {
   const { subtotal, taxTotal, total } = computeDocumentTotals(lines);
   return { subtotal, taxTotal, total };
+}
+
+/** ⑧ بندُ عرضٍ حُلّت ضريبتُه — من صنفه لحظةَ الكتابة أو من إعلانه؛ والنسبةُ مشتقّة (كما في الفاتورة). */
+type PricedQuoteLine = Omit<QuoteLineDto, 'taxRate' | 'taxCategory' | 'taxExemptionReasonCode' | 'taxExemptionReason'> & LineTax;
+
+async function priceQuoteLines(tx: Prisma.TransactionClient, lines: readonly QuoteLineDto[]): Promise<PricedQuoteLine[]> {
+  const taxes = await resolveLineTaxes(tx, lines);
+  return lines.map((l, i) => ({ ...l, ...taxes[i] }));
+}
+
+function quoteLineRow(companyId: string, unitCodes: ReadonlyMap<string, string | null>, l: PricedQuoteLine) {
+  return {
+    companyId,
+    description: l.description,
+    productId: l.productId ?? null,
+    unitCode: unitCodeOf(unitCodes, l.productId),
+    quantity: l.quantity,
+    unitPrice: l.unitPrice,
+    taxRate: l.taxRate,
+    taxCategory: l.taxCategory,
+    taxExemptionReasonCode: l.taxExemptionReasonCode,
+    taxExemptionReason: l.taxExemptionReason,
+  };
 }
 
 /**
@@ -90,7 +114,6 @@ export class QuotesService {
    * ⇒ **والمصدرُ الواحد `resolveBranchId`** — وجودٌ ثم إذن.
    */
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateQuoteDto) {
-    const { subtotal, taxTotal, total } = computeTotals(dto.lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
     // نفس عقد الترقيم المتسابق للفواتير: قيد (companyId, no) الفريد يحسم،
     // وretry يعيد العدّ — اختبار التصادم المتزامن ضمن الدفعة يثبته.
@@ -99,6 +122,9 @@ export class QuotesService {
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 
+        // ⑧ الفئةُ والنسبةُ تُحلّان قبل الحساب — من الصنف لحظةَ الكتابة أو من إعلان البند.
+        const lines = await priceQuoteLines(tx, dto.lines);
+        const { subtotal, taxTotal, total } = computeTotals(lines);
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
 
         const no = await this.nextQuoteNumber(tx, companyId, new Date(dto.issueDate));
@@ -123,7 +149,7 @@ export class QuotesService {
             baseTotal: toBaseAmount(total, exchangeRate),
             // companyId على كل بند صراحةً — الكتابة المتداخلة لا يراها امتداد
             // العزل (نفس تعليل InvoicesService)، وRLS يسند خلفها.
-            lines: { create: dto.lines.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, unitCode: unitCodeOf(unitCodes, l.productId), quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })) },
+            lines: { create: lines.map((l) => quoteLineRow(companyId, unitCodes, l)) },
           } as unknown as Prisma.QuoteUncheckedCreateInput,
           include: QUOTE_INCLUDE,
         });
@@ -139,7 +165,8 @@ export class QuotesService {
         throw new ConflictException(formatMessage(MSG.quote_converted_immutable, { invoiceNo: await this.convertedInvoiceNo(tx, existing) }));
       }
 
-      const totals = dto.lines ? computeTotals(dto.lines) : null;
+      const priced = dto.lines ? await priceQuoteLines(tx, dto.lines) : null;
+      const totals = priced ? computeTotals(priced) : null;
       const unitCodes = dto.lines ? await unitCodesFor(tx, dto.lines) : new Map<string, string | null>();
       const updated = await tx.quote.update({
         where: { id },
@@ -159,7 +186,7 @@ export class QuotesService {
                 baseTotal: toBaseAmount(totals.total, Number(existing.exchangeRate)),
                 lines: {
                   deleteMany: {},
-                  create: dto.lines!.map((l) => ({ companyId, description: l.description, productId: l.productId ?? null, unitCode: unitCodeOf(unitCodes, l.productId), quantity: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+                  create: priced!.map((l) => quoteLineRow(companyId, unitCodes, l)),
                 },
               }
             : {}),
@@ -227,13 +254,18 @@ export class QuotesService {
               quantity: Number(l.quantity),
               unitPrice: Number(l.unitPrice),
               taxRate: Number(l.taxRate),
+              // ⑧ والفئةُ تنتقل كما عُرضت — ما وافق عليه العميل لا ما على البطاقة اليوم؛
+              // وبندٌ قديم بصفرٍ بلا فئة (`LEGACY_ZERO`) يُردّ باسمه حتى يُعلَن على العرض.
+              taxCategory: l.taxCategory as 'S' | 'Z' | 'E' | 'O',
+              taxExemptionReasonCode: l.taxExemptionReasonCode ?? undefined,
+              taxExemptionReason: l.taxExemptionReason ?? undefined,
             })),
           } as CreateInvoiceDto;
 
           // ⚖️ **التحويل يفتح ذمّةً كالفاتورة المباشرة** — فيمرّ ببوّابة الحدّ
           //    بتصريح المستدعي نفسِه (`ق-٣٣٨`). **ولا مسارَ فوترةٍ موازٍ**،
           //    فالتكافؤُ يبقى محفوظاً حتى في المنع.
-          const invoice = await this.invoicesService.createWithinTx(tx, companyId, allowedBranchIds, invoiceDto, credit);
+          const invoice = await this.invoicesService.createWithinTx(tx, companyId, allowedBranchIds, invoiceDto, credit, { trustLineTax: true });
 
           // شرط ما-زال-قابلاً داخل نفس المعاملة: صفر صفوف = سبقنا متسابق —
           // نقرأ فاتورته ونتراجع بإلقاءٍ يفكّ المعاملة كلها (فاتورتنا معها).

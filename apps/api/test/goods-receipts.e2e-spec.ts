@@ -89,7 +89,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     customerId = (await post('/customers').send({ name: `عميل استلام ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع استلام ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع استلام ${suffix}`, warehouseId }).expect(201)).body.id;
-    productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف استلام ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
+    productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف استلام ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {
@@ -267,7 +267,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     expect((await reconciliation()).difference).toBe(0);
 
     // ولا يُلغى ما استُهلك منه: صنفٌ جديد (فالبيعُ يستهلك أقدمَ طبقات الصنف — FIFO — لا هذه) ⟵ استلامٌ ثم بيعٌ منه ثم إلغاء ⟵ 409 مسمّى.
-    const productB: string = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, name: `صنف استهلاك ${Date.now()}`, price: 100, cost: 40 }).expect(201)).body.id;
+    const productB: string = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف استهلاك ${Date.now()}`, price: 100, cost: 40 }).expect(201)).body.id;
     const pending = await post('/purchases').send(stockedPurchase({ subtotal: 300, lines: [{ description: 'صنف', productId: productB, quantity: 3, unitPrice: 100, taxRate: 15 }], receiveNow: false })).expect(201);
     const again = await post(`/purchases/${pending.body.id}/receipts`).send({ receivedAt: today(), lines: [{ purchaseLineId: pending.body.lines[0].id, quantity: 3 }] }).expect(201);
     await post('/invoices').send({ customerId, branchId, issueDate: today(), dueDate: today(), lines: [{ description: 'بيع', productId: productB, quantity: 1, unitPrice: 150, taxRate: 15 }] }).expect(201);
@@ -317,7 +317,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
     const sup = (await post('/suppliers', t).send({ name: `مورّد قديم ${suffix}` }).expect(201)).body.id;
     const wh = (await post('/warehouses', t).send({ name: `مستودع قديم ${suffix}` }).expect(201)).body.id;
     const br = (await post('/branches', t).send({ name: `فرع قديم ${suffix}`, warehouseId: wh }).expect(201)).body.id;
-    const prod = (await post('/products', t).send({ unitCode: 'H87', expiryTracked: false, name: `صنف قديم ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
+    const prod = (await post('/products', t).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف قديم ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;
     const created = await post('/purchases', t)
       .send({ supplierId: sup, date: daysAgo(5), subtotal: 400, warehouseId: wh, branchId: br, category: 'بضاعة', lines: [{ description: 'صنف', productId: prod, quantity: 10, unitPrice: 40, taxRate: 15 }] })
       .expect(201);

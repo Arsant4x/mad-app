@@ -453,8 +453,20 @@ export class ZatcaService {
     // المخزَّنة تُعاد من البنود بالدالة نفسها التي يستعملها الدفتر والمستند. فإن اختلفت
     // هللةً (فاتورةٌ قديمة بطريقةٍ سابقة، أو بنودٌ عُدّلت بلا إعادة حساب) **لا يُختم**
     // المستند ويُعلَن الفرق — فمستندٌ مختوم يخالف الدفتر أسوأ من مستندٍ لم يُختم.
+    // ⑧ ما لا يُختم يُرمى باسمه قبل أيّ بناء: سطرٌ قديم بصفرٍ بلا فئة، أو فئةٌ بلا سببها (`BR-KSA-CL-04`).
+    if (invoice.lines.some((l) => l.taxCategory === 'LEGACY_ZERO')) throw new ConflictException(MSG.zatca_legacy_zero_unstampable);
+    if (invoice.lines.some((l) => l.taxCategory !== 'S' && l.taxCategory !== 'LEGACY_STANDARD' && !l.taxExemptionReasonCode)) {
+      throw new ConflictException(MSG.zatca_reason_missing);
+    }
     const recomputed = computeDocumentTotals(
-      invoice.lines.map((l) => ({ quantity: Number(l.quantity), unitPrice: Number(l.unitPrice), taxRate: Number(l.taxRate) })),
+      invoice.lines.map((l) => ({
+        quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice),
+        taxRate: Number(l.taxRate),
+        taxCategory: l.taxCategory,
+        taxExemptionReasonCode: l.taxExemptionReasonCode,
+        taxExemptionReason: l.taxExemptionReason,
+      })),
     );
     const stored = { subtotal: Number(invoice.subtotal), taxTotal: Number(invoice.taxTotal), total: Number(invoice.total) };
     for (const key of ['subtotal', 'taxTotal', 'total'] as const) {
@@ -508,6 +520,10 @@ export class ZatcaService {
         unitCode: l.unitCode ?? null,
         unitPrice: Number(l.unitPrice),
         taxRate: Number(l.taxRate),
+        // ⑧ الفئةُ والسببُ كما نُسخا على السطر لحظةَ البيع — لا من البطاقة اليوم.
+        taxCategory: l.taxCategory,
+        taxExemptionReasonCode: l.taxExemptionReasonCode,
+        taxExemptionReason: l.taxExemptionReason,
       })),
       currency: invoice.currency,
       subtotal: Number(invoice.subtotal),

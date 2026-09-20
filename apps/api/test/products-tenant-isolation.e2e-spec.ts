@@ -30,7 +30,7 @@ describe('Products tenant isolation (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/products')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ unitCode: 'H87', expiryTracked: false, name: `منتج اختبار ${Date.now()}`, price: 100, cost: 40 })
+      .send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `منتج اختبار ${Date.now()}`, price: 100, cost: 40 })
       .expect(201);
 
     expect(created.body.barcode).toMatch(/^2\d{11}$/);

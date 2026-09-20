@@ -34,7 +34,7 @@ describe('حالةُ الفاتورة مشتقّةٌ لا مكتوبة (e2e)', (
     const today = new Date().toISOString().slice(0, 10);
     invoiceId = (
       await auth(http().post('/invoices'))
-        .send({ customerId, issueDate: today, dueDate: today, lines: [{ description: 'بند', quantity: 1, unitPrice: 100, taxRate: 0 }] })
+        .send({ customerId, issueDate: today, dueDate: today, lines: [{ description: 'بند', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
         .expect(201)
     ).body.id;
   }, 90000);

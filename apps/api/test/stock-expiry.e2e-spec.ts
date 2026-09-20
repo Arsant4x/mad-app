@@ -52,7 +52,7 @@ describe('Stock batch/expiry (e2e)', () => {
     tokenB = loginB.body.accessToken;
 
     // ٥+٦ الصنفُ معلَنٌ تتبّعُه — فالدفعةُ على الإدخال كيانٌ والتقريرُ يقرأ المتبقّي من طبقاتها (ق-١٠٨٦).
-    const product = await authA(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: true, name: productName, sku: `SKU-${suffix}` }).expect(201);
+    const product = await authA(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: true, taxCategory: 'S', name: productName, sku: `SKU-${suffix}` }).expect(201);
     productId = product.body.id;
     const warehouse = await authA(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع ${suffix}` }).expect(201);
     warehouseId = warehouse.body.id;

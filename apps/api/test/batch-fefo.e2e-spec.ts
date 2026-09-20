@@ -46,7 +46,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     return d.toISOString().slice(0, 10);
   };
   const product = async (name: string, expiryTracked: boolean) =>
-    (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked, name: `${name} ${suffix}`, price: 100 }).expect(201)).body.id as string;
+    (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked, taxCategory: 'S', name: `${name} ${suffix}`, price: 100 }).expect(201)).body.id as string;
   const purchase = (
     lines: { productId: string; quantity: number; unitPrice: number; batchNo?: string; expiryDate?: string }[],
     date = iso(0),
@@ -101,7 +101,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     expect(String(missing.body.message)).toContain('إعلانُ التتبّع');
     // نصٌّ بدل القيمة الثنائية يُردّ عند الباب — لا يُفسَّر «نعم».
     await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: 'yes', name: `نصّ ${suffix}`, price: 10 }).expect(400);
-    const tracked = await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: true, name: `دواء ${suffix}`, price: 10 }).expect(201);
+    const tracked = await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: true, taxCategory: 'S', name: `دواء ${suffix}`, price: 10 }).expect(201);
     expect(tracked.body.expiryTracked).toBe(true);
 
     legacyId = (

@@ -41,7 +41,7 @@ d('سباق طبقات التكلفة — نقصانٌ ذرّيٌّ مشروط (
   /** صنفٌ وطبقةٌ واحدة بكميةٍ وتكلفةٍ معلومتَين — ملتزَمةٌ فعلاً كي تتنازع عليها معاملتان. */
   async function stockedProduct(qty: number, unitCost: number) {
     return inTenant(async (tx) => {
-      const product = await tx.product.create({ data: { companyId, name: `صنف سباق ${Date.now()}-${Math.random()}`, cost: unitCost } });
+      const product = await tx.product.create({ data: { companyId, name: `صنف سباق ${Date.now()}-${Math.random()}`, cost: unitCost, taxCategory: 'S' } });
       const layer = await tx.inventoryLayer.create({
         data: { companyId, productId: product.id, warehouseId, qtyReceived: qty, qtyRemaining: qty, unitCost, acquiredAt: new Date(Date.UTC(2026, 0, 1)), sourceType: 'GOODS_RECEIPT' },
       });

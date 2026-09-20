@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listProducts, type Product } from '../../api/products';
 import { listBranches, type Branch } from '../../api/branches';
+import { STANDARD_VAT_RATE } from '../../lib/vat';
 import { BranchPicker } from '../../components/BranchPicker';
 import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
@@ -125,7 +126,8 @@ export function PosPage() {
 
   const totals = useMemo(() => {
     const subtotal = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity, 0);
-    const tax = subtotal * 0.15;
+    // ⑧ معاينةٌ بالنسبة الأساسية من المصدر الواحد؛ والخادمُ يشتقّ نسبةَ كلِّ سطرٍ من فئة صنفه ويعيد المجاميع المعتمَدة.
+    const tax = (subtotal * STANDARD_VAT_RATE) / 100;
     return { subtotal, tax, total: subtotal + tax };
   }, [cart]);
 

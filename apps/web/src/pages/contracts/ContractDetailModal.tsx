@@ -19,6 +19,7 @@ import {
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
 import { formatMoney, round2 } from '../../lib/money';
+import { STANDARD_VAT_GROSS_FACTOR, STANDARD_VAT_RATE, standardVatIncludedIn } from '../../lib/vat';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
@@ -40,7 +41,7 @@ const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeC
 /** إجماليُّ القسط رقماً — غيرُ الشامل الخاضع +15%، والباقي المبلغُ نفسُه (التدويرُ من `lib/money` وحده — ق-٦٥ بروحها). */
 function grossNumberOf(contract: { classification: string; vatInclusion: string }, amount: string | number): number {
   const a = Number(amount);
-  return contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE' ? round2(a * 1.15) : round2(a);
+  return contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE' ? round2(a * STANDARD_VAT_GROSS_FACTOR) : round2(a);
 }
 
 /**
@@ -68,11 +69,11 @@ function paymentDeclaration(contract: { classification: string; vatInclusion: st
   if (contract.classification === 'RESIDENTIAL') return `عقدٌ سكنيّ معفى — المبلغُ المقترَح هو القسطُ ${formatMoney(a)} بلا ضريبة.`;
   if (contract.classification !== 'COMMERCIAL') return 'عقدٌ قديم بلا تصنيف — لا تُحسب له ضريبةٌ حتى يُصنَّف من بطاقته؛ والقبضُ على المسار القائم.';
   if (contract.vatInclusion === 'INCLUSIVE') {
-    const tax = round2((a * 15) / 115);
+    const tax = round2(standardVatIncludedIn(a));
     return `قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
   }
   if (contract.vatInclusion === 'EXCLUSIVE') {
-    const tax = round2(a * 0.15);
+    const tax = round2((a * STANDARD_VAT_RATE) / 100);
     return `قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
   }
   return 'عقدٌ قديم غيرُ معلَنِ الشمول — لا تُحسب له ضريبةٌ حتى يُعلَن من بطاقته.';

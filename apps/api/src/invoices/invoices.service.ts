@@ -19,7 +19,8 @@ import {
 } from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
-import { computeDocumentTotals } from '../common/money/totals';
+import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
+import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
 import { fulfilStockedLines, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -70,9 +71,39 @@ const INVOICE_INCLUDE = {
  * بهللةٍ على بنودٍ ثلاثيةٍ مثل `0.335` — **بنفس سياسة التدوير**. الآن الدفتر
  * والمستند دالةٌ واحدة، و`subtotal + taxTotal === total` بالضبط.
  */
-export function computeTotals(lines: InvoiceLineDto[]) {
+export function computeTotals(lines: readonly MoneyLine[]) {
   const { subtotal, taxTotal, total } = computeDocumentTotals(lines);
   return { subtotal, taxTotal, total };
+}
+
+/** ⑧ سطرٌ حُلّت ضريبتُه: الـDTO كما وصل + الفئةُ والسببُ والنسبةُ المشتقّة — وهو ما يُحسب منه ويُكتب. */
+export type PricedInvoiceLine = Omit<InvoiceLineDto, 'taxRate' | 'taxCategory' | 'taxExemptionReasonCode' | 'taxExemptionReason'> & LineTax;
+
+/**
+ * ⑧ حلُّ ضريبة السطور (`ق-١٢١١` · `ق-١٢١٢`): سطرٌ بصنفٍ يرث بطاقتَه، وسطرٌ بلا صنفٍ يُعلن فئتَه؛
+ * و`trusted` للنسخ من سطورٍ مخزَّنة (بدلٌ · إشعارٌ · تحويلُ عرض) — يُوثَق ما كُتب لا ما على البطاقة اليوم،
+ * و`LEGACY_ZERO` يُردّ باسمه. وسطرُ مرتجعٍ (`returnsLineId`) يُنسخ من أصله دائماً: الإشعارُ يعكس ما فُوتر.
+ */
+export async function priceLines(
+  tx: Prisma.TransactionClient,
+  lines: readonly InvoiceLineDto[],
+  opts: { trusted?: boolean; originals?: ReadonlyMap<string, ProductTaxProfile> } = {},
+): Promise<PricedInvoiceLine[]> {
+  const profiles = opts.trusted ? new Map<string, ProductTaxProfile>() : await productTaxFor(tx, lines.filter((l) => !(l.returnsLineId && opts.originals?.has(l.returnsLineId))));
+  return lines.map((l) => {
+    const original = l.returnsLineId ? opts.originals?.get(l.returnsLineId) : undefined;
+    const tax = original
+      ? lineTaxFromStored(original)
+      : opts.trusted
+        ? lineTaxFromStored({ taxCategory: l.taxCategory as ProductTaxProfile['taxCategory'], taxExemptionReasonCode: l.taxExemptionReasonCode ?? null, taxExemptionReason: l.taxExemptionReason ?? null })
+        : resolveLineTax(l, profiles);
+    return { ...l, ...tax };
+  });
+}
+
+/** أعمدةُ الضريبة كما تُكتب على سطر المستند. */
+function taxColumns(l: LineTax) {
+  return { taxRate: l.taxRate, taxCategory: l.taxCategory, taxExemptionReasonCode: l.taxExemptionReasonCode, taxExemptionReason: l.taxExemptionReason };
 }
 
 @Injectable()
@@ -315,16 +346,11 @@ export class InvoicesService {
             branchId: rejected.branchId ?? undefined,
             currency: rejected.currency,
             exchangeRate: rate,
-            lines: rejected.lines.map((l) => ({
-              description: l.description,
-              productId: l.productId ?? undefined,
-              quantity: Number(l.quantity),
-              unitPrice: Number(l.unitPrice),
-              taxRate: Number(l.taxRate),
-            })),
+            // ⑧ البدلُ يحمل فئةَ المردودة كما كُتبت — لا ما على البطاقة اليوم (`trustLineTax`).
+            lines: linesFromOriginal(rejected.lines, () => ({})),
           },
           credit,
-          { replacesInvoiceId: rejected.id },
+          { replacesInvoiceId: rejected.id, trustLineTax: true },
         );
 
         // ④ المقبوضُ يُنقل — والحالةُ تُشتقّ للاثنين، والأثرُ في السجلّ باسم الفاعل.
@@ -462,10 +488,13 @@ export class InvoicesService {
     allowedBranchIds: string[] | 'all',
     dto: CreateInvoiceDto,
     credit: CreditContext,
-    /** بدلٌ عن مردودة (`ق-٩٦٣`): الرابطُ يُكتب في كتابة الإنشاء نفسها — لا يُلحق بعدها. */
-    link: { replacesInvoiceId: string } | null = null,
+    /** بدلٌ عن مردودة (`ق-٩٦٣`): الرابطُ يُكتب في كتابة الإنشاء نفسها — لا يُلحق بعدها.
+     * و`trustLineTax` للنسخ الداخليّ من سطورٍ مخزَّنة (البدلُ · تحويلُ العرض): تُوثَق فئتُها كما كُتبت. */
+    link: { replacesInvoiceId?: string; trustLineTax?: boolean } | null = null,
   ) {
-    const { subtotal, taxTotal, total } = computeTotals(dto.lines);
+    // ⑧ الفئةُ والنسبةُ تُحلّان قبل أيّ حساب: من الصنف لحظةَ البيع، أو من إعلان السطر، أو من الأصل المنسوخ.
+    const lines = await priceLines(tx, dto.lines, { trusted: link?.trustLineTax });
+    const { subtotal, taxTotal, total } = computeTotals(lines);
     const { currency, exchangeRate } = resolveCurrency(dto);
       /**
        * ⚖️ **الحدُّ يُفحص قبل أي كتابة** (`ق-٣٣٦`) — قبل الترقيم نفسِه:
@@ -518,14 +547,15 @@ export class InvoicesService {
           baseTaxTotal: toBaseAmount(taxTotal, exchangeRate),
           baseTotal: toBaseAmount(total, exchangeRate),
           lines: {
-            create: dto.lines.map((l) => ({
+            create: lines.map((l) => ({
               companyId,
               description: l.description,
               productId: l.productId ?? null,
               unitCode: unitCodeOf(unitCodes, l.productId),
               quantity: l.quantity,
               unitPrice: l.unitPrice,
-              taxRate: l.taxRate,
+              // ⑧ الفئةُ والسببُ والنسبةُ المشتقّة — منسوخةً لحظةَ البيع كما الوحدة.
+              ...taxColumns(l),
             })),
           },
         } as unknown as Prisma.InvoiceUncheckedCreateInput,
@@ -692,7 +722,9 @@ export class InvoicesService {
       // كان هنا `if (dto.status) data.status = dto.status` — حالةٌ مشتقّةٌ تُكتب من الخارج (`ق-١١٩٨`/②).
 
       if (dto.lines) {
-        const totals = computeTotals(dto.lines);
+        // ⑧ (مسارٌ لا يُبلَغ عملياً — الصادرةُ مقفلةٌ أعلاه — ويبقى مطابقاً للإنشاء.)
+        const priced = await priceLines(tx, dto.lines);
+        const totals = computeTotals(priced);
         // The rate stays whatever the invoice was issued at unless the caller
         // explicitly sends a new one — re-editing lines must not silently
         // reprice the document at today's rate.
@@ -710,14 +742,14 @@ export class InvoicesService {
         await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
         const unitCodes = await unitCodesFor(tx, dto.lines);
         data.lines = {
-          create: dto.lines.map((l) => ({
+          create: priced.map((l) => ({
             companyId,
             description: l.description,
             productId: l.productId ?? null,
             unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            taxRate: l.taxRate,
+            ...taxColumns(l),
           })),
         } as unknown as Prisma.InvoiceUncheckedUpdateInput['lines'];
       }
@@ -799,18 +831,22 @@ export class InvoicesService {
 
       // المصدرُ الواحد ② — والصنفُ يُنقل مع السطر: إشعارٌ دائن يفقد صنفه يعكس الإيراد ولا يستطيع عكس
       // تكلفته. وإشعارٌ كامل = مرتجعٌ كامل سليم (`SPEC 30.4`): كل سطرٍ يشير إلى أصله ويعود إلى الرفّ.
-      const lines: InvoiceLineDto[] =
+      const draft: InvoiceLineDto[] =
         dto.lines ?? linesFromOriginal(original.lines, (l) => (correctsDebitNote ? {} : { returnsLineId: l.id, returnCondition: 'GOOD' as const }));
-      if (correctsDebitNote && lines.some((l) => l.returnsLineId)) throw new BadRequestException(MSG.return_line_not_original);
+      if (correctsDebitNote && draft.some((l) => l.returnsLineId)) throw new BadRequestException(MSG.return_line_not_original);
 
       // `SPEC 30.2` (المصدرُ الواحد ③): سطرُ مرتجعٍ يشير إلى سطرٍ من **هذه** الفاتورة الأصلية وحدها، وبكميةٍ
       // لا تتجاوز ما فُوتر فيه — والتراكم عبر الإشعارات السابقة يفحصه `returnStockedLines` من الحركات.
       // سطرٌ بلا `returnsLineId` إشعارٌ محاسبيّ لا يمسّ المخزون.
       assertReturnLinesBelong(
-        lines.map((l) => ({ returnsId: l.returnsLineId, productId: l.productId, quantity: l.quantity })),
+        draft.map((l) => ({ returnsId: l.returnsLineId, productId: l.productId, quantity: l.quantity })),
         original.lines,
         { notOriginal: MSG.return_line_not_original, exceeds: MSG.return_exceeds_sold },
       );
+      // ⑧ الإشعارُ يعكس **ما فُوتر**: سطرُ مرتجعٍ يرث فئةَ أصله، والإشعارُ الكامل ينسخ سطورَ الأصل كما كُتبت؛
+      // وسطرٌ حرٌّ يضيفه التاجر يُحلّ كأيّ سطرٍ جديد (صنفُه أو إعلانُه).
+      const originals = new Map(original.lines.map((l) => [l.id, { taxCategory: l.taxCategory, taxExemptionReasonCode: l.taxExemptionReasonCode, taxExemptionReason: l.taxExemptionReason }]));
+      const lines = await priceLines(tx, draft, { trusted: dto.lines === undefined, originals });
       const totals = computeTotals(lines);
 
       // All credit notes on one invoice together must not exceed what it billed — crediting more
@@ -853,7 +889,9 @@ export class InvoicesService {
   issueDebitNote(companyId: string, allowedBranchIds: string[] | 'all', invoiceId: string, dto: CreateDebitNoteDto) {
     return retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const original = await this.adjustableOriginal(tx, invoiceId, allowedBranchIds, 'DEBIT_NOTE');
-      const totals = computeTotals(dto.lines);
+      // ⑧ فوترةٌ إضافية: سطورُها جديدةٌ تُحلّ كأيّ بيع — من الصنف أو من إعلان السطر.
+      const lines = await priceLines(tx, dto.lines);
+      const totals = computeTotals(lines);
       // مدينٌ على دائنٍ زائد (`ق-٩٥٢`): يصحّح ما زاد في الإشعار الدائن — فلا يتجاوز ما بقي
       // منه بعد ما صُحِّح قبلَه. (على الفاتورة نفسِها لا سقفَ: فوترةٌ إضافية بلا حدٍّ حسابيّ.)
       if (original.docType === 'CREDIT_NOTE') {
@@ -866,7 +904,7 @@ export class InvoicesService {
         reason: dto.reason,
         issueDate: dto.issueDate,
         eventDate: dto.eventDate,
-        lines: dto.lines,
+        lines,
         totals,
         status: 'DUE',
         post: postDebitNoteEntry,
@@ -916,7 +954,7 @@ export class InvoicesService {
       issueDate?: string;
       /** يوم قبول الإعادة — تُحسب منه المهلة النظامية. راجع `note-deadline.util.ts`. */
       eventDate?: string;
-      lines: InvoiceLineDto[];
+      lines: PricedInvoiceLine[];
       totals: { subtotal: number; taxTotal: number; total: number };
       status: 'PAID' | 'DUE';
       post: typeof postCreditNoteEntry;
@@ -962,7 +1000,7 @@ export class InvoicesService {
             unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
-            taxRate: l.taxRate,
+            ...taxColumns(l),
             // رابطُ المرتجع وحالته على سطر الإشعار الدائن وحده (`SPEC 30.2` · `30.4`).
             returnsLineId: note.docType === 'CREDIT_NOTE' ? (l.returnsLineId ?? null) : null,
             returnCondition: note.docType === 'CREDIT_NOTE' ? (l.returnCondition ?? null) : null,

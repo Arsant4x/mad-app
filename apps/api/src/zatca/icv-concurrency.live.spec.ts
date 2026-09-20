@@ -143,7 +143,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
             baseTaxTotal: 15,
             baseTotal: 115,
             lines: {
-              create: [{ companyId, description: 'بند فحص', quantity: 1, unitPrice: 100, taxRate: 15 }],
+              create: [{ companyId, description: 'بند فحص', quantity: 1, unitPrice: 100, taxRate: 15, taxCategory: 'S' }],
             },
           },
         });

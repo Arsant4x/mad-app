@@ -3,6 +3,7 @@ import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import type { Customer, Invoice } from '../../api/invoices';
 import { fmt, toLocalISODate, today } from '../../lib/format';
+import { STANDARD_VAT_RATE } from '../../lib/vat';
 import i18n from '../../i18n';
 
 interface LineDraft {
@@ -30,8 +31,8 @@ function initialLines(editing: Invoice | null): LineDraft[] {
     }));
   }
   return [
-    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, taxRate: 15 },
-    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, taxRate: 15 },
+    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, taxRate: STANDARD_VAT_RATE },
+    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, taxRate: STANDARD_VAT_RATE },
   ];
 }
 
@@ -71,7 +72,7 @@ export function InvoiceBuilderView({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
   function addLine() {
-    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: 15 }]);
+    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }]);
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i));
@@ -196,7 +197,7 @@ export function InvoiceBuilderView({
                     </td>
                     <td>
                       <select value={l.taxRate} onChange={(e) => updateLine(i, { taxRate: parseFloat(e.target.value) })}>
-                        <option value={15}>15٪</option>
+                        <option value={STANDARD_VAT_RATE}>{STANDARD_VAT_RATE}٪</option>
                         <option value={0}>0٪ (معفى)</option>
                       </select>
                     </td>

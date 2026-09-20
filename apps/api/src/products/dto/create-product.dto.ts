@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
@@ -23,6 +23,21 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   expiryTracked?: boolean;
+
+  /** ⑧ فئةُ ضريبة القيمة المضافة (`S` · `Z` · `E` · `O`) — تُعلَن عند الإنشاء ولا تُخمَّن؛ غيابُها يُردّ في الخدمة باسمه. */
+  @IsOptional()
+  @IsIn(['S', 'Z', 'E', 'O'])
+  taxCategory?: 'S' | 'Z' | 'E' | 'O';
+
+  /** ⑧ رمزُ سبب الإعفاء من قائمة الهيئة — إلزاميٌّ لـ`Z`/`E`، ممنوعٌ على `S`؛ يُفحص في الخدمة من المصدر الواحد. */
+  @IsOptional()
+  @IsString()
+  taxExemptionReasonCode?: string;
+
+  /** ⑧ نصُّ سبب «خارج النطاق» لـ`O` وحدَه — ٣ إلى ٢٥٠ حرفاً بعد القصّ (`ق-١٢٢٢`). */
+  @IsOptional()
+  @IsString()
+  taxExemptionReason?: string;
 
   @IsOptional()
   @IsNumber()

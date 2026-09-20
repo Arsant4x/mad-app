@@ -1,4 +1,5 @@
 import { round2 } from '../common/money/rounding';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { dayNumber } from './rent-recognition.util';
 
 /**
@@ -28,7 +29,8 @@ import { dayNumber } from './rent-recognition.util';
  * ⚠️ **حدٌّ معلَن**: العقدُ غيرُ المصنَّف أو غيرُ معلَنِ الشمول **لا معاملةَ له**
  * (`null`) — لا يُستحقّ ولا يدخل الإقرار، ويُعدّ باسمه (`ق-٩١٨`).
  */
-export const RENT_VAT_RATE = 0.15;
+// ⑧ النسبةُ من المصدر الواحد (`ق-١٢١٢`) — كانت `0.15` مكتوبةً هنا ثانيةً بجانب الكاشير وشاشتين.
+export const RENT_VAT_RATE = STANDARD_VAT_RATE / 100;
 
 export type RentClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCLASSIFIED';
 export type RentVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';

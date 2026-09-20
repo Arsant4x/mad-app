@@ -21,11 +21,12 @@ import {
 } from '../journal/pos-settlement.util';
 import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
+import { rateForCategory } from '../common/vat/line-tax.util';
 import { ZatcaService } from '../zatca/zatca.service';
 
-/** KSA standard VAT — the cashier rings retail lines at the standard rate,
- * matching the invoice screen's default. */
-const POS_TAX_RATE = 15;
+// ⑧ كان هنا `POS_TAX_RATE = 15` — نسبةٌ ثابتةٌ لكلِّ سطرٍ يرنّه الكاشير، فتُرَنّ الأدويةُ (نسبة الصفر)
+// بالنسبة الأساسية. صارت الفئةُ تُقرأ من بطاقة الصنف لحظةَ البيع والنسبةُ تُشتقّ منها (`ق-١٢١٢`):
+// الكاشيرُ **يقرأ فقط** ولا يختار فئةً ولا نسبة (`§3.5` في الموجز).
 
 /**
  * يومُ الإقفال **بتقويم الكاشير** عند منتصف ليل `UTC` — الشكلُ الذي يقرؤه `@db.Date` (`ق-٧٣٦`).
@@ -422,15 +423,7 @@ export class PosService {
       const rungAt = opts.ringAt ? new Date(opts.ringAt) : new Date();
       const offsetKnown = opts.ringAt !== undefined && opts.ringOffsetMin !== undefined;
       const issueDate = localDateOf(rungAt, offsetKnown ? opts.ringOffsetMin! : 0);
-      const invoiceDto = {
-        customerId,
-        issueDate,
-        issuedAt: offsetKnown ? rungAt.toISOString() : undefined,
-        issuedOffsetMin: offsetKnown ? opts.ringOffsetMin : undefined,
-        // Paid on the spot — due = issue keeps it out of every aging bucket.
-        dueDate: issueDate,
-        branchId: shift.branchId ?? undefined,
-        lines: dto.lines.map((l) => {
+      const posLines = dto.lines.map((l) => {
           const p = byId.get(l.productId)!;
           /**
            * ⚠️ **`productId` يُنقل ولا يُترك عند الاسم.**
@@ -450,16 +443,30 @@ export class PosService {
             unitCode: p.unitCode ?? null,
             quantity: l.quantity,
             unitPrice: Number(p.price),
-            taxRate: POS_TAX_RATE,
+            // ⑧ الفئةُ من البطاقة والنسبةُ مشتقّةٌ منها — الخادمُ يعيد حلَّها من الصنف نفسِه عند الإنشاء،
+            // وتُمرَّر هنا كي تُحسب المجاميعُ (تدقيقُ الدفع المقسَّم أدناه) بالدالّة نفسِها وبالنسبة نفسِها.
+            taxRate: rateForCategory(p.taxCategory),
+            taxCategory: p.taxCategory as 'S' | 'Z' | 'E' | 'O',
+            taxExemptionReasonCode: p.taxExemptionReasonCode ?? undefined,
+            taxExemptionReason: p.taxExemptionReason ?? undefined,
           };
-        }),
+        });
+      const invoiceDto = {
+        customerId,
+        issueDate,
+        issuedAt: offsetKnown ? rungAt.toISOString() : undefined,
+        issuedOffsetMin: offsetKnown ? opts.ringOffsetMin : undefined,
+        // Paid on the spot — due = issue keeps it out of every aging bucket.
+        dueDate: issueDate,
+        branchId: shift.branchId ?? undefined,
+        lines: posLines,
       } as CreateInvoiceDto;
 
       // الدفع المقسّم يُدقَّق قبل إنشاء أي شيء: نفس دالة المجاميع التي
       // ستحسب الفاتورة تتحقق أن الأجزاء تساويها — لا فاتورة نصف مدفوعة.
       if (dto.paymentMethod === 'SPLIT') {
         if (!dto.payments?.length) throw new BadRequestException(MSG.pos_split_parts_required);
-        const expected = computeTotals(invoiceDto.lines).total;
+        const expected = computeTotals(posLines).total;
         const paid = dto.payments.reduce((sum, p) => sum + p.amount, 0);
         if (Math.abs(paid - expected) > 0.01) throw new BadRequestException(MSG.pos_split_mismatch);
       } else if (dto.payments?.length) {
@@ -470,7 +477,7 @@ export class PosService {
       let providerRef: string | null = null;
       const cardAmount =
         dto.paymentMethod === 'CARD'
-          ? computeTotals(invoiceDto.lines).total
+          ? computeTotals(posLines).total
           : dto.paymentMethod === 'SPLIT'
             ? dto.payments!.filter((p) => p.method === 'CARD').reduce((sum, p) => sum + p.amount, 0)
             : 0;
