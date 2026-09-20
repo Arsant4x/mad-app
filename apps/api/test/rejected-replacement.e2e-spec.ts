@@ -7,7 +7,7 @@ import * as x509 from '@peculiar/x509';
 import { encryptSecret } from '../src/common/crypto/secret.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
-import { localDateOf } from '../src/common/wall-clock.util';
+import { dayEndOf, localDateOf } from '../src/common/wall-clock.util';
 import { customerExposure } from '../src/reports/receivables-exposure.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
@@ -159,14 +159,10 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
    * نهايةُ اليوم التقويميّ **في الإزاحة المعلَنة** التي يُختم بها البدل (`issuedOffsetMin`) — لا نهايةُ يوم منطقة
    * العملية (ق-١٠٥٦): على سيرٍ يعمل بـ`UTC` بين `21:00` و`24:00` يكون يومُ الرياض تالياً ليومه، فيُختم البدلُ بتاريخ
    * الغد ويسقط من نافذةٍ تنتهي اليوم — وقد سقط هذا التوكيدُ مرّتين داخل تلك النافذة ومرّ خارجها بلا تغيير حرف.
+   * والدالّةُ صارت مشتركةً في `wall-clock.util` (`dayEndOf` · ق-١١٩٠) — فلا نسخةَ هنا تفترق عنها.
    */
-  function endOfDeclaredDay(instant: Date, offsetMin: number): Date {
-    const shifted = new Date(instant.getTime() + offsetMin * 60_000);
-    return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate(), 23, 59, 59, 999));
-  }
-
   function exposureOf(customerId: string): Promise<number> {
-    const asOf = endOfDeclaredDay(new Date(), ISSUED_OFFSET_MIN);
+    const asOf = dayEndOf(new Date(), ISSUED_OFFSET_MIN);
     return tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await customerExposure(tx, { asOf, allowedBranchIds: 'all', customerId });
       return rows.filter((r) => r.customerId === customerId).reduce((s, r) => s + r.total, 0);

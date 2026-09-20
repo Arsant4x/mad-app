@@ -7,7 +7,7 @@ import { grant } from '../delegations/permission-tree';
 import { TenantContext } from '../auth/types';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
-import { issuedWallClock } from '../common/wall-clock.util';
+import { dayStartOf, issuedWallClock } from '../common/wall-clock.util';
 import { Prisma } from '@prisma/client';
 import {
   assertAdjustableTarget,
@@ -375,8 +375,8 @@ export class InvoicesService {
     if (!invoice) return;
     const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId }, _sum: { amount: true } });
     const derived = deriveSettlementStatus(Number(allocated._sum.amount ?? 0), Number(invoice.total));
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
+    // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.
+    const today = dayStartOf(now);
     const status = derived === 'DUE' && invoice.dueDate < today ? 'OVERDUE' : derived;
     if (status !== invoice.status) await tx.invoice.update({ where: { id: invoiceId }, data: { status } });
   }
