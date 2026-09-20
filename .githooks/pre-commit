@@ -27,6 +27,10 @@ for f in $staged; do
   case "$f" in
     # المسموح صراحةً أولاً — هجرات Prisma وسكربتات تهيئة Postgres مصدرٌ لا بيانات.
     apps/api/prisma/migrations/*|docker/postgres-init/*|docker/postgres-init-prod/*) continue ;;
+    # بذرُ قياس المراجع الخارجيّ — مصدرُ قياسٍ خارجيّ، لا بيانات (generate_series بلا صفٍّ منقول ولا هاش ولا مفتاح).
+    # أذن به المالك 2026-09-20 (التوجيه ٢٤١ · ق-١٢١٧) **بالمسار الكامل لا بنمط** — فنمطٌ على المجلد يفتح ما لم يُقرأ —
+    # وفحصُ المحتوى أدناه يبقى عليه (مُثبَتٌ بسرٍّ مزروعٍ يُرفض). ملفٌّ آخر في المجلد نفسه يبقى مرفوضاً بالنوع.
+    bench/external-review-2026-09/seed.sql) continue ;;
     # القوالب الفارغة مقصودة.
     *.env.example|*.env.test.example|.env.example|.env.production.example|.env.test.example) continue ;;
   esac
