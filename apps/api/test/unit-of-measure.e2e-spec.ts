@@ -85,7 +85,8 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
     // صفٌّ كما تركته الهجرة: نصٌّ قديم «كرتون» وبلا رمز.
     legacyId = (
       await tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unit: 'كرتون', price: 25, cost: 0 } as unknown as Prisma.ProductUncheckedCreateInput }),
+        // ⑧ وفئةٌ قديمة (`LEGACY_STANDARD`) بتاريخٍ يسبق لحظةَ الهجرة — فقيدُ `CHECK` يقبلها لما سبق وحدَه؛ والسطرُ الذي يبيعه يرثها.
+        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unit: 'كرتون', price: 25, cost: 0, taxCategory: 'LEGACY_STANDARD', createdAt: new Date('2000-01-01T00:00:00Z') } as unknown as Prisma.ProductUncheckedCreateInput }),
       )
     ).id;
     const list = (await auth(http().get('/products')).expect(200)).body as { id: string; unitCode: string | null; unit: string | null }[];

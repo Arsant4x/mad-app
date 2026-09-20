@@ -106,7 +106,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
 
     legacyId = (
       await tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unitCode: 'H87', price: 25, cost: 0 } as unknown as Prisma.ProductUncheckedCreateInput }),
+        // ⑧ صفٌّ كما تركته الهجرة: فئةٌ قديمة بتاريخٍ يسبق لحظتَها — فقيدُ `CHECK` يقبلها لما سبق وحدَه.
+        tx.product.create({ data: { companyId, name: `صنفٌ قديم ${suffix}`, unitCode: 'H87', price: 25, cost: 0, taxCategory: 'LEGACY_STANDARD', createdAt: new Date('2000-01-01T00:00:00Z') } as unknown as Prisma.ProductUncheckedCreateInput }),
       )
     ).id;
     const list = (await auth(http().get('/products')).expect(200)).body as { id: string; expiryTracked: boolean | null }[];
