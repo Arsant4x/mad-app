@@ -3,15 +3,18 @@ import { listCustomers, type Customer } from '../../api/customers';
 import { listBranches, type Branch } from '../../api/branches';
 import { createQuote, updateQuote, type Quote, type QuoteLineInput } from '../../api/quotes';
 import { fmt, today } from '../../lib/format';
+import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
+import { LineTaxPicker } from '../../components/LineTaxPicker';
 
+/** ⑧ البندُ يحمل الفئةَ بسببها لا نسبةً تُكتب — كان هنا حقلُ رقمٍ حرّ (`'15'`) يقبل أيَّ نسبة. */
 interface LineDraft {
   description: string;
   quantity: string;
   unitPrice: string;
-  taxRate: string;
+  tax: LineTaxDraft;
 }
 
-const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPrice: '', taxRate: '15' };
+const EMPTY_LINE: LineDraft = { description: '', quantity: '1', unitPrice: '', tax: STANDARD_LINE_TAX };
 
 /** منشئ عرض السعر — نسخة مبسطة من منشئ الفاتورة: بنود بنفس شكلها حرفياً. */
 export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | null; onCancel: () => void; onSaved: () => Promise<void> }) {
@@ -26,7 +29,7 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
   const [notes, setNotes] = useState(editing?.notes ?? '');
   const [lines, setLines] = useState<LineDraft[]>(
     editing
-      ? editing.lines.map((l) => ({ description: l.description, quantity: String(Number(l.quantity)), unitPrice: String(Number(l.unitPrice)), taxRate: String(Number(l.taxRate)) }))
+      ? editing.lines.map((l) => ({ description: l.description, quantity: String(Number(l.quantity)), unitPrice: String(Number(l.unitPrice)), tax: draftTaxOf(l) }))
       : [{ ...EMPTY_LINE }],
   );
   const [saving, setSaving] = useState(false);
@@ -37,9 +40,10 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
     listBranches().then(setBranches);
   }, []);
 
+  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم.
   const totals = (() => {
     const subtotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0);
-    const tax = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0) * ((parseFloat(l.taxRate) || 0) / 100), 0);
+    const tax = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0) * (rateForCategory(l.tax.taxCategory) / 100), 0);
     return { subtotal, tax, total: subtotal + tax };
   })();
 
@@ -49,9 +53,13 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
 
   async function handleSave() {
     setError(null);
-    const parsed: QuoteLineInput[] = lines
-      .filter((l) => l.description.trim())
-      .map((l) => ({ description: l.description.trim(), quantity: parseFloat(l.quantity) || 0, unitPrice: parseFloat(l.unitPrice) || 0, taxRate: parseFloat(l.taxRate) || 0 }));
+    const kept = lines.filter((l) => l.description.trim());
+    const taxProblem = kept.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
+    if (taxProblem) {
+      setError(`البند ${taxProblem.i + 1}: ${taxProblem.msg}`);
+      return;
+    }
+    const parsed: QuoteLineInput[] = kept.map((l) => ({ description: l.description.trim(), quantity: parseFloat(l.quantity) || 0, unitPrice: parseFloat(l.unitPrice) || 0, ...lineTaxPayload(l.tax) }));
     if (!customerId || parsed.length === 0 || parsed.some((l) => l.quantity <= 0)) {
       setError('العميل وبند واحد على الأقل (بكمية موجبة) مطلوبان.');
       return;
@@ -125,7 +133,8 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
               <th style={{ width: '45%' }}>البند</th>
               <th>الكمية</th>
               <th>سعر الوحدة</th>
-              <th>الضريبة %</th>
+              <th style={{ width: 210 }}>الفئة الضريبية</th>
+              <th>النسبة</th>
               <th></th>
             </tr>
           </thead>
@@ -142,8 +151,9 @@ export function QuoteModal({ editing, onCancel, onSaved }: { editing: Quote | nu
                   <input className="num" type="number" min="0" value={l.unitPrice} onChange={(e) => setLine(i, { unitPrice: e.target.value })} />
                 </td>
                 <td>
-                  <input className="num" type="number" min="0" value={l.taxRate} onChange={(e) => setLine(i, { taxRate: e.target.value })} />
+                  <LineTaxPicker compact value={l.tax} onChange={(tax) => setLine(i, { tax })} />
                 </td>
+                <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} disabled={lines.length === 1}>
                     ✕

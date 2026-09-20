@@ -1,7 +1,20 @@
 import { useState } from 'react';
 import type { Invoice, InvoiceLineInput } from '../../api/invoices';
 import { fmt } from '../../lib/format';
-import { STANDARD_VAT_RATE } from '../../lib/vat';
+import { lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
+import { LineTaxPicker } from '../../components/LineTaxPicker';
+
+/** ⑧ البندُ يحمل الفئةَ بسببها لا نسبةً تُختار — كما في بنّاء الفاتورة. */
+interface DebitLineDraft {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  tax: LineTaxDraft;
+}
+
+function toInput(l: DebitLineDraft): InvoiceLineInput {
+  return { description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, ...lineTaxPayload(l.tax) };
+}
 
 /**
  * Issues a ZATCA 383 debit note — additional billing against an already-issued
@@ -22,21 +35,24 @@ export function DebitNoteModal({
   onConfirm: (reason: string, lines: InvoiceLineInput[]) => void;
 }) {
   const [reason, setReason] = useState('');
-  const [lines, setLines] = useState<InvoiceLineInput[]>([{ description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }]);
+  const [lines, setLines] = useState<DebitLineDraft[]>([{ description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }]);
 
-  function updateLine(index: number, patch: Partial<InvoiceLineInput>) {
+  function updateLine(index: number, patch: Partial<DebitLineDraft>) {
     setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   }
 
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
+  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم.
+  const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (rateForCategory(l.tax.taxCategory) / 100), 0);
   // Every line must actually bill something — a zero-value note is a document
-  // issued to the authority that says nothing.
-  const valid = reason.trim() !== '' && lines.every((l) => l.description.trim() !== '' && l.quantity > 0 && l.unitPrice > 0);
+  // issued to the authority that says nothing. And a Z/E/O line without its
+  // reason is refused here as the server refuses it (ق-١٢١١/③).
+  const taxProblem = lines.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
+  const valid = reason.trim() !== '' && !taxProblem && lines.every((l) => l.description.trim() !== '' && l.quantity > 0 && l.unitPrice > 0);
 
   return (
     <div className="overlay" onClick={onCancel}>
-      <div className="modal" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-title">إصدار إشعار مدين</div>
           <button className="modal-close" onClick={onCancel}>
@@ -59,7 +75,8 @@ export function DebitNoteModal({
               <th>الوصف</th>
               <th style={{ width: 55 }}>الكمية</th>
               <th style={{ width: 95 }}>السعر</th>
-              <th style={{ width: 80 }}>الضريبة</th>
+              <th style={{ width: 210 }}>الفئة الضريبية</th>
+              <th style={{ width: 55 }}>النسبة</th>
               <th style={{ width: 30 }}></th>
             </tr>
           </thead>
@@ -76,11 +93,9 @@ export function DebitNoteModal({
                   <input className="num" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: parseFloat(e.target.value) || 0 })} />
                 </td>
                 <td>
-                  <select value={l.taxRate} onChange={(e) => updateLine(i, { taxRate: parseFloat(e.target.value) })}>
-                    <option value={STANDARD_VAT_RATE}>{STANDARD_VAT_RATE}٪</option>
-                    <option value={0}>0٪ (معفى)</option>
-                  </select>
+                  <LineTaxPicker compact value={l.tax} onChange={(tax) => updateLine(i, { tax })} />
                 </td>
+                <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
                 <td>
                   {lines.length > 1 && (
                     <button className="remove-line" onClick={() => setLines((ls) => ls.filter((_, x) => x !== i))}>
@@ -92,9 +107,15 @@ export function DebitNoteModal({
             ))}
           </tbody>
         </table>
-        <button className="add-line" onClick={() => setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }])}>
+        <button className="add-line" onClick={() => setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }])}>
           + إضافة بند جديد
         </button>
+
+        {taxProblem && (
+          <p className="error-text" style={{ marginTop: 8 }}>
+            البند {taxProblem.i + 1}: {taxProblem.msg}
+          </p>
+        )}
 
         <div className="hint" style={{ marginTop: 10 }}>
           الإجمالي: {fmt(subtotal + tax)} (شامل ضريبة {fmt(tax)})
@@ -104,7 +125,7 @@ export function DebitNoteModal({
           <button className="btn btn-ghost" onClick={onCancel}>
             إلغاء
           </button>
-          <button className="btn btn-primary" disabled={!valid} onClick={() => onConfirm(reason.trim(), lines)}>
+          <button className="btn btn-primary" disabled={!valid} onClick={() => onConfirm(reason.trim(), lines.map(toInput))}>
             إصدار الإشعار
           </button>
         </div>

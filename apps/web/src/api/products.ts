@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
 
 export interface Product {
   archived: boolean;
@@ -12,6 +13,12 @@ export interface Product {
   unitCode: string | null;
   /** ٥+٦ «يُتتبَّع بالدفعة والانتهاء؟» — علَمٌ ثنائيّ يُعلَن ولا يُخمَّن؛ `null` = لم يُعلَن بعد (يُعدّ ويُعلَن عند لمس الصنف). */
   expiryTracked: boolean | null;
+  /** ⑧ فئةُ ضريبة القيمة المضافة — تُعلَن عند الإنشاء؛ والقائمُ `LEGACY_STANDARD` («لم تُعلَن الفئة») حتى تُعلَن من البطاقة. */
+  taxCategory: TaxCategory;
+  /** ⑧ رمزُ سبب الإعفاء من قائمة الهيئة لـ`Z`/`E` (و`VATEX-SA-OOS` لـ`O`)؛ `null` لـ`S`. */
+  taxExemptionReasonCode: string | null;
+  /** ⑧ نصُّ سبب «خارج النطاق» لـ`O` وحدَه. */
+  taxExemptionReason: string | null;
   price: string;
   cost: string;
   minStock: string;
@@ -24,6 +31,10 @@ export interface ProductInput {
   category?: string;
   unitCode?: string;
   expiryTracked?: boolean;
+  /** ⑧ الفئةُ والسبب — إلزاميّان عند الإنشاء بقواعد الخادم؛ والقائمُ يُعلن من البطاقة. */
+  taxCategory?: DeclarableTaxCategory;
+  taxExemptionReasonCode?: string | null;
+  taxExemptionReason?: string | null;
   price?: number;
   cost?: number;
   minStock?: number;

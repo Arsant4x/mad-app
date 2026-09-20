@@ -1,16 +1,23 @@
 import { useMemo, useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
-import type { Customer, Invoice } from '../../api/invoices';
+import type { Customer, Invoice, InvoiceLineInput } from '../../api/invoices';
 import { fmt, toLocalISODate, today } from '../../lib/format';
-import { STANDARD_VAT_RATE } from '../../lib/vat';
+import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
+import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
 
-interface LineDraft {
+/** ⑧ البندُ يحمل الفئةَ والسبب لا نسبةً تُختار (`ق-١٢١١`/③)؛ والنسبةُ للمعاينة تُقرأ من الفئة. */
+export interface LineDraft {
   description: string;
   quantity: number;
   unitPrice: number;
-  taxRate: number;
+  tax: LineTaxDraft;
+}
+
+/** ما يُرسَل للخادم: الوصفُ والكمّيةُ والسعرُ والفئةُ بسببها — بلا `taxRate` (الخادمُ يشتقّها). */
+function lineDraftPayload(l: LineDraft): InvoiceLineInput {
+  return { description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, ...lineTaxPayload(l.tax) };
 }
 
 const DEFAULT_NOTES = 'يتم سداد المبلغ خلال 30 يوماً من تاريخ الإصدار. تُضاف غرامة تأخير بنسبة 1.5٪ شهرياً على المبالغ المتأخرة.';
@@ -27,12 +34,12 @@ function initialLines(editing: Invoice | null): LineDraft[] {
       description: l.description,
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
-      taxRate: Number(l.taxRate),
+      tax: draftTaxOf(l),
     }));
   }
   return [
-    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, taxRate: STANDARD_VAT_RATE },
-    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, taxRate: STANDARD_VAT_RATE },
+    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, tax: STANDARD_LINE_TAX },
+    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, tax: STANDARD_LINE_TAX },
   ];
 }
 
@@ -50,7 +57,7 @@ export function InvoiceBuilderView({
   editing: Invoice | null;
   nextNumberHint: string;
   onCancel: () => void;
-  onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: LineDraft[] }) => Promise<void>;
+  onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[] }) => Promise<void>;
   onCreateCustomer: (name: string) => Promise<Customer>;
 }) {
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
@@ -62,9 +69,10 @@ export function InvoiceBuilderView({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم بدالّة المجاميع الواحدة.
   const totals = useMemo(() => {
     const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (l.taxRate / 100), 0);
+    const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (rateForCategory(l.tax.taxCategory) / 100), 0);
     return { subtotal, tax, grand: subtotal + tax };
   }, [lines]);
 
@@ -72,7 +80,7 @@ export function InvoiceBuilderView({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
   function addLine() {
-    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, taxRate: STANDARD_VAT_RATE }]);
+    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }]);
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i));
@@ -89,6 +97,12 @@ export function InvoiceBuilderView({
       setError(i18n.t('err_invoice_line_desc'));
       return;
     }
+    // سببُ الفئة قبل الإرسال — بقواعد الخادم نفسِها كي لا يُفاجَأ التاجر بـ400 بعد أن أنشأ العميل.
+    const taxProblem = lines.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
+    if (taxProblem) {
+      setError(`البند ${taxProblem.i + 1}: ${taxProblem.msg}`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -97,7 +111,7 @@ export function InvoiceBuilderView({
       // فاتورةٌ مؤرَّخةٌ باليوم تحمل لحظةَ الجهاز وانحرافَه؛ والمؤرَّخة بيدٍ في يومٍ آخر
       // لا وقتَ معلوماً لها فلا يُخترَع (ق-١٨٥).
       const stamped = issueDate === today() ? { issuedAt: new Date().toISOString(), issuedOffsetMin: -new Date().getTimezoneOffset() } : {};
-      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines, ...stamped });
+      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines: lines.map(lineDraftPayload), ...stamped });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_invoice_save')));
     } finally {
@@ -178,7 +192,8 @@ export function InvoiceBuilderView({
                   <th>الوصف</th>
                   <th style={{ width: 55 }}>الكمية</th>
                   <th style={{ width: 95 }}>السعر</th>
-                  <th style={{ width: 80 }}>الضريبة</th>
+                  <th style={{ width: 210 }}>الفئة الضريبية</th>
+                  <th style={{ width: 55 }}>النسبة</th>
                   <th style={{ width: 100 }}>الإجمالي</th>
                   <th style={{ width: 30 }}></th>
                 </tr>
@@ -196,11 +211,10 @@ export function InvoiceBuilderView({
                       <input className="num" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td>
-                      <select value={l.taxRate} onChange={(e) => updateLine(i, { taxRate: parseFloat(e.target.value) })}>
-                        <option value={STANDARD_VAT_RATE}>{STANDARD_VAT_RATE}٪</option>
-                        <option value={0}>0٪ (معفى)</option>
-                      </select>
+                      <LineTaxPicker compact value={l.tax} onChange={(tax) => updateLine(i, { tax })} />
                     </td>
+                    {/* النسبةُ تُقرأ من الفئة ولا تُدخَل — عمودٌ للقراءة كما في النموذج المُقرّ. */}
+                    <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
                     <td className="num line-total">{fmt(l.quantity * l.unitPrice)}</td>
                     <td>
                       {lines.length > 1 && (

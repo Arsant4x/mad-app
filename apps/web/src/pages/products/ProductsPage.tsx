@@ -4,6 +4,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
 import { unitLabel } from '../../lib/units';
+import { taxBadgeOf } from '../../lib/vat';
 import { ProductModal } from './ProductModal';
 
 export function ProductsPage() {
@@ -41,6 +42,8 @@ export function ProductsPage() {
   const undeclaredUnits = useMemo(() => products.filter((p) => !p.unitCode).length, [products]);
   // ٥+٦ القائمُ بلا إعلانِ تتبّعٍ يُعدّ ويُعرض — يُعلَن عند لمس الصنف لا بشاشةٍ جماعية (ق-١٠٨٣).
   const undeclaredTracking = useMemo(() => products.filter((p) => p.expiryTracked === null || p.expiryTracked === undefined).length, [products]);
+  // ⑧ القائمُ بلا فئةٍ ضريبية معلَنة (`LEGACY_STANDARD`) يُعدّ ويُعرض شارةً في القائمة — لا في وجه المستند (`ق-١٢٢٢`/②)؛ ويُعلَن من البطاقة.
+  const undeclaredTax = useMemo(() => products.filter((p) => taxBadgeOf(p).undeclared).length, [products]);
 
   async function handleSave(data: ProductInput) {
     if (modal?.mode === 'edit') {
@@ -85,6 +88,11 @@ export function ProductsPage() {
           {undeclaredTracking} صنفاً لم يُعلَن أيُتتبَّع بالدفعة والانتهاء أم لا — يُعلَن من بطاقة كلِّ صنف عند لمسه (لا شاشةَ جماعية)؛ وحتى يُعلَن يُصرَف بالأقدم كما كان ولا يُرفض منه منتهٍ.
         </div>
       )}
+      {undeclaredTax > 0 && (
+        <div className="hint" style={{ marginBottom: 8 }}>
+          أصنافٌ بلا فئةٍ ضريبية معلَنة: {undeclaredTax} — تُعلَن من بطاقة كلٍّ منها ولا تُخمَّن؛ وحتى تُعلَن يُرَنّ الصنفُ بالنسبة الأساسية كما كان، وتُعدّ سطورُه في الإقرار «على صنفٍ لم تُعلَن فئتُه».
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="search-box">
@@ -107,6 +115,7 @@ export function ProductsPage() {
               <th>الرمز</th>
               <th>الفئة</th>
               <th>الوحدة</th>
+              <th>الضريبة</th>
               <th>سعر الوحدة</th>
               <th>التكلفة</th>
               <th>الباركود</th>
@@ -116,7 +125,7 @@ export function ProductsPage() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   <div className="empty-state">لا توجد منتجات مطابقة</div>
                 </td>
               </tr>
@@ -130,6 +139,18 @@ export function ProductsPage() {
                   {p.unitCode ? unitLabel(p.unitCode) : <span className="badge draft" title="لم تُعلَن وحدةُ القياس بعد — تُعلَن من بطاقة الصنف ولا تُخمَّن">بلا وحدةٍ معلَنة</span>}
                   {p.expiryTracked === true && <span className="badge due" style={{ marginInlineStart: 6 }} title="يُصرَف بالأقرب انتهاءً ولا يُباع منه المنتهي">دفعة وانتهاء</span>}
                   {(p.expiryTracked === null || p.expiryTracked === undefined) && <span className="badge draft" style={{ marginInlineStart: 6 }} title="لم يُعلَن التتبّع بالدفعة والانتهاء بعد — يُعلَن من بطاقة الصنف ولا يُخمَّن">بلا إعلانِ تتبّع</span>}
+                </td>
+                <td>
+                  {(() => {
+                    const badge = taxBadgeOf(p);
+                    return badge.undeclared ? (
+                      <span className="badge draft" title="صنفٌ قائم قبل الحقل — يُرَنّ بالنسبة الأساسية حتى تُعلَن فئتُه من بطاقته">
+                        {badge.text}
+                      </span>
+                    ) : (
+                      <span className="num" title={p.taxExemptionReason ?? undefined}>{badge.text}</span>
+                    );
+                  })()}
                 </td>
                 <td className="num">{fmt(p.price)}</td>
                 <td className="num">{fmt(p.cost)}</td>

@@ -3,7 +3,12 @@ import { apiErrorMessage } from '../../lib/apiError';
 import type { Product, ProductInput } from '../../api/products';
 import { UNITS_OF_MEASURE } from '../../lib/units';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../../lib/batchLimits';
+import { BUYER_DEPENDENT_LIMIT, draftTaxOf, lineTaxDraftError, productTaxPayload, STANDARD_VAT_RATE, TAX_CATEGORY_OPTIONS, type LineTaxDraft } from '../../lib/vat';
+import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
+
+/** الصنفُ القائم قبل الحقل يحمل `LEGACY_STANDARD` — «لم تُعلَن الفئة»: يُرَنّ بالأساسية ويبقى حتى يُعلَن هنا (`ق-١٢١١`/④). */
+const LEGACY_PANEL = `فئةُ هذا الصنف LEGACY_STANDARD — كان يُرَنّ بـ${STANDARD_VAT_RATE}٪ قبل أن يوجد الحقل، ويبقى كذلك حتى تُعلَن هنا. والسطورُ التي بيعت به قبل الإعلان لا تتغيّر.`;
 
 export function ProductModal({
   editing,
@@ -25,6 +30,9 @@ export function ProductModal({
   const [cost, setCost] = useState(editing?.cost ?? '');
   const [minStock, setMinStock] = useState(editing?.minStock ?? '');
   const [barcode, setBarcode] = useState(editing?.barcode ?? '');
+  // ⑧ الفئةُ الضريبية تُعلَن ولا تُفترض: جديدٌ بلا فئة يُرفض؛ والقائمُ `LEGACY_STANDARD` يبقى «لم تُعلَن» حتى يُعلَن هنا.
+  const legacy = editing?.taxCategory === 'LEGACY_STANDARD';
+  const [tax, setTax] = useState<LineTaxDraft | null>(editing && !legacy ? draftTaxOf(editing) : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +50,15 @@ export function ProductModal({
       setError('إعلانُ التتبّع بالدفعة والانتهاء مطلوب — نعم أو لا، ولا يُخمَّن');
       return;
     }
+    if (!editing && !tax) {
+      setError('الفئةُ الضريبية مطلوبة — تُعلَن من القائمة ولا تُفترض');
+      return;
+    }
+    const taxProblem = tax ? lineTaxDraftError(tax) : null;
+    if (taxProblem) {
+      setError(taxProblem);
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -50,6 +67,8 @@ export function ProductModal({
         category: category.trim() || undefined,
         unitCode,
         expiryTracked: expiryTracked === 'yes',
+        // القائمُ غيرُ المعلَن يُترك كما هو (لا تُرسَل حقولُ الضريبة) — فالتعديلُ لا يُصحّح القديم صامتاً.
+        ...(tax ? productTaxPayload(tax) : {}),
         price: parseFloat(String(price)) || 0,
         cost: parseFloat(String(cost)) || 0,
         minStock: parseFloat(String(minStock)) || 0,
@@ -120,6 +139,23 @@ export function ProductModal({
               ))}
             </ul>
           )}
+        </div>
+        <div className="field">
+          <label>الفئة الضريبية (ضريبة القيمة المضافة)</label>
+          {tax ? (
+            <LineTaxPicker value={tax} onChange={setTax} />
+          ) : (
+            <select value="" onChange={(e) => e.target.value && setTax({ taxCategory: e.target.value as LineTaxDraft['taxCategory'] })} aria-label="فئة الضريبة">
+              <option value="">— تُعلَن من القائمة —</option>
+              {TAX_CATEGORY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {legacy && !tax && <div className="hint">{LEGACY_PANEL}</div>}
+          {tax?.taxCategory !== 'Z' && <div className="hint">{BUYER_DEPENDENT_LIMIT}</div>}
         </div>
         <div className="field">
           <label>التكلفة</label>
