@@ -124,4 +124,31 @@ test.describe('الشريطُ الرفيع — قائمة العقود وبطا�
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
   });
+
+  test('④ب تغييرُ المقاس بلا إعادة تحميل: الأعمدةُ تُعاد بالقياس (8 ⟵ 5 ⟵ 8 ⟵ مصفوف)', async ({ request }, testInfo) => {
+    const start = testInfo.project.use.viewport ?? { width: 1280, height: 800 };
+    test.skip(start.width < 1280, 'يُقاس من المقاس الواسع وحده — المسارُ واحد');
+    const page = session.page();
+    await seedContract(request, state as TestCompany);
+    await page.goto('/contracts');
+    const wrap = page.locator('.rz-table-wrap');
+    await expect(wrap).toHaveAttribute('data-status', 'ready');
+    const hiddenCount = () => page.locator('.rz-table__note').getAttribute('data-hidden-columns').then((v) => Number(v));
+    await expect.poll(hiddenCount, { message: 'عند 1280 يُحال عمودٌ واحد' }).toBe(1);
+
+    // تضييقٌ حيّ — لا إعادةَ تحميل: القياسُ يُعاد بـResizeObserver (§8.2.1: انتظارُ حالةٍ لا زمن)
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect.poll(hiddenCount, { message: 'عند 768 تُحال أربعة' }).toBe(4);
+    await noHorizontalScroll(page);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect.poll(hiddenCount, { message: 'العودةُ إلى 1280 تُعيد الأعمدة' }).toBe(1);
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(wrap).toHaveAttribute('data-layout', 'stack');
+    await noHorizontalScroll(page);
+
+    await page.setViewportSize(start);
+    await expect(wrap).toHaveAttribute('data-layout', 'table');
+  });
 });
