@@ -15,6 +15,7 @@ import { MyTasksPage } from './pages/tasks/MyTasksPage';
 import { TrashPage } from './pages/trash/TrashPage';
 import { CompanyUsersPage } from './pages/companyUsers/CompanyUsersPage';
 import { ContractsPage } from './pages/contracts/ContractsPage';
+import { ContractsListPage } from './pages/contracts/ContractsListPage';
 import { MaintenancePage } from './pages/maintenance/MaintenancePage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { RemindersPage } from './pages/reminders/RemindersPage';
@@ -183,8 +184,19 @@ export default function App() {
                 </ScreenGuard>
               }
             />
+            {/* الشريطُ الرفيع (docs/ui/rounds/03): القائمةُ والبطاقةُ على القواعد الخمس.
+                والشاشةُ القديمة تبقى على `contracts/legacy` — الإنشاءُ والودائعُ والمطالباتُ
+                والتسليمُ ما زالت عليها، ولا تُحذف قبل حكم المالك (§٤ من التوجيه). */}
             <Route
               path="contracts"
+              element={
+                <ScreenGuard screen="contracts">
+                  <ContractsListPage />
+                </ScreenGuard>
+              }
+            />
+            <Route
+              path="contracts/legacy"
               element={
                 <ScreenGuard screen="contracts">
                   <ContractsPage />

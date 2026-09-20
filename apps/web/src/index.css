@@ -1010,3 +1010,88 @@ tr:last-child td {
 @media (max-width:340px){
   .two-col{ grid-template-columns:1fr; }
 }
+
+/* ======================================================================
+   الأنماطُ الستة على القواعد الخمس — docs/ui/rounds/02-six-patterns.md
+   الأرقام مقيسة: الصفُّ الكثيف 32px · اللمسُ 48px دون 520px حاويةً · اللوحة 440px.
+   ====================================================================== */
+
+/* زرُّ الإصدار — الحبرُ لما في ISSUE_ACTIONS وحده (و-٤) */
+.btn-issue { background: var(--ink); color: #f4f5f1; border-color: var(--ink); }
+.btn-issue:hover { filter: brightness(1.15); }
+
+/* رأسُ الصفحة */
+.rz-pagehead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; margin-bottom: 14px; }
+.rz-pagehead__titles { min-width: 0; }
+.rz-pagehead__count { font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 16px; }
+.rz-pagehead__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rz-toolbar { flex-basis: 100%; margin-top: 4px; }
+.rz-toolbar .search-box { max-width: 420px; width: 100%; }
+
+/* شريطُ التحذير — 36px */
+.rz-warnbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; margin-bottom: 10px; }
+.rz-warnbar--warn { background: var(--gold-soft); color: #7a5a14; }
+.rz-warnbar--bad { background: var(--rose-soft); color: var(--rose); }
+.rz-warnbar--info { background: #eaf1fb; color: #2b5ea8; }
+
+/* الحالاتُ: خطأ · ممنوع · فارغ — كتلٌ لا تشبه بعضها ولا تشبه الجدول */
+.rz-state { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 28px 16px; border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; color: var(--muted); }
+.rz-state strong { color: var(--charcoal); font-size: 14px; }
+.rz-state--error { border-color: var(--rose); background: var(--rose-soft); color: #7a1f1a; }
+.rz-state--error strong { color: var(--rose); }
+.rz-state--forbidden { border-color: #8c6c24; background: var(--gold-soft); color: #5e4a1a; }
+.rz-state__meta { font-size: 11.5px; opacity: .85; }
+
+/* هيكلُ التحميل — بأبعاد المحتوى الحقيقي */
+.rz-skeleton { display: grid; gap: 1px; }
+.rz-skeleton__row { background: linear-gradient(90deg, #f0f2ee, #e6e9e3, #f0f2ee); background-size: 200% 100%; animation: rz-shimmer 1.2s linear infinite; border-radius: 4px; }
+.rz-skeleton__inline { display: inline-block; width: 80px; height: 12px; border-radius: 4px; background: #e6e9e3; vertical-align: middle; }
+@keyframes rz-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* الجدولُ الكثيف — 13.5px · خلية 0 12px · صف 32px · ولا تمريرَ أفقيّاً */
+.rz-table-wrap { width: 100%; overflow-x: hidden; }
+.rz-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; table-layout: auto; }
+.rz-table th { font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 0 12px; height: 32px; border-bottom: 1.5px solid var(--line); white-space: nowrap; text-align: start; }
+.rz-table td { padding: 0 12px; height: 32px; font-size: 13.5px; border-bottom: 1px solid var(--paper-line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.rz-table th.num, .rz-table td.num { text-align: right; direction: ltr; font-variant-numeric: tabular-nums; }
+.rz-table__row--click { cursor: pointer; }
+.rz-table__row--click:hover { background: #faf9f5; }
+.rz-table__actions { text-align: end; white-space: nowrap; }
+.rz-table__note { font-size: 11.5px; color: var(--muted); margin: 0 0 6px; }
+.rz-table__head { display: none; }
+.rz-table--embedded td { height: 36px; }
+
+/* الصفُّ المصفوف بسطرين — دون 520px حاويةً: 48px · بلا رأس · التسميةُ داخل السطر */
+.rz-stack { display: grid; gap: 0; }
+.rz-stack__row { min-height: 48px; padding: 6px 10px; border-bottom: 1px solid var(--paper-line); display: grid; gap: 2px; cursor: pointer; }
+.rz-stack__row:hover { background: #faf9f5; }
+.rz-stack__line { display: flex; gap: 10px; align-items: center; white-space: nowrap; overflow: hidden; font-size: 13.5px; }
+.rz-stack__line--2 { font-size: 12.5px; color: var(--muted); }
+.rz-stack__cell { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rz-stack__cell--money { margin-inline-start: auto; }
+.rz-stack__lbl { font-size: 11px; color: var(--muted); }
+
+/* المال — `—` للغائب في فرعٍ واحد */
+.rz-money { font-variant-numeric: tabular-nums; }
+.rz-money--absent { color: var(--muted); }
+.rz-money__cur { font-size: .85em; color: var(--muted); }
+
+/* اللوحةُ الجانبية — 440 · تغطّي دون 860 · ورقةٌ دون 520 */
+.rz-panel__backdrop { position: fixed; inset: 0; background: rgba(10, 15, 25, .35); z-index: 400; }
+.rz-panel { position: fixed; top: 0; bottom: 0; inset-inline-end: 0; width: 440px; max-width: 100%; background: #fff; z-index: 401; display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.12); }
+html[dir="ltr"] .rz-panel { box-shadow: 8px 0 24px rgba(0,0,0,.12); }
+.rz-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-height: 56px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.rz-panel__title { font-weight: 600; font-size: 16px; }
+.rz-panel__sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.rz-panel__tabs { padding: 0 12px; min-height: 40px; border-bottom: 1px solid var(--line); }
+.rz-panel__body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+.rz-panel__foot { min-height: 56px; padding: 10px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 860px) { .rz-panel { width: 100%; } }
+@media (max-width: 520px) { .rz-panel { inset: 0; width: 100%; } .rz-panel__body { padding: 12px; } }
+
+/* بطاقةُ الوقائع */
+.rz-facts { margin: 0; display: grid; gap: 0; }
+.rz-facts__row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--paper-line); font-size: 13px; align-items: center; }
+.rz-facts dt { color: var(--muted); font-size: 12px; margin: 0; }
+.rz-facts dd { margin: 0; }
+.rz-declare { margin-bottom: 12px; background: #fff8e6; }
