@@ -8,6 +8,9 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
+import { MSG } from '../common/i18n/messages';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { DeletionRequestDecisionDto, SubmitDeletionRequestDto } from './dto/deletion-request.dto';
 import { DecisionActor, DeletionRequestsService } from './deletion-requests.service';
 
@@ -21,6 +24,9 @@ import { DecisionActor, DeletionRequestsService } from './deletion-requests.serv
  *
  * @AllowWhileClosed — على ستّةٍ فقط: حالُ الطلب، وحالُ الحساب، ونسختُه، وطلبُ إعادة الفتح، وطلبُ
  * الإتلاف (`ق-٥٥٩`)، وسحبُ الطلب. فالمغلقُ لا يقرأ بياناته ولا يجدّد اشتراكه — ويعود بطلبٍ وقرار.
+ *
+ * والحالُ (الطلبُ وحالُ الحساب) يُقرأ لكلّ فاعل — فالمغلقُ يعرضه لكلّ من دخل؛ والقراراتُ
+ * والنسخةُ للمالك وحدَه، معلَنةً في الحارس ومؤكَّدةً في الخدمة (`ق-١١٩٨`/①).
  */
 @Controller('deletion-request')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -28,6 +34,7 @@ import { DecisionActor, DeletionRequestsService } from './deletion-requests.serv
 // ⭐ **ومنفذُ الخروج لا يُغلق** (`ق-٥٨٩/④`): «أغلق حسابي» يعمل والتاجرُ ممنوعٌ حتى يقبل
 // قائمةَ المعالجين الفرعيين — **فمن لم يوافق يخرج بنسخته، ولا يُحبس داخل حسابه**.
 @AllowWhileConsentPending()
+@TenantWide('حالُ طلب الإغلاق وحالُ الحساب يُقرآن لكلّ فاعل: شاشةُ المغلق تُعرض لكلّ من دخل — والقراراتُ للمالك وحدَه')
 export class DeletionRequestsController {
   constructor(private readonly service: DeletionRequestsService) {}
 
@@ -47,17 +54,20 @@ export class DeletionRequestsController {
   /** نسخةُ الإغلاق (`ق-٥٥٤`): ملفّاتُها بروابطَ موقَّعة — للمالك، وهو مغلق. */
   @Get('archive')
   @AllowWhileClosed()
+  @OwnerOnly(MSG.deletion_owner_only)
   archive(@CurrentTenant() tenant: TenantContext) {
     return this.service.closureArchive(tenant.companyId, tenant.actorType);
   }
 
   @Post()
+  @OwnerOnly(MSG.deletion_owner_only)
   submit(@CurrentTenant() tenant: TenantContext, @Body() dto: SubmitDeletionRequestDto) {
     return this.service.submit(tenant.companyId, tenant.actorType, dto.reason);
   }
 
   @Post('reopen')
   @AllowWhileClosed()
+  @OwnerOnly(MSG.deletion_owner_only)
   reopen(@CurrentTenant() tenant: TenantContext) {
     return this.service.requestReopening(tenant.companyId, tenant.actorType);
   }
@@ -65,12 +75,14 @@ export class DeletionRequestsController {
   /** طلبُ إتلافٍ صريح (`ق-٥٥٩/ب` — م٤/٥): محوُ غير الملزِم الآن لا بعد النافذة — لحسابٍ مغلق. */
   @Post('erase')
   @AllowWhileClosed()
+  @OwnerOnly(MSG.deletion_owner_only)
   erase(@CurrentTenant() tenant: TenantContext) {
     return this.service.requestErasure(tenant.companyId, tenant.actorType);
   }
 
   @Post(':id/cancel')
   @AllowWhileClosed()
+  @OwnerOnly(MSG.deletion_owner_only)
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.service.cancel(tenant.companyId, tenant.actorType, id);
   }

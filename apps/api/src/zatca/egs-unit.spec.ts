@@ -56,25 +56,27 @@ describe('الدفعة (ب) — العدّاد والسلسلة داخل الو�
     expect(schema).not.toContain('@@unique([companyId, zatcaIcv])');
   });
 
-  it('🔴 أداة السلسلة: `nextIcv` و`latestChainHash` تشترطان الوحدة في التوقيع وفي الشرط', () => {
+  it('🔴 أداة السلسلة: `nextIcv` و`previousChainHash` تشترطان الوحدة في التوقيع وفي الشرط', () => {
     const util = readFileSync(join(__dirname, 'hash-chain.util.ts'), 'utf8');
     expect(util.length).toBeGreaterThan(1000);
     expect(util).toMatch(/export async function nextIcv\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
-    expect(util).toMatch(/export async function latestChainHash\(tx: Prisma\.TransactionClient, egsUnitId: string\)/);
+    expect(util).toMatch(/export async function previousChainHash\(tx: Prisma\.TransactionClient, egsUnitId: string, icv: number\)/);
     // الشرط نفسه يحمل الوحدة — توقيعٌ يقبلها ولا يستعملها عدٌّ على المنشأة بقناع.
     // و`MAX+1` لا `count()+1`: عدٌّ يعود إلى العدّ يصطدم حتمياً بعد أول فجوة.
     expect(util).toMatch(/aggregate\(\{ where: \{ egsUnitId, zatcaIcv: \{ not: null \} \}, _max: \{ zatcaIcv: true \} \}\)/);
     expect(util).not.toMatch(/tx\.invoice\.count\(/);
-    expect(util).toMatch(/findFirst\(\{\s*where: \{ egsUnitId, zatcaHash: \{ not: null \}, zatcaStatus: 'CLEARED' \}/);
+    // السلفُ موقعٌ بعينه (`icv - 1`) على الوحدة — لا «آخرُ مقبول» (ق-١١٩٨/⑦).
+    expect(util).toMatch(/findFirst\(\{ where: \{ egsUnitId, zatcaIcv: icv - 1 \}/);
+    expect(util).not.toMatch(/zatcaStatus: 'CLEARED'/);
   });
 
   it('🔴 الخدمة: تعدّ داخل الوحدة التي تختمها — لا استدعاءَ بلا وحدة', () => {
     const service = readFileSync(join(__dirname, 'zatca.service.ts'), 'utf8');
     expect(service.length).toBeGreaterThan(5000);
-    expect(service).toContain('latestChainHash(tx, unit.id)');
+    expect(service).toContain('previousChainHash(tx, unit.id, icv)');
     expect(service).toContain('nextIcv(tx, unit.id)');
     expect(service).not.toMatch(/nextIcv\(tx\)/);
-    expect(service).not.toMatch(/latestChainHash\(tx\)/);
+    expect(service).not.toMatch(/previousChainHash\(tx\)/);
   });
 
   it('🔴 الهجرة: تُبدّل المفتاح، وتمنع موقعاً بلا وحدة بالشكل، وتفحص القائم بعينٍ مفتوحة', () => {

@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { NoAudit } from '../audit/no-audit.decorator';
 import { EscalationService } from './escalation.service';
@@ -12,13 +13,15 @@ import { NotificationsService } from './notifications.service';
  * Deliberately **not** behind `@RequiresScreen`. Every screen shows the bell,
  * and a notification is already filtered to what its recipient may see — gating
  * it on some other screen's permission would hide a manager's own escalations
- * from them.
+ * from them. Declared as such (`ق-١١٩٨`/①); the two `run-*` sweeps stay open —
+ * a collector pushes their own case up (`contractId`), and both are idempotent.
  */
 // ⭐ **وبها يعرف لماذا مُنع** (`ق-٥٨٩`): التذكيرُ المتكرّر يصل عبر الإشعارات، فقطعُها عمّن
 // ينتظر قبولَه يجعل المنعَ بلا سبب يُقرأ.
 @AllowWhileConsentPending()
 @Controller('notifications')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('الإشعاراتُ مرشَّحةٌ إلى صاحبها أصلاً والجرسُ في كلّ شاشة — وحارسُ شاشةٍ ثانٍ يُخفي عن المدير تصعيداتِه')
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService,

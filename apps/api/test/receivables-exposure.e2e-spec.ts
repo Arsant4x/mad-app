@@ -5,6 +5,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { dayEndOf } from '../src/common/wall-clock.util';
 import { customerExposure, exposureOf } from '../src/reports/receivables-exposure.util';
 
 /**
@@ -33,11 +34,9 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
     total: number;
   }
 
-  const endOfToday = () => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d;
-  };
+  // آخرُ لحظةٍ من يوم الخادم المعلَن (`dayEndOf` · يومُ UTC — `ق-١١٩٠`) — كما يشتقّه التقريرُ نفسُه
+  // (`reports.service` · `asOf = dayEndOf(new Date())`)، لا منتصفُ ليل منطقة العملية.
+  const endOfToday = () => dayEndOf(new Date());
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

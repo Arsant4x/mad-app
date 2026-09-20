@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { TenantContext } from '../auth/types';
 import { TasksService } from './tasks.service';
@@ -30,6 +31,7 @@ import { TaskStatus } from './task-model';
  */
 @Controller('tasks')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('«مهامي» تقرأ ما كُلِّف به الفاعلُ نفسُه — تُسنَد إليه لأنه لا يملك الشاشةَ بعد؛ والحراسةُ داخل الخدمة بالمُكلَّف والتقاطع')
 export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 

@@ -25,10 +25,10 @@ describe('Stock batch/expiry (e2e)', () => {
   const authA = (r: request.Test) => r.set('Authorization', `Bearer ${tokenA}`);
   const authB = (r: request.Test) => r.set('Authorization', `Bearer ${tokenB}`);
 
+  /** يومُ UTC ± أيام — يومُ الخادم المعلَن (`toDateOnly` بدوالّ UTC · `ق-١١٩٠`) لا يومُ منطقة العملية. */
   function iso(daysFromToday: number): string {
     const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + daysFromToday);
+    d.setUTCDate(d.getUTCDate() + daysFromToday);
     return d.toISOString().slice(0, 10);
   }
 

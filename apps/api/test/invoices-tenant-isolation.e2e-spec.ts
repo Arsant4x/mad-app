@@ -69,7 +69,8 @@ describe('Invoices tenant isolation (e2e)', () => {
     const resB = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${tokenB}`).expect(200);
     expect(resB.body.some((i: { id: string }) => i.id === invoiceId)).toBe(false);
 
-    await request(app.getHttpServer()).patch(`/invoices/${invoiceId}`).set('Authorization', `Bearer ${tokenB}`).send({ status: 'PAID' }).expect(404);
+    // `notes` لا `status` — الحالةُ ليست حقلَ تعديلٍ أصلاً (`ق-١١٩٨`/②)، والدعوى هنا العزلُ: `404` لا `400`.
+    await request(app.getHttpServer()).patch(`/invoices/${invoiceId}`).set('Authorization', `Bearer ${tokenB}`).send({ notes: 'محاولة من منشأة أخرى' }).expect(404);
     await request(app.getHttpServer()).delete(`/invoices/${invoiceId}`).set('Authorization', `Bearer ${tokenB}`).expect(404);
 
     const resA = await request(app.getHttpServer()).get('/invoices').set('Authorization', `Bearer ${tokenA}`).expect(200);

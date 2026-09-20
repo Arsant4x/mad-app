@@ -1,10 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../app.module';
-import { encryptSecret } from '../common/crypto/secret.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
-import { GENESIS_PREVIOUS_HASH, latestChainHash, nextIcv } from './hash-chain.util';
+import { seedProductionCredential } from '../../test/zatca-credential';
+import { GENESIS_PREVIOUS_HASH, nextIcv, previousChainHash } from './hash-chain.util';
 import { ZatcaAttemptFailedException, ZatcaService } from './zatca.service';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
@@ -53,10 +53,15 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  * الحزم مكشوفة وهي ليست. **ونصٌّ يوحي بخطرٍ غير قائم يُفقد الثقة بالتوثيق
  * كله** (قرار المالك 2026-08-16).
  *
- * وبيانات الاعتماد **فاسدة عمداً**: `signInvoice` يسقط قبل `fetch` أصلاً،
- * وسقوطُ التوقيع **ليس جواباً من الهيئة** (`ق-٩٧١`): يُحرَّر الادّعاء والموقعُ محفوظ،
- * ويُرمى باسمه (`ZatcaAttemptFailedException`) لا يُكتب مردوداً. فموقع السلسلة
- * يُلتزم قبل الإرسال، وهو بالضبط ما نقيسه.
+ * وبيانات الاعتماد **حقيقيةٌ موقَّعةٌ ذاتياً** (`seedProductionCredential`): يُختم المستندُ
+ * فعلاً ويُحفظ موقعُه وبصمتُه، ثم يسقط **النقل** على `fetch` المعترَض — وسقوطُ النقل **ليس
+ * جواباً من الهيئة** (`ق-٩٧١`): يبقى المستندُ `STAMPED` بموقعه، ويُرمى باسمه
+ * (`ZatcaAttemptFailedException`) لا يُكتب مردوداً. فموقعُ السلسلة يُلتزم عند الختم قبل
+ * الإرسال، وهو بالضبط ما نقيسه.
+ *
+ * ⚠️ **وكان الاعتمادُ فاسداً عمداً** فيسقط التوقيعُ قبل `fetch` والموقعُ يبقى محجوزاً — حتى
+ * `ق-١١٩٨`/⑦: موقعٌ بلا بصمةٍ صار يحبس ما بعده، فصار `releaseClaim` يحرّره؛ ومجسٌّ يقيس
+ * الموقعَ على توقيعٍ ساقط لم يعد يرى شيئاً. فالختمُ الحقيقيُّ هو ما يُبقي القياسَ قياساً.
  */
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
@@ -116,19 +121,10 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
     });
     companyId = identity.company!.id;
 
-    await tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      // اعتمادٌ **فاسد عمداً**: يمرّ من بوابة `secretIsSet` ويسقط عند التوقيع،
-      // فلا يصل الإرسال أصلاً. والغرض بلوغ المعاملة، لا إتمام الإرسال.
-      await tx.zatcaCredential.create({
-        data: {
-          companyId,
-          privateKeyEnc: encryptSecret('not-a-real-private-key'),
-          productionCsidEnc: encryptSecret('not-a-real-certificate'),
-          productionSecretEnc: encryptSecret('not-a-real-secret'),
-          status: 'PRODUCTION_ISSUED',
-        },
-      });
+    // اعتمادٌ حقيقيٌّ موقَّعٌ ذاتياً: يُختم المستندُ فيُحفظ موقعُه، ويسقط النقلُ على المعترَض (رأس الملف).
+    await seedProductionCredential(tenantPrisma, companyId);
 
+    await tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const customer = await tx.customer.create({ data: { companyId, name: 'عميل فحص ICV' } });
       customerId = customer.id;
 
@@ -230,7 +226,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
     // القاعدة الحقيقية لا على نسخة: بعد ① تحمل الوحدة الافتراضية موقعَين، فوحدةٌ
     // ثانية في المنشأة نفسها **يجب** أن تعدّ من ١ وتقرأ الأساس — وإلا فالعدّ ما
     // زال على المنشأة مهما قال المخطَّط.
-    const { defaultUnit, secondUnit, icvDefault, icvSecond, pihDefault, pihSecond } = await tenantPrisma.runInTenantContext(
+    const { defaultUnit, secondUnit, second, icvDefault, icvSecond, pihDefault, pihSecond } = await tenantPrisma.runInTenantContext(
       companyId,
       async (tx) => {
         const defaultUnit = await tx.egsUnit.findFirstOrThrow({ where: { companyId, kind: 'DEFAULT_WEB' }, select: { id: true } });
@@ -238,34 +234,39 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
           data: { companyId, serial: `1-probe|2-pos|3-${companyId}-${Date.now()}`, kind: 'POS_TERMINAL', label: 'كاشير فحص' },
           select: { id: true },
         });
-        // سلفٌ مقبول في الافتراضية — كي يكون للسلسلة ما تُقرأ منه، لا الأساس وحده.
-        await tx.invoice.update({
-          where: { id: invoiceIds[0] },
-          data: { zatcaStatus: 'CLEARED', zatcaHash: 'probe-hash-unit-a', zatcaSubmittedAt: new Date() },
-        });
+        // سلفُ الافتراضية الموقعُ ٢ بعينه — مختومٌ في ① ولم تُجبه الهيئة (النقلُ سقط): `STAMPED`
+        // لا `CLEARED` (ق-١١٩٨/⑦: السلفُ `ICV − 1` أيّاً كانت حالتُه) — يُقرأ كما هو لا يُزوَّر.
+        const second = await tx.invoice.findFirstOrThrow({ where: { id: { in: invoiceIds }, zatcaIcv: 2 }, select: { zatcaStatus: true, zatcaHash: true } });
+        const icvDefault = await nextIcv(tx, defaultUnit.id);
+        const icvSecond = await nextIcv(tx, secondUnit.id);
         return {
           defaultUnit,
           secondUnit,
-          icvDefault: await nextIcv(tx, defaultUnit.id),
-          icvSecond: await nextIcv(tx, secondUnit.id),
-          pihDefault: await latestChainHash(tx, defaultUnit.id),
-          pihSecond: await latestChainHash(tx, secondUnit.id),
+          second,
+          icvDefault,
+          icvSecond,
+          pihDefault: await previousChainHash(tx, defaultUnit.id, icvDefault),
+          pihSecond: await previousChainHash(tx, secondUnit.id, icvSecond),
         };
       },
     );
 
     expect(defaultUnit.id).not.toBe(secondUnit.id);
-    // الافتراضية: موقعان محجوزان في ① ⇒ التالي ٣، وسلفُها التجزئة المقبولة.
+    // الافتراضية: موقعان محجوزان في ① ⇒ التالي ٣، وسلفُها بصمةُ الموقع ٢ — مختوماً لا مقبولاً.
+    expect(second.zatcaStatus).toBe('STAMPED');
+    expect(second.zatcaHash).toBeTruthy();
     expect(icvDefault).toBe(3);
-    expect(pihDefault).toBe('probe-hash-unit-a');
+    expect(pihDefault).toBe(second.zatcaHash);
     // الثانية: لا شيء بعد ⇒ ١ والأساس. **والافتراضية لم تتأثّر بوجودها.**
     expect(icvSecond).toBe(1);
     expect(pihSecond).toBe(GENESIS_PREVIOUS_HASH);
   });
 
-  it('③ ولم تُلمس شبكة الهيئة ولا مرة — حارسُ هذا الملف بعينه', async () => {
-    // لا يضبط هذا الملف `ZATCA_API_BASE_OVERRIDE` كما تفعل حزم الـe2e، فحارسه
-    // هو الاعتراض. (وتلك محميّة بتصميمها — انظر رأس الملف.)
-    expect(fetchCalls).toBe(0);
+  it('③ ولم تُلمس شبكة الهيئة — الاعتراضُ في المسار فعلاً: استُدعي مرّةً لكلّ إبلاغٍ ورمى قبل أيّ شبكة', async () => {
+    // لا يضبط هذا الملف `ZATCA_API_BASE_OVERRIDE` كما تفعل حزم الـe2e، فحارسه هو الاعتراض
+    // (وتلك محميّة بتصميمها — انظر رأس الملف). والتوكيدُ على أن المعترَض **هو الذي استُدعي**:
+    // صفرُ استدعاءاتٍ كان يعني أن التوقيع سقط قبل النقل — وهذا ما لم يعد يُقاس (ق-١١٩٨/⑦).
+    expect(fetchCalls).toBe(invoiceIds.length);
+    expect(globalThis.fetch).not.toBe(realFetch);
   });
 });

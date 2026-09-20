@@ -162,12 +162,18 @@ export class SupplierPaymentsService {
     );
   }
 
-  /** إعادةُ توزيع سندٍ قائم: تحلّ المجموعةُ الجديدة محلَّ تخصيصاته كلِّها — ولا يمسّ مبلغَه ولا قيدَه. */
+  /**
+   * إعادةُ توزيع سندٍ قائم: تحلّ المجموعةُ الجديدة محلَّ تخصيصاته كلِّها — ولا يمسّ مبلغَه ولا قيدَه.
+   *
+   * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
+   * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
+   */
   allocate(companyId: string, id: string, dto: AllocateSupplierPaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.supplierPayment.findUnique({ where: { id }, include: { allocations: true } });
       if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
-      assertReversible(payment, null);
+      // ⚖️ مرآةُ سند القبض (`ق-١١٩٨`/⑤): كان يُمرَّر `null` فيُعاد توزيعُ سندٍ عُكس فعلاً.
+      assertReversible(payment, await tx.supplierPayment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
       const requested = dto.allocations.map((a) => ({ purchaseId: a.purchaseId, amount: round2(a.amount) }));
       const touched = new Set<string>([...payment.allocations.map((a) => a.purchaseId), ...requested.map((a) => a.purchaseId)]);

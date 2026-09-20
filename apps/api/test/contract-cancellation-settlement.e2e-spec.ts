@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { dayEndOf } from '../src/common/wall-clock.util';
 import { createTenantCustomer } from './tenant-customer';
 
 /**
@@ -30,10 +31,12 @@ describe('Contract cancellation settlement (e2e)', () => {
    * ⚖️ **ما يُعكس عند الإلغاء** (`ق-٩٢٥/②`): أقساطٌ حلّت (استُحقّت ذمّةً عند الإنشاء — `ق-٩١٧`)
    * ولم تُقبض وتُسقَط بالإلغاء ⇒ تُردّ ذمّتُها. فأثرُ الإلغاء على `1200` = التسويةُ − المُسقَطُ
    * المستحقّ — **ويُحسب من الجدول لا يُكتب رقماً**، فما «حلّ» يتبع الساعةَ الحقيقية.
+   *
+   * و«حلّ» بيوم الخادم المعلَن (`dayEndOf` · يومُ UTC بلا إزاحة — `ق-١١٩٠`) لا بمنتصف ليل
+   * منطقة العملية: فالكنسُ يقيس `dueDate ≤ الآن` على عمودِ `@db.Date` الذي يُقرأ UTC حصراً.
    */
   function accruedVoidedBy(contract: { installments: { dueDate: string; amount: string | number; status: string }[] }, cancelDate: string) {
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
+    const today = dayEndOf(new Date());
     return contract.installments
       .filter((i) => i.status !== 'PAID' && new Date(i.dueDate) >= new Date(cancelDate) && new Date(i.dueDate) <= today)
       .reduce((sum, i) => sum + Number(i.amount), 0);
@@ -174,6 +177,37 @@ describe('Contract cancellation settlement (e2e)', () => {
     // لا تسويةَ — ويبقى عكسُ المُسقَط المستحقّ وحدَه على الذمّة.
     expect((await balance('1200')) - receivableBefore).toBeCloseTo(-accruedVoidedBy(contract, '2026-06-30'), 2);
     expect(await balance('4300')).toBeCloseTo(otherIncomeBefore);
+  }, 40000);
+
+  it('🔴 لا قبضَ على عقدٍ ملغى ولا على قسطٍ ملغى — كان يمرّ 201 (ق-١١٩٨/⑥)', async () => {
+    const contract = await makeContract();
+    await request(app.getHttpServer())
+      .post(`/contracts/${contract.id}/cancel`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ cancelDate: '2026-06-30', cancelReason: 'إخلاء مبكر', installmentDisposition: 'cancel' })
+      .expect(201);
+    const [receivableBefore, cashBefore] = await Promise.all([balance('1200'), balance('1000')]);
+
+    // على العقد نفسِه — بلا قسط.
+    const onContract = await request(app.getHttpServer())
+      .post(`/contracts/${contract.id}/payments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ date: '2026-07-05', amount: 1000, method: 'CASH' })
+      .expect(409);
+    expect(String(onContract.body.message)).toContain('ملغى');
+
+    // وعلى قسطٍ أُسقط بالإلغاء — يُردّ كذلك (العقدُ يُفحص أوّلاً؛ وفحصُ القسط طبقةٌ ثانية لقسطٍ
+    // ملغى على عقدٍ قائم إن وُجد مسارٌ يصنعه يوماً).
+    const cancelledInstallment = (contract.installments as { id: string; dueDate: string }[]).find((i) => i.dueDate.slice(0, 10) >= '2026-07-01')!;
+    await request(app.getHttpServer())
+      .post(`/contracts/${contract.id}/payments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ installmentId: cancelledInstallment.id, date: '2026-07-05', amount: 1000, method: 'CASH' })
+      .expect(409);
+
+    // ولا أثرَ في الدفتر: لا ذمّةَ تحرّكت ولا نقد.
+    expect(await balance('1200')).toBeCloseTo(receivableBefore, 2);
+    expect(await balance('1000')).toBeCloseTo(cashBefore, 2);
   }, 40000);
 
   it('lets a held deposit be applied against the settlement it created', async () => {

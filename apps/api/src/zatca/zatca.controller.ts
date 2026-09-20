@@ -2,15 +2,20 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { StartOnboardingDto, SubmitOtpDto } from './dto/onboarding.dto';
 import { ZatcaOnboardingService } from './zatca-onboarding.service';
 import { ZatcaService } from './zatca.service';
 
 /** No @RequiresScreen: this is the company's own tax registration, gated by
- * actor type (owner only for writes) rather than by a permission template. */
+ * actor type (owner only for writes — declared on each write with `@OwnerOnly`
+ * and asserted again in the service, `ق-١١٩٨`/①) rather than by a template. */
 @Controller('zatca')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('حالُ الربط و«صادرٌ لم يصل» يُقرآن لكلّ فاعل — الكاشير يحتاج التحذيرَ كالمالك؛ والربطُ والإرسالُ للمالك وحدَه')
 export class ZatcaController {
   constructor(
     private readonly zatcaService: ZatcaService,
@@ -26,23 +31,27 @@ export class ZatcaController {
 
   /** Step 1 — the platform generates this merchant's keypair and CSR. */
   @Post('onboarding/start')
+  @OwnerOnly(MSG.company_profile_owner_only)
   start(@CurrentTenant() tenant: TenantContext, @Body() dto: StartOnboardingDto) {
     return this.onboarding.start(tenant.companyId, tenant.actorType, dto);
   }
 
   /** Step 2 — the merchant's only manual step: the OTP from Fatoora. */
   @Post('onboarding/otp')
+  @OwnerOnly(MSG.company_profile_owner_only)
   submitOtp(@CurrentTenant() tenant: TenantContext, @Body() dto: SubmitOtpDto) {
     return this.onboarding.submitOtp(tenant.companyId, tenant.actorType, dto);
   }
 
   /** Step 3 — swap the compliance certificate for the production one. */
   @Post('onboarding/production')
+  @OwnerOnly(MSG.company_profile_owner_only)
   requestProduction(@CurrentTenant() tenant: TenantContext) {
     return this.onboarding.requestProductionCertificate(tenant.companyId, tenant.actorType);
   }
 
   @Post('invoices/:id/submit')
+  @OwnerOnly(MSG.company_profile_owner_only)
   submit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.zatcaService.submitInvoice(tenant.companyId, tenant.actorType, id);
   }

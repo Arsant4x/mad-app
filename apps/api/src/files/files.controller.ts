@@ -13,15 +13,18 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { FileKeyDto } from './dto/file-key.dto';
 import { FilesService, MAX_FILE_BYTES } from './files.service';
 
 /** No @RequiresScreen: this is shared infrastructure, not a screen. Any
  * authenticated tenant actor can store its own company's files; which
- * *feature* may attach them is enforced by that feature's own screen guard. */
+ * *feature* may attach them is enforced by that feature's own screen guard
+ * — declared as such (`ق-١١٩٨`/①). */
 @Controller('files')
 @UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('بنيةُ ملفّاتٍ مشتركة لا شاشة: كلُّ فاعلٍ يخزّن ملفّاتِ منشأته، ومن يربطها بمستندٍ يحرسه حارسُ شاشةِ ذلك المستند')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 

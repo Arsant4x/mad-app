@@ -24,7 +24,9 @@ export type AuthorityVerdict =
   /** `503` — خادمُ الهيئة معطَّل: ليس جواباً على المستند. */
   | 'outage'
   /** `401` — اعتمادٌ مرفوض: ليس جواباً على المستند. */
-  | 'unauthorized';
+  | 'unauthorized'
+  /** لا جوابَ أبداً — الاتصالُ يُقبل ويبقى صامتاً (`ق-١١٩٨`/③: المهلةُ هي ما يقطعه). */
+  | 'hang';
 
 export interface AuthorityStub {
   url: string;
@@ -48,6 +50,8 @@ export const STUB_NUL_MESSAGE_SENT = STUB_NUL_MESSAGE_STORED.replace(' — BR-KS
 export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): Promise<AuthorityStub> {
   const requests: AuthorityStub['requests'] = [];
   let verdict: AuthorityVerdict = initial;
+  // المقابسُ تُتابَع كي يُغلق الخادمُ ولو بقي اتصالٌ معلَّقٌ بحكم `hang`.
+  const sockets = new Set<import('node:net').Socket>();
   const server: Server = createServer((req, res) => {
     let raw = '';
     req.on('data', (chunk) => (raw += chunk));
@@ -59,6 +63,7 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
         body = { raw };
       }
       requests.push({ path: req.url ?? '', body });
+      if (verdict === 'hang') return; // لا ترويسةَ ولا جسد — الصمتُ هو الجواب الذي لا يأتي.
       res.setHeader('Content-Type', 'application/json');
       const reporting = (req.url ?? '').includes('/reporting/');
       switch (verdict) {
@@ -96,6 +101,10 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
       }
     });
   });
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   process.env.ZATCA_API_BASE_OVERRIDE = url;
@@ -110,6 +119,7 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
     },
     async close() {
       delete process.env.ZATCA_API_BASE_OVERRIDE;
+      for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };

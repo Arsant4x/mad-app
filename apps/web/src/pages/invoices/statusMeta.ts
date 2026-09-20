@@ -10,7 +10,8 @@ export const STATUS_META: Record<InvoiceStatus, { label: string; badgeClass: str
 };
 
 /** PARTIAL خارج هذه القائمة عمداً: هي **مشتقّة** من التخصيصات ولا يضبطها
- *  مستخدم يدوياً (قاعدة 4.5) — وهذه القائمة تغذّي مُنتقي تغيير الحالة. */
+ *  مستخدم يدوياً (قاعدة 4.5). كانت القائمةُ تغذّي مُنتقي «تغيير الحالة» — وقد أُزيل
+ *  المنتقي كلُّه (`ق-١١٩٨`/②: الحالةُ لا تُكتب من الخارج)، وبقيت القائمةُ ترتيبَ العرض. */
 export const STATUS_ORDER: InvoiceStatus[] = ['DUE', 'PAID', 'OVERDUE'];
 
 /** Clearance state with the authority — deliberately separate from the payment

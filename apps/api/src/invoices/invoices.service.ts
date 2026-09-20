@@ -635,10 +635,10 @@ export class InvoicesService {
       const existing = await tx.invoice.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
 
-      // What the submitted XML is signed over. Notes and payment status are
-      // absent on purpose: they never enter the document, so they stay
-      // editable at every stage — a cleared invoice must still be markable
-      // PAID.
+      // What the submitted XML is signed over. Notes are absent on purpose: they
+      // never enter the document, so they stay editable at every stage. Payment
+      // status is not editable here at all any more (`ق-١١٩٨`/②) — it is derived
+      // from allocations, and a cleared invoice becomes PAID through a receipt.
       //
       // The test is presence, not difference: a field that arrives is treated
       // as an attempt to set it, exactly like `affectsPosting` below. Diffing
@@ -689,7 +689,7 @@ export class InvoicesService {
       if (dto.issueDate) data.issueDate = new Date(dto.issueDate);
       if (dto.dueDate) data.dueDate = new Date(dto.dueDate);
       if (dto.notes !== undefined) data.notes = dto.notes;
-      if (dto.status) data.status = dto.status;
+      // كان هنا `if (dto.status) data.status = dto.status` — حالةٌ مشتقّةٌ تُكتب من الخارج (`ق-١١٩٨`/②).
 
       if (dto.lines) {
         const totals = computeTotals(dto.lines);

@@ -9,10 +9,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
-import { invoiceTypeFor, latestChainHash, nextIcv } from './hash-chain.util';
+import { invoiceTypeFor, nextIcv, previousChainHash } from './hash-chain.util';
 import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
-import { API_BASE, apiBaseFor } from './zatca-onboarding.service';
+import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
 
@@ -302,11 +302,11 @@ export class ZatcaService {
      *    الفاتورة في المحاولة التالية و`zatcaIcv` لا يزال `null`، ويعيد `nextIcv`
      *    العدّ وقد التزم الفائز.
      *
-     * ⚠️ **وحدُّه معلَن**: `zatcaPreviousHash` (PIH) يتفرّع بالسباق نفسه
-     * **ولا يمسّه هذا الإصلاح** — `latestChainHash` يقرأ المقبول (`CLEARED`)
-     * وحده، وهو لا يتغيّر أثناء السباق فيأخذ المتزامنان الـPIH نفسه قبلَه
-     * وبعدَه سواء. والعلاج المناظر **مستحيل**: تكرار PIH **مشروع** ومغطّى
-     * باختبار قائم. (بند متابعة مسجَّل.)
+     * ⚖️ **و`PIH` لم يعد يتفرّع بالسباق** (`ق-١١٩٨`/⑦ — كان بنداً معلَناً هنا):
+     * `previousChainHash` تقرأ بصمةَ الموقع `ICV − 1` بعينه، فالخاسرُ في السباق
+     * يجد سلفَه محجوزاً غيرَ مختوم **فيُرفض** (`ConflictException` لا `P2002` —
+     * فلا يلفّه هذا اللفّ) ويعود الطابورُ إليه بعد أن يُختم سلفُه. **ولا موقعَ
+     * يُتخطّى**: تكرارُ `PIH` الذي كان «مشروعاً» هو التفرّعُ الذي يُمنع الآن.
      */
     const unsigned = await retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, (tx) => this.claimAndBuild(tx, companyId, invoiceId, ctx.company)),
@@ -333,8 +333,8 @@ export class ZatcaService {
       return { qrPayload: qrBase64 };
     } catch (e) {
       // سقط التوقيعُ بعد حجز الموقع: **ليس جواباً من الهيئة** (`ق-٩٧١`) فلا يُكتب مردوداً —
-      // يُحرَّر الادّعاء (`NOT_SUBMITTED`) **والموقعُ محفوظٌ** للمحاولة التالية (`??` في
-      // `claimAndBuild`) فلا فجوةَ في السلسلة، ويُكتب السبب. **ولا يُرمى هنا**: الكاشير يطبع
+      // يُحرَّر الادّعاء (`NOT_SUBMITTED`) **والموقعُ معه** (`ق-١١٩٨`/⑦: موقعٌ بلا بصمةٍ يحبس
+      // ما بعده) فيأخذه التالي بلا فجوة، ويُكتب السبب. **ولا يُرمى هنا**: الكاشير يطبع
       // الوسوم الخمسة، و`submitInvoice` يرمي من بعدُ للطابور والشاشة. (أخطاءُ البناء والتحقّق
       // قبل التوقيع تبقى استثناءاتٍ تُرمى: مستندٌ لا يُبنى ليس مردوداً بل مرفوضٌ قبل أن يُحجز
       // له شيء.)
@@ -384,8 +384,10 @@ export class ZatcaService {
      * أدركت هذه المنشأة.
      */
     const unit = await ensureDefaultUnit(tx, companyId);
-    const previousHash = invoice.zatcaPreviousHash ?? (await latestChainHash(tx, unit.id));
+    // الموقعُ أوّلاً ثم سلفُه: `PIH` بصمةُ الموقع `ICV − 1` أيّاً كانت حالتُه (`ق-١١٩٨`/⑦) —
+    // وسلفٌ محجوزٌ لم يُختم بعد يرفض الختمَ الآن فيعود الطابورُ إليه، لا يُتخطّى.
     const icv = invoice.zatcaIcv ?? (await nextIcv(tx, unit.id));
+    const previousHash = invoice.zatcaPreviousHash ?? (await previousChainHash(tx, unit.id, icv));
     const invoiceType = invoiceTypeFor(invoice.customer.vatNumber);
 
     /**
@@ -569,8 +571,10 @@ export class ZatcaService {
       const token = decryptSecret(credential.productionCsidEnc!);
       const secret = decryptSecret(credential.productionSecretEnc!);
 
+      // ⏱ مهلةٌ على الاتصال (`ق-١١٩٨`/③): اتصالٌ معلَّقٌ كان يوقف طابورَ المنشأة بمدّة صمت `undici`.
       const res = await fetch(`${apiBaseFor(credential.environment)}${path}`, {
         method: 'POST',
+        signal: zatcaFetchSignal(),
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -638,9 +642,22 @@ export class ZatcaService {
   }
 
   /** تحريرُ ادّعاء الختم بعد سقوط التوقيع — الموقعُ (`ICV`/`UUID`/`PIH`) يبقى ليُعاد استعمالُه. */
+  /**
+   * تحريرُ ادّعاء الختم بعد سقوط التوقيع — **والموقعُ يُحرَّر معه** (`ق-١١٩٨`/⑦).
+   *
+   * كان الموقعُ (`ICV`/`UUID`/`PIH`) يبقى محجوزاً «للمحاولة التالية» — ومستندٌ لم يُوقَّع لم
+   * يُرسَل، فلا هويّةَ له عند الهيئة تُحفظ. وبعد أن صار سلفُ كلّ مستندٍ **موقعَه السابق بعينه**،
+   * موقعٌ محجوزٌ بلا بصمةٍ يحبس ما بعده حتى يُوقَّع — وما لا يُوقَّع (شهادةٌ فاسدة · مبلغٌ يفيض
+   * على حدّ الرمز) كان سيحبس سلسلةَ المنشأة كلَّها. فيُحرَّر الموقعُ ويأخذه المستندُ التالي بلا
+   * فجوة، **ويأخذ هذا المستندُ موقعاً وهويّةً جديدَين حين يُعاد** — وهو ما كان يقع أصلاً عند
+   * الارتداد قبل التوقيع (`P2002`).
+   */
   private releaseClaim(companyId: string, invoiceId: string, reason: string) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.invoice.update({ where: { id: invoiceId }, data: { zatcaStatus: 'NOT_SUBMITTED', zatcaMessage: storableText(reason) } }),
+      tx.invoice.update({
+        where: { id: invoiceId },
+        data: { zatcaStatus: 'NOT_SUBMITTED', zatcaMessage: storableText(reason), zatcaIcv: null, zatcaUuid: null, zatcaPreviousHash: null },
+      }),
     );
   }
 

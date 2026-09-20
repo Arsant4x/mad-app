@@ -203,7 +203,8 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     // سقوطُ التوقيع ليس جواباً من الهيئة (ق-٩٧١): يُحرَّر الادّعاء ويُكتب السبب — لا مردودة.
     expect(stored.zatcaStatus).toBe('NOT_SUBMITTED');
     expect(stored.zatcaMessage).toBeTruthy();
-    // والموقعُ محفوظٌ للمحاولة التالية.
-    expect(stored.zatcaIcv).not.toBeNull();
+    // والموقعُ يُحرَّر معه (ق-١١٩٨/⑦): السلفُ صار `ICV − 1` بعينه، وموقعٌ بلا بصمةٍ يحبس ما بعده —
+    // فيأخذه التالي، ويأخذ هذا موقعاً جديداً حين يُعاد. (كان يبقى محفوظاً «للمحاولة التالية».)
+    expect(stored.zatcaIcv).toBeNull();
   }, 60000);
 });

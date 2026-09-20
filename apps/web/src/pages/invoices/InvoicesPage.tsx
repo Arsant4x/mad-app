@@ -8,12 +8,10 @@ import {
   createInvoice,
   type Invoice,
   type InvoiceLineInput,
-  type InvoiceStatus,
   issueCreditNote,
   issueDebitNote,
   issueReplacement,
   listInvoices,
-  updateInvoice,
 } from '../../api/invoices';
 import { submitInvoiceToZatca } from '../../api/zatca';
 import { useAuth } from '../../auth/AuthContext';
@@ -66,11 +64,6 @@ export function InvoicesPage() {
   useEffect(() => {
     reload().finally(() => setLoading(false));
   }, []);
-
-  async function handleChangeStatus(invoice: Invoice, status: InvoiceStatus) {
-    await updateInvoice(invoice.id, { status });
-    await reload();
-  }
 
   /**
    * Sending an invoice to the authority is irreversible — a cleared invoice
@@ -233,7 +226,6 @@ export function InvoicesPage() {
       <InvoiceListView
         invoices={invoices}
         onNew={() => setView({ mode: 'builder' })}
-        onChangeStatus={handleChangeStatus}
         onSubmitToZatca={(invoice) => setPendingSubmit(invoice)}
         onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
         onIssueDebitNote={(invoice) => setDebitNoteFor(invoice)}
