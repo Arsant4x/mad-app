@@ -162,7 +162,12 @@ export class SupplierPaymentsService {
     );
   }
 
-  /** إعادةُ توزيع سندٍ قائم: تحلّ المجموعةُ الجديدة محلَّ تخصيصاته كلِّها — ولا يمسّ مبلغَه ولا قيدَه. */
+  /**
+   * إعادةُ توزيع سندٍ قائم: تحلّ المجموعةُ الجديدة محلَّ تخصيصاته كلِّها — ولا يمسّ مبلغَه ولا قيدَه.
+   *
+   * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
+   * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
+   */
   allocate(companyId: string, id: string, dto: AllocateSupplierPaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.supplierPayment.findUnique({ where: { id }, include: { allocations: true } });

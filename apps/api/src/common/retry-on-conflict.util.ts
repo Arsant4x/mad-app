@@ -18,6 +18,13 @@ import { Prisma } from '@prisma/client';
  * — مقيسٌ على القاعدة (`retry-on-conflict-shape.e2e-spec`): بدور التطبيق يصل `target: null`
  * والرسالةُ «`(not available)`»، فالفيصلُ الأوّلُ وحدَه كان سيُطفئ الإعادةَ كلَّها بصمت. والنماذجُ
  * المرقَّمة **مشتقّةٌ من المخطّط**: كلُّ نموذجٍ له قيدُ فرادةٍ يحمل عمودَ ترقيم.
+ *
+ * ⚠️ **واستثناءٌ واحد مسمّىً بحدّه — أمسكته المحطة لا المراجعة**: `ensureDefaultUnit` (وحدةُ
+ * الهيئة الافتراضية) تُنشئ إن لم تجد، **وعند أوّل ختمَين متزامنَين** يخسر أحدُهما على الفهرس
+ * الجزئي `(companyId, kind)` بـ`P2002` — ولا يُمكن إصلاحُه داخل المعاملة (بعد فشل الإدراج
+ * تُجهَض المعاملةُ كلُّها)، فالإعادةُ الكاملة هي التي تُقارب: القراءةُ الثانية تجد ما أنشأه الرابح.
+ * حصرُ الإعادة في الرقم وحدَه أسقط `icv-concurrency.live ①` — فصار الفيصلُ **التقاربَ**: قيودُ
+ * الترقيم، **و**`EgsUnit` بالاسم وبسببه هنا.
  */
 export const NUMBERING_COLUMNS: readonly string[] = ['no', 'zatcaIcv', 'seq'];
 
@@ -26,10 +33,14 @@ export const NUMBERED_MODELS: ReadonlySet<string> = new Set(
   Prisma.dmmf.datamodel.models.filter((m) => m.uniqueFields.some((fields) => fields.some((f) => NUMBERING_COLUMNS.includes(f)))).map((m) => m.name),
 );
 
-/** هل الخطأُ `P2002` على قيدِ ترقيم؟ بأعمدة القيد إن بلّغها Prisma، وإلا بالنموذج. */
-export function isNumberingConflict(e: unknown): boolean {
+/** نماذجُ «أنشئ إن لم تجد» التي يُقاربها تكرارُ المعاملة — كلُّ اسمٍ هنا يحمل سببَه في رأس الملف. */
+export const CONVERGENT_ENSURE_MODELS: ReadonlySet<string> = new Set(['EgsUnit']);
+
+/** هل الخطأُ `P2002` يُقاربه التكرار؟ — قيدُ ترقيمٍ (بأعمدة القيد إن بلّغها Prisma، وإلا بالنموذج) أو نموذجُ «أنشئ إن لم تجد». */
+export function isConvergentConflict(e: unknown): boolean {
   if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') return false;
   const meta = (e.meta ?? {}) as { target?: unknown; modelName?: unknown };
+  if (typeof meta.modelName === 'string' && CONVERGENT_ENSURE_MODELS.has(meta.modelName)) return true;
   const columns = Array.isArray(meta.target) ? meta.target.map(String) : typeof meta.target === 'string' ? [meta.target] : null;
   if (columns !== null) return columns.some((c) => NUMBERING_COLUMNS.includes(c));
   return typeof meta.modelName === 'string' && NUMBERED_MODELS.has(meta.modelName);
@@ -41,7 +52,7 @@ export async function retryOnUniqueConflict<T>(fn: () => Promise<T>, attempts = 
       return await fn();
     } catch (e) {
       const isLastAttempt = i === attempts - 1;
-      if (isNumberingConflict(e) && !isLastAttempt) {
+      if (isConvergentConflict(e) && !isLastAttempt) {
         // Random jitter, not a fixed delay: without it, two callers that
         // collided once tend to stay in lockstep (both re-read the position at
         // the same relative offset and collide again on every retry).

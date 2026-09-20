@@ -244,7 +244,12 @@ export class PaymentsService {
     await this.recomputeInvoiceStatus(tx, input.invoiceId);
   }
 
-  /** إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها. */
+  /**
+   * إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها.
+   *
+   * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
+   * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
+   */
   allocate(companyId: string, id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id }, include: { allocations: true } });

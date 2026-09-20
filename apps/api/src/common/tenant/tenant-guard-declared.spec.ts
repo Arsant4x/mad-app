@@ -139,26 +139,27 @@ describe('كلُّ مسارٍ تحت TenantGuard يُعلن نفسَه (ق-١١�
   });
 
   describe('مصادقةُ المسبار بحالاتٍ معلومة (ق-٢٦٢)', () => {
-    const wrap = (cls: string) => `import { Controller, Get, Post, UseGuards } from '@nestjs/common';\n${cls}`;
+    // العيّناتُ قوالبُ نصّيةٌ مباشرة (لا عبر دالّةِ لفّ) — كي يراها `probe-two-cases` نصّاً مصنوعاً (`ق-٣٤٩`).
+    const HEADER = "import { Controller, Get, Post, UseGuards } from '@nestjs/common';";
 
     it('يُدين تابعاً بلا إعلانٍ في صنفٍ تحت TenantGuard — ولا يُدين صنفاً بلا الحارس', () => {
-      const bare = wrap(`@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\nexport class XController {\n  @Get()\n  list() { return 1; }\n  @Post()\n  @OwnerOnly()\n  create() { return 2; }\n}`);
+      const bare = `${HEADER}\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\nexport class XController {\n  @Get()\n  list() { return 1; }\n  @Post()\n  @OwnerOnly()\n  create() { return 2; }\n}`;
       expect(undeclaredRoutes(bare).map((r) => r.method)).toEqual(['list']);
-      const noGuard = wrap(`@Controller('y')\n@UseGuards(JwtAuthGuard, PlatformAdminGuard)\nexport class YController {\n  @Get()\n  list() { return 1; }\n}`);
+      const noGuard = `${HEADER}\n@Controller('y')\n@UseGuards(JwtAuthGuard, PlatformAdminGuard)\nexport class YController {\n  @Get()\n  list() { return 1; }\n}`;
       expect(tenantRoutes(noGuard)).toEqual([]);
     });
 
     it('الإعلانُ على الصنف يغطّي التوابعَ كلَّها — والسببُ القصير يُدان', () => {
-      const ok = wrap(`@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@TenantWide('قائمةٌ تغذّي منتقياً في كلّ شاشة لكلّ فاعل')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`);
+      const ok = `${HEADER}\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@TenantWide('قائمةٌ تغذّي منتقياً في كلّ شاشة لكلّ فاعل')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`;
       expect(undeclaredRoutes(ok)).toEqual([]);
-      const short = wrap(`@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@TenantWide('عامّة')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`);
+      const short = `${HEADER}\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@TenantWide('عامّة')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`;
       expect(undeclaredRoutes(short).map((r) => r.method)).toEqual(['list']);
-      const screen = wrap(`@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@RequiresScreen('invoice')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`);
+      const screen = `${HEADER}\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\n@RequiresScreen('invoice')\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`;
       expect(undeclaredRoutes(screen)).toEqual([]);
     });
 
     it('وسمٌ مكتوبٌ في تعليقٍ ليس إعلاناً', () => {
-      const commented = wrap(`/** @TenantWide('سببٌ في تعليقٍ لا على الصنف — لا يُحسب') */\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`);
+      const commented = `${HEADER}\n/** @TenantWide('سببٌ في تعليقٍ لا على الصنف — لا يُحسب') */\n@Controller('x')\n@UseGuards(JwtAuthGuard, TenantGuard)\nexport class XController {\n  @Get()\n  list() { return 1; }\n}`;
       expect(undeclaredRoutes(commented).map((r) => r.method)).toEqual(['list']);
     });
   });

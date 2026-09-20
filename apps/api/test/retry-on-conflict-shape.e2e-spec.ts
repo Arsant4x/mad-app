@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
-import { isNumberingConflict } from '../src/common/retry-on-conflict.util';
+import { isConvergentConflict } from '../src/common/retry-on-conflict.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
@@ -62,7 +62,7 @@ describe('شكلُ P2002 كما يبلّغه Prisma — مصادقةُ فيصل 
     expect(e.meta?.modelName).toBe('Account');
     // الحالُ المقيس: لا أعمدةَ تصل. فإن صارت تصل يوماً فالفيصلُ يقرؤها أوّلاً — والتوكيدُ التالي يبقى صادقاً.
     expect(e.meta?.target ?? null).toBeNull();
-    expect(isNumberingConflict(e)).toBe(false);
+    expect(isConvergentConflict(e)).toBe(false);
   });
 
   it('قيدُ الرقم (`journal_entries (companyId, no)`): النموذجُ `JournalEntry` — ويُعاد', async () => {
@@ -82,6 +82,6 @@ describe('شكلُ P2002 كما يبلّغه Prisma — مصادقةُ فيصل 
     );
     expect(e.code).toBe('P2002');
     expect(e.meta?.modelName).toBe('JournalEntry');
-    expect(isNumberingConflict(e)).toBe(true);
+    expect(isConvergentConflict(e)).toBe(true);
   });
 });

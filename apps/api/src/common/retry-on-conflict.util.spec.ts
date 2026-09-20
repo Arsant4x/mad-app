@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { isNumberingConflict, NUMBERED_MODELS, NUMBERING_COLUMNS, retryOnUniqueConflict } from './retry-on-conflict.util';
+import { CONVERGENT_ENSURE_MODELS, isConvergentConflict, NUMBERED_MODELS, NUMBERING_COLUMNS, retryOnUniqueConflict } from './retry-on-conflict.util';
 
 /**
  * `ق-١١٩٨`/④ — إعادةُ المحاولة محصورةٌ في قيد الرقم.
@@ -68,8 +68,16 @@ describe('retryOnUniqueConflict — محصورةٌ في قيد الرقم (ق-١
   });
 
   it('⑤ مصادقةُ المسبار: أعمدةُ القيد تُقدَّم على النموذج حين تصل — فنموذجٌ مرقَّم بقيدٍ ليس رقماً لا يُعاد', () => {
-    expect(isNumberingConflict(p2002({ modelName: 'Invoice', target: ['companyId', 'clientSaleId'] }))).toBe(false);
-    expect(isNumberingConflict(p2002({ modelName: 'Invoice', target: 'no' }))).toBe(true);
-    expect(isNumberingConflict(p2002({ modelName: 'Account', target: ['companyId', 'no'] }))).toBe(true);
+    expect(isConvergentConflict(p2002({ modelName: 'Invoice', target: ['companyId', 'clientSaleId'] }))).toBe(false);
+    expect(isConvergentConflict(p2002({ modelName: 'Invoice', target: 'no' }))).toBe(true);
+    expect(isConvergentConflict(p2002({ modelName: 'Account', target: ['companyId', 'no'] }))).toBe(true);
+  });
+
+  it('⑥ «أنشئ إن لم تجد» يُقارَب بالتكرار — وحدةُ الهيئة الافتراضية وحدَها، بالاسم وبسببها (أمسكته المحطة: icv-concurrency ①)', () => {
+    expect([...CONVERGENT_ENSURE_MODELS]).toEqual(['EgsUnit']);
+    // الشكلُ الحيّ تحت دور التطبيق: بلا أعمدة — فالاسمُ هو الفيصل.
+    expect(isConvergentConflict(p2002({ modelName: 'EgsUnit', target: null }))).toBe(true);
+    // ونموذجٌ آخر بالشكل نفسِه لا يُعاد — فالاستثناءُ اسمٌ لا نمط.
+    expect(isConvergentConflict(p2002({ modelName: 'Warehouse', target: null }))).toBe(false);
   });
 });
