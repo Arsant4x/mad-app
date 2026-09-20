@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
@@ -30,27 +31,27 @@ export class ZatcaController {
 
   /** Step 1 — the platform generates this merchant's keypair and CSR. */
   @Post('onboarding/start')
-  @OwnerOnly()
+  @OwnerOnly(MSG.company_profile_owner_only)
   start(@CurrentTenant() tenant: TenantContext, @Body() dto: StartOnboardingDto) {
     return this.onboarding.start(tenant.companyId, tenant.actorType, dto);
   }
 
   /** Step 2 — the merchant's only manual step: the OTP from Fatoora. */
   @Post('onboarding/otp')
-  @OwnerOnly()
+  @OwnerOnly(MSG.company_profile_owner_only)
   submitOtp(@CurrentTenant() tenant: TenantContext, @Body() dto: SubmitOtpDto) {
     return this.onboarding.submitOtp(tenant.companyId, tenant.actorType, dto);
   }
 
   /** Step 3 — swap the compliance certificate for the production one. */
   @Post('onboarding/production')
-  @OwnerOnly()
+  @OwnerOnly(MSG.company_profile_owner_only)
   requestProduction(@CurrentTenant() tenant: TenantContext) {
     return this.onboarding.requestProductionCertificate(tenant.companyId, tenant.actorType);
   }
 
   @Post('invoices/:id/submit')
-  @OwnerOnly()
+  @OwnerOnly(MSG.company_profile_owner_only)
   submit(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.zatcaService.submitInvoice(tenant.companyId, tenant.actorType, id);
   }

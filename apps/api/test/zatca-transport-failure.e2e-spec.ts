@@ -27,8 +27,9 @@ import { DEAD_PORT_URL, startAuthorityStub, STUB_REJECTION_MESSAGE, type Authori
  *   ⑤ جوابُ القبول (`2xx`): `CLEARED`.
  *   ⑥ ما ليس جواباً على المستند وإن جاء من الخادم — `503` · `401` — يُرمى ولا يُغلق؛ والرمزُ
  *      هو الفيصل لا النصّ: الخادمُ نفسُه يجيب بعدها `400` فيُردّ.
- *   ⑦ سقوطُ التوقيع (مفتاحٌ معطوب) ليس جواباً: يُحرَّر الادّعاء والموقعُ محفوظ — ومفتاحٌ سليم
- *      بعده يُرسل على الموقع نفسِه.
+ *   ⑦ سقوطُ التوقيع (مفتاحٌ معطوب) ليس جواباً: يُحرَّر الادّعاء **والموقعُ معه** (ق-١١٩٨/⑦ —
+ *      السلفُ صار `ICV − 1` بعينه فموقعٌ بلا بصمةٍ يحبس ما بعده؛ كان يبقى محفوظاً) — ومفتاحٌ سليم
+ *      بعده يُرسل بموقعٍ يأخذه حينها، بلا فجوةٍ في السلسلة.
  */
 describe('سقوطُ النقل ليس جواباً — يُرمى فيعود الطابور، وREJECTED على جوابٍ من الهيئة وحده (e2e)', () => {
   let app: INestApplication;
@@ -263,7 +264,7 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     expect(String(rejected.body.zatcaMessage)).toContain(STUB_REJECTION_MESSAGE);
   }, 60000);
 
-  it('⑦ سقوطُ التوقيع ليس جواباً: يُحرَّر الادّعاء والموقعُ محفوظ — ومفتاحٌ سليم بعده يُرسل على الموقع نفسِه', async () => {
+  it('⑦ سقوطُ التوقيع ليس جواباً: يُحرَّر الادّعاءُ والموقعُ معه (ق-١١٩٨/⑦) — ومفتاحٌ سليم بعده يُرسل بموقعٍ يأخذه حينها بلا فجوة', async () => {
     authority ??= await startAuthorityStub('reject');
     authority.set('reject');
     await seedCredential('not-a-real-private-key', keys.certBase64);
@@ -275,18 +276,21 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     let r = await row(id);
     expect(r.zatcaStatus).toBe('NOT_SUBMITTED');
     expect(r.zatcaSignedXml).toBeNull();
-    expect(r.zatcaIcv).not.toBeNull();
-    expect(r.zatcaUuid).toBeTruthy();
+    // الموقعُ يُحرَّر مع الادّعاء: كان يبقى «للمحاولة التالية» (ق-٩٧١)، وبعد أن صار السلفُ `ICV − 1`
+    // بعينه يحبس موقعٌ بلا بصمةٍ كلَّ ما بعده — فيأخذه التالي، ويأخذ هذا موقعاً جديداً حين يُعاد.
+    expect(r.zatcaIcv).toBeNull();
+    expect(r.zatcaUuid).toBeNull();
+    expect(r.zatcaPreviousHash).toBeNull();
     expect(r.zatcaMessage).toBeTruthy();
     expect(authority!.requests.length).toBe(requestsBefore);
-    const slot = { icv: r.zatcaIcv, uuid: r.zatcaUuid };
 
     await seedCredential(keys.privateKeyPem, keys.certBase64);
     const sent = await submitExpecting(id, 201);
     expect(sent.body.zatcaStatus).toBe('REJECTED');
     r = await row(id);
-    expect(r.zatcaIcv).toBe(slot.icv);
-    expect(r.zatcaUuid).toBe(slot.uuid);
+    // موقعٌ وهويّةٌ يُؤخذان لحظةَ الختم الناجح — ولا فجوةَ: لم يحجز أحدٌ بينهما فالرقمُ هو التالي في الوحدة.
+    expect(r.zatcaIcv).not.toBeNull();
+    expect(r.zatcaUuid).toBeTruthy();
     expect(authority!.requests.length).toBe(requestsBefore + 1);
   }, 60000);
 });

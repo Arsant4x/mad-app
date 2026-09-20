@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CompanyUsersService } from './company-users.service';
@@ -13,7 +14,7 @@ import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
  * (`@OwnerOnly`) ومؤكَّدٌ في الخدمة (`ق-١١٩٨`/①). */
 @Controller('company-users')
 @UseGuards(JwtAuthGuard, TenantGuard)
-@OwnerOnly()
+@OwnerOnly(MSG.company_users_owner_only)
 export class CompanyUsersController {
   constructor(private readonly companyUsersService: CompanyUsersService) {}
 

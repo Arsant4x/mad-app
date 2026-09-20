@@ -1,4 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
+import { MSG } from '../i18n/messages';
 
 export const OWNER_ONLY_KEY = 'ownerOnly';
 
@@ -7,10 +8,15 @@ export const OWNER_ONLY_KEY = 'ownerOnly';
  *
  * الخدماتُ تفحص `assertIsCompanyOwner(actorType)` — وتبقى طبقةً ثانية. لكنّ الحارسَ
  * صار مغلقاً افتراضياً، فمسارُ المالك يُعلن نفسَه هنا: **يُرفض الموظّفُ قبل أن يبلغ
- * الخدمة** برسالة `owner_only` واحدة، ويُحصى المسارُ في حارس الإعلان.
+ * الخدمة**، ويُحصى المسارُ في حارس الإعلان.
+ *
+ * **والرسالةُ رسالةُ الخدمة نفسِها** حين لها واحدة (`MSG.consent_owner_only` · `MSG.sub_owner_only` …):
+ * الحارسُ يسبق الخدمةَ فيحمل رسالتَها كي لا يُفقد الموظّفُ **ما** الذي للمالك — «الموافقةُ على معالجة
+ * البيانات لمالك الحساب وحده» تدلّ، و«هذا القرار لمالك المنشأة» تعمّم (ترتيبُ الرفض قرارُ منتج:
+ * الرسالةُ تحدّد ما يفعله بعدها). وبلا وسيطٍ الرسالةُ العامّة `MSG.owner_only`.
  *
  * ⚠️ لا يُغني عن `@RequiresScreen` حين تكون الشاشةُ هي العقد: المالكُ يملك كلَّ
  * الشاشات، فوسمٌ بهذا وحدَه يعني «للمالك بلا شاشةٍ بعينها» — وهو ما يليق بإدارة
  * الحساب (الموظفون · الاشتراك · التصدير · الإغلاق) لا بشاشات العمل.
  */
-export const OwnerOnly = () => SetMetadata(OWNER_ONLY_KEY, true);
+export const OwnerOnly = (message: string = MSG.owner_only) => SetMetadata(OWNER_ONLY_KEY, message);

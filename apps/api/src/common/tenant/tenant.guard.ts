@@ -216,11 +216,12 @@ export class TenantGuard implements CanActivate {
      * وما عداه يُرفض — والحارسُ الساكن `tenant-guard-declared.spec` يُدين المتحكّمَ
      * الجديد قبل أن يبلغ السير.
      */
-    const ownerOnly = this.reflector.getAllAndOverride<boolean | undefined>(OWNER_ONLY_KEY, [context.getHandler(), context.getClass()]);
+    // قيمةُ الوسم رسالتُه — رسالةُ الخدمة نفسِها حين لها واحدة، وإلا `MSG.owner_only` (انظر المزخرِف).
+    const ownerOnly = this.reflector.getAllAndOverride<string | undefined>(OWNER_ONLY_KEY, [context.getHandler(), context.getClass()]);
     const tenantWide = this.reflector.getAllAndOverride<string | undefined>(TENANT_WIDE_KEY, [context.getHandler(), context.getClass()]);
     const supportShell = this.reflector.getAllAndOverride<boolean | undefined>(SUPPORT_SHELL_KEY, [context.getHandler(), context.getClass()]);
     if (!requiredScreen && !ownerOnly && !tenantWide && !supportShell) throw new ForbiddenException(MSG.screen_undeclared);
-    if (ownerOnly && payload.actorType !== 'COMPANY') throw new ForbiddenException(MSG.owner_only);
+    if (ownerOnly && payload.actorType !== 'COMPANY') throw new ForbiddenException(ownerOnly);
 
     /**
      * ⚠️ **ترشيح النشاط قبل فحص القالب — والترتيب مقصود.**

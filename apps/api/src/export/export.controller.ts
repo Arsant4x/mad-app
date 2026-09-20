@@ -4,6 +4,7 @@ import { TenantContext } from '../auth/types';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { ExportService } from './export.service';
@@ -24,7 +25,7 @@ import { ExportService } from './export.service';
 @Controller('export')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
-@OwnerOnly()
+@OwnerOnly(MSG.export_owner_only)
 export class ExportController {
   constructor(private readonly exportService: ExportService) {}
 

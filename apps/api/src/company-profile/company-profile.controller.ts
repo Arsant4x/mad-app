@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
@@ -22,7 +23,7 @@ export class CompanyProfileController {
   }
 
   @Patch()
-  @OwnerOnly()
+  @OwnerOnly(MSG.company_profile_owner_only)
   update(@CurrentTenant() tenant: TenantContext, @Body() dto: UpdateCompanyProfileDto) {
     return this.companyProfileService.update(tenant.companyId, tenant.actorType, dto);
   }

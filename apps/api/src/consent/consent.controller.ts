@@ -6,6 +6,7 @@ import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guar
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
@@ -34,7 +35,7 @@ export class ConsentController {
   }
 
   @Post('accept')
-  @OwnerOnly()
+  @OwnerOnly(MSG.consent_owner_only)
   accept(@Req() req: Request, @CurrentTenant() tenant: TenantContext, @Body() dto: AcceptConsentDto) {
     const payload = req.user as JwtPayload;
     // العنوانُ الشبكيّ يُكتب على القبول كما يُكتب على سطر التدقيق — شاهدٌ لا تتبّع.

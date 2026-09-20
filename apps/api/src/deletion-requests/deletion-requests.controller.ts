@@ -8,6 +8,7 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { DeletionRequestDecisionDto, SubmitDeletionRequestDto } from './dto/deletion-request.dto';
@@ -53,20 +54,20 @@ export class DeletionRequestsController {
   /** نسخةُ الإغلاق (`ق-٥٥٤`): ملفّاتُها بروابطَ موقَّعة — للمالك، وهو مغلق. */
   @Get('archive')
   @AllowWhileClosed()
-  @OwnerOnly()
+  @OwnerOnly(MSG.deletion_owner_only)
   archive(@CurrentTenant() tenant: TenantContext) {
     return this.service.closureArchive(tenant.companyId, tenant.actorType);
   }
 
   @Post()
-  @OwnerOnly()
+  @OwnerOnly(MSG.deletion_owner_only)
   submit(@CurrentTenant() tenant: TenantContext, @Body() dto: SubmitDeletionRequestDto) {
     return this.service.submit(tenant.companyId, tenant.actorType, dto.reason);
   }
 
   @Post('reopen')
   @AllowWhileClosed()
-  @OwnerOnly()
+  @OwnerOnly(MSG.deletion_owner_only)
   reopen(@CurrentTenant() tenant: TenantContext) {
     return this.service.requestReopening(tenant.companyId, tenant.actorType);
   }
@@ -74,14 +75,14 @@ export class DeletionRequestsController {
   /** طلبُ إتلافٍ صريح (`ق-٥٥٩/ب` — م٤/٥): محوُ غير الملزِم الآن لا بعد النافذة — لحسابٍ مغلق. */
   @Post('erase')
   @AllowWhileClosed()
-  @OwnerOnly()
+  @OwnerOnly(MSG.deletion_owner_only)
   erase(@CurrentTenant() tenant: TenantContext) {
     return this.service.requestErasure(tenant.companyId, tenant.actorType);
   }
 
   @Post(':id/cancel')
   @AllowWhileClosed()
-  @OwnerOnly()
+  @OwnerOnly(MSG.deletion_owner_only)
   cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.service.cancel(tenant.companyId, tenant.actorType, id);
   }

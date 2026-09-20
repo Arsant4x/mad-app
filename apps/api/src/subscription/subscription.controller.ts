@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { RenewSubscriptionDto } from './dto/renew-subscription.dto';
@@ -19,7 +20,7 @@ import { SubscriptionService } from './subscription.service';
 @Controller('subscription')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @AllowWhileInactive()
-@OwnerOnly()
+@OwnerOnly(MSG.sub_owner_only)
 export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
