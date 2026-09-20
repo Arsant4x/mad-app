@@ -1,8 +1,6 @@
 import {
   Controller,
-  Delete,
   Get,
-  HttpCode,
   Post,
   Query,
   UploadedFile,
@@ -21,7 +19,13 @@ import { FilesService, MAX_FILE_BYTES } from './files.service';
 /** No @RequiresScreen: this is shared infrastructure, not a screen. Any
  * authenticated tenant actor can store its own company's files; which
  * *feature* may attach them is enforced by that feature's own screen guard
- * — declared as such (`ق-١١٩٨`/①). */
+ * — declared as such (`ق-١١٩٨`/①).
+ *
+ * ⛔ **ولا حذفَ هنا** (`ق-١٢٣٤`): كان `DELETE /files?key=` مفتوحاً لكلّ فاعلٍ في المنشأة —
+ * يحذف الكائنَ من المخزن بمعرفة مفتاحه، ومفاتيحُ المرفقات تصل كلَّ من **يطّلع** على
+ * المستند، فموظّفٌ بصلاحية اطّلاعٍ كان يحذف كائنَ مرفقٍ رآه ويبقى صفُّه يتيماً؛
+ * **وصفرُ مستدعٍ له في الواجهة**. الحذفُ يمرّ بمسار الميزة التي تملك المرفق (تحذف
+ * الصفَّ والكائنَ معاً تحت حارس شاشتها)، و`FilesService.remove` يبقى لها لا لمسار عامّ. */
 @Controller('files')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @TenantWide('بنيةُ ملفّاتٍ مشتركة لا شاشة: كلُّ فاعلٍ يخزّن ملفّاتِ منشأته، ومن يربطها بمستندٍ يحرسه حارسُ شاشةِ ذلك المستند')
@@ -37,11 +41,5 @@ export class FilesController {
   @Get('download-url')
   downloadUrl(@CurrentTenant() tenant: TenantContext, @Query() dto: FileKeyDto) {
     return this.filesService.downloadUrl(tenant.companyId, dto.key);
-  }
-
-  @Delete()
-  @HttpCode(204)
-  remove(@CurrentTenant() tenant: TenantContext, @Query() dto: FileKeyDto) {
-    return this.filesService.remove(tenant.companyId, dto.key);
   }
 }

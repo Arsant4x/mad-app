@@ -34,6 +34,5 @@ export async function getFileDownloadUrl(key: string): Promise<DownloadUrlResult
   return res.data;
 }
 
-export async function deleteFile(key: string): Promise<void> {
-  await apiClient.delete('/files', { params: { key } });
-}
+// لا `deleteFile` هنا (ق-١٢٣٤): حذفُ المرفق يمرّ بمسار الميزة التي تملكه (عقدٌ · مطالبة · شراء …)
+// فيُحذف الصفُّ والكائنُ معاً تحت حارس شاشتها — والمسارُ العامّ `DELETE /files` أُزيل من الخادم.
