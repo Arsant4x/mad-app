@@ -6,6 +6,11 @@ import { validateDeclaredTax } from '../common/vat/line-tax.util';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والرمزُ والباركودُ والفئة. */
+const PRODUCT_SEARCH_FIELDS = ['name', 'sku', 'barcode', 'category'] as const;
 
 /** Matches the original mockup's genBarcode(): a 12-digit, EAN-13-shaped
  * numeric string derived from the current timestamp. Not guaranteed globally
@@ -19,8 +24,9 @@ function generateBarcode(): string {
 export class ProductsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.product.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.ProductWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), PRODUCT_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.product, { where, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, dto: CreateProductDto) {

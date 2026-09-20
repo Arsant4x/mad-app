@@ -9,6 +9,8 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { type CreditContext } from '../invoices/credit-context';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { mapList, pagedFindMany, searchTerm } from '../common/pagination/paged.util';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
@@ -89,11 +91,17 @@ export class QuotesService {
    * ⇒ **والمنعُ بلا إخفاء ليس عزلاً**: من يُمنع من الكتابة في فرعٍ ويقرأ بياناته
    * يملك ما يبيعه المنتجُ حجبَه.
    */
-  async list(companyId: string, allowedBranchIds: string[] | 'all') {
-    const quotes = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.quote.findMany({ where: branchFilter(allowedBranchIds), include: QUOTE_INCLUDE, orderBy: { createdAt: 'desc' } }),
+  async list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const term = searchTerm(query);
+    // البحثُ في رقم العرض وملاحظاته واسم عميله — العلاقةُ شرطُ Prisma لا ترشيحٌ في الذاكرة.
+    const where: Prisma.QuoteWhereInput = {
+      ...branchFilter(allowedBranchIds),
+      ...(term ? { OR: [{ no: { contains: term, mode: 'insensitive' } }, { notes: { contains: term, mode: 'insensitive' } }, { customer: { name: { contains: term, mode: 'insensitive' } } }] } : {}),
+    };
+    const result = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      pagedFindMany(query, tx.quote, { where, include: QUOTE_INCLUDE, orderBy: { createdAt: 'desc' } }),
     );
-    return quotes.map((q) => ({ ...q, derivedStatus: deriveStatus(q) }));
+    return mapList(result, (q) => ({ ...q, derivedStatus: deriveStatus(q) }));
   }
 
   async findOne(companyId: string, id: string) {

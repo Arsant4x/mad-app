@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { MaintenanceStatus, Prisma } from '@prisma/client';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postMaintenanceCostEntry } from '../journal/auto-posting.util';
@@ -20,6 +22,9 @@ const REQUEST_INCLUDE = {
   property: { select: { id: true, name: true } },
   unit: { select: { id: true, unitNo: true } },
 };
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — العنوانُ والوصفُ ومَن بلّغ ومَن كُلِّف. */
+const MAINTENANCE_SEARCH_FIELDS = ['title', 'description', 'reportedBy', 'assignedTo'] as const;
 
 /**
  * What each status may become.
@@ -52,9 +57,11 @@ const STATUS_LABEL: Record<MaintenanceStatus, string> = {
 export class MaintenanceService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.MaintenanceRequestWhereInput = { ...searchWhere(searchTerm(query), MAINTENANCE_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.maintenanceRequest.findMany({
+      pagedFindMany(query, tx.maintenanceRequest, {
+        where,
         include: REQUEST_INCLUDE,
         // Urgent first, then newest: the list is a work queue, not an archive.
         orderBy: [{ priority: 'asc' }, { reportedAt: 'desc' }],

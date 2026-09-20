@@ -9,8 +9,13 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { listItems, listOrPage, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
 const COMPANY_INCLUDE = { permissionTemplate: true } as const;
+
+/** حقولُ البحث المُعلَنة للوحة المنصّة (`ق-١٢٣٦`) — الاسمُ التجاريُّ والقانونيُّ والرقمُ الضريبيُّ والبريد. */
+const COMPANY_SEARCH_FIELDS = ['orgName', 'legalName', 'vatNumber', 'email'] as const;
 
 /**
  * أسماءُ السجلّات التي ترفض القاعدةُ حذفَ المنشأة لأجلها — **للرسالة لا للحكم**.
@@ -65,9 +70,19 @@ export class CompaniesService {
     return parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10);
   }
 
-  async list() {
-    const companies = await this.prisma.company.findMany({ include: COMPANY_INCLUDE, orderBy: { createdAt: 'asc' } });
-    return Promise.all(companies.map((c) => this.refreshStatus(c)));
+  async list(query?: PagedQueryDto) {
+    const where: Prisma.CompanyWhereInput = { ...searchWhere(searchTerm(query), COMPANY_SEARCH_FIELDS) };
+    // الترتيبُ التامّ (`ق-٣٥٦`): تاريخُ الإنشاء ثم `id` — فلا يتبدّل متعادلان بين صفحتين.
+    const args = { where, include: COMPANY_INCLUDE, orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }] };
+    // `listOrPage` لا `pagedFindMany`: `refreshStatus` مُعمَّمٌ على الصفّ بضمائمه (`permissionTemplate`) فيُستنتج نوعُه من النداء.
+    const result = await listOrPage(query, {
+      all: () => this.prisma.company.findMany(args),
+      count: () => this.prisma.company.count({ where }),
+      window: (offset, limit) => this.prisma.company.findMany({ ...args, skip: offset, take: limit }),
+    });
+    // تقييمُ الحالة على الصفوف المُعادة وحدَها — القائمةُ كلُّها أو الصفحة.
+    const refreshed = await Promise.all(listItems(result).map((c) => this.refreshStatus(c)));
+    return Array.isArray(result) ? refreshed : { ...result, items: refreshed };
   }
 
   /** Matches the mockup's renderDeveloperPanel calling checkSubscriptionStatus

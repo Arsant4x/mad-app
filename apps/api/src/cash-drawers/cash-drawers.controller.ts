@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
@@ -20,8 +21,8 @@ export class CashDrawersController {
   constructor(private readonly cashDrawers: CashDrawersService) {}
 
   @Get()
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.cashDrawers.list(tenant.companyId, tenant.allowedBranchIds);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.cashDrawers.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** سقفُ نطاق رموز الأدراج (`ق-٢٩٥`) — مسارٌ ثابتٌ قبل `:id`. */

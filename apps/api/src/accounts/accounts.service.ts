@@ -4,6 +4,11 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pageArray } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الرمزُ والاسم. */
+const ACCOUNT_SEARCH_FIELDS = ['code', 'name'] as const;
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
@@ -43,9 +48,10 @@ export class AccountsService {
    * واحد للمنشأة — والقيدُ الافتتاحيّ يُقرأ ليُشتقّ منه التاريخُ لا لتُعرض
    * قيمتُه، فلا معنى لفرعٍ فيه.
    */
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
+      // الرمزُ فريدٌ داخل المنشأة، و`id` ختماً للترتيب التامّ الذي يوجبه القطعُ في الذاكرة (`ق-٣٥٦`).
+      const accounts = await tx.account.findMany({ orderBy: [{ code: 'asc' }, { id: 'asc' }] });
       const openings = await tx.journalEntry.findMany({
         where: { openingForAccountId: { in: accounts.map((a) => a.id) } },
         orderBy: { date: 'asc' },
@@ -55,11 +61,13 @@ export class AccountsService {
       const firstOpening = new Map<string, Date>();
       for (const e of openings) if (e.openingForAccountId && !firstOpening.has(e.openingForAccountId)) firstOpening.set(e.openingForAccountId, e.date);
 
-      return accounts.map((a) => ({
+      const rows = accounts.map((a) => ({
         ...a,
         openingDate: a.openingDate ?? firstOpening.get(a.id) ?? null,
         openingDateDeclared: a.openingDate !== null,
       }));
+      // الدليلُ كلُّه يُقرأ ليُشتقّ تاريخُ الافتتاح، فالقطعُ في الذاكرة (ق-١٢٣٦).
+      return pageArray(query, rows, ACCOUNT_SEARCH_FIELDS);
     });
   }
 

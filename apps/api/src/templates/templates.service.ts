@@ -5,6 +5,11 @@ import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SCREEN_ACTIONS, type ScreenAction, type ScreenActionMap } from './screens';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — اسمُ القالب. */
+const TEMPLATE_SEARCH_FIELDS = ['name'] as const;
 
 /**
  * Who is operating on templates. Employee permissions are the OWNER's decision
@@ -58,15 +63,13 @@ export class TemplatesService {
 
   /** What this caller may see: a company gets the global presets PLUS its own
    * templates — never a neighbour's. The platform admin sees everything. */
-  list(scope?: TemplateScope) {
+  list(scope?: TemplateScope, query?: PagedQueryDto) {
+    const search = searchWhere(searchTerm(query), TEMPLATE_SEARCH_FIELDS);
     return this.inScope(scope, (tx) => {
-      if (!scope || scope.companyId === null) {
-        return tx.permissionTemplate.findMany({ orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }] });
-      }
-      return tx.permissionTemplate.findMany({
-        where: { OR: [{ companyId: null }, { companyId: scope.companyId }] },
-        orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }],
-      });
+      // الرؤيةُ شرطٌ في `AND` مع البحث — فلا يوسّع البحثُ ما تراه المنشأة.
+      const visibility: Prisma.PermissionTemplateWhereInput = !scope || scope.companyId === null ? {} : { OR: [{ companyId: null }, { companyId: scope.companyId }] };
+      const where: Prisma.PermissionTemplateWhereInput = search ? { AND: [visibility, search] } : visibility;
+      return pagedFindMany(query, tx.permissionTemplate, { where, orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }] });
     });
   }
 

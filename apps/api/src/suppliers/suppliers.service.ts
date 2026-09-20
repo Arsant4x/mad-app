@@ -4,13 +4,19 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والهاتفُ والرقمُ الضريبي والفئة. */
+const SUPPLIER_SEARCH_FIELDS = ['name', 'phone', 'vatNumber', 'category'] as const;
 
 @Injectable()
 export class SuppliersService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.supplier.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.SupplierWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), SUPPLIER_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.supplier, { where, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, dto: CreateSupplierDto) {

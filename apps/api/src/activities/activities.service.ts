@@ -1,10 +1,15 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { suggestSector } from './sectors';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — اسمُ النشاط ونوعُه. */
+const ACTIVITY_SEARCH_FIELDS = ['name', 'activityType'] as const;
 
 /** Same rule as branches: what lines of business a company runs is an
  * owner-level decision, not something an employee redefines. */
@@ -20,19 +25,22 @@ export class ActivitiesService {
 
   /** Readable by any tenant actor — the list feeds the activity picker on the
    * branches and products screens. */
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.BusinessActivityWhereInput = { ...searchWhere(searchTerm(query), ACTIVITY_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const activities = await tx.businessActivity.findMany({ orderBy: { createdAt: 'asc' } });
+      const result = await pagedFindMany(query, tx.businessActivity, { where, orderBy: { createdAt: 'asc' } });
 
       // The counts are what make the delete guard understandable *before* the
-      // owner presses delete rather than after it fails.
-      return Promise.all(
-        activities.map(async (activity) => ({
+      // owner presses delete rather than after it fails — computed for the rows
+      // returned (the whole list, or the page), never for rows outside it.
+      const withCounts = await Promise.all(
+        listItems(result).map(async (activity) => ({
           ...activity,
           branchCount: await tx.branch.count({ where: { activityId: activity.id } }),
           productCount: await tx.product.count({ where: { activityId: activity.id } }),
         })),
       );
+      return Array.isArray(result) ? withCounts : { ...result, items: withCounts };
     });
   }
 

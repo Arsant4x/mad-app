@@ -15,6 +15,8 @@ import {
 } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { mirrorBankMovement, postSupplierPaymentEntry } from '../journal/auto-posting.util';
+import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
+import { ListSupplierPaymentsQueryDto } from './dto/list-supplier-payments-query.dto';
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, SupplierAllocationDto } from './dto/supplier-payment.dto';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
@@ -50,10 +52,26 @@ const toSettlementAllocations = (allocations: SupplierAllocationDto[]) => alloca
 export class SupplierPaymentsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all', supplierId?: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListSupplierPaymentsQueryDto) {
+    const term = searchTerm(query);
+    const where: Prisma.SupplierPaymentWhereInput = {
+      ...branchFilter(allowedBranchIds),
+      ...(query?.supplierId ? { supplierId: query.supplierId } : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ المورّد — مرآةُ سند القبض.
+      ...(term
+        ? {
+            OR: [
+              { no: { contains: term, mode: 'insensitive' } },
+              { reference: { contains: term, mode: 'insensitive' } },
+              { notes: { contains: term, mode: 'insensitive' } },
+              { supplier: { name: { contains: term, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.supplierPayment.findMany({
-        where: { ...branchFilter(allowedBranchIds), ...(supplierId ? { supplierId } : {}) },
+      pagedFindMany(query, tx.supplierPayment, {
+        where,
         include: SUPPLIER_PAYMENT_INCLUDE,
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       }),

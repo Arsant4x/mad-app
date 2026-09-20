@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { JwtPayload } from '../auth/types';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
@@ -30,10 +31,10 @@ export class TemplatesController {
   }
 
   @Get()
-  list(@Req() req: Request) {
+  list(@Req() req: Request, @Query() query: PagedQueryDto) {
     const payload = req.user as JwtPayload;
     // Admin sees everything; a tenant (owner or employee) sees global + own.
-    return this.templatesService.list(payload.actorType === 'PLATFORM_ADMIN' ? { companyId: null } : { companyId: payload.companyId! });
+    return this.templatesService.list(payload.actorType === 'PLATFORM_ADMIN' ? { companyId: null } : { companyId: payload.companyId! }, query);
   }
 
   @Post()

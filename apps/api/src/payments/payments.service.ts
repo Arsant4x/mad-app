@@ -20,6 +20,8 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
+import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto } from './dto/payment.dto';
 
 const PAYMENT_INCLUDE = {
@@ -61,10 +63,27 @@ const toSettlementAllocations = (allocations: AllocationDto[]) => allocations.ma
 export class PaymentsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all', customerId?: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListPaymentsQueryDto) {
+    const term = searchTerm(query);
+    const where: Prisma.PaymentWhereInput = {
+      ...branchFilter(allowedBranchIds),
+      ...(query?.customerId ? { customerId: query.customerId } : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ
+      // فلا يمرّ من `searchWhere` بل يُكتب هنا داخل `OR` نفسِه.
+      ...(term
+        ? {
+            OR: [
+              { no: { contains: term, mode: 'insensitive' } },
+              { reference: { contains: term, mode: 'insensitive' } },
+              { notes: { contains: term, mode: 'insensitive' } },
+              { customer: { name: { contains: term, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.payment.findMany({
-        where: { ...branchFilter(allowedBranchIds), ...(customerId ? { customerId } : {}) },
+      pagedFindMany(query, tx.payment, {
+        where,
         include: PAYMENT_INCLUDE,
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       }),

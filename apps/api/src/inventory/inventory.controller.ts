@@ -12,6 +12,8 @@ import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { CreateWriteOffDto } from './dto/create-write-off.dto';
 import { DeclareStockOpeningDto } from './dto/declare-stock-opening.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
+import { ListWriteOffsQueryDto } from './dto/list-write-offs-query.dto';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { RejectWriteOffDto } from './dto/reject-write-off.dto';
 import { InventoryService } from './inventory.service';
 import { StockOpeningsService } from './stock-openings.service';
@@ -63,8 +65,8 @@ export class InventoryController {
 
   @Get('stock-levels')
   @RequiresAction('view')
-  stockLevels(@CurrentTenant() tenant: TenantContext) {
-    return this.inventoryService.stockLevels(tenant.companyId);
+  stockLevels(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.inventoryService.stockLevels(tenant.companyId, query);
   }
 
   @Get('movements')
@@ -91,8 +93,8 @@ export class InventoryController {
   /** ㉘ الاستهلاكاتُ المؤقّتة المفتوحة — ما سبق استلامَه ولم يُسوَّ بعد (ق-١٠٦٢). */
   @Get('provisional')
   @RequiresAction('view')
-  provisional(@CurrentTenant() tenant: TenantContext) {
-    return this.inventoryService.openProvisional(tenant.companyId, tenant.allowedBranchIds);
+  provisional(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.inventoryService.openProvisional(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Post('movements')
@@ -116,8 +118,8 @@ export class InventoryController {
 
   @Get('write-offs')
   @RequiresAction('view')
-  listWriteOffs(@CurrentTenant() tenant: TenantContext, @Query('status') status?: string) {
-    return this.writeOffs.list(tenant.companyId, tenant.allowedBranchIds, status);
+  listWriteOffs(@CurrentTenant() tenant: TenantContext, @Query() query: ListWriteOffsQueryDto) {
+    return this.writeOffs.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Post('write-offs')

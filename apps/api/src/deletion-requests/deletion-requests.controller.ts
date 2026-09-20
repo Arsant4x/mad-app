@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { TenantGuard } from '../common/tenant/tenant.guard';
@@ -101,8 +102,8 @@ export class AdminDeletionRequestsController {
   constructor(private readonly service: DeletionRequestsService) {}
 
   @Get()
-  list() {
-    return this.service.listAll();
+  list(@Query() query: PagedQueryDto) {
+    return this.service.listAll(query);
   }
 
   @Post(':id/reject')

@@ -4,6 +4,11 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { formatMoney } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسم. */
+const DRAWER_SEARCH_FIELDS = ['name'] as const;
 import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
 import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
 import { DRAWER_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
@@ -52,9 +57,10 @@ export class CashDrawersService {
    * والقائمةُ تبقى مقروءةً لكلّ فاعل (تغذّي مُنتقي الدرج عند فتح المناوبة) —
    * **يتغيّر ما تُظهره لا من يقرؤها**.
    */
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const where: Prisma.CashDrawerWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), DRAWER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.cashDrawer.findMany({ where: branchFilter(allowedBranchIds), include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+      pagedFindMany(query, tx.cashDrawer, { where, include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
     );
   }
 

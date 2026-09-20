@@ -8,6 +8,11 @@ import { Grant } from '../delegations/permission-tree';
 import { PermissionsService } from '../delegations/permissions.service';
 import { TaskStatus, assigneeKindOf, currentDueDate, mayTransition } from './task-model';
 import { TaskView, viewFor } from './task-visibility';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { ListResult, pageArray } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة لـ«مهامي» (`ق-١٢٣٦`) — العنوانُ والقسم. */
+const TASK_SEARCH_FIELDS = ['title', 'department'] as const;
 
 /**
  * المهام — **مبنيّةٌ فوق التفويض لا بجانبه**.
@@ -104,10 +109,11 @@ export class TasksService {
    * وحدَه — **وللمالك `profileId` معرّفُ المنشأة الذي لا يكتبه الإسنادُ قطّ**، فعادت
    * «مهامي» فارغةً له **بنجاحٍ وبنيوياً**. والوسمُ يجعل الطرفَين في فضاءٍ واحدٍ بالبناء.
    */
-  async mine(tenant: TenantContext, now: Date): Promise<MyTaskView[]> {
+  async mine(tenant: TenantContext, now: Date, query?: PagedQueryDto): Promise<ListResult<MyTaskView>> {
     const rows = await this.rowsFor(tenant);
     const grants = await this.grantsOf(tenant);
-    return rows.map((r) => this.toView(r, grants, now));
+    // قائمةٌ محسوبة (الموعدُ والتأخّرُ والانتقالاتُ تُشتقّ لكلّ صفّ): تُرشَّح بالعنوان ثم تُقطَع (`ق-١٢٣٦`).
+    return pageArray(query, rows.map((r) => this.toView(r, grants, now)), TASK_SEARCH_FIELDS);
   }
 
   /**
@@ -285,7 +291,8 @@ export class TasksService {
     const kind = assigneeKindOf(tenant.actorType);
     if (kind === null) return Promise.resolve([]);
     return this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
-      tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "assigneeKind" = ${kind}::"TaskAssigneeKind" AND "assigneeId" = ${tenant.profileId} ORDER BY "createdAt" DESC`,
+      // `id` ختماً للترتيب (`ق-٣٥٦`): «مهامي» تُقطَع في الذاكرة، ومهمّتان في المللي‑ثانية نفسها لا تتبدّلان بين صفحتين.
+      tx.$queryRaw<TaskRow[]>`SELECT * FROM "tasks" WHERE "assigneeKind" = ${kind}::"TaskAssigneeKind" AND "assigneeId" = ${tenant.profileId} ORDER BY "createdAt" DESC, "id" DESC`,
     );
   }
 

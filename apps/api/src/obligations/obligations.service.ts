@@ -10,6 +10,11 @@ import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallme
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة للالتزامات الحكومية (`ق-١٢٣٦`) — العنوانُ والجهة. */
+const OBLIGATION_SEARCH_FIELDS = ['title', 'body'] as const;
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 
 /**
@@ -70,18 +75,19 @@ export const STANDARD_OBLIGATIONS: { body: string; title: string }[] = [
 export class ObligationsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.GovernmentObligationWhereInput = { ...searchWhere(searchTerm(query), OBLIGATION_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.governmentObligation.findMany({ orderBy: { order: 'asc' } });
-      if (existing.length > 0) return existing;
-
-      await tx.governmentObligation.createMany({
-        // companyId omitted on purpose — injected per-row at runtime by the
-        // tenant scope extension (see accounts.service.ts for why this cast
-        // exists).
-        data: STANDARD_OBLIGATIONS.map((o, i) => ({ body: o.body, title: o.title, order: i })) as unknown as Prisma.GovernmentObligationCreateManyInput[],
-      });
-      return tx.governmentObligation.findMany({ orderBy: { order: 'asc' } });
+      // الافتراضياتُ تُبذَر عند أوّل قراءةٍ كما كان — **بعدٍّ لا بقراءة القائمة**، فبحثٌ لا يُصيب شيئاً لا يُعيد البذر.
+      if ((await tx.governmentObligation.count()) === 0) {
+        await tx.governmentObligation.createMany({
+          // companyId omitted on purpose — injected per-row at runtime by the
+          // tenant scope extension (see accounts.service.ts for why this cast
+          // exists).
+          data: STANDARD_OBLIGATIONS.map((o, i) => ({ body: o.body, title: o.title, order: i })) as unknown as Prisma.GovernmentObligationCreateManyInput[],
+        });
+      }
+      return pagedFindMany(query, tx.governmentObligation, { where, orderBy: { order: 'asc' } });
     });
   }
 

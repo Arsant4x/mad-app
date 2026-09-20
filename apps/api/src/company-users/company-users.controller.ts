@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { MSG } from '../common/i18n/messages';
@@ -19,8 +20,8 @@ export class CompanyUsersController {
   constructor(private readonly companyUsersService: CompanyUsersService) {}
 
   @Get()
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.companyUsersService.list(tenant.companyId, tenant.actorType);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.companyUsersService.list(tenant.companyId, tenant.actorType, query);
   }
 
   /**

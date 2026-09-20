@@ -4,13 +4,19 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreatePropertyDto } from './dto/create-property.dto';
 import { UpdatePropertyDto } from './dto/update-property.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والعنوانُ ورقمُ الصكّ. */
+const PROPERTY_SEARCH_FIELDS = ['name', 'address', 'deedNo'] as const;
 
 @Injectable()
 export class PropertiesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.property.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.PropertyWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), PROPERTY_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.property, { where, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, dto: CreatePropertyDto) {

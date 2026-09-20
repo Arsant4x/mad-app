@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { ListRatesQueryDto } from './dto/list-rates-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
@@ -21,14 +23,14 @@ export class CurrenciesController {
   constructor(private readonly currenciesService: CurrenciesService) {}
 
   @Get()
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.currenciesService.list(tenant.companyId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.currenciesService.list(tenant.companyId, query);
   }
 
   // Declared before ':id' so "rates" is never read as a currency id.
   @Get('rates')
-  listRates(@CurrentTenant() tenant: TenantContext, @Query('fromCode') fromCode?: string, @Query('toCode') toCode?: string) {
-    return this.currenciesService.listRates(tenant.companyId, fromCode, toCode);
+  listRates(@CurrentTenant() tenant: TenantContext, @Query() query: ListRatesQueryDto) {
+    return this.currenciesService.listRates(tenant.companyId, query.fromCode, query.toCode, query);
   }
 
   @Post('rates')

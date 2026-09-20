@@ -5,6 +5,13 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ALLOWED_SCREENS } from '../templates/screens';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { mapList, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`): لمدير المنصّة اسمُ المنشأة على الصفّ ومَن طلب والسبب؛ وللمالك مَن طلب والسبب؛ وللسجلّ الفاعلُ والمسارُ والطريقة. */
+const GRANT_ADMIN_SEARCH_FIELDS = ['companyName', 'requestedByName', 'reason'] as const;
+const GRANT_OWNER_SEARCH_FIELDS = ['requestedByName', 'reason'] as const;
+const LOG_SEARCH_FIELDS = ['actorName', 'path', 'method'] as const;
 
 /** أقصى نافذة يُسمح بطلبها: يوم واحد — الدعم زيارة، لا إقامة. */
 const MAX_DURATION_MINUTES = 24 * 60;
@@ -76,10 +83,13 @@ export class SupportAccessService {
   }
 
   /** كل الطلبات عبر المنشآت — للوحة المطوّر. **والاسمُ من الإذن نفسِه**: منشأةٌ حُذفت تبقى مسمّاةً هنا (`ق-٥٣١`). */
-  adminList() {
-    return this.prisma.supportAccessGrant.findMany({
+  adminList(query?: PagedQueryDto) {
+    const where: Prisma.SupportAccessGrantWhereInput = { ...searchWhere(searchTerm(query), GRANT_ADMIN_SEARCH_FIELDS) };
+    return pagedFindMany(query, this.prisma.supportAccessGrant, {
+      where,
       orderBy: { requestedAt: 'desc' },
-      take: 100,
+      // سقفُ المئة يبقى بلا `page` كما كان؛ ومع `page` النافذةُ تحكم.
+      ...(query?.page ? {} : { take: 100 }),
     });
   }
 
@@ -122,11 +132,13 @@ export class SupportAccessService {
   // ---------- جانب مالك المنشأة ----------
 
   /** ما يعرضه إعداد المالك: المعلّق + الفعّال + آخر المحسومة. */
-  ownerOverview(companyId: string) {
+  ownerOverview(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.SupportAccessGrantWhereInput = { ...searchWhere(searchTerm(query), GRANT_OWNER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const grants = await tx.supportAccessGrant.findMany({ orderBy: { requestedAt: 'desc' }, take: 20 });
+      // سقفُ العشرين يبقى بلا `page` كما كان؛ ومع `page` النافذةُ تحكم.
+      const result = await pagedFindMany(query, tx.supportAccessGrant, { where, orderBy: { requestedAt: 'desc' }, ...(query?.page ? {} : { take: 20 }) });
       const now = new Date();
-      return grants.map((g) => ({ ...g, active: isGrantActive(g, now) }));
+      return mapList(result, (g) => ({ ...g, active: isGrantActive(g, now) }));
     });
   }
 
@@ -161,11 +173,14 @@ export class SupportAccessService {
   }
 
   /** «سجل الوصول»: كل ما فعله الدعم، بطلبه وسببه — أمام عينَي المالك. */
-  ownerLog(companyId: string) {
+  ownerLog(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.SupportAccessLogWhereInput = { ...searchWhere(searchTerm(query), LOG_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.supportAccessLog.findMany({
+      pagedFindMany(query, tx.supportAccessLog, {
+        where,
         orderBy: { at: 'desc' },
-        take: 500,
+        // سقفُ الخمسمئة يبقى بلا `page` كما كان؛ ومع `page` النافذةُ تحكم.
+        ...(query?.page ? {} : { take: 500 }),
         include: { grant: { select: { requestedByName: true, reason: true } } },
       }),
     );

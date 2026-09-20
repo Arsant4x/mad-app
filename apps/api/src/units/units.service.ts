@@ -6,6 +6,11 @@ import { BulkCreateUnitsDto } from './dto/bulk-create-units.dto';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pageArray } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — رقمُ الوحدة ونوعُها وطابقُها. */
+const UNIT_SEARCH_FIELDS = ['unitNo', 'type', 'subtype', 'floor'] as const;
 
 export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved' | 'upcoming';
 
@@ -13,8 +18,9 @@ export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved' | 'upc
 export class UnitsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.listWithStatus(tx, includeArchived));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    // الحالةُ محسوبةٌ لكل وحدة (عقدٌ ساري · قادم · حجز) فتُقطَع القائمةُ في الذاكرة بعد الحساب.
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => pageArray(query, await this.listWithStatus(tx, includeArchived), UNIT_SEARCH_FIELDS));
   }
 
   create(companyId: string, dto: CreateUnitDto) {
@@ -136,7 +142,8 @@ export class UnitsService {
    * active (non-expired) reservation holds the unit. */
   private async listWithStatus(tx: Prisma.TransactionClient, includeArchived = false): Promise<(Unit & { status: UnitStatus; currentTenant: string | null; upcomingTenant: string | null; reservedBy: string | null })[]> {
     await expireStaleReservations(tx);
-    const units = await tx.unit.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: [{ propertyId: 'asc' }, { unitNo: 'asc' }] });
+    // `id` ختماً للترتيب التامّ (`ق-٣٥٦`) — القائمةُ تُقطَع في الذاكرة بعد اشتقاق الحالة.
+    const units = await tx.unit.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: [{ propertyId: 'asc' }, { unitNo: 'asc' }, { id: 'asc' }] });
     const today = new Date();
 
     const activeContracts = await tx.contract.findMany({

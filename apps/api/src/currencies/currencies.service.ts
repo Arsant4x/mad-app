@@ -2,7 +2,13 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { CreateCurrencyDto } from './dto/create-currency.dto';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`). */
+const CURRENCY_SEARCH_FIELDS = ['code', 'name', 'symbol'] as const;
+const RATE_SEARCH_FIELDS = ['fromCode', 'toCode'] as const;
 import { UpdateCurrencyDto } from './dto/update-currency.dto';
 import { UpsertExchangeRateDto } from './dto/upsert-exchange-rate.dto';
 
@@ -20,11 +26,11 @@ export class CurrenciesService {
 
   /** Readable by any tenant actor — this is the list behind the currency picker
    * on the invoice and purchase forms. */
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       // Base first, then alphabetical: the base is the one a single-currency
       // company ever sees.
-      tx.currency.findMany({ orderBy: [{ isBase: 'desc' }, { code: 'asc' }] }),
+      pagedFindMany(query, tx.currency, { where: { ...searchWhere(searchTerm(query), CURRENCY_SEARCH_FIELDS) }, orderBy: [{ isBase: 'desc' }, { code: 'asc' }] }),
     );
   }
 
@@ -108,16 +114,15 @@ export class CurrenciesService {
 
   /** Most recent first — the rate history screen reads top-down, and callers
    * pricing a document want the latest applicable row. */
-  listRates(companyId: string, fromCode?: string, toCode?: string) {
+  listRates(companyId: string, fromCode?: string, toCode?: string, query?: PagedQueryDto) {
+    const where: Prisma.ExchangeRateWhereInput = {
+      ...(fromCode ? { fromCode: fromCode.toUpperCase() } : {}),
+      ...(toCode ? { toCode: toCode.toUpperCase() } : {}),
+      ...searchWhere(searchTerm(query), RATE_SEARCH_FIELDS),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.exchangeRate.findMany({
-        where: {
-          ...(fromCode ? { fromCode: fromCode.toUpperCase() } : {}),
-          ...(toCode ? { toCode: toCode.toUpperCase() } : {}),
-        },
-        orderBy: [{ date: 'desc' }, { fromCode: 'asc' }],
-        take: 200,
-      }),
+      // بلا ترقيمٍ يبقى السقفُ القديم `200` كما كان (عقدٌ قائم)؛ ومع `page` النافذةُ هي السقف.
+      pagedFindMany(query, tx.exchangeRate, { where, orderBy: [{ date: 'desc' }, { fromCode: 'asc' }], ...(query?.page ? {} : { take: 200 }) }),
     );
   }
 
