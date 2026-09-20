@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>نموذج ضريبة الصنف</title>
+<meta name="description" content="نموذجٌ مرئيّ للإقرار قبل الشيفرة (§3.6/③): بطاقةُ الصنف بفئته وسببه · سطرُ الفاتورة بلا صنف · شارةُ القائمة · خاناتُ الإقرار — لا يعمل، يُرى." />
+<style>
+  :root { --ink:#10192e; --paper:#f6f4ee; --card:#ffffff; --emerald:#1e6e5c; --emerald-soft:#e4f0ec; --gold:#b08d3d; --gold-soft:#f3ecda; --rose:#ae4438; --rose-soft:#f7e9e6; --blue:#3a5a9c; --blue-soft:#e9eef6; --charcoal:#232a36; --muted:#77808f; --line:#e4e1d8; --radius:10px; --text:var(--charcoal); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper:#151a24; --card:#1d2330; --line:#2e3644; --text:#e6e6e6; --muted:#9aa3b2; --emerald-soft:#1f3a33; --gold-soft:#3a3222; --rose-soft:#3a2523; --blue-soft:#22304a; } }
+  :root[data-theme="dark"] { --paper:#151a24; --card:#1d2330; --line:#2e3644; --text:#e6e6e6; --muted:#9aa3b2; --emerald-soft:#1f3a33; --gold-soft:#3a3222; --rose-soft:#3a2523; --blue-soft:#22304a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--text); font-family:"Segoe UI", Tahoma, "Noto Naskh Arabic", sans-serif; line-height:1.6; padding:16px; }
+  .wrap { max-width:1040px; margin:0 auto; }
+  .banner { background:var(--gold-soft); border:1px solid var(--gold); color:var(--charcoal); border-radius:var(--radius); padding:10px 14px; margin-bottom:16px; font-size:14px; }
+  h1 { font-size:20px; margin:0 0 8px; }
+  h2 { font-size:16px; margin:0 0 10px; color:var(--emerald); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:640px) { .two-col { grid-template-columns:1fr; } }
+  .field label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .field input, .field select, .field textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; }
+  .hint { font-size:12px; color:var(--muted); margin-top:4px; }
+  .hint.warn { color:var(--rose); }
+  .panel { background:var(--gold-soft); border:1px dashed var(--gold); border-radius:8px; padding:10px 12px; margin-top:10px; font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:right; font-weight:600; color:var(--muted); font-size:12px; padding:8px 6px; border-bottom:1px solid var(--line); }
+  td { padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  .num { text-align:left; font-variant-numeric:tabular-nums; direction:ltr; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .badge.draft { background:var(--gold-soft); color:var(--gold); }
+  .badge.ok { background:var(--emerald-soft); color:var(--emerald); }
+  .readonly { background:var(--paper); color:var(--muted); }
+  .muted { color:var(--muted); font-size:13px; }
+  .limit { background:var(--rose-soft); border:1px solid var(--rose); border-radius:8px; padding:10px 12px; font-size:13px; margin-top:10px; }
+  .tag { font-family:ui-monospace, Consolas, monospace; font-size:12px; background:var(--blue-soft); color:var(--blue); padding:1px 6px; border-radius:6px; direction:ltr; display:inline-block; }
+  .caption { font-size:12px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner"><strong>نموذجٌ مرئيّ للإقرار قبل الشيفرة</strong> (<span class="tag">§3.6/③</span> · <span class="tag">ق-١٢١٤</span>) — لا يعمل، يُرى. يُقرّه المالك ثم يُبنى؛ وما يُقرّ هنا هو <em>الشكل والقاعدة</em> لا الألوان.</div>
+
+  <h1>ضريبة الصنف — أربعُ شاشاتٍ تتغيّر</h1>
+
+  <!-- ١ بطاقة الصنف -->
+  <div class="card">
+    <h2>١. بطاقةُ الصنف — الفئةُ تُعلَن عند الإنشاء ولا تُخمَّن</h2>
+    <div class="two-col">
+      <div class="field">
+        <label>الاسم</label>
+        <input value="باراسيتامول ٥٠٠ ملغ — ٢٠ قرصاً" />
+      </div>
+      <div class="field">
+        <label>الرمز (SKU)</label>
+        <input value="MED-0144" />
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field">
+        <label>الفئةُ الضريبية</label>
+        <select id="cat" onchange="reasonFor(this.value)">
+          <option value="">— تُعلَن من القائمة —</option>
+          <option value="S">خاضعٌ بالنسبة الأساسية (S) — ١٥٪</option>
+          <option value="Z" selected>خاضعٌ بنسبة الصفر (Z) — ٠٪ بسببٍ من قائمة الهيئة</option>
+          <option value="E">معفى (E) — ٠٪ بسببٍ من قائمة الهيئة</option>
+          <option value="O">خارج النطاق (O) — ٠٪ بسببٍ يكتبه التاجر</option>
+        </select>
+        <div class="hint">النسبةُ تُشتقّ من الفئة ولا تُكتب: <span class="tag">S ⟵ 15٪</span> وغيرُها <span class="tag">0٪</span>. والفئةُ تُنسخ إلى كلّ سطرٍ يبيع هذا الصنف لحظةَ البيع — فإعادةُ تصنيفه لا تُغيّر فاتورةً صدرت.</div>
+      </div>
+      <div class="field" id="reasonField">
+        <label>سببُ نسبة الصفر — من قائمة الهيئة (معيار XML 1.2 §11.2.4)</label>
+        <select id="reason">
+          <option value="">— يُعلَن من القائمة —</option>
+          <option value="VATEX-SA-32">VATEX-SA-32 · صادرات السلع من المملكة</option>
+          <option value="VATEX-SA-33">VATEX-SA-33 · صادرات الخدمات من المملكة</option>
+          <option value="VATEX-SA-34-1">VATEX-SA-34-1 · النقل الدولي للسلع</option>
+          <option value="VATEX-SA-34-2">VATEX-SA-34-2 · النقل الدولي للركاب</option>
+          <option value="VATEX-SA-34-3">VATEX-SA-34-3 · الخدمات المرتبطة بتوريد النقل الدولي للركاب</option>
+          <option value="VATEX-SA-34-4">VATEX-SA-34-4 · توريد وسائل النقل المؤهلة</option>
+          <option value="VATEX-SA-34-5">VATEX-SA-34-5 · الخدمات ذات الصلة بنقل السلع أو الركاب (م٢٥)</option>
+          <option value="VATEX-SA-35" selected>VATEX-SA-35 · الأدوية والمعدات الطبية</option>
+          <option value="VATEX-SA-36">VATEX-SA-36 · المعادن المؤهلة</option>
+          <option value="VATEX-SA-MLTRY">VATEX-SA-MLTRY · توريد السلع العسكرية المؤهلة</option>
+        </select>
+        <div class="hint">الرمزُ يُكتب في المستند المختوم (<span class="tag">TaxExemptionReasonCode</span>) ونصُّه العربي في <span class="tag">TaxExemptionReason</span> — بلا هذا الرمز يرفض المصدِّقُ كلَّ بندٍ بصفر (<span class="tag">BR-KSA-CL-04</span>).</div>
+        <div class="limit"><strong>حدٌّ معلَن (ق-١٢١١/②):</strong> الفئاتُ التابعة للمشتري — الخدماتُ الصحية والتعليمية الخاصة <em>للمواطنين</em> (<span class="tag">VATEX-SA-HEA</span> · <span class="tag">VATEX-SA-EDU</span>) — <strong>غيرُ مدعومة</strong> في هذه الموجة، فلا تظهر في القائمة؛ تُحسم بعد الجلسة الميدانية.</div>
+      </div>
+    </div>
+    <div class="panel" id="legacyPanel">
+      <strong>لوحةُ الإعلان — لصنفٍ قائمٍ سبق الحقل:</strong> فئةُ هذا الصنف <span class="tag">LEGACY_STANDARD</span> — كان يُرَنّ بـ١٥٪ قبل أن يوجد الحقل، ويبقى كذلك حتى تُعلَن هنا. <span class="muted">(الهجرةُ تختم القائمَ وتعدّه وتصرخ، وقيدُ <span class="tag">CHECK</span> على <span class="tag">createdAt</span> يحبس القيمةَ القديمة على ما سبق لحظتَها — كما تصنيفُ العقود.)</span>
+    </div>
+    <div class="caption">الفاعل: مالكُ المنشأة (أو موظفٌ بـ<span class="tag">products:edit</span>) — في بطاقة الصنف؛ وقائمةُ الأسباب بياناتٌ مرجعيّة للمنصّة يُختار منها ولا يُكتب رمز.</div>
+  </div>
+
+  <!-- ٢ سطر الفاتورة بلا صنف -->
+  <div class="card">
+    <h2>٢. سطرُ الفاتورة بلا صنف — الفئةُ والسبب بدل «١٥٪ / ٠٪ (معفى)»</h2>
+    <table>
+      <thead><tr><th>الوصف</th><th style="width:60px">الكمية</th><th style="width:95px">السعر</th><th style="width:300px">الضريبة</th><th style="width:70px">النسبة</th><th style="width:100px">الإجمالي</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><input value="اشتراك شهري — النظام المحاسبي" /></td>
+          <td><input class="num" value="1" /></td>
+          <td><input class="num" value="1,200.00" /></td>
+          <td>
+            <select><option selected>خاضعٌ بالنسبة الأساسية (S)</option><option>خاضعٌ بنسبة الصفر (Z) — بسبب</option><option>معفى (E) — بسبب</option><option>خارج النطاق (O) — بسبب يُكتب</option></select>
+          </td>
+          <td><input class="num readonly" value="15٪" readonly /></td>
+          <td class="num">1,380.00</td>
+        </tr>
+        <tr>
+          <td><input value="شحن دولي لعميلٍ خارج المملكة" /></td>
+          <td><input class="num" value="1" /></td>
+          <td><input class="num" value="450.00" /></td>
+          <td>
+            <select><option>خاضعٌ بالنسبة الأساسية (S)</option><option selected>خاضعٌ بنسبة الصفر (Z) — بسبب</option><option>معفى (E) — بسبب</option><option>خارج النطاق (O) — بسبب يُكتب</option></select>
+            <select style="margin-top:6px"><option>— السبب من قائمة الهيئة —</option><option selected>VATEX-SA-34-1 · النقل الدولي للسلع</option></select>
+          </td>
+          <td><input class="num readonly" value="0٪" readonly /></td>
+          <td class="num">450.00</td>
+        </tr>
+        <tr>
+          <td><input value="مبلغٌ مستردّ عن وديعة" /></td>
+          <td><input class="num" value="1" /></td>
+          <td><input class="num" value="2,000.00" /></td>
+          <td>
+            <select><option>خاضعٌ بالنسبة الأساسية (S)</option><option>خاضعٌ بنسبة الصفر (Z) — بسبب</option><option>معفى (E) — بسبب</option><option selected>خارج النطاق (O) — بسبب يُكتب</option></select>
+            <input style="margin-top:6px" value="ردُّ وديعةٍ لا توريد" placeholder="السبب — نصٌّ يكتبه التاجر (VATEX-SA-OOS)" />
+          </td>
+          <td><input class="num readonly" value="0٪" readonly /></td>
+          <td class="num">2,000.00</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="hint" style="margin-top:8px">السطرُ الذي يحمل صنفاً يرث فئتَه وسببَه من بطاقته ولا يعرضهما للتعديل هنا (ينسخهما لحظةَ البيع). والسطرُ بلا صنفٍ <strong>يُلزَم</strong> بالفئة، وبالسبب لغير S — فلا «٠٪ (معفى)» بلا سبب (ق-١٢١١/③). والنسبةُ عمودٌ للقراءة.</div>
+    <div class="caption">الشاشةُ نفسُها في الإشعار المدين (<span class="tag">DebitNoteModal</span>) وعرض السعر (<span class="tag">QuoteModal</span>).</div>
+  </div>
+
+  <!-- ٣ قائمة الأصناف -->
+  <div class="card">
+    <h2>٣. قائمةُ الأصناف — شارةُ ما لم يُعلَن حيث يُعالَج النقص</h2>
+    <div class="muted" style="margin-bottom:8px">أصنافٌ بلا فئةٍ معلَنة: <strong>3</strong> — تُعلَن من بطاقة كلٍّ منها. <span class="muted">(كشارة وحدة القياس — ق-١٢١٠: الشارةُ هنا لا في وجه المستند.)</span></div>
+    <table>
+      <thead><tr><th>الصنف</th><th>الوحدة</th><th>الفئةُ الضريبية</th><th class="num">السعر</th></tr></thead>
+      <tbody>
+        <tr><td>باراسيتامول ٥٠٠ ملغ</td><td>علبة (BX)</td><td><span class="badge ok">Z · VATEX-SA-35</span></td><td class="num">12.00</td></tr>
+        <tr><td>خدمة تنظيف شهرية</td><td>خدمة (E48)</td><td><span class="badge ok">S · 15٪</span></td><td class="num">300.00</td></tr>
+        <tr><td>كرسي مكتب</td><td>قطعة (H87)</td><td><span class="badge draft" title="كان يُرَنّ بـ15٪ قبل أن يوجد الحقل">لم تُعلَن الفئة — LEGACY_STANDARD</span></td><td class="num">450.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ٤ الإقرار -->
+  <div class="card">
+    <h2>٤. شاشةُ الإقرار — المبيعاتُ بالخانات ١–٥ من السطور لا من مجموع الفاتورة</h2>
+    <table>
+      <thead><tr><th>#</th><th>الخانة (بنصّ نموذج الهيئة)</th><th class="num">المبلغ</th><th class="num">مبلغ الضريبة</th><th>مصدرُه عندنا</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>المبيعات الخاضعة للنسبة الأساسية</td><td class="num">120,000.00</td><td class="num">18,000.00</td><td class="muted">سطورُ الفئة S</td></tr>
+        <tr><td>2</td><td>المبيعات للمواطنين (الخدمات الصحية الخاصة / التعليم الأهلي الخاص)</td><td class="num">0.00</td><td class="num">0.00</td><td class="muted">غيرُ مدعومة في هذه الموجة — تبقى صفراً معلَناً حتى الجلسة (ق-١٢١١/②)</td></tr>
+        <tr><td>3</td><td>المبيعات المحلية الخاضعة للنسبة الصفرية</td><td class="num">8,400.00</td><td class="num">0.00</td><td class="muted">سطورُ Z بغير الصادرات (34-x · 35 · 36 · MLTRY)</td></tr>
+        <tr><td>4</td><td>الصادرات</td><td class="num">2,300.00</td><td class="num">0.00</td><td class="muted">سطورُ Z بـ 32 · 33</td></tr>
+        <tr><td>5</td><td>المبيعات المعفاة</td><td class="num">55,000.00</td><td class="num">0.00</td><td class="muted">سطورُ E + الإيجارُ السكني (كما اليوم)</td></tr>
+        <tr><td>6</td><td><strong>إجمالي المبيعات</strong></td><td class="num"><strong>185,700.00</strong></td><td class="num"><strong>18,000.00</strong></td><td class="muted">O خارج الإقرار — يُعدّ ويُعلَن</td></tr>
+      </tbody>
+    </table>
+    <div class="hint" style="margin-top:8px">الخانةُ 2 صودقت من دليل الهيئة نفسِه: «إرشادات مبسطة حول تقديم الإقرار الضريبي» (2023م، ص13): <em>المبيعات للمواطنين (الخدمات الصحية الخاصة/ التعليم الأهلي الخاص)</em>؛ ونشرةُ تحمّل الدولة للتعليم الأهلي (الإصدار 2، مايو 2026، ص8): تُدرَج في بند «المبيعات للمواطنين» <strong>دون سداد الضريبة المستحقة</strong> وبفاتورةٍ تحمل رقمَ الهوية الوطنية — وهي بعينها التصميمُ الذي ينتظر الجلسة.</div>
+    <div class="hint">وسطورٌ بقيمةٍ قديمة (<span class="tag">LEGACY_STANDARD</span>) تُعدّ في الخانة 1 كما كانت، ويظهر عدُّها في الشاشة: «منها 12 سطراً على صنفٍ لم تُعلَن فئتُه».</div>
+  </div>
+
+  <div class="muted">ما لا يتغيّر: وجهُ الفاتورة والإيصال (ق-١٢١٠) · جانبُ المشتريات (موجزٌ مستقلّ) · الكاشيرُ لا يعرض فئةً — يقرؤها من بطاقة الصنف.</div>
+</div>
+<script>
+  function reasonFor(cat) {
+    var f = document.getElementById('reasonField');
+    var lbl = f.querySelector('label');
+    var sel = document.getElementById('reason');
+    if (cat === 'S') { f.style.opacity = '0.45'; sel.disabled = true; lbl.textContent = 'لا سببَ على الخاضع بالنسبة الأساسية'; }
+    else if (cat === 'O') { f.style.opacity = '1'; sel.disabled = true; lbl.textContent = 'خارج النطاق (VATEX-SA-OOS): السببُ نصٌّ يكتبه التاجر — حقلٌ نصّي مكان القائمة'; }
+    else if (cat === 'E') { f.style.opacity = '1'; sel.disabled = false; lbl.textContent = 'سببُ الإعفاء — من قائمة الهيئة: VATEX-SA-29 · 29-7 · 30'; }
+    else { f.style.opacity = '1'; sel.disabled = false; lbl.textContent = 'سببُ نسبة الصفر — من قائمة الهيئة (معيار XML 1.2 §11.2.4)'; }
+  }
+</script>
+</body>
+</html>
