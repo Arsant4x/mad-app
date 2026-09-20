@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8">
+<title>مسبار عرض الجدول — عشرة أعمدة</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Readex+Pro:wght@500;600&display=swap">
+<style>
+  :root { --line:#d9ddd5; --ink:#1b2320; --ink-2:#4f5a55; --bg:#f4f5f1; }
+  body { margin:0; padding:16px; font-family:"IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif; color:var(--ink); background:var(--bg); }
+  /* نفس قيم design/components.css: الجدول 13.5px · الخلية 0 12px · الصف الكثيف 32px */
+  table { border-collapse:separate; border-spacing:0; font-size:13.5px; width:max-content; table-layout:auto; background:#fff; }
+  th { font-weight:600; font-size:12.5px; color:var(--ink-2); text-align:start; padding:0 12px; height:32px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:0 12px; height:32px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap; }
+  td.num, th.num { font-variant-numeric:tabular-nums; direction:ltr; text-align:right; }
+  .badge { display:inline-block; font-size:12px; font-weight:500; padding:2px 8px; border-radius:999px; background:#e8f3ec; color:#1e7d4f; }
+  /* الصف المصفوف بسطرين عند 375 */
+  .stack { width:347px; background:#fff; border:1px solid var(--line); font-size:13.5px; }
+  .stack .row { display:flex; gap:10px; padding:4px 10px; white-space:nowrap; overflow:hidden; }
+  .stack .row > span { flex:0 0 auto; }
+  .stack .num { font-variant-numeric:tabular-nums; direction:ltr; }
+  .lbl { color:var(--ink-2); font-size:12px; }
+  pre { background:#fff; padding:10px; font-size:12px; direction:ltr; }
+</style>
+<body>
+<h3>قائمة العقود — عشرة أعمدة بأطول محتوىً واقعي</h3>
+<table id="t">
+  <thead><tr>
+    <th data-key="no">رقم العقد</th>
+    <th data-key="tenant">المستأجر</th>
+    <th data-key="unit">الوحدة · العقار</th>
+    <th data-key="start">البداية</th>
+    <th data-key="end">النهاية</th>
+    <th data-key="status">الحالة</th>
+    <th data-key="class">التصنيف</th>
+    <th class="num" data-key="rent">الإيجار السنوي</th>
+    <th class="num" data-key="deposit">التأمين</th>
+    <th class="num" data-key="outstanding">المتبقّي</th>
+  </tr></thead>
+  <tbody>
+    <tr>
+      <td class="num">EJ-2026-0412</td>
+      <td>مؤسسة الرواد للمقاولات والتطوير</td>
+      <td>A-204 · برج النخيل التجاري</td>
+      <td class="num">2026-09-01</td>
+      <td class="num">2027-08-31</td>
+      <td><span class="badge">سارٍ · متأخّر</span></td>
+      <td>تجاري · شامل</td>
+      <td class="num">1,234,567.89</td>
+      <td class="num">123,456.00</td>
+      <td class="num">−45,678.90</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>الصفّ المصفوف بسطرين عند 375 (المحتوى 347px)</h3>
+<div class="stack" id="s">
+  <div class="row" id="r1"><span class="num">EJ-2026-0412</span><span class="badge">سارٍ · متأخّر</span><span class="num">1,234,567.89</span></div>
+  <div class="row" id="r2"><span>مؤسسة الرواد للمقاولات</span><span class="lbl">A-204</span><span class="num lbl">2026-09-01 → 2027-08-31</span></div>
+</div>
+
+<pre id="out">…</pre>
+<script>
+(async () => {
+  await document.fonts.load('400 13.5px "IBM Plex Sans Arabic"');
+  await document.fonts.load('600 12.5px "IBM Plex Sans Arabic"');
+  await document.fonts.ready;
+  const ths = [...document.querySelectorAll('#t th')];
+  const tds = [...document.querySelectorAll('#t tbody td')];
+  const cols = ths.map((th, i) => ({ key: th.dataset.key, head: Math.ceil(th.getBoundingClientRect().width), cell: Math.ceil(tds[i].getBoundingClientRect().width) }));
+  cols.forEach(c => c.w = Math.max(c.head, c.cell));
+  const total = cols.reduce((s, c) => s + c.w, 0);
+  const r1 = document.getElementById('r1'), r2 = document.getElementById('r2');
+  const fits = (el) => ({ scroll: el.scrollWidth, client: el.clientWidth, fits: el.scrollWidth <= el.clientWidth });
+  const out = { font: getComputedStyle(tds[0]).fontFamily.split(',')[0], plexLoaded: document.fonts.check('400 13.5px "IBM Plex Sans Arabic"'),
+    columns: cols, total10: total, tableWidth: Math.ceil(document.getElementById('t').getBoundingClientRect().width),
+    stack: { line1: fits(r1), line2: fits(r2) } };
+  document.getElementById('out').textContent = JSON.stringify(out, null, 2);
+  window.__probe = out;
+})();
+</script>
+</body></html>
