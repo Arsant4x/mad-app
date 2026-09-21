@@ -1323,7 +1323,7 @@ mad-app/
 │   │   ├── src/
 │   │   └── test/     اختبارات e2e
 │   └── web/          React + Vite     (الواجهة)
-├── packages/shared/  مقصدٌ لم يُنفَّذ بعد — ملفّان بلا مستورِد (مرشَّحُ توليد التعدادات من Prisma، §4)
+├── packages/shared/  `src/permissions.ts` مرسومٌ من `apps/api/src/templates/screens.ts` (24 شاشة × 7 أفعال) وتستورده الواجهة `@mad-app/shared/permissions` — بحارسٍ يعيد الرسمَ ويقارن (③ · `#504` · 2026-09-20)؛ وتوليدُ التعدادات من Prisma مرشَّحٌ باقٍ (§4)
 ├── docker/           تهيئة Postgres
 └── docker-compose.yml
 ```
