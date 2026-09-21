@@ -905,6 +905,7 @@ export class ReportsService {
       const result = await readLedger(
         tx,
         {
+          allowedBranchIds,
           accountId: filter.accountId,
           propertyId: filter.propertyId,
           unitId: filter.unitId,
@@ -940,6 +941,7 @@ export class ReportsService {
       const result = await readLedger(
         tx,
         {
+          allowedBranchIds,
           accountId: control.id,
           customerId: filter.customerId,
           supplierId: filter.supplierId,

@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { requestedBranchFilter } from '../branches/branch-scope.util';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
@@ -25,6 +26,8 @@ import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 export const LEDGER_LINE_CAP = 5000;
 
 export interface LedgerFilter {
+  /** فروعُ القارئ — القراءةُ تُرشَّح بها دائماً (`ق-٥١٧`)، وبالفرع المطلوب إن طُلب وكان من فروعه. */
+  allowedBranchIds: string[] | 'all';
   accountId?: string;
   customerId?: string;
   supplierId?: string;
@@ -122,20 +125,14 @@ export function resolveSource(entry: EntryHead, fromDocs: LedgerSource | undefin
   return { type: entry.auto ? 'AUTO' : 'MANUAL', id: entry.id, no: entry.no };
 }
 
-function lineWhere(filter: LedgerFilter, dated: boolean): Prisma.JournalLineWhereInput {
-  const date: Prisma.DateTimeFilter = {};
-  if (dated && filter.from) date.gte = filter.from;
-  if (dated && filter.to) date.lte = filter.to;
+function lineWhere(filter: LedgerFilter, scope: Prisma.JournalEntryWhereInput, date: Prisma.DateTimeFilter | undefined): Prisma.JournalLineWhereInput {
   return {
     ...(filter.accountId ? { accountId: filter.accountId } : {}),
     ...(filter.customerId ? { customerId: filter.customerId } : {}),
     ...(filter.supplierId ? { supplierId: filter.supplierId } : {}),
     ...(filter.propertyId ? { propertyId: filter.propertyId } : {}),
     ...(filter.unitId ? { unitId: filter.unitId } : {}),
-    journalEntry: {
-      ...(Object.keys(date).length ? { date } : {}),
-      ...(filter.branchId ? { branchId: filter.branchId } : {}),
-    },
+    journalEntry: { ...(date ? { date } : {}), ...scope },
   };
 }
 
@@ -159,20 +156,22 @@ export interface LedgerResult {
  */
 export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFilter, side: BalanceSide): Promise<LedgerResult> {
   const signed = (debit: number, credit: number) => (side === 'debit' ? debit - credit : credit - debit);
+  // فروعُ القارئ مصدرُ المرشِّح الواحد (`branches/branch-scope.util`) — لا يُقرأ فرعٌ ليس له.
+  const scope = requestedBranchFilter(filter.allowedBranchIds, filter.branchId);
 
   let opening = 0;
   if (filter.from) {
     const before = await tx.journalLine.aggregate({
-      where: {
-        ...lineWhere({ ...filter, to: undefined, from: undefined }, false),
-        journalEntry: { date: { lt: filter.from }, ...(filter.branchId ? { branchId: filter.branchId } : {}) },
-      },
+      where: lineWhere(filter, scope, { lt: filter.from }),
       _sum: { debit: true, credit: true },
     });
     opening = round2(signed(Number(before._sum.debit ?? 0), Number(before._sum.credit ?? 0)));
   }
 
-  const where = lineWhere(filter, true);
+  const range: Prisma.DateTimeFilter = {};
+  if (filter.from) range.gte = filter.from;
+  if (filter.to) range.lte = filter.to;
+  const where = lineWhere(filter, scope, Object.keys(range).length ? range : undefined);
   const count = await tx.journalLine.count({ where });
   const lines = await tx.journalLine.findMany({
     where,
