@@ -80,6 +80,17 @@ const ROLES = [
     context: 'UNIT_PRICE' as const,
     matches: /^(price|cost|unitPrice|unitCost)$|(Price|Cost)$/,
   },
+  {
+    // `exchangeRate` على المستندات و`rate` في `Currency`/`ExchangeRate` — ودورُ النسبة (`taxRate` · `opRate`) لا يدخل هنا (`Rate$` عمداً غيرُ مطابَق).
+    name: 'سعر صرف',
+    context: 'EXCHANGE_RATE' as const,
+    matches: /^(exchangeRate|rate)$/,
+  },
+  {
+    name: 'نسبة مئوية',
+    context: 'PERCENT' as const,
+    matches: /^(taxRate|opRate)$/,
+  },
 ] satisfies { name: string; context: RoundingContext; matches: RegExp }[];
 
 /**

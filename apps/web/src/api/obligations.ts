@@ -1,3 +1,4 @@
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
 export interface GovernmentObligation {
@@ -9,14 +10,15 @@ export interface GovernmentObligation {
 
 /** قسمُ الإيجار في الإقرار — من صفوف الاستحقاق، وما سبق البناء يُحسب ويُعدّ (ق-٩١٨ · ق-٩٢٦). */
 export interface RentDeclarationSection {
-  standard: number;
-  standardVat: number;
-  exempt: number;
-  managedExcluded: number;
+  /** ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ بـ`num()` قبل أي حساب. */
+  standard: MoneyText;
+  standardVat: MoneyText;
+  exempt: MoneyText;
+  managedExcluded: MoneyText;
   managedCount: number;
-  legacyStandard: number;
-  legacyStandardVat: number;
-  legacyExempt: number;
+  legacyStandard: MoneyText;
+  legacyStandardVat: MoneyText;
+  legacyExempt: MoneyText;
   legacyCount: number;
   legacyNote: string;
   unclassifiedCount: number;
@@ -29,48 +31,54 @@ export interface RentDeclarationSection {
 
 /** ⑧ خاناتُ المبيعات 1–6 من فئات السطور (`ق-١٢١١`/⑤) — والخانةُ 2 تابعةٌ للمشتري: صفرٌ معلَن وغيرُ مدعومة. */
 export interface SalesBoxes {
-  1: { net: number; vat: number };
-  2: { net: number; vat: number; supported: false };
-  3: { net: number };
-  4: { net: number };
-  5: { net: number };
-  6: { net: number };
+  1: { net: MoneyText; vat: MoneyText };
+  2: { net: MoneyText; vat: MoneyText; supported: false };
+  3: { net: MoneyText };
+  4: { net: MoneyText };
+  5: { net: MoneyText };
+  6: { net: MoneyText };
 }
 
+/**
+ * ② **المالُ نصّاً بخانتين** (`ق-١٢٣٥` — أوّلُ نطاق): كلُّ مبلغٍ هنا `MoneyText` (`"1500.00"`) والعدّاتُ أرقام.
+ * فالحقلُ يُعرض بـ`fmt()` كما هو، **ويُقرأ بـ`num()` قبل أي جمعٍ أو مقارنة** — والحارسُ الشجريّ يُسقط ما سواه.
+ */
 export interface VatDeclaration {
   year: number;
   quarter: number;
   from: string;
   to: string;
-  salesStandard: number;
-  salesStandardVat: number;
-  salesExempt: number;
+  salesStandard: MoneyText;
+  salesStandardVat: MoneyText;
+  salesExempt: MoneyText;
   /** الخانةُ 3 — الخاضعُ للصفر داخلياً (`Z` بغير رمز التصدير). */
-  salesZeroRatedDomestic: number;
+  salesZeroRatedDomestic: MoneyText;
   /** الخانةُ 4 — الصادرات (`VATEX-SA-32` · `33`). */
-  salesExports: number;
+  salesExports: MoneyText;
   /** الخانةُ 2 — صفرٌ معلَن (تابعةٌ للمشتري). */
-  salesCitizens: number;
+  salesCitizens: MoneyText;
   salesCitizensNote: string;
   /** الخانةُ 6 — مجموعُ المبيعات. */
-  totalSales: number;
+  totalSales: MoneyText;
   /** خارجَ النطاق (`O`) — يُعدّ ولا يدخل الخانات. */
-  salesOutOfScope: { lineCount: number; net: number };
+  salesOutOfScope: { lineCount: number; net: MoneyText };
   /** سطورٌ سبقت البناء بنسبة صفر بلا فئة — تُعدّ ولا تدخل الخانات (`LEGACY_ZERO`). */
-  legacyZeroLines: { lineCount: number; net: number };
+  legacyZeroLines: { lineCount: number; net: MoneyText };
   /** سطورٌ على صنفٍ لم تُعلَن فئتُه — داخلةٌ في الخانة 1 وتُعدّ بنصّها (`LEGACY_STANDARD`). */
-  legacyStandardLines: { lineCount: number; net: number };
+  legacyStandardLines: { lineCount: number; net: MoneyText };
   boxes: SalesBoxes;
   rent: RentDeclarationSection;
-  purchasesStandard: number;
-  purchasesStandardVat: number;
-  purchasesExempt: number;
-  totalPurchases: number;
-  netVat: number;
+  purchasesStandard: MoneyText;
+  purchasesStandardVat: MoneyText;
+  purchasesExempt: MoneyText;
+  purchasesExcluded: MoneyText;
+  excludedCount: number;
+  totalPurchases: MoneyText;
+  netVat: MoneyText;
   invoiceCount: number;
   purchaseCount: number;
   /** علَمُ «قُدِّم» (ق-٩١٩) — يضعه التاجر بيده. */
-  filed: { filedAt: string; netVat: number } | null;
+  filed: { filedAt: string; netVat: MoneyText } | null;
   changedSinceFiled: boolean;
   filedNote: string | null;
 }
@@ -80,6 +88,6 @@ export const toggleObligation = (id: string) => apiClient.patch<GovernmentObliga
 export const getVatDeclaration = (year: number, quarter: number) =>
   apiClient.get<VatDeclaration>('/obligations/vat-declaration', { params: { year, quarter } }).then((r) => r.data);
 export const markVatFiled = (year: number, quarter: number) =>
-  apiClient.post<{ filedAt: string; netVat: number }>('/obligations/vat-declaration/filed', { year, quarter }).then((r) => r.data);
+  apiClient.post<{ filedAt: string; netVat: MoneyText }>('/obligations/vat-declaration/filed', { year, quarter }).then((r) => r.data);
 export const unmarkVatFiled = (year: number, quarter: number) =>
   apiClient.delete('/obligations/vat-declaration/filed', { params: { year, quarter } }).then((r) => r.data);

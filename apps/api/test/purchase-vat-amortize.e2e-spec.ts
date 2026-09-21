@@ -65,21 +65,23 @@ describe('Purchase VAT exclusion + amortization (e2e)', () => {
   });
 
   it('[SPEC 5.4] an excluded purchase never reduces the VAT owed, and is reported apart', async () => {
+    // ② المالُ نصّاً (`ق-١٢٣٥`): الحقولُ تصل نصّاً بخانتين وتُقرأ رقماً قبل الحساب.
+    const money = (d: Record<string, unknown>, key: string) => Number(d[key]);
     const before = (await vatDeclaration()).body;
 
     // A normal taxable purchase does reduce net VAT (reclaimable input VAT).
     await createPurchase({ subtotal: 1000, category: 'مواد خام' });
     const afterTaxable = (await vatDeclaration()).body;
-    expect(afterTaxable.purchasesStandardVat).toBeCloseTo(before.purchasesStandardVat + 150, 2);
-    expect(afterTaxable.netVat).toBeCloseTo(before.netVat - 150, 2);
+    expect(money(afterTaxable, 'purchasesStandardVat')).toBeCloseTo(money(before, 'purchasesStandardVat') + 150, 2);
+    expect(money(afterTaxable, 'netVat')).toBeCloseTo(money(before, 'netVat') - 150, 2);
 
     // An excluded purchase (VAT charged, no valid tax invoice) must NOT.
     await createPurchase({ subtotal: 2000, category: 'مواد خام', excludeFromVat: true });
     const afterExcluded = (await vatDeclaration()).body;
-    expect(afterExcluded.purchasesStandardVat).toBeCloseTo(afterTaxable.purchasesStandardVat, 2);
-    expect(afterExcluded.netVat).toBeCloseTo(afterTaxable.netVat, 2);
+    expect(money(afterExcluded, 'purchasesStandardVat')).toBeCloseTo(money(afterTaxable, 'purchasesStandardVat'), 2);
+    expect(money(afterExcluded, 'netVat')).toBeCloseTo(money(afterTaxable, 'netVat'), 2);
     // Reported separately for transparency.
-    expect(afterExcluded.purchasesExcluded).toBeCloseTo((afterTaxable.purchasesExcluded ?? 0) + 2000, 2);
+    expect(money(afterExcluded, 'purchasesExcluded')).toBeCloseTo(money(afterTaxable, 'purchasesExcluded') + 2000, 2);
     expect(afterExcluded.excludedCount).toBe((afterTaxable.excludedCount ?? 0) + 1);
   }, 60000);
 

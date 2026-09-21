@@ -213,9 +213,9 @@ describe('ZATCA credit notes (e2e)', () => {
     createdInvoiceIds.push(note.body.id);
 
     const after = await request(app.getHttpServer()).get(`/obligations/vat-declaration?${query}`).set('Authorization', `Bearer ${token}`).expect(200);
-    // +300 from the invoice, −300 from the note: the pair nets to zero.
-    expect(after.body.salesStandard).toBeCloseTo(before.body.salesStandard, 2);
-    expect(after.body.salesStandardVat).toBeCloseTo(before.body.salesStandardVat, 2);
+    // +300 from the invoice, −300 from the note: the pair nets to zero. (② المالُ نصّاً — يُقرأ رقماً قبل المقارنة.)
+    expect(Number(after.body.salesStandard)).toBeCloseTo(Number(before.body.salesStandard), 2);
+    expect(Number(after.body.salesStandardVat)).toBeCloseTo(Number(before.body.salesStandardVat), 2);
     // مهلةٌ صريحة: الإقرارُ يقرأ قسمَ الإيجار ويعدّ ما لم يُرحَّل (ق-٩٢٧) — وعلى قاعدة التطوير الكبيرة يجاوز الخمسَ ثوانٍ.
   }, 30000);
 
@@ -397,9 +397,9 @@ describe('ZATCA credit notes (e2e)', () => {
       createdInvoiceIds.push(note.body.id);
 
       const after = await request(app.getHttpServer()).get(`/obligations/vat-declaration?${query}`).set('Authorization', `Bearer ${token}`).expect(200);
-      // +100 invoice +50 debit note — the note bills, it doesn't reduce.
-      expect(after.body.salesStandard - before.body.salesStandard).toBeCloseTo(150, 2);
-      expect(after.body.salesStandardVat - before.body.salesStandardVat).toBeCloseTo(22.5, 2);
+      // +100 invoice +50 debit note — the note bills, it doesn't reduce. (② المالُ نصّاً — يُقرأ رقماً قبل الطرح.)
+      expect(Number(after.body.salesStandard) - Number(before.body.salesStandard)).toBeCloseTo(150, 2);
+      expect(Number(after.body.salesStandardVat) - Number(before.body.salesStandardVat)).toBeCloseTo(22.5, 2);
     });
   });
 });

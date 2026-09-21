@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { computeDocumentTotals, lineNet } from '../common/money/totals';
 import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -120,7 +121,7 @@ export class ObligationsService {
         create: { companyId, year: dto.year, quarter: dto.quarter, netVat: declaration.netVat, filedAt: new Date() },
         update: { netVat: declaration.netVat, filedAt: new Date() },
       });
-      return { year: filing.year, quarter: filing.quarter, filedAt: filing.filedAt, netVat: Number(filing.netVat) };
+      return { year: filing.year, quarter: filing.quarter, filedAt: filing.filedAt, netVat: money(filing.netVat) };
     });
   }
 
@@ -206,46 +207,59 @@ export class ObligationsService {
       const filed = filing ? { filedAt: filing.filedAt, netVat: round2(Number(filing.netVat)) } : null;
       const changedSinceFiled = filed !== null && Math.abs(filed.netVat - netVat) >= 0.005;
 
+      // ② **المالُ نصّاً بدقّة صنفه على حدّ الاستجابة** (`ق-١٢٣٥` — أوّلُ نطاق: الإقرار): الحسابُ فوقُ يبقى رقماً
+      //    بالمصدر الواحد، والحقولُ تخرج نصّاً بخانتين (`money`) فلا يُعاد تدويرُها في المتصفّح؛ والعدّاتُ أرقامٌ كما هي.
+      const box = (b: { net: number; vat?: number }) => ('vat' in b && b.vat !== undefined ? { net: money(b.net), vat: money(b.vat) } : { net: money(b.net) });
+      const counted = (c: { lineCount: number; net: number }) => ({ lineCount: c.lineCount, net: money(c.net) });
       return {
         year: query.year,
         quarter: query.quarter,
         from: from.toISOString().slice(0, 10),
         to: to.toISOString().slice(0, 10),
-        salesStandard,
-        salesStandardVat,
-        salesExempt,
+        salesStandard: money(salesStandard),
+        salesStandardVat: money(salesStandardVat),
+        salesExempt: money(salesExempt),
         /** ⑧ الخاناتُ من السطور — و`2` صفرٌ معلَن بنصّه، والقديمُ وخارجُ النطاق عدّاً معلَناً لا خانةً. */
-        salesZeroRatedDomestic,
-        salesExports,
-        salesCitizens: boxes.box2.net,
+        salesZeroRatedDomestic: money(salesZeroRatedDomestic),
+        salesExports: money(salesExports),
+        salesCitizens: money(boxes.box2.net),
         salesCitizensNote: 'المبيعاتُ للمواطنين (الخدمات الصحية الخاصة / التعليم الأهلي الخاص) تتبع هويّةَ المشتري لا الصنف — غيرُ مدعومة بعد؛ الخانةُ صفرٌ معلَن ولا تُدمَج في الخانة 3',
-        totalSales,
-        salesOutOfScope: boxes.outOfScope,
-        legacyZeroLines: boxes.legacyZero,
-        legacyStandardLines: boxes.legacyStandard,
+        totalSales: money(totalSales),
+        salesOutOfScope: counted(boxes.outOfScope),
+        legacyZeroLines: counted(boxes.legacyZero),
+        legacyStandardLines: counted(boxes.legacyStandard),
         boxes: {
-          1: boxes.box1,
-          2: { ...boxes.box2, supported: false },
-          3: boxes.box3,
-          4: boxes.box4,
-          5: boxes.box5,
-          6: { net: totalSales },
+          1: box(boxes.box1),
+          2: { ...box(boxes.box2), supported: false as const },
+          3: box(boxes.box3),
+          4: box(boxes.box4),
+          5: box(boxes.box5),
+          6: { net: money(totalSales) },
         },
-        rent,
-        purchasesStandard,
-        purchasesStandardVat,
-        purchasesExempt,
-        purchasesExcluded,
+        rent: {
+          ...rent,
+          standard: money(rent.standard),
+          standardVat: money(rent.standardVat),
+          exempt: money(rent.exempt),
+          managedExcluded: money(rent.managedExcluded),
+          legacyStandard: money(rent.legacyStandard),
+          legacyStandardVat: money(rent.legacyStandardVat),
+          legacyExempt: money(rent.legacyExempt),
+        },
+        purchasesStandard: money(purchasesStandard),
+        purchasesStandardVat: money(purchasesStandardVat),
+        purchasesExempt: money(purchasesExempt),
+        purchasesExcluded: money(purchasesExcluded),
         excludedCount: excludedPurchases.length,
-        totalPurchases: purchasesStandard + purchasesExempt,
-        netVat,
+        totalPurchases: money(round2(purchasesStandard + purchasesExempt)),
+        netVat: money(netVat),
         invoiceCount: invoices.length,
         purchaseCount: purchases.length,
-        filed,
+        filed: filed ? { filedAt: filed.filedAt, netVat: money(filed.netVat) } : null,
         changedSinceFiled,
         /** يُعرض حين `changedSinceFiled` وحدَه — نصُّ م٦٣ حيث يُقرأ الرقم (ق-٤٤٩). */
         filedNote: changedSinceFiled
-          ? `تغيّر هذا الإقرارُ بعد تقديمه (قُدِّم بصافي ${filed!.netVat}): تصحيحُه واجبٌ خلال عشرين يوماً من العلم (م٦٣/١)؛ ونقصٌ دون 15,000 ريال يجوز إدراجُه في الإقرار التالي (م٦٣/٣)`
+          ? `تغيّر هذا الإقرارُ بعد تقديمه (قُدِّم بصافي ${money(filed!.netVat)}): تصحيحُه واجبٌ خلال عشرين يوماً من العلم (م٦٣/١)؛ ونقصٌ دون 15,000 ريال يجوز إدراجُه في الإقرار التالي (م٦٣/٣)`
           : null,
       };
     }

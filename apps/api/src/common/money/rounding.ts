@@ -42,6 +42,13 @@ export const SCALE = {
   UNIT_PRICE: 6,
   /** تكلفة وحدة — `Decimal(18,6)` */
   UNIT_COST: 6,
+  /**
+   * سعرُ صرف — `Decimal(18,6)` (`exchangeRate` في ستّة عشر نموذجاً و`rate` في `Currency`/`ExchangeRate` — مقيسٌ من
+   * المخطَّط 2026-09-20 لطلب «المالُ نصّاً بدقّة صنفه» `ق-١٢٣٥`؛ والدورُ مُحرَّسٌ في `rounding.spec`).
+   */
+  EXCHANGE_RATE: 6,
+  /** نسبةٌ مئوية — `Decimal(5,2)` (`taxRate` · `opRate`). */
+  PERCENT: 2,
 } as const;
 
 export type RoundingContext = keyof typeof SCALE;
