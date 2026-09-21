@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { SCALE } from './rounding';
-import { money, moneyText, numericText, percentText, qty, qtyText, rateText, TEXT_SCALE } from './text';
+import { money, moneyText, numericText, percent, percentText, qty, qtyText, rateText, TEXT_SCALE } from './text';
 
 /**
  * **المالُ نصّاً بدقّة صنفه** (`ق-١٢٣٥`) — الآليةُ وحدَها: الدقّةُ من جدول التدوير، والتدويرُ بسياسته (نصفٌ بعيداً
@@ -51,9 +51,12 @@ describe('numericText — الدقّةُ صفةُ الصنف', () => {
     expect(numericText(-0.0004, 'quantity')).toBe('0.000');
   });
 
-  it('الصيغةُ الواجبة (money · qty) لا تقبل غائباً: تُرجع نصّاً أو ترمي', () => {
+  it('الصيغةُ الواجبة (money · qty · percent) لا تقبل غائباً: تُرجع نصّاً أو ترمي', () => {
     expect(money(0)).toBe('0.00');
     expect(qty(0)).toBe('0.000');
+    // نسبةُ التحصيل والإشغال في التقارير تُحسب بخانةٍ واحدة (`33.3`) وتخرج بخانتين — لا تُقصّ.
+    expect(percent(33.3)).toBe('33.30');
     expect(() => money('')).toThrow(TypeError);
+    expect(() => percent('')).toThrow(TypeError);
   });
 });

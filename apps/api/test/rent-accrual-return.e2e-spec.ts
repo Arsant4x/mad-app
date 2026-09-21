@@ -340,12 +340,29 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     expect(d.receivable).toBeCloseTo(1000 * n, 2);
   }, 60000);
 
+  /** ② مبالغُ التقريرين نصٌّ بخانتين (`ق-١٢٣٥`): يُثبَت شكلُها ثم تُقرأ رقماً — والفروقُ أدناه على الأرقام كما كانت. */
+  const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+  const n = (text: string): number => {
+    expect(text).toMatch(MONEY_TEXT);
+    return Number(text);
+  };
   interface AgingReport {
     rentRows: { contractNo: string; installmentId: string; remaining: number; bucket: string }[];
     totals: { total: number; rent: number };
     reconciliation: { difference: number } | null;
   }
-  const aging = async () => (await auth(http().get('/reports/receivables-aging')).query({ reconcile: '1' }).expect(200)).body as AgingReport;
+  const aging = async (): Promise<AgingReport> => {
+    const body = (await auth(http().get('/reports/receivables-aging')).query({ reconcile: '1' }).expect(200)).body as {
+      rentRows: { contractNo: string; installmentId: string; remaining: string; bucket: string }[];
+      totals: { total: string; rent: string };
+      reconciliation: { difference: string } | null;
+    };
+    return {
+      rentRows: body.rentRows.map((r) => ({ ...r, remaining: n(r.remaining) })),
+      totals: { total: n(body.totals.total), rent: n(body.totals.rent) },
+      reconciliation: body.reconciliation ? { difference: n(body.reconciliation.difference) } : null,
+    };
+  };
 
   interface CashFlow {
     netProfit: number;
@@ -354,7 +371,16 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     outputVatChange: number;
     operatingCashFlow: number;
   }
-  const cashFlow = async () => (await auth(http().get('/reports/cash-flow')).expect(200)).body as CashFlow;
+  const cashFlow = async (): Promise<CashFlow> => {
+    const body = (await auth(http().get('/reports/cash-flow')).expect(200)).body as Record<keyof CashFlow, string>;
+    return {
+      netProfit: n(body.netProfit),
+      receivablesChange: n(body.receivablesChange),
+      deferredRevenueChange: n(body.deferredRevenueChange),
+      outputVatChange: n(body.outputVatChange),
+      operatingCashFlow: n(body.operatingCashFlow),
+    };
+  };
 
   it('🔴 ⑧ الأعمارُ بصفَّين: القسطُ المستحقُّ غيرُ المقبوض يظهر بعمره ويدخل المطابقة — ويخرج بالقبض (ق-٩٢٥/④)', async () => {
     const before = await aging();

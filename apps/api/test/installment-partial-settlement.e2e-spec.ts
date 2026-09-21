@@ -56,7 +56,12 @@ describe('السدادُ الجزئي للقسط — PARTIAL مشتقّةٌ من
   const pay = async (contractId: string, installmentId: string, amount: number, discount = 0) =>
     (await auth(http().post(`/contracts/${contractId}/payments`)).send({ installmentId, date: iso(new Date()), amount, ...(discount ? { discount } : {}), method: 'CASH' }).expect(201)).body as { installment: { status: string } };
   const remindersDue = async (contractId: string) => ((await auth(http().get('/reminders/due').query({ contractId })).expect(200)).body as { reminders: { installmentId: string }[] }).reminders;
-  const kpis = async () => (await auth(http().get('/reports/property-kpis')).expect(200)).body as { collection: { paidAmount: number; overdueCount: number } };
+  // ② المقبوضُ نصٌّ بخانتين (`ق-١٢٣٥`) — يُثبَت شكلُه ثم يُقرأ رقماً للفرق.
+  const kpis = async () => {
+    const body = (await auth(http().get('/reports/property-kpis')).expect(200)).body as { collection: { paidAmount: string; overdueCount: number } };
+    expect(body.collection.paidAmount).toMatch(/^-?\d+\.\d{2}$/);
+    return { collection: { paidAmount: Number(body.collection.paidAmount), overdueCount: body.collection.overdueCount } };
+  };
   const accrualsOf = (installmentId: string) =>
     tenantPrisma.runInTenantContext(company.companyId, (tx) => tx.rentAccrual.findMany({ where: { installmentId }, orderBy: { date: 'asc' }, select: { amountGross: true, kind: true } }));
 

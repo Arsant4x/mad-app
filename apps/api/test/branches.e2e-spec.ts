@@ -535,12 +535,14 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
 
     const south = res.body.branches.find((b: { branchId: string }) => b.branchId === branchSouthId);
     expect(south).toBeDefined();
-    expect(south.revenue).toBeGreaterThan(0);
+    // ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`) — يُثبَت شكلُها ثم تُقرأ رقماً للجمع.
+    expect(south.revenue).toMatch(/^-?\d+\.\d{2}$/);
+    expect(Number(south.revenue)).toBeGreaterThan(0);
 
     // Rows must add up to the consolidated total, otherwise the report is
     // quietly losing money somewhere.
-    const summed = [...res.body.branches, res.body.unassigned].reduce((acc: number, b: { revenue: number }) => acc + b.revenue, 0);
-    expect(summed).toBeCloseTo(res.body.consolidated.revenue, 2);
+    const summed = [...res.body.branches, res.body.unassigned].reduce((acc: number, b: { revenue: string }) => acc + Number(b.revenue), 0);
+    expect(summed).toBeCloseTo(Number(res.body.consolidated.revenue), 2);
   });
 
   it('[SPEC 2.8] shows a restricted employee only their own branch in the report', async () => {
@@ -560,9 +562,9 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     // accumulates rows across runs, so any absolute figure would be flaky.
     // What must hold is that the south branch's revenue is exactly what the
     // employee's consolidated total is missing — i.e. it didn't leak in.
-    const southRevenue = asOwner.body.branches.find((b: { branchId: string }) => b.branchId === branchSouthId).revenue;
+    const southRevenue = Number(asOwner.body.branches.find((b: { branchId: string }) => b.branchId === branchSouthId).revenue);
     expect(southRevenue).toBeGreaterThan(0);
-    expect(asOwner.body.consolidated.revenue - asEmployee.body.consolidated.revenue).toBeCloseTo(southRevenue, 2);
+    expect(Number(asOwner.body.consolidated.revenue) - Number(asEmployee.body.consolidated.revenue)).toBeCloseTo(southRevenue, 2);
 
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)

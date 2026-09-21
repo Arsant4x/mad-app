@@ -148,8 +148,9 @@ describe('Opening balances as posted journal entries (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/reports/trial-balance').set('Authorization', `Bearer ${token}`).expect(200);
     const row = res.body.rows.find((r: { code: string }) => r.code === code);
     expect(row).toBeDefined();
-    expect(row.debitTotal).toBe(1234.56);
-    expect(row.balanceDebit).toBe(1234.56);
+    // ② نصٌّ بخانتين (`ق-١٢٣٥`).
+    expect(row.debitTotal).toBe('1234.56');
+    expect(row.balanceDebit).toBe('1234.56');
     expect(res.body.rows.some((r: { code: string }) => r.code === '3900')).toBe(true);
     expect(res.body.balanced).toBe(true);
     // The account row exists in the report *because* of a real posted line —

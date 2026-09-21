@@ -75,23 +75,25 @@ describe('Trial balance + CSV export (e2e)', () => {
   it('[SPEC 10.4] balances by construction and honors the period filter', async () => {
     const res = await auth(request(app.getHttpServer()).get('/reports/trial-balance?from=2026-05-01&to=2026-05-31')).expect(200);
     expect(res.body.balanced).toBe(true);
-    expect(res.body.totalDebit).toBeCloseTo(res.body.totalCredit, 2);
+    // ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`) — الإجماليان يتساويان حرفاً، والصفوفُ تُقارَن حرفاً.
+    expect(res.body.totalDebit).toMatch(/^-?\d+\.\d{2}$/);
+    expect(res.body.totalDebit).toBe(res.body.totalCredit);
 
     const cashRow = res.body.rows.find((r: { code: string }) => r.code === cashCode);
-    expect(cashRow.debitTotal).toBeCloseTo(750, 2);
-    expect(cashRow.balanceDebit).toBeCloseTo(750, 2);
-    expect(cashRow.balanceCredit).toBe(0);
+    expect(cashRow.debitTotal).toBe('750.00');
+    expect(cashRow.balanceDebit).toBe('750.00');
+    expect(cashRow.balanceCredit).toBe('0.00');
 
     const revRow = res.body.rows.find((r: { code: string }) => r.code === revenueCode);
-    expect(revRow.creditTotal).toBeCloseTo(750, 2);
-    expect(revRow.balanceCredit).toBeCloseTo(750, 2);
+    expect(revRow.creditTotal).toBe('750.00');
+    expect(revRow.balanceCredit).toBe('750.00');
   }, 60000);
 
   it('[SPEC 10.4] honors the branch filter — the branchless entry disappears', async () => {
     const res = await auth(request(app.getHttpServer()).get(`/reports/trial-balance?branchId=${branchId}`)).expect(200);
     const cashRow = res.body.rows.find((r: { code: string }) => r.code === cashCode);
     // القيد خارج الفترة بلا فرع — فلا يظهر هنا رغم غياب مرشّح التاريخ.
-    expect(cashRow.debitTotal).toBeCloseTo(750, 2);
+    expect(cashRow.debitTotal).toBe('750.00');
     expect(res.body.balanced).toBe(true);
   }, 60000);
 

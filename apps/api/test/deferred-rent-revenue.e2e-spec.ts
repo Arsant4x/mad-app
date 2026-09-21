@@ -304,27 +304,29 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     // ② ودفعةٌ بلا قسط — لا فترةَ خدمةٍ تُعرف لها.
     await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 250, method: 'CASH' }).expect(201);
 
+    // ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً حيث الجوابُ معلوم، وتُقرأ رقماً للمجاميع المفتوحة.
     const report = (await auth(http().get('/reports/deferred-revenue')).expect(200)).body as {
-      outstanding: { contractNo: string; deferred: number; accrualBasis: string }[];
-      totalDeferred: number;
-      unlinked: { contractNo: string; baseNetAmount: number }[];
-      totalUnlinked: number;
+      outstanding: { contractNo: string; deferred: string; accrualBasis: string }[];
+      totalDeferred: string;
+      unlinked: { contractNo: string; baseNetAmount: string }[];
+      totalUnlinked: string;
       unlinkedNote: string;
     };
 
     const mine = report.outstanding.filter((r) => r.contractNo === contract.no);
     expect(mine.length).toBeGreaterThan(0);
-    expect(mine[0].deferred).toBeCloseTo(1000, 2);
+    expect(mine[0].deferred).toBe('1000.00');
     expect(mine[0].accrualBasis).toBe('ACCRUAL');
 
     const myUnlinked = report.unlinked.filter((r) => r.contractNo === contract.no);
     expect(myUnlinked).toHaveLength(1);
-    expect(myUnlinked[0].baseNetAmount).toBeCloseTo(250, 2);
+    expect(myUnlinked[0].baseNetAmount).toBe('250.00');
 
     // ⚠️ والحدُّ منصوصٌ في التقرير نفسِه لا في وثيقةٍ بعيدة.
     expect(report.unlinkedNote).toContain('لا تُعرف لها فترة خدمة');
-    expect(report.totalDeferred).toBeGreaterThanOrEqual(1000);
-    expect(report.totalUnlinked).toBeGreaterThanOrEqual(250);
+    expect(report.totalDeferred).toMatch(/^-?\d+\.\d{2}$/);
+    expect(Number(report.totalDeferred)).toBeGreaterThanOrEqual(1000);
+    expect(Number(report.totalUnlinked)).toBeGreaterThanOrEqual(250);
   }, 60000);
 
   it('⑥ ودفعةٌ بلا قسطٍ مرتبط تُعترَف فوراً — حدٌّ معلَنٌ لا عطل (ق-٤٧٣)', async () => {

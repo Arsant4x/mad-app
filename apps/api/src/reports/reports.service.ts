@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';
+import { money, moneyText, percent, qty } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { writeOffReason } from '../common/writeoff-reasons';
@@ -90,12 +91,13 @@ async function collectionRate(tx: Prisma.TransactionClient, companyId: string, t
 
   const pct = (part: number) => (agg.dueAmount === 0 ? 0 : Math.round((part / agg.dueAmount) * 1000) / 10);
 
+  // ② المبالغُ نصّاً بخانتين والنِّسَبُ نصّاً بخانتين (`ق-١٢٣٥`) — والعدُّ رقمٌ كما هو.
   return {
-    dueAmount: round2(agg.dueAmount),
-    paidAmount: round2(agg.paidAmount),
-    onTimeAmount: round2(agg.onTimeAmount),
-    collectedRate: pct(agg.paidAmount),
-    onTimeRate: pct(agg.onTimeAmount),
+    dueAmount: money(agg.dueAmount),
+    paidAmount: money(agg.paidAmount),
+    onTimeAmount: money(agg.onTimeAmount),
+    collectedRate: percent(pct(agg.paidAmount)),
+    onTimeRate: percent(pct(agg.onTimeAmount)),
     /** Installments due and still unpaid — the follow-up list's length. */
     overdueCount: agg.overdueCount,
   };
@@ -276,11 +278,18 @@ export class ReportsService {
         baseNetAmount: round2(Number(p.baseNetAmount)),
       }));
 
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والحسابُ والترشيحُ أعلاه رقم.
       return {
-        outstanding,
-        totalDeferred: round2(outstanding.reduce((sum, r) => sum + r.deferred, 0)),
-        unlinked,
-        totalUnlinked: round2(unlinked.reduce((sum, r) => sum + r.baseNetAmount, 0)),
+        outstanding: outstanding.map((r) => ({
+          ...r,
+          collected: money(r.collected),
+          accrued: money(r.accrued),
+          recognized: money(r.recognized),
+          deferred: money(r.deferred),
+        })),
+        totalDeferred: money(outstanding.reduce((sum, r) => sum + r.deferred, 0)),
+        unlinked: unlinked.map((p) => ({ ...p, baseNetAmount: money(p.baseNetAmount) })),
+        totalUnlinked: money(unlinked.reduce((sum, r) => sum + r.baseNetAmount, 0)),
         /** ⚠️ **حدٌّ معلَن**: هذه اعتُرف بها إيراداً فوراً — **لا فترةَ خدمةٍ تُعرف لها**. */
         unlinkedNote: 'دفعات غير مرتبطة بأقساط: لا تُعرف لها فترة خدمة، فاعتُرف بها إيراداً فوراً ولم تمرّ بالإيراد المؤجَّل',
       };
@@ -343,12 +352,19 @@ export class ReportsService {
           })
         : null;
 
+      // ② الأرصدةُ والفرقُ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والعدُّ رقم.
       return {
-        rows,
+        rows: rows.map((r) => ({
+          ...r,
+          ledgerBalance: money(r.ledgerBalance),
+          shownBalance: money(r.shownBalance),
+          difference: money(r.difference),
+          unpostedSum: money(r.unpostedSum),
+        })),
         totals: {
-          ledgerBalance: round2(rows.reduce((s, r) => s + r.ledgerBalance, 0)),
-          shownBalance: round2(rows.reduce((s, r) => s + r.shownBalance, 0)),
-          difference: round2(rows.reduce((s, r) => s + r.difference, 0)),
+          ledgerBalance: money(rows.reduce((s, r) => s + r.ledgerBalance, 0)),
+          shownBalance: money(rows.reduce((s, r) => s + r.shownBalance, 0)),
+          difference: money(rows.reduce((s, r) => s + r.difference, 0)),
           unpostedCount: rows.reduce((s, r) => s + r.unpostedCount, 0),
         },
         /** `null` حين لا قيدَ على بنكٍ بعد — **فلا يُعلَن تاريخٌ لم يقع**. */
@@ -419,12 +435,13 @@ export class ReportsService {
         }
       }
 
+      // ② نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — `money()` يدوّر بسياسة المبلغ نفسِها (خانتان).
       const shape = (name: string, id: string | null, v: { revenue: number; expenses: number }) => ({
         branchId: id,
         branchName: name,
-        revenue: roundTo(v.revenue, 'LINE_AMOUNT'),
-        expenses: roundTo(v.expenses, 'LINE_AMOUNT'),
-        netIncome: roundTo(v.revenue - v.expenses, 'LINE_AMOUNT'),
+        revenue: money(v.revenue),
+        expenses: money(v.expenses),
+        netIncome: money(v.revenue - v.expenses),
       });
 
       return {
@@ -482,8 +499,8 @@ export class ReportsService {
           maintenance,
           // Against total units, not against lettable ones: a building half
           // under maintenance is genuinely half empty, and hiding that in the
-          // denominator would flatter the number.
-          occupancyRate: own.length === 0 ? 0 : Math.round((rented / own.length) * 1000) / 10,
+          // denominator would flatter the number. ② نسبةٌ نصّاً بخانتين (`ق-١٢٣٥`).
+          occupancyRate: percent(own.length === 0 ? 0 : Math.round((rented / own.length) * 1000) / 10),
         };
       });
 
@@ -496,7 +513,7 @@ export class ReportsService {
           totalProperties: properties.length,
           totalUnits,
           rented: totalRented,
-          occupancyRate: totalUnits === 0 ? 0 : Math.round((totalRented / totalUnits) * 1000) / 10,
+          occupancyRate: percent(totalUnits === 0 ? 0 : Math.round((totalRented / totalUnits) * 1000) / 10),
         },
         collection,
         expiring: await expiringContracts(tx, today),
@@ -524,14 +541,16 @@ export class ReportsService {
       const totalRevenue = revenue.reduce((s, a) => s + a.amount, 0);
       const totalExpenses = expenses.reduce((s, a) => s + a.amount, 0);
 
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والمجاميعُ تُجمع رقماً ثم تُدوَّر مرّةً في `money()`.
+      const line = (a: { code: string; name: string; amount: number }) => ({ code: a.code, name: a.name, amount: money(a.amount) });
       return {
         from: range.from ?? null,
         to: range.to ?? null,
-        revenue,
-        totalRevenue,
-        expenses,
-        totalExpenses,
-        netProfit: totalRevenue - totalExpenses,
+        revenue: revenue.map(line),
+        totalRevenue: money(totalRevenue),
+        expenses: expenses.map(line),
+        totalExpenses: money(totalExpenses),
+        netProfit: money(totalRevenue - totalExpenses),
         hasAnyPostedEntries: (await tx.journalEntry.count()) > 0,
       };
     });
@@ -549,12 +568,14 @@ export class ReportsService {
       const totalLiabilities = liabilities.reduce((s, a) => s + a.amount, 0);
       const totalEquity = equity.reduce((s, a) => s + a.amount, 0);
 
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والتوازنُ يُحكم على الرقم قبل التحويل.
+      const line = (a: { code: string; name: string; amount: number }) => ({ code: a.code, name: a.name, amount: money(a.amount) });
       return {
-        assets,
-        totalAssets,
-        liabilities,
-        equity,
-        totalLiabilitiesAndEquity: totalLiabilities + totalEquity,
+        assets: assets.map(line),
+        totalAssets: money(totalAssets),
+        liabilities: liabilities.map(line),
+        equity: equity.map(line),
+        totalLiabilitiesAndEquity: money(totalLiabilities + totalEquity),
         balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
       };
     });
@@ -589,15 +610,16 @@ export class ReportsService {
       const outputVatChange = changeFor('2200');
       const operatingCashFlow = round2(netProfit - receivablesChange + payablesChange + deferredRevenueChange + outputVatChange);
 
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`).
       return {
-        netProfit,
-        receivablesChange,
-        payablesChange,
-        deferredRevenueChange,
-        outputVatChange,
-        operatingCashFlow,
-        fixedAssetChange,
-        netCashChange: round2(operatingCashFlow - fixedAssetChange),
+        netProfit: money(netProfit),
+        receivablesChange: money(receivablesChange),
+        payablesChange: money(payablesChange),
+        deferredRevenueChange: money(deferredRevenueChange),
+        outputVatChange: money(outputVatChange),
+        operatingCashFlow: money(operatingCashFlow),
+        fixedAssetChange: money(fixedAssetChange),
+        netCashChange: money(operatingCashFlow - fixedAssetChange),
         missingAccounts: missing,
       };
     });
@@ -667,19 +689,36 @@ export class ReportsService {
       // فلا يُدفع ثمنه في كل تحميل (زر «طابق مع ميزان المراجعة»).
       const reconciliation = filter.reconcile ? await this.reconcileAgainstReceivables(tx, asOf, allowedBranchIds, filter.branchId, totals.total) : null;
 
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والشرائحُ والمطابقةُ تُحسب رقماً أعلاه (وحدُّ الائتمان يقرأ الرقمَ من المصدر نفسِه).
+      const buckets = (r: { current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number }) => ({
+        current: money(r.current),
+        d1: money(r.d1),
+        d31: money(r.d31),
+        d61: money(r.d61),
+        d90: money(r.d90),
+        unapplied: money(r.unapplied),
+        total: money(r.total),
+      });
       return {
         asOf: asOf.toISOString().slice(0, 10),
         branchId: filter.branchId ?? null,
         customerId: filter.customerId ?? null,
-        rows: result,
+        rows: result.map((r) => ({ ...r, ...buckets(r) })),
         /** الصفُّ الثاني: قسطٌ قسطاً، بعمره من استحقاقه. */
-        rentRows: rent,
+        rentRows: rent.map((r) => ({ ...r, accrued: money(r.accrued), paid: money(r.paid), remaining: money(r.remaining) })),
         rentNote:
           allowedBranchIds === 'all' && !filter.branchId
             ? 'أقساطُ إيجارٍ استُحقّت ذمّةً على المستأجر ولم تُقبض — تدخل شرائح عميلها وإجماليَّه ومطابقةَ 1200'
             : 'ذممُ الإيجار على مستوى المنشأة لا الفرع — تظهر في التقرير المجمَّع وحده',
-        totals,
-        reconciliation,
+        totals: { ...buckets(totals), rent: money(totals.rent) },
+        reconciliation: reconciliation
+          ? {
+              ...reconciliation,
+              ledgerBalance: money(reconciliation.ledgerBalance),
+              reportTotal: money(reconciliation.reportTotal),
+              difference: money(reconciliation.difference),
+            }
+          : null,
       };
     });
   }
@@ -753,15 +792,22 @@ export class ReportsService {
 
       const totalDebit = round2(rows.reduce((s2, r) => s2 + r.debitTotal, 0));
       const totalCredit = round2(rows.reduce((s2, r) => s2 + r.creditTotal, 0));
+      // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والتوازنُ يُحكم على الرقم.
       return {
         from: filter.from ?? null,
         to: filter.to ?? null,
         branchId: filter.branchId ?? null,
-        rows,
-        totalDebit,
-        totalCredit,
-        totalBalanceDebit: round2(rows.reduce((s2, r) => s2 + r.balanceDebit, 0)),
-        totalBalanceCredit: round2(rows.reduce((s2, r) => s2 + r.balanceCredit, 0)),
+        rows: rows.map((r) => ({
+          ...r,
+          debitTotal: money(r.debitTotal),
+          creditTotal: money(r.creditTotal),
+          balanceDebit: money(r.balanceDebit),
+          balanceCredit: money(r.balanceCredit),
+        })),
+        totalDebit: money(totalDebit),
+        totalCredit: money(totalCredit),
+        totalBalanceDebit: money(rows.reduce((s2, r) => s2 + r.balanceDebit, 0)),
+        totalBalanceCredit: money(rows.reduce((s2, r) => s2 + r.balanceCredit, 0)),
         /** عدم توازنه = عطب في القيود يستحق إنذاراً لا إخفاءً. */
         balanced: Math.abs(totalDebit - totalCredit) < 0.01,
       };
@@ -823,7 +869,8 @@ export class ReportsService {
           customer: n.customer?.name ?? null,
           relatedInvoiceNo: n.relatedInvoice?.no ?? null,
           reason: n.adjustmentReason,
-          total: Number(n.total),
+          // ② نصّاً بخانتين (`ق-١٢٣٥`).
+          total: money(n.total),
           eventDate: view.eventDate,
           eventDateKnown: n.adjustmentEventDate !== null,
           issueDate: n.issueDate,
@@ -952,23 +999,31 @@ export class ReportsService {
       }));
       const approved = writeOffs.filter((w) => w.status === 'APPROVED');
 
+      // ② على الحدّ: المبالغُ نصّاً بخانتين والكمّياتُ بثلاث (`ق-١٢٣٥`) — والعدُّ رقمٌ، وتكلفةُ الشطب المنتظِر `null` كما هي.
       return {
         from: range.from ?? null,
         to: range.to ?? null,
         branchId: branchId ?? null,
-        rows,
-        writeOffs,
+        rows: rows.map((r) => ({
+          ...r,
+          total: money(r.total),
+          restockedQty: qty(r.restockedQty),
+          restockedCost: money(r.restockedCost),
+          refunded: money(r.refunded),
+          lines: r.lines.map((l) => ({ ...l, quantity: qty(l.quantity), unitPrice: money(l.unitPrice), restockedQty: qty(l.restockedQty) })),
+        })),
+        writeOffs: writeOffs.map((w) => ({ ...w, qty: qty(w.qty), cost: moneyText(w.cost) })),
         totals: {
           count: rows.length,
-          total: round2(rows.reduce((s, r) => s + r.total, 0)),
-          restockedQty: roundTo(rows.reduce((s, r) => s + r.restockedQty, 0), 'DERIVED_QUANTITY'),
-          restockedCost: round2(rows.reduce((s, r) => s + r.restockedCost, 0)),
-          refunded: round2(rows.reduce((s, r) => s + r.refunded, 0)),
+          total: money(rows.reduce((s, r) => s + r.total, 0)),
+          restockedQty: qty(rows.reduce((s, r) => s + r.restockedQty, 0)),
+          restockedCost: money(rows.reduce((s, r) => s + r.restockedCost, 0)),
+          refunded: money(rows.reduce((s, r) => s + r.refunded, 0)),
           damagedLines: rows.reduce((s, r) => s + r.damagedLines, 0),
           /** كم أتلفنا فعلاً — **مبلغاً من الدفتر**، وهو سؤال `SPEC 30.9`. */
           writtenOffCount: approved.length,
-          writtenOffQty: roundTo(approved.reduce((s, w) => s + w.qty, 0), 'DERIVED_QUANTITY'),
-          writtenOffCost: round2(approved.reduce((s, w) => s + (w.cost ?? 0), 0)),
+          writtenOffQty: qty(approved.reduce((s, w) => s + w.qty, 0)),
+          writtenOffCost: money(approved.reduce((s, w) => s + (w.cost ?? 0), 0)),
           pendingWriteOffs: writeOffs.filter((w) => w.status === 'PENDING_REVIEW').length,
           /** 🔴 كم واقعةً اعتمدها من سجّلها — **رقمٌ يُقرأ لا يُستنتج**. */
           selfApprovedWriteOffs: writeOffs.filter((w) => w.selfApproved).length,

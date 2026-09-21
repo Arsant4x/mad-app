@@ -3,6 +3,7 @@ import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
 import { downloadReceivablesAgingCsv, getReceivablesAging, type AgingReport } from '../../api/reports';
 import { fmt, today } from '../../lib/format';
+import { num0 } from '../../lib/money';
 
 /**
  * أعمار ذمم العملاء (4.6) — «مَن يدين لنا، بكم، ومنذ متى».
@@ -50,7 +51,8 @@ export function ReceivablesAgingSection() {
   if (loading || !report) return null;
   const t = report.totals;
   const rec = report.reconciliation;
-  const matched = rec ? Math.abs(rec.difference) < 0.005 : false;
+  // ② الفرقُ يصل نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ رقماً قبل المقارنة.
+  const matched = rec ? Math.abs(num0(rec.difference)) < 0.005 : false;
 
   return (
     <div>
@@ -124,10 +126,10 @@ export function ReceivablesAgingSection() {
                 <td className="num">{fmt(r.current)}</td>
                 <td className="num">{fmt(r.d1)}</td>
                 <td className="num">{fmt(r.d31)}</td>
-                <td className="num" style={{ color: r.d61 > 0 ? 'var(--amber)' : undefined }}>
+                <td className="num" style={{ color: num0(r.d61) > 0 ? 'var(--amber)' : undefined }}>
                   {fmt(r.d61)}
                 </td>
-                <td className="num" style={{ color: r.d90 > 0 ? 'var(--rose)' : undefined }}>
+                <td className="num" style={{ color: num0(r.d90) > 0 ? 'var(--rose)' : undefined }}>
                   {fmt(r.d90)}
                 </td>
                 <td className="num" style={{ color: 'var(--muted)' }}>

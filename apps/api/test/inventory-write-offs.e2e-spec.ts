@@ -183,16 +183,18 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
 
     // ② وتقرير المرتجعات والتلف يحمله عموداً، ومعه المصروف لا الحالة وحدها.
     const report = await auth(request(app.getHttpServer()).get('/reports/returns')).expect(200);
-    const row = (report.body.writeOffs as { no: string; selfApproved: boolean; cost: number; reason: string; recordedBy: string | null; reviewedBy: string | null }[]).find((w) => w.no === no);
+    const row = (report.body.writeOffs as { no: string; selfApproved: boolean; cost: string | null; reason: string; recordedBy: string | null; reviewedBy: string | null }[]).find((w) => w.no === no);
     expect(row).toBeDefined();
     expect(row!.selfApproved).toBe(true);
-    expect(row!.cost).toBe(UNIT_COST);
+    // ② التكلفةُ نصٌّ بخانتين (`ق-١٢٣٥`) — والمنتظِرةُ `null` كما كانت.
+    expect(row!.cost).toBe(UNIT_COST.toFixed(2));
     expect(row!.reason).toBe(NO_ADJUSTMENT.label);
     // والاسم يُحلّ للمالك أيضاً — ومعرّفه هو معرّف المنشأة لا معرّف موظّف.
     expect(row!.recordedBy).not.toBeNull();
     expect(row!.reviewedBy).toBe(row!.recordedBy);
     expect(report.body.totals.selfApprovedWriteOffs).toBeGreaterThan(0);
-    expect(report.body.totals.writtenOffCost).toBeGreaterThanOrEqual(UNIT_COST);
+    expect(report.body.totals.writtenOffCost).toMatch(/^-?\d+\.\d{2}$/);
+    expect(Number(report.body.totals.writtenOffCost)).toBeGreaterThanOrEqual(UNIT_COST);
 
     // ③ وسجل التدقيق يجده **بحثاً** — لا بتقليب الصفحات ومقارنةٍ يدوية.
     const trail = await auth(request(app.getHttpServer()).get('/audit-log?action=self-review')).expect(200);
