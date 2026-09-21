@@ -64,10 +64,14 @@ describe('General ledger and party statement (e2e)', () => {
   }, 90000);
 
   afterAll(async () => {
+    // إزالةُ منشأتين بحذفٍ متتالٍ — تُقاس لا تُترك للمهلة الافتراضية.
+    const t0 = Date.now();
     await removeIsolatedCompany(app, company);
     await removeIsolatedCompany(app, other);
+    // eslint-disable-next-line no-console
+    console.log(`removeIsolatedCompany ×2: ${Date.now() - t0} ms`);
     await app.close();
-  });
+  }, 60000);
 
   it('[SPEC 10.16] ① a debit-normal account: opening before the range by aggregation, rows inside it with a running balance and the source document', async () => {
     const res = await auth(http().get(`/reports/ledger?accountId=${cashId}&from=2026-06-01&to=2026-06-30`)).expect(200);

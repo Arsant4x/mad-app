@@ -11,9 +11,13 @@ import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
  * المصدر**. الرصيدُ على الطرف الطبيعيّ للحساب (`DEBIT_NORMAL_TYPES`)؛ وكشفُ العميل مدينُ الطبع (ذمّةٌ له
  * علينا) وكشفُ المورّد دائنُه.
  *
- * **المصدرُ يُشتقّ من علاقات القيد لا من عمودٍ يُكتب**: كلُّ مستندٍ يرحّل يشير إلى قيده (`journalEntryId`
- * وأخواتُه)، فيُقرأ الاتجاهُ المعاكس مرّةً واحدة عند القراءة — لا هجرةَ ولا تعبئةَ ولا كاتباً يُنسى (`①B8`
- * يُستغنى عنه). والقيدُ اليدويّ مصدرُه `MANUAL`، والافتتاحيّ `OPENING`، وقيدُ العكس `REVERSAL` بمرجع أصله.
+ * **المصدرُ يُشتقّ من المستندات التي تشير إلى القيد لا من عمودٍ يُكتب**: كلُّ مستندٍ يرحّل يحمل `journalEntryId`
+ * (أو أخواتِه)، فيُقرأ الاتجاهُ المعاكس **باستعلامٍ واحدٍ موحَّد** على جداول المستندات لمعرّفات القيود المقروءة —
+ * لا هجرةَ ولا تعبئةَ ولا كاتباً يُنسى (`①B8` يُستغنى عنه). والقيدُ اليدويّ مصدرُه `MANUAL`، والافتتاحيّ `OPENING`،
+ * وقيدُ العكس `REVERSAL` بمرجع أصله.
+ *
+ * ⚠️ **لماذا استعلامٌ خامّ لا `include`**: استنباطُ حمولة `include` لعشرين علاقةً على القيد أسقط `ts-jest` بنفاد
+ * الذاكرة (مقيس 2026-09-21 — محطّتان `EXIT=134`)؛ والاتحادُ الخامّ يُعيد صفوفاً بشكلٍ معلَن صراحةً.
  *
  * ⚠️ **حدٌّ معلَن:** السقفُ `5000` سطرٍ في القراءة الواحدة — ما فوقه يُعلَن `truncated` ويُضيَّق المدى؛
  * والرصيدُ الجاري صحيحٌ لما عاد لأن الافتتاحيَّ يُحسب بالتجميع قبل المدى لا من السطور المقصوصة.
@@ -32,7 +36,7 @@ export interface LedgerFilter {
 }
 
 export interface LedgerSource {
-  /** نوعُ المستند المصدر — من علاقة القيد التي وُجد عليها. */
+  /** نوعُ المستند المصدر — من الجدول الذي وُجد فيه (أو `MANUAL`/`AUTO`/`OPENING`/`REVERSAL`). */
   type: string;
   id: string;
   /** رقمُ المستند إن كان له رقم؛ وإلا معرّفُه. */
@@ -61,86 +65,60 @@ export interface LedgerRow {
 }
 
 /**
- * ما يُطلب مع كل قيدٍ لاشتقاق مصدره — العلاقاتُ المعاكسة كلُّها، بمعرّفٍ ورقمٍ حيث يوجد.
- * ⚠️ مُعلَنٌ بنوع Prisma العريض لا بـ`satisfies` + `GetPayload`: استنباطُ الحمولة الدقيقة لعشرين علاقةً أسقط
- * `ts-jest` بنفاد الذاكرة (مقيس 2026-09-21)، والشكلُ المقروء يُعلَن أدناه صراحةً ويُصان معه.
+ * أذرعُ الاتحاد: جدولُ المستند، عمودُه الذي يشير إلى القيد، نوعُه، وعمودُ رقمه إن كان — **بترتيب الأخصّية**: حين
+ * يشير أكثرُ من مستندٍ إلى القيد نفسِه (نادرٌ) يُسمّى الأسبقُ هنا. `docType` للفاتورة يميّز الإشعارَين.
  */
-const SOURCE_INCLUDE: Prisma.JournalEntryInclude = {
-  invoices: { select: { id: true, no: true, docType: true } },
-  reversedInvoices: { select: { id: true, no: true } },
-  purchases: { select: { id: true, no: true } },
-  payments: { select: { id: true, no: true } },
-  supplierPayments: { select: { id: true, no: true } },
-  goodsReceipts: { select: { id: true, no: true } },
-  inventoryWriteOffs: { select: { id: true, no: true } },
-  stockOpening: { select: { id: true, no: true } },
-  stockOpeningLineVoid: { select: { id: true } },
-  landedCosts: { select: { id: true } },
-  landedCostVoids: { select: { id: true } },
-  rentPayments: { select: { id: true } },
-  rentAccruals: { select: { id: true } },
-  depositReceipts: { select: { id: true } },
-  depositSettlements: { select: { id: true } },
-  contractSettlements: { select: { id: true, no: true } },
-  claimIssues: { select: { id: true } },
-  claimSettlements: { select: { id: true } },
-  keyMoneyEntries: { select: { id: true } },
-  maintenanceCosts: { select: { id: true } },
-  reversalOf: { select: { id: true, no: true } },
-};
-
-type SourceDoc = { id: string; no?: string | null; docType?: string | null } | null;
-/** شكلُ القيد كما يُقرأ بـ`SOURCE_INCLUDE` — يُعلَن لا يُستنبَط (انظر التحذير أعلاه). */
-export type EntryWithSources = {
-  id: string;
-  no: string;
-  memo: string;
-  date: Date;
-  auto: boolean;
-  branchId: string | null;
-  openingForAccountId: string | null;
-  reversalOf: { id: string; no: string } | null;
-} & Partial<Record<SourceKey, SourceDoc | SourceDoc[]>>;
-
-type SourceKey =
-  | 'invoices' | 'reversedInvoices' | 'purchases' | 'payments' | 'supplierPayments' | 'goodsReceipts' | 'inventoryWriteOffs'
-  | 'stockOpening' | 'stockOpeningLineVoid' | 'landedCosts' | 'landedCostVoids' | 'rentPayments' | 'rentAccruals'
-  | 'depositReceipts' | 'depositSettlements' | 'contractSettlements' | 'claimIssues' | 'claimSettlements' | 'keyMoneyEntries' | 'maintenanceCosts';
-
-/** الترتيبُ يقرّر أيَّ مصدرٍ يُسمّى حين يشير أكثرُ من مستندٍ إلى القيد نفسِه — الأخصُّ أولاً. */
-const SOURCE_ORDER: { key: SourceKey; type: string }[] = [
-  { key: 'invoices', type: 'INVOICE' },
-  { key: 'reversedInvoices', type: 'INVOICE_REVERSAL' },
-  { key: 'purchases', type: 'PURCHASE' },
-  { key: 'payments', type: 'PAYMENT' },
-  { key: 'supplierPayments', type: 'SUPPLIER_PAYMENT' },
-  { key: 'goodsReceipts', type: 'GOODS_RECEIPT' },
-  { key: 'inventoryWriteOffs', type: 'WRITE_OFF' },
-  { key: 'stockOpening', type: 'STOCK_OPENING' },
-  { key: 'stockOpeningLineVoid', type: 'STOCK_OPENING_VOID' },
-  { key: 'landedCosts', type: 'LANDED_COST' },
-  { key: 'landedCostVoids', type: 'LANDED_COST_VOID' },
-  { key: 'rentPayments', type: 'RENT_PAYMENT' },
-  { key: 'rentAccruals', type: 'RENT_ACCRUAL' },
-  { key: 'depositReceipts', type: 'DEPOSIT_RECEIPT' },
-  { key: 'depositSettlements', type: 'DEPOSIT_SETTLEMENT' },
-  { key: 'contractSettlements', type: 'CONTRACT_SETTLEMENT' },
-  { key: 'claimIssues', type: 'CLAIM_ISSUE' },
-  { key: 'claimSettlements', type: 'CLAIM_SETTLEMENT' },
-  { key: 'keyMoneyEntries', type: 'KEY_MONEY' },
-  { key: 'maintenanceCosts', type: 'MAINTENANCE' },
+const SOURCE_ARMS: { table: string; col: string; type: string; no: string | null; docType?: boolean }[] = [
+  { table: 'invoices', col: 'journalEntryId', type: 'INVOICE', no: 'no', docType: true },
+  { table: 'invoices', col: 'reversalJournalEntryId', type: 'INVOICE_REVERSAL', no: 'no' },
+  { table: 'purchases', col: 'journalEntryId', type: 'PURCHASE', no: 'no' },
+  { table: 'payments', col: 'journalEntryId', type: 'PAYMENT', no: 'no' },
+  { table: 'supplier_payments', col: 'journalEntryId', type: 'SUPPLIER_PAYMENT', no: 'no' },
+  { table: 'goods_receipts', col: 'journalEntryId', type: 'GOODS_RECEIPT', no: 'no' },
+  { table: 'inventory_write_offs', col: 'journalEntryId', type: 'WRITE_OFF', no: 'no' },
+  { table: 'stock_openings', col: 'journalEntryId', type: 'STOCK_OPENING', no: 'no' },
+  { table: 'stock_opening_lines', col: 'voidJournalEntryId', type: 'STOCK_OPENING_VOID', no: null },
+  { table: 'landed_cost_distributions', col: 'journalEntryId', type: 'LANDED_COST', no: null },
+  { table: 'landed_cost_distributions', col: 'voidJournalEntryId', type: 'LANDED_COST_VOID', no: null },
+  { table: 'rent_payments', col: 'journalEntryId', type: 'RENT_PAYMENT', no: null },
+  { table: 'rent_accruals', col: 'journalEntryId', type: 'RENT_ACCRUAL', no: null },
+  { table: 'contract_deposits', col: 'journalEntryId', type: 'DEPOSIT_RECEIPT', no: null },
+  { table: 'contract_deposits', col: 'settlementEntryId', type: 'DEPOSIT_SETTLEMENT', no: null },
+  { table: 'contracts', col: 'settlementEntryId', type: 'CONTRACT_SETTLEMENT', no: 'no' },
+  { table: 'contract_claims', col: 'journalEntryId', type: 'CLAIM_ISSUE', no: null },
+  { table: 'contract_claims', col: 'settlementEntryId', type: 'CLAIM_SETTLEMENT', no: null },
+  { table: 'contract_key_money', col: 'journalEntryId', type: 'KEY_MONEY', no: null },
+  { table: 'maintenance_requests', col: 'journalEntryId', type: 'MAINTENANCE', no: null },
 ];
 
-export function resolveSource(entry: EntryWithSources): LedgerSource {
+const SOURCE_UNION_SQL = SOURCE_ARMS.map(
+  (a, i) =>
+    `SELECT "${a.col}" AS entry_id, '${a.type}' AS type, id, ${a.no ? `"${a.no}"::text` : 'NULL::text'} AS no, ${a.docType ? '"docType"::text' : 'NULL::text'} AS doc_type, ${i} AS prio FROM "${a.table}" WHERE "${a.col}" = ANY($1::text[])`,
+).join(' UNION ALL ');
+
+type SourceHit = { entry_id: string; type: string; id: string; no: string | null; doc_type: string | null; prio: number };
+
+/** يقرأ مصادرَ مجموعةِ قيودٍ دفعةً واحدة — الأخصُّ (الأسبقُ ذراعاً) لكلِّ قيد. */
+export async function sourcesOf(tx: Prisma.TransactionClient, entryIds: string[]): Promise<Map<string, LedgerSource>> {
+  const out = new Map<string, LedgerSource>();
+  if (entryIds.length === 0) return out;
+  const hits = await tx.$queryRawUnsafe<SourceHit[]>(SOURCE_UNION_SQL, entryIds);
+  hits.sort((a, b) => a.prio - b.prio);
+  for (const h of hits) {
+    if (out.has(h.entry_id)) continue;
+    const type = h.type === 'INVOICE' && h.doc_type && h.doc_type !== 'INVOICE' ? h.doc_type : h.type;
+    out.set(h.entry_id, { type, id: h.id, no: h.no ?? h.id });
+  }
+  return out;
+}
+
+type EntryHead = { id: string; no: string; auto: boolean; openingForAccountId: string | null; reversalOf: { id: string; no: string } | null };
+
+/** مصدرُ قيدٍ واحد: افتتاحيٌّ ثم عكسٌ ثم مستندٌ ثم يدويٌّ/آليّ. */
+export function resolveSource(entry: EntryHead, fromDocs: LedgerSource | undefined): LedgerSource {
   if (entry.openingForAccountId) return { type: 'OPENING', id: entry.openingForAccountId, no: entry.no };
   if (entry.reversalOf) return { type: 'REVERSAL', id: entry.reversalOf.id, no: entry.reversalOf.no };
-  for (const { key, type } of SOURCE_ORDER) {
-    const v = entry[key];
-    const doc = Array.isArray(v) ? v[0] : v;
-    if (!doc) continue;
-    const docType = key === 'invoices' && doc.docType && doc.docType !== 'INVOICE' ? doc.docType : type;
-    return { type: docType, id: doc.id, no: doc.no ?? doc.id };
-  }
+  if (fromDocs) return fromDocs;
   return { type: entry.auto ? 'AUTO' : 'MANUAL', id: entry.id, no: entry.no };
 }
 
@@ -185,7 +163,10 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
   let opening = 0;
   if (filter.from) {
     const before = await tx.journalLine.aggregate({
-      where: { ...lineWhere({ ...filter, to: undefined, from: undefined }, false), journalEntry: { date: { lt: filter.from }, ...(filter.branchId ? { branchId: filter.branchId } : {}) } },
+      where: {
+        ...lineWhere({ ...filter, to: undefined, from: undefined }, false),
+        journalEntry: { date: { lt: filter.from }, ...(filter.branchId ? { branchId: filter.branchId } : {}) },
+      },
       _sum: { debit: true, credit: true },
     });
     opening = round2(signed(Number(before._sum.debit ?? 0), Number(before._sum.credit ?? 0)));
@@ -195,10 +176,26 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
   const count = await tx.journalLine.count({ where });
   const lines = await tx.journalLine.findMany({
     where,
-    include: { account: { select: { code: true, name: true, type: true } }, journalEntry: { include: SOURCE_INCLUDE } },
+    select: {
+      id: true,
+      journalEntryId: true,
+      accountId: true,
+      debit: true,
+      credit: true,
+      customerId: true,
+      supplierId: true,
+      propertyId: true,
+      unitId: true,
+      account: { select: { code: true, name: true } },
+      journalEntry: {
+        select: { id: true, no: true, date: true, memo: true, branchId: true, auto: true, openingForAccountId: true, reversalOf: { select: { id: true, no: true } } },
+      },
+    },
     orderBy: [{ journalEntry: { date: 'asc' } }, { journalEntry: { no: 'asc' } }, { id: 'asc' }],
     take: LEDGER_LINE_CAP,
   });
+
+  const docs = await sourcesOf(tx, [...new Set(lines.map((l) => l.journalEntryId))]);
 
   let running = opening;
   let totalDebit = 0;
@@ -221,7 +218,7 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
       debit: money(debit),
       credit: money(credit),
       balance: money(running),
-      source: resolveSource(l.journalEntry as unknown as EntryWithSources),
+      source: resolveSource(l.journalEntry, docs.get(l.journalEntryId)),
       branchId: l.journalEntry.branchId,
       customerId: l.customerId,
       supplierId: l.supplierId,
