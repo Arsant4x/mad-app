@@ -17,7 +17,7 @@ describe('Trial balance + CSV export (e2e)', () => {
   let cashCode: string;
   let revenueCode: string;
   let branchId: string;
-  const entryIds: string[] = [];
+  const entryIds: [string, string][] = [];
   const accountIds: string[] = [];
 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -63,11 +63,12 @@ describe('Trial balance + CSV export (e2e)', () => {
         ],
       })
       .expect(201);
-    entryIds.push(inPeriod.body.id, outPeriod.body.id);
+    entryIds.push([inPeriod.body.id, '2026-05-10'], [outPeriod.body.id, '2026-07-20']);
   }, 60000);
 
   afterAll(async () => {
-    for (const id of entryIds) await auth(request(app.getHttpServer()).delete(`/journal/${id}`));
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) بتاريخ كلِّ أصل — والحساباتُ تبقى بأثرها (`409` على حذفها، يُتجاهَل).
+    for (const [id, date] of entryIds) await auth(request(app.getHttpServer()).post(`/journal/${id}/reverse`)).send({ date });
     for (const id of accountIds) await auth(request(app.getHttpServer()).delete(`/accounts/${id}`));
     await app.close();
   });

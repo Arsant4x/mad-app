@@ -52,6 +52,10 @@ export const MSG = {
   journal_entry_unbalanced: 'journal.entry_unbalanced',
   journal_line_account_not_found: 'journal.line_account_not_found',
   journal_auto_entry_undeletable: 'journal.auto_entry_undeletable',
+  journal_posted_reverse_instead: 'journal.posted_reverse_instead',
+  journal_auto_entry_not_reversible: 'journal.auto_entry_not_reversible',
+  journal_reversal_not_reversible: 'journal.reversal_not_reversible',
+  journal_already_reversed: 'journal.already_reversed',
   account_opening_after_movement: 'accounts.opening_after_movement',
   account_opening_date_locked: 'accounts.opening_date_locked',
   writeoff_deemed_supply_not_built: 'journal.writeoff_deemed_supply_not_built',
@@ -512,6 +516,22 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.journal_auto_entry_undeletable]: {
     ar: 'لا يمكن حذف قيد آلي مباشرة — احذف المستند المصدر (الفاتورة/فاتورة الشراء) بدلاً من ذلك',
     en: 'An automatic entry cannot be deleted directly — delete the source document (invoice/purchase) instead',
+  },
+  [MSG.journal_posted_reverse_instead]: {
+    ar: 'القيد {no} مرحَّل ولا يُحذف — التصحيح بقيدٍ عكسي في فترةٍ مفتوحة (عكس القيد)',
+    en: 'Entry {no} is posted and cannot be deleted — correct it with a reversing entry in an open period (reverse the entry)',
+  },
+  [MSG.journal_auto_entry_not_reversible]: {
+    ar: 'القيد {no} آلي يتبع مستنده — يُصحَّح من مستنده (إشعار أو إلغاء) لا بعكسه هنا',
+    en: 'Entry {no} is automatic and follows its document — correct it from the document (note or void), not by reversing it here',
+  },
+  [MSG.journal_reversal_not_reversible]: {
+    ar: 'القيد {no} قيدٌ عكسي — لا يُعكس؛ أعد القيد الأصلي قيداً جديداً إن لزم',
+    en: 'Entry {no} is itself a reversing entry — it cannot be reversed; re-post the original as a new entry if needed',
+  },
+  [MSG.journal_already_reversed]: {
+    ar: 'القيد {no} معكوسٌ سلفاً بالقيد {by}',
+    en: 'Entry {no} has already been reversed by entry {by}',
   },
   [MSG.account_opening_date_locked]: {
     ar: 'الحساب {code} — {name} عليه حركة بتاريخ {moved} (القيد {entry})، فتاريخ الافتتاح لا يُعدَّل بعدها — تعديله يعيد تأريخ قيدٍ صار له تاريخ. المخرج: أدخل الفرق بقيد بتاريخه',

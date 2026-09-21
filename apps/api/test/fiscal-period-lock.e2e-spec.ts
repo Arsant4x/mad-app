@@ -118,7 +118,8 @@ describe('Fiscal year and period locking (e2e)', () => {
     await request(app.getHttpServer()).patch(`/fiscal-years/periods/${march.id}/reopen`).set('Authorization', `Bearer ${tokenA}`).expect(200);
 
     const posted = await request(app.getHttpServer()).post('/journal').set('Authorization', `Bearer ${tokenA}`).send(entry).expect(201);
-    await request(app.getHttpServer()).delete(`/journal/${posted.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①): المرحَّلُ يُعكس — بتاريخ الأصل والفترةُ مفتوحة.
+    await request(app.getHttpServer()).post(`/journal/${posted.body.id}/reverse`).set('Authorization', `Bearer ${tokenA}`).send({ date: entry.date }).expect(201);
   });
 
   it('blocks an invoice dated in a closed period too, since it posts automatically', async () => {
@@ -165,6 +166,7 @@ describe('Fiscal year and period locking (e2e)', () => {
       })
       .expect(201);
 
-    await request(app.getHttpServer()).delete(`/journal/${posted.body.id}`).set('Authorization', `Bearer ${tokenB}`).expect(204);
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) — وشركةُ ب بلا تقويمٍ فلا قفلَ على أيّ تاريخ.
+    await request(app.getHttpServer()).post(`/journal/${posted.body.id}/reverse`).set('Authorization', `Bearer ${tokenB}`).send({ date: `${YEAR}-03-15` }).expect(201);
   });
 });

@@ -88,7 +88,7 @@
   "err_invoice_save": "تعذّر حفظ الفاتورة — حاول مرة أخرى",
   "err_journal_line_required": "أضف سطراً واحداً على الأقل بحساب صحيح",
   "err_journal_post": "تعذّر ترحيل القيد",
-  "err_journal_delete": "تعذّر حذف القيد",
+  "err_journal_reverse": "تعذّر عكس القيد",
   "err_product_name_required": "الرجاء إدخال اسم المنتج",
   "err_product_save": "تعذّر حفظ المنتج",
   "err_property_delete": "تعذّر حذف العقار",

@@ -253,7 +253,8 @@ describe('Receivables aging (e2e)', () => {
     expect(after.reportTotal).toBeCloseTo(before.reportTotal, 2);
     expect(after.difference - before.difference).toBeCloseTo(777, 2);
 
-    await auth(request(app.getHttpServer()).delete(`/journal/${entry.body.id}`));
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) — بتاريخ الأصل.
+    await auth(request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`)).send({ date: dayStr(0) }).expect(201);
   }, 120000);
 
   // ── 7: التصدير CSV بعربية سليمة ──

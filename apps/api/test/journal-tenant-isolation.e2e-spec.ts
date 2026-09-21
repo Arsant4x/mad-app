@@ -67,11 +67,13 @@ describe('Journal ledger + account posting (e2e)', () => {
     expect(Number(assetAfter.balance)).toBe(1200); // asset is debit-normal: +200
     expect(Number(liabAfter.balance)).toBe(700); // liability is credit-normal: +200
 
-    await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // ⚖️ المرحَّلُ يُعكس ولا يُحذف (ق-١٢٥٣/①): الحذفُ مرفوضٌ بمسمّاه، والعكسُ يعيد الأرصدة.
+    await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
+    await request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`).set('Authorization', `Bearer ${tokenA}`).send({ date: '2026-01-01' }).expect(201);
 
-    const afterDelete = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    const assetRestored = afterDelete.body.find((a: { id: string }) => a.id === asset.id);
-    const liabRestored = afterDelete.body.find((a: { id: string }) => a.id === liability.id);
+    const afterReverse = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    const assetRestored = afterReverse.body.find((a: { id: string }) => a.id === asset.id);
+    const liabRestored = afterReverse.body.find((a: { id: string }) => a.id === liability.id);
     expect(Number(assetRestored.balance)).toBe(1000);
     expect(Number(liabRestored.balance)).toBe(500);
   });
@@ -118,7 +120,9 @@ describe('Journal ledger + account posting (e2e)', () => {
     const assetAfter = accountsAfter.body.find((a: { id: string }) => a.id === asset.id);
     expect(Number(assetAfter.balance)).toBe(1050); // only A's own posting applied
 
-    await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // التنظيفُ بالعكس (ق-١٢٥٣/①) — والعكسُ من ب على قيد أ مرفوضٌ `404` كالحذف.
+    await request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`).set('Authorization', `Bearer ${tokenB}`).send({}).expect(404);
+    await request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`).set('Authorization', `Bearer ${tokenA}`).send({ date: '2026-01-01' }).expect(201);
   });
 
   it('blocks deleting an account still referenced by a posted journal entry', async () => {
@@ -131,10 +135,11 @@ describe('Journal ledger + account posting (e2e)', () => {
 
     await request(app.getHttpServer()).delete(`/accounts/${asset.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
 
-    // Once the entry is gone (reversing the balance), the account can be removed.
-    await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
-    await request(app.getHttpServer()).delete(`/accounts/${asset.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
-    await request(app.getHttpServer()).delete(`/accounts/${liability.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // ⚖️ المرحَّلُ يُعكس ولا يُحذف (ق-١٢٥٣/①): العكسُ يعيد الرصيدَ **ويُبقي السطورَ** — فالحسابُ
+    // يبقى محجوزاً بأثره (الأصلُ وعكسُه) ولا يُحذف؛ كان الاختبارُ يحذف القيدَ ثم الحساب.
+    await request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`).set('Authorization', `Bearer ${tokenA}`).send({ date: '2026-01-01' }).expect(201);
+    await request(app.getHttpServer()).delete(`/accounts/${asset.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
+    await request(app.getHttpServer()).delete(`/accounts/${liability.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
   });
 
   it("blocks changing an account's type once it has posted journal lines", async () => {

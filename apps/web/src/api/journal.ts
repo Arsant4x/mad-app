@@ -18,6 +18,9 @@ export interface JournalEntry {
   totalCredit: string;
   auto: boolean;
   lines: JournalLine[];
+  /** ⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (ق-١٢٥٣): مَن عكسه، أو مَن يعكسه هذا القيد. */
+  reversedBy: { id: string; no: string; date: string } | null;
+  reversalOf: { id: string; no: string } | null;
 }
 
 export interface JournalLineInput {
@@ -49,4 +52,6 @@ export interface ListJournalParams {
 export const listJournalEntries = (params: ListJournalParams = {}) =>
   apiClient.get<JournalListResponse>('/journal', { params }).then((r) => r.data);
 export const createJournalEntry = (dto: CreateJournalEntryInput) => apiClient.post<JournalEntry>('/journal', dto).then((r) => r.data);
-export const deleteJournalEntry = (id: string) => apiClient.delete(`/journal/${id}`);
+/** قيدٌ عكسيٌّ مرقَّمٌ بتاريخ اليوم (أو تاريخٍ يُمرَّر) في فترةٍ مفتوحة — والأصلُ يبقى. */
+export const reverseJournalEntry = (id: string, body: { date?: string; memo?: string } = {}) =>
+  apiClient.post<JournalEntry>(`/journal/${id}/reverse`, body).then((r) => r.data);

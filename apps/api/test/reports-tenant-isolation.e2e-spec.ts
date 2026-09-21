@@ -71,7 +71,8 @@ describe('Reports tenant isolation (e2e)', () => {
     const afterB = await request(app.getHttpServer()).get('/reports/income-statement').set('Authorization', `Bearer ${tokenB}`).query({ from: date, to: date }).expect(200);
     expect(afterB.body.totalRevenue).toBe('0.00');
 
-    await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) — بالتاريخ نفسِه فيصفو يومُ 2031-01-15 للتشغيل التالي.
+    await request(app.getHttpServer()).post(`/journal/${entry.body.id}/reverse`).set('Authorization', `Bearer ${tokenA}`).send({ date }).expect(201);
   });
 
   it("company A's rent collection and occupancy never bleed into company B's property KPIs", async () => {

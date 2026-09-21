@@ -12,7 +12,7 @@ export function JournalListView({
   total,
   onPage,
   onNew,
-  onDelete,
+  onReverse,
 }: {
   entries: JournalEntry[];
   search: string;
@@ -22,7 +22,8 @@ export function JournalListView({
   total: number;
   onPage: (page: number) => void;
   onNew: () => void;
-  onDelete: (entry: JournalEntry) => void;
+  /** ⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (ق-١٢٥٣). */
+  onReverse: (entry: JournalEntry) => void;
 }) {
   return (
     <div className="subview active">
@@ -84,10 +85,24 @@ export function JournalListView({
                 <td className="num">{fmt(j.totalDebit)}</td>
                 <td className="num">{fmt(j.totalCredit)}</td>
                 <td>
-                  <span className="badge paid">مرحّل</span>
+                  {/* الحالةُ تُقرأ من روابط العكس لا من نصٍّ ثابت: معكوسٌ (ومَن عكسه) · قيدُ عكسٍ (ولمَن) · مرحَّل. */}
+                  {j.reversedBy ? (
+                    <span className="badge overdue" title={`عُكس بالقيد ${j.reversedBy.no}`}>
+                      معكوس — {j.reversedBy.no}
+                    </span>
+                  ) : j.reversalOf ? (
+                    <span className="badge" title={`يعكس القيد ${j.reversalOf.no}`}>
+                      قيد عكس — {j.reversalOf.no}
+                    </span>
+                  ) : (
+                    <span className="badge paid">مرحّل</span>
+                  )}
                 </td>
                 <td>
-                  <RowMenu actions={[{ label: '🗑 حذف', onClick: () => onDelete(j), danger: true }]} />
+                  {/* لا حذفَ لقيدٍ مرحَّل؛ والآليُّ يتبع مستندَه، والمعكوسُ والعكسيُّ لا يُعكسان ثانيةً. */}
+                  {!j.auto && !j.reversedBy && !j.reversalOf && (
+                    <RowMenu actions={[{ label: '↩ عكس القيد', onClick: () => onReverse(j), danger: true }]} />
+                  )}
                 </td>
               </tr>
             ))}
