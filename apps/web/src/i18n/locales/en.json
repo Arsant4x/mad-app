@@ -88,7 +88,7 @@
   "err_invoice_save": "Could not save the invoice — please try again",
   "err_journal_line_required": "Add at least one line with a valid account",
   "err_journal_post": "Could not post the journal entry",
-  "err_journal_delete": "Could not delete the journal entry",
+  "err_journal_reverse": "Could not reverse the journal entry",
   "err_product_name_required": "Please enter the product name",
   "err_product_save": "Could not save the product",
   "err_property_delete": "Could not delete the property",
