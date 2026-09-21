@@ -742,6 +742,9 @@ model PosOfflineIncident {
 
   @@index([companyId, startedAt])
   @@map("pos_offline_incidents")
+  invoice_offlineIncidentId_tenant Invoice[] @relation("Invoice_offlineIncidentId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum EgsUnitKind {
@@ -1102,6 +1105,8 @@ model Invoice {
   /// (CASH/CARD) — cash feeds the shift's expected-drawer math.
   posShiftId    String?
   posShift      PosShift? @relation(fields: [posShiftId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  posShiftTenant PosShift? @relation("Invoice_posShiftId_tenant", fields: [companyId, posShiftId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   paymentMethod String?
 
   /// Offline POS sync (doc §6 v2): the terminal-generated id that makes the
@@ -1146,6 +1151,8 @@ model Invoice {
   /// دمجُ واقعتَين يُعيد توجيه بيوعهما ثم يحذف الفارغة، ولا يُفقد بيعٌ صلتَه بغيره.
   offlineIncidentId String?
   offlineIncident   PosOfflineIncident? @relation(fields: [offlineIncidentId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  offlineIncidentTenant PosOfflineIncident? @relation("Invoice_offlineIncidentId_tenant", fields: [companyId, offlineIncidentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   zatcaUuid         String?
   zatcaHash         String?
@@ -1187,6 +1194,8 @@ model Invoice {
   /// Restrict — an invoice that has issued adjustments must stay on file.
   relatedInvoiceId String?
   relatedInvoice   Invoice?  @relation("InvoiceAdjustments", fields: [relatedInvoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  relatedInvoiceTenant Invoice? @relation("Invoice_relatedInvoiceId_tenant", fields: [companyId, relatedInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   adjustments      Invoice[] @relation("InvoiceAdjustments")
   /// ⚖️ **بدلٌ عن مردودة** (`ق-٩٥٨` · `ق-٩٦٣`): المردودةُ التي يحلّ هذا المستندُ محلَّها — رابطٌ
   /// **مخصَّصٌ لا `relatedInvoiceId`**: ذاك يُخرج `BillingReference` إلى الهيئة، والبدلُ **لا
@@ -1196,6 +1205,8 @@ model Invoice {
   /// `replacedBy` هو الإغلاق، ولا عمودَ حالةٍ يُكتب فيكذب.
   replacesInvoiceId String?  @unique
   replacesInvoice   Invoice? @relation("InvoiceReplacement", fields: [replacesInvoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  replacesInvoiceTenant Invoice? @relation("Invoice_replacesInvoiceId_tenant", fields: [companyId, replacesInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   replacedBy        Invoice? @relation("InvoiceReplacement")
   /// قيدُ **عكس** المردودة عند إغلاقها (`ق-٩٦٥` — عكسٌ لا حذف): قيدُ الفاتورة يبقى كما رُحِّل،
   /// وهذا يعكسه بتاريخ الإغلاق فيبقى الدفترُ يروي ما وقع. `Restrict` كقيد الفاتورة نفسه.
@@ -1245,6 +1256,15 @@ model Invoice {
   @@unique([egsUnitId, zatcaIcv])
   @@index([relatedInvoiceId])
   @@map("invoices")
+  paymentAllocation_invoiceId_tenant PaymentAllocation[] @relation("PaymentAllocation_invoiceId_tenant")
+  payment_refundsInvoiceId_tenant Payment[] @relation("Payment_refundsInvoiceId_tenant")
+  quote_convertedInvoiceId_tenant Quote[] @relation("Quote_convertedInvoiceId_tenant")
+  posPayment_invoiceId_tenant PosPayment[] @relation("PosPayment_invoiceId_tenant")
+  invoiceLine_invoiceId_tenant InvoiceLine[] @relation("InvoiceLine_invoiceId_tenant")
+  invoice_replacesInvoiceId_tenant Invoice[] @relation("Invoice_replacesInvoiceId_tenant")
+  invoice_relatedInvoiceId_tenant Invoice[] @relation("Invoice_relatedInvoiceId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A single invoice line item. Carries `companyId` too (denormalized, always
@@ -1259,6 +1279,8 @@ model InvoiceLine {
 
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceTenant Invoice @relation("InvoiceLine_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   description String
 
@@ -1317,6 +1339,8 @@ model InvoiceLine {
   /// سطرُ إشعارٍ بلا هذا الرابط إشعارٌ محاسبيّ (خصم · تصحيح) لا يمسّ المخزون.
   returnsLineId String?
   returnsLine   InvoiceLine?  @relation("InvoiceLineReturns", fields: [returnsLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  returnsLineTenant InvoiceLine? @relation("InvoiceLine_returnsLineId_tenant", fields: [companyId, returnsLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   returnedBy    InvoiceLine[] @relation("InvoiceLineReturns")
 
   /// حالة البضاعة المرتجعة — انظر `ReturnCondition`. فارغةٌ على سطور الفواتير والإشعارات المدينة.
@@ -1325,6 +1349,10 @@ model InvoiceLine {
   @@index([companyId, productId])
   @@index([returnsLineId])
   @@map("invoice_lines")
+  stockMovement_invoiceLineId_tenant StockMovement[] @relation("StockMovement_invoiceLineId_tenant")
+  invoiceLine_returnsLineId_tenant InvoiceLine[] @relation("InvoiceLine_returnsLineId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A purchase supplier / service provider. Same shape and role as Customer,
@@ -1413,6 +1441,8 @@ model Purchase {
   /// (دائنٌ على مدينٍ زائد وعكسُه). `Restrict`: شراءٌ صدر عليه إشعارٌ يبقى في الملفّ.
   relatedPurchaseId String?
   relatedPurchase   Purchase?  @relation("PurchaseAdjustments", fields: [relatedPurchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  relatedPurchaseTenant Purchase? @relation("Purchase_relatedPurchaseId_tenant", fields: [companyId, relatedPurchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   adjustments       Purchase[] @relation("PurchaseAdjustments")
   /// سببُ الإشعار كما على مستند المورّد.
   adjustmentReason String?
@@ -1489,6 +1519,14 @@ model Purchase {
   @@index([companyId, categoryCode])
   @@index([relatedPurchaseId])
   @@map("purchases")
+  supplierPaymentAllocation_purchaseId_tenant SupplierPaymentAllocation[] @relation("SupplierPaymentAllocation_purchaseId_tenant")
+  purchaseAttachment_purchaseId_tenant PurchaseAttachment[] @relation("PurchaseAttachment_purchaseId_tenant")
+  landedCostDistribution_purchaseId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_purchaseId_tenant")
+  goodsReceipt_purchaseId_tenant GoodsReceipt[] @relation("GoodsReceipt_purchaseId_tenant")
+  purchaseLine_purchaseId_tenant PurchaseLine[] @relation("PurchaseLine_purchaseId_tenant")
+  purchase_relatedPurchaseId_tenant Purchase[] @relation("Purchase_relatedPurchaseId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// ⭐ **The purchase line — the row this platform never had.**
@@ -1514,6 +1552,8 @@ model PurchaseLine {
 
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("PurchaseLine_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   description String
 
@@ -1543,6 +1583,8 @@ model PurchaseLine {
   /// سطرٌ بلا هذا الرابط إشعارٌ محاسبيّ لا يمسّ الرفّ.
   returnsPurchaseLineId String?
   returnsPurchaseLine   PurchaseLine?  @relation("PurchaseLineReturns", fields: [returnsPurchaseLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  returnsPurchaseLineTenant PurchaseLine? @relation("PurchaseLine_returnsPurchaseLineId_tenant", fields: [companyId, returnsPurchaseLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   returnedBy            PurchaseLine[] @relation("PurchaseLineReturns")
   /// هل **أُعيدت البضاعةُ فعلاً** إلى المورّد (تخرج من الرفّ) — أم أنه إشعارُ سعرٍ بلا بضاعة
   /// (الرفُّ يبقى وتكلفتُه تتبع). على الإشعار الدائن وحده؛ والمدينُ فوترةٌ لا بضاعةَ تُعاد فيه.
@@ -1565,6 +1607,12 @@ model PurchaseLine {
   @@index([companyId, productId])
   @@index([returnsPurchaseLineId])
   @@map("purchase_lines")
+  stockMovement_purchaseLineId_tenant StockMovement[] @relation("StockMovement_purchaseLineId_tenant")
+  landedCostDistribution_purchaseLineId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_purchaseLineId_tenant")
+  goodsReceiptLine_purchaseLineId_tenant GoodsReceiptLine[] @relation("GoodsReceiptLine_purchaseLineId_tenant")
+  purchaseLine_returnsPurchaseLineId_tenant PurchaseLine[] @relation("PurchaseLine_returnsPurchaseLineId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// ⭐ **الاستلامُ المستقلّ — كيانٌ فوق الشراء لا بدلَه** (`٢٥` · `ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`).
@@ -1600,6 +1648,8 @@ model GoodsReceipt {
 
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("GoodsReceipt_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
@@ -1636,6 +1686,9 @@ model GoodsReceipt {
   @@index([purchaseId])
   @@index([companyId, receivedAt])
   @@map("goods_receipts")
+  goodsReceiptLine_goodsReceiptId_tenant GoodsReceiptLine[] @relation("GoodsReceiptLine_goodsReceiptId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// سطرُ الاستلام — كمّيةٌ مستلَمة من سطر شراءٍ بعينه، وحركةُ الإدخال تشير إليه **وإلى سطر الشراء معاً**
@@ -1647,9 +1700,13 @@ model GoodsReceiptLine {
 
   goodsReceiptId String
   goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  goodsReceiptTenant GoodsReceipt @relation("GoodsReceiptLine_goodsReceiptId_tenant", fields: [companyId, goodsReceiptId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   purchaseLineId String
   purchaseLine   PurchaseLine @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseLineTenant PurchaseLine @relation("GoodsReceiptLine_purchaseLineId_tenant", fields: [companyId, purchaseLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// الكمّيةُ المستلَمة في هذا الاستلام — موجبةٌ (قيدُ `CHECK`) ولا تتجاوز ما بقي من السطر (الخدمة).
   quantity Decimal @db.Decimal(18, 3)
@@ -1665,6 +1722,9 @@ model GoodsReceiptLine {
   @@index([goodsReceiptId])
   @@index([purchaseLineId])
   @@map("goods_receipt_lines")
+  stockMovement_goodsReceiptLineId_tenant StockMovement[] @relation("StockMovement_goodsReceiptLineId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// طريقةُ توزيع التكلفة المحمَّلة على الطبقات — **لكلِّ توزيعٍ لا للمنشأة** (خطّةُ الأجهزة `§٧.٢`).
@@ -1707,10 +1767,14 @@ model LandedCostDistribution {
   /// الشراءُ الخدميّ (فاتورةُ الناقل/المخلّص) — للقراءة بمساره؛ وسطرُه الموزَّع أدناه.
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("LandedCostDistribution_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// سطرُ الشراء الخدميّ الموزَّع (بلا `productId`) — واحدٌ فعّال لكلِّ سطر (فهرسٌ جزئيّ في الهجرة).
   purchaseLineId String
   purchaseLine   PurchaseLine @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseLineTenant PurchaseLine @relation("LandedCostDistribution_purchaseLineId_tenant", fields: [companyId, purchaseLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   method LandedCostMethod
 
@@ -1743,6 +1807,9 @@ model LandedCostDistribution {
   @@index([companyId, purchaseId])
   @@index([purchaseLineId])
   @@map("landed_cost_distributions")
+  landedCostLine_distributionId_tenant LandedCostLine[] @relation("LandedCostLine_distributionId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// سطرُ التوزيع — نصيبُ طبقةٍ بعينها، مع ما يلزم لإلغائه بلا تخمين: متبقّي الطبقة وتكلفتُها قبل التوزيع وبعده.
@@ -1753,6 +1820,8 @@ model LandedCostLine {
 
   distributionId String
   distribution   LandedCostDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  distributionTenant LandedCostDistribution @relation("LandedCostLine_distributionId_tenant", fields: [companyId, distributionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   layerId String
   layer   InventoryLayer @relation(fields: [layerId], references: [id], onDelete: Restrict)
@@ -3496,6 +3565,8 @@ model PurchaseAttachment {
 
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("PurchaseAttachment_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Object-storage key: companies/{companyId}/{uuid}-{filename}.
   fileKey  String
@@ -3567,6 +3638,9 @@ model PosShift {
   @@index([companyId, status])
   @@index([drawerId])
   @@map("pos_shifts")
+  invoice_posShiftId_tenant Invoice[] @relation("Invoice_posShiftId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// **درجُ الكاشير كياناً وحساباً** (`ق-٢١٨` بحكم صاحب المشروع: «المفصَّل يُجمَّع
@@ -3627,6 +3701,8 @@ model PosPayment {
 
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceTenant Invoice @relation("PosPayment_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   method String
   amount Decimal @db.Decimal(18, 2)
@@ -3801,6 +3877,8 @@ model Quote {
   /// نقرتين — الخاسر يقرأ الفائز ويعيد 409 باسم فاتورته (قرار 6.12).
   convertedInvoiceId String?  @unique
   convertedInvoice   Invoice? @relation(fields: [convertedInvoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  convertedInvoiceTenant Invoice? @relation("Quote_convertedInvoiceId_tenant", fields: [companyId, convertedInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   convertedAt        DateTime?
 
   lines QuoteLine[]
@@ -3811,6 +3889,9 @@ model Quote {
   @@unique([companyId, no])
   @@index([companyId, status])
   @@map("quotes")
+  quoteLine_quoteId_tenant QuoteLine[] @relation("QuoteLine_quoteId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 model QuoteLine {
@@ -3820,6 +3901,8 @@ model QuoteLine {
 
   quoteId String
   quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  quoteTenant Quote @relation("QuoteLine_quoteId_tenant", fields: [companyId, quoteId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   description String
 
@@ -3986,6 +4069,8 @@ model Payment {
   /// الدفعة العكسية تحمل مبلغاً سالباً وتشير إلى ما تصحّحه.
   reversesId String?  @unique
   reverses   Payment? @relation("PaymentReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversesTenant Payment? @relation("Payment_reversesId_tenant", fields: [companyId, reversesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy Payment? @relation("PaymentReversal")
 
   /// نوع السند (`SPEC 30.8`، قرار المالك 2026-09-03): `RECEIPT` مقبوضٌ من عميل · `REFUND` ردُّ
@@ -3996,6 +4081,8 @@ model Payment {
   /// للردّ وحده: الإشعار الدائن الذي يُردّ نقداً. `Restrict` — إشعارٌ رُدّ لا يُحذف.
   refundsInvoiceId String?
   refundsInvoice   Invoice? @relation("PaymentRefunds", fields: [refundsInvoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  refundsInvoiceTenant Invoice? @relation("Payment_refundsInvoiceId_tenant", fields: [companyId, refundsInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   allocations PaymentAllocation[]
 
@@ -4005,6 +4092,10 @@ model Payment {
   @@index([companyId, customerId])
   @@index([refundsInvoiceId])
   @@map("payments")
+  paymentAllocation_paymentId_tenant PaymentAllocation[] @relation("PaymentAllocation_paymentId_tenant")
+  payment_reversesId_tenant Payment[] @relation("Payment_reversesId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// انظر `Payment.kind`.
@@ -4022,9 +4113,13 @@ model PaymentAllocation {
 
   paymentId String
   payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  paymentTenant Payment @relation("PaymentAllocation_paymentId_tenant", fields: [companyId, paymentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   invoiceId String
   invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceTenant Invoice @relation("PaymentAllocation_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   amount Decimal @db.Decimal(18, 2)
 
@@ -4092,6 +4187,8 @@ model SupplierPayment {
   /// السندُ العاكس يحمل مبلغاً سالباً ويشير إلى ما يصحّحه.
   reversesId String?          @unique
   reverses   SupplierPayment? @relation("SupplierPaymentReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversesTenant SupplierPayment? @relation("SupplierPayment_reversesId_tenant", fields: [companyId, reversesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy SupplierPayment? @relation("SupplierPaymentReversal")
 
   allocations SupplierPaymentAllocation[]
@@ -4101,6 +4198,10 @@ model SupplierPayment {
   @@unique([companyId, no])
   @@index([companyId, supplierId])
   @@map("supplier_payments")
+  supplierPaymentAllocation_paymentId_tenant SupplierPaymentAllocation[] @relation("SupplierPaymentAllocation_paymentId_tenant")
+  supplierPayment_reversesId_tenant SupplierPayment[] @relation("SupplierPayment_reversesId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// تخصيصُ جزءٍ من سند صرفٍ لفاتورة شراءٍ بعينها — مصدرُ الحقيقة الوحيد لـ«المسدَّد»
@@ -4112,9 +4213,13 @@ model SupplierPaymentAllocation {
 
   paymentId String
   payment   SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  paymentTenant SupplierPayment @relation("SupplierPaymentAllocation_paymentId_tenant", fields: [companyId, paymentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("SupplierPaymentAllocation_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   amount Decimal @db.Decimal(18, 2)
 
@@ -4384,9 +4489,13 @@ model StockMovement {
 
   invoiceLineId String?
   invoiceLine   InvoiceLine? @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceLineTenant InvoiceLine? @relation("StockMovement_invoiceLineId_tenant", fields: [companyId, invoiceLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   purchaseLineId String?
   purchaseLine   PurchaseLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseLineTenant PurchaseLine? @relation("StockMovement_purchaseLineId_tenant", fields: [companyId, purchaseLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ٢٥ سطرُ الاستلام الذي أدخل هذه البضاعة (أو أخرجها عكساً) — **مع** `purchaseLineId` لا بدلَه (فالعدُّ
   /// «اثنان» أعلاه بقي: مصدرُ الحركة سطرُ الشراء، والاستلامُ مستندُ الوصول). قيدُ `CHECK`: لا يُملأ إلا على
@@ -4394,6 +4503,8 @@ model StockMovement {
   /// التي لم تُكتب لها صفوفُ استلام (الحركاتُ الخارجة القديمة) ولحركات الإعادة إلى المورّد.
   goodsReceiptLineId String?
   goodsReceiptLine   GoodsReceiptLine? @relation(fields: [goodsReceiptLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  goodsReceiptLineTenant GoodsReceiptLine? @relation("StockMovement_goodsReceiptLineId_tenant", fields: [companyId, goodsReceiptLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
