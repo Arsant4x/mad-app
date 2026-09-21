@@ -12,10 +12,23 @@
  * بلا فواصل. فنسخُ ذلك النمط كان سينشر العيب على اثني عشر موضعاً.
  */
 
-/** شكل ردّ الخطأ من NestJS كما يصل عبر axios. */
+/** شكل ردّ الخطأ من NestJS كما يصل عبر axios — مع رأس `x-request-id` وجسمٍ يحمل `requestId` (ق-١٢٣٧). */
 interface ApiErrorShape {
-  response?: { data?: { message?: unknown; code?: unknown } };
+  response?: { status?: number; data?: { message?: unknown; code?: unknown; requestId?: unknown }; headers?: Record<string, unknown> };
   message?: unknown;
+}
+
+/**
+ * **معرِّفُ الطلب** كما أعاده الخادم (`ق-١٢٣٧`): من الرأس `x-request-id` (يُعلَن في `CORS` فيقرؤه
+ * المتصفّح) أو من جسم الخطأ. يُبلَّغ به الدعمُ فيجد الطلبَ في السجلّ بلا تخمين — و`undefined` حين لا
+ * ردَّ أصلاً (انقطاعُ شبكة) فلا يُخترَع.
+ */
+export function apiRequestId(error: unknown): string | undefined {
+  const res = (error as ApiErrorShape)?.response;
+  const fromHeader = res?.headers?.['x-request-id'];
+  if (typeof fromHeader === 'string' && fromHeader) return fromHeader;
+  const fromBody = res?.data?.requestId;
+  return typeof fromBody === 'string' && fromBody ? fromBody : undefined;
 }
 
 /**
@@ -40,15 +53,20 @@ export function apiErrorCode(error: unknown): string | undefined {
  */
 export function apiErrorMessage(error: unknown, fallback: string): string {
   const raw = (error as ApiErrorShape)?.response?.data?.message;
+  // ⑧ خطأُ الخادم (`5xx`) يحمل معرِّفَ طلبه في الرسالة كي يُبلَّغ به الدعمُ (ق-١٢٣٧)؛ أمّا `4xx` فرسالتُه
+  // تسمّي سببَها وحدَها — والمعرِّفُ متاحٌ لمن أراده بـ`apiRequestId`.
+  const status = (error as ApiErrorShape)?.response?.status;
+  const requestId = apiRequestId(error);
+  const withId = (text: string) => (requestId && typeof status === 'number' && status >= 500 ? `${text} (رقم الطلب: ${requestId})` : text);
 
   if (Array.isArray(raw)) {
     const parts = raw.map((m) => String(m).trim()).filter(Boolean);
-    if (parts.length) return parts.join(' · ');
+    if (parts.length) return withId(parts.join(' · '));
   } else if (typeof raw === 'string' && raw.trim()) {
-    return raw.trim();
+    return withId(raw.trim());
   }
 
   // انقطاع شبكة أو انهيار قبل الردّ: لا `response` أصلاً. رسالة axios نفسها
   // إنجليزية تقنية (`Network Error`) فلا تُعرض — الاحتياطي العربي أصدق.
-  return fallback;
+  return withId(fallback);
 }

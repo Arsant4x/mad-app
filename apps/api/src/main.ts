@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
 import { validationExceptionFactory } from './common/i18n/validation.util';
 import { assertProductionSecrets } from './common/config/production-secrets';
+import { REQUEST_ID_HEADER, requestIdMiddleware } from './common/request-id/request-id.middleware';
 
 async function bootstrap() {
   // قبل أي شيء آخر — قبل الاتصال بقاعدة البيانات وقبل فتح المنفذ: منصةٌ تُقلع
@@ -27,6 +28,10 @@ async function bootstrap() {
   // قابلة للتزوير من الخارج.
   app.set('trust proxy', 1);
 
+  // معرِّفُ الطلب **أوّلَ السلسلة** (ق-١٢٣٧): يُكتب على الاستجابة قبل أيّ معالجٍ أو حارس، فيحمله
+  // `404` لمسارٍ لا وجود له و`401` قبل المصادقة و`500` لاستثناءٍ لم يُلتقط — لا الناجحُ وحدَه.
+  app.use(requestIdMiddleware);
+
   // Standard hardening headers (HSTS, no-sniff, frame denial…). CSP is left
   // off: this process serves only a JSON API plus Swagger, and Swagger's inline
   // scripts break under a strict default CSP for no security gain here.
@@ -35,6 +40,8 @@ async function bootstrap() {
   app.enableCors({
     origin: config.get<string>('WEB_ORIGIN', 'http://localhost:5173'),
     credentials: true,
+    // المتصفّحُ لا يقرأ رأساً مخصَّصاً حتى يُعلَن — بدونه يبقى المعرِّفُ في الشبكة ولا يصل شاشةَ الخطأ.
+    exposedHeaders: [REQUEST_ID_HEADER],
   });
   // `exceptionFactory` يحوّل أخطاء class-validator إلى حمولاتٍ مقروءة آلياً
   // يترجمها المرشّح بلغة الطلب. بدونه تصل المستخدمَ العربي رسائل إنجليزية
