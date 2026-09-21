@@ -625,6 +625,75 @@ export class ReportsService {
     });
   }
 
+  /**
+   * **لوحةُ التحكّم — الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`، الحزمةُ الثانية من المراجعة الخارجية).
+   *
+   * كانت الشاشةُ تجمع بنفسها من قائمتَي الفواتير والمشتريات: **الإيرادُ شاملَ الضريبة** (إجماليُّ
+   * الفاتورة لا صافيها)، **والذممُ تحسب المسدَّدَ جزئياً كاملاً** (فاتورةٌ غيرُ `PAID` بكامل إجماليها)،
+   * والمصروفُ إجماليُّ الشراء بضريبته. فصار كلُّ رقمٍ من مصدره الذي تقرأ منه التقارير:
+   * الإيرادُ والمصروفُ من الدفتر (حساباتُ الإيراد والمصروف في الفترة — كقائمة الدخل، والضريبةُ على
+   * `2200` لا فيهما)، والذممُ من التخصيصات (`customerExposure` — مصدرُ الأعمار وحدِّ الائتمان)،
+   * والسلسلةُ الشهرية من الدفتر نفسِه. وكلُّها نصٌّ بخانتين على الحدّ (`ق-١٢٣٥`).
+   *
+   * الفترةُ كما تفهمها بقيّةُ التقارير (`dateFilter`)؛ والسلسلةُ تنتهي بشهر `to` (أو اليوم) وتمتدّ
+   * على أشهر الفترة (`1..24`) أو ستّةٍ حين لا بداية — كما كانت الشاشةُ ترسمها.
+   *
+   * **على مستوى المنشأة بحقّها**: الإيرادُ والمصروفُ من دفترٍ واحد كقائمة الدخل — ولا تُشتقّ لوحةٌ
+   * من نصف دفتر؛ والذممُ وحدَها بفروع القارئ كما في الأعمار.
+   */
+  dashboard(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const accounts = await tx.account.findMany({ select: { id: true, type: true } });
+      const movements = await this.movementsByAccount(tx, range);
+      const revenueIds = accounts.filter((a) => a.type === 'revenue').map((a) => a.id);
+      const expenseIds = accounts.filter((a) => a.type === 'expense').map((a) => a.id);
+      const totalRevenue = revenueIds.reduce((s, id) => s + this.periodAmount(movements, id, 'credit'), 0);
+      const totalExpenses = expenseIds.reduce((s, id) => s + this.periodAmount(movements, id, 'debit'), 0);
+
+      // السلسلةُ الشهرية: إيرادُ كلِّ شهرٍ من الدفتر — حاصلُ الدائن − المدين على حسابات الإيراد.
+      const toDate = range.to ? new Date(range.to) : new Date();
+      let monthsBack = 6;
+      if (range.from) {
+        const fromDate = new Date(range.from);
+        monthsBack = Math.max(1, Math.min(24, (toDate.getUTCFullYear() - fromDate.getUTCFullYear()) * 12 + (toDate.getUTCMonth() - fromDate.getUTCMonth()) + 1));
+      }
+      const firstMonth = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() - (monthsBack - 1), 1));
+      const seriesEnd = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+      const lines = revenueIds.length
+        ? await tx.journalLine.findMany({
+            where: { accountId: { in: revenueIds }, journalEntry: { date: { gte: firstMonth, lte: seriesEnd } } },
+            select: { debit: true, credit: true, journalEntry: { select: { date: true } } },
+          })
+        : [];
+      const byMonth = new Map<string, number>();
+      for (const l of lines) {
+        const d = l.journalEntry.date;
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        byMonth.set(key, (byMonth.get(key) ?? 0) + Number(l.credit) - Number(l.debit));
+      }
+      const monthly: { month: string; revenue: string }[] = [];
+      for (let i = monthsBack - 1; i >= 0; i--) {
+        const d = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() - i, 1));
+        const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+        monthly.push({ month: key, revenue: money(byMonth.get(key) ?? 0) });
+      }
+
+      // الذممُ: تعرّضُ العملاء اليوم من التخصيصات — الفواتيرُ بمتبقّيها وأقساطُ الإيجار المستحقّة (`ق-٩٢٥/④`).
+      const exposure = await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds });
+      const receivables = exposure.reduce((s, r) => s + r.total, 0);
+
+      return {
+        from: range.from ?? null,
+        to: range.to ?? null,
+        revenue: money(totalRevenue),
+        expenses: money(totalExpenses),
+        netProfit: money(totalRevenue - totalExpenses),
+        receivables: money(receivables),
+        monthly,
+      };
+    });
+  }
+
   /** Shared by every report so they all interpret the same range identically —
    * an empty range means "everything", not "nothing". */
   private dateFilter(range: ReportRangeDto): Prisma.DateTimeFilter | undefined {

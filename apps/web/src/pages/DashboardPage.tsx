@@ -2,32 +2,45 @@ import { badgeOf } from '../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listInvoices, type Invoice } from '../api/invoices';
-import { listPurchases, type Purchase } from '../api/purchases';
+import { getDashboard, type DashboardSummary } from '../api/reports';
 import { dfmt, fmt } from '../lib/format';
-import { computeRange, inRange, type DashRange } from './dashboardRange';
+import { num0 } from '../lib/money';
+import { computeRange, type DashRange } from './dashboardRange';
 import { STATUS_META } from './invoices/statusMeta';
 
 const MONTH_NAMES = ['ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون', 'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'];
 
+/** تسميةُ شهرٍ من مفتاحه `YYYY-MM` — عرضٌ لا حساب. */
+const monthLabel = (key: string) => MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? key;
+
+/**
+ * لوحةُ التحكّم — **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`).
+ *
+ * كانت تجمع بنفسها من قائمتَي الفواتير والمشتريات: الإيرادَ شاملَ الضريبة، والمصروفَ إجماليَّ
+ * الشراء بضريبته، والذممَ من فواتيرَ غيرِ `PAID` **بكامل إجماليها** (المسدَّدُ جزئياً كاملاً)،
+ * والسلسلةَ الشهرية من الإجماليات. صارت كلُّها من `GET /reports/dashboard` — من الدفتر والتخصيصات —
+ * وتصل نصّاً بخانتين فتُعرض بـ`fmt` وتُقرأ بـ`num0` حيث تلزم مقارنة.
+ */
 export function DashboardPage() {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DashRange>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
+  const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
+
   useEffect(() => {
-    Promise.all([listInvoices(), listPurchases()])
-      .then(([inv, pur]) => {
-        setInvoices(inv);
-        setPurchases(pur);
-      })
+    listInvoices()
+      .then(setInvoices)
       .finally(() => setLoading(false));
   }, []);
 
-  const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
+  useEffect(() => {
+    getDashboard({ from: from ?? undefined, to }).then(setSummary);
+  }, [from, to]);
 
   function selectRange(r: DashRange) {
     setRange(r);
@@ -40,38 +53,15 @@ export function DashboardPage() {
 
   const periodLabel = from ? `من ${dfmt(from)} إلى ${dfmt(to)}` : `حتى ${dfmt(to)} (كل الفترات)`;
 
-  // A credit note stores positive amounts (docType carries the direction), so
-  // it enters revenue with a flipped sign rather than inflating it.
-  const signedTotal = (i: Invoice) => (i.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(i.total);
-  const revenue = useMemo(() => invoices.filter((i) => inRange(i.issueDate, from, to)).reduce((s, i) => s + signedTotal(i), 0), [invoices, from, to]);
-  const expense = useMemo(() => purchases.filter((p) => inRange(p.date, from, to)).reduce((s, p) => s + Number(p.total), 0), [purchases, from, to]);
-  const net = revenue - expense;
-  // Notes are issued as status PAID, so the receivables filter already skips them.
-  const receivables = useMemo(() => invoices.filter((i) => i.status !== 'PAID').reduce((s, i) => s + Number(i.total), 0), [invoices]);
-
-  const months = useMemo(() => {
-    const toDate = to ? new Date(to) : new Date();
-    let monthsBack = 6;
-    if (from) {
-      const fromDate = new Date(from);
-      monthsBack = Math.max(1, Math.min(24, (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth()) + 1));
-    }
-    const result: { label: string; value: number }[] = [];
-    for (let i = monthsBack - 1; i >= 0; i--) {
-      const d = new Date(toDate.getFullYear(), toDate.getMonth() - i, 1);
-      const mFrom = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      const mToDate = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-      const mTo = `${mToDate.getFullYear()}-${String(mToDate.getMonth() + 1).padStart(2, '0')}-${String(mToDate.getDate()).padStart(2, '0')}`;
-      const rv = invoices.filter((inv) => inRange(inv.issueDate, mFrom, mTo)).reduce((s, inv) => s + (inv.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(inv.total), 0);
-      result.push({ label: MONTH_NAMES[d.getMonth()], value: Math.round(rv / 1000) });
-    }
-    return result;
-  }, [invoices, from, to]);
+  // الأرقامُ من الخادم كما هي؛ والصافي يُقرأ رقماً لاختيار اللون فقط.
+  const net = num0(summary?.netProfit);
+  // السلسلةُ الشهرية تصل جاهزة؛ الارتفاعُ النسبيّ للعمود تخطيطٌ لا رقمٌ يُعرض.
+  const months = useMemo(() => (summary?.monthly ?? []).map((m) => ({ label: monthLabel(m.month), revenue: m.revenue, value: num0(m.revenue) })), [summary]);
   const maxMonth = Math.max(1, ...months.map((m) => m.value));
 
   const recentInvoices = useMemo(() => [...invoices].sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1)).slice(0, 4), [invoices]);
 
-  if (loading) return null;
+  if (loading || !summary) return null;
 
   return (
     <div>
@@ -114,23 +104,23 @@ export function DashboardPage() {
       <div className="kpi-row">
         <div className="kpi-card pos">
           <div className="kpi-label">الإيرادات</div>
-          <div className="kpi-value num">{fmt(revenue)} ر.س</div>
-          <div className="kpi-delta">للفترة المحددة</div>
+          <div className="kpi-value num">{fmt(summary.revenue)} ر.س</div>
+          <div className="kpi-delta">صافيةً من الضريبة — للفترة المحددة</div>
         </div>
         <div className="kpi-card neg">
           <div className="kpi-label">المصروفات</div>
-          <div className="kpi-value num">{fmt(expense)} ر.س</div>
-          <div className="kpi-delta">للفترة المحددة</div>
+          <div className="kpi-value num">{fmt(summary.expenses)} ر.س</div>
+          <div className="kpi-delta">من الدفتر — للفترة المحددة</div>
         </div>
         <div className={`kpi-card ${net >= 0 ? 'pos' : 'neg'}`}>
           <div className="kpi-label">صافي الربح</div>
-          <div className="kpi-value num">{fmt(net)} ر.س</div>
+          <div className="kpi-value num">{fmt(summary.netProfit)} ر.س</div>
           <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? 'ربح' : 'خسارة'} للفترة المحددة</div>
         </div>
         <div className="kpi-card neu">
           <div className="kpi-label">الذمم المدينة المستحقة</div>
-          <div className="kpi-value num">{fmt(receivables)} ر.س</div>
-          <div className="kpi-delta">غير محصَّلة بعد</div>
+          <div className="kpi-value num">{fmt(summary.receivables)} ر.س</div>
+          <div className="kpi-delta">متبقّي الفواتير والأقساط بعد المقبوض</div>
         </div>
       </div>
 
@@ -139,10 +129,10 @@ export function DashboardPage() {
           <div className="card-title">الإيرادات — اتجاه شهري</div>
         </div>
         <div className="chart-wrap">
-          {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>لا توجد فواتير بعد لعرض الاتجاه</div>}
+          {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>لا توجد قيودُ إيرادٍ بعد لعرض الاتجاه</div>}
           {months.map((m, i) => (
             <div key={i} className={`bar ${i === months.length - 1 ? 'now' : ''}`} style={{ height: `${Math.max(Math.round((m.value / maxMonth) * 100), 2)}%` }}>
-              <em className="num">{m.value}K</em>
+              <em className="num">{fmt(m.revenue)}</em>
               <span>{m.label}</span>
             </div>
           ))}

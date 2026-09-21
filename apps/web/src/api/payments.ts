@@ -29,6 +29,9 @@ export interface Payment {
   /** غير فارغ ⇒ هذا سند عكسي، لا يُعكس ولا يُعاد توزيعه. */
   reversesId: string | null;
   allocations: PaymentAllocation[];
+  /** مجموعُ التخصيصات وما بقي بلا تخصيص — من الخادم لا من جمع الشاشة (`ق-١٢٤٣`)؛ نصٌّ بخانتين. */
+  allocatedTotal: MoneyText;
+  unallocated: MoneyText;
   createdAt: string;
 }
 

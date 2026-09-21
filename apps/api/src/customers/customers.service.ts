@@ -5,7 +5,10 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
-import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { mapList, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { money } from '../common/money/text';
+import { dayEndOf } from '../common/wall-clock.util';
+import { customerExposure, exposureOf } from '../reports/receivables-exposure.util';
 import { assertCustomerNotInTrash } from './customer-trash.util';
 
 /** حقولُ البحث المُعلَنة لهذه القائمة (`ق-١٢٣٦`) — الاسمُ والهاتفُ والرقمُ الضريبي. */
@@ -15,9 +18,44 @@ const CUSTOMER_SEARCH_FIELDS = ['name', 'phone', 'vatNumber'] as const;
 export class CustomersService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
+  /**
+   * القائمةُ **برصيد كلِّ عميل** — من المصدر الواحد لتعرّض العميل (`customerExposure`: فواتيرُه بمتبقّيها
+   * من التخصيصات، وأقساطُ إيجاره المستحقّة) لا من جمع الشاشة (`ق-١٢٤٣`: كانت شاشةُ العملاء تحمّل
+   * الفواتيرَ كلَّها وتجمع `outstanding` بنفسها). تمريرةٌ واحدة على المنشأة لا استعلامٌ لكل صفّ؛
+   * والرصيدُ نصٌّ بخانتين (`ق-١٢٣٥`)، وصفرٌ لمن لا رصيدَ له. **وعلى مستوى المنشأة** كحدّ الائتمان.
+   */
   list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
     const where: Prisma.CustomerWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), CUSTOMER_SEARCH_FIELDS) };
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } }));
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const result = await pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } });
+      const exposure = new Map((await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds: 'all' })).map((r) => [r.customerId, r.total]));
+      return mapList(result, (c) => ({ ...c, outstanding: money(exposure.get(c.id) ?? 0) }));
+    });
+  }
+
+  /**
+   * ملخّصُ العميل — ثلاثةُ أرقامٍ كانت تُجمع في نافذة تفاصيله من إجماليات الفواتير (`ق-١٢٤٣`):
+   * **المفوتَر** صافياً من إشعاراته الدائنة (الإجماليُّ موقَّعاً بنوع المستند)، **والمقبوض** من تخصيصات
+   * سندات القبض على فواتيره (لا من فواتيرَ ختمُها `PAID` — فالمسدَّدُ جزئياً كان لا يُحسب)، **والرصيدُ**
+   * من المصدر الواحد للتعرّض. كلُّها نصٌّ بخانتين.
+   *
+   * **على مستوى المنشأة بحقّها**: فواتيرُ العميل تُقرأ من فروعها كلِّها — فالمفوتَرُ له والمقبوضُ منه
+   * ذمّتُه على المنشأة لا على فرع، كما يقرؤها حدُّ الائتمان.
+   */
+  summary(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const customer = await tx.customer.findUnique({ where: { id }, select: { id: true } });
+      if (!customer) throw new NotFoundException(MSG.customer_not_found);
+      const invoices = await tx.invoice.findMany({ where: { customerId: id }, select: { id: true, docType: true, total: true } });
+      const billed = invoices.reduce((s, i) => s + (i.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(i.total), 0);
+      const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId: { in: invoices.map((i) => i.id) } }, _sum: { amount: true } });
+      return {
+        customerId: id,
+        billed: money(billed),
+        collected: money(Number(allocated._sum.amount ?? 0)),
+        outstanding: money(await exposureOf(tx, id, dayEndOf(new Date()))),
+      };
+    });
   }
 
   create(companyId: string, dto: CreateCustomerDto) {

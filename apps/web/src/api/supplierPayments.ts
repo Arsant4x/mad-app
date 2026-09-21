@@ -31,6 +31,9 @@ export interface SupplierPayment {
   /** غيرُ فارغ ⇒ هذا سندٌ عاكس، لا يُعكس ولا يُعاد توزيعه. */
   reversesId: string | null;
   allocations: SupplierPaymentAllocation[];
+  /** مجموعُ التخصيصات وما بقي بلا تخصيص — من الخادم كسند القبض (`ق-١٢٤٣`)؛ نصٌّ بخانتين. */
+  allocatedTotal: MoneyText;
+  unallocated: MoneyText;
   createdAt: string;
 }
 

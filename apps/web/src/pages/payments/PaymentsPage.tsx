@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listPayments, reversePayment, type Payment } from '../../api/payments';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt, fmt } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { num0 } from '../../lib/money';
 import { PaymentModal } from './PaymentModal';
 
 /**
@@ -33,8 +33,6 @@ export function PaymentsPage() {
     return payments.filter((p) => p.no.toLowerCase().includes(q) || p.customer.name.toLowerCase().includes(q) || (p.reference ?? '').toLowerCase().includes(q));
   }, [payments, search]);
 
-  /** المخصَّص من التخصيصات نفسها — لا حقل مخزَّن يُقرأ هنا. */
-  const allocatedOf = (p: Payment) => p.allocations.reduce((s, a) => s + Number(a.amount), 0);
 
   async function confirmReverse() {
     if (!reversing) return;
@@ -99,9 +97,9 @@ export function PaymentsPage() {
               </tr>
             )}
             {rows.map((p) => {
-              const allocated = allocatedOf(p);
               const isReversal = !!p.reversesId;
-              const onAccount = round2(Number(p.amount) - allocated);
+              // المخصَّصُ وغيرُ المخصَّص يصلان من الخادم (`ق-١٢٤٣`)؛ غيرُ المخصَّص يُقرأ رقماً لقرار الإظهار وحدَه.
+              const onAccount = num0(p.unallocated);
               return (
                 <tr key={p.id}>
                   <td className="num">
@@ -112,8 +110,8 @@ export function PaymentsPage() {
                   <td>{p.customer.name}</td>
                   <td className="num">{fmt(Number(p.amount))}</td>
                   <td className="num">
-                    {fmt(allocated)}
-                    {Math.abs(onAccount) > 0.005 && <div className="hint">على الحساب: {fmt(onAccount)}</div>}
+                    {fmt(p.allocatedTotal)}
+                    {Math.abs(onAccount) > 0.005 && <div className="hint">على الحساب: {fmt(p.unallocated)}</div>}
                   </td>
                   <td style={{ fontSize: 12 }}>
                     {p.allocations.map((a) => (

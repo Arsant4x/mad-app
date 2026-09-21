@@ -9,7 +9,7 @@ import {
   type DepositType,
 } from '../../api/contracts';
 import { fmt, dfmt } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { num0, round2 } from '../../lib/money';
 
 const TYPE_LABEL: Record<DepositType, string> = {
   RENT: 'تأمين إيجار',
@@ -57,9 +57,8 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
   const [settledAt, setSettledAt] = useState(new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<DeductionRow[]>([]);
 
-  const heldTotal = contract.deposits
-    .filter((d) => d.status === 'HELD' && d.holder === 'COMPANY')
-    .reduce((sum, d) => sum + Number(d.amount), 0);
+  // المحجوزُ لدى المنشأة يصل من الخادم مع العقد (`ق-١٢٤٣`) — يُقرأ رقماً لقرار الإظهار وحدَه.
+  const heldTotal = num0(contract.depositsHeld);
 
   function fail(e: unknown) {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -116,7 +115,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>
-          التأمينات ({contract.deposits.length}){heldTotal > 0 && <span className="hint"> — محتجز لدى الشركة: {fmt(heldTotal)}</span>}
+          التأمينات ({contract.deposits.length}){heldTotal > 0 && <span className="hint"> — محتجز لدى الشركة: {fmt(contract.depositsHeld ?? 0)}</span>}
         </span>
         {contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>

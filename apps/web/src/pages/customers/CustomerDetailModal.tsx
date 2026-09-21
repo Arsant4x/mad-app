@@ -1,20 +1,23 @@
 import { badgeOf } from '../../lib/statusBadge';
-import type { Customer } from '../../api/customers';
+import { useEffect, useState } from 'react';
+import { getCustomerSummary, type Customer, type CustomerSummary } from '../../api/customers';
 import type { Invoice } from '../../api/invoices';
 import { dfmt, fmt } from '../../lib/format';
+import { num0 } from '../../lib/money';
 import { STATUS_META } from '../invoices/statusMeta';
 
+/**
+ * نافذةُ العميل — **الأرقامُ الثلاثة من الخادم** (`ق-١٢٤٣`): كانت تُجمع هنا من إجماليات الفواتير، فعُدّ
+ * المقبوضُ من فواتيرَ ختمُها `PAID` وحدَها (المسدَّدُ جزئياً لا يُحسب) والرصيدُ من غير `PAID` بكامله.
+ * صارت من `GET /customers/:id/summary`: المفوتَرُ صافياً، والمقبوضُ من التخصيصات، والرصيدُ من التعرّض.
+ */
 export function CustomerDetailModal({ customer, invoices, onClose }: { customer: Customer; invoices: Invoice[]; onClose: () => void }) {
   const customerInvoices = invoices.filter((v) => v.customerId === customer.id).sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
-  // Credit notes sit in this list too, storing positive amounts — so what was
-  // billed is the NET of invoices and debit notes minus credits.
-  const totalBilled = customerInvoices.reduce((s, v) => s + (v.docType === 'CREDIT_NOTE' ? -1 : 1) * Number(v.total), 0);
-  // A credit note is issued as PAID (nothing is receivable on it), but no money
-  // came in — counting it as collected would overstate what this customer paid.
-  const totalPaid = customerInvoices.filter((v) => v.status === 'PAID' && v.docType !== 'CREDIT_NOTE').reduce((s, v) => s + Number(v.total), 0);
-  // Unchanged: credit notes are PAID so they drop out, and a debit note is
-  // genuinely receivable, so its DUE amount belongs here.
-  const balance = customerInvoices.filter((v) => v.status !== 'PAID').reduce((s, v) => s + Number(v.total), 0);
+  const [summary, setSummary] = useState<CustomerSummary | null>(null);
+  useEffect(() => {
+    getCustomerSummary(customer.id).then(setSummary);
+  }, [customer.id]);
+  const balance = num0(summary?.outstanding);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -44,16 +47,16 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
         <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
           <div className="kpi-card neu">
             <div className="kpi-label">إجمالي الفواتير المصدَرة</div>
-            <div className="kpi-value num">{fmt(totalBilled)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
             <div className="kpi-delta">{customerInvoices.length} فاتورة</div>
           </div>
           <div className="kpi-card pos">
             <div className="kpi-label">المُحصَّل</div>
-            <div className="kpi-value num">{fmt(totalPaid)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.collected)} ر.س` : '…'}</div>
           </div>
           <div className={`kpi-card ${balance > 0 ? 'neg' : 'pos'}`}>
             <div className="kpi-label">الرصيد المستحق</div>
-            <div className="kpi-value num">{fmt(balance)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.outstanding)} ر.س` : '…'}</div>
           </div>
         </div>
 

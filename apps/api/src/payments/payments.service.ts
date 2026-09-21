@@ -15,13 +15,14 @@ import {
   lockAndAssertAllocationsFit,
   SETTLEMENT_EPS as EPS,
   SettlementTarget,
+  withAllocatedTotals,
   withRemaining,
 } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
+import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto } from './dto/payment.dto';
 
@@ -82,19 +83,26 @@ export class PaymentsService {
           }
         : {}),
     };
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      pagedFindMany(query, tx.payment, {
-        where,
-        include: PAYMENT_INCLUDE,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      }),
+    // المخصَّصُ وغيرُ المخصَّص على كلِّ صفّ — من التخصيصات في الخادم لا في الشاشة (`ق-١٢٤٣`).
+    // (`listOrPage` لا `pagedFindMany`: الصفُّ يُقرأ بضمائمه فيُستنتج نوعُه من النداء نفسِه؛ والترتيبُ
+    // مختومٌ بـ`id` — `ق-٣٥٦`.)
+    const args = { where, include: PAYMENT_INCLUDE, orderBy: [{ date: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }] };
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
+      mapList(
+        await listOrPage(query, {
+          all: () => tx.payment.findMany(args),
+          count: () => tx.payment.count({ where }),
+          window: (offset, limit) => tx.payment.findMany({ ...args, skip: offset, take: limit }),
+        }),
+        withAllocatedTotals,
+      ),
     );
   }
 
   async findOne(companyId: string, id: string) {
     const payment = await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.payment.findUnique({ where: { id }, include: PAYMENT_INCLUDE }));
     if (!payment) throw new NotFoundException(MSG.payment_not_found);
-    return payment;
+    return withAllocatedTotals(payment);
   }
 
   /**
@@ -188,7 +196,7 @@ export class PaymentsService {
 
         for (const a of allocations) await this.recomputeInvoiceStatus(tx, a.invoiceId);
 
-        return tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE });
+        return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE }));
       }),
     );
   }
@@ -302,7 +310,7 @@ export class PaymentsService {
 
       for (const invoiceId of touched) await this.recomputeInvoiceStatus(tx, invoiceId);
 
-      return tx.payment.findUniqueOrThrow({ where: { id }, include: PAYMENT_INCLUDE });
+      return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id }, include: PAYMENT_INCLUDE }));
     });
   }
 
@@ -388,7 +396,7 @@ export class PaymentsService {
 
         for (const a of original.allocations) await this.recomputeInvoiceStatus(tx, a.invoiceId);
 
-        return tx.payment.findUniqueOrThrow({ where: { id: reversal.id }, include: PAYMENT_INCLUDE });
+        return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: reversal.id }, include: PAYMENT_INCLUDE }));
       }),
     );
   }
@@ -489,7 +497,7 @@ export class PaymentsService {
           refund: true,
         });
 
-        return tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE });
+        return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE }));
       }),
     );
   }

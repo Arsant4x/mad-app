@@ -7,6 +7,7 @@ import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
+import { ReportRangeDto } from '../reports/dto/report-range.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { SuppliersService } from './suppliers.service';
@@ -21,6 +22,13 @@ export class SuppliersController {
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
     return this.suppliersService.list(tenant.companyId, query.includeArchived === 'true', query);
+  }
+
+  /** المفوتَرُ والمسدَّدُ والمستحقُّ في فترة — محسوبةٌ في الخادم لا في نافذة التفاصيل (`ق-١٢٤٣`). */
+  @Get(':id/summary')
+  @RequiresAction('view')
+  summary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Query() range: ReportRangeDto) {
+    return this.suppliersService.summary(tenant.companyId, id, range);
   }
 
   @Post()

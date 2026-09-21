@@ -1,3 +1,4 @@
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
@@ -24,6 +25,10 @@ export interface AccountInput {
 }
 
 export const listAccounts = () => apiClient.get<Account[]>('/accounts').then((r) => r.data);
+
+/** مجموعُ أرصدة الدليل لكل نوع — من الخادم (`GET /accounts/summary`) لا من جمع الشاشة (`ق-١٢٤٣`)؛ نصٌّ بخانتين. */
+export type AccountsSummary = Record<AccountType, { total: MoneyText; count: number }>;
+export const getAccountsSummary = () => apiClient.get<AccountsSummary>('/accounts/summary').then((r) => r.data);
 export const createAccount = (dto: AccountInput) => apiClient.post<Account>('/accounts', dto).then((r) => r.data);
 export const updateAccount = (id: string, dto: Partial<Omit<AccountInput, 'code'>>) => apiClient.patch<Account>(`/accounts/${id}`, dto).then((r) => r.data);
 export const deleteAccount = (id: string) => apiClient.delete(`/accounts/${id}`);

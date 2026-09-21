@@ -1,3 +1,4 @@
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Unit } from './units';
 
@@ -21,6 +22,10 @@ export interface Installment {
   amount: string;
   status: InstallmentStatus;
   notes: string | null;
+  /** إجماليُّ القسط بالضريبة ومسدَّدُه ومتبقّيه — يحسبها الخادم في `GET /contracts/:id` وحده (`ق-١٢٤٣`)؛ نصٌّ بخانتين، والمتبقّي موقَّع. */
+  gross?: MoneyText;
+  settled?: MoneyText;
+  remaining?: MoneyText;
 }
 
 export interface RentPayment {
@@ -71,6 +76,9 @@ export interface Contract {
   claims: ContractClaim[];
   keyMoney: ContractKeyMoney[];
   handovers: ContractHandover[];
+  /** مجموعُ المطالبات المفتوحة والتأميناتُ المحجوزة لدى المنشأة — من الخادم في `GET /contracts/:id` وحده (`ق-١٢٤٣`). */
+  claimsOutstanding?: MoneyText;
+  depositsHeld?: MoneyText;
 }
 
 export type HandoverType = 'DELIVERY' | 'RECEIPT';
