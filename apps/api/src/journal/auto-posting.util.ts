@@ -1052,6 +1052,44 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
 }
 
 /**
+ * **سطرُ كشفٍ بنكيٍّ بلا دفتر يُرحَّل عند المطابقة** (`ق-١٢٦١` ج — يحلّ `ق-٢٨١`): الطرفُ المقابل **يختاره
+ * المحاسب** (رسمٌ بنكيّ · فائدةٌ · تحويلٌ لم يُسجَّل) فلا يُخترع؛ الموجبُ يدخل البنكَ (مدين البنك · دائن الطرف)
+ * والسالبُ يخرج منه. القيدُ يمرّ بقفل الفترة وحارس الإقفال البنكيّ كأيِّ قيد، **ومرآةُ البنك** تُحرَّك هنا —
+ * من مسار الترحيل — **بلا صفِّ مرآةٍ جديد**: سطرُ الكشف نفسُه هو الحركة، ويُربَط بالقيد في التسوية.
+ * **على مستوى المنشأة بحقّها**: سطرُ البنك يُقرأ من القيد الذي رُحِّل للتوّ على فرع البنك — قراءةٌ بمعرّف القيد
+ * والحساب لا مسحٌ على الفروع.
+ */
+export async function postBankStatementLineEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: { bank: { id: string; accountId: string; branchId: string | null }; counterpartyAccountId: string; date: Date; amount: number; memo: string },
+): Promise<{ entryId: string; entryNo: string; bankLineId: string }> {
+  const abs = round2(Math.abs(p.amount));
+  if (abs <= 0) throw new BadRequestException(MSG.journal_entry_unbalanced);
+  const lines: PostingLine[] =
+    p.amount >= 0
+      ? [
+          { accountId: p.bank.accountId, debit: abs, credit: 0 },
+          { accountId: p.counterpartyAccountId, debit: 0, credit: abs },
+        ]
+      : [
+          { accountId: p.counterpartyAccountId, debit: abs, credit: 0 },
+          { accountId: p.bank.accountId, debit: 0, credit: abs },
+        ];
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.bank.branchId,
+    date: p.date,
+    memo: p.memo,
+    auto: false,
+    lines,
+  });
+  await tx.bank.update({ where: { id: p.bank.id }, data: { balance: { increment: p.amount } } });
+  const bankLine = await tx.journalLine.findFirstOrThrow({ where: { journalEntryId: entry.id, accountId: p.bank.accountId }, select: { id: true } });
+  return { entryId: entry.id, entryNo: entry.no, bankLineId: bankLine.id };
+}
+
+/**
  * أثرُ سند التسوية على **مرآة البنك/الصندوق** (`ق-٢٨٢`: تُكتب من مسار الترحيل وحدَه — ولذلك
  * تسكن هذا الملفّ): رصيدٌ يتحرّك وحركةٌ بنكية تُسجَّل مربوطةً برقم القيد، بمبلغٍ **موقَّع**
  * (موجبٌ يدخل، سالبٌ يخرج؛ والعكسُ يقلب الإشارة). لا شيء حين لا بنك (نقدٌ على `1000`).

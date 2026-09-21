@@ -1,9 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 
 /** Account types whose balance increases with a debit (asset, expense);
@@ -15,6 +15,25 @@ export interface PostingLine {
   accountId: string;
   debit: number;
   credit: number;
+}
+
+/**
+ * **الإقفالُ البنكيّ** (`ق-١٢٦١` ج — التسويةُ البنكية): بنكٌ سُوّي كشفُه حتى تاريخٍ لا يُكتب على حسابه قيدٌ بذلك
+ * التاريخ أو قبله — كإقفال الفترة لكنّه لحسابٍ واحد؛ والتصحيحُ بقيدٍ بعد تاريخ الإقفال. هنا لا في كلِّ مستدعٍ
+ * لأن هذا هو المسارَ الواحدَ لكلِّ ترحيل (كـ`assertPeriodOpen`).
+ * **على مستوى المنشأة بحقّها**: حارسٌ على حسابات القيد كلِّها — بنكٌ في أيِّ فرعٍ يحرس حسابَه، والقيدُ نفسُه هو الذي
+ * حُدّد فرعُه قبل الوصول هنا؛ فمرشِّحُ فروع القارئ يُعمي الحارسَ عن بنكِ فرعٍ آخر يخصّ القيدَ نفسَه.
+ */
+async function assertBankNotReconciled(tx: Prisma.TransactionClient, accountIds: string[], date: Date): Promise<void> {
+  const locked = await tx.bank.findFirst({
+    where: { accountId: { in: accountIds }, reconciledUntil: { gte: date } },
+    select: { name: true, reconciledUntil: true },
+  });
+  if (locked) {
+    throw new ConflictException(
+      formatMessage(MSG.bank_reconciled_locked, { bank: locked.name, until: locked.reconciledUntil!.toISOString().slice(0, 10) }),
+    );
+  }
 }
 
 /** Resolves each account id to its type in one query, scoped by the tenant
@@ -179,6 +198,7 @@ export async function createJournalEntry(
   // writing anything — see fetchAccountTypes for why this must come first.
   const accountIds = [...new Set(input.lines.map((l) => l.accountId))];
   const accountTypes = await fetchAccountTypes(tx, accountIds);
+  await assertBankNotReconciled(tx, accountIds, input.date);
 
   const { currency, exchangeRate } = resolveCurrency(input);
   // البُعد يُحسب مرّة واحدة ويُختم على كل سطر — فلا يفترق سطرٌ عن قيده، ولا

@@ -4,6 +4,8 @@ import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
+import { CloseReconciliationDto, MatchStatementLineDto, PostStatementLineDto, ReconciliationQueryDto, UnmatchStatementLineDto } from './dto/reconciliation.dto';
+import { ReconciliationService } from './reconciliation.service';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
@@ -15,7 +17,48 @@ import { UpdateBankDto } from './dto/update-bank.dto';
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('banks')
 export class BanksController {
-  constructor(private readonly banksService: BanksService) {}
+  constructor(
+    private readonly banksService: BanksService,
+    private readonly reconciliation: ReconciliationService,
+  ) {}
+
+  /** التسويةُ البنكية (ق-١٢٦١ ج): الكشفُ مقابل الدفتر، بمقترَحاتٍ ومجاميع — كلُّ رقمٍ من الخادم. */
+  @Get(':id/reconciliation')
+  @RequiresAction('view')
+  reconciliationOverview(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Query() query: ReconciliationQueryDto) {
+    return this.reconciliation.overview(tenant.companyId, tenant.allowedBranchIds, id, query);
+  }
+
+  @Post(':id/reconciliation/match')
+  @RequiresAction('record')
+  reconciliationMatch(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: MatchStatementLineDto) {
+    return this.reconciliation.match(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.lineId);
+  }
+
+  @Post(':id/reconciliation/unmatch')
+  @RequiresAction('record')
+  reconciliationUnmatch(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UnmatchStatementLineDto) {
+    return this.reconciliation.unmatch(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId);
+  }
+
+  /** سطرُ كشفٍ بلا دفتر يُرحَّل بطرفٍ يختاره المحاسب ثم يُطابَق — يحلّ ق-٢٨١. */
+  @Post(':id/reconciliation/post')
+  @RequiresAction('record')
+  reconciliationPost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: PostStatementLineDto) {
+    return this.reconciliation.postFromStatement(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.counterpartyAccountId, dto.memo);
+  }
+
+  @Post(':id/reconciliation/close')
+  @RequiresAction('review')
+  reconciliationClose(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseReconciliationDto) {
+    return this.reconciliation.close(tenant.companyId, tenant.allowedBranchIds, id, dto.until);
+  }
+
+  @Post(':id/reconciliation/reopen')
+  @RequiresAction('review')
+  reconciliationReopen(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.reconciliation.reopen(tenant.companyId, tenant.allowedBranchIds, id);
+  }
 
   @Get()
   @RequiresAction('view')

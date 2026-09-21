@@ -5,6 +5,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { BankModal } from './BankModal';
+import { ReconciliationPanel } from './ReconciliationPanel';
 
 export function BanksPage() {
   const [banks, setBanks] = useState<Bank[]>([]);
@@ -14,6 +15,7 @@ export function BanksPage() {
   // Include archived records; off by day-to-day default (gap-analysis §1).
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
+  const [reconciling, setReconciling] = useState<Bank | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Bank | null>(null);
   const [codeBand, setCodeBand] = useState<CodeBandStatus | null>(null);
 
@@ -123,6 +125,7 @@ export function BanksPage() {
                   <RowMenu
                     actions={[
                       { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', bank: b }) },
+                      { label: '⚖ التسوية البنكية', onClick: () => setReconciling(b) },
                       { label: b.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
                       '-',
                       { label: '🗑 حذف', onClick: () => setPendingDelete(b), danger: true },
@@ -136,6 +139,7 @@ export function BanksPage() {
       </div>
 
       {modal && <BankModal branches={branches} editing={modal.mode === 'edit' ? modal.bank : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {reconciling && <ReconciliationPanel bank={reconciling} onClose={() => { setReconciling(null); reload(); }} />}
 
       {pendingDelete && (
         <ConfirmModal

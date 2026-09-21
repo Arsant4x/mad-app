@@ -1,0 +1,217 @@
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
+import { postBankStatementLineEntry } from '../journal/auto-posting.util';
+import { readLedger, type LedgerRow } from '../reports/ledger.util';
+
+/**
+ * **التسويةُ البنكية** (`ق-١٢٦١` ج — `domain-scan/07` A1).
+ *
+ * ثلاثةُ أطرافٍ في هذا الملفّ، وتمييزُها هو التصميم:
+ * - **سطورُ الكشف** = صفوفُ `bank_transactions` **اليدوية** (`entryNo` فارغ — `ق-٢٨١`: سطرُ مطابقةٍ لا مصدرُ قيد)؛
+ *   ما كتبه التاجر من كشف البنك. **المرآةُ** (`entryNo` مكتوب — تُكتب من مسار الترحيل) ليست كشفاً بل صورةَ الدفتر،
+ *   فلا تدخل جانبَ الكشف.
+ * - **سطورُ الدفتر** = سطورُ القيود على حساب البنك — تُقرأ **بمحرّك الأستاذ نفسِه** (`readLedger`).
+ * - **المطابقة** تربط سطرَ كشفٍ بسطرِ دفترٍ واحد (`matchedLineId` فريد) بمبلغٍ مساوٍ وإشارةٍ متّفقة؛ **والسطرُ الذي لا
+ *   دفترَ له** (رسمٌ بنكيّ · فائدةٌ · تحويلٌ لم يُسجَّل) **يُرحَّل عند المطابقة بطرفٍ يختاره المحاسب** — وبه تُحلّ
+ *   `ق-٢٨١` (السطرُ اليدويّ كان بلا طرفٍ فلا يُرحَّل) بلا أن يُخترع الطرف.
+ * - **الإقفال** (`reconciledUntil`): لا سطرَ كشفٍ معلَّقاً حتى التاريخ؛ وبعده **لا قيدَ على حساب البنك بتاريخٍ ≤ التاريخ**
+ *   (حارسٌ في `createJournalEntry`) **ولا فكَّ مطابقةٍ قبله** — فالمطابَقُ حقيقةٌ أُغلقت كإقفال الفترة.
+ *
+ * ⚠️ حدودٌ معلَنة: المطابقةُ واحدٌ لواحد بمبلغٍ مساوٍ (لا تجميعُ سطورٍ ولا مطابقةٌ جزئية) · لا استيرادَ ملفّ كشف
+ * (يدويٌّ اليوم، مستورَدٌ غداً بالبنية نفسِها) · المقترَحاتُ بالمبلغ والتاريخ `±3` أيام لا أكثر.
+ */
+const SUGGEST_DAYS = 3;
+
+/**
+ * سطرُ كشفٍ = ليس مرآةً: المرآةُ تحمل `entryNo` بلا `matchedLineId` (كتبها الترحيل)؛ والسطرُ اليدويُّ بلا `entryNo`،
+ * فإن رُحِّل من التسوية حمل الاثنين معاً — ويبقى سطرَ كشفٍ لأنه هو الحركةُ التي كتبها التاجر.
+ */
+const STATEMENT_ROW: Prisma.BankTransactionWhereInput = { OR: [{ entryNo: null }, { NOT: { matchedLineId: null } }] };
+const isStatementRow = (row: { entryNo: string | null; matchedLineId: string | null }) => row.entryNo === null || row.matchedLineId !== null;
+
+export interface ReconciliationQuery {
+  from?: string;
+  to?: string;
+}
+
+@Injectable()
+export class ReconciliationService {
+  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  /** البنكُ بمعرّفه، ثم فرعُه يُفحص على فروع القارئ — فكلُّ قراءةٍ بعده مقيَّدةٌ ببنكٍ أُذن به. */
+  private async bankOf(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', bankId: string) {
+    const bank = await tx.bank.findUnique({ where: { id: bankId }, select: { id: true, name: true, accountId: true, branchId: true, reconciledUntil: true, balance: true, deletedAt: true } });
+    if (!bank || bank.deletedAt) throw new NotFoundException(MSG.bank_not_found);
+    if (bank.branchId) assertBranchAllowed(allowedBranchIds, bank.branchId);
+    return bank;
+  }
+
+  /**
+   * الجانبان والمقترَحاتُ والمجاميع — كلُّ رقمٍ محسوبٌ هنا ويُرسَل نصّاً (`ق-١٢٤٣`).
+   * **على مستوى المنشأة بحقّها**: سطورُ الكشف تُقرأ ببنكٍ واحد فُحص فرعُه في `bankOf`، وسطورُ الدفتر بمحرّك الأستاذ
+   * الذي يرشّح بفروع القارئ بنفسه — فالفرعُ محروسٌ عبر البنك والمحرّك لا عبر مرشِّحٍ على الصفّ هنا.
+   */
+  overview(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, query: ReconciliationQuery) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      const from = query.from ? new Date(query.from) : undefined;
+      const to = query.to ? new Date(query.to) : undefined;
+
+      // سطورُ الكشف اليدوية في المدى — مع ما طابقته.
+      const statement = await tx.bankTransaction.findMany({
+        where: { bankId, ...STATEMENT_ROW, ...(from || to ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
+        orderBy: [{ date: 'asc' }, { id: 'asc' }],
+        select: { id: true, date: true, description: true, amount: true, matchedLineId: true, matchedAt: true, source: true },
+      });
+      // سطورُ الدفتر على حساب البنك — بالمحرّك نفسِه، والافتتاحيُّ والجاري معه.
+      const ledger = await readLedger(tx, { allowedBranchIds, accountId: bank.accountId, from, to }, 'debit');
+      const matchedLineIds = new Set(statement.map((s) => s.matchedLineId).filter((x): x is string => Boolean(x)));
+      // سطورٌ طابقتها صفوفٌ خارج المدى تبقى «مطابَقة» — تُقرأ من الجدول لا من المدى.
+      const outsideMatches = await tx.bankTransaction.findMany({ where: { bankId, matchedLineId: { in: ledger.rows.map((r) => r.lineId) } }, select: { matchedLineId: true } });
+      for (const m of outsideMatches) if (m.matchedLineId) matchedLineIds.add(m.matchedLineId);
+
+      const ledgerRows = ledger.rows.map((r) => ({ ...r, matched: matchedLineIds.has(r.lineId) }));
+      const unmatchedLedger = ledgerRows.filter((r) => !r.matched);
+      const unmatchedStatement = statement.filter((s) => !s.matchedLineId);
+
+      // المقترَحات: المبلغُ نفسُه بإشارته (موجبٌ ⟵ مدين على البنك) وتاريخٌ في حدود ±3 أيام — لكلِّ سطرِ كشفٍ معلَّق.
+      const suggestions = unmatchedStatement.map((s) => {
+        const amount = Number(s.amount);
+        const candidates = unmatchedLedger.filter((r) => {
+          // المبلغُ الموقَّع للسطر: مدينٌ يدخل البنكَ (+) ودائنٌ يخرج (−) — كإشارة سطر الكشف.
+          const lineAmount = Number(r.debit) - Number(r.credit);
+          const days = Math.abs((new Date(r.date).getTime() - s.date.getTime()) / 86_400_000);
+          return Math.abs(lineAmount - amount) < 0.005 && days <= SUGGEST_DAYS;
+        });
+        return { transactionId: s.id, lineIds: candidates.map((r) => r.lineId) };
+      });
+
+      const sum = (xs: number[]) => round2(xs.reduce((a, b) => a + b, 0));
+      return {
+        bank: { id: bank.id, name: bank.name, accountId: bank.accountId, reconciledUntil: bank.reconciledUntil ? bank.reconciledUntil.toISOString().slice(0, 10) : null, mirrorBalance: money(bank.balance) },
+        from: query.from ?? null,
+        to: query.to ?? null,
+        statement: statement.map((s) => ({ id: s.id, date: s.date.toISOString().slice(0, 10), description: s.description, amount: money(s.amount), matchedLineId: s.matchedLineId, matchedAt: s.matchedAt, source: s.source })),
+        ledger: { opening: ledger.opening, closing: ledger.closing, rows: ledgerRows, truncated: ledger.truncated },
+        suggestions,
+        totals: {
+          unmatchedStatement: money(sum(unmatchedStatement.map((s) => Number(s.amount)))),
+          unmatchedStatementCount: unmatchedStatement.length,
+          unmatchedLedger: money(sum(unmatchedLedger.map((r) => Number(r.debit) - Number(r.credit)))),
+          unmatchedLedgerCount: unmatchedLedger.length,
+        },
+      };
+    });
+  }
+
+  /**
+   * يربط سطرَ كشفٍ بسطرِ دفترٍ — بمبلغٍ مساوٍ وإشارةٍ متّفقة، وما قبل الإقفال لا يُمسّ.
+   * **على مستوى المنشأة بحقّها**: الصفوفُ الثلاثة تُقرأ بمعرّفاتها داخل بنكٍ واحد أُذن بفرعه أعلاه، والسطرُ يُقيَّد
+   * بحساب ذلك البنك — قراءةٌ بالمعرّف لا قراءةٌ جامعة، والفرعُ حُسم قبلها.
+   */
+  match(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, transactionId: string, lineId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      const row = await tx.bankTransaction.findFirst({ where: { id: transactionId, bankId } });
+      if (!row || !isStatementRow(row)) throw new NotFoundException(MSG.bank_transaction_not_found);
+      if (row.matchedLineId) throw new ConflictException(MSG.reconciliation_already_matched);
+      this.assertAfterClose(bank.reconciledUntil, row.date);
+      const line = await tx.journalLine.findFirst({ where: { id: lineId, accountId: bank.accountId }, include: { journalEntry: { select: { date: true, no: true } } } });
+      if (!line) throw new NotFoundException(MSG.reconciliation_line_not_found);
+      const taken = await tx.bankTransaction.findFirst({ where: { matchedLineId: lineId }, select: { id: true } });
+      if (taken) throw new ConflictException(MSG.reconciliation_line_taken);
+      const amount = Number(row.amount);
+      const lineAmount = Number(line.debit) - Number(line.credit);
+      if (Math.abs(lineAmount - amount) >= 0.005) {
+        throw new ConflictException(formatMessage(MSG.reconciliation_amount_mismatch, { statement: money(amount), ledger: money(lineAmount) }));
+      }
+      return tx.bankTransaction.update({ where: { id: row.id }, data: { matchedLineId: lineId, matchedAt: new Date(), matched: true } });
+    });
+  }
+
+  /**
+   * يفكّ مطابقةً — لا قبل الإقفال.
+   * **على مستوى المنشأة بحقّها**: صفٌّ واحد بمعرّفه في بنكٍ فُحص فرعُه — لا مسحَ على الفروع هنا.
+   */
+  unmatch(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, transactionId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      const row = await tx.bankTransaction.findFirst({ where: { id: transactionId, bankId } });
+      if (!row || !isStatementRow(row)) throw new NotFoundException(MSG.bank_transaction_not_found);
+      if (!row.matchedLineId) throw new ConflictException(MSG.reconciliation_not_matched);
+      this.assertAfterClose(bank.reconciledUntil, row.date);
+      // السطرُ الذي رُحِّل من التسوية يبقى حاملاً قيدَه (`entryNo`) — فكُّ المطابقة لا يمحو قيداً، والقيدُ يُعكس إن لزم.
+      return tx.bankTransaction.update({ where: { id: row.id }, data: { matchedLineId: null, matchedAt: null, matched: row.entryNo !== null } });
+    });
+  }
+
+  /**
+   * سطرُ كشفٍ بلا دفتر: يُرحَّل بطرفٍ يختاره المحاسب (رسمٌ · فائدةٌ · تحويلٌ لم يُسجَّل) بتاريخ السطر — والقيدُ يمرّ
+   * بقفل الفترة وحارس الإقفال البنكيّ كأيِّ قيد — ثم يُطابَق بسطر البنك من القيد نفسِه.
+   * **على مستوى المنشأة بحقّها**: سطرُ الكشف يُقرأ بمعرّفه في البنك المأذون، والقيدُ يُرحَّل على فرع البنك نفسِه —
+   * فلا قراءةَ تتجاوز فرعَ القارئ.
+   */
+  postFromStatement(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, transactionId: string, counterpartyAccountId: string, memo?: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      const row = await tx.bankTransaction.findFirst({ where: { id: transactionId, bankId } });
+      if (!row || row.entryNo !== null) throw new NotFoundException(MSG.bank_transaction_not_found);
+      if (row.matchedLineId) throw new ConflictException(MSG.reconciliation_already_matched);
+      this.assertAfterClose(bank.reconciledUntil, row.date);
+      const counterparty = await tx.account.findFirst({ where: { id: counterpartyAccountId } });
+      if (!counterparty) throw new NotFoundException(MSG.account_not_found);
+      if (counterparty.id === bank.accountId) throw new BadRequestException(MSG.reconciliation_counterparty_is_bank);
+      const posted = await postBankStatementLineEntry(tx, companyId, {
+        bank: { id: bank.id, accountId: bank.accountId, branchId: bank.branchId },
+        counterpartyAccountId: counterparty.id,
+        date: row.date,
+        amount: Number(row.amount),
+        memo: memo?.trim() || row.description,
+      });
+      return tx.bankTransaction.update({
+        where: { id: row.id },
+        data: { matchedLineId: posted.bankLineId, matchedAt: new Date(), matched: true, entryNo: posted.entryNo, source: row.source ?? 'statement' },
+      });
+    });
+  }
+
+  /**
+   * الإقفالُ حتى تاريخ: لا سطرَ كشفٍ معلَّقاً حتى التاريخ — وإلا يُسمّى العددُ ويُرفض.
+   * **على مستوى المنشأة بحقّها**: عدُّ المعلَّق في بنكٍ واحد فُحص فرعُه — الإقفالُ حالةُ البنك لا حالةُ فرع القارئ.
+   */
+  close(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, until: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      const untilDate = new Date(until);
+      if (bank.reconciledUntil && untilDate < bank.reconciledUntil) throw new ConflictException(MSG.reconciliation_close_backwards);
+      const pending = await tx.bankTransaction.count({ where: { bankId, entryNo: null, matchedLineId: null, date: { lte: untilDate } } });
+      // (السطرُ المرحَّل من التسوية يحمل matchedLineId فلا يُعدّ معلَّقاً؛ والمرآةُ تحمل entryNo فلا تدخل.)
+      if (pending > 0) throw new ConflictException(formatMessage(MSG.reconciliation_pending_lines, { count: String(pending), until }));
+      const updated = await tx.bank.update({ where: { id: bank.id }, data: { reconciledUntil: untilDate }, select: { id: true, reconciledUntil: true } });
+      return { bankId: updated.id, reconciledUntil: updated.reconciledUntil?.toISOString().slice(0, 10) ?? null };
+    });
+  }
+
+  /** إعادةُ فتح الإقفال — فعلٌ مقصود بصلاحية المراجعة، كإعادة فتح الفترة. */
+  reopen(companyId: string, allowedBranchIds: string[] | 'all', bankId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const bank = await this.bankOf(tx, allowedBranchIds, bankId);
+      await tx.bank.update({ where: { id: bank.id }, data: { reconciledUntil: null } });
+      return { bankId: bank.id, reconciledUntil: null };
+    });
+  }
+
+  private assertAfterClose(reconciledUntil: Date | null, date: Date) {
+    if (reconciledUntil && dayStartOf(date) <= dayEndOf(reconciledUntil)) {
+      throw new ConflictException(formatMessage(MSG.reconciliation_locked, { until: reconciledUntil.toISOString().slice(0, 10) }));
+    }
+  }
+}
+
+export type ReconciliationLedgerRow = LedgerRow & { matched: boolean };

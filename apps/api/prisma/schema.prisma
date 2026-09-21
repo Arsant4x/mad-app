@@ -2372,6 +2372,9 @@ model Bank {
   /// في عمودٍ خارج الأستاذ.
   accountId String  @unique
   account   Account @relation(fields: [accountId], references: [id])
+
+  /// التسويةُ البنكية (ق-١٢٦١ ج): كشفُ البنك مُسوّى حتى هذا التاريخ — لا قيدَ على حسابه بتاريخٍ ≤ له (حارسٌ في createJournalEntry).
+  reconciledUntil DateTime? @db.Date
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   accountTenant Account @relation("Bank_accountId_tenant", fields: [companyId, accountId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -2425,6 +2428,12 @@ model BankTransaction {
   source      String?
   matched     Boolean  @default(false)
   entryNo     String?
+  /// المطابقةُ (ق-١٢٦١ ج): سطرُ الدفتر الذي يقابل سطرَ الكشف — واحدٌ لواحد؛ وعمودان لا يُكتبان إلا من التسوية.
+  matchedLineId String?      @unique
+  matchedLine   JournalLine? @relation("StatementMatch", fields: [matchedLineId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  matchedLineTenant JournalLine? @relation("BankTransaction_matchedLineId_tenant", fields: [companyId, matchedLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  matchedAt     DateTime?
 
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
@@ -2618,6 +2627,8 @@ model JournalLine {
 
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  statementMatch BankTransaction? @relation("StatementMatch")
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   supplierTenant Supplier? @relation("JournalLine_supplierId_tenant", fields: [companyId, supplierId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -2626,6 +2637,9 @@ model JournalLine {
   @@index([companyId, customerId])
   @@index([companyId, supplierId])
   @@map("journal_lines")
+  bankTransaction_matchedLineId_tenant BankTransaction[] @relation("BankTransaction_matchedLineId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A managed real-estate property. Trimmed from the original mockup's
