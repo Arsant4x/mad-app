@@ -5,13 +5,13 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 281 |
-| منها في جداولٍ لها عمودُ حالة | 187 |
-| تقول الوثيقة ✅ | 95 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 91 |
+| بنود SPEC | 282 |
+| منها في جداولٍ لها عمودُ حالة | 188 |
+| تقول الوثيقة ✅ | 96 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 92 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 4 (منها 4 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 223 / 1787 |
+| اختباراتٌ موسومة / كل الاختبارات | 224 / 1789 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -78,6 +78,7 @@
 | 6.10 | تنبيه قرب انتهاء الترخيص/السجل | ⬜ | ⬜ | — |
 | 6.11 | جدولة الالتزامات المتكررة | ⬜ | ⬜ | — |
 | 6.12 | الزكاة وضريبة الدخل | ⬜ | ⬜ | — |
+| 6.13 | **الفاتورةُ الكاملة لا تُشارَك قبل الإجازة — الكاشير** *(بيعُ الكاشير لمشترٍ توجب صفتُه فا | ✅ | ✅ | `api/test/customer-kind.e2e-spec.ts` :: [SPEC 6.13] ④ ⑤A4 — a register sale to a legal person completes but its receipt carries no code and is gated until clearance; the walk-in sale is not (e2e) |
 | 7.1 | حسابات بنكية متعددة | ✅ | ✅ | `api/test/banks-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1] creates a bank account for company A, invisible/unreachable by B, and posts a delta entry when the opening balance is edited (e2e)<br>`api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] leaves the bank balance to the ledger and stays invisible to company B (e2e) |
 | 7.2 | الحركات البنكية | ✅ | ✅ | `api/test/transactions-tenant-isolation.e2e-spec.ts` :: [SPEC 7.1 7.2] leaves the bank balance to the ledger and stays invisible to company B (e2e) |
 | 7.3 | الصندوق النقدي | ✅ | ✅ | `api/test/contract-cashbox-payment.e2e-spec.ts` :: [SPEC 7.3] a cash receipt naming a box raises that box balance (e2e)<br>`api/test/payments.e2e-spec.ts` :: [SPEC 3.3 7.3 7.5] posts a balanced entry (debit cash / credit A-R) and raises the branch cash box (e2e)<br>`api/test/pos.e2e-spec.ts` :: [SPEC 7.3] closes the shift computing the variance itself — and blocks further sales (e2e) |
