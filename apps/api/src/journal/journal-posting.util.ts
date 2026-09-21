@@ -74,6 +74,8 @@ export interface CreateJournalEntryInput {
   /** Marks this entry as an account's قيد افتتاحي (or opening-balance delta
    * entry) — see opening-balance.util.ts. */
   openingForAccountId?: string;
+  /** ⚖️ القيدُ العكسيّ يحمل معرّفَ أصله (`ق-١٢٥٣`/①) — يمرّره `JournalService.reverse` وحدَه. */
+  reversalOfId?: string;
 
   /**
    * ── البُعد التحليلي: الوحدة المصدر ──────────────────────────────────
@@ -194,6 +196,7 @@ export async function createJournalEntry(
       auto: input.auto ?? false,
       branchId: input.branchId ?? null,
       openingForAccountId: input.openingForAccountId ?? null,
+      reversalOfId: input.reversalOfId ?? null,
       currency,
       exchangeRate,
       baseTotalDebit: toBaseAmount(totalDebit, exchangeRate),

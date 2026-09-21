@@ -1,16 +1,22 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { branchFilter } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { dayStartOf } from '../common/wall-clock.util';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { ListJournalQueryDto } from './dto/list-journal-query.dto';
+import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
 import { resolveBranchId } from '../branches/branch-scope.util';
-import { createJournalEntry, reverseAndDeleteJournalEntry } from './journal-posting.util';
-import { MSG } from '../common/i18n/messages';
+import { createJournalEntry } from './journal-posting.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
-const JOURNAL_ENTRY_INCLUDE = { lines: { include: { account: true } } } as const;
+/** السطورُ بحساباتها، ورابطا العكس: مَن عكسه (`reversedBy`) ومَن يعكسه (`reversalOf`) — بالرقم للعرض. */
+const JOURNAL_ENTRY_INCLUDE = {
+  lines: { include: { account: true } },
+  reversedBy: { select: { id: true, no: true, date: true } },
+  reversalOf: { select: { id: true, no: true } },
+} as const;
 
 @Injectable()
 export class JournalService {
@@ -85,22 +91,64 @@ export class JournalService {
     );
   }
 
+  /**
+   * ⚖️ **القيدُ المرحَّل يُعكس ولا يُحذف** (`ق-١٢٥٣`/①).
+   *
+   * كان هذا المسارُ يعكس الأرصدةَ **ثم يحذف الصفَّ وسطورَه** (`reverseAndDeleteJournalEntry`)
+   * — فيُمحى قيدٌ مرحَّل ويُحرق رقمُه في التسلسل (`JE-` عدّادٌ ذرّيّ لا يُعاد)، وهو
+   * نقيضُ ما بُني في كلِّ مستندٍ آخر (الفاتورةُ لا تُعدَّل والمردودُ يُغلق ولا يُمسّ).
+   * **مقيسٌ قبل الإصلاح**: `DELETE /journal/:id` على قيدٍ يدويّ ⇒ `204` والصفُّ يختفي
+   * والرقمُ التالي يقفز (`journal-reversal.e2e-spec.ts` — الحالةُ ① سقطت على الشيفرة القديمة).
+   *
+   * **فالحذفُ يُرفض دائماً** بمسمّاه، والمخرجُ `reverse()`. (والآليُّ كان مرفوضاً قبلُ
+   * برسالته — تبقى رسالتُه لأنها تدلّ على مخرجه: المستندُ المصدر.)
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.journalEntry.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.journal_entry_not_found);
-      if (existing.auto) {
-        // Auto-posted entries (from invoices/purchases) are deleted by
-        // deleting the source document, not directly — matches the mockup,
-        // which never exposes a manual delete button for auto entries.
-        throw new ConflictException(MSG.journal_auto_entry_undeletable);
-      }
-      // قفل الفترة كان يحرس الكتابة ولا يحرس الحذف — مُثبَت بالتشغيل
-      // (2026-08-15): `POST /journal` إلى فترة مقفلة ⇒ 409، و`DELETE` لقيدٍ
-      // **داخل الفترة نفسها** ⇒ **204** والصفّ يختفي. أي أن القفل يمنع إضافة
-      // قيدٍ ويسمح بمحو قيدٍ قائم — وهو نقيض معناه.
-      await assertPeriodOpen(tx, existing.date);
-      await reverseAndDeleteJournalEntry(tx, id);
+      if (existing.auto) throw new ConflictException(MSG.journal_auto_entry_undeletable);
+      throw new ConflictException(formatMessage(MSG.journal_posted_reverse_instead, { no: existing.no }));
     });
+  }
+
+  /**
+   * قيدٌ عكسيٌّ مرقَّمٌ في فترةٍ مفتوحة: السطورُ نفسُها بتبديل الطرفين، العملةُ وسعرُها
+   * والفرعُ كما هما، `reversalOfId` يشير إلى الأصل — **والأصلُ لا يُمسّ**.
+   *
+   * ما يُرفض بمسمّاه: الآليُّ (يتبع مستندَه) · العكسيُّ (لا يُعكس) · المعكوسُ سلفاً
+   * (واحدٌ لكلِّ أصل — والقاعدةُ تحرسه بفهرسٍ فريد فوق هذا الفحص). وقفلُ الفترة يُرمى
+   * من `createJournalEntry` على تاريخ العكس لا على تاريخ الأصل — فأصلٌ في فترةٍ
+   * مقفلة يُعكس اليوم، وهو معنى «التصحيحُ بقيدٍ عكسي في فترةٍ مفتوحة».
+   *
+   * ⚠️ الفرعُ: يُقرأ الأصلُ بحقّ القارئ (`branchFilter`) — فمن لا يرى فرعاً لا يعكس قيودَه.
+   */
+  reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: ReverseJournalEntryDto = {}) {
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        const existing = await tx.journalEntry.findFirst({
+          where: { id, ...branchFilter(allowedBranchIds) },
+          include: { lines: true, reversedBy: { select: { no: true } } },
+        });
+        if (!existing) throw new NotFoundException(MSG.journal_entry_not_found);
+        if (existing.auto) throw new ConflictException(formatMessage(MSG.journal_auto_entry_not_reversible, { no: existing.no }));
+        if (existing.reversalOfId) throw new ConflictException(formatMessage(MSG.journal_reversal_not_reversible, { no: existing.no }));
+        if (existing.reversedBy) throw new ConflictException(formatMessage(MSG.journal_already_reversed, { no: existing.no, by: existing.reversedBy.no }));
+
+        // يومُ الطلب بالدالّة الواحدة (`ق-١١٩٠`) — بإزاحتها الافتراضية المعلَنة، لا بمنطقة العملية.
+        const date = dto.date ? new Date(dto.date) : dayStartOf(new Date());
+        return createJournalEntry(tx, {
+          companyId,
+          branchId: existing.branchId,
+          date,
+          memo: dto.memo?.trim() || `عكس القيد ${existing.no} — ${existing.memo}`,
+          auto: false,
+          currency: existing.currency,
+          exchangeRate: Number(existing.exchangeRate),
+          reversalOfId: existing.id,
+          lines: existing.lines.map((l) => ({ accountId: l.accountId, debit: Number(l.credit), credit: Number(l.debit) })),
+        });
+      }),
+    );
   }
 }

@@ -2262,6 +2262,14 @@ model JournalEntry {
   openingForAccountId String?
   openingForAccount   Account? @relation("OpeningEntries", fields: [openingForAccountId], references: [id], onDelete: Restrict)
 
+  /// ⚖️ **القيدُ المرحَّل يُعكس ولا يُحذف** (`ق-١٢٥٣`/①): القيدُ العكسيُّ يحمل معرّفَ
+  /// أصله، والأصلُ يبقى برقمه وسطوره — فلا محوَ ولا فجوةَ ترقيم. **واحدٌ لكلِّ أصل**
+  /// (`@unique`)، والعكسُ لا يُعكس (يُعاد الأصلُ قيداً جديداً). `Restrict`: لا يُحذف
+  /// أصلٌ عُكس — والحذفُ أصلاً ممنوعٌ من الواجهة.
+  reversalOfId String?       @unique
+  reversalOf   JournalEntry? @relation("EntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy   JournalEntry? @relation("EntryReversal")
+
   createdAt DateTime @default(now())
 
   lines        JournalLine[]
