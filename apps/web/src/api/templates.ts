@@ -1,34 +1,16 @@
+import { ALLOWED_SCREENS, SCREEN_ACTIONS, type ScreenAction, type ScreenKey } from '@mad-app/shared/permissions';
 import { apiClient } from './client';
 
-/** Mirrors apps/api/src/templates/screens.ts — keep in sync. */
-export const ALLOWED_SCREENS = [
-  'dashboard',
-  'accounts',
-  'journal',
-  'fiscal',
-  'branches',
-  'settings',
-  'invoice',
-  'payments',
-  'customers',
-  'suppliers',
-  'products',
-  'inventory',
-  'properties',
-  'contracts',
-  'maintenance',
-  'employees',
-  'banks',
-  'transactions',
-  'obligations',
-  'reports',
-  'scripts',
-  'audit',
-  'pos',
-  'quotes',
-] as const;
+/**
+ * ⑧ مفرداتُ الصلاحيات **مولَّدةٌ لا منسوخة** (`ق-١٢٣٤`): `ALLOWED_SCREENS` و`SCREEN_ACTIONS` تُقرآن من
+ * `@mad-app/shared/permissions` المولَّد من `apps/api/src/templates/screens.ts` — وكانت هنا نسخةٌ يدوية
+ * بتعليق «keep in sync». **التسمياتُ العربية وحدَها تعيش هنا** (شأنُ واجهة)، ومفاتيحُها من النوع
+ * المولَّد فتُسقط `tsc` شاشةً بلا تسمية.
+ */
+export { ALLOWED_SCREENS, SCREEN_ACTIONS };
+export type { ScreenAction, ScreenKey };
 
-export const SCREEN_LABELS: Record<(typeof ALLOWED_SCREENS)[number], string> = {
+export const SCREEN_LABELS: Record<ScreenKey, string> = {
   dashboard: 'لوحة التحكم',
   accounts: 'دليل الحسابات',
   journal: 'دفتر اليومية',
@@ -54,11 +36,6 @@ export const SCREEN_LABELS: Record<(typeof ALLOWED_SCREENS)[number], string> = {
   pos: 'الكاشير',
   quotes: 'عروض الأسعار',
 };
-
-/** Actions a permission can grant on a screen — mirrors SCREEN_ACTIONS in
- * apps/api/src/templates/screens.ts. Keep both in sync. */
-export const SCREEN_ACTIONS = ['view', 'add', 'edit', 'delete', 'record', 'review', 'audit'] as const;
-export type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 
 export const ACTION_LABELS: Record<ScreenAction, string> = {
   view: 'اطلاع',

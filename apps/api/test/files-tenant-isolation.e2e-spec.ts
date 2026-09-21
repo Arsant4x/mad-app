@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { FilesService } from '../src/files/files.service';
 
 describe('File storage (e2e)', () => {
   let app: INestApplication;
@@ -24,8 +25,11 @@ describe('File storage (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
+    // لا مسارَ حذفٍ عامّ بعد `ق-١٢٣٤` — التنظيفُ بالخدمة نفسِها كما تفعل الميزاتُ التي تملك المرفق؛
+    // ومعرِّفُ المنشأة يُقرأ من بادئة المفتاح الذي أعاده الرفع (`companies/<id>/…`).
     if (uploadedKeyA) {
-      await request(app.getHttpServer()).delete('/files').query({ key: uploadedKeyA }).set('Authorization', `Bearer ${tokenA}`);
+      const companyIdA = uploadedKeyA.split('/')[1];
+      await app.get(FilesService).remove(companyIdA, uploadedKeyA);
     }
     await app.close();
   });
@@ -67,14 +71,21 @@ describe('File storage (e2e)', () => {
     expect(res.body.expiresInSeconds).toBeLessThanOrEqual(600);
   });
 
-  it("keeps company B from downloading or deleting company A's file", async () => {
+  it("keeps company B from downloading company A's file", async () => {
     await request(app.getHttpServer())
       .get('/files/download-url')
       .query({ key: uploadedKeyA })
       .set('Authorization', `Bearer ${tokenB}`)
       .expect(403);
+  });
 
-    await request(app.getHttpServer()).delete('/files').query({ key: uploadedKeyA }).set('Authorization', `Bearer ${tokenB}`).expect(403);
+  it('⛔ لا مسارَ حذفٍ عامّ (ق-١٢٣٤): `DELETE /files` غيرُ موجودٍ حتى لصاحب المفتاح — والحذفُ يمرّ بمسار الميزة التي تملك المرفق', async () => {
+    // التوكيدُ على `404` لصاحب الملفّ نفسِه لا على `403` لغيره: لو أُعيد المسارُ يوماً ردّ `204`
+    // لصاحبه فسقط هذا الاختبار باسمه — وهو ما يُراد. ويبقى الكائنُ للتنظيف في `afterAll`.
+    await request(app.getHttpServer()).delete('/files').query({ key: uploadedKeyA }).set('Authorization', `Bearer ${tokenA}`).expect(404);
+    await request(app.getHttpServer()).delete('/files').query({ key: uploadedKeyA }).set('Authorization', `Bearer ${tokenB}`).expect(404);
+    // والملفُّ باقٍ: رابطُ التنزيل ما زال يُصدَر لصاحبه.
+    await request(app.getHttpServer()).get('/files/download-url').query({ key: uploadedKeyA }).set('Authorization', `Bearer ${tokenA}`).expect(200);
   });
 
   it('rejects a path-traversal key that tries to escape the company prefix', async () => {
