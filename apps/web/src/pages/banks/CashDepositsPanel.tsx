@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createCashDeposit, listCashDeposits, voidCashDeposit, type Bank, type CashDeposit, type CashDepositList } from '../../api/banks';
 import { listCashDrawers, type CashDrawer } from '../../api/cashDrawers';
-import { fmt } from '../../lib/format';
+import { fmt, today } from '../../lib/format';
 
 /**
  * إيداعاتُ الأدراج في البنوك عبر «نقدٍ في الطريق» `1190` (`ق-١٢٦١` ج — ⑦A3): الإيداعُ يخرج من الدرج إلى الطريق،
@@ -14,8 +14,6 @@ const STATUS_LABEL: Record<CashDeposit['status'], { text: string; cls: string }>
   CONFIRMED: { text: 'مؤكَّد', cls: 'badge paid' },
   VOID: { text: 'ملغى', cls: 'badge' },
 };
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: () => void }) {
   const [data, setData] = useState<CashDepositList | null>(null);
