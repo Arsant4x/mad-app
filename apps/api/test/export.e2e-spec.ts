@@ -71,7 +71,7 @@ describe('Data export (e2e)', () => {
     tokenA = await registerCompany(`exp-a-${suffix}`);
     tokenB = await registerCompany(`exp-b-${suffix}`);
 
-    markerId = (await authA(request(app.getHttpServer()).post('/customers')).send({ name: markerName }).expect(201)).body.id;
+    markerId = (await authA(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: markerName }).expect(201)).body.id;
 
     // An employee with every screen — proving the export refusal is about
     // ownership, not a missing screen permission.

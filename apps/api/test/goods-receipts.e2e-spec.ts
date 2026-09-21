@@ -86,7 +86,7 @@ describe('الاستلامُ المستقلّ — كيانٌ فوق الشراء
 
     const suffix = Date.now();
     supplierId = (await post('/suppliers').send({ name: `مورّد استلام ${suffix}` }).expect(201)).body.id;
-    customerId = (await post('/customers').send({ name: `عميل استلام ${suffix}` }).expect(201)).body.id;
+    customerId = (await post('/customers').send({ kind: 'NATURAL', name: `عميل استلام ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع استلام ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع استلام ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف استلام ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;

@@ -110,7 +110,7 @@ describe('نصُّ الجهة الخارجية يُنقّى قبل أن يُكت
     token = company.token;
     companyId = company.companyId;
     await auth(request(server()).patch('/company-profile')).send({ legalName: 'شركة النصّ الخارجيّ التجارية', vatNumber: '300000000000003' }).expect(200);
-    customerId = (await auth(request(server()).post('/customers')).send({ name: `عميل النصّ ${Date.now()}` }).expect(201)).body.id;
+    customerId = (await auth(request(server()).post('/customers')).send({ kind: 'NATURAL', name: `عميل النصّ ${Date.now()}` }).expect(201)).body.id;
     const keys = await realKeys();
     const data = {
       privateKeyEnc: encryptSecret(keys.privateKeyPem),

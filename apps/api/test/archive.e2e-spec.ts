@@ -42,7 +42,7 @@ describe('Archive (e2e)', () => {
     company = await registerIsolatedCompany(app, 'archive');
     token = company.token;
 
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الأرشيف ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الأرشيف ${suffix}` }).expect(201)).body.id;
     bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `بنك الأرشيف ${suffix}`, openingBalance: 0, openingDate: '2025-01-01' }).expect(201)).body.id;
 
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))

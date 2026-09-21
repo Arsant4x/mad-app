@@ -190,10 +190,10 @@ export class ZatcaService {
       const ctx = await this.onboardedContext(companyId);
       if (!ctx) return { qrPayload: null, error: null };
       const buyer = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { vatNumber: true } } } }),
+        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { kind: true, vatNumber: true } } } }),
       );
       if (!buyer) throw new NotFoundException(MSG.invoice_not_found);
-      if (invoiceTypeFor(buyer.customer.vatNumber) === 'standard') return { qrPayload: null, error: null };
+      if (invoiceTypeFor(buyer.customer) === 'standard') return { qrPayload: null, error: null };
       const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
       return { qrPayload: stamped.qrPayload, error: stamped.failure ?? null };
     } catch (e) {
@@ -388,7 +388,7 @@ export class ZatcaService {
     // وسلفٌ محجوزٌ لم يُختم بعد يرفض الختمَ الآن فيعود الطابورُ إليه، لا يُتخطّى.
     const icv = invoice.zatcaIcv ?? (await nextIcv(tx, unit.id));
     const previousHash = invoice.zatcaPreviousHash ?? (await previousChainHash(tx, unit.id, icv));
-    const invoiceType = invoiceTypeFor(invoice.customer.vatNumber);
+    const invoiceType = invoiceTypeFor(invoice.customer);
 
     /**
      * ⭐ **بوّابة عنوان المشتري — قبل أول كتابة** (`BR-KSA-63`).
@@ -508,6 +508,12 @@ export class ZatcaService {
       buyer: {
         name: invoice.customer.name,
         vatNumber: invoice.customer.vatNumber,
+        // ②A1: معرّفٌ بديل بمخطّطه (BR-KSA-14) وبلدُ المشتري (BT-55) — من بطاقته لا ثابتَين.
+        otherId:
+          invoice.customer.otherIdScheme && invoice.customer.otherId
+            ? { scheme: invoice.customer.otherIdScheme, id: invoice.customer.otherId }
+            : null,
+        country: invoice.customer.country,
         street: invoice.customer.street,
         buildingNumber: invoice.customer.buildingNumber,
         district: invoice.customer.district,
@@ -564,7 +570,7 @@ export class ZatcaService {
     const stored = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { vatNumber: true } } },
+        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true } } },
       }),
     );
     if (!stored) throw new NotFoundException(MSG.invoice_not_found);
@@ -582,7 +588,7 @@ export class ZatcaService {
       // Standard (B2B) invoices are *cleared* before being given to the buyer;
       // simplified (B2C) ones are *reported* within 24h. Sending one down the
       // other's path is rejected.
-      const invoiceType = invoiceTypeFor(stored.customer.vatNumber);
+      const invoiceType = invoiceTypeFor(stored.customer);
       const path = invoiceType === 'standard' ? '/invoices/clearance/single' : '/invoices/reporting/single';
       const token = decryptSecret(credential.productionCsidEnc!);
       const secret = decryptSecret(credential.productionSecretEnc!);

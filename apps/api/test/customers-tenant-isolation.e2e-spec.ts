@@ -35,10 +35,10 @@ describe('Customers tenant isolation (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: uniqueName, creditLimit: 1000 })
+      .send({ kind: 'NATURAL', name: uniqueName, creditLimit: 1000 })
       .expect(201);
 
-    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ name: uniqueName }).expect(409);
+    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ kind: 'NATURAL', name: uniqueName }).expect(409);
 
     const resB = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${tokenB}`).expect(200);
     expect(resB.body.some((c: { id: string }) => c.id === created.body.id)).toBe(false);
@@ -59,7 +59,7 @@ describe('Customers tenant isolation (e2e)', () => {
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: `عميل مع فاتورة ${Date.now()}` })
+      .send({ kind: 'NATURAL', name: `عميل مع فاتورة ${Date.now()}` })
       .expect(201);
 
     await request(app.getHttpServer())

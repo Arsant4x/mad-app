@@ -50,7 +50,7 @@ describe('Network settlement of 1251 (e2e)', () => {
     const bank = await auth(http().post('/banks')).send({ name: 'بنك الشبكة', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     bankId = bank.body.id;
     bankAccountId = bank.body.accountId;
-    const customer = await auth(http().post('/customers')).send({ name: 'عميل الشبكة' }).expect(201);
+    const customer = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل الشبكة' }).expect(201);
     customerId = customer.body.id;
   }, 90000);
 

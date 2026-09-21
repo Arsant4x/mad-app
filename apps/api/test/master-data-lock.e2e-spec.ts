@@ -73,7 +73,7 @@ describe('Master-data lock (e2e)', () => {
     // Reading is untouched: the lock protects the register, not the day's work.
     await emp(request(app.getHttpServer()).get('/properties')).expect(200);
     // And an unrelated screen keeps working.
-    await emp(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${suffix}` }).expect(201);
+    await emp(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل ${suffix}` }).expect(201);
   }, 40000);
 
   it('never locks the owner out of their own data', async () => {

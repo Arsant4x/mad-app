@@ -130,7 +130,7 @@ describe('نقاطُ القائمة — مصفوفةٌ بلا page، مغلَّ�
   it('search يرشّح ولا يغيّر الشكل: مصفوفةٌ بلا page ومغلَّفٌ به — على صفٍّ من صنع الاختبار لا من البذرة', async () => {
     // الصفُّ يُصنع هنا بلاحقةٍ فريدة (`ق-٦٥٩`: مسبارٌ يقيس على صفوفٍ قائمة يشهد لبيئته) — فالبحثُ عنها يعيد واحداً بالضبط.
     const needle = `بحثُ-الترقيم-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const created = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${companyToken}`).send({ name: `عميل ${needle}` }).expect(201);
+    const created = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${companyToken}`).send({ kind: 'NATURAL', name: `عميل ${needle}` }).expect(201);
     const all = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${companyToken}`).expect(200);
     expect(Array.isArray(all.body)).toBe(true);
     expect(all.body.some((c: { id: string }) => c.id === created.body.id)).toBe(true);

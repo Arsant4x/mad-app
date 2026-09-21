@@ -140,6 +140,7 @@ describe('ZATCA chain — invoice delete guard (e2e)', () => {
         .post('/customers')
         .set('Authorization', `Bearer ${token}`)
         .send({
+          kind: 'NATURAL',
           name: `عميل حارس الحذف ${Date.now()}`,
           vatNumber: `3${String(Date.now()).slice(-13)}3`,
           street: 'طريق الملك عبدالعزيز',

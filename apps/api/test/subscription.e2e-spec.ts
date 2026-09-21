@@ -111,7 +111,7 @@ describe('Subscription lifecycle (e2e)', () => {
     // Read is allowed during grace.
     await auth(request(app.getHttpServer()).get('/customers')).expect(200);
     // Writing is not.
-    await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${suffix}` }).expect(403);
+    await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل ${suffix}` }).expect(403);
 
     const sub = await auth(request(app.getHttpServer()).get('/subscription')).expect(200);
     expect(sub.body.status).toBe('FROZEN');
@@ -119,6 +119,6 @@ describe('Subscription lifecycle (e2e)', () => {
 
     // Renewal works from inside the freeze and restores writes.
     await auth(request(app.getHttpServer()).post('/subscription/renew')).send({ months: 1 }).expect(201);
-    await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${suffix}-2` }).expect(201);
+    await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل ${suffix}-2` }).expect(201);
   }, 40000);
 });

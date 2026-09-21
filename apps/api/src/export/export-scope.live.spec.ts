@@ -69,7 +69,7 @@ d('تصدير المنشأة — الاشتقاق والضمانة', () => {
 
     await tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // صفوفٌ في نماذج **كانت خارج القائمة اليدوية** — فغيابها من الحزمة عطل.
-      const customer = await tx.customer.create({ data: { companyId, name: 'عميل التصدير' } });
+      const customer = await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل التصدير' } });
       await tx.quote.create({
         data: {
           companyId,

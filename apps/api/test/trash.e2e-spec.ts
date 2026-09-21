@@ -45,7 +45,7 @@ describe('Trash / soft delete (e2e)', () => {
     tokenA = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
     tokenB = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' })).body.accessToken;
 
-    customerId = (await authA(request(app.getHttpServer()).post('/customers')).send({ name }).expect(201)).body.id;
+    customerId = (await authA(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name }).expect(201)).body.id;
   }, 60000);
 
   afterAll(async () => {

@@ -37,7 +37,7 @@ describe('الربطُ بالمعرّف — العقدُ يختار عميلَه
     return (await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `L-${tag}`, type: 'تجاري', rentMonthly: 1000 }).expect(201)).body as { id: string };
   }
   const createCustomer = async (name: string, phone?: string, allowSameName = false) =>
-    (await auth(http().post('/customers')).send({ name, ...(phone ? { phone } : {}), ...(allowSameName ? { allowSameName: true } : {}) }).expect(201)).body as CustomerBody;
+    (await auth(http().post('/customers')).send({ kind: 'NATURAL', name, ...(phone ? { phone } : {}), ...(allowSameName ? { allowSameName: true } : {}) }).expect(201)).body as CustomerBody;
   const contractPayload = async (customerId: string | undefined, extra: Record<string, unknown> = {}, startOffset = 0) => {
     const unit = await makeUnit();
     const start = monthStart(startOffset);
@@ -144,7 +144,7 @@ describe('الربطُ بالمعرّف — العقدُ يختار عميلَه
   it('⑦ الاسمُ المكرَّر تنبيهٌ يُؤكَّد لا قيدٌ يمنع — «أهو نفسُه؟»', async () => {
     const name = `خالد الدوسري ${Date.now()}`;
     await createCustomer(name, '0500000209');
-    const warned = await auth(http().post('/customers')).send({ name, phone: '0500000210' });
+    const warned = await auth(http().post('/customers')).send({ kind: 'NATURAL', name, phone: '0500000210' });
     expect(warned.status).toBe(409);
     expect(message(warned)).toContain('أهو نفسُه');
     await createCustomer(name, '0500000210', true);

@@ -30,7 +30,7 @@ describe('حالةُ الفاتورة مشتقّةٌ لا مكتوبة (e2e)', (
     await app.init();
 
     company = await registerIsolatedCompany(app, 'status-derived');
-    const customerId = (await auth(http().post('/customers')).send({ name: 'عميل الحالة' }).expect(201)).body.id;
+    const customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل الحالة' }).expect(201)).body.id;
     const today = new Date().toISOString().slice(0, 10);
     invoiceId = (
       await auth(http().post('/invoices'))

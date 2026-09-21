@@ -200,7 +200,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ منع ٢' } });
         const p = await tx.product.create({ data: { companyId, name: 'صنف منع ٢', taxCategory: 'S' } });
-        const customer = await tx.customer.create({ data: { companyId, name: 'عميل منع ٢' } });
+        const customer = await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل منع ٢' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP2-${randomUUID().slice(0, 8)}`, customerId: customer.id,
@@ -226,7 +226,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ منع ٣' } });
         const sold = await tx.product.create({ data: { companyId, name: 'الصنف المبيع', taxCategory: 'S' } });
         const other = await tx.product.create({ data: { companyId, name: 'صنفٌ آخر', taxCategory: 'S' } });
-        const customer = await tx.customer.create({ data: { companyId, name: 'عميل منع ٣' } });
+        const customer = await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل منع ٣' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP3-${randomUUID().slice(0, 8)}`, customerId: customer.id,
@@ -252,7 +252,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
       attempt(async (tx) => {
         const w = await tx.warehouse.create({ data: { companyId, name: 'م٤ قبول' } });
         const p = await tx.product.create({ data: { companyId, name: 'صنف القبول', taxCategory: 'S' } });
-        const customer = await tx.customer.create({ data: { companyId, name: 'عميل القبول' } });
+        const customer = await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل القبول' } });
         const inv = await tx.invoice.create({
           data: {
             companyId, no: `MP4-${randomUUID().slice(0, 8)}`, customerId: customer.id,

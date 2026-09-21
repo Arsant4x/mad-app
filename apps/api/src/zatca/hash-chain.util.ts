@@ -108,11 +108,27 @@ export async function previousChainHash(tx: Prisma.TransactionClient, egsUnitId:
   return below?.zatcaHash ?? GENESIS_PREVIOUS_HASH;
 }
 
+/** ما يحتاجه تقريرُ نوع الفاتورة من المشتري — الصفةُ والرقمُ الضريبيّ (ق-١٢٦١ أ — ②A1). */
+export interface BuyerForInvoiceType {
+  kind: string;
+  vatNumber: string | null | undefined;
+}
+
 /**
- * Standard (B2B) vs simplified (B2C) — decided by whether the buyer has a VAT
- * registration number, matching the mockup's `invoiceType` rule. The two are
- * cleared differently by the authority, so this is not cosmetic.
+ * **نوعُ الفاتورة من صفة المشتري لا من رقمه الضريبيّ وحدَه** (ق-١٢٦١ أ — ②A1).
+ *
+ * كان القرارُ «رقمٌ ضريبيّ ⟵ كاملة، وإلا مبسّطة» — فكلُّ فاتورةٍ لمؤسّسةٍ أو شخصٍ اعتباريٍّ **غيرِ مسجَّل** خُتمت
+ * مبسّطةً وأُبلغت في مسار الإبلاغ لا الإجازة، **والمختومُ لا يُعدَّل** (`ق-٩٤٣`). واللائحةُ التنفيذية م٥٣(١)(أ)
+ * توجب الكاملةَ للتوريد إلى «خاضعٍ آخر، أو شخصٍ اعتباريٍّ غيرِ خاضع، أو مؤسّسةٍ (فردية)، أو أيِّ كيانٍ مؤسَّس
+ * بموجب أنظمة المملكة»، والمبسّطةَ لغيرهم (م٥٣(٧)). فالقرارُ:
+ *   · رقمٌ ضريبيّ ⟵ كاملة (خاضعٌ مسجَّل — أيّاً كانت صفتُه)
+ *   · مؤسّسةٌ فردية أو شخصٌ اعتباريّ ⟵ كاملة ولو بلا تسجيل
+ *   · طبيعيٌّ ⟵ مبسّطة
+ * والقديمُ غيرُ المعلَن (`LEGACY_UNDECLARED`) لا يبلغ مستنداً جديداً — يُرفض عند الإصدار حتى يُعلَن؛ ومستندٌ قائمٌ له
+ * يُقرأ بالرقم كما كان يُقرأ (لا يُغيَّر نوعُ ما صدر).
  */
-export function invoiceTypeFor(buyerVatNumber: string | null | undefined): 'standard' | 'simplified' {
-  return buyerVatNumber?.trim() ? 'standard' : 'simplified';
+export function invoiceTypeFor(buyer: BuyerForInvoiceType): 'standard' | 'simplified' {
+  if (buyer.vatNumber?.trim()) return 'standard';
+  if (buyer.kind === 'ESTABLISHMENT' || buyer.kind === 'LEGAL_PERSON') return 'standard';
+  return 'simplified';
 }

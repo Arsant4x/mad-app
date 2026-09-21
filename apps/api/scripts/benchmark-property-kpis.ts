@@ -64,7 +64,7 @@ async function seed(companyId: string): Promise<void> {
   const unit = await inTenant(companyId, (tx) => tx.unit.findFirst({ where: { companyId, unitNo: 'BM-UNIT' } }));
   if (!unit) throw new Error('benchmark unit vanished');
   // العقدُ الحيّ لا يكون بلا عميل — قيدُ CHECK في القاعدة (ق-١٠٢٩/②): عميلٌ واحد لعقود القياس كلِّها.
-  const customer = await inTenant(companyId, (tx) => tx.customer.create({ data: { companyId, name: 'مستأجر بنشمارك' }, select: { id: true } }));
+  const customer = await inTenant(companyId, (tx) => tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'مستأجر بنشمارك' }, select: { id: true } }));
 
   for (let offset = 0; offset < TARGET_EXTRA; offset += CHUNK) {
     const size = Math.min(CHUNK, TARGET_EXTRA - offset);

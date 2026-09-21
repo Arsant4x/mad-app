@@ -67,7 +67,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     // One invoice in each branch, plus one company-wide (no branch).
     // العميلُ يُصنع هنا لا يُلتقط من القاعدة — كان `customers.body[0]` يعتمد على عميلٍ تركته بذرةُ العرض (ق-٧٢٢).
     fixtureCustomerId = (
-      await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${ownerToken}`).send({ name: `عميل الفروع ${suffix}` }).expect(201)
+      await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${ownerToken}`).send({ kind: 'NATURAL', name: `عميل الفروع ${suffix}` }).expect(201)
     ).body.id;
     const customerId = fixtureCustomerId;
     const line = { description: 'بند', quantity: 1, unitPrice: 100, taxRate: 15 };

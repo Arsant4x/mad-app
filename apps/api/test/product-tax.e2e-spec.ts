@@ -55,7 +55,7 @@ describe('⑧ فئةُ ضريبة الصنف — من البطاقة إلى ال
     company = await registerIsolatedCompany(app, 'product-tax');
     token = company.token;
     companyId = company.companyId;
-    customerId = (await auth(http().post('/customers')).send({ name: `عميل الفئات ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الفئات ${suffix}` }).expect(201)).body.id;
   }, 120000);
 
   afterAll(async () => {

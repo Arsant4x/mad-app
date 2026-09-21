@@ -49,7 +49,7 @@ describe('Quotes → invoice conversion (e2e)', () => {
     await app.init();
 
     token = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' })).body.accessToken;
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل عروض ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل عروض ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع العروض ${suffix}` }).expect(201)).body.id;
     productPriceThen = 1000;
   }, 60000);
@@ -154,7 +154,7 @@ describe('Quotes → invoice conversion (e2e)', () => {
    * ولا يُطفأ ولا يُستثنى العميلُ منه**.
    */
   it('parity: conversion is blocked exactly like direct invoicing for an over-limit customer', async () => {
-    const tightCustomer = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `محدود ${suffix}`, creditLimit: 100 }).expect(201)).body.id;
+    const tightCustomer = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `محدود ${suffix}`, creditLimit: 100 }).expect(201)).body.id;
     limitedCustomerIds.push(tightCustomer);
     const overLimitLines = [{ description: 'مباشر', quantity: 2, unitPrice: 1000, taxRate: 15 }];
 

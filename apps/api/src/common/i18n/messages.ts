@@ -74,6 +74,13 @@ export const MSG = {
   credit_limit_hard_block: 'customers.credit_limit_hard_block',
   credit_limit_override_forbidden: 'customers.credit_limit_override_forbidden',
   customer_not_found: 'customers.not_found',
+  // buyer kind (ق-١٢٦١ أ — ②A1)
+  customer_kind_required: 'customers.kind_required',
+  customer_kind_undeclared: 'customers.kind_undeclared',
+  customer_other_id_scheme_invalid: 'customers.other_id_scheme_invalid',
+  customer_other_id_invalid: 'customers.other_id_invalid',
+  customer_other_id_pair: 'customers.other_id_pair',
+  customer_country_invalid: 'customers.country_invalid',
   customer_has_invoices: 'customers.has_invoices',
   customer_has_contracts: 'customers.has_contracts',
   customer_in_trash: 'customers.in_trash',
@@ -621,6 +628,21 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Only a user with approval permission may override a credit limit — ask someone who has it',
   },
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
+  [MSG.customer_kind_required]: {
+    ar: 'صفة العميل مطلوبة: فرد، أو مؤسسة فردية، أو شخص اعتباري — هي ما يقرّر نوع الفاتورة',
+    en: 'The customer kind is required: natural person, sole establishment, or legal person — it decides the invoice type',
+  },
+  [MSG.customer_kind_undeclared]: {
+    ar: 'العميل «{customer}» سبق البناء ولم تُعلَن صفته — أعلنها من بطاقته (فرد · مؤسسة · شخص اعتباري) قبل إصدار مستند له',
+    en: 'Customer "{customer}" predates this build and has no declared kind — declare it on the card (natural · establishment · legal person) before issuing a document',
+  },
+  [MSG.customer_other_id_scheme_invalid]: {
+    ar: 'مخطّط المعرّف البديل غير معروف — المقبول: TIN · CRN · MOM · MLS · 700 · SAG · NAT · GCC · IQA · PAS · OTH',
+    en: 'Unknown buyer identification scheme — allowed: TIN · CRN · MOM · MLS · 700 · SAG · NAT · GCC · IQA · PAS · OTH',
+  },
+  [MSG.customer_other_id_invalid]: { ar: 'المعرّف البديل حروف وأرقام لاتينية فقط', en: 'The alternative identifier must be alphanumeric' },
+  [MSG.customer_other_id_pair]: { ar: 'المعرّف البديل يُذكر مع مخطّطه معاً — أو يُتركان معاً', en: 'The alternative identifier and its scheme go together — or both are left empty' },
+  [MSG.customer_country_invalid]: { ar: 'رمز البلد حرفان لاتينيان كبيران (ISO 3166-1)', en: 'The country code is two uppercase letters (ISO 3166-1)' },
   [MSG.customer_has_invoices]: {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',
     en: 'Cannot delete a customer that has invoices — delete their invoices first',

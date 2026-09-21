@@ -74,7 +74,7 @@ describe('Auth self-service: register + password reset (e2e)', () => {
     expect(sub.body.daysLeft).toBeLessThanOrEqual(14);
 
     // And it can write — a real account, not a viewer.
-    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${accessToken}`).send({ name: `عميل ${username}` }).expect(201);
+    await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${accessToken}`).send({ kind: 'NATURAL', name: `عميل ${username}` }).expect(201);
     expect(user.companyId).toBeTruthy();
 
     // 🔴 (ق-٦٤٤) **القالبُ الذي يركب عليه التاجرُ ليس نظامياً**: كان التسجيلُ يأخذ

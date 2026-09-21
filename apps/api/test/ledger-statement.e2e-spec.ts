@@ -49,7 +49,7 @@ describe('General ledger and party statement (e2e)', () => {
       .expect(201);
     manualNo = manual.body.no;
 
-    customerId = (await auth(http().post('/customers')).send({ name: 'عميل الكشف' }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل الكشف' }).expect(201)).body.id;
     const invoice = await auth(http().post('/invoices'))
       .send({ customerId, issueDate: '2026-06-10', dueDate: '2026-07-10', lines: [{ description: 'خدمة', quantity: 1, unitPrice: 100, taxRate: 15 }] })
       .expect(201);

@@ -80,7 +80,7 @@ describe('Audit log (e2e)', () => {
   });
 
   it('[SPEC 12.1 12.2] records a change automatically, as a readable Arabic sentence', async () => {
-    const created = await authA(request(app.getHttpServer()).post('/customers')).send({ name: customerName }).expect(201);
+    const created = await authA(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: customerName }).expect(201);
     customerId = created.body.id;
 
     const isCreation = (e: Entry) => e.entityId === customerId && e.action === 'add';

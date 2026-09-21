@@ -116,7 +116,7 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       await request(app.getHttpServer())
         .post('/customers')
         .set('Authorization', `Bearer ${token}`)
-        .send({ name: `عميل ZATCA ${Date.now()}` })
+        .send({ kind: 'NATURAL', name: `عميل ZATCA ${Date.now()}` })
         .expect(201)
     ).body.id;
 
@@ -181,10 +181,14 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(GENESIS_PREVIOUS_HASH).not.toBe(Buffer.from('0'.repeat(44)).toString('base64'));
     });
 
-    it('classifies an invoice by whether the buyer has a VAT number', () => {
-      expect(invoiceTypeFor('300000000000003')).toBe('standard');
-      expect(invoiceTypeFor(null)).toBe('simplified');
-      expect(invoiceTypeFor('  ')).toBe('simplified');
+    it('classifies an invoice by the buyer kind and VAT number — an establishment or legal person is standard even unregistered (②A1, م٥٣)', () => {
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '300000000000003' })).toBe('standard');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null })).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '  ' })).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'ESTABLISHMENT', vatNumber: null })).toBe('standard');
+      expect(invoiceTypeFor({ kind: 'LEGAL_PERSON', vatNumber: null })).toBe('standard');
+      // القديمُ غيرُ المعلَن يُقرأ بالرقم كما كان — ولا يبلغ مستنداً جديداً (يُرفض عند الإصدار).
+      expect(invoiceTypeFor({ kind: 'LEGACY_UNDECLARED', vatNumber: null })).toBe('simplified');
     });
   });
 
@@ -339,7 +343,7 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
         const res = await request(app.getHttpServer())
           .post('/customers')
           .set('Authorization', `Bearer ${token}`)
-          .send({ name: `منشأة مشترية ${unique}`, vatNumber: `3${unique}3`, ...address })
+          .send({ kind: 'NATURAL', name: `منشأة مشترية ${unique}`, vatNumber: `3${unique}3`, ...address })
           .expect(201);
         return res.body.id as string;
       }
@@ -394,7 +398,7 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
           await request(app.getHttpServer())
             .post('/customers')
             .set('Authorization', `Bearer ${token}`)
-            .send({ name: `مستهلك ${Date.now()}` })
+            .send({ kind: 'NATURAL', name: `مستهلك ${Date.now()}` })
             .expect(201)
         ).body.id as string;
 

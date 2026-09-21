@@ -20,6 +20,7 @@ import {
   getOrCreateAccountByCode,
   postShiftVarianceEntry,
 } from '../journal/pos-settlement.util';
+import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
 import { rateForCategory } from '../common/vat/line-tax.util';
@@ -442,6 +443,8 @@ export class PosService {
       if (missing) throw new NotFoundException(MSG.product_not_found);
 
       const customerId = dto.customerId ?? (await this.walkInCustomerId(tx));
+      // ②A1: مشترٍ مسمّىً لم يُعلن صفتَه لا يُصدَر له مستند — الكاشيرُ لا يقرّر الصفة، صاحبُ المنشأة يعلنها من البطاقة.
+      if (dto.customerId) await assertBuyerKindDeclared(tx, dto.customerId);
       /**
        * ⭐ **يومُ الفاتورة يومُ الجهاز، لا يومُ UTC ولا يومُ عودة الشبكة** (`ق-١٨٥`).
        *
@@ -731,10 +734,18 @@ export class PosService {
     return totals;
   }
 
+  /**
+   * عميلُ المرور **طبيعيٌّ بالبناء** (②A1): بيعُ الكاشير بلا مشترٍ مسمّىً بيعٌ لمستهلك — مبسّطةٌ بحكم م٥٣(٧). فالصفُّ
+   * الذي تُنشئه هذه الدالّة يُعلَن `NATURAL` عند إنشائه؛ والقائمُ منه قبل البناء (`LEGACY_UNDECLARED`) تُعلنه هي
+   * نفسُها هنا — لأنها هي التي تعرفه بهويّته (هذا الاسمُ في الشيفرة) لا الهجرةُ من نصٍّ حرّ (ق-٨٩٨).
+   */
   private async walkInCustomerId(tx: Prisma.TransactionClient): Promise<string> {
-    const existing = await tx.customer.findFirst({ where: { name: WALK_IN_CUSTOMER } });
-    if (existing) return existing.id;
-    const created = await tx.customer.create({ data: { name: WALK_IN_CUSTOMER } as unknown as Prisma.CustomerUncheckedCreateInput });
+    const existing = await tx.customer.findFirst({ where: { name: WALK_IN_CUSTOMER }, select: { id: true, kind: true } });
+    if (existing) {
+      if (existing.kind === 'LEGACY_UNDECLARED') await tx.customer.update({ where: { id: existing.id }, data: { kind: 'NATURAL' } });
+      return existing.id;
+    }
+    const created = await tx.customer.create({ data: { name: WALK_IN_CUSTOMER, kind: 'NATURAL' } as unknown as Prisma.CustomerUncheckedCreateInput });
     return created.id;
   }
 

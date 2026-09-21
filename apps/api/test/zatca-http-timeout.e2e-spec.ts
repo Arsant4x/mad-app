@@ -47,7 +47,7 @@ describe('مهلةُ الاتصال بالهيئة — الصمتُ يُقطع �
     await seedProductionCredential(tenantPrisma, company.companyId);
 
     // عميلٌ بلا رقمٍ ضريبي ⇒ فاتورةٌ مبسّطة (إبلاغ) — والمسارُ واحد للاثنتين.
-    const customerId = (await auth(http().post('/customers')).send({ name: 'عميل المهلة' }).expect(201)).body.id;
+    const customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل المهلة' }).expect(201)).body.id;
     const today = new Date().toISOString().slice(0, 10);
     invoiceId = (
       await auth(http().post('/invoices'))

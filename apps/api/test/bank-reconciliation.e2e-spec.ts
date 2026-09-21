@@ -47,7 +47,7 @@ describe('Bank reconciliation (e2e)', () => {
     bankAccountId = bank.body.accountId;
 
     // دفترٌ: قبضُ 500 من عميل إلى البنك بتاريخ 2026-06-10 — سطرُ بنكٍ مدينٌ 500.
-    customerId = (await auth(http().post('/customers')).send({ name: 'عميل التسوية' }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل التسوية' }).expect(201)).body.id;
     const invoice = await auth(http().post('/invoices'))
       .send({ customerId, issueDate: '2026-06-01', dueDate: '2026-07-01', lines: [{ description: 'خدمة', quantity: 1, unitPrice: 500, taxRate: 15 }] })
       .expect(201);

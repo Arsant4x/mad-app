@@ -160,7 +160,7 @@ describe('ZATCA chain — invoice edit guard (e2e)', () => {
     // على «أول ما تجده» يربط النتيجة بترتيب صفوفٍ لا يملكه، ويسقط على قاعدة
     // نظيفة فيها عميلٌ واحد أو لا عميل.
     const mkCustomer = async (name: string) =>
-      (await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ name }).expect(201)).body.id as string;
+      (await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ kind: 'NATURAL', name }).expect(201)).body.id as string;
     const stamp = Date.now();
     customerId = await mkCustomer(`عميل حارس التعديل أ ${stamp}`);
     // ثانٍ مغاير، فيكون «تغيير العميل» تغييراً حقيقياً لا لا-عمليةً تمرّ من
