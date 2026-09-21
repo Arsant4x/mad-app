@@ -152,22 +152,38 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
         <div className="two-col">
           <div className="field">
             <label>طريقة القبض</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+            <select
+              value={method}
+              onChange={(e) => {
+                const next = e.target.value as PaymentMethod;
+                setMethod(next);
+                // الشبكةُ ذمّةٌ على المستحوذ (1251) لا نقدٌ في بنك — فلا بنكَ يُرسَل معها.
+                if (next === 'CARD') setBankId('');
+              }}
+            >
               <option value="CASH">نقداً</option>
               <option value="BANK">تحويل بنكي</option>
+              <option value="CARD">شبكة (جهاز البنك)</option>
             </select>
           </div>
-          <div className="field">
-            <label>{method === 'BANK' ? 'الحساب البنكي' : 'الصندوق المستلِم (اختياري)'}</label>
-            <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
-              <option value="">— بلا تحديد —</option>
-              {banks.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {method === 'CARD' ? (
+            <div className="field">
+              <label>الحساب</label>
+              <div className="muted">مدينو شبكة المدفوعات (1251) حتى يحوّلها المستحوذ — تدخل البنك من «تسويات الشبكة»</div>
+            </div>
+          ) : (
+            <div className="field">
+              <label>{method === 'BANK' ? 'الحساب البنكي' : 'الصندوق المستلِم (اختياري)'}</label>
+              <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
+                <option value="">— بلا تحديد —</option>
+                {banks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="two-col">
