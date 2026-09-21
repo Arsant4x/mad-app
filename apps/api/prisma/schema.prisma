@@ -1212,6 +1212,8 @@ model Invoice {
   /// وهذا يعكسه بتاريخ الإغلاق فيبقى الدفترُ يروي ما وقع. `Restrict` كقيد الفاتورة نفسه.
   reversalJournalEntryId String?
   reversalJournalEntry   JournalEntry? @relation("InvoiceReversal", fields: [reversalJournalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversalJournalEntryTenant JournalEntry? @relation("Invoice_reversalJournalEntryId_tenant", fields: [companyId, reversalJournalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   /// Credit/debit notes only (BR-KSA-17): why the adjustment was issued —
   /// travels to the authority as cac:PaymentMeans/cbc:InstructionNote.
   adjustmentReason String?
@@ -1231,6 +1233,8 @@ model Invoice {
   /// still references it — reverse it via deleting/re-editing the invoice.
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("Invoice_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1501,6 +1505,8 @@ model Purchase {
   /// set up yet, Restrict so the entry can't be deleted out from under it.
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("Purchase_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// تخصيصاتُ سندات الصرف عليها — مصدرُ الحقيقة الوحيد لـ«المسدَّد».
   paymentAllocations SupplierPaymentAllocation[]
@@ -1673,6 +1679,8 @@ model GoodsReceipt {
   /// قيدُ الاستلام (مدين `1300` / دائن الوسيط) — `null` لاستلامات ما قبل البناء التي رُحِّلت داخل قيد شرائها.
   journalEntryId String?
   journalEntry   JournalEntry? @relation("GoodsReceiptEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("GoodsReceipt_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ⚖️ الإلغاءُ عكسٌ لا محو: الصفُّ يبقى، والطبقاتُ تُفرَغ بحركاتٍ خارجة، والقيدُ يُعكس.
   voidedAt DateTime?
@@ -1791,11 +1799,15 @@ model LandedCostDistribution {
   /// قيدُ إعادة التصنيف — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
   journalEntryId String?
   journalEntry   JournalEntry? @relation("LandedCostEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("LandedCostDistribution_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ⚖️ الإلغاءُ عكسٌ لا محو: الصفُّ يبقى، وتكلفةُ الطبقات تُعاد، والقيدُ يُعكس بقيدٍ مسجَّلٍ هنا.
   voidedAt           DateTime?
   voidJournalEntryId String?
   voidJournalEntry   JournalEntry? @relation("LandedCostVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  voidJournalEntryTenant JournalEntry? @relation("LandedCostDistribution_voidJournalEntryId_tenant", fields: [companyId, voidJournalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   notes String?
 
@@ -1825,6 +1837,8 @@ model LandedCostLine {
 
   layerId String
   layer   InventoryLayer @relation(fields: [layerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  layerTenant InventoryLayer @relation("LandedCostLine_layerId_tenant", fields: [companyId, layerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// نصيبُ الطبقة بالعملة الأساسية — غيرُ سالب (قيدُ `CHECK`).
   baseAmount Decimal @db.Decimal(18, 2)
@@ -1886,6 +1900,8 @@ model StockOpening {
   /// قيدُ الإعلان — مدين `1300` / دائن `3900` — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
   journalEntryId String?       @unique
   journalEntry   JournalEntry? @relation("StockOpeningEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("StockOpening_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
@@ -1894,6 +1910,9 @@ model StockOpening {
   @@unique([companyId, no])
   @@index([companyId, openingDate])
   @@map("stock_openings")
+  stockOpeningLine_openingId_tenant StockOpeningLine[] @relation("StockOpeningLine_openingId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// سطرُ الإعلان — يملك ما أُعلن (الكمّيةُ بوحدة الصنف · تكلفةُ الوحدة الصريحة · تاريخُ الاقتناء · السند)
@@ -1905,14 +1924,20 @@ model StockOpeningLine {
 
   openingId String
   opening   StockOpening @relation(fields: [openingId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  openingTenant StockOpening @relation("StockOpeningLine_openingId_tenant", fields: [companyId, openingId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// حركةُ `IN` بمصدر `OPENING` — واحدةٌ لكلِّ سطر.
   movementId String        @unique
   movement   StockMovement @relation("OpeningLineMovement", fields: [movementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  movementTenant StockMovement @relation("StockOpeningLine_movementId_tenant", fields: [companyId, movementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// طبقةُ `OPENING` التي أنشأتها الحركة — واحدةٌ لكلِّ سطر.
   layerId String         @unique
   layer   InventoryLayer @relation("OpeningLineLayer", fields: [layerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  layerTenant InventoryLayer @relation("StockOpeningLine_layerId_tenant", fields: [companyId, layerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   productId   String
   warehouseId String
@@ -1932,8 +1957,12 @@ model StockOpeningLine {
   voidedAt           DateTime?
   voidMovementId     String?       @unique
   voidMovement       StockMovement? @relation("OpeningLineVoidMovement", fields: [voidMovementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  voidMovementTenant StockMovement? @relation("StockOpeningLine_voidMovementId_tenant", fields: [companyId, voidMovementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   voidJournalEntryId String?       @unique
   voidJournalEntry   JournalEntry? @relation("StockOpeningLineVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  voidJournalEntryTenant JournalEntry? @relation("StockOpeningLine_voidJournalEntryId_tenant", fields: [companyId, voidJournalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
@@ -2458,6 +2487,8 @@ model JournalEntry {
   /// أصلٌ عُكس — والحذفُ أصلاً ممنوعٌ من الواجهة.
   reversalOfId String?       @unique
   reversalOf   JournalEntry? @relation("EntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversalOfTenant JournalEntry? @relation("JournalEntry_reversalOfId_tenant", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy   JournalEntry? @relation("EntryReversal")
 
   createdAt DateTime @default(now())
@@ -2491,6 +2522,30 @@ model JournalEntry {
   @@unique([companyId, no])
   @@index([openingForAccountId])
   @@map("journal_entries")
+  inventoryWriteOff_journalEntryId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_journalEntryId_tenant")
+  rentAccrual_journalEntryId_tenant RentAccrual[] @relation("RentAccrual_journalEntryId_tenant")
+  rentPayment_journalEntryId_tenant RentPayment[] @relation("RentPayment_journalEntryId_tenant")
+  supplierPayment_journalEntryId_tenant SupplierPayment[] @relation("SupplierPayment_journalEntryId_tenant")
+  payment_journalEntryId_tenant Payment[] @relation("Payment_journalEntryId_tenant")
+  contract_settlementEntryId_tenant Contract[] @relation("Contract_settlementEntryId_tenant")
+  contractDeposit_settlementEntryId_tenant ContractDeposit[] @relation("ContractDeposit_settlementEntryId_tenant")
+  contractDeposit_journalEntryId_tenant ContractDeposit[] @relation("ContractDeposit_journalEntryId_tenant")
+  contractClaim_settlementEntryId_tenant ContractClaim[] @relation("ContractClaim_settlementEntryId_tenant")
+  contractClaim_journalEntryId_tenant ContractClaim[] @relation("ContractClaim_journalEntryId_tenant")
+  contractKeyMoney_journalEntryId_tenant ContractKeyMoney[] @relation("ContractKeyMoney_journalEntryId_tenant")
+  maintenanceRequest_journalEntryId_tenant MaintenanceRequest[] @relation("MaintenanceRequest_journalEntryId_tenant")
+  journalLine_journalEntryId_tenant JournalLine[] @relation("JournalLine_journalEntryId_tenant")
+  journalEntry_reversalOfId_tenant JournalEntry[] @relation("JournalEntry_reversalOfId_tenant")
+  stockOpeningLine_voidJournalEntryId_tenant StockOpeningLine[] @relation("StockOpeningLine_voidJournalEntryId_tenant")
+  stockOpening_journalEntryId_tenant StockOpening[] @relation("StockOpening_journalEntryId_tenant")
+  landedCostDistribution_voidJournalEntryId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_voidJournalEntryId_tenant")
+  landedCostDistribution_journalEntryId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_journalEntryId_tenant")
+  goodsReceipt_journalEntryId_tenant GoodsReceipt[] @relation("GoodsReceipt_journalEntryId_tenant")
+  purchase_journalEntryId_tenant Purchase[] @relation("Purchase_journalEntryId_tenant")
+  invoice_journalEntryId_tenant Invoice[] @relation("Invoice_journalEntryId_tenant")
+  invoice_reversalJournalEntryId_tenant Invoice[] @relation("Invoice_reversalJournalEntryId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// One debit-or-credit line of a JournalEntry. `onDelete: Restrict` on
@@ -2503,6 +2558,8 @@ model JournalLine {
 
   journalEntryId String
   journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry @relation("JournalLine_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   accountId String
   account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -3016,6 +3073,8 @@ model MaintenanceRequest {
 
   journalEntryId String?       @unique
   journalEntry   JournalEntry? @relation("MaintenanceCost", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("MaintenanceRequest_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// The warranty this job was claimed under, if any.
   ///
@@ -3200,6 +3259,8 @@ model ContractKeyMoney {
 
   journalEntryId String?       @unique
   journalEntry   JournalEntry? @relation("KeyMoney", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("ContractKeyMoney_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3262,8 +3323,12 @@ model ContractClaim {
   /// recorded, just not posted, matching how invoices behave.
   journalEntryId    String?       @unique
   journalEntry      JournalEntry? @relation("ClaimIssue", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("ContractClaim_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   settlementEntryId String?       @unique
   settlementEntry   JournalEntry? @relation("ClaimSettlement", fields: [settlementEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  settlementEntryTenant JournalEntry? @relation("ContractClaim_settlementEntryId_tenant", fields: [companyId, settlementEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3346,8 +3411,12 @@ model ContractDeposit {
   /// recorded, just not posted, matching how invoices behave.
   journalEntryId    String?       @unique
   journalEntry      JournalEntry? @relation("DepositReceipt", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("ContractDeposit_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   settlementEntryId String?       @unique
   settlementEntry   JournalEntry? @relation("DepositSettlement", fields: [settlementEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  settlementEntryTenant JournalEntry? @relation("ContractDeposit_settlementEntryId_tenant", fields: [companyId, settlementEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   deductions DepositDeduction[]
 
@@ -3428,6 +3497,8 @@ model Contract {
   settlementAmount    Decimal?      @db.Decimal(18, 2)
   settlementEntryId   String?       @unique
   settlementEntry     JournalEntry? @relation("ContractSettlement", fields: [settlementEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  settlementEntryTenant JournalEntry? @relation("Contract_settlementEntryId_tenant", fields: [companyId, settlementEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// The contract this one renews. One-to-one in both directions: a contract
   /// is renewed at most once, and the unique constraint is what enforces it —
@@ -4065,6 +4136,8 @@ model Payment {
   /// دفعة مرحَّلة لا تُعدَّل ولا تُحذف — التصحيح بدفعة عكسية تشير للأصل.
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("Payment_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// الدفعة العكسية تحمل مبلغاً سالباً وتشير إلى ما تصحّحه.
   reversesId String?  @unique
@@ -4183,6 +4256,8 @@ model SupplierPayment {
   /// سندٌ مرحَّل لا يُعدَّل ولا يُحذف — التصحيحُ بسندٍ عاكس يشير إلى الأصل.
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("SupplierPayment_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// السندُ العاكس يحمل مبلغاً سالباً ويشير إلى ما يصحّحه.
   reversesId String?          @unique
@@ -4262,6 +4337,8 @@ model RentPayment {
 
   journalEntryId String?
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("RentPayment_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
@@ -4334,6 +4411,8 @@ model RentAccrual {
   /// فارغٌ حين تخطّى الترحيلُ لنقص حسابٍ في الدليل — ويُعدّ في الإقرار «بلا قيد» لا يُخفى.
   journalEntryId String?
   journalEntry   JournalEntry? @relation("RentAccrualEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("RentAccrual_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
@@ -4518,6 +4597,8 @@ model StockMovement {
   /// ㉙ عكسُ حركةٍ سابقة (ق-١٠٦٣): حركةٌ مقابلة تشير إلى أصلها — لا حذف؛ فريدٌ فلا يُعكَس أصلٌ مرّتين، و`Restrict` فلا يُحذف.
   reversalOfId String?        @unique
   reversalOf   StockMovement? @relation("MovementReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversalOfTenant StockMovement? @relation("StockMovement_reversalOfId_tenant", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy   StockMovement? @relation("MovementReversal")
 
   @@index([expiryDate])
@@ -4526,6 +4607,14 @@ model StockMovement {
   @@index([purchaseLineId])
   @@index([goodsReceiptLineId])
   @@map("stock_movements")
+  inventoryWriteOff_movementId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_movementId_tenant")
+  inventoryConsumption_movementId_tenant InventoryConsumption[] @relation("InventoryConsumption_movementId_tenant")
+  inventoryLayer_sourceMovementId_tenant InventoryLayer[] @relation("InventoryLayer_sourceMovementId_tenant")
+  stockMovement_reversalOfId_tenant StockMovement[] @relation("StockMovement_reversalOfId_tenant")
+  stockOpeningLine_voidMovementId_tenant StockOpeningLine[] @relation("StockOpeningLine_voidMovementId_tenant")
+  stockOpeningLine_movementId_tenant StockOpeningLine[] @relation("StockOpeningLine_movementId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// سبب الحركة — **يحدّده المسار الذي أنشأها، ويقيّده مُشغِّل القاعدة**.
@@ -4609,6 +4698,8 @@ model InventoryLayer {
   /// حركة الإدخال التي أنشأت الطبقة — إن وُجدت (الرصيد الافتتاحي بلا حركة).
   sourceMovementId String?
   sourceMovement   StockMovement? @relation(fields: [sourceMovementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  sourceMovementTenant StockMovement? @relation("InventoryLayer_sourceMovementId_tenant", fields: [companyId, sourceMovementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// الطريقة السارية لحظة الإنشاء — لا تُقرأ من إعدادٍ متغيّر عند التقرير.
   costingMethod CostingMethod @default(FIFO)
@@ -4618,6 +4709,8 @@ model InventoryLayer {
   /// التحويلُ ينقلها مع الطبقة، والعكسُ يُقفل الطبقةَ بدفعتها. `Restrict`: دفعةٌ لها طبقة لا تُحذف.
   batchId String?
   batch   StockBatch? @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  batchTenant StockBatch? @relation("InventoryLayer_batchId_tenant", fields: [companyId, batchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
@@ -4632,6 +4725,11 @@ model InventoryLayer {
   @@index([companyId, productId, warehouseId, acquiredAt, createdAt])
   @@index([batchId])
   @@map("inventory_layers")
+  inventoryConsumption_layerId_tenant InventoryConsumption[] @relation("InventoryConsumption_layerId_tenant")
+  stockOpeningLine_layerId_tenant StockOpeningLine[] @relation("StockOpeningLine_layerId_tenant")
+  landedCostLine_layerId_tenant LandedCostLine[] @relation("LandedCostLine_layerId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// ٥+٦ **الدفعةُ كياناً** (`ق-١٠٨٦` · 2026-09-18) — لا نصّاً على الحركة: رقمٌ وانتهاءٌ واحد لصنفٍ في منشأة،
@@ -4660,6 +4758,9 @@ model StockBatch {
   @@unique([companyId, productId, batchNo])
   @@index([companyId, productId, expiryDate])
   @@map("stock_batches")
+  inventoryLayer_batchId_tenant InventoryLayer[] @relation("InventoryLayer_batchId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// ⭐ **سجلّ الاستهلاك — أيّ طبقةٍ خرجت ولأي حركة.**
@@ -4677,10 +4778,14 @@ model InventoryConsumption {
   /// فالكذبة تُحصر في التكلفة ولا تمتدّ إلى تاريخ الشراء.
   layerId String?
   layer   InventoryLayer? @relation(fields: [layerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  layerTenant InventoryLayer? @relation("InventoryConsumption_layerId_tenant", fields: [companyId, layerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// حركة الإخراج التي استهلكت — والمرتجع يعكسها بسطرٍ سالب لا بحذف.
   movementId String
   movement   StockMovement @relation(fields: [movementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  movementTenant StockMovement @relation("InventoryConsumption_movementId_tenant", fields: [companyId, movementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   qty      Decimal @db.Decimal(18, 3)
   /// تكلفة الوحدة **وقت الاستهلاك** — تُثبَّت هنا ولا تُقرأ من الطبقة لاحقاً.
@@ -4699,6 +4804,8 @@ model InventoryConsumption {
   ///     layerId IS NULL  AND  NOT EXISTS (تسويةٌ تشير إليه)
   settlesId String?               @unique
   settles   InventoryConsumption? @relation("ProvisionalSettlement", fields: [settlesId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  settlesTenant InventoryConsumption? @relation("InventoryConsumption_settlesId_tenant", fields: [companyId, settlesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   settledBy InventoryConsumption? @relation("ProvisionalSettlement")
 
   createdAt DateTime @default(now())
@@ -4706,6 +4813,9 @@ model InventoryConsumption {
   @@index([companyId, layerId])
   @@index([companyId, movementId])
   @@map("inventory_consumptions")
+  inventoryConsumption_settlesId_tenant InventoryConsumption[] @relation("InventoryConsumption_settlesId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// حالة واقعة الشطب — **والاعتماد هو الحدث المحاسبي، لا التسجيل**.
@@ -4786,9 +4896,13 @@ model InventoryWriteOff {
   /// مرّتين** بحركتين أو قيدين.
   movementId String?        @unique
   movement   StockMovement? @relation("WriteOffMovement", fields: [movementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  movementTenant StockMovement? @relation("InventoryWriteOff_movementId_tenant", fields: [companyId, movementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   journalEntryId String?       @unique
   journalEntry   JournalEntry? @relation("InventoryWriteOffEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("InventoryWriteOff_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -4800,6 +4914,9 @@ model InventoryWriteOff {
   @@index([companyId, productId, warehouseId])
   @@index([companyId, occurredAt])
   @@map("inventory_write_offs")
+  inventoryWriteOffAttachment_writeOffId_tenant InventoryWriteOffAttachment[] @relation("InventoryWriteOffAttachment_writeOffId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// مرفقات واقعة الشطب — **الدليل الذي تطلبه الهيئة إن سألت**.
@@ -4820,6 +4937,8 @@ model InventoryWriteOffAttachment {
 
   writeOffId String
   writeOff   InventoryWriteOff @relation(fields: [writeOffId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  writeOffTenant InventoryWriteOff @relation("InventoryWriteOffAttachment_writeOffId_tenant", fields: [companyId, writeOffId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// مفتاح التخزين: companies/{companyId}/{uuid}-{filename}.
   fileKey  String
