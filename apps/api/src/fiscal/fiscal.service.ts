@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -84,12 +84,32 @@ export class FiscalService {
     });
   }
 
+  /**
+   * **حذفُ التقويم لا يفكّ الإقفال** (`ق-١٢٥٣`/② — `domain-scan/01` A2).
+   *
+   * كانت السنةُ تُحذف بفتراتها المقفلة بالتتالي، فيصير الشهرُ المقفل مفتوحاً لكلِّ
+   * ترحيلٍ بلا أثرٍ يميّز ما دخله بعد الحذف. الحارسُ: سنةٌ فيها فترةٌ `CLOSED`
+   * تُرفض `409` مسمّىً بالشهر؛ ومن أراد حذفَها يعيد فتحَ الفترة أولاً — فعلٌ
+   * مقصودٌ يمرّ بصلاحية `review` ويُسجَّل في التدقيق — ثم يحذف تقويماً لا يقفل شيئاً.
+   * (الفتراتُ المفتوحة كلُّها لا تقفل قيداً، فحذفُها لا يفكّ شيئاً — وسنةٌ خاطئةٌ
+   * تُصحَّح بالحذف وإعادة الإنشاء، لا تُحبَس بقيودها.)
+   */
   async remove(companyId: string, id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.fiscalYear.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.fiscal_year_not_found);
-      // Periods cascade with the year (see schema) — deleting the calendar
-      // doesn't touch any journal entry, it only stops constraining them.
+      const closed = await tx.fiscalPeriod.findFirst({
+        where: { fiscalYearId: id, status: 'CLOSED' },
+        orderBy: [{ year: 'asc' }, { month: 'asc' }],
+        select: { month: true, year: true },
+      });
+      if (closed) {
+        throw new ConflictException(
+          formatMessage(MSG.fiscal_year_has_closed_period, { period: `${String(closed.month).padStart(2, '0')}/${closed.year}` }),
+        );
+      }
+      // Periods cascade with the year (see schema) — deleting an all-open
+      // calendar doesn't touch any journal entry, it only stops constraining them.
       await tx.fiscalYear.delete({ where: { id } });
     });
   }
