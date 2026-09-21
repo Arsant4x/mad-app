@@ -209,6 +209,21 @@ export class ObligationsService {
 
       // ② **المالُ نصّاً بدقّة صنفه على حدّ الاستجابة** (`ق-١٢٣٥` — أوّلُ نطاق: الإقرار): الحسابُ فوقُ يبقى رقماً
       //    بالمصدر الواحد، والحقولُ تخرج نصّاً بخانتين (`money`) فلا يُعاد تدويرُها في المتصفّح؛ والعدّاتُ أرقامٌ كما هي.
+      /**
+       * **حدٌّ يُعلَن في وجه الإقرار حتى تُبنى «و»** (`ق-١٢٦٠`): الخصمُ النسبيّ لضريبة المدخلات (اللائحةُ التنفيذية م٥١)
+       * غيرُ مبنيّ — فمكلَّفٌ له توريداتٌ **معفاة وخاضعة معاً** في الفترة (إيجارٌ سكنيٌّ معفى بجانب بيعٍ أو إيجارٍ خاضع)
+       * يقرأ هنا ضريبةَ مشترياته مخصومةً كاملةً حيث تجب نسبةٌ. يُقاس من الفترة نفسِها لا يُكتب: المعفى > 0 والخاضع (بنسبته أو بالصفر) > 0.
+       */
+      const exemptSupplies = salesExempt; // يشمل إيجارَ السكنيّ المعفى وقديمَه
+      const taxableSupplies = round2(salesStandard + salesZeroRatedDomestic + salesExports); // الخاضعُ بنسبته وبالصفر — كلاهما «خاضع» في القسمة
+      const limits: { code: string; severity: 'blocking'; message: string }[] = [];
+      if (exemptSupplies > 0 && taxableSupplies > 0) {
+        limits.push({
+          code: 'PROPORTIONAL_INPUT_VAT_NOT_BUILT',
+          severity: 'blocking',
+          message: `الخصمُ النسبيّ لضريبة المدخلات (م٥١) غيرُ مبنيّ: لهذه المنشأة في الفترة توريداتٌ معفاة (${money(exemptSupplies)}) وخاضعة (${money(taxableSupplies)}) معاً، والإقرارُ يخصم ضريبةَ المشتريات كاملةً حيث تجب نسبةٌ — لا يُعتمد هذا الإقرارُ للتقديم قبل بناء الخصم النسبيّ (الحزمة «و»)`,
+        });
+      }
       const box = (b: { net: number; vat?: number }) => ('vat' in b && b.vat !== undefined ? { net: money(b.net), vat: money(b.vat) } : { net: money(b.net) });
       const counted = (c: { lineCount: number; net: number }) => ({ lineCount: c.lineCount, net: money(c.net) });
       return {
@@ -257,6 +272,8 @@ export class ObligationsService {
         purchaseCount: purchases.length,
         filed: filed ? { filedAt: filed.filedAt, netVat: money(filed.netVat) } : null,
         changedSinceFiled,
+        /** حدودٌ معلَنة على هذا الإقرار — فارغةٌ حين لا حدّ (`ق-١٢٦٠`). */
+        limits,
         /** يُعرض حين `changedSinceFiled` وحدَه — نصُّ م٦٣ حيث يُقرأ الرقم (ق-٤٤٩). */
         filedNote: changedSinceFiled
           ? `تغيّر هذا الإقرارُ بعد تقديمه (قُدِّم بصافي ${money(filed!.netVat)}): تصحيحُه واجبٌ خلال عشرين يوماً من العلم (م٦٣/١)؛ ونقصٌ دون 15,000 ريال يجوز إدراجُه في الإقرار التالي (م٦٣/٣)`
