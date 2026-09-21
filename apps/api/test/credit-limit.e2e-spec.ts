@@ -120,7 +120,7 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
     expect(res.body.creditOverrideById).toBeNull();
   }, 60000);
 
-  it('② والحدُّ يمنع — والرسالةُ تحمل الحدَّ والقائمَ والمطلوب لا كلمةَ «تجاوزت»', async () => {
+  it('[SPEC 4.3] ② والحدُّ يمنع — والرسالةُ تحمل الحدَّ والقائمَ والمطلوب لا كلمةَ «تجاوزت»', async () => {
     const tight = await customerWithLimit(100, 'محدود');
     const res = await bill(tight).expect(409);
 
