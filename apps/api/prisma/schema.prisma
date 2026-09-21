@@ -464,6 +464,10 @@ model CompanyUser {
   escalationPolicies ReminderPolicy[] @relation("EscalationRecipient")
 
   @@map("company_users")
+  notification_targetUserId_tenant Notification[] @relation("Notification_targetUserId_tenant")
+  reminderPolicy_escalateToUserId_tenant ReminderPolicy[] @relation("ReminderPolicy_escalateToUserId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Refresh tokens are stored hashed so a stolen DB dump can't be replayed
@@ -536,6 +540,10 @@ model BusinessActivity {
   /// `migrate diff` يقرأ غيابه نيّةَ حذف. يوصف هنا ولا يُنشأ من جديد.
   @@index([companyId, sector])
   @@map("business_activities")
+  product_activityId_tenant Product[] @relation("Product_activityId_tenant")
+  branch_activityId_tenant Branch[] @relation("Branch_activityId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// An operating location. Unlike `companyId` — which is an absolute, always-on
@@ -549,6 +557,8 @@ model Branch {
 
   activityId String?
   activity   BusinessActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  activityTenant BusinessActivity? @relation("Branch_activityId_tenant", fields: [companyId, activityId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   name String
   /// 'فرع' | 'محل' | 'مستودع' ... — display only.
@@ -559,6 +569,8 @@ model Branch {
   property    Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   warehouseId String?
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warehouseTenant Warehouse? @relation("Branch_warehouseId_tenant", fields: [companyId, warehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   hours String?
 
@@ -588,6 +600,23 @@ model Branch {
 
   @@unique([companyId, name])
   @@map("branches")
+  inventoryWriteOff_branchId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_branchId_tenant")
+  stockMovement_branchId_tenant StockMovement[] @relation("StockMovement_branchId_tenant")
+  supplierPayment_branchId_tenant SupplierPayment[] @relation("SupplierPayment_branchId_tenant")
+  payment_branchId_tenant Payment[] @relation("Payment_branchId_tenant")
+  quote_branchId_tenant Quote[] @relation("Quote_branchId_tenant")
+  cashDrawer_branchId_tenant CashDrawer[] @relation("CashDrawer_branchId_tenant")
+  posShift_branchId_tenant PosShift[] @relation("PosShift_branchId_tenant")
+  journalLine_branchId_tenant JournalLine[] @relation("JournalLine_branchId_tenant")
+  journalEntry_branchId_tenant JournalEntry[] @relation("JournalEntry_branchId_tenant")
+  bankTransaction_branchId_tenant BankTransaction[] @relation("BankTransaction_branchId_tenant")
+  bank_branchId_tenant Bank[] @relation("Bank_branchId_tenant")
+  employee_branchId_tenant Employee[] @relation("Employee_branchId_tenant")
+  goodsReceipt_branchId_tenant GoodsReceipt[] @relation("GoodsReceipt_branchId_tenant")
+  purchase_branchId_tenant Purchase[] @relation("Purchase_branchId_tenant")
+  invoice_branchId_tenant Invoice[] @relation("Invoice_branchId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Which branches an employee sub-account may see. A join table rather than a
@@ -641,6 +670,8 @@ model ZatcaCredential {
   /// إلزامياً في (ب)، والفرادة تمنع شهادةً واحدةً على وحدتين (`ق-١٥٩` ③).
   egsUnitId String?  @unique
   egsUnit   EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  egsUnitTenant EgsUnit? @relation("ZatcaCredential_egsUnitId_tenant", fields: [companyId, egsUnitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// The EC private key the platform generated for this merchant. Losing it
   /// means re-onboarding from scratch, so it is never regenerated once a
@@ -776,6 +807,10 @@ model EgsUnit {
   /// الهجرة (`kind = DEFAULT_WEB`)، لأن Prisma لا تعبّر عن الشرط.
   @@index([companyId, kind])
   @@map("egs_units")
+  invoice_egsUnitId_tenant Invoice[] @relation("Invoice_egsUnitId_tenant")
+  zatcaCredential_egsUnitId_tenant ZatcaCredential[] @relation("ZatcaCredential_egsUnitId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Per-company currency registry. `rate` is the "as of now" rate, used as a
@@ -839,6 +874,9 @@ model FiscalYear {
 
   @@unique([companyId, name])
   @@map("fiscal_years")
+  fiscalPeriod_fiscalYearId_tenant FiscalPeriod[] @relation("FiscalPeriod_fiscalYearId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum FiscalPeriodStatus {
@@ -856,6 +894,8 @@ model FiscalPeriod {
 
   fiscalYearId String
   fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  fiscalYearTenant FiscalYear @relation("FiscalPeriod_fiscalYearId_tenant", fields: [companyId, fiscalYearId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// 1-12 plus the calendar year, so a period is identifiable without having
   /// to walk back to its FiscalYear's start date.
@@ -933,6 +973,12 @@ model Account {
 
   @@unique([companyId, code])
   @@map("accounts")
+  cashDrawer_accountId_tenant CashDrawer[] @relation("CashDrawer_accountId_tenant")
+  journalLine_accountId_tenant JournalLine[] @relation("JournalLine_accountId_tenant")
+  journalEntry_openingForAccountId_tenant JournalEntry[] @relation("JournalEntry_openingForAccountId_tenant")
+  bank_accountId_tenant Bank[] @relation("Bank_accountId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A customer the company invoices. Deliberately minimal — full customer
@@ -994,6 +1040,13 @@ model Customer {
   archived  Boolean  @default(false)
 
   @@map("customers")
+  payment_customerId_tenant Payment[] @relation("Payment_customerId_tenant")
+  quote_customerId_tenant Quote[] @relation("Quote_customerId_tenant")
+  contract_customerId_tenant Contract[] @relation("Contract_customerId_tenant")
+  journalLine_customerId_tenant JournalLine[] @relation("JournalLine_customerId_tenant")
+  invoice_customerId_tenant Invoice[] @relation("Invoice_customerId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Sales invoice. `subtotal`/`taxTotal`/`total` are always derived
@@ -1007,6 +1060,8 @@ model Invoice {
   no         String
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  customerTenant Customer @relation("Invoice_customerId_tenant", fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   issueDate DateTime      @db.Date
   dueDate   DateTime      @db.Date
@@ -1016,6 +1071,8 @@ model Invoice {
   /// and every row that existed before branches were introduced has none.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Invoice_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   subtotal Decimal @db.Decimal(18, 2)
   taxTotal Decimal @db.Decimal(18, 2)
@@ -1082,6 +1139,8 @@ model Invoice {
   /// `20260905120000_icv_per_unit` (Prisma لا تعبّر عن `CHECK`).
   egsUnitId         String?
   egsUnit           EgsUnit? @relation(fields: [egsUnitId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  egsUnitTenant EgsUnit? @relation("Invoice_egsUnitId_tenant", fields: [companyId, egsUnitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// واقعةُ الانقطاع التي استُنتج أن هذا البيع وقع فيها (`ق-١٩٢`/ج) — `SetNull`:
   /// دمجُ واقعتَين يُعيد توجيه بيوعهما ثم يحذف الفارغة، ولا يُفقد بيعٌ صلتَه بغيره.
@@ -1220,6 +1279,8 @@ model InvoiceLine {
   /// produce a *wrong* cost instead of an absent one.
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product? @relation("InvoiceLine_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Precision follows the platform-wide scale table in
   /// `common/money/rounding.ts` — quantity 3dp, net unit price 6dp. A pharmacy
@@ -1299,6 +1360,12 @@ model Supplier {
   archived  Boolean  @default(false)
 
   @@map("suppliers")
+  supplierPayment_supplierId_tenant SupplierPayment[] @relation("SupplierPayment_supplierId_tenant")
+  warranty_supplierId_tenant Warranty[] @relation("Warranty_supplierId_tenant")
+  journalLine_supplierId_tenant JournalLine[] @relation("JournalLine_supplierId_tenant")
+  purchase_supplierId_tenant Purchase[] @relation("Purchase_supplierId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// حالةُ سداد فاتورة الشراء — **مشتقّةٌ مخزَّنة** (`ق-٨٧٢`) من مجموع تخصيصات
@@ -1335,6 +1402,8 @@ model Purchase {
   no         String
   supplierId String
   supplier   Supplier @relation(fields: [supplierId], references: [id])
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  supplierTenant Supplier @relation("Purchase_supplierId_tenant", fields: [companyId, supplierId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ⚖️ **إشعارُ المورّد صفٌّ في جدول الشراء نفسِه بنوعه** (`ق-١٠٠٦`/③ — «كما في إشعار البيع،
   /// ولا نمطَ ثانٍ»): مستندُه هو، **وقيدُه قيدُنا** (`ق-١٠٠٦`/①). لا رقمَ منّا يُصدَر له
@@ -1362,6 +1431,8 @@ model Purchase {
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Purchase_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   subtotal  Decimal @db.Decimal(18, 2)
   taxAmount Decimal @db.Decimal(18, 2)
@@ -1450,6 +1521,8 @@ model PurchaseLine {
   /// for it** — there is no item to consume a cost layer from.
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product? @relation("PurchaseLine_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Born at the platform scale, not widened into it later — the guard in
   /// `common/money/rounding.spec.ts` fails the build otherwise.
@@ -1530,9 +1603,13 @@ model GoodsReceipt {
 
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warehouseTenant Warehouse @relation("GoodsReceipt_warehouseId_tenant", fields: [companyId, warehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("GoodsReceipt_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// تاريخُ وصول البضاعة — **وهو تاريخُ الطبقة** الذي يرتّب الرفّ (`FIFO`/`FEFO`).
   receivedAt DateTime @db.Date
@@ -1810,6 +1887,8 @@ model Product {
   /// of the company's activities.
   activityId String?
   activity   BusinessActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  activityTenant BusinessActivity? @relation("Product_activityId_tenant", fields: [companyId, activityId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   name     String
   sku      String?
@@ -1865,6 +1944,15 @@ model Product {
   archived  Boolean  @default(false)
 
   @@map("products")
+  inventoryWriteOff_productId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_productId_tenant")
+  stockBatch_productId_tenant StockBatch[] @relation("StockBatch_productId_tenant")
+  inventoryLayer_productId_tenant InventoryLayer[] @relation("InventoryLayer_productId_tenant")
+  stockMovement_productId_tenant StockMovement[] @relation("StockMovement_productId_tenant")
+  quoteLine_productId_tenant QuoteLine[] @relation("QuoteLine_productId_tenant")
+  purchaseLine_productId_tenant PurchaseLine[] @relation("PurchaseLine_productId_tenant")
+  invoiceLine_productId_tenant InvoiceLine[] @relation("InvoiceLine_productId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Basic HR record — deliberately just the employee roster (no GOSI payroll
@@ -1877,6 +1965,8 @@ model Employee {
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Employee_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   fullName   String
   jobTitle   String?
@@ -1900,6 +1990,10 @@ model Employee {
   archived  Boolean  @default(false)
 
   @@map("employees")
+  attendanceRecord_employeeId_tenant AttendanceRecord[] @relation("AttendanceRecord_employeeId_tenant")
+  leaveRequest_employeeId_tenant LeaveRequest[] @relation("LeaveRequest_employeeId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// An immutable record of who changed what, and when.
@@ -2052,6 +2146,9 @@ model LeaveType {
 
   @@unique([companyId, name])
   @@map("leave_types")
+  leaveRequest_leaveTypeId_tenant LeaveRequest[] @relation("LeaveRequest_leaveTypeId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// One leave request and its approval state. `days` is stored (inclusive
@@ -2065,9 +2162,13 @@ model LeaveRequest {
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  employeeTenant Employee @relation("LeaveRequest_employeeId_tenant", fields: [companyId, employeeId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   leaveTypeId String
   leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  leaveTypeTenant LeaveType @relation("LeaveRequest_leaveTypeId_tenant", fields: [companyId, leaveTypeId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   startDate DateTime @db.Date
   endDate   DateTime @db.Date
@@ -2120,6 +2221,8 @@ model AttendanceRecord {
 
   employeeId String
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  employeeTenant Employee @relation("AttendanceRecord_employeeId_tenant", fields: [companyId, employeeId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   date     DateTime         @db.Date
   status   AttendanceStatus @default(PRESENT)
@@ -2149,6 +2252,8 @@ model Bank {
   /// pointing the Bank/cash account at a branch, not by a separate table.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Bank_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   name           String
   iban           String?
@@ -2167,6 +2272,8 @@ model Bank {
   /// في عمودٍ خارج الأستاذ.
   accountId String  @unique
   account   Account @relation(fields: [accountId], references: [id])
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  accountTenant Account @relation("Bank_accountId_tenant", fields: [companyId, accountId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
@@ -2184,6 +2291,12 @@ model Bank {
   supplierPayments SupplierPayment[]
 
   @@map("banks")
+  rentPayment_bankId_tenant RentPayment[] @relation("RentPayment_bankId_tenant")
+  supplierPayment_bankId_tenant SupplierPayment[] @relation("SupplierPayment_bankId_tenant")
+  payment_bankId_tenant Payment[] @relation("Payment_bankId_tenant")
+  bankTransaction_bankId_tenant BankTransaction[] @relation("BankTransaction_bankId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A manual bank transaction (deposit/withdrawal). `matched`/`entryNo` mirror
@@ -2198,9 +2311,13 @@ model BankTransaction {
 
   bankId String
   bank   Bank   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank @relation("BankTransaction_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("BankTransaction_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   date        DateTime @db.Date
   description String
@@ -2239,6 +2356,8 @@ model JournalEntry {
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("JournalEntry_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   no          String
   date        DateTime @db.Date
@@ -2261,6 +2380,8 @@ model JournalEntry {
   /// account-delete path explicitly reverses these entries first.
   openingForAccountId String?
   openingForAccount   Account? @relation("OpeningEntries", fields: [openingForAccountId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  openingForAccountTenant Account? @relation("JournalEntry_openingForAccountId_tenant", fields: [companyId, openingForAccountId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ⚖️ **القيدُ المرحَّل يُعكس ولا يُحذف** (`ق-١٢٥٣`/①): القيدُ العكسيُّ يحمل معرّفَ
   /// أصله، والأصلُ يبقى برقمه وسطوره — فلا محوَ ولا فجوةَ ترقيم. **واحدٌ لكلِّ أصل**
@@ -2316,6 +2437,8 @@ model JournalLine {
 
   accountId String
   account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  accountTenant Account @relation("JournalLine_accountId_tenant", fields: [companyId, accountId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   debit  Decimal @default(0) @db.Decimal(18, 2)
   credit Decimal @default(0) @db.Decimal(18, 2)
@@ -2340,6 +2463,8 @@ model JournalLine {
   /// `Restrict` للسبب عينه.)
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("JournalLine_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
@@ -2356,9 +2481,13 @@ model JournalLine {
   /// `Restrict` كالوحدة: طرفٌ له سطور لا يُحذف.
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  customerTenant Customer? @relation("JournalLine_customerId_tenant", fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  supplierTenant Supplier? @relation("JournalLine_supplierId_tenant", fields: [companyId, supplierId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([companyId, propertyId])
   @@index([companyId, unitId])
@@ -2657,6 +2786,8 @@ model ReminderPolicy {
   /// recipient guaranteed to exist.
   escalateToUserId String?
   escalateTo       CompanyUser? @relation("EscalationRecipient", fields: [escalateToUserId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  escalateToTenant CompanyUser? @relation("ReminderPolicy_escalateToUserId_tenant", fields: [companyId, escalateToUserId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2724,6 +2855,8 @@ model Notification {
   /// them; the owner sees everything in the company.
   targetUserId String?
   targetUser   CompanyUser? @relation("NotificationTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  targetUserTenant CompanyUser? @relation("Notification_targetUserId_tenant", fields: [companyId, targetUserId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   title String
   body  String
@@ -2860,6 +2993,8 @@ model Warranty {
   provider   String
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  supplierTenant Supplier? @relation("Warranty_supplierId_tenant", fields: [companyId, supplierId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   startDate DateTime @db.Date
   /// When cover ends. Required — a warranty with no end date is a claim nobody
@@ -3183,6 +3318,8 @@ model Contract {
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  customerTenant Customer? @relation("Contract_customerId_tenant", fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// `EJ-<year>-<seq>`, server-generated — see ContractsService.nextContractNumber.
   no     String
@@ -3386,6 +3523,8 @@ model PosShift {
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("PosShift_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// The login identity that opened the shift — a cashier closes their own.
   openedById   String
@@ -3422,6 +3561,8 @@ model PosShift {
   /// الافتراضي لفرعها، فالزوجُ (فرع، كاشير) مجسٌّ لا هويّة: الكاشير ليس درجاً.
   drawerId String?
   drawer   CashDrawer? @relation(fields: [drawerId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  drawerTenant CashDrawer? @relation("PosShift_drawerId_tenant", fields: [companyId, drawerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([companyId, status])
   @@index([drawerId])
@@ -3446,6 +3587,8 @@ model CashDrawer {
   /// الفرع الذي يقف فيه الدرج — يقبل الفراغ لمنشأةٍ بلا فروع.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("CashDrawer_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   name     String
   isActive Boolean @default(true)
@@ -3457,6 +3600,8 @@ model CashDrawer {
   /// حسابُ الدرج في الدليل — واحدٌ لواحد، ولا يُشارَك.
   accountId String  @unique
   account   Account @relation(fields: [accountId], references: [id])
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  accountTenant Account @relation("CashDrawer_accountId_tenant", fields: [companyId, accountId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3466,6 +3611,9 @@ model CashDrawer {
   @@unique([companyId, branchId, name])
   @@index([companyId, isActive])
   @@map("cash_drawers")
+  posShift_drawerId_tenant PosShift[] @relation("PosShift_drawerId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// دفعة واحدة من فاتورة كاشير (مستند §4): الفاتورة الواحدة قد تُدفع نقداً
@@ -3623,9 +3771,13 @@ model Quote {
   no         String
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  customerTenant Customer @relation("Quote_customerId_tenant", fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Quote_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   issueDate  DateTime @db.Date
   /// آخر يوم يصلح فيه التحويل — بعده يُعرض ويُرفض تحويله باسم تاريخه.
@@ -3677,6 +3829,8 @@ model QuoteLine {
   /// mis-pick there is a wrong cost, not a wrong label.
   productId String?
   product   Product? @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product? @relation("QuoteLine_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Same scale as `InvoiceLine` deliberately: a quote that cannot express the
   /// quantity its invoice will carry turns every conversion into a rounding
@@ -3797,10 +3951,14 @@ model Payment {
 
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  customerTenant Customer @relation("Payment_customerId_tenant", fields: [companyId, customerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// فرع الدفعة: هو من يحدد الصندوق الذي يدخله النقد.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("Payment_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   date   DateTime      @db.Date
   amount Decimal       @db.Decimal(18, 2)
@@ -3809,6 +3967,8 @@ model Payment {
   /// حساب البنك، أو صندوق الفرع النقدي (صندوق = Bank مربوط بفرع).
   bankId String?
   bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank? @relation("Payment_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// رقم الحوالة/الشيك/المرجع لدى المزوّد.
   reference String?
@@ -3897,10 +4057,14 @@ model SupplierPayment {
 
   supplierId String
   supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  supplierTenant Supplier @relation("SupplierPayment_supplierId_tenant", fields: [companyId, supplierId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// فرع السند — والقيدُ يُختم به.
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("SupplierPayment_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   date   DateTime      @db.Date
   amount Decimal       @db.Decimal(18, 2)
@@ -3910,6 +4074,8 @@ model SupplierPayment {
   /// الدرجُ للكاشير لا للمورّد (`ق-٨٧٢`) — ومن يدفع نقداً بلا صندوقٍ مسمّى يدفع من `1000`.
   bankId String?
   bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank? @relation("SupplierPayment_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// رقم الحوالة/الشيك/المرجع لدى البنك.
   reference String?
@@ -3984,6 +4150,8 @@ model RentPayment {
 
   bankId String?
   bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank? @relation("RentPayment_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   notes String?
 
@@ -4131,6 +4299,14 @@ model Warehouse {
   goodsReceipts   GoodsReceipt[]
 
   @@map("warehouses")
+  inventoryWriteOff_warehouseId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_warehouseId_tenant")
+  inventoryLayer_warehouseId_tenant InventoryLayer[] @relation("InventoryLayer_warehouseId_tenant")
+  stockMovement_toWarehouseId_tenant StockMovement[] @relation("StockMovement_toWarehouseId_tenant")
+  stockMovement_warehouseId_tenant StockMovement[] @relation("StockMovement_warehouseId_tenant")
+  goodsReceipt_warehouseId_tenant GoodsReceipt[] @relation("GoodsReceipt_warehouseId_tenant")
+  branch_warehouseId_tenant Branch[] @relation("Branch_warehouseId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum StockMovementType {
@@ -4155,16 +4331,24 @@ model StockMovement {
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product @relation("StockMovement_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   warehouseId String
   warehouse   Warehouse @relation("MovementSourceWarehouse", fields: [warehouseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warehouseTenant Warehouse @relation("StockMovement_warehouseId_tenant", fields: [companyId, warehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Only set when type === TRANSFER (the destination warehouse); null otherwise.
   toWarehouseId String?
   toWarehouse   Warehouse? @relation("MovementDestinationWarehouse", fields: [toWarehouseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  toWarehouseTenant Warehouse? @relation("StockMovement_toWarehouseId_tenant", fields: [companyId, toWarehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("StockMovement_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   type   StockMovementType
   /// The stock ledger's quantity — and the one that must never round, because
@@ -4292,9 +4476,13 @@ model InventoryLayer {
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product @relation("InventoryLayer_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warehouseTenant Warehouse @relation("InventoryLayer_warehouseId_tenant", fields: [companyId, warehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   qtyReceived  Decimal @db.Decimal(18, 3)
   /// المتبقّي في الطبقة — يُستهلك منه ويعود إليه المرتجع.
@@ -4348,6 +4536,8 @@ model StockBatch {
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product @relation("StockBatch_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   batchNo    String
   expiryDate DateTime @db.Date
@@ -4444,12 +4634,18 @@ model InventoryWriteOff {
 
   branchId String?
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("InventoryWriteOff_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   warehouseId String
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warehouseTenant Warehouse @relation("InventoryWriteOff_warehouseId_tenant", fields: [companyId, warehouseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  productTenant Product @relation("InventoryWriteOff_productId_tenant", fields: [companyId, productId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// سلسلةٌ مستقلة `WO-YYYY-NNNN` — لا يتزاحم الشطب مع الفواتير على عدّاد.
   no String
