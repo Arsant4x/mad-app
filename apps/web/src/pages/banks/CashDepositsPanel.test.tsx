@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CashDepositsPanel } from './CashDepositsPanel';
@@ -52,14 +52,15 @@ describe('لوحةُ إيداعات الأدراج', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('الدرج'), 'dr1');
     await userEvent.selectOptions(screen.getByLabelText('البنك'), 'b1');
-    await userEvent.clear(screen.getByLabelText('التاريخ'));
-    await userEvent.type(screen.getByLabelText('التاريخ'), '2026-06-09');
-    await userEvent.type(screen.getByLabelText('المبلغ'), '120');
+    // حقلا التاريخ والمبلغ بحدثِ تغييرٍ واحد — الكتابةُ حرفاً حرفاً في حقل تاريخٍ تكلّف ثوانيَ على جهازٍ مثقَل
+    // وتُسقط الاختبارَ على المهلة لا على المنطق (قِيس: 2.9 s خالياً · 6 s مثقَلاً).
+    fireEvent.change(screen.getByLabelText('التاريخ'), { target: { value: '2026-06-09' } });
+    fireEvent.change(screen.getByLabelText('المبلغ'), { target: { value: '120' } });
     await userEvent.click(screen.getByText('أودِع'));
     expect(vi.mocked(banks.createCashDeposit)).toHaveBeenCalledWith({ drawerId: 'dr1', bankId: 'b1', amount: 120, date: '2026-06-09', memo: undefined });
     expect(await screen.findByTestId('deposit-notice')).toHaveTextContent('CD-2026-0002');
     expect(screen.getByTestId('deposit-notice')).toHaveTextContent('JE-2026-0009');
-  });
+  }, 15000);
 
   it('الإلغاءُ عكسٌ للمفتوح وحدَه، والفرقُ بين الدفتر والمستندات يُعلَن كما قاله الخادم', async () => {
     vi.mocked(banks.listCashDeposits).mockResolvedValue({
