@@ -8,6 +8,7 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMoney, round2, roundTo } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { AMORTIZABLE_CATEGORY, purchaseCategoryLabel, toPurchaseCategoryCode } from '../common/purchase-categories';
 import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/settlement/settlement.util';
 import { postPurchaseEntry, postReversalEntry } from '../journal/auto-posting.util';
@@ -75,7 +76,8 @@ export class PurchasesService {
         const creditedTotal = p.docType === 'SUPPLIER_CREDIT_NOTE' ? 0 : (credited.get(p.id) ?? 0);
         // والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
         const remaining = p.voidedAt ? 0 : outstandingAfterNotes(p, creditedTotal, paid, 'SUPPLIER_CREDIT_NOTE');
-        return { ...p, allocated: paid, credited: creditedTotal, remaining };
+        // ② الثلاثةُ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — كما تخرج `outstanding`/`creditedTotal` من قائمة الفواتير.
+        return { ...p, allocated: money(paid), credited: money(creditedTotal), remaining: money(remaining) };
       });
     });
   }

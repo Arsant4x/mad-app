@@ -9,10 +9,10 @@ import { computeTotals, InvoicesService } from '../invoices/invoices.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
-import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
+import { FulfilmentReport } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
-import { money, qty } from '../common/money/text';
+import { money } from '../common/money/text';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import {
   NETWORK_RECEIVABLE_CODE,
@@ -75,12 +75,12 @@ export type StockDeductionReport =
  * الفاتورة، **وهذا تغييرٌ داخليّ لا يخصّ من يقرأ الردّ**. فمن غيّر الشكل مع
  * المالك أجبر كل واجهةٍ على تتبّع إعادة تنظيمٍ لا تعنيها.
  */
-function toDeductionReport(f: FulfilmentResult | undefined): StockDeductionReport {
+function toDeductionReport(f: FulfilmentReport | undefined): StockDeductionReport {
   if (!f || !f.fulfilled) {
     return { deducted: false, reason: f?.reason === 'NO_TRACKED_PRODUCTS' ? 'NO_TRACKED_PRODUCTS' : 'NO_BRANCH_WAREHOUSE' };
   }
-  // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`) — الرصيدُ السالب يُقرأ ولا يُحسب عليه في الكاشير.
-  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: qty(b.resultingQty) })) };
+  // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`) تصل من صورة حدّ التسليم نفسِها — تُمرَّر ولا تُعاد صياغتها.
+  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: b.resultingQty })) };
 }
 
 /** مجاميعُ المناوبة رقماً — للحساب داخل الخادم (فرقُ الجرد · قيدُ الفرق). */

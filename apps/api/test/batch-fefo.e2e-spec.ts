@@ -176,7 +176,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     const [layerA, layerB] = await layersOf(t);
     expect(layerA.batch?.batchNo).toBe(`A-${suffix}`);
     const soldT = await sale(t, 3).expect(201);
-    expect(soldT.body.stockFulfilment.totalCost).toBe(60);
+    // ② التكلفةُ تصل نصّاً بخانتين والكمّيةُ بثلاث (`ق-١٢٣٥`) — تُقارَن حرفاً.
+    expect(soldT.body.stockFulfilment.totalCost).toBe('60.00');
     const consT = await lastSaleConsumptions(t);
     expect(consT).toHaveLength(1);
     expect(consT[0].layerId).toBe(layerB.id);
@@ -186,7 +187,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     await purchase([{ productId: u, quantity: 5, unitPrice: 20, batchNo: `B-${suffix}`, expiryDate: iso(30) }], iso(0)).expect(201);
     const [layerUA] = await layersOf(u);
     const soldU = await sale(u, 3).expect(201);
-    expect(soldU.body.stockFulfilment.totalCost).toBe(30);
+    expect(soldU.body.stockFulfilment.totalCost).toBe('30.00');
     const consU = await lastSaleConsumptions(u);
     expect(consU).toHaveLength(1);
     expect(consU[0].layerId).toBe(layerUA.id);
@@ -203,7 +204,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     expect(await outMovements(e)).toBe(0);
 
     const ok = await sale(e, 3).expect(201);
-    expect(ok.body.stockFulfilment.provisionalQty).toBe(0);
+    expect(ok.body.stockFulfilment.provisionalQty).toBe('0.000');
     expect((await lastSaleConsumptions(e))[0].layerId).toBe(layerY.id);
     const again = await sale(e, 1).expect(409);
     expect(String(again.body.message)).toContain('لا يُباع من دفعةٍ منتهية');
@@ -228,7 +229,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     await purchase([{ productId: p, quantity: 1, unitPrice: 10, batchNo: `Z-${suffix}`, expiryDate: iso(60) }]).expect(201);
     const provisional = await sale(p, 3).expect(201);
     expect(provisional.body.stockFulfilment.fulfilled).toBe(true);
-    expect(provisional.body.stockFulfilment.provisionalQty).toBe(2);
+    expect(provisional.body.stockFulfilment.provisionalQty).toBe('2.000');
   });
 
   it('⑥ قربُ الانتهاء بالمتبقّي من الطبقات — والقديمةُ نصّاً تبقى وتُعدّ موسومة؛ والحدودُ الثلاثة في وجهه', async () => {
@@ -313,7 +314,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
 
     // البيعُ يأخذ من الدفعة (الأحدثِ اقتناءً) لا من الطبقة الأقدم مجهولةِ الانتهاء.
     const sold = await sale(r, 5).expect(201);
-    expect(sold.body.stockFulfilment.totalCost).toBe(50);
+    expect(sold.body.stockFulfilment.totalCost).toBe('50.00');
     const cons = await lastSaleConsumptions(r);
     expect(cons).toHaveLength(1);
     const batchLayer = (await layersOf(r)).find((l) => l.batch?.batchNo === `N-${suffix}`)!;

@@ -174,10 +174,11 @@ describe('الفاتورةُ الصادرة لا تُعدَّل ولا تُحذ�
     expect(undo.body.relatedInvoice.id).toBe(debit.body.id);
     expect(Number(undo.body.total)).toBeCloseTo(575, 2);
     // والمدينُ المصحَّح لم يعد مستحقّاً.
-    const list = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; outstanding: number; creditedTotal: number }[];
+    // ② الحقلان نصٌّ بخانتين (`ق-١٢٣٥`) — يُقارَنان حرفاً.
+    const list = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; outstanding: string; creditedTotal: string }[];
     const debitRow = list.find((r) => r.id === debit.body.id)!;
-    expect(debitRow.outstanding).toBeCloseTo(0, 2);
-    expect(debitRow.creditedTotal).toBeCloseTo(575, 2);
+    expect(debitRow.outstanding).toBe('0.00');
+    expect(debitRow.creditedTotal).toBe('575.00');
 
     // ⛔ لا من نوعه: دائنٌ على دائن، ومدينٌ على مدين.
     const cc = await auth(request(app.getHttpServer()).post(`/invoices/${credit.body.id}/credit-note`)).send({ reason: 'دائنٌ على دائن' }).expect(400);

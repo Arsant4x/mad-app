@@ -5,6 +5,7 @@ import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.ut
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import {
   allocatedByDocument,
@@ -105,9 +106,15 @@ export class SupplierPaymentsService {
       const ids = purchases.map((p) => p.id);
       // المتبقّي بعد ما ائتمن به المورّد — المصدرُ الواحد ⑥ مع الفاتورة (`ق-١٠٠٨`/١).
       const credited = await creditedByPurchase(tx, ids);
+      // ② المسدَّدُ والمُئتمَنُ والمتبقّي نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والحسابُ قبلها رقم.
       return withRemaining(purchases, await allocatedByDocument(purchaseTarget(tx), ids)).map((p) => {
         const creditedTotal = credited.get(p.id) ?? 0;
-        return { ...p, credited: creditedTotal, remaining: outstandingAfterNotes(p, creditedTotal, p.allocated, 'SUPPLIER_CREDIT_NOTE') };
+        return {
+          ...p,
+          allocated: money(p.allocated),
+          credited: money(creditedTotal),
+          remaining: money(outstandingAfterNotes(p, creditedTotal, p.allocated, 'SUPPLIER_CREDIT_NOTE')),
+        };
       });
     });
   }

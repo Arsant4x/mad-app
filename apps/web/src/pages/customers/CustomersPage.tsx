@@ -4,6 +4,7 @@ import { listInvoices, type Invoice } from '../../api/invoices';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
+import { num0 } from '../../lib/money';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { CustomerModal } from './CustomerModal';
 import i18n from '../../i18n';
@@ -39,7 +40,8 @@ export function CustomersPage() {
       // المسدَّدة جزئياً بكاملها، فيُظهر رصيداً أعلى مما يدين به العميل فعلاً
       // ويخالف رقم تقرير أعمار الذمم لنفس العميل.
       // ولا حاجة لتخطي PAID: outstanding يعيد صفراً لها ولإشعارات الدائن.
-      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + inv.outstanding);
+      // ② يصل نصّاً بخانتين (`ق-١٢٣٥`) فيُقرأ رقماً قبل الجمع — والجمعُ على النصّ وصلٌ لا جمع.
+      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + num0(inv.outstanding));
     }
     return map;
   }, [invoices]);

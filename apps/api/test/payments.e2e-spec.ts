@@ -49,10 +49,15 @@ describe('Customer payments + allocations (e2e)', () => {
   };
   const invoiceStatus = async (id: string): Promise<string> => (await invoiceOf(id)).status;
 
-  /** المتبقي كما يعرضه الخادم — محسوباً من التخصيصات لا من حقل مخزَّن. */
+  /** المتبقي كما يعرضه الخادم — محسوباً من التخصيصات لا من حقل مخزَّن.
+   *  ② يصل نصّاً بخانتين (`ق-١٢٣٥`) وشكلُه يُثبَت حرفاً، ثم يُقرأ رقماً للمقارنة؛ والفاتورةُ المسدَّدة تغيب من القائمة فصفر. */
   const remainingOf = async (invoiceId: string): Promise<number> => {
-    const rows = (await auth(request(app.getHttpServer()).get(`/payments/open-invoices/${customerId}`)).expect(200)).body as { id: string; remaining: number }[];
-    return rows.find((r) => r.id === invoiceId)?.remaining ?? 0;
+    const rows = (await auth(request(app.getHttpServer()).get(`/payments/open-invoices/${customerId}`)).expect(200)).body as { id: string; remaining: string; allocated: string }[];
+    const row = rows.find((r) => r.id === invoiceId);
+    if (!row) return 0;
+    expect(row.remaining).toMatch(/^-?\d+\.\d{2}$/);
+    expect(row.allocated).toMatch(/^-?\d+\.\d{2}$/);
+    return Number(row.remaining);
   };
 
   const bankBalance = async (): Promise<number> => {

@@ -48,7 +48,8 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
   }, 60000);
 
   const listed = async (id: string) => {
-    const rows = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; status: string; outstanding: number }[];
+    // ② `outstanding` نصٌّ بخانتين (`ق-١٢٣٥`) — يُقارَن حرفاً لا بتقريب.
+    const rows = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body as { id: string; status: string; outstanding: string }[];
     return rows.find((r) => r.id === id)!;
   };
 
@@ -57,7 +58,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
       .send({ customerId, issueDate: '2026-07-01', dueDate: '2026-08-01', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 1000, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
-    expect((await listed(inv.body.id)).outstanding).toBeCloseTo(1000, 2);
+    expect((await listed(inv.body.id)).outstanding).toBe('1000.00');
 
     await auth(request(app.getHttpServer()).post('/payments'))
       .send({ customerId, date: '2026-07-15', amount: 400, method: 'CASH', bankId, allocations: [{ invoiceId: inv.body.id, amount: 400 }] })
@@ -65,7 +66,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
 
     const after = await listed(inv.body.id);
     // العطل بالضبط: كان يعيد 1000 — أي أن العميل يُطالَب بما دفعه.
-    expect(after.outstanding).toBeCloseTo(600, 2);
+    expect(after.outstanding).toBe('600.00');
     expect(after.status).toBe('PARTIAL');
   }, 90000);
 
@@ -79,7 +80,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
       .expect(201);
 
     const after = await listed(inv.body.id);
-    expect(after.outstanding).toBeCloseTo(0, 2);
+    expect(after.outstanding).toBe('0.00');
     expect(after.status).toBe('PAID');
   }, 90000);
 

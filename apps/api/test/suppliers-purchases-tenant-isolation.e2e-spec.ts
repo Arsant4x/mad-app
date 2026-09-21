@@ -70,7 +70,8 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
     const listed = (await request(app.getHttpServer()).get('/purchases').set('Authorization', `Bearer ${tokenA}`).expect(200)).body.find(
       (p: { id: string }) => p.id === purchase.body.id,
     );
-    expect({ allocated: listed.allocated, remaining: listed.remaining }).toEqual({ allocated: 0, remaining: 920 });
+    // ② نصٌّ بخانتين (`ق-١٢٣٥`).
+    expect({ allocated: listed.allocated, remaining: listed.remaining }).toEqual({ allocated: '0.00', remaining: '920.00' });
     await request(app.getHttpServer())
       .patch(`/purchases/${purchase.body.id}`)
       .set('Authorization', `Bearer ${tokenA}`)
@@ -83,7 +84,7 @@ describe('Suppliers/Purchases tenant isolation (e2e)', () => {
       (p: { id: string }) => p.id === purchase.body.id,
     );
     expect(voided.voidedAt).toBeTruthy();
-    expect(voided.remaining).toBe(0);
+    expect(voided.remaining).toBe('0.00');
     await request(app.getHttpServer()).delete(`/suppliers/${supplier.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(409);
   }, 20000);
 });

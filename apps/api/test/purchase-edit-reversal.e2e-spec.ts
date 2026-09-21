@@ -206,8 +206,9 @@ describe('تعديلُ فاتورة الشراء بعكسٍ وتجميدُها �
     expect(after.vat.standard - before.vat.standard).toBeCloseTo(0, 2);
     expect(after.vat.tax - before.vat.tax).toBeCloseTo(0, 2);
     // الصفُّ باقٍ مُلغىً: لا تعديلَ ولا إلغاءَ ثانياً ولا إشعارَ عليه، ولا يظهر في فواتير المورّد المفتوحة
-    const list = (await get('/purchases').expect(200)).body as { id: string; voidedAt: string | null; remaining: number }[];
-    expect(list.find((p) => p.id === id)).toMatchObject({ remaining: 0 });
+    // ② `remaining` نصٌّ بخانتين (`ق-١٢٣٥`).
+    const list = (await get('/purchases').expect(200)).body as { id: string; voidedAt: string | null; remaining: string }[];
+    expect(list.find((p) => p.id === id)).toMatchObject({ remaining: '0.00' });
     expect(list.find((p) => p.id === id)?.voidedAt).toBeTruthy();
     const again = await patch(`/purchases/${id}`).send({ dueDate: today() });
     expect(again.status).toBe(409);

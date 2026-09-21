@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Customer } from './customers';
+import type { MoneyText } from '../lib/money';
 import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
 
 export type { Customer } from './customers';
@@ -58,10 +59,11 @@ export interface Invoice {
   notes: string | null;
   /** ما تبقّى على هذا المستند فعلاً: الإجمالي − الإشعارات الدائنة − المقبوض.
    *  يُحسب في الخادم (invoices.service.ts outstandingOf) فلا تُعيد كل شاشة
-   *  حسابه بطريقتها — وهو ما أنتج رقمين مختلفين لنفس العميل. */
-  outstanding: number;
-  /** كم رُدّ من هذه الفاتورة بإشعارات دائنة. */
-  creditedTotal: number;
+   *  حسابه بطريقتها — وهو ما أنتج رقمين مختلفين لنفس العميل.
+   *  ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`): يُقرأ بـ`num()` قبل أي جمع. */
+  outstanding: MoneyText;
+  /** كم رُدّ من هذه الفاتورة بإشعارات دائنة — نصٌّ بخانتين. */
+  creditedTotal: MoneyText;
   /** Base64 TLV for the ZATCA phase-1 QR, or null while the company profile
    * is missing its legal name or VAT number. Built server-side. */
   zatcaQr: string | null;

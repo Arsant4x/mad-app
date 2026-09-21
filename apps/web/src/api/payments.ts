@@ -1,4 +1,5 @@
 import { today } from '../lib/format';
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
 export type PaymentMethod = 'CASH' | 'BANK';
@@ -40,8 +41,9 @@ export interface OpenInvoice {
   total: string;
   currency: string;
   status: string;
-  allocated: number;
-  remaining: number;
+  /** ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`): يُقرأ بـ`num0()` قبل أي حساب. */
+  allocated: MoneyText;
+  remaining: MoneyText;
 }
 
 export interface AllocationInput {

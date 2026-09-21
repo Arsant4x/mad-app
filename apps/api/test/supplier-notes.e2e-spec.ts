@@ -164,9 +164,10 @@ describe('إشعارُ المورّد — الدفترُ والرفُّ والض
     expect(after.vat.tax - before.vat.tax).toBeCloseTo(-24, 2);
     expect(after.vat.count - before.vat.count).toBe(1);
     // القائمة: ما ائتمن به المورّد يخفّض متبقّي الأصل، والإشعارُ لا متبقّيَ عليه
-    const list = (await get('/purchases').expect(200)).body as { id: string; credited: number; remaining: number; allocated: number }[];
-    expect(list.find((p) => p.id === purchaseId)).toMatchObject({ credited: 184, allocated: 0, remaining: 276 });
-    expect(list.find((p) => p.id === res.body.id)).toMatchObject({ credited: 0, remaining: 0 });
+    // ② الثلاثةُ نصٌّ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً.
+    const list = (await get('/purchases').expect(200)).body as { id: string; credited: string; remaining: string; allocated: string }[];
+    expect(list.find((p) => p.id === purchaseId)).toMatchObject({ credited: '184.00', allocated: '0.00', remaining: '276.00' });
+    expect(list.find((p) => p.id === res.body.id)).toMatchObject({ credited: '0.00', remaining: '0.00' });
   }, 30000);
 
   it('③ بعد بيع ٣: تخفيضُ سعرٍ بـ٢ على ٦ — ما على الرفّ يتبع طبقته وما استُهلك تكلفةُ مبيعاتٍ في فترة الإشعار', async () => {
@@ -249,9 +250,9 @@ describe('إشعارُ المورّد — الدفترُ والرفُّ والض
     expect(after.vat.standard - before.vat.standard).toBeCloseTo(10, 2);
     expect(after.vat.tax - before.vat.tax).toBeCloseTo(1.5, 2);
     // المدينُ يُسدَّد كالشراء: يظهر في فواتير المورّد المفتوحة بمتبقّيه — والدائنُ لا يظهر
-    const open = (await get(`/supplier-payments/open-purchases/${supplierId}`).expect(200)).body as { id: string; remaining: number; docType: string }[];
-    expect(open.find((p) => p.id === res.body.id)).toMatchObject({ docType: 'SUPPLIER_DEBIT_NOTE', remaining: 11.5 });
-    expect(open.find((p) => p.id === purchaseId)).toMatchObject({ docType: 'PURCHASE', remaining: 262.2 });
+    const open = (await get(`/supplier-payments/open-purchases/${supplierId}`).expect(200)).body as { id: string; remaining: string; docType: string }[];
+    expect(open.find((p) => p.id === res.body.id)).toMatchObject({ docType: 'SUPPLIER_DEBIT_NOTE', remaining: '11.50' });
+    expect(open.find((p) => p.id === purchaseId)).toMatchObject({ docType: 'PURCHASE', remaining: '262.20' });
     expect(open.some((p) => p.docType === 'SUPPLIER_CREDIT_NOTE')).toBe(false);
   }, 30000);
 

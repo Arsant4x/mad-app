@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { consumeFifo, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
+import { money, qty } from '../common/money/text';
 
 /**
  * تسليم البيع — **مالكٌ واحد للكتابتين: حركة المخزون وتكلفتها**.
@@ -55,6 +56,35 @@ export type FulfilmentResult =
       provisionalQty: number;
     }
   | { fulfilled: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
+/**
+ * **صورةُ الحدّ** (② `ق-١٢٣٥`): ما يخرج في الردّ من التسليم — التكلفةُ مالٌ بخانتين
+ * والكمّياتُ بثلاث، نصّاً. والحسابُ داخل الخدمة (قيدُ التكلفة · العدّ) على
+ * `FulfilmentResult` الرقميّ كما كان؛ ويُحوَّل هنا لأن المالكَ الواحد لكتابتَي الحركة
+ * والتكلفة هو نفسُه من يقول ماذا خرج.
+ */
+export type FulfilmentReport =
+  | {
+      fulfilled: true;
+      warehouseId: string;
+      movements: number;
+      belowZero: { productId: string; resultingQty: string }[];
+      totalCost: string;
+      provisionalQty: string;
+    }
+  | { fulfilled: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
+export function fulfilmentReport(f: FulfilmentResult): FulfilmentReport {
+  if (!f.fulfilled) return f;
+  return {
+    fulfilled: true,
+    warehouseId: f.warehouseId,
+    movements: f.movements,
+    belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: qty(b.resultingQty) })),
+    totalCost: money(f.totalCost),
+    provisionalQty: qty(f.provisionalQty),
+  };
+}
 
 /**
  * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
@@ -170,6 +200,10 @@ export interface ReturnResult {
   totalCost: number;
   provisionalQty: number;
 }
+
+/** صورةُ الحدّ لما عاد إلى الرفّ (② `ق-١٢٣٥`): الكمّيةُ بثلاث والتكلفةُ بخانتين، نصّاً. */
+export const restoredReport = (restored: ReturnResult['restored']): { lineId: string; qty: string; cost: string }[] =>
+  restored.map((r) => ({ lineId: r.lineId, qty: qty(r.qty), cost: money(r.cost) }));
 
 /**
  * **ردُّ البضاعة السليمة إلى المخزون** — من المالك الواحد نفسه لكتابتَي الحركة والتكلفة.
