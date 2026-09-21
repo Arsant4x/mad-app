@@ -150,6 +150,23 @@ export class CompanyUsersService {
         await this.replaceBranchAssignments(tx, id, dto.branchIds);
       }
 
+      /**
+       * **التعطيلُ يُنهي الجلساتِ لا يُوقفها** (`ق-١٢٥٣`/③ — `domain-scan/09` A2).
+       *
+       * الحارسُ يقرأ الحالةَ من القاعدة فيرفض الطلبَ التالي فوراً، وتحديثُ الجلسة يرفض
+       * غيرَ `ACTIVE` — **لكنّ رموزَ التحديث كانت تبقى صالحة**: جهازٌ صامت أثناء
+       * التعطيل يعود بعد إعادة التفعيل بلا دخولٍ جديد (قِيس: `expected 401, got 200`).
+       * فتُبطَل رموزُ الهويّة كلُّها عند أيِّ حالةٍ غيرِ `ACTIVE` — وإعادةُ التفعيل تفتح
+       * الدخولَ بالكلمة لا الجلسةَ القديمة. (جدولُ منصّةٍ بلا منشأة — يُبلَغ عبر هويّةِ
+       * موظفٍ ثبت أنه لهذه المنشأة أعلاه.)
+       */
+      if (dto.status !== undefined && dto.status !== 'ACTIVE') {
+        await tx.refreshToken.updateMany({
+          where: { loginIdentityId: existing.loginIdentityId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+
       return tx.companyUser.update({
         where: { id },
         data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
