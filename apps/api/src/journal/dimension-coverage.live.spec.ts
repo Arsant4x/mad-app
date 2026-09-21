@@ -75,11 +75,14 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
     // بعد إضافة جدولين بسبعة مفاتيح — مقابل `10 s` قبلها — ومحلّياً `700 ms`؛ والمكافئُ على `pg_constraint`
     // يعيد الصفوفَ نفسَها (`8` هنا · `37` في مصادر الطرف، مقارنةً صفّاً صفّاً) في `4 ms`. فالكتالوجُ يُقرأ من
     // مصدره لا من واجهةٍ تُعيد بناءه لكلِّ صفّ.
+    // ⚠️ **المفردُ وحدَه** (`ق-١٢٥٢`): المركّبُ `(companyId, col)` بجانب المفرد يعيد الطريقَ نفسَه مرّتين
+    // ويقدّم `companyId` عموداً «يشير إلى القيد» — فيُقرأ عمودُ الاستدلال من مفتاحٍ بعمودٍ واحد.
     const rows = await prisma.$queryRaw<{ table_name: string; entry_col: string }[]>`
       SELECT DISTINCT c.conrelid::regclass::text AS table_name, a.attname AS entry_col
       FROM pg_constraint c
       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
       WHERE c.contype = 'f'
+        AND array_length(c.conkey, 1) = 1
         AND c.confrelid = 'journal_entries'::regclass
         AND EXISTS (
           SELECT 1 FROM pg_constraint c2
@@ -233,11 +236,13 @@ describe('حارس الأبعاد التحليلية (حيّ)', () => {
     /** المصادرُ مشتقّةٌ من الكتالوج: مفاتيحُ `journal_entries` مع أعمدة الطرف/العقد على الجدول نفسِه. */
     async function partySources(): Promise<PartySource[]> {
       // من `pg_catalog` لا `information_schema` — السببُ والقياسُ في مسارات الوحدة أعلاه (الصفوفُ نفسُها: `37`).
+      // المفردُ وحدَه (`ق-١٢٥٢`) — كالقارئ أعلاه: المركّبُ يكرّر الطريقَ ويُدخل `companyId` عموداً.
       const fks = await prisma.$queryRaw<{ table_name: string; column_name: string; referenced: string }[]>`
         SELECT c.conrelid::regclass::text AS table_name, a.attname AS column_name, c.confrelid::regclass::text AS referenced
         FROM pg_constraint c
         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
         WHERE c.contype = 'f'
+          AND array_length(c.conkey, 1) = 1
           AND c.confrelid IN ('journal_entries'::regclass, 'contracts'::regclass, 'customers'::regclass, 'suppliers'::regclass)
           AND c.conrelid <> 'journal_lines'::regclass
       `;

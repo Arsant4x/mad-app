@@ -179,4 +179,32 @@ describe('Composite tenant foreign keys (e2e)', () => {
     );
     expect(after.invoiceId).toBe(invA2.id);
   }, 60000);
+
+  it('[SPEC 1.2] ④ batch 3 sample — journal_lines.journalEntryId → journal_entries: a foreign company\'s entry is refused, its own is accepted', async () => {
+    const conname = await constraintNamed('journal_lines', 'journalEntryId');
+    const entryOf = async (c: IsolatedCompany, tag: string) => {
+      const accounts = await auth(c)(request(app.getHttpServer()).get('/accounts')).expect(200);
+      const cash = accounts.body.find((x: { code: string }) => x.code === '1000').id;
+      const revenue = accounts.body.find((x: { code: string }) => x.code === '4100').id;
+      const res = await auth(c)(request(app.getHttpServer()).post('/journal'))
+        .send({ date: '2026-06-15', memo: `قيد ${tag}`, lines: [{ accountId: cash, debit: 50, credit: 0 }, { accountId: revenue, debit: 0, credit: 50 }] })
+        .expect(201);
+      return res.body as { id: string; lines: { id: string }[] };
+    };
+    const jeA = await entryOf(a, 'أ');
+    const jeA2 = await entryOf(a, 'أ٢');
+    const jeB = await entryOf(b, 'ب');
+    expect(jeA.lines?.[0]?.id).toBeDefined();
+
+    const refused = await crossWrite('journal_lines', 'journalEntryId', jeA.lines[0].id, jeB.id);
+    expect(refused).toEqual({ sqlstate: '23503', constraint: conname });
+
+    await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$executeRawUnsafe(`UPDATE "journal_lines" SET "journalEntryId" = $1 WHERE id = $2`, jeA2.id, jeA.lines[0].id),
+    );
+    const [after] = await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$queryRawUnsafe<{ journalEntryId: string }[]>(`SELECT "journalEntryId" FROM "journal_lines" WHERE id = $1`, jeA.lines[0].id),
+    );
+    expect(after.journalEntryId).toBe(jeA2.id);
+  }, 60000);
 });
