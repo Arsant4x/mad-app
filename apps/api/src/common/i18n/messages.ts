@@ -412,6 +412,7 @@ export const MSG = {
   fiscal_year_start_after_end: 'fiscal.year_start_after_end',
   fiscal_no_period_for_date: 'fiscal.no_period_for_date',
   fiscal_period_closed: 'fiscal.period_closed',
+  fiscal_year_has_closed_period: 'fiscal.year_has_closed_period',
 
   // tenant status / screen access
   account_frozen: 'tenant.account_frozen',
@@ -1092,6 +1093,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.fiscal_period_closed]: {
     ar: 'الفترة {period} مقفلة — التصحيح يكون بقيد عكسي في فترة مفتوحة',
     en: 'Period {period} is closed — post a reversing entry in an open period instead',
+  },
+  [MSG.fiscal_year_has_closed_period]: {
+    ar: 'لا يمكن حذف سنة مالية فيها فترة مقفلة ({period}) — حذف التقويم لا يفكّ الإقفال؛ أعد فتح الفترة أولاً',
+    en: 'Cannot delete a fiscal year that still has a closed period ({period}) — deleting the calendar does not unlock it; reopen the period first',
   },
 
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
