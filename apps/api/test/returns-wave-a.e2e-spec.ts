@@ -205,14 +205,15 @@ describe('§30 المرتجعات — موجة أ (e2e)', () => {
 
   it('[SPEC 30.9] تقرير المرتجعات: كم أُرجع · كم عاد إلى الرفّ وبأي تكلفة · كم رُدّ · ومن سجّله', async () => {
     const res = await auth(request(app.getHttpServer()).get('/reports/returns')).query({ from: today(), to: today(), branchId }).expect(200);
-    const rows = res.body.rows as { no: string; restockedQty: number; restockedCost: number; refunded: number; recordedBy: string | null; damagedLines: number }[];
+    // ② الكمّياتُ نصٌّ بثلاث خانات والمبالغُ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً، والمجموعُ يُقرأ رقماً.
+    const rows = res.body.rows as { no: string; restockedQty: string; restockedCost: string; refunded: string; recordedBy: string | null; damagedLines: number }[];
     expect(rows.length).toBeGreaterThanOrEqual(5);
-    const full = rows.find((r) => r.restockedQty === 3);
+    const full = rows.find((r) => r.restockedQty === '3.000');
     expect(full).toBeDefined();
-    expect(full!.restockedCost).toBe(3 * UNIT_COST);
+    expect(full!.restockedCost).toBe((3 * UNIT_COST).toFixed(2));
     expect(full!.recordedBy).toBe('demo-company-a');
-    expect(rows.some((r) => r.refunded > 0)).toBe(true);
-    expect(rows.some((r) => r.damagedLines === 1 && r.restockedQty === 0)).toBe(true);
-    expect(res.body.totals.restockedQty).toBe(rows.reduce((s, r) => s + r.restockedQty, 0));
+    expect(rows.some((r) => Number(r.refunded) > 0)).toBe(true);
+    expect(rows.some((r) => r.damagedLines === 1 && r.restockedQty === '0.000')).toBe(true);
+    expect(res.body.totals.restockedQty).toBe(rows.reduce((s, r) => s + Number(r.restockedQty), 0).toFixed(3));
   });
 });

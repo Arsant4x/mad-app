@@ -18,6 +18,7 @@ import {
   type DeferredRevenue,
 } from '../../api/reports';
 import { dfmt, fmt } from '../../lib/format';
+import { num0 } from '../../lib/money';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
@@ -297,7 +298,8 @@ export function ReportsPage() {
                 </tr>
                 <tr>
                   <td>التغير في الذمم المدينة</td>
-                  <td className="num">{fmt(-cash.receivablesChange)}</td>
+                  {/* ② السالبُ الأحادي على نصٍّ يمرّ من المترجم ويسقط الحارس — فيُقرأ رقماً أولاً. */}
+                  <td className="num">{fmt(-num0(cash.receivablesChange))}</td>
                 </tr>
                 <tr>
                   <td>التغير في الذمم الدائنة</td>
@@ -318,7 +320,7 @@ export function ReportsPage() {
                 </tr>
                 <tr>
                   <td>شراء/بيع أصول ثابتة</td>
-                  <td className="num">{fmt(-cash.fixedAssetChange)}</td>
+                  <td className="num">{fmt(-num0(cash.fixedAssetChange))}</td>
                 </tr>
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: 'var(--emerald)' }}>
                   <td>صافي التغير في النقدية</td>
@@ -352,7 +354,7 @@ export function ReportsPage() {
                     <td>{b.branchName}</td>
                     <td className="num">{fmt(b.revenue)}</td>
                     <td className="num">{fmt(b.expenses)}</td>
-                    <td className="num" style={{ color: b.netIncome >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
+                    <td className="num" style={{ color: num0(b.netIncome) >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
                       {fmt(b.netIncome)}
                     </td>
                   </tr>
@@ -370,7 +372,7 @@ export function ReportsPage() {
                   <td>{branchSummary.consolidated.branchName}</td>
                   <td className="num">{fmt(branchSummary.consolidated.revenue)}</td>
                   <td className="num">{fmt(branchSummary.consolidated.expenses)}</td>
-                  <td className="num" style={{ color: branchSummary.consolidated.netIncome >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
+                  <td className="num" style={{ color: num0(branchSummary.consolidated.netIncome) >= 0 ? 'var(--emerald)' : 'var(--rose)' }}>
                     {fmt(branchSummary.consolidated.netIncome)}
                   </td>
                 </tr>
@@ -493,7 +495,7 @@ export function ReportsPage() {
                     <td>{r.accountCode ?? '—'}</td>
                     <td>{fmt(r.ledgerBalance)}</td>
                     <td>{fmt(r.shownBalance)}</td>
-                    <td>{r.difference === 0 ? '—' : <span className="badge overdue">{fmt(r.difference)}</span>}</td>
+                    <td>{num0(r.difference) === 0 ? '—' : <span className="badge overdue">{fmt(r.difference)}</span>}</td>
                     <td>{r.unpostedCount === 0 ? '—' : `${r.unpostedCount} بمجموع ${fmt(r.unpostedSum)}`}</td>
                   </tr>
                 ))}

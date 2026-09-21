@@ -76,3 +76,5 @@ function requiredText(value: number | string | Prisma.Decimal, kind: TextKind): 
 }
 export const money = (value: number | string | Prisma.Decimal): string => requiredText(value, 'money');
 export const qty = (value: number | string | Prisma.Decimal): string => requiredText(value, 'quantity');
+/** نسبةٌ مئوية واجبة بخانتين — `"33.30"` (نسبةُ التحصيل · الإشغال). */
+export const percent = (value: number | string | Prisma.Decimal): string => requiredText(value, 'percent');

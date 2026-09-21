@@ -1,42 +1,47 @@
+import type { MoneyText, PercentText } from '../lib/money';
 import { apiClient } from './client';
 
+/**
+ * ② مرآةُ التقارير — **كلُّ مبلغٍ نصٌّ بخانتين وكلُّ نسبةٍ نصٌّ بخانتين** (`ق-١٢٣٥`): تُعرض بـ`fmt()` كما هي،
+ * وتُقرأ بـ`num()`/`num0()` قبل أي مقارنةٍ أو حساب؛ والعدُّ (وحداتٌ · أقساطٌ · قيود) رقمٌ كما هو.
+ */
 export interface ReportLine {
   code: string;
   name: string;
-  amount: number;
+  amount: MoneyText;
 }
 
 export interface IncomeStatement {
   from: string | null;
   to: string | null;
   revenue: ReportLine[];
-  totalRevenue: number;
+  totalRevenue: MoneyText;
   expenses: ReportLine[];
-  totalExpenses: number;
-  netProfit: number;
+  totalExpenses: MoneyText;
+  netProfit: MoneyText;
   hasAnyPostedEntries: boolean;
 }
 
 export interface BalanceSheet {
   assets: ReportLine[];
-  totalAssets: number;
+  totalAssets: MoneyText;
   liabilities: ReportLine[];
   equity: ReportLine[];
-  totalLiabilitiesAndEquity: number;
+  totalLiabilitiesAndEquity: MoneyText;
   balanced: boolean;
 }
 
 export interface CashFlow {
-  netProfit: number;
-  receivablesChange: number;
-  payablesChange: number;
+  netProfit: MoneyText;
+  receivablesChange: MoneyText;
+  payablesChange: MoneyText;
   /** Δ2400 — قبضٌ يُؤجَّل (كان ناقصاً منذ بُني الإيراد المؤجَّل — ق-٩٢٣). */
-  deferredRevenueChange: number;
+  deferredRevenueChange: MoneyText;
   /** Δ2200 — ضريبةٌ مستحقّة لم تُسدَّد. */
-  outputVatChange: number;
-  operatingCashFlow: number;
-  fixedAssetChange: number;
-  netCashChange: number;
+  outputVatChange: MoneyText;
+  operatingCashFlow: MoneyText;
+  fixedAssetChange: MoneyText;
+  netCashChange: MoneyText;
   missingAccounts: string[];
 }
 
@@ -54,21 +59,21 @@ export interface PropertyOccupancy {
   vacant: number;
   maintenance: number;
   /** Rented ÷ **total** units — a building half under maintenance really is
-   * half empty, so maintenance stays in the denominator. */
-  occupancyRate: number;
+   * half empty, so maintenance stays in the denominator. نسبةٌ نصّاً بخانتين. */
+  occupancyRate: PercentText;
 }
 
 export interface PropertyKpis {
   occupancy: PropertyOccupancy[];
-  portfolio: { totalProperties: number; totalUnits: number; rented: number; occupancyRate: number };
+  portfolio: { totalProperties: number; totalUnits: number; rented: number; occupancyRate: PercentText };
   collection: {
     /** Only instalments that have actually fallen due — next year's schedule
      * doesn't drag the rate down. */
-    dueAmount: number;
-    paidAmount: number;
-    onTimeAmount: number;
-    collectedRate: number;
-    onTimeRate: number;
+    dueAmount: MoneyText;
+    paidAmount: MoneyText;
+    onTimeAmount: MoneyText;
+    collectedRate: PercentText;
+    onTimeRate: PercentText;
     overdueCount: number;
   };
   expiring: {
@@ -92,13 +97,13 @@ export interface BankDifference {
     bankId: string;
     bankName: string;
     accountCode: string | null;
-    ledgerBalance: number;
-    shownBalance: number;
-    difference: number;
+    ledgerBalance: MoneyText;
+    shownBalance: MoneyText;
+    difference: MoneyText;
     unpostedCount: number;
-    unpostedSum: number;
+    unpostedSum: MoneyText;
   }[];
-  totals: { ledgerBalance: number; shownBalance: number; difference: number; unpostedCount: number };
+  totals: { ledgerBalance: MoneyText; shownBalance: MoneyText; difference: MoneyText; unpostedCount: number };
   /** إعلانُ ق-٢٨٣ — `null` حين لا قيدَ على بنكٍ بعد. */
   bankCashSeparatedOn: string | null;
 }
@@ -116,13 +121,13 @@ export interface DeferredRevenue {
     unitNo: string | null;
     serviceStart: string;
     serviceEnd: string;
-    collected: number;
-    recognized: number;
-    deferred: number;
+    collected: MoneyText;
+    recognized: MoneyText;
+    deferred: MoneyText;
   }[];
-  totalDeferred: number;
-  unlinked: { date: string; contractNo: string; tenant: string; baseNetAmount: number }[];
-  totalUnlinked: number;
+  totalDeferred: MoneyText;
+  unlinked: { date: string; contractNo: string; tenant: string; baseNetAmount: MoneyText }[];
+  totalUnlinked: MoneyText;
   unlinkedNote: string;
 }
 
@@ -131,10 +136,10 @@ export const getDeferredRevenue = () => apiClient.get<DeferredRevenue>('/reports
 export interface TrialBalanceRow {
   code: string;
   name: string;
-  debitTotal: number;
-  creditTotal: number;
-  balanceDebit: number;
-  balanceCredit: number;
+  debitTotal: MoneyText;
+  creditTotal: MoneyText;
+  balanceDebit: MoneyText;
+  balanceCredit: MoneyText;
 }
 
 export interface TrialBalance {
@@ -142,10 +147,10 @@ export interface TrialBalance {
   to: string | null;
   branchId: string | null;
   rows: TrialBalanceRow[];
-  totalDebit: number;
-  totalCredit: number;
-  totalBalanceDebit: number;
-  totalBalanceCredit: number;
+  totalDebit: MoneyText;
+  totalCredit: MoneyText;
+  totalBalanceDebit: MoneyText;
+  totalBalanceCredit: MoneyText;
   balanced: boolean;
 }
 
@@ -167,14 +172,14 @@ export const downloadTrialBalanceCsv = async (params: { from?: string; to?: stri
 export interface AgingRow {
   customerId: string;
   customerName: string;
-  current: number;
-  d1: number;
-  d31: number;
-  d61: number;
-  d90: number;
+  current: MoneyText;
+  d1: MoneyText;
+  d31: MoneyText;
+  d61: MoneyText;
+  d90: MoneyText;
   /** دفعات على الحساب وإشعارات بلا فاتورة — تخفّض الذمّة بلا عمرٍ تنتمي إليه. */
-  unapplied: number;
-  total: number;
+  unapplied: MoneyText;
+  total: MoneyText;
 }
 
 /** قسطُ إيجارٍ استُحقّ ولم يُقبض — الصفُّ الثاني في الأعمار (ق-٩٢٥/④). */
@@ -186,9 +191,9 @@ export interface RentAgingRow {
   unitNo: string | null;
   installmentId: string;
   dueDate: string;
-  accrued: number;
-  paid: number;
-  remaining: number;
+  accrued: MoneyText;
+  paid: MoneyText;
+  remaining: MoneyText;
   bucket: 'current' | 'd1' | 'd31' | 'd61' | 'd90';
 }
 
@@ -199,9 +204,9 @@ export interface AgingReport {
   rows: AgingRow[];
   rentRows: RentAgingRow[];
   rentNote: string;
-  totals: Omit<AgingRow, 'customerId' | 'customerName'> & { rent: number };
+  totals: Omit<AgingRow, 'customerId' | 'customerName'> & { rent: MoneyText };
   /** يُحسب عند الطلب فقط — مسح الدفتر أثقل من التقرير نفسه. */
-  reconciliation: { ledgerBalance: number; reportTotal: number; difference: number; accountMissing: boolean } | null;
+  reconciliation: { ledgerBalance: MoneyText; reportTotal: MoneyText; difference: MoneyText; accountMissing: boolean } | null;
 }
 
 export interface AgingParams {

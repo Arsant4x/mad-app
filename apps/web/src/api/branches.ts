@@ -1,3 +1,4 @@
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
 export interface BranchActivity {
@@ -33,12 +34,13 @@ export const createBranch = (dto: BranchInput) => apiClient.post<Branch>('/branc
 export const updateBranch = (id: string, dto: Partial<BranchInput>) => apiClient.patch<Branch>(`/branches/${id}`, dto).then((r) => r.data);
 export const deleteBranch = (id: string) => apiClient.delete(`/branches/${id}`).then(() => undefined);
 
+/** ② المبالغُ نصّاً بخانتين (`ق-١٢٣٥`): تُقرأ بـ`num0()` قبل المقارنة. */
 export interface BranchSummaryRow {
   branchId: string | null;
   branchName: string;
-  revenue: number;
-  expenses: number;
-  netIncome: number;
+  revenue: MoneyText;
+  expenses: MoneyText;
+  netIncome: MoneyText;
 }
 
 export interface BranchSummary {

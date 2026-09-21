@@ -54,8 +54,9 @@ describe('Reports tenant isolation (e2e)', () => {
     // isolable from whatever other e2e specs have already posted this run.
     const date = '2031-01-15';
 
+    // ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً.
     const beforeA = await request(app.getHttpServer()).get('/reports/income-statement').set('Authorization', `Bearer ${tokenA}`).query({ from: date, to: date }).expect(200);
-    expect(beforeA.body.totalRevenue).toBe(0);
+    expect(beforeA.body.totalRevenue).toBe('0.00');
 
     const entry = await request(app.getHttpServer())
       .post('/journal')
@@ -64,18 +65,33 @@ describe('Reports tenant isolation (e2e)', () => {
       .expect(201);
 
     const afterA = await request(app.getHttpServer()).get('/reports/income-statement').set('Authorization', `Bearer ${tokenA}`).query({ from: date, to: date }).expect(200);
-    expect(afterA.body.totalRevenue).toBe(777);
-    expect(afterA.body.netProfit).toBe(777);
+    expect(afterA.body.totalRevenue).toBe('777.00');
+    expect(afterA.body.netProfit).toBe('777.00');
 
     const afterB = await request(app.getHttpServer()).get('/reports/income-statement').set('Authorization', `Bearer ${tokenB}`).query({ from: date, to: date }).expect(200);
-    expect(afterB.body.totalRevenue).toBe(0);
+    expect(afterB.body.totalRevenue).toBe('0.00');
 
     await request(app.getHttpServer()).delete(`/journal/${entry.body.id}`).set('Authorization', `Bearer ${tokenA}`).expect(204);
   });
 
   it("company A's rent collection and occupancy never bleed into company B's property KPIs", async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const kpis = (token: string) => request(app.getHttpServer()).get('/reports/property-kpis').set('Authorization', `Bearer ${token}`).expect(200);
+    // ② مبالغُ التحصيل نصٌّ بخانتين (`ق-١٢٣٥`) — يُثبَت شكلُها ثم تُقرأ رقماً، فالفروقُ أدناه على الأرقام كما كانت.
+    const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+    const n = (text: string): number => {
+      expect(text).toMatch(MONEY_TEXT);
+      return Number(text);
+    };
+    const kpis = async (token: string) => {
+      const res = await request(app.getHttpServer()).get('/reports/property-kpis').set('Authorization', `Bearer ${token}`).expect(200);
+      const c = res.body.collection as { dueAmount: string; paidAmount: string; onTimeAmount: string; overdueCount: number };
+      return {
+        body: {
+          ...res.body,
+          collection: { dueAmount: n(c.dueAmount), paidAmount: n(c.paidAmount), onTimeAmount: n(c.onTimeAmount), overdueCount: c.overdueCount },
+        },
+      };
+    };
     const cleanup: { token: string; id: string }[] = [];
 
     /** A fully-due 2024 lease with its first instalment paid on the due date —
@@ -162,7 +178,8 @@ describe('Reports tenant isolation (e2e)', () => {
     // account (its distinctive code) should ever appear in A's report.
     expect(codesA.has('1000')).toBe(true);
     expect(codesB.includes('1000')).toBe(true);
-    expect(typeof balA.body.totalAssets).toBe('number');
-    expect(typeof balB.body.totalAssets).toBe('number');
+    // ② الإجماليُّ نصٌّ بخانتين لا رقم (`ق-١٢٣٥`).
+    expect(balA.body.totalAssets).toMatch(/^-?\d+\.\d{2}$/);
+    expect(balB.body.totalAssets).toMatch(/^-?\d+\.\d{2}$/);
   });
 });

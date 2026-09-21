@@ -31,8 +31,10 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
   interface AgingRow {
     customerId: string;
     customerName: string;
-    total: number;
+    /** ② نصٌّ بخانتين على الحدّ (`ق-١٢٣٥`) — والمصدرُ رقمٌ، فالمقارنةُ بعد `Number()` وبالضبط. */
+    total: string;
   }
+  const MONEY_TEXT = /^-?\d+\.\d{2}$/;
 
   // آخرُ لحظةٍ من يوم الخادم المعلَن (`dayEndOf` · يومُ UTC — `ق-١١٩٠`) — كما يشتقّه التقريرُ نفسُه
   // (`reports.service` · `asOf = dayEndOf(new Date())`)، لا منتصفُ ليل منطقة العملية.
@@ -59,7 +61,7 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
   it('🔴 ما يقرأه الحدُّ هو عينُ ما يعرضه التقرير — لكل عميلٍ له رصيد', async () => {
     const report = (await auth(http().get('/reports/receivables-aging')).expect(200)).body as {
       rows: AgingRow[];
-      totals: { total: number };
+      totals: { total: string };
     };
 
     // **السطح غير فارغ**: مقارنةٌ على صفر صفوفٍ تمرّ عمىً.
@@ -68,7 +70,8 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
     for (const row of report.rows) {
       const fromSource = await tenantPrisma.runInTenantContext(companyId, (tx) => exposureOf(tx, row.customerId, endOfToday()));
       // ⚠️ **بالضبط لا بالتقريب**: فرقُ هللةٍ بين شاشتين يُقرأ عطلاً في إحداهما.
-      expect(fromSource).toBe(row.total);
+      expect(row.total).toMatch(MONEY_TEXT);
+      expect(fromSource).toBe(Number(row.total));
     }
   }, 40000);
 
@@ -97,6 +100,6 @@ describe('تعرّضُ العميل: رقمٌ واحد لا رقمان (e2e)', (
       customerExposure(tx, { asOf: endOfToday(), allowedBranchIds: 'all', customerId: target.customerId }),
     );
     expect(narrowed).toHaveLength(1);
-    expect(narrowed[0].total).toBe(target.total);
+    expect(narrowed[0].total).toBe(Number(target.total));
   }, 30000);
 });

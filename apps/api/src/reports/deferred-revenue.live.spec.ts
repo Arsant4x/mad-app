@@ -191,6 +191,29 @@ const key = (r: OutstandingRow) =>
 
 const day = (x: Date | null) => x?.toISOString().slice(0, 10) ?? null;
 
+/**
+ * ② التقريرُ يخرج مبالغَه نصّاً بخانتين (`ق-١٢٣٥`) — والشكلُ القديم رقمٌ. فتُثبَت صورةُ النصّ حرفاً
+ * (`^-?\d+\.\d{2}$`) ثم يُقرأ رقماً للمقارنة رقماً رقماً كما اشترط المالك.
+ */
+const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+const asNumber = (text: string): number => {
+  expect(text).toMatch(MONEY_TEXT);
+  return Number(text);
+};
+type TextReport = Awaited<ReturnType<ReportsService['deferredRevenue']>>;
+const numeric = (report: TextReport) => ({
+  outstanding: report.outstanding.map((r) => ({
+    ...r,
+    collected: asNumber(r.collected),
+    accrued: asNumber(r.accrued),
+    recognized: asNumber(r.recognized),
+    deferred: asNumber(r.deferred),
+  })),
+  totalDeferred: asNumber(report.totalDeferred),
+  unlinked: report.unlinked.map((p) => ({ ...p, baseNetAmount: asNumber(p.baseNetAmount) })),
+  totalUnlinked: asNumber(report.totalUnlinked),
+});
+
 d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعدة — مطابقٌ للشكل القديم على صفوفٍ معلومة وعلى أكبر منشأة (ق-٧٠٦)', () => {
   const prisma = new PrismaService();
   const tenant = new TenantPrismaService(prisma);
@@ -236,7 +259,7 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
   });
 
   it('⭐ ② على صفوفٍ معلومة الجواب: صفٌّ قديم مؤجَّلُه 600 وصفٌّ استحقاقيّ مؤجَّلُه 750 بلا قبض، والمرشَّحان لا يظهران، وغيرُ المرتبط 300 — والشكلُ القديم يقول الشيءَ نفسَه عن القديم', async () => {
-    const current = await reports.deferredRevenue(probeCompanyId);
+    const current = numeric(await reports.deferredRevenue(probeCompanyId));
     expect(current.outstanding).toHaveLength(2);
     const row = current.outstanding.find((r) => r.accrualBasis === 'LEGACY_COLLECTED')!;
     expect(row).toBeDefined();
@@ -275,7 +298,7 @@ d('تقريرُ الإيراد المؤجَّل يُرشِّح في القاعد
 
   it('⭐ ② على أكبر منشأةٍ في القاعدة: الناتجُ يطابق الشكلَ القديم رقماً رقماً — الصفوفُ والمجاميعُ والدفعاتُ غيرُ المرتبطة', async () => {
     const legacy = await legacyDeferredRevenue(tenant, largestCompanyId);
-    const current = await reports.deferredRevenue(largestCompanyId);
+    const current = numeric(await reports.deferredRevenue(largestCompanyId));
 
     // على أساس القبض وحدَه: الشكلُ القديم لا يعرف الاستحقاق (ق-٩٢٧/٢)، فالمطابقةُ على صفوفه.
     const currentLegacyRows = current.outstanding.filter((r) => r.accrualBasis === 'LEGACY_COLLECTED');

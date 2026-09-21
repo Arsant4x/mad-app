@@ -59,15 +59,16 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
     bankId: string;
     bankName: string;
     accountCode: string | null;
-    ledgerBalance: number;
-    shownBalance: number;
-    difference: number;
+    /** ② نصٌّ بخانتين (`ق-١٢٣٥`) — يُقارَن حرفاً. */
+    ledgerBalance: string;
+    shownBalance: string;
+    difference: string;
     unpostedCount: number;
-    unpostedSum: number;
+    unpostedSum: string;
   }
   interface Body {
     rows: Row[];
-    totals: { ledgerBalance: number; shownBalance: number; difference: number; unpostedCount: number };
+    totals: { ledgerBalance: string; shownBalance: string; difference: string; unpostedCount: number };
     bankCashSeparatedOn: string | null;
   }
 
@@ -80,9 +81,9 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
 
   it('بنكٌ متّسق: الدفتريُّ والمعروضُ سواء، والفرقُ صفر', async () => {
     const row = rowOfBank(await report());
-    expect(row.ledgerBalance).toBe(1000);
-    expect(row.shownBalance).toBe(1000);
-    expect(row.difference).toBe(0);
+    expect(row.ledgerBalance).toBe('1000.00');
+    expect(row.shownBalance).toBe('1000.00');
+    expect(row.difference).toBe('0.00');
   }, 20000);
 
   it('🔴 وانحرافٌ تاريخيّ في العمود يظهر فرقاً — ويُفسَّر بأسطرٍ لا يعرفها الأستاذ', async () => {
@@ -93,12 +94,12 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
     await tenantPrisma.runInTenantContext(companyId, (tx) => tx.bank.update({ where: { id: bankId }, data: { balance: 1500 } }));
 
     const row = rowOfBank(await report());
-    expect(row.ledgerBalance).toBe(1000);
-    expect(row.shownBalance).toBe(1500);
-    expect(row.difference).toBe(500);
+    expect(row.ledgerBalance).toBe('1000.00');
+    expect(row.shownBalance).toBe('1500.00');
+    expect(row.difference).toBe('500.00');
     // والتفسير: سطرٌ واحد بلا رقم قيد، مجموعه ٥٠٠ — **فالفرقُ مسمّى لا مجهول**.
     expect(row.unpostedCount).toBe(1);
-    expect(row.unpostedSum).toBe(500);
+    expect(row.unpostedSum).toBe('500.00');
   }, 20000);
 
   it('🔴 وإعلانُ ق-٢٨٣ مشتقٌّ من أول قيدٍ على حسابِ بنك — لا مكتوبٌ بيد', async () => {
@@ -127,6 +128,6 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
 
     const after = rowOfBank(await report());
     expect(after.unpostedCount).toBe(before.unpostedCount + 1);
-    expect(after.unpostedSum).toBe(570);
+    expect(after.unpostedSum).toBe('570.00');
   }, 20000);
 });

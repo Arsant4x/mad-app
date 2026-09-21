@@ -72,13 +72,21 @@ describe('Supplier payments + allocations (e2e)', () => {
     return Number(banks.find((b) => b.id === cashBoxId)!.balance);
   };
 
-  const cashFlow = async () =>
-    (await auth(request(app.getHttpServer()).get('/reports/cash-flow')).expect(200)).body as {
-      netProfit: number;
-      payablesChange: number;
-      operatingCashFlow: number;
-      netCashChange: number;
+  /** ② التدفّقُ يخرج نصّاً بخانتين (`ق-١٢٣٥`) — يُثبَت شكلُه ثم يُقرأ رقماً، فالفروقُ أدناه على الأرقام كما كانت. */
+  const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+  const n = (text: string): number => {
+    expect(text).toMatch(MONEY_TEXT);
+    return Number(text);
+  };
+  const cashFlow = async () => {
+    const body = (await auth(request(app.getHttpServer()).get('/reports/cash-flow')).expect(200)).body as {
+      netProfit: string;
+      payablesChange: string;
+      operatingCashFlow: string;
+      netCashChange: string;
     };
+    return { netProfit: n(body.netProfit), payablesChange: n(body.payablesChange), operatingCashFlow: n(body.operatingCashFlow), netCashChange: n(body.netCashChange) };
+  };
 
   const entryOf = async (journalEntryId: string, paymentNo: string) => {
     const res = (await auth(request(app.getHttpServer()).get(`/journal?search=${encodeURIComponent(paymentNo)}&pageSize=50`)).expect(200)).body;

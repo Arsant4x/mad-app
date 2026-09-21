@@ -41,13 +41,38 @@ describe('Receivables aging (e2e)', () => {
     return { id: res.body.id, no: res.body.no };
   };
 
-  const aging = async (params = '') =>
-    (await auth(request(app.getHttpServer()).get(`/reports/receivables-aging${params}`)).expect(200)).body as {
+  /** ② كلُّ مبلغٍ في التقرير نصٌّ بخانتين (`ق-١٢٣٥`): يُثبَت شكلُه ثم يُقرأ رقماً — فالتوكيداتُ أدناه على الأرقام كما كانت. */
+  const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+  const n = (text: string): number => {
+    expect(text).toMatch(MONEY_TEXT);
+    return Number(text);
+  };
+  type Buckets = { current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number };
+  const bucketsOf = (r: Record<keyof Buckets, string>): Buckets => ({
+    current: n(r.current),
+    d1: n(r.d1),
+    d31: n(r.d31),
+    d61: n(r.d61),
+    d90: n(r.d90),
+    unapplied: n(r.unapplied),
+    total: n(r.total),
+  });
+  const aging = async (params = '') => {
+    const body = (await auth(request(app.getHttpServer()).get(`/reports/receivables-aging${params}`)).expect(200)).body as {
       asOf: string;
-      rows: { customerId: string; customerName: string; current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number }[];
-      totals: { current: number; d1: number; d31: number; d61: number; d90: number; unapplied: number; total: number };
-      reconciliation: { ledgerBalance: number; reportTotal: number; difference: number } | null;
+      rows: ({ customerId: string; customerName: string } & Record<keyof Buckets, string>)[];
+      totals: Record<keyof Buckets, string>;
+      reconciliation: { ledgerBalance: string; reportTotal: string; difference: string } | null;
     };
+    return {
+      asOf: body.asOf,
+      rows: body.rows.map((r) => ({ customerId: r.customerId, customerName: r.customerName, ...bucketsOf(r) })),
+      totals: bucketsOf(body.totals),
+      reconciliation: body.reconciliation
+        ? { ledgerBalance: n(body.reconciliation.ledgerBalance), reportTotal: n(body.reconciliation.reportTotal), difference: n(body.reconciliation.difference) }
+        : null,
+    };
+  };
 
   /** صفّ عميلنا وحده — القاعدة تحمل عملاء آخرين من مجموعات أخرى. */
   const myRow = async (params = '') => (await aging(params)).rows.find((r) => r.customerId === customerId);
@@ -183,9 +208,13 @@ describe('Receivables aging (e2e)', () => {
       .send({ issueDate: dayStr(0), reason: 'مرتجع', lines: [{ description: 'مرتجع', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
       .expect(201);
 
-    const report = (await co(request(app.getHttpServer()).get('/reports/receivables-aging?reconcile=true')).expect(200)).body as {
-      totals: { total: number; unapplied: number };
-      reconciliation: { ledgerBalance: number; reportTotal: number; difference: number };
+    const raw = (await co(request(app.getHttpServer()).get('/reports/receivables-aging?reconcile=true')).expect(200)).body as {
+      totals: Record<keyof Buckets, string>;
+      reconciliation: { ledgerBalance: string; reportTotal: string; difference: string };
+    };
+    const report = {
+      totals: bucketsOf(raw.totals),
+      reconciliation: { ledgerBalance: n(raw.reconciliation.ledgerBalance), reportTotal: n(raw.reconciliation.reportTotal), difference: n(raw.reconciliation.difference) },
     };
 
     // (1000−400) + (500−100) + 300 − 150 = 1150

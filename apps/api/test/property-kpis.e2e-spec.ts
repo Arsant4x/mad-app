@@ -32,8 +32,24 @@ describe('Property KPIs (e2e)', () => {
     reserved: number;
     vacant: number;
     maintenance: number;
-    occupancyRate: number;
+    /** ② نسبةٌ نصّاً بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً. */
+    occupancyRate: string;
   }
+
+  /** ② مبالغُ التحصيل ونِسَبُه نصٌّ — يُثبَت شكلُها ثم تُقرأ رقماً للفروق. */
+  const MONEY_TEXT = /^-?\d+\.\d{2}$/;
+  const collectionOf = (body: { collection: { dueAmount: string; paidAmount: string; onTimeAmount: string; collectedRate: string; onTimeRate: string; overdueCount: number } }) => {
+    const c = body.collection;
+    for (const v of [c.dueAmount, c.paidAmount, c.onTimeAmount, c.collectedRate, c.onTimeRate]) expect(v).toMatch(MONEY_TEXT);
+    return {
+      dueAmount: Number(c.dueAmount),
+      paidAmount: Number(c.paidAmount),
+      onTimeAmount: Number(c.onTimeAmount),
+      collectedRate: Number(c.collectedRate),
+      onTimeRate: Number(c.onTimeRate),
+      overdueCount: c.overdueCount,
+    };
+  };
 
   /** This suite's own property, so other suites' leftovers can't move its numbers. */
   function mine(body: { occupancy: OccupancyRow[] }): OccupancyRow {
@@ -85,7 +101,7 @@ describe('Property KPIs (e2e)', () => {
     const row = mine(res.body);
 
     expect(row.total).toBe(0);
-    expect(row.occupancyRate).toBe(0);
+    expect(row.occupancyRate).toBe('0.00');
   }, 30000);
 
   it('counts a live contract as occupied and leaves the rest vacant', async () => {
@@ -112,7 +128,7 @@ describe('Property KPIs (e2e)', () => {
     expect(row.total).toBe(2);
     expect(row.rented).toBe(1);
     expect(row.vacant).toBe(1);
-    expect(row.occupancyRate).toBe(50);
+    expect(row.occupancyRate).toBe('50.00');
   }, 40000);
 
   it('keeps a unit under maintenance in the denominator', async () => {
@@ -123,11 +139,11 @@ describe('Property KPIs (e2e)', () => {
     expect(row.total).toBe(3);
     // 1 of 3, not 1 of 2: a building half under maintenance is genuinely half
     // empty, and shrinking the denominator would flatter the number.
-    expect(row.occupancyRate).toBeCloseTo(33.3, 1);
+    expect(row.occupancyRate).toBe('33.30');
   }, 30000);
 
   it('ignores instalments that have not fallen due yet', async () => {
-    const before = (await kpis()).body.collection;
+    const before = collectionOf((await kpis()).body);
 
     const unit = await addUnit('FUT');
     const future = await request(app.getHttpServer())
@@ -147,7 +163,7 @@ describe('Property KPIs (e2e)', () => {
 
     // A landlord who just issued next year's schedule is not suddenly at 8%
     // collection — nothing about the due figures may move.
-    const after = (await kpis()).body.collection;
+    const after = collectionOf((await kpis()).body);
     expect(after.dueAmount).toBeCloseTo(before.dueAmount);
     expect(after.overdueCount).toBe(before.overdueCount);
   }, 40000);
@@ -171,7 +187,7 @@ describe('Property KPIs (e2e)', () => {
 
     const first = contract.body.installments[0];
     const second = contract.body.installments[1];
-    const before = (await kpis()).body.collection;
+    const before = collectionOf((await kpis()).body);
 
     // Paid before its due date...
     await request(app.getHttpServer())
@@ -187,7 +203,7 @@ describe('Property KPIs (e2e)', () => {
       .send({ installmentId: second.id, date: '2024-08-01', amount: Number(second.amount), method: 'CASH' })
       .expect(201);
 
-    const after = (await kpis()).body.collection;
+    const after = collectionOf((await kpis()).body);
     const paidDelta = after.paidAmount - before.paidAmount;
     const onTimeDelta = after.onTimeAmount - before.onTimeAmount;
 
