@@ -21,6 +21,8 @@ import {
   postShiftVarianceEntry,
 } from '../journal/pos-settlement.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
+import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { translate } from '../common/i18n/messages';
 import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
 import { rateForCategory } from '../common/vat/line-tax.util';
@@ -444,6 +446,7 @@ export class PosService {
 
       const customerId = dto.customerId ?? (await this.walkInCustomerId(tx));
       // ②A1: مشترٍ مسمّىً لم يُعلن صفتَه لا يُصدَر له مستند — الكاشيرُ لا يقرّر الصفة، صاحبُ المنشأة يعلنها من البطاقة.
+      // ⑤A4: وصفتُه تقرّر نوعَ المستند — كاملةٌ (مؤسّسة/اعتباريّ/مسجَّل) تُجاز قبل أن تُشارَك، فيُعلَم ذلك هنا للإيصال.
       if (dto.customerId) await assertBuyerKindDeclared(tx, dto.customerId);
       /**
        * ⭐ **يومُ الفاتورة يومُ الجهاز، لا يومُ UTC ولا يومُ عودة الشبكة** (`ق-١٨٥`).
@@ -567,6 +570,8 @@ export class PosService {
       overrideRequested: false,
       canOverride: false,
     });
+    // ⑤A4: نوعُ المستند من صفة مشتريه كما أُنشئ — كاملةٌ تُجاز قبل أن تُشارَك، فيُعلَم ذلك للإيصال أدناه.
+    const clearanceRequired = invoiceTypeFor(invoice.customer) === 'standard';
 
     const sold = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم
@@ -642,7 +647,7 @@ export class PosService {
         include: { lines: true, customer: true, posPayments: true },
       });
       // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).
-      return { ...(await this.withReceiptQr(tenant.companyId, updated, tx)), stockDeduction };
+      return { ...(await this.withReceiptQr(tenant.companyId, updated, tx)), stockDeduction, clearanceRequired };
     });
 
     /**
@@ -654,8 +659,26 @@ export class PosService {
      * ويُنبَّه الكاشير، والطابور يعيد الختم والإبلاغ. والمزامَن يمرّ هنا أيضاً —
      * وهذا هو (`ق-١٩٢`/ب): الممتثلة بتاريخ المعاملة عند عودة الاتصال.
      */
+    /**
+     * ⚖️ **الكاملةُ لا تُشارَك قبل الاعتماد** (`ق-١٢٦١` أ — ⑤A4): مستندُ مشترٍ مؤسّسةٍ أو اعتباريٍّ أو مسجَّلٍ فاتورةٌ
+     * ضريبيةٌ كاملة **تُجاز** لدى الهيئة قبل أن تُسلَّم للمشتري — لا تُبلَّغ بعد التسليم كالمبسّطة. فالبيعُ يمضي (المالُ
+     * قُبض والقيدُ رُحِّل) **والإيصالُ يخرج بلا رمزٍ ولا يُطبع** حتى تعود الإجازةُ من الطابور؛ والشاشةُ تقرأ
+     * `clearance.required` فتحجب الطباعةَ وتحيل إلى شاشة الفواتير. **ما يُعلَن**: رمزُ الإجازة (من المستند المُجاز الذي
+     * تعيده الهيئة) لا يُخزَّن بعدُ — بندٌ في ⑤.
+     */
+    if (sold.clearanceRequired) {
+      const { clearanceRequired: _, ...rest } = sold;
+      return {
+        ...rest,
+        zatcaQr: null,
+        zatcaStamped: false,
+        stampError: null,
+        clearance: { required: true, status: sold.zatcaStatus, message: translate(MSG.pos_clearance_required, 'ar') },
+      };
+    }
     const stamp = await this.zatca.stampForReceipt(tenant.companyId, sold.id);
-    return { ...sold, zatcaQr: stamp.qrPayload ?? sold.zatcaQr, zatcaStamped: stamp.qrPayload !== null, stampError: stamp.error };
+    const { clearanceRequired: _, ...rest } = sold;
+    return { ...rest, zatcaQr: stamp.qrPayload ?? sold.zatcaQr, zatcaStamped: stamp.qrPayload !== null, stampError: stamp.error, clearance: { required: false } };
   }
 
   /**

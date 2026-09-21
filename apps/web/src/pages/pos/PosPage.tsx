@@ -3,7 +3,7 @@ import { listProducts, type Product } from '../../api/products';
 import { listBranches, type Branch } from '../../api/branches';
 import { rateForCategory } from '../../lib/vat';
 import { BranchPicker } from '../../components/BranchPicker';
-import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosShift } from '../../api/pos';
+import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosSaleResponse, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, cacheSellerProfile, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readCachedSellerProfile, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
 import type { Invoice } from '../../api/invoices';
@@ -38,7 +38,7 @@ export function PosPage() {
   const [branchInput, setBranchInput] = useState('');
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [receipt, setReceipt] = useState<Invoice | null>(null);
+  const [receipt, setReceipt] = useState<PosSaleResponse | null>(null);
   const [closing, setClosing] = useState(false);
   const [declared, setDeclared] = useState('');
   const [closed, setClosed] = useState<ClosedShift | null>(null);
@@ -579,8 +579,14 @@ export function PosPage() {
                 </div>
               )}
             </div>
+            {/* ⑤A4: فاتورةٌ كاملة (مشترٍ مؤسّسة/اعتباريّ/مسجَّل) تُجاز قبل أن تُشارَك — لا طباعةَ هنا، والتسليمُ من شاشة الفواتير بعد الإجازة. */}
+            {receipt.clearance?.required && (
+              <p className="hint" data-testid="pos-clearance-gate" style={{ color: 'var(--rose)' }}>
+                {receipt.clearance.message ?? 'فاتورةٌ ضريبيةٌ كاملة — تُجاز لدى الهيئة قبل تسليمها؛ تُطبع من شاشة الفواتير بعد الإجازة.'}
+              </p>
+            )}
             {/* خارج .print-receipt عمداً — تنبيه للكاشير لا سطراً على إيصال العميل. */}
-            {!receipt.zatcaQr && (
+            {!receipt.zatcaQr && !receipt.clearance?.required && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
                 الإيصال بلا رمز الهيئة — أكمل الاسم القانوني والرقم الضريبي في ملف المنشأة.
               </p>
@@ -605,9 +611,11 @@ export function PosPage() {
               <button className="btn btn-ghost" onClick={() => setReceipt(null)}>
                 إغلاق
               </button>
-              <button className="btn btn-primary" onClick={() => window.print()}>
-                🖨 طباعة
-              </button>
+              {!receipt.clearance?.required && (
+                <button className="btn btn-primary" onClick={() => window.print()}>
+                  🖨 طباعة
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -425,6 +425,10 @@ export class ZatcaService {
           formatMessage(MSG.zatca_buyer_address_incomplete, { customer: invoice.customer.name, missing: missing.join(' · ') }),
         );
       }
+      // BR-KSA-81 (②A1): مشترٍ بلا رقمٍ ضريبيّ على فاتورةٍ كاملة يحتاج معرّفَه البديل (BT-46) بمخطّطه — يُسمّى الناقصُ هنا لا في ردّ الهيئة.
+      if (!invoice.customer.vatNumber?.trim() && !(invoice.customer.otherIdScheme && invoice.customer.otherId)) {
+        throw new BadRequestException(formatMessage(MSG.zatca_buyer_id_missing, { customer: invoice.customer.name }));
+      }
     }
 
     // ⭐ **الادّعاء** (`ق-١٩٦`): الوحدةُ والموقعُ والسلفُ والحالةُ في كتابةٍ واحدة

@@ -406,6 +406,34 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
         expect(res.status).toBe(201);
         expect(JSON.stringify(res.body)).not.toContain('عنوان المشتري');
       }, 20000);
+
+      /**
+       * ②A1 — `BR-KSA-81`: الكاملةُ لمشترٍ **بلا رقمٍ ضريبيّ** (مؤسّسةٌ أو اعتباريٌّ غيرُ مسجَّل — م٥٣) تشترط معرّفَه
+       * البديل (BT-46) بمخطّطه. بلا رقمٍ وبلا معرّف كانت تُختم مبسّطةً (النوعُ بالرقم وحدَه) **فتُبلَّغ في المسار الخطأ**.
+       */
+      it('🔴 [SPEC 4.10] مؤسّسةٌ بلا رقمٍ ضريبيّ كاملةٌ بحكم صفتها — وبلا معرّفٍ بديل تُرفض مسمّاةً (BR-KSA-81)، وبه تمرّ', async () => {
+        await seedProductionCredential();
+        const unique = String(Date.now()).slice(-8);
+        const establishment = (
+          await request(app.getHttpServer())
+            .post('/customers')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ kind: 'ESTABLISHMENT', name: `مؤسسة بلا تسجيل ${unique}`, ...FULL_ADDRESS })
+            .expect(201)
+        ).body.id as string;
+        const refused = await submitFor(establishment);
+        expect(refused.status).toBe(400);
+        expect(JSON.stringify(refused.body)).toContain('BR-KSA-81');
+
+        await request(app.getHttpServer())
+          .patch(`/customers/${establishment}`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ otherIdScheme: 'CRN', otherId: `10${unique}` })
+          .expect(200);
+        const passed = await submitFor(establishment);
+        expect(passed.status).toBe(201);
+        expect(JSON.stringify(passed.body)).not.toContain('BR-KSA-81');
+      }, 30000);
     });
 
     it('records the chain and marks the invoice REJECTED when the authority answers with a rejection (ق-٩٧١)', async () => {

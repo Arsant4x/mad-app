@@ -119,4 +119,23 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
     expect(sellerXml).toContain('schemeID="CRN">2050000000<');
     expect(sellerXml).toContain('<cbc:IdentificationCode>SA</cbc:IdentificationCode>');
   });
+
+  it('[SPEC 6.13] ④ ⑤A4 — a register sale to a legal person completes but its receipt carries no code and is gated until clearance; the walk-in sale is not', async () => {
+    const productId = (await auth(http().post('/products')).send({ name: 'صنف الكاشير', unitCode: 'H87', expiryTracked: false, taxCategory: 'S', price: 100 }).expect(201)).body.id;
+    const legal = (await auth(http().post('/customers')).send({ kind: 'LEGAL_PERSON', name: 'شركة المشتري' }).expect(201)).body.id;
+    await auth(http().post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
+
+    const gated = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH', customerId: legal }).expect(201);
+    expect(gated.body.status).toBe('PAID');
+    expect(gated.body.clearance).toMatchObject({ required: true });
+    expect(String(gated.body.clearance.message)).toContain('الإجازة');
+    expect(gated.body.zatcaQr).toBeNull();
+    expect(gated.body.zatcaStamped).toBe(false);
+
+    const walkIn = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(201);
+    expect(walkIn.body.clearance).toEqual({ required: false });
+    // عميلُ المرور طبيعيٌّ بالبناء — أُعلن عند إنشائه لا افتُرض.
+    const customers = (await auth(http().get('/customers')).expect(200)).body as { name: string; kind: string }[];
+    expect(customers.find((c) => c.name === 'عميل نقدي')?.kind).toBe('NATURAL');
+  }, 60000);
 });
