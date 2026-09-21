@@ -12,7 +12,7 @@ import { ZatcaQr } from '../../components/ZatcaQr';
 import { buildPhase1Qr } from '../../lib/zatcaQr';
 import { wallClockOf } from '../../lib/wallClock';
 import { fmt } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { num0, round2, type QtyText } from '../../lib/money';
 
 interface CartLine {
   product: Product;
@@ -48,7 +48,7 @@ export function PosPage() {
   const [splitting, setSplitting] = useState(false);
   const [splitCash, setSplitCash] = useState('');
   /** بنود هبط رصيدها تحت الصفر بهذا البيع — تحذير ناعم داخل الإيصال، لا يمنع البيع. */
-  const [stockWarnings, setStockWarnings] = useState<{ name: string; resultingQty: number }[]>([]);
+  const [stockWarnings, setStockWarnings] = useState<{ name: string; resultingQty: QtyText }[]>([]);
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -272,6 +272,9 @@ export function PosPage() {
 
   if (loading) return null;
 
+  // ② الانحرافُ يصل نصّاً بإشارته (`ق-١٢٣٥`) — يُقرأ رقماً مرّةً واحدة قبل المقارنة والعرض.
+  const closedVariance = closed ? num0(closed.variance) : 0;
+
   // ---- لا مناوبة: بطاقة فتح ----
   if (!shift) {
     return (
@@ -324,10 +327,10 @@ export function PosPage() {
                 </tr>
                 <tr>
                   <td>
-                    <b>{closed.variance === 0 ? 'مطابق' : closed.variance > 0 ? 'زيادة' : 'عجز'}</b>
+                    <b>{closedVariance === 0 ? 'مطابق' : closedVariance > 0 ? 'زيادة' : 'عجز'}</b>
                   </td>
-                  <td className="num" style={{ color: closed.variance === 0 ? 'var(--emerald)' : 'var(--rose)', fontWeight: 700 }}>
-                    {fmt(Math.abs(closed.variance))}
+                  <td className="num" style={{ color: closedVariance === 0 ? 'var(--emerald)' : 'var(--rose)', fontWeight: 700 }}>
+                    {fmt(Math.abs(closedVariance))}
                   </td>
                 </tr>
               </tbody>
