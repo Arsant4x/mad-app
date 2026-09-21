@@ -5,13 +5,13 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 278 |
-| منها في جداولٍ لها عمودُ حالة | 184 |
-| تقول الوثيقة ✅ | 92 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 88 |
+| بنود SPEC | 279 |
+| منها في جداولٍ لها عمودُ حالة | 185 |
+| تقول الوثيقة ✅ | 93 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 89 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 4 (منها 4 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 210 / 1768 |
+| اختباراتٌ موسومة / كل الاختبارات | 215 / 1776 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -83,6 +83,7 @@
 | 7.4 | التسوية البنكية | ✅ | ✅ | `api/test/bank-reconciliation.e2e-spec.ts` :: [SPEC 7.4] ① the overview reads the statement side (manual lines only) against the ledger side, and suggests the equal-amount line within ±3 days (e2e)<br>`api/test/bank-reconciliation.e2e-spec.ts` :: [SPEC 7.4] ② matching is one-to-one with equal amounts — the fee cannot take the deposit line, the deposit can (e2e)<br>`api/test/bank-reconciliation.e2e-spec.ts` :: [SPEC 7.4] ③ a statement line with no ledger is posted with a chosen counterparty — the entry lands on the bank ledger and the mirror, and the line is matched (e2e)<br>`api/test/bank-reconciliation.e2e-spec.ts` :: [SPEC 7.4] ④ closing through a date needs no pending statement lines, then locks the bank account for entries and unmatching on or before it (e2e)<br>`api/test/bank-reconciliation.e2e-spec.ts` :: [SPEC 7.4] ⑤ another company sees nothing (e2e) |
 | 7.5 | صندوق مستقل لكل فرع | ✅ | ✅ | `api/test/payments.e2e-spec.ts` :: [SPEC 3.3 7.3 7.5] posts a balanced entry (debit cash / credit A-R) and raises the branch cash box (e2e) |
 | 7.6 | **ترحيلُ البنك إلى الأستاذ** *(حسابٌ لكل بنك في نطاقه · القبضُ والصرفُ والإيجارُ على البنك | ✅ | ✅ | `api/test/bank-account-link.e2e-spec.ts` :: [SPEC 7.6] ① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في أحد نطاقات البنوك، وباسمه (e2e) |
+| 7.7 | **إيداعُ الدرج في البنك عبر «نقدٍ في الطريق»** *(مستندٌ مرقَّم `CD` · مدين `1190` / دائن ا | ✅ | ✅ | `api/test/cash-deposits.e2e-spec.ts` :: [SPEC 7.7] ① a deposit leaves the drawer for 1190 — numbered CD, an auto entry, and the two ledgers say so (e2e)<br>`api/test/cash-deposits.e2e-spec.ts` :: [SPEC 7.7] ② a deposit above what the drawer holds is refused by the drawer balance — named (e2e)<br>`api/test/cash-deposits.e2e-spec.ts` :: [SPEC 7.7] ③ the bank statement confirms it through reconciliation with the exact amount — 1190 clears, the bank ledger and mirror move, the document closes (e2e)<br>`api/test/cash-deposits.e2e-spec.ts` :: [SPEC 7.7] ④ voiding an in-transit deposit is a reversal that returns the cash to the drawer (e2e)<br>`api/test/cash-deposits.e2e-spec.ts` :: [SPEC 7.7] ⑤ another company sees nothing (e2e) |
 | 8.1 | المنتجات والأصناف | ✅ | ✅ | `api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.1 8.10] flags low and out-of-stock status based on Product.minStock, and allows going negative as a soft warning only (e2e)<br>`api/test/products-tenant-isolation.e2e-spec.ts` :: [SPEC 8.1] auto-generates a barcode when none is given, and keeps the product invisible to and unreachable by company B (e2e) |
 | 8.2 | المستودعات | ✅ | ✅ | `api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.2 8.10] computes on-hand quantity live from IN/OUT/TRANSFER/ADJUSTMENT movements, with no stored balance (e2e)<br>`api/test/inventory-tenant-isolation.e2e-spec.ts` :: [SPEC 8.2] blocks deleting a warehouse that still has stock movements (e2e)<br>`api/test/pos.e2e-spec.ts` :: [SPEC 8.2 8.10] deducts branch-warehouse stock inside the sale — untracked lines are skipped explicitly (e2e) |
 | 8.3 | حركات المخزون | ✅ | ✅ | `api/src/inventory/quantity-precision.live.spec.ts` :: [SPEC 8.3] ⭐ 100.125 تُخزَّن كما هي — لا 100.13 (حيّ) |

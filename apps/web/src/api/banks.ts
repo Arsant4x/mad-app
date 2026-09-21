@@ -71,7 +71,49 @@ export const unmatchStatementLine = (bankId: string, transactionId: string) =>
   apiClient.post(`/banks/${bankId}/reconciliation/unmatch`, { transactionId }).then((r) => r.data);
 export const postStatementLine = (bankId: string, transactionId: string, counterpartyAccountId: string, memo?: string) =>
   apiClient.post(`/banks/${bankId}/reconciliation/post`, { transactionId, counterpartyAccountId, memo }).then((r) => r.data);
+/**
+ * تأكيدُ إيداعٍ في الطريق من سطر الكشف (⑦A3): الطرفُ المقابل يفرضه الخادم (`1190`) والمبلغُ يجب أن يساوي المستند —
+ * فلا طرفَ يُرسَل من هنا.
+ */
+export const confirmDepositFromStatement = (bankId: string, transactionId: string, depositId: string) =>
+  apiClient.post(`/banks/${bankId}/reconciliation/post`, { transactionId, depositId }).then((r) => r.data);
 export const closeReconciliation = (bankId: string, until: string) =>
   apiClient.post<{ bankId: string; reconciledUntil: string | null }>(`/banks/${bankId}/reconciliation/close`, { until }).then((r) => r.data);
 export const reopenReconciliation = (bankId: string) =>
   apiClient.post<{ bankId: string; reconciledUntil: string | null }>(`/banks/${bankId}/reconciliation/reopen`).then((r) => r.data);
+
+/** إيداعُ نقدِ الدرج في البنك عبر «نقدٍ في الطريق» `1190` (`ق-١٢٦١` ج — ⑦A3). كلُّ رقمٍ نصٌّ من الخادم. */
+export type CashDepositStatus = 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
+export interface CashDeposit {
+  id: string;
+  no: string;
+  date: string;
+  amount: string;
+  memo: string | null;
+  status: CashDepositStatus;
+  drawer: { id: string; name: string };
+  bank: { id: string; name: string };
+  branchId: string | null;
+  journalEntryId: string;
+  voidJournalEntryId: string | null;
+  confirmedTransactionId: string | null;
+  confirmedAt: string | null;
+}
+export interface CashDepositList {
+  items: CashDeposit[];
+  /** رصيدُ `1190` بالدفتر مقابل مجموع المستندات المفتوحة — والفرقُ يُعلَن لا يُصحَّح. */
+  inTransit: { ledger: string; documents: string; matched: boolean };
+}
+export interface CashDepositInput {
+  drawerId: string;
+  bankId: string;
+  amount: number;
+  date: string;
+  memo?: string;
+}
+export const listCashDeposits = (bankId?: string) =>
+  apiClient.get<CashDepositList>('/banks/cash-deposits', { params: bankId ? { bankId } : undefined }).then((r) => r.data);
+export const createCashDeposit = (dto: CashDepositInput) =>
+  apiClient.post<CashDeposit & { entryNo: string }>('/banks/cash-deposits', dto).then((r) => r.data);
+export const voidCashDeposit = (id: string, reason?: string) =>
+  apiClient.post<CashDeposit & { voidEntryNo: string }>(`/banks/cash-deposits/${id}/void`, { reason }).then((r) => r.data);

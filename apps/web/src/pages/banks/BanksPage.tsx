@@ -5,6 +5,7 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { BankModal } from './BankModal';
+import { CashDepositsPanel } from './CashDepositsPanel';
 import { ReconciliationPanel } from './ReconciliationPanel';
 
 export function BanksPage() {
@@ -16,6 +17,7 @@ export function BanksPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
   const [reconciling, setReconciling] = useState<Bank | null>(null);
+  const [depositing, setDepositing] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Bank | null>(null);
   const [codeBand, setCodeBand] = useState<CodeBandStatus | null>(null);
 
@@ -65,6 +67,9 @@ export function BanksPage() {
           <div className="page-sub">أرصدة الحسابات البنكية للمنشأة</div>
         </div>
         <div className="topbar-actions">
+          <button className="btn secondary" onClick={() => setDepositing(true)}>
+            ⇄ إيداعات الأدراج
+          </button>
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
             + حساب بنكي
           </button>
@@ -140,6 +145,7 @@ export function BanksPage() {
 
       {modal && <BankModal branches={branches} editing={modal.mode === 'edit' ? modal.bank : null} onCancel={() => setModal(null)} onSave={handleSave} />}
       {reconciling && <ReconciliationPanel bank={reconciling} onClose={() => { setReconciling(null); reload(); }} />}
+      {depositing && <CashDepositsPanel banks={banks} onClose={() => { setDepositing(false); reload(); }} />}
 
       {pendingDelete && (
         <ConfirmModal

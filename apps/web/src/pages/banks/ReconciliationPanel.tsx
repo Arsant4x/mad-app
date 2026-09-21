@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { listAccounts, type Account } from '../../api/accounts';
 import {
   closeReconciliation,
+  confirmDepositFromStatement,
   getReconciliation,
+  listCashDeposits,
   matchStatementLine,
   postStatementLine,
   reopenReconciliation,
   unmatchStatementLine,
   type Bank,
+  type CashDeposit,
   type ReconciliationOverview,
 } from '../../api/banks';
 import { fmt } from '../../lib/format';
@@ -23,13 +26,18 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
   const [data, setData] = useState<ReconciliationOverview | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [posting, setPosting] = useState<{ transactionId: string; counterpartyAccountId: string; memo: string } | null>(null);
+  // `depositId` — إيداعُ درجٍ في الطريق (⑦A3) يؤكَّد من هذا السطر: الطرفُ المقابل يفرضه الخادم (`1190`) فيُخفى الاختيار.
+  const [posting, setPosting] = useState<{ transactionId: string; counterpartyAccountId: string; memo: string; depositId: string } | null>(null);
+  const [inTransit, setInTransit] = useState<CashDeposit[]>([]);
   const [closeUntil, setCloseUntil] = useState('');
 
   async function load() {
     setError(null);
     try {
       setData(await getReconciliation(bank.id, { from: from || undefined, to: to || undefined }));
+      // الإيداعاتُ المفتوحة على هذا البنك — ما لم يؤكَّد بعد يُعرض في نموذج الترحيل.
+      const deposits = await listCashDeposits(bank.id).catch(() => null);
+      setInTransit(deposits ? deposits.items.filter((d) => d.status === 'IN_TRANSIT') : []);
     } catch (e) {
       setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'تعذّر تحميل التسوية');
     }
@@ -127,7 +135,7 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                                   ✓ طابِق بـ {lineLabel(lineId)}
                                 </button>
                               ))}
-                              <button className="btn link" onClick={() => setPosting({ transactionId: s.id, counterpartyAccountId: '', memo: s.description })}>
+                              <button className="btn link" onClick={() => setPosting({ transactionId: s.id, counterpartyAccountId: '', memo: s.description, depositId: '' })}>
                                 ↳ رحِّل بطرف
                               </button>
                             </>
@@ -175,27 +183,52 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
               <div className="card" style={{ marginTop: 12 }}>
                 <strong>ترحيلُ سطر الكشف بطرفٍ مقابل</strong>
                 <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
-                  <div className="field" style={{ margin: 0, minWidth: 260 }}>
-                    <label htmlFor="rec-counterparty">الطرف المقابل</label>
-                    <select id="rec-counterparty" value={posting.counterpartyAccountId} onChange={(e) => setPosting({ ...posting, counterpartyAccountId: e.target.value })}>
-                      <option value="">— اختر حساباً —</option>
-                      {accounts.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.code} — {a.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field" style={{ margin: 0, minWidth: 260 }}>
-                    <label htmlFor="rec-memo">البيان</label>
-                    <input id="rec-memo" value={posting.memo} onChange={(e) => setPosting({ ...posting, memo: e.target.value })} />
-                  </div>
+                  {inTransit.length > 0 && (
+                    <div className="field" style={{ margin: 0, minWidth: 260 }}>
+                      <label htmlFor="rec-deposit">إيداعُ درجٍ في الطريق</label>
+                      <select id="rec-deposit" value={posting.depositId} onChange={(e) => setPosting({ ...posting, depositId: e.target.value, counterpartyAccountId: '' })}>
+                        <option value="">— ليس إيداعَ درج —</option>
+                        {inTransit.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.no} · {d.date} · {d.drawer.name} · {fmt(d.amount)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {!posting.depositId && (
+                    <div className="field" style={{ margin: 0, minWidth: 260 }}>
+                      <label htmlFor="rec-counterparty">الطرف المقابل</label>
+                      <select id="rec-counterparty" value={posting.counterpartyAccountId} onChange={(e) => setPosting({ ...posting, counterpartyAccountId: e.target.value })}>
+                        <option value="">— اختر حساباً —</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.code} — {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {posting.depositId ? (
+                    <span className="muted">الطرفُ المقابل «نقدٌ في الطريق 1190» والمبلغُ مبلغُ المستند — يفرضهما الخادم.</span>
+                  ) : (
+                    <div className="field" style={{ margin: 0, minWidth: 260 }}>
+                      <label htmlFor="rec-memo">البيان</label>
+                      <input id="rec-memo" value={posting.memo} onChange={(e) => setPosting({ ...posting, memo: e.target.value })} />
+                    </div>
+                  )}
                   <button
                     className="btn btn-primary"
-                    disabled={!posting.counterpartyAccountId}
-                    onClick={() => act(() => postStatementLine(bank.id, posting.transactionId, posting.counterpartyAccountId, posting.memo)).then(() => setPosting(null))}
+                    disabled={!posting.counterpartyAccountId && !posting.depositId}
+                    onClick={() =>
+                      act(() =>
+                        posting.depositId
+                          ? confirmDepositFromStatement(bank.id, posting.transactionId, posting.depositId)
+                          : postStatementLine(bank.id, posting.transactionId, posting.counterpartyAccountId, posting.memo),
+                      ).then(() => setPosting(null))
+                    }
                   >
-                    رحِّل وطابِق
+                    {posting.depositId ? 'أكِّد الإيداع وطابِق' : 'رحِّل وطابِق'}
                   </button>
                   <button className="btn secondary" onClick={() => setPosting(null)}>
                     إلغاء
