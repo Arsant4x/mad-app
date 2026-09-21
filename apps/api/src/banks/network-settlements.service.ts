@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assertBranchAllowed, requestedBranchFilter } from '../branches/branch-scope.util';
+import { assertBranchAllowed, requestedBranchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
@@ -158,7 +158,8 @@ export class NetworkSettlementsService {
       if (company && bank.currency !== company.baseCurrency) {
         throw new BadRequestException(formatMessage(MSG.network_settlement_bank_currency, { bank: bank.name, currency: bank.currency }));
       }
-      if (dto.branchId) assertBranchAllowed(allowedBranchIds, dto.branchId);
+      // فرعُ الطلب يمرّ بالمصدر الواحد (ق-٥١٢): موجودٌ في المنشأة **ومن فروع صاحب الطلب** — ويُكتب ما يعيده.
+      const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
       const periodFrom = new Date(dto.periodFrom);
       const periodTo = new Date(dto.periodTo);
       if (periodTo < periodFrom) throw new BadRequestException(MSG.network_settlement_period_backwards);
@@ -167,7 +168,7 @@ export class NetworkSettlementsService {
       const feeVat = round2(dto.feeVatAmount);
       if (fee < 0 || feeVat < 0) throw new BadRequestException(MSG.network_settlement_fee_negative);
 
-      const candidates = await this.openReceipts(tx, allowedBranchIds, { from: periodFrom, to: periodTo, branchId: dto.branchId });
+      const candidates = await this.openReceipts(tx, allowedBranchIds, { from: periodFrom, to: periodTo, branchId: branchId ?? undefined });
       let claimed = candidates;
       if (dto.receiptIds?.length) {
         const wanted = new Set(dto.receiptIds);
@@ -189,7 +190,7 @@ export class NetworkSettlementsService {
         no,
         date,
         memo,
-        branchId: dto.branchId ?? null,
+        branchId,
         bank: { id: bank.id, accountId: bank.accountId, currency: bank.currency },
         networkAccountId: network.id,
         feeAccountId: feeAccount.id,
@@ -211,7 +212,7 @@ export class NetworkSettlementsService {
           netAmount: net,
           memo,
           bankId: bank.id,
-          branchId: dto.branchId ?? null,
+          branchId,
           journalEntryId: entry.id,
         } as unknown as Prisma.NetworkSettlementUncheckedCreateInput,
         include: { bank: { select: { id: true, name: true } }, _count: { select: { receipts: true } } },
