@@ -5,13 +5,13 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 277 |
-| منها في جداولٍ لها عمودُ حالة | 183 |
-| تقول الوثيقة ✅ | 90 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 85 |
-| ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 5 (منها 5 معلَنة) |
+| بنود SPEC | 278 |
+| منها في جداولٍ لها عمودُ حالة | 184 |
+| تقول الوثيقة ✅ | 91 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 87 |
+| ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 4 (منها 4 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 189 / 1737 |
+| اختباراتٌ موسومة / كل الاختبارات | 195 / 1751 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -49,7 +49,7 @@
 | 3.11 | قيود الإقفال السنوي التلقائية | ⬜ | ⬜ | — |
 | 3.12 | **الأصول الثابتة والإهلاك** | ⬜ | ⬜ | — |
 | 4.1 | سجل العملاء | ✅ | ✅ | `api/test/customer-trash-guards.e2e-spec.ts` :: [SPEC 4.1] ① عميلٌ له عقدٌ حيّ لا يُحذف — 409 تسمّي الأرشفةَ مخرجاً (e2e)<br>`api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] creates, rejects duplicate name, updates, and deletes a customer scoped to company A only (e2e)<br>`api/test/customers-tenant-isolation.e2e-spec.ts` :: [SPEC 4.1] refuses to delete a customer that still has invoices (e2e) |
-| 4.2 | كشف حساب العميل | ✅ | ⬜ (دَين معلَن) | ⚠️ كشف حساب العميل — CustomerDetailModal لا يُفتح في أي اختبار؛ CustomersPage.test.tsx يوكّد خلية «الرصيد المستحق» في جدول العملاء لا الكشف بفواتيره ومقبوضه. يلزم اختبار. |
+| 4.2 | كشف حساب العميل | ✅ | ✅ | `api/test/ledger-statement.e2e-spec.ts` :: [SPEC 4.2] ④ the customer statement reads the party dimension across accounts and closes on the receivable the aging reports (e2e) |
 | 4.3 | حد الائتمان | ✅ | ✅ | `api/test/credit-limit.e2e-spec.ts` :: [SPEC 4.3] ② والحدُّ يمنع — والرسالةُ تحمل الحدَّ والقائمَ والمطلوب لا كلمةَ «تجاوزت» (e2e) |
 | 4.4 | الفواتير وبنودها | ✅ | ✅ | `api/test/invoice-outstanding.e2e-spec.ts` :: [SPEC 4.4] a partly paid invoice reports its REMAINING amount, not its total (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 3.4 4.4] posts a new invoice to A/R, revenue, and VAT, then reverses on delete (e2e)<br>`api/test/invoices-tenant-isolation.e2e-spec.ts` :: [SPEC 4.4 6.1] computes invoice totals server-side from lines, ignoring any client-submitted amounts (e2e) |
 | 4.5 | المقبوضات والسداد الجزئي | 🟨 | ⬜ | — |
@@ -120,6 +120,7 @@
 | 10.13 | **مراقبة أداء الفريق** (من يرد ومن يتجاهل) | ⬜ | ⬜ | — |
 | 10.14 | متوسط زمن الرد ووقت الإغلاق | ⬜ | ⬜ | — |
 | 10.15 | معدل تحويل الفرص لكل موظف | ⬜ | ⬜ | — |
+| 10.16 | **الأستاذ العام وكشف الحساب** *(دفترُ كلِّ حسابٍ أو بُعدٍ برصيدٍ افتتاحيٍّ وجارٍ ومصدرِ كل | ✅ | ✅ | `api/test/ledger-statement.e2e-spec.ts` :: [SPEC 10.16] ① a debit-normal account: opening before the range by aggregation, rows inside it with a running balance and the source document (e2e)<br>`api/test/ledger-statement.e2e-spec.ts` :: [SPEC 10.16] ② receivables: the invoice then the receipt, in date order, each with its document (e2e)<br>`api/test/ledger-statement.e2e-spec.ts` :: [SPEC 10.16] ③ a credit-normal account runs on its own side, and a manual entry names itself as the source (e2e)<br>`api/test/ledger-statement.e2e-spec.ts` :: [SPEC 10.16] ⑤ refuses a ledger without a filter and a statement with two parties — and the other company sees nothing (e2e)<br>`api/test/ledger-statement.e2e-spec.ts` :: [SPEC 10.16] ⑥ exports both as CSV with a BOM and the same columns (e2e) |
 | 11.1 | **طبقة تخزين الملفات (MinIO)** | ✅ | ✅ | `api/test/files-tenant-isolation.e2e-spec.ts` :: [SPEC 11.1] uploads a file and namespaces its key under the uploading company (e2e)<br>`api/test/files-tenant-isolation.e2e-spec.ts` :: [SPEC 11.1] rejects a disallowed file type (e2e)<br>`api/test/files-tenant-isolation.e2e-spec.ts` :: [SPEC 11.1] issues a short-lived download URL to the owning company (e2e) |
 | 11.2 | مرفقات العقود | ✅ | ✅ | `api/test/contract-attachments.e2e-spec.ts` :: [SPEC 11.2] uploads a document and lists it back (e2e)<br>`api/test/contract-attachments.e2e-spec.ts` :: [SPEC 11.2] hands back a short-lived signed download URL (e2e)<br>`api/test/contract-attachments.e2e-spec.ts` :: [SPEC 11.2] deletes the attachment (e2e) |
 | 11.3 | شعار المنشأة | ✅ | ✅ | `api/test/company-profile.e2e-spec.ts` :: [SPEC 2.2 11.3] attaches an uploaded logo, serves it back, and clears it on request (e2e) |
