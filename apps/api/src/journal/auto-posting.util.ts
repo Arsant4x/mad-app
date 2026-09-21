@@ -1137,6 +1137,93 @@ export async function postCashDepositVoidEntry(
 }
 
 /**
+ * **تسويةُ الشبكة** (`ق-١٢٦١` ج — ⑦A2): تحصيلُ المستحوذ يدخل البنكَ صافياً، والعمولةُ وضريبتُها تُثبَتان في
+ * شهرهما، والذمّةُ على الشبكة `1251` تُقفل بإجماليّ ما طالبت به التسويةُ من سندات:
+ *
+ *   `مدين البنك (الصافي) · مدين عمولاتُ الشبكة (العمولة) · مدين ضريبةُ المدخلات (ضريبتُها) · دائن 1251 (الإجمالي)`
+ *
+ * ومرآةُ البنك تتحرّك بالصافي مع حركةٍ بنكية مربوطةٍ برقم القيد (`ق-٢٨٢` — من هذا الملفّ وحدَه). قيدٌ آليّ
+ * لمستنده — لا يُعكس من شاشة القيود بل بإلغاء المستند.
+ */
+export interface NetworkSettlementForPosting {
+  no: string;
+  memo: string;
+  branchId: string | null;
+  bank: { id: string; accountId: string; currency: string };
+  networkAccountId: string;
+  feeAccountId: string;
+  /** يُترك فارغاً حين لا ضريبةَ على العمولة — فلا سطرَ بصفر. */
+  inputVatAccountId: string | null;
+  gross: number;
+  fee: number;
+  feeVat: number;
+  net: number;
+}
+
+function networkSettlementLines(p: NetworkSettlementForPosting, reverse: boolean): PostingLine[] {
+  const debit = (accountId: string, amount: number): PostingLine => (reverse ? { accountId, debit: 0, credit: amount } : { accountId, debit: amount, credit: 0 });
+  const credit = (accountId: string, amount: number): PostingLine => (reverse ? { accountId, debit: amount, credit: 0 } : { accountId, debit: 0, credit: amount });
+  const lines: PostingLine[] = [debit(p.bank.accountId, round2(p.net))];
+  if (round2(p.fee) > 0) lines.push(debit(p.feeAccountId, round2(p.fee)));
+  if (round2(p.feeVat) > 0 && p.inputVatAccountId) lines.push(debit(p.inputVatAccountId, round2(p.feeVat)));
+  lines.push(credit(p.networkAccountId, round2(p.gross)));
+  return lines;
+}
+
+export async function postNetworkSettlementEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: NetworkSettlementForPosting & { date: Date },
+): Promise<{ id: string; no: string }> {
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.branchId,
+    date: p.date,
+    memo: p.memo,
+    auto: true,
+    lines: networkSettlementLines(p, false),
+  });
+  await mirrorBankMovement(tx, p.bank, {
+    date: p.date,
+    description: p.memo,
+    amount: round2(p.net),
+    source: 'network-settlement',
+    currency: p.bank.currency,
+    exchangeRate: 1,
+    entryNo: entry.no,
+  });
+  return { id: entry.id, no: entry.no };
+}
+
+/** إلغاءُ تسوية الشبكة: عكسٌ بتاريخ اليوم يحمل `reversalOfId`، والمرآةُ تنقص بالصافي — لا محو. */
+export async function postNetworkSettlementVoidEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: NetworkSettlementForPosting & { reversalOfId: string | null },
+): Promise<{ id: string; no: string }> {
+  const date = new Date();
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.branchId,
+    date,
+    memo: p.memo,
+    auto: true,
+    reversalOfId: p.reversalOfId ?? undefined,
+    lines: networkSettlementLines(p, true),
+  });
+  await mirrorBankMovement(tx, p.bank, {
+    date,
+    description: p.memo,
+    amount: -round2(p.net),
+    source: 'network-settlement',
+    currency: p.bank.currency,
+    exchangeRate: 1,
+    entryNo: entry.no,
+  });
+  return { id: entry.id, no: entry.no };
+}
+
+/**
  * أثرُ سند التسوية على **مرآة البنك/الصندوق** (`ق-٢٨٢`: تُكتب من مسار الترحيل وحدَه — ولذلك
  * تسكن هذا الملفّ): رصيدٌ يتحرّك وحركةٌ بنكية تُسجَّل مربوطةً برقم القيد، بمبلغٍ **موقَّع**
  * (موجبٌ يدخل، سالبٌ يخرج؛ والعكسُ يقلب الإشارة). لا شيء حين لا بنك (نقدٌ على `1000`).

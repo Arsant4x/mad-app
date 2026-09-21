@@ -181,6 +181,17 @@ export const MSG = {
   cash_deposit_exceeds_drawer: 'cash_deposits.exceeds_drawer',
   cash_deposit_not_voidable: 'cash_deposits.not_voidable',
   cash_deposit_not_in_transit: 'cash_deposits.not_in_transit',
+  // network settlements (ق-١٢٦١ ج — ⑦A2)
+  network_settlement_not_found: 'network_settlements.not_found',
+  network_settlement_nothing_open: 'network_settlements.nothing_open',
+  network_settlement_receipt_not_open: 'network_settlements.receipt_not_open',
+  network_settlement_fee_exceeds_gross: 'network_settlements.fee_exceeds_gross',
+  network_settlement_fee_negative: 'network_settlements.fee_negative',
+  network_settlement_period_backwards: 'network_settlements.period_backwards',
+  network_settlement_bank_currency: 'network_settlements.bank_currency',
+  network_settlement_not_voidable: 'network_settlements.not_voidable',
+  network_settlement_matched: 'network_settlements.matched',
+  payment_card_no_bank: 'payments.card_no_bank',
 
   // properties / units / contracts
   property_not_found: 'properties.not_found',
@@ -761,6 +772,34 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.cash_deposit_not_voidable]: { ar: 'لا يُلغى إلا إيداعٌ في الطريق — المؤكَّد رآه كشف البنك', en: 'Only an in-transit deposit can be voided — a confirmed one was seen on the bank statement' },
   [MSG.cash_deposit_not_in_transit]: { ar: 'مستند الإيداع ليس في الطريق — لا يُؤكَّد', en: 'This deposit is not in transit — it cannot be confirmed' },
+  [MSG.network_settlement_not_found]: { ar: 'تسوية الشبكة غير موجودة', en: 'Network settlement not found' },
+  [MSG.network_settlement_nothing_open]: {
+    ar: 'لا سندات قبضٍ بالشبكة مفتوحة في هذا المدى — لا شيء يُسوّى',
+    en: 'No open network receipts in this period — nothing to settle',
+  },
+  [MSG.network_settlement_receipt_not_open]: {
+    ar: '{count} من السندات المسمّاة ليس مفتوحاً في المدى (طُولب به من قبل، أو خارج المدى، أو ليس بالشبكة)',
+    en: '{count} of the named receipts is not open in the period (already settled, outside the period, or not a network receipt)',
+  },
+  [MSG.network_settlement_fee_exceeds_gross]: {
+    ar: 'العمولة وضريبتها ({fee}) تستهلك إجمالي التحصيل ({gross}) أو تفوقه — لا صافي يدخل البنك',
+    en: 'The fee and its VAT ({fee}) consume or exceed the gross ({gross}) — nothing would reach the bank',
+  },
+  [MSG.network_settlement_fee_negative]: { ar: 'العمولة وضريبتها لا تكونان سالبتين', en: 'The fee and its VAT cannot be negative' },
+  [MSG.network_settlement_period_backwards]: { ar: 'نهاية المدى قبل بدايته', en: 'The period ends before it starts' },
+  [MSG.network_settlement_bank_currency]: {
+    ar: 'البنك «{bank}» بعملة {currency} — تسوية الشبكة تُرحَّل إلى بنكٍ بالعملة الأساسية',
+    en: 'Bank "{bank}" is in {currency} — a network settlement is posted to a base-currency bank',
+  },
+  [MSG.network_settlement_not_voidable]: { ar: 'لا تُلغى إلا تسويةٌ مرحَّلة — هذه مُلغاة من قبل', en: 'Only a posted settlement can be voided — this one is already void' },
+  [MSG.network_settlement_matched]: {
+    ar: 'التسوية {no} طابقها كشفُ البنك — فُكّ المطابقة من التسوية البنكية قبل إلغائها',
+    en: 'Settlement {no} is matched by the bank statement — unmatch it in the bank reconciliation before voiding',
+  },
+  [MSG.payment_card_no_bank]: {
+    ar: 'مقبوض الشبكة يُقيَّد على مدينو شبكة المدفوعات (1251) حتى يحوّله المستحوذ — لا يُختار له بنك',
+    en: 'A network receipt is posted to network receivables (1251) until the acquirer settles it — no bank is chosen for it',
+  },
   [MSG.bank_code_range_full]: {
     ar: 'نطاق رموز حسابات البنوك (1100–1199) ممتلئ — احذف بنكاً غير مستعمل أو وسّع النطاق بقرار',
     en: 'The bank account code range (1100–1199) is full — remove an unused bank or widen the range by decision',
