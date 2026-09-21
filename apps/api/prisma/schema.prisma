@@ -567,6 +567,8 @@ model Branch {
   /// Optional links to the physical place and its default stock location.
   propertyId  String?
   property    Property?  @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  propertyTenant Property? @relation("Branch_propertyId_tenant", fields: [companyId, propertyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   warehouseId String?
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
@@ -2594,9 +2596,13 @@ model JournalLine {
 
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  propertyTenant Property? @relation("JournalLine_propertyId_tenant", fields: [companyId, propertyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   unitId String?
   unit   Unit? @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  unitTenant Unit? @relation("JournalLine_unitId_tenant", fields: [companyId, unitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// ── بُعدُ الطرف (`ق-٨٧٣`) — بحدّه الأدنى ────────────────────────────────
   /// **يُملأ من `resolveDimensions()` لا بيد**: الفاتورةُ والإشعارُ وسندُ القبض ⇒ عميلُها،
@@ -2683,6 +2689,13 @@ model Property {
   journalLines JournalLine[]
 
   @@map("properties")
+  warranty_propertyId_tenant Warranty[] @relation("Warranty_propertyId_tenant")
+  maintenanceRequest_propertyId_tenant MaintenanceRequest[] @relation("MaintenanceRequest_propertyId_tenant")
+  unit_propertyId_tenant Unit[] @relation("Unit_propertyId_tenant")
+  journalLine_propertyId_tenant JournalLine[] @relation("JournalLine_propertyId_tenant")
+  branch_propertyId_tenant Branch[] @relation("Branch_propertyId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A leasable unit within a Property. `type`/`subtype` mirror the mockup's
@@ -2699,6 +2712,8 @@ model Unit {
 
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  propertyTenant Property @relation("Unit_propertyId_tenant", fields: [companyId, propertyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   unitNo           String
   floor            String?
@@ -2729,6 +2744,13 @@ model Unit {
   journalLines JournalLine[]
 
   @@map("units")
+  contract_unitId_tenant Contract[] @relation("Contract_unitId_tenant")
+  warranty_unitId_tenant Warranty[] @relation("Warranty_unitId_tenant")
+  maintenanceRequest_unitId_tenant MaintenanceRequest[] @relation("MaintenanceRequest_unitId_tenant")
+  reservation_unitId_tenant Reservation[] @relation("Reservation_unitId_tenant")
+  journalLine_unitId_tenant JournalLine[] @relation("JournalLine_unitId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum ReservationStatus {
@@ -2750,6 +2772,8 @@ model Reservation {
 
   unitId String
   unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  unitTenant Unit @relation("Reservation_unitId_tenant", fields: [companyId, unitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   name       String
   phone      String?
@@ -2930,6 +2954,8 @@ model RentReminder {
 
   installmentId String
   installment   Installment @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  installmentTenant Installment @relation("RentReminder_installmentId_tenant", fields: [companyId, installmentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   channel ReminderChannel
   /// The text as it went out — templates change, and a record of what was
@@ -3041,8 +3067,12 @@ model MaintenanceRequest {
 
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  propertyTenant Property @relation("MaintenanceRequest_propertyId_tenant", fields: [companyId, propertyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   unitId     String?
   unit       Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  unitTenant Unit? @relation("MaintenanceRequest_unitId_tenant", fields: [companyId, unitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   title       String
   description String?
@@ -3083,6 +3113,8 @@ model MaintenanceRequest {
   /// facts, and only the second is a defence when the provider argues later.
   warrantyId String?
   warranty   Warranty? @relation(fields: [warrantyId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  warrantyTenant Warranty? @relation("MaintenanceRequest_warrantyId_tenant", fields: [companyId, warrantyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   notes String?
 
@@ -3111,10 +3143,14 @@ model Warranty {
 
   propertyId String
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  propertyTenant Property @relation("Warranty_propertyId_tenant", fields: [companyId, propertyId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   /// Null = covers the whole property. A building's lift belongs to the
   /// building; a flat's air conditioner belongs to the flat.
   unitId String?
   unit   Unit?   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  unitTenant Unit? @relation("Warranty_unitId_tenant", fields: [companyId, unitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Who honours it. Free text as well as an optional supplier link: the
   /// manufacturer behind a warranty is often not the supplier who invoiced it.
@@ -3144,6 +3180,9 @@ model Warranty {
 
   @@index([companyId, endDate])
   @@map("warranties")
+  maintenanceRequest_warrantyId_tenant MaintenanceRequest[] @relation("MaintenanceRequest_warrantyId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum HandoverType {
@@ -3182,6 +3221,8 @@ model ContractHandover {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractHandover_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   type   HandoverType
   status HandoverStatus @default(DRAFT)
@@ -3205,6 +3246,10 @@ model ContractHandover {
   photos HandoverPhoto[]
 
   @@map("contract_handovers")
+  handoverPhoto_handoverId_tenant HandoverPhoto[] @relation("HandoverPhoto_handoverId_tenant")
+  handoverItem_handoverId_tenant HandoverItem[] @relation("HandoverItem_handoverId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 model HandoverItem {
@@ -3214,6 +3259,8 @@ model HandoverItem {
 
   handoverId String
   handover   ContractHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  handoverTenant ContractHandover @relation("HandoverItem_handoverId_tenant", fields: [companyId, handoverId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   label     String
   condition ItemCondition
@@ -3224,6 +3271,9 @@ model HandoverItem {
   photos HandoverPhoto[]
 
   @@map("handover_items")
+  handoverPhoto_itemId_tenant HandoverPhoto[] @relation("HandoverPhoto_itemId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// Which way the key money went. It decides the accounting entirely: received
@@ -3246,6 +3296,8 @@ model ContractKeyMoney {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractKeyMoney_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   direction KeyMoneyDirection
   amount    Decimal           @db.Decimal(18, 2)
@@ -3302,6 +3354,8 @@ model ContractClaim {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractClaim_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   kind   ClaimKind
   amount Decimal   @db.Decimal(18, 2)
@@ -3336,6 +3390,9 @@ model ContractClaim {
   attachments ClaimAttachment[]
 
   @@map("contract_claims")
+  claimAttachment_claimId_tenant ClaimAttachment[] @relation("ClaimAttachment_claimId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// The two deposits a Saudi lease commonly carries. They are settled
@@ -3390,6 +3447,8 @@ model ContractDeposit {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractDeposit_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   type   DepositType
   holder DepositHolder @default(COMPANY)
@@ -3424,6 +3483,9 @@ model ContractDeposit {
   updatedAt DateTime @updatedAt
 
   @@map("contract_deposits")
+  depositDeduction_depositId_tenant DepositDeduction[] @relation("DepositDeduction_depositId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// One line of "what we kept and why" at settlement. Itemized rather than a
@@ -3436,6 +3498,8 @@ model DepositDeduction {
 
   depositId String
   deposit   ContractDeposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  depositTenant ContractDeposit @relation("DepositDeduction_depositId_tenant", fields: [companyId, depositId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   kind   DeductionKind
   amount Decimal       @db.Decimal(18, 2)
@@ -3453,6 +3517,8 @@ model Contract {
 
   unitId String
   unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  unitTenant Unit @relation("Contract_unitId_tenant", fields: [companyId, unitId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -3505,6 +3571,8 @@ model Contract {
   /// two renewals of the same lease would fork the tenancy history.
   renewedFromId String?    @unique
   renewedFrom   Contract?  @relation("ContractRenewal", fields: [renewedFromId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  renewedFromTenant Contract? @relation("Contract_renewedFromId_tenant", fields: [companyId, renewedFromId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   renewedTo     Contract?  @relation("ContractRenewal")
 
   createdAt DateTime @default(now())
@@ -3525,6 +3593,18 @@ model Contract {
   /// The paginated list orders by start desc within the tenant.
   @@index([companyId, start])
   @@map("contracts")
+  rentAccrual_contractId_tenant RentAccrual[] @relation("RentAccrual_contractId_tenant")
+  rentPayment_contractId_tenant RentPayment[] @relation("RentPayment_contractId_tenant")
+  installment_contractId_tenant Installment[] @relation("Installment_contractId_tenant")
+  contractSettlementLine_contractId_tenant ContractSettlementLine[] @relation("ContractSettlementLine_contractId_tenant")
+  contractAttachment_contractId_tenant ContractAttachment[] @relation("ContractAttachment_contractId_tenant")
+  contract_renewedFromId_tenant Contract[] @relation("Contract_renewedFromId_tenant")
+  contractDeposit_contractId_tenant ContractDeposit[] @relation("ContractDeposit_contractId_tenant")
+  contractClaim_contractId_tenant ContractClaim[] @relation("ContractClaim_contractId_tenant")
+  contractKeyMoney_contractId_tenant ContractKeyMoney[] @relation("ContractKeyMoney_contractId_tenant")
+  contractHandover_contractId_tenant ContractHandover[] @relation("ContractHandover_contractId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A file stored against a contract — a signed lease PDF, an annex, a
@@ -3546,6 +3626,8 @@ model ContractAttachment {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractAttachment_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// Object-storage key: companies/{companyId}/{uuid}-{filename}.
   fileKey  String
@@ -3568,6 +3650,8 @@ model ClaimAttachment {
 
   claimId String
   claim   ContractClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  claimTenant ContractClaim @relation("ClaimAttachment_claimId_tenant", fields: [companyId, claimId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   fileKey  String
   filename String
@@ -3590,9 +3674,13 @@ model HandoverPhoto {
 
   handoverId String
   handover   ContractHandover @relation(fields: [handoverId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  handoverTenant ContractHandover @relation("HandoverPhoto_handoverId_tenant", fields: [companyId, handoverId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   itemId String?
   item   HandoverItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  itemTenant HandoverItem? @relation("HandoverPhoto_itemId_tenant", fields: [companyId, itemId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   fileKey  String
   filename String
@@ -3615,6 +3703,8 @@ model ContractSettlementLine {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractSettlementLine_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   label  String
   /// موجب = على المستأجر، سالب = له (استرداد).
@@ -4018,6 +4108,8 @@ model Installment {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("Installment_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   dueDate DateTime          @db.Date
   amount  Decimal           @db.Decimal(18, 2)
@@ -4085,6 +4177,11 @@ model Installment {
   /// الكنسُ اليوميّ للاستحقاق: ما حلّ ولم يُستحقّ بعد (`ق-٩٢٧/٥`).
   @@index([companyId, accrualBasis, dueDate])
   @@map("contract_installments")
+  rentAccrual_installmentId_tenant RentAccrual[] @relation("RentAccrual_installmentId_tenant")
+  rentPayment_installmentId_tenant RentPayment[] @relation("RentPayment_installmentId_tenant")
+  rentReminder_installmentId_tenant RentReminder[] @relation("RentReminder_installmentId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// An actual collected rent payment. Always posts a journal entry (debit
@@ -4312,9 +4409,13 @@ model RentPayment {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("RentPayment_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   installmentId String?
   installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  installmentTenant Installment? @relation("RentPayment_installmentId_tenant", fields: [companyId, installmentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   date       DateTime      @db.Date
   amount     Decimal       @db.Decimal(18, 2)
@@ -4356,6 +4457,9 @@ model RentPayment {
   /// table (measured: 60,000 scans for 60,000 deleted installments).
   @@index([installmentId])
   @@map("rent_payments")
+  rentAccrual_paymentId_tenant RentAccrual[] @relation("RentAccrual_paymentId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// ⭐ **صفُّ استحقاق الإيجار — ما يقرؤه الدفترُ والإقرارُ معاً** (`ق-٩١٧` · `ق-٩٢٧/١`).
@@ -4375,14 +4479,20 @@ model RentAccrual {
 
   contractId String
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("RentAccrual_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// فارغٌ لدفعةٍ بلا قسط (`UNLINKED`).
   installmentId String?
   installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  installmentTenant Installment? @relation("RentAccrual_installmentId_tenant", fields: [companyId, installmentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   /// الدفعةُ التي أنشأت الصفّ — لمقدَّمةٍ أو بلا قسطٍ أو خصم.
   paymentId String?
   payment   RentPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  paymentTenant RentPayment? @relation("RentAccrual_paymentId_tenant", fields: [companyId, paymentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   kind RentAccrualKind
   /// نقطةُ الضريبة — تاريخُ القيد وتاريخُ الإقرار معاً.

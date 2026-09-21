@@ -207,4 +207,27 @@ describe('Composite tenant foreign keys (e2e)', () => {
     );
     expect(after.journalEntryId).toBe(jeA2.id);
   }, 60000);
+
+  it('[SPEC 1.2] ⑤ batch 4 sample — units.propertyId → properties: a foreign company\'s property is refused, its own is accepted', async () => {
+    const conname = await constraintNamed('units', 'propertyId');
+    const propertyOf = async (c: IsolatedCompany, tag: string) =>
+      (await auth(c)(request(app.getHttpServer()).post('/properties')).send({ name: `عقار ${tag}`, ownership: 'owned' }).expect(201)).body as { id: string };
+    const propA = await propertyOf(a, 'أ');
+    const propA2 = await propertyOf(a, 'أ٢');
+    const propB = await propertyOf(b, 'ب');
+    const unitA = await auth(a)(request(app.getHttpServer()).post('/units'))
+      .send({ propertyId: propA.id, unitNo: 'U-1', type: 'سكني', rentMonthly: 1000 })
+      .expect(201);
+
+    const refused = await crossWrite('units', 'propertyId', unitA.body.id, propB.id);
+    expect(refused).toEqual({ sqlstate: '23503', constraint: conname });
+
+    await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$executeRawUnsafe(`UPDATE "units" SET "propertyId" = $1 WHERE id = $2`, propA2.id, unitA.body.id),
+    );
+    const [after] = await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$queryRawUnsafe<{ propertyId: string }[]>(`SELECT "propertyId" FROM "units" WHERE id = $1`, unitA.body.id),
+    );
+    expect(after.propertyId).toBe(propA2.id);
+  }, 60000);
 });
