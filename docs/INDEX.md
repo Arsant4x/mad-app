@@ -59,7 +59,7 @@
 ⚠️ **وهي تستشهد بـ`gap-analysis.md`** — وهو **مؤرشفٌ منذ 2026-08-08** في
 `docs/archive/` ورأسه يقول «لا يُعتمد عليها». بندٌ يُراجَع.
 
-## الوثائق — ٥٦
+## الوثائق — ٥٧
 
 | الملف | العنوان | التاريخ | الحالة | أسطر | تعتمد على |
 |---|---|---|---|---|---|
@@ -92,6 +92,7 @@
 | [`imaging-physio-complete.md`](plans/imaging-physio-complete.md) | مراكز الأشعة التشخيصية والعلاج الطبيعي — الوثيقة الكاملة | — | مسوّدة | 1375 | — |
 | [`insurance-brokerage-master-plan.md`](plans/insurance-brokerage-master-plan.md) | الخطة الرئيسية — وساطة التأمين والأنشطة الوكيلية (العمولات) | — | مسوّدة | 666 | — |
 | [`inventory-master-plan.md`](plans/inventory-master-plan.md) | الخطة الشاملة لبناء نظام المخزون والمستودعات المحاسبي | 2026-08-26 | مسوّدة (افتراضاً) | 1383 | pharmacy-master-plan.md |
+| [`irreversible-20-plan.md`](plans/irreversible-20-plan.md) | خطّةُ العشرين الباقية من الثلاثة والعشرين «لا يُعكَس» — جدولٌ واحد: البندُ · يعتمد على ماذا · كلفتُه بالأيام بالمقياس المعلَن · حزمتُه (ق-١٢٥٤) | 2026-09-21 | بانتظار حكم المالك | 77 | — |
 | [`jewelry-full-spec.md`](plans/jewelry-full-spec.md) | المواصفة الكاملة — نشاط المجوهرات والمعادن الثمينة والأحجار الكريمة | — | مسوّدة | 1227 | — |
 | [`lab-master-plan.md`](plans/lab-master-plan.md) | الخطة الرئيسية — ملف نشاط: المختبرات الطبية المستقلة (B2B) وما يشابهها | — | مسوّدة | 803 | inventory-master-plan.md، pharmacy-master-plan.md، wholesale-full-spec.md |
 | [`manufacturing-full-spec.md`](plans/manufacturing-full-spec.md) | المصانع والإنتاج — المواصفة الكاملة | 2026-08-27 | مسوّدة (افتراضاً) | 955 | — |
