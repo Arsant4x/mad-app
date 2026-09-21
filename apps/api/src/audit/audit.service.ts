@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { ListAuditQueryDto } from './dto/list-audit-query.dto';
+
+/** حقولُ البحث المُعلَنة لسجلّ التدقيق (`ق-١٢٣٦`). */
+const AUDIT_SEARCH_FIELDS = ['summary', 'actorName', 'entity'] as const;
 
 /** What the reader sees instead of a route name. Keyed by the first path
  * segment, which is how the interceptor groups entries. */
@@ -215,27 +220,31 @@ export class AuditService {
    * (`ق-١٤٣`، الاعتماد الذاتي): سجلٌّ يحمل الواقعة **ولا يُرشَّح عليها** يجعل
    * المدقّق يقلّب الصفحات — **والقدرة على التسجيل ليست قدرةً على الإيجاد**.
    */
-  list(companyId: string, filters: { actorId?: string; screen?: string; action?: string; entityId?: string; from?: string; to?: string; limit?: number }) {
+  list(companyId: string, filters: ListAuditQueryDto) {
     const take = Math.min(Math.max(filters.limit ?? 200, 1), 500);
+    const where: Prisma.AuditLogWhereInput = {
+      ...(filters.actorId ? { actorId: filters.actorId } : {}),
+      ...(filters.screen ? { screen: filters.screen } : {}),
+      ...(filters.action ? { action: filters.action } : {}),
+      ...(filters.entityId ? { entityId: filters.entityId } : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: new Date(filters.from) } : {}),
+              // Inclusive of the whole end day, not midnight at its start.
+              ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): الملخّصُ العربيُّ واسمُ الفاعل واسمُ الكيان.
+      ...searchWhere(searchTerm(filters), AUDIT_SEARCH_FIELDS),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.auditLog.findMany({
-        where: {
-          ...(filters.actorId ? { actorId: filters.actorId } : {}),
-          ...(filters.screen ? { screen: filters.screen } : {}),
-          ...(filters.action ? { action: filters.action } : {}),
-          ...(filters.entityId ? { entityId: filters.entityId } : {}),
-          ...(filters.from || filters.to
-            ? {
-                createdAt: {
-                  ...(filters.from ? { gte: new Date(filters.from) } : {}),
-                  // Inclusive of the whole end day, not midnight at its start.
-                  ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59.999Z`) } : {}),
-                },
-              }
-            : {}),
-        },
+      pagedFindMany(filters, tx.auditLog, {
+        where,
         orderBy: { createdAt: 'desc' },
-        take,
+        // سقفُ `limit` يسري بلا `page` كما كان؛ ومع `page` النافذةُ تحكم (`skip`/`take` من الترقيم).
+        ...(filters.page ? {} : { take }),
       }),
     );
   }

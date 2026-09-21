@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
+import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { EmployeesService } from './employees.service';
@@ -18,8 +19,8 @@ export class EmployeesController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('includeArchived') includeArchived?: string) {
-    return this.employeesService.list(tenant.companyId, tenant.allowedBranchIds, includeArchived === 'true');
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
+    return this.employeesService.list(tenant.companyId, tenant.allowedBranchIds, query.includeArchived === 'true', query);
   }
 
   @Post()

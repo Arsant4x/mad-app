@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, CreatePaymentDto, RefundDto, ReversePaymentDto } from './dto/payment.dto';
 import { PaymentsService } from './payments.service';
 
@@ -23,8 +24,8 @@ export class PaymentsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('customerId') customerId?: string) {
-    return this.paymentsService.list(tenant.companyId, tenant.allowedBranchIds, customerId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListPaymentsQueryDto) {
+    return this.paymentsService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** فواتير العميل المفتوحة بمتبقّيها المحسوب — شاشة توزيع الدفعة. */

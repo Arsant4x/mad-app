@@ -6,6 +6,7 @@ import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AuditService } from './audit.service';
+import { ListAuditQueryDto } from './dto/list-audit-query.dto';
 
 /**
  * Read-only by design: there is no endpoint to edit or delete an entry, because
@@ -22,24 +23,7 @@ export class AuditController {
 
   @Get()
   @RequiresAction('audit')
-  list(
-    @CurrentTenant() tenant: TenantContext,
-    @Query('actorId') actorId?: string,
-    @Query('screen') screen?: string,
-    @Query('action') action?: string,
-    @Query('entityId') entityId?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('limit') limit?: string,
-  ) {
-    return this.auditService.list(tenant.companyId, {
-      actorId,
-      screen,
-      action,
-      entityId,
-      from,
-      to,
-      limit: limit ? parseInt(limit, 10) : undefined,
-    });
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListAuditQueryDto) {
+    return this.auditService.list(tenant.companyId, query);
   }
 }

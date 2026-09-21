@@ -6,6 +6,7 @@ import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { RecordAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
+import { ListAttendanceQueryDto } from './dto/list-attendance-query.dto';
 import { AttendanceService } from './attendance.service';
 
 /** Lives under the HR (employees) screen, like leaves — whoever manages staff
@@ -18,8 +19,8 @@ export class AttendanceController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('date') date?: string, @Query('employeeId') employeeId?: string) {
-    return this.attendanceService.list(tenant.companyId, date, employeeId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListAttendanceQueryDto) {
+    return this.attendanceService.list(tenant.companyId, query);
   }
 
   /** Recording presence is an operational posting — `record`, not `add`. */

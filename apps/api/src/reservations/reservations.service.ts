@@ -3,17 +3,23 @@ import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
 const RESERVATION_INCLUDE = { unit: { include: { property: true } } };
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — اسمُ الحاجز وهاتفُه. */
+const RESERVATION_SEARCH_FIELDS = ['name', 'phone'] as const;
 
 @Injectable()
 export class ReservationsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.ReservationWhereInput = { ...searchWhere(searchTerm(query), RESERVATION_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await expireStaleReservations(tx);
-      return tx.reservation.findMany({ include: RESERVATION_INCLUDE, orderBy: { createdAt: 'desc' } });
+      return pagedFindMany(query, tx.reservation, { where, include: RESERVATION_INCLUDE, orderBy: { createdAt: 'desc' } });
     });
   }
 

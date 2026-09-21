@@ -8,6 +8,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PersonalDataErasureService } from './personal-data-erasure.service';
 import { reopenUntil } from '../common/tenant/reopen-window';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — اسمُ المنشأة على الصفّ نفسِه (فقد تكون زالت) وسببُ الطلب وملاحظةُ القرار. */
+const DELETION_REQUEST_SEARCH_FIELDS = ['companyName', 'reason', 'decidedNote'] as const;
 
 /** من قرّر — مديرُ المنصّة الذي وافق أو رفض؛ يُكتب على القرار نفسه (`ق-٥٣٧`). */
 export interface DecisionActor {
@@ -181,17 +186,21 @@ export class DeletionRequestsService {
    * الاسمُ على الصفّ نفسه لا في ضمّة — فالمنشأةُ قد تكون زالت (`ق-٥٣٧`).
    * **ومعاينةُ القرار على كل طلب حذفٍ معلَّق**: أتُحذف أم تُغلَق، ولماذا — قبل الضغطة.
    */
-  async listAll() {
-    const rows = await this.prisma.accountDeletionRequest.findMany({
+  async listAll(query?: PagedQueryDto) {
+    const where: Prisma.AccountDeletionRequestWhereInput = { ...searchWhere(searchTerm(query), DELETION_REQUEST_SEARCH_FIELDS) };
+    const result = await pagedFindMany(query, this.prisma.accountDeletionRequest, {
+      where,
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
-    return Promise.all(
-      rows.map(async (row) => {
+    // المعاينةُ تُحسب للصفوف المُعادة وحدَها (القائمةُ كلُّها أو الصفحة) — فهي قياسٌ تحت سياق كل منشأة.
+    const withPreview = await Promise.all(
+      listItems(result).map(async (row) => {
         if (row.status !== 'PENDING' || row.kind !== 'DELETION') return row;
         const company = await this.prisma.company.findUnique({ where: { id: row.companyId }, select: { id: true } });
         return company ? { ...row, preview: await this.preview(row.companyId) } : row;
       }),
     );
+    return Array.isArray(result) ? withPreview : { ...result, items: withPreview };
   }
 
   /** الحقيقةُ قبل الضغطة (`ق-٥٤٦`): يُقاس الأثرُ تحت سياق المنشأة. */

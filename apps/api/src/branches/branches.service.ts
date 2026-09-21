@@ -2,7 +2,12 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { CreateBranchDto } from './dto/create-branch.dto';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والنوع. */
+const BRANCH_SEARCH_FIELDS = ['name', 'type'] as const;
 import { UpdateBranchDto } from './dto/update-branch.dto';
 
 const BRANCH_INCLUDE = { activity: true, property: true, warehouse: true } as const;
@@ -23,14 +28,9 @@ export class BranchesService {
   /** An employee sees only the branches assigned to them; the owner sees all.
    * This is the list the branch picker on other screens is built from, so the
    * filter has to live here rather than in the UI. */
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.branch.findMany({
-        where: allowedBranchIds === 'all' ? {} : { id: { in: allowedBranchIds } },
-        include: BRANCH_INCLUDE,
-        orderBy: { name: 'asc' },
-      }),
-    );
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const where: Prisma.BranchWhereInput = { ...(allowedBranchIds === 'all' ? {} : { id: { in: allowedBranchIds } }), ...searchWhere(searchTerm(query), BRANCH_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.branch, { where, include: BRANCH_INCLUDE, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, actorType: string, dto: CreateBranchDto) {

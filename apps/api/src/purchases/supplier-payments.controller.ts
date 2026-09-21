@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { ListSupplierPaymentsQueryDto } from './dto/list-supplier-payments-query.dto';
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, ReverseSupplierPaymentDto } from './dto/supplier-payment.dto';
 import { SupplierPaymentsService } from './supplier-payments.service';
 
@@ -23,8 +24,8 @@ export class SupplierPaymentsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('supplierId') supplierId?: string) {
-    return this.supplierPayments.list(tenant.companyId, tenant.allowedBranchIds, supplierId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListSupplierPaymentsQueryDto) {
+    return this.supplierPayments.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** فواتيرُ المورّد المفتوحة بمتبقّيها المحسوب — شاشةُ توزيع السند. */

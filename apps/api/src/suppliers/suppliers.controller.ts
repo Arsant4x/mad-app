@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
+import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { SuppliersService } from './suppliers.service';
@@ -18,8 +19,8 @@ export class SuppliersController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('includeArchived') includeArchived?: string) {
-    return this.suppliersService.list(tenant.companyId, includeArchived === 'true');
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
+    return this.suppliersService.list(tenant.companyId, query.includeArchived === 'true', query);
   }
 
   @Post()

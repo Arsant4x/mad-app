@@ -4,6 +4,12 @@ import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayStartOf } from '../common/wall-clock.util';
 import { CreateWarrantyDto, UpdateWarrantyDto } from './dto/warranty.dto';
+import { ListWarrantiesQueryDto } from './dto/list-warranties-query.dto';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { mapList, pageArray, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة للضمانات (`ق-١٢٣٦`) — الموضوعُ والمزوّدُ والمرجع. */
+const WARRANTY_SEARCH_FIELDS = ['subject', 'provider', 'reference'] as const;
 
 /**
  * Warranties on what is installed in a property.
@@ -32,10 +38,14 @@ function daysUntil(date: Date, from: Date): number {
 export class WarrantiesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, propertyId?: string) {
+  list(companyId: string, query?: ListWarrantiesQueryDto) {
+    const where: Prisma.WarrantyWhereInput = {
+      ...(query?.propertyId ? { propertyId: query.propertyId } : {}),
+      ...searchWhere(searchTerm(query), WARRANTY_SEARCH_FIELDS),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const rows = await tx.warranty.findMany({
-        where: propertyId ? { propertyId } : {},
+      const result = await pagedFindMany(query, tx.warranty, {
+        where,
         include: WARRANTY_INCLUDE,
         // Soonest to expire first: the ones about to lapse are the ones worth
         // acting on, and an alphabetical list hides them.
@@ -45,7 +55,7 @@ export class WarrantiesService {
       const today = new Date();
       // `daysLeft` is derived, never stored: a stored countdown is wrong the
       // day after it is written.
-      return rows.map((w) => ({ ...w, daysLeft: daysUntil(w.endDate, today), expired: daysUntil(w.endDate, today) < 0 }));
+      return mapList(result, (w) => ({ ...w, daysLeft: daysUntil(w.endDate, today), expired: daysUntil(w.endDate, today) < 0 }));
     });
   }
 
@@ -73,8 +83,13 @@ export class WarrantiesService {
    * claimable even if it is being logged three weeks later. Using today's date
    * here would quietly deny valid claims.
    */
-  coverFor(companyId: string, propertyId: string, unitId: string | undefined, onDate: Date) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => coverForTx(tx, propertyId, unitId, onDate));
+  coverFor(companyId: string, propertyId: string, unitId: string | undefined, onDate: Date, query?: PagedQueryDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // `coverForTx` يبقى الدالّةَ الواحدة التي تسأل «ما يغطّي هذا الموقعَ اليوم؟» (تستعملها الصيانةُ أيضاً)؛
+      // والقائمةُ هنا تُرشَّح بالبحث وتُقطَع فوقها لا داخلها (`ق-١٢٣٦`).
+      const rows = await coverForTx(tx, propertyId, unitId, onDate);
+      return pageArray(query, rows, WARRANTY_SEARCH_FIELDS);
+    });
   }
 
   create(companyId: string, dto: CreateWarrantyDto) {
@@ -166,7 +181,7 @@ export function coverForTx(tx: Prisma.TransactionClient, propertyId: string, uni
       endDate: { gte: onDate },
     },
     include: { supplier: { select: { id: true, name: true } }, unit: { select: { id: true, unitNo: true } } },
-    orderBy: { endDate: 'asc' },
+    orderBy: [{ endDate: 'asc' }, { id: 'asc' }], // ترتيبٌ تامّ — `/warranties/cover` تُقطَع في الذاكرة (`ق-٣٥٦`)
   });
 }
 

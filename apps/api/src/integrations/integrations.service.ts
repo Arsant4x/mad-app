@@ -2,7 +2,12 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { IntegrationKind, Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pageArray } from '../common/pagination/paged.util';
 import { decryptCredentials, encryptCredentials, maskCredentials } from './credentials.crypto';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — المزوّدُ والتسمية. */
+const INTEGRATION_SEARCH_FIELDS = ['provider', 'label'] as const;
 import { TERMINAL_ADAPTERS, TerminalChargeRequest, TerminalChargeResult } from './payment-terminal.adapter';
 
 const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
@@ -55,10 +60,11 @@ function toSafe(row: { id: string; kind: IntegrationKind; provider: string; labe
 export class IntegrationsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
+  list(companyId: string, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const rows = await tx.integrationConnection.findMany({ orderBy: { createdAt: 'desc' } });
-      return rows.map(toSafe);
+      const rows = await tx.integrationConnection.findMany({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }); // ترتيبٌ تامّ للقطع في الذاكرة (`ق-٣٥٦`)
+      // الصفوفُ تُنظَّف من أسرارها قبل أن تخرج (`toSafe`) — فالقطعُ في الذاكرة بعد التنظيف.
+      return pageArray(query, rows.map(toSafe), INTEGRATION_SEARCH_FIELDS);
     });
   }
 

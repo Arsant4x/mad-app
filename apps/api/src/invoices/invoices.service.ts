@@ -43,6 +43,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
 import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/domain-events';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 
 /** أنواعُ مستند البيع — الأساسُ وإشعاراه؛ نظيرُها في الشراء `PURCHASE_NOTE_KINDS` (المصدرُ الواحد `ق-١٠٠٨`/١). */
 const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = { base: 'INVOICE', credit: 'CREDIT_NOTE', debit: 'DEBIT_NOTE' };
@@ -146,9 +148,31 @@ export class InvoicesService {
     return outstandingAfterNotes(inv, credited, allocated, 'CREDIT_NOTE');
   }
 
-  list(companyId: string, allowedBranchIds: string[] | 'all') {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const term = searchTerm(query);
+    const where: Prisma.InvoiceWhereInput = {
+      ...branchFilter(allowedBranchIds),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ المستند والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ فيُكتب هنا.
+      ...(term
+        ? {
+            OR: [
+              { no: { contains: term, mode: 'insensitive' } },
+              { notes: { contains: term, mode: 'insensitive' } },
+              { customer: { name: { contains: term, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const invoices = await tx.invoice.findMany({ where: branchFilter(allowedBranchIds), include: INVOICE_INCLUDE, orderBy: { issueDate: 'desc' } });
+      // بلا `page` القائمةُ كلُّها كما كانت؛ وبه النافذةُ — والإثراءُ أدناه على الصفوف المُعادة وحدَها.
+      // (`listOrPage` لا `pagedFindMany`: الصفُّ هنا يُقرأ بضمائمه — `replacedBy` في `outstandingOf` — فيُستنتج نوعُه من النداء نفسِه.)
+      // الترتيبُ التامّ (`ق-٣٥٦`): تاريخُ الإصدار ثم `id` — فلا يتبدّل متعادلان بين صفحتين.
+      const args = { where, include: INVOICE_INCLUDE, orderBy: [{ issueDate: 'desc' as const }, { id: 'desc' as const }] };
+      const result = await listOrPage(query, {
+        all: () => tx.invoice.findMany(args),
+        count: () => tx.invoice.count({ where }),
+        window: (offset, limit) => tx.invoice.findMany({ ...args, skip: offset, take: limit }),
+      });
 
       // Credited amount per original invoice, in one pass — a per-row query
       // would be a request per invoice on a screen that lists all of them.
@@ -177,7 +201,7 @@ export class InvoicesService {
         select: { legalName: true, vatNumber: true },
       });
 
-      return invoices.map((inv) => ({
+      return mapList(result, (inv) => ({
         ...inv,
         /** What this document still leaves owing — see outstandingOf. */
         outstanding: this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId),

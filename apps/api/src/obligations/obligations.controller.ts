@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { ObligationsService } from './obligations.service';
@@ -17,8 +18,8 @@ export class ObligationsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.obligationsService.list(tenant.companyId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.obligationsService.list(tenant.companyId, query);
   }
 
   @Get('vat-declaration')

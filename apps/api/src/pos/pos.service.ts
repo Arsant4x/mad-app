@@ -23,6 +23,11 @@ import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
 import { rateForCategory } from '../common/vat/line-tax.util';
 import { ZatcaService } from '../zatca/zatca.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة للمناوبات (`ق-١٢٣٦`) — اسمُ من فتحها وملاحظاتُ الإقفال. */
+const SHIFT_SEARCH_FIELDS = ['openedByName', 'notes'] as const;
 
 // ⑧ كان هنا `POS_TAX_RATE = 15` — نسبةٌ ثابتةٌ لكلِّ سطرٍ يرنّه الكاشير، فتُرَنّ الأدويةُ (نسبة الصفر)
 // بالنسبة الأساسية. صارت الفئةُ تُقرأ من بطاقة الصنف لحظةَ البيع والنسبةُ تُشتقّ منها (`ق-١٢١٢`):
@@ -197,11 +202,15 @@ export class PosService {
    * نقطة البيع. **فكاشيرُ فرعٍ يقرأ صندوقَ كلّ فرعٍ آخر مناوبةً مناوبة** (`ق-٥١٧`).
    * والآن مقصورةٌ على فروع القارئ — كالفواتير والأدراج سواء.
    */
-  listShifts(companyId: string, allowedBranchIds: string[] | 'all') {
+  listShifts(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const where: Prisma.PosShiftWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), SHIFT_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const shifts = await tx.posShift.findMany({ where: branchFilter(allowedBranchIds), orderBy: { openedAt: 'desc' } });
+      const result = await pagedFindMany(query, tx.posShift, { where, orderBy: { openedAt: 'desc' } });
+      // المجاميعُ للمناوبات المُعادة وحدَها (القائمةُ كلُّها أو الصفحة) — فلا تُحسب مناوبةٌ خارج النافذة.
+      const shifts = listItems(result);
       const totals = await this.totalsForMany(tx, shifts);
-      return shifts.map((s) => ({ ...s, ...totals.get(s.id)! }));
+      const withTotals = shifts.map((s) => ({ ...s, ...totals.get(s.id)! }));
+      return Array.isArray(result) ? withTotals : { ...result, items: withTotals };
     });
   }
 

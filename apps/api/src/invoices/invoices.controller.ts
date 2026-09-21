@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload, TenantContext } from '../auth/types';
 import { AuditEntityFromResult } from '../audit/audit-entity-from-result.decorator';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -22,8 +23,8 @@ export class InvoicesController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext) {
-    return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /**

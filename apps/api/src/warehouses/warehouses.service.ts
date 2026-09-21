@@ -5,16 +5,22 @@ import { computeStockQuantities } from '../inventory/stock-quantity.util';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto';
 import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pageArray } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والموقعُ والمسؤول. */
+const WAREHOUSE_SEARCH_FIELDS = ['name', 'location', 'manager'] as const;
 
 @Injectable()
 export class WarehousesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const [warehouses, quantities] = await Promise.all([tx.warehouse.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: { name: 'asc' } }), computeStockQuantities(tx)]);
+      // الترتيبُ التامّ (`ق-٣٥٦`): الاسمُ ثم `id` — فالقطعُ في الذاكرة يعيد بناءَ القائمة في كل طلب.
+      const [warehouses, quantities] = await Promise.all([tx.warehouse.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: [{ name: 'asc' }, { id: 'asc' }] }), computeStockQuantities(tx)]);
 
-      return warehouses.map((w) => {
+      const rows = warehouses.map((w) => {
         let itemCount = 0;
         let totalQty = 0;
         for (const [key, qty] of quantities) {
@@ -24,6 +30,8 @@ export class WarehousesService {
         }
         return { ...w, itemCount, totalQty };
       });
+      // القائمةُ محسوبةٌ (أرصدةٌ لكل مستودع) فتُقطَع في الذاكرة بعد الحساب.
+      return pageArray(query, rows, WAREHOUSE_SEARCH_FIELDS);
     });
   }
 

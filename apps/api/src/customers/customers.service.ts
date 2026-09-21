@@ -4,14 +4,20 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { assertCustomerNotInTrash } from './customer-trash.util';
+
+/** حقولُ البحث المُعلَنة لهذه القائمة (`ق-١٢٣٦`) — الاسمُ والهاتفُ والرقمُ الضريبي. */
+const CUSTOMER_SEARCH_FIELDS = ['name', 'phone', 'vatNumber'] as const;
 
 @Injectable()
 export class CustomersService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.customer.findMany({ ...{ orderBy: { name: 'asc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.CustomerWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), CUSTOMER_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } }));
   }
 
   create(companyId: string, dto: CreateCustomerDto) {

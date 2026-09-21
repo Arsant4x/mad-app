@@ -457,6 +457,7 @@ export const MSG = {
   legal_name_required: 'validation.legal_name_required',
   legal_name_too_long_for_qr: 'validation.legal_name_too_long_for_qr',
   file_key_required: 'validation.file_key_required',
+  page_size_without_page: 'validation.page_size_without_page',
 } as const;
 
 export type MessageKey = (typeof MSG)[keyof typeof MSG];
@@ -1150,6 +1151,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Legal name exceeds the ZATCA QR limit (255 bytes — Arabic letters are two bytes each, about 127 characters)',
   },
   [MSG.file_key_required]: { ar: 'مفتاح الملف مطلوب', en: 'File key is required' },
+  [MSG.page_size_without_page]: { ar: 'حجمُ الصفحة (pageSize) يُرسَل مع رقم الصفحة (page) — بلا page تعود القائمةُ كاملةً ولا يسري سقف', en: 'pageSize must be sent together with page — without page the full list is returned and no cap applies' },
 };
 
 /** Looks up `key` in the requested language. An unknown key is returned as-is

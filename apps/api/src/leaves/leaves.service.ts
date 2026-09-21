@@ -5,6 +5,12 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
 import { CreateLeaveRequestDto, CreateLeaveTypeDto, UpdateLeaveTypeDto } from './dto/leave.dto';
+import { ListLeaveRequestsQueryDto } from './dto/list-leave-requests-query.dto';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة لأنواع الإجازات (`ق-١٢٣٦`). */
+const LEAVE_TYPE_SEARCH_FIELDS = ['name'] as const;
 
 const REQUEST_INCLUDE = {
   employee: { select: { id: true, fullName: true } },
@@ -38,8 +44,9 @@ export class LeavesService {
 
   // ---- Leave types ----
 
-  listTypes(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.leaveType.findMany({ orderBy: { name: 'asc' } }));
+  listTypes(companyId: string, query?: PagedQueryDto) {
+    const where: Prisma.LeaveTypeWhereInput = { ...searchWhere(searchTerm(query), LEAVE_TYPE_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.leaveType, { where, orderBy: { name: 'asc' } }));
   }
 
   createType(companyId: string, dto: CreateLeaveTypeDto) {
@@ -87,13 +94,26 @@ export class LeavesService {
 
   // ---- Leave requests ----
 
-  listRequests(companyId: string, employeeId?: string, status?: string) {
+  listRequests(companyId: string, query?: ListLeaveRequestsQueryDto) {
+    const term = searchTerm(query);
+    const where: Prisma.LeaveRequestWhereInput = {
+      ...(query?.employeeId ? { employeeId: query.employeeId } : {}),
+      ...(query?.status ? { status: query.status as Prisma.EnumLeaveRequestStatusFilter['equals'] } : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): السببُ ومَن طلب ومَن قرّر واسمُ الموظّف — والأخيرُ علاقةٌ فيُكتب هنا.
+      ...(term
+        ? {
+            OR: [
+              { reason: { contains: term, mode: 'insensitive' } },
+              { requestedByName: { contains: term, mode: 'insensitive' } },
+              { decidedByName: { contains: term, mode: 'insensitive' } },
+              { employee: { fullName: { contains: term, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.leaveRequest.findMany({
-        where: {
-          ...(employeeId ? { employeeId } : {}),
-          ...(status ? { status: status as Prisma.EnumLeaveRequestStatusFilter['equals'] } : {}),
-        },
+      pagedFindMany(query, tx.leaveRequest, {
+        where,
         include: REQUEST_INCLUDE,
         orderBy: { startDate: 'desc' },
       }),

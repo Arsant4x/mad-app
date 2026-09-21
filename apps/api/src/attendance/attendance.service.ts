@@ -2,7 +2,9 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
+import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
 import { RecordAttendanceDto, UpdateAttendanceDto } from './dto/attendance.dto';
+import { ListAttendanceQueryDto } from './dto/list-attendance-query.dto';
 
 const RECORD_INCLUDE = { employee: { select: { id: true, fullName: true } } } as const;
 
@@ -18,13 +20,17 @@ export class AttendanceService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   /** A day's sheet (default) or one employee's history. */
-  list(companyId: string, date?: string, employeeId?: string) {
+  list(companyId: string, query?: ListAttendanceQueryDto) {
+    const term = searchTerm(query);
+    const where: Prisma.AttendanceRecordWhereInput = {
+      ...(query?.date ? { date: new Date(query.date) } : {}),
+      ...(query?.employeeId ? { employeeId: query.employeeId } : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): الملاحظاتُ واسمُ الموظّف — والأخيرُ علاقةٌ فيُكتب هنا.
+      ...(term ? { OR: [{ notes: { contains: term, mode: 'insensitive' } }, { employee: { fullName: { contains: term, mode: 'insensitive' } } }] } : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.attendanceRecord.findMany({
-        where: {
-          ...(date ? { date: new Date(date) } : {}),
-          ...(employeeId ? { employeeId } : {}),
-        },
+      pagedFindMany(query, tx.attendanceRecord, {
+        where,
         include: RECORD_INCLUDE,
         orderBy: [{ date: 'desc' }, { createdAt: 'asc' }],
       }),

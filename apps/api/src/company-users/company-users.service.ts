@@ -7,6 +7,11 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
 import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — اسمُ الموظّف. */
+const COMPANY_USER_SEARCH_FIELDS = ['name'] as const;
 
 /** `branches` is the join rows only — deliberately not `include: { branch: true }`.
  * The client already loads the branch list for its picker and resolves the
@@ -48,10 +53,11 @@ export class CompanyUsersService {
     private readonly audit: AuditService,
   ) {}
 
-  list(companyId: string, actorType: string) {
+  list(companyId: string, actorType: string, query?: PagedQueryDto) {
     assertIsCompanyOwner(actorType);
+    const where: Prisma.CompanyUserWhereInput = { companyId, ...searchWhere(searchTerm(query), COMPANY_USER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.companyUser.findMany({ where: { companyId }, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } }),
+      pagedFindMany(query, tx.companyUser, { where, include: COMPANY_USER_INCLUDE, orderBy: { createdAt: 'asc' } }),
     );
   }
 

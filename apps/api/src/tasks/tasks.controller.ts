@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -42,8 +43,8 @@ export class TasksController {
    * الاختبارُ زمنَها ولا ينتظر مروره. وهو قرار المرحلة الثانية بنصّه.
    */
   @Get('mine')
-  mine(@CurrentTenant() tenant: TenantContext) {
-    return this.tasks.mine(tenant, new Date());
+  mine(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.tasks.mine(tenant, new Date(), query);
   }
 
   /** عدّادا لوحة التحكم — مشتقّان، لا عمود «متأخّرة» في القاعدة. */

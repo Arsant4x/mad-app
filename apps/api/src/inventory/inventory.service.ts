@@ -12,6 +12,11 @@ import { settleProvisionalConsumptions } from '../journal/provisional-settlement
 import { BATCH_FEFO_DECLARED_LIMITS } from '../common/batches/declared-limits';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
 import { roundTo } from '../common/money/rounding';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pageArray, searchTerm } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة للاستهلاكات المؤقّتة (`ق-١٢٣٦`) — اسمُ الصنف واسمُ المستودع. */
+const PROVISIONAL_SEARCH_FIELDS = ['productName', 'warehouseName'] as const;
 
 const MOVEMENT_INCLUDE = { product: true, warehouse: true, toWarehouse: true } as const;
 
@@ -159,14 +164,15 @@ export class InventoryService {
    * ㉘ الاستهلاكاتُ المؤقّتة **المفتوحة** — التقريرُ الذي وعدت به الشيفرة ولم يقرأه أحد (ق-١٠٦٢): بيعٌ أو إخراجٌ
    * سبق استلامَه فقُيّد بآخر تكلفةٍ معروفة ولم يصله استلامُه بعد. «فما لا يُرى لا يُسوَّى».
    */
-  openProvisional(companyId: string, allowedBranchIds: string[] | 'all') {
+  openProvisional(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await tx.inventoryConsumption.findMany({
         where: { layerId: null, settledBy: { is: null }, movement: branchFilter(allowedBranchIds) },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], // ترتيبٌ تامّ للقطع في الذاكرة (`ق-٣٥٦`)
         include: { movement: { include: { product: { select: { name: true } }, warehouse: { select: { name: true } } } } },
       });
-      return rows.map((r) => ({
+      // صفوفٌ محسوبة: تُرشَّح بالبحث على اسم الصنف واسم المستودع ثم تُقطَع (`ق-١٢٣٦`).
+      return pageArray(query, rows.map((r) => ({
         id: r.id,
         movementId: r.movementId,
         productId: r.movement.productId,
@@ -178,7 +184,7 @@ export class InventoryService {
         qty: Number(r.qty),
         unitCost: Number(r.unitCost),
         createdAt: r.createdAt,
-      }));
+      })), PROVISIONAL_SEARCH_FIELDS);
     });
   }
 
@@ -398,7 +404,7 @@ export class InventoryService {
     });
   }
 
-  stockLevels(companyId: string) {
+  stockLevels(companyId: string, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const [quantities, products, warehouses] = await Promise.all([
         computeStockQuantities(tx),
@@ -421,7 +427,14 @@ export class InventoryService {
         rows.push({ productId, warehouseId, product, warehouse, qty, status });
       }
 
-      return rows.sort((a, b) => a.product.name.localeCompare(b.product.name));
+      // الاسمُ ثم مفتاحا الصفّ (صنفٌ · مستودع) — ترتيبٌ تامّ للقطع في الذاكرة (`ق-٣٥٦`): صنفان بالاسم نفسِه لا يتبدّلان بين صفحتين.
+      rows.sort((a, b) => a.product.name.localeCompare(b.product.name) || a.productId.localeCompare(b.productId) || a.warehouseId.localeCompare(b.warehouseId));
+      // البحثُ على الصنف (اسمُه ورمزُه) والمستودع — حقولٌ متداخلة فتُرشَّح هنا لا بـ`matchesSearch`، ثم تُقطَع (`ق-١٢٣٦`).
+      const term = searchTerm(query)?.toLowerCase();
+      const filtered = term
+        ? rows.filter((r) => [r.product.name, r.product.sku, r.warehouse.name].some((v) => typeof v === 'string' && v.toLowerCase().includes(term)))
+        : rows;
+      return pageArray(query, filtered);
     });
   }
 }

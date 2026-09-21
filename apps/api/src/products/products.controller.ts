@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
+import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
@@ -18,8 +19,8 @@ export class ProductsController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('includeArchived') includeArchived?: string) {
-    return this.productsService.list(tenant.companyId, includeArchived === 'true');
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
+    return this.productsService.list(tenant.companyId, query.includeArchived === 'true', query);
   }
 
   @Post()

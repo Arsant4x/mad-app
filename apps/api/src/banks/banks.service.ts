@@ -9,6 +9,11 @@ import { MSG } from '../common/i18n/messages';
 import { postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
 import { BANK_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
 import { round2 } from '../common/money/rounding';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والآيبان. */
+const BANK_SEARCH_FIELDS = ['name', 'iban'] as const;
 
 /**
  * الرمزُ التالي لحساب بنك — **`MAX+1` من المصدر لا `count()`** (`ق-١٩٨`): يقرأ
@@ -39,8 +44,9 @@ export class BanksService {
     });
   }
 
-  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.bank.findMany({ where: { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }) }, orderBy: { name: 'asc' } }));
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.BankWhereInput = { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), BANK_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.bank, { where, orderBy: { name: 'asc' } }));
   }
 
   /**

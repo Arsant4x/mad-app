@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -21,8 +22,8 @@ export class PosController {
 
   @Get('shifts')
   @RequiresAction('view')
-  listShifts(@CurrentTenant() tenant: TenantContext) {
-    return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds);
+  listShifts(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Get('shifts/current')

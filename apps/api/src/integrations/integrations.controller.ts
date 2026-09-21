@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString } from 'class-validator';
 import { IntegrationKind } from '@prisma/client';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -46,9 +47,9 @@ export class IntegrationsController {
   }
 
   @Get()
-  list(@CurrentTenant() tenant: TenantContext) {
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
     this.assertOwner(tenant);
-    return this.integrationsService.list(tenant.companyId);
+    return this.integrationsService.list(tenant.companyId, query);
   }
 
   @Post()

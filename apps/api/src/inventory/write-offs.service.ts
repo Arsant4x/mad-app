@@ -14,7 +14,9 @@ import { events } from '../shared/events/event-bus';
 import { INVENTORY_WRITTEN_OFF, type InventoryWrittenOffPayload } from '../shared/events/domain-events';
 import { consumeFifo } from './costing.util';
 import { CreateWriteOffDto } from './dto/create-write-off.dto';
+import { ListWriteOffsQueryDto } from './dto/list-write-offs-query.dto';
 import { RejectWriteOffDto } from './dto/reject-write-off.dto';
+import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
 
 /**
  * 📌 **فعلُ الاعتماد الذاتي انتقل إلى `common/self-review.ts`** (`ق-١٤٣` · `ق-٦٢١`).
@@ -67,7 +69,8 @@ export class WriteOffsService {
     private readonly audit: AuditService,
   ) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all', status?: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListWriteOffsQueryDto) {
+    const status = query?.status;
     // ⚠️ **مرشّحٌ مجهول يُرَدّ ولا يُتجاهَل**: تجاهلُه يُظهر القائمة كاملةً
     // لمن ظنّ أنه يرى المنتظِرة وحدها — **وهو أسوأ من خطأ**. وتمريرُه خاماً إلى
     // Prisma يُنتج `500` بدل رسالةٍ تُقرأ.
@@ -75,9 +78,25 @@ export class WriteOffsService {
       throw new BadRequestException(formatMessage(MSG.writeoff_status_unknown, { status, allowed: WRITE_OFF_STATUSES.join(' · ') }));
     }
 
+    const term = searchTerm(query);
+    const where: Prisma.InventoryWriteOffWhereInput = {
+      ...branchFilter(allowedBranchIds),
+      ...(status ? { status: status as 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' } : {}),
+      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ الشطب ورمزُ سببه وملاحظتُه واسمُ الصنف — والأخيرُ علاقةٌ فيُكتب هنا.
+      ...(term
+        ? {
+            OR: [
+              { no: { contains: term, mode: 'insensitive' } },
+              { reasonCode: { contains: term, mode: 'insensitive' } },
+              { note: { contains: term, mode: 'insensitive' } },
+              { product: { name: { contains: term, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.inventoryWriteOff.findMany({
-        where: { ...branchFilter(allowedBranchIds), ...(status ? { status: status as 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' } : {}) },
+      pagedFindMany(query, tx.inventoryWriteOff, {
+        where,
         include: WRITE_OFF_INCLUDE,
         orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       }),

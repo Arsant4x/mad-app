@@ -5,13 +5,19 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والمسمّى والقسمُ والهاتف. */
+const EMPLOYEE_SEARCH_FIELDS = ['fullName', 'jobTitle', 'department', 'phone'] as const;
 
 @Injectable()
 export class EmployeesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.employee.findMany({ where: { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }) }, orderBy: { fullName: 'asc' } }));
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.EmployeeWhereInput = { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), EMPLOYEE_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.employee, { where, orderBy: { fullName: 'asc' } }));
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateEmployeeDto) {

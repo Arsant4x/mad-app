@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
+import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { BanksService } from './banks.service';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
@@ -18,8 +19,8 @@ export class BanksController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('includeArchived') includeArchived?: string) {
-    return this.banksService.list(tenant.companyId, tenant.allowedBranchIds, includeArchived === 'true');
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
+    return this.banksService.list(tenant.companyId, tenant.allowedBranchIds, query.includeArchived === 'true', query);
   }
 
   /**

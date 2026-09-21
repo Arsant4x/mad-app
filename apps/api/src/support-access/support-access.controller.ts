@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ArrayMinSize, IsArray, IsIn, IsInt, IsString, Max, Min, MinLength } from 'class-validator';
 import { ALLOWED_SCREENS } from '../templates/screens';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { OwnerOnlyGuard } from '../common/tenant/owner-only.guard';
@@ -45,8 +46,8 @@ export class SupportAccessAdminController {
   constructor(private readonly supportAccessService: SupportAccessService) {}
 
   @Get()
-  list() {
-    return this.supportAccessService.adminList();
+  list(@Query() query: PagedQueryDto) {
+    return this.supportAccessService.adminList(query);
   }
 
   @Post()
@@ -67,13 +68,13 @@ export class SupportAccessOwnerController {
   constructor(private readonly supportAccessService: SupportAccessService) {}
 
   @Get()
-  overview(@CurrentTenant() tenant: TenantContext) {
-    return this.supportAccessService.ownerOverview(tenant.companyId);
+  overview(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.supportAccessService.ownerOverview(tenant.companyId, query);
   }
 
   @Get('log')
-  log(@CurrentTenant() tenant: TenantContext) {
-    return this.supportAccessService.ownerLog(tenant.companyId);
+  log(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.supportAccessService.ownerLog(tenant.companyId, query);
   }
 
   // (ق-٦٤٦) **الاسمُ يُمرَّر لأن القرارَ يُكتب باسم قائله** — وقتَ الفعل لا يُحلّ لاحقاً،

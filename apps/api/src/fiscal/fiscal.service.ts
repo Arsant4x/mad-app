@@ -2,6 +2,11 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسم. */
+const FISCAL_SEARCH_FIELDS = ['name'] as const;
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 
 const YEAR_INCLUDE = { periods: { orderBy: [{ year: 'asc' as const }, { month: 'asc' as const }] } };
@@ -23,8 +28,10 @@ function monthsFrom(start: Date): { month: number; year: number }[] {
 export class FiscalService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.fiscalYear.findMany({ include: YEAR_INCLUDE, orderBy: { start: 'asc' } }));
+  list(companyId: string, query?: PagedQueryDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      pagedFindMany(query, tx.fiscalYear, { where: { ...searchWhere(searchTerm(query), FISCAL_SEARCH_FIELDS) }, include: YEAR_INCLUDE, orderBy: { start: 'asc' } }),
+    );
   }
 
   create(companyId: string, dto: CreateFiscalYearDto) {

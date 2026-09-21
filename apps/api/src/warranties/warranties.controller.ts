@@ -6,6 +6,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateWarrantyDto, UpdateWarrantyDto } from './dto/warranty.dto';
+import { CoverQueryDto, ListWarrantiesQueryDto } from './dto/list-warranties-query.dto';
 import { WarrantiesService } from './warranties.service';
 
 /** Gated by the maintenance screen: whoever handles repairs is exactly who
@@ -18,8 +19,8 @@ export class WarrantiesController {
 
   @Get()
   @RequiresAction('view')
-  list(@CurrentTenant() tenant: TenantContext, @Query('propertyId') propertyId?: string) {
-    return this.warrantiesService.list(tenant.companyId, propertyId);
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: ListWarrantiesQueryDto) {
+    return this.warrantiesService.list(tenant.companyId, query);
   }
 
   /**
@@ -28,13 +29,8 @@ export class WarrantiesController {
    */
   @Get('cover')
   @RequiresAction('view')
-  cover(
-    @CurrentTenant() tenant: TenantContext,
-    @Query('propertyId') propertyId: string,
-    @Query('unitId') unitId?: string,
-    @Query('date') date?: string,
-  ) {
-    return this.warrantiesService.coverFor(tenant.companyId, propertyId, unitId, date ? new Date(date) : new Date());
+  cover(@CurrentTenant() tenant: TenantContext, @Query() query: CoverQueryDto) {
+    return this.warrantiesService.coverFor(tenant.companyId, query.propertyId, query.unitId, query.date ? new Date(query.date) : new Date(), query);
   }
 
   @Get(':id')

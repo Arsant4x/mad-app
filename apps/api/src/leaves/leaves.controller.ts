@@ -8,6 +8,8 @@ import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { localYearOf } from '../common/wall-clock.util';
 import { CreateLeaveRequestDto, CreateLeaveTypeDto, DecideLeaveRequestDto, UpdateLeaveTypeDto } from './dto/leave.dto';
+import { ListLeaveRequestsQueryDto } from './dto/list-leave-requests-query.dto';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { LeavesService } from './leaves.service';
 
 /** Leave management lives under the HR (employees) screen — whoever manages
@@ -21,8 +23,8 @@ export class LeavesController {
   // ---- Types ----
   @Get('types')
   @RequiresAction('view')
-  listTypes(@CurrentTenant() tenant: TenantContext) {
-    return this.leavesService.listTypes(tenant.companyId);
+  listTypes(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.leavesService.listTypes(tenant.companyId, query);
   }
 
   @Post('types')
@@ -47,8 +49,8 @@ export class LeavesController {
   // ---- Requests ----
   @Get('requests')
   @RequiresAction('view')
-  listRequests(@CurrentTenant() tenant: TenantContext, @Query('employeeId') employeeId?: string, @Query('status') status?: string) {
-    return this.leavesService.listRequests(tenant.companyId, employeeId, status);
+  listRequests(@CurrentTenant() tenant: TenantContext, @Query() query: ListLeaveRequestsQueryDto) {
+    return this.leavesService.listRequests(tenant.companyId, query);
   }
 
   // ⭐ **الفاعلُ يُمرَّر عند التقديم وعند القرار** (`ق-٦٢١`): الطرفان اللذان

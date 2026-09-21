@@ -4,13 +4,19 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateScriptDto } from './dto/create-script.dto';
 import { UpdateScriptDto } from './dto/update-script.dto';
 import { MSG } from '../common/i18n/messages';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — العنوانُ والنصّ. */
+const SCRIPT_SEARCH_FIELDS = ['title', 'text'] as const;
 
 @Injectable()
 export class ScriptsService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.messageScript.findMany({ ...{ orderBy: { createdAt: 'desc' } }, ...(includeArchived ? {} : { where: { archived: false } }) }));
+  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+    const where: Prisma.MessageScriptWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), SCRIPT_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.messageScript, { where, orderBy: { createdAt: 'desc' } }));
   }
 
   create(companyId: string, dto: CreateScriptDto) {
