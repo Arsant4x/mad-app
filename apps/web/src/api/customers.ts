@@ -1,10 +1,45 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
+/**
+ * صفةُ المشتري (ق-١٢٦١ أ — ②A1): تقرّر نوعَ الفاتورة في الخادم (م٥٣) — مؤسّسةٌ أو اعتباريٌّ ⟵ كاملة، طبيعيٌّ ⟵ مبسّطة.
+ * `LEGACY_UNDECLARED` صفٌّ سبق البناءَ ولم يُعلَن — لا يُفوتَر قبل الإعلان، ولا يُختار لصفٍّ جديد.
+ */
+export type CustomerKind = 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON' | 'LEGACY_UNDECLARED';
+/** ما يُختار لعميلٍ جديد — القديمةُ غيرُ المعلَنة ليست خياراً. */
+export type NewCustomerKind = Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
+export const CUSTOMER_KIND_LABEL: Record<CustomerKind, string> = {
+  NATURAL: 'فرد',
+  ESTABLISHMENT: 'مؤسسة فردية',
+  LEGAL_PERSON: 'شخص اعتباري (شركة/جهة)',
+  LEGACY_UNDECLARED: 'غير معلَن — سبق البناء',
+};
+/** مخطّطاتُ المعرّف البديل (BR-KSA-14) كما يقبلها الخادم — بترتيب أسبقية المعيار. */
+export const BUYER_ID_SCHEMES = ['TIN', 'CRN', 'MOM', 'MLS', '700', 'SAG', 'NAT', 'GCC', 'IQA', 'PAS', 'OTH'] as const;
+export type BuyerIdScheme = (typeof BUYER_ID_SCHEMES)[number];
+export const BUYER_ID_SCHEME_LABEL: Record<BuyerIdScheme, string> = {
+  TIN: 'الرقم المميز (TIN)',
+  CRN: 'السجل التجاري',
+  MOM: 'رخصة الشؤون البلدية (MOMRAH)',
+  MLS: 'رخصة الموارد البشرية (MHRSD)',
+  '700': 'الرقم الموحد 700',
+  SAG: 'ترخيص الاستثمار (MISA)',
+  NAT: 'الهوية الوطنية',
+  GCC: 'هوية خليجية',
+  IQA: 'الإقامة',
+  PAS: 'جواز السفر',
+  OTH: 'معرّف آخر',
+};
+
 export interface Customer {
   archived: boolean;
   id: string;
   name: string;
+  kind: CustomerKind;
+  otherIdScheme: BuyerIdScheme | null;
+  otherId: string | null;
+  /** رمزُ البلد ISO 3166-1 alpha-2 — `SA` غياباً. */
+  country: string;
   vatNumber: string | null;
   phone: string | null;
   creditLimit: string;
@@ -22,6 +57,11 @@ export interface CustomerSummary {
 
 export interface CustomerInput {
   name: string;
+  /** إلزاميةٌ عند الإنشاء — الخادمُ يرفض بلا صفة (لا افتراض). */
+  kind: Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
+  otherIdScheme?: BuyerIdScheme | '';
+  otherId?: string;
+  country?: string;
   vatNumber?: string;
   phone?: string;
   creditLimit?: number;

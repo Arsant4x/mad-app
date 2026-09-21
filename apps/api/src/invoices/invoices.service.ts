@@ -205,6 +205,8 @@ export class InvoicesService {
 
       return mapList(result, (inv) => ({
         ...inv,
+        /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
+        invoiceType: invoiceTypeFor(inv.customer),
         /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
         outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
         /** How much of this invoice has been credited back, so a screen can

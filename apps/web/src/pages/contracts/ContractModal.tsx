@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Customer, CustomerInput } from '../../api/customers';
+import type { Customer, CustomerInput, NewCustomerKind } from '../../api/customers';
 import type { Property } from '../../api/properties';
 import type { Unit } from '../../api/units';
 import type { ContractCycle, CreateContractInput, DeclaredClassification, DeclaredVatInclusion, Furnished } from '../../api/contracts';
@@ -49,6 +49,8 @@ export function ContractModal({
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  // ②A1: صفةُ المستأجر الجديد تُختار — لا تُفترض.
+  const [newKind, setNewKind] = useState<NewCustomerKind | ''>('');
   const [sameNameAsk, setSameNameAsk] = useState<string | null>(null);
   const [customerError, setCustomerError] = useState<string | null>(null);
   const [creatingCustomer, setCreatingCustomer] = useState(false);
@@ -84,10 +86,14 @@ export function ContractModal({
       setCustomerError(i18n.t('err_customer_name_required'));
       return;
     }
+    if (!newKind) {
+      setCustomerError('اختر صفة المستأجر: فرد، أو مؤسسة فردية، أو شخص اعتباري');
+      return;
+    }
     setCustomerError(null);
     setCreatingCustomer(true);
     try {
-      const created = await onCreateCustomer({ name, phone: newPhone.trim() || undefined, ...(allowSameName ? { allowSameName: true } : {}) });
+      const created = await onCreateCustomer({ name, kind: newKind, phone: newPhone.trim() || undefined, ...(allowSameName ? { allowSameName: true } : {}) });
       setCreatedCustomers((prev) => [created, ...prev]);
       setCustomerId(created.id);
       setSameNameAsk(null);
@@ -187,6 +193,15 @@ export function ContractModal({
               <div className="field">
                 <label>الجوال</label>
                 <input className="num" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="05xxxxxxxx" />
+              </div>
+              <div className="field">
+                <label htmlFor="contract-new-kind">صفة المستأجر</label>
+                <select id="contract-new-kind" value={newKind} onChange={(e) => setNewKind(e.target.value as NewCustomerKind | '')}>
+                  <option value="">— اختر —</option>
+                  <option value="NATURAL">فرد</option>
+                  <option value="ESTABLISHMENT">مؤسسة فردية</option>
+                  <option value="LEGAL_PERSON">شخص اعتباري (شركة/جهة)</option>
+                </select>
               </div>
               {sameNameAsk ? (
                 <div className="field" style={{ gridColumn: '1 / -1' }}>

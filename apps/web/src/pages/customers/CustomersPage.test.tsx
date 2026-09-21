@@ -16,7 +16,8 @@ import type { Invoice } from '../../api/invoices';
  * يؤكّد أن **الرقم المعروض في الجدول هو رقمُ الخادم** — لا مجموعُ إجماليات الفواتير
  * التي ما زالت تُحمَّل لنافذة التفاصيل — وأن غيابَه صفرٌ لا `NaN`.
  */
-vi.mock('../../api/customers', () => ({
+vi.mock('../../api/customers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/customers')>()),
   listCustomers: vi.fn(),
   createCustomer: vi.fn(),
   updateCustomer: vi.fn(),
@@ -30,8 +31,8 @@ const { listCustomers } = await import('../../api/customers');
 const { listInvoices } = await import('../../api/invoices');
 const { CustomersPage } = await import('./CustomersPage');
 
-const customer = (id: string, name: string, outstanding?: string): Customer =>
-  ({ id, name, vatNumber: '', phone: '', creditLimit: '0', archived: false, outstanding }) as unknown as Customer;
+const customer = (id: string, name: string, outstanding?: string, kind: Customer['kind'] = 'NATURAL'): Customer =>
+  ({ id, name, kind, otherIdScheme: null, otherId: null, country: 'SA', vatNumber: '', phone: '', creditLimit: '0', archived: false, outstanding }) as unknown as Customer;
 
 /** فاتورة بأقل ما تحتاجه الشاشة — إجماليُّها هو ما كانت الشاشةُ تجمعه خطأً. */
 const invoice = (id: string, customerId: string, total: string, outstanding: string, status: string): Invoice =>
@@ -69,5 +70,19 @@ describe('الاختبار ٤ — رصيد العميل = مجموع المتب�
     await waitFor(() => expect(screen.getByText((_, el) => el?.tagName === 'TD' && !!el.textContent?.includes('عميل جديد'))).toBeInTheDocument());
     expect(screen.queryByText('NaN')).not.toBeInTheDocument();
     expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
+  });
+
+  it('②A1 — الصفةُ تُعرض كما جاءت، والقديمُ غيرُ المعلَن يحمل زرَّ الإعلان الذي يفتح البطاقة', async () => {
+    vi.mocked(listCustomers).mockResolvedValue([customer('c4', 'مؤسسة الرواد', '0.00', 'ESTABLISHMENT'), customer('c5', 'عميل قديم', '0.00', 'LEGACY_UNDECLARED')]);
+    vi.mocked(listInvoices).mockResolvedValue([]);
+
+    render(<CustomersPage />);
+
+    await waitFor(() => expect(screen.getByText('مؤسسة فردية')).toBeInTheDocument());
+    const declare = screen.getByTestId('declare-kind');
+    expect(declare).toHaveTextContent('أعلن الصفة');
+    declare.click();
+    await waitFor(() => expect(screen.getByLabelText('صفة العميل')).toBeInTheDocument());
+    expect(screen.getByText(/سبق البناء ولم تُعلَن صفته/)).toBeInTheDocument();
   });
 });

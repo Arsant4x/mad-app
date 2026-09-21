@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import type { Customer, Invoice, InvoiceLineInput } from '../../api/invoices';
+import type { NewCustomerKind } from '../../api/customers';
 import { fmt, toLocalISODate, today } from '../../lib/format';
 import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
@@ -58,9 +59,11 @@ export function InvoiceBuilderView({
   nextNumberHint: string;
   onCancel: () => void;
   onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[] }) => Promise<void>;
-  onCreateCustomer: (name: string) => Promise<Customer>;
+  onCreateCustomer: (name: string, kind: NewCustomerKind) => Promise<Customer>;
 }) {
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
+  // ②A1: عميلٌ جديد يُنشأ من هنا يحتاج صفتَه — الخادمُ يرفض بلا صفة، والشاشةُ تسألها بجانب الاسم.
+  const [newCustomerKind, setNewCustomerKind] = useState<NewCustomerKind | ''>('');
   const [issueDate, setIssueDate] = useState(editing ? editing.issueDate.slice(0, 10) : today());
   const [dueDate, setDueDate] = useState(editing ? editing.dueDate.slice(0, 10) : defaultDueDate());
   const [notes, setNotes] = useState(editing?.notes ?? DEFAULT_NOTES);
@@ -107,7 +110,14 @@ export function InvoiceBuilderView({
     setSaving(true);
     try {
       let customer = customers.find((c) => c.name === name);
-      if (!customer) customer = await onCreateCustomer(name);
+      if (!customer) {
+        if (!newCustomerKind) {
+          setError('العميل جديد — اختر صفته (فرد · مؤسسة · شخص اعتباري) فهي ما يقرّر نوع الفاتورة');
+          setSaving(false);
+          return;
+        }
+        customer = await onCreateCustomer(name, newCustomerKind);
+      }
       // فاتورةٌ مؤرَّخةٌ باليوم تحمل لحظةَ الجهاز وانحرافَه؛ والمؤرَّخة بيدٍ في يومٍ آخر
       // لا وقتَ معلوماً لها فلا يُخترَع (ق-١٨٥).
       const stamped = issueDate === today() ? { issuedAt: new Date().toISOString(), issuedOffsetMin: -new Date().getTimezoneOffset() } : {};
@@ -151,6 +161,14 @@ export function InvoiceBuilderView({
                     <option key={c.id} value={c.name} />
                   ))}
                 </datalist>
+                {customerInput.trim() && !customers.some((c) => c.name === customerInput.trim()) && (
+                  <select aria-label="صفة العميل الجديد" value={newCustomerKind} onChange={(e) => setNewCustomerKind(e.target.value as NewCustomerKind | '')} style={{ marginTop: 6 }}>
+                    <option value="">عميل جديد — اختر صفته</option>
+                    <option value="NATURAL">فرد — فاتورة مبسّطة</option>
+                    <option value="ESTABLISHMENT">مؤسسة فردية — فاتورة كاملة</option>
+                    <option value="LEGAL_PERSON">شخص اعتباري — فاتورة كاملة</option>
+                  </select>
+                )}
               </div>
               <div className="field">
                 <label>رقم الفاتورة</label>

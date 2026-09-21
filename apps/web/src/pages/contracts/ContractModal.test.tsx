@@ -58,13 +58,17 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     render(<ContractModal units={[unit]} properties={[property]} customers={[customer('c1', 'خالد الدوسري')]} onCancel={() => {}} onSave={onSave} onCreateCustomer={onCreateCustomer} />);
     fireEvent.click(screen.getByText('+ عميلٌ جديد'));
     fireEvent.change(screen.getByPlaceholderText('اسم المستأجر'), { target: { value: 'خالد الدوسري' } });
+    // ②A1: بلا صفةٍ لا يُرسَل شيء — الشاشةُ تسأل، والخادمُ يرفض؛ ثم تُختار فيمضي.
+    fireEvent.click(screen.getByText('حفظ العميل واختياره'));
+    expect(onCreateCustomer).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('صفة المستأجر'), { target: { value: 'NATURAL' } });
     fireEvent.click(screen.getByText('حفظ العميل واختياره'));
     await waitFor(() => expect(screen.getByText(/أهو نفسُه/)).toBeTruthy());
     expect(onCreateCustomer).toHaveBeenCalledTimes(1);
     expect(onCreateCustomer.mock.calls[0][0]).not.toHaveProperty('allowSameName');
     fireEvent.click(screen.getByText(/نعم، شخصٌ آخر/));
     await waitFor(() => expect(onCreateCustomer).toHaveBeenCalledTimes(2));
-    expect(onCreateCustomer.mock.calls[1][0]).toMatchObject({ name: 'خالد الدوسري', allowSameName: true });
+    expect(onCreateCustomer.mock.calls[1][0]).toMatchObject({ name: 'خالد الدوسري', kind: 'NATURAL', allowSameName: true });
     await waitFor(() => expect((screen.getByRole('listbox') as HTMLSelectElement).value).toBe('c9'));
   }, 20000);
 });

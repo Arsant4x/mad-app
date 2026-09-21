@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
 import { useLocation } from 'react-router-dom';
-import { createCustomer, listCustomers, type Customer } from '../../api/customers';
+import { createCustomer, listCustomers, type Customer, type NewCustomerKind } from '../../api/customers';
 import { apiErrorCode } from '../../lib/apiError';
 import {
   CREDIT_LIMIT_EXCEEDED,
@@ -143,8 +143,8 @@ export function InvoicesPage() {
     }
   }
 
-  async function handleCreateCustomer(name: string): Promise<Customer> {
-    const customer = await createCustomer({ name });
+  async function handleCreateCustomer(name: string, kind: NewCustomerKind): Promise<Customer> {
+    const customer = await createCustomer({ name, kind });
     setCustomers((cs) => [...cs, customer].sort((a, b) => a.name.localeCompare(b.name)));
     return customer;
   }

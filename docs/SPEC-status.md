@@ -5,13 +5,13 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 280 |
-| منها في جداولٍ لها عمودُ حالة | 186 |
-| تقول الوثيقة ✅ | 94 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 90 |
+| بنود SPEC | 281 |
+| منها في جداولٍ لها عمودُ حالة | 187 |
+| تقول الوثيقة ✅ | 95 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 91 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 4 (منها 4 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 220 / 1783 |
+| اختباراتٌ موسومة / كل الاختبارات | 223 / 1787 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -57,6 +57,7 @@
 | 4.7 | CRM (إدارة علاقات) | ⬜ | ⬜ | — |
 | 4.8 | المبيعات المستهدفة والعمولات | ⬜ | ⬜ | — |
 | 4.9 | عروض الأسعار | ⬜ | ⬜ | — |
+| 4.10 | **صفةُ المشتري ومعرّفُه البديل وبلدُه — ونوعُ الفاتورة منها** *(فردٌ · مؤسّسةٌ فردية · شخص | ✅ | ✅ | `api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ① the kind is required and declared — no silent default; the alternative id is a pair with a listed scheme, the country a code (e2e)<br>`api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ② a customer from before the build is refused a document by name until its kind is declared — then it is invoiced (e2e)<br>`api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ③ the type follows the kind (م٥٣) and the document carries the alternative id with its scheme and the buyer country (BR-KSA-14 · BT-55) (e2e) |
 | 5.1 | سجل الموردين | ✅ | ✅ | `api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1] creates a supplier, rejects a duplicate name, and keeps it invisible to company B (e2e)<br>`api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists (e2e) |
 | 5.2 | فواتير المشتريات | ✅ | ✅ | `api/src/purchases/purchase-lines.live.spec.ts` :: [SPEC 5.2] ⭐ ① شراءٌ ببندين — مخزنيٍّ وخدميٍّ — يُحفظ ويُقرأ (حيّ) |
 | 5.3 | المدفوعات والذمم الدائنة | ✅ | ✅ | `api/test/default-chart.e2e-spec.ts` :: [SPEC 5.3] مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches (e2e)<br>`api/test/supplier-payments.e2e-spec.ts` :: [SPEC 5.3 10.3] 1,000 purchase → 400 payment (600 · PARTIAL) → 600 payment (0 · PAID) → reversal (600 · PARTIAL): 2100 and the cash-flow report follow every step (e2e) |

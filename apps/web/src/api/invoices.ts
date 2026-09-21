@@ -77,6 +77,8 @@ export interface Invoice {
    * until it is submitted; the chain values are assigned at submission and
    * kept across retries. */
   zatcaStatus: ZatcaInvoiceStatus;
+  /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه — يحسبه الخادم (②A1)؛ يأتي مع القائمة. */
+  invoiceType?: 'standard' | 'simplified';
   /** The authority's clearance or rejection note, or the local reason a
    * submission could not be completed. */
   zatcaMessage: string | null;
