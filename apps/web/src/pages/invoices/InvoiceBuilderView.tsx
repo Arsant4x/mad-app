@@ -13,12 +13,14 @@ export interface LineDraft {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** ④B1 — خصمٌ مبلغاً على السطر؛ صفرٌ غياباً. */
+  discount: number;
   tax: LineTaxDraft;
 }
 
 /** ما يُرسَل للخادم: الوصفُ والكمّيةُ والسعرُ والفئةُ بسببها — بلا `taxRate` (الخادمُ يشتقّها). */
 function lineDraftPayload(l: LineDraft): InvoiceLineInput {
-  return { description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, ...lineTaxPayload(l.tax) };
+  return { description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, ...(l.discount > 0 ? { discount: l.discount } : {}), ...lineTaxPayload(l.tax) };
 }
 
 const DEFAULT_NOTES = 'يتم سداد المبلغ خلال 30 يوماً من تاريخ الإصدار. تُضاف غرامة تأخير بنسبة 1.5٪ شهرياً على المبالغ المتأخرة.';
@@ -35,12 +37,13 @@ function initialLines(editing: Invoice | null): LineDraft[] {
       description: l.description,
       quantity: Number(l.quantity),
       unitPrice: Number(l.unitPrice),
+      discount: Number(l.discount ?? 0),
       tax: draftTaxOf(l),
     }));
   }
   return [
-    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, tax: STANDARD_LINE_TAX },
-    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, tax: STANDARD_LINE_TAX },
+    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, discount: 0, tax: STANDARD_LINE_TAX },
+    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, discount: 0, tax: STANDARD_LINE_TAX },
   ];
 }
 
@@ -74,8 +77,10 @@ export function InvoiceBuilderView({
 
   // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم بدالّة المجاميع الواحدة.
   const totals = useMemo(() => {
-    const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-    const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (rateForCategory(l.tax.taxCategory) / 100), 0);
+    // ④B1 — الصافي بعد خصم السطر، والضريبةُ منه (BT-131).
+    const net = (l: LineDraft) => Math.max(0, l.quantity * l.unitPrice - (l.discount || 0));
+    const subtotal = lines.reduce((s, l) => s + net(l), 0);
+    const tax = lines.reduce((s, l) => s + net(l) * (rateForCategory(l.tax.taxCategory) / 100), 0);
     return { subtotal, tax, grand: subtotal + tax };
   }, [lines]);
 
@@ -83,7 +88,7 @@ export function InvoiceBuilderView({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   }
   function addLine() {
-    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }]);
+    setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, discount: 0, tax: STANDARD_LINE_TAX }]);
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i));
@@ -210,6 +215,7 @@ export function InvoiceBuilderView({
                   <th>الوصف</th>
                   <th style={{ width: 55 }}>الكمية</th>
                   <th style={{ width: 95 }}>السعر</th>
+                  <th style={{ width: 80 }}>الخصم</th>
                   <th style={{ width: 210 }}>الفئة الضريبية</th>
                   <th style={{ width: 55 }}>النسبة</th>
                   <th style={{ width: 100 }}>الإجمالي</th>
@@ -229,11 +235,14 @@ export function InvoiceBuilderView({
                       <input className="num" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td>
+                      <input className="num" aria-label={`خصم البند ${i + 1}`} value={l.discount} onChange={(e) => updateLine(i, { discount: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                    </td>
+                    <td>
                       <LineTaxPicker compact value={l.tax} onChange={(tax) => updateLine(i, { tax })} />
                     </td>
                     {/* النسبةُ تُقرأ من الفئة ولا تُدخَل — عمودٌ للقراءة كما في النموذج المُقرّ. */}
                     <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
-                    <td className="num line-total">{fmt(l.quantity * l.unitPrice)}</td>
+                    <td className="num line-total">{fmt(Math.max(0, l.quantity * l.unitPrice - (l.discount || 0)))}</td>
                     <td>
                       {lines.length > 1 && (
                         <button className="remove-line" onClick={() => removeLine(i)}>

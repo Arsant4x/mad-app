@@ -16,6 +16,8 @@ import { num0, round2, type QtyText } from '../../lib/money';
 interface CartLine {
   product: Product;
   quantity: number;
+  /** ④B1 — خصمٌ مبلغاً على السطر (صفرٌ غياباً). */
+  discount: number;
 }
 
 /**
@@ -124,19 +126,25 @@ export function PosPage() {
   }, [products, query]);
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity, 0);
+    // ④B1 — الصافي بعد خصم السطر (BT-131)، والضريبةُ منه.
+    const net = (l: CartLine) => Math.max(0, Number(l.product.price) * l.quantity - (l.discount || 0));
+    const subtotal = cart.reduce((s, l) => s + net(l), 0);
     // ⑧ الضريبةُ من فئة كلِّ صنف (`rateForCategory`) لا نسبةً واحدة على السلة — فسلةٌ فيها دواءٌ بنسبة الصفر لا
     // تُحمَّل ضريبتَه؛ والخادمُ يشتقّ النسبةَ نفسَها من الفئة ويعيد المجاميع المعتمَدة. ⚠️ ورمزُ الإيصال المؤقّت
     // أوفلاين يُبنى من هذا الرقم (ق-١٨٨) فيلزم أن يطابق ما سيحسبه الخادم للسلة نفسِها.
-    const tax = cart.reduce((s, l) => s + Number(l.product.price) * l.quantity * (rateForCategory(l.product.taxCategory) / 100), 0);
+    const tax = cart.reduce((s, l) => s + net(l) * (rateForCategory(l.product.taxCategory) / 100), 0);
     return { subtotal, tax, total: subtotal + tax };
   }, [cart]);
+
+  function setDiscount(id: string, discount: number) {
+    setCart((prev) => prev.map((l) => (l.product.id === id ? { ...l, discount } : l)));
+  }
 
   function addToCart(p: Product) {
     setCart((prev) => {
       const hit = prev.find((l) => l.product.id === p.id);
       if (hit) return prev.map((l) => (l.product.id === p.id ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...prev, { product: p, quantity: 1 }];
+      return [...prev, { product: p, quantity: 1, discount: 0 }];
     });
   }
 
@@ -165,7 +173,7 @@ export function PosPage() {
       ringAt: new Date().toISOString(),
       // انحرافُ الجهاز مع اللحظة: يومُ الفاتورة ووقتُها يومُ التاجر لا يومُ UTC (ق-١٨٥).
       ringOffsetMin: -new Date().getTimezoneOffset(),
-      lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+      lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity, ...(l.discount > 0 ? { discount: l.discount } : {}) })),
       paymentMethod: method,
       payments,
     };
@@ -418,6 +426,15 @@ export function PosPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => changeQty(l.product.id, 1)}>
                 +
               </button>
+              <input
+                className="num"
+                aria-label={`خصم ${l.product.name}`}
+                title="خصم على السطر (مبلغ)"
+                style={{ width: 64 }}
+                value={l.discount || ''}
+                placeholder="خصم"
+                onChange={(e) => setDiscount(l.product.id, Math.max(0, parseFloat(e.target.value) || 0))}
+              />
             </div>
           ))}
 
