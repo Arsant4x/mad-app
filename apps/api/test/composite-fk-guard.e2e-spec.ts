@@ -153,4 +153,30 @@ describe('Composite tenant foreign keys (e2e)', () => {
     );
     expect(after.branchId).toBe(branchA.body.id);
   }, 60000);
+
+  it('[SPEC 1.2] ③ batch 2 sample — invoice_lines.invoiceId → invoices: a foreign company\'s invoice is refused, its own is accepted', async () => {
+    const conname = await constraintNamed('invoice_lines', 'invoiceId');
+    const invoiceOf = async (c: IsolatedCompany, tag: string) => {
+      const customer = await auth(c)(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${tag}` }).expect(201);
+      const inv = await auth(c)(request(app.getHttpServer()).post('/invoices'))
+        .send({ customerId: customer.body.id, issueDate: '2026-06-10', dueDate: '2026-07-10', lines: [{ description: `بند ${tag}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })
+        .expect(201);
+      return inv.body as { id: string; lines: { id: string }[] };
+    };
+    const invA = await invoiceOf(a, 'أ');
+    const invA2 = await invoiceOf(a, 'أ٢');
+    const invB = await invoiceOf(b, 'ب');
+    expect(invA.lines?.[0]?.id).toBeDefined();
+
+    const refused = await crossWrite('invoice_lines', 'invoiceId', invA.lines[0].id, invB.id);
+    expect(refused).toEqual({ sqlstate: '23503', constraint: conname });
+
+    await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$executeRawUnsafe(`UPDATE "invoice_lines" SET "invoiceId" = $1 WHERE id = $2`, invA2.id, invA.lines[0].id),
+    );
+    const [after] = await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.$queryRawUnsafe<{ invoiceId: string }[]>(`SELECT "invoiceId" FROM "invoice_lines" WHERE id = $1`, invA.lines[0].id),
+    );
+    expect(after.invoiceId).toBe(invA2.id);
+  }, 60000);
 });
