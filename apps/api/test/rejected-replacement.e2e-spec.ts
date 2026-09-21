@@ -360,10 +360,11 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     expect((await exposureOf(standardCustomerId)) - baseline.exposure).toBeCloseTo(345, 2);
 
     // وقائمةُ الفواتير تقرأ المتبقّي من المصدر نفسه: المردودةُ المغلقة صفر، والبدلُ يحمل الذمّة.
-    const list = (await auth(request(server()).get('/invoices')).expect(200)).body as { id: string; outstanding: number; replacedBy: { no: string } | null }[];
-    expect(list.find((i) => i.id === rejectedStd.id)!.outstanding).toBe(0);
+    // ② `outstanding` نصٌّ بخانتين (`ق-١٢٣٥`) — يُقارَن حرفاً.
+    const list = (await auth(request(server()).get('/invoices')).expect(200)).body as { id: string; outstanding: string; replacedBy: { no: string } | null }[];
+    expect(list.find((i) => i.id === rejectedStd.id)!.outstanding).toBe('0.00');
     expect(list.find((i) => i.id === rejectedStd.id)!.replacedBy!.no).toBe(replacementStd.no);
-    expect(list.find((i) => i.id === replacementStd.id)!.outstanding).toBeCloseTo(345, 2);
+    expect(list.find((i) => i.id === replacementStd.id)!.outstanding).toBe('345.00');
   }, 30000);
 
   let rejectedSimple: Row;
@@ -378,7 +379,8 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
 
     const res = await replace(rejectedSimple.id);
     expect(res.status).toBe(201);
-    expect(res.body.closure).toMatchObject({ allocationsMoved: 1, amountMoved: 100 });
+    // ② المقبوضُ المنقول نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والسجلُّ أدناه يحمل الرقم.
+    expect(res.body.closure).toMatchObject({ allocationsMoved: 1, amountMoved: '100.00' });
     replacementSimple = (await getInvoice(res.body.id))!;
 
     const allocations = await tenantPrisma.runInTenantContext(companyId, (tx) => tx.paymentAllocation.findMany({ where: { paymentId: pay.body.id } }));
@@ -386,9 +388,9 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     // الحالةُ مشتقّةٌ للاثنين: المردودةُ بلا تخصيص، والبدلُ مسدَّدٌ جزئياً.
     expect((await getInvoice(rejectedSimple.id))!.status).toBe('OVERDUE');
     expect(replacementSimple.status).toBe('PARTIAL');
-    const list = (await auth(request(server()).get('/invoices')).expect(200)).body as { id: string; outstanding: number }[];
-    expect(list.find((i) => i.id === rejectedSimple.id)!.outstanding).toBe(0);
-    expect(list.find((i) => i.id === replacementSimple.id)!.outstanding).toBeCloseTo(130, 2);
+    const list = (await auth(request(server()).get('/invoices')).expect(200)).body as { id: string; outstanding: string }[];
+    expect(list.find((i) => i.id === rejectedSimple.id)!.outstanding).toBe('0.00');
+    expect(list.find((i) => i.id === replacementSimple.id)!.outstanding).toBe('130.00');
 
     // والأثرُ في السجلّ: من نقل ومتى ومن أيّ مستندٍ إلى أيّ.
     const audit = await tenantPrisma.runInTenantContext(companyId, (tx) =>

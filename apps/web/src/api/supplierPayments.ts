@@ -1,4 +1,5 @@
 import { today } from '../lib/format';
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
 /** نقداً من الصندوق، أو تحويلٌ من حساب بنك — **ولا شبكة** لسداد مورّد (`ق-٨٧٢`). */
@@ -42,8 +43,11 @@ export interface OpenPurchase {
   total: string;
   currency: string;
   status: string;
-  allocated: number;
-  remaining: number;
+  /** ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`): يُقرأ بـ`num0()` قبل أي حساب. */
+  allocated: MoneyText;
+  /** ما ائتمن به المورّد على المستند بإشعاراته الدائنة — نصٌّ بخانتين. */
+  credited: MoneyText;
+  remaining: MoneyText;
 }
 
 export interface SupplierAllocationInput {

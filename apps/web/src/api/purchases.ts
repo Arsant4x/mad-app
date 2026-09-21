@@ -1,3 +1,4 @@
+import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Supplier } from './suppliers';
 
@@ -32,11 +33,12 @@ export interface Purchase {
   currency: string;
   /** مشتقّةٌ مخزَّنة من تخصيصات سندات الصرف (`ق-٨٧٢`) — لا علَمَ يُكتب بيد. */
   status: PurchaseStatus;
-  /** المسدَّدُ والمتبقّي — **محسوبان في الخادم من التخصيصات** لا من حقل. */
-  allocated: number;
+  /** المسدَّدُ والمتبقّي — **محسوبان في الخادم من التخصيصات** لا من حقل.
+   *  ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`): يُقرأ بـ`num0()` قبل أي حساب. */
+  allocated: MoneyText;
   /** ما ائتمن به المورّد على هذا المستند بإشعاراته الدائنة — يخفّض المتبقّي كما يخفّضه الإشعارُ الدائن على الفاتورة. */
-  credited: number;
-  remaining: number;
+  credited: MoneyText;
+  remaining: MoneyText;
 }
 
 export type PurchaseStatus = 'DUE' | 'PARTIAL' | 'PAID';

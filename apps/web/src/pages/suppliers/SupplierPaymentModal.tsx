@@ -4,7 +4,7 @@ import { listBranches, type Branch } from '../../api/branches';
 import type { Purchase } from '../../api/purchases';
 import { createSupplierPayment, listOpenPurchases, type OpenPurchase, type SupplierPaymentMethod } from '../../api/supplierPayments';
 import { dfmt, fmt, today } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { num0, round2 } from '../../lib/money';
 
 /**
  * سندُ صرفٍ لمورّد وتوزيعُه على فواتير الشراء المفتوحة (`ق-٨٧١`) — مرآةُ نافذة سند القبض.
@@ -20,12 +20,13 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
 
   const [branchId, setBranchId] = useState(purchase.branchId ?? '');
   const [date, setDate] = useState(today());
-  const [amount, setAmount] = useState(String(round2(purchase.remaining)));
+  // ② المتبقّي يصل نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ رقماً مرّةً ثم يُملأ به الحقلان.
+  const [amount, setAmount] = useState(String(round2(num0(purchase.remaining))));
   const [method, setMethod] = useState<SupplierPaymentMethod>('CASH');
   const [bankId, setBankId] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [alloc, setAlloc] = useState<Record<string, string>>({ [purchase.id]: String(round2(purchase.remaining)) });
+  const [alloc, setAlloc] = useState<Record<string, string>>({ [purchase.id]: String(round2(num0(purchase.remaining))) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +46,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
     const next: Record<string, string> = {};
     for (const p of open) {
       if (left <= 0) break;
-      const take = Math.min(left, p.remaining);
+      const take = Math.min(left, num0(p.remaining));
       if (take > 0) {
         next[p.id] = String(round2(take));
         left = round2(left - take);

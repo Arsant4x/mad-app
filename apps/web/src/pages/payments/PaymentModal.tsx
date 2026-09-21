@@ -4,7 +4,7 @@ import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
 import { createPayment, listOpenInvoices, type OpenInvoice, type PaymentMethod } from '../../api/payments';
 import { dfmt, fmt, today } from '../../lib/format';
-import { round2 } from '../../lib/money';
+import { num0, round2 } from '../../lib/money';
 
 /**
  * تسجيل سند قبض وتوزيعه على فواتير العميل المفتوحة.
@@ -55,7 +55,8 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
     const next: Record<string, string> = {};
     for (const inv of open) {
       if (left <= 0) break;
-      const take = Math.min(left, inv.remaining);
+      // ② المتبقّي يصل نصّاً (`ق-١٢٣٥`) — يُقرأ رقماً قبل المقارنة.
+      const take = Math.min(left, num0(inv.remaining));
       if (take > 0) {
         next[inv.id] = String(round2(take));
         left = round2(left - take);

@@ -19,9 +19,10 @@ import {
 } from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
-import { fulfilStockedLines, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
+import { fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, postReversalEntry, unpostIfLinked } from '../journal/auto-posting.util';
@@ -203,11 +204,11 @@ export class InvoicesService {
 
       return mapList(result, (inv) => ({
         ...inv,
-        /** What this document still leaves owing — see outstandingOf. */
-        outstanding: this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId),
+        /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
+        outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
         /** How much of this invoice has been credited back, so a screen can
          * show the invoice as partly reversed without a second request. */
-        creditedTotal: inv.docType === 'CREDIT_NOTE' ? 0 : (creditedByInvoiceId.get(inv.id) ?? 0),
+        creditedTotal: money(inv.docType === 'CREDIT_NOTE' ? 0 : (creditedByInvoiceId.get(inv.id) ?? 0)),
         // مستندٌ مختوم يعرض رمزَه التساعي المحفوظ؛ وغيرُه الوسومَ الخمسة المشتقّة (`ق-١٨٧`).
         zatcaQr: inv.zatcaQrPayload ?? buildZatcaQr({
           sellerName: company?.legalName ?? '',
@@ -406,10 +407,11 @@ export class InvoicesService {
         });
 
         const row = await tx.invoice.findUniqueOrThrow({ where: { id: replacement.id }, include: INVOICE_INCLUDE });
+        // ② صورةُ الحدّ نصّاً (`ق-١٢٣٥`): ما عاد إلى الرفّ والمقبوضُ المنقول — والسجلُّ أعلاه يحمل الرقم.
         return {
           ...row,
           stockFulfilment: replacement.stockFulfilment,
-          closure: { returned: returned.restored, reversalJournalEntryId, allocationsMoved: allocations.length, amountMoved },
+          closure: { returned: restoredReport(returned.restored), reversalJournalEntryId, allocationsMoved: allocations.length, amountMoved: money(amountMoved) },
         };
       }),
     );
@@ -460,13 +462,13 @@ export class InvoicesService {
     });
     if (!check.exceeded) return null;
 
-    const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const grouped = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const numbers = {
       customer: check.customerName,
-      limit: money(check.limit),
-      exposure: money(check.exposure),
-      adding: money(check.adding),
-      after: money(check.after),
+      limit: grouped(check.limit),
+      exposure: grouped(check.exposure),
+      adding: grouped(check.adding),
+      after: grouped(check.after),
     };
 
     // ⚖️ **المنعُ الصلب إعدادٌ يختاره التاجر** (`ق-٣٤٠`) — **ولا تجاوزَ معه
@@ -674,9 +676,10 @@ export class InvoicesService {
         payload: { invoiceId: created.id, docType: created.docType, no: created.no } satisfies InvoiceIssuedPayload,
       });
 
-      if (!entry) return { ...created, stockFulfilment: fulfilment };
+      // ② التسليمُ يخرج نصّاً بدقّة صنفه (`ق-١٢٣٥`) — والكاشيرُ يقرأ صورةَ الحدّ هذه لا الرقم.
+      if (!entry) return { ...created, stockFulfilment: fulfilmentReport(fulfilment) };
       const saved = await tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
-      return { ...saved, stockFulfilment: fulfilment };
+      return { ...saved, stockFulfilment: fulfilmentReport(fulfilment) };
   }
 
   /**

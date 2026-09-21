@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { dayStartOf } from '../common/wall-clock.util';
 import {
@@ -112,7 +113,12 @@ export class PaymentsService {
         select: { id: true, no: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
         orderBy: { issueDate: 'asc' },
       });
-      return withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), invoices.map((i) => i.id)));
+      // ② المسدَّدُ والمتبقّي نصّاً بخانتين على الحدّ (`ق-١٢٣٥`) — والترشيحُ داخل `withRemaining` رقمٌ كما كان.
+      return withRemaining(invoices, await allocatedByDocument(invoiceTarget(tx), invoices.map((i) => i.id))).map((doc) => ({
+        ...doc,
+        allocated: money(doc.allocated),
+        remaining: money(doc.remaining),
+      }));
     });
   }
 

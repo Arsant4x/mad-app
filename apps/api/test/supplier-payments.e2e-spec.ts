@@ -54,8 +54,9 @@ describe('Supplier payments + allocations (e2e)', () => {
       no: string;
       status: string;
       total: string;
-      allocated: number;
-      remaining: number;
+      /** ② نصٌّ بخانتين (`ق-١٢٣٥`) — يُقارَن حرفاً. */
+      allocated: string;
+      remaining: string;
     }[];
     return rows.find((r) => r.id === id)!;
   };
@@ -141,7 +142,7 @@ describe('Supplier payments + allocations (e2e)', () => {
     expect(first.body.journalEntryId).toBeTruthy();
 
     let row = await purchaseOf(purchase.id);
-    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PARTIAL', allocated: 400, remaining: 600 });
+    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PARTIAL', allocated: '400.00', remaining: '600.00' });
     expect(await balanceOf('2100')).toBeCloseTo(payablesBefore + 600, 2);
     expect(await bankBalance()).toBeCloseTo(boxBefore - 400, 2);
 
@@ -170,7 +171,7 @@ describe('Supplier payments + allocations (e2e)', () => {
       .send({ supplierId, branchId, date: today(), amount: 600, method: 'CASH', bankId: cashBoxId, allocations: [{ purchaseId: purchase.id, amount: 600 }] })
       .expect(201);
     row = await purchaseOf(purchase.id);
-    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PAID', allocated: 1000, remaining: 0 });
+    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PAID', allocated: '1000.00', remaining: '0.00' });
     expect(await balanceOf('2100')).toBeCloseTo(payablesBefore, 2);
     const flowAfterSecond = await cashFlow();
     expect(flowAfterSecond.payablesChange - flowBefore.payablesChange).toBeCloseTo(0, 2);
@@ -182,7 +183,7 @@ describe('Supplier payments + allocations (e2e)', () => {
       .expect(201);
     expect(Number(reversal.body.amount)).toBeCloseTo(-600, 2);
     row = await purchaseOf(purchase.id);
-    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PARTIAL', allocated: 400, remaining: 600 });
+    expect({ status: row.status, allocated: row.allocated, remaining: row.remaining }).toEqual({ status: 'PARTIAL', allocated: '400.00', remaining: '600.00' });
     expect(await balanceOf('2100')).toBeCloseTo(payablesBefore + 600, 2);
     expect(await bankBalance()).toBeCloseTo(boxBefore - 400, 2);
 
@@ -268,7 +269,7 @@ describe('Supplier payments + allocations (e2e)', () => {
     expect(String(loser.body.message)).toContain(purchase.no);
 
     const row = await purchaseOf(purchase.id);
-    expect({ status: row.status, allocated: row.allocated }).toEqual({ status: 'PAID', allocated: 1000 });
+    expect({ status: row.status, allocated: row.allocated }).toEqual({ status: 'PAID', allocated: '1000.00' });
   }, 90000);
 
   // ── العملة: الذمّةُ بسعر فاتورة الشراء، والنقدُ بسعر يوم السداد، والفارقُ خسارةُ صرفٍ على 5600 ──
@@ -313,7 +314,7 @@ describe('Supplier payments + allocations (e2e)', () => {
     // ورفعُه يبقي الحالةَ مشتقّةً من التخصيصات: ٢٠٠ من ٤٠٠ ⇒ ما زال جزئياً.
     await auth(request(app.getHttpServer()).patch(`/purchases/${purchase.id}`)).send({ subtotal: 400 }).expect(200);
     const row = await purchaseOf(purchase.id);
-    expect({ status: row.status, remaining: row.remaining }).toEqual({ status: 'PARTIAL', remaining: 200 });
+    expect({ status: row.status, remaining: row.remaining }).toEqual({ status: 'PARTIAL', remaining: '200.00' });
 
     await auth(request(app.getHttpServer()).patch(`/purchases/${purchase.id}`)).send({ paid: true }).expect(400);
   }, 90000);
@@ -347,7 +348,7 @@ describe('Supplier payments + allocations (e2e)', () => {
       const allocated = Math.round((allocatedByPurchase.get(purchase.id) ?? 0) * 100) / 100;
       const total = Math.round(Number(row.total) * 100) / 100;
       const computed = allocated >= total - 0.005 ? 'PAID' : allocated > 0.005 ? 'PARTIAL' : 'DUE';
-      expect({ purchase: purchase.no, status: row.status, allocated: row.allocated }).toEqual({ purchase: purchase.no, status: computed, allocated });
+      expect({ purchase: purchase.no, status: row.status, allocated: row.allocated }).toEqual({ purchase: purchase.no, status: computed, allocated: allocated.toFixed(2) });
     }
   }, 120000);
 
