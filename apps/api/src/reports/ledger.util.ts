@@ -60,8 +60,12 @@ export interface LedgerRow {
   unitId: string | null;
 }
 
-/** ما يُطلب مع كل قيدٍ لاشتقاق مصدره — العلاقاتُ المعاكسة كلُّها، بمعرّفٍ ورقمٍ حيث يوجد. */
-const SOURCE_INCLUDE = {
+/**
+ * ما يُطلب مع كل قيدٍ لاشتقاق مصدره — العلاقاتُ المعاكسة كلُّها، بمعرّفٍ ورقمٍ حيث يوجد.
+ * ⚠️ مُعلَنٌ بنوع Prisma العريض لا بـ`satisfies` + `GetPayload`: استنباطُ الحمولة الدقيقة لعشرين علاقةً أسقط
+ * `ts-jest` بنفاد الذاكرة (مقيس 2026-09-21)، والشكلُ المقروء يُعلَن أدناه صراحةً ويُصان معه.
+ */
+const SOURCE_INCLUDE: Prisma.JournalEntryInclude = {
   invoices: { select: { id: true, no: true, docType: true } },
   reversedInvoices: { select: { id: true, no: true } },
   purchases: { select: { id: true, no: true } },
@@ -83,12 +87,28 @@ const SOURCE_INCLUDE = {
   keyMoneyEntries: { select: { id: true } },
   maintenanceCosts: { select: { id: true } },
   reversalOf: { select: { id: true, no: true } },
-} satisfies Prisma.JournalEntryInclude;
+};
 
-type EntryWithSources = Prisma.JournalEntryGetPayload<{ include: typeof SOURCE_INCLUDE }>;
+type SourceDoc = { id: string; no?: string | null; docType?: string | null } | null;
+/** شكلُ القيد كما يُقرأ بـ`SOURCE_INCLUDE` — يُعلَن لا يُستنبَط (انظر التحذير أعلاه). */
+export type EntryWithSources = {
+  id: string;
+  no: string;
+  memo: string;
+  date: Date;
+  auto: boolean;
+  branchId: string | null;
+  openingForAccountId: string | null;
+  reversalOf: { id: string; no: string } | null;
+} & Partial<Record<SourceKey, SourceDoc | SourceDoc[]>>;
+
+type SourceKey =
+  | 'invoices' | 'reversedInvoices' | 'purchases' | 'payments' | 'supplierPayments' | 'goodsReceipts' | 'inventoryWriteOffs'
+  | 'stockOpening' | 'stockOpeningLineVoid' | 'landedCosts' | 'landedCostVoids' | 'rentPayments' | 'rentAccruals'
+  | 'depositReceipts' | 'depositSettlements' | 'contractSettlements' | 'claimIssues' | 'claimSettlements' | 'keyMoneyEntries' | 'maintenanceCosts';
 
 /** الترتيبُ يقرّر أيَّ مصدرٍ يُسمّى حين يشير أكثرُ من مستندٍ إلى القيد نفسِه — الأخصُّ أولاً. */
-const SOURCE_ORDER: { key: keyof typeof SOURCE_INCLUDE; type: string }[] = [
+const SOURCE_ORDER: { key: SourceKey; type: string }[] = [
   { key: 'invoices', type: 'INVOICE' },
   { key: 'reversedInvoices', type: 'INVOICE_REVERSAL' },
   { key: 'purchases', type: 'PURCHASE' },
@@ -115,10 +135,9 @@ export function resolveSource(entry: EntryWithSources): LedgerSource {
   if (entry.openingForAccountId) return { type: 'OPENING', id: entry.openingForAccountId, no: entry.no };
   if (entry.reversalOf) return { type: 'REVERSAL', id: entry.reversalOf.id, no: entry.reversalOf.no };
   for (const { key, type } of SOURCE_ORDER) {
-    const v = entry[key] as unknown;
-    const first = Array.isArray(v) ? v[0] : v;
-    if (!first) continue;
-    const doc = first as { id: string; no?: string | null; docType?: string | null };
+    const v = entry[key];
+    const doc = Array.isArray(v) ? v[0] : v;
+    if (!doc) continue;
     const docType = key === 'invoices' && doc.docType && doc.docType !== 'INVOICE' ? doc.docType : type;
     return { type: docType, id: doc.id, no: doc.no ?? doc.id };
   }
@@ -202,7 +221,7 @@ export async function readLedger(tx: Prisma.TransactionClient, filter: LedgerFil
       debit: money(debit),
       credit: money(credit),
       balance: money(running),
-      source: resolveSource(l.journalEntry),
+      source: resolveSource(l.journalEntry as unknown as EntryWithSources),
       branchId: l.journalEntry.branchId,
       customerId: l.customerId,
       supplierId: l.supplierId,
