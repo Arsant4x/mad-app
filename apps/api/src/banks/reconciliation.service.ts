@@ -190,9 +190,10 @@ export class ReconciliationService {
       const bank = await this.bankOf(tx, allowedBranchIds, bankId);
       const untilDate = new Date(until);
       if (bank.reconciledUntil && untilDate < bank.reconciledUntil) throw new ConflictException(MSG.reconciliation_close_backwards);
-      const pending = await tx.bankTransaction.count({ where: { bankId, entryNo: null, matchedLineId: null, date: { lte: untilDate } } });
+      // المعلَّقُ حتى التاريخ — يُسمّى في الرفض بعدده وأوّل تاريخٍ فيه (لا ترقيمٌ من العدّ — حارسُ ق-١٩٨ يقرأ count() ترقيماً).
       // (السطرُ المرحَّل من التسوية يحمل matchedLineId فلا يُعدّ معلَّقاً؛ والمرآةُ تحمل entryNo فلا تدخل.)
-      if (pending > 0) throw new ConflictException(formatMessage(MSG.reconciliation_pending_lines, { count: String(pending), until }));
+      const pendingRows = await tx.bankTransaction.findMany({ where: { bankId, entryNo: null, matchedLineId: null, date: { lte: untilDate } }, select: { id: true }, orderBy: { date: 'asc' } });
+      if (pendingRows.length > 0) throw new ConflictException(formatMessage(MSG.reconciliation_pending_lines, { count: String(pendingRows.length), until }));
       const updated = await tx.bank.update({ where: { id: bank.id }, data: { reconciledUntil: untilDate }, select: { id: true, reconciledUntil: true } });
       return { bankId: updated.id, reconciledUntil: updated.reconciledUntil?.toISOString().slice(0, 10) ?? null };
     });
