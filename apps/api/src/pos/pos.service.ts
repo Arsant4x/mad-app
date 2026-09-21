@@ -12,6 +12,7 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentResult } from '../invoices/sale-fulfilment.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
+import { money, qty } from '../common/money/text';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import {
   NETWORK_RECEIVABLE_CODE,
@@ -63,7 +64,7 @@ export type StockDeductionReport =
       /** عدد حركات OUT المُنشأة (حركة لكل بند مخزني). */
       movements: number;
       /** بنود هبط رصيدها تحت الصفر — تحذير ناعم لا مانع، كسياسة المخزون القائمة. */
-      belowZero: { productId: string; resultingQty: number }[];
+      belowZero: { productId: string; resultingQty: string }[];
     }
   | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
@@ -78,16 +79,37 @@ function toDeductionReport(f: FulfilmentResult | undefined): StockDeductionRepor
   if (!f || !f.fulfilled) {
     return { deducted: false, reason: f?.reason === 'NO_TRACKED_PRODUCTS' ? 'NO_TRACKED_PRODUCTS' : 'NO_BRANCH_WAREHOUSE' };
   }
-  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero };
+  // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`) — الرصيدُ السالب يُقرأ ولا يُحسب عليه في الكاشير.
+  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: qty(b.resultingQty) })) };
 }
 
-export interface ShiftTotals {
+/** مجاميعُ المناوبة رقماً — للحساب داخل الخادم (فرقُ الجرد · قيدُ الفرق). */
+interface ShiftTotalsNumeric {
   salesCount: number;
   cashTotal: number;
   cardTotal: number;
   /** openingFloat + cashTotal — what should be in the drawer. */
   expectedCash: number;
 }
+
+/**
+ * ② مجاميعُ المناوبة كما تخرج للكاشير — **المالُ نصّاً بخانتين** (`ق-١٢٣٥` · النطاقُ الثاني):
+ * `cashTotal` · `cardTotal` · `expectedCash` نصٌّ من `money()`، والعدُّ رقمٌ كما هو.
+ */
+export interface ShiftTotals {
+  salesCount: number;
+  cashTotal: string;
+  cardTotal: string;
+  /** openingFloat + cashTotal — what should be in the drawer. */
+  expectedCash: string;
+}
+
+const totalsText = (t: ShiftTotalsNumeric): ShiftTotals => ({
+  salesCount: t.salesCount,
+  cashTotal: money(t.cashTotal),
+  cardTotal: money(t.cardTotal),
+  expectedCash: money(t.expectedCash),
+});
 
 /**
  * الكاشير (مستند §6، النسخة الأولى — أونلاين): مناوبات + بيع يُسجَّل كفاتورة
@@ -193,7 +215,7 @@ export class PosService {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
       if (!shift) return null;
-      return { ...shift, ...(await this.totalsFor(tx, shift.id, Number(shift.openingFloat))) };
+      return { ...shift, ...totalsText(await this.totalsFor(tx, shift.id, Number(shift.openingFloat))) };
     });
   }
 
@@ -209,7 +231,7 @@ export class PosService {
       // المجاميعُ للمناوبات المُعادة وحدَها (القائمةُ كلُّها أو الصفحة) — فلا تُحسب مناوبةٌ خارج النافذة.
       const shifts = listItems(result);
       const totals = await this.totalsForMany(tx, shifts);
-      const withTotals = shifts.map((s) => ({ ...s, ...totals.get(s.id)! }));
+      const withTotals = shifts.map((s) => ({ ...s, ...totalsText(totals.get(s.id)!) }));
       return Array.isArray(result) ? withTotals : { ...result, items: withTotals };
     });
   }
@@ -253,7 +275,8 @@ export class PosService {
         variance,
       });
 
-      return { ...closed, ...totals, variance };
+      // ② الفرقُ نصّاً بخانتين كسائر المبالغ (`ق-١٢٣٥`) — موجبٌ زيادةٌ وسالبٌ عجزٌ، والإشارةُ تُقرأ بـ`num()` في الشاشة.
+      return { ...closed, ...totalsText(totals), variance: money(variance) };
     });
   }
 
@@ -655,7 +678,7 @@ export class PosService {
 
 
   /** مناوبةٌ واحدة — حالةٌ خاصّة من الجمع، لا حسابٌ ثانٍ (`totalsForMany`). */
-  private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotals> {
+  private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotalsNumeric> {
     return (await this.totalsForMany(tx, [{ id: shiftId, openingFloat }])).get(shiftId)!;
   }
 
@@ -674,7 +697,7 @@ export class PosService {
    * مستدعٍ قرأها مرشَّحةً أو تحقّق منها — فالمرشِّحُ هنا مجموعةُ معرّفاتٍ لا
    * قائمةُ رؤية.
    */
-  private async totalsForMany(tx: Prisma.TransactionClient, shifts: { id: string; openingFloat: number | Prisma.Decimal }[]): Promise<Map<string, ShiftTotals>> {
+  private async totalsForMany(tx: Prisma.TransactionClient, shifts: { id: string; openingFloat: number | Prisma.Decimal }[]): Promise<Map<string, ShiftTotalsNumeric>> {
     const ids = shifts.map((s) => s.id);
     const [payments, counts] = ids.length
       ? await Promise.all([
@@ -695,7 +718,7 @@ export class PosService {
     }
     const salesCount = new Map(counts.map((c) => [c.posShiftId!, c._count._all]));
 
-    const totals = new Map<string, ShiftTotals>();
+    const totals = new Map<string, ShiftTotalsNumeric>();
     for (const s of shifts) {
       const cashTotal = cash.get(s.id) ?? 0;
       totals.set(s.id, {

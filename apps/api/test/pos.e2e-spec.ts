@@ -114,17 +114,18 @@ describe('POS cashier (e2e)', () => {
     const cur = await auth(request(app.getHttpServer()).get('/pos/shifts/current')).expect(200);
     expect(cur.body.id).toBe(shiftId);
     expect(cur.body.salesCount).toBe(2);
-    expect(cur.body.cashTotal).toBeCloseTo(230, 2);
-    expect(cur.body.cardTotal).toBeCloseTo(115, 2);
+    // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`): الشكلُ جزءٌ من العقد فيُقارَن حرفاً.
+    expect(cur.body.cashTotal).toBe('230.00');
+    expect(cur.body.cardTotal).toBe('115.00');
     // الدرج المتوقع = العهدة + النقد فقط — الشبكة ليست في الدرج.
-    expect(cur.body.expectedCash).toBeCloseTo(430, 2);
+    expect(cur.body.expectedCash).toBe('430.00');
   }, 60000);
 
   it('[SPEC 7.3] closes the shift computing the variance itself — and blocks further sales', async () => {
     const res = await auth(request(app.getHttpServer()).post(`/pos/shifts/${shiftId}/close`)).send({ declaredClosing: 400 }).expect(201);
     expect(res.body.status).toBe('CLOSED');
-    // عدّ 400 والمتوقع 430 → عجز 30.
-    expect(res.body.variance).toBeCloseTo(-30, 2);
+    // عدّ 400 والمتوقع 430 → عجز 30 — نصّاً بإشارته.
+    expect(res.body.variance).toBe('-30.00');
 
     await auth(request(app.getHttpServer()).post('/pos/sales'))
       .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' })
@@ -174,7 +175,8 @@ describe('POS cashier (e2e)', () => {
     expect(res.body.status).toBe('PAID');
     // 8 − 20 = −12: البيع يمضي والسالب يُعلَن تحذيراً ناعماً، لا رفضاً.
     expect(res.body.stockDeduction.deducted).toBe(true);
-    expect(res.body.stockDeduction.belowZero).toEqual([{ productId: trackedProductId, resultingQty: -12 }]);
+    // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`).
+    expect(res.body.stockDeduction.belowZero).toEqual([{ productId: trackedProductId, resultingQty: '-12.000' }]);
     expect(await qtyAt(trackedProductId, warehouseId)).toBeCloseTo(-12, 2);
   }, 60000);
 

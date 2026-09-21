@@ -1,3 +1,4 @@
+import type { MoneyText, QtyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
 
@@ -19,16 +20,16 @@ export interface PosShift {
   openingFloat: string;
   declaredClosing: string | null;
   notes: string | null;
-  /** live drawer math — derived server-side from the shift's invoices. */
+  /** live drawer math — derived server-side from the shift's invoices. ② مالٌ نصّاً بخانتين (`ق-١٢٣٥`): يُقرأ بـ`num()` قبل أي حساب. */
   salesCount: number;
-  cashTotal: number;
-  cardTotal: number;
-  expectedCash: number;
+  cashTotal: MoneyText;
+  cardTotal: MoneyText;
+  expectedCash: MoneyText;
 }
 
 export interface ClosedShift extends PosShift {
-  /** موجب = زيادة، سالب = عجز. */
-  variance: number;
+  /** موجب = زيادة، سالب = عجز — نصٌّ بإشارته (`"-30.00"`). */
+  variance: MoneyText;
 }
 
 export interface PosSaleLine {
@@ -42,8 +43,8 @@ export type StockDeductionReport =
       deducted: true;
       warehouseId: string;
       movements: number;
-      /** بنود هبط رصيدها تحت الصفر — تحذير ناعم بعد البيع، لا مانع. */
-      belowZero: { productId: string; resultingQty: number }[];
+      /** بنود هبط رصيدها تحت الصفر — تحذير ناعم بعد البيع، لا مانع. ② كمّيةٌ نصّاً بثلاث خانات. */
+      belowZero: { productId: string; resultingQty: QtyText }[];
     }
   | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
