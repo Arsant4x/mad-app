@@ -20,7 +20,7 @@ import {
 import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
-import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
+import { computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
 import { fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -94,6 +94,11 @@ export async function priceLines(
   opts: { trusted?: boolean; originals?: ReadonlyMap<string, ProductTaxProfile> } = {},
 ): Promise<PricedInvoiceLine[]> {
   const profiles = opts.trusted ? new Map<string, ProductTaxProfile>() : await productTaxFor(tx, lines.filter((l) => !(l.returnsLineId && opts.originals?.has(l.returnsLineId))));
+  // ④B1: خصمُ السطر لا يفوق إجماليَّه (الكمية × السعر) — يُرفض مسمّىً بسطره، لا صافٍ سالب يمرّ إلى الدفتر والمستند.
+  lines.forEach((l, i) => {
+    const m: MoneyLine = { quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount ?? 0, taxRate: 0 };
+    if (lineDiscount(m) > lineGross(m)) throw new BadRequestException(formatMessage(MSG.invoice_line_discount_exceeds, { line: i + 1, gross: money(lineGross(m)), discount: money(lineDiscount(m)) }));
+  });
   return lines.map((l) => {
     const original = l.returnsLineId ? opts.originals?.get(l.returnsLineId) : undefined;
     const tax = original
@@ -585,6 +590,7 @@ export class InvoicesService {
               unitCode: unitCodeOf(unitCodes, l.productId),
               quantity: l.quantity,
               unitPrice: l.unitPrice,
+              discount: l.discount ?? 0,
               // ⑧ الفئةُ والسببُ والنسبةُ المشتقّة — منسوخةً لحظةَ البيع كما الوحدة.
               ...taxColumns(l),
             })),
@@ -781,6 +787,7 @@ export class InvoicesService {
             unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
+            discount: l.discount ?? 0,
             ...taxColumns(l),
           })),
         } as unknown as Prisma.InvoiceUncheckedUpdateInput['lines'];
@@ -1032,6 +1039,7 @@ export class InvoicesService {
             unitCode: unitCodeOf(unitCodes, l.productId),
             quantity: l.quantity,
             unitPrice: l.unitPrice,
+            discount: l.discount ?? 0,
             ...taxColumns(l),
             // رابطُ المرتجع وحالته على سطر الإشعار الدائن وحده (`SPEC 30.2` · `30.4`).
             returnsLineId: note.docType === 'CREDIT_NOTE' ? (l.returnsLineId ?? null) : null,

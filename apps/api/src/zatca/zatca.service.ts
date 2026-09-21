@@ -466,6 +466,7 @@ export class ZatcaService {
       invoice.lines.map((l) => ({
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
+        discount: Number(l.discount),
         taxRate: Number(l.taxRate),
         taxCategory: l.taxCategory,
         taxExemptionReasonCode: l.taxExemptionReasonCode,
@@ -529,6 +530,7 @@ export class ZatcaService {
         quantity: Number(l.quantity),
         unitCode: l.unitCode ?? null,
         unitPrice: Number(l.unitPrice),
+        discount: Number(l.discount),
         taxRate: Number(l.taxRate),
         // ⑧ الفئةُ والسببُ كما نُسخا على السطر لحظةَ البيع — لا من البطاقة اليوم.
         taxCategory: l.taxCategory,

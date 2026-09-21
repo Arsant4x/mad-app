@@ -76,6 +76,8 @@ export const MSG = {
   customer_not_found: 'customers.not_found',
   // buyer kind (ق-١٢٦١ أ — ②A1)
   customer_kind_required: 'customers.kind_required',
+  // line discount (ق-١٢٦١ ب — ④B1)
+  invoice_line_discount_exceeds: 'invoices.line_discount_exceeds',
   customer_kind_undeclared: 'customers.kind_undeclared',
   customer_other_id_scheme_invalid: 'customers.other_id_scheme_invalid',
   customer_other_id_invalid: 'customers.other_id_invalid',
@@ -631,6 +633,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Only a user with approval permission may override a credit limit — ask someone who has it',
   },
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
+  [MSG.invoice_line_discount_exceeds]: {
+    ar: 'خصم البند {line} ({discount}) يفوق إجماليه ({gross}) — لا صافي سالب',
+    en: 'The discount on line {line} ({discount}) exceeds its gross ({gross}) — no negative net',
+  },
   [MSG.customer_kind_required]: {
     ar: 'صفة العميل مطلوبة: فرد، أو مؤسسة فردية، أو شخص اعتباري — هي ما يقرّر نوع الفاتورة',
     en: 'The customer kind is required: natural person, sole establishment, or legal person — it decides the invoice type',

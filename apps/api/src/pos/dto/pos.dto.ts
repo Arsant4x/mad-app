@@ -59,6 +59,12 @@ export class PosSaleLineDto {
   @IsNumber()
   @IsPositive()
   quantity!: number;
+
+  /** ④B1 — خصمٌ على سطر الكاشير مبلغاً (≥ 0 ولا يفوق الكمية × السعر). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount?: number;
 }
 
 export class CreatePosSaleDto {
