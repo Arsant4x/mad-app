@@ -66,7 +66,7 @@ describe('Bank ↔ ledger account (e2e)', () => {
     await app.close();
   }, 60000);
 
-  it('① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في أحد نطاقات البنوك، وباسمه', async () => {
+  it('[SPEC 7.6] ① إنشاءُ بنكٍ يُنشئ حسابَه في الدليل — في أحد نطاقات البنوك، وباسمه', async () => {
     const bank = (await createBank(`بنك الاختبار ${suffix}`).expect(201)).body as Bank;
     banks.push(bank.id);
 
