@@ -1090,6 +1090,53 @@ export async function postBankStatementLineEntry(
 }
 
 /**
+ * **إيداعُ الدرج في الطريق** (`ق-١٢٦١` ج — ⑦A3): `مدين 1190 نقدٌ في الطريق / دائن الدرج` بتاريخ الإيداع — النقدُ خرج
+ * من الدرج ولم يدخل البنكَ بعد؛ يدخله تأكيدُ الكشف من التسوية (`postBankStatementLineEntry` بطرفٍ هو `1190`).
+ * قيدٌ آليّ لمستنده — لا يُعكس من شاشة القيود بل بإلغاء المستند.
+ */
+export async function postCashDepositEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: { no: string; date: Date; amount: number; memo: string; branchId: string | null; drawerAccountId: string; transitAccountId: string },
+): Promise<{ id: string; no: string }> {
+  const amount = round2(p.amount);
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.branchId,
+    date: p.date,
+    memo: p.memo,
+    auto: true,
+    lines: [
+      { accountId: p.transitAccountId, debit: amount, credit: 0 },
+      { accountId: p.drawerAccountId, debit: 0, credit: amount },
+    ],
+  });
+  return { id: entry.id, no: entry.no };
+}
+
+/** إلغاءُ إيداعٍ في الطريق: عكسٌ بتاريخ اليوم يحمل `reversalOfId` — المالُ يعود إلى الدرج ولا يُمحى أثر. */
+export async function postCashDepositVoidEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: { no: string; amount: number; memo: string; branchId: string | null; drawerAccountId: string; transitAccountId: string; reversalOfId: string | null },
+): Promise<{ id: string; no: string }> {
+  const amount = round2(p.amount);
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.branchId,
+    date: new Date(),
+    memo: p.memo,
+    auto: true,
+    reversalOfId: p.reversalOfId ?? undefined,
+    lines: [
+      { accountId: p.drawerAccountId, debit: amount, credit: 0 },
+      { accountId: p.transitAccountId, debit: 0, credit: amount },
+    ],
+  });
+  return { id: entry.id, no: entry.no };
+}
+
+/**
  * أثرُ سند التسوية على **مرآة البنك/الصندوق** (`ق-٢٨٢`: تُكتب من مسار الترحيل وحدَه — ولذلك
  * تسكن هذا الملفّ): رصيدٌ يتحرّك وحركةٌ بنكية تُسجَّل مربوطةً برقم القيد، بمبلغٍ **موقَّع**
  * (موجبٌ يدخل، سالبٌ يخرج؛ والعكسُ يقلب الإشارة). لا شيء حين لا بنك (نقدٌ على `1000`).

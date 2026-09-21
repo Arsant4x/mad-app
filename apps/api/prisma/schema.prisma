@@ -417,6 +417,7 @@ model Company {
   writeOffAttachments   InventoryWriteOffAttachment[]
   posShifts           PosShift[]
   cashDrawers         CashDrawer[]
+  cashDeposits CashDeposit[]
   posPayments         PosPayment[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
@@ -601,6 +602,7 @@ model Branch {
   journalLines JournalLine[]
 
   @@unique([companyId, name])
+  cashDeposits CashDeposit[]
   @@map("branches")
   inventoryWriteOff_branchId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_branchId_tenant")
   stockMovement_branchId_tenant StockMovement[] @relation("StockMovement_branchId_tenant")
@@ -619,6 +621,7 @@ model Branch {
   invoice_branchId_tenant Invoice[] @relation("Invoice_branchId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  cashDeposit_branchId_tenant CashDeposit[] @relation("CashDeposit_branchId_tenant")
 }
 
 /// Which branches an employee sub-account may see. A join table rather than a
@@ -2381,6 +2384,7 @@ model Bank {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
   transactions BankTransaction[]
+  cashDeposits CashDeposit[]
   rentPayments RentPayment[]
 
 
@@ -2400,6 +2404,7 @@ model Bank {
   bankTransaction_bankId_tenant BankTransaction[] @relation("BankTransaction_bankId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  cashDeposit_bankId_tenant CashDeposit[] @relation("CashDeposit_bankId_tenant")
 }
 
 /// A manual bank transaction (deposit/withdrawal). `matched`/`entryNo` mirror
@@ -2434,6 +2439,7 @@ model BankTransaction {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   matchedLineTenant JournalLine? @relation("BankTransaction_matchedLineId_tenant", fields: [companyId, matchedLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   matchedAt     DateTime?
+  cashDepositConfirmed CashDeposit? @relation("CashDepositConfirmation")
 
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
@@ -2443,6 +2449,9 @@ model BankTransaction {
   updatedAt DateTime @updatedAt
 
   @@map("bank_transactions")
+  cashDeposit_confirmedTransactionId_tenant CashDeposit[] @relation("CashDeposit_confirmedTransactionId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A posted double-entry journal entry — `no` numbering, balance
@@ -2524,6 +2533,8 @@ model JournalEntry {
   goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
   landedCosts         LandedCostDistribution[] @relation("LandedCostEntry")
   landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
+  cashDeposits        CashDeposit[]            @relation("CashDepositEntry")
+  cashDepositVoids    CashDeposit[]            @relation("CashDepositVoidEntry")
   stockOpening        StockOpening?            @relation("StockOpeningEntry")
   stockOpeningLineVoid StockOpeningLine?       @relation("StockOpeningLineVoidEntry")
 
@@ -2557,6 +2568,8 @@ model JournalEntry {
   invoice_reversalJournalEntryId_tenant Invoice[] @relation("Invoice_reversalJournalEntryId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  cashDeposit_voidJournalEntryId_tenant CashDeposit[] @relation("CashDeposit_voidJournalEntryId_tenant")
+  cashDeposit_journalEntryId_tenant CashDeposit[] @relation("CashDeposit_journalEntryId_tenant")
 }
 
 /// One debit-or-credit line of a JournalEntry. `onDelete: Restrict` on
@@ -3860,9 +3873,67 @@ model CashDrawer {
   @@unique([companyId, branchId, name])
   @@index([companyId, isActive])
   @@map("cash_drawers")
+  cashDeposits CashDeposit[]
   posShift_drawerId_tenant PosShift[] @relation("PosShift_drawerId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  cashDeposit_drawerId_tenant CashDeposit[] @relation("CashDeposit_drawerId_tenant")
+}
+
+/// حالُ إيداع الدرج (ق-١٢٦١ ج — ⑦A3): في الطريق حتى يؤكّده كشفُ البنك من التسوية؛ أو مُلغى بقيدِ عكس.
+enum CashDepositStatus {
+  IN_TRANSIT
+  CONFIRMED
+  VOID
+}
+
+/// إيداعُ نقدِ درجٍ في بنك عبر «نقدٍ في الطريق» 1190 (ق-١٢٦١ ج — ⑦A3): مدين 1190 / دائن الدرج عند الإيداع،
+/// ثم يؤكّده سطرُ كشف البنك من التسوية (مدين البنك / دائن 1190) — فلا يدخل البنكَ بالدفتر قبل أن يُرى في كشفه.
+model CashDeposit {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("CashDeposit_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  no     String
+  date   DateTime @db.Date
+  amount Decimal  @db.Decimal(18, 2)
+  memo   String?
+  status CashDepositStatus @default(IN_TRANSIT)
+
+  drawerId String
+  drawer   CashDrawer @relation(fields: [drawerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  drawerTenant CashDrawer @relation("CashDeposit_drawerId_tenant", fields: [companyId, drawerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  bankId   String
+  bank     Bank       @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank @relation("CashDeposit_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("CashDepositEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("CashDeposit_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  voidJournalEntryId String?
+  voidJournalEntry   JournalEntry? @relation("CashDepositVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  voidJournalEntryTenant JournalEntry? @relation("CashDeposit_voidJournalEntryId_tenant", fields: [companyId, voidJournalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// سطرُ الكشف الذي أكّد الوصول (من التسوية) — واحدٌ لواحد.
+  confirmedTransactionId String?          @unique
+  confirmedTransaction   BankTransaction? @relation("CashDepositConfirmation", fields: [confirmedTransactionId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  confirmedTransactionTenant BankTransaction? @relation("CashDeposit_confirmedTransactionId_tenant", fields: [companyId, confirmedTransactionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  confirmedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, no])
+  @@index([companyId, status])
+  @@map("cash_deposits")
 }
 
 /// دفعة واحدة من فاتورة كاشير (مستند §4): الفاتورة الواحدة قد تُدفع نقداً

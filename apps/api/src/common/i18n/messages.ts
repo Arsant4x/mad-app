@@ -174,6 +174,13 @@ export const MSG = {
   reconciliation_pending_lines: 'reconciliation.pending_lines',
   reconciliation_close_backwards: 'reconciliation.close_backwards',
   reconciliation_locked: 'reconciliation.locked',
+  reconciliation_deposit_amount: 'reconciliation.deposit_amount',
+  // cash deposits (ق-١٢٦١ ج — ⑦A3)
+  cash_deposit_not_found: 'cash_deposits.not_found',
+  cash_deposit_amount_positive: 'cash_deposits.amount_positive',
+  cash_deposit_exceeds_drawer: 'cash_deposits.exceeds_drawer',
+  cash_deposit_not_voidable: 'cash_deposits.not_voidable',
+  cash_deposit_not_in_transit: 'cash_deposits.not_in_transit',
 
   // properties / units / contracts
   property_not_found: 'properties.not_found',
@@ -742,6 +749,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.reconciliation_close_backwards]: { ar: 'تاريخ الإقفال لا يرجع إلى ما قبل الإقفال القائم — أعد الفتح أولاً', en: 'The close date cannot move backwards — reopen first' },
   [MSG.reconciliation_locked]: { ar: 'الكشف مُسوّى حتى {until} — لا مطابقة ولا فكّ قبل هذا التاريخ', en: 'Reconciled through {until} — no matching or unmatching before that date' },
+  [MSG.reconciliation_deposit_amount]: {
+    ar: 'سطر الكشف ({statement}) لا يساوي مبلغ الإيداع {no} ({deposit}) — تأكيد الإيداع يكون بسطرٍ بمبلغه',
+    en: 'Statement line ({statement}) does not equal deposit {no} ({deposit}) — a deposit is confirmed by a line of its exact amount',
+  },
+  [MSG.cash_deposit_not_found]: { ar: 'مستند الإيداع غير موجود', en: 'Cash deposit not found' },
+  [MSG.cash_deposit_amount_positive]: { ar: 'مبلغ الإيداع يجب أن يكون موجباً', en: 'The deposit amount must be positive' },
+  [MSG.cash_deposit_exceeds_drawer]: {
+    ar: 'الدرج «{drawer}» يحمل {available} بالدفتر — لا يُودَع منه {amount}',
+    en: 'Drawer "{drawer}" holds {available} on the books — {amount} cannot be deposited from it',
+  },
+  [MSG.cash_deposit_not_voidable]: { ar: 'لا يُلغى إلا إيداعٌ في الطريق — المؤكَّد رآه كشف البنك', en: 'Only an in-transit deposit can be voided — a confirmed one was seen on the bank statement' },
+  [MSG.cash_deposit_not_in_transit]: { ar: 'مستند الإيداع ليس في الطريق — لا يُؤكَّد', en: 'This deposit is not in transit — it cannot be confirmed' },
   [MSG.bank_code_range_full]: {
     ar: 'نطاق رموز حسابات البنوك (1100–1199) ممتلئ — احذف بنكاً غير مستعمل أو وسّع النطاق بقرار',
     en: 'The bank account code range (1100–1199) is full — remove an unused bank or widen the range by decision',

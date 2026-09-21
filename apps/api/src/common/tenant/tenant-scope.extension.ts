@@ -59,6 +59,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'InvoiceLine',
   'Supplier',
   'Purchase',
+  // ⑦A3 إيداعُ الدرج في البنك (ق-١٢٦١ ج): يحمل companyId وتحته RLS بـFORCE — طبقتان.
+  'CashDeposit',
   // ٢٥ الاستلامُ وسطورُه (ق-١١٣١): يحملان companyId وتحتهما RLS بـFORCE — طبقتان كالشراء.
   'GoodsReceipt',
   'GoodsReceiptLine',

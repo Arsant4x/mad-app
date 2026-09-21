@@ -6,6 +6,8 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { CloseReconciliationDto, MatchStatementLineDto, PostStatementLineDto, ReconciliationQueryDto, UnmatchStatementLineDto } from './dto/reconciliation.dto';
 import { ReconciliationService } from './reconciliation.service';
+import { CashDepositsService } from './cash-deposits.service';
+import { CreateCashDepositDto, VoidCashDepositDto } from './dto/cash-deposit.dto';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
@@ -20,7 +22,27 @@ export class BanksController {
   constructor(
     private readonly banksService: BanksService,
     private readonly reconciliation: ReconciliationService,
+    private readonly deposits: CashDepositsService,
   ) {}
+
+  /** إيداعاتُ الأدراج عبر «نقدٍ في الطريق» (⑦A3) — القائمةُ ومجموعُ الطريق من الدفتر والمستندات معاً. */
+  @Get('cash-deposits')
+  @RequiresAction('view')
+  listCashDeposits(@CurrentTenant() tenant: TenantContext, @Query('bankId') bankId?: string) {
+    return this.deposits.list(tenant.companyId, tenant.allowedBranchIds, bankId || undefined);
+  }
+
+  @Post('cash-deposits')
+  @RequiresAction('record')
+  createCashDeposit(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDepositDto) {
+    return this.deposits.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  }
+
+  @Post('cash-deposits/:depositId/void')
+  @RequiresAction('record')
+  voidCashDeposit(@CurrentTenant() tenant: TenantContext, @Param('depositId') depositId: string, @Body() dto: VoidCashDepositDto) {
+    return this.deposits.void(tenant.companyId, tenant.allowedBranchIds, depositId, dto.reason);
+  }
 
   /** التسويةُ البنكية (ق-١٢٦١ ج): الكشفُ مقابل الدفتر، بمقترَحاتٍ ومجاميع — كلُّ رقمٍ من الخادم. */
   @Get(':id/reconciliation')
@@ -45,7 +67,7 @@ export class BanksController {
   @Post(':id/reconciliation/post')
   @RequiresAction('record')
   reconciliationPost(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: PostStatementLineDto) {
-    return this.reconciliation.postFromStatement(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.counterpartyAccountId, dto.memo);
+    return this.reconciliation.postFromStatement(tenant.companyId, tenant.allowedBranchIds, id, dto.transactionId, dto.counterpartyAccountId, dto.memo, dto.depositId);
   }
 
   @Post(':id/reconciliation/close')
