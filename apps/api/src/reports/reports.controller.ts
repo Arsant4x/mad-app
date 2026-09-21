@@ -16,6 +16,13 @@ import { ReportsService } from './reports.service';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  /** لوحةُ التحكّم — أرقامُها من الدفتر والتخصيصات لا من جمع الشاشة (`ق-١٢٤٣`)؛ وشاشتُها شاشةُ التقارير: هي قائمةُ دخلٍ مختصرة. */
+  @Get('dashboard')
+  @RequiresAction('view')
+  dashboard(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
+    return this.reportsService.dashboard(tenant.companyId, tenant.allowedBranchIds, range);
+  }
+
   /** Occupancy, on-time collection and the renewal pipeline — all derived, none stored. */
   @Get('property-kpis')
   @RequiresAction('view')

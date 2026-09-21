@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { toBaseAmount } from '../currency/base-amount.util';
 import { formatMessage, MessageKey, MSG } from '../i18n/messages';
 import { formatMoney, round2 } from '../money/rounding';
+import { money } from '../money/text';
 
 /**
  * ⭐ **تسويةُ مستندٍ بسند — المشتركُ بين سند القبض وسند الصرف، مستخرَجاً لا منسوخاً** (`ق-٨٧١`).
@@ -110,6 +111,18 @@ export function withRemaining<T extends { id: string; total: Prisma.Decimal | nu
       return { ...doc, allocated: paid, remaining: round2(Number(doc.total) - paid) };
     })
     .filter((doc) => doc.remaining > SETTLEMENT_EPS);
+}
+
+/**
+ * يُلحق بالسند **مخصَّصَه** (مجموعُ تخصيصاته — موقَّعاً: العاكسُ سالبٌ) **وغيرَ المخصَّص** منه
+ * (مبلغُه − مخصَّصُه) — نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). كانت شاشةُ السندات تجمع التخصيصات
+ * بنفسها (`ق-١٢٤٣`: الشاشةُ تقرأ ولا تحسب)؛ والحسابُ هنا لأن الملفَّ هو مالكُ معنى التخصيص للجانبين.
+ */
+export function withAllocatedTotals<T extends { amount: Prisma.Decimal | number | string; allocations: { amount: Prisma.Decimal | number | string }[] }>(
+  payment: T,
+): T & { allocatedTotal: string; unallocated: string } {
+  const allocated = round2(payment.allocations.reduce((s, a) => s + Number(a.amount), 0));
+  return { ...payment, allocatedTotal: money(allocated), unallocated: money(Number(payment.amount) - allocated) };
 }
 
 interface LockedDocument {

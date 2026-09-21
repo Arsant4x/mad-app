@@ -87,6 +87,22 @@ export interface PropertyKpis {
 
 export const getPropertyKpis = () => apiClient.get<PropertyKpis>('/reports/property-kpis').then((r) => r.data);
 
+/**
+ * لوحةُ التحكّم — **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`): الإيرادُ والمصروفُ من الدفتر (صافيَين من الضريبة)،
+ * والذممُ من التخصيصات (المسدَّدُ جزئياً بمتبقّيه)، والسلسلةُ الشهرية من الدفتر — كلُّها نصٌّ بخانتين.
+ */
+export interface DashboardSummary {
+  from: string | null;
+  to: string | null;
+  revenue: MoneyText;
+  expenses: MoneyText;
+  netProfit: MoneyText;
+  receivables: MoneyText;
+  monthly: { month: string; revenue: MoneyText }[];
+}
+
+export const getDashboard = (range: ReportRange) => apiClient.get<DashboardSummary>('/reports/dashboard', { params: range }).then((r) => r.data);
+
 export const getIncomeStatement = (range: ReportRange) => apiClient.get<IncomeStatement>('/reports/income-statement', { params: range }).then((r) => r.data);
 export const getBalanceSheet = () => apiClient.get<BalanceSheet>('/reports/balance-sheet').then((r) => r.data);
 export const getCashFlow = (range: ReportRange) => apiClient.get<CashFlow>('/reports/cash-flow', { params: range }).then((r) => r.data);

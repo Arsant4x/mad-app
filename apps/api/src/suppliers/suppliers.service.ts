@@ -6,6 +6,11 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
+import { money } from '../common/money/text';
+import { allocatedByDocument } from '../common/settlement/settlement.util';
+import { dayEndOf } from '../common/wall-clock.util';
+import { creditedByPurchase, purchaseTarget } from '../purchases/purchase-settlement.util';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والهاتفُ والرقمُ الضريبي والفئة. */
 const SUPPLIER_SEARCH_FIELDS = ['name', 'phone', 'vatNumber', 'category'] as const;
@@ -17,6 +22,44 @@ export class SuppliersService {
   list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
     const where: Prisma.SupplierWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), SUPPLIER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.supplier, { where, orderBy: { name: 'asc' } }));
+  }
+
+  /**
+   * ملخّصُ المورّد في فترة — ثلاثةُ أرقامٍ كانت تُجمع في نافذة تفاصيله (`ق-١٢٤٣`): **المفوتَر** موقَّعاً
+   * بنوع المستند (الإشعارُ الدائن ينقص)، **والمسدَّد** من تخصيصات سندات الصرف على مستندات الفترة
+   * (`ق-٨٧٢`)، **والمستحقّ** متبقّي كلِّ مستندٍ بعد ما ائتمن به المورّد — من المصدر الواحد
+   * (`outstandingAfterNotes`) لا من طرحٍ في الشاشة؛ والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
+   * الفترةُ على تاريخ المستند كما كانت الشاشةُ ترشّح؛ وكلُّها نصٌّ بخانتين.
+   *
+   * **على مستوى المنشأة بحقّها**: مستنداتُ المورّد تُقرأ من فروعها كلِّها — فما يُطالِب به المورّدُ
+   * دَينٌ على المنشأة، والتقريرُ يقابله كاملاً كما تقابله فواتيرُه المفتوحة عند السداد.
+   */
+  summary(companyId: string, id: string, range: { from?: string; to?: string }) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const supplier = await tx.supplier.findUnique({ where: { id }, select: { id: true } });
+      if (!supplier) throw new NotFoundException(MSG.supplier_not_found);
+      const date: Prisma.DateTimeFilter = {};
+      if (range.from) date.gte = new Date(range.from);
+      if (range.to) date.lte = dayEndOf(new Date(range.to));
+      const purchases = await tx.purchase.findMany({
+        where: { supplierId: id, ...(Object.keys(date).length ? { date } : {}) },
+        select: { id: true, docType: true, total: true, voidedAt: true },
+      });
+      const ids = purchases.map((p) => p.id);
+      const allocated = await allocatedByDocument(purchaseTarget(tx), ids);
+      const credited = await creditedByPurchase(tx, ids);
+      let billed = 0;
+      let paid = 0;
+      let due = 0;
+      for (const p of purchases) {
+        billed += (p.docType === 'SUPPLIER_CREDIT_NOTE' ? -1 : 1) * Number(p.total);
+        const alloc = allocated.get(p.id) ?? 0;
+        paid += alloc;
+        const creditedTotal = p.docType === 'SUPPLIER_CREDIT_NOTE' ? 0 : (credited.get(p.id) ?? 0);
+        due += p.voidedAt ? 0 : outstandingAfterNotes(p, creditedTotal, alloc, 'SUPPLIER_CREDIT_NOTE');
+      }
+      return { supplierId: id, from: range.from ?? null, to: range.to ?? null, billed: money(billed), paid: money(paid), due: money(due) };
+    });
   }
 
   create(companyId: string, dto: CreateSupplierDto) {

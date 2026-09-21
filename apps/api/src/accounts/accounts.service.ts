@@ -13,6 +13,7 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { reverseAndDeleteJournalEntry } from '../journal/journal-posting.util';
 import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
 import { INVENTORY_ACCOUNT_CODE } from '../journal/inventory-accounts.util';
 
@@ -68,6 +69,20 @@ export class AccountsService {
       }));
       // الدليلُ كلُّه يُقرأ ليُشتقّ تاريخُ الافتتاح، فالقطعُ في الذاكرة (ق-١٢٣٦).
       return pageArray(query, rows, ACCOUNT_SEARCH_FIELDS);
+    });
+  }
+
+  /**
+   * مجموعُ أرصدة الدليل **لكل نوع** — كانت شاشةُ الحسابات تجمعه بنفسها (`ق-١٢٤٣`)، وعلى الصفوف
+   * المُرشَّحة بالبحث فيتغيّر المجموعُ بتغيّر ما كُتب في خانة البحث. هنا مجموعُ الدليل كلِّه لكل
+   * نوع — حقيقةٌ عن الدفاتر لا عن البحث — نصّاً بخانتين (`ق-١٢٣٥`).
+   */
+  summary(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const grouped = await tx.account.groupBy({ by: ['type'], _sum: { balance: true }, _count: { _all: true } });
+      const byType = new Map(grouped.map((g) => [g.type, g]));
+      const of = (type: string) => ({ total: money(Number(byType.get(type)?._sum.balance ?? 0)), count: byType.get(type)?._count._all ?? 0 });
+      return { asset: of('asset'), liability: of('liability'), equity: of('equity'), revenue: of('revenue'), expense: of('expense') };
     });
   }
 

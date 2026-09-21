@@ -32,19 +32,8 @@ export function CustomersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showArchived]);
 
-  const balanceByCustomer = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const inv of invoices) {
-      // `outstanding` لا `total`: الخادم يطرح منه الإشعارات الدائنة **والمقبوض**
-      // (invoices.service.ts outstandingOf). جمعُ الإجمالي كان يحتسب الفاتورة
-      // المسدَّدة جزئياً بكاملها، فيُظهر رصيداً أعلى مما يدين به العميل فعلاً
-      // ويخالف رقم تقرير أعمار الذمم لنفس العميل.
-      // ولا حاجة لتخطي PAID: outstanding يعيد صفراً لها ولإشعارات الدائن.
-      // ② يصل نصّاً بخانتين (`ق-١٢٣٥`) فيُقرأ رقماً قبل الجمع — والجمعُ على النصّ وصلٌ لا جمع.
-      map.set(inv.customerId, (map.get(inv.customerId) ?? 0) + num0(inv.outstanding));
-    }
-    return map;
-  }, [invoices]);
+  // الرصيدُ يصل مع صفّ العميل من الخادم (`outstanding` — المصدرُ الواحد للتعرّض، `ق-١٢٤٣`): كانت الشاشةُ
+  // تحمّل الفواتيرَ كلَّها وتجمع `outstanding` لكل عميل بنفسها. الفواتيرُ تبقى لنافذة التفاصيل وحدَها.
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -125,7 +114,7 @@ export function CustomersPage() {
               </tr>
             )}
             {rows.map((c) => {
-              const balance = balanceByCustomer.get(c.id) ?? 0;
+              const balance = num0(c.outstanding);
               return (
                 <tr key={c.id}>
                   <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(c)}>
@@ -135,7 +124,7 @@ export function CustomersPage() {
                   <td className="num">{c.phone || '—'}</td>
                   <td className="num">{fmt(c.creditLimit)}</td>
                   <td className="num" style={{ color: balance > 0 ? 'var(--rose)' : 'var(--emerald)' }}>
-                    {fmt(balance)}
+                    {fmt(c.outstanding ?? 0)}
                   </td>
                   <td>
                     <RowMenu

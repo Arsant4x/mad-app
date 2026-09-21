@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createAccount, deleteAccount, listAccounts, updateAccount, type Account, type AccountInput, type AccountType } from '../../api/accounts';
+import { createAccount, deleteAccount, getAccountsSummary, listAccounts, updateAccount, type Account, type AccountInput, type AccountType, type AccountsSummary } from '../../api/accounts';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { fmt } from '../../lib/format';
@@ -20,8 +20,12 @@ export function AccountsPage() {
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // مجموعُ كلِّ نوعٍ من الخادم (`ق-١٢٤٣`) — مجموعُ الدليل كلِّه، حقيقةٌ عن الدفاتر لا عن خانة البحث.
+  const [summary, setSummary] = useState<AccountsSummary | null>(null);
   async function reload() {
-    setAccounts(await listAccounts());
+    const [rows, totals] = await Promise.all([listAccounts(), getAccountsSummary()]);
+    setAccounts(rows);
+    setSummary(totals);
   }
 
   useEffect(() => {
@@ -116,7 +120,7 @@ export function AccountsPage() {
           TYPE_GROUPS.map((g) => {
             const rows = filtered.filter((a) => a.type === g);
             if (!rows.length) return null;
-            const total = rows.reduce((s, a) => s + Number(a.balance), 0);
+            const total = summary?.[g]?.total ?? '0.00';
             return (
               <div key={g}>
                 <div className="tree-row l1">

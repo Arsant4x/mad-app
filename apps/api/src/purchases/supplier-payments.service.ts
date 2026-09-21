@@ -12,11 +12,12 @@ import {
   assertReversible,
   baseSettledOf,
   lockAndAssertAllocationsFit,
+  withAllocatedTotals,
   withRemaining,
 } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { mirrorBankMovement, postSupplierPaymentEntry } from '../journal/auto-posting.util';
-import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
+import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListSupplierPaymentsQueryDto } from './dto/list-supplier-payments-query.dto';
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, SupplierAllocationDto } from './dto/supplier-payment.dto';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
@@ -70,12 +71,18 @@ export class SupplierPaymentsService {
           }
         : {}),
     };
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      pagedFindMany(query, tx.supplierPayment, {
-        where,
-        include: SUPPLIER_PAYMENT_INCLUDE,
-        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      }),
+    // المخصَّصُ وغيرُ المخصَّص على كلِّ صفّ — كسند القبض (`ق-١٢٤٣`)؛ و`listOrPage` لأن الصفَّ يُقرأ بضمائمه،
+    // والترتيبُ مختومٌ بـ`id` (`ق-٣٥٦`).
+    const args = { where, include: SUPPLIER_PAYMENT_INCLUDE, orderBy: [{ date: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }] };
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
+      mapList(
+        await listOrPage(query, {
+          all: () => tx.supplierPayment.findMany(args),
+          count: () => tx.supplierPayment.count({ where }),
+          window: (offset, limit) => tx.supplierPayment.findMany({ ...args, skip: offset, take: limit }),
+        }),
+        withAllocatedTotals,
+      ),
     );
   }
 
@@ -84,7 +91,7 @@ export class SupplierPaymentsService {
       tx.supplierPayment.findUnique({ where: { id }, include: SUPPLIER_PAYMENT_INCLUDE }),
     );
     if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
-    return payment;
+    return withAllocatedTotals(payment);
   }
 
   /**
@@ -182,7 +189,7 @@ export class SupplierPaymentsService {
 
         for (const a of allocations) await recomputePurchaseStatus(tx, a.purchaseId);
 
-        return tx.supplierPayment.findUniqueOrThrow({ where: { id: payment.id }, include: SUPPLIER_PAYMENT_INCLUDE });
+        return withAllocatedTotals(await tx.supplierPayment.findUniqueOrThrow({ where: { id: payment.id }, include: SUPPLIER_PAYMENT_INCLUDE }));
       }),
     );
   }
@@ -220,7 +227,7 @@ export class SupplierPaymentsService {
 
       for (const purchaseId of touched) await recomputePurchaseStatus(tx, purchaseId);
 
-      return tx.supplierPayment.findUniqueOrThrow({ where: { id }, include: SUPPLIER_PAYMENT_INCLUDE });
+      return withAllocatedTotals(await tx.supplierPayment.findUniqueOrThrow({ where: { id }, include: SUPPLIER_PAYMENT_INCLUDE }));
     });
   }
 
@@ -303,7 +310,7 @@ export class SupplierPaymentsService {
 
         for (const a of original.allocations) await recomputePurchaseStatus(tx, a.purchaseId);
 
-        return tx.supplierPayment.findUniqueOrThrow({ where: { id: reversal.id }, include: SUPPLIER_PAYMENT_INCLUDE });
+        return withAllocatedTotals(await tx.supplierPayment.findUniqueOrThrow({ where: { id: reversal.id }, include: SUPPLIER_PAYMENT_INCLUDE }));
       }),
     );
   }

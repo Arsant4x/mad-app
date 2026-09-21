@@ -23,6 +23,13 @@ export class CustomersController {
     return this.customersService.list(tenant.companyId, query.includeArchived === 'true', query);
   }
 
+  /** المفوتَرُ والمقبوضُ والرصيد — محسوبةٌ في الخادم من التخصيصات لا في نافذة التفاصيل (`ق-١٢٤٣`). */
+  @Get(':id/summary')
+  @RequiresAction('view')
+  summary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.customersService.summary(tenant.companyId, id);
+  }
+
   @Post()
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCustomerDto) {

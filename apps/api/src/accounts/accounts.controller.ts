@@ -22,6 +22,13 @@ export class AccountsController {
     return this.accountsService.list(tenant.companyId, query);
   }
 
+  /** مجموعُ الأرصدة لكل نوع — في الخادم لا في الشاشة (`ق-١٢٤٣`). */
+  @Get('summary')
+  @RequiresAction('view')
+  summary(@CurrentTenant() tenant: TenantContext) {
+    return this.accountsService.summary(tenant.companyId);
+  }
+
   @Post()
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateAccountDto) {

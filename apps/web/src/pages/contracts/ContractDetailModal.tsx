@@ -18,7 +18,7 @@ import {
   type SettlementBasis,
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
-import { formatMoney, round2 } from '../../lib/money';
+import { formatMoney, num0, round2, type MoneyText } from '../../lib/money';
 import { STANDARD_VAT_GROSS_FACTOR, STANDARD_VAT_RATE, standardVatIncludedIn } from '../../lib/vat';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
@@ -50,15 +50,15 @@ function grossNumberOf(contract: { classification: string; vatInclusion: string 
  * اقتراحه الكامل.
  */
 function suggestedRemainingGross(
-  contract: { classification: string; vatInclusion: string; payments: { installmentId: string | null; netAmount: string; discount: string }[] },
-  installment: { id: string; amount: string | number } | undefined,
+  contract: { classification: string; vatInclusion: string },
+  installment: { id: string; amount: string | number; gross?: MoneyText; settled?: MoneyText; remaining?: MoneyText } | undefined,
 ): string {
   if (!installment) return '';
-  const gross = grossNumberOf(contract, installment.amount);
-  const settled = contract.payments
-    .filter((p) => p.installmentId === installment.id)
-    .reduce((sum, p) => sum + Number(p.netAmount) + Number(p.discount), 0);
-  const remaining = round2(gross - settled);
+  // الإجماليُّ والمسدَّدُ والمتبقّي يصلون من الخادم مع العقد (`ق-١٢٤٣`) — وقد كانت النافذةُ تحسبها من دفعاته،
+  // وتخطئ عقارَ التشغيل (لا ضريبةَ عليه). والعقدُ القادم من قائمةٍ بلا حساب يعود إلى إجماليّ الشاشة.
+  const gross = installment.gross !== undefined ? num0(installment.gross) : grossNumberOf(contract, installment.amount);
+  const settled = num0(installment.settled);
+  const remaining = installment.remaining !== undefined ? num0(installment.remaining) : round2(gross - settled);
   return formatMoney(settled > 0 && remaining > 0 ? remaining : gross);
 }
 

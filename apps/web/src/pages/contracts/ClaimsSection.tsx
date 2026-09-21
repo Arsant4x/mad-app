@@ -2,6 +2,7 @@ import { badgeOf } from '../../lib/statusBadge';
 import { useRef, useState } from 'react';
 import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
+import { num0 } from '../../lib/money';
 
 const KIND_LABEL: Record<ClaimKind, string> = {
   MAINTENANCE: 'صيانة',
@@ -66,7 +67,8 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
   const [description, setDescription] = useState('');
   const [issuedAt, setIssuedAt] = useState(today());
 
-  const outstanding = contract.claims.filter((c) => c.status === 'OPEN').reduce((sum, c) => sum + Number(c.amount), 0);
+  // مجموعُ المطالبات المفتوحة يصل من الخادم مع العقد (`ق-١٢٤٣`) — يُقرأ رقماً لقرار الإظهار وحدَه.
+  const outstanding = num0(contract.claimsOutstanding);
 
   function fail(e: unknown) {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -90,7 +92,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>
-          المطالبات ({contract.claims.length}){outstanding > 0 && <span className="hint"> — مستحق على المستأجر: {fmt(outstanding)}</span>}
+          المطالبات ({contract.claims.length}){outstanding > 0 && <span className="hint"> — مستحق على المستأجر: {fmt(contract.claimsOutstanding ?? 0)}</span>}
         </span>
         {contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>

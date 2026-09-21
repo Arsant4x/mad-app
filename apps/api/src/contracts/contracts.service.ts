@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { ClaimKind, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
+import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -42,7 +42,8 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { deriveSettlementStatus } from '../common/settlement/settlement.util';
-import { rentAmountsOf } from '../journal/rent-tax-point.util';
+import { rentAmountsOf, rentTaxTreatment, type RentClassification, type RentVatInclusion } from '../journal/rent-tax-point.util';
+import { money } from '../common/money/text';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
@@ -132,8 +133,43 @@ export class ContractsService {
       if (!contract) throw new NotFoundException(MSG.contract_not_found);
       // العميلُ مصدرُ الحقيقة (`ق-١٠٢٨`/⑥): ما افترق على العقد قبل هذا البناء يُصحَّح بالاشتقاق عند
       // القراءة — لا بهجرةٍ تكتبه — وما بعده تُبقيه الكتابةُ متطابقاً.
-      return withPartyFromCustomer(contract);
+      return this.withComputedFigures(withPartyFromCustomer(contract));
     });
+  }
+
+  /**
+   * **الأرقامُ التي كانت تجمعها نافذةُ العقد بنفسها** (`ق-١٢٤٣`: الشاشةُ تقرأ ولا تحسب) — نصّاً بخانتين:
+   * لكل قسطٍ **إجماليُّه** بالضريبة من الدالّة نفسِها التي يقيس بها الاستحقاقُ والقبض (`rentAmountsOf`؛
+   * والقديمُ غيرُ المصنَّف بمبلغه — **وعقارُ التشغيل بلا ضريبة**، وهو ما كانت الشاشةُ تخطئه) **ومسدَّدُه**
+   * (صافي دفعاته + خصمُها — كما تُشتقّ حالتُه) **ومتبقّيه** (موقَّعاً: الزائدُ سالب)؛ ومجموعُ المطالبات
+   * المفتوحة؛ والتأميناتُ المحجوزة لدى المنشأة.
+   */
+  private withComputedFigures<
+    T extends Pick<Contract, 'classification' | 'vatInclusion'> & {
+      unit: { property: { ownership: string } };
+      installments: { id: string; amount: Prisma.Decimal }[];
+      payments: { installmentId: string | null; netAmount: Prisma.Decimal; discount: Prisma.Decimal }[];
+      claims: { status: string; amount: Prisma.Decimal }[];
+      deposits: { status: string; holder: string; amount: Prisma.Decimal }[];
+    },
+  >(contract: T) {
+    // المعاملةُ الضريبية من حقلَي العقد المُعلَنَين (`ق-٨٩١`) — لا استنباطَ من كلمة.
+    const treatment = rentTaxTreatment(contract.classification as RentClassification, contract.vatInclusion as RentVatInclusion, contract.unit.property.ownership);
+    const settledBy = new Map<string, number>();
+    for (const p of contract.payments) {
+      if (!p.installmentId) continue;
+      settledBy.set(p.installmentId, (settledBy.get(p.installmentId) ?? 0) + Number(p.netAmount) + Number(p.discount));
+    }
+    return {
+      ...contract,
+      installments: contract.installments.map((i) => {
+        const gross = treatment ? rentAmountsOf(Number(i.amount), treatment).gross : round2(Number(i.amount));
+        const settled = round2(settledBy.get(i.id) ?? 0);
+        return { ...i, gross: money(gross), settled: money(settled), remaining: money(gross - settled) };
+      }),
+      claimsOutstanding: money(contract.claims.filter((c) => c.status === 'OPEN').reduce((s, c) => s + Number(c.amount), 0)),
+      depositsHeld: money(contract.deposits.filter((d) => d.status === 'HELD' && d.holder === 'COMPANY').reduce((s, d) => s + Number(d.amount), 0)),
+    };
   }
 
   create(companyId: string, dto: CreateContractDto) {
@@ -215,7 +251,7 @@ export class ContractsService {
           await accrueDueWithinTx(tx, companyId, new Date(), created.id);
         }
 
-        return tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
         },
         ACCRUAL_TX_OPTIONS,
       ),
@@ -260,7 +296,7 @@ export class ContractsService {
       if (dto.furnished !== undefined) data.furnished = dto.furnished;
       if (dto.ejarNo !== undefined) data.ejarNo = dto.ejarNo;
 
-      return tx.contract.update({ where: { id }, data, include: CONTRACT_INCLUDE });
+      return this.withComputedFigures(await tx.contract.update({ where: { id }, data, include: CONTRACT_INCLUDE }));
     });
   }
 
@@ -371,7 +407,7 @@ export class ContractsService {
           await closeDeferredWithinTx(tx, id);
         }
 
-        return tx.contract.findUniqueOrThrow({ where: { id }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id }, include: CONTRACT_INCLUDE }));
         },
         ACCRUAL_TX_OPTIONS,
       ),
@@ -734,7 +770,7 @@ export class ContractsService {
         // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
         await accrueDueWithinTx(tx, companyId, new Date(), created.id);
 
-        return tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
         },
         ACCRUAL_TX_OPTIONS,
       ),
@@ -764,7 +800,7 @@ export class ContractsService {
       });
 
       await this.replaceHandoverItems(tx, created.id, dto.items);
-      return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
     });
   }
 
@@ -784,7 +820,7 @@ export class ContractsService {
       });
 
       if (dto.items) await this.replaceHandoverItems(tx, handover.id, dto.items);
-      return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
     });
   }
 
@@ -804,7 +840,7 @@ export class ContractsService {
         data: { status: 'SIGNED', signedAt: new Date(), signedBy: dto.signedBy.trim() },
       });
 
-      return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
     });
   }
 
@@ -816,7 +852,7 @@ export class ContractsService {
       // كي لا تبقى بايتاتها يتيمةً في التخزين (اكتشاف المراجعة).
       const photos = await tx.handoverPhoto.findMany({ where: { handoverId: handover.id }, select: { fileKey: true } });
       await tx.contractHandover.delete({ where: { id: handover.id } });
-      const refreshed = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+      const refreshed = this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       return { photoKeys: photos.map((p) => p.fileKey), refreshed };
     });
     for (const key of photoKeys) {
@@ -910,7 +946,7 @@ export class ContractsService {
           } as unknown as Prisma.ContractKeyMoneyUncheckedCreateInput,
         });
 
-        return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       }),
     );
   }
@@ -957,7 +993,7 @@ export class ContractsService {
           } as unknown as Prisma.ContractClaimUncheckedCreateInput,
         });
 
-        return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       }),
     );
   }
@@ -997,7 +1033,7 @@ export class ContractsService {
           data: { status, settledAt: date, waiveReason, settlementEntryId: entry?.id ?? null },
         });
 
-        return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       }),
     );
   }
@@ -1056,7 +1092,7 @@ export class ContractsService {
           } as unknown as Prisma.ContractDepositUncheckedCreateInput,
         });
 
-        return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       }),
     );
   }
@@ -1130,7 +1166,7 @@ export class ContractsService {
           },
         });
 
-        return tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE });
+        return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));
       }),
     );
   }

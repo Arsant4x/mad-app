@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Purchase } from '../../api/purchases';
-import type { Supplier } from '../../api/suppliers';
+import { getSupplierSummary, type Supplier, type SupplierSummary } from '../../api/suppliers';
 import { dfmt, fmt } from '../../lib/format';
+import { num0 } from '../../lib/money';
 import { purchaseStatus } from './purchaseStatus';
 
 export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier: Supplier; purchases: Purchase[]; onClose: () => void }) {
@@ -17,11 +18,13 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
     [allForSupplier, from, to],
   );
 
-  // إشعارُ المورّد الدائن يخفّض ما فُوتر — بإشارته (المبالغُ مخزَّنةٌ موجبةً والنوعُ يحمل الاتجاه).
-  const totalBilled = filtered.reduce((s, p) => s + (p.docType === 'SUPPLIER_CREDIT_NOTE' ? -1 : 1) * Number(p.total), 0);
-  // المسدَّدُ من تخصيصات سندات الصرف كما يحسبه الخادم (ق-٨٧٢) — لا من علَمٍ على الصفّ.
-  const totalPaid = filtered.reduce((s, p) => s + Number(p.allocated), 0);
-  const totalDue = totalBilled - totalPaid;
+  // الأرقامُ الثلاثة من الخادم بالفترة نفسِها (`ق-١٢٤٣`): المفوتَرُ موقَّعاً، والمسدَّدُ من التخصيصات،
+  // والمستحقُّ متبقّي كلِّ مستندٍ بعد ما ائتمن به المورّد — لا طرحُ الشاشة (المفوتَر − المسدَّد) الذي كان يتجاهل إشعاراتِه.
+  const [summary, setSummary] = useState<SupplierSummary | null>(null);
+  useEffect(() => {
+    getSupplierSummary(supplier.id, { from: from || undefined, to: to || undefined }).then(setSummary);
+  }, [supplier.id, from, to]);
+  const totalDue = num0(summary?.due);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -74,18 +77,18 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
         <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
           <div className="kpi-card neu">
             <div className="kpi-label">إجمالي فواتير الشراء</div>
-            <div className="kpi-value num">{fmt(totalBilled)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
             <div className="kpi-delta">
               {filtered.length} من {allForSupplier.length} فاتورة
             </div>
           </div>
           <div className="kpi-card pos">
             <div className="kpi-label">المسدَّد</div>
-            <div className="kpi-value num">{fmt(totalPaid)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.paid)} ر.س` : '…'}</div>
           </div>
           <div className={`kpi-card ${totalDue > 0 ? 'neg' : 'pos'}`}>
             <div className="kpi-label">المتبقي غير المسدَّد</div>
-            <div className="kpi-value num">{fmt(totalDue)} ر.س</div>
+            <div className="kpi-value num">{summary ? `${fmt(summary.due)} ر.س` : '…'}</div>
           </div>
         </div>
 
