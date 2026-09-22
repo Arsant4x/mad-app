@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { createJournalEntry, DEBIT_NORMAL_TYPES, type PostingLine } from '../journal/journal-posting.util';
 import { getOrCreateAccount } from '../journal/inventory-accounts.util';
 
@@ -66,7 +67,13 @@ export interface FiscalYearRow {
   end: Date;
 }
 
-/** رصيدُ كلِّ حساب نتيجةٍ حتى تاريخٍ — بالإشارة الطبيعية لنوعه. */
+/**
+ * رصيدُ كلِّ حساب نتيجةٍ حتى تاريخٍ — بالإشارة الطبيعية لنوعه.
+ *
+ * **على مستوى المنشأة بحقّها**: الأستاذُ دفترٌ واحد وقائمةُ الدخل تُقفل للمنشأة لا
+ * لفرعٍ منها — فإقفالُ نتيجةِ فرعٍ وحدَه يترك الإيرادَ مفتوحاً في غيره بلا أن يُرى،
+ * ويصير رصيدُ الأرباح المبقاة جزءَ النتيجة لا كلَّها.
+ */
 async function resultBalancesAsOf(tx: Prisma.TransactionClient, end: Date) {
   const accounts = await tx.account.findMany({
     where: { type: { in: ['revenue', 'expense'] } },
@@ -88,7 +95,13 @@ async function resultBalancesAsOf(tx: Prisma.TransactionClient, end: Date) {
     .filter((a) => Math.abs(a.amount) >= 0.005);
 }
 
-/** قيدُ الإقفال الفعّال للسنة — أي قيدِ إقفالٍ لم يُعكس بعد. */
+/**
+ * قيدُ الإقفال الفعّال للسنة — أي قيدِ إقفالٍ لم يُعكس بعد.
+ *
+ * **على مستوى المنشأة بحقّها**: السنةُ المالية تقويمُ المنشأة كلِّها لا تقويمَ فرع،
+ * وقيدُ إقفالها واحدٌ لها — فقراءتُه بفروعِ القارئ تجعل السنةَ «مقفلةً لفرعٍ مفتوحةً
+ * لآخر»، وهي حالٌ لا معنى لها في دفترٍ واحد.
+ */
 export async function activeClosingEntry(tx: Prisma.TransactionClient, fiscalYearId: string) {
   const entries = await tx.journalEntry.findMany({
     where: { closingForFiscalYearId: fiscalYearId, reversalOfId: null },
@@ -153,7 +166,7 @@ export async function closeFiscalYearWithinTx(
    * اللغة عند الردّ، **و`Postgres` يرفض البايتَ الصفريّ في عمود نصّ** (`22021`).
    * فرسائلُ الاستثناء تمرّ به، **وما يُكتب في الدفتر لا**.
    */
-  const memo = `إقفال السنة المالية ${year.name} — صافي ${netResult < 0 ? 'خسارة' : 'ربح'} ${Math.abs(netResult).toFixed(2)}`;
+  const memo = `إقفال السنة المالية ${year.name} — صافي ${netResult < 0 ? 'خسارة' : 'ربح'} ${money(Math.abs(netResult))}`;
 
   const entry = await createJournalEntry(tx, {
     companyId,
@@ -174,6 +187,9 @@ export async function closeFiscalYearWithinTx(
  * يُستدعى آلياً عند **إعادة فتح فترةٍ** في سنةٍ مقفلة: «فلا يبقى قيدُ إقفالٍ على
  * أرقامٍ تغيّرت» (قرار المالك). والتاريخُ تاريخُ الأصل لا اليوم — وإلا بقي
  * المركزُ المالي بتاريخ النهاية مقفلاً على أرقامٍ لم تعد قائمة.
+ *
+ * **على مستوى المنشأة بحقّها**: يقرأ سطورَ **قيدٍ بعينه** ليقلبها — وقصرُها على فروع
+ * القارئ يُنتج عكساً ناقصاً يترك الدفترَ غيرَ متوازن.
  */
 export async function reverseClosingEntryWithinTx(
   tx: Prisma.TransactionClient,
