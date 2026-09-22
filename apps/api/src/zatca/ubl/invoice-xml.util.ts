@@ -130,6 +130,8 @@ export interface UblInvoiceInput {
    * (BT-115) = الإجماليُّ − المقدَّم. ومجاميعُ المستند وضريبتُه **لا تُخفَّض** — كما في مثال المعيار (٢٣٠ بضريبةٍ ٣٠ ومقدَّمٍ ١٠٠).
    */
   prepayments?: UblPrepaymentReference[];
+  /** ⑤A3 — أعلامُ المعاملة (KSA-2)؛ غيابُها أصفار. */
+  flags?: UblTransactionFlags;
 }
 
 /** ④A1 — مرجعُ مستند دفعةٍ مقدَّمة على فاتورة التوريد (معيارُ XML للهيئة، §٩ «Prepayment»). */
@@ -169,7 +171,32 @@ const ADJUSTMENT_PAYMENT_MEANS_CODE = '10';
  * distinguishes standard (1) from simplified (2); the rest cover third-party,
  * nominal, export, summary and self-billing, none of which apply here.
  */
-const TRANSACTION_CODE = { standard: '0100000', simplified: '0200000' } as const;
+/** الموضعان الأوّلان من KSA-2: 01 كاملة · 02 مبسّطة (BR-KSA-06). */
+const INVOICE_SUBTYPE = { standard: '01', simplified: '02' } as const;
+
+/**
+ * ⑤A3 — أعلامُ المعاملة (KSA-2 المواضع 3–7: P N E S B). تُشتقّ في الخدمة ولا تُثبَّت هنا؛ والغائبُ صفر.
+ * الصادراتُ من بلد المشتري وسطر صادراتٍ معاً (`isExportInvoice`)؛ والثلاثةُ الأُخر (طرفٌ ثالث · اعتباريّ/nominal · ملخَّص)
+ * والذاتيةُ **غيرُ مبنيّة — أصفارٌ معلَنة** حتى يُبنى ما يُنتجها.
+ */
+export interface UblTransactionFlags {
+  thirdParty?: boolean;
+  nominal?: boolean;
+  export?: boolean;
+  summary?: boolean;
+  selfBilled?: boolean;
+}
+
+/**
+ * رمزُ المعاملة السباعيّ `NNPNESB` (BR-KSA-06) — ويُرمى على ما تمنعه الهيئة قبل أن يصلها:
+ * BR-KSA-31 المبسّطةُ لا تقبل إلا الطرفَ الثالث والاعتباريَّ والملخَّص (لا صادراتٍ ولا ذاتية)، وBR-KSA-07 لا ذاتيةَ على صادرات.
+ */
+export function transactionCode(invoiceType: 'standard' | 'simplified', flags: UblTransactionFlags = {}): string {
+  if (invoiceType === 'simplified' && (flags.export || flags.selfBilled)) throw new Error('KSA-2: a simplified invoice cannot be an export or self-billed transaction (BR-KSA-31).');
+  if (flags.export && flags.selfBilled) throw new Error('KSA-2: self-billing is not allowed on export invoices (BR-KSA-07).');
+  const bit = (v: boolean | undefined) => (v ? '1' : '0');
+  return INVOICE_SUBTYPE[invoiceType] + bit(flags.thirdParty) + bit(flags.nominal) + bit(flags.export) + bit(flags.summary) + bit(flags.selfBilled);
+}
 
 /** Standard invoices are cleared before issue, simplified ones reported after. */
 const PROFILE_ID = 'reporting:1.0';
@@ -366,6 +393,8 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
 
   // ⑧ كلُّ سطرٍ يُفحص قبل التفصيل — فمستندٌ فيه سطرٌ لا يُختم يُرمى هنا لا في منتصف بنائه.
   input.lines.forEach(ublCategoryOf);
+  // ⑤A3 — BR-KSA-46: فاتورةُ الصادرات لا تحمل رقمَ تسجيلٍ ضريبيٍّ للمشتري.
+  if (input.flags?.export && input.buyer.vatNumber?.trim()) throw new Error('KSA-2: an export invoice must not carry a buyer VAT registration number (BR-KSA-46).');
 
   // Tax is reported per category — ⑧ one `TaxSubtotal` per (category · rate · reason), the
   // taxable amount being the sum of that key's rounded line nets and the tax being
@@ -405,7 +434,7 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
     // لاحقة أو UTC بـ`Z`، وهما الصيغتان الوحيدتان في معيار الهيئة (`ق-١٨٥`).
     `<cbc:IssueDate>${esc(input.issued.date)}</cbc:IssueDate>` +
     `<cbc:IssueTime>${esc(input.issued.time)}</cbc:IssueTime>` +
-    `<cbc:InvoiceTypeCode name="${TRANSACTION_CODE[input.invoiceType]}">${DOCUMENT_TYPE_CODE[documentType]}</cbc:InvoiceTypeCode>` +
+    `<cbc:InvoiceTypeCode name="${transactionCode(input.invoiceType, input.flags)}">${DOCUMENT_TYPE_CODE[documentType]}</cbc:InvoiceTypeCode>` +
     `<cbc:DocumentCurrencyCode>${esc(currency)}</cbc:DocumentCurrencyCode>` +
     // Always SAR: the authority accounts for the tax in local currency even
     // when the invoice is denominated in another one.

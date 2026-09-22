@@ -378,6 +378,10 @@ export class ZatcaOnboardingService {
       // حيٍّ للامتثال هو الإثبات، ويُردّ السطرُ بسطرٍ إن رفضته الهيئة.
       const sampleLines: UblInvoiceLine[] = [
         { description: 'عينة فحص الامتثال', quantity: 1, unitPrice: 100, taxRate: STANDARD_VAT_RATE, taxCategory: 'S' },
+        // ④B1/⑤A3: عيّنةُ الفاتورة الكاملة تحمل سطراً بخصمٍ (BT-136 · AllowanceCharge على السطر) — يُثبَت أمام الهيئة.
+        ...(sample.invoiceType === 'standard' && sample.documentType === 'invoice'
+          ? [{ description: 'عينة خصم على السطر', quantity: 2, unitPrice: 30, discount: 10, taxRate: STANDARD_VAT_RATE, taxCategory: 'S' as const }]
+          : []),
         ...(sample.invoiceType === 'simplified' && sample.documentType === 'invoice'
           ? [{ description: 'عينة نسبة الصفر — دواء', quantity: 1, unitPrice: 50, taxRate: 0, taxCategory: 'Z' as const, taxExemptionReasonCode: 'VATEX-SA-35' }]
           : []),

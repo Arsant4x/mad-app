@@ -90,10 +90,12 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
   }, 30000);
 
   it('[SPEC 4.10] ③ the type follows the kind (م٥٣) and the document carries the alternative id with its scheme and the buyer country (BR-KSA-14 · BT-55)', () => {
-    expect(invoiceTypeFor({ kind: 'ESTABLISHMENT', vatNumber: null })).toBe('standard');
-    expect(invoiceTypeFor({ kind: 'LEGAL_PERSON', vatNumber: null })).toBe('standard');
-    expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null })).toBe('simplified');
-    expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '300000000000003' })).toBe('standard');
+    // ⑤A3: السطورُ تدخل الاشتقاق (الصادرات) — هنا محلّيةٌ خاضعة فلا تغيّر الحكم.
+    const local = [{ taxExemptionReasonCode: null }];
+    expect(invoiceTypeFor({ kind: 'ESTABLISHMENT', vatNumber: null, country: 'SA' }, local)).toBe('standard');
+    expect(invoiceTypeFor({ kind: 'LEGAL_PERSON', vatNumber: null, country: 'SA' }, local)).toBe('standard');
+    expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: 'SA' }, local)).toBe('simplified');
+    expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '300000000000003', country: 'SA' }, local)).toBe('standard');
 
     const xml = buildUnsignedInvoiceXml({
       number: 'INV-2026-0001',
@@ -119,6 +121,25 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
     expect(sellerXml).toContain('schemeID="CRN">2050000000<');
     expect(sellerXml).toContain('<cbc:IdentificationCode>SA</cbc:IdentificationCode>');
   });
+
+  it('[SPEC 4.10] ⑤ ⑤A3 — an export supply to a foreign buyer is a standard invoice even for a natural person (م٥٣(١)(أ)(٣)); a foreign buyer with only local lines is not; a Saudi VAT number on a foreign customer is refused by name', async () => {
+    // أجنبيٌّ برقمِ تسجيلٍ سعوديّ تناقضٌ — يُرفض عند البطاقة لا عند الختم (BR-KSA-46).
+    const conflict = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'أجنبي برقم سعودي', country: 'AE', vatNumber: '300000000000003' }).expect(400);
+    expect(String(conflict.body.message)).toContain('TIN');
+    const foreign = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'مشترٍ في الإمارات', country: 'AE', otherIdScheme: 'TIN', otherId: 'AE1234567' }).expect(201)).body as { id: string };
+    await auth(http().patch(`/customers/${foreign.id}`)).send({ vatNumber: '300000000000003' }).expect(400);
+
+    const exported = (
+      await auth(http().post('/invoices'))
+        .send({ customerId: foreign.id, issueDate: '2026-06-01', dueDate: '2026-06-30', lines: [{ description: 'خدمة مصدَّرة', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'Z', taxExemptionReasonCode: 'VATEX-SA-33' }] })
+        .expect(201)
+    ).body as { id: string };
+    const local = (await invoiceFor(foreign.id).expect(201)).body as { id: string };
+    const rows = (await auth(http().get('/invoices')).expect(200)).body as { id: string; invoiceType: string }[];
+    expect(rows.find((r) => r.id === exported.id)?.invoiceType).toBe('standard');
+    // خدمةٌ تُستهلك في المملكة لمشترٍ أجنبيّ فرد: مبسّطةٌ كما كانت — البلدُ وحدَه لا يصنع صادرات.
+    expect(rows.find((r) => r.id === local.id)?.invoiceType).toBe('simplified');
+  }, 60000);
 
   it('[SPEC 6.13] ④ ⑤A4 — a register sale to a legal person completes but its receipt carries no code and is gated until clearance; the walk-in sale is not', async () => {
     const productId = (await auth(http().post('/products')).send({ name: 'صنف الكاشير', unitCode: 'H87', expiryTracked: false, taxCategory: 'S', price: 100 }).expect(201)).body.id;
