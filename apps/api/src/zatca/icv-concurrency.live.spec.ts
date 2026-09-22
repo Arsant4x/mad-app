@@ -185,6 +185,16 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
    * وأحمرُ حين يصل قبلها (`§8.2.1` — سقط على السير `35516939838` وهو نفسُه على الشجرة نفسِها مرّ مرّتين).
    */
   let chainWaits = 0;
+  /**
+   * إلزامُ التداخل بإشارةٍ لا بزمن (`ق-١٢٦٥`/ب — `ق-٨٢٠`): توقيعُ الفائز يُحبس حتى يقرأ الخاسرُ سلفَه محجوزاً
+   * بلا بصمة ويُرفض باسمه — **ثم** يُطلَق. فالنافذةُ التي يقيسها الاختبارُ مضمونةٌ في كلِّ تشغيل، لا مرهونةً بأن
+   * تكون `600 ms` أطولَ من مسار الخاسر تحت الحِمل (كانت تحت الحِمل أقصرَ فيصل الخاسرُ بعد حفظ البصمة:
+   * `chainWaits = 0` — أخضرُ وحدَه وأحمرُ في المحطّة، أي حارسٌ يشهد لبيئته).
+   */
+  let releaseWinner: () => void = () => {};
+  const winnerMayFinish = new Promise<void>((resolve) => {
+    releaseWinner = resolve;
+  });
   const waitUntilNoClaimWithoutHash = async () => {
     for (let poll = 0; poll < 400; poll += 1) {
       const pending = await tenantPrisma.runInTenantContext(companyId, (tx) =>
@@ -202,6 +212,8 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
       } catch (e) {
         if (e instanceof ConflictException && String(e.message).startsWith(MSG.zatca_previous_unstamped)) {
           chainWaits += 1;
+          // الخاسرُ رأى النافذة — فليُطلَق الفائزُ الآن ليحفظ بصمتَه، ثم يُنتظَر حالةً لا زمناً.
+          releaseWinner();
           await waitUntilNoClaimWithoutHash();
           continue;
         }
@@ -212,15 +224,22 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
   };
 
   it('① استدعاءان متزامنان يُنتجان موقعين مختلفين — الخاسرُ يُرفض باسمه ويعود بعد ختم سلفه، ولا تصادم', async () => {
-    // إلزامُ التداخل (`§8.8` الوجه الثالث — `ق-٨٢٠`): أوّلُ توقيعٍ (الفائزُ بالادّعاء) يُبطَّأ فيبقى
-    // موقعُه محجوزاً بلا بصمةٍ حتى يصل الخاسرُ إلى `previousChainHash` — **في كل تشغيل لا في بعضه**.
-    // والدالّةُ الحقيقيةُ تُستدعى بعد الإبطاء، فالختمُ ختمٌ حقيقيّ.
+    // إلزامُ التداخل (`§8.8` الوجه الثالث — `ق-٨٢٠` · `ق-١٢٦٥`/ب): أوّلُ توقيعٍ (الفائزُ بالادّعاء) **يُحبس على
+    // إشارةٍ** يطلقها الخاسرُ حين يقرأ سلفَه محجوزاً بلا بصمة — لا على نومٍ ثابت قد يقصر عن مسار الخاسر تحت الحِمل.
+    // فالنافذةُ مضمونةٌ **في كل تشغيل لا في بعضه**، والدالّةُ الحقيقيةُ تُستدعى بعد الإطلاق فالختمُ ختمٌ حقيقيّ.
+    // وسقفُ الحبس يسمّي العطلَ إن لم يبلغ الخاسرُ القراءةَ أصلاً — لا تعليقٌ صامت.
     const realSign = xades.signInvoice;
     let delayedOnce = false;
     const sign = jest.spyOn(xades, 'signInvoice').mockImplementation(async (input) => {
       if (!delayedOnce) {
         delayedOnce = true;
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        let cap: NodeJS.Timeout | undefined;
+        await Promise.race([
+          winnerMayFinish,
+          new Promise<never>((_, reject) => {
+            cap = setTimeout(() => reject(new Error('الخاسرُ لم يقرأ سلفَه محجوزاً خلال ١٠ ثوانٍ — التداخلُ لم يقع فالحارسُ لا يقيس')), 10_000);
+          }),
+        ]).finally(() => clearTimeout(cap));
       }
       return realSign(input);
     });
