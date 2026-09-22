@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -10,6 +10,7 @@ import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
 import { validationExceptionFactory } from './common/i18n/validation.util';
 import { assertProductionSecrets } from './common/config/production-secrets';
 import { REQUEST_ID_HEADER, requestIdMiddleware } from './common/request-id/request-id.middleware';
+import { buildOpenApiDocument } from './common/openapi-document';
 import { applyApiVersioning } from './common/versioning';
 
 async function bootstrap() {
@@ -71,14 +72,9 @@ async function bootstrap() {
   // ENABLE_API_DOCS=true يعيده عمداً عند الحاجة لتشخيص عابر.
   const docsEnabled = !isProduction || config.get<string>('ENABLE_API_DOCS') === 'true';
   if (docsEnabled) {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('Mad App API')
-      .setDescription('Multi-tenant accounting / real-estate / HR / inventory platform')
-      .setVersion('0.1.0')
-      .addBearerAuth()
-      .build();
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document);
+    // ⭐ الوثيقةُ من مصدرٍ واحد (`ق-١٢٩١` · ي/⑫A2): يستدعيه الإقلاعُ وحارسُ العقد
+    //    وسكربتُ اللقطة — فما يُحرَس هو ما يُنشَر لا نسخةٌ منه (`§8.5`).
+    SwaggerModule.setup('docs', app, buildOpenApiDocument(app));
   }
 
   const port = config.get<number>('PORT', 3000);

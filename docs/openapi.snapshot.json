@@ -1,0 +1,5526 @@
+{
+  "DELETE /accounts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /activities/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /attendance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /banks/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /branches/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /cash-drawers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /company-users/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /contracts/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /contracts/claim-attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /contracts/handover-photos/{photoId}": {
+    "parameters": [
+      "path:photoId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /contracts/{id}/handovers/{handoverId}": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /currencies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /customers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /employees/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /fiscal-years/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /integrations/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /inventory/write-offs/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /invoices/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /journal/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /leaves/requests/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /leaves/types/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /obligations/vat-declaration/filed": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /products/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /properties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /purchases/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /purchases/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /purchases/{id}/landed-costs/{distributionId}": {
+    "parameters": [
+      "path:distributionId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /purchases/{id}/receipts/{receiptId}": {
+    "parameters": [
+      "path:id:required",
+      "path:receiptId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /scripts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /suppliers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /transactions/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /trash/{entity}/{id}": {
+    "parameters": [
+      "path:entity:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /units/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/accounts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/activities/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/attendance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/banks/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/branches/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/cash-drawers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/company-users/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/contracts/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/contracts/claim-attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /v1/contracts/handover-photos/{photoId}": {
+    "parameters": [
+      "path:photoId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /v1/contracts/{id}/handovers/{handoverId}": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /v1/currencies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/customers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/employees/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/fiscal-years/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/integrations/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/inventory/write-offs/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/invoices/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/journal/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/leaves/requests/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/leaves/types/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/obligations/vat-declaration/filed": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /v1/products/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/properties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/purchases/attachments/{attachmentId}": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/purchases/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/purchases/{id}/landed-costs/{distributionId}": {
+    "parameters": [
+      "path:distributionId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/purchases/{id}/receipts/{receiptId}": {
+    "parameters": [
+      "path:id:required",
+      "path:receiptId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/scripts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/suppliers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/transactions/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/trash/{entity}/{id}": {
+    "parameters": [
+      "path:entity:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/units/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/warehouses/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "DELETE /warehouses/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /accounts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /accounts/summary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /activities": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /activities/primary/preview": {
+    "parameters": [
+      "query:activityId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /admin/deletion-requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /admin/processing-agreement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /attendance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /audit-log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /auth/me": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks/cash-deposits": {
+    "parameters": [
+      "query:bankId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks/code-band": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks/network-settlements": {
+    "parameters": [
+      "query:bankId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks/network-settlements/open": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /banks/{id}/reconciliation": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /branches": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /cash-drawers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /cash-drawers/code-band": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /companies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /company-profile": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /company-users": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/claim-attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/claims/{claimId}/attachments": {
+    "parameters": [
+      "path:claimId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/handover-photos/{photoId}/download-url": {
+    "parameters": [
+      "path:photoId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/handovers/{handoverId}/photos": {
+    "parameters": [
+      "path:handoverId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/{contractId}/attachments": {
+    "parameters": [
+      "path:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /contracts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /currencies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /currencies/rates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /customers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /customers/{id}/summary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /delegations/log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /delegations/{granteeId}": {
+    "parameters": [
+      "path:granteeId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /deletion-request": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /deletion-request/account": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /deletion-request/archive": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /employees": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /files/download-url": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /fiscal-years": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /integrations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/batch-balances": {
+    "parameters": [
+      "query:productId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/expiring": {
+    "parameters": [
+      "query:withinDays:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/movements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/opening": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/opening/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/provisional": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/stock-levels": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/write-offs": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/write-offs/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /inventory/write-offs/{id}/attachments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /invoices": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /invoices/open-prepayments/{customerId}": {
+    "parameters": [
+      "path:customerId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /journal": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /leaves/balance": {
+    "parameters": [
+      "query:employeeId:required",
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /leaves/requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /leaves/types": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /maintenance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /maintenance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /me/permissions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /notifications": {
+    "parameters": [
+      "query:unread:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /notifications/unread-count": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /obligations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /obligations/vat-declaration": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /payments/open-invoices/{customerId}": {
+    "parameters": [
+      "path:customerId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /payments/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /pos/incidents": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /pos/shifts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /pos/shifts/current": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /processing-agreement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /products": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /properties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/incorporation-report": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/receipts/reconciliation": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/{id}/landed-costs": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/{id}/receipts": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /purchases/{purchaseId}/attachments": {
+    "parameters": [
+      "path:purchaseId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /quotes": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reminders/due": {
+    "parameters": [
+      "query:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reminders/installments/{installmentId}/history": {
+    "parameters": [
+      "path:installmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reminders/policy": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/balance-sheet": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/bank-difference": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/branch-summary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/cash-flow": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/dashboard": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/deferred-revenue": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/income-statement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/ledger": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/ledger/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/note-deadlines": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/property-kpis": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/receivables-aging": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/receivables-aging/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/returns": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/statement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/statement/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/trial-balance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reports/trial-balance/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /reservations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /scripts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /subscription": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /supplier-payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /supplier-payments/open-purchases/{supplierId}": {
+    "parameters": [
+      "path:supplierId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /supplier-payments/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /suppliers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /suppliers/{id}/summary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /support-access": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /support-access/admin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /support-access/log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /tasks/counters": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /tasks/mine": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /tasks/{id}/log": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /transactions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /trash": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /units": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/accounts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/accounts/summary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/activities": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/activities/primary/preview": {
+    "parameters": [
+      "query:activityId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/admin/deletion-requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/admin/processing-agreement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/attendance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/audit-log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/auth/me": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks/cash-deposits": {
+    "parameters": [
+      "query:bankId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks/code-band": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks/network-settlements": {
+    "parameters": [
+      "query:bankId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks/network-settlements/open": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/banks/{id}/reconciliation": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/branches": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/cash-drawers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/cash-drawers/code-band": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/companies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/company-profile": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/company-users": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/claim-attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/claims/{claimId}/attachments": {
+    "parameters": [
+      "path:claimId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/handover-photos/{photoId}/download-url": {
+    "parameters": [
+      "path:photoId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/handovers/{handoverId}/photos": {
+    "parameters": [
+      "path:handoverId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{contractId}/attachments": {
+    "parameters": [
+      "path:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/currencies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/currencies/rates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/customers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/customers/{id}/summary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/delegations/log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/delegations/{granteeId}": {
+    "parameters": [
+      "path:granteeId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/deletion-request": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/deletion-request/account": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/deletion-request/archive": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/employees": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/files/download-url": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/fiscal-years": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/integrations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/batch-balances": {
+    "parameters": [
+      "query:productId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/expiring": {
+    "parameters": [
+      "query:withinDays:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/movements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/opening": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/opening/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/provisional": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/stock-levels": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/write-offs": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/write-offs/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/inventory/write-offs/{id}/attachments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/invoices": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/invoices/open-prepayments/{customerId}": {
+    "parameters": [
+      "path:customerId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/journal": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/leaves/balance": {
+    "parameters": [
+      "query:employeeId:required",
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/leaves/requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/leaves/types": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/maintenance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/maintenance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/me/permissions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/notifications": {
+    "parameters": [
+      "query:unread:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/notifications/unread-count": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/obligations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/obligations/vat-declaration": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/payments/open-invoices/{customerId}": {
+    "parameters": [
+      "path:customerId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/payments/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/incidents": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/shifts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/shifts/current": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/processing-agreement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/products": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/properties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/attachments/{attachmentId}/download-url": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/incorporation-report": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/receipts/reconciliation": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/{id}/landed-costs": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/{id}/receipts": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/purchases/{purchaseId}/attachments": {
+    "parameters": [
+      "path:purchaseId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/quotes": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reminders/due": {
+    "parameters": [
+      "query:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reminders/installments/{installmentId}/history": {
+    "parameters": [
+      "path:installmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reminders/policy": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/balance-sheet": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/bank-difference": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/branch-summary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/cash-flow": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/dashboard": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/deferred-revenue": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/income-statement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/ledger": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/ledger/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/note-deadlines": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/property-kpis": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/receivables-aging": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/receivables-aging/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/returns": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/statement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/statement/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/trial-balance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reports/trial-balance/export": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/reservations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/scripts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/subscription": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/supplier-payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/supplier-payments/open-purchases/{supplierId}": {
+    "parameters": [
+      "path:supplierId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/supplier-payments/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/suppliers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/suppliers/{id}/summary": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/support-access": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/support-access/admin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/support-access/log": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/tasks/counters": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/tasks/mine": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/tasks/{id}/log": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/transactions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/trash": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/units": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/warehouses": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/warranties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/warranties/cover": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/zatca/onboarding": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/zatca/unreported": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /warehouses": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /warranties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /warranties/cover": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /zatca/onboarding": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /zatca/unreported": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /accounts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /activities/primary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /activities/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /attendance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /banks/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /banks/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /branches/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /cash-drawers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /companies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /company-profile": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /company-users/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /contracts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /contracts/{id}/handovers/{handoverId}": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /currencies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /customers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /customers/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /delegations/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /employees/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /employees/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /fiscal-years/periods/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /fiscal-years/periods/{id}/reopen": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /integrations/{id}/enabled": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /invoices/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /leaves/types/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /maintenance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /maintenance/{id}/warranty": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /notifications/{id}/read": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /obligations/{id}/toggle": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /products/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /products/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /properties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /properties/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /purchases/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /reminders/policy": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /reservations/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /scripts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /scripts/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /suppliers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /suppliers/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /tasks/{id}/status": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /transactions/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /units/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /units/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/accounts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/activities/primary": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/activities/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/attendance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/banks/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/banks/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/branches/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/cash-drawers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/companies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/company-profile": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/company-users/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/contracts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/contracts/{id}/handovers/{handoverId}": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/currencies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/customers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/customers/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/delegations/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/employees/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/employees/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/fiscal-years/periods/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/fiscal-years/periods/{id}/reopen": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/integrations/{id}/enabled": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/invoices/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/leaves/types/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/maintenance/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/maintenance/{id}/warranty": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/notifications/{id}/read": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/obligations/{id}/toggle": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/products/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/products/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/properties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/properties/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/purchases/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/quotes/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/reminders/policy": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/reservations/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/scripts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/scripts/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/suppliers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/suppliers/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/tasks/{id}/status": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/transactions/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/units/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/units/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/warehouses/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/warehouses/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /warehouses/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /warehouses/{id}/archive": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /warranties/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /accounts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /activities": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/deletion-requests/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/deletion-requests/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/processing-agreement/sub-processors": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/processing-agreement/sub-processors/{id}/retire": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/processing-agreement/versions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /attendance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /auth/forgot-password": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /auth/login": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /auth/logout": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "POST /auth/refresh": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /auth/register": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /auth/reset-password": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /banks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/cash-deposits": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/cash-deposits/{depositId}/void": {
+    "parameters": [
+      "path:depositId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/network-settlements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/network-settlements/{settlementId}/void": {
+    "parameters": [
+      "path:settlementId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/{id}/reconciliation/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/{id}/reconciliation/match": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/{id}/reconciliation/post": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/{id}/reconciliation/reopen": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /banks/{id}/reconciliation/unmatch": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /branches": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /cash-drawers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /companies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /company-users": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/claims/{claimId}/attachments": {
+    "parameters": [
+      "path:claimId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/handovers/{handoverId}/photos": {
+    "parameters": [
+      "path:handoverId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{contractId}/attachments": {
+    "parameters": [
+      "path:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/claims": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/claims/{claimId}/pay": {
+    "parameters": [
+      "path:claimId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/claims/{claimId}/waive": {
+    "parameters": [
+      "path:claimId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/deposits": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/deposits/{depositId}/settle": {
+    "parameters": [
+      "path:depositId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/handovers": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/handovers/{handoverId}/sign": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/key-money": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/payments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /contracts/{id}/renew": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /currencies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /currencies/rates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /customers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /delegations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /deletion-request": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /deletion-request/erase": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /deletion-request/reopen": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /deletion-request/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /employees": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /files": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /fiscal-years": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /fiscal-years/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /integrations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/movements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/movements/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/opening": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/opening/{id}/lines/{lineId}/void": {
+    "parameters": [
+      "path:id:required",
+      "path:lineId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/write-offs": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/write-offs/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/write-offs/{id}/attachments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /inventory/write-offs/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /invoices": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /invoices/{id}/credit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /invoices/{id}/debit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /invoices/{id}/replacement": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /journal": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /journal/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /leaves/requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /leaves/requests/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /leaves/requests/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /leaves/types": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance/{id}/assign": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance/{id}/complete": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /maintenance/{id}/start": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /notifications/read-all": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /notifications/run-escalation": {
+    "parameters": [
+      "query:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /notifications/run-warranty-check": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /obligations/vat-declaration/filed": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /payments/refund": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /payments/{id}/allocate": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /payments/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /pos/sales": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /pos/sales/sync": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /pos/shifts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /pos/shifts/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /processing-agreement/accept": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /products": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /properties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases/{id}/landed-costs": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases/{id}/receipts": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases/{id}/supplier-credit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases/{id}/supplier-debit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /purchases/{purchaseId}/attachments": {
+    "parameters": [
+      "path:purchaseId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /quotes": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /quotes/{id}/convert": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /reminders/installments/{installmentId}/send": {
+    "parameters": [
+      "path:installmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /reservations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /scripts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /subscription/renew": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /supplier-payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /supplier-payments/{id}/allocate": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /supplier-payments/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /suppliers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /support-access/admin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /support-access/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /support-access/{id}/deny": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /support-access/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /tasks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /tasks/{id}/comments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /transactions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /trash/{entity}/{id}/restore": {
+    "parameters": [
+      "path:entity:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /units": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /units/bulk": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/accounts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/activities": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/deletion-requests/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/deletion-requests/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/processing-agreement/sub-processors": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/processing-agreement/sub-processors/{id}/retire": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/processing-agreement/versions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/attendance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/auth/forgot-password": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /v1/auth/login": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /v1/auth/logout": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "POST /v1/auth/refresh": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /v1/auth/register": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/auth/reset-password": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /v1/banks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/cash-deposits": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/cash-deposits/{depositId}/void": {
+    "parameters": [
+      "path:depositId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/network-settlements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/network-settlements/{settlementId}/void": {
+    "parameters": [
+      "path:settlementId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/{id}/reconciliation/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/{id}/reconciliation/match": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/{id}/reconciliation/post": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/{id}/reconciliation/reopen": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/banks/{id}/reconciliation/unmatch": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/branches": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/cash-drawers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/companies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/company-users": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/claims/{claimId}/attachments": {
+    "parameters": [
+      "path:claimId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/handovers/{handoverId}/photos": {
+    "parameters": [
+      "path:handoverId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{contractId}/attachments": {
+    "parameters": [
+      "path:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/claims": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/claims/{claimId}/pay": {
+    "parameters": [
+      "path:claimId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/claims/{claimId}/waive": {
+    "parameters": [
+      "path:claimId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/deposits": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/deposits/{depositId}/settle": {
+    "parameters": [
+      "path:depositId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/handovers": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/handovers/{handoverId}/sign": {
+    "parameters": [
+      "path:handoverId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/key-money": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/payments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/renew": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/currencies": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/currencies/rates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/customers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/delegations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/deletion-request": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/deletion-request/erase": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/deletion-request/reopen": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/deletion-request/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/employees": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/files": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/fiscal-years": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/fiscal-years/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/integrations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/movements": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/movements/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/opening": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/opening/{id}/lines/{lineId}/void": {
+    "parameters": [
+      "path:id:required",
+      "path:lineId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/write-offs": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/write-offs/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/write-offs/{id}/attachments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/inventory/write-offs/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/invoices": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/invoices/{id}/credit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/invoices/{id}/debit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/invoices/{id}/replacement": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/journal": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/journal/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/leaves/requests": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/leaves/requests/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/leaves/requests/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/leaves/types": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance/{id}/assign": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance/{id}/complete": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/maintenance/{id}/start": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/notifications/read-all": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/notifications/run-escalation": {
+    "parameters": [
+      "query:contractId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/notifications/run-warranty-check": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/obligations/vat-declaration/filed": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/payments/refund": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/payments/{id}/allocate": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/payments/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/sales": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/sales/sync": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/shifts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/shifts/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/processing-agreement/accept": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/products": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/properties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases/{id}/landed-costs": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases/{id}/receipts": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases/{id}/supplier-credit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases/{id}/supplier-debit-note": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/purchases/{purchaseId}/attachments": {
+    "parameters": [
+      "path:purchaseId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/quotes": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/quotes/{id}/convert": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/reminders/installments/{installmentId}/send": {
+    "parameters": [
+      "path:installmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/reservations": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/scripts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/subscription/renew": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/supplier-payments": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/supplier-payments/{id}/allocate": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/supplier-payments/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/suppliers": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/support-access/admin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/support-access/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/support-access/{id}/deny": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/support-access/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/tasks": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/tasks/{id}/comments": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/transactions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/trash/{entity}/{id}/restore": {
+    "parameters": [
+      "path:entity:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/units": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/units/bulk": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/warehouses": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/warranties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/zatca/invoices/{id}/submit": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/zatca/onboarding/otp": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/zatca/onboarding/production": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/zatca/onboarding/start": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /warehouses": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /warranties": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /zatca/invoices/{id}/submit": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /zatca/onboarding/otp": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /zatca/onboarding/production": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /zatca/onboarding/start": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  }
+}
