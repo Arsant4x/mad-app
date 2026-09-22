@@ -70,3 +70,8 @@ Closing the books · Receivables · Payables · Purchasing · Sales · Bank acco
 | | **المجموع** | | **٢٢٣** | **٢٣** | **٨١** |
 
 *المسابيرُ في `D:\mad-app-scratch\review-250\` (`scan/markers-NN.json` · `scan/scan-NN.json` · `plan-modules.mjs` · `door-match-scope.mjs`).*
+
+## مكسورٌ اليوم والخطّةُ الموحّدة (`ق-١٢٧١` · `ق-١٢٧٢` · التوجيه ٢٥٠ · 2026-09-22)
+
+- [`00-ب-مكسور-اليوم.md`](00-ب-مكسور-اليوم.md) — ما هو مبنيٌّ ويتصرّف خلافَ ما يدّعيه في الأبواب ⑪…㉔ (سبعة: اثنان بُنيا `#539` · `#540`، والباقي مرتَّبٌ لا مبنيّ).
+- [`../plans/unified-core-plan.md`](../plans/unified-core-plan.md) — الثلاثةُ والعشرون الجديدة + باقي خطّة العشرين، جدولٌ واحد بخمسةَ عشرَ حزمة — **بانتظار حكم المالك**.
