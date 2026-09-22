@@ -49,7 +49,7 @@ describe('الشاشةُ تقرأ ولا تحسب — الأرقامُ من ال
 
     company = await registerIsolatedCompany(app, 'screen-reads');
     token = company.token;
-    customerId = (await auth(http().post('/customers')).send({ name: `عميل اللوحة ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل اللوحة ${suffix}` }).expect(201)).body.id;
     supplierId = (await auth(http().post('/suppliers')).send({ name: `مورّد اللوحة ${suffix}` }).expect(201)).body.id;
     bankId = (await auth(http().post('/banks')).send({ name: `صندوق اللوحة ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body.id;
 

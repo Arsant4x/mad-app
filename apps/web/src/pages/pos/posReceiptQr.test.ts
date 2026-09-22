@@ -42,7 +42,9 @@ describe('إيصال الكاشير يحمل رمز الهيئة داخل منط
     // رمزٌ يُقرأ ولا يصحّ أسوأ من غيابه (قاعدة QR المرحلة الأولى)؛ فحين يكون
     // `zatcaQr` فارغاً لا يُرسم شيء، ويُنبَّه الكاشير إلى إكمال ملف المنشأة.
     expect(source).toMatch(/receipt\.zatcaQr && \(/);
-    expect(source).toMatch(/!receipt\.zatcaQr && \(/);
+    // ⑤A4: الكاملةُ المحجوبة حتى الإجازة تخرج بلا رمزٍ **عمداً** — فتنبيهُ «أكمل الملفّ» لا يُعرض لها، ويُعرض حجبُها.
+    expect(source).toMatch(/!receipt\.zatcaQr && !receipt\.clearance\?\.required && \(/);
+    expect(source).toMatch(/receipt\.clearance\?\.required && \(/);
     expect(source).toContain('أكمل الاسم القانوني والرقم الضريبي');
   });
 });

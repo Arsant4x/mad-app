@@ -39,8 +39,9 @@ describe('Invoice/purchase auto-posting (e2e)', () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
 
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`).expect(200);
-    customerId = customers.body[0].id;
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
+    customerId = customers.body.id;
     const suppliers = await request(app.getHttpServer()).get('/suppliers').set('Authorization', `Bearer ${token}`).expect(200);
     supplierId = suppliers.body[0].id;
   }, 30000);

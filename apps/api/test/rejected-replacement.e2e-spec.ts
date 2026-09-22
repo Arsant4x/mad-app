@@ -216,10 +216,10 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     // قياسيّ: رقمٌ ضريبيّ وعنوانٌ مبنيّ كامل (BR-KSA-63) — والمبسَّط بلا رقم.
     standardCustomerId = (
       await auth(request(server()).post('/customers'))
-        .send({ name: `عميل قياسيّ ${suffix}`, vatNumber: '311111111111113', street: 'شارع الملك فهد', buildingNumber: '1234', district: 'العليا', city: 'الرياض', postalCode: '12345' })
+        .send({ kind: 'NATURAL', name: `عميل قياسيّ ${suffix}`, vatNumber: '311111111111113', street: 'شارع الملك فهد', buildingNumber: '1234', district: 'العليا', city: 'الرياض', postalCode: '12345' })
         .expect(201)
     ).body.id;
-    simpleCustomerId = (await auth(request(server()).post('/customers')).send({ name: `عميل مبسَّط ${suffix}` }).expect(201)).body.id;
+    simpleCustomerId = (await auth(request(server()).post('/customers')).send({ kind: 'NATURAL', name: `عميل مبسَّط ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(request(server()).post('/warehouses')).send({ name: `مستودع البدل ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(server()).post('/branches')).send({ name: `فرع البدل ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await auth(request(server()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف البدل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;

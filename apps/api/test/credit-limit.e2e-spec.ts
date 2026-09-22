@@ -54,7 +54,7 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
    */
   const limited: string[] = [];
   const customerWithLimit = async (creditLimit: number, label: string) => {
-    const id = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `${label} ${suffix}`, creditLimit }).expect(201)).body
+    const id = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `${label} ${suffix}`, creditLimit }).expect(201)).body
       .id as string;
     limited.push(id);
     return id;

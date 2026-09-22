@@ -94,7 +94,7 @@ describe('إشعارُ المورّد — الدفترُ والرفُّ والض
 
     const suffix = Date.now();
     supplierId = (await post('/suppliers').send({ name: `مورّد إشعارات ${suffix}` }).expect(201)).body.id;
-    customerId = (await post('/customers').send({ name: `عميل إشعارات ${suffix}` }).expect(201)).body.id;
+    customerId = (await post('/customers').send({ kind: 'NATURAL', name: `عميل إشعارات ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع إشعارات ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع إشعارات ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف إشعارات ${suffix}`, price: 100, cost: UNIT_COST }).expect(201)).body.id;

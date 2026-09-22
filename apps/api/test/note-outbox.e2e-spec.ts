@@ -91,7 +91,7 @@ describe('إشعارُ البيع يدخل طابورَ الإرسال عند إ
     token = company.token;
     companyId = company.companyId;
     await auth(request(server()).patch('/company-profile')).send({ legalName: 'شركة إشعار الطابور التجارية', vatNumber: '300000000000003' }).expect(200);
-    customerId = (await auth(request(server()).post('/customers')).send({ name: `عميل الإشعار ${Date.now()}` }).expect(201)).body.id;
+    customerId = (await auth(request(server()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الإشعار ${Date.now()}` }).expect(201)).body.id;
     const keys = await realKeys();
     const data = {
       privateKeyEnc: encryptSecret(keys.privateKeyPem),

@@ -73,8 +73,8 @@ describe('الفاتورةُ الصادرة لا تُعدَّل ولا تُحذ�
     companyId = login.body.user.companyId;
 
     const suffix = Date.now();
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الصادرة ${suffix}` }).expect(201)).body.id;
-    otherCustomerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل الصادرة ب ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الصادرة ${suffix}` }).expect(201)).body.id;
+    otherCustomerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الصادرة ب ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع الصادرة ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع الصادرة ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف الصادرة ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;

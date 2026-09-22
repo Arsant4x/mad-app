@@ -1,10 +1,41 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
+
+/** صفاتُ المشتري التي يقبلها الإنشاء — القديمةُ غيرُ المعلَنة ليست منها (لا تُعطى لصفٍّ جديد). */
+export const CUSTOMER_KINDS = ['NATURAL', 'ESTABLISHMENT', 'LEGAL_PERSON'] as const;
+export type CustomerKindInput = (typeof CUSTOMER_KINDS)[number];
+
+/** مخطّطاتُ المعرّف البديل (BR-KSA-14) — تُخزَّن كما هي، والقاعدةُ تقيّدها بالقائمة نفسِها. */
+export const BUYER_ID_SCHEMES = ['TIN', 'CRN', 'MOM', 'MLS', '700', 'SAG', 'NAT', 'GCC', 'IQA', 'PAS', 'OTH'] as const;
+export type BuyerIdSchemeInput = (typeof BUYER_ID_SCHEMES)[number];
 
 export class CreateCustomerDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
+
+  /**
+   * **صفةُ المشتري — إلزاميةٌ بلا افتراض** (ق-١٢٦١ أ — ②A1): تقرّر نوعَ الفاتورة (م٥٣): مؤسّسةٌ فردية أو شخصٌ
+   * اعتباريّ ⟵ ضريبيةٌ كاملة ولو بلا رقم؛ طبيعيٌّ ⟵ مبسّطة. رقمٌ ضريبيّ مع أيِّ صفة ⟵ كاملة.
+   */
+  @IsIn(CUSTOMER_KINDS, { message: MSG.customer_kind_required })
+  kind!: CustomerKindInput;
+
+  /** معرّفٌ بديل لمشترٍ غيرِ مسجَّل (BR-KSA-14): المخطّطُ والرقمُ معاً أو لا شيء. */
+  @IsOptional()
+  @IsIn(BUYER_ID_SCHEMES, { message: MSG.customer_other_id_scheme_invalid })
+  otherIdScheme?: BuyerIdSchemeInput;
+
+  @IsOptional()
+  @ValidateIf((o: CreateCustomerDto) => !!o.otherId)
+  @Matches(/^[A-Za-z0-9]+$/, { message: MSG.customer_other_id_invalid })
+  otherId?: string;
+
+  /** رمزُ البلد ISO 3166-1 alpha-2 (BT-55) — الغيابُ يعني `SA`. */
+  @IsOptional()
+  @ValidateIf((o: CreateCustomerDto) => !!o.country)
+  @Matches(/^[A-Z]{2}$/, { message: MSG.customer_country_invalid })
+  country?: string;
 
   /**
    * ⚠️ **ويُفحص نمطه كما يُفحص رقم المنشأة**: `^3\d{13}3$`.

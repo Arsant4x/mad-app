@@ -85,7 +85,7 @@ describe('ZATCA credit notes (e2e)', () => {
       await request(app.getHttpServer())
         .post('/customers')
         .set('Authorization', `Bearer ${token}`)
-        .send({ name: `عميل إشعارات ${Date.now()}` })
+        .send({ kind: 'NATURAL', name: `عميل إشعارات ${Date.now()}` })
         .expect(201)
     ).body.id;
   }, 30000);

@@ -11,7 +11,7 @@ export async function createTenantCustomer(app: INestApplication, token: string,
   const res = await request(app.getHttpServer())
     .post('/customers')
     .set('Authorization', `Bearer ${token}`)
-    .send({ name, ...(phone ? { phone } : {}), allowSameName: true })
+    .send({ kind: 'NATURAL', name, ...(phone ? { phone } : {}), allowSameName: true })
     .expect(201);
   return (res.body as { id: string }).id;
 }

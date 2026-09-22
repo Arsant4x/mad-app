@@ -41,7 +41,7 @@ describe('مهلة إصدار الإشعار (e2e)', () => {
     await app.init();
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل مهلة ${Date.now()}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل مهلة ${Date.now()}` }).expect(201)).body.id;
   }, 30000);
 
   afterAll(async () => {

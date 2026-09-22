@@ -282,7 +282,7 @@ async function seedCustomers(companyId: string, customers: { name: string; vatNu
       // فرادةُ الاسم لم تعد قيداً (`ق-١٠٢٨`/⑤) فلا مفتاحَ مركّباً يُرفع به — يُقرأ بالاسم ثم يُنشأ إن غاب.
       const existing = await tx.customer.findFirst({ where: { companyId, name: c.name }, select: { id: true } });
       if (existing) continue;
-      await tx.customer.create({ data: { companyId, name: c.name, vatNumber: c.vatNumber || null, phone: c.phone || null } });
+      await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: c.name, vatNumber: c.vatNumber || null, phone: c.phone || null } });
     }
   });
 }

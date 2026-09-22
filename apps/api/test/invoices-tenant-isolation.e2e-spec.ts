@@ -31,8 +31,9 @@ describe('Invoices tenant isolation (e2e)', () => {
     tokenA = loginA.body.accessToken;
     tokenB = loginB.body.accessToken;
 
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${tokenA}`).expect(200);
-    customerAId = customers.body[0].id;
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده» — على قاعدةٍ سبقت البناء يكون الأوّلُ قديماً غيرَ معلَنٍ فتُرفض فاتورتُه.
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
+    customerAId = customers.body.id;
   }, 30000); // booting a full Nest app + DB connections exceeds Jest's 5s default hook timeout
 
   afterAll(async () => {

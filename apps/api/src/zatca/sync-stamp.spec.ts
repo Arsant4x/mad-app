@@ -29,7 +29,8 @@ describe('الختم المتزامن — قرارات ق-١٩٦ في المصد
   it('🔴 ٢ — القياسية تُصفّى قبل الختم في مسار الإيصال', () => {
     const start = service.indexOf('async stampForReceipt(');
     const body = service.slice(start, service.indexOf('private async requireOnboarded(', start));
-    expect(body).toContain("invoiceTypeFor(buyer.customer.vatNumber) === 'standard'");
+    // ②A1: النوعُ من صفة المشتري ورقمِه معاً — يُمرَّر المشتري لا رقمُه.
+    expect(body).toContain("invoiceTypeFor(buyer.customer) === 'standard'");
   });
 
   it('🔴 ٣ — المردودُ يُرفض باسمه قبل أي ادّعاء، والمختومُ يُعاد محفوظُه قبل الادّعاء — ولا توقيعَ ثانياً لمردود (ق-٩٦٤)', () => {

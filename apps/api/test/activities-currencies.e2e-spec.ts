@@ -218,12 +218,13 @@ describe('Activities, currencies and FX difference (e2e)', () => {
         .expect(201);
       createdCurrencyIds.push(currency.body.id);
 
-      const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`).expect(200);
+      // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+      const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
       const invoice = await request(app.getHttpServer())
         .post('/invoices')
         .set('Authorization', `Bearer ${token}`)
         .send({
-          customerId: customers.body[0].id,
+          customerId: customers.body.id,
           issueDate: '2026-06-01',
           dueDate: '2026-06-30',
           currency: currency.body.code,

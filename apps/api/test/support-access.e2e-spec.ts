@@ -108,7 +108,7 @@ describe('Support mode (e2e)', () => {
     expect(approved.body.decidedById).not.toBe(approved.body.requestedById); // الطالبُ مديرُ منصّة — فضاءٌ آخر
 
     await support(request(app.getHttpServer()).get('/customers')).expect(200);
-    await support(request(app.getHttpServer()).post('/customers')).send({ name: 'محاولة كتابة' }).expect(403);
+    await support(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: 'محاولة كتابة' }).expect(403);
 
     // ⭐ **ويُخطَر عند أوّل دخولٍ — مرّةً لكل إذن** (`ق-٥٣٠`): قراءةٌ ثانية لا تُكرّره.
     await support(request(app.getHttpServer()).get('/customers')).expect(200);

@@ -51,7 +51,7 @@ describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', (
     company = await registerIsolatedCompany(app, 'unit-of-measure');
     token = company.token;
     companyId = company.companyId;
-    customerId = (await auth(http().post('/customers')).send({ name: `عميل الوحدات ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الوحدات ${suffix}` }).expect(201)).body.id;
     supplierId = (await auth(http().post('/suppliers')).send({ name: `مورّد الوحدات ${suffix}` }).expect(201)).body.id;
     warehouseId = (await auth(http().post('/warehouses')).send({ name: `مستودع الوحدات ${suffix}` }).expect(201)).body.id;
   }, 120000);

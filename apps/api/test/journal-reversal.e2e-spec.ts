@@ -126,7 +126,7 @@ describe('⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (e2e
   }, 60000);
 
   it('④ الآليُّ يتبع مستندَه — لا يُعكس هنا ولا يُحذف', async () => {
-    const customer = (await auth(http().post('/customers')).send({ name: `عميل عكس ${suffix}` }).expect(201)).body as { id: string };
+    const customer = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل عكس ${suffix}` }).expect(201)).body as { id: string };
     const invoice = (await auth(http().post('/invoices'))
       .send({ customerId: customer.id, issueDate: today(), dueDate: today(), lines: [{ description: 'خدمة', quantity: 1, unitPrice: 100, taxRate: 15 }] })
       .expect(201)).body as { journalEntryId: string };

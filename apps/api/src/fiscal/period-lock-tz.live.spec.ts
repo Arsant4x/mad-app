@@ -187,7 +187,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
       await acc(purchaseExpenseAccountCode(null), 'مصروفات إدارية وعمومية', 'EXPENSE');
       await acc('5600', 'فروق العملة', 'EXPENSE');
 
-      customerId = (await tx.customer.create({ data: { companyId, name: 'عميل فحص' } })).id;
+      customerId = (await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل فحص' } })).id;
       supplierId = (await tx.supplier.create({ data: { companyId, name: 'مورّد فحص' } })).id;
     });
   });

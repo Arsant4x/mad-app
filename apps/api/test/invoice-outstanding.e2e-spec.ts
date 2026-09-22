@@ -36,7 +36,7 @@ describe('Invoice outstanding = total - credits - allocations (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'invoice-outstanding');
     token = company.token;
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل المتبقي ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل المتبقي ${suffix}` }).expect(201)).body.id;
     bankId = (
       await auth(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق المتبقي ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201)
     ).body.id;

@@ -186,6 +186,12 @@ export function InvoiceListView({
                   {inv.zatcaQr ? <ZatcaQr payload={inv.zatcaQr} size={64} /> : <span className="badge">غير مكتمل</span>}
                 </td>
                 <td>
+                  {/* ②A1: نوعُ المستند لدى الهيئة يقرّره الخادمُ من صفة المشتري — يُعرض ولا يُختار. */}
+                  {inv.invoiceType && (
+                    <span className="badge" data-testid="invoice-type" style={{ marginInlineEnd: 6 }}>
+                      {inv.invoiceType === 'standard' ? 'كاملة' : 'مبسّطة'}
+                    </span>
+                  )}
                   <span className={`badge ${badgeOf(ZATCA_STATUS_META, inv.zatcaStatus).badgeClass}`} title={inv.zatcaMessage ?? undefined}>
                     {badgeOf(ZATCA_STATUS_META, inv.zatcaStatus).label}
                   </span>

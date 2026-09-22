@@ -105,13 +105,14 @@ describe('Structural wave — isolation and base amounts (e2e)', () => {
   });
 
   it('stores base amounts equal to the original when the invoice is in the base currency', async () => {
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
 
     const res = await request(app.getHttpServer())
       .post('/invoices')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({
-        customerId: customers.body[0].id,
+        customerId: customers.body.id,
         issueDate: '2026-03-01',
         dueDate: '2026-03-31',
         lines: [{ description: 'بند بالريال', quantity: 2, unitPrice: 100, taxRate: 15 }],
@@ -131,13 +132,14 @@ describe('Structural wave — isolation and base amounts (e2e)', () => {
   });
 
   it('converts to the base currency when the invoice is issued in a foreign one', async () => {
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
 
     const res = await request(app.getHttpServer())
       .post('/invoices')
       .set('Authorization', `Bearer ${tokenA}`)
       .send({
-        customerId: customers.body[0].id,
+        customerId: customers.body.id,
         issueDate: '2026-03-01',
         dueDate: '2026-03-31',
         currency: 'USD',
@@ -160,9 +162,10 @@ describe('Structural wave — isolation and base amounts (e2e)', () => {
   });
 
   it('rejects a malformed currency code or a non-positive rate', async () => {
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${tokenA}`).expect(200);
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${tokenA}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
     const base = {
-      customerId: customers.body[0].id,
+      customerId: customers.body.id,
       issueDate: '2026-03-01',
       dueDate: '2026-03-31',
       lines: [{ description: 'x', quantity: 1, unitPrice: 10, taxRate: 15 }],

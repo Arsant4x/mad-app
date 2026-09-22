@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCustomer, deleteCustomer, listCustomers, setCustomerArchived, updateCustomer, type Customer, type CustomerInput } from '../../api/customers';
+import { createCustomer, CUSTOMER_KIND_LABEL, deleteCustomer, listCustomers, setCustomerArchived, updateCustomer, type Customer, type CustomerInput } from '../../api/customers';
 import { listInvoices, type Invoice } from '../../api/invoices';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -98,6 +98,7 @@ export function CustomersPage() {
           <thead>
             <tr>
               <th>اسم العميل</th>
+              <th>الصفة</th>
               <th>الرقم الضريبي</th>
               <th>الجوال</th>
               <th>حد الائتمان</th>
@@ -108,7 +109,7 @@ export function CustomersPage() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6}>
+                <td colSpan={7}>
                   <div className="empty-state">لا يوجد عملاء مطابقون</div>
                 </td>
               </tr>
@@ -119,6 +120,16 @@ export function CustomersPage() {
                 <tr key={c.id}>
                   <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(c)}>
                     {c.name} 👁{c.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
+                  </td>
+                  <td>
+                    {c.kind === 'LEGACY_UNDECLARED' ? (
+                      // ②A1: القديمُ غيرُ المعلَن لا يُصدَر له مستند — الإعلانُ نقرةٌ من هنا، لا افتراضٌ من الخادم.
+                      <button className="btn link" data-testid="declare-kind" onClick={() => setModal({ mode: 'edit', customer: c })}>
+                        ⚠ أعلن الصفة
+                      </button>
+                    ) : (
+                      CUSTOMER_KIND_LABEL[c.kind]
+                    )}
                   </td>
                   <td className="num">{c.vatNumber || '—'}</td>
                   <td className="num">{c.phone || '—'}</td>

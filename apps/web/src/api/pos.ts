@@ -48,7 +48,16 @@ export type StockDeductionReport =
     }
   | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
-export type PosSaleResponse = Invoice & { stockDeduction?: StockDeductionReport };
+/**
+ * ⑤A4 — الكاملةُ لا تُشارَك قبل الاعتماد: مشترٍ مؤسّسةٌ أو اعتباريٌّ أو مسجَّلٌ ⟵ فاتورةٌ ضريبيةٌ كاملة تُجاز لدى الهيئة
+ * قبل التسليم؛ الخادمُ يعيدها بلا رمزٍ ويعلّم `clearance.required` فتحجب الشاشةُ الطباعة.
+ */
+export interface PosClearance {
+  required: boolean;
+  status?: string;
+  message?: string;
+}
+export type PosSaleResponse = Invoice & { stockDeduction?: StockDeductionReport; clearance?: PosClearance };
 
 export const getCurrentShift = () => apiClient.get<PosShift | null>('/pos/shifts/current').then((r) => r.data);
 export const listShifts = () => apiClient.get<PosShift[]>('/pos/shifts').then((r) => r.data);

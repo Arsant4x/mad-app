@@ -123,7 +123,7 @@ describe('سقوطُ النقل ليس جواباً — يُرمى فيعود ا
     token = company.token;
     companyId = company.companyId;
     await auth(request(server()).patch('/company-profile')).send({ legalName: 'شركة النقل التجارية', vatNumber: '300000000000003' }).expect(200);
-    customerId = (await auth(request(server()).post('/customers')).send({ name: `عميل النقل ${Date.now()}` }).expect(201)).body.id;
+    customerId = (await auth(request(server()).post('/customers')).send({ kind: 'NATURAL', name: `عميل النقل ${Date.now()}` }).expect(201)).body.id;
     keys = await realKeys();
     await seedCredential(keys.privateKeyPem, keys.certBase64);
   }, 90000);

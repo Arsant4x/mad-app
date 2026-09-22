@@ -57,7 +57,7 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
     const customer = await request(app.getHttpServer())
       .post('/customers')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: `عميل إقرار ${Date.now()}` })
+      .send({ kind: 'NATURAL', name: `عميل إقرار ${Date.now()}` })
       .expect(201);
     await request(app.getHttpServer())
       .post('/invoices')

@@ -22,8 +22,9 @@ describe('ZATCA phase 1 — invoice QR (e2e)', () => {
 
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
-    const customers = await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${token}`);
-    customerId = customers.body[0].id;
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${token}`).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
+    customerId = customers.body.id;
   }, 30000);
 
   afterAll(async () => {

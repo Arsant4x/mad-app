@@ -74,6 +74,15 @@ export const MSG = {
   credit_limit_hard_block: 'customers.credit_limit_hard_block',
   credit_limit_override_forbidden: 'customers.credit_limit_override_forbidden',
   customer_not_found: 'customers.not_found',
+  // buyer kind (ق-١٢٦١ أ — ②A1)
+  customer_kind_required: 'customers.kind_required',
+  customer_kind_undeclared: 'customers.kind_undeclared',
+  customer_other_id_scheme_invalid: 'customers.other_id_scheme_invalid',
+  customer_other_id_invalid: 'customers.other_id_invalid',
+  customer_other_id_pair: 'customers.other_id_pair',
+  customer_country_invalid: 'customers.country_invalid',
+  // pos clearance gate (ق-١٢٦١ أ — ⑤A4)
+  pos_clearance_required: 'pos.clearance_required',
   customer_has_invoices: 'customers.has_invoices',
   customer_has_contracts: 'customers.has_contracts',
   customer_in_trash: 'customers.in_trash',
@@ -318,6 +327,7 @@ export const MSG = {
   // zatca
   zatca_profile_incomplete: 'zatca.profile_incomplete',
   zatca_buyer_address_incomplete: 'zatca.buyer_address_incomplete',
+  zatca_buyer_id_missing: 'zatca.buyer_id_missing',
   zatca_onboarding_not_started: 'zatca.onboarding_not_started',
   zatca_already_onboarded: 'zatca.already_onboarded',
   zatca_qr_value_too_long: 'zatca.qr_value_too_long',
@@ -621,6 +631,25 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Only a user with approval permission may override a credit limit — ask someone who has it',
   },
   [MSG.customer_not_found]: { ar: 'العميل غير موجود', en: 'Customer not found' },
+  [MSG.customer_kind_required]: {
+    ar: 'صفة العميل مطلوبة: فرد، أو مؤسسة فردية، أو شخص اعتباري — هي ما يقرّر نوع الفاتورة',
+    en: 'The customer kind is required: natural person, sole establishment, or legal person — it decides the invoice type',
+  },
+  [MSG.customer_kind_undeclared]: {
+    ar: 'العميل «{customer}» سبق البناء ولم تُعلَن صفته — أعلنها من بطاقته (فرد · مؤسسة · شخص اعتباري) قبل إصدار مستند له',
+    en: 'Customer "{customer}" predates this build and has no declared kind — declare it on the card (natural · establishment · legal person) before issuing a document',
+  },
+  [MSG.customer_other_id_scheme_invalid]: {
+    ar: 'مخطّط المعرّف البديل غير معروف — المقبول: TIN · CRN · MOM · MLS · 700 · SAG · NAT · GCC · IQA · PAS · OTH',
+    en: 'Unknown buyer identification scheme — allowed: TIN · CRN · MOM · MLS · 700 · SAG · NAT · GCC · IQA · PAS · OTH',
+  },
+  [MSG.customer_other_id_invalid]: { ar: 'المعرّف البديل حروف وأرقام لاتينية فقط', en: 'The alternative identifier must be alphanumeric' },
+  [MSG.customer_other_id_pair]: { ar: 'المعرّف البديل يُذكر مع مخطّطه معاً — أو يُتركان معاً', en: 'The alternative identifier and its scheme go together — or both are left empty' },
+  [MSG.customer_country_invalid]: { ar: 'رمز البلد حرفان لاتينيان كبيران (ISO 3166-1)', en: 'The country code is two uppercase letters (ISO 3166-1)' },
+  [MSG.pos_clearance_required]: {
+    ar: 'فاتورة ضريبية كاملة — المشتري مؤسسة أو شخص اعتباري أو مسجَّل في الضريبة — تُجاز لدى الهيئة قبل تسليمها؛ لا تُطبع من الكاشير، وتُسلَّم من شاشة الفواتير بعد الإجازة',
+    en: 'Standard tax invoice — the buyer is an establishment, a legal person, or VAT-registered — it is cleared by the authority before delivery; not printed at the register, delivered from the invoices screen once cleared',
+  },
   [MSG.customer_has_invoices]: {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',
     en: 'Cannot delete a customer that has invoices — delete their invoices first',
@@ -1018,6 +1047,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_buyer_address_incomplete]: {
     ar: 'الفاتورة القياسية تشترط عنوان المشتري كاملاً — وينقص من بطاقة «{customer}»: {missing}. أكملها ثم أعد الإرسال',
     en: 'A standard invoice requires the buyer\'s full national address — missing from "{customer}": {missing}. Complete it and resubmit',
+  },
+  [MSG.zatca_buyer_id_missing]: {
+    ar: 'الفاتورة الكاملة لمشترٍ بلا رقم ضريبي تشترط معرّفه البديل بمخطّطه (سجل تجاري · هوية · إقامة · …) — أكمله في بطاقة «{customer}» ثم أعد الإرسال (BR-KSA-81)',
+    en: 'A standard invoice for a buyer without a VAT number requires the buyer\'s alternative identifier with its scheme (CRN · NAT · IQA · …) — complete it on "{customer}" and resubmit (BR-KSA-81)',
   },
   [MSG.zatca_onboarding_not_started]: { ar: 'ابدأ ربط الفوترة الإلكترونية أولاً من إعدادات المنشأة', en: 'Start e-invoicing onboarding first' },
   [MSG.zatca_qr_value_too_long]: {

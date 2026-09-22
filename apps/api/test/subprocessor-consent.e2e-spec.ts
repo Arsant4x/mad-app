@@ -154,7 +154,7 @@ describe('Sub-processor consent (e2e)', () => {
     expect(blocked.body.message).toContain('تنزّل بياناتك');
     expect(blocked.body.message).toContain('تُغلق حسابك');
     // والكتابةُ ممنوعةٌ كالقراءة — فمن لم يأذن لا تمرّ بياناتُه.
-    await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميلٌ ممنوع ${suffix}` }).expect(403);
+    await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميلٌ ممنوع ${suffix}` }).expect(403);
 
     // ④ ومنفذُ الخروج مفتوح: الاتفاقيةُ تُقرأ · والتصديرُ يعمل · والإغلاقُ يُطلب · والإشعاراتُ تُقرأ.
     const view = await auth(request(app.getHttpServer()).get('/processing-agreement')).expect(200);

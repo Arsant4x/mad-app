@@ -88,7 +88,7 @@ describe('Customer payments + allocations (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'payments');
     token = company.token;
-    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل مقبوضات ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل مقبوضات ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع المقبوضات ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
       .send({ name: `صندوق ${suffix}`, openingBalance: 0, openingDate: today(), branchId })

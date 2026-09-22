@@ -50,8 +50,9 @@ describe('ZATCA unreported report + requeue (e2e)', () => {
   }, 60000);
 
   it('يعدّ ما لم يُقبَل، ولا يعدّ ما قُبل — بوجهَين (ق-١٨٢/٢)', async () => {
-    const customers = await auth(request(app.getHttpServer()).get('/customers')).expect(200);
-    const customerId = customers.body[0].id as string;
+    // ②A1: عميلٌ يصنعه الملفّ لا «أوّلُ ما تجده».
+    const customers = await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الملف ${Date.now()}` }).expect(201);
+    const customerId = customers.body.id as string;
     const mk = async (issueDate: string) => {
       const res = await auth(request(app.getHttpServer()).post('/invoices'))
         .send({ customerId, issueDate, dueDate: issueDate, lines: [{ description: `unreported ${suffix}`, quantity: 1, unitPrice: 10, taxRate: 15 }] })

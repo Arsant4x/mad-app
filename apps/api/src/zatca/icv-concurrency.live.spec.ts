@@ -128,7 +128,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
     await seedProductionCredential(tenantPrisma, companyId);
 
     await tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const customer = await tx.customer.create({ data: { companyId, name: 'عميل فحص ICV' } });
+      const customer = await tx.customer.create({ data: { companyId, kind: 'NATURAL', name: 'عميل فحص ICV' } });
       customerId = customer.id;
 
       for (let i = 1; i <= 2; i += 1) {

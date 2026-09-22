@@ -89,7 +89,7 @@ describe('التكاليفُ المحمَّلة — توزيعُ فاتورةٍ 
     const suffix = Date.now();
     supplierId = (await post('/suppliers').send({ name: `مورّد بضاعة ${suffix}` }).expect(201)).body.id;
     carrierId = (await post('/suppliers').send({ name: `ناقل ${suffix}` }).expect(201)).body.id;
-    customerId = (await post('/customers').send({ name: `عميل تكلفة ${suffix}` }).expect(201)).body.id;
+    customerId = (await post('/customers').send({ kind: 'NATURAL', name: `عميل تكلفة ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع تكلفة ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع تكلفة ${suffix}`, warehouseId }).expect(201)).body.id;
     productA = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف أ ${suffix}`, price: 150, cost: 40 }).expect(201)).body.id;

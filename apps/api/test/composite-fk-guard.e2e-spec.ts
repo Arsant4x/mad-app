@@ -157,7 +157,7 @@ describe('Composite tenant foreign keys (e2e)', () => {
   it('[SPEC 1.2] ③ batch 2 sample — invoice_lines.invoiceId → invoices: a foreign company\'s invoice is refused, its own is accepted', async () => {
     const conname = await constraintNamed('invoice_lines', 'invoiceId');
     const invoiceOf = async (c: IsolatedCompany, tag: string) => {
-      const customer = await auth(c)(request(app.getHttpServer()).post('/customers')).send({ name: `عميل ${tag}` }).expect(201);
+      const customer = await auth(c)(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل ${tag}` }).expect(201);
       const inv = await auth(c)(request(app.getHttpServer()).post('/invoices'))
         .send({ customerId: customer.body.id, issueDate: '2026-06-10', dueDate: '2026-07-10', lines: [{ description: `بند ${tag}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })
         .expect(201);

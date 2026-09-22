@@ -135,7 +135,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
         // ⚠️ **تُصنع الفاتورةُ ولا تُلتقط من القاعدة**: «أوّلُ ما تجده» يربط
         // النتيجةَ ببيانات لا يملكها هذا الملف — وقد سقط التوكيدُ فعلاً حين
         // كانت أوّلُ منشأةٍ بلا فواتير. والملفُّ كلُّه يصنع ما يفحصه.
-        const customer = await tx.customer.create({ data: { companyId: companyA, name: 'عميل بوابة L0-0' } });
+        const customer = await tx.customer.create({ data: { companyId: companyA, kind: 'NATURAL', name: 'عميل بوابة L0-0' } });
         const invoice = await tx.invoice.create({
           data: {
             companyId: companyA,

@@ -231,7 +231,7 @@ describe('Account deletion requests (e2e)', () => {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
 
     // فعلٌ مُدقَّق قبل الحذف — إنشاءُ عميل يمرّ بالمعترض العامّ.
-    await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميلٌ قبل الحذف ${suffix}` }).expect(201);
+    await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميلٌ قبل الحذف ${suffix}` }).expect(201);
     // ⚠️ كتابةُ التدقيق لا تُنتظَر في الطلب (`AuditInterceptor` يسجّل ولا يُبطئ الردّ) —
     //    فيُستطلَع السطرُ حتى يهبط، كما في `audit-log.e2e`؛ وأوّلُ صياغةٍ عدّت فوراً فوجدت صفراً.
     const countAudit = () => tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.count());
@@ -362,7 +362,7 @@ describe('Account deletion requests (e2e)', () => {
   it('⚖️ a company with one quote is closed, not deleted — the message carries the deadline, and reopening is by request and recorded decision', async () => {
     const co = await makeCompany();
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
-    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل عرض ${suffix}` }).expect(201);
+    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل عرض ${suffix}` }).expect(201);
     const today = new Date().toISOString().slice(0, 10);
     const inTwoWeeks = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
     await auth(request(app.getHttpServer()).post('/quotes'))
@@ -468,7 +468,7 @@ describe('Account deletion requests (e2e)', () => {
     // وهو نشطٌ لا إتلافَ — الطلبُ لحسابٍ مغلقٍ فقط.
     await auth(request(app.getHttpServer()).post('/deletion-request/erase')).expect(409);
 
-    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ name: `عميل هاتف ${suffix}`, phone: '0500000001' }).expect(201);
+    const customer = await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل هاتف ${suffix}`, phone: '0500000001' }).expect(201);
     await prisma.company.update({ where: { id: co.id }, data: { phone: '0112223344', email: `owner-${suffix}@example.test`, address: 'الرياض — حي الملقا' } });
     const closedToken = await closeCompany(co);
     const closed = (r: request.Test) => r.set('Authorization', `Bearer ${closedToken}`);
@@ -523,13 +523,13 @@ describe('Account deletion requests (e2e)', () => {
 
     // ① انقضت نافذتُها — يُمحى غيرُ الملزِم.
     const past = await makeCompany();
-    const pastCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${past.token}`).send({ name: `عميل ماضٍ ${suffix}`, phone: '0500000002' }).expect(201);
+    const pastCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${past.token}`).send({ kind: 'NATURAL', name: `عميل ماضٍ ${suffix}`, phone: '0500000002' }).expect(201);
     await closeCompany(past);
     await prisma.company.update({ where: { id: past.id }, data: { closedAt: new Date(Date.now() - (REOPEN_WINDOW_DAYS + 1) * day) } });
 
     // ② أُغلقت أمس — تبقى كما هي.
     const fresh = await makeCompany();
-    const freshCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${fresh.token}`).send({ name: `عميل حديث ${suffix}`, phone: '0500000003' }).expect(201);
+    const freshCustomer = await request(app.getHttpServer()).post('/customers').set('Authorization', `Bearer ${fresh.token}`).send({ kind: 'NATURAL', name: `عميل حديث ${suffix}`, phone: '0500000003' }).expect(201);
     await closeCompany(fresh);
     await prisma.company.update({ where: { id: fresh.id }, data: { closedAt: new Date(Date.now() - day) } });
 

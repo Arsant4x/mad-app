@@ -30,6 +30,7 @@ import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { isReplacedRejected } from './active-documents.util';
 import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
 import { deriveSettlementStatus } from '../common/settlement/settlement.util';
 import { documentYear } from '../common/document-year.util';
@@ -204,6 +205,8 @@ export class InvoicesService {
 
       return mapList(result, (inv) => ({
         ...inv,
+        /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
+        invoiceType: invoiceTypeFor(inv.customer),
         /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
         outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
         /** How much of this invoice has been credited back, so a screen can
@@ -302,7 +305,7 @@ export class InvoicesService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const rejected = await tx.invoice.findUnique({
           where: { id: invoiceId },
-          include: { customer: { select: { vatNumber: true } }, lines: true, replacedBy: { select: { no: true } } },
+          include: { customer: { select: { kind: true, vatNumber: true } }, lines: true, replacedBy: { select: { no: true } } },
         });
         if (!rejected) throw new NotFoundException(MSG.invoice_not_found);
         assertBranchAllowed(tenant.allowedBranchIds, rejected.branchId);
@@ -312,7 +315,7 @@ export class InvoicesService {
         if (rejected.replacedBy) throw new ConflictException(formatMessage(MSG.invoice_already_replaced, { no: rejected.replacedBy.no }));
 
         // ③ التاريخُ بالنوع — يُحسم أولاً لأن الإعادةَ والعكسَ يؤرَّخان به.
-        const standard = invoiceTypeFor(rejected.customer.vatNumber) === 'standard';
+        const standard = invoiceTypeFor(rejected.customer) === 'standard';
         const now = new Date();
         const clock = standard
           ? { issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null, issuedOffsetMin: dto.issuedAt ? (dto.issuedOffsetMin ?? null) : null }
@@ -527,6 +530,8 @@ export class InvoicesService {
        * **رفضٌ بعد `nextDocumentNumber` يحرق رقماً في كل محاولة**، والعدّادُ
        * ذرّيٌّ لا يعيد المحروق (`ق-٣٣١`③). فيُفحص أولاً، **ولا فجوةَ من رفض**.
        */
+      // ②A1: صفةُ المشتري تقرّر نوعَ المستند، والمختومُ لا يُعدَّل — فعميلٌ لم يُعلن صفتَه يُرفض هنا قبل الحدّ والترقيم.
+      await assertBuyerKindDeclared(tx, dto.customerId);
       const override = await this.gateCreditLimit(
         tx,
         companyId,

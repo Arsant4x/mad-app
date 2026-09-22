@@ -87,14 +87,14 @@ describe('حرّاسُ سلة العملاء — الحذفُ بعقود، وا�
 
   it('③ عميلٌ في السلة بلا عقود: الاسمُ نفسُه يُرفض 409 مسمّىً من بابَي العملاء والعقود — لا 500', async () => {
     const name = `عميل في السلة ${Date.now()}`;
-    const trashed = (await auth(http().post('/customers')).send({ name, phone: '0500000103' }).expect(201)).body as { id: string };
+    const trashed = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name, phone: '0500000103' }).expect(201)).body as { id: string };
     await auth(http().delete(`/customers/${trashed.id}`)).expect(204);
     // غابَ من القائمة — الحذفُ ناعم
     const listed = (await auth(http().get('/customers')).expect(200)).body as { id: string }[];
     expect(listed.some((c) => c.id === trashed.id)).toBe(false);
 
     // بابُ العملاء
-    const viaCustomers = await auth(http().post('/customers')).send({ name, phone: '0500000104' });
+    const viaCustomers = await auth(http().post('/customers')).send({ kind: 'NATURAL', name, phone: '0500000104' });
     expect(viaCustomers.status).toBe(409);
     expect(message(viaCustomers)).toContain('سلة المحذوفات');
 
@@ -111,15 +111,15 @@ describe('حرّاسُ سلة العملاء — الحذفُ بعقود، وا�
 
   it('⑤ والرقمُ الضريبي لعميلٍ في السلة يُرفض كذلك — الفحصُ يقرأ الاسمَ والرقمَ معاً', async () => {
     const vat = '300000000000003';
-    const first = (await auth(http().post('/customers')).send({ name: `صاحب رقم ضريبي ${Date.now()}`, vatNumber: vat }).expect(201)).body as { id: string };
+    const first = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `صاحب رقم ضريبي ${Date.now()}`, vatNumber: vat }).expect(201)).body as { id: string };
     await auth(http().delete(`/customers/${first.id}`)).expect(204);
-    const res = await auth(http().post('/customers')).send({ name: `اسمٌ آخر ${Date.now()}`, vatNumber: vat });
+    const res = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `اسمٌ آخر ${Date.now()}`, vatNumber: vat });
     expect(res.status).toBe(409);
     expect(message(res)).toContain('سلة المحذوفات');
     await auth(http().post(`/trash/customers/${first.id}/restore`)).expect(201);
   }, 60000);
 
   it('⑥ الضابط: اسمٌ لا يطابق حيّاً ولا محذوفاً يمرّ 201', async () => {
-    await auth(http().post('/customers')).send({ name: `عميل ضابط ${Date.now()}`, phone: '0500000107' }).expect(201);
+    await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل ضابط ${Date.now()}`, phone: '0500000107' }).expect(201);
   }, 30000);
 });

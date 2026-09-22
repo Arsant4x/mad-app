@@ -91,7 +91,7 @@ describe('تعديلُ فاتورة الشراء بعكسٍ وتجميدُها �
 
     const suffix = Date.now();
     supplierId = (await post('/suppliers').send({ name: `مورّد تعديل ${suffix}` }).expect(201)).body.id;
-    customerId = (await post('/customers').send({ name: `عميل تعديل ${suffix}` }).expect(201)).body.id;
+    customerId = (await post('/customers').send({ kind: 'NATURAL', name: `عميل تعديل ${suffix}` }).expect(201)).body.id;
     warehouseId = (await post('/warehouses').send({ name: `مستودع تعديل ${suffix}` }).expect(201)).body.id;
     branchId = (await post('/branches').send({ name: `فرع تعديل ${suffix}`, warehouseId }).expect(201)).body.id;
     productId = (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف تعديل ${suffix}`, price: 100, cost: 40 }).expect(201)).body.id;

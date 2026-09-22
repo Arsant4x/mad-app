@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -10,6 +10,23 @@ import { money } from '../common/money/text';
 import { dayEndOf } from '../common/wall-clock.util';
 import { customerExposure, exposureOf } from '../reports/receivables-exposure.util';
 import { assertCustomerNotInTrash } from './customer-trash.util';
+
+/**
+ * المعرّفُ البديل زوجٌ (BR-KSA-14): مخطّطٌ ورقمٌ معاً، أو لا شيء — نصفُ زوجٍ يُرفض مسمّىً لا يُكمَل صامتاً.
+ * المخطّطُ نصٌّ مقيَّدٌ في القاعدة (CHECK على الأحد عشر) فيُخزَّن كما يُرسَل — «700» كما هي.
+ */
+function otherIdPair(
+  scheme: string | null | undefined,
+  id: string | null | undefined,
+  opts: { clear?: boolean } = {},
+): { scheme: string; id: string } | null {
+  if (opts.clear) return null;
+  const s = scheme?.trim() || null;
+  const v = id?.trim() || null;
+  if (!s && !v) return null;
+  if (!s || !v) throw new BadRequestException(MSG.customer_other_id_pair);
+  return { scheme: s, id: v };
+}
 
 /** حقولُ البحث المُعلَنة لهذه القائمة (`ق-١٢٣٦`) — الاسمُ والهاتفُ والرقمُ الضريبي. */
 const CUSTOMER_SEARCH_FIELDS = ['name', 'phone', 'vatNumber'] as const;
@@ -61,11 +78,17 @@ export class CustomersService {
   create(companyId: string, dto: CreateCustomerDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, undefined, dto.allowSameName === true);
+      const otherId = otherIdPair(dto.otherIdScheme, dto.otherId);
       return tx.customer.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
         data: {
           name: dto.name,
+          // ②A1: الصفةُ تُذكر في كل إنشاء — لا افتراض؛ والمعرّفُ البديل زوجٌ أو لا شيء؛ والبلدُ `SA` غياباً.
+          kind: dto.kind,
+          otherIdScheme: otherId?.scheme ?? null,
+          otherId: otherId?.id ?? null,
+          country: dto.country?.trim() || 'SA',
           vatNumber: dto.vatNumber || null,
           phone: dto.phone || null,
           // العنوان الوطني — `''` تعني «فارغ» لا «نصٌّ فارغ»، فالمستند يقرأ
@@ -89,6 +112,15 @@ export class CustomersService {
 
       const data: Prisma.CustomerUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
+      // ②A1: الصفةُ تُعلَن أو تُغيَّر — ولا تعود «غيرَ معلَنة» (الـDTO لا يقبلها)؛ والمعرّفُ البديل يُكتب زوجاً أو يُمسح زوجاً.
+      if (dto.kind !== undefined) data.kind = dto.kind;
+      if (dto.otherIdScheme !== undefined || dto.otherId !== undefined) {
+        const cleared = [dto.otherIdScheme, dto.otherId].some((v) => v === null || v === '');
+        const pair = otherIdPair(dto.otherIdScheme ?? existing.otherIdScheme, dto.otherId ?? existing.otherId, { clear: cleared });
+        data.otherIdScheme = pair?.scheme ?? null;
+        data.otherId = pair?.id ?? null;
+      }
+      if (dto.country !== undefined) data.country = dto.country.trim() || 'SA';
       if (dto.vatNumber !== undefined) data.vatNumber = dto.vatNumber || null;
       if (dto.phone !== undefined) data.phone = dto.phone || null;
       if (dto.street !== undefined) data.street = dto.street || null;

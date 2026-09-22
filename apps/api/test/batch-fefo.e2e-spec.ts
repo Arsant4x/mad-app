@@ -85,7 +85,7 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     token = company.token;
     companyId = company.companyId;
     supplierId = (await auth(http().post('/suppliers')).send({ name: `مورّد الدفعات ${suffix}` }).expect(201)).body.id;
-    customerId = (await auth(http().post('/customers')).send({ name: `عميل الدفعات ${suffix}` }).expect(201)).body.id;
+    customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الدفعات ${suffix}` }).expect(201)).body.id;
     whA = (await auth(http().post('/warehouses')).send({ name: `مستودع أ ${suffix}` }).expect(201)).body.id;
     whB = (await auth(http().post('/warehouses')).send({ name: `مستودع ب ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(http().post('/branches')).send({ name: `فرع الدفعات ${suffix}`, warehouseId: whA }).expect(201)).body.id;

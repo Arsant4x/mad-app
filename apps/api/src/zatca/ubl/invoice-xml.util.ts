@@ -70,6 +70,13 @@ export interface UblParty {
   name: string;
   vatNumber: string | null;
   crNumber?: string | null;
+  /**
+   * معرّفٌ بديل بمخطّطه (BT-46 / BT-46-1 — BR-KSA-14): للمشتري غير المسجَّل في الضريبة على الفاتورة الكاملة
+   * (`TIN · CRN · MOM · MLS · 700 · SAG · NAT · GCC · IQA · PAS · OTH`). للبائع يبقى `crNumber` كما كان.
+   */
+  otherId?: { scheme: string; id: string } | null;
+  /** بلدُ الطرف (BT-40 / BT-55) — رمزُ ISO؛ الغيابُ يعني `SA` كما كان يُكتب ثابتاً. */
+  country?: string | null;
   /** ZATCA wants a structured address; see `address` on the input for what we
    * currently have and the gap it leaves. */
   street?: string | null;
@@ -167,10 +174,13 @@ function quantity(value: number): string {
 
 function partyXml(tag: string, party: UblParty): string {
   // The VAT number travels as a PartyTaxScheme; the CR number, when present, is
-  // the PartyIdentification with a CRN scheme.
-  const identification = party.crNumber
-    ? `<cac:PartyIdentification><cbc:ID schemeID="CRN">${esc(party.crNumber)}</cbc:ID></cac:PartyIdentification>`
-    : '';
+  // the PartyIdentification with a CRN scheme — and for a buyer, the alternative
+  // identifier with its own scheme (BR-KSA-14, ②A1).
+  const identification = party.otherId
+    ? `<cac:PartyIdentification><cbc:ID schemeID="${esc(party.otherId.scheme)}">${esc(party.otherId.id)}</cbc:ID></cac:PartyIdentification>`
+    : party.crNumber
+      ? `<cac:PartyIdentification><cbc:ID schemeID="CRN">${esc(party.crNumber)}</cbc:ID></cac:PartyIdentification>`
+      : '';
 
   // A simplified invoice's buyer usually has no VAT registration at all, and
   // ZATCA rejects an empty PartyTaxScheme — so it is omitted entirely.
@@ -188,7 +198,7 @@ function partyXml(tag: string, party: UblParty): string {
     `<cbc:CitySubdivisionName>${esc(party.district ?? '')}</cbc:CitySubdivisionName>` +
     `<cbc:CityName>${esc(party.city ?? '')}</cbc:CityName>` +
     `<cbc:PostalZone>${esc(party.postalCode ?? '')}</cbc:PostalZone>` +
-    '<cac:Country><cbc:IdentificationCode>SA</cbc:IdentificationCode></cac:Country>' +
+    `<cac:Country><cbc:IdentificationCode>${esc(party.country?.trim() || 'SA')}</cbc:IdentificationCode></cac:Country>` +
     '</cac:PostalAddress>' +
     taxScheme +
     `<cac:PartyLegalEntity><cbc:RegistrationName>${esc(party.name)}</cbc:RegistrationName></cac:PartyLegalEntity>` +
