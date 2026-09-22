@@ -720,6 +720,13 @@
       "200"
     ]
   },
+  "GET /api-keys/usage": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /attendance": {
     "parameters": [],
     "requiredBody": [],
@@ -1653,6 +1660,13 @@
     ]
   },
   "GET /v1/api-keys": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/api-keys/usage": {
     "parameters": [],
     "requiredBody": [],
     "responses": [

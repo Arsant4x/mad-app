@@ -284,6 +284,13 @@ model Company {
   subStart        DateTime?
   subEnd          DateTime?
 
+  /// **حصّةُ نداءات التكامل الشهرية** (`ق-١٢٩١` · ي/㉑A1) — `null` = **بلا حدّ**.
+  ///
+  /// ولا رقمَ افتراضيّ عمداً: الحصّةُ بندُ تسعيرٍ لم يُحسم، **ورقمٌ يُكتب اليوم يُقرأ
+  /// غداً كأنه محسوب** (قاعدةُ السعات في موجز التسجيل). فالآليةُ تُبنى كاملةً،
+  /// والرقمُ يُملأ حين تُحسم الباقات — **فلا يُحبس البناءُ على قرارٍ لم يأتِ**.
+  apiMonthlyQuota Int?
+
   /// "بيانات المنشأة" — the legal/tax identity shown on printed tax invoices
   /// and required for ZATCA e-invoicing. Deliberately separate from `orgName`
   /// above, which is the platform-admin-facing subscription/display name.
@@ -348,6 +355,8 @@ model Company {
   users            CompanyUser[]
   /// مفاتيحُ الأنظمة الخارجية (`ق-١٢٩١` · ي/⑫A3).
   apiKeys          ApiKey[]
+  /// قياسُ استعمال التكاملات (`ق-١٢٩١` · ي/㉑A1).
+  integrationUsage IntegrationUsage[]
   /// كلُّ هويّات الدخول التي تنتمي لهذه المنشأة — المالكُ وحساباتُه الفرعية (`ق-٦٦٦`).
   identities       LoginIdentity[] @relation("CompanyIdentities")
   activities       BusinessActivity[]
@@ -693,6 +702,32 @@ model ApiKey {
   @@map("api_keys")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+}
+
+/// **قياسُ استعمال التكاملات** (`ق-١٢٩١` · ي/㉑A1) — صفٌّ لكلِّ (منشأة · نوع · شهر).
+///
+/// **والشهرُ نصٌّ `YYYY-MM` بتوقيت الرياض** لا حسابٌ من طابعٍ زمنيّ: التاجرُ يقرأ
+/// استعمالَه بشهره هو، **وحدُّ الشهر بتوقيت الخادم يُزيح نداءات ثلاث ساعاتٍ كلَّ شهر**
+/// إلى الشهر الخطأ (`ق-١١٩٠` من عائلته).
+///
+/// ⚠️ **ولا يُحذف صفٌّ منه بالتقادم اليوم** — حجمُه سطرٌ لكلِّ منشأةٍ في الشهر.
+model IntegrationUsage {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// نوعُ الاستعمال — `API_KEY` اليوم، ومزوّدٌ خارجيّ (واثق · مُدد) غداً بالآلية نفسِها.
+  kind   String
+  /// `YYYY-MM` بتوقيت الرياض.
+  period String
+  count  Int      @default(0)
+  lastAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, kind, period])
+  @@map("integration_usage")
 }
 
 /// One merchant's ZATCA e-invoicing identity, held and used by the platform

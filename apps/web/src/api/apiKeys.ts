@@ -31,3 +31,17 @@ export async function revokeApiKey(id: string): Promise<ApiKeyRow> {
   const { data } = await apiClient.post<ApiKeyRow>(`/api-keys/${id}/revoke`);
   return data;
 }
+
+/** قياسُ الاستعمال والحصّة (`ق-١٢٩١` · ي/㉑A1) — `quota: null` = بلا حدّ. */
+export interface UsageRow {
+  period: string;
+  kind: string;
+  count: number;
+  quota: number | null;
+  lastAt: string;
+}
+
+export async function apiKeyUsage(): Promise<{ quota: number | null; period: string; rows: UsageRow[] }> {
+  const { data } = await apiClient.get<{ quota: number | null; period: string; rows: UsageRow[] }>('/api-keys/usage');
+  return data;
+}

@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ApiKeysController } from './api-keys.controller';
 import { ApiKeysService } from './api-keys.service';
+import { IntegrationUsageService } from './integration-usage.service';
 
 /**
  * **عامّةٌ عمداً** (`ق-١٢٩١` · ي/⑫A3): `JwtAuthGuard` صار يعتمد على `ApiKeysService`،
@@ -13,7 +14,7 @@ import { ApiKeysService } from './api-keys.service';
 @Module({
   imports: [PrismaModule],
   controllers: [ApiKeysController],
-  providers: [ApiKeysService],
-  exports: [ApiKeysService],
+  providers: [ApiKeysService, IntegrationUsageService],
+  exports: [ApiKeysService, IntegrationUsageService],
 })
 export class ApiKeysModule {}
