@@ -5,6 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG, formatMessage } from '../common/i18n/messages';
 import { RowRetention, retentionOf } from './trash-retention.util';
+import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
 /** How long a deleted record stays recoverable (gap-analysis §1). Long enough
  * to notice the mistake, short enough that the trash doesn't become a second
@@ -151,7 +152,7 @@ export class TrashService {
    * logged rather than failing the sweep — it simply stays recoverable, which
    * is the safer of the two wrong answers.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron(CronExpression.EVERY_DAY_AT_3AM, { timeZone: SCHEDULE_TIME_ZONE })
   async purgeExpired(): Promise<{ companies: number; purged: number; retained: number }> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);

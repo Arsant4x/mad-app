@@ -78,4 +78,27 @@ describe('Company-user deactivation ends sessions (e2e)', () => {
     const again = await request(app.getHttpServer()).post('/auth/login').send(EMPLOYEE).expect(200);
     await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${again.body.accessToken}`).expect(200);
   }, 30000);
+
+  it('[SPEC 1.4] ④ 🔴 تغييرُ المالك لكلمة الموظف يُنهي جلساتِه كالتعطيل — R48 (ق-١٢٧٨/④)', async () => {
+    /**
+     * **العطلُ الذي يُغلقه**: كان `PATCH /company-users/:id { password }` يكتب التجزئةَ وحدَها —
+     * فموظّفٌ غادر وغُيّرت كلمتُه **يبقى داخلاً برمز تحديثه** حتى ثلاثين يوماً ما لم يُجمَّد،
+     * والمالكُ الذي غيّر الكلمة يظنّ أنه أغلق الباب. و`auth.resetPassword` كانت تُبطلها
+     * **والمسارُ الثاني لا** — فاستوى المساران.
+     */
+    const fresh = await request(app.getHttpServer()).post('/auth/login').send(EMPLOYEE).expect(200);
+    const deviceCookie = refreshCookieOf(fresh);
+    // قبلَ التغيير: الجهازُ يُجدّد جلستَه — وإلا لم نفحص شيئاً.
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', deviceCookie).expect(200);
+
+    const NEW_PASSWORD = 'RotatedPass123!';
+    await owner(request(app.getHttpServer()).patch(`/company-users/${employeeId}`)).send({ password: NEW_PASSWORD }).expect(200);
+
+    // بعدَه: رمزُ التحديث مُبطَل — الجهازُ الصامت لا يعود.
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', deviceCookie).expect(401);
+    // والكلمةُ القديمة لا تفتح، والجديدةُ تفتح — فالتغييرُ وقع فعلاً لا الإبطالُ وحدَه.
+    await request(app.getHttpServer()).post('/auth/login').send(EMPLOYEE).expect(401);
+    const relogin = await request(app.getHttpServer()).post('/auth/login').send({ username: EMPLOYEE.username, password: NEW_PASSWORD }).expect(200);
+    await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${relogin.body.accessToken}`).expect(200);
+  }, 30000);
 });

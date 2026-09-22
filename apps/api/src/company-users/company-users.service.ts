@@ -141,8 +141,20 @@ export class CompanyUsersService {
         if (clash && clash.id !== existing.loginIdentityId) throw new ConflictException(formatMessage(MSG.username_taken, { username: dto.username }));
         await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { username: dto.username } });
       }
+      /**
+       * **وتغييرُ الكلمة يُنهي الجلساتِ كالتعطيل** (`ق-١٢٧٨`/④ — `R48` في المراجعة الخارجية).
+       *
+       * كان يكتب التجزئةَ وحدَها: فموظّفٌ غادر وغُيّرت كلمتُه **يبقى داخلاً برمز تحديثه** حتى
+       * ثلاثين يوماً ما لم يُجمَّد — والمالكُ الذي غيّر الكلمةَ يظنّ أنه أغلق الباب.
+       * و`auth.service.resetPassword` كانت تُبطلها والمسارُ الثاني لا — **فاستوى المساران**.
+       * (والإبطالُ داخل المعاملة نفسِها: كلمةٌ جديدة بلا إبطالٍ ملتزَمٍ معها حالةٌ نصفية.)
+       */
       if (dto.password) {
         await tx.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
+        await tx.refreshToken.updateMany({
+          where: { loginIdentityId: existing.loginIdentityId, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
       }
 
       if (dto.branchIds !== undefined) {

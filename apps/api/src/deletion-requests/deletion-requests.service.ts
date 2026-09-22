@@ -272,7 +272,8 @@ export class DeletionRequestsService {
       const report = await this.erasure.erase(company.id, decider, 'REQUEST');
       await this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'ERASED' } });
       this.logger.warn(`Erased non-mandatory data of company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
-      return { executed: true, outcome: 'ERASED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: company.retainUntil, erased: report.counts };
+      // الحدُّ يُعلَن في الردّ نفسِه (`ق-١٢٧٨`/②): ما لا يبلغه المحو يُقال لطالبه لا يُكتشف بعده.
+      return { executed: true, outcome: 'ERASED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: company.retainUntil, erased: report.counts, limits: report.limits };
     }
 
     const report = await this.movement.describe(company.id);
