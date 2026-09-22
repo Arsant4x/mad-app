@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { Prisma } from '@prisma/client';
 import { stripComments } from '../common/source-scan.util';
-import { LEDGER_LINES, NUMBERED_DOCUMENTS, RETENTION_YEARS, movementSources, refusedByDatabase, retentionDeadline } from './company-movement.service';
+import { LEDGER_LINES, NUMBERED_DOCUMENTS, REAL_ESTATE_MODELS, RETENTION_YEARS, movementSources, refusedByDatabase, retentionDeadline } from './company-movement.service';
 
 /**
  * حارسُ معيار الحركة (`ق-٥٤٦`) — **الأسماءُ تُقرأ من مصدرها لا من الذاكرة**:
@@ -85,5 +85,24 @@ describe('معيارُ الحركة — الأسماءُ من المصدر، و�
     expect(retentionDeadline(closedAt, ['Invoice']).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.books);
     expect(retentionDeadline(closedAt, ['Invoice', 'Contract']).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
     expect(retentionDeadline(closedAt, []).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.books);
+  });
+
+  it('سجلّاتُ العقار: كلُّ اسمٍ في المجموعة إمّا العقارُ أو الوحدةُ أو نموذجٌ يشير إلى أحدهما — لا اسمَ مخترَع (ق-١٢٧١/أ)', () => {
+    const byName = new Map(Prisma.dmmf.datamodel.models.map((m) => [m.name, m]));
+    const pointsAtRealEstate = (name: string, depth = 3): boolean =>
+      // يشير إلى العقار أو الوحدة مباشرةً أو عبر مستندٍ يشير إليهما (دفعةُ الإيجار ⟵ القسط ⟵ العقد ⟵ الوحدة) — من جهة المفتاح الأجنبي حتى ثلاث خطوات
+      depth > 0 &&
+      byName.get(name)!.fields.some(
+        (f) => f.kind === 'object' && (f.relationFromFields?.length ?? 0) > 0 && (f.type === 'Property' || f.type === 'Unit' || pointsAtRealEstate(f.type, depth - 1)),
+      );
+    expect(REAL_ESTATE_MODELS.size).toBeGreaterThanOrEqual(7);
+    for (const name of REAL_ESTATE_MODELS) {
+      expect(byName.has(name)).toBe(true);
+      expect(name === 'Property' || name === 'Unit' || pointsAtRealEstate(name)).toBe(true);
+    }
+    // وبلاغاتُ الصيانة والضمانات — ما يجرّه محوُ العقار (Cascade) — داخلَ المجموعة بعينها.
+    expect(REAL_ESTATE_MODELS.has('MaintenanceRequest')).toBe(true);
+    expect(REAL_ESTATE_MODELS.has('Warranty')).toBe(true);
+    expect(retentionDeadline(new Date('2026-09-11T00:00:00Z'), ['MaintenanceRequest']).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
   });
 });

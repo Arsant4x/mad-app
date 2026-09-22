@@ -5,8 +5,12 @@ export interface TrashItem {
   /** The record's own name — you have to know what you're restoring. */
   name: string;
   deletedAt: string;
-  /** Days before it is purged for good. */
+  /** Days before it is purged for good — or before the statutory retention ends, whichever is later. */
   daysLeft: number;
+  /** ما تحت الحفظ النظاميّ (`ق-١٢٧١`/أ): لا يُمحى قبل هذا اليوم — `null` إن لم يشر إليه سجلّ. */
+  retainedUntil: string | null;
+  /** أسماءُ السجلّات التي تحفظه (فواتير · بنود فواتير · بلاغات صيانة …). */
+  retainedBy: string[];
 }
 
 export interface TrashGroup {

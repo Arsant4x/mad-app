@@ -52,7 +52,7 @@ export function TrashPage() {
         <div>
           <div className="page-title">سلة المحذوفات</div>
           <div className="page-sub">
-            كل ما حُذف يبقى قابلاً للاسترجاع {data?.retentionDays ?? 30} يوماً، ثم يُمسح نهائياً
+            كل ما حُذف يبقى قابلاً للاسترجاع {data?.retentionDays ?? 30} يوماً، ثم يُمسح نهائياً — إلا ما يشير إليه سجلٌّ يُحفظ نظاماً (فواتير · قيود · بلاغات): يبقى في السلة حتى انقضاء مدة الحفظ
           </div>
         </div>
       </div>
@@ -84,15 +84,28 @@ export function TrashPage() {
                     <td>{item.name}</td>
                     <td className="num">{dfmt(item.deletedAt)}</td>
                     <td>
-                      {/* Colour carries urgency: a week or less is the point at
-                          which someone should actually decide. */}
-                      <span className={`badge ${item.daysLeft <= 7 ? 'overdue' : 'draft'}`}>{item.daysLeft} يوم</span>
+                      {item.retainedUntil ? (
+                        /* محفوظٌ نظاماً (ق-١٢٧١/أ): لا عدَّ تنازلياً على ما لن يُمحى — يُقال الأجلُ وما يحفظه */
+                        <span className="badge draft" title={item.retainedBy.join(' · ')} data-testid="retained">
+                          محفوظ نظاماً حتى {item.retainedUntil} — له {item.retainedBy.join(' · ')}
+                        </span>
+                      ) : (
+                        /* Colour carries urgency: a week or less is the point at
+                            which someone should actually decide. */
+                        <span className={`badge ${item.daysLeft <= 7 ? 'overdue' : 'draft'}`}>{item.daysLeft} يوم</span>
+                      )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => restoreFromTrash(group.entity, item.id), 'تعذّر الاسترجاع')}>
                         استرجاع
                       </button>{' '}
-                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setPendingPurge({ entity: group.entity, id: item.id, name: item.name })}>
+                      {/* الخادمُ يرفض المحوَ على المحفوظ بـ409 مسمّىً؛ والزرُّ يُعطَّل لا يُخفى — فالتفسيرُ في العنوان */}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        disabled={busy || Boolean(item.retainedUntil)}
+                        title={item.retainedUntil ? `محفوظ نظاماً حتى ${item.retainedUntil}` : undefined}
+                        onClick={() => setPendingPurge({ entity: group.entity, id: item.id, name: item.name })}
+                      >
                         حذف نهائي
                       </button>
                     </td>

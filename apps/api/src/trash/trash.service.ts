@@ -1,9 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { MSG, formatMessage } from '../common/i18n/messages';
+import { RowRetention, retentionOf } from './trash-retention.util';
 
 /** How long a deleted record stays recoverable (gap-analysis §1). Long enough
  * to notice the mistake, short enough that the trash doesn't become a second
@@ -16,18 +17,16 @@ export const RETENTION_DAYS = 30;
  * better than a uuid when deciding what to restore.
  */
 const TRASHED_ENTITIES = [
-  { key: 'customers', label: 'العملاء', delegate: 'customer', nameField: 'name' },
-  { key: 'suppliers', label: 'الموردون', delegate: 'supplier', nameField: 'name' },
-  { key: 'products', label: 'المنتجات', delegate: 'product', nameField: 'name' },
-  { key: 'employees', label: 'الموظفون', delegate: 'employee', nameField: 'fullName' },
-  { key: 'banks', label: 'البنوك والصناديق', delegate: 'bank', nameField: 'name' },
-  { key: 'warehouses', label: 'المستودعات', delegate: 'warehouse', nameField: 'name' },
-  { key: 'scripts', label: 'قوالب الرسائل', delegate: 'messageScript', nameField: 'title' },
-  { key: 'properties', label: 'العقارات', delegate: 'property', nameField: 'name' },
-  { key: 'units', label: 'الوحدات', delegate: 'unit', nameField: 'unitNo' },
-] as const;
-
-type EntityKey = (typeof TRASHED_ENTITIES)[number]['key'];
+  { key: 'customers', label: 'العملاء', delegate: 'customer', model: 'Customer', nameField: 'name' },
+  { key: 'suppliers', label: 'الموردون', delegate: 'supplier', model: 'Supplier', nameField: 'name' },
+  { key: 'products', label: 'المنتجات', delegate: 'product', model: 'Product', nameField: 'name' },
+  { key: 'employees', label: 'الموظفون', delegate: 'employee', model: 'Employee', nameField: 'fullName' },
+  { key: 'banks', label: 'البنوك والصناديق', delegate: 'bank', model: 'Bank', nameField: 'name' },
+  { key: 'warehouses', label: 'المستودعات', delegate: 'warehouse', model: 'Warehouse', nameField: 'name' },
+  { key: 'scripts', label: 'قوالب الرسائل', delegate: 'messageScript', model: 'MessageScript', nameField: 'title' },
+  { key: 'properties', label: 'العقارات', delegate: 'property', model: 'Property', nameField: 'name' },
+  { key: 'units', label: 'الوحدات', delegate: 'unit', model: 'Unit', nameField: 'unitNo' },
+] as const satisfies ReadonlyArray<{ key: string; label: string; delegate: string; model: Prisma.ModelName; nameField: string }>;
 
 type DelegateLike = {
   findMany: (args: unknown) => Promise<Record<string, unknown>[]>;
@@ -36,11 +35,21 @@ type DelegateLike = {
   delete: (args: unknown) => Promise<unknown>;
 };
 
-function daysLeft(deletedAt: Date, now: Date): number {
-  const purgeAt = new Date(deletedAt);
-  purgeAt.setDate(purgeAt.getDate() + RETENTION_DAYS);
-  return Math.max(0, Math.ceil((purgeAt.getTime() - now.getTime()) / 86400000));
+const DAY_MS = 86400000;
+
+/** أوّلُ يومٍ يجوز فيه المحو: نافذةُ الثلاثين، أو أجلُ الحفظ النظاميّ إن كان أبعد. */
+function purgeEligibleAt(deletedAt: Date, retention: RowRetention | undefined): Date {
+  const windowEnd = new Date(deletedAt);
+  windowEnd.setDate(windowEnd.getDate() + RETENTION_DAYS);
+  const until = retention?.retainedUntil;
+  return until && until > windowEnd ? until : windowEnd;
 }
+
+function daysUntil(at: Date, now: Date): number {
+  return Math.max(0, Math.ceil((at.getTime() - now.getTime()) / DAY_MS));
+}
+
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 @Injectable()
 export class TrashService {
@@ -57,7 +66,12 @@ export class TrashService {
     return found;
   }
 
-  /** Everything currently recoverable, grouped by kind, soonest-to-purge first. */
+  /**
+   * Everything currently recoverable, grouped by kind, soonest-to-purge first.
+   *
+   * كلُّ صفٍّ يحمل حالَه أمام الحفظ النظاميّ (`ق-١٢٧١`/أ): ما يشير إليه سجلٌّ يُعلَن
+   * «محفوظٌ نظاماً حتى …» بأسماء ما يحفظه — فلا يقرأ التاجر «٣ أيام» على ما لن يُمحى.
+   */
   list(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const now = new Date();
@@ -71,15 +85,22 @@ export class TrashService {
             orderBy: { deletedAt: 'desc' },
             take: 200,
           });
+          const retention = await retentionOf(tx, e.model, rows.map((r) => ({ id: r.id as string, deletedAt: r.deletedAt as Date })));
           return {
             entity: e.key,
             label: e.label,
-            items: rows.map((r) => ({
-              id: r.id as string,
-              name: (r[e.nameField] as string) ?? '—',
-              deletedAt: (r.deletedAt as Date).toISOString(),
-              daysLeft: daysLeft(r.deletedAt as Date, now),
-            })),
+            items: rows.map((r) => {
+              const ret = retention.get(r.id as string);
+              const deletedAt = r.deletedAt as Date;
+              return {
+                id: r.id as string,
+                name: (r[e.nameField] as string) ?? '—',
+                deletedAt: deletedAt.toISOString(),
+                daysLeft: daysUntil(purgeEligibleAt(deletedAt, ret), now),
+                retainedUntil: ret?.retainedUntil ? isoDay(ret.retainedUntil) : null,
+                retainedBy: ret?.retainedBy ?? [],
+              };
+            }),
           };
         }),
       );
@@ -100,13 +121,20 @@ export class TrashService {
     });
   }
 
-  /** Deletes for real, on the owner's explicit instruction. */
+  /**
+   * Deletes for real, on the owner's explicit instruction — **إلا ما تحت الحفظ**: يُردّ `409`
+   * مسمّىً بالأجل وبما يحفظه، لا خطأَ قاعدةٍ خاماً ولا محواً يجرّ سجلاتٍ معه.
+   */
   async purge(companyId: string, entityKey: string, id: string): Promise<void> {
     const e = this.entity(entityKey);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const delegate = (tx as unknown as Record<string, DelegateLike>)[e.delegate];
       const row = await delegate.findFirst({ where: { id, deletedAt: { not: null } } });
       if (!row) throw new NotFoundException(MSG.trash_item_not_found);
+      const ret = (await retentionOf(tx, e.model, [{ id, deletedAt: row.deletedAt as Date }])).get(id);
+      if (ret?.retainedUntil && ret.retainedUntil > new Date()) {
+        throw new ConflictException(formatMessage(MSG.trash_retained_by_law, { until: isoDay(ret.retainedUntil), by: ret.retainedBy.join(' · ') }));
+      }
       await delegate.delete({ where: { id } });
     });
   }
@@ -114,37 +142,77 @@ export class TrashService {
   /**
    * Nightly sweep clearing anything past the retention window.
    *
-   * Runs on the unscoped client on purpose: this is a housekeeping job across
-   * every tenant, and each row still carries its own companyId. A row whose
-   * real delete is refused by a foreign key is left in place and logged rather
-   * than failing the sweep — it simply stays recoverable, which is the safer
-   * of the two wrong answers.
+   * **منشأةً منشأةً داخل سياقها**: الجداولُ تحت `FORCE ROW LEVEL SECURITY`، والعميلُ غيرُ المقيَّد
+   * يقرؤها **فارغةً بنجاح** — وهكذا كان الكنسُ منذ بُني: يعمل كلَّ ليلة ولا يرى صفّاً (مقيسٌ 2026-09-22:
+   * عميلٌ في السلّة منذ أربعين يوماً، `rawSees: 0 · purged: 0`). فالعميلُ الخام يعبر المنشآت ليدخل
+   * سياقَ كلٍّ (نمطُ `rent-accrual`)، وما تحت الحفظ النظاميّ يُترك بعدٍّ وتُذكر منشأتُه.
+   *
+   * A row whose real delete is refused by a foreign key is left in place and
+   * logged rather than failing the sweep — it simply stays recoverable, which
+   * is the safer of the two wrong answers.
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
-  async purgeExpired(): Promise<{ purged: number }> {
+  async purgeExpired(): Promise<{ companies: number; purged: number; retained: number }> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+    // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
+    const companies = await this.prisma.company.findMany({ select: { id: true } });
 
     let purged = 0;
-    for (const e of TRASHED_ENTITIES) {
-      const delegate = (this.prisma as unknown as Record<string, DelegateLike>)[e.delegate];
+    let retained = 0;
+    for (const c of companies) {
       try {
-        const stale = await delegate.findMany({ where: { deletedAt: { lt: cutoff } }, take: 500 });
-        for (const row of stale) {
-          try {
-            await delegate.delete({ where: { id: row.id as string } });
-            purged += 1;
-          } catch (err) {
-            const reason = err instanceof Prisma.PrismaClientKnownRequestError ? err.code : (err as Error).message;
-            this.logger.warn(`Kept ${e.key} ${row.id as string} in the trash — real delete refused (${reason})`);
-          }
-        }
+        const r = await this.purgeExpiredForCompany(c.id, cutoff);
+        purged += r.purged;
+        retained += r.retained;
       } catch (err) {
-        this.logger.error(`Trash sweep failed for ${e.key}: ${(err as Error).message}`);
+        this.logger.error(`Trash sweep failed for company ${c.id}: ${(err as Error).message}`);
       }
     }
 
-    if (purged > 0) this.logger.log(`Trash sweep permanently removed ${purged} record(s) past ${RETENTION_DAYS} days`);
-    return { purged };
+    if (purged > 0 || retained > 0) {
+      this.logger.log(`Trash sweep: permanently removed ${purged} record(s) past ${RETENTION_DAYS} days across ${companies.length} companies; ${retained} kept under statutory retention`);
+    }
+    return { companies: companies.length, purged, retained };
+  }
+
+  /**
+   * كنسُ منشأةٍ واحدة — داخل سياقها؛ يُعيد ما مُحي وما بقي محفوظاً نظاماً.
+   *
+   * القراءةُ والتصنيفُ في معاملةٍ، **وكلُّ محوٍ في معاملته**: حذفٌ ترفضه القاعدة (`P2003`) يُفسد
+   * معاملةَ Postgres التي وقع فيها فتسقط بقيةُ العبارات — فلا يُشارك الصفوفَ الأخرى معاملتَه.
+   */
+  async purgeExpiredForCompany(companyId: string, cutoff: Date): Promise<{ purged: number; retained: number }> {
+    const now = new Date();
+    const plan = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const deletable: Array<{ entity: (typeof TRASHED_ENTITIES)[number]; id: string }> = [];
+      let retained = 0;
+      for (const e of TRASHED_ENTITIES) {
+        const delegate = (tx as unknown as Record<string, DelegateLike>)[e.delegate];
+        const stale = await delegate.findMany({ where: { deletedAt: { lt: cutoff } }, take: 500 });
+        const retention = await retentionOf(tx, e.model, stale.map((r) => ({ id: r.id as string, deletedAt: r.deletedAt as Date })));
+        for (const row of stale) {
+          const ret = retention.get(row.id as string);
+          if (ret?.retainedUntil && ret.retainedUntil > now) retained += 1;
+          else deletable.push({ entity: e, id: row.id as string });
+        }
+      }
+      return { deletable, retained };
+    });
+
+    let purged = 0;
+    for (const { entity, id } of plan.deletable) {
+      try {
+        await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          await (tx as unknown as Record<string, DelegateLike>)[entity.delegate].delete({ where: { id } });
+        });
+        purged += 1;
+      } catch (err) {
+        const reason = err instanceof Prisma.PrismaClientKnownRequestError ? err.code : (err as Error).message;
+        this.logger.warn(`Kept ${entity.key} ${id} of company ${companyId} in the trash — real delete refused (${reason})`);
+      }
+    }
+    if (plan.retained > 0) this.logger.warn(`Trash sweep: ${plan.retained} record(s) of company ${companyId} kept under statutory retention`);
+    return { purged, retained: plan.retained };
   }
 }
