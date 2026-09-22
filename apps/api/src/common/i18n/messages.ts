@@ -470,6 +470,7 @@ export const MSG = {
   fiscal_period_not_found: 'fiscal.period_not_found',
   fiscal_year_overlaps: 'fiscal.year_overlaps',
   fiscal_year_start_after_end: 'fiscal.year_start_after_end',
+  fiscal_year_span_out_of_range: 'fiscal.year_span_out_of_range',
   fiscal_no_period_for_date: 'fiscal.no_period_for_date',
   fiscal_period_closed: 'fiscal.period_closed',
   fiscal_year_has_closed_period: 'fiscal.year_has_closed_period',
@@ -1275,6 +1276,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'A fiscal year covering part of this period is already defined',
   },
   [MSG.fiscal_year_start_after_end]: { ar: 'تاريخ بداية السنة المالية يجب أن يسبق تاريخ نهايتها', en: "The fiscal year's start date must come before its end date" },
+  [MSG.fiscal_year_span_out_of_range]: { ar: 'مدّةُ السنة المالية {months} شهراً — والنظام يجيز من ٦ إلى ١٨ شهراً (نظام الشركات، المادة ١٦: اثنا عشر شهراً، والأولى من ستّة إلى ثمانية عشر)', en: 'The fiscal year spans {months} months — the law allows 6 to 18 (Companies Law art. 16)' },
   [MSG.fiscal_no_period_for_date]: {
     ar: 'لا توجد فترة مالية معرَّفة لهذا التاريخ',
     en: 'No fiscal period is defined for this date',
