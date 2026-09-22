@@ -190,7 +190,10 @@
     ]
   },
   "DELETE /obligations/vat-declaration/filed": {
-    "parameters": [],
+    "parameters": [
+      "query:quarter:required",
+      "query:year:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -507,7 +510,10 @@
     ]
   },
   "DELETE /v1/obligations/vat-declaration/filed": {
-    "parameters": [],
+    "parameters": [
+      "query:quarter:required",
+      "query:year:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -670,7 +676,11 @@
     ]
   },
   "GET /accounts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -684,7 +694,11 @@
     ]
   },
   "GET /activities": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -700,7 +714,11 @@
     ]
   },
   "GET /admin/deletion-requests": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -728,14 +746,31 @@
     ]
   },
   "GET /attendance": {
-    "parameters": [],
+    "parameters": [
+      "query:date",
+      "query:employeeId",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /audit-log": {
-    "parameters": [],
+    "parameters": [
+      "query:action",
+      "query:actorId",
+      "query:entityId",
+      "query:from",
+      "query:limit",
+      "query:page",
+      "query:pageSize",
+      "query:screen",
+      "query:search",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -749,7 +784,12 @@
     ]
   },
   "GET /banks": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -781,7 +821,11 @@
     ]
   },
   "GET /banks/network-settlements/open": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -789,7 +833,9 @@
   },
   "GET /banks/{id}/reconciliation": {
     "parameters": [
-      "path:id:required"
+      "path:id:required",
+      "query:from",
+      "query:to"
     ],
     "requiredBody": [],
     "responses": [
@@ -797,14 +843,22 @@
     ]
   },
   "GET /branches": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /cash-drawers": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -818,7 +872,11 @@
     ]
   },
   "GET /companies": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -832,14 +890,22 @@
     ]
   },
   "GET /company-users": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /contracts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -909,21 +975,36 @@
     ]
   },
   "GET /currencies": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /currencies/rates": {
-    "parameters": [],
+    "parameters": [
+      "query:fromCode",
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:toCode"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /customers": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -976,7 +1057,12 @@
     ]
   },
   "GET /employees": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -990,21 +1076,31 @@
     ]
   },
   "GET /files/download-url": {
-    "parameters": [],
+    "parameters": [
+      "query:key:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /fiscal-years": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /integrations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1029,7 +1125,11 @@
     ]
   },
   "GET /inventory/movements": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1052,21 +1152,34 @@
     ]
   },
   "GET /inventory/provisional": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /inventory/stock-levels": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /inventory/write-offs": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:status"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1091,7 +1204,11 @@
     ]
   },
   "GET /invoices": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1107,7 +1224,11 @@
     ]
   },
   "GET /journal": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1124,21 +1245,35 @@
     ]
   },
   "GET /leaves/requests": {
-    "parameters": [],
+    "parameters": [
+      "query:employeeId",
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:status"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /leaves/types": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /maintenance": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1177,21 +1312,33 @@
     ]
   },
   "GET /obligations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /obligations/vat-declaration": {
-    "parameters": [],
+    "parameters": [
+      "query:quarter:required",
+      "query:year:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /payments": {
-    "parameters": [],
+    "parameters": [
+      "query:customerId",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1223,7 +1370,11 @@
     ]
   },
   "GET /pos/shifts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1244,14 +1395,24 @@
     ]
   },
   "GET /products": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /properties": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1315,7 +1476,11 @@
     ]
   },
   "GET /quotes": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1356,7 +1521,10 @@
     ]
   },
   "GET /reports/balance-sheet": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1370,21 +1538,30 @@
     ]
   },
   "GET /reports/branch-summary": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/cash-flow": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/dashboard": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1398,28 +1575,49 @@
     ]
   },
   "GET /reports/income-statement": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/ledger": {
-    "parameters": [],
+    "parameters": [
+      "query:accountId",
+      "query:branchId",
+      "query:from",
+      "query:propertyId",
+      "query:to",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/ledger/export": {
-    "parameters": [],
+    "parameters": [
+      "query:accountId",
+      "query:branchId",
+      "query:from",
+      "query:propertyId",
+      "query:to",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/note-deadlines": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1433,63 +1631,106 @@
     ]
   },
   "GET /reports/receivables-aging": {
-    "parameters": [],
+    "parameters": [
+      "query:asOf",
+      "query:branchId",
+      "query:customerId",
+      "query:reconcile"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/receivables-aging/export": {
-    "parameters": [],
+    "parameters": [
+      "query:asOf",
+      "query:branchId",
+      "query:customerId",
+      "query:reconcile"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/returns": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/statement": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:customerId",
+      "query:from",
+      "query:supplierId",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/statement/export": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:customerId",
+      "query:from",
+      "query:supplierId",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/trial-balance": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reports/trial-balance/export": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /reservations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /scripts": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1503,7 +1744,12 @@
     ]
   },
   "GET /supplier-payments": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:supplierId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1528,7 +1774,12 @@
     ]
   },
   "GET /suppliers": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1536,7 +1787,9 @@
   },
   "GET /suppliers/{id}/summary": {
     "parameters": [
-      "path:id:required"
+      "path:id:required",
+      "query:from",
+      "query:to"
     ],
     "requiredBody": [],
     "responses": [
@@ -1544,21 +1797,33 @@
     ]
   },
   "GET /support-access": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /support-access/admin": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /support-access/log": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1572,7 +1837,11 @@
     ]
   },
   "GET /tasks/mine": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1588,14 +1857,22 @@
     ]
   },
   "GET /templates": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /transactions": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1609,14 +1886,23 @@
     ]
   },
   "GET /units": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/accounts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1630,7 +1916,11 @@
     ]
   },
   "GET /v1/activities": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1646,7 +1936,11 @@
     ]
   },
   "GET /v1/admin/deletion-requests": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1674,14 +1968,31 @@
     ]
   },
   "GET /v1/attendance": {
-    "parameters": [],
+    "parameters": [
+      "query:date",
+      "query:employeeId",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/audit-log": {
-    "parameters": [],
+    "parameters": [
+      "query:action",
+      "query:actorId",
+      "query:entityId",
+      "query:from",
+      "query:limit",
+      "query:page",
+      "query:pageSize",
+      "query:screen",
+      "query:search",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1695,7 +2006,12 @@
     ]
   },
   "GET /v1/banks": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1727,7 +2043,11 @@
     ]
   },
   "GET /v1/banks/network-settlements/open": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1735,7 +2055,9 @@
   },
   "GET /v1/banks/{id}/reconciliation": {
     "parameters": [
-      "path:id:required"
+      "path:id:required",
+      "query:from",
+      "query:to"
     ],
     "requiredBody": [],
     "responses": [
@@ -1743,14 +2065,22 @@
     ]
   },
   "GET /v1/branches": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/cash-drawers": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1764,7 +2094,11 @@
     ]
   },
   "GET /v1/companies": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1778,14 +2112,22 @@
     ]
   },
   "GET /v1/company-users": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/contracts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1855,21 +2197,36 @@
     ]
   },
   "GET /v1/currencies": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/currencies/rates": {
-    "parameters": [],
+    "parameters": [
+      "query:fromCode",
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:toCode"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/customers": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1922,7 +2279,12 @@
     ]
   },
   "GET /v1/employees": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1936,21 +2298,31 @@
     ]
   },
   "GET /v1/files/download-url": {
-    "parameters": [],
+    "parameters": [
+      "query:key:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/fiscal-years": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/integrations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1975,7 +2347,11 @@
     ]
   },
   "GET /v1/inventory/movements": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1998,21 +2374,34 @@
     ]
   },
   "GET /v1/inventory/provisional": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/inventory/stock-levels": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/inventory/write-offs": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:status"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2037,7 +2426,11 @@
     ]
   },
   "GET /v1/invoices": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2053,7 +2446,11 @@
     ]
   },
   "GET /v1/journal": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2070,21 +2467,35 @@
     ]
   },
   "GET /v1/leaves/requests": {
-    "parameters": [],
+    "parameters": [
+      "query:employeeId",
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:status"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/leaves/types": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/maintenance": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2123,21 +2534,33 @@
     ]
   },
   "GET /v1/obligations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/obligations/vat-declaration": {
-    "parameters": [],
+    "parameters": [
+      "query:quarter:required",
+      "query:year:required"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/payments": {
-    "parameters": [],
+    "parameters": [
+      "query:customerId",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2169,7 +2592,11 @@
     ]
   },
   "GET /v1/pos/shifts": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2190,14 +2617,24 @@
     ]
   },
   "GET /v1/products": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/properties": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2261,7 +2698,11 @@
     ]
   },
   "GET /v1/quotes": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2302,7 +2743,10 @@
     ]
   },
   "GET /v1/reports/balance-sheet": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2316,21 +2760,30 @@
     ]
   },
   "GET /v1/reports/branch-summary": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/cash-flow": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/dashboard": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2344,28 +2797,49 @@
     ]
   },
   "GET /v1/reports/income-statement": {
-    "parameters": [],
+    "parameters": [
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/ledger": {
-    "parameters": [],
+    "parameters": [
+      "query:accountId",
+      "query:branchId",
+      "query:from",
+      "query:propertyId",
+      "query:to",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/ledger/export": {
-    "parameters": [],
+    "parameters": [
+      "query:accountId",
+      "query:branchId",
+      "query:from",
+      "query:propertyId",
+      "query:to",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/note-deadlines": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2379,63 +2853,106 @@
     ]
   },
   "GET /v1/reports/receivables-aging": {
-    "parameters": [],
+    "parameters": [
+      "query:asOf",
+      "query:branchId",
+      "query:customerId",
+      "query:reconcile"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/receivables-aging/export": {
-    "parameters": [],
+    "parameters": [
+      "query:asOf",
+      "query:branchId",
+      "query:customerId",
+      "query:reconcile"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/returns": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/statement": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:customerId",
+      "query:from",
+      "query:supplierId",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/statement/export": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:customerId",
+      "query:from",
+      "query:supplierId",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/trial-balance": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reports/trial-balance/export": {
-    "parameters": [],
+    "parameters": [
+      "query:branchId",
+      "query:from",
+      "query:to"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/reservations": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/scripts": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2449,7 +2966,12 @@
     ]
   },
   "GET /v1/supplier-payments": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search",
+      "query:supplierId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2474,7 +2996,12 @@
     ]
   },
   "GET /v1/suppliers": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2482,7 +3009,9 @@
   },
   "GET /v1/suppliers/{id}/summary": {
     "parameters": [
-      "path:id:required"
+      "path:id:required",
+      "query:from",
+      "query:to"
     ],
     "requiredBody": [],
     "responses": [
@@ -2490,21 +3019,33 @@
     ]
   },
   "GET /v1/support-access": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/support-access/admin": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/support-access/log": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2518,7 +3059,11 @@
     ]
   },
   "GET /v1/tasks/mine": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2534,14 +3079,22 @@
     ]
   },
   "GET /v1/templates": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/transactions": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2555,28 +3108,50 @@
     ]
   },
   "GET /v1/units": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/warehouses": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/warranties": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:propertyId",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /v1/warranties/cover": {
-    "parameters": [],
+    "parameters": [
+      "query:date",
+      "query:page",
+      "query:pageSize",
+      "query:propertyId:required",
+      "query:search",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2606,21 +3181,38 @@
     ]
   },
   "GET /warehouses": {
-    "parameters": [],
+    "parameters": [
+      "query:includeArchived",
+      "query:page",
+      "query:pageSize",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /warranties": {
-    "parameters": [],
+    "parameters": [
+      "query:page",
+      "query:pageSize",
+      "query:propertyId",
+      "query:search"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
     ]
   },
   "GET /warranties/cover": {
-    "parameters": [],
+    "parameters": [
+      "query:date",
+      "query:page",
+      "query:pageSize",
+      "query:propertyId:required",
+      "query:search",
+      "query:unitId"
+    ],
     "requiredBody": [],
     "responses": [
       "200"
@@ -2660,7 +3252,9 @@
   },
   "PATCH /activities/primary": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "confirmed"
+    ],
     "responses": [
       "200"
     ]
@@ -2696,7 +3290,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2785,7 +3381,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2812,7 +3410,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2911,7 +3511,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2929,7 +3531,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2981,7 +3585,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -2999,7 +3605,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3008,7 +3616,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "to"
+    ],
     "responses": [
       "200"
     ]
@@ -3044,7 +3654,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3060,7 +3672,9 @@
   },
   "PATCH /v1/activities/primary": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "confirmed"
+    ],
     "responses": [
       "200"
     ]
@@ -3096,7 +3710,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3185,7 +3801,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3212,7 +3830,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3311,7 +3931,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3329,7 +3951,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3381,7 +4005,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3399,7 +4025,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3408,7 +4036,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "to"
+    ],
     "responses": [
       "200"
     ]
@@ -3444,7 +4074,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3462,7 +4094,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3489,7 +4123,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "archived"
+    ],
     "responses": [
       "200"
     ]
@@ -3505,14 +4141,20 @@
   },
   "POST /accounts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code",
+      "name",
+      "type"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /activities": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
@@ -3537,7 +4179,12 @@
   },
   "POST /admin/processing-agreement/sub-processors": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "dataCategories",
+      "location",
+      "name",
+      "purpose"
+    ],
     "responses": [
       "201"
     ]
@@ -3553,14 +4200,20 @@
   },
   "POST /admin/processing-agreement/versions": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "effectiveFrom",
+      "summary"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /api-keys": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "permissionTemplateId"
+    ],
     "responses": [
       "201"
     ]
@@ -3576,21 +4229,29 @@
   },
   "POST /attendance": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "employeeId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /auth/forgot-password": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "username"
+    ],
     "responses": [
       "200"
     ]
   },
   "POST /auth/login": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "password",
+      "username"
+    ],
     "responses": [
       "200"
     ]
@@ -3611,28 +4272,43 @@
   },
   "POST /auth/register": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "orgName",
+      "password",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /auth/reset-password": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "newPassword",
+      "token"
+    ],
     "responses": [
       "200"
     ]
   },
   "POST /banks": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "openingDate"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /banks/cash-deposits": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "bankId",
+      "date",
+      "drawerId"
+    ],
     "responses": [
       "201"
     ]
@@ -3648,7 +4324,14 @@
   },
   "POST /banks/network-settlements": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "bankId",
+      "date",
+      "feeAmount",
+      "feeVatAmount",
+      "periodFrom",
+      "periodTo"
+    ],
     "responses": [
       "201"
     ]
@@ -3666,7 +4349,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "until"
+    ],
     "responses": [
       "201"
     ]
@@ -3675,7 +4360,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lineId",
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
@@ -3684,7 +4372,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
@@ -3702,42 +4392,67 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /branches": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /cash-drawers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /companies": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "orgName",
+      "password",
+      "permissionTemplateId",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /company-users": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "password",
+      "permissionTemplateId",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /contracts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "classification",
+      "customerId",
+      "cycle",
+      "end",
+      "start",
+      "unitId",
+      "value",
+      "vatInclusion"
+    ],
     "responses": [
       "201"
     ]
@@ -3773,7 +4488,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "cancelDate",
+      "cancelReason",
+      "installmentDisposition"
+    ],
     "responses": [
       "201"
     ]
@@ -3782,7 +4501,12 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "description",
+      "issuedAt",
+      "kind"
+    ],
     "responses": [
       "201"
     ]
@@ -3792,7 +4516,9 @@
       "path:claimId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "paidAt"
+    ],
     "responses": [
       "201"
     ]
@@ -3802,7 +4528,10 @@
       "path:claimId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason",
+      "waivedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -3811,7 +4540,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "receivedAt",
+      "type"
+    ],
     "responses": [
       "201"
     ]
@@ -3821,7 +4554,10 @@
       "path:depositId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "deductions",
+      "settledAt"
+    ],
     "responses": [
       "201"
     ]
@@ -3830,7 +4566,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "items",
+      "type"
+    ],
     "responses": [
       "201"
     ]
@@ -3840,7 +4580,9 @@
       "path:handoverId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "signedBy"
+    ],
     "responses": [
       "201"
     ]
@@ -3849,7 +4591,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "direction",
+      "paidAt"
+    ],
     "responses": [
       "201"
     ]
@@ -3858,7 +4604,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
@@ -3867,35 +4617,55 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "classification",
+      "end",
+      "start",
+      "vatInclusion"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /currencies": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code",
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /currencies/rates": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "fromCode",
+      "rate",
+      "toCode"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /customers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "kind",
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /delegations": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "granteeId",
+      "grants",
+      "nodeKey"
+    ],
     "responses": [
       "201"
     ]
@@ -3932,7 +4702,10 @@
   },
   "POST /employees": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "fullName",
+      "hireDate"
+    ],
     "responses": [
       "201"
     ]
@@ -3946,7 +4719,11 @@
   },
   "POST /fiscal-years": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "end",
+      "name",
+      "start"
+    ],
     "responses": [
       "201"
     ]
@@ -3969,7 +4746,13 @@
   },
   "POST /inventory/movements": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "productId",
+      "qty",
+      "type",
+      "warehouseId"
+    ],
     "responses": [
       "201"
     ]
@@ -3985,7 +4768,9 @@
   },
   "POST /inventory/opening": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines"
+    ],
     "responses": [
       "201"
     ]
@@ -4002,7 +4787,13 @@
   },
   "POST /inventory/write-offs": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "occurredAt",
+      "productId",
+      "qty",
+      "reasonCode",
+      "warehouseId"
+    ],
     "responses": [
       "201"
     ]
@@ -4029,14 +4820,21 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /invoices": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "customerId",
+      "dueDate",
+      "issueDate",
+      "lines"
+    ],
     "responses": [
       "201"
     ]
@@ -4045,7 +4843,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -4054,7 +4854,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -4070,7 +4873,11 @@
   },
   "POST /journal": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "lines",
+      "memo"
+    ],
     "responses": [
       "201"
     ]
@@ -4086,7 +4893,12 @@
   },
   "POST /leaves/requests": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "employeeId",
+      "endDate",
+      "leaveTypeId",
+      "startDate"
+    ],
     "responses": [
       "201"
     ]
@@ -4111,14 +4923,20 @@
   },
   "POST /leaves/types": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /maintenance": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "propertyId",
+      "reportedAt",
+      "title"
+    ],
     "responses": [
       "201"
     ]
@@ -4127,7 +4945,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "assignedTo"
+    ],
     "responses": [
       "201"
     ]
@@ -4136,7 +4956,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "cancelReason"
+    ],
     "responses": [
       "201"
     ]
@@ -4145,7 +4967,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "closedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4154,7 +4978,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "completedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4163,7 +4989,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "startedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4193,21 +5021,33 @@
   },
   "POST /obligations/vat-declaration/filed": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "quarter",
+      "year"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /payments": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "customerId",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /payments/refund": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "creditNoteId",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
@@ -4216,7 +5056,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "allocations"
+    ],
     "responses": [
       "201"
     ]
@@ -4232,21 +5074,30 @@
   },
   "POST /pos/sales": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "paymentMethod"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /pos/sales/sync": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "clientSaleId",
+      "lines",
+      "paymentMethod"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /pos/shifts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "openingFloat"
+    ],
     "responses": [
       "201"
     ]
@@ -4255,35 +5106,48 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "declaredClosing"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /processing-agreement/accept": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "version"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /products": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /properties": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "ownership"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /purchases": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "subtotal",
+      "supplierId"
+    ],
     "responses": [
       "201"
     ]
@@ -4292,7 +5156,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "purchaseLineId"
+    ],
     "responses": [
       "201"
     ]
@@ -4301,7 +5167,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "receivedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4310,7 +5179,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -4319,7 +5190,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -4335,7 +5208,12 @@
   },
   "POST /quotes": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "customerId",
+      "issueDate",
+      "lines",
+      "validUntil"
+    ],
     "responses": [
       "201"
     ]
@@ -4353,35 +5231,53 @@
     "parameters": [
       "path:installmentId:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "channel",
+      "message"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /reservations": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "expiryDate",
+      "name",
+      "unitId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /scripts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "audience",
+      "text",
+      "title"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /subscription/renew": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "months"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /supplier-payments": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "date",
+      "method",
+      "supplierId"
+    ],
     "responses": [
       "201"
     ]
@@ -4390,7 +5286,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "allocations"
+    ],
     "responses": [
       "201"
     ]
@@ -4406,7 +5304,9 @@
   },
   "POST /suppliers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
@@ -4447,7 +5347,11 @@
   },
   "POST /tasks": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "assigneeId",
+      "assigneeKind",
+      "title"
+    ],
     "responses": [
       "201"
     ]
@@ -4456,21 +5360,30 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "note"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /templates": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /transactions": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "bankId",
+      "date",
+      "description"
+    ],
     "responses": [
       "201"
     ]
@@ -4487,28 +5400,45 @@
   },
   "POST /units": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "propertyId",
+      "rentMonthly",
+      "type",
+      "unitNo"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /units/bulk": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "count",
+      "prefix",
+      "propertyId",
+      "rentMonthly",
+      "type"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/accounts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code",
+      "name",
+      "type"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/activities": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
@@ -4533,7 +5463,12 @@
   },
   "POST /v1/admin/processing-agreement/sub-processors": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "dataCategories",
+      "location",
+      "name",
+      "purpose"
+    ],
     "responses": [
       "201"
     ]
@@ -4549,14 +5484,20 @@
   },
   "POST /v1/admin/processing-agreement/versions": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "effectiveFrom",
+      "summary"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/api-keys": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "permissionTemplateId"
+    ],
     "responses": [
       "201"
     ]
@@ -4572,21 +5513,29 @@
   },
   "POST /v1/attendance": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "employeeId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/auth/forgot-password": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "username"
+    ],
     "responses": [
       "200"
     ]
   },
   "POST /v1/auth/login": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "password",
+      "username"
+    ],
     "responses": [
       "200"
     ]
@@ -4607,28 +5556,43 @@
   },
   "POST /v1/auth/register": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "orgName",
+      "password",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/auth/reset-password": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "newPassword",
+      "token"
+    ],
     "responses": [
       "200"
     ]
   },
   "POST /v1/banks": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "openingDate"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/banks/cash-deposits": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "bankId",
+      "date",
+      "drawerId"
+    ],
     "responses": [
       "201"
     ]
@@ -4644,7 +5608,14 @@
   },
   "POST /v1/banks/network-settlements": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "bankId",
+      "date",
+      "feeAmount",
+      "feeVatAmount",
+      "periodFrom",
+      "periodTo"
+    ],
     "responses": [
       "201"
     ]
@@ -4662,7 +5633,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "until"
+    ],
     "responses": [
       "201"
     ]
@@ -4671,7 +5644,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lineId",
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
@@ -4680,7 +5656,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
@@ -4698,42 +5676,67 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "transactionId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/branches": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/cash-drawers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/companies": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "orgName",
+      "password",
+      "permissionTemplateId",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/company-users": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "password",
+      "permissionTemplateId",
+      "username"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/contracts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "classification",
+      "customerId",
+      "cycle",
+      "end",
+      "start",
+      "unitId",
+      "value",
+      "vatInclusion"
+    ],
     "responses": [
       "201"
     ]
@@ -4769,7 +5772,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "cancelDate",
+      "cancelReason",
+      "installmentDisposition"
+    ],
     "responses": [
       "201"
     ]
@@ -4778,7 +5785,12 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "description",
+      "issuedAt",
+      "kind"
+    ],
     "responses": [
       "201"
     ]
@@ -4788,7 +5800,9 @@
       "path:claimId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "paidAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4798,7 +5812,10 @@
       "path:claimId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason",
+      "waivedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4807,7 +5824,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "receivedAt",
+      "type"
+    ],
     "responses": [
       "201"
     ]
@@ -4817,7 +5838,10 @@
       "path:depositId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "deductions",
+      "settledAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4826,7 +5850,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "items",
+      "type"
+    ],
     "responses": [
       "201"
     ]
@@ -4836,7 +5864,9 @@
       "path:handoverId:required",
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "signedBy"
+    ],
     "responses": [
       "201"
     ]
@@ -4845,7 +5875,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "direction",
+      "paidAt"
+    ],
     "responses": [
       "201"
     ]
@@ -4854,7 +5888,11 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
@@ -4863,35 +5901,55 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "classification",
+      "end",
+      "start",
+      "vatInclusion"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/currencies": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code",
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/currencies/rates": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "fromCode",
+      "rate",
+      "toCode"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/customers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "kind",
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/delegations": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "granteeId",
+      "grants",
+      "nodeKey"
+    ],
     "responses": [
       "201"
     ]
@@ -4928,7 +5986,10 @@
   },
   "POST /v1/employees": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "fullName",
+      "hireDate"
+    ],
     "responses": [
       "201"
     ]
@@ -4942,7 +6003,11 @@
   },
   "POST /v1/fiscal-years": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "end",
+      "name",
+      "start"
+    ],
     "responses": [
       "201"
     ]
@@ -4965,7 +6030,13 @@
   },
   "POST /v1/inventory/movements": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "productId",
+      "qty",
+      "type",
+      "warehouseId"
+    ],
     "responses": [
       "201"
     ]
@@ -4981,7 +6052,9 @@
   },
   "POST /v1/inventory/opening": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines"
+    ],
     "responses": [
       "201"
     ]
@@ -4998,7 +6071,13 @@
   },
   "POST /v1/inventory/write-offs": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "occurredAt",
+      "productId",
+      "qty",
+      "reasonCode",
+      "warehouseId"
+    ],
     "responses": [
       "201"
     ]
@@ -5025,14 +6104,21 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/invoices": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "customerId",
+      "dueDate",
+      "issueDate",
+      "lines"
+    ],
     "responses": [
       "201"
     ]
@@ -5041,7 +6127,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -5050,7 +6138,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -5066,7 +6157,11 @@
   },
   "POST /v1/journal": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "lines",
+      "memo"
+    ],
     "responses": [
       "201"
     ]
@@ -5082,7 +6177,12 @@
   },
   "POST /v1/leaves/requests": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "employeeId",
+      "endDate",
+      "leaveTypeId",
+      "startDate"
+    ],
     "responses": [
       "201"
     ]
@@ -5107,14 +6207,20 @@
   },
   "POST /v1/leaves/types": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/maintenance": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "propertyId",
+      "reportedAt",
+      "title"
+    ],
     "responses": [
       "201"
     ]
@@ -5123,7 +6229,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "assignedTo"
+    ],
     "responses": [
       "201"
     ]
@@ -5132,7 +6240,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "cancelReason"
+    ],
     "responses": [
       "201"
     ]
@@ -5141,7 +6251,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "closedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -5150,7 +6262,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "completedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -5159,7 +6273,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "startedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -5189,21 +6305,33 @@
   },
   "POST /v1/obligations/vat-declaration/filed": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "quarter",
+      "year"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/payments": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "customerId",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/payments/refund": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "creditNoteId",
+      "date",
+      "method"
+    ],
     "responses": [
       "201"
     ]
@@ -5212,7 +6340,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "allocations"
+    ],
     "responses": [
       "201"
     ]
@@ -5228,21 +6358,30 @@
   },
   "POST /v1/pos/sales": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "paymentMethod"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/pos/sales/sync": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "clientSaleId",
+      "lines",
+      "paymentMethod"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/pos/shifts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "openingFloat"
+    ],
     "responses": [
       "201"
     ]
@@ -5251,35 +6390,48 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "declaredClosing"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/processing-agreement/accept": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "version"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/products": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/properties": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name",
+      "ownership"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/purchases": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "date",
+      "subtotal",
+      "supplierId"
+    ],
     "responses": [
       "201"
     ]
@@ -5288,7 +6440,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "purchaseLineId"
+    ],
     "responses": [
       "201"
     ]
@@ -5297,7 +6451,10 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "lines",
+      "receivedAt"
+    ],
     "responses": [
       "201"
     ]
@@ -5306,7 +6463,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -5315,7 +6474,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "201"
     ]
@@ -5331,7 +6492,12 @@
   },
   "POST /v1/quotes": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "customerId",
+      "issueDate",
+      "lines",
+      "validUntil"
+    ],
     "responses": [
       "201"
     ]
@@ -5349,35 +6515,53 @@
     "parameters": [
       "path:installmentId:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "channel",
+      "message"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/reservations": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "expiryDate",
+      "name",
+      "unitId"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/scripts": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "audience",
+      "text",
+      "title"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/subscription/renew": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "months"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/supplier-payments": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "date",
+      "method",
+      "supplierId"
+    ],
     "responses": [
       "201"
     ]
@@ -5386,7 +6570,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "allocations"
+    ],
     "responses": [
       "201"
     ]
@@ -5402,7 +6588,9 @@
   },
   "POST /v1/suppliers": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
@@ -5443,7 +6631,11 @@
   },
   "POST /v1/tasks": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "assigneeId",
+      "assigneeKind",
+      "title"
+    ],
     "responses": [
       "201"
     ]
@@ -5452,21 +6644,30 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "note"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/templates": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/transactions": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "amount",
+      "bankId",
+      "date",
+      "description"
+    ],
     "responses": [
       "201"
     ]
@@ -5483,28 +6684,47 @@
   },
   "POST /v1/units": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "propertyId",
+      "rentMonthly",
+      "type",
+      "unitNo"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/units/bulk": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "count",
+      "prefix",
+      "propertyId",
+      "rentMonthly",
+      "type"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/warehouses": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/warranties": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "endDate",
+      "propertyId",
+      "provider",
+      "startDate",
+      "subject"
+    ],
     "responses": [
       "201"
     ]
@@ -5520,7 +6740,9 @@
   },
   "POST /v1/zatca/onboarding/otp": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "otp"
+    ],
     "responses": [
       "201"
     ]
@@ -5541,14 +6763,22 @@
   },
   "POST /warehouses": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "name"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /warranties": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "endDate",
+      "propertyId",
+      "provider",
+      "startDate",
+      "subject"
+    ],
     "responses": [
       "201"
     ]
@@ -5564,7 +6794,9 @@
   },
   "POST /zatca/onboarding/otp": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "otp"
+    ],
     "responses": [
       "201"
     ]
