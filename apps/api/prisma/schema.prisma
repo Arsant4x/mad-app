@@ -708,6 +708,12 @@ model ZatcaCredential {
   productionCsidEnc   String?
   productionSecretEnc String?
 
+  /// نهايةُ صلاحية شهادة الإنتاج — **مقروءةٌ من الشهادة نفسِها** لا مُدخَلة (`ق-١٢٧٩` · ز/⑤A1).
+  /// الشهادةُ تنتهي وأوّلُ علامةٍ اليوم رفضُ كلِّ الفواتير؛ فتُقرأ لحظةَ الحفظ ويُنبَّه قبل ٣٠ يوماً.
+  certificateNotAfter DateTime?
+  /// آخرُ تنبيهٍ أُرسل عن قرب الانتهاء — فلا يتكرّر كلَّ ليلة.
+  expiryNotifiedAt    DateTime?
+
   status      ZatcaOnboardingStatus @default(NOT_STARTED)
   environment ZatcaEnvironment      @default(SANDBOX)
   /// Why onboarding failed, so a merchant can be told something actionable
@@ -1221,6 +1227,10 @@ model Invoice {
   /// invoice can actually be diagnosed.
   /// @external-text
   zatcaMessage      String?
+  /// تحذيراتُ الهيئة على مستندٍ **مقبول** (`validationResults.warningMessages`) — تُحفظ ولا
+  /// تُغيّر الحكم (`ق-١٢٧٩` · ز/⑤A2). وما لا يُخزَّن هنا لا يُستعاد: لا نقطةَ استعلامٍ لدى الهيئة.
+  /// @external-text
+  zatcaWarnings     Json?
 
   /// ZATCA document kind — see the enum's comment for why notes share this
   /// table. A CREDIT_NOTE row's amounts are stored POSITIVE (the docType
@@ -3091,6 +3101,8 @@ enum NotificationKind {
   /// قائمةُ المعالجين الفرعيين تغيّرت وتلزم موافقةُ التاجر (`ق-٥٨٩`) — **تذكيرٌ متكرّرٌ
   /// لا إشعارٌ واحد**: عند النشر، وقبل السريان بأربعةَ عشرَ يوماً وبسبعةٍ وبيوم، ثم أسبوعياً.
   SUBPROCESSOR_CONSENT
+  /// شهادةُ الفوترة الإلكترونية تقترب من انتهائها — وبعدها تُرفض كلُّ الفواتير (ز/⑤A1).
+  ZATCA_CERT_EXPIRING
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something

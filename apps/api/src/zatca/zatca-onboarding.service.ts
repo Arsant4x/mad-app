@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, Logger } from '@ne
 import { ZatcaEnvironment, ZatcaOnboardingStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret, secretIsSet } from '../common/crypto/secret.util';
+import { CERT_EXPIRY_WARN_DAYS, certificateNotAfter, daysUntil } from './certificate-expiry.util';
 import { MSG } from '../common/i18n/messages';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -166,6 +167,10 @@ export class ZatcaOnboardingService {
       hasComplianceCertificate: secretIsSet(credential?.complianceCsidEnc),
       hasProductionCertificate: secretIsSet(credential?.productionCsidEnc),
       onboardedAt: credential?.onboardedAt ?? null,
+      // انتهاءُ الشهادة: التاريخُ وما بقي — والتاجرُ يرى «تنتهي بعد ١٢ يوماً» قبل أن تُرفض فاتورةٌ واحدة.
+      certificateNotAfter: credential?.certificateNotAfter ?? null,
+      certificateDaysLeft: credential?.certificateNotAfter ? daysUntil(credential.certificateNotAfter, new Date()) : null,
+      certificateExpiringSoon: credential?.certificateNotAfter ? daysUntil(credential.certificateNotAfter, new Date()) <= CERT_EXPIRY_WARN_DAYS : false,
       lastError: credential?.lastError ?? null,
       // Surfaced so the screen can explain what's missing instead of failing
       // only once the merchant presses the button.
@@ -512,6 +517,11 @@ export class ZatcaOnboardingService {
           data: {
             productionCsidEnc: encryptSecret(binarySecurityToken),
             productionSecretEnc: encryptSecret(productionSecret),
+            // **نهايةُ الصلاحية تُقرأ من الشهادة لحظةَ حفظها** (`ق-١٢٧٩` · ز/⑤A1) — لا تُحسب بسنةٍ
+            // تُضاف، ولا تُترك حتى ترفض الهيئةُ فواتيرَ يومٍ كامل. وشهادةٌ لا تُقرأ تُترك `null`
+            // **ولا تُسقط الإصدار** — والغيابُ يظهر في الحالة بدل أن يُفترض «سليمة».
+            certificateNotAfter: certificateNotAfter(binarySecurityToken),
+            expiryNotifiedAt: null,
             status: ZatcaOnboardingStatus.PRODUCTION_ISSUED,
             onboardedAt: new Date(),
             lastError: null,

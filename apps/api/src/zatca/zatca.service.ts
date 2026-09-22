@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { issuedWallClock } from '../common/wall-clock.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -16,6 +16,7 @@ import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xad
 import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
+import { AuthorityMessage, zatcaWarningsOf } from './authority-warnings.util';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
  * legal act on the merchant's behalf, not routine data entry. */
@@ -670,7 +671,7 @@ export class ZatcaService {
         await this.recordAttempt(companyId, invoiceId, reason);
         throw new ZatcaAttemptFailedException(reason);
       }
-      await this.recordResult(companyId, invoiceId, verdict === 'accepted', detail);
+      await this.recordResult(companyId, invoiceId, verdict === 'accepted', detail, zatcaWarningsOf(body));
       return this.statusOf(companyId, invoiceId);
     } catch (e) {
       if (e instanceof ZatcaAttemptFailedException) throw e;
@@ -715,7 +716,13 @@ export class ZatcaService {
     );
   }
 
-  private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null) {
+  /**
+   * جوابُ الهيئة على المستند — الحالةُ والنصُّ **وتحذيراتُها** (`ق-١٢٧٩` · ز/⑤A2).
+   *
+   * التحذيرُ يُحفظ ولا يُغيّر الحكم: مستندٌ مقبولٌ بملاحظاتٍ يبقى `CLEARED` — وتُرى ملاحظاتُه.
+   * و`null` تعني «لا `validationResults` في الجواب»، فلا يُمحى ما حُفظ من محاولةٍ سابقة إلا بجوابٍ يحمل غيرَه.
+   */
+  private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null, warnings?: AuthorityMessage[] | null) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.update({
         where: { id: invoiceId },
@@ -723,6 +730,9 @@ export class ZatcaService {
           zatcaStatus: cleared ? 'CLEARED' : 'REJECTED',
           zatcaSubmittedAt: new Date(),
           zatcaMessage: storableText(message),
+          // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`،
+          // **والقيمةُ نفسُها بلا تغيير**: مصفوفةُ كائناتٍ عاديةٍ يقبلها `JSONB`.
+          ...(warnings === undefined ? {} : { zatcaWarnings: (warnings ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue }),
         },
       }),
     );
