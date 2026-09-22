@@ -11,18 +11,35 @@ import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 
 const YEAR_INCLUDE = { periods: { orderBy: [{ year: 'asc' as const }, { month: 'asc' as const }] } };
 
-/** The twelve (year, month) pairs a fiscal year spans, walking forward from
- * its start. Driven by the start date rather than assuming January, so a year
- * beginning 2026-04-01 correctly produces Apr 2026 … Mar 2027. */
-function monthsFrom(start: Date): { month: number; year: number }[] {
+/**
+ * أزواجُ (سنة، شهر) التي تغطّيها السنةُ المالية — **من بدايتها إلى نهايتها المعلَنة**
+ * (`ق-١٢٧٩` · د/①A3 — `domain-scan/01` A3 · S24).
+ *
+ * **ما كان**: اثنا عشر شهراً دائماً من البداية، و`end` يُفحص أن يكون بعدها **ولا يؤثّر**.
+ * فسنةٌ أولى من ثمانية عشر شهراً (نظامُ الشركات، م١٦) **لا تُمثَّل**: ستّةُ أشهرٍ بلا فترة،
+ * وكلُّ قيدٍ فيها يُردّ `fiscal_no_period_for_date` — فالتقويمُ خاطئٌ من اليوم الأوّل،
+ * وتصحيحُه بعد الإقفال يمرّ بحارس A2 (لا يُحذف تقويمٌ فيه فترةٌ مقفلة).
+ *
+ * واليومُ الأوّل من كلِّ شهرٍ يتجنّب فخَّ آخر الشهر (`Jan 31 + 1 month = Mar 3`).
+ */
+export function monthsBetween(start: Date, end: Date): { month: number; year: number }[] {
   const months: { month: number; year: number }[] = [];
-  for (let i = 0; i < 12; i++) {
-    // Day 1 avoids the month-end rollover trap (Jan 31 + 1 month = Mar 3).
-    const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
+  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+  for (let d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1)); d <= last; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
     months.push({ month: d.getUTCMonth() + 1, year: d.getUTCFullYear() });
   }
   return months;
 }
+
+/**
+ * حدُّ المدّة — **من المصدر لا من الذاكرة**: نظامُ الشركات (١٤٤٣هـ) **م١٦**: «السنةُ المالية
+ * للشركة اثنا عشر شهراً … ويجوز أن تكون السنةُ المالية الأولى … مدّةً لا تقلّ عن ستّة أشهر
+ * ولا تزيد على ثمانية عشر شهراً» — الترجمةُ الإنجليزية على موقع وزارة الاستثمار، مقروءةً
+ * 2026-09-21 (`docs/domain-scan/01` — المصدر م٨). **ولا يُفرَض اثنا عشر حتماً**: الأولى
+ * والأخيرة يجوز أن تخالفاها، والنظامُ لا يميّزهما في بياناتنا — فالحدُّ على المدى وحدَه.
+ */
+export const FISCAL_SPAN_MIN_MONTHS = 6;
+export const FISCAL_SPAN_MAX_MONTHS = 18;
 
 @Injectable()
 export class FiscalService {
@@ -40,7 +57,10 @@ export class FiscalService {
       const end = new Date(dto.end);
       if (start >= end) throw new BadRequestException(MSG.fiscal_year_start_after_end);
 
-      const months = monthsFrom(start);
+      const months = monthsBetween(start, end);
+      if (months.length < FISCAL_SPAN_MIN_MONTHS || months.length > FISCAL_SPAN_MAX_MONTHS) {
+        throw new BadRequestException(formatMessage(MSG.fiscal_year_span_out_of_range, { months: months.length }));
+      }
 
       // Two fiscal years must not both claim the same month: `periodForDate`
       // resolves a date to exactly one period, so an overlap would make which
@@ -54,7 +74,7 @@ export class FiscalService {
         data: { name: dto.name.trim(), start, end } as unknown as Prisma.FiscalYearUncheckedCreateInput,
       });
 
-      // All twelve open — closing is always a deliberate act, never a default.
+      // كلُّ فتراتها مفتوحة — الإقفالُ فعلٌ مقصودٌ دائماً لا حالةٌ افتراضية.
       await tx.fiscalPeriod.createMany({
         data: months.map((m) => ({
           companyId,
