@@ -481,6 +481,7 @@ export class PosService {
             unitCode: p.unitCode ?? null,
             quantity: l.quantity,
             unitPrice: Number(p.price),
+            discount: l.discount ?? 0,
             // ⑧ الفئةُ من البطاقة والنسبةُ مشتقّةٌ منها — الخادمُ يعيد حلَّها من الصنف نفسِه عند الإنشاء،
             // وتُمرَّر هنا كي تُحسب المجاميعُ (تدقيقُ الدفع المقسَّم أدناه) بالدالّة نفسِها وبالنسبة نفسِها.
             taxRate: rateForCategory(p.taxCategory),

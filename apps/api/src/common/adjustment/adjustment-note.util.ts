@@ -44,6 +44,8 @@ export interface OriginalLine {
   productId: string | null;
   quantity: Prisma.Decimal | number;
   unitPrice: Prisma.Decimal | number;
+  /** ④B1 — خصمُ السطر كما كُتب على الأصل؛ الإشعارُ الكامل ينقله كي يعكس ما فُوتر لا الإجمالي. */
+  discount?: Prisma.Decimal | number | null;
   taxRate: Prisma.Decimal | number;
   /** ⑧ فئةُ الضريبة وسببُها كما كُتبت على الأصل — تُنقل مع السطر لا تُقرأ من البطاقة (سطرُ الشراء بلا فئةٍ بعد). */
   taxCategory?: string | null;
@@ -62,6 +64,7 @@ export function linesFromOriginal<L extends OriginalLine, X extends object>(line
     productId: l.productId ?? undefined,
     quantity: Number(l.quantity),
     unitPrice: Number(l.unitPrice),
+    discount: Number(l.discount ?? 0),
     taxRate: Number(l.taxRate),
     ...(l.taxCategory
       ? { taxCategory: l.taxCategory as 'S' | 'Z' | 'E' | 'O', taxExemptionReasonCode: l.taxExemptionReasonCode ?? undefined, taxExemptionReason: l.taxExemptionReason ?? undefined }

@@ -35,6 +35,11 @@ export type BucketCategory = 'S' | 'Z' | 'E' | 'O' | 'LEGACY_ZERO';
 export interface MoneyLine {
   quantity: number;
   unitPrice: number;
+  /**
+   * ④B1 — خصمٌ على السطر **مبلغاً** (BT-136): صافي السطر = الكمية × السعر − الخصم (BT-131) — فيدخل الوعاءَ والضريبةَ
+   * من هنا لا من حسابٍ ثانٍ. لا نسبةَ في الخادم: النسبةُ تُحوَّل مبلغاً في الشاشة وتُرسَل كما تُعرض للمشتري.
+   */
+  discount?: number | null;
   /** نسبةٌ مئوية، مثل 15. */
   taxRate: number;
   /** ⑧ فئةُ الضريبة كما على السطر (`S` · `Z` · `E` · `O` · `LEGACY_STANDARD` · `LEGACY_ZERO`)؛ غيابُها يُصنَّف من النسبة للحساب وحده. */
@@ -67,9 +72,19 @@ export interface DocumentTotals {
   byRate: RateBucket[];
 }
 
-/** صافي البند: الكمية × السعر، مدوَّراً إلى مبلغ سطر. */
-export function lineNet(line: MoneyLine): number {
+/** إجماليُّ البند قبل الخصم: الكمية × السعر، مدوَّراً إلى مبلغ سطر. */
+export function lineGross(line: MoneyLine): number {
   return roundTo(line.quantity * line.unitPrice, 'LINE_AMOUNT');
+}
+
+/** خصمُ البند مدوَّراً مبلغَ سطر — صفرٌ غياباً. */
+export function lineDiscount(line: MoneyLine): number {
+  return roundTo(Number(line.discount ?? 0), 'LINE_AMOUNT');
+}
+
+/** صافي البند (BT-131): الإجماليُّ − الخصم — مدوَّراً إلى مبلغ سطر. */
+export function lineNet(line: MoneyLine): number {
+  return roundTo(lineGross(line) - lineDiscount(line), 'LINE_AMOUNT');
 }
 
 /** ضريبة البند للعرض على السطر — الهيئة تتحقّق من ضريبة **النسبة** لا البند، فلا تُجمَع هذه. */

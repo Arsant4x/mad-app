@@ -25,6 +25,12 @@ export class QuoteLineDto {
   @Min(0)
   unitPrice!: number;
 
+  /** ④B1 — خصمٌ على السطر مبلغاً؛ ينتقل إلى الفاتورة عند التحويل. */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount?: number;
+
   /** ⑧ مشتقّةٌ من الفئة — كما في بند الفاتورة: تُقبل مساويةً الأساسية إعلاناً لـ`S`، وتُطابَق مع فئةٍ معلَنة. */
   @IsOptional()
   @IsNumber()

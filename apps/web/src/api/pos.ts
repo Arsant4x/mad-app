@@ -35,6 +35,8 @@ export interface ClosedShift extends PosShift {
 export interface PosSaleLine {
   productId: string;
   quantity: number;
+  /** ④B1 — خصمٌ مبلغاً على سطر البيع (≥ 0 ولا يفوق الكمية × السعر — الخادمُ يرفض مسمّىً). */
+  discount?: number;
 }
 
 /** مرآة StockDeductionReport في الخادم — معلوماتي فقط، الرصيد يبقى مشتقاً من دفتر الحركات. */

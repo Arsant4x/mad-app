@@ -43,6 +43,7 @@ function quoteLineRow(companyId: string, unitCodes: ReadonlyMap<string, string |
     unitCode: unitCodeOf(unitCodes, l.productId),
     quantity: l.quantity,
     unitPrice: l.unitPrice,
+    discount: l.discount ?? 0,
     taxRate: l.taxRate,
     taxCategory: l.taxCategory,
     taxExemptionReasonCode: l.taxExemptionReasonCode,
@@ -261,6 +262,7 @@ export class QuotesService {
               productId: l.productId ?? undefined,
               quantity: Number(l.quantity),
               unitPrice: Number(l.unitPrice),
+              discount: Number(l.discount ?? 0),
               taxRate: Number(l.taxRate),
               // ⑧ والفئةُ تنتقل كما عُرضت — ما وافق عليه العميل لا ما على البطاقة اليوم؛
               // وبندٌ قديم بصفرٍ بلا فئة (`LEGACY_ZERO`) يُردّ باسمه حتى يُعلَن على العرض.

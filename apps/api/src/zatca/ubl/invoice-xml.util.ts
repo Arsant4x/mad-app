@@ -24,7 +24,7 @@
  */
 
 import { formatMoney } from '../../common/money/rounding';
-import { computeDocumentTotals, lineNet, lineTax, type BucketCategory } from '../../common/money/totals';
+import { computeDocumentTotals, lineDiscount, lineGross, lineNet, lineTax, type BucketCategory } from '../../common/money/totals';
 import { exemptionReasonByCode } from '../../common/vat/exemption-reasons';
 import type { WallClock } from '../../common/wall-clock.util';
 
@@ -38,6 +38,8 @@ export interface UblInvoiceLine {
    * فهي اختياريةٌ في قاموس الهيئة (`BT-130`، `0..1`)، ولا يُرسَل `PCE` صامتاً لما لم يُعلَن. */
   unitCode?: string | null;
   unitPrice: number;
+  /** ④B1 — خصمُ السطر مبلغاً (BT-136)؛ يخرج `cac:AllowanceCharge[ChargeIndicator=false]` والصافي بعده. */
+  discount?: number | null;
   /** Percentage, e.g. 15. */
   taxRate: number;
   /** ⑧ فئةُ ضريبة القيمة المضافة (`BT-151` على السطر · `BT-118` في التفصيل) — إلزاميّة. */
@@ -220,12 +222,21 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
   // ① وحدةُ الكمّية تُقرأ من السطر لا تُثبَّت: كان `unitCode="PCE"` ثابتاً لكلِّ سطر (حدٌّ أُعلن في
   // ق-١٠٦٠ وقِيس في ق-١٠٦٩). سطرٌ بلا وحدةٍ معلَنة يخرج بلا السمة — لا برمزٍ مخمَّن.
   const unit = line.unitCode ? ` unitCode="${esc(line.unitCode)}"` : '';
+  // ④B1 — الخصمُ على السطر (BT-136): يُكتب بعد الصافي وقبل الضريبة (ترتيبُ UBL)، والصافي هو ما بعده (BT-131).
+  const allowance = lineDiscount(line) > 0
+    ? '<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator>' +
+      '<cbc:AllowanceChargeReason>خصم</cbc:AllowanceChargeReason>' +
+      `<cbc:Amount currencyID="${esc(currency)}">${money(lineDiscount(line))}</cbc:Amount>` +
+      `<cbc:BaseAmount currencyID="${esc(currency)}">${money(lineGross(line))}</cbc:BaseAmount>` +
+      '</cac:AllowanceCharge>'
+    : '';
 
   return (
     '<cac:InvoiceLine>' +
     `<cbc:ID>${index + 1}</cbc:ID>` +
     `<cbc:InvoicedQuantity${unit}>${quantity(line.quantity)}</cbc:InvoicedQuantity>` +
     `<cbc:LineExtensionAmount currencyID="${esc(currency)}">${money(lineExtension)}</cbc:LineExtensionAmount>` +
+    allowance +
     '<cac:TaxTotal>' +
     `<cbc:TaxAmount currencyID="${esc(currency)}">${money(lineTaxAmount)}</cbc:TaxAmount>` +
     `<cbc:RoundingAmount currencyID="${esc(currency)}">${money(lineExtension + lineTaxAmount)}</cbc:RoundingAmount>` +

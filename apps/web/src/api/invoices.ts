@@ -10,6 +10,8 @@ export interface InvoiceLine {
   description: string;
   quantity: string;
   unitPrice: string;
+  /** ④B1 — خصمُ السطر مبلغاً كما خُزّن (BT-136)؛ الصافي = الكمية × السعر − الخصم. */
+  discount: string;
   /** ⑧ مشتقّةٌ من الفئة — للقراءة. */
   taxRate: string;
   /** ⑧ الفئةُ والسبب كما نُسخا لحظةَ البيع (من الصنف أو من إعلان السطر). */
@@ -94,6 +96,8 @@ export interface InvoiceLineInput {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** ④B1 — خصمٌ على السطر مبلغاً (≥ 0 ولا يفوق الكمية × السعر — الخادمُ يرفض مسمّىً). */
+  discount?: number;
   /** ⑧ الفئةُ والسبب لسطرٍ بلا صنف — يُلزَم بهما (`ق-١٢١١`/③)؛ والنسبةُ يشتقّها الخادم ولا تُرسَل. */
   taxCategory: DeclarableTaxCategory;
   taxExemptionReasonCode?: string;

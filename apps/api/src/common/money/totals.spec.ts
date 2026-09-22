@@ -24,6 +24,7 @@ const ublLine = (l: MoneyLine, i: number): UblInvoiceLine => ({
   description: `بند ${i + 1}`,
   quantity: l.quantity,
   unitPrice: l.unitPrice,
+  discount: l.discount ?? 0,
   taxRate: l.taxRate,
   taxCategory: (l.taxCategory as UblInvoiceLine['taxCategory']) ?? (l.taxRate > 0 ? 'S' : 'Z'),
   taxExemptionReasonCode: l.taxExemptionReasonCode ?? (l.taxRate > 0 ? null : 'VATEX-SA-35'),
@@ -166,5 +167,30 @@ describe('⭐⭐ المختوم = المرحَّل — يُقرأ المستند
     expect(t.byRate[0].taxable).toBe(5.05); // 1.01 × 5
     expect(t.byRate[0].tax).toBe(roundTo(5.05 * 0.15, 'VAT_AMOUNT'));
     expect(lines.map(lineTax).every((x) => x === 0.15)).toBe(true);
+  });
+
+  it('[SPEC 4.11] ④B1 الخصمُ على السطر: الصافي = الكمية × السعر − الخصم (BT-131)، والمستندُ يذكر الخصمَ AllowanceCharge والصافيَ بعده — ولا يفترق عن الدفتر', () => {
+    // 2 × 100 − 20 = 180 صافياً؛ الضريبةُ من الصافي: 27؛ والإجمالي 207 — وسطرٌ بلا خصم كما كان.
+    const lines: MoneyLine[] = [
+      { quantity: 2, unitPrice: 100, discount: 20, taxRate: 15, taxCategory: 'S' },
+      { quantity: 1, unitPrice: 50, taxRate: 15, taxCategory: 'S' },
+    ];
+    expect(lineNet(lines[0])).toBe(180);
+    expect(lineNet(lines[1])).toBe(50);
+    const t = computeDocumentTotals(lines);
+    expect([t.subtotal, t.taxTotal, t.total]).toEqual([230, 34.5, 264.5]);
+    const xml = buildUnsignedInvoiceXml(baseInput(lines.map((l) => ({ ...l })), t));
+    // السطرُ الأوّل يحمل الخصمَ مبلغاً وأساسَه، والصافي بعده؛ والثاني بلا AllowanceCharge.
+    const first = xml.slice(xml.indexOf('<cac:InvoiceLine>'), xml.indexOf('</cac:InvoiceLine>'));
+    expect(first).toContain('<cac:AllowanceCharge><cbc:ChargeIndicator>false</cbc:ChargeIndicator>');
+    expect(first).toContain('<cbc:Amount currencyID="SAR">20.00</cbc:Amount>');
+    expect(first).toContain('<cbc:BaseAmount currencyID="SAR">200.00</cbc:BaseAmount>');
+    expect(amountsOf(first, 'cbc:LineExtensionAmount')).toEqual(['180.00']);
+    expect((xml.match(/<cac:AllowanceCharge>/g) ?? []).length).toBe(1);
+    // ومجاميعُ المستند هي مجاميعُ الدفتر — الخصمُ على السطر لا على المستند (BT-107 لا يُمسّ).
+    expect(amountsOf(xml, 'cbc:TaxExclusiveAmount')).toEqual([formatMoney(t.subtotal)]);
+    expect(amountsOf(xml, 'cbc:TaxInclusiveAmount')).toEqual([formatMoney(t.total)]);
+    // ⑧ خصمٌ يساوي الإجماليَّ صافيُه صفر — وما يفوقه يرفضه الخادمُ قبل الحساب (يُثبت في e2e).
+    expect(lineNet({ quantity: 1, unitPrice: 10, discount: 10, taxRate: 15 })).toBe(0);
   });
 });
