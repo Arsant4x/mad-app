@@ -9,6 +9,15 @@ function currentLanguage(): string {
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
+/**
+ * ⭐ **الواجهةُ على `/v1`** (`ق-١٢٨٦` · ي/⑫A1). الخادمُ يُجيب البابَ المحايد أيضاً
+ * **مدّةً معلَنة**، والواجهةُ تُعلن إصدارَها كي لا تصير هي نفسُها المستهلكَ الذي يحبس
+ * المحايد. والبادئةُ تُلحق **هنا في موضعٍ واحد** — فلا يُمسّ `VITE_API_URL` ولا وثائقُ
+ * النشر. ومصدرُ الثابت في الخادم: `apps/api/src/common/versioning.ts`.
+ */
+const API_VERSION_PREFIX = 'v1';
+const API_BASE = `${API_URL.replace(/\/+$/, '')}/${API_VERSION_PREFIX}`;
+
 export type ActorType = 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
 /** `CLOSED` الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — لا يعود بالدفع، بل بطلبٍ وقرار. */
 export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
@@ -48,11 +57,11 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
 }
 
-export const apiClient = axios.create({ baseURL: API_URL, withCredentials: true });
+export const apiClient = axios.create({ baseURL: API_BASE, withCredentials: true });
 
 // A separate, un-intercepted client for the refresh call itself — avoids
 // recursively triggering the 401 handler below.
-const refreshClient = axios.create({ baseURL: API_URL, withCredentials: true });
+const refreshClient = axios.create({ baseURL: API_BASE, withCredentials: true });
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
