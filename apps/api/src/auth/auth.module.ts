@@ -20,6 +20,7 @@ import { JwtStrategy } from './jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  // `JwtModule` يُصدَّر للمقنِّن (`tenantTracker`) كي يقرأ هويّةَ الطالب بتوقيع الرمز نفسِه — لا لمفتاحٍ ثانٍ
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

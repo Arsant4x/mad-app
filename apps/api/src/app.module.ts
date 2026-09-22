@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { JwtService } from '@nestjs/jwt';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
+import { tenantTracker } from './common/throttle/tenant-tracker';
 import { BanksModule } from './banks/banks.module';
 import { CompaniesModule } from './companies/companies.module';
 import { CompanyProfileModule } from './company-profile/company-profile.module';
@@ -86,9 +88,17 @@ import { WarrantiesModule } from './warranties/warranties.module';
     // password guessing is throttled hard. Skipped entirely under Jest — the
     // e2e suite fires hundreds of requests from one IP by design, and rate
     // limiting is not the behaviour those tests exist to verify.
-    ThrottlerModule.forRoot({
-      throttlers: [{ limit: 600, ttl: 60_000 }],
-      skipIf: () => process.env.NODE_ENV === 'test',
+    //
+    // **والمفتاحُ بالمنشأة والمستخدم، والعنوانُ للمجهول وحدَه** (`ق-١٢٧١`/ب): كان العنوانَ للجميع، فمنشأتان
+    // خلف عنوانٍ واحد كانت تحجب إحداهما الأخرى — `tenantTracker` يقرأ هويّةَ الطالب من رمزه بتوقيعه.
+    ThrottlerModule.forRootAsync({
+      imports: [AuthModule],
+      inject: [JwtService],
+      useFactory: (jwt: JwtService) => ({
+        throttlers: [{ limit: 600, ttl: 60_000 }],
+        skipIf: () => process.env.NODE_ENV === 'test',
+        getTracker: tenantTracker(jwt),
+      }),
     }),
     PrismaModule,
     TenantPrismaModule,
