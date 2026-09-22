@@ -733,9 +733,12 @@ export class ZatcaService {
           zatcaStatus: cleared ? 'CLEARED' : 'REJECTED',
           zatcaSubmittedAt: new Date(),
           zatcaMessage: storableText(message),
-          // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`،
-          // **والقيمةُ نفسُها بلا تغيير**: مصفوفةُ كائناتٍ عاديةٍ يقبلها `JSONB`.
-          zatcaWarnings: (warnings ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
+          // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`.
+          // **والتنقيةُ في موضع الكتابة** (`ق-٩٨٢`): البايتُ الصفريُّ يرفضه `JSONB` كما يرفضه عمودُ
+          // النصّ، فلا يكفي أن يُنقّى في المحلّل — يُرى هنا حيث يُكتب.
+          zatcaWarnings: warnings
+            ? (warnings.map((w) => ({ ...w, code: storableText(w.code) ?? '', message: storableText(w.message) ?? '' })) as unknown as Prisma.InputJsonValue)
+            : Prisma.DbNull,
         },
       }),
     );
