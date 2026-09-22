@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * Late-rent escalation and the in-system notifications it raises.
  *

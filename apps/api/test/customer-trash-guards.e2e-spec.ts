@@ -7,6 +7,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * ثقبُ الحذف الناعم في العملاء — `§6.12` واقعةً (`ق-١٠٢٠` · `ق-١٠٢٨`/④ · `ق-١٠٢٩`/①):
  * ① عميلٌ له عقدُ إيجار لا يُحذف — **بأيّ حالةٍ ولو مُلغاة** — والرسالةُ تسمّي المخرج (الأرشفة).

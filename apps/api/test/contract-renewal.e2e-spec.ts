@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (29.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(90000);
+
 /**
  * Renewal creates a *new* contract rather than stretching the old one's dates.
  * That distinction is the point: the expiring lease keeps its own installments

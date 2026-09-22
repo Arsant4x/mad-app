@@ -15,6 +15,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { startAuthorityStub, STUB_WARNING_CODE, STUB_WARNING_MESSAGE, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (69.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(210000);
+
 /**
  * Phase 2 cannot clear a real invoice without a certificate issued by the
  * authority, so what these lock in is everything *around* that: onboarding

@@ -7,6 +7,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (27.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(85000);
+
 /**
  * 4.9 — عروض الأسعار والتحويل بنقرة: بنود تحقق الموجز السبعة + شرطا
  * صاحب المشروع (تصادم ترقيم الدفعة المتزامن، ومسودة تُحوَّل مباشرة).

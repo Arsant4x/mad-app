@@ -7,6 +7,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * Proves invoices/purchases auto-post to the ledger through the real chart
  * of accounts seeded for demo-company-a (1200/4100/2200/2100/5300 — see

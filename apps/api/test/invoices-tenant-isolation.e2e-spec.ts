@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (7.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * Same proof as tenant-isolation.e2e-spec.ts, but for the Invoices feature:
  * customers and invoices (with their line items) must never leak across

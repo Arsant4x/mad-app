@@ -6,6 +6,9 @@ import { canonicalize, parseXml } from '../src/zatca/ubl/canonicalize.util';
 import { buildUnsignedInvoiceXml, type UblInvoiceInput } from '../src/zatca/ubl/invoice-xml.util';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from '../src/zatca/ubl/xades.util';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (5.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * The authority is the only real verifier, so what these can prove is
  * *self-consistency*: that the document we emit is well-formed, that every

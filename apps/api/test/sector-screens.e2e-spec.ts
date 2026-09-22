@@ -7,6 +7,9 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (14.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(45000);
+
 /**
  * ترشيح الشاشات بالنشاط — **سلوكياً على قاعدة حيّة**.
  *

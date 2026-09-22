@@ -13,6 +13,9 @@ import { PersonalDataErasureService, REOPEN_WINDOW_DAYS } from '../src/deletion-
 import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (73.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(220000);
+
 /**
  * حذف الحساب بصيغة SaaS (قاعدة المالك 2026-08-07): التاجر لا يمسح بياناته
  * بنفسه أبداً — يقدّم طلباً، والدعم يراجعه وينفّذه.

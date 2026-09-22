@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (19.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * **المستأجرُ يُربط بالعميل بالمعرّف لا بالاسم** (`§6.3` · `ق-٤٩٧` · `ق-١٠٢٨` · `ق-١٠٢٩`/②):
  * ① عميلان بالاسم نفسِه بعقدين **لا يندمجان** وهاتفُ كلٍّ محفوظ · ② عميلُ بيعٍ قائم لا يُلتهم ·

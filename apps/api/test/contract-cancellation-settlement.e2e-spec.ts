@@ -7,6 +7,9 @@ import { AppModule } from '../src/app.module';
 import { dayEndOf } from '../src/common/wall-clock.util';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (44.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(135000);
+
 /**
  * Early termination: what the tenant owes for walking away.
  *

@@ -10,6 +10,9 @@ import { purgeInvoicesForTest } from './purge-invoices';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 import { clearCredential, seedProductionCredential } from './zatca-credential';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (22.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(70000);
+
 /**
  * **مهلةٌ على الاتصال بالهيئة** (`ق-١١٩٨`/③ — مراجعةٌ خارجية).
  *

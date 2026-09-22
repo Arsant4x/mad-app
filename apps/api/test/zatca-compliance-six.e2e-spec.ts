@@ -10,6 +10,9 @@ import { GENESIS_PREVIOUS_HASH } from '../src/zatca/hash-chain.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (14.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(45000);
+
 /**
  * The six-document conformance run: obtaining a compliance CSID must be
  * followed, in the same flow, by one passing sample of every document kind —

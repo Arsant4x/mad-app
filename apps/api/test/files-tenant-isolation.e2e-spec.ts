@@ -5,6 +5,9 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { FilesService } from '../src/files/files.service';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (80.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(245000);
+
 describe('File storage (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;

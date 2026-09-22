@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 interface Account { id: string; code: string; balance: string }
 interface Bank { id: string; name: string; accountId: string }
 interface JournalLine { accountId: string; debit: string; credit: string }

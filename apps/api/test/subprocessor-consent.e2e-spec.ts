@@ -9,6 +9,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (42.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(130000);
+
 /**
  * ⚖️ **موافقةُ التاجر على المعالجين الفرعيين — اختيارٌ لا حجب** (`ق-٥٨١` · `ق-٥٨٩`).
  *

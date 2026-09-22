@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (20.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(65000);
+
 /**
  * مهلة الإشعار (`م٥٤`): **خمسة عشر يوماً من نهاية شهر الواقعة** — **تنبيهٌ لا حجز**.
  *

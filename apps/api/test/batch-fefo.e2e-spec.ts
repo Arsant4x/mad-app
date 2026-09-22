@@ -22,7 +22,8 @@ import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } 
  *   ⑦ التحويلُ ينقل الدفعةَ مع الطبقة.
  * منشأةٌ معزولة تُزال في الختام.
  */
-jest.setTimeout(60000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (43.0 ث) — رُفعت من ٦٠ ث بعد القياس.
+jest.setTimeout(130000);
 
 describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياسةً تُقرأ (e2e)', () => {
   let app: INestApplication;

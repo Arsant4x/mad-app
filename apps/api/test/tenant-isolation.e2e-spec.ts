@@ -4,6 +4,9 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (7.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * End-to-end proof that company A can never see or affect company B's data,
  * even when authenticated and even when guessing IDs. Exercises the real

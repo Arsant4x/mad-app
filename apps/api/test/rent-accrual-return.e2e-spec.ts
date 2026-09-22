@@ -11,6 +11,9 @@ import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-a
 import { OUTPUT_VAT_ACCOUNT } from '../src/journal/auto-posting.util';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (53.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(165000);
+
 /**
  * ⭐ **الحارسُ الحيّ لاستحقاق الإيجار — يقرأ الدفترَ والإقرارَ معاً في كلِّ مرحلة**
  * (`ق-٩١٧` · `ق-٩٢٤` · `ق-٩٢٦` · `ق-٩٢٧` — شرطُ المالك: «فلا يُعلَن مبنيٌّ حتى يتطابقا»).

@@ -11,6 +11,9 @@ import { TenantWide } from '../src/common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../src/common/tenant/tenant.guard';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (26.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(80000);
+
 /**
  * **`TenantGuard` مغلقٌ افتراضياً — مسارٌ لا يُعلن نفسَه يُرفض** (`ق-١١٩٨`/①).
  *

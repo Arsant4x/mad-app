@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { tenantTracker } from '../src/common/throttle/tenant-tracker';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (23.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(75000);
+
 /**
  * حدود المعدّل — **تُفحص بسلوكها لا بوجود تصريحها**.
  *

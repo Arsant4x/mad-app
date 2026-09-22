@@ -8,6 +8,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { purgeInvoicesForTest } from './purge-invoices';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * الأرشفة (gap-analysis §1): hidden from day-to-day lists, still in the books.
  *

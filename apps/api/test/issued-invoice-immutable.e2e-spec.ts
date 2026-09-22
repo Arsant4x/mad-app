@@ -7,6 +7,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (23.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(75000);
+
 /**
  * ⚖️ **الفاتورةُ الصادرة لا تُعدَّل ولا تُحذف — مختومةً كانت أو لا** (`ق-٩٤٣`)، **والإشعارُ
  * الخاطئ يُصحَّح بإشعارٍ مقابل** (`ق-٩٥٢`) — حارسٌ حيّ على المسار الحقيقيّ:

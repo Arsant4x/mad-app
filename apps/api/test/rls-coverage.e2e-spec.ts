@@ -4,6 +4,9 @@ import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { TENANT_SCOPED_MODELS } from '../src/common/tenant/tenant-scope.extension';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (1.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * حارس تغطية RLS — يقيس **حالة قاعدة البيانات نفسها**، لا نصّ الهجرات.
  *

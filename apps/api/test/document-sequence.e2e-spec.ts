@@ -9,6 +9,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { nextDocumentNumber } from '../src/common/document-sequence.util';
 import { isSequencePortReady } from '../src/common/sequence-allocator';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (9.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * **العدّادُ الذرّيّ للمستندات** (`ق-٣٢٨`) — والبذرُ **بنيةً لا انضباطاً**.
  *

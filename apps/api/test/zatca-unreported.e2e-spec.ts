@@ -9,6 +9,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { requeueFailedWithinTx } from '../src/outbox/outbox.service';
 import { INVOICE_ISSUED } from '../src/shared/events/domain-events';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (13.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(45000);
+
 /**
  * `ق-١٨٢` — «صادرٌ لم يصل»: التقرير (٢) وعودةُ `FAILED` إلى الطابور (٣).
  * شرطُ قبول الختم المتزامن (`ق-١٩٦`): بعده يخرج الإيصال مكتملَ الشكل وإن لم

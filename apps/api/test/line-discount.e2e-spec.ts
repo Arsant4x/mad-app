@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (18.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * الحزمة ب (`ق-١٢٦١`) — **الخصمُ على السطر** (④B1): مبلغٌ على سطر البيع يدخل الوعاءَ والضريبةَ بدالّة المجاميع الواحدة
  * (BT-131 = الكمية × السعر − BT-136)؛ فالدفترُ والمستندُ والعرضُ والكاشيرُ والإشعارُ كلُّها من صافٍ واحد. جوابٌ محسوبٌ

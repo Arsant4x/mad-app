@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (16.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * الحزمة ج (`ق-١٢٦١`) — **تسويةُ الشبكة `1251`** (⑦A2): سندُ قبضٍ بطريقة الشبكة يرحّل `مدين 1251` (كما يقول تعريفُ
  * الطريقة `ق-٣٢٠` — وكان المسارُ اليدويّ يُسقطه إلى `1000`)، والتسويةُ تطالب بسندات المدى فتقفل `1251` بإجماليّها:

@@ -11,6 +11,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (56.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(170000);
+
 /**
  * What may be edited after submission is decided by **acceptance**, not by
  * whether the chain was touched:

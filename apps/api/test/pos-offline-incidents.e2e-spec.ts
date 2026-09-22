@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (56.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(170000);
+
 interface IncidentRow {
   id: string;
   startedAt: string;

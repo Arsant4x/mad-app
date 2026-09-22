@@ -14,6 +14,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { decodeZatcaQr } from '../src/zatca/qr.util';
 import { STORED_DOC_CORRUPT } from '../src/zatca/zatca.service';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (44.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(135000);
+
 /**
  * ⑤ الختم المتزامن (`ق-١٨٧` · `ق-١٩٦`) — على الخدمة الحقيقية بمفاتيحٍ حقيقية:
  *

@@ -5,6 +5,9 @@ import request from 'supertest';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (38.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(120000);
+
 /**
  * §30 المرتجعات — **موجة أ (الخلفية)**، قرار المالك 2026-09-03:
  *

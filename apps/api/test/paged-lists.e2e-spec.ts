@@ -5,6 +5,9 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { LIST_ROUTES } from '../src/common/pagination/list-routes';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (71.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(215000);
+
 /**
  * **الترقيمُ بالاختيار على نقاط القائمة الاثنتين والأربعين — على القاعدة الحقيقية** (`ق-١٢٣٦`).
  *

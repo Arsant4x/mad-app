@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (34.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(105000);
+
 /**
  * الدفع المقسّم (مستند §4): نقدي + بطاقة على نفس الفاتورة. الدرج يستلم الجزء
  * النقدي فقط، والأجزاء تُدقَّق ضد إجمالي الخادم قبل إنشاء أي شيء.

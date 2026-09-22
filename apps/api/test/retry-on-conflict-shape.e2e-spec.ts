@@ -8,6 +8,9 @@ import { isConvergentConflict } from '../src/common/retry-on-conflict.util';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (82.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(250000);
+
 /**
  * **مصادقةُ الفيصل على خطأٍ حقيقيٍّ من القاعدة** (`ق-١١٩٨`/④ · `ق-٢٦٢`).
  *

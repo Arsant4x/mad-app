@@ -11,6 +11,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (56.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(175000);
+
 /**
  * Credit notes as documents: issued against an invoice, never touching it,
  * reversing its ledger footprint through their own posted entry, and taking an

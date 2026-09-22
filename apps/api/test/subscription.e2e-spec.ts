@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (48.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(150000);
+
 /**
  * Subscription lifecycle — the owner's three rules:
  *  1. subStart is fixed to the activation day; a backdated start is refused.

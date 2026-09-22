@@ -8,6 +8,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { computeStockQuantities, stockQuantityKey } from '../src/inventory/stock-quantity.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (69.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(210000);
+
 /**
  * **㉙ حذفُ الحركة ⟵ عكسٌ بحركةٍ مقابلة** (`ق-١٠٦٣` · 2026-09-18) — تاريخُ المخزون لا يُمحى:
  *   ① إخراجٌ يدويّ يُعكَس بإدخالٍ مقابل يشير إليه، ويعيد الاستهلاكَ إلى طبقاته الأصلية — لا طبقةً جديدة.

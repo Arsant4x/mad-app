@@ -10,6 +10,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { TrashService } from '../src/trash/trash.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (19.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * السلّةُ والحفظُ النظاميّ (`ق-١٢٧١`/أ) — **ما تحت الحفظ لا يُمحى بالسلّة، ويُعلَن للتاجر أنه محفوظٌ نظاماً.**
  *

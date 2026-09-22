@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (33.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(100000);
+
 /**
  * Branch visibility is a *permission* filter, not the absolute company
  * boundary — so the cases that matter are the asymmetric ones: owner sees all,

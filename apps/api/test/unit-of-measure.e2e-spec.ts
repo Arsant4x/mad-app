@@ -20,7 +20,8 @@ import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } 
  * منشأةٌ معزولة تُزال في الختام.
  */
 // كلُّ مرحلةٍ ستّةُ طلباتٍ فأكثر على مضيفٍ بطيء — السقفُ الافتراضيّ (خمس ثوانٍ) يقطعها لا يقيسها.
-jest.setTimeout(60000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (34.4 ث) — رُفعت من ٦٠ ث بعد القياس.
+jest.setTimeout(105000);
 
 describe('① وحدةُ القياس تُعلَن ولا تُفترض (e2e)', () => {
   let app: INestApplication;

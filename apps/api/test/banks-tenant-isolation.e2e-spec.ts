@@ -5,6 +5,9 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (11.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(35000);
+
 describe('Banks tenant isolation (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;

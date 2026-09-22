@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * ⚖️ **القيدُ المرحَّل يُعكس ولا يُحذف** (`ق-١٢٥٣`/① — التوجيه ٢٤٧).
  *

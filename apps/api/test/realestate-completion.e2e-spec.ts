@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (21.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(70000);
+
 /**
  * إكمال §16 — البنود السبعة الأخيرة دفعةً واحدة:
  * تفاصيل الغرف · الوحدات بالجملة (كلٌّ أو لا شيء) · حالة «قادم مؤكَّد» ·

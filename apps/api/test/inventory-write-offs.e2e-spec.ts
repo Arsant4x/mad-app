@@ -6,6 +6,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { AppModule } from '../src/app.module';
 import { WRITEOFF_REASONS } from '../src/common/writeoff-reasons';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (20.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(65000);
+
 /**
  * `SPEC 30.5` — **التالف: واقعةٌ تُعتمد، وقيدٌ بلا سطر ضريبة.**
  *

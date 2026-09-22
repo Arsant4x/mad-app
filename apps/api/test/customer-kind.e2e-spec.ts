@@ -10,6 +10,9 @@ import { invoiceTypeFor } from '../src/zatca/hash-chain.util';
 import { buildUnsignedInvoiceXml } from '../src/zatca/ubl/invoice-xml.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (46.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(140000);
+
 /**
  * الحزمة أ (`ق-١٢٦١`) — **صفةُ المشتري ومعرّفُه البديل وبلدُه، ونوعُ الفاتورة منها** (②A1):
  * م٥٣(١)(أ) توجب الكاملةَ للمؤسّسة والشخص الاعتباري ولو بلا تسجيل، والمبسّطةَ للطبيعيّ (م٥٣(٧))؛ و`BR-KSA-14`

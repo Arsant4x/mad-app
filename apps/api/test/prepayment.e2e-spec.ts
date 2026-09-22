@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (66.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(200000);
+
 /**
  * الحزمة ب (`ق-١٢٦١`) — **الدفعةُ المقدَّمة بمستندٍ ضريبيّ (386)** (④A1): فائضُ سند القبض فوق المخصَّص يُعلَن مصيرُه؛
  * والمعلَنُ دفعةً مقدَّمة يُصدر فاتورةَ 386 يومَ القبض (م٥٣(١)(أ)(٢) · م٥٣(٧)(أ)(٢)) مرحَّلةً التزاماً لا إيراداً، ثم تُطبَّق
