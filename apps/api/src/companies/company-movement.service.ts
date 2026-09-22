@@ -86,7 +86,15 @@ export function movementSources(): MovementSource[] {
 
 /** مددُ الحفظ المقروءة (وثيقةُ الترخيص — سطرُ «مددُ الحفظ»): الدفاترُ ١٠ سنوات · والعقارُ ١١. */
 export const RETENTION_YEARS = { books: 10, realEstate: 11 } as const;
-const REAL_ESTATE_MODELS = new Set<Prisma.ModelName>(['Contract', 'RentPayment', 'Reservation']);
+/**
+ * سجلّاتُ العقار — أجلُها `11`: العقدُ ودفعاتُه وحجوزاتُه (حركةُ المنشأة)، **والعقارُ والوحدةُ بذاتهما وما يشير
+ * إليهما** (بلاغاتُ الصيانة والضمانات — `Cascade` على العقار) لأجل السلّة (`ق-١٢٧١`/أ): عقارٌ بلا وحدات
+ * يُمحى نهائياً فتذهب بلاغاتُه وضماناتُه معه. والحارسُ في `company-movement.spec` يُثبت أن كلَّ اسمٍ هنا
+ * إمّا العقارُ أو الوحدةُ أو نموذجٌ يشير إلى أحدهما — لا اسمَ مخترَع.
+ */
+export const REAL_ESTATE_MODELS: ReadonlySet<Prisma.ModelName> = new Set<Prisma.ModelName>([
+  'Contract', 'RentPayment', 'Reservation', 'Property', 'Unit', 'MaintenanceRequest', 'Warranty',
+]);
 
 /**
  * أجلُ الحفظ الأدنى (`ق-٥٤٧`): «حتى {التاريخ} على الأقلّ» — أطولُ المدد المقروءة لصنف

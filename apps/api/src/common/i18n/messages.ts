@@ -497,6 +497,7 @@ export const MSG = {
   master_data_locked: 'tenant.master_data_locked',
   trash_entity_unknown: 'trash.entity_unknown',
   trash_item_not_found: 'trash.item_not_found',
+  trash_retained_by_law: 'trash.retained_by_law',
   deletion_owner_only: 'deletion.owner_only',
   export_owner_only: 'export.owner_only',
   archive_not_ready: 'archive.not_ready',
@@ -1338,6 +1339,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.deletion_not_pending]: { ar: 'لا يمكن تعديل طلب سبق البتّ فيه', en: 'This request has already been decided' },
   [MSG.trash_entity_unknown]: { ar: 'نوع السجل غير معروف', en: 'Unknown record type' },
   [MSG.trash_item_not_found]: { ar: 'السجل غير موجود في سلة المحذوفات', en: 'Record not found in trash' },
+  [MSG.trash_retained_by_law]: { ar: 'لا يُمحى نهائياً: محفوظٌ نظاماً حتى {until} لأن له {by} — يبقى في السلة قابلاً للاسترجاع', en: 'Cannot be purged: retained by law until {until} because it has {by} — it stays in the trash and can be restored' },
   [MSG.master_data_locked]: { ar: 'البيانات الرئيسية مقفلة — لا يمكن تعديل العقارات أو العقود إلا لمالك المنشأة أو موظف مُستثنى', en: 'Master data is locked — only the owner or an exempted employee may change properties or contracts' },
   [MSG.action_forbidden]: { ar: 'لا تملك صلاحية تنفيذ هذا الإجراء ({action}) على شاشة "{screen}"', en: 'You do not have permission to perform this action ({action}) on the "{screen}" screen' },
 
