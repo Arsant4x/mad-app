@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
+import { RETAINED_EARNINGS_CODE, RETAINED_EARNINGS_NAME } from '../fiscal/year-closing.util';
 import { WRITEOFF_EXPENSE_ACCOUNT_CODE, WRITEOFF_EXPENSE_ACCOUNT_NAME } from '../journal/writeoff-account.util';
 
 /**
@@ -69,6 +70,10 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   // الحاجة أيضاً — وجوده هنا يجعل الدليل مكتملاً من يومه، والإنشاء التلقائي
   // يبقى شبكة أمان للمنشآت التي سبقت هذه القائمة.
   { code: OPENING_EQUITY_CODE, name: 'رصيد افتتاحي', type: 'equity' },
+  // الطرفُ المقابل لقيد إقفال السنة (`ق-١٢٨٣` · د/③) — **ويُنشئه المحرّك عند أول
+  // إقفالٍ أيضاً**، فوجودُه هنا يجعل الدليلَ مكتملاً للمولود الجديد والإنشاءُ
+  // التلقائيُّ شبكةَ أمانٍ لمن سبق (نمطُ `3900` و`5800` نفسُه).
+  { code: RETAINED_EARNINGS_CODE, name: RETAINED_EARNINGS_NAME, type: 'equity' },
 
   // ── الإيرادات ───────────────────────────────────────────────────────────
   { code: '4100', name: 'إيرادات المبيعات', type: 'revenue' },

@@ -474,6 +474,10 @@ export const MSG = {
   fiscal_no_period_for_date: 'fiscal.no_period_for_date',
   fiscal_period_closed: 'fiscal.period_closed',
   fiscal_year_has_closed_period: 'fiscal.year_has_closed_period',
+  fiscal_year_close_needs_closed_periods: 'fiscal.year_close_needs_closed_periods',
+  fiscal_year_already_closed: 'fiscal.year_already_closed',
+  fiscal_year_nothing_to_close: 'fiscal.year_nothing_to_close',
+  account_system_protected: 'account.system_protected',
 
   // tenant status / screen access
   account_frozen: 'tenant.account_frozen',
@@ -1288,6 +1292,22 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.fiscal_year_has_closed_period]: {
     ar: 'لا يمكن حذف سنة مالية فيها فترة مقفلة ({period}) — حذف التقويم لا يفكّ الإقفال؛ أعد فتح الفترة أولاً',
     en: 'Cannot delete a fiscal year that still has a closed period ({period}) — deleting the calendar does not unlock it; reopen the period first',
+  },
+  [MSG.fiscal_year_close_needs_closed_periods]: {
+    ar: 'لا تُقفل السنة المالية وفيها فترة مفتوحة — الفترة {period} ما زالت مفتوحة',
+    en: 'A fiscal year cannot be closed while a period is open — {period} is still open',
+  },
+  [MSG.fiscal_year_already_closed]: {
+    ar: 'السنة المالية مقفلة بقيد إقفال قائم — أعد فتح فترة منها ليُعكس القيد أولاً',
+    en: 'This fiscal year already has a closing entry — reopen one of its periods to reverse it first',
+  },
+  [MSG.fiscal_year_nothing_to_close]: {
+    ar: 'لا حركة إيراد ولا مصروف حتى نهاية السنة — لا شيء يُقفل',
+    en: 'No revenue or expense movement up to the year end — nothing to close',
+  },
+  [MSG.account_system_protected]: {
+    ar: 'الحساب {code} حساب نظامي — لا يُحذف ولا يُعدَّل رمزه',
+    en: 'Account {code} is a system account — it cannot be deleted and its code cannot be changed',
   },
 
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
