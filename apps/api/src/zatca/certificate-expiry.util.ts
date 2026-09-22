@@ -23,7 +23,14 @@ export function certificateNotAfter(certificateBase64: string): Date | null {
     // ② `base64` لنصٍّ `PEM` — فكُّه يُظهر الترويسة.
     if (body.toString('utf8').includes('BEGIN CERTIFICATE')) candidates.push(body);
     // ③ `base64` لجسم `DER` — يُلفّ بترويسة `PEM` ليقرأه `X509Certificate`.
-    candidates.push(Buffer.from(`-----BEGIN CERTIFICATE-----\n${raw.replace(/\s+/g, '').replace(/(.{64})/g, '$1\n')}\n-----END CERTIFICATE-----\n`, 'utf8'));
+    //
+    // 🔴 **والتقطيعُ بـ`match` لا بـ`replace`**: `replace(/(.{64})/g, '$1\n')` يُلحق سطراً جديداً
+    // **بعد آخر مقطعٍ أيضاً** حين يكون الطولُ من مضاعفات ٦٤ — فيلتقي بـ`\n` الذي قبل `END`
+    // فيصير **سطراً فارغاً وسط الجسد**، وقارئُ `PEM` يقطع عنده فيُردّ `wrong tag`.
+    // قِيس (٢٥ شهادةً مولَّدة): **٤ سقوطٍ** — كلُّها بطولٍ `512`. عطلٌ يظهر في شهادةٍ من ستٍّ
+    // تقريباً، أي أن المراقبةَ كانت ستصمت عن تاجرٍ بلا سببٍ ظاهر.
+    const pemBody = (raw.replace(/\s+/g, '').match(/.{1,64}/g) ?? []).join('\n');
+    candidates.push(Buffer.from(`-----BEGIN CERTIFICATE-----\n${pemBody}\n-----END CERTIFICATE-----\n`, 'utf8'));
   }
   for (const candidate of candidates) {
     try {

@@ -54,6 +54,32 @@ describe('حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ ا�
       expect(at!.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
     });
 
+    /**
+     * 🔴 **عيّنةٌ مثبَّتة لحالةٍ كانت تسقط**: طولُ `base64` لجسمها **٥١٢** — من مضاعفات ٦٤ بالضبط.
+     *
+     * والتقطيعُ الأوّل (`replace(/(.{64})/g, '$1\n')`) كان يُلحق سطراً جديداً **بعد آخر مقطعٍ
+     * أيضاً**، فيلتقي بالسطر الذي قبل `END` ويصير **سطراً فارغاً وسط الجسد** — وقارئُ `PEM`
+     * يقطع عنده فيُردّ `error:068000A8:asn1 encoding routines::wrong tag`.
+     *
+     * **ولم تُمسكه الحالاتُ المولَّدة**: الطولُ يتذبذب مع كلِّ شهادة (قِيس على ٢٥ مولَّدة:
+     * `508×21` و`512×4`) — فالحزمةُ كانت تخضرّ خمسَ مرّاتٍ من ستّ. **والعيّنةُ المثبَّتة هي
+     * ما يجعلها حكماً**؛ ولذلك تُفحص هنا حتى طولُها، فخطأُ نقلٍ حرفٍ واحدٍ يُعلَن سقوطاً.
+     */
+    const DER_MULTIPLE_OF_64 = [
+      'MIIBejCCAR+gAwIBAgIUV0huGd2pIEIG+o1OgxVpX+zmI4MwCgYIKoZIzj0EAwIwEjEQMA4GA1UEAwwHbWFkLWFwcDAeFw0yNjA5MjIxMzM5NT',
+      'daFw0yNjExMDExMzM5NTdaMBIxEDAOBgNVBAMMB21hZC1hcHAwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAATbpQ5Q9HOTHAbMqdTeOxYeBgRJ',
+      'meP0ABNyFqgfyFihtpEIOftTCgWbuS+l7Ews5xboZ9dG/49iDcA7tAxf2bn2o1MwUTAdBgNVHQ4EFgQUiS7EJhOeqCa4rcWxRrKQQ4ZjJpUwHw',
+      'YDVR0jBBgwFoAUiS7EJhOeqCa4rcWxRrKQQ4ZjJpUwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNJADBGAiEAmlC+laXzqK5pBOsSckPF',
+      '63a7s/ARu4SxsWdo2pXb+sMCIQDDwH67ZW5R8CXsqC+X3tyWThSEv8z7iKYyNxv+3ExDVA==',
+    ].join('');
+
+    it('⭐ 🔴 وجسمُ `DER` بطولٍ من مضاعفات ٦٤ يُقرأ — وهي الحالةُ التي كان التقطيعُ يسقط عليها', () => {
+      // ⓪ حارسٌ على العيّنة نفسِها: طولُها هو شرطُ الحالة، فإن اختلّ فالاختبارُ يفحص شيئاً آخر.
+      expect(DER_MULTIPLE_OF_64.length).toBe(512);
+      expect(DER_MULTIPLE_OF_64.length % 64).toBe(0);
+      expect(certificateNotAfter(DER_MULTIPLE_OF_64)?.toISOString()).toBe('2026-11-01T13:39:57.000Z');
+    });
+
     it('ويقرؤه من `base64` لنصّ `PEM` كامل — الشكلُ الثالث الذي قد يصل', () => {
       const wrapped = Buffer.from(pem, 'utf8').toString('base64');
       expect(certificateNotAfter(wrapped)?.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
