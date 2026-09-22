@@ -41,6 +41,9 @@ enum ActorType {
   PLATFORM_ADMIN
   COMPANY
   COMPANY_USER
+  /// مفتاحُ نظامٍ خارجيّ (`ق-١٢٩١` · ي/⑫A3) — **فاعلٌ لا إنسانَ خلفه**: لا هويّةَ دخولٍ
+  /// ولا كلمةَ مرور، وصلاحياتُه **قالبُ صلاحياتٍ كالموظّف** لا مفرداتٌ خاصّةٌ به.
+  INTEGRATION
 }
 
 enum EmployeeStatus {
@@ -194,6 +197,8 @@ model PermissionTemplate {
 
   companies    Company[]
   companyUsers CompanyUser[]
+  /// مفاتيحُ الأنظمة التي تستعمل هذا القالب (`ق-١٢٩١`) — **المفردةُ نفسُها للموظّف والمفتاح**.
+  apiKeys      ApiKey[]
 
   @@unique([companyId, name])
   @@map("permission_templates")
@@ -341,6 +346,8 @@ model Company {
   updatedAt DateTime @updatedAt
 
   users            CompanyUser[]
+  /// مفاتيحُ الأنظمة الخارجية (`ق-١٢٩١` · ي/⑫A3).
+  apiKeys          ApiKey[]
   /// كلُّ هويّات الدخول التي تنتمي لهذه المنشأة — المالكُ وحساباتُه الفرعية (`ق-٦٦٦`).
   identities       LoginIdentity[] @relation("CompanyIdentities")
   activities       BusinessActivity[]
@@ -651,6 +658,41 @@ model CompanyUserBranch {
 
   @@unique([companyUserId, branchId])
   @@map("company_user_branches")
+}
+
+/// **مفتاحُ نظامٍ خارجيّ** (`ق-١٢٩١` · ي/⑫A3) — أوّلُ مستهلكٍ للواجهة من خارج واجهتنا.
+///
+/// **الرمزُ `mk_<prefix>_<secret>`**: البادئةُ عشوائيةٌ مفهرسة تُعرَض في الشاشة ويُعدّ
+/// بها المقنِّنُ **بلا استعلامٍ في القاعدة** (الحارسُ العامّ يسبق حرّاسَ المتحكّم فلا
+/// يملك سياقاً)، **والسرُّ مهشَّمٌ بـ`argon2` ولا يُعرض إلا مرّةً واحدةً عند الإنشاء**.
+///
+/// **والنطاقُ قالبُ صلاحياتٍ قائم** لا حقولٌ جديدة — فلا نظامَ صلاحياتٍ ثانٍ في المنصّة.
+model ApiKey {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// اسمٌ يعرفه التاجر: «تكاملُ المتجر» — به يُميّز ما يُبطله.
+  name   String
+  /// بادئةٌ عشوائية تُعرَض ويُعدّ بها المقنِّن — **ليست سرّاً وليست معرّفَ الصفّ**.
+  prefix String @unique
+  /// هاشُ السرّ (`argon2`) — لا يُخزَّن السرُّ ولا يُعاد عرضُه.
+  secretHash String
+
+  permissionTemplateId String
+  permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
+
+  /// آخرُ استعمالٍ ناجح — به يُعرف المفتاحُ المهجور، ويُكتب خارج مسار الردّ.
+  lastUsedAt DateTime?
+  /// الإبطالُ **لا يُحذف**: المفتاحُ المُبطَل يبقى ليُقرأ أثرُه في سجلّ التدقيق.
+  revokedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("api_keys")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// One merchant's ZATCA e-invoicing identity, held and used by the platform

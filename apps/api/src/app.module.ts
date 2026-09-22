@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { JwtService } from '@nestjs/jwt';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
 import { tenantTracker } from './common/throttle/tenant-tracker';
 import { BanksModule } from './banks/banks.module';
@@ -107,6 +108,9 @@ import { WarrantiesModule } from './warranties/warranties.module';
     TrashModule,
     DeletionRequestsModule,
     ExportModule,
+    // ⚠️ **قبل `AuthModule`**: `JwtAuthGuard` فيه يعتمد على `ApiKeysService`، والوحدةُ
+    //    عامّة — فتسجيلُها أوّلاً يجعلها متاحةً لكلّ من يستعمل الحارس (ي/⑫A3).
+    ApiKeysModule,
     AuthModule,
     AccountsModule,
     CustomersModule,

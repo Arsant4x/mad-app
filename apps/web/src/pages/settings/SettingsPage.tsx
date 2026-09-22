@@ -22,6 +22,7 @@ import {
 } from '../../api/currencies';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { useAuth } from '../../auth/AuthContext';
+import { ApiKeysCard } from './ApiKeysCard';
 import { CashDrawersCard } from './CashDrawersCard';
 import { IntegrationsCard } from './IntegrationsCard';
 import { SupportAccessCard } from './SupportAccessCard';
@@ -524,6 +525,8 @@ export function SettingsPage() {
       {user?.actorType === 'COMPANY' && <CashDrawersCard />}
       {/* الربط والتكاملات — تظهر للمالك فقط: المفاتيح ملكه (قاعدة §3.5). */}
       {user?.actorType === 'COMPANY' && <IntegrationsCard />}
+      {/* مفاتيحُ الأنظمة — للمالك وحدَه كما يُنفِذه الخادم بـ`@OwnerOnly` (ي/⑫A3). */}
+      {user?.actorType === 'COMPANY' && <ApiKeysCard />}
       {user?.actorType === 'COMPANY' && <SupportAccessCard />}
     </div>
   );

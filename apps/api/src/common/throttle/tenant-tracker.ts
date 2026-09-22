@@ -1,4 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
+import { parseApiKeyToken, presentedApiKey } from '../../api-keys/api-key-token.util';
 import { JwtPayload } from '../../auth/types';
 
 /**
@@ -17,6 +18,17 @@ import { JwtPayload } from '../../auth/types';
 export function tenantTracker(jwt: JwtService): (req: Record<string, unknown>) => string {
   return (req) => {
     const headers = (req.headers ?? {}) as Record<string, unknown>;
+    /**
+     * **مفتاحُ النظام يُعدّ ببادئته** (`ق-١٢٩١` · ي/⑫A3) — **بلا استعلامٍ ولا هاش**:
+     * الحارسُ العامّ لا يملك قاعدةً هنا. والبادئةُ **عشوائيةٌ لا معرّفُ الصفّ**، فمن
+     * لا يملك الرمزَ لا يستطيع أن يستهلك حصّةَ مفتاحٍ ليس له — وهو ما يمنعه توقيعُ
+     * الرمز في حالة `JWT` أدناه. وما ليس على الشكل يسقط إلى المجهول بعنوانه.
+     */
+    const apiKey = presentedApiKey(headers);
+    if (apiKey) {
+      const parsed = parseApiKeyToken(apiKey);
+      if (parsed) return `key:${parsed.prefix}`;
+    }
     const header = headers.authorization;
     const token = typeof header === 'string' && /^Bearer\s+\S+$/i.test(header) ? header.replace(/^Bearer\s+/i, '') : null;
     if (token) {

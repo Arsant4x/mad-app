@@ -133,6 +133,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // ونُقلت قراءاتُها كلُّها إلى سياقها في ① (ق-٦٥٧). فتُحقن هنا وتُحرَس في القاعدة معاً.
   // (`CompanyUserBranch` بلا companyId — يُبلَغ عبر أبيه وسياستُه EXISTS عليه.)
   'CompanyUser',
+  // مفاتيحُ الأنظمة (`ق-١٢٩١` · ي/⑫A3): قراءاتُ الإدارة كلُّها داخل سياق المنشأة، وقراءةُ
+  // المصادقة وحدَها بمسندٍ مسمّى (`runAsApiKeyLookup`) بعميلٍ خامٍّ لا يمرّ بهذا الحقن.
+  'ApiKey',
 ]);
 
 const READ_OR_MUTATE_BY_WHERE = new Set([

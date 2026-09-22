@@ -80,4 +80,25 @@ export class TenantPrismaService {
       }, options),
     );
   }
+
+  /**
+   * **مسندُ مصادقة مفتاح النظام** (`ق-١٢٩١` · ي/⑫A3) — على نمط `runAsPlatformAdmin`.
+   *
+   * المفتاحُ يُقدَّم **قبل أن يُعرف مستأجرُه**، فالسياقُ هو ما نبحث عنه ولا يمكن أن
+   * يسبقه — كقراءة الهويّة في الدخول. ولولا هذا لعادت القراءةُ **فارغةً بنجاح** تحت
+   * `FORCE` فيُردّ كلُّ مفتاحٍ صحيحٍ `401`، **وهو ما وقع في أوّل تشغيلٍ للحزمة**.
+   *
+   * ⚠️ **وحدودُه ثلاثة**: السياسةُ `FOR SELECT` فلا يُكتب بها شيء · ولا يستدعيه إلا
+   * مسارُ المصادقة · **والبحثُ بالبادئة الفريدة** فلا يُعيد إلا صفّاً واحداً، وكلُّ ما
+   * بعده داخل سياق منشأة المفتاح. **وليس مفتاحاً ثانياً لعزل المستأجر** — لا يفتح
+   * صفَّ بياناتٍ واحداً، بل صفَّ المفتاح الذي قُدِّم سرُّه.
+   */
+  async runAsApiKeyLookup<T>(work: (tx: Prisma.TransactionClient) => Promise<T>, options?: { timeout?: number; maxWait?: number }): Promise<T> {
+    return withTransactionProbe(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.api_key_auth', 'true', true)`;
+        return work(tx);
+      }, options),
+    );
+  }
 }

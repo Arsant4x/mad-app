@@ -167,7 +167,29 @@ export class TenantGuard implements CanActivate {
     let allowedBranchIds: string[] | 'all' = 'all';
     let canEditMasterData = false;
 
-    if (payload.actorType === 'COMPANY_USER') {
+    if (payload.actorType === 'INTEGRATION') {
+      /**
+       * **مفتاحُ نظامٍ خارجيّ** (`ق-١٢٩١` · ي/⑫A3) — **يُعامَل موظّفاً مقيَّداً**.
+       *
+       * والقالبُ يُقرأ **حيّاً من القاعدة** لا من الرمز: قالبٌ ضُيِّق أو مفتاحٌ أُبطل
+       * يسري **في الطلب التالي** — وهي قاعدةُ «لا ذاكرةَ مؤقتة للصلاحيات» (`CLAUDE §4`)
+       * تسري على المفتاح كما تسري على الموظّف.
+       *
+       * ⚠️ **وحدٌّ معلَن**: `allowedBranchIds: 'all'` — المفتاحُ لا يُقيَّد بفرعٍ اليوم،
+       * **ويُقيَّد حين يُطلب** بجدولٍ كـ`company_user_branches`.
+       */
+      const key = await this.tenantPrisma.runInTenantContext(payload.companyId, (tx) =>
+        tx.apiKey.findUnique({ where: { id: payload.profileId }, include: { permissionTemplate: true } }),
+      );
+      // مفتاحٌ أُبطل أو حُذفت منشأتُه — **والرفضُ من الحارس لا من الباب**: الباب يُثبت
+      // الهويّةَ، وهذا يفحص الحال في كلِّ طلب.
+      if (!key || key.revokedAt) throw new UnauthorizedException(MSG.api_key_invalid);
+      isAllScreens = key.permissionTemplate.isAllScreens;
+      allowedScreens = isAllScreens ? 'all' : key.permissionTemplate.allowedScreens;
+      screenActions = (key.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;
+      canEditMasterData = false;
+      allowedBranchIds = 'all';
+    } else if (payload.actorType === 'COMPANY_USER') {
       /**
        * 🔴 **تحت سياق المنشأة لا خارجه** (`ق-٦٥٧` · المرحلة ①).
        *
