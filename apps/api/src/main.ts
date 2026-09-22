@@ -10,6 +10,7 @@ import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
 import { validationExceptionFactory } from './common/i18n/validation.util';
 import { assertProductionSecrets } from './common/config/production-secrets';
 import { REQUEST_ID_HEADER, requestIdMiddleware } from './common/request-id/request-id.middleware';
+import { applyApiVersioning } from './common/versioning';
 
 async function bootstrap() {
   // قبل أي شيء آخر — قبل الاتصال بقاعدة البيانات وقبل فتح المنفذ: منصةٌ تُقلع
@@ -27,6 +28,10 @@ async function bootstrap() {
   // ثقةٌ بقفزة واحدة فقط — الوسيط على نفس الخادم، وتوسيعها يجعل الترويسة
   // قابلة للتزوير من الخارج.
   app.set('trust proxy', 1);
+
+  // ⭐ الإصدارُ في المسار (ق-١٢٨٦ · ي/⑫A1): يُجيب كلُّ متحكّمٍ على `/v1/x` و`/x` معاً —
+  // **قبل بناء وثيقة Swagger** كي تحملها، وقبل `listen` كي تُسجَّل المسارات بإصدارها.
+  applyApiVersioning(app);
 
   // معرِّفُ الطلب **أوّلَ السلسلة** (ق-١٢٣٧): يُكتب على الاستجابة قبل أيّ معالجٍ أو حارس، فيحمله
   // `404` لمسارٍ لا وجود له و`401` قبل المصادقة و`500` لاستثناءٍ لم يُلتقط — لا الناجحُ وحدَه.
