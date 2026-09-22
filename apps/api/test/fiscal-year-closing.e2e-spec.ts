@@ -19,6 +19,11 @@ import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from 
  * ③ والمركزُ المالي بتاريخ النهاية: **لا سطرَ «نتيجة الفترة»** (زال بالإقفال)، و`3300` فيه `600`، ومتوازن.
  * ④ وإقفالٌ ثانٍ يُرفض مسمّىً.
  * ⑤ وإعادةُ فتح فترةٍ **تعكس القيدَ آلياً بقيدٍ مرقَّم بتاريخه** — فيعود السطرُ المؤقّت ويعود `3300` صفراً.
+ *
+ * ⚠️ **والسنةُ ماضيةٌ (٢٠٢٤) عمداً**: عكسٌ بتاريخ **اليوم** يقع خارجها، فلا يراه المركزُ
+ * المالي بتاريخ نهايتها — **وبها وحدَها يسقط الحارسُ على ذلك الكسر**. وأوّلُ صياغةٍ
+ * جعلتها السنةَ الجارية، **فمرّ كسرُ «العكسُ بتاريخ اليوم» أخضرَ** (`§8.8`: كسرٌ يمرّ
+ * يعني أن سطحَ الحارس أضيقُ من القاعدة).
  * ⑥ ثم يُقفل من جديد — فالإقفالُ يُعاد توليدُه لا يُحبَس.
  */
 jest.setTimeout(120000);
@@ -67,13 +72,13 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     // الحركةُ أوّلاً — قبل أي فترةٍ تُقفل.
     const [receivable, sales, admin, cash] = await Promise.all([accountByCode('1200'), accountByCode('4100'), accountByCode('5300'), accountByCode('1000')]);
     await auth(http().post('/journal'))
-      .send({ date: '2026-03-01', memo: 'بيعٌ للسنة', lines: [{ accountId: receivable.id, debit: 1000, credit: 0 }, { accountId: sales.id, debit: 0, credit: 1000 }] })
+      .send({ date: '2024-03-01', memo: 'بيعٌ للسنة', lines: [{ accountId: receivable.id, debit: 1000, credit: 0 }, { accountId: sales.id, debit: 0, credit: 1000 }] })
       .expect(201);
     await auth(http().post('/journal'))
-      .send({ date: '2026-04-01', memo: 'مصروفٌ للسنة', lines: [{ accountId: admin.id, debit: 400, credit: 0 }, { accountId: cash.id, debit: 0, credit: 400 }] })
+      .send({ date: '2024-04-01', memo: 'مصروفٌ للسنة', lines: [{ accountId: admin.id, debit: 400, credit: 0 }, { accountId: cash.id, debit: 0, credit: 400 }] })
       .expect(201);
 
-    const year = (await auth(http().post('/fiscal-years')).send({ name: 'سنةُ الإقفال ٢٠٢٦', start: '2026-01-01', end: '2026-12-31' }).expect(201)).body as {
+    const year = (await auth(http().post('/fiscal-years')).send({ name: 'سنةُ الإقفال ٢٠٢٤', start: '2024-01-01', end: '2024-12-31' }).expect(201)).body as {
       id: string;
       periods: { id: string }[];
     };
@@ -91,7 +96,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     // إحدى عشرة مغلقة وواحدةٌ مفتوحة: الرفضُ يجب أن يسمّي **المفتوحة** لا أيَّ فترة.
     await closeAllPeriods(1);
     const res = await auth(http().post(`/fiscal-years/${yearId}/close`)).expect(409);
-    expect(String(res.body.message)).toContain('01/2026');
+    expect(String(res.body.message)).toContain('01/2024');
   });
 
   it('⭐ ② قيدٌ واحد يُصفّر الإيرادَ والمصروف ويُدائن الأرباحَ المبقاة بـ٦٠٠', async () => {
@@ -109,7 +114,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     expect(body.entry.no).toBeTruthy();
 
     const entry = body.entry;
-    expect(entry.date.slice(0, 10)).toBe('2026-12-31');
+    expect(entry.date.slice(0, 10)).toBe('2024-12-31');
     expect(entry.memo).toContain('600.00');
     const side = (code: string) => {
       const l = entry.lines.find((x) => x.account.code === code);
@@ -124,8 +129,8 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
   });
 
   it('⭐ ③ والمركزُ المالي بتاريخ النهاية: لا سطرَ «نتيجة الفترة»، والمبقاةُ ٦٠٠، ومتوازن', async () => {
-    const sheet = await sheetAt('2026-12-31');
-    expect(sheet.asOf).toBe('2026-12-31');
+    const sheet = await sheetAt('2024-12-31');
+    expect(sheet.asOf).toBe('2024-12-31');
     expect(periodResultLine(sheet)).toBeUndefined();
     expect(retainedLine(sheet)?.amount).toBe('600.00');
     expect(sheet.balanced).toBe(true);
@@ -139,7 +144,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
   it('⭐ ⑤ إعادةُ فتح فترةٍ تعكس الإقفال بقيدٍ مرقَّم بتاريخه — فيعود السطرُ المؤقّت', async () => {
     await auth(http().patch(`/fiscal-years/periods/${periodIds[5]}/reopen`)).expect(200);
 
-    const sheet = await sheetAt('2026-12-31');
+    const sheet = await sheetAt('2024-12-31');
     expect(periodResultLine(sheet)?.amount).toBe('600.00');
     // المبقاةُ تعود صفراً — فلا يبقى أثرُ إقفالٍ على أرقامٍ تغيّرت.
     expect(Number(retainedLine(sheet)?.amount ?? 0)).toBe(0);
@@ -151,7 +156,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     const again = await auth(http().post(`/fiscal-years/${yearId}/close`)).expect(201);
     expect((again.body as { netResult: number }).netResult).toBe(600);
 
-    const sheet = await sheetAt('2026-12-31');
+    const sheet = await sheetAt('2024-12-31');
     expect(periodResultLine(sheet)).toBeUndefined();
     expect(retainedLine(sheet)?.amount).toBe('600.00');
   });
