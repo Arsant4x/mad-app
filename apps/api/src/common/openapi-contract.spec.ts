@@ -31,6 +31,23 @@ import { applyApiVersioning } from './versioning';
 
 const SNAPSHOT = join(__dirname, '..', '..', '..', '..', 'docs', 'openapi.snapshot.json');
 
+/**
+ * 🔴 **الحارسُ يبني الوحدةَ ليمسحَ وسومَها، فيحتاجها أن تُنشأ لا أن تعمل.**
+ *
+ * و`AppModule` يطلب مفتاحاً واحداً عند الإنشاء (`JwtModule.registerAsync` ⟵
+ * `getOrThrow`) — **وهو الوحيدُ في المستودع كلِّه**: مقيسٌ بالبحث عن `getOrThrow` في
+ * `apps/api/src` فأعطى `JWT_ACCESS_SECRET` وحدَه.
+ *
+ * **ومحلياً كان يمرّ بـ`.env.test`**، ووظيفةُ `api-unit` في السير **بلا بيئةٍ ولا
+ * أسرار** (فهي للوحدات النقيّة) — فسقط بـ`Configuration key "JWT_ACCESS_SECRET" does
+ * not exist`. وهي عائلةُ «سقوطٌ على بيئةٍ دون أخرى = **عطلٌ بيئيّ لا انحدار**».
+ *
+ * ⚠️ **و`??=` لا `=`**: ما ضبطته البيئةُ يفوز دائماً، فلا يُطغى على تشغيلٍ بأسرارٍ
+ * حقيقية. **والقيمةُ ظاهرةُ الزيف** فلا تُقرأ سرّاً منسياً، **ولا يُوقَّع بها شيء**:
+ * الماسحُ يقرأ الوسومَ ولا يُصدر رمزاً.
+ */
+process.env.JWT_ACCESS_SECRET ??= 'openapi-contract-guard-signs-nothing';
+
 describe('عقدُ الواجهة البرمجية: لقطةٌ تُقارَن باتجاهٍ واحد (ق-١٢٩١ · ⑫A2)', () => {
   let current: ApiContract;
   const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8')) as ApiContract;
