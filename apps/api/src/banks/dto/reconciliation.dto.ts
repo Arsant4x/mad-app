@@ -29,8 +29,15 @@ export class PostStatementLineDto {
   @IsString()
   transactionId!: string;
 
+  /** الطرفُ المقابل — يُهمَل حين يُقدَّم `depositId` (الطرفُ حينها `1190` حتماً). */
+  @IsOptional()
   @IsString()
-  counterpartyAccountId!: string;
+  counterpartyAccountId?: string;
+
+  /** تأكيدُ إيداع درجٍ في الطريق (⑦A3): السطرُ بمبلغ الإيداع نفسِه، والطرفُ `1190`. */
+  @IsOptional()
+  @IsString()
+  depositId?: string;
 
   @IsOptional()
   @IsString()

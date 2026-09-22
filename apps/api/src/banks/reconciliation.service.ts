@@ -8,6 +8,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { postBankStatementLineEntry } from '../journal/auto-posting.util';
 import { readLedger, type LedgerRow } from '../reports/ledger.util';
+import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, getOrCreateAccountByCode } from '../journal/pos-settlement.util';
 
 /**
  * **التسويةُ البنكية** (`ق-١٢٦١` ج — `domain-scan/07` A1).
@@ -157,14 +158,26 @@ export class ReconciliationService {
    * **على مستوى المنشأة بحقّها**: سطرُ الكشف يُقرأ بمعرّفه في البنك المأذون، والقيدُ يُرحَّل على فرع البنك نفسِه —
    * فلا قراءةَ تتجاوز فرعَ القارئ.
    */
-  postFromStatement(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, transactionId: string, counterpartyAccountId: string, memo?: string) {
+  postFromStatement(companyId: string, allowedBranchIds: string[] | 'all', bankId: string, transactionId: string, counterpartyAccountId: string | undefined, memo?: string, depositId?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const bank = await this.bankOf(tx, allowedBranchIds, bankId);
       const row = await tx.bankTransaction.findFirst({ where: { id: transactionId, bankId } });
       if (!row || row.entryNo !== null) throw new NotFoundException(MSG.bank_transaction_not_found);
       if (row.matchedLineId) throw new ConflictException(MSG.reconciliation_already_matched);
       this.assertAfterClose(bank.reconciledUntil, row.date);
-      const counterparty = await tx.account.findFirst({ where: { id: counterpartyAccountId } });
+
+      // تأكيدُ إيداعِ درجٍ (⑦A3): الطرفُ «نقدٌ في الطريق» حتماً، والسطرُ بمبلغ الإيداع نفسِه — فلا يُؤكَّد إيداعٌ بسطرٍ غيرِه.
+      const deposit = depositId
+        ? await tx.cashDeposit.findUnique({ where: { id: depositId }, select: { id: true, no: true, amount: true, status: true, bankId: true } })
+        : null;
+      if (depositId && (!deposit || deposit.bankId !== bank.id)) throw new NotFoundException(MSG.cash_deposit_not_found);
+      if (deposit && deposit.status !== 'IN_TRANSIT') throw new ConflictException(MSG.cash_deposit_not_in_transit);
+      if (deposit && Math.abs(Number(deposit.amount) - Number(row.amount)) >= 0.005) {
+        throw new ConflictException(formatMessage(MSG.reconciliation_deposit_amount, { statement: money(row.amount), no: deposit.no, deposit: money(deposit.amount) }));
+      }
+      const counterparty = deposit
+        ? await getOrCreateAccountByCode(tx, companyId, CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, 'asset')
+        : await tx.account.findFirst({ where: { id: counterpartyAccountId ?? '' }, select: { id: true } });
       if (!counterparty) throw new NotFoundException(MSG.account_not_found);
       if (counterparty.id === bank.accountId) throw new BadRequestException(MSG.reconciliation_counterparty_is_bank);
       const posted = await postBankStatementLineEntry(tx, companyId, {
@@ -172,11 +185,14 @@ export class ReconciliationService {
         counterpartyAccountId: counterparty.id,
         date: row.date,
         amount: Number(row.amount),
-        memo: memo?.trim() || row.description,
+        memo: memo?.trim() || (deposit ? `تأكيد إيداع ${deposit.no}` : row.description),
       });
+      if (deposit) {
+        await tx.cashDeposit.update({ where: { id: deposit.id }, data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedTransactionId: row.id } });
+      }
       return tx.bankTransaction.update({
         where: { id: row.id },
-        data: { matchedLineId: posted.bankLineId, matchedAt: new Date(), matched: true, entryNo: posted.entryNo, source: row.source ?? 'statement' },
+        data: { matchedLineId: posted.bankLineId, matchedAt: new Date(), matched: true, entryNo: posted.entryNo, source: row.source ?? (deposit ? 'cash-deposit' : 'statement') },
       });
     });
   }

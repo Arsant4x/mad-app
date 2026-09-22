@@ -38,8 +38,10 @@ describe('لوحةُ التسوية البنكية', () => {
     vi.clearAllMocks();
     vi.mocked(listAccounts).mockResolvedValue([{ id: 'a5300', code: '5300', name: 'مصروفات إدارية', type: 'expense' } as never]);
     vi.mocked(banks.getReconciliation).mockResolvedValue(overview());
+    vi.mocked(banks.listCashDeposits).mockResolvedValue({ items: [], inTransit: { ledger: '0.00', documents: '0.00', matched: true } });
     vi.mocked(banks.matchStatementLine).mockResolvedValue({});
     vi.mocked(banks.postStatementLine).mockResolvedValue({});
+    vi.mocked(banks.confirmDepositFromStatement).mockResolvedValue({});
   });
 
   it('تعرض الجانبين والمجاميعَ كما جاءت، وتقترح المطابقةَ من الخادم وترسلها بمعرّفَي السطرين', async () => {
@@ -58,5 +60,23 @@ describe('لوحةُ التسوية البنكية', () => {
     await userEvent.selectOptions(await screen.findByLabelText('الطرف المقابل'), 'a5300');
     await userEvent.click(screen.getByText('رحِّل وطابِق'));
     expect(vi.mocked(banks.postStatementLine)).toHaveBeenCalledWith('b1', 's2', 'a5300', 'رسوم البنك');
+  });
+
+  it('إيداعُ درجٍ في الطريق يُؤكَّد من سطر الكشف بمعرّف المستند — بلا طرفٍ يُختار، فالخادم يفرض 1190', async () => {
+    vi.mocked(banks.listCashDeposits).mockResolvedValue({
+      items: [
+        { id: 'd1', no: 'CD-2026-0001', date: '2026-06-05', amount: '500.00', memo: null, status: 'IN_TRANSIT', drawer: { id: 'dr1', name: 'درج الصالة' }, bank: { id: 'b1', name: 'بنك التسوية' }, branchId: null, journalEntryId: 'e9', voidJournalEntryId: null, confirmedTransactionId: null, confirmedAt: null },
+      ],
+      inTransit: { ledger: '500.00', documents: '500.00', matched: true },
+    });
+    render(<ReconciliationPanel bank={bank} onClose={() => {}} />);
+    await screen.findByText('إيداع عميل');
+    await userEvent.click(screen.getAllByText('↳ رحِّل بطرف')[0]);
+    await userEvent.selectOptions(await screen.findByLabelText('إيداعُ درجٍ في الطريق'), 'd1');
+    // اختيارُ الإيداع يُخفي اختيارَ الطرف — لا طرفَ يُرسَل.
+    expect(screen.queryByLabelText('الطرف المقابل')).toBeNull();
+    await userEvent.click(screen.getByText('أكِّد الإيداع وطابِق'));
+    expect(vi.mocked(banks.confirmDepositFromStatement)).toHaveBeenCalledWith('b1', 's1', 'd1');
+    expect(vi.mocked(banks.postStatementLine)).not.toHaveBeenCalled();
   });
 });

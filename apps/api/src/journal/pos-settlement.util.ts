@@ -53,6 +53,9 @@ export async function getOrCreateAccountByCode(
   });
 }
 
+/** «نقدٌ في الطريق» (ق-١٢٦١ ج — ⑦A3): بين الأدراج (1010–1099) والذمم (1200) — رمزٌ مشتقٌّ من موضعه، «أو ما يُقرَّر». */
+export const CASH_IN_TRANSIT_CODE = '1190';
+export const CASH_IN_TRANSIT_NAME = 'نقد في الطريق';
 export const CASH_VARIANCE_CODE = '5900';
 export const CASH_VARIANCE_NAME = 'عجز وزيادة الصندوق';
 
