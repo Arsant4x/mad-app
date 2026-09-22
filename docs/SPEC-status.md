@@ -5,13 +5,13 @@
 
 | القياس | العدد |
 |---|---|
-| بنود SPEC | 283 |
-| منها في جداولٍ لها عمودُ حالة | 189 |
-| تقول الوثيقة ✅ | 97 |
-| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 93 |
+| بنود SPEC | 284 |
+| منها في جداولٍ لها عمودُ حالة | 190 |
+| تقول الوثيقة ✅ | 98 |
+| لها اختبارٌ موسومٌ يعمل (مشتقّةً ✅) | 94 |
 | ✅ في الوثيقة بلا اختبارٍ موسوم (دَينٌ معلَن في spec-untested.json) | 4 (منها 4 معلَنة) |
 | اختبارٌ يثبتها والوثيقة تقول غير ✅ (تخلّف SPEC) | 0 |
-| اختباراتٌ موسومة / كل الاختبارات | 229 / 1794 |
+| اختباراتٌ موسومة / كل الاختبارات | 234 / 1806 |
 
 | # | البند | الوثيقة | المشتقّة | الاختبارات التي تثبته |
 |---|---|---|---|---|
@@ -59,6 +59,7 @@
 | 4.9 | عروض الأسعار | ⬜ | ⬜ | — |
 | 4.10 | **صفةُ المشتري ومعرّفُه البديل وبلدُه — ونوعُ الفاتورة منها** *(فردٌ · مؤسّسةٌ فردية · شخص | ✅ | ✅ | `api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ① the kind is required and declared — no silent default; the alternative id is a pair with a listed scheme, the country a code (e2e)<br>`api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ② a customer from before the build is refused a document by name until its kind is declared — then it is invoiced (e2e)<br>`api/test/customer-kind.e2e-spec.ts` :: [SPEC 4.10] ③ the type follows the kind (م٥٣) and the document carries the alternative id with its scheme and the buyer country (BR-KSA-14 · BT-55) (e2e) |
 | 4.11 | **الخصمُ على السطر** *(مبلغٌ على سطر البيع في الفاتورة والعرض والكاشير · الصافي = الكمية × | ✅ | ✅ | `api/src/common/money/totals.spec.ts` :: [SPEC 4.11] ④B1 الخصمُ على السطر: الصافي = الكمية × السعر − الخصم (BT-131)، والمستندُ يذكر الخصمَ AllowanceCharge والصافيَ بعده — ولا يفترق عن الدفتر (وحدة)<br>`api/test/line-discount.e2e-spec.ts` :: [SPEC 4.11] ① the invoice nets the discount on the line — totals, ledger (4100 · 2200 · 1200) and the stored line agree (e2e)<br>`api/test/line-discount.e2e-spec.ts` :: [SPEC 4.11] ② a discount above the line gross is refused by name — no negative net reaches the books (e2e)<br>`api/test/line-discount.e2e-spec.ts` :: [SPEC 4.11] ③ a quote carries the discount into the converted invoice, and a full credit note mirrors the net — not the gross (e2e)<br>`api/test/line-discount.e2e-spec.ts` :: [SPEC 4.11] ④ the register applies a line discount through the same path (e2e) |
+| 4.12 | **الدفعةُ المقدَّمة بمستندٍ ضريبيّ (386)** *(فائضُ سند القبض فوق المخصَّص يُعلَن مصيرُه: د | ✅ | ✅ | `api/test/prepayment.e2e-spec.ts` :: [SPEC 4.12] ① an unallocated remainder must be declared — undeclared and uncovered on-account are refused by name; PREPAYMENT issues a 386 posted as a liability, settled by its own receipt (e2e)<br>`api/test/prepayment.e2e-spec.ts` :: [SPEC 4.12] ② applying the 386 to the supply invoice moves the receipt allocation, closes 2450, reverses its VAT, and leaves the remainder outstanding (e2e)<br>`api/test/prepayment.e2e-spec.ts` :: [SPEC 4.12] ③ the VAT return counts the 386 once: the applied prepayment is subtracted in the quarter of application (e2e)<br>`api/test/prepayment.e2e-spec.ts` :: [SPEC 4.12] ④ an on-account remainder is accepted only when open invoices cover it — and a tax-rounding gap stays on account, declared (e2e)<br>`api/test/prepayment.e2e-spec.ts` :: [SPEC 4.12] ⑤ guards: a 386 is applied once, to its own customer, never beyond the invoice total; its receipt is neither re-allocated nor reversed; the document itself is immutable (e2e) |
 | 5.1 | سجل الموردين | ✅ | ✅ | `api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1] creates a supplier, rejects a duplicate name, and keeps it invisible to company B (e2e)<br>`api/test/suppliers-purchases-tenant-isolation.e2e-spec.ts` :: [SPEC 5.1 6.1] computes purchase tax/total server-side, isolates it from company B, and blocks supplier deletion while it exists (e2e) |
 | 5.2 | فواتير المشتريات | ✅ | ✅ | `api/src/purchases/purchase-lines.live.spec.ts` :: [SPEC 5.2] ⭐ ① شراءٌ ببندين — مخزنيٍّ وخدميٍّ — يُحفظ ويُقرأ (حيّ) |
 | 5.3 | المدفوعات والذمم الدائنة | ✅ | ✅ | `api/test/default-chart.e2e-spec.ts` :: [SPEC 5.3] مشترى أول يوم يُرحَّل — 5300 مديناً و2100 دائناً (e2e)<br>`api/test/invoice-purchase-auto-posting.e2e-spec.ts` :: [SPEC 5.3] posts a new purchase to its expense account, VAT, and A/P using the default expense account when no category matches (e2e)<br>`api/test/supplier-payments.e2e-spec.ts` :: [SPEC 5.3 10.3] 1,000 purchase → 400 payment (600 · PARTIAL) → 600 payment (0 · PAID) → reversal (600 · PARTIAL): 2100 and the cash-flow report follow every step (e2e) |

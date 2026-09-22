@@ -342,18 +342,18 @@ export class PaymentsService {
     await this.recomputeInvoiceStatus(tx, input.invoiceId);
   }
 
-  /**
-   * إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها.
-   *
-   * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
-   * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
-   */
   /** ④A1 — سندٌ أصدر فاتورةَ دفعةٍ مقدَّمة لا يُعاد توزيعُه ولا يُعكس: مستندُه صادرٌ بسلسلته، وتصحيحُه إشعارٌ دائن عليه (لم يُبنَ بعد — حدٌّ معلَن). */
   private async assertNoPrepaymentInvoice(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
     const doc = await tx.invoice.findUnique({ where: { prepaymentPaymentId: paymentId }, select: { no: true } });
     if (doc) throw new ConflictException(formatMessage(MSG.payment_has_prepayment_invoice, { no: doc.no }));
   }
 
+  /**
+   * إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها.
+   *
+   * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
+   * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
+   */
   allocate(companyId: string, id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id }, include: { allocations: true } });

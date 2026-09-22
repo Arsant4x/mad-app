@@ -11,6 +11,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
 import { invoiceTypeFor, nextIcv, previousChainHash } from './hash-chain.util';
 import { buildUnsignedInvoiceXml, ublCategoryOf } from './ubl/invoice-xml.util';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
@@ -561,7 +562,7 @@ export class ZatcaService {
           taxable: Number(p.net),
           tax: Number(p.vat),
           category: line ? ublCategoryOf({ taxCategory: line.taxCategory, taxExemptionReasonCode: line.taxExemptionReasonCode }) : 'S',
-          rate: line ? Number(line.taxRate) : 15,
+          rate: line ? Number(line.taxRate) : STANDARD_VAT_RATE,
         };
       }),
     });

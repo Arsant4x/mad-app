@@ -139,7 +139,8 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     // المفتوح الآن `1150` — فمئةٌ على الحساب مغطّاة.
     const covered = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 100, method: 'CASH', bankId, unallocated: 'ON_ACCOUNT' }).expect(201);
     expect(covered.body).toMatchObject({ allocatedTotal: '0.00', unallocated: '100.00' });
-    expect(covered.body.prepaymentInvoice).toBeUndefined();
+    // لا مستندَ أُصدر — الحقلُ يصل `null` من ضميمة السند (لا غائباً).
+    expect(covered.body.prepaymentInvoice).toBeNull();
 
     // `0.80` لا يبلغه أيُّ صافٍ (`0.69 ⟵ 0.79` · `0.70 ⟵ 0.81`): يُختار `0.79` والهللةُ تبقى على الحساب معلَنةً — لا تخصيصٌ يفوق المقبوض.
     const gap = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 0.8, method: 'CASH', bankId, unallocated: 'PREPAYMENT' }).expect(201);

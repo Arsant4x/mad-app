@@ -43,6 +43,7 @@ import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
@@ -1168,7 +1169,7 @@ export class InvoicesService {
   ): Promise<{ id: string; no: string; total: number; onAccountRemainder: number }> {
     const gross = round2(p.grossAmount);
     if (gross <= 0) throw new BadRequestException(MSG.prepayment_amount_positive);
-    const rate = 15;
+    const rate = STANDARD_VAT_RATE;
     // الصافي يُختار بحيث يساوي إجماليُّ المستند المقبوضَ؛ فإن تعذّر (قفزةُ تدوير الضريبة تتخطّى المقبوضَ — كـ`0.80`:
     // `0.69 ⟵ 0.79` و`0.70 ⟵ 0.81`) اختير **أكبرُ صافٍ لا يفوق إجماليُّه المقبوضَ** — فلا يُخصَّص على المستند أكثرُ ممّا قُبض.
     const base = round2(gross / (1 + rate / 100));
