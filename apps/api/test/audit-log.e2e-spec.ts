@@ -189,6 +189,30 @@ describe('Audit log (e2e)', () => {
     // ③ والاسمُ يبقى — به يُعرف الصفُّ في السجلّ (حدٌّ معلَن).
     expect(serialized).toContain('عميل الخصوصية');
 
+    /**
+     * ④ **والملاحظةُ الحرّة كذلك** — وهي حيث يكتب الموظّفون أرقامَ الهويات والهواتف (`§4`).
+     * مهمّةٌ بملاحظةٍ: يُسجَّل أن الملاحظة وصلت، ولا يُسجَّل نصُّها.
+     */
+    const freeText = 'راجع هوية العميل 1098765432 وهاتفه 0555123987';
+    // `OWNER` ⟵ معرّفُ المنشأة نفسِها (`task-model`)، و`/me/permissions` لا تحمل معرّفاً — فيُقرأ من الجلسة.
+    const whoAmI = (await authA(request(app.getHttpServer()).get('/auth/me')).expect(200)).body as { companyId?: string; user?: { companyId?: string } };
+    const ownerProfileId = whoAmI.companyId ?? whoAmI.user?.companyId;
+    expect(typeof ownerProfileId).toBe('string');
+    const taskRes = await authA(request(app.getHttpServer()).post('/tasks'))
+      .send({ title: `مهمة الخصوصية ${suffix}`, assigneeId: ownerProfileId, assigneeKind: 'OWNER', note: freeText });
+    // سببُ الرفض يُقرأ لا يُخمَّن (`§8.4`) — ورسالةُ الخادم تسمّي الحقل.
+    if (taskRes.status !== 201) throw new Error(`تعذّر إنشاء المهمة (${taskRes.status}): ${JSON.stringify(taskRes.body)}`);
+    const task = taskRes;
+    const isTask = (e: Entry) => e.entity === 'tasks' && e.entityId === task.body.id;
+    const taskEntry = (await trailUntil((es) => es.some(isTask))).find(isTask);
+    expect(taskEntry).toBeTruthy();
+    const taskDetails = JSON.stringify(taskEntry!.details ?? {});
+    expect(taskDetails).not.toContain('1098765432');
+    expect(taskDetails).not.toContain('0555123987');
+    expect(taskEntry!.details?.note).toBe('[تغيّر — القيمة لا تُسجَّل]');
+    // والعنوانُ يبقى — فالمهمّةُ تُعرف بما هي.
+    expect(taskDetails).toContain('مهمة الخصوصية');
+
     await authA(request(app.getHttpServer()).delete(`/customers/${created.body.id}`));
     await authA(request(app.getHttpServer()).delete(`/trash/customers/${created.body.id}`));
   }, 40000);

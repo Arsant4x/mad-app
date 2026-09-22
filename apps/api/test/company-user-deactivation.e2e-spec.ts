@@ -88,14 +88,19 @@ describe('Company-user deactivation ends sessions (e2e)', () => {
      */
     const fresh = await request(app.getHttpServer()).post('/auth/login').send(EMPLOYEE).expect(200);
     const deviceCookie = refreshCookieOf(fresh);
+    /**
+     * ⚠️ **وأوّلُ صياغةٍ لهذه المرحلة مرّت على الكسر** (`§8.7` الوجه الرابع): جدّدت بالكعكة الأولى
+     * ثم أعادت استعمالَها بعد التغيير — **والتدويرُ يجعلها مستهلَكة**، فيُردّ `401` ولو لم يُبطَل
+     * شيء. فتُلتقط **الكعكةُ المدوَّرة** ويُفحص إبطالُها هي.
+     */
     // قبلَ التغيير: الجهازُ يُجدّد جلستَه — وإلا لم نفحص شيئاً.
-    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', deviceCookie).expect(200);
+    const rotated = refreshCookieOf(await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', deviceCookie).expect(200));
 
     const NEW_PASSWORD = 'RotatedPass123!';
     await owner(request(app.getHttpServer()).patch(`/company-users/${employeeId}`)).send({ password: NEW_PASSWORD }).expect(200);
 
     // بعدَه: رمزُ التحديث مُبطَل — الجهازُ الصامت لا يعود.
-    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', deviceCookie).expect(401);
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', rotated).expect(401);
     // والكلمةُ القديمة لا تفتح، والجديدةُ تفتح — فالتغييرُ وقع فعلاً لا الإبطالُ وحدَه.
     await request(app.getHttpServer()).post('/auth/login').send(EMPLOYEE).expect(401);
     const relogin = await request(app.getHttpServer()).post('/auth/login').send({ username: EMPLOYEE.username, password: NEW_PASSWORD }).expect(200);
