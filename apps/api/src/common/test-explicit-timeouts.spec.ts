@@ -82,10 +82,13 @@ describe('لا مهلةَ صريحةٍ جديدةٍ دون ميزانية حزم
     expect(stale).toEqual([]);
   });
 
-  it('مُصادَقٌ بثلاثٍ: أصغرُ يُعدّ · أكبرُ لا · ورمزُ الحالة الثلاثيُّ لا يُعدّ', () => {
-    const src = (body: string) => `jest.setTimeout(60000);\n${body}`;
-    expect(belowBudgetCount(src('it("x", async () => {\n}, 30000);'))).toBe(1);
-    expect(belowBudgetCount(src('it("x", async () => {\n}, 90000);'))).toBe(0);
-    expect(belowBudgetCount(src('await createPurchase({ a: 1 }, 400);'))).toBe(0);
+  it('مُصادَقٌ بأربعٍ على نصٍّ مصنوع: أصغرُ يُعدّ · أكبرُ لا · ورمزُ الحالة الثلاثيُّ لا يُعدّ · وبلا ميزانيةٍ يُعلَن', () => {
+    // ⚠️ **النصُّ مصنوعٌ في موضع النداء** (`ق-١٣٦`): كاشفٌ يُستدعى على متغيّرٍ يبنيه
+    //    مساعدٌ **لا يُعدّ مُثبَتاً** — والحارسُ `probe-two-cases` أمسكها فعلاً.
+    expect(belowBudgetCount(['jest.setTimeout(60000);', 'it("x", async () => {', '}, 30000);'].join('\n'))).toBe(1);
+    expect(belowBudgetCount(['jest.setTimeout(60000);', 'it("x", async () => {', '}, 90000);'].join('\n'))).toBe(0);
+    expect(belowBudgetCount(['jest.setTimeout(60000);', 'await createPurchase({ a: 1 }, 400);'].join('\n'))).toBe(0);
+    // بلا ميزانيةٍ ⟵ `-1`، ويمسكه حارسُ `ق-١٢٨٥` لا هذا.
+    expect(belowBudgetCount('it("x", async () => {\n}, 30000);')).toBe(-1);
   });
 });
