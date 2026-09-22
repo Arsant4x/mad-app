@@ -43,7 +43,6 @@ import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
-import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
@@ -1159,17 +1158,19 @@ export class InvoicesService {
    * «دفعةٌ مقدَّمة» بالصافي، وضريبتُه من دالّة المجاميع الواحدة — **والصافي يُختار بحيث يساوي إجماليُّ المستند
    * المقبوضَ** (`gross/1.15` مدوَّراً ثم مجاورُه إن اختلّت هللةُ التدوير)؛ فإن تعذّر على هللةٍ (BR-CO-17 يوجب
    * الضريبةَ = الوعاء × النسبة مدوَّراً) بقيت الهللةُ على حساب العميل **وتُعلَن** في الردّ (`onAccountRemainder`).
-   * النوعُ (كاملة/مبسّطة) من صفة المشتري كسائر المستندات؛ والفئةُ `S` بالنسبة الأساسية — توريدٌ لم يُعرف بعد
-   * يُفترض خاضعاً، **حدٌّ معلَن**. يُرحَّل التزاماً (`2450`) لا إيراداً، ويدخل السلسلةَ بحدث الإصدار نفسِه.
+   * النوعُ (كاملة/مبسّطة) من صفة المشتري كسائر المستندات؛ **والفئةُ فئةُ ما يُدفع مقدَّماً عنه، تُعلَن على السند ولا
+   * تُفترض** (`ق-١٢٦٤`/②): إيجارٌ سكنيٌّ معفى (`E` · م٣٠) دفعتُه بلا ضريبة، والمعفى/الصفريّ صافيُه المقبوضُ بعينه.
+   * يُرحَّل التزاماً (`2450`) لا إيراداً — وسطرُ `2200` حين تكون ضريبة — ويدخل السلسلةَ بحدث الإصدار نفسِه.
    */
   async issuePrepaymentWithinTx(
     tx: Prisma.TransactionClient,
     companyId: string,
-    p: { customerId: string; customerName: string; paymentId: string; paymentNo: string; branchId: string | null; date: Date; grossAmount: number; currency: string; exchangeRate: number },
+    p: { customerId: string; customerName: string; paymentId: string; paymentNo: string; branchId: string | null; date: Date; grossAmount: number; currency: string; exchangeRate: number; tax: LineTax },
   ): Promise<{ id: string; no: string; total: number; onAccountRemainder: number }> {
     const gross = round2(p.grossAmount);
     if (gross <= 0) throw new BadRequestException(MSG.prepayment_amount_positive);
-    const rate = STANDARD_VAT_RATE;
+    // النسبةُ من الفئة المعلَنة (المعفى والصفريُّ وخارجُ النطاق صفر) — لا من ثابت.
+    const rate = p.tax.taxRate;
     // الصافي يُختار بحيث يساوي إجماليُّ المستند المقبوضَ؛ فإن تعذّر (قفزةُ تدوير الضريبة تتخطّى المقبوضَ — كـ`0.80`:
     // `0.69 ⟵ 0.79` و`0.70 ⟵ 0.81`) اختير **أكبرُ صافٍ لا يفوق إجماليُّه المقبوضَ** — فلا يُخصَّص على المستند أكثرُ ممّا قُبض.
     const base = round2(gross / (1 + rate / 100));
@@ -1177,7 +1178,21 @@ export class InvoicesService {
     const candidates = [base, round2(base - 0.01), round2(base + 0.01), round2(base - 0.02)].filter((net) => net > 0 && totalOf(net) <= gross);
     if (candidates.length === 0) throw new BadRequestException(MSG.prepayment_amount_positive);
     const chosen = candidates.reduce((best, net) => (totalOf(net) > totalOf(best) ? net : best), candidates[0]);
-    const lines = await priceLines(tx, [{ description: `دفعة مقدَّمة — سند القبض ${p.paymentNo}`, quantity: 1, unitPrice: chosen, taxRate: rate, taxCategory: 'S' }], { trusted: true });
+    const lines = await priceLines(
+      tx,
+      [
+        {
+          description: `دفعة مقدَّمة — سند القبض ${p.paymentNo}`,
+          quantity: 1,
+          unitPrice: chosen,
+          taxRate: rate,
+          taxCategory: p.tax.taxCategory as 'S' | 'Z' | 'E' | 'O',
+          taxExemptionReasonCode: p.tax.taxExemptionReasonCode ?? undefined,
+          taxExemptionReason: p.tax.taxExemptionReason ?? undefined,
+        },
+      ],
+      { trusted: true },
+    );
     const { subtotal, taxTotal, total } = computeTotals(lines);
     const onAccountRemainder = round2(gross - total);
     const no = await this.nextDocumentNumber(tx, companyId, 'PP', p.date);

@@ -78,6 +78,8 @@ export interface PaymentInput {
   allocations?: AllocationInput[];
   /** ④A1: مصيرُ الفائض غير المخصَّص — إلزاميٌّ من الخادم حين يفوق هللاتِ التدوير. */
   unallocated?: UnallocatedFate;
+  /** ④A1 (`ق-١٢٦٤`/②): فئةُ ما يُدفع مقدَّماً عنه — إلزاميةٌ من الخادم مع `PREPAYMENT`، ولا تُفترض. */
+  prepaymentTax?: { taxCategory: 'S' | 'Z' | 'E' | 'O'; taxExemptionReasonCode?: string; taxExemptionReason?: string };
 }
 
 export const listPayments = (customerId?: string) =>

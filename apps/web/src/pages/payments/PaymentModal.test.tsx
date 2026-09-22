@@ -39,9 +39,16 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     expect(screen.getByText(/أعلن ما يكون/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('radio', { name: /دفعة مقدَّمة/ }));
+    // ق-١٢٦٤/②: الفئةُ تُختار ولا تُفترض — بلا اختيارٍ يُوقَف الإرسال.
+    await userEvent.click(screen.getByText('تسجيل السند'));
+    expect(vi.mocked(payments.createPayment)).not.toHaveBeenCalled();
+    // الرسالةُ في فقرة الخطأ بعينها — فالعبارةُ نفسُها في عنوان الحقل أيضاً.
+    expect(screen.getByText(/اخترها .*تُعلَن ولا تُفترض/)).toHaveClass('error-text');
+    await userEvent.selectOptions(screen.getByLabelText('فئة الدفعة المقدَّمة'), 'E');
+    await userEvent.selectOptions(screen.getByLabelText('سبب الإعفاء'), 'VATEX-SA-30');
     await userEvent.click(screen.getByText('تسجيل السند'));
     expect(vi.mocked(payments.createPayment)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(payments.createPayment).mock.calls[0][0]).toMatchObject({ customerId: 'c1', amount: 1150, method: 'CASH', unallocated: 'PREPAYMENT' });
+    expect(vi.mocked(payments.createPayment).mock.calls[0][0]).toMatchObject({ customerId: 'c1', amount: 1150, method: 'CASH', unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-30' } });
     expect(onSaved).toHaveBeenCalled();
   }, 15000);
 

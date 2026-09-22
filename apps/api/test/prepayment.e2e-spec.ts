@@ -72,7 +72,11 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     expect(String(uncovered.body.message)).toContain('1150.00');
     expect(String(uncovered.body.message)).toContain('0.00');
 
-    const res = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT' }).expect(201);
+    // ق-١٢٦٤/②: فئةُ ما يُدفع مقدَّماً عنه تُعلَن ولا تُفترض — بلا فئةٍ يُرفض باسمه، وبفئةٍ معفاة بلا سببها كذلك.
+    const noTax = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT' }).expect(400);
+    expect(String(noTax.body.message)).toContain('تُعلَن ولا تُفترض');
+    await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'E' } }).expect(400);
+    const res = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'S' } }).expect(201);
     receiptId = res.body.id;
     expect(res.body.prepaymentInvoice).toMatchObject({ total: '1150.00', onAccountRemainder: '0.00' });
     expect(String(res.body.prepaymentInvoice.no)).toMatch(/^PP-\d{4}-\d{4}$/);
@@ -143,7 +147,7 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     expect(covered.body.prepaymentInvoice).toBeNull();
 
     // `0.80` لا يبلغه أيُّ صافٍ (`0.69 ⟵ 0.79` · `0.70 ⟵ 0.81`): يُختار `0.79` والهللةُ تبقى على الحساب معلَنةً — لا تخصيصٌ يفوق المقبوض.
-    const gap = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 0.8, method: 'CASH', bankId, unallocated: 'PREPAYMENT' }).expect(201);
+    const gap = await auth(http().post('/payments')).send({ customerId, date: today(), amount: 0.8, method: 'CASH', bankId, unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'S' } }).expect(201);
     expect(gap.body.prepaymentInvoice).toMatchObject({ total: '0.79', onAccountRemainder: '0.01' });
     expect(gap.body).toMatchObject({ allocatedTotal: '0.79', unallocated: '0.01' });
     const row = await invoiceRow(gap.body.prepaymentInvoice.id);
@@ -158,7 +162,7 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     const again = await auth(http().post('/invoices')).send({ customerId, issueDate: today(), dueDate: today(), lines: line(2000), prepaymentInvoiceIds: [prepaymentId] }).expect(409);
     expect(String(again.body.message)).toContain(prepaymentNo);
 
-    const fresh = (await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT' }).expect(201)).body.prepaymentInvoice as { id: string; no: string };
+    const fresh = (await auth(http().post('/payments')).send({ customerId, date: today(), amount: 1150, method: 'CASH', bankId, unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'S' } }).expect(201)).body.prepaymentInvoice as { id: string; no: string };
     const other = await auth(http().post('/invoices')).send({ customerId: otherCustomerId, issueDate: today(), dueDate: today(), lines: line(2000), prepaymentInvoiceIds: [fresh.id] }).expect(400);
     expect(String(other.body.message)).toContain(fresh.no);
     const exceeds = await auth(http().post('/invoices')).send({ customerId, issueDate: today(), dueDate: today(), lines: line(200), prepaymentInvoiceIds: [fresh.id] }).expect(400);
@@ -180,5 +184,36 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     await auth(http().patch(`/invoices/${prepaymentId}`)).send({ notes: 'x' }).expect(400);
     await auth(http().post(`/invoices/${prepaymentId}/credit-note`)).send({ issueDate: today(), reason: 'ردّ' }).expect(409);
     await auth(http().delete(`/invoices/${prepaymentId}`)).expect(409);
+  }, 60000);
+
+  it('[SPEC 4.12] ⑥ a prepayment takes the category of what it is paid for — residential rent (E · VATEX-SA-30) issues a 386 without VAT, closes without touching 2200, and enters the return as exempt', async () => {
+    // إيجارٌ سكنيٌّ معفى (م٣٠): المقبوضُ مقدَّماً كلُّه صافٍ — لا ضريبةَ تُفوتَر ولا سطرَ 2200.
+    const tenant = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'مستأجر سكني' }).expect(201)).body.id as string;
+    const vat2200Before = Number(await ledgerClosing(await accountByCode('2200')));
+    const deferredBefore = Number(await ledgerClosing(await accountByCode('2450')));
+    const res = await auth(http().post('/payments'))
+      .send({ customerId: tenant, date: today(), amount: 1000, method: 'CASH', bankId, unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-30' } })
+      .expect(201);
+    expect(res.body.prepaymentInvoice).toMatchObject({ total: '1000.00', onAccountRemainder: '0.00' });
+    const pp = await invoiceRow(res.body.prepaymentInvoice.id);
+    expect([pp.subtotal, pp.taxTotal, pp.total].map(Number)).toEqual([1000, 0, 1000]);
+    expect(Number(await ledgerClosing(await accountByCode('2200')))).toBe(vat2200Before);
+    expect(Number(await ledgerClosing(await accountByCode('2450')))).toBe(deferredBefore + 1000);
+
+    // ثم التوريدُ المعفى (شهرٌ سكنيّ 2000) يطبّق الدفعةَ: قيدُ الإقفال بلا سطر ضريبة، والمتبقّي 1000.
+    const supply = await auth(http().post('/invoices'))
+      .send({ customerId: tenant, issueDate: today(), dueDate: today(), lines: [{ description: 'إيجار سكني — شهر', quantity: 1, unitPrice: 2000, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-30' }], prepaymentInvoiceIds: [res.body.prepaymentInvoice.id] })
+      .expect(201);
+    expect(supply.body.status).toBe('PARTIAL');
+    expect((await invoiceRow(supply.body.id)).outstanding).toBe('1000.00');
+    expect(Number(await ledgerClosing(await accountByCode('2450')))).toBe(deferredBefore);
+    expect(Number(await ledgerClosing(await accountByCode('2200')))).toBe(vat2200Before);
+
+    // والإقرار: المعفى 1000 (المستند) + 2000 (التوريد) − 1000 (المطبَّق) = 2000 — ولا شيء في الخاضع من هذا المسار.
+    const now = new Date();
+    const quarter = Math.floor(now.getUTCMonth() / 3) + 1;
+    const d = (await auth(http().get('/obligations/vat-declaration')).query({ year: now.getUTCFullYear(), quarter }).expect(200)).body as { salesExempt: string; prepaymentsApplied: { count: number } };
+    expect(Number(d.salesExempt)).toBe(2000);
+    expect(d.prepaymentsApplied.count).toBe(2);
   }, 60000);
 });

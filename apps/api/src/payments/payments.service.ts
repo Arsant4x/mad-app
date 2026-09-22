@@ -26,6 +26,7 @@ import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
+import { resolveDeclaredLineTax, type LineTax } from '../common/vat/line-tax.util';
 import { InvoicesService } from '../invoices/invoices.service';
 
 const PAYMENT_INCLUDE = {
@@ -179,6 +180,12 @@ export class PaymentsService {
         if (remainder > UNALLOCATED_DECLARATION_MIN && !declared) {
           throw new BadRequestException(formatMessage(MSG.payment_unallocated_choice_required, { remainder: money(remainder) }));
         }
+        // ④A1: فئةُ ما يُدفع مقدَّماً عنه تُعلَن مع الإعلان — ولا `S` مفترضة (`ق-١٢٦٤`/②)؛ تُحلّ هنا قبل أيّ كتابة فيُرفض الناقصُ باسمه.
+        let prepaymentTax: LineTax | null = null;
+        if (declared === 'PREPAYMENT') {
+          if (!dto.prepaymentTax?.taxCategory) throw new BadRequestException(MSG.payment_prepayment_tax_required);
+          prepaymentTax = resolveDeclaredLineTax(dto.prepaymentTax);
+        }
         if (declared === 'ON_ACCOUNT') {
           // «على الحساب» = ذمّةٌ مفوترةٌ تأخّر تخصيصُها — فلا بدّ أن تغطّيه فواتيرُ العميل المفتوحة بعد تخصيصات هذا السند.
           const openRemaining = round2((await this.openRemainingOf(tx, dto.customerId)) - allocatedNow);
@@ -238,6 +245,7 @@ export class PaymentsService {
                 grossAmount: remainder,
                 currency,
                 exchangeRate,
+                tax: prepaymentTax!,
               })
             : null;
 

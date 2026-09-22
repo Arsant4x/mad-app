@@ -5,6 +5,8 @@ import { listCustomers, type Customer } from '../../api/customers';
 import { createPayment, listOpenInvoices, UNALLOCATED_DECLARATION_MIN, type OpenInvoice, type PaymentMethod, type UnallocatedFate } from '../../api/payments';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
+import { lineTaxDraftError, lineTaxPayload, TAX_CATEGORY_OPTIONS, type DeclarableTaxCategory, type LineTaxDraft } from '../../lib/vat';
+import { LineTaxPicker } from '../../components/LineTaxPicker';
 
 /**
  * تسجيل سند قبض وتوزيعه على فواتير العميل المفتوحة.
@@ -29,6 +31,8 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   const [alloc, setAlloc] = useState<Record<string, string>>({});
   // ④A1: مصيرُ الفائض — يُسأل حين يظهر، ولا يُفترض (`ق-٨٩٨`)؛ والخادمُ يرفض المعلَنَ على الحساب بلا فواتيرَ تغطّيه.
   const [fate, setFate] = useState<UnallocatedFate | ''>('');
+  // ④A1 (`ق-١٢٦٤`/②): فئةُ ما يُدفع مقدَّماً عنه — تُختار ولا تبدأ بقيمة (إيجارٌ سكنيٌّ معفى لا يُفوتَر بالنسبة الأساسية).
+  const [prepaymentTax, setPrepaymentTax] = useState<LineTaxDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +90,17 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
       setError(`في السند ${fmt(unallocated)} فوق المخصَّص — أعلن ما يكون: دفعةً مقدَّمة (تصدر لها فاتورة 386 الآن) أو مبلغاً على الحساب.`);
       return;
     }
+    if (mustDeclare && fate === 'PREPAYMENT') {
+      if (!prepaymentTax) {
+        setError('الدفعة المقدَّمة تحمل فئة ما يُدفع عنه — اخترها (خاضع · صفر بسببه · معفى بسببه · خارج النطاق بسببه)؛ تُعلَن ولا تُفترض.');
+        return;
+      }
+      const taxProblem = lineTaxDraftError(prepaymentTax);
+      if (taxProblem) {
+        setError(taxProblem);
+        return;
+      }
+    }
     setSaving(true);
     try {
       await createPayment({
@@ -101,6 +116,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
           .map(([invoiceId, v]) => ({ invoiceId, amount: parseFloat(v) || 0 }))
           .filter((a) => a.amount > 0),
         ...(mustDeclare && fate ? { unallocated: fate } : {}),
+        ...(mustDeclare && fate === 'PREPAYMENT' && prepaymentTax ? { prepaymentTax: lineTaxPayload(prepaymentTax) } : {}),
       });
       await onSaved();
     } catch (e) {
@@ -270,6 +286,23 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
             <label style={{ display: 'block' }}>
               <input type="radio" name="unallocated-fate" value="ON_ACCOUNT" checked={fate === 'ON_ACCOUNT'} onChange={() => setFate('ON_ACCOUNT')} /> على الحساب — يُخصَّص لاحقاً على فواتيرَ مفتوحةٍ قائمة تغطّيه
             </label>
+            {fate === 'PREPAYMENT' && (
+              <div className="field" data-testid="prepayment-tax" style={{ marginTop: 8 }}>
+                <label>فئةُ ما يُدفع مقدَّماً عنه — تُعلَن ولا تُفترض (إيجارٌ سكنيّ معفى · خدمةٌ خاضعة · …)</label>
+                {prepaymentTax ? (
+                  <LineTaxPicker value={prepaymentTax} onChange={setPrepaymentTax} />
+                ) : (
+                  <select aria-label="فئة الدفعة المقدَّمة" value="" onChange={(e) => e.target.value && setPrepaymentTax({ taxCategory: e.target.value as DeclarableTaxCategory })}>
+                    <option value="">— اختر الفئة —</option>
+                    {TAX_CATEGORY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </fieldset>
         )}
 
