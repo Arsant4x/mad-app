@@ -6,7 +6,6 @@ import { BranchPicker } from '../../components/BranchPicker';
 import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosSaleResponse, type PosShift } from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
 import { cacheProducts, cacheSellerProfile, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readCachedSellerProfile, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
-import type { Invoice } from '../../api/invoices';
 import { getCompanyProfile } from '../../api/companyProfile';
 import { ZatcaQr } from '../../components/ZatcaQr';
 import { buildPhase1Qr } from '../../lib/zatcaQr';

@@ -24,7 +24,7 @@ describe('VAT declaration declared limits (e2e)', () => {
     app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
     company = await registerIsolatedCompany(app, 'vat-limits');
-    const customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ name: 'عميل خاضع' }).expect(201)).body.id;
+    const customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: 'عميل خاضع' }).expect(201)).body.id;
     await auth(request(app.getHttpServer()).post('/invoices'))
       .send({ customerId, issueDate: '2026-05-10', dueDate: '2026-06-10', lines: [{ description: 'خدمة', quantity: 1, unitPrice: 100, taxRate: 15 }] })
       .expect(201);
