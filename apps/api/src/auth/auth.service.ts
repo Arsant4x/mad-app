@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AccountStatus } from '@prisma/client';
+import { AccountStatus, ActorType } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,12 +43,32 @@ const REFRESH_TOKEN_BYTES = 32;
  * **فتُقرأ بلا سياق** ثم يُقرأ ملفُّها تحت `runInTenantContext(identity.companyId)`.
  * الثمنُ مقيس ومقبول (`ق-٦٦٧`): `+1.2–2.1 ms` لكلّ نداء.
  */
+/**
+ * صفُّ هويّةِ دخول — **بثلاثة فاعلين لا أربعة**.
+ *
+ * ⚠️ `ActorType` فيه `INTEGRATION` (`ق-١٢٩١` · ي/⑫A3)، **ولا هويّةَ دخولٍ له**: المفتاحُ
+ * لا كلمةَ مرورَ له ولا يمرّ بهذا المسار أصلاً. **والتضييقُ هنا مقصود** — فحين وُسّع
+ * التعدادُ أسقط المترجمُ كلَّ موضعٍ يمرّر صفَّ هويّةٍ هنا، وهو ما نريد: **بابُ المفتاح
+ * غيرُ باب الجلسة**، ولو وُسّع النوعُ لمرّ الخلطُ صامتاً.
+ */
 interface IdentityRow {
   id: string;
   username: string;
   actorType: 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
   passwordHash: string;
   companyId: string | null;
+}
+
+/**
+ * يضيّق صفَّ القاعدة إلى فاعلٍ بشريّ — **ويرمي على `INTEGRATION`**.
+ *
+ * وهو صفٌّ **لا يمكن أن يوجد** (لا يُنشأ مفتاحٌ في `login_identities` من أيّ مسار)،
+ * فالرميُ إعلانٌ عن استحالةٍ لا معالجةُ حالة: لو وُجد يوماً فالسببُ عطلٌ يجب أن يصرخ،
+ * لا دخولٌ يمرّ.
+ */
+function asHumanIdentity(row: { actorType: ActorType } & Omit<IdentityRow, 'actorType'>): IdentityRow {
+  if (row.actorType === 'INTEGRATION') throw new UnauthorizedException(MSG.invalid_credentials);
+  return { ...row, actorType: row.actorType };
 }
 
 interface IdentityWithProfiles {
@@ -131,7 +151,7 @@ export class AuthService {
     }
     // الملفُّ قبل التحقّق من كلمة المرور — كما كان يُضمَّن في الاستعلام نفسِه: فالزيادةُ
     // (`≈ +2 ms`) تقع قبل `argon2` في المسارين ولا تُضاف إلى فرق الزمن بينهما.
-    const profiles = await this.loadProfiles(identity);
+    const profiles = await this.loadProfiles(asHumanIdentity(identity));
     const passwordOk = await argon2.verify(identity.passwordHash, password);
     if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
 
@@ -162,7 +182,7 @@ export class AuthService {
 
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
 
-    return this.buildSessionFromIdentity(await this.loadProfiles(stored.loginIdentity));
+    return this.buildSessionFromIdentity(await this.loadProfiles(asHumanIdentity(stored.loginIdentity)));
   }
 
   /** Re-derives the current user's view from a valid access token payload,
@@ -170,7 +190,7 @@ export class AuthService {
   async whoAmI(payload: JwtPayload): Promise<AuthUserView> {
     const row = await this.prisma.loginIdentity.findUnique({ where: { id: payload.sub } });
     if (!row) throw new UnauthorizedException(MSG.session_invalid);
-    const identity = await this.loadProfiles(row);
+    const identity = await this.loadProfiles(asHumanIdentity(row));
 
     if (identity.actorType === 'PLATFORM_ADMIN' && identity.platformAdmin) {
       return { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all' };

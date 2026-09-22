@@ -276,6 +276,11 @@ export const MSG = {
   company_delete_blocked: 'companies.delete_blocked',
   username_taken: 'companies.username_taken',
   template_not_found: 'templates.not_found',
+  /** مفاتيحُ الأنظمة (`ق-١٢٩١` · ي/⑫A3). */
+  api_key_invalid: 'apiKeys.invalid',
+  api_key_not_found: 'apiKeys.not_found',
+  api_key_template_too_wide: 'apiKeys.template_too_wide',
+  api_key_name_required: 'apiKeys.name_required',
   template_name_required: 'templates.name_required',
   template_name_taken: 'templates.name_taken',
   template_in_use: 'templates.in_use',
@@ -998,6 +1003,13 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.username_taken]: { ar: 'اسم المستخدم "{username}" مستخدَم بالفعل', en: 'Username "{username}" is already taken' },
   [MSG.template_not_found]: { ar: 'القالب غير موجود', en: 'Permission template not found' },
+  [MSG.api_key_invalid]: { ar: 'مفتاح النظام غير صالح أو مُبطَل', en: 'API key is invalid or revoked' },
+  [MSG.api_key_not_found]: { ar: 'مفتاح النظام غير موجود', en: 'API key not found' },
+  [MSG.api_key_template_too_wide]: {
+    ar: 'لا يُنشأ مفتاح نظام بقالب يفتح كل الشاشات — اختر قالباً يحصر ما يحتاجه التكامل',
+    en: 'An API key cannot use an all-screens template — pick one scoped to what the integration needs',
+  },
+  [MSG.api_key_name_required]: { ar: 'اسم مفتاح النظام مطلوب', en: 'API key name is required' },
   [MSG.template_name_required]: { ar: 'اسم النموذج مطلوب', en: 'Template name is required' },
   [MSG.template_name_taken]: { ar: 'يوجد نموذج بالاسم "{name}" بالفعل', en: 'A template named "{name}" already exists' },
   [MSG.template_in_use]: {

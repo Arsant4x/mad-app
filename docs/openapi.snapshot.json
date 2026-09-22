@@ -713,6 +713,13 @@
       "200"
     ]
   },
+  "GET /api-keys": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /attendance": {
     "parameters": [],
     "requiredBody": [],
@@ -1639,6 +1646,13 @@
     ]
   },
   "GET /v1/admin/processing-agreement": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/api-keys": {
     "parameters": [],
     "requiredBody": [],
     "responses": [
@@ -3530,6 +3544,22 @@
       "201"
     ]
   },
+  "POST /api-keys": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /api-keys/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /attendance": {
     "parameters": [],
     "requiredBody": [],
@@ -4505,6 +4535,22 @@
   },
   "POST /v1/admin/processing-agreement/versions": {
     "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/api-keys": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/api-keys/{id}/revoke": {
+    "parameters": [
+      "path:id:required"
+    ],
     "requiredBody": [],
     "responses": [
       "201"
