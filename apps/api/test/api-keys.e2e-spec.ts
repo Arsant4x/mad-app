@@ -117,6 +117,19 @@ describe('مفاتيحُ الأنظمة (e2e)', () => {
     expect(list.find((k) => k.id === keyId)?.revokedAt).toBeTruthy();
   });
 
+  it('🔴 ⑥-ب والإبطالُ يُنفَذ في **باب الهويّة** لا في حارس المستأجر وحدَه', async () => {
+    /**
+     * **حارسٌ مغطّىً لا يُثبَت إلا بتجاوز الغطاء** (`§8.18`).
+     *
+     * `TenantGuard` يفحص الإبطالَ أيضاً — فالمرحلةُ ⑥ تمرّ **بشهادة الغطاء**: أُثبت
+     * بالعكس أن إزالةَ الفحص من `authenticate` **تُبقي الحزمةَ خضراء كلَّها**.
+     *
+     * 🔴 **والثقبُ حقيقيّ**: `/templates` يحمل `JwtAuthGuard` **بلا `TenantGuard`** —
+     * فمفتاحٌ مُبطَل كان سيقرأ قوالبَ المنشأة. فالمرحلةُ تطرق ذلك البابَ بعينه.
+     */
+    await http().get('/templates').set('X-Api-Key', keyToken).expect(401);
+  });
+
   it('⑦ وقالبٌ يفتح كلَّ الشاشات يُردّ باسمه، ورمزٌ ملفَّقٌ يُردّ ٤٠١', async () => {
     const wide = await auth(http().post('/templates')).send({ name: `مفتوحٌ ${suffix}`, isAllScreens: true }).expect(201);
     const rejected = await auth(http().post('/api-keys')).send({ name: `مفتاحٌ واسع ${suffix}`, permissionTemplateId: wide.body.id }).expect(400);
