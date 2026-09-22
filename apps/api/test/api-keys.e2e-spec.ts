@@ -8,8 +8,8 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { applyApiVersioning } from '../src/common/versioning';
 import { ISOLATED_PASSWORD, IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
-// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): حزمةٌ جديدة — `120` ثانيةً ابتداءً، وتُضبط على ثلاثة أضعاف مقيسها بعد أوّل تشغيل.
-jest.setTimeout(120000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (67.7 ث في أوّل تشغيلٍ كامل) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(205000);
 
 /**
  * **مفاتيحُ الأنظمة — الفاعلُ الخامس** (`ق-١٢٩١` · ي/⑫A3).
