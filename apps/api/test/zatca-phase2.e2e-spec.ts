@@ -13,7 +13,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { expectNothingBetweenIcv } from './zatca-chain.util';
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
-import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
+import { startAuthorityStub, STUB_WARNING_CODE, STUB_WARNING_MESSAGE, type AuthorityStub } from './zatca-authority-stub';
 
 /**
  * Phase 2 cannot clear a real invoice without a certificate issued by the
@@ -144,7 +144,11 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
     await clearCredential();
     await authority.close();
     await app.close();
-  });
+    // ⏱️ **ميزانيةٌ معلَنة للتنظيف** — و`jest` يعطي الخطّافَ خمسَ ثوانٍ افتراضاً بينما التنظيفُ
+    // يمحو فاتورةً فاتورةً عبر مسارٍ يعكس قيودَها: عملٌ يكبر بعددِ ما أنشأته الحزمة، لا انتظارُ
+    // حالة. (وهذا ليس علاجاً لتذبذبٍ بمهلةٍ أطول — `§8.2.1`: لا حالةَ تُنتظر هنا، بل `N` صفّاً
+    // تُحذف؛ و`beforeAll` أعلاه معلَنٌ بثلاثين ثانيةً للسبب نفسِه.)
+  }, 60000);
 
   describe('secret encryption', () => {
     it('round-trips a secret and produces different ciphertext each time', () => {
@@ -566,6 +570,39 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
       expect(next.body.zatcaPreviousHash).toBe(stuck.zatcaHash);
       expect(next.body.zatcaPreviousHash).not.toBe(cleared.body.zatcaHash);
       await expectNothingBetweenIcv(tenantPrisma, companyId, stuck.zatcaIcv!, next.body.zatcaIcv);
+    }, 40000);
+
+    /**
+     * ⭐ **ز/⑤A2 — قبولٌ بملاحظات: تُحفظ، ولا تَحكم.**
+     *
+     * كان جوابُ `2xx` يُقرأ منه الحكمُ وحدَه و`detail` يصير `null` عند القبول، فيُهدَر كلُّ ما في
+     * `validationResults` — **ولا نقطةَ استعلامٍ لاحقة لدى الهيئة**، فما لا يُخزَّن لحظةَ الجواب
+     * لا يُستعاد. والوحدةُ تُثبت المحلّل؛ **وهذه تُثبت الوصل**: أن `report()` يكتبه فعلاً.
+     */
+    it('🔴 قبولٌ بملاحظاتٍ من الهيئة: الحكمُ CLEARED كما هو والملاحظةُ محفوظةٌ برمزها — وقبولٌ نظيفٌ يكتب NULL ولا يختلق (ز/⑤A2)', async () => {
+      await seedProductionCredential();
+
+      authority.set('clear-warn');
+      const idWarned = await makeInvoice();
+      const warned = await request(app.getHttpServer()).post(`/zatca/invoices/${idWarned}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      // ⚖️ الحكمُ لا يتغيّر (`ق-٩٧١`): التحذيرُ يُرى ولا يَحكم.
+      expect(warned.body.zatcaStatus).toBe('CLEARED');
+
+      // وقبولٌ نظيفٌ في الجولة نفسِها — فيُقاس الفرقُ بين جوابين لا حالٌ واحدة.
+      authority.set('clear');
+      const idClean = await makeInvoice();
+      const clean = await request(app.getHttpServer()).post(`/zatca/invoices/${idClean}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+      expect(clean.body.zatcaStatus).toBe('CLEARED');
+
+      const rows = await tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.invoice.findMany({ where: { id: { in: [idWarned, idClean] } }, select: { id: true, zatcaWarnings: true } }),
+      );
+      const byId = new Map(rows.map((r) => [r.id, r.zatcaWarnings]));
+      expect(byId.get(idWarned)).toEqual([{ code: STUB_WARNING_CODE, message: STUB_WARNING_MESSAGE, severity: 'WARNING' }]);
+      // `null` لا `[]`: الحقلُ يصف الجوابَ الأخير — وجوابٌ بلا ملاحظاتٍ لا يُختلق له مصفوفةٌ فارغة.
+      expect(byId.get(idClean)).toBeNull();
+
+      authority.set('reject');
     }, 40000);
   });
 });

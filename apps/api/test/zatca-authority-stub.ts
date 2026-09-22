@@ -21,6 +21,11 @@ export type AuthorityVerdict =
   | 'reject-nul'
   /** `200` — قبول (`CLEARED`). */
   | 'clear'
+  /**
+   * `200` **بتحذيرات** — الفاتورةُ تُقبل ومعها ملاحظات (`validationResults.warningMessages`).
+   * وهو ما توثّقه الهيئة، **وكان يُهدَر كلُّه** قبل ز/⑤A2: القبولُ يجعل `detail` عندنا `null`.
+   */
+  | 'clear-warn'
   /** `503` — خادمُ الهيئة معطَّل: ليس جواباً على المستند. */
   | 'outage'
   /** `401` — اعتمادٌ مرفوض: ليس جواباً على المستند. */
@@ -38,6 +43,10 @@ export interface AuthorityStub {
 }
 
 export const STUB_REJECTION_MESSAGE = 'رفضٌ من خادمٍ محلّيٍّ يمثّل الهيئة — BR-KSA-STUB';
+
+/** تحذيرُ قبولٍ — رمزُه ونصُّه، كما تردّهما الهيئةُ في `warningMessages` (ز/⑤A2). */
+export const STUB_WARNING_CODE = 'BR-KSA-STUB-WARN';
+export const STUB_WARNING_MESSAGE = 'قُبلت الفاتورة مع ملاحظة — خادمٌ محلّيٌّ يمثّل الهيئة';
 
 // البايتُ الصفريّ يُسمّى بالرمز لا يُكتب حرفاً (`ق-٩٧٤`) — يقع **وسط** الرسالة كي يُثبَت أن ما بعده يبقى.
 const NUL = String.fromCharCode(0);
@@ -71,6 +80,13 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
           res.statusCode = 200;
           res.end(JSON.stringify(reporting ? { reportingStatus: 'REPORTED', validationResults: { status: 'PASS' } } : { clearanceStatus: 'CLEARED', validationResults: { status: 'PASS' } }));
           return;
+        case 'clear-warn': {
+          res.statusCode = 200;
+          // ⚖️ قبولٌ كامل (`2xx`) — والتحذيرُ بجانبه لا فوقه: الحكمُ لا يتغيّر (`ق-٩٧١`).
+          const warnings = { status: 'PASS', warningMessages: [{ type: 'WARNING', code: STUB_WARNING_CODE, category: 'STUB', message: STUB_WARNING_MESSAGE, status: 'WARNING' }] };
+          res.end(JSON.stringify(reporting ? { reportingStatus: 'REPORTED', validationResults: warnings } : { clearanceStatus: 'CLEARED', validationResults: warnings }));
+          return;
+        }
         case 'reject':
           res.statusCode = 400;
           res.end(

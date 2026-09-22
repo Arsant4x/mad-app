@@ -26,7 +26,17 @@ const API_ROOT = join(__dirname, '..', '..');
 const SCHEMA_PATH = join(API_ROOT, 'prisma', 'schema.prisma');
 const SRC_ROOT = join(API_ROOT, 'src');
 export const EXTERNAL_TEXT_MARKER = '/// @external-text';
-const STORABLE_CALL = /^storable(Text|Error)\s*\(/;
+/**
+ * النداءُ يُقبل **حيثما وقع في القيمة المكتوبة** لا في أوّلها وحدَها (`ق-١٢٧٩`).
+ *
+ * فالسلاسلُ والتعليقاتُ مقنَّعةٌ قبل المطابقة، **فما بقي نداءٌ حقيقيٌّ في التعبير المكتوب** لا
+ * ذِكرٌ في نصّ. واشتراطُ الصدارة كان يمنع أشكالاً صحيحة — شرطاً (`c ? storableText(a) : DbNull`)
+ * أو تخطيطاً على مصفوفة (`Json`) — **وحارسٌ يُدين الصحيحَ يُعطَّل** (`ق-٦٥`).
+ *
+ * ⚠️ **وحدُّه معلَن**: قيمةٌ تنقّي شيئاً وتكتب غيرَه (`f(a, storableText(b))`) تمرّ — وهو حدٌّ كان
+ * قائماً قبل التوسعة أيضاً (`storableText(x).concat(raw)` كانت تمرّ بالصدارة).
+ */
+const STORABLE_CALL = /\bstorable(Text|Error)\s*\(/;
 const WRITE_OPS = ['create', 'createMany', 'update', 'updateMany', 'upsert'] as const;
 
 export interface ExternalTextField {
@@ -274,6 +284,10 @@ describe('حارسٌ مشتقّ — كلُّ كتابةِ نصٍّ من جهةٍ
       `const g = tx.outboxEvent.upsert({ where: { id }, create: { lastError: ${BT}x ${BT} }, update: { lastError: storableError(e) } });`,
       'const h = tx.customer.update({ where: { id }, data: { name: "zatcaMessage: raw" } });',
       'const i = tx.invoice.update({ where: { id }, data: { zatcaMessage: raw } // قوسُ النداء مفقود',
+      // ⭐ الشكلُ الشرطيّ — نداءٌ في القيمة لا في صدارتها: **يُقبل** (وهو ما يكتبه عمودُ `Json`).
+      'const j = tx.invoice.update({ where: { id }, data: { zatcaMessage: cleared ? storableText(reason) : null } });',
+      // وبجانبه شكلٌ يشبهه ولا نداءَ فيه: **يُدان** — فالتوسعةُ لم تفتح الباب.
+      'const k = tx.invoice.update({ where: { id }, data: { zatcaMessage: cleared ? reason : null } });',
     ].join('\n');
     const fx: ExternalTextField[] = [
       { model: 'Invoice', field: 'zatcaMessage' },
@@ -281,8 +295,8 @@ describe('حارسٌ مشتقّ — كلُّ كتابةِ نصٍّ من جهةٍ
       { model: 'OutboxEvent', field: 'lastError' },
     ];
     const r = scanSource(fixture, fx);
-    expect(r.examined).toBe(7);
-    expect(r.violations.map((v) => `${v.line}:${v.field}`)).toEqual(['1:zatcaMessage', '6:complianceRequestId', '7:lastError', '8:lastError', '10:*']);
+    expect(r.examined).toBe(9);
+    expect(r.violations.map((v) => `${v.line}:${v.field}`)).toEqual(['1:zatcaMessage', '6:complianceRequestId', '7:lastError', '8:lastError', '10:*', '12:zatcaMessage']);
     expect(rawSqlMentions('await tx.$executeRaw`UPDATE invoices SET "zatcaMessage" = ${x}`', fx)).toEqual([1]);
     expect(rawSqlMentions('const s = { zatcaMessage: 1 };', fx)).toEqual([]);
   });

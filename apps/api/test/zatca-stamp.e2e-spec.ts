@@ -110,7 +110,11 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     await purgeInvoicesForTest(tenantPrisma, companyId, invoiceIds).catch(() => undefined);
     await auth(request(app.getHttpServer()).delete(`/products/${productId}`)).catch(() => undefined);
     await app.close();
-  });
+    // ⏱️ ميزانيةٌ معلَنة للتنظيف — كما في `zatca-phase2`: خمسُ ثوانٍ افتراضاً لا تكفي إغلاقَ
+    // مناوبةٍ ومحوَ فواتيرَ مختومةٍ وإغلاقَ التطبيق. **مقيسٌ لا مُقدَّر** (2026-09-22): الحزمةُ
+    // تسقط في الخطّاف بالميزانية الافتراضية وتمرّ `3/3` بثلاثين ثانية — والعَرَضُ نفسُه مسجَّلٌ
+    // على حزمٍ أخرى قبلها بأسابيع (`pos` · `ledger-statement` · `zatca-invoice-edit-guard`).
+  }, 60000);
 
   it('① بيعٌ حيّ لمنشأةٍ مربوطة: الإيصال بالوسوم التسعة، والمستندُ الموقَّع محفوظٌ — والمزامنةُ المكرَّرة تعيد الرمزَ نفسه', async () => {
     const keys = await realKeys();
