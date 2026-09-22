@@ -117,6 +117,7 @@
 | [`transport-logistics-full-spec.md`](plans/transport-logistics-full-spec.md) | مواصفة كاملة — وحدة النقل والخدمات اللوجستية | — | مسوّدة | 1339 | inventory-master-plan.md |
 | [`travel-master-plan.md`](plans/travel-master-plan.md) | الخطة الرئيسية — ملف نشاط وكالات السفر والسياحة والحجوزات | 2026-08-28 | معتمدة | 1739 | hr-master-plan.md، inventory-master-plan.md |
 | [`unified-build-plan.md`](plans/unified-build-plan.md) | خطة البناء الموحّدة — منصة رِكز | — | معتمدة | 757 | — |
+| [`unified-core-plan.md`](plans/unified-core-plan.md) | الخطّةُ الموحّدة — الثلاثةُ والعشرون الجديدة من الأبواب ⑪…㉔ وباقي خطّة العشرين (د · و · هـ · ز · ح) ومكسورُ اليوم الباقي، جدولٌ واحد بخمسةَ عشرَ حزمةً على ما تكرّر (ق-١٢٧٢) | 2026-09-22 | بانتظار حكم المالك | 113 | — |
 | [`veterinary-master-plan.md`](plans/veterinary-master-plan.md) | الخطة الرئيسية — العيادات البيطرية ومستلزمات الحيوانات الأليفة | — | مسوّدة | 1272 | — |
 | [`wholesale-full-spec.md`](plans/wholesale-full-spec.md) | مواصفة نشاط تجارة الجملة والتوزيع — رِكز | 2026-08-26 | مسوّدة | 638 | — |
 | [`خطة-نشاط-السوبرماركت.md`](plans/خطة-نشاط-السوبرماركت.md) | خطة بناء نظام التجزئة الغذائية (سوبرماركت · ميني ماركت · بقالة · تموينات) | — | مسوّدة (افتراضاً) | 438 | — |
