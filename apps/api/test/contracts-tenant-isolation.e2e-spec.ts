@@ -7,6 +7,9 @@ import { round2 } from '../src/common/money/rounding';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (27.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(85000);
+
 describe('Properties/Units/Contracts (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;

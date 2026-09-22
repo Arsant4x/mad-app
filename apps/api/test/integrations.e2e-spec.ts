@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (11.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(35000);
+
 /**
  * طبقة التكاملات (المستند: adapters قابلة للاستبدال + «تشفير أي مفاتيح API»):
  * المفاتيح مشفّرة في القاعدة فعلاً (نقرأ الصفّ الخام ونتأكد)، القراءات

@@ -9,6 +9,9 @@ import { AppModule } from '../src/app.module';
 import { postReversalEntry } from '../src/journal/auto-posting.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (30.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(95000);
+
 /**
  * ٢٥ **الاستلامُ المستقلّ** (`ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`) — الحارسُ الحيّ يقرأ **الدفترَ والرفَّ والمطابقةَ معاً** في كلِّ مرحلة:
  *

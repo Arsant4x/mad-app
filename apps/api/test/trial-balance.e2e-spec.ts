@@ -5,6 +5,9 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (38.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(120000);
+
 /**
  * ميزان المراجعة (احتياجات 10.4) + التصدير (10.12): يقرأ من القيود الحقيقية،
  * إجماليا المدين والدائن متطابقان حتماً، الفترة والفرع يرشّحان فعلاً،

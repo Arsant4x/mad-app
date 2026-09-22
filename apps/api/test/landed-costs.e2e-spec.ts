@@ -6,6 +6,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (51.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(155000);
+
 /**
  * ٧ **التكاليفُ المحمَّلة** (`ق-١١٤٥` · `ق-١١٤٦`) — الحارسُ الحيّ يقرأ **الدفترَ والطبقةَ معاً** في كلِّ مرحلة:
  *

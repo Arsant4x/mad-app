@@ -9,6 +9,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { decodeZatcaQr } from '../src/zatca/qr.util';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (39.0 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(120000);
+
 /**
  * الكاشير v1 (مستند §6): مناوبة تُفتح بعهدة، بيعٌ يصير فاتورة مدفوعة على نفس
  * سلسلة الترقيم، درجٌ يُشتق من الفواتير لا من عدّاد، وإقفال يحسب الفرق بنفسه.

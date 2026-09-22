@@ -7,6 +7,9 @@ import { BANK_BANDS, type CodeBand } from '../src/accounts/code-bands';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (11.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(35000);
+
 /** رموزُ الدليل الواقعةُ في نطاقٍ بعينه — تُقرأ من القاعدة لحظةَ السؤال. */
 const codesIn = (list: { code: string }[], band: CodeBand): number[] =>
   list.map((a) => Number(a.code)).filter((n) => Number.isInteger(n) && n >= band.min && n <= band.max);

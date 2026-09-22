@@ -9,6 +9,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (21.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(65000);
+
 /**
  * تصنيفُ العقد للضريبة وشمولُ قيمته (ق-٨٩١ · ق-٨٩٢ · ق-٨٩٨):
  *   · إلزاميان بتعدادٍ مغلق — عقدٌ بلا تصنيفٍ يُرفض، والقيمةُ القديمة لا يقبلها الخادمُ لعقدٍ جديد.

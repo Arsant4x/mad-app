@@ -6,6 +6,9 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { isRequestId, REQUEST_ID_HEADER, requestIdMiddleware } from '../src/common/request-id/request-id.middleware';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (12.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(40000);
+
 /**
  * `x-request-id` على التطبيق الحقيقيّ (`ق-١٢٣٧`): يُركَّب الوسيطُ هنا كما في `main.ts` (أوّلَ السلسلة)
  * ويُقرأ الرأسُ على `200` (دخولٌ ناجح) و`400` (تحقّقٌ ساقط — وجسمُه يحمل المعرِّف) و`401` (بلا رمز —

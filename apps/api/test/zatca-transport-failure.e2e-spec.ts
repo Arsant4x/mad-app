@@ -14,6 +14,9 @@ import { purgeInvoicesForTest } from './purge-invoices';
 import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { DEAD_PORT_URL, startAuthorityStub, STUB_REJECTION_MESSAGE, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (166.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(500000);
+
 /**
  * ⚖️ **سقوطُ النقل ليس جواباً — يُرمى فيعود الطابور، و`REJECTED` على جوابٍ من الهيئة وحده**
  * (`ق-٩٧١`) — الحارسُ الحيّ بسبعته على المسار الحقيقيّ (توقيعٌ فعليّ، منشأةٌ معزولة):

@@ -18,6 +18,9 @@ import { hardDeleteCompanyForTest } from './hard-delete-company';
  */
 import { delegateName } from '../src/export/export-scope';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (21.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(65000);
+
 /**
  * تصدير البيانات — نسخة التاجر من بياناته (النصف الآخر من «النسخ الاحتياطي»
  * بصيغة SaaS: التصدير ذاتي، أما الحذف فطلب يراجعه الدعم).

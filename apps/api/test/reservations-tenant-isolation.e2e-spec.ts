@@ -5,6 +5,9 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (62.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(190000);
+
 describe('Reservations (e2e)', () => {
   let app: INestApplication;
   let tokenA: string;

@@ -8,6 +8,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { computeStockQuantities, stockQuantityKey } from '../src/inventory/stock-quantity.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (13.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(45000);
+
 /**
  * **㉘ الحركاتُ اليدوية عبر طبقات التكلفة** (`ق-١٠٦٣` · 2026-09-18) — كانت الكمّيةُ تتحرّك والقيمةُ لا:
  * إدخالٌ يدويّ بلا طبقة، وإخراجٌ بلا استهلاك، وتحويلٌ يترك طبقاتِه في المصدر، ووعدٌ في الشيفرة بتسوية

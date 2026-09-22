@@ -4,6 +4,9 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (16.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * Customers CRUD: tenant isolation, duplicate-name/VAT rejection, and the
  * FK-restrict guard that stops deleting a customer that still has invoices.

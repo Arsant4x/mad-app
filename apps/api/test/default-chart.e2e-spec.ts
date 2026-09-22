@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { DEFAULT_CHART } from '../src/accounts/default-chart';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (16.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * دليل الحسابات الافتراضي (4.7) — الاختبار الحاسم: **منشأة عمرها ثوانٍ تصدر
  * مستنداً فيُرحَّل، بصفر إعداد**.

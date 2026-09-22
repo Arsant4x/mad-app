@@ -8,6 +8,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (26.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(80000);
+
 /**
  * وضع الدعم الفني (احتياجات §1.10) — «بموافقتها الصريحة فقط، لمدة محددة،
  * مع سجل كامل تراه المنشأة»، كلّه مفروضاً تقنياً:

@@ -8,6 +8,9 @@ import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (30.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(95000);
+
 /**
  * الأوفلاين (مستند §6 v2): «دون فقدان أو تكرار بيانات» حرفياً —
  * المزامنة idempotent على clientSaleId، والترقيم مركزي عند الوصول فلا

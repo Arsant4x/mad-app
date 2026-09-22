@@ -6,6 +6,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (88.6 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(270000);
+
 /**
  * The structural wave (activities + branches, multi-currency, fiscal year) has
  * no HTTP surface yet — services and screens come in later stages. What must

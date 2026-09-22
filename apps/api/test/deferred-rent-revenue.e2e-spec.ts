@@ -8,6 +8,9 @@ import { RentRecognitionService } from '../src/contracts/rent-recognition.servic
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (33.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(100000);
+
 /**
  * ⚖️ **الإيرادُ المؤجَّل — يُحتجَز بالاستحقاق ويخرج بالخدمة**
  * (`ق-٤٦٨` · `ق-٤٧٠` … `ق-٤٧٥` · ثم `ق-٩١٧`).

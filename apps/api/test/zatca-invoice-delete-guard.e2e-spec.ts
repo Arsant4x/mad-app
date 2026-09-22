@@ -12,6 +12,9 @@ import { AppModule } from '../src/app.module';
 import { purgeInvoicesForTest } from './purge-invoices';
 import { startAuthorityStub, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (29.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(90000);
+
 /**
  * Deleting a document that holds a ZATCA chain link would leave a gap the
  * authority can see: the next document's PIH commits to the deleted hash, and

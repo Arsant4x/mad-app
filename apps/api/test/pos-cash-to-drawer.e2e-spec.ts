@@ -7,6 +7,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (36.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(110000);
+
 /**
  * **نقدُ الكاشير يدخل حسابَ درجه، وفرقُ الجرد يُرحَّل** (`ق-٣٠٩` · `ق-٣٠٨`).
  *

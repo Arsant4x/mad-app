@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (52.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(160000);
+
 /**
  * سنداتُ الصرف للمورّدين وتخصيصُها على فواتير الشراء (`ق-٨٦٦` · `ق-٨٧١` · `ق-٨٧٢` · `ق-٨٧٥`).
  *

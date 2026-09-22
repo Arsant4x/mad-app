@@ -7,6 +7,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { CREDIT_CODE, CREDIT_OVERRIDE_ACTION } from '../src/invoices/credit-context';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * ⚖️ **حدُّ الائتمان — من حقلٍ يُرى إلى حدٍّ يفعل** (`ق-٣٣٦` … `ق-٣٤١`).
  *

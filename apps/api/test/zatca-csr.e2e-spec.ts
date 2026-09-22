@@ -1,5 +1,8 @@
 import { CERT_TEMPLATE_NAME, csrToBase64, generateCsr, parseCsr } from '../src/zatca/csr.util';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (2.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * These assert the CSR is *cryptographically valid*, not merely well-shaped.
  *

@@ -7,6 +7,9 @@ import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (27.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(85000);
+
 /**
  * **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣` — الحزمةُ الثانية من المراجعة الخارجية): كلُّ رقمٍ كانت الشاشةُ
  * تجمعه من قوائم الخادم صار يُحسب في الخادم ويُرسَل جاهزاً — نصّاً بخانتين (`ق-١٢٣٥`).

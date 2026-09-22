@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (8.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * ق-١٢٥٣/② — **حذفُ السنة المالية لا يفكّ الإقفال.** كان `DELETE /fiscal-years/:id` يحذف السنةَ وفتراتِها
  * المقفلةَ بالتتالي بلا حارس (`domain-scan/01` — A2)، فيصير الشهرُ المقفل مفتوحاً لكلِّ ترحيلٍ بلا أثرٍ يميّزه.

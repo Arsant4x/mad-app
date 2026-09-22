@@ -7,6 +7,9 @@ import { AppModule } from '../src/app.module';
 import { DRAWER_BANDS } from '../src/accounts/code-bands';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (11.8 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(40000);
+
 interface Drawer {
   id: string;
   name: string;

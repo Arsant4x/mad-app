@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * ق-١٢٥٣/③ — **تعطيلُ الموظف يُنهي جلساتِه، لا يُوقفها.** الحالةُ غيرُ `ACTIVE` تُرفض في حارس المستأجر على
  * الطلب التالي (لا انتظارَ لانتهاء رمز الوصول)، ويُرفض تحديثُ الجلسة، **وتُبطَل رموزُ التحديث كلُّها** — فإعادةُ

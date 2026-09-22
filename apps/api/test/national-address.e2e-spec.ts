@@ -5,6 +5,9 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (5.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(30000);
+
 /**
  * العنوان الوطني السعودي مكتملاً (2.3 — سبعة حقول رسمية): الرقم الإضافي
  * ورقم الوحدة يكملان الخمسة القائمة. الرقم الإضافي أربع خانات يُتحقَّق منها

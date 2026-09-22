@@ -8,6 +8,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { dayEndOf } from '../src/common/wall-clock.util';
 import { customerExposure, exposureOf } from '../src/reports/receivables-exposure.util';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (16.5 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * **رقمٌ واحد لا رقمان** (`ق-٣٤١`) — شرطُ قبولٍ يسبق حدَّ الائتمان.
  *

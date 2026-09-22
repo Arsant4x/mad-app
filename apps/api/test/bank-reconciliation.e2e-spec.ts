@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (19.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * الحزمة ج (`ق-١٢٦١`) — **التسويةُ البنكية**: سطورُ الكشف اليدوية مقابل سطور الدفتر على حساب البنك (بمحرّك الأستاذ)،
  * مطابقةٌ واحدٌ لواحد بمبلغٍ مساوٍ ومقترَحاتٌ بالمبلغ والتاريخ، وسطرٌ بلا دفتر يُرحَّل بطرفٍ يختاره المحاسب (`ق-٢٨١`)،

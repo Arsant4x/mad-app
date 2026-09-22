@@ -8,6 +8,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { companyIdOfToken, purgeInvoicesForTest } from './purge-invoices';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (25.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(80000);
+
 /**
  * The last of the structural wave: the activity and currency registries a
  * merchant maintains, and the realized FX gain/loss that multi-currency

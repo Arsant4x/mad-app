@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (24.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(75000);
+
 /**
  * الحزمة ج (`ق-١٢٦١`) — **إيداعُ الدرج في البنك عبر «نقدٍ في الطريق» 1190** (⑦A3): الإيداعُ يخرج من الدرج إلى الطريق
  * (`مدين 1190 / دائن الدرج`)، ويؤكّده سطرُ كشف البنك من التسوية (⑦A1) بمبلغه نفسِه (`مدين البنك / دائن 1190`)؛

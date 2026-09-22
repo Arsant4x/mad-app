@@ -13,6 +13,9 @@ import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service'
 import { CertificateExpiryService } from '../src/zatca/certificate-expiry.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (100.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(305000);
+
 /**
  * **مراقبةُ انتهاء شهادة الفوترة** (`ق-١٢٧٩` · ز/⑤A1 — `domain-scan/05` A1).
  *

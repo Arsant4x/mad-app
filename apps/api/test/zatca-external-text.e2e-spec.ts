@@ -14,6 +14,9 @@ import { purgeInvoicesForTest } from './purge-invoices';
 import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 import { startAuthorityStub, STUB_NUL_MESSAGE_STORED, type AuthorityStub } from './zatca-authority-stub';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (19.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * ⚖️ **نصُّ الجهة الخارجية يُنقّى قبل أن يُكتب — وجوابُ الهيئة يختم حدثَ الطابور** (`ق-٩٨٢` · `ق-٩٨٣`)
  * — الحارسُ الحيّ على المسار الحقيقيّ (توقيعٌ فعليّ · منشأةٌ معزولة · خادمٌ محلّيّ يمثّل الهيئة):

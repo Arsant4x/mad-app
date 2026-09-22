@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (15.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(50000);
+
 /**
  * الحزمة ج (`ق-١٢٦١`) — **محرّكُ الأستاذ العام وكشف الحساب**: تقريرٌ واحد يقرأ `journal_lines` بمرشِّح
  * (حسابٌ أو بُعد) على مدىً وفرع، برصيدٍ افتتاحيٍّ قبل المدى ورصيدٍ جارٍ على كلِّ سطر ومصدرِ كلِّ قيد

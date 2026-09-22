@@ -7,6 +7,9 @@ import { dayStartOf } from '../src/common/wall-clock.util';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (51.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(160000);
+
 /**
  * المقبوضات وتخصيصها (4.5) — بنود تحقق الموجز السبعة + الثامن (الانحراف).
  *

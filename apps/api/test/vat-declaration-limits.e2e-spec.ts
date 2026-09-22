@@ -6,6 +6,9 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (19.9 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(60000);
+
 /**
  * حدودُ الإقرار المعلَنة (`ق-١٢٦٠`): الحدُّ يُعلنه الخادم في ردّ الإقرار **حين يُقاس** — منشأةٌ خاضعةٌ وحدَها لا حدَّ
  * عليها (الحالةُ السالبة هنا)؛ والمختلطةُ (سكنيٌّ معفى بجانب خاضع) تحمل الحدَّ — تُثبتها المرحلةُ ④ من

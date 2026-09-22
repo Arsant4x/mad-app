@@ -4,6 +4,9 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /** A run-unique suffix, same shape as the one already used for throwaway
  * usernames below. PermissionTemplate.name is @unique by design, so any
  * template this suite creates must carry it too — a fixed name succeeds on a

@@ -10,6 +10,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (131.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(395000);
+
 /**
  * ق-١٢٥٢ — **حارسُ المفاتيح المركّبة** `(companyId, col) → Parent(companyId, id)` بجانب المفرد القائم.
  *

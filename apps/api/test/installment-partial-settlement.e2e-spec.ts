@@ -10,6 +10,9 @@ import { rentAmountsOf, rentTaxTreatment } from '../src/journal/rent-tax-point.u
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (18.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(55000);
+
 /**
  * **السدادُ الجزئي للقسط — حقلُ حالةٍ يُشتقّ على نمط الفاتورة** (`SPEC 16.3` · `ق-١٠٤٠`):
  * ① دفعةٌ جزئية ⇒ `PARTIAL` لا `PAID`؛ ويبقى القسطُ في التذكيرات والتصعيد؛ ونسبةُ التحصيل تقرأ المقبوض.
