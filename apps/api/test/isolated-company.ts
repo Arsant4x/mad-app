@@ -24,6 +24,10 @@ export const ISOLATED_PASSWORD = 'IsoPass123!';
 export async function registerIsolatedCompany(app: INestApplication, tag: string): Promise<IsolatedCompany> {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const username = `iso-${tag}-${stamp}`;
+  // ⚠️ تسخينُ الاتصال قبل معاملة التسجيل (2026-09-21): أوّلُ استعلامٍ في عمليةٍ باردة (إقلاعُ محرّك Prisma + الاتصال)
+  //    كان يُحسب داخل معاملة التسجيل ذات المهلة 5 s فتسقط بـ`5473 ms`/`6394 ms` على جهازٍ مثقَل — والمهلةُ قرارٌ لا
+  //    يُرفع؛ فيُدفع ثمنُ البرودة خارجها. لا أثرَ على المنتج: التسخينُ استعلامٌ ثابت.
+  await app.get(PrismaService).$queryRaw`SELECT 1`;
   const res = await request(app.getHttpServer())
     .post('/auth/register')
     .send({ orgName: `منشأة معزولة ${tag} ${stamp}`, username, password: ISOLATED_PASSWORD })

@@ -163,6 +163,17 @@ export const MSG = {
   bank_code_range_full: 'banks.code_range_full',
   bank_required: 'banks.required',
   bank_transaction_not_found: 'transactions.not_found',
+  // bank reconciliation (ق-١٢٦١ ج)
+  bank_reconciled_locked: 'banks.reconciled_locked',
+  reconciliation_already_matched: 'reconciliation.already_matched',
+  reconciliation_not_matched: 'reconciliation.not_matched',
+  reconciliation_line_not_found: 'reconciliation.line_not_found',
+  reconciliation_line_taken: 'reconciliation.line_taken',
+  reconciliation_amount_mismatch: 'reconciliation.amount_mismatch',
+  reconciliation_counterparty_is_bank: 'reconciliation.counterparty_is_bank',
+  reconciliation_pending_lines: 'reconciliation.pending_lines',
+  reconciliation_close_backwards: 'reconciliation.close_backwards',
+  reconciliation_locked: 'reconciliation.locked',
 
   // properties / units / contracts
   property_not_found: 'properties.not_found',
@@ -712,6 +723,25 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.sub_owner_only]: { ar: 'إدارة الاشتراك متاحة لمالك المنشأة فقط', en: 'Only the company owner can manage the subscription' },
   [MSG.sub_renew_months_invalid]: { ar: 'مدة التجديد يجب أن تكون بين شهر و36 شهراً', en: 'Renewal duration must be between 1 and 36 months' },
   [MSG.bank_not_found]: { ar: 'الحساب البنكي غير موجود', en: 'Bank account not found' },
+  [MSG.bank_reconciled_locked]: {
+    ar: 'حساب البنك «{bank}» مُسوّى حتى {until} — لا يُقيَّد عليه بتاريخٍ قبل ذلك؛ التصحيح بقيدٍ بعد تاريخ الإقفال أو بإعادة فتح التسوية',
+    en: 'Bank "{bank}" is reconciled through {until} — no entry may be dated on or before it; correct with a later-dated entry or reopen the reconciliation',
+  },
+  [MSG.reconciliation_already_matched]: { ar: 'سطر الكشف مطابَق بالفعل — فكّ المطابقة أولاً', en: 'This statement line is already matched — unmatch it first' },
+  [MSG.reconciliation_not_matched]: { ar: 'سطر الكشف غير مطابَق', en: 'This statement line is not matched' },
+  [MSG.reconciliation_line_not_found]: { ar: 'سطر الدفتر غير موجود على حساب هذا البنك', en: 'Ledger line not found on this bank account' },
+  [MSG.reconciliation_line_taken]: { ar: 'سطر الدفتر مطابَق بسطر كشفٍ آخر', en: 'This ledger line is already matched to another statement line' },
+  [MSG.reconciliation_amount_mismatch]: {
+    ar: 'المبلغان لا يتطابقان: الكشف {statement} والدفتر {ledger} — المطابقة واحدٌ لواحد بمبلغٍ مساوٍ',
+    en: 'Amounts differ: statement {statement} vs ledger {ledger} — matching is one-to-one with equal amounts',
+  },
+  [MSG.reconciliation_counterparty_is_bank]: { ar: 'الطرف المقابل لا يكون حساب البنك نفسه', en: 'The counterparty cannot be the bank account itself' },
+  [MSG.reconciliation_pending_lines]: {
+    ar: 'لا يُقفل الكشف حتى {until}: {count} سطر كشفٍ معلَّق قبل هذا التاريخ — طابِقه أو رحِّله أولاً',
+    en: 'Cannot close through {until}: {count} statement line(s) before that date are still unmatched — match or post them first',
+  },
+  [MSG.reconciliation_close_backwards]: { ar: 'تاريخ الإقفال لا يرجع إلى ما قبل الإقفال القائم — أعد الفتح أولاً', en: 'The close date cannot move backwards — reopen first' },
+  [MSG.reconciliation_locked]: { ar: 'الكشف مُسوّى حتى {until} — لا مطابقة ولا فكّ قبل هذا التاريخ', en: 'Reconciled through {until} — no matching or unmatching before that date' },
   [MSG.bank_code_range_full]: {
     ar: 'نطاق رموز حسابات البنوك (1100–1199) ممتلئ — احذف بنكاً غير مستعمل أو وسّع النطاق بقرار',
     en: 'The bank account code range (1100–1199) is full — remove an unused bank or widen the range by decision',
