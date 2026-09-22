@@ -53,8 +53,8 @@ export class ReportsController {
 
   @Get('balance-sheet')
   @RequiresAction('view')
-  balanceSheet(@CurrentTenant() tenant: TenantContext) {
-    return this.reportsService.balanceSheet(tenant.companyId);
+  balanceSheet(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
+    return this.reportsService.balanceSheet(tenant.companyId, range);
   }
 
   @Get('cash-flow')

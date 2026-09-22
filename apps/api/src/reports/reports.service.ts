@@ -560,14 +560,40 @@ export class ReportsService {
     });
   }
 
-  balanceSheet(companyId: string) {
+  /**
+   * المركزُ المالي **بتاريخٍ ومن السطور** (`ق-١٢٧٩` · د/⑩A1 — `domain-scan/10` A1).
+   *
+   * **ما كان**: يقرأ `account.balance` — رقمٌ تراكميٌّ منذ التأسيس **بلا تاريخ**، فلا وجودَ لميزانيةٍ
+   * «كما في ٣١ ديسمبر»؛ **ويهمل الإيراداتِ والمصروفات** فلا يتوازن أبداً بعد أوّل بيع (`balanced: false`
+   * دائماً — والفجوةُ = صافي الربح حرفياً).
+   *
+   * **وما صار**: الأرصدةُ من `journal_lines` حتى `asOf` (الافتراضُ اليوم)، **وصافي نتيجة الفترة**
+   * سطرٌ في حقوق الملكية — لأن الإيرادَ والمصروفَ حقوقُ ملكيةٍ لم تُقفل بعد. **وهو سطرٌ مؤقّت**:
+   * حين تُبنى قيودُ الإقفال السنويّ يصير الترحيلُ إلى الأرباح المبقاة هو ما يحمله، ويُقاس حينها.
+   *
+   * ⚠️ **والتوازنُ يصير خاصيةً لا أملاً**: مجموعُ المدين = مجموعُ الدائن في القيد المزدوج، فما لم
+   * يكن ثمّة سطرٌ بلا حساب، الفرقُ صفرٌ حتماً. فبقاءُ `balanced` **حارسٌ على الدفتر** لا تحذيرٌ
+   * للتاجر: اختلالُه يعني سطراً على حسابٍ محذوف أو نوعاً خارج الخمسة.
+   */
+  balanceSheet(companyId: string, range?: ReportRangeDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
-      const pick = (type: string) => accounts.filter((a) => a.type === type).map((a) => ({ code: a.code, name: a.name, amount: Number(a.balance) }));
+      // الأرصدةُ حتى التاريخ — لا فترةَ لها بداية: المركزُ المالي **رصيدٌ لا حركة**.
+      const asOf = range?.to ? new Date(range.to) : null;
+      const movements = await this.movementsByAccount(tx, { to: range?.to });
+      const balanceOf = (a: { id: string; type: string }) => {
+        const m = movements.get(a.id) ?? { debit: 0, credit: 0 };
+        return DEBIT_NORMAL_TYPES.has(a.type) ? m.debit - m.credit : m.credit - m.debit;
+      };
+      const pick = (type: string) => accounts.filter((a) => a.type === type).map((a) => ({ code: a.code, name: a.name, amount: balanceOf(a) }));
 
       const assets = pick('asset');
       const liabilities = pick('liability');
       const equity = pick('equity');
+      // نتيجةُ الفترة: إيرادٌ − مصروف حتى التاريخ نفسِه — حقوقُ ملكيةٍ لم تُقفل بعد.
+      const periodResult = accounts.filter((a) => a.type === 'revenue').reduce((s, a) => s + balanceOf(a), 0)
+        - accounts.filter((a) => a.type === 'expense').reduce((s, a) => s + balanceOf(a), 0);
+      if (Math.abs(periodResult) >= 0.005) equity.push({ code: '—', name: 'نتيجة الفترة (قبل الإقفال)', amount: periodResult });
       const totalAssets = assets.reduce((s, a) => s + a.amount, 0);
       const totalLiabilities = liabilities.reduce((s, a) => s + a.amount, 0);
       const totalEquity = equity.reduce((s, a) => s + a.amount, 0);
@@ -575,6 +601,7 @@ export class ReportsService {
       // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`) — والتوازنُ يُحكم على الرقم قبل التحويل.
       const line = (a: { code: string; name: string; amount: number }) => ({ code: a.code, name: a.name, amount: money(a.amount) });
       return {
+        asOf: asOf ? asOf.toISOString().slice(0, 10) : null,
         assets: assets.map(line),
         totalAssets: money(totalAssets),
         liabilities: liabilities.map(line),

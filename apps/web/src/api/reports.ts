@@ -23,6 +23,8 @@ export interface IncomeStatement {
 }
 
 export interface BalanceSheet {
+  /** التاريخُ الذي تُقرأ عنده الأرصدة — `null` يعني «حتى اليوم» (ق-١٢٧٩ · ⑩A1). */
+  asOf: string | null;
   assets: ReportLine[];
   totalAssets: MoneyText;
   liabilities: ReportLine[];
@@ -104,7 +106,7 @@ export interface DashboardSummary {
 export const getDashboard = (range: ReportRange) => apiClient.get<DashboardSummary>('/reports/dashboard', { params: range }).then((r) => r.data);
 
 export const getIncomeStatement = (range: ReportRange) => apiClient.get<IncomeStatement>('/reports/income-statement', { params: range }).then((r) => r.data);
-export const getBalanceSheet = () => apiClient.get<BalanceSheet>('/reports/balance-sheet').then((r) => r.data);
+export const getBalanceSheet = (to?: string) => apiClient.get<BalanceSheet>('/reports/balance-sheet', { params: to ? { to } : undefined }).then((r) => r.data);
 export const getCashFlow = (range: ReportRange) => apiClient.get<CashFlow>('/reports/cash-flow', { params: range }).then((r) => r.data);
 
 /** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض. */
