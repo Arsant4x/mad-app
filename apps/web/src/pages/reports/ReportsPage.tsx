@@ -56,7 +56,8 @@ export function ReportsPage() {
     setLoading(true);
     Promise.all([
       getIncomeStatement({ from: from ?? undefined, to }),
-      getBalanceSheet(),
+      // **بتاريخٍ فعلاً** (`ق-١٢٧٩` · ⑩A1): كانت الشاشةُ تقول «كما في …» والخادمُ يقرأ رصيداً تراكمياً بلا تاريخ.
+      getBalanceSheet(to),
       getCashFlow({ from: from ?? undefined, to }),
       getBranchSummary({ from: from ?? undefined, to }),
       // Point-in-time by design: occupancy and expiry are about today, not
@@ -234,7 +235,7 @@ export function ReportsPage() {
         {tab === 'balance' && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              الميزانية العمومية — كما في {dfmt(to)}
+              الميزانية العمومية — كما في {dfmt(balance.asOf ?? to)}
             </div>
             <table>
               <tbody>
@@ -279,7 +280,9 @@ export function ReportsPage() {
               </tbody>
             </table>
             <p className="hint" style={{ marginTop: 10, color: balance.balanced ? 'var(--emerald)' : 'var(--rose)' }}>
-              {balance.balanced ? '✓ الأصول = الخصوم + حقوق الملكية' : '⚠ الميزانية غير متوازنة — تحقق من القيود المرحّلة'}
+              {balance.balanced
+                ? '✓ الأصول = الخصوم + حقوق الملكية'
+                : '⚠ الأصول لا تساوي الخصوم وحقوق الملكية — وهذا لا يقع مع القيد المزدوج إلا بسطرٍ على حسابٍ خارج الأنواع الخمسة؛ راجعها مع الدعم'}
             </p>
           </>
         )}
