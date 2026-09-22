@@ -67,7 +67,8 @@ describe('Bank postings — cash lands in the bank account (e2e)', () => {
       // اليومُ لا تاريخٌ قديم: قائمةُ اليومية مرتَّبةٌ تنازلياً بالتاريخ وتُصفَّح
       // بمئة — فقيدٌ في يونيو **يقع خارج الصفحة الأولى** على قاعدةٍ عامرة،
       // فيُقرأ «لا قيد» وهو موجود. (والرصيدان أعلاه أثبتا الترحيل أصلاً.)
-      .send({ customerId, amount, method: 'BANK', bankId: bank.id, date: new Date().toISOString().slice(0, 10) })
+      // ④A1: قبضٌ بلا فاتورةٍ مفتوحة دفعةٌ مقدَّمة تُعلَن (يصدر معها مستندُ 386 — وقيدُ السند نفسُه هو المقيس هنا).
+      .send({ customerId, amount, method: 'BANK', bankId: bank.id, date: new Date().toISOString().slice(0, 10), unallocated: 'PREPAYMENT' })
       .expect(201)).body as { id: string };
     cleanup.payments.push(payment.id);
 
@@ -91,7 +92,7 @@ describe('Bank postings — cash lands in the bank account (e2e)', () => {
     const amount = 120;
 
     const payment = (await auth(http().post('/payments'))
-      .send({ customerId, amount, method: 'CASH', date: '2026-06-02' })
+      .send({ customerId, amount, method: 'CASH', date: '2026-06-02', unallocated: 'PREPAYMENT' })
       .expect(201)).body as { id: string };
     cleanup.payments.push(payment.id);
 

@@ -10,7 +10,7 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
 import { invoiceTypeFor, nextIcv, previousChainHash } from './hash-chain.util';
-import { buildUnsignedInvoiceXml } from './ubl/invoice-xml.util';
+import { buildUnsignedInvoiceXml, ublCategoryOf } from './ubl/invoice-xml.util';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
 import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
@@ -353,7 +353,15 @@ export class ZatcaService {
   private async claimAndBuild(tx: Prisma.TransactionClient, companyId: string, invoiceId: string, company: SellerRow) {
     const invoice = await tx.invoice.findUnique({
       where: { id: invoiceId },
-      include: { customer: true, lines: true, relatedInvoice: { select: { no: true } } },
+      include: {
+        customer: true,
+        lines: true,
+        relatedInvoice: { select: { no: true } },
+        // ④A1: مراجعُ الدفعات المقدَّمة المطبَّقة — رقمُ مستندها ولحظتُه وسطرُه (فئةً ونسبةً) كما صدر.
+        prepaymentsApplied: {
+          select: { net: true, vat: true, prepaymentInvoice: { select: { no: true, issueDate: true, issuedAt: true, issuedOffsetMin: true, lines: { select: { taxRate: true, taxCategory: true, taxExemptionReasonCode: true } } } } },
+        },
+      },
     });
     if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
     if (invoice.zatcaStatus === 'CLEARED') throw new BadRequestException(MSG.zatca_already_cleared);
@@ -492,7 +500,7 @@ export class ZatcaService {
       // Credit/debit notes travel as the same Invoice structure with type
       // code 381/383 plus the original's reference and the reason — and
       // they occupy ordinary positions in the same ICV/PIH chain.
-      documentType: invoice.docType === 'CREDIT_NOTE' ? 'credit' : invoice.docType === 'DEBIT_NOTE' ? 'debit' : 'invoice',
+      documentType: invoice.docType === 'CREDIT_NOTE' ? 'credit' : invoice.docType === 'DEBIT_NOTE' ? 'debit' : invoice.docType === 'PREPAYMENT' ? 'prepayment' : 'invoice',
       billingReference: invoice.relatedInvoice ? { invoiceNumber: invoice.relatedInvoice.no } : undefined,
       adjustmentReason: invoice.adjustmentReason ?? undefined,
       icv,
@@ -544,6 +552,18 @@ export class ZatcaService {
       // The tax always goes to the authority in SAR, whatever the invoice is
       // denominated in.
       taxTotalSar: Number(invoice.baseTaxTotal ?? invoice.taxTotal),
+      // ④A1: كلُّ دفعةٍ مقدَّمة مطبَّقة سطرُ مرجعٍ (KSA-26…34) — وعاؤها وضريبتُها كما على مستندها، وفئتُه ونسبتُه من سطره الواحد.
+      prepayments: invoice.prepaymentsApplied.map((p) => {
+        const line = p.prepaymentInvoice.lines[0];
+        return {
+          number: p.prepaymentInvoice.no,
+          issued: issuedWallClock(p.prepaymentInvoice),
+          taxable: Number(p.net),
+          tax: Number(p.vat),
+          category: line ? ublCategoryOf({ taxCategory: line.taxCategory, taxExemptionReasonCode: line.taxExemptionReasonCode }) : 'S',
+          rate: line ? Number(line.taxRate) : 15,
+        };
+      }),
     });
 
     return {

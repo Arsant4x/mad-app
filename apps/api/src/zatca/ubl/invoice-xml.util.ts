@@ -23,7 +23,7 @@
  * `Math.round` عند الأنصاف السالبة (إشعارٌ دائن)، فكان الفرق هللةً لا تُقفل.
  */
 
-import { formatMoney } from '../../common/money/rounding';
+import { formatMoney, round2 } from '../../common/money/rounding';
 import { computeDocumentTotals, lineDiscount, lineGross, lineNet, lineTax, type BucketCategory } from '../../common/money/totals';
 import { exemptionReasonByCode } from '../../common/vat/exemption-reasons';
 import type { WallClock } from '../../common/wall-clock.util';
@@ -123,9 +123,30 @@ export interface UblInvoiceInput {
   /** The tax figures again in SAR. ZATCA always wants the tax in the local
    * currency, even when the invoice itself is issued in another one. */
   taxTotalSar: number;
+  /**
+   * ④A1 — دفعاتٌ مقدَّمة (مستندات 386) طُبِّقت على هذه الفاتورة: لكلٍّ سطرٌ إضافيّ بكمّيةٍ وصافٍ وسعرٍ صفر يحمل
+   * مرجعَ مستندها (KSA-26 رقمُه · KSA-28 يومُه · KSA-29 وقتُه · KSA-30 = 386) وتفصيلَ ضريبتها (KSA-31 الوعاء ·
+   * KSA-32 الضريبة · KSA-33 الفئة · KSA-34 النسبة)؛ و`PrepaidAmount` (BT-113) = Σ(KSA-31 + KSA-32) و`PayableAmount`
+   * (BT-115) = الإجماليُّ − المقدَّم. ومجاميعُ المستند وضريبتُه **لا تُخفَّض** — كما في مثال المعيار (٢٣٠ بضريبةٍ ٣٠ ومقدَّمٍ ١٠٠).
+   */
+  prepayments?: UblPrepaymentReference[];
 }
 
-export type UblDocumentType = 'invoice' | 'credit' | 'debit';
+/** ④A1 — مرجعُ مستند دفعةٍ مقدَّمة على فاتورة التوريد (معيارُ XML للهيئة، §٩ «Prepayment»). */
+export interface UblPrepaymentReference {
+  /** رقمُ مستند 386 (KSA-26 = BT-1 له). */
+  number: string;
+  /** يومُه ووقتُه كما صدر (KSA-28 · KSA-29). */
+  issued: WallClock;
+  /** الوعاءُ والضريبةُ كما على مستند 386 (KSA-31 · KSA-32). */
+  taxable: number;
+  tax: number;
+  /** فئتُه ونسبتُه (KSA-33 · KSA-34). */
+  category: 'S' | 'Z' | 'E' | 'O';
+  rate: number;
+}
+
+export type UblDocumentType = 'invoice' | 'credit' | 'debit' | 'prepayment';
 
 /** UNTDID 1001: 388 tax invoice, 381 credit note, 383 debit note. ZATCA's
  * compliance check demands all three, in both standard and simplified form,
@@ -134,6 +155,8 @@ const DOCUMENT_TYPE_CODE: Record<UblDocumentType, string> = {
   invoice: '388',
   credit: '381',
   debit: '383',
+  // ④A1 — فاتورةُ الدفعة المقدَّمة (`ق-١٢٦١` ب): «An invoice representing the prepayment must use the invoice type code as '386'».
+  prepayment: '386',
 };
 
 /** UNTDID 4461 payment means. Our data model doesn't capture how an adjustment
@@ -257,30 +280,84 @@ function lineXml(line: UblInvoiceLine, index: number, currency: string): string 
 }
 
 /**
+ * ④A1 — سطرُ تعديل الدفعة المقدَّمة على فاتورة التوريد، حرفاً كمثال المعيار (§٩ «UBL example of adjustment of the
+ * prepayment amount»): الكمّيةُ والصافي وضريبةُ السطر وسعرُه **أصفار** (KSA-11 · KSA-12 · BT-131 · BT-146 = 0)، ومرجعُ
+ * المستند بين الصافي وضريبة السطر، وتفصيلُ ضريبة الدفعة في `TaxSubtotal` داخل `TaxTotal` السطر.
+ */
+function prepaymentLineXml(ref: UblPrepaymentReference, index: number, currency: string): string {
+  const percent = ref.category === 'O' ? '' : `<cbc:Percent>${money(ref.rate)}</cbc:Percent>`;
+  return (
+    '<cac:InvoiceLine>' +
+    `<cbc:ID>${index + 1}</cbc:ID>` +
+    '<cbc:InvoicedQuantity unitCode="PCE">0.00</cbc:InvoicedQuantity>' +
+    `<cbc:LineExtensionAmount currencyID="${esc(currency)}">0.00</cbc:LineExtensionAmount>` +
+    '<cac:DocumentReference>' +
+    `<cbc:ID>${esc(ref.number)}</cbc:ID>` +
+    `<cbc:IssueDate>${esc(ref.issued.date)}</cbc:IssueDate>` +
+    `<cbc:IssueTime>${esc(ref.issued.time)}</cbc:IssueTime>` +
+    '<cbc:DocumentTypeCode>386</cbc:DocumentTypeCode>' +
+    '</cac:DocumentReference>' +
+    '<cac:TaxTotal>' +
+    `<cbc:TaxAmount currencyID="${esc(currency)}">0.00</cbc:TaxAmount>` +
+    `<cbc:RoundingAmount currencyID="${esc(currency)}">0.00</cbc:RoundingAmount>` +
+    '<cac:TaxSubtotal>' +
+    `<cbc:TaxableAmount currencyID="${esc(currency)}">${money(ref.taxable)}</cbc:TaxableAmount>` +
+    `<cbc:TaxAmount currencyID="${esc(currency)}">${money(ref.tax)}</cbc:TaxAmount>` +
+    '<cac:TaxCategory>' +
+    `<cbc:ID>${ref.category}</cbc:ID>` +
+    percent +
+    '<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>' +
+    '</cac:TaxCategory>' +
+    '</cac:TaxSubtotal>' +
+    '</cac:TaxTotal>' +
+    '<cac:Item>' +
+    `<cbc:Name>${esc(`تعديل دفعة مقدَّمة — ${ref.number}`)}</cbc:Name>` +
+    '<cac:ClassifiedTaxCategory>' +
+    `<cbc:ID>${ref.category}</cbc:ID>` +
+    percent +
+    '<cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>' +
+    '</cac:ClassifiedTaxCategory>' +
+    '</cac:Item>' +
+    '<cac:Price>' +
+    `<cbc:PriceAmount currencyID="${esc(currency)}">0.00</cbc:PriceAmount>` +
+    '</cac:Price>' +
+    '</cac:InvoiceLine>'
+  );
+}
+
+/** ④A1 — المقدَّمُ (BT-113) = Σ(KSA-31 + KSA-32) على المراجع؛ صفرٌ بلا مراجع. */
+export function prepaidAmountOf(prepayments: readonly UblPrepaymentReference[] | undefined): number {
+  return round2((prepayments ?? []).reduce((s, p) => s + p.taxable + p.tax, 0));
+}
+
+/**
  * The invoice as it stands before signing: no UBLExtensions, no QR, no
  * cac:Signature. This is the document that gets hashed.
  */
 export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
   const { currency } = input;
   const documentType = input.documentType ?? 'invoice';
+  // ④A1: مستندُ 386 أصليٌّ كالفاتورة — لا مرجعَ فاتورةٍ ولا سببَ تعديل؛ الإشعاران وحدَهما يحملانهما.
+  const isNote = documentType === 'credit' || documentType === 'debit';
+  const prepaid = prepaidAmountOf(input.prepayments);
 
   // A 381/383 without its original-invoice reference or reason is rejected by
   // the authority unconditionally (BR-KSA-56 / BR-KSA-17) — failing here keeps
   // that a programming error instead of a clearance rejection weeks later.
-  if (documentType !== 'invoice' && (!input.billingReference || !input.adjustmentReason?.trim())) {
+  if (isNote && (!input.billingReference || !input.adjustmentReason?.trim())) {
     throw new Error(`A ${documentType} note requires billingReference and adjustmentReason.`);
   }
 
   // UBL's sequence puts BillingReference *before* AdditionalDocumentReference
   // (the ICV/PIH blocks) and PaymentMeans after the customer party.
   const billingReference =
-    documentType !== 'invoice'
+    isNote
       ? '<cac:BillingReference><cac:InvoiceDocumentReference>' +
         `<cbc:ID>${esc(input.billingReference!.invoiceNumber)}</cbc:ID>` +
         '</cac:InvoiceDocumentReference></cac:BillingReference>'
       : '';
   const paymentMeans =
-    documentType !== 'invoice'
+    isNote
       ? '<cac:PaymentMeans>' +
         `<cbc:PaymentMeansCode>${ADJUSTMENT_PAYMENT_MEANS_CODE}</cbc:PaymentMeansCode>` +
         `<cbc:InstructionNote>${esc(input.adjustmentReason!)}</cbc:InstructionNote>` +
@@ -359,9 +436,12 @@ export function buildUnsignedInvoiceXml(input: UblInvoiceInput): string {
     `<cbc:LineExtensionAmount currencyID="${esc(currency)}">${money(input.subtotal)}</cbc:LineExtensionAmount>` +
     `<cbc:TaxExclusiveAmount currencyID="${esc(currency)}">${money(input.subtotal)}</cbc:TaxExclusiveAmount>` +
     `<cbc:TaxInclusiveAmount currencyID="${esc(currency)}">${money(input.total)}</cbc:TaxInclusiveAmount>` +
-    `<cbc:PayableAmount currencyID="${esc(currency)}">${money(input.total)}</cbc:PayableAmount>` +
+    // ④A1 — المقدَّمُ يُكتب حين يوجد (BT-113 اختياريّ)، والمستحقُّ بعده (BT-115 = BT-112 − BT-113).
+    (prepaid > 0 ? `<cbc:PrepaidAmount currencyID="${esc(currency)}">${money(prepaid)}</cbc:PrepaidAmount>` : '') +
+    `<cbc:PayableAmount currencyID="${esc(currency)}">${money(round2(input.total - prepaid))}</cbc:PayableAmount>` +
     '</cac:LegalMonetaryTotal>' +
     input.lines.map((line, i) => lineXml(line, i, currency)).join('') +
+    (input.prepayments ?? []).map((ref, i) => prepaymentLineXml(ref, input.lines.length + i, currency)).join('') +
     '</Invoice>'
   );
 }

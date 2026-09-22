@@ -31,7 +31,8 @@ export type InvoiceStatus = 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 
 /** Credit/debit notes are invoice rows too (ZATCA's chain runs across all
  * document kinds); amounts stay positive — `docType` carries the direction. */
-export type InvoiceDocType = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE';
+/** ④A1: `PREPAYMENT` فاتورةُ دفعةٍ مقدَّمة (رمزُ الهيئة 386) — تصدر من سند قبضٍ وتُطبَّق على فاتورة التوريد. */
+export type InvoiceDocType = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
 
 export interface Invoice {
   docType: InvoiceDocType;
@@ -122,6 +123,20 @@ export interface CreateInvoiceInput {
    * تجاوزَه على الفاتورة** ويكتب حدثاً باسمه في سجل التدقيق.
    */
   creditOverride?: boolean;
+  /** ④A1: دفعاتٌ مقدَّمة (386) للعميل تُطبَّق كاملةً على هذه الفاتورة — التخصيصُ وقيدُ الإقفال ومرجعُ المستند في الخادم. */
+  prepaymentInvoiceIds?: string[];
+}
+
+/** ④A1: مستندُ دفعةٍ مقدَّمة معلَّق (لم يُطبَّق) كما يقرؤه الخادم — مالٌ نصّاً بخانتين. */
+export interface OpenPrepayment {
+  id: string;
+  no: string;
+  issueDate: string;
+  currency: string;
+  receiptNo: string | null;
+  subtotal: string;
+  taxTotal: string;
+  total: string;
 }
 
 /**
@@ -147,6 +162,8 @@ export interface CreateCreditNoteInput {
 }
 
 export const listInvoices = () => apiClient.get<Invoice[]>('/invoices').then((r) => r.data);
+/** ④A1: الدفعاتُ المقدَّمة المعلَّقة لعميل — ما يعرضه بنّاءُ الفاتورة للتطبيق. */
+export const listOpenPrepayments = (customerId: string) => apiClient.get<OpenPrepayment[]>(`/invoices/open-prepayments/${customerId}`).then((r) => r.data);
 export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice>('/invoices', dto).then((r) => r.data);
 /** الملاحظاتُ وحالةُ السداد وحدَهما — المحتوى الموقَّع لا يُعدَّل بعد الإصدار (الخادم يرفضه بـ409 · ق-٩٤٣)، ولا حذفَ لمستندٍ صادر. */
 export const updateInvoice = (id: string, dto: UpdateInvoiceInput) => apiClient.patch<Invoice>(`/invoices/${id}`, dto).then((r) => r.data);

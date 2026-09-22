@@ -114,7 +114,8 @@ describe('الشاشةُ تقرأ ولا تحسب — الأرقامُ من ال
   }, 30000);
 
   it('④ سندُ القبض يحمل مخصَّصَه وغيرَ مخصَّصه — الموزَّعُ كلُّه، وعلى الحساب كلُّه', async () => {
-    const onAccount = (await auth(http().post('/payments')).send({ customerId, date: today, amount: 50, method: 'CASH', bankId }).expect(201)).body as { id: string; allocatedTotal: string; unallocated: string };
+    // ④A1: على الحساب مغطّىً بالمفتوح (`750`) — يُعلَن.
+    const onAccount = (await auth(http().post('/payments')).send({ customerId, date: today, amount: 50, method: 'CASH', bankId, unallocated: 'ON_ACCOUNT' }).expect(201)).body as { id: string; allocatedTotal: string; unallocated: string };
     expect(onAccount).toMatchObject({ allocatedTotal: '0.00', unallocated: '50.00' });
     const rows = (await auth(http().get('/payments')).expect(200)).body as { id: string; amount: string; allocatedTotal: string; unallocated: string }[];
     const allocated = rows.find((p) => Number(p.amount) === 400)!;

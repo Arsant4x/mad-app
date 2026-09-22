@@ -152,8 +152,10 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   // كل مستندات الذمم حتى تاريخ القياس: الفواتير وإشعاراتها معاً —
   // فالإشعار يعدّل ذمّة فاتورته لا ذمّةً مستقلة. والمردودةُ التي صدر بدلُها
   // تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
+  // ④A1: مستندُ الدفعة المقدَّمة (386) ليس ذمّةً — سندُ قبضه مخصَّصٌ عليه حتى يُطبَّق، ثم ينتقل التخصيصُ إلى فاتورة التوريد؛
+  // فلا يدخل الأعمارَ لا فاتورةً ولا إشعاراً (كان سيُقرأ إشعاراً مديناً يزيد الذمّة).
   const documents = await tx.invoice.findMany({
-    where: { issueDate: { lte: asOf }, ...branchWhere, ...customerWhere, ...NOT_REPLACED_REJECTED },
+    where: { issueDate: { lte: asOf }, docType: { not: 'PREPAYMENT' }, ...branchWhere, ...customerWhere, ...NOT_REPLACED_REJECTED },
     select: {
       id: true,
       no: true,

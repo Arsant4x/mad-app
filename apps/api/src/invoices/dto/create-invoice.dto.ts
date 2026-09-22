@@ -1,6 +1,6 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { InvoiceLineDto } from './invoice-line.dto';
 
 export class CreateInvoiceDto extends CurrencyFieldsDto {
@@ -51,4 +51,14 @@ export class CreateInvoiceDto extends CurrencyFieldsDto {
   @Type(() => InvoiceLineDto)
   @ArrayMinSize(1)
   lines!: InvoiceLineDto[];
+
+  /**
+   * ④A1 (`ق-١٢٦١` ب): دفعاتٌ مقدَّمة (مستندات 386) لهذا العميل تُطبَّق على هذه الفاتورة كاملةً — تخصيصٌ من سند قبض كلٍّ
+   * منها، وقيدُ إقفال الالتزام، وصفُّ ربطٍ يحمله المستندُ إلى الهيئة (BT-113). وما يفوق إجماليَّ الفاتورة يُرفض مسمّىً.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  prepaymentInvoiceIds?: string[];
 }

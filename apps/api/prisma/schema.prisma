@@ -74,6 +74,9 @@ enum InvoiceDocType {
   INVOICE
   CREDIT_NOTE
   DEBIT_NOTE
+  /// ④A1 — فاتورةُ دفعةٍ مقدَّمة (رمزُ الهيئة 386): تصدر من سند قبضٍ غيرِ مخصَّص (م٥٣(١)(أ)(٢) · م٥٣(٧)(أ)(٢))، وتُخصم
+  /// من فاتورة التوريد لاحقاً (BT-113 · KSA-26…34).
+  PREPAYMENT
 }
 
 /// حالة البضاعة المرتجعة على سطر الإشعار الدائن (`SPEC 30.4–30.6`، قرار المالك 2026-09-03):
@@ -419,6 +422,7 @@ model Company {
   cashDrawers         CashDrawer[]
   cashDeposits CashDeposit[]
   networkSettlements NetworkSettlement[]
+  invoicePrepayments InvoicePrepayment[]
   posPayments         PosPayment[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
@@ -1260,6 +1264,15 @@ model Invoice {
   /// **ولا يُملأ رجعياً بتخمين** (نفس قاعدة `ق-٥٣`).
   adjustmentEventDate DateTime? @db.Date
 
+  /// ④A1 — للدفعة المقدَّمة وحدَها: سندُ القبض الذي أصدرها (واحدٌ لواحد؛ `Restrict` — سندٌ أصدر مستنداً لا يُحذف).
+  prepaymentPaymentId String?  @unique
+  prepaymentPayment   Payment? @relation("PrepaymentInvoiceOfPayment", fields: [prepaymentPaymentId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  prepaymentPaymentTenant Payment? @relation("Invoice_prepaymentPaymentId_tenant", fields: [companyId, prepaymentPaymentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// ④A1 — ما طُبّق على هذه الفاتورة من دفعاتٍ مقدَّمة (فاتورةُ توريد) / وما طُبّقت عليه هذه الدفعةُ المقدَّمة (مستندُ 386).
+  prepaymentsApplied InvoicePrepayment[] @relation("InvoicePrepaymentOnInvoice")
+  appliedAsPrepayment InvoicePrepayment[] @relation("InvoicePrepaymentSource")
+
   /// Null when required accounts (1200/4100/2200) aren't set up yet for this
   /// company — the invoice itself is still created, just not posted (see
   /// InvoicesService). `onDelete: Restrict` means the linked JournalEntry
@@ -1294,6 +1307,8 @@ model Invoice {
   @@unique([egsUnitId, zatcaIcv])
   @@index([relatedInvoiceId])
   @@map("invoices")
+  invoicePrepayment_prepaymentInvoiceId_tenant InvoicePrepayment[] @relation("InvoicePrepayment_prepaymentInvoiceId_tenant")
+  invoicePrepayment_invoiceId_tenant InvoicePrepayment[] @relation("InvoicePrepayment_invoiceId_tenant")
   paymentAllocation_invoiceId_tenant PaymentAllocation[] @relation("PaymentAllocation_invoiceId_tenant")
   payment_refundsInvoiceId_tenant Payment[] @relation("Payment_refundsInvoiceId_tenant")
   quote_convertedInvoiceId_tenant Quote[] @relation("Quote_convertedInvoiceId_tenant")
@@ -1303,6 +1318,32 @@ model Invoice {
   invoice_relatedInvoiceId_tenant Invoice[] @relation("Invoice_relatedInvoiceId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+}
+
+/// ④A1 — تطبيقُ دفعةٍ مقدَّمة على فاتورة توريد (BT-113): الصافي والضريبةُ كما على مستند 386، والإجماليُّ يُخصم من
+/// المستحقّ. مستندُ 386 يُطبَّق كاملاً على فاتورةٍ واحدة (لا تجزئة — حدٌّ معلَن).
+model InvoicePrepayment {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  invoiceId String
+  invoice   Invoice @relation("InvoicePrepaymentOnInvoice", fields: [invoiceId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceTenant Invoice @relation("InvoicePrepayment_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  prepaymentInvoiceId String @unique
+  prepaymentInvoice   Invoice @relation("InvoicePrepaymentSource", fields: [prepaymentInvoiceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  prepaymentInvoiceTenant Invoice @relation("InvoicePrepayment_prepaymentInvoiceId_tenant", fields: [companyId, prepaymentInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  net   Decimal @db.Decimal(18, 2)
+  vat   Decimal @db.Decimal(18, 2)
+  gross Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, invoiceId])
+  @@map("invoice_prepayments")
 }
 
 /// A single invoice line item. Carries `companyId` too (denormalized, always
@@ -4431,6 +4472,8 @@ model Payment {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   reversesTenant Payment? @relation("Payment_reversesId_tenant", fields: [companyId, reversesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy Payment? @relation("PaymentReversal")
+  /// ④A1 — فاتورةُ الدفعة المقدَّمة (386) التي أصدرها فائضُ هذا السند غيرُ المخصَّص.
+  prepaymentInvoice Invoice? @relation("PrepaymentInvoiceOfPayment")
 
   /// نوع السند (`SPEC 30.8`، قرار المالك 2026-09-03): `RECEIPT` مقبوضٌ من عميل · `REFUND` ردُّ
   /// مرتجعٍ نقداً — **سندٌ مستقل** مربوطٌ بإشعاره الدائن، يحمل مبلغاً سالباً (كالعكس) وليس عكساً
@@ -4462,6 +4505,7 @@ model Payment {
   payment_reversesId_tenant Payment[] @relation("Payment_reversesId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+  invoice_prepaymentPaymentId_tenant Invoice[] @relation("Invoice_prepaymentPaymentId_tenant")
 }
 
 /// انظر `Payment.kind`.

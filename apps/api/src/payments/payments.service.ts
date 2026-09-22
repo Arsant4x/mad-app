@@ -25,11 +25,14 @@ import { getOrCreateAccountByCode, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_N
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
-import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto } from './dto/payment.dto';
+import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
+import { InvoicesService } from '../invoices/invoices.service';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { id: true, name: true } },
   allocations: { include: { invoice: { select: { id: true, no: true, total: true, currency: true } } } },
+  // ④A1: فاتورةُ الدفعة المقدَّمة التي أصدرها السند — تقرؤها الشاشةُ من هنا لا تستنتجها.
+  prepaymentInvoice: { select: { id: true, no: true, total: true } },
 } as const;
 
 /** هدفُ التسوية: الفواتير بمفتاح العميل — والآليةُ المشتركة في `common/settlement` (`ق-٨٧١`). */
@@ -64,7 +67,11 @@ const toSettlementAllocations = (allocations: AllocationDto[]) => allocations.ma
  */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    // ④A1: فاتورةُ الدفعة المقدَّمة تصدر من مسار الفواتير نفسِه (ترقيمٌ · ترحيلٌ · حدثُ إصدار).
+    private readonly invoices: InvoicesService,
+  ) {}
 
   list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListPaymentsQueryDto) {
     const term = searchTerm(query);
@@ -165,6 +172,21 @@ export class PaymentsService {
           allocations: toSettlementAllocations(allocations),
         });
 
+        // ④A1: ما فوق المخصَّص يُعلَن مصيرُه قبل أيّ كتابة — دفعةٌ مقدَّمة بمستندٍ، أو على الحساب مغطّىً بفواتيرَ مفتوحة.
+        const allocatedNow = round2(allocations.reduce((s, a) => s + a.amount, 0));
+        const remainder = round2(amount - allocatedNow);
+        const declared = remainder > UNALLOCATED_DECLARATION_MIN ? dto.unallocated : undefined;
+        if (remainder > UNALLOCATED_DECLARATION_MIN && !declared) {
+          throw new BadRequestException(formatMessage(MSG.payment_unallocated_choice_required, { remainder: money(remainder) }));
+        }
+        if (declared === 'ON_ACCOUNT') {
+          // «على الحساب» = ذمّةٌ مفوترةٌ تأخّر تخصيصُها — فلا بدّ أن تغطّيه فواتيرُ العميل المفتوحة بعد تخصيصات هذا السند.
+          const openRemaining = round2((await this.openRemainingOf(tx, dto.customerId)) - allocatedNow);
+          if (openRemaining + 0.005 < remainder) {
+            throw new BadRequestException(formatMessage(MSG.payment_on_account_uncovered, { remainder: money(remainder), open: money(Math.max(0, openRemaining)) }));
+          }
+        }
+
         const no = await this.nextPaymentNumber(tx, companyId, new Date(dto.date));
         const payment = await tx.payment.create({
           data: {
@@ -203,9 +225,45 @@ export class PaymentsService {
 
         for (const a of allocations) await this.recomputeInvoiceStatus(tx, a.invoiceId);
 
-        return withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE }));
+        // ④A1: الفائضُ المعلَنُ دفعةً مقدَّمة يُصدر مستندَ 386 يومَ القبض — بعد ترحيل السند (فالذمّةُ تُقفل منه إلى الالتزام).
+        const prepaymentInvoice =
+          declared === 'PREPAYMENT'
+            ? await this.invoices.issuePrepaymentWithinTx(tx, companyId, {
+                customerId: customer.id,
+                customerName: customer.name,
+                paymentId: payment.id,
+                paymentNo: no,
+                branchId,
+                date: new Date(dto.date),
+                grossAmount: remainder,
+                currency,
+                exchangeRate,
+              })
+            : null;
+
+        const saved = withAllocatedTotals(await tx.payment.findUniqueOrThrow({ where: { id: payment.id }, include: PAYMENT_INCLUDE }));
+        return prepaymentInvoice
+          ? { ...saved, prepaymentInvoice: { id: prepaymentInvoice.id, no: prepaymentInvoice.no, total: money(prepaymentInvoice.total), onAccountRemainder: money(prepaymentInvoice.onAccountRemainder) } }
+          : saved;
       }),
     );
+  }
+
+  /**
+   * ④A1 — متبقّي فواتير العميل المفتوحة (ما يراه موزِّعُ الدفعة في `openInvoices`): من التخصيصات لا من حقل.
+   * مستندُ الدفعة المقدَّمة ليس ذمّةً فلا يدخل، والدائنُ يخفّض لا يزيد.
+   *
+   * **على مستوى المنشأة بحقّها**: الذمّةُ ذمّةُ العميل على المنشأة لا على فرع — كما يقرؤها `openInvoices` لموزِّع الدفعة،
+   * وفاتورةُ فرعٍ محجوبٍ تغطّي المقبوضَ على الحساب كما تغطّيه فاتورةُ فرع القارئ.
+   */
+  private async openRemainingOf(tx: Prisma.TransactionClient, customerId: string): Promise<number> {
+    const open = await tx.invoice.findMany({
+      where: { customerId, status: { not: 'PAID' }, docType: { in: ['INVOICE', 'DEBIT_NOTE'] } },
+      select: { id: true, total: true },
+    });
+    if (open.length === 0) return 0;
+    const allocated = await allocatedByDocument(invoiceTarget(tx), open.map((i) => i.id));
+    return round2(withRemaining(open, allocated).reduce((s, d) => s + d.remaining, 0));
   }
 
   /**
@@ -290,9 +348,17 @@ export class PaymentsService {
    * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
    * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
    */
+  /** ④A1 — سندٌ أصدر فاتورةَ دفعةٍ مقدَّمة لا يُعاد توزيعُه ولا يُعكس: مستندُه صادرٌ بسلسلته، وتصحيحُه إشعارٌ دائن عليه (لم يُبنَ بعد — حدٌّ معلَن). */
+  private async assertNoPrepaymentInvoice(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
+    const doc = await tx.invoice.findUnique({ where: { prepaymentPaymentId: paymentId }, select: { no: true } });
+    if (doc) throw new ConflictException(formatMessage(MSG.payment_has_prepayment_invoice, { no: doc.no }));
+  }
+
   allocate(companyId: string, id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id }, include: { allocations: true } });
+      // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.
+      await this.assertNoPrepaymentInvoice(tx, id);
       if (!payment) throw new NotFoundException(MSG.payment_not_found);
       // ⚖️ سندٌ له عكسٌ لا يُعاد توزيعُه (`ق-١١٩٨`/⑤ — مراجعةٌ خارجية): كان الفحصُ على «هو عكسٌ»
       //    وحدَه، فسندٌ عُكس كان يُعاد توزيعُه على فاتورةٍ أخرى — وعكسُه يحمل مرآةَ التوزيع
@@ -335,6 +401,8 @@ export class PaymentsService {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const original = await tx.payment.findUnique({ where: { id }, include: { allocations: true, customer: { select: { name: true } } } });
+        // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.
+        await this.assertNoPrepaymentInvoice(tx, id);
         if (!original) throw new NotFoundException(MSG.payment_not_found);
         assertReversible(original, await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
@@ -553,8 +621,10 @@ export class PaymentsService {
    * وما يخصّ الفاتورةَ وحدَها هو `OVERDUE` على المستحقّ الذي فات موعدُه.
    */
   private async recomputeInvoiceStatus(tx: Prisma.TransactionClient, invoiceId: string): Promise<void> {
-    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, total: true, status: true, dueDate: true } });
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { id: true, total: true, status: true, dueDate: true, docType: true } });
     if (!invoice) return;
+    // ④A1: مستندُ الدفعة المقدَّمة مسدَّدٌ بالبناء (سندُ قبضه أصدره) — حالتُه لا تُشتقّ من تخصيصٍ قد ينتقل عنه.
+    if (invoice.docType === 'PREPAYMENT') return;
     const derived = deriveSettlementStatus(await allocatedFor(invoiceTarget(tx), invoiceId), Number(invoice.total));
 
     // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
-import { createPayment, listOpenInvoices, type OpenInvoice, type PaymentMethod } from '../../api/payments';
+import { createPayment, listOpenInvoices, UNALLOCATED_DECLARATION_MIN, type OpenInvoice, type PaymentMethod, type UnallocatedFate } from '../../api/payments';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 
@@ -27,6 +27,8 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [alloc, setAlloc] = useState<Record<string, string>>({});
+  // ④A1: مصيرُ الفائض — يُسأل حين يظهر، ولا يُفترض (`ق-٨٩٨`)؛ والخادمُ يرفض المعلَنَ على الحساب بلا فواتيرَ تغطّيه.
+  const [fate, setFate] = useState<UnallocatedFate | ''>('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +81,11 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
       setError('مجموع التخصيصات يتجاوز مبلغ السند.');
       return;
     }
+    const mustDeclare = unallocated > UNALLOCATED_DECLARATION_MIN;
+    if (mustDeclare && !fate) {
+      setError(`في السند ${fmt(unallocated)} فوق المخصَّص — أعلن ما يكون: دفعةً مقدَّمة (تصدر لها فاتورة 386 الآن) أو مبلغاً على الحساب.`);
+      return;
+    }
     setSaving(true);
     try {
       await createPayment({
@@ -93,6 +100,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
         allocations: Object.entries(alloc)
           .map(([invoiceId, v]) => ({ invoiceId, amount: parseFloat(v) || 0 }))
           .filter((a) => a.amount > 0),
+        ...(mustDeclare && fate ? { unallocated: fate } : {}),
       });
       await onSaved();
     } catch (e) {
@@ -219,7 +227,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
                 {open.length === 0 && (
                   <tr>
                     <td colSpan={5}>
-                      <div className="empty-state">لا فواتير مفتوحة لهذا العميل — يمكن تسجيل السند على الحساب وتوزيعه لاحقاً</div>
+                      <div className="empty-state">لا فواتير مفتوحة لهذا العميل — ما يُقبض قبل التوريد دفعةٌ مقدَّمة تُصدَر لها فاتورة 386 بتاريخ السند</div>
                     </td>
                   </tr>
                 )}
@@ -245,12 +253,24 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
               </tbody>
             </table>
             <p className="hint">
-              المخصَّص: <b className="num">{fmt(allocatedSum)}</b> · غير المخصَّص (على الحساب):{' '}
+              المخصَّص: <b className="num">{fmt(allocatedSum)}</b> · غير المخصَّص:{' '}
               <b className="num" style={{ color: unallocated < 0 ? 'var(--rose)' : undefined }}>
                 {fmt(unallocated)}
               </b>
             </p>
           </>
+        )}
+        {/* ④A1: فائضٌ فوق هللات التدوير يُعلَن مصيرُه — لا افتراضَ صامتاً. والخادمُ يرفض «على الحساب» بلا فواتيرَ مفتوحةٍ تغطّيه (م٥٣). */}
+        {customerId && paymentAmount > 0 && unallocated > UNALLOCATED_DECLARATION_MIN && (
+          <fieldset className="field" data-testid="unallocated-fate" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+            <legend>ما مصيرُ {fmt(unallocated)} فوق المخصَّص؟</legend>
+            <label style={{ display: 'block' }}>
+              <input type="radio" name="unallocated-fate" value="PREPAYMENT" checked={fate === 'PREPAYMENT'} onChange={() => setFate('PREPAYMENT')} /> دفعة مقدَّمة — تصدر لها فاتورة دفعة مقدَّمة (386) بتاريخ السند وتُخصم من فاتورة التوريد لاحقاً
+            </label>
+            <label style={{ display: 'block' }}>
+              <input type="radio" name="unallocated-fate" value="ON_ACCOUNT" checked={fate === 'ON_ACCOUNT'} onChange={() => setFate('ON_ACCOUNT')} /> على الحساب — يُخصَّص لاحقاً على فواتيرَ مفتوحةٍ قائمة تغطّيه
+            </label>
+          </fieldset>
         )}
 
         {error && <p className="error-text">{error}</p>}
