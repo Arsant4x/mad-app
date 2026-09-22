@@ -270,11 +270,17 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     expect(d.outputVat).toBeCloseTo(d.standardVat, 2);
   }, 60000);
 
-  it('🔴 ④ عقدٌ سكنيّ: صفُّ المعفى بقيمته — ولا 2200', async () => {
+  it('🔴 ④ عقدٌ سكنيّ: صفُّ المعفى بقيمته — ولا 2200؛ وباجتماع المعفى مع الخاضع يُعلَن حدُّ الخصم النسبيّ (ق-١٢٦٠)', async () => {
     const before = await snapshot(thisQuarter);
+    // منشأةُ العرض مختلطةٌ أصلاً (سكنيٌّ معفى بجانب التجاريّ) — فالحدُّ يُعلَن هنا في الردّ نفسِه لا في وثيقة؛
+    // والحالةُ السالبة (خاضعٌ وحدَه ⟵ لا حدّ) على منشأةٍ معزولة في vat-declaration-limits.e2e-spec.ts.
     const contract = await makeContract({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
     const after = await snapshot(thisQuarter);
     const d = delta(before, after);
+    const rawAfter = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as { limits: { code: string; severity: string; message: string }[] };
+    const limit = rawAfter.limits.find((l) => l.code === 'PROPORTIONAL_INPUT_VAT_NOT_BUILT');
+    expect(limit?.severity).toBe('blocking');
+    expect(limit?.message).toContain('م٥١');
 
     const n = dueByToday(contract).length;
     expect(d.exempt).toBeCloseTo(1000 * n, 2);

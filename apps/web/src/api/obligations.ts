@@ -81,6 +81,8 @@ export interface VatDeclaration {
   filed: { filedAt: string; netVat: MoneyText } | null;
   changedSinceFiled: boolean;
   filedNote: string | null;
+  /** حدودٌ معلَنة على هذا الإقرار من الخادم (ق-١٢٦٠) — تُعرض كما جاءت ولا تُشتقّ في الشاشة. */
+  limits: { code: string; severity: 'blocking'; message: string }[];
 }
 
 export const listObligations = () => apiClient.get<GovernmentObligation[]>('/obligations').then((r) => r.data);

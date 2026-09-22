@@ -86,6 +86,12 @@ export function VatDeclarationPage() {
 
         {loading || !declaration ? null : (
           <>
+            {declaration.limits.map((l) => (
+              <div key={l.code} className="card" data-testid="vat-limit" style={{ marginBottom: 12, borderInlineStart: '4px solid var(--rose)', background: 'rgba(244, 63, 94, 0.06)' }}>
+                <strong>⛔ حدٌّ معلَن — لا يُقدَّم هذا الإقرار</strong>
+                <p style={{ margin: '6px 0 0' }}>{l.message}</p>
+              </div>
+            ))}
             <p className="hint" style={{ marginBottom: 10 }}>
               عن الفترة من {dfmt(declaration.from)} إلى {dfmt(declaration.to)}
             </p>
