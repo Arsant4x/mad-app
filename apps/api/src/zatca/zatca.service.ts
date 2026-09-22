@@ -720,9 +720,12 @@ export class ZatcaService {
    * جوابُ الهيئة على المستند — الحالةُ والنصُّ **وتحذيراتُها** (`ق-١٢٧٩` · ز/⑤A2).
    *
    * التحذيرُ يُحفظ ولا يُغيّر الحكم: مستندٌ مقبولٌ بملاحظاتٍ يبقى `CLEARED` — وتُرى ملاحظاتُه.
-   * و`null` تعني «لا `validationResults` في الجواب»، فلا يُمحى ما حُفظ من محاولةٍ سابقة إلا بجوابٍ يحمل غيرَه.
+   *
+   * **وآخرُ جوابٍ هو المحفوظ** — كما `zatcaMessage` تماماً: جوابٌ بلا تحذيراتٍ يكتب `NULL`،
+   * فالحقلُ يصف **الجوابَ الأخير** لا اتحادَ الأجوبة. (والمعامل إلزاميٌّ عمداً: اختياريٌّ
+   * يُغري بمُستدعٍ يُغفله فيبقى تحذيرُ جوابٍ سابقٍ منسوباً إلى جوابٍ لاحقٍ لم يقله.)
    */
-  private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null, warnings?: AuthorityMessage[] | null) {
+  private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null, warnings: AuthorityMessage[] | null) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.update({
         where: { id: invoiceId },
@@ -732,7 +735,7 @@ export class ZatcaService {
           zatcaMessage: storableText(message),
           // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`،
           // **والقيمةُ نفسُها بلا تغيير**: مصفوفةُ كائناتٍ عاديةٍ يقبلها `JSONB`.
-          ...(warnings === undefined ? {} : { zatcaWarnings: (warnings ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue }),
+          zatcaWarnings: (warnings ?? Prisma.DbNull) as unknown as Prisma.InputJsonValue,
         },
       }),
     );

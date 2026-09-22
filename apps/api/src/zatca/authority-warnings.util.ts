@@ -40,6 +40,9 @@ function normalize(entry: unknown, severity: 'WARNING' | 'ERROR'): AuthorityMess
 /**
  * يقرأ `validationResults` من جسم الجواب — بالشكلين المعروفين (`warningMessages` و
  * `errorMessages`)، وما ليس مصفوفةً يُتجاهَل بلا رمي: **مراقبةٌ لا تُسقط إرسالاً**.
+ *
+ * و`null` تعني «هذا الجوابُ بلا ملاحظات» — فيُكتب `NULL` على المستند، لأن الحقل يصف
+ * **الجوابَ الأخير** لا اتحادَ الأجوبة (كما `zatcaMessage`).
  */
 export function zatcaWarningsOf(body: Record<string, unknown>): AuthorityMessage[] | null {
   const results = body.validationResults;
