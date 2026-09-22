@@ -2,7 +2,17 @@ import { apiClient } from './client';
 
 /** What the notification is about. Drives both the icon and where clicking it
  * takes you — a free-text title could not do either. */
-export type NotificationKind = 'RENT_ESCALATION' | 'WARRANTY_EXPIRING' | 'NOTE_ISSUED_LATE' | 'SUPPORT_REQUESTED' | 'SUPPORT_ENTERED';
+export type NotificationKind =
+  | 'RENT_ESCALATION'
+  | 'WARRANTY_EXPIRING'
+  | 'NOTE_ISSUED_LATE'
+  | 'SUPPORT_REQUESTED'
+  | 'SUPPORT_ENTERED'
+  // ⚠️ كان الاثنان الأخيران ناقصَين — والنوعُ **منسوخٌ بيدٍ** بلا رابطٍ آلي إلى `schema.prisma`
+  // (دَينُ `4.5` المسجَّل في `CLAUDE §4`). لا ينكسر شيءٌ هنا لأنه ليس مفتاحَ `Record`،
+  // **لكنه يَعِد المترجمَ بما ليس صحيحاً** — وقيمةٌ يراها المترجمُ مستحيلةً تصل فعلاً.
+  | 'SUBPROCESSOR_CONSENT'
+  | 'ZATCA_CERT_EXPIRING';
 
 export interface AppNotification {
   id: string;
