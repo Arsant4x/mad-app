@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { stripCommentsAndStrings } from '../src/common/source-scan.util';
 import { API_VERSION_PREFIX, applyApiVersioning } from '../src/common/versioning';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
@@ -68,8 +69,11 @@ describe('إصدارُ الواجهة في المسار (e2e)', () => {
     await http().get(`/${API_VERSION_PREFIX}/accounts`).expect(401);
   });
 
-  it('⑤ وحارسُ الوصل: الإقلاعُ يستدعي الدالّة فعلاً', () => {
+  it('⑤ وحارسُ الوصل: الإقلاعُ يستدعي الدالّة فعلاً — والنداءُ المُعلَّق ليس نداءً', () => {
     const main = readFileSync(join(__dirname, '..', 'src', 'main.ts'), 'utf8');
-    expect(main).toContain('applyApiVersioning(app)');
+    // ⚠️ **الشيفرةُ لا النصّ** (`§8.24`): أوّلُ صياغةٍ طابقت النصَّ الخام، **فنداءٌ
+    //    مُعلَّقٌ بشرطتين يبقى في الملفّ حرفياً فيمرّ الحارسُ على وصلٍ لا وجود له**.
+    //    أمسكه الإثباتُ العكسيُّ بكسرٍ هو أقربُ ما يقع: تعليقُ السطر.
+    expect(stripCommentsAndStrings(main)).toContain('applyApiVersioning(app)');
   });
 });
