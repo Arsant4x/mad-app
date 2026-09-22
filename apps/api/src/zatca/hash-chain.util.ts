@@ -112,6 +112,27 @@ export async function previousChainHash(tx: Prisma.TransactionClient, egsUnitId:
 export interface BuyerForInvoiceType {
   kind: string;
   vatNumber: string | null | undefined;
+  /** بلدُ المشتري (ISO 3166-1 alpha-2) — `SA` غياباً؛ يقرّر مع سطور الصادرات علَمَ الصادرات (⑤A3). */
+  country: string | null | undefined;
+}
+
+/** سطرُ مستندٍ كما يلزم لاشتقاق علَم الصادرات: سببُ الإعفاء وحدَه. */
+export interface LineForInvoiceType {
+  taxExemptionReasonCode: string | null | undefined;
+}
+
+/** أسبابُ الصادرات في قائمة الهيئة (`exemption-reasons.ts`): صادراتُ السلع م٣٢ وصادراتُ الخدمات م٣٣. */
+export const EXPORT_REASON_CODES: ReadonlySet<string> = new Set(['VATEX-SA-32', 'VATEX-SA-33']);
+
+/**
+ * ⑤A3 — **فاتورةُ صادرات** (KSA-2 الموضع 5): مشترٍ خارجَ المملكة **وسطرٌ بسبب صادرات** معاً — لا أحدُهما.
+ * تعريفُ الهيئة: «The invoice is issued to a foreign buyer as per KSA VAT regulation» — والتوريدُ الذي يقرّره النظامُ
+ * صادراتٍ هو ما حمل سببَ م٣٢/م٣٣؛ فمشترٍ أجنبيّ يشتري خدمةً تُستهلك في المملكة (سائح · مقيمٌ عابر) ليس صادرات.
+ */
+export function isExportInvoice(buyer: Pick<BuyerForInvoiceType, 'country'>, lines: ReadonlyArray<LineForInvoiceType>): boolean {
+  const country = buyer.country?.trim().toUpperCase() || 'SA';
+  if (country === 'SA') return false;
+  return lines.some((l) => !!l.taxExemptionReasonCode && EXPORT_REASON_CODES.has(l.taxExemptionReasonCode));
 }
 
 /**
@@ -126,8 +147,12 @@ export interface BuyerForInvoiceType {
  *   · طبيعيٌّ ⟵ مبسّطة
  * والقديمُ غيرُ المعلَن (`LEGACY_UNDECLARED`) لا يبلغ مستنداً جديداً — يُرفض عند الإصدار حتى يُعلَن؛ ومستندٌ قائمٌ له
  * يُقرأ بالرقم كما كان يُقرأ (لا يُغيَّر نوعُ ما صدر).
+ *
+ * ⑤A3: **والصادراتُ كاملةٌ دائماً** — م٥٣(١)(أ)(٣) توجب الفاتورةَ الضريبية للتوريدات الخارجية، والهيئةُ لا تقبل علَمَ
+ * الصادرات على مبسّطة (BR-KSA-31) — فالسطورُ تدخل الاشتقاقَ مع صفة المشتري، وموضعٌ يعرف المشتري ولا يعرف السطور لا يحكم.
  */
-export function invoiceTypeFor(buyer: BuyerForInvoiceType): 'standard' | 'simplified' {
+export function invoiceTypeFor(buyer: BuyerForInvoiceType, lines: ReadonlyArray<LineForInvoiceType>): 'standard' | 'simplified' {
+  if (isExportInvoice(buyer, lines)) return 'standard';
   if (buyer.vatNumber?.trim()) return 'standard';
   if (buyer.kind === 'ESTABLISHMENT' || buyer.kind === 'LEGAL_PERSON') return 'standard';
   return 'simplified';

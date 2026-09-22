@@ -214,7 +214,7 @@ export class InvoicesService {
       return mapList(result, (inv) => ({
         ...inv,
         /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
-        invoiceType: invoiceTypeFor(inv.customer),
+        invoiceType: invoiceTypeFor(inv.customer, inv.lines),
         /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
         outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
         /** How much of this invoice has been credited back, so a screen can
@@ -313,7 +313,7 @@ export class InvoicesService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const rejected = await tx.invoice.findUnique({
           where: { id: invoiceId },
-          include: { customer: { select: { kind: true, vatNumber: true } }, lines: true, replacedBy: { select: { no: true } } },
+          include: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: true, replacedBy: { select: { no: true } } },
         });
         if (!rejected) throw new NotFoundException(MSG.invoice_not_found);
         assertBranchAllowed(tenant.allowedBranchIds, rejected.branchId);
@@ -323,7 +323,7 @@ export class InvoicesService {
         if (rejected.replacedBy) throw new ConflictException(formatMessage(MSG.invoice_already_replaced, { no: rejected.replacedBy.no }));
 
         // ③ التاريخُ بالنوع — يُحسم أولاً لأن الإعادةَ والعكسَ يؤرَّخان به.
-        const standard = invoiceTypeFor(rejected.customer) === 'standard';
+        const standard = invoiceTypeFor(rejected.customer, rejected.lines) === 'standard';
         const now = new Date();
         const clock = standard
           ? { issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null, issuedOffsetMin: dto.issuedAt ? (dto.issuedOffsetMin ?? null) : null }

@@ -15,6 +15,15 @@ import { assertCustomerNotInTrash } from './customer-trash.util';
  * المعرّفُ البديل زوجٌ (BR-KSA-14): مخطّطٌ ورقمٌ معاً، أو لا شيء — نصفُ زوجٍ يُرفض مسمّىً لا يُكمَل صامتاً.
  * المخطّطُ نصٌّ مقيَّدٌ في القاعدة (CHECK على الأحد عشر) فيُخزَّن كما يُرسَل — «700» كما هي.
  */
+/**
+ * ⑤A3 — رقمُ التسجيل الضريبيّ السعوديّ (`3…3`) لمن سُجّل في المملكة؛ فمشترٍ بلدُه غيرُ `SA` لا يحمله (BR-KSA-46:
+ * فاتورةُ الصادرات لا تحمل رقمَ المشتري) — ومعرّفُه الأجنبيّ يُكتب في المعرّف البديل بمخطّطه (`TIN`).
+ */
+function assertCountryVatConsistent(country: string | null | undefined, vatNumber: string | null | undefined): void {
+  const c = country?.trim().toUpperCase() || 'SA';
+  if (c !== 'SA' && vatNumber?.trim()) throw new BadRequestException(MSG.customer_foreign_vat_conflict);
+}
+
 function otherIdPair(
   scheme: string | null | undefined,
   id: string | null | undefined,
@@ -82,6 +91,7 @@ export class CustomersService {
   create(companyId: string, dto: CreateCustomerDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, undefined, dto.allowSameName === true);
+      assertCountryVatConsistent(dto.country, dto.vatNumber);
       const otherId = otherIdPair(dto.otherIdScheme, dto.otherId);
       return tx.customer.create({
         // companyId omitted on purpose — injected at runtime by the tenant
@@ -126,6 +136,7 @@ export class CustomersService {
       }
       if (dto.country !== undefined) data.country = dto.country.trim() || 'SA';
       if (dto.vatNumber !== undefined) data.vatNumber = dto.vatNumber || null;
+      assertCountryVatConsistent(dto.country ?? existing.country, dto.vatNumber !== undefined ? dto.vatNumber : existing.vatNumber);
       if (dto.phone !== undefined) data.phone = dto.phone || null;
       if (dto.street !== undefined) data.street = dto.street || null;
       if (dto.buildingNumber !== undefined) data.buildingNumber = dto.buildingNumber || null;

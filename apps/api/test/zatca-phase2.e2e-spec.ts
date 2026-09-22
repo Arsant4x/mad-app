@@ -182,13 +182,20 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
     });
 
     it('classifies an invoice by the buyer kind and VAT number — an establishment or legal person is standard even unregistered (②A1, م٥٣)', () => {
-      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '300000000000003' })).toBe('standard');
-      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null })).toBe('simplified');
-      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '  ' })).toBe('simplified');
-      expect(invoiceTypeFor({ kind: 'ESTABLISHMENT', vatNumber: null })).toBe('standard');
-      expect(invoiceTypeFor({ kind: 'LEGAL_PERSON', vatNumber: null })).toBe('standard');
+      const local = [{ taxExemptionReasonCode: null }];
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '300000000000003', country: 'SA' }, local)).toBe('standard');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: 'SA' }, local)).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: '  ', country: 'SA' }, local)).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'ESTABLISHMENT', vatNumber: null, country: 'SA' }, local)).toBe('standard');
+      expect(invoiceTypeFor({ kind: 'LEGAL_PERSON', vatNumber: null, country: 'SA' }, local)).toBe('standard');
       // القديمُ غيرُ المعلَن يُقرأ بالرقم كما كان — ولا يبلغ مستنداً جديداً (يُرفض عند الإصدار).
-      expect(invoiceTypeFor({ kind: 'LEGACY_UNDECLARED', vatNumber: null })).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'LEGACY_UNDECLARED', vatNumber: null, country: 'SA' }, local)).toBe('simplified');
+      // ⑤A3: الصادراتُ كاملةٌ ولو لفرد (م٥٣(١)(أ)(٣)) — بلدٌ أجنبيّ **وسطرُ صادرات** معاً؛ وأجنبيٌّ بلا سطر صادراتٍ على حاله.
+      const exportLine = [{ taxExemptionReasonCode: 'VATEX-SA-33' }];
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: 'AE' }, exportLine)).toBe('standard');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: 'AE' }, local)).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: 'SA' }, exportLine)).toBe('simplified');
+      expect(invoiceTypeFor({ kind: 'NATURAL', vatNumber: null, country: null }, exportLine)).toBe('simplified');
     });
   });
 
@@ -433,6 +440,38 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
         const passed = await submitFor(establishment);
         expect(passed.status).toBe(201);
         expect(JSON.stringify(passed.body)).not.toContain('BR-KSA-81');
+      }, 30000);
+
+      /**
+       * ⑤A3 — KSA-2: كان رمزُ المعاملة ثابتاً (`0100000`) فلا صادراتَ تُعلَم. مشترٍ خارجَ المملكة **وسطرُ صادرات** ⟵
+       * فاتورةٌ كاملةٌ ولو لفرد (م٥٣(١)(أ)(٣)) بعلَم الصادرات في الموضع الخامس، وبلا رقمٍ ضريبيٍّ للمشتري (BR-KSA-46).
+       * المستندُ المختوم يُقرأ من الصفّ بعد أن تردّه السلطةُ المحلّية — فالبناءُ والتوقيعُ وقعا على مسار الإجازة.
+       */
+      it('🔴 [SPEC 4.10] ⑤A3 — فاتورةُ صادراتٍ لمشترٍ أجنبيّ تُختم كاملةً وبعلَم الصادرات (KSA-2 = 0100100) وبلا رقمٍ ضريبيٍّ له', async () => {
+        await seedProductionCredential();
+        const unique = String(Date.now()).slice(-8);
+        const foreign = (
+          await request(app.getHttpServer())
+            .post('/customers')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ kind: 'NATURAL', name: `مشترٍ في الإمارات ${unique}`, country: 'AE', otherIdScheme: 'TIN', otherId: `AE${unique}`, ...FULL_ADDRESS })
+            .expect(201)
+        ).body.id as string;
+        const invoice = await request(app.getHttpServer())
+          .post('/invoices')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ customerId: foreign, issueDate: '2026-06-01', dueDate: '2026-06-30', lines: [{ description: 'خدمة مصدَّرة', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'Z', taxExemptionReasonCode: 'VATEX-SA-33' }] })
+          .expect(201);
+        createdInvoiceIds.push(invoice.body.id);
+        const res = await request(app.getHttpServer()).post(`/zatca/invoices/${invoice.body.id}/submit`).set('Authorization', `Bearer ${token}`).expect(201);
+        // السلطةُ المحلّية تردّ — فالمستندُ بُني ووُقّع وأُرسل، وصورتُه المختومة في الصفّ.
+        expect(res.body.zatcaStatus).toBe('REJECTED');
+        const row = await tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.findUniqueOrThrow({ where: { id: invoice.body.id }, select: { zatcaSignedXml: true } }));
+        expect(row.zatcaSignedXml).toContain('<cbc:InvoiceTypeCode name="0100100">388</cbc:InvoiceTypeCode>');
+        const buyerXml = row.zatcaSignedXml!.slice(row.zatcaSignedXml!.indexOf('<cac:AccountingCustomerParty>'), row.zatcaSignedXml!.indexOf('</cac:AccountingCustomerParty>'));
+        // BT-48 غائب — لا `CompanyID` للمشتري (BR-KSA-46)؛ وعنصرُ المخطّط الفارغ كما يخرج لكل مشترٍ بلا رقم.
+        expect(buyerXml).not.toContain('<cbc:CompanyID>');
+        expect(buyerXml).toContain('<cbc:IdentificationCode>AE</cbc:IdentificationCode>');
       }, 30000);
     });
 

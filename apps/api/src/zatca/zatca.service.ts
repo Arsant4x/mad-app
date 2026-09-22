@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ensureDefaultUnit } from './egs-unit.util';
-import { invoiceTypeFor, nextIcv, previousChainHash } from './hash-chain.util';
+import { invoiceTypeFor, isExportInvoice, nextIcv, previousChainHash } from './hash-chain.util';
 import { buildUnsignedInvoiceXml, ublCategoryOf } from './ubl/invoice-xml.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xades.util';
@@ -191,10 +191,10 @@ export class ZatcaService {
       const ctx = await this.onboardedContext(companyId);
       if (!ctx) return { qrPayload: null, error: null };
       const buyer = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { kind: true, vatNumber: true } } } }),
+        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { select: { taxExemptionReasonCode: true } } } }),
       );
       if (!buyer) throw new NotFoundException(MSG.invoice_not_found);
-      if (invoiceTypeFor(buyer.customer) === 'standard') return { qrPayload: null, error: null };
+      if (invoiceTypeFor(buyer.customer, buyer.lines) === 'standard') return { qrPayload: null, error: null };
       const stamped = await this.stampIfNeeded(companyId, invoiceId, ctx);
       return { qrPayload: stamped.qrPayload, error: stamped.failure ?? null };
     } catch (e) {
@@ -397,7 +397,10 @@ export class ZatcaService {
     // وسلفٌ محجوزٌ لم يُختم بعد يرفض الختمَ الآن فيعود الطابورُ إليه، لا يُتخطّى.
     const icv = invoice.zatcaIcv ?? (await nextIcv(tx, unit.id));
     const previousHash = invoice.zatcaPreviousHash ?? (await previousChainHash(tx, unit.id, icv));
-    const invoiceType = invoiceTypeFor(invoice.customer);
+    const invoiceType = invoiceTypeFor(invoice.customer, invoice.lines);
+    // ⑤A3: علَمُ الصادرات من بلد المشتري وسطر صادراتٍ معاً؛ ومشترٍ أجنبيٌّ يحمل رقمَ تسجيلٍ سعوديّاً تناقضٌ يُرفض باسمه (BR-KSA-46).
+    const exportInvoice = isExportInvoice(invoice.customer, invoice.lines);
+    if (exportInvoice && invoice.customer.vatNumber?.trim()) throw new ConflictException(formatMessage(MSG.zatca_export_buyer_vat, { customer: invoice.customer.name }));
 
     /**
      * ⭐ **بوّابة عنوان المشتري — قبل أول كتابة** (`BR-KSA-63`).
@@ -502,6 +505,8 @@ export class ZatcaService {
       // code 381/383 plus the original's reference and the reason — and
       // they occupy ordinary positions in the same ICV/PIH chain.
       documentType: invoice.docType === 'CREDIT_NOTE' ? 'credit' : invoice.docType === 'DEBIT_NOTE' ? 'debit' : invoice.docType === 'PREPAYMENT' ? 'prepayment' : 'invoice',
+      // ⑤A3: KSA-2 — الصادراتُ مشتقّة؛ والباقي أصفارٌ معلَنة (غيرُ مبنيّة).
+      flags: { export: exportInvoice },
       billingReference: invoice.relatedInvoice ? { invoiceNumber: invoice.relatedInvoice.no } : undefined,
       adjustmentReason: invoice.adjustmentReason ?? undefined,
       icv,
@@ -597,7 +602,7 @@ export class ZatcaService {
     const stored = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true } } },
+        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { select: { taxExemptionReasonCode: true } } },
       }),
     );
     if (!stored) throw new NotFoundException(MSG.invoice_not_found);
@@ -615,7 +620,7 @@ export class ZatcaService {
       // Standard (B2B) invoices are *cleared* before being given to the buyer;
       // simplified (B2C) ones are *reported* within 24h. Sending one down the
       // other's path is rejected.
-      const invoiceType = invoiceTypeFor(stored.customer);
+      const invoiceType = invoiceTypeFor(stored.customer, stored.lines);
       const path = invoiceType === 'standard' ? '/invoices/clearance/single' : '/invoices/reporting/single';
       const token = decryptSecret(credential.productionCsidEnc!);
       const secret = decryptSecret(credential.productionSecretEnc!);

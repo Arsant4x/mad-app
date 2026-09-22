@@ -341,6 +341,9 @@ export const MSG = {
   zatca_profile_incomplete: 'zatca.profile_incomplete',
   zatca_buyer_address_incomplete: 'zatca.buyer_address_incomplete',
   zatca_buyer_id_missing: 'zatca.buyer_id_missing',
+  // export flag (ق-١٢٦١ ب — ⑤A3)
+  zatca_export_buyer_vat: 'zatca.export_buyer_vat',
+  customer_foreign_vat_conflict: 'customers.foreign_vat_conflict',
   zatca_onboarding_not_started: 'zatca.onboarding_not_started',
   zatca_already_onboarded: 'zatca.already_onboarded',
   zatca_qr_value_too_long: 'zatca.qr_value_too_long',
@@ -1086,6 +1089,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_buyer_address_incomplete]: {
     ar: 'الفاتورة القياسية تشترط عنوان المشتري كاملاً — وينقص من بطاقة «{customer}»: {missing}. أكملها ثم أعد الإرسال',
     en: 'A standard invoice requires the buyer\'s full national address — missing from "{customer}": {missing}. Complete it and resubmit',
+  },
+  [MSG.zatca_export_buyer_vat]: {
+    ar: 'فاتورة صادرات لمشترٍ خارج المملكة لا تحمل رقم تسجيل ضريبي سعودي للمشتري (BR-KSA-46) — امسح الرقم من بطاقة «{customer}» أو صحّح بلده، ثم أعد الإرسال',
+    en: 'An export invoice to a buyer outside the Kingdom must not carry a Saudi buyer VAT number (BR-KSA-46) — clear it on "{customer}" or correct the country, then resubmit',
+  },
+  [MSG.customer_foreign_vat_conflict]: {
+    ar: 'رقم التسجيل الضريبي السعودي لمن سُجّل في المملكة — عميلٌ بلده غير السعودية يُكتب معرّفه في «المعرّف البديل» بمخطّطه (TIN)',
+    en: 'A Saudi VAT registration number belongs to a KSA-registered person — a customer outside Saudi Arabia carries their identifier in the alternative identifier with its scheme (TIN)',
   },
   [MSG.zatca_buyer_id_missing]: {
     ar: 'الفاتورة الكاملة لمشترٍ بلا رقم ضريبي تشترط معرّفه البديل بمخطّطه (سجل تجاري · هوية · إقامة · …) — أكمله في بطاقة «{customer}» ثم أعد الإرسال (BR-KSA-81)',

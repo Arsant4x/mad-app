@@ -572,7 +572,7 @@ export class PosService {
       canOverride: false,
     });
     // ⑤A4: نوعُ المستند من صفة مشتريه كما أُنشئ — كاملةٌ تُجاز قبل أن تُشارَك، فيُعلَم ذلك للإيصال أدناه.
-    const clearanceRequired = invoiceTypeFor(invoice.customer) === 'standard';
+    const clearanceRequired = invoiceTypeFor(invoice.customer, invoice.lines) === 'standard';
 
     const sold = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم
