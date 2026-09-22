@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, ValidateIf, ValidateNested } from 'class-validator';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 
 /** تخصيص جزء من الدفعة لفاتورة بعينها — بعملة الدفعة. */
@@ -10,6 +10,24 @@ export class AllocationDto {
   @IsNumber()
   @IsPositive()
   amount!: number;
+}
+
+/**
+ * ④A1 (`ق-١٢٦٤`/② · `ق-١٢٦٥`/أ) — **فئةُ ما يُدفع مقدَّماً عنه**، بمفردات سطر المستند نفسِها (`S` · `Z` بسببه ·
+ * `E` بسببه · `O` بسببٍ يُكتب): إيجارٌ سكنيٌّ معفى لا يُفوتَر بالنسبة الأساسية. **تُعلَن ولا تُفترض** — كان `S`
+ * افتراضاً مكتوباً؛ والخادمُ يرفض دفعةً مقدَّمة بلا فئة، ويفحص السببَ من القائمة الواحدة (`resolveDeclaredLineTax`).
+ */
+export class PrepaymentTaxDto {
+  @IsIn(['S', 'Z', 'E', 'O'])
+  taxCategory!: 'S' | 'Z' | 'E' | 'O';
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReasonCode?: string;
+
+  @IsOptional()
+  @IsString()
+  taxExemptionReason?: string;
 }
 
 export class CreatePaymentDto extends CurrencyFieldsDto {
@@ -67,6 +85,12 @@ export class CreatePaymentDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsIn(['PREPAYMENT', 'ON_ACCOUNT'])
   unallocated?: 'PREPAYMENT' | 'ON_ACCOUNT';
+
+  /** فئةُ الدفعة المقدَّمة — تُقرأ حين `unallocated = PREPAYMENT` وتُلزم في الخدمة باسمها. */
+  @ValidateIf((o: CreatePaymentDto) => o.unallocated === 'PREPAYMENT')
+  @ValidateNested()
+  @Type(() => PrepaymentTaxDto)
+  prepaymentTax?: PrepaymentTaxDto;
 }
 
 /** ④A1 — ما دون هذا من فائضٍ هللاتُ تدويرٍ تبقى على الحساب بلا إعلانٍ ولا مستند. */

@@ -210,6 +210,7 @@ export const MSG = {
   prepayment_immutable: 'invoices.prepayment_immutable',
   prepayment_note_unsupported: 'invoices.prepayment_note_unsupported',
   prepayment_amount_positive: 'invoices.prepayment_amount_positive',
+  payment_prepayment_tax_required: 'payments.prepayment_tax_required',
   prepayment_not_found: 'invoices.prepayment_not_found',
   prepayment_other_customer: 'invoices.prepayment_other_customer',
   prepayment_already_applied: 'invoices.prepayment_already_applied',
@@ -684,6 +685,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.prepayment_immutable]: { ar: 'فاتورة الدفعة المقدَّمة صادرة من سند قبضها ولا تُعدَّل — تصحيحها إشعار دائن عليها', en: 'A prepayment invoice is issued from its receipt and cannot be edited — correct it with a credit note' },
   [MSG.prepayment_note_unsupported]: { ar: 'الإشعار على فاتورة دفعة مقدَّمة لم يُبنَ بعد — حدٌّ معلَن', en: 'Notes on a prepayment invoice are not built yet — a declared limit' },
+  [MSG.payment_prepayment_tax_required]: {
+    ar: 'الدفعة المقدَّمة تحمل فئة ما يُدفع عنه — خاضع (S) أو صفر (Z) بسببه أو معفى (E) بسببه أو خارج النطاق (O) بسببه — تُعلَن ولا تُفترض',
+    en: 'A prepayment carries the VAT category of what it is paid for — S, Z with its reason, E with its reason, or O with its reason — declared, never assumed',
+  },
   [MSG.prepayment_amount_positive]: { ar: 'مبلغ الدفعة المقدَّمة يجب أن يكون موجباً', en: 'The prepayment amount must be positive' },
   [MSG.prepayment_not_found]: { ar: 'مستند الدفعة المقدَّمة غير موجود', en: 'Prepayment invoice not found' },
   [MSG.prepayment_other_customer]: { ar: 'الدفعة المقدَّمة {no} لعميلٍ آخر — لا تُطبَّق على فاتورة غيره', en: 'Prepayment {no} belongs to another customer — it cannot be applied to this invoice' },
