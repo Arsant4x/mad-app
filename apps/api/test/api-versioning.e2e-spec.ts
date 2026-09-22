@@ -8,7 +8,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { stripCommentsAndStrings } from '../src/common/source-scan.util';
 import { API_VERSION_PREFIX, applyApiVersioning } from '../src/common/versioning';
-import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
+import { ISOLATED_PASSWORD, IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (115.5 ث) — والمقيسُ تشغيلٌ **بارد**
 //    لحزمةٍ وحدَها، فهو كزمن أوّلِ حزمةٍ في دفعة (تُحسب فيه ترجمةُ `ts-jest` وإقلاعُ `Nest`
@@ -67,6 +67,19 @@ describe('إصدارُ الواجهة في المسار (e2e)', () => {
 
   it('④ والعزلُ يسري على المسار الجديد: بلا رمزٍ ⟵ ٤٠١', async () => {
     await http().get(`/${API_VERSION_PREFIX}/accounts`).expect(401);
+  });
+
+  it('🔴 ⑥ كوكي التحديث يتبع البابَ الذي دخل منه — وإلّا خرج المستخدمُ عند أوّل تحديثِ صفحة', async () => {
+    const creds = { username: company.username, password: ISOLATED_PASSWORD };
+    const pathOf = (res: request.Response) => {
+      const raw = res.headers['set-cookie'] as unknown as string[] | undefined;
+      const line = (raw ?? []).find((c) => c.startsWith('refresh_token='));
+      expect(line).toBeDefined();
+      return /Path=([^;]+)/.exec(line as string)?.[1];
+    };
+    // المحايدُ كما كان، والمُصدَّرُ على بابه — **فالمتصفّحُ يرسل الكوكي في الحالتين**.
+    expect(pathOf(await http().post('/auth/login').send(creds).expect(200))).toBe('/auth');
+    expect(pathOf(await http().post(`/${API_VERSION_PREFIX}/auth/login`).send(creds).expect(200))).toBe(`/${API_VERSION_PREFIX}/auth`);
   });
 
   it('⑤ وحارسُ الوصل: الإقلاعُ يستدعي الدالّة فعلاً — والنداءُ المُعلَّق ليس نداءً', () => {
