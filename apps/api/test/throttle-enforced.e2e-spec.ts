@@ -1,10 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { getOptionsToken } from '@nestjs/throttler';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { tenantTracker } from '../src/common/throttle/tenant-tracker';
 
 /**
  * حدود المعدّل — **تُفحص بسلوكها لا بوجود تصريحها**.
@@ -43,12 +45,14 @@ const d = HAS_DB ? describe : describe.skip;
 d('حدود المعدّل — مُنفَّذة لا مُصرَّحة (e2e)', () => {
   let app: INestApplication;
   let token: string;
+  let tokenB: string;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      // ⚠️ **التجاوز هنا لا في الإنتاج**: نفس الخيارات بلا `skipIf`.
+      // ⚠️ **التجاوز هنا لا في الإنتاج**: نفس الخيارات بلا `skipIf` — **وبمفتاح الإنتاج نفسِه** (`tenantTracker`)،
+      // فتجاوزٌ يُسقط المفتاحَ إلى افتراض المكتبة (العنوان) يفحص مقنِّناً غيرَ الذي يعمل على المنشور.
       .overrideProvider(getOptionsToken())
-      .useValue({ throttlers: [{ limit: 600, ttl: 60_000 }] })
+      .useFactory({ factory: (jwt: JwtService) => ({ throttlers: [{ limit: 600, ttl: 60_000 }], getTracker: tenantTracker(jwt) }), inject: [JwtService] })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -61,6 +65,7 @@ d('حدود المعدّل — مُنفَّذة لا مُصرَّحة (e2e)', ()
       .post('/auth/login')
       .send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
+    tokenB = (await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' })).body.accessToken;
   }, 60000);
 
   afterAll(async () => {
@@ -102,6 +107,41 @@ d('حدود المعدّل — مُنفَّذة لا مُصرَّحة (e2e)', ()
     expect(codes[5]).toBe(429);
   }, 60000);
 
+  it('② ⭐ منشأتان خلف عنوانٍ واحد لا تحجب إحداهما الأخرى — المفتاحُ بالمنشأة والمستخدم لا بالعنوان (ق-١٢٧١/ب)', async () => {
+    /**
+     * كلُّ طلبات الاختبار من `127.0.0.1` — وهو بعينه حالُ منشأتين خلف `NAT` واحد. بعد أن استنفدت
+     * المنشأةُ (أ) حصّتَها في ① (السادسُ `429`)، أوّلُ طلبٍ من (ب) على المسار نفسِه **يبلغ المعالج**
+     * (`400` تحقّق لا `429`) — وبمفتاح العنوان كان يُردّ `429` قبل أن يُقرأ جسمُه.
+     */
+    const again = await request(app.getHttpServer()).post('/company-users').set('Authorization', `Bearer ${token}`).send({});
+    expect(again.status).toBe(429);
+    const other = await request(app.getHttpServer()).post('/company-users').set('Authorization', `Bearer ${tokenB}`).send({});
+    expect(other.status).toBe(400);
+  }, 60000);
+
+  it('③ المجهولُ يُحاسَب بعنوانه — ورمزٌ مزوَّر لا يشتري حصّةً مستقلّة', async () => {
+    /**
+     * حدُّ الدخول `10/دقيقة` بلا رمز، **وقد استُهلك منه اثنان في `beforeAll`** (دخولُ أ و ب من العنوان نفسِه) —
+     * فتسعُ محاولاتٍ بكلمةٍ خاطئة: الثمانيةُ الأولى تبلغ المعالج (`401`) والتاسعةُ `429`.
+     * ثم رمزٌ مزوَّر (توقيعٌ لا نعرفه) على المسار المحدود في ①: يسقط إلى العنوان **لا إلى حصّةٍ جديدة** —
+     * فحصّةُ العنوان على `/company-users` لم تُمسّ بعدُ (① و② حُسبا على فاعلَين) وتُستهلك الآن بستّ محاولات.
+     */
+    const codes: number[] = [];
+    for (let i = 0; i < 9; i += 1) {
+      codes.push((await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'wrong-password' })).status);
+    }
+    expect(codes.slice(0, 8).every((c) => c === 401)).toBe(true);
+    expect(codes[8]).toBe(429);
+
+    const forged = `${token.split('.').slice(0, 2).join('.')}.AAAA`;
+    const forgedCodes: number[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      forgedCodes.push((await request(app.getHttpServer()).post('/company-users').set('Authorization', `Bearer ${forged}`).send({})).status);
+    }
+    // الخمسةُ الأولى تُردّ 401 (رمزٌ لا يُقبل) لا 429 — أي أنها حُسبت على حصّة العنوان الطازجة، والسادسُ 429
+    expect(forgedCodes.slice(0, 5).every((c) => c === 401)).toBe(true);
+    expect(forgedCodes[5]).toBe(429);
+  }, 60000);
   /**
    * ⚠️ **ولا يوجد اختبارٌ ثانٍ يفحص «وجود التصريح» — وحذفُه قرار.**
    *
