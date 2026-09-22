@@ -42,6 +42,16 @@ export class FiscalController {
     return this.fiscalService.setPeriodStatus(tenant.companyId, id, false);
   }
 
+  /**
+   * **إقفالُ السنة بقيدٍ واحد** (`ق-١٢٨٣` · د/③) — فعلُ `review` كإغلاق الفترة:
+   * قرارٌ محاسبيٌّ لا إدخالُ بيانات، **وبيد صاحب الصلاحية لا آلياً**.
+   */
+  @Post(':id/close')
+  @RequiresAction('review')
+  closeYear(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.fiscalService.closeYear(tenant.companyId, id);
+  }
+
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)

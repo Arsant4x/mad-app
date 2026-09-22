@@ -97,6 +97,19 @@ export interface CreateJournalEntryInput {
   reversalOfId?: string;
 
   /**
+   * ⚖️ **قيدُ إقفال سنةٍ مالية** (`ق-١٢٨٣` · د/③) — يمرّره `year-closing.util` وحدَه.
+   *
+   * **وهو الاستثناءُ الوحيد من قفل الفترات، ومقلوبُ سببِه لا خرقُه**: الإقفالُ لا
+   * يقع إلا **بعد** أن تُغلق فتراتُ السنة كلُّها (يفحصه المحرّك قبل النداء)، وتاريخُه
+   * نهايةُ السنة — أي **داخل فترةٍ مقفلةٍ بالضرورة**. فلو خضع للقفل لاستحال الإقفالُ
+   * أصلاً، ولو فُتحت فترةٌ لأجله لصار الدفترُ مفتوحاً لغيره في الوقت نفسِه.
+   *
+   * والعكسُ يحمله كذلك (بتاريخ الأصل) فيمرّ من الباب نفسِه — ويُميَّز بأنه يحمل
+   * `reversalOfId`.
+   */
+  closingForFiscalYearId?: string;
+
+  /**
    * ── البُعد التحليلي: الوحدة المصدر ──────────────────────────────────
    *
    * **معرّفٌ واحد يمرّره المستدعي، والباقي يُشتقّ هنا.** فمن يملك عقداً يملك
@@ -192,7 +205,11 @@ export async function createJournalEntry(
   // Refuse anything dated inside a closed period. Placed here rather than in
   // each caller because this function is the one path every posting takes —
   // manual, invoice, purchase and rent alike (see assertPeriodOpen).
-  await assertPeriodOpen(tx, input.date);
+  //
+  // ⚖️ **وقيدُ الإقفال وحدَه يمرّ** (`ق-١٢٨٣`): شرطُه أن تكون فتراتُ السنة **كلُّها
+  // مقفلة**، وتاريخُه نهايتُها — فالفحصُ هنا كان سيمنع الإقفالَ لأنه أُقفل. والشرطُ
+  // يُفحص في `closeFiscalYearWithinTx` قبل النداء، فلا يصل هنا قيدٌ بلا سببه.
+  if (!input.closingForFiscalYearId) await assertPeriodOpen(tx, input.date);
 
   // Validate every referenced account belongs to this tenant *before*
   // writing anything — see fetchAccountTypes for why this must come first.
@@ -217,6 +234,7 @@ export async function createJournalEntry(
       branchId: input.branchId ?? null,
       openingForAccountId: input.openingForAccountId ?? null,
       reversalOfId: input.reversalOfId ?? null,
+      closingForFiscalYearId: input.closingForFiscalYearId ?? null,
       currency,
       exchangeRate,
       baseTotalDebit: toBaseAmount(totalDebit, exchangeRate),

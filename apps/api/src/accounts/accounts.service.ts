@@ -16,6 +16,7 @@ import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { OPENING_EQUITY_CODE, postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
 import { INVENTORY_ACCOUNT_CODE } from '../journal/inventory-accounts.util';
+import { SYSTEM_ACCOUNT_CODES } from '../fiscal/year-closing.util';
 
 /** مقارنةُ يومٍ بيوم — `@db.Date` بلا لحظة، و`null` لا يساوي تاريخاً. */
 function sameDay(a: Date, b: Date | null): boolean {
@@ -216,6 +217,7 @@ export class AccountsService {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.account.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.account_not_found);
+      this.assertNotSystemAccount(existing.code);
 
       // The account's opening entries are system-owned (auto), so deleting
       // the account deletes them with it — reversing their balance effect on
@@ -244,6 +246,26 @@ export class AccountsService {
   private async assertNoDuplicateCode(tx: Prisma.TransactionClient, code: string, excludeId?: string): Promise<void> {
     const existing = await tx.account.findFirst({ where: { code, ...(excludeId ? { id: { not: excludeId } } : {}) } });
     if (existing) throw new ConflictException(formatMessage(MSG.account_code_taken, { code }));
+  }
+
+  /**
+   * **حساباتٌ نظامية: لا تُحذف** (`ق-١٢٨٣`/أ — قرار المالك في التوجيه ٢٥٢).
+   *
+   * `3300` طرفُ قيد الإقفال و`3900` طرفُ القيد الافتتاحيّ — **ينشئهما النظامُ
+   * ويقرؤهما بالرمز**. وحذفُ أحدهما يترك المحرّكَ يُنشئه من جديد عند أوّل حاجة،
+   * **فيُقرأ دليلُ الحسابات وكأنه بلا تاريخ**؛ والتقاريرُ التي تقرؤه بالرمز تفقد
+   * سطرَها بين الحذف وإعادة الإنشاء.
+   *
+   * ⚠️ **والقاعدةُ على الموضعَين معاً لا على الجديد وحده** (`§8.14`): لو حُرس `3300`
+   * وحدَه لصار الاختلافُ الذي أُريد منعُه.
+   *
+   * ⚠️ **و«لا يُعدَّل رمزُه» قائمٌ بالبنية لا بحارس** — مقيس: `UpdateAccountDto`
+   * **بلا حقل `code` أصلاً**، فلا مسارَ لتغيير رمز أيِّ حساب من الواجهة.
+   */
+  private assertNotSystemAccount(code: string): void {
+    if (SYSTEM_ACCOUNT_CODES.has(code)) {
+      throw new ConflictException(formatMessage(MSG.account_system_protected, { code }));
+    }
   }
 
   /** 3900 is the counterpart of every opening entry — giving it an opening

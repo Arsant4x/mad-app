@@ -892,10 +892,13 @@ model FiscalYear {
   updatedAt DateTime @updatedAt
 
   periods FiscalPeriod[]
+  /// قيودُ إقفال هذه السنة — **والفعّالُ منها ما لم يُعكس** (`ق-١٢٨٣`).
+  closingEntries JournalEntry[] @relation("YearClosingEntries")
 
   @@unique([companyId, name])
   @@map("fiscal_years")
   fiscalPeriod_fiscalYearId_tenant FiscalPeriod[] @relation("FiscalPeriod_fiscalYearId_tenant")
+  journalEntry_closingForFiscalYearId_tenant JournalEntry[] @relation("JournalEntry_closingForFiscalYearId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -2594,6 +2597,16 @@ model JournalEntry {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   reversalOfTenant JournalEntry? @relation("JournalEntry_reversalOfId_tenant", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy   JournalEntry? @relation("EntryReversal")
+
+  /// ⚖️ **قيدُ إقفال سنةٍ مالية** (`ق-١٢٨٣` · د/③): يسِم القيدَ بالسنة التي يُقفلها،
+  /// فمنه يُعرف «أمقفلةٌ هي؟» — قيدُ إقفالٍ لم يُعكس بعد. **وبه وحدَه يُسمح بالترحيل
+  /// داخل فترةٍ مقفلة**: الإقفالُ يقع **لأنها أُقفلت** لا رغم ذلك. والعكسُ يحمله كذلك
+  /// كي يمرّ من الباب نفسِه، ويُميَّز عن الأصل بأنه يحمل `reversalOfId`.
+  /// `Restrict`: لا تُحذف سنةٌ لها قيدُ إقفال.
+  closingForFiscalYearId String?
+  closingForFiscalYear   FiscalYear? @relation("YearClosingEntries", fields: [closingForFiscalYearId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  closingForFiscalYearTenant FiscalYear? @relation("JournalEntry_closingForFiscalYearId_tenant", fields: [companyId, closingForFiscalYearId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 

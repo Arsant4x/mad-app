@@ -8,6 +8,7 @@ import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/pag
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسم. */
 const FISCAL_SEARCH_FIELDS = ['name'] as const;
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
+import { closeFiscalYearWithinTx, reverseClosingEntryWithinTx } from './year-closing.util';
 
 const YEAR_INCLUDE = { periods: { orderBy: [{ year: 'asc' as const }, { month: 'asc' as const }] } };
 
@@ -97,10 +98,31 @@ export class FiscalService {
       const period = await tx.fiscalPeriod.findUnique({ where: { id: periodId } });
       if (!period) throw new NotFoundException(MSG.fiscal_period_not_found);
 
+      /**
+       * ⚖️ **إعادةُ فتح فترةٍ تعكس قيدَ إقفال سنتها آلياً** (`ق-١٢٨٣`/ج — قرار المالك):
+       * «فلا يبقى قيدُ إقفالٍ على أرقامٍ تغيّرت». والعكسُ **قيدٌ مرقَّم بتاريخ الأصل**
+       * لا محوٌ — والإقفالُ يُعاد توليدُه حين تُغلق الفترةُ ثانيةً.
+       */
+      if (!close) await reverseClosingEntryWithinTx(tx, { companyId, fiscalYearId: period.fiscalYearId });
+
       return tx.fiscalPeriod.update({
         where: { id: periodId },
         data: { status: close ? 'CLOSED' : 'OPEN', closedAt: close ? new Date() : null },
       });
+    });
+  }
+
+  /**
+   * **إقفالُ السنة بقيدٍ واحد — بيد صاحب الصلاحية لا آلياً** (`ق-١٢٨٣` · د/③).
+   *
+   * «فتسوياتُ المراجع تقع غالباً **بعد** إغلاق آخر فترة، والإقفالُ الآليُّ يسبقها»
+   * (قرار المالك) — فالفعلُ صريحٌ بصلاحية `review` كإغلاق الفترة نفسِه.
+   */
+  closeYear(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const year = await tx.fiscalYear.findUnique({ where: { id }, select: { id: true, name: true, start: true, end: true } });
+      if (!year) throw new NotFoundException(MSG.fiscal_year_not_found);
+      return closeFiscalYearWithinTx(tx, { companyId, year });
     });
   }
 
