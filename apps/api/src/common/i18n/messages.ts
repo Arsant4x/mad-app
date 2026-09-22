@@ -38,6 +38,10 @@ export const MSG = {
   register_unavailable: 'auth.register_unavailable',
   register_username_unavailable: 'auth.register_username_unavailable',
 
+  // reports — ledger / statement (ق-١٢٦١ ج)
+  ledger_filter_required: 'reports.ledger_filter_required',
+  statement_party_required: 'reports.statement_party_required',
+
   // accounts / journal
   account_not_found: 'accounts.not_found',
   account_code_taken: 'accounts.code_taken',
@@ -484,6 +488,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.register_username_unavailable]: { ar: 'تعذّر إنشاء الحساب بهذا الاسم — جرّب اسماً آخر', en: 'Could not create an account with that username — try another' },
   [MSG.platform_admin_only]: { ar: 'هذا الإجراء متاح لحساب المطوّر فقط', en: 'This action is restricted to the platform administrator' },
 
+  [MSG.ledger_filter_required]: {
+    ar: 'دفتر الأستاذ يحتاج حساباً أو بُعداً (عقار · وحدة · عميل · مورّد) — بلا مرشّح هو ميزان المراجعة لا الأستاذ',
+    en: 'The ledger needs an account or a dimension (property · unit · customer · supplier) — with no filter it is the trial balance, not a ledger',
+  },
+  [MSG.statement_party_required]: {
+    ar: 'كشف الحساب يحتاج عميلاً أو مورّداً — واحداً منهما لا كليهما',
+    en: 'The statement needs a customer or a supplier — one of them, not both',
+  },
   [MSG.account_not_found]: { ar: 'الحساب غير موجود', en: 'Account not found' },
   [MSG.account_code_taken]: { ar: 'رمز الحساب "{code}" مستخدَم بالفعل', en: 'Account code "{code}" is already in use' },
   [MSG.account_type_locked]: { ar: 'لا يمكن تغيير نوع حساب مستخدَم بقيود مرحّلة', en: "Cannot change the type of an account that has posted journal entries" },

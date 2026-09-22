@@ -1,4 +1,5 @@
 import { ReceivablesAgingSection } from './ReceivablesAgingSection';
+import { LedgerSection } from './LedgerSection';
 import { useEffect, useMemo, useState } from 'react';
 import {
   getBalanceSheet,
@@ -22,7 +23,7 @@ import { num0 } from '../../lib/money';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'aging' | 'bankdiff' | 'deferred';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'ledger' | 'aging' | 'bankdiff' | 'deferred';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -145,6 +146,9 @@ export function ReportsPage() {
         </button>
         <button className={tab === 'trial' ? 'tab active' : 'tab'} onClick={() => setTab('trial')}>
           ميزان المراجعة
+        </button>
+        <button className={tab === 'ledger' ? 'tab active' : 'tab'} onClick={() => setTab('ledger')}>
+          الأستاذ العام / كشف الحساب
         </button>
         <button className={tab === 'aging' ? 'tab active' : 'tab'} onClick={() => setTab('aging')}>
           أعمار الذمم
@@ -382,6 +386,7 @@ export function ReportsPage() {
         )}
 
         {tab === 'aging' && <ReceivablesAgingSection />}
+        {tab === 'ledger' && <LedgerSection />}
 
         {/* الإيرادُ المؤجَّل (ق-٤٦٨): رصيدُ `2400` رقمٌ واحدٌ لا يقول ممّن تكوّن
             — فيُفصَّل بعقده وفترته. ومعه شرطُ المالك (ق-٤٧٣): «من يقرأ إيرادَه

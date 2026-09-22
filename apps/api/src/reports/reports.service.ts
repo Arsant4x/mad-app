@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { MSG } from '../common/i18n/messages';
 import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';
 import { money, moneyText, percent, qty } from '../common/money/text';
@@ -9,7 +10,8 @@ import { writeOffReason } from '../common/writeoff-reasons';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
-import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
+import { readLedger, sideOfAccountType } from './ledger.util';
 import { customerExposure, RentReceivableRow } from './receivables-exposure.util';
 
 interface Movement {
@@ -148,8 +150,10 @@ async function expiringContracts(tx: Prisma.TransactionClient, today: Date) {
   };
 }
 
-/** حساب ذمم العملاء — مرجع مطابقة تقرير الأعمار. */
+/** حساب ذمم العملاء — مرجع مطابقة تقرير الأعمار، وحسابُ كشف حساب العميل. */
 const RECEIVABLES_ACCOUNT = '1200';
+/** حساب ذمم المورّدين — حسابُ كشف حساب المورّد (`postPartySettlementEntry` يرحّل عليه). */
+const PAYABLES_ACCOUNT = '2100';
 
 @Injectable()
 export class ReportsService {
@@ -879,6 +883,81 @@ export class ReportsService {
         totalBalanceCredit: money(rows.reduce((s2, r) => s2 + r.balanceCredit, 0)),
         /** عدم توازنه = عطب في القيود يستحق إنذاراً لا إخفاءً. */
         balanced: Math.abs(totalDebit - totalCredit) < 0.01,
+      };
+    });
+  }
+
+  /**
+   * **الأستاذُ العام** (`ق-١٢٦١` ج — `SPEC 10.16`): دفترُ حسابٍ واحد — أو بُعدٍ — على مدىً وفرع، برصيدٍ
+   * افتتاحيٍّ قبل المدى ورصيدٍ جارٍ على كلِّ سطر ومصدرِ كلِّ قيد. المحرّكُ في `ledger.util.ts`؛ هنا التحقّقُ
+   * من المرشِّح والفرع وقراءةُ الحساب ليُعرف طرفُه الطبيعيّ.
+   */
+  ledger(companyId: string, allowedBranchIds: string[] | 'all', filter: LedgerDto) {
+    if (filter.branchId) assertBranchAllowed(allowedBranchIds, filter.branchId);
+    if (!filter.accountId && !filter.propertyId && !filter.unitId) throw new BadRequestException(MSG.ledger_filter_required);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const account = filter.accountId
+        ? await tx.account.findFirst({ where: { id: filter.accountId }, select: { id: true, code: true, name: true, type: true } })
+        : null;
+      if (filter.accountId && !account) throw new NotFoundException(MSG.account_not_found);
+      // بُعدٌ بلا حساب: الرصيدُ على الطرف المدين (عقارٌ/وحدة تُقرأ إيراداً وذمّةً معاً — والقارئ يعرف طرفَه من الحساب على كل سطر).
+      const side = account ? sideOfAccountType(account.type) : 'debit';
+      const result = await readLedger(
+        tx,
+        {
+          allowedBranchIds,
+          accountId: filter.accountId,
+          propertyId: filter.propertyId,
+          unitId: filter.unitId,
+          branchId: filter.branchId,
+          from: filter.from ? new Date(filter.from) : undefined,
+          to: filter.to ? new Date(filter.to) : undefined,
+        },
+        side,
+      );
+      return { account, from: filter.from ?? null, to: filter.to ?? null, branchId: filter.branchId ?? null, propertyId: filter.propertyId ?? null, unitId: filter.unitId ?? null, ...result };
+    });
+  }
+
+  /**
+   * **كشفُ حساب طرف** (`SPEC 4.2`): حركةُ **حساب ذمّة الطرف** (`1200` للعميل · `2100` للمورّد) التي تحمل بُعدَه —
+   * برصيدٍ جارٍ على طرفه الطبيعيّ (العميلُ مدين · المورّدُ دائن) ومصدرِ كلِّ قيد. **لا كلُّ سطرٍ يحمل البُعد**:
+   * قيدُ الفاتورة يختم العميلَ على سطور الإيراد والضريبة والذمّة معاً (`resolveDimensions`)، وكشفُ الحساب
+   * بتعريفه المحاسبيّ حركةُ الذمّة وحدَها — وبها يطابق الأعمارَ وحدَّ الائتمان بالبناء.
+   * ⚠️ **حدٌّ معلَن:** سطورُ الذمّة السابقة لموجة البُعد (`ق-٨٧٣`، بقي منها `44` بلا عميل على التطوير) لا
+   * تظهر في الكشف لأنها بلا طرف — والأعمارُ تراها من التخصيصات؛ فرقُهما، إن كان، هو تلك السطور.
+   */
+  statement(companyId: string, allowedBranchIds: string[] | 'all', filter: StatementDto) {
+    if (filter.branchId) assertBranchAllowed(allowedBranchIds, filter.branchId);
+    if ((filter.customerId ? 1 : 0) + (filter.supplierId ? 1 : 0) !== 1) throw new BadRequestException(MSG.statement_party_required);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const party = filter.customerId
+        ? await tx.customer.findFirst({ where: { id: filter.customerId }, select: { id: true, name: true } })
+        : await tx.supplier.findFirst({ where: { id: filter.supplierId }, select: { id: true, name: true } });
+      if (!party) throw new NotFoundException(filter.customerId ? MSG.customer_not_found : MSG.supplier_not_found);
+      const control = await tx.account.findFirst({ where: { code: filter.customerId ? RECEIVABLES_ACCOUNT : PAYABLES_ACCOUNT }, select: { id: true, code: true, name: true, type: true } });
+      if (!control) throw new NotFoundException(MSG.account_not_found);
+      const side = filter.customerId ? 'debit' : 'credit';
+      const result = await readLedger(
+        tx,
+        {
+          allowedBranchIds,
+          accountId: control.id,
+          customerId: filter.customerId,
+          supplierId: filter.supplierId,
+          branchId: filter.branchId,
+          from: filter.from ? new Date(filter.from) : undefined,
+          to: filter.to ? new Date(filter.to) : undefined,
+        },
+        side,
+      );
+      return {
+        party: { kind: filter.customerId ? 'customer' : 'supplier', id: party.id, name: party.name },
+        account: control,
+        from: filter.from ?? null,
+        to: filter.to ?? null,
+        branchId: filter.branchId ?? null,
+        ...result,
       };
     });
   }

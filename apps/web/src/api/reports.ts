@@ -244,3 +244,74 @@ export const downloadReceivablesAgingCsv = async (params: AgingParams) => {
   link.click();
   URL.revokeObjectURL(url);
 };
+
+/** الأستاذُ العام وكشفُ الحساب (`ق-١٢٦١` ج) — سطرٌ برصيدٍ جارٍ ومصدرٍ؛ الأرقامُ نصٌّ من الخادم. */
+export interface LedgerRow {
+  lineId: string;
+  entryId: string;
+  entryNo: string;
+  date: string;
+  memo: string;
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  debit: MoneyText;
+  credit: MoneyText;
+  balance: MoneyText;
+  source: { type: string; id: string; no: string };
+  branchId: string | null;
+  customerId: string | null;
+  supplierId: string | null;
+  propertyId: string | null;
+  unitId: string | null;
+}
+
+export interface LedgerReport {
+  account: { id: string; code: string; name: string; type: string } | null;
+  from: string | null;
+  to: string | null;
+  branchId: string | null;
+  side: 'debit' | 'credit';
+  opening: MoneyText;
+  rows: LedgerRow[];
+  totalDebit: MoneyText;
+  totalCredit: MoneyText;
+  closing: MoneyText;
+  count: number;
+  truncated: boolean;
+}
+
+export interface StatementReport extends LedgerReport {
+  party: { kind: 'customer' | 'supplier'; id: string; name: string };
+}
+
+export interface LedgerParams {
+  accountId?: string;
+  propertyId?: string;
+  unitId?: string;
+  from?: string;
+  to?: string;
+  branchId?: string;
+}
+export interface StatementParams {
+  customerId?: string;
+  supplierId?: string;
+  from?: string;
+  to?: string;
+  branchId?: string;
+}
+
+export const getLedger = (params: LedgerParams) => apiClient.get<LedgerReport>('/reports/ledger', { params }).then((r) => r.data);
+export const getStatement = (params: StatementParams) => apiClient.get<StatementReport>('/reports/statement', { params }).then((r) => r.data);
+
+const downloadCsv = async (path: string, params: Record<string, string | undefined>, name: string) => {
+  const res = await apiClient.get(path, { params, responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+export const downloadLedgerCsv = (params: LedgerParams) => downloadCsv('/reports/ledger/export', params as Record<string, string | undefined>, `ledger-${params.from ?? 'all'}-${params.to ?? 'all'}.csv`);
+export const downloadStatementCsv = (params: StatementParams) => downloadCsv('/reports/statement/export', params as Record<string, string | undefined>, `statement-${params.from ?? 'all'}-${params.to ?? 'all'}.csv`);

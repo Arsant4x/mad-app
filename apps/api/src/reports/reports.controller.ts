@@ -6,9 +6,24 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { AgingDto, ReportRangeDto, TrialBalanceDto } from './dto/report-range.dto';
+import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
 import { buildCsv } from '../common/csv.util';
+import type { LedgerRow } from './ledger.util';
 import { ReportsService } from './reports.service';
+
+/** أعمدةُ الأستاذ وكشف الحساب في التصدير — واحدةٌ للاثنين لأن المحرّكَ واحد. */
+const LEDGER_CSV_COLUMNS = [
+  { label: 'التاريخ', value: (r: LedgerRow) => r.date },
+  { label: 'رقم القيد', value: (r: LedgerRow) => r.entryNo },
+  { label: 'البيان', value: (r: LedgerRow) => r.memo },
+  { label: 'رمز الحساب', value: (r: LedgerRow) => r.accountCode },
+  { label: 'اسم الحساب', value: (r: LedgerRow) => r.accountName },
+  { label: 'مدين', value: (r: LedgerRow) => r.debit },
+  { label: 'دائن', value: (r: LedgerRow) => r.credit },
+  { label: 'الرصيد', value: (r: LedgerRow) => r.balance },
+  { label: 'المصدر', value: (r: LedgerRow) => r.source.type },
+  { label: 'رقم المستند', value: (r: LedgerRow) => r.source.no },
+];
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -115,6 +130,42 @@ export class ReportsController {
   @RequiresAction('view')
   trialBalance(@CurrentTenant() tenant: TenantContext, @Query() filter: TrialBalanceDto) {
     return this.reportsService.trialBalance(tenant.companyId, tenant.allowedBranchIds, filter);
+  }
+
+  /** الأستاذُ العام (`SPEC 10.16` · `ق-١٢٦١` ج): حسابٌ أو بُعدٌ، على مدىً وفرع — برصيدٍ افتتاحيٍّ وجارٍ ومصدرٍ لكلِّ قيد. */
+  @Get('ledger')
+  @RequiresAction('view')
+  ledger(@CurrentTenant() tenant: TenantContext, @Query() filter: LedgerDto) {
+    return this.reportsService.ledger(tenant.companyId, tenant.allowedBranchIds, filter);
+  }
+
+  @Get('ledger/export')
+  @RequiresAction('view')
+  async ledgerCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: LedgerDto, @Res() res: Response) {
+    const report = await this.reportsService.ledger(tenant.companyId, tenant.allowedBranchIds, filter);
+    const csv = buildCsv(LEDGER_CSV_COLUMNS, report.rows);
+    res
+      .set('Content-Type', 'text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="ledger-${report.account?.code ?? 'dimension'}-${filter.from ?? 'all'}-${filter.to ?? 'all'}.csv"`)
+      .send(csv);
+  }
+
+  /** كشفُ حساب عميلٍ أو مورّد (`SPEC 4.2`): سطورُ الدفتر التي تحمل بُعدَ الطرف، برصيدٍ جارٍ على طرفه الطبيعيّ. */
+  @Get('statement')
+  @RequiresAction('view')
+  statement(@CurrentTenant() tenant: TenantContext, @Query() filter: StatementDto) {
+    return this.reportsService.statement(tenant.companyId, tenant.allowedBranchIds, filter);
+  }
+
+  @Get('statement/export')
+  @RequiresAction('view')
+  async statementCsv(@CurrentTenant() tenant: TenantContext, @Query() filter: StatementDto, @Res() res: Response) {
+    const report = await this.reportsService.statement(tenant.companyId, tenant.allowedBranchIds, filter);
+    const csv = buildCsv(LEDGER_CSV_COLUMNS, report.rows);
+    res
+      .set('Content-Type', 'text/csv; charset=utf-8')
+      .set('Content-Disposition', `attachment; filename="statement-${report.party.kind}-${report.party.id}-${filter.from ?? 'all'}-${filter.to ?? 'all'}.csv"`)
+      .send(csv);
   }
 
   /** تصدير 10.12 — CSV بـBOM ليفتح عربياً سليماً في Excel. */
