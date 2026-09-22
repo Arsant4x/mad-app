@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { Observable, tap } from 'rxjs';
 import { JwtPayload } from '../auth/types';
+import { REDACTED_VALUE, isRedactedKey } from '../common/privacy/personal-fields';
 import { REQUIRES_SCREEN_KEY } from '../common/tenant/requires-screen.decorator';
 import { REQUIRES_ACTION_KEY } from '../common/tenant/requires-action.decorator';
 import { AUDIT_CREATED_ID_PATH_KEY, AUDIT_ENTITY_FROM_RESULT_KEY, idFromResultPath } from './audit-entity-from-result.decorator';
@@ -51,6 +52,13 @@ function safeDetails(body: unknown): Record<string, unknown> | null {
   for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
     if (isSecretKey(key)) {
       out[key] = '[محذوف]';
+      continue;
+    }
+    // حقولُ التواصل والملاحظاتُ الحرّة: يُكتب **أن الحقل تغيّر** ولا تُكتب قيمتُه (`ق-١٢٧٨`/②).
+    // فالسجلُّ يحتاج أيَّ حقلٍ تغيّر لا قيمتَه، والقناعُ بآخر أربعةٍ يُبقي بياناً شخصياً — والمحوُ
+    // لا يبلغ السجلَّ (لا يُعدَّل — الملحقُ ١)، فالمنعُ **عند الكتابة** أو لا منعَ أصلاً.
+    if (isRedactedKey(key)) {
+      out[key] = REDACTED_VALUE;
       continue;
     }
     if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) {

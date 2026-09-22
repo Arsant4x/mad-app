@@ -1,0 +1,58 @@
+/**
+ * أسماءُ الحقول الشخصية — **مصدرٌ واحد** يقرؤه المحوُ (`personal-data-erasure`) وسجلُّ التدقيق
+ * (`audit.interceptor`) معاً (`ق-١٢٧٨`/②).
+ *
+ * **لماذا واحد:** المحوُ يُصفّر الحقلَ في الجدول، والسجلُّ يحتفظ بقيمته في `details` — فقائمتان
+ * تفترقان تعني حقلاً يُمحى من جدوله ويبقى في السجلّ (وهو العطلُ الذي وقع فعلاً: `ق-١٢٧١`/٣).
+ *
+ * **والحكمُ في السجلّ استبعادٌ كاملٌ عند الكتابة لا قناع** (بنصّ المالك): «فالسجلُّ يحتاج **أيَّ
+ * حقلٍ تغيّر** لا قيمتَه، والقناعُ بآخر أربعةٍ يُبقي بياناً شخصياً» — فيُكتب اسمُ الحقل وأنه
+ * تغيّر، ولا تُكتب القيمة. ⚠️ **والصفوفُ القائمة لا تُعدَّل** (السجلُّ لا يُعدَّل — الملحقُ ١
+ * لقرار الهيئة: «Allows for log modification/deletion» محظور)، ويُعلَن حدُّها في ردّ طلب المحو.
+ *
+ * **وحدٌّ معلَن ثانٍ:** الأسماءُ (`name` · `fullName` · `tenant`) **تبقى** — بها يُعرف الصفُّ في
+ * السجلّ («عميل «مؤسسة النخيل»» لا معرّفٌ خام)، وهي في `KEPT_FIELDS` للمحو كذلك بحجّتها.
+ */
+
+/** حقولُ التواصل — يقرؤها المحوُ أيضاً (`PERSONAL_FIELD_NAMES` كانت هنا أصلاً). */
+export const CONTACT_FIELD_NAMES = ['phone', 'mobile', 'email', 'website', 'address'] as const;
+
+/** أجزاءُ العنوان الوطنيّ — عنوانٌ بالتفصيل، فحكمُها حكمُ `address`. */
+export const ADDRESS_PART_NAMES = ['street', 'district', 'postalcode', 'buildingno', 'additionalnumber', 'unitnumber'] as const;
+
+/**
+ * الملاحظاتُ الحرّة — ما يكتبه الموظّف بيده، وهو حيث تُكتب أرقامُ الهويات والهواتف
+ * (`§4`: «`notes` و`reason` و`description` … وهي حيث يكتب الموظفون أرقام هويات وهواتف»).
+ *
+ * ⚠️ **و`description` داخلها بحدٍّ معلَن**: وصفُ بند الفاتورة يذهب من السجلّ كذلك — وقيمتُه
+ * **باقيةٌ في المستند نفسِه** (السجلُّ يقول «الوصف تغيّر» والفاتورةُ تحمل الوصف)، وبلاغُ الصيانة
+ * والمطالبةُ يكتبان فيه نصّاً حرّاً فعلاً.
+ */
+export const FREE_TEXT_FIELD_NAMES = ['notes', 'note', 'reason', 'description', 'remark', 'comment', 'memo'] as const;
+
+/** ما لا تُكتب قيمتُه في `details` — تُكتب علامةُ التغيّر وحدَها. */
+export const REDACTED_FIELD_NAMES: ReadonlySet<string> = new Set<string>([
+  ...CONTACT_FIELD_NAMES,
+  ...ADDRESS_PART_NAMES,
+  ...FREE_TEXT_FIELD_NAMES,
+]);
+
+/** العلامةُ في مكان القيمة — تقول إن الحقل وصل وتغيّر، ولا تقول ماذا صار. */
+export const REDACTED_VALUE = '[تغيّر — القيمة لا تُسجَّل]';
+
+/**
+ * أسماءٌ **تبدو شخصية** في المخطَّط ولا تُستبعد — كلٌّ بحجّته، كي لا يُسكَت عنها.
+ * الحارسُ (`audit-personal-fields.spec.ts`) يُسقط أيَّ اسمٍ جديدٍ في المخطَّط يشبهها
+ * وليس في `REDACTED_FIELD_NAMES` ولا هنا.
+ */
+export const DECLARED_NOT_REDACTED: ReadonlyArray<{ field: string; reason: string }> = [
+  { field: 'name', reason: 'اسمُ الصفّ — به يُعرف ما تغيّر في السجلّ، وهو باقٍ في المحو كذلك (`KEPT_FIELDS`)' },
+  { field: 'fullName', reason: 'اسمُ الموظّف — كسابقه' },
+  { field: 'tenant', reason: 'اسمُ المستأجر على العقد — حقلُ المستند المحفوظ نفسِه (م٥٣/٥/هـ)' },
+  { field: 'orgName', reason: 'اسمُ المنشأة — بيانُ المستند لا بيانُ شخص' },
+];
+
+/** هل يُستبعَد هذا المفتاح من `details`؟ — بالاسم كما يصل في جسم الطلب، بلا حساسيةٍ لحالة الأحرف. */
+export function isRedactedKey(key: string): boolean {
+  return REDACTED_FIELD_NAMES.has(key.toLowerCase());
+}

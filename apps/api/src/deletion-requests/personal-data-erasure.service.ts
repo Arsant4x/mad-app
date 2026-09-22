@@ -2,6 +2,7 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { CONTACT_FIELD_NAMES } from '../common/privacy/personal-fields';
 import { CompaniesService } from '../companies/companies.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { REOPEN_WINDOW_DAYS, reopenUntil } from '../common/tenant/reopen-window';
@@ -9,6 +10,7 @@ import { ArchiveManifest } from '../export/company-archive.service';
 import { delegateName } from '../export/export-scope';
 import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
 /**
  * الإتلافُ حقٌّ يُطلب وسياسةٌ تُطبَّق معاً (`ق-٥٥٩`):
@@ -64,8 +66,12 @@ export const KEPT_FIELDS: ReadonlyArray<PersonalField> = [
   { model: 'Property', field: 'address', reason: 'عنوانُ عقارٍ لا شخص' },
 ];
 
-/** الحقولُ التي يعدّها الحارسُ شخصيةً في المخطّط — بأسمائها لا بقائمة نماذج. */
-export const PERSONAL_FIELD_NAMES = ['phone', 'mobile', 'email', 'website', 'address'] as const;
+/**
+ * الحقولُ التي يعدّها الحارسُ شخصيةً في المخطّط — بأسمائها لا بقائمة نماذج.
+ * **ومصدرُها واحدٌ مع سجلّ التدقيق** (`common/privacy/personal-fields`): ما يُمحى من جدوله
+ * لا يبقى في `details` (`ق-١٢٧٨`/②) — وقائمتان تفترقان تعني حقلاً يُمحى ويبقى.
+ */
+export const PERSONAL_FIELD_NAMES = CONTACT_FIELD_NAMES;
 
 export const SYSTEM_ACTOR = { id: 'system', username: 'المحو الآليّ' } as const;
 
@@ -73,7 +79,18 @@ export interface EraseReport {
   companyId: string;
   trigger: 'REQUEST' | 'WINDOW';
   counts: Record<string, number>;
+  /** حدودٌ تُعلَن مع كلِّ محو — لا تُكتشف بعده (`ق-١٢٧٨`/②). */
+  limits: string[];
 }
+
+/**
+ * ما لا يبلغه المحو — **يُقال في الردّ** لا يُسكَت عنه:
+ * سجلُّ التدقيق **وقائعُ لا حالات** ولا يُعدَّل ولا يُحذف (الملحقُ ١ لقرار الهيئة)، فصفوفُه
+ * السابقة لـ`ق-١٢٧٨` تحمل قيمَ حقول التواصل كما وصلت؛ **والجديدُ لا يحملها** (تُستبعَد عند
+ * الكتابة). وهذا حدٌّ **معلَن** لا عطلٌ مكتوم.
+ */
+export const AUDIT_RETENTION_NOTICE =
+ 'سجلّاتٌ قديمةٌ محفوظةٌ نظاماً: أثرُ التدقيق لا يُعدَّل ولا يُحذف (متطلّبُ الهيئة)، فما سُجّل قبل استبعاد حقول التواصل يبقى كما هو؛ وما يُسجَّل بعده لا يحمل قيمةَ هاتفٍ ولا بريدٍ ولا ملاحظةٍ حرّة.';
 
 type UpdateManyDelegate = { updateMany: (args: unknown) => Promise<{ count: number }> };
 
@@ -120,12 +137,12 @@ export class PersonalDataErasureService {
         entityId: companyId,
         method: trigger === 'WINDOW' ? 'CRON' : 'POST',
         path: trigger === 'WINDOW' ? 'erasure.sweep' : '/admin/deletion-requests/:id/approve',
-        details: { trigger, counts, deferralReason: DEFERRAL_REASON },
+        details: { trigger, counts, deferralReason: DEFERRAL_REASON, auditNotice: AUDIT_RETENTION_NOTICE },
         ip: null,
       })
       .catch((e) => this.logger.error(`تعذّر تسجيل حدث المحو: ${String(e)}`));
     this.logger.warn(`Erased non-mandatory personal data of company ${companyId} (${trigger}): ${JSON.stringify(counts)}`);
-    return { companyId, trigger, counts };
+    return { companyId, trigger, counts, limits: [AUDIT_RETENTION_NOTICE] };
   }
 
   /**
@@ -133,7 +150,7 @@ export class PersonalDataErasureService {
    * تُحذف نسخةُ الإغلاق من المخزن ويُحذف الحسابُ صلباً — **وما ترفضه القاعدةُ (سجلٌّ ملحق —
    * `ق-١١٠`) يُسجَّل تعذّرُه ويُعرَض، ولا يُلتفّ عليه**.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { timeZone: SCHEDULE_TIME_ZONE })
   async sweep(now: Date = new Date()): Promise<{ erased: string[]; deleted: string[]; blocked: string[] }> {
     const erased: string[] = [];
     const deleted: string[] = [];

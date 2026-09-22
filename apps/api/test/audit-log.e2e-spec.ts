@@ -160,6 +160,62 @@ describe('Audit log (e2e)', () => {
     await authA(request(app.getHttpServer()).delete(`/company-users/${created.body.id}`));
   }, 40000);
 
+  it('🔴 لا يخزّن قيمةَ حقلِ تواصلٍ ولا جزءَ عنوان — يقول إن الحقل تغيّر وحسب (ق-١٢٧٨/②)', async () => {
+    /**
+     * **المحوُ لا يبلغ السجلَّ**: `personal-data-erasure` يصفّر الجداول، والسجلُّ لا يُعدَّل
+     * ولا يُحذف (الملحقُ ١ لقرار الهيئة) — فهاتفٌ يدخل `details` اليوم **يبقى بعد المحو**.
+     * فالمنعُ **عند الكتابة** أو لا منعَ أصلاً؛ والقناعُ بآخر أربعةٍ يُبقي بياناً شخصياً.
+     */
+    const phone = '0555123987';
+    const district = 'حي الياسمين قطعة 12';
+    const created = await authA(request(app.getHttpServer()).post('/customers'))
+      .send({ kind: 'NATURAL', name: `عميل الخصوصية ${suffix}`, phone })
+      .expect(201);
+    await authA(request(app.getHttpServer()).patch(`/customers/${created.body.id}`)).send({ district }).expect(200);
+
+    const isMine = (e: Entry) => e.entity === 'customers' && e.entityId === created.body.id;
+    const entries = (await trailUntil((es) => es.filter(isMine).length >= 2)).filter(isMine);
+    expect(entries.length).toBeGreaterThanOrEqual(2);
+    const serialized = JSON.stringify(entries.map((e) => e.details ?? {}));
+    // ① القيمةُ لا توجد — لا كاملةً ولا مقنَّعةً بآخر أربعة.
+    expect(serialized).not.toContain(phone);
+    expect(serialized).not.toContain(phone.slice(-4));
+    expect(serialized).not.toContain('الياسمين');
+    // ② والحقلُ **يُقال إنه تغيّر** — فالسجلُّ يبقى مفيداً: من غيّر ماذا ومتى.
+    const withPhone = entries.find((e) => e.details && 'phone' in e.details);
+    const withDistrict = entries.find((e) => e.details && 'district' in e.details);
+    expect(withPhone?.details?.phone).toBe('[تغيّر — القيمة لا تُسجَّل]');
+    expect(withDistrict?.details?.district).toBe('[تغيّر — القيمة لا تُسجَّل]');
+    // ③ والاسمُ يبقى — به يُعرف الصفُّ في السجلّ (حدٌّ معلَن).
+    expect(serialized).toContain('عميل الخصوصية');
+
+    /**
+     * ④ **والملاحظةُ الحرّة كذلك** — وهي حيث يكتب الموظّفون أرقامَ الهويات والهواتف (`§4`).
+     * مهمّةٌ بملاحظةٍ: يُسجَّل أن الملاحظة وصلت، ولا يُسجَّل نصُّها.
+     */
+    const freeText = 'راجع هوية العميل 1098765432 وهاتفه 0555123987';
+    // `OWNER` ⟵ معرّفُ المنشأة نفسِها (`task-model`)، و`/me/permissions` لا تحمل معرّفاً — فيُقرأ من الجلسة.
+    const whoAmI = (await authA(request(app.getHttpServer()).get('/auth/me')).expect(200)).body as { companyId?: string; user?: { companyId?: string } };
+    const ownerProfileId = whoAmI.companyId ?? whoAmI.user?.companyId;
+    expect(typeof ownerProfileId).toBe('string');
+    const taskRes = await authA(request(app.getHttpServer()).post('/tasks'))
+      .send({ title: `مهمة الخصوصية ${suffix}`, assigneeId: ownerProfileId, assigneeKind: 'OWNER', note: freeText });
+    // سببُ الرفض يُقرأ لا يُخمَّن (`§8.4`) — ورسالةُ الخادم تسمّي الحقل.
+    if (taskRes.status !== 201) throw new Error(`تعذّر إنشاء المهمة (${taskRes.status}): ${JSON.stringify(taskRes.body)}`);
+    const task = taskRes;
+    const isTask = (e: Entry) => e.entity === 'tasks' && e.entityId === task.body.id;
+    const taskEntry = (await trailUntil((es) => es.some(isTask))).find(isTask);
+    expect(taskEntry).toBeTruthy();
+    const taskDetails = JSON.stringify(taskEntry!.details ?? {});
+    expect(taskDetails).not.toContain('1098765432');
+    expect(taskDetails).not.toContain('0555123987');
+    expect(taskEntry!.details?.note).toBe('[تغيّر — القيمة لا تُسجَّل]');
+    // والعنوانُ يبقى — فالمهمّةُ تُعرف بما هي.
+    expect(taskDetails).toContain('مهمة الخصوصية');
+
+    await authA(request(app.getHttpServer()).delete(`/customers/${created.body.id}`));
+    await authA(request(app.getHttpServer()).delete(`/trash/customers/${created.body.id}`));
+  }, 40000);
   it('never shows one company another\'s trail', async () => {
     const res = await authB(request(app.getHttpServer()).get('/audit-log?limit=200')).expect(200);
     expect((res.body as Entry[]).some((e) => e.entityId === customerId)).toBe(false);

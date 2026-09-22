@@ -5,6 +5,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
 /**
  * ═══ موافقةُ التاجر على المعالجين الفرعيين (`ق-٥٨١` · `ق-٥٨٩`) ═══
@@ -187,7 +188,7 @@ export class ConsentService {
    * ⚠️ **والتكرارُ لا يُنتج إشعاراً مكرّراً**: مفتاحُ إبطال التكرار فريدٌ لكلِّ (منشأة ·
    * نسخة · مرحلة) — **والقيدُ الفريد في القاعدة هو الضمانة لا الشيفرة**.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_9AM)
+  @Cron(CronExpression.EVERY_DAY_AT_9AM, { timeZone: SCHEDULE_TIME_ZONE })
   async remind(now: Date = new Date()): Promise<{ stage: string; companies: number }[]> {
     const out: { stage: string; companies: number }[] = [];
     const versions = await this.prisma.subProcessorListVersion.findMany({ orderBy: { version: 'desc' }, take: 5 });

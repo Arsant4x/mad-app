@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { round2 } from '../common/money/rounding';
 import { postDeferredRecognitionEntry } from '../journal/auto-posting.util';
 import { recognitionSchedule, recognitionShareLabel } from '../journal/rent-recognition.util';
+import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
 /**
  * **تحوّلُ الإيراد المؤجَّل — الطرفُ الثاني من القاعدة** (`ق-٤٦٨` · `ق-٤٧٥/①`).
@@ -68,7 +69,7 @@ export class RentRecognitionService {
    *
    * وفشلُ منشأةٍ لا يوقف البقيّة — كسابقتها في `escalation`.
    */
-  @Cron('0 2 1 * *')
+  @Cron('0 2 1 * *', { timeZone: SCHEDULE_TIME_ZONE })
   async runForAllCompanies(): Promise<{ companies: number; entries: number }> {
     // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
     const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });

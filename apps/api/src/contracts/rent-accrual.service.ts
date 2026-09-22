@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { accrueDueWithinTx, AccrualSweepResult } from '../journal/rent-accrual.util';
 import { BATCH_TX_OPTIONS, RentRecognitionService } from './rent-recognition.service';
+import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
 /**
  * **كنسُ الاستحقاق اليوميّ — نداءٌ للمحرّك لا قاعدةٌ ثانية** (`ق-٩٢٧/٥`).
@@ -31,7 +32,7 @@ export class RentAccrualService {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) => accrueDueWithinTx(tx, companyId, asOf), BATCH_TX_OPTIONS);
   }
 
-  @Cron('0 1 * * *')
+  @Cron('0 1 * * *', { timeZone: SCHEDULE_TIME_ZONE })
   async runForAllCompanies(): Promise<{ companies: number; accrued: number }> {
     // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
     const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });

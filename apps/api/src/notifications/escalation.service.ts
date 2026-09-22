@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationKind } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { dayStartOf } from '../common/wall-clock.util';
+import { SCHEDULE_TIME_ZONE, dayStartOf } from '../common/wall-clock.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from './notifications.service';
 import { formatMoney } from '../common/money/rounding';
@@ -207,7 +207,7 @@ export class EscalationService {
    * A failure in one company must not stop the rest, so each is caught and
    * logged individually.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_7AM)
+  @Cron(CronExpression.EVERY_DAY_AT_7AM, { timeZone: SCHEDULE_TIME_ZONE })
   async runForAllCompanies(): Promise<{ companies: number; escalated: number; warned: number }> {
     // Deliberately the unscoped client: this is the one place that legitimately
     // crosses tenants — to then enter each tenant's own context below.
