@@ -20,6 +20,7 @@ import { TENANT_WIDE_KEY } from './tenant-wide.decorator';
 import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
+import { IntegrationUsageService, USAGE_API_KEY } from '../../api-keys/integration-usage.service';
 
 /** Screens holding the records the whole ledger hangs off. Freezing these is
  * what the master-data lock is for — invoices and payments stay editable. */
@@ -41,6 +42,7 @@ export class TenantGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly supportAccessService: SupportAccessService,
     private readonly consent: ConsentService,
+    private readonly usage: IntegrationUsageService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -184,6 +186,12 @@ export class TenantGuard implements CanActivate {
       // مفتاحٌ أُبطل أو حُذفت منشأتُه — **والرفضُ من الحارس لا من الباب**: الباب يُثبت
       // الهويّةَ، وهذا يفحص الحال في كلِّ طلب.
       if (!key || key.revokedAt) throw new UnauthorizedException(MSG.api_key_invalid);
+      /**
+       * **قياسُ الاستعمال والحصّة** (`ق-١٢٩١` · ي/㉑A1) — **بعد إثبات المفتاح وقبل
+       * العمل**: فنداءٌ بمفتاحٍ مزوَّر لا يُعدّ على أحد، **ونداءٌ صحيحٌ يُعدّ ولو رُدّ
+       * بعدها** (تجاوزُ الحصّة لا يُشترى بتكرار المحاولة).
+       */
+      await this.usage.recordAndCheck(payload.companyId, USAGE_API_KEY, company.apiMonthlyQuota);
       isAllScreens = key.permissionTemplate.isAllScreens;
       allowedScreens = isAllScreens ? 'all' : key.permissionTemplate.allowedScreens;
       screenActions = (key.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;

@@ -36,4 +36,10 @@ export class ApiKeysController {
   revoke(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.apiKeys.revoke(tenant.companyId, id);
   }
+
+  /** قياسُ الاستعمال والحصّة (`ق-١٢٩١` · ي/㉑A1) — **ما لا يُرى لا يُدار**. */
+  @Get('usage')
+  usage(@CurrentTenant() tenant: TenantContext) {
+    return this.apiKeys.usage(tenant.companyId);
+  }
 }

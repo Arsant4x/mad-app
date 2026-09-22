@@ -6,6 +6,7 @@ import { JwtPayload } from '../auth/types';
 import { MSG } from '../common/i18n/messages';
 import { generateApiKey, parseApiKeyToken } from './api-key-token.util';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
+import { IntegrationUsageService, UsageView, usagePeriod } from './integration-usage.service';
 
 /** ما يراه التاجر في القائمة — **بلا سرٍّ ولا هاش**. */
 export interface ApiKeyView {
@@ -24,6 +25,7 @@ export class ApiKeysService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
+    private readonly usageService: IntegrationUsageService,
   ) {}
 
   /**
@@ -59,6 +61,14 @@ export class ApiKeysService {
       profileId: key.id,
       username: key.name,
     };
+  }
+
+  /** استعمالُ التكامل وحصّتُه (`ق-١٢٩١` · ي/㉑A1) — يقرؤه المالك في شاشته. */
+  async usage(companyId: string): Promise<{ quota: number | null; period: string; rows: UsageView[] }> {
+    const quota = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { apiMonthlyQuota: true } }),
+    );
+    return { quota: quota.apiMonthlyQuota, period: usagePeriod(), rows: await this.usageService.list(companyId, quota.apiMonthlyQuota) };
   }
 
   list(companyId: string): Promise<ApiKeyView[]> {

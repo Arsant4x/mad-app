@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyRow } from '../../api/apiKeys';
+import { apiKeyUsage, createApiKey, listApiKeys, revokeApiKey, type ApiKeyRow, type UsageRow } from '../../api/apiKeys';
 import { listTemplates, type PermissionTemplate } from '../../api/templates';
 
 const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('ar-SA') : '—');
@@ -16,15 +16,17 @@ export function ApiKeysCard() {
   const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
   const [name, setName] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [usage, setUsage] = useState<{ quota: number | null; period: string; rows: UsageRow[] } | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function reload() {
-    const [k, t] = await Promise.all([listApiKeys(), listTemplates()]);
+    const [k, t, u] = await Promise.all([listApiKeys(), listTemplates(), apiKeyUsage()]);
     setKeys(k);
     // **القوالبُ المفتوحة على كلِّ الشاشات لا تُعرض** — الخادمُ يردّها، والشاشةُ لا تغري بها.
     setTemplates(t.filter((x) => !x.isAllScreens));
+    setUsage(u);
   }
 
   useEffect(() => {
@@ -70,6 +72,13 @@ export function ApiKeysCard() {
         </div>
       </div>
       {error && <p className="error-text">{error}</p>}
+
+      {usage && (
+        <p className="page-sub" data-testid="api-usage">
+          نداءات هذا الشهر ({usage.period}): <strong>{usage.rows.find((r) => r.period === usage.period)?.count ?? 0}</strong>
+          {usage.quota === null ? ' — بلا حد' : ` من ${usage.quota}`}
+        </p>
+      )}
 
       {fresh && (
         <div className="card" style={{ background: 'var(--bg)', marginBottom: 10 }}>
