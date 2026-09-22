@@ -126,6 +126,80 @@ export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: 
 }
 
 /**
+ * ④A1 — **مستندُ الدفعة المقدَّمة (386) يُرحَّل التزاماً لا إيراداً** (`ق-١٢٦١` ب).
+ *
+ * سندُ القبض رحّل نقدَه `مدين النقد / دائن 1200` — فبقي العميلُ دائناً على الذمم بمبلغٍ لم يُورَّد له شيء. المستندُ
+ * ينقله من الذمم إلى التزامٍ باسمه ويُثبت ضريبتَه يومَ القبض (م٥٣(١)(أ)(٢) — الضريبةُ تُستحقّ بالقبض):
+ *
+ *   `مدين 1200 (الإجمالي) · دائن 2450 دفعاتٌ مقدَّمة (الصافي) · دائن 2200 (الضريبة)`
+ *
+ * فالذمّةُ تعود إلى الصفر للمقدَّم، والالتزامُ يُقفل عند التطبيق على فاتورة التوريد (`postPrepaymentApplicationEntry`).
+ */
+export interface PrepaymentForPosting {
+  customerId: string;
+  branchId?: string | null;
+  no: string;
+  issueDate: Date;
+  customerName: string;
+  baseSubtotal: number;
+  baseTaxTotal: number;
+  baseTotal: number;
+  /** حسابُ `2450` — يُنشأ عند أوّل حاجة (`prepayment-account.util`). */
+  prepaymentsAccountId: string;
+}
+
+export async function postPrepaymentInvoiceEntry(tx: Prisma.TransactionClient, companyId: string, p: PrepaymentForPosting) {
+  if (p.baseTotal <= 0) return null;
+  const needCodes = ['1200', ...(p.baseTaxTotal > 0 ? ['2200'] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: p.baseTotal, credit: 0 }];
+  if (p.baseSubtotal > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: 0, credit: p.baseSubtotal });
+  if (p.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: p.baseTaxTotal });
+  return createJournalEntry(tx, {
+    companyId,
+    date: p.issueDate,
+    memo: `دفعة مقدَّمة ${p.no} — ${p.customerName}`,
+    lines,
+    auto: true,
+    branchId: p.branchId ?? null,
+    customerId: p.customerId,
+  });
+}
+
+/**
+ * ④A1 — **تطبيقُ الدفعة المقدَّمة على فاتورة التوريد**: الالتزامُ يُقفل وضريبتُه التي أُثبتت يومَ القبض تُعكس (فاتورةُ
+ * التوريد أثبتتها كاملةً على توريدها)، والذمّةُ تنقص بالإجماليّ المقدَّم:
+ *
+ *   `مدين 2450 (الصافي) · مدين 2200 (ضريبةُ المقدَّم) · دائن 1200 (الإجمالي)`
+ *
+ * فيبقى على العميل ما فوق المقدَّم، وفي `2200` ضريبةُ التوريد كاملةً مرّةً واحدة.
+ */
+export async function postPrepaymentApplicationEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: { customerId: string; branchId?: string | null; invoiceNo: string; prepaymentNo: string; date: Date; customerName: string; net: number; vat: number; gross: number; prepaymentsAccountId: string },
+) {
+  if (p.gross <= 0) return null;
+  const needCodes = ['1200', ...(p.vat > 0 ? ['2200'] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
+  if (!ids) return null;
+  const lines: PostingLine[] = [];
+  if (p.net > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: p.net, credit: 0 });
+  if (p.vat > 0) lines.push({ accountId: ids.get('2200')!, debit: p.vat, credit: 0 });
+  lines.push({ accountId: ids.get('1200')!, debit: 0, credit: p.gross });
+  return createJournalEntry(tx, {
+    companyId,
+    date: p.date,
+    memo: `تطبيق دفعة مقدَّمة ${p.prepaymentNo} على ${p.invoiceNo} — ${p.customerName}`,
+    lines,
+    auto: true,
+    branchId: p.branchId ?? null,
+    customerId: p.customerId,
+  });
+}
+
+/**
  * The mirror image of `postInvoiceEntry` — what a credit note posts: credit
  * A/R (1200) for the total, debit Revenue (4100) for the subtotal, debit VAT
  * payable (2200) for the tax.

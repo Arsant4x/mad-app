@@ -153,8 +153,8 @@ export function InvoiceListView({
                       credit (reduces), amber for a debit (adds). */}
                   {inv.docType !== 'INVOICE' && (
                     <>
-                      <span className={`badge ${inv.docType === 'CREDIT_NOTE' ? 'overdue' : 'due'}`} style={{ marginInlineStart: 6 }}>
-                        {inv.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : 'إشعار مدين'}
+                      <span className={`badge ${inv.docType === 'CREDIT_NOTE' ? 'overdue' : inv.docType === 'PREPAYMENT' ? 'paid' : 'due'}`} style={{ marginInlineStart: 6 }}>
+                        {inv.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : inv.docType === 'PREPAYMENT' ? 'دفعة مقدَّمة' : 'إشعار مدين'}
                       </span>
                       {inv.relatedInvoice && <div className="hint">على الفاتورة {inv.relatedInvoice.no}</div>}
                     </>
@@ -232,7 +232,10 @@ export function InvoiceListView({
                             ]
                           : inv.docType === 'CREDIT_NOTE'
                             ? [{ label: '↪ إشعار مدين يصحّحه', onClick: () => onIssueDebitNote(inv) }]
-                            : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
+                            : // ④A1: مستندُ الدفعة المقدَّمة لا إشعارَ عليه بعدُ (الخادمُ يرفضه مسمّىً) — فلا زرَّ يُعرض ويُرفض.
+                              inv.docType === 'PREPAYMENT'
+                              ? []
+                              : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED' && inv.zatcaStatus !== 'REJECTED'

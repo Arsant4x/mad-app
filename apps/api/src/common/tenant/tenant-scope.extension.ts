@@ -63,6 +63,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'CashDeposit',
   // ⑦A2 تسويةُ الشبكة 1251 (ق-١٢٦١ ج): يحمل companyId وتحته RLS بـFORCE — طبقتان.
   'NetworkSettlement',
+  // ④A1 تطبيقُ الدفعة المقدَّمة على فاتورة التوريد (ق-١٢٦١ ب): يحمل companyId وتحته RLS بـFORCE — طبقتان.
+  'InvoicePrepayment',
   // ٢٥ الاستلامُ وسطورُه (ق-١١٣١): يحملان companyId وتحتهما RLS بـFORCE — طبقتان كالشراء.
   'GoodsReceipt',
   'GoodsReceiptLine',

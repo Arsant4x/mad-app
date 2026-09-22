@@ -33,8 +33,17 @@ export interface Payment {
   /** مجموعُ التخصيصات وما بقي بلا تخصيص — من الخادم لا من جمع الشاشة (`ق-١٢٤٣`)؛ نصٌّ بخانتين. */
   allocatedTotal: MoneyText;
   unallocated: MoneyText;
+  /** ④A1: فاتورةُ الدفعة المقدَّمة (386) التي أصدرها فائضُ هذا السند — إن أُعلن دفعةً مقدَّمة. */
+  prepaymentInvoice?: { id: string; no: string; total: MoneyText; onAccountRemainder?: MoneyText } | null;
   createdAt: string;
 }
+
+/**
+ * ④A1: مصيرُ ما في السند فوق المخصَّص — يُعلَن حين يفوق هللاتِ التدوير (`UNALLOCATED_DECLARATION_MIN`، والخادمُ الحكم):
+ * دفعةٌ مقدَّمة تُصدر فاتورةَ 386 يومَ القبض، أو على الحساب حين تغطّيه فواتيرُ العميل المفتوحة.
+ */
+export type UnallocatedFate = 'PREPAYMENT' | 'ON_ACCOUNT';
+export const UNALLOCATED_DECLARATION_MIN = 0.05;
 
 /** فاتورة مفتوحة بمتبقّيها — **محسوباً في الخادم من التخصيصات** لا من حقل. */
 export interface OpenInvoice {
@@ -67,6 +76,8 @@ export interface PaymentInput {
   currency?: string;
   exchangeRate?: number;
   allocations?: AllocationInput[];
+  /** ④A1: مصيرُ الفائض غير المخصَّص — إلزاميٌّ من الخادم حين يفوق هللاتِ التدوير. */
+  unallocated?: UnallocatedFate;
 }
 
 export const listPayments = (customerId?: string) =>

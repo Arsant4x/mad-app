@@ -203,6 +203,17 @@ export const MSG = {
   network_settlement_not_voidable: 'network_settlements.not_voidable',
   network_settlement_matched: 'network_settlements.matched',
   payment_card_no_bank: 'payments.card_no_bank',
+  // prepayment invoice (ق-١٢٦١ ب — ④A1)
+  payment_unallocated_choice_required: 'payments.unallocated_choice_required',
+  payment_on_account_uncovered: 'payments.on_account_uncovered',
+  payment_has_prepayment_invoice: 'payments.has_prepayment_invoice',
+  prepayment_immutable: 'invoices.prepayment_immutable',
+  prepayment_note_unsupported: 'invoices.prepayment_note_unsupported',
+  prepayment_amount_positive: 'invoices.prepayment_amount_positive',
+  prepayment_not_found: 'invoices.prepayment_not_found',
+  prepayment_other_customer: 'invoices.prepayment_other_customer',
+  prepayment_already_applied: 'invoices.prepayment_already_applied',
+  prepayment_exceeds_invoice: 'invoices.prepayment_exceeds_invoice',
 
   // properties / units / contracts
   property_not_found: 'properties.not_found',
@@ -655,6 +666,28 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.pos_clearance_required]: {
     ar: 'فاتورة ضريبية كاملة — المشتري مؤسسة أو شخص اعتباري أو مسجَّل في الضريبة — تُجاز لدى الهيئة قبل تسليمها؛ لا تُطبع من الكاشير، وتُسلَّم من شاشة الفواتير بعد الإجازة',
     en: 'Standard tax invoice — the buyer is an establishment, a legal person, or VAT-registered — it is cleared by the authority before delivery; not printed at the register, delivered from the invoices screen once cleared',
+  },
+  [MSG.payment_unallocated_choice_required]: {
+    ar: 'في السند {remainder} فوق ما خُصِّص للفواتير — أعلن ما يكون: دفعةً مقدَّمة (تُصدَر لها فاتورة 386 اليوم) أو مبلغاً على الحساب',
+    en: 'The receipt carries {remainder} beyond what was allocated to invoices — declare it: a prepayment (a 386 invoice is issued today) or an on-account amount',
+  },
+  [MSG.payment_on_account_uncovered]: {
+    ar: 'لا فواتير مفتوحة تغطّي {remainder} (المفتوح بعد التخصيص: {open}) — مقبوضٌ قبل التوريد دفعةٌ مقدَّمة توجب فاتورة 386 (م٥٣)، فأعلنه كذلك',
+    en: 'No open invoices cover {remainder} (open after allocation: {open}) — money received before supply is a prepayment and requires a 386 invoice (Art. 53); declare it as such',
+  },
+  [MSG.payment_has_prepayment_invoice]: {
+    ar: 'السند أصدر فاتورة دفعة مقدَّمة {no} — لا يُعاد توزيعه ولا يُعكس؛ تصحيحه إشعار دائن على مستندها',
+    en: 'This receipt issued prepayment invoice {no} — it cannot be re-allocated or reversed; correct it with a credit note on that document',
+  },
+  [MSG.prepayment_immutable]: { ar: 'فاتورة الدفعة المقدَّمة صادرة من سند قبضها ولا تُعدَّل — تصحيحها إشعار دائن عليها', en: 'A prepayment invoice is issued from its receipt and cannot be edited — correct it with a credit note' },
+  [MSG.prepayment_note_unsupported]: { ar: 'الإشعار على فاتورة دفعة مقدَّمة لم يُبنَ بعد — حدٌّ معلَن', en: 'Notes on a prepayment invoice are not built yet — a declared limit' },
+  [MSG.prepayment_amount_positive]: { ar: 'مبلغ الدفعة المقدَّمة يجب أن يكون موجباً', en: 'The prepayment amount must be positive' },
+  [MSG.prepayment_not_found]: { ar: 'مستند الدفعة المقدَّمة غير موجود', en: 'Prepayment invoice not found' },
+  [MSG.prepayment_other_customer]: { ar: 'الدفعة المقدَّمة {no} لعميلٍ آخر — لا تُطبَّق على فاتورة غيره', en: 'Prepayment {no} belongs to another customer — it cannot be applied to this invoice' },
+  [MSG.prepayment_already_applied]: { ar: 'الدفعة المقدَّمة {no} طُبِّقت من قبل على فاتورة', en: 'Prepayment {no} has already been applied to an invoice' },
+  [MSG.prepayment_exceeds_invoice]: {
+    ar: 'الدفعات المقدَّمة المطبَّقة ({applied}) تفوق إجمالي الفاتورة ({total}) عند {no} — أصدر فاتورة بقيمة الدفعات أو اترك ما زاد لفاتورة تالية',
+    en: 'Applied prepayments ({applied}) exceed the invoice total ({total}) at {no} — invoice the full prepaid amount or leave the excess for a later invoice',
   },
   [MSG.customer_has_invoices]: {
     ar: 'لا يمكن حذف عميل مرتبط بفواتير — احذف فواتيره أولاً',

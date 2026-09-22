@@ -120,9 +120,15 @@ export function PaymentsPage() {
                       </div>
                     ))}
                     {p.allocations.length === 0 && <span className="hint">غير موزَّع</span>}
+                    {/* ④A1: سندٌ أصدر فاتورةَ دفعةٍ مقدَّمة — يُقرأ من الخادم؛ ولا عكسَ له (الخادمُ يرفضه مسمّىً). */}
+                    {p.prepaymentInvoice && (
+                      <div className="hint num" data-testid="prepayment-invoice">
+                        دفعة مقدَّمة {p.prepaymentInvoice.no} — {fmt(p.prepaymentInvoice.total)}
+                      </div>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {!isReversal && (
+                    {!isReversal && !p.prepaymentInvoice && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setReversing(p)}>
                         ↩ عكس
                       </button>

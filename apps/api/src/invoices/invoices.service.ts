@@ -25,6 +25,8 @@ import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type Pr
 import { fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { postPrepaymentApplicationEntry, postPrepaymentInvoiceEntry } from '../journal/auto-posting.util';
+import { getOrCreateCustomerPrepaymentsAccount } from '../journal/prepayment-account.util';
 import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, postReversalEntry, unpostIfLinked } from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
@@ -41,6 +43,7 @@ import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
+import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
 import { events } from '../shared/events/event-bus';
@@ -390,6 +393,8 @@ export class InvoicesService {
         const allocations = await tx.paymentAllocation.findMany({ where: { invoiceId: rejected.id }, select: { paymentId: true, amount: true } });
         const amountMoved = round2(allocations.reduce((s, a) => s + Number(a.amount), 0));
         if (allocations.length > 0) await tx.paymentAllocation.updateMany({ where: { invoiceId: rejected.id }, data: { invoiceId: replacement.id } });
+        // ④A1: صفوفُ الدفعات المقدَّمة المطبَّقة تتبع تخصيصاتها إلى البدل — فيحمل مرجعَها (BT-113) كما حملته المردودة.
+        await tx.invoicePrepayment.updateMany({ where: { invoiceId: rejected.id }, data: { invoiceId: replacement.id } });
         await this.syncSettlementStatus(tx, rejected.id, now);
         await this.syncSettlementStatus(tx, replacement.id, now);
         await this.audit.recordWithinTx(tx, {
@@ -431,8 +436,10 @@ export class InvoicesService {
    * للطرفين معاً كي لا يفترق المخزَّنُ عن المحسوب (حارسُ الانحراف في `invoice-outstanding`).
    */
   private async syncSettlementStatus(tx: Prisma.TransactionClient, invoiceId: string, now: Date): Promise<void> {
-    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { total: true, status: true, dueDate: true } });
+    const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { total: true, status: true, dueDate: true, docType: true } });
     if (!invoice) return;
+    // ④A1: مستندُ الدفعة المقدَّمة مسدَّدٌ بالبناء — سندُ قبضه أصدره، وتخصيصُه ينتقل إلى فاتورة التوريد عند التطبيق.
+    if (invoice.docType === 'PREPAYMENT') return;
     const allocated = await tx.paymentAllocation.aggregate({ where: { invoiceId }, _sum: { amount: true } });
     const derived = deriveSettlementStatus(Number(allocated._sum.amount ?? 0), Number(invoice.total));
     // يومُ الآن بإزاحةٍ معلَنة لا بمنطقة العملية (`ق-١١٩٠`) — فحكمُ «متأخّرة» يقرؤه التاجر.
@@ -687,6 +694,9 @@ export class InvoicesService {
         payload: { invoiceId: created.id, docType: created.docType, no: created.no } satisfies InvoiceIssuedPayload,
       });
 
+      // ④A1: الدفعاتُ المقدَّمة المسمّاة تُطبَّق على هذه الفاتورة — تخصيصٌ من سند قبضها، وقيدُ إقفالِ الالتزام، وصفُّ الربط للمستند.
+      if (dto.prepaymentInvoiceIds?.length) await this.applyPrepayments(tx, companyId, created, dto.prepaymentInvoiceIds);
+
       // ② التسليمُ يخرج نصّاً بدقّة صنفه (`ق-١٢٣٥`) — والكاشيرُ يقرأ صورةَ الحدّ هذه لا الرقم.
       if (!entry) return { ...created, stockFulfilment: fulfilmentReport(fulfilment) };
       const saved = await tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: INVOICE_INCLUDE });
@@ -730,6 +740,8 @@ export class InvoicesService {
       // مقابل (`ق-٩٥٢`). الدائنُ لا حالةَ سدادٍ له فيُرفض كلُّه؛ والمدينُ ذمّةٌ فتتحرّك حالتُه.
       if (existing.docType === 'CREDIT_NOTE') throw new BadRequestException(MSG.credit_note_immutable);
       if (existing.docType === 'DEBIT_NOTE' && changesSignedContent) throw new BadRequestException(MSG.credit_note_immutable);
+      // ④A1: مستندُ الدفعة المقدَّمة صادرٌ من سند قبضه وحالتُه مسدَّدةٌ بالبناء — لا يُعدَّل بحال.
+      if (existing.docType === 'PREPAYMENT') throw new BadRequestException(MSG.prepayment_immutable);
 
       if (changesSignedContent) {
         /**
@@ -968,6 +980,8 @@ export class InvoicesService {
   ) {
     const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: true } });
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
+    // ④A1: الإشعارُ على مستند 386 (ردُّ دفعةٍ مقدَّمة) موجةٌ لاحقة — يُرفض مسمّىً لا يُبنى نصفُه.
+    if (original.docType === 'PREPAYMENT') throw new ConflictException(MSG.prepayment_note_unsupported);
     // المصدرُ الواحد مع إشعار المورّد (`ق-١٠٠٨`/١ — ①). ⚖️ ولا إشعارَ على مردودة (`ق-٩٥٨`): ليست فاتورةً
     // صحيحة، ومخرجُها بدلٌ — ثم يُصحَّح البدلُ إن لزم.
     assertAdjustableTarget(
@@ -1138,10 +1152,159 @@ export class InvoicesService {
    * no])` turns that into a P2002 instead of a silent duplicate, and the
    * callers retry the whole transaction on that error (see
    * retryOnUniqueConflict). */
+  /**
+   * ④A1 — **مستندُ الدفعة المقدَّمة (386) من فائض سند القبض** (`ق-١٢٦١` ب).
+   *
+   * مقبوضٌ قبل التوريد يوجب مستنداً ضريبياً يومَه (م٥٣(١)(أ)(٢) للكاملة · م٥٣(٧)(أ)(٢) للمبسّطة). سطرٌ خدميّ واحد
+   * «دفعةٌ مقدَّمة» بالصافي، وضريبتُه من دالّة المجاميع الواحدة — **والصافي يُختار بحيث يساوي إجماليُّ المستند
+   * المقبوضَ** (`gross/1.15` مدوَّراً ثم مجاورُه إن اختلّت هللةُ التدوير)؛ فإن تعذّر على هللةٍ (BR-CO-17 يوجب
+   * الضريبةَ = الوعاء × النسبة مدوَّراً) بقيت الهللةُ على حساب العميل **وتُعلَن** في الردّ (`onAccountRemainder`).
+   * النوعُ (كاملة/مبسّطة) من صفة المشتري كسائر المستندات؛ والفئةُ `S` بالنسبة الأساسية — توريدٌ لم يُعرف بعد
+   * يُفترض خاضعاً، **حدٌّ معلَن**. يُرحَّل التزاماً (`2450`) لا إيراداً، ويدخل السلسلةَ بحدث الإصدار نفسِه.
+   */
+  async issuePrepaymentWithinTx(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    p: { customerId: string; customerName: string; paymentId: string; paymentNo: string; branchId: string | null; date: Date; grossAmount: number; currency: string; exchangeRate: number },
+  ): Promise<{ id: string; no: string; total: number; onAccountRemainder: number }> {
+    const gross = round2(p.grossAmount);
+    if (gross <= 0) throw new BadRequestException(MSG.prepayment_amount_positive);
+    const rate = STANDARD_VAT_RATE;
+    // الصافي يُختار بحيث يساوي إجماليُّ المستند المقبوضَ؛ فإن تعذّر (قفزةُ تدوير الضريبة تتخطّى المقبوضَ — كـ`0.80`:
+    // `0.69 ⟵ 0.79` و`0.70 ⟵ 0.81`) اختير **أكبرُ صافٍ لا يفوق إجماليُّه المقبوضَ** — فلا يُخصَّص على المستند أكثرُ ممّا قُبض.
+    const base = round2(gross / (1 + rate / 100));
+    const totalOf = (net: number) => computeTotals([{ quantity: 1, unitPrice: net, taxRate: rate }]).total;
+    const candidates = [base, round2(base - 0.01), round2(base + 0.01), round2(base - 0.02)].filter((net) => net > 0 && totalOf(net) <= gross);
+    if (candidates.length === 0) throw new BadRequestException(MSG.prepayment_amount_positive);
+    const chosen = candidates.reduce((best, net) => (totalOf(net) > totalOf(best) ? net : best), candidates[0]);
+    const lines = await priceLines(tx, [{ description: `دفعة مقدَّمة — سند القبض ${p.paymentNo}`, quantity: 1, unitPrice: chosen, taxRate: rate, taxCategory: 'S' }], { trusted: true });
+    const { subtotal, taxTotal, total } = computeTotals(lines);
+    const onAccountRemainder = round2(gross - total);
+    const no = await this.nextDocumentNumber(tx, companyId, 'PP', p.date);
+    const created = await tx.invoice.create({
+      data: {
+        companyId,
+        no,
+        docType: 'PREPAYMENT',
+        prepaymentPaymentId: p.paymentId,
+        branchId: p.branchId,
+        customerId: p.customerId,
+        issueDate: p.date,
+        dueDate: p.date,
+        // مسدَّدةٌ بالبناء — سندُ قبضها هو ما أصدرها.
+        status: 'PAID',
+        subtotal,
+        taxTotal,
+        total,
+        currency: p.currency,
+        exchangeRate: p.exchangeRate,
+        baseSubtotal: toBaseAmount(subtotal, p.exchangeRate),
+        baseTaxTotal: toBaseAmount(taxTotal, p.exchangeRate),
+        baseTotal: toBaseAmount(total, p.exchangeRate),
+        lines: { create: lines.map((l) => ({ companyId, description: l.description, productId: null, unitCode: null, quantity: l.quantity, unitPrice: l.unitPrice, discount: 0, ...taxColumns(l) })) },
+      } as unknown as Prisma.InvoiceUncheckedCreateInput,
+      include: INVOICE_INCLUDE,
+    });
+    const entry = await postPrepaymentInvoiceEntry(tx, companyId, {
+      customerId: created.customerId,
+      branchId: created.branchId,
+      no: created.no,
+      issueDate: created.issueDate,
+      customerName: created.customer.name,
+      baseSubtotal: Number(created.baseSubtotal),
+      baseTaxTotal: Number(created.baseTaxTotal),
+      baseTotal: Number(created.baseTotal),
+      prepaymentsAccountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId),
+    });
+    if (entry) await tx.invoice.update({ where: { id: created.id }, data: { journalEntryId: entry.id } });
+    // السندُ يُخصَّص على مستنده بإجماليه — فالمستندُ مسدَّدٌ بالبناء من المصدر الواحد (التخصيصات)، والفائضُ (هللةُ
+    // التدوير إن وُجدت) يبقى على الحساب معلَناً؛ وعند التطبيق ينتقل هذا التخصيصُ بعينه إلى فاتورة التوريد.
+    await tx.paymentAllocation.create({ data: { companyId, paymentId: p.paymentId, invoiceId: created.id, amount: total } as unknown as Prisma.PaymentAllocationUncheckedCreateInput });
+    // مستندٌ ضريبيّ كسائرها: حدثُ الإصدار داخل المعاملة — إن تعذّر أُلغي المستندُ وسندُه معه (`ق-٤٩`).
+    await events.emitCompliance(tx, {
+      type: INVOICE_ISSUED,
+      companyId,
+      payload: { invoiceId: created.id, docType: created.docType, no: created.no } satisfies InvoiceIssuedPayload,
+    });
+    return { id: created.id, no: created.no, total, onAccountRemainder };
+  }
+
+  /**
+   * ④A1 — مستنداتُ الدفعة المقدَّمة غيرُ المطبَّقة لعميل: ما يُعرض للتطبيق عند إصدار فاتورة التوريد — الشاشةُ تقرأ ولا تحسب.
+   *
+   * **على مستوى المنشأة بحقّها**: الدفعةُ المقدَّمة التزامٌ للعميل على المنشأة لا على فرع — مستندٌ صدر من سند قبضٍ في فرعٍ
+   * يُطبَّق على توريدٍ يُفوتَر من فرعٍ آخر، وحجبُه يترك التزاماً لا يُقفل أبداً.
+   */
+  openPrepayments(companyId: string, customerId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const docs = await tx.invoice.findMany({
+        where: { customerId, docType: 'PREPAYMENT', appliedAsPrepayment: { none: {} } },
+        select: { id: true, no: true, issueDate: true, subtotal: true, taxTotal: true, total: true, currency: true, prepaymentPayment: { select: { no: true } } },
+        orderBy: [{ issueDate: 'asc' }, { id: 'asc' }],
+      });
+      // ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`).
+      return docs.map((d) => ({ id: d.id, no: d.no, issueDate: d.issueDate, currency: d.currency, receiptNo: d.prepaymentPayment?.no ?? null, subtotal: money(d.subtotal), taxTotal: money(d.taxTotal), total: money(d.total) }));
+    });
+  }
+
+  /**
+   * ④A1 — **تطبيقُ دفعاتٍ مقدَّمة على فاتورة التوريد**: كلُّ مستند 386 مسمّىً يُطبَّق كاملاً (لا تجزئة — حدٌّ معلَن)
+   * على هذه الفاتورة وحدَها: **تخصيصٌ** من سند قبضه إليها (فالحالةُ والأعمارُ والمتبقّي من المصدر الواحد — التخصيصات)،
+   * **وقيدٌ** يُقفل الالتزامَ ويعكس ضريبتَه، **وصفُّ ربطٍ** يحمله المستندُ إلى الهيئة (BT-113 · KSA-26…34).
+   * يُرفض ما ليس دفعةً مقدَّمة، أو لعميلٍ آخر، أو طُبّق من قبل، أو ما يفوق مجموعُه إجماليَّ الفاتورة.
+   *
+   * **على مستوى المنشأة بحقّها**: مستنداتُ 386 تُقرأ بمعرّفاتها المسمّاة في الطلب، ومستندُ العميل الصادرُ من سند قبضٍ
+   * في فرعٍ آخر يُطبَّق على توريده هنا — فالدفعةُ المقدَّمة التزامٌ للعميل على المنشأة لا على فرع.
+   */
+  private async applyPrepayments(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    invoice: { id: string; no: string; customerId: string; branchId: string | null; issueDate: Date; total: Prisma.Decimal; customer: { name: string } },
+    prepaymentInvoiceIds: string[],
+  ) {
+    const ids = [...new Set(prepaymentInvoiceIds)];
+    const docs = await tx.invoice.findMany({
+      where: { id: { in: ids } },
+      include: { appliedAsPrepayment: { select: { invoiceId: true } }, prepaymentPayment: { select: { id: true } } },
+    });
+    let applied = 0;
+    const prepaymentsAccountId = await getOrCreateCustomerPrepaymentsAccount(tx, companyId);
+    for (const id of ids) {
+      const doc = docs.find((d) => d.id === id);
+      if (!doc || doc.docType !== 'PREPAYMENT' || !doc.prepaymentPayment) throw new NotFoundException(MSG.prepayment_not_found);
+      if (doc.customerId !== invoice.customerId) throw new BadRequestException(formatMessage(MSG.prepayment_other_customer, { no: doc.no }));
+      if (doc.appliedAsPrepayment.length > 0) throw new ConflictException(formatMessage(MSG.prepayment_already_applied, { no: doc.no }));
+      const gross = Number(doc.total);
+      applied = round2(applied + gross);
+      if (applied > Number(invoice.total) + 0.005) {
+        throw new BadRequestException(formatMessage(MSG.prepayment_exceeds_invoice, { no: doc.no, applied: money(applied), total: money(invoice.total) }));
+      }
+      await tx.invoicePrepayment.create({
+        data: { companyId, invoiceId: invoice.id, prepaymentInvoiceId: doc.id, net: doc.subtotal, vat: doc.taxTotal, gross: doc.total } as unknown as Prisma.InvoicePrepaymentUncheckedCreateInput,
+      });
+      // تخصيصُ سند القبض ينتقل من مستند 386 إلى فاتورة التوريد — بمبلغه لا بتخصيصٍ ثانٍ (فمجموعُ تخصيصات السند لا يفوق مبلغَه).
+      const moved = await tx.paymentAllocation.updateMany({ where: { paymentId: doc.prepaymentPayment.id, invoiceId: doc.id }, data: { invoiceId: invoice.id } });
+      if (moved.count !== 1) throw new ConflictException(formatMessage(MSG.prepayment_already_applied, { no: doc.no }));
+      await postPrepaymentApplicationEntry(tx, companyId, {
+        customerId: invoice.customerId,
+        branchId: invoice.branchId,
+        invoiceNo: invoice.no,
+        prepaymentNo: doc.no,
+        date: invoice.issueDate,
+        customerName: invoice.customer.name,
+        net: Number(doc.baseSubtotal),
+        vat: Number(doc.baseTaxTotal),
+        gross: Number(doc.baseTotal),
+        prepaymentsAccountId,
+      });
+    }
+    await this.syncSettlementStatus(tx, invoice.id, new Date());
+  }
+
   private async nextDocumentNumber(
     tx: Prisma.TransactionClient,
     companyId: string,
-    kind: 'INV' | 'CN' | 'DN',
+    kind: 'INV' | 'CN' | 'DN' | 'PP',
     issueDate: Date,
   ): Promise<string> {
     // عدّادٌ ذرّيّ لا مسحُ سنة (ق-٣٢٨) — والبذرُ من أعلى قائمٍ مرّةً واحدة.

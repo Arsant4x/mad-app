@@ -27,6 +27,13 @@ export class InvoicesController {
     return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
+  /** ④A1: مستنداتُ الدفعة المقدَّمة (386) غيرُ المطبَّقة لعميلٍ — ما تعرضه شاشةُ الفاتورة لتطبيقه عند إصدار التوريد. */
+  @Get('open-prepayments/:customerId')
+  @RequiresAction('view')
+  openPrepayments(@CurrentTenant() tenant: TenantContext, @Param('customerId') customerId: string) {
+    return this.invoicesService.openPrepayments(tenant.companyId, customerId);
+  }
+
   /**
    * ⚖️ **الفاتورةُ المباشرة تفتح ذمّةً — فتُصرَّح `ON_ACCOUNT`** (`ق-٣٣٨`).
    *

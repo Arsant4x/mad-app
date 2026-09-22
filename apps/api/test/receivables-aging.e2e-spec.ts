@@ -202,7 +202,8 @@ describe('Receivables aging (e2e)', () => {
     await co(request(app.getHttpServer()).post('/payments'))
       .send({ customerId: buyer, date: dayStr(0), amount: 400, method: 'CASH', bankId: box, allocations: [{ invoiceId: i1.id, amount: 400 }] })
       .expect(201);
-    await co(request(app.getHttpServer()).post('/payments')).send({ customerId: buyer, date: dayStr(0), amount: 150, method: 'CASH', bankId: box }).expect(201);
+    // ④A1: على الحساب — مغطّىً بالفواتير المفتوحة (`1400`)، فليس دفعةً مقدَّمة.
+    await co(request(app.getHttpServer()).post('/payments')).send({ customerId: buyer, date: dayStr(0), amount: 150, method: 'CASH', bankId: box, unallocated: 'ON_ACCOUNT' }).expect(201);
     // وإشعار دائن على فاتورة.
     await co(request(app.getHttpServer()).post(`/invoices/${i2.id}/credit-note`))
       .send({ issueDate: dayStr(0), reason: 'مرتجع', lines: [{ description: 'مرتجع', quantity: 1, unitPrice: 100, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })

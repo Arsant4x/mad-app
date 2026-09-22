@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
-import type { Customer, Invoice, InvoiceLineInput } from '../../api/invoices';
+import { listOpenPrepayments, type Customer, type Invoice, type InvoiceLineInput, type OpenPrepayment } from '../../api/invoices';
+import { num0 } from '../../lib/money';
 import type { NewCustomerKind } from '../../api/customers';
 import { fmt, toLocalISODate, today } from '../../lib/format';
 import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
@@ -61,7 +62,7 @@ export function InvoiceBuilderView({
   editing: Invoice | null;
   nextNumberHint: string;
   onCancel: () => void;
-  onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[] }) => Promise<void>;
+  onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[]; prepaymentInvoiceIds?: string[] }) => Promise<void>;
   onCreateCustomer: (name: string, kind: NewCustomerKind) => Promise<Customer>;
 }) {
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
@@ -74,6 +75,30 @@ export function InvoiceBuilderView({
   const [lines, setLines] = useState<LineDraft[]>(() => initialLines(editing));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ④A1: الدفعاتُ المقدَّمة المعلَّقة للعميل المختار — يقرؤها الخادم (لا تُحسب هنا)، وتُطبَّق كاملةً بما يختاره التاجر.
+  const matchedCustomerId = useMemo(() => customers.find((c) => c.name === customerInput.trim())?.id ?? null, [customers, customerInput]);
+  const [openPrepayments, setOpenPrepayments] = useState<OpenPrepayment[]>([]);
+  const [applyIds, setApplyIds] = useState<string[]>([]);
+  useEffect(() => {
+    setApplyIds([]);
+    if (!matchedCustomerId || editing) {
+      setOpenPrepayments([]);
+      return;
+    }
+    let cancelled = false;
+    listOpenPrepayments(matchedCustomerId)
+      .then((rows) => {
+        if (!cancelled) setOpenPrepayments(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenPrepayments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [matchedCustomerId, editing]);
+  const appliedPreview = useMemo(() => openPrepayments.filter((p) => applyIds.includes(p.id)).reduce((s, p) => s + num0(p.total), 0), [openPrepayments, applyIds]);
 
   // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم بدالّة المجاميع الواحدة.
   const totals = useMemo(() => {
@@ -126,7 +151,7 @@ export function InvoiceBuilderView({
       // فاتورةٌ مؤرَّخةٌ باليوم تحمل لحظةَ الجهاز وانحرافَه؛ والمؤرَّخة بيدٍ في يومٍ آخر
       // لا وقتَ معلوماً لها فلا يُخترَع (ق-١٨٥).
       const stamped = issueDate === today() ? { issuedAt: new Date().toISOString(), issuedOffsetMin: -new Date().getTimezoneOffset() } : {};
-      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines: lines.map(lineDraftPayload), ...stamped });
+      await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines: lines.map(lineDraftPayload), ...stamped, ...(applyIds.length ? { prepaymentInvoiceIds: applyIds } : {}) });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_invoice_save')));
     } finally {
@@ -266,6 +291,24 @@ export function InvoiceBuilderView({
             </div>
           </div>
 
+          {/* ④A1: دفعاتٌ مقدَّمة معلَّقة لهذا العميل — تُطبَّق كاملةً على هذه الفاتورة، والمقدَّمُ يُخصم من المستحقّ لا من الإجمالي. */}
+          {openPrepayments.length > 0 && (
+            <fieldset className="field" data-testid="open-prepayments" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              <legend>دفعات مقدَّمة معلَّقة للعميل — تُطبَّق كاملةً على هذه الفاتورة</legend>
+              {openPrepayments.map((p) => (
+                <label key={p.id} style={{ display: 'block' }}>
+                  <input
+                    type="checkbox"
+                    checked={applyIds.includes(p.id)}
+                    onChange={(e) => setApplyIds((ids) => (e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id)))}
+                  />{' '}
+                  <span className="num">{p.no}</span> · {p.issueDate.slice(0, 10)} · <span className="num">{p.total}</span> {p.currency}
+                  {p.receiptNo && <span className="hint"> — من سند القبض {p.receiptNo}</span>}
+                </label>
+              ))}
+            </fieldset>
+          )}
+
           {error && <p className="error-text">{error}</p>}
         </div>
 
@@ -283,6 +326,18 @@ export function InvoiceBuilderView({
               <span>الإجمالي المستحق</span>
               <span className="num">{fmt(totals.grand)} ر.س</span>
             </div>
+            {appliedPreview > 0 && (
+              <>
+                <div className="t-row">
+                  <span>دفعات مقدَّمة مطبَّقة</span>
+                  <span className="num" data-testid="applied-prepayments">− {fmt(appliedPreview)}</span>
+                </div>
+                <div className="t-row">
+                  <span>المستحق بعد المقدَّم</span>
+                  <span className="num">{fmt(Math.max(0, totals.grand - appliedPreview))} ر.س</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

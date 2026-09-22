@@ -35,7 +35,8 @@ describe('Network settlement of 1251 (e2e)', () => {
     }
     return codes[code];
   };
-  const cardReceipt = (amount: number, date: string) => auth(http().post('/payments')).send({ customerId, date, amount, method: 'CARD' });
+  // ④A1: قبضُ الشبكة بلا فاتورةٍ دفعةٌ مقدَّمة تُعلَن — سطرُ `1251` على السند هو ما تقرؤه التسوية، ومستندُ 386 لا يمسّه.
+  const cardReceipt = (amount: number, date: string) => auth(http().post('/payments')).send({ customerId, date, amount, method: 'CARD', unallocated: 'PREPAYMENT' });
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

@@ -148,7 +148,7 @@ export class ObligationsService {
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
       const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } as const;
-      const [invoices, purchaseRows, voidedRows, rent] = await Promise.all([
+      const [invoices, purchaseRows, voidedRows, rent, prepaymentsApplied] = await Promise.all([
         // ⑧ الإقرارُ يقرأ **السطورَ** لا مجموعَ الفاتورة (`ق-١٢٢٣`): كان كلُّ مبيعٍ في الخانة `1` بمجموعه ولو كان
         // فيه سطرٌ بنسبة الصفر أو معفى — فلا يصحّ إقرارُ صيدليةٍ ولا مصدِّر. والمبالغُ بالريال عبر سعر الفاتورة.
         tx.invoice.findMany({
@@ -163,6 +163,18 @@ export class ObligationsService {
         // ⚖️ الإلغاءُ بقيد عكسٍ يدخل الإقرارَ **في ربعه** كما دخل الأصلُ في ربعه (`ق-٩٩٧`/②) — لا يُعاد كتابةُ ربعٍ مضى.
         tx.purchase.findMany({ where: { voidedAt: { gte: from, lt: new Date(to.getTime() + 86_400_000) } }, select: purchaseSelect }),
         this.rentSection(tx, from, to),
+        // ④A1: دفعاتٌ مقدَّمة طُبِّقت على فواتيرِ توريدٍ صادرةٍ في الربع — مستندُ 386 دخل الإقرارَ في ربع قبضه بضريبته،
+        // وفاتورةُ التوريد تدخل هنا بكامل ضريبتها (كما في مستند الهيئة) — فيُطرح ما سبق إقرارُه في ربع التطبيق.
+        tx.invoicePrepayment.findMany({
+          where: { invoice: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED } },
+          select: {
+            net: true,
+            vat: true,
+            prepaymentInvoice: {
+              select: { exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+            },
+          },
+        }),
       ]);
       const purchases = [...purchaseRows.map((p) => ({ ...p, voidSign: 1 })), ...voidedRows.map((p) => ({ ...p, voidSign: -1 }))];
 
@@ -178,7 +190,13 @@ export class ObligationsService {
       //   `3` الصفرُ المحليّ · `4` الصادرات · `5` المعفى · وخارجُ النطاق (`O`) لا يدخل الإقرار ويُعدّ
       //   و`LEGACY_ZERO` — سطرٌ قديم بصفرٍ لا يُعرف أزيروٌ هو أم معفىً أم خارج النطاق: **يُعدّ ويُعلَن ولا
       //   يُنسب إلى خانة** — أوّلُ صفٍّ يقول «لا أعرف» بدل أن يختار.
-      const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: sign(v.docType), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
+      const boxes = salesBoxesFromLines([
+        ...invoices.map((v) => ({ sign: sign(v.docType), exchangeRate: Number(v.exchangeRate), lines: v.lines })),
+        // ④A1: سطورُ مستند 386 المطبَّق بإشارةٍ سالبة — بسعر صرفه كما دخل.
+        ...prepaymentsApplied.map((p) => ({ sign: -1 as const, exchangeRate: Number(p.prepaymentInvoice.exchangeRate), lines: p.prepaymentInvoice.lines })),
+      ]);
+      const prepaymentsAppliedNet = round2(prepaymentsApplied.reduce((s, p) => s + Number(p.net) * Number(p.prepaymentInvoice.exchangeRate), 0));
+      const prepaymentsAppliedVat = round2(prepaymentsApplied.reduce((s, p) => s + Number(p.vat) * Number(p.prepaymentInvoice.exchangeRate), 0));
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
       // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز).
       const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard);
@@ -270,6 +288,8 @@ export class ObligationsService {
         netVat: money(netVat),
         invoiceCount: invoices.length,
         purchaseCount: purchases.length,
+        /** ④A1: ما طُرح في هذا الربع من دفعاتٍ مقدَّمة سبق إقرارُها في ربع قبضها — عدّاً ووعاءً وضريبةً. */
+        prepaymentsApplied: { count: prepaymentsApplied.length, net: money(prepaymentsAppliedNet), vat: money(prepaymentsAppliedVat) },
         filed: filed ? { filedAt: filed.filedAt, netVat: money(filed.netVat) } : null,
         changedSinceFiled,
         /** حدودٌ معلَنة على هذا الإقرار — فارغةٌ حين لا حدّ (`ق-١٢٦٠`). */
