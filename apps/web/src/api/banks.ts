@@ -117,3 +117,60 @@ export const createCashDeposit = (dto: CashDepositInput) =>
   apiClient.post<CashDeposit & { entryNo: string }>('/banks/cash-deposits', dto).then((r) => r.data);
 export const voidCashDeposit = (id: string, reason?: string) =>
   apiClient.post<CashDeposit & { voidEntryNo: string }>(`/banks/cash-deposits/${id}/void`, { reason }).then((r) => r.data);
+
+/** تسويةُ الشبكة `1251` (`ق-١٢٦١` ج — ⑦A2): الإجماليُّ من السندات، والصافي إلى البنك؛ كلُّ رقمٍ نصٌّ من الخادم. */
+export type NetworkSettlementStatus = 'POSTED' | 'VOID';
+export interface NetworkSettlement {
+  id: string;
+  no: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  grossAmount: string;
+  feeAmount: string;
+  feeVatAmount: string;
+  netAmount: string;
+  memo: string | null;
+  status: NetworkSettlementStatus;
+  branchId: string | null;
+  bankId: string;
+  bank: { id: string; name: string };
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  receiptCount: number;
+}
+/** رصيدُ `1251` بالدفتر مقابل مجموع السندات المفتوحة — والفرقُ يُعلَن لا يُصحَّح. */
+export interface NetworkTransitSummary {
+  ledger: string;
+  open: string;
+  openCount: number;
+  matched: boolean;
+}
+export interface NetworkSettlementList {
+  items: NetworkSettlement[];
+  summary: NetworkTransitSummary;
+}
+export interface OpenNetworkReceipts {
+  receipts: { id: string; no: string; date: string; branchId: string | null; customerName: string; signed: string }[];
+  gross: string;
+  summary: NetworkTransitSummary;
+}
+export interface NetworkSettlementInput {
+  bankId: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  feeAmount: number;
+  feeVatAmount: number;
+  branchId?: string;
+  memo?: string;
+  receiptIds?: string[];
+}
+export const listNetworkSettlements = (bankId?: string) =>
+  apiClient.get<NetworkSettlementList>('/banks/network-settlements', { params: bankId ? { bankId } : undefined }).then((r) => r.data);
+export const getOpenNetworkReceipts = (params: { from?: string; to?: string; branchId?: string }) =>
+  apiClient.get<OpenNetworkReceipts>('/banks/network-settlements/open', { params }).then((r) => r.data);
+export const createNetworkSettlement = (dto: NetworkSettlementInput) =>
+  apiClient.post<NetworkSettlement & { entryNo: string }>('/banks/network-settlements', dto).then((r) => r.data);
+export const voidNetworkSettlement = (id: string, reason?: string) =>
+  apiClient.post<NetworkSettlement & { voidEntryNo: string }>(`/banks/network-settlements/${id}/void`, { reason }).then((r) => r.data);

@@ -56,6 +56,12 @@ export async function getOrCreateAccountByCode(
 /** «نقدٌ في الطريق» (ق-١٢٦١ ج — ⑦A3): بين الأدراج (1010–1099) والذمم (1200) — رمزٌ مشتقٌّ من موضعه، «أو ما يُقرَّر». */
 export const CASH_IN_TRANSIT_CODE = '1190';
 export const CASH_IN_TRANSIT_NAME = 'نقد في الطريق';
+/**
+ * عمولاتُ شبكة المدفوعات (ق-١٢٦١ ج — ⑦A2): حسابٌ مستقلّ لا `5300` — كتلف `5800` وعجز `5900`: «كم تأخذ الشبكةُ من
+ * مبيعاتي؟» رقمٌ يجب أن يُرى لا أن يذوب في الإداريّة. رمزٌ بعد `5900` «أو ما يُقرَّر»؛ يُنشأ عند أوّل تسوية.
+ */
+export const NETWORK_FEE_EXPENSE_CODE = '5910';
+export const NETWORK_FEE_EXPENSE_NAME = 'عمولات شبكة المدفوعات';
 export const CASH_VARIANCE_CODE = '5900';
 export const CASH_VARIANCE_NAME = 'عجز وزيادة الصندوق';
 

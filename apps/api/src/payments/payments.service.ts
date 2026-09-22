@@ -21,6 +21,7 @@ import {
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
+import { getOrCreateAccountByCode, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME } from '../journal/pos-settlement.util';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
@@ -146,8 +147,12 @@ export class PaymentsService {
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 
         if (dto.method === 'BANK' && !dto.bankId) throw new BadRequestException(MSG.bank_required);
+        // الشبكةُ ذمّةٌ على المستحوذ (`1251` — `ق-٣٢٠`) لا نقدٌ في بنك: بنكٌ معها يُدخل المالَ قبل أن يصل.
+        if (dto.method === 'CARD' && dto.bankId) throw new BadRequestException(MSG.payment_card_no_bank);
         const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
         if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
+        const networkAccountId =
+          dto.method === 'CARD' ? (await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset')).id : null;
 
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
         const amount = round2(dto.amount);
@@ -190,6 +195,8 @@ export class PaymentsService {
           exchangeRate,
           branchId,
           bank,
+          // الشبكةُ تدخل `1251` كما في بيع الكاشير (`recordPosReceipt`) — مسارٌ واحد للطريقة لا مساران.
+          drawerAccountId: networkAccountId,
           baseReceivable: baseSettledOf(amount, exchangeRate, toSettlementAllocations(allocations), invoices),
           description: `مقبوض من عميل — سند ${no} — ${customer.name}`,
         });
@@ -340,6 +347,9 @@ export class PaymentsService {
         const reversalDate = date ? new Date(date) : new Date();
         const no = await this.nextPaymentNumber(tx, companyId, reversalDate);
         const bank = original.bankId ? await tx.bank.findUnique({ where: { id: original.bankId } }) : null;
+        // عكسُ مقبوض الشبكة يردّ `1251` لا `1000` — الطريقةُ تحدّد الحسابَ في الاتجاهين (`ق-٣٢٠`).
+        const networkAccountId =
+          original.method === 'CARD' ? (await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset')).id : null;
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
         // القيدان طرفاً بطرف ويعود 5600 إلى ما كان: الحسبةُ نفسُها التي سوّت الأصل، مقلوبةَ الإشارة.
@@ -389,6 +399,7 @@ export class PaymentsService {
           exchangeRate: rate,
           branchId: original.branchId,
           bank,
+          drawerAccountId: networkAccountId,
           baseReceivable,
           description: `عكس مقبوض — سند ${no} (يعكس ${original.no})`,
           reversal: true,

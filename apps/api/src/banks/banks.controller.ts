@@ -8,6 +8,8 @@ import { CloseReconciliationDto, MatchStatementLineDto, PostStatementLineDto, Re
 import { ReconciliationService } from './reconciliation.service';
 import { CashDepositsService } from './cash-deposits.service';
 import { CreateCashDepositDto, VoidCashDepositDto } from './dto/cash-deposit.dto';
+import { NetworkSettlementsService } from './network-settlements.service';
+import { CreateNetworkSettlementDto, OpenNetworkReceiptsQueryDto, VoidNetworkSettlementDto } from './dto/network-settlement.dto';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
@@ -23,7 +25,34 @@ export class BanksController {
     private readonly banksService: BanksService,
     private readonly reconciliation: ReconciliationService,
     private readonly deposits: CashDepositsService,
+    private readonly settlements: NetworkSettlementsService,
   ) {}
+
+  /** تسوياتُ الشبكة `1251` (⑦A2) — القائمةُ مع رصيد الشبكة بالدفتر مقابل السندات المفتوحة. */
+  @Get('network-settlements')
+  @RequiresAction('view')
+  listNetworkSettlements(@CurrentTenant() tenant: TenantContext, @Query('bankId') bankId?: string) {
+    return this.settlements.list(tenant.companyId, tenant.allowedBranchIds, bankId || undefined);
+  }
+
+  /** ما ستطالب به تسويةٌ لمدًى — تقرؤه الشاشةُ قبل الإنشاء، والإجماليُّ من الدفتر. */
+  @Get('network-settlements/open')
+  @RequiresAction('view')
+  openNetworkReceipts(@CurrentTenant() tenant: TenantContext, @Query() query: OpenNetworkReceiptsQueryDto) {
+    return this.settlements.open(tenant.companyId, tenant.allowedBranchIds, query);
+  }
+
+  @Post('network-settlements')
+  @RequiresAction('record')
+  createNetworkSettlement(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateNetworkSettlementDto) {
+    return this.settlements.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  }
+
+  @Post('network-settlements/:settlementId/void')
+  @RequiresAction('record')
+  voidNetworkSettlement(@CurrentTenant() tenant: TenantContext, @Param('settlementId') settlementId: string, @Body() dto: VoidNetworkSettlementDto) {
+    return this.settlements.void(tenant.companyId, tenant.allowedBranchIds, settlementId, dto.reason);
+  }
 
   /** إيداعاتُ الأدراج عبر «نقدٍ في الطريق» (⑦A3) — القائمةُ ومجموعُ الطريق من الدفتر والمستندات معاً. */
   @Get('cash-deposits')

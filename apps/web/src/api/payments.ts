@@ -2,7 +2,8 @@ import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
-export type PaymentMethod = 'CASH' | 'BANK';
+/** `CARD` هي الشبكة (`ق-٣٢٠`): تُقيَّد على `1251` حتى يحوّلها المستحوذ — بلا بنك؛ تسويةُ الشبكة تُدخلها البنكَ صافيةً (⑦A2). */
+export type PaymentMethod = 'CASH' | 'BANK' | 'CARD';
 
 export interface PaymentAllocation {
   id: string;

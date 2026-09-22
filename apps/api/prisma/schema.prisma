@@ -418,6 +418,7 @@ model Company {
   posShifts           PosShift[]
   cashDrawers         CashDrawer[]
   cashDeposits CashDeposit[]
+  networkSettlements NetworkSettlement[]
   posPayments         PosPayment[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
@@ -603,6 +604,7 @@ model Branch {
 
   @@unique([companyId, name])
   cashDeposits CashDeposit[]
+  networkSettlements NetworkSettlement[]
   @@map("branches")
   inventoryWriteOff_branchId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_branchId_tenant")
   stockMovement_branchId_tenant StockMovement[] @relation("StockMovement_branchId_tenant")
@@ -622,6 +624,7 @@ model Branch {
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
   cashDeposit_branchId_tenant CashDeposit[] @relation("CashDeposit_branchId_tenant")
+  networkSettlement_branchId_tenant NetworkSettlement[] @relation("NetworkSettlement_branchId_tenant")
 }
 
 /// Which branches an employee sub-account may see. A join table rather than a
@@ -2385,6 +2388,7 @@ model Bank {
   updatedAt    DateTime          @updatedAt
   transactions BankTransaction[]
   cashDeposits CashDeposit[]
+  networkSettlements NetworkSettlement[]
   rentPayments RentPayment[]
 
 
@@ -2405,6 +2409,7 @@ model Bank {
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
   cashDeposit_bankId_tenant CashDeposit[] @relation("CashDeposit_bankId_tenant")
+  networkSettlement_bankId_tenant NetworkSettlement[] @relation("NetworkSettlement_bankId_tenant")
 }
 
 /// A manual bank transaction (deposit/withdrawal). `matched`/`entryNo` mirror
@@ -2535,6 +2540,8 @@ model JournalEntry {
   landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
   cashDeposits        CashDeposit[]            @relation("CashDepositEntry")
   cashDepositVoids    CashDeposit[]            @relation("CashDepositVoidEntry")
+  networkSettlements  NetworkSettlement[]      @relation("NetworkSettlementEntry")
+  networkSettlementVoids NetworkSettlement[]   @relation("NetworkSettlementVoidEntry")
   stockOpening        StockOpening?            @relation("StockOpeningEntry")
   stockOpeningLineVoid StockOpeningLine?       @relation("StockOpeningLineVoidEntry")
 
@@ -2570,6 +2577,8 @@ model JournalEntry {
   @@unique([companyId, id])
   cashDeposit_voidJournalEntryId_tenant CashDeposit[] @relation("CashDeposit_voidJournalEntryId_tenant")
   cashDeposit_journalEntryId_tenant CashDeposit[] @relation("CashDeposit_journalEntryId_tenant")
+  networkSettlement_voidJournalEntryId_tenant NetworkSettlement[] @relation("NetworkSettlement_voidJournalEntryId_tenant")
+  networkSettlement_journalEntryId_tenant NetworkSettlement[] @relation("NetworkSettlement_journalEntryId_tenant")
 }
 
 /// One debit-or-credit line of a JournalEntry. `onDelete: Restrict` on
@@ -3936,6 +3945,71 @@ model CashDeposit {
   @@map("cash_deposits")
 }
 
+/// حالُ تسوية الشبكة (ق-١٢٦١ ج — ⑦A2): مرحَّلةٌ، أو مُلغاةٌ بعكس.
+enum NetworkSettlementStatus {
+  POSTED
+  VOID
+}
+
+/// تسويةُ الشبكة 1251 (ق-١٢٦١ ج — ⑦A2): تحصيلُ المستحوذ يدخل البنكَ صافياً وتُثبَت العمولةُ وضريبتُها في
+/// شهرهما وتُقفل ذمّةُ الشبكة بإجماليّ سندات القبض التي طالبت بها التسوية (`Payment.networkSettlementId`):
+/// مدين البنك (الصافي) · مدين 5910 (العمولة) · مدين 1250 (ضريبتها) · دائن 1251 (الإجمالي).
+/// الإجماليُّ من الدفتر لا من اليد، والإلغاءُ عكسٌ يُطلق السنداتِ إلى المفتوح.
+model NetworkSettlement {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  branchTenant Branch? @relation("NetworkSettlement_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  no         String
+  /// يومُ دخول التحصيل إلى البنك.
+  date       DateTime @db.Date
+  /// مدى سندات القبض المطالَب بها — بتاريخ السند.
+  periodFrom DateTime @db.Date
+  periodTo   DateTime @db.Date
+
+  /// ما رحّلته السنداتُ المطالَبُ بها على 1251 (موجباً للقبض، سالباً للعكس والردّ).
+  grossAmount  Decimal @db.Decimal(18, 2)
+  feeAmount    Decimal @db.Decimal(18, 2)
+  /// ضريبةُ القيمة المضافة على العمولة — تُدخَل من إشعار المستحوذ لا تُفترض.
+  feeVatAmount Decimal @db.Decimal(18, 2)
+  /// الإجمالي − العمولة − ضريبتها = ما دخل البنك.
+  netAmount    Decimal @db.Decimal(18, 2)
+  memo         String?
+  status       NetworkSettlementStatus @default(POSTED)
+
+  bankId String
+  bank   Bank   @relation(fields: [bankId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  bankTenant Bank @relation("NetworkSettlement_bankId_tenant", fields: [companyId, bankId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("NetworkSettlementEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("NetworkSettlement_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  voidJournalEntryId String?
+  voidJournalEntry   JournalEntry? @relation("NetworkSettlementVoidEntry", fields: [voidJournalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  voidJournalEntryTenant JournalEntry? @relation("NetworkSettlement_voidJournalEntryId_tenant", fields: [companyId, voidJournalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// سنداتُ القبض التي طالبت بها هذه التسوية — بالمعرّف (§6.3)، والسندُ لتسويةٍ واحدة.
+  receipts Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, no])
+  @@index([companyId, status])
+  @@index([companyId, bankId])
+  @@map("network_settlements")
+  payment_networkSettlementId_tenant Payment[] @relation("Payment_networkSettlementId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
+}
+
 /// دفعة واحدة من فاتورة كاشير (مستند §4): الفاتورة الواحدة قد تُدفع نقداً
 /// وبطاقةً معاً — صفٌّ لكل طريقة بمبلغها، ودرجُ المناوبة يجمع النقد فقط.
 /// Extensible by design: a BNPL or terminal-mediated method lands here as
@@ -4340,6 +4414,13 @@ model Payment {
   refundsInvoiceTenant Invoice? @relation("Payment_refundsInvoiceId_tenant", fields: [companyId, refundsInvoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   allocations PaymentAllocation[]
+
+  /// تسويةُ الشبكة التي طالبت بهذا السند (طريقةُ الشبكة وحدَها — ق-١٢٦١ ج ⑦A2): فارغٌ = مفتوحٌ على 1251.
+  /// `Restrict` — تسويةٌ لها سندات لا تُحذف؛ والإلغاءُ يُفرغ الحقل لا يحذف الصفّ.
+  networkSettlementId String?
+  networkSettlement   NetworkSettlement? @relation(fields: [networkSettlementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  networkSettlementTenant NetworkSettlement? @relation("Payment_networkSettlementId_tenant", fields: [companyId, networkSettlementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   createdAt DateTime @default(now())
 
