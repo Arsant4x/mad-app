@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getVatDeclaration, markVatFiled, unmarkVatFiled, type VatDeclaration } from '../../api/obligations';
+import { getVatDeclaration, markVatFiled, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType } from '../../api/obligations';
 import { dfmt, fmt } from '../../lib/format';
 import { num0, sumMoney } from '../../lib/money';
 
@@ -11,33 +11,49 @@ const QUARTER_OPTIONS = [
   { value: 4, label: 'الربع الرابع (أكتوبر - ديسمبر)' },
 ];
 
+/** ⑥A2 (`ق-١٣٢٥`) — الشهورُ الاثنا عشر بأسمائها؛ الفترةُ الشهرية فوق أربعين مليوناً. */
+const MONTH_OPTIONS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'].map((label, i) => ({ value: i + 1, label }));
+
 export function VatDeclarationPage() {
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [quarter, setQuarter] = useState(Math.floor(new Date().getMonth() / 3) + 1);
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  /**
+   * ⑥A2 — **الشاشةُ تعرض الفترتين معاً ولا تحجب إحداهما**: التاجرُ الشهريُّ قدّم أرباعاً
+   * قبل انتقاله، ومنعُه من قراءتها عطلٌ لا حراسة. والإعدادُ يضبط **ما يُفتح عليه أولاً**
+   * — يُقرأ من الخادم في أوّل ردّ، فلا تخمّن الشاشةُ فترةَ التاجر.
+   */
+  const [periodType, setPeriodType] = useState<VatPeriodType | null>(null);
   const [declaration, setDeclaration] = useState<VatDeclaration | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
 
+  const period: VatPeriodQuery = periodType === 'MONTHLY' ? { year, month } : { year, quarter };
+
   function reload() {
     setLoading(true);
-    return getVatDeclaration(year, quarter)
-      .then(setDeclaration)
+    return getVatDeclaration(period)
+      .then((d) => {
+        setDeclaration(d);
+        // أوّلُ ردٍّ يكشف فترةَ التاجر — فتُتبَع مرّةً واحدة، ثم اختيارُه هو الحاكم.
+        setPeriodType((p) => p ?? d.companyVatPeriod);
+      })
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, quarter]);
+  }, [year, quarter, month, periodType]);
 
   async function toggleFiled() {
     if (!declaration) return;
     setMarking(true);
     try {
-      if (declaration.filed) await unmarkVatFiled(year, quarter);
-      else await markVatFiled(year, quarter);
+      if (declaration.filed) await unmarkVatFiled(period);
+      else await markVatFiled(period);
       await reload();
     } finally {
       setMarking(false);
@@ -73,22 +89,56 @@ export function VatDeclarationPage() {
             </select>
           </div>
           <div className="field">
-            <label>الربع</label>
-            <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
-              {QUARTER_OPTIONS.map((q) => (
-                <option key={q.value} value={q.value}>
-                  {q.label}
-                </option>
-              ))}
+            <label>الفترة</label>
+            <select data-testid="vat-period-type" value={periodType ?? 'QUARTERLY'} onChange={(e) => setPeriodType(e.target.value as VatPeriodType)}>
+              <option value="QUARTERLY">ربع سنوية</option>
+              <option value="MONTHLY">شهرية</option>
             </select>
           </div>
+          {periodType === 'MONTHLY' ? (
+            <div className="field">
+              <label>الشهر</label>
+              <select data-testid="vat-month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+                {MONTH_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="field">
+              <label>الربع</label>
+              <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
+                {QUARTER_OPTIONS.map((q) => (
+                  <option key={q.value} value={q.value}>
+                    {q.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {loading || !declaration ? null : (
           <>
+            {!declaration.periodMatchesCompany && (
+              <p className="hint" data-testid="vat-period-mismatch" style={{ marginBottom: 10 }}>
+                فترةُ هذه المنشأة المسجَّلة {declaration.companyVatPeriod === 'MONTHLY' ? 'شهرية' : 'ربع سنوية'} — وهذه قراءةٌ لفترةٍ من النوع الآخر.
+              </p>
+            )}
             {declaration.limits.map((l) => (
-              <div key={l.code} className="card" data-testid="vat-limit" style={{ marginBottom: 12, borderInlineStart: '4px solid var(--rose)', background: 'rgba(244, 63, 94, 0.06)' }}>
-                <strong>⛔ حدٌّ معلَن — لا يُقدَّم هذا الإقرار</strong>
+              <div
+                key={l.code}
+                className="card"
+                data-testid="vat-limit"
+                style={
+                  l.severity === 'blocking'
+                    ? { marginBottom: 12, borderInlineStart: '4px solid var(--rose)', background: 'rgba(244, 63, 94, 0.06)' }
+                    : { marginBottom: 12, borderInlineStart: '4px solid var(--gold)', background: 'var(--gold-soft)' }
+                }
+              >
+                <strong>{l.severity === 'blocking' ? '⛔ حدٌّ معلَن — لا يُقدَّم هذا الإقرار' : '⚠️ تنبيهٌ معلَن'}</strong>
                 <p style={{ margin: '6px 0 0' }}>{l.message}</p>
               </div>
             ))}

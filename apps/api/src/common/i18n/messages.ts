@@ -550,6 +550,10 @@ export const MSG = {
   file_not_found: 'files.not_found',
 
   // validation (used by class-validator DTOs)
+  /** ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية: ربعٌ أو شهر، أحدُهما لا كلاهما. */
+  vat_period_one_of: 'validation.vat_period_one_of',
+  vat_period_quarter_range: 'validation.vat_period_quarter_range',
+  vat_period_month_range: 'validation.vat_period_month_range',
   vat_number_invalid: 'validation.vat_number',
   cr_number_invalid: 'validation.cr_number',
   postal_code_invalid: 'validation.postal_code',
@@ -1191,6 +1195,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_export_buyer_vat]: {
     ar: 'فاتورة صادرات لمشترٍ خارج المملكة لا تحمل رقم تسجيل ضريبي سعودي للمشتري (BR-KSA-46) — امسح الرقم من بطاقة «{customer}» أو صحّح بلده، ثم أعد الإرسال',
     en: 'An export invoice to a buyer outside the Kingdom must not carry a Saudi buyer VAT number (BR-KSA-46) — clear it on "{customer}" or correct the country, then resubmit',
+  },
+  [MSG.vat_period_one_of]: {
+    ar: 'الإقرار يُطلب بربعٍ أو بشهر — أحدهما لا كلاهما ولا واحد: أرسل «quarter» من 1 إلى 4، أو «month» من 1 إلى 12',
+    en: 'A VAT return is requested by quarter or by month — one of them, not both and not neither: send "quarter" 1–4 or "month" 1–12',
+  },
+  [MSG.vat_period_quarter_range]: {
+    ar: 'رقم الربع من 1 إلى 4',
+    en: 'Quarter must be 1 to 4',
+  },
+  [MSG.vat_period_month_range]: {
+    ar: 'رقم الشهر من 1 إلى 12',
+    en: 'Month must be 1 to 12',
   },
   [MSG.customer_foreign_vat_conflict]: {
     ar: 'رقم التسجيل الضريبي السعودي لمن سُجّل في المملكة — عميلٌ بلده غير السعودية يُكتب معرّفه في «المعرّف البديل» بمخطّطه (TIN)',

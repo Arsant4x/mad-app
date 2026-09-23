@@ -8,6 +8,7 @@ import { computeDocumentTotals, lineNet } from '../common/money/totals';
 import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
+import { MONTHLY_PERIOD_THRESHOLD, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { MSG } from '../common/i18n/messages';
@@ -106,7 +107,7 @@ export class ObligationsService {
    * فرعاً إقرارٌ ناقصٌ أمام الهيئة.
    */
   vatDeclaration(companyId: string, query: VatDeclarationQueryDto) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.declarationWithinTx(tx, query));
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.declarationWithinTx(tx, companyId, query));
   }
 
   /**
@@ -115,21 +116,62 @@ export class ObligationsService {
    */
   markFiled(companyId: string, dto: VatFiledDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const declaration = await this.declarationWithinTx(tx, dto);
+      const declaration = await this.declarationWithinTx(tx, companyId, dto);
+      // ⑥A2 — الوسمُ بنوع الفترة ورقمِها معاً، فشهرُ `3` وربعُ `3` وسمان مختلفان لا واحد.
+      const period = resolveVatPeriod(dto);
       const filing = await tx.vatReturnFiling.upsert({
-        where: { companyId_year_quarter: { companyId, year: dto.year, quarter: dto.quarter } },
-        create: { companyId, year: dto.year, quarter: dto.quarter, netVat: declaration.netVat, filedAt: new Date() },
+        where: {
+          companyId_year_periodType_periodNo: { companyId, year: period.year, periodType: period.periodType, periodNo: period.periodNo },
+        },
+        create: { companyId, year: period.year, periodType: period.periodType, periodNo: period.periodNo, netVat: declaration.netVat, filedAt: new Date() },
         update: { netVat: declaration.netVat, filedAt: new Date() },
       });
-      return { year: filing.year, quarter: filing.quarter, filedAt: filing.filedAt, netVat: money(filing.netVat) };
+      return { year: filing.year, periodType: filing.periodType, periodNo: filing.periodNo, filedAt: filing.filedAt, netVat: money(filing.netVat) };
     });
   }
 
   unmarkFiled(companyId: string, dto: VatFiledDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      await tx.vatReturnFiling.deleteMany({ where: { year: dto.year, quarter: dto.quarter } });
-      return { year: dto.year, quarter: dto.quarter, filed: null };
+      const period = resolveVatPeriod(dto);
+      await tx.vatReturnFiling.deleteMany({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo } });
+      return { year: period.year, periodType: period.periodType, periodNo: period.periodNo, filed: null };
     });
+  }
+
+  /**
+   * ⑥A2 (`ق-١٣٢٥`) — **التوريداتُ الخاضعة في الاثني عشر شهراً الماضية، إن تجاوزت الحدَّ.**
+   *
+   * تُعيد الرقمَ حين يتجاوز أربعين مليوناً، و`null` حين لا يتجاوزه — فلا يُحسب ما لا يُعرض.
+   *
+   * ⚠️ **ومرحلتان لا واحدة، والسببُ كلفةٌ لا أناقة**: القياسُ الدقيق يقرأ **سطورَ** اثني عشر
+   * شهراً (أربعةَ أضعاف ما يقرؤه الإقرارُ الربعيّ) — **وكلُّ قراءةِ إقرارٍ تدفعه**. فيُقاس
+   * أوّلاً **حدٌّ أعلى رخيص** بالتجميع في القاعدة: مجموعُ صافي المستندات وصافي الاستحقاق.
+   * وهو **حدٌّ أعلى مُثبَت**: الخاضعُ من كلِّ مستندٍ لا يتجاوز صافيَه كلَّه، والإشعارُ الدائن
+   * يُجمع موجباً فيزيد البند ولا ينقصه. فإن قصُر الحدُّ الأعلى عن أربعين مليوناً **فالحقيقةُ
+   * دونه يقيناً** ولا يُقرأ سطرٌ واحد؛ ولا يُقاس الدقيقُ إلا حيث يمكن أن يُلزِم.
+   */
+  private async trailingTaxableSupplies(tx: Prisma.TransactionClient, period: ResolvedVatPeriod): Promise<number | null> {
+    const window = trailingTwelveMonths(period);
+    const [invoiceAgg, rentAgg] = await Promise.all([
+      tx.invoice.aggregate({ _sum: { baseSubtotal: true }, where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED } }),
+      tx.rentAccrual.aggregate({ _sum: { amountNet: true }, where: { date: { gte: window.from, lte: window.to }, managed: false } }),
+    ]);
+    const upperBound = round2(Number(invoiceAgg._sum.baseSubtotal ?? 0) + Number(rentAgg._sum.amountNet ?? 0));
+    if (upperBound <= MONTHLY_PERIOD_THRESHOLD) return null;
+
+    // فوق الحدّ الأعلى: يُقاس الخاضعُ بعينه بالمحرّك نفسِه — الخانةُ `1` والصفرُ والصادرات،
+    // ومعها الإيجارُ الخاضع (`taxable`) وحدَه — فلا يدخل معفىً ولا عقارُ تشغيل.
+    const [invoices, rentRows] = await Promise.all([
+      tx.invoice.findMany({
+        where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED },
+        select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+      }),
+      tx.rentAccrual.findMany({ where: { date: { gte: window.from, lte: window.to }, managed: false, taxable: true }, select: { amountNet: true, exchangeRate: true } }),
+    ]);
+    const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: adjustmentSign(v.docType, 'CREDIT_NOTE'), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
+    const rentStandard = rentRows.reduce((s, r) => s + Number(r.amountNet) * Number(r.exchangeRate), 0);
+    const exact = round2(boxes.box1.net + boxes.box3.net + boxes.box4.net + rentStandard);
+    return exact > MONTHLY_PERIOD_THRESHOLD ? exact : null;
   }
 
   /**
@@ -137,12 +179,11 @@ export class ObligationsService {
    * فمبيعاتُ الفروع كلِّها ومشترياتُها تدخل فيه (الإعلانُ على المتحكِّم العامّ أعلاه، ويُعاد هنا
    * على الدالّة التي تقرأ — فحارسُ `ق-٥١٧` يقرأ النطاقَ الذي تقع فيه القراءة).
    */
-  private async declarationWithinTx(tx: Prisma.TransactionClient, query: VatDeclarationQueryDto) {
+  private async declarationWithinTx(tx: Prisma.TransactionClient, companyId: string, query: VatDeclarationQueryDto) {
     {
-      const quarterMonths: Record<number, [number, number]> = { 1: [1, 3], 2: [4, 6], 3: [7, 9], 4: [10, 12] };
-      const [startMonth, endMonth] = quarterMonths[query.quarter];
-      const from = new Date(Date.UTC(query.year, startMonth - 1, 1));
-      const to = new Date(Date.UTC(query.year, endMonth, 0));
+      // ⑥A2 (`ق-١٣٢٥`) — الفترةُ من المصدر الواحد: ربعاً أو شهراً، بمدىً واحدٍ لا جدولَين.
+      const period = resolveVatPeriod(query);
+      const { from, to } = period;
 
       // الإقرارُ يقرأ ولا يُرحّل: الاستحقاقُ يُكتب عند الإنشاء والتجديد والقبض وبالكنس اليوميّ
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
@@ -221,7 +262,7 @@ export class ObligationsService {
 
       const netVat = round2(salesStandardVat - purchasesStandardVat);
       // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.
-      const filing = await tx.vatReturnFiling.findFirst({ where: { year: query.year, quarter: query.quarter } });
+      const filing = await tx.vatReturnFiling.findFirst({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo } });
       const filed = filing ? { filedAt: filing.filedAt, netVat: round2(Number(filing.netVat)) } : null;
       const changedSinceFiled = filed !== null && Math.abs(filed.netVat - netVat) >= 0.005;
 
@@ -234,7 +275,7 @@ export class ObligationsService {
        */
       const exemptSupplies = salesExempt; // يشمل إيجارَ السكنيّ المعفى وقديمَه
       const taxableSupplies = round2(salesStandard + salesZeroRatedDomestic + salesExports); // الخاضعُ بنسبته وبالصفر — كلاهما «خاضع» في القسمة
-      const limits: { code: string; severity: 'blocking'; message: string }[] = [];
+      const limits: { code: string; severity: 'blocking' | 'warning'; message: string }[] = [];
       if (exemptSupplies > 0 && taxableSupplies > 0) {
         limits.push({
           code: 'PROPORTIONAL_INPUT_VAT_NOT_BUILT',
@@ -242,11 +283,44 @@ export class ObligationsService {
           message: `الخصمُ النسبيّ لضريبة المدخلات (م٥١) غيرُ مبنيّ: لهذه المنشأة في الفترة توريداتٌ معفاة (${money(exemptSupplies)}) وخاضعة (${money(taxableSupplies)}) معاً، والإقرارُ يخصم ضريبةَ المشتريات كاملةً حيث تجب نسبةٌ — لا يُعتمد هذا الإقرارُ للتقديم قبل بناء الخصم النسبيّ (الحزمة «و»)`,
         });
       }
+
+      /**
+       * ⑥A2 (`ق-١٣٢٥`) — **حدُّ الأربعين مليوناً يُقاس ويُعلَن ولا يُبدَّل به إعدادُ التاجر.**
+       *
+       * ف١ تُلزم بالشهرية من تجاوزت توريداتُه الخاضعة أربعين مليوناً في الاثني عشر شهراً
+       * الماضية. **ولا يُقلب الإعدادُ آلياً**: الانتقالُ يقع بإشعارٍ من الهيئة له تاريخُ سريان
+       * (ف٤ · ف٦) — فنظامٌ يبدّلها بنفسه **يصنع فترةً لم تُقرّها الهيئة**. فيُعلَن للتاجر
+       * ليطلب، **ويبقى القرارُ خارجَنا**.
+       */
+      /**
+       * ⚠️ **بالمعرّف لا بـ`findFirst`** — و**الاختبارُ أمسكها قبل الدفع**: أوّلُ صياغةٍ كانت
+       * `tx.company.findFirstOrThrow({ select: … })` بلا شرط. و`companies` **بلا `RLS` أصلاً**
+       * (`relrowsecurity = false` — مقيسٌ في الموجة ٢٥٦)، **وليس في `TENANT_SCOPED_MODELS`**
+       * لأنه يحمل `id` لا `companyId` — فلا امتدادٌ يحقن النطاق ولا سياسةٌ تحجب.
+       * ⇒ **فقراءةٌ بلا شرطٍ تُعيد صفَّ منشأةٍ أخرى**، لا فراغاً يُلاحَظ (`§8.5` مقلوبةً).
+       */
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { vatPeriod: true } });
+      if (company.vatPeriod === 'QUARTERLY') {
+        const trailing = await this.trailingTaxableSupplies(tx, period);
+        if (trailing !== null) {
+          limits.push({
+            code: 'MONTHLY_VAT_PERIOD_REQUIRED',
+            severity: 'warning',
+            message: `توريداتُك الخاضعة في الاثني عشر شهراً المنتهية بنهاية هذه الفترة ${money(trailing)} — وهي فوق أربعين مليوناً، والفترةُ الضريبية عندئذٍ شهرية (مادّةُ الفترة الضريبية ف١). وإعدادُك ربعيّ: الانتقالُ يقع بإشعارٍ من الهيئة لا من النظام، فراجِعها`,
+          });
+        }
+      }
+
       const box = (b: { net: number; vat?: number }) => ('vat' in b && b.vat !== undefined ? { net: money(b.net), vat: money(b.vat) } : { net: money(b.net) });
       const counted = (c: { lineCount: number; net: number }) => ({ lineCount: c.lineCount, net: money(c.net) });
       return {
-        year: query.year,
-        quarter: query.quarter,
+        year: period.year,
+        /** ⑥A2 — الفترةُ كما حُلَّت: نوعُها ورقمُها ونصُّها، **ومطابقتُها لإعداد التاجر**. */
+        periodType: period.periodType,
+        periodNo: period.periodNo,
+        periodLabel: period.label,
+        companyVatPeriod: company.vatPeriod,
+        periodMatchesCompany: period.periodType === company.vatPeriod,
         from: from.toISOString().slice(0, 10),
         to: to.toISOString().slice(0, 10),
         salesStandard: money(salesStandard),

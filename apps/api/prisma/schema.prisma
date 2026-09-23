@@ -408,6 +408,13 @@ model Company {
   vatNumber   String?
   /// Commercial Registration number, 10 digits — validated in the DTO.
   crNumber    String?
+  /// ⑥A2 (`ق-١٣٢٥`) — **فترةُ التاجر الضريبية**: شهريةٌ لمن تجاوزت توريداتُه الخاضعة
+  /// **أربعين مليوناً خلال الاثني عشر شهراً الماضية**، وربعيةٌ لغيره (اللائحةُ التنفيذية،
+  /// مادّةُ الفترة الضريبية ف١–٢). ⚠️ **وهي عدسةٌ لا بوّابة**: المحرّكُ يحسب أيَّ فترةٍ
+  /// تُطلَب — شهراً أو ربعاً — **وهذا الحقلُ يقول أيُّهما فترةُ هذا التاجر** فتُعلَن
+  /// المطابقةُ في ردّ الإقرار. والسببُ من النصّ نفسِه: الفترةُ تتغيّر **بإشعارٍ من الهيئة
+  /// له تاريخُ سريان** (ف٤ · ف٦)، فلو كانت بوّابةً لحجب تبديلُها أرباعاً سبق تقديمُها.
+  vatPeriod   VatPeriod @default(QUARTERLY)
   phone       String?
   email       String?
   website     String?
@@ -5062,13 +5069,23 @@ model RentAccrual {
 /// قُدِّم للهيئة. بلاه تُعرض رسالةُ التصحيح لكلِّ ربعٍ تغيّر رقمُه فتصير ضجيجاً يُتجاهَل؛ وبه تُعرض
 /// لمن قدّم وحدَه، مع صافي ما قُدِّم لتُقارَن به قراءةُ اليوم (م٦٣: تصحيحٌ خلال عشرين يوماً من العلم،
 /// ودون 15,000 ريال يجوز إدراجُه في الإقرار التالي).
+/// ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية: ربعيةٌ هي الأصل، وشهريةٌ فوق أربعين مليوناً.
+enum VatPeriod {
+  QUARTERLY
+  MONTHLY
+}
+
 model VatReturnFiling {
   id        String  @id @default(uuid())
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   year    Int
-  quarter Int
+  /// ⑥A2 — **نوعُ الفترة ورقمُها معاً**: `QUARTERLY` بـ`1..4` أو `MONTHLY` بـ`1..12`.
+  /// وكان المفتاحُ `(companyId, year, quarter)` ربعاً حتماً؛ والهجرةُ تنقل القائمَ
+  /// `quarter ⟵ periodNo` بنوع `QUARTERLY` وتعدّ وتصرخ.
+  periodType VatPeriod @default(QUARTERLY)
+  periodNo   Int
   /// لحظةُ الوسم — التاجرُ يضعه بعد التقديم فعلاً.
   filedAt DateTime @default(now())
   /// صافي الضريبة كما قرأته الشاشةُ لحظةَ الوسم — المرجعُ الذي يُقاس عليه «تغيّر بعد التقديم».
@@ -5076,7 +5093,7 @@ model VatReturnFiling {
 
   createdAt DateTime @default(now())
 
-  @@unique([companyId, year, quarter])
+  @@unique([companyId, year, periodType, periodNo])
   @@map("vat_return_filings")
 }
 

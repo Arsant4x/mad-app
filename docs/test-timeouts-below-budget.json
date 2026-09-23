@@ -93,7 +93,6 @@
     "transactions-tenant-isolation.e2e-spec.ts": 2,
     "trash.e2e-spec.ts": 5,
     "trial-balance.e2e-spec.ts": 4,
-    "vat-declaration-limits.e2e-spec.ts": 1,
     "warranty-expiry.e2e-spec.ts": 4,
     "zatca-cert-expiry.e2e-spec.ts": 5,
     "zatca-credit-notes.e2e-spec.ts": 6,

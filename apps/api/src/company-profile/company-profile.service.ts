@@ -12,6 +12,8 @@ const PROFILE_SELECT = {
   legalName: true,
   vatNumber: true,
   crNumber: true,
+  /** ⑥A2 (`ق-١٣٢٥`) — فترةُ المنشأة الضريبية: تُعلَن ولا تُقلب آلياً. */
+  vatPeriod: true,
   phone: true,
   email: true,
   website: true,
@@ -138,6 +140,7 @@ export class CompanyProfileService {
         ...(dto.writeOffRequiresTwoPersons !== undefined ? { writeOffRequiresTwoPersons: dto.writeOffRequiresTwoPersons } : {}),
         ...(dto.leaveApprovalRequiresTwoPersons !== undefined ? { leaveApprovalRequiresTwoPersons: dto.leaveApprovalRequiresTwoPersons } : {}),
         ...(dto.creditLimitHardBlock !== undefined ? { creditLimitHardBlock: dto.creditLimitHardBlock } : {}),
+        ...(dto.vatPeriod !== undefined ? { vatPeriod: dto.vatPeriod } : {}),
         ...(dto.posOfflineGapMinutes !== undefined ? { posOfflineGapMinutes: dto.posOfflineGapMinutes } : {}),
       },
       select: PROFILE_SELECT,

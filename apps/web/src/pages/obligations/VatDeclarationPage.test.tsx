@@ -8,7 +8,12 @@ vi.mock('../../api/obligations');
 
 const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration => ({
   year: 2026,
-  quarter: 2,
+  // ⑥A2 (`ق-١٣٢٥`) — الفترةُ بنوعها ورقمها، ومطابقتُها لإعداد المنشأة.
+  periodType: 'QUARTERLY',
+  periodNo: 2,
+  periodLabel: 'الربع 2 من 2026',
+  companyVatPeriod: 'QUARTERLY',
+  periodMatchesCompany: true,
   from: '2026-04-01',
   to: '2026-06-30',
   salesStandard: '100.00',

@@ -1,15 +1,9 @@
-import { Type } from 'class-transformer';
-import { IsIn, IsInt, Max, Min } from 'class-validator';
+import { VatDeclarationQueryDto } from './vat-declaration-query.dto';
 
-/** علَمُ «قُدِّم» — ربعُ سنةٍ يُوسَم بيد التاجر (`ق-٩١٩`). */
-export class VatFiledDto {
-  @Type(() => Number)
-  @IsInt()
-  @Min(2000)
-  @Max(2100)
-  year!: number;
-
-  @Type(() => Number)
-  @IsIn([1, 2, 3, 4])
-  quarter!: number;
-}
+/**
+ * علَمُ «قُدِّم» — فترةٌ تُوسَم بيد التاجر (`ق-٩١٩`).
+ *
+ * ⑥A2 (`ق-١٣٢٥`): كان ربعَ سنةٍ حتماً. **ويرث الآن شرطَ الفترة نفسَه** من استعلام الإقرار —
+ * فالوسمُ والقراءة يقرآن الفترةَ بقاعدةٍ واحدة، **ولا تتباعد صيغتان لشيءٍ واحد**.
+ */
+export class VatFiledDto extends VatDeclarationQueryDto {}

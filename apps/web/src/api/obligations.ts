@@ -43,9 +43,20 @@ export interface SalesBoxes {
  * ② **المالُ نصّاً بخانتين** (`ق-١٢٣٥` — أوّلُ نطاق): كلُّ مبلغٍ هنا `MoneyText` (`"1500.00"`) والعدّاتُ أرقام.
  * فالحقلُ يُعرض بـ`fmt()` كما هو، **ويُقرأ بـ`num()` قبل أي جمعٍ أو مقارنة** — والحارسُ الشجريّ يُسقط ما سواه.
  */
+/** ⑥A2 (`ق-١٣٢٥`) — فترةُ التاجر الضريبية: ربعيةٌ هي الأصل، وشهريةٌ فوق أربعين مليوناً. */
+export type VatPeriodType = 'QUARTERLY' | 'MONTHLY';
+
+/** الفترةُ المطلوبة — **أحدُهما لا كلاهما**، والخادمُ يردّ برسالةٍ مسمّاة على المخالفة. */
+export type VatPeriodQuery = { year: number; quarter: number; month?: undefined } | { year: number; month: number; quarter?: undefined };
+
 export interface VatDeclaration {
   year: number;
-  quarter: number;
+  /** ⑥A2 — الفترةُ كما حلّها الخادم، **ومطابقتُها لإعداد التاجر**. */
+  periodType: VatPeriodType;
+  periodNo: number;
+  periodLabel: string;
+  companyVatPeriod: VatPeriodType;
+  periodMatchesCompany: boolean;
   from: string;
   to: string;
   salesStandard: MoneyText;
@@ -82,14 +93,13 @@ export interface VatDeclaration {
   changedSinceFiled: boolean;
   filedNote: string | null;
   /** حدودٌ معلَنة على هذا الإقرار من الخادم (ق-١٢٦٠) — تُعرض كما جاءت ولا تُشتقّ في الشاشة. */
-  limits: { code: string; severity: 'blocking'; message: string }[];
+  limits: { code: string; severity: 'blocking' | 'warning'; message: string }[];
 }
 
 export const listObligations = () => apiClient.get<GovernmentObligation[]>('/obligations').then((r) => r.data);
 export const toggleObligation = (id: string) => apiClient.patch<GovernmentObligation>(`/obligations/${id}/toggle`).then((r) => r.data);
-export const getVatDeclaration = (year: number, quarter: number) =>
-  apiClient.get<VatDeclaration>('/obligations/vat-declaration', { params: { year, quarter } }).then((r) => r.data);
-export const markVatFiled = (year: number, quarter: number) =>
-  apiClient.post<{ filedAt: string; netVat: MoneyText }>('/obligations/vat-declaration/filed', { year, quarter }).then((r) => r.data);
-export const unmarkVatFiled = (year: number, quarter: number) =>
-  apiClient.delete('/obligations/vat-declaration/filed', { params: { year, quarter } }).then((r) => r.data);
+export const getVatDeclaration = (period: VatPeriodQuery) =>
+  apiClient.get<VatDeclaration>('/obligations/vat-declaration', { params: period }).then((r) => r.data);
+export const markVatFiled = (period: VatPeriodQuery) =>
+  apiClient.post<{ filedAt: string; netVat: MoneyText }>('/obligations/vat-declaration/filed', period).then((r) => r.data);
+export const unmarkVatFiled = (period: VatPeriodQuery) => apiClient.delete('/obligations/vat-declaration/filed', { params: period }).then((r) => r.data);
