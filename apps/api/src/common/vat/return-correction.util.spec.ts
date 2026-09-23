@@ -1,4 +1,4 @@
-import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, judgeCorrection } from './return-correction.util';
+import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, filedChangeNote, judgeCorrection } from './return-correction.util';
 import { resolveVatPeriod } from './vat-period.util';
 
 const q = (year: number, quarter: number) => resolveVatPeriod({ year, quarter });
@@ -40,5 +40,39 @@ describe('⑥A3 — تصحيحُ إقرارٍ سابق (م٦٣)', () => {
     expect(judgeCorrection(q(2026, 4), target(2021, 1), -100, new Date(Date.UTC(2026, 11, 31)))).toEqual({ ok: true });
     // ⚠️ والمدّةُ على الزيادة وحدَها — والنقصُ دونها لا تسقط مدّتُه هنا.
     expect(judgeCorrection(q(2027, 1), target(2021, 1), 100, new Date(Date.UTC(2027, 0, 1)))).toEqual({ ok: true });
+  });
+});
+
+/**
+ * **رسالةُ «تغيّر بعد التقديم» بالحدّ الذي يحكم به `judgeCorrection` وبالاتجاه** — كانت نصّاً يقول «دون 15,000»
+ * والنصُّ المقروء «less than five thousand (5,000) SAR»، ويوجب العشرين يوماً على الزيادة والنقص معاً.
+ */
+describe('⑥A3 — رسالةُ «تغيّر بعد التقديم» من الحدّ نفسِه وبالاتجاه (م٦٣)', () => {
+  const limitText = CORRECTION_UNDERSTATEMENT_LIMIT.toLocaleString('en-US');
+
+  it('① نقصٌ دون الحدّ ⟸ الأصلُ عشرون يوماً، وهذا ممّا يُستدرك في الإقرار التالي', () => {
+    const note = filedChangeNote(1000, 1450);
+    expect(note).toContain('نقصٌ في الضريبة المستحقّة بـ450.00');
+    expect(note).toContain('عشرين يوماً');
+    expect(note).toContain(`إلا ما دون ${limitText} ريال فيجوز استدراكُه في الإقرار التالي (م٦٣/٣) — وهذا منه`);
+  });
+
+  it('⭐ ② نقصٌ يبلغ الحدّ ⟸ لا يُستدرك في الإقرار التالي — والحدُّ خمسةُ آلافٍ لا خمسةَ عشر', () => {
+    // عند الحدّ بالضبط وبين الحدّين القديم والصحيح: كلاهما يوجب الإشعار.
+    for (const current of [1000 + CORRECTION_UNDERSTATEMENT_LIMIT, 1000 + 12000]) {
+      const note = filedChangeNote(1000, current);
+      expect(note).toContain('إشعارُ الهيئة خلال عشرين يوماً');
+      expect(note).toContain(`ولا يُستدرك في الإقرار التالي لأنه يبلغ ${limitText} ريال فأكثر`);
+      expect(note).not.toContain('وهذا منه');
+    }
+    for (const n of [filedChangeNote(1000, 1450), filedChangeNote(1000, 13000), filedChangeNote(5000, 100)]) expect(n).not.toContain('15,000');
+  });
+
+  it('③ زيادةٌ ⟸ تُصحَّح في أيّ إقرارٍ لاحق — ولا عشرين يوماً عليها', () => {
+    const note = filedChangeNote(5000, 4200);
+    expect(note).toContain('زيادةٌ في الضريبة المستحقّة بـ800.00');
+    expect(note).toContain('في أيّ إقرارٍ لاحق (م٦٣/٢)');
+    expect(note).toContain(`${CORRECTION_OVERSTATEMENT_YEARS} سنواتٍ`);
+    expect(note).not.toContain('عشرين يوماً');
   });
 });

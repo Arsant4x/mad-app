@@ -9,7 +9,7 @@ import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
 import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, previousVatPeriod, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
-import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, judgeCorrection } from '../common/vat/return-correction.util';
+import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, filedChangeNote, judgeCorrection } from '../common/vat/return-correction.util';
 import { annualSettlement, applyProportionalDeduction, type InputVatBuckets, proportionalRatio } from '../common/vat/proportional-deduction.util';
 import type { InputVatUse } from '@prisma/client';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
@@ -684,9 +684,7 @@ export class ObligationsService {
         /** حدودٌ معلَنة على هذا الإقرار — فارغةٌ حين لا حدّ (`ق-١٢٦٠`). */
         limits,
         /** يُعرض حين `changedSinceFiled` وحدَه — نصُّ م٦٣ حيث يُقرأ الرقم (ق-٤٤٩). */
-        filedNote: changedSinceFiled
-          ? `تغيّر هذا الإقرارُ بعد تقديمه (قُدِّم بصافي ${money(filed!.netVat)}): تصحيحُه واجبٌ خلال عشرين يوماً من العلم (م٦٣/١)؛ ونقصٌ دون 15,000 ريال يجوز إدراجُه في الإقرار التالي (م٦٣/٣)`
-          : null,
+        filedNote: changedSinceFiled ? filedChangeNote(filed!.netVat, netVat) : null,
       };
     }
   }
