@@ -138,6 +138,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'ApiKey',
   // قياسُ الاستعمال (`ق-١٢٩١` · ي/㉑A1): كلُّ قراءةٍ وكتابةٍ داخل سياق المنشأة.
   'IntegrationUsage',
+  // وقائعُ الموافقة التسويقية (`ق-١٣٠٣` · ك/⑰A1): تُقرأ وتُكتب داخل سياق منشأة العميل وحدَه.
+  'MarketingConsent',
 ]);
 
 const READ_OR_MUTATE_BY_WHERE = new Set([
