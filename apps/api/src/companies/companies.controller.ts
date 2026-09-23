@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
+import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
+import { PlatformRole } from '@prisma/client';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
@@ -13,6 +15,9 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
  */
 @Controller('companies')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+// ⑪A2 (`ق-١٣١٢`): حساباتُ المنشآت **تشغيلٌ**، واشتراكاتُها **ماليةٌ** — وهما في متحكّمٍ
+// واحدٍ اليوم، فيُمنحان معاً حتى يُفصل المساران. و`OWNER` يمرّ بتعريفه.
+@RequiresPlatformRole(PlatformRole.OPERATIONS, PlatformRole.FINANCE)
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 

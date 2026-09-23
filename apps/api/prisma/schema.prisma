@@ -161,11 +161,32 @@ model PasswordResetToken {
 
 /// Platform super-admin — operates the developer panel, manages companies
 /// and permission templates. Never scoped to a company.
+/// **دورُ مدير المنصّة — والفصلُ بين من يدعم ومن يمحو** (`ق-١٣١٢` · ⑪A2).
+///
+/// كان دورٌ واحدٌ يرى كلَّ شيءٍ ويفعل كلَّ شيء: **أوّلُ موظفِ دعمٍ يُعيَّن يرث صلاحيةَ المالك**،
+/// **وما رآه أو فعله لا يُستردّ** (`docs/domain-scan/11` · A2).
+///
+/// **والخمسةُ من نصّ المسح**: `OWNER` يملك كلَّ شيء · `SUPPORT` الدخولُ بموافقة التاجر ·
+/// `FINANCE` الحساباتُ والاشتراكات · `OPERATIONS` تشغيلُ الحسابات · `COMPLIANCE` طلباتُ
+/// الحذف وقائمةُ المعالجين الفرعيين والبنود.
+enum PlatformRole {
+  OWNER
+  SUPPORT
+  FINANCE
+  OPERATIONS
+  COMPLIANCE
+}
+
 model PlatformAdmin {
   id              String        @id @default(uuid())
   loginIdentityId String        @unique
   loginIdentity   LoginIdentity @relation(fields: [loginIdentityId], references: [id], onDelete: Cascade)
   displayName     String
+
+  /// **يُقرأ حيّاً في الحارس لا من الرمز** — فدورٌ يُسحب ينفذ في الطلب التالي، ورمزٌ يحمله
+  /// يُبقيه سارياً حتى انتهائه (نظيرةُ `ق-١٢٥٨`: الحالةُ تُقرأ من القاعدة).
+  role PlatformRole @default(OWNER)
+
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

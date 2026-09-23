@@ -33,6 +33,8 @@ export const MSG = {
   session_missing: 'auth.session_missing',
   company_login_required: 'auth.company_login_required',
   platform_admin_only: 'auth.platform_admin_only',
+  /** دورُ مدير المنصّة (`ق-١٣١٢` · ⑪A2). */
+  platform_role_denied: 'auth.platform_role_denied',
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
@@ -564,6 +566,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   // حيث الفاعل موثَّق ويُدير حساباتٍ يملكها.
   [MSG.register_username_unavailable]: { ar: 'تعذّر إنشاء الحساب بهذا الاسم — جرّب اسماً آخر', en: 'Could not create an account with that username — try another' },
   [MSG.platform_admin_only]: { ar: 'هذا الإجراء متاح لحساب المطوّر فقط', en: 'This action is restricted to the platform administrator' },
+  [MSG.platform_role_denied]: {
+    ar: 'هذا الإجراء خارج دورك في المنصّة ({role}) — اطلبه ممن يملكه',
+    en: 'This action is outside your platform role ({role}) — ask whoever holds it',
+  },
 
   [MSG.ledger_filter_required]: {
     ar: 'دفتر الأستاذ يحتاج حساباً أو بُعداً (عقار · وحدة · عميل · مورّد) — بلا مرشّح هو ميزان المراجعة لا الأستاذ',

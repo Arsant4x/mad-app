@@ -5,6 +5,8 @@ import { JwtPayload, TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
+import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
+import { PlatformRole } from '@prisma/client';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';
@@ -98,6 +100,9 @@ const decider = (req: Request): DecisionActor => {
 /** Support side: review and execute. Platform-admin only. */
 @Controller('admin/deletion-requests')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+// ⑪A2 (`ق-١٣١٢`): قرارُ حذف حسابٍ ومحوُ بياناته **امتثالٌ** — وهو **الفعلُ الذي لا يُردّ**،
+// فأبعدُ ما يكون عن الدعم.
+@RequiresPlatformRole(PlatformRole.COMPLIANCE)
 export class AdminDeletionRequestsController {
   constructor(private readonly service: DeletionRequestsService) {}
 

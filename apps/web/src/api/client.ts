@@ -22,6 +22,9 @@ export type ActorType = 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
 /** `CLOSED` الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — لا يعود بالدفع، بل بطلبٍ وقرار. */
 export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
 
+/** أدوارُ مدير المنصّة (`ق-١٣١٢` · ⑪A2) — مرسومةٌ من `PlatformRole` في الخادم. */
+export type PlatformRole = 'OWNER' | 'SUPPORT' | 'FINANCE' | 'OPERATIONS' | 'COMPLIANCE';
+
 export interface AuthUser {
   id: string;
   actorType: ActorType;
@@ -29,6 +32,15 @@ export interface AuthUser {
   displayName: string;
   companyId: string | null;
   status: AccountStatus;
+  /**
+   * دورُ مدير المنصّة — `null` لغيره.
+   *
+   * ⚠️ **للعرض لا للحكم**: اللوحةُ تُخفي ما لا يملكه الدورُ **كي لا يُقاد إلى بابٍ يُردّ
+   * منه**، **والحكمُ في الخادم** — فمن عدّله في المتصفّح لم يفتح باباً. **وهو خلافُ
+   * `allowedScreens`** أدناه: ذاك يُثبَّت لحظةَ الدخول فيُخفي سحباً لاحقاً، وهذا **يُقرأ
+   * حيّاً في الحارس عند كلِّ طلب** — فالخفاءُ في الشاشة لا يُبقي باباً مفتوحاً.
+   */
+  platformRole: PlatformRole | null;
   // ⚠️ **لا `allowedScreens` هنا عمداً.** الخادم ما زال يرسله في استجابة
   // الدخول، لكن تعريفه في هذا النوع يجعل الحساب به ممكناً — وقد وقع فعلاً:
   // قاعدة «كل الشاشات» كانت مكتوبة مرتين (`AppShell` و`ScreenGuard`).

@@ -3,6 +3,8 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
+import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
+import { PlatformRole } from '@prisma/client';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -47,6 +49,9 @@ export class ConsentController {
 /** جانبُ المنصّة: القائمةُ ونشرُ نسخها — ومن يقرأ «لماذا مُنع فلان؟» يقرأ العدّ. */
 @Controller('admin/processing-agreement')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
+// ⑪A2 (`ق-١٣١٢`): قائمةُ المعالجين الفرعيين ونشرُ نسخها **امتثالٌ** — وهي التي يُحاسَب عليها
+// أمام سدايا، فلا يمسّها الدعمُ ولا التشغيل.
+@RequiresPlatformRole(PlatformRole.COMPLIANCE)
 export class AdminConsentController {
   constructor(private readonly service: ConsentService) {}
 
