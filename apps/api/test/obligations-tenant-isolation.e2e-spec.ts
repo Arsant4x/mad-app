@@ -94,7 +94,20 @@ describe('Government obligations checklist + VAT declaration (e2e)', () => {
     expect(Number(declaration.body.salesStandardVat) - Number(before.body.salesStandardVat)).toBeCloseTo(150, 2);
     expect(Number(declaration.body.purchasesStandard) - Number(before.body.purchasesStandard)).toBeCloseTo(400, 2);
     expect(Number(declaration.body.purchasesStandardVat) - Number(before.body.purchasesStandardVat)).toBeCloseTo(60, 2);
-    expect(Number(declaration.body.netVat)).toBeCloseTo(Number(declaration.body.salesStandardVat) - Number(declaration.body.purchasesStandardVat));
+    /**
+     * ⑥A1 (`ق-١٣٢٥`) — **الصافي يُطرح منه المخصومُ لا كلُّ ضريبة المشتريات** (م٥١).
+     *
+     * وكان هذا التوكيدُ يُثبّت الصيغةَ القديمة `salesStandardVat − purchasesStandardVat`
+     * (`§8.14`/الوجه الثالث: توكيدٌ على ثابتٍ يصير حارسَ الحالة القائمة) — وسقط على
+     * **الصواب** حين بُني الخصم. والمنشأةُ هنا مبذورةٌ قد يكون فيها معفى، فالمقارنةُ
+     * **بالمخصوم الذي يُعلنه الردُّ نفسُه** لا بافتراضٍ عنه.
+     */
+    expect(Number(declaration.body.netVat)).toBeCloseTo(
+      Number(declaration.body.salesStandardVat) - Number(declaration.body.proportional.deductibleInputVat) - (declaration.body.proportional.settlement?.difference ?? 0),
+      2,
+    );
+    // وشقّا المدخلات يستويان بمجموعها — فلا هللةَ تضيع بين المخصوم وغيره.
+    expect(Number(declaration.body.proportional.deductibleInputVat) + Number(declaration.body.proportional.nonDeductibleInputVat)).toBeCloseTo(Number(declaration.body.purchasesStandardVat), 2);
   });
 
   it("gives company B its own separate seeded checklist and blocks it from toggling company A's items", async () => {

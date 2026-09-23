@@ -8,10 +8,13 @@ import { computeDocumentTotals, lineNet } from '../common/money/totals';
 import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
-import { MONTHLY_PERIOD_THRESHOLD, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
+import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
+import { annualSettlement, applyProportionalDeduction, type InputVatBuckets, proportionalRatio } from '../common/vat/proportional-deduction.util';
+import type { InputVatUse } from '@prisma/client';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
-import { MSG } from '../common/i18n/messages';
+import { DeclareVatRatioDto } from './dto/vat-ratio.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -139,6 +142,120 @@ export class ObligationsService {
   }
 
   /**
+   * ⑥A1 (`ق-١٣٢٥`) — **نسبةُ السنة: المعلَنةُ والمقترَحة معاً.**
+   *
+   * ⚠️ **والمقترَحُ يحمل تحفّظَه**: يُحسب من السنة الماضية (م٥١/٤)، **ويُعلَن معه أوّلُ
+   * مستندٍ في النظام** — فمن انتقل إلينا في منتصف تلك السنة يرى أن الأساس ناقص **قبل أن
+   * يُقرّ**. ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض، فلا تُكتب آلياً.
+   */
+  vatRatio(companyId: string, year: number) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
+      const previous = calendarYear(year - 1);
+      const [invoices, rent, firstInvoice] = await Promise.all([
+        tx.invoice.findMany({
+          where: { issueDate: { gte: previous.from, lte: previous.to }, ...NOT_REPLACED_REJECTED },
+          select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        }),
+        this.rentSection(tx, previous.from, previous.to),
+        tx.invoice.findFirst({ orderBy: { issueDate: 'asc' }, select: { issueDate: true } }),
+      ]);
+      const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: adjustmentSign(v.docType, 'CREDIT_NOTE'), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
+      const taxable = round2(boxes.box1.net + boxes.box3.net + boxes.box4.net + rent.standard + rent.legacyStandard);
+      const exempt = round2(boxes.box5.net + rent.exempt + rent.legacyExempt);
+      const suggested = proportionalRatio(taxable, exempt);
+      // **يغطّي النظامُ السنةَ الماضية كلَّها؟** — أوّلُ مستندٍ فيه قبل بدايتها أو معها.
+      const coversPreviousYear = firstInvoice !== null && firstInvoice.issueDate <= previous.from;
+      return {
+        year,
+        declared: declared ? { ratio: Number(declared.ratio), basis: declared.basis, note: declared.note, settledRatio: declared.settledRatio === null ? null : Number(declared.settledRatio), settledAt: declared.settledAt } : null,
+        suggestion: {
+          basedOnYear: year - 1,
+          ratio: suggested,
+          taxableSupplies: money(taxable),
+          exemptSupplies: money(exempt),
+          coversPreviousYear,
+          note: suggested === null ? `لا توريداتِ في ${year - 1} في هذا النظام — فالنسبةُ تُقدَّر لسنة ${year} وتُسوّى في إقرارها الأخير (م٥١/٦–٧)` : coversPreviousYear ? `محسوبةٌ من توريدات ${year - 1} كاملةً (م٥١/٤)` : `⚠️ أوّلُ مستندٍ في هذا النظام بعد بداية ${year - 1} — فالأساسُ ناقصٌ، وراجِع دفاترك قبل الإقرار`,
+        },
+      };
+    });
+  }
+
+  /** ⑥A1 — إعلانُ النسبة: يُكتب أو يُحدَّث لسنةٍ واحدة (`@@unique([companyId, year])`). */
+  declareVatRatio(companyId: string, dto: DeclareVatRatioDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const row = await tx.vatProportionalRatio.upsert({
+        where: { companyId_year: { companyId, year: dto.year } },
+        create: { companyId, year: dto.year, ratio: dto.ratio, basis: dto.basis, note: dto.note?.trim() || null },
+        update: { ratio: dto.ratio, basis: dto.basis, note: dto.note?.trim() || null },
+      });
+      return { year: row.year, ratio: Number(row.ratio), basis: row.basis, note: row.note };
+    });
+  }
+
+  /**
+   * ⑥A1 — **إقرارُ التسوية السنوية** (م٥١/٧): يُختم أن التاجر رآها وأقرّها، **ولا يُخزَّن
+   * حسابُها** — فمصدرُه الصفوفُ نفسُها وقراءتُه اليوم كقراءته غداً.
+   */
+  settleVatRatio(companyId: string, year: number) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
+      if (!declared) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
+      const settlement = await this.annualSettlementWithinTx(tx, year, Number(declared.ratio), declared);
+      if (settlement === null) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
+      const row = await tx.vatProportionalRatio.update({ where: { id: declared.id }, data: { settledRatio: settlement.actualRatio, settledAt: new Date() } });
+      return { ...settlement, settledRatio: Number(row.settledRatio), settledAt: row.settledAt };
+    });
+  }
+
+  /**
+   * ⑥A1 (`ق-١٣٢٥`) — **تسويةُ الخصم النسبيّ السنوية** (م٥١/٧).
+   *
+   * «أن يقوم **في نهاية السنة التقويمية** بمقارنة القيَم المستخدمة في الكسر خلال تلك السنة
+   * مع القيَم الفعلية للتوريدات … وإجراء التعديل على ضريبة المدخلات **في الإقرار الضريبي
+   * النهائي عن تلك السنة**».
+   *
+   * **وتُحسب من السنة كلِّها لا من الفترة**: توريداتُها الفعلية نسبةً، ومشترياتُها المشتركة
+   * وعاءً. **ولا تُخزَّن** — مصدرُها الصفوفُ نفسُها، وقراءتُها اليوم كقراءتها غداً.
+   */
+  private async annualSettlementWithinTx(tx: Prisma.TransactionClient, year: number, appliedRatio: number, declared: { settledAt: Date | null } | null) {
+    const { from, to } = calendarYear(year);
+    const [invoices, purchases, rent] = await Promise.all([
+      tx.invoice.findMany({
+        where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED },
+        select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+      }),
+      tx.purchase.findMany({
+        where: { date: { gte: from, lte: to }, excludeFromVat: false, exempt: false, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] } },
+        select: { taxAmount: true, docType: true },
+      }),
+      this.rentSection(tx, from, to),
+    ]);
+    const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: adjustmentSign(v.docType, 'CREDIT_NOTE'), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
+    const yearTaxable = round2(boxes.box1.net + boxes.box3.net + boxes.box4.net + rent.standard + rent.legacyStandard);
+    const yearExempt = round2(boxes.box5.net + rent.exempt + rent.legacyExempt);
+    const actualRatio = proportionalRatio(yearTaxable, yearExempt);
+    if (actualRatio === null) return null;
+
+    const yearApportionedBase = round2(purchases.reduce((s, p) => s + adjustmentSign(p.docType, 'SUPPLIER_CREDIT_NOTE') * Number(p.taxAmount), 0));
+    const settled = annualSettlement(appliedRatio, actualRatio, yearApportionedBase);
+    return {
+      year,
+      appliedRatio,
+      actualRatio,
+      yearTaxableSupplies: money(yearTaxable),
+      yearExemptSupplies: money(yearExempt),
+      yearApportionedBase: money(yearApportionedBase),
+      appliedDeductible: money(settled.appliedDeductible),
+      actualDeductible: money(settled.actualDeductible),
+      difference: settled.difference,
+      differenceText: money(settled.difference),
+      /** أُقرّت التسويةُ بيد التاجر؟ — الحسابُ يبقى كما هو، والإقرارُ أثرٌ يُحفظ. */
+      settledAt: declared?.settledAt ?? null,
+    };
+  }
+
+  /**
    * ⑥A2 (`ق-١٣٢٥`) — **التوريداتُ الخاضعة في الاثني عشر شهراً الماضية، إن تجاوزت الحدَّ.**
    *
    * تُعيد الرقمَ حين يتجاوز أربعين مليوناً، و`null` حين لا يتجاوزه — فلا يُحسب ما لا يُعرض.
@@ -188,7 +305,7 @@ export class ObligationsService {
       // الإقرارُ يقرأ ولا يُرحّل: الاستحقاقُ يُكتب عند الإنشاء والتجديد والقبض وبالكنس اليوميّ
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
-      const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true } as const;
+      const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true, inputVatUse: true } as const;
       const [invoices, purchaseRows, voidedRows, rent, prepaymentsApplied] = await Promise.all([
         // ⑧ الإقرارُ يقرأ **السطورَ** لا مجموعَ الفاتورة (`ق-١٢٢٣`): كان كلُّ مبيعٍ في الخانة `1` بمجموعه ولو كان
         // فيه سطرٌ بنسبة الصفر أو معفى — فلا يصحّ إقرارُ صيدليةٍ ولا مصدِّر. والمبالغُ بالريال عبر سعر الفاتورة.
@@ -260,7 +377,39 @@ export class ObligationsService {
       const purchasesExempt = round2(exemptPurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
       const purchasesExcluded = round2(excludedPurchases.reduce((s, p) => s + purchaseSign(p) * Number(p.subtotal), 0));
 
-      const netVat = round2(salesStandardVat - purchasesStandardVat);
+      /**
+       * ⑥A1 (`ق-١٣٢٥`) — **الخصمُ النسبيّ** (م٥١): ضريبةُ المدخلات تُقسَم على أكياسها، ثم
+       * **تُضرب النسبةُ في المشترك وحدَه**. والنسبةُ من `vat_proportional_ratios` للسنة —
+       * **تُعلَن ولا تُخترع**؛ وبلا إعلانٍ لمن له توريدٌ معفى يُعلَن حدٌّ حاجب.
+       */
+      const bucketVat = (use: InputVatUse) => round2(taxablePurchases.filter((p) => p.inputVatUse === use).reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0));
+      const inputVatBuckets: InputVatBuckets = {
+        taxableOnly: bucketVat('TAXABLE_ONLY'),
+        exemptOnly: bucketVat('EXEMPT_ONLY'),
+        mixed: bucketVat('MIXED'),
+        legacyUnassigned: bucketVat('LEGACY_UNASSIGNED'),
+        legacyCount: taxablePurchases.filter((p) => p.inputVatUse === 'LEGACY_UNASSIGNED').length,
+      };
+      const declaredRatio = await tx.vatProportionalRatio.findFirst({ where: { year: period.year } });
+      /**
+       * ⚠️ **ولا نسبةَ لمن لا معفى له**: منشأةٌ خاضعةٌ وحدَها **لا يجب عليها شيء** من م٥١ —
+       * فلا تُطالَب بإعلانٍ ولا يُنقص خصمُها. والقياسُ من الفترة نفسِها كما في `ق-١٢٦٠`.
+       */
+      const proportionalApplies = salesExempt > 0;
+      const appliedRatio = proportionalApplies ? (declaredRatio ? Number(declaredRatio.ratio) : null) : 1;
+      // بلا نسبةٍ معلَنة **لا يُخصم المشتركُ أصلاً** — ولا يُخصم كاملاً: الحدُّ الحاجب يقول للتاجر ما يفعل.
+      const deduction = applyProportionalDeduction(inputVatBuckets, appliedRatio ?? 0);
+      const deductibleInputVat = deduction.deductible;
+
+      /**
+       * ⑥A1 — **تسويةُ آخر فترةٍ من السنة** (م٥١/٧): تُقارَن النسبةُ المطبَّقة بنسبة السنة
+       * **الفعلية** ويُعدَّل الفرقُ هنا. **وتُحسب ولا تُخزَّن** — فمصدرُها توريداتُ السنة نفسِها،
+       * وقراءتُها اليوم كقراءتها غداً. والمخزَّنُ **أنها أُقرّت** (`settledAt`).
+       */
+      const settlement = proportionalApplies && appliedRatio !== null && isLastPeriodOfYear(period) ? await this.annualSettlementWithinTx(tx, period.year, appliedRatio, declaredRatio) : null;
+
+      // وفرقُ التسوية **خصمٌ إضافي** حين يكون موجباً (خُصم أقلُّ مما يحقّ) وردٌّ حين يكون سالباً.
+      const netVat = round2(salesStandardVat - deductibleInputVat - (settlement?.difference ?? 0));
       // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.
       const filing = await tx.vatReturnFiling.findFirst({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo } });
       const filed = filing ? { filedAt: filing.filedAt, netVat: round2(Number(filing.netVat)) } : null;
@@ -268,19 +417,33 @@ export class ObligationsService {
 
       // ② **المالُ نصّاً بدقّة صنفه على حدّ الاستجابة** (`ق-١٢٣٥` — أوّلُ نطاق: الإقرار): الحسابُ فوقُ يبقى رقماً
       //    بالمصدر الواحد، والحقولُ تخرج نصّاً بخانتين (`money`) فلا يُعاد تدويرُها في المتصفّح؛ والعدّاتُ أرقامٌ كما هي.
-      /**
-       * **حدٌّ يُعلَن في وجه الإقرار حتى تُبنى «و»** (`ق-١٢٦٠`): الخصمُ النسبيّ لضريبة المدخلات (اللائحةُ التنفيذية م٥١)
-       * غيرُ مبنيّ — فمكلَّفٌ له توريداتٌ **معفاة وخاضعة معاً** في الفترة (إيجارٌ سكنيٌّ معفى بجانب بيعٍ أو إيجارٍ خاضع)
-       * يقرأ هنا ضريبةَ مشترياته مخصومةً كاملةً حيث تجب نسبةٌ. يُقاس من الفترة نفسِها لا يُكتب: المعفى > 0 والخاضع (بنسبته أو بالصفر) > 0.
-       */
       const exemptSupplies = salesExempt; // يشمل إيجارَ السكنيّ المعفى وقديمَه
       const taxableSupplies = round2(salesStandard + salesZeroRatedDomestic + salesExports); // الخاضعُ بنسبته وبالصفر — كلاهما «خاضع» في القسمة
       const limits: { code: string; severity: 'blocking' | 'warning'; message: string }[] = [];
-      if (exemptSupplies > 0 && taxableSupplies > 0) {
+
+      /**
+       * ⑥A1 (`ق-١٣٢٥`) — **حدُّ `ق-١٢٦٠` رُفع ببناء الخصم النسبيّ**، وحلّ محلَّه حدّان يقولان
+       * للتاجر ما يفعل: نسبةٌ لم تُعلَن (حاجب) · ومشترياتٌ بلا إسناد (تنبيه).
+       */
+      if (proportionalApplies && appliedRatio === null) {
         limits.push({
-          code: 'PROPORTIONAL_INPUT_VAT_NOT_BUILT',
+          code: 'PROPORTIONAL_RATIO_NOT_DECLARED',
           severity: 'blocking',
-          message: `الخصمُ النسبيّ لضريبة المدخلات (م٥١) غيرُ مبنيّ: لهذه المنشأة في الفترة توريداتٌ معفاة (${money(exemptSupplies)}) وخاضعة (${money(taxableSupplies)}) معاً، والإقرارُ يخصم ضريبةَ المشتريات كاملةً حيث تجب نسبةٌ — لا يُعتمد هذا الإقرارُ للتقديم قبل بناء الخصم النسبيّ (الحزمة «و»)`,
+          message: `لك في هذه الفترة توريداتٌ معفاة (${money(exemptSupplies)}) وخاضعة (${money(taxableSupplies)}) معاً، فضريبةُ المدخلات المشتركة تُخصم بنسبةٍ (م٥١) — ولم تُعلَن نسبةُ سنة ${period.year} بعد، فلا يُخصم المشترَك (${money(deduction.apportionedBase)}) حتى تُعلنها من هذه الشاشة`,
+        });
+      }
+      if (inputVatBuckets.legacyCount > 0 && proportionalApplies) {
+        limits.push({
+          code: 'INPUT_VAT_USE_UNASSIGNED',
+          severity: 'warning',
+          message: `${inputVatBuckets.legacyCount} فاتورةَ شراءٍ في هذه الفترة سُجّلت قبل بناء إسناد المدخلات، بضريبةٍ قدرُها ${money(inputVatBuckets.legacyUnassigned)} — تُعامَل معاملةَ المشترك فتُخصم بالنسبة؛ وما كان منها خاصاً بتوريدٍ خاضعٍ حصراً يُصنَّف من بطاقة الشراء ليُخصم كاملاً`,
+        });
+      }
+      if (proportionalApplies && deduction.nonDeductible > 0) {
+        limits.push({
+          code: 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED',
+          severity: 'warning',
+          message: `غيرُ القابل للخصم من ضريبة المدخلات في هذه الفترة ${money(deduction.nonDeductible)} — **يُخصم من الإقرار ولا يُرحَّل في الدفتر بعد**: ما زال كاملاً في حساب ضريبة المدخلات، فرصيدُه أعلى مما يُستردّ بهذا المقدار. ومعالجتُه قيداً قرارٌ محاسبيٌّ لم يُحسم بعد (أيُّ حسابِ مصروفٍ ومتى)`,
         });
       }
 
@@ -359,6 +522,27 @@ export class ObligationsService {
         purchasesExcluded: money(purchasesExcluded),
         excludedCount: excludedPurchases.length,
         totalPurchases: money(round2(purchasesStandard + purchasesExempt)),
+        /**
+         * ⑥A1 (`ق-١٣٢٥`) — **الخصمُ النسبيّ بأجزائه، فيُقرأ منه كيف بلغ ما بلغ** (م٥١).
+         * و`ratio = null` تعني «لم تُعلَن بعد» لا «صفر» — ومعها حدٌّ حاجب.
+         */
+        proportional: {
+          applies: proportionalApplies,
+          ratio: appliedRatio,
+          basis: declaredRatio?.basis ?? null,
+          buckets: {
+            taxableOnly: money(inputVatBuckets.taxableOnly),
+            exemptOnly: money(inputVatBuckets.exemptOnly),
+            mixed: money(inputVatBuckets.mixed),
+            legacyUnassigned: money(inputVatBuckets.legacyUnassigned),
+            legacyCount: inputVatBuckets.legacyCount,
+          },
+          apportionedBase: money(deduction.apportionedBase),
+          apportionedDeductible: money(deduction.apportionedDeductible),
+          deductibleInputVat: money(deductibleInputVat),
+          nonDeductibleInputVat: money(deduction.nonDeductible),
+          settlement,
+        },
         netVat: money(netVat),
         invoiceCount: invoices.length,
         purchaseCount: purchases.length,

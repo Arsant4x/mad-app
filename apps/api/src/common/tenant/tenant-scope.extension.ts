@@ -96,6 +96,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // صفُّ استحقاق الإيجار — ما يقرؤه الدفترُ والإقرارُ معاً (ق-٩١٧).
   'RentAccrual',
   'VatReturnFiling',
+  'VatProportionalRatio',
   'ContractDeposit',
   'DepositDeduction',
   'ContractClaim',

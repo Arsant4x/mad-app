@@ -3,6 +3,7 @@ import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
 import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { PurchaseLineDto } from './purchase-line.dto';
+import { MSG } from '../../common/i18n/messages';
 
 export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsString()
@@ -44,6 +45,20 @@ export class CreatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsBoolean()
   excludeFromVat?: boolean;
+
+  /**
+   * ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **إلى أيِّ توريدٍ تُنسَب ضريبةُ مدخلات هذا الشراء** (م٥١/١–٣).
+   *
+   * ⚠️ **وغيابُه ليس خصماً كاملاً**: ما لم يُعلَن يُخزَّن `MIXED` — **وهو حكمُ النصّ نفسِه**
+   * (م٥١/٣: ما **لا يمكن تحديدُه بشكلٍ مستقل** عن التوريد المعفى يُخصم نسبياً)، لا تساهلاً.
+   * فمنشأةٌ خاضعةٌ وحدَها نسبتُها واحدٌ فيُخصم كاملاً بحقّه، والمختلطةُ يُخصم لها بالنسبة.
+   * **ولا يُفترض `TAXABLE_ONLY` أبداً** — ذاك خصمٌ كاملٌ بلا إسناد، وهو المنهيُّ عنه.
+   *
+   * ⛔ ولا تُقبل `LEGACY_UNASSIGNED` لصفٍّ جديد — هي للقائم وحدَه، ويحبسها قيدُ `CHECK`.
+   */
+  @IsOptional()
+  @IsIn(['TAXABLE_ONLY', 'EXEMPT_ONLY', 'MIXED'], { message: MSG.input_vat_use_invalid })
+  inputVatUse?: 'TAXABLE_ONLY' | 'EXEMPT_ONLY' | 'MIXED';
 
   /// Only meaningful when category = 'مصروفات تأسيس'; enforced in the service.
   @IsOptional()

@@ -14,6 +14,18 @@ const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration =
   periodLabel: 'الربع 2 من 2026',
   companyVatPeriod: 'QUARTERLY',
   periodMatchesCompany: true,
+  // ⑥A1 (`ق-١٣٢٥`) — منشأةٌ لا يجب عليها الخصمُ النسبيّ: `applies=false` فلا تُقرأ نسبةٌ ولا تُعرض صفوفُها.
+  proportional: {
+    applies: false,
+    ratio: 1,
+    basis: null,
+    buckets: { taxableOnly: '0.00', exemptOnly: '0.00', mixed: '0.00', legacyUnassigned: '0.00', legacyCount: 0 },
+    apportionedBase: '0.00',
+    apportionedDeductible: '0.00',
+    deductibleInputVat: '0.00',
+    nonDeductibleInputVat: '0.00',
+    settlement: null,
+  },
   from: '2026-04-01',
   to: '2026-06-30',
   salesStandard: '100.00',

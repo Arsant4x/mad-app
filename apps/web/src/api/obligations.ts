@@ -85,6 +85,33 @@ export interface VatDeclaration {
   purchasesExcluded: MoneyText;
   excludedCount: number;
   totalPurchases: MoneyText;
+  /**
+   * ⑥A1 (`ق-١٣٢٥`) — الخصمُ النسبيّ بأجزائه (م٥١).
+   * و`ratio = null` تعني «لم تُعلَن بعد» لا «صفر» — ومعها حدٌّ حاجب في `limits`.
+   */
+  proportional: {
+    applies: boolean;
+    ratio: number | null;
+    basis: 'COMPUTED' | 'ESTIMATED' | null;
+    buckets: { taxableOnly: MoneyText; exemptOnly: MoneyText; mixed: MoneyText; legacyUnassigned: MoneyText; legacyCount: number };
+    apportionedBase: MoneyText;
+    apportionedDeductible: MoneyText;
+    deductibleInputVat: MoneyText;
+    nonDeductibleInputVat: MoneyText;
+    settlement: {
+      year: number;
+      appliedRatio: number;
+      actualRatio: number;
+      yearTaxableSupplies: MoneyText;
+      yearExemptSupplies: MoneyText;
+      yearApportionedBase: MoneyText;
+      appliedDeductible: MoneyText;
+      actualDeductible: MoneyText;
+      difference: number;
+      differenceText: MoneyText;
+      settledAt: string | null;
+    } | null;
+  };
   netVat: MoneyText;
   invoiceCount: number;
   purchaseCount: number;
@@ -103,3 +130,14 @@ export const getVatDeclaration = (period: VatPeriodQuery) =>
 export const markVatFiled = (period: VatPeriodQuery) =>
   apiClient.post<{ filedAt: string; netVat: MoneyText }>('/obligations/vat-declaration/filed', period).then((r) => r.data);
 export const unmarkVatFiled = (period: VatPeriodQuery) => apiClient.delete('/obligations/vat-declaration/filed', { params: period }).then((r) => r.data);
+
+/** ⑥A1 (`ق-١٣٢٥`) — نسبةُ الخصم النسبيّ لسنةٍ تقويمية: المعلَنةُ والمقترَحةُ معاً (م٥١/٤–٦). */
+export interface VatRatioView {
+  year: number;
+  declared: { ratio: number; basis: 'COMPUTED' | 'ESTIMATED'; note: string | null; settledRatio: number | null; settledAt: string | null } | null;
+  suggestion: { basedOnYear: number; ratio: number | null; taxableSupplies: MoneyText; exemptSupplies: MoneyText; coversPreviousYear: boolean; note: string };
+}
+
+export const getVatRatio = (year: number) => apiClient.get<VatRatioView>('/obligations/vat-ratio', { params: { year } }).then((r) => r.data);
+export const declareVatRatio = (body: { year: number; ratio: number; basis: 'COMPUTED' | 'ESTIMATED'; note?: string }) => apiClient.post('/obligations/vat-ratio', body).then((r) => r.data);
+export const settleVatRatio = (year: number) => apiClient.post('/obligations/vat-ratio/settle', { year }).then((r) => r.data);

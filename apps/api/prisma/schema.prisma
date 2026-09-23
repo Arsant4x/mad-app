@@ -510,6 +510,8 @@ model Company {
   rentPayments     RentPayment[]
   rentAccruals     RentAccrual[]
   vatReturnFilings VatReturnFiling[]
+  /// ⑥A1 (`ق-١٣٢٥`) — نسبةُ الخصم النسبيّ المطبَّقة لكلِّ سنةٍ تقويمية.
+  vatProportionalRatios VatProportionalRatio[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -1826,6 +1828,12 @@ model Purchase {
   subtotal  Decimal @db.Decimal(18, 2)
   taxAmount Decimal @db.Decimal(18, 2)
   exempt    Boolean @default(false)
+  /// ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **إلى أيِّ توريدٍ تُنسَب ضريبةُ مدخلات هذا الشراء.**
+  ///
+  /// ⚠️ **وهو غيرُ `exempt`**: ذاك يقول «لا ضريبةَ على الشراء أصلاً»، وهذا يقول «الضريبةُ
+  /// حُمِّلت — فأين استُعملت؟». فصيانةُ مبنىً سكنيّ **شراءٌ خاضع** ومدخلُه **معفى الاستعمال**.
+  /// و`LEGACY_UNASSIGNED` للقائم: يُعامَل معاملةَ المشترك ويُعدّ، وقيدُ `CHECK` يمنعه للجديد.
+  inputVatUse InputVatUse @default(LEGACY_UNASSIGNED)
   /// VAT was charged but there's no valid tax invoice, so its input VAT cannot
   /// be reclaimed — the purchase is dropped from the VAT declaration. Distinct
   /// from `exempt` (no VAT at all). Matches the mockup: this affects **only the
@@ -5073,6 +5081,66 @@ model RentAccrual {
 enum VatPeriod {
   QUARTERLY
   MONTHLY
+}
+
+/// ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **إسنادُ ضريبة المدخلات إلى ما استُعملت فيه.**
+///
+/// م٥١/١–٣: ما نُسب **حصراً ومباشرةً** للتوريد الخاضع يُخصم كاملاً · وللمعفى **لا يُخصم** ·
+/// وما استُعمل فيهما أو لا يُنسب مستقلاً **يُخصم نسبياً**. **ولا خصمَ كاملاً بلا إسناد.**
+enum InputVatUse {
+  /// منسوبٌ حصراً ومباشرةً لتوريدٍ خاضع — يُخصم كاملاً.
+  TAXABLE_ONLY
+  /// منسوبٌ حصراً ومباشرةً لتوريدٍ معفى — لا يُخصم منه شيء.
+  EXEMPT_ONLY
+  /// مشتركٌ بينهما أو لا يُنسب مستقلاً — يُخصم بنسبة الخصم النسبيّ.
+  MIXED
+  /// **ما سبق البناء**: شراءٌ سُجّل قبل وجود الإسناد. **يُعامَل معاملةَ المشترك**
+  /// (فلا خصمَ كاملاً بلا إسناد) **ويُعدّ ويُعلَن** حتى يُصنَّف. وقيدُ `CHECK` على
+  /// `createdAt` يمنع صفّاً جديداً أن يأخذها.
+  LEGACY_UNASSIGNED
+}
+
+/// ⑥A1 — من أين جاءت نسبةُ السنة: محسوبةً من سنةٍ تقويميةٍ ماضيةٍ في النظام، أو مقدَّرةً يُعلنها التاجر.
+enum VatRatioBasis {
+  /// م٥١/٤ — الطريقةُ الافتراضية: خاضعُ السنة الماضية ÷ (خاضعٌ + معفى).
+  COMPUTED
+  /// م٥١/٦ — من لا سنةَ ماضيةَ له: **القيمُ المقدَّرة للسنة الحالية**، يُعلنها التاجر.
+  ESTIMATED
+}
+
+/// ⑥A1 (`ق-١٣٢٥`) — **نسبةُ الخصم النسبيّ المطبَّقة في سنةٍ تقويمية** (م٥١/٤–٧).
+///
+/// ⚠️ **تُعلَن ولا تُكتب آلياً**: بياناتُنا قد لا تغطّي السنةَ الماضية كلَّها (منشأةٌ انتقلت
+/// إلينا في منتصفها)، **ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض**. فالخادمُ **يحسب
+/// ويعرض** المقترَح بأرقامه، **والتاجرُ يُعلن** ما يطبّقه — وبلا إعلانٍ يُعلَن حدٌّ حاجب.
+///
+/// والتسويةُ (م٥١/٧) **تُحسب في الإقرار الأخير من السنة** من توريدات السنة نفسِها، فلا
+/// تُخزَّن — **ويُخزَّن أنها أُقرّت**.
+///
+/// **بلا أبٍ** (`ق-٥٠١`) — إعلانٌ للمنشأة عن سنةٍ تقويمية، لا ابنَ لمستندٍ ولا لطرف:
+/// مصدرُه قرارُ التاجر لا صفٌّ آخر، فلا سلسلةَ حذفٍ تجرّه غيرَ حذف المنشأة نفسِها.
+model VatProportionalRatio {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// السنةُ التقويمية التي تُطبَّق فيها هذه النسبة.
+  year  Int
+  /// `0.000000`–`1.000000` — ستُّ خاناتٍ تكفي لنسبةٍ تُضرب في مبالغَ بخانتين.
+  ratio Decimal @db.Decimal(9, 6)
+  basis VatRatioBasis
+  /// أرقامُ الحساب كما كانت لحظةَ الإعلان — فمن يقرأ بعد سنةٍ يعرف **ممّ** جاءت النسبة.
+  note  String?
+
+  /// إقرارُ التسوية السنوية (م٥١/٧): نسبةُ السنة الفعلية كما قُرئت لحظةَ الإقرار، ولحظتُه.
+  settledRatio Decimal? @db.Decimal(9, 6)
+  settledAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, year])
+  @@map("vat_proportional_ratios")
 }
 
 model VatReturnFiling {

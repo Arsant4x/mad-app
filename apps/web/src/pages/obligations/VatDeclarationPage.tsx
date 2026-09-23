@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getVatDeclaration, markVatFiled, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType } from '../../api/obligations';
+import { declareVatRatio, getVatDeclaration, getVatRatio, markVatFiled, settleVatRatio, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType, type VatRatioView } from '../../api/obligations';
 import { dfmt, fmt } from '../../lib/format';
 import { num0, sumMoney } from '../../lib/money';
 
@@ -29,18 +29,53 @@ export function VatDeclarationPage() {
   const [declaration, setDeclaration] = useState<VatDeclaration | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  /** ⑥A1 — نسبةُ السنة: المعلَنةُ والمقترَحة. تُقرأ **حين يجب الخصمُ النسبيّ وحدَه**. */
+  const [ratioView, setRatioView] = useState<VatRatioView | null>(null);
+  const [ratioInput, setRatioInput] = useState('');
+  const [ratioBusy, setRatioBusy] = useState(false);
 
   const period: VatPeriodQuery = periodType === 'MONTHLY' ? { year, month } : { year, quarter };
 
   function reload() {
     setLoading(true);
     return getVatDeclaration(period)
-      .then((d) => {
+      .then(async (d) => {
         setDeclaration(d);
         // أوّلُ ردٍّ يكشف فترةَ التاجر — فتُتبَع مرّةً واحدة، ثم اختيارُه هو الحاكم.
         setPeriodType((p) => p ?? d.companyVatPeriod);
+        // ⑥A1 — **ولا تُقرأ النسبةُ لمن لا يجب عليه**: منشأةٌ خاضعةٌ وحدَها لا شأنَ لها بم٥١.
+        if (d.proportional.applies) {
+          const r = await getVatRatio(year);
+          setRatioView(r);
+          setRatioInput(r.declared ? String(r.declared.ratio) : r.suggestion.ratio !== null ? String(r.suggestion.ratio) : '');
+        } else {
+          setRatioView(null);
+        }
       })
       .finally(() => setLoading(false));
+  }
+
+  async function saveRatio() {
+    if (!ratioView) return;
+    setRatioBusy(true);
+    try {
+      // الأساسُ يتبع ما يملكه النظام: سنةٌ ماضيةٌ كاملةٌ ⟵ محسوبة، وإلا ⟵ مقدَّرة (م٥١/٦).
+      const basis = ratioView.suggestion.coversPreviousYear && ratioView.suggestion.ratio !== null ? 'COMPUTED' : 'ESTIMATED';
+      await declareVatRatio({ year, ratio: Number(ratioInput), basis, note: ratioView.suggestion.note });
+      await reload();
+    } finally {
+      setRatioBusy(false);
+    }
+  }
+
+  async function confirmSettlement() {
+    setRatioBusy(true);
+    try {
+      await settleVatRatio(year);
+      await reload();
+    } finally {
+      setRatioBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -145,6 +180,45 @@ export function VatDeclarationPage() {
             <p className="hint" style={{ marginBottom: 10 }}>
               عن الفترة من {dfmt(declaration.from)} إلى {dfmt(declaration.to)}
             </p>
+
+            {/* ⑥A1 (`ق-١٣٢٥`) — **بطاقةُ النسبة: يحسب النظامُ ويعرض، ويُقرّ التاجر** (م٥١/٤–٦).
+                ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض — فالتحفّظُ يُعرض قبل الإقرار لا بعده. */}
+            {ratioView && (
+              <div className="card" data-testid="vat-ratio-card" style={{ marginBottom: 12 }}>
+                <div className="card-title" style={{ marginBottom: 10 }}>
+                  نسبة الخصم النسبي لسنة {ratioView.year}
+                </div>
+                <p className="hint" style={{ marginTop: 0 }}>
+                  {ratioView.suggestion.note}
+                  {ratioView.suggestion.ratio !== null && (
+                    <>
+                      {' '}— المقترَح <span className="num">{(ratioView.suggestion.ratio * 100).toFixed(2)}%</span> (خاضع {fmt(ratioView.suggestion.taxableSupplies)} · معفى{' '}
+                      {fmt(ratioView.suggestion.exemptSupplies)})
+                    </>
+                  )}
+                </p>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <div className="field" style={{ maxWidth: 200, marginBottom: 0 }}>
+                    <label>النسبة المطبَّقة (كسر)</label>
+                    <input data-testid="vat-ratio-input" className="num" value={ratioInput} onChange={(e) => setRatioInput(e.target.value)} placeholder="0.75" />
+                  </div>
+                  <button className="btn btn-primary" data-testid="vat-ratio-save" disabled={ratioBusy || ratioInput.trim() === ''} onClick={saveRatio}>
+                    {ratioView.declared ? 'تحديث النسبة' : 'إعلان النسبة'}
+                  </button>
+                  {declaration.proportional.settlement && !declaration.proportional.settlement.settledAt && (
+                    <button className="btn btn-ghost" data-testid="vat-ratio-settle" disabled={ratioBusy} onClick={confirmSettlement}>
+                      إقرار تسوية السنة (م٥١/٧)
+                    </button>
+                  )}
+                </div>
+                {ratioView.declared?.settledAt && (
+                  <p className="hint" style={{ marginBottom: 0 }}>
+                    أُقرّت تسوية السنة في {dfmt(ratioView.declared.settledAt)} بنسبة فعلية{' '}
+                    <span className="num">{((ratioView.declared.settledRatio ?? 0) * 100).toFixed(2)}%</span>
+                  </p>
+                )}
+              </div>
+            )}
             <table>
               <tbody>
                 <tr style={{ fontWeight: 700 }}>
@@ -242,6 +316,53 @@ export function VatDeclarationPage() {
                   <td className="num">{fmt(declaration.totalPurchases)}</td>
                   <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
+                {/* ⑥A1 (`ق-١٣٢٥`) — الخصمُ النسبيّ بأجزائه (م٥١): يُعرض **حين يجب وحدَه**،
+                    فمنشأةٌ خاضعةٌ وحدَها لا شأنَ لها بالمادّة ولا تُثقَل بصفوفٍ لا تعنيها. */}
+                {declaration.proportional.applies && (
+                  <>
+                    <tr style={{ fontWeight: 700 }}>
+                      <td data-testid="proportional-head">
+                        الخصم النسبي لضريبة المدخلات (م٥١)
+                        {declaration.proportional.ratio !== null && <span className="badge draft"> النسبة {(declaration.proportional.ratio * 100).toFixed(2)}%</span>}
+                      </td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>منسوبة حصراً لتوريد خاضع — تُخصم كاملة</td>
+                      <td></td>
+                      <td className="num">{fmt(declaration.proportional.buckets.taxableOnly)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>منسوبة حصراً لتوريد معفى — لا تُخصم</td>
+                      <td></td>
+                      <td className="num">{fmt(declaration.proportional.buckets.exemptOnly)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
+                        مشتركة تُخصم بالنسبة
+                        {declaration.proportional.buckets.legacyCount > 0 && ` (منها ${declaration.proportional.buckets.legacyCount} فاتورة سبقت بناء الإسناد بضريبة ${fmt(declaration.proportional.buckets.legacyUnassigned)})`}
+                      </td>
+                      <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.proportional.apportionedBase)}</td>
+                      <td className="num">{fmt(declaration.proportional.apportionedDeductible)}</td>
+                    </tr>
+                    <tr style={{ fontWeight: 700 }}>
+                      <td data-testid="deductible-input-vat">ضريبة المدخلات القابلة للخصم</td>
+                      <td className="num" style={{ color: 'var(--muted)' }}>غير القابلة: {fmt(declaration.proportional.nonDeductibleInputVat)}</td>
+                      <td className="num">{fmt(declaration.proportional.deductibleInputVat)}</td>
+                    </tr>
+                    {declaration.proportional.settlement && (
+                      <tr data-testid="proportional-settlement">
+                        <td style={{ paddingRight: 20 }}>
+                          تسوية السنة {declaration.proportional.settlement.year} (م٥١/٧) — النسبة المطبَّقة {(declaration.proportional.settlement.appliedRatio * 100).toFixed(2)}% والفعلية{' '}
+                          {(declaration.proportional.settlement.actualRatio * 100).toFixed(2)}%
+                        </td>
+                        <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.proportional.settlement.yearApportionedBase)}</td>
+                        <td className="num">{fmt(declaration.proportional.settlement.differenceText)}</td>
+                      </tr>
+                    )}
+                  </>
+                )}
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
                   <td>{netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
                   <td></td>

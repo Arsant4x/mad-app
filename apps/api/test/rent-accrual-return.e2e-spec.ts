@@ -280,10 +280,21 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     const contract = await makeContract({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', start: thisQuarterStart, value: 12000 });
     const after = await snapshot(thisQuarter);
     const d = delta(before, after);
-    const rawAfter = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as { limits: { code: string; severity: string; message: string }[] };
-    const limit = rawAfter.limits.find((l) => l.code === 'PROPORTIONAL_INPUT_VAT_NOT_BUILT');
+    /**
+     * ⑥A1 (`ق-١٣٢٥`) — **حدُّ `ق-١٢٦٠` رُفع ببناء الخصم النسبيّ**، وحلّ محلَّه حدٌّ يقول
+     * للتاجر ما يفعل: النسبةُ لم تُعلَن بعد. **والحاجبُ باقٍ حاجباً** — فمكلَّفٌ مختلطٌ
+     * لا يُقدِّم إقراراً يخصم مشترياته كاملةً.
+     */
+    const rawAfter = (await auth(http().get('/obligations/vat-declaration')).query(thisQuarter).expect(200)).body as {
+      limits: { code: string; severity: string; message: string }[];
+      proportional: { applies: boolean; ratio: number | null };
+    };
+    expect(rawAfter.proportional.applies).toBe(true);
+    const limit = rawAfter.limits.find((l) => l.code === 'PROPORTIONAL_RATIO_NOT_DECLARED');
     expect(limit?.severity).toBe('blocking');
     expect(limit?.message).toContain('م٥١');
+    // ⛔ ولا يُقرأ الحدُّ القديم بعد بنائه — فنصٌّ يقول «غيرُ مبنيّ» على مبنيٍّ يُفقد الثقة.
+    expect(rawAfter.limits.map((l) => l.code)).not.toContain('PROPORTIONAL_INPUT_VAT_NOT_BUILT');
 
     const n = dueByToday(contract).length;
     expect(d.exempt).toBeCloseTo(1000 * n, 2);

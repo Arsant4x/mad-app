@@ -552,6 +552,10 @@ export const MSG = {
   // validation (used by class-validator DTOs)
   /** ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية: ربعٌ أو شهر، أحدُهما لا كلاهما. */
   vat_period_one_of: 'validation.vat_period_one_of',
+  /** ⑥A1 (`ق-١٣٢٥`) — إسنادُ ضريبة المدخلات وإعلانُ نسبة الخصم النسبيّ. */
+  input_vat_use_invalid: 'validation.input_vat_use_invalid',
+  vat_ratio_range: 'validation.vat_ratio_range',
+  vat_ratio_not_declared: 'obligations.vat_ratio_not_declared',
   vat_period_quarter_range: 'validation.vat_period_quarter_range',
   vat_period_month_range: 'validation.vat_period_month_range',
   vat_number_invalid: 'validation.vat_number',
@@ -1195,6 +1199,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_export_buyer_vat]: {
     ar: 'فاتورة صادرات لمشترٍ خارج المملكة لا تحمل رقم تسجيل ضريبي سعودي للمشتري (BR-KSA-46) — امسح الرقم من بطاقة «{customer}» أو صحّح بلده، ثم أعد الإرسال',
     en: 'An export invoice to a buyer outside the Kingdom must not carry a Saudi buyer VAT number (BR-KSA-46) — clear it on "{customer}" or correct the country, then resubmit',
+  },
+  [MSG.input_vat_use_invalid]: {
+    ar: 'إسناد ضريبة المدخلات أحد ثلاثة: «خاضع حصراً» أو «معفى حصراً» أو «مشترك» — وقيمة «ما سبق البناء» للمشتريات القديمة وحدها ولا تُقبل لشراء جديد',
+    en: 'Input VAT use is one of: TAXABLE_ONLY, EXEMPT_ONLY or MIXED — LEGACY_UNASSIGNED is for pre-existing purchases only and is refused on a new one',
+  },
+  [MSG.vat_ratio_range]: {
+    ar: 'نسبة الخصم النسبي كسر بين صفر وواحد (0.75 تعني 75%)',
+    en: 'The proportional deduction ratio is a fraction between 0 and 1 (0.75 means 75%)',
+  },
+  [MSG.vat_ratio_not_declared]: {
+    ar: 'لم تُعلَن نسبة الخصم النسبي لسنة {year} — أعلِنها من شاشة الإقرار قبل اعتماده',
+    en: 'The proportional deduction ratio for {year} has not been declared — declare it on the VAT return screen before relying on it',
   },
   [MSG.vat_period_one_of]: {
     ar: 'الإقرار يُطلب بربعٍ أو بشهر — أحدهما لا كلاهما ولا واحد: أرسل «quarter» من 1 إلى 4، أو «month» من 1 إلى 12',
