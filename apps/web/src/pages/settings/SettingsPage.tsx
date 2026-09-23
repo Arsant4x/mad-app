@@ -23,6 +23,7 @@ import {
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { useAuth } from '../../auth/AuthContext';
 import { ApiKeysCard } from './ApiKeysCard';
+import { MfaCard } from '../../components/MfaCard';
 import { CashDrawersCard } from './CashDrawersCard';
 import { IntegrationsCard } from './IntegrationsCard';
 import { SupportAccessCard } from './SupportAccessCard';
@@ -528,6 +529,9 @@ export function SettingsPage() {
       {/* مفاتيحُ الأنظمة — للمالك وحدَه كما يُنفِذه الخادم بـ`@OwnerOnly` (ي/⑫A3). */}
       {user?.actorType === 'COMPANY' && <ApiKeysCard />}
       {user?.actorType === 'COMPANY' && <SupportAccessCard />}
+      {/* المصادقةُ بخطوتين — **لكلِّ فاعلٍ على حسابه هو** (`ق-١٣١٨` · ⑨A1): لا دورَ يمنحها،
+          فحمايةُ حسابي قراري. والخادمُ يقرأ الهويّةَ من الرمز فلا يمسّ أحدٌ حسابَ غيره. */}
+      <MfaCard />
     </div>
   );
 }

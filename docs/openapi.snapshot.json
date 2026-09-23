@@ -792,6 +792,13 @@
       "200"
     ]
   },
+  "GET /auth/mfa": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /banks": {
     "parameters": [
       "query:includeArchived",
@@ -2033,6 +2040,13 @@
     ]
   },
   "GET /v1/auth/me": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/auth/mfa": {
     "parameters": [],
     "requiredBody": [],
     "responses": [
@@ -4356,6 +4370,27 @@
       "204"
     ]
   },
+  "POST /auth/mfa/begin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /auth/mfa/confirm": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /auth/mfa/disable": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /auth/refresh": {
     "parameters": [],
     "requiredBody": [],
@@ -5676,6 +5711,27 @@
     "requiredBody": [],
     "responses": [
       "204"
+    ]
+  },
+  "POST /v1/auth/mfa/begin": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/auth/mfa/confirm": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/auth/mfa/disable": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
     ]
   },
   "POST /v1/auth/refresh": {

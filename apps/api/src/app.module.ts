@@ -12,6 +12,7 @@ import { BanksModule } from './banks/banks.module';
 import { CompaniesModule } from './companies/companies.module';
 import { PlatformModule } from './platform/platform.module';
 import { HealthModule } from './common/health/health.module';
+import { MfaModule } from './common/mfa/mfa.module';
 import { CompanyProfileModule } from './company-profile/company-profile.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
 import { ContractsModule } from './contracts/contracts.module';
@@ -153,6 +154,8 @@ import { WarrantiesModule } from './warranties/warranties.module';
     PlatformModule,
     // شقُّ الصحّة (`ق-١٣١٨` · ⑪A3) — **مكشوفٌ بلا مصادقة** كي ينفع فحصَ الحاوية.
     HealthModule,
+    // المصادقةُ المتعدّدة (`ق-١٣١٨` · ⑨A1) — **قبل `AuthModule`**: مسارُ الدخول يستهلكها.
+    MfaModule,
     CompaniesModule,
     CompanyUsersModule,
     ScriptsModule,

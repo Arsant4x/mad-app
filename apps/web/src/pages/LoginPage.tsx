@@ -24,6 +24,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** العاملُ الثاني (`ق-١٣١٨` · ⑨A1) — لا يظهر حتى يطلبه الخادم. */
+  const [mfaNeeded, setMfaNeeded] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
 
   if (!bootLoading && user) return <Navigate to="/" replace />;
 
@@ -40,7 +43,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       if (mode === 'login') {
-        await login(username, password);
+        await login(username, password, mfaCode);
       } else if (mode === 'register') {
         await register(orgName, username, password, email);
       } else {
@@ -52,8 +55,10 @@ export function LoginPage() {
     } catch (e) {
       // Prefer the server's message — it's already localized to the language
       // this client asked for (see api/client.ts's Accept-Language header).
-      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      const data = (e as { response?: { data?: { message?: string | string[]; mfaRequired?: boolean } } })?.response?.data;
       const message = Array.isArray(data?.message) ? data.message.join(' — ') : data?.message;
+      // ⑨A1 (`ق-١٣١٨`): الخادمُ يقول «يلزم رمز» — **فيُعرض الحقلُ ولا يُخمّن المستخدم**.
+      if (data?.mfaRequired) setMfaNeeded(true);
       setError(message ?? t('login_error_generic'));
     } finally {
       setSubmitting(false);
@@ -82,6 +87,15 @@ export function LoginPage() {
           <label>
             {t('login_password')}
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+        )}
+
+        {mode === 'login' && mfaNeeded && (
+          <label>
+            {t('login_mfa_code')}
+            {/* `inputMode` رقميّ: يُفتح لوحُ الأرقام على الجوال — والرمزُ يُنسخ من التطبيق. */}
+            <input inputMode="numeric" autoComplete="one-time-code" value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} autoFocus />
+            <span className="hint">{t('login_mfa_hint')}</span>
           </label>
         )}
 

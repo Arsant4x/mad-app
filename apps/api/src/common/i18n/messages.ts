@@ -42,6 +42,12 @@ export const MSG = {
   decision_not_pending: 'platform.decision_not_pending',
   decision_same_hand: 'platform.decision_same_hand',
   decision_required: 'platform.decision_required',
+  /** المصادقةُ المتعدّدة (`ق-١٣١٨` · ⑨A1). */
+  mfa_already_enrolled: 'auth.mfa_already_enrolled',
+  mfa_not_started: 'auth.mfa_not_started',
+  mfa_code_invalid: 'auth.mfa_code_invalid',
+  mfa_required: 'auth.mfa_required',
+  mfa_enrolment_required: 'auth.mfa_enrolment_required',
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
@@ -588,6 +594,15 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.decision_required]: {
     ar: 'هذا الإجراء ({action}) يحتاج قراراً مُقرّاً من مدير منصّة آخر قبل تنفيذه',
     en: 'This action ({action}) needs a decision approved by another platform administrator first',
+  },
+  [MSG.mfa_already_enrolled]: { ar: 'المصادقة المتعددة مفعّلة على هذا الحساب بالفعل', en: 'Multi-factor authentication is already enabled on this account' },
+  [MSG.mfa_not_started]: { ar: 'ابدأ التفعيل أولاً للحصول على المفتاح', en: 'Start enrolment first to obtain the key' },
+  // ⚠️ **رسالةٌ واحدة للحالتين**: تمييزُ «الرمز خاطئ» عن «رمز الاسترداد مستهلَك» يُعلّم المهاجمَ أكثر من صاحب الحساب.
+  [MSG.mfa_code_invalid]: { ar: 'الرمز غير صحيح', en: 'Invalid code' },
+  [MSG.mfa_required]: { ar: 'أدخل رمز المصادقة من تطبيق المصادقة أو أحد رموز الاسترداد', en: 'Enter the code from your authenticator app, or one of your recovery codes' },
+  [MSG.mfa_enrolment_required]: {
+    ar: 'المصادقة المتعددة إلزامية لحسابات المنصّة — فعّلها من إعدادات حسابك قبل الدخول',
+    en: 'Multi-factor authentication is mandatory for platform accounts — enable it from your account settings first',
   },
 
   [MSG.ledger_filter_required]: {

@@ -12,6 +12,7 @@ import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { MailService } from '../common/mail/mail.service';
+import { MfaService } from '../common/mfa/mfa.service';
 
 export interface AuthUserView {
   id: string;
@@ -108,6 +109,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
+    private readonly mfa: MfaService,
   ) {}
 
   /**
@@ -132,7 +134,7 @@ export class AuthService {
     });
   }
 
-  async login(username: string, password: string): Promise<LoginResult> {
+  async login(username: string, password: string, code?: string): Promise<LoginResult> {
     const identity = await this.prisma.loginIdentity.findUnique({ where: { username } });
 
     // Same generic message whether the username doesn't exist or the
@@ -161,6 +163,22 @@ export class AuthService {
     const profiles = await this.loadProfiles(asHumanIdentity(identity));
     const passwordOk = await argon2.verify(identity.passwordHash, password);
     if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
+
+    /**
+     * 🔴 **العاملُ الثاني — بعد كلمة المرور لا قبلها** (`ق-١٣١٨` · ⑨A1).
+     *
+     * **بعدها** كي لا يصير المسارُ مِعداداً: من يُطالَب برمزٍ قبل التحقّق من كلمته **يعرف
+     * أن الاسمَ موجودٌ ومسجَّل** بلا أن يملك شيئاً. **وبعد التحقّق لا يُفصح عمّا لم يكن يعرفه.**
+     */
+    if (identity.mfaEnrolledAt) {
+      // **المفتاحُ يُرمى لا نصُّه** — المرشِّحُ يترجمه ويُبقي ما جاوره (`mfaRequired`) كما هو.
+      if (!code) throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_required, mfaRequired: true });
+      await this.mfa.assertCode(identity.id, code);
+    } else if (identity.actorType === 'PLATFORM_ADMIN' && MfaService.requiredForPlatformAdmin()) {
+      // ⛔ **الإلزامُ علَمٌ مطفأٌ افتراضياً**: مُشعَلاً لا يدخل مديرُ منصّةٍ بلا تسجيل —
+      //    **والرسالةُ تقول ما يفعل**، فلا يُترك أمام رفضٍ لا مخرجَ منه.
+      throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_enrolment_required, mfaEnrolmentRequired: true });
+    }
 
     return this.buildSessionFromIdentity(profiles);
   }

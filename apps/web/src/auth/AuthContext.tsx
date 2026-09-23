@@ -9,7 +9,7 @@ interface LoginResponse {
 interface AuthContextValue {
   user: AuthUser | null;
   bootLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, code?: string) => Promise<void>;
   register: (orgName: string, username: string, password: string, email?: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -50,8 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       bootLoading,
-      async login(username: string, password: string) {
-        const res = await apiClient.post<LoginResponse>('/auth/login', { username, password });
+      /**
+       * `code` هو العاملُ الثاني (`ق-١٣١٨` · ⑨A1) — **اختياريٌّ دائماً في العقد**: من لم
+       * يُسجّل لا يُطالَب به، ومن سجّل يُردّ بـ`401` حاملاً `mfaRequired` **فتسأله الشاشةُ
+       * عنه وتُعيد الإرسال**. **وطلبةٌ واحدة لا طلبتان** — لا رمزَ وسيطاً يُصدَر فيُسرَق.
+       */
+      async login(username: string, password: string, code?: string) {
+        const res = await apiClient.post<LoginResponse>('/auth/login', { username, password, code: code || undefined });
         setAccessToken(res.data.accessToken);
         setUser(res.data.user);
       },

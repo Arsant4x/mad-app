@@ -27,7 +27,7 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {
-    const result = await this.authService.login(dto.username, dto.password);
+    const result = await this.authService.login(dto.username, dto.password, dto.code);
     this.setRefreshCookie(req, res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
   }
