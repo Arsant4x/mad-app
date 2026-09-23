@@ -3,13 +3,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { SubProcessorsSection } from './SubProcessorsSection';
 import { SupportAccessSection } from './SupportAccessSection';
-import { createCompany, listCompanies, updateCompany, type Company, type CompanyInput } from '../../api/companies';
+import { createCompany, listCompanies, updateCompany, updateCompanySubscription, type Company, type CompanyInput } from '../../api/companies';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt } from '../../lib/format';
 import { CompanyModal } from './CompanyModal';
 import { TemplateModal } from './TemplateModal';
+import { PlatformRoleGate } from './PlatformRoleGate';
+import { DecisionsPanel } from './DecisionsPanel';
 import i18n from '../../i18n';
 
 const STATUS_META: Record<Company['status'], { label: string; badgeClass: string }> = {
@@ -56,7 +58,13 @@ export function DeveloperPanelPage() {
 
   async function handleSaveCompany(data: Partial<CompanyInput>) {
     if (companyModal?.mode === 'edit') {
-      await updateCompany(companyModal.company.id, data);
+      // ⑪A2 (`ق-١٣١٧`): الاشتراكُ مسارٌ بدوره — **والمالُ لا يُرسل مع الاسم**.
+      const { subStart, subEnd, ...profile } = data;
+      await updateCompany(companyModal.company.id, profile);
+      // **ولا يُنادى مسارُ المالية إلا إن تغيّر التاريخُ فعلاً**: من يعدّل الاسمَ وحدَه
+      // بدور التشغيل لا يُردّ `403` على اشتراكٍ لم يمسّه.
+      const current = companyModal.company.subEnd?.slice(0, 10) ?? '';
+      if ((subEnd ?? '') !== current) await updateCompanySubscription(companyModal.company.id, { subStart, subEnd });
     } else {
       await createCompany(data as CompanyInput);
     }
@@ -205,9 +213,21 @@ export function DeveloperPanelPage() {
         </table>
       </div>
 
-      <SupportAccessSection />
-      <DeletionRequestsSection onExecuted={reload} />
-      <SubProcessorsSection />
+      {/* ⑪A2 (`ق-١٣١٢`): كلُّ قسمٍ لدوره — **والإخفاءُ كي لا يُقاد أحدٌ إلى بابٍ يُردّ منه**،
+          والحكمُ في الخادم لا هنا. والبوّابةُ مكوِّنٌ مستقلّ **لأن هذه اللوحةَ لا تقرأ الفاعل
+          إطلاقاً**: هي محرِّرُ نماذجَ، وخلطُ ذلك بسلطة المستخدم هو ما يمنعه حارسُ الواجهة. */}
+      {/* ⑪A1 (`ق-١٣١٨`): القراراتُ الحرجة لكلِّ دورٍ منصّيّ — **فالفصلُ بين شخصين لا بين دورين**. */}
+      <DecisionsPanel />
+
+      <PlatformRoleGate allow="SUPPORT">
+        <SupportAccessSection />
+      </PlatformRoleGate>
+      <PlatformRoleGate allow="COMPLIANCE">
+        <DeletionRequestsSection onExecuted={reload} />
+      </PlatformRoleGate>
+      <PlatformRoleGate allow="COMPLIANCE">
+        <SubProcessorsSection />
+      </PlatformRoleGate>
 
       {companyModal && (
         <CompanyModal

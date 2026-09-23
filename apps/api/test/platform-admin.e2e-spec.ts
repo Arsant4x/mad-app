@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { grantPlatformDecision, releaseSecondHand } from './platform-decision';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(55000);
@@ -47,6 +48,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     for (const id of createdTemplateIds) {
       await request(app.getHttpServer()).delete(`/templates/${id}`).set('Authorization', `Bearer ${platformAdminToken}`);
     }
+    await releaseSecondHand(app);
     await app.close();
   });
 
@@ -150,8 +152,11 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
       .expect(201);
     expect(created.body.status).toBe('ACTIVE');
 
+    // ⑪A2 (`ق-١٣١٧`): الاشتراكُ انتقل إلى مسارِه — **للمالية وحدَها**، والحسابُ في مساره.
+    // ⑪A1 (`ق-١٣١٨`): **وتعديلُه بيدين** — فيُطلب القرارُ ويُقرّه ثانٍ قبل كلِّ تعديل.
+    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
     await request(app.getHttpServer())
-      .patch(`/companies/${created.body.id}`)
+      .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
       .send({ subEnd: '2020-01-01' })
       .expect(200);
@@ -164,8 +169,9 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const foundFrozen = listAfterLapse.body.find((c: { id: string }) => c.id === created.body.id);
     expect(foundFrozen.status).toBe('FROZEN');
 
+    await grantPlatformDecision(app, 'SUBSCRIPTION_CHANGE', created.body.id, platformAdminToken);
     const reactivated = await request(app.getHttpServer())
-      .patch(`/companies/${created.body.id}`)
+      .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
       .send({ subEnd: '2030-01-01' })
       .expect(200);

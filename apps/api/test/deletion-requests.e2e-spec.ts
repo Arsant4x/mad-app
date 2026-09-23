@@ -12,6 +12,7 @@ import { FilesService } from '../src/files/files.service';
 import { PersonalDataErasureService, REOPEN_WINDOW_DAYS } from '../src/deletion-requests/personal-data-erasure.service';
 import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantPlatformDecision, releaseSecondHand } from './platform-decision';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (73.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(220000);
@@ -36,6 +37,17 @@ describe('Account deletion requests (e2e)', () => {
   const madeCompanyIds: string[] = [];
 
   const admin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`);
+
+  /**
+   * **الفعلُ الحرج بيدين** (`ق-١٣١٨` · ⑪A1): إغلاقُ حسابٍ أو محوُه لا يمضي بيدٍ واحدة —
+   * فيُطلب القرارُ بيد الحزمة **ويُقرّه ثانٍ**، ثم يُعاد مسارُ الإقرار.
+   *
+   * ⚠️ **وإعادةُ الفتح لا تمرّ به** — فعلٌ يُعيد لا يُتلف، فلا قرارَ لها.
+   */
+  const approvePath = async (id: string) => {
+    await grantPlatformDecision(app, 'ACCOUNT_ERASURE', id, adminToken);
+    return `/admin/deletion-requests/${id}/approve`;
+  };
 
   let seq = 0;
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
@@ -68,7 +80,7 @@ describe('Account deletion requests (e2e)', () => {
 
     const templates = await admin(request(app.getHttpServer()).get('/templates')).expect(200);
     templateId = (templates.body as { id: string; isAllScreens: boolean }[]).find((t) => t.isAllScreens)!.id;
-  }, 30000);
+  });
 
   afterAll(async () => {
     // مسارُ المنصّة المباشر حُذف (`ق-٥٤٨`) — التنظيفُ بالمسلك نفسه عبر هويّة الدخول.
@@ -81,6 +93,8 @@ describe('Account deletion requests (e2e)', () => {
     }
     // الطلباتُ تبقى بعد حذف المنشأة عمداً (`ق-٥٣٧`) — فتُنظَّف من حيث بقيت؛ والجدولُ `ENABLE` لا `FORCE` فالمالكُ يراها بلا سياق.
     await prisma.accountDeletionRequest.deleteMany({ where: { companyId: { in: madeCompanyIds } } });
+    // اليدُ الثانية وقراراتُها من صنع الحزمة — تُزال معها (`ق-١٣١٨`).
+    await releaseSecondHand(app);
     await app.close();
   });
 
@@ -101,7 +115,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(cancelled.body.status).toBe('CANCELLED');
     // After withdrawing, a fresh request is allowed again.
     await auth(request(app.getHttpServer()).post('/deletion-request')).send({}).expect(201);
-  }, 60000);
+  });
 
   it('rejection keeps the account alive and records the note', async () => {
     const co = await makeCompany();
@@ -119,7 +133,27 @@ describe('Account deletion requests (e2e)', () => {
 
     // The account still works.
     await auth(request(app.getHttpServer()).get('/customers')).expect(200);
-  }, 60000);
+  });
+
+  /**
+   * 🔴 **ولا يمضي بيدٍ واحدة** (`ق-١٣١٨` · ⑪A1): الموافقةُ **بلا قرارٍ أقرّه مديرٌ آخر** تُردّ.
+   *
+   * ⚠️ **وهذه الحالةُ كشفها الإثباتُ العكسيّ**: حذفُ الفحص المسبق لم يُسقط شيئاً، **لأن كلَّ
+   * حالةٍ كانت تمنح القرارَ أوّلاً** — فالحارسُ لم يكن مُختبَراً حيث يعمل: **حين لا قرارَ أصلاً**.
+   */
+  it('🔴 الإغلاقُ لا يمضي بلا قرارٍ من يدٍ ثانية — والرفضُ يقول ما ينقص', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'بلا قرار' }).expect(201);
+
+    const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولةٌ بيدٍ واحدة' }).expect(409);
+    expect(String(refused.body.message)).toContain('مدير منصّة آخر');
+
+    // ولم يقع شيء: الطلبُ معلّقٌ والحسابُ يعمل.
+    const still = await auth(request(app.getHttpServer()).get('/deletion-request')).expect(200);
+    expect(still.body.status).toBe('PENDING');
+    await auth(request(app.getHttpServer()).get('/customers')).expect(200);
+  });
 
   /**
    * ⚖️ **النسخةُ قبل أيّ شيء** (`ق-٥٥٤`): منشأةٌ بلا حركةٍ كانت تُحذف عند الموافقة — **وذاك محوٌ
@@ -131,7 +165,7 @@ describe('Account deletion requests (e2e)', () => {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
 
-    const executed = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
+    const executed = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
     expect(executed.body.executed).toBe(true);
     expect(executed.body.outcome).toBe('CLOSED');
     expect(executed.body.movement).toEqual([]);
@@ -149,7 +183,7 @@ describe('Account deletion requests (e2e)', () => {
     // ولوحةُ المنصّة ما زالت تراها — مغلقةً لا محذوفة.
     const companies = await admin(request(app.getHttpServer()).get('/companies')).expect(200);
     expect((companies.body as { id: string; status: string }[]).find((c) => c.id === co.id)?.status).toBe('CLOSED');
-  }, 60000);
+  });
 
   /**
    * ⭐ **طُعمٌ دائم** (`ق-٥٣٦`): لو سبق الإغلاقُ النسخةَ يوماً — بإعادة ترتيبٍ أو بتغاضٍ عن سقوط
@@ -166,7 +200,7 @@ describe('Account deletion requests (e2e)', () => {
       throw new Error('storage down (test bait)');
     };
     try {
-      const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولة' }).expect(503);
+      const refused = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'محاولة' }).expect(503);
       expect(refused.body.message).toContain('لا يُغلق الحساب ولا يُمحى شيءٌ قبلها');
     } finally {
       files.putObject = original;
@@ -174,7 +208,7 @@ describe('Account deletion requests (e2e)', () => {
     expect((await prisma.accountDeletionRequest.findUnique({ where: { id: filed.body.id } }))?.status).toBe('PENDING');
     expect((await prisma.company.findUnique({ where: { id: co.id } }))?.status).toBe('ACTIVE');
     await auth(request(app.getHttpServer()).get('/customers')).expect(200);
-  }, 60000);
+  });
 
   /**
    * 🔴 **إذنُ الدعم وسجلُّه يبقيان بعد حذف المنشأة** (`ق-٥٣١`).
@@ -198,7 +232,7 @@ describe('Account deletion requests (e2e)', () => {
     await admin(request(app.getHttpServer()).get('/customers')).set('X-Support-Company', co.id).expect(200);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ' }).expect(201);
     // الموافقةُ تُنتج النسخةَ وتُغلق (`ق-٥٥٤`)؛ والحذفُ الصلبُ يقع بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا مباشرةً ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -215,7 +249,7 @@ describe('Account deletion requests (e2e)', () => {
     // تنظيفُ ما بقي عمداً — من حيث بقي.
     await prisma.supportAccessLog.deleteMany({ where: { grantId: grant.body.id } });
     await prisma.supportAccessGrant.delete({ where: { id: grant.body.id } });
-  }, 60000);
+  });
 
   /**
    * 🔴 **سجلُّ التدقيق يبقى بعد حذف المنشأة** (`ق-٨٠` · `ق-٥٣٥`).
@@ -247,7 +281,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(before).toBeGreaterThan(0);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ' }).expect(201);
     // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -262,7 +296,7 @@ describe('Account deletion requests (e2e)', () => {
 
     // تنظيفُ ما بقي عمداً — من حيث بقي.
     await tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.deleteMany({}));
-  }, 60000);
+  });
 
   /**
    * 🔴 **طلبُ الحذف وقرارُه يبقيان بعد حذف المنشأة** (`ق-٥٣٧`).
@@ -281,7 +315,7 @@ describe('Account deletion requests (e2e)', () => {
     // الاسمُ يُحفظ على الطلب وقتَ تقديمه.
     expect(filed.body.companyName).toContain('منشأة حذف');
 
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
     // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -304,7 +338,7 @@ describe('Account deletion requests (e2e)', () => {
     const row = (listed.body as { id: string; companyName: string; decidedByName: string | null }[]).find((r) => r.id === filed.body.id);
     expect(row?.companyName).toContain('منشأة حذف');
     expect(row?.decidedByName).toBeTruthy();
-  }, 60000);
+  });
 
   /**
    * 🔴 **الوسمُ والتنفيذُ يسقطان معاً** (`ق-٥٤١`).
@@ -331,7 +365,7 @@ describe('Account deletion requests (e2e)', () => {
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
     // ⚖️ ما ترفض القاعدةُ حذفَه حركةٌ من الصنف الأوّل (`ق-٥٤٦`) — فالموافقةُ تُغلق لا تحذف، **بلا 409 ولا 500**.
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'لها سجلّات' }).expect(201);
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'لها سجلّات' }).expect(201);
     expect(approved.body.outcome).toBe('CLOSED');
     expect(approved.body.movement.join(' ')).toMatch(/سجلّ المهام|مهامّ/);
 
@@ -350,7 +384,7 @@ describe('Account deletion requests (e2e)', () => {
 
     // ⚠️ المنشأةُ تبقى على القاعدة عمداً — مهامُّها لا تُحذف (`ق-١١٠`) — فتُسقط من التنظيف.
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
-  }, 60000);
+  });
 
   /**
    * ⚖️ **المنشأةُ ذاتُ الحركة تُغلَق لا تُحذف — ثم تُفتح بطلبٍ وقرار** (`ق-٥٤٢` · `ق-٥٤٦` · `ق-٥٤٧` · `ق-٥٤٨`).
@@ -385,7 +419,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(listed?.preview).toEqual({ outcome: 'CLOSE', movement: ['عروض أسعار'] });
 
     // ② الموافقةُ تُنتج النسخةَ ثم تُغلق — وأجلُ الحفظ عشرُ سنواتٍ من الإغلاق (لا عقار).
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'أُغلق' }).expect(201);
     expect(approved.body.outcome).toBe('CLOSED');
     const thisYear = new Date().getUTCFullYear();
     expect(approved.body.archive.years).toContain(thisYear);
@@ -446,13 +480,13 @@ describe('Account deletion requests (e2e)', () => {
     expect((await prisma.company.findUnique({ where: { id: co.id } }))?.status).toBe('ACTIVE');
     await request(app.getHttpServer()).get('/customers').set('Authorization', `Bearer ${closedToken}`).expect(200);
     await request(app.getHttpServer()).post('/deletion-request/reopen').set('Authorization', `Bearer ${closedToken}`).expect(409);
-  }, 90000);
+  });
 
   /** يُغلق حساباً بطلبٍ وموافقة، ويعيد رمزَ دخوله المغلق. */
   async function closeCompany(co: { id: string; token: string; username: string }): Promise<string> {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'أُغلق' }).expect(201);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
     expect(login.body.user.status).toBe('CLOSED');
     return login.body.accessToken as string;
@@ -482,7 +516,15 @@ describe('Account deletion requests (e2e)', () => {
     // ولا طلبَ ثانياً وهذا معلّق.
     await closed(request(app.getHttpServer()).post('/deletion-request/reopen')).expect(409);
 
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'مُحي' }).expect(201);
+    // 🔴 **والمحوُ بلا قرارٍ يُردّ قبل أن يقع** (`ق-١٣١٨` · ⑪A1): هنا يعمل الفحصُ المسبق
+    //    وحدَه — فالإتلافُ يجري **قبل** معاملة الختم، فلو تُرك لـ«الاستهلاك» لوقع المحوُ ثم
+    //    رُدّ الختمُ فقط. **والهاتفُ يُقرأ بعده فيثبت أن شيئاً لم يقع.**
+    const refusedWithoutDecision = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'بلا قرار' }).expect(409);
+    expect(String(refusedWithoutDecision.body.message)).toContain('مدير منصّة آخر');
+    const intact = await tenantPrisma.runInTenantContext(co.id, (tx) => tx.customer.findUniqueOrThrow({ where: { id: customer.body.id }, select: { phone: true } }));
+    expect(intact.phone).toBe('0500000001');
+
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'مُحي' }).expect(201);
     expect(approved.body.outcome).toBe('ERASED');
     expect(approved.body.erased['Customer.phone']).toBe(1);
 
@@ -511,7 +553,7 @@ describe('Account deletion requests (e2e)', () => {
     const account = await closed(request(app.getHttpServer()).get('/deletion-request/account')).expect(200);
     expect(account.body.erasedAt).toBeTruthy();
     expect(account.body.reopenUntil).toBeTruthy();
-  }, 90000);
+  });
 
   /**
    * ⚖️ **والسياسةُ حين لا يطلب أحد** (`ق-٥٥٩/ج`): المسحُ اليوميّ يمحو غيرَ الملزِم بعد نافذة
@@ -589,12 +631,12 @@ describe('Account deletion requests (e2e)', () => {
     expect(blocked.erasedAt).toBeTruthy();
     // ⚠️ تبقى على القاعدة عمداً — مهامُّها لا تُحذف (`ق-١١٠`) — فتُسقط من التنظيف.
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(kept.id), 1);
-  }, 120000);
+  });
 
   it('an ordinary tenant can never reach the support endpoints', async () => {
     const co = await makeCompany();
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     await auth(request(app.getHttpServer()).get('/admin/deletion-requests')).expect(403);
     await auth(request(app.getHttpServer()).post('/admin/deletion-requests/whatever/approve')).expect(403);
-  }, 60000);
+  });
 });

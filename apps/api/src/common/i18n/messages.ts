@@ -33,6 +33,21 @@ export const MSG = {
   session_missing: 'auth.session_missing',
   company_login_required: 'auth.company_login_required',
   platform_admin_only: 'auth.platform_admin_only',
+  /** دورُ مدير المنصّة (`ق-١٣١٢` · ⑪A2). */
+  platform_role_denied: 'auth.platform_role_denied',
+  /** القرارُ المنصّيُّ بيدين (`ق-١٣١٨` · ⑪A1). */
+  decision_summary_required: 'platform.decision_summary_required',
+  decision_already_open: 'platform.decision_already_open',
+  decision_not_found: 'platform.decision_not_found',
+  decision_not_pending: 'platform.decision_not_pending',
+  decision_same_hand: 'platform.decision_same_hand',
+  decision_required: 'platform.decision_required',
+  /** المصادقةُ المتعدّدة (`ق-١٣١٨` · ⑨A1). */
+  mfa_already_enrolled: 'auth.mfa_already_enrolled',
+  mfa_not_started: 'auth.mfa_not_started',
+  mfa_code_invalid: 'auth.mfa_code_invalid',
+  mfa_required: 'auth.mfa_required',
+  mfa_enrolment_required: 'auth.mfa_enrolment_required',
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
@@ -564,6 +579,31 @@ const CATALOG: Record<string, Record<Language, string>> = {
   // حيث الفاعل موثَّق ويُدير حساباتٍ يملكها.
   [MSG.register_username_unavailable]: { ar: 'تعذّر إنشاء الحساب بهذا الاسم — جرّب اسماً آخر', en: 'Could not create an account with that username — try another' },
   [MSG.platform_admin_only]: { ar: 'هذا الإجراء متاح لحساب المطوّر فقط', en: 'This action is restricted to the platform administrator' },
+  [MSG.platform_role_denied]: {
+    ar: 'هذا الإجراء خارج دورك في المنصّة ({role}) — اطلبه ممن يملكه',
+    en: 'This action is outside your platform role ({role}) — ask whoever holds it',
+  },
+  [MSG.decision_summary_required]: { ar: 'اكتب ملخّص الأثر — فالمُقرّ يوافق على ما يقرأ', en: 'Write a summary of the effect — the approver agrees to what they read' },
+  [MSG.decision_already_open]: { ar: 'يوجد قرار قائم على هذا الهدف بالفعل ({status})', en: 'A decision on this target is already open ({status})' },
+  [MSG.decision_not_found]: { ar: 'القرار غير موجود', en: 'Decision not found' },
+  [MSG.decision_not_pending]: { ar: 'القرار لم يعد معلّقاً ({status})', en: 'The decision is no longer pending ({status})' },
+  [MSG.decision_same_hand]: {
+    ar: 'من طلب القرار لا يُقرّه — الفعل الحرج بيدين لا بيد',
+    en: 'Whoever requested the decision cannot approve it — a critical action takes two hands',
+  },
+  [MSG.decision_required]: {
+    ar: 'هذا الإجراء ({action}) يحتاج قراراً مُقرّاً من مدير منصّة آخر قبل تنفيذه',
+    en: 'This action ({action}) needs a decision approved by another platform administrator first',
+  },
+  [MSG.mfa_already_enrolled]: { ar: 'المصادقة المتعددة مفعّلة على هذا الحساب بالفعل', en: 'Multi-factor authentication is already enabled on this account' },
+  [MSG.mfa_not_started]: { ar: 'ابدأ التفعيل أولاً للحصول على المفتاح', en: 'Start enrolment first to obtain the key' },
+  // ⚠️ **رسالةٌ واحدة للحالتين**: تمييزُ «الرمز خاطئ» عن «رمز الاسترداد مستهلَك» يُعلّم المهاجمَ أكثر من صاحب الحساب.
+  [MSG.mfa_code_invalid]: { ar: 'الرمز غير صحيح', en: 'Invalid code' },
+  [MSG.mfa_required]: { ar: 'أدخل رمز المصادقة من تطبيق المصادقة أو أحد رموز الاسترداد', en: 'Enter the code from your authenticator app, or one of your recovery codes' },
+  [MSG.mfa_enrolment_required]: {
+    ar: 'المصادقة المتعددة إلزامية لحسابات المنصّة — فعّلها من إعدادات حسابك قبل الدخول',
+    en: 'Multi-factor authentication is mandatory for platform accounts — enable it from your account settings first',
+  },
 
   [MSG.ledger_filter_required]: {
     ar: 'دفتر الأستاذ يحتاج حساباً أو بُعداً (عقار · وحدة · عميل · مورّد) — بلا مرشّح هو ميزان المراجعة لا الأستاذ',

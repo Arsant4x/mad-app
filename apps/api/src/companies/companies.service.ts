@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
+import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
+import { PlatformDecisionsService } from '../platform/platform-decisions.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, listOrPage, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -60,6 +62,7 @@ export class CompaniesService {
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly config: ConfigService,
+    private readonly decisions: PlatformDecisionsService,
   ) {}
 
   /**
@@ -156,6 +159,29 @@ export class CompaniesService {
       await this.prisma.loginIdentity.update({ where: { id: existing.loginIdentityId }, data: { passwordHash: await argon2.hash(dto.password) } });
     }
 
+    return this.prisma.company.update({
+      where: { id },
+      data: {
+        orgName: dto.orgName,
+        permissionTemplateId: dto.permissionTemplateId,
+      },
+      include: COMPANY_INCLUDE,
+    });
+  }
+
+  /**
+   * **تغييرُ الاشتراك — مسارٌ بدوره** (`ق-١٣١٧` · ⑪A2): الاشتراكُ مالٌ يُحصَّل ويُردّ،
+   * **والتشغيلُ يخصّ الخادمَ والنسخ لا المال**. خرج من `update` إلى هنا **ليُحرَس بدورٍ آخر**
+   * لا لتغيير سلوكه — والمنطقُ منقولٌ كما هو.
+   */
+  async updateSubscription(id: string, dto: UpdateCompanySubscriptionDto) {
+    const existing = await this.prisma.company.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(MSG.company_not_found);
+
+    // 🔴 **بيدين لا بيد** (`ق-١٣١٨` · ⑪A1): تعديلُ اشتراكٍ يدويّ **مالٌ يقع مرّةً**، فيُستهلك
+    //    قرارٌ أقرّه **مديرٌ آخر**. ⛔ **ولا يعمل بحسابٍ منصّيٍّ واحد** — وهو المقصود لا عطل.
+    await this.decisions.consume('SUBSCRIPTION_CHANGE', id);
+
     const newSubEnd = dto.subEnd ? new Date(dto.subEnd) : existing.subEnd;
     // Editing subEnd forward is this app's only "renew" lever (matches the
     // mockup — no separate activate/unfreeze button): if the new end date is
@@ -168,8 +194,6 @@ export class CompaniesService {
     return this.prisma.company.update({
       where: { id },
       data: {
-        orgName: dto.orgName,
-        permissionTemplateId: dto.permissionTemplateId,
         // subStart is intentionally not editable — it is fixed to the actual
         // activation day (owner's rule). Renewal moves subEnd, never subStart.
         subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,

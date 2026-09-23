@@ -159,5 +159,7 @@
   "nav_quotes": "Quotes",
   "err_additional_number": "The additional number must be 4 digits",
   "nav_payments": "Receipts",
-  "err_slug_format": "Subdomain: 3–40 characters — lowercase letters, digits and hyphens, not starting or ending with a hyphen"
+  "err_slug_format": "Subdomain: 3–40 characters — lowercase letters, digits and hyphens, not starting or ending with a hyphen",
+  "login_mfa_code": "Authentication code",
+  "login_mfa_hint": "From your authenticator app, or a recovery code if you lost your phone"
 }

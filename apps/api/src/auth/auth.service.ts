@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AccountStatus, ActorType } from '@prisma/client';
+import { AccountStatus, ActorType, PlatformRole } from '@prisma/client';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +12,7 @@ import { AccountStoppedException } from '../common/tenant/tenant.exceptions';
 import { JwtPayload } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { MailService } from '../common/mail/mail.service';
+import { MfaService } from '../common/mfa/mfa.service';
 
 export interface AuthUserView {
   id: string;
@@ -21,6 +22,13 @@ export interface AuthUserView {
   companyId: string | null;
   status: AccountStatus;
   allowedScreens: string[] | 'all';
+  /**
+   * دورُ مدير المنصّة (`ق-١٣١٢` · ⑪A2) — **لمديري المنصّة وحدَهم**، و`null` لغيرهم.
+   *
+   * ⚠️ **وهو للعرض لا للحكم**: الشاشةُ تُخفي ما لا يملكه الدورُ **كي لا يُقاد إلى بابٍ يُردّ
+   * منه**، **والحكمُ في الخادم** (`PlatformAdminGuard`) — فمن عدّل الرد لم يفتح باباً.
+   */
+  platformRole: PlatformRole | null;
 }
 
 export interface LoginResult {
@@ -75,7 +83,7 @@ interface IdentityWithProfiles {
   id: string;
   username: string;
   actorType: 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
-  platformAdmin: { id: string; displayName: string } | null;
+  platformAdmin: { id: string; displayName: string; role: PlatformRole } | null;
   company:
     | { id: string; orgName: string; status: AccountStatus; frozenAt: Date | null; subEnd: Date | null; permissionTemplate: { isAllScreens: boolean; allowedScreens: string[] } }
     | null;
@@ -101,6 +109,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
+    private readonly mfa: MfaService,
   ) {}
 
   /**
@@ -111,7 +120,7 @@ export class AuthService {
   private async loadProfiles(identity: IdentityRow): Promise<IdentityWithProfiles> {
     const base: IdentityWithProfiles = { id: identity.id, username: identity.username, actorType: identity.actorType, platformAdmin: null, company: null, companyUser: null };
     if (identity.actorType === 'PLATFORM_ADMIN') {
-      base.platformAdmin = await this.prisma.platformAdmin.findUnique({ where: { loginIdentityId: identity.id }, select: { id: true, displayName: true } });
+      base.platformAdmin = await this.prisma.platformAdmin.findUnique({ where: { loginIdentityId: identity.id }, select: { id: true, displayName: true, role: true } });
       return base;
     }
     if (!identity.companyId) return base;
@@ -125,7 +134,7 @@ export class AuthService {
     });
   }
 
-  async login(username: string, password: string): Promise<LoginResult> {
+  async login(username: string, password: string, code?: string): Promise<LoginResult> {
     const identity = await this.prisma.loginIdentity.findUnique({ where: { username } });
 
     // Same generic message whether the username doesn't exist or the
@@ -154,6 +163,22 @@ export class AuthService {
     const profiles = await this.loadProfiles(asHumanIdentity(identity));
     const passwordOk = await argon2.verify(identity.passwordHash, password);
     if (!passwordOk) throw new UnauthorizedException(MSG.invalid_credentials);
+
+    /**
+     * 🔴 **العاملُ الثاني — بعد كلمة المرور لا قبلها** (`ق-١٣١٨` · ⑨A1).
+     *
+     * **بعدها** كي لا يصير المسارُ مِعداداً: من يُطالَب برمزٍ قبل التحقّق من كلمته **يعرف
+     * أن الاسمَ موجودٌ ومسجَّل** بلا أن يملك شيئاً. **وبعد التحقّق لا يُفصح عمّا لم يكن يعرفه.**
+     */
+    if (identity.mfaEnrolledAt) {
+      // **المفتاحُ يُرمى لا نصُّه** — المرشِّحُ يترجمه ويُبقي ما جاوره (`mfaRequired`) كما هو.
+      if (!code) throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_required, mfaRequired: true });
+      await this.mfa.assertCode(identity.id, code);
+    } else if (identity.actorType === 'PLATFORM_ADMIN' && MfaService.requiredForPlatformAdmin()) {
+      // ⛔ **الإلزامُ علَمٌ مطفأٌ افتراضياً**: مُشعَلاً لا يدخل مديرُ منصّةٍ بلا تسجيل —
+      //    **والرسالةُ تقول ما يفعل**، فلا يُترك أمام رفضٍ لا مخرجَ منه.
+      throw new UnauthorizedException({ statusCode: 401, message: MSG.mfa_enrolment_required, mfaEnrolmentRequired: true });
+    }
 
     return this.buildSessionFromIdentity(profiles);
   }
@@ -193,7 +218,7 @@ export class AuthService {
     const identity = await this.loadProfiles(asHumanIdentity(row));
 
     if (identity.actorType === 'PLATFORM_ADMIN' && identity.platformAdmin) {
-      return { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all' };
+      return { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all', platformRole: identity.platformAdmin.role };
     }
     if (identity.actorType === 'COMPANY' && identity.company) {
       const evaluated = evaluateCompanyStatus(identity.company);
@@ -205,6 +230,7 @@ export class AuthService {
         companyId: identity.company.id,
         status: evaluated.status,
         allowedScreens: identity.company.permissionTemplate.isAllScreens ? 'all' : identity.company.permissionTemplate.allowedScreens,
+        platformRole: null,
       };
     }
     if (identity.actorType === 'COMPANY_USER' && identity.companyUser) {
@@ -216,6 +242,7 @@ export class AuthService {
         companyId: identity.companyUser.companyId,
         status: identity.companyUser.status,
         allowedScreens: identity.companyUser.permissionTemplate.isAllScreens ? 'all' : identity.companyUser.permissionTemplate.allowedScreens,
+        platformRole: null,
       };
     }
     throw new UnauthorizedException(MSG.session_invalid);
@@ -238,7 +265,7 @@ export class AuthService {
 
     if (identity.actorType === 'PLATFORM_ADMIN' && identity.platformAdmin) {
       payload = { sub: identity.id, actorType: 'PLATFORM_ADMIN', companyId: null, profileId: identity.platformAdmin.id, username: identity.username };
-      user = { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all' };
+      user = { id: identity.platformAdmin.id, actorType: 'PLATFORM_ADMIN', username: identity.username, displayName: identity.platformAdmin.displayName, companyId: null, status: 'ACTIVE', allowedScreens: 'all', platformRole: identity.platformAdmin.role };
     } else if (identity.actorType === 'COMPANY' && identity.company) {
       const company = identity.company;
       const evaluated = evaluateCompanyStatus(company);
@@ -259,6 +286,7 @@ export class AuthService {
         companyId: company.id,
         status: evaluated.status,
         allowedScreens: company.permissionTemplate.isAllScreens ? 'all' : company.permissionTemplate.allowedScreens,
+        platformRole: null,
       };
     } else if (identity.actorType === 'COMPANY_USER' && identity.companyUser) {
       const companyUser = identity.companyUser;
@@ -274,6 +302,7 @@ export class AuthService {
         companyId: companyUser.companyId,
         status: companyUser.status,
         allowedScreens: companyUser.permissionTemplate.isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens,
+        platformRole: null,
       };
     } else {
       throw new UnauthorizedException(MSG.invalid_credentials);
