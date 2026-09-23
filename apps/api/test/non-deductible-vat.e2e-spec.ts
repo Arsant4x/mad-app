@@ -271,7 +271,9 @@ describe('⚖️ غيرُ القابل للخصم يدخل تكلفةَ ما ا�
     const now = new Date();
     const declaration = (await get('/obligations/vat-declaration').query({ year: now.getUTCFullYear(), quarter: Math.floor(now.getUTCMonth() / 3) + 1 }).expect(200)).body;
     const limit = (declaration.limits as { code: string; message: string }[]).find((l) => l.code === 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED');
-    expect(limit?.message).toContain('30.00');
+    // المجموعُ نفسُه ٣٠ لا أكثر: المرحَّلُ (①–⑨) لا يدخله — والتوكيدُ على الرقم في موضعه لا على وروده في أيّ مكان.
+    expect(limit?.message).toContain('في هذه الفترة 30.00 —');
     expect(limit?.message).toContain('المشتركُ غيرُ المخصوم 0.00');
+    expect(limit?.message).toContain('سبقت ترحيلَه 30.00');
   });
 });
