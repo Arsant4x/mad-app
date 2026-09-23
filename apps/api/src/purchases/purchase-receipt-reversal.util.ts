@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { postReversalEntry } from '../journal/auto-posting.util';
+import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 
 /**
  * ⚖️ **عكسُ الاستلام — بحركةٍ خارجة من طبقته لا بحذفه** (`ق-٩٩٧`/① «بعكسٍ لا بحذف، والرفُّ يتبع»).
@@ -72,10 +73,14 @@ export interface ReverseGoodsReceiptArgs {
 export async function reverseGoodsReceipt(tx: Tx, args: ReverseGoodsReceiptArgs): Promise<{ warehouseId: string; reversedCost: number }> {
   const receipt = await tx.goodsReceipt.findUnique({
     where: { id: args.receiptId },
-    select: { id: true, no: true, warehouseId: true, voidedAt: true, journalEntryId: true, lines: { select: { id: true, purchaseLineId: true } } },
+    select: { id: true, no: true, purchaseId: true, warehouseId: true, voidedAt: true, journalEntryId: true, lines: { select: { id: true, purchaseLineId: true } } },
   });
   if (!receipt) throw new ConflictException(MSG.goods_receipt_not_found);
   if (receipt.voidedAt) throw new ConflictException(MSG.goods_receipt_voided);
+
+  // ⚖️ `ق-١٣٤٢` حصّةُ الضريبة غيرِ القابلة للخصم التي تحملها طبقاتُ هذا الاستلام تعود إلى الوسيط **قبل** أن تخرج —
+  // فتخرج البضاعةُ بتكلفتها كما استُلمت ويُعكس قيدُ الاستلام بمبلغه، ولا يبقى في `1300` ما لا طبقةَ له.
+  await reconcileNonDeductibleVat(tx, args.companyId, receipt.purchaseId, { date: args.date, trigger: 'RECEIPT_VOID', excludeReceiptId: receipt.id, labelSuffix: `عكسُ استلام ${receipt.no}` });
 
   let reversedCost = 0;
   for (const line of receipt.lines) {

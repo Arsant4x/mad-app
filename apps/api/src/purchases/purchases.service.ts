@@ -14,6 +14,7 @@ import { allocatedByDocument, allocatedFor, SETTLEMENT_EPS } from '../common/set
 import { postPurchaseEntry, postReversalEntry } from '../journal/auto-posting.util';
 import { GoodsReceiptsService, stockedBaseOf } from './goods-receipts.service';
 import { receiptConsumed, reverseAllReceipts } from './purchase-receipt-reversal.util';
+import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
@@ -220,7 +221,10 @@ export class PurchasesService {
           baseStockedSubtotal: stockedBaseOf(created.lines, Number(created.exchangeRate)),
         });
         if (!entry) return created;
-        return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
+        const posted = await tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: PURCHASE_INCLUDE });
+        // ⚖️ `ق-١٣٣٠` المنسوبُ إلى المعفى وحدَه يدخل التكلفةَ **عند الشراء نفسِه** — بعد الاستلام الضمنيّ فتجد حصّتُه طبقتَها.
+        await reconcileNonDeductibleVat(tx, companyId, created.id, { date: created.date, trigger: 'PURCHASE' });
+        return posted;
       }),
     );
   }
@@ -377,7 +381,12 @@ export class PurchasesService {
 
       // الإجماليُّ تغيّر فالحالةُ المشتقّة تُعاد من التخصيصات في المعاملة نفسِها — لا تنحرف لحظة.
       if (amountsGiven) await recomputePurchaseStatus(tx, id);
-      if (!affectsPosting) return updated;
+      if (!affectsPosting) {
+        // ⚖️ `ق-١٣٤٢` إسنادُ المدخلات يغيّر ما لا يُخصم ولو لم يمسّ قيدَ الشراء — فيُرحَّل فرقُه بقاعدة الانتشار
+        // (ما على الرفّ يتبع الطبقة، وما استُهلك إلى `5100` في فترة الحدث) ولو بعد استهلاك.
+        await reconcileNonDeductibleVat(tx, companyId, id, { date: updated.date, trigger: 'PURCHASE_EDIT' });
+        return updated;
+      }
 
       // ① القيدُ يُعكس ولا يُحذف (`ق-٩٦٥`) — بتاريخ المستند (`ق-٩٧٢`) — ثم يُعاد من بنوده الحيّة.
       if (existing.journalEntryId) {
@@ -400,7 +409,10 @@ export class PurchasesService {
       // ٢٥ الشراءُ صار قيدُه على الوسيط — فاستلاماتُه التي رُحِّلت داخل قيده القديم (ما قبل البناء) تأخذ قيودَها الآن،
       // وإلا بقي مخزونٌ على الرفّ بلا `1300` يقابله.
       await this.receipts.postPendingReceiptEntriesWithinTx(tx, companyId, { ...updated, supplierName: updated.supplier.name, exchangeRate: rate });
-      return tx.purchase.update({ where: { id }, data: { journalEntryId: entry?.id ?? null }, include: PURCHASE_INCLUDE });
+      const reposted = await tx.purchase.update({ where: { id }, data: { journalEntryId: entry?.id ?? null }, include: PURCHASE_INCLUDE });
+      // ⚖️ `ق-١٣٤٢` بعد إعادة الترحيل والاستلام: حصصُ البنود المتجاوَزة تعود، وحصصُ الحيّة توضع — فرقاً واحداً.
+      await reconcileNonDeductibleVat(tx, companyId, id, { date: updated.date, trigger: 'PURCHASE_EDIT' });
+      return reposted;
     });
   }
 
@@ -491,6 +503,8 @@ export class PurchasesService {
         await postReversalEntry(tx, companyId, { entryId: existing.journalEntryId, date: voidedAt, memo: `إلغاءُ فاتورة شراء ${existing.no}` });
       }
       await tx.purchase.update({ where: { id }, data: { voidedAt } });
+      // ⚖️ `ق-١٣٤٢` المُلغى جوابُه صفر: ما بقي في الوسيط وحساب الفئة يعود إلى `1250` (والطبقاتُ أُعيدت حصصُها قبل خروجها).
+      await reconcileNonDeductibleVat(tx, companyId, id, { date: voidedAt, trigger: 'PURCHASE_VOID' });
     });
   }
 

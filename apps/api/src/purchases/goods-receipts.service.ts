@@ -10,6 +10,7 @@ import { postGoodsReceiptEntry } from '../journal/auto-posting.util';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
 import { receiveStockedLines, resolveReceiptWarehouse } from './purchase-receipt.util';
 import { reverseGoodsReceipt } from './purchase-receipt-reversal.util';
+import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 
 /**
  * ⭐ **الاستلامُ المستقلّ** (`٢٥` · `ق-١١٢١` · `ق-١١٢٢` · `ق-١١٣١`) — كيانٌ فوق الشراء لا بدلَه.
@@ -175,6 +176,8 @@ export class GoodsReceiptsService {
           lines: purchase.lines,
         };
         await this.writeShelfAndPost(tx, companyId, forReceipt, receipt, warehouseId, wanted);
+        // ⚖️ `ق-١٣٤٢` حصّةُ ما وصل من الضريبة غيرِ القابلة للخصم تنتقل من الوسيط إلى طبقتها الجديدة — بتاريخ الاستلام.
+        await reconcileNonDeductibleVat(tx, companyId, purchase.id, { date: receivedAt, trigger: 'RECEIPT', labelSuffix: `استلام ${receipt.no}` });
         return tx.goodsReceipt.findUniqueOrThrow({ where: { id: receipt.id }, include: RECEIPT_INCLUDE });
       }),
     );
@@ -361,7 +364,11 @@ export class GoodsReceiptsService {
       const credit = round2(Number(sums?._sum.credit ?? 0));
       // رصيدُ الوسيط دائناً موجباً (حسابُ التزام): ما استُلم ولم يُفوتر − ما فُوتر ولم يُستلم.
       const ledgerBalance = round2(credit - debit);
-      const expected = round2(receivedNotInvoiced - invoicedNotReceived);
+      // ⚖️ `ق-١٣٤٢` وحصّةُ الضريبة غيرِ القابلة للخصم لما فُوتر ولم يُستلم تنتظر في الوسيط مدينةً حتى تجد طبقتَها —
+      // تُقرأ من سطور أحداثها (مستنداتٌ بعد البناء وحدَها؛ والمُلغى صافيه صفر).
+      const pending = await tx.nonDeductibleVatEventLine.aggregate({ where: { placement: 'CLEARING' }, _sum: { baseAmount: true } });
+      const nonDeductiblePending = round2(Number(pending._sum.baseAmount ?? 0));
+      const expected = round2(receivedNotInvoiced - invoicedNotReceived - nonDeductiblePending);
       return {
         account: account ? { code: account.code, name: account.name } : null,
         ledgerBalance,
@@ -369,6 +376,7 @@ export class GoodsReceiptsService {
         difference: round2(ledgerBalance - expected),
         invoicedNotReceived,
         receivedNotInvoiced,
+        nonDeductiblePending,
         linesOpen,
         open,
         legacyPurchases,

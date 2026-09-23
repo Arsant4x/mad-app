@@ -545,6 +545,8 @@ model Company {
   goodsReceiptLines   GoodsReceiptLine[]
   landedCostDistributions LandedCostDistribution[]
   landedCostLines         LandedCostLine[]
+  nonDeductibleVatEvents     NonDeductibleVatEvent[]
+  nonDeductibleVatEventLines NonDeductibleVatEventLine[]
   stockOpenings           StockOpening[]
   stockOpeningLines       StockOpeningLine[]
   inventoryLayers       InventoryLayer[]
@@ -1836,6 +1838,12 @@ model Purchase {
   /// حُمِّلت — فأين استُعملت؟». فصيانةُ مبنىً سكنيّ **شراءٌ خاضع** ومدخلُه **معفى الاستعمال**.
   /// و`LEGACY_UNASSIGNED` للقائم: يُعامَل معاملةَ المشترك ويُعدّ، وقيدُ `CHECK` يمنعه للجديد.
   inputVatUse InputVatUse @default(LEGACY_UNASSIGNED)
+  /// ⚖️ `ق-١٣٣٠` · `ق-١٣٤٢` — **يُرحَّل غيرُ القابل للخصم من ضريبته إلى تكلفة ما اشتُري؟**
+  ///
+  /// `true` لكلِّ مستندٍ بعد البناء، و`false` لما سبقه: **القديمُ يُعدّ ويُعلَن ولا يُحوَّل** (`ق-١١٧٨`) —
+  /// ضريبتُه باقيةٌ في `1250` ويعدّها الإقرارُ «غيرَ مرحَّل». والإشعارُ يرث قيمةَ أصله عند إنشائه، فلا يُرحِّل
+  /// إشعارٌ جديد عكسَ ما لم يُرحَّل لأصلٍ قديم.
+  nonDeductibleTracked Boolean @default(true)
   /// VAT was charged but there's no valid tax invoice, so its input VAT cannot
   /// be reclaimed — the purchase is dropped from the VAT declaration. Distinct
   /// from `exempt` (no VAT at all). Matches the mockup: this affects **only the
@@ -1885,6 +1893,8 @@ model Purchase {
   receipts    GoodsReceipt[]
   /// ٧ توزيعاتُ التكلفة المحمَّلة التي يحملها هذا الشراء الخدميّ (فاتورةُ ناقلٍ أو مخلّص).
   landedCostDistributions LandedCostDistribution[]
+  /// `ق-١٣٤٢` أحداثُ ضريبة المدخلات غيرِ القابلة للخصم لهذا المستند (شراءً كان أو إشعارَ مورّد).
+  nonDeductibleVatEvents NonDeductibleVatEvent[]
 
   @@unique([companyId, no])
   @@index([companyId, categoryCode])
@@ -1893,6 +1903,7 @@ model Purchase {
   supplierPaymentAllocation_purchaseId_tenant SupplierPaymentAllocation[] @relation("SupplierPaymentAllocation_purchaseId_tenant")
   purchaseAttachment_purchaseId_tenant PurchaseAttachment[] @relation("PurchaseAttachment_purchaseId_tenant")
   landedCostDistribution_purchaseId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_purchaseId_tenant")
+  nonDeductibleVatEvent_purchaseId_tenant NonDeductibleVatEvent[] @relation("NonDeductibleVatEvent_purchaseId_tenant")
   goodsReceipt_purchaseId_tenant GoodsReceipt[] @relation("GoodsReceipt_purchaseId_tenant")
   purchaseLine_purchaseId_tenant PurchaseLine[] @relation("PurchaseLine_purchaseId_tenant")
   purchase_relatedPurchaseId_tenant Purchase[] @relation("Purchase_relatedPurchaseId_tenant")
@@ -1973,6 +1984,8 @@ model PurchaseLine {
   receiptLines GoodsReceiptLine[]
   /// ٧ توزيعُ هذا السطر الخدميّ على طبقاتٍ — واحدٌ فعّال (فهرسٌ جزئيّ في الهجرة)، وما أُلغي يبقى.
   landedCostDistributions LandedCostDistribution[]
+  /// `ق-١٣٤٢` مواضعُ حصّة هذا السطر من الضريبة غيرِ القابلة للخصم — حدثاً حدثاً.
+  nonDeductibleVatEventLines NonDeductibleVatEventLine[]
 
   @@index([purchaseId])
   @@index([companyId, productId])
@@ -1980,6 +1993,7 @@ model PurchaseLine {
   @@map("purchase_lines")
   stockMovement_purchaseLineId_tenant StockMovement[] @relation("StockMovement_purchaseLineId_tenant")
   landedCostDistribution_purchaseLineId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_purchaseLineId_tenant")
+  nonDeductibleVatEventLine_purchaseLineId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_purchaseLineId_tenant")
   goodsReceiptLine_purchaseLineId_tenant GoodsReceiptLine[] @relation("GoodsReceiptLine_purchaseLineId_tenant")
   purchaseLine_returnsPurchaseLineId_tenant PurchaseLine[] @relation("PurchaseLine_returnsPurchaseLineId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
@@ -2222,6 +2236,117 @@ model LandedCostLine {
   @@index([distributionId])
   @@index([layerId])
   @@map("landed_cost_lines")
+}
+
+/// `ق-١٣٤٢` ما أطلق حدثَ الضريبة غيرِ القابلة للخصم — لكلِّ مسارٍ اسمُه، فيُقرأ السجلُّ بلا تخمين.
+enum NonDeductibleVatTrigger {
+  PURCHASE
+  PURCHASE_EDIT
+  PURCHASE_VOID
+  RECEIPT
+  RECEIPT_VOID
+  SUPPLIER_NOTE
+}
+
+/// `ق-١٣٤٢` أين تقع حصّةُ السطر: طبقةٌ على الرفّ (ما عليه يرفع تكلفتَها وما استُهلك منها إلى `5100`) ·
+/// وسيطُ الاستلام (مفوتَرٌ لم يُستلم — ينتظر طبقتَه) · حسابُ الفئة (بندٌ خدميّ) · تكلفةُ المبيعات (بضاعةٌ أُعيدت).
+enum NonDeductibleVatPlacement {
+  LAYER
+  CLEARING
+  EXPENSE
+  COGS
+}
+
+/// ⚖️ **غيرُ القابل للخصم من ضريبة المدخلات يدخل تكلفةَ ما اشتُري** (`ق-١٣٣٠` · `ق-١٣٤٢`).
+///
+/// بنصّ المالك: «وهو حكمُ المعايير نصّاً: الضرائبُ غيرُ المستردّة جزءٌ من تكلفة الشراء» — و«يرث قاعدةَ الانتشار
+/// القائمة بعينها، ولا منطقَ جديد». فكلُّ حدثٍ **قيدُ إعادة تصنيفٍ مستقلّ** يُخرج الحصّةَ من `1250` إلى موضعها
+/// (أو يُعيدها) — وقيدُ المستند نفسُه لا يُمسّ، كالتكلفة المحمَّلة (`ق-١١٤٦`).
+///
+/// **والحدثُ فرقٌ لا مطلق**: ما يجب أن يكون في كلِّ موضعٍ الآن ناقصَ ما وُضع فيه قبلُ — فتعديلٌ أو استلامٌ أو
+/// إلغاءٌ يُرحّل الفرقَ وحدَه، ويبقى السجلُّ راوياً ما وقع حدثاً حدثاً. ⛔ **والمشتركُ (`MIXED`) لا يُرحَّل هنا** —
+/// محبوسٌ على قرارٍ لم يُحسم (متى يُقفل الإقرار وبأيّ تاريخ).
+model NonDeductibleVatEvent {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// المستندُ الذي تُحسب حصصُه — شراءٌ أو إشعارُ مورّد.
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase @relation("NonDeductibleVatEvent_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  trigger NonDeductibleVatTrigger
+  /// تاريخُ الحدث — تاريخُ قيده، وهو تاريخُ ما أطلقه (الشراءُ · الاستلامُ · الإلغاءُ · الإشعار)، ويخضع لقفل الفترات.
+  date DateTime @db.Date
+
+  /// ما خرج من `1250` في هذا الحدث (سالبٌ حين يعود إليه) = Σ المواضع الأربعة.
+  baseAmount    Decimal @db.Decimal(18, 2)
+  baseInventory Decimal @db.Decimal(18, 2)
+  baseCogs      Decimal @db.Decimal(18, 2)
+  baseExpense   Decimal @db.Decimal(18, 2)
+  baseClearing  Decimal @db.Decimal(18, 2)
+
+  /// قيدُ إعادة التصنيف — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("NonDeductibleVatEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("NonDeductibleVatEvent_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  createdAt DateTime @default(now())
+
+  lines NonDeductibleVatEventLine[]
+
+  @@index([companyId, purchaseId])
+  @@map("non_deductible_vat_events")
+  nonDeductibleVatEventLine_eventId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_eventId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
+}
+
+/// `ق-١٣٤٢` حصّةُ سطرٍ في حدث — موضعُها ومقدارُها بإشارته، وما وقع على الرفّ منها وما ذهب إلى `5100`.
+/// «ما وُضع في الموضع حتى الآن» = Σ هذه الصفوف لسطرٍ وموضعٍ وطبقة — ومنه يُحسب فرقُ الحدث التالي.
+model NonDeductibleVatEventLine {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  eventId String
+  event   NonDeductibleVatEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  eventTenant NonDeductibleVatEvent @relation("NonDeductibleVatEventLine_eventId_tenant", fields: [companyId, eventId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// سطرُ المستند صاحبُ الحصّة (سطرُ الإشعار للإشعار، ولو وقعت حصّتُه على طبقة سطر الأصل). وفارغٌ لمستندٍ بلا
+  /// بنود — ضريبتُه كلُّها حصّةٌ واحدة على حساب فئته (`EXPENSE` وحدَه — قيدُ `CHECK`).
+  purchaseLineId String?
+  purchaseLine   PurchaseLine? @relation(fields: [purchaseLineId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseLineTenant PurchaseLine? @relation("NonDeductibleVatEventLine_purchaseLineId_tenant", fields: [companyId, purchaseLineId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  placement NonDeductibleVatPlacement
+  /// الطبقةُ حين يكون الموضعُ `LAYER` — وإلا فارغة (قيدُ `CHECK`).
+  layerId String?
+  layer   InventoryLayer? @relation(fields: [layerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  layerTenant InventoryLayer? @relation("NonDeductibleVatEventLine_layerId_tenant", fields: [companyId, layerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// الحصّةُ بإشارتها (موجبٌ: خرجت من `1250` إلى الموضع · سالبٌ: عادت).
+  baseAmount    Decimal @db.Decimal(18, 2)
+  /// لـ`LAYER`: ما وقع منها على الرفّ (تكلفةُ الطبقة) وما وقع على ما استُهلك (`5100`) — `baseInventory + baseCogs = baseAmount`.
+  baseInventory Decimal @db.Decimal(18, 2)
+  baseCogs      Decimal @db.Decimal(18, 2)
+
+  qtyRemainingAt Decimal? @db.Decimal(18, 3)
+  unitCostBefore Decimal? @db.Decimal(18, 6)
+  unitCostAfter  Decimal? @db.Decimal(18, 6)
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([purchaseLineId])
+  @@index([layerId])
+  @@map("non_deductible_vat_event_lines")
 }
 
 /// ⭐ **`٣٠` إعلانُ الأرصدة الافتتاحية للمخزون** (`ق-١١٧٧` · `ق-١١٧٩`) — رأسٌ لكلِّ إعلان.
@@ -2905,6 +3030,7 @@ model JournalEntry {
   goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
   landedCosts         LandedCostDistribution[] @relation("LandedCostEntry")
   landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
+  nonDeductibleVatEvents NonDeductibleVatEvent[] @relation("NonDeductibleVatEntry")
   cashDeposits        CashDeposit[]            @relation("CashDepositEntry")
   cashDepositVoids    CashDeposit[]            @relation("CashDepositVoidEntry")
   networkSettlements  NetworkSettlement[]      @relation("NetworkSettlementEntry")
@@ -2936,6 +3062,7 @@ model JournalEntry {
   stockOpening_journalEntryId_tenant StockOpening[] @relation("StockOpening_journalEntryId_tenant")
   landedCostDistribution_voidJournalEntryId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_voidJournalEntryId_tenant")
   landedCostDistribution_journalEntryId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_journalEntryId_tenant")
+  nonDeductibleVatEvent_journalEntryId_tenant NonDeductibleVatEvent[] @relation("NonDeductibleVatEvent_journalEntryId_tenant")
   goodsReceipt_journalEntryId_tenant GoodsReceipt[] @relation("GoodsReceipt_journalEntryId_tenant")
   purchase_journalEntryId_tenant Purchase[] @relation("Purchase_journalEntryId_tenant")
   invoice_journalEntryId_tenant Invoice[] @relation("Invoice_journalEntryId_tenant")
@@ -5490,6 +5617,8 @@ model InventoryLayer {
   consumptions InventoryConsumption[]
   /// ٧ نصيبُ هذه الطبقة من تكاليفَ محمَّلة وُزِّعت عليها (`Restrict`: طبقةٌ عليها توزيعٌ لا تُحذف).
   landedCostLines LandedCostLine[]
+  /// `ق-١٣٤٢` حصصُ ضريبة المدخلات غيرِ القابلة للخصم التي حملتها هذه الطبقة (`Restrict`).
+  nonDeductibleVatEventLines NonDeductibleVatEventLine[]
   /// ٣٠ سطرُ الإعلان الافتتاحيّ الذي أنشأ هذه الطبقة (`OPENING`).
   openingLine     StockOpeningLine? @relation("OpeningLineLayer")
 
@@ -5501,6 +5630,7 @@ model InventoryLayer {
   inventoryConsumption_layerId_tenant InventoryConsumption[] @relation("InventoryConsumption_layerId_tenant")
   stockOpeningLine_layerId_tenant StockOpeningLine[] @relation("StockOpeningLine_layerId_tenant")
   landedCostLine_layerId_tenant LandedCostLine[] @relation("LandedCostLine_layerId_tenant")
+  nonDeductibleVatEventLine_layerId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_layerId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
