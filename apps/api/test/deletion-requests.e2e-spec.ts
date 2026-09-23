@@ -12,6 +12,7 @@ import { FilesService } from '../src/files/files.service';
 import { PersonalDataErasureService, REOPEN_WINDOW_DAYS } from '../src/deletion-requests/personal-data-erasure.service';
 import { gunzipSync } from 'node:zlib';
 import { hardDeleteCompanyForTest } from './hard-delete-company';
+import { grantPlatformDecision, releaseSecondHand } from './platform-decision';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (73.2 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(220000);
@@ -36,6 +37,17 @@ describe('Account deletion requests (e2e)', () => {
   const madeCompanyIds: string[] = [];
 
   const admin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`);
+
+  /**
+   * **الفعلُ الحرج بيدين** (`ق-١٣١٨` · ⑪A1): إغلاقُ حسابٍ أو محوُه لا يمضي بيدٍ واحدة —
+   * فيُطلب القرارُ بيد الحزمة **ويُقرّه ثانٍ**، ثم يُعاد مسارُ الإقرار.
+   *
+   * ⚠️ **وإعادةُ الفتح لا تمرّ به** — فعلٌ يُعيد لا يُتلف، فلا قرارَ لها.
+   */
+  const approvePath = async (id: string) => {
+    await grantPlatformDecision(app, 'ACCOUNT_ERASURE', id, adminToken);
+    return `/admin/deletion-requests/${id}/approve`;
+  };
 
   let seq = 0;
   async function makeCompany(): Promise<{ id: string; token: string; username: string }> {
@@ -81,6 +93,8 @@ describe('Account deletion requests (e2e)', () => {
     }
     // الطلباتُ تبقى بعد حذف المنشأة عمداً (`ق-٥٣٧`) — فتُنظَّف من حيث بقيت؛ والجدولُ `ENABLE` لا `FORCE` فالمالكُ يراها بلا سياق.
     await prisma.accountDeletionRequest.deleteMany({ where: { companyId: { in: madeCompanyIds } } });
+    // اليدُ الثانية وقراراتُها من صنع الحزمة — تُزال معها (`ق-١٣١٨`).
+    await releaseSecondHand(app);
     await app.close();
   });
 
@@ -131,7 +145,7 @@ describe('Account deletion requests (e2e)', () => {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
 
-    const executed = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
+    const executed = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
     expect(executed.body.executed).toBe(true);
     expect(executed.body.outcome).toBe('CLOSED');
     expect(executed.body.movement).toEqual([]);
@@ -166,7 +180,7 @@ describe('Account deletion requests (e2e)', () => {
       throw new Error('storage down (test bait)');
     };
     try {
-      const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولة' }).expect(503);
+      const refused = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'محاولة' }).expect(503);
       expect(refused.body.message).toContain('لا يُغلق الحساب ولا يُمحى شيءٌ قبلها');
     } finally {
       files.putObject = original;
@@ -198,7 +212,7 @@ describe('Account deletion requests (e2e)', () => {
     await admin(request(app.getHttpServer()).get('/customers')).set('X-Support-Company', co.id).expect(200);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ' }).expect(201);
     // الموافقةُ تُنتج النسخةَ وتُغلق (`ق-٥٥٤`)؛ والحذفُ الصلبُ يقع بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا مباشرةً ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -247,7 +261,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(before).toBeGreaterThan(0);
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ' }).expect(201);
     // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -281,7 +295,7 @@ describe('Account deletion requests (e2e)', () => {
     // الاسمُ يُحفظ على الطلب وقتَ تقديمه.
     expect(filed.body.companyName).toContain('منشأة حذف');
 
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'نُفِّذ بعد التأكد' }).expect(201);
     // الموافقةُ تُغلق بعد النسخة (`ق-٥٥٤`)؛ والحذفُ الصلبُ بعد الأجل بالمسلك نفسه (`ق-٥٥٦`) — يُستدعى هنا ليُقاس البقاءُ بعده.
     await app.get(CompaniesService).remove(co.id);
     cleanupCompanyIds.splice(cleanupCompanyIds.indexOf(co.id), 1);
@@ -331,7 +345,7 @@ describe('Account deletion requests (e2e)', () => {
 
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
     // ⚖️ ما ترفض القاعدةُ حذفَه حركةٌ من الصنف الأوّل (`ق-٥٤٦`) — فالموافقةُ تُغلق لا تحذف، **بلا 409 ولا 500**.
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'لها سجلّات' }).expect(201);
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'لها سجلّات' }).expect(201);
     expect(approved.body.outcome).toBe('CLOSED');
     expect(approved.body.movement.join(' ')).toMatch(/سجلّ المهام|مهامّ/);
 
@@ -385,7 +399,7 @@ describe('Account deletion requests (e2e)', () => {
     expect(listed?.preview).toEqual({ outcome: 'CLOSE', movement: ['عروض أسعار'] });
 
     // ② الموافقةُ تُنتج النسخةَ ثم تُغلق — وأجلُ الحفظ عشرُ سنواتٍ من الإغلاق (لا عقار).
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'أُغلق' }).expect(201);
     expect(approved.body.outcome).toBe('CLOSED');
     const thisYear = new Date().getUTCFullYear();
     expect(approved.body.archive.years).toContain(thisYear);
@@ -452,7 +466,7 @@ describe('Account deletion requests (e2e)', () => {
   async function closeCompany(co: { id: string; token: string; username: string }): Promise<string> {
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'إغلاق النشاط' }).expect(201);
-    await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'أُغلق' }).expect(201);
+    await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'أُغلق' }).expect(201);
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: co.username, password: 'DelPass123!' }).expect(200);
     expect(login.body.user.status).toBe('CLOSED');
     return login.body.accessToken as string;
@@ -482,7 +496,7 @@ describe('Account deletion requests (e2e)', () => {
     // ولا طلبَ ثانياً وهذا معلّق.
     await closed(request(app.getHttpServer()).post('/deletion-request/reopen')).expect(409);
 
-    const approved = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'مُحي' }).expect(201);
+    const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'مُحي' }).expect(201);
     expect(approved.body.outcome).toBe('ERASED');
     expect(approved.body.erased['Customer.phone']).toBe(1);
 

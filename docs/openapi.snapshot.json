@@ -713,6 +713,15 @@
       "200"
     ]
   },
+  "GET /admin/decisions": {
+    "parameters": [
+      "query:status:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /admin/deletion-requests": {
     "parameters": [
       "query:page",
@@ -1099,6 +1108,13 @@
       "query:pageSize",
       "query:search"
     ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /health": {
+    "parameters": [],
     "requiredBody": [],
     "responses": [
       "200"
@@ -1944,6 +1960,15 @@
       "200"
     ]
   },
+  "GET /v1/admin/decisions": {
+    "parameters": [
+      "query:status:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/admin/deletion-requests": {
     "parameters": [
       "query:page",
@@ -2330,6 +2355,13 @@
       "query:pageSize",
       "query:search"
     ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/health": {
+    "parameters": [],
     "requiredBody": [],
     "responses": [
       "200"
@@ -4195,6 +4227,31 @@
       "201"
     ]
   },
+  "POST /admin/decisions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/decisions/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /admin/decisions/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /admin/deletion-requests/{id}/approve": {
     "parameters": [
       "path:id:required"
@@ -5488,6 +5545,31 @@
     "requiredBody": [
       "name"
     ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/decisions": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/decisions/{id}/approve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/decisions/{id}/reject": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
     "responses": [
       "201"
     ]

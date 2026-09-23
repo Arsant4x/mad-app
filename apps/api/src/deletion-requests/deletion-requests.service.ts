@@ -7,6 +7,7 @@ import { ARCHIVE_WINDOW_DAYS, ArchiveManifest, CompanyArchiveService } from '../
 import { PrismaService } from '../prisma/prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PersonalDataErasureService } from './personal-data-erasure.service';
+import { PlatformDecisionsService } from '../platform/platform-decisions.service';
 import { reopenUntil } from '../common/tenant/reopen-window';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -57,6 +58,7 @@ export class DeletionRequestsService {
     private readonly movement: CompanyMovementService,
     private readonly archive: CompanyArchiveService,
     private readonly erasure: PersonalDataErasureService,
+    private readonly decisions: PlatformDecisionsService,
   ) {}
 
   // ---------- Merchant side ----------
@@ -245,6 +247,13 @@ export class DeletionRequestsService {
     });
     if (!company) throw new NotFoundException(MSG.company_not_found);
 
+    // 🔴 **بيدين لا بيد** (`ق-١٣١٨` · ⑪A1): إغلاقُ حسابٍ أو محوُ بياناته **يقع مرّةً ولا
+    //    يُردّ** — فيُشترط قرارٌ أقرّه **مديرٌ منصّيٌّ آخر**. **وإعادةُ الفتح مستثناةٌ بحجّتها**:
+    //    فعلٌ **يُعيد** ما أُغلق، والخطرُ في الإتلاف لا في الردّ.
+    //    ⚠️ **ويُتحقَّق هنا ويُستهلك بعد وقوع الفعل** — فلا عملَ مدمِّرٌ بلا إقرار، ولا إقرارٌ
+    //    يُختم «مُنفَّذاً» على عملٍ سقط.
+    if (existing.kind !== 'REOPENING') await this.decisions.assertApproved('ACCOUNT_ERASURE', id);
+
     const decision = {
       status: 'APPROVED' as const,
       decidedAt: new Date(),
@@ -270,7 +279,11 @@ export class DeletionRequestsService {
       if (company.erasedAt) throw new ConflictException(MSG.erasure_already_done);
       // الوسمُ بعد التنفيذ لا قبله (`ق-٥٤١`): إن سقط المحوُ بقي الطلبُ معلّقاً — ولا «مُوافَقٌ» كاذب.
       const report = await this.erasure.erase(company.id, decider, 'REQUEST');
-      await this.prisma.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'ERASED' } });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.accountDeletionRequest.update({ where: { id }, data: { ...decision, outcome: 'ERASED' } });
+        // الاستهلاكُ مع ختم الطلب — **فالقرارُ يُصرف مرّةً واحدة** (`ق-١٣١٨`).
+        await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id);
+      });
       this.logger.warn(`Erased non-mandatory data of company ${company.id} ("${company.orgName}") — approved request ${id} by ${decider.username}`);
       // الحدُّ يُعلَن في الردّ نفسِه (`ق-١٢٧٨`/②): ما لا يبلغه المحو يُقال لطالبه لا يُكتشف بعده.
       return { executed: true, outcome: 'ERASED' as const, companyId: company.id, orgName: company.orgName, movement: [] as string[], retainUntil: company.retainUntil, erased: report.counts, limits: report.limits };
@@ -292,8 +305,8 @@ export class DeletionRequestsService {
     this.logger.warn(
       `Closing company ${company.id} ("${company.orgName}") — movement: ${report.labels.join(', ') || 'none'} — archive ${manifest.files.length} files — approved request ${id} by ${decider.username}`,
     );
-    await this.prisma.$transaction([
-      this.prisma.accountDeletionRequest.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accountDeletionRequest.update({
         where: { id },
         data: {
           ...decision,
@@ -303,9 +316,11 @@ export class DeletionRequestsService {
           archiveProducedAt: new Date(manifest.producedAt),
           archiveExpiresAt,
         },
-      }),
-      this.prisma.company.update({ where: { id: company.id }, data: { status: 'CLOSED', closedAt, retainUntil } }),
-    ]);
+      });
+      await tx.company.update({ where: { id: company.id }, data: { status: 'CLOSED', closedAt, retainUntil } });
+      // الاستهلاكُ مع ختم الإغلاق — في المعاملة نفسِها فيسقطان معاً أو يقعان معاً.
+      await this.decisions.consumeWithinTx(tx, 'ACCOUNT_ERASURE', id);
+    });
     return {
       executed: true,
       outcome: 'CLOSED' as const,

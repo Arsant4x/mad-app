@@ -177,6 +177,62 @@ enum PlatformRole {
   COMPLIANCE
 }
 
+/// **الأفعالُ الحرجة على المنصّة — بيدين لا بيد** (`ق-١٣١٨` · ⑪A1).
+///
+/// «**محوُ بيانات منشأةٍ أو تغييرُ اشتراكها بيدٍ واحدة يقع مرّةً ولا يُردّ**»
+/// (`docs/domain-scan/11` · A1). والثلاثةُ من نصّ المسح؛ **وردُّ المال لا مسارَ له بعد**
+/// فيُعلَن ولا يُدَّعى.
+enum PlatformDecisionAction {
+  ACCOUNT_ERASURE
+  SUBSCRIPTION_CHANGE
+  REFUND
+}
+
+enum PlatformDecisionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+}
+
+/// **قرارٌ منصّيٌّ بطالبٍ ومُقرٍّ مختلفَين** (`ق-١٣١٨` · ⑪A1).
+///
+/// **بلا أبٍ — سجلٌّ لا يُحذف** (`ق-٥٠١`): أثرُ من طلب ومن أقرّ **هو الغرض**، فحذفُه يمحو
+/// الإجابةَ التي بُني لأجلها. ولا عمودَ منشأةٍ عليه: القرارُ **منصّيٌّ لا بيانَ مستأجر**،
+/// وهدفُه يُسمّى بـ`targetId` لأن الأفعالَ تختلف أهدافُها (منشأةٌ · طلبٌ · دفعة).
+///
+/// ⚠️ **والقاعدةُ تمنع اليدَ الواحدة لا الخدمة**: قيدُ `CHECK` يرفض `decidedById` مساوياً
+/// `requestedById` — **فمسارٌ لا يمرّ بالخدمة لا يلتفّ عليه**.
+model PlatformDecision {
+  id      String                 @id @default(uuid())
+  action  PlatformDecisionAction
+  status  PlatformDecisionStatus @default(PENDING)
+
+  /// ما يقع عليه الفعل — معرّفُ منشأةٍ أو طلب. نصٌّ لأن الأهدافَ تختلف بالفعل.
+  targetId String
+
+  /// **ملخّصُ الأثر كما يُعرض على المُقرّ** — يُكتب لحظةَ الطلب، **فالمُقرُّ يوافق على ما قُرئ**
+  /// لا على ما صار بعده.
+  summary String
+
+  requestedById String
+  requestedBy   PlatformAdmin @relation("PlatformDecisionRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedAt   DateTime      @default(now())
+
+  decidedById String?
+  decidedBy   PlatformAdmin? @relation("PlatformDecisionDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt   DateTime?
+  note        String?
+
+  /// متى نُفِّذ الفعلُ فعلاً — **فالإقرارُ ليس تنفيذاً**، وقرارٌ أُقرّ ولم يُنفَّذ يبقى صالحاً مرّةً واحدة.
+  executedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([action, targetId, status])
+  @@map("platform_decisions")
+}
+
 model PlatformAdmin {
   id              String        @id @default(uuid())
   loginIdentityId String        @unique
@@ -186,6 +242,11 @@ model PlatformAdmin {
   /// **يُقرأ حيّاً في الحارس لا من الرمز** — فدورٌ يُسحب ينفذ في الطلب التالي، ورمزٌ يحمله
   /// يُبقيه سارياً حتى انتهائه (نظيرةُ `ق-١٢٥٨`: الحالةُ تُقرأ من القاعدة).
   role PlatformRole @default(OWNER)
+
+  /// القراراتُ الحرجة التي طلبها أو أقرّها (`ق-١٣١٨` · ⑪A1) — و`Restrict` عليهما: **من طلب
+  /// ومن أقرّ لا يُمحى أثرُه بحذف حسابه**.
+  decisionsRequested PlatformDecision[] @relation("PlatformDecisionRequester")
+  decisionsDecided   PlatformDecision[] @relation("PlatformDecisionDecider")
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

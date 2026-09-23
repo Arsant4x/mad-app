@@ -11,6 +11,7 @@ import { dfmt } from '../../lib/format';
 import { CompanyModal } from './CompanyModal';
 import { TemplateModal } from './TemplateModal';
 import { PlatformRoleGate } from './PlatformRoleGate';
+import { DecisionsPanel } from './DecisionsPanel';
 import i18n from '../../i18n';
 
 const STATUS_META: Record<Company['status'], { label: string; badgeClass: string }> = {
@@ -215,6 +216,9 @@ export function DeveloperPanelPage() {
       {/* ⑪A2 (`ق-١٣١٢`): كلُّ قسمٍ لدوره — **والإخفاءُ كي لا يُقاد أحدٌ إلى بابٍ يُردّ منه**،
           والحكمُ في الخادم لا هنا. والبوّابةُ مكوِّنٌ مستقلّ **لأن هذه اللوحةَ لا تقرأ الفاعل
           إطلاقاً**: هي محرِّرُ نماذجَ، وخلطُ ذلك بسلطة المستخدم هو ما يمنعه حارسُ الواجهة. */}
+      {/* ⑪A1 (`ق-١٣١٨`): القراراتُ الحرجة لكلِّ دورٍ منصّيّ — **فالفصلُ بين شخصين لا بين دورين**. */}
+      <DecisionsPanel />
+
       <PlatformRoleGate allow="SUPPORT">
         <SupportAccessSection />
       </PlatformRoleGate>

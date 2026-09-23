@@ -61,6 +61,8 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
   });
 
   afterAll(async () => {
+    // القراراتُ تشير إلى المديرَين بـ`Restrict` (`ق-١٣١٨`) — فتُزال قبلهما.
+    await prisma.platformDecision.deleteMany({ where: { summary: { contains: suffix } } });
     // حذفُ الهويّة يُسلسِل على `platform_admins` (Cascade) — فلا يبقى مديرٌ من صنع الحزمة.
     for (const id of createdIdentityIds) await prisma.loginIdentity.delete({ where: { id } }).catch(() => undefined);
     await app.close();
@@ -104,8 +106,16 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
       // التشغيلُ يعدّل حسابَ المنشأة نفسَه.
       await http().patch(`/companies/${target.companyId}`).set('Authorization', as(PlatformRole.OPERATIONS)).send({ orgName: `منشأةٌ مُعاد تسميتُها ${suffix}` }).expect(200);
       // **ولا يمدّ اشتراكاً** — والمسارُ نفسُه يقبل المالية.
+      // ⚠️ **والدورُ يُفحص قبل اليدين**: يُردّ `403` بلا قرارٍ أصلاً — فالرفضُ عن الدور لا عن نقصِ إقرار.
       const denied = await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as(PlatformRole.OPERATIONS)).send({ subEnd: nextYear }).expect(403);
       expect(String(denied.body.message)).toContain('التشغيل');
+      // ⑪A1 (`ق-١٣١٨`): والماليةُ تمدّه **بيدين** — طلبٌ من المالية وإقرارٌ من الامتثال.
+      const asked = await http()
+        .post('/admin/decisions')
+        .set('Authorization', as(PlatformRole.FINANCE))
+        .send({ action: 'SUBSCRIPTION_CHANGE', targetId: target.companyId, summary: `تمديدُ اشتراكٍ للاختبار ${suffix}` })
+        .expect(201);
+      await http().post(`/admin/decisions/${asked.body.id}/approve`).set('Authorization', as(PlatformRole.COMPLIANCE)).expect(201);
       await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as(PlatformRole.FINANCE)).send({ subEnd: nextYear }).expect(200);
       // ⚠️ **والحقلُ لا يعود من الباب الخلفيّ**: إرسالُه على المسار العامّ يُردّ باسمه.
       const back = await http().patch(`/companies/${target.companyId}`).set('Authorization', as(PlatformRole.OWNER)).send({ subEnd: nextYear }).expect(400);

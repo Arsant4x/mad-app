@@ -9,6 +9,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.dto';
+import { PlatformDecisionsService } from '../platform/platform-decisions.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, listOrPage, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -61,6 +62,7 @@ export class CompaniesService {
     private readonly prisma: PrismaService,
     private readonly tenantPrisma: TenantPrismaService,
     private readonly config: ConfigService,
+    private readonly decisions: PlatformDecisionsService,
   ) {}
 
   /**
@@ -175,6 +177,10 @@ export class CompaniesService {
   async updateSubscription(id: string, dto: UpdateCompanySubscriptionDto) {
     const existing = await this.prisma.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
+
+    // 🔴 **بيدين لا بيد** (`ق-١٣١٨` · ⑪A1): تعديلُ اشتراكٍ يدويّ **مالٌ يقع مرّةً**، فيُستهلك
+    //    قرارٌ أقرّه **مديرٌ آخر**. ⛔ **ولا يعمل بحسابٍ منصّيٍّ واحد** — وهو المقصود لا عطل.
+    await this.decisions.consume('SUBSCRIPTION_CHANGE', id);
 
     const newSubEnd = dto.subEnd ? new Date(dto.subEnd) : existing.subEnd;
     // Editing subEnd forward is this app's only "renew" lever (matches the

@@ -35,6 +35,13 @@ export const MSG = {
   platform_admin_only: 'auth.platform_admin_only',
   /** دورُ مدير المنصّة (`ق-١٣١٢` · ⑪A2). */
   platform_role_denied: 'auth.platform_role_denied',
+  /** القرارُ المنصّيُّ بيدين (`ق-١٣١٨` · ⑪A1). */
+  decision_summary_required: 'platform.decision_summary_required',
+  decision_already_open: 'platform.decision_already_open',
+  decision_not_found: 'platform.decision_not_found',
+  decision_not_pending: 'platform.decision_not_pending',
+  decision_same_hand: 'platform.decision_same_hand',
+  decision_required: 'platform.decision_required',
   reset_token_invalid: 'auth.reset_token_invalid',
   register_disabled: 'auth.register_disabled',
   register_unavailable: 'auth.register_unavailable',
@@ -569,6 +576,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.platform_role_denied]: {
     ar: 'هذا الإجراء خارج دورك في المنصّة ({role}) — اطلبه ممن يملكه',
     en: 'This action is outside your platform role ({role}) — ask whoever holds it',
+  },
+  [MSG.decision_summary_required]: { ar: 'اكتب ملخّص الأثر — فالمُقرّ يوافق على ما يقرأ', en: 'Write a summary of the effect — the approver agrees to what they read' },
+  [MSG.decision_already_open]: { ar: 'يوجد قرار قائم على هذا الهدف بالفعل ({status})', en: 'A decision on this target is already open ({status})' },
+  [MSG.decision_not_found]: { ar: 'القرار غير موجود', en: 'Decision not found' },
+  [MSG.decision_not_pending]: { ar: 'القرار لم يعد معلّقاً ({status})', en: 'The decision is no longer pending ({status})' },
+  [MSG.decision_same_hand]: {
+    ar: 'من طلب القرار لا يُقرّه — الفعل الحرج بيدين لا بيد',
+    en: 'Whoever requested the decision cannot approve it — a critical action takes two hands',
+  },
+  [MSG.decision_required]: {
+    ar: 'هذا الإجراء ({action}) يحتاج قراراً مُقرّاً من مدير منصّة آخر قبل تنفيذه',
+    en: 'This action ({action}) needs a decision approved by another platform administrator first',
   },
 
   [MSG.ledger_filter_required]: {
