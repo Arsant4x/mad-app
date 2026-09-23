@@ -29,7 +29,7 @@ export function companyIdOfToken(token: string): string {
 export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, companyId: string, invoiceIds: string[]): Promise<void> {
   const ids = [...new Set(invoiceIds)];
   if (ids.length === 0) return;
-  await tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  const ordered = await tenantPrisma.runInTenantContext(companyId, async (tx) => {
     const rows = await tx.invoice.findMany({
       where: { id: { in: ids } },
       select: {
@@ -57,8 +57,20 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
         remaining.delete(leaf.id);
       }
     }
+    return ordered;
+  });
 
-    for (const inv of ordered) {
+  /**
+   * ⏱️ **معاملةٌ لكلِّ مستندٍ لا معاملةٌ للجميع** (`ق-١٣٣٢` — عائلةُ مهلة المعاملة لا ميزانية الحزمة).
+   *
+   * كانت الإزالةُ كلُّها في معاملة المستأجر الواحدة (**سقفُها خمسُ ثوانٍ، ولا يُرفع** — `ق-١٣٠١`)، وكلُّ بيعِ
+   * كاشيرٍ يحمل حركاتٍ واستهلاكاتٍ وقيدَين: قرابةُ عشرين استعلاماً للمستند. فحزمةٌ تُزيل عشراتِ المستندات
+   * **تتجاوز السقفَ بحجم ما أنشأته لا بعطلٍ في المنتج** — وسقطت بها أربعُ حزمٍ في `afterAll` وكلُّ توكيدٍ
+   * فيها أخضر (`Transaction already closed … 5000 ms`). **والعلاجُ عملٌ أقلُّ في المعاملة** كما يقول حارسُ
+   * ميزانيات الحزم نفسُه، لا مهلةٌ أطول. **وكلُّ مستندٍ يبقى ذرّياً**؛ والترتيبُ (الأوراقُ أولاً) محفوظٌ بالتتابع.
+   */
+  for (const inv of ordered) {
+    await tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const lineIds = inv.lines.map((l) => l.id);
       const movements = lineIds.length
         ? await tx.stockMovement.findMany({ where: { invoiceLineId: { in: lineIds } }, select: { id: true, type: true, origin: true, qty: true, invoiceLineId: true } })
@@ -118,6 +130,6 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
       });
       for (const e of costEntries) await unpostIfLinked(tx, e.id);
       await tx.outboxEvent.deleteMany({ where: { type: 'invoice.issued', payload: { path: ['invoiceId'], equals: inv.id } } });
-    }
-  });
+    });
+  }
 }

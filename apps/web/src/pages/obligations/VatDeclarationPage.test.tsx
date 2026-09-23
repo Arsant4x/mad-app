@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VatDeclarationPage } from './VatDeclarationPage';
 import * as api from '../../api/obligations';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (3.7 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 12_000 });
+
 vi.mock('../../api/obligations');
 
 const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration => ({

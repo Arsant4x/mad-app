@@ -15,6 +15,10 @@ vi.mock('../../auth/PermissionsContext', async (orig) => ({
 
 import { previewPrimaryActivity, setPrimaryActivity } from '../../api/activities';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (6.9 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 21_000 });
+
 const activity = { id: 'a1', name: 'المطعم' } as never;
 
 const mount = (preview: Record<string, unknown>, act: unknown = activity) => {

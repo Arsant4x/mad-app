@@ -8,6 +8,10 @@ vi.mock('../../api/companyUsers', () => ({ listCompanyUsers: vi.fn() }));
 import { getDelegationLog } from '../../api/delegations';
 import { listCompanyUsers } from '../../api/companyUsers';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (3.1 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 10_000 });
+
 const row = (over: Record<string, unknown> = {}) => ({
   id: `l${over.seq ?? 1}`,
   seq: 1,

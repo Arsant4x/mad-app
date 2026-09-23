@@ -6,6 +6,10 @@ vi.mock('../../api/trash', () => ({ listTrash: vi.fn(), purgeFromTrash: vi.fn(),
 
 import { listTrash } from '../../api/trash';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (4.9 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 15_000 });
+
 beforeEach(() => vi.clearAllMocks());
 
 /**

@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkSettlementsPanel } from './NetworkSettlementsPanel';
 import * as banks from '../../api/banks';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (14.2 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 43_000 });
+
 vi.mock('../../api/banks');
 
 const bankRows: banks.Bank[] = [{ archived: false, id: 'b1', branchId: null, name: 'بنك الشبكة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' }];

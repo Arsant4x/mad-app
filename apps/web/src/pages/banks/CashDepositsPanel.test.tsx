@@ -5,6 +5,10 @@ import { CashDepositsPanel } from './CashDepositsPanel';
 import * as banks from '../../api/banks';
 import { listCashDrawers } from '../../api/cashDrawers';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (10.9 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 33_000 });
+
 vi.mock('../../api/banks');
 vi.mock('../../api/cashDrawers', () => ({ listCashDrawers: vi.fn() }));
 
@@ -60,7 +64,7 @@ describe('لوحةُ إيداعات الأدراج', () => {
     expect(vi.mocked(banks.createCashDeposit)).toHaveBeenCalledWith({ drawerId: 'dr1', bankId: 'b1', amount: 120, date: '2026-06-09', memo: undefined });
     expect(await screen.findByTestId('deposit-notice')).toHaveTextContent('CD-2026-0002');
     expect(screen.getByTestId('deposit-notice')).toHaveTextContent('JE-2026-0009');
-  }, 15000);
+  });
 
   it('الإلغاءُ عكسٌ للمفتوح وحدَه، والفرقُ بين الدفتر والمستندات يُعلَن كما قاله الخادم', async () => {
     vi.mocked(banks.listCashDeposits).mockResolvedValue({

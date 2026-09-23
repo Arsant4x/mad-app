@@ -14,6 +14,10 @@ vi.mock('../../auth/PermissionsContext', async (orig) => ({
 
 import { getDelegationView } from '../../api/delegations';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (3.4 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 11_000 });
+
 const view = (over: Partial<Parameters<typeof mount>[0]> = {}) => ({
   granteeId: 'emp',
   grantable: ['contracts:view', 'contracts:edit', 'contracts:add'],

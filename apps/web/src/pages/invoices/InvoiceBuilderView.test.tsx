@@ -5,6 +5,10 @@ import { InvoiceBuilderView } from './InvoiceBuilderView';
 import * as invoices from '../../api/invoices';
 import type { Customer } from '../../api/customers';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (12.0 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 37_000 });
+
 vi.mock('../../api/invoices', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api/invoices')>()), listOpenPrepayments: vi.fn() }));
 
 const customer: Customer = { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherId: null, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' };
@@ -35,7 +39,7 @@ describe('بنّاءُ الفاتورة — تطبيقُ الدفعات المق
     await userEvent.click(screen.getByText('إصدار الفاتورة'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0][0]).toMatchObject({ customerId: 'c1', prepaymentInvoiceIds: ['pp1'] });
-  }, 15000);
+  });
 
   it('بلا اختيارٍ لا يُرسَل الحقلُ أصلاً', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
@@ -45,5 +49,5 @@ describe('بنّاءُ الفاتورة — تطبيقُ الدفعات المق
     await userEvent.click(screen.getByText('إصدار الفاتورة'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('prepaymentInvoiceIds');
-  }, 15000);
+  });
 });

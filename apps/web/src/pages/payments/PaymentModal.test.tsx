@@ -7,6 +7,10 @@ import { listCustomers } from '../../api/customers';
 import { listBranches } from '../../api/branches';
 import { listBanks } from '../../api/banks';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (20.0 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 60_000 });
+
 vi.mock('../../api/payments');
 vi.mock('../../api/customers', () => ({ listCustomers: vi.fn() }));
 vi.mock('../../api/branches', () => ({ listBranches: vi.fn() }));
@@ -50,7 +54,7 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     expect(vi.mocked(payments.createPayment)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(payments.createPayment).mock.calls[0][0]).toMatchObject({ customerId: 'c1', amount: 1150, method: 'CASH', unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-30' } });
     expect(onSaved).toHaveBeenCalled();
-  }, 15000);
+  });
 
   it('سندٌ موزَّعٌ كلُّه لا يُسأل عن مصيرٍ ولا يحمل علَماً', async () => {
     vi.mocked(payments.listOpenInvoices).mockResolvedValue([
@@ -67,5 +71,5 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     expect(vi.mocked(payments.createPayment)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(payments.createPayment).mock.calls[0][0]).not.toHaveProperty('unallocated');
     expect(vi.mocked(payments.createPayment).mock.calls[0][0].allocations).toEqual([{ invoiceId: 'i1', amount: 400 }]);
-  }, 15000);
+  });
 });

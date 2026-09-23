@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Customer } from '../../api/customers';
 import type { Invoice } from '../../api/invoices';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (4.8 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 15_000 });
+
 /**
  * الاختبار ٤ — «الرصيد المستحق» يطرح المقبوض.
  *

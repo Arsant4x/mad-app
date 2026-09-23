@@ -5,6 +5,10 @@ import type { Property } from '../../api/properties';
 import type { Unit } from '../../api/units';
 import { ContractModal } from './ContractModal';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (12.5 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 38_000 });
+
 /**
  * **المستأجرُ يُختار بمعرّفه لا يُكتب باسمه** (`ق-١٠٢٨`/① · `ق-١٠٢٩`/③):
  * ① النموذجُ يرسل `customerId` المختار ولا يرسل `tenant`/`phone` — فالخادمُ لا يقبلهما.
@@ -37,7 +41,7 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     expect(payload.customerId).toBe('c2');
     expect(payload).not.toHaveProperty('tenant');
     expect(payload).not.toHaveProperty('phone');
-  }, 20000);
+  });
 
   it('② بلا عميلٍ مختار لا يُرسَل شيء', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
@@ -46,7 +50,7 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     fireEvent.click(screen.getByText('إضافة العقد'));
     await waitFor(() => expect(document.querySelector('.error-text')).toBeTruthy());
     expect(onSave).not.toHaveBeenCalled();
-  }, 20000);
+  });
 
   it('③ «عميلٌ جديد»: تنبيهُ «أهو نفسُه؟» يُعرض ولا يُفترض، والتأكيدُ يعيد الطلبَ بعلَمه ثم يختار المُنشأ', async () => {
     const created = customer('c9', 'خالد الدوسري', '0500000009');
@@ -70,5 +74,5 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     await waitFor(() => expect(onCreateCustomer).toHaveBeenCalledTimes(2));
     expect(onCreateCustomer.mock.calls[1][0]).toMatchObject({ name: 'خالد الدوسري', kind: 'NATURAL', allowSameName: true });
     await waitFor(() => expect((screen.getByRole('listbox') as HTMLSelectElement).value).toBe('c9'));
-  }, 20000);
+  });
 });

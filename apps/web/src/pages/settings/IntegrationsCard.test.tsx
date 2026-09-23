@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { hasAnyProvider, PROVIDERS_BY_KIND } from '../../api/integrations';
 import { IntegrationsCard } from './IntegrationsCard';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (0.6 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 5_000 });
+
 vi.mock('../../api/integrations', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/integrations')>()),
   listIntegrations: vi.fn().mockResolvedValue([]),
