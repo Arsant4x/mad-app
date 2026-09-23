@@ -27,7 +27,6 @@
     "customer-trash-guards.e2e-spec.ts": 1,
     "customers-tenant-isolation.e2e-spec.ts": 3,
     "deferred-rent-revenue.e2e-spec.ts": 13,
-    "deletion-requests.e2e-spec.ts": 13,
     "document-sequence.e2e-spec.ts": 2,
     "employees-tenant-isolation.e2e-spec.ts": 1,
     "escalation.e2e-spec.ts": 7,
