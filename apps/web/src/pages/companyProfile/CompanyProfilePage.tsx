@@ -52,6 +52,7 @@ export function CompanyProfilePage() {
   // URL just for display, refetched whenever the key changes.
   const [logoFileKey, setLogoFileKey] = useState('');
   const [masterDataLocked, setMasterDataLocked] = useState(false);
+  const [vatPeriod, setVatPeriod] = useState<'QUARTERLY' | 'MONTHLY'>('QUARTERLY');
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -78,6 +79,7 @@ export function CompanyProfilePage() {
         setSlug(p.slug ?? '');
         setSavedSlug(p.slug ?? null);
         setMasterDataLocked(p.masterDataLocked ?? false);
+        setVatPeriod(p.vatPeriod ?? 'QUARTERLY');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -185,6 +187,7 @@ export function CompanyProfilePage() {
         unitNumber: unitNumber.trim(),
         logoFileKey,
         masterDataLocked,
+        vatPeriod,
       });
       // **يُقرأ المعرّفُ من ردّ الخادم لا من حالة الشاشة** — فهو الذي طبّعه وقبله.
       setSlug(profile.slug ?? '');
@@ -330,6 +333,26 @@ export function CompanyProfilePage() {
         <p className="hint" style={{ marginTop: 6 }}>
           عند التفعيل تبقى القراءة والتقارير كما هي للجميع، ويُمنع فقط الإضافة والتعديل والحذف على العقارات والعقود.
           استثنِ موظفاً بعينه من شاشة «حسابات الموظفين».
+        </p>
+      </div>
+
+      {/* ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية صفةٌ للمنشأة كرقمها الضريبيّ، فمكانُها هنا.
+          ⚠️ **ولا يقلبها النظامُ آلياً**: الانتقالُ يقع بإشعارٍ من الهيئة له تاريخُ سريان
+          (مادّةُ الفترة الضريبية ف٤ · ف٦) — فالنظامُ يقيس ويُنبّه في الإقرار، والتاجرُ يُعلن. */}
+      <div className="card">
+        <div className="card-title" style={{ marginBottom: 14 }}>
+          الفترة الضريبية
+        </div>
+        <div className="field" style={{ maxWidth: 320 }}>
+          <label>فترة تقديم إقرار ضريبة القيمة المضافة</label>
+          <select data-testid="company-vat-period" value={vatPeriod} disabled={!canEdit} onChange={(e) => setVatPeriod(e.target.value as 'QUARTERLY' | 'MONTHLY')}>
+            <option value="QUARTERLY">ربع سنوية</option>
+            <option value="MONTHLY">شهرية</option>
+          </select>
+        </div>
+        <p className="hint" style={{ marginTop: 6 }}>
+          الفترة شهرية لمن تجاوزت توريداته الخاضعة أربعين مليون ريال خلال اثني عشر شهراً، وربع سنوية لغيره. والانتقال بينهما يقع بإشعار من
+          الهيئة له تاريخ سريان — فأعلِن هنا ما أقرّته لك، ولا يغيّرها النظام من تلقائه. وشاشة الإقرار تنبّهك إن قاست توريداتك فوق الحد.
         </p>
       </div>
 

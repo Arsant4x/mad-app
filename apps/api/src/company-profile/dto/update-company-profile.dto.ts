@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, MinLength, ValidateIf } from 'class-validator';
 import { MaxUtf8Bytes } from '../../common/dto/max-utf8-bytes.decorator';
 import { MSG } from '../../common/i18n/messages';
 import { ZATCA_QR_MAX_VALUE_BYTES } from '../../zatca/qr.util';
@@ -140,6 +140,14 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   @IsBoolean()
   creditLimitHardBlock?: boolean;
+
+  /// ⑥A2 (`ق-١٣٢٥`) — **فترةُ المنشأة الضريبية**: شهريةٌ لمن تجاوزت توريداتُه الخاضعة
+  /// أربعين مليوناً في اثني عشر شهراً، وربعيةٌ لغيره (مادّةُ الفترة الضريبية ف١–٢).
+  /// ⚠️ **ولا يقلبها النظامُ آلياً**: الانتقالُ يقع بإشعارٍ من الهيئة له تاريخُ سريان
+  /// (ف٤ · ف٦) — فالنظامُ **يقيس ويُنبّه**، والتاجرُ يُعلن ما أقرّته الهيئة له.
+  @IsOptional()
+  @IsIn(['QUARTERLY', 'MONTHLY'])
+  vatPeriod?: 'QUARTERLY' | 'MONTHLY';
 
   /// حدُّ فصل وقائع الانقطاع بالدقائق (`ق-٢٠١`/٢) — إعدادٌ للتاجر لا ثابتٌ في الكود؛
   /// بين دقيقةٍ ويوم: أقلُّ من دقيقةٍ يجعل كل تأخّرِ شبكةٍ انقطاعاً، وأكثرُ من يومٍ يمحو الوقائع.

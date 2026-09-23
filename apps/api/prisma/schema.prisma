@@ -408,6 +408,13 @@ model Company {
   vatNumber   String?
   /// Commercial Registration number, 10 digits — validated in the DTO.
   crNumber    String?
+  /// ⑥A2 (`ق-١٣٢٥`) — **فترةُ التاجر الضريبية**: شهريةٌ لمن تجاوزت توريداتُه الخاضعة
+  /// **أربعين مليوناً خلال الاثني عشر شهراً الماضية**، وربعيةٌ لغيره (اللائحةُ التنفيذية،
+  /// مادّةُ الفترة الضريبية ف١–٢). ⚠️ **وهي عدسةٌ لا بوّابة**: المحرّكُ يحسب أيَّ فترةٍ
+  /// تُطلَب — شهراً أو ربعاً — **وهذا الحقلُ يقول أيُّهما فترةُ هذا التاجر** فتُعلَن
+  /// المطابقةُ في ردّ الإقرار. والسببُ من النصّ نفسِه: الفترةُ تتغيّر **بإشعارٍ من الهيئة
+  /// له تاريخُ سريان** (ف٤ · ف٦)، فلو كانت بوّابةً لحجب تبديلُها أرباعاً سبق تقديمُها.
+  vatPeriod   VatPeriod @default(QUARTERLY)
   phone       String?
   email       String?
   website     String?
@@ -503,6 +510,10 @@ model Company {
   rentPayments     RentPayment[]
   rentAccruals     RentAccrual[]
   vatReturnFilings VatReturnFiling[]
+  /// ⑥A1 (`ق-١٣٢٥`) — نسبةُ الخصم النسبيّ المطبَّقة لكلِّ سنةٍ تقويمية.
+  vatProportionalRatios VatProportionalRatio[]
+  /// ⑥A3 (`ق-١٣٢٥`) — تصحيحاتُ إقراراتٍ سابقة تُعلَن في إقرارٍ لاحق (م٦٣).
+  vatReturnCorrections VatReturnCorrection[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -1819,6 +1830,12 @@ model Purchase {
   subtotal  Decimal @db.Decimal(18, 2)
   taxAmount Decimal @db.Decimal(18, 2)
   exempt    Boolean @default(false)
+  /// ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **إلى أيِّ توريدٍ تُنسَب ضريبةُ مدخلات هذا الشراء.**
+  ///
+  /// ⚠️ **وهو غيرُ `exempt`**: ذاك يقول «لا ضريبةَ على الشراء أصلاً»، وهذا يقول «الضريبةُ
+  /// حُمِّلت — فأين استُعملت؟». فصيانةُ مبنىً سكنيّ **شراءٌ خاضع** ومدخلُه **معفى الاستعمال**.
+  /// و`LEGACY_UNASSIGNED` للقائم: يُعامَل معاملةَ المشترك ويُعدّ، وقيدُ `CHECK` يمنعه للجديد.
+  inputVatUse InputVatUse @default(LEGACY_UNASSIGNED)
   /// VAT was charged but there's no valid tax invoice, so its input VAT cannot
   /// be reclaimed — the purchase is dropped from the VAT declaration. Distinct
   /// from `exempt` (no VAT at all). Matches the mockup: this affects **only the
@@ -5062,22 +5079,143 @@ model RentAccrual {
 /// قُدِّم للهيئة. بلاه تُعرض رسالةُ التصحيح لكلِّ ربعٍ تغيّر رقمُه فتصير ضجيجاً يُتجاهَل؛ وبه تُعرض
 /// لمن قدّم وحدَه، مع صافي ما قُدِّم لتُقارَن به قراءةُ اليوم (م٦٣: تصحيحٌ خلال عشرين يوماً من العلم،
 /// ودون 15,000 ريال يجوز إدراجُه في الإقرار التالي).
+/// ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية: ربعيةٌ هي الأصل، وشهريةٌ فوق أربعين مليوناً.
+enum VatPeriod {
+  QUARTERLY
+  MONTHLY
+}
+
+/// ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **إسنادُ ضريبة المدخلات إلى ما استُعملت فيه.**
+///
+/// م٥١/١–٣: ما نُسب **حصراً ومباشرةً** للتوريد الخاضع يُخصم كاملاً · وللمعفى **لا يُخصم** ·
+/// وما استُعمل فيهما أو لا يُنسب مستقلاً **يُخصم نسبياً**. **ولا خصمَ كاملاً بلا إسناد.**
+enum InputVatUse {
+  /// منسوبٌ حصراً ومباشرةً لتوريدٍ خاضع — يُخصم كاملاً.
+  TAXABLE_ONLY
+  /// منسوبٌ حصراً ومباشرةً لتوريدٍ معفى — لا يُخصم منه شيء.
+  EXEMPT_ONLY
+  /// مشتركٌ بينهما أو لا يُنسب مستقلاً — يُخصم بنسبة الخصم النسبيّ.
+  MIXED
+  /// **ما سبق البناء**: شراءٌ سُجّل قبل وجود الإسناد. **يُعامَل معاملةَ المشترك**
+  /// (فلا خصمَ كاملاً بلا إسناد) **ويُعدّ ويُعلَن** حتى يُصنَّف. وقيدُ `CHECK` على
+  /// `createdAt` يمنع صفّاً جديداً أن يأخذها.
+  LEGACY_UNASSIGNED
+}
+
+/// ⑥A1 — من أين جاءت نسبةُ السنة: محسوبةً من سنةٍ تقويميةٍ ماضيةٍ في النظام، أو مقدَّرةً يُعلنها التاجر.
+enum VatRatioBasis {
+  /// م٥١/٤ — الطريقةُ الافتراضية: خاضعُ السنة الماضية ÷ (خاضعٌ + معفى).
+  COMPUTED
+  /// م٥١/٦ — من لا سنةَ ماضيةَ له: **القيمُ المقدَّرة للسنة الحالية**، يُعلنها التاجر.
+  ESTIMATED
+}
+
+/// ⑥A1 (`ق-١٣٢٥`) — **نسبةُ الخصم النسبيّ المطبَّقة في سنةٍ تقويمية** (م٥١/٤–٧).
+///
+/// ⚠️ **تُعلَن ولا تُكتب آلياً**: بياناتُنا قد لا تغطّي السنةَ الماضية كلَّها (منشأةٌ انتقلت
+/// إلينا في منتصفها)، **ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض**. فالخادمُ **يحسب
+/// ويعرض** المقترَح بأرقامه، **والتاجرُ يُعلن** ما يطبّقه — وبلا إعلانٍ يُعلَن حدٌّ حاجب.
+///
+/// والتسويةُ (م٥١/٧) **تُحسب في الإقرار الأخير من السنة** من توريدات السنة نفسِها، فلا
+/// تُخزَّن — **ويُخزَّن أنها أُقرّت**.
+///
+/// **بلا أبٍ** (`ق-٥٠١`) — إعلانٌ للمنشأة عن سنةٍ تقويمية، لا ابنَ لمستندٍ ولا لطرف:
+/// مصدرُه قرارُ التاجر لا صفٌّ آخر، فلا سلسلةَ حذفٍ تجرّه غيرَ حذف المنشأة نفسِها.
+model VatProportionalRatio {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// السنةُ التقويمية التي تُطبَّق فيها هذه النسبة.
+  year  Int
+  /// `0.000000`–`1.000000` — ستُّ خاناتٍ تكفي لنسبةٍ تُضرب في مبالغَ بخانتين.
+  ratio Decimal @db.Decimal(9, 6)
+  basis VatRatioBasis
+  /// أرقامُ الحساب كما كانت لحظةَ الإعلان — فمن يقرأ بعد سنةٍ يعرف **ممّ** جاءت النسبة.
+  note  String?
+
+  /// إقرارُ التسوية السنوية (م٥١/٧): نسبةُ السنة الفعلية كما قُرئت لحظةَ الإقرار، ولحظتُه.
+  settledRatio Decimal? @db.Decimal(9, 6)
+  settledAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, year])
+  @@map("vat_proportional_ratios")
+}
+
+/// **بلا أبٍ** (`ق-٥٠١`) — **سجلٌّ لا يُحذف**: وسمُ «قُدِّم» واقعةٌ أعلنها التاجرُ عن فترة،
+/// لا ابنَ لمستندٍ ولا لطرف. **وإعلانُه كان فوقه فانفصل** حين أُدخل `enum VatPeriod` بينهما
+/// (`ق-١٣٢٥`) — والحارسُ أمسكه: **نقلُ نموذجٍ يقطع إعلانَه عنه، والنصُّ لا يشكو**.
 model VatReturnFiling {
   id        String  @id @default(uuid())
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   year    Int
-  quarter Int
+  /// ⑥A2 — **نوعُ الفترة ورقمُها معاً**: `QUARTERLY` بـ`1..4` أو `MONTHLY` بـ`1..12`.
+  /// وكان المفتاحُ `(companyId, year, quarter)` ربعاً حتماً؛ والهجرةُ تنقل القائمَ
+  /// `quarter ⟵ periodNo` بنوع `QUARTERLY` وتعدّ وتصرخ.
+  periodType VatPeriod @default(QUARTERLY)
+  periodNo   Int
   /// لحظةُ الوسم — التاجرُ يضعه بعد التقديم فعلاً.
   filedAt DateTime @default(now())
   /// صافي الضريبة كما قرأته الشاشةُ لحظةَ الوسم — المرجعُ الذي يُقاس عليه «تغيّر بعد التقديم».
   netVat  Decimal  @db.Decimal(18, 2)
+  /// ⑥A3 (`ق-١٣٢٥`) — **أطُلب ردُّ الفائض أم يُرحَّل؟**
+  ///
+  /// النصّ: «The Taxable Person **may request** excess Tax to be refunded, **otherwise
+  /// excess Tax will be carried forward** in the VAT account». ⇒ **فالترحيلُ هو الأصل**
+  /// والردُّ طلبٌ يُعلنه التاجر. وتحتاجه الفترةُ التالية لتعرف: أبقي الفائضُ رصيداً أم خرج؟
+  /// **ولا يُخمَّن** — فلو خُمِّن ترحيلاً وقد طُلب ردُّه لحُسب الفائضُ مرّتين.
+  refundRequested Boolean @default(false)
 
   createdAt DateTime @default(now())
 
-  @@unique([companyId, year, quarter])
+  @@unique([companyId, year, periodType, periodNo])
   @@map("vat_return_filings")
+}
+
+/// ⑥A3 (`ق-١٣٢٥`) — **تصحيحُ إقرارٍ سابق من خلال إقرارٍ لاحق** (م٦٣، وخانةُ م٦٢/٢/ي).
+///
+/// **النصّ بفقراته** (اللائحةُ التنفيذية · `CORRECTION OF RETURNS`):
+///   ف١ · نقصٌ في الضريبة المستحقّة ⟵ **إشعارُ الهيئة خلال عشرين يوماً** بتقديم تصحيح،
+///        إلّا ما تشمله ف٣ ويلتزم به المكلَّف.
+///   ف٢ · زيادةٌ في الضريبة المستحقّة ⟵ **يجوز تصحيحُها في أيِّ إقرارٍ لاحق**.
+///   ف٣ · نقصٌ **دون خمسة آلاف ريال** ⟵ **يجوز تعديلُه في الإقرار التالي**.
+///   ف٤ · لا تصحيحَ لزيادةٍ **بعد خمس سنوات** من نهاية السنة التقويمية لتلك الفترة.
+///
+/// **والموجبُ زيادةٌ في الضريبة المستحقّة** (نقصٌ سابقٌ يُستدرك) **والسالبُ نقصٌ منها**
+/// (زيادةٌ سابقةٌ تُردّ) — فإشارةُ الصفّ هي إشارتُه في الصافي.
+///
+/// **بلا أبٍ** (`ق-٥٠١`) — **سجلٌّ لا يُحذف**: إعلانٌ عن فترتَين بأرقامهما، لا ابنَ لمستندٍ
+/// ولا لطرف. ويُسحب قبل التقديم وحدَه؛ وبعده يُصحَّح بتصحيحٍ جديد لا بمحوٍ.
+model VatReturnCorrection {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الفترةُ التي يُعلَن فيها التصحيح — أي الإقرارُ الذي يحمله.
+  year       Int
+  periodType VatPeriod
+  periodNo   Int
+
+  /// الفترةُ المصحَّحة — سابقةٌ للتي تحمله.
+  correctedYear       Int
+  correctedPeriodType VatPeriod
+  correctedPeriodNo   Int
+
+  /// موجبٌ: نقصٌ سابقٌ يُستدرك (تزيد الضريبةُ المستحقّة) · سالب: زيادةٌ سابقةٌ تُردّ.
+  amount Decimal @db.Decimal(18, 2)
+  reason String
+
+  declaredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  // الفهرسُ على الفترة الحاملة — فقراءةُ الإقرار تقرأ تصحيحاتِه وحدَها.
+  @@index([companyId, year, periodType, periodNo])
+  @@map("vat_return_corrections")
 }
 
 /// A storage location. `manager` is a free-text name, not a real Employee FK

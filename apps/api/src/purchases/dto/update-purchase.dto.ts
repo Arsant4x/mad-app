@@ -3,6 +3,7 @@ import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
 import { PURCHASE_CATEGORY_CODES } from '../../common/purchase-categories';
 import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { PurchaseLineDto } from './purchase-line.dto';
+import { MSG } from '../../common/i18n/messages';
 
 export class UpdatePurchaseDto extends CurrencyFieldsDto {
   /**
@@ -61,6 +62,15 @@ export class UpdatePurchaseDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsBoolean()
   excludeFromVat?: boolean;
+
+  /**
+   * ⑥A1 (`ق-١٣٢٥`) — **تصنيفُ إسناد المدخلات يُصحَّح هنا**: شراءٌ سُجّل قبل البناء
+   * (`LEGACY_UNASSIGNED`) يُصنَّف بالتعديل، وشراءٌ صُنِّف خطأً يُقوَّم.
+   * ⛔ ولا تُقبل `LEGACY_UNASSIGNED` — لا رجوعَ إلى «لا أعرف» بعد المعرفة.
+   */
+  @IsOptional()
+  @IsIn(['TAXABLE_ONLY', 'EXEMPT_ONLY', 'MIXED'], { message: MSG.input_vat_use_invalid })
+  inputVatUse?: 'TAXABLE_ONLY' | 'EXEMPT_ONLY' | 'MIXED';
 
   @IsOptional()
   @IsBoolean()

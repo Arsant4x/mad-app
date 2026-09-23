@@ -144,6 +144,13 @@ export class SupplierNotesService {
             taxAmount,
             exempt: original.exempt,
             excludeFromVat: original.excludeFromVat,
+            /**
+             * ⑥A1 (`ق-١٣٢٥`) — **الإشعارُ يرث إسنادَ الشراء الذي يصحّحه**: هو عكسٌ لجزءٍ منه،
+             * فمدخلُه يخصّ التوريدَ نفسَه. **و`LEGACY_UNASSIGNED` تُحوَّل إلى `MIXED`** —
+             * معاملتُها واحدة، **والقيمةُ القديمة محبوسةٌ على ما سبق** بقيد `CHECK` فلا تُكتب
+             * لصفٍّ جديد (وهو الذي أمسك هذا المسار قبل الدفع، فكان يسقط `500`).
+             */
+            inputVatUse: original.inputVatUse === 'LEGACY_UNASSIGNED' ? 'MIXED' : original.inputVatUse,
             total: noteTotal,
             currency: original.currency,
             exchangeRate: rate,

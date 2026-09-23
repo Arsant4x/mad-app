@@ -137,6 +137,15 @@ export class PurchasesService {
             taxAmount: tax,
             exempt,
             excludeFromVat: dto.excludeFromVat ?? false,
+            /**
+             * ⑥A1 (`ق-١٣٢٥` · `ق-٨٢٤`/①) — **الافتراضُ `MIXED` لا `TAXABLE_ONLY`**.
+             *
+             * وهو **حكمُ النصّ** لا تساهلاً: م٥١/٣ تجعل ما **لا يمكن تحديدُه مستقلاً** عن
+             * التوريد المعفى **نسبياً** — وشراءٌ لم يُعلَن إسنادُه هو ذاك بعينه. فمنشأةٌ
+             * خاضعةٌ وحدَها نسبتُها واحدٌ فتخصم كاملاً بحقّها، والمختلطةُ تخصم بالنسبة.
+             * ⛔ و`TAXABLE_ONLY` افتراضاً **خصمٌ كاملٌ بلا إسناد** — وهو المنهيُّ عنه.
+             */
+            inputVatUse: dto.inputVatUse ?? 'MIXED',
             amortize,
             amortizeMonths,
             incorpItem: dto.incorpItem?.trim() || null,
@@ -298,6 +307,8 @@ export class PurchasesService {
       // Declaration exclusion and amortization are metadata only — neither
       // touches the ledger, so they never trigger a re-post below.
       if (dto.excludeFromVat !== undefined) data.excludeFromVat = dto.excludeFromVat;
+      // ⑥A1 — تصنيفُ إسناد المدخلات يُصحَّح بالتعديل: شراءٌ قديمٌ `LEGACY_UNASSIGNED` يُصنَّف هنا.
+      if (dto.inputVatUse !== undefined) data.inputVatUse = dto.inputVatUse;
       if (dto.incorpItem !== undefined) data.incorpItem = dto.incorpItem.trim() || null;
 
       // Re-validate whenever amortize, its months, or the category changes: a

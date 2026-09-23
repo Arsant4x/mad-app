@@ -60,3 +60,17 @@ export const num0 = (text: MoneyText | QtyText | RateText | PercentText | number
 export function sumMoney(values: readonly (MoneyText | number | null | undefined)[]): number {
   return round2(values.reduce<number>((s, v) => s + num0(v), 0));
 }
+
+/**
+ * ⑥A1 (`ق-١٣٢٥`) — **كسرٌ يُعرض نسبةً مئوية**: `0.666667` ⟵ `«66.67%»`.
+ *
+ * ⚠️ **ومكانُها هنا لا في الشاشة**: الشاشةُ كانت تكتب `(r * 100).toFixed(2)` فأسقطها حارسُ
+ * كنسة التدوير — **وهو محقّ وإن لم تكن نسبةً مالاً**: ما يُدوَّر بيدٍ في شاشةٍ يُكرَّر في
+ * أخرى بصياغةٍ تختلف، فتفترق نسبةُ الإقرار عن نسبة البطاقة. **فمصدرٌ واحد**.
+ */
+export function pct(ratio: number | null | undefined, digits = 2): string {
+  const n = num(ratio ?? null);
+  if (n === null) return '—';
+  const scaled = Math.round(n * 100 * 10 ** digits) / 10 ** digits;
+  return `${scaled.toFixed(digits)}%`;
+}

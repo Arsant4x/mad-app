@@ -550,6 +550,20 @@ export const MSG = {
   file_not_found: 'files.not_found',
 
   // validation (used by class-validator DTOs)
+  /** ⑥A2 (`ق-١٣٢٥`) — الفترةُ الضريبية: ربعٌ أو شهر، أحدُهما لا كلاهما. */
+  vat_period_one_of: 'validation.vat_period_one_of',
+  /** ⑥A1 (`ق-١٣٢٥`) — إسنادُ ضريبة المدخلات وإعلانُ نسبة الخصم النسبيّ. */
+  input_vat_use_invalid: 'validation.input_vat_use_invalid',
+  vat_ratio_range: 'validation.vat_ratio_range',
+  vat_ratio_not_declared: 'obligations.vat_ratio_not_declared',
+  /** ⑥A3 (`ق-١٣٢٥`) — تصحيحُ إقرارٍ سابق (م٦٣). */
+  vat_correction_not_earlier: 'obligations.vat_correction_not_earlier',
+  vat_correction_needs_notice: 'obligations.vat_correction_needs_notice',
+  vat_correction_time_barred: 'obligations.vat_correction_time_barred',
+  vat_correction_not_found: 'obligations.vat_correction_not_found',
+  vat_correction_filed_locked: 'obligations.vat_correction_filed_locked',
+  vat_period_quarter_range: 'validation.vat_period_quarter_range',
+  vat_period_month_range: 'validation.vat_period_month_range',
   vat_number_invalid: 'validation.vat_number',
   cr_number_invalid: 'validation.cr_number',
   postal_code_invalid: 'validation.postal_code',
@@ -1191,6 +1205,50 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_export_buyer_vat]: {
     ar: 'فاتورة صادرات لمشترٍ خارج المملكة لا تحمل رقم تسجيل ضريبي سعودي للمشتري (BR-KSA-46) — امسح الرقم من بطاقة «{customer}» أو صحّح بلده، ثم أعد الإرسال',
     en: 'An export invoice to a buyer outside the Kingdom must not carry a Saudi buyer VAT number (BR-KSA-46) — clear it on "{customer}" or correct the country, then resubmit',
+  },
+  [MSG.vat_correction_not_earlier]: {
+    ar: 'التصحيح يقع على إقرار سابق للفترة التي يُعلَن فيها — اختر فترة تبدأ قبلها',
+    en: 'A correction applies to a return earlier than the period declaring it — pick a period that starts before it',
+  },
+  [MSG.vat_correction_needs_notice]: {
+    ar: 'هذا نقص في الضريبة المستحقة قدره {limit} ريال فأكثر — لا يُستدرك في إقرار لاحق: يجب إشعار الهيئة خلال عشرين يوماً من اكتشافه بتقديم تصحيح للإقرار الأصلي (المادة ٦٣ فقرة ١ و٣)',
+    en: 'This understatement is {limit} SAR or more — it cannot be absorbed into a later return: the Authority must be notified within 20 days of discovery by filing a correction of the original return (Article 63(1) and (3))',
+  },
+  [MSG.vat_correction_time_barred]: {
+    ar: 'لا يُصحَّح إقرار بزيادة في الضريبة بعد مضيّ {years} سنوات من نهاية السنة التقويمية لفترته (المادة ٦٣ فقرة ٤)',
+    en: 'An overstatement cannot be corrected after {years} years from the end of the calendar year of its tax period (Article 63(4))',
+  },
+  [MSG.vat_correction_not_found]: {
+    ar: 'التصحيح غير موجود',
+    en: 'Correction not found',
+  },
+  [MSG.vat_correction_filed_locked]: {
+    ar: 'أُعلن هذا التصحيح في إقرار وُسم «قُدِّم» — ما قُدِّم للهيئة يُصحَّح بتصحيح جديد لا بمحوه من السجل',
+    en: 'This correction belongs to a return already marked as filed — what was filed is corrected by a new correction, not by deleting the record',
+  },
+  [MSG.input_vat_use_invalid]: {
+    ar: 'إسناد ضريبة المدخلات أحد ثلاثة: «خاضع حصراً» أو «معفى حصراً» أو «مشترك» — وقيمة «ما سبق البناء» للمشتريات القديمة وحدها ولا تُقبل لشراء جديد',
+    en: 'Input VAT use is one of: TAXABLE_ONLY, EXEMPT_ONLY or MIXED — LEGACY_UNASSIGNED is for pre-existing purchases only and is refused on a new one',
+  },
+  [MSG.vat_ratio_range]: {
+    ar: 'نسبة الخصم النسبي كسر بين صفر وواحد (0.75 تعني 75%)',
+    en: 'The proportional deduction ratio is a fraction between 0 and 1 (0.75 means 75%)',
+  },
+  [MSG.vat_ratio_not_declared]: {
+    ar: 'لم تُعلَن نسبة الخصم النسبي لسنة {year} — أعلِنها من شاشة الإقرار قبل اعتماده',
+    en: 'The proportional deduction ratio for {year} has not been declared — declare it on the VAT return screen before relying on it',
+  },
+  [MSG.vat_period_one_of]: {
+    ar: 'الإقرار يُطلب بربعٍ أو بشهر — أحدهما لا كلاهما ولا واحد: أرسل «quarter» من 1 إلى 4، أو «month» من 1 إلى 12',
+    en: 'A VAT return is requested by quarter or by month — one of them, not both and not neither: send "quarter" 1–4 or "month" 1–12',
+  },
+  [MSG.vat_period_quarter_range]: {
+    ar: 'رقم الربع من 1 إلى 4',
+    en: 'Quarter must be 1 to 4',
+  },
+  [MSG.vat_period_month_range]: {
+    ar: 'رقم الشهر من 1 إلى 12',
+    en: 'Month must be 1 to 12',
   },
   [MSG.customer_foreign_vat_conflict]: {
     ar: 'رقم التسجيل الضريبي السعودي لمن سُجّل في المملكة — عميلٌ بلده غير السعودية يُكتب معرّفه في «المعرّف البديل» بمخطّطه (TIN)',

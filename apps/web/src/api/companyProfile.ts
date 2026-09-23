@@ -24,6 +24,8 @@ export interface CompanyProfile {
   slug: string | null;
   /** Freezes properties/contracts company-wide. */
   masterDataLocked: boolean;
+  /** ⑥A2 (`ق-١٣٢٥`) — فترةُ المنشأة الضريبية: تُعلَن ولا يقلبها النظام. */
+  vatPeriod: 'QUARTERLY' | 'MONTHLY';
   /** حدُّ فصل وقائع الانقطاع بالدقائق — إعدادٌ للتاجر يُعرَض مع كل واقعة (ق-٢٠١). */
   posOfflineGapMinutes: number;
 }
@@ -54,6 +56,7 @@ export interface CompanyProfileInput {
    */
   slug?: string;
   masterDataLocked?: boolean;
+  vatPeriod?: 'QUARTERLY' | 'MONTHLY';
   posOfflineGapMinutes?: number;
 }
 
