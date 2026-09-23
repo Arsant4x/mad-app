@@ -1,15 +1,62 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { Prisma } from '@prisma/client';
+import { Employee, Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { blindIndex, decryptField, encryptField } from '../common/crypto/field-cipher.util';
+import { normalizeIban, normalizeIdentifier } from '../common/identity/identifiers.util';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
-import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { mapList, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والمسمّى والقسمُ والهاتف. */
 const EMPLOYEE_SEARCH_FIELDS = ['fullName', 'jobTitle', 'department', 'phone'] as const;
+
+/**
+ * ⚖️ `ق-١٣٤٥` (الحزمة م①) — **هويّةُ الموظف ورقمُ حسابه ورقمُ تأميناته تُشفَّر في التطبيق من أوّل حقل.**
+ *
+ * الحقولُ الثلاثة تُكتب نصّاً مشفَّراً (`field-cipher.util`) **مربوطاً بمنشأته وحقله وصفّه** — فنسخُه إلى صفٍّ آخر يفشل فكُّه
+ * — ورقمُ الهويّة معه بصمةُ بحثٍ بمفتاحٍ منفصل. **ولا يخرج نصٌّ مشفَّرٌ ولا بصمةٌ في ردٍّ قطّ**: القائمةُ تقول «مسجَّلٌ أم
+ * لا» وحدَه، والتفصيلُ يفكّ لمن يملك الاطّلاع على الشاشة.
+ *
+ * **والأسماءُ عامّةٌ لا سعودية** (`ق-١٣٥٠`): `nationalId` · `salaryIban` · `socialInsuranceNo` — التأميناتُ الاجتماعية
+ * (`GOSI`) مثالُها السعوديّ، وصيغُها المحلّية تُفحص في وحدة الدولة حين تُبنى لا هنا.
+ *
+ * ⚠️ **يمسّ وحدةَ الموظفين التي رُفض العملُ عليها (2026-08-10)** — ويُبنى بأمر المالك الصريح في التوجيه ٢٥٩.
+ */
+const aadOf = (companyId: string, employeeId: string, field: 'nationalId' | 'salaryIban' | 'socialInsuranceNo') => `${companyId}|employees.${field}|${employeeId}`;
+
+type IdentityInput = { nationalId?: string | null; salaryIban?: string | null; socialInsuranceNo?: string | null };
+
+/** ما يُكتب من الحقول الحسّاسة: `undefined` لا يمسّ، والفارغُ يمحو، وغيرُه يُطبَّع ثم يُشفَّر. */
+function identityData(companyId: string, employeeId: string, dto: IdentityInput) {
+  const data: { nationalIdCipher?: string | null; nationalIdIndex?: string | null; salaryIbanCipher?: string | null; socialInsuranceNoCipher?: string | null } = {};
+  if (dto.nationalId !== undefined) {
+    const v = normalizeIdentifier(dto.nationalId);
+    data.nationalIdCipher = v ? encryptField(v, aadOf(companyId, employeeId, 'nationalId')) : null;
+    data.nationalIdIndex = v ? blindIndex(v, companyId) : null;
+  }
+  if (dto.salaryIban !== undefined) {
+    const v = normalizeIban(dto.salaryIban);
+    data.salaryIbanCipher = v ? encryptField(v, aadOf(companyId, employeeId, 'salaryIban')) : null;
+  }
+  if (dto.socialInsuranceNo !== undefined) {
+    const v = normalizeIdentifier(dto.socialInsuranceNo);
+    data.socialInsuranceNoCipher = v ? encryptField(v, aadOf(companyId, employeeId, 'socialInsuranceNo')) : null;
+  }
+  return data;
+}
+
+/** الصفُّ كما يخرج في كلِّ ردّ: بلا نصٍّ مشفَّرٍ ولا بصمة — وعلامةُ الوجود وحدَها. */
+export function publicEmployee(row: Employee) {
+  const { nationalIdCipher, nationalIdIndex: _index, salaryIbanCipher, socialInsuranceNoCipher, ...rest } = row;
+  return {
+    ...rest,
+    identityOnFile: { nationalId: nationalIdCipher !== null, salaryIban: salaryIbanCipher !== null, socialInsuranceNo: socialInsuranceNoCipher !== null },
+  };
+}
 
 @Injectable()
 export class EmployeesService {
@@ -17,16 +64,44 @@ export class EmployeesService {
 
   list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
     const where: Prisma.EmployeeWhereInput = { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), EMPLOYEE_SEARCH_FIELDS) };
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.employee, { where, orderBy: { fullName: 'asc' } }));
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
+      mapList(await pagedFindMany(query, tx.employee, { where, orderBy: { fullName: 'asc' } }), (row) => publicEmployee(row as Employee)),
+    );
+  }
+
+  /** التفصيل — الحقولُ الحسّاسة مفكوكةً لمن يملك الاطّلاع على شاشة الموظفين، في فروعه. */
+  findOne(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const row = await tx.employee.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
+      if (!row) throw new NotFoundException(MSG.employee_not_found);
+      return {
+        ...publicEmployee(row),
+        nationalId: row.nationalIdCipher ? decryptField(row.nationalIdCipher, aadOf(companyId, row.id, 'nationalId')) : null,
+        salaryIban: row.salaryIbanCipher ? decryptField(row.salaryIbanCipher, aadOf(companyId, row.id, 'salaryIban')) : null,
+        socialInsuranceNo: row.socialInsuranceNoCipher ? decryptField(row.socialInsuranceNoCipher, aadOf(companyId, row.id, 'socialInsuranceNo')) : null,
+      };
+    });
+  }
+
+  /** البحثُ برقم الهويّة ببصمته — داخل المنشأة وفروع القارئ، ولا يُكتب الرقمُ في مسارٍ ولا في سجلّ. */
+  findByNationalId(companyId: string, allowedBranchIds: string[] | 'all', nationalId: string) {
+    const v = normalizeIdentifier(nationalId);
+    if (!v) return Promise.resolve([]);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
+      (await tx.employee.findMany({ where: { nationalIdIndex: blindIndex(v, companyId), ...branchFilter(allowedBranchIds) }, orderBy: { fullName: 'asc' } })).map(publicEmployee),
+    );
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateEmployeeDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-      return tx.employee.create({
+      // المعرّفُ قبل الكتابة — فالنصُّ المشفَّر يُربط بصفّه من أوّل حقل.
+      const id = randomUUID();
+      const row = await tx.employee.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
         data: {
+          id,
           branchId,
           fullName: dto.fullName,
           jobTitle: dto.jobTitle || null,
@@ -35,8 +110,10 @@ export class EmployeesService {
           baseSalary: dto.baseSalary ?? 0,
           phone: dto.phone || null,
           status: dto.status ?? 'ACTIVE',
+          ...identityData(companyId, id, dto),
         } as unknown as Prisma.EmployeeCreateInput,
       });
+      return publicEmployee(row);
     });
   }
 
@@ -53,8 +130,9 @@ export class EmployeesService {
       if (dto.baseSalary !== undefined) data.baseSalary = dto.baseSalary;
       if (dto.phone !== undefined) data.phone = dto.phone || null;
       if (dto.status !== undefined) data.status = dto.status;
+      Object.assign(data, identityData(companyId, id, dto));
 
-      return tx.employee.update({ where: { id }, data });
+      return publicEmployee(await tx.employee.update({ where: { id }, data }));
     });
   }
 
@@ -64,7 +142,7 @@ export class EmployeesService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.employee.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.employee_not_found);
-      return tx.employee.update({ where: { id }, data: { archived } });
+      return publicEmployee(await tx.employee.update({ where: { id }, data: { archived } }));
     });
   }
 

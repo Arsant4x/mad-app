@@ -191,6 +191,10 @@ jobs:
       # ⚠️ غيابه يجعل `/zatca/onboarding/start` يرتدّ بـ400 فتسقط ثلاث
       # مجموعات بسببٍ يبدو منطقياً وليس كذلك.
       SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+      # ⚠️ تشفيرُ الحقول الحسّاسة (ق-١٣٤٥) — غيابُها يُسقط `employee-identity`؛ قيمُ اختبارٍ منسوخةٌ من `.env.test.example`.
+      PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+      PII_ENCRYPTION_KEY_ID: test1
+      PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
       # ⚠️ بلا MinIO يرتدّ رفع الشعار بـ500 وتسقط `company-profile`.
       S3_ENDPOINT: http://localhost:9100
       S3_ACCESS_KEY: mad_app

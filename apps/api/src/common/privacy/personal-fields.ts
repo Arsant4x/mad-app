@@ -30,11 +30,19 @@ export const ADDRESS_PART_NAMES = ['street', 'district', 'postalcode', 'building
  */
 export const FREE_TEXT_FIELD_NAMES = ['notes', 'note', 'reason', 'description', 'remark', 'comment', 'memo'] as const;
 
+/**
+ * ⚖️ **مُعرِّفاتُ الشخص المشفَّرة في التطبيق** (`ق-١٣٤٥`) — بأسمائها كما تصل في جسم الطلب: هويّةُ الموظف ورقمُ حسابه
+ * ورقمُ تأميناته. **تُشفَّر في جدولها فلا تبقى صريحةً في السجلّ** — وإلا عاد النصُّ الصريح من الباب الذي أُغلق.
+ * ⚠️ **و`salaryIban` اسمٌ غيرُ `iban`** عمداً: `iban` حسابُ المنشأة نفسِها ويبقى كاملاً (`ق-١٢٩٨` أدناه)، وحسابُ الموظف بيانُ شخص.
+ */
+export const IDENTITY_FIELD_NAMES = ['nationalid', 'salaryiban', 'socialinsuranceno'] as const;
+
 /** ما لا تُكتب قيمتُه في `details` — تُكتب علامةُ التغيّر وحدَها. */
 export const REDACTED_FIELD_NAMES: ReadonlySet<string> = new Set<string>([
   ...CONTACT_FIELD_NAMES,
   ...ADDRESS_PART_NAMES,
   ...FREE_TEXT_FIELD_NAMES,
+  ...IDENTITY_FIELD_NAMES,
 ]);
 
 /** العلامةُ في مكان القيمة — تقول إن الحقل وصل وتغيّر، ولا تقول ماذا صار. */

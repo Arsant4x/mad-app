@@ -1,6 +1,6 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 import { EmployeeStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateEmployeeDto extends BranchFieldDto {
   @IsString()
@@ -30,4 +30,31 @@ export class CreateEmployeeDto extends BranchFieldDto {
   @IsOptional()
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;
+
+  /**
+   * ⚖️ `ق-١٣٤٥` — الحقولُ الحسّاسة الثلاثة: تُطبَّع وتُشفَّر في الخدمة ولا تُخزَّن نصّاً صريحاً قطّ، والفارغُ يمحو.
+   * **وأسماؤها عامّة** (`ق-١٣٥٠`): صيغُ الدولة (عشرةُ أرقامٍ للهويّة · رقمُ التأمينات) تُفحص في وحدتها حين تُبنى لا هنا.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  salaryIban?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  socialInsuranceNo?: string;
+}
+
+/** البحثُ برقم الهويّة — في الجسم لا في المسار ولا في الاستعلام، فلا يُكتب في سجلّات الوصول. */
+export class FindByNationalIdDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  nationalId!: string;
 }
