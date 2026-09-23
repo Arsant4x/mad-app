@@ -150,8 +150,9 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
       .expect(201);
     expect(created.body.status).toBe('ACTIVE');
 
+    // ⑪A2 (`ق-١٣١٧`): الاشتراكُ انتقل إلى مسارِه — **للمالية وحدَها**، والحسابُ في مساره.
     await request(app.getHttpServer())
-      .patch(`/companies/${created.body.id}`)
+      .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
       .send({ subEnd: '2020-01-01' })
       .expect(200);
@@ -165,7 +166,7 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     expect(foundFrozen.status).toBe('FROZEN');
 
     const reactivated = await request(app.getHttpServer())
-      .patch(`/companies/${created.body.id}`)
+      .patch(`/companies/${created.body.id}/subscription`)
       .set('Authorization', `Bearer ${platformAdminToken}`)
       .send({ subEnd: '2030-01-01' })
       .expect(200);
