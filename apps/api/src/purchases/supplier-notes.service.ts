@@ -20,6 +20,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postSupplierNoteEntry } from '../journal/auto-posting.util';
 import { CreateSupplierNoteDto, SupplierNoteLineDto } from './dto/create-supplier-note.dto';
 import { applySupplierNoteToStock } from './purchase-return.util';
+import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { recomputePurchaseStatus } from './purchase-settlement.util';
 import { computePurchaseTax } from './purchases.service';
 
@@ -151,6 +152,8 @@ export class SupplierNotesService {
              * لصفٍّ جديد (وهو الذي أمسك هذا المسار قبل الدفع، فكان يسقط `500`).
              */
             inputVatUse: original.inputVatUse === 'LEGACY_UNASSIGNED' ? 'MIXED' : original.inputVatUse,
+            // ⚖️ `ق-١٣٤٢` ويرث تتبّعَ أصله: إشعارٌ جديد على أصلٍ لم يُرحَّل غيرُ قابله للخصم لا يُرحّل عكسَ ما لم يُرحَّل.
+            nonDeductibleTracked: original.nonDeductibleTracked,
             total: noteTotal,
             currency: original.currency,
             exchangeRate: rate,
@@ -205,7 +208,11 @@ export class SupplierNotesService {
         if (side === 'credit') await recomputePurchaseStatus(tx, original.id);
 
         if (!entry) return created;
-        return tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: NOTE_INCLUDE });
+        const posted = await tx.purchase.update({ where: { id: created.id }, data: { journalEntryId: entry.id }, include: NOTE_INCLUDE });
+        // ⚖️ `ق-١٣٤٢` ضريبةُ الإشعار على مستندٍ منسوبٍ إلى المعفى لا تُستردّ كذلك: حصّتُها تتبع أثرَ صافيه — فرقُ السعر
+        // على طبقة الأصل بقاعدة الانتشار، والمُعادةُ إلى `5100`، والخدميُّ إلى حساب الفئة.
+        await reconcileNonDeductibleVat(tx, companyId, created.id, { date: created.date, trigger: 'SUPPLIER_NOTE' });
+        return posted;
       }),
     );
   }

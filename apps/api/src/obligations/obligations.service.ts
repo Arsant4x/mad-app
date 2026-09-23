@@ -370,7 +370,7 @@ export class ObligationsService {
       // الإقرارُ يقرأ ولا يُرحّل: الاستحقاقُ يُكتب عند الإنشاء والتجديد والقبض وبالكنس اليوميّ
       // (ق-٩٢٧/٥)؛ وما حلّ ولم يُرحَّل بعدُ **يُعدّ هنا** لا يُخفى — فقراءةٌ لا تكتب في الدفتر.
       // المردودةُ التي صدر بدلُها تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
-      const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true, inputVatUse: true } as const;
+      const purchaseSelect = { subtotal: true, taxAmount: true, exempt: true, excludeFromVat: true, docType: true, inputVatUse: true, nonDeductibleTracked: true } as const;
       const [invoices, purchaseRows, voidedRows, rent, prepaymentsApplied] = await Promise.all([
         // ⑧ الإقرارُ يقرأ **السطورَ** لا مجموعَ الفاتورة (`ق-١٢٢٣`): كان كلُّ مبيعٍ في الخانة `1` بمجموعه ولو كان
         // فيه سطرٌ بنسبة الصفر أو معفى — فلا يصحّ إقرارُ صيدليةٍ ولا مصدِّر. والمبالغُ بالريال عبر سعر الفاتورة.
@@ -524,11 +524,21 @@ export class ObligationsService {
           message: `${inputVatBuckets.legacyCount} فاتورةَ شراءٍ في هذه الفترة سُجّلت قبل بناء إسناد المدخلات، بضريبةٍ قدرُها ${money(inputVatBuckets.legacyUnassigned)} — تُعامَل معاملةَ المشترك فتُخصم بالنسبة؛ وما كان منها خاصاً بتوريدٍ خاضعٍ حصراً يُصنَّف من بطاقة الشراء ليُخصم كاملاً`,
         });
       }
-      if (proportionalApplies && deduction.nonDeductible > 0) {
+      /**
+       * ⚖️ `ق-١٣٤٢` — **المنسوبُ إلى المعفى وحدَه يُرحَّل إلى تكلفة ما اشتُري عند الشراء نفسِه** (`non-deductible-vat.util`)،
+       * فلا يبقى في حساب ضريبة المدخلات. **والباقي فيه يُعلَن بقسمَيه**: المشتركُ غيرُ المخصوم (محبوسٌ على قرار ترحيله عند
+       * إقفال الإقرار — لم يُحسم) · ومستنداتٌ منسوبةٌ إلى المعفى سبقت البناء (تُعدّ ولا تُحوَّل — `ق-١١٧٨`).
+       */
+      const apportionedNotDeducted = round2(deduction.apportionedBase - deduction.apportionedDeductible);
+      const exemptOnlyUntracked = round2(
+        taxablePurchases.filter((p) => p.inputVatUse === 'EXEMPT_ONLY' && !p.nonDeductibleTracked).reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0),
+      );
+      const notPosted = round2(apportionedNotDeducted + exemptOnlyUntracked);
+      if (notPosted > 0) {
         limits.push({
           code: 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED',
           severity: 'warning',
-          message: `غيرُ القابل للخصم من ضريبة المدخلات في هذه الفترة ${money(deduction.nonDeductible)} — **يُخصم من الإقرار ولا يُرحَّل في الدفتر بعد**: ما زال كاملاً في حساب ضريبة المدخلات، فرصيدُه أعلى مما يُستردّ بهذا المقدار. ومعالجتُه قيداً قرارٌ محاسبيٌّ لم يُحسم بعد (أيُّ حسابِ مصروفٍ ومتى)`,
+          message: `غيرُ القابل للخصم من ضريبة المدخلات الباقي في حسابها في هذه الفترة ${money(notPosted)} — منه المشتركُ غيرُ المخصوم ${money(apportionedNotDeducted)} (ترحيلُه إلى التكلفة عند إقفال الإقرار ينتظر قراراً لم يُحسم) ومنه مشترياتٌ منسوبةٌ إلى المعفى سبقت ترحيلَه ${money(exemptOnlyUntracked)}؛ فرصيدُ حساب ضريبة المدخلات أعلى مما يُستردّ بهذا المقدار. أمّا المنسوبُ إلى المعفى وحدَه فيُرحَّل إلى تكلفة ما اشتُري عند الشراء`,
         });
       }
 

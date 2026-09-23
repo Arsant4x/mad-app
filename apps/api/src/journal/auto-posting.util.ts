@@ -687,6 +687,63 @@ export async function postLandedCostEntry(tx: Prisma.TransactionClient, companyI
   });
 }
 
+export interface NonDeductibleVatForPosting {
+  /** مورّدُ المستند — يُختم على السطور (ق-٨٧٣) فيُقرأ الحدثُ في كشفه كما يُقرأ مستندُه. */
+  supplierId: string;
+  branchId?: string | null;
+  /** «فاتورة شراء PUR-012» · «إشعار مورّد …» · «استلام GR-…» — للمذكّرة. */
+  docLabel: string;
+  /** فئةُ المستند — حسابُها موضعُ حصّة البند الخدميّ (المصروفُ نفسُه). */
+  categoryCode: string | null;
+  date: Date;
+  /** بإشاراتها: موجبٌ = خرج من `1250` إلى الموضع · سالبٌ = عاد منه. */
+  baseInventory: number;
+  baseCogs: number;
+  baseExpense: number;
+  baseClearing: number;
+}
+
+/**
+ * ⚖️ **قيدُ ضريبة المدخلات غيرِ القابلة للخصم — إعادةُ تصنيفٍ مستقلّة، وقيدُ المستند لا يُمسّ** (`ق-١٣٣٠` · `ق-١٣٤٢`).
+ *
+ * الشراءُ رُحِّلت ضريبتُه كلُّها إلى `1250`؛ والمنسوبُ منها إلى المعفى **لا يُستردّ** فهو تكلفة. فيُقيَّد الفرقُ بين ما
+ * يجب أن يكون في كلِّ موضعٍ وما فيه: `1300` (ما على الرفّ) · `5100` (ما استُهلك، وما أُعيد إلى المورّد) · حسابُ الفئة
+ * (البندُ الخدميّ) · وسيطُ الاستلام (مفوتَرٌ لم يُستلم) — مقابل `1250`. والحدثُ الذي ينقل من الوسيط إلى الطبقة عند
+ * الاستلام لا يمسّ `1250` أصلاً. وكلُّ مبلغٍ بإشارته: السالبُ يقلب الطرف، فالحدثُ العاكس مرآةٌ بلا دالّةٍ ثانية.
+ */
+export async function postNonDeductibleVatEntry(tx: Prisma.TransactionClient, companyId: string, n: NonDeductibleVatForPosting) {
+  const inventory = round2(n.baseInventory);
+  const cogs = round2(n.baseCogs);
+  const expense = round2(n.baseExpense);
+  const clearing = round2(n.baseClearing);
+  if (inventory === 0 && cogs === 0 && expense === 0 && clearing === 0) return null;
+  const inputVat = round2(inventory + cogs + expense + clearing);
+
+  const expCode = purchaseExpenseAccountCode(n.categoryCode);
+  const ids = await resolveAccountIds(tx, ['5100', ...(expense !== 0 ? [expCode] : [])]);
+  if (!ids) return null;
+  const lines: PostingLine[] = [];
+  const push = (accountId: string, amount: number) => {
+    if (amount === 0) return;
+    lines.push(amount > 0 ? { accountId, debit: amount, credit: 0 } : { accountId, debit: 0, credit: -amount });
+  };
+  if (inventory !== 0) push(await getOrCreateInventoryAccount(tx, companyId), inventory);
+  if (cogs !== 0) push(ids.get('5100')!, cogs);
+  if (expense !== 0) push(ids.get(expCode)!, expense);
+  if (clearing !== 0) push(await getOrCreateReceiptClearingAccount(tx, companyId), clearing);
+  if (inputVat !== 0) push(await getOrCreateInputVatAccount(tx, companyId), -inputVat);
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: n.date,
+    memo: `ضريبةُ مدخلاتٍ غيرُ قابلةٍ للخصم — ${n.docLabel}`,
+    lines,
+    auto: true,
+    branchId: n.branchId ?? null,
+    supplierId: n.supplierId,
+  });
+}
+
 export interface RentPaymentForPosting {
   /** عميلُ العقد إن سُجِّل (`Contract.customerId`) — يُختم على كل سطر (ق-٨٧٣)؛ وعقدٌ بلا عميلٍ يبقى بلا طرف. */
   customerId?: string | null;
