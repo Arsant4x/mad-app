@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
+import type { ErrorReporter } from '../error-tracking/error-reporter';
 import { requestIdOf } from '../request-id/request-id.middleware';
 import { resolveLanguage } from './language.util';
 import { Language, MSG, resolveMessage } from './messages';
@@ -23,10 +24,15 @@ interface NestErrorBody {
  *
  * A non-HttpException becomes a generic 500 — an internal error's raw text
  * (stack traces, driver errors) must never reach a client, in any language.
+ *
+ * ③ (`ق-١٣٣١`): **وكلُّ خطأٍ من صنف `5xx` يُبلَّغ إلى متتبّع الأخطاء** إن وُجد (`ErrorReporter` — بقائمة سماح،
+ * لا يُنتظَر ولا يرمي). و`4xx` لا — رفضٌ مسمّى ليس عطلاً، وإبلاغُه ضجيجٌ يُغرق العطلَ الحقيقيّ.
  */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
+
+  constructor(private readonly reporter: ErrorReporter | null = null) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
@@ -39,6 +45,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (!(exception instanceof HttpException)) {
       this.logger.error(`${requestId ? `[${requestId}] ` : ''}${exception instanceof Error ? exception.stack : String(exception)}`);
+      void this.reporter?.report(exception, request, HttpStatus.INTERNAL_SERVER_ERROR);
       response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(
         withId({
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -51,6 +58,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const status = exception.getStatus();
     const body = exception.getResponse();
+    if (status >= 500) void this.reporter?.report(exception, request, status);
 
     response.status(status).json(
       withId(

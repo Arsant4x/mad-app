@@ -6,6 +6,7 @@ import { SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ErrorReporter } from './common/error-tracking/error-reporter';
 import { HttpExceptionFilter } from './common/i18n/http-exception.filter';
 import { validationExceptionFactory } from './common/i18n/validation.util';
 import { assertProductionSecrets } from './common/config/production-secrets';
@@ -64,7 +65,8 @@ async function bootstrap() {
   // Translates every error message into the caller's Accept-Language — see
   // common/i18n/http-exception.filter.ts. Registered after the pipe so it also
   // catches (and localizes) validation failures.
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // ③ (ق-١٣٣١): ومعه متتبّعُ الأخطاء — `null` بلا ERROR_TRACKING_DSN، فلا يُرسَل شيءٌ قبل أن يوجد خادمُه.
+  app.useGlobalFilters(new HttpExceptionFilter(ErrorReporter.fromEnv(process.env)));
 
   // Swagger خارج الإنتاج فقط. المستند يعدّد كل نقطة نهاية وكل حقل في كل DTO،
   // أي أنه خريطة سطح الهجوم كاملةً مقدَّمةً بلا مصادقة على نطاق عام. وقيمته
