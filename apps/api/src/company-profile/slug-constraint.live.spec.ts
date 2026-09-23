@@ -17,8 +17,15 @@ jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
  * ③ **ويُثبت أن القيدَ يردّ فعلاً** — لا أن نصَّه مكتوب: كتابةٌ مباشرةٌ لا تمرّ بالخدمة،
  *   بقيمةٍ خاطئةٍ تُرفض **باسم القيد** وبقيمةٍ صحيحةٍ تمرّ، في معاملتين تُرجَعان.
  *
- * ⚠️ **والرفضُ يُطابَق باسم القيد لا بمجرّد وقوعه** (`§8.14`): عزلُ الصفوف يردّ الكتابةَ
- * بلا سياقٍ كذلك، فتوكيدٌ على «رُفض» **يمرّ لسببٍ آخر** ويشهد للقيد وهو ساقط.
+ * ⚠️ **والرفضُ يُطابَق باسم القيد لا بمجرّد وقوعه** (`§8.14`): توكيدٌ على «رُفض» يمرّ على
+ * تعارض الفهرس الفريد وعلى «الصفُّ غيرُ موجود» كذلك — **فيشهد للقيد وهو ساقط**.
+ *
+ * ⚠️ **وفرضٌ أسقطه الإثباتُ العكسيّ** (`§8.14` · الوجه المقابل): كُتب المسبارُ أوّلاً داخل
+ * سياق مستأجر بحجّة أن الكتابةَ بلا سياقٍ **يردّها العزل** فيُقرأ رفضُ العزل رفضَ قيد.
+ * **والقياسُ أسقطه**: حذفُ السياق تركَ الحارسَ أخضر، ثم قراءةُ الكتالوج بيّنت السبب —
+ * **`companies` بلا عزل صفوفٍ أصلاً** (`relrowsecurity = false` · صفرُ سياسة): هي **صفُّ
+ * المستأجر نفسِه**، وعزلُها في الطبقة الأولى بالمفتاح `id`. ⇒ **فالسياقُ حُذف ولم يُترك
+ * بحجّةٍ لا تصحّ** — وتوكيدُ الاسم وحدَه هو ما يفصل القيدَ عن غيره.
  */
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 const d = HAS_DB ? describe : describe.skip;
@@ -40,13 +47,6 @@ async function rolledBack<T>(prisma: PrismaClient, fn: (tx: Tx) => Promise<T>): 
     });
   if (!ran) throw new Error('المعاملةُ لم تكتمل');
   return out as T;
-}
-
-/** سياقُ المنشأة — **ويُقرأ بعد ضبطه** (`ق-٤٤٩`)، فسياقٌ لم يُضبط يجعل الرفضَ رفضَ عزلٍ لا رفضَ قيد. */
-async function asCompany(tx: Tx, companyId: string): Promise<void> {
-  await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
-  const [{ ctx }] = await tx.$queryRaw<{ ctx: string }[]>`SELECT current_setting('app.company_id', true) AS ctx`;
-  if (ctx !== companyId) throw new Error(`السياقُ لم يُضبط: ${ctx}`);
 }
 
 d('شكلُ معرّف النطاق واحدٌ في الشيفرة والقاعدة — مقروءاً من الكتالوج (ق-١٣٠٣)', () => {
@@ -87,17 +87,16 @@ d('شكلُ معرّف النطاق واحدٌ في الشيفرة والقاع�
   });
 
   it('🔴 ③ والقيدُ يردّ فعلاً — قيمةٌ خاطئةٌ تُرفض باسمه، وصحيحةٌ تمرّ', async () => {
-    const bad = await rolledBack(prisma, async (tx) => {
-      await asCompany(tx, companyId);
-      return tx.company
-        .update({ where: { id: companyId }, data: { slug: 'BAD_SLUG!' } })
-        .then(() => null as string | null, (e: Error) => String(e.message));
-    });
-    // ⚠️ باسم القيد — فرفضُ العزل يبدو رفضاً كذلك.
+    const bad = await rolledBack(prisma, (tx) =>
+      tx.company.update({ where: { id: companyId }, data: { slug: 'BAD_SLUG!' } }).then(
+        () => null as string | null,
+        (e: Error) => String(e.message),
+      ),
+    );
+    // ⚠️ **باسم القيد**: «رُفض» وحدَه يمرّ على تعارض الفهرس الفريد وعلى «الصفُّ غيرُ موجود».
     expect(bad).toContain('companies_slug_format');
 
     const good = await rolledBack(prisma, async (tx) => {
-      await asCompany(tx, companyId);
       const row = await tx.company.update({ where: { id: companyId }, data: { slug: `probe-slug-${Date.now()}` }, select: { slug: true } });
       return row.slug;
     });
