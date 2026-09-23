@@ -10,6 +10,9 @@ import { money } from '../common/money/text';
 import { dayEndOf } from '../common/wall-clock.util';
 import { customerExposure, exposureOf } from '../reports/receivables-exposure.util';
 import { assertCustomerNotInTrash } from './customer-trash.util';
+import { TenantContext } from '../auth/types';
+import { RecordMarketingConsentDto } from './dto/record-marketing-consent.dto';
+import { MarketingChannel, marketingState, mayReceiveMarketing } from './marketing-consent.util';
 
 /**
  * المعرّفُ البديل زوجٌ (BR-KSA-14): مخطّطٌ ورقمٌ معاً، أو لا شيء — نصفُ زوجٍ يُرفض مسمّىً لا يُكمَل صامتاً.
@@ -187,6 +190,61 @@ export class CustomersService {
 
       // Soft delete — recoverable from the trash for 30 days.
       await tx.customer.update({ where: { id }, data: { deletedAt: new Date() } });
+    });
+  }
+
+  /**
+   * **حالةُ الموافقة التسويقية وسِجلُّها** (`ق-١٣٠٣` · ك/⑰A1).
+   *
+   * **الحالةُ مشتقّةٌ لا مخزَّنة** — تُحسب بالبوّابة وحدَها (`marketingState`)، **والسجلُّ يُعرض
+   * كاملاً**: اللائحةُ (م٢٨/٣) توجب الاحتفاظ بالإثبات، **وإثباتٌ لا يُقرأ ليس إثباتاً**.
+   */
+  marketingConsent(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const customer = await tx.customer.findUnique({ where: { id }, select: { id: true } });
+      if (!customer) throw new NotFoundException(MSG.customer_not_found);
+      const events = await tx.marketingConsent.findMany({ where: { customerId: id }, orderBy: [{ at: 'desc' }, { createdAt: 'desc' }] });
+      return { customerId: id, channels: marketingState(events), events };
+    });
+  }
+
+  /**
+   * **تسجيلُ واقعةٍ — موافقةً أو رجوعاً عنها** (`ق-١٣٠٣` · ك/⑰A1).
+   *
+   * ثلاثةُ أحكامٍ في موضعٍ واحد:
+   * ① **لا تاريخَ من المستقبل**: واقعةٌ تُسجَّل بعد وقوعها؛ وتاريخٌ لاحق **يفعّل موافقةً في وقتها**
+   *   بلا أن يقع شيء — وهو ما يجعل الإثباتَ دعوى.
+   * ② **ولا واقعةَ لا تغيّر شيئاً**: موافقةٌ فوق موافقةٍ سارية تُضخّم السجلَّ ولا تُثبت جديداً،
+   *   **والرجوعُ فوق رجوعٍ كذلك**. تُردّ `409` مسمّىً.
+   * ③ **والمسجِّلُ يُختم مع الواقعة** — فالإثباتُ بلا مسجِّلٍ دعوى (م٢٨/٢: توثيقٌ يقبل التحقّق).
+   *
+   * ⚠️ **والصفُّ لا يُعدَّل ولا يُحذف بعدها** — مُشغِّلاتٌ في القاعدة لا فحصٌ هنا: `deleteMany`
+   * والـ`DELETE` الخام لا يمرّان بهذه الدالّة.
+   */
+  recordMarketingConsent(tenant: TenantContext, id: string, dto: RecordMarketingConsentDto) {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const customer = await tx.customer.findUnique({ where: { id }, select: { id: true } });
+      if (!customer) throw new NotFoundException(MSG.customer_not_found);
+
+      const at = dto.at ? new Date(dto.at) : new Date();
+      if (at.getTime() > Date.now()) throw new BadRequestException(MSG.consent_future_date);
+
+      const channel = dto.channel as MarketingChannel;
+      const events = await tx.marketingConsent.findMany({ where: { customerId: id, channel }, select: { channel: true, granted: true, at: true, createdAt: true } });
+      if (mayReceiveMarketing(events, channel).allowed === dto.granted) throw new ConflictException(MSG.consent_unchanged);
+
+      return tx.marketingConsent.create({
+        data: {
+          customerId: id,
+          channel,
+          granted: dto.granted,
+          source: dto.source,
+          note: dto.note?.trim() || null,
+          at,
+          actorType: tenant.actorType,
+          actorId: tenant.profileId ?? null,
+        } as unknown as Prisma.MarketingConsentCreateInput,
+      });
     });
   }
 

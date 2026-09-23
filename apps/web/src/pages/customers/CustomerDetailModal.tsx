@@ -5,6 +5,8 @@ import type { Invoice } from '../../api/invoices';
 import { dfmt, fmt } from '../../lib/format';
 import { num0 } from '../../lib/money';
 import { STATUS_META } from '../invoices/statusMeta';
+import { usePermissions } from '../../auth/PermissionsContext';
+import { MarketingConsentPanel } from './MarketingConsentPanel';
 
 /**
  * نافذةُ العميل — **الأرقامُ الثلاثة من الخادم** (`ق-١٢٤٣`): كانت تُجمع هنا من إجماليات الفواتير، فعُدّ
@@ -13,6 +15,7 @@ import { STATUS_META } from '../invoices/statusMeta';
  */
 export function CustomerDetailModal({ customer, invoices, onClose }: { customer: Customer; invoices: Invoice[]; onClose: () => void }) {
   const customerInvoices = invoices.filter((v) => v.customerId === customer.id).sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
+  const { can } = usePermissions();
   const [summary, setSummary] = useState<CustomerSummary | null>(null);
   useEffect(() => {
     getCustomerSummary(customer.id).then(setSummary);
@@ -59,6 +62,9 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
             <div className="kpi-value num">{summary ? `${fmt(summary.outstanding)} ر.س` : '…'}</div>
           </div>
         </div>
+
+        {/* الموافقةُ التسويقية في بطاقة العميل — حيث ينظر التاجر إليه، لا في شاشةٍ مستقلة. */}
+        <MarketingConsentPanel customerId={customer.id} canRecord={can('customers', 'record')} />
 
         <div className="card-title" style={{ marginBottom: 10 }}>
           سجل الفواتير ({customerInvoices.length})

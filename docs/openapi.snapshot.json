@@ -1010,6 +1010,15 @@
       "200"
     ]
   },
+  "GET /customers/{id}/marketing-consent": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /customers/{id}/summary": {
     "parameters": [
       "path:id:required"
@@ -2226,6 +2235,15 @@
       "query:page",
       "query:pageSize",
       "query:search"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/customers/{id}/marketing-consent": {
+    "parameters": [
+      "path:id:required"
     ],
     "requiredBody": [],
     "responses": [
@@ -4659,6 +4677,19 @@
       "201"
     ]
   },
+  "POST /customers/{id}/marketing-consent": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "channel",
+      "granted",
+      "source"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /delegations": {
     "parameters": [],
     "requiredBody": [
@@ -5938,6 +5969,19 @@
     "requiredBody": [
       "kind",
       "name"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/customers/{id}/marketing-consent": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "channel",
+      "granted",
+      "source"
     ],
     "responses": [
       "201"

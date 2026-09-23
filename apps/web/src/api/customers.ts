@@ -77,3 +77,38 @@ export const getCustomerSummary = (id: string) => apiClient.get<CustomerSummary>
 
 /** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
 export const setCustomerArchived = (id: string, archived: boolean) => apiClient.patch<Customer>(`/customers/${id}/archive`, { archived }).then((r) => r.data);
+
+/**
+ * **الموافقةُ التسويقية** (`ق-١٣٠٣` · ك/⑰A1) — الحالةُ **مشتقّةٌ في الخادم** والسجلُّ يُعرض معها:
+ * اللائحةُ (م٢٨/٣) توجب الاحتفاظ بالإثبات، **وإثباتٌ لا يُقرأ ليس إثباتاً**.
+ */
+export const MARKETING_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP'] as const;
+export type MarketingChannel = (typeof MARKETING_CHANNELS)[number];
+
+export const CONSENT_SOURCES = ['IN_PERSON', 'PHONE', 'WEB_FORM', 'WRITTEN', 'IMPORTED'] as const;
+export type ConsentSource = (typeof CONSENT_SOURCES)[number];
+
+export type MarketingVerdict = { allowed: true; since: string } | { allowed: false; reason: 'NEVER_GRANTED' | 'WITHDRAWN'; at?: string };
+
+export interface MarketingConsentEvent {
+  id: string;
+  channel: MarketingChannel;
+  granted: boolean;
+  source: ConsentSource;
+  note: string | null;
+  at: string;
+  actorType: string;
+  createdAt: string;
+}
+
+export interface MarketingConsentState {
+  customerId: string;
+  channels: Record<MarketingChannel, MarketingVerdict>;
+  events: MarketingConsentEvent[];
+}
+
+export const getMarketingConsent = (id: string) => apiClient.get<MarketingConsentState>(`/customers/${id}/marketing-consent`).then((r) => r.data);
+
+/** **الرجوعُ واقعةٌ تالية لا تعديلٌ للأولى** — ولذلك `POST` لا `PATCH`. */
+export const recordMarketingConsent = (id: string, dto: { channel: MarketingChannel; granted: boolean; source: ConsentSource; note?: string }) =>
+  apiClient.post<MarketingConsentEvent>(`/customers/${id}/marketing-consent`, dto).then((r) => r.data);

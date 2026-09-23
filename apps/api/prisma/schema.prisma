@@ -364,6 +364,8 @@ model Company {
   apiKeys          ApiKey[]
   /// قياسُ استعمال التكاملات (`ق-١٢٩١` · ي/㉑A1).
   integrationUsage IntegrationUsage[]
+  /// وقائعُ الموافقة التسويقية (`ق-١٣٠٣` · ك/⑰A1).
+  marketingConsents MarketingConsent[]
   /// كلُّ هويّات الدخول التي تنتمي لهذه المنشأة — المالكُ وحساباتُه الفرعية (`ق-٦٦٦`).
   identities       LoginIdentity[] @relation("CompanyIdentities")
   activities       BusinessActivity[]
@@ -1203,8 +1205,58 @@ model Customer {
   contract_customerId_tenant Contract[] @relation("Contract_customerId_tenant")
   journalLine_customerId_tenant JournalLine[] @relation("JournalLine_customerId_tenant")
   invoice_customerId_tenant Invoice[] @relation("Invoice_customerId_tenant")
+  marketingConsents MarketingConsent[]
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
+}
+
+/// **الموافقةُ التسويقية — وقائعُ تُلحَق ولا تُعدَّل** (`ق-١٣٠٣` · ك/⑰A1).
+///
+/// ## النصُّ الذي فرض الشكل
+///
+/// **نظامُ حماية البيانات الشخصية م٢٥**: لا تُستعمل وسائلُ الاتصال الشخصية لإرسال موادَّ
+/// دعائيةٍ أو توعوية **إلا بموافقة المتلقّي المستهدف**، ومع **آليةٍ واضحة** للتوقّف.
+/// **وم٢٦**: المعالجةُ لأغراضٍ تسويقية تجوز إن جُمعت البياناتُ من صاحبها مباشرةً ووافق.
+/// **وم٥/٢**: له الرجوعُ عن الموافقة **في أيّ وقت**.
+///
+/// **واللائحةُ التنفيذية م٢٨** هي التي حدّدت البنية: **الموافقةُ بإرادةٍ حرّة**، **وتمكينُ
+/// المتلقّي من تخصيص الخيارات** (⟵ **لكلِّ قناةٍ على حدة**، فلا تكفي رايةٌ واحدة)،
+/// **وتوثيقُها بوسيلةٍ للتحقّق مستقبلاً** و**الاحتفاظُ بإثباتها** (⟵ **صفٌّ لا يُدهَس**:
+/// حقلٌ يُستبدَل يمحو الإثباتَ الذي توجبه المادةُ نفسُها)، **والتوقّفُ فور الطلب وبلا مقابل**.
+///
+/// ⚠️ **ولذلك خالف الشكلُ سطرَ الخطّة** (`marketingConsentAt/Channel/Source` ثلاثةَ أعمدةٍ
+/// على العميل): عمودٌ واحد لا يحمل قناتين، **والكتابةُ فوقه تمحو الإثبات**. فالفكرةُ صحيحة
+/// والتطبيقُ مختلف (`§3.6`) — والنصُّ هو الذي حكم لا التفضيل.
+///
+/// **والحالةُ مشتقّةٌ لا مخزَّنة**: آخرُ واقعةٍ لكلِّ قناة (`at` ثم `createdAt`) هي الحكم —
+/// `granted=false` رجوعٌ، ولا واقعةَ = لا موافقة.
+model MarketingConsent {
+  id         String   @id @default(uuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  /// من كتالوج `MARKETING_CHANNELS` — **وقيدُ `CHECK` في القاعدة** لا تعدادُ Prisma: القنواتُ
+  /// تُضاف بمحوِّلٍ جديد، وتعدادٌ يُرحَّل لكلِّ قناةٍ أثقلُ من قائمةٍ مقيَّدة (نمطُ `otherIdScheme`).
+  channel String
+  /// `true` موافقة · `false` رجوعٌ عنها. **والرجوعُ صفٌّ جديد لا حذفٌ للأوّل** (م٢٨/٣: يُحتفظ بالإثبات).
+  granted Boolean
+  /// **كيف وصلت** — من كتالوج `CONSENT_SOURCES`: الإثباتُ يحتاج «أين قالها» لا «أنه قالها».
+  source String
+  note   String?
+
+  /// **متى وقعت** كما يعلنها التاجر (قد يسجّلها بعد يوم) — **ولا تُقبل من المستقبل**.
+  at DateTime
+  /// **ومن سجّلها** — فالإثباتُ بلا مسجِّلٍ دعوى.
+  actorType String
+  actorId   String?
+
+  /// زمنُ الخادم — **يُدهَس بمشغِّل**: `DEFAULT` وحده تتجاوزه قيمةٌ صريحة في الإدراج.
+  createdAt DateTime @default(now())
+
+  @@index([companyId, customerId, channel, at])
+  @@map("marketing_consents")
 }
 
 /// Sales invoice. `subtotal`/`taxTotal`/`total` are always derived

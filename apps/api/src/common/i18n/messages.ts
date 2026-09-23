@@ -83,6 +83,9 @@ export const MSG = {
   customer_other_id_invalid: 'customers.other_id_invalid',
   customer_other_id_pair: 'customers.other_id_pair',
   customer_country_invalid: 'customers.country_invalid',
+  /** الموافقةُ التسويقية (`ق-١٣٠٣` · ك/⑰A1). */
+  consent_future_date: 'customers.consent_future_date',
+  consent_unchanged: 'customers.consent_unchanged',
   // pos clearance gate (ق-١٢٦١ أ — ⑤A4)
   pos_clearance_required: 'pos.clearance_required',
   customer_has_invoices: 'customers.has_invoices',
@@ -684,6 +687,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.customer_other_id_invalid]: { ar: 'المعرّف البديل حروف وأرقام لاتينية فقط', en: 'The alternative identifier must be alphanumeric' },
   [MSG.customer_other_id_pair]: { ar: 'المعرّف البديل يُذكر مع مخطّطه معاً — أو يُتركان معاً', en: 'The alternative identifier and its scheme go together — or both are left empty' },
+  [MSG.consent_future_date]: {
+    ar: 'تاريخ الموافقة لا يكون في المستقبل — تُسجَّل الواقعة بعد وقوعها لا قبله',
+    en: 'A consent date cannot be in the future — the event is recorded after it happens, not before',
+  },
+  [MSG.consent_unchanged]: {
+    ar: 'الحالة الحالية لهذه القناة هي نفسها — ولا تُسجَّل واقعة لا تغيّر شيئاً',
+    en: 'This channel is already in that state — an event that changes nothing is not recorded',
+  },
   [MSG.customer_country_invalid]: { ar: 'رمز البلد حرفان لاتينيان كبيران (ISO 3166-1)', en: 'The country code is two uppercase letters (ISO 3166-1)' },
   [MSG.pos_clearance_required]: {
     ar: 'فاتورة ضريبية كاملة — المشتري مؤسسة أو شخص اعتباري أو مسجَّل في الضريبة — تُجاز لدى الهيئة قبل تسليمها؛ لا تُطبع من الكاشير، وتُسلَّم من شاشة الفواتير بعد الإجازة',

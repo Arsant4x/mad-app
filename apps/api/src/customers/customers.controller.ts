@@ -10,6 +10,7 @@ import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dt
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { RecordMarketingConsentDto } from './dto/record-marketing-consent.dto';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -28,6 +29,26 @@ export class CustomersController {
   @RequiresAction('view')
   summary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.customersService.summary(tenant.companyId, id);
+  }
+
+  /**
+   * **الموافقةُ التسويقية — حالةً وسجلّاً** (`ق-١٣٠٣` · ك/⑰A1). واللائحةُ (م٢٨/٣) توجب
+   * الاحتفاظَ بالإثبات، **وإثباتٌ لا يُقرأ ليس إثباتاً** — فيُعرض السجلُّ كاملاً لا الحالةُ وحدَها.
+   */
+  @Get(':id/marketing-consent')
+  @RequiresAction('view')
+  marketingConsent(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.customersService.marketingConsent(tenant.companyId, id);
+  }
+
+  /**
+   * **تسجيلُ واقعةِ موافقةٍ أو رجوعٍ عنها** — بفعل `record` لا `edit`: **لا شيء يُعدَّل**،
+   * والواقعةُ تُلحَق. ومن يسجّل بيعاً في الفرع هو من يسمع «وافقت» فيسجّلها.
+   */
+  @Post(':id/marketing-consent')
+  @RequiresAction('record')
+  recordMarketingConsent(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordMarketingConsentDto) {
+    return this.customersService.recordMarketingConsent(tenant, id, dto);
   }
 
   @Post()
