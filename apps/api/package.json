@@ -17,7 +17,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
-    "test:clean": "node scripts/test-clean.mjs"
+    "test:clean": "node scripts/test-clean.mjs",
+    "openapi:check": "nest build && ts-node scripts/openapi-snapshot.ts --check",
+    "openapi:snapshot": "nest build && ts-node scripts/openapi-snapshot.ts --write"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",
