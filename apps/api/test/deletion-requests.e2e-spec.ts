@@ -516,6 +516,14 @@ describe('Account deletion requests (e2e)', () => {
     // ولا طلبَ ثانياً وهذا معلّق.
     await closed(request(app.getHttpServer()).post('/deletion-request/reopen')).expect(409);
 
+    // 🔴 **والمحوُ بلا قرارٍ يُردّ قبل أن يقع** (`ق-١٣١٨` · ⑪A1): هنا يعمل الفحصُ المسبق
+    //    وحدَه — فالإتلافُ يجري **قبل** معاملة الختم، فلو تُرك لـ«الاستهلاك» لوقع المحوُ ثم
+    //    رُدّ الختمُ فقط. **والهاتفُ يُقرأ بعده فيثبت أن شيئاً لم يقع.**
+    const refusedWithoutDecision = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'بلا قرار' }).expect(409);
+    expect(String(refusedWithoutDecision.body.message)).toContain('مدير منصّة آخر');
+    const intact = await tenantPrisma.runInTenantContext(co.id, (tx) => tx.customer.findUniqueOrThrow({ where: { id: customer.body.id }, select: { phone: true } }));
+    expect(intact.phone).toBe('0500000001');
+
     const approved = await admin(request(app.getHttpServer()).post(await approvePath(filed.body.id))).send({ note: 'مُحي' }).expect(201);
     expect(approved.body.outcome).toBe('ERASED');
     expect(approved.body.erased['Customer.phone']).toBe(1);
