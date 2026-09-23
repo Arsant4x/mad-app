@@ -10,8 +10,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt } from '../../lib/format';
 import { CompanyModal } from './CompanyModal';
 import { TemplateModal } from './TemplateModal';
-import { useAuth } from '../../auth/AuthContext';
-import type { PlatformRole } from '../../api/client';
+import { PlatformRoleGate } from './PlatformRoleGate';
 import i18n from '../../i18n';
 
 const STATUS_META: Record<Company['status'], { label: string; badgeClass: string }> = {
@@ -22,14 +21,6 @@ const STATUS_META: Record<Company['status'], { label: string; badgeClass: string
 };
 
 export function DeveloperPanelPage() {
-  const { user } = useAuth();
-  /**
-   * **هل يملك دورُ هذا المدير هذا القسم؟** (`ق-١٣١٢` · ⑪A2)
-   *
-   * `OWNER` يمرّ بتعريفه — **فلا أحدَ يفقد لوحتَه بهذه الإضافة**، والتضييقُ على من يُعيَّن
-   * بدورٍ أضيق. ⚠️ **وهو إخفاءٌ لا منع**: الحكمُ في الخادم (`PlatformAdminGuard`).
-   */
-  const mayUse = (role: PlatformRole) => user?.platformRole === 'OWNER' || user?.platformRole === role;
   const [companies, setCompanies] = useState<Company[]>([]);
   const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,10 +207,17 @@ export function DeveloperPanelPage() {
       </div>
 
       {/* ⑪A2 (`ق-١٣١٢`): كلُّ قسمٍ لدوره — **والإخفاءُ كي لا يُقاد أحدٌ إلى بابٍ يُردّ منه**،
-          والحكمُ في الخادم لا هنا. و`OWNER` يرى الكلّ بتعريفه. */}
-      {mayUse('SUPPORT') && <SupportAccessSection />}
-      {mayUse('COMPLIANCE') && <DeletionRequestsSection onExecuted={reload} />}
-      {mayUse('COMPLIANCE') && <SubProcessorsSection />}
+          والحكمُ في الخادم لا هنا. والبوّابةُ مكوِّنٌ مستقلّ **لأن هذه اللوحةَ لا تقرأ الفاعل
+          إطلاقاً**: هي محرِّرُ نماذجَ، وخلطُ ذلك بسلطة المستخدم هو ما يمنعه حارسُ الواجهة. */}
+      <PlatformRoleGate allow="SUPPORT">
+        <SupportAccessSection />
+      </PlatformRoleGate>
+      <PlatformRoleGate allow="COMPLIANCE">
+        <DeletionRequestsSection onExecuted={reload} />
+      </PlatformRoleGate>
+      <PlatformRoleGate allow="COMPLIANCE">
+        <SubProcessorsSection />
+      </PlatformRoleGate>
 
       {companyModal && (
         <CompanyModal
