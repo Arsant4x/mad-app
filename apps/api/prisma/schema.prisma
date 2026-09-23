@@ -2564,6 +2564,17 @@ model Employee {
   phone      String?
   status     EmployeeStatus @default(ACTIVE)
 
+  /// ⚖️ `ق-١٣٤٥` (الحزمة م①) — **الحقولُ الحسّاسة مشفَّرةٌ في التطبيق من أوّل حقل**: لا عمودَ نصٍّ صريحٍ لها قطّ.
+  /// كلُّ قيمةٍ `f1:<معرّفُ المفتاح>:…` يكتبها التطبيقُ مربوطةً بمنشأتها وحقلها وصفّها (`common/crypto/field-cipher.util`)،
+  /// والمفاتيحُ خارج القاعدة. **والأسماءُ عامّة** (`ق-١٣٥٠`): التأميناتُ الاجتماعية (`GOSI`) مثالُها السعوديّ.
+  nationalIdCipher        String?
+  /// بصمةُ البحث برقم الهويّة بمفتاحٍ منفصل (`b1:<معرّفُ المفتاح>:…`) — تكشف التساويَ داخل المنشأة وحدَها ولا تُفكّ.
+  nationalIdIndex         String?
+  /// رقمُ الحساب الذي يُصرف إليه الراتب (آيبان) — مشفَّراً.
+  salaryIbanCipher        String?
+  /// رقمُ الاشتراك في التأمينات الاجتماعية — مشفَّراً.
+  socialInsuranceNoCipher String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2578,6 +2589,7 @@ model Employee {
   archived  Boolean  @default(false)
 
   @@map("employees")
+  @@index([companyId, nationalIdIndex])
   attendanceRecord_employeeId_tenant AttendanceRecord[] @relation("AttendanceRecord_employeeId_tenant")
   leaveRequest_employeeId_tenant LeaveRequest[] @relation("LeaveRequest_employeeId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).

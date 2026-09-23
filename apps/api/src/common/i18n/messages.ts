@@ -175,6 +175,8 @@ export const MSG = {
 
   // employees / banks
   employee_not_found: 'employees.not_found',
+  identity_identifier_invalid: 'identity.identifier_invalid',
+  identity_iban_invalid: 'identity.iban_invalid',
   leave_type_not_found: 'leaves.type_not_found',
   leave_type_duplicate_name: 'leaves.type_duplicate_name',
   leave_type_in_use: 'leaves.type_in_use',
@@ -882,6 +884,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.movement_layer_consumed]: { ar: 'طبقة هذه الحركة استُهلك منها — لا تُعكَس، والتصحيح بحركةٍ جديدة', en: 'The cost layer of this movement has been consumed — it cannot be reversed; correct with a new movement' },
 
   [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
+  [MSG.identity_identifier_invalid]: { ar: 'المعرّف غير صالح — حروفٌ لاتينية وأرقامٌ حتى ٣٢، والمسافاتُ والشرطاتُ تُحذف', en: 'Invalid identifier — Latin letters and digits, up to 32; spaces and dashes are removed' },
+  [MSG.identity_iban_invalid]: { ar: 'الآيبان غير صالح بالمعيار الدولي (رمزُ دولةٍ ورقما تحقّقٍ لا يطابقان الحساب)', en: 'Invalid IBAN under the international standard (country code and check digits do not match the account)' },
   [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
   [MSG.leave_type_duplicate_name]: { ar: 'يوجد نوع إجازة بنفس الاسم', en: 'A leave type with this name already exists' },
   [MSG.leave_type_in_use]: { ar: 'لا يمكن حذف نوع إجازة مستخدم في طلبات قائمة', en: 'A leave type used by existing requests cannot be deleted' },

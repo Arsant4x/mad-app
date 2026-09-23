@@ -1,5 +1,5 @@
 import { EmployeeStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class UpdateEmployeeDto {
   @IsOptional()
@@ -30,4 +30,20 @@ export class UpdateEmployeeDto {
   @IsOptional()
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;
+
+  /** ⚖️ `ق-١٣٤٥` — كالإنشاء: تُطبَّع وتُشفَّر في الخدمة، والفارغُ يمحو، وغيابُ الحقل لا يمسّه. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  nationalId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  salaryIban?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  socialInsuranceNo?: string;
 }

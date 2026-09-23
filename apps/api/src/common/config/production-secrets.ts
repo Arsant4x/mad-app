@@ -22,6 +22,7 @@
  *    مرسِلَ ولا حدَّ يُطلبان؛ **ومعه يُطلبان** — فالبريدُ لا يخرج من نطاقٍ افتراضيٍّ لا يُصادَق، ولا بحدٍّ لم يُعلَن.
  */
 
+import { blindKeyProblem, keyringProblem } from '../crypto/field-cipher.util';
 import { parseDsn } from '../error-tracking/error-event.util';
 import { parseMailDailyLimit } from '../mail/mail-quota.util';
 
@@ -39,8 +40,8 @@ interface SecretRule {
   minLength?: number;
   /** لماذا يهمّ — يظهر في رسالة الرفض ليعرف المشغّل ما الذي يحميه. */
   why: string;
-  /** فحص إضافي خاص؛ يعيد نص الخطأ أو null. */
-  extra?: (value: string) => string | null;
+  /** فحص إضافي خاص؛ يعيد نص الخطأ أو null — والبيئةُ كاملةً لقاعدةٍ تقرأ متغيّراً ثانياً (حلقةُ المفاتيح ومعرّفُها). */
+  extra?: (value: string, env: NodeJS.ProcessEnv) => string | null;
 }
 
 const REQUIRED: SecretRule[] = [
@@ -67,6 +68,24 @@ const REQUIRED: SecretRule[] = [
     why: 'اتصال قاعدة البيانات',
     // الدور الأعلى يتجاوز RLS بصمت — وهي الطبقة الثانية من عزل المستأجرين.
     extra: (v) => (v.includes('://app_user:') ? null : 'يجب أن يتصل بدور app_user لا بالدور الأعلى (الأعلى يتجاوز RLS بصمت)'),
+  },
+  /**
+   * ⚖️ `ق-١٣٤٥` (الحزمة م①) — **مفاتيحُ تشفير الحقول الحسّاسة في التطبيق**، خارج القاعدة. وتُفحص بالتحليل نفسِه الذي يرمي
+   * عند أوّل حقل (`field-cipher.util`)، **قبل الإقلاع لا عند أوّل موظف**؛ ومفتاحُ الاختبار (بايتٌ واحدٌ مكرَّر) يُرفض هنا.
+   */
+  {
+    name: 'PII_ENCRYPTION_KEYS',
+    why: 'حلقةُ مفاتيح تشفير هويّة الموظف وحسابه ورقم تأميناته («معرّفٌ:مفتاح» مفصولةً بفواصل) — ضياعُها ضياعُ تلك الحقول، فتُحفظ نسختُها خارج الخادم',
+    extra: (v, env) => keyringProblem(v, env.PII_ENCRYPTION_KEY_ID),
+  },
+  {
+    name: 'PII_ENCRYPTION_KEY_ID',
+    why: 'معرّفُ المفتاح النشيط في الحلقة — به يُكتب الجديد، وبمعرّفه في كلِّ قيمةٍ يُقرأ القديم',
+  },
+  {
+    name: 'PII_BLIND_INDEX_KEY',
+    why: 'مفتاحُ بصمة البحث برقم الهويّة («معرّفٌ:مفتاح») — منفصلٌ عن مفاتيح التشفير',
+    extra: (v, env) => blindKeyProblem(v, env.PII_ENCRYPTION_KEYS),
   },
 ];
 
@@ -160,7 +179,7 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
       problems.push(`${rule.name} — أقصر من ${rule.minLength} محرفاً. ${rule.why}`);
       continue;
     }
-    const extra = rule.extra?.(value);
+    const extra = rule.extra?.(value, env);
     if (extra) problems.push(`${rule.name} — ${extra}. ${rule.why}`);
   }
 

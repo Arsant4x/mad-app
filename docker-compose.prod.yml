@@ -98,6 +98,11 @@ services:
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY}
       # بديله في الكود مفتاح ثابت منشور — وحارس الإقلاع يرفض التشغيل بدونه.
       INTEGRATIONS_ENC_KEY: ${INTEGRATIONS_ENC_KEY}
+      # تشفيرُ هويّة الموظف وحسابه ورقم تأميناته في التطبيق (ق-١٣٤٥ · الحزمة م①) — حلقةُ مفاتيح بمعرّفاتها ومفتاحُ
+      # بصمةٍ منفصل؛ حارسُ الإقلاع يرفض التشغيل بدونها. وتُحفظ نسختُها خارج الخادم: ضياعُها ضياعُ تلك الحقول.
+      PII_ENCRYPTION_KEYS: ${PII_ENCRYPTION_KEYS}
+      PII_ENCRYPTION_KEY_ID: ${PII_ENCRYPTION_KEY_ID}
+      PII_BLIND_INDEX_KEY: ${PII_BLIND_INDEX_KEY}
       ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
