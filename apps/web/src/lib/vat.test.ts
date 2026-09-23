@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BUYER_DEPENDENT_LIMIT,
   draftTaxOf,
@@ -13,6 +13,10 @@ import {
   STANDARD_VAT_RATE,
   taxBadgeOf,
 } from './vat';
+
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (0.2 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 5_000 });
 
 /**
  * ⑧ مرآةُ قواعد الخادم في الواجهة (`line-tax.util.ts` · `exemption-reasons.ts`) — والقائمةُ نفسُها

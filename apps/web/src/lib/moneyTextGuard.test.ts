@@ -1,7 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import * as ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (52.2 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 157_000 });
 
 /**
  * **لا حسابَ على حقلٍ نصّيّ من المرآة** (`ق-١٢٣٥`/③) — حارسٌ **شجريّ لا نصّيّ** (`ق-٣٣١`).
@@ -110,9 +114,8 @@ function scan(prog: ts.Program, files: readonly string[]): Hit[] {
 describe('المالُ نصّاً — لا حسابَ على حقلٍ نصّيّ من المرآة (ق-١٢٣٥)', () => {
   const prog = program();
   const appFiles = prog.getRootFileNames().filter((f) => f.replace(/\\/g, '/').includes('/src/'));
-  // مدقّقُ الأنواع على الواجهة كلِّها: ثانيتان وحدَه، وعشرٌ حين تتزاحم عمّالُ vitest — فالمهلةُ سقفٌ للتزاحم لا للبطء.
-  const TYPECHECK_TIMEOUT_MS = 90_000;
-
+  // مدقّقُ الأنواع على الواجهة كلِّها: ثانيتان وحدَه، وعشراتٌ حين تتزاحم عمّالُ vitest — فالمهلةُ سقفٌ للتزاحم لا للبطء،
+  // **وهي ميزانيةُ الملفّ المعلنةُ أعلاه** (ق-١٣٣٢) لا رقمٌ على كلِّ اختبار: موضعٌ واحدٌ يُقرأ ويُحرَس.
   it('يقرأ الشجرةَ فعلاً: ملفّاتُ المصدر بالعشرات والأنواعُ النصّية مُعلَنة في lib/money.ts', () => {
     expect(appFiles.length).toBeGreaterThan(50);
     const money = readFileSync(join(SRC, 'lib', 'money.ts'), 'utf8');
@@ -122,7 +125,7 @@ describe('المالُ نصّاً — لا حسابَ على حقلٍ نصّيّ
   it('⭐ لا عمليةَ حسابية ولا مقارنة على حقلٍ من الأنواع النصّية في الواجهة كلِّها', () => {
     const hits = scan(prog, appFiles);
     expect(hits.map((h) => `${h.file}:${h.line} — ${h.text} (${h.type})`)).toEqual([]);
-  }, TYPECHECK_TIMEOUT_MS);
+  });
 
   it('المُكتشِفُ مُثبَتٌ بحالتين — يمسك الحسابَ والمقارنةَ وMath ويترك fmt وnum والوصلَ في قالب', () => {
     const sample = join(SRC, 'lib', '__money-text-guard-sample__.tsx');
@@ -157,5 +160,5 @@ describe('المالُ نصّاً — لا حسابَ على حقلٍ نصّيّ
     // الأربعةُ السيّئة (الأسطر 5–8) تُمسَك — والحسنة (12–15) لا.
     expect(new Set(byLine)).toEqual(new Set([5, 6, 7, 8]));
     expect(hits.every((h) => h.type === 'MoneyText')).toBe(true);
-  }, TYPECHECK_TIMEOUT_MS);
+  });
 });

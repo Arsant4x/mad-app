@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { KSA_UTC_OFFSET_MIN, qrTimestamp, wallClockOf } from './wallClock';
+
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (0.1 ث — ثلاثةُ أضعافه دون الافتراضيّ، فالميزانيةُ الافتراضيُّ نفسُه).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 5_000 });
 
 /**
  * `ق-١٨٥`/`ق-١٨٨` — القيم نفسها التي يثبّتها اختبار الخادم

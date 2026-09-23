@@ -6,6 +6,10 @@ import * as api from '../../api/cashDrawers';
 import type { CodeBandStatus } from '../../api/banks';
 import { listBranches } from '../../api/branches';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (9.5 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 29_000 });
+
 vi.mock('../../api/cashDrawers');
 vi.mock('../../api/branches', () => ({ listBranches: vi.fn() }));
 

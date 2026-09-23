@@ -8,6 +8,10 @@ import { listBranches } from '../../api/branches';
 import { listCustomers } from '../../api/customers';
 import { listSuppliers } from '../../api/suppliers';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (10.0 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 31_000 });
+
 vi.mock('../../api/reports');
 vi.mock('../../api/accounts', () => ({ listAccounts: vi.fn() }));
 vi.mock('../../api/branches', () => ({ listBranches: vi.fn() }));

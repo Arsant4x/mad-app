@@ -12,6 +12,10 @@ vi.mock('../../api/tasks', async (orig) => ({
 
 import { listMyTasks } from '../../api/tasks';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (5.1 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 16_000 });
+
 const task = (over: Record<string, unknown> = {}) => ({
   id: 't1',
   title: 'راجع بند التأمين',

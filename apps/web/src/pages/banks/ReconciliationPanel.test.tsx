@@ -5,6 +5,10 @@ import { ReconciliationPanel } from './ReconciliationPanel';
 import * as banks from '../../api/banks';
 import { listAccounts } from '../../api/accounts';
 
+// ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): ثلاثةُ أضعاف أعلى زمنٍ مقيسٍ له تحت حِمل الحزمة كاملةً (12.6 ث).
+//    معلنةٌ هنا لا في الإعداد العامّ — فرفعُ السقف العامّ يُخفي البطيءَ ولا يسمّيه.
+vi.setConfig({ testTimeout: 38_000 });
+
 vi.mock('../../api/banks');
 vi.mock('../../api/accounts', () => ({ listAccounts: vi.fn() }));
 
