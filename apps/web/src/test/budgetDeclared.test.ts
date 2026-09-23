@@ -28,8 +28,9 @@ vi.setConfig({ testTimeout: 5_000 });
  * ② **ولا مهلةَ على اختبارٍ بعينه** — المهلةُ في موضعٍ واحد يُقرأ ويُحرَس؛ ومن احتاج اختبارُه أكثرَ **رفع ميزانيةَ
  * ملفّه فرآها من يقرأ** · ③ **ولا سقفَ عامّاً في الإعداد ولا في سطر الأمر**.
  *
- * ⚠️ **وحدُّه معلَن**: المهلةُ على **الاختبارات**؛ والخطّافاتُ على افتراضيّها (`10 ث`) — ولم يسقط منها خطّافٌ
- * واحد في التشغيلات الثلاثة. ويُمدّ الحكمُ إليها **حين يسقط أوّلُها** لا قبله.
+ * ⚠️ **وحدُّه معلَن**: الميزانيةُ المشتقّةُ على **الاختبارات**؛ والخطّافاتُ على افتراضيّها (`10 ث`) — ولم يسقط منها
+ * خطّافٌ واحد في التشغيلات الثلاثة. **لكن لا رقمَ على خطّافٍ بعينه كذلك** (②)؛ ومن احتاج أكثر أعلن `hookTimeout`
+ * في رأس ملفّه — فيبقى الموضعُ واحداً.
  */
 
 const SRC = join(__dirname, '..');
@@ -64,6 +65,12 @@ function setConfigBudget(node: ts.Node): number | null | undefined {
 }
 
 const TEST_CALLEES = new Set(['it', 'test']);
+/**
+ * والخطّافاتُ كذلك: رقمٌ على `beforeEach` موضعٌ ثانٍ كرقمٍ على `it`. ⚠️ **أمسكه الإثباتُ العكسيّ لا القراءة**:
+ * أوّلُ كسرٍ حُقن ليعيد `}, 15000);` وقع على `beforeEach` لا على `it` فمرّ الحارسُ أخضر — فكان الكسرُ في غير
+ * موضعه **وكان في الحارس ثقبٌ حقيقيّ معاً**. ومن احتاج خطّافُه أكثرَ من افتراضيّه أعلن `hookTimeout` في رأس ملفّه.
+ */
+const HOOK_CALLEES = new Set(['beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
 
 /** اسمُ مُستدعي الاختبار — `it` · `test` · `it.only` · `it.skip` · `it.concurrent` … */
 function isTestCall(node: ts.CallExpression): boolean {
@@ -106,6 +113,8 @@ export function readBudget(fileName: string, text: string): BudgetReading {
         const hasTimeoutOption = (a?: ts.Expression) => !!a && ts.isObjectLiteralExpression(a) && a.properties.some((p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'timeout');
         if ((third && !ts.isObjectLiteralExpression(third)) || hasTimeoutOption(second) || hasTimeoutOption(third)) perTest.push(line(node));
       }
+      // الخطّافُ: `beforeEach(fn, timeout?)` — أيُّ وسيطٍ ثانٍ مهلةٌ على خطّافٍ بعينه.
+      if (ts.isIdentifier(node.expression) && HOOK_CALLEES.has(node.expression.text) && node.arguments.length >= 2) perTest.push(line(node));
     }
     ts.forEachChild(node, visit);
   };
@@ -176,8 +185,8 @@ describe('كلُّ ملفِّ اختبارٍ في الواجهة يُعلن مي
     expect(inside.budget).toBeNull();
     expect(inside.misplaced).toEqual([2]);
 
-    const perTest = readBudget('e.test.ts', src(call('9000'), "it('t', () => {}, 15000);", "test('u', () => {}, { timeout: 1 });", "it('ok', () => {});"));
-    expect(perTest.perTest).toEqual([2, 3]);
+    const perTest = readBudget('e.test.ts', src(call('9000'), "it('t', () => {}, 15000);", "test('u', () => {}, { timeout: 1 });", "it('ok', () => {});", 'beforeEach(() => {}, 15000);', 'afterAll(() => {});'));
+    expect(perTest.perTest).toEqual([2, 3, 5]);
 
     expect(globalTimeoutKeys(src('export default { test: { testTimeout: 60000 } };'))).toEqual(['testTimeout']);
     expect(globalTimeoutKeys(src('export default { test: { environment: "jsdom" } };'))).toEqual([]);
