@@ -1,7 +1,9 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { isValidSlug, normalizeSlug } from './slug.util';
 import { assertKeyBelongsToCompany, FilesService } from '../files/files.service';
 
 const PROFILE_SELECT = {
@@ -27,6 +29,7 @@ const PROFILE_SELECT = {
   leaveApprovalRequiresTwoPersons: true,
   creditLimitHardBlock: true,
   posOfflineGapMinutes: true,
+  slug: true,
 } as const;
 
 /** Matches CompanyUsersService's assertIsCompanyOwner — only the company
@@ -61,8 +64,38 @@ export class CompanyProfileService {
     return this.prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: PROFILE_SELECT });
   }
 
+  /**
+   * **معرّفُ النطاق الفرعيّ — يُحجز ولا يُعاد** (`ق-١٣٠٣` · ك/⑬A2).
+   *
+   * ثلاثةُ أحكامٍ في موضعٍ واحد: **الشكلُ** (مُطبَّعاً أوّلاً) · **والمحجوزُ لا يُمنح**
+   * (محجوزاتُ المنصّة، والمتروكُ من غيره **ومنه هو**) · **والقديمُ يُحجز عند الاستبدال**.
+   *
+   * ⚠️ **وكلُّه في معاملةٍ واحدة**: طلبان متزامنان على المعرّف نفسِه يمرّان على القراءة
+   * نفسِها، **والقيدُ الفريد يردّ الثاني** — فالفحصُ يُسمّي السبب، والقيدُ يمنعه.
+   */
+  private async resolveSlug(tx: Prisma.TransactionClient, companyId: string, requested: string, current: string | null): Promise<string | null> {
+    const slug = normalizeSlug(requested);
+    if (slug === current) return null;
+    if (!isValidSlug(slug)) throw new BadRequestException(MSG.slug_invalid);
+
+    // **المحجوزُ لا يُمنح ولو كان لصاحبه** — والرسالةُ تقول ذلك صراحةً بدل أن تُبهم.
+    const reserved = await tx.reservedSlug.findUnique({ where: { slug }, select: { slug: true } });
+    if (reserved) throw new ConflictException(formatMessage(MSG.slug_reserved, { slug }));
+
+    const holder = await tx.company.findUnique({ where: { slug }, select: { id: true } });
+    if (holder && holder.id !== companyId) throw new ConflictException(formatMessage(MSG.slug_taken, { slug }));
+
+    // **القديمُ يُحجز لحظةَ الاستبدال** — فلا يأخذه غيرُه وروابطُه ما زالت تشير إليه.
+    if (current) await tx.reservedSlug.create({ data: { slug: current } });
+    return slug;
+  }
+
   async update(companyId: string, actorType: string, dto: UpdateCompanyProfileDto) {
     assertIsCompanyOwner(actorType);
+
+    // ⛔ **ولا يُمحى بعد اختياره**: `''` على هذا الحقل يعني «امحه» في بقيّة الحقول،
+    //    وهنا محوٌ يترك روابطَ التاجر بلا وجهة. يُستبدل ولا يُفرَّغ.
+    if (dto.slug !== undefined && dto.slug.trim() === '') throw new BadRequestException(MSG.slug_not_cleared);
 
     const logoFileKey = emptyToNull(dto.logoFileKey);
     // A storage key is just a string on this row — nothing stops a caller from
@@ -74,9 +107,16 @@ export class CompanyProfileService {
 
     const previous = logoFileKey !== undefined ? await this.prisma.company.findUnique({ where: { id: companyId }, select: { logoFileKey: true } }) : null;
 
-    const updated = await this.prisma.company.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      let slug: string | null = null;
+      if (dto.slug !== undefined) {
+        const row = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { slug: true } });
+        slug = await this.resolveSlug(tx, companyId, dto.slug, row.slug);
+      }
+      return tx.company.update({
       where: { id: companyId },
       data: {
+        ...(slug !== null ? { slug } : {}),
         // يُكتب إن أُرسل وحده — فالحقل الذي لم يُرسَل **يبقى كما هو**، وهو معنى
         // `PATCH`. (وقبلها كان `dto.legalName.trim()` يفترض وجوده دائماً.)
         ...(dto.legalName !== undefined ? { legalName: dto.legalName.trim() } : {}),
@@ -101,6 +141,7 @@ export class CompanyProfileService {
         ...(dto.posOfflineGapMinutes !== undefined ? { posOfflineGapMinutes: dto.posOfflineGapMinutes } : {}),
       },
       select: PROFILE_SELECT,
+      });
     });
 
     // Replacing or clearing the logo leaves the old object orphaned in storage

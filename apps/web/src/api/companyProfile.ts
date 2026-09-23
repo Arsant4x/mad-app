@@ -20,6 +20,8 @@ export interface CompanyProfile {
   additionalNumber: string | null;
   unitNumber: string | null;
   logoFileKey: string | null;
+  /** معرّفُ النطاق الفرعيّ — `alfa` في `alfa.rikzapp.com` (ق-١٣٠٣). `null` حتى تختاره المنشأة. */
+  slug: string | null;
   /** Freezes properties/contracts company-wide. */
   masterDataLocked: boolean;
   /** حدُّ فصل وقائع الانقطاع بالدقائق — إعدادٌ للتاجر يُعرَض مع كل واقعة (ق-٢٠١). */
@@ -44,6 +46,13 @@ export interface CompanyProfileInput {
   unitNumber?: string;
   /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
   logoFileKey?: string;
+  /**
+   * معرّفُ النطاق الفرعيّ (`ق-١٣٠٣`) — **يُرسَل حين يتغيّر وحده**، خلافاً لبقيّة الحقول.
+   *
+   * ⚠️ فـ`''` هنا **ليس محواً بل رفضٌ من الخادم**: المعرّف لا يُمحى بعد اختياره، والمنشأةُ
+   * التي لم تختره بعد يُسقَط الحقلُ من طلبها أصلاً — وإرسالُه فارغاً كان سيُسقط كلَّ حفظٍ لها.
+   */
+  slug?: string;
   masterDataLocked?: boolean;
   posOfflineGapMinutes?: number;
 }

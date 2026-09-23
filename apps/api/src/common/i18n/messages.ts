@@ -344,6 +344,11 @@ export const MSG = {
   company_user_not_found: 'companyUsers.not_found',
   company_users_owner_only: 'companyUsers.owner_only',
   company_profile_owner_only: 'companyProfile.owner_only',
+  /** معرّفُ النطاق الفرعيّ (`ق-١٣٠٣` · ك/⑬A2). */
+  slug_invalid: 'companyProfile.slug_invalid',
+  slug_taken: 'companyProfile.slug_taken',
+  slug_reserved: 'companyProfile.slug_reserved',
+  slug_not_cleared: 'companyProfile.slug_not_cleared',
 
   // zatca
   zatca_profile_incomplete: 'zatca.profile_incomplete',
@@ -1112,6 +1117,19 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.company_profile_owner_only]: {
     ar: 'تعديل بيانات المنشأة متاح لحساب الشركة الرئيسي فقط',
     en: 'Editing company details is restricted to the main company account',
+  },
+  [MSG.slug_invalid]: {
+    ar: 'معرّف النطاق يجب أن يكون من ٣ إلى ٤٠ حرفاً: حروف إنجليزية صغيرة وأرقام وشرطة، ولا يبدأ بشرطة ولا ينتهي بها',
+    en: 'The subdomain must be 3–40 characters: lowercase letters, digits and hyphens, not starting or ending with a hyphen',
+  },
+  [MSG.slug_taken]: { ar: 'معرّف النطاق "{slug}" مستخدَم بالفعل', en: 'The subdomain "{slug}" is already in use' },
+  [MSG.slug_reserved]: {
+    ar: 'معرّف النطاق "{slug}" محجوز ولا يُمنح — وإن كان لك سابقاً فالمتروك لا يعود، لأن روابطه القديمة تبقى تشير إليه',
+    en: 'The subdomain "{slug}" is reserved and cannot be granted — a released identifier never returns, since old links still point at it',
+  },
+  [MSG.slug_not_cleared]: {
+    ar: 'لا يُمحى معرّف النطاق بعد اختياره — يُستبدل بغيره، والقديم يبقى محجوزاً',
+    en: 'A subdomain cannot be cleared once chosen — replace it instead; the old one stays reserved',
   },
 
   [MSG.zatca_profile_incomplete]: { ar: 'أكمل الاسم القانوني والرقم الضريبي في بيانات المنشأة قبل الإرسال لهيئة الزكاة', en: 'Complete the legal name and VAT number in the company profile before submitting to ZATCA' },

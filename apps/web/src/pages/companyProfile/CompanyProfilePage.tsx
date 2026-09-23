@@ -11,6 +11,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const POSTAL_CODE_PATTERN = /^\d{5}$/;
 /** الرقم الإضافي أربع خانات — نفس صرامة الرمز البريدي وعند الكتابة فقط. */
 const ADDITIONAL_NUMBER_PATTERN = /^\d{4}$/;
+/**
+ * معرّفُ النطاق الفرعيّ (`ق-١٣٠٣`) — **والخادمُ هو الحَكَم**: هذا النمطُ يقول للتاجر
+ * ما الخطأ قبل الإرسال، وقيدُ `CHECK` في القاعدة هو الذي يمنع. (كما `VAT_PATTERN`.)
+ */
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
 
 type FieldErrors = Partial<Record<keyof CompanyProfileInput, string>>;
 
@@ -33,6 +38,10 @@ export function CompanyProfilePage() {
   const [postalCode, setPostalCode] = useState('');
   const [additionalNumber, setAdditionalNumber] = useState('');
   const [unitNumber, setUnitNumber] = useState('');
+  // ⚠️ **المعرّفُ يُرسَل حين يتغيّر وحده** — ولذلك تُحفظ قيمتُه المحمَّلة: منشأةٌ لم تختره
+  //    بعدُ كانت سترسله `''` مع كلِّ حفظ، **فيُردّ حفظُها كلُّه** بحكم «لا يُمحى».
+  const [slug, setSlug] = useState('');
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -66,6 +75,8 @@ export function CompanyProfilePage() {
         setAdditionalNumber(p.additionalNumber ?? '');
         setUnitNumber(p.unitNumber ?? '');
         setLogoFileKey(p.logoFileKey ?? '');
+        setSlug(p.slug ?? '');
+        setSavedSlug(p.slug ?? null);
         setMasterDataLocked(p.masterDataLocked ?? false);
       })
       .finally(() => setLoading(false));
@@ -134,8 +145,18 @@ export function CompanyProfilePage() {
     if (additionalNumber.trim() && !ADDITIONAL_NUMBER_PATTERN.test(additionalNumber.trim())) {
       errors.additionalNumber = i18n.t('err_additional_number');
     }
+    // التطبيعُ قبل الفحص كما في الخادم — «Alfa » معرّفٌ صحيح، فلا يُردّ على التاجر ما يقصده.
+    if (slug.trim() && !SLUG_PATTERN.test(slug.trim().toLowerCase())) {
+      errors.slug = i18n.t('err_slug_format');
+    }
     return errors;
   }
+
+  /** ما سيُرسَل فعلاً — `null` حين لا تغيير، فلا يُرسَل الحقلُ أصلاً. */
+  const slugToSend = (() => {
+    const next = slug.trim().toLowerCase();
+    return next && next !== savedSlug ? next : null;
+  })();
 
   async function handleSave() {
     setSaved(false);
@@ -146,7 +167,8 @@ export function CompanyProfilePage() {
 
     setSaving(true);
     try {
-      await updateCompanyProfile({
+      const profile = await updateCompanyProfile({
+        ...(slugToSend ? { slug: slugToSend } : {}),
         legalName: legalName.trim(),
         vatNumber: vatNumber.trim(),
         crNumber: crNumber.trim(),
@@ -164,6 +186,9 @@ export function CompanyProfilePage() {
         logoFileKey,
         masterDataLocked,
       });
+      // **يُقرأ المعرّفُ من ردّ الخادم لا من حالة الشاشة** — فهو الذي طبّعه وقبله.
+      setSlug(profile.slug ?? '');
+      setSavedSlug(profile.slug ?? null);
       setSaved(true);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -216,6 +241,30 @@ export function CompanyProfilePage() {
             <input className="num" value={crNumber} onChange={(e) => setCrNumber(e.target.value)} disabled={!canEdit} placeholder="1234567890" />
             {fieldErrors.crNumber && <p className="error-text">{fieldErrors.crNumber}</p>}
           </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title" style={{ marginBottom: 14 }}>
+          معرّف النطاق الفرعي
+        </div>
+        <div className="field">
+          <label>المعرّف</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, direction: 'ltr' }}>
+            <input className="num" value={slug} onChange={(e) => setSlug(e.target.value)} disabled={!canEdit} placeholder="alfa" style={{ maxWidth: 220 }} />
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>.rikzapp.com</span>
+          </div>
+          {fieldErrors.slug && <p className="error-text">{fieldErrors.slug}</p>}
+          <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+            حروف إنجليزية صغيرة وأرقام وشرطة، من ٣ إلى ٤٠ حرفاً. يُستخدم في رابط متجرك وروابط مستنداتك.
+          </p>
+          {/* ⚠️ التحذيرُ قبل الحفظ لا بعده — فالقديمُ يُحجز ولا يعود، ولو لصاحبه. */}
+          {canEdit && savedSlug && slugToSend && (
+            <p className="error-text" style={{ marginTop: 6 }}>
+              سيُستبدل «{savedSlug}» بـ«{slugToSend}» — والمعرّف القديم يبقى محجوزاً ولا يعود إليك، لأن الروابط المنشورة به تظل تشير إليه.
+            </p>
+          )}
+          {canEdit && !savedSlug && <p style={{ fontSize: 11, color: 'var(--muted)' }}>لم تختر معرّفاً بعد. يُحفظ مع «حفظ البيانات».</p>}
         </div>
       </div>
 
