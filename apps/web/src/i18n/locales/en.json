@@ -158,5 +158,6 @@
   "nav_pos": "POS",
   "nav_quotes": "Quotes",
   "err_additional_number": "The additional number must be 4 digits",
-  "nav_payments": "Receipts"
+  "nav_payments": "Receipts",
+  "err_slug_format": "Subdomain: 3–40 characters — lowercase letters, digits and hyphens, not starting or ending with a hyphen"
 }

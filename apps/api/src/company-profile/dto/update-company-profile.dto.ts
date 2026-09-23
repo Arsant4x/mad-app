@@ -24,6 +24,23 @@ export class UpdateCompanyProfileDto {
   @MaxUtf8Bytes(ZATCA_QR_MAX_VALUE_BYTES, { message: MSG.legal_name_too_long_for_qr })
   legalName?: string;
 
+  /**
+   * **معرّفُ النطاق الفرعيّ** (`ق-١٣٠٣` · ك/⑬A2) — `alfa` في `alfa.rikzapp.com`.
+   *
+   * ⚠️ **والشكلُ يُفحص في الخدمة لا هنا وحدَه**: التطبيعُ (`Alfa ` ⟵ `alfa`) يسبق
+   * الفحص، فمطابقةٌ في الـ`DTO` تردّ ما كان صحيحاً بعد تطبيعه. **والقيدُ في القاعدة
+   * هو الحدّ الأخير.**
+   */
+  /**
+   * ⛔ **ولا `@MinLength(1)` هنا** خلافاً لـ`legalName`: كانت تردّ `''` برسالة
+   * `class-validator` الإنجليزية (**«slug must be longer than or equal to 1
+   * characters»** — مقيسةٌ في الحزمة) **فتحجب رسالةَ «لا يُمحى» ومعها سببُ المنع**.
+   * فالمنعُ في الخدمة بنصٍّ يقول للتاجر ما يفعل: **يُستبدل ولا يُفرَّغ**.
+   */
+  @IsOptional()
+  @IsString()
+  slug?: string;
+
   /// 15 digits, must start and end with '3' (the Saudi VAT number format).
   /// @ValidateIf skips the @Matches check for '' (treated as "clear the
   /// field") and for omitted values (handled by @IsOptional) — only a
