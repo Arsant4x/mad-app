@@ -77,7 +77,12 @@ export function allocateByWeight(total: number, weights: number[]): number[] {
   return out;
 }
 
-/** طبقاتُ استلامٍ حيّة لسطر شراء — بترتيب الاقتناء، وبلا طبقات استلامٍ يُعكس الآن. */
+/**
+ * طبقاتُ استلامٍ حيّة لسطر شراء — بترتيب الاقتناء، وبلا طبقات استلامٍ يُعكس الآن.
+ *
+ * **على مستوى المنشأة بحقّها**: حركاتُ استلام سطرٍ بعينه تُقرأ بمعرّفه لا بفرع القارئ — فالحصّةُ تتبع البضاعةَ حيث
+ * استُلمت، وقراءةٌ مقصورةٌ على فرعٍ تُسقط طبقةً فتُعيد حصّتَها إلى الوسيط وهي على الرفّ.
+ */
 async function liveLayersOf(tx: Tx, purchaseLineId: string, excludeReceiptId?: string) {
   const movements = await tx.stockMovement.findMany({
     where: {
