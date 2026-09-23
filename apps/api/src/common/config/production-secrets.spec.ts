@@ -90,3 +90,51 @@ describe('حارس أسرار الإنتاج', () => {
     }
   });
 });
+
+/**
+ * ⑬A1 (`ق-١٣٣٣`) — **ما يُطلب حين يُفعَّل البريد**: مرسِلٌ من نطاقٍ يُصادَق، وحدٌّ يوميٌّ معلَن.
+ * وبلا `SMTP_HOST` لا يُطلبان — فالحارسُ على تفعيل الميزة لا على كلِّ إقلاع.
+ */
+describe('⑬A1 — البريدُ المفعَّل يُطلب له مرسِلٌ وحدٌّ معلَن (ق-١٣٣٣)', () => {
+  const MAIL = { SMTP_HOST: 'smtp.email.me-riyadh-1.oci.oraclecloud.com', SMTP_FROM: '"ركز" <no-reply@rikzapp.com>', MAIL_DAILY_LIMIT: '200' };
+  const reasons = (over: Record<string, string | undefined>): string => {
+    try {
+      assertProductionSecrets(withEnv(over));
+      return '';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+
+  it('① بلا SMTP_HOST لا يُطلب مرسِلٌ ولا حدّ — والإقلاعُ القائمُ بلا بريدٍ لا يسقط', () => {
+    expect(reasons({ SMTP_FROM: undefined, MAIL_DAILY_LIMIT: undefined })).toBe('');
+  });
+
+  it('② معه ومع الاثنين صحيحَين ⟸ يمرّ', () => {
+    expect(reasons(MAIL)).toBe('');
+    expect(reasons({ ...MAIL, SMTP_FROM: 'no-reply@rikzapp.com', MAIL_DAILY_LIMIT: '50000' })).toBe('');
+  });
+
+  it('③ الحدُّ غائباً أو ليس عدداً صحيحاً موجباً ⟸ يُرفض ويسمّي مصدرَه في وحدة التحكّم', () => {
+    for (const bad of [undefined, '0', 'مئة', '١٠٠', '100.5']) {
+      const msg = reasons({ ...MAIL, MAIL_DAILY_LIMIT: bad });
+      expect(msg).toContain('MAIL_DAILY_LIMIT');
+      expect(msg).toContain('max-emails-day');
+    }
+  });
+
+  it('⭐ ④ المرسِلُ غائباً أو من نطاقٍ لا يُصادَق ⟸ يُرفض — فالافتراضيُّ mad-app.local لا يخرج بريداً', () => {
+    expect(reasons({ ...MAIL, SMTP_FROM: undefined })).toContain('SMTP_FROM — غير مضبوط');
+    expect(reasons({ ...MAIL, SMTP_FROM: 'no-reply@mad-app.local' })).toContain('نطاقٌ محلّيّ لا يُصادَق');
+    expect(reasons({ ...MAIL, SMTP_FROM: 'ركز' })).toContain('بلا عنوانٍ صحيح');
+    // وقيمةُ المثال تُمسك كسائر الأسرار.
+    expect(reasons({ ...MAIL, SMTP_FROM: 'no-reply@example.com' })).toContain('SMTP_FROM — ما زال يحمل قيمة المثال');
+  });
+
+  it('⑤ ويُجمعان مع غيرهما في رسالةٍ واحدة — لا دورةَ إصلاحٍ لكلِّ متغيّر', () => {
+    const msg = reasons({ ...MAIL, SMTP_FROM: undefined, MAIL_DAILY_LIMIT: undefined, JWT_ACCESS_SECRET: undefined });
+    expect(msg).toContain('JWT_ACCESS_SECRET');
+    expect(msg).toContain('SMTP_FROM');
+    expect(msg).toContain('MAIL_DAILY_LIMIT');
+  });
+});

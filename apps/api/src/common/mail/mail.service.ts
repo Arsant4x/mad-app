@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { MailQuotaService } from './mail-quota.service';
+import { mailQuotaCrossing, parseMailDailyLimit } from './mail-quota.util';
 
 /**
  * Outbound email, behind plain SMTP env vars so it works with ANY provider the
@@ -12,15 +14,25 @@ import * as nodemailer from 'nodemailer';
  * With no SMTP_HOST configured (local dev), the message is written to the
  * server log instead — the reset link still exists somewhere the developer can
  * grab it, and nothing silently pretends an email was sent.
+ *
+ * ⑬A1 (`ق-١٣٣٣`): **وكلُّ رسالةٍ تُعدّ في نافذة «آخر أربعٍ وعشرين ساعة» عند المزوّد** (`MailQuotaService`)،
+ * والحدُّ مُعلَنٌ في `MAIL_DAILY_LIMIT` كما تعرضه حجرةُ الحدود في وحدة التحكّم — **فيُنذر السجلُّ عند ثمانين
+ * بالمئة ليُطلب الرفعُ قبل أن يُبلغ**، ويُخطئ باسمٍ عند البلوغ. والإرسالُ يمضي في الحالين: المزوّدُ هو الحَكَم.
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly transporter: nodemailer.Transporter | null;
   private readonly from: string;
+  /** الحدُّ اليوميّ المعلَن — `null` بلا إعلان (فالعدّادُ يعدّ ولا يُنذر، وحارسُ الإقلاع يمنعه في الإنتاج). */
+  private readonly dailyLimit: number | null;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly quota: MailQuotaService,
+  ) {
     const host = this.config.get<string>('SMTP_HOST');
+    this.dailyLimit = parseMailDailyLimit(this.config.get<string>('MAIL_DAILY_LIMIT'));
     this.from = this.config.get<string>('SMTP_FROM', 'no-reply@mad-app.local');
     this.transporter = host
       ? nodemailer.createTransport({
@@ -53,6 +65,30 @@ export class MailService {
       this.logger.warn(`SMTP not configured — email to ${to} logged instead:\n--- ${subject} ---\n${text}`);
       return;
     }
+    await this.countTowardsDailyLimit();
     await this.transporter.sendMail({ from: this.from, to, subject, text });
+  }
+
+  /**
+   * يعدّ الرسالةَ **قبل** تسليمها للمزوّد — فالمرفوضُ منه يُعدّ، والإنذارُ يقع مبكّراً لا متأخّراً — ويُنذر مرّةً
+   * عند عبور العتبة. **ولا يحجب الإرسال إن تعذّر العدّ**: العدّادُ إنذارٌ لا بوّابة، ورسالةُ استعادة كلمة المرور
+   * أهمُّ من عدّها؛ فيُخطئ السجلُّ باسمٍ ويمضي الإرسال.
+   */
+  private async countTowardsDailyLimit(): Promise<void> {
+    try {
+      const { before, after } = await this.quota.recordSend();
+      const crossing = mailQuotaCrossing(before, after, this.dailyLimit);
+      if (crossing === 'warn') {
+        this.logger.warn(
+          `البريدُ المُرسَل في آخر ٢٤ ساعة بلغ ${after} من حدّ المزوّد ${this.dailyLimit} (٨٠٪) — اطلب رفعَ الحدّ من وحدة التحكّم قبل أن يُبلغ (MAIL_DAILY_LIMIT · ق-١٣٣٣).`,
+        );
+      } else if (crossing === 'limit') {
+        this.logger.error(
+          `البريدُ المُرسَل في آخر ٢٤ ساعة بلغ حدَّ المزوّد (${this.dailyLimit}) — ما بعده يرفضه المزوّد حتى تنقضي النافذة أو يُرفع الحدّ (MAIL_DAILY_LIMIT · ق-١٣٣٣).`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`تعذّر عدُّ الرسالة في حدّ البريد اليوميّ — تُرسَل بلا عدّ: ${(err as Error).message}`);
+    }
   }
 }

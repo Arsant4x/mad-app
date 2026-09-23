@@ -17,7 +17,12 @@
  *
  * ③ **يسري في الإنتاج وحده.** التطوير والاختبار يعملان بقيم مريحة كما هي،
  *    وإلا تحوّل الحارس إلى عائق يومي فيُعطَّل — وحارسٌ معطَّل ليس حارساً.
+ *
+ * ④ **وما يحرس ميزةً تُفعَّل يسري حين تُفعَّل وحدَها** (⑬A1 · `ق-١٣٣٣`): بلا `SMTP_HOST` لا بريد، فلا
+ *    مرسِلَ ولا حدَّ يُطلبان؛ **ومعه يُطلبان** — فالبريدُ لا يخرج من نطاقٍ افتراضيٍّ لا يُصادَق، ولا بحدٍّ لم يُعلَن.
  */
+
+import { parseMailDailyLimit } from '../mail/mail-quota.util';
 
 /** قيم المثال والتطوير المعروفة — وجودها في الإنتاج يعني أن الملف نُسخ ولم يُملأ. */
 const KNOWN_PLACEHOLDERS = [
@@ -64,6 +69,51 @@ const REQUIRED: SecretRule[] = [
   },
 ];
 
+/** نطاقُ عنوان المرسِل — «اسمٌ <no-reply@rikzapp.com>» أو «no-reply@rikzapp.com» — أو `null` بلا عنوان. */
+function senderDomain(from: string): string | null {
+  const open = from.lastIndexOf('<');
+  const close = from.lastIndexOf('>');
+  const addr = open >= 0 && close > open ? from.slice(open + 1, close) : from;
+  const at = addr.lastIndexOf('@');
+  if (at < 1) return null;
+  const domain = addr.slice(at + 1).trim().toLowerCase();
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain) ? domain : null;
+}
+
+/**
+ * ⑬A1 (`ق-١٣٣٣`) — **ما يُطلب حين يُفعَّل البريد** (`SMTP_HOST` مضبوط):
+ *
+ * ⚠️ **وغيابُ `SMTP_HOST` نفسِه لا يُرفض هنا** — وهو قرارُ `ق-١١٧` («حارسُ إقلاعٍ يمنع الإقلاع بلا
+ *    `SMTP_HOST`») **ولم يُبنَ بعد**: بناؤه قبل أن يُنشئ المالكُ حجرةَ البريد في وحدة التحكّم يُسقط أوّلَ إقلاعٍ
+ *    بعده. يُفعَّل بأمرٍ حين تكتمل خطواتُ `DEPLOY.md` (البريد).
+ */
+const WHEN_MAIL: SecretRule[] = [
+  {
+    name: 'SMTP_FROM',
+    why: 'عنوانُ المرسِل، ونطاقُه هو الذي تُفحص سجلّاتُ مصادقته (SPF · DKIM · DMARC) — وبغيابه يُرسَل من no-reply@mad-app.local: نطاقٌ لا يُصادَق فيُصنَّف البريدُ مزعجاً',
+    extra: (v) => {
+      const domain = senderDomain(v);
+      if (!domain) return 'بلا عنوانٍ صحيح (no-reply@النطاق)';
+      if (domain.endsWith('.local')) return 'نطاقٌ محلّيّ لا يُصادَق';
+      return null;
+    },
+  },
+  {
+    name: 'MAIL_DAILY_LIMIT',
+    why: 'حدُّ المزوّد اليوميّ كما تعرضه حجرةُ الحدود في وحدة التحكّم (max-emails-day) — به يُنذر السجلُّ عند ٨٠٪ ليُطلب الرفعُ قبل أن يُبلغ، ولا يُكتب في الشيفرة رقمٌ لم يُقرأ منها',
+    extra: (v) => (parseMailDailyLimit(v) === null ? 'يجب أن يكون عدداً صحيحاً موجباً بأرقامٍ لاتينية' : null),
+  },
+];
+
+/**
+ * **كلُّ متغيّرٍ يقرؤه هذا الحارس** — ليُفحص أنه **يبلغ الحاوية** (`boot-vars-reach-container.spec.ts`):
+ * `docker-compose.prod.yml` يسرد بيئةَ `api` بالاسم، **فمتغيّرٌ يطلبه الحارسُ ولا يمرّره التركيبُ يُسقط الإقلاعَ
+ * ولو ضُبط في `.env.production`** — والمشغِّلُ يرى «غير مضبوط» عن قيمةٍ كتبها بيده.
+ */
+export function bootGuardedVariables(): string[] {
+  return ['NODE_ENV', 'SMTP_HOST', ...REQUIRED.map((r) => r.name), ...WHEN_MAIL.map((r) => r.name)];
+}
+
 export class ProductionSecretsError extends Error {}
 
 /**
@@ -74,8 +124,9 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
   if (env.NODE_ENV !== 'production') return;
 
   const problems: string[] = [];
+  const rules = (env.SMTP_HOST ?? '').trim() ? [...REQUIRED, ...WHEN_MAIL] : REQUIRED;
 
-  for (const rule of REQUIRED) {
+  for (const rule of rules) {
     const raw = env[rule.name];
     const value = (raw ?? '').trim();
 

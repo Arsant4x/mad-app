@@ -42,6 +42,10 @@ dc() { docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"; }
 [[ -f ./ops/deploy/recreate-guard.sh ]] || die "لا أجد ops/deploy/recreate-guard.sh — الحارسُ بلا دوالّه."
 # shellcheck source=ops/deploy/recreate-guard.sh
 source ./ops/deploy/recreate-guard.sh
+# دوالُّ فحص سجلّات مصادقة البريد (ق-١٣٣٣ · ⑬A1) — في ملفٍّ يُختبر وحدَه بـ`dig` مزيَّف.
+[[ -f ./ops/mail/mail-dns-check.sh ]] || die "لا أجد ops/mail/mail-dns-check.sh — فحصُ سجلّات البريد بلا دوالّه."
+# shellcheck source=ops/mail/mail-dns-check.sh
+source ./ops/mail/mail-dns-check.sh
 
 # مِن داخل حاوية الواجهة — بصمة الحزمة التي يقدّمها nginx فعلاً.
 bundle_hash() {
@@ -70,6 +74,13 @@ for s in "${MUST_RECREATE[@]}"; do
    هذا هو خطأ 2026-08-14 نفسه: البناء سينجح ويخرج بالرمز 0 دون أن يلمس $s."
 done
 say "${GRN}✔${RST} $COMPOSE_FILE يعرّف: $(tr '\n' ' ' <<<"$services")"
+
+# ⑬A1 (ق-١٣٣٣): **لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة** — أوّلُ دفعةِ بريدٍ بلا مصادقة
+#    تُصنّف النطاقَ مزعجاً، وسمعتُه لا تُستردّ بسطر. **والنداءُ في شرطٍ عمداً**: `set -e` لا يسري داخل
+#    دالّةٍ تُنادى في `if` — فيُبلَّغ عن الثلاثة كلِّها لا عن أوّل غائب.
+if ! mail_dns_check "$ENV_FILE"; then
+  die "سجلّاتُ مصادقة البريد ناقصة والبريدُ مفعَّل (SMTP_HOST) — أكمِلها كما في DEPLOY.md (البريد: SPF · DKIM · DMARC) ثم أعد النشر."
+fi
 
 # ═══ ٢) خط الأساس — يُلتقط قبل أي تغيير ══════════════════════════════════
 head_ "خط الأساس"
