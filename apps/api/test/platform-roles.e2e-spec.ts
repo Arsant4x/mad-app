@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (`ق-١٢٨٥`) — **ثلاثةُ أضعاف المقيس لا رقمٌ مختار**: `75.6 s` على القاعدة
 //    النظيفة، **وجُلُّها في `beforeAll`** (تركيبُ `AppModule` ثم **خمسةُ مديرين بخمس تهشيرات
@@ -102,8 +103,15 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
   });
 
   it('⑥ وفاعلُ المنشأة يُردّ من مسارات المنصّة كما كان — الدورُ يضيّق ولا يفتح', async () => {
-    const merchant = await http().post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
-    if (merchant.status !== 200) return; // بذرةٌ بلا منشأة العرض — لا يُدّعى ما لم يُقس
-    await http().get('/companies').set('Authorization', `Bearer ${merchant.body.accessToken}`).expect(403);
+    // ⚠️ **منشأةٌ من صنع الحزمة لا منشأةُ البذرة** (`ق-٦٥٩`): أوّلُ صياغةٍ قرأت `demo-company-a`
+    //    **وانسحبت بصمتٍ إن غابت** — فأدانها حارسُ التخطّي الصامت (`ق-٢٦٨`)، وهو محقّ:
+    //    حزمةٌ تنسحب على قاعدةٍ بلا بذرةٍ تُقرأ خضراء ولم تقس شيئاً.
+    const merchant = await registerIsolatedCompany(app, 'roles-merchant');
+    try {
+      await http().get('/companies').set('Authorization', `Bearer ${merchant.token}`).expect(403);
+      await http().get('/admin/deletion-requests').set('Authorization', `Bearer ${merchant.token}`).expect(403);
+    } finally {
+      await removeIsolatedCompany(app, merchant);
+    }
   });
 });
