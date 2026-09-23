@@ -67,7 +67,7 @@ describe('[SPEC 6.2] ⑥A1 — الخصمُ النسبيّ (e2e)', () => {
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 120000);
+  });
 
   it('① النسبةُ تُعلَن ولا تُخترع — وبلا إعلانٍ لا يُخصم المشترَك، بحدٍّ حاجبٍ يقول ما يُفعَل', async () => {
     await buy(1000, 'MIXED'); // ضريبتُها 150

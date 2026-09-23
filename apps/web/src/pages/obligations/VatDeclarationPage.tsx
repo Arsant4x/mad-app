@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { declareVatRatio, getVatDeclaration, getVatRatio, markVatFiled, settleVatRatio, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType, type VatRatioView } from '../../api/obligations';
 import { dfmt, fmt } from '../../lib/format';
-import { num0, sumMoney } from '../../lib/money';
+import { num0, pct, sumMoney } from '../../lib/money';
 
 const QUARTER_OPTIONS = [
   { value: 1, label: 'الربع الأول (يناير - مارس)' },
@@ -192,7 +192,7 @@ export function VatDeclarationPage() {
                   {ratioView.suggestion.note}
                   {ratioView.suggestion.ratio !== null && (
                     <>
-                      {' '}— المقترَح <span className="num">{(ratioView.suggestion.ratio * 100).toFixed(2)}%</span> (خاضع {fmt(ratioView.suggestion.taxableSupplies)} · معفى{' '}
+                      {' '}— المقترَح <span className="num">{pct(ratioView.suggestion.ratio)}</span> (خاضع {fmt(ratioView.suggestion.taxableSupplies)} · معفى{' '}
                       {fmt(ratioView.suggestion.exemptSupplies)})
                     </>
                   )}
@@ -214,7 +214,7 @@ export function VatDeclarationPage() {
                 {ratioView.declared?.settledAt && (
                   <p className="hint" style={{ marginBottom: 0 }}>
                     أُقرّت تسوية السنة في {dfmt(ratioView.declared.settledAt)} بنسبة فعلية{' '}
-                    <span className="num">{((ratioView.declared.settledRatio ?? 0) * 100).toFixed(2)}%</span>
+                    <span className="num">{pct(ratioView.declared.settledRatio)}</span>
                   </p>
                 )}
               </div>
@@ -323,7 +323,7 @@ export function VatDeclarationPage() {
                     <tr style={{ fontWeight: 700 }}>
                       <td data-testid="proportional-head">
                         الخصم النسبي لضريبة المدخلات (م٥١)
-                        {declaration.proportional.ratio !== null && <span className="badge draft"> النسبة {(declaration.proportional.ratio * 100).toFixed(2)}%</span>}
+                        {declaration.proportional.ratio !== null && <span className="badge draft"> النسبة {pct(declaration.proportional.ratio)}</span>}
                       </td>
                       <td></td>
                       <td></td>
@@ -354,8 +354,8 @@ export function VatDeclarationPage() {
                     {declaration.proportional.settlement && (
                       <tr data-testid="proportional-settlement">
                         <td style={{ paddingRight: 20 }}>
-                          تسوية السنة {declaration.proportional.settlement.year} (م٥١/٧) — النسبة المطبَّقة {(declaration.proportional.settlement.appliedRatio * 100).toFixed(2)}% والفعلية{' '}
-                          {(declaration.proportional.settlement.actualRatio * 100).toFixed(2)}%
+                          تسوية السنة {declaration.proportional.settlement.year} (م٥١/٧) — النسبة المطبَّقة {pct(declaration.proportional.settlement.appliedRatio)} والفعلية{' '}
+                          {pct(declaration.proportional.settlement.actualRatio)}
                         </td>
                         <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.proportional.settlement.yearApportionedBase)}</td>
                         <td className="num">{fmt(declaration.proportional.settlement.differenceText)}</td>

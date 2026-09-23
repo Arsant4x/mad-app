@@ -200,6 +200,11 @@ export class ObligationsService {
    * مستندٍ في النظام** — فمن انتقل إلينا في منتصف تلك السنة يرى أن الأساس ناقص **قبل أن
    * يُقرّ**. ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض، فلا تُكتب آلياً.
    */
+  /**
+   * **على مستوى المنشأة بحقّها**: نسبةُ الخصم النسبيّ كسرٌ من توريدات المكلَّف كلِّها (م٥١/٤)،
+   * والمكلَّفُ هو المنشأةُ برقمها الضريبيّ الواحد — فنسبةٌ تُحسب من فرعٍ دون فرعٍ **نسبةُ
+   * شخصٍ آخر**، ويُخصم بها ما لا يحقّ أو يُمنع ما يحقّ.
+   */
   vatRatio(companyId: string, year: number) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
@@ -269,6 +274,10 @@ export class ObligationsService {
    *
    * **وتُحسب من السنة كلِّها لا من الفترة**: توريداتُها الفعلية نسبةً، ومشترياتُها المشتركة
    * وعاءً. **ولا تُخزَّن** — مصدرُها الصفوفُ نفسُها، وقراءتُها اليوم كقراءتها غداً.
+   *
+   * **على مستوى المنشأة بحقّها**: التسويةُ تعديلٌ على إقرارٍ يُقدَّم عن المنشأة برقمها
+   * الضريبيّ الواحد، ونسبتُها من توريدات المكلَّف كلِّها — فتسويةٌ بفرعٍ دون فرعٍ تُعدِّل
+   * ضريبةَ مدخلاتٍ بنسبةٍ ليست نسبتَه.
    */
   private async annualSettlementWithinTx(tx: Prisma.TransactionClient, year: number, appliedRatio: number, declared: { settledAt: Date | null } | null) {
     const { from, to } = calendarYear(year);
@@ -318,6 +327,10 @@ export class ObligationsService {
    * وهو **حدٌّ أعلى مُثبَت**: الخاضعُ من كلِّ مستندٍ لا يتجاوز صافيَه كلَّه، والإشعارُ الدائن
    * يُجمع موجباً فيزيد البند ولا ينقصه. فإن قصُر الحدُّ الأعلى عن أربعين مليوناً **فالحقيقةُ
    * دونه يقيناً** ولا يُقرأ سطرٌ واحد؛ ولا يُقاس الدقيقُ إلا حيث يمكن أن يُلزِم.
+   *
+   * **على مستوى المنشأة بحقّها**: حدُّ الفترة الشهرية على «annual value of Taxable Supplies»
+   * للمكلَّف — أي المنشأةِ برقمها الضريبيّ الواحد. **فقياسٌ بفرعٍ دون فرعٍ يُنقص التوريداتِ**
+   * فلا يبلغ الحدَّ أبداً، ويسكت عن إلزامٍ قائم.
    */
   private async trailingTaxableSupplies(tx: Prisma.TransactionClient, period: ResolvedVatPeriod): Promise<number | null> {
     const window = trailingTwelveMonths(period);

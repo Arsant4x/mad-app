@@ -12,6 +12,12 @@ ALTER TABLE "companies" ADD COLUMN "vatPeriod" "VatPeriod" NOT NULL DEFAULT 'QUA
 ALTER TABLE "vat_return_filings" ADD COLUMN "periodType" "VatPeriod" NOT NULL DEFAULT 'QUARTERLY';
 ALTER TABLE "vat_return_filings" ADD COLUMN "periodNo" INTEGER;
 
+-- ⚠️ **ورفعُ `FORCE` صراحةً للنقل ثم إعادتُه** (`ق-٢٦٢`): الجدولُ تحت `FORCE ROW LEVEL
+--    SECURITY` والهجرةُ تعمل بدور المالك **بلا `app.company_id`** — فـ`UPDATE` بلا رفعٍ
+--    **يمسّ صفرَ صفوف**، ثم يسقط `SET NOT NULL` على عمودٍ ما زال فارغاً. والرفعُ لمدّة
+--    النقل وحدَها ويُعاد بعده فوراً، فضمانُ العزل لا يتغيّر بانتهاء الهجرة.
+ALTER TABLE "vat_return_filings" NO FORCE ROW LEVEL SECURITY;
+
 DO $$
 DECLARE
   moved INTEGER;
@@ -20,6 +26,8 @@ BEGIN
   GET DIAGNOSTICS moved = ROW_COUNT;
   RAISE WARNING 'ق-١٣٢٥ — وسومُ تقديمٍ نُقلت من quarter إلى periodNo بنوع QUARTERLY: %', moved;
 END $$;
+
+ALTER TABLE "vat_return_filings" FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE "vat_return_filings" ALTER COLUMN "periodNo" SET NOT NULL;
 

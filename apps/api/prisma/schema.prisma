@@ -5145,6 +5145,9 @@ model VatProportionalRatio {
   @@map("vat_proportional_ratios")
 }
 
+/// **بلا أبٍ** (`ق-٥٠١`) — **سجلٌّ لا يُحذف**: وسمُ «قُدِّم» واقعةٌ أعلنها التاجرُ عن فترة،
+/// لا ابنَ لمستندٍ ولا لطرف. **وإعلانُه كان فوقه فانفصل** حين أُدخل `enum VatPeriod` بينهما
+/// (`ق-١٣٢٥`) — والحارسُ أمسكه: **نقلُ نموذجٍ يقطع إعلانَه عنه، والنصُّ لا يشكو**.
 model VatReturnFiling {
   id        String  @id @default(uuid())
   companyId String
@@ -5185,6 +5188,9 @@ model VatReturnFiling {
 ///
 /// **والموجبُ زيادةٌ في الضريبة المستحقّة** (نقصٌ سابقٌ يُستدرك) **والسالبُ نقصٌ منها**
 /// (زيادةٌ سابقةٌ تُردّ) — فإشارةُ الصفّ هي إشارتُه في الصافي.
+///
+/// **بلا أبٍ** (`ق-٥٠١`) — **سجلٌّ لا يُحذف**: إعلانٌ عن فترتَين بأرقامهما، لا ابنَ لمستندٍ
+/// ولا لطرف. ويُسحب قبل التقديم وحدَه؛ وبعده يُصحَّح بتصحيحٍ جديد لا بمحوٍ.
 model VatReturnCorrection {
   id        String  @id @default(uuid())
   companyId String
@@ -5207,7 +5213,7 @@ model VatReturnCorrection {
   declaredAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  /// **بلا أبٍ** (`ق-٥٠١`) — إعلانٌ للمنشأة عن فترتَين بأرقامهما، لا ابنَ لمستندٍ ولا لطرف.
+  // الفهرسُ على الفترة الحاملة — فقراءةُ الإقرار تقرأ تصحيحاتِه وحدَها.
   @@index([companyId, year, periodType, periodNo])
   @@map("vat_return_corrections")
 }
