@@ -138,3 +138,31 @@ describe('⑬A1 — البريدُ المفعَّل يُطلب له مرسِلٌ
     expect(msg).toContain('MAIL_DAILY_LIMIT');
   });
 });
+
+/**
+ * ③ (`ق-١٣٣١`) — **متتبّعُ الأخطاء حين يُضبط**: عنوانٌ صالحٌ عبر `https` — وغيابُه جائزٌ لأن خادمَه شرطُ تشغيل.
+ */
+describe('③ — عنوانُ متتبّع الأخطاء يُقبل صالحاً عبر https أو لا يُضبط (ق-١٣٣١)', () => {
+  const reasons = (over: Record<string, string | undefined>): string => {
+    try {
+      assertProductionSecrets(withEnv(over));
+      return '';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+
+  it('① غائباً لا يُطلب — فلا يسقط إقلاعٌ قبل وجود الخادم المستقلّ', () => {
+    expect(reasons({ ERROR_TRACKING_DSN: undefined })).toBe('');
+  });
+
+  it('② صالحاً عبر https ⟸ يمرّ', () => {
+    expect(reasons({ ERROR_TRACKING_DSN: 'https://k3y@errors.rikzapp.com/3' })).toBe('');
+  });
+
+  it('③ عبر http أو بلا مفتاحٍ أو بلا رقم مشروع ⟸ يُرفض — ولا يُقلع كأن التتبّعَ يعمل وهو صامت', () => {
+    for (const bad of ['http://k3y@errors.rikzapp.com/3', 'http://k3y@127.0.0.1:9000/3', 'https://errors.rikzapp.com/3', 'https://k3y@errors.rikzapp.com/x']) {
+      expect(reasons({ ERROR_TRACKING_DSN: bad })).toContain('ERROR_TRACKING_DSN — صيغةٌ غير صالحة');
+    }
+  });
+});

@@ -106,6 +106,8 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       # حدُّ المزوّد اليوميّ كما تعرضه حجرةُ الحدود (max-emails-day) — مطلوبٌ متى ضُبط SMTP_HOST (ق-١٣٣٣ · ⑬A1).
       MAIL_DAILY_LIMIT: ${MAIL_DAILY_LIMIT:-}
+      # متتبّعُ الأخطاء (GlitchTip) — فارغاً حتى يوجد خادمُه المستقلّ داخل المملكة؛ شرطُ تشغيل (ق-١٣٣١ · ③).
+      ERROR_TRACKING_DSN: ${ERROR_TRACKING_DSN:-}
       TRIAL_DAYS: ${TRIAL_DAYS:-14}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
       DEV_SEED_PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME}

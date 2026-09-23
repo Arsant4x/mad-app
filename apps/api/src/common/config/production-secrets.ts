@@ -22,6 +22,7 @@
  *    مرسِلَ ولا حدَّ يُطلبان؛ **ومعه يُطلبان** — فالبريدُ لا يخرج من نطاقٍ افتراضيٍّ لا يُصادَق، ولا بحدٍّ لم يُعلَن.
  */
 
+import { parseDsn } from '../error-tracking/error-event.util';
 import { parseMailDailyLimit } from '../mail/mail-quota.util';
 
 /** قيم المثال والتطوير المعروفة — وجودها في الإنتاج يعني أن الملف نُسخ ولم يُملأ. */
@@ -106,12 +107,24 @@ const WHEN_MAIL: SecretRule[] = [
 ];
 
 /**
+ * ③ (`ق-١٣٣١`) — **متتبّعُ الأخطاء حين يُضبط**: عنوانٌ يُقرأ ويُرسَل إليه عبر `https` وحدَه — فحدثُ الخطأ لا يعبر
+ * الشبكةَ مكشوفاً، و`DSN` مكسورٌ لا يُقلع كأن التتبّعَ يعمل وهو صامت. وغيابُه جائز: **الخادمُ المستقلّ شرطُ تشغيل**.
+ */
+const WHEN_ERROR_TRACKING: SecretRule[] = [
+  {
+    name: 'ERROR_TRACKING_DSN',
+    why: 'عنوانُ خادم تتبّع الأخطاء (GlitchTip) المستقلّ داخل المملكة — شرطُ تشغيلٍ لا يُضبط قبل وجوده',
+    extra: (v) => (parseDsn(v) && v.trim().startsWith('https://') ? null : 'صيغةٌ غير صالحة — https://<المفتاح>@<الخادم>/<رقم المشروع>'),
+  },
+];
+
+/**
  * **كلُّ متغيّرٍ يقرؤه هذا الحارس** — ليُفحص أنه **يبلغ الحاوية** (`boot-vars-reach-container.spec.ts`):
  * `docker-compose.prod.yml` يسرد بيئةَ `api` بالاسم، **فمتغيّرٌ يطلبه الحارسُ ولا يمرّره التركيبُ يُسقط الإقلاعَ
  * ولو ضُبط في `.env.production`** — والمشغِّلُ يرى «غير مضبوط» عن قيمةٍ كتبها بيده.
  */
 export function bootGuardedVariables(): string[] {
-  return ['NODE_ENV', 'SMTP_HOST', ...REQUIRED.map((r) => r.name), ...WHEN_MAIL.map((r) => r.name)];
+  return ['NODE_ENV', 'SMTP_HOST', ...REQUIRED.map((r) => r.name), ...WHEN_MAIL.map((r) => r.name), ...WHEN_ERROR_TRACKING.map((r) => r.name)];
 }
 
 export class ProductionSecretsError extends Error {}
@@ -124,7 +137,11 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
   if (env.NODE_ENV !== 'production') return;
 
   const problems: string[] = [];
-  const rules = (env.SMTP_HOST ?? '').trim() ? [...REQUIRED, ...WHEN_MAIL] : REQUIRED;
+  const rules = [
+    ...REQUIRED,
+    ...((env.SMTP_HOST ?? '').trim() ? WHEN_MAIL : []),
+    ...((env.ERROR_TRACKING_DSN ?? '').trim() ? WHEN_ERROR_TRACKING : []),
+  ];
 
   for (const rule of rules) {
     const raw = env[rule.name];
