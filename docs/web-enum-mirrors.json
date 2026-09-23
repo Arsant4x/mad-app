@@ -1,0 +1,329 @@
+{
+  "$doc": [
+    "ق-١٣٦٧ — سجلُّ تعدادات الواجهة ومقابلاتها في الخادم. يقرؤه web-enum-mirrors.spec.ts (api-unit) فيقارن القيمَ من الملفّين في كلِّ تشغيل —",
+    "ولا قيمةَ مكتوبةٌ هنا. المرجع: prisma:Enum · const:file#NAME · type:file#Name · prop:file#Container.prop · isIn:file#Class.prop.",
+    "وكلُّ اتّحادٍ حرفيٍّ مصدَّرٍ في apps/web/src/api يجب أن يُسجَّل هنا أو في webOnly بسببه — فتعدادٌ جديدٌ بلا مقابلٍ يُسقط الحزمة.",
+    "والسجلُّ الأوّل وُلّد من ملحق المسح ٢٦ (الخمسة والسبعون) ثم قُسمت الثلاثةُ الأضيقُ عموداً وإدخالاً."
+  ],
+  "mirrors": [
+    {
+      "web": "apps/web/src/api/accounts.ts#AccountType",
+      "server": "const:apps/api/src/accounts/dto/create-account.dto.ts#ACCOUNT_TYPES"
+    },
+    {
+      "web": "apps/web/src/api/activities.ts#Sector",
+      "server": "const:apps/api/src/activities/sectors.ts#SECTORS"
+    },
+    {
+      "web": "apps/web/src/api/attendance.ts#AttendanceStatus",
+      "server": "prisma:AttendanceStatus"
+    },
+    {
+      "web": "apps/web/src/api/banks.ts#CashDepositStatus",
+      "server": "prisma:CashDepositStatus"
+    },
+    {
+      "web": "apps/web/src/api/banks.ts#NetworkSettlementStatus",
+      "server": "prisma:NetworkSettlementStatus"
+    },
+    {
+      "web": "apps/web/src/api/client.ts#AccountStatus",
+      "server": "prisma:AccountStatus"
+    },
+    {
+      "web": "apps/web/src/api/client.ts#ActorType",
+      "server": "prop:apps/api/src/auth/auth.service.ts#AuthUserView.actorType"
+    },
+    {
+      "web": "apps/web/src/api/client.ts#PlatformRole",
+      "server": "prisma:PlatformRole"
+    },
+    {
+      "web": "apps/web/src/api/companies.ts#CompanyStatus",
+      "server": "prisma:AccountStatus"
+    },
+    {
+      "web": "apps/web/src/api/companyUsers.ts#CompanyUserSettableStatus",
+      "server": "const:apps/api/src/company-users/dto/update-company-user.dto.ts#STATUSES",
+      "note": "حدُّ الإدخال في التعديل — بلا CLOSED"
+    },
+    {
+      "web": "apps/web/src/api/companyUsers.ts#CompanyUserStatus",
+      "server": "prisma:AccountStatus",
+      "note": "عمودُ CompanyUser.status (ق-١٣٦٧) — كان يطابق حدَّ الإدخال STATUSES فقصر عن CLOSED"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ClaimKind",
+      "server": "prisma:ClaimKind"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ClaimStatus",
+      "server": "prisma:ClaimStatus"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ContractClassification",
+      "server": "prisma:ContractClassification"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ContractCycle",
+      "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CYCLES"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ContractStatus",
+      "server": "prisma:ContractStatus"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ContractVatInclusion",
+      "server": "prisma:ContractVatInclusion"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DeclaredClassification",
+      "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CLASSIFICATIONS"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DeclaredVatInclusion",
+      "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_VAT_INCLUSIONS"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DeductionKind",
+      "server": "prisma:DeductionKind"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DepositHolder",
+      "server": "prisma:DepositHolder"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DepositStatus",
+      "server": "prisma:DepositStatus"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DepositType",
+      "server": "prisma:DepositType"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#Furnished",
+      "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#FURNISHED_OPTIONS"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#HandoverStatus",
+      "server": "prisma:HandoverStatus"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#HandoverType",
+      "server": "prisma:HandoverType"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#InstallmentStatus",
+      "server": "prisma:InstallmentStatus"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#ItemCondition",
+      "server": "prisma:ItemCondition"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#KeyMoneyDirection",
+      "server": "prisma:KeyMoneyDirection"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#RecordPaymentMethod",
+      "server": "isIn:apps/api/src/contracts/dto/record-payment.dto.ts#RecordPaymentDto.method",
+      "note": "حدُّ الإدخال في تسجيل السداد"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#RentPaymentMethod",
+      "server": "prisma:PaymentMethod",
+      "note": "عمودُ RentPayment.method (ق-١٣٦٧) — كان PaymentMethod نقداً وبنكاً وحدهما"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#SettlementBasis",
+      "server": "const:apps/api/src/contracts/dto/cancel-contract.dto.ts#SETTLEMENT_BASES"
+    },
+    {
+      "web": "apps/web/src/api/customers.ts#BuyerIdScheme",
+      "server": "const:apps/api/src/customers/dto/create-customer.dto.ts#BUYER_ID_SCHEMES"
+    },
+    {
+      "web": "apps/web/src/api/customers.ts#ConsentSource",
+      "server": "const:apps/api/src/customers/marketing-consent.util.ts#CONSENT_SOURCES"
+    },
+    {
+      "web": "apps/web/src/api/customers.ts#CustomerKind",
+      "server": "prisma:CustomerKind"
+    },
+    {
+      "web": "apps/web/src/api/customers.ts#MarketingChannel",
+      "server": "const:apps/api/src/customers/marketing-consent.util.ts#MARKETING_CHANNELS"
+    },
+    {
+      "web": "apps/web/src/api/customers.ts#NewCustomerKind",
+      "server": "const:apps/api/src/customers/dto/create-customer.dto.ts#CUSTOMER_KINDS"
+    },
+    {
+      "web": "apps/web/src/api/deletionRequests.ts#AccountRequestKind",
+      "server": "prisma:AccountRequestKind"
+    },
+    {
+      "web": "apps/web/src/api/deletionRequests.ts#AccountRequestOutcome",
+      "server": "prisma:AccountRequestOutcome"
+    },
+    {
+      "web": "apps/web/src/api/deletionRequests.ts#DeletionRequestStatus",
+      "server": "prisma:DeletionRequestStatus"
+    },
+    {
+      "web": "apps/web/src/api/employees.ts#EmployeeStatus",
+      "server": "prisma:EmployeeStatus"
+    },
+    {
+      "web": "apps/web/src/api/fiscal.ts#FiscalPeriodStatus",
+      "server": "prisma:FiscalPeriodStatus"
+    },
+    {
+      "web": "apps/web/src/api/integrations.ts#IntegrationKind",
+      "server": "prisma:IntegrationKind"
+    },
+    {
+      "web": "apps/web/src/api/inventory.ts#StockMovementType",
+      "server": "prisma:StockMovementType"
+    },
+    {
+      "web": "apps/web/src/api/inventory.ts#StockStatus",
+      "server": "type:apps/api/src/inventory/inventory.service.ts#StockStatus"
+    },
+    {
+      "web": "apps/web/src/api/invoices.ts#InvoiceDocType",
+      "server": "prisma:InvoiceDocType"
+    },
+    {
+      "web": "apps/web/src/api/invoices.ts#InvoiceStatus",
+      "server": "prisma:InvoiceStatus"
+    },
+    {
+      "web": "apps/web/src/api/invoices.ts#ZatcaInvoiceStatus",
+      "server": "prisma:ZatcaStatus"
+    },
+    {
+      "web": "apps/web/src/api/leaves.ts#LeaveStatus",
+      "server": "prisma:LeaveRequestStatus"
+    },
+    {
+      "web": "apps/web/src/api/maintenance.ts#MaintenancePriority",
+      "server": "prisma:MaintenancePriority"
+    },
+    {
+      "web": "apps/web/src/api/maintenance.ts#MaintenanceStatus",
+      "server": "prisma:MaintenanceStatus"
+    },
+    {
+      "web": "apps/web/src/api/notifications.ts#NotificationKind",
+      "server": "prisma:NotificationKind"
+    },
+    {
+      "web": "apps/web/src/api/obligations.ts#VatPeriodType",
+      "server": "type:apps/api/src/common/vat/vat-period.util.ts#VatPeriodType"
+    },
+    {
+      "web": "apps/web/src/api/payments.ts#PaymentMethod",
+      "server": "prisma:PaymentMethod"
+    },
+    {
+      "web": "apps/web/src/api/payments.ts#UnallocatedFate",
+      "server": "isIn:apps/api/src/payments/dto/payment.dto.ts#CreatePaymentDto.unallocated"
+    },
+    {
+      "web": "apps/web/src/api/platformDecisions.ts#PlatformDecisionAction",
+      "server": "prisma:PlatformDecisionAction"
+    },
+    {
+      "web": "apps/web/src/api/platformDecisions.ts#PlatformDecisionStatus",
+      "server": "prisma:PlatformDecisionStatus"
+    },
+    {
+      "web": "apps/web/src/api/pos.ts#PosPaymentMethod",
+      "server": "isIn:apps/api/src/pos/dto/pos.dto.ts#CreatePosSaleDto.paymentMethod"
+    },
+    {
+      "web": "apps/web/src/api/properties.ts#ActivityType",
+      "server": "const:apps/api/src/properties/dto/create-property.dto.ts#ACTIVITY_TYPES"
+    },
+    {
+      "web": "apps/web/src/api/properties.ts#Ownership",
+      "server": "const:apps/api/src/properties/dto/create-property.dto.ts#OWNERSHIP_TYPES"
+    },
+    {
+      "web": "apps/web/src/api/purchases.ts#PurchaseDocType",
+      "server": "prisma:PurchaseDocType"
+    },
+    {
+      "web": "apps/web/src/api/purchases.ts#PurchaseStatus",
+      "server": "prisma:PurchaseStatus"
+    },
+    {
+      "web": "apps/web/src/api/quotes.ts#DerivedQuoteStatus",
+      "server": "type:apps/api/src/quotes/quotes.service.ts#DerivedQuoteStatus"
+    },
+    {
+      "web": "apps/web/src/api/quotes.ts#QuoteStatus",
+      "server": "prisma:QuoteStatus"
+    },
+    {
+      "web": "apps/web/src/api/reminders.ts#ReminderChannel",
+      "server": "prisma:ReminderChannel"
+    },
+    {
+      "web": "apps/web/src/api/reservations.ts#ReservationStatus",
+      "server": "prisma:ReservationStatus"
+    },
+    {
+      "web": "apps/web/src/api/scripts.ts#ScriptAudience",
+      "server": "prisma:ScriptAudience"
+    },
+    {
+      "web": "apps/web/src/api/supplierPayments.ts#SupplierPaymentInputMethod",
+      "server": "isIn:apps/api/src/purchases/dto/supplier-payment.dto.ts#CreateSupplierPaymentDto.method",
+      "note": "حدُّ الإدخال — ولا شبكة لسداد مورّد (ق-٨٧٢)"
+    },
+    {
+      "web": "apps/web/src/api/supplierPayments.ts#SupplierPaymentMethod",
+      "server": "prisma:PaymentMethod",
+      "note": "عمودُ SupplierPayment.method (ق-١٣٦٧) — والمسحُ قرنه خطأً بـRecordPaymentDto.method"
+    },
+    {
+      "web": "apps/web/src/api/supportAccess.ts#SupportGrantStatus",
+      "server": "prisma:SupportGrantStatus"
+    },
+    {
+      "web": "apps/web/src/api/tasks.ts#TaskAssigneeKind",
+      "server": "prisma:TaskAssigneeKind"
+    },
+    {
+      "web": "apps/web/src/api/tasks.ts#TaskPriority",
+      "server": "prisma:TaskPriority"
+    },
+    {
+      "web": "apps/web/src/api/tasks.ts#TaskStatus",
+      "server": "const:apps/api/src/tasks/task-model.ts#TASK_STATUSES"
+    },
+    {
+      "web": "apps/web/src/api/units.ts#UnitStatus",
+      "server": "type:apps/api/src/units/units.service.ts#UnitStatus"
+    },
+    {
+      "web": "apps/web/src/api/zatca.ts#ZatcaOnboardingStatus",
+      "server": "prisma:ZatcaOnboardingStatus"
+    },
+    {
+      "web": "apps/web/src/auth/PermissionsContext.tsx#ExtinctionReason",
+      "server": "type:apps/api/src/delegations/extinguished.ts#ExtinctionReason"
+    },
+    {
+      "web": "apps/web/src/lib/vat.ts#DeclarableTaxCategory",
+      "server": "const:apps/api/src/common/vat/line-tax.util.ts#DECLARABLE_TAX_CATEGORIES"
+    },
+    {
+      "web": "apps/web/src/lib/vat.ts#TaxCategory",
+      "server": "prisma:TaxCategory"
+    }
+  ],
+  "webOnly": []
+}

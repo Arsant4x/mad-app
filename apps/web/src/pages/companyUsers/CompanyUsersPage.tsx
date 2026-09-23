@@ -10,10 +10,12 @@ import { CompanyUserModal } from './CompanyUserModal';
 import { DelegationModal } from './DelegationModal';
 import i18n from '../../i18n';
 
+// بكلِّ قيم عمود الحالة (`AccountStatus`) — `CLOSED` كان غائباً فيُعرض مفتاحُه (`ق-١٣٦٧`).
 const STATUS_META: Record<CompanyUser['status'], { label: string; badgeClass: string }> = {
   ACTIVE: { label: 'نشط', badgeClass: 'paid' },
   FROZEN: { label: 'مجمّد', badgeClass: 'due' },
   STOPPED: { label: 'متوقف', badgeClass: 'overdue' },
+  CLOSED: { label: 'مغلق', badgeClass: 'overdue' },
 };
 
 export function CompanyUsersPage() {

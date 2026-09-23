@@ -14,7 +14,13 @@ export type DeclaredClassification = Exclude<ContractClassification, 'LEGACY_UNC
 export type DeclaredVatInclusion = Exclude<ContractVatInclusion, 'LEGACY_UNDECLARED'>;
 /** منسوخٌ بيدٍ من `InstallmentStatus` في المخطّط (دَينُ 4.5) — `PARTIAL` مسدَّدٌ بعضُه، تُشتقّ من المقبوض مقابل الإجماليّ (ق-١٠٤٠). */
 export type InstallmentStatus = 'DUE' | 'LATE' | 'PARTIAL' | 'PAID' | 'CANCELLED';
-export type PaymentMethod = 'CASH' | 'BANK';
+/**
+ * طريقةُ سداد الإيجار **كما يحملها عمودُها** (`PaymentMethod` — ومنها `CARD` «الشبكة») — `ق-١٣٦٧`: كانت `PaymentMethod` هنا نقداً وبنكاً
+ * وحدهما (حدَّ الإدخال) **وباسمٍ يتكرّر في `payments.ts` بمجموعةٍ أخرى**، فسندٌ بالشبكة كان يُعرض «تحويل بنكي».
+ */
+export type RentPaymentMethod = 'CASH' | 'BANK' | 'CARD';
+/** ما يقبله الخادمُ في تسجيل السداد (`@IsIn` على `RecordPaymentDto.method`). */
+export type RecordPaymentMethod = 'CASH' | 'BANK';
 
 export interface Installment {
   id: string;
@@ -35,7 +41,7 @@ export interface RentPayment {
   amount: string;
   discount: string;
   netAmount: string;
-  method: PaymentMethod;
+  method: RentPaymentMethod;
   bankId: string | null;
   notes: string | null;
   journalEntryId: string | null;
@@ -269,7 +275,7 @@ export interface RecordPaymentInput {
   date: string;
   amount: number;
   discount?: number;
-  method: PaymentMethod;
+  method: RecordPaymentMethod;
   bankId?: string;
   notes?: string;
 }

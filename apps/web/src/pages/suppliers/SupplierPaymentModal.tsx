@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import type { Purchase } from '../../api/purchases';
-import { createSupplierPayment, listOpenPurchases, type OpenPurchase, type SupplierPaymentMethod } from '../../api/supplierPayments';
+import { createSupplierPayment, listOpenPurchases, type OpenPurchase, type SupplierPaymentInputMethod } from '../../api/supplierPayments';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 
@@ -22,7 +22,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   const [date, setDate] = useState(today());
   // ② المتبقّي يصل نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ رقماً مرّةً ثم يُملأ به الحقلان.
   const [amount, setAmount] = useState(String(round2(num0(purchase.remaining))));
-  const [method, setMethod] = useState<SupplierPaymentMethod>('CASH');
+  const [method, setMethod] = useState<SupplierPaymentInputMethod>('CASH');
   const [bankId, setBankId] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
@@ -117,7 +117,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
         <div className="two-col">
           <div className="field">
             <label>طريقة السداد</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as SupplierPaymentMethod)}>
+            <select value={method} onChange={(e) => setMethod(e.target.value as SupplierPaymentInputMethod)}>
               <option value="CASH">نقداً</option>
               <option value="BANK">تحويل بنكي</option>
             </select>

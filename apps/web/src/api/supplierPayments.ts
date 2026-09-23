@@ -2,8 +2,13 @@ import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 
-/** نقداً من الصندوق، أو تحويلٌ من حساب بنك — **ولا شبكة** لسداد مورّد (`ق-٨٧٢`). */
-export type SupplierPaymentMethod = 'CASH' | 'BANK';
+/**
+ * طريقةُ سند الصرف **كما يحملها عمودُه** (`PaymentMethod` — ومنها `CARD`) — `ق-١٣٦٧`: العمودُ التعدادُ المشترك ولا قيدَ فيه يمنع
+ * الشبكة، فالشاشةُ تعرف القيمَ كلَّها. **وما يُرسَل** `SupplierPaymentInputMethod`: نقداً أو تحويلاً — **ولا شبكة** لسداد مورّد (`ق-٨٧٢`).
+ */
+export type SupplierPaymentMethod = 'CASH' | 'BANK' | 'CARD';
+/** ما يقبله الخادمُ في إنشاء السند (`@IsIn` على `CreateSupplierPaymentDto.method`). */
+export type SupplierPaymentInputMethod = 'CASH' | 'BANK';
 
 export interface SupplierPaymentAllocation {
   id: string;
@@ -63,7 +68,7 @@ export interface SupplierPaymentInput {
   branchId?: string;
   date: string;
   amount: number;
-  method: SupplierPaymentMethod;
+  method: SupplierPaymentInputMethod;
   bankId?: string;
   reference?: string;
   notes?: string;
