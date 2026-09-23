@@ -136,6 +136,26 @@ describe('Account deletion requests (e2e)', () => {
   }, 60000);
 
   /**
+   * 🔴 **ولا يمضي بيدٍ واحدة** (`ق-١٣١٨` · ⑪A1): الموافقةُ **بلا قرارٍ أقرّه مديرٌ آخر** تُردّ.
+   *
+   * ⚠️ **وهذه الحالةُ كشفها الإثباتُ العكسيّ**: حذفُ الفحص المسبق لم يُسقط شيئاً، **لأن كلَّ
+   * حالةٍ كانت تمنح القرارَ أوّلاً** — فالحارسُ لم يكن مُختبَراً حيث يعمل: **حين لا قرارَ أصلاً**.
+   */
+  it('🔴 الإغلاقُ لا يمضي بلا قرارٍ من يدٍ ثانية — والرفضُ يقول ما ينقص', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const filed = await auth(request(app.getHttpServer()).post('/deletion-request')).send({ reason: 'بلا قرار' }).expect(201);
+
+    const refused = await admin(request(app.getHttpServer()).post(`/admin/deletion-requests/${filed.body.id}/approve`)).send({ note: 'محاولةٌ بيدٍ واحدة' }).expect(409);
+    expect(String(refused.body.message)).toContain('مدير منصّة آخر');
+
+    // ولم يقع شيء: الطلبُ معلّقٌ والحسابُ يعمل.
+    const still = await auth(request(app.getHttpServer()).get('/deletion-request')).expect(200);
+    expect(still.body.status).toBe('PENDING');
+    await auth(request(app.getHttpServer()).get('/customers')).expect(200);
+  }, 60000);
+
+  /**
    * ⚖️ **النسخةُ قبل أيّ شيء** (`ق-٥٥٤`): منشأةٌ بلا حركةٍ كانت تُحذف عند الموافقة — **وذاك محوٌ
    * قبل أن ينال صاحبُه نسختَه**. فصارت الموافقةُ تُنتج النسخةَ أولاً ثم تُغلق، ويُرجأ الحذفُ
    * الصلبُ إلى انقضاء نافذة النسخة (الطبقةُ الثالثة — `ق-٥٥٦`).
