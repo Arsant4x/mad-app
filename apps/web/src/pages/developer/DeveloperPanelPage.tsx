@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { SubProcessorsSection } from './SubProcessorsSection';
 import { SupportAccessSection } from './SupportAccessSection';
-import { createCompany, listCompanies, updateCompany, type Company, type CompanyInput } from '../../api/companies';
+import { createCompany, listCompanies, updateCompany, updateCompanySubscription, type Company, type CompanyInput } from '../../api/companies';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, type PermissionTemplate, type TemplateInput } from '../../api/templates';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -57,7 +57,13 @@ export function DeveloperPanelPage() {
 
   async function handleSaveCompany(data: Partial<CompanyInput>) {
     if (companyModal?.mode === 'edit') {
-      await updateCompany(companyModal.company.id, data);
+      // ⑪A2 (`ق-١٣١٧`): الاشتراكُ مسارٌ بدوره — **والمالُ لا يُرسل مع الاسم**.
+      const { subStart, subEnd, ...profile } = data;
+      await updateCompany(companyModal.company.id, profile);
+      // **ولا يُنادى مسارُ المالية إلا إن تغيّر التاريخُ فعلاً**: من يعدّل الاسمَ وحدَه
+      // بدور التشغيل لا يُردّ `403` على اشتراكٍ لم يمسّه.
+      const current = companyModal.company.subEnd?.slice(0, 10) ?? '';
+      if ((subEnd ?? '') !== current) await updateCompanySubscription(companyModal.company.id, { subStart, subEnd });
     } else {
       await createCompany(data as CompanyInput);
     }

@@ -3342,6 +3342,15 @@
       "200"
     ]
   },
+  "PATCH /companies/{id}/subscription": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "PATCH /company-profile": {
     "parameters": [],
     "requiredBody": [],
@@ -3754,6 +3763,15 @@
     ]
   },
   "PATCH /v1/companies/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/companies/{id}/subscription": {
     "parameters": [
       "path:id:required"
     ],

@@ -93,6 +93,28 @@ describe('أدوارُ مديري المنصّة (e2e)', () => {
     await http().get('/admin/deletion-requests').set('Authorization', as(PlatformRole.FINANCE)).expect(403);
   });
 
+  /**
+   * 🔴 **والاشتراكُ للمالية وحدَها** (`ق-١٣١٧`): مالٌ يُحصَّل ويُردّ، **والتشغيلُ يخصّ
+   * الخادمَ والنسخ لا المال** — **وفصلُهما غرضُ الأدوار أصلاً**.
+   */
+  it('🔴 ⑦ والاشتراكُ للمالية وحدَها — والتشغيلُ يعدّل الاسمَ ولا يمدّ اشتراكاً', async () => {
+    const target = await registerIsolatedCompany(app, 'roles-sub');
+    try {
+      const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      // التشغيلُ يعدّل حسابَ المنشأة نفسَه.
+      await http().patch(`/companies/${target.companyId}`).set('Authorization', as(PlatformRole.OPERATIONS)).send({ orgName: `منشأةٌ مُعاد تسميتُها ${suffix}` }).expect(200);
+      // **ولا يمدّ اشتراكاً** — والمسارُ نفسُه يقبل المالية.
+      const denied = await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as(PlatformRole.OPERATIONS)).send({ subEnd: nextYear }).expect(403);
+      expect(String(denied.body.message)).toContain('التشغيل');
+      await http().patch(`/companies/${target.companyId}/subscription`).set('Authorization', as(PlatformRole.FINANCE)).send({ subEnd: nextYear }).expect(200);
+      // ⚠️ **والحقلُ لا يعود من الباب الخلفيّ**: إرسالُه على المسار العامّ يُردّ باسمه.
+      const back = await http().patch(`/companies/${target.companyId}`).set('Authorization', as(PlatformRole.OWNER)).send({ subEnd: nextYear }).expect(400);
+      expect(JSON.stringify(back.body)).toContain('subEnd');
+    } finally {
+      await removeIsolatedCompany(app, target);
+    }
+  });
+
   it('🔴 ⑤ والدورُ يُقرأ حيّاً — سحبُه ينفذ في الطلب التالي بلا انتظار انتهاء الرمز', async () => {
     const admin = await prisma.platformAdmin.findFirstOrThrow({ where: { displayName: `اختبار ${PlatformRole.SUPPORT}` }, select: { id: true } });
     await http().get('/support-access/admin').set('Authorization', as(PlatformRole.SUPPORT)).expect(200);

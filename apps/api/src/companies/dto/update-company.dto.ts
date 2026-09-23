@@ -20,11 +20,7 @@ export class UpdateCompanyDto {
   @IsString()
   permissionTemplateId?: string;
 
-  @IsOptional()
-  @IsISO8601()
-  subStart?: string;
-
-  @IsOptional()
-  @IsISO8601()
-  subEnd?: string;
+  // ⛔ **ولا `subStart`/`subEnd` هنا** (`ق-١٣١٧`): تغييرُ الاشتراك **للمالية وحدَها**، وله
+  //    مسارُه `PATCH /companies/:id/subscription` بدوره. ومن أرسلهما هنا يُردّ `400`
+  //    باسمهما (`forbidNonWhitelisted`) — **فالتضييقُ يُعلَن ولا يُتجاهَل صامتاً**.
 }
