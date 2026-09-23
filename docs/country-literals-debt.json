@@ -1,0 +1,236 @@
+{
+  "rule": "ق-١٣٥٠",
+  "note": "العلاماتُ السعودية الحرفية في شيفرة الإنتاج خارج حدود الوحدة السعودية كما هي اليوم — دَينٌ معلَنٌ ينقص ولا يزيد. الحارس: apps/api/src/common/country-literals.spec.ts",
+  "measured": {
+    "filesScanned": 665,
+    "outsideFiles": 56,
+    "outsideLines": 210,
+    "insideLines": 267
+  },
+  "files": {
+    "apps/api/src/api-keys/integration-usage.service.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/app.module.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/audit/audit.service.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/cash-drawers/cash-drawers.service.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/config/production-secrets.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/currency/base-amount.util.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/i18n/messages.ts": {
+      "count": 42,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/retry-on-conflict.util.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/tenant/tenant-scope.extension.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/common/wall-clock.util.ts": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/companies/company-defaults.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/company-profile/dto/update-company-profile.dto.ts": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/customers/customers.service.ts": {
+      "count": 4,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/customers/dto/create-customer.dto.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/customers/dto/update-customer.dto.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/export/company-archive.service.ts": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/export/export-scope.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/export/export.service.ts": {
+      "count": 5,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/invoices/active-documents.util.ts": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/invoices/invoices.service.ts": {
+      "count": 11,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/journal/rent-tax-point.util.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/maintenance/maintenance.service.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/outbox/outbox.module.ts": {
+      "count": 5,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/pos/pos.module.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/pos/pos.service.ts": {
+      "count": 12,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/purchases/purchases.service.ts": {
+      "count": 4,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/api/src/purchases/supplier-notes.service.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/api/invoices.ts": {
+      "count": 8,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/api/notifications.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/layout/AppShell.tsx": {
+      "count": 5,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/lib/posQueue.ts": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/lib/wallClock.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/audit/AuditLogPage.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/audit/DelegationLogPage.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/companyProfile/CompanyProfilePage.tsx": {
+      "count": 4,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/contracts/ContractDetailModal.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/contracts/ContractModal.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/contracts/HandoversSection.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/customers/CustomerDetailModal.tsx": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/customers/CustomerModal.tsx": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/DashboardPage.tsx": {
+      "count": 4,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/developer/SupportAccessSection.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/invoices/InvoiceBuilderView.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/invoices/InvoiceListView.tsx": {
+      "count": 17,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/invoices/InvoicesPage.tsx": {
+      "count": 4,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/invoices/statusMeta.ts": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/pos/PosPage.tsx": {
+      "count": 11,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/products/ProductModal.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/settings/ApiKeysCard.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/settings/CashDrawersCard.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/settings/SettingsPage.tsx": {
+      "count": 1,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/settings/SupportAccessCard.tsx": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/suppliers/IncorporationReportPage.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/suppliers/PurchaseModal.tsx": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/suppliers/SupplierDetailModal.tsx": {
+      "count": 3,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    },
+    "apps/web/src/pages/tasks/MyTasksPage.tsx": {
+      "count": 2,
+      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
+    }
+  }
+}
