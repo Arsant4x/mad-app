@@ -512,6 +512,8 @@ model Company {
   vatReturnFilings VatReturnFiling[]
   /// ⑥A1 (`ق-١٣٢٥`) — نسبةُ الخصم النسبيّ المطبَّقة لكلِّ سنةٍ تقويمية.
   vatProportionalRatios VatProportionalRatio[]
+  /// ⑥A3 (`ق-١٣٢٥`) — تصحيحاتُ إقراراتٍ سابقة تُعلَن في إقرارٍ لاحق (م٦٣).
+  vatReturnCorrections VatReturnCorrection[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -5158,11 +5160,56 @@ model VatReturnFiling {
   filedAt DateTime @default(now())
   /// صافي الضريبة كما قرأته الشاشةُ لحظةَ الوسم — المرجعُ الذي يُقاس عليه «تغيّر بعد التقديم».
   netVat  Decimal  @db.Decimal(18, 2)
+  /// ⑥A3 (`ق-١٣٢٥`) — **أطُلب ردُّ الفائض أم يُرحَّل؟**
+  ///
+  /// النصّ: «The Taxable Person **may request** excess Tax to be refunded, **otherwise
+  /// excess Tax will be carried forward** in the VAT account». ⇒ **فالترحيلُ هو الأصل**
+  /// والردُّ طلبٌ يُعلنه التاجر. وتحتاجه الفترةُ التالية لتعرف: أبقي الفائضُ رصيداً أم خرج؟
+  /// **ولا يُخمَّن** — فلو خُمِّن ترحيلاً وقد طُلب ردُّه لحُسب الفائضُ مرّتين.
+  refundRequested Boolean @default(false)
 
   createdAt DateTime @default(now())
 
   @@unique([companyId, year, periodType, periodNo])
   @@map("vat_return_filings")
+}
+
+/// ⑥A3 (`ق-١٣٢٥`) — **تصحيحُ إقرارٍ سابق من خلال إقرارٍ لاحق** (م٦٣، وخانةُ م٦٢/٢/ي).
+///
+/// **النصّ بفقراته** (اللائحةُ التنفيذية · `CORRECTION OF RETURNS`):
+///   ف١ · نقصٌ في الضريبة المستحقّة ⟵ **إشعارُ الهيئة خلال عشرين يوماً** بتقديم تصحيح،
+///        إلّا ما تشمله ف٣ ويلتزم به المكلَّف.
+///   ف٢ · زيادةٌ في الضريبة المستحقّة ⟵ **يجوز تصحيحُها في أيِّ إقرارٍ لاحق**.
+///   ف٣ · نقصٌ **دون خمسة آلاف ريال** ⟵ **يجوز تعديلُه في الإقرار التالي**.
+///   ف٤ · لا تصحيحَ لزيادةٍ **بعد خمس سنوات** من نهاية السنة التقويمية لتلك الفترة.
+///
+/// **والموجبُ زيادةٌ في الضريبة المستحقّة** (نقصٌ سابقٌ يُستدرك) **والسالبُ نقصٌ منها**
+/// (زيادةٌ سابقةٌ تُردّ) — فإشارةُ الصفّ هي إشارتُه في الصافي.
+model VatReturnCorrection {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الفترةُ التي يُعلَن فيها التصحيح — أي الإقرارُ الذي يحمله.
+  year       Int
+  periodType VatPeriod
+  periodNo   Int
+
+  /// الفترةُ المصحَّحة — سابقةٌ للتي تحمله.
+  correctedYear       Int
+  correctedPeriodType VatPeriod
+  correctedPeriodNo   Int
+
+  /// موجبٌ: نقصٌ سابقٌ يُستدرك (تزيد الضريبةُ المستحقّة) · سالب: زيادةٌ سابقةٌ تُردّ.
+  amount Decimal @db.Decimal(18, 2)
+  reason String
+
+  declaredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  /// **بلا أبٍ** (`ق-٥٠١`) — إعلانٌ للمنشأة عن فترتَين بأرقامهما، لا ابنَ لمستندٍ ولا لطرف.
+  @@index([companyId, year, periodType, periodNo])
+  @@map("vat_return_corrections")
 }
 
 /// A storage location. `manager` is a free-text name, not a real Employee FK

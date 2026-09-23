@@ -556,6 +556,12 @@ export const MSG = {
   input_vat_use_invalid: 'validation.input_vat_use_invalid',
   vat_ratio_range: 'validation.vat_ratio_range',
   vat_ratio_not_declared: 'obligations.vat_ratio_not_declared',
+  /** ⑥A3 (`ق-١٣٢٥`) — تصحيحُ إقرارٍ سابق (م٦٣). */
+  vat_correction_not_earlier: 'obligations.vat_correction_not_earlier',
+  vat_correction_needs_notice: 'obligations.vat_correction_needs_notice',
+  vat_correction_time_barred: 'obligations.vat_correction_time_barred',
+  vat_correction_not_found: 'obligations.vat_correction_not_found',
+  vat_correction_filed_locked: 'obligations.vat_correction_filed_locked',
   vat_period_quarter_range: 'validation.vat_period_quarter_range',
   vat_period_month_range: 'validation.vat_period_month_range',
   vat_number_invalid: 'validation.vat_number',
@@ -1199,6 +1205,26 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.zatca_export_buyer_vat]: {
     ar: 'فاتورة صادرات لمشترٍ خارج المملكة لا تحمل رقم تسجيل ضريبي سعودي للمشتري (BR-KSA-46) — امسح الرقم من بطاقة «{customer}» أو صحّح بلده، ثم أعد الإرسال',
     en: 'An export invoice to a buyer outside the Kingdom must not carry a Saudi buyer VAT number (BR-KSA-46) — clear it on "{customer}" or correct the country, then resubmit',
+  },
+  [MSG.vat_correction_not_earlier]: {
+    ar: 'التصحيح يقع على إقرار سابق للفترة التي يُعلَن فيها — اختر فترة تبدأ قبلها',
+    en: 'A correction applies to a return earlier than the period declaring it — pick a period that starts before it',
+  },
+  [MSG.vat_correction_needs_notice]: {
+    ar: 'هذا نقص في الضريبة المستحقة قدره {limit} ريال فأكثر — لا يُستدرك في إقرار لاحق: يجب إشعار الهيئة خلال عشرين يوماً من اكتشافه بتقديم تصحيح للإقرار الأصلي (المادة ٦٣ فقرة ١ و٣)',
+    en: 'This understatement is {limit} SAR or more — it cannot be absorbed into a later return: the Authority must be notified within 20 days of discovery by filing a correction of the original return (Article 63(1) and (3))',
+  },
+  [MSG.vat_correction_time_barred]: {
+    ar: 'لا يُصحَّح إقرار بزيادة في الضريبة بعد مضيّ {years} سنوات من نهاية السنة التقويمية لفترته (المادة ٦٣ فقرة ٤)',
+    en: 'An overstatement cannot be corrected after {years} years from the end of the calendar year of its tax period (Article 63(4))',
+  },
+  [MSG.vat_correction_not_found]: {
+    ar: 'التصحيح غير موجود',
+    en: 'Correction not found',
+  },
+  [MSG.vat_correction_filed_locked]: {
+    ar: 'أُعلن هذا التصحيح في إقرار وُسم «قُدِّم» — ما قُدِّم للهيئة يُصحَّح بتصحيح جديد لا بمحوه من السجل',
+    en: 'This correction belongs to a return already marked as filed — what was filed is corrected by a new correction, not by deleting the record',
   },
   [MSG.input_vat_use_invalid]: {
     ar: 'إسناد ضريبة المدخلات أحد ثلاثة: «خاضع حصراً» أو «معفى حصراً» أو «مشترك» — وقيمة «ما سبق البناء» للمشتريات القديمة وحدها ولا تُقبل لشراء جديد',

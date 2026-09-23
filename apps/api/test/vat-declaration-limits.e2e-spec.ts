@@ -47,7 +47,7 @@ describe('VAT declaration declared limits (e2e)', () => {
     expect(res.body).toMatchObject({ periodType: 'QUARTERLY', periodNo: 2, companyVatPeriod: 'QUARTERLY', periodMatchesCompany: true, from: '2026-04-01', to: '2026-06-30' });
   });
 
-  it('⑥A2 — الشهرُ يُطلب كما يُطلب الربع: مدىً أضيقُ وأرقامٌ منه وحدَه', async () => {
+  it('[SPEC 6.2] ⑥A2 — الشهرُ يُطلب كما يُطلب الربع: مدىً أضيقُ وأرقامٌ منه وحدَه', async () => {
     const may = await auth(request(app.getHttpServer()).get('/obligations/vat-declaration')).query({ year: 2026, month: 5 }).expect(200);
     expect(may.body).toMatchObject({ periodType: 'MONTHLY', periodNo: 5, from: '2026-05-01', to: '2026-05-31', salesStandard: '100.00' });
     // والفاتورةُ في مايو، فشهرُ أبريل صفرٌ — المدى يعمل لا الاسمُ وحدَه.
@@ -58,7 +58,7 @@ describe('VAT declaration declared limits (e2e)', () => {
     expect(may.body.companyVatPeriod).toBe('QUARTERLY');
   });
 
-  it('⑥A2 — ربعٌ وشهرٌ معاً أو لا واحدَ: يُردّ برسالةٍ عربيةٍ تقول ماذا يُرسَل', async () => {
+  it('[SPEC 6.2] ⑥A2 — ربعٌ وشهرٌ معاً أو لا واحدَ: يُردّ برسالةٍ عربيةٍ تقول ماذا يُرسَل', async () => {
     const both = await auth(request(app.getHttpServer()).get('/obligations/vat-declaration')).query({ year: 2026, quarter: 2, month: 5 }).expect(400);
     expect(JSON.stringify(both.body)).toContain('أحدهما لا كلاهما');
     const neither = await auth(request(app.getHttpServer()).get('/obligations/vat-declaration')).query({ year: 2026 }).expect(400);
@@ -68,7 +68,7 @@ describe('VAT declaration declared limits (e2e)', () => {
     await auth(request(app.getHttpServer()).get('/obligations/vat-declaration')).query({ year: 2026, quarter: 5 }).expect(400);
   });
 
-  it('⑥A2 — وسمُ «قُدِّم» بالنوع والرقم معاً: شهرُ ٢ وربعُ ٢ وسمان لا واحد', async () => {
+  it('[SPEC 6.2] ⑥A2 — وسمُ «قُدِّم» بالنوع والرقم معاً: شهرُ ٢ وربعُ ٢ وسمان لا واحد', async () => {
     const q = { year: 2026, quarter: 2 };
     const m = { year: 2026, month: 2 };
     await auth(request(app.getHttpServer()).post('/obligations/vat-declaration/filed')).send(q).expect(201);
@@ -89,7 +89,7 @@ describe('VAT declaration declared limits (e2e)', () => {
     await auth(request(app.getHttpServer()).delete('/obligations/vat-declaration/filed')).query(q).expect(200);
   });
 
-  it('⑥A2 — إعدادُ الفترة يُعلَن ولا يُقلب آلياً، وحدُّ الأربعين مليوناً لا يُنذر دونه', async () => {
+  it('[SPEC 6.2] ⑥A2 — إعدادُ الفترة يُعلَن ولا يُقلب آلياً، وحدُّ الأربعين مليوناً لا يُنذر دونه', async () => {
     await auth(request(app.getHttpServer()).patch('/company-profile')).send({ vatPeriod: 'MONTHLY' }).expect(200);
     const res = await auth(request(app.getHttpServer()).get('/obligations/vat-declaration')).query({ year: 2026, month: 5 }).expect(200);
     expect(res.body).toMatchObject({ companyVatPeriod: 'MONTHLY', periodMatchesCompany: true });

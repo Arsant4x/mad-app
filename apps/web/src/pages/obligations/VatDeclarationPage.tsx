@@ -363,13 +363,49 @@ export function VatDeclarationPage() {
                     )}
                   </>
                 )}
+                {/* ⑥A3 (`ق-١٣٢٥`) — التصحيحاتُ تدخل الصافي بإشارتها (م٦٣/٢ · خانةُ م٦٢/٢/ي). */}
+                {declaration.corrections.rows.map((c) => (
+                  <tr key={c.id} data-testid="vat-correction-row">
+                    <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
+                      تصحيح {c.correctedPeriodType === 'MONTHLY' ? `شهر ${c.correctedPeriodNo}` : `الربع ${c.correctedPeriodNo}`} من {c.correctedYear} — {c.reason}
+                    </td>
+                    <td></td>
+                    <td className="num">{fmt(c.amount)}</td>
+                  </tr>
+                ))}
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
                   <td>{netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
                   <td></td>
                   <td className="num">{fmt(Math.abs(netVat))}</td>
                 </tr>
+                {/* ⑥A3 — المرحَّلُ يُعرض **حين يوجد وحدَه**، ومصدرُه مسمّىً فلا يُسأل «من أين». */}
+                {num0(declaration.carriedForward) !== 0 && declaration.carriedForwardFrom && (
+                  <>
+                    <tr data-testid="vat-carry-forward">
+                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
+                        رصيد مرحَّل من{' '}
+                        {declaration.carriedForwardFrom.periodType === 'MONTHLY' ? `شهر ${declaration.carriedForwardFrom.periodNo}` : `الربع ${declaration.carriedForwardFrom.periodNo}`} من{' '}
+                        {declaration.carriedForwardFrom.year}
+                      </td>
+                      <td></td>
+                      <td className="num">−{fmt(declaration.carriedForward)}</td>
+                    </tr>
+                    <tr style={{ fontWeight: 700, color: num0(declaration.netVatAfterCarryForward) >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
+                      <td>{num0(declaration.netVatAfterCarryForward) >= 0 ? 'المستحق بعد استنزال المرحَّل' : 'الفائض بعد استنزال المرحَّل'}</td>
+                      <td></td>
+                      <td className="num">{fmt(Math.abs(num0(declaration.netVatAfterCarryForward)))}</td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
+
+            {/* ⑥A3 (`ق-١٣٢٥`) — **ما لم يُبنَ يُعلَن في وجه الإقرار**: من يقرأ رقماً بلا تنبيهٍ يظنّه كاملاً. */}
+            {declaration.notBuilt.map((n) => (
+              <p key={n.code} className="hint" data-testid="vat-not-built" style={{ marginTop: 10, color: 'var(--muted)' }}>
+                ⓘ {n.note}
+              </p>
+            ))}
 
             {/* ⑧ ما يُعدّ ولا يدخل الخانات — يُعلَن حيث يُقرأ الرقم (ق-١٢١١/⑤ · ق-١٢٢٥). */}
             <p className="hint" style={{ marginTop: 10, color: 'var(--muted)' }}>{declaration.salesCitizensNote}</p>

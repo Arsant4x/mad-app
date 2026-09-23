@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount } from '../common/currency/base-amount.util';
@@ -8,12 +8,14 @@ import { computeDocumentTotals, lineNet } from '../common/money/totals';
 import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
-import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
+import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, previousVatPeriod, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
+import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, judgeCorrection } from '../common/vat/return-correction.util';
 import { annualSettlement, applyProportionalDeduction, type InputVatBuckets, proportionalRatio } from '../common/vat/proportional-deduction.util';
 import type { InputVatUse } from '@prisma/client';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { DeclareVatRatioDto } from './dto/vat-ratio.dto';
+import { DeclareVatCorrectionDto } from './dto/vat-correction.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -126,10 +128,10 @@ export class ObligationsService {
         where: {
           companyId_year_periodType_periodNo: { companyId, year: period.year, periodType: period.periodType, periodNo: period.periodNo },
         },
-        create: { companyId, year: period.year, periodType: period.periodType, periodNo: period.periodNo, netVat: declaration.netVat, filedAt: new Date() },
-        update: { netVat: declaration.netVat, filedAt: new Date() },
+        create: { companyId, year: period.year, periodType: period.periodType, periodNo: period.periodNo, netVat: declaration.netVat, filedAt: new Date(), refundRequested: dto.refundRequested ?? false },
+        update: { netVat: declaration.netVat, filedAt: new Date(), refundRequested: dto.refundRequested ?? false },
       });
-      return { year: filing.year, periodType: filing.periodType, periodNo: filing.periodNo, filedAt: filing.filedAt, netVat: money(filing.netVat) };
+      return { year: filing.year, periodType: filing.periodType, periodNo: filing.periodNo, filedAt: filing.filedAt, netVat: money(filing.netVat), refundRequested: filing.refundRequested };
     });
   }
 
@@ -138,6 +140,56 @@ export class ObligationsService {
       const period = resolveVatPeriod(dto);
       await tx.vatReturnFiling.deleteMany({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo } });
       return { year: period.year, periodType: period.periodType, periodNo: period.periodNo, filed: null };
+    });
+  }
+
+  /**
+   * ⑥A3 (`ق-١٣٢٥`) — **إعلانُ تصحيحٍ لإقرارٍ سابق** (م٦٣).
+   *
+   * ⚠️ **والرفضُ يقول ما يفعل**: نقصٌ يبلغ خمسةَ آلافٍ **يوجب إشعارَ الهيئة خلال عشرين
+   * يوماً** ولا يُبتلع هنا — ونظامٌ يقبله يجعل التاجر يظنّ أنه امتثل وهو لم يُشعر.
+   */
+  declareCorrection(companyId: string, dto: DeclareVatCorrectionDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const declaredIn = resolveVatPeriod(dto);
+      const corrected = { year: dto.correctedYear, periodType: dto.correctedPeriodType, periodNo: dto.correctedPeriodNo };
+      const verdict = judgeCorrection(declaredIn, corrected, dto.amount, new Date());
+      if (!verdict.ok) {
+        const message =
+          verdict.code === 'NOT_EARLIER'
+            ? MSG.vat_correction_not_earlier
+            : verdict.code === 'UNDERSTATEMENT_NEEDS_NOTICE'
+              ? MSG.vat_correction_needs_notice
+              : MSG.vat_correction_time_barred;
+        throw new BadRequestException(formatMessage(message, { limit: String(CORRECTION_UNDERSTATEMENT_LIMIT), years: String(CORRECTION_OVERSTATEMENT_YEARS) }));
+      }
+      const row = await tx.vatReturnCorrection.create({
+        data: {
+          companyId,
+          year: declaredIn.year,
+          periodType: declaredIn.periodType,
+          periodNo: declaredIn.periodNo,
+          correctedYear: corrected.year,
+          correctedPeriodType: corrected.periodType,
+          correctedPeriodNo: corrected.periodNo,
+          amount: dto.amount,
+          reason: dto.reason.trim(),
+        },
+      });
+      return { id: row.id, amount: money(Number(row.amount)), reason: row.reason };
+    });
+  }
+
+  /** ⑥A3 — سحبُ تصحيحٍ أُعلن خطأً، **ما دام إقرارُه لم يُقدَّم بعد**. */
+  removeCorrection(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const row = await tx.vatReturnCorrection.findUnique({ where: { id } });
+      if (!row) throw new NotFoundException(MSG.vat_correction_not_found);
+      const filing = await tx.vatReturnFiling.findFirst({ where: { year: row.year, periodType: row.periodType, periodNo: row.periodNo } });
+      // ⛔ **ولا يُسحب من إقرارٍ قُدِّم**: ما قُدِّم للهيئة يُصحَّح بتصحيحٍ لا بمحوٍ من سجلِّنا.
+      if (filing) throw new ConflictException(MSG.vat_correction_filed_locked);
+      await tx.vatReturnCorrection.delete({ where: { id } });
+      return { id, removed: true };
     });
   }
 
@@ -409,7 +461,27 @@ export class ObligationsService {
       const settlement = proportionalApplies && appliedRatio !== null && isLastPeriodOfYear(period) ? await this.annualSettlementWithinTx(tx, period.year, appliedRatio, declaredRatio) : null;
 
       // وفرقُ التسوية **خصمٌ إضافي** حين يكون موجباً (خُصم أقلُّ مما يحقّ) وردٌّ حين يكون سالباً.
-      const netVat = round2(salesStandardVat - deductibleInputVat - (settlement?.difference ?? 0));
+      /**
+       * ⑥A3 (`ق-١٣٢٥`) — **تصحيحاتُ إقراراتٍ سابقة تُعلَن في هذا الإقرار** (م٦٣/٢ · خانةُ م٦٢/٢/ي).
+       * موجبٌ يزيد المستحقَّ وسالبٌ ينقصه — وإشارةُ الصفّ هي إشارتُه في الصافي.
+       */
+      const corrections = await tx.vatReturnCorrection.findMany({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo }, orderBy: { declaredAt: 'asc' } });
+      const correctionsTotal = round2(corrections.reduce((s, c) => s + Number(c.amount), 0));
+
+      const netVat = round2(salesStandardVat - deductibleInputVat - (settlement?.difference ?? 0) + correctionsTotal);
+
+      /**
+       * ⑥A3 — **الرصيدُ المرحَّل من الفترة السابقة** (`otherwise excess Tax will be carried forward`).
+       *
+       * ⚠️ **ومن الفترة السابقة المقدَّمة وحدَها**: الفائضُ يصير رصيداً **حين يُقدَّم الإقرار**،
+       * وقراءةُ فترةٍ لم تُقدَّم بعد **قراءةُ عمل** لا واقعةٌ يُبنى عليها رصيد. ولو طُلب ردُّه
+       * **فقد خرج** فلا يُرحَّل — ولذلك يُعلَن الطلبُ ولا يُخمَّن.
+       */
+      const prev = previousVatPeriod(period);
+      const prevFiling = await tx.vatReturnFiling.findFirst({ where: { year: prev.year, periodType: prev.periodType, periodNo: prev.periodNo } });
+      const carriedForward = prevFiling && !prevFiling.refundRequested && Number(prevFiling.netVat) < 0 ? round2(-Number(prevFiling.netVat)) : 0;
+      /** ما يُدفع (أو يُستردّ) بعد استنزال المرحَّل — و`netVat` يبقى صافيَ الفترة نفسِها. */
+      const netVatAfterCarryForward = round2(netVat - carriedForward);
       // علَمُ «قُدِّم» (ق-٩١٩): إن وُسم الربعُ فالمقارنةُ بين ما قُدِّم وما يُقرأ الآن — وبلا وسمٍ لا رسالة.
       const filing = await tx.vatReturnFiling.findFirst({ where: { year: period.year, periodType: period.periodType, periodNo: period.periodNo } });
       const filed = filing ? { filedAt: filing.filedAt, netVat: round2(Number(filing.netVat)) } : null;
@@ -446,6 +518,31 @@ export class ObligationsService {
           message: `غيرُ القابل للخصم من ضريبة المدخلات في هذه الفترة ${money(deduction.nonDeductible)} — **يُخصم من الإقرار ولا يُرحَّل في الدفتر بعد**: ما زال كاملاً في حساب ضريبة المدخلات، فرصيدُه أعلى مما يُستردّ بهذا المقدار. ومعالجتُه قيداً قرارٌ محاسبيٌّ لم يُحسم بعد (أيُّ حسابِ مصروفٍ ومتى)`,
         });
       }
+
+      /**
+       * ⑥A3 (`ق-١٣٢٥`) — **الخانتان `8` و`9` لم تُبنَيا، ويُعلَن ذلك لمن يمسّه وحدَه.**
+       *
+       * اللائحةُ تؤكّد المفهومين (م٦٢/٢/د الاحتسابُ العكسيّ · م٦٢/٢/و ضريبةُ الاستيراد)،
+       * **لكنّ ترقيمَ الخانات وحسابَها قُرئا صورةً لا نصّاً** ومسحُ الباب ⑥ يشترط صراحةً
+       * مصادقتَهما **على النموذج الحيّ في بوابة الهيئة قبل أن تُبنى** (`حدودُ المسح` ٢).
+       * وبيانُ الاستيراد نفسُه **موجةٌ مسمّاة `٧-ب`** لا سطرٌ هنا.
+       *
+       * ⚠️ **فيُعلَن ولا يُخمَّن**: إقرارُ مستوردٍ يخرج من هنا **ناقصاً خانتين**، ومن يقرأ
+       * رقماً بلا تنبيهٍ يظنّه كاملاً. والتنبيهُ **لمن له مورّدٌ أجنبيّ وحدَه** — فلا يُثقَل
+       * به تاجرُ تجزئةٍ محلّيّ لا يستورد.
+       */
+      /**
+       * ⚠️ **وهو إعلانٌ ثابتٌ لا بانرُ إنذار**: لا حقلَ على المورّد يقول «غيرُ مقيم» بعد
+       * (`Supplier` بلا `country` — مقيسٌ على المخطَّط؛ و`country` على `Customer` وحدَه)،
+       * **فلا يُقاس من يمسّه** — وبانرٌ يُنذر الجميع يُعطَّل (`ق-٦٥`). فيُعلَن نصّاً في
+       * موضعه من الردّ: **من يستورد يقرؤه، ومن لا يستورد لا يُثقَل به**.
+       */
+      const notBuilt = [
+        {
+          code: 'IMPORT_BOXES',
+          note: 'خانتا الاستيراد — الضريبةُ المدفوعة عند الجمارك، والاحتسابُ العكسيّ على ما يُورَّد من خارج المملكة — غير مبنيّتين بعد (المفهومان في المادة ٦٢ فقرة ٢/د و٢/و). فإن كان لك استيراد في هذه الفترة، أكمِل الخانتين في نموذج الهيئة يدوياً. ويسبق بناءهما: حقلٌ يميّز المورّد غير المقيم، ومستندُ بيان الاستيراد، ومصادقةُ ترقيم الخانات على النموذج الحيّ',
+        },
+      ];
 
       /**
        * ⑥A2 (`ق-١٣٢٥`) — **حدُّ الأربعين مليوناً يُقاس ويُعلَن ولا يُبدَّل به إعدادُ التاجر.**
@@ -544,6 +641,27 @@ export class ObligationsService {
           settlement,
         },
         netVat: money(netVat),
+        /**
+         * ⑥A3 (`ق-١٣٢٥`) — المرحَّلُ والتصحيحاتُ بأصلهما، **و`netVat` يبقى صافيَ الفترة نفسِها**
+         * فلا يتغيّر معناه عمّا يُقاس عليه «تغيّر بعد التقديم».
+         */
+        /** ⑥A3 — ما لم يُبنَ من الإقرار، **معلَناً في وجهه لا في وثيقةٍ بعيدة**. */
+        notBuilt,
+        carriedForward: money(carriedForward),
+        carriedForwardFrom: carriedForward > 0 ? { year: prev.year, periodType: prev.periodType, periodNo: prev.periodNo } : null,
+        netVatAfterCarryForward: money(netVatAfterCarryForward),
+        corrections: {
+          total: money(correctionsTotal),
+          rows: corrections.map((c) => ({
+            id: c.id,
+            correctedYear: c.correctedYear,
+            correctedPeriodType: c.correctedPeriodType,
+            correctedPeriodNo: c.correctedPeriodNo,
+            amount: money(Number(c.amount)),
+            reason: c.reason,
+            declaredAt: c.declaredAt,
+          })),
+        },
         invoiceCount: invoices.length,
         purchaseCount: purchases.length,
         /** ④A1: ما طُرح في هذا الربع من دفعاتٍ مقدَّمة سبق إقرارُها في ربع قبضها — عدّاً ووعاءً وضريبةً. */

@@ -113,6 +113,17 @@ export interface VatDeclaration {
     } | null;
   };
   netVat: MoneyText;
+  /** ⑥A3 (`ق-١٣٢٥`) — ما لم يُبنَ من الإقرار، معلَناً في وجهه لا في وثيقةٍ بعيدة. */
+  notBuilt: { code: string; note: string }[];
+  /** ⑥A3 — الرصيدُ المرحَّل من الفترة السابقة المقدَّمة، و`netVat` يبقى صافيَ الفترة نفسِها. */
+  carriedForward: MoneyText;
+  carriedForwardFrom: { year: number; periodType: VatPeriodType; periodNo: number } | null;
+  netVatAfterCarryForward: MoneyText;
+  /** ⑥A3 — تصحيحاتُ إقراراتٍ سابقة تُعلَن في هذا الإقرار (م٦٣/٢). */
+  corrections: {
+    total: MoneyText;
+    rows: { id: string; correctedYear: number; correctedPeriodType: VatPeriodType; correctedPeriodNo: number; amount: MoneyText; reason: string; declaredAt: string }[];
+  };
   invoiceCount: number;
   purchaseCount: number;
   /** علَمُ «قُدِّم» (ق-٩١٩) — يضعه التاجر بيده. */

@@ -20,7 +20,7 @@ jest.setTimeout(180000);
  * **والخطأُ الشائع** `(150+150+400) × 0.5 = 350` **يتصادف مع الصواب**، فاختيرت الأرقامُ
  * بحيث يفترقان: انظر المرحلة ④.
  */
-describe('⑥A1 — الخصمُ النسبيّ (e2e)', () => {
+describe('[SPEC 6.2] ⑥A1 — الخصمُ النسبيّ (e2e)', () => {
   let app: INestApplication;
   let company: IsolatedCompany;
   const http = () => request(app.getHttpServer());

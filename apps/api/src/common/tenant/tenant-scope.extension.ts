@@ -97,6 +97,7 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'RentAccrual',
   'VatReturnFiling',
   'VatProportionalRatio',
+  'VatReturnCorrection',
   'ContractDeposit',
   'DepositDeduction',
   'ContractClaim',
