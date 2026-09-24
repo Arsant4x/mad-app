@@ -408,6 +408,7 @@ export interface CreatePosPaymentAttemptDto {
   customerId?: string;
   ringAt?: string;
   ringOffsetMin?: number;
+  cardDeviceReference?: string;
   clientSaleId: string;
   offlineRef?: string;
 }
@@ -420,6 +421,7 @@ export interface CreatePosSaleDto {
   customerId?: string;
   ringAt?: string;
   ringOffsetMin?: number;
+  cardDeviceReference?: string;
 }
 
 /** جسمُ طلب — `CreateProductDto` في الخادم. */
@@ -1072,13 +1074,13 @@ export interface SupplierNoteLineDto {
 export interface SyncPosSaleDto {
   clientSaleId: string;
   offlineRef?: string;
-  cardDeviceReference?: string;
   lines: PosSaleLineDto[];
   paymentMethod: 'CASH' | 'CARD' | 'SPLIT';
   payments?: PosPaymentPartDto[];
   customerId?: string;
   ringAt?: string;
   ringOffsetMin?: number;
+  cardDeviceReference?: string;
 }
 
 /** جسمُ طلب — `TransitionTaskDto` في الخادم. */
