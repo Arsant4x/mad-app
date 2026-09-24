@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { FiscalPeriodStatus } from '@mad-app/shared/api/enums';
 
-export type FiscalPeriodStatus = 'OPEN' | 'CLOSED';
+export type { FiscalPeriodStatus };
 
 export interface FiscalPeriod {
   id: string;

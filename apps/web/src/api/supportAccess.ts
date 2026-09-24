@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { SupportGrantStatus } from '@mad-app/shared/api/enums';
 
-export type SupportGrantStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'REVOKED';
+export type { SupportGrantStatus };
 
 export interface SupportGrant {
   id: string;

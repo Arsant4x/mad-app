@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { UnitStatus } from '@mad-app/shared/api/enums';
 
-export type UnitStatus = 'vacant' | 'rented' | 'maintenance' | 'reserved' | 'upcoming';
+export type { UnitStatus };
 
 export interface Unit {
   archived: boolean;

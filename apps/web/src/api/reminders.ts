@@ -1,8 +1,9 @@
 import { apiClient } from './client';
+import type { ReminderChannel } from '@mad-app/shared/api/enums';
 
 /** How the reminder actually reached the tenant. Recorded because no messaging
  * provider is wired up — the user copies the text and sends it themselves. */
-export type ReminderChannel = 'WHATSAPP' | 'SMS' | 'CALL' | 'EMAIL' | 'OTHER';
+export type { ReminderChannel };
 
 export interface ReminderPolicy {
   enabled: boolean;

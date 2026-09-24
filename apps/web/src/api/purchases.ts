@@ -1,9 +1,10 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Supplier } from './suppliers';
+import type { PurchaseDocType, PurchaseStatus } from '@mad-app/shared/api/enums';
 
 /** نوعُ مستند الشراء — الأصلُ وإشعارا المورّد عليه (`ق-١٠٠٦`): صفٌّ في الجدول نفسِه بنوعه، كإشعار البيع. */
-export type PurchaseDocType = 'PURCHASE' | 'SUPPLIER_CREDIT_NOTE' | 'SUPPLIER_DEBIT_NOTE';
+export type { PurchaseDocType };
 
 export interface Purchase {
   id: string;
@@ -41,7 +42,7 @@ export interface Purchase {
   remaining: MoneyText;
 }
 
-export type PurchaseStatus = 'DUE' | 'PARTIAL' | 'PAID';
+export type { PurchaseStatus };
 
 export interface CreatePurchaseInput {
   supplierId: string;

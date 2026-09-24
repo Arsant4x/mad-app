@@ -1,12 +1,14 @@
 import { apiClient } from './client';
+import { PLATFORM_DECISION_ACTION_VALUES } from '@mad-app/shared/api/enums';
+import type { PlatformDecisionAction, PlatformDecisionStatus } from '@mad-app/shared/api/enums';
 
 /**
  * **القراراتُ المنصّية الحرجة** (`ق-١٣١٨` · ⑪A1) — الفعلُ الذي لا يُردّ **بيدين لا بيد**.
  * والأفعالُ مرسومةٌ من `PlatformDecisionAction` في الخادم.
  */
-export const PLATFORM_DECISION_ACTIONS = ['ACCOUNT_ERASURE', 'SUBSCRIPTION_CHANGE', 'REFUND'] as const;
-export type PlatformDecisionAction = (typeof PLATFORM_DECISION_ACTIONS)[number];
-export type PlatformDecisionStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTED';
+export const PLATFORM_DECISION_ACTIONS = PLATFORM_DECISION_ACTION_VALUES;
+export type { PlatformDecisionAction };
+export type { PlatformDecisionStatus };
 
 export interface PlatformDecision {
   id: string;

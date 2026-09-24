@@ -8,6 +8,8 @@
  *
  * والنسبةُ للعرض والمعاينة وحدَهما: الخادمُ يشتقّها من فئة الصنف على كل سطرٍ ويعيد المجاميع.
  */
+import type { DeclarableTaxCategory } from '@mad-app/shared/api/enums';
+
 export const STANDARD_VAT_RATE = 15;
 
 /** معاملُ الإجمالي من الصافي (`1.15`) — للمعاينة قبل أن يعيد الخادمُ الرقمَ المعتمَد. */
@@ -19,7 +21,7 @@ export function standardVatIncludedIn(gross: number): number {
 }
 
 /** الفئاتُ التي يُعلنها التاجر — والقيمتان القديمتان (`LEGACY_*`) تُقرآن ولا تُختاران. */
-export type DeclarableTaxCategory = 'S' | 'Z' | 'E' | 'O';
+export type { DeclarableTaxCategory };
 export type TaxCategory = DeclarableTaxCategory | 'LEGACY_STANDARD' | 'LEGACY_ZERO';
 
 /** تسمياتُ الفئات كما في النموذج المرئيّ المُقرّ (`ق-١٢٢٢`). */

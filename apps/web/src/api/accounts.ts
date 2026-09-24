@@ -1,7 +1,8 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { AccountType } from '@mad-app/shared/api/enums';
 
-export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+export type { AccountType };
 
 export interface Account {
   id: string;

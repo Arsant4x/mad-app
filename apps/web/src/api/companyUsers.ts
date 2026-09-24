@@ -1,13 +1,14 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
+import type { CompanyUserSettableStatus, CompanyUserStatus } from '@mad-app/shared/api/enums';
 
 /**
  * حالةُ حساب الموظف **كما يحملها عمودُه** (`AccountStatus` — أربع قيم، ومنها `CLOSED`) — `ق-١٣٦٧`: كانت ثلاثاً تطابق حدَّ الإدخال
  * لا العمود، فقيمةٌ في القاعدة لا تعرفها الشاشة. **وما يُرسَل في التعديل** هو `CompanyUserSettableStatus` — حدُّ `UpdateCompanyUserDto`.
  */
-export type CompanyUserStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
+export type { CompanyUserStatus };
 /** ما يقبله الخادمُ في التعديل (`STATUSES` في `update-company-user.dto.ts`) — لا `CLOSED`. */
-export type CompanyUserSettableStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED';
+export type { CompanyUserSettableStatus };
 
 export interface CompanyUser {
   id: string;

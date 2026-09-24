@@ -1,12 +1,13 @@
 import { apiClient } from './client';
+import type { MaintenancePriority, MaintenanceStatus } from '@mad-app/shared/api/enums';
 
 /** Urgent is a habitability/liability issue (a burst pipe, a failed lift), not
  * a mood — which is why it is ranked rather than left to a note. */
-export type MaintenancePriority = 'URGENT' | 'HIGH' | 'NORMAL';
+export type { MaintenancePriority };
 
 /** DONE and CLOSED are distinct on purpose: the contractor says it's finished,
  * the landlord confirms it actually is. */
-export type MaintenanceStatus = 'REPORTED' | 'ASSIGNED' | 'IN_PROGRESS' | 'DONE' | 'CLOSED' | 'CANCELLED';
+export type { MaintenanceStatus };
 
 export interface MaintenanceRequest {
   id: string;

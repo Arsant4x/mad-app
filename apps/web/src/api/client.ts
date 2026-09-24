@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import i18n from '../i18n';
+import type { AccountStatus, ActorType, PlatformRole } from '@mad-app/shared/api/enums';
 
 /** The API answers in whichever of `ar`/`en` this resolves to; anything else
  * falls back to Arabic server-side. */
@@ -18,12 +19,12 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const API_VERSION_PREFIX = 'v1';
 const API_BASE = `${API_URL.replace(/\/+$/, '')}/${API_VERSION_PREFIX}`;
 
-export type ActorType = 'PLATFORM_ADMIN' | 'COMPANY' | 'COMPANY_USER';
+export type { ActorType };
 /** `CLOSED` الحالةُ الرابعة (`ق-٥٤٧`): مغلقٌ بطلب التاجر — لا يعود بالدفع، بل بطلبٍ وقرار. */
-export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
+export type { AccountStatus };
 
 /** أدوارُ مدير المنصّة (`ق-١٣١٢` · ⑪A2) — مرسومةٌ من `PlatformRole` في الخادم. */
-export type PlatformRole = 'OWNER' | 'SUPPORT' | 'FINANCE' | 'OPERATIONS' | 'COMPLIANCE';
+export type { PlatformRole };
 
 export interface AuthUser {
   id: string;

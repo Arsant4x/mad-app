@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { LeaveStatus } from '@mad-app/shared/api/enums';
 
 export interface LeaveType {
   id: string;
@@ -13,7 +14,7 @@ export interface LeaveTypeInput {
   paid?: boolean;
 }
 
-export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type { LeaveStatus };
 
 export interface LeaveRequest {
   id: string;

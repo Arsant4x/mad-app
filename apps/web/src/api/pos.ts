@@ -1,8 +1,9 @@
 import type { MoneyText, QtyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
+import type { PosPaymentMethod } from '@mad-app/shared/api/enums';
 
-export type PosPaymentMethod = 'CASH' | 'CARD' | 'SPLIT';
+export type { PosPaymentMethod };
 
 export interface PosPaymentPart {
   method: 'CASH' | 'CARD';

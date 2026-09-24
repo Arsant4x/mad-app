@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CashDepositStatus, NetworkSettlementStatus } from '@mad-app/shared/api/enums';
 
 export interface Bank {
   archived: boolean;
@@ -89,7 +90,7 @@ export const reopenReconciliation = (bankId: string) =>
   apiClient.post<{ bankId: string; reconciledUntil: string | null }>(`/banks/${bankId}/reconciliation/reopen`).then((r) => r.data);
 
 /** إيداعُ نقدِ الدرج في البنك عبر «نقدٍ في الطريق» `1190` (`ق-١٢٦١` ج — ⑦A3). كلُّ رقمٍ نصٌّ من الخادم. */
-export type CashDepositStatus = 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
+export type { CashDepositStatus };
 export interface CashDeposit {
   id: string;
   no: string;
@@ -125,7 +126,7 @@ export const voidCashDeposit = (id: string, reason?: string) =>
   apiClient.post<CashDeposit & { voidEntryNo: string }>(`/banks/cash-deposits/${id}/void`, { reason }).then((r) => r.data);
 
 /** تسويةُ الشبكة `1251` (`ق-١٢٦١` ج — ⑦A2): الإجماليُّ من السندات، والصافي إلى البنك؛ كلُّ رقمٍ نصٌّ من الخادم. */
-export type NetworkSettlementStatus = 'POSTED' | 'VOID';
+export type { NetworkSettlementStatus };
 export interface NetworkSettlement {
   id: string;
   no: string;

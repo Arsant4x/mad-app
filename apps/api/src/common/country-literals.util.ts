@@ -78,8 +78,14 @@ function isProduction(rel: string): boolean {
  * ⚖️ **ومعها سجلُّ الأقاليم** (`common/region/` — `ق-١٣٦٨`): هو **مسكنُ قيم الدولة** بطبيعته — منه تُكتب الحقولُ الأربعة على المنشأة
  * عند ميلادها لتُقرأ من المنشأة في كلِّ موضعٍ آخر (`ق-١٣٥٠` ②). فعلامتُه هناك ليست دَيناً يُنقَص بل الموضعُ الذي يُنقَص إليه الدَّين.
  */
+/**
+ * علامةُ المسار التي تجعل ملفّاً داخل الوحدة — **مصدرٌ واحد** يقرؤه الحدُّ هنا ومولِّدُ التعدادات المشتركة (`ق-١٣٨٤`) حين يسمّي
+ * ملفَّ ما يحمل علامةً سعودية: فإن تغيّر الحدُّ تبعه المولَّد، ولا يُكتب اسمُ الوحدة في مولِّدٍ عامّ.
+ */
+export const SAUDI_UNIT_PATH_MARK = 'zatca';
+
 export function insideSaudiBoundary(rel: string): boolean {
-  if (/zatca/i.test(rel)) return true;
+  if (rel.toLowerCase().includes(SAUDI_UNIT_PATH_MARK)) return true;
   if (rel.startsWith('apps/api/src/common/region/')) return true;
   if (rel.startsWith('apps/api/src/common/vat/') || rel.startsWith('apps/api/src/obligations/')) return true;
   if (rel.startsWith('apps/web/src/pages/obligations/')) return true;

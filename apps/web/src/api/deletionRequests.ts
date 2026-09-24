@@ -1,11 +1,12 @@
 import { apiClient } from './client';
 import type { AccountStatus } from './client';
+import type { AccountRequestKind, AccountRequestOutcome, DeletionRequestStatus } from '@mad-app/shared/api/enums';
 
-export type DeletionRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+export type { DeletionRequestStatus };
 /** نوعُ الطلب: حذفٌ — أو إعادةُ فتحٍ لحسابٍ مغلق (ق-٥٤٨) — أو إتلافٌ صريحٌ لغير الملزِم (ق-٥٥٩). */
-export type AccountRequestKind = 'DELETION' | 'REOPENING' | 'ERASURE';
+export type { AccountRequestKind };
 /** ما وقع بالموافقة (ق-٥٤٢): حُذفت (بلا حركة) · أُغلقت (لها حركة) · أُعيد فتحُها · مُحي غيرُ الملزِم. */
-export type AccountRequestOutcome = 'DELETED' | 'CLOSED' | 'REOPENED' | 'ERASED';
+export type { AccountRequestOutcome };
 
 export interface DeletionRequest {
   id: string;

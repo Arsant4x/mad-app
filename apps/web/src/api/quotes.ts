@@ -1,8 +1,9 @@
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
 import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
+import type { QuoteStatus } from '@mad-app/shared/api/enums';
 
-export type QuoteStatus = 'DRAFT' | 'SENT' | 'CONVERTED';
+export type { QuoteStatus };
 /** EXPIRED مشتقة قراءةً من validUntil — لا تُخزَّن. */
 export type DerivedQuoteStatus = QuoteStatus | 'EXPIRED';
 

@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { EmployeeStatus } from '@mad-app/shared/api/enums';
 
-export type EmployeeStatus = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
+export type { EmployeeStatus };
 
 export interface Employee {
   archived: boolean;

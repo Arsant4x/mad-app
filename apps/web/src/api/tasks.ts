@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { TaskAssigneeKind, TaskPriority, TaskStatus } from '@mad-app/shared/api/enums';
 
 /**
  * عميل المهام — **ينقل ولا يحسب**.
@@ -8,14 +9,14 @@ import { apiClient } from './client';
  * ثانية تفترق عند أول تعديل، ويرى المستخدم زرّاً يرفضه الخادم.
  */
 
-export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CANCELLED';
+export type { TaskStatus };
 /** الأولوية (SPEC 14.2) — القائمةُ المغلقة في الخادم، وهذه نسختُها للعرض. */
-export type TaskPriority = 'URGENT' | 'HIGH' | 'NORMAL';
+export type { TaskPriority };
 /**
  * وسمُ فضاء المكلَّف (`ق-٦٣٩`): `OWNER` ⇒ `assigneeId` هو معرّفُ المنشأة (المالك)،
  * `USER` ⇒ معرّفُ حسابٍ فرعيّ. **إلزاميٌّ عند الإنشاء** — والخادمُ يردّ `400` بدونه.
  */
-export type TaskAssigneeKind = 'OWNER' | 'USER';
+export type { TaskAssigneeKind };
 
 /** سطرٌ من سجل المهمّة — انتقالٌ، أو تعليقٌ حين يستوي الطرفان. */
 export interface TaskLogLine {

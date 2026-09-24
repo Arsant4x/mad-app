@@ -197,16 +197,42 @@ export function typeValues(sf: ts.SourceFile, node: ts.TypeNode | undefined, ctx
   return null;
 }
 
-/** قيمُ نوعٍ مسمّى — في الملفّ نفسِه، أو عبر استيرادٍ نسبيّ، أو تعدادٌ من `@prisma/client`. */
+/** قيمُ نوعٍ مسمّى — في الملفّ نفسِه، أو عبر استيرادٍ أو إعادةِ تصدير (نسبيّين أو من الحزمة المشتركة)، أو تعدادٌ من `@prisma/client`. */
 export function namedTypeValues(sf: ts.SourceFile, name: string, ctx: ResolveContext = newContext()): string[] | null {
   const key = `${sf.fileName}#${name}`;
   if (ctx.seen.has(key)) return null;
   ctx.seen.add(key);
   const alias = findTypeAlias(sf, name);
   if (alias) return typeValues(sf, alias.type, ctx);
-  const target = importedFrom(sf, name);
+  const target: { file?: string; prisma?: boolean; name: string } | null = importedFrom(sf, name) ?? reExportedFrom(sf, name);
   if (target?.file) return namedTypeValues(sourceOf(target.file), target.name, ctx);
   if (target?.prisma) return ctx.prismaEnums?.get(target.name) ?? null;
+  return null;
+}
+
+/**
+ * ⚖️ `ق-١٣٨٤` — **الحزمةُ المشتركة تُحلّ من مصدرها في هذه الشجرة** لا من `node_modules` (الذي قد يشير إلى نسخة عملٍ أخرى):
+ * `@mad-app/shared/<مسار>` ⟵ خريطةُ `exports` في `packages/shared/package.json`.
+ */
+const SHARED_PACKAGE = '@mad-app/shared';
+
+function sharedExportTarget(spec: string, root = REPO_ROOT): string | null {
+  if (spec !== SHARED_PACKAGE && !spec.startsWith(`${SHARED_PACKAGE}/`)) return null;
+  const sub = spec === SHARED_PACKAGE ? '.' : `.${spec.slice(SHARED_PACKAGE.length)}`;
+  const pkg = JSON.parse(readFileSync(join(root, 'packages', 'shared', 'package.json'), 'utf8')) as { exports?: Record<string, string> };
+  const target = pkg.exports?.[sub];
+  return target ? join(root, 'packages', 'shared', target) : null;
+}
+
+/** مسارُ ملفٍّ لمُحدِّد وحدة: نسبيٌّ (`.ts` · `.tsx` · `index.ts`) أو من الحزمة المشتركة — وغيرُ ذلك `null`. */
+export function resolveSpecifier(fromFile: string, spec: string): string | null {
+  const shared = sharedExportTarget(spec);
+  if (shared) return existsSync(shared) ? shared : null;
+  if (!spec.startsWith('.')) return null;
+  const base = resolve(dirname(fromFile), spec);
+  for (const cand of [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')]) {
+    if (existsSync(cand)) return cand;
+  }
   return null;
 }
 
@@ -221,11 +247,25 @@ export function importedFrom(sf: ts.SourceFile, local: string): { file?: string;
       if (el.name.text !== local) continue;
       const name = (el.propertyName ?? el.name).text;
       if (spec === '@prisma/client') return { prisma: true, name };
-      if (!spec.startsWith('.')) return null;
-      const base = resolve(dirname(sf.fileName), spec);
-      for (const cand of [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')]) {
-        if (existsSync(cand)) return { file: cand, name };
-      }
+      const file = resolveSpecifier(sf.fileName, spec);
+      return file ? { file, name } : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * ⚖️ `ق-١٣٨٤` — **وإعادةُ التصدير كالاستيراد**: `export type { A } from '…'` و`export { A as B } from '…'` — فتعدادٌ صار يُعاد تصديرُه
+ * من الحزمة المشتركة يُقرأ من هناك، ولا يعمى عنه الحارسُ لأنه لم يعد تصريحاً في ملفّه.
+ */
+export function reExportedFrom(sf: ts.SourceFile, exported: string): { file: string; name: string } | null {
+  for (const st of sf.statements) {
+    if (!ts.isExportDeclaration(st) || !st.moduleSpecifier || !st.exportClause || !ts.isNamedExports(st.exportClause)) continue;
+    const spec = (st.moduleSpecifier as ts.StringLiteral).text;
+    for (const el of st.exportClause.elements) {
+      if (el.name.text !== exported) continue;
+      const file = resolveSpecifier(sf.fileName, spec);
+      return file ? { file, name: (el.propertyName ?? el.name).text } : null;
     }
   }
   return null;
@@ -316,15 +356,39 @@ export function webApiFiles(root = REPO_ROOT): string[] {
   return out.sort();
 }
 
-/** كلُّ اتّحادٍ حرفيٍّ **مصدَّر** في ملفّ: `file#Name` ⟵ قيمُه. */
+/**
+ * ⚖️ **مولَّدٌ بحارسٍ آخر — يُستثنى بالاسم لا يُضيَّق له السطح** (`§8.7`): مفرداتُ الصلاحيات في `packages/shared/src/permissions.ts`
+ * مرسومةٌ من `apps/api/src/templates/screens.ts` ويحرسها `shared-permissions-generated.spec.ts` (`ق-١٢٣٤`) — فإعادةُ تصديرها
+ * (`ScreenKey` · `ScreenAction`) لا تُسجَّل مقابلاً ثانياً هنا. وملفٌّ مولَّدٌ جديد يُضاف إلى هذه القائمة بحارسه، أو يُسجَّل.
+ */
+export const GENERATED_ELSEWHERE: ReadonlySet<string> = new Set(['packages/shared/src/permissions.ts']);
+
+/** الملفُّ الذي يعيش فيه اسمٌ مستوردٌ أو مُعادُ التصدير في هذا الملفّ (خطوةٌ واحدة) — أو `null`. */
+function sourceFileOf(sf: ts.SourceFile, name: string): string | null {
+  return (importedFrom(sf, name) ?? reExportedFrom(sf, name))?.file ?? null;
+}
+
+/**
+ * كلُّ اتّحادٍ حرفيٍّ **مصدَّر** في ملفّ: `file#Name` ⟵ قيمُه — تصريحاً فيه، **أو إعادةَ تصديرٍ** (`export type { X } from '…'` ·
+ * `export type { X }` لمستورَد — `ق-١٣٨٤`): فتعدادٌ صار مولَّداً في الحزمة المشتركة ويُعاد تصديرُه باسمه يبقى في سطح التغطية (①).
+ */
 export function exportedLiteralUnions(absFile: string, root = REPO_ROOT, prisma?: PrismaShape): Map<string, string[]> {
   const sf = sourceOf(absFile);
   const out = new Map<string, string[]>();
+  const key = (name: string) => `${posix(relative(root, absFile))}#${name}`;
   for (const st of sf.statements) {
-    if (!ts.isTypeAliasDeclaration(st)) continue;
-    if (!st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
-    const v = typeValues(sf, st.type, newContext(prisma?.enums));
-    if (v && v.length > 0) out.set(`${posix(relative(root, absFile))}#${st.name.text}`, v);
+    if (ts.isTypeAliasDeclaration(st)) {
+      if (!st.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+      const v = typeValues(sf, st.type, newContext(prisma?.enums));
+      if (v && v.length > 0) out.set(key(st.name.text), v);
+    } else if (ts.isExportDeclaration(st) && st.exportClause && ts.isNamedExports(st.exportClause)) {
+      for (const el of st.exportClause.elements) {
+        const from = sourceFileOf(sf, el.name.text);
+        if (from && GENERATED_ELSEWHERE.has(posix(relative(root, from)))) continue;
+        const v = namedTypeValues(sf, el.name.text, newContext(prisma?.enums));
+        if (v && v.length > 0) out.set(key(el.name.text), v);
+      }
+    }
   }
   return out;
 }

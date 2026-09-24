@@ -1,14 +1,15 @@
 import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { SupplierPaymentInputMethod, SupplierPaymentMethod } from '@mad-app/shared/api/enums';
 
 /**
  * طريقةُ سند الصرف **كما يحملها عمودُه** (`PaymentMethod` — ومنها `CARD`) — `ق-١٣٦٧`: العمودُ التعدادُ المشترك ولا قيدَ فيه يمنع
  * الشبكة، فالشاشةُ تعرف القيمَ كلَّها. **وما يُرسَل** `SupplierPaymentInputMethod`: نقداً أو تحويلاً — **ولا شبكة** لسداد مورّد (`ق-٨٧٢`).
  */
-export type SupplierPaymentMethod = 'CASH' | 'BANK' | 'CARD';
+export type { SupplierPaymentMethod };
 /** ما يقبله الخادمُ في إنشاء السند (`@IsIn` على `CreateSupplierPaymentDto.method`). */
-export type SupplierPaymentInputMethod = 'CASH' | 'BANK';
+export type { SupplierPaymentInputMethod };
 
 export interface SupplierPaymentAllocation {
   id: string;

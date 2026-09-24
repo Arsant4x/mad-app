@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { IntegrationKind } from '@mad-app/shared/api/enums';
 
-export type IntegrationKind = 'PAYMENT_GATEWAY' | 'BNPL' | 'ECOMMERCE';
+export type { IntegrationKind };
 
 export interface IntegrationConnection {
   id: string;

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from './AuthContext';
 import { supportCompanyId } from '../lib/supportMode';
+import type { ExtinctionReason } from '@mad-app/shared/api/enums';
 
 /**
  * الوحدة **الوحيدة** في الواجهة التي تلمس الصلاحيات.
@@ -37,7 +38,7 @@ import { supportCompanyId } from '../lib/supportMode';
 /** زوج `شاشة:فعل` كما يرسله الخادم — مسطّحاً ومحسوماً. */
 type Grant = string;
 
-export type ExtinctionReason = 'NOT_IN_ROOT' | 'REVOKED' | 'NARROWED';
+export type { ExtinctionReason };
 
 /** منحةٌ أُعطيت ثم انطفأت — **محسوبةً في الخادم بسببها**. */
 export interface ExtinguishedGrant {
