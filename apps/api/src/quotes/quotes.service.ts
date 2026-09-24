@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Quote, QuoteStatus } from '@prisma/client';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';
 import { resolveLineTaxes, type LineTax } from '../common/vat/line-tax.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
@@ -123,11 +123,12 @@ export class QuotesService {
    * ⇒ **والمصدرُ الواحد `resolveBranchId`** — وجودٌ ثم إذن.
    */
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateQuoteDto) {
-    const { currency, exchangeRate } = resolveCurrency(dto);
     // نفس عقد الترقيم المتسابق للفواتير: قيد (companyId, no) الفريد يحسم،
     // وretry يعيد العدّ — اختبار التصادم المتزامن ضمن الدفعة يثبته.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+        const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true } });
         if (!customer) throw new NotFoundException(MSG.customer_not_found);
 

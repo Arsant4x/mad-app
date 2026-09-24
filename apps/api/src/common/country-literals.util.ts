@@ -72,9 +72,15 @@ function isProduction(rel: string): boolean {
   return !rel.startsWith('apps/web/src/test/');
 }
 
-/** أهو داخل حدود الوحدة السعودية كما هي اليوم؟ (المسح §ب — `PROD_Z` و`PROD_V`) */
+/**
+ * أهو داخل حدود الوحدة السعودية كما هي اليوم؟ (المسح §ب — `PROD_Z` و`PROD_V`)
+ *
+ * ⚖️ **ومعها سجلُّ الأقاليم** (`common/region/` — `ق-١٣٦٨`): هو **مسكنُ قيم الدولة** بطبيعته — منه تُكتب الحقولُ الأربعة على المنشأة
+ * عند ميلادها لتُقرأ من المنشأة في كلِّ موضعٍ آخر (`ق-١٣٥٠` ②). فعلامتُه هناك ليست دَيناً يُنقَص بل الموضعُ الذي يُنقَص إليه الدَّين.
+ */
 export function insideSaudiBoundary(rel: string): boolean {
   if (/zatca/i.test(rel)) return true;
+  if (rel.startsWith('apps/api/src/common/region/')) return true;
   if (rel.startsWith('apps/api/src/common/vat/') || rel.startsWith('apps/api/src/obligations/')) return true;
   if (rel.startsWith('apps/web/src/pages/obligations/')) return true;
   return ['apps/web/src/lib/vat.ts', 'apps/web/src/api/obligations.ts', 'apps/web/src/components/LineTaxPicker.tsx'].includes(rel);

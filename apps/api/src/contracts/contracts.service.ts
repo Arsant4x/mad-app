@@ -3,7 +3,7 @@ import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import {
   postClaimIssueEntry,
@@ -173,7 +173,6 @@ export class ContractsService {
   }
 
   create(companyId: string, dto: CreateContractDto) {
-    const { currency, exchangeRate } = resolveCurrency(dto);
     // Retries the whole transaction on a "no" collision from a concurrent
     // create — same reasoning as InvoicesService.create.
     // ⚠️ مهلةٌ أطول من الافتراض: عقدٌ يُدخَل بتاريخٍ مضى يستحقّ أقساطَه التي حلّت في المعاملة
@@ -182,6 +181,8 @@ export class ContractsService {
       this.tenantPrisma.runInTenantContext(
         companyId,
         async (tx) => {
+        // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+        const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const unit = await tx.unit.findUnique({ where: { id: dto.unitId }, include: { property: true } });
         if (!unit) throw new NotFoundException(MSG.unit_not_found);
 

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
@@ -57,8 +57,9 @@ export class TransactionsService {
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateTransactionDto) {
-    const { currency, exchangeRate } = resolveCurrency(dto);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+      const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
       // ⚠️ (ق-٢٨١ · ق-٢٨٢ · ق-٢٨٥) **لا يُحرَّك رصيدُ البنك هنا**: كان السطرُ
       //    اليدويّ يزيد الرصيدَ بيدٍ بلا قيدٍ يسنده. وهو **سطرُ مطابقةٍ لا مصدرُ
       //    قيد** — لا يحمل حساباً ثانياً، **وترحيلُه يخترع الطرفَ المقابل**.

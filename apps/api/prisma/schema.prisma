@@ -446,7 +446,19 @@ model Company {
   /// — never recomputed later, so a historical invoice doesn't silently
   /// reprice when today's rate moves — and stores the resulting `baseXxx`
   /// figure once, as amount × exchangeRate.
-  baseCurrency String @default("SAR")
+  ///
+  /// 🔴 `ق-١٣٦٨` — **بلا افتراضٍ في القاعدة**: كان `@default("SAR")` ولا تكتبه الشيفرةُ أبداً، فكلُّ منشأةٍ «ريالٌ بالافتراض».
+  /// الآن يُكتب عند الميلاد من سجلّ الأقاليم (`common/region/regions.ts`)، ومستندٌ بلا عملةٍ صريحة يسقط إليه لا إلى الريال.
+  baseCurrency String
+
+  /// 🔴 `ق-١٣٦٨` — **الدولةُ صفةٌ للمنشأة لا افتراضٌ في الشيفرة** (المسح `25` ج): ISO 3166-1 alpha-2. **بلا افتراضٍ في القاعدة**
+  /// — يُكتب عند الميلاد من سجلّ الأقاليم؛ والقائمُ عُبّئ «السعودية» **معلَناً** في الهجرة لأن المنصّة لم تخدم غيرها.
+  /// ⛔ ولا يُعدَّل بعد الميلاد (لا مسارَ له) — المنصّاتُ متعدّدةُ الدول تُقفله عند الإنشاء (المسح `25` أ).
+  country  String
+  /// المنطقةُ الزمنية — IANA (`ق-١٣٦٨`). يُكتب ويُعلَن ولا يُقرأ بعد: المهامُّ المجدولة السبع ما زالت على منطقةٍ ثابتة (دَينُ المِسنَن).
+  timeZone String
+  /// لغةُ العرض ومحلّيتُه — BCP 47 (`ق-١٣٦٨`). يُكتب ويُعلَن ولا يُقرأ بعد (الواجهةُ على محلّيةٍ ثابتة — دَينُ المِسنَن).
+  locale   String
 
   /// ZATCA e-invoicing credentials — see the ZatcaCredential model. This is a
   /// SaaS: the platform onboards and signs on the merchant's behalf, so the

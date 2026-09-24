@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { MSG } from '../common/i18n/messages';
+import { regionForNewCompany } from '../common/region/regions';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { seedProductionCredential } from '../../test/zatca-credential';
@@ -117,6 +118,7 @@ d('سباق ICV — إعادة المحاولة تُقارب بدل أن تُخ�
             permissionTemplateId: template.id,
             legalName: `مؤسسة فحص ${stamp}`,
             vatNumber: '300000000000003',
+            ...regionForNewCompany(undefined),
           },
         },
       },

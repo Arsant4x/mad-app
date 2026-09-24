@@ -6,6 +6,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { ExportService } from './export.service';
 import { EXPORT_EXCLUSIONS, delegateName, exportedModels, tenantOwnedModels } from './export-scope';
+import { regionForNewCompany } from '../common/region/regions';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -61,7 +62,7 @@ d('تصدير المنشأة — الاشتقاق والضمانة', () => {
         username: `probe-export-${stamp}`,
         passwordHash: 'probe-not-a-real-hash',
         actorType: 'COMPANY',
-        company: { create: { orgName: `probe-export-${stamp}`, permissionTemplateId: template.id } },
+        company: { create: { orgName: `probe-export-${stamp}`, permissionTemplateId: template.id, ...regionForNewCompany(undefined) } },
       },
       include: { company: { select: { id: true } } },
     });

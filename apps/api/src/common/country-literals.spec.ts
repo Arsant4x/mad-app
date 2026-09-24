@@ -26,10 +26,12 @@ describe('🔴 لا علامةَ سعوديةً حرفيةً جديدةً خار
     expect(scan.filesScanned).toBeGreaterThan(500);
     expect(countMarkerLines("export const DEFAULT_CURRENCY = 'SAR';")).toBe(1);
     expect(countMarkerLines('// كان هنا \'SAR\' ثابتةً — شرحٌ لا شيفرة')).toBe(0);
-    expect(scan.outside['apps/api/src/common/currency/base-amount.util.ts']).toBeGreaterThan(0);
+    // الموجبُ المعلوم: بذرةُ عملة الأساس في `company-defaults.ts` (كان `base-amount.util.ts` حتى أسقط `ق-١٣٦٨` ريالَه الثابت).
+    expect(scan.outside['apps/api/src/companies/company-defaults.ts']).toBeGreaterThan(0);
     expect(scan.outside['apps/api/src/auth/auth.service.ts']).toBeUndefined();
-    // والداخلُ داخل: الهيئةُ ووحدتا الضريبة والإقرار لا تُعدّ دَيناً.
+    // والداخلُ داخل: الهيئةُ ووحدتا الضريبة والإقرار وسجلُّ الأقاليم (مسكنُ قيم الدولة — `ق-١٣٦٨`) لا تُعدّ دَيناً.
     expect(insideSaudiBoundary('apps/api/src/zatca/zatca.service.ts')).toBe(true);
+    expect(insideSaudiBoundary('apps/api/src/common/region/regions.ts')).toBe(true);
     expect(insideSaudiBoundary('apps/api/src/invoices/invoices.service.ts')).toBe(false);
     expect(scan.insideLines).toBeGreaterThan(0);
   });

@@ -3,7 +3,7 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { Prisma } from '@prisma/client';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -107,7 +107,6 @@ export class PurchasesService {
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePurchaseDto) {
     const exempt = dto.exempt ?? false;
     const { tax, total } = computePurchaseTax(dto.subtotal, exempt);
-    const { currency, exchangeRate } = resolveCurrency(dto);
     // الرمز يُشتقّ مرةً واحدة عند الكتابة — فلا يعود قارئٌ يطابق نصّاً عربياً.
     const categoryCode = toPurchaseCategoryCode(dto.categoryCode ?? dto.category);
     const { amortize, amortizeMonths } = resolveAmortization(dto.amortize ?? false, categoryCode, dto.amortizeMonths);
@@ -118,6 +117,8 @@ export class PurchasesService {
     // collision from a concurrent create — see nextPurchaseNumber's comment.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+        const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
         const no = await this.nextPurchaseNumber(tx, companyId);
         // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.

@@ -8,6 +8,7 @@ import { readsDeclaredStrings } from '../common/source-scan.util';
 readsDeclaredStrings();
 import { Prisma } from '@prisma/client';
 import { createCompanyDefaults, DEFAULT_ACTIVITY_NAME, DEFAULT_CURRENCY } from './company-defaults';
+import { regionForNewCompany } from '../common/region/regions';
 
 /**
  * حارس «لا تُولد منشأة ناقصة».
@@ -59,11 +60,12 @@ describe('افتراضيات المنشأة — لا تُولد ناقصة', () 
     ]);
   });
 
-  it('عملة الأساس تطابق `Company.baseCurrency` الافتراضي — صفٌّ لا يطابقه يوحي بأساسٍ آخر', () => {
+  it('عملة الأساس تطابق ما يكتبه الميلادُ على `Company.baseCurrency` — صفٌّ لا يطابقه يوحي بأساسٍ آخر', () => {
+    // ق-١٣٦٨: لا افتراضَ في القاعدة بعد اليوم — والمنشأةُ تولد بعملة إقليمها من السجلّ. وحين يُضاف إقليمٌ ثانٍ يرمي
+    // `regionForNewCompany(undefined)` فيسقط هذا الاختبار — **وهو المقصود**: بذرةُ صفّ العملة تصير من عملة المنشأة لا ثابتاً.
     const schema = readFileSync(join(__dirname, '..', '..', 'prisma', 'schema.prisma'), 'utf8');
-    const m = schema.match(/baseCurrency\s+String\s+@default\("([A-Z]{3})"\)/);
-    expect(m).toBeTruthy();
-    expect(DEFAULT_CURRENCY.code).toBe(m![1]);
+    expect(schema).not.toMatch(/baseCurrency\s+String\s+@default\(/);
+    expect(DEFAULT_CURRENCY.code).toBe(regionForNewCompany(undefined).baseCurrency);
   });
 
   it('⚠️ عديم الأثر عند التكرار — لا يُنشئ شيئاً مرتين', async () => {

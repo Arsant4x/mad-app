@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+import { regionForNewCompany } from '../common/region/regions';
 
 // مهلة مقيسة لا افتراضية — وهذا الملف بعينه هو الأسوأ قياساً (3687 ms من 5000).
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -87,7 +88,7 @@ d('حرّاس سجل التفويض — إثباتٌ حيّ على قاعدة ح
         username: `probe-delegation-log-${stamp}`,
         passwordHash: 'probe-not-a-real-hash',
         actorType: 'COMPANY',
-        company: { create: { orgName: `probe-delegation-log-${stamp}`, permissionTemplateId: template.id } },
+        company: { create: { orgName: `probe-delegation-log-${stamp}`, permissionTemplateId: template.id, ...regionForNewCompany(undefined) } },
       },
       include: { company: { select: { id: true } } },
     });

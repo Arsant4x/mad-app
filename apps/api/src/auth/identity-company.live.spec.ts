@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+import { regionForNewCompany } from '../common/region/regions';
 
 // مهلة مقيسة لا افتراضية — الرقم ومصدره في `live-spec-timeout.ts`.
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -226,7 +227,7 @@ d('منشأةُ هويّة الدخول — الانحرافُ صفر، والي
       const template = await tx.permissionTemplate.findFirstOrThrow({ where: { companyId: null, isSystem: false }, select: { id: true } });
       const stamp = Date.now();
       const owner = await tx.loginIdentity.create({
-        data: { username: `identity-company-owner-${stamp}`, passwordHash: 'x', actorType: 'COMPANY', company: { create: { orgName: `probe-${stamp}`, permissionTemplateId: template.id, subStart: new Date(), subEnd: new Date() } } },
+        data: { username: `identity-company-owner-${stamp}`, passwordHash: 'x', actorType: 'COMPANY', company: { create: { orgName: `probe-${stamp}`, permissionTemplateId: template.id, subStart: new Date(), subEnd: new Date(), ...regionForNewCompany(undefined) } } },
         include: { company: { select: { id: true } } },
       });
       const companyId = owner.company!.id;

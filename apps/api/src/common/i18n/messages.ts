@@ -295,6 +295,9 @@ export const MSG = {
   company_not_found: 'companies.not_found',
   company_delete_blocked: 'companies.delete_blocked',
   username_taken: 'companies.username_taken',
+  /** ق-١٣٦٨ — إقليمُ المنشأة عند ميلادها. */
+  region_required: 'companies.region_required',
+  region_unsupported: 'companies.region_unsupported',
   template_not_found: 'templates.not_found',
   /** مفاتيحُ الأنظمة (`ق-١٢٩١` · ي/⑫A3). */
   api_key_invalid: 'apiKeys.invalid',
@@ -1079,6 +1082,11 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The company cannot be deleted: it holds records that are never deleted ({records}) — its data stays',
   },
   [MSG.username_taken]: { ar: 'اسم المستخدم "{username}" مستخدَم بالفعل', en: 'Username "{username}" is already taken' },
+  [MSG.region_required]: {
+    ar: 'اختر دولة المنشأة — المنصّة تخدم أكثر من دولة، فلا تُفترض دولةٌ لم تُعلَن',
+    en: 'Choose the company country — the platform serves more than one, so none is assumed',
+  },
+  [MSG.region_unsupported]: { ar: 'الدولة "{country}" لا تخدمها المنصّة بعد', en: 'The platform does not serve "{country}" yet' },
   [MSG.template_not_found]: { ar: 'القالب غير موجود', en: 'Permission template not found' },
   [MSG.api_key_invalid]: { ar: 'مفتاح النظام غير صالح أو مُبطَل', en: 'API key is invalid or revoked' },
   [MSG.api_key_not_found]: { ar: 'مفتاح النظام غير موجود', en: 'API key not found' },

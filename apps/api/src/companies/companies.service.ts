@@ -128,6 +128,8 @@ export class CompaniesService {
       username: dto.username,
       password: dto.password,
       orgName: dto.orgName,
+      // ق-١٣٦٨ — الدولةُ المعلَنة، وغيابُها يأخذ الإقليمَ الوحيد ما دام وحيداً.
+      country: dto.country,
       permissionTemplateId: dto.permissionTemplateId,
       subStart: resolveSubStart(dto.subStart),
       subEnd: dto.subEnd ? new Date(dto.subEnd) : undefined,

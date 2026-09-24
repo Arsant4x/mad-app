@@ -17,7 +17,7 @@ import {
   outstandingAfterNotes,
   type NoteKinds,
 } from '../common/adjustment/adjustment-note.util';
-import { toBaseAmount, resolveCurrency } from '../common/currency/base-amount.util';
+import { toBaseAmount, resolveCurrencyWithin } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
@@ -535,7 +535,8 @@ export class InvoicesService {
     // ⑧ الفئةُ والنسبةُ تُحلّان قبل أيّ حساب: من الصنف لحظةَ البيع، أو من إعلان السطر، أو من الأصل المنسوخ.
     const lines = await priceLines(tx, dto.lines, { trusted: link?.trustLineTax });
     const { subtotal, taxTotal, total } = computeTotals(lines);
-    const { currency, exchangeRate } = resolveCurrency(dto);
+    // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+    const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
       /**
        * ⚖️ **الحدُّ يُفحص قبل أي كتابة** (`ق-٣٣٦`) — قبل الترقيم نفسِه:
        * **رفضٌ بعد `nextDocumentNumber` يحرق رقماً في كل محاولة**، والعدّادُ
