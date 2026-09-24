@@ -189,9 +189,21 @@
       "204"
     ]
   },
+  "DELETE /obligations/vat-declaration/corrections/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "DELETE /obligations/vat-declaration/filed": {
     "parameters": [
-      "query:quarter:required",
+      "query:month",
+      "query:periodChoice",
+      "query:quarter",
+      "query:refundRequested",
       "query:year:required"
     ],
     "requiredBody": [],
@@ -509,9 +521,21 @@
       "204"
     ]
   },
+  "DELETE /v1/obligations/vat-declaration/corrections/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "DELETE /v1/obligations/vat-declaration/filed": {
     "parameters": [
-      "query:quarter:required",
+      "query:month",
+      "query:periodChoice",
+      "query:quarter",
+      "query:refundRequested",
       "query:year:required"
     ],
     "requiredBody": [],
@@ -927,6 +951,15 @@
       "200"
     ]
   },
+  "GET /contracts/attachments/{attachmentId}/download": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /contracts/attachments/{attachmentId}/download-url": {
     "parameters": [
       "path:attachmentId:required"
@@ -1087,6 +1120,15 @@
       "query:page",
       "query:pageSize",
       "query:search"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /employees/{id}": {
+    "parameters": [
+      "path:id:required"
     ],
     "requiredBody": [],
     "responses": [
@@ -1356,7 +1398,36 @@
   },
   "GET /obligations/vat-declaration": {
     "parameters": [
-      "query:quarter:required",
+      "query:month",
+      "query:periodChoice",
+      "query:quarter",
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /obligations/vat-declaration/closings": {
+    "parameters": [
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /obligations/vat-ratio": {
+    "parameters": [
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /obligations/vat-ratio/settlement": {
+    "parameters": [
       "query:year:required"
     ],
     "requiredBody": [],
@@ -2181,6 +2252,15 @@
       "200"
     ]
   },
+  "GET /v1/contracts/attachments/{attachmentId}/download": {
+    "parameters": [
+      "path:attachmentId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/contracts/attachments/{attachmentId}/download-url": {
     "parameters": [
       "path:attachmentId:required"
@@ -2341,6 +2421,15 @@
       "query:page",
       "query:pageSize",
       "query:search"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/employees/{id}": {
+    "parameters": [
+      "path:id:required"
     ],
     "requiredBody": [],
     "responses": [
@@ -2610,7 +2699,36 @@
   },
   "GET /v1/obligations/vat-declaration": {
     "parameters": [
-      "query:quarter:required",
+      "query:month",
+      "query:periodChoice",
+      "query:quarter",
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/obligations/vat-declaration/closings": {
+    "parameters": [
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/obligations/vat-ratio": {
+    "parameters": [
+      "query:year:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/obligations/vat-ratio/settlement": {
+    "parameters": [
       "query:year:required"
     ],
     "requiredBody": [],
@@ -4851,6 +4969,15 @@
       "201"
     ]
   },
+  "POST /employees/find-by-national-id": {
+    "parameters": [],
+    "requiredBody": [
+      "nationalId"
+    ],
+    "responses": [
+      "200"
+    ]
+  },
   "POST /files": {
     "parameters": [],
     "requiredBody": [],
@@ -4891,6 +5018,7 @@
       "date",
       "productId",
       "qty",
+      "reason",
       "type",
       "warehouseId"
     ],
@@ -5160,10 +5288,61 @@
       "201"
     ]
   },
+  "POST /obligations/vat-declaration/closings": {
+    "parameters": [],
+    "requiredBody": [
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /obligations/vat-declaration/closings/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /obligations/vat-declaration/corrections": {
+    "parameters": [],
+    "requiredBody": [
+      "amount",
+      "correctedPeriodNo",
+      "correctedPeriodType",
+      "correctedYear",
+      "reason",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /obligations/vat-declaration/filed": {
     "parameters": [],
     "requiredBody": [
-      "quarter",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /obligations/vat-ratio": {
+    "parameters": [],
+    "requiredBody": [
+      "basis",
+      "ratio",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /obligations/vat-ratio/settle": {
+    "parameters": [],
+    "requiredBody": [
       "year"
     ],
     "responses": [
@@ -6194,6 +6373,15 @@
       "201"
     ]
   },
+  "POST /v1/employees/find-by-national-id": {
+    "parameters": [],
+    "requiredBody": [
+      "nationalId"
+    ],
+    "responses": [
+      "200"
+    ]
+  },
   "POST /v1/files": {
     "parameters": [],
     "requiredBody": [],
@@ -6234,6 +6422,7 @@
       "date",
       "productId",
       "qty",
+      "reason",
       "type",
       "warehouseId"
     ],
@@ -6503,10 +6692,61 @@
       "201"
     ]
   },
+  "POST /v1/obligations/vat-declaration/closings": {
+    "parameters": [],
+    "requiredBody": [
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/obligations/vat-declaration/closings/{id}/reverse": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/obligations/vat-declaration/corrections": {
+    "parameters": [],
+    "requiredBody": [
+      "amount",
+      "correctedPeriodNo",
+      "correctedPeriodType",
+      "correctedYear",
+      "reason",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/obligations/vat-declaration/filed": {
     "parameters": [],
     "requiredBody": [
-      "quarter",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/obligations/vat-ratio": {
+    "parameters": [],
+    "requiredBody": [
+      "basis",
+      "ratio",
+      "year"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/obligations/vat-ratio/settle": {
+    "parameters": [],
+    "requiredBody": [
       "year"
     ],
     "responses": [

@@ -107,7 +107,8 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       const approved = await post(`/inventory/write-offs/${created.body.id}/approve`).send({}).expect(201);
       expect(approved.body.status).toBe('APPROVED');
     };
-    const move = (body: Record<string, unknown>) => post('/inventory/movements').send({ date: today(), ...body });
+    // ق-١٣٧٧: السببُ إلزاميٌّ للحركة اليدوية — افتراضُ الاختبار، ويُطغى عليه بالجسم.
+    const move = (body: Record<string, unknown>) => post('/inventory/movements').send({ date: today(), reason: 'اختبار — حركةٌ يدوية', ...body });
     const freight = async (amount: number) => {
       const res = await post('/purchases')
         .send({ supplierId: carrierId, date: today(), subtotal: amount, branchId, category: 'مصروفات أخرى', lines: [{ description: 'شحن', quantity: 1, unitPrice: amount, taxRate: 15 }] })

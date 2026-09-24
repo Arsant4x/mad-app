@@ -67,6 +67,9 @@ export class InventoryService {
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateStockMovementDto) {
+    // ⭐ ق-١٣٧٧ — **السببُ إلزاميّ**: والمسافاتُ وحدَها ليست سبباً (الـ`DTO` يرفض الفارغ، وهذا يرفض المُفرَغ) — ويُكتب مشذَّباً.
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException(MSG.stock_movement_reason_required);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const product = await tx.product.findUnique({ where: { id: dto.productId } });
       if (!product) throw new NotFoundException(MSG.product_not_found);
@@ -111,7 +114,7 @@ export class InventoryService {
           type: dto.type,
           qty: dto.type === 'ADJUSTMENT' ? dto.qty : Math.abs(dto.qty),
           date: new Date(dto.date),
-          reason: dto.reason,
+          reason,
           // نصُّ الدفعة على الحركة الداخلة كما كان يُقرأ في القائمة — والكيانُ على الطبقة (`batchId`)؛ ولا يُختم
           // خروجٌ بدفعة: البيعُ لا يعيد وسمَ ما يسحبه.
           batchNo: batchId ? dto.batchNo?.trim() : undefined,
@@ -124,7 +127,7 @@ export class InventoryService {
       // ⚖️ ق-١٣٦٣ — **وقيدٌ بما تحرّك في الطبقات** على فروقات المخزون مقابل `1300` (نقضٌ لـ«لا قيدَ للحركة اليدوية»)؛ والتحويلُ لا قيدَ له
       // (القيمةُ تنتقل بين رفّين ولا تغادر المخزون).
       const when = new Date(dto.date);
-      const ref = `${dto.type === 'ADJUSTMENT' ? 'تسوية' : dto.type === 'IN' ? 'إدخال' : 'إخراج'} ${movement.id.slice(0, 8)}${dto.reason ? ` — ${dto.reason}` : ''}`;
+      const ref = `${dto.type === 'ADJUSTMENT' ? 'تسوية' : dto.type === 'IN' ? 'إدخال' : 'إخراج'} ${movement.id.slice(0, 8)} — ${reason}`;
       let entryId: string | null = null;
       if (entering) {
         const layerId = await createLayerFromMovement(tx, companyId, {

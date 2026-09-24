@@ -61,7 +61,8 @@ d('سباق طبقات التكلفة — نقصانٌ ذرّيٌّ مشروط (
         await tx.$executeRaw`SELECT pg_sleep(${barrier.holdMs / 1000})`;
       }
       const m = await tx.stockMovement.create({
-        data: { companyId, productId, warehouseId, type: 'OUT', qty, date: new Date(), origin: 'MANUAL' },
+        // ق-١٣٧٧: الحركةُ اليدويةُ بعد لحظة الهجرة لا تُكتب بلا سبب — ولو بغير الخدمة (قيدُ القاعدة).
+        data: { companyId, productId, warehouseId, type: 'OUT', qty, date: new Date(), origin: 'MANUAL', reason: 'مجسّ السباق' },
         select: { id: true },
       });
       created.movements.push(m.id);

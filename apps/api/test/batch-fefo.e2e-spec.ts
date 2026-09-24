@@ -62,7 +62,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     });
   const sale = (productId: string, quantity: number) =>
     auth(http().post('/invoices')).send({ customerId, branchId, issueDate: iso(0), dueDate: iso(0), lines: [{ description: 'بيع', productId, quantity, unitPrice: 150, taxRate: 15 }] });
-  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: iso(0), ...body });
+  // ق-١٣٧٧: السببُ إلزاميٌّ للحركة اليدوية — افتراضُ الاختبار، ويُطغى عليه بالجسم.
+  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: iso(0), reason: 'اختبار — حركةٌ يدوية', ...body });
   const layersOf = (productId: string, warehouseId = whA) =>
     tenantPrisma.runInTenantContext(companyId, (tx) => tx.inventoryLayer.findMany({ where: { productId, warehouseId }, orderBy: { createdAt: 'asc' }, include: { batch: true } }));
   const batchesOf = (productId: string) => tenantPrisma.runInTenantContext(companyId, (tx) => tx.stockBatch.findMany({ where: { productId }, orderBy: { createdAt: 'asc' } }));
@@ -240,7 +241,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     // حركةُ إدخالٍ قديمة بدفعةٍ نصّاً وبلا طبقة — كما تركتها الأيام قبل البناء.
     await tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.stockMovement.create({
-        data: { companyId, productId: r, warehouseId: whA, type: 'IN', origin: 'MANUAL', qty: 7, date: new Date(iso(-40)), batchNo: `OLD-${suffix}`, expiryDate: new Date(iso(10)) } as unknown as Prisma.StockMovementUncheckedCreateInput,
+        // ق-١٣٧٧: الحركةُ اليدويةُ بعد لحظة الهجرة لا تُكتب بلا سبب ولو مباشرةً (قيدُ القاعدة) — والسببُ لا يمسّ ما يُختبَر هنا.
+        data: { companyId, productId: r, warehouseId: whA, type: 'IN', origin: 'MANUAL', reason: 'اختبار — دفعةٌ قديمة نصّاً', qty: 7, date: new Date(iso(-40)), batchNo: `OLD-${suffix}`, expiryDate: new Date(iso(10)) } as unknown as Prisma.StockMovementUncheckedCreateInput,
       }),
     );
     const res = await auth(http().get('/inventory/expiring')).query({ withinDays: 90 }).expect(200);
@@ -293,7 +295,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     // طبقةٌ بلا دفعة أقدمُ من الدفعة — كما تركتها الأيام قبل الإعلان: تُكتب مباشرةً لأن المسارَ يرفض استلامَ المعلَن بلا دفعة.
     const legacyMovement = await tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.stockMovement.create({
-        data: { companyId, productId: r, warehouseId: whA, type: 'IN', origin: 'MANUAL', qty: 4, date: new Date(iso(-30)) } as unknown as Prisma.StockMovementUncheckedCreateInput,
+        // ق-١٣٧٧: الحركةُ اليدويةُ بعد لحظة الهجرة لا تُكتب بلا سبب ولو مباشرةً (قيدُ القاعدة).
+        data: { companyId, productId: r, warehouseId: whA, type: 'IN', origin: 'MANUAL', reason: 'اختبار — طبقةٌ بلا دفعة', qty: 4, date: new Date(iso(-30)) } as unknown as Prisma.StockMovementUncheckedCreateInput,
         select: { id: true },
       }),
     );

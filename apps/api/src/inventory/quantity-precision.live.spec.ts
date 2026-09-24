@@ -53,7 +53,8 @@ d('L0-4 — دقّة الكمية على قاعدة حيّة', () => {
         const warehouse = await tx.warehouse.create({ data: { companyId, name: 'مستودع مجسّ الدقة' } });
         const product = await tx.product.create({ data: { companyId, name: 'صنف مجسّ الدقة', taxCategory: 'S' } });
         const movement = await tx.stockMovement.create({
-          data: { companyId, productId: product.id, warehouseId: warehouse.id, type: 'IN', qty, date: new Date() },
+          // ق-١٣٧٧: الأصلُ `MANUAL`، والحركةُ اليدويةُ بعد لحظة الهجرة لا تُكتب بلا سبب (قيدُ القاعدة).
+          data: { companyId, productId: product.id, warehouseId: warehouse.id, type: 'IN', qty, date: new Date(), reason: 'مجسّ الدقة' },
         });
         const read = await tx.stockMovement.findUniqueOrThrow({ where: { id: movement.id }, select: { qty: true } });
         stored = read.qty.toString();
