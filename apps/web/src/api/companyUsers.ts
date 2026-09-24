@@ -1,7 +1,13 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
 
-export type CompanyUserStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED';
+/**
+ * حالةُ حساب الموظف **كما يحملها عمودُه** (`AccountStatus` — أربع قيم، ومنها `CLOSED`) — `ق-١٣٦٧`: كانت ثلاثاً تطابق حدَّ الإدخال
+ * لا العمود، فقيمةٌ في القاعدة لا تعرفها الشاشة. **وما يُرسَل في التعديل** هو `CompanyUserSettableStatus` — حدُّ `UpdateCompanyUserDto`.
+ */
+export type CompanyUserStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
+/** ما يقبله الخادمُ في التعديل (`STATUSES` في `update-company-user.dto.ts`) — لا `CLOSED`. */
+export type CompanyUserSettableStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED';
 
 export interface CompanyUser {
   id: string;
@@ -28,6 +34,6 @@ export interface CompanyUserInput {
 
 export const listCompanyUsers = () => apiClient.get<CompanyUser[]>('/company-users').then((r) => r.data);
 export const createCompanyUser = (dto: CompanyUserInput) => apiClient.post<CompanyUser>('/company-users', dto).then((r) => r.data);
-export const updateCompanyUser = (id: string, dto: Partial<CompanyUserInput> & { status?: CompanyUserStatus; canEditMasterData?: boolean }) =>
+export const updateCompanyUser = (id: string, dto: Partial<CompanyUserInput> & { status?: CompanyUserSettableStatus; canEditMasterData?: boolean }) =>
   apiClient.patch<CompanyUser>(`/company-users/${id}`, dto).then((r) => r.data);
 export const deleteCompanyUser = (id: string) => apiClient.delete(`/company-users/${id}`);

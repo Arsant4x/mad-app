@@ -12,8 +12,9 @@ import {
   type DeclaredClassification,
   type DeclaredVatInclusion,
   type InstallmentStatus,
-  type PaymentMethod,
   type RecordPaymentInput,
+  type RecordPaymentMethod,
+  type RentPaymentMethod,
   type RenewContractInput,
   type SettlementBasis,
 } from '../../api/contracts';
@@ -35,6 +36,16 @@ const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeC
   PARTIAL: { label: 'مسدَّدة جزئياً', badgeClass: 'due' },
   PAID: { label: 'مدفوعة', badgeClass: 'paid' },
   CANCELLED: { label: 'ملغية', badgeClass: 'draft' },
+};
+
+/**
+ * طريقةُ السداد **بكلِّ قيم عمودها** (`ق-١٣٦٧`) — كان العرضُ `p.method === 'CASH' ? 'نقداً' : 'تحويل بنكي'` فسندٌ بالشبكة يُقرأ تحويلاً.
+ * و`Record` يُلزمه المترجمُ بكلِّ قيمة: قيمةٌ تُضاف إلى النوع تُسقط البناءَ حتى تُسمّى هنا. «شبكة» لا «بطاقة» (`ق-٣٢٠`).
+ */
+const RENT_PAYMENT_METHOD_LABEL: Record<RentPaymentMethod, string> = {
+  CASH: 'نقداً',
+  BANK: 'تحويل بنكي',
+  CARD: 'شبكة',
 };
 
 /** الإجماليُّ الذي يدين به المستأجر عن قسطٍ — بحسب الشمول (م٤٥/٢ · ق-٩١٨): غيرُ الشامل يزيد 15%. */
@@ -96,7 +107,7 @@ function PaymentForm({
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState(defaultAmount);
   const [discount, setDiscount] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('CASH');
+  const [method, setMethod] = useState<RecordPaymentMethod>('CASH');
   const [bankId, setBankId] = useState(banks[0]?.id ?? '');
   // Which cash box took a cash receipt. Optional and defaults to none, so cash
   // payments keep working exactly as before unless a box is chosen.
@@ -153,7 +164,7 @@ function PaymentForm({
         </div>
         <div className="field">
           <label>طريقة السداد</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
+          <select value={method} onChange={(e) => setMethod(e.target.value as RecordPaymentMethod)}>
             <option value="CASH">نقداً</option>
             <option value="BANK">تحويل بنكي</option>
           </select>
@@ -771,7 +782,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
               <tr key={p.id}>
                 <td className="num">{dfmt(p.date)}</td>
                 <td className="num">{fmt(p.netAmount)}</td>
-                <td>{p.method === 'CASH' ? 'نقداً' : 'تحويل بنكي'}</td>
+                <td>{RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
               </tr>
             ))}
           </tbody>
