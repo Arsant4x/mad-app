@@ -1362,6 +1362,52 @@ export async function postCashDepositEntry(
   return { id: entry.id, no: entry.no };
 }
 
+/**
+ * ⚖️ **نقلُ رصيد الدرج بين فرعين** (`ق-١٤١٣`): **قيدان لا قيد** — القيدُ الواحد لا يحمل فرعَين (`resolveDimensions`) —
+ * خروجٌ بفرع المُرسِل `مدين 1190 نقدٌ في الطريق / دائن الدرج القديم` ودخولٌ بفرع المستقبِل `مدين الدرج الجديد / دائن 1190`،
+ * بتاريخٍ واحد. فـ`1190` يُصفَّر على المنشأة، وفي كلِّ فرعٍ منفرداً يبقى أثرُ الطرف (معلَنٌ عند النقل).
+ */
+export async function postDrawerTransferEntries(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  p: {
+    date: Date;
+    amount: number;
+    memoOut: string;
+    memoIn: string;
+    fromBranchId: string | null;
+    toBranchId: string | null;
+    fromAccountId: string;
+    toAccountId: string;
+    transitAccountId: string;
+  },
+): Promise<{ out: { id: string; no: string }; in: { id: string; no: string } }> {
+  const amount = round2(p.amount);
+  const out = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.fromBranchId,
+    date: p.date,
+    memo: p.memoOut,
+    auto: true,
+    lines: [
+      { accountId: p.transitAccountId, debit: amount, credit: 0 },
+      { accountId: p.fromAccountId, debit: 0, credit: amount },
+    ],
+  });
+  const into = await createJournalEntry(tx, {
+    companyId,
+    branchId: p.toBranchId,
+    date: p.date,
+    memo: p.memoIn,
+    auto: true,
+    lines: [
+      { accountId: p.toAccountId, debit: amount, credit: 0 },
+      { accountId: p.transitAccountId, debit: 0, credit: amount },
+    ],
+  });
+  return { out: { id: out.id, no: out.no }, in: { id: into.id, no: into.no } };
+}
+
 /** إلغاءُ إيداعٍ في الطريق: عكسٌ بتاريخ اليوم يحمل `reversalOfId` — المالُ يعود إلى الدرج ولا يُمحى أثر. */
 export async function postCashDepositVoidEntry(
   tx: Prisma.TransactionClient,

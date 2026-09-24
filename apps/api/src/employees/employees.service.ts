@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Employee, Prisma } from '@prisma/client';
@@ -7,6 +7,7 @@ import { blindIndex, decryptField, encryptField } from '../common/crypto/field-c
 import { normalizeIban, normalizeIdentifier } from '../common/identity/identifiers.util';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { TransferEmployeeDto } from './dto/transfer-employee.dto';
 import { MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { mapList, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -151,6 +152,27 @@ export class EmployeesService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await this.findVisible(tx, allowedBranchIds, id);
       return publicEmployee(await tx.employee.update({ where: { id }, data: { archived } }));
+    });
+  }
+
+  /**
+   * ⚖️ **نقلُ الموظّف للقادم** (`ق-١٤١٥` · التوجيه ٢٦٣ §٤ بنصّ المالك: «النقلُ للقادم، وصلاحياتُه تُقرأ حيّةً فتنفذ في
+   * الطلب التالي، وأفعالُه السابقة بفرعها»).
+   *
+   * يتغيّر فرعُه **من هذا الطلب**، وما سبقه بفرعه: المستنداتُ تحمل فروعَها مختومةً (`resolveDimensions`)، والحضورُ
+   * والإجازاتُ لا تحمل فرعاً أصلاً — **فلا يُعاد نسبُ شيء**؛ وقائمةُ الموظفين تُرشَّح بالفرع في كلِّ طلب فيراه فرعُه
+   * الجديد من الطلب التالي. **والفرعُ السابق شرطٌ في الطلب وأثرٌ في السجلّ** (`TransferEmployeeDto`).
+   *
+   * **والفاعلُ مالكُ المنشأة** (فاعلُ الموجز §٠) — وتوسيعُه لمن يملك الفرعَين والفعلَ «لحكم المالك» (س٤).
+   */
+  transfer(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: TransferEmployeeDto) {
+    if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.employee_transfer_forbidden);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await this.findVisible(tx, allowedBranchIds, id);
+      if ((existing.branchId ?? null) !== (dto.fromBranchId ?? null)) throw new ConflictException(MSG.employee_transfer_stale);
+      const toBranchId = await resolveBranchId(tx, dto.toBranchId, allowedBranchIds);
+      if (toBranchId === (existing.branchId ?? null)) throw new BadRequestException(MSG.employee_transfer_same_branch);
+      return publicEmployee(await tx.employee.update({ where: { id }, data: { branchId: toBranchId } }));
     });
   }
 

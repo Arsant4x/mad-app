@@ -4446,6 +4446,18 @@ model CashDrawer {
   /// المناوباتُ السابقة على الكيان. والتفصيل يبدأ من أول درجٍ يُنشئه التاجر.
   isDefault Boolean @default(false)
 
+  /// ⚖️ **خلفُه حين نُقل بين الفروع** (`ق-١٤١٣`): النقلُ إغلاقٌ وفتح — فهذا الدرجُ أُغلق في فرعه بعد عدِّ نقده ونقلِ
+  /// رصيده، والخلفُ درجٌ جديدٌ في الفرع الهدف بحسابٍ جديد. **وتاريخُ هذا الدرج لا ينتقل** — مناوباتُه وإيداعاتُه
+  /// وقيودُه بفرعه؛ والرابطُ هو ما يقول لمن يقرأ بعد سنة أين ذهب نقدُه. `NoAction` لا `Restrict`: الخلفُ لا يُحذف
+  /// وسلفُه يشير إليه — **والفحصُ آخرَ العبارة** فحذفُ المنشأة يحذف الاثنين معاً (`Restrict` يفحص صفّاً صفّاً فيسقط الحذفُ المتسلسل).
+  transferredToId String? @unique
+  transferredTo   CashDrawer? @relation("CashDrawerTransfer", fields: [transferredToId], references: [id], onDelete: NoAction)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  transferredToTenant CashDrawer? @relation("CashDrawer_transferredToId_tenant", fields: [companyId, transferredToId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// السلفُ الذي أُغلق وفُتح هذا بدلاً منه — إن وُجد.
+  transferredFrom CashDrawer? @relation("CashDrawerTransfer")
+  cashDrawer_transferredToId_tenant CashDrawer[] @relation("CashDrawer_transferredToId_tenant")
+
   /// حسابُ الدرج في الدليل — واحدٌ لواحد، ولا يُشارَك.
   accountId String  @unique
   account   Account @relation(fields: [accountId], references: [id])

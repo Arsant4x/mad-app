@@ -1,9 +1,14 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { formatMoney } from '../common/money/rounding';
+import { formatMoney, round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { postDrawerTransferEntries } from '../journal/auto-posting.util';
+import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, getOrCreateAccountByCode, postShiftVarianceEntry } from '../journal/pos-settlement.util';
+import { readLedger } from '../reports/ledger.util';
+import { TransferCashDrawerDto } from './dto/transfer-cash-drawer.dto';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -166,14 +171,121 @@ export class CashDrawersService {
     });
   }
 
+  /**
+   * ⚖️ **نقلُ الدرج بين الفروع إغلاقٌ وفتح** (`ق-١٤١٣` · التوجيه ٢٦٣ §٤ بنصّ المالك: «فرعُه مكانُ النقد فعلاً»).
+   *
+   * يُعدّ النقدُ ويُغلق الدرجُ في فرعه، ويُنقل رصيدُه بقيدٍ بين الفرعين، ويُفتح درجٌ جديدٌ في الفرع الهدف — **ولا
+   * يُنقل تاريخُه**: مناوباتُ القديم وإيداعاتُه وقيودُه تبقى بفرعه وحسابِه.
+   *
+   *   ① **فرقُ العدّ** (المعدودُ − الدفتر) يُرحَّل على `5900` بفرع القديم — كفرق جرد المناوبة (`ق-٣٠٨`)؛
+   *   ② **المعدودُ يخرج ويدخل بقيدَين**: `مدين 1190 / دائن القديم` بفرع القديم ⟵ `مدين الجديد / دائن 1190` بفرع
+   *      الجديد — **القيدُ الواحد لا يحمل فرعَين** (`resolveDimensions`)، ونقدٌ يُحمل بين فرعين نقدٌ في الطريق؛
+   *   ③ **القديمُ يُعطَّل برصيدٍ صفر** ويحمل رابطَ خلفه (`transferredToId`)، **والجديدُ درجٌ بحسابٍ جديد** في الهدف.
+   *
+   * **وشروطُه شروطُ التعطيل** (`ق-٢٦٥`): لا مناوبةً مفتوحة عليه — ولا قيدَ على حسابه بعد تاريخ العدّ، فالعدُّ عدٌّ لكلِّ ما
+   * في الدفتر. **والفاعلُ مالكُ المنشأة** كسائر إدارة الأدراج.
+   *
+   * ⚠️ **حدٌّ معلَن**: `1190` يُصفَّر على المنشأة ولا يُصفَّر لكلِّ فرعٍ منفرداً (موجبٌ في المُرسِل، سالبٌ في المستقبِل) —
+   * كإيداع درجٍ في بنكِ فرعٍ آخر اليوم؛ وحسابٌ جارٍ بين الفروع يُقفل في المجمَّع **لحكم المالك**.
+   */
+  async transfer(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: TransferCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          const drawer = await tx.cashDrawer.findUnique({ where: { id }, include: DRAWER_INCLUDE });
+          if (!drawer) throw new NotFoundException(MSG.cash_drawer_not_found);
+          if (!drawer.isActive) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_closed, { name: drawer.name }));
+
+          const toBranchId = await resolveBranchId(tx, dto.toBranchId, allowedBranchIds);
+          if (toBranchId === (drawer.branchId ?? null)) throw new BadRequestException(MSG.cash_drawer_transfer_same_branch);
+
+          const openShift = await tx.posShift.findFirst({ where: { drawerId: id, status: 'OPEN' }, orderBy: { openedAt: 'asc' } });
+          if (openShift) {
+            throw new ConflictException(
+              formatMessage(MSG.cash_drawer_transfer_open_shift, {
+                cashier: openShift.openedByName,
+                since: openShift.openedAt.toISOString().slice(0, 16).replace('T', ' '),
+              }),
+            );
+          }
+
+          // العدُّ عدٌّ لكلِّ ما في الدفتر: قيدٌ بعد تاريخه يترك الدرجَ المغلق برصيد.
+          const date = new Date(dto.date);
+          const later = await tx.journalLine.count({ where: { accountId: drawer.accountId, journalEntry: { date: { gt: date } } } });
+          if (later > 0) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_later_postings, { date: dto.date.slice(0, 10), count: String(later) }));
+
+          const book = round2(Number((await readLedger(tx, { allowedBranchIds: 'all', accountId: drawer.accountId, to: date }, 'debit')).closing));
+          const counted = round2(dto.countedAmount);
+          const variance = round2(counted - book);
+
+          // الجديدُ أوّلاً — فحسابُه يستقبل قيدَ الدخول. والاسمُ فريدٌ في فرعه: يُسمّى المانعُ قبل أن يسقط القيدُ الفريد.
+          const name = dto.name?.trim() || drawer.name;
+          if (await tx.cashDrawer.findFirst({ where: { branchId: toBranchId, name }, select: { id: true } })) {
+            throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name }));
+          }
+          const code = await nextDrawerCode(tx);
+          const account = await tx.account.create({
+            data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput,
+          });
+          const successor = await tx.cashDrawer.create({
+            data: { name, branchId: toBranchId, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
+          });
+
+          const fromBranch = drawer.branch?.name ?? 'المنشأة';
+          const toBranch = (await tx.branch.findUnique({ where: { id: toBranchId! }, select: { name: true } }))?.name ?? '';
+          const varianceEntry = await postShiftVarianceEntry(tx, companyId, {
+            memo: `${variance > 0 ? 'زيادة' : 'عجز'} عدّ درج عند نقله — ${drawer.name} (${fromBranch} ⟵ ${toBranch})`,
+            date,
+            branchId: drawer.branchId,
+            drawerAccountId: drawer.accountId,
+            variance,
+          });
+          const transit = await getOrCreateAccountByCode(tx, companyId, CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, 'asset');
+          const moved =
+            counted > 0
+              ? await postDrawerTransferEntries(tx, companyId, {
+                  date,
+                  amount: counted,
+                  memoOut: `نقل درج — ${drawer.name}: خروجٌ من ${fromBranch} إلى ${toBranch}`,
+                  memoIn: `نقل درج — ${name}: دخولٌ في ${toBranch} من ${fromBranch}`,
+                  fromBranchId: drawer.branchId,
+                  toBranchId,
+                  fromAccountId: drawer.accountId,
+                  toAccountId: account.id,
+                  transitAccountId: transit.id,
+                })
+              : null;
+
+          await tx.cashDrawer.update({ where: { id }, data: { isActive: false, transferredToId: successor.id } });
+
+          return {
+            from: await tx.cashDrawer.findUniqueOrThrow({ where: { id }, include: DRAWER_INCLUDE }),
+            to: await tx.cashDrawer.findUniqueOrThrow({ where: { id: successor.id }, include: DRAWER_INCLUDE }),
+            bookBalance: money(book),
+            countedAmount: money(counted),
+            variance: money(variance),
+            entries: { variance: varianceEntry?.no ?? null, out: moved?.out.no ?? null, in: moved?.in.no ?? null },
+          };
+        });
+      } catch (e) {
+        // الاسمُ فُحص قبل الكتابة؛ فـ`P2002` هنا سباقٌ على الرمز أو الاسم — يُعاد بقراءةٍ جديدة ويُسمّى المانعُ فيها.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 2) continue;
+        throw e;
+      }
+    }
+  }
+
   /** الحذفُ يرثه `RESTRICT` من `journal_lines`: درجٌ تحرّك حسابُه يُعطَّل ولا يُحذف. */
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
     assertIsCompanyOwner(actorType);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.cashDrawer.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.cash_drawer_not_found);
-      await tx.cashDrawer.delete({ where: { id } });
       try {
+        // وخلفُ درجٍ منقول (`ق-١٤١٣`) يشير إليه سلفُه — تاريخٌ لا يُحذف كالحركة.
+        await tx.cashDrawer.delete({ where: { id } });
         await tx.account.delete({ where: { id: existing.accountId } });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {

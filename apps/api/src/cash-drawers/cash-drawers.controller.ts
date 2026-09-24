@@ -10,6 +10,7 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CashDrawersService } from './cash-drawers.service';
 import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
 import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
+import { TransferCashDrawerDto } from './dto/transfer-cash-drawer.dto';
 
 /** القائمةُ تُقرأ لكل فاعلٍ داخل المستأجر (تغذّي مُنتقي الدرج عند فتح المناوبة)،
  * **والتغييرُ لمالك المنشأة** — معلَنٌ في الحارس (`@OwnerOnly`) ومؤكَّدٌ في الخدمة
@@ -41,6 +42,13 @@ export class CashDrawersController {
   @OwnerOnly(MSG.cash_drawer_forbidden)
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCashDrawerDto) {
     return this.cashDrawers.update(tenant.companyId, tenant.actorType, id, dto);
+  }
+
+  /** نقلُ الدرج إلى فرعٍ آخر — إغلاقٌ وفتحٌ بعدّ النقد ونقلِ رصيده بقيدين (`ق-١٤١٣`). */
+  @Post(':id/transfer')
+  @OwnerOnly(MSG.cash_drawer_forbidden)
+  transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferCashDrawerDto) {
+    return this.cashDrawers.transfer(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')

@@ -176,6 +176,9 @@ export const MSG = {
 
   // employees / banks
   employee_not_found: 'employees.not_found',
+  employee_transfer_forbidden: 'employees.transfer_forbidden',
+  employee_transfer_stale: 'employees.transfer_stale',
+  employee_transfer_same_branch: 'employees.transfer_same_branch',
   identity_identifier_invalid: 'identity.identifier_invalid',
   identity_iban_invalid: 'identity.iban_invalid',
   leave_type_not_found: 'leaves.type_not_found',
@@ -502,6 +505,10 @@ export const MSG = {
   cash_drawer_has_movements: 'cash_drawers.has_movements',
   cash_drawer_inactive: 'cash_drawers.inactive',
   cash_drawer_branch_mismatch: 'cash_drawers.branch_mismatch',
+  cash_drawer_transfer_closed: 'cash_drawers.transfer_closed',
+  cash_drawer_transfer_same_branch: 'cash_drawers.transfer_same_branch',
+  cash_drawer_transfer_open_shift: 'cash_drawers.transfer_open_shift',
+  cash_drawer_transfer_later_postings: 'cash_drawers.transfer_later_postings',
   // branches / activities
   branch_not_found: 'branches.not_found',
   branch_name_taken: 'branches.name_taken',
@@ -920,6 +927,12 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.movement_layer_consumed]: { ar: 'طبقة هذه الحركة استُهلك منها — لا تُعكَس، والتصحيح بحركةٍ جديدة', en: 'The cost layer of this movement has been consumed — it cannot be reversed; correct with a new movement' },
 
   [MSG.employee_not_found]: { ar: 'الموظف غير موجود', en: 'Employee not found' },
+  [MSG.employee_transfer_forbidden]: { ar: 'نقلُ الموظف بين الفروع لمالك المنشأة', en: 'Transferring an employee between branches is limited to the company owner' },
+  [MSG.employee_transfer_stale]: {
+    ar: 'فرعُ الموظف تغيّر منذ قُرئ — أعد فتح بطاقته ثم انقله',
+    en: "The employee's branch changed since it was read — reopen the record, then transfer",
+  },
+  [MSG.employee_transfer_same_branch]: { ar: 'الموظف في هذا الفرع أصلاً — اختر فرعاً آخر', en: 'The employee is already in this branch — pick another branch' },
   [MSG.identity_identifier_invalid]: { ar: 'المعرّف غير صالح — حروفٌ لاتينية وأرقامٌ حتى ٣٢، والمسافاتُ والشرطاتُ تُحذف', en: 'Invalid identifier — Latin letters and digits, up to 32; spaces and dashes are removed' },
   [MSG.identity_iban_invalid]: { ar: 'الآيبان غير صالح بالمعيار الدولي (رمزُ دولةٍ ورقما تحقّقٍ لا يطابقان الحساب)', en: 'Invalid IBAN under the international standard (country code and check digits do not match the account)' },
   [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
@@ -1524,6 +1537,22 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.cash_drawer_branch_mismatch]: {
     ar: 'الدرج "{name}" يخصّ فرعاً آخر — اختر درجاً من فرع المناوبة',
     en: 'Drawer "{name}" belongs to another branch — pick one from the shift branch',
+  },
+  [MSG.cash_drawer_transfer_closed]: {
+    ar: 'الدرج "{name}" مغلق — لا يُنقل درجٌ مغلق، فعّله أولاً أو انقل خلفَه',
+    en: 'Drawer "{name}" is closed — a closed drawer is not transferred; activate it first or transfer its successor',
+  },
+  [MSG.cash_drawer_transfer_same_branch]: {
+    ar: 'الدرج في هذا الفرع أصلاً — اختر فرعاً آخر',
+    en: 'The drawer is already in this branch — pick another branch',
+  },
+  [MSG.cash_drawer_transfer_open_shift]: {
+    ar: 'على الدرج مناوبة مفتوحة لـ{cashier} منذ {since} · أقفلها ثم انقل الدرج',
+    en: 'The drawer has an open shift for {cashier} since {since} · close it, then transfer the drawer',
+  },
+  [MSG.cash_drawer_transfer_later_postings]: {
+    ar: 'على حساب الدرج {count} قيداً بعد {date} — العدُّ عدٌّ لكلِّ ما في الدفتر، فاختر تاريخاً لا يسبق آخرَ حركة',
+    en: 'The drawer account has {count} postings after {date} — the count covers the whole ledger, so pick a date not before the last movement',
   },
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },

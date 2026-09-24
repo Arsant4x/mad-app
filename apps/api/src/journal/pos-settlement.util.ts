@@ -84,7 +84,8 @@ export const CASH_VARIANCE_NAME = 'عجز وزيادة الصندوق';
 export async function postShiftVarianceEntry(
   tx: Prisma.TransactionClient,
   companyId: string,
-  input: { shiftNo: string; date: Date; branchId?: string | null; drawerAccountId: string | null; variance: number },
+  // `memo` لعدٍّ ليس جردَ مناوبة — عدُّ الدرج عند نقله بين الفروع (`ق-١٤١٣`): الحسابُ والجانبُ واحد، والبيانُ يسمّي الواقعة.
+  input: { shiftNo?: string; memo?: string; date: Date; branchId?: string | null; drawerAccountId: string | null; variance: number },
 ) {
   const variance = round2(input.variance);
   if (variance === 0) return null;
@@ -108,7 +109,7 @@ export async function postShiftVarianceEntry(
   return createJournalEntry(tx, {
     companyId,
     date: input.date,
-    memo: `${variance > 0 ? 'زيادة' : 'عجز'} جرد مناوبة — ${input.shiftNo}`,
+    memo: input.memo ?? `${variance > 0 ? 'زيادة' : 'عجز'} جرد مناوبة — ${input.shiftNo ?? ''}`,
     auto: true,
     branchId: input.branchId ?? null,
     lines,
