@@ -1,14 +1,14 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { IntegrationKind, Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { MSG } from '../common/i18n/messages';
+import { DEFAULT_LANGUAGE, formatMessage, MSG, resolveMessage } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pageArray } from '../common/pagination/paged.util';
 import { decryptCredentials, encryptCredentials, maskCredentials } from './credentials.crypto';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — المزوّدُ والتسمية. */
 const INTEGRATION_SEARCH_FIELDS = ['provider', 'label'] as const;
-import { TERMINAL_ADAPTERS, TerminalChargeRequest, TerminalChargeResult } from './payment-terminal.adapter';
+import { PaymentTerminalAdapter, TERMINAL_ADAPTERS, TerminalChargeRequest, TerminalStatusResult } from './payment-terminal.adapter';
 
 const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
   PAYMENT_GATEWAY: ['MOCK'],
@@ -115,30 +115,119 @@ export class IntegrationsService {
   }
 
   /**
-   * بوابة الدفع الفعّالة إن وُجدت — يسألها الكاشير قبل تمرير البطاقة.
-   * Returns null when the company runs terminal-less (the pre-adapter
-   * behavior stays the default; a connection OPTS IN to the gateway).
+   * **بوابةُ الدفع الفعّالة إن وُجدت** — يسألها الكاشير قبل أن يقبل جزءَ بطاقة (`ق-١٤٠١`).
+   * `null` حين تعمل المنشأةُ بلا ربط (السلوكُ السابق يبقى الافتراض؛ والاتصالُ **يختار** البوابة).
+   *
+   * الحاجز الثاني — وهو الأهم عملياً: منعُ الإنشاء لا يحمي صفّاً **موجوداً سلفاً**. اتصالٌ تجريبي أُنشئ قبل
+   * هذا الحاجز، أو رحل مع نسخة بيانات، يبقى فعّالاً ويعتمد كل بطاقة — فالفحصُ يقع عند كلِّ استعمال.
+   *
+   * **والرمي لا الإعادة بـ`null`**: الإعادةُ بـ`null` تعني «لا بوابة» فيمرّ البيعُ كأنه بلا ربط — أي **يُختم مسدَّداً
+   * بلا مال**، وهو العطلُ بعينه. وكذلك اتصالٌ فعّالٌ بلا محوّلٍ مسجَّل: يُرفض ولا يُعامَل كغيابه.
    */
-  async chargeCardIfConfigured(tx: Prisma.TransactionClient, request: TerminalChargeRequest): Promise<TerminalChargeResult | null> {
-    const conn = await tx.integrationConnection.findFirst({ where: { kind: 'PAYMENT_GATEWAY', enabled: true } });
+  async activeGateway(tx: Prisma.TransactionClient): Promise<{ id: string; provider: string; adapter: PaymentTerminalAdapter } | null> {
+    const conn = await tx.integrationConnection.findFirst({ where: { kind: 'PAYMENT_GATEWAY', enabled: true }, select: { id: true, provider: true } });
     if (!conn) return null;
-
-    /**
-     * الحاجز الثاني — وهو الأهم عملياً: منعُ الإنشاء لا يحمي صفّاً **موجوداً
-     * سلفاً**. اتصالٌ تجريبي أُنشئ قبل هذا الحاجز، أو رحل مع نسخة بيانات،
-     * يبقى فعّالاً ويعتمد كل بطاقة. فالفحص يقع عند لحظة الشحن نفسها.
-     *
-     * والرمي لا الإعادة بـ`null`: الإعادة بـ`null` تعني «لا بوابة» فيمرّ
-     * البيع كأنه نقدي — أي **يُختم مسدَّداً بلا مال** وهو العطل بعينه.
-     * الرفض الصريح يوقف البيع ويُظهر السبب للكاشير.
-     */
-    if (isProduction() && TEST_ONLY_PROVIDERS.has(conn.provider)) {
-      throw new BadRequestException(MSG.integration_mock_forbidden_in_production);
-    }
-
-    const adapter = TERMINAL_ADAPTERS[conn.provider];
-    if (!adapter) return null;
-    // The ONLY place credentials are decrypted — straight into the call.
-    return adapter.charge(decryptCredentials(conn.credentials), request);
+    return { id: conn.id, provider: conn.provider, adapter: adapterFor(conn.provider) };
   }
+
+  /**
+   * ما تقرؤه شاشةُ الكاشير: أفعّالٌ الربطُ، وبأيّ مزوّدٍ ومهلة — بلا مفاتيح (`ق-١٤٠١`).
+   * **على مستوى المنشأة بحقّها**: الربطُ للمنشأة لا لفرع.
+   */
+  gatewayMode(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const gateway = await this.activeGateway(tx);
+      return gateway ? { active: true as const, provider: gateway.provider, deadlineMs: gateway.adapter.chargeDeadlineMs } : { active: false as const };
+    });
+  }
+
+  /**
+   * ⭐ **الشحنُ خارج كلِّ معاملة، بمهلة المحوّل** (`ق-١٤٠١` · `ق-١٣٩٨`).
+   *
+   * الاتصالُ يُقرأ في معاملةٍ قصيرة تُلتزم **قبل** نداء المزوّد — فلا تبقى معاملةُ قاعدةٍ مفتوحةً على طرفٍ ثالث (القياس ②
+   * في الموجز: جهازٌ يستغرق ستّ ثوانٍ داخل معاملة الخمس ثوانٍ ⟸ المالُ قُبل والبيعُ سقط). والمفاتيحُ تُفكّ هنا وحدَها،
+   * مباشرةً إلى النداء. **وما لم يُجب في المهلة أو انقطع ⟸ `UNKNOWN` — لا رفضٌ ولا قبول**: المالُ قد يكون قُبض.
+   */
+  async chargeWithDeadline(companyId: string, provider: string, request: TerminalChargeRequest): Promise<ChargeOutcome> {
+    // ما يسقط قبل النداء لم يُرسل شيئاً — فليس معلّقاً: يعود مسمّىً ليُعاد المحاولةُ إلى ما قبل الإرسال.
+    let conn: { provider: string; credentials: string };
+    let adapter: PaymentTerminalAdapter;
+    try {
+      conn = await this.connectionFor(companyId, provider);
+      adapter = adapterFor(conn.provider);
+    } catch (e) {
+      return { kind: 'NOT_SENT', error: e };
+    }
+    const deadlineMs = adapter.chargeDeadlineMs;
+    let timer: NodeJS.Timeout | undefined;
+    const expired = new Promise<'EXPIRED'>((resolve) => {
+      timer = setTimeout(() => resolve('EXPIRED'), deadlineMs);
+    });
+    try {
+      const result = await Promise.race([adapter.charge(decryptCredentials(conn.credentials), request), expired]);
+      // نصٌّ يُخزَّن لا مفتاحٌ يعبر المرشِّح: `formatMessage` يحمل فاصلاً داخلياً (بايت NUL) لا يقبله عمودٌ نصّي.
+      if (result === 'EXPIRED') return { kind: 'UNKNOWN', detail: resolveMessage(formatMessage(MSG.pos_attempt_deadline_passed, { seconds: String(Math.round(deadlineMs / 1000)) }), DEFAULT_LANGUAGE) };
+      if (!result.approved) return { kind: 'DECLINED', reason: result.declineReason ?? null };
+      // مرجعُ المزوّد، وإلا فمرجعُنا الذي يُستعلم به عنده (معرّفُ المحاولة) — فصفُّ «قبله المزوّد» لا يبقى بلا مرجع.
+      return { kind: 'APPROVED', providerRef: result.providerRef ?? request.reference, approvalCode: result.approvalCode ?? null };
+    } catch (e) {
+      return { kind: 'UNKNOWN', detail: textOf(e) };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * **جوابُ المزوّد عن مرجع** (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً») — خارج كلِّ معاملة كالشحن.
+   * تعذُّرُ الوصول ليس جواباً: يعود `PENDING` فيبقى المعلّقُ معلّقاً — لا رفضَ يُخمَّن من صمت.
+   */
+  async queryStatus(companyId: string, provider: string, reference: string): Promise<TerminalStatusResult & { unreachable?: string }> {
+    try {
+      const conn = await this.connectionFor(companyId, provider);
+      return await adapterFor(conn.provider).status(decryptCredentials(conn.credentials), reference);
+    } catch (e) {
+      // ربطٌ تغيّر أو مزوّدٌ لا يُبلغ: لم يُجب أحد — فلا رفضَ ولا قبول، والحسمُ اليدويّ بدليلٍ متاح.
+      return { state: 'PENDING', unreachable: textOf(e) };
+    }
+  }
+
+  /** مهلةُ محوّل مزوّدٍ بعينه — يقرؤها الحاسمُ ليعرف متى يصير «لا أثر» جواباً. */
+  deadlineOf(provider: string): number {
+    return adapterFor(provider).chargeDeadlineMs;
+  }
+
+  /** الاتصالُ الفعّالُ لمزوّد المحاولة — في معاملةٍ قصيرة تُلتزم قبل أيّ نداء. تغيُّرُه بعد إنشاء المحاولة يُرفض مسمّىً. */
+  private async connectionFor(companyId: string, provider: string) {
+    const conn = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.integrationConnection.findFirst({ where: { kind: 'PAYMENT_GATEWAY', enabled: true }, select: { provider: true, credentials: true } }),
+    );
+    if (!conn || conn.provider !== provider) throw new ConflictException(formatMessage(MSG.pos_attempt_gateway_changed, { provider }));
+    return conn;
+  }
+}
+
+/** نتيجةُ الشحن كما تقرؤها النواة — والمعلّقُ حالٌ مسمّاة لا خطأ. */
+export type ChargeOutcome =
+  | { kind: 'APPROVED'; providerRef: string; approvalCode: string | null }
+  | { kind: 'DECLINED'; reason: string | null }
+  | { kind: 'UNKNOWN'; detail: string }
+  /** سقط قبل نداء المزوّد (ربطٌ تغيّر · محوّلٌ ممنوع) — لم يُرسل شيءٌ فلا مالَ في الطريق. */
+  | { kind: 'NOT_SENT'; error: unknown };
+
+/** نصُّ خطأٍ يُخزَّن ويُعرض — مفتاحُ الرسالة يُحلّ إلى نصّه (لا فاصلَ داخليّاً يبلغ عموداً نصّياً). */
+function textOf(e: unknown): string {
+  return resolveMessage(e instanceof Error ? e.message : String(e), DEFAULT_LANGUAGE);
+}
+
+/**
+ * المحوّلُ لمزوّدٍ — **بحاجز الإنتاج عند كلِّ استعمال** وبرفضٍ صريحٍ لاتصالٍ بلا محوّلٍ مسجَّل (لا `null`: الغيابُ
+ * يمرّ البيعَ بلا مال).
+ */
+function adapterFor(provider: string): PaymentTerminalAdapter {
+  if (isProduction() && TEST_ONLY_PROVIDERS.has(provider)) {
+    throw new BadRequestException(MSG.integration_mock_forbidden_in_production);
+  }
+  const adapter = TERMINAL_ADAPTERS[provider];
+  if (!adapter) throw new ConflictException(formatMessage(MSG.integration_adapter_missing, { provider }));
+  return adapter;
 }

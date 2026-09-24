@@ -104,16 +104,27 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
     await auth(request(app.getHttpServer()).delete(`/templates/${tpl.body.id}`));
   }, 60000);
 
+  /** بيعٌ ببطاقةٍ والربطُ فعّال يمرّ بمحاولة دفع (`ق-١٤٠١`): إنشاءٌ بلا فاتورة ثم شحنٌ خارج المعاملة. */
+  const chargeCard = async (lines: { productId: string; quantity: number }[]) => {
+    const attempt = await auth(request(app.getHttpServer()).post('/pos/payment-attempts'))
+      .send({ clientSaleId: `integrations-${suffix}-${Math.random().toString(36).slice(2, 9)}`, lines, paymentMethod: 'CARD' })
+      .expect(201);
+    return auth(request(app.getHttpServer()).post(`/pos/payment-attempts/${attempt.body.id}/charge`)).expect(201);
+  };
+
   it('a card sale rides the gateway: approved → providerRef stamped on the card row', async () => {
     shiftId = (await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0 }).expect(201)).body.id;
 
-    const res = await auth(request(app.getHttpServer()).post('/pos/sales'))
-      .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' })
-      .expect(201);
-    invoiceIds.push(res.body.id);
+    // والمسارُ الحيّ لا يشحن والربطُ فعّال — يُحال إلى محاولة الدفع (`ق-١٤٠١`).
+    await auth(request(app.getHttpServer()).post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' }).expect(409);
 
-    const cardRow = (res.body.posPayments as { method: string; providerRef: string | null }[]).find((p) => p.method === 'CARD');
+    const res = await chargeCard([{ productId, quantity: 1 }]);
+    expect(res.body.status).toBe('COMPLETED');
+    invoiceIds.push(res.body.sale.id);
+
+    const cardRow = (res.body.sale.posPayments as { method: string; providerRef: string | null; verification: string }[]).find((p) => p.method === 'CARD');
     expect(cardRow?.providerRef).toMatch(/^MOCK-/);
+    expect(cardRow?.verification).toBe('PROVIDER_APPROVED');
   }, 60000);
 
   it('a declined card leaves NOTHING behind — no invoice, clear reason', async () => {
@@ -135,10 +146,10 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
     const declineProduct = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `رفض ${suffix}`, price: 7.94 }).expect(201)).body.id;
 
     const before = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body.length;
-    const res = await auth(request(app.getHttpServer()).post('/pos/sales'))
-      .send({ lines: [{ productId: declineProduct, quantity: 1 }], paymentMethod: 'CARD' })
-      .expect(400);
-    expect(res.body.message).toContain('رفض');
+    const res = await chargeCard([{ productId: declineProduct, quantity: 1 }]);
+    expect(res.body.status).toBe('DECLINED');
+    expect(res.body.declineReason).toContain('رفض');
+    expect(res.body.invoiceId).toBeNull();
     const after = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body.length;
     expect(after).toBe(before);
 
@@ -153,7 +164,9 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
       .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' })
       .expect(201);
     invoiceIds.push(res.body.id);
-    const cardRow = (res.body.posPayments as { method: string; providerRef: string | null }[]).find((p) => p.method === 'CARD');
+    const cardRow = (res.body.posPayments as { method: string; providerRef: string | null; verification: string }[]).find((p) => p.method === 'CARD');
     expect(cardRow?.providerRef).toBeNull();
+    // بلا ربطٍ: جهازٌ مستقلّ أكّده الكاشير (الموجز ٢.١) — لا «قبله المزوّد».
+    expect(cardRow?.verification).toBe('CASHIER_CONFIRMED');
   }, 60000);
 });

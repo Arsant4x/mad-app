@@ -118,6 +118,9 @@ export async function purgeInvoicesForTest(tenantPrisma: TenantPrismaService, co
         await unpostIfLinked(tx, payment?.journalEntryId ?? null);
       }
       await tx.quote.updateMany({ where: { convertedInvoiceId: inv.id }, data: { convertedInvoiceId: null } });
+      // ومحاولةُ الدفع التي أنتجته (`ق-١٤٠١`) تشير إليه بلا فعلٍ عند الحذف، وصفُّ البطاقة يشير إليها — فالصفوفُ ثم المحاولة.
+      await tx.posPayment.deleteMany({ where: { invoiceId: inv.id } });
+      await tx.posPaymentAttempt.deleteMany({ where: { invoiceId: inv.id } });
 
       // ④ الصفُّ ثم قيودُه — كما كان `remove()` يفعل قبل أن يُغلَق. ومردودةٌ أُغلقت ببدلٍ تحمل
       //    قيدَ عكسها (`ق-٩٦٥`) وقيدَ عكس تكلفتها (بذكره) — يُزالان معها.
