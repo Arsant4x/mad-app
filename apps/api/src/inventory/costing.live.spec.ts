@@ -208,7 +208,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
             companyId, no: `MP2-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر خدمي بلا صنف', quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
+            lines: { create: [{ companyId, lineNo: 1, description: 'سطر خدمي بلا صنف', quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });
@@ -234,7 +234,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
             companyId, no: `MP3-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر بصنف', productId: sold.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
+            lines: { create: [{ companyId, lineNo: 1, description: 'سطر بصنف', productId: sold.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });
@@ -260,7 +260,7 @@ d('L0-2 — المنع البنيوي: مُشغِّل القاعدة', () => {
             companyId, no: `MP4-${randomUUID().slice(0, 8)}`, customerId: customer.id,
             issueDate: new Date(), dueDate: new Date(),
             subtotal: 1, taxTotal: 0, total: 1, baseSubtotal: 1, baseTaxTotal: 0, baseTotal: 1,
-            lines: { create: [{ companyId, description: 'سطر بصنف', productId: p.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
+            lines: { create: [{ companyId, lineNo: 1, description: 'سطر بصنف', productId: p.id, quantity: 1, unitPrice: 1, taxRate: 15, taxCategory: 'S' }] },
           },
           include: { lines: true },
         });

@@ -180,8 +180,9 @@ describe('⑧ فئةُ ضريبة الصنف — من البطاقة إلى ال
     // وسطرُ فاتورةٍ جديد لا يحمل LEGACY_ZERO.
     await expect(
       tenantPrisma.runInTenantContext(companyId, async (tx) => {
-        await tx.$executeRaw`INSERT INTO "invoice_lines" ("id", "companyId", "invoiceId", "description", "quantity", "unitPrice", "taxRate", "taxCategory")
-          VALUES (${`probe-line-${suffix}`}, ${companyId}, ${serviceInvoiceId}, ${'قديم'}, 1, 1, 0, 'LEGACY_ZERO')`;
+        // رقمُ سطرٍ لا يصطدم بسطور الفاتورة (`ق-١٤١٢`) — فالرفضُ من قيد الحبس لا من الإلزام ولا من الفريد.
+        await tx.$executeRaw`INSERT INTO "invoice_lines" ("id", "companyId", "invoiceId", "lineNo", "description", "quantity", "unitPrice", "taxRate", "taxCategory")
+          VALUES (${`probe-line-${suffix}`}, ${companyId}, ${serviceInvoiceId}, 99, ${'قديم'}, 1, 1, 0, 'LEGACY_ZERO')`;
         throw new RollbackSignal();
       }),
     ).rejects.toThrow(/invoice_lines_legacy_zero_before_cutover/);

@@ -158,6 +158,7 @@ d('L0-0 — بند المستند على قاعدة حيّة', () => {
           data: {
             companyId: companyA,
             invoiceId: invoice.id,
+            lineNo: 1,
             description: 'بند خدمي بلا صنف — بوابة L0-0',
             quantity: '1',
             unitPrice: '50',

@@ -30,6 +30,7 @@ import { rateForCategory } from '../common/vat/line-tax.util';
 import { ZatcaService } from '../zatca/zatca.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { LINE_ORDER } from '../common/document-lines.util';
 
 /** حقولُ البحث المُعلَنة للمناوبات (`ق-١٢٣٦`) — اسمُ من فتحها وملاحظاتُ الإقفال. */
 const SHIFT_SEARCH_FIELDS = ['openedByName', 'notes'] as const;
@@ -55,7 +56,8 @@ export function settlementDate(offsetMin: number | undefined, now = new Date()):
 const WALK_IN_CUSTOMER = 'عميل نقدي';
 
 /** ما يُقرأ مع فاتورة البيع للإيصال — مصدرٌ واحد للمباشر والمزامَن والمكرَّر ومحاولة الدفع. */
-const SALE_INCLUDE = { lines: true, customer: true, posPayments: true } as const;
+// الإيصالُ بترتيب السلّة المعلَن (`ق-١٤١٢`) — والثابتُ الواحد يحمله إلى كلِّ قراءةٍ لبيع (الإتمام · المزامنة · الإيصال).
+const SALE_INCLUDE = { lines: LINE_ORDER, customer: true, posPayments: true } as const;
 type SaleRow = Prisma.InvoiceGetPayload<{ include: typeof SALE_INCLUDE }>;
 
 /** جزءُ دفعٍ واحد — نقدٌ أو بطاقة بمبلغه. */
@@ -814,6 +816,7 @@ export class PosService {
           clientSaleId: input.clientSaleId,
           offlineRef: input.offlineRef,
         } as Prisma.InvoiceUncheckedUpdateInput,
+        // الإيصالُ بترتيب السلّة المعلَن (`ق-١٤١٢`) — عبر الثابت الواحد.
         include: SALE_INCLUDE,
       });
       // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).

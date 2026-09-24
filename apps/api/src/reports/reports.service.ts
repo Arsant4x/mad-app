@@ -7,6 +7,7 @@ import { money, moneyText, percent, qty } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { writeOffReason } from '../common/writeoff-reasons';
+import { LINE_ORDER } from '../common/document-lines.util';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
@@ -1077,7 +1078,7 @@ export class ReportsService {
         include: {
           customer: { select: { name: true } },
           relatedInvoice: { select: { no: true } },
-          lines: { select: { id: true, description: true, quantity: true, unitPrice: true, returnsLineId: true, returnCondition: true } },
+          lines: { ...LINE_ORDER, select: { id: true, description: true, quantity: true, unitPrice: true, returnsLineId: true, returnCondition: true } },
         },
         orderBy: { issueDate: 'asc' },
       });
