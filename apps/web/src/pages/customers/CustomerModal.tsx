@@ -44,8 +44,10 @@ export function CustomerModal({
       await onSave({
         name: name.trim(),
         kind,
-        otherIdScheme: otherIdScheme || '',
-        otherId: otherId.trim(),
+        // 🔴 لا فارغَ على السلك (`ق-١٤٠٤`): `CreateCustomerDto` يقبل قائمتَه وحدَها فيردّ `''` بـ`400` — والإنشاءُ بلا مخطّطٍ يُغفله،
+        //    والتعديلُ يمحوه بـ`null` (يقبله `UpdateCustomerDto`، والخدمةُ تقرؤه محواً).
+        otherIdScheme: otherIdScheme || (editing ? null : undefined),
+        otherId: otherId.trim() || (editing ? null : undefined),
         country: country.trim().toUpperCase() || 'SA',
         vatNumber: vatNumber.trim() || undefined,
         phone: phone.trim() || undefined,

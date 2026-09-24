@@ -61,8 +61,9 @@ export interface CustomerInput {
   name: string;
   /** إلزاميةٌ عند الإنشاء — الخادمُ يرفض بلا صفة (لا افتراض). */
   kind: Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
-  otherIdScheme?: BuyerIdScheme | '';
-  otherId?: string;
+  /** يُغفَل حين لا مخطّط — والفارغُ يردّه الإنشاءُ `400` (`ق-١٤٠٤`)؛ و`null` يمحوه في التعديل. */
+  otherIdScheme?: BuyerIdScheme | null;
+  otherId?: string | null;
   country?: string;
   vatNumber?: string;
   phone?: string;
