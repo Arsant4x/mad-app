@@ -8,6 +8,7 @@ import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.util';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { getOrCreateInventoryVarianceAccount } from './inventory-variance-account.util';
+import type { CostAllocation } from '../purchases/layer-cost-allocation.util';
 import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
@@ -406,21 +407,53 @@ export async function postManualStockEntry(
 }
 
 /**
- * **فرقُ تسوية المؤقّت يُرحَّل على حساب مصدره** (`ق-١٣٦٣`): المؤقّتُ من بيعٍ فرقُه تكلفةُ مبيعات (`5100` — كما كان)، **ومن حركةٍ يدويةٍ
- * فرقُه فروقاتُ المخزون** — فالإخراجُ اليدويُّ قُيّد على الفروقات بتكلفته المؤقّتة، وتصحيحُها يتبعه. ⚠️ **وما سواهما** (الشطبُ ·
- * التحويل) **على `5100` كما كان** — عائلةُ «سوء التوزيع» (`ق-١٣٦٤`) معلَنةً هناك لا مصلَحةً هنا.
+ * **فرقُ تسوية المؤقّت يُرحَّل على حساب مخرجه** (`ق-١٣٦٣` · `ق-١٣٦٤`): البيعُ `5100` (كما كان) · الإخراجُ اليدويّ `5810` (قُيّد عليها
+ * بتكلفته المؤقّتة وتصحيحُها يتبعه) · الشطبُ `5800` (بنصّ المالك: «حصّتُه إلى حساب خسائر الإتلاف») · **والتحويلُ تبع طبقةَ المقصِد**
+ * — فرفُّه داخلَ `1300` نفسِه لا قيدَ له، وما خرج من المقصِد قبل التسوية حصّتُه على مخارجه في `allocation`.
  */
 export async function postProvisionalSettlementEntries(
   tx: Prisma.TransactionClient,
   companyId: string,
-  c: { branchId?: string | null; ref: string; date: Date; byOrigin: Partial<Record<string, number>> },
+  c: { branchId?: string | null; ref: string; date: Date; allocation: CostAllocation },
 ) {
-  const manual = round2(c.byOrigin.MANUAL ?? 0);
-  const rest = round2(Object.entries(c.byOrigin).reduce((t, [origin, v]) => (origin === 'MANUAL' ? t : t + (v ?? 0)), 0));
-  const cogs = await postCogsSettlementEntry(tx, companyId, { branchId: c.branchId, ref: c.ref, date: c.date, baseDelta: rest });
+  const cogs = await postCogsSettlementEntry(tx, companyId, { branchId: c.branchId, ref: c.ref, date: c.date, baseDelta: c.allocation.cogs });
   // الفرقُ الموجب = تكلفةٌ فعليةٌ أعلى من المؤقّتة ⟸ خرج من الرفّ أكثرُ مما قُيّد ⟸ قيمةٌ سالبة على الفروقات.
-  const variance = await postManualStockEntry(tx, companyId, { branchId: c.branchId, ref: `تسوية مؤقّتٍ يدويّ — ${c.ref}`, date: c.date, baseValue: -manual });
-  return { cogs, variance };
+  const variance = await postManualStockEntry(tx, companyId, { branchId: c.branchId, ref: `تسوية مؤقّتٍ يدويّ — ${c.ref}`, date: c.date, baseValue: -c.allocation.variance });
+  const writeOff = await postWriteOffSettlementEntry(tx, companyId, { branchId: c.branchId, ref: c.ref, date: c.date, baseDelta: c.allocation.writeOff });
+  return { cogs, variance, writeOff };
+}
+
+/**
+ * ⚖️ `ق-١٣٦٤` **فرقُ تكلفة ما شُطب**: شطبٌ وراء الرصيد قُيّد على `5800` بآخر تكلفةٍ معروفة، ثم عُرفت الحقيقيةُ — أو رفعٌ وصل طبقةً
+ * خرج منها مشطوب. موجبُه مدين `5800` دائن `1300`، وسالبُه العكس. وصفرٌ لا قيد.
+ */
+export async function postWriteOffSettlementEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; ref: string; date: Date; baseDelta: number },
+) {
+  const delta = round2(c.baseDelta);
+  if (Math.abs(delta) < 0.005) return null;
+  const inventoryAccountId = await getOrCreateInventoryAccount(tx, companyId);
+  const writeOffAccountId = await getOrCreateWriteOffAccount(tx, companyId);
+  const amount = Math.abs(delta);
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `تسوية شطبٍ مؤقّت — ${c.ref}`,
+    lines:
+      delta > 0
+        ? [
+            { accountId: writeOffAccountId, debit: amount, credit: 0 },
+            { accountId: inventoryAccountId, debit: 0, credit: amount },
+          ]
+        : [
+            { accountId: inventoryAccountId, debit: amount, credit: 0 },
+            { accountId: writeOffAccountId, debit: 0, credit: amount },
+          ],
+    auto: true,
+    branchId: c.branchId ?? null,
+  });
 }
 
 /**
@@ -529,8 +562,12 @@ export interface SupplierNoteForPosting {
   baseTotal: number;
   /** ما يمسّ `1300`: تكلفةُ ما خرج من الطبقة + حصّةُ ما على الرفّ من فرق السعر (`purchase-return.util`). */
   baseInventory: number;
-  /** ما يمسّ `5100` في فترة الإشعار: حصّةُ المستهلَك من فرق السعر + فرقُ سعر المُعاد عن تكلفة طبقته. */
+  /** ما يمسّ `5100` في فترة الإشعار: حصّةُ المبيع من فرق السعر + فرقُ سعر المُعاد عن تكلفة طبقته. */
   baseCogs: number;
+  /** ⚖️ `ق-١٣٦٤` حصّةُ المشطوب من فرق السعر (`5800`) — بإشارة الإشعار كسابقَيه. */
+  baseWriteOff?: number;
+  /** ⚖️ `ق-١٣٦٤` حصّةُ المُخرَج يدوياً من فرق السعر (`5810`). */
+  baseVariance?: number;
 }
 
 /**
@@ -562,11 +599,16 @@ export async function postSupplierNoteEntry(tx: Prisma.TransactionClient, compan
     const credit = a * dir;
     lines.push(credit > 0 ? { accountId, debit: 0, credit } : { accountId, debit: -credit, credit: 0 });
   };
+  const writeOff = n.baseWriteOff ?? 0;
+  const variance = n.baseVariance ?? 0;
   push(ids.get('2100')!, -n.baseTotal);
   push(inputVatId, n.baseTaxAmount);
   push(inventoryId, n.baseInventory);
   push(ids.get('5100')!, n.baseCogs);
-  push(ids.get(expCode)!, n.baseTotal - n.baseTaxAmount - n.baseInventory - n.baseCogs);
+  // ⚖️ ق-١٣٦٤ حصّةُ المشطوب والمُخرَج يدوياً على حسابيهما لا على تكلفة المبيعات.
+  if (roundTo(writeOff, 'LINE_AMOUNT') !== 0) push(await getOrCreateWriteOffAccount(tx, companyId), writeOff);
+  if (roundTo(variance, 'LINE_AMOUNT') !== 0) push(await getOrCreateInventoryVarianceAccount(tx, companyId), variance);
+  push(ids.get(expCode)!, n.baseTotal - n.baseTaxAmount - n.baseInventory - n.baseCogs - writeOff - variance);
 
   return createJournalEntry(tx, {
     companyId,
@@ -706,9 +748,14 @@ export interface LandedCostForPosting {
   /** فئةُ الشراء الخدميّ — حسابُها هو الدائنُ (ما رُحِّل إليه مصروفاً يُعاد تصنيفُه). */
   categoryCode: string | null;
   date: Date;
-  /** Σ حصّة ما على الرفّ (مدين `1300`) و Σ حصّة ما استُهلك (مدين `5100`)، بالعملة الأساسية. */
+  /**
+   * Σ حصّة ما على الرفّ — طبقاتُ الاستلام وطبقاتُ المقصِد التي تبعها الرفعُ (مدين `1300`) — و Σ حصّة ما بيع (مدين `5100`)،
+   * بالعملة الأساسية. ⚖️ `ق-١٣٦٤`: والمشطوبُ (`5800`) والمُخرَجُ يدوياً (`5810`) على حسابيهما.
+   */
   baseInventory: number;
   baseCogs: number;
+  baseWriteOff?: number;
+  baseVariance?: number;
   layersCount: number;
 }
 
@@ -723,7 +770,9 @@ export interface LandedCostForPosting {
 export async function postLandedCostEntry(tx: Prisma.TransactionClient, companyId: string, c: LandedCostForPosting) {
   const inventory = round2(c.baseInventory);
   const cogs = round2(c.baseCogs);
-  const total = round2(inventory + cogs);
+  const writeOff = round2(c.baseWriteOff ?? 0);
+  const variance = round2(c.baseVariance ?? 0);
+  const total = round2(inventory + cogs + writeOff + variance);
   if (total <= 0) return null;
 
   const expCode = purchaseExpenseAccountCode(c.categoryCode);
@@ -732,6 +781,9 @@ export async function postLandedCostEntry(tx: Prisma.TransactionClient, companyI
   const lines: PostingLine[] = [];
   if (inventory > 0) lines.push({ accountId: await getOrCreateInventoryAccount(tx, companyId), debit: inventory, credit: 0 });
   if (cogs > 0) lines.push({ accountId: ids.get('5100')!, debit: cogs, credit: 0 });
+  // ⚖️ ق-١٣٦٤ «والإتلاف: حصّتُه إلى حساب خسائر الإتلاف لا تكلفة المبيعات» — والمُخرَجُ يدوياً إلى الفروقات.
+  if (writeOff > 0) lines.push({ accountId: await getOrCreateWriteOffAccount(tx, companyId), debit: writeOff, credit: 0 });
+  if (variance > 0) lines.push({ accountId: await getOrCreateInventoryVarianceAccount(tx, companyId), debit: variance, credit: 0 });
   lines.push({ accountId: ids.get(expCode)!, debit: 0, credit: total });
 
   return createJournalEntry(tx, {
@@ -759,6 +811,9 @@ export interface NonDeductibleVatForPosting {
   baseCogs: number;
   baseExpense: number;
   baseClearing: number;
+  /** ⚖️ `ق-١٣٦٤` حصّةُ المشطوب (`5800`) والمُخرَج يدوياً (`5810`) ممّا خرج من الطبقة — بإشارتيهما. */
+  baseWriteOff?: number;
+  baseVariance?: number;
 }
 
 /**
@@ -774,8 +829,10 @@ export async function postNonDeductibleVatEntry(tx: Prisma.TransactionClient, co
   const cogs = round2(n.baseCogs);
   const expense = round2(n.baseExpense);
   const clearing = round2(n.baseClearing);
-  if (inventory === 0 && cogs === 0 && expense === 0 && clearing === 0) return null;
-  const inputVat = round2(inventory + cogs + expense + clearing);
+  const writeOff = round2(n.baseWriteOff ?? 0);
+  const variance = round2(n.baseVariance ?? 0);
+  if (inventory === 0 && cogs === 0 && expense === 0 && clearing === 0 && writeOff === 0 && variance === 0) return null;
+  const inputVat = round2(inventory + cogs + expense + clearing + writeOff + variance);
 
   const expCode = purchaseExpenseAccountCode(n.categoryCode);
   const ids = await resolveAccountIds(tx, ['5100', ...(expense !== 0 ? [expCode] : [])]);
@@ -787,6 +844,8 @@ export async function postNonDeductibleVatEntry(tx: Prisma.TransactionClient, co
   };
   if (inventory !== 0) push(await getOrCreateInventoryAccount(tx, companyId), inventory);
   if (cogs !== 0) push(ids.get('5100')!, cogs);
+  if (writeOff !== 0) push(await getOrCreateWriteOffAccount(tx, companyId), writeOff);
+  if (variance !== 0) push(await getOrCreateInventoryVarianceAccount(tx, companyId), variance);
   if (expense !== 0) push(ids.get(expCode)!, expense);
   if (clearing !== 0) push(await getOrCreateReceiptClearingAccount(tx, companyId), clearing);
   if (inputVat !== 0) push(await getOrCreateInputVatAccount(tx, companyId), -inputVat);

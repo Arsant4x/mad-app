@@ -199,6 +199,11 @@ export interface ReturnResult {
   skipped: { lineId: string; reason: 'NO_RETURNS_LINE' | 'NOT_STOCKED' | 'NOT_GOOD' | 'NO_PRODUCT' }[];
   totalCost: number;
   provisionalQty: number;
+  /**
+   * ⚖️ `ق-١٣٦٤` — **ما رُفع على العائد بعد خروجه** (تكلفةٌ محمَّلة · إشعارُ سعر · ضريبةٌ غيرُ قابلةٍ للخصم وصلت طبقتَه وهو خارجها)،
+   * بالعملة الأساسية: كان حصّتُه قد ذهبت إلى `5100` يومَ الرفع، فتعود الآن إلى `1300` معه — والمستدعي يضمّه إلى عكس التكلفة.
+   */
+  raisedAfterExit: number;
 }
 
 /** صورةُ الحدّ لما عاد إلى الرفّ (② `ق-١٢٣٥`): الكمّيةُ بثلاث والتكلفةُ بخانتين، نصّاً. */
@@ -227,6 +232,7 @@ export async function returnStockedLines(tx: Tx, args: ReturnArgs): Promise<Retu
   const skipped: ReturnResult['skipped'] = [];
   let totalCost = 0;
   let provisionalQty = 0;
+  let raisedAfterExit = 0;
 
   for (const line of args.lines) {
     if (!line.productId) { skipped.push({ lineId: line.id, reason: 'NO_PRODUCT' }); continue; }
@@ -274,9 +280,16 @@ export async function returnStockedLines(tx: Tx, args: ReturnArgs): Promise<Retu
     restored.push({ lineId: line.id, qty, cost: back.reversedCost });
     totalCost += back.reversedCost;
     provisionalQty += back.provisionalQty;
+    raisedAfterExit += back.raisedAfterExit;
   }
 
-  return { restored, skipped, totalCost: roundTo(totalCost, 'LINE_AMOUNT'), provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY') };
+  return {
+    restored,
+    skipped,
+    totalCost: roundTo(totalCost, 'LINE_AMOUNT'),
+    provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
+    raisedAfterExit: roundTo(raisedAfterExit, 'LINE_AMOUNT'),
+  };
 }
 
 /** يُترجَم في الخدمة إلى `BadRequestException` برسالةٍ مفهومة — الخطأ يحمل أرقامه. */

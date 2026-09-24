@@ -163,7 +163,7 @@ export class StockOpeningsService {
         // ٣. لكلِّ سطر: حركةٌ داخلة بمصدر OPENING، وطبقةٌ بتاريخ الاقتناء، وسطرُ إعلانٍ يملك ما أُعلن، ثم تسويةُ المؤقّت.
         let settledDelta = 0;
         let settledCount = 0;
-        const settledByOrigin: Record<string, number> = {};
+        const settledAllocation = { shelf: 0, cogs: 0, writeOff: 0, variance: 0 };
         const today = toDateOnly(new Date());
         for (const p of prepared) {
           const movement = await tx.stockMovement.create({
@@ -210,7 +210,7 @@ export class StockOpeningsService {
           const settled = await settleProvisionalConsumptions(tx, companyId, { productId: p.line.productId, warehouseId: p.line.warehouseId, layerId });
           settledDelta = round2(settledDelta + settled.costDelta);
           settledCount += settled.settled;
-          for (const [origin, v] of Object.entries(settled.costDeltaByOrigin)) settledByOrigin[origin] = round2((settledByOrigin[origin] ?? 0) + (v ?? 0));
+          for (const k of ['shelf', 'cogs', 'writeOff', 'variance'] as const) settledAllocation[k] = round2(settledAllocation[k] + settled.allocation[k]);
         }
 
         // ٤. قيدٌ واحد للإعلان — مدين 1300 / دائن 3900 بتاريخ الافتتاح (يخضع للقفل في createJournalEntry).
@@ -221,7 +221,7 @@ export class StockOpeningsService {
         // ٥. فرقُ تسوية المؤقّت — حدثُ اليوم لا حدثُ الافتتاح: البيعُ قُيّد بتكلفةٍ مؤقّتة والحقيقةُ عُرفت الآن.
         if (settledCount > 0) {
           // ق-١٣٦٣ — فرقُ كلِّ مؤقّتٍ على حساب مصدره: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
-          await postProvisionalSettlementEntries(tx, companyId, { branchId, ref: `رصيدٌ افتتاحيّ ${no}`, date: today, byOrigin: settledByOrigin });
+          await postProvisionalSettlementEntries(tx, companyId, { branchId, ref: `رصيدٌ افتتاحيّ ${no}`, date: today, allocation: settledAllocation });
         }
 
         return this.readOne(tx, opening.id, { provisionalSettled: settledCount, provisionalCostDelta: settledDelta });

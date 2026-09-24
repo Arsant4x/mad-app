@@ -1,8 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo } from '../common/money/rounding';
-import { spreadCostOverLayer } from './layer-cost-spread.util';
+import { allocationOf, raiseLayerCost, type CostShareNode } from './layer-cost-allocation.util';
 
 /**
  * ⚖️ **أثرُ إشعار المورّد على الرفّ — على طبقة الاستلام الأصلية نفسِها** (`ق-١٠٠٦`/③ · `ق-٩٩٠`).
@@ -44,9 +44,15 @@ export interface SupplierNoteStockArgs {
 export interface SupplierNoteStockResult {
   /** ما يُقيَّد على `1300` بالعملة الأساسية (تكلفةُ ما خرج + حصّةُ ما على الرفّ من فرق السعر). */
   baseInventory: number;
-  /** ما يُقيَّد على `5100` في فترة الإشعار (حصّةُ المستهلَك من فرق السعر + فرقُ سعر المُعاد عن تكلفة طبقته). */
+  /** ما يُقيَّد على `5100` في فترة الإشعار (حصّةُ المبيع من فرق السعر + فرقُ سعر المُعاد عن تكلفة طبقته). */
   baseCogs: number;
+  /** ⚖️ `ق-١٣٦٤` حصّةُ المشطوب من فرق السعر (`5800`) — بإشارة الإشعار. */
+  baseWriteOff: number;
+  /** ⚖️ `ق-١٣٦٤` حصّةُ المُخرَج يدوياً من فرق السعر (`5810`) — بإشارة الإشعار. */
+  baseVariance: number;
   returned: { lineId: string; qty: number; layerId: string }[];
+  /** شجرةُ الحصص (الطبقاتُ وما تبعها إلى المقصِد) — يسجّلها المستدعي بحدث `PRICE_NOTE` (`recordCostShares`). */
+  shares: CostShareNode[];
 }
 
 /**
@@ -59,6 +65,7 @@ export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockAr
   let baseInventory = 0;
   let baseCogs = 0;
   const returned: SupplierNoteStockResult['returned'] = [];
+  const nodes: CostShareNode[] = [];
 
   for (const line of args.lines) {
     if (!line.returnsPurchaseLineId) continue;
@@ -130,15 +137,28 @@ export async function applySupplierNoteToStock(tx: Tx, args: SupplierNoteStockAr
       continue;
     }
 
-    // إشعارُ سعرٍ بلا بضاعة (دائنٌ يخفّض التكلفة، ومدينٌ يزيدها): ما على الرفّ يتبع الطبقة، وما استُهلك إلى 5100.
-    // ٧ الحكمُ دالّةٌ واحدة تخدم التكلفةَ المحمَّلة أيضاً (`layer-cost-spread.util`) — لا نسخةً.
-    const spread = spreadCostOverLayer({ unitsAffected: qty, perUnitAmount: unitBase, direction: args.side === 'credit' ? -1 : 1, qtyRemaining: remaining, unitCost: layerCost });
-    if (spread.onShelfQty > 0) {
-      await tx.inventoryLayer.update({ where: { id: layer.id }, data: { unitCost: spread.newUnitCost } });
-      baseInventory += spread.baseInventory;
-    }
-    baseCogs += spread.baseCogs;
+    // إشعارُ سعرٍ بلا بضاعة (دائنٌ يخفّض التكلفة، ومدينٌ يزيدها): ما على الرفّ يتبع الطبقة، وما خرج على مخارجه (`ق-١٣٦٤`:
+    // البيعُ `5100` · الشطبُ `5800` · اليدويُّ `5810` · والمحوَّلُ يتبع إلى طبقة مقصِده). ٧ الحكمُ دالّةٌ واحدة تخدم التكلفةَ
+    // المحمَّلة والضريبةَ غيرَ القابلة للخصم أيضاً — لا نسخةً.
+    const sign = args.side === 'credit' ? -1 : 1;
+    const node = await raiseLayerCost(tx, {
+      layerId: layer.id,
+      unitsAffected: qty,
+      amount: roundTo(sign * qty * unitBase, 'LINE_AMOUNT'),
+      onConflict: (layerId) => new ConflictException(formatMessage(MSG.supplier_note_layer_changed, { layerId })),
+    });
+    nodes.push(node);
   }
 
-  return { baseInventory: roundTo(baseInventory, 'LINE_AMOUNT'), baseCogs: roundTo(baseCogs, 'LINE_AMOUNT'), returned };
+  // المبالغُ بإشارة الإشعار (موجبٌ = دائنٌ في الدائن ومدينٌ في المدين) — فالحصصُ الموقَّعة تُقلب بإشارته.
+  const noteSign = args.side === 'credit' ? -1 : 1;
+  const allocation = allocationOf(nodes);
+  return {
+    baseInventory: roundTo(baseInventory + noteSign * allocation.shelf, 'LINE_AMOUNT'),
+    baseCogs: roundTo(baseCogs + noteSign * allocation.cogs, 'LINE_AMOUNT'),
+    baseWriteOff: roundTo(noteSign * allocation.writeOff, 'LINE_AMOUNT'),
+    baseVariance: roundTo(noteSign * allocation.variance, 'LINE_AMOUNT'),
+    returned,
+    shares: nodes,
+  };
 }

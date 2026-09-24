@@ -141,7 +141,7 @@ export class InventoryService {
         entryId = entry?.id ?? null;
         const settled = await settleProvisionalConsumptions(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, layerId });
         if (settled.settled > 0) {
-          await postProvisionalSettlementEntries(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, byOrigin: settled.costDeltaByOrigin });
+          await postProvisionalSettlementEntries(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, allocation: settled.allocation });
         }
       } else if (dto.type === 'OUT' || dto.type === 'ADJUSTMENT') {
         // ٥+٦ الإخراجُ اليدويّ ليس بيعاً — المنتهي يمرّ منه (`ق-١٠٨٢`).
@@ -390,11 +390,13 @@ export class InventoryService {
 
       /**
        * ⚖️ ق-١٣٦٣ — **العكسُ يُقيَّد إن قُيّد أصلُه**: مرآةُ قيده بما تحرّك فعلاً (الطبقةُ تُقفل بتكلفتها اليوم · والمستعادُ بتكلفة ما خرج).
-       * **وأصلٌ سبق البناء بلا قيد لا يُقيَّد عكسُه** — وإلا خرج من الدفتر ما لم يدخله.
+       * **وأصلٌ سبق البناء بلا قيد لا يُقيَّد عكسُه** — وإلا خرج من الدفتر ما لم يدخله؛ **إلا ما رُفع عليه بعد البناء** (`ق-١٣٦٤`):
+       * حصّتُه قُيّدت على `5810` يومَ الرفع، فتعود منها مع الوحدة.
        */
-      const mirror = async (reversalId: string, baseValue: number) => {
-        if (!original.journalEntryId) return null;
-        const entry = await postManualStockEntry(tx, companyId, { branchId: original.branchId, ref: reason, date: base.date, baseValue });
+      const mirror = async (reversalId: string, baseValue: number, raisedAfterExit = 0) => {
+        const value = original.journalEntryId ? baseValue + raisedAfterExit : raisedAfterExit;
+        if (Math.abs(value) < 0.005) return null;
+        const entry = await postManualStockEntry(tx, companyId, { branchId: original.branchId, ref: reason, date: base.date, baseValue: value });
         if (entry) await tx.stockMovement.update({ where: { id: reversalId }, data: { journalEntryId: entry.id } });
         return entry?.id ?? null;
       };
@@ -415,7 +417,8 @@ export class InventoryService {
       if (original.type === 'OUT' || original.type === 'ADJUSTMENT') {
         const restored = await restoreConsumption(tx, companyId, original.id);
         const reversal = await tx.stockMovement.create({ data: { ...base, warehouseId: original.warehouseId, type: 'IN', qty }, include: MOVEMENT_INCLUDE });
-        const journalEntryId = await mirror(reversal.id, restored.restoredCost);
+        // ق-١٣٦٤ ومعه ما رُفع عليه بعد خروجه — حصّتُه ذهبت إلى 5810 يومَ الرفع، فتعود منها.
+        const journalEntryId = await mirror(reversal.id, restored.restoredCost, restored.raisedAfterExit);
         return { ...reversal, journalEntryId, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
       }
 

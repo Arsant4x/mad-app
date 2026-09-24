@@ -564,6 +564,7 @@ model Company {
   inventoryLayers       InventoryLayer[]
   stockBatches          StockBatch[]
   inventoryConsumptions InventoryConsumption[]
+  layerCostShares       LayerCostShare[]
   inventoryWriteOffs    InventoryWriteOff[]
   writeOffAttachments   InventoryWriteOffAttachment[]
   posShifts           PosShift[]
@@ -1911,6 +1912,8 @@ model Purchase {
   landedCostDistributions LandedCostDistribution[]
   /// `ق-١٣٤٢` أحداثُ ضريبة المدخلات غيرِ القابلة للخصم لهذا المستند (شراءً كان أو إشعارَ مورّد).
   nonDeductibleVatEvents NonDeductibleVatEvent[]
+  /// ⚖️ `ق-١٣٦٤` حصصُ فرقِ السعر على الطبقات ومخارجها — لإشعار السعر من المورّد.
+  layerCostShares LayerCostShare[]
 
   @@unique([companyId, no])
   @@index([companyId, categoryCode])
@@ -1920,6 +1923,7 @@ model Purchase {
   purchaseAttachment_purchaseId_tenant PurchaseAttachment[] @relation("PurchaseAttachment_purchaseId_tenant")
   landedCostDistribution_purchaseId_tenant LandedCostDistribution[] @relation("LandedCostDistribution_purchaseId_tenant")
   nonDeductibleVatEvent_purchaseId_tenant NonDeductibleVatEvent[] @relation("NonDeductibleVatEvent_purchaseId_tenant")
+  layerCostShare_purchaseId_tenant LayerCostShare[] @relation("LayerCostShare_purchaseId_tenant")
   goodsReceipt_purchaseId_tenant GoodsReceipt[] @relation("GoodsReceipt_purchaseId_tenant")
   purchaseLine_purchaseId_tenant PurchaseLine[] @relation("PurchaseLine_purchaseId_tenant")
   purchase_relatedPurchaseId_tenant Purchase[] @relation("Purchase_relatedPurchaseId_tenant")
@@ -2186,9 +2190,9 @@ model LandedCostDistribution {
 
   /// ما وُزِّع بالعملة الأساسية = قيمةُ السطر الأساسية (Σ سطور التوزيع).
   baseAmount Decimal @db.Decimal(18, 2)
-  /// Σ حصّة ما على الرفّ (مدين `1300`).
+  /// Σ حصّة الرفوف — طبقاتُ الاستلام **وطبقاتُ المقصِد التي تبعها الرفع** (مدين `1300` · `ق-١٣٦٤`).
   baseInventory Decimal @db.Decimal(18, 2)
-  /// Σ حصّة ما استُهلك قبل الوصول (مدين `5100`).
+  /// Σ حصّة ما خرج قبل الوصول — **مقسومةً على مخارجها** (البيعُ `5100` · الشطبُ `5800` · اليدويُّ `5810`) في `layer_cost_shares` (`ق-١٣٦٤`).
   baseCogs Decimal @db.Decimal(18, 2)
 
   /// قيدُ إعادة التصنيف — `null` حين تعذّر الترحيل (دليلٌ ناقص) كسائر المستندات.
@@ -2210,11 +2214,14 @@ model LandedCostDistribution {
   updatedAt DateTime @updatedAt
 
   lines LandedCostLine[]
+  /// ⚖️ `ق-١٣٦٤` حصصُ التوزيع على الطبقات ومخارجها — ومنها ما تبع الوحدةَ إلى طبقة المقصِد (يُعكس معه).
+  costShares LayerCostShare[]
 
   @@index([companyId, purchaseId])
   @@index([purchaseLineId])
   @@map("landed_cost_distributions")
   landedCostLine_distributionId_tenant LandedCostLine[] @relation("LandedCostLine_distributionId_tenant")
+  layerCostShare_landedCostDistributionId_tenant LayerCostShare[] @relation("LayerCostShare_landedCostDistributionId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -2239,7 +2246,7 @@ model LandedCostLine {
   baseAmount Decimal @db.Decimal(18, 2)
   /// حصّةُ ما على الرفّ منه (تُضاف إلى تكلفة الطبقة).
   baseInventory Decimal @db.Decimal(18, 2)
-  /// حصّةُ ما استُهلك قبل الوصول (إلى `5100` الآن).
+  /// حصّةُ ما خرج من هذه الطبقة قبل الوصول — مقسومةً على مخارجه في `layer_cost_shares` (`ق-١٣٦٤`).
   baseCogs Decimal @db.Decimal(18, 2)
 
   /// المتبقّي في الطبقة لحظةَ التوزيع — الإلغاءُ يشترط ألّا يتغيّر (استهلاكٌ لاحق يمنعه مسمّىً).
@@ -2313,10 +2320,13 @@ model NonDeductibleVatEvent {
   createdAt DateTime @default(now())
 
   lines NonDeductibleVatEventLine[]
+  /// ⚖️ `ق-١٣٦٤` حصصُ الحدث على الطبقات ومخارجها.
+  costShares LayerCostShare[]
 
   @@index([companyId, purchaseId])
   @@map("non_deductible_vat_events")
   nonDeductibleVatEventLine_eventId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_eventId_tenant")
+  layerCostShare_nonDeductibleVatEventId_tenant LayerCostShare[] @relation("LayerCostShare_nonDeductibleVatEventId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -2349,7 +2359,8 @@ model NonDeductibleVatEventLine {
 
   /// الحصّةُ بإشارتها (موجبٌ: خرجت من `1250` إلى الموضع · سالبٌ: عادت).
   baseAmount    Decimal @db.Decimal(18, 2)
-  /// لـ`LAYER`: ما وقع منها على الرفّ (تكلفةُ الطبقة) وما وقع على ما استُهلك (`5100`) — `baseInventory + baseCogs = baseAmount`.
+  /// لـ`LAYER`: ما وقع منها على رفّ الطبقة (تكلفتُها) وما وقع على ما خرج منها (مقسوماً على مخارجه في `layer_cost_shares` —
+  /// `ق-١٣٦٤`) — `baseInventory + baseCogs = baseAmount`.
   baseInventory Decimal @db.Decimal(18, 2)
   baseCogs      Decimal @db.Decimal(18, 2)
 
@@ -5651,9 +5662,24 @@ model InventoryLayer {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   batchTenant StockBatch? @relation("InventoryLayer_batchId_tenant", fields: [companyId, batchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ `ق-١٣٦٤` — **طبقةٌ وُلدت بتحويل تعرف الاستهلاكَ الذي جاءت منه** (شريحةُ طبقة المصدر، أو مؤقّتُها):
+  /// فما رُفع من تكلفة طبقة المصدر بعد التحويل **يتبع الوحدةَ إلى هنا ولا يُعدّ مستهلكاً** (بنصّ المالك). `null` لغير
+  /// المحوَّل، ولطبقاتٍ وُلدت بتحويلٍ سبق البناء (تُعدّ ولا تُحوَّل). فريدٌ: شريحةٌ واحدة تُنشئ طبقةً واحدة.
+  transferConsumptionId String?               @unique
+  transferConsumption   InventoryConsumption? @relation("TransferBornLayer", fields: [transferConsumptionId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  transferConsumptionTenant InventoryConsumption? @relation("InventoryLayer_transferConsumptionId_tenant", fields: [companyId, transferConsumptionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// ⚖️ `ق-١٣٦٤` — **ما رُفع على الوحدة الواحدة ممّا كان قد خرج من الطبقة**، تراكميّاً: كلُّ رفعٍ يصل الطبقةَ وقد خرج منها
+  /// شيءٌ يضيف (حصّةَ الخارج ÷ كمّيتِه). والاستهلاكُ يحفظ قيمتَه لحظةَ خروجه (`exitedRaiseAtExit`) — فالوحدةُ التي **تعود**
+  /// تعود «بالتكلفة التي خرجت بها، وما رُفع عليها بعد خروجها يُعاد من تكلفة المبيعات إلى المخزون» (بنصّ المالك): الفرقُ بينهما.
+  exitedRaise Decimal @default(0) @db.Decimal(18, 6)
+
   createdAt DateTime @default(now())
 
   consumptions InventoryConsumption[]
+  /// ⚖️ `ق-١٣٦٤` حصصُ الرفع على هذه الطبقة ومخارجها.
+  costShares LayerCostShare[]
   /// ٧ نصيبُ هذه الطبقة من تكاليفَ محمَّلة وُزِّعت عليها (`Restrict`: طبقةٌ عليها توزيعٌ لا تُحذف).
   landedCostLines LandedCostLine[]
   /// `ق-١٣٤٢` حصصُ ضريبة المدخلات غيرِ القابلة للخصم التي حملتها هذه الطبقة (`Restrict`).
@@ -5670,6 +5696,7 @@ model InventoryLayer {
   stockOpeningLine_layerId_tenant StockOpeningLine[] @relation("StockOpeningLine_layerId_tenant")
   landedCostLine_layerId_tenant LandedCostLine[] @relation("LandedCostLine_layerId_tenant")
   nonDeductibleVatEventLine_layerId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_layerId_tenant")
+  layerCostShare_layerId_tenant LayerCostShare[] @relation("LayerCostShare_layerId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -5750,12 +5777,114 @@ model InventoryConsumption {
   settlesTenant InventoryConsumption? @relation("InventoryConsumption_settlesId_tenant", fields: [companyId, settlesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   settledBy InventoryConsumption? @relation("ProvisionalSettlement")
 
+  /// ⚖️ `ق-١٣٦٤` — `exitedRaise` طبقتِه لحظةَ الخروج، **يكتبه مُشغِّل القاعدة لا الشيفرة** (فمسارُ استهلاكٍ جديد لا ينساه):
+  /// والعائدُ يستردّ الفرقَ بينه وبين ما صار عليه (`restoreConsumption*`). صفرٌ للمؤقّت (لا طبقة) ولما سبق البناء.
+  exitedRaiseAtExit Decimal @default(0) @db.Decimal(18, 6)
+
   createdAt DateTime @default(now())
+
+  /// ⚖️ `ق-١٣٦٤` الطبقةُ التي وُلدت من هذه الشريحة بتحويل — إليها يتبع ما رُفع بعده.
+  transferBornLayer InventoryLayer? @relation("TransferBornLayer")
+  /// ⚖️ `ق-١٣٦٤` حصصُ فرق التسوية حين يكون هذا الصفُّ تسويةَ مؤقّت.
+  settlementCostShares LayerCostShare[] @relation("SettlementCostShare")
 
   @@index([companyId, layerId])
   @@index([companyId, movementId])
   @@map("inventory_consumptions")
   inventoryConsumption_settlesId_tenant InventoryConsumption[] @relation("InventoryConsumption_settlesId_tenant")
+  inventoryLayer_transferConsumptionId_tenant InventoryLayer[] @relation("InventoryLayer_transferConsumptionId_tenant")
+  layerCostShare_settlementId_tenant LayerCostShare[] @relation("LayerCostShare_settlementId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
+}
+
+/// ⚖️ `ق-١٣٦٤` ما الذي رفع (أو خفض) تكلفةَ الطبقة.
+enum LayerCostEvent {
+  /// توزيعُ تكلفةٍ محمَّلة (شحنٌ · تخليصٌ · رسوم).
+  LANDED_COST
+  /// إشعارُ سعرٍ من المورّد بلا بضاعة.
+  PRICE_NOTE
+  /// ضريبةُ مدخلاتٍ غيرُ قابلةٍ للخصم (`ق-١٣٤٢`).
+  NON_DEDUCTIBLE_VAT
+  /// فرقُ تسوية مؤقّت: التكلفةُ الحقيقية عُرفت بعد أن خرجت الوحدةُ بآخر تكلفةٍ معروفة.
+  SETTLEMENT
+}
+
+/// ⚖️ **`ق-١٣٦٤` — حصّةُ رفعٍ على طبقة: أين ذهب كلُّ ريالٍ منه** — الرفُّ (`1300`) أو مخارجُ الطبقة بأنواعها.
+///
+/// **بنصّ المالك** (⑤): «التحويل: ما رُفع من تكلفة الطبقة يتبع الوحدةَ إلى طبقة المقصِد، ولا يُعدّ مستهلكاً. والإتلاف:
+/// حصّتُه إلى حساب خسائر الإتلاف لا تكلفة المبيعات.» فحصّةُ ما خرج **تُقسَم على مخارجه بكمّياتها**: الشطبُ إلى `5800` ·
+/// الإخراجُ اليدويّ إلى `5810` (أصلُه قُيّد عليها — `ق-١٣٦٣`) · التحويلُ **يتبع إلى طبقة المقصِد** (صفٌّ ابنٌ هنا بـ`parentId`)
+/// · والبيعُ الصافي (وإعادةُ المورّد كما كانت) إلى `5100`.
+///
+/// **وهو مادّةُ الحارس الثاني** (`inventory-distribution.util`): يُعيد اشتقاقَ القسمة من صفوف الاستهلاك نفسِها — مستقلّاً عن
+/// الموزِّع — ويطابقها بالدفتر. `CHECK`: الحصّةُ = الرفّ + المبيعات + الإتلاف + الفروقات + التابع.
+model LayerCostShare {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  layerId String
+  layer   InventoryLayer @relation(fields: [layerId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  layerTenant InventoryLayer @relation("LayerCostShare_layerId_tenant", fields: [companyId, layerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// الحصّةُ التي تبعت منها هذه إلى طبقة المقصِد — `null` للحصّة الأصل.
+  parentId String?
+  parent   LayerCostShare? @relation("CostShareFollow", fields: [parentId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  parentTenant LayerCostShare? @relation("LayerCostShare_parentId_tenant", fields: [companyId, parentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  children     LayerCostShare[] @relation("CostShareFollow")
+
+  event LayerCostEvent
+  /// الحدثُ بمفتاحٍ حقيقيّ لكلِّ نوع (§6.3) — واحدٌ لا غير، بقيد `CHECK`.
+  landedCostDistributionId String?
+  landedCostDistribution   LandedCostDistribution? @relation(fields: [landedCostDistributionId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  landedCostDistributionTenant LandedCostDistribution? @relation("LayerCostShare_landedCostDistributionId_tenant", fields: [companyId, landedCostDistributionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  nonDeductibleVatEventId String?
+  nonDeductibleVatEvent   NonDeductibleVatEvent? @relation(fields: [nonDeductibleVatEventId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  nonDeductibleVatEventTenant NonDeductibleVatEvent? @relation("LayerCostShare_nonDeductibleVatEventId_tenant", fields: [companyId, nonDeductibleVatEventId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// إشعارُ السعر من المورّد (المستند).
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  purchaseTenant Purchase? @relation("LayerCostShare_purchaseId_tenant", fields: [companyId, purchaseId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// صفُّ التسوية (استهلاكٌ يشير إلى مؤقّته).
+  settlementId String?
+  settlement   InventoryConsumption? @relation("SettlementCostShare", fields: [settlementId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  settlementTenant InventoryConsumption? @relation("LayerCostShare_settlementId_tenant", fields: [companyId, settlementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// الطبقةُ لحظةَ الحصّة: ما استُلم فيها · ما بقي على الرفّ · وما خرج منها (= الأوّل − الثاني).
+  qtyReceived    Decimal @db.Decimal(18, 3)
+  qtyRemainingAt Decimal @db.Decimal(18, 3)
+  exitedQtyAt    Decimal @db.Decimal(18, 3)
+
+  /// الحصّةُ بإشارتها (موجبٌ رفع · سالبٌ خفض) = الرفّ + المبيعات + الإتلاف + الفروقات + التابع.
+  baseAmount   Decimal @db.Decimal(18, 2)
+  baseShelf    Decimal @db.Decimal(18, 2)
+  baseCogs     Decimal @db.Decimal(18, 2)
+  baseWriteOff Decimal @db.Decimal(18, 2)
+  baseVariance Decimal @db.Decimal(18, 2)
+  baseFollow   Decimal @db.Decimal(18, 2)
+
+  unitCostBefore    Decimal @db.Decimal(18, 6)
+  unitCostAfter     Decimal @db.Decimal(18, 6)
+  exitedRaiseBefore Decimal @db.Decimal(18, 6)
+  exitedRaiseAfter  Decimal @db.Decimal(18, 6)
+
+  createdAt DateTime @default(now())
+
+  @@index([layerId])
+  @@index([parentId])
+  @@index([landedCostDistributionId])
+  @@index([nonDeductibleVatEventId])
+  @@index([purchaseId])
+  @@index([settlementId])
+  @@map("layer_cost_shares")
+  layerCostShare_parentId_tenant LayerCostShare[] @relation("LayerCostShare_parentId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
