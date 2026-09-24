@@ -153,6 +153,11 @@ jobs:
     runs-on: ubuntu-latest
     # سقفٌ لئلا يلتهم تعليقٌ ستّ ساعات. خطّ الأساس 22 دقيقة، والضِّعف هامش.
     timeout-minutes: 60
+    # 🔒 (`ق-١٤٠٨`) صورةُ MinIO في سجلّ GitHub الخاصّ — والرمزُ يقرأ الحزمَ صراحةً (`packages: read`)،
+    #    والمستودعُ ممنوحٌ الوصولَ إلى الحزمة من إعداداتها («Manage Actions access»). والمحتوى قراءةٌ وحدَها.
+    permissions:
+      contents: read
+      packages: read
 
     services:
       postgres:
@@ -215,23 +220,25 @@ jobs:
       #
       # ولا خطوة `mc mb`: `FilesService.onModuleInit` ينشئ الحاوية عند أول
       # إقلاع (مقروءٌ من المصدر لا مفترَض).
-      # 🔴 **والصورةُ من `quay.io` لا من Docker Hub** (2026-09-11): سحبُ `minio/minio`
-      #    مجهولاً صار يُردّ **`pull access denied … may require 'docker login'`** على
-      #    عدّاءات السير — **فسقطت الخطوةُ مرّتين متتاليتين، وسقط معها كلُّ ما بعدها**:
-      #    `prisma generate` لم يعمل، فانهارت **كلُّ** مجموعات التكامل عند الترجمة بـ
-      #    `'@prisma/client' has no exported member 'PrismaClient'` — **عطلٌ يبدو في
-      #    الشيفرة وسببُه سجلُّ صور**.
-      #
-      # ⚠️ **و`quay.io` مرآةٌ رسمية لـMinIO** — جُرِّبت بالسحب فعلاً قبل الاعتماد.
-      # 🔒 **وبوسمٍ صريح لا `latest`**: سحبٌ مجهولٌ من وسمٍ متحرّك يجعل الحزمةَ تتبدّل
-      #    تحتنا بلا التزام.
-      # 🔒 **والوسمُ هو نسخةُ الإنتاج العاملة** (`ق-٦٠٠`): ملفّا التركيب والسيرُ على
-      #    نسخةٍ واحدةٍ — فما يُختبَر هو ما يُشغَّل، ولا يُكتشف فرقُ نسخةٍ يوم النشر.
+      # 🔴 **والصورةُ من سجلّ GitHub الخاصّ بحساب المالك، مثبَّتةً بالبصمة** (`ق-١٤٠٨` · 2026-09-24):
+      #    توزيعُ MinIO المجانيّ غاب **مرّتين** — Docker Hub ردّ السحبَ المجهول (`ق-٦٠٠` · 2026-09-11)
+      #    فانتقلنا إلى `quay.io`، ثم صار `quay.io` يردّ **`unauthorized`** (`401`) و`dl.min.io` `410`
+      #    **فسقطت هذه الخطوةُ وسقط معها كلُّ ما بعدها**: `prisma generate` لم يعمل، فانهارت **كلُّ**
+      #    مجموعات التكامل بـ`'@prisma/client' has no exported member 'PrismaClient'` — **عطلٌ يبدو
+      #    في الشيفرة وسببُه سجلُّ صور** (و`main` نفسُه أحمر من `12:59Z`).
+      # 🔒 **ونُسخت الصورةُ المخزَّنة نفسُها** إلى `ghcr.io/arsant4x/minio` — **خاصّةً والاستعمالُ داخليّ**؛
+      #    والبصمةُ بصمةُ منصّة `linux/amd64` كما سُحبت من المصدر، فالإصدارُ نفسُه بايتاً — **وهي نسخةُ
+      #    الإنتاج العاملة**: ملفّا التركيب والسيرُ على بصمةٍ واحدة، فما يُختبَر هو ما يُشغَّل.
+      # ⚠️ **والدخولُ برمز الوظيفة** (`packages: read` أعلاه) — لا سرَّ يُضاف؛ وإن رُفض السحبُ فالحزمةُ
+      #    لم تُمنح لهذا المستودع («Manage Actions access» في إعدادات الحزمة).
       - name: تشغيل MinIO وانتظار جاهزيته
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker run -d --name minio -p 9100:9000 \
             -e MINIO_ROOT_USER=mad_app -e MINIO_ROOT_PASSWORD=mad_app_dev_password \
-            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            ghcr.io/arsant4x/minio:RELEASE.2025-09-07T16-13-09Z@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2 server /data
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null http://localhost:9100/minio/health/live; then echo "MinIO جاهز بعد ${i}s"; exit 0; fi
             sleep 1
