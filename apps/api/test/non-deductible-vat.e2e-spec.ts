@@ -267,13 +267,61 @@ describe('⚖️ غيرُ القابل للخصم يدخل تكلفةَ ما ا�
     expect(d('1250')).toBe(0);
     expect(await eventsOf(id)).toHaveLength(0);
 
-    // الإقرارُ يعلن الباقي في 1250 بقسمَيه — والمتتبَّعُ المرحَّل (①–⑨) لا يدخله.
+    // ⚖️ ق-١٣٦١ — ومستندٌ بلا فاتورةٍ صحيحة سبق البناء كذلك: يبقى في 1250 ويُعدّ بقسمه.
+    const legacyExcluded = (await buy([service(100)], 'TAXABLE_ONLY')).body.id;
+    await tenantPrisma.runInTenantContext(company.companyId, (tx) => tx.purchase.update({ where: { id: legacyExcluded }, data: { nonDeductibleTracked: false } }));
+    const dx = await deltaOf(async () => {
+      await patch(`/purchases/${legacyExcluded}`).send({ excludeFromVat: true }).expect(200);
+    });
+    expect(dx('1250')).toBe(0);
+    expect(await eventsOf(legacyExcluded)).toHaveLength(0);
+
+    // الإقرارُ يعلن الباقي في 1250 بأقسامه — والمتتبَّعُ المرحَّل (①–⑨) لا يدخله.
     const now = new Date();
     const declaration = (await get('/obligations/vat-declaration').query({ year: now.getUTCFullYear(), quarter: Math.floor(now.getUTCMonth() / 3) + 1 }).expect(200)).body;
     const limit = (declaration.limits as { code: string; message: string }[]).find((l) => l.code === 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED');
-    // المجموعُ نفسُه ٣٠ لا أكثر: المرحَّلُ (①–⑨) لا يدخله — والتوكيدُ على الرقم في موضعه لا على وروده في أيّ مكان.
-    expect(limit?.message).toContain('في هذه الفترة 30.00 —');
+    // المجموعُ ٤٥ لا أكثر: المرحَّلُ (①–⑨) لا يدخله — والتوكيدُ على الرقم في موضعه لا على وروده في أيّ مكان (ق-١٣٥٩).
+    expect(limit?.message).toContain('في هذه الفترة 45.00 —');
     expect(limit?.message).toContain('المشتركُ غيرُ المخصوم 0.00');
     expect(limit?.message).toContain('سبقت ترحيلَه 30.00');
+    expect(limit?.message).toContain('صحيحة سبقت البناء 15.00');
+  });
+
+  // ─── ⚖️ ق-١٣٦١ — الضريبةُ بلا فاتورةٍ صحيحة تدخل تكلفةَ ما اشتُري عند الشراء، كالمنسوب إلى المعفى ───
+
+  it('⑫ بندٌ خدميٌّ بلا فاتورةٍ صحيحة — ضريبتُه إلى حساب المصروف نفسِه عند الشراء، و1250 لا يتحرّك', async () => {
+    let id = '';
+    const d = await deltaOf(async () => {
+      id = (await buy([service(1000)], 'TAXABLE_ONLY', { excludeFromVat: true })).body.id;
+    });
+    expect({ vat1250: d('1250'), expense5400: d('5400') }).toEqual({ vat1250: 0, expense5400: 1150 });
+    const [event] = await eventsOf(id);
+    expect({ trigger: event.trigger, expense: Number(event.baseExpense), amount: Number(event.baseAmount) }).toEqual({ trigger: 'PURCHASE', expense: 150, amount: 150 });
+    await balanced('excluded-service');
+  });
+
+  it('⑬ بندٌ مخزنيٌّ بلا فاتورةٍ صحيحة — الطبقةُ تولد بتكلفتها مع الضريبة (46 لا 40)', async () => {
+    const pid = await product('صنف بلا فاتورة');
+    const d = await deltaOf(async () => {
+      await buy([stocked(pid, 10, 40)], 'TAXABLE_ONLY', { excludeFromVat: true });
+    });
+    expect({ vat1250: d('1250'), inventory1300: d('1300') }).toEqual({ vat1250: 0, inventory1300: 460 });
+    expect(await layerOf(pid)).toEqual([{ remaining: 10, unitCost: 46 }]);
+    await balanced('excluded-stocked');
+  });
+
+  it('⑭ المشتركُ بلا فاتورةٍ صحيحة — غيرُ مستردٍّ كلُّه: لا ينتظر الإقفالَ، ويُرحَّل عند الشراء', async () => {
+    let id = '';
+    const d = await deltaOf(async () => {
+      id = (await buy([service(200)], 'MIXED', { excludeFromVat: true })).body.id;
+    });
+    expect({ vat1250: d('1250'), expense5400: d('5400') }).toEqual({ vat1250: 0, expense5400: 230 });
+    expect((await eventsOf(id)).map((e) => Number(e.baseExpense))).toEqual([30]);
+    // والعكسُ: رفعُ العلَم يُعيد الحصّةَ إلى 1250 — فرقٌ لا مطلق.
+    const back = await deltaOf(async () => {
+      await patch(`/purchases/${id}`).send({ excludeFromVat: false }).expect(200);
+    });
+    expect({ vat1250: back('1250'), expense5400: back('5400') }).toEqual({ vat1250: 30, expense5400: -30 });
+    await balanced('excluded-mixed');
   });
 });

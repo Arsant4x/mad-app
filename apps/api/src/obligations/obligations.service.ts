@@ -533,12 +533,16 @@ export class ObligationsService {
       const exemptOnlyUntracked = round2(
         taxablePurchases.filter((p) => p.inputVatUse === 'EXEMPT_ONLY' && !p.nonDeductibleTracked).reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0),
       );
-      const notPosted = round2(apportionedNotDeducted + exemptOnlyUntracked);
+      // ⚖️ ق-١٣٦١ — وما بلا فاتورةٍ صحيحة يُرحَّل كذلك عند الشراء؛ **فالباقي منه في 1250 ما سبق البناءَ وحدَه** (يُعدّ ولا يُحوَّل).
+      const excludedUntracked = round2(
+        excludedPurchases.filter((p) => !p.exempt && !p.nonDeductibleTracked).reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0),
+      );
+      const notPosted = round2(apportionedNotDeducted + exemptOnlyUntracked + excludedUntracked);
       if (notPosted > 0) {
         limits.push({
           code: 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED',
           severity: 'warning',
-          message: `غيرُ القابل للخصم من ضريبة المدخلات الباقي في حسابها في هذه الفترة ${money(notPosted)} — منه المشتركُ غيرُ المخصوم ${money(apportionedNotDeducted)} (ترحيلُه إلى التكلفة عند إقفال الإقرار ينتظر قراراً لم يُحسم) ومنه مشترياتٌ منسوبةٌ إلى المعفى سبقت ترحيلَه ${money(exemptOnlyUntracked)}؛ فرصيدُ حساب ضريبة المدخلات أعلى مما يُستردّ بهذا المقدار. أمّا المنسوبُ إلى المعفى وحدَه فيُرحَّل إلى تكلفة ما اشتُري عند الشراء`,
+          message: `غيرُ القابل للخصم من ضريبة المدخلات الباقي في حسابها في هذه الفترة ${money(notPosted)} — منه المشتركُ غيرُ المخصوم ${money(apportionedNotDeducted)} (ترحيلُه إلى التكلفة عند إقفال الإقرار ينتظر قراراً لم يُحسم) ومنه مشترياتٌ منسوبةٌ إلى المعفى سبقت ترحيلَه ${money(exemptOnlyUntracked)} ومنه مشترياتٌ بلا فاتورةٍ ضريبيةٍ صحيحة سبقت البناء ${money(excludedUntracked)}؛ فرصيدُ حساب ضريبة المدخلات أعلى مما يُستردّ بهذا المقدار. أمّا المنسوبُ إلى المعفى وحدَه وما بلا فاتورةٍ صحيحة فيُرحَّلان إلى تكلفة ما اشتُري عند الشراء`,
         });
       }
 

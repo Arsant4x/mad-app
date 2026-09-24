@@ -1858,8 +1858,12 @@ model Purchase {
   nonDeductibleTracked Boolean @default(true)
   /// VAT was charged but there's no valid tax invoice, so its input VAT cannot
   /// be reclaimed — the purchase is dropped from the VAT declaration. Distinct
-  /// from `exempt` (no VAT at all). Matches the mockup: this affects **only the
-  /// declaration**, not the ledger (the tax still posts to 2200).
+  /// from `exempt` (no VAT at all).
+  ///
+  /// ⚖️ `ق-١٣٦١` — **ويمسّ الدفترَ لا الإقرارَ وحدَه** (صُحّح: كان «this affects only the declaration, not the ledger»
+  /// منقولاً عن النموذج): الضريبةُ غيرُ المستردّة **تدخل تكلفةَ ما اشتُري عند الشراء، كالمنسوب إلى المعفى** — «فهي غيرُ مستردّة،
+  /// والمعاييرُ لا تفرّق بسبب عدم الاسترداد». فتخرج من `1250` إلى موضعها (طبقةٌ · وسيطٌ · حسابُ الفئة · `5100`) بقاعدة الانتشار
+  /// نفسِها (`non-deductible-vat.util.ts`)؛ **وما سبق البناء يُعدّ ولا يُحوَّل** (`nonDeductibleTracked`).
   excludeFromVat Boolean @default(false)
   total     Decimal @db.Decimal(18, 2)
 
