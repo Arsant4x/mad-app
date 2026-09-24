@@ -62,7 +62,7 @@ describe('فروعُ الفاعل عند التعديل بالمعرّف — ا�
     const employee = (fullName: string, branchId: string) => asOwner(http().post('/employees')).send({ fullName, hireDate: '2026-01-01', branchId }).expect(201);
     employeeNorth = (await employee(`موظّف الشمال ${suffix}`, northId)).body.id;
     employeeSouth = (await employee(`موظّف الجنوب ${suffix}`, southId)).body.id;
-  }, 100000);
+  });
 
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
