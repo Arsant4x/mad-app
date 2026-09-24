@@ -3,6 +3,7 @@ import { assertPeriodOpen } from './period-lock.util';
 import { createJournalEntry } from '../journal/journal-posting.util';
 import { postInvoiceEntry, postPurchaseEntry, postCustomerPaymentEntry, purchaseExpenseAccountCode } from '../journal/auto-posting.util';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
+import { regionForNewCompany } from '../common/region/regions';
 
 // مهلة مقيسة لا افتراضية — `beforeAll` هنا يُنشئ ١٢ فترة و٧ حسابات (1606 ms).
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -134,7 +135,7 @@ d('قفل الفترة تحت انزياح المنطقة — أربعة مسا�
         username: `probe-period-tz-${stamp}`,
         passwordHash: 'probe-not-a-real-hash',
         actorType: 'COMPANY',
-        company: { create: { orgName: `probe-period-tz-${stamp}`, permissionTemplateId: template.id } },
+        company: { create: { orgName: `probe-period-tz-${stamp}`, permissionTemplateId: template.id, ...regionForNewCompany(undefined) } },
       },
       include: { company: { select: { id: true } } },
     });

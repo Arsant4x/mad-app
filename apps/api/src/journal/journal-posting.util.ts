@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -217,7 +217,8 @@ export async function createJournalEntry(
   const accountTypes = await fetchAccountTypes(tx, accountIds);
   await assertBankNotReconciled(tx, accountIds, input.date);
 
-  const { currency, exchangeRate } = resolveCurrency(input);
+  // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`) — ومن يُعلن عملتَه لا يدفع قراءةً زائدة.
+  const { currency, exchangeRate } = await resolveCurrencyWithin(tx, input.companyId, input);
   // البُعد يُحسب مرّة واحدة ويُختم على كل سطر — فلا يفترق سطرٌ عن قيده، ولا
   // يُملأ في ستة عشر موضعاً فيُنسى في السابع عشر.
   const dims = await resolveDimensions(tx, input);

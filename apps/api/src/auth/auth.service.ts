@@ -435,7 +435,7 @@ export class AuthService {
    * واختيار النشاط عند التسجيل (بند ٢ في ترتيب التنفيذ المعتمد) لم يُبنَ بعد —
    * وقد صار قراراً محسوماً لا معلَّقاً، فيُضاف **داخل** النواة لا هنا.
    */
-  async register(orgName: string, username: string, password: string, email?: string): Promise<LoginResult> {
+  async register(orgName: string, username: string, password: string, email?: string, country?: string): Promise<LoginResult> {
     if (this.config.get<string>('REGISTRATION_ENABLED', 'true') === 'false') {
       throw new ForbiddenException(MSG.register_disabled);
     }
@@ -457,6 +457,8 @@ export class AuthService {
       password,
       orgName,
       email,
+      // ق-١٣٦٨ — الدولةُ المعلَنة، وغيابُها يأخذ الإقليمَ الوحيد ما دام وحيداً.
+      country,
       permissionTemplateId: template.id,
       trialDays: parseInt(this.config.get<string>('TRIAL_DAYS', '14'), 10),
       // بوّابة مفتوحة بلا مصادقة — فرسالة تكرار الاسم لا تسمّي ولا تؤكّد.

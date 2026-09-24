@@ -4,6 +4,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { round2 } from '../common/money/rounding';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { ReportsService } from './reports.service';
+import { regionForNewCompany } from '../common/region/regions';
 
 // المهلةُ صريحة (بوّابةُ السير) — والاختباراتُ الثقيلة ترفعها فوقها بمهلتها الخاصّة (الشكلُ القديم على 22,872 قسطاً).
 jest.setTimeout(LIVE_SPEC_TIMEOUT_MS);
@@ -123,7 +124,7 @@ async function createProbeCompany(raw: PrismaClient, tenant: TenantPrismaService
       username: `probe-deferred-revenue-${stamp}`,
       passwordHash: 'probe-not-a-real-hash',
       actorType: 'COMPANY',
-      company: { create: { orgName: `probe-deferred-revenue-${stamp}`, permissionTemplateId: template.id } },
+      company: { create: { orgName: `probe-deferred-revenue-${stamp}`, permissionTemplateId: template.id, ...regionForNewCompany(undefined) } },
     },
     include: { company: { select: { id: true } } },
   });

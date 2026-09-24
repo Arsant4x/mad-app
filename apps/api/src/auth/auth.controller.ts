@@ -53,7 +53,7 @@ export class AuthController {
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<{ accessToken: string; user: AuthUserView }> {
-    const result = await this.authService.register(dto.orgName, dto.username, dto.password, dto.email);
+    const result = await this.authService.register(dto.orgName, dto.username, dto.password, dto.email, dto.country);
     this.setRefreshCookie(req, res, result.refreshToken, result.refreshTokenExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
   }

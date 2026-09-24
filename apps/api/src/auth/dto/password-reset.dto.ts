@@ -39,4 +39,12 @@ export class RegisterDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  /// 🔴 `ق-١٣٦٨` — دولةُ المنشأة (ISO 3166-1 alpha-2). اختياريّةٌ ما دامت المنصّةُ تخدم إقليماً واحداً، وتصير إلزاميةً وحدَها حين
+  /// يُضاف ثانٍ (`regionForNewCompany`). والتحقّقُ من دعمها هناك لا هنا — فرسالتُه تسمّي الدولة.
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(2)
+  country?: string;
 }

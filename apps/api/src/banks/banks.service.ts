@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateBankDto } from './dto/create-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
@@ -62,11 +62,12 @@ export class BanksService {
    */
   async create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateBankDto) {
     const openingBalance = dto.openingBalance ?? 0;
-    const { currency, exchangeRate } = resolveCurrency(dto);
 
     for (let attempt = 0; ; attempt += 1) {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+          const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
           const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
           const code = await nextBankCode(tx);
           const account = await tx.account.create({

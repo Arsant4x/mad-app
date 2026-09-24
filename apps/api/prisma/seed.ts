@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
 import { DEFAULT_CHART } from '../src/accounts/default-chart';
 import { bootstrapPlatform } from '../src/platform/platform-bootstrap';
+import { regionForNewCompany } from '../src/common/region/regions';
 
 const prisma = new PrismaClient();
 
@@ -185,6 +186,8 @@ async function seedDemoCompany(opts: {
         orgName: opts.orgName,
         permissionTemplateId: opts.templateId,
         status: 'ACTIVE',
+        // ق-١٣٦٨ — الإقليمُ صراحةً من السجلّ (لا افتراضَ في القاعدة) — كمسار الميلاد نفسِه.
+        ...regionForNewCompany(undefined),
         // العلاقة أحاديّة الاتجاه في المخطط (`loginIdentityId @unique` بلا حقلٍ
         // مقابل على `LoginIdentity`)، فتُوصَل بالمفتاح لا بـ`connect`.
         loginIdentityId: existing.id,
@@ -204,6 +207,7 @@ async function seedDemoCompany(opts: {
           orgName: opts.orgName,
           permissionTemplateId: opts.templateId,
           status: 'ACTIVE',
+          ...regionForNewCompany(undefined),
         },
       },
     },

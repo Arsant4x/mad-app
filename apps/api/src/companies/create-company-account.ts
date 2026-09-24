@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { createDefaultChart } from '../accounts/default-chart';
 import { createCompanyDefaults } from './company-defaults';
+import { regionForNewCompany } from '../common/region/regions';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**
@@ -36,6 +37,11 @@ export interface CreateCompanyAccountInput {
   permissionTemplateId: string;
   /** بريد المنشأة — اختياري اليوم. سيصير إلزامياً في مسار التسجيل الذاتي (بند ⑪). */
   email?: string | null;
+  /**
+   * 🔴 `ق-١٣٦٨` — **دولةُ المنشأة المعلَنة** (ISO 3166-1 alpha-2). والغيابُ يأخذ الإقليمَ **الوحيد** الذي تخدمه المنصّة — ويصير
+   * الإعلانُ إلزامياً من تلقاء نفسه حين يُضاف ثانٍ (`regionForNewCompany`). ومنها تُكتب الحقولُ الأربعة صراحةً: لا افتراضَ في القاعدة.
+   */
+  country?: string | null;
   /** بداية الاشتراك. الغياب = الآن. */
   subStart?: Date;
   /** نهاية الاشتراك. **الغياب = الآن + `trialDays`** — انظر الضمانة ٣. */
@@ -82,6 +88,8 @@ export async function createCompanyAccount(
 
   const subStart = input.subStart ?? new Date();
   const subEnd = input.subEnd ?? addDays(subStart, input.trialDays);
+  // يُحلّ قبل المعاملة: إقليمٌ غيرُ مدعوم أو غيرُ معلَنٍ حين يلزم يُردّ `400` قبل أن يُكتب صفّ.
+  const region = regionForNewCompany(input.country);
 
   return prisma.$transaction(async (tx) => {
     // منشأةُ الهويّة (`login_identities.companyId` — `ق-٦٦٦`) **تملؤها القاعدةُ** هنا:
@@ -99,6 +107,11 @@ export async function createCompanyAccount(
             permissionTemplateId: input.permissionTemplateId,
             subStart,
             subEnd,
+            // ق-١٣٦٨ — الأربعةُ صراحةً من سجلّ الأقاليم؛ ولا افتراضَ في القاعدة يكتبها بدلاً منه.
+            country: region.country,
+            timeZone: region.timeZone,
+            locale: region.locale,
+            baseCurrency: region.baseCurrency,
           },
         },
       },

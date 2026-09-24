@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { resolveCurrency, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
@@ -132,9 +132,10 @@ export class SupplierPaymentsService {
    * وإعادةُ حساب الحالات.
    */
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto) {
-    const { currency, exchangeRate } = resolveCurrency(dto);
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
+        const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const supplier = await tx.supplier.findUnique({ where: { id: dto.supplierId }, select: { id: true, name: true } });
         if (!supplier) throw new NotFoundException(MSG.supplier_not_found);
 
