@@ -49,8 +49,36 @@ export class PosCardVerificationsService {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const { days, rows } = await this.rows(tx, tenant.companyId, tenant.allowedBranchIds, new Date());
       const items = state === 'all' ? rows : state === 'matched' ? rows.filter((r) => r.matched) : state === 'overdue' ? rows.filter((r) => r.overdue) : rows.filter((r) => !r.matched);
-      return { settlementDays: days, items };
+      return { settlementDays: days, items, unresolvedAttempts: await this.unresolvedAttempts(tx, tenant.allowedBranchIds) };
     });
+  }
+
+  /**
+   * ⚖️ **المعلّقُ من مناوبةٍ مقفلة ينتقل إلى قائمة المطابقة** (`ق-١٤١٨` · التوجيه ٢٦٣ §٥): المناوبةُ أُقفلت وهو فيها مسمّىً
+   * (`closeShift`)، **ويبقى هنا حتى يُحسم** — بجواب المزوّد (الكانس كلَّ عشر دقائق) أو بالدليل لصاحب المراجعة — **ولا يُخمَّن**:
+   * لا بيعَ يُسجَّل له ولا يُرفض حتى يُجاب. وما اكتمل منه صار دفعةً في `items` كسائر البطاقة.
+   * **على مستوى المنشأة بحقّها**: مرشَّحةٌ بفروع القارئ عبر فرع المناوبة.
+   */
+  private async unresolvedAttempts(tx: Tx, allowedBranchIds: string[] | 'all') {
+    const rows = await tx.posPaymentAttempt.findMany({
+      where: {
+        status: { in: ['CHARGING', 'UNKNOWN', 'APPROVED'] },
+        shift: { status: 'CLOSED', ...(branchFilter(allowedBranchIds) as Prisma.PosShiftWhereInput) },
+      },
+      select: { id: true, status: true, cardAmount: true, provider: true, createdAt: true, detail: true, shift: { select: { openedByName: true, closedAt: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    return rows.map((a) => ({
+      attemptId: a.id,
+      status: a.status,
+      amount: money(a.cardAmount),
+      provider: a.provider,
+      createdAt: a.createdAt.toISOString(),
+      detail: a.detail,
+      cashierName: a.shift.openedByName,
+      shiftClosedAt: a.shift.closedAt?.toISOString() ?? null,
+    }));
   }
 
   /**

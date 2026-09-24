@@ -57,6 +57,8 @@ describe('POS split payment (e2e)', () => {
           { method: 'CASH', amount: 100 },
           { method: 'CARD', amount: 38 },
         ],
+        // بلا ربط — جهازٌ مستقلّ: رقمُ مرجعه إلزاميّ (`ق-١٤١٩`).
+        cardDeviceReference: 'RRN-SPLIT-CARD',
       })
       .expect(201);
     invoiceIds.push(res.body.id);
@@ -81,6 +83,8 @@ describe('POS split payment (e2e)', () => {
           { method: 'CASH', amount: 50 },
           { method: 'CARD', amount: 50 },
         ],
+        // المرجعُ حاضر — فالرفضُ لعدم التطابق وحدَه.
+        cardDeviceReference: 'RRN-SPLIT-MISMATCH',
       })
       .expect(400);
     const after = (await auth(request(app.getHttpServer()).get('/invoices')).expect(200)).body.length;
@@ -105,6 +109,7 @@ describe('POS split payment (e2e)', () => {
         { method: 'CASH' as const, amount: 20 },
         { method: 'CARD' as const, amount: 26 },
       ],
+      cardDeviceReference: 'RRN-SPLIT-SYNC',
     };
     const first = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
     invoiceIds.push(first.body.id);

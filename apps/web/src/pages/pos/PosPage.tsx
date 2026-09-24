@@ -15,7 +15,7 @@ import {
   resolvePaymentAttempt,
   resolvePaymentAttemptWithEvidence,
   syncPosSale,
-  type CardVerificationRow,
+  type CardVerificationList,
   type ClosedShift,
   type PosPaymentAttempt,
   type PosPaymentMethod,
@@ -119,14 +119,18 @@ export function PosPage() {
   const [pendingAttempt, setPendingAttempt] = useState<PosPaymentAttempt | null>(null);
   /** ما لم يُحسم في المناوبة — يراه الكاشير ويستعلم عنه. */
   const [openAttempts, setOpenAttempts] = useState<PosPaymentAttempt[]>([]);
-  /** بيعٌ ببطاقةٍ دون اتصالٍ والربطُ فعّال ينتظر رقمَ مرجع الجهاز من إيصاله (`ق-١٣٩٧`). */
+  /**
+   * بيعٌ ببطاقةٍ ينتظر رقمَ مرجع الجهاز من إيصاله — **دون اتصالٍ والربطُ فعّال** (`ق-١٣٩٧`) **أو على جهازٍ مستقلٍّ بلا ربط**
+   * (`ق-١٤١٩` · «فالحكمُ واحد» بنصّ المالك): الأوّلُ يصطفّ محلياً، والثاني يُرسل الآن برقمه.
+   */
   const [deviceRefFor, setDeviceRefFor] = useState<RungSale | null>(null);
+  const [deviceRefMode, setDeviceRefMode] = useState<'offline' | 'standalone'>('offline');
   const [deviceRef, setDeviceRef] = useState('');
   /** حسمٌ يدويٌّ بدليلٍ — لصاحب المراجعة (`ق-١٣٩٩`). */
   const [evidenceFor, setEvidenceFor] = useState<PosPaymentAttempt | null>(null);
   const [evidence, setEvidence] = useState({ deviceReference: '', approvalCode: '', note: '' });
   /** دفعاتُ البطاقة غيرُ المتحقَّقة — للمراجعة. */
-  const [verifications, setVerifications] = useState<{ settlementDays: number; items: CardVerificationRow[] } | null>(null);
+  const [verifications, setVerifications] = useState<CardVerificationList | null>(null);
 
   async function reload() {
     try {
@@ -272,10 +276,18 @@ export function PosPage() {
     if (paymentMode?.active && cardPartOf(sale) > 0) {
       if (offline) {
         setDeviceRef('');
+        setDeviceRefMode('offline');
         setDeviceRefFor(sale);
         return;
       }
       await payByAttempt(sale);
+      return;
+    }
+    // ⚖️ وبلا ربطٍ — جهازٌ مستقلّ: رقمُ مرجعه من إيصاله كبيع البطاقة دون اتصال (`ق-١٤١٩` «فالحكمُ واحد») — لا «أكّده الكاشير».
+    if (!paymentMode?.active && cardPartOf(sale) > 0) {
+      setDeviceRef('');
+      setDeviceRefMode('standalone');
+      setDeviceRefFor(sale);
       return;
     }
     setPaying(true);
@@ -306,6 +318,7 @@ export function PosPage() {
       if (isNetworkError(e)) {
         setOffline(true);
         setDeviceRef('');
+        setDeviceRefMode('offline');
         setDeviceRefFor(sale);
       } else {
         setError(messageOf(e, 'تعذّر بدء عملية البطاقة'));
@@ -382,16 +395,34 @@ export function PosPage() {
     }
   }
 
-  /** بيعٌ ببطاقةٍ دون اتصال: يصطفّ برقم مرجع الجهاز — ولا يُقبل بدونه (`ق-١٣٩٧`/١). */
-  function confirmDeviceRef() {
+  /**
+   * بيعٌ ببطاقةٍ برقم مرجع الجهاز — ولا يُقبل بدونه (`ق-١٣٩٧`/١ · `ق-١٤١٩`): **دون اتصالٍ** يصطفّ محلياً، **وعلى جهازٍ مستقلّ**
+   * يُرسل الآن برقمه (وإن انقطع الاتصالُ في الطريق اصطفّ برقمه كذلك).
+   */
+  async function confirmDeviceRef() {
     if (!deviceRefFor) return;
-    if (!deviceRef.trim()) {
-      setError('أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل البيعُ ببطاقةٍ دون اتصالٍ بتأكيدك وحدَه.');
+    const reference = deviceRef.trim();
+    if (!reference) {
+      setError('أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل البيعُ بالبطاقة بتأكيدك وحدَه.');
       return;
     }
-    queueOffline(deviceRefFor, deviceRef.trim());
+    const sale = deviceRefFor;
     setDeviceRefFor(null);
     setDeviceRef('');
+    if (deviceRefMode === 'offline') {
+      queueOffline(sale, reference);
+      return;
+    }
+    setPaying(true);
+    setError(null);
+    try {
+      await completed(await syncPosSale({ ...sale, cardDeviceReference: reference }));
+    } catch (e) {
+      if (isNetworkError(e)) queueOffline(sale, reference);
+      else setError(messageOf(e, 'تعذّر إتمام البيع'));
+    } finally {
+      setPaying(false);
+    }
   }
 
   async function openVerifications(state: 'open' | 'overdue' | 'matched' | 'all' = 'open') {
@@ -570,6 +601,21 @@ export function PosPage() {
                 </tr>
               </tbody>
             </table>
+            {/* ⚖️ المعلّقُ لا يحبس المناوبة — يُسمّى هنا وينتقل إلى قائمة المطابقة حتى يُحسم (`ق-١٤١٨`). */}
+            {(closed.pendingAttempts ?? []).length > 0 && (
+              <div data-testid="pos-closed-pending" style={{ marginTop: 10, fontSize: 13 }}>
+                <b>عملياتُ بطاقةٍ لم تُحسم ({closed.pendingAttempts.length})</b> — أُقفلت المناوبةُ وهي فيها، وتنتقل إلى قائمة المطابقة بالتسوية حتى يحسمها
+                جوابُ المزوّد أو الدليل:
+                <ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>
+                  {closed.pendingAttempts.map((a) => (
+                    <li key={a.id}>
+                      <span className="num">{fmt(a.cardAmount)}</span> · {a.status === 'UNKNOWN' ? 'معلّقة' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'} ·{' '}
+                      <span className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -776,17 +822,19 @@ export function PosPage() {
         </div>
       )}
 
-      {/* ⚖️ بيعٌ ببطاقةٍ دون اتصالٍ والربطُ فعّال — رقمُ مرجع الجهاز من إيصاله إلزاميّ (`ق-١٣٩٧`/١). */}
+      {/* ⚖️ بيعٌ ببطاقةٍ برقم مرجع الجهاز من إيصاله — دون اتصالٍ والربطُ فعّال (`ق-١٣٩٧`/١) أو جهازٌ مستقلٌّ بلا ربط (`ق-١٤١٩`). */}
       {deviceRefFor && (
         <div className="overlay" onClick={() => setDeviceRefFor(null)}>
           <div className="modal" data-testid="pos-device-ref" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
             <div className="modal-head">
-              <div className="modal-title">بطاقةٌ دون اتصال</div>
+              <div className="modal-title">{deviceRefMode === 'offline' ? 'بطاقةٌ دون اتصال' : 'بطاقةٌ على جهازٍ مستقلّ'}</div>
               <button className="modal-close" onClick={() => setDeviceRefFor(null)}>✕</button>
             </div>
             <p style={{ fontSize: 13 }}>
-              الاتصالُ منقطع وبوابةُ الدفع مربوطة: اشحن على الجهاز مباشرةً، ثم أدخل <b>رقمَ المرجع المطبوع على إيصاله</b>. يُسجَّل البيعُ
-              غيرَ متحقَّقٍ حتى تطابقه تسويةُ الشبكة.
+              {deviceRefMode === 'offline'
+                ? 'الاتصالُ منقطع وبوابةُ الدفع مربوطة: اشحن على الجهاز مباشرةً، ثم أدخل '
+                : 'لا بوابةَ دفعٍ مربوطة: اشحن على جهاز الشبكة، ثم أدخل '}
+              <b>رقمَ المرجع المطبوع على إيصاله</b>. يُسجَّل البيعُ غيرَ متحقَّقٍ حتى تطابقه تسويةُ الشبكة.
             </p>
             <div className="field">
               <label>رقمُ مرجع الجهاز</label>
@@ -872,7 +920,7 @@ export function PosPage() {
                       <td className="num">{fmt(r.amount)}</td>
                       <td>{r.cashierName ?? '—'}</td>
                       <td className="num">{r.deviceReference ?? '—'}</td>
-                      <td>{r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'دون اتصال'}</td>
+                      <td>{r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'برقم مرجع الجهاز'}</td>
                       <td style={{ color: r.matched ? 'var(--emerald)' : r.overdue ? 'var(--rose)' : undefined }}>
                         {r.matched ? `طابقتها ${r.settlementNo ?? 'تسوية'}` : r.overdue ? `تجاوزت المهلة (${r.ageDays} يوماً)` : `تنتظر (${r.ageDays} يوماً)`}
                       </td>
@@ -880,6 +928,32 @@ export function PosPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+            {/* ⚖️ المعلّقُ من مناوبةٍ مقفلة — في قائمة المطابقة حتى يُحسم، لا يُخمَّن (`ق-١٤١٨`). */}
+            {verifications.unresolvedAttempts.length > 0 && (
+              <div data-testid="pos-unresolved-attempts" style={{ marginTop: 12 }}>
+                <div className="card-title">عملياتُ بطاقةٍ لم تُحسم من مناوباتٍ مقفلة ({verifications.unresolvedAttempts.length})</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>المبلغ</th>
+                      <th>الكاشير</th>
+                      <th>البدء</th>
+                      <th>الحال</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {verifications.unresolvedAttempts.map((a) => (
+                      <tr key={a.attemptId}>
+                        <td className="num">{fmt(a.amount)}</td>
+                        <td>{a.cashierName ?? '—'}</td>
+                        <td className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</td>
+                        <td>{a.status === 'UNKNOWN' ? 'معلّقة — تنتظر جوابَ المزوّد أو الدليل' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

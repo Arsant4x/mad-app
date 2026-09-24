@@ -97,7 +97,7 @@ describe('POS offline sync (e2e)', () => {
 
   it('resending the same sale returns the SAME invoice — never a duplicate', async () => {
     const clientSaleId = randomUUID();
-    const payload = { clientSaleId, offlineRef: 'OFF-TEST2', lines: [{ productId, quantity: 2 }], paymentMethod: 'CARD' as const };
+    const payload = { clientSaleId, offlineRef: 'OFF-TEST2', lines: [{ productId, quantity: 2 }], paymentMethod: 'CARD' as const, cardDeviceReference: 'RRN-OFF-TEST2' };
 
     const first = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
     invoiceIds.push(first.body.id);

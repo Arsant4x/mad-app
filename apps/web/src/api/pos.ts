@@ -31,6 +31,8 @@ export interface PosShift {
 export interface ClosedShift extends PosShift {
   /** موجب = زيادة، سالب = عجز — نصٌّ بإشارته (`"-30.00"`). */
   variance: MoneyText;
+  /** ⚖️ ما لم يُحسم من عمليات البطاقة — لا يحبس الإقفال، ويُسمّى هنا وينتقل إلى قائمة المطابقة (`ق-١٤١٨`). */
+  pendingAttempts: { id: string; status: PosPaymentAttemptStatus; cardAmount: MoneyText; clientSaleId: string; createdAt: string }[];
 }
 
 export interface PosSaleLine {
@@ -169,5 +171,24 @@ export interface CardVerificationRow {
   ageDays: number;
   overdue: boolean;
 }
+/**
+ * ⚖️ **معلّقٌ من مناوبةٍ مقفلة** (`ق-١٤١٨`): أُقفلت المناوبةُ وهو فيها مسمّىً، وينتقل إلى قائمة المطابقة حتى يحسمه جوابُ المزوّد
+ * أو الدليل — لا بيعَ يُسجَّل له ولا يُرفض بالتخمين.
+ */
+export interface UnresolvedAttemptRow {
+  attemptId: string;
+  status: PosPaymentAttemptStatus;
+  amount: MoneyText;
+  provider: string;
+  createdAt: string;
+  detail: string | null;
+  cashierName: string | null;
+  shiftClosedAt: string | null;
+}
+export interface CardVerificationList {
+  settlementDays: number;
+  items: CardVerificationRow[];
+  unresolvedAttempts: UnresolvedAttemptRow[];
+}
 export const listCardVerifications = (state: 'open' | 'overdue' | 'matched' | 'all' = 'open') =>
-  apiClient.get<{ settlementDays: number; items: CardVerificationRow[] }>('/pos/card-verifications', { params: { state } }).then((r) => r.data);
+  apiClient.get<CardVerificationList>('/pos/card-verifications', { params: { state } }).then((r) => r.data);

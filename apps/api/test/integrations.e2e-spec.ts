@@ -161,12 +161,12 @@ describe('Integrations + POS terminal adapter (e2e)', () => {
     await auth(request(app.getHttpServer()).patch(`/integrations/${connectionId}/enabled`)).send({ enabled: false }).expect(200);
 
     const res = await auth(request(app.getHttpServer()).post('/pos/sales'))
-      .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' })
+      .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD', cardDeviceReference: 'RRN-INTEGRATION-OFF' })
       .expect(201);
     invoiceIds.push(res.body.id);
     const cardRow = (res.body.posPayments as { method: string; providerRef: string | null; verification: string }[]).find((p) => p.method === 'CARD');
     expect(cardRow?.providerRef).toBeNull();
-    // بلا ربطٍ: جهازٌ مستقلّ أكّده الكاشير (الموجز ٢.١) — لا «قبله المزوّد».
-    expect(cardRow?.verification).toBe('CASHIER_CONFIRMED');
+    // ⚖️ بلا ربطٍ — جهازٌ مستقلّ: برقم مرجعه كبيع البطاقة دون اتصال (`ق-١٤١٩` «فالحكمُ واحد») — لا «قبله المزوّد» ولا «أكّده الكاشير».
+    expect(cardRow?.verification).toBe('DEVICE_REFERENCE');
   }, 60000);
 });

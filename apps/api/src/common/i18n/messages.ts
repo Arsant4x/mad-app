@@ -342,7 +342,6 @@ export const MSG = {
   pos_attempt_deadline_passed: 'pos.attempt_deadline_passed',
   pos_attempt_gateway_changed: 'pos.attempt_gateway_changed',
   pos_attempt_total_mismatch: 'pos.attempt_total_mismatch',
-  pos_shift_pending_attempts: 'pos.shift_pending_attempts',
   integration_adapter_missing: 'integrations.adapter_missing',
   integration_unknown_provider: 'integrations.unknown_provider',
   integration_credentials_required: 'integrations.credentials_required',
@@ -1157,8 +1156,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'A payment gateway is connected — a card payment goes through a payment attempt with the provider, not a direct sale',
   },
   [MSG.pos_card_device_reference_required]: {
-    ar: 'بيعٌ ببطاقةٍ دون اتصالٍ والربطُ فعّال: أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل بتأكيد الكاشير وحدَه',
-    en: 'A card sale made offline while a gateway is connected needs the terminal reference number from its receipt — the cashier\'s word alone is not accepted',
+    ar: 'بيعٌ بالبطاقة دون محاولةِ دفعٍ عبر البوابة (دون اتصالٍ أو على جهازٍ مستقلّ): أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل بتأكيد الكاشير وحدَه',
+    en: 'A card sale made without a gateway payment attempt (offline or on a standalone terminal) needs the terminal reference number from its receipt — the cashier\'s word alone is not accepted',
   },
   [MSG.pos_card_single_part]: {
     ar: 'دفعُ البطاقة جزءٌ واحد في البيع الواحد والربطُ فعّال — عمليةٌ واحدة على الجهاز لها مرجعٌ واحد',
@@ -1194,10 +1193,6 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.pos_attempt_total_mismatch]: {
     ar: 'إجماليُّ الفاتورة ({total}) يخالف ما شُحن ({charged}) — لا يُتمّ البيعُ على مبلغٍ غير المشحون',
     en: 'The invoice total ({total}) differs from what was charged ({charged}) — the sale is not completed on a different amount',
-  },
-  [MSG.pos_shift_pending_attempts]: {
-    ar: 'في المناوبة {count} عملية بطاقةٍ لم تُحسم — لا تُقفل والمالُ في الطريق؛ احسمها أوّلاً',
-    en: 'The shift has {count} unresolved card transaction(s) — it cannot close while money is in flight; resolve them first',
   },
   [MSG.integration_adapter_missing]: {
     ar: 'لا محوّلَ مسجَّلاً للمزوّد {provider} — لا يُقبل دفعُ بطاقةٍ عبر ربطٍ لا يعمل',

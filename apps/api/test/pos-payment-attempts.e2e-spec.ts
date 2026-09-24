@@ -117,7 +117,7 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     expect(seq(nextDone.body.sale.no)).toBe(seq(firstDone.body.sale.no) + 1);
   });
 
-  it('[SPEC 27.1] ⑤ المعلّقُ لا يخرج إلا بجواب المزوّد — والمناوبةُ لا تُقفل ما دام في الطريق، والحسمُ بلا شحنٍ ثانٍ (ق-١٣٩٨ · ق-١٣٩٩)', async () => {
+  it('[SPEC 27.1] ⑤ المعلّقُ لا يخرج إلا بجواب المزوّد — والحسمُ بلا شحنٍ ثانٍ (ق-١٣٩٨ · ق-١٣٩٩)', async () => {
     mock.chargeDeadlineMs = 300;
     const calls: string[] = [];
     jest.spyOn(mock, 'charge').mockImplementation(async (_c, r) => {
@@ -133,16 +133,49 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     expect(String(charged.body.detail)).toContain('ثانية');
     expect(await invoiceBySale(attempt.clientSaleId)).toBeNull();
 
-    const closing = await auth(http().post(`/pos/shifts/${ownerShiftId}/close`)).send({ declaredClosing: 0 });
-    expect(closing.status).toBe(409);
-    expect(String(closing.body.message)).toContain('لم تُحسم');
-
     const resolved = await auth(http().post(`/pos/payment-attempts/${attempt.id}/resolve`)).expect(201);
     expect(resolved.body).toMatchObject({ status: 'COMPLETED', resolution: 'PROVIDER_STATUS', providerRef: `MOCK-${attempt.id}` });
     expect(resolved.body.sale.status).toBe('PAID');
     expect(calls).toEqual([attempt.id]);
     const invoice = await invoiceBySale(attempt.clientSaleId);
     expect(invoice?.posPayments.find((p) => p.method === 'CARD')).toMatchObject({ verification: 'PROVIDER_APPROVED', providerRef: `MOCK-${attempt.id}`, attemptId: attempt.id });
+  });
+
+  /**
+   * ⚖️ **المعلّقُ لا يحبس المناوبةَ أبداً** (`ق-١٤١٨` · التوجيه ٢٦٣ §٥ بنصّ المالك: «تُقفل وهو فيها مسمّىً، وينتقل إلى قائمة
+   * المطابقة بالتسوية»). كاشيرٌ يفتح مناوبتَه، ومحاولتُه معلّقة (المزوّدُ وافق وتأخّر جوابُه) ⟸ المالكُ يقفلها `201` **ويُسمّيها
+   * الردّ** · وتظهر في قائمة المطابقة · **ولا بيعَ ولا رفضَ بالتخمين** · ثم يحسمها جوابُ المزوّد ⟸ البيعُ يكتمل على المناوبة
+   * المقفلة، وتخرج من القائمة.
+   */
+  it('[SPEC 27.1] ⑤ج ⚖️ المعلّقُ لا يحبس المناوبة: تُقفل وهو مسمّىً فيها، وينتقل إلى قائمة المطابقة حتى يُحسم (ق-١٤١٨)', async () => {
+    const cashierShift = (await asCashier(http().post('/pos/shifts')).send({ openingFloat: 0 }).expect(201)).body.id as string;
+    mock.chargeDeadlineMs = 300;
+    jest.spyOn(mock, 'charge').mockImplementation(async (_c, r) => {
+      mock.remember(r.reference, { state: 'APPROVED', providerRef: `MOCK-${r.reference}`, approvalCode: 'A77777' });
+      await sleep(1500);
+      return { approved: true, providerRef: `MOCK-${r.reference}`, approvalCode: 'A77777' };
+    });
+    const attempt = await createAttempt(ringing(), asCashier);
+    expect((await charge(attempt.id, asCashier).expect(201)).body.status).toBe('UNKNOWN');
+
+    // المالكُ يقفل مناوبةَ الكاشير — والمعلّقُ فيها لا يحبسها، بل يُسمّى.
+    const closed = await auth(http().post(`/pos/shifts/${cashierShift}/close`)).send({ declaredClosing: 0 }).expect(201);
+    expect(closed.body.status).toBe('CLOSED');
+    expect(closed.body.pendingAttempts).toEqual([expect.objectContaining({ id: attempt.id, status: 'UNKNOWN', cardAmount: attempt.cardAmount })]);
+    // ولا يُخمَّن: لا بيعَ ولا رفض — المحاولةُ بحالها.
+    expect(await invoiceBySale(attempt.clientSaleId)).toBeNull();
+    expect((await auth(http().get(`/pos/payment-attempts/${attempt.id}`)).expect(200)).body.status).toBe('UNKNOWN');
+
+    // وينتقل إلى قائمة المطابقة بالتسوية.
+    const listed = await auth(http().get('/pos/card-verifications')).expect(200);
+    expect((listed.body.unresolvedAttempts as { attemptId: string }[]).find((a) => a.attemptId === attempt.id)).toMatchObject({ status: 'UNKNOWN', amount: attempt.cardAmount });
+
+    // جوابُ المزوّد يحسمه ⟸ البيعُ يكتمل على المناوبة المقفلة، ويخرج من القائمة.
+    const resolved = await auth(http().post(`/pos/payment-attempts/${attempt.id}/resolve`)).expect(201);
+    expect(resolved.body.status).toBe('COMPLETED');
+    expect((await invoiceBySale(attempt.clientSaleId))?.posShiftId).toBe(cashierShift);
+    const after = await auth(http().get('/pos/card-verifications')).expect(200);
+    expect((after.body.unresolvedAttempts as { attemptId: string }[]).some((a) => a.attemptId === attempt.id)).toBe(false);
   });
 
   it('[SPEC 27.1] ⑤ب «لا أثر لدى المزوّد» جوابٌ بعد انقضاء المهلة وحدَها — وقبلها تبقى معلّقة', async () => {
@@ -299,14 +332,24 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     expect((stillOpen.body.items as { invoiceNo: string }[]).some((r) => r.invoiceNo === synced.body.no)).toBe(false);
   });
 
-  it('[SPEC 27.1] ⑩ بلا ربطٍ فعّال: بطاقةُ المسار الحيّ «أكّدها الكاشير» — مسارُ ما قبل الربط كما هو', async () => {
+  /**
+   * ⚖️ **الجهازُ المستقلُّ بلا ربط: شرطُ رقم المرجع كبيع البطاقة دون اتصال** (`ق-١٤١٩` · التوجيه ٢٦٣ §٥ بنصّ المالك: «فالحكمُ
+   * واحد»). بلا رقمٍ ⟸ `400` مسمّى · وبرقمٍ ⟸ «غيرُ متحقَّق» حتى تطابقه التسوية، ويظهر في قائمة المطابقة — **لا «أكّده الكاشير»**.
+   */
+  it('[SPEC 27.1] ⑩ ⚖️ بلا ربطٍ فعّال — جهازٌ مستقلّ: رقمُ المرجع إلزاميّ، والبطاقةُ غيرُ متحقَّقةٍ حتى تطابقها التسوية (ق-١٤١٩)', async () => {
     await auth(http().patch(`/integrations/${connectionId}/enabled`)).send({ enabled: false }).expect(200);
     try {
       const calls = jest.spyOn(mock, 'charge');
-      const res = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' }).expect(201);
+      const bare = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' });
+      expect(bare.status).toBe(400);
+      expect(String(bare.body.message)).toContain('مرجع الجهاز');
+      const reference = `RRN-STANDALONE-${Date.now()}`;
+      const res = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD', cardDeviceReference: reference }).expect(201);
       expect(calls).not.toHaveBeenCalled();
       const card = (res.body.posPayments as Record<string, unknown>[]).find((p) => p.method === 'CARD');
-      expect(card).toMatchObject({ verification: 'CASHIER_CONFIRMED', providerRef: null });
+      expect(card).toMatchObject({ verification: 'DEVICE_REFERENCE', deviceReference: reference, providerRef: null });
+      const open = await auth(http().get('/pos/card-verifications')).expect(200);
+      expect((open.body.items as { invoiceNo: string }[]).find((r) => r.invoiceNo === res.body.no)).toMatchObject({ verification: 'DEVICE_REFERENCE', matched: false });
       // ولا محاولةَ بلا بوابة.
       const refused = await auth(http().post('/pos/payment-attempts')).send(ringing());
       expect(refused.status).toBe(409);

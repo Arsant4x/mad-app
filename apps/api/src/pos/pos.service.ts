@@ -289,12 +289,18 @@ export class PosService {
       }
 
       /**
-       * ⭐ **المناوبةُ لا تُقفل والمالُ في الطريق** (`ق-١٤٠١` · الموجز ٢.٧): محاولةُ بطاقةٍ تُشحن الآن، أو معلّقةٌ، أو قبلها
-       * المزوّدُ ولم تكتمل فاتورتُها ⟸ `409` مسمّى — فجردُ الدرج وتسويةُ الشبكة `1251` لا يُبنيان على بيعٍ لم يُحسم.
+       * ⚖️ **المعلّقُ لا يحبس المناوبةَ أبداً** (`ق-١٤١٨` · التوجيه ٢٦٣ §٥ بنصّ المالك: «تُقفل وهو فيها مسمّىً، وينتقل إلى
+       * قائمة المطابقة بالتسوية ⇒ فلا يُخمَّن، ولا يُحبس التاجرُ عن إقفال يومه») — **ونسخ `409` الذي كان هنا** (`ق-١٤٠١`).
+       * محاولةُ بطاقةٍ تُشحن أو معلّقةٌ أو مقبولةٌ لم تكتمل **تبقى بحالها**: تُسمّى في ردّ الإقفال، وتظهر في قائمة المطابقة
+       * (`card-verifications` · `unresolvedAttempts`) حتى يحسمها جوابُ المزوّد (الكانس) أو الدليل — **والنقدُ لا يمسّه شيءٌ منها**:
+       * بطاقةٌ لا درج، فجردُ الدرج يُبنى على ما فيه.
        * **وما لم يُرسل بعد (`CREATED`) يُلغى مع الإقفال**: لا مالَ فيه، وإبقاؤه يُشحن على مناوبةٍ مقفلة.
        */
-      const inFlight = await tx.posPaymentAttempt.count({ where: { shiftId: id, status: { in: ['CHARGING', 'UNKNOWN', 'APPROVED'] } } });
-      if (inFlight > 0) throw new ConflictException(formatMessage(MSG.pos_shift_pending_attempts, { count: inFlight }));
+      const pendingAttempts = await tx.posPaymentAttempt.findMany({
+        where: { shiftId: id, status: { in: ['CHARGING', 'UNKNOWN', 'APPROVED'] } },
+        select: { id: true, status: true, cardAmount: true, clientSaleId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
       await tx.posPaymentAttempt.updateMany({ where: { shiftId: id, status: 'CREATED' }, data: { status: 'CANCELLED', resolution: 'CANCELLED', resolvedAt: new Date() } });
 
       const totals = await this.totalsFor(tx, shift.id, Number(shift.openingFloat));
@@ -326,13 +332,25 @@ export class PosService {
       });
 
       // ② الفرقُ نصّاً بخانتين كسائر المبالغ (`ق-١٢٣٥`) — موجبٌ زيادةٌ وسالبٌ عجزٌ، والإشارةُ تُقرأ بـ`num()` في الشاشة.
-      return { ...closed, ...totalsText(totals), variance: money(variance) };
+      return {
+        ...closed,
+        ...totalsText(totals),
+        variance: money(variance),
+        // مسمّاةً في ردّ الإقفال (`ق-١٤١٨`) — ومنه إلى قائمة المطابقة حتى تُحسم.
+        pendingAttempts: pendingAttempts.map((a) => ({
+          id: a.id,
+          status: a.status,
+          cardAmount: money(a.cardAmount),
+          clientSaleId: a.clientSaleId,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      };
     });
   }
 
   /** بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة. */
   createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
-    return this.ringDirect(tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin });
+    return this.ringDirect(tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin, cardDeviceReference: dto.cardDeviceReference });
   }
 
   /**
@@ -581,19 +599,20 @@ export class PosService {
   }
 
   /**
-   * ⭐ **بمَ يثبت جزءُ البطاقة في البيع المباشر** (`ق-١٣٩٧` · الموجز ٢.١ و٢.١٠).
+   * ⭐ **بمَ يثبت جزءُ البطاقة في البيع المباشر** (`ق-١٣٩٧` · الموجز ٢.١ و٢.١٠ · `ق-١٤١٩`).
    *
-   * - **بلا ربطٍ فعّال**: جهازٌ مستقلّ أكّده الكاشير — مسارُ ما قبل الربط، ورقمُ المرجع يُحفظ إن أُعطي.
    * - **والربطُ فعّال**: **المسارُ الحيّ يرفض** جزءَ البطاقة (يمرّ بمحاولة الدفع — فلا مالَ يُقبل لدى المزوّد بلا بيعٍ
    *   يُسجَّل)؛ **والمزامنةُ تقبله بثلاثة شروط** (`ق-١٣٩٧`): رقمُ مرجع الجهاز **إلزاميٌّ من إيصاله** · ويُعلَّم «غيرَ متحقَّق»
    *   حتى تطالب به تسويةُ الشبكة · وما لم يُطابَق بعد مهلتها يُرفع للمراجعة باسم الكاشير. **وجزءٌ واحد**: عمليةٌ واحدة
    *   على الجهاز لها مرجعٌ واحد.
+   * - ⚖️ **وبلا ربطٍ فعّال — جهازٌ مستقلّ — الحكمُ نفسُه** (`ق-١٤١٩` · التوجيه ٢٦٣ §٥ بنصّ المالك: «يسري عليه شرطُ رقم
+   *   المرجع كبيع البطاقة دون اتصال، فالحكمُ واحد»): رقمُ المرجع إلزاميّ وجزءٌ واحد، ويُعلَّم «غيرَ متحقَّق» حتى تطابقه
+   *   التسوية — **ونسخ «أكّده الكاشير» (`CASHIER_CONFIRMED`) للبيع الجديد**؛ وما كُتب به قبل هذا يبقى كما هو.
    */
   private async directCardProof(tx: Prisma.TransactionClient, prepared: PreparedSale, opts: { viaSync?: boolean; cardDeviceReference?: string }): Promise<CardProof> {
     const reference = opts.cardDeviceReference?.trim() || null;
     const gateway = await this.integrationsService.activeGateway(tx);
-    if (!gateway) return { verification: 'CASHIER_CONFIRMED', deviceReference: reference };
-    if (!opts.viaSync) throw new ConflictException(MSG.pos_card_requires_attempt);
+    if (gateway && !opts.viaSync) throw new ConflictException(MSG.pos_card_requires_attempt);
     if (prepared.cardParts > 1) throw new BadRequestException(MSG.pos_card_single_part);
     if (!reference) throw new BadRequestException(MSG.pos_card_device_reference_required);
     return { verification: 'DEVICE_REFERENCE', deviceReference: reference };
