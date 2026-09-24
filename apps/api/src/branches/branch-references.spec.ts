@@ -1,6 +1,10 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { readsDeclaredStrings } from '../common/source-scan.util';
 import { BRANCH_REFERENCES, nameList, OPEN_WHERE } from './branch-references';
+
+// يقرأ بياناتٍ معلَنة عمداً (`ق-٣٧٥`): نصُّ المخطَّط بياناتُه — أسماءُ النماذج وأعمدتُها — لا شيفرةٌ تُجرَّد.
+readsDeclaredStrings();
 
 /**
  * 🔴 **حارسُ التصنيف** (`ق-١٤٣٥`): كلُّ نموذجٍ يحمل `branchId` في المخطَّط مصنَّفٌ في `BRANCH_REFERENCES` — **وإلا سقطت
