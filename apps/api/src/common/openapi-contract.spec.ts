@@ -109,4 +109,18 @@ describe('⚖️ شكلُ الوثيقة — بابٌ واحد ومعرّفات�
     const doc = { paths: { '/v1/x': { post: { responses: { '201': {} } } } } } as never;
     expect(documentProblems(doc, 'v1')).toEqual(['عمليةٌ بلا معرّف: POST /v1/x']);
   });
+
+  it('⭐ ومخطَّطُ طلبٍ بلا خاصيّة يُعلَن باسمه (ق-١٣٨٣ · ②) — والمُشارُ إليه والمضمَّنُ سواء', () => {
+    const body = (schema: Record<string, unknown>) => ({ content: { 'application/json': { schema } } });
+    const doc = {
+      paths: {
+        '/v1/a': { post: { operationId: 'A_create', requestBody: body({ $ref: '#/components/schemas/EmptyDto' }), responses: {} } },
+        '/v1/b': { post: { operationId: 'B_create', requestBody: body({ $ref: '#/components/schemas/FullDto' }), responses: {} } },
+        '/v1/c': { post: { operationId: 'C_create', requestBody: body({ type: 'object' }), responses: {} } },
+        '/v1/d': { post: { operationId: 'D_create', requestBody: body({ type: 'array', items: { $ref: '#/components/schemas/FullDto' } }), responses: {} } },
+      },
+      components: { schemas: { EmptyDto: { type: 'object', properties: {} }, FullDto: { type: 'object', required: ['code'], properties: { code: { type: 'string' } } } } },
+    } as never;
+    expect(documentProblems(doc, 'v1')).toEqual(['مخطَّطُ طلبٍ بلا خاصيّة: POST /v1/a ⟵ EmptyDto', 'مخطَّطُ طلبٍ بلا خاصيّة: POST /v1/c ⟵ مضمَّن']);
+  });
 });

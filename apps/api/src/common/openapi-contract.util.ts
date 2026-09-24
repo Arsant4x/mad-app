@@ -100,12 +100,30 @@ export function contractBreaks(snapshot: ApiContract, current: ApiContract): str
 }
 
 /**
+ * اسمُ مخطَّطِ جسمٍ **بلا خاصيّة** — أو `null` إن حمل خاصيّةً أو لا جسمَ أصلاً. يتبع `$ref` إلى `components`،
+ * ومخطَّطٌ مضمَّنٌ بلا خاصيّة يُسمّى «مضمَّن».
+ */
+function emptyRequestSchema(operation: Record<string, unknown>, doc: OpenAPIObject): string | null {
+  const body = operation.requestBody as { content?: Record<string, { schema?: Record<string, unknown> }> } | undefined;
+  const schema = body?.content?.['application/json']?.schema;
+  if (!schema) return null;
+  const ref = schema.$ref as string | undefined;
+  const name = ref ? (ref.split('/').pop() as string) : 'مضمَّن';
+  const resolved = ref ? ((doc.components?.schemas ?? {})[name] as Record<string, unknown> | undefined) : schema;
+  if (!resolved) return name;
+  if (resolved.allOf || resolved.oneOf || resolved.anyOf || resolved.items) return null;
+  const properties = resolved.properties as Record<string, unknown> | undefined;
+  return properties && Object.keys(properties).length > 0 ? null : name;
+}
+
+/**
  * ⚖️ **شكلُ الوثيقة نفسِها — لا عقدُها** (`ق-١٣٨٢` · خطّةُ الأنواع ①): ما يجعل الوثيقةَ صالحةً لمولِّد.
  *
  * | ما يُفحص | لماذا |
  * |---|---|
  * | كلُّ مسارٍ يبدأ بـ`/<الإصدار>/` | البابُ المحايد مخدومٌ لا موثَّق — ودخولُه الوثيقةَ يعيد كلَّ نوعٍ مرّتين |
  * | كلُّ `operationId` فريد | مولِّدٌ مفهرسٌ بالمعرّف **يتصادم أو يطمس** — والمواصفةُ تشترط الفرادة |
+ * | كلُّ مخطَّطِ طلبٍ يحمل خاصيّة (`ق-١٣٨٣` · ②) | صنفٌ خارج لاحقة `.dto.ts` يُولَّد **جسماً `{}`** — فتضيع حقولُه الإلزامية من الوثيقة والمولَّد |
  *
  * تُعاد قائمةٌ فارغة حين تصلح. **والسكربتُ يرفض الكتابةَ والفحصَ معاً** إن لم تكن فارغة — فلقطةٌ من وثيقةٍ
  * معطوبة لا تُكتب.
@@ -120,6 +138,8 @@ export function documentProblems(doc: OpenAPIObject, prefix: string): string[] {
       const operation = (item as Record<string, unknown>)[method] as { operationId?: string } | undefined;
       if (!operation) continue;
       const key = `${method.toUpperCase()} ${path}`;
+      const empty = emptyRequestSchema(operation as Record<string, unknown>, doc);
+      if (empty) problems.push(`مخطَّطُ طلبٍ بلا خاصيّة: ${key} ⟵ ${empty}`);
       if (!operation.operationId) {
         problems.push(`عمليةٌ بلا معرّف: ${key}`);
         continue;
