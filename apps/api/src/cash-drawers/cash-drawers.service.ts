@@ -185,6 +185,9 @@ export class CashDrawersService {
    * **وشروطُه شروطُ التعطيل** (`ق-٢٦٥`): لا مناوبةً مفتوحة عليه — ولا قيدَ على حسابه بعد تاريخ العدّ، فالعدُّ عدٌّ لكلِّ ما
    * في الدفتر. **والفاعلُ مالكُ المنشأة** كسائر إدارة الأدراج.
    *
+   * **على مستوى المنشأة بحقّها**: النقلُ فعلُ مالكٍ نطاقُه الكلّ، والقراءاتُ الثلاث على هذا الدرج بعينه لا على قائمة —
+   * مناوبتُه المفتوحة أيّاً كان فرعُها، وقيدٌ على حسابه في الدفتر الواحد، واسمُه في الفرع الهدف تحديداً.
+   *
    * ⚠️ **حدٌّ معلَن**: `1190` يُصفَّر على المنشأة ولا يُصفَّر لكلِّ فرعٍ منفرداً (موجبٌ في المُرسِل، سالبٌ في المستقبِل) —
    * كإيداع درجٍ في بنكِ فرعٍ آخر اليوم؛ وحسابٌ جارٍ بين الفروع يُقفل في المجمَّع **لحكم المالك**.
    */
@@ -213,8 +216,8 @@ export class CashDrawersService {
 
           // العدُّ عدٌّ لكلِّ ما في الدفتر: قيدٌ بعد تاريخه يترك الدرجَ المغلق برصيد.
           const date = new Date(dto.date);
-          const later = await tx.journalLine.count({ where: { accountId: drawer.accountId, journalEntry: { date: { gt: date } } } });
-          if (later > 0) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_later_postings, { date: dto.date.slice(0, 10), count: String(later) }));
+          const later = await tx.journalLine.findFirst({ where: { accountId: drawer.accountId, journalEntry: { date: { gt: date } } }, select: { id: true } });
+          if (later) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_later_postings, { date: dto.date.slice(0, 10) }));
 
           const book = round2(Number((await readLedger(tx, { allowedBranchIds: 'all', accountId: drawer.accountId, to: date }, 'debit')).closing));
           const counted = round2(dto.countedAmount);

@@ -1551,8 +1551,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The drawer has an open shift for {cashier} since {since} · close it, then transfer the drawer',
   },
   [MSG.cash_drawer_transfer_later_postings]: {
-    ar: 'على حساب الدرج {count} قيداً بعد {date} — العدُّ عدٌّ لكلِّ ما في الدفتر، فاختر تاريخاً لا يسبق آخرَ حركة',
-    en: 'The drawer account has {count} postings after {date} — the count covers the whole ledger, so pick a date not before the last movement',
+    ar: 'على حساب الدرج قيودٌ بعد {date} — العدُّ عدٌّ لكلِّ ما في الدفتر، فاختر تاريخاً لا يسبق آخرَ حركة',
+    en: 'The drawer account has postings after {date} — the count covers the whole ledger, so pick a date not before the last movement',
   },
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
