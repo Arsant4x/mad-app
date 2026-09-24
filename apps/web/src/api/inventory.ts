@@ -26,7 +26,8 @@ export interface StockMovementInput {
   type: StockMovementType;
   qty: number;
   date: string;
-  reason?: string;
+  /** ⭐ ق-١٣٧٧ — إلزاميٌّ من اليوم (والخادمُ يرفض الفارغَ والمسافات). */
+  reason: string;
   /** Batch/lot + expiry — used on receiving (IN) perishables. */
   batchNo?: string;
   expiryDate?: string;

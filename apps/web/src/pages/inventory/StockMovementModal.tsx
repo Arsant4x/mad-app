@@ -56,6 +56,11 @@ export function StockMovementModal({
       setError('تكلفة الوحدة مطلوبة للإدخال — لا تؤخذ من بطاقة الصنف');
       return;
     }
+    // ⭐ ق-١٣٧٧ — السببُ إلزاميٌّ من اليوم (والخادمُ يرفض الفارغَ والمسافاتِ برسالته — هذا تنبيهٌ قبل الإرسال لا حارس).
+    if (!reason.trim()) {
+      setError('سببُ الحركة مطلوب — اكتب لماذا تتحرّك الكمّية (جرد · تصحيحُ إدخال · نقل…)');
+      return;
+    }
     setSaving(true);
     try {
       const result = await onSave({
@@ -66,7 +71,7 @@ export function StockMovementModal({
         qty: qtyNum,
         date,
         unitCost: entering ? unitCostNum : undefined,
-        reason: reason.trim() || undefined,
+        reason: reason.trim(),
         // Batch/expiry only apply to received stock.
         batchNo: type === 'IN' ? batchNo.trim() || undefined : undefined,
         expiryDate: type === 'IN' ? expiryDate || undefined : undefined,
@@ -180,8 +185,8 @@ export function StockMovementModal({
           </>
         )}
         <div className="field">
-          <label>السبب / ملاحظات</label>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="استلام من مورد، بيع، جرد دوري..." />
+          <label>السبب *</label>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="جرد دوري، تصحيح إدخال، نقل بين المستودعات..." required />
         </div>
 
         {warning && (

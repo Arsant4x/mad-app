@@ -34,7 +34,8 @@ describe('㉙ حذفُ الحركة ⟵ عكسٌ بحركةٍ مقابلة — �
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
   const today = () => new Date().toISOString().slice(0, 10);
   const product = async (name: string) => (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `${name} ${suffix}`, price: 100 }).expect(201)).body.id as string;
-  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: today(), ...body });
+  // ق-١٣٧٧: السببُ إلزاميٌّ للحركة اليدوية — افتراضُ الاختبار، ويُطغى عليه بالجسم.
+  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: today(), reason: 'اختبار — حركةٌ يدوية', ...body });
   const reverse = (id: string) => auth(http().post(`/inventory/movements/${id}/reverse`)).send({});
   const layersOf = (productId: string, warehouseId: string) =>
     tenantPrisma.runInTenantContext(companyId, (tx) => tx.inventoryLayer.findMany({ where: { productId, warehouseId }, orderBy: { createdAt: 'asc' } }));

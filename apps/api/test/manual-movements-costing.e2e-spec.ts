@@ -44,7 +44,8 @@ describe('㉘ الحركاتُ اليدوية عبر طبقات التكلفة �
   const today = () => new Date().toISOString().slice(0, 10);
   const product = async (name: string, cost?: number) =>
     (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `${name} ${suffix}`, price: 100, ...(cost !== undefined ? { cost } : {}) }).expect(201)).body.id as string;
-  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: today(), ...body });
+  // ق-١٣٧٧: السببُ إلزاميٌّ للحركة اليدوية — افتراضُ الاختبار، ويُطغى عليه بالجسم.
+  const move = (body: Record<string, unknown>) => auth(http().post('/inventory/movements')).send({ date: today(), reason: 'اختبار — حركةٌ يدوية', ...body });
   const layersOf = (productId: string, warehouseId: string): Promise<Layer[]> =>
     tenantPrisma.runInTenantContext(companyId, (tx) => tx.inventoryLayer.findMany({ where: { productId, warehouseId }, orderBy: { createdAt: 'asc' } }));
   const consumptionsOf = (movementId: string): Promise<Consumption[]> =>

@@ -142,7 +142,7 @@ describe('POS cashier (e2e)', () => {
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع كاشير ${suffix}`, warehouseId }).expect(201)).body.id;
     trackedProductId = (await auth(request(app.getHttpServer()).post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `عصير برتقال ${suffix}`, price: 50 }).expect(201)).body.id;
     await auth(request(app.getHttpServer()).post('/inventory/movements'))
-      .send({ productId: trackedProductId, warehouseId, type: 'IN', qty: 10, unitCost: 20, date: new Date().toISOString().slice(0, 10) })
+      .send({ reason: 'اختبار — رصيدٌ للكاشير', productId: trackedProductId, warehouseId, type: 'IN', qty: 10, unitCost: 20, date: new Date().toISOString().slice(0, 10) })
       .expect(201);
 
     invShiftId = (await auth(request(app.getHttpServer()).post('/pos/shifts')).send({ openingFloat: 0, branchId }).expect(201)).body.id;
