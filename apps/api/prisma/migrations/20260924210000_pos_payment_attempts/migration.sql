@@ -6,7 +6,7 @@
 --
 -- والقائمُ من صفوف البطاقة يُعلَّم **بما وقع فعلاً** لا بتخمين: بمرجع مزوّد ⟵ PROVIDER_APPROVED (مرّ بالمحوّل) ·
 -- وبلا مرجع ⟵ CASHIER_CONFIRMED (لم يُسأل مزوّد — أكّده الكاشيرُ وحدَه، ومنه ما زُومن والربطُ فعّال: القياس ① في الموجز).
--- والكتابةُ داخل سياق كلِّ منشأة (ق-١٣٢٥)، والعددُ يُعلَن بـWARNING ولو صفراً (ق-٦٩١).
+-- والعددُ يُعلَن بـWARNING ولو صفراً (ق-٦٩١).
 
 -- AlterEnum — يُرفع للمراجعة باسم الكاشير ما لم تطابقه التسوية بعد مهلتها (ق-١٣٩٧/٣ · ق-١٣٩٩).
 ALTER TYPE "NotificationKind" ADD VALUE 'POS_CARD_UNMATCHED';
@@ -96,33 +96,30 @@ ALTER TABLE "pos_payment_attempts" ADD CONSTRAINT "pos_payment_attempts_invoiceI
 -- AddForeignKey
 ALTER TABLE "pos_payment_attempts" ADD CONSTRAINT "pos_payment_attempts_companyId_invoiceId_fkey" FOREIGN KEY ("companyId", "invoiceId") REFERENCES "invoices"("companyId", "id") ON DELETE NO ACTION ON UPDATE NO ACTION;
 
--- القائمُ يُعلَّم بما وقع — منشأةً منشأة في سياقها، ثم يُحبس الشكلُ بالقيود.
+-- القائمُ يُعلَّم بما وقع، ثم يُحبس الشكلُ بالقيود.
+-- ⚠️ **ورفعُ `FORCE` صراحةً للتعبئة ثم إعادتُه** (`ق-٢٦٢`): الجدولُ تحت `FORCE ROW LEVEL SECURITY` والهجرةُ تعمل بدور المالك
+--    **بلا `app.company_id`** — فـ`UPDATE` بلا رفعٍ يمسّ صفرَ صفوف، ثم يسقط قيدُ صفّ البطاقة على صفوفٍ لم تُعلَّم. والرفعُ
+--    لمدّة التعبئة وحدَها ويُعاد بعدها فوراً، فضمانُ العزل لا يتغيّر بانتهاء الهجرة.
+ALTER TABLE "pos_payments" NO FORCE ROW LEVEL SECURITY;
+
 DO $$
 DECLARE
-  c RECORD;
-  k INTEGER;
-  companies_n INTEGER := 0;
-  provider_n INTEGER := 0;
-  cashier_n INTEGER := 0;
+  provider_n INTEGER;
+  cashier_n INTEGER;
 BEGIN
-  FOR c IN SELECT id FROM companies LOOP
-    companies_n := companies_n + 1;
-    PERFORM set_config('app.company_id', c.id, true);
+  UPDATE "pos_payments" SET "verification" = 'PROVIDER_APPROVED'
+   WHERE "method" = 'CARD' AND "providerRef" IS NOT NULL AND "verification" IS NULL;
+  GET DIAGNOSTICS provider_n = ROW_COUNT;
 
-    UPDATE "pos_payments" SET "verification" = 'PROVIDER_APPROVED'
-     WHERE "companyId" = c.id AND "method" = 'CARD' AND "providerRef" IS NOT NULL AND "verification" IS NULL;
-    GET DIAGNOSTICS k = ROW_COUNT;
-    provider_n := provider_n + k;
+  UPDATE "pos_payments" SET "verification" = 'CASHIER_CONFIRMED'
+   WHERE "method" = 'CARD' AND "providerRef" IS NULL AND "verification" IS NULL;
+  GET DIAGNOSTICS cashier_n = ROW_COUNT;
 
-    UPDATE "pos_payments" SET "verification" = 'CASHIER_CONFIRMED'
-     WHERE "companyId" = c.id AND "method" = 'CARD' AND "providerRef" IS NULL AND "verification" IS NULL;
-    GET DIAGNOSTICS k = ROW_COUNT;
-    cashier_n := cashier_n + k;
-  END LOOP;
-
-  RAISE WARNING 'ق-١٣٩٧: % منشأة — صفوفُ بطاقةٍ قائمة: % بمرجع مزوّد ⟵ PROVIDER_APPROVED · % بلا مرجع ⟵ CASHIER_CONFIRMED (لم يُسأل مزوّد — أكّدها الكاشيرُ وحدَه)',
-    companies_n, provider_n, cashier_n;
+  RAISE WARNING 'ق-١٣٩٧: صفوفُ بطاقةٍ قائمة: % بمرجع مزوّد ⟵ PROVIDER_APPROVED · % بلا مرجع ⟵ CASHIER_CONFIRMED (لم يُسأل مزوّد — أكّدها الكاشيرُ وحدَه)',
+    provider_n, cashier_n;
 END $$;
+
+ALTER TABLE "pos_payments" FORCE ROW LEVEL SECURITY;
 
 -- صفُّ البطاقة يعلن بمَ ثبت دفعُه، وصفُّ النقد لا (ق-١٣٩٧).
 ALTER TABLE "pos_payments" ADD CONSTRAINT "pos_payments_card_verification"

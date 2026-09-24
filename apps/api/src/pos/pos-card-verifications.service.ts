@@ -5,7 +5,7 @@ import { TenantContext } from '../auth/types';
 import { branchFilter } from '../branches/branch-scope.util';
 import { money } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { localDateOf } from '../common/wall-clock.util';
+import { localDateOf, SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -77,8 +77,11 @@ export class PosCardVerificationsService {
     });
   }
 
-  /** كلَّ ساعة لكلِّ منشأةٍ فعّالة — بلا منطقةٍ ثابتة (اليومُ يومُ `UTC` معلَناً أعلاه). */
-  @Cron(CronExpression.EVERY_HOUR)
+  /**
+   * كلَّ ساعة لكلِّ منشأةٍ فعّالة. والمنطقةُ معلنةٌ بحارس `ق-١٢٧٩` (كلُّ جدولٍ غيرِ دقائقيٍّ يعلنها) — وهي منطقةُ الجدولة الثابتة
+   * القائمة (دَينٌ معدود في مسح التوطين)، لا منطقةُ المنشأة؛ واليومُ في المقارنة يومُ `UTC` معلَناً أعلاه.
+   */
+  @Cron(CronExpression.EVERY_HOUR, { timeZone: SCHEDULE_TIME_ZONE })
   async raiseOverdueForAllCompanies(): Promise<{ companies: number; raised: number }> {
     // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
     const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
@@ -94,6 +97,10 @@ export class PosCardVerificationsService {
     return { companies: companies.length, raised };
   }
 
+  /**
+   * **على مستوى المنشأة بحقّها** في سندات القبض: تُقرأ بمعرّفات فواتير قُرئت مرشَّحةً بفروع القارئ في العبارة التي قبلها —
+   * فلا يبلغ القارئَ سندُ فرعٍ لا يراه.
+   */
   private async rows(tx: Tx, companyId: string, allowedBranchIds: string[] | 'all', now: Date) {
     const { posCardSettlementDays: days } = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posCardSettlementDays: true } });
     const payments = await tx.posPayment.findMany({
