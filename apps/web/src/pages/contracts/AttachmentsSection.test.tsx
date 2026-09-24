@@ -24,7 +24,7 @@ vi.setConfig({ testTimeout: 5_000 });
 vi.mock('../../api/contracts', () => ({
   listContractAttachments: vi.fn(),
   deleteContractAttachment: vi.fn(),
-  contractAttachmentDownloadUrl: vi.fn(),
+  downloadContractAttachment: vi.fn(),
   uploadContractAttachment: vi.fn(),
 }));
 

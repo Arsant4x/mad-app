@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -47,6 +48,22 @@ export class ContractsController {
   @RequiresAction('view')
   attachmentDownloadUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
     return this.attachments.downloadUrl(tenant.companyId, attachmentId);
+  }
+
+  /**
+   * ⚖️ ق-١٣٦٥ — **التنزيلُ عبر الخادم يفكّ ويبثّ** (لا رابطَ موقَّعاً لمرفق عقد). بنوعه واسمه، ولا يُخزَّن في وسيطٍ ولا متصفّح
+   * (`no-store`) — فالمفكوكُ لا يبقى في نسخةٍ خارج المخزن.
+   */
+  @Get('attachments/:attachmentId/download')
+  @RequiresAction('view')
+  async downloadAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string, @Res({ passthrough: true }) res: Response) {
+    const file = await this.attachments.download(tenant.companyId, attachmentId);
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(file.buffer, {
+      type: file.mimeType,
+      length: file.buffer.length,
+      disposition: `attachment; filename="file"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    });
   }
 
   @Delete('attachments/:attachmentId')

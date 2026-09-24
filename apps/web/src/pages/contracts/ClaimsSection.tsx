@@ -247,6 +247,8 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
               <input ref={fileRef} type="file" style={{ display: 'none' }} disabled={uploading} onChange={(e) => e.target.files?.[0] && handleUpload(e.target.files[0])} />
             </label>
           </div>
+          {/* ⚖️ ق-١٣٦٥ — حدُّ المطالبة يُعلَن في شاشة رفعها: مرفقاتُها في المخزن العاديّ، ولا مخزنَ لهويّات المستأجرين (لائحة 2289 م٢٨/١٤). */}
+          <p className="warn-text" style={{ margin: '8px 0' }}>⚠️ لا تُرفع صورُ الهويّات هنا.</p>
           {attachments.length === 0 && <div className="empty-state">لا مرفقات — فاتورة الإصلاح وصور الضرر توثَّق هنا</div>}
           {attachments.map((a) => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
