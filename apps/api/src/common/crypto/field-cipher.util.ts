@@ -88,6 +88,53 @@ export function decryptField(stored: string, aad: string): string {
   return Buffer.concat([decipher.update(Buffer.from(dataB, 'base64url')), decipher.final()]).toString('utf8');
 }
 
+/**
+ * ⚖️ **`ق-١٣٦٥` — غلافُ الملفّ: البايتاتُ بالحلقة نفسِها** (بنصّ المالك: «مرفقاتُ العقود حسّاسةٌ الآن … والحساسيةُ بالمخزن لا بسؤال
+ * الرافع. والتنزيلُ من المخزن الحسّاس عبر الخادم يفكّ ويبثّ، لا برابطٍ موقَّع»).
+ *
+ * الشكلُ ثنائيٌّ لا نصّ (`base64` يُضخّم الملفَّ ثلثاً): `mfb1` · طولُ المعرّف (بايتٌ واحد) · المعرّف · `iv` (١٢) · `tag` (١٦) · النصّ.
+ * **والمعرّفُ في الغلاف** كما في الحقل — فالتدويرُ إضافةُ مفتاحٍ لا إعادةُ تشفير. **والموضعُ (`aad`) مفتاحُ الكائن** في المخزن: نسخُ
+ * الكائن إلى مفتاحٍ آخر يفشل فكُّه بدل أن يُقرأ مرفقاً لعقدٍ آخر.
+ */
+const BYTES_MAGIC = Buffer.from('mfb1', 'ascii');
+const TAG_BYTES = 16;
+
+export function encryptBytes(plain: Buffer, aad: string): Buffer {
+  const { activeId, keys } = keyring();
+  const iv = randomBytes(IV_BYTES);
+  const cipher = createCipheriv(ALGORITHM, keys.get(activeId)!, iv);
+  cipher.setAAD(Buffer.from(aad, 'utf8'));
+  const data = Buffer.concat([cipher.update(plain), cipher.final()]);
+  const id = Buffer.from(activeId, 'utf8');
+  return Buffer.concat([BYTES_MAGIC, Buffer.from([id.length]), id, iv, cipher.getAuthTag(), data]);
+}
+
+/** أهذه بايتاتٌ في الغلاف؟ — بالبصمة الأولى وحدَها، بلا فكّ. */
+export function isEncryptedBytes(stored: Buffer): boolean {
+  return stored.length > BYTES_MAGIC.length && stored.subarray(0, BYTES_MAGIC.length).equals(BYTES_MAGIC);
+}
+
+/** يفكّ الغلافَ بمعرّف مفتاحه — ويرمي إن لم يكن غلافاً أو غاب المفتاحُ أو اختلف الموضعُ أو عُبث بالبايتات. */
+export function decryptBytes(stored: Buffer, aad: string): Buffer {
+  if (!isEncryptedBytes(stored)) throw new FieldCipherConfigError('ليست بايتاتٍ مغلَّفة (mfb1)');
+  let at = BYTES_MAGIC.length;
+  const idLength = stored[at];
+  at += 1;
+  const keyId = stored.subarray(at, at + idLength).toString('utf8');
+  at += idLength;
+  const iv = stored.subarray(at, at + IV_BYTES);
+  at += IV_BYTES;
+  const tag = stored.subarray(at, at + TAG_BYTES);
+  at += TAG_BYTES;
+  if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) throw new FieldCipherConfigError('غلافٌ مبتور');
+  const key = keyring().keys.get(keyId);
+  if (!key) throw new FieldCipherConfigError(`المفتاحُ «${keyId}» الذي غُلّف به الملفُّ ليس في الحلقة — لا يُحذف مفتاحٌ ما دام به ملفّ`);
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAAD(Buffer.from(aad, 'utf8'));
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(stored.subarray(at)), decipher.final()]);
+}
+
 /** بصمةُ البحث: `b1:<معرّفُ المفتاح>:<HMAC>` — مجالُها المنشأة (`scope`)، فلا تتطابق عبر المستأجرين. */
 export function blindIndex(value: string, scope: string): string {
   const [id, key] = blindKey();

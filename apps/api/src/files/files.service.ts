@@ -10,6 +10,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import { MSG } from '../common/i18n/messages';
+import { decryptBytes, encryptBytes } from '../common/crypto/field-cipher.util';
 
 /** Download links are short-lived: the URL grants access to whoever holds it,
  * with no further auth check, so it must expire well before it could be
@@ -42,6 +43,18 @@ export function assertKeyBelongsToCompany(key: string, companyId: string): void 
 
 function companyPrefix(companyId: string): string {
   return `companies/${companyId}/`;
+}
+
+/**
+ * ⚖️ **`ق-١٣٦٥` — المخزنُ الحسّاس: مقطعٌ تحت مجال المنشأة** (بنصّ المالك: «والحساسيةُ بالمخزن لا بسؤال الرافع. والتنزيلُ من المخزن
+ * الحسّاس عبر الخادم يفكّ ويبثّ، لا برابطٍ موقَّع»). فالمرفقُ الذي يُرفع إليه **يُغلَّف قبل أن يغادر الخادم** (`encryptBytes` بحلقة
+ * مفاتيح الحقول الحسّاسة) ولا يُوقَّع له رابطٌ أبداً — ومجالُ المنشأة فوقه كما هو (`assertKeyBelongsToCompany`).
+ */
+const SENSITIVE_SEGMENT = 'sensitive/';
+
+/** أهذا المفتاحُ في المخزن الحسّاس؟ — بموضعه لا بعلَمٍ يُكتب: الحساسيةُ بالمخزن. */
+export function isSensitiveKey(key: string): boolean {
+  return /^companies\/[^/]+\/sensitive\//.test(key);
 }
 
 /** multer/busboy decodes multipart filenames as latin-1 (its `defParamCharset`
@@ -118,7 +131,7 @@ export class FilesService implements OnModuleInit {
     }
   }
 
-  async upload(companyId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
+  private assertUploadable(file: { originalname: string; mimetype: string; buffer: Buffer; size: number }): void {
     if (!file) throw new BadRequestException(MSG.file_missing);
     if (file.size > MAX_FILE_BYTES) {
       throw new BadRequestException(MSG.file_too_large);
@@ -126,6 +139,42 @@ export class FilesService implements OnModuleInit {
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       throw new BadRequestException(MSG.file_type_unsupported);
     }
+  }
+
+  /**
+   * ⚖️ `ق-١٣٦٥` — **الرفعُ إلى المخزن الحسّاس**: الفحوصُ نفسُها، ثم يُغلَّف الملفُّ بمفتاح الكائن موضعاً ويُكتب نوعُه `octet-stream`
+   * (نوعُ الأصل في صفّ المرفق لا في المخزن — فمن قرأ المخزنَ لا يعرف حتى أنه `pdf`).
+   */
+  async uploadSensitive(companyId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
+    this.assertUploadable(file);
+    const key = `${companyPrefix(companyId)}${SENSITIVE_SEGMENT}${randomUUID()}-${sanitizeFilename(file.originalname)}`;
+    const body = encryptBytes(file.buffer, key);
+    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: 'application/octet-stream' }));
+    return { key, filename: sanitizeFilename(file.originalname), size: file.size, mimeType: file.mimetype };
+  }
+
+  /** ⚖️ `ق-١٣٦٥` — **يفكّ ويُعيد** كائناً من المخزن الحسّاس (للبثّ عبر الخادم) — ويرمي إن لم يكن فيه أو لم يكن مغلَّفاً. */
+  async readSensitive(companyId: string, key: string): Promise<Buffer> {
+    assertKeyBelongsToCompany(key, companyId);
+    if (!isSensitiveKey(key)) throw new ForbiddenException(MSG.file_access_denied);
+    return decryptBytes(await this.readObject(key), key);
+  }
+
+  /** كائنٌ عاديٌّ (قبل المخزن الحسّاس) يُقرأ كما هو — للبثّ عبر الخادم لما سبق الغلاف. ولا يقرأ الحسّاسَ بلا فكّ. */
+  async readPlain(companyId: string, key: string): Promise<Buffer> {
+    assertKeyBelongsToCompany(key, companyId);
+    if (isSensitiveKey(key)) throw new ForbiddenException(MSG.file_access_denied);
+    return this.readObject(key);
+  }
+
+  private async readObject(key: string): Promise<Buffer> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (!res.Body) throw new BadRequestException(MSG.file_not_found);
+    return Buffer.from(await res.Body.transformToByteArray());
+  }
+
+  async upload(companyId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
+    this.assertUploadable(file);
 
     const key = `${companyPrefix(companyId)}${randomUUID()}-${sanitizeFilename(file.originalname)}`;
     await this.client.send(
@@ -142,6 +191,8 @@ export class FilesService implements OnModuleInit {
 
   async downloadUrl(companyId: string, key: string): Promise<{ url: string; expiresInSeconds: number }> {
     assertKeyBelongsToCompany(key, companyId);
+    // ⚖️ ق-١٣٦٥ «لا برابطٍ موقَّع» — والرابطُ لا يفكّ أصلاً: كان سيُسلّم الغلافَ نفسَه.
+    if (isSensitiveKey(key)) throw new ForbiddenException(MSG.file_sensitive_server_only);
     // signingClient لا client: الرابط يذهب إلى متصفح خارج شبكة Docker.
     const url = await getSignedUrl(this.signingClient, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
       expiresIn: DOWNLOAD_URL_TTL_SECONDS,

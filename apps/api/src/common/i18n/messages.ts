@@ -554,6 +554,7 @@ export const MSG = {
   file_too_large: 'files.too_large',
   file_type_unsupported: 'files.type_unsupported',
   file_access_denied: 'files.access_denied',
+  file_sensitive_server_only: 'files.sensitive_server_only',
   file_not_found: 'files.not_found',
 
   // validation (used by class-validator DTOs)
@@ -1588,6 +1589,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Unsupported file type — allowed: PDF or image (JPEG/PNG/WebP)',
   },
   [MSG.file_access_denied]: { ar: 'لا تملك صلاحية الوصول إلى هذا الملف', en: 'You do not have permission to access this file' },
+  [MSG.file_sensitive_server_only]: {
+    ar: 'هذا الملفُّ في المخزن الحسّاس — يُنزَّل عبر الخادم مفكوكاً، ولا يُعطى له رابطٌ موقَّع',
+    en: 'This file is in the sensitive store — it is downloaded through the server, decrypted, and never through a signed link',
+  },
   [MSG.file_not_found]: { ar: 'الملف غير موجود', en: 'File not found' },
 
   [MSG.vat_number_invalid]: {

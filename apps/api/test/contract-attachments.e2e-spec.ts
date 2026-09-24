@@ -2,8 +2,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { FilesService } from '../src/files/files.service';
 import { createTenantCustomer } from './tenant-customer';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (17.7 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -23,6 +26,8 @@ describe('Contract attachments (e2e)', () => {
   let tokenB: string;
   let contractId: string;
   let attachmentId: string;
+  let companyA: string;
+  const ORIGINAL = '%PDF-1.4 signed lease';
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -45,6 +50,8 @@ describe('Contract attachments (e2e)', () => {
     const loginB = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-b', password: 'DemoPass123!' });
     tokenA = loginA.body.accessToken;
     tokenB = loginB.body.accessToken;
+    companyA = loginA.body.user?.companyId;
+    expect(typeof companyA).toBe('string');
 
     const property = await authA(request(app.getHttpServer()).post('/properties')).send({ name: `عقار المرفقات ${suffix}`, ownership: 'owned' }).expect(201);
     const unit = await authA(request(app.getHttpServer()).post('/units'))
@@ -68,7 +75,7 @@ describe('Contract attachments (e2e)', () => {
 
   it('[SPEC 11.2] uploads a document and lists it back', async () => {
     const res = await authA(request(app.getHttpServer()).post(`/contracts/${contractId}/attachments`))
-      .attach('file', Buffer.from('%PDF-1.4 signed lease'), { filename: `عقد موقّع ${suffix}.pdf`, contentType: 'application/pdf' })
+      .attach('file', Buffer.from(ORIGINAL), { filename: `عقد موقّع ${suffix}.pdf`, contentType: 'application/pdf' })
       .expect(201);
     attachmentId = res.body.id;
     expect(res.body.filename).toContain(suffix);
@@ -79,11 +86,33 @@ describe('Contract attachments (e2e)', () => {
     expect((list.body as { id: string }[]).some((a) => a.id === attachmentId)).toBe(true);
   }, 40000);
 
-  it('[SPEC 11.2] hands back a short-lived signed download URL', async () => {
-    const res = await authA(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download-url`)).expect(200);
-    expect(res.body.url).toMatch(/^https?:\/\//);
-    expect(res.body.expiresInSeconds).toBeGreaterThan(0);
+  it('[SPEC 11.2] ⚖️ ق-١٣٦٥ يُنزَّل عبر الخادم مفكوكاً — بايتاتُه كما رُفعت، والمخزنُ يحمل الغلافَ لا النصّ', async () => {
+    const res = await authA(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download`))
+      .buffer(true)
+      .parse((r, done) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((res.body as Buffer).toString('utf8')).toBe(ORIGINAL);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['content-disposition']).toContain(encodeURIComponent(suffix));
+
+    // المخزنُ نفسُه: الكائنُ في المقطع الحسّاس، وبايتاتُه غلافٌ (`mfb1`) لا يحمل النصَّ الأصليّ.
+    const row = await app.get(TenantPrismaService).runInTenantContext(companyA, (tx) => tx.contractAttachment.findUniqueOrThrow({ where: { id: attachmentId }, select: { fileKey: true } }));
+    expect(row.fileKey).toMatch(/^companies\/[^/]+\/sensitive\//);
+    const files = app.get(FilesService) as unknown as { client: S3Client; bucket: string };
+    const raw = Buffer.from(await (await files.client.send(new GetObjectCommand({ Bucket: files.bucket, Key: row.fileKey }))).Body!.transformToByteArray());
+    expect(raw.subarray(0, 4).toString('ascii')).toBe('mfb1');
+    expect(raw.includes(Buffer.from('signed lease'))).toBe(false);
   }, 40000);
+
+  it('⚖️ ق-١٣٦٥ لا رابطَ موقَّعاً لمرفق عقد — «لا برابطٍ موقَّع»', async () => {
+    const res = await authA(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download-url`)).expect(403);
+    expect(String(res.body.message)).toContain('المخزن الحسّاس');
+  });
 
   it('refuses a file type outside the allow-list', async () => {
     await authA(request(app.getHttpServer()).post(`/contracts/${contractId}/attachments`))
@@ -94,8 +123,9 @@ describe('Contract attachments (e2e)', () => {
   it('never lets one company reach another\'s attachments', async () => {
     // B can't list A's contract attachments — the contract is invisible to it.
     await authB(request(app.getHttpServer()).get(`/contracts/${contractId}/attachments`)).expect(404);
-    // Nor download by guessing the attachment id.
+    // Nor download by guessing the attachment id — neither the old signed link nor the server stream.
     await authB(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download-url`)).expect(404);
+    await authB(request(app.getHttpServer()).get(`/contracts/attachments/${attachmentId}/download`)).expect(404);
     // Nor delete it.
     await authB(request(app.getHttpServer()).delete(`/contracts/attachments/${attachmentId}`)).expect(404);
 

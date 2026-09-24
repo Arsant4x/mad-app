@@ -1,7 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { FilesService } from '../files/files.service';
+import { FilesService, isSensitiveKey } from '../files/files.service';
 import { MSG } from '../common/i18n/messages';
 
 /** What the API returns for one attachment — never the raw storage key alone,
@@ -46,7 +46,9 @@ export class ContractAttachmentsService {
   async add(companyId: string, contractId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
     // Upload first: the MIME allow-list, size cap and key-namespacing all live in
     // FilesService, so a rejected file never reaches the database.
-    const stored = await this.files.upload(companyId, file);
+    // ⚖️ ق-١٣٦٥ — **إلى المخزن الحسّاس** («مرفقاتُ العقود حسّاسةٌ الآن … والحساسيةُ بالمخزن لا بسؤال الرافع»): يُغلَّف قبل أن يغادر
+    // الخادم، ولا يُسأل الرافعُ أحسّاسٌ هو — العقدُ يحمل هويّةَ المستأجر وعنوانَه فكلُّ مرفقاته في المخزن نفسِه.
+    const stored = await this.files.uploadSensitive(companyId, file);
     try {
       return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const contract = await tx.contract.findUnique({ where: { id: contractId }, select: { id: true } });
@@ -68,14 +70,30 @@ export class ContractAttachmentsService {
     }
   }
 
+  /**
+   * ⚖️ ق-١٣٦٥ — **لا رابطَ موقَّعاً لمرفق عقد** («والتنزيلُ من المخزن الحسّاس عبر الخادم يفكّ ويبثّ، لا برابطٍ موقَّع»). والرفضُ
+   * للفئة كلِّها لا للمغلَّف وحدَه: ما سبق الغلافَ مرفقُ عقدٍ كذلك، ويُبثّ عبر الخادم مثلَه (`download`). والعزلُ قبل الرفض —
+   * مرفقُ منشأةٍ أخرى `404` كما كان، فلا يُعرف وجودُه.
+   */
   downloadUrl(companyId: string, attachmentId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const att = await tx.contractAttachment.findUnique({ where: { id: attachmentId }, select: { fileKey: true } });
       if (!att) throw new NotFoundException(MSG.file_not_found);
-      // downloadUrl re-derives the company prefix from the key, so even a key
-      // that somehow slipped tenant scope can't be signed for another company.
-      return this.files.downloadUrl(companyId, att.fileKey);
+      throw new ForbiddenException(MSG.file_sensitive_server_only);
     });
+  }
+
+  /**
+   * ⚖️ ق-١٣٦٥ — **التنزيلُ عبر الخادم**: يُقرأ الصفُّ تحت سياق المنشأة (فمرفقُ غيرها غيرُ موجود)، ثم يُفكّ الغلافُ ويُعاد البايتاتُ
+   * بنوعها واسمها ليبثّها المتحكّم. وما سبق الغلافَ (مخزنٌ عاديّ) يُقرأ كما هو — يُعدّ في الهجرة ولا يُحوَّل.
+   */
+  async download(companyId: string, attachmentId: string): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+    const att = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.contractAttachment.findUnique({ where: { id: attachmentId }, select: { fileKey: true, filename: true, mimeType: true } }),
+    );
+    if (!att) throw new NotFoundException(MSG.file_not_found);
+    const buffer = isSensitiveKey(att.fileKey) ? await this.files.readSensitive(companyId, att.fileKey) : await this.files.readPlain(companyId, att.fileKey);
+    return { buffer, filename: att.filename, mimeType: att.mimeType };
   }
 
   async remove(companyId: string, attachmentId: string): Promise<void> {

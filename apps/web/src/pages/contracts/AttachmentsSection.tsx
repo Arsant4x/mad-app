@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import {
-  contractAttachmentDownloadUrl,
   deleteContractAttachment,
+  downloadContractAttachment,
   listContractAttachments,
   uploadContractAttachment,
   type ContractAttachment,
@@ -63,8 +63,8 @@ export function AttachmentsSection({ contractId }: { contractId: string }) {
   async function open(att: ContractAttachment) {
     setError(null);
     try {
-      const { url } = await contractAttachmentDownloadUrl(att.id);
-      window.open(url, '_blank', 'noopener');
+      // ق-١٣٦٥ — عبر الخادم مفكوكاً، لا رابطَ موقَّعاً.
+      await downloadContractAttachment(att.id, att.filename);
     } catch (e) {
       setError(apiErrorMessage(e, 'تعذّر فتح الملف'));
     }

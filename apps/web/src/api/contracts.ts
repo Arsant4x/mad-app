@@ -378,8 +378,18 @@ export const uploadContractAttachment = async (contractId: string, file: File): 
   return res.data;
 };
 
-export const contractAttachmentDownloadUrl = (attachmentId: string) =>
-  apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/attachments/${attachmentId}/download-url`).then((r) => r.data);
+/**
+ * ⚖️ ق-١٣٦٥ — مرفقُ العقد في المخزن الحسّاس: **يُنزَّل عبر الخادم مفكوكاً** (blob بالرأس Authorization) — لا رابطَ موقَّعاً له.
+ */
+export const downloadContractAttachment = async (attachmentId: string, filename: string) => {
+  const res = await apiClient.get(`/contracts/attachments/${attachmentId}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 export const deleteContractAttachment = (attachmentId: string) => apiClient.delete(`/contracts/attachments/${attachmentId}`);
 
