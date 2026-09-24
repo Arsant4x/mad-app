@@ -4,6 +4,7 @@ import {
   columnMismatches,
   columnMismatchesIn,
   exportedLiteralUnions,
+  namedTypeValues,
   parsePrisma,
   readPrisma,
   readRegistry,
@@ -57,6 +58,25 @@ describe('⓪ المسبار يرى — مُصادَقٌ بحالتين قبل �
     expect(typeValues(sf, aliasType(sf, 'D'))).toBeNull();
   });
 
+  it('⭐ وإعادةُ التصدير من الحزمة المشتركة تُحلّ من مصدرها في هذه الشجرة (`ق-١٣٨٤`) — موجبٌ وسالب', () => {
+    const sf = fixture(
+      [
+        "import type { AccountType } from '@mad-app/shared/api/enums';",
+        'export type { AccountType };',
+        "export type { StockStatus } from '@mad-app/shared/api/enums';",
+        "export type { Nope } from '@mad-app/shared/api/nope';",
+      ].join('\n'),
+    );
+    // موجبان: استيرادٌ ثم تصديرٌ محلّيّ · وإعادةُ تصديرٍ مباشرة — كلاهما يبلغ الثابتَ المولَّد بقيمه، وهي قيمُ مقابله في الخادم.
+    const account = registry.mirrors.find((m) => m.web.endsWith('#AccountType'))!;
+    expect(namedTypeValues(sf, 'AccountType')).toEqual(serverValues(account.server, prisma));
+    expect(namedTypeValues(sf, 'StockStatus')?.length).toBeGreaterThan(0);
+    // وسالب: مسارٌ لا تعلنه `exports` في `packages/shared/package.json` لا يُحلّ — فلا يُقرأ صفرٌ قيمةً.
+    expect(namedTypeValues(sf, 'Nope')).toBeNull();
+    // والسطحُ يعدّ التصديرَ المحلّيَّ للمستورَد (شكلُ الشجرة بعد التوليد) — فلا يخرج تعدادٌ من التغطية (①) لأنه صار مولَّداً.
+    expect([...exportedLiteralUnions(join(REPO_ROOT, 'apps/web/src/api/accounts.ts'), REPO_ROOT, prisma).keys()]).toContain('apps/web/src/api/accounts.ts#AccountType');
+  });
+
   it('فحصُ العمود يمسك القاصرَ ويترك التامّ — بحالتين معلومتين، وبالدالّة نفسِها التي تفحص الشجرة', () => {
     const shape = parsePrisma(['enum Way {', ...['CASH', 'BANK', 'CARD'].map((v) => `  ${v}`), '}', 'model Pay {', '  way Way', '}'].join('\n'));
     const short = fixture(`export interface Pay { way: ${quoted('CASH', 'BANK')}; }`, join(REPO_ROOT, 'short.ts'));
@@ -84,7 +104,9 @@ describe('① التغطية — كلُّ تعدادٍ في الواجهة مس�
     const registered = new Set([...registry.mirrors.map((m) => m.web), ...registry.webOnly.map((w) => w.web)]);
     const unions = new Map<string, string[]>();
     for (const f of files) for (const [k, v] of exportedLiteralUnions(f, REPO_ROOT, prisma)) unions.set(k, v);
-    expect(unions.size).toBeGreaterThanOrEqual(75);
+    // الحدُّ الأدنى للسطح — مقيسٌ لا مقدَّر: `75` مدخلاً من السجلّ داخل `apps/web/src/api` ناقصاً `ZatcaInvoiceStatus` الذي صار يُستورد
+    // من وحدته المولَّدة ولا يُعاد تصديرُه من ملفّ الفواتير العامّ (`ق-١٣٨٤` — حدُّ الوحدة `ق-١٣٥٠`)؛ ومدخلُه في السجلّ يُحلّ بالاستيراد.
+    expect(unions.size).toBeGreaterThanOrEqual(74);
     const unregistered = [...unions.keys()].filter((k) => !registered.has(k));
     expect(unregistered).toEqual([]);
   });

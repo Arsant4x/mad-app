@@ -1,9 +1,10 @@
 import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { PaymentMethod, UnallocatedFate } from '@mad-app/shared/api/enums';
 
 /** `CARD` هي الشبكة (`ق-٣٢٠`): تُقيَّد على `1251` حتى يحوّلها المستحوذ — بلا بنك؛ تسويةُ الشبكة تُدخلها البنكَ صافيةً (⑦A2). */
-export type PaymentMethod = 'CASH' | 'BANK' | 'CARD';
+export type { PaymentMethod };
 
 export interface PaymentAllocation {
   id: string;
@@ -42,7 +43,7 @@ export interface Payment {
  * ④A1: مصيرُ ما في السند فوق المخصَّص — يُعلَن حين يفوق هللاتِ التدوير (`UNALLOCATED_DECLARATION_MIN`، والخادمُ الحكم):
  * دفعةٌ مقدَّمة تُصدر فاتورةَ 386 يومَ القبض، أو على الحساب حين تغطّيه فواتيرُ العميل المفتوحة.
  */
-export type UnallocatedFate = 'PREPAYMENT' | 'ON_ACCOUNT';
+export type { UnallocatedFate };
 export const UNALLOCATED_DECLARATION_MIN = 0.05;
 
 /** فاتورة مفتوحة بمتبقّيها — **محسوباً في الخادم من التخصيصات** لا من حقل. */

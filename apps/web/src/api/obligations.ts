@@ -1,5 +1,6 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { VatPeriodType } from '@mad-app/shared/api/enums';
 
 export interface GovernmentObligation {
   id: string;
@@ -44,7 +45,7 @@ export interface SalesBoxes {
  * فالحقلُ يُعرض بـ`fmt()` كما هو، **ويُقرأ بـ`num()` قبل أي جمعٍ أو مقارنة** — والحارسُ الشجريّ يُسقط ما سواه.
  */
 /** ⑥A2 (`ق-١٣٢٥`) — فترةُ التاجر الضريبية: ربعيةٌ هي الأصل، وشهريةٌ فوق أربعين مليوناً. */
-export type VatPeriodType = 'QUARTERLY' | 'MONTHLY';
+export type { VatPeriodType };
 
 /** الفترةُ المطلوبة — **أحدُهما لا كلاهما**، والخادمُ يردّ برسالةٍ مسمّاة على المخالفة. */
 export type VatPeriodQuery = { year: number; quarter: number; month?: undefined } | { year: number; month: number; quarter?: undefined };

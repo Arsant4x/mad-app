@@ -1,11 +1,13 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import { BUYER_ID_SCHEME_VALUES, CONSENT_SOURCE_VALUES, MARKETING_CHANNEL_VALUES } from '@mad-app/shared/api/enums';
+import type { BuyerIdScheme, ConsentSource, CustomerKind, MarketingChannel } from '@mad-app/shared/api/enums';
 
 /**
  * صفةُ المشتري (ق-١٢٦١ أ — ②A1): تقرّر نوعَ الفاتورة في الخادم (م٥٣) — مؤسّسةٌ أو اعتباريٌّ ⟵ كاملة، طبيعيٌّ ⟵ مبسّطة.
  * `LEGACY_UNDECLARED` صفٌّ سبق البناءَ ولم يُعلَن — لا يُفوتَر قبل الإعلان، ولا يُختار لصفٍّ جديد.
  */
-export type CustomerKind = 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON' | 'LEGACY_UNDECLARED';
+export type { CustomerKind };
 /** ما يُختار لعميلٍ جديد — القديمةُ غيرُ المعلَنة ليست خياراً. */
 export type NewCustomerKind = Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
 export const CUSTOMER_KIND_LABEL: Record<CustomerKind, string> = {
@@ -15,8 +17,8 @@ export const CUSTOMER_KIND_LABEL: Record<CustomerKind, string> = {
   LEGACY_UNDECLARED: 'غير معلَن — سبق البناء',
 };
 /** مخطّطاتُ المعرّف البديل (BR-KSA-14) كما يقبلها الخادم — بترتيب أسبقية المعيار. */
-export const BUYER_ID_SCHEMES = ['TIN', 'CRN', 'MOM', 'MLS', '700', 'SAG', 'NAT', 'GCC', 'IQA', 'PAS', 'OTH'] as const;
-export type BuyerIdScheme = (typeof BUYER_ID_SCHEMES)[number];
+export const BUYER_ID_SCHEMES = BUYER_ID_SCHEME_VALUES;
+export type { BuyerIdScheme };
 export const BUYER_ID_SCHEME_LABEL: Record<BuyerIdScheme, string> = {
   TIN: 'الرقم المميز (TIN)',
   CRN: 'السجل التجاري',
@@ -82,11 +84,11 @@ export const setCustomerArchived = (id: string, archived: boolean) => apiClient.
  * **الموافقةُ التسويقية** (`ق-١٣٠٣` · ك/⑰A1) — الحالةُ **مشتقّةٌ في الخادم** والسجلُّ يُعرض معها:
  * اللائحةُ (م٢٨/٣) توجب الاحتفاظ بالإثبات، **وإثباتٌ لا يُقرأ ليس إثباتاً**.
  */
-export const MARKETING_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP'] as const;
-export type MarketingChannel = (typeof MARKETING_CHANNELS)[number];
+export const MARKETING_CHANNELS = MARKETING_CHANNEL_VALUES;
+export type { MarketingChannel };
 
-export const CONSENT_SOURCES = ['IN_PERSON', 'PHONE', 'WEB_FORM', 'WRITTEN', 'IMPORTED'] as const;
-export type ConsentSource = (typeof CONSENT_SOURCES)[number];
+export const CONSENT_SOURCES = CONSENT_SOURCE_VALUES;
+export type { ConsentSource };
 
 export type MarketingVerdict = { allowed: true; since: string } | { allowed: false; reason: 'NEVER_GRANTED' | 'WITHDRAWN'; at?: string };
 

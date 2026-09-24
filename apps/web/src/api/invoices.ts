@@ -2,6 +2,8 @@ import { apiClient } from './client';
 import type { Customer } from './customers';
 import type { MoneyText } from '../lib/money';
 import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
+import type { InvoiceDocType, InvoiceStatus } from '@mad-app/shared/api/enums';
+import type { ZatcaInvoiceStatus } from '@mad-app/shared/api/zatca-enums';
 
 export type { Customer } from './customers';
 
@@ -27,12 +29,12 @@ export interface InvoiceLine {
  * صامتة هنا. حدث ذلك مع PARTIAL في 4.5 — أُضيفت للمخطط ولـrecomputeInvoiceStatus
  * ونُسيت هنا، فانهارت الشاشات عند أول فاتورة مسدَّدة جزئياً على بيانات حقيقية.
  */
-export type InvoiceStatus = 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+export type { InvoiceStatus };
 
 /** Credit/debit notes are invoice rows too (ZATCA's chain runs across all
  * document kinds); amounts stay positive — `docType` carries the direction. */
 /** ④A1: `PREPAYMENT` فاتورةُ دفعةٍ مقدَّمة (رمزُ الهيئة 386) — تصدر من سند قبضٍ وتُطبَّق على فاتورة التوريد. */
-export type InvoiceDocType = 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
+export type { InvoiceDocType };
 
 export interface Invoice {
   docType: InvoiceDocType;
@@ -90,8 +92,6 @@ export interface Invoice {
   zatcaIcv: number | null;
   lines: InvoiceLine[];
 }
-
-export type ZatcaInvoiceStatus = 'NOT_SUBMITTED' | 'SUBMITTING' | 'STAMPED' | 'CLEARED' | 'REJECTED';
 
 export interface InvoiceLineInput {
   description: string;

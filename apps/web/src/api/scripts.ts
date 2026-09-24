@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { ScriptAudience } from '@mad-app/shared/api/enums';
 
-export type ScriptAudience = 'TENANT' | 'CUSTOMER' | 'EMPLOYEE';
+export type { ScriptAudience };
 
 export interface MessageScript {
   archived: boolean;

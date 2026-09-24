@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { AttendanceStatus } from '@mad-app/shared/api/enums';
 
-export type AttendanceStatus = 'PRESENT' | 'ABSENT';
+export type { AttendanceStatus };
 
 export interface AttendanceRecord {
   id: string;

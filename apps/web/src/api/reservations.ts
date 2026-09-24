@@ -1,7 +1,8 @@
 import { apiClient } from './client';
 import type { Unit } from './units';
+import type { ReservationStatus } from '@mad-app/shared/api/enums';
 
-export type ReservationStatus = 'ACTIVE' | 'EXPIRED' | 'CONVERTED';
+export type { ReservationStatus };
 
 export interface Reservation {
   id: string;

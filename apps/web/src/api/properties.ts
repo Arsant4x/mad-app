@@ -1,7 +1,8 @@
 import { apiClient } from './client';
+import type { ActivityType, Ownership } from '@mad-app/shared/api/enums';
 
-export type Ownership = 'owned' | 'leased' | 'managed';
-export type ActivityType = 'residential' | 'shop' | 'showroom' | 'office' | 'warehouse' | 'mixed';
+export type { Ownership };
+export type { ActivityType };
 
 export interface Property {
   archived: boolean;

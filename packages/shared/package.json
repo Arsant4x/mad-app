@@ -6,6 +6,8 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./permissions": "./src/permissions.ts"
+    "./permissions": "./src/permissions.ts",
+    "./api/enums": "./src/api/enums.ts",
+    "./api/zatca-enums": "./src/api/zatca-enums.ts"
   }
 }

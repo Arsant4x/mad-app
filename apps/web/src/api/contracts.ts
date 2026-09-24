@@ -1,26 +1,27 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Unit } from './units';
+import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
 
-export type ContractStatus = 'DRAFT' | 'UPCOMING' | 'DUE' | 'LATE' | 'CANCELLED';
-export type ContractCycle = 'monthly' | 'quarterly' | 'semiannual' | 'annual';
-export type Furnished = 'unfurnished' | 'furnished' | 'partial';
+export type { ContractStatus };
+export type { ContractCycle };
+export type { Furnished };
 /** تصنيفُ العقد للضريبة — على العقد لا العقار ولا الوحدة (ق-٨٩١)؛ والقيمةُ القديمة للصفوف
  * التي سبقت الهجرة وحدَها، ولا يقبلها الخادمُ لعقدٍ جديد. */
-export type ContractClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCLASSIFIED';
+export type { ContractClassification };
 /** أقيمةُ العقد شاملةٌ لضريبة القيمة المضافة أم لا — تُعلَن ولا تُفترض (ق-٨٩٢). */
-export type ContractVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';
+export type { ContractVatInclusion };
 export type DeclaredClassification = Exclude<ContractClassification, 'LEGACY_UNCLASSIFIED'>;
 export type DeclaredVatInclusion = Exclude<ContractVatInclusion, 'LEGACY_UNDECLARED'>;
-/** منسوخٌ بيدٍ من `InstallmentStatus` في المخطّط (دَينُ 4.5) — `PARTIAL` مسدَّدٌ بعضُه، تُشتقّ من المقبوض مقابل الإجماليّ (ق-١٠٤٠). */
-export type InstallmentStatus = 'DUE' | 'LATE' | 'PARTIAL' | 'PAID' | 'CANCELLED';
+/** مولَّدٌ من `InstallmentStatus` في المخطّط عبر سجلّ التعدادات (`ق-١٣٨٤` — وكان منسوخاً بيدٍ: دَينُ 4.5) — `PARTIAL` مسدَّدٌ بعضُه، تُشتقّ من المقبوض مقابل الإجماليّ (ق-١٠٤٠). */
+export type { InstallmentStatus };
 /**
  * طريقةُ سداد الإيجار **كما يحملها عمودُها** (`PaymentMethod` — ومنها `CARD` «الشبكة») — `ق-١٣٦٧`: كانت `PaymentMethod` هنا نقداً وبنكاً
  * وحدهما (حدَّ الإدخال) **وباسمٍ يتكرّر في `payments.ts` بمجموعةٍ أخرى**، فسندٌ بالشبكة كان يُعرض «تحويل بنكي».
  */
-export type RentPaymentMethod = 'CASH' | 'BANK' | 'CARD';
+export type { RentPaymentMethod };
 /** ما يقبله الخادمُ في تسجيل السداد (`@IsIn` على `RecordPaymentDto.method`). */
-export type RecordPaymentMethod = 'CASH' | 'BANK';
+export type { RecordPaymentMethod };
 
 export interface Installment {
   id: string;
@@ -87,9 +88,9 @@ export interface Contract {
   depositsHeld?: MoneyText;
 }
 
-export type HandoverType = 'DELIVERY' | 'RECEIPT';
-export type HandoverStatus = 'DRAFT' | 'SIGNED';
-export type ItemCondition = 'GOOD' | 'FAIR' | 'DAMAGED' | 'MISSING';
+export type { HandoverType };
+export type { HandoverStatus };
+export type { ItemCondition };
 
 export interface HandoverItem {
   id: string;
@@ -138,7 +139,7 @@ export interface UpdateHandoverInput {
 
 /** Which way the key money went — it decides the accounting, not just the
  * label: received is income, paid is an asset the company bought. */
-export type KeyMoneyDirection = 'RECEIVED' | 'PAID';
+export type { KeyMoneyDirection };
 
 export interface ContractKeyMoney {
   id: string;
@@ -157,8 +158,8 @@ export interface RecordKeyMoneyInput {
   note?: string;
 }
 
-export type ClaimKind = 'MAINTENANCE' | 'UTILITIES' | 'LATE_FEE' | 'DAMAGE' | 'OTHER';
-export type ClaimStatus = 'OPEN' | 'PAID' | 'WAIVED';
+export type { ClaimKind };
+export type { ClaimStatus };
 
 export interface ContractClaim {
   id: string;
@@ -181,12 +182,12 @@ export interface CreateClaimInput {
   issuedAt: string;
 }
 
-export type DepositType = 'RENT' | 'FACILITY';
+export type { DepositType };
 /** Who is holding the money. EJAR means the platform blocked it and the
  * company never received it — nothing is posted to the ledger. */
-export type DepositHolder = 'COMPANY' | 'EJAR';
-export type DepositStatus = 'HELD' | 'SETTLED';
-export type DeductionKind = 'UNPAID_RENT' | 'DAMAGE' | 'UTILITIES' | 'CLEANING' | 'OTHER';
+export type { DepositHolder };
+export type { DepositStatus };
+export type { DeductionKind };
 
 export interface DepositDeduction {
   id: string;
@@ -257,7 +258,7 @@ export interface UpdateContractInput {
 
 /** How the early-termination settlement is worked out. The last two are
  * conveniences that compute an amount from the remaining installments. */
-export type SettlementBasis = 'none' | 'amount' | 'installments' | 'all';
+export type { SettlementBasis };
 
 export interface CancelContractInput {
   cancelDate: string;

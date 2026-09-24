@@ -1,4 +1,6 @@
-import type { InvoiceStatus, ZatcaInvoiceStatus } from '../../api/invoices';
+import type { InvoiceStatus } from '../../api/invoices';
+// ق-١٣٨٤: حالةُ الهيئة من وحدتها المولَّدة (حدُّ الوحدة السعودية `ق-١٣٥٠`) — لا يُعاد تصديرُها من ملفّ الفواتير العامّ.
+import type { ZatcaInvoiceStatus } from '@mad-app/shared/api/zatca-enums';
 
 export const STATUS_META: Record<InvoiceStatus, { label: string; badgeClass: string }> = {
   DUE: { label: 'مستحقة', badgeClass: 'due' },

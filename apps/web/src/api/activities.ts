@@ -1,8 +1,10 @@
 import { apiClient } from './client';
+import { SECTOR_VALUES } from '@mad-app/shared/api/enums';
+import type { Sector } from '@mad-app/shared/api/enums';
 
-/** القطاعات — **مرآةٌ لـ`apps/api/src/activities/sectors.ts`**، محروسة بفحص. */
-export const SECTORS = ['REALESTATE', 'RESTAURANT', 'RETAIL', 'PHARMACY', 'CONTRACTING', 'FREELANCE', 'OTHER'] as const;
-export type Sector = (typeof SECTORS)[number];
+/** القطاعات — **مولَّدةٌ من `apps/api/src/activities/sectors.ts`** عبر سجلّ التعدادات (`ق-١٣٨٤`)، بترتيب المصدر. */
+export const SECTORS = SECTOR_VALUES;
+export type { Sector };
 
 export const SECTOR_LABELS: Record<Sector, string> = {
   REALESTATE: 'مكتب عقاري',

@@ -1,7 +1,8 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
+import type { CompanyStatus } from '@mad-app/shared/api/enums';
 
-export type CompanyStatus = 'ACTIVE' | 'FROZEN' | 'STOPPED' | 'CLOSED';
+export type { CompanyStatus };
 
 export interface Company {
   id: string;

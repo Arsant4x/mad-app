@@ -1,6 +1,7 @@
 import { apiClient } from './client';
+import type { ZatcaOnboardingStatus } from '@mad-app/shared/api/zatca-enums';
 
-export type ZatcaOnboardingStatus = 'NOT_STARTED' | 'AWAITING_OTP' | 'COMPLIANCE_ISSUED' | 'PRODUCTION_ISSUED' | 'FAILED';
+export type { ZatcaOnboardingStatus };
 
 /** Deliberately carries no key material — only whether each piece exists. The
  * private key and certificates never leave the server. */

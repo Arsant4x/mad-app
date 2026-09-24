@@ -1,9 +1,10 @@
 import { apiClient } from './client';
 import type { Product } from './products';
 import type { Warehouse } from './warehouses';
+import type { StockMovementType, StockStatus } from '@mad-app/shared/api/enums';
 
-export type StockMovementType = 'IN' | 'OUT' | 'TRANSFER' | 'ADJUSTMENT';
-export type StockStatus = 'out' | 'low' | 'available';
+export type { StockMovementType };
+export type { StockStatus };
 
 export interface StockMovement {
   id: string;
