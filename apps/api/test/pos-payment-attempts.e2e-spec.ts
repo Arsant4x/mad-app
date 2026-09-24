@@ -6,6 +6,7 @@ import request from 'supertest';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { IntegrationsService } from '../src/integrations/integrations.service';
 import { MockTerminalAdapter, TERMINAL_ADAPTERS } from '../src/integrations/payment-terminal.adapter';
 import { PosCardVerificationsService } from '../src/pos/pos-card-verifications.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
@@ -162,7 +163,7 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     expect(await invoiceBySale(attempt.clientSaleId)).toBeNull();
   });
 
-  it('[SPEC 27.1] ⑥ نقرتان لا تشحنان مرّتين — وفاتورةٌ واحدة', async () => {
+  it('[SPEC 27.1] ⑥ نقرتان لا تشحنان مرّتين — وفاتورةٌ واحدة (التداخلُ مفروضٌ لا منتظَر — §8.8)', async () => {
     const calls: string[] = [];
     const real = MockTerminalAdapter.prototype.charge;
     jest.spyOn(mock, 'charge').mockImplementation(async (c, r) => {
@@ -171,6 +172,14 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
       return real.call(mock, c, r);
     });
     const attempt = await createAttempt(ringing());
+    // ⚠️ **التداخلُ يُفرض**: كلا الطلبين يقرأ المحاولةَ «لم تُرسل» ثم ينتظر قبل انتقالها — فلو كان الانتقالُ غيرَ مشروطٍ
+    //    بالحالة لشحن الاثنان. بلا هذا التأخير قد يتعاقبان فيمرّ الحارسُ على الكسر (حارسُ سباقٍ يشهد لنفسه).
+    const integrations = app.get(IntegrationsService);
+    const realGateway = integrations.activeGateway.bind(integrations);
+    jest.spyOn(integrations, 'activeGateway').mockImplementation(async (tx) => {
+      await sleep(400);
+      return realGateway(tx);
+    });
     const [a, b] = await Promise.all([charge(attempt.id), charge(attempt.id)]);
     expect([a.status, b.status]).toEqual([201, 201]);
     expect(calls).toEqual([attempt.id]);
