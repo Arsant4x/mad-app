@@ -39,6 +39,10 @@ export interface ActivityInput {
   name: string;
   activityType?: string;
   sector?: Sector;
+}
+
+/** التعطيلُ تعديلٌ لا إنشاء — `CreateActivityDto` لا يعرف `disabled` فيردّه `400` (`ق-١٣٨٤`). */
+export interface ActivityUpdateInput extends Partial<ActivityInput> {
   disabled?: boolean;
 }
 
@@ -52,7 +56,7 @@ export interface ScreenChangePreview {
 
 export const listActivities = () => apiClient.get<Activity[]>('/activities').then((r) => r.data);
 export const createActivity = (dto: ActivityInput) => apiClient.post<Activity>('/activities', dto).then((r) => r.data);
-export const updateActivity = (id: string, dto: Partial<ActivityInput>) => apiClient.patch<Activity>(`/activities/${id}`, dto).then((r) => r.data);
+export const updateActivity = (id: string, dto: ActivityUpdateInput) => apiClient.patch<Activity>(`/activities/${id}`, dto).then((r) => r.data);
 export const deleteActivity = (id: string) => apiClient.delete(`/activities/${id}`).then(() => undefined);
 
 export const previewPrimaryActivity = (activityId: string | null) =>

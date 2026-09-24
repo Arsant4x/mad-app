@@ -148,8 +148,12 @@ export interface OpenPrepayment {
  */
 export const CREDIT_LIMIT_EXCEEDED = 'CREDIT_LIMIT_EXCEEDED';
 
-/** لا `status` هنا (`ق-١١٩٨`/②): حالةُ السداد تُشتقّ من المقبوضات ولا تُرسَل من الواجهة. */
-export type UpdateInvoiceInput = Partial<CreateInvoiceInput>;
+/**
+ * لا `status` هنا (`ق-١١٩٨`/②): حالةُ السداد تُشتقّ من المقبوضات ولا تُرسَل من الواجهة.
+ * ⚖️ **وما يقبله `UpdateInvoiceDto` وحدَه** (`ق-١٣٨٤`): لا `issuedAt` ولا `issuedOffsetMin` ولا `creditOverride` ولا `prepaymentInvoiceIds` —
+ * كانت تُورث من نوع الإنشاء فيُردّ بها `400`.
+ */
+export type UpdateInvoiceInput = Partial<Pick<CreateInvoiceInput, 'customerId' | 'issueDate' | 'dueDate' | 'notes' | 'branchId' | 'lines'>>;
 
 export interface CreateCreditNoteInput {
   /** Required — ZATCA rejects a credit note without its reason. */

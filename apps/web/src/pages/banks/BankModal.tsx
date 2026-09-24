@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
-import { BranchPicker } from '../../components/BranchPicker';
+import { BranchPicker, BranchReadOnly } from '../../components/BranchPicker';
 import type { Bank, BankInput } from '../../api/banks';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
@@ -33,13 +33,14 @@ export function BankModal({
     }
     setSaving(true);
     try {
-      await onSave({
+      const fields = {
         name: name.trim(),
         iban: iban.trim() || undefined,
         openingBalance: parseFloat(String(openingBalance)) || 0,
         openingDate,
-        branchId: branchId || undefined,
-      });
+      };
+      // 🔴 ق-١٣٨٤: الفرعُ عند الإنشاء وحدَه — `UpdateBankDto` لا يقبله، وإرسالُه في التعديل كان يُردّ `400`.
+      await onSave(editing ? fields : { ...fields, branchId: branchId || undefined });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_bank_save')));
     } finally {
@@ -74,7 +75,7 @@ export function BankModal({
             <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
           </div>
         </div>
-        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
+        {editing ? <BranchReadOnly branches={branches} branchId={editing.branchId} /> : <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />}
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

@@ -37,3 +37,19 @@ export function BranchPicker({
     </div>
   );
 }
+
+/**
+ * الفرعُ **قراءةً** — لسجلٍّ يُحدَّد فرعُه عند الإنشاء ولا يقبل خادمُه تغييرَه في التعديل (`ق-١٣٨٤`: الحسابُ البنكيّ · الموظّف).
+ * كان المُنتقي يُعرض في التعديل فيُرسَل الفرعُ ويُردّ الحفظُ كلُّه `400` — **فالشاشةُ تقول الحقيقة بدل أن تعرض اختياراً يُردّ**.
+ * ولا يظهر لمنشأةٍ بلا فروع، كالمُنتقي نفسِه.
+ */
+export function BranchReadOnly({ branches, branchId, label = 'الفرع' }: { branches: Branch[]; branchId: string | null; label?: string }) {
+  if (branches.length === 0) return null;
+  const name = branchId ? (branches.find((b) => b.id === branchId)?.name ?? '—') : '— على مستوى الشركة —';
+  return (
+    <div className="field">
+      <label>{label}</label>
+      <p className="hint">{name} · يُحدَّد عند الإنشاء ولا يُغيَّر</p>
+    </div>
+  );
+}

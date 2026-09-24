@@ -25,7 +25,13 @@ export interface CompanyInput {
 
 export const listCompanies = () => apiClient.get<Company[]>('/companies').then((r) => r.data);
 export const createCompany = (dto: CompanyInput) => apiClient.post<Company>('/companies', dto).then((r) => r.data);
-export const updateCompany = (id: string, dto: Partial<CompanyInput>) => apiClient.patch<Company>(`/companies/${id}`, dto).then((r) => r.data);
+/**
+ * ⚖️ `ق-١٣١٧` بالنوع لا بالتذكّر (`ق-١٣٨٤`): `UpdateCompanyDto` لا يقبل `subStart`/`subEnd` — الاشتراكُ مسارُ المالية وحدَه
+ * (`updateCompanySubscription`)؛ فنوعُ التعديل يمنعهما `never` كي لا يُسلَّم إليه كائنُ إنشاءٍ يحملهما.
+ */
+export type CompanyUpdateInput = Partial<Omit<CompanyInput, 'subStart' | 'subEnd'>> & { subStart?: never; subEnd?: never };
+
+export const updateCompany = (id: string, dto: CompanyUpdateInput) => apiClient.patch<Company>(`/companies/${id}`, dto).then((r) => r.data);
 
 /**
  * **تغييرُ الاشتراك — مسارٌ بدوره** (`ق-١٣١٧`): الاشتراكُ **مالٌ يُحصَّل ويُردّ**، فللمالية

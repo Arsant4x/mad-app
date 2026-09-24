@@ -27,9 +27,15 @@ export interface EmployeeInput {
   status?: EmployeeStatus;
 }
 
-export const listEmployees = (includeArchived = false) => apiClient.get<Employee[]>('/employees', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
+/**
+ * 🔴 `ق-١٣٨٤` — **الفرعُ يُحدَّد عند الإنشاء**: `UpdateEmployeeDto` لا يقبل `branchId` (و`forbidNonWhitelisted` يردّ `400`)،
+ * فنوعُ التعديل يمنعه **بالبناء** — `never` لا الإغفال، كي لا يُسلَّم إليه كائنُ إنشاءٍ يحمله (وهكذا كان يُردّ تعديلُ كلِّ موظّفٍ له فرع).
+ */
+export type EmployeeUpdateInput = Partial<Omit<EmployeeInput, 'branchId'>> & { branchId?: never };
+
+export const listEmployees =(includeArchived = false) => apiClient.get<Employee[]>('/employees', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createEmployee = (dto: EmployeeInput) => apiClient.post<Employee>('/employees', dto).then((r) => r.data);
-export const updateEmployee = (id: string, dto: Partial<EmployeeInput>) => apiClient.patch<Employee>(`/employees/${id}`, dto).then((r) => r.data);
+export const updateEmployee = (id: string, dto: EmployeeUpdateInput) => apiClient.patch<Employee>(`/employees/${id}`, dto).then((r) => r.data);
 export const deleteEmployee = (id: string) => apiClient.delete(`/employees/${id}`);
 
 /** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
