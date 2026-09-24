@@ -18,8 +18,9 @@ jest.setTimeout(128000);
  *
  * **① المساراتُ الموثَّقة — منشأةٌ معزولة تمرّ بها واحداً بعد آخر، والفرقُ يُقرأ بعد كلِّ خطوة ويجب أن يكون صفراً**:
  * رصيدٌ افتتاحيّ · شراءٌ باستلامٍ ضمنيّ · بيع · مرتجعُ بيعٍ سليم · شطب · تحويلٌ بين مستودعين · إشعارُ سعرٍ من المورّد ·
- * تكلفةٌ محمَّلة · بيعٌ بعد الرفع · إدخالٌ وإخراجٌ يدويّان وعكسُ الإخراج (معلَنةٌ بقرارها في `manualOneSided`) ·
- * إعادةُ بضاعةٍ إلى المورّد · شراءٌ باستلامٍ مسجَّلٍ ثم إلغاؤه.
+ * تكلفةٌ محمَّلة · بيعٌ بعد الرفع · إدخالٌ وإخراجٌ يدويّان وعكسُ الإخراج (**قيدُها على `5810` منذ `ق-١٣٦٣` — والمعادلةُ صارمة**) ·
+ * إعادةُ بضاعةٍ إلى المورّد · شراءٌ باستلامٍ مسجَّلٍ ثم إلغاؤه · إخراجٌ يدويٌّ وراء الرصيد يُسوّيه استلام (فرقُه على `5810` لا `5100`) ·
+ * وقديمٌ بلا قيد **يُعدّ ولا يُطرح** (`legacyManualUnposted` — الفرقُ يساوي سالبَه).
  *
  * **② العيوبُ الثلاثة (`ق-١٣٤٤`) — تُقاس ولا تُصلَح**: منشأةٌ ثانية تبني ترتيبَها — بيعٌ ثم تحويلٌ ثم شطبٌ ثم مرتجعٌ ثم تكلفةٌ
  * محمَّلة ثم مرتجعٌ ثانٍ — **وتوكيداتُها تسجّل حجمَ كلِّ عيبٍ رقماً**: فحين يُصلَح البندُ المستقلّ يسقط توكيدُه ويُحدَّث.
@@ -71,6 +72,13 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       const res = await get('/accounts').expect(200);
       return Object.fromEntries((res.body as { code: string; balance: string }[]).map((a) => [a.code, Number(a.balance)]));
     };
+    /** تغيُّرُ أرصدة الدليل حول فعلٍ واحد — لكلِّ رمزٍ بإشارته الطبيعية (المدينُ موجبٌ في الأصول والمصروفات). */
+    const deltaOf = async (fn: () => Promise<void>) => {
+      const before = await ledger();
+      await fn();
+      const after = await ledger();
+      return (code: string) => Number(((after[code] ?? 0) - (before[code] ?? 0)).toFixed(2));
+    };
     const layersOf = (pid: string) =>
       tenantPrisma.runInTenantContext(company.companyId, async (tx) =>
         (await tx.inventoryLayer.findMany({ where: { productId: pid }, orderBy: [{ acquiredAt: 'asc' }, { createdAt: 'asc' }] })).map((l) => ({
@@ -106,7 +114,7 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
     };
     const receiptOf = async (purchaseId: string) => (await get(`/purchases/${purchaseId}/receipts`).expect(200)).body.receipts[0].id as string;
 
-    return { company, get, post, del, supplierId, warehouseA, warehouseB, branchId, product, recon, ledger, layersOf, buy, sell, returnSale, writeOff, move, freight, receiptOf };
+    return { company, get, post, del, supplierId, warehouseA, warehouseB, branchId, product, recon, ledger, deltaOf, layersOf, buy, sell, returnSale, writeOff, move, freight, receiptOf };
   }
 
   describe('① المساراتُ الموثَّقة — الفرقُ صفرٌ بعد كلِّ خطوة', () => {
@@ -134,7 +142,7 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       await s.post('/inventory/opening').send({ openingDate: today(), lines: [{ productId: q, warehouseId: s.warehouseA, qty: 10, unitCost: 4, acquiredAt: daysAgo(5) }] }).expect(201);
       const r = await balanced('opening');
       // مصادقةُ المسبار: يرى ما أُعلن — لا صفرَ على صفر.
-      expect(r).toEqual(expect.objectContaining({ ledger: 40, layers: 40, manualOneSided: 0, openProvisional: 0 }));
+      expect(r).toEqual(expect.objectContaining({ ledger: 40, layers: 40, openProvisional: 0, legacyManualUnposted: 0 }));
     });
 
     it('① شراءٌ باستلامٍ ضمنيّ · ② بيع · ③ مرتجعٌ سليم · ④ شطب · ⑤ تحويل', async () => {
@@ -160,14 +168,29 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       await balanced('sale-after-raise');
     });
 
-    it('⑨ إدخالٌ يدويّ · ⑩ إخراجٌ يدويّ · ⑪ عكسُه — تتحرّك الطبقاتُ بلا قيدٍ بقرارٍ قائم، ويُعلَن ذلك رقماً', async () => {
-      await s.move({ productId: q, warehouseId: s.warehouseA, type: 'IN', qty: 5, unitCost: 4 }).expect(201);
-      const afterIn = await balanced('manual-in');
-      expect(afterIn.manualOneSided).toBe(20);
-      manualOutId = (await s.move({ productId: q, warehouseId: s.warehouseA, type: 'OUT', qty: 2 }).expect(201)).body.id;
-      expect((await balanced('manual-out')).manualOneSided).toBe(12);
-      await s.post(`/inventory/movements/${manualOutId}/reverse`).send({}).expect(201);
-      expect((await balanced('manual-out-reversed')).manualOneSided).toBe(20);
+    it('⑨ إدخالٌ يدويّ · ⑩ إخراجٌ يدويّ · ⑪ عكسُه — ⚖️ ق-١٣٦٣: لكلٍّ قيدٌ على فروقات المخزون (5810) مقابل 1300 بما تحرّك في الطبقات', async () => {
+      // ⓐ الإدخال: خمسٌ بأربعة ⟵ مدين 1300 / دائن 5810 بعشرين — والحركةُ تحمل قيدَها.
+      let delta = await s.deltaOf(async () => {
+        const inMove = (await s.move({ productId: q, warehouseId: s.warehouseA, type: 'IN', qty: 5, unitCost: 4 }).expect(201)).body;
+        expect(typeof inMove.journalEntryId).toBe('string');
+      });
+      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 20, variance: -20, cogs: 0 });
+      expect(await balanced('manual-in')).toEqual(expect.objectContaining({ legacyManualUnposted: 0, openProvisional: 0 }));
+
+      // ⓑ الإخراج: اثنتان من طبقة الافتتاح (FIFO بأربعة) ⟵ مدين 5810 / دائن 1300 بثمانية — بتكلفة الطبقة لا البطاقة.
+      delta = await s.deltaOf(async () => {
+        manualOutId = (await s.move({ productId: q, warehouseId: s.warehouseA, type: 'OUT', qty: 2 }).expect(201)).body.id;
+      });
+      expect({ inv: delta('1300'), variance: delta('5810') }).toEqual({ inv: -8, variance: 8 });
+      await balanced('manual-out');
+
+      // ⓒ العكس: مرآةُ قيد أصله بما عاد إلى الطبقات.
+      delta = await s.deltaOf(async () => {
+        const rev = (await s.post(`/inventory/movements/${manualOutId}/reverse`).send({}).expect(201)).body;
+        expect(typeof rev.journalEntryId).toBe('string');
+      });
+      expect({ inv: delta('1300'), variance: delta('5810') }).toEqual({ inv: 8, variance: -8 });
+      expect((await balanced('manual-out-reversed')).legacyManualUnposted).toBe(0);
     });
 
     it('⑫ إعادةُ بضاعةٍ إلى المورّد · ⑬ شراءٌ باستلامٍ مسجَّلٍ ثم إلغاؤه', async () => {
@@ -179,6 +202,59 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       await balanced('registered-receipt');
       await s.del(`/purchases/${later.id}/receipts/${receipt.id}`).expect(204);
       await balanced('receipt-voided');
+    });
+
+    it('⑭ إخراجٌ يدويٌّ وراء الرصيد ثم استلامٌ يسوّيه — المؤقّتُ مقيَّدٌ على 5810، وفرقُ تسويته على 5810 لا على تكلفة المبيعات (ق-١٣٦٣)', async () => {
+      const r = await s.product('صنف المؤقّت اليدويّ', 10);
+      // لا طبقةَ للصنف: الاثنتان مؤقّتتان ببطاقته (عشرة) — والقيدُ بهما.
+      let delta = await s.deltaOf(async () => {
+        await s.move({ productId: r, warehouseId: s.warehouseA, type: 'OUT', qty: 2 }).expect(201);
+      });
+      expect({ inv: delta('1300'), variance: delta('5810') }).toEqual({ inv: -20, variance: 20 });
+      expect((await balanced('manual-out-provisional')).openProvisional).toBe(20);
+
+      // يصل الشراءُ بخمسٍ باثني عشر: تُسوّى الاثنتان من طبقته (+٤ فرقاً) — على الفروقات، وتكلفةُ المبيعات لا تتحرّك.
+      delta = await s.deltaOf(async () => {
+        await s.buy(r, 5, 12).expect(201);
+      });
+      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 56, variance: 4, cogs: 0 });
+      expect((await balanced('manual-provisional-settled')).openProvisional).toBe(0);
+    });
+
+    it('⑯ مؤقّتُ إخراجٍ يدويٍّ قديمٍ بلا قيد يُسوّيه استلام — قيمتُه كلُّها تخرج الآن على 5810 (حدثُ اليوم لا فرقٌ عن قيدٍ لم يقع)', async () => {
+      const u = await s.product('صنف المؤقّت القديم', 10);
+      // كما كتبته الشيفرةُ قبل ق-١٣٦٣: إخراجٌ يدويٌّ وراء الرصيد — استهلاكٌ مؤقّتٌ بالبطاقة (عشرة) بلا قيد.
+      await tenantPrisma.runInTenantContext(s.company.companyId, async (tx) => {
+        const m = await tx.stockMovement.create({
+          data: { companyId: s.company.companyId, productId: u, warehouseId: s.warehouseA, type: 'OUT', qty: 2, date: new Date(), origin: 'MANUAL', reason: 'إخراجٌ قديمٌ بلا قيد' },
+        });
+        await tx.inventoryConsumption.create({ data: { companyId: s.company.companyId, layerId: null, movementId: m.id, qty: 2, unitCost: 10 } });
+      });
+      // لم يُقيَّد فلا يُعدّ في المؤقّت المفتوح، ولا طبقةَ حرّكها — الفرقُ صفر.
+      expect(await balanced('legacy-provisional-open')).toEqual(expect.objectContaining({ openProvisional: 0, legacyManualUnposted: 0 }));
+
+      const delta = await s.deltaOf(async () => {
+        await s.buy(u, 5, 12).expect(201);
+      });
+      // الاستلامُ 60 على 1300، والتسويةُ تُخرج الوحدتين بقيمتهما كاملةً (24) على 5810 — لا فرقاً (4) عن مؤقّتٍ لم يُقيَّد أصلاً.
+      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 36, variance: 24, cogs: 0 });
+      await balanced('legacy-provisional-settled');
+    });
+
+    it('⑮ قديمٌ بلا قيد (سبق ق-١٣٦٣) يُعدّ ولا يُطرح — الحارسُ صارم: الفرقُ يساوي سالبَ ما حرّكه القديم', async () => {
+      const t = await s.product('صنف القديم', 7);
+      // صفٌّ كما كتبته الشيفرةُ قبل ق-١٣٦٣: حركةٌ يدوية وطبقتُها بلا قيد — يُكتب مباشرةً لأن المسارَ لم يعد ينتجه.
+      await tenantPrisma.runInTenantContext(s.company.companyId, async (tx) => {
+        const m = await tx.stockMovement.create({
+          data: { companyId: s.company.companyId, productId: t, warehouseId: s.warehouseA, type: 'IN', qty: 3, date: new Date(), origin: 'MANUAL', reason: 'قديمٌ بلا قيد' },
+        });
+        await tx.inventoryLayer.create({
+          data: { companyId: s.company.companyId, productId: t, warehouseId: s.warehouseA, qtyReceived: 3, qtyRemaining: 3, unitCost: 7, acquiredAt: new Date(), sourceType: 'ADJUSTMENT', sourceMovementId: m.id },
+        });
+      });
+      const r = await s.recon();
+      // مصادقةُ المسبار بالعكس: لو بقي «اليدويّ» مطروحاً لكان الفرقُ صفراً — وهو −٢١ مسمّىً بمصدره.
+      expect({ legacy: r.legacyManualUnposted, difference: r.difference }).toEqual({ legacy: 21, difference: -21 });
     });
   });
 

@@ -7,7 +7,7 @@ import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
 import { closeLayerExactly, consumeFifo, createLayerFromMovement, restoreConsumption, transferLayers } from './costing.util';
-import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { postManualStockEntry, postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../common/batches/declared-limits';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
@@ -121,7 +121,11 @@ export class InventoryService {
       });
 
       // ㉘ طبقةٌ للداخل (وتسويةُ المؤقّت المفتوح بها)، استهلاكٌ للخارج، ونقلُ طبقاتٍ للتحويل — كما الاستلامُ والبيع.
+      // ⚖️ ق-١٣٦٣ — **وقيدٌ بما تحرّك في الطبقات** على فروقات المخزون مقابل `1300` (نقضٌ لـ«لا قيدَ للحركة اليدوية»)؛ والتحويلُ لا قيدَ له
+      // (القيمةُ تنتقل بين رفّين ولا تغادر المخزون).
       const when = new Date(dto.date);
+      const ref = `${dto.type === 'ADJUSTMENT' ? 'تسوية' : dto.type === 'IN' ? 'إدخال' : 'إخراج'} ${movement.id.slice(0, 8)}${dto.reason ? ` — ${dto.reason}` : ''}`;
+      let entryId: string | null = null;
       if (entering) {
         const layerId = await createLayerFromMovement(tx, companyId, {
           productId: dto.productId,
@@ -133,13 +137,18 @@ export class InventoryService {
           movementId: movement.id,
           batchId,
         });
+        const entry = await postManualStockEntry(tx, companyId, { branchId: movement.branchId, ref, date: when, baseValue: Math.abs(dto.qty) * dto.unitCost! });
+        entryId = entry?.id ?? null;
         const settled = await settleProvisionalConsumptions(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, layerId });
         if (settled.settled > 0) {
-          await postCogsSettlementEntry(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, baseDelta: settled.costDelta });
+          await postProvisionalSettlementEntries(tx, companyId, { branchId: movement.branchId, ref: `إدخالٌ يدويّ ${dto.date}`, date: when, byOrigin: settled.costDeltaByOrigin });
         }
       } else if (dto.type === 'OUT' || dto.type === 'ADJUSTMENT') {
         // ٥+٦ الإخراجُ اليدويّ ليس بيعاً — المنتهي يمرّ منه (`ق-١٠٨٢`).
-        await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id, exit: 'OTHER', date: when });
+        const consumed = await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id, exit: 'OTHER', date: when });
+        // بتكلفة ما خرج — ومنه المؤقّتُ (ما خرج وراء الرصيد) بآخر تكلفةٍ معروفة، تُسوّيه طبقةٌ تصل فيُرحَّل فرقُه على الفروقات.
+        const entry = await postManualStockEntry(tx, companyId, { branchId: movement.branchId, ref, date: when, baseValue: -consumed.totalCost });
+        entryId = entry?.id ?? null;
       } else if (dto.type === 'TRANSFER') {
         await transferLayers(tx, companyId, {
           productId: dto.productId,
@@ -150,13 +159,15 @@ export class InventoryService {
           date: when,
         });
       }
+      // الحركةُ تحمل قيدَها — فما بلا قيدٍ يُعرف قديماً (سبق ق-١٣٦٣) لا منسيّاً.
+      if (entryId) await tx.stockMovement.update({ where: { id: movement.id }, data: { journalEntryId: entryId } });
 
       // Soft warning only — matches the mockup's non-blocking "quantity
       // exceeds available balance, continue anyway?" confirm: the movement
       // is never rejected for going negative, the frontend just gets enough
       // information to flag it if it wants to.
       const resultingQty = await currentStockQty(tx, dto.productId, dto.warehouseId);
-      return { ...movement, resultingQty };
+      return { ...movement, journalEntryId: entryId, resultingQty };
     });
   }
 
@@ -377,18 +388,35 @@ export class InventoryService {
       const reason = `عكسُ الحركة ${original.id.slice(0, 8)}${original.reason ? ` — ${original.reason}` : ''}`;
       const base = { companyId, branchId: original.branchId, productId: original.productId, date: new Date(), reason, origin: 'MANUAL' as const, reversalOfId: original.id };
 
+      /**
+       * ⚖️ ق-١٣٦٣ — **العكسُ يُقيَّد إن قُيّد أصلُه**: مرآةُ قيده بما تحرّك فعلاً (الطبقةُ تُقفل بتكلفتها اليوم · والمستعادُ بتكلفة ما خرج).
+       * **وأصلٌ سبق البناء بلا قيد لا يُقيَّد عكسُه** — وإلا خرج من الدفتر ما لم يدخله.
+       */
+      const mirror = async (reversalId: string, baseValue: number) => {
+        if (!original.journalEntryId) return null;
+        const entry = await postManualStockEntry(tx, companyId, { branchId: original.branchId, ref: reason, date: base.date, baseValue });
+        if (entry) await tx.stockMovement.update({ where: { id: reversalId }, data: { journalEntryId: entry.id } });
+        return entry?.id ?? null;
+      };
+
       if (entering) {
         const layers = await tx.inventoryLayer.findMany({ where: { sourceMovementId: original.id } });
         if (layers.some((l) => Number(l.qtyRemaining) !== Number(l.qtyReceived))) throw new ConflictException(MSG.movement_layer_consumed);
         const reversal = await tx.stockMovement.create({ data: { ...base, warehouseId: original.warehouseId, type: 'OUT', qty }, include: MOVEMENT_INCLUDE });
-        for (const l of layers) await closeLayerExactly(tx, companyId, { layerId: l.id, movementId: reversal.id });
-        return { ...reversal, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
+        let closedValue = 0;
+        for (const l of layers) {
+          const closed = await closeLayerExactly(tx, companyId, { layerId: l.id, movementId: reversal.id });
+          closedValue += closed.qty * closed.unitCost;
+        }
+        const journalEntryId = await mirror(reversal.id, -closedValue);
+        return { ...reversal, journalEntryId, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
       }
 
       if (original.type === 'OUT' || original.type === 'ADJUSTMENT') {
-        await restoreConsumption(tx, companyId, original.id);
+        const restored = await restoreConsumption(tx, companyId, original.id);
         const reversal = await tx.stockMovement.create({ data: { ...base, warehouseId: original.warehouseId, type: 'IN', qty }, include: MOVEMENT_INCLUDE });
-        return { ...reversal, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
+        const journalEntryId = await mirror(reversal.id, restored.restoredCost);
+        return { ...reversal, journalEntryId, resultingQty: await currentStockQty(tx, original.productId, original.warehouseId) };
       }
 
       // TRANSFER: طبقاتُ المقصِد التي أنشأها التحويل تُقفل، والمصدرُ يستعيد ما استُهلك منه.

@@ -7,6 +7,7 @@ import { purchaseExpenseAccountCode } from '../common/purchase-categories';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.util';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
+import { getOrCreateInventoryVarianceAccount } from './inventory-variance-account.util';
 import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
@@ -363,6 +364,63 @@ export async function postCogsSettlementEntry(
     auto: true,
     branchId: c.branchId ?? null,
   });
+}
+
+/**
+ * ⚖️ `ق-١٣٦٣` — **قيدُ الحركة اليدوية**: حسابُ فروقات المخزون مقابل حساب المخزون، في الاتجاهين.
+ *
+ * `baseValue` بإشارته: **موجبٌ** = قيمةٌ دخلت الرفّ (إدخالٌ · عكسُ إخراج) ⟵ مدين `1300` / دائن الفروقات؛ **وسالبٌ** = قيمةٌ خرجت
+ * (إخراجٌ · عكسُ إدخال · فرقُ تسويةِ مؤقّتٍ يدويّ) ⟵ مدين الفروقات / دائن `1300`. والقيمةُ **ما تحرّك في الطبقات فعلاً** (تكلفةُ الطبقة
+ * المُنشأة أو المستهلَكة) — لا سعرُ البطاقة. وصفرٌ لا قيد. ويخضع لقفل الفترات في `createJournalEntry`.
+ *
+ * **ويُنقض به** «ولا قيدَ في الدفتر — كما لم يكن للحركة اليدوية قيد» (قراءةُ ㉘ المعلَنة) — بنصّ المالك لا بقراءة.
+ */
+export async function postManualStockEntry(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; ref: string; date: Date; baseValue: number },
+) {
+  const value = round2(c.baseValue);
+  if (Math.abs(value) < 0.005) return null;
+  const inventoryAccountId = await getOrCreateInventoryAccount(tx, companyId);
+  const varianceAccountId = await getOrCreateInventoryVarianceAccount(tx, companyId);
+  const amount = Math.abs(value);
+  const lines: PostingLine[] =
+    value > 0
+      ? [
+          { accountId: inventoryAccountId, debit: amount, credit: 0 },
+          { accountId: varianceAccountId, debit: 0, credit: amount },
+        ]
+      : [
+          { accountId: varianceAccountId, debit: amount, credit: 0 },
+          { accountId: inventoryAccountId, debit: 0, credit: amount },
+        ];
+  return createJournalEntry(tx, {
+    companyId,
+    date: c.date,
+    memo: `حركةُ مخزونٍ يدوية — ${c.ref}`,
+    lines,
+    auto: true,
+    branchId: c.branchId ?? null,
+  });
+}
+
+/**
+ * **فرقُ تسوية المؤقّت يُرحَّل على حساب مصدره** (`ق-١٣٦٣`): المؤقّتُ من بيعٍ فرقُه تكلفةُ مبيعات (`5100` — كما كان)، **ومن حركةٍ يدويةٍ
+ * فرقُه فروقاتُ المخزون** — فالإخراجُ اليدويُّ قُيّد على الفروقات بتكلفته المؤقّتة، وتصحيحُها يتبعه. ⚠️ **وما سواهما** (الشطبُ ·
+ * التحويل) **على `5100` كما كان** — عائلةُ «سوء التوزيع» (`ق-١٣٦٤`) معلَنةً هناك لا مصلَحةً هنا.
+ */
+export async function postProvisionalSettlementEntries(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  c: { branchId?: string | null; ref: string; date: Date; byOrigin: Partial<Record<string, number>> },
+) {
+  const manual = round2(c.byOrigin.MANUAL ?? 0);
+  const rest = round2(Object.entries(c.byOrigin).reduce((t, [origin, v]) => (origin === 'MANUAL' ? t : t + (v ?? 0)), 0));
+  const cogs = await postCogsSettlementEntry(tx, companyId, { branchId: c.branchId, ref: c.ref, date: c.date, baseDelta: rest });
+  // الفرقُ الموجب = تكلفةٌ فعليةٌ أعلى من المؤقّتة ⟸ خرج من الرفّ أكثرُ مما قُيّد ⟸ قيمةٌ سالبة على الفروقات.
+  const variance = await postManualStockEntry(tx, companyId, { branchId: c.branchId, ref: `تسوية مؤقّتٍ يدويّ — ${c.ref}`, date: c.date, baseValue: -manual });
+  return { cogs, variance };
 }
 
 /**

@@ -30,13 +30,16 @@ export async function settleProvisionalConsumptions(
   tx: Tx,
   companyId: string,
   args: { productId: string; warehouseId: string; layerId: string },
-): Promise<{ settled: number; costDelta: number; settlements: SettlementRow[] }> {
+): Promise<{ settled: number; costDelta: number; costDeltaByOrigin: Partial<Record<string, number>>; settlements: SettlementRow[] }> {
   const open = await tx.inventoryConsumption.findMany({
     where: { companyId, layerId: null, settledBy: { is: null }, movement: { productId: args.productId, warehouseId: args.warehouseId } },
     orderBy: { createdAt: 'asc' },
+    // ق-١٣٦٣ — مصدرُ المؤقّت يقرّر حسابَ فرقه: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
+    include: { movement: { select: { origin: true, journalEntryId: true } } },
   });
   const settlements: SettlementRow[] = [];
   let costDelta = 0;
+  const byOrigin: Record<string, number> = {};
   for (const p of open) {
     const qty = Number(p.qty);
     const layer = await tx.inventoryLayer.findUnique({ where: { id: args.layerId }, select: { qtyRemaining: true, unitCost: true } });
@@ -52,8 +55,14 @@ export async function settleProvisionalConsumptions(
       select: { id: true },
     });
     const provisionalUnitCost = Number(p.unitCost);
-    costDelta += (actualUnitCost - provisionalUnitCost) * qty;
+    // ⚠️ إخراجٌ يدويٌّ سبق `ق-١٣٦٣` لم يُقيَّد أصلاً (لا قيدَ لحركته): فلا «فرقَ» عن مؤقّتٍ قُيّد — **القيمةُ كلُّها تخرج من الدفتر
+    // الآن**، حدثَ اليوم لا تحويلاً للقديم. وما قُيّد (بيعٌ · يدويٌّ بعد البناء) فرقُه وحدَه.
+    const unpostedManual = p.movement.origin === 'MANUAL' && p.movement.journalEntryId === null;
+    const delta = unpostedManual ? actualUnitCost * qty : (actualUnitCost - provisionalUnitCost) * qty;
+    costDelta += delta;
+    byOrigin[p.movement.origin] = (byOrigin[p.movement.origin] ?? 0) + delta;
     settlements.push({ provisionalId: p.id, settlementId: created.id, qty, provisionalUnitCost, actualUnitCost });
   }
-  return { settled: settlements.length, costDelta: roundTo(costDelta, 'LINE_AMOUNT'), settlements };
+  const costDeltaByOrigin = Object.fromEntries(Object.entries(byOrigin).map(([o, v]) => [o, roundTo(v, 'LINE_AMOUNT')]));
+  return { settled: settlements.length, costDelta: roundTo(costDelta, 'LINE_AMOUNT'), costDeltaByOrigin, settlements };
 }

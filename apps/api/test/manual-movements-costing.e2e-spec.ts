@@ -20,7 +20,8 @@ jest.setTimeout(45000);
  *   ③ التسويةُ الموجبة طبقةٌ كالإدخال.
  *   ④ التحويلُ ينقل الطبقةَ لا الكمّيةَ وحدَها — بتكلفتها وتاريخ اقتنائها إلى المستودع المقصِد.
  *   ⑤ **الوعدُ يُنفَّذ**: المؤقّتُ يُسوَّى عند وصول الاستلام (شراءً أو إدخالاً يدوياً) بصفٍّ يشير إلى الأصل،
- *      وفرقُ التكلفة في الدفتر (`5100` ⇄ `1300`)، ويخرج من قائمة المفتوحة التي صارت تُقرأ.
+ *      وفرقُ التكلفة في الدفتر، ويخرج من قائمة المفتوحة التي صارت تُقرأ. ⚖️ **وللمؤقّت اليدويّ على فروقات المخزون
+ *      (`5810` ⇄ `1300`) منذ `ق-١٣٦٣`** — أصلُه قُيّد عليها فتصحيحُه يتبعه؛ والبيعُ وحدَه على `5100`.
  *   ⑥ حارسُ الانحراف: لكلِّ (صنف · مستودع) — Σ المتبقّي في الطبقات − Σ المؤقّت المفتوح = رصيدُ الحركات.
  * منشأةٌ معزولة تُزال في الختام.
  */
@@ -145,7 +146,7 @@ describe('㉘ الحركاتُ اليدوية عبر طبقات التكلفة �
   }, 60000);
 
   it('⑤ الوعدُ يُنفَّذ: ما سبق استلامَه يُسوَّى عند وصول الاستلام — شراءً أو إدخالاً — بصفٍّ يشير إلى الأصل وفرقِ تكلفةٍ في الدفتر، ويخرج من المفتوحة', async () => {
-    // الاستلامُ الحقيقيّ (شراء): البيعُ قبله بتكلفة البطاقة 7، والاستلامُ بـ9 ⇒ فرقٌ 2 × 3 = 6 مديناً على 5100
+    // الاستلامُ الحقيقيّ (شراء): الإخراجُ اليدويّ قبله بتكلفة البطاقة 7، والاستلامُ بـ9 ⇒ فرقٌ 2 × 3 = 6 مديناً على 5810 (ق-١٣٦٣) لا 5100
     const p = await product('صنفٌ يُستلم لاحقاً', 7);
     const out = await move({ productId: p, warehouseId: whA, type: 'OUT', qty: 3 }).expect(201);
     expect((await consumptionsOf(out.body.id)).map((c) => [num(c.qty), num(c.unitCost), c.layerId])).toEqual([[3, 7, null]]);
@@ -166,12 +167,11 @@ describe('㉘ الحركاتُ اليدوية عبر طبقات التكلفة �
     expect((await openProvisional()).some((o) => o.movementId === out.body.id)).toBe(false);
 
     const entry = await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.journalEntry.findFirst({ where: { memo: { contains: 'تسوية استهلاكٍ مؤقّت' } }, orderBy: { createdAt: 'desc' }, include: { lines: { include: { account: true } } } }),
+      tx.journalEntry.findFirst({ where: { memo: { contains: 'تسوية مؤقّتٍ يدويّ' } }, orderBy: { createdAt: 'desc' }, include: { lines: { include: { account: true } } } }),
     );
     expect(entry).not.toBeNull();
     const byCode = Object.fromEntries(entry!.lines.map((l) => [l.account.code, [num(l.debit), num(l.credit)]]));
-    expect(byCode['5100']).toEqual([6, 0]);
-    expect(byCode['1300']).toEqual([0, 6]);
+    expect(byCode).toEqual({ '5810': [6, 0], '1300': [0, 6] });
 
     // والإدخالُ اليدويّ يُسوّي أيضاً — وبالاتجاه المقابل حين تكون التكلفةُ الحقيقية أقلّ: 2 × (4 − 5) = −2
     const q = await product('صنفٌ يُدخَل لاحقاً', 5);
@@ -183,11 +183,10 @@ describe('㉘ الحركاتُ اليدوية عبر طبقات التكلفة �
       [2, 4, true],
     ]);
     const entry2 = await tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.journalEntry.findFirst({ where: { memo: { contains: 'تسوية استهلاكٍ مؤقّت' } }, orderBy: { createdAt: 'desc' }, include: { lines: { include: { account: true } } } }),
+      tx.journalEntry.findFirst({ where: { memo: { contains: 'تسوية مؤقّتٍ يدويّ' } }, orderBy: { createdAt: 'desc' }, include: { lines: { include: { account: true } } } }),
     );
     const byCode2 = Object.fromEntries(entry2!.lines.map((l) => [l.account.code, [num(l.debit), num(l.credit)]]));
-    expect(byCode2['1300']).toEqual([2, 0]);
-    expect(byCode2['5100']).toEqual([0, 2]);
+    expect(byCode2).toEqual({ '1300': [2, 0], '5810': [0, 2] });
   }, 90000);
 
   it('⑥ حارسُ الانحراف: لكلِّ (صنف · مستودع) في المنشأة — Σ المتبقّي في الطبقات − Σ المؤقّت المفتوح = رصيدُ الحركات', async () => {

@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { resolveReceiptBatch } from '../common/batches/stock-batch.util';
 import { MSG } from '../common/i18n/messages';
-import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 
 /**
@@ -135,7 +135,8 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
     // التكلفة يُرحَّل على 5100/1300 — كان هذا السطرُ تعليقاً في `consumeFifo` بلا كاتب.
     const settled = await settleProvisionalConsumptions(tx, args.companyId, { productId: line.productId!, warehouseId, layerId: layer.id });
     if (settled.settled > 0) {
-      await postCogsSettlementEntry(tx, args.companyId, { branchId: args.branchId, ref: `استلام ${args.ref ?? ''}`.trim(), date: args.date, baseDelta: settled.costDelta });
+      // ق-١٣٦٣ — فرقُ كلِّ مؤقّتٍ على حساب مصدره: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
+      await postProvisionalSettlementEntries(tx, args.companyId, { branchId: args.branchId, ref: `استلام ${args.ref ?? ''}`.trim(), date: args.date, byOrigin: settled.costDeltaByOrigin });
     }
   }
 
