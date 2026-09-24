@@ -81,6 +81,9 @@ describe('[SPEC 27.1] مسارُ دفع الكاشير — الحكمُ لا ا�
     await app.init();
 
     co = await registerIsolatedCompany(app, 'paypath');
+    // عميلُ المرور قائمٌ كما في أيّ منشأةٍ بعد بيعها الأوّل — فيقيس ③ ذرّيةَ الإتمام وحدَها لا إنشاءَ العميل
+    // (إثباتُه بالعكس بمعاملةٍ مستقلّة للفاتورة سقط أوّلَ مرّةٍ بـ404: المستقلّةُ لا ترى عميلاً أُنشئ في الخارجية غيرِ الملتزمة).
+    await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل نقدي' }).expect(201);
     productId = (await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `مسار الدفع ${Date.now()}`, price: 100 }).expect(201)).body.id;
     await auth(http().post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
     connectionId = (await auth(http().post('/integrations')).send({ kind: 'PAYMENT_GATEWAY', provider: 'MOCK', credentials: { apiKey: 'paypath-262' } }).expect(201)).body.id;
