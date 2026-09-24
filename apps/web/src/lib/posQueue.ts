@@ -1,5 +1,5 @@
 import type { Product } from '../api/products';
-import type { PosPaymentMethod, PosPaymentPart, PosSaleLine } from '../api/pos';
+import type { PosPaymentMethod, PosPaymentMode, PosPaymentPart, PosSaleInput, PosSaleLine } from '../api/pos';
 
 /**
  * طابور مبيعات الأوفلاين (مستند §6 v2) — localStorage per company.
@@ -19,6 +19,11 @@ export interface QueuedSale {
   lines: PosSaleLine[];
   paymentMethod: PosPaymentMethod;
   payments?: PosPaymentPart[];
+  /**
+   * ⚖️ **رقمُ مرجع الجهاز من إيصاله** (`ق-١٣٩٧`) — لجزء البطاقة والربطُ فعّال: البيعُ دون اتصالٍ أُخذت بطاقتُه على جهازٍ
+   * يعمل بشبكته، ويُقبل بهذا الرقم لا بتأكيد الكاشير وحدَه، ويبقى غيرَ متحقَّقٍ حتى تطابقه تسويةُ الشبكة.
+   */
+  cardDeviceReference?: string;
   /** ما يلزم لعرض الإيصال أوفلاين — الأسماء والأسعار وقت البيع. */
   display: { name: string; quantity: number; unitPrice: number }[];
   total: number;
@@ -40,6 +45,41 @@ export interface CachedSellerProfile {
 const queueKey = (companyId: string) => `pos.queue.${companyId}`;
 const productsKey = (companyId: string) => `pos.products.${companyId}`;
 const sellerKey = (companyId: string) => `pos.seller.${companyId}`;
+const modeKey = (companyId: string) => `pos.paymentMode.${companyId}`;
+
+/**
+ * 🔴 **ما يُرسَل للمزامنة — حقولُ البيع وحدَها** (`ق-١٤٠١`).
+ *
+ * كان الطابورُ يُرسَل كما خُزِّن، بحقول العرض (`display` · `total` · `vatAmount` · `zatcaQr`) — والخادمُ يرفض كلَّ حقلٍ لا يعرفه
+ * (`forbidNonWhitelisted`)، **فمقيسٌ: `400` بأسمائها الأربعة، والبيعُ الأوفلاين لا يُزامَن أبداً** ويبقى في الطابور برسالة الرفض.
+ * فحقولُ العرض للإيصال المؤقّت على الجهاز، والسلكُ يحمل البيعَ وحدَه.
+ */
+export function wireSaleOf(sale: QueuedSale): PosSaleInput & { cardDeviceReference?: string } {
+  return {
+    clientSaleId: sale.clientSaleId,
+    offlineRef: sale.offlineRef,
+    ringAt: sale.ringAt,
+    ringOffsetMin: sale.ringOffsetMin,
+    lines: sale.lines,
+    paymentMethod: sale.paymentMethod,
+    ...(sale.payments ? { payments: sale.payments } : {}),
+    ...(sale.cardDeviceReference ? { cardDeviceReference: sale.cardDeviceReference } : {}),
+  };
+}
+
+/** وضعُ الدفع (أفعّالٌ ربطُ البوابة) آخرَ اتصال — به تعرف الشاشةُ أوفلاين أن البطاقةَ تحتاج رقمَ مرجع الجهاز. */
+export function cachePaymentMode(companyId: string, mode: PosPaymentMode): void {
+  localStorage.setItem(modeKey(companyId), JSON.stringify(mode));
+}
+
+export function readCachedPaymentMode(companyId: string): PosPaymentMode | null {
+  try {
+    const raw = localStorage.getItem(modeKey(companyId));
+    return raw ? (JSON.parse(raw) as PosPaymentMode) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function cacheSellerProfile(companyId: string, profile: CachedSellerProfile): void {
   localStorage.setItem(sellerKey(companyId), JSON.stringify(profile));

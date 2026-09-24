@@ -3,9 +3,46 @@ import { listProducts, type Product } from '../../api/products';
 import { listBranches, type Branch } from '../../api/branches';
 import { rateForCategory } from '../../lib/vat';
 import { BranchPicker } from '../../components/BranchPicker';
-import { closeShift, getCurrentShift, openShift, syncPosSale, type ClosedShift, type PosPaymentMethod, type PosPaymentPart, type PosSaleResponse, type PosShift } from '../../api/pos';
+import {
+  chargePaymentAttempt,
+  closeShift,
+  createPaymentAttempt,
+  getCurrentShift,
+  getPaymentMode,
+  listCardVerifications,
+  listOpenPaymentAttempts,
+  openShift,
+  resolvePaymentAttempt,
+  resolvePaymentAttemptWithEvidence,
+  syncPosSale,
+  type CardVerificationList,
+  type ClosedShift,
+  type PosPaymentAttempt,
+  type PosPaymentMethod,
+  type PosPaymentMode,
+  type PosPaymentPart,
+  type PosSaleInput,
+  type PosSaleResponse,
+  type PosShift,
+} from '../../api/pos';
 import { useAuth } from '../../auth/AuthContext';
-import { cacheProducts, cacheSellerProfile, enqueueSale, isNetworkError, newClientSaleId, newOfflineRef, readCachedProducts, readCachedSellerProfile, readQueue, removeFromQueue, type QueuedSale } from '../../lib/posQueue';
+import { usePermissions } from '../../auth/PermissionsContext';
+import {
+  cachePaymentMode,
+  cacheProducts,
+  cacheSellerProfile,
+  enqueueSale,
+  isNetworkError,
+  newClientSaleId,
+  newOfflineRef,
+  readCachedPaymentMode,
+  readCachedProducts,
+  readCachedSellerProfile,
+  readQueue,
+  removeFromQueue,
+  wireSaleOf,
+  type QueuedSale,
+} from '../../lib/posQueue';
 import { getCompanyProfile } from '../../api/companyProfile';
 import { ZatcaQr } from '../../components/ZatcaQr';
 import { buildPhase1Qr } from '../../lib/zatcaQr';
@@ -19,6 +56,26 @@ interface CartLine {
   /** ④B1 — خصمٌ مبلغاً على السطر (صفرٌ غياباً). */
   discount: number;
 }
+
+/** بيعٌ رُنّ على هذا الجهاز: لحظتُه وانحرافُه ومرجعُه المؤقّت إلزاميّةٌ — منها يومُ الفاتورة وطابعُ إيصاله (ق-١٨٥ · ق-١٨٨). */
+type RungSale = PosSaleInput & { offlineRef: string; ringAt: string; ringOffsetMin: number };
+
+/** رسالةُ الخادم كما هي — والتحقّقُ يعيد مصفوفةً فتُضمّ. */
+function messageOf(e: unknown, fallback: string): string {
+  const m = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+  return Array.isArray(m) ? m.join(' · ') : (m ?? fallback);
+}
+
+/** حالُ المحاولة كما يقرؤه الكاشير. */
+const ATTEMPT_LABEL: Record<PosPaymentAttempt['status'], string> = {
+  CREATED: 'لم تُرسل',
+  CHARGING: 'بانتظار الجهاز…',
+  APPROVED: 'قبلها المزوّد — تُتمّ الفاتورة',
+  COMPLETED: 'اكتملت',
+  DECLINED: 'رُفضت',
+  UNKNOWN: 'لم يصل جوابُ المزوّد — لا تُعِد الشحن',
+  CANCELLED: 'أُلغيت',
+};
 
 /**
  * شاشة الكاشير (مستند §6 — النسخة الأولى، أونلاين).
@@ -53,17 +110,43 @@ export function PosPage() {
   const [stockNotice, setStockNotice] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // ───── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────
+  const { can } = usePermissions();
+  const canReview = can('pos', 'review');
+  /** أفعّالٌ ربطُ البوابة — منه يُختار المسار: محاولةٌ عبر المزوّد، أو بيعٌ مباشر. */
+  const [paymentMode, setPaymentMode] = useState<PosPaymentMode | null>(null);
+  /** المحاولةُ التي تقفل السلةَ حتى تُحسم — «لا تُعِد الشحن». */
+  const [pendingAttempt, setPendingAttempt] = useState<PosPaymentAttempt | null>(null);
+  /** ما لم يُحسم في المناوبة — يراه الكاشير ويستعلم عنه. */
+  const [openAttempts, setOpenAttempts] = useState<PosPaymentAttempt[]>([]);
+  /**
+   * بيعٌ ببطاقةٍ ينتظر رقمَ مرجع الجهاز من إيصاله — **دون اتصالٍ والربطُ فعّال** (`ق-١٣٩٧`) **أو على جهازٍ مستقلٍّ بلا ربط**
+   * (`ق-١٤١٩` · «فالحكمُ واحد» بنصّ المالك): الأوّلُ يصطفّ محلياً، والثاني يُرسل الآن برقمه.
+   */
+  const [deviceRefFor, setDeviceRefFor] = useState<RungSale | null>(null);
+  const [deviceRefMode, setDeviceRefMode] = useState<'offline' | 'standalone'>('offline');
+  const [deviceRef, setDeviceRef] = useState('');
+  /** حسمٌ يدويٌّ بدليلٍ — لصاحب المراجعة (`ق-١٣٩٩`). */
+  const [evidenceFor, setEvidenceFor] = useState<PosPaymentAttempt | null>(null);
+  const [evidence, setEvidence] = useState({ deviceReference: '', approvalCode: '', note: '' });
+  /** دفعاتُ البطاقة غيرُ المتحقَّقة — للمراجعة. */
+  const [verifications, setVerifications] = useState<CardVerificationList | null>(null);
+
   async function reload() {
     try {
-      const [s, p] = await Promise.all([getCurrentShift(), listProducts()]);
+      const [s, p, mode, attempts] = await Promise.all([getCurrentShift(), listProducts(), getPaymentMode(), listOpenPaymentAttempts()]);
       setShift(s);
       setProducts(p);
       cacheProducts(companyId, p);
+      setPaymentMode(mode);
+      cachePaymentMode(companyId, mode);
+      setOpenAttempts(attempts.filter((a) => a.shiftId === s?.id));
       setOffline(false);
     } catch (e) {
       if (!isNetworkError(e)) throw e;
-      // انقطاع: نبيع من آخر كتالوج معروف، والمناوبة كما كانت في الذاكرة.
+      // انقطاع: نبيع من آخر كتالوج معروف، والمناوبة كما كانت في الذاكرة — ووضعُ الدفع آخرَ ما عُرف.
       setProducts((prev) => (prev.length ? prev : readCachedProducts(companyId)));
+      setPaymentMode((prev) => prev ?? readCachedPaymentMode(companyId));
       setOffline(true);
     }
     // بمعزل عن الكتلة أعلاه: فشلُ الفروع لا يُسقط البيع في الأوفلاين، وإعادةُ
@@ -95,7 +178,8 @@ export function PosPage() {
     const queue = readQueue(companyId);
     for (const sale of queue) {
       try {
-        await syncPosSale(sale);
+        // حقولُ البيع وحدَها على السلك — حقولُ العرض للإيصال المؤقّت، والخادمُ يرفض ما لا يعرفه (`wireSaleOf`).
+        await syncPosSale(wireSaleOf(sale));
         removeFromQueue(companyId, sale.clientSaleId);
       } catch (e) {
         if (isNetworkError(e)) return; // ما زلنا أوفلاين — نحاول لاحقاً.
@@ -161,13 +245,12 @@ export function PosPage() {
     }
   }
 
-  async function pay(method: PosPaymentMethod, payments?: PosPaymentPart[]) {
-    if (!cart.length || paying) return;
-    setPaying(true);
-    setError(null);
-    // كل بيع — أونلاين أو أوفلاين — يحمل هوية طرفية من لحظة الرنّ: المسار
-    // واحد (sync) والخادم يبتلع أي تكرار، فلا فقدان ولا ازدواج (مستند §6).
-    const sale = {
+  /**
+   * كل بيع — أونلاين أو أوفلاين — يحمل هوية طرفية من لحظة الرنّ: المسار واحد والخادم يبتلع أي تكرار، فلا فقدان ولا
+   * ازدواج (مستند §6). ومحاولةُ الدفع تحمل الهويّةَ نفسَها (`ق-١٤٠١`).
+   */
+  function ringSale(method: PosPaymentMethod, payments?: PosPaymentPart[]): RungSale {
+    return {
       clientSaleId: newClientSaleId(),
       offlineRef: newOfflineRef(),
       ringAt: new Date().toISOString(),
@@ -175,56 +258,232 @@ export function PosPage() {
       ringOffsetMin: -new Date().getTimezoneOffset(),
       lines: cart.map((l) => ({ productId: l.product.id, quantity: l.quantity, ...(l.discount > 0 ? { discount: l.discount } : {}) })),
       paymentMethod: method,
-      payments,
+      ...(payments ? { payments } : {}),
     };
-    try {
-      const invoice = await syncPosSale(sale);
-      // الخادم يعيد ids فقط في belowZero — الأسماء تُحلّ من السلة قبل تفريغها.
-      const deduction = invoice.stockDeduction;
-      if (deduction?.deducted && deduction.belowZero.length > 0) {
-        const nameById = new Map(cart.map((l) => [l.product.id, l.product.name]));
-        setStockWarnings(deduction.belowZero.map((b) => ({ name: nameById.get(b.productId) ?? b.productId, resultingQty: b.resultingQty })));
-      } else {
-        setStockWarnings([]);
+  }
+
+  /** جزءُ البطاقة من البيع — كلُّه للبطاقة، أو جزؤها من المقسّم. */
+  function cardPartOf(sale: PosSaleInput): number {
+    if (sale.paymentMethod === 'CARD') return totals.total;
+    if (sale.paymentMethod === 'SPLIT') return (sale.payments ?? []).filter((p) => p.method === 'CARD').reduce((s, p) => s + p.amount, 0);
+    return 0;
+  }
+
+  async function pay(method: PosPaymentMethod, payments?: PosPaymentPart[]) {
+    if (!cart.length || paying || pendingAttempt) return;
+    const sale = ringSale(method, payments);
+    // ⚖️ البطاقةُ والربطُ فعّال تمرّ بمحاولة دفعٍ عبر المزوّد (`ق-١٤٠١`) — وأوفلاين برقم مرجع الجهاز من إيصاله (`ق-١٣٩٧`).
+    if (paymentMode?.active && cardPartOf(sale) > 0) {
+      if (offline) {
+        setDeviceRef('');
+        setDeviceRefMode('offline');
+        setDeviceRefFor(sale);
+        return;
       }
-      // تخطي الخصم سلوك مقصود لا خطأ — تلميح خافت فقط لوردية على فرع بلا
-      // مستودع مربوط (وردية بلا فرع أصلاً أو سلة كلها خدمات لا تستحق أي إشارة).
-      setStockNotice(deduction?.deducted === false && deduction.reason === 'NO_BRANCH_WAREHOUSE' && shift?.branchId ? 'لم يُخصم المخزون تلقائياً — لا مستودع مرتبطاً بفرع المناوبة' : null);
-      setCart([]);
-      setReceipt(invoice);
-      await reload();
+      await payByAttempt(sale);
+      return;
+    }
+    // ⚖️ وبلا ربطٍ — جهازٌ مستقلّ: رقمُ مرجعه من إيصاله كبيع البطاقة دون اتصال (`ق-١٤١٩` «فالحكمُ واحد») — لا «أكّده الكاشير».
+    if (!paymentMode?.active && cardPartOf(sale) > 0) {
+      setDeviceRef('');
+      setDeviceRefMode('standalone');
+      setDeviceRefFor(sale);
+      return;
+    }
+    setPaying(true);
+    setError(null);
+    try {
+      await completed(await syncPosSale(sale));
     } catch (e) {
+      if (isNetworkError(e)) queueOffline(sale);
+      else setError(messageOf(e, 'تعذّر إتمام البيع'));
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  /**
+   * ⭐ **محاولةُ الدفع** (`ق-١٤٠١`): تُنشأ بلا فاتورة ثم تُشحن خارج المعاملة — قُبلت ⟸ إيصال · رُفضت ⟸ السببُ والسلةُ كما هي ·
+   * لا جواب ⟸ **معلّقة**: «لا تُعِد الشحن»، والسلةُ مقفلةٌ عليها حتى تُحسم.
+   */
+  async function payByAttempt(sale: RungSale) {
+    setPaying(true);
+    setError(null);
+    let attempt: PosPaymentAttempt;
+    try {
+      attempt = await createPaymentAttempt(sale);
+    } catch (e) {
+      setPaying(false);
+      // لم يُشحن شيء — الاتصالُ انقطع قبل المحاولة: فالبيعُ ببطاقةٍ دون اتصالٍ برقم مرجع الجهاز (`ق-١٣٩٧`).
       if (isNetworkError(e)) {
-        // انقطاع: البيع يصطفّ محلياً بإيصال مؤقت، ويتزامن وحده لاحقاً.
-        // رمزُ الهيئة يُبنى **هنا، على الجهاز، بلا مفاتيح** (ق-١٨٨): الوسوم الخمسة من
-        // ملف المنشأة المخبَّأ وساعة الجهاز نفسها التي سيأخذها الخادم للفاتورة
-        // الممتثلة — فالطابع على الإيصال هو طابعُ المستند القادم حرفاً.
-        const seller = readCachedSellerProfile(companyId);
-        const queued: QueuedSale = {
-          ...sale,
-          display: cart.map((l) => ({ name: l.product.name, quantity: l.quantity, unitPrice: Number(l.product.price) })),
-          total: totals.total,
-          vatAmount: totals.tax,
-          zatcaQr: buildPhase1Qr({
-            sellerName: seller?.legalName,
-            vatNumber: seller?.vatNumber,
-            issued: wallClockOf(new Date(sale.ringAt), sale.ringOffsetMin),
-            total: totals.total,
-            vatAmount: totals.tax,
-          }),
-        };
-        enqueueSale(companyId, queued);
-        setQueueCount(readQueue(companyId).length);
         setOffline(true);
-        setCart([]);
-        setOfflineReceipt(queued);
+        setDeviceRef('');
+        setDeviceRefMode('offline');
+        setDeviceRefFor(sale);
       } else {
-        const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-        setError(d?.message ?? 'تعذّر إتمام البيع');
+        setError(messageOf(e, 'تعذّر بدء عملية البطاقة'));
+      }
+      return;
+    }
+    setPendingAttempt({ ...attempt, status: 'CHARGING' });
+    try {
+      await applyAttempt(await chargePaymentAttempt(attempt.id), sale);
+    } catch (e) {
+      // الطلبُ عند المزوّد أو في الطريق: لا يُعاد الشحن — يُستعلم عنه حين يعود الاتصال.
+      if (isNetworkError(e)) setError('انقطع الاتصال أثناء الشحن — لا تُعِد الشحن؛ استعلم عن حال العملية حين يعود الاتصال.');
+      else {
+        setPendingAttempt(null);
+        setError(messageOf(e, 'تعذّر شحن البطاقة'));
       }
     } finally {
       setPaying(false);
     }
+  }
+
+  /** ما آلت إليه المحاولة — اكتملت ⟸ إيصال · رُفضت ⟸ السبب · وإلا تبقى تقفل السلة. */
+  async function applyAttempt(attempt: PosPaymentAttempt, sale?: PosSaleInput) {
+    if (attempt.status === 'COMPLETED' && attempt.sale) {
+      setPendingAttempt(null);
+      await completed(attempt.sale);
+      return;
+    }
+    if (attempt.status === 'DECLINED' || attempt.status === 'CANCELLED') {
+      setPendingAttempt(null);
+      const split = (sale?.paymentMethod ?? attempt.paymentMethod) === 'SPLIT';
+      setError(`رُفضت البطاقة: ${attempt.declineReason ?? '—'}${split ? ' — أعِد النقد للعميل؛ لم يُسجَّل من البيع شيء.' : ''}`);
+      await refreshAttempts();
+      return;
+    }
+    setPendingAttempt(attempt);
+    await refreshAttempts();
+  }
+
+  async function refreshAttempts() {
+    try {
+      const all = await listOpenPaymentAttempts();
+      setOpenAttempts(all.filter((a) => a.shiftId === shift?.id));
+    } catch {
+      /* أوفلاين — يُعاد مع أوّل تحميلٍ ناجح */
+    }
+  }
+
+  /** «جوابُ المزوّد أوّلاً» (`ق-١٣٩٩`) — الاستعلامُ بالمرجع لا يشحن ثانيةً. */
+  async function queryAttempt(a: PosPaymentAttempt) {
+    setError(null);
+    try {
+      await applyAttempt(await resolvePaymentAttempt(a.id));
+    } catch (e) {
+      setError(messageOf(e, 'تعذّر الاستعلام عن العملية'));
+    }
+  }
+
+  /** ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — مرجعُ الجهاز ورمزُ الموافقة من إيصاله (`ق-١٣٩٩`). */
+  async function submitEvidence() {
+    if (!evidenceFor) return;
+    setError(null);
+    try {
+      const out = await resolvePaymentAttemptWithEvidence(evidenceFor.id, {
+        deviceReference: evidence.deviceReference.trim(),
+        approvalCode: evidence.approvalCode.trim(),
+        ...(evidence.note.trim() ? { note: evidence.note.trim() } : {}),
+      });
+      setEvidenceFor(null);
+      setEvidence({ deviceReference: '', approvalCode: '', note: '' });
+      await applyAttempt(out);
+    } catch (e) {
+      setError(messageOf(e, 'تعذّر الحسم'));
+    }
+  }
+
+  /**
+   * بيعٌ ببطاقةٍ برقم مرجع الجهاز — ولا يُقبل بدونه (`ق-١٣٩٧`/١ · `ق-١٤١٩`): **دون اتصالٍ** يصطفّ محلياً، **وعلى جهازٍ مستقلّ**
+   * يُرسل الآن برقمه (وإن انقطع الاتصالُ في الطريق اصطفّ برقمه كذلك).
+   */
+  async function confirmDeviceRef() {
+    if (!deviceRefFor) return;
+    const reference = deviceRef.trim();
+    if (!reference) {
+      setError('أدخل رقمَ مرجع الجهاز من إيصاله — لا يُقبل البيعُ بالبطاقة بتأكيدك وحدَه.');
+      return;
+    }
+    const sale = deviceRefFor;
+    setDeviceRefFor(null);
+    setDeviceRef('');
+    if (deviceRefMode === 'offline') {
+      queueOffline(sale, reference);
+      return;
+    }
+    setPaying(true);
+    setError(null);
+    try {
+      await completed(await syncPosSale({ ...sale, cardDeviceReference: reference }));
+    } catch (e) {
+      if (isNetworkError(e)) queueOffline(sale, reference);
+      else setError(messageOf(e, 'تعذّر إتمام البيع'));
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  async function openVerifications(state: 'open' | 'overdue' | 'matched' | 'all' = 'open') {
+    setError(null);
+    try {
+      setVerifications(await listCardVerifications(state));
+    } catch (e) {
+      setError(messageOf(e, 'تعذّر جلب دفعات البطاقة'));
+    }
+  }
+
+  /** ما يُعرض بعد بيعٍ اكتمل — مشتركٌ بين البيع المباشر ومحاولة الدفع. */
+  async function completed(invoice: PosSaleResponse) {
+    // الخادم يعيد ids فقط في belowZero — الأسماء تُحلّ من السلة قبل تفريغها.
+    const deduction = invoice.stockDeduction;
+    if (deduction?.deducted && deduction.belowZero.length > 0) {
+      const nameById = new Map(cart.map((l) => [l.product.id, l.product.name]));
+      setStockWarnings(deduction.belowZero.map((b) => ({ name: nameById.get(b.productId) ?? b.productId, resultingQty: b.resultingQty })));
+    } else {
+      setStockWarnings([]);
+    }
+    // تخطي الخصم سلوك مقصود لا خطأ — تلميح خافت فقط لوردية على فرع بلا
+    // مستودع مربوط (وردية بلا فرع أصلاً أو سلة كلها خدمات لا تستحق أي إشارة).
+    setStockNotice(deduction?.deducted === false && deduction.reason === 'NO_BRANCH_WAREHOUSE' && shift?.branchId ? 'لم يُخصم المخزون تلقائياً — لا مستودع مرتبطاً بفرع المناوبة' : null);
+    setCart([]);
+    setReceipt(invoice);
+    await reload();
+  }
+
+  /**
+   * انقطاع: البيع يصطفّ محلياً بإيصال مؤقت، ويتزامن وحده لاحقاً — وبطاقةٌ والربطُ فعّال تحمل رقمَ مرجع الجهاز (`ق-١٣٩٧`).
+   * رمزُ الهيئة يُبنى **هنا، على الجهاز، بلا مفاتيح** (ق-١٨٨): الوسوم الخمسة من ملف المنشأة المخبَّأ وساعة الجهاز نفسها التي
+   * سيأخذها الخادم للفاتورة الممتثلة — فالطابع على الإيصال هو طابعُ المستند القادم حرفاً.
+   */
+  function queueOffline(sale: RungSale, cardDeviceReference?: string) {
+    const seller = readCachedSellerProfile(companyId);
+    const queued: QueuedSale = {
+      clientSaleId: sale.clientSaleId,
+      offlineRef: sale.offlineRef,
+      ringAt: sale.ringAt,
+      ringOffsetMin: sale.ringOffsetMin,
+      lines: sale.lines,
+      paymentMethod: sale.paymentMethod,
+      ...(sale.payments ? { payments: sale.payments } : {}),
+      ...(cardDeviceReference ? { cardDeviceReference } : {}),
+      display: cart.map((l) => ({ name: l.product.name, quantity: l.quantity, unitPrice: Number(l.product.price) })),
+      total: totals.total,
+      vatAmount: totals.tax,
+      zatcaQr: buildPhase1Qr({
+        sellerName: seller?.legalName,
+        vatNumber: seller?.vatNumber,
+        issued: wallClockOf(new Date(sale.ringAt), sale.ringOffsetMin),
+        total: totals.total,
+        vatAmount: totals.tax,
+      }),
+    };
+    enqueueSale(companyId, queued);
+    setQueueCount(readQueue(companyId).length);
+    setOffline(true);
+    setCart([]);
+    setOfflineReceipt(queued);
   }
 
   /** تقسيم: الكاشير يُدخل النقد، والبطاقة تكمل الباقي تلقائياً. */
@@ -342,6 +601,21 @@ export function PosPage() {
                 </tr>
               </tbody>
             </table>
+            {/* ⚖️ المعلّقُ لا يحبس المناوبة — يُسمّى هنا وينتقل إلى قائمة المطابقة حتى يُحسم (`ق-١٤١٨`). */}
+            {(closed.pendingAttempts ?? []).length > 0 && (
+              <div data-testid="pos-closed-pending" style={{ marginTop: 10, fontSize: 13 }}>
+                <b>عملياتُ بطاقةٍ لم تُحسم ({closed.pendingAttempts.length})</b> — أُقفلت المناوبةُ وهي فيها، وتنتقل إلى قائمة المطابقة بالتسوية حتى يحسمها
+                جوابُ المزوّد أو الدليل:
+                <ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>
+                  {closed.pendingAttempts.map((a) => (
+                    <li key={a.id}>
+                      <span className="num">{fmt(a.cardAmount)}</span> · {a.status === 'UNKNOWN' ? 'معلّقة' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'} ·{' '}
+                      <span className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -362,6 +636,11 @@ export function PosPage() {
           </div>
         </div>
         <div className="topbar-actions">
+          {canReview && (
+            <button className="btn btn-ghost" onClick={() => openVerifications('open')}>
+              💳 بطاقاتٌ غيرُ متحقَّقة
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={() => setClosing(true)}>
             إقفال المناوبة
           </button>
@@ -458,17 +737,63 @@ export function PosPage() {
           </table>
 
           {error && <p className="error-text">{error}</p>}
+          {/* السلةُ مقفلةٌ على محاولتها حتى تُحسم — «لا تُعِد الشحن» (الموجز ٢.٩). */}
+          {pendingAttempt && (
+            <div className="card" data-testid="pos-pending-attempt" style={{ marginTop: 10, border: '1px solid var(--amber, var(--line))' }}>
+              <b>{ATTEMPT_LABEL[pendingAttempt.status]}</b>
+              <p className="num" style={{ margin: '6px 0' }}>
+                {fmt(pendingAttempt.cardAmount)}
+                {pendingAttempt.status === 'CHARGING' && paymentMode?.deadlineMs ? ` · المهلة ${Math.round(paymentMode.deadlineMs / 1000)} ثانية` : ''}
+              </p>
+              {pendingAttempt.detail && <p className="hint">{pendingAttempt.detail}</p>}
+              {pendingAttempt.status !== 'CHARGING' && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(pendingAttempt)}>
+                    🔎 استعلام عن حالها
+                  </button>
+                  {canReview && pendingAttempt.status === 'UNKNOWN' && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(pendingAttempt)}>
+                      حسمٌ بدليل
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
-            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying} onClick={() => pay('CASH')}>
+            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CASH')}>
               💵 نقدي
             </button>
-            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying} onClick={() => pay('CARD')}>
+            <button className="btn btn-primary" style={{ padding: 16, fontSize: 16 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => pay('CARD')}>
               💳 شبكة
             </button>
           </div>
-          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying} onClick={() => setSplitting(true)}>
+          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8 }} disabled={!cart.length || paying || !!pendingAttempt} onClick={() => setSplitting(true)}>
             ✂ تقسيم نقدي + شبكة
           </button>
+          {/* ما لم يُحسم في المناوبة — والمناوبةُ لا تُقفل والمالُ في الطريق (الموجز ٢.٧). */}
+          {openAttempts.filter((a) => a.id !== pendingAttempt?.id && a.status !== 'CREATED').length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="card-title" style={{ fontSize: 13 }}>عملياتُ بطاقةٍ لم تُحسم</div>
+              {openAttempts
+                .filter((a) => a.id !== pendingAttempt?.id && a.status !== 'CREATED')
+                .map((a) => (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                    <span className="num" style={{ flex: 1, fontSize: 12 }}>
+                      {fmt(a.cardAmount)} · {ATTEMPT_LABEL[a.status]}
+                    </span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => queryAttempt(a)}>
+                      استعلام
+                    </button>
+                    {canReview && a.status === 'UNKNOWN' && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEvidenceFor(a)}>
+                        بدليل
+                      </button>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -493,6 +818,143 @@ export function PosPage() {
               <button className="btn btn-ghost" onClick={() => setSplitting(false)}>إلغاء</button>
               <button className="btn btn-primary" onClick={confirmSplit}>تأكيد التقسيم</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚖️ بيعٌ ببطاقةٍ برقم مرجع الجهاز من إيصاله — دون اتصالٍ والربطُ فعّال (`ق-١٣٩٧`/١) أو جهازٌ مستقلٌّ بلا ربط (`ق-١٤١٩`). */}
+      {deviceRefFor && (
+        <div className="overlay" onClick={() => setDeviceRefFor(null)}>
+          <div className="modal" data-testid="pos-device-ref" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380 }}>
+            <div className="modal-head">
+              <div className="modal-title">{deviceRefMode === 'offline' ? 'بطاقةٌ دون اتصال' : 'بطاقةٌ على جهازٍ مستقلّ'}</div>
+              <button className="modal-close" onClick={() => setDeviceRefFor(null)}>✕</button>
+            </div>
+            <p style={{ fontSize: 13 }}>
+              {deviceRefMode === 'offline'
+                ? 'الاتصالُ منقطع وبوابةُ الدفع مربوطة: اشحن على الجهاز مباشرةً، ثم أدخل '
+                : 'لا بوابةَ دفعٍ مربوطة: اشحن على جهاز الشبكة، ثم أدخل '}
+              <b>رقمَ المرجع المطبوع على إيصاله</b>. يُسجَّل البيعُ غيرَ متحقَّقٍ حتى تطابقه تسويةُ الشبكة.
+            </p>
+            <div className="field">
+              <label>رقمُ مرجع الجهاز</label>
+              <input autoFocus value={deviceRef} onChange={(e) => setDeviceRef(e.target.value)} maxLength={64} />
+            </div>
+            {error && <p className="error-text">{error}</p>}
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setDeviceRefFor(null)}>إلغاء</button>
+              <button className="btn btn-primary" disabled={!deviceRef.trim()} onClick={confirmDeviceRef}>
+                تسجيلُ البيع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — لصاحب المراجعة، بعد أن يُسأل المزوّد (`ق-١٣٩٩`). */}
+      {evidenceFor && (
+        <div className="overlay" onClick={() => setEvidenceFor(null)}>
+          <div className="modal" data-testid="pos-evidence" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div className="modal-head">
+              <div className="modal-title">حسمُ عمليةٍ معلّقة بدليل</div>
+              <button className="modal-close" onClick={() => setEvidenceFor(null)}>✕</button>
+            </div>
+            <p className="num" style={{ fontSize: 13 }}>
+              {fmt(evidenceFor.cardAmount)} · يُسأل المزوّدُ أوّلاً — فإن أجاب فجوابُه يحسمها. والحسمُ بدليلٍ لا يُعدّ نهائياً حتى تطابقه تسويةُ الشبكة.
+            </p>
+            <div className="field">
+              <label>رقمُ مرجع الجهاز (من إيصاله)</label>
+              <input value={evidence.deviceReference} onChange={(e) => setEvidence({ ...evidence, deviceReference: e.target.value })} maxLength={64} />
+            </div>
+            <div className="field">
+              <label>رمزُ الموافقة (من إيصاله)</label>
+              <input value={evidence.approvalCode} onChange={(e) => setEvidence({ ...evidence, approvalCode: e.target.value })} maxLength={32} />
+            </div>
+            <div className="field">
+              <label>ملاحظة</label>
+              <input value={evidence.note} onChange={(e) => setEvidence({ ...evidence, note: e.target.value })} maxLength={500} />
+            </div>
+            {error && <p className="error-text">{error}</p>}
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setEvidenceFor(null)}>إلغاء</button>
+              <button className="btn btn-primary" disabled={!evidence.deviceReference.trim() || !evidence.approvalCode.trim()} onClick={submitEvidence}>
+                حسمٌ بالدليل
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة — باسم الكاشير وبحال المطابقة ومهلة التسوية (`ق-١٣٩٧`/٢–٣). */}
+      {verifications && (
+        <div className="overlay" onClick={() => setVerifications(null)}>
+          <div className="modal" data-testid="pos-card-verifications" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div className="modal-head">
+              <div className="modal-title">دفعاتُ بطاقةٍ غيرُ متحقَّقة — مهلةُ التسوية {verifications.settlementDays} أيام</div>
+              <button className="modal-close" onClick={() => setVerifications(null)}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('open')}>غيرُ مطابَقة</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('overdue')}>تجاوزت المهلة</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => openVerifications('matched')}>طابقتها تسوية</button>
+            </div>
+            {verifications.items.length === 0 && <div className="empty-state">لا شيء هنا</div>}
+            {verifications.items.length > 0 && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>الفاتورة</th>
+                    <th>اليوم</th>
+                    <th>المبلغ</th>
+                    <th>الكاشير</th>
+                    <th>مرجعُ الجهاز</th>
+                    <th>بمَ ثبت</th>
+                    <th>الحال</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {verifications.items.map((r) => (
+                    <tr key={r.posPaymentId}>
+                      <td className="num">{r.invoiceNo}</td>
+                      <td className="num">{r.issueDate}</td>
+                      <td className="num">{fmt(r.amount)}</td>
+                      <td>{r.cashierName ?? '—'}</td>
+                      <td className="num">{r.deviceReference ?? '—'}</td>
+                      <td>{r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'برقم مرجع الجهاز'}</td>
+                      <td style={{ color: r.matched ? 'var(--emerald)' : r.overdue ? 'var(--rose)' : undefined }}>
+                        {r.matched ? `طابقتها ${r.settlementNo ?? 'تسوية'}` : r.overdue ? `تجاوزت المهلة (${r.ageDays} يوماً)` : `تنتظر (${r.ageDays} يوماً)`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {/* ⚖️ المعلّقُ من مناوبةٍ مقفلة — في قائمة المطابقة حتى يُحسم، لا يُخمَّن (`ق-١٤١٨`). */}
+            {verifications.unresolvedAttempts.length > 0 && (
+              <div data-testid="pos-unresolved-attempts" style={{ marginTop: 12 }}>
+                <div className="card-title">عملياتُ بطاقةٍ لم تُحسم من مناوباتٍ مقفلة ({verifications.unresolvedAttempts.length})</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>المبلغ</th>
+                      <th>الكاشير</th>
+                      <th>البدء</th>
+                      <th>الحال</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {verifications.unresolvedAttempts.map((a) => (
+                      <tr key={a.attemptId}>
+                        <td className="num">{fmt(a.amount)}</td>
+                        <td>{a.cashierName ?? '—'}</td>
+                        <td className="num">{a.createdAt.slice(0, 16).replace('T', ' ')}</td>
+                        <td>{a.status === 'UNKNOWN' ? 'معلّقة — تنتظر جوابَ المزوّد أو الدليل' : a.status === 'CHARGING' ? 'تُشحن' : 'قُبلت ولم تكتمل'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -63,7 +63,9 @@ describe('الختم المتزامن — قرارات ق-١٩٦ في المصد
   });
 
   it('🔴 والكاشير يستدعي الختم بعد معاملة البيع ويُبلّغ سببَ السقوط لا يبتلعه', () => {
-    expect(pos).toContain('this.zatca.stampForReceipt(tenant.companyId, sold.id)');
+    // `ق-١٤٠١`: الختمُ في `finishReceipt` — يستدعيه كلُّ مسارٍ أتمّ بيعاً (المباشرُ ومحاولةُ الدفع) بعد التزام معاملته.
+    expect(pos).toContain('this.zatca.stampForReceipt(companyId, sold.id)');
     expect(pos).toContain('stampError: stamp.error');
+    expect(pos).toContain('return this.finishReceipt(tenant.companyId, outcome.sold)');
   });
 });

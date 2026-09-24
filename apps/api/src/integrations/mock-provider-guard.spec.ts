@@ -45,34 +45,41 @@ describe('المزوّد التجريبي ممنوع في الإنتاج', () =>
     expect(tx.integrationConnection.create).not.toHaveBeenCalled();
   });
 
-  it('الشحن عبر اتصالٍ تجريبي **قائم سلفاً** مرفوض في الإنتاج', async () => {
+  const MOCK_ROW = { id: 'i1', kind: 'PAYMENT_GATEWAY', provider: 'MOCK', enabled: true, credentials: 'x' };
+
+  it('قبولُ جزء البطاقة عبر اتصالٍ تجريبي **قائم سلفاً** مرفوض في الإنتاج — عند كلِّ استعمال لا عند الإنشاء وحده', async () => {
     process.env.NODE_ENV = 'production';
-    const { service } = serviceWith({ id: 'i1', kind: 'PAYMENT_GATEWAY', provider: 'MOCK', enabled: true, credentials: 'x' });
-    await expect(
-      service.chargeCardIfConfigured({ integrationConnection: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', kind: 'PAYMENT_GATEWAY', provider: 'MOCK', enabled: true, credentials: 'x' }) } } as never, {
-        amount: 100,
-        currency: 'SAR',
-        reference: 'R1',
-      }),
-    ).rejects.toThrow(MSG.integration_mock_forbidden_in_production);
+    const { service, tx } = serviceWith(MOCK_ROW);
+    await expect(service.activeGateway(tx as never)).rejects.toThrow(MSG.integration_mock_forbidden_in_production);
   });
 
-  it('⚠️ الرفض بالرمي لا بـnull — فإعادة null تعني «لا بوابة» فيمرّ البيع كنقدي', async () => {
+  it('⚠️ الرفض بالرمي لا بـnull — فإعادة null تعني «لا بوابة» فيمرّ البيع بلا مال', async () => {
     process.env.NODE_ENV = 'production';
-    const tx = { integrationConnection: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', kind: 'PAYMENT_GATEWAY', provider: 'MOCK', enabled: true, credentials: 'x' }) } };
-    const { service } = serviceWith(null);
-    const result = await service.chargeCardIfConfigured(tx as never, { amount: 100, currency: 'SAR', reference: 'R1' }).catch((e) => e);
+    const { service, tx } = serviceWith(MOCK_ROW);
+    const result = await service.activeGateway(tx as never).catch((e: unknown) => e);
     expect(result).toBeInstanceOf(BadRequestException);
     expect(result).not.toBeNull();
+    // والشحنُ نفسُه لا يبلغ المحوّل: يعود «لم يُرسل» حاملاً الحاجزَ نفسَه — لا قبولٌ ولا معلّق.
+    const charged = await service.chargeWithDeadline('c1', 'MOCK', { amount: 100, currency: 'XXX', reference: 'R1' });
+    expect(charged.kind).toBe('NOT_SENT');
+    expect(String((charged as { error: Error }).error.message)).toContain(MSG.integration_mock_forbidden_in_production);
   });
 
   it('خارج الإنتاج يبقى المزوّد التجريبي عاملاً — وإلا تعطّل التطوير والعرض', async () => {
     process.env.NODE_ENV = 'development';
-    const tx = { integrationConnection: { findFirst: jest.fn().mockResolvedValue({ id: 'i1', kind: 'PAYMENT_GATEWAY', provider: 'MOCK', enabled: true, credentials: 'ENC' }) } };
-    const { service } = serviceWith(null);
-    // يصل إلى المحوّل (سيفشل فكّ التشفير لا الحاجز) — المهم ألّا يُرفض بحاجز الإنتاج.
-    const out = await service.chargeCardIfConfigured(tx as never, { amount: 100, currency: 'SAR', reference: 'R' }).catch((e) => e);
-    expect(String(out?.message ?? out)).not.toContain(MSG.integration_mock_forbidden_in_production);
+    const { service, tx } = serviceWith({ ...MOCK_ROW, credentials: 'ENC' });
+    const gateway = await service.activeGateway(tx as never);
+    expect(gateway?.provider).toBe('MOCK');
+  });
+
+  /**
+   * ⚖️ `ق-١٣٩٨`: «**تسعون ثانية، ثم معلّق. ⚠️ وتُعلَن في محوّل كلِّ مزوّدٍ لا في النواة، فلكلِّ مزوّدٍ حدُّه.**»
+   * جردٌ لا حالة: كلُّ محوّلٍ مسجَّلٍ يعلن مهلتَه عدداً موجباً منتهياً — فمحوّلٌ بلا مهلةٍ لا يُسجَّل.
+   */
+  it('كلُّ محوّلٍ مسجَّل يعلن مهلةَ جهازه بنفسه — والتجريبيُّ تسعون ثانية (ق-١٣٩٨)', () => {
+    const declared = Object.entries(TERMINAL_ADAPTERS).map(([p, a]) => ({ p, ms: a.chargeDeadlineMs }));
+    expect(declared.filter((d) => !(Number.isFinite(d.ms) && d.ms > 0))).toEqual([]);
+    expect(TERMINAL_ADAPTERS.MOCK.chargeDeadlineMs).toBe(90_000);
   });
 
   /**

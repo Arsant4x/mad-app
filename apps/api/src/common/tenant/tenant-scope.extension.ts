@@ -123,6 +123,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'PurchaseAttachment',
   'PosShift',
   'PosPayment',
+  // محاولةُ دفع البطاقة (`ق-١٤٠١`): صفٌّ يحمل `companyId` ولقطةَ بيعٍ ومرجعَ مزوّد — لا يُقرأ ولا يُكتب من سياق منشأةٍ أخرى.
+  'PosPaymentAttempt',
   'IntegrationConnection',
   'SupportAccessGrant',
   'SupportAccessLog',

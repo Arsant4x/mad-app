@@ -110,7 +110,8 @@ describe('POS cashier (e2e)', () => {
 
   it('rings a card sale and derives the drawer from the invoices', async () => {
     const sale = await auth(request(app.getHttpServer()).post('/pos/sales'))
-      .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD' })
+      // بلا ربط — جهازٌ مستقلّ: رقمُ مرجعه إلزاميّ (`ق-١٤١٩`).
+      .send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CARD', cardDeviceReference: 'RRN-POS-CARD' })
       .expect(201);
     invoiceIds.push(sale.body.id);
 

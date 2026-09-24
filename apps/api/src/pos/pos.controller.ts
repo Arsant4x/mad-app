@@ -6,7 +6,18 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
-import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, SyncPosSaleDto } from './dto/pos.dto';
+import { IntegrationsService } from '../integrations/integrations.service';
+import {
+  CardVerificationsQueryDto,
+  CloseShiftDto,
+  CreatePosPaymentAttemptDto,
+  CreatePosSaleDto,
+  OpenShiftDto,
+  ResolvePaymentAttemptWithEvidenceDto,
+  SyncPosSaleDto,
+} from './dto/pos.dto';
+import { PosCardVerificationsService } from './pos-card-verifications.service';
+import { PosPaymentAttemptsService } from './pos-payment-attempts.service';
 import { PosService } from './pos.service';
 
 /**
@@ -18,7 +29,12 @@ import { PosService } from './pos.service';
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('pos')
 export class PosController {
-  constructor(private readonly posService: PosService) {}
+  constructor(
+    private readonly posService: PosService,
+    private readonly attempts: PosPaymentAttemptsService,
+    private readonly verifications: PosCardVerificationsService,
+    private readonly integrations: IntegrationsService,
+  ) {}
 
   @Get('shifts')
   @RequiresAction('view')
@@ -62,5 +78,69 @@ export class PosController {
   @RequiresAction('record')
   createSale(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosSaleDto) {
     return this.posService.createSale(tenant, dto);
+  }
+
+  // ───────── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────────
+
+  /** أفعّالٌ ربطُ بوابة الدفع، وبأيّ مزوّدٍ ومهلة — تقرؤه شاشةُ الكاشير لتختار المسار (بلا مفاتيح). */
+  @Get('payment-mode')
+  @RequiresAction('view')
+  paymentMode(@CurrentTenant() tenant: TenantContext) {
+    return this.integrations.gatewayMode(tenant.companyId);
+  }
+
+  /** إنشاءُ المحاولة — تحقّقُ البيع ولقطتُه **بلا شحنٍ ولا فاتورة**؛ وإعادتُه بالمعرّف نفسِه تعيدها نفسَها. */
+  @Post('payment-attempts')
+  @RequiresAction('record')
+  createAttempt(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosPaymentAttemptDto) {
+    return this.attempts.create(tenant, dto);
+  }
+
+  /** المحاولاتُ المفتوحة (لم تُرسل · تُشحن · معلّقة · مقبولةٌ لم تكتمل) — مرشَّحةً بفروع القارئ. */
+  @Get('payment-attempts')
+  @RequiresAction('view')
+  listAttempts(@CurrentTenant() tenant: TenantContext) {
+    return this.attempts.listOpen(tenant);
+  }
+
+  @Get('payment-attempts/:id')
+  @RequiresAction('view')
+  viewAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.view(tenant, id);
+  }
+
+  /** الشحنُ خارج كلِّ معاملة بمهلة المحوّل — قُبل ⟸ فاتورة · رُفض ⟸ لا شيء · لا جواب ⟸ معلّقة. */
+  @Post('payment-attempts/:id/charge')
+  @RequiresAction('record')
+  chargeAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.charge(tenant, id);
+  }
+
+  /** الحسمُ بجواب المزوّد بالمرجع (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً») — يطلبه الكاشير ويكنسه النظام. */
+  @Post('payment-attempts/:id/resolve')
+  @RequiresAction('record')
+  resolveAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.resolve(tenant, id);
+  }
+
+  /** ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — **لصاحب صلاحية المراجعة** (`ق-١٣٩٩`)؛ ولا يُعدّ نهائياً حتى تطابقه التسوية. */
+  @Post('payment-attempts/:id/resolve-with-evidence')
+  @RequiresAction('review')
+  resolveAttemptWithEvidence(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ResolvePaymentAttemptWithEvidenceDto) {
+    return this.attempts.resolveWithEvidence(tenant, id, dto);
+  }
+
+  /** الإلغاءُ قبل الإرسال وحدَه. */
+  @Post('payment-attempts/:id/cancel')
+  @RequiresAction('record')
+  cancelAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.cancel(tenant, id);
+  }
+
+  /** ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة (`ق-١٣٩٧`/٢–٣) — باسم الكاشير وبحال المطابقة ومهلة التسوية، **للمراجعة**. */
+  @Get('card-verifications')
+  @RequiresAction('review')
+  cardVerifications(@CurrentTenant() tenant: TenantContext, @Query() query: CardVerificationsQueryDto) {
+    return this.verifications.list(tenant, query.state ?? 'open');
   }
 }

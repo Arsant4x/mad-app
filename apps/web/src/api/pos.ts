@@ -1,9 +1,9 @@
 import type { MoneyText, QtyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
-import type { PosPaymentMethod } from '@mad-app/shared/api/enums';
+import type { PosCardVerification, PosPaymentAttemptStatus, PosPaymentMethod, PosPaymentResolution } from '@mad-app/shared/api/enums';
 
-export type { PosPaymentMethod };
+export type { PosCardVerification, PosPaymentAttemptStatus, PosPaymentMethod, PosPaymentResolution };
 
 export interface PosPaymentPart {
   method: 'CASH' | 'CARD';
@@ -31,6 +31,8 @@ export interface PosShift {
 export interface ClosedShift extends PosShift {
   /** موجب = زيادة، سالب = عجز — نصٌّ بإشارته (`"-30.00"`). */
   variance: MoneyText;
+  /** ⚖️ ما لم يُحسم من عمليات البطاقة — لا يحبس الإقفال، ويُسمّى هنا وينتقل إلى قائمة المطابقة (`ق-١٤١٨`). */
+  pendingAttempts: { id: string; status: PosPaymentAttemptStatus; cardAmount: MoneyText; clientSaleId: string; createdAt: string }[];
 }
 
 export interface PosSaleLine {
@@ -82,6 +84,111 @@ export interface PosOfflineIncidents {
 }
 export const getPosIncidents = () => apiClient.get<PosOfflineIncidents>('/pos/incidents').then((r) => r.data);
 
-/** مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة. */
-export const syncPosSale = (sale: { clientSaleId: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; lines: PosSaleLine[]; paymentMethod: PosPaymentMethod; payments?: PosPaymentPart[]; customerId?: string }) =>
-  apiClient.post<PosSaleResponse>('/pos/sales/sync', sale).then((r) => r.data);
+/** البيعُ كما يُرسَل — بهويّة الطرفية ولحظة الرنّ. */
+export interface PosSaleInput {
+  clientSaleId: string;
+  offlineRef?: string;
+  ringAt?: string;
+  ringOffsetMin?: number;
+  lines: PosSaleLine[];
+  paymentMethod: PosPaymentMethod;
+  payments?: PosPaymentPart[];
+  customerId?: string;
+}
+
+/**
+ * مزامنة بيع أوفلاين — idempotent على clientSaleId: التكرار يعيد نفس الفاتورة.
+ * ⚖️ `ق-١٣٩٧`: والربطُ فعّال، جزءُ البطاقة **يحمل رقمَ مرجع الجهاز من إيصاله** — لا يُقبل بتأكيد الكاشير وحدَه.
+ */
+export const syncPosSale = (sale: PosSaleInput & { cardDeviceReference?: string }) => apiClient.post<PosSaleResponse>('/pos/sales/sync', sale).then((r) => r.data);
+
+// ───────── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────────
+
+/** أفعّالٌ ربطُ بوابة الدفع — يقرّر المسار: محاولةٌ عبر المزوّد، أو بيعٌ مباشر. */
+export interface PosPaymentMode {
+  active: boolean;
+  provider?: string;
+  /** مهلةُ جهاز المحوّل بالمللي ثانية (`ق-١٣٩٨`) — تعرضها الشاشة وهي تنتظر. */
+  deadlineMs?: number;
+}
+export const getPaymentMode = () => apiClient.get<PosPaymentMode>('/pos/payment-mode').then((r) => r.data);
+
+export interface PosPaymentAttempt {
+  id: string;
+  status: PosPaymentAttemptStatus;
+  clientSaleId: string;
+  shiftId: string;
+  /** ② مالٌ نصّاً بخانتين. */
+  cardAmount: MoneyText;
+  total: MoneyText | null;
+  paymentMethod: PosPaymentMethod | null;
+  currency: string;
+  provider: string;
+  providerRef: string | null;
+  approvalCode: string | null;
+  declineReason: string | null;
+  /** سببُ التعليق أو آخرُ جوابٍ غير قاطع. */
+  detail: string | null;
+  invoiceId: string | null;
+  chargeStartedAt: string | null;
+  resolvedAt: string | null;
+  resolution: PosPaymentResolution | null;
+  resolvedByName: string | null;
+  evidence: { deviceReference: string | null; approvalCode: string | null; note: string | null } | null;
+  createdAt: string;
+  /** إيصالُ البيع حين اكتملت. */
+  sale?: PosSaleResponse | null;
+  /** في القائمة المفتوحة: اسمُ الكاشير صاحب المناوبة. */
+  cashierName?: string;
+}
+
+export const createPaymentAttempt = (sale: PosSaleInput) => apiClient.post<PosPaymentAttempt>('/pos/payment-attempts', sale).then((r) => r.data);
+export const chargePaymentAttempt = (id: string) => apiClient.post<PosPaymentAttempt>(`/pos/payment-attempts/${id}/charge`).then((r) => r.data);
+export const getPaymentAttempt = (id: string) => apiClient.get<PosPaymentAttempt>(`/pos/payment-attempts/${id}`).then((r) => r.data);
+export const listOpenPaymentAttempts = () => apiClient.get<PosPaymentAttempt[]>('/pos/payment-attempts').then((r) => r.data);
+/** الحسمُ بجواب المزوّد بالمرجع — «جوابُ المزوّد أوّلاً» (`ق-١٣٩٩`). */
+export const resolvePaymentAttempt = (id: string) => apiClient.post<PosPaymentAttempt>(`/pos/payment-attempts/${id}/resolve`).then((r) => r.data);
+/** ⚖️ الحسمُ اليدويّ بدليلٍ — لصاحب صلاحية المراجعة (`ق-١٣٩٩`). */
+export const resolvePaymentAttemptWithEvidence = (id: string, evidence: { deviceReference: string; approvalCode: string; note?: string }) =>
+  apiClient.post<PosPaymentAttempt>(`/pos/payment-attempts/${id}/resolve-with-evidence`, evidence).then((r) => r.data);
+export const cancelPaymentAttempt = (id: string) => apiClient.post<PosPaymentAttempt>(`/pos/payment-attempts/${id}/cancel`).then((r) => r.data);
+
+/** ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة (`ق-١٣٩٧`/٢–٣) — للمراجعة، باسم الكاشير وبحال المطابقة. */
+export interface CardVerificationRow {
+  posPaymentId: string;
+  invoiceId: string;
+  invoiceNo: string;
+  issueDate: string;
+  amount: MoneyText;
+  verification: PosCardVerification;
+  deviceReference: string | null;
+  approvalCode: string | null;
+  resolvedByName: string | null;
+  cashierName: string | null;
+  receiptNo: string | null;
+  settlementNo: string | null;
+  matched: boolean;
+  ageDays: number;
+  overdue: boolean;
+}
+/**
+ * ⚖️ **معلّقٌ من مناوبةٍ مقفلة** (`ق-١٤١٨`): أُقفلت المناوبةُ وهو فيها مسمّىً، وينتقل إلى قائمة المطابقة حتى يحسمه جوابُ المزوّد
+ * أو الدليل — لا بيعَ يُسجَّل له ولا يُرفض بالتخمين.
+ */
+export interface UnresolvedAttemptRow {
+  attemptId: string;
+  status: PosPaymentAttemptStatus;
+  amount: MoneyText;
+  provider: string;
+  createdAt: string;
+  detail: string | null;
+  cashierName: string | null;
+  shiftClosedAt: string | null;
+}
+export interface CardVerificationList {
+  settlementDays: number;
+  items: CardVerificationRow[];
+  unresolvedAttempts: UnresolvedAttemptRow[];
+}
+export const listCardVerifications = (state: 'open' | 'overdue' | 'matched' | 'all' = 'open') =>
+  apiClient.get<CardVerificationList>('/pos/card-verifications', { params: { state } }).then((r) => r.data);

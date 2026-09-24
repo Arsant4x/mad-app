@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 
 export class OpenShiftDto {
   /** العهدة الافتتاحية — what the drawer starts with. Zero is a valid float. */
@@ -104,6 +104,16 @@ export class CreatePosSaleDto {
   @Min(-840)
   @Max(840)
   ringOffsetMin?: number;
+
+  /**
+   * ⚖️ **رقمُ مرجع الجهاز من إيصاله** (`ق-١٣٩٧`/١ · `ق-١٤١٩`) — **إلزاميٌّ لجزء البطاقة إن لم يمرّ بمحاولة دفع**: بيعٌ دون اتصالٍ
+   * والربطُ فعّال، **أو جهازٌ مستقلٌّ بلا ربط** («فالحكمُ واحد» بنصّ المالك) — **لا «أكّده الكاشير» وحدَه**. يُعلَّم غيرَ متحقَّقٍ
+   * حتى تطالب به تسويةُ الشبكة. (ومحاولةُ الدفع ترث الحقلَ ولا تقرؤه: مرجعُها جوابُ المزوّد.)
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  cardDeviceReference?: string;
 }
 
 /** مزامنة بيع أوفلاين: نفس البيع + هوية الطرفية التي تجعل الإرسال آمن التكرار. */
@@ -116,4 +126,45 @@ export class SyncPosSaleDto extends CreatePosSaleDto {
   @IsOptional()
   @IsString()
   offlineRef?: string;
+}
+
+/**
+ * ⭐ **محاولةُ دفع البطاقة** (`ق-١٤٠١`): البيعُ نفسُه بهويّة الطرفية — يُتحقَّق منه ويُحفظ لقطةً **بلا فاتورةٍ ولا شحن**،
+ * ثم يُشحن بمسارٍ مستقلّ خارج كلِّ معاملة. وإعادةُ الطلب بالمعرّف نفسِه تعيد المحاولةَ نفسَها.
+ */
+export class CreatePosPaymentAttemptDto extends CreatePosSaleDto {
+  @IsString()
+  clientSaleId!: string;
+
+  @IsOptional()
+  @IsString()
+  offlineRef?: string;
+}
+
+/** مرشِّحُ دفعات البطاقة غير المتحقَّقة (`ق-١٣٩٧`): المفتوحُ افتراضاً · ما تجاوز المهلة · ما طابقته تسوية · الكلّ. */
+export class CardVerificationsQueryDto {
+  @IsOptional()
+  @IsIn(['open', 'overdue', 'matched', 'all'])
+  state?: 'open' | 'overdue' | 'matched' | 'all';
+}
+
+/**
+ * ⚖️ **الحسمُ اليدويّ للمعلّق — بدليلٍ لا بقول** (`ق-١٣٩٩`): إيصالُ الجهاز (مرجعُه) ورمزُ الموافقة، لصاحب صلاحية المراجعة،
+ * **بعد أن يُسأل المزوّد فلا يُجيب**؛ ولا يُعدّ نهائياً حتى تطابقه التسوية.
+ */
+export class ResolvePaymentAttemptWithEvidenceDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  deviceReference!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  approvalCode!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }

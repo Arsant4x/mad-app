@@ -211,9 +211,21 @@ export type PlatformDecisionStatus = (typeof PLATFORM_DECISION_STATUS_VALUES)[nu
 export const PLATFORM_ROLE_VALUES = ['OWNER', 'SUPPORT', 'FINANCE', 'OPERATIONS', 'COMPLIANCE'] as const;
 export type PlatformRole = (typeof PLATFORM_ROLE_VALUES)[number];
 
+/** `prisma:PosCardVerification` — ويقابلُه `apps/web/src/api/pos.ts#PosCardVerification`. */
+export const POS_CARD_VERIFICATION_VALUES = ['PROVIDER_APPROVED', 'DEVICE_REFERENCE', 'MANUAL_EVIDENCE', 'CASHIER_CONFIRMED'] as const;
+export type PosCardVerification = (typeof POS_CARD_VERIFICATION_VALUES)[number];
+
+/** `prisma:PosPaymentAttemptStatus` — ويقابلُه `apps/web/src/api/pos.ts#PosPaymentAttemptStatus`. */
+export const POS_PAYMENT_ATTEMPT_STATUS_VALUES = ['CREATED', 'CHARGING', 'APPROVED', 'COMPLETED', 'DECLINED', 'UNKNOWN', 'CANCELLED'] as const;
+export type PosPaymentAttemptStatus = (typeof POS_PAYMENT_ATTEMPT_STATUS_VALUES)[number];
+
 /** `isIn:apps/api/src/pos/dto/pos.dto.ts#CreatePosSaleDto.paymentMethod` — ويقابلُه `apps/web/src/api/pos.ts#PosPaymentMethod`. */
 export const POS_PAYMENT_METHOD_VALUES = ['CASH', 'CARD', 'SPLIT'] as const;
 export type PosPaymentMethod = (typeof POS_PAYMENT_METHOD_VALUES)[number];
+
+/** `prisma:PosPaymentResolution` — ويقابلُه `apps/web/src/api/pos.ts#PosPaymentResolution`. */
+export const POS_PAYMENT_RESOLUTION_VALUES = ['PROVIDER_CHARGE', 'PROVIDER_STATUS', 'MANUAL_EVIDENCE', 'CANCELLED'] as const;
+export type PosPaymentResolution = (typeof POS_PAYMENT_RESOLUTION_VALUES)[number];
 
 /** `prisma:PurchaseDocType` — ويقابلُه `apps/web/src/api/purchases.ts#PurchaseDocType`. */
 export const PURCHASE_DOC_TYPE_VALUES = ['PURCHASE', 'SUPPLIER_CREDIT_NOTE', 'SUPPLIER_DEBIT_NOTE'] as const;

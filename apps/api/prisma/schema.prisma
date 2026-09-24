@@ -379,6 +379,12 @@ model Company {
   /// أكثر منه واقعتان. «الحدّ اجتهادٌ لا نصّ، وقد يختلف بين متجرٍ وآخر» — فهو
   /// للتاجر، ويُعرَض في التقرير مع كل واقعة كي يُقرأ الاستنتاجُ استنتاجاً.
   posOfflineGapMinutes Int @default(2)
+  /// ⚖️ **مهلةُ تسوية الشبكة بالأيام — إعدادٌ لا ثابت** (`ق-١٣٩٧`/٣ · `ق-١٣٩٩`).
+  ///
+  /// دفعُ بطاقةٍ لم يمرّ بالمزوّد (رقمُ مرجع الجهاز دون اتصال، أو حسمٌ يدويٌّ بدليل) **غيرُ متحقَّقٍ حتى تطالب به
+  /// تسويةُ الشبكة**؛ وما لم يُطابَق بعد هذه المهلة من يوم البيع **يُرفع للمراجعة باسم الكاشير**. ودورةُ التسوية
+  /// تختلف بالمستحوذ (T+1 إلى T+3 في خطّتنا الموثَّقة) — فهي للتاجر، والافتراضيُّ أعلاها.
+  posCardSettlementDays Int @default(3)
 
   /// **معرّفُ النطاق الفرعيّ** (`ق-١٣٠٣` · ك/⑬A2) — `alfa` في `alfa.rikzapp.com`.
   ///
@@ -574,6 +580,7 @@ model Company {
   networkSettlements NetworkSettlement[]
   invoicePrepayments InvoicePrepayment[]
   posPayments         PosPayment[]
+  posPaymentAttempts  PosPaymentAttempt[]
   payments            Payment[]
   paymentAllocations  PaymentAllocation[]
   supplierPayments           SupplierPayment[]
@@ -1448,6 +1455,8 @@ model Invoice {
   clientSaleId String?
   offlineRef   String?
   posPayments  PosPayment[]
+  /// محاولةُ دفع البطاقة التي أنتجت هذا البيع عند إتمامها (`ق-١٤٠١`) — لبيعٍ مرّ بالمزوّد وحدَه.
+  posPaymentAttempt PosPaymentAttempt?
 
   /// See Company.baseCurrency for the scheme these columns belong to.
   currency     String  @default("SAR")
@@ -1611,6 +1620,7 @@ model Invoice {
   payment_refundsInvoiceId_tenant Payment[] @relation("Payment_refundsInvoiceId_tenant")
   quote_convertedInvoiceId_tenant Quote[] @relation("Quote_convertedInvoiceId_tenant")
   posPayment_invoiceId_tenant PosPayment[] @relation("PosPayment_invoiceId_tenant")
+  posPaymentAttempt_invoiceId_tenant PosPaymentAttempt[] @relation("PosPaymentAttempt_invoiceId_tenant")
   invoiceLine_invoiceId_tenant InvoiceLine[] @relation("InvoiceLine_invoiceId_tenant")
   invoice_replacesInvoiceId_tenant Invoice[] @relation("Invoice_replacesInvoiceId_tenant")
   invoice_relatedInvoiceId_tenant Invoice[] @relation("Invoice_relatedInvoiceId_tenant")
@@ -3574,6 +3584,9 @@ enum NotificationKind {
   SUBPROCESSOR_CONSENT
   /// شهادةُ الفوترة الإلكترونية تقترب من انتهائها — وبعدها تُرفض كلُّ الفواتير (ز/⑤A1).
   ZATCA_CERT_EXPIRING
+  /// دفعُ بطاقةٍ لم يمرّ بالمزوّد (رقمُ مرجع الجهاز · حسمٌ يدويّ) ولم تطالب به تسويةُ الشبكة بعد مهلتها —
+  /// **يُرفع للمراجعة باسم الكاشير** (`ق-١٣٩٧`/٣ · `ق-١٣٩٩`).
+  POS_CARD_UNMATCHED
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something
@@ -4384,10 +4397,14 @@ model PosShift {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   drawerTenant CashDrawer? @relation("PosShift_drawerId_tenant", fields: [companyId, drawerId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// محاولاتُ دفع البطاقة على المناوبة (`ق-١٤٠١`) — والمناوبةُ لا تُقفل ومالُها في الطريق.
+  paymentAttempts PosPaymentAttempt[]
+
   @@index([companyId, status])
   @@index([drawerId])
   @@map("pos_shifts")
   invoice_posShiftId_tenant Invoice[] @relation("Invoice_posShiftId_tenant")
+  posPaymentAttempt_shiftId_tenant PosPaymentAttempt[] @relation("PosPaymentAttempt_shiftId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -4581,10 +4598,134 @@ model PosPayment {
   /// مرجع عملية المزوّد (رقم موافقة الجهاز/البوابة) إن مرّت عبر adapter.
   providerRef String?
 
+  /// ⚖️ **بمَ ثبت دفعُ صفِّ البطاقة** (`ق-١٣٩٧` · `ق-١٣٩٩`) — و`null` لصفِّ النقد وحدَه (قيدُ `CHECK` في القاعدة).
+  verification    PosCardVerification?
+  /// **رقمُ مرجع الجهاز من إيصاله** — إلزاميٌّ لبيعٍ ببطاقةٍ دون اتصالٍ والربطُ فعّال (`ق-١٣٩٧`/١) وللحسم اليدويّ (`ق-١٣٩٩`).
+  deviceReference String?
+  /// رمزُ الموافقة — من المزوّد أو من إيصال الجهاز.
+  approvalCode    String?
+  /// محاولةُ الدفع التي أنتجت صفَّ البطاقة — لما مرّ بالمزوّد أو حُسم يدوياً.
+  attemptId       String?
+  attempt         PosPaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: NoAction)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  attemptTenant PosPaymentAttempt? @relation("PosPayment_attemptId_tenant", fields: [companyId, attemptId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   createdAt DateTime @default(now())
 
   @@index([companyId, invoiceId])
   @@map("pos_payments")
+}
+
+/// ⭐ **حالُ محاولة دفع البطاقة** (`ق-١٤٠١` · الموجز `موجز-مسار-دفع-الكاشير.md` ٢.٢).
+///
+/// كلُّ انتقالٍ كتابةٌ مشروطةٌ بالحالة السابقة — فنقرتان لا تشحنان مرّتين، والإتمامُ لا يقع مرّتين.
+enum PosPaymentAttemptStatus {
+  /// تحقّقنا من البيع ولم نُرسل شيئاً.
+  CREATED
+  /// أُرسل الطلبُ للمزوّد وننتظر — بمهلة محوّله (`ق-١٣٩٨`).
+  CHARGING
+  /// قبل المزوّد (أو حُسم بدليلٍ مسجَّل) — ولم تُنشأ الفاتورةُ بعد.
+  APPROVED
+  /// الفاتورةُ أُنشئت في معاملة الإتمام.
+  COMPLETED
+  /// رفض المزوّد — لا فاتورة ولا رقم.
+  DECLINED
+  /// انقطع الجوابُ — المالُ قد يكون قُبض: لا يخرج إلا بجواب المزوّد أو بدليلٍ مسجَّل (`ق-١٣٩٩`).
+  UNKNOWN
+  /// أُلغيت قبل الإرسال — بيد الكاشير أو بإقفال المناوبة عليها.
+  CANCELLED
+}
+
+/// ⚖️ **بمَ ثبت دفعُ البطاقة** (`ق-١٣٩٧` · `ق-١٣٩٩`).
+enum PosCardVerification {
+  /// قبله المزوّد عبر محاولة الدفع — الربطُ فعّال والاتصالُ قائم.
+  PROVIDER_APPROVED
+  /// بيعٌ دون اتصالٍ والربطُ فعّال: رقمُ مرجع الجهاز من إيصاله — **غيرُ متحقَّقٍ حتى تطالب به تسويةُ الشبكة** (`ق-١٣٩٧`).
+  DEVICE_REFERENCE
+  /// معلّقٌ لم يُجب عنه المزوّد فحسمه صاحبُ المراجعة بإيصال الجهاز ورمز الموافقة — **غيرُ نهائيٍّ حتى تطابقه التسوية** (`ق-١٣٩٩`).
+  MANUAL_EVIDENCE
+  /// بلا ربطٍ فعّال: جهازٌ مستقلّ أكّده الكاشير — مسارُ ما قبل الربط (الموجز ٢.١)، وكلُّ صفِّ بطاقةٍ قائمٍ بلا مرجع مزوّد.
+  CASHIER_CONFIRMED
+}
+
+/// مَن حسم محاولةَ الدفع.
+enum PosPaymentResolution {
+  /// جوابُ الشحن نفسِه — قُبل أو رُفض في مهلته.
+  PROVIDER_CHARGE
+  /// جوابُ المزوّد على الاستعلام بالمرجع (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً»).
+  PROVIDER_STATUS
+  /// صاحبُ المراجعة بدليلٍ مسجَّل — والمزوّدُ لم يُجب (`ق-١٣٩٩`).
+  MANUAL_EVIDENCE
+  /// أُلغيت قبل الإرسال.
+  CANCELLED
+}
+
+/// ⭐ **محاولةُ دفع البطاقة — الشحنُ خارج المعاملة، والفاتورةُ بعد القبول** (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`).
+///
+/// البيعُ ببطاقةٍ والربطُ فعّال لا يُنشئ فاتورةً قبل جواب المزوّد: يُتحقَّق منه ويُحفظ لقطةً (`CREATED`)، ثم يُشحن
+/// **خارج كلِّ معاملة** بمهلة المحوّل (`CHARGING`)، ثم تُنشأ الفاتورةُ ورقمُها وقيدُها وسندُها **في معاملة الإتمام
+/// وحدَها** (`COMPLETED`). فالرفضُ لا يترك فاتورةً ولا يستهلك رقماً، والانقطاعُ حالٌ مسمّاةٌ (`UNKNOWN`) تُحسم ولا تُخمَّن.
+model PosPaymentAttempt {
+  /// **معرّفُ المحاولة هو مرجعُها عند المزوّد** — مفتاحُ عدم التكرار: الاستعلامُ والإعادةُ بالمرجع نفسِه.
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  shiftId     String
+  shift       PosShift @relation(fields: [shiftId], references: [id], onDelete: NoAction)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  shiftTenant PosShift @relation("PosPaymentAttempt_shiftId_tenant", fields: [companyId, shiftId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// البيعُ من الجهاز — فريدٌ في المنشأة: إعادةُ الطلب بالمعرّف نفسِه تعيد المحاولةَ نفسَها.
+  clientSaleId String
+  status       PosPaymentAttemptStatus @default(CREATED)
+
+  /// **لقطةُ البيع المتحقَّق منها** — المستندُ بسطوره وأسعاره وفئاته لحظةَ البيع وأجزاءُ دفعه: منها وحدَها تُنشأ الفاتورةُ
+  /// عند الإتمام، فلا يفترق ما يُفوتَر عمّا شُحن ولو تغيّر سعرُ الصنف بين الشحن والإتمام.
+  sale Json
+
+  cardAmount Decimal @db.Decimal(18, 2)
+  /// عملةُ المستند — من المنشأة لا حرفاً (`§3.8`).
+  currency   String
+  /// المحوّلُ الذي شُحنت عليه — وبه يُستعلم عن الحال.
+  provider   String
+
+  providerRef   String?
+  approvalCode  String?
+  declineReason String?
+  /// آخرُ ما قيل عن الحال وهي لم تُحسم — سببُ التعليق (مهلةٌ انقضت · انقطاع) أو جوابٌ غيرُ قاطع.
+  detail        String?
+
+  invoiceId     String?  @unique
+  invoice       Invoice? @relation(fields: [invoiceId], references: [id], onDelete: NoAction)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  invoiceTenant Invoice? @relation("PosPaymentAttempt_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  chargeStartedAt DateTime?
+  resolvedAt      DateTime?
+  resolution      PosPaymentResolution?
+  /// مَن حسم يدوياً — هويّتُه واسمُه لحظةَ الحسم (`ق-١٣٩٩`: «ويُسجَّل»).
+  resolvedById    String?
+  resolvedByName  String?
+  /// دليلُ الحسم اليدويّ من إيصال الجهاز: مرجعُه ورمزُ الموافقة — وملاحظة.
+  evidenceDeviceReference String?
+  evidenceApprovalCode    String?
+  evidenceNote            String?
+
+  /// الكاشيرُ الذي أنشأها — هويّتُه (مفتاحُ مناوبته).
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posPayments                 PosPayment[]
+  posPayment_attemptId_tenant PosPayment[] @relation("PosPayment_attemptId_tenant")
+
+  @@unique([companyId, clientSaleId])
+  @@index([companyId, status])
+  @@index([companyId, shiftId])
+  @@map("pos_payment_attempts")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 enum IntegrationKind {
