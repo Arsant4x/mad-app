@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { WRITEOFF_REASONS } from '../src/common/writeoff-reasons';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { inventoryLedgerReconciliation, type InventoryLedgerReconciliation } from '../src/inventory/inventory-ledger-reconciliation.util';
+import { inventoryDistributionCheck, type InventoryDistributionCheck } from '../src/inventory/inventory-distribution.util';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (42.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -68,6 +69,7 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       (await post('/products').send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `${name} ${suffix}`, price: 150, cost }).expect(201)).body.id as string;
 
     const recon = (): Promise<InventoryLedgerReconciliation> => tenantPrisma.runInTenantContext(company.companyId, (tx) => inventoryLedgerReconciliation(tx));
+    const distribution = (): Promise<InventoryDistributionCheck> => tenantPrisma.runInTenantContext(company.companyId, (tx) => inventoryDistributionCheck(tx));
     const ledger = async (): Promise<Record<string, number>> => {
       const res = await get('/accounts').expect(200);
       return Object.fromEntries((res.body as { code: string; balance: string }[]).map((a) => [a.code, Number(a.balance)]));
@@ -114,7 +116,7 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
     };
     const receiptOf = async (purchaseId: string) => (await get(`/purchases/${purchaseId}/receipts`).expect(200)).body.receipts[0].id as string;
 
-    return { company, get, post, del, supplierId, warehouseA, warehouseB, branchId, product, recon, ledger, deltaOf, layersOf, buy, sell, returnSale, writeOff, move, freight, receiptOf };
+    return { company, get, post, del, supplierId, warehouseA, warehouseB, branchId, product, recon, distribution, ledger, deltaOf, layersOf, buy, sell, returnSale, writeOff, move, freight, receiptOf };
   }
 
   describe('① المساراتُ الموثَّقة — الفرقُ صفرٌ بعد كلِّ خطوة', () => {
@@ -129,6 +131,9 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       const r = await s.recon();
       // الرسالةُ تسمّي الخطوة والأرقام — فالسقوطُ يقول أين افترق الحسابان وبكم.
       expect({ step, difference: r.difference }).toEqual({ step, difference: 0 });
+      // ⚖️ ق-١٣٦٤ والحارسُ الثاني بعد كلِّ خطوة: القسمةُ المسجَّلة تطابق المشتقّة من الصفوف، والحسابان المخصوصان يطابقان سجلَّهما.
+      const d = await s.distribution();
+      expect({ step, findings: d.findings, writeOff: d.writeOff.difference, variance: d.variance.difference }).toEqual({ step, findings: [], writeOff: 0, variance: 0 });
       return r;
     };
 
@@ -250,11 +255,13 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       expect({ inv: delta('1300'), variance: delta('5810') }).toEqual({ inv: 0, variance: 0 });
       expect((await balanced('transfer-provisional')).openProvisional).toBe(20);
 
-      // يصل الشراءُ باثني عشر: فرقُ الاثنتين (٤) — لا قيمتُهما (٢٤) — والفروقاتُ لا تتحرّك (وتبعُه المقصِدَ بندُ ق-١٣٦٤).
+      // يصل الشراءُ باثني عشر: فرقُ الاثنتين (٤) — لا قيمتُهما (٢٤) — **يتبع الوحدتين إلى طبقة المقصِد** (ق-١٣٦٤: «ولا يُعدّ
+      // مستهلكاً»): لا تكلفةَ مبيعات ولا فروقات، والمقصِدُ صار باثني عشر.
       delta = await s.deltaOf(async () => {
         await s.buy(v, 5, 12).expect(201);
       });
-      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 56, variance: 0, cogs: 4 });
+      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 60, variance: 0, cogs: 0 });
+      expect((await s.layersOf(v)).find((l) => l.warehouseId === s.warehouseB)).toEqual(expect.objectContaining({ source: 'TRANSFER', remaining: 2, unitCost: 12 }));
       await balanced('transfer-provisional-settled');
     });
 
@@ -275,11 +282,11 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
     });
   });
 
-  describe('② العيوبُ الثلاثة (ق-١٣٤٤) — تُقاس ولا تُصلَح', () => {
+  describe('② العيوبُ الثلاثة (ق-١٣٤٤) — أُصلحت (ق-١٣٦٤): الأرقامُ المسمّاة نفسُها في حالها الصحيح، والحارسُ الثاني يراها', () => {
     let s: Awaited<ReturnType<typeof setUp>>;
     let p: string;
     let sale: { id: string; lines: { id: string }[] };
-    let landed: { cogs: number; writeOffAccount: number };
+    let landed: { inv: number; cogs: number; writeOffAccount: number; variance: number };
 
     beforeAll(async () => {
       s = await setUp('ledger-recon-defects');
@@ -292,33 +299,65 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       await s.returnSale(sale, p, 1).expect(201);
       expect((await s.recon()).difference).toBe(0);
 
-      // تكلفةٌ محمَّلة ١٠٠ على الاستلام: عشرةٌ للوحدة؛ على الرفّ خمسٌ (+٥٠ للطبقة) و«المستهلَكُ» خمسٌ (+٥٠ لـ5100).
-      const before = await s.ledger();
-      const f = await s.freight(100);
-      await s.post(`/purchases/${f.id}/landed-costs`).send({ purchaseLineId: f.lineId, goodsReceiptIds: [await s.receiptOf(purchase.id)] }).expect(201);
-      const after = await s.ledger();
-      landed = { cogs: Number(((after['5100'] ?? 0) - (before['5100'] ?? 0)).toFixed(2)), writeOffAccount: Number(((after['5800'] ?? 0) - (before['5800'] ?? 0)).toFixed(2)) };
+      // تكلفةٌ محمَّلة ١٠٠ على الاستلام: عشرةٌ للوحدة — على الرفّ خمسٌ (+٥٠ للطبقة)، والخارجُ خمسٌ تُقسَم على مخارجها:
+      // بيعٌ صافٍ (٢ ⟵ ٢٠ إلى 5100) · تحويلٌ (٢ ⟵ ٢٠ تتبع إلى طبقة المقصِد) · شطبٌ (١ ⟵ ١٠ إلى 5800).
+      const delta = await s.deltaOf(async () => {
+        const f = await s.freight(100);
+        await s.post(`/purchases/${f.id}/landed-costs`).send({ purchaseLineId: f.lineId, goodsReceiptIds: [await s.receiptOf(purchase.id)] }).expect(201);
+      });
+      landed = { inv: delta('1300'), cogs: delta('5100'), writeOffAccount: delta('5800'), variance: delta('5810') };
     });
 
-    it('العيبُ الأوّل — التحويلُ «مستهلَك» وهو على رفٍّ آخر: حصّةُ وحدتَي التحويل (٢٠) ذهبت إلى 5100، وطبقةُ المقصِد بتكلفتها القديمة — والحارسُ لا يراه', async () => {
-      const layers = await s.layersOf(p);
-      const dest = layers.find((l) => l.warehouseId === s.warehouseB)!;
-      expect(dest).toEqual(expect.objectContaining({ source: 'TRANSFER', remaining: 2, unitCost: 40 }));
-      // الخمسُ «المستهلَكة» = بيعٌ صافٍ (٢) + تحويل (٢) + شطب (١): كلُّها إلى 5100 — ومنها ٢٠ حقُّها طبقةُ المقصِد.
-      expect(landed.cogs).toBe(50);
+    it('الأوّل أُصلح — التحويلُ يتبع: طبقةُ المقصِد بخمسين، وحصّتا وحدتيه (٢٠) على الرفّ لا في 5100', async () => {
+      const dest = (await s.layersOf(p)).find((l) => l.warehouseId === s.warehouseB)!;
+      expect(dest).toEqual(expect.objectContaining({ source: 'TRANSFER', remaining: 2, unitCost: 50 }));
+      expect(landed).toEqual({ inv: 70, cogs: 20, writeOffAccount: 10, variance: 0 });
       expect((await s.recon()).difference).toBe(0);
     });
 
-    it('العيبُ الثاني — الإتلافُ يذهب إلى تكلفة المبيعات: حصّةُ الوحدة المشطوبة (١٠) في 5100 لا في 5800', async () => {
-      expect(landed.writeOffAccount).toBe(0);
-      expect(landed.cogs).toBe(50);
+    it('الثاني أُصلح — الإتلافُ إلى 5800: حصّةُ الوحدة المشطوبة (١٠) هناك لا في تكلفة المبيعات', async () => {
+      expect(landed.writeOffAccount).toBe(10);
+      expect(landed.cogs).toBe(20);
     });
 
-    it('🔴 العيبُ الثالث — مرتجعُ البيع بعد الرفع لا يُعيد فرقَ الرفع: الطبقةُ تستقبل الوحدةَ بخمسين والدفترُ بأربعين — الحارسُ يراه −١٠', async () => {
-      await s.returnSale(sale, p, 1).expect(201);
-      const r = await s.recon();
-      // حجمُ العيب رقماً: وحدةٌ × فرقُ الرفع (١٠) — يصير صفراً حين يُصلَح البندُ المستقلّ، فيسقط هذا التوكيدُ ويُحدَّث.
-      expect(r.difference).toBe(-10);
+    it('الثالث أُصلح — مرتجعُ البيع بعد الرفع يعود بتكلفة خروجه (٤٠) وما رُفع عليه بعدها (١٠) يُعاد من 5100 إلى المخزون: الفرقُ صفر', async () => {
+      const delta = await s.deltaOf(async () => {
+        await s.returnSale(sale, p, 1).expect(201);
+      });
+      expect({ inv: delta('1300'), cogs: delta('5100') }).toEqual({ inv: 50, cogs: -50 });
+      expect((await s.recon()).difference).toBe(0);
+      const origin = (await s.layersOf(p)).find((l) => l.warehouseId === s.warehouseA && l.source === 'GOODS_RECEIPT')!;
+      expect(origin).toEqual(expect.objectContaining({ remaining: 6, unitCost: 50 }));
+    });
+
+    it('إلغاءُ توزيعٍ تبعَ التحويلَ يعيد طبقةَ المقصِد معه — من حصصه المسجَّلة، والفرقُ صفرٌ بعده', async () => {
+      const w = await s.product('صنف الإلغاء', 10);
+      const purchase = (await s.buy(w, 4, 10).expect(201)).body;
+      await s.move({ productId: w, warehouseId: s.warehouseA, toWarehouseId: s.warehouseB, type: 'TRANSFER', qty: 1 }).expect(201);
+      // ٨ على أربع: اثنان للوحدة — ثلاثٌ على الرفّ (+٦) وواحدةٌ حُوّلت فتتبعها (+٢) إلى المقصِد.
+      const f = await s.freight(8);
+      let distributionId = '';
+      let delta = await s.deltaOf(async () => {
+        distributionId = (await s.post(`/purchases/${f.id}/landed-costs`).send({ purchaseLineId: f.lineId, goodsReceiptIds: [await s.receiptOf(purchase.id)] }).expect(201)).body.id;
+      });
+      expect({ inv: delta('1300'), cogs: delta('5100') }).toEqual({ inv: 8, cogs: 0 });
+      const unitCosts = async () => Object.fromEntries((await s.layersOf(w)).map((l) => [l.warehouseId === s.warehouseB ? 'dest' : 'origin', l.unitCost]));
+      expect(await unitCosts()).toEqual({ origin: 12, dest: 12 });
+
+      delta = await s.deltaOf(async () => {
+        await s.del(`/purchases/${f.id}/landed-costs/${distributionId}`).expect(204);
+      });
+      expect({ inv: delta('1300'), cogs: delta('5100') }).toEqual({ inv: -8, cogs: 0 });
+      expect(await unitCosts()).toEqual({ origin: 10, dest: 10 });
+      expect((await s.recon()).difference).toBe(0);
+    });
+
+    it('🔴 الحارسُ الثاني (على التوزيع) نظيفٌ على الحالة الصحيحة — ويرى الحصّتين: الأصلَ والتابعَ إلى المقصِد', async () => {
+      const d = await s.distribution();
+      expect({ findings: d.findings, writeOff: d.writeOff.difference, variance: d.variance.difference }).toEqual({ findings: [], writeOff: 0, variance: 0 });
+      // مصادقةُ المسبار: يرى ما سُجّل — لا صفرَ على صفر: حصّتا التوزيع الأوّل (الأصلُ والتابع) وحصّتا الملغى (تبقيان سجلّاً).
+      expect(d.sharesChecked).toBe(4);
+      expect(d.writeOff.ledger).toBe(50);
     });
   });
 });

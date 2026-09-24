@@ -2,12 +2,13 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { Prisma } from '@prisma/client';
 import { branchFilter } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { formatMoney, round2 } from '../common/money/rounding';
+import { formatMoney, round2, roundTo } from '../common/money/rounding';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postLandedCostEntry, postReversalEntry } from '../journal/auto-posting.util';
 import { CreateLandedCostDto } from './dto/create-landed-cost.dto';
 import { purchaseLineBase } from './goods-receipts.service';
-import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-spread.util';
+import { unitCostAfterShelfDelta } from './layer-cost-spread.util';
+import { allocationOf, raiseLayerCost, recordCostShares, type CostShareNode } from './layer-cost-allocation.util';
 
 /**
  * ⭐ **التكلفةُ المحمَّلة — توزيعُ فاتورةٍ خدمية على طبقاتٍ مسمّاة** (`٧` · `ق-١١٤٥` · `ق-١١٤٦`).
@@ -171,34 +172,28 @@ export class LandedCostsService {
       }
 
       // لكلِّ طبقة: نصيبُها على كلِّ ما استُلم فيها؛ ما على الرفّ يرفع تكلفتَها بكتابةٍ مشروطة بالمتبقّي المقروء
-      // (`ق-٨١٤`: بيعٌ متزامن غيّر المتبقّي ⇒ يُرفض ويُعاد)، وما استُهلك حصّتُه إلى `5100`.
+      // (`ق-٨١٤`: بيعٌ متزامن غيّر المتبقّي ⇒ يُرفض ويُعاد)، وما خرج حصّتُه على مخارجه (`ق-١٣٦٤`): البيعُ `5100` · الشطبُ `5800`
+      // · اليدويُّ `5810` · **والمحوَّلُ يتبع إلى طبقة مقصِده** (`layer-cost-allocation.util`).
       const written: { layerId: string; baseAmount: number; baseInventory: number; baseCogs: number; qtyRemainingAt: number; unitCostBefore: number; unitCostAfter: number }[] = [];
+      const nodes: CostShareNode[] = [];
       for (let i = 0; i < layers.length; i++) {
         const layer = layers[i];
         const share = shares[i];
-        const spread = spreadCostOverLayer({
+        const node = await raiseLayerCost(tx, {
+          layerId: layer.id,
           unitsAffected: layer.qtyReceived,
-          perUnitAmount: layer.qtyReceived > 0 ? share / layer.qtyReceived : 0,
-          direction: 1,
-          qtyRemaining: layer.qtyRemaining,
-          unitCost: layer.unitCost,
+          amount: share,
+          onConflict: (layerId) => new ConflictException(formatMessage(MSG.landed_cost_layer_changed, { layerId })),
         });
-        const baseInventory = round2(spread.baseInventory);
-        const baseCogs = round2(share - baseInventory);
-        // التكلفةُ الجديدة من الحصّة **المدوَّرة** — ما يُقيَّد على `1300` هو ما يحمله الرفّ حرفاً.
-        const unitCostAfter = unitCostAfterShelfDelta(layer.qtyRemaining, layer.unitCost, baseInventory);
-        if (unitCostAfter !== layer.unitCost) {
-          const { count } = await tx.inventoryLayer.updateMany({
-            where: { id: layer.id, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost },
-            data: { unitCost: unitCostAfter },
-          });
-          if (count === 0) throw new ConflictException(formatMessage(MSG.landed_cost_layer_changed, { layerId: layer.id }));
-        }
-        written.push({ layerId: layer.id, baseAmount: share, baseInventory, baseCogs, qtyRemainingAt: layer.qtyRemaining, unitCostBefore: layer.unitCost, unitCostAfter });
+        nodes.push(node);
+        // السطرُ يروي طبقةَ الاستلام نفسَها: ما وقع على رفّها وما خرج منها (والخارجُ مقسومٌ في `layer_cost_shares`).
+        written.push({ layerId: layer.id, baseAmount: share, baseInventory: node.baseShelf, baseCogs: round2(share - node.baseShelf), qtyRemainingAt: node.qtyRemainingAt, unitCostBefore: node.unitCostBefore, unitCostAfter: node.unitCostAfter });
       }
 
-      const baseInventory = round2(written.reduce((t, w) => t + w.baseInventory, 0));
-      const baseCogs = round2(written.reduce((t, w) => t + w.baseCogs, 0));
+      // الرأسُ يروي ما يُقيَّد: الرفوفُ كلُّها (الاستلامُ وما تبعه إلى المقصِد) مقابل ما خرج بأنواعه.
+      const allocation = allocationOf(nodes);
+      const baseInventory = allocation.shelf;
+      const baseCogs = round2(written.reduce((t, w) => t + w.baseAmount, 0) - allocation.shelf);
       const date = dto.date ? new Date(dto.date) : purchase.date;
       const distribution = await tx.landedCostDistribution.create({
         data: {
@@ -215,6 +210,7 @@ export class LandedCostsService {
         },
         select: { id: true },
       });
+      await recordCostShares(tx, companyId, { event: 'LANDED_COST', landedCostDistributionId: distribution.id }, nodes);
       const entry = await postLandedCostEntry(tx, companyId, {
         supplierId: purchase.supplierId,
         branchId: purchase.branchId,
@@ -223,7 +219,9 @@ export class LandedCostsService {
         categoryCode: purchase.categoryCode,
         date,
         baseInventory,
-        baseCogs,
+        baseCogs: allocation.cogs,
+        baseWriteOff: allocation.writeOff,
+        baseVariance: allocation.variance,
         layersCount: written.length,
       });
       if (entry) await tx.landedCostDistribution.update({ where: { id: distribution.id }, data: { journalEntryId: entry.id } });
@@ -264,18 +262,35 @@ export class LandedCostsService {
       if (!distribution) throw new NotFoundException(MSG.landed_cost_not_found);
       if (distribution.voidedAt) throw new ConflictException(MSG.landed_cost_voided);
 
-      for (const line of distribution.lines) {
-        const layer = await tx.inventoryLayer.findUnique({ where: { id: line.layerId }, select: { qtyRemaining: true, unitCost: true } });
-        const qtyRemainingAt = Number(line.qtyRemainingAt);
-        if (!layer || Number(layer.qtyRemaining) !== qtyRemainingAt) {
-          throw new ConflictException(formatMessage(MSG.landed_cost_void_after_consumption, { no: purchase.no }));
-        }
-        const restored = unitCostAfterShelfDelta(qtyRemainingAt, Number(layer.unitCost), -Number(line.baseInventory));
+      // ⚖️ ق-١٣٦٤ التوزيعُ بحصصه المسجَّلة: طبقاتُ الاستلام **وطبقاتُ المقصِد التي تبعها الرفع** — كلٌّ يُعاد بما أُضيف إليه حرفاً
+      // (تكلفةً وما رُفع على خارجه)، وبالشرط نفسِه: المتبقّي لم يتغيّر منذ التوزيع.
+      const shares = await tx.layerCostShare.findMany({ where: { landedCostDistributionId: distribution.id } });
+      const refuse = () => new ConflictException(formatMessage(MSG.landed_cost_void_after_consumption, { no: purchase.no }));
+      for (const s of shares) {
+        const layer = await tx.inventoryLayer.findUnique({ where: { id: s.layerId }, select: { qtyRemaining: true, unitCost: true, exitedRaise: true } });
+        if (!layer || Number(layer.qtyRemaining) !== Number(s.qtyRemainingAt)) throw refuse();
+        const unitDelta = Number(s.unitCostAfter) - Number(s.unitCostBefore);
+        const raiseDelta = Number(s.exitedRaiseAfter) - Number(s.exitedRaiseBefore);
+        if (unitDelta === 0 && raiseDelta === 0) continue;
         const { count } = await tx.inventoryLayer.updateMany({
-          where: { id: line.layerId, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost },
-          data: { unitCost: restored },
+          where: { id: s.layerId, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost, exitedRaise: layer.exitedRaise },
+          data: { unitCost: roundTo(Number(layer.unitCost) - unitDelta, 'UNIT_COST'), exitedRaise: roundTo(Number(layer.exitedRaise) - raiseDelta, 'UNIT_COST') },
         });
-        if (count === 0) throw new ConflictException(formatMessage(MSG.landed_cost_void_after_consumption, { no: purchase.no }));
+        if (count === 0) throw refuse();
+      }
+      // وتوزيعٌ سبق ق-١٣٦٤ بلا حصصٍ مسجَّلة — بسطوره كما كان (طبقاتُ الاستلام وحدَها).
+      if (shares.length === 0) {
+        for (const line of distribution.lines) {
+          const layer = await tx.inventoryLayer.findUnique({ where: { id: line.layerId }, select: { qtyRemaining: true, unitCost: true } });
+          const qtyRemainingAt = Number(line.qtyRemainingAt);
+          if (!layer || Number(layer.qtyRemaining) !== qtyRemainingAt) throw refuse();
+          const restored = unitCostAfterShelfDelta(qtyRemainingAt, Number(layer.unitCost), -Number(line.baseInventory));
+          const { count } = await tx.inventoryLayer.updateMany({
+            where: { id: line.layerId, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost },
+            data: { unitCost: restored },
+          });
+          if (count === 0) throw refuse();
+        }
       }
 
       const voidedAt = new Date();

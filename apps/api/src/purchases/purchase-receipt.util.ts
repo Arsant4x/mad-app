@@ -136,7 +136,7 @@ export async function receiveStockedLines(tx: Tx, args: ReceiveArgs): Promise<{ 
     const settled = await settleProvisionalConsumptions(tx, args.companyId, { productId: line.productId!, warehouseId, layerId: layer.id });
     if (settled.settled > 0) {
       // ق-١٣٦٣ — فرقُ كلِّ مؤقّتٍ على حساب مصدره: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
-      await postProvisionalSettlementEntries(tx, args.companyId, { branchId: args.branchId, ref: `استلام ${args.ref ?? ''}`.trim(), date: args.date, byOrigin: settled.costDeltaByOrigin });
+      await postProvisionalSettlementEntries(tx, args.companyId, { branchId: args.branchId, ref: `استلام ${args.ref ?? ''}`.trim(), date: args.date, allocation: settled.allocation });
     }
   }
 

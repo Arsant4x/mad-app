@@ -273,7 +273,7 @@ export async function restoreConsumption(
   tx: Tx,
   companyId: string,
   originalMovementId: string,
-): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number; restoredCost: number }> {
+): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number; restoredCost: number; raisedAfterExit: number }> {
   const consumptions = await tx.inventoryConsumption.findMany({
     where: { movementId: originalMovementId },
     orderBy: { createdAt: 'asc' },
@@ -285,6 +285,8 @@ export async function restoreConsumption(
   let provisionalQty = 0;
   // ق-١٣٦٣ — ما عاد إلى الطبقات فعلاً بتكلفته (بلا المؤقّت الذي لم يأخذ من طبقة) — قيمةُ قيد عكس الحركة اليدوية.
   let restoredCost = 0;
+  // ق-١٣٦٤ — وما رُفع على العائد بعد خروجه: يعود معه إلى الطبقة، ويُعاد في القيد من حيث ذهب.
+  let raisedAfterExit = 0;
 
   for (const c of consumptions) {
     // ㉘ مؤقّتٌ سُوِّي: صفُّ تسويته — بطبقةٍ حقيقية وتكلفتها — هو الذي يُعاد ويُحسب، لا الأصلُ (ق-١٠٦٣/١).
@@ -297,11 +299,7 @@ export async function restoreConsumption(
       continue;
     }
 
-    // زيادةٌ ذرّية لا قراءةٌ ثم قيمةٌ مطلقة — الموضعُ الثاني من ثلاثة (ق-٨١٤).
-    await tx.inventoryLayer.update({
-      where: { id: c.layerId },
-      data: { qtyRemaining: { increment: qty } },
-    });
+    raisedAfterExit += await restoreIntoLayer(tx, c.layerId, qty, c);
     restoredQty += qty;
     restoredCost += qty * Number(c.unitCost);
   }
@@ -311,7 +309,39 @@ export async function restoreConsumption(
     reversedCost: roundTo(reversedCost, 'LINE_AMOUNT'),
     provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
     restoredCost: roundTo(restoredCost, 'LINE_AMOUNT'),
+    raisedAfterExit: roundTo(raisedAfterExit, 'LINE_AMOUNT'),
   };
+}
+
+/**
+ * ⚖️ **`ق-١٣٦٤` — إعادةُ وحداتٍ إلى طبقتها بما رُفع عليها بعد خروجها** — والعائدُ هو ما يحدّد، لا تكلفةُ الطبقة اليوم.
+ *
+ * بنصّ المالك: «ومرتجعُ البيع بعد الرفع: الدفترُ والطبقةُ يتطابقان بعده، والوحدةُ تعود بالتكلفة التي خرجت بها، وما رُفع عليها
+ * بعد خروجها يُعاد من تكلفة المبيعات إلى المخزون.» فالوحدةُ تحمل `تكلفةَ خروجها + (exitedRaise الطبقة الآن − ما كان لحظةَ خروجها)`،
+ * ويُعاد الفرقُ (المُعاد) إلى المستدعي ليقيّده. **وحين تساوي تكلفةَ الطبقة** — وهو الغالب: رفعٌ كاملٌ وصل الرفَّ والخارجَ معاً —
+ * **زيادةٌ ذرّية كما كانت** (`ق-٨١٤`)؛ وحين تخالفها (إشعارُ سعرٍ على جزء · طبقةٌ فرغت ثم رُفعت) تُمزج تكلفةُ الطبقة بكتابةٍ مشروطة
+ * تُعاد عند التزاحم — فقيمةُ الرفّ بعدها = ما كان + ما عاد بتكلفته، حرفاً كما في الدفتر.
+ */
+async function restoreIntoLayer(tx: Tx, layerId: string, qty: number, row: { unitCost: Prisma.Decimal | number; exitedRaiseAtExit: Prisma.Decimal | number }): Promise<number> {
+  for (let pass = 0; pass < MAX_CONSUME_PASSES; pass++) {
+    const layer = await tx.inventoryLayer.findUniqueOrThrow({ where: { id: layerId }, select: { qtyRemaining: true, unitCost: true, exitedRaise: true } });
+    const extraPerUnit = Number(layer.exitedRaise) - Number(row.exitedRaiseAtExit);
+    const effective = roundTo(Number(row.unitCost) + extraPerUnit, 'UNIT_COST');
+    const current = Number(layer.unitCost);
+    if (effective === current) {
+      // زيادةٌ ذرّية لا قراءةٌ ثم قيمةٌ مطلقة — الموضعُ الثاني من ثلاثة (ق-٨١٤).
+      await tx.inventoryLayer.update({ where: { id: layerId }, data: { qtyRemaining: { increment: qty } } });
+      return qty * extraPerUnit;
+    }
+    const remaining = Number(layer.qtyRemaining);
+    const blended = roundTo((remaining * current + qty * effective) / (remaining + qty), 'UNIT_COST');
+    const { count } = await tx.inventoryLayer.updateMany({
+      where: { id: layerId, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost },
+      data: { qtyRemaining: { increment: qty }, unitCost: blended },
+    });
+    if (count === 1) return qty * extraPerUnit;
+  }
+  throw new Error(`الطبقةُ ${layerId} تتغيّر تحت الأيدي ولم تستقبل عائدَها بعد ${MAX_CONSUME_PASSES} محاولات`);
 }
 
 /**
@@ -330,7 +360,7 @@ export async function restoreConsumptionPartial(
   companyId: string,
   originalMovementId: string,
   qty: number,
-): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number }> {
+): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number; raisedAfterExit: number }> {
   const all = await tx.inventoryConsumption.findMany({
     where: { movementId: originalMovementId },
     orderBy: { createdAt: 'desc' },
@@ -345,6 +375,8 @@ export async function restoreConsumptionPartial(
   let restoredQty = 0;
   let reversedCost = 0;
   let provisionalQty = 0;
+  // ق-١٣٦٤ — ما رُفع على العائد بعد خروجه (يعود معه؛ والمستدعي يعيده من تكلفة المبيعات إلى المخزون).
+  let raisedAfterExit = 0;
 
   for (const c of consumptions) {
     if (remaining <= 0) break;
@@ -356,11 +388,8 @@ export async function restoreConsumptionPartial(
       provisionalQty += take;
       continue;
     }
-    // زيادةٌ ذرّية — الموضعُ الثالث من ثلاثة (ق-٨١٤).
-    await tx.inventoryLayer.update({
-      where: { id: c.layerId },
-      data: { qtyRemaining: { increment: take } },
-    });
+    // الموضعُ الثالث من ثلاثة (ق-٨١٤) — ذرّيٌّ حين يعود بتكلفة الطبقة، ومشروطٌ حين يمزجها.
+    raisedAfterExit += await restoreIntoLayer(tx, c.layerId, take, c);
     restoredQty += take;
   }
 
@@ -368,6 +397,7 @@ export async function restoreConsumptionPartial(
     restoredQty: roundTo(restoredQty, 'DERIVED_QUANTITY'),
     reversedCost: roundTo(reversedCost, 'LINE_AMOUNT'),
     provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
+    raisedAfterExit: roundTo(raisedAfterExit, 'LINE_AMOUNT'),
   };
 }
 
@@ -456,6 +486,8 @@ export async function transferLayers(
         sourceMovementId: args.movementId,
         // ٥+٦ الدفعةُ تنتقل مع الطبقة (`ق-١٠٨٦`) — فالمقصِدُ يعرف انتهاءَها كما عرفه المصدر.
         batchId: s.layer?.batchId ?? null,
+        // ⚖️ ق-١٣٦٤ الشريحةُ التي وُلدت منها — فما رُفع من تكلفة المصدر بعد التحويل يتبع الوحدةَ إلى هنا.
+        transferConsumptionId: s.id,
       },
     });
   }

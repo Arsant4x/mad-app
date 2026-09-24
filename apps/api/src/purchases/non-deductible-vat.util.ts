@@ -3,7 +3,7 @@ import { NonDeductibleVatPlacement, NonDeductibleVatTrigger, Prisma } from '@pri
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
 import { postNonDeductibleVatEntry } from '../journal/auto-posting.util';
-import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-spread.util';
+import { allocationOf, raiseLayerCost, recordCostShares, type CostShareNode } from './layer-cost-allocation.util';
 
 /**
  * ⚖️ **ضريبةُ المدخلات غيرُ القابلة للخصم تدخل تكلفةَ ما اشتُري** (`ق-١٣٣٠` · `ق-١٣٤٢`).
@@ -16,9 +16,9 @@ import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-sprea
  * لمستندٍ واحد (شراءٌ أو إشعارُ مورّد) تحسب **ما يجب أن يكون الآن في كلِّ موضع**، وتطرح منه **ما وُضع فيه قبلُ**
  * (Σ سطور أحداثه)، وتُرحّل الفرقَ وحدَه قيدَ إعادة تصنيفٍ مستقلّاً (`postNonDeductibleVatEntry`) — فتُنادى بعد كلِّ ما
  * يغيّر الجواب (إنشاءٌ · تعديلٌ · استلامٌ · إلغاء) ولا تُكرّر ما وقع. **والمواضعُ أربعة**:
- * - **`LAYER`** طبقةُ استلامٍ حيّة: الحصّةُ على كلِّ ما استُلم فيها — ما على الرفّ يرفع تكلفتَها (`1300`) وما استُهلك
- *   إلى `5100` في فترة الحدث — **بالدالّة نفسِها** التي تخدم إشعارَ السعر والتكلفةَ المحمَّلة (`spreadCostOverLayer`)،
- *   وبكتابةٍ مشروطة بالمتبقّي والتكلفة المقروءين (`ق-٨١٤`).
+ * - **`LAYER`** طبقةُ استلامٍ حيّة: الحصّةُ على كلِّ ما استُلم فيها — ما على الرفّ يرفع تكلفتَها (`1300`) وما خرج منها
+ *   على مخارجه في فترة الحدث (`ق-١٣٦٤`: البيعُ `5100` · الشطبُ `5800` · اليدويُّ `5810` · والمحوَّلُ يتبع طبقةَ مقصِده) —
+ *   **بالموزِّع نفسِه** الذي يخدم إشعارَ السعر والتكلفةَ المحمَّلة (`raiseLayerCost`)، وبكتابةٍ مشروطة (`ق-٨١٤`).
  * - **`CLEARING`** وسيطُ الاستلام: حصّةُ ما فُوتر ولم يُستلم — تنتظر طبقتَها، فينقلها الاستلامُ إليها بلا مسّ `1250`.
  * - **`EXPENSE`** حسابُ فئة المستند: البندُ الخدميّ (والمستندُ بلا بنود حصّةً واحدة).
  * - **`COGS`** `5100`: بضاعةٌ أُعيدت إلى المورّد — خرجت بتكلفة طبقتها وفيها حصّتُها، فحصّةُ إشعارها تقابل ذلك.
@@ -37,8 +37,8 @@ import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-sprea
  * حيث استُلمت، وقراءةٌ مقصورةٌ على فرعٍ تُسقط طبقةً فتُعيد حصّتَها إلى الوسيط وهي على الرفّ.
  *
  * ⚠️ **وحدودُها معلَنة**: (١) الأصلُ الثابت لا فئةَ شراءٍ له ولا وحدةَ أصول — فحصّتُه تذهب إلى حساب فئة المستند كأيّ بندٍ
- * خدميّ حتى تُبنى الأصول (`م٧`). (٢) حدثٌ لاحق على طبقةٍ خرج منها **تحويلٌ أو إتلاف** يعدّها «مستهلَكة» — العيبان
- * القائمان المقيسان (`ق-١٣٤٤`)؛ وعند الشراء نفسِه الطبقةُ جديدةٌ فلا يقع.
+ * خدميّ حتى تُبنى الأصول (`م٧`). (٢) ~~حدثٌ لاحق على طبقةٍ خرج منها تحويلٌ أو إتلاف يعدّها «مستهلَكة»~~ — أُصلح (`ق-١٣٦٤`):
+ * حصّةُ الخارج تُقسَم على مخارجه.
  */
 type Tx = Prisma.TransactionClient;
 
@@ -231,6 +231,7 @@ export async function reconcileNonDeductibleVat(tx: Tx, companyId: string, purch
     unitCostAfter: number | null;
   };
   const written: Written[] = [];
+  const nodes: CostShareNode[] = [];
   for (const key of keys) {
     const target = wanted.get(key);
     const delta = round2((target?.amount ?? 0) - (applied.get(key) ?? 0));
@@ -243,32 +244,29 @@ export async function reconcileNonDeductibleVat(tx: Tx, companyId: string, purch
       continue;
     }
 
-    // الطبقة: الحكمُ نفسُه بلا نسخة — ما على الرفّ يتبعها، وما استُهلك منها إلى `5100` في فترة الحدث.
-    const layer = await tx.inventoryLayer.findUnique({ where: { id: base.layerId! }, select: { id: true, qtyReceived: true, qtyRemaining: true, unitCost: true } });
+    // الطبقة: الحكمُ نفسُه بلا نسخة — ما على الرفّ يتبعها، وما خرج منها على مخارجه في فترة الحدث (`ق-١٣٦٤`: البيعُ `5100` ·
+    // الشطبُ `5800` · اليدويُّ `5810` · والمحوَّلُ يتبع إلى طبقة مقصِده).
+    const layer = await tx.inventoryLayer.findUnique({ where: { id: base.layerId! }, select: { id: true, qtyReceived: true } });
     if (!layer) continue;
-    const qtyRemaining = Number(layer.qtyRemaining);
-    const unitCost = Number(layer.unitCost);
     const units = target?.unitsAffected ?? Number(layer.qtyReceived);
-    const direction: 1 | -1 = delta > 0 ? 1 : -1;
-    const spread = spreadCostOverLayer({ unitsAffected: units, perUnitAmount: units > 0 ? Math.abs(delta) / units : 0, direction, qtyRemaining, unitCost });
-    const baseInventory = round2(direction * spread.baseInventory);
-    const baseCogs = round2(delta - baseInventory);
-    // التكلفةُ الجديدة من الحصّة **المدوَّرة** — ما يُقيَّد على `1300` هو ما يحمله الرفّ حرفاً.
-    const unitCostAfter = unitCostAfterShelfDelta(qtyRemaining, unitCost, baseInventory);
-    if (unitCostAfter !== unitCost) {
-      const { count } = await tx.inventoryLayer.updateMany({
-        where: { id: layer.id, qtyRemaining: layer.qtyRemaining, unitCost: layer.unitCost },
-        data: { unitCost: unitCostAfter },
-      });
-      if (count === 0) throw new ConflictException(formatMessage(MSG.non_deductible_vat_layer_changed, { layerId: layer.id }));
-    }
-    written.push({ ...base, baseAmount: delta, baseInventory, baseCogs, qtyRemainingAt: qtyRemaining, unitCostBefore: unitCost, unitCostAfter });
+    const node = await raiseLayerCost(tx, {
+      layerId: layer.id,
+      unitsAffected: units,
+      amount: delta,
+      onConflict: (layerId) => new ConflictException(formatMessage(MSG.non_deductible_vat_layer_changed, { layerId })),
+    });
+    nodes.push(node);
+    written.push({ ...base, baseAmount: delta, baseInventory: node.baseShelf, baseCogs: round2(delta - node.baseShelf), qtyRemainingAt: node.qtyRemainingAt, unitCostBefore: node.unitCostBefore, unitCostAfter: node.unitCostAfter });
   }
   if (written.length === 0) return null;
 
   const sum = (pick: (w: Written) => number) => round2(written.reduce((t, w) => t + pick(w), 0));
-  const baseInventory = sum((w) => w.baseInventory);
-  const baseCogs = sum((w) => w.baseCogs);
+  // ما يُقيَّد: الرفوفُ كلُّها (الطبقةُ وما تبعها إلى المقصِد) · وما خرج بأنواعه · وموضعُ «المُعاد» (COGS) كما كان.
+  const allocation = allocationOf(nodes);
+  const layerTotal = sum((w) => (w.placement === 'LAYER' ? w.baseAmount : 0));
+  const returnedCogs = sum((w) => (w.placement === 'COGS' ? w.baseAmount : 0));
+  const baseInventory = allocation.shelf;
+  const baseCogs = round2(layerTotal - allocation.shelf + returnedCogs);
   const baseExpense = sum((w) => (w.placement === 'EXPENSE' ? w.baseAmount : 0));
   const baseClearing = sum((w) => (w.placement === 'CLEARING' ? w.baseAmount : 0));
   const event = await tx.nonDeductibleVatEvent.create({
@@ -286,6 +284,7 @@ export async function reconcileNonDeductibleVat(tx: Tx, companyId: string, purch
     } as unknown as Prisma.NonDeductibleVatEventUncheckedCreateInput,
     select: { id: true },
   });
+  await recordCostShares(tx, companyId, { event: 'NON_DEDUCTIBLE_VAT', nonDeductibleVatEventId: event.id }, nodes);
   const label = `${doc.docType === 'PURCHASE' ? 'فاتورة شراء' : 'إشعار مورّد'} ${doc.no}${args.labelSuffix ? ` — ${args.labelSuffix}` : ''}`;
   const entry = await postNonDeductibleVatEntry(tx, companyId, {
     supplierId: doc.supplierId,
@@ -294,7 +293,10 @@ export async function reconcileNonDeductibleVat(tx: Tx, companyId: string, purch
     categoryCode: doc.categoryCode,
     date: args.date,
     baseInventory,
-    baseCogs,
+    // ⚖️ ق-١٣٦٤ ما خرج من الطبقات مقسوماً: المبيعُ والمُعادُ إلى المورّد `5100` · المشطوبُ `5800` · المُخرَجُ يدوياً `5810`.
+    baseCogs: round2(allocation.cogs + returnedCogs),
+    baseWriteOff: allocation.writeOff,
+    baseVariance: allocation.variance,
     baseExpense,
     baseClearing,
   });

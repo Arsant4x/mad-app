@@ -344,12 +344,14 @@ export class InvoicesService {
           documentNo: rejected.no,
           lines: rejected.lines.map((l) => ({ id: l.id, productId: l.productId, quantity: l.quantity, returnsLineId: l.id, returnCondition: 'GOOD' as const })),
         });
-        if (returned.totalCost > 0) {
+        // ⚖️ ق-١٣٦٤ ومعه ما رُفع على العائد بعد خروجه — بالعملة الأساسية أصلاً (من الطبقة) فلا يُحوَّل.
+        const returnedBase = round2(toBaseAmount(returned.totalCost, rate) + returned.raisedAfterExit);
+        if (returnedBase > 0) {
           await postCogsReversalEntry(tx, companyId, {
             branchId: rejected.branchId,
             no: rejected.no,
             date: issueDate,
-            baseCost: toBaseAmount(returned.totalCost, rate),
+            baseCost: returnedBase,
             memo: `عكس تكلفة مبيعات — إغلاقُ مردودة ${rejected.no}`,
           });
         }
@@ -1119,12 +1121,15 @@ export class InvoicesService {
         }
         throw e;
       }
-      if (restocking.totalCost > 0) {
+      // ⚖️ ق-١٣٦٤ «والوحدةُ تعود بالتكلفة التي خرجت بها، وما رُفع عليها بعد خروجها يُعاد من تكلفة المبيعات إلى المخزون» —
+      // الثاني بالعملة الأساسية أصلاً (من الطبقة) فلا يُحوَّل.
+      const restockedBase = round2(toBaseAmount(restocking.totalCost, rate) + restocking.raisedAfterExit);
+      if (restockedBase > 0) {
         await postCogsReversalEntry(tx, companyId, {
           branchId: created.branchId,
           no: created.no,
           date: created.issueDate,
-          baseCost: toBaseAmount(restocking.totalCost, rate),
+          baseCost: restockedBase,
         });
       }
     }

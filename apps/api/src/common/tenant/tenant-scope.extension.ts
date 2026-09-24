@@ -74,6 +74,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   // ⚖️ أحداثُ ضريبة المدخلات غيرِ القابلة للخصم وسطورُها (ق-١٣٤٢): يحملان companyId وتحتهما RLS بـFORCE — طبقتان.
   'NonDeductibleVatEvent',
   'NonDeductibleVatEventLine',
+  // ⚖️ حصصُ رفع التكلفة على الطبقات ومخارجها (ق-١٣٦٤): تحمل companyId وتحتها RLS بـFORCE — طبقتان.
+  'LayerCostShare',
   // ٣٠ إعلانُ الأرصدة الافتتاحية للمخزون وسطورُه (ق-١١٧٩): يحملان companyId وتحتهما RLS بـFORCE — طبقتان.
   'StockOpening',
   'StockOpeningLine',

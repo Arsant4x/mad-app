@@ -20,6 +20,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postSupplierNoteEntry } from '../journal/auto-posting.util';
 import { CreateSupplierNoteDto, SupplierNoteLineDto } from './dto/create-supplier-note.dto';
 import { applySupplierNoteToStock } from './purchase-return.util';
+import { recordCostShares } from './layer-cost-allocation.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { recomputePurchaseStatus } from './purchase-settlement.util';
 import { computePurchaseTax } from './purchases.service';
@@ -189,6 +190,8 @@ export class SupplierNotesService {
           exchangeRate: rate,
           lines: created.lines,
         });
+        // ⚖️ ق-١٣٦٤ أين ذهب فرقُ السعر: الرفوفُ ومخارجُها — مسجَّلاً بحدث الإشعار (مادّةُ الحارس الثاني).
+        await recordCostShares(tx, companyId, { event: 'PRICE_NOTE', purchaseId: created.id }, stock.shares);
 
         const entry = await postSupplierNoteEntry(tx, companyId, {
           side,
@@ -203,6 +206,8 @@ export class SupplierNotesService {
           baseTotal: Number(created.baseTotal),
           baseInventory: stock.baseInventory,
           baseCogs: stock.baseCogs,
+          baseWriteOff: stock.baseWriteOff,
+          baseVariance: stock.baseVariance,
         });
         // ⑥ الدائنُ يخفّض متبقّي أصله فتُشتقّ حالتُه من جديد في المعاملة نفسِها (`ق-٨٧٢`).
         if (side === 'credit') await recomputePurchaseStatus(tx, original.id);
