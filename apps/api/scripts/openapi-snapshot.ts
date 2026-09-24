@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
@@ -41,8 +41,31 @@ interface DistExports {
   contractOf: (doc: OpenAPIObject) => ApiContract;
   contractBreaks: (snapshot: ApiContract, current: ApiContract) => string[];
   documentProblems: (doc: OpenAPIObject, prefix: string) => string[];
+  arrayShapeProblems: (doc: OpenAPIObject, sources: readonly string[]) => { problems: string[]; arrays: number };
   API_VERSION_PREFIX: string;
+  renderSharedRequests: (doc: OpenAPIObject) => { general: string; unit: string; bodies: number; queries: number; unitNames: string[] };
+  SAUDI_UNIT_PATH_MARK: string;
 }
+
+/**
+ * مسارا الملفّين **من موضع هذا السكربت** لا من الوحدة المبنيّة: `dist/src/common` أعمقُ درجةً من `src/common`، فجذرٌ يُحسب هناك
+ * يقع في `apps/` (وقع في أوّل تشغيل: `ENOENT … apps\packages\shared`).
+ */
+const SHARED_API_DIR = join(__dirname, '..', '..', '..', 'packages', 'shared', 'src', 'api');
+
+/** مصدرُ أصناف الطلب — ملفّاتُ `.dto.ts` وحدَها، وهي اللاحقةُ التي يقرؤها المُلحَق (`ق-١٣٨٣`). */
+const SRC = join(__dirname, '..', 'src');
+function dtoSources(dir: string = SRC, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) dtoSources(path, out);
+    else if (name.endsWith('.dto.ts')) out.push(readFileSync(path, 'utf8'));
+  }
+  return out;
+}
+
+/** أدنى ما يُقرأ من حقول المصفوفة — قِيس `34` (2026-09-24)؛ ودونه فالفحصُ لم يقرأ ما يدّعي (`§8.7`). */
+const MIN_ARRAY_FIELDS = 20;
 
 function loadDist(): DistExports {
   const entry = join(DIST, 'app.module.js');
@@ -59,9 +82,40 @@ function loadDist(): DistExports {
     contractOf: (doc: OpenAPIObject) => ApiContract;
     contractBreaks: (snapshot: ApiContract, current: ApiContract) => string[];
     documentProblems: (doc: OpenAPIObject, prefix: string) => string[];
+    arrayShapeProblems: DistExports['arrayShapeProblems'];
   };
+  // ③ (`ق-١٤٠٤`): أنواعُ الطلب المولَّدة تُرسَم من الوثيقة نفسِها — في الخطوة نفسِها.
+  const requests = require(join(DIST, 'common', 'shared-requests.util.js')) as Pick<DistExports, 'renderSharedRequests'>;
+  const country = require(join(DIST, 'common', 'country-literals.util.js')) as Pick<DistExports, 'SAUDI_UNIT_PATH_MARK'>;
   /* eslint-enable @typescript-eslint/no-var-requires */
-  return { AppModule: appModule.AppModule, ...versioning, ...document, ...contract };
+  return { AppModule: appModule.AppModule, ...versioning, ...document, ...contract, ...requests, SAUDI_UNIT_PATH_MARK: country.SAUDI_UNIT_PATH_MARK };
+}
+
+/**
+ * ⚖️ **③ — الأنواعُ المولَّدة تطابق الوثيقةَ حرفاً** (`ق-١٤٠٤`): تُكتب مع اللقطة (`--write`)، وتُقارَن في الفحص فيُسقط اختلافُها — فصنفٌ تغيّر
+ * في الخادم بلا إعادة توليدٍ لا يمرّ، وملفٌّ حُرّر بيدٍ لا يمرّ. ونهاياتُ الأسطر توحَّد قبل المقارنة (`§8.7` الوجه الخامس عشر).
+ */
+function syncSharedRequests(dist: DistExports, doc: OpenAPIObject, mode: 'write' | 'check'): boolean {
+  const rendered = dist.renderSharedRequests(doc);
+  const files: [string, string][] = [
+    [join(SHARED_API_DIR, 'requests.ts'), rendered.general],
+    [join(SHARED_API_DIR, `${dist.SAUDI_UNIT_PATH_MARK}-requests.ts`), rendered.unit],
+  ];
+  if (mode === 'write') {
+    for (const [path, text] of files) writeFileSync(path, text, 'utf8');
+    // eslint-disable-next-line no-console
+    console.log(`أنواعُ الطلب المولَّدة: ${rendered.bodies} جسماً · ${rendered.queries} استعلاماً · في ملفّ الوحدة: ${rendered.unitNames.length} — كُتبت`);
+    return true;
+  }
+  const stale = files.filter(([path, text]) => !existsSync(path) || readFileSync(path, 'utf8').replace(/\r\n/g, '\n') !== text).map(([path]) => path);
+  // eslint-disable-next-line no-console
+  console.log(`أنواعُ الطلب المولَّدة: ${rendered.bodies} جسماً · ${rendered.queries} استعلاماً · متقادمة: ${stale.length}`);
+  if (stale.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(['✖ أنواعُ الطلب المولَّدة لا تطابق الوثيقة (ق-١٤٠٤):', ...stale.map((p) => `   ${p}`), '', 'أعد توليدَها: npm run openapi:snapshot — ولا تُحرَّر بيد.'].join('\n'));
+    return false;
+  }
+  return true;
 }
 
 async function main(): Promise<void> {
@@ -78,6 +132,12 @@ async function main(): Promise<void> {
 
   // ⚖️ ق-١٣٨٢ — **شكلُ الوثيقة قبل عقدها**: بابٌ واحد ومعرّفاتٌ فريدة، وإلا فلا فحصَ ولا كتابة.
   const problems = dist.documentProblems(doc, dist.API_VERSION_PREFIX);
+  // ③ (`ق-١٤٠٤`): وحقلُ المصفوفة في المصدر يُوصف مصفوفة — والمقروءُ يُطبع ويُسقط إن قلّ عن حدّه.
+  const shape = dist.arrayShapeProblems(doc, dtoSources());
+  // eslint-disable-next-line no-console
+  console.log(`حقولُ مصفوفةٍ مقروءة من المصدر: ${shape.arrays} · موصوفةٌ خطأً: ${shape.problems.length}`);
+  if (shape.arrays < MIN_ARRAY_FIELDS) problems.push(`فحصُ المصفوفات قرأ ${shape.arrays} حقلاً — دون ${MIN_ARRAY_FIELDS}، فلم يقرأ ما يدّعي`);
+  problems.push(...shape.problems);
   if (problems.length > 0) {
     // eslint-disable-next-line no-console
     console.error([`✖ الوثيقةُ لا تصلح لمولِّد (${problems.length}):`, ...problems.slice(0, 20).map((p) => `   ${p}`)].join('\n'));
@@ -95,8 +155,10 @@ async function main(): Promise<void> {
     writeFileSync(SNAPSHOT, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
     // eslint-disable-next-line no-console
     console.log(`عملياتٌ في اللقطة: ${count} · كُتبت ${SNAPSHOT}`);
+    syncSharedRequests(dist, doc, 'write');
     return;
   }
+  const requestsFresh = syncSharedRequests(dist, doc, 'check');
 
   const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8')) as ApiContract;
   const breaks = dist.contractBreaks(snapshot, current);
@@ -107,6 +169,7 @@ async function main(): Promise<void> {
     console.error(['✖ كسرٌ في عقد الواجهة:', ...breaks.map((b) => `   ${b}`), '', 'وإن كان مقصوداً: npm run openapi:snapshot — فيظهر في فرق الطلب.'].join('\n'));
     process.exit(1);
   }
+  if (!requestsFresh) process.exit(1);
 }
 
 void main();

@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { ArrayMinSize, IsArray, IsIn, IsInt, IsString, Max, Min, MinLength } from 'class-validator';
 import { ALLOWED_SCREENS } from '../../templates/screens';
 
@@ -22,7 +23,9 @@ export class RequestSupportAccessDto {
   /**
    * **نطاقُ ما يُرى** (`ق-٥٢٧`) — شاشاتٌ من `ALLOWED_SCREENS` **مقروءةً لا
    * منسوخة**، واحدةٌ على الأقلّ: إذنٌ بلا نطاقٍ ليس تعليمةً (اللائحة م١٧/١/ب).
+   * ⚠️ والشكلُ معلَنٌ صراحةً — المُلحَقُ يُسقط `each` من `@IsIn` فيصفها نصّاً واحداً (`ق-١٤٠٤`).
    */
+  @ApiProperty({ enum: [...ALLOWED_SCREENS], isArray: true })
   @IsArray()
   @ArrayMinSize(1)
   @IsIn(ALLOWED_SCREENS as readonly string[], { each: true })

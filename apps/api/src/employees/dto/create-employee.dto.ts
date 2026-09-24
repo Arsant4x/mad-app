@@ -1,5 +1,6 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 import { EmployeeStatus } from '@prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateEmployeeDto extends BranchFieldDto {
@@ -27,6 +28,8 @@ export class CreateEmployeeDto extends BranchFieldDto {
   @IsString()
   phone?: string;
 
+  // ③ (`ق-١٤٠٤`): تعدادُ Prisma يصفه مُلحَقُ الوثيقة «كائناً» — فيُعلَن تعداداً صراحةً كي يُولَّد نوعُه قيماً لا `Record`.
+  @ApiProperty({ enum: EmployeeStatus, required: false })
   @IsOptional()
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;

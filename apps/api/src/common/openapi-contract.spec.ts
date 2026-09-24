@@ -1,5 +1,5 @@
-import { ApiContract, contractBreaks, contractOf, documentProblems } from './openapi-contract.util';
-import { versionedDocument } from './openapi-document';
+import { ApiContract, arrayShapeProblems, contractBreaks, contractOf, documentProblems } from './openapi-contract.util';
+import { arrayEnumsInItems, versionedDocument } from './openapi-document';
 
 /**
  * **قواعدُ العقد — نقيّةٌ على وثيقةٍ مصنوعة** (`ق-١٢٩٩` · التوجيه ٢٥٤).
@@ -122,5 +122,92 @@ describe('⚖️ شكلُ الوثيقة — بابٌ واحد ومعرّفات�
       components: { schemas: { EmptyDto: { type: 'object', properties: {} }, FullDto: { type: 'object', required: ['code'], properties: { code: { type: 'string' } } } } },
     } as never;
     expect(documentProblems(doc, 'v1')).toEqual(['مخطَّطُ طلبٍ بلا خاصيّة: POST /v1/a ⟵ EmptyDto', 'مخطَّطُ طلبٍ بلا خاصيّة: POST /v1/c ⟵ مضمَّن']);
+  });
+});
+
+describe('⚖️ حقلُ المصفوفة في المصدر يُوصف مصفوفةً في الوثيقة (ق-١٤٠٤ · ③)', () => {
+  /**
+   * مصدرٌ مصنوعٌ بدالّةٍ لا حرفياً (`§4` — عيّناتُ الحرّاس): صنفان لهما مخطَّط، وصنفٌ بلا مخطَّط، وسطرُ تعليقٍ
+   * يشبه خاصّيةً — والحالتان المعلومتان: `BadDto.tags` **يجب** أن يُمسَك، و`GoodDto.lines` **يجب** ألّا يُمسَك.
+   */
+  const lines = (eol: string) =>
+    [
+      'export class GoodDto {',
+      '  lines!: LineDto[];',
+      '  ids?: string[] | null;',
+      '  note?: string | null;',
+      '  /**',
+      '   * fake?: string[];',
+      '   */',
+      '  missing?: Array<string>;',
+      '  /*',
+      '  ghost?: string[];',
+      '  */',
+      '}',
+      'class HelperDto {',
+      '  items: string[];',
+      '}',
+      'export class BadDto {',
+      '  tags?: string[];',
+      '  screens?: string[];',
+      '}',
+    ].join(eol);
+  const doc = {
+    paths: {},
+    components: {
+      schemas: {
+        GoodDto: {
+          properties: {
+            lines: { type: 'array', items: { $ref: '#/components/schemas/LineDto' } },
+            ids: { type: 'array', items: { type: 'string' } },
+            note: { type: 'string' },
+          },
+        },
+        BadDto: {
+          properties: {
+            tags: { type: 'string', enum: ['a', 'b'] },
+            // ما خرج فعلاً بعد `@ApiProperty({ enum, isArray })` والمُلحَقُ يدمج تعدادَ `@IsIn` فوقه:
+            screens: { type: 'array', enum: ['a', 'b'], items: { type: 'string', enum: ['a', 'b'] } },
+          },
+        },
+      },
+    },
+  } as never;
+
+  it('⭐ المصفوفةُ الموصوفةُ نصّاً تُمسَك، والموصوفةُ مصفوفةً تمرّ — والغائبةُ والمعدودةُ على مستواها تُمسَكان', () => {
+    const { problems, arrays } = arrayShapeProblems(doc, [lines('\n')]);
+    expect(problems).toEqual([
+      'حقلُ مصفوفةٍ موصوفٌ غيرَ مصفوفة: GoodDto.missing (Array<string>) ⟵ null',
+      'حقلُ مصفوفةٍ موصوفٌ غيرَ مصفوفة: BadDto.tags (string[]) ⟵ {"type":"string","enum":["a","b"]}',
+      'مصفوفةٌ تحمل تعداداً على مستواها لا على عناصرها: BadDto.screens',
+    ]);
+    // خمسٌ مقروءة: lines · ids (`| null` يُنزَع) · missing · tags · screens — لا `note` ولا سطرا التعليق (بنجمةٍ وبلا نجمة) ولا صنفٌ بلا مخطَّط.
+    expect(arrays).toBe(5);
+  });
+
+  it('⭐ والبابُ ينقل تعدادَ المصفوفة إلى عناصرها — فيمرّ ما كان يُمسَك، ولا يمسّ تعدادَ نصٍّ واحد', () => {
+    const fixed = arrayEnumsInItems(doc) as unknown as { components: { schemas: Record<string, { properties: Record<string, unknown> }> } };
+    // عناصرُها تحمل تعدادَها ⟵ يُسقَط الذي على المستوى.
+    expect(fixed.components.schemas.BadDto.properties.screens).toEqual({ type: 'array', items: { type: 'string', enum: ['a', 'b'] } });
+    // النصُّ الواحد بتعداده لا يُمسّ — ليس مصفوفة (وفحصُ المصدر هو ما يمسكه).
+    expect(fixed.components.schemas.BadDto.properties.tags).toEqual({ type: 'string', enum: ['a', 'b'] });
+    const moved = arrayEnumsInItems({ components: { schemas: { X: { properties: { xs: { type: 'array', enum: ['p'], items: { type: 'string' } } } } } } } as never);
+    // عناصرُ بلا تعداد ⟵ يُنقل إليها.
+    expect((moved as unknown as { components: { schemas: { X: { properties: { xs: unknown } } } } }).components.schemas.X.properties.xs).toEqual({
+      type: 'array',
+      items: { type: 'string', enum: ['p'] },
+    });
+    expect(arrayShapeProblems(fixed as never, [lines('\n')]).problems).toEqual([
+      'حقلُ مصفوفةٍ موصوفٌ غيرَ مصفوفة: GoodDto.missing (Array<string>) ⟵ null',
+      'حقلُ مصفوفةٍ موصوفٌ غيرَ مصفوفة: BadDto.tags (string[]) ⟵ {"type":"string","enum":["a","b"]}',
+    ]);
+  });
+
+  it('ونهاياتُ الأسطر لا تغيّر الحكم (`§8.7` الوجه الخامس عشر)', () => {
+    expect(arrayShapeProblems(doc, [lines('\r\n')])).toEqual(arrayShapeProblems(doc, [lines('\n')]));
+  });
+
+  it('ومصدرٌ بلا صنفٍ له مخطَّط يعيد صفراً مقروءاً — والسكربتُ يُسقط الصفرَ بدل أن يشهد به', () => {
+    expect(arrayShapeProblems(doc, [['export class Other {', '  xs?: string[];', '}'].join('\n')])).toEqual({ problems: [], arrays: 0 });
   });
 });
