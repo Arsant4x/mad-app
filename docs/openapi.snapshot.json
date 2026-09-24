@@ -1115,7 +1115,39 @@
       "200"
     ]
   },
+  "GET /v1/pos/card-verifications": {
+    "parameters": [
+      "query:state"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/pos/incidents": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/payment-attempts": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/payment-attempts/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/pos/payment-mode": {
     "parameters": [],
     "requiredBody": [],
     "responses": [
@@ -3232,6 +3264,56 @@
       "path:id:required"
     ],
     "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/payment-attempts": {
+    "parameters": [],
+    "requiredBody": [
+      "clientSaleId",
+      "lines",
+      "paymentMethod"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/payment-attempts/{id}/cancel": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/payment-attempts/{id}/charge": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/payment-attempts/{id}/resolve": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/pos/payment-attempts/{id}/resolve-with-evidence": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "approvalCode",
+      "deviceReference"
+    ],
     "responses": [
       "201"
     ]

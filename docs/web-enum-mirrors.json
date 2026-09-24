@@ -239,8 +239,20 @@
       "server": "prisma:PlatformDecisionStatus"
     },
     {
+      "web": "apps/web/src/api/pos.ts#PosCardVerification",
+      "server": "prisma:PosCardVerification"
+    },
+    {
+      "web": "apps/web/src/api/pos.ts#PosPaymentAttemptStatus",
+      "server": "prisma:PosPaymentAttemptStatus"
+    },
+    {
       "web": "apps/web/src/api/pos.ts#PosPaymentMethod",
       "server": "isIn:apps/api/src/pos/dto/pos.dto.ts#CreatePosSaleDto.paymentMethod"
+    },
+    {
+      "web": "apps/web/src/api/pos.ts#PosPaymentResolution",
+      "server": "prisma:PosPaymentResolution"
     },
     {
       "web": "apps/web/src/api/properties.ts#ActivityType",
