@@ -23,6 +23,8 @@ import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/pag
 /** حقولُ البحث المُعلَنة للالتزامات الحكومية (`ق-١٢٣٦`) — العنوانُ والجهة. */
 const OBLIGATION_SEARCH_FIELDS = ['title', 'body'] as const;
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
+import { reconcileNonDeductibleVat } from '../purchases/non-deductible-vat.util';
+import { dayStartOf } from '../common/wall-clock.util';
 
 /**
  * ⭐ **قسمُ الإيجار في الإقرار** (`ق-٩١٧` · `ق-٩١٨` · `ق-٩٢٦`).
@@ -251,18 +253,253 @@ export class ObligationsService {
   }
 
   /**
-   * ⑥A1 — **إقرارُ التسوية السنوية** (م٥١/٧): يُختم أن التاجر رآها وأقرّها، **ولا يُخزَّن
-   * حسابُها** — فمصدرُه الصفوفُ نفسُها وقراءتُه اليوم كقراءته غداً.
+   * ⑥A1 — **معاينةُ التسوية السنوية** (م٥١/٧): تُحسب من الصفوف ولا تُكتب — فمصدرُها توريداتُ السنة نفسِها، وقراءتُها اليوم
+   * كقراءتها غداً. والإقرارُ بها حدثٌ (`settleVatRatio`).
    */
-  settleVatRatio(companyId: string, year: number) {
+  vatSettlementPreview(companyId: string, year: number) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
       if (!declared) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
       const settlement = await this.annualSettlementWithinTx(tx, year, Number(declared.ratio), declared);
       if (settlement === null) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
-      const row = await tx.vatProportionalRatio.update({ where: { id: declared.id }, data: { settledRatio: settlement.actualRatio, settledAt: new Date() } });
-      return { ...settlement, settledRatio: Number(row.settledRatio), settledAt: row.settledAt };
+      return settlement;
     });
+  }
+
+  /**
+   * ⚖️ `ق-١٣٦٠` — **التسويةُ السنويةُ حدثٌ** (م٥١/٧ · بنصّ المالك: «والتسويةُ السنويةُ حدثٌ مثلُه»): بعد انقضاء السنة وإقفال فتراتها
+   * يُعاد غيرُ القابل للخصم من المشترك **بنسبة السنة الفعلية** — **بتاريخ الحدث** — ولا يُرفع إلا بحدثٍ عاكسٍ بتاريخه. والختمُ
+   * القديم (`settledAt`) صار أثرَ الحدث لا بديلَه؛ والمعاينةُ بلا حدث في `vatSettlementPreview`.
+   */
+  settleVatRatio(companyId: string, year: number) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const declared = await tx.vatProportionalRatio.findFirst({ where: { year } });
+      if (!declared) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
+      const { from, to } = calendarYear(year);
+      const today = dayStartOf(new Date());
+      if (to.getTime() >= today.getTime()) throw new ConflictException(formatMessage(MSG.vat_adjustment_year_open, { year: String(year) }));
+      const settlement = await this.annualSettlementWithinTx(tx, year, Number(declared.ratio), declared);
+      if (settlement === null) throw new NotFoundException(formatMessage(MSG.vat_ratio_not_declared, { year: String(year) }));
+
+      await this.lockVatClosings(tx, companyId);
+      const live = await tx.vatReturnClosing.findFirst({ where: { kind: 'ANNUAL_ADJUSTMENT', year, reversedBy: { is: null } }, select: { id: true } });
+      if (live) throw new ConflictException(formatMessage(MSG.vat_adjustment_exists, { year: String(year) }));
+      const open = await this.mixedDocumentsOutsideClosings(tx, from, to);
+      if (open > 0) throw new ConflictException(formatMessage(MSG.vat_adjustment_periods_open, { count: String(open), year: String(year) }));
+
+      const event = await tx.vatReturnClosing.create({
+        data: { companyId, kind: 'ANNUAL_ADJUSTMENT', year, periodFrom: from, periodTo: to, ratio: settlement.actualRatio, date: today, documentsCount: 0, untrackedCount: 0, baseAmount: 0 },
+        select: { id: true },
+      });
+      const applied = await this.reconcileMixedRange(tx, companyId, { from, to, date: today, trigger: 'VAT_ANNUAL_ADJUSTMENT', closingId: event.id, label: `التسويةُ السنوية ${year}` });
+      const adjustment = await this.finishClosing(tx, event.id, applied);
+      const row = await tx.vatProportionalRatio.update({ where: { id: declared.id }, data: { settledRatio: settlement.actualRatio, settledAt: new Date() } });
+      return { ...settlement, settledRatio: Number(row.settledRatio), settledAt: row.settledAt, adjustment };
+    });
+  }
+
+  /**
+   * ⚖️ **`ق-١٣٦٠` — «إقفالُ الإقرار» حدثٌ مستقلٌّ بتاريخه** (الخيارُ (ب) بحكم المالك).
+   *
+   * بنصّ المالك: «حدثٌ مستقلٌّ «إقفالُ الإقرار» بتاريخ الحدث نفسِه في أوّل فترةٍ مفتوحة. ⇒ فتغيّرُ التقدير يُثبَت في فترته لا بأثرٍ
+   * رجعيّ، ولا يُعلَّق على علَمٍ يرفعه التاجرُ بيده.» — فبعد انقضاء الفترة يُرحَّل غيرُ القابل للخصم من المشترك لمستنداتها **بنسبة
+   * الفترة كما يحسبها الإقرار** (واحدٌ لمن لا معفى له فيها · المعلَنةُ لغيره؛ وبلا إعلانٍ لمن له معفى يُرفض الإقفالُ مسمّىً) إلى تكلفة
+   * ما اشتُري بقاعدة الانتشار — **بتاريخ اليوم** (يومُ الحدث)، والقفلُ يحكم تاريخَه كأيّ قيد.
+   *
+   * **على مستوى المنشأة بحقّها**: الإقرارُ عن المنشأة برقمها الضريبيّ الواحد، فإقفالُه يمسّ مستنداتِها كلَّها لا فرعَ القارئ.
+   */
+  closeVatReturn(companyId: string, dto: VatDeclarationQueryDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const period = resolveVatPeriod(dto);
+      const today = dayStartOf(new Date());
+      if (period.to.getTime() >= today.getTime()) throw new ConflictException(formatMessage(MSG.vat_closing_period_open, { period: period.label }));
+
+      await this.lockVatClosings(tx, companyId);
+      const overlapping = await tx.vatReturnClosing.findFirst({
+        where: { kind: 'CLOSING', periodFrom: { lte: period.to }, periodTo: { gte: period.from }, reversedBy: { is: null } },
+        select: { year: true, periodType: true, periodNo: true },
+      });
+      if (overlapping) {
+        const same = overlapping.year === period.year && overlapping.periodType === period.periodType && overlapping.periodNo === period.periodNo;
+        if (same) throw new ConflictException(formatMessage(MSG.vat_closing_exists, { period: period.label }));
+        const other = resolveVatPeriod(overlapping.periodType === 'MONTHLY' ? { year: overlapping.year, month: overlapping.periodNo! } : { year: overlapping.year, quarter: overlapping.periodNo! });
+        throw new ConflictException(formatMessage(MSG.vat_closing_overlap, { period: period.label, other: other.label }));
+      }
+
+      const declaration = await this.declarationWithinTx(tx, companyId, dto);
+      const ratio = declaration.proportional.ratio;
+      if (ratio === null) throw new ConflictException(formatMessage(MSG.vat_closing_ratio_not_declared, { period: period.label, year: String(period.year) }));
+
+      const event = await tx.vatReturnClosing.create({
+        data: {
+          companyId,
+          kind: 'CLOSING',
+          year: period.year,
+          periodType: period.periodType,
+          periodNo: period.periodNo,
+          periodFrom: period.from,
+          periodTo: period.to,
+          ratio,
+          date: today,
+          documentsCount: 0,
+          untrackedCount: 0,
+          baseAmount: 0,
+        },
+        select: { id: true },
+      });
+      const applied = await this.reconcileMixedRange(tx, companyId, { from: period.from, to: period.to, date: today, trigger: 'VAT_RETURN_CLOSING', closingId: event.id, label: `إقفالُ ${period.label}` });
+      return this.finishClosing(tx, event.id, applied);
+    });
+  }
+
+  /**
+   * ⚖️ `ق-١٣٦٠` — **العكسُ حدثٌ بتاريخه** («ولا يُرفع إلا بحدثٍ عاكسٍ بتاريخه»): صفٌّ ثانٍ يشير إلى ما يعكسه (فريد)، ويُعاد به
+   * المشتركُ إلى ما كان قبل المعكوس — بتاريخ اليوم. والعكسُ لا يُعكس، وإقفالٌ تعتمد عليه تسويةٌ سنويةٌ قائمة يُعكس بعدها.
+   */
+  reverseVatClosing(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await this.lockVatClosings(tx, companyId);
+      const target = await tx.vatReturnClosing.findUnique({ where: { id }, include: { reversedBy: { select: { id: true } } } });
+      if (!target) throw new NotFoundException(MSG.vat_closing_not_found);
+      if (target.kind === 'REVERSAL') throw new ConflictException(MSG.vat_closing_reversal_final);
+      if (target.reversedBy) throw new ConflictException(MSG.vat_closing_already_reversed);
+      if (target.kind === 'CLOSING') {
+        const adjustment = await tx.vatReturnClosing.findFirst({
+          where: { kind: 'ANNUAL_ADJUSTMENT', periodFrom: { lte: target.periodTo }, periodTo: { gte: target.periodFrom }, reversedBy: { is: null } },
+          select: { year: true },
+        });
+        if (adjustment) throw new ConflictException(formatMessage(MSG.vat_closing_adjustment_first, { year: String(adjustment.year) }));
+      }
+      const today = dayStartOf(new Date());
+      const event = await tx.vatReturnClosing.create({
+        data: {
+          companyId,
+          kind: 'REVERSAL',
+          year: target.year,
+          periodType: target.periodType,
+          periodNo: target.periodNo,
+          periodFrom: target.periodFrom,
+          periodTo: target.periodTo,
+          ratio: target.ratio,
+          date: today,
+          reversesId: target.id,
+          documentsCount: 0,
+          untrackedCount: 0,
+          baseAmount: 0,
+        },
+        select: { id: true },
+      });
+      const applied = await this.reconcileMixedRange(tx, companyId, { from: target.periodFrom, to: target.periodTo, date: today, trigger: 'VAT_RETURN_CLOSING_REVERSAL', closingId: event.id, label: 'عكسُ إقفال' });
+      // التسويةُ السنويةُ المعكوسة: ختمُها يُرفع معها — فالإقرارُ لا يقول «أُقرّت» عن تسويةٍ عُكست.
+      if (target.kind === 'ANNUAL_ADJUSTMENT') await tx.vatProportionalRatio.updateMany({ where: { year: target.year }, data: { settledRatio: null, settledAt: null } });
+      return this.finishClosing(tx, event.id, applied);
+    });
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — أحداثُ الإقفال لسنةٍ (إقفالٌ · تسويةٌ · عكس) بترتيب وقوعها. */
+  listVatClosings(companyId: string, year: number) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const rows = await tx.vatReturnClosing.findMany({ where: { year }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], include: { reversedBy: { select: { id: true } } } });
+      return rows.map((r) => this.closingView(r));
+    });
+  }
+
+  private closingView(r: {
+    id: string;
+    kind: string;
+    year: number;
+    periodType: string | null;
+    periodNo: number | null;
+    periodFrom: Date;
+    periodTo: Date;
+    ratio: Prisma.Decimal;
+    date: Date;
+    reversesId: string | null;
+    documentsCount: number;
+    untrackedCount: number;
+    baseAmount: Prisma.Decimal;
+    reversedBy?: { id: string } | null;
+  }) {
+    return {
+      id: r.id,
+      kind: r.kind,
+      year: r.year,
+      periodType: r.periodType,
+      periodNo: r.periodNo,
+      periodFrom: r.periodFrom,
+      periodTo: r.periodTo,
+      ratio: Number(r.ratio),
+      date: r.date,
+      reversesId: r.reversesId,
+      reversedById: r.reversedBy?.id ?? null,
+      documentsCount: r.documentsCount,
+      untrackedCount: r.untrackedCount,
+      baseAmount: money(Number(r.baseAmount)),
+    };
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — أحداثُ الإقفال تُكتب واحداً بعد واحد في المنشأة: قفلٌ استشاريٌّ في المعاملة — «الحيُّ الذي لم يُعكس» لا يعبّر عنه قيدٌ فريد. */
+  private async lockVatClosings(tx: Prisma.TransactionClient, companyId: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'vat_return_closing:' + companyId}))`;
+  }
+
+  /**
+   * مستنداتٌ مشتركةٌ متتبَّعةٌ حيّةٌ في المدى لا يغطّيها إقفالٌ حيّ — التسويةُ السنويةُ تنتظر إقفالَها.
+   *
+   * **على مستوى المنشأة بحقّها**: التسويةُ السنويةُ تعديلٌ على إقرار المنشأة برقمها الضريبيّ الواحد (م٥١/٧)، فمستندٌ في فرعٍ لا يراه
+   * القارئ يبقى مستنداً في سنة المكلَّف — وقصرُها على فروعه يُسوّي سنةً ناقصة.
+   */
+  private async mixedDocumentsOutsideClosings(tx: Prisma.TransactionClient, from: Date, to: Date): Promise<number> {
+    const [docs, closings] = await Promise.all([
+      tx.purchase.findMany({
+        where: { date: { gte: from, lte: to }, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] }, nonDeductibleTracked: true, exempt: false, excludeFromVat: false, voidedAt: null, baseTaxAmount: { gt: 0 } },
+        select: { date: true },
+      }),
+      tx.vatReturnClosing.findMany({ where: { kind: 'CLOSING', periodFrom: { lte: to }, periodTo: { gte: from }, reversedBy: { is: null } }, select: { periodFrom: true, periodTo: true } }),
+    ]);
+    return docs.filter((d) => !closings.some((c) => c.periodFrom.getTime() <= d.date.getTime() && d.date.getTime() <= c.periodTo.getTime())).length;
+  }
+
+  /**
+   * يُرحّل فرقَ غير القابل للخصم لكلِّ مستندٍ مشتركٍ في المدى — بالدالّة القائمة نفسِها (`reconcileNonDeductibleVat` — فرقٌ لا مطلق)،
+   * فتقرأ النسبةَ النافذة بعد كتابة الحدث. وما سبق التتبّعَ يُعدّ ولا يُحوَّل.
+   *
+   * **على مستوى المنشأة بحقّها**: إقفالُ الإقرار حدثٌ على فترة المكلَّف برقمه الضريبيّ الواحد — مستنداتُها كلُّها في كلِّ فرع؛ وإقفالٌ
+   * يُقصر على فروع القارئ يترك مشتركَ الفروع الأخرى في `1250` والإقرارُ يقول إن الفترةَ أُقفلت.
+   */
+  private async reconcileMixedRange(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    a: { from: Date; to: Date; date: Date; trigger: 'VAT_RETURN_CLOSING' | 'VAT_RETURN_CLOSING_REVERSAL' | 'VAT_ANNUAL_ADJUSTMENT'; closingId: string; label: string },
+  ): Promise<{ documentsCount: number; untrackedCount: number; baseAmount: number }> {
+    const docs = await tx.purchase.findMany({
+      where: { date: { gte: a.from, lte: a.to }, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] }, exempt: false, excludeFromVat: false },
+      orderBy: [{ date: 'asc' }, { id: 'asc' }],
+      select: { id: true, nonDeductibleTracked: true, voidedAt: true, baseTaxAmount: true },
+    });
+    let documentsCount = 0;
+    let untrackedCount = 0;
+    let baseAmount = 0;
+    for (const d of docs) {
+      if (!d.nonDeductibleTracked) {
+        if (d.voidedAt === null && Number(d.baseTaxAmount) > 0) untrackedCount += 1;
+        continue;
+      }
+      const ev = await reconcileNonDeductibleVat(tx, companyId, d.id, { date: a.date, trigger: a.trigger, vatReturnClosingId: a.closingId, labelSuffix: a.label });
+      if (!ev) continue;
+      documentsCount += 1;
+      baseAmount = round2(baseAmount + ev.baseInventory + ev.baseCogs + ev.baseExpense + ev.baseClearing);
+    }
+    return { documentsCount, untrackedCount, baseAmount };
+  }
+
+  private async finishClosing(tx: Prisma.TransactionClient, id: string, applied: { documentsCount: number; untrackedCount: number; baseAmount: number }) {
+    const row = await tx.vatReturnClosing.update({
+      where: { id },
+      data: { documentsCount: applied.documentsCount, untrackedCount: applied.untrackedCount, baseAmount: applied.baseAmount },
+      include: { reversedBy: { select: { id: true } } },
+    });
+    return this.closingView(row);
   }
 
   /**
@@ -529,7 +766,17 @@ export class ObligationsService {
        * فلا يبقى في حساب ضريبة المدخلات. **والباقي فيه يُعلَن بقسمَيه**: المشتركُ غيرُ المخصوم (محبوسٌ على قرار ترحيله عند
        * إقفال الإقرار — لم يُحسم) · ومستنداتٌ منسوبةٌ إلى المعفى سبقت البناء (تُعدّ ولا تُحوَّل — `ق-١١٧٨`).
        */
-      const apportionedNotDeducted = round2(deduction.apportionedBase - deduction.apportionedDeductible);
+      // ⚖️ ق-١٣٦٠ — وما رحّله إقفالُ الفترة (أو تسويتُها السنوية) من المشترك لم يعد في 1250: يُطرح بما وُضع فعلاً لمستندات الفترة.
+      const mixedPosted = await tx.nonDeductibleVatEventLine.aggregate({
+        where: { event: { purchase: { date: { gte: period.from, lte: period.to }, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] } } } },
+        _sum: { baseAmount: true },
+      });
+      const closing = await tx.vatReturnClosing.findFirst({
+        where: { kind: 'CLOSING', periodFrom: { lte: period.to }, periodTo: { gte: period.from }, reversedBy: { is: null } },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, date: true, ratio: true },
+      });
+      const apportionedNotDeducted = round2(deduction.apportionedBase - deduction.apportionedDeductible - Number(mixedPosted._sum.baseAmount ?? 0));
       const exemptOnlyUntracked = round2(
         taxablePurchases.filter((p) => p.inputVatUse === 'EXEMPT_ONLY' && !p.nonDeductibleTracked).reduce((s, p) => s + purchaseSign(p) * Number(p.taxAmount), 0),
       );
@@ -542,7 +789,7 @@ export class ObligationsService {
         limits.push({
           code: 'NON_DEDUCTIBLE_INPUT_VAT_NOT_POSTED',
           severity: 'warning',
-          message: `غيرُ القابل للخصم من ضريبة المدخلات الباقي في حسابها في هذه الفترة ${money(notPosted)} — منه المشتركُ غيرُ المخصوم ${money(apportionedNotDeducted)} (ترحيلُه إلى التكلفة عند إقفال الإقرار ينتظر قراراً لم يُحسم) ومنه مشترياتٌ منسوبةٌ إلى المعفى سبقت ترحيلَه ${money(exemptOnlyUntracked)} ومنه مشترياتٌ بلا فاتورةٍ ضريبيةٍ صحيحة سبقت البناء ${money(excludedUntracked)}؛ فرصيدُ حساب ضريبة المدخلات أعلى مما يُستردّ بهذا المقدار. أمّا المنسوبُ إلى المعفى وحدَه وما بلا فاتورةٍ صحيحة فيُرحَّلان إلى تكلفة ما اشتُري عند الشراء`,
+          message: `غيرُ القابل للخصم من ضريبة المدخلات الباقي في حسابها في هذه الفترة ${money(notPosted)} — منه المشتركُ غيرُ المخصوم ${money(apportionedNotDeducted)} (${closing ? 'بعد إقفال الفترة — ما بقي منه سابقٌ للتتبّع أو فرقُ تدوير' : 'يُرحَّل إلى التكلفة بحدث «إقفال الإقرار» بعد انقضاء الفترة'}) ومنه مشترياتٌ منسوبةٌ إلى المعفى سبقت ترحيلَه ${money(exemptOnlyUntracked)} ومنه مشترياتٌ بلا فاتورةٍ ضريبيةٍ صحيحة سبقت البناء ${money(excludedUntracked)}؛ فرصيدُ حساب ضريبة المدخلات أعلى مما يُستردّ بهذا المقدار. أمّا المنسوبُ إلى المعفى وحدَه وما بلا فاتورةٍ صحيحة فيُرحَّلان إلى تكلفة ما اشتُري عند الشراء`,
         });
       }
 
@@ -666,6 +913,9 @@ export class ObligationsService {
           deductibleInputVat: money(deductibleInputVat),
           nonDeductibleInputVat: money(deduction.nonDeductible),
           settlement,
+          /** ⚖️ `ق-١٣٦٠` — حدثُ «إقفال الإقرار» الحيّ لهذه الفترة (إن وقع): تاريخُه ونسبتُه — والمشتركُ المرحَّلُ لمستنداتها. */
+          closing: closing ? { id: closing.id, date: closing.date, ratio: Number(closing.ratio) } : null,
+          mixedPosted: money(Number(mixedPosted._sum.baseAmount ?? 0)),
         },
         netVat: money(netVat),
         /**

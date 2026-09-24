@@ -526,6 +526,7 @@ model Company {
   vatProportionalRatios VatProportionalRatio[]
   /// ⑥A3 (`ق-١٣٢٥`) — تصحيحاتُ إقراراتٍ سابقة تُعلَن في إقرارٍ لاحق (م٦٣).
   vatReturnCorrections VatReturnCorrection[]
+  vatReturnClosings    VatReturnClosing[]
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
@@ -2269,6 +2270,12 @@ enum NonDeductibleVatTrigger {
   RECEIPT
   RECEIPT_VOID
   SUPPLIER_NOTE
+  /// ⚖️ `ق-١٣٦٠` إقفالُ فترة إقرار: المشتركُ يُرحَّل بنسبة الفترة.
+  VAT_RETURN_CLOSING
+  /// ⚖️ `ق-١٣٦٠` عكسُ إقفالٍ أو تسوية — حدثٌ عاكسٌ بتاريخه.
+  VAT_RETURN_CLOSING_REVERSAL
+  /// ⚖️ `ق-١٣٦٠` التسويةُ السنوية (م٥١/٧): المشتركُ بنسبة السنة الفعلية.
+  VAT_ANNUAL_ADJUSTMENT
 }
 
 /// `ق-١٣٤٢` أين تقع حصّةُ السطر: طبقةٌ على الرفّ (ما عليه يرفع تكلفتَها وما استُهلك منها إلى `5100`) ·
@@ -2317,6 +2324,12 @@ model NonDeductibleVatEvent {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   journalEntryTenant JournalEntry? @relation("NonDeductibleVatEvent_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ `ق-١٣٦٠` حدثُ الإقفال (أو عكسُه أو التسويةُ السنوية) الذي أطلق هذا الحدث — للمشترك وحدَه.
+  vatReturnClosingId String?
+  vatReturnClosing   VatReturnClosing? @relation(fields: [vatReturnClosingId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  vatReturnClosingTenant VatReturnClosing? @relation("NonDeductibleVatEvent_vatReturnClosingId_tenant", fields: [companyId, vatReturnClosingId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   createdAt DateTime @default(now())
 
   lines NonDeductibleVatEventLine[]
@@ -2324,6 +2337,7 @@ model NonDeductibleVatEvent {
   costShares LayerCostShare[]
 
   @@index([companyId, purchaseId])
+  @@index([vatReturnClosingId])
   @@map("non_deductible_vat_events")
   nonDeductibleVatEventLine_eventId_tenant NonDeductibleVatEventLine[] @relation("NonDeductibleVatEventLine_eventId_tenant")
   layerCostShare_nonDeductibleVatEventId_tenant LayerCostShare[] @relation("LayerCostShare_nonDeductibleVatEventId_tenant")
@@ -5387,6 +5401,70 @@ model VatReturnCorrection {
   // الفهرسُ على الفترة الحاملة — فقراءةُ الإقرار تقرأ تصحيحاتِه وحدَها.
   @@index([companyId, year, periodType, periodNo])
   @@map("vat_return_corrections")
+}
+
+/// ⚖️ `ق-١٣٦٠` — نوعُ حدث الإقفال.
+enum VatClosingKind {
+  /// إقفالُ فترة إقرار: المشتركُ يُرحَّل بنسبة الفترة المطبَّقة.
+  CLOSING
+  /// التسويةُ السنوية (م٥١/٧): المشتركُ يُعاد بنسبة السنة الفعلية — «حدثٌ مثلُه».
+  ANNUAL_ADJUSTMENT
+  /// عكسُ إقفالٍ أو تسوية — «ولا يُرفع إلا بحدثٍ عاكسٍ بتاريخه».
+  REVERSAL
+}
+
+/// ⚖️ **`ق-١٣٦٠` — «إقفالُ الإقرار» حدثٌ مستقلٌّ بتاريخه** (الخيارُ (ب) بحكم المالك).
+///
+/// **بنصّ المالك**: «حدثٌ مستقلٌّ «إقفالُ الإقرار» بتاريخ الحدث نفسِه في أوّل فترةٍ مفتوحة. ⇒ فتغيّرُ التقدير يُثبَت في فترته
+/// لا بأثرٍ رجعيّ، ولا يُعلَّق على علَمٍ يرفعه التاجرُ بيده. ⚠️ ولا يُرفع إلا بحدثٍ عاكسٍ بتاريخه، والتسويةُ السنويةُ حدثٌ مثلُه.»
+///
+/// ما يفعله: الضريبةُ **المشتركة** (`MIXED`) لمستندات الفترة يُرحَّل غيرُ القابل منها للخصم (`ضريبة × (1 − النسبة)`) إلى تكلفة ما
+/// اشتُري **بقاعدة الانتشار** (`non-deductible-vat.util` — الحكمُ المبنيّ في `ق-١٣٤٢`) **بتاريخ الحدث** لا بتاريخ المستند. والنسبةُ
+/// **نسبةُ الفترة كما يحسبها الإقرار** (واحدٌ لمن لا توريدَ معفى له فيها · المعلَنةُ لغيره). ⛔ **وليس علَمَ «قُدِّم»**
+/// (`VatReturnFiling` — يرفعه التاجرُ بيده): هذا حدثٌ لا يُمحى، وعكسُه حدثٌ ثانٍ بتاريخه (`reversesId`).
+///
+/// **بلا أبٍ** (`ق-٥٠١`) — حدثٌ للمنشأة عن فترتها، لا ابنَ لمستندٍ ولا لطرف؛ وأحداثُ الضريبة التي أطلقها تشير إليه.
+model VatReturnClosing {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  kind VatClosingKind
+  year Int
+  /// فترةُ الإقرار للإقفال — وفارغان للتسوية السنوية (سنتُها كلُّها)؛ والعكسُ يرث ما يعكسه.
+  periodType VatPeriod?
+  periodNo   Int?
+  /// مدى ما يمسّه الحدث — أوّلُ يومٍ فيه وآخرُه (الفترةُ للإقفال · السنةُ للتسوية).
+  periodFrom DateTime @db.Date
+  periodTo   DateTime @db.Date
+  /// النسبةُ المطبَّقة (`0`–`1`): نسبةُ الفترة للإقفال · نسبةُ السنة الفعلية للتسوية · وللعكس نسبةُ ما يعكسه.
+  ratio Decimal @db.Decimal(9, 6)
+  /// تاريخُ الحدث — تاريخُ قيوده، يومَ وقوعه (فيقع في أوّل فترةٍ مفتوحة، ويخضع للقفل كأيّ قيد).
+  date DateTime @db.Date
+
+  /// ما يعكسه هذا الحدث — فريد: لا يُعكس حدثٌ مرّتين.
+  reversesId String?           @unique
+  reverses   VatReturnClosing? @relation("VatClosingReversal", fields: [reversesId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  reversesTenant VatReturnClosing? @relation("VatReturnClosing_reversesId_tenant", fields: [companyId, reversesId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  reversedBy     VatReturnClosing? @relation("VatClosingReversal")
+
+  /// مستنداتٌ مشتركةٌ في المدى رُحّل فرقُها بهذا الحدث · وما سبق تتبّعَ غير القابل للخصم منها (يُعدّ ولا يُحوَّل — `ق-١١٧٨`).
+  documentsCount Int
+  untrackedCount Int
+  /// صافي ما خرج من `1250` بهذا الحدث — سالبٌ حين يعود إليه.
+  baseAmount Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  nonDeductibleVatEvents NonDeductibleVatEvent[]
+
+  @@index([companyId, year])
+  @@map("vat_return_closings")
+  vatReturnClosing_reversesId_tenant VatReturnClosing[] @relation("VatReturnClosing_reversesId_tenant")
+  nonDeductibleVatEvent_vatReturnClosingId_tenant NonDeductibleVatEvent[] @relation("NonDeductibleVatEvent_vatReturnClosingId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
 }
 
 /// A storage location. `manager` is a free-text name, not a real Employee FK

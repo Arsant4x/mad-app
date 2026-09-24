@@ -103,6 +103,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'VatReturnFiling',
   'VatProportionalRatio',
   'VatReturnCorrection',
+  // ⚖️ حدثُ إقفال الإقرار (ق-١٣٦٠): يحمل companyId وتحته RLS بـFORCE — طبقتان.
+  'VatReturnClosing',
   'ContractDeposit',
   'DepositDeduction',
   'ContractClaim',
