@@ -165,16 +165,24 @@ describe('تعديلُ فاتورة الشراء بعكسٍ وتجميدُها �
     const unchanged = await snapshot();
     expect(unchanged).toEqual(before);
 
-    // ما عدا الكمية والتكلفة يُعدَّل: مرجعُ المورّد والاستحقاق والاستبعادُ من الإقرار
+    // ما عدا الكمية والتكلفة يُعدَّل: مرجعُ المورّد والاستحقاق والاستبعادُ من الإقرار.
+    // ⚖️ ق-١٣٦١ — **والاستبعادُ يمسّ التكلفةَ الآن لا الإقرارَ وحده** (بنصّ المالك: «تدخل تكلفةَ ما اشتُري … والتعليقُ «تمسّ الإقرارَ
+    // وحده» يُصحَّح معه»): ضريبةٌ بلا فاتورةٍ صحيحة لا تُستردّ — فحدثٌ بتاريخ التعديل بقاعدة الانتشار: ما على الرفّ (٦ من ٨) يرفع
+    // الطبقةَ ٣٧.٨، وما بيع (٢) إلى 5100 ١٢.٦، و1250 يُخلى من ٥٠.٤. **والعودةُ عكسُه حرفاً.**
     const ok = await patch(`/purchases/${purchaseId}`).send({ supplierRef: 'SUP-77-B', dueDate: today(), excludeFromVat: true }).expect(200);
     expect(ok.body.supplierRef).toBe('SUP-77-B');
     expect(ok.body.excludeFromVat).toBe(true);
     const after = await snapshot();
-    expect(after.ledger).toEqual(before.ledger);
-    expect(after.shelf).toEqual(before.shelf);
+    const moved = (code: string) => delta(after.ledger, before.ledger, code);
+    expect({ '1250': moved('1250'), '1300': moved('1300'), '5100': moved('5100'), '2100': moved('2100') }).toEqual({ '1250': -50.4, '1300': 37.8, '5100': 12.6, '2100': 0 });
+    expect(after.shelf.layers[after.shelf.layers.length - 1]).toEqual({ received: 8, remaining: 6, unitCost: 48.3 });
+    expect(after.shelf.movements).toEqual(before.shelf.movements);
     expect(after.vat.standard - before.vat.standard).toBeCloseTo(-336, 2);
     expect(after.vat.excluded - before.vat.excluded).toBeCloseTo(336, 2);
     await patch(`/purchases/${purchaseId}`).send({ excludeFromVat: false }).expect(200);
+    const back = await snapshot();
+    expect(back.ledger).toEqual(before.ledger);
+    expect(back.shelf).toEqual(before.shelf);
   }, 30000);
 
   it('③ ما استُهلك منه لا يُلغى — والرسالةُ تسمّي المخرج', async () => {
