@@ -5,6 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { CreateBranchDto } from './dto/create-branch.dto';
+import { branchContentReasons, branchHistoryCount } from './branch-references';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والنوع. */
 const BRANCH_SEARCH_FIELDS = ['name', 'type'] as const;
@@ -89,26 +90,26 @@ export class BranchesService {
    * **على مستوى المنشأة بحقّها**: العدُّ على الفرع المحذوف نفسِه لا على فروع
    * القارئ — والحذفُ فعلُ مالكٍ نطاقُه الكلّ، ومنعُه يقوم على تاريخ الفرع
    * كاملاً وإن حُجب عن غيره.
+   *
+   * 🔴 **ولا يُفرغه صامتاً** (`ق-١٤٣٥`): مفاتيحُ الفرع `SET NULL` كانت تُخرج ما فيه إلى «المنشأة كلِّها» بلا أثر، وإسنادُ
+   * حساب الدخول `CASCADE` يترك الحسابَ بلا فرعٍ **فيرى الفروعَ كلَّها**. فكلُّ ما يشير إليه مصنَّفٌ في `BRANCH_REFERENCES`:
+   * **التاريخُ لا يُنقل** فذو التاريخ لا يُحذف · **وما فيه والمفتوحُ من مستنداته** يوقف الحذفَ **في رفضٍ واحد** — سببٌ لكلِّ
+   * صنفٍ بأسمائه، ويدلّ على النقل أو الإغلاق. **وصفُّ الفرع يُقفل أوّلاً** (`FOR UPDATE`): إدراجٌ يشير إليه يأخذ قفلَ المفتاح
+   * على الصفّ نفسِه، فلا يقع بين الفحص والحذف ثم يُفرَغ بصمت.
    */
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
     assertIsCompanyOwner(actorType);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.branch.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.branch_not_found);
+      await tx.$queryRaw`SELECT "id" FROM "branches" WHERE "id" = ${id} FOR UPDATE`;
 
-      // Every branchId FK is ON DELETE SET NULL, so deleting would silently
-      // orphan the branch's history into the company-wide bucket rather than
-      // failing. Refuse instead — losing which branch earned what is exactly
-      // the reporting the branch feature exists to provide.
-      const [invoices, purchases, entries, movements] = await Promise.all([
-        tx.invoice.count({ where: { branchId: id } }),
-        tx.purchase.count({ where: { branchId: id } }),
-        tx.journalEntry.count({ where: { branchId: id } }),
-        tx.stockMovement.count({ where: { branchId: id } }),
-      ]);
-      if (invoices + purchases + entries + movements > 0) {
-        throw new ConflictException(MSG.branch_has_data);
+      const history = await branchHistoryCount(tx, id);
+      if (history > 0) {
+        throw new ConflictException(formatMessage(MSG.branch_delete_history, { name: existing.name, count: history }));
       }
+      const reasons = await branchContentReasons(tx, id);
+      if (reasons.length > 0) throw new ConflictException(reasons);
 
       await tx.branch.delete({ where: { id } });
     });
