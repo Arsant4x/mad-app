@@ -151,23 +151,26 @@ describe('[SPEC 6.2] ⑥A1 — الخصمُ النسبيّ (e2e)', () => {
     expect(d.limits.map((l: { code: string }) => l.code)).not.toContain('PROPORTIONAL_RATIO_NOT_DECLARED');
   });
 
-  it('⑧ التسويةُ السنوية في آخر فترةٍ وحدَها (م٥١/٧) — وتُقرّ فتُختم', async () => {
+  it('⑧ التسويةُ السنوية في آخر فترةٍ وحدَها (م٥١/٧) — معاينتُها تُحسب ولا تُكتب، والإقرارُ بها حدثٌ بعد انقضاء السنة (ق-١٣٦٠)', async () => {
     // الربعُ الثاني ليس الأخير — فلا تسوية.
     expect((await declaration()).proportional.settlement).toBeNull();
 
     const q4 = (await auth(http().get('/obligations/vat-declaration')).query({ year: 2026, quarter: 4 }).expect(200)).body;
     // ⚠️ الربعُ الرابعُ بلا توريداتٍ فيه، **والتسويةُ تقرأ السنةَ كلَّها** — فتظهر.
     expect(q4.proportional.applies).toBe(false); // لا معفى في الربع الرابع نفسِه
-    // فتُقرأ التسويةُ من مسارها: نسبةُ السنة الفعلية نصفٌ (1000 خاضع · 1000 معفى).
-    const settled = (await auth(http().post('/obligations/vat-ratio/settle')).send({ year: 2026 }).expect(201)).body;
-    expect(settled.actualRatio).toBe(0.5);
-    expect(settled.appliedRatio).toBe(0.5);
-    expect(settled.difference).toBe(0); // طُبِّقت النسبةُ الصحيحة فلا فرق
-    expect(settled.settledAt).not.toBeNull();
+    // فتُقرأ التسويةُ من معاينتها: نسبةُ السنة الفعلية نصفٌ (1000 خاضع · 1000 معفى).
+    const preview = (await auth(http().get('/obligations/vat-ratio/settlement')).query({ year: 2026 }).expect(200)).body;
+    expect(preview.actualRatio).toBe(0.5);
+    expect(preview.appliedRatio).toBe(0.5);
+    expect(preview.difference).toBe(0); // طُبِّقت النسبةُ الصحيحة فلا فرق
+
+    // ⚖️ ق-١٣٦٠ — **والإقرارُ بها حدثٌ لا ختم** («والتسويةُ السنويةُ حدثٌ مثلُه»): سنةٌ لم تنتهِ لا تُسوّى.
+    const early = await auth(http().post('/obligations/vat-ratio/settle')).send({ year: 2026 }).expect(409);
+    expect(String(early.body.message)).toContain('م٥١/٧');
 
     // وتغييرُ المطبَّقة يُنتج فرقاً محسوباً يداً: الوعاءُ السنويّ 180 (150+30)، و(0.5−0.25)×180 = 45.
     await auth(http().post('/obligations/vat-ratio')).send({ year: 2026, ratio: 0.25, basis: 'ESTIMATED' }).expect(201);
-    const again = (await auth(http().post('/obligations/vat-ratio/settle')).send({ year: 2026 }).expect(201)).body;
+    const again = (await auth(http().get('/obligations/vat-ratio/settlement')).query({ year: 2026 }).expect(200)).body;
     expect(Number(again.yearApportionedBase)).toBeCloseTo(180, 2);
     expect(again.difference).toBeCloseTo(45, 2);
   });

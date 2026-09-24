@@ -59,11 +59,39 @@ export class ObligationsController {
     return this.obligationsService.declareVatRatio(tenant.companyId, dto);
   }
 
-  /** ⑥A1 — إقرارُ التسوية السنوية (م٥١/٧): أثرٌ يُختم، والحسابُ يبقى مشتقّاً. */
+  /** ⑥A1 — معاينةُ التسوية السنوية (م٥١/٧): تُحسب ولا تُكتب. */
+  @Get('vat-ratio/settlement')
+  @RequiresAction('view')
+  vatSettlementPreview(@CurrentTenant() tenant: TenantContext, @Query() query: VatRatioQueryDto) {
+    return this.obligationsService.vatSettlementPreview(tenant.companyId, query.year);
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — التسويةُ السنوية حدثٌ بتاريخه بعد انقضاء السنة وإقفال فتراتها (م٥١/٧) — يُرحّل المشتركَ بنسبة السنة الفعلية. */
   @Post('vat-ratio/settle')
   @RequiresAction('review')
   settleVatRatio(@CurrentTenant() tenant: TenantContext, @Body() dto: VatRatioQueryDto) {
     return this.obligationsService.settleVatRatio(tenant.companyId, dto.year);
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — أحداثُ إقفال الإقرار لسنة (إقفالٌ · تسويةٌ · عكس). */
+  @Get('vat-declaration/closings')
+  @RequiresAction('view')
+  listVatClosings(@CurrentTenant() tenant: TenantContext, @Query() query: VatRatioQueryDto) {
+    return this.obligationsService.listVatClosings(tenant.companyId, query.year);
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — «إقفالُ الإقرار» حدثٌ مستقلٌّ بتاريخه — لا علَمُ «قُدِّم». */
+  @Post('vat-declaration/closings')
+  @RequiresAction('review')
+  closeVatReturn(@CurrentTenant() tenant: TenantContext, @Body() dto: VatDeclarationQueryDto) {
+    return this.obligationsService.closeVatReturn(tenant.companyId, dto);
+  }
+
+  /** ⚖️ `ق-١٣٦٠` — «ولا يُرفع إلا بحدثٍ عاكسٍ بتاريخه». */
+  @Post('vat-declaration/closings/:id/reverse')
+  @RequiresAction('review')
+  reverseVatClosing(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.obligationsService.reverseVatClosing(tenant.companyId, id);
   }
 
   /** ⑥A3 (`ق-١٣٢٥`) — تصحيحُ إقرارٍ سابق من خلال هذا الإقرار (م٦٣/٢–٣). */

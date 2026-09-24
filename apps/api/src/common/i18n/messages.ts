@@ -563,6 +563,17 @@ export const MSG = {
   input_vat_use_invalid: 'validation.input_vat_use_invalid',
   vat_ratio_range: 'validation.vat_ratio_range',
   vat_ratio_not_declared: 'obligations.vat_ratio_not_declared',
+  vat_closing_period_open: 'obligations.vat_closing_period_open',
+  vat_closing_exists: 'obligations.vat_closing_exists',
+  vat_closing_overlap: 'obligations.vat_closing_overlap',
+  vat_closing_ratio_not_declared: 'obligations.vat_closing_ratio_not_declared',
+  vat_closing_not_found: 'obligations.vat_closing_not_found',
+  vat_closing_already_reversed: 'obligations.vat_closing_already_reversed',
+  vat_closing_reversal_final: 'obligations.vat_closing_reversal_final',
+  vat_closing_adjustment_first: 'obligations.vat_closing_adjustment_first',
+  vat_adjustment_year_open: 'obligations.vat_adjustment_year_open',
+  vat_adjustment_exists: 'obligations.vat_adjustment_exists',
+  vat_adjustment_periods_open: 'obligations.vat_adjustment_periods_open',
   /** ⑥A3 (`ق-١٣٢٥`) — تصحيحُ إقرارٍ سابق (م٦٣). */
   vat_correction_not_earlier: 'obligations.vat_correction_not_earlier',
   vat_correction_needs_notice: 'obligations.vat_correction_needs_notice',
@@ -1251,6 +1262,50 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.vat_ratio_not_declared]: {
     ar: 'لم تُعلَن نسبة الخصم النسبي لسنة {year} — أعلِنها من شاشة الإقرار قبل اعتماده',
     en: 'The proportional deduction ratio for {year} has not been declared — declare it on the VAT return screen before relying on it',
+  },
+  [MSG.vat_closing_period_open]: {
+    ar: 'لم تنتهِ {period} بعد — يُقفل الإقرارُ بعد انقضاء فترته',
+    en: '{period} has not ended yet — a return is closed after its period ends',
+  },
+  [MSG.vat_closing_exists]: {
+    ar: '{period} مُقفلةٌ بحدثٍ قائم — اعكسه أوّلاً إن أردتَ إقفالاً بنسبةٍ أخرى',
+    en: '{period} is already closed by a live event — reverse it first to close again with another ratio',
+  },
+  [MSG.vat_closing_overlap]: {
+    ar: 'مدى {period} يتداخل مع فترةٍ مُقفلةٍ قائمة ({other}) — فالمستندُ الواحد لا يُقفل مرّتين؛ اعكسها أوّلاً',
+    en: 'The range of {period} overlaps a live closed period ({other}) — a document cannot be closed twice; reverse it first',
+  },
+  [MSG.vat_closing_ratio_not_declared]: {
+    ar: 'لك في {period} توريداتٌ معفاةٌ وخاضعةٌ معاً، ولم تُعلَن نسبةُ الخصم النسبي لسنة {year} — أعلِنها ثم أقفل الإقرار',
+    en: '{period} has both exempt and taxable supplies and the {year} proportional ratio is not declared — declare it, then close the return',
+  },
+  [MSG.vat_closing_not_found]: {
+    ar: 'حدثُ إقفال الإقرار غيرُ موجود',
+    en: 'VAT return closing event not found',
+  },
+  [MSG.vat_closing_already_reversed]: {
+    ar: 'هذا الحدثُ عُكس من قبل — لا يُعكس حدثٌ مرّتين',
+    en: 'This event was already reversed — an event is not reversed twice',
+  },
+  [MSG.vat_closing_reversal_final]: {
+    ar: 'العكسُ حدثٌ لا يُعكس — أقفِل الفترةَ من جديد بحدثٍ جديد',
+    en: 'A reversal is itself final — close the period again with a new event',
+  },
+  [MSG.vat_closing_adjustment_first]: {
+    ar: 'لسنة {year} تسويةٌ سنويةٌ قائمة تعتمد على هذا الإقفال — اعكسها أوّلاً',
+    en: 'A live annual adjustment for {year} depends on this closing — reverse it first',
+  },
+  [MSG.vat_adjustment_year_open]: {
+    ar: 'لم تنتهِ سنة {year} بعد — التسويةُ السنويةُ في إقرارها الأخير بعد انقضائها (م٥١/٧)',
+    en: '{year} has not ended yet — the annual adjustment belongs to its final return after it ends (Art. 51/7)',
+  },
+  [MSG.vat_adjustment_exists]: {
+    ar: 'لسنة {year} تسويةٌ سنويةٌ قائمة — اعكسها أوّلاً',
+    en: 'A live annual adjustment for {year} exists — reverse it first',
+  },
+  [MSG.vat_adjustment_periods_open]: {
+    ar: '{count} مستنداً مشتركاً في سنة {year} فتراتُها لم تُقفل — أقفِلها قبل التسوية السنوية',
+    en: '{count} mixed-use documents in {year} fall in periods not yet closed — close them before the annual adjustment',
   },
   [MSG.vat_period_one_of]: {
     ar: 'الإقرار يُطلب بربعٍ أو بشهر — أحدهما لا كلاهما ولا واحد: أرسل «quarter» من 1 إلى 4، أو «month» من 1 إلى 12',

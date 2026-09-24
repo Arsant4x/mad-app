@@ -26,8 +26,9 @@ import { allocationOf, raiseLayerCost, recordCostShares, type CostShareNode } fr
  * ## متى تكون الحصّةُ غيرَ صفر
  * مستندٌ حيّ **منسوبٌ إلى المعفى وحدَه** (`EXEMPT_ONLY`) **أو بلا فاتورةٍ ضريبيةٍ صحيحة** (`excludeFromVat` — `ق-١٣٦١`: «تدخل تكلفةَ
  * ما اشتُري عند الشراء، كالمنسوب إلى المعفى … فهي غيرُ مستردّة، والمعاييرُ لا تفرّق بسبب عدم الاسترداد») بضريبة، **ومتتبَّعٌ**
- * (`nonDeductibleTracked` — ما سبق البناء يُعدّ ولا يُحوَّل). ⛔ **والمشتركُ (`MIXED`) صفرٌ هنا** — «عند إقفال فترة الإقرار» حكمٌ قائم، و**ما يُطلقه وبأيّ تاريخ**
- * قرارٌ لم يُحسم؛ فيبقى في `1250` ويعلنه الإقرار. والإلغاءُ يجعل الجوابَ صفراً فيُعاد كلُّ ما وُضع.
+ * (`nonDeductibleTracked` — ما سبق البناء يُعدّ ولا يُحوَّل). ⚖️ **والمشتركُ (`MIXED`) بعد إقفال فترته** (`ق-١٣٦٠`): غيرُ القابل منه
+ * (`ضريبة × (1 − النسبة)`) بنسبة الإقفال الحيّ أو التسوية السنوية الحيّة (`mixedRatioAt`) — **وقبل الإقفال صفرٌ** يبقى في `1250`
+ * ويعلنه الإقرار. والإلغاءُ يجعل الجوابَ صفراً فيُعاد كلُّ ما وُضع.
  *
  * ## توزيعُ ضريبة المستند على بنوده
  * بصافي كلِّ بندٍ بالعملة الأساسية (`qty × price × rate` مدوَّراً — كـ`purchaseLineBase`)، والأخيرُ يحمل بقيّةَ التدوير فلا
@@ -45,6 +46,8 @@ type Tx = Prisma.TransactionClient;
 export interface ReconcileNonDeductibleArgs {
   date: Date;
   trigger: NonDeductibleVatTrigger;
+  /** ⚖️ `ق-١٣٦٠` حدثُ الإقفال (أو عكسُه أو التسويةُ السنوية) الذي أطلق الترحيل — يُختم على الحدث. */
+  vatReturnClosingId?: string;
   /** استلامٌ يُعكس الآن — طبقاتُه تُعامَل كأنها خرجت، فتعود حصّتُها إلى الوسيط **قبل** أن تخرج البضاعة بتكلفتها. */
   excludeReceiptId?: string;
   /** يُلحق بالمذكّرة — رقمُ الاستلام مثلاً. */
@@ -109,9 +112,18 @@ async function targetsFor(tx: Tx, doc: NonNullable<Awaited<ReturnType<typeof loa
   // والمستندُ مرحَّلٌ (`journalEntryId`) — ما لم يُرحَّل لم تدخل ضريبتُه `1250` أصلاً، فلا يُخرَج منها ما لم يدخل.
   // ⚖️ ق-١٣٦١ — **والضريبةُ بلا فاتورةٍ صحيحة كالمنسوب إلى المعفى**: غيرُ مستردّة، «والمعاييرُ لا تفرّق بسبب عدم الاسترداد».
   const nonRecoverable = doc.inputVatUse === 'EXEMPT_ONLY' || doc.excludeFromVat;
-  const active = doc.voidedAt === null && doc.journalEntryId !== null && doc.nonDeductibleTracked && nonRecoverable && !doc.exempt && Number(doc.baseTaxAmount) > 0;
+  // ⚖️ ق-١٣٦٠ — **والمشتركُ بعد إقفال فترته**: غيرُ القابل منه (`ضريبة × (1 − النسبة)`) بنسبة الإقفال الحيّ لفترته أو بنسبة التسوية
+  // السنوية الحيّة لسنته — وقبل الإقفال صفرٌ (يبقى في 1250 ويعلنه الإقرار). ⛔ ولا نسبةَ تُقرأ من علَم «قُدِّم».
+  const mixed = !nonRecoverable && (doc.inputVatUse === 'MIXED' || doc.inputVatUse === 'LEGACY_UNASSIGNED');
+  const active = doc.voidedAt === null && doc.journalEntryId !== null && doc.nonDeductibleTracked && (nonRecoverable || mixed) && !doc.exempt && Number(doc.baseTaxAmount) > 0;
   if (!active) return [];
-  const tax = round2(Number(doc.baseTaxAmount));
+  let tax = round2(Number(doc.baseTaxAmount));
+  if (mixed) {
+    const ratio = await mixedRatioAt(tx, doc.date);
+    if (ratio === null) return [];
+    tax = round2(tax * (1 - ratio));
+    if (tax === 0) return [];
+  }
   // مستندٌ بلا بنود: ضريبتُه كلُّها حصّةٌ واحدة على حساب فئته.
   if (doc.lines.length === 0) return [{ purchaseLineId: null, placement: 'EXPENSE', layerId: null, amount: tax }];
 
@@ -172,12 +184,25 @@ async function targetsFor(tx: Tx, doc: NonNullable<Awaited<ReturnType<typeof loa
   return out;
 }
 
+/**
+ * ⚖️ `ق-١٣٦٠` — **نسبةُ المشترك النافذة على يوم مستند**: التسويةُ السنوية الحيّة لسنته أوّلاً (نسبةُ السنة الفعلية — م٥١/٧)، ثم إقفالُ
+ * فترته الحيّ (نسبةُ الفترة) — و«الحيّ» ما لم يُعكس. **وبلاهما لا شيء**: الفترةُ لم تُقفل فالمشتركُ باقٍ في `1250`.
+ */
+export async function mixedRatioAt(tx: Tx, date: Date): Promise<number | null> {
+  const live = { periodFrom: { lte: date }, periodTo: { gte: date }, reversedBy: { is: null } };
+  const adjustment = await tx.vatReturnClosing.findFirst({ where: { kind: 'ANNUAL_ADJUSTMENT', ...live }, orderBy: { createdAt: 'desc' }, select: { ratio: true } });
+  if (adjustment) return Number(adjustment.ratio);
+  const closing = await tx.vatReturnClosing.findFirst({ where: { kind: 'CLOSING', ...live }, orderBy: { createdAt: 'desc' }, select: { ratio: true } });
+  return closing ? Number(closing.ratio) : null;
+}
+
 function loadDoc(tx: Tx, purchaseId: string) {
   return tx.purchase.findUnique({
     where: { id: purchaseId },
     select: {
       id: true,
       no: true,
+      date: true,
       docType: true,
       supplierId: true,
       branchId: true,
@@ -275,6 +300,7 @@ export async function reconcileNonDeductibleVat(tx: Tx, companyId: string, purch
       purchaseId: doc.id,
       trigger: args.trigger,
       date: args.date,
+      vatReturnClosingId: args.vatReturnClosingId ?? null,
       baseAmount: round2(baseInventory + baseCogs + baseExpense + baseClearing),
       baseInventory,
       baseCogs,
