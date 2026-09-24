@@ -241,6 +241,23 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
       await balanced('legacy-provisional-settled');
     });
 
+    it('⑰ تحويلٌ وراء الرصيد ثم استلامٌ يسوّيه — التحويلُ ليس إخراجاً يدويّاً (مصدرُه MANUAL): فرقُه فرقٌ لا قيمتُه، و5810 لا تتحرّك', async () => {
+      const v = await s.product('صنف التحويل المؤقّت', 10);
+      // لا طبقةَ في المصدر: الاثنتان مؤقّتتان ببطاقته (عشرة)، وتولد لهما في المقصِد طبقةٌ بالتكلفة نفسِها — ولا قيد.
+      let delta = await s.deltaOf(async () => {
+        await s.move({ productId: v, warehouseId: s.warehouseA, toWarehouseId: s.warehouseB, type: 'TRANSFER', qty: 2 }).expect(201);
+      });
+      expect({ inv: delta('1300'), variance: delta('5810') }).toEqual({ inv: 0, variance: 0 });
+      expect((await balanced('transfer-provisional')).openProvisional).toBe(20);
+
+      // يصل الشراءُ باثني عشر: فرقُ الاثنتين (٤) — لا قيمتُهما (٢٤) — والفروقاتُ لا تتحرّك (وتبعُه المقصِدَ بندُ ق-١٣٦٤).
+      delta = await s.deltaOf(async () => {
+        await s.buy(v, 5, 12).expect(201);
+      });
+      expect({ inv: delta('1300'), variance: delta('5810'), cogs: delta('5100') }).toEqual({ inv: 56, variance: 0, cogs: 4 });
+      await balanced('transfer-provisional-settled');
+    });
+
     it('⑮ قديمٌ بلا قيد (سبق ق-١٣٦٣) يُعدّ ولا يُطرح — الحارسُ صارم: الفرقُ يساوي سالبَ ما حرّكه القديم', async () => {
       const t = await s.product('صنف القديم', 7);
       // صفٌّ كما كتبته الشيفرةُ قبل ق-١٣٦٣: حركةٌ يدوية وطبقتُها بلا قيد — يُكتب مباشرةً لأن المسارَ لم يعد ينتجه.

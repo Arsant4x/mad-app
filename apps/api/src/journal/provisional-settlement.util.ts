@@ -35,7 +35,7 @@ export async function settleProvisionalConsumptions(
     where: { companyId, layerId: null, settledBy: { is: null }, movement: { productId: args.productId, warehouseId: args.warehouseId } },
     orderBy: { createdAt: 'asc' },
     // ق-١٣٦٣ — مصدرُ المؤقّت يقرّر حسابَ فرقه: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
-    include: { movement: { select: { origin: true, journalEntryId: true } } },
+    include: { movement: { select: { origin: true, type: true, journalEntryId: true } } },
   });
   const settlements: SettlementRow[] = [];
   let costDelta = 0;
@@ -57,10 +57,14 @@ export async function settleProvisionalConsumptions(
     const provisionalUnitCost = Number(p.unitCost);
     // ⚠️ إخراجٌ يدويٌّ سبق `ق-١٣٦٣` لم يُقيَّد أصلاً (لا قيدَ لحركته): فلا «فرقَ» عن مؤقّتٍ قُيّد — **القيمةُ كلُّها تخرج من الدفتر
     // الآن**، حدثَ اليوم لا تحويلاً للقديم. وما قُيّد (بيعٌ · يدويٌّ بعد البناء) فرقُه وحدَه.
-    const unpostedManual = p.movement.origin === 'MANUAL' && p.movement.journalEntryId === null;
+    // ⚠️ **والتحويلُ ليس إخراجاً يدويّاً** وإن حمل `MANUAL` مصدراً: لا قيدَ له لأنه لا يُخرج قيمةً من المخزون (طبقةُ مقصِده
+    // وُلدت بالتكلفة المؤقّتة) — ففرقُه فرقٌ، ومفتاحُه `TRANSFER` لا `MANUAL` (يبقى على `5100` هنا؛ ويتبع المقصِدَ في `ق-١٣٦٤`).
+    const transfer = p.movement.type === 'TRANSFER';
+    const unpostedManual = !transfer && p.movement.origin === 'MANUAL' && p.movement.journalEntryId === null;
     const delta = unpostedManual ? actualUnitCost * qty : (actualUnitCost - provisionalUnitCost) * qty;
     costDelta += delta;
-    byOrigin[p.movement.origin] = (byOrigin[p.movement.origin] ?? 0) + delta;
+    const key = transfer ? 'TRANSFER' : p.movement.origin;
+    byOrigin[key] = (byOrigin[key] ?? 0) + delta;
     settlements.push({ provisionalId: p.id, settlementId: created.id, qty, provisionalUnitCost, actualUnitCost });
   }
   const costDeltaByOrigin = Object.fromEntries(Object.entries(byOrigin).map(([o, v]) => [o, roundTo(v, 'LINE_AMOUNT')]));
