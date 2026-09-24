@@ -87,13 +87,23 @@ d('سطورُ الفاتورة بترتيبها المعلَن على قاعدة
   });
 
   it('⭐ ورقمُ السطر بوّابةٌ في القاعدة: غيابُه يسقط، ومكرَّرُه في المستند يُرفض', async () => {
+    // الإدراجُ الخامُ نفسُه **برقمٍ يمرّ** (ثم يُلغى) — فسقوطُه بلا رقمٍ لغيابه لا لعيبٍ آخر في الصفّ.
+    await expect(
+      prisma.$transaction(async (tx) => {
+        const invoice = await bareInvoice(tx);
+        await tx.$executeRaw`INSERT INTO "invoice_lines" ("id", "companyId", "invoiceId", "lineNo", "description", "quantity", "unitPrice", "taxRate", "taxCategory")
+          VALUES (${randomUUID()}, ${companyId}, ${invoice.id}, 1, ${'برقم'}, 1, 1, 15, 'S')`;
+        throw new RollbackSignal();
+      }),
+    ).rejects.toThrow(RollbackSignal);
+    // وبلا رقم: `23502` — خرقُ «غيرُ فارغ» (Prisma لا يسمّي العمودَ في الإدراج الخام، والرمزُ يسمّي الصنف).
     await expect(
       prisma.$transaction(async (tx) => {
         const invoice = await bareInvoice(tx);
         await tx.$executeRaw`INSERT INTO "invoice_lines" ("id", "companyId", "invoiceId", "description", "quantity", "unitPrice", "taxRate", "taxCategory")
           VALUES (${randomUUID()}, ${companyId}, ${invoice.id}, ${'بلا رقم'}, 1, 1, 15, 'S')`;
       }),
-    ).rejects.toThrow(/"lineNo"/);
+    ).rejects.toThrow(/23502/);
 
     await expect(
       prisma.$transaction(async (tx) => {

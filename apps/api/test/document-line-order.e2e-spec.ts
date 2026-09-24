@@ -6,16 +6,16 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
-// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
-jest.setTimeout(90000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (11.7 ث دافئاً على قاعدة الفحص) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(40000);
 
 /**
  * ⚖️ **رقمُ السطر من ترتيب الإدخال في كلِّ مسار كتابة** (`ق-١٤١٢` · مكسورُ اليوم ب في التوجيه ٢٦٣).
  *
  * كلُّ مستندٍ هنا بثلاثة سطورٍ **أسماؤها بغير ترتيب الأبجدية** (ج · أ · ب) — فترتيبٌ مصادَفٌ بالاسم أو بالمعرّف
- * لا يطابقها صدفةً. والمساراتُ الأربعة التي تكتب سطوراً من سطور: **الإنشاء** · **التعديل** (إعادةُ كتابة السطور
- * بترتيبٍ جديد) · **الإشعارُ الدائن الكامل** (يقرأ سطورَ أصله) · **تحويلُ العرض** (يقرأ سطورَ العرض). **وهما الموضعان
- * اللذان تذبذب فيهما `line-discount ③`**: التحويلُ والإشعار.
+ * لا يطابقها صدفةً. والمساراتُ التي تكتب سطوراً: **إنشاءُ الفاتورة** · **الإشعارُ الدائن الكامل** (يقرأ سطورَ أصله) ·
+ * **إنشاءُ العرض وتعديلُه** (إعادةُ كتابة السطور بترتيبٍ جديد) · **تحويلُ العرض** (يقرأ سطورَه). **والإشعارُ والتحويلُ
+ * هما الموضعان اللذان تذبذب فيهما `line-discount ③`.** (تعديلُ سطور الفاتورة الصادرة مرفوضٌ أصلاً — `ق-٩٤٣`.)
  */
 describe('رقمُ السطر من ترتيب الإدخال — الفاتورةُ والعرضُ والإشعار (ق-١٤١٢)', () => {
   let app: INestApplication;
@@ -49,15 +49,13 @@ describe('رقمُ السطر من ترتيب الإدخال — الفاتور�
     await app.close();
   });
 
-  it('الإنشاءُ يرقّم بترتيب الإدخال — والقراءةُ تعيده كما أُدخل، والتعديلُ يعيد الترقيم بالترتيب الجديد', async () => {
+  it('إنشاءُ الفاتورة يرقّم بترتيب الإدخال — والقائمةُ تعيده كما أُدخل', async () => {
     const created = await auth(http().post('/invoices')).send({ customerId, issueDate: day(0), dueDate: day(0), lines: three() }).expect(201);
     expect(shape(created.body.lines)).toEqual(entered);
-    const read = await auth(http().get(`/invoices/${created.body.id}`)).expect(200);
-    expect(shape(read.body.lines)).toEqual(entered);
-
-    const [c, a, b] = three();
-    const edited = await auth(http().patch(`/invoices/${created.body.id}`)).send({ lines: [b, c, a] }).expect(200);
-    expect(shape(edited.body.lines)).toEqual(['1:ب — الثالث', '2:ج — الأول', '3:أ — الثاني']);
+    const list = (await auth(http().get('/invoices')).expect(200)).body as { id: string; lines: Line[] }[];
+    const read = list.find((i) => i.id === created.body.id);
+    expect(read).toBeDefined();
+    expect(shape(read!.lines)).toEqual(entered);
   });
 
   it('الإشعارُ الدائن الكامل يرث ترتيبَ أصله — لا ترتيبَ القرص', async () => {
@@ -66,10 +64,18 @@ describe('رقمُ السطر من ترتيب الإدخال — الفاتور�
     expect(shape(note.body.lines)).toEqual(entered);
   });
 
-  it('العرضُ يرقّم بترتيبه، وتحويلُه يكتب الفاتورةَ بالترتيب نفسِه', async () => {
+  it('العرضُ يرقّم بترتيبه، وتعديلُه يعيد الترقيم بالترتيب الجديد، وتحويلُه يكتب الفاتورةَ بالترتيب نفسِه', async () => {
     const quote = await auth(http().post('/quotes')).send({ customerId, issueDate: day(0), validUntil: day(14), lines: three() }).expect(201);
     expect(shape(quote.body.lines)).toEqual(entered);
+
+    const [c, a, b] = three();
+    const reordered = ['1:ب — الثالث', '2:ج — الأول', '3:أ — الثاني'];
+    const edited = await auth(http().patch(`/quotes/${quote.body.id}`)).send({ lines: [b, c, a] }).expect(200);
+    expect(shape(edited.body.lines)).toEqual(reordered);
+    const read = await auth(http().get(`/quotes/${quote.body.id}`)).expect(200);
+    expect(shape(read.body.lines)).toEqual(reordered);
+
     const converted = await auth(http().post(`/quotes/${quote.body.id}/convert`)).expect(201);
-    expect(shape(converted.body.invoice.lines)).toEqual(entered);
+    expect(shape(converted.body.invoice.lines)).toEqual(reordered);
   });
 });
