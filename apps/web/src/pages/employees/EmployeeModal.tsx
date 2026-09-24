@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
-import { BranchPicker } from '../../components/BranchPicker';
+import { BranchPicker, BranchReadOnly } from '../../components/BranchPicker';
 import type { Employee, EmployeeInput, EmployeeStatus } from '../../api/employees';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
@@ -42,7 +42,7 @@ export function EmployeeModal({
     }
     setSaving(true);
     try {
-      await onSave({
+      const fields = {
         fullName: fullName.trim(),
         jobTitle: jobTitle.trim() || undefined,
         department: department.trim() || undefined,
@@ -50,8 +50,9 @@ export function EmployeeModal({
         baseSalary: parseFloat(String(baseSalary)) || 0,
         phone: phone.trim() || undefined,
         status,
-        branchId: branchId || undefined,
-      });
+      };
+      // 🔴 ق-١٣٨٤: الفرعُ عند الإنشاء وحدَه — `UpdateEmployeeDto` لا يقبله، وإرسالُه في التعديل كان يُردّ `400`.
+      await onSave(editing ? fields : { ...fields, branchId: branchId || undefined });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_employee_save')));
     } finally {
@@ -108,7 +109,7 @@ export function EmployeeModal({
             </select>
           </div>
         </div>
-        <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
+        {editing ? <BranchReadOnly branches={branches} branchId={editing.branchId} /> : <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />}
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>

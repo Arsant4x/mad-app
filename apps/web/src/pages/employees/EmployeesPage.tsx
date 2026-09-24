@@ -48,7 +48,9 @@ export function EmployeesPage() {
 
   async function handleSave(data: EmployeeInput) {
     if (modal?.mode === 'edit') {
-      await updateEmployee(modal.employee.id, data);
+      // 🔴 ق-١٣٨٤: الفرعُ لا يُرسَل في التعديل — والنوعُ يمنعه (`EmployeeUpdateInput`)، فيُنزع هنا صراحةً.
+      const { branchId: _createOnly, ...update } = data;
+      await updateEmployee(modal.employee.id, update);
     } else {
       await createEmployee(data);
     }

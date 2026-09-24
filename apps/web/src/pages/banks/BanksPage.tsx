@@ -44,7 +44,9 @@ export function BanksPage() {
 
   async function handleSave(data: BankInput) {
     if (modal?.mode === 'edit') {
-      await updateBank(modal.bank.id, data);
+      // 🔴 ق-١٣٨٤: الفرعُ لا يُرسَل في التعديل — والنوعُ يمنعه (`BankUpdateInput`)، فيُنزع هنا صراحةً.
+      const { branchId: _createOnly, ...update } = data;
+      await updateBank(modal.bank.id, update);
     } else {
       await createBank(data);
     }

@@ -20,7 +20,13 @@ export interface BankInput {
   openingDate: string;
 }
 
-export const listBanks = (includeArchived = false) => apiClient.get<Bank[]>('/banks', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
+/**
+ * 🔴 `ق-١٣٨٤` — **الفرعُ يُحدَّد عند الإنشاء**: `UpdateBankDto` لا يقبل `branchId` (و`forbidNonWhitelisted` يردّ `400`)،
+ * فنوعُ التعديل يمنعه **بالبناء** — `never` لا الإغفال، كي لا يُسلَّم إليه كائنُ إنشاءٍ يحمله (وهكذا كان يُردّ تعديلُ كلِّ حسابٍ له فرع).
+ */
+export type BankUpdateInput = Partial<Omit<BankInput, 'branchId'>> & { branchId?: never };
+
+export const listBanks =(includeArchived = false) => apiClient.get<Bank[]>('/banks', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 
 /** سقفُ نطاق رموز الحسابات (ق-٢٩٥) — يُنذر قبل الاصطدام لا عنده. */
 export interface CodeBandStatus {
@@ -35,7 +41,7 @@ export interface CodeBandStatus {
 
 export const getBankCodeBand = () => apiClient.get<CodeBandStatus>('/banks/code-band').then((r) => r.data);
 export const createBank = (dto: BankInput) => apiClient.post<Bank>('/banks', dto).then((r) => r.data);
-export const updateBank = (id: string, dto: Partial<BankInput>) => apiClient.patch<Bank>(`/banks/${id}`, dto).then((r) => r.data);
+export const updateBank = (id: string, dto: BankUpdateInput) => apiClient.patch<Bank>(`/banks/${id}`, dto).then((r) => r.data);
 export const deleteBank = (id: string) => apiClient.delete(`/banks/${id}`);
 
 /** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
