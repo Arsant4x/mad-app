@@ -24,8 +24,9 @@ import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-sprea
  * - **`COGS`** `5100`: بضاعةٌ أُعيدت إلى المورّد — خرجت بتكلفة طبقتها وفيها حصّتُها، فحصّةُ إشعارها تقابل ذلك.
  *
  * ## متى تكون الحصّةُ غيرَ صفر
- * مستندٌ حيّ **منسوبٌ إلى المعفى وحدَه** (`EXEMPT_ONLY`) بضريبة، **ومتتبَّعٌ** (`nonDeductibleTracked` — ما سبق البناء يُعدّ
- * ولا يُحوَّل). ⛔ **والمشتركُ (`MIXED`) صفرٌ هنا** — «عند إقفال فترة الإقرار» حكمٌ قائم، و**ما يُطلقه وبأيّ تاريخ**
+ * مستندٌ حيّ **منسوبٌ إلى المعفى وحدَه** (`EXEMPT_ONLY`) **أو بلا فاتورةٍ ضريبيةٍ صحيحة** (`excludeFromVat` — `ق-١٣٦١`: «تدخل تكلفةَ
+ * ما اشتُري عند الشراء، كالمنسوب إلى المعفى … فهي غيرُ مستردّة، والمعاييرُ لا تفرّق بسبب عدم الاسترداد») بضريبة، **ومتتبَّعٌ**
+ * (`nonDeductibleTracked` — ما سبق البناء يُعدّ ولا يُحوَّل). ⛔ **والمشتركُ (`MIXED`) صفرٌ هنا** — «عند إقفال فترة الإقرار» حكمٌ قائم، و**ما يُطلقه وبأيّ تاريخ**
  * قرارٌ لم يُحسم؛ فيبقى في `1250` ويعلنه الإقرار. والإلغاءُ يجعل الجوابَ صفراً فيُعاد كلُّ ما وُضع.
  *
  * ## توزيعُ ضريبة المستند على بنوده
@@ -106,8 +107,9 @@ async function liveLayersOf(tx: Tx, purchaseLineId: string, excludeReceiptId?: s
 /** ما يجب أن يكون في كلِّ موضعٍ الآن — انظر رأسَ الملفّ. */
 async function targetsFor(tx: Tx, doc: NonNullable<Awaited<ReturnType<typeof loadDoc>>>, excludeReceiptId?: string): Promise<Target[]> {
   // والمستندُ مرحَّلٌ (`journalEntryId`) — ما لم يُرحَّل لم تدخل ضريبتُه `1250` أصلاً، فلا يُخرَج منها ما لم يدخل.
-  const active =
-    doc.voidedAt === null && doc.journalEntryId !== null && doc.nonDeductibleTracked && doc.inputVatUse === 'EXEMPT_ONLY' && !doc.exempt && Number(doc.baseTaxAmount) > 0;
+  // ⚖️ ق-١٣٦١ — **والضريبةُ بلا فاتورةٍ صحيحة كالمنسوب إلى المعفى**: غيرُ مستردّة، «والمعاييرُ لا تفرّق بسبب عدم الاسترداد».
+  const nonRecoverable = doc.inputVatUse === 'EXEMPT_ONLY' || doc.excludeFromVat;
+  const active = doc.voidedAt === null && doc.journalEntryId !== null && doc.nonDeductibleTracked && nonRecoverable && !doc.exempt && Number(doc.baseTaxAmount) > 0;
   if (!active) return [];
   const tax = round2(Number(doc.baseTaxAmount));
   // مستندٌ بلا بنود: ضريبتُه كلُّها حصّةٌ واحدة على حساب فئته.
@@ -182,6 +184,7 @@ function loadDoc(tx: Tx, purchaseId: string) {
       categoryCode: true,
       inputVatUse: true,
       exempt: true,
+      excludeFromVat: true,
       voidedAt: true,
       journalEntryId: true,
       nonDeductibleTracked: true,
