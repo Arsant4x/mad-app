@@ -98,3 +98,37 @@ export function contractBreaks(snapshot: ApiContract, current: ApiContract): str
   }
   return breaks;
 }
+
+/**
+ * ⚖️ **شكلُ الوثيقة نفسِها — لا عقدُها** (`ق-١٣٨٢` · خطّةُ الأنواع ①): ما يجعل الوثيقةَ صالحةً لمولِّد.
+ *
+ * | ما يُفحص | لماذا |
+ * |---|---|
+ * | كلُّ مسارٍ يبدأ بـ`/<الإصدار>/` | البابُ المحايد مخدومٌ لا موثَّق — ودخولُه الوثيقةَ يعيد كلَّ نوعٍ مرّتين |
+ * | كلُّ `operationId` فريد | مولِّدٌ مفهرسٌ بالمعرّف **يتصادم أو يطمس** — والمواصفةُ تشترط الفرادة |
+ *
+ * تُعاد قائمةٌ فارغة حين تصلح. **والسكربتُ يرفض الكتابةَ والفحصَ معاً** إن لم تكن فارغة — فلقطةٌ من وثيقةٍ
+ * معطوبة لا تُكتب.
+ */
+export function documentProblems(doc: OpenAPIObject, prefix: string): string[] {
+  const problems: string[] = [];
+  const head = `/${prefix}/`;
+  const seen = new Map<string, string[]>();
+  for (const [path, item] of Object.entries(doc.paths ?? {})) {
+    if (!path.startsWith(head)) problems.push(`مسارٌ خارج الإصدار: ${path}`);
+    for (const method of METHODS) {
+      const operation = (item as Record<string, unknown>)[method] as { operationId?: string } | undefined;
+      if (!operation) continue;
+      const key = `${method.toUpperCase()} ${path}`;
+      if (!operation.operationId) {
+        problems.push(`عمليةٌ بلا معرّف: ${key}`);
+        continue;
+      }
+      seen.set(operation.operationId, [...(seen.get(operation.operationId) ?? []), key]);
+    }
+  }
+  for (const [id, keys] of seen) {
+    if (keys.length > 1) problems.push(`معرّفُ عمليةٍ مكرَّر: ${id} ⟵ ${keys.join(' · ')}`);
+  }
+  return problems;
+}

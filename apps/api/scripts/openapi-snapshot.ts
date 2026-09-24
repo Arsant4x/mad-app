@@ -40,6 +40,8 @@ interface DistExports {
   buildOpenApiDocument: (app: INestApplication) => OpenAPIObject;
   contractOf: (doc: OpenAPIObject) => ApiContract;
   contractBreaks: (snapshot: ApiContract, current: ApiContract) => string[];
+  documentProblems: (doc: OpenAPIObject, prefix: string) => string[];
+  API_VERSION_PREFIX: string;
 }
 
 function loadDist(): DistExports {
@@ -51,11 +53,12 @@ function loadDist(): DistExports {
   }
   /* eslint-disable @typescript-eslint/no-var-requires */
   const appModule = require(entry) as { AppModule: unknown };
-  const versioning = require(join(DIST, 'common', 'versioning.js')) as { applyApiVersioning: (app: INestApplication) => void };
+  const versioning = require(join(DIST, 'common', 'versioning.js')) as { applyApiVersioning: (app: INestApplication) => void; API_VERSION_PREFIX: string };
   const document = require(join(DIST, 'common', 'openapi-document.js')) as { buildOpenApiDocument: (app: INestApplication) => OpenAPIObject };
   const contract = require(join(DIST, 'common', 'openapi-contract.util.js')) as {
     contractOf: (doc: OpenAPIObject) => ApiContract;
     contractBreaks: (snapshot: ApiContract, current: ApiContract) => string[];
+    documentProblems: (doc: OpenAPIObject, prefix: string) => string[];
   };
   /* eslint-enable @typescript-eslint/no-var-requires */
   return { AppModule: appModule.AppModule, ...versioning, ...document, ...contract };
@@ -69,8 +72,17 @@ async function main(): Promise<void> {
   const moduleRef = await Test.createTestingModule({ imports: [dist.AppModule as never] }).compile();
   const app = moduleRef.createNestApplication();
   dist.applyApiVersioning(app);
-  const current = dist.contractOf(dist.buildOpenApiDocument(app));
+  const doc = dist.buildOpenApiDocument(app);
+  const current = dist.contractOf(doc);
   await app.close();
+
+  // ⚖️ ق-١٣٨٢ — **شكلُ الوثيقة قبل عقدها**: بابٌ واحد ومعرّفاتٌ فريدة، وإلا فلا فحصَ ولا كتابة.
+  const problems = dist.documentProblems(doc, dist.API_VERSION_PREFIX);
+  if (problems.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error([`✖ الوثيقةُ لا تصلح لمولِّد (${problems.length}):`, ...problems.slice(0, 20).map((p) => `   ${p}`)].join('\n'));
+    process.exit(1);
+  }
 
   const count = Object.keys(current).length;
   if (count < 200) {

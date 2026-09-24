@@ -1,4 +1,5 @@
-import { ApiContract, contractBreaks, contractOf } from './openapi-contract.util';
+import { ApiContract, contractBreaks, contractOf, documentProblems } from './openapi-contract.util';
+import { versionedDocument } from './openapi-document';
 
 /**
  * **قواعدُ العقد — نقيّةٌ على وثيقةٍ مصنوعة** (`ق-١٢٩٩` · التوجيه ٢٥٤).
@@ -72,5 +73,40 @@ describe('قواعدُ عقد الواجهة — باتجاهٍ واحد (ق-١�
     expect(contractBreaks(base, { ...base, 'GET /v1/things/{id}': { ...base['GET /v1/things/{id}'], parameters: ['path:id:required', 'query:page:required'] } })).toEqual([
       'وسيطٌ صار إلزامياً: GET /v1/things/{id} ⟵ query:page',
     ]);
+  });
+});
+
+describe('⚖️ شكلُ الوثيقة — بابٌ واحد ومعرّفاتٌ فريدة (ق-١٣٨٢ · خطّةُ الأنواع ①)', () => {
+  /** وثيقةٌ كما يُنتجها `createDocument` تحت `defaultVersion: ['1', VERSION_NEUTRAL]`: كلُّ مسارٍ بابان بمعرّفٍ واحد. */
+  const twoDoors = {
+    openapi: '3.0.0',
+    info: { title: 't', version: '0' },
+    paths: {
+      '/v1/things': { get: { operationId: 'ThingsController_list', responses: { '200': {} } } },
+      '/things': { get: { operationId: 'ThingsController_list', responses: { '200': {} } } },
+      '/v1/things/{id}': { delete: { operationId: 'ThingsController_remove', responses: { '204': {} } } },
+      '/things/{id}': { delete: { operationId: 'ThingsController_remove', responses: { '204': {} } } },
+    },
+  } as never;
+
+  it('⭐ الوثيقةُ ببابين تُعلَن معطوبةً — المسارُ المحايد والمعرّفُ المكرَّر كلٌّ باسمه', () => {
+    expect(documentProblems(twoDoors, 'v1')).toEqual([
+      'مسارٌ خارج الإصدار: /things',
+      'مسارٌ خارج الإصدار: /things/{id}',
+      'معرّفُ عمليةٍ مكرَّر: ThingsController_list ⟵ GET /v1/things · GET /things',
+      'معرّفُ عمليةٍ مكرَّر: ThingsController_remove ⟵ DELETE /v1/things/{id} · DELETE /things/{id}',
+    ]);
+  });
+
+  it('⭐ وبابُ الإصدار وحدَه يصلح — والمحايدُ يُسقَط من `paths` لا غير', () => {
+    const one = versionedDocument(twoDoors, 'v1') as unknown as { paths: Record<string, unknown>; info: unknown };
+    expect(Object.keys(one.paths)).toEqual(['/v1/things', '/v1/things/{id}']);
+    expect(one.info).toEqual({ title: 't', version: '0' });
+    expect(documentProblems(one as never, 'v1')).toEqual([]);
+  });
+
+  it('وعمليةٌ بلا معرّفٍ تُعلَن — فالمولِّدُ لا يسمّيها', () => {
+    const doc = { paths: { '/v1/x': { post: { responses: { '201': {} } } } } } as never;
+    expect(documentProblems(doc, 'v1')).toEqual(['عمليةٌ بلا معرّف: POST /v1/x']);
   });
 });
