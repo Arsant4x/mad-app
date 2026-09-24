@@ -1,35 +1,13 @@
 import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString } from 'class-validator';
-import { IntegrationKind } from '@prisma/client';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CreateIntegrationDto, SetEnabledDto } from './dto/integration.dto';
 import { IntegrationsService } from './integrations.service';
 import { MSG } from '../common/i18n/messages';
-
-class CreateIntegrationDto {
-  @IsIn(['PAYMENT_GATEWAY', 'BNPL', 'ECOMMERCE'])
-  kind!: IntegrationKind;
-
-  @IsString()
-  provider!: string;
-
-  @IsOptional()
-  @IsString()
-  label?: string;
-
-  /** {apiKey: '...', merchantId: '...'} — تُشفَّر فور الوصول ولا تُقرأ ثانيةً. */
-  @IsObject()
-  credentials!: Record<string, string>;
-}
-
-class SetEnabledDto {
-  @IsBoolean()
-  enabled!: boolean;
-}
 
 /**
  * ربط المزوّدين — قرار المالك في إعدادات منشأته (قاعدة الفاعل §3.5):

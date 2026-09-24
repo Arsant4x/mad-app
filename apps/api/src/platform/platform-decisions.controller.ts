@@ -1,34 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { PlatformDecisionAction, PlatformDecisionStatus, PlatformRole } from '@prisma/client';
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { PlatformDecisionStatus, PlatformRole } from '@prisma/client';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload } from '../auth/types';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
+import { DecideDto, RequestDecisionDto } from './dto/platform-decision.dto';
 import { PlatformDecisionsService } from './platform-decisions.service';
-
-class RequestDecisionDto {
-  @IsIn(Object.values(PlatformDecisionAction))
-  action!: PlatformDecisionAction;
-
-  @IsString()
-  @MinLength(1)
-  targetId!: string;
-
-  /** ملخّصُ الأثر كما سيقرؤه المُقرّ — **إلزاميّ**: إقرارٌ على معرّفٍ مجرَّد ليس إقراراً. */
-  @IsString()
-  @MinLength(10)
-  @MaxLength(500)
-  summary!: string;
-}
-
-class DecideDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  note?: string;
-}
 
 /**
  * **القراراتُ المنصّية الحرجة** (`ق-١٣١٨` · ⑪A1).

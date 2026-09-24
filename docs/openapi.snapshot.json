@@ -1918,7 +1918,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "enabled"
+    ],
     "responses": [
       "200"
     ]
@@ -2191,7 +2193,11 @@
   },
   "POST /v1/admin/decisions": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "action",
+      "summary",
+      "targetId"
+    ],
     "responses": [
       "201"
     ]
@@ -2327,14 +2333,18 @@
   },
   "POST /v1/auth/mfa/confirm": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code"
+    ],
     "responses": [
       "201"
     ]
   },
   "POST /v1/auth/mfa/disable": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "code"
+    ],
     "responses": [
       "201"
     ]
@@ -2837,7 +2847,11 @@
   },
   "POST /v1/integrations": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "credentials",
+      "kind",
+      "provider"
+    ],
     "responses": [
       "201"
     ]
@@ -3463,7 +3477,12 @@
   },
   "POST /v1/support-access/admin": {
     "parameters": [],
-    "requiredBody": [],
+    "requiredBody": [
+      "companyId",
+      "durationMinutes",
+      "reason",
+      "screens"
+    ],
     "responses": [
       "201"
     ]

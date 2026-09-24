@@ -1,16 +1,9 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
-import { IsString, MinLength } from 'class-validator';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtPayload } from '../../auth/types';
+import { MfaCodeDto } from './dto/mfa-code.dto';
 import { MfaService } from './mfa.service';
-
-class MfaCodeDto {
-  /** الرمزُ من التطبيق (ستُّ خانات) أو رمزُ استرداد — والخدمةُ تميّزهما. */
-  @IsString()
-  @MinLength(6)
-  code!: string;
-}
 
 /**
  * **المصادقةُ المتعدّدة — لصاحب الحساب نفسِه** (`ق-١٣١٨` · ⑨A1 — باب `⑨ الصلاحيات`، مُسح).
