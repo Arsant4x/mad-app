@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assertBranchAllowed, requestedBranchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, assertBranchAllowed, requestedBranchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
@@ -160,6 +160,8 @@ export class NetworkSettlementsService {
       }
       // فرعُ الطلب يمرّ بالمصدر الواحد (ق-٥١٢): موجودٌ في المنشأة **ومن فروع صاحب الطلب** — ويُكتب ما يعيده.
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+      // مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر ولا بنكَه (`ق-١٤٣٧`).
+      await assertBoxInBranch(tx, branchId, bank);
       const periodFrom = new Date(dto.periodFrom);
       const periodTo = new Date(dto.periodTo);
       if (periodTo < periodFrom) throw new BadRequestException(MSG.network_settlement_period_backwards);

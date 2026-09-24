@@ -181,6 +181,9 @@ export class PosService {
    * **على مستوى المنشأة بحقّها**: مناوبةُ الكاشير المفتوحة تُبحث بهويّته لا
    * بفرعه — فمناوبةٌ فتحها في فرعٍ لم يعد يراه تبقى مفتوحةً ويجب أن تمنعه من
    * ثانية، والفرعُ الجديد يُقاس بعدها بـ`resolveBranchId`.
+   *
+   * **صندوقُه لا يُقاس هنا**: الدرجُ يُقاس في `resolveDrawerId` بقاعدةٍ أشدّ من `ق-١٤٣٧` — مطابقةٌ تامّةٌ لفرع المناوبة
+   * (`cash_drawer_branch_mismatch`)، فلا درجَ للمنشأة في مناوبة فرعٍ ولا درجَ فرعٍ في مناوبةٍ بلا فرع.
    */
   openShift(tenant: TenantContext, dto: OpenShiftDto) {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {

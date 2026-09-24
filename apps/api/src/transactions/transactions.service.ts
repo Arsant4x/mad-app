@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -65,6 +65,8 @@ export class TransactionsService {
       //    قيد** — لا يحمل حساباً ثانياً، **وترحيلُه يخترع الطرفَ المقابل**.
       //    فالرصيدُ **مرآةٌ تتبع الأستاذ**، تُكتب من مسار الترحيل وحده.
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+      // مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر (`ق-١٤٣٧`).
+      await assertBoxInBranch(tx, branchId, await tx.bank.findUnique({ where: { id: dto.bankId }, select: { name: true, branchId: true } }));
       return tx.bankTransaction.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
@@ -96,7 +98,11 @@ export class TransactionsService {
       //    **مرآةٌ تتبع الأستاذ** فيُكتب من مسار الترحيل وحده — يحرسه
       //    `bank-mirror.spec.ts`.
       const data: Prisma.BankTransactionUncheckedUpdateInput = {};
-      if (dto.bankId !== undefined) data.bankId = dto.bankId;
+      if (dto.bankId !== undefined) {
+        // نقلُ الحركة إلى صندوقٍ آخر يُقاس بفرعها كإنشائها (`ق-١٤٣٧`).
+        await assertBoxInBranch(tx, existing.branchId, await tx.bank.findUnique({ where: { id: dto.bankId }, select: { name: true, branchId: true } }));
+        data.bankId = dto.bankId;
+      }
       if (dto.date !== undefined) data.date = new Date(dto.date);
       if (dto.description !== undefined) data.description = dto.description;
       if (dto.amount !== undefined) {

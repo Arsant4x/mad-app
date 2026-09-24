@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { assertBoxInBranch, assertBranchAllowed } from '../branches/branch-scope.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
@@ -68,8 +68,10 @@ export class CashDepositsService {
       const drawer = await tx.cashDrawer.findUnique({ where: { id: dto.drawerId }, select: { id: true, name: true, accountId: true, branchId: true, isActive: true } });
       if (!drawer) throw new NotFoundException(MSG.cash_drawer_not_found);
       if (drawer.branchId) assertBranchAllowed(allowedBranchIds, drawer.branchId);
-      const bank = await tx.bank.findUnique({ where: { id: dto.bankId }, select: { id: true, name: true, accountId: true, deletedAt: true } });
+      const bank = await tx.bank.findUnique({ where: { id: dto.bankId }, select: { id: true, name: true, accountId: true, branchId: true, deletedAt: true } });
       if (!bank || bank.deletedAt) throw new NotFoundException(MSG.bank_not_found);
+      // الإيداعُ مستندُ فرع الدرج — لا يدخل صندوقَ فرعٍ آخر (`ق-١٤٣٧`)؛ وصندوقُ المنشأة كلِّها لكلِّ فرع.
+      await assertBoxInBranch(tx, drawer.branchId, bank);
       const amount = round2(dto.amount);
       if (amount <= 0) throw new BadRequestException(MSG.cash_deposit_amount_positive);
       const date = new Date(dto.date);

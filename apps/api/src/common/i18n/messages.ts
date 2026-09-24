@@ -522,6 +522,7 @@ export const MSG = {
   branch_delete_open_quotes: 'branches.delete_open_quotes',
   branch_delete_open_shifts: 'branches.delete_open_shifts',
   branch_delete_pending_write_offs: 'branches.delete_pending_write_offs',
+  document_box_other_branch: 'branches.document_box_other_branch',
   activity_not_found: 'activities.not_found',
   activity_name_taken: 'activities.name_taken',
   activity_in_use: 'activities.in_use',
@@ -1600,6 +1601,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.branch_delete_pending_write_offs]: {
     ar: 'في الفرع إتلافاتٌ بانتظار المراجعة: {numbers} — اعتمدها أو ارفضها أولاً',
     en: 'The branch has write-offs awaiting review: {numbers} — approve or reject them first',
+  },
+  [MSG.document_box_other_branch]: {
+    ar: '"{box}" يخصّ فرع "{boxBranch}" — ومستندٌ في فرع "{branch}" لا يستعمل صندوقَ فرعٍ آخر: اختر صندوقاً من فرعه أو صندوقاً للمنشأة كلِّها',
+    en: '"{box}" belongs to branch "{boxBranch}" — a document in branch "{branch}" does not use another branch\'s cash box: pick one from its branch or a company-wide one',
   },
   [MSG.activity_not_found]: { ar: 'النشاط التجاري غير موجود', en: 'Business activity not found' },
   [MSG.activity_name_taken]: { ar: 'يوجد نشاط بالاسم "{name}" بالفعل', en: 'An activity named "{name}" already exists' },
