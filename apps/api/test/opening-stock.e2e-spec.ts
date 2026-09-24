@@ -213,20 +213,21 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
     // تاريخُ الافتتاح المعلَنُ من قبل يُطبَّق بلا أن يُذكر.
     expect(res.body.openingDate).toBe(today());
     expect(res.body.provisionalSettled).toBe(1);
-    // الفرقُ = (9 − 7) × 3 = 6 على تكلفة المبيعات، والطبقةُ بقيت 5.
+    // الفرقُ = (9 − 7) × 3 = 6 — على فروقات المخزون (5810) لأن أصلَه إخراجٌ يدويّ (ق-١٣٦٣)، والطبقةُ بقيت 5.
     expect(res.body.provisionalCostDelta).toBe(6);
     expect(await layersOf(provisionalProductId)).toEqual([{ source: 'OPENING', received: 8, remaining: 5, unitCost: 9, acquiredAt: daysAgo(10), batch: false }]);
     const stillOpen = await get('/inventory/provisional').expect(200);
     expect((stillOpen.body as { movementId: string }[]).some((r) => r.movementId === out.body.id)).toBe(false);
 
-    const settlement = await entriesNamed(`تسوية استهلاكٍ مؤقّت — رصيدٌ افتتاحيّ ${res.body.no}`);
+    const settlement = await entriesNamed(`حركةُ مخزونٍ يدوية — تسوية مؤقّتٍ يدويّ — رصيدٌ افتتاحيّ ${res.body.no}`);
     expect(settlement).toHaveLength(1);
     expect(settlement[0].date.toISOString().slice(0, 10)).toBe(today());
     const after = await ledger();
-    // الإعلانُ 72 على 1300 ناقص فرقُ التسوية 6 إلى 5100.
+    // الإعلانُ 72 على 1300 ناقص فرقُ التسوية 6 إلى 5810 — وتكلفةُ المبيعات لا تتحرّك.
     expect(delta(after, before, '1300')).toBe(66);
     expect(delta(after, before, '3900')).toBe(72);
-    expect(delta(after, before, '5100')).toBe(6);
+    expect(delta(after, before, '5810')).toBe(6);
+    expect(delta(after, before, '5100')).toBe(0);
   });
 
   it('[SPEC 8.14] ④ الحدودُ المسمّاة: متتبَّعٌ بلا دفعة (ولا يُكتب شيء) · اقتناءٌ بعد الافتتاح · تاريخُ افتتاحٍ ثانٍ · صنفٌ تحرّك قبل الافتتاح', async () => {

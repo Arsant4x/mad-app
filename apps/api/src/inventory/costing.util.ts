@@ -273,7 +273,7 @@ export async function restoreConsumption(
   tx: Tx,
   companyId: string,
   originalMovementId: string,
-): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number }> {
+): Promise<{ restoredQty: number; reversedCost: number; provisionalQty: number; restoredCost: number }> {
   const consumptions = await tx.inventoryConsumption.findMany({
     where: { movementId: originalMovementId },
     orderBy: { createdAt: 'asc' },
@@ -283,6 +283,8 @@ export async function restoreConsumption(
   let restoredQty = 0;
   let reversedCost = 0;
   let provisionalQty = 0;
+  // ق-١٣٦٣ — ما عاد إلى الطبقات فعلاً بتكلفته (بلا المؤقّت الذي لم يأخذ من طبقة) — قيمةُ قيد عكس الحركة اليدوية.
+  let restoredCost = 0;
 
   for (const c of consumptions) {
     // ㉘ مؤقّتٌ سُوِّي: صفُّ تسويته — بطبقةٍ حقيقية وتكلفتها — هو الذي يُعاد ويُحسب، لا الأصلُ (ق-١٠٦٣/١).
@@ -301,12 +303,14 @@ export async function restoreConsumption(
       data: { qtyRemaining: { increment: qty } },
     });
     restoredQty += qty;
+    restoredCost += qty * Number(c.unitCost);
   }
 
   return {
     restoredQty: roundTo(restoredQty, 'DERIVED_QUANTITY'),
     reversedCost: roundTo(reversedCost, 'LINE_AMOUNT'),
     provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
+    restoredCost: roundTo(restoredCost, 'LINE_AMOUNT'),
   };
 }
 

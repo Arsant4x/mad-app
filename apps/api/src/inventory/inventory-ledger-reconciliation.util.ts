@@ -10,20 +10,28 @@ type Tx = Prisma.TransactionClient;
  * **بنصّ المالك**: «فتحليلُك يقول إن الافتراقَ يتراكم بلا حارس، وكلُّ رفعٍ للتكلفة يزيده. فيُبنى حارسٌ حيٌّ يقارن
  * الرصيدَ بمجموع المتبقّي في تكلفته، ويسقط بفرق.» — وكان مسبارٌ مُصادَق قد وجد **صفرَ مطابقةٍ في الشيفرة**.
  *
- * ## المعادلة — وما يُعلَن بقرارٍ قائم لا يُخفى
+ * ## المعادلة — صارمةٌ منذ `ق-١٣٦٣`
  *
- *     الدفتر(1300) = الطبقات − صافي اليدويّ − المؤقّت المفتوح      ⟸   الفرقُ = الدفتر − الطبقات + صافي اليدويّ + المؤقّت
+ *     الدفتر(1300) = الطبقات − المؤقّت المفتوح      ⟸   الفرقُ = الدفتر − الطبقات + المؤقّت
+ *
+ * **وسقط منها «صافي اليدويّ»** بحكم المالك (`ق-١٣٦٣`): «فحركةٌ تُحرّك قيمةَ المخزون ولا تصل الدفتر تجعل الدفترَ لا يطابق ما
+ * على الرفّ، وهذا عينُ ما بُني الحارسُ ليمنعه … ⇒ ويسقط استثناءُ «اليدويّ» من معادلة الحارس، فيصير صارماً.» — فالحركةُ اليدوية
+ * صار لها قيدٌ على `5810 فروقات المخزون` (`postManualStockEntry`)، ولا شيءَ يتحرّك في الطبقات بلا أثرٍ في الدفتر إلا ما يُعلَن أدناه.
  *
  * - **الطبقات**: `Σ qtyRemaining × unitCost` — قيمةُ ما على الرفّ بتكلفته اليوم.
- * - **صافي اليدويّ** (`manualOneSided`): الحركةُ اليدوية **تُحرّك الطبقاتِ بلا قيد بقرارٍ قائم** («ولا قيدَ في الدفتر —
- *   كما لم يكن للحركة اليدوية قيد» · ㉘ · `ق-١٠٦٣`). فتُعدّ رقماً معلَناً: طبقاتُ الإدخال اليدويّ − ما استهلكه الإخراجُ
- *   اليدويّ + ما أعاده عكسُه. **والتحويلُ خارجه** — يُنقص طبقةً ويُنشئ أخرى بتكلفتها، فيبقى المجموع.
- * - **المؤقّت المفتوح** (`openProvisional`): بيعٌ سبق استلامَه رُحّلت تكلفتُه بآخر تكلفةٍ معروفة **بلا طبقةٍ تُنقَص** حتى
- *   يصل الاستلام (`ق-١٠٦٣/١`: «قائمةُ الدخل قد تحوي تقديراً، ويجب أن يكون مقروءاً»).
+ * - **المؤقّت المفتوح** (`openProvisional`): استهلاكٌ بلا طبقةٍ لم تصله تسوية، **غادرت قيمتُه رفَّ المصدر في الدفتر** — بيعٌ سبق
+ *   استلامَه (قيدُ التكلفة) · شطبٌ وراء الرصيد (قيدُ الشطب) · إخراجٌ يدويٌّ بعد `ق-١٣٦٣` (قيدُه) — **أو إلى رفِّ المقصِد** (تحويلٌ
+ *   وراء الرصيد يُنشئ طبقةَ مقصِدٍ بتكلفته المؤقّتة). `ق-١٠٦٣/١`: «قائمةُ الدخل قد تحوي تقديراً، ويجب أن يكون مقروءاً».
  *
- * ⚠️ **وحدُّها معلَن**: الحارسُ يرى **الافتراقَ** بين الحسابين لا **سوءَ التوزيع** بينهما — حصّةُ تكلفةٍ ذهبت إلى `5100`
- * وحقُّها طبقةٌ على رفٍّ آخر (التحويل) لا تُحدث فرقاً بين `1300` والطبقات. فالعيبان «التحويلُ مستهلَك» و«الإتلافُ إلى
- * تكلفة المبيعات» **لا يقيسهما هذا الحارس** — يقيسهما سيناريو حزمته بأرقامٍ مسمّاة (`ق-١٣٤٤`).
+ * ## والقديمُ يُعدّ ولا يُطرح (`ق-١١٧٨`)
+ *
+ * `legacyManualUnposted`: ما حرّكته في الطبقات حركاتٌ يدويةٌ **سبقت `ق-١٣٦٣` بلا قيد** (وعكوسُها) — **رقمٌ معلَنٌ يفسّر الفرقَ ولا
+ * يدخل المعادلة**: فرقٌ يساوي `−legacyManualUnposted` كلُّه قديم. ومؤقّتُها المفتوح خارج `openProvisional` (لم يُقيَّد).
+ * ⚠️ **وحدُّه**: لا يرى صفوفَ التسوية (`settlesId`) — فتسويةُ مؤقّتِ إخراجٍ قديمٍ **قبل** البناء (رُحّل فرقُها على `5100` وأصلُها بلا
+ * قيد) تبقى في الفرق بلا تفسيرٍ هنا؛ وتسويتُه **بعد** البناء قيدُها كاملاً على `5810` فلا أثر.
+ *
+ * ⚠️ **وحدُّ الحارس معلَن**: يرى **الافتراقَ** بين الحسابين لا **سوءَ التوزيع** بينهما — حصّةُ تكلفةٍ ذهبت إلى `5100` وحقُّها طبقةٌ
+ * على رفٍّ آخر (التحويل) لا تُحدث فرقاً بين `1300` والطبقات (`ق-١٣٤٤`).
  *
  * **على مستوى المنشأة بحقّها**: المطابقةُ بين حسابٍ واحد في دليل المنشأة وطبقاتِها كلِّها — فرعُ القارئ لا يقسم
  * رصيدَ `1300` (سطورُه بلا فرعٍ في أغلبها) فمطابقةُ فرعٍ بعينه فرقٌ مصطنع.
@@ -33,11 +41,11 @@ export interface InventoryLedgerReconciliation {
   ledger: number;
   /** قيمةُ ما على الرفّ بتكلفته. */
   layers: number;
-  /** ما حرّكته الحركاتُ اليدوية في الطبقات بلا قيد — معلَنٌ بقرار (`ق-١٠٦٣`). */
-  manualOneSided: number;
-  /** تكلفةُ بيعٍ مؤقّتةٌ رُحّلت بلا طبقة — مفتوحةٌ حتى يُسوّيها الاستلام (`ق-١٠٦٣/١`). */
+  /** تكلفةٌ مؤقّتةٌ غادرت رفَّ المصدر في الدفتر أو إلى رفِّ المقصِد بلا طبقةٍ تُنقَص — مفتوحةٌ حتى تُسوّيها طبقةٌ تصل (`ق-١٠٦٣/١`). */
   openProvisional: number;
-  /** **الافتراق** — ما لا يفسّره شيءٌ معلَن: `ledger − layers + manualOneSided + openProvisional`. صفرٌ = مطابق. */
+  /** ما حرّكته حركاتٌ يدويةٌ قديمة بلا قيد (سبقت `ق-١٣٦٣`) — **يُعدّ ولا يُطرح**: يفسّر الفرقَ ولا يُخفيه. */
+  legacyManualUnposted: number;
+  /** **الافتراق** — صارماً: `ledger − layers + openProvisional`. صفرٌ = مطابق. */
   difference: number;
 }
 
@@ -50,31 +58,32 @@ export async function inventoryLedgerReconciliation(tx: Tx): Promise<InventoryLe
   const [layers] = await tx.$queryRaw<{ v: number }[]>`
     SELECT COALESCE(SUM(l."qtyRemaining" * l."unitCost"), 0)::float8 AS v FROM inventory_layers l`;
 
-  // اليدويّ: طبقاتُ الإدخال اليدويّ بقيمتها عند إنشائها − ما استهلكه الإخراجُ اليدويّ من طبقاتٍ (لا التحويل)
-  //          + ما أعاده عكسُ إخراجٍ يدويّ إلى طبقاته (يُقاس بما خرج به، فعكسُه يُطفئه).
-  const [manual] = await tx.$queryRaw<{ added: number; consumed: number; restored: number }[]>`
-    SELECT
-      COALESCE((SELECT SUM(l."qtyReceived" * l."unitCost") FROM inventory_layers l JOIN stock_movements m ON m.id = l."sourceMovementId"
-                WHERE l."sourceType" = 'ADJUSTMENT' AND m.origin = 'MANUAL'), 0)::float8 AS added,
-      COALESCE((SELECT SUM(c.qty * c."unitCost") FROM inventory_consumptions c JOIN stock_movements m ON m.id = c."movementId"
-                WHERE c."layerId" IS NOT NULL AND m.origin = 'MANUAL' AND m.type <> 'TRANSFER'), 0)::float8 AS consumed,
-      COALESCE((SELECT SUM(c.qty * c."unitCost") FROM inventory_consumptions c JOIN stock_movements m ON m.id = c."movementId"
-                WHERE c."layerId" IS NOT NULL AND m.origin = 'MANUAL' AND m.type <> 'TRANSFER'
-                  AND EXISTS (SELECT 1 FROM stock_movements r WHERE r."reversalOfId" = m.id AND r.type = 'IN')), 0)::float8 AS restored`;
-
-  // المؤقّتُ المفتوح: استهلاكُ بيعٍ بلا طبقة ولم تصله تسوية.
+  // المؤقّتُ المفتوح: استهلاكٌ بلا طبقةٍ لم تصله تسوية — إلا إخراجاً يدويّاً قديماً بلا قيد (لم تغادر قيمتُه الدفترَ ولا إلى رفٍّ آخر).
   const [provisional] = await tx.$queryRaw<{ v: number }[]>`
     SELECT COALESCE(SUM(c.qty * c."unitCost"), 0)::float8 AS v
     FROM inventory_consumptions c JOIN stock_movements m ON m.id = c."movementId"
-    WHERE c."layerId" IS NULL AND m.origin = 'SALE'
-      AND NOT EXISTS (SELECT 1 FROM inventory_consumptions s WHERE s."settlesId" = c.id)`;
+    WHERE c."layerId" IS NULL
+      AND NOT EXISTS (SELECT 1 FROM inventory_consumptions s WHERE s."settlesId" = c.id)
+      AND NOT (m.origin = 'MANUAL' AND m.type <> 'TRANSFER' AND m."journalEntryId" IS NULL)`;
 
-  const manualOneSided = manual.added - manual.consumed + manual.restored;
+  // القديمُ بلا قيد: طبقاتُ إدخالٍ يدويٍّ قديم − ما استهلكه إخراجٌ يدويٌّ قديم من طبقات + ما أعاده عكسُه (بما خرج به)؛ والتحويلُ خارجه.
+  const [legacy] = await tx.$queryRaw<{ added: number; consumed: number; restored: number }[]>`
+    SELECT
+      COALESCE((SELECT SUM(l."qtyReceived" * l."unitCost") FROM inventory_layers l JOIN stock_movements m ON m.id = l."sourceMovementId"
+                WHERE l."sourceType" = 'ADJUSTMENT' AND m.origin = 'MANUAL' AND m."journalEntryId" IS NULL), 0)::float8 AS added,
+      COALESCE((SELECT SUM(c.qty * c."unitCost") FROM inventory_consumptions c JOIN stock_movements m ON m.id = c."movementId"
+                WHERE c."layerId" IS NOT NULL AND c."settlesId" IS NULL
+                  AND m.origin = 'MANUAL' AND m.type <> 'TRANSFER' AND m."journalEntryId" IS NULL), 0)::float8 AS consumed,
+      COALESCE((SELECT SUM(c.qty * c."unitCost") FROM inventory_consumptions c JOIN stock_movements m ON m.id = c."movementId"
+                WHERE c."layerId" IS NOT NULL AND c."settlesId" IS NULL
+                  AND m.origin = 'MANUAL' AND m.type <> 'TRANSFER' AND m."journalEntryId" IS NULL
+                  AND EXISTS (SELECT 1 FROM stock_movements r WHERE r."reversalOfId" = m.id AND r.type = 'IN')), 0)::float8 AS restored`;
+
   return {
     ledger: round2(ledger.v),
     layers: round2(layers.v),
-    manualOneSided: round2(manualOneSided),
     openProvisional: round2(provisional.v),
-    difference: round2(ledger.v - layers.v + manualOneSided + provisional.v),
+    legacyManualUnposted: round2(legacy.added - legacy.consumed + legacy.restored),
+    difference: round2(ledger.v - layers.v + provisional.v),
   };
 }

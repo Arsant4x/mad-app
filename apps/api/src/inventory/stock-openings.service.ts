@@ -7,7 +7,7 @@ import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { postCogsSettlementEntry } from '../journal/auto-posting.util';
+import { postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { openingEntryDate } from '../journal/opening-balance.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 import { postStockOpeningEntry, postStockOpeningVoidEntry } from '../journal/stock-opening-posting.util';
@@ -163,6 +163,7 @@ export class StockOpeningsService {
         // ٣. لكلِّ سطر: حركةٌ داخلة بمصدر OPENING، وطبقةٌ بتاريخ الاقتناء، وسطرُ إعلانٍ يملك ما أُعلن، ثم تسويةُ المؤقّت.
         let settledDelta = 0;
         let settledCount = 0;
+        const settledByOrigin: Record<string, number> = {};
         const today = toDateOnly(new Date());
         for (const p of prepared) {
           const movement = await tx.stockMovement.create({
@@ -209,6 +210,7 @@ export class StockOpeningsService {
           const settled = await settleProvisionalConsumptions(tx, companyId, { productId: p.line.productId, warehouseId: p.line.warehouseId, layerId });
           settledDelta = round2(settledDelta + settled.costDelta);
           settledCount += settled.settled;
+          for (const [origin, v] of Object.entries(settled.costDeltaByOrigin)) settledByOrigin[origin] = round2((settledByOrigin[origin] ?? 0) + (v ?? 0));
         }
 
         // ٤. قيدٌ واحد للإعلان — مدين 1300 / دائن 3900 بتاريخ الافتتاح (يخضع للقفل في createJournalEntry).
@@ -218,7 +220,8 @@ export class StockOpeningsService {
 
         // ٥. فرقُ تسوية المؤقّت — حدثُ اليوم لا حدثُ الافتتاح: البيعُ قُيّد بتكلفةٍ مؤقّتة والحقيقةُ عُرفت الآن.
         if (settledCount > 0) {
-          await postCogsSettlementEntry(tx, companyId, { branchId, ref: `رصيدٌ افتتاحيّ ${no}`, date: today, baseDelta: settledDelta });
+          // ق-١٣٦٣ — فرقُ كلِّ مؤقّتٍ على حساب مصدره: البيعُ تكلفةُ مبيعات، والحركةُ اليدويةُ فروقاتُ المخزون.
+          await postProvisionalSettlementEntries(tx, companyId, { branchId, ref: `رصيدٌ افتتاحيّ ${no}`, date: today, byOrigin: settledByOrigin });
         }
 
         return this.readOne(tx, opening.id, { provisionalSettled: settledCount, provisionalCostDelta: settledDelta });

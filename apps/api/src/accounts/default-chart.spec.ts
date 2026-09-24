@@ -82,6 +82,8 @@ describe('الدليل الافتراضي يغطي كل ما يرحّل عليه
       // ينتقل سطح الحارس معها** — وهي العلّة نفسها التي وثّقها التعليق أعلاه.
       { path: join(__dirname, '..', 'journal', 'inventory-accounts.util.ts'), must: 'INVENTORY_ACCOUNT_CODE' },
       { path: join(__dirname, '..', 'journal', 'writeoff-account.util.ts'), must: 'WRITEOFF_EXPENSE_ACCOUNT_CODE' },
+      // ق-١٣٦٣ — حسابُ فروقات المخزون وُلد في ملفّه كالتلف؛ فينتقل السطحُ معه ساعةَ وُلد لا بعد ثقب.
+      { path: join(__dirname, '..', 'journal', 'inventory-variance-account.util.ts'), must: 'INVENTORY_VARIANCE_ACCOUNT_CODE' },
     ];
 
     // توكيد السلامة أولاً: ملف مفقود أو أُعيدت تسميته يجب أن يُسقط الاختبار

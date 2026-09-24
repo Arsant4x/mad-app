@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
 import { RETAINED_EARNINGS_CODE, RETAINED_EARNINGS_NAME } from '../fiscal/year-closing.util';
 import { WRITEOFF_EXPENSE_ACCOUNT_CODE, WRITEOFF_EXPENSE_ACCOUNT_NAME } from '../journal/writeoff-account.util';
+import { INVENTORY_VARIANCE_ACCOUNT_CODE, INVENTORY_VARIANCE_ACCOUNT_NAME } from '../journal/inventory-variance-account.util';
 
 /**
  * دليل الحسابات الافتراضي — المصدر الوحيد الذي تُولد به كل منشأة جديدة.
@@ -96,6 +97,9 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   // 5800 لا 5400 (قرار المالك 2026-09-03): خلطُ التلف بـ«مصروفات أخرى» **يُخفي
   // رقماً يجب أن يُرى** — «كم أتلفتُ هذا الشهر؟» مؤشرُ سرقةٍ قبل الجرد.
   { code: WRITEOFF_EXPENSE_ACCOUNT_CODE, name: WRITEOFF_EXPENSE_ACCOUNT_NAME, type: 'expense' },
+  // 5810 بجوار التلف لا فيه (ق-١٣٦٣): الحركةُ اليدوية تسويةٌ بلا مستند، والتلفُ فعلٌ باعتماد —
+  // ورقمُ «كم عدّلنا بأيدينا» يُرى وحدَه. ويُنشأ عند أوّل حركةٍ يدوية للقائمة (نمطُ 5800).
+  { code: INVENTORY_VARIANCE_ACCOUNT_CODE, name: INVENTORY_VARIANCE_ACCOUNT_NAME, type: 'expense' },
 ];
 
 /** رموز الدليل الافتراضي — للمقارنة السريعة ولاختبار التغطية. */

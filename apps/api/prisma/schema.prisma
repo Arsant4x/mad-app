@@ -3055,6 +3055,8 @@ model JournalEntry {
   keyMoneyEntries     ContractKeyMoney[] @relation("KeyMoney")
   maintenanceCosts    MaintenanceRequest[] @relation("MaintenanceCost")
   inventoryWriteOffs  InventoryWriteOff[]  @relation("InventoryWriteOffEntry")
+  /// ق-١٣٦٣ — قيودُ الحركات اليدوية (فروقاتُ المخزون ⇄ 1300).
+  manualStockMovements StockMovement[]     @relation("ManualStockEntry")
   goodsReceipts       GoodsReceipt[]       @relation("GoodsReceiptEntry")
   landedCosts         LandedCostDistribution[] @relation("LandedCostEntry")
   landedCostVoids     LandedCostDistribution[] @relation("LandedCostVoidEntry")
@@ -3073,6 +3075,7 @@ model JournalEntry {
   @@index([openingForAccountId])
   @@map("journal_entries")
   inventoryWriteOff_journalEntryId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_journalEntryId_tenant")
+  stockMovement_journalEntryId_tenant StockMovement[] @relation("StockMovement_journalEntryId_tenant")
   rentAccrual_journalEntryId_tenant RentAccrual[] @relation("RentAccrual_journalEntryId_tenant")
   rentPayment_journalEntryId_tenant RentPayment[] @relation("RentPayment_journalEntryId_tenant")
   supplierPayment_journalEntryId_tenant SupplierPayment[] @relation("SupplierPayment_journalEntryId_tenant")
@@ -5529,11 +5532,19 @@ model StockMovement {
   reversalOfTenant StockMovement? @relation("StockMovement_reversalOfId_tenant", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
   reversedBy   StockMovement? @relation("MovementReversal")
 
+  /// ⚖️ ق-١٣٦٣ — **قيدُ الحركة اليدوية** (فروقاتُ المخزون ⇄ `1300`) — نقضٌ لـ«ولا قيدَ في الدفتر — كما لم يكن للحركة اليدوية قيد».
+  /// `null` لما سبق البناء (يُعدّ ولا يُحوَّل) · وللتحويل (لا قيمةَ تغادر المخزون) · ولحركات المستندات (قيدُها على مستندها).
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation("ManualStockEntry", fields: [journalEntryId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  journalEntryTenant JournalEntry? @relation("StockMovement_journalEntryId_tenant", fields: [companyId, journalEntryId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([expiryDate])
   @@index([companyId, productId, warehouseId])
   @@index([invoiceLineId])
   @@index([purchaseLineId])
   @@index([goodsReceiptLineId])
+  @@index([journalEntryId])
   @@map("stock_movements")
   inventoryWriteOff_movementId_tenant InventoryWriteOff[] @relation("InventoryWriteOff_movementId_tenant")
   inventoryConsumption_movementId_tenant InventoryConsumption[] @relation("InventoryConsumption_movementId_tenant")
