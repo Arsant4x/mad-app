@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type { Product } from './products';
 import type { Warehouse } from './warehouses';
 import type { StockMovementType, StockStatus } from '@mad-app/shared/api/enums';
+import type { CreateStockMovementDto, InventoryListMovementsQuery } from '@mad-app/shared/api/requests';
 
 export type { StockMovementType };
 export type { StockStatus };
@@ -20,21 +21,7 @@ export interface StockMovement {
   date: string;
 }
 
-export interface StockMovementInput {
-  productId: string;
-  warehouseId: string;
-  toWarehouseId?: string;
-  type: StockMovementType;
-  qty: number;
-  date: string;
-  /** ⭐ ق-١٣٧٧ — إلزاميٌّ من اليوم (والخادمُ يرفض الفارغَ والمسافات). */
-  reason: string;
-  /** Batch/lot + expiry — used on receiving (IN) perishables. */
-  batchNo?: string;
-  expiryDate?: string;
-  /** تكلفةُ الوحدة — مطلوبةٌ للإدخال والتسوية الموجبة؛ لا تؤخذ من البطاقة (ق-١٠٦٣/٣). */
-  unitCost?: number;
-}
+export type StockMovementInput = CreateStockMovementDto;
 
 export interface ExpiringBatch {
   id: string;
@@ -75,12 +62,7 @@ export interface StockMovementListResponse {
   pageSize: number;
 }
 
-export interface ListStockMovementsParams {
-  page?: number;
-  pageSize?: number;
-  /** Server-side — matches product name, warehouse name, or reason. */
-  search?: string;
-}
+export type ListStockMovementsParams = InventoryListMovementsQuery;
 
 export const listStockMovements = (params: ListStockMovementsParams = {}) =>
   apiClient.get<StockMovementListResponse>('/inventory/movements', { params }).then((r) => r.data);

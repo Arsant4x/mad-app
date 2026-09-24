@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CreateWarehouseDto } from '@mad-app/shared/api/requests';
 
 export interface Warehouse {
   archived: boolean;
@@ -10,11 +11,7 @@ export interface Warehouse {
   totalQty: number;
 }
 
-export interface WarehouseInput {
-  name: string;
-  location?: string;
-  manager?: string;
-}
+export type WarehouseInput = CreateWarehouseDto;
 
 export const listWarehouses = (includeArchived = false) =>
   apiClient.get<Warehouse[]>('/warehouses', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);

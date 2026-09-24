@@ -2,6 +2,7 @@ import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Supplier } from './suppliers';
 import type { PurchaseDocType, PurchaseStatus } from '@mad-app/shared/api/enums';
+import type { CreatePurchaseDto, CreateSupplierNoteDto, SupplierNoteLineDto, UpdatePurchaseDto } from '@mad-app/shared/api/requests';
 
 /** نوعُ مستند الشراء — الأصلُ وإشعارا المورّد عليه (`ق-١٠٠٦`): صفٌّ في الجدول نفسِه بنوعه، كإشعار البيع. */
 export type { PurchaseDocType };
@@ -44,28 +45,10 @@ export interface Purchase {
 
 export type { PurchaseStatus };
 
-export interface CreatePurchaseInput {
-  supplierId: string;
-  /** Omit for a company-wide record. */
-  branchId?: string;
-  date: string;
-  dueDate?: string;
-  /** رقمُ فاتورة المورّد — مرجعٌ خارجيٌّ يُسجَّل. */
-  supplierRef?: string;
-  /** لافتةٌ حرّة للعرض. */
-  category?: string;
-  /** الرمز الذي يقرّر: الإطفاء · تقرير التأسيس · حساب الترحيل. */
-  categoryCode?: string;
-  subtotal: number;
-  exempt?: boolean;
-  excludeFromVat?: boolean;
-  amortize?: boolean;
-  amortizeMonths?: number;
-  incorpItem?: string;
-}
+export type CreatePurchaseInput = CreatePurchaseDto;
 
 /** لا `paid` هنا (`ق-٨٧٤`): السدادُ سندُ صرفٍ (`supplierPayments.ts`) — والخادمُ يرفض العلَمَ القديم بـ400. */
-export type UpdatePurchaseInput = Partial<CreatePurchaseInput>;
+export type UpdatePurchaseInput = UpdatePurchaseDto;
 
 export const listPurchases = () => apiClient.get<Purchase[]>('/purchases').then((r) => r.data);
 export const createPurchase = (dto: CreatePurchaseInput) => apiClient.post<Purchase>('/purchases', dto).then((r) => r.data);
@@ -73,23 +56,10 @@ export const updatePurchase = (id: string, dto: UpdatePurchaseInput) => apiClien
 export const deletePurchase = (id: string) => apiClient.delete(`/purchases/${id}`);
 
 /** سطرُ إشعارٍ من المورّد — يشير إلى سطر الشراء الأصليّ، ويقول إن كانت البضاعةُ أُعيدت فعلاً أم أنه إشعارُ سعر. */
-export interface SupplierNoteLineInput {
-  description: string;
-  productId?: string;
-  quantity: number;
-  unitPrice: number;
-  taxRate?: number;
-  returnsPurchaseLineId?: string;
-  goodsReturned?: boolean;
-}
+export type SupplierNoteLineInput = SupplierNoteLineDto;
 
 /** إشعارٌ من المورّد على شراء — مستندُه يُسجَّل لا يُصدَر: سببُه وتاريخُه ورقمُه عنده، وبنودٌ أو الإشعارُ الكامل. */
-export interface SupplierNoteInput {
-  reason: string;
-  date?: string;
-  supplierRef?: string;
-  lines?: SupplierNoteLineInput[];
-}
+export type SupplierNoteInput = CreateSupplierNoteDto;
 
 export const issueSupplierCreditNote = (purchaseId: string, dto: SupplierNoteInput) =>
   apiClient.post<Purchase>(`/purchases/${purchaseId}/supplier-credit-note`, dto).then((r) => r.data);

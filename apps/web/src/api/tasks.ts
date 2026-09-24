@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { TaskAssigneeKind, TaskPriority, TaskStatus } from '@mad-app/shared/api/enums';
+import type { CreateTaskDto } from '@mad-app/shared/api/requests';
 
 /**
  * عميل المهام — **ينقل ولا يحسب**.
@@ -58,18 +59,7 @@ export interface TaskCounters {
   overdue: number;
 }
 
-export interface CreateTaskInput {
-  title: string;
-  assigneeId: string;
-  assigneeKind: TaskAssigneeKind;
-  targetScreen?: string;
-  targetId?: string;
-  note?: string;
-  recurEveryDays?: number;
-  dueAnchor?: string;
-  priority?: TaskPriority;
-  department?: string;
-}
+export type CreateTaskInput = CreateTaskDto;
 
 export const listMyTasks = () => apiClient.get<MyTask[]>('/tasks/mine').then((r) => r.data);
 export const getTaskCounters = () => apiClient.get<TaskCounters>('/tasks/counters').then((r) => r.data);

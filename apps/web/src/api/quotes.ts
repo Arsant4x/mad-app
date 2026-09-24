@@ -1,7 +1,8 @@
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
-import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
+import type { TaxCategory } from '../lib/vat';
 import type { QuoteStatus } from '@mad-app/shared/api/enums';
+import type { CreateQuoteDto, QuoteLineDto } from '@mad-app/shared/api/requests';
 
 export type { QuoteStatus };
 /** EXPIRED مشتقة قراءةً من validUntil — لا تُخزَّن. */
@@ -40,24 +41,9 @@ export interface Quote {
   createdAt: string;
 }
 
-export interface QuoteLineInput {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  /** ⑧ الفئةُ والسبب — كما في بند الفاتورة؛ والنسبةُ يشتقّها الخادم. */
-  taxCategory: DeclarableTaxCategory;
-  taxExemptionReasonCode?: string;
-  taxExemptionReason?: string;
-}
+export type QuoteLineInput = QuoteLineDto;
 
-export interface QuoteInput {
-  customerId: string;
-  branchId?: string;
-  issueDate: string;
-  validUntil: string;
-  notes?: string;
-  lines: QuoteLineInput[];
-}
+export type QuoteInput = CreateQuoteDto;
 
 export const listQuotes = () => apiClient.get<Quote[]>('/quotes').then((r) => r.data);
 export const getQuote = (id: string) => apiClient.get<Quote>(`/quotes/${id}`).then((r) => r.data);

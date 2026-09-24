@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import { SECTOR_VALUES } from '@mad-app/shared/api/enums';
 import type { Sector } from '@mad-app/shared/api/enums';
+import type { CreateActivityDto } from '@mad-app/shared/api/requests';
 
 /** القطاعات — **مولَّدةٌ من `apps/api/src/activities/sectors.ts`** عبر سجلّ التعدادات (`ق-١٣٨٤`)، بترتيب المصدر. */
 export const SECTORS = SECTOR_VALUES;
@@ -37,11 +38,7 @@ export interface Activity {
   productCount: number;
 }
 
-export interface ActivityInput {
-  name: string;
-  activityType?: string;
-  sector?: Sector;
-}
+export type ActivityInput = CreateActivityDto;
 
 /** التعطيلُ تعديلٌ لا إنشاء — `CreateActivityDto` لا يعرف `disabled` فيردّه `400` (`ق-١٣٨٤`). */
 export interface ActivityUpdateInput extends Partial<ActivityInput> {

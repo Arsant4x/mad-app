@@ -1,5 +1,6 @@
 import { ALLOWED_SCREENS, SCREEN_ACTIONS, type ScreenAction, type ScreenKey } from '@mad-app/shared/permissions';
 import { apiClient } from './client';
+import type { CreateTemplateDto } from '@mad-app/shared/api/requests';
 
 /**
  * ⑧ مفرداتُ الصلاحيات **مولَّدةٌ لا منسوخة** (`ق-١٢٣٤`): `ALLOWED_SCREENS` و`SCREEN_ACTIONS` تُقرآن من
@@ -9,6 +10,15 @@ import { apiClient } from './client';
  */
 export { ALLOWED_SCREENS, SCREEN_ACTIONS };
 export type { ScreenAction, ScreenKey };
+
+/**
+ * شاشةٌ من القائمة المشتركة؟ — بوّابةُ ما يُرسَل (`ق-١٤٠٤` · ③): الحالةُ تُبذَر من قالبٍ مخزَّن فقد تحمل شاشةً
+ * أُسقطت من القائمة بعد حفظه، والنافذةُ لا تعرضها أصلاً (مربّعاتُها من `ALLOWED_SCREENS`) — فتُرشَّح عند الإرسال
+ * بدل أن يردّها الخادمُ فيتعذّر تعديلُ القالب أبداً.
+ */
+export function isScreenKey(value: string): value is ScreenKey {
+  return (ALLOWED_SCREENS as readonly string[]).includes(value);
+}
 
 export const SCREEN_LABELS: Record<ScreenKey, string> = {
   dashboard: 'لوحة التحكم',
@@ -63,12 +73,7 @@ export interface PermissionTemplate {
   createdAt: string;
 }
 
-export interface TemplateInput {
-  name: string;
-  isAllScreens?: boolean;
-  allowedScreens?: string[];
-  screenActions?: ScreenActionMap;
-}
+export type TemplateInput = CreateTemplateDto;
 
 export const listTemplates = () => apiClient.get<PermissionTemplate[]>('/templates').then((r) => r.data);
 export const createTemplate = (dto: TemplateInput) => apiClient.post<PermissionTemplate>('/templates', dto).then((r) => r.data);

@@ -1,5 +1,6 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { CreateBranchDto } from '@mad-app/shared/api/requests';
 
 export interface BranchActivity {
   id: string;
@@ -18,13 +19,7 @@ export interface Branch {
   warehouseId: string | null;
 }
 
-export interface BranchInput {
-  name: string;
-  type?: string;
-  hours?: string;
-  propertyId?: string;
-  warehouseId?: string;
-}
+export type BranchInput = CreateBranchDto;
 
 /** Returns only the branches the signed-in user may see — the owner gets all,
  * an employee gets the ones assigned to them. So this is safe to use directly

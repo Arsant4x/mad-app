@@ -2,6 +2,7 @@ import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { PaymentMethod, UnallocatedFate } from '@mad-app/shared/api/enums';
+import type { AllocationDto, CreatePaymentDto } from '@mad-app/shared/api/requests';
 
 /** `CARD` هي الشبكة (`ق-٣٢٠`): تُقيَّد على `1251` حتى يحوّلها المستحوذ — بلا بنك؛ تسويةُ الشبكة تُدخلها البنكَ صافيةً (⑦A2). */
 export type { PaymentMethod };
@@ -60,28 +61,9 @@ export interface OpenInvoice {
   remaining: MoneyText;
 }
 
-export interface AllocationInput {
-  invoiceId: string;
-  amount: number;
-}
+export type AllocationInput = AllocationDto;
 
-export interface PaymentInput {
-  customerId: string;
-  branchId?: string;
-  date: string;
-  amount: number;
-  method: PaymentMethod;
-  bankId?: string;
-  reference?: string;
-  notes?: string;
-  currency?: string;
-  exchangeRate?: number;
-  allocations?: AllocationInput[];
-  /** ④A1: مصيرُ الفائض غير المخصَّص — إلزاميٌّ من الخادم حين يفوق هللاتِ التدوير. */
-  unallocated?: UnallocatedFate;
-  /** ④A1 (`ق-١٢٦٤`/②): فئةُ ما يُدفع مقدَّماً عنه — إلزاميةٌ من الخادم مع `PREPAYMENT`، ولا تُفترض. */
-  prepaymentTax?: { taxCategory: 'S' | 'Z' | 'E' | 'O'; taxExemptionReasonCode?: string; taxExemptionReason?: string };
-}
+export type PaymentInput = CreatePaymentDto;
 
 export const listPayments = (customerId?: string) =>
   apiClient.get<Payment[]>('/payments', { params: customerId ? { customerId } : {} }).then((r) => r.data);

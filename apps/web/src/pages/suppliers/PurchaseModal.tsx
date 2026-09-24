@@ -3,7 +3,7 @@ import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
 import { STANDARD_VAT_RATE } from '../../lib/vat';
-import type { Purchase } from '../../api/purchases';
+import type { CreatePurchaseInput, Purchase } from '../../api/purchases';
 import type { Supplier } from '../../api/suppliers';
 import { fmt, today } from '../../lib/format';
 import { round2 } from '../../lib/money';
@@ -40,6 +40,26 @@ function categoryCodeOf(written: string): (typeof CATEGORY_CODES)[number] | unde
   return CATEGORY_CODES.find((c) => c === v || CATEGORY_LABELS[c] === v);
 }
 
+/**
+ * ما تسلّمه النافذةُ للإنشاء والتعديل معاً — نوعٌ واحدٌ كان منسوخاً في الصفحة. والرمزُ بنوع الخادم المولَّد
+ * (`ق-١٤٠٤` · ③) لا `string`: فمرآةُ `CATEGORY_CODES` تُفحص به عند الترجمة أيضاً.
+ */
+export interface PurchaseFormData {
+  supplierId: string;
+  date: string;
+  dueDate?: string;
+  supplierRef?: string;
+  category?: string;
+  categoryCode?: CreatePurchaseInput['categoryCode'];
+  subtotal: number;
+  exempt: boolean;
+  excludeFromVat: boolean;
+  amortize: boolean;
+  amortizeMonths?: number;
+  incorpItem?: string;
+  branchId?: string;
+}
+
 export function PurchaseModal({
   suppliers,
   branches,
@@ -52,21 +72,7 @@ export function PurchaseModal({
   branches: Branch[];
   editing: Purchase | null;
   onCancel: () => void;
-  onSave: (data: {
-    supplierId: string;
-    date: string;
-    dueDate?: string;
-    supplierRef?: string;
-    category?: string;
-    categoryCode?: string;
-    subtotal: number;
-    exempt: boolean;
-    excludeFromVat: boolean;
-    amortize: boolean;
-    amortizeMonths?: number;
-    incorpItem?: string;
-    branchId?: string;
-  }) => Promise<void>;
+  onSave: (data: PurchaseFormData) => Promise<void>;
   onCreateSupplier: (name: string) => Promise<Supplier>;
 }) {
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');

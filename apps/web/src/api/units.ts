@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { UnitStatus } from '@mad-app/shared/api/enums';
+import type { CreateUnitDto } from '@mad-app/shared/api/requests';
 
 export type { UnitStatus };
 
@@ -21,16 +22,7 @@ export interface Unit {
   roomDetails: string | null;
 }
 
-export interface UnitInput {
-  roomDetails?: string;
-  propertyId: string;
-  unitNo: string;
-  floor?: string;
-  type: string;
-  subtype?: string;
-  rentMonthly: number;
-  underMaintenance?: boolean;
-}
+export type UnitInput = CreateUnitDto;
 
 export const listUnits = (includeArchived = false) => apiClient.get<Unit[]>('/units', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createUnit = (dto: UnitInput) => apiClient.post<Unit>('/units', dto).then((r) => r.data);

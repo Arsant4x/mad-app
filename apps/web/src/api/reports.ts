@@ -1,5 +1,6 @@
 import type { MoneyText, PercentText } from '../lib/money';
 import { apiClient } from './client';
+import type { ReportsIncomeStatementQuery, ReportsLedgerQuery, ReportsReceivablesAgingQuery, ReportsStatementQuery } from '@mad-app/shared/api/requests';
 
 /**
  * ② مرآةُ التقارير — **كلُّ مبلغٍ نصٌّ بخانتين وكلُّ نسبةٍ نصٌّ بخانتين** (`ق-١٢٣٥`): تُعرض بـ`fmt()` كما هي،
@@ -47,10 +48,7 @@ export interface CashFlow {
   missingAccounts: string[];
 }
 
-export interface ReportRange {
-  from?: string;
-  to?: string;
-}
+export type ReportRange = ReportsIncomeStatementQuery;
 
 export interface PropertyOccupancy {
   propertyId: string;
@@ -227,12 +225,7 @@ export interface AgingReport {
   reconciliation: { ledgerBalance: MoneyText; reportTotal: MoneyText; difference: MoneyText; accountMissing: boolean } | null;
 }
 
-export interface AgingParams {
-  asOf?: string;
-  branchId?: string;
-  customerId?: string;
-  reconcile?: string;
-}
+export type AgingParams = ReportsReceivablesAgingQuery;
 
 export const getReceivablesAging = (params: AgingParams) =>
   apiClient.get<AgingReport>('/reports/receivables-aging', { params }).then((r) => r.data);
@@ -287,21 +280,8 @@ export interface StatementReport extends LedgerReport {
   party: { kind: 'customer' | 'supplier'; id: string; name: string };
 }
 
-export interface LedgerParams {
-  accountId?: string;
-  propertyId?: string;
-  unitId?: string;
-  from?: string;
-  to?: string;
-  branchId?: string;
-}
-export interface StatementParams {
-  customerId?: string;
-  supplierId?: string;
-  from?: string;
-  to?: string;
-  branchId?: string;
-}
+export type LedgerParams = ReportsLedgerQuery;
+export type StatementParams = ReportsStatementQuery;
 
 export const getLedger = (params: LedgerParams) => apiClient.get<LedgerReport>('/reports/ledger', { params }).then((r) => r.data);
 export const getStatement = (params: StatementParams) => apiClient.get<StatementReport>('/reports/statement', { params }).then((r) => r.data);

@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CreateCurrencyDto, UpsertExchangeRateDto } from '@mad-app/shared/api/requests';
 
 export interface Currency {
   id: string;
@@ -9,12 +10,7 @@ export interface Currency {
   rate: string;
 }
 
-export interface CurrencyInput {
-  code: string;
-  name: string;
-  symbol?: string;
-  rate?: number;
-}
+export type CurrencyInput = CreateCurrencyDto;
 
 export interface ExchangeRate {
   id: string;
@@ -24,12 +20,7 @@ export interface ExchangeRate {
   date: string;
 }
 
-export interface ExchangeRateInput {
-  fromCode: string;
-  toCode: string;
-  rate: number;
-  date: string;
-}
+export type ExchangeRateInput = UpsertExchangeRateDto;
 
 export const listCurrencies = () => apiClient.get<Currency[]>('/currencies').then((r) => r.data);
 export const createCurrency = (dto: CurrencyInput) => apiClient.post<Currency>('/currencies', dto).then((r) => r.data);

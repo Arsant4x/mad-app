@@ -1,20 +1,30 @@
 import { useState } from 'react';
-import { BUYER_ID_SCHEMES, BUYER_ID_SCHEME_LABEL, CUSTOMER_KIND_LABEL, type BuyerIdScheme, type Customer, type CustomerInput, type CustomerKind } from '../../api/customers';
+import {
+  BUYER_ID_SCHEMES,
+  BUYER_ID_SCHEME_LABEL,
+  CUSTOMER_KIND_LABEL,
+  type BuyerIdScheme,
+  type Customer,
+  type CustomerInput,
+  type CustomerKind,
+  type CustomerUpdateInput,
+} from '../../api/customers';
 import i18n from '../../i18n';
 
 /** رسالةُ الخادم وحالتُه من خطأ محور — كما تقرؤها بقيّةُ الشاشات. */
 const serverMessage = (e: unknown): string | undefined => (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
 const serverStatus = (e: unknown): number | undefined => (e as { response?: { status?: number } })?.response?.status;
 
-export function CustomerModal({
-  editing,
-  onCancel,
-  onSave,
-}: {
-  editing: Customer | null;
-  onCancel: () => void;
-  onSave: (data: CustomerInput) => Promise<void>;
-}) {
+/**
+ * الإنشاءُ والتعديلُ صنفان في الخادم (`CreateCustomerDto` · `UpdateCustomerDto`) — فالنافذةُ تسلّم كلّاً بنوعه:
+ * الإنشاءُ يُغفل المعرّفَ البديلَ الفارغ، والتعديلُ يمحوه بـ`null` (`ق-١٤٠٤` · ③).
+ */
+type CustomerModalProps =
+  | { editing: null; onCancel: () => void; onSave: (data: CustomerInput) => Promise<void> }
+  | { editing: Customer; onCancel: () => void; onSave: (data: CustomerUpdateInput) => Promise<void> };
+
+export function CustomerModal(props: CustomerModalProps) {
+  const { editing, onCancel } = props;
   const [name, setName] = useState(editing?.name ?? '');
   // ②A1: الصفةُ تُختار صراحةً — لا افتراضَ لعميلٍ جديد، والقديمُ غيرُ المعلَن يُعلَن من هنا.
   const [kind, setKind] = useState<Exclude<CustomerKind, 'LEGACY_UNDECLARED'> | ''>(editing && editing.kind !== 'LEGACY_UNDECLARED' ? editing.kind : '');
@@ -41,19 +51,18 @@ export function CustomerModal({
     }
     setSaving(true);
     try {
-      await onSave({
+      const base = {
         name: name.trim(),
         kind,
-        // 🔴 لا فارغَ على السلك (`ق-١٤٠٤`): `CreateCustomerDto` يقبل قائمتَه وحدَها فيردّ `''` بـ`400` — والإنشاءُ بلا مخطّطٍ يُغفله،
-        //    والتعديلُ يمحوه بـ`null` (يقبله `UpdateCustomerDto`، والخدمةُ تقرؤه محواً).
-        otherIdScheme: otherIdScheme || (editing ? null : undefined),
-        otherId: otherId.trim() || (editing ? null : undefined),
         country: country.trim().toUpperCase() || 'SA',
         vatNumber: vatNumber.trim() || undefined,
         phone: phone.trim() || undefined,
         creditLimit: parseFloat(creditLimit as string) || 0,
         ...(allowSameName ? { allowSameName: true } : {}),
-      });
+      };
+      // ⚠️ الإنشاءُ بـ`''` كان يُردّ `400` («مخطّط المعرّف البديل غير معروف») — فيُغفَل الفارغ، والتعديلُ يمحو بـ`null`.
+      if (props.editing !== null) await props.onSave({ ...base, otherIdScheme: otherIdScheme || null, otherId: otherId.trim() || null });
+      else await props.onSave({ ...base, otherIdScheme: otherIdScheme || undefined, otherId: otherId.trim() || undefined });
       setSameNameAsk(null);
     } catch (e) {
       const message = serverMessage(e);

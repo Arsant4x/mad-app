@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { UpdateCompanyProfileDto } from '@mad-app/shared/api/requests';
 
 export interface CompanyProfile {
   id: string;
@@ -31,34 +32,7 @@ export interface CompanyProfile {
 }
 
 /** عقدُ `PATCH` كاملاً (ق-١٤٦): ما لم يُرسَل يبقى كما هو، وما أُرسل `''` يُمحى — فلا حقلَ واجبٌ في كل حفظ، وبطاقةٌ تحفظ إعداداً واحداً لا تحمل الملف كله. */
-export interface CompanyProfileInput {
-  legalName?: string;
-  vatNumber?: string;
-  crNumber?: string;
-  phone?: string;
-  email?: string;
-  website?: string;
-  address?: string;
-  street?: string;
-  buildingNumber?: string;
-  district?: string;
-  city?: string;
-  postalCode?: string;
-  additionalNumber?: string;
-  unitNumber?: string;
-  /** Key from `uploadFile`; '' clears the logo and deletes the stored object. */
-  logoFileKey?: string;
-  /**
-   * معرّفُ النطاق الفرعيّ (`ق-١٣٠٣`) — **يُرسَل حين يتغيّر وحده**، خلافاً لبقيّة الحقول.
-   *
-   * ⚠️ فـ`''` هنا **ليس محواً بل رفضٌ من الخادم**: المعرّف لا يُمحى بعد اختياره، والمنشأةُ
-   * التي لم تختره بعد يُسقَط الحقلُ من طلبها أصلاً — وإرسالُه فارغاً كان سيُسقط كلَّ حفظٍ لها.
-   */
-  slug?: string;
-  masterDataLocked?: boolean;
-  vatPeriod?: 'QUARTERLY' | 'MONTHLY';
-  posOfflineGapMinutes?: number;
-}
+export type CompanyProfileInput = UpdateCompanyProfileDto;
 
 export const getCompanyProfile = () => apiClient.get<CompanyProfile>('/company-profile').then((r) => r.data);
 export const updateCompanyProfile = (dto: CompanyProfileInput) => apiClient.patch<CompanyProfile>('/company-profile', dto).then((r) => r.data);

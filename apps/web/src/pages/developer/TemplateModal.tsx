@@ -4,6 +4,7 @@ import {
   ALLOWED_SCREENS,
   SCREEN_ACTIONS,
   SCREEN_LABELS,
+  isScreenKey,
   type PermissionTemplate,
   type ScreenAction,
   type ScreenActionMap,
@@ -79,7 +80,7 @@ export function TemplateModal({
 
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: [...finalScreens], screenActions: finalActions });
+      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: [...finalScreens].filter(isScreenKey), screenActions: finalActions });
     } catch (e) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(message ?? i18n.t('err_template_save'));

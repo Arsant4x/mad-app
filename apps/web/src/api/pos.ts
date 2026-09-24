@@ -2,13 +2,11 @@ import type { MoneyText, QtyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Invoice } from './invoices';
 import type { PosCardVerification, PosPaymentAttemptStatus, PosPaymentMethod, PosPaymentResolution } from '@mad-app/shared/api/enums';
+import type { PosPaymentPartDto, PosSaleLineDto } from '@mad-app/shared/api/requests';
 
 export type { PosCardVerification, PosPaymentAttemptStatus, PosPaymentMethod, PosPaymentResolution };
 
-export interface PosPaymentPart {
-  method: 'CASH' | 'CARD';
-  amount: number;
-}
+export type PosPaymentPart = PosPaymentPartDto;
 
 export interface PosShift {
   id: string;
@@ -35,12 +33,7 @@ export interface ClosedShift extends PosShift {
   pendingAttempts: { id: string; status: PosPaymentAttemptStatus; cardAmount: MoneyText; clientSaleId: string; createdAt: string }[];
 }
 
-export interface PosSaleLine {
-  productId: string;
-  quantity: number;
-  /** ④B1 — خصمٌ مبلغاً على سطر البيع (≥ 0 ولا يفوق الكمية × السعر — الخادمُ يرفض مسمّىً). */
-  discount?: number;
-}
+export type PosSaleLine = PosSaleLineDto;
 
 /** مرآة StockDeductionReport في الخادم — معلوماتي فقط، الرصيد يبقى مشتقاً من دفتر الحركات. */
 export type StockDeductionReport =

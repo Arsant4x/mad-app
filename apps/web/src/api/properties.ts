@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { ActivityType, Ownership } from '@mad-app/shared/api/enums';
+import type { CreatePropertyDto } from '@mad-app/shared/api/requests';
 
 export type { Ownership };
 export type { ActivityType };
@@ -23,22 +24,7 @@ export interface Property {
   lng: number | null;
 }
 
-export interface PropertyInput {
-  name: string;
-  address?: string;
-  floors?: number;
-  activityType?: ActivityType;
-  activitySubtype?: string;
-  ownership: Ownership;
-  leaseValue?: number;
-  leaseCycle?: string;
-  leaseStart?: string;
-  leaseEnd?: string;
-  opRate?: number;
-  deedNo?: string;
-  lat?: number;
-  lng?: number;
-}
+export type PropertyInput = CreatePropertyDto;
 
 export const listProperties = (includeArchived = false) => apiClient.get<Property[]>('/properties', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createProperty = (dto: PropertyInput) => apiClient.post<Property>('/properties', dto).then((r) => r.data);

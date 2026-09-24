@@ -2,6 +2,7 @@ import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import { BUYER_ID_SCHEME_VALUES, CONSENT_SOURCE_VALUES, MARKETING_CHANNEL_VALUES } from '@mad-app/shared/api/enums';
 import type { BuyerIdScheme, ConsentSource, CustomerKind, MarketingChannel } from '@mad-app/shared/api/enums';
+import type { CreateCustomerDto, UpdateCustomerDto } from '@mad-app/shared/api/requests';
 
 /**
  * صفةُ المشتري (ق-١٢٦١ أ — ②A1): تقرّر نوعَ الفاتورة في الخادم (م٥٣) — مؤسّسةٌ أو اعتباريٌّ ⟵ كاملة، طبيعيٌّ ⟵ مبسّطة.
@@ -57,24 +58,16 @@ export interface CustomerSummary {
   outstanding: MoneyText;
 }
 
-export interface CustomerInput {
-  name: string;
-  /** إلزاميةٌ عند الإنشاء — الخادمُ يرفض بلا صفة (لا افتراض). */
-  kind: Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
-  /** يُغفَل حين لا مخطّط — والفارغُ يردّه الإنشاءُ `400` (`ق-١٤٠٤`)؛ و`null` يمحوه في التعديل. */
-  otherIdScheme?: BuyerIdScheme | null;
-  otherId?: string | null;
-  country?: string;
-  vatNumber?: string;
-  phone?: string;
-  creditLimit?: number;
-  /** تأكيدُ «شخصٌ آخر بالاسم نفسِه» بعد تنبيه الخادم «أهو نفسُه؟» (ق-١٠٢٨/⑤). */
-  allowSameName?: boolean;
-}
+export type CustomerInput = CreateCustomerDto;
+/**
+ * التعديلُ صنفٌ آخر في الخادم: يمحو المعرّفَ البديل بـ`null` حيث يُغفله الإنشاء — فلكلٍّ نوعُه لا `Partial` للإنشاء
+ * (`ق-١٤٠٤` · ③: وجد التوليدُ أن الإنشاءَ بـ`''` كان يُردّ `400`).
+ */
+export type CustomerUpdateInput = UpdateCustomerDto;
 
 export const listCustomers = (includeArchived = false) => apiClient.get<Customer[]>('/customers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createCustomer = (dto: CustomerInput) => apiClient.post<Customer>('/customers', dto).then((r) => r.data);
-export const updateCustomer = (id: string, dto: Partial<CustomerInput>) => apiClient.patch<Customer>(`/customers/${id}`, dto).then((r) => r.data);
+export const updateCustomer = (id: string, dto: CustomerUpdateInput) => apiClient.patch<Customer>(`/customers/${id}`, dto).then((r) => r.data);
 export const deleteCustomer = (id: string) => apiClient.delete(`/customers/${id}`);
 export const getCustomerSummary = (id: string) => apiClient.get<CustomerSummary>(`/customers/${id}/summary`).then((r) => r.data);
 
