@@ -117,10 +117,19 @@ export class EmployeesService {
     });
   }
 
-  update(companyId: string, id: string, dto: UpdateEmployeeDto) {
+  /**
+   * 🔴 **الصفُّ بفروع الفاعل — كالتفصيل** (`ق-١٤١١`): كان التعديلُ والأرشفةُ والحذفُ تقرأ `findUnique({ id })` **فموظّفٌ
+   * مقيَّدٌ بفرعٍ عدّل موظّفَ فرعٍ آخر** وهو لا يراه في القائمة ولا في التفصيل. ⟸ خارجُ الفروع `404` كـ`findOne` نفسِه.
+   */
+  private async findVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
+    const existing = await tx.employee.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
+    if (!existing) throw new NotFoundException(MSG.employee_not_found);
+    return existing;
+  }
+
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateEmployeeDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.employee.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.employee_not_found);
+      await this.findVisible(tx, allowedBranchIds, id);
 
       const data: Prisma.EmployeeUncheckedUpdateInput = {};
       if (dto.fullName !== undefined) data.fullName = dto.fullName;
@@ -138,18 +147,16 @@ export class EmployeesService {
 
   /** Hidden from day-to-day lists while staying in the books — archiving
    * is presentation, deletion is the trash. */
-  setArchived(companyId: string, id: string, archived: boolean) {
+  setArchived(companyId: string, allowedBranchIds: string[] | 'all', id: string, archived: boolean) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.employee.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.employee_not_found);
+      await this.findVisible(tx, allowedBranchIds, id);
       return publicEmployee(await tx.employee.update({ where: { id }, data: { archived } }));
     });
   }
 
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.employee.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.employee_not_found);
+      await this.findVisible(tx, allowedBranchIds, id);
       await tx.employee.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }

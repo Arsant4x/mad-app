@@ -6,8 +6,8 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
-// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): تُقاس في أوّل تشغيل وتُعلن هنا — والسقفُ مؤقّتٌ حتى القياس.
-jest.setTimeout(100000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (49.7 ث على `mad_app_clean`) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
+jest.setTimeout(150000);
 
 /**
  * 🔴 **مكسورُ اليوم (أ) — `ق-١٤١١`**: موظّفٌ مقيَّدٌ بفرعٍ كان يعدّل **صندوقَ فرعٍ آخر ورصيدَه الافتتاحيّ**

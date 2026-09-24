@@ -36,6 +36,18 @@ export async function nextBankCode(tx: Prisma.TransactionClient): Promise<string
 export class BanksService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
+  /**
+   * 🔴 **الصفُّ بفروع الفاعل — لا بمعرّفه وحدَه** (`ق-١٤١١`): كان التعديلُ والأرشفةُ والحذفُ تقرأ `findUnique({ id })`
+   * **فموظّفٌ مقيَّدٌ بفرعٍ عدّل صندوقَ فرعٍ آخر ورصيدَه الافتتاحيّ** (والرصيدُ يرحّل قيداً — `postOpeningDeltaEntry`).
+   * ⟸ خارجُ الفروع **غيرُ موجودٍ له** (`404` كالقائمة، فلا يُسرَّب وجودُه)، **وما هو للمنشأة كلِّها** (`branchId: null`)
+   * مرئيٌّ للجميع كما في القراءة (`branchFilter`).
+   */
+  private async findVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
+    const existing = await tx.bank.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
+    if (!existing) throw new NotFoundException(MSG.bank_not_found);
+    return existing;
+  }
+
   /** حالةُ نطاق رموز البنوك — تُقرأ من الدليل لحظةَ السؤال (`ق-٢٩٥`). */
   codeBand(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -114,10 +126,9 @@ export class BanksService {
     }
   }
 
-  update(companyId: string, id: string, dto: UpdateBankDto) {
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateBankDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.bank.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.bank_not_found);
+      const existing = await this.findVisible(tx, allowedBranchIds, id);
 
       const data: Prisma.BankUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -176,18 +187,16 @@ export class BanksService {
 
   /** Hidden from day-to-day lists while staying in the books — archiving
    * is presentation, deletion is the trash. */
-  setArchived(companyId: string, id: string, archived: boolean) {
+  setArchived(companyId: string, allowedBranchIds: string[] | 'all', id: string, archived: boolean) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.bank.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.bank_not_found);
+      await this.findVisible(tx, allowedBranchIds, id);
       return tx.bank.update({ where: { id }, data: { archived } });
     });
   }
 
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.bank.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.bank_not_found);
+      await this.findVisible(tx, allowedBranchIds, id);
       await tx.bank.update({ where: { id }, data: { deletedAt: new Date() } });
     });
   }
