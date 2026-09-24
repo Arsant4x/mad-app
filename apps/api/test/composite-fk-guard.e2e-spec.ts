@@ -170,6 +170,9 @@ describe('Composite tenant foreign keys (e2e)', () => {
     const invA2 = await invoiceOf(a, 'أ٢');
     const invB = await invoiceOf(b, 'ب');
     expect(invA.lines?.[0]?.id).toBeDefined();
+    // ⚖️ رقمُ السطر فريدٌ في مستنده (`ق-١٤١٢`) — والفواتيرُ الثلاث سطرُها `1`: فبلا رقمٍ لا يصطدم يسقط النقلُ على الفريد
+    // (`23505`) قبل أن يبلغ المفتاحَ المركّب (فحصُه آخرَ العبارة). فالسطرُ يُعطى رقماً حرّاً في منشأته أوّلاً — والمقيسُ المفتاح.
+    await tenantPrisma.runInTenantContext(a.companyId, (tx) => tx.$executeRawUnsafe(`UPDATE "invoice_lines" SET "lineNo" = 99 WHERE id = $1`, invA.lines[0].id));
 
     const refused = await crossWrite('invoice_lines', 'invoiceId', invA.lines[0].id, invB.id);
     expect(refused).toEqual({ sqlstate: '23503', constraint: conname });
