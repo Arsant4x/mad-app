@@ -2535,6 +2535,19 @@
       "201"
     ]
   },
+  "POST /v1/cash-drawers/{id}/transfer": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "countedAmount",
+      "date",
+      "toBranchId"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/companies": {
     "parameters": [],
     "requiredBody": [
@@ -2848,6 +2861,18 @@
     ],
     "responses": [
       "200"
+    ]
+  },
+  "POST /v1/employees/{id}/transfer": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "fromBranchId",
+      "toBranchId"
+    ],
+    "responses": [
+      "201"
     ]
   },
   "POST /v1/files": {

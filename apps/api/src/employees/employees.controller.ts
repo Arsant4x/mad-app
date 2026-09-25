@@ -10,7 +10,10 @@ import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dt
 import { NoAudit } from '../audit/no-audit.decorator';
 import { CreateEmployeeDto, FindByNationalIdDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { TransferEmployeeDto } from './dto/transfer-employee.dto';
 import { EmployeesService } from './employees.service';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { MSG } from '../common/i18n/messages';
 
 @Controller('employees')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -60,6 +63,14 @@ export class EmployeesController {
   @RequiresAction('edit')
   setArchived(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: SetArchivedDto) {
     return this.employeesService.setArchived(tenant.companyId, tenant.allowedBranchIds, id, dto.archived);
+  }
+
+  /** ⚖️ نقلُ الموظّف إلى فرعٍ آخر للقادم (`ق-١٤١٥`) — والفرعُ السابق شرطٌ في الجسم وأثرٌ في سجلّ التدقيق. */
+  @Post(':id/transfer')
+  @RequiresAction('edit')
+  @OwnerOnly(MSG.employee_transfer_forbidden)
+  transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferEmployeeDto) {
+    return this.employeesService.transfer(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
