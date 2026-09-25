@@ -513,7 +513,15 @@ export const MSG = {
   branch_not_found: 'branches.not_found',
   branch_name_taken: 'branches.name_taken',
   branch_forbidden: 'branches.forbidden',
-  branch_has_data: 'branches.has_data',
+  branch_delete_history: 'branches.delete_history',
+  branch_delete_cash_boxes: 'branches.delete_cash_boxes',
+  branch_delete_drawers: 'branches.delete_drawers',
+  branch_delete_employees: 'branches.delete_employees',
+  branch_delete_accounts: 'branches.delete_accounts',
+  branch_delete_trashed: 'branches.delete_trashed',
+  branch_delete_open_quotes: 'branches.delete_open_quotes',
+  branch_delete_open_shifts: 'branches.delete_open_shifts',
+  branch_delete_pending_write_offs: 'branches.delete_pending_write_offs',
   activity_not_found: 'activities.not_found',
   activity_name_taken: 'activities.name_taken',
   activity_in_use: 'activities.in_use',
@@ -1557,9 +1565,41 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.branch_not_found]: { ar: 'الفرع غير موجود', en: 'Branch not found' },
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
   [MSG.branch_forbidden]: { ar: 'لا تملك صلاحية الوصول إلى هذا الفرع', en: 'You do not have permission to access this branch' },
-  [MSG.branch_has_data]: {
-    ar: 'لا يمكن حذف فرع مرتبط بحركات — انقل بياناته أو أعد إسنادها أولاً',
-    en: 'Cannot delete a branch that has activity — move or reassign its records first',
+  [MSG.branch_delete_history]: {
+    ar: 'للفرع "{name}" تاريخٌ مسجَّل ({count} من المستندات والقيود) — والتاريخُ لا يُنقل بين الفروع، فلا يُحذف فرعٌ له تاريخ',
+    en: 'Branch "{name}" has recorded history ({count} documents and entries) — history does not move between branches, so a branch with history is not deleted',
+  },
+  [MSG.branch_delete_cash_boxes]: {
+    ar: 'في الفرع صناديقُ وحساباتٌ بنكية: {names} — انقلها إلى فرعٍ آخر أولاً',
+    en: 'The branch holds cash boxes and bank accounts: {names} — transfer them to another branch first',
+  },
+  [MSG.branch_delete_drawers]: {
+    ar: 'في الفرع أدراجُ كاشير: {names} — انقلها إلى فرعٍ آخر أولاً (يُعدّ نقدُ الدرج ويُغلق ويُفتح في الفرع الآخر)',
+    en: 'The branch holds cashier drawers: {names} — transfer them to another branch first (the drawer cash is counted, closed and reopened there)',
+  },
+  [MSG.branch_delete_employees]: {
+    ar: 'في الفرع موظفون: {names} — انقلهم إلى فرعٍ آخر أولاً',
+    en: 'The branch has employees: {names} — transfer them to another branch first',
+  },
+  [MSG.branch_delete_accounts]: {
+    ar: 'حساباتُ دخولٍ مُسنَدٌ إليها الفرع: {names} — أزل الفرعَ من فروع كلٍّ منها أولاً؛ فحسابٌ يفقد فرعَه الوحيد يرى الفروعَ كلَّها',
+    en: 'Login accounts assigned to the branch: {names} — remove the branch from each account first; an account that loses its only branch sees every branch',
+  },
+  [MSG.branch_delete_trashed]: {
+    ar: 'محذوفاتٌ في السلّة تشير إلى الفرع: {names} — استعدها وانقلها، أو احذفها من السلّة نهائياً أولاً',
+    en: 'Trashed records point to the branch: {names} — restore and transfer them, or delete them from the trash permanently first',
+  },
+  [MSG.branch_delete_open_quotes]: {
+    ar: 'في الفرع عروضُ أسعارٍ مفتوحة: {numbers} — حوّلها أو احذفها أولاً',
+    en: 'The branch has open quotes: {numbers} — convert or delete them first',
+  },
+  [MSG.branch_delete_open_shifts]: {
+    ar: 'في الفرع مناوباتٌ مفتوحة لـ: {cashiers} — أقفلها أولاً',
+    en: 'The branch has open shifts for: {cashiers} — close them first',
+  },
+  [MSG.branch_delete_pending_write_offs]: {
+    ar: 'في الفرع إتلافاتٌ بانتظار المراجعة: {numbers} — اعتمدها أو ارفضها أولاً',
+    en: 'The branch has write-offs awaiting review: {numbers} — approve or reject them first',
   },
   [MSG.activity_not_found]: { ar: 'النشاط التجاري غير موجود', en: 'Business activity not found' },
   [MSG.activity_name_taken]: { ar: 'يوجد نشاط بالاسم "{name}" بالفعل', en: 'An activity named "{name}" already exists' },
