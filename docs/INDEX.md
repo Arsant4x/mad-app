@@ -71,6 +71,7 @@
 | [`automotive-master-plan.md`](plans/automotive-master-plan.md) | الخطة الرئيسية — نشاط السيارات وقطع الغيار | 2026-08-26 | مسوّدة | 1078 | pharmacy-master-plan.md |
 | [`chat-master-plan.md`](plans/chat-master-plan.md) | خطة بناء نظام التواصل (الدردشة الكتابية والصوتية) — منصة ركز | 2026-08-28 | مسوّدة | 702 | — |
 | [`compound-master-plan.md`](plans/compound-master-plan.md) | الخطة الرئيسية — نظام محاسبي متكامل للمجمعات السكنية المغلقة (كومباوند) وما يشابهها | — | مسوّدة | 896 | — |
+| [`contacts-identity-plan.md`](plans/contacts-identity-plan.md) | خطّةُ جهات الاتصال — هويّةٌ واحدةٌ وجدولا دور: الهجرةُ على القائم · المطابقةُ بلا تخمين · الكلفة · ما ينكسر (ق-١٤٣٩ · الخيار ب — لا بناءَ قبل الحكم) | 2026-09-25 | بانتظار حكم المالك | 155 | — |
 | [`customer-app-master-plan.md`](plans/customer-app-master-plan.md) | الخطة الرئيسية — طبقة قنوات الطلب للعميل النهائي | — | مسوّدة | 899 | hr-master-plan.md، inventory-master-plan.md، retail-full-spec.md |
 | [`delivery-master-plan.md`](plans/delivery-master-plan.md) | الخطة الرئيسية — نشاط توصيل الطلبات (Delivery) | 2026-08-28 | مسوّدة | 971 | hr-master-plan.md، inventory-master-plan.md، retail-full-spec.md |
 | [`ecommerce-full-spec.md`](plans/ecommerce-full-spec.md) | المواصفة الشاملة لمنظومة التجارة الإلكترونية | 2026-08-27 | مسوّدة (افتراضاً) | 959 | inventory-master-plan.md، retail-full-spec.md، wholesale-full-spec.md |
