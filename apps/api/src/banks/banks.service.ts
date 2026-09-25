@@ -1,11 +1,16 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@prisma/client';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateBankDto } from './dto/create-bank.dto';
+import { TransferBankDto } from './dto/transfer-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { money } from '../common/money/text';
+import { mirrorBankMovement, postDrawerTransferEntries } from '../journal/auto-posting.util';
+import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, getOrCreateAccountByCode, postShiftVarianceEntry } from '../journal/pos-settlement.util';
+import { readLedger } from '../reports/ledger.util';
 import { postOpeningDeltaEntry, redeclareOpeningDate } from '../journal/opening-balance.util';
 import { BANK_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
 import { round2 } from '../common/money/rounding';
@@ -46,6 +51,126 @@ export class BanksService {
     const existing = await tx.bank.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
     if (!existing) throw new NotFoundException(MSG.bank_not_found);
     return existing;
+  }
+
+  /**
+   * ⚖️ **نقلُ صفّ البنك بين الفروع — بنوعه المعلَن** (`ق-١٤٣١` · التوجيه ٢٦٤ §٢ · مبادئ `ق-١٤١٣` · `ق-١٤١٤`):
+   * - **«غيرُ المعلَن»** لا يُنقل حتى يُعلَن — بنصّ المالك: «ولا يُنقل حتى يُعلَن، كتصنيف العقود».
+   * - **الحسابُ البنكيّ** — **للقادم وحدَه**: يتغيّر فرعُه ولا يُمسّ قيدٌ مرحَّل ولا تسوية (`ق-١٤٣٦`)، ولا عدَّ ولا تاريخ.
+   * - **الصندوقُ النقديّ** — **إغلاقٌ وفتح** كالدرج: يُعدّ بتاريخه (ولا قيدَ على حسابه بعده — فالعدُّ عدٌّ لكلِّ ما في الدفتر)،
+   *   والفرقُ على `5900` بفرع القديم، والمعدودُ يخرج بقيدٍ بفرع القديم ويدخل خلفَه بقيدٍ بفرع الهدف عبر `1190` (`ق-١٤٣٣`)،
+   *   والمرآتان تتبعان القيودَ (`ق-٢٨٢`)، والقديمُ يُؤرشف برابط خلفه، **وتاريخُه لا ينتقل**.
+   * **والفاعلُ المالكُ وحدَه** (`ق-١٤٣٢`). ⚠️ **وحدٌّ معلَن**: الصندوقُ بعملةٍ غير عملة المنشأة لا يُنقل بعد — الدفترُ بعملة
+   * الأساس والعدُّ بعملته، ونقلُه يحتاج سعرَ يومٍ وفرقَ صرفٍ لم يُبنيا (كتسوية الشبكة).
+   *
+   * **على مستوى المنشأة بحقّها**: النقلُ فعلُ مالكٍ نطاقُه الكلّ — والقراءاتُ على هذا الصفّ بعينه وحسابِه لا على قائمة.
+   */
+  async transfer(companyId: string, actorType: string, id: string, dto: TransferBankDto) {
+    if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.bank_transfer_forbidden);
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          const bank = await this.findVisible(tx, 'all', id);
+          if (bank.kind === 'LEGACY_UNDECLARED') throw new ConflictException(formatMessage(MSG.bank_transfer_undeclared, { name: bank.name }));
+          if (bank.archived) throw new ConflictException(formatMessage(MSG.bank_transfer_archived, { name: bank.name }));
+
+          const toBranchId = await resolveBranchId(tx, dto.toBranchId, 'all');
+          if (toBranchId === (bank.branchId ?? null)) throw new BadRequestException(MSG.bank_transfer_same_branch);
+
+          if (bank.kind === 'BANK_ACCOUNT') {
+            // للقادم وحدَه — لا عدَّ ولا تاريخ ولا خلف: من يرسلها يظنّه صندوقاً، فيُسمّى الفرقُ لا يُتجاهل.
+            if (dto.countedAmount !== undefined || dto.date !== undefined || dto.name !== undefined) {
+              throw new BadRequestException(MSG.bank_transfer_account_no_count);
+            }
+            const moved = await tx.bank.update({ where: { id }, data: { branchId: toBranchId } });
+            return { kind: 'BANK_ACCOUNT' as const, fromBranchId: bank.branchId, toBranchId, bank: moved };
+          }
+
+          if (dto.countedAmount === undefined || !dto.date) throw new BadRequestException(MSG.bank_transfer_count_required);
+          const company = await tx.company.findUnique({ where: { id: companyId }, select: { baseCurrency: true } });
+          if (company && bank.currency !== company.baseCurrency) {
+            throw new ConflictException(formatMessage(MSG.bank_transfer_foreign_currency, { name: bank.name, currency: bank.currency }));
+          }
+
+          const date = new Date(dto.date);
+          const later = await tx.journalLine.findFirst({ where: { accountId: bank.accountId, journalEntry: { date: { gt: date } } }, select: { id: true } });
+          if (later) throw new ConflictException(formatMessage(MSG.bank_transfer_later_postings, { date: dto.date.slice(0, 10) }));
+
+          const book = round2(Number((await readLedger(tx, { allowedBranchIds: 'all', accountId: bank.accountId, to: date }, 'debit')).closing));
+          const counted = round2(dto.countedAmount);
+          const variance = round2(counted - book);
+
+          // الخلفُ أوّلاً — فحسابُه يستقبل قيدَ الدخول.
+          const name = dto.name?.trim() || bank.name;
+          const code = await nextBankCode(tx);
+          const account = await tx.account.create({ data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput });
+          const successor = await tx.bank.create({
+            data: {
+              name,
+              kind: 'CASH_BOX',
+              branchId: toBranchId,
+              accountId: account.id,
+              openingBalance: 0,
+              balance: 0,
+              openingDate: date,
+              currency: bank.currency,
+              exchangeRate: 1,
+              baseOpeningBalance: 0,
+              baseBalance: 0,
+            } as unknown as Prisma.BankUncheckedCreateInput,
+          });
+
+          const branchName = async (branchId: string | null) =>
+            branchId ? ((await tx.branch.findUnique({ where: { id: branchId }, select: { name: true } }))?.name ?? '') : 'المنشأة';
+          const fromBranch = await branchName(bank.branchId);
+          const toBranch = await branchName(toBranchId);
+          const varianceMemo = `${variance > 0 ? 'زيادة' : 'عجز'} عدّ صندوق عند نقله — ${bank.name} (${fromBranch} ⟵ ${toBranch})`;
+          const varianceEntry = await postShiftVarianceEntry(tx, companyId, { memo: varianceMemo, date, branchId: bank.branchId, drawerAccountId: bank.accountId, variance });
+          if (varianceEntry) {
+            await mirrorBankMovement(tx, bank, { date, description: varianceMemo, amount: variance, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: varianceEntry.no });
+          }
+
+          const transit = await getOrCreateAccountByCode(tx, companyId, CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, 'asset');
+          const memoOut = `نقل صندوق — ${bank.name}: خروجٌ من ${fromBranch} إلى ${toBranch}`;
+          const memoIn = `نقل صندوق — ${name}: دخولٌ في ${toBranch} من ${fromBranch}`;
+          const moved =
+            counted > 0
+              ? await postDrawerTransferEntries(tx, companyId, {
+                  date,
+                  amount: counted,
+                  memoOut,
+                  memoIn,
+                  fromBranchId: bank.branchId,
+                  toBranchId,
+                  fromAccountId: bank.accountId,
+                  toAccountId: account.id,
+                  transitAccountId: transit.id,
+                })
+              : null;
+          if (moved) {
+            await mirrorBankMovement(tx, bank, { date, description: memoOut, amount: -counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.out.no });
+            await mirrorBankMovement(tx, successor, { date, description: memoIn, amount: counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.in.no });
+          }
+
+          await tx.bank.update({ where: { id }, data: { archived: true, transferredToId: successor.id } });
+
+          return {
+            kind: 'CASH_BOX' as const,
+            from: await tx.bank.findUniqueOrThrow({ where: { id } }),
+            to: await tx.bank.findUniqueOrThrow({ where: { id: successor.id } }),
+            bookBalance: money(book),
+            countedAmount: money(counted),
+            variance: money(variance),
+            entries: { variance: varianceEntry?.no ?? null, out: moved?.out.no ?? null, in: moved?.in.no ?? null },
+          };
+        });
+      } catch (e) {
+        // `P2002` سباقٌ على رمز الحساب — يُعاد بقراءةٍ جديدة (نمطُ الإنشاء والدرج).
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 2) continue;
+        throw e;
+      }
+    }
   }
 
   /** حالةُ نطاق رموز البنوك — تُقرأ من الدليل لحظةَ السؤال (`ق-٢٩٥`). */

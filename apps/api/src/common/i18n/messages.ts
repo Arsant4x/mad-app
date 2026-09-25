@@ -198,6 +198,14 @@ export const MSG = {
   bank_code_range_full: 'banks.code_range_full',
   bank_required: 'banks.required',
   bank_kind_required: 'banks.kind_required',
+  bank_transfer_forbidden: 'banks.transfer_forbidden',
+  bank_transfer_undeclared: 'banks.transfer_undeclared',
+  bank_transfer_archived: 'banks.transfer_archived',
+  bank_transfer_same_branch: 'banks.transfer_same_branch',
+  bank_transfer_account_no_count: 'banks.transfer_account_no_count',
+  bank_transfer_count_required: 'banks.transfer_count_required',
+  bank_transfer_foreign_currency: 'banks.transfer_foreign_currency',
+  bank_transfer_later_postings: 'banks.transfer_later_postings',
   bank_transaction_not_found: 'transactions.not_found',
   // bank reconciliation (ق-١٢٦١ ج)
   bank_reconciled_locked: 'banks.reconciled_locked',
@@ -1031,6 +1039,29 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.bank_kind_required]: {
     ar: 'حدِّد نوعَ الصفّ صراحةً: صندوقٌ نقديّ أو حسابٌ بنكيّ — لا يُستنبط من الفرع ولا من الآيبان',
     en: 'Declare the row kind explicitly: cash box or bank account — it is never inferred from the branch or the IBAN',
+  },
+  [MSG.bank_transfer_forbidden]: { ar: 'نقلُ الصندوق أو الحساب البنكي بين الفروع لمالك المنشأة', en: 'Moving a cash box or bank account between branches is limited to the company owner' },
+  [MSG.bank_transfer_undeclared]: {
+    ar: '"{name}" غيرُ معلَنِ النوع — أعلنه صندوقاً نقدياً أو حساباً بنكياً أولاً، فنقلُ الصندوق إغلاقٌ وفتح ونقلُ الحساب للقادم',
+    en: '"{name}" has no declared kind — declare it a cash box or a bank account first; a cash box is closed and reopened, an account moves for the future',
+  },
+  [MSG.bank_transfer_archived]: { ar: '"{name}" مؤرشف — لا يُنقل صفٌّ مؤرشف', en: '"{name}" is archived — an archived row is not moved' },
+  [MSG.bank_transfer_same_branch]: { ar: 'الصفّ في هذا الفرع أصلاً — اختر فرعاً آخر', en: 'The row is already in this branch — pick another branch' },
+  [MSG.bank_transfer_account_no_count]: {
+    ar: 'الحسابُ البنكيّ ينتقل للقادم وحدَه — لا عدَّ ولا تاريخَ ولا اسمَ جديد؛ فالعدُّ للصندوق النقديّ',
+    en: 'A bank account moves for the future only — no count, date or new name; counting is for a cash box',
+  },
+  [MSG.bank_transfer_count_required]: {
+    ar: 'نقلُ الصندوق النقديّ إغلاقٌ وفتح — أدخل المعدودَ فيه وتاريخَ العدّ',
+    en: 'Moving a cash box closes and reopens it — enter the counted cash and the count date',
+  },
+  [MSG.bank_transfer_foreign_currency]: {
+    ar: 'الصندوق "{name}" بعملة {currency} — ونقلُ صندوقٍ بغير عملة المنشأة لم يُبنَ بعد (يحتاج سعرَ يومٍ وفرقَ صرف)',
+    en: 'Cash box "{name}" is in {currency} — moving a cash box in a non-base currency is not built yet (needs a day rate and an exchange difference)',
+  },
+  [MSG.bank_transfer_later_postings]: {
+    ar: 'على حساب الصندوق قيودٌ بعد {date} — العدُّ عدٌّ لكلِّ ما في الدفتر، فاختر تاريخاً لا يسبق آخرَ حركة',
+    en: 'The cash box account has postings after {date} — the count covers the whole ledger, so pick a date not before the last movement',
   },
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
 

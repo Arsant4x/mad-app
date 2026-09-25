@@ -2957,6 +2957,17 @@ model Bank {
   /// Hidden from day-to-day lists but still counted in the books.
   archived  Boolean  @default(false)
 
+  /// ⚖️ **خلفُ الصندوق حين نُقل بين الفروع** (`ق-١٤١٣` · `ق-١٤٣١`): الصندوقُ النقديّ فرعُه مكانُ نقده، فالنقلُ إغلاقٌ وفتح —
+  /// يُعدّ ويُغلق (يُؤرشف) في فرعه ويُفتح خلفُه صندوقاً جديداً بحسابٍ جديد في الهدف، **وتاريخُه لا ينتقل**. والحسابُ البنكيّ
+  /// ينتقل للقادم وحدَه (`ق-١٤١٤`) فلا خلفَ له. `NoAction` لا `Restrict` — كرابط الدرج: حذفُ المنشأة يحذف الاثنين معاً.
+  transferredToId String? @unique
+  transferredTo   Bank?   @relation("BankTransfer", fields: [transferredToId], references: [id], onDelete: NoAction)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  transferredToTenant Bank? @relation("Bank_transferredToId_tenant", fields: [companyId, transferredToId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  /// السلفُ الذي أُغلق وفُتح هذا بدلاً منه — إن وُجد.
+  transferredFrom Bank?  @relation("BankTransfer")
+  bank_transferredToId_tenant Bank[] @relation("Bank_transferredToId_tenant")
+
   payments         Payment[]
   supplierPayments SupplierPayment[]
 
