@@ -2518,6 +2518,17 @@
       "201"
     ]
   },
+  "POST /v1/banks/{id}/transfer": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "toBranchId"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/branches": {
     "parameters": [],
     "requiredBody": [

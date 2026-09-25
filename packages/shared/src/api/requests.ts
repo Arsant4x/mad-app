@@ -1084,6 +1084,14 @@ export interface SyncPosSaleDto {
   cardDeviceReference?: string;
 }
 
+/** جسمُ طلب — `TransferBankDto` في الخادم. */
+export interface TransferBankDto {
+  toBranchId: string;
+  countedAmount?: number;
+  date?: string;
+  name?: string;
+}
+
 /** جسمُ طلب — `TransferCashDrawerDto` في الخادم. */
 export interface TransferCashDrawerDto {
   toBranchId: string;
