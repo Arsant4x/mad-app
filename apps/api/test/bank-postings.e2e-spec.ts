@@ -46,7 +46,7 @@ describe('Bank postings — cash lands in the bank account (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'bank-postings');
     token = company.token;
-    bank = (await auth(http().post('/banks')).send({ name: `بنك الترحيل ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body;
+    bank = (await auth(http().post('/banks')).send({ name: `بنك الترحيل ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body;
     cleanup.banks.push(bank.id);
     customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الترحيل ${suffix}` }).expect(201)).body.id;
   }, 60000);

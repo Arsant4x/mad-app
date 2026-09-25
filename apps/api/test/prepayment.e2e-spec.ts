@@ -59,7 +59,7 @@ describe('Prepayment invoice — 386 (e2e)', () => {
     company = await registerIsolatedCompany(app, 'prepay');
     customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل الدفعة المقدَّمة' }).expect(201)).body.id;
     otherCustomerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميلٌ آخر' }).expect(201)).body.id;
-    bankId = (await auth(http().post('/banks')).send({ name: 'صندوق الدفعات', openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body.id;
+    bankId = (await auth(http().post('/banks')).send({ name: 'صندوق الدفعات', kind: 'CASH_BOX', openingBalance: 0, openingDate: '2026-01-01' }).expect(201)).body.id;
   }, 90000);
 
   afterAll(async () => {

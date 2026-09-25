@@ -46,7 +46,7 @@ describe('Archive (e2e)', () => {
     token = company.token;
 
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الأرشيف ${suffix}` }).expect(201)).body.id;
-    bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `بنك الأرشيف ${suffix}`, openingBalance: 0, openingDate: '2025-01-01' }).expect(201)).body.id;
+    bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `بنك الأرشيف ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2025-01-01' }).expect(201)).body.id;
 
     const inv = await auth(request(app.getHttpServer()).post('/invoices'))
       .send({ customerId, issueDate: '2025-06-01', dueDate: '2025-07-01', lines: [{ description: `بند ${suffix}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })

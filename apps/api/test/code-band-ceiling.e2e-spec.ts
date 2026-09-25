@@ -81,7 +81,7 @@ describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
 
     const bank = (
       await auth(http().post('/banks'))
-        .send({ name: `بنكُ السقف ${Date.now()}`, openingBalance: 0, openingDate: '2026-01-01' })
+        .send({ name: `بنكُ السقف ${Date.now()}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' })
         .expect(201)
     ).body as { id: string; accountId: string };
 
@@ -102,7 +102,7 @@ describe('سقفُ نطاق رموز الحسابات (e2e)', () => {
 
     const bank = (
       await auth(http().post('/banks'))
-        .send({ name: `بنكٌ يُحذف ${Date.now()}`, openingBalance: 0, openingDate: '2026-01-01' })
+        .send({ name: `بنكٌ يُحذف ${Date.now()}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' })
         .expect(201)
     ).body as { id: string };
     await auth(http().delete(`/banks/${bank.id}`)).expect(204);

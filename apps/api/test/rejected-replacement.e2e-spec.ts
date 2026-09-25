@@ -230,7 +230,7 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     await auth(request(server()).post('/purchases'))
       .send({ supplierId, date: '2026-05-01', subtotal: 400, warehouseId, branchId, lines: [{ description: 'صنفٌ مخزني', productId, quantity: 10, unitPrice: 40, taxRate: 15 }] })
       .expect(201);
-    cashBoxId = (await auth(request(server()).post('/banks')).send({ name: `صندوق البدل ${suffix}`, openingBalance: 0, openingDate: '2026-05-01', branchId }).expect(201)).body.id;
+    cashBoxId = (await auth(request(server()).post('/banks')).send({ name: `صندوق البدل ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: '2026-05-01', branchId }).expect(201)).body.id;
 
     await seedProductionCredential();
   }, 90000);

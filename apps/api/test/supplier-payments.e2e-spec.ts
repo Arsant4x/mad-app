@@ -120,7 +120,7 @@ describe('Supplier payments + allocations (e2e)', () => {
     supplierId = (await auth(request(app.getHttpServer()).post('/suppliers')).send({ name: `مورّد سداد ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع السداد ${suffix}` }).expect(201)).body.id;
     const box = (await auth(request(app.getHttpServer()).post('/banks'))
-      .send({ name: `صندوق ${suffix}`, openingBalance: 5000, openingDate: today(), branchId })
+      .send({ name: `صندوق ${suffix}`, kind: 'CASH_BOX', openingBalance: 5000, openingDate: today(), branchId })
       .expect(201)).body as { id: string; accountId: string };
     cashBoxId = box.id;
     cashBoxAccountId = box.accountId;

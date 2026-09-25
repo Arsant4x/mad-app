@@ -169,7 +169,7 @@ describe('تاريخُ الافتتاح المعلَن (e2e)', () => {
   it('⭐ وتاريخُ فتح البنك يصل الأستاذ — الحقلُ الميت حيّ', async () => {
     const bank = (
       await auth(http().post('/banks'))
-        .send({ name: `بنكُ التاريخ ${suffix}`, openingBalance: 900, openingDate: '2026-02-01' })
+        .send({ name: `بنكُ التاريخ ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 900, openingDate: '2026-02-01' })
         .expect(201)
     ).body as { id: string; accountId: string };
     banks.push(bank.id);

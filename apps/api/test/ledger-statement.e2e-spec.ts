@@ -58,7 +58,7 @@ describe('General ledger and party statement (e2e)', () => {
       .expect(201);
     invoiceNo = invoice.body.no;
 
-    const bank = await auth(http().post('/banks')).send({ name: 'صندوق الكشف', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: 'صندوق الكشف', kind: 'CASH_BOX', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     bankAccountId = bank.body.accountId;
     const payment = await auth(http().post('/payments'))
       .send({ customerId, date: '2026-06-20', amount: 50, method: 'CASH', bankId: bank.body.id, allocations: [{ invoiceId: invoice.body.id, amount: 50 }] })

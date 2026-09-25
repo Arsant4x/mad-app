@@ -48,7 +48,7 @@ describe('Bank ↔ ledger account (e2e)', () => {
   const banks: string[] = [];
 
   const createBank = (name: string, openingBalance = 0) =>
-    auth(http().post('/banks')).send({ name, openingBalance, openingDate: '2026-01-01' });
+    auth(http().post('/banks')).send({ name, kind: 'BANK_ACCOUNT', openingBalance, openingDate: '2026-01-01' });
   const accounts = async (): Promise<Account[]> => (await auth(http().get('/accounts')).expect(200)).body;
   const accountOf = async (bank: Bank) => (await accounts()).find((a) => a.id === bank.accountId);
 

@@ -61,7 +61,7 @@ describe('Cash rent payment into a branch cash box (e2e)', () => {
     contractId = contract.body.id;
 
     const box = await auth(request(app.getHttpServer()).post('/banks'))
-      .send({ name: `صندوق فرع اختبار ${suffix}`, openingBalance: 0, openingDate: '2025-01-01' })
+      .send({ name: `صندوق فرع اختبار ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: '2025-01-01' })
       .expect(201);
     boxId = box.body.id;
   }, 60000);

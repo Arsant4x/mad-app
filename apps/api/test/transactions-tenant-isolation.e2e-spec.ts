@@ -47,7 +47,7 @@ describe('Bank transactions tenant isolation (e2e)', () => {
     const bank = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: `بنك اختبار ${Date.now()}`, openingBalance: 1000, openingDate: '2026-01-01' })
+      .send({ name: `بنك اختبار ${Date.now()}`, kind: 'BANK_ACCOUNT', openingBalance: 1000, openingDate: '2026-01-01' })
       .expect(201);
 
     // Unique per run: the transactions list is paginated, so company B's

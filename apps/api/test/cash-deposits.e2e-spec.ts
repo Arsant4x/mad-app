@@ -46,7 +46,7 @@ describe('Cash deposits through cash-in-transit (e2e)', () => {
     const drawer = await auth(http().post('/cash-drawers')).send({ name: 'درج الإيداع' }).expect(201);
     drawerId = drawer.body.id;
     drawerAccountId = drawer.body.account?.id ?? drawer.body.accountId;
-    const bank = await auth(http().post('/banks')).send({ name: 'بنك الإيداع', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: 'بنك الإيداع', kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     bankId = bank.body.id;
     bankAccountId = bank.body.accountId;
 

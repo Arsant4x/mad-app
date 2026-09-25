@@ -52,7 +52,7 @@ describe('حذفُ الفرع لا يُفرغه صامتاً — يُرفض بم
 
   it('[SPEC 2.4] ① الصندوقُ في الفرع يوقف الحذفَ مسمّىً — ويبقى في فرعه', async () => {
     const branchId = await newBranch('فرع الصندوق');
-    const bank = (await asOwner(http().post('/banks')).send({ name: `صندوق الحذف ${suffix}`, openingDate: '2026-01-01', branchId }).expect(201)).body;
+    const bank = (await asOwner(http().post('/banks')).send({ name: `صندوق الحذف ${suffix}`, kind: 'CASH_BOX', openingDate: '2026-01-01', branchId }).expect(201)).body;
     const message = (await refusal(branchId)).join(' | ');
     expect(message).toContain(`صندوق الحذف ${suffix}`);
     expect(message).toContain('انقل');
@@ -140,7 +140,7 @@ describe('حذفُ الفرع لا يُفرغه صامتاً — يُرفض بم
 
   it('[SPEC 2.4] ⑨ وكلُّ ما فيه في رفضٍ واحد — سببٌ لكلِّ صنف، فلا يُكتشف واحدٌ بعد آخر', async () => {
     const branchId = await newBranch('فرع الكلّ');
-    await asOwner(http().post('/banks')).send({ name: `صندوق الكلّ ${suffix}`, openingDate: '2026-01-01', branchId }).expect(201);
+    await asOwner(http().post('/banks')).send({ name: `صندوق الكلّ ${suffix}`, kind: 'CASH_BOX', openingDate: '2026-01-01', branchId }).expect(201);
     await asOwner(http().post('/employees')).send({ fullName: `موظّف الكلّ ${suffix}`, hireDate: '2026-01-01', branchId }).expect(201);
     const reasons = await refusal(branchId);
     expect(reasons.length).toBeGreaterThanOrEqual(2);
