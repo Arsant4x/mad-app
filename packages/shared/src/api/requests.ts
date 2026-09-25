@@ -125,6 +125,7 @@ export interface CreateApiKeyDto {
 /** جسمُ طلب — `CreateBankDto` في الخادم. */
 export interface CreateBankDto {
   name: string;
+  kind: 'CASH_BOX' | 'BANK_ACCOUNT';
   iban?: string;
   openingBalance?: number;
   openingDate: string;
@@ -1135,6 +1136,7 @@ export interface UpdateAttendanceDto {
 /** جسمُ طلب — `UpdateBankDto` في الخادم. */
 export interface UpdateBankDto {
   name?: string;
+  kind?: 'CASH_BOX' | 'BANK_ACCOUNT';
   iban?: string;
   openingBalance?: number;
   openingDate?: string;

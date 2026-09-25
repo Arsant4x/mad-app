@@ -2412,6 +2412,7 @@
   "POST /v1/banks": {
     "parameters": [],
     "requiredBody": [
+      "kind",
       "name",
       "openingDate"
     ],
