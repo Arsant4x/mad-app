@@ -1083,6 +1083,20 @@ export interface SyncPosSaleDto {
   cardDeviceReference?: string;
 }
 
+/** جسمُ طلب — `TransferCashDrawerDto` في الخادم. */
+export interface TransferCashDrawerDto {
+  toBranchId: string;
+  countedAmount: number;
+  date: string;
+  name?: string;
+}
+
+/** جسمُ طلب — `TransferEmployeeDto` في الخادم. */
+export interface TransferEmployeeDto {
+  fromBranchId: string | null;
+  toBranchId: string;
+}
+
 /** جسمُ طلب — `TransitionTaskDto` في الخادم. */
 export interface TransitionTaskDto {
   to: 'OPEN' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'CANCELLED';
