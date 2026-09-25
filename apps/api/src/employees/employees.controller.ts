@@ -52,20 +52,20 @@ export class EmployeesController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateEmployeeDto) {
-    return this.employeesService.update(tenant.companyId, id, dto);
+    return this.employeesService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   /** أرشفة/إلغاء أرشفة — يخفيه من القوائم اليومية ويبقيه في الحسابات. */
   @Patch(':id/archive')
   @RequiresAction('edit')
   setArchived(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: SetArchivedDto) {
-    return this.employeesService.setArchived(tenant.companyId, id, dto.archived);
+    return this.employeesService.setArchived(tenant.companyId, tenant.allowedBranchIds, id, dto.archived);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.employeesService.remove(tenant.companyId, id);
+    return this.employeesService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }

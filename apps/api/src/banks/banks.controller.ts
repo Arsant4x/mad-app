@@ -139,20 +139,20 @@ export class BanksController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateBankDto) {
-    return this.banksService.update(tenant.companyId, id, dto);
+    return this.banksService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   /** أرشفة/إلغاء أرشفة — يخفيه من القوائم اليومية ويبقيه في الحسابات. */
   @Patch(':id/archive')
   @RequiresAction('edit')
   setArchived(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: SetArchivedDto) {
-    return this.banksService.setArchived(tenant.companyId, id, dto.archived);
+    return this.banksService.setArchived(tenant.companyId, tenant.allowedBranchIds, id, dto.archived);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.banksService.remove(tenant.companyId, id);
+    return this.banksService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }
