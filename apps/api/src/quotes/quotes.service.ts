@@ -16,8 +16,10 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CreateQuoteDto, QuoteLineDto, UpdateQuoteDto } from './dto/quote.dto';
 import { isQuoteExpired } from './quote-expiry.util';
+import { LINE_ORDER, numberLines } from '../common/document-lines.util';
 
-const QUOTE_INCLUDE = { customer: true, lines: true } as const;
+/** السطورُ بترتيبها المعلَن (`ق-١٤١٢`) — والعرضُ مصدرُ ترتيب فاتورته المحوَّلة. */
+const QUOTE_INCLUDE = { customer: true, lines: LINE_ORDER } as const;
 
 /** نفس رياضيات الفاتورة حرفياً — **الدالة نفسها** (`common/money/totals.ts`) لا نسخةٌ منها،
  * فما يراه العميل في العرض هو ما سيُفوتَر هللةً بهللة. (كانت هنا نسخةٌ **غير مدوَّرة**
@@ -159,7 +161,7 @@ export class QuotesService {
             baseTotal: toBaseAmount(total, exchangeRate),
             // companyId على كل بند صراحةً — الكتابة المتداخلة لا يراها امتداد
             // العزل (نفس تعليل InvoicesService)، وRLS يسند خلفها.
-            lines: { create: lines.map((l) => quoteLineRow(companyId, unitCodes, l)) },
+            lines: { create: numberLines(lines.map((l) => quoteLineRow(companyId, unitCodes, l))) },
           } as unknown as Prisma.QuoteUncheckedCreateInput,
           include: QUOTE_INCLUDE,
         });
@@ -196,7 +198,7 @@ export class QuotesService {
                 baseTotal: toBaseAmount(totals.total, Number(existing.exchangeRate)),
                 lines: {
                   deleteMany: {},
-                  create: priced!.map((l) => quoteLineRow(companyId, unitCodes, l)),
+                  create: numberLines(priced!.map((l) => quoteLineRow(companyId, unitCodes, l))),
                 },
               }
             : {}),
@@ -231,7 +233,8 @@ export class QuotesService {
     return retryOnUniqueConflict(async () => {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-          const quote = await tx.quote.findUnique({ where: { id }, include: { lines: true } });
+          // بترتيبها المعلَن — فالفاتورةُ المحوَّلة تُرقَّم بترتيب العرض لا بترتيب القرص (`ق-١٤١٢`).
+          const quote = await tx.quote.findUnique({ where: { id }, include: { lines: LINE_ORDER } });
           if (!quote) throw new NotFoundException(MSG.quote_not_found);
 
           if (quote.status === 'CONVERTED') {

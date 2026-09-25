@@ -49,6 +49,7 @@ import { events } from '../shared/events/event-bus';
 import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/domain-events';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
+import { LINE_ORDER, numberLines } from '../common/document-lines.util';
 
 /** أنواعُ مستند البيع — الأساسُ وإشعاراه؛ نظيرُها في الشراء `PURCHASE_NOTE_KINDS` (المصدرُ الواحد `ق-١٠٠٨`/١). */
 const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = { base: 'INVOICE', credit: 'CREDIT_NOTE', debit: 'DEBIT_NOTE' };
@@ -59,7 +60,8 @@ const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = 
  * ومنهما تُشتقّ «مغلقة» (`ق-٩٦٤`). */
 const INVOICE_INCLUDE = {
   customer: true,
-  lines: true,
+  // بترتيبها المعلَن لا بترتيب القرص (`ق-١٤١٢`).
+  lines: LINE_ORDER,
   relatedInvoice: { select: { id: true, no: true } },
   replacesInvoice: { select: { id: true, no: true } },
   replacedBy: { select: { id: true, no: true } },
@@ -312,7 +314,7 @@ export class InvoicesService {
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const rejected = await tx.invoice.findUnique({
           where: { id: invoiceId },
-          include: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: true, replacedBy: { select: { no: true } } },
+          include: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: LINE_ORDER, replacedBy: { select: { no: true } } },
         });
         if (!rejected) throw new NotFoundException(MSG.invoice_not_found);
         assertBranchAllowed(tenant.allowedBranchIds, rejected.branchId);
@@ -592,17 +594,20 @@ export class InvoicesService {
           baseTaxTotal: toBaseAmount(taxTotal, exchangeRate),
           baseTotal: toBaseAmount(total, exchangeRate),
           lines: {
-            create: lines.map((l) => ({
-              companyId,
-              description: l.description,
-              productId: l.productId ?? null,
-              unitCode: unitCodeOf(unitCodes, l.productId),
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              discount: l.discount ?? 0,
-              // ⑧ الفئةُ والسببُ والنسبةُ المشتقّة — منسوخةً لحظةَ البيع كما الوحدة.
-              ...taxColumns(l),
-            })),
+            // رقمُ السطر من ترتيب الإدخال (`ق-١٤١٢`).
+            create: numberLines(
+              lines.map((l) => ({
+                companyId,
+                description: l.description,
+                productId: l.productId ?? null,
+                unitCode: unitCodeOf(unitCodes, l.productId),
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                discount: l.discount ?? 0,
+                // ⑧ الفئةُ والسببُ والنسبةُ المشتقّة — منسوخةً لحظةَ البيع كما الوحدة.
+                ...taxColumns(l),
+              })),
+            ),
           },
         } as unknown as Prisma.InvoiceUncheckedCreateInput,
         include: INVOICE_INCLUDE,
@@ -794,16 +799,18 @@ export class InvoicesService {
         await tx.invoiceLine.deleteMany({ where: { invoiceId: id } });
         const unitCodes = await unitCodesFor(tx, dto.lines);
         data.lines = {
-          create: priced.map((l) => ({
-            companyId,
-            description: l.description,
-            productId: l.productId ?? null,
-            unitCode: unitCodeOf(unitCodes, l.productId),
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            discount: l.discount ?? 0,
-            ...taxColumns(l),
-          })),
+          create: numberLines(
+            priced.map((l) => ({
+              companyId,
+              description: l.description,
+              productId: l.productId ?? null,
+              unitCode: unitCodeOf(unitCodes, l.productId),
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              discount: l.discount ?? 0,
+              ...taxColumns(l),
+            })),
+          ),
         } as unknown as Prisma.InvoiceUncheckedUpdateInput['lines'];
       }
 
@@ -980,7 +987,7 @@ export class InvoicesService {
     allowedBranchIds: string[] | 'all',
     noteKind: 'CREDIT_NOTE' | 'DEBIT_NOTE',
   ) {
-    const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: true } });
+    const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: LINE_ORDER } });
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
     // ④A1: الإشعارُ على مستند 386 (ردُّ دفعةٍ مقدَّمة) موجةٌ لاحقة — يُرفض مسمّىً لا يُبنى نصفُه.
     if (original.docType === 'PREPAYMENT') throw new ConflictException(MSG.prepayment_note_unsupported);
@@ -1048,19 +1055,21 @@ export class InvoicesService {
         baseTaxTotal: toBaseAmount(taxTotal, rate),
         baseTotal: toBaseAmount(total, rate),
         lines: {
-          create: note.lines.map((l) => ({
-            companyId,
-            description: l.description,
-            productId: l.productId ?? null,
-            unitCode: unitCodeOf(unitCodes, l.productId),
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            discount: l.discount ?? 0,
-            ...taxColumns(l),
-            // رابطُ المرتجع وحالته على سطر الإشعار الدائن وحده (`SPEC 30.2` · `30.4`).
-            returnsLineId: note.docType === 'CREDIT_NOTE' ? (l.returnsLineId ?? null) : null,
-            returnCondition: note.docType === 'CREDIT_NOTE' ? (l.returnCondition ?? null) : null,
-          })),
+          create: numberLines(
+            note.lines.map((l) => ({
+              companyId,
+              description: l.description,
+              productId: l.productId ?? null,
+              unitCode: unitCodeOf(unitCodes, l.productId),
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              discount: l.discount ?? 0,
+              ...taxColumns(l),
+              // رابطُ المرتجع وحالته على سطر الإشعار الدائن وحده (`SPEC 30.2` · `30.4`).
+              returnsLineId: note.docType === 'CREDIT_NOTE' ? (l.returnsLineId ?? null) : null,
+              returnCondition: note.docType === 'CREDIT_NOTE' ? (l.returnCondition ?? null) : null,
+            })),
+          ),
         },
       } as unknown as Prisma.InvoiceUncheckedCreateInput,
       include: INVOICE_INCLUDE,
@@ -1222,7 +1231,7 @@ export class InvoicesService {
         baseSubtotal: toBaseAmount(subtotal, p.exchangeRate),
         baseTaxTotal: toBaseAmount(taxTotal, p.exchangeRate),
         baseTotal: toBaseAmount(total, p.exchangeRate),
-        lines: { create: lines.map((l) => ({ companyId, description: l.description, productId: null, unitCode: null, quantity: l.quantity, unitPrice: l.unitPrice, discount: 0, ...taxColumns(l) })) },
+        lines: { create: numberLines(lines.map((l) => ({ companyId, description: l.description, productId: null, unitCode: null, quantity: l.quantity, unitPrice: l.unitPrice, discount: 0, ...taxColumns(l) }))) },
       } as unknown as Prisma.InvoiceUncheckedCreateInput,
       include: INVOICE_INCLUDE,
     });

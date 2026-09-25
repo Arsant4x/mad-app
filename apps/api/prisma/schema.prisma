@@ -1669,6 +1669,13 @@ model InvoiceLine {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   invoiceTenant Invoice @relation("InvoiceLine_invoiceId_tenant", fields: [companyId, invoiceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ **رقمُ السطر في مستنده — ترتيبُه المعلَن لا المصادَف** (`ق-١٤١٢`): يُكتب من ترتيب الإدخال
+  /// (`1..n` بلا فجوة — `numberLines`) ويُقرأ به كلُّ ما يعرض السطور أو يختمها (`LINE_ORDER`)، فالشاشةُ
+  /// والطباعةُ و`cbc:ID` في المستند المختوم ترى الترتيبَ نفسَه. كانت السطورُ تُقرأ بلا ترتيب فتأتي بترتيبها
+  /// على القرص، وهو يتبدّل بما يُحذف ويُكتب حولها — **وأسقط اختبارَ الخصم متقطّعاً**.
+  /// **بلا افتراضٍ في القاعدة**: كلُّ إنشاءٍ يذكره، ومكرَّرُه في المستند الواحد يُرفض (الفريدُ أدناه).
+  lineNo Int
+
   description String
 
   /// ⭐ **The item this line sold — the link COGS needs and never had.**
@@ -1737,6 +1744,8 @@ model InvoiceLine {
 
   @@index([companyId, productId])
   @@index([returnsLineId])
+  /// رقمُ السطر فريدٌ في مستنده — وفهرسُه هو ما تقرأ به السطورُ مستندَها (لم يكن على `invoiceId` فهرسٌ قطّ).
+  @@unique([invoiceId, lineNo])
   @@map("invoice_lines")
   stockMovement_invoiceLineId_tenant StockMovement[] @relation("StockMovement_invoiceLineId_tenant")
   invoiceLine_returnsLineId_tenant InvoiceLine[] @relation("InvoiceLine_returnsLineId_tenant")
@@ -4917,6 +4926,10 @@ model QuoteLine {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   quoteTenant Quote @relation("QuoteLine_quoteId_tenant", fields: [companyId, quoteId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ رقمُ السطر في العرض — كـ`InvoiceLine.lineNo` (`ق-١٤١٢`): **فالعرضُ مصدرُ ترتيب فاتورته المحوَّلة**،
+  /// وتحويلٌ يقرأ سطورَ العرض بلا ترتيب يكتب فاتورةً بترتيبٍ مصادَف.
+  lineNo Int
+
   description String
 
   /// Carried for the same reason as `InvoiceLine.productId`: a quote that
@@ -4948,6 +4961,7 @@ model QuoteLine {
 
   @@index([quoteId])
   @@index([companyId, productId])
+  @@unique([quoteId, lineNo])
   @@map("quote_lines")
 }
 

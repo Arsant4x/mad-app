@@ -16,6 +16,7 @@ import { invoiceHashOfSigned, signInvoice, verifySignedInvoice } from './ubl/xad
 import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.service';
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
+import { LINE_ORDER } from '../common/document-lines.util';
 import { AuthorityMessage, zatcaWarningsOf } from './authority-warnings.util';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
@@ -192,7 +193,7 @@ export class ZatcaService {
       const ctx = await this.onboardedContext(companyId);
       if (!ctx) return { qrPayload: null, error: null };
       const buyer = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { select: { taxExemptionReasonCode: true } } } }),
+        tx.invoice.findUnique({ where: { id: invoiceId }, select: { customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } } } }),
       );
       if (!buyer) throw new NotFoundException(MSG.invoice_not_found);
       if (invoiceTypeFor(buyer.customer, buyer.lines) === 'standard') return { qrPayload: null, error: null };
@@ -357,11 +358,12 @@ export class ZatcaService {
       where: { id: invoiceId },
       include: {
         customer: true,
-        lines: true,
+        // ⚖️ بترتيبها المعلَن (`ق-١٤١٢`): `cbc:ID` يُكتب بترتيب هذه القراءة — فالمختومُ والمعروضُ والمطبوعُ ترتيبٌ واحد.
+        lines: LINE_ORDER,
         relatedInvoice: { select: { no: true } },
         // ④A1: مراجعُ الدفعات المقدَّمة المطبَّقة — رقمُ مستندها ولحظتُه وسطرُه (فئةً ونسبةً) كما صدر.
         prepaymentsApplied: {
-          select: { net: true, vat: true, prepaymentInvoice: { select: { no: true, issueDate: true, issuedAt: true, issuedOffsetMin: true, lines: { select: { taxRate: true, taxCategory: true, taxExemptionReasonCode: true } } } } },
+          select: { net: true, vat: true, prepaymentInvoice: { select: { no: true, issueDate: true, issuedAt: true, issuedOffsetMin: true, lines: { ...LINE_ORDER, select: { taxRate: true, taxCategory: true, taxExemptionReasonCode: true } } } } },
         },
       },
     });
@@ -603,7 +605,7 @@ export class ZatcaService {
     const stored = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { select: { taxExemptionReasonCode: true } } },
+        select: { zatcaSignedXml: true, zatcaHash: true, zatcaUuid: true, customer: { select: { kind: true, vatNumber: true, country: true } }, lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } } },
       }),
     );
     if (!stored) throw new NotFoundException(MSG.invoice_not_found);

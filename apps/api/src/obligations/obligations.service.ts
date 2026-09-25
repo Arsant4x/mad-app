@@ -25,6 +25,7 @@ const OBLIGATION_SEARCH_FIELDS = ['title', 'body'] as const;
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
 import { reconcileNonDeductibleVat } from '../purchases/non-deductible-vat.util';
 import { dayStartOf } from '../common/wall-clock.util';
+import { LINE_ORDER } from '../common/document-lines.util';
 
 /**
  * ⭐ **قسمُ الإيجار في الإقرار** (`ق-٩١٧` · `ق-٩١٨` · `ق-٩٢٦`).
@@ -214,7 +215,7 @@ export class ObligationsService {
       const [invoices, rent, firstInvoice] = await Promise.all([
         tx.invoice.findMany({
           where: { issueDate: { gte: previous.from, lte: previous.to }, ...NOT_REPLACED_REJECTED },
-          select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+          select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
         }),
         this.rentSection(tx, previous.from, previous.to),
         tx.invoice.findFirst({ orderBy: { issueDate: 'asc' }, select: { issueDate: true } }),
@@ -521,7 +522,7 @@ export class ObligationsService {
     const [invoices, purchases, rent] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: from, lte: to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.purchase.findMany({
         where: { date: { gte: from, lte: to }, excludeFromVat: false, exempt: false, inputVatUse: { in: ['MIXED', 'LEGACY_UNASSIGNED'] } },
@@ -583,7 +584,7 @@ export class ObligationsService {
     const [invoices, rentRows] = await Promise.all([
       tx.invoice.findMany({
         where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED },
-        select: { docType: true, exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+        select: { docType: true, exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
       }),
       tx.rentAccrual.findMany({ where: { date: { gte: window.from, lte: window.to }, managed: false, taxable: true }, select: { amountNet: true, exchangeRate: true } }),
     ]);
@@ -616,7 +617,7 @@ export class ObligationsService {
           select: {
             docType: true,
             exchangeRate: true,
-            lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
+            lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } },
           },
         }),
         tx.purchase.findMany({ where: { date: { gte: from, lte: to } }, select: purchaseSelect }),
@@ -631,7 +632,7 @@ export class ObligationsService {
             net: true,
             vat: true,
             prepaymentInvoice: {
-              select: { exchangeRate: true, lines: { select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
+              select: { exchangeRate: true, lines: { ...LINE_ORDER, select: { quantity: true, unitPrice: true, taxRate: true, taxCategory: true, taxExemptionReasonCode: true, taxExemptionReason: true } } },
             },
           },
         }),
