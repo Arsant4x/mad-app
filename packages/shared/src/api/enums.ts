@@ -31,6 +31,10 @@ export type ActorType = (typeof ACTOR_TYPE_VALUES)[number];
 export const ATTENDANCE_STATUS_VALUES = ['PRESENT', 'ABSENT'] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUS_VALUES)[number];
 
+/** `prisma:BankKind` — ويقابلُه `apps/web/src/api/banks.ts#BankKind`. */
+export const BANK_KIND_VALUES = ['CASH_BOX', 'BANK_ACCOUNT', 'LEGACY_UNDECLARED'] as const;
+export type BankKind = (typeof BANK_KIND_VALUES)[number];
+
 /** `const:apps/api/src/customers/dto/create-customer.dto.ts#BUYER_ID_SCHEMES` — ويقابلُه `apps/web/src/api/customers.ts#BuyerIdScheme`. */
 export const BUYER_ID_SCHEME_VALUES = ['TIN', 'CRN', 'MOM', 'MLS', '700', 'SAG', 'NAT', 'GCC', 'IQA', 'PAS', 'OTH'] as const;
 export type BuyerIdScheme = (typeof BUYER_ID_SCHEME_VALUES)[number];

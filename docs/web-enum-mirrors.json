@@ -19,6 +19,10 @@
       "server": "prisma:AttendanceStatus"
     },
     {
+      "web": "apps/web/src/api/banks.ts#BankKind",
+      "server": "prisma:BankKind"
+    },
+    {
       "web": "apps/web/src/api/banks.ts#CashDepositStatus",
       "server": "prisma:CashDepositStatus"
     },

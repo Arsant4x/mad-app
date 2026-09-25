@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker, BranchReadOnly } from '../../components/BranchPicker';
-import type { Bank, BankInput } from '../../api/banks';
+import { BANK_KIND_LABEL, type Bank, type BankInput, type BankKind, type BankUpdateInput, type DeclaredBankKind } from '../../api/banks';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -15,9 +15,12 @@ export function BankModal({
   editing: Bank | null;
   branches: Branch[];
   onCancel: () => void;
-  onSave: (data: BankInput) => Promise<void>;
+  /** الإنشاءُ `BankInput` (النوعُ فيه إلزاميّ) والتعديلُ `BankUpdateInput` — والصفحةُ تفرّق بوضع النافذة. */
+  onSave: (data: BankInput | BankUpdateInput) => Promise<void>;
 }) {
   const [name, setName] = useState(editing?.name ?? '');
+  // ⚖️ ق-١٤٣١ — النوعُ معلَنٌ لا مستنبَط: لا افتراضَ في الإنشاء، و«غيرُ المعلَن» يبقى كذلك حتى يُعلَن.
+  const [kind, setKind] = useState<BankKind | ''>(editing?.kind ?? '');
   const [iban, setIban] = useState(editing?.iban ?? '');
   const [openingBalance, setOpeningBalance] = useState(editing?.openingBalance ?? '');
   const [openingDate, setOpeningDate] = useState(editing ? editing.openingDate.slice(0, 10) : today());
@@ -25,10 +28,16 @@ export function BankModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const declared: DeclaredBankKind | undefined = kind && kind !== 'LEGACY_UNDECLARED' ? kind : undefined;
+
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
       setError(i18n.t('err_bank_name_required'));
+      return;
+    }
+    if (!editing && !declared) {
+      setError(i18n.t('err_bank_kind_required'));
       return;
     }
     setSaving(true);
@@ -40,7 +49,9 @@ export function BankModal({
         openingDate,
       };
       // 🔴 ق-١٣٨٤: الفرعُ عند الإنشاء وحدَه — `UpdateBankDto` لا يقبله، وإرسالُه في التعديل كان يُردّ `400`.
-      await onSave(editing ? fields : { ...fields, branchId: branchId || undefined });
+      // والنوعُ في التعديل يُرسَل حين يُعلَن فقط — فـ«غيرُ المعلَن» الذي لم يُختر له نوعٌ يبقى كما هو.
+      if (editing) await onSave(declared ? { ...fields, kind: declared } : fields);
+      else await onSave({ ...fields, kind: declared!, branchId: branchId || undefined });
     } catch (e) {
       setError(apiErrorMessage(e, i18n.t('err_bank_save')));
     } finally {
@@ -60,6 +71,14 @@ export function BankModal({
         <div className="field">
           <label>اسم الحساب</label>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: مصرف الراجحي — الحساب الرئيسي" />
+        </div>
+        <div className="field">
+          <label htmlFor="bank-kind">نوع الصفّ</label>
+          <select id="bank-kind" value={declared ?? ''} onChange={(e) => setKind(e.target.value as DeclaredBankKind | '')}>
+            <option value="">{editing?.kind === 'LEGACY_UNDECLARED' ? `${BANK_KIND_LABEL.LEGACY_UNDECLARED} — اختر نوعه` : '— اختر —'}</option>
+            <option value="CASH_BOX">{BANK_KIND_LABEL.CASH_BOX}</option>
+            <option value="BANK_ACCOUNT">{BANK_KIND_LABEL.BANK_ACCOUNT}</option>
+          </select>
         </div>
         <div className="field">
           <label>IBAN</label>

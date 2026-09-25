@@ -10,7 +10,7 @@ vi.setConfig({ testTimeout: 43_000 });
 
 vi.mock('../../api/banks');
 
-const bankRows: banks.Bank[] = [{ archived: false, id: 'b1', branchId: null, name: 'بنك الشبكة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' }];
+const bankRows: banks.Bank[] = [{ archived: false, id: 'b1', branchId: null, kind: 'BANK_ACCOUNT', name: 'بنك الشبكة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' }];
 
 const settlement = (over: Partial<banks.NetworkSettlement> = {}): banks.NetworkSettlement => ({
   id: 'ns1',

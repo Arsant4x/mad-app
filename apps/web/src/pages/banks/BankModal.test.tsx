@@ -9,7 +9,7 @@ import type { Branch } from '../../api/branches';
 vi.setConfig({ testTimeout: 5_000 });
 
 const branches: Branch[] = [{ id: 'br1', name: 'فرع الصالة', type: null, hours: null, activityId: null, activity: null, propertyId: null, warehouseId: null }];
-const bank: Bank = { archived: false, id: 'b1', branchId: 'br1', name: 'درج الصالة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' };
+const bank: Bank = { archived: false, id: 'b1', branchId: 'br1', kind: 'CASH_BOX', name: 'درج الصالة', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' };
 
 /**
  * 🔴 `ق-١٣٨٤` — **الرفضُ الكامن**: `UpdateBankDto` لا يقبل `branchId` (`CreateBankDto` وحدَه يقبله) و`forbidNonWhitelisted` يردّ `400`،
@@ -34,10 +34,39 @@ describe('نافذةُ الحساب البنكي — الفرعُ عند الإ�
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<BankModal editing={null} branches={branches} onCancel={() => {}} onSave={onSave} />);
     await userEvent.type(screen.getByPlaceholderText(/مصرف الراجحي/), 'بنك جديد');
+    await userEvent.selectOptions(screen.getByLabelText('نوع الصفّ'), 'BANK_ACCOUNT');
     const branchSelect = screen.getByRole('option', { name: 'فرع الصالة' }).closest('select')!;
     await userEvent.selectOptions(branchSelect, 'br1');
     await userEvent.click(screen.getByRole('button', { name: 'إضافة الحساب' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect((onSave.mock.calls[0][0] as Record<string, unknown>).branchId).toBe('br1');
+  });
+});
+
+/** ⚖️ `ق-١٤٣١` — نوعُ الصفّ معلَنٌ لا مستنبَط: لا افتراضَ في الإنشاء، و«غيرُ المعلَن» يُعلَن صراحةً أو يبقى. */
+describe('نافذةُ الحساب البنكي — نوعُ الصفّ معلَن', () => {
+  it('الإنشاءُ بلا نوعٍ لا يُرسَل — ولو حمل آيباناً', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<BankModal editing={null} branches={branches} onCancel={() => {}} onSave={onSave} />);
+    await userEvent.type(screen.getByPlaceholderText(/مصرف الراجحي/), 'بنكٌ بآيبان');
+    await userEvent.type(screen.getByPlaceholderText(/SA0000/), 'SA0380000000608010167519');
+    await userEvent.click(screen.getByRole('button', { name: 'إضافة الحساب' }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText(/نوع الصفّ/, { selector: 'p' })).toBeTruthy();
+  });
+
+  it('و«غيرُ المعلَن» يبقى كذلك حتى يُختار نوعُه — ثم يُرسَل الإعلان', async () => {
+    const legacy: Bank = { ...bank, kind: 'LEGACY_UNDECLARED' };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { unmount } = render(<BankModal editing={legacy} branches={branches} onCancel={() => {}} onSave={onSave} />);
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    expect('kind' in (onSave.mock.calls[0][0] as Record<string, unknown>)).toBe(false);
+    unmount();
+
+    const declare = vi.fn().mockResolvedValue(undefined);
+    render(<BankModal editing={legacy} branches={branches} onCancel={() => {}} onSave={declare} />);
+    await userEvent.selectOptions(screen.getByLabelText('نوع الصفّ'), 'CASH_BOX');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    expect((declare.mock.calls[0][0] as Record<string, unknown>).kind).toBe('CASH_BOX');
   });
 });
