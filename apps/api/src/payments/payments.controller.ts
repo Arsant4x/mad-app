@@ -38,7 +38,7 @@ export class PaymentsController {
   @Get(':id')
   @RequiresAction('view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.paymentsService.findOne(tenant.companyId, id);
+    return this.paymentsService.findOne(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   @Post()
@@ -58,13 +58,13 @@ export class PaymentsController {
   @Post(':id/allocate')
   @RequiresAction('edit')
   allocate(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AllocateDto) {
-    return this.paymentsService.allocate(tenant.companyId, id, dto);
+    return this.paymentsService.allocate(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   /** التصحيح الوحيد المتاح: دفعة عكسية بقيدٍ مضاد. */
   @Post(':id/reverse')
   @RequiresAction('record')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReversePaymentDto) {
-    return this.paymentsService.reverse(tenant.companyId, id, dto.reason, dto.date);
+    return this.paymentsService.reverse(tenant.companyId, tenant.allowedBranchIds, id, dto.reason, dto.date);
   }
 }

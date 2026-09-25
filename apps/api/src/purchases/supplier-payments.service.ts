@@ -86,9 +86,10 @@ export class SupplierPaymentsService {
     );
   }
 
-  async findOne(companyId: string, id: string) {
+  async findOne(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    // ق-١٤٤٠: السندُ بفروع الفاعل كالقائمة — سندُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403)، فلا يُقرأ بتخصيصاته.
     const payment = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.supplierPayment.findUnique({ where: { id }, include: SUPPLIER_PAYMENT_INCLUDE }),
+      tx.supplierPayment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: SUPPLIER_PAYMENT_INCLUDE }),
     );
     if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
     return withAllocatedTotals(payment);
@@ -203,9 +204,10 @@ export class SupplierPaymentsService {
    * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
    * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
    */
-  allocate(companyId: string, id: string, dto: AllocateSupplierPaymentDto) {
+  allocate(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: AllocateSupplierPaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const payment = await tx.supplierPayment.findUnique({ where: { id }, include: { allocations: true } });
+      // ق-١٤٤٠: السندُ بفروع الفاعل قبل فحص العكس وقبل أيّ حذفٍ للتخصيصات — سندُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403).
+      const payment = await tx.supplierPayment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { allocations: true } });
       if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
       // ⚖️ مرآةُ سند القبض (`ق-١١٩٨`/⑤): كان يُمرَّر `null` فيُعاد توزيعُ سندٍ عُكس فعلاً.
       assertReversible(payment, await tx.supplierPayment.findFirst({ where: { reversesId: id }, select: { no: true } }));
@@ -244,11 +246,12 @@ export class SupplierPaymentsService {
    * **صندوقُه لا يُقاس هنا**: عكسُ سند الصرف يحمل صندوقَ أصله وفرعَه كما هما — قيس الأصلُ عند إنشائه (`ق-١٤٣٧`)،
    * والعكسُ يُلغيه ولا يختار صندوقاً.
    */
-  reverse(companyId: string, id: string, reason?: string, date?: string) {
+  reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-        const original = await tx.supplierPayment.findUnique({
-          where: { id },
+        // ق-١٤٤٠: الأصلُ بفروع الفاعل قبل فحص «عُكس سابقاً» — سندُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403)، فلا يُعكس.
+        const original = await tx.supplierPayment.findFirst({
+          where: { id, ...branchFilter(allowedBranchIds) },
           include: { allocations: true, supplier: { select: { name: true } } },
         });
         if (!original) throw new NotFoundException(MSG.supplier_payment_not_found);

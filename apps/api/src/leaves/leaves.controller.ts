@@ -64,20 +64,20 @@ export class LeavesController {
   @Post('requests/:id/approve')
   @RequiresAction('review')
   approve(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
-    return this.leavesService.decide(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'APPROVED', dto.note);
+    return this.leavesService.decide(tenant.companyId, tenant.allowedBranchIds, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'APPROVED', dto.note);
   }
 
   @Post('requests/:id/reject')
   @RequiresAction('review')
   reject(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Param('id') id: string, @Body() dto: DecideLeaveRequestDto) {
-    return this.leavesService.decide(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'REJECTED', dto.note);
+    return this.leavesService.decide(tenant.companyId, tenant.allowedBranchIds, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, id, 'REJECTED', dto.note);
   }
 
   @Delete('requests/:id')
   @RequiresAction('delete')
   @HttpCode(204)
   removeRequest(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.leavesService.remove(tenant.companyId, id);
+    return this.leavesService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   // ---- Balance ----

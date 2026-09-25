@@ -33,13 +33,13 @@ export class AttendanceController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateAttendanceDto) {
-    return this.attendanceService.update(tenant.companyId, id, dto);
+    return this.attendanceService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(204)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.attendanceService.remove(tenant.companyId, id);
+    return this.attendanceService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }

@@ -156,20 +156,20 @@ export class InventoryController {
   @Get('write-offs/attachments/:attachmentId/download-url')
   @RequiresAction('view')
   writeOffAttachmentUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
-    return this.writeOffAttachments.downloadUrl(tenant.companyId, attachmentId);
+    return this.writeOffAttachments.downloadUrl(tenant.companyId, tenant.allowedBranchIds, attachmentId);
   }
 
   @Delete('write-offs/attachments/:attachmentId')
   @RequiresAction('record')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeWriteOffAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
-    return this.writeOffAttachments.remove(tenant.companyId, attachmentId);
+    return this.writeOffAttachments.remove(tenant.companyId, tenant.allowedBranchIds, attachmentId);
   }
 
   @Get('write-offs/:id/attachments')
   @RequiresAction('view')
   listWriteOffAttachments(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.writeOffAttachments.list(tenant.companyId, id);
+    return this.writeOffAttachments.list(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   /** `record` لا `review`: **من يرى التلف يرفع دليله** — والاعتماد قرارٌ آخر. */
@@ -177,6 +177,6 @@ export class InventoryController {
   @RequiresAction('record')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
   addWriteOffAttachment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
-    return this.writeOffAttachments.add(tenant.companyId, id, file);
+    return this.writeOffAttachments.add(tenant.companyId, tenant.allowedBranchIds, id, file);
   }
 }

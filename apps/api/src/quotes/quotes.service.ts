@@ -107,9 +107,10 @@ export class QuotesService {
     return mapList(result, (q) => ({ ...q, derivedStatus: deriveStatus(q) }));
   }
 
-  async findOne(companyId: string, id: string) {
+  async findOne(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    // عرضُ فرعٍ خارج فروع الفاعل غيرُ موجودٍ له — 404 كالقائمة لا 403، فلا يُسرَّب وجودُه (`ق-١٤٤٠`).
     const quote = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
-      tx.quote.findUnique({ where: { id }, include: { ...QUOTE_INCLUDE, convertedInvoice: { select: { id: true, no: true } } } }),
+      tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { ...QUOTE_INCLUDE, convertedInvoice: { select: { id: true, no: true } } } }),
     );
     if (!quote) throw new NotFoundException(MSG.quote_not_found);
     return { ...quote, derivedStatus: deriveStatus(quote) };
@@ -169,9 +170,10 @@ export class QuotesService {
     );
   }
 
-  update(companyId: string, id: string, dto: UpdateQuoteDto) {
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateQuoteDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.quote.findUnique({ where: { id } });
+      // الفرعُ أوّلاً (`ق-١٤٤٠`): عرضُ فرعٍ آخر 404 لا 409 المحوَّلِ الذي يسمّي فاتورتَه — فهو غيرُ موجودٍ له.
+      const existing = await tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
       if (!existing) throw new NotFoundException(MSG.quote_not_found);
       if (existing.status === 'CONVERTED') {
         throw new ConflictException(formatMessage(MSG.quote_converted_immutable, { invoiceNo: await this.convertedInvoiceNo(tx, existing) }));
@@ -210,9 +212,10 @@ export class QuotesService {
   }
 
   /** حماية الحذف تمتد (قاعدة الموجز 6): المحوَّل لا يُحذف — فاتورته قائمة. */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.quote.findUnique({ where: { id } });
+      // الفرعُ أوّلاً (`ق-١٤٤٠`): عرضُ فرعٍ آخر 404 لا حذفٌ ولا 409 يسمّي فاتورتَه — فهو غيرُ موجودٍ له.
+      const existing = await tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
       if (!existing) throw new NotFoundException(MSG.quote_not_found);
       if (existing.status === 'CONVERTED') {
         throw new ConflictException(formatMessage(MSG.quote_converted_undeletable, { invoiceNo: await this.convertedInvoiceNo(tx, existing) }));
@@ -234,7 +237,8 @@ export class QuotesService {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
           // بترتيبها المعلَن — فالفاتورةُ المحوَّلة تُرقَّم بترتيب العرض لا بترتيب القرص (`ق-١٤١٢`).
-          const quote = await tx.quote.findUnique({ where: { id }, include: { lines: LINE_ORDER } });
+          // والفرعُ أوّلاً (`ق-١٤٤٠`): عرضُ فرعٍ آخر 404 لا 403 الفرعِ ولا 409 المحوَّلِ/المنقضي التي تكشف رقمَ فاتورته وتاريخَه.
+          const quote = await tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { lines: LINE_ORDER } });
           if (!quote) throw new NotFoundException(MSG.quote_not_found);
 
           if (quote.status === 'CONVERTED') {

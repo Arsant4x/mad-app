@@ -108,8 +108,11 @@ export class PaymentsService {
     );
   }
 
-  async findOne(companyId: string, id: string) {
-    const payment = await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.payment.findUnique({ where: { id }, include: PAYMENT_INCLUDE }));
+  async findOne(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    // سندُ فرعٍ خارج فروع الفاعل غيرُ موجودٍ له — 404 لا 403، فلا يُسرَّب وجودُه (`ق-١٤٤٠`).
+    const payment = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.payment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: PAYMENT_INCLUDE }),
+    );
     if (!payment) throw new NotFoundException(MSG.payment_not_found);
     return withAllocatedTotals(payment);
   }
@@ -353,6 +356,20 @@ export class PaymentsService {
     await this.recomputeInvoiceStatus(tx, input.invoiceId);
   }
 
+  /**
+   * 🔴 **السندُ بفروع الفاعل لا بمعرّفه وحدَه** (`ق-١٤٤٠`): كان التوزيعُ والعكسُ يقرآن `findUnique({ id })`
+   * فموظّفٌ مقيَّدٌ بفرعٍ أعاد توزيعَ سندِ فرعٍ آخر أو عكسه. ⟸ خارجُ فروعه **غيرُ موجودٍ له** (`404` كالقائمة)،
+   * ويُقرأ **قبل** أيّ فحصِ حالٍ يكشف وجودَه؛ وما هو للمنشأة كلِّها (`branchId: null`) مرئيٌّ للجميع (`branchFilter`).
+   */
+  private async findVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
+    const payment = await tx.payment.findFirst({
+      where: { id, ...branchFilter(allowedBranchIds) },
+      include: { allocations: true, customer: { select: { name: true } } },
+    });
+    if (!payment) throw new NotFoundException(MSG.payment_not_found);
+    return payment;
+  }
+
   /** ④A1 — سندٌ أصدر فاتورةَ دفعةٍ مقدَّمة لا يُعاد توزيعُه ولا يُعكس: مستندُه صادرٌ بسلسلته، وتصحيحُه إشعارٌ دائن عليه (لم يُبنَ بعد — حدٌّ معلَن). */
   private async assertNoPrepaymentInvoice(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
     const doc = await tx.invoice.findUnique({ where: { prepaymentPaymentId: paymentId }, select: { no: true } });
@@ -365,12 +382,12 @@ export class PaymentsService {
    * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
    * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
    */
-  allocate(companyId: string, id: string, dto: AllocateDto) {
+  allocate(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const payment = await tx.payment.findUnique({ where: { id }, include: { allocations: true } });
+      // الفرعُ أوّلاً (`ق-١٤٤٠`): سندُ فرعٍ آخر 404 لا 409 الدفعةِ المقدَّمة التي تسمّي مستندَه — فهو غيرُ موجودٍ له.
+      const payment = await this.findVisible(tx, allowedBranchIds, id);
       // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.
       await this.assertNoPrepaymentInvoice(tx, id);
-      if (!payment) throw new NotFoundException(MSG.payment_not_found);
       // ⚖️ سندٌ له عكسٌ لا يُعاد توزيعُه (`ق-١١٩٨`/⑤ — مراجعةٌ خارجية): كان الفحصُ على «هو عكسٌ»
       //    وحدَه، فسندٌ عُكس كان يُعاد توزيعُه على فاتورةٍ أخرى — وعكسُه يحمل مرآةَ التوزيع
       //    القديم، فتُختم فاتورةٌ مسدَّدةً بمالٍ رُدّ. الفحصُ نفسُه الذي يحرس العكسَ الثاني.
@@ -411,13 +428,13 @@ export class PaymentsService {
    * **صندوقُه لا يُقاس هنا**: العكسُ مرآةُ سند القبض بصندوقه وفرعه كما هما، والأصلُ قيس صندوقُه عند إنشائه
    * (`ق-١٤٣٧`) — وقياسُه الآن يمنع تصحيحَ سندٍ نُقل حسابُه البنكيّ بعده للقادم.
    */
-  reverse(companyId: string, id: string, reason?: string, date?: string) {
+  reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-        const original = await tx.payment.findUnique({ where: { id }, include: { allocations: true, customer: { select: { name: true } } } });
+        // الفرعُ أوّلاً (`ق-١٤٤٠`): سندُ فرعٍ آخر 404 لا 409 الدفعةِ المقدَّمة أو العكسِ السابق — فهو غيرُ موجودٍ له.
+        const original = await this.findVisible(tx, allowedBranchIds, id);
         // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.
         await this.assertNoPrepaymentInvoice(tx, id);
-        if (!original) throw new NotFoundException(MSG.payment_not_found);
         assertReversible(original, await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
         const amount = round2(-Number(original.amount));

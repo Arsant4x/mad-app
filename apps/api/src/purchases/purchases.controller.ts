@@ -118,27 +118,27 @@ export class PurchasesController {
   @Get('attachments/:attachmentId/download-url')
   @RequiresAction('view')
   attachmentDownloadUrl(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
-    return this.attachments.downloadUrl(tenant.companyId, attachmentId);
+    return this.attachments.downloadUrl(tenant.companyId, tenant.allowedBranchIds, attachmentId);
   }
 
   @Delete('attachments/:attachmentId')
   @RequiresAction('delete')
   @HttpCode(204)
   removeAttachment(@CurrentTenant() tenant: TenantContext, @Param('attachmentId') attachmentId: string) {
-    return this.attachments.remove(tenant.companyId, attachmentId);
+    return this.attachments.remove(tenant.companyId, tenant.allowedBranchIds, attachmentId);
   }
 
   @Get(':purchaseId/attachments')
   @RequiresAction('view')
   listAttachments(@CurrentTenant() tenant: TenantContext, @Param('purchaseId') purchaseId: string) {
-    return this.attachments.list(tenant.companyId, purchaseId);
+    return this.attachments.list(tenant.companyId, tenant.allowedBranchIds, purchaseId);
   }
 
   @Post(':purchaseId/attachments')
   @RequiresAction('add')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_BYTES } }))
   addAttachment(@CurrentTenant() tenant: TenantContext, @Param('purchaseId') purchaseId: string, @UploadedFile() file: Express.Multer.File) {
-    return this.attachments.add(tenant.companyId, purchaseId, file);
+    return this.attachments.add(tenant.companyId, tenant.allowedBranchIds, purchaseId, file);
   }
 
   @Post()
@@ -150,13 +150,13 @@ export class PurchasesController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdatePurchaseDto) {
-    return this.purchasesService.update(tenant.companyId, id, dto);
+    return this.purchasesService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.purchasesService.remove(tenant.companyId, id);
+    return this.purchasesService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }

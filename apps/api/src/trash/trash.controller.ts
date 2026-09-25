@@ -26,7 +26,7 @@ export class TrashController {
   @Post(':entity/:id/restore')
   @RequiresAction('review')
   restore(@CurrentTenant() tenant: TenantContext, @Param('entity') entity: string, @Param('id') id: string) {
-    return this.trashService.restore(tenant.companyId, entity, id);
+    return this.trashService.restore(tenant.companyId, tenant.allowedBranchIds, entity, id);
   }
 
   /** Permanent, on explicit instruction — the one delete with no way back. */
@@ -34,6 +34,6 @@ export class TrashController {
   @HttpCode(204)
   @RequiresAction('delete')
   purge(@CurrentTenant() tenant: TenantContext, @Param('entity') entity: string, @Param('id') id: string) {
-    return this.trashService.purge(tenant.companyId, entity, id);
+    return this.trashService.purge(tenant.companyId, tenant.allowedBranchIds, entity, id);
   }
 }

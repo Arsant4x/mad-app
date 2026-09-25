@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import { branchFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG, formatMessage } from '../common/i18n/messages';
@@ -28,6 +29,14 @@ const TRASHED_ENTITIES = [
   { key: 'properties', label: 'العقارات', delegate: 'property', model: 'Property', nameField: 'name' },
   { key: 'units', label: 'الوحدات', delegate: 'unit', model: 'Unit', nameField: 'unitNo' },
 ] as const satisfies ReadonlyArray<{ key: string; label: string; delegate: string; model: Prisma.ModelName; nameField: string }>;
+
+/**
+ * كياناتُ السلّة التي تحمل عمودَ الفرع — **من المخطّط** (`Prisma.dmmf`) لا من قائمة (`ق-١٤٤٠`): اليومَ الموظّفون
+ * والبنوك، وكيانٌ يدخل السلّةَ غداً بفرعٍ يُحرَس بلا لمس هذا الموضع. وسائرُها للمنشأة كلِّها فلا مرشِّحَ عليها.
+ */
+const BRANCH_BEARING_MODELS: ReadonlySet<string> = new Set(
+  Prisma.dmmf.datamodel.models.filter((m) => m.fields.some((f) => f.name === 'branchId')).map((m) => m.name),
+);
 
 type DelegateLike = {
   findMany: (args: unknown) => Promise<Record<string, unknown>[]>;
@@ -65,6 +74,18 @@ export class TrashService {
     const found = TRASHED_ENTITIES.find((e) => e.key === key);
     if (!found) throw new NotFoundException(MSG.trash_entity_unknown);
     return found;
+  }
+
+  /**
+   * 🔴 **الصفُّ المحذوفُ بفروع الفاعل** (`ق-١٤٤٠`): كانت الاستعادةُ والمحوُ تقرآن بالمعرّف وحدَه، فموظّفٌ مقيَّدٌ بفرعٍ
+   * استعاد موظّفَ فرعٍ آخر وصندوقَه أو محاهما نهائياً. ⟸ ما يحمل الفرعَ يُقرأ بـ`branchFilter` (وما للمنشأة كلِّها
+   * `branchId: null` مرئيٌّ للجميع)، وصفُّ فرعٍ آخر **غيرُ موجودٍ له** (`404`) — قبل الحفظ النظاميّ وقبل أيّ كتابة.
+   */
+  private async findTrashedVisible(delegate: DelegateLike, model: Prisma.ModelName, allowedBranchIds: string[] | 'all', id: string) {
+    const scope = BRANCH_BEARING_MODELS.has(model) ? branchFilter(allowedBranchIds) : {};
+    const row = await delegate.findFirst({ where: { id, deletedAt: { not: null }, ...scope } });
+    if (!row) throw new NotFoundException(MSG.trash_item_not_found);
+    return row;
   }
 
   /**
@@ -111,12 +132,12 @@ export class TrashService {
 
   /** Puts a record back. Clearing the stamp is all it takes — nothing was ever
    * removed, which is the whole reason soft delete is worth the columns. */
-  restore(companyId: string, entityKey: string, id: string) {
+  restore(companyId: string, allowedBranchIds: string[] | 'all', entityKey: string, id: string) {
     const e = this.entity(entityKey);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const delegate = (tx as unknown as Record<string, DelegateLike>)[e.delegate];
-      const row = await delegate.findFirst({ where: { id, deletedAt: { not: null } } });
-      if (!row) throw new NotFoundException(MSG.trash_item_not_found);
+      // ق-١٤٤٠: صفُّ فرعٍ آخر غيرُ موجودٍ للفاعل — 404 لا 403، فلا يُستعاد ما لا يراه.
+      await this.findTrashedVisible(delegate, e.model, allowedBranchIds, id);
       await delegate.update({ where: { id }, data: { deletedAt: null } });
       return { restored: true, entity: e.key, id };
     });
@@ -126,12 +147,12 @@ export class TrashService {
    * Deletes for real, on the owner's explicit instruction — **إلا ما تحت الحفظ**: يُردّ `409`
    * مسمّىً بالأجل وبما يحفظه، لا خطأَ قاعدةٍ خاماً ولا محواً يجرّ سجلاتٍ معه.
    */
-  async purge(companyId: string, entityKey: string, id: string): Promise<void> {
+  async purge(companyId: string, allowedBranchIds: string[] | 'all', entityKey: string, id: string): Promise<void> {
     const e = this.entity(entityKey);
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const delegate = (tx as unknown as Record<string, DelegateLike>)[e.delegate];
-      const row = await delegate.findFirst({ where: { id, deletedAt: { not: null } } });
-      if (!row) throw new NotFoundException(MSG.trash_item_not_found);
+      // ق-١٤٤٠: صفُّ فرعٍ آخر غيرُ موجودٍ للفاعل — 404 قبل الحفظ النظاميّ (فلا يكشفه 409) وقبل المحو.
+      const row = await this.findTrashedVisible(delegate, e.model, allowedBranchIds, id);
       const ret = (await retentionOf(tx, e.model, [{ id, deletedAt: row.deletedAt as Date }])).get(id);
       if (ret?.retainedUntil && ret.retainedUntil > new Date()) {
         throw new ConflictException(formatMessage(MSG.trash_retained_by_law, { until: isoDay(ret.retainedUntil), by: ret.retainedBy.join(' · ') }));

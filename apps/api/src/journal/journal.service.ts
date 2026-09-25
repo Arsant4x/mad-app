@@ -102,10 +102,14 @@ export class JournalService {
    *
    * **فالحذفُ يُرفض دائماً** بمسمّاه، والمخرجُ `reverse()`. (والآليُّ كان مرفوضاً قبلُ
    * برسالته — تبقى رسالتُه لأنها تدلّ على مخرجه: المستندُ المصدر.)
+   *
+   * ⚠️ الفرعُ (`ق-١٤٤٠`): يُقرأ القيدُ بحقّ القارئ (`branchFilter`) **قبل** الرفض المسمّى — فرفضٌ `409`
+   * برقم قيدِ فرعٍ آخر أو بنوعه يُثبت وجودَ صفٍّ مخفيٍّ ويكشف رقمَه.
    */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.journalEntry.findUnique({ where: { id } });
+      // ق-١٤٤٠: قيدُ فرعٍ آخر غيرُ موجودٍ للفاعل — 404 كالمعرّف الذي لا صفَّ له، لا 409 يسمّيه.
+      const existing = await tx.journalEntry.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
       if (!existing) throw new NotFoundException(MSG.journal_entry_not_found);
       if (existing.auto) throw new ConflictException(MSG.journal_auto_entry_undeletable);
       throw new ConflictException(formatMessage(MSG.journal_posted_reverse_instead, { no: existing.no }));

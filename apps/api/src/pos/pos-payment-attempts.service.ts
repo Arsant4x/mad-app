@@ -352,7 +352,11 @@ export class PosPaymentAttemptsService {
   private async readOwn(tx: Tx, tenant: TenantContext, id: string): Promise<PosPaymentAttempt> {
     const attempt = await tx.posPaymentAttempt.findUnique({ where: { id } });
     if (!attempt) throw new NotFoundException(MSG.pos_attempt_not_found);
-    if (attempt.createdById !== tenant.profileId && tenant.actorType !== 'COMPANY') throw new ForbiddenException(MSG.pos_attempt_not_yours);
+    if (attempt.createdById !== tenant.profileId && tenant.actorType !== 'COMPANY') {
+      // ق-١٤٤٠: محاولةُ غيره على مناوبةٍ خارج فروعه لا وجودَ لها عنده — `404` (`readVisible`) قبل `403` الملكيّة (ومحاولتُه هو بعد نقله قرارٌ معلَّق للمالك لا يُمسّ).
+      await this.readVisible(tx, tenant, id);
+      throw new ForbiddenException(MSG.pos_attempt_not_yours);
+    }
     return attempt;
   }
 

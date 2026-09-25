@@ -286,6 +286,11 @@ export class PosService {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
       const shift = await tx.posShift.findUnique({ where: { id } });
       if (!shift) throw new NotFoundException(MSG.pos_shift_not_found);
+      if (shift.openedById !== tenant.profileId) {
+        // ق-١٤٤٠: مناوبةُ غيره خارج فروعه لا وجودَ لها عنده — `404` لا `403`، وقبل «مقفلة» فلا يُكشف وجودُها ولا حالُها (ومناوبتُه هو بعد نقله قرارٌ معلَّق للمالك لا يُمسّ).
+        const visible = await tx.posShift.findFirst({ where: { id, ...branchFilter(tenant.allowedBranchIds) }, select: { id: true } });
+        if (!visible) throw new NotFoundException(MSG.pos_shift_not_found);
+      }
       if (shift.status === 'CLOSED') throw new ConflictException(MSG.pos_shift_closed);
       // A cashier closes their own drawer; the owner can close anyone's
       // (an employee who left with a shift still open must not wedge it).

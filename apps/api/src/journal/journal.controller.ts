@@ -43,6 +43,6 @@ export class JournalController {
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.journalService.remove(tenant.companyId, id);
+    return this.journalService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }

@@ -29,7 +29,7 @@ export class QuotesController {
   @Get(':id')
   @RequiresAction('view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.quotesService.findOne(tenant.companyId, id);
+    return this.quotesService.findOne(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   @Post()
@@ -41,14 +41,14 @@ export class QuotesController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateQuoteDto) {
-    return this.quotesService.update(tenant.companyId, id, dto);
+    return this.quotesService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.quotesService.remove(tenant.companyId, id);
+    return this.quotesService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }
 
