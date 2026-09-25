@@ -8,7 +8,8 @@ import type { CreateBankDto, CreateCashDepositDto, CreateNetworkSettlementDto } 
  */
 export type { BankKind };
 /** ما يُختار لصفٍّ جديدٍ أو يُعلَن به القائم — القديمُ غيرُ المعلَن ليس خياراً. */
-export type DeclaredBankKind = Exclude<BankKind, 'LEGACY_UNDECLARED'>;
+/** ما يُعلَن عند الإنشاء — من جسم الطلب المولَّد (`CreateBankDto.kind`) لا اتّحاداً مكتوباً بيد: «غيرُ معلَن» ليس مدخلاً (`ق-١٤٣١`). */
+export type DeclaredBankKind = BankInput['kind'];
 export const BANK_KIND_LABEL: Record<BankKind, string> = {
   CASH_BOX: 'صندوقٌ نقديّ',
   BANK_ACCOUNT: 'حسابٌ بنكيّ',
