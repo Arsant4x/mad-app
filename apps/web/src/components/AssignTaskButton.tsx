@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createTask, type TaskAssigneeKind, type TaskPriority } from '../api/tasks';
 import { listCompanyUsers, type CompanyUser } from '../api/companyUsers';
+import type { ScreenKey } from '../api/templates';
 import { useAuth } from '../auth/AuthContext';
 import { usePermissions } from '../auth/PermissionsContext';
 import { apiErrorMessage } from '../lib/apiError';
@@ -42,7 +43,8 @@ function splitAssignee(value: string): { assigneeId: string; assigneeKind: TaskA
  * وإخفاء الزر هنا **عرضٌ لا منع**: يوفّر محاولةً ترفضها الخادم، والمنع
  * هناك لا هنا.
  */
-export function AssignTaskButton({ screen, entityId }: { screen: string; entityId: string }) {
+// الشاشةُ من القائمة المشتركة لا نصٌّ حرّ — وهي ما يقبله الخادمُ في `targetScreen` (`ق-١٤٠٤`).
+export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; entityId: string }) {
   const { can } = usePermissions();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);

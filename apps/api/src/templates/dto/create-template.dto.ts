@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { ArrayUnique, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import { ALLOWED_SCREENS } from '../screens';
 
@@ -10,6 +11,11 @@ export class CreateTemplateDto {
   @IsBoolean()
   isAllScreens?: boolean;
 
+  /**
+   * ⚠️ مُلحَقُ الوثيقة يقرأ `@IsIn` تعداداً **ويُسقط `each`** فيصف المصفوفةَ نصّاً واحداً — فالشكلُ يُعلَن
+   * هنا صراحةً، وفحصُ «حقلُ المصفوفة يُوصف مصفوفة» يمسك عودتَه (`ق-١٤٠٤`).
+   */
+  @ApiProperty({ enum: [...ALLOWED_SCREENS], isArray: true, required: false })
   @IsOptional()
   @IsArray()
   @ArrayUnique()

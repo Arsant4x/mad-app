@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
 import type { CompanyUserSettableStatus, CompanyUserStatus } from '@mad-app/shared/api/enums';
+import type { CreateCompanyUserDto } from '@mad-app/shared/api/requests';
 
 /**
  * حالةُ حساب الموظف **كما يحملها عمودُه** (`AccountStatus` — أربع قيم، ومنها `CLOSED`) — `ق-١٣٦٧`: كانت ثلاثاً تطابق حدَّ الإدخال
@@ -24,14 +25,7 @@ export interface CompanyUser {
   branches: { branchId: string }[];
 }
 
-export interface CompanyUserInput {
-  name: string;
-  username: string;
-  password: string;
-  permissionTemplateId: string;
-  /** الفروع التي يراها الموظف — فارغة/غائبة = بلا قيد (كل الفروع). */
-  branchIds?: string[];
-}
+export type CompanyUserInput = CreateCompanyUserDto;
 
 export const listCompanyUsers = () => apiClient.get<CompanyUser[]>('/company-users').then((r) => r.data);
 export const createCompanyUser = (dto: CompanyUserInput) => apiClient.post<CompanyUser>('/company-users', dto).then((r) => r.data);

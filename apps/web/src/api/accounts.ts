@@ -1,6 +1,7 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { AccountType } from '@mad-app/shared/api/enums';
+import type { CreateAccountDto } from '@mad-app/shared/api/requests';
 
 export type { AccountType };
 
@@ -17,13 +18,7 @@ export interface Account {
   balance: string;
 }
 
-export interface AccountInput {
-  code: string;
-  name: string;
-  type: AccountType;
-  openingBalance?: number;
-  openingDate?: string;
-}
+export type AccountInput = CreateAccountDto;
 
 export const listAccounts = () => apiClient.get<Account[]>('/accounts').then((r) => r.data);
 

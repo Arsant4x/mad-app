@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { CashDepositStatus, NetworkSettlementStatus } from '@mad-app/shared/api/enums';
+import type { CreateBankDto, CreateCashDepositDto, CreateNetworkSettlementDto } from '@mad-app/shared/api/requests';
 
 export interface Bank {
   archived: boolean;
@@ -12,14 +13,7 @@ export interface Bank {
   openingDate: string;
 }
 
-export interface BankInput {
-  name: string;
-  /** Omit for a company-wide record. */
-  branchId?: string;
-  iban?: string;
-  openingBalance?: number;
-  openingDate: string;
-}
+export type BankInput = CreateBankDto;
 
 /**
  * 🔴 `ق-١٣٨٤` — **الفرعُ يُحدَّد عند الإنشاء**: `UpdateBankDto` لا يقبل `branchId` (و`forbidNonWhitelisted` يردّ `400`)،
@@ -111,13 +105,7 @@ export interface CashDepositList {
   /** رصيدُ `1190` بالدفتر مقابل مجموع المستندات المفتوحة — والفرقُ يُعلَن لا يُصحَّح. */
   inTransit: { ledger: string; documents: string; matched: boolean };
 }
-export interface CashDepositInput {
-  drawerId: string;
-  bankId: string;
-  amount: number;
-  date: string;
-  memo?: string;
-}
+export type CashDepositInput = CreateCashDepositDto;
 export const listCashDeposits = (bankId?: string) =>
   apiClient.get<CashDepositList>('/banks/cash-deposits', { params: bankId ? { bankId } : undefined }).then((r) => r.data);
 export const createCashDeposit = (dto: CashDepositInput) =>
@@ -162,17 +150,7 @@ export interface OpenNetworkReceipts {
   gross: string;
   summary: NetworkTransitSummary;
 }
-export interface NetworkSettlementInput {
-  bankId: string;
-  date: string;
-  periodFrom: string;
-  periodTo: string;
-  feeAmount: number;
-  feeVatAmount: number;
-  branchId?: string;
-  memo?: string;
-  receiptIds?: string[];
-}
+export type NetworkSettlementInput = CreateNetworkSettlementDto;
 export const listNetworkSettlements = (bankId?: string) =>
   apiClient.get<NetworkSettlementList>('/banks/network-settlements', { params: bankId ? { bankId } : undefined }).then((r) => r.data);
 export const getOpenNetworkReceipts = (params: { from?: string; to?: string; branchId?: string }) =>

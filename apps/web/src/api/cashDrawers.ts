@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { CodeBandStatus } from './banks';
+import type { CreateCashDrawerDto } from '@mad-app/shared/api/requests';
 
 export interface CashDrawerAccount {
   id: string;
@@ -19,10 +20,7 @@ export interface CashDrawer {
   account: CashDrawerAccount;
 }
 
-export interface CashDrawerInput {
-  name: string;
-  branchId?: string;
-}
+export type CashDrawerInput = CreateCashDrawerDto;
 
 /** حسابُ الدرج يُنشأ في الخادم مع الدرج — ولا رمزَ يُرسَل من هنا (ق-٢٥٣ · ق-٢٦١). */
 export const listCashDrawers = () => apiClient.get<CashDrawer[]>('/cash-drawers').then((r) => r.data);

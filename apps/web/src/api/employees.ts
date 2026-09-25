@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { EmployeeStatus } from '@mad-app/shared/api/enums';
+import type { CreateEmployeeDto } from '@mad-app/shared/api/requests';
 
 export type { EmployeeStatus };
 
@@ -16,17 +17,7 @@ export interface Employee {
   status: EmployeeStatus;
 }
 
-export interface EmployeeInput {
-  fullName: string;
-  /** Omit for a company-wide record. */
-  branchId?: string;
-  jobTitle?: string;
-  department?: string;
-  hireDate: string;
-  baseSalary?: number;
-  phone?: string;
-  status?: EmployeeStatus;
-}
+export type EmployeeInput = CreateEmployeeDto;
 
 /**
  * 🔴 `ق-١٣٨٤` — **الفرعُ يُحدَّد عند الإنشاء**: `UpdateEmployeeDto` لا يقبل `branchId` (و`forbidNonWhitelisted` يردّ `400`)،

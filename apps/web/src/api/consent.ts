@@ -1,13 +1,8 @@
 import { apiClient } from './client';
+import type { UpsertSubProcessorDto } from '@mad-app/shared/api/requests';
 
 /** صفٌّ في قائمة المعالجين الفرعيين كما نُشر في النسخة — لقطةٌ لا مرجعٌ متحرّك. */
-export interface SubProcessorEntry {
-  name: string;
-  purpose: string;
-  /** الموقعُ الجغرافيّ — وهو ما يحكم النقلَ خارج المملكة (ق-٥٧٢). */
-  location: string;
-  dataCategories: string[];
-}
+export type SubProcessorEntry = UpsertSubProcessorDto;
 
 export interface ConsentVersion {
   version: number;

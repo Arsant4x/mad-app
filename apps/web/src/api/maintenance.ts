@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { MaintenancePriority, MaintenanceStatus } from '@mad-app/shared/api/enums';
+import type { CreateMaintenanceDto, UpdateMaintenanceDto } from '@mad-app/shared/api/requests';
 
 /** Urgent is a habitability/liability issue (a burst pipe, a failed lift), not
  * a mood — which is why it is ranked rather than left to a note. */
@@ -33,23 +34,9 @@ export interface MaintenanceRequest {
   notes: string | null;
 }
 
-export interface CreateMaintenanceInput {
-  propertyId: string;
-  unitId?: string;
-  title: string;
-  description?: string;
-  priority?: MaintenancePriority;
-  reportedBy?: string;
-  reportedAt: string;
-}
+export type CreateMaintenanceInput = CreateMaintenanceDto;
 
-export interface UpdateMaintenanceInput {
-  title?: string;
-  description?: string;
-  priority?: MaintenancePriority;
-  reportedBy?: string;
-  notes?: string;
-}
+export type UpdateMaintenanceInput = UpdateMaintenanceDto;
 
 export const listMaintenance = () => apiClient.get<MaintenanceRequest[]>('/maintenance').then((r) => r.data);
 export const createMaintenance = (dto: CreateMaintenanceInput) => apiClient.post<MaintenanceRequest>('/maintenance', dto).then((r) => r.data);

@@ -8,6 +8,8 @@
     ".": "./src/index.ts",
     "./permissions": "./src/permissions.ts",
     "./api/enums": "./src/api/enums.ts",
-    "./api/zatca-enums": "./src/api/zatca-enums.ts"
+    "./api/zatca-enums": "./src/api/zatca-enums.ts",
+    "./api/requests": "./src/api/requests.ts",
+    "./api/zatca-requests": "./src/api/zatca-requests.ts"
   }
 }

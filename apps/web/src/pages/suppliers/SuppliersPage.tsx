@@ -7,7 +7,7 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { SupplierPaymentModal } from './SupplierPaymentModal';
 import { SupplierNoteModal } from './SupplierNoteModal';
-import { PurchaseModal } from './PurchaseModal';
+import { PurchaseModal, type PurchaseFormData } from './PurchaseModal';
 import { PurchaseAttachmentsModal } from './PurchaseAttachmentsModal';
 import { purchaseStatus } from './purchaseStatus';
 import { SupplierDetailModal } from './SupplierDetailModal';
@@ -111,21 +111,7 @@ export function SuppliersPage() {
     await reload();
   }
 
-  async function handleSavePurchase(data: {
-    supplierId: string;
-    date: string;
-    dueDate?: string;
-    supplierRef?: string;
-    category?: string;
-    categoryCode?: string;
-    subtotal: number;
-    exempt: boolean;
-    excludeFromVat: boolean;
-    amortize: boolean;
-    amortizeMonths?: number;
-    incorpItem?: string;
-    branchId?: string;
-  }) {
+  async function handleSavePurchase(data: PurchaseFormData) {
     if (purchaseModal?.mode === 'edit') {
       await updatePurchase(purchaseModal.purchase.id, data);
     } else {

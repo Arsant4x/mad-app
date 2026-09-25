@@ -1,4 +1,5 @@
 import type { OpenAPIObject } from '@nestjs/swagger';
+import { stripCommentsAndStrings } from './source-scan.util';
 
 /**
  * **عقدُ الواجهة البرمجية كما يراه مستهلكٌ خارجيّ** (`ق-١٢٩١` · ي/⑫A2).
@@ -16,8 +17,10 @@ import type { OpenAPIObject } from '@nestjs/swagger';
  * **والمقارنةُ باتجاهٍ واحد**: الحذفُ والتغييرُ يُسقطان، **والإضافةُ تمرّ** — فمسارٌ
  * جديد أو حقلٌ اختياريّ جديد لا يكسر أحداً.
  *
- * ⚠️ **وحدٌّ معلَنٌ بقياس** (صُحّح `ق-١٣٦٩` — كان يقول «ولا مُلحَق» والمُلحَقُ مضبوط): لا `@ApiProperty`
- * في الشيفرة، **لكنّ مُلحَق `@nestjs/swagger` مضبوطٌ في `nest-cli.json`** (`classValidatorShim` · اللاحقة
+ * ⚠️ **وحدٌّ معلَنٌ بقياس** (صُحّح `ق-١٣٦٩` — كان يقول «ولا مُلحَق» والمُلحَقُ مضبوط): `@ApiProperty` لا يُكتب
+ * إلا حيث يقصر المُلحَقُ عن الوصف — **خمسةُ مواضع** (`ق-١٤٠٤` · ③: حالةُ الموظّف تعداداً في الصنفَين، وثلاثُ مصفوفاتٍ
+ * من `@IsIn(…, { each })` يصفها المُلحَقُ نصّاً واحداً — ويمسك عودتَها `arrayShapeProblems` أدناه)،
+ * **ومُلحَق `@nestjs/swagger` مضبوطٌ في `nest-cli.json`** (`classValidatorShim` · اللاحقة
  * `.dto.ts`) **ويعمل تحت `nest build` وحدَه** — فأجسامُ `DTO`ات تلك اللاحقة موصوفةٌ ومنها `requiredBody`
  * (اللقطة: `200` عمليةٍ بـ`448` حقلاً إلزامياً من `716`). **وما لا يُوصف**: الردود (لا عمليةَ بمخطّطِ ردٍّ
  * بحقول) و`DTO`اتٌ معرَّفةٌ خارج اللاحقة (ستّةُ مخطّطات طلبٍ فارغة — المسح `26` ج).
@@ -151,4 +154,56 @@ export function documentProblems(doc: OpenAPIObject, prefix: string): string[] {
     if (keys.length > 1) problems.push(`معرّفُ عمليةٍ مكرَّر: ${id} ⟵ ${keys.join(' · ')}`);
   }
   return problems;
+}
+
+/** نوعُ الخاصّية مصفوفةٌ في المصدر؟ (`T[]` · `Array<T>` · `ReadonlyArray<T>` — بعد نزع `| null` و`| undefined`). */
+function isArraySourceType(type: string): boolean {
+  const bare = type.replace(/\s*\|\s*(?:null|undefined)\b/g, '').trim();
+  return /\[\]$/.test(bare) || /^(?:Readonly)?Array</.test(bare);
+}
+
+/**
+ * ⚖️ **حقلُ المصفوفة في المصدر يُوصف مصفوفةً في الوثيقة** (`ق-١٤٠٤` · ③).
+ *
+ * المُلحَقُ يقرأ `@IsIn(…)` تعداداً **ويُسقط `each`** — فوصف ثلاثةَ حقولِ مصفوفةٍ (`allowedScreens` في صنفَي القالب ·
+ * `screens` في طلب الدعم) **نصّاً واحداً**، ولم يشكُ شيءٌ حتى وُلّدت أنواعُ الطلب منها. والوثيقةُ منشورةٌ لمستهلكٍ
+ * خارجيّ (مفاتيحُ الواجهة) — فهي تكذب عليه قبل أن تكذب على المولِّد.
+ *
+ * فيُقابَل **نوعُ الخاصّية في المصدر** (`.dto.ts`) **بمخطَّط صنفها**: كلُّ خاصّيةٍ نوعُها مصفوفة يجب أن تكون
+ * `type: array`. والقراءةُ بالسطر: الصنفُ من `class X` في أوّل السطر، والخاصّيةُ على مسافتين (`  name?: T[];`) — فسطرُ
+ * التعليق (`   * …`) لا يطابق. وصنفٌ لا مخطَّطَ له (ليس جسمَ طلب) **لا يُعدّ ولا يُحكم عليه**.
+ *
+ * **ويُعاد العددُ المقروء** — فالسكربتُ يُسقط فحصاً لم يقرأ شيئاً بدل أن يشهد بصفره (`§8.7`).
+ */
+export function arrayShapeProblems(doc: OpenAPIObject, sources: readonly string[]): { problems: string[]; arrays: number } {
+  const schemas = (doc.components?.schemas ?? {}) as Record<string, { properties?: Record<string, { type?: string; enum?: unknown[]; items?: unknown }> }>;
+  const problems: string[] = [];
+  let arrays = 0;
+  for (const text of sources) {
+    let owner: string | null = null;
+    // يُطابَق على الكود بلا تعليقٍ ولا نصّ (`§8.7` الوجه السادس عشر) — والأسطرُ محفوظةٌ عدداً، فيُطبع النوعُ من الأصل.
+    const original = text.split(/\r?\n/);
+    const code = stripCommentsAndStrings(text).split(/\r?\n/);
+    for (const [i, line] of code.entries()) {
+      const cls = /^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/.exec(line);
+      if (cls) {
+        owner = cls[1];
+        continue;
+      }
+      const prop = /^ {2}(?:readonly\s+)?(\w+)[?!]?:\s*(.+?);\s*$/.exec(line);
+      if (!owner || !prop || !isArraySourceType(prop[2])) continue;
+      prop[2] = /:\s*(.+?);\s*$/.exec(original[i])?.[1] ?? prop[2];
+      const schema = schemas[owner];
+      if (!schema) continue;
+      arrays++;
+      const described = schema.properties?.[prop[1]];
+      if (described?.type !== 'array' || !described.items) {
+        problems.push(`حقلُ مصفوفةٍ موصوفٌ غيرَ مصفوفة: ${owner}.${prop[1]} (${prop[2]}) ⟵ ${JSON.stringify(described ?? null).slice(0, 80)}`);
+      } else if (described.enum) {
+        // تعدادٌ على مستوى المصفوفة تناقض — مكانُه `items` (`arrayEnumsInItems` عند الباب).
+        problems.push(`مصفوفةٌ تحمل تعداداً على مستواها لا على عناصرها: ${owner}.${prop[1]}`);
+      }
+    }
+  }
+  return { problems, arrays };
 }

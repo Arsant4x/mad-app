@@ -2,6 +2,7 @@ import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Unit } from './units';
 import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
+import type { CancelContractDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
 
 export type { ContractStatus };
 export type { ContractCycle };
@@ -113,29 +114,11 @@ export interface ContractHandover {
   items: HandoverItem[];
 }
 
-export interface HandoverItemInput {
-  label: string;
-  condition: ItemCondition;
-  note?: string;
-}
+export type HandoverItemInput = HandoverItemDto;
 
-export interface CreateHandoverInput {
-  type: HandoverType;
-  date: string;
-  electricityMeter?: string;
-  waterMeter?: string;
-  notes?: string;
-  items: HandoverItemInput[];
-}
+export type CreateHandoverInput = CreateHandoverDto;
 
-export interface UpdateHandoverInput {
-  date?: string;
-  electricityMeter?: string;
-  waterMeter?: string;
-  notes?: string;
-  /** Replaces the list wholesale. */
-  items?: HandoverItemInput[];
-}
+export type UpdateHandoverInput = UpdateHandoverDto;
 
 /** Which way the key money went — it decides the accounting, not just the
  * label: received is income, paid is an asset the company bought. */
@@ -151,12 +134,7 @@ export interface ContractKeyMoney {
   journalEntryId: string | null;
 }
 
-export interface RecordKeyMoneyInput {
-  direction: KeyMoneyDirection;
-  amount: number;
-  paidAt: string;
-  note?: string;
-}
+export type RecordKeyMoneyInput = RecordKeyMoneyDto;
 
 export type { ClaimKind };
 export type { ClaimStatus };
@@ -175,12 +153,7 @@ export interface ContractClaim {
   settlementEntryId: string | null;
 }
 
-export interface CreateClaimInput {
-  kind: ClaimKind;
-  amount: number;
-  description: string;
-  issuedAt: string;
-}
+export type CreateClaimInput = CreateClaimDto;
 
 export type { DepositType };
 /** Who is holding the money. EJAR means the platform blocked it and the
@@ -214,72 +187,21 @@ export interface ContractDeposit {
   deductions: DepositDeduction[];
 }
 
-export interface RecordDepositInput {
-  type: DepositType;
-  holder?: DepositHolder;
-  amount: number;
-  receivedAt: string;
-  note?: string;
-}
+export type RecordDepositInput = RecordDepositDto;
 
-export interface SettleDepositInput {
-  settledAt: string;
-  deductions: { kind: DeductionKind; amount: number; reason: string }[];
-}
+export type SettleDepositInput = SettleDepositDto;
 
-export interface CreateContractInput {
-  unitId: string;
-  /** المستأجرُ عميلٌ يُختار بمعرّفه — لا اسمٌ ولا هاتفٌ يُرسَلان (ق-١٠٢٨/①). */
-  customerId: string;
-  value: number;
-  cycle: ContractCycle;
-  start: string;
-  end: string;
-  deposit?: number;
-  services?: string;
-  furnished?: Furnished;
-  ejarNo?: string;
-  /** إلزاميان — بلا قيمةٍ مسبقة في النموذج. */
-  classification: DeclaredClassification;
-  vatInclusion: DeclaredVatInclusion;
-  draft?: boolean;
-}
+export type CreateContractInput = CreateContractDto;
 
-export interface UpdateContractInput {
-  /** لعقدٍ قديم: إلزاميان قبل أي تعديل — الخادمُ يرفض بدونهما. */
-  classification?: DeclaredClassification;
-  vatInclusion?: DeclaredVatInclusion;
-  /** تغييرُ الطرف بمعرّفه — قبل أوّل ترحيلٍ فقط، والخادمُ يرفض بعده برسالةٍ تسمّي المخرج (ق-١٠٢٨/③). */
-  customerId?: string;
-  services?: string;
-  furnished?: Furnished;
-  ejarNo?: string;
-}
+export type UpdateContractInput = UpdateContractDto;
 
 /** How the early-termination settlement is worked out. The last two are
  * conveniences that compute an amount from the remaining installments. */
 export type { SettlementBasis };
 
-export interface CancelContractInput {
-  cancelDate: string;
-  cancelReason: string;
-  installmentDisposition: 'keep' | 'cancel';
-  /** تفصيل التسوية بنوداً — مجموعها يجب أن يساوي المبلغ، والخادم يدقّق. */
-  settlementLines?: { label: string; amount: number }[];
-  settlementBasis?: SettlementBasis;
-  settlementAmount?: number;
-  settlementInstallments?: number;
-}
+export type CancelContractInput = CancelContractDto;
 
-export interface RecordPaymentInput {
-  installmentId?: string;
-  date: string;
-  amount: number;
-  discount?: number;
-  method: RecordPaymentMethod;
-  bankId?: string;
-  notes?: string;
-}
+export type RecordPaymentInput = RecordPaymentDto;
 
 /** One row of the paginated list — the contract itself plus its unit, without
  * the sub-tree (installments, payments, deposits, …). The list endpoint went
@@ -294,12 +216,7 @@ export interface ContractListResponse {
   pageSize: number;
 }
 
-export interface ListContractsParams {
-  page?: number;
-  pageSize?: number;
-  /** Server-side — matches tenant name, contract no, or unit no. */
-  search?: string;
-}
+export type ListContractsParams = ContractsListQuery;
 
 export const listContracts = (params: ListContractsParams = {}) =>
   apiClient.get<ContractListResponse>('/contracts', { params }).then((r) => r.data);
@@ -308,20 +225,7 @@ export const createContract = (dto: CreateContractInput) => apiClient.post<Contr
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);
 export const cancelContract = (id: string, dto: CancelContractInput) => apiClient.post<Contract>(`/contracts/${id}/cancel`, dto).then((r) => r.data);
 export const recordPayment = (contractId: string, dto: RecordPaymentInput) => apiClient.post<RentPayment>(`/contracts/${contractId}/payments`, dto).then((r) => r.data);
-export interface RenewContractInput {
-  start: string;
-  end: string;
-  /** يُعلَنان للعقد الجديد — لا يرثهما الخادمُ من الأصل. */
-  classification: DeclaredClassification;
-  vatInclusion: DeclaredVatInclusion;
-  value?: number;
-  cycle?: ContractCycle;
-  /** Overrides the server's own numbering, for externally-issued references. */
-  no?: string;
-  ejarNo?: string;
-  /** Defaults to true server-side: a held deposit moves to the new lease. */
-  carryDeposits?: boolean;
-}
+export type RenewContractInput = RenewContractDto;
 
 export const renewContract = (id: string, dto: RenewContractInput) =>
   apiClient.post<Contract>(`/contracts/${id}/renew`, dto).then((r) => r.data);

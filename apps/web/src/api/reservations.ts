@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { Unit } from './units';
 import type { ReservationStatus } from '@mad-app/shared/api/enums';
+import type { CreateReservationDto } from '@mad-app/shared/api/requests';
 
 export type { ReservationStatus };
 
@@ -16,13 +17,7 @@ export interface Reservation {
   unit: Unit & { property: { name: string } };
 }
 
-export interface ReservationInput {
-  unitId: string;
-  name: string;
-  phone?: string;
-  deposit?: number;
-  expiryDate: string;
-}
+export type ReservationInput = CreateReservationDto;
 
 export const listReservations = () => apiClient.get<Reservation[]>('/reservations').then((r) => r.data);
 export const createReservation = (dto: ReservationInput) => apiClient.post<Reservation>('/reservations', dto).then((r) => r.data);

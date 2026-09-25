@@ -28,13 +28,14 @@ export class UpdateProductDto {
   @IsIn(['S', 'Z', 'E', 'O'])
   taxCategory?: 'S' | 'Z' | 'E' | 'O';
 
+  /** و`null` **يمحو** القائم (الخدمةُ تدمج ما لم يُرسَل مع القائم — فتغييرُ `Z` إلى `S` يحتاج `null` صريحاً) — معلَنٌ في النوع (`ق-١٤٠٤`). */
   @IsOptional()
   @IsString()
-  taxExemptionReasonCode?: string;
+  taxExemptionReasonCode?: string | null;
 
   @IsOptional()
   @IsString()
-  taxExemptionReason?: string;
+  taxExemptionReason?: string | null;
 
   @IsOptional()
   @IsNumber()

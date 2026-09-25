@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CreateWarrantyDto } from '@mad-app/shared/api/requests';
 
 /** سجل الضمان كما يعود من الخادم مع علاقاته المختصرة. */
 export interface WarrantyCore {
@@ -31,18 +32,7 @@ export interface Warranty extends WarrantyCore {
   expired: boolean;
 }
 
-export interface WarrantyInput {
-  subject: string;
-  propertyId: string;
-  unitId?: string;
-  provider: string;
-  supplierId?: string;
-  startDate: string;
-  endDate: string;
-  reference?: string;
-  terms?: string;
-  notes?: string;
-}
+export type WarrantyInput = CreateWarrantyDto;
 
 /** لا يقبل الخادم نقل الضمان إلى عقار آخر؛ والوحدة تقبل null لإرجاعه للعقار كله. */
 export type WarrantyUpdate = Partial<Omit<WarrantyInput, 'propertyId' | 'unitId'>> & { unitId?: string | null };

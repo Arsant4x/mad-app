@@ -29,15 +29,18 @@ export class CreateProductDto {
   @IsIn(['S', 'Z', 'E', 'O'])
   taxCategory?: 'S' | 'Z' | 'E' | 'O';
 
-  /** ⑧ رمزُ سبب الإعفاء من قائمة الهيئة — إلزاميٌّ لـ`Z`/`E`، ممنوعٌ على `S`؛ يُفحص في الخدمة من المصدر الواحد. */
+  /**
+   * ⑧ رمزُ سبب الإعفاء من قائمة الهيئة — إلزاميٌّ لـ`Z`/`E`، ممنوعٌ على `S`؛ يُفحص في الخدمة من المصدر الواحد.
+   * و`null` مقبولٌ (`@IsOptional` يتخطّاه) وتُرسله الواجهةُ لما لا ينطبق — فيُعلَن في النوع كي تقوله الوثيقةُ والمولَّد (`ق-١٤٠٤`).
+   */
   @IsOptional()
   @IsString()
-  taxExemptionReasonCode?: string;
+  taxExemptionReasonCode?: string | null;
 
-  /** ⑧ نصُّ سبب «خارج النطاق» لـ`O` وحدَه — ٣ إلى ٢٥٠ حرفاً بعد القصّ (`ق-١٢٢٢`). */
+  /** ⑧ نصُّ سبب «خارج النطاق» لـ`O` وحدَه — ٣ إلى ٢٥٠ حرفاً بعد القصّ (`ق-١٢٢٢`). و`null` كالرمز. */
   @IsOptional()
   @IsString()
-  taxExemptionReason?: string;
+  taxExemptionReason?: string | null;
 
   @IsOptional()
   @IsNumber()

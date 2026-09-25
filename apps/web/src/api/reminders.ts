@@ -1,21 +1,12 @@
 import { apiClient } from './client';
 import type { ReminderChannel } from '@mad-app/shared/api/enums';
+import type { UpdateReminderPolicyDto } from '@mad-app/shared/api/requests';
 
 /** How the reminder actually reached the tenant. Recorded because no messaging
  * provider is wired up — the user copies the text and sends it themselves. */
 export type { ReminderChannel };
 
-export interface ReminderPolicy {
-  enabled: boolean;
-  /** Days of notice before the due date. 0 = on the day. */
-  daysBefore: number;
-  /** How long before the same tenant may be chased again. */
-  repeatEveryDays: number;
-  /** Days overdue before the arrear is raised to the manager. Null = off. */
-  escalateAfterDays: number | null;
-  /** Which company user receives escalations. Null = the account owner. */
-  escalateToUserId: string | null;
-}
+export type ReminderPolicy = UpdateReminderPolicyDto;
 
 export interface DueReminder {
   installmentId: string;

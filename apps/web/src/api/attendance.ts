@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { AttendanceStatus } from '@mad-app/shared/api/enums';
+import type { RecordAttendanceDto } from '@mad-app/shared/api/requests';
 
 export type { AttendanceStatus };
 
@@ -14,13 +15,7 @@ export interface AttendanceRecord {
   employee: { id: string; fullName: string };
 }
 
-export interface RecordAttendanceInput {
-  employeeId: string;
-  date: string;
-  status?: AttendanceStatus;
-  checkIn?: string;
-  notes?: string;
-}
+export type RecordAttendanceInput = RecordAttendanceDto;
 
 export const listAttendance = (date?: string, employeeId?: string) =>
   apiClient

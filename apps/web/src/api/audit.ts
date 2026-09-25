@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { AuditListQuery } from '@mad-app/shared/api/requests';
 
 export interface AuditEntry {
   id: string;
@@ -16,14 +17,7 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-export interface AuditFilters {
-  actorId?: string;
-  screen?: string;
-  entityId?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-}
+export type AuditFilters = AuditListQuery;
 
 export const listAuditLog = (filters: AuditFilters = {}) =>
   apiClient

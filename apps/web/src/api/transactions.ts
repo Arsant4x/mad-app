@@ -1,5 +1,6 @@
 import type { Bank } from './banks';
 import { apiClient } from './client';
+import type { CreateTransactionDto } from '@mad-app/shared/api/requests';
 
 export interface BankTx {
   id: string;
@@ -14,15 +15,7 @@ export interface BankTx {
   entryNo: string | null;
 }
 
-export interface TransactionInput {
-  bankId: string;
-  /** Omit for a company-wide record. */
-  branchId?: string;
-  date: string;
-  description: string;
-  amount: number;
-  source?: string;
-}
+export type TransactionInput = CreateTransactionDto;
 
 export interface BankTxListResponse {
   items: BankTx[];

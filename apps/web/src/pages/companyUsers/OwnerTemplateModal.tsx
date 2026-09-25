@@ -4,6 +4,7 @@ import {
   ALLOWED_SCREENS,
   SCREEN_ACTIONS,
   SCREEN_LABELS,
+  isScreenKey,
   type PermissionTemplate,
   type ScreenActionMap,
   type TemplateInput,
@@ -82,7 +83,7 @@ export function OwnerTemplateModal({
 
     setSaving(true);
     try {
-      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: screens, screenActions: actions });
+      await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: screens.filter(isScreenKey), screenActions: actions });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
       setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ النموذج'));

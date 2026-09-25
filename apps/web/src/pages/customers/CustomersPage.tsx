@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createCustomer, CUSTOMER_KIND_LABEL, deleteCustomer, listCustomers, setCustomerArchived, updateCustomer, type Customer, type CustomerInput } from '../../api/customers';
+import {
+  createCustomer,
+  CUSTOMER_KIND_LABEL,
+  deleteCustomer,
+  listCustomers,
+  setCustomerArchived,
+  updateCustomer,
+  type Customer,
+  type CustomerInput,
+  type CustomerUpdateInput,
+} from '../../api/customers';
 import { listInvoices, type Invoice } from '../../api/invoices';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -41,12 +51,15 @@ export function CustomersPage() {
     return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.vatNumber ?? '').includes(q) || (c.phone ?? '').includes(q));
   }, [customers, search]);
 
-  async function handleSave(data: CustomerInput) {
-    if (modal?.mode === 'edit') {
-      await updateCustomer(modal.customer.id, data);
-    } else {
-      await createCustomer(data);
-    }
+  // الإنشاءُ والتعديلُ بنوعَيهما في الخادم — فلكلٍّ معالجُه ولا تحويلَ بينهما (`ق-١٤٠٤`).
+  async function handleCreate(data: CustomerInput) {
+    await createCustomer(data);
+    setModal(null);
+    await reload();
+  }
+
+  async function handleUpdate(id: string, data: CustomerUpdateInput) {
+    await updateCustomer(id, data);
     setModal(null);
     await reload();
   }
@@ -155,7 +168,10 @@ export function CustomersPage() {
         </table>
       </div>
 
-      {modal && <CustomerModal editing={modal.mode === 'edit' ? modal.customer : null} onCancel={() => setModal(null)} onSave={handleSave} />}
+      {modal?.mode === 'edit' && (
+        <CustomerModal editing={modal.customer} onCancel={() => setModal(null)} onSave={(data) => handleUpdate(modal.customer.id, data)} />
+      )}
+      {modal?.mode === 'create' && <CustomerModal editing={null} onCancel={() => setModal(null)} onSave={handleCreate} />}
 
       {detailFor && <CustomerDetailModal customer={detailFor} invoices={invoices} onClose={() => setDetailFor(null)} />}
 

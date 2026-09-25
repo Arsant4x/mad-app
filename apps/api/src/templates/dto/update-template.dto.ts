@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { ArrayUnique, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 import { ALLOWED_SCREENS } from '../screens';
 
@@ -11,6 +12,8 @@ export class UpdateTemplateDto {
   @IsBoolean()
   isAllScreens?: boolean;
 
+  /** ⚠️ الشكلُ معلَنٌ صراحةً — المُلحَقُ يُسقط `each` من `@IsIn` (انظر `CreateTemplateDto` · `ق-١٤٠٤`). */
+  @ApiProperty({ enum: [...ALLOWED_SCREENS], isArray: true, required: false })
   @IsOptional()
   @IsArray()
   @ArrayUnique()

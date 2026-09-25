@@ -2,6 +2,7 @@ import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { SupplierPaymentInputMethod, SupplierPaymentMethod } from '@mad-app/shared/api/enums';
+import type { CreateSupplierPaymentDto, SupplierAllocationDto } from '@mad-app/shared/api/requests';
 
 /**
  * طريقةُ سند الصرف **كما يحملها عمودُه** (`PaymentMethod` — ومنها `CARD`) — `ق-١٣٦٧`: العمودُ التعدادُ المشترك ولا قيدَ فيه يمنع
@@ -59,24 +60,9 @@ export interface OpenPurchase {
   remaining: MoneyText;
 }
 
-export interface SupplierAllocationInput {
-  purchaseId: string;
-  amount: number;
-}
+export type SupplierAllocationInput = SupplierAllocationDto;
 
-export interface SupplierPaymentInput {
-  supplierId: string;
-  branchId?: string;
-  date: string;
-  amount: number;
-  method: SupplierPaymentInputMethod;
-  bankId?: string;
-  reference?: string;
-  notes?: string;
-  currency?: string;
-  exchangeRate?: number;
-  allocations?: SupplierAllocationInput[];
-}
+export type SupplierPaymentInput = CreateSupplierPaymentDto;
 
 export const listSupplierPayments = (supplierId?: string) =>
   apiClient.get<SupplierPayment[]>('/supplier-payments', { params: supplierId ? { supplierId } : {} }).then((r) => r.data);

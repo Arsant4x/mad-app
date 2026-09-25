@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Account } from './accounts';
+import type { CreateJournalEntryDto, JournalLineDto, JournalListQuery } from '@mad-app/shared/api/requests';
 
 export interface JournalLine {
   id: string;
@@ -23,17 +24,9 @@ export interface JournalEntry {
   reversalOf: { id: string; no: string } | null;
 }
 
-export interface JournalLineInput {
-  accountId: string;
-  debit: number;
-  credit: number;
-}
+export type JournalLineInput = JournalLineDto;
 
-export interface CreateJournalEntryInput {
-  date: string;
-  memo: string;
-  lines: JournalLineInput[];
-}
+export type CreateJournalEntryInput = CreateJournalEntryDto;
 
 export interface JournalListResponse {
   items: JournalEntry[];
@@ -42,12 +35,7 @@ export interface JournalListResponse {
   pageSize: number;
 }
 
-export interface ListJournalParams {
-  page?: number;
-  pageSize?: number;
-  /** Server-side — matches memo, entry no, or a line's account code. */
-  search?: string;
-}
+export type ListJournalParams = JournalListQuery;
 
 export const listJournalEntries = (params: ListJournalParams = {}) =>
   apiClient.get<JournalListResponse>('/journal', { params }).then((r) => r.data);

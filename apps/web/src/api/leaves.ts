@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { LeaveStatus } from '@mad-app/shared/api/enums';
+import type { CreateLeaveRequestDto, CreateLeaveTypeDto } from '@mad-app/shared/api/requests';
 
 export interface LeaveType {
   id: string;
@@ -8,11 +9,7 @@ export interface LeaveType {
   paid: boolean;
 }
 
-export interface LeaveTypeInput {
-  name: string;
-  annualDays?: number;
-  paid?: boolean;
-}
+export type LeaveTypeInput = CreateLeaveTypeDto;
 
 export type { LeaveStatus };
 
@@ -35,13 +32,7 @@ export interface LeaveRequest {
   leaveType: { id: string; name: string; paid: boolean; annualDays: number };
 }
 
-export interface LeaveRequestInput {
-  employeeId: string;
-  leaveTypeId: string;
-  startDate: string;
-  endDate: string;
-  reason?: string;
-}
+export type LeaveRequestInput = CreateLeaveRequestDto;
 
 export interface LeaveBalance {
   year: number;

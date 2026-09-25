@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { FiscalPeriodStatus } from '@mad-app/shared/api/enums';
+import type { CreateFiscalYearDto } from '@mad-app/shared/api/requests';
 
 export type { FiscalPeriodStatus };
 
@@ -20,11 +21,7 @@ export interface FiscalYear {
   periods: FiscalPeriod[];
 }
 
-export interface FiscalYearInput {
-  name: string;
-  start: string;
-  end: string;
-}
+export type FiscalYearInput = CreateFiscalYearDto;
 
 export const getFiscalYears = () => apiClient.get<FiscalYear[]>('/fiscal-years').then((r) => r.data);
 export const createFiscalYear = (dto: FiscalYearInput) => apiClient.post<FiscalYear>('/fiscal-years', dto).then((r) => r.data);

@@ -1,5 +1,6 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import type { CreateSupplierDto } from '@mad-app/shared/api/requests';
 
 export interface Supplier {
   archived: boolean;
@@ -10,12 +11,7 @@ export interface Supplier {
   category: string | null;
 }
 
-export interface SupplierInput {
-  name: string;
-  vatNumber?: string;
-  phone?: string;
-  category?: string;
-}
+export type SupplierInput = CreateSupplierDto;
 
 export const listSuppliers = (includeArchived = false) => apiClient.get<Supplier[]>('/suppliers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createSupplier = (dto: SupplierInput) => apiClient.post<Supplier>('/suppliers', dto).then((r) => r.data);

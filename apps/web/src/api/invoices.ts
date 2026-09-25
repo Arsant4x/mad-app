@@ -1,9 +1,10 @@
 import { apiClient } from './client';
 import type { Customer } from './customers';
 import type { MoneyText } from '../lib/money';
-import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
+import type { TaxCategory } from '../lib/vat';
 import type { InvoiceDocType, InvoiceStatus } from '@mad-app/shared/api/enums';
 import type { ZatcaInvoiceStatus } from '@mad-app/shared/api/zatca-enums';
+import type { CreateCreditNoteDto, CreateDebitNoteDto, CreateInvoiceDto, InvoiceLineDto, UpdateInvoiceDto } from '@mad-app/shared/api/requests';
 
 export type { Customer } from './customers';
 
@@ -93,39 +94,9 @@ export interface Invoice {
   lines: InvoiceLine[];
 }
 
-export interface InvoiceLineInput {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  /** ④B1 — خصمٌ على السطر مبلغاً (≥ 0 ولا يفوق الكمية × السعر — الخادمُ يرفض مسمّىً). */
-  discount?: number;
-  /** ⑧ الفئةُ والسبب لسطرٍ بلا صنف — يُلزَم بهما (`ق-١٢١١`/③)؛ والنسبةُ يشتقّها الخادم ولا تُرسَل. */
-  taxCategory: DeclarableTaxCategory;
-  taxExemptionReasonCode?: string;
-  taxExemptionReason?: string;
-}
+export type InvoiceLineInput = InvoiceLineDto;
 
-export interface CreateInvoiceInput {
-  customerId: string;
-  issueDate: string;
-  /** لحظةُ الإصدار عند الجهاز وانحرافُه — يُرسَلان معاً حين يكون التاريخ اليوم (ق-١٨٥). */
-  issuedAt?: string;
-  issuedOffsetMin?: number;
-  dueDate: string;
-  notes?: string;
-  /** Omit for a company-wide invoice; the server rejects a branch the signed-in
-   * user isn't allowed to write to. */
-  branchId?: string;
-  lines: InvoiceLineInput[];
-  /**
-   * ⚖️ **تصريحُ تجاوز حدّ الائتمان** — **لا يُرسَل إلا بعد رفضٍ قرأه التاجر**
-   * (`ق-٣٣٩`). والخادمُ يتحقّق أن صاحبَه يملك صلاحية الاعتماد، **ويُخزّن
-   * تجاوزَه على الفاتورة** ويكتب حدثاً باسمه في سجل التدقيق.
-   */
-  creditOverride?: boolean;
-  /** ④A1: دفعاتٌ مقدَّمة (386) للعميل تُطبَّق كاملةً على هذه الفاتورة — التخصيصُ وقيدُ الإقفال ومرجعُ المستند في الخادم. */
-  prepaymentInvoiceIds?: string[];
-}
+export type CreateInvoiceInput = CreateInvoiceDto;
 
 /** ④A1: مستندُ دفعةٍ مقدَّمة معلَّق (لم يُطبَّق) كما يقرؤه الخادم — مالٌ نصّاً بخانتين. */
 export interface OpenPrepayment {
@@ -153,17 +124,9 @@ export const CREDIT_LIMIT_EXCEEDED = 'CREDIT_LIMIT_EXCEEDED';
  * ⚖️ **وما يقبله `UpdateInvoiceDto` وحدَه** (`ق-١٣٨٤`): لا `issuedAt` ولا `issuedOffsetMin` ولا `creditOverride` ولا `prepaymentInvoiceIds` —
  * كانت تُورث من نوع الإنشاء فيُردّ بها `400`.
  */
-export type UpdateInvoiceInput = Partial<Pick<CreateInvoiceInput, 'customerId' | 'issueDate' | 'dueDate' | 'notes' | 'branchId' | 'lines'>>;
+export type UpdateInvoiceInput = UpdateInvoiceDto;
 
-export interface CreateCreditNoteInput {
-  /** Required — ZATCA rejects a credit note without its reason. */
-  reason: string;
-  /** The user's local calendar date — the server clock is UTC, so omitting
-   * this can stamp a late-night note with yesterday's date. */
-  issueDate?: string;
-  /** Omit for a full credit of the original invoice. */
-  lines?: InvoiceLineInput[];
-}
+export type CreateCreditNoteInput = CreateCreditNoteDto;
 
 export const listInvoices = () => apiClient.get<Invoice[]>('/invoices').then((r) => r.data);
 /** ④A1: الدفعاتُ المقدَّمة المعلَّقة لعميل — ما يعرضه بنّاءُ الفاتورة للتطبيق. */
@@ -173,13 +136,7 @@ export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice
 export const updateInvoice = (id: string, dto: UpdateInvoiceInput) => apiClient.patch<Invoice>(`/invoices/${id}`, dto).then((r) => r.data);
 export const issueCreditNote = (invoiceId: string, dto: CreateCreditNoteInput) => apiClient.post<Invoice>(`/invoices/${invoiceId}/credit-note`, dto).then((r) => r.data);
 
-export interface CreateDebitNoteInput {
-  reason: string;
-  issueDate?: string;
-  /** Required — a debit note bills specific additional amounts; there is no
-   * full-copy default (that would be accidental double-billing). */
-  lines: InvoiceLineInput[];
-}
+export type CreateDebitNoteInput = CreateDebitNoteDto;
 
 /** بدلٌ عن مردودة (ق-٩٥٨): مستندٌ جديدٌ بعدّادٍ وتجزئةٍ جديدَين، والمردودةُ تُغلق ولا تُمسّ؛ يُرسَل معه ساعةُ الجهاز كما في الإنشاء. */
 export const issueReplacement = (invoiceId: string, dto: { issuedAt?: string; issuedOffsetMin?: number } = {}) =>

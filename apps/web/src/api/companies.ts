@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { PermissionTemplate } from './templates';
 import type { CompanyStatus } from '@mad-app/shared/api/enums';
+import type { CreateCompanyDto } from '@mad-app/shared/api/requests';
 
 export type { CompanyStatus };
 
@@ -15,14 +16,7 @@ export interface Company {
   permissionTemplate: PermissionTemplate;
 }
 
-export interface CompanyInput {
-  orgName: string;
-  username: string;
-  password: string;
-  permissionTemplateId: string;
-  subStart?: string;
-  subEnd?: string;
-}
+export type CompanyInput = CreateCompanyDto;
 
 export const listCompanies = () => apiClient.get<Company[]>('/companies').then((r) => r.data);
 export const createCompany = (dto: CompanyInput) => apiClient.post<Company>('/companies', dto).then((r) => r.data);

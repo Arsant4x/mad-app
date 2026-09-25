@@ -1,4 +1,5 @@
 import { EmployeeStatus } from '@prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class UpdateEmployeeDto {
@@ -27,6 +28,8 @@ export class UpdateEmployeeDto {
   @IsString()
   phone?: string;
 
+  // ③ (`ق-١٤٠٤`): كالإنشاء — تعدادٌ صريحٌ في الوثيقة لا «كائن».
+  @ApiProperty({ enum: EmployeeStatus, required: false })
   @IsOptional()
   @IsEnum(EmployeeStatus)
   status?: EmployeeStatus;

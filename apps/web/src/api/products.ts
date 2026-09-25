@@ -1,5 +1,6 @@
 import { apiClient } from './client';
-import type { DeclarableTaxCategory, TaxCategory } from '../lib/vat';
+import type { TaxCategory } from '../lib/vat';
+import type { CreateProductDto } from '@mad-app/shared/api/requests';
 
 export interface Product {
   archived: boolean;
@@ -25,21 +26,7 @@ export interface Product {
   barcode: string | null;
 }
 
-export interface ProductInput {
-  name: string;
-  sku?: string;
-  category?: string;
-  unitCode?: string;
-  expiryTracked?: boolean;
-  /** ⑧ الفئةُ والسبب — إلزاميّان عند الإنشاء بقواعد الخادم؛ والقائمُ يُعلن من البطاقة. */
-  taxCategory?: DeclarableTaxCategory;
-  taxExemptionReasonCode?: string | null;
-  taxExemptionReason?: string | null;
-  price?: number;
-  cost?: number;
-  minStock?: number;
-  barcode?: string;
-}
+export type ProductInput = CreateProductDto;
 
 export const listProducts = (includeArchived = false) => apiClient.get<Product[]>('/products', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 export const createProduct = (dto: ProductInput) => apiClient.post<Product>('/products', dto).then((r) => r.data);
