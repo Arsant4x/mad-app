@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiCreatedResponse, ApiExtraModels, ApiOkResponse, getSchemaPath } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
@@ -16,6 +17,22 @@ import {
   ResolvePaymentAttemptWithEvidenceDto,
   SyncPosSaleDto,
 } from './dto/pos.dto';
+import {
+  PagedPosShiftResponse,
+  PosCardVerificationListResponse,
+  PosClosedShiftResponse,
+  PosIncidentsResponse,
+  PosOpenPaymentAttemptResponse,
+  PosPaymentAttemptResponse,
+  PosPaymentAttemptWithSaleResponse,
+  PosPaymentModeResponse,
+  PosSaleResponse,
+  PosShiftResponse,
+  PosShiftWithTotalsResponse,
+  PosStockDeductedResponse,
+  PosStockSkippedResponse,
+  PosSyncedSaleResponse,
+} from './dto/pos-responses.dto';
 import { PosCardVerificationsService } from './pos-card-verifications.service';
 import { PosPaymentAttemptsService } from './pos-payment-attempts.service';
 import { PosService } from './pos.service';
@@ -24,10 +41,14 @@ import { PosService } from './pos.service';
  * شاشة الكاشير — actor: the cashier employee (or the owner), gated by the
  * `pos` screen the owner grants through permission templates. Ringing a sale
  * is `record`; closing a drawer is `review` (it approves the count).
+ *
+ * ⚖️ **كلُّ مسارٍ يعلن ردَّه صنفاً مسمّىً** (`ق-١٤٣٨` · خطّةُ الأنواع ④) — `dto/pos-responses.dto.ts`، ويطابقه حارسُ الصدق الحيّ.
+ * والأصنافُ المشار إليها بـ`getSchemaPath` (القائمةُ والمناوبةُ الحالية وفرعا الخصم) تُسجَّل هنا كي توجد في الوثيقة.
  */
 @Controller('pos')
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('pos')
+@ApiExtraModels(PosShiftWithTotalsResponse, PagedPosShiftResponse, PosStockDeductedResponse, PosStockSkippedResponse)
 export class PosController {
   constructor(
     private readonly posService: PosService,
@@ -36,14 +57,20 @@ export class PosController {
     private readonly integrations: IntegrationsService,
   ) {}
 
+  // `pagedFindMany`: مصفوفةٌ بلا `?page`، ومغلَّفٌ مرقَّمٌ به — فالردُّ أحدُهما.
   @Get('shifts')
   @RequiresAction('view')
+  @ApiOkResponse({
+    schema: { oneOf: [{ type: 'array', items: { $ref: getSchemaPath(PosShiftWithTotalsResponse) } }, { $ref: getSchemaPath(PagedPosShiftResponse) }] },
+  })
   listShifts(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
     return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
+  // `null` بلا مناوبةٍ مفتوحة — و`Nest` يرسله جسماً فارغاً (`ExpressAdapter.reply`)؛ يُعلَن فراغاً والحارسُ الحيّ يحسم قراءتَه.
   @Get('shifts/current')
   @RequiresAction('view')
+  @ApiOkResponse({ schema: { allOf: [{ $ref: getSchemaPath(PosShiftWithTotalsResponse) }], nullable: true } })
   currentShift(@CurrentTenant() tenant: TenantContext) {
     return this.posService.currentShift(tenant);
   }
@@ -51,18 +78,21 @@ export class PosController {
   /** وقائعُ الانقطاع المستنتَجة — بمدّتها وعدد فواتيرها وحدّ استنتاجها (`ق-١٩٢`/ج · `ق-٢٠١`). */
   @Get('incidents')
   @RequiresAction('view')
+  @ApiOkResponse({ type: PosIncidentsResponse })
   incidents(@CurrentTenant() tenant: TenantContext) {
     return this.posService.listIncidents(tenant.companyId);
   }
 
   @Post('shifts')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosShiftResponse })
   openShift(@CurrentTenant() tenant: TenantContext, @Body() dto: OpenShiftDto) {
     return this.posService.openShift(tenant, dto);
   }
 
   @Post('shifts/:id/close')
   @RequiresAction('review')
+  @ApiCreatedResponse({ type: PosClosedShiftResponse })
   closeShift(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseShiftDto) {
     return this.posService.closeShift(tenant, id, dto);
   }
@@ -70,12 +100,14 @@ export class PosController {
   /** مزامنة مبيعات الأوفلاين — idempotent: التكرار يعيد نفس الفاتورة. */
   @Post('sales/sync')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosSyncedSaleResponse })
   syncSale(@CurrentTenant() tenant: TenantContext, @Body() dto: SyncPosSaleDto) {
     return this.posService.syncSale(tenant, dto);
   }
 
   @Post('sales')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosSaleResponse })
   createSale(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosSaleDto) {
     return this.posService.createSale(tenant, dto);
   }
@@ -85,6 +117,7 @@ export class PosController {
   /** أفعّالٌ ربطُ بوابة الدفع، وبأيّ مزوّدٍ ومهلة — تقرؤه شاشةُ الكاشير لتختار المسار (بلا مفاتيح). */
   @Get('payment-mode')
   @RequiresAction('view')
+  @ApiOkResponse({ type: PosPaymentModeResponse })
   paymentMode(@CurrentTenant() tenant: TenantContext) {
     return this.integrations.gatewayMode(tenant.companyId);
   }
@@ -92,6 +125,7 @@ export class PosController {
   /** إنشاءُ المحاولة — تحقّقُ البيع ولقطتُه **بلا شحنٍ ولا فاتورة**؛ وإعادتُه بالمعرّف نفسِه تعيدها نفسَها. */
   @Post('payment-attempts')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptResponse })
   createAttempt(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosPaymentAttemptDto) {
     return this.attempts.create(tenant, dto);
   }
@@ -99,12 +133,14 @@ export class PosController {
   /** المحاولاتُ المفتوحة (لم تُرسل · تُشحن · معلّقة · مقبولةٌ لم تكتمل) — مرشَّحةً بفروع القارئ. */
   @Get('payment-attempts')
   @RequiresAction('view')
+  @ApiOkResponse({ type: PosOpenPaymentAttemptResponse, isArray: true })
   listAttempts(@CurrentTenant() tenant: TenantContext) {
     return this.attempts.listOpen(tenant);
   }
 
   @Get('payment-attempts/:id')
   @RequiresAction('view')
+  @ApiOkResponse({ type: PosPaymentAttemptWithSaleResponse })
   viewAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.view(tenant, id);
   }
@@ -112,6 +148,7 @@ export class PosController {
   /** الشحنُ خارج كلِّ معاملة بمهلة المحوّل — قُبل ⟸ فاتورة · رُفض ⟸ لا شيء · لا جواب ⟸ معلّقة. */
   @Post('payment-attempts/:id/charge')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
   chargeAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.charge(tenant, id);
   }
@@ -119,6 +156,7 @@ export class PosController {
   /** الحسمُ بجواب المزوّد بالمرجع (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً») — يطلبه الكاشير ويكنسه النظام. */
   @Post('payment-attempts/:id/resolve')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
   resolveAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.resolve(tenant, id);
   }
@@ -126,6 +164,7 @@ export class PosController {
   /** ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — **لصاحب صلاحية المراجعة** (`ق-١٣٩٩`)؛ ولا يُعدّ نهائياً حتى تطابقه التسوية. */
   @Post('payment-attempts/:id/resolve-with-evidence')
   @RequiresAction('review')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
   resolveAttemptWithEvidence(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ResolvePaymentAttemptWithEvidenceDto) {
     return this.attempts.resolveWithEvidence(tenant, id, dto);
   }
@@ -133,6 +172,7 @@ export class PosController {
   /** الإلغاءُ قبل الإرسال وحدَه. */
   @Post('payment-attempts/:id/cancel')
   @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
   cancelAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.attempts.cancel(tenant, id);
   }
@@ -140,6 +180,7 @@ export class PosController {
   /** ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة (`ق-١٣٩٧`/٢–٣) — باسم الكاشير وبحال المطابقة ومهلة التسوية، **للمراجعة**. */
   @Get('card-verifications')
   @RequiresAction('review')
+  @ApiOkResponse({ type: PosCardVerificationListResponse })
   cardVerifications(@CurrentTenant() tenant: TenantContext, @Query() query: CardVerificationsQueryDto) {
     return this.verifications.list(tenant, query.state ?? 'open');
   }
