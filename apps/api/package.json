@@ -19,7 +19,8 @@
     "seed": "ts-node prisma/seed.ts",
     "test:clean": "node scripts/test-clean.mjs",
     "openapi:check": "nest build && ts-node scripts/openapi-snapshot.ts --check",
-    "openapi:snapshot": "nest build && ts-node scripts/openapi-snapshot.ts --write"
+    "openapi:snapshot": "nest build && ts-node scripts/openapi-snapshot.ts --write",
+    "response:truth": "nest build && ts-node scripts/response-truth.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

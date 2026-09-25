@@ -43,8 +43,48 @@ interface DistExports {
   documentProblems: (doc: OpenAPIObject, prefix: string) => string[];
   arrayShapeProblems: (doc: OpenAPIObject, sources: readonly string[]) => { problems: string[]; arrays: number };
   API_VERSION_PREFIX: string;
-  renderSharedRequests: (doc: OpenAPIObject) => { general: string; unit: string; bodies: number; queries: number; unitNames: string[] };
+  renderSharedRequests: (doc: OpenAPIObject) => { general: string; unit: string; bodies: number; queries: number; unitNames: string[]; names: string[] };
+  renderSharedResponses: (doc: OpenAPIObject, requestNames: ReadonlySet<string>, requestUnitNames: ReadonlySet<string>) => { general: string; unit: string; count: number; unitNames: string[] };
   SAUDI_UNIT_PATH_MARK: string;
+  untypedResponseOperations: (doc: OpenAPIObject) => string[];
+}
+
+/**
+ * ⚖️ **مِسنَنُ الردود — ينقص ولا يزيد** (`ق-١٤٣٨` · خطّةُ الأنواع ④ البند ١ · سابقةُ `docs/spec-untested.json`).
+ *
+ * العملياتُ بلا مخطَّطِ ردٍّ يعلن شكلاً مسرودةٌ في الملفّ يومَ البدء. **عمليةٌ جديدة بلا مخطَّط ⟵ يُسقط** (لا يزيد)،
+ * **ومسرودةٌ صار لها مخطَّط أو زالت ⟵ يُسقط الفحصُ حتى تُحذف** (ينقص) — و`openapi:snapshot` يحذفها وحدَه ولا يضيف أبداً.
+ */
+const UNTYPED = join(__dirname, '..', '..', '..', 'docs', 'openapi-untyped-responses.json');
+
+interface UntypedFile {
+  note: string;
+  operations: string[];
+}
+
+function syncUntyped(dist: DistExports, doc: OpenAPIObject, mode: 'write' | 'check'): boolean {
+  const current = dist.untypedResponseOperations(doc);
+  const listed = (JSON.parse(readFileSync(UNTYPED, 'utf8')) as UntypedFile).operations;
+  const added = current.filter((k) => !listed.includes(k));
+  const gone = listed.filter((k) => !current.includes(k));
+  // eslint-disable-next-line no-console
+  console.log(`ردودٌ بلا مخطَّط: ${current.length} · في المِسنَن: ${listed.length} · جديدةٌ بلا مخطَّط: ${added.length} · صار لها مخطَّط: ${gone.length}`);
+  if (added.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(['✖ عمليةٌ جديدة بلا مخطَّطِ ردّ — المِسنَنُ لا يزيد (ق-١٤٣٨):', ...added.map((k) => `   ${k}`), '', 'أعلن ردَّها: صنفٌ في dto/*-response.dto.ts و@ApiOkResponse/@ApiCreatedResponse.'].join('\n'));
+    return false;
+  }
+  if (gone.length === 0) return true;
+  if (mode === 'write') {
+    const file = JSON.parse(readFileSync(UNTYPED, 'utf8')) as UntypedFile;
+    writeFileSync(UNTYPED, `${JSON.stringify({ ...file, operations: listed.filter((k) => current.includes(k)) }, null, 2)}\n`, 'utf8');
+    // eslint-disable-next-line no-console
+    console.log(`المِسنَن: حُذف ${gone.length} — ${gone.join(' · ')}`);
+    return true;
+  }
+  // eslint-disable-next-line no-console
+  console.error(['✖ مسرودةٌ في مِسنَن الردود صار لها مخطَّط — تُحذف منه (ينقص):', ...gone.map((k) => `   ${k}`), '', 'npm run openapi:snapshot يحذفها.'].join('\n'));
+  return false;
 }
 
 /**
@@ -85,10 +125,12 @@ function loadDist(): DistExports {
     arrayShapeProblems: DistExports['arrayShapeProblems'];
   };
   // ③ (`ق-١٤٠٤`): أنواعُ الطلب المولَّدة تُرسَم من الوثيقة نفسِها — في الخطوة نفسِها.
-  const requests = require(join(DIST, 'common', 'shared-requests.util.js')) as Pick<DistExports, 'renderSharedRequests'>;
+  const requests = require(join(DIST, 'common', 'shared-requests.util.js')) as Pick<DistExports, 'renderSharedRequests' | 'renderSharedResponses'>;
   const country = require(join(DIST, 'common', 'country-literals.util.js')) as Pick<DistExports, 'SAUDI_UNIT_PATH_MARK'>;
+  // ④ (`ق-١٤٣٨`): مِسنَنُ الردود يُقرأ من الوثيقة نفسِها.
+  const responses = require(join(DIST, 'common', 'response-schema.util.js')) as Pick<DistExports, 'untypedResponseOperations'>;
   /* eslint-enable @typescript-eslint/no-var-requires */
-  return { AppModule: appModule.AppModule, ...versioning, ...document, ...contract, ...requests, SAUDI_UNIT_PATH_MARK: country.SAUDI_UNIT_PATH_MARK };
+  return { AppModule: appModule.AppModule, ...versioning, ...document, ...contract, ...requests, SAUDI_UNIT_PATH_MARK: country.SAUDI_UNIT_PATH_MARK, ...responses };
 }
 
 /**
@@ -97,19 +139,25 @@ function loadDist(): DistExports {
  */
 function syncSharedRequests(dist: DistExports, doc: OpenAPIObject, mode: 'write' | 'check'): boolean {
   const rendered = dist.renderSharedRequests(doc);
+  // ④ (`ق-١٤٣٨`): الردودُ المعلنة بالأداة نفسِها — تستورد من ملفّي الطلب ما رُسم هناك ولا تعيد تعريفه.
+  const responses = dist.renderSharedResponses(doc, new Set(rendered.names), new Set(rendered.unitNames));
   const files: [string, string][] = [
     [join(SHARED_API_DIR, 'requests.ts'), rendered.general],
     [join(SHARED_API_DIR, `${dist.SAUDI_UNIT_PATH_MARK}-requests.ts`), rendered.unit],
+    [join(SHARED_API_DIR, 'responses.ts'), responses.general],
+    [join(SHARED_API_DIR, `${dist.SAUDI_UNIT_PATH_MARK}-responses.ts`), responses.unit],
   ];
   if (mode === 'write') {
     for (const [path, text] of files) writeFileSync(path, text, 'utf8');
     // eslint-disable-next-line no-console
     console.log(`أنواعُ الطلب المولَّدة: ${rendered.bodies} جسماً · ${rendered.queries} استعلاماً · في ملفّ الوحدة: ${rendered.unitNames.length} — كُتبت`);
+    // eslint-disable-next-line no-console
+    console.log(`أنواعُ الردّ المولَّدة: ${responses.count} · في ملفّ الوحدة: ${responses.unitNames.length} — كُتبت`);
     return true;
   }
   const stale = files.filter(([path, text]) => !existsSync(path) || readFileSync(path, 'utf8').replace(/\r\n/g, '\n') !== text).map(([path]) => path);
   // eslint-disable-next-line no-console
-  console.log(`أنواعُ الطلب المولَّدة: ${rendered.bodies} جسماً · ${rendered.queries} استعلاماً · متقادمة: ${stale.length}`);
+  console.log(`أنواعُ الطلب المولَّدة: ${rendered.bodies} جسماً · ${rendered.queries} استعلاماً · أنواعُ الردّ: ${responses.count} · متقادمة: ${stale.length}`);
   if (stale.length > 0) {
     // eslint-disable-next-line no-console
     console.error(['✖ أنواعُ الطلب المولَّدة لا تطابق الوثيقة (ق-١٤٠٤):', ...stale.map((p) => `   ${p}`), '', 'أعد توليدَها: npm run openapi:snapshot — ولا تُحرَّر بيد.'].join('\n'));
@@ -151,14 +199,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // ④ (`ق-١٤٣٨`): بذرةُ المِسنَن تُكتب مرّةً واحدة — ولا تُكتب فوق ملفٍّ قائم، فالمِسنَنُ لا يُعاد ملؤه.
+  if (process.argv.includes('--seed-untyped')) {
+    if (existsSync(UNTYPED)) {
+      // eslint-disable-next-line no-console
+      console.error(`✖ ${UNTYPED} قائم — البذرةُ مرّةً واحدة، والمِسنَنُ ينقص بـ openapi:snapshot ولا يُعاد ملؤه`);
+      process.exit(1);
+    }
+    const operations = dist.untypedResponseOperations(doc);
+    const note = 'مِسنَنُ الردود (ق-١٤٣٨ · خطّةُ الأنواع ④): عملياتٌ بلا مخطَّطِ ردٍّ يعلن شكلاً — ينقص ولا يزيد. لا يُحرَّر بيدٍ للزيادة.';
+    writeFileSync(UNTYPED, `${JSON.stringify({ note, operations }, null, 2)}\n`, 'utf8');
+    // eslint-disable-next-line no-console
+    console.log(`بذرةُ المِسنَن: ${operations.length} عمليةً من ${count} — كُتبت ${UNTYPED}`);
+    return;
+  }
+
   if (mode === 'write') {
     writeFileSync(SNAPSHOT, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
     // eslint-disable-next-line no-console
     console.log(`عملياتٌ في اللقطة: ${count} · كُتبت ${SNAPSHOT}`);
     syncSharedRequests(dist, doc, 'write');
+    if (!syncUntyped(dist, doc, 'write')) process.exit(1);
     return;
   }
   const requestsFresh = syncSharedRequests(dist, doc, 'check');
+  const untypedFresh = syncUntyped(dist, doc, 'check');
 
   const snapshot = JSON.parse(readFileSync(SNAPSHOT, 'utf8')) as ApiContract;
   const breaks = dist.contractBreaks(snapshot, current);
@@ -169,7 +234,7 @@ async function main(): Promise<void> {
     console.error(['✖ كسرٌ في عقد الواجهة:', ...breaks.map((b) => `   ${b}`), '', 'وإن كان مقصوداً: npm run openapi:snapshot — فيظهر في فرق الطلب.'].join('\n'));
     process.exit(1);
   }
-  if (!requestsFresh) process.exit(1);
+  if (!requestsFresh || !untypedFresh) process.exit(1);
 }
 
 void main();
