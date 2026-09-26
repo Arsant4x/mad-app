@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
+import { DEFAULT_LANGUAGE, MSG, resolveMessage } from '../src/common/i18n/messages';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
@@ -21,8 +22,8 @@ jest.setTimeout(300000);
  * **والمسبارُ مُصادَقٌ قبل أيّ صفر**: العدُّ نفسُه بمعرّف «أ» بعد التوأم المشروع `≥ 1` (يجب أن يجد)،
  * وهو داخل سياق «أ» (`runInTenantContext`) فلا يعمى تحت `FORCE`.
  *
- * ⚠️ **وما لا يوكّده**: **شكلُ** الرفض. الرموزُ تُطبع في كلِّ تشغيل (`500` حيث لا فحصَ في الخدمة قبل القاعدة،
- * `404` حيث يوجد) — وهي بقيّةٌ قائمة مسجّلة في `ق-١٤٦٥` لا ما تدّعيه الدعوى.
+ * **وشكلُ الرفض يُوكَّد حيث سُدَّت البقيّة**: الشراءُ (④ ⑤) كان يخرج `500` من المفتاح المركّب بعد الترقيم، **فصار
+ * يُردّ مسمّىً قبله** (`assertPurchaseReferences`) — ويُوكَّد رمزُه ورسالتُه. والباقي يُطبع رمزُه في كلِّ تشغيل.
  */
 describe('الحقنُ العابر للمنشآت يُرفض — ولا يبقى في «أ» صفٌّ بمعرّف «ب» (ق-١٤٦٥)', () => {
   let app: INestApplication;
@@ -90,6 +91,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
     table: string,
     col: string,
     idOf: (r: Refs) => string,
+    named?: { status: number; message: string },
   ): Promise<void> => {
     await send(refs.a!).expect(201);
     expect({ label, probeSees: (await countInA(table, col, idOf(refs.a!))) >= 1 }).toEqual({ label, probeSees: true });
@@ -97,6 +99,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
     const res = await send({ ...refs.a!, ...pick(refs.b!, idOf) });
     observed.push(`${label}: ${res.status} ${String(res.body?.message ?? '').slice(0, 80)}`);
     expect({ label, rejected: res.status >= 400 }).toEqual({ label, rejected: true });
+    if (named) expect({ label, status: res.status, message: String(res.body?.message ?? '') }).toEqual({ label, status: named.status, message: named.message });
     expect({ label, rowsInAWithBId: await countInA(table, col, idOf(refs.b!)) }).toEqual({ label, rowsInAWithBId: 0 });
   };
 
@@ -140,6 +143,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
       'purchases',
       'supplierId',
       (r) => r.supplier,
+      { status: 404, message: resolveMessage(MSG.supplier_not_found, DEFAULT_LANGUAGE) },
     ));
 
   it('[SPEC 1.2] ⑤ سطرُ شراءٍ بصنف «ب»', () =>
@@ -156,6 +160,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
       'purchase_lines',
       'productId',
       (r) => r.product,
+      { status: 400, message: resolveMessage(MSG.product_not_found, DEFAULT_LANGUAGE) },
     ));
 
   it('[SPEC 1.2] ⑥ سندُ قبضٍ بعميل «ب»', () =>
