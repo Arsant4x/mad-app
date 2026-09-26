@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { CONTACT_FIELD_NAMES } from '../common/privacy/personal-fields';
 import { CompaniesService } from '../companies/companies.service';
+import { CompanyMovementService, retentionDeadline } from '../companies/company-movement.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { REOPEN_WINDOW_DAYS, reopenUntil } from '../common/tenant/reopen-window';
 import { ArchiveManifest } from '../export/company-archive.service';
@@ -104,6 +105,7 @@ export class PersonalDataErasureService {
     private readonly companiesService: CompaniesService,
     private readonly files: FilesService,
     private readonly audit: AuditService,
+    private readonly movement: CompanyMovementService,
   ) {}
 
   /**
@@ -151,10 +153,11 @@ export class PersonalDataErasureService {
    * `ق-١١٠`) يُسجَّل تعذّرُه ويُعرَض، ولا يُلتفّ عليه**.
    */
   @Cron(CronExpression.EVERY_DAY_AT_4AM, { timeZone: SCHEDULE_TIME_ZONE })
-  async sweep(now: Date = new Date()): Promise<{ erased: string[]; deleted: string[]; blocked: string[] }> {
+  async sweep(now: Date = new Date()): Promise<{ erased: string[]; deleted: string[]; blocked: string[]; retained: string[] }> {
     const erased: string[] = [];
     const deleted: string[] = [];
     const blocked: string[] = [];
+    const retained: string[] = [];
     const windowCutoff = new Date(now.getTime() - REOPEN_WINDOW_DAYS * 24 * 3600 * 1000);
 
     const due = await this.prisma.company.findMany({
@@ -170,8 +173,22 @@ export class PersonalDataErasureService {
       }
     }
 
-    const expired = await this.prisma.company.findMany({ where: { status: 'CLOSED', retainUntil: { lt: now } }, select: { id: true, orgName: true } });
-    for (const { id, orgName } of expired) {
+    const expired = await this.prisma.company.findMany({ where: { status: 'CLOSED', retainUntil: { lt: now } }, select: { id: true, orgName: true, closedAt: true } });
+    for (const { id, orgName, closedAt } of expired) {
+      // ⚖️ (`ق-١٤٧٠` · التوجيه ٢٦٦ §٤و) **يُعاد قياسُ الحفظ لحظةَ الحذف** — كما تفعل السلّة — ولا يُوثق بـ`retainUntil`
+      //    المخزَّن: حُسب لحظةَ الموافقة، **وما كُتب بين القياس وختم الإغلاق** (فاتورةٌ أثناء إنتاج النسخة والمنشأةُ
+      //    ما زالت نشطة) **أو ما حسبه معيارٌ أضيق** (عقاراتٌ بلا عقود) لا يراه. فإن كان الأجلُ المقيسُ بعد الآن
+      //    لا يُحذف شيء — ولا نسختُه — ويُمدّ الأجلُ ويُعلَن.
+      if (closedAt) {
+        const kept = await this.movement.retention(id);
+        const deadline = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models) : null;
+        if (deadline && deadline > now) {
+          await this.prisma.company.update({ where: { id }, data: { retainUntil: deadline } });
+          retained.push(id);
+          this.logger.warn(`Final erasure of company ${id} ("${orgName}") withheld: records under retention (${kept.labels.join('، ')}) — retainUntil extended to ${deadline.toISOString()}`);
+          continue;
+        }
+      }
       const latest = await this.prisma.accountDeletionRequest.findFirst({ where: { companyId: id, archiveProducedAt: { not: null } }, orderBy: { archiveProducedAt: 'desc' } });
       for (const f of ((latest?.archiveManifest as unknown as ArchiveManifest | null)?.files ?? [])) {
         await this.files.deleteArchiveObject(f.key).catch((e) => this.logger.warn(`تعذّر حذف ملفّ النسخة ${f.key}: ${String(e)}`));
@@ -185,6 +202,6 @@ export class PersonalDataErasureService {
         this.logger.warn(`Final erasure of company ${id} ("${orgName}") blocked by an append-only record (ق-١١٠): ${(e as Error).message}`);
       }
     }
-    return { erased, deleted, blocked };
+    return { erased, deleted, blocked, retained };
   }
 }

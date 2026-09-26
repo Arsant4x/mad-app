@@ -107,6 +107,25 @@ export function retentionDeadline(closedAt: Date, models: ReadonlyArray<string>)
   return until;
 }
 
+/**
+ * (`ق-١٤٧٠` · التوجيه ٢٦٦ §٤و) **مصادرُ الحفظ أوسعُ من مصادر الحركة**: سجلّاتُ العقار بذاتها (العقارُ والوحدةُ
+ * وبلاغاتُ الصيانة والضمانات) **لا تجعل المنشأةَ «ذاتَ حركة»** — فلا يُمسّ معيارُ الإغلاق ولا تقسيمُ ملفّات النسخة
+ * (`yearlyModels()` مشتقٌّ من `movementSources()`) — **لكنها تحت الحفظ `11` سنة** كما تحفظها السلّة. وكانت خارجَ
+ * أجل الإغلاق: منشأةُ إدارة أملاكٍ بلا عقود ولا فواتير تُغلق بـ`90` يوماً ثم يحذفها الكنسُ بعقاراتها.
+ */
+export const RETENTION_ONLY: ReadonlyArray<{ model: Prisma.ModelName; label: string }> = [
+  { model: 'Property', label: 'عقارات' },
+  { model: 'Unit', label: 'وحدات' },
+  { model: 'MaintenanceRequest', label: 'بلاغات صيانة' },
+  { model: 'Warranty', label: 'ضمانات' },
+];
+
+export interface RetentionReport {
+  /** ما يقع تحت الحفظ — للأجل. وقيدٌ يحمل بُعدَ عقارٍ أو وحدة يُحسب عقاراً (`Property`). */
+  models: Prisma.ModelName[];
+  labels: string[];
+}
+
 export interface MovementReport {
   hasMovement: boolean;
   /** أسماءُ النماذج التي وُجد فيها أثر — للحكم (أجلُ الحفظ) وللسجل. */
@@ -132,6 +151,33 @@ export class CompanyMovementService {
         if (n > 0) found.push(source);
       }
       return { hasMovement: found.length > 0, models: found.map((s) => s.model), labels: found.map((s) => s.label) };
+    });
+  }
+
+  /**
+   * **ما يقع تحت الحفظ** (`ق-١٤٧٠`) — مصادرُ الحركة وسجلّاتُ العقار بذاتها، **وقيدٌ يحمل بُعدَ عقارٍ أو وحدة** (صيانةٌ
+   * مُكمَلةٌ بكلفة — `JournalLine.propertyId/unitId`) فيصير الأجلُ `11` لا `10`. تحت سياق المنشأة كـ`describe`.
+   *
+   * **على مستوى المنشأة بحقّها**: الحفظُ التزامُ المنشأة كلِّها والحذفُ يطالها كلَّها — فقيدٌ في أيّ فرعٍ يُبقيها، ولا قارئَ
+   * بفروعٍ هنا أصلاً (الكنسُ والموافقةُ من المنصّة).
+   */
+  retention(companyId: string): Promise<RetentionReport> {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const models: Prisma.ModelName[] = [];
+      const labels: string[] = [];
+      for (const source of [...movementSources(), ...RETENTION_ONLY]) {
+        const n = await (tx as unknown as Countable)[delegateOf(source.model)].count({ where: { companyId } });
+        if (n > 0) {
+          models.push(source.model);
+          labels.push(source.label);
+        }
+      }
+      const dimensioned = await tx.journalLine.count({ where: { companyId, OR: [{ propertyId: { not: null } }, { unitId: { not: null } }] } });
+      if (dimensioned > 0 && !models.includes('Property')) {
+        models.push('Property');
+        labels.push('قيودٌ بأبعاد عقار');
+      }
+      return { models, labels };
     });
   }
 }

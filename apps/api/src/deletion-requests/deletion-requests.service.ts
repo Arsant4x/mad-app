@@ -294,7 +294,9 @@ export class DeletionRequestsService {
     // ذاتُ الحركة تبقى بمدد الحفظ (`ق-٥٤٧`)؛ وبلا حركةٍ تبقى نافذةَ النسخة فقط — ثم يُمحى
     // في الطبقة الثالثة (`ق-٥٥٦`) لا هنا: **الحذفُ الفوريُّ عند الموافقة محوٌ قبل أن ينال
     // صاحبُه نسختَه** (`ق-٥٥٤`)، فأُرجئ إلى انقضاء الأجل.
-    const retainUntil = report.hasMovement ? retentionDeadline(closedAt, report.models) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
+    // ⚖️ (`ق-١٤٧٠`) والأجلُ من مصادر **الحفظ** لا الحركة وحدها — فمنشأةُ عقاراتٍ بلا عقود تُحفظ `11` سنة لا `90` يوماً.
+    const kept = await this.movement.retention(company.id);
+    const retainUntil = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
     // مدّةُ الإتاحة = مدّةُ الحفظ (`ق-٥٥٨/ج`): ما دمنا نحفظ يصل التاجرُ نسختَه — فقطعُ وصوله قبل
     // انقضاء التزامه يتركه مسؤولاً عمّا لا يبلغه. وبلا حركةٍ النافذةُ هي الأجل نفسُه.
     const archiveExpiresAt = retainUntil;
