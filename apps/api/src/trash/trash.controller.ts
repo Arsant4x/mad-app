@@ -20,7 +20,7 @@ export class TrashController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext) {
-    return this.trashService.list(tenant.companyId);
+    return this.trashService.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post(':entity/:id/restore')

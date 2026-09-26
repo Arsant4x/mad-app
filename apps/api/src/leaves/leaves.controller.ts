@@ -50,7 +50,7 @@ export class LeavesController {
   @Get('requests')
   @RequiresAction('view')
   listRequests(@CurrentTenant() tenant: TenantContext, @Query() query: ListLeaveRequestsQueryDto) {
-    return this.leavesService.listRequests(tenant.companyId, query);
+    return this.leavesService.listRequests(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   // ⭐ **الفاعلُ يُمرَّر عند التقديم وعند القرار** (`ق-٦٢١`): الطرفان اللذان
@@ -86,6 +86,6 @@ export class LeavesController {
   balance(@CurrentTenant() tenant: TenantContext, @Query('employeeId') employeeId: string, @Query('year') year?: string) {
     // سنةُ اليوم المعلَن لا `getFullYear()` بمنطقة العملية (`ق-١١٩٠`) — فرصيدُ الإجازات رقمٌ يقرؤه التاجر.
     const y = year ? parseInt(year, 10) : localYearOf(new Date());
-    return this.leavesService.balance(tenant.companyId, employeeId, y);
+    return this.leavesService.balance(tenant.companyId, tenant.allowedBranchIds, employeeId, y);
   }
 }

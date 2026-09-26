@@ -95,9 +95,14 @@ export class LeavesService {
 
   // ---- Leave requests ----
 
-  listRequests(companyId: string, query?: ListLeaveRequestsQueryDto) {
+  /**
+   * 🔴 **مرشَّحةٌ بفروع القارئ عبر فرع الموظّف** (`ق-١٤٥٢` — قِيس: موظّفٌ مقيَّدٌ بالشمال كان يرى طلباتِ موظّفي الجنوب):
+   * الطلبُ لا يحمل فرعاً، ففرعُه فرعُ موظّفه — كقراره وحذفه (`ق-١٤٤٠`).
+   */
+  listRequests(companyId: string, allowedBranchIds: string[] | 'all', query?: ListLeaveRequestsQueryDto) {
     const term = searchTerm(query);
     const where: Prisma.LeaveRequestWhereInput = {
+      ...(allowedBranchIds === 'all' ? {} : { employee: branchFilter(allowedBranchIds) as Prisma.EmployeeWhereInput }),
       ...(query?.employeeId ? { employeeId: query.employeeId } : {}),
       ...(query?.status ? { status: query.status as Prisma.EnumLeaveRequestStatusFilter['equals'] } : {}),
       // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): السببُ ومَن طلب ومَن قرّر واسمُ الموظّف — والأخيرُ علاقةٌ فيُكتب هنا.
@@ -279,9 +284,10 @@ export class LeavesService {
    * which reads as "unlimited" rather than "zero left" — the difference between
    * unpaid leave and a fully-consumed allowance.
    */
-  balance(companyId: string, employeeId: string, year: number) {
+  balance(companyId: string, allowedBranchIds: string[] | 'all', employeeId: string, year: number) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const employee = await tx.employee.findUnique({ where: { id: employeeId }, select: { id: true } });
+      // 🔴 ق-١٤٥٢ — موظّفُ فرعٍ آخر غيرُ موجودٍ للقارئ: `404` لا رصيدُه (قِيس `200`).
+      const employee = await tx.employee.findFirst({ where: { id: employeeId, ...branchFilter(allowedBranchIds) }, select: { id: true } });
       if (!employee) throw new NotFoundException(MSG.employee_not_found);
 
       const from = new Date(Date.UTC(year, 0, 1));

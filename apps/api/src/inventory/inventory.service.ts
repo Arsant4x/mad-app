@@ -438,12 +438,19 @@ export class InventoryService {
     });
   }
 
-  stockLevels(companyId: string, query?: PagedQueryDto) {
+  /**
+   * 🔴 **مرشَّحةٌ بفروع القارئ على مستوى المستودع** (`ق-١٤٥٢` — قِيس: موظّفٌ مقيَّدٌ بالشمال كان يرى رصيدَ مستودع الجنوب):
+   * المستودعُ مرئيٌّ إن خدم فرعاً من فروع القارئ (`Branch.warehouseId`) **أو لم يخدم فرعاً قطّ** (مستودعُ المنشأة كلِّها) — فالرصيدُ
+   * لكلِّ مستودعٍ يبقى كاملاً لا نصفَ حركاته. والمالكُ يرى الكلّ.
+   */
+  stockLevels(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const [quantities, products, warehouses] = await Promise.all([
         computeStockQuantities(tx),
         tx.product.findMany(),
-        tx.warehouse.findMany(),
+        tx.warehouse.findMany({
+          where: allowedBranchIds === 'all' ? {} : { OR: [{ branches: { none: {} } }, { branches: { some: { id: { in: allowedBranchIds } } } }] },
+        }),
       ]);
       const productById = new Map(products.map((p) => [p.id, p]));
       const warehouseById = new Map(warehouses.map((w) => [w.id, w]));

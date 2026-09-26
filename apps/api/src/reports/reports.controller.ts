@@ -48,19 +48,19 @@ export class ReportsController {
   @Get('income-statement')
   @RequiresAction('view')
   incomeStatement(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
-    return this.reportsService.incomeStatement(tenant.companyId, range);
+    return this.reportsService.incomeStatement(tenant.companyId, tenant.allowedBranchIds, range);
   }
 
   @Get('balance-sheet')
   @RequiresAction('view')
   balanceSheet(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
-    return this.reportsService.balanceSheet(tenant.companyId, range);
+    return this.reportsService.balanceSheet(tenant.companyId, tenant.allowedBranchIds, range);
   }
 
   @Get('cash-flow')
   @RequiresAction('view')
   cashFlow(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
-    return this.reportsService.cashFlow(tenant.companyId, range);
+    return this.reportsService.cashFlow(tenant.companyId, tenant.allowedBranchIds, range);
   }
 
   /**

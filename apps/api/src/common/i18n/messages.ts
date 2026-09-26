@@ -56,6 +56,7 @@ export const MSG = {
   // reports — ledger / statement (ق-١٢٦١ ج)
   ledger_filter_required: 'reports.ledger_filter_required',
   statement_party_required: 'reports.statement_party_required',
+  report_company_statement_whole_company: 'reports.company_statement_whole_company',
 
   // accounts / journal
   account_not_found: 'accounts.not_found',
@@ -693,6 +694,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.statement_party_required]: {
     ar: 'كشف الحساب يحتاج عميلاً أو مورّداً — واحداً منهما لا كليهما',
     en: 'The statement needs a customer or a supplier — one of them, not both',
+  },
+  [MSG.report_company_statement_whole_company]: {
+    ar: 'القوائمُ المالية للمنشأة كلِّها تُقرأ لمن يرى فروعَها كلَّها — ولا تُشتقّ من نصف دفتر. تقريرُ فروعك في «ملخّص الفرع»',
+    en: "The company's financial statements are for readers who see every branch — they cannot be derived from half the ledger. Your branches' report is the branch summary",
   },
   [MSG.account_not_found]: { ar: 'الحساب غير موجود', en: 'Account not found' },
   [MSG.account_code_taken]: { ar: 'رمز الحساب "{code}" مستخدَم بالفعل', en: 'Account code "{code}" is already in use' },

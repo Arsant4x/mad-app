@@ -20,10 +20,16 @@ const RECORD_INCLUDE = { employee: { select: { id: true, fullName: true } } } as
 export class AttendanceService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  /** A day's sheet (default) or one employee's history. */
-  list(companyId: string, query?: ListAttendanceQueryDto) {
+  /**
+   * A day's sheet (default) or one employee's history.
+   *
+   * 🔴 **مرشَّحةٌ بفروع القارئ عبر فرع الموظّف** (`ق-١٤٥٢` — قِيس: موظّفٌ مقيَّدٌ بالشمال كان يرى حضورَ موظّفي الجنوب):
+   * سجلُّ الحضور لا يحمل فرعاً، ففرعُه فرعُ موظّفه — كتعديله وحذفه (`ق-١٤٤٠`).
+   */
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListAttendanceQueryDto) {
     const term = searchTerm(query);
     const where: Prisma.AttendanceRecordWhereInput = {
+      ...(allowedBranchIds === 'all' ? {} : { employee: branchFilter(allowedBranchIds) as Prisma.EmployeeWhereInput }),
       ...(query?.date ? { date: new Date(query.date) } : {}),
       ...(query?.employeeId ? { employeeId: query.employeeId } : {}),
       // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): الملاحظاتُ واسمُ الموظّف — والأخيرُ علاقةٌ فيُكتب هنا.
