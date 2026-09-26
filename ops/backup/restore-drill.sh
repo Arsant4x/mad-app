@@ -103,14 +103,14 @@ if [ -n "$cipher" ]; then
   SECRETS_ENCRYPTION_KEY="$key" CIPHER="$cipher" docker run --rm -e SECRETS_ENCRYPTION_KEY -e CIPHER "$API_IMAGE" \
     node -e 'const{decryptSecret}=require("./dist/src/common/crypto/secret.util");const v=decryptSecret(process.env.CIPHER);if(!v||v.length<8)throw new Error("فكٌّ فارغ");console.log("decrypted:"+v.length+" حرفاً")' \
     || fail "المفتاحُ المستعاد لا يفكّ سرّاً مخزَّناً — فالنسخةُ تُستعاد ولا تُقرأ (ق-٥٧٤)"
-  decrypted=stored-secret
+  decrypted='stored-secret'
 else
   # ⚠️ لا سرَّ مخزَّنٌ بعد (لا شهادةَ فوترة) — **فيُثبَت المفتاحُ بدورةٍ كاملة بشيفرة التطبيق**،
   #    ويُعلَن في التقرير أن المقارنة كانت على قيمةٍ مصنوعةٍ لا على صفٍّ قائم.
   SECRETS_ENCRYPTION_KEY="$key" docker run --rm -e SECRETS_ENCRYPTION_KEY "$API_IMAGE" \
     node -e 'const{encryptSecret,decryptSecret}=require("./dist/src/common/crypto/secret.util");const s="canary-"+Date.now();if(decryptSecret(encryptSecret(s))!==s)throw new Error("دورةُ التشفير لا تُغلق");console.log("canary ok")' \
     || fail "المفتاحُ المستعاد لا يعمل بشيفرة التطبيق"
-  decrypted=canary-no-stored-secret
+  decrypted='canary-no-stored-secret'
 fi
 
 # ⑤ **والمخزَّنُ يُقاس شهرياً هنا لا في وثيقة** (`ق-٧٤٣` · `ق-٧٥١`): «يكتب ولا يحذف» يُراكم بلا تقليمٍ
