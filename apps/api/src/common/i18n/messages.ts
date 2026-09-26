@@ -179,6 +179,9 @@ export const MSG = {
   employee_transfer_forbidden: 'employees.transfer_forbidden',
   employee_transfer_stale: 'employees.transfer_stale',
   employee_transfer_same_branch: 'employees.transfer_same_branch',
+  employee_login_account_forbidden: 'employees.login_account_forbidden',
+  employee_login_account_taken: 'employees.login_account_taken',
+  employee_login_account_not_linked: 'employees.login_account_not_linked',
   identity_identifier_invalid: 'identity.identifier_invalid',
   identity_iban_invalid: 'identity.iban_invalid',
   leave_type_not_found: 'leaves.type_not_found',
@@ -396,6 +399,7 @@ export const MSG = {
   screen_undeclared: 'common.screen_undeclared',
   support_grant_not_yours: 'support.grant_not_yours',
   company_user_not_found: 'companyUsers.not_found',
+  company_user_open_shift_blocks_move: 'companyUsers.open_shift_blocks_move',
   company_users_owner_only: 'companyUsers.owner_only',
   company_profile_owner_only: 'companyProfile.owner_only',
   /** معرّفُ النطاق الفرعيّ (`ق-١٣٠٣` · ك/⑬A2). */
@@ -951,6 +955,15 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: "The employee's branch changed since it was read — reopen the record, then transfer",
   },
   [MSG.employee_transfer_same_branch]: { ar: 'الموظف في هذا الفرع أصلاً — اختر فرعاً آخر', en: 'The employee is already in this branch — pick another branch' },
+  [MSG.employee_login_account_forbidden]: { ar: 'ربطُ الموظف بحساب دخوله لمالك المنشأة', en: "Linking an employee to a login account is limited to the company owner" },
+  [MSG.employee_login_account_taken]: {
+    ar: 'حسابُ الدخول هذا مربوطٌ بالموظف {employee} — افكُكه عنه أولاً ثم اربطه',
+    en: 'This login account is already linked to employee {employee} — unlink it there first',
+  },
+  [MSG.employee_login_account_not_linked]: {
+    ar: 'الموظف بلا حسابِ دخولٍ مربوط — فلا فروعَ حسابٍ تُنقل معه. اربطه أولاً، أو انقل الموظف وحده',
+    en: 'The employee has no linked login account, so there are no account branches to move — link one first, or transfer the employee alone',
+  },
   [MSG.identity_identifier_invalid]: { ar: 'المعرّف غير صالح — حروفٌ لاتينية وأرقامٌ حتى ٣٢، والمسافاتُ والشرطاتُ تُحذف', en: 'Invalid identifier — Latin letters and digits, up to 32; spaces and dashes are removed' },
   [MSG.identity_iban_invalid]: { ar: 'الآيبان غير صالح بالمعيار الدولي (رمزُ دولةٍ ورقما تحقّقٍ لا يطابقان الحساب)', en: 'Invalid IBAN under the international standard (country code and check digits do not match the account)' },
   [MSG.leave_type_not_found]: { ar: 'نوع الإجازة غير موجود', en: 'Leave type not found' },
@@ -1326,6 +1339,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.templates_owner_only]: { ar: 'إدارة نماذج الصلاحيات متاحة لمالك المنشأة أو مدير المنصة فقط', en: 'Only the company owner or the platform admin can manage permission templates' },
   [MSG.templates_read_forbidden]: { ar: 'لا تملك صلاحية عرض قوالب الصلاحيات', en: 'You do not have permission to view permission templates' },
   [MSG.company_user_not_found]: { ar: 'حساب الموظف غير موجود', en: 'Employee account not found' },
+  [MSG.company_user_open_shift_blocks_move]: {
+    ar: 'لا يُنقل الحسابُ عن فرع {branch}: عليه مناوبةُ كاشيرٍ مفتوحةٌ فيه — أقفلها أولاً ثم انقل الحساب (الإغلاقُ قبل النقل)',
+    en: 'The account cannot leave branch {branch}: it has an open cashier shift there — close the shift first, then move the account',
+  },
   [MSG.company_users_owner_only]: {
     ar: 'إدارة حسابات الموظفين متاحة لحساب الشركة الرئيسي فقط',
     en: 'Managing employee accounts is restricted to the main company account',

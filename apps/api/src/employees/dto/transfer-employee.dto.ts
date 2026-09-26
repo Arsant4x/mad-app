@@ -1,4 +1,4 @@
-import { IsUUID, ValidateIf } from 'class-validator';
+import { IsArray, IsOptional, IsUUID, ValidateIf } from 'class-validator';
 
 /**
  * ⚖️ **نقلُ الموظّف للقادم** (`ق-١٤١٥` · التوجيه ٢٦٣ §٤).
@@ -16,4 +16,14 @@ export class TransferEmployeeDto {
   /** الفرعُ الذي يُنقل إليه من هذا الطلب. */
   @IsUUID()
   toBranchId!: string;
+
+  /**
+   * ⚖️ **فروعُ حساب الدخول المربوط — فعلٌ صريحٌ في الخطوة نفسِها** (`ق-١٤٣٤` · `ق-١٤٤٥`): غيابُه يُبقي الحسابَ كما هو
+   * (لا يتغيّر أحدُهما بالآخر صامتاً)، وحضورُه يستبدل فروعَ الحساب في معاملة النقل نفسِها — والفارغُ «بلا قيد». وموظّفٌ
+   * بلا حسابٍ مربوطٍ يُرفض معه مسمّىً. **والحسابُ على مناوبةٍ مفتوحةٍ لا يُخرَج من فرعها** (`ق-١٤٤٦`).
+   */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  loginAccountBranchIds?: string[];
 }

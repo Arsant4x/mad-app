@@ -46,6 +46,34 @@ export interface CashBoxTransferResponse {
   entries: BankTransferEntriesResponse;
 }
 
+/** ردٌّ — `EmployeeIdentityOnFileResponse` في الخادم (ق-١٤٣٨). */
+export interface EmployeeIdentityOnFileResponse {
+  nationalId: boolean;
+  salaryIban: boolean;
+  socialInsuranceNo: boolean;
+}
+
+/** ردٌّ — `EmployeeLoginAccountResponse` في الخادم (ق-١٤٣٨). */
+export interface EmployeeLoginAccountResponse {
+  id: string;
+  name: string;
+  branchIds: string[];
+}
+
+/** ردٌّ — `EmployeeWithLoginAccountResponse` في الخادم (ق-١٤٣٨). */
+export interface EmployeeWithLoginAccountResponse {
+  status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
+  loginAccount: EmployeeLoginAccountResponse | null;
+  id: string;
+  fullName: string;
+  branchId: string | null;
+  companyUserId: string | null;
+  archived: boolean;
+  identityOnFile: EmployeeIdentityOnFileResponse;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** ردٌّ — `PagedPosShiftResponse` في الخادم (ق-١٤٣٨). */
 export interface PagedPosShiftResponse {
   items: PosShiftWithTotalsResponse[];

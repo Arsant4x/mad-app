@@ -8,7 +8,9 @@ import { normalizeIban, normalizeIdentifier } from '../common/identity/identifie
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { TransferEmployeeDto } from './dto/transfer-employee.dto';
-import { MSG } from '../common/i18n/messages';
+import { LinkLoginAccountDto } from './dto/link-login-account.dto';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { assertBranchIdsAssignable, assertNoOpenShiftOutside, replaceBranchAssignments } from '../company-users/branch-assignment.util';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { mapList, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 
@@ -77,6 +79,7 @@ export class EmployeesService {
       if (!row) throw new NotFoundException(MSG.employee_not_found);
       return {
         ...publicEmployee(row),
+        loginAccount: await this.loginAccountOf(tx, row.companyUserId),
         nationalId: row.nationalIdCipher ? decryptField(row.nationalIdCipher, aadOf(companyId, row.id, 'nationalId')) : null,
         salaryIban: row.salaryIbanCipher ? decryptField(row.salaryIbanCipher, aadOf(companyId, row.id, 'salaryIban')) : null,
         socialInsuranceNo: row.socialInsuranceNoCipher ? decryptField(row.socialInsuranceNoCipher, aadOf(companyId, row.id, 'socialInsuranceNo')) : null,
@@ -172,8 +175,48 @@ export class EmployeesService {
       if ((existing.branchId ?? null) !== (dto.fromBranchId ?? null)) throw new ConflictException(MSG.employee_transfer_stale);
       const toBranchId = await resolveBranchId(tx, dto.toBranchId, allowedBranchIds);
       if (toBranchId === (existing.branchId ?? null)) throw new BadRequestException(MSG.employee_transfer_same_branch);
-      return publicEmployee(await tx.employee.update({ where: { id }, data: { branchId: toBranchId } }));
+      /**
+       * ⚖️ **فروعُ الحساب المربوط فعلٌ صريحٌ في الخطوة نفسِها** (`ق-١٤٣٤` · `ق-١٤٤٥`): تُغيَّر إن طُلبت وحدَها، وفي المعاملة
+       * نفسِها — فرفضُها (مناوبةٌ مفتوحة `ق-١٤٤٦` · فرعٌ غيرُ مأذون) يُرجع النقلَ كلَّه، لا نصفَ نقل.
+       */
+      if (dto.loginAccountBranchIds !== undefined) {
+        if (!existing.companyUserId) throw new BadRequestException(MSG.employee_login_account_not_linked);
+        await assertBranchIdsAssignable(tx, allowedBranchIds, dto.loginAccountBranchIds);
+        await assertNoOpenShiftOutside(tx, existing.companyUserId, dto.loginAccountBranchIds);
+        await replaceBranchAssignments(tx, existing.companyUserId, dto.loginAccountBranchIds);
+      }
+      const row = await tx.employee.update({ where: { id }, data: { branchId: toBranchId } });
+      return { ...publicEmployee(row), loginAccount: await this.loginAccountOf(tx, row.companyUserId) };
     });
+  }
+
+  /**
+   * ⚖️ **ربطُ الموظّف بحساب دخوله — صراحةً من المالك** (`ق-١٤٤٥` بنصّه: «**`companyUserId` فريدٌ اختياريٌّ يضبطه المالكُ صراحةً،
+   * والقائمُ بلا ربطٍ حتى يُربط. ⛔ ولا ربطَ بالاسم.**»). `null` يفكّ.
+   *
+   * **على مستوى المنشأة بحقّها**: الحسابُ المربوطُ بموظّفٍ آخر يُبحث في المنشأة كلِّها لا في فروع الفاعل — فالفرادةُ للمنشأة،
+   * والرفضُ يسمّي صاحبَه كي يُفكّ عنه أوّلاً (والفاعلُ المالكُ ونطاقُه الكلّ).
+   */
+  linkLoginAccount(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: LinkLoginAccountDto) {
+    if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.employee_login_account_forbidden);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await this.findVisible(tx, allowedBranchIds, id);
+      if (dto.companyUserId !== null) {
+        const account = await tx.companyUser.findUnique({ where: { id: dto.companyUserId }, select: { id: true } });
+        if (!account) throw new NotFoundException(MSG.company_user_not_found);
+        const holder = await tx.employee.findFirst({ where: { companyUserId: dto.companyUserId, id: { not: id } }, select: { fullName: true } });
+        if (holder) throw new ConflictException(formatMessage(MSG.employee_login_account_taken, { employee: holder.fullName }));
+      }
+      const row = await tx.employee.update({ where: { id }, data: { companyUserId: dto.companyUserId } });
+      return { ...publicEmployee(row), loginAccount: await this.loginAccountOf(tx, row.companyUserId) };
+    });
+  }
+
+  /** ⚖️ **حسابُ الدخول المربوط كما يُعرض** (`ق-١٤٣٤`): معرّفُه واسمُه وفروعُه — أو `null`. ولا يُستنبط بالاسم. */
+  private async loginAccountOf(tx: Prisma.TransactionClient, companyUserId: string | null) {
+    if (!companyUserId) return null;
+    const account = await tx.companyUser.findUnique({ where: { id: companyUserId }, select: { id: true, name: true, branches: { select: { branchId: true } } } });
+    return account ? { id: account.id, name: account.name, branchIds: account.branches.map((b) => b.branchId).sort() } : null;
   }
 
   async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {

@@ -744,6 +744,11 @@ export interface LandedCostManualLineDto {
   baseAmount: number;
 }
 
+/** جسمُ طلب — `LinkLoginAccountDto` في الخادم. */
+export interface LinkLoginAccountDto {
+  companyUserId: string | null;
+}
+
 /** جسمُ طلب — `LoginDto` في الخادم. */
 export interface LoginDto {
   username: string;
@@ -1104,6 +1109,7 @@ export interface TransferCashDrawerDto {
 export interface TransferEmployeeDto {
   fromBranchId: string | null;
   toBranchId: string;
+  loginAccountBranchIds?: string[];
 }
 
 /** جسمُ طلب — `TransitionTaskDto` في الخادم. */

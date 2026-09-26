@@ -11,6 +11,9 @@ import { NoAudit } from '../audit/no-audit.decorator';
 import { CreateEmployeeDto, FindByNationalIdDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { TransferEmployeeDto } from './dto/transfer-employee.dto';
+import { LinkLoginAccountDto } from './dto/link-login-account.dto';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { EmployeeWithLoginAccountResponse } from './dto/employee-responses.dto';
 import { EmployeesService } from './employees.service';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { MSG } from '../common/i18n/messages';
@@ -71,6 +74,15 @@ export class EmployeesController {
   @OwnerOnly(MSG.employee_transfer_forbidden)
   transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferEmployeeDto) {
     return this.employeesService.transfer(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
+  }
+
+  /** ⚖️ ربطُ الموظّف بحساب دخوله أو فكُّه — صراحةً من المالك (`ق-١٤٤٥`)، ولا ربطَ بالاسم. */
+  @Patch(':id/login-account')
+  @RequiresAction('edit')
+  @OwnerOnly(MSG.employee_login_account_forbidden)
+  @ApiOkResponse({ type: EmployeeWithLoginAccountResponse })
+  linkLoginAccount(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: LinkLoginAccountDto) {
+    return this.employeesService.linkLoginAccount(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
