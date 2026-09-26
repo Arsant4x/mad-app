@@ -2549,6 +2549,24 @@
       "201"
     ]
   },
+  "POST /v1/branches/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/branches/{id}/reopen": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/cash-drawers": {
     "parameters": [],
     "requiredBody": [
