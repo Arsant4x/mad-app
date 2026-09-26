@@ -91,19 +91,26 @@ describe('المستندُ يُرفض برسالة ولا يمرّ بلا قيد
   });
 
   it('④ الكاشير: التحضيرُ يرفض قبل أيّ شيء — فمحاولةُ البطاقة لا تشحن لبيعٍ لا يُرحَّل', async () => {
-    const productId = (
-      await auth(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف الكاشير ${suffix}`, price: 50 }).expect(201)
-    ).body.id as string;
-    await auth(http().post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
-    const before = await tenantPrisma.runInTenantContext(co.companyId, (tx) => tx.invoice.count());
+    // منشأةٌ ثانيةٌ وليدة: حسابُ الإيرادات في الأولى صار عليه قيدٌ من ①–③ فلا يُحذف (وهو الصواب) — فالحالةُ على دليلٍ لم يُمسّ.
+    const co2 = await registerIsolatedCompany(app, 'posting-accounts-pos');
+    const auth2 = (r: request.Test) => r.set('Authorization', `Bearer ${co2.token}`);
+    try {
+      const productId = (
+        await auth2(http().post('/products')).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف الكاشير ${suffix}`, price: 50 }).expect(201)
+      ).body.id as string;
+      await auth2(http().post('/pos/shifts')).send({ openingFloat: 0 }).expect(201);
+      const revenue = await tenantPrisma.runInTenantContext(co2.companyId, (tx) => tx.account.findFirst({ where: { code: '4100' }, select: { id: true } }));
+      expect(revenue).not.toBeNull();
+      await auth2(http().delete(`/accounts/${revenue!.id}`)).expect(204);
 
-    const revenue = await accountId('4100');
-    await auth(http().delete(`/accounts/${revenue}`)).expect(204);
-    const refused = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(409);
-    expect(String(refused.body.message)).toContain('4100');
-    expect(await tenantPrisma.runInTenantContext(co.companyId, (tx) => tx.invoice.count())).toBe(before);
+      const refused = await auth2(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(409);
+      expect(String(refused.body.message)).toContain('4100');
+      expect(await tenantPrisma.runInTenantContext(co2.companyId, (tx) => tx.invoice.count())).toBe(0);
 
-    await auth(http().post('/accounts')).send({ code: '4100', name: 'إيرادات المبيعات', type: 'revenue' }).expect(201);
-    await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(201);
+      await auth2(http().post('/accounts')).send({ code: '4100', name: 'إيرادات المبيعات', type: 'revenue' }).expect(201);
+      await auth2(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(201);
+    } finally {
+      await removeIsolatedCompany(app, co2);
+    }
   });
 });
