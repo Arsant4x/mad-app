@@ -629,6 +629,9 @@ model CompanyUser {
   @@map("company_users")
   notification_targetUserId_tenant Notification[] @relation("Notification_targetUserId_tenant")
   reminderPolicy_escalateToUserId_tenant ReminderPolicy[] @relation("ReminderPolicy_escalateToUserId_tenant")
+  /// ⚖️ `ق-١٤٤٥` — الموظّفُ المربوطُ بهذا الحساب إن رُبط (صراحةً من المالك).
+  employee                               Employee?        @relation("EmployeeLoginAccount")
+  employee_companyUserId_tenant          Employee[]       @relation("Employee_companyUserId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -2615,6 +2618,13 @@ model Employee {
   branch   Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   branchTenant Branch? @relation("Employee_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// ⚖️ `ق-١٤٤٥` — **حسابُ الدخول المربوط**: فريدٌ اختياريٌّ **يضبطه المالكُ صراحةً** (`PATCH /employees/:id/login-account`)،
+  /// والقائمُ بلا ربطٍ حتى يُربط — **ولا ربطَ بالاسم**. الموظّفُ وحسابُه منفصلان ولا يتغيّر أحدُهما بالآخر صامتاً (`ق-١٤٣٤`).
+  companyUserId     String?      @unique
+  companyUser       CompanyUser? @relation("EmployeeLoginAccount", fields: [companyUserId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  companyUserTenant CompanyUser? @relation("Employee_companyUserId_tenant", fields: [companyId, companyUserId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
   fullName   String
   jobTitle   String?

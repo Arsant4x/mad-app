@@ -2,8 +2,8 @@ import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundExce
 import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
-import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { assertBranchIdsAssignable, assertNoOpenShiftOutside, replaceBranchAssignments } from './branch-assignment.util';
 import { CreateCompanyUserDto } from './dto/create-company-user.dto';
 import { UpdateCompanyUserDto } from './dto/update-company-user.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -159,6 +159,8 @@ export class CompanyUsersService {
 
       if (dto.branchIds !== undefined) {
         await this.assertBranchIdsAssignable(tx, allowedBranchIds, dto.branchIds);
+        // ⚖️ ق-١٤٤٦ — الإغلاقُ قبل النقل: لا يُخرَج الحسابُ من فرع مناوبته المفتوحة.
+        await assertNoOpenShiftOutside(tx, id, dto.branchIds);
         await this.replaceBranchAssignments(tx, id, dto.branchIds);
       }
 
@@ -207,21 +209,14 @@ export class CompanyUsersService {
    * بوّابةٍ أخرى يسقط يوم تُفتَح تلك البوّابة، ولا يشتكي**.
    */
   private async assertBranchIdsAssignable(tx: Tx, allowedBranchIds: string[] | 'all', branchIds: string[]): Promise<void> {
-    if (branchIds.length === 0) return;
-    const valid = await tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } });
-    if (valid.length !== branchIds.length) throw new NotFoundException(MSG.branch_not_found);
-
-    // والإذنُ بعد الوجود — بالمصدر الواحد نفسِه الذي تمرّ به الخدماتُ الأخرى.
-    for (const id of branchIds) assertBranchAllowed(allowedBranchIds, id);
+    // والإذنُ بعد الوجود — بالمصدر الواحد نفسِه الذي يمرّ به نقلُ الموظّف المربوط (`ق-١٤٤٥`).
+    await assertBranchIdsAssignable(tx, allowedBranchIds, branchIds);
   }
 
   /** Replace-all: the payload is the complete desired set, so diffing would
    * only add a way for the two to drift apart. Empty = unrestricted. */
   private async replaceBranchAssignments(tx: Tx, companyUserId: string, branchIds: string[]): Promise<void> {
-    await tx.companyUserBranch.deleteMany({ where: { companyUserId } });
-    if (branchIds.length > 0) {
-      await tx.companyUserBranch.createMany({ data: branchIds.map((branchId) => ({ companyUserId, branchId })) });
-    }
+    await replaceBranchAssignments(tx, companyUserId, branchIds);
   }
 
   async remove(companyId: string, actorType: string, id: string): Promise<void> {
