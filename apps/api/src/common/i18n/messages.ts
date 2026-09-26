@@ -360,6 +360,7 @@ export const MSG = {
   pos_attempt_total_mismatch: 'pos.attempt_total_mismatch',
   integration_adapter_missing: 'integrations.adapter_missing',
   integration_unknown_provider: 'integrations.unknown_provider',
+  integration_provider_not_licensed: 'integrations.provider_not_licensed',
   integration_credentials_required: 'integrations.credentials_required',
   integration_kind_already_active: 'integrations.kind_already_active',
   integration_not_found: 'integrations.not_found',
@@ -1286,6 +1287,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'No adapter is registered for provider {provider} — a card payment is not accepted through a connection that cannot work',
   },
   [MSG.integration_unknown_provider]: { ar: 'مزوّد غير معروف لهذا النوع من الربط', en: 'Unknown provider for this integration kind' },
+  [MSG.integration_provider_not_licensed]: {
+    ar: 'لا يُربط مزوّدُ دفعٍ إلا بمدرَجٍ في قائمة الجهة المنظِّمة للشركات المرخّصة — وهذا المزوّد بلا مدخلٍ مكتملٍ فيها',
+    en: 'A payment provider can only be connected if it is listed in the regulator’s register of licensed companies — this provider has no complete entry',
+  },
   [MSG.zatca_test_environment_forbidden_in_production]: { ar: 'بيئة الاختبار (SANDBOX/SIMULATION) غير مسموحة في الإنتاج — فواتيرها لا تُعتمد لدى هيئة الزكاة والضريبة والجمارك', en: 'Test environments (SANDBOX/SIMULATION) are not allowed in production — their invoices are not accepted by ZATCA' },
   [MSG.delegation_cycle_rejected]: {
     ar: 'لا يمكن التفويض لهذا المستخدم — فهو يفوّضك أصلاً (مباشرةً أو عبر سلسلة)، والتفويض الدائري غير مسموح',
