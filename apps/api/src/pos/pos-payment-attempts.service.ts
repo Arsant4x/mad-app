@@ -315,11 +315,18 @@ export class PosPaymentAttemptsService {
     await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.posPaymentAttempt.updateMany({ where: { id, status: { in: from } }, data }));
   }
 
-  /** بعد أيّ انتقال: المقبولةُ تُتمّ، ثم يُقرأ الحالُ بإيصاله. */
+  /**
+   * بعد أيّ انتقال: المقبولةُ تُتمّ، ثم يُقرأ الحالُ بإيصاله.
+   *
+   * 🔴 **وإيصالُ البيع الذي أُتمّ في هذا الطلب هو ناتجُ `finishReceipt` نفسُه** (`ق-١٤٤٧`) — كان يُرمى ويُقرأ الإيصالُ من جديد،
+   * **فضاع تقريرُ الخصم** (تنبيهُ الرصيد السالب صفةُ لحظة الإتمام لا يُعاد بناؤه) **وضاعت نتيجةُ الختم**. وبوّابةُ الإجازة
+   * صارت في بانيّ الإيصال الواحد فتحملها القراءةُ اللاحقة أيضاً.
+   */
   private async settleAndView(tenant: TenantContext, id: string) {
     const sold = await retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.settle(tx, tenant.companyId, tenant.allowedBranchIds, id)));
-    if (sold) await this.pos.finishReceipt(tenant.companyId, sold);
-    return this.view(tenant, id);
+    const finished = sold ? await this.pos.finishReceipt(tenant.companyId, sold) : null;
+    const viewed = await this.view(tenant, id);
+    return finished ? { ...viewed, sale: finished } : viewed;
   }
 
   /**
