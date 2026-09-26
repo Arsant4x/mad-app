@@ -506,7 +506,13 @@ if (MERGE_CMD.test(cmd)) {
     const prBlock = pr.slice(0, pr.slice(1).search(/\n {0,2}\S/) + 1);
     heavyPaths = [...prBlock.matchAll(/^\s{6}- '([^']+)'/gm)].map((m) => m[1]);
     const jobsAt = yaml.indexOf('\njobs:\n');
-    heavyJobs = [...yaml.slice(jobsAt).matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)].map((m) => m[1]);
+    const allJobs = [...yaml.slice(jobsAt).matchAll(/^ {2}([A-Za-z0-9_-]+):\s*$/gm)].map((m) => m[1]);
+    // (ق-١٤٧٣) **وظيفةٌ تعتمد عليها غيرُها بوّابةٌ لا فحص** — تُعرف ببنيتها (`needs:`) لا باسمها، ولا تعمل على
+    // الطلبات أصلاً؛ فالمطلوبُ نجاحُه على الرأس هو ما لا يعتمد عليه شيء: الوظائفُ الثقيلة نفسُها.
+    const needed = new Set(
+      [...yaml.slice(jobsAt).matchAll(/^ {4}needs:\s*\[?([^\]\n]*)\]?\s*$/gm)].flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean)),
+    );
+    heavyJobs = allJobs.filter((j) => !needed.has(j));
   } catch {
     heavyPaths = null;
   }
