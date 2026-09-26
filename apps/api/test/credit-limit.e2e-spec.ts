@@ -97,7 +97,8 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
       .send({ name: `محاسب ائتمان ${suffix}`, allowedScreens: ['invoice', 'customers'], screenActions: { invoice: ['view', 'add'], customers: ['view'] } })
       .expect(201)).body.id;
     clerkId = (await auth(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'محاسب الائتمان', username: `cl-${suffix}`, password: 'ClerkPass123!', permissionTemplateId: templateId })
+      // ⚖️ ق-١٤٦٨: «كلُّ الفروع» صراحةً — كان الغيابُ يعني الكلّ، فيبقى المقيسُ حدَّ الائتمان لا نطاقَ الفرع.
+      .send({ name: 'محاسب الائتمان', username: `cl-${suffix}`, password: 'ClerkPass123!', permissionTemplateId: templateId, allBranches: true })
       .expect(201)).body.id;
     clerkToken = (await request(app.getHttpServer()).post('/auth/login').send({ username: `cl-${suffix}`, password: 'ClerkPass123!' })).body.accessToken;
   }, 120000);

@@ -34,7 +34,7 @@ export async function assertNoOpenShiftOutside(tx: Tx, companyUserId: string, br
   if (open) throw new ConflictException(formatMessage(MSG.company_user_open_shift_blocks_move, { branch: open.branch?.name ?? '' }));
 }
 
-/** استبدالٌ كامل: الجسمُ هو المجموعةُ المرادة كلُّها، والفارغُ «بلا قيد». */
+/** استبدالٌ كامل: الجسمُ هو المجموعةُ المرادة كلُّها — **والفارغُ لا فرع** (`ق-١٤٦٨`)؛ و«الكلّ» علَمُ `CompanyUser.allBranches`. */
 export async function replaceBranchAssignments(tx: Tx, companyUserId: string, branchIds: string[]): Promise<void> {
   await tx.companyUserBranch.deleteMany({ where: { companyUserId } });
   if (branchIds.length > 0) {

@@ -188,6 +188,7 @@ export interface CreateCompanyUserDto {
   password: string;
   permissionTemplateId: string;
   branchIds?: string[];
+  allBranches?: boolean;
 }
 
 /** جسمُ طلب — `CreateContractDto` في الخادم. */
@@ -1220,6 +1221,7 @@ export interface UpdateCompanyUserDto {
   permissionTemplateId?: string;
   status?: 'ACTIVE' | 'FROZEN' | 'STOPPED';
   branchIds?: string[];
+  allBranches?: boolean;
   canEditMasterData?: boolean;
 }
 

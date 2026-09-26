@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
@@ -79,6 +79,10 @@ export class CompanyUsersService {
 
       // قبل إنشاء أي شيء — فرع مرفوض بعد إنشاء الحساب كان سيترك حساباً
       // نصف مُنشأ، وإعادة المحاولة تصطدم بـusername_taken.
+      // ⚖️ `ق-١٤٦٨`: «كلُّ الفروع» علَمٌ صريح لا يجتمع مع قائمة — والتعارضُ يُردّ مسمّىً لا يُحسم بافتراض.
+      if (dto.allBranches && dto.branchIds?.length) throw new BadRequestException(MSG.company_user_all_branches_conflict);
+      // ومنحُ «الكلّ» لمن نطاقُه الكلّ — سلامةٌ ذاتيّة كفحص الإسناد (`ق-٥١٤`)، لا اعتمادٌ على أن المسارَ للمالك وحده.
+      if (dto.allBranches && allowedBranchIds !== 'all') throw new ForbiddenException(MSG.branch_forbidden);
       if (dto.branchIds?.length) await this.assertBranchIdsAssignable(tx, allowedBranchIds, dto.branchIds);
 
       const existing = await tx.loginIdentity.findUnique({ where: { username: dto.username } });
@@ -108,7 +112,7 @@ export class CompanyUsersService {
           // منشأةُ الهويّة (`ق-٦٦٦`) — تُكتب هنا إعلاناً، **والقاعدةُ تفرضها**: مشغِّلُ
           // `company_users_identity_follows` يرفض صفَّ حسابٍ لهويّةٍ منشأتُها غيرُ منشأته.
           companyId,
-          companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId } },
+          companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId, allBranches: dto.allBranches === true } },
         },
         include: { companyUser: { include: COMPANY_USER_INCLUDE } },
       });
@@ -157,11 +161,22 @@ export class CompanyUsersService {
         });
       }
 
+      /**
+       * ⚖️ `ق-١٤٦٨` — **العلَمُ والقائمةُ حالةٌ واحدةٌ لا اثنتان**: «كلُّ الفروع» مع قائمةٍ غيرِ فارغة يُردّ مسمّىً؛
+       * و«الكلّ» يُفرغ الإسنادَ فلا تُخزَّن حالتان متعارضتان؛ وقائمةٌ غيرُ فارغةٍ بلا ذكر العلَم تقييدٌ صريحٌ فيُطفأ العلَم.
+       * والقائمةُ الفارغةُ بلا علَمٍ **لا فرع** — لا «الكلّ» كما كانت.
+       */
+      let allBranches: boolean | undefined = dto.allBranches;
+      if (dto.allBranches === true && dto.branchIds?.length) throw new BadRequestException(MSG.company_user_all_branches_conflict);
+      if (dto.allBranches === undefined && dto.branchIds?.length) allBranches = false;
+      if (dto.allBranches === true && allowedBranchIds !== 'all') throw new ForbiddenException(MSG.branch_forbidden);
       if (dto.branchIds !== undefined) {
         await this.assertBranchIdsAssignable(tx, allowedBranchIds, dto.branchIds);
         // ⚖️ ق-١٤٤٦ — الإغلاقُ قبل النقل: لا يُخرَج الحسابُ من فرع مناوبته المفتوحة.
         await assertNoOpenShiftOutside(tx, id, dto.branchIds);
         await this.replaceBranchAssignments(tx, id, dto.branchIds);
+      } else if (allBranches === true) {
+        await this.replaceBranchAssignments(tx, id, []);
       }
 
       /**
@@ -183,7 +198,7 @@ export class CompanyUsersService {
 
       return tx.companyUser.update({
         where: { id },
-        data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData },
+        data: { name: dto.name, permissionTemplateId: dto.permissionTemplateId, status: dto.status, canEditMasterData: dto.canEditMasterData, allBranches },
         include: COMPANY_USER_INCLUDE,
       });
     });
@@ -214,7 +229,7 @@ export class CompanyUsersService {
   }
 
   /** Replace-all: the payload is the complete desired set, so diffing would
-   * only add a way for the two to drift apart. Empty = unrestricted. */
+   * only add a way for the two to drift apart. Empty = no branch (`ق-١٤٦٨`); «all» is `allBranches`. */
   private async replaceBranchAssignments(tx: Tx, companyUserId: string, branchIds: string[]): Promise<void> {
     await replaceBranchAssignments(tx, companyUserId, branchIds);
   }

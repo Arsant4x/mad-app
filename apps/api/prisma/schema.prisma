@@ -613,6 +613,9 @@ model CompanyUser {
   /// property manager can still maintain the register while everyone else is
   /// frozen out of it.
   canEditMasterData Boolean @default(false)
+  /// ⚖️ `ق-١٤٦٨` — «كلُّ الفروع» علَمٌ صريح، ويشمل ما يُضاف لاحقاً. والقائمةُ الفارغةُ مع `false` لا فرع:
+  /// صفوفُ المنشأة العامّة (بلا فرع) وحدَها. القائمون بلا إسنادٍ وُسموا `true` في الهجرة فبقي سلوكُهم.
+  allBranches Boolean @default(false)
 
   permissionTemplateId String
   permissionTemplate   PermissionTemplate @relation(fields: [permissionTemplateId], references: [id])
@@ -620,7 +623,7 @@ model CompanyUser {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// Empty = unrestricted within the company (see CompanyUserBranch).
+  /// With `allBranches = false`: the branches this employee sees (empty = none — company-wide rows only).
   branches CompanyUserBranch[]
 
   notifications      Notification[]   @relation("NotificationTarget")
@@ -799,9 +802,9 @@ model Branch {
 /// `branchId` column on CompanyUser because one employee can legitimately
 /// cover several branches (an area manager over three shops).
 ///
-/// An employee with **no** rows here is treated as unrestricted within their
-/// company — that's what keeps every existing account working unchanged after
-/// this migration, instead of locking everyone out of everything.
+/// ⚖️ `ق-١٤٦٨`: **no rows here no longer means unrestricted** — «all branches» is the explicit
+/// `CompanyUser.allBranches`; an employee with `allBranches = false` and no rows sees company-wide
+/// rows only. Accounts that had no rows when the flag shipped were marked `true` by its migration.
 model CompanyUserBranch {
   id String @id @default(uuid())
 

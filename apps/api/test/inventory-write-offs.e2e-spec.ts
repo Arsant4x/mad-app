@@ -101,7 +101,8 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
       .expect(201);
     templateId = template.body.id;
     const cashier = await auth(request(app.getHttpServer()).post('/company-users'))
-      .send({ name: 'كاشير التلف', username: `wo-cashier-${suffix}`, password: 'CashierPass123!', permissionTemplateId: templateId })
+      // ⚖️ ق-١٤٦٨: «كلُّ الفروع» صراحةً — فالمقيسُ صلاحيةُ التسجيل والمراجعة لا نطاقُ الفرع.
+      .send({ name: 'كاشير التلف', username: `wo-cashier-${suffix}`, password: 'CashierPass123!', permissionTemplateId: templateId, allBranches: true })
       .expect(201);
     cashierId = cashier.body.id;
     const cashierLogin = await request(app.getHttpServer()).post('/auth/login').send({ username: `wo-cashier-${suffix}`, password: 'CashierPass123!' });

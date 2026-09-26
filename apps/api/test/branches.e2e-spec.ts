@@ -98,7 +98,8 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     const emp = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ name: 'موظف الفرع الشمالي', username: `north-${suffix}`, password: 'BranchPass123!', permissionTemplateId: template.id })
+      // ⚖️ `ق-١٤٦٨`: «كلُّ الفروع» صراحةً — القائمةُ الفارغة وحدَها لم تعد «الكلّ».
+      .send({ name: 'موظف الفرع الشمالي', username: `north-${suffix}`, password: 'BranchPass123!', permissionTemplateId: template.id, allBranches: true })
       .expect(201);
     employeeId = emp.body.id;
 
@@ -217,7 +218,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
       .expect(409);
   });
 
-  it('leaves an employee with no branch assignment unrestricted', async () => {
+  it('an employee flagged «all branches» is unrestricted (ق-١٤٦٨ — the flag, not an empty list)', async () => {
     const branches = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${employeeToken}`).expect(200);
     const ids = branches.body.map((b: { id: string }) => b.id);
     expect(ids).toEqual(expect.arrayContaining([branchNorthId, branchSouthId]));
@@ -388,15 +389,35 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     }
   }, 60000);
 
-  it('restores unrestricted visibility when the assignment is cleared', async () => {
+  /**
+   * ⚖️ `ق-١٤٦٨` — **كان هذا الاختبارُ يثبّت العطلَ نفسَه**: إفراغُ الإسناد يعيد «بلا قيد». والآن الفارغُ **لا فرع**، و«الكلّ»
+   * علَمٌ صريح — فيُثبت الاختبارُ الاتجاهين: الإفراغُ يضيّق ولا يوسّع، والعلَمُ وحدَه يعيد الكلّ.
+   */
+  it('clearing the assignment narrows to no branch — only the explicit flag restores all (ق-١٤٦٨)', async () => {
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ branchIds: [] })
+      .send({ branchIds: [], allBranches: false })
       .expect(200);
+    const none = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    expect(none.body.map((b: { id: string }) => b.id)).toEqual([]);
 
-    const branches = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${employeeToken}`).expect(200);
-    expect(branches.body.map((b: { id: string }) => b.id)).toEqual(expect.arrayContaining([branchNorthId, branchSouthId]));
+    await request(app.getHttpServer())
+      .patch(`/company-users/${employeeId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ allBranches: true })
+      .expect(200);
+    const all = await request(app.getHttpServer()).get('/branches').set('Authorization', `Bearer ${employeeToken}`).expect(200);
+    expect(all.body.map((b: { id: string }) => b.id)).toEqual(expect.arrayContaining([branchNorthId, branchSouthId]));
+  });
+
+  it('«all branches» with specific branches is refused, named (ق-١٤٦٨)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/company-users/${employeeId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ branchIds: [branchNorthId], allBranches: true })
+      .expect(400);
+    expect(String(res.body.message)).toContain('كلُّ الفروع');
   });
 
   it('refuses to assign a branch belonging to another company', async () => {
@@ -525,7 +546,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ branchIds: [] })
+      .send({ allBranches: true }) // ⚖️ ق-١٤٦٨: الإعادةُ إلى «الكلّ» بالعلَم — الفارغُ صار «لا فرع»
       .expect(200);
   });
 
@@ -572,7 +593,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     await request(app.getHttpServer())
       .patch(`/company-users/${employeeId}`)
       .set('Authorization', `Bearer ${ownerToken}`)
-      .send({ branchIds: [] })
+      .send({ allBranches: true }) // ⚖️ ق-١٤٦٨: الإعادةُ إلى «الكلّ» بالعلَم — الفارغُ صار «لا فرع»
       .expect(200);
   });
 });

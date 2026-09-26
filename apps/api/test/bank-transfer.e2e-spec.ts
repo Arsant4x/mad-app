@@ -139,7 +139,8 @@ describe('نقلُ صفّ البنك بين الفروع — الصندوقُ إ
   it('[SPEC 2.6] والنقلُ فعلُ مالك — موظّفٌ بشاشة البنوك لا ينقل صندوقاً ولا حساباً (ق-١٤٣٢)', async () => {
     const template = await asOwner(http().post('/templates')).send({ name: `نقل البنوك ${suffix}`, allowedScreens: ['dashboard', 'banks'] }).expect(201);
     await asOwner(http().post('/company-users'))
-      .send({ name: 'موظّف البنوك', username: `bank-transfer-${suffix}`, password: 'BankMove123!', permissionTemplateId: template.body.id })
+      // ⚖️ ق-١٤٦٨: «كلُّ الفروع» صراحةً — فالمقيسُ صلاحيةُ النقل لا نطاقُ الفرع.
+      .send({ name: 'موظّف البنوك', username: `bank-transfer-${suffix}`, password: 'BankMove123!', permissionTemplateId: template.body.id, allBranches: true })
       .expect(201);
     const token = (await http().post('/auth/login').send({ username: `bank-transfer-${suffix}`, password: 'BankMove123!' }).expect(200)).body.accessToken;
     const box = await newBank(`صندوقُ المالك ${suffix}`, 'CASH_BOX');

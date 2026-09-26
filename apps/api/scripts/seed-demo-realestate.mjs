@@ -334,6 +334,8 @@ async function main() {
     username: `${DEMO_USER}-emp`,
     password: `${DEMO_PASS}emp`,
     permissionTemplateId: template.id,
+    // ⚖️ ق-١٤٦٨: «كلُّ الفروع» علَمٌ صريح — بلا إسنادٍ ولا علَمٍ لا ترى فرعاً.
+    allBranches: true,
   });
   log(`  ✔ موظّف: سارة العتيبي (${DEMO_USER}-emp)`);
 
