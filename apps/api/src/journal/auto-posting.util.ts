@@ -1,4 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { DEFAULT_CHART } from '../accounts/default-chart';
 import { Prisma } from '@prisma/client';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -14,16 +15,46 @@ import { getOrCreateWriteOffAccount } from './writeoff-account.util';
 import { createJournalEntry, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 import { ServicePeriod, splitAtCollection } from './rent-recognition.util';
 
-/** Resolves a set of account codes to ids, scoped by the tenant context
- * already baked into `tx`. Returns `null` (soft-skip signal) if any code
- * isn't set up for this company yet — matches the mockup's
- * `postInvoiceToLedger`/`postPurchaseToLedger`, which silently skip posting
- * rather than blocking the invoice/purchase itself when the chart of
- * accounts isn't ready. */
-async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]): Promise<Map<string, string> | null> {
+/**
+ * يحلّ رموزَ الحسابات إلى معرّفاتها تحت سياق المنشأة المحمول في `tx`.
+ *
+ * ⚖️ (`ق-١٤٦٦` · التوجيه ٢٦٦ §٤ب) **يُرفض المستندُ برسالة ولا يمرّ بلا قيد**: كان يعيد `null` («تخطٍّ ناعم» منقولٌ من
+ * النموذج المتصفّحيّ) فيُحفظ المستندُ `201` بلا قيده — وأسوأُ من الناقص: سندٌ يُرحَّل على فاتورةٍ متخطّاة يجعل `1200`
+ * سالباً، واعترافٌ يُرحَّل على استحقاقٍ متخطّى يجعل `2400` مديناً. **والآن يرمي `409` مسمّىً** بالرموز وأسمائها،
+ * فالمعاملةُ كلُّها تسقط (المستندُ وحركاتُه وحدثُه) ويُدلّ المالكُ على المخرج: إعادةُ الحساب من شاشة الحسابات.
+ * ⚠️ **وحدُّه معلَن**: رقمُ المستند يُحجز على منفذٍ خاصّ قبل الترحيل، فالرفضُ هنا يترك فجوةً في السلسلة — كرفض الفترة
+ * المقفلة اليوم؛ والفحصُ المسبقُ قبل الترقيم مبنيٌّ للفاتورة وحدَها (`assertPostingAccounts`).
+ */
+async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]): Promise<Map<string, string>> {
   const rows = await tx.account.findMany({ where: { code: { in: codes } }, select: { id: true, code: true } });
   const ids = new Map(rows.map((r) => [r.code, r.id]));
-  return codes.every((c) => ids.has(c)) ? ids : null;
+  const missing = [...new Set(codes.filter((c) => !ids.has(c)))];
+  if (missing.length > 0) throw new MissingPostingAccountsError(missing);
+  return ids;
+}
+
+/** (`ق-١٤٦٦`) رفضٌ مسمّى — `409` لا `400`: كي لا يبتلعه ملتقطٌ يظنّه «فترةً مقفلة» فيُحفظ المستندُ بلا قيد. */
+export class MissingPostingAccountsError extends ConflictException {
+  constructor(readonly codes: string[]) {
+    super(
+      formatMessage(MSG.posting_accounts_missing, {
+        accounts: codes.map((c) => `${c} ${DEFAULT_CHART.find((a) => a.code === c)?.name ?? ''}`.trim()).join('، '),
+      }),
+    );
+  }
+}
+
+/**
+ * (`ق-١٤٦٦`) **فحصٌ مسبقٌ قبل الترقيم** — فالرفضُ لا يُحرق رقماً من السلسلة. يُستدعى برموز الترحيل التي سيطلبها المستند.
+ */
+export async function assertPostingAccounts(tx: Prisma.TransactionClient, codes: string[]): Promise<void> {
+  if (codes.length > 0) await resolveAccountIds(tx, codes);
+}
+
+/** رموزُ قيد الفاتورة كما يطلبها `postInvoiceEntry` — مصدرٌ واحد للفحص المسبق وللترحيل. */
+export function invoicePostingCodes(inv: { baseTotal: number; baseSubtotal: number; baseTaxTotal: number }): string[] {
+  if (inv.baseTotal <= 0) return [];
+  return ['1200', ...(inv.baseSubtotal > 0 ? ['4100'] : []), ...(inv.baseTaxTotal > 0 ? ['2200'] : [])];
 }
 
 /**
@@ -108,9 +139,8 @@ export async function postReversalEntry(
 export async function postInvoiceEntry(tx: Prisma.TransactionClient, companyId: string, inv: InvoiceForPosting) {
   if (inv.baseTotal <= 0) return null;
 
-  const needCodes = ['1200', '4100', ...(inv.baseTaxTotal > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
+  // (`ق-١٤٦٦`) `4100` حين يُقيَّد عليه فعلاً — لا يُرفض مستندٌ بحسابٍ لا يمسّه.
+  const ids = await resolveAccountIds(tx, invoicePostingCodes(inv));
 
   const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: inv.baseTotal, credit: 0 }];
   if (inv.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: inv.baseSubtotal });
@@ -153,9 +183,7 @@ export interface PrepaymentForPosting {
 export async function postPrepaymentInvoiceEntry(tx: Prisma.TransactionClient, companyId: string, p: PrepaymentForPosting) {
   if (p.baseTotal <= 0) return null;
   const needCodes = ['1200', ...(p.baseTaxTotal > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: p.baseTotal, credit: 0 }];
+  const ids = await resolveAccountIds(tx, needCodes);  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: p.baseTotal, credit: 0 }];
   if (p.baseSubtotal > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: 0, credit: p.baseSubtotal });
   if (p.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: p.baseTaxTotal });
   return createJournalEntry(tx, {
@@ -184,9 +212,7 @@ export async function postPrepaymentApplicationEntry(
 ) {
   if (p.gross <= 0) return null;
   const needCodes = ['1200', ...(p.vat > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-  const lines: PostingLine[] = [];
+  const ids = await resolveAccountIds(tx, needCodes);  const lines: PostingLine[] = [];
   if (p.net > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: p.net, credit: 0 });
   if (p.vat > 0) lines.push({ accountId: ids.get('2200')!, debit: p.vat, credit: 0 });
   lines.push({ accountId: ids.get('1200')!, debit: 0, credit: p.gross });
@@ -216,8 +242,6 @@ export async function postCreditNoteEntry(tx: Prisma.TransactionClient, companyI
 
   const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-
   const lines: PostingLine[] = [];
   if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: note.baseSubtotal, credit: 0 });
   if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: note.baseTaxTotal, credit: 0 });
@@ -242,8 +266,6 @@ export async function postDebitNoteEntry(tx: Prisma.TransactionClient, companyId
 
   const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-
   const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: note.baseTotal, credit: 0 }];
   if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: note.baseSubtotal });
   if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: note.baseTaxTotal });
@@ -280,8 +302,6 @@ export async function postCogsEntry(
   if (c.baseCost <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['5100']);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
@@ -314,8 +334,6 @@ export async function postCogsReversalEntry(
   if (c.baseCost <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['5100']);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
@@ -342,9 +360,7 @@ export async function postCogsSettlementEntry(
   const delta = round2(c.baseDelta);
   if (Math.abs(delta) < 0.005) return null;
 
-  const ids = await resolveAccountIds(tx, ['5100']);
-  if (!ids) return null;
-  const inventoryAccountId = await getOrCreateInventoryAccount(tx, companyId);
+  const ids = await resolveAccountIds(tx, ['5100']);  const inventoryAccountId = await getOrCreateInventoryAccount(tx, companyId);
   const amount = Math.abs(delta);
   const lines: PostingLine[] =
     delta > 0
@@ -585,8 +601,15 @@ export async function postSupplierNoteEntry(tx: Prisma.TransactionClient, compan
   if (n.baseTotal <= 0) return null;
 
   const expCode = purchaseExpenseAccountCode(n.categoryCode);
-  const ids = await resolveAccountIds(tx, ['2100', '5100', expCode]);
-  if (!ids) return null;
+  const noteWriteOff = n.baseWriteOff ?? 0;
+  const noteVariance = n.baseVariance ?? 0;
+  const residual = roundTo(n.baseTotal - n.baseTaxAmount - n.baseInventory - n.baseCogs - noteWriteOff - noteVariance, 'LINE_AMOUNT');
+  // (`ق-١٤٦٦`) ما يُقيَّد عليه فعلاً — `push` يتخطّى الصفر، فحسابٌ لا يمسّه الإشعارُ لا يرفضه.
+  const ids = await resolveAccountIds(tx, [
+    '2100',
+    ...(roundTo(n.baseCogs, 'LINE_AMOUNT') !== 0 ? ['5100'] : []),
+    ...(residual !== 0 ? [expCode] : []),
+  ]);
   const inventoryId = await getOrCreateInventoryAccount(tx, companyId);
   const inputVatId = await getOrCreateInputVatAccount(tx, companyId);
 
@@ -657,8 +680,6 @@ export async function postPurchaseEntry(tx: Prisma.TransactionClient, companyId:
   const expCode = purchaseExpenseAccountCode(p.categoryCode);
   const needCodes = ['2100', ...(serviceSubtotal !== 0 ? [expCode] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-
   const lines: PostingLine[] = [];
 
   /**
@@ -776,8 +797,8 @@ export async function postLandedCostEntry(tx: Prisma.TransactionClient, companyI
   if (total <= 0) return null;
 
   const expCode = purchaseExpenseAccountCode(c.categoryCode);
-  const ids = await resolveAccountIds(tx, ['5100', expCode]);
-  if (!ids) return null;
+  // (`ق-١٤٦٦`) `5100` حين تُقيَّد حصّةُ المستهلَك فعلاً.
+  const ids = await resolveAccountIds(tx, [...(cogs > 0 ? ['5100'] : []), expCode]);
   const lines: PostingLine[] = [];
   if (inventory > 0) lines.push({ accountId: await getOrCreateInventoryAccount(tx, companyId), debit: inventory, credit: 0 });
   if (cogs > 0) lines.push({ accountId: ids.get('5100')!, debit: cogs, credit: 0 });
@@ -835,8 +856,8 @@ export async function postNonDeductibleVatEntry(tx: Prisma.TransactionClient, co
   const inputVat = round2(inventory + cogs + expense + clearing + writeOff + variance);
 
   const expCode = purchaseExpenseAccountCode(n.categoryCode);
-  const ids = await resolveAccountIds(tx, ['5100', ...(expense !== 0 ? [expCode] : [])]);
-  if (!ids) return null;
+  // (`ق-١٤٦٦`) `5100` حين تُقيَّد حصّةُ المستهلَك فعلاً — كالمصروف.
+  const ids = await resolveAccountIds(tx, [...(cogs !== 0 ? ['5100'] : []), ...(expense !== 0 ? [expCode] : [])]);
   const lines: PostingLine[] = [];
   const push = (accountId: string, amount: number) => {
     if (amount === 0) return;
@@ -956,8 +977,6 @@ export async function postRentPaymentEntry(
   // كسابقتها (ق-٢٧٧): الطرفُ المدين حسابُ البنك حين يُقبض الإيجارُ على بنك.
   const needCodes = [...(p.cashAccountId ? [] : ['1000']), '4200', ...(fxDifference !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return skipped;
-
   const lines: PostingLine[] = [{ accountId: p.cashAccountId ?? ids.get('1000')!, debit: cash, credit: 0 }];
   if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
   if (split.deferred > 0) {
@@ -1018,9 +1037,7 @@ export interface DeferredRecognitionForPosting {
 export async function postDeferredRecognitionEntry(tx: Prisma.TransactionClient, companyId: string, r: DeferredRecognitionForPosting) {
   if (r.baseAmount <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['4200']);
-  if (!ids) return null;
-  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  const ids = await resolveAccountIds(tx, ['4200']);  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
 
   return createJournalEntry(tx, {
     companyId,
@@ -1089,8 +1106,6 @@ export async function postRentAccrualEntry(
 
   const needCodes = ['1200', '4200', ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return skipped;
-
   const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: gross, credit: 0 }];
   if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
   if (split.deferred > 0) {
@@ -1144,8 +1159,6 @@ export async function postRentAccrualReversalEntry(tx: Prisma.TransactionClient,
 
   const needCodes = ['1200', ...(fromRevenue > 0 ? ['4200'] : []), ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-
   const lines: PostingLine[] = [];
   if (fromDeferred > 0) {
     const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
@@ -1183,9 +1196,7 @@ export interface DeferredToOtherIncomeForPosting {
  */
 export async function postDeferredToOtherIncomeEntry(tx: Prisma.TransactionClient, companyId: string, s: DeferredToOtherIncomeForPosting) {
   if (s.baseAmount <= 0) return null;
-  const ids = await resolveAccountIds(tx, [OTHER_INCOME_ACCOUNT]);
-  if (!ids) return null;
-  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  const ids = await resolveAccountIds(tx, [OTHER_INCOME_ACCOUNT]);  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
   return createJournalEntry(tx, {
     companyId,
     date: s.date,
@@ -1276,9 +1287,7 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
   // `1000` لا يُطلَب حين يُمرَّر حسابُ بنك: منشأةٌ بلا `1000` لا يُسقَط قيدُها
   // البنكيّ لأجل رمزٍ لا يدخل فيه.
   const needCodes = [...(p.cashAccountId ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-  const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
+  const ids = await resolveAccountIds(tx, needCodes);  const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
 
   const lines: PostingLine[] = [
     signedLine(cashAccountId, cash, receivable),
@@ -1644,8 +1653,6 @@ export async function postDepositReceiptEntry(tx: Prisma.TransactionClient, comp
   if (d.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1000', TENANT_DEPOSITS_ACCOUNT]);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: d.date,
@@ -1714,8 +1721,6 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
     ...(s.heldByCompany && s.refund > 0 ? ['1000'] : []),
   ];
   const ids = await resolveAccountIds(tx, needCodes);
-  if (!ids) return null;
-
   const lines: PostingLine[] = s.heldByCompany
     ? [{ accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: s.baseAmount, credit: 0 }]
     : [{ accountId: ids.get('1000')!, debit: awarded, credit: 0 }];
@@ -1765,9 +1770,7 @@ export async function postDeferredSettlementEntry(tx: Prisma.TransactionClient, 
   if (s.baseAmount <= 0) return null;
 
   const destination = s.disposition === 'refund' ? '1000' : OTHER_INCOME_ACCOUNT;
-  const ids = await resolveAccountIds(tx, [destination]);
-  if (!ids) return null;
-  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  const ids = await resolveAccountIds(tx, [destination]);  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
 
   return createJournalEntry(tx, {
     companyId,
@@ -1813,8 +1816,6 @@ export async function postContractSettlementEntry(tx: Prisma.TransactionClient, 
   if (s.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: s.date,
@@ -1852,8 +1853,6 @@ export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyI
   if (c.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
@@ -1873,8 +1872,6 @@ export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, compan
   if (c.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1000', '1200']);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
@@ -1900,8 +1897,6 @@ export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, company
   if (c.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
@@ -1951,8 +1946,6 @@ export async function postKeyMoneyEntry(tx: Prisma.TransactionClient, companyId:
   if (k.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, ['1000', k.received ? OTHER_INCOME_ACCOUNT : KEY_MONEY_ASSET_ACCOUNT]);
-  if (!ids) return null;
-
   const lines: PostingLine[] = k.received
     ? [
         { accountId: ids.get('1000')!, debit: k.baseAmount, credit: 0 },
@@ -2006,8 +1999,6 @@ export async function postMaintenanceCostEntry(tx: Prisma.TransactionClient, com
   if (m.baseAmount <= 0) return null;
 
   const ids = await resolveAccountIds(tx, [MAINTENANCE_EXPENSE_ACCOUNT, '1000']);
-  if (!ids) return null;
-
   return createJournalEntry(tx, {
     companyId,
     date: m.date,

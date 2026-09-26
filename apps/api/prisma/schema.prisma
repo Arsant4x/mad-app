@@ -1587,9 +1587,9 @@ model Invoice {
   prepaymentsApplied InvoicePrepayment[] @relation("InvoicePrepaymentOnInvoice")
   appliedAsPrepayment InvoicePrepayment[] @relation("InvoicePrepaymentSource")
 
-  /// Null when required accounts (1200/4100/2200) aren't set up yet for this
-  /// company — the invoice itself is still created, just not posted (see
-  /// InvoicesService). `onDelete: Restrict` means the linked JournalEntry
+  /// ⚖️ `ق-١٤٦٦`: a missing posting account (1200/4100/2200) now **refuses the invoice** (409, named) —
+  /// it is no longer created unposted. Null only on rows saved before that rule, or when there is
+  /// nothing to post (a zero total). `onDelete: Restrict` means the linked JournalEntry
   /// can't be deleted directly from the Journal screen while this invoice
   /// still references it — reverse it via deleting/re-editing the invoice.
   journalEntryId String?
@@ -5102,8 +5102,8 @@ model Installment {
 }
 
 /// An actual collected rent payment. Always posts a journal entry (debit
-/// cash, credit rental-revenue — soft-skipped if those accounts aren't set
-/// up yet, same pattern as Invoice/Purchase auto-posting) and, when paid via
+/// cash, credit rental-revenue — ⚖️ `ق-١٤٦٦`: a missing account refuses the payment, named, like
+/// Invoice/Purchase auto-posting; it is no longer soft-skipped) and, when paid via
 /// bank transfer, also creates a matching BankTransaction (see
 /// ContractsService.recordPayment) so it shows up in the Bank Transactions
 /// screen too, not just the ledger.

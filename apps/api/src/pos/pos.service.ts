@@ -11,6 +11,7 @@ import { IntegrationsService } from '../integrations/integrations.service';
 import { formatMessage } from '../common/i18n/messages';
 import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { FulfilmentReport } from '../invoices/sale-fulfilment.util';
+import { assertPostingAccounts, invoicePostingCodes } from '../journal/auto-posting.util';
 import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
@@ -597,7 +598,11 @@ export class PosService {
 
       // الدفع المقسّم يُدقَّق قبل إنشاء أي شيء: نفس دالة المجاميع التي
       // ستحسب الفاتورة تتحقق أن الأجزاء تساويها — لا فاتورة نصف مدفوعة.
-      const total = computeTotals(posLines).total;
+      const totals = computeTotals(posLines);
+      const total = totals.total;
+      // ⚖️ (`ق-١٤٦٦`) حساباتُ قيد الفاتورة تُفحص هنا — **قبل أيّ شحنٍ للبطاقة**: محاولةُ الدفع تُنشأ من هذا التحضير ثم
+      //    تشحن ثم تُتمّ؛ فحسابٌ غائبٌ عند الإتمام كان يترك المالَ مأخوذاً والبيعَ غيرَ مسجَّل. (بعملة أساس المنشأة.)
+      await assertPostingAccounts(tx, invoicePostingCodes({ baseTotal: totals.total, baseSubtotal: totals.subtotal, baseTaxTotal: totals.taxTotal }));
       if (dto.paymentMethod === 'SPLIT') {
         if (!dto.payments?.length) throw new BadRequestException(MSG.pos_split_parts_required);
         const paid = dto.payments.reduce((sum, p) => sum + p.amount, 0);

@@ -27,7 +27,17 @@ import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postPrepaymentApplicationEntry, postPrepaymentInvoiceEntry } from '../journal/auto-posting.util';
 import { getOrCreateCustomerPrepaymentsAccount } from '../journal/prepayment-account.util';
-import { postCogsEntry, postCogsReversalEntry, postCreditNoteEntry, postDebitNoteEntry, postInvoiceEntry, postReversalEntry, unpostIfLinked } from '../journal/auto-posting.util';
+import {
+  assertPostingAccounts,
+  invoicePostingCodes,
+  postCogsEntry,
+  postCogsReversalEntry,
+  postCreditNoteEntry,
+  postDebitNoteEntry,
+  postInvoiceEntry,
+  postReversalEntry,
+  unpostIfLinked,
+} from '../journal/auto-posting.util';
 import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { isReplacedRejected } from './active-documents.util';
@@ -555,6 +565,11 @@ export class InvoicesService {
         credit,
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+      // ⚖️ (`ق-١٤٦٦`) وحساباتُ القيد تُفحص قبل الترقيم كذلك — فالرفضُ برسالةٍ لا يحرق رقماً من سلسلة الفاتورة.
+      await assertPostingAccounts(
+        tx,
+        invoicePostingCodes({ baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) }),
+      );
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — وصنفٌ لم يُعلن وحدتَه يترك السطرَ بلا وحدة، لا برمزٍ مخمَّن.
       const unitCodes = await unitCodesFor(tx, dto.lines);
@@ -670,9 +685,8 @@ export class InvoicesService {
         });
       }
 
-      // Auto-post to the ledger; soft-skip (journalEntryId stays null) if the
-      // required accounts (1200/4100/2200) aren't set up for this company yet
-      // — see the schema comment on Invoice.journalEntryId.
+      // Auto-post to the ledger. ⚖️ (`ق-١٤٦٦`) لا تخطٍّ ناعم: حسابٌ غائب يرمي `409` مسمّىً فتسقط الفاتورةُ كلُّها —
+      // وقد فُحص قبل الترقيم أعلاه، فلا يبلغ هنا إلا ما حُذف بين الفحص والترحيل.
       const entry = await postInvoiceEntry(tx, companyId, {
         customerId: created.customerId,
         branchId: created.branchId,
