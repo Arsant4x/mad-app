@@ -108,6 +108,11 @@ export type StockDeductionReport =
       movements: number;
       /** بنود هبط رصيدها تحت الصفر — تحذير ناعم لا مانع، كسياسة المخزون القائمة. */
       belowZero: { productId: string; resultingQty: string }[];
+      /** (`ق-١٤٦٩`) ما خرج بلا طبقة — كان يُسقَط هنا فيصمت الكاشيرُ عن المؤقّت كلّه. */
+      provisionalQty: string;
+      /** (`ق-١٤٦٩`) والمؤقّتُ بتكلفة صفر لكلّ صنفٍ بمصدره — يُعلَن ولا يمرّ صامتاً. */
+      // النوعُ من تقرير التسليم نفسِه لا من المخزون — فلا حافةَ استيرادٍ جديدةٍ من النواة إلى محرّك (`§3`).
+      zeroCostProvisional: Extract<FulfilmentReport, { fulfilled: true }>['zeroCostProvisional'];
     }
   | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
@@ -123,7 +128,14 @@ function toDeductionReport(f: FulfilmentReport | undefined): StockDeductionRepor
     return { deducted: false, reason: f?.reason === 'NO_TRACKED_PRODUCTS' ? 'NO_TRACKED_PRODUCTS' : 'NO_BRANCH_WAREHOUSE' };
   }
   // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`) تصل من صورة حدّ التسليم نفسِها — تُمرَّر ولا تُعاد صياغتها.
-  return { deducted: true, warehouseId: f.warehouseId, movements: f.movements, belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: b.resultingQty })) };
+  return {
+    deducted: true,
+    warehouseId: f.warehouseId,
+    movements: f.movements,
+    belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: b.resultingQty })),
+    provisionalQty: f.provisionalQty,
+    zeroCostProvisional: f.zeroCostProvisional.map((z) => ({ productId: z.productId, qty: z.qty, costSource: z.costSource })),
+  };
 }
 
 /** مجاميعُ المناوبة رقماً — للحساب داخل الخادم (فرقُ الجرد · قيدُ الفرق). */

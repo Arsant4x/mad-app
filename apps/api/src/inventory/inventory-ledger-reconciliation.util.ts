@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { round2 } from '../common/money/rounding';
+import { round2, roundTo } from '../common/money/rounding';
 import { INVENTORY_ACCOUNT_CODE } from '../journal/inventory-accounts.util';
 
 type Tx = Prisma.TransactionClient;
@@ -48,6 +48,11 @@ export interface InventoryLedgerReconciliation {
   legacyManualUnposted: number;
   /** **الافتراق** — صارماً: `ledger − layers + openProvisional`. صفرٌ = مطابق. */
   difference: number;
+  /**
+   * (`ق-١٤٦٩` · التوجيه ٢٦٦ §٤هـ) **المؤقّتُ المفتوح بتكلفة صفر — عدداً وكمّيةً، خارج المعادلة**: قيمتُه صفرٌ فلا تراه
+   * `openProvisional` ولا `difference` أبداً — فكان صامتاً في المطابقة. **يُعدّ ولا يُطرح**، كـ`legacyManualUnposted`.
+   */
+  openProvisionalZeroCost: { count: number; qty: number };
 }
 
 export async function inventoryLedgerReconciliation(tx: Tx): Promise<InventoryLedgerReconciliation> {
@@ -80,11 +85,18 @@ export async function inventoryLedgerReconciliation(tx: Tx): Promise<InventoryLe
                   AND m.origin = 'MANUAL' AND m.type <> 'TRANSFER' AND m."journalEntryId" IS NULL
                   AND EXISTS (SELECT 1 FROM stock_movements r WHERE r."reversalOfId" = m.id AND r.type = 'IN')), 0)::float8 AS restored`;
 
+  const [zero] = await tx.$queryRaw<{ n: number; q: number }[]>`
+    SELECT count(*)::int AS n, COALESCE(SUM(c.qty), 0)::float8 AS q
+    FROM inventory_consumptions c
+    WHERE c."layerId" IS NULL AND c."unitCost" = 0
+      AND NOT EXISTS (SELECT 1 FROM inventory_consumptions s WHERE s."settlesId" = c.id)`;
+
   return {
     ledger: round2(ledger.v),
     layers: round2(layers.v),
     openProvisional: round2(provisional.v),
     legacyManualUnposted: round2(legacy.added - legacy.consumed + legacy.restored),
     difference: round2(ledger.v - layers.v + provisional.v),
+    openProvisionalZeroCost: { count: zero.n, qty: roundTo(zero.q, 'DERIVED_QUANTITY') },
   };
 }

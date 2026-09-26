@@ -204,6 +204,14 @@ export class PosStockBelowZeroResponse {
   resultingQty!: string;
 }
 
+/** (`ق-١٤٦٩`) صنفٌ خرج مؤقّتاً **بتكلفة صفر** — بكمّيته نصّاً ومصدر تكلفته؛ و`NONE` صفرٌ بلا مصدر. */
+export class PosZeroCostProvisionalResponse {
+  productId!: string;
+  qty!: string;
+  @ApiProperty({ enum: ['WAREHOUSE_LAYER', 'PRODUCT_LAYER', 'PRODUCT_CARD', 'NONE'] })
+  costSource!: 'WAREHOUSE_LAYER' | 'PRODUCT_LAYER' | 'PRODUCT_CARD' | 'NONE';
+}
+
 /** خُصم المخزون — فرعُ `deducted: true` من `StockDeductionReport`. */
 export class PosStockDeductedResponse {
   // منطقيٌّ حرفيٌّ يميّز الفرعين: `enum` في المزخرف يجعل النوعَ عدداً (`getEnumType`) — فيُلفّ التعدادُ في `allOf`.
@@ -212,6 +220,9 @@ export class PosStockDeductedResponse {
   warehouseId!: string;
   movements!: number;
   belowZero!: PosStockBelowZeroResponse[];
+  /** ما خرج بلا طبقة — نصّاً بثلاث خانات. */
+  provisionalQty!: string;
+  zeroCostProvisional!: PosZeroCostProvisionalResponse[];
 }
 
 /** تُخطّي الخصم صراحةً — فرعُ `deducted: false`. */

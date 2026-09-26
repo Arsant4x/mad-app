@@ -6,7 +6,7 @@ import { CreateStockMovementDto } from './dto/create-stock-movement.dto';
 import { ListMovementsQueryDto } from './dto/list-movements-query.dto';
 import { computeStockQuantities, currentStockQty } from './stock-quantity.util';
 import { MSG } from '../common/i18n/messages';
-import { closeLayerExactly, consumeFifo, createLayerFromMovement, restoreConsumption, transferLayers } from './costing.util';
+import { closeLayerExactly, consumeFifo, createLayerFromMovement, ProvisionalCostSource, restoreConsumption, transferLayers } from './costing.util';
 import { postManualStockEntry, postProvisionalSettlementEntries } from '../journal/auto-posting.util';
 import { settleProvisionalConsumptions } from '../journal/provisional-settlement.util';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../common/batches/declared-limits';
@@ -129,6 +129,8 @@ export class InventoryService {
       const when = new Date(dto.date);
       const ref = `${dto.type === 'ADJUSTMENT' ? 'تسوية' : dto.type === 'IN' ? 'إدخال' : 'إخراج'} ${movement.id.slice(0, 8)} — ${reason}`;
       let entryId: string | null = null;
+      // (`ق-١٤٦٩` · التوجيه ٢٦٦ §٤هـ) ما خرج بلا طبقة — ومنه ما خرج بتكلفة صفر — يُعلَن في الردّ لا في التقرير وحدَه.
+      let provisional: { provisionalQty: number; zeroCostQty: number; costSource: ProvisionalCostSource | null } | null = null;
       if (entering) {
         const layerId = await createLayerFromMovement(tx, companyId, {
           productId: dto.productId,
@@ -149,11 +151,14 @@ export class InventoryService {
       } else if (dto.type === 'OUT' || dto.type === 'ADJUSTMENT') {
         // ٥+٦ الإخراجُ اليدويّ ليس بيعاً — المنتهي يمرّ منه (`ق-١٠٨٢`).
         const consumed = await consumeFifo(tx, companyId, { productId: dto.productId, warehouseId: dto.warehouseId, qty: Math.abs(dto.qty), movementId: movement.id, exit: 'OTHER', date: when });
+        provisional = { provisionalQty: consumed.provisionalQty, zeroCostQty: consumed.zeroCostQty, costSource: consumed.provisionalCostSource };
         // بتكلفة ما خرج — ومنه المؤقّتُ (ما خرج وراء الرصيد) بآخر تكلفةٍ معروفة، تُسوّيه طبقةٌ تصل فيُرحَّل فرقُه على الفروقات.
         const entry = await postManualStockEntry(tx, companyId, { branchId: movement.branchId, ref, date: when, baseValue: -consumed.totalCost });
         entryId = entry?.id ?? null;
       } else if (dto.type === 'TRANSFER') {
-        await transferLayers(tx, companyId, {
+        // (`ق-١٤٦٩`) والتحويلُ يُعلن مؤقّتَه: شريحةٌ مؤقّتةٌ في المصدر تصير **طبقةً حقيقيّةً** في المقصِد بتكلفتها —
+        //    فصفرٌ هنا يُغسَل صفراً «معروفاً» هناك إن لم يُعلَن لحظةَ وقوعه.
+        const { consumed } = await transferLayers(tx, companyId, {
           productId: dto.productId,
           fromWarehouseId: dto.warehouseId,
           toWarehouseId: dto.toWarehouseId!,
@@ -161,6 +166,7 @@ export class InventoryService {
           movementId: movement.id,
           date: when,
         });
+        provisional = { provisionalQty: consumed.provisionalQty, zeroCostQty: consumed.zeroCostQty, costSource: consumed.provisionalCostSource };
       }
       // الحركةُ تحمل قيدَها — فما بلا قيدٍ يُعرف قديماً (سبق ق-١٣٦٣) لا منسيّاً.
       if (entryId) await tx.stockMovement.update({ where: { id: movement.id }, data: { journalEntryId: entryId } });
@@ -170,7 +176,7 @@ export class InventoryService {
       // is never rejected for going negative, the frontend just gets enough
       // information to flag it if it wants to.
       const resultingQty = await currentStockQty(tx, dto.productId, dto.warehouseId);
-      return { ...movement, journalEntryId: entryId, resultingQty };
+      return { ...movement, journalEntryId: entryId, resultingQty, provisional };
     });
   }
 
@@ -197,6 +203,8 @@ export class InventoryService {
         date: r.movement.date,
         qty: Number(r.qty),
         unitCost: Number(r.unitCost),
+        // (`ق-١٤٦٩`) الصفرُ علَمٌ مقروء لا رقمٌ يُستنتج — مشتقٌّ من الصفّ نفسِه (`layerId IS NULL AND unitCost = 0`)، لا حالةٌ تُخزَّن.
+        zeroCost: Number(r.unitCost) === 0,
         createdAt: r.createdAt,
       })), PROVISIONAL_SEARCH_FIELDS);
     });
