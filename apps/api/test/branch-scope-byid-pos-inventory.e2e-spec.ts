@@ -112,7 +112,7 @@ describe('فروعُ الفاعل عند الفعل بالمعرّف — نقط�
     ((await as(http().post('/pos/shifts')).send({ openingFloat: 0, branchId }).expect(201)).body as Created).id;
   /** مناوبةُ موظّف الشمال المفتوحة — أو تُفتح في الشمال (مناوبةٌ مفتوحةٌ واحدة لكلِّ كاشير). */
   const openNorthShift = async (): Promise<string> => {
-    const current = (await asRestricted(http().get('/pos/shifts/current')).expect(200)).body as Partial<ShiftRow> | null;
+    const current = (await asRestricted(http().get('/pos/shifts/current')).expect(200)).body.shift as Partial<ShiftRow> | null;
     if (current?.id) return current.id;
     return openShift(asRestricted, northId);
   };

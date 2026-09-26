@@ -126,10 +126,10 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     const res = await sale().expect(201);
     invoiceIds.push(res.body.id);
     // السببُ يُطبع قبل التوكيد — سقوطٌ بلا سببه يُقاس مرتَين.
-    if (!res.body.zatcaStamped) console.log(`stampError: ${res.body.stampError}`);
-    expect(res.body.zatcaStamped).toBe(true);
+    if (!res.body.stamped) console.log(`stampError: ${res.body.stampError}`);
+    expect(res.body.stamped).toBe(true);
     expect(res.body.stampError).toBeNull();
-    const fields = decodeZatcaQr(res.body.zatcaQr);
+    const fields = decodeZatcaQr(res.body.receiptQr);
     // الوسوم ٦–٩ هي ما يجعله ختماً: تجزئة المستند وتوقيعه ومفتاحه العام وتوقيع الشهادة.
     expect(Object.keys(fields).map(Number).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(fields[1]).toBe(`مؤسسة الختم ${suffix}`);
@@ -139,7 +139,7 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
     );
     expect(stored.zatcaStatus).toBe('STAMPED');
     expect(stored.zatcaSignedXml).toContain('<ds:SignatureValue>');
-    expect(stored.zatcaQrPayload).toBe(res.body.zatcaQr);
+    expect(stored.zatcaQrPayload).toBe(res.body.receiptQr);
     expect(stored.zatcaIcv).not.toBeNull();
     // الوسم ٦ = التجزئة المحفوظة — الرمز على الإيصال يُشير إلى المستند الذي سيُرسَل بعينه.
     expect(fields[6]).toBe(stored.zatcaHash);
@@ -149,13 +149,13 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
       .send({ clientSaleId: randomUUID(), ringAt: new Date().toISOString(), ringOffsetMin: 180, lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' })
       .expect(201);
     invoiceIds.push(again.body.id);
-    expect(again.body.zatcaStamped).toBe(true);
+    expect(again.body.stamped).toBe(true);
   }, 60000);
 
   it('② الإبلاغ يرفض مخزوناً تلف بعد التوقيع — بسببٍ مسمّى، ولا يُرسَل (ق-١٩٦/٤)', async () => {
     const res = await sale().expect(201);
     invoiceIds.push(res.body.id);
-    expect(res.body.zatcaStamped).toBe(true);
+    expect(res.body.stamped).toBe(true);
 
     // تلفٌ في المتن بعد التوقيع: حرفٌ في اسم البائع داخل المستند المخزَّن — التوقيع على
     // SignedInfo يبقى صحيحاً، فلا يكشفه إلا إعادةُ التجزئة من البايتات.
@@ -195,11 +195,11 @@ describe('ZATCA synchronous stamp at sale (e2e)', () => {
 
     const res = await sale().expect(201);
     invoiceIds.push(res.body.id);
-    expect(res.body.zatcaStamped).toBe(false);
+    expect(res.body.stamped).toBe(false);
     expect(typeof res.body.stampError).toBe('string');
     expect(res.body.stampError.length).toBeGreaterThan(0);
     // الإيصال يخرج — بالوسوم الخمسة لا التسعة.
-    const fields = decodeZatcaQr(res.body.zatcaQr);
+    const fields = decodeZatcaQr(res.body.receiptQr);
     expect(Object.keys(fields).map(Number).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
 
     const stored = await tenantPrisma.runInTenantContext(companyId, (tx) =>

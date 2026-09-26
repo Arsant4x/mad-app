@@ -116,8 +116,8 @@ describe('POS cashier (e2e)', () => {
     invoiceIds.push(sale.body.id);
 
     const cur = await auth(request(app.getHttpServer()).get('/pos/shifts/current')).expect(200);
-    expect(cur.body.id).toBe(shiftId);
-    expect(cur.body.salesCount).toBe(2);
+    expect(cur.body.shift.id).toBe(shiftId);
+    expect(cur.body.shift.salesCount).toBe(2);
     // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`): الشكلُ جزءٌ من العقد فيُقارَن حرفاً.
     expect(cur.body.cashTotal).toBe('230.00');
     expect(cur.body.cardTotal).toBe('115.00');
@@ -228,8 +228,8 @@ describe('POS cashier (e2e)', () => {
     const sale = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
     invoiceIds.push(sale.body.id);
 
-    expect(sale.body.zatcaQr).toBeTruthy();
-    const fields = decodeZatcaQr(sale.body.zatcaQr);
+    expect(sale.body.receiptQr).toBeTruthy();
+    const fields = decodeZatcaQr(sale.body.receiptQr);
     expect(fields[1]).toBe(legalName);
     expect(fields[2]).toBe(vatNumber);
     // وسم ٣ = يومُ الجهاز ووقتُه محلياً بلا لاحقة (ق-١٨٥) — لا 22:15 ولا 00:00:00.
@@ -240,7 +240,7 @@ describe('POS cashier (e2e)', () => {
     // إعادةُ الإرسال تعيد الفاتورةَ نفسها **بإيصالٍ كامل** — فطرفيةٌ أعادت المزامنة تطبع رمزاً لا فراغاً.
     const again = await auth(request(app.getHttpServer()).post('/pos/sales/sync')).send(payload).expect(201);
     expect(again.body.id).toBe(sale.body.id);
-    expect(again.body.zatcaQr).toBe(sale.body.zatcaQr);
+    expect(again.body.receiptQr).toBe(sale.body.receiptQr);
 
     if (openedHere) await auth(request(app.getHttpServer()).post(`/pos/shifts/${open.body.id}/close`)).send({ declaredClosing: 0 });
   }, 60000);
