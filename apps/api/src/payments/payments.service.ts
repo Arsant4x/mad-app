@@ -22,7 +22,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { getOrCreateAccountByCode, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME } from '../journal/pos-settlement.util';
-import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
@@ -164,6 +164,8 @@ export class PaymentsService {
           dto.method === 'CARD' ? (await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset')).id : null;
 
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+        // مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر (`ق-١٤٣٧`).
+        await assertBoxInBranch(tx, branchId, bank);
         const amount = round2(dto.amount);
         const allocations = (dto.allocations ?? []).map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
 
@@ -405,6 +407,9 @@ export class PaymentsService {
    * **على مستوى المنشأة بحقّها**: عكسُ السند يقرأ عكسَه السابق وفواتيرَ
    * تخصيصاته هو — روابطُ مستندٍ لا قوائمُ رؤية، وحجبُ فاتورةٍ منها يعكس نصفَ
    * السند ويترك الذمّةَ مختلّة.
+   *
+   * **صندوقُه لا يُقاس هنا**: العكسُ مرآةُ سند القبض بصندوقه وفرعه كما هما، والأصلُ قيس صندوقُه عند إنشائه
+   * (`ق-١٤٣٧`) — وقياسُه الآن يمنع تصحيحَ سندٍ نُقل حسابُه البنكيّ بعده للقادم.
    */
   reverse(companyId: string, id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
@@ -519,6 +524,8 @@ export class PaymentsService {
         if (dto.method === 'BANK' && !dto.bankId) throw new BadRequestException(MSG.bank_required);
         const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
         if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
+        // الردُّ مستندٌ في فرع الإشعار — لا يخرج من صندوق فرعٍ آخر (`ق-١٤٣٧`).
+        await assertBoxInBranch(tx, note.branchId, bank);
 
         const refundable = await this.refundableOf(tx, note.relatedInvoice);
         if (refundable <= EPS) throw new BadRequestException(MSG.refund_nothing_refundable);

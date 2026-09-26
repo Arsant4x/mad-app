@@ -1,6 +1,6 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { MSG } from '../common/i18n/messages';
+import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**
  * Branch visibility, expressed once so every list query filters it the same way.
@@ -77,4 +77,22 @@ export async function resolveBranchId(
 
   assertBranchAllowed(allowedBranchIds, branchId);
   return branch.id;
+}
+
+/**
+ * 🔴 **مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر** (`ق-١٤٣٧`) — المخطَّطُ يقول إن صندوقَ الفرع صفُّ `Bank` يشير إليه
+ * (`Bank.branchId` · `CLAUDE.md §6.8`)، والشيفرةُ كانت تقرأ الصندوقَ بمعرّفه ولا تقيسه بفرع المستند.
+ *
+ * **والحدّ**: صندوقُ المنشأة كلِّها (بلا فرع) لكلِّ فرع · **والمستندُ بلا فرعٍ خارجُ الحكم** (معلَنٌ لا مغطّى) · **والمرآةُ**
+ * (عكسُ سندٍ أو إلغاؤه) تحمل صندوقَ أصلها وفرعَه كما هما، فلا تُقاس. يُستدعى بعد أن يُعرف الفرعان وقبل أيّ كتابة.
+ */
+export async function assertBoxInBranch(
+  tx: Prisma.TransactionClient,
+  documentBranchId: string | null | undefined,
+  box: { name: string; branchId: string | null } | null | undefined,
+): Promise<void> {
+  if (!box || !documentBranchId || !box.branchId || box.branchId === documentBranchId) return;
+  const names = await tx.branch.findMany({ where: { id: { in: [documentBranchId, box.branchId] } }, select: { id: true, name: true } });
+  const nameOf = (id: string) => names.find((b) => b.id === id)?.name ?? id;
+  throw new ConflictException(formatMessage(MSG.document_box_other_branch, { box: box.name, boxBranch: nameOf(box.branchId), branch: nameOf(documentBranchId) }));
 }

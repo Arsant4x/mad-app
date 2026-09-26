@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
@@ -144,6 +144,8 @@ export class SupplierPaymentsService {
         if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
 
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+        // مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر (`ق-١٤٣٧`).
+        await assertBoxInBranch(tx, branchId, bank);
         const amount = round2(dto.amount);
         const allocations = (dto.allocations ?? []).map((a) => ({ purchaseId: a.purchaseId, amount: round2(a.amount) }));
 
@@ -238,6 +240,9 @@ export class SupplierPaymentsService {
    *
    * **على مستوى المنشأة بحقّها**: عكسُ السند يقرأ عكسَه السابق وفواتيرَ تخصيصاته هو —
    * روابطُ مستندٍ لا قوائمُ رؤية، وحجبُ فاتورةٍ منها يعكس نصفَ السند ويترك الذمّةَ مختلّة.
+   *
+   * **صندوقُه لا يُقاس هنا**: عكسُ سند الصرف يحمل صندوقَ أصله وفرعَه كما هما — قيس الأصلُ عند إنشائه (`ق-١٤٣٧`)،
+   * والعكسُ يُلغيه ولا يختار صندوقاً.
    */
   reverse(companyId: string, id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>

@@ -433,6 +433,10 @@ export class ContractsService {
     return round2(remaining.reduce((sum, i) => sum + Number(i.amount), 0));
   }
 
+  /**
+   * **صندوقُه لا يُقاس هنا**: دفعةُ الإيجار مستندٌ بلا فرع (العقدُ والعقارُ لا يحملان فرعاً)، والمستندُ بلا فرعٍ خارجُ حكم
+   * `ق-١٤٣٧` — وحركةُ البنك مرآتُها بلا فرعٍ كذلك.
+   */
   recordPayment(companyId: string, contractId: string, dto: RecordPaymentDto) {
     // Retries on a journal-entry "no" collision from a concurrent payment.
     return retryOnUniqueConflict(() =>
