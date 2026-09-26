@@ -43,6 +43,11 @@ export interface OutboxRow {
   payload: unknown;
 }
 
+/** الصفُّ كما قُرئ للحجز — ومعه عددُ محاولاته **نسخةً** يُشترط عليها الحجز. */
+export interface OutboxRowRead extends OutboxRow {
+  attempts: number;
+}
+
 /** ما يُنفِّذ الإرسال فعلاً — يُسجَّل من وحدةٍ تعرف الجهة، لا من هنا. */
 export type OutboxDispatcher = (row: OutboxRow) => Promise<void>;
 
@@ -63,6 +68,17 @@ const EMPTY: DispatchResult = { claimed: 0, sent: 0, retried: 0, failed: 0 };
  * `enqueueWithinTx` مسجَّلٌ مستمعاً **امتثالياً** على الناقل، فيجري **داخل معاملة
  * المستند**. وإن تعذّرت كتابة الصفّ **تُلغى المعاملة كلها**: لا فاتورة بلا
  * طابورها. وهذا ما يجعل الطابور ضمانةً لا رجاءً.
+ *
+ * ## 🔴 والإرسالُ خارج معاملة القاعدة (`ق-١٤٦٤`)
+ *
+ * كانت الدورةُ معاملةً واحدة: تحجز الصفَّ **ثم تنادي المرسِل وهي مفتوحة** — ومرسِلُ الهيئة (`deliverIssued`) نداءٌ شبكيّ
+ * مهلتُه `30 s` في معاملةٍ مهلتُها `5 s`. فإرسالٌ أبطأُ منها يُسقط كتابةَ «أُرسل» («`Transaction already closed`») **ويُرجِع
+ * الحجزَ معها** — فيعود الصفُّ بلا أثرٍ ولا زيادةٍ في محاولاته، ويُرسَل ثانيةً في الدورة التالية ولا يبلغ حدَّ الفشل أبداً؛
+ * واتصالٌ يُحبس طوالَ النداء. **قِيس حيّاً** (`test/outbox-dispatch-outside-tx.e2e-spec.ts`).
+ *
+ * فصار ثلاثةَ أطوار: **① حجزٌ في معاملةٍ تُلتزم** (المحاولةُ تُحسب والموعدُ يُؤجَّل بالتراجع — فهو إيجارٌ للصفّ) ·
+ * **② الإرسالُ خارجها** · **③ معاملةٌ ثانيةٌ تكتب النتيجة**. وسقوطٌ بين الثاني والثالث يترك الصفَّ مستحقّاً بعد تراجعه —
+ * «مرّةً على الأقلّ» كما كان، والمرسِلُ يتخطّى ما قُضي فيه (`deliverIssued`).
  *
  * ## ⚠️ ولماذا يمرّ الموزّع بكل منشأة على حدة
  *
@@ -116,60 +132,85 @@ export class OutboxService {
   }
 
   /**
+   * **① الحجز** — داخل معاملة المستدعي، وتُلتزم قبل أيّ إرسال.
+   *
+   * مشروطٌ بـ`status: PENDING` **وبعدد المحاولات كما قُرئ**: الحجزُ يزيده، فمن قرأ الصفَّ قبل أن يحجزه غيرُه يحمل عدداً أقدم
+   * **فلا يحجز شيئاً** — وهو ما يمنع إرسالاً مزدوجاً بعد أن صار الحجزُ يُلتزم قبل الإرسال (كان قفلُ الصفّ في المعاملة الواحدة
+   * يمنعه). **والموعدُ يُؤجَّل بالتراجع** فالصفُّ المحجوزُ لا يُقرأ مستحقّاً حتى ينقضي إيجارُه.
+   */
+  async claimWithinTx(tx: Prisma.TransactionClient, rows: OutboxRowRead[], now: Date): Promise<OutboxRowRead[]> {
+    const claimed: OutboxRowRead[] = [];
+    for (const row of rows) {
+      const result = await tx.outboxEvent.updateMany({
+        where: { id: row.id, status: 'PENDING', attempts: row.attempts },
+        data: { attempts: { increment: 1 }, availableAt: new Date(now.getTime() + nextDelayMs(row.attempts + 1)) },
+      });
+      if (result.count === 1) claimed.push(row);
+    }
+    return claimed;
+  }
+
+  /**
    * دورةٌ لمنشأةٍ واحدة **داخل سياقها** — وهي وحدة العمل القابلة للاختبار.
    *
-   * والمطالبة بـ`updateMany` مشروطاً بـ`status: PENDING`: من يفوز بالتحديث يملك
-   * الصفّ. **وهو ما يمنع إرسالاً مزدوجاً، لا ترتيبُ القراءة** — فيبقى صحيحاً لو
-   * عمل موزّعان معاً.
+   * **① حجزٌ في معاملة** (`claimWithinTx`) · **② الإرسالُ خارجها** · **③ معاملةٌ ثانيةٌ لكلِّ صفٍّ تكتب نتيجتَه** (`ق-١٤٦٤`).
    */
-  dispatchForCompany(companyId: string, batchSize = 20, now = new Date()): Promise<DispatchResult> {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  async dispatchForCompany(companyId: string, batchSize = 20, now = new Date()): Promise<DispatchResult> {
+    const claimed = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const due = await tx.outboxEvent.findMany({
         where: { status: 'PENDING', availableAt: { lte: now } },
         orderBy: { availableAt: 'asc' },
         take: batchSize,
         select: { id: true, companyId: true, type: true, payload: true, attempts: true },
       });
+      return this.claimWithinTx(tx, due, now);
+    });
 
-      let result = { ...EMPTY, claimed: due.length };
+    let result = { ...EMPTY, claimed: claimed.length };
 
-      for (const row of due) {
-        const claimed = await tx.outboxEvent.updateMany({
-          where: { id: row.id, status: 'PENDING' },
-          data: { attempts: { increment: 1 }, availableAt: new Date(now.getTime() + nextDelayMs(row.attempts + 1)) },
-        });
-        if (claimed.count === 0) {
-          result = { ...result, claimed: result.claimed - 1 };
-          continue;
-        }
-
-        const dispatcher = this.dispatchers.get(row.type);
-        if (!dispatcher) {
-          // نوعٌ بلا مرسِل يُعلَن فاشلاً **صراحةً** ولا يبقى يدور إلى الأبد.
-          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'FAILED', lastError: storableText(`لا مرسِل مسجَّل للنوع ${row.type}`) } });
-          result = { ...result, failed: result.failed + 1 };
-          continue;
-        }
-
-        try {
-          await dispatcher({ id: row.id, companyId: row.companyId, type: row.type, payload: row.payload });
-          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'SENT', sentAt: new Date(), lastError: null } });
-          result = { ...result, sent: result.sent + 1 };
-        } catch (e) {
-          const exhausted = row.attempts + 1 >= MAX_ATTEMPTS;
-          // النداءُ في موضع الكتابة نفسِه — فحارسُ الأعمدة المعلَنة يقرأ الشكلَ لا المتغيّر.
-          await tx.outboxEvent.update({ where: { id: row.id }, data: { status: exhausted ? 'FAILED' : 'PENDING', lastError: storableError(e) } });
-          if (exhausted) {
-            result = { ...result, failed: result.failed + 1 };
-            this.logger.error(`Outbox ${row.type} ${row.id} استُنفدت محاولاته: ${storableError(e)}`);
-          } else {
-            result = { ...result, retried: result.retried + 1 };
-          }
-        }
+    for (const row of claimed) {
+      const dispatcher = this.dispatchers.get(row.type);
+      if (!dispatcher) {
+        // نوعٌ بلا مرسِل يُعلَن فاشلاً **صراحةً** ولا يبقى يدور إلى الأبد.
+        await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+          tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'FAILED', lastError: storableText(`لا مرسِل مسجَّل للنوع ${row.type}`) } }),
+        );
+        result = { ...result, failed: result.failed + 1 };
+        continue;
       }
 
-      return result;
-    });
+      // ② خارج أيّ معاملة — النداءُ الشبكيّ لا يحبس اتصالاً ولا يسابق مهلةَ معاملة.
+      let failure: unknown = null;
+      let sent = false;
+      try {
+        await dispatcher({ id: row.id, companyId: row.companyId, type: row.type, payload: row.payload });
+        sent = true;
+      } catch (e) {
+        failure = e;
+      }
+
+      // ③ معاملةٌ ثانية تكتب النتيجة.
+      if (sent) {
+        await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+          tx.outboxEvent.update({ where: { id: row.id }, data: { status: 'SENT', sentAt: new Date(), lastError: null } }),
+        );
+        result = { ...result, sent: result.sent + 1 };
+        continue;
+      }
+      const exhausted = row.attempts + 1 >= MAX_ATTEMPTS;
+      // النداءُ في موضع الكتابة نفسِه — فحارسُ الأعمدة المعلَنة يقرأ الشكلَ لا المتغيّر.
+      await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+        tx.outboxEvent.update({ where: { id: row.id }, data: { status: exhausted ? 'FAILED' : 'PENDING', lastError: storableError(failure) } }),
+      );
+      if (exhausted) {
+        result = { ...result, failed: result.failed + 1 };
+        this.logger.error(`Outbox ${row.type} ${row.id} استُنفدت محاولاته: ${storableError(failure)}`);
+      } else {
+        result = { ...result, retried: result.retried + 1 };
+      }
+    }
+
+    return result;
   }
 }
 
