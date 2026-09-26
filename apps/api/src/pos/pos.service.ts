@@ -22,7 +22,7 @@ import {
   postShiftVarianceEntry,
 } from '../journal/pos-settlement.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
-import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { gatedReceiptFields, invoiceTypeFor, ReceiptClearance, ReceiptGateInput } from '../zatca/hash-chain.util';
 import { translate } from '../common/i18n/messages';
 import { PaymentsService } from '../payments/payments.service';
 import { localDateOf } from '../common/wall-clock.util';
@@ -878,15 +878,23 @@ export class PosService {
    * `null` حين يغيب الاسم القانوني أو الرقم الضريبي — والواجهة تُنبّه الكاشير
    * بدل رمزٍ يُقرأ ولا يصحّ.
    */
+  /**
+   * 🔴 **وبوّابةُ الإجازة صفةُ المستند لا صفةُ المسار** (`ق-١٤٤٧` · `ق-١٢٦١` أ): كانت في البيع المباشر وحدَه (`finishReceipt`)،
+   * **فخرجت الفاتورةُ الكاملة برمزٍ قابلٍ للطباعة** من إعادة المزامنة ومن البيع المكتمل ببطاقة ومن قراءة محاولته — قِيس حيّاً.
+   * فتُحسب هنا، في بانيّ الإيصال الواحد، **بالقاعدة نفسِها** التي يحسبها الإتمام (`invoiceTypeFor` من مشتريه وسطوره):
+   * الكاملةُ بلا رمزٍ وبوّابتُها مغلقة، والمبسّطةُ برمزها وبوّابتُها مفتوحة.
+   */
   private async withReceiptQr<
-    T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null },
-  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean }> {
+    T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null } & ReceiptGateInput,
+  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean; clearance: ReceiptClearance }> {
+    const gated = gatedReceiptFields(invoice, translate(MSG.pos_clearance_required, 'ar'));
+    if (gated) return { ...invoice, ...gated };
     // مستندٌ مختوم يعيد رمزَه التساعي المحفوظ — فإعادةُ المزامنة تطبع ما طُبع أولَ مرة حرفاً.
     //
     // ⚠️ **و`tx` تُمرَّر حين نكون داخل معاملة** (`ق-٣٦٠`): بدونها كانت تُفتح
     // معاملةٌ ثانية فوق الأولى، **فتمسك البيعةُ اتصالاً وتطلب ثانياً** — وثلاثُ
     // بيعاتٍ متزامنة تُجوّع المجموعَ فيعود `500`.
-    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), zatcaStamped: Boolean(invoice.zatcaQrPayload) };
+    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), zatcaStamped: Boolean(invoice.zatcaQrPayload), clearance: { required: false } };
   }
 
 

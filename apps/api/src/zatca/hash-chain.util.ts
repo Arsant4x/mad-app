@@ -157,3 +157,26 @@ export function invoiceTypeFor(buyer: BuyerForInvoiceType, lines: ReadonlyArray<
   if (buyer.kind === 'ESTABLISHMENT' || buyer.kind === 'LEGAL_PERSON') return 'standard';
   return 'simplified';
 }
+
+/** ما يلزم إيصالاً ليُعرف أيُحجب: مشتريه وسطورُه (نوعُ المستند) وحالُه لدى الهيئة. */
+export interface ReceiptGateInput {
+  customer: BuyerForInvoiceType;
+  lines: ReadonlyArray<LineForInvoiceType>;
+  zatcaStatus: string;
+}
+
+/** بوّابةُ الإجازة على الإيصال — مغلقةٌ بحال المستند ورسالته، أو مفتوحة. */
+export type ReceiptClearance = { required: true; status: string; message: string } | { required: false };
+
+/**
+ * 🔴 **حقولُ الإيصال المحجوب — أو `null` للمبسّطة** (`ق-١٤٤٧` · `ق-١٢٦١` أ — ⑤A4).
+ *
+ * الكاملةُ تُجاز لدى الهيئة **قبل** أن تُسلَّم للمشتري، فإيصالُها يخرج **بلا رمزٍ** وبوّابتُه مغلقة، والشاشةُ تحيل إلى شاشة
+ * الفواتير. **وهي صفةُ المستند** (من `invoiceTypeFor` نفسِها) **لا صفةُ لحظة البيع** — فكلُّ مسارٍ يبني إيصالاً يسأل هنا:
+ * البيعُ المباشر والمزامنةُ وإعادتُها والبيعُ المكتمل ببطاقة وقراءةُ محاولته. **وقِيس أن ثلاثةً منها كانت تُخرج رمزاً قابلاً
+ * للطباعة لفاتورةٍ كاملة** قبل أن يُسأل هنا.
+ */
+export function gatedReceiptFields(invoice: ReceiptGateInput, message: string): { zatcaQr: null; zatcaStamped: false; clearance: ReceiptClearance } | null {
+  if (invoiceTypeFor(invoice.customer, invoice.lines) !== 'standard') return null;
+  return { zatcaQr: null, zatcaStamped: false, clearance: { required: true, status: invoice.zatcaStatus, message } };
+}
