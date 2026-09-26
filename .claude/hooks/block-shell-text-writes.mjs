@@ -286,9 +286,125 @@ if (TEST_RUNNER.test(cmd) && PIPED_VERDICT.test(cmd) && !/set\s+-o\s+pipefail|PI
   process.exit(2);
 }
 
+/**
+ * ⛔ **النسخةُ المشتركة على `main` دائماً** (`ق-١٤٨٤` · التوجيه ٢٦٧ §٢).
+ *
+ * ── الحادثة ───────────────────────────────────────────────────────────────
+ *
+ * هذا الخطّافُ نفسُه **يُقرأ من النسخة المشتركة** (مسارُه المطلق في إعدادات المستخدم —
+ * `install-user-hooks.mjs`). فبقيت تلك النسخةُ أيّاماً على فرعٍ مدموجٍ قديم
+ * (`feat/country-literals-guard`) — **فشرطُ `ق-١٤٧٢` (الثقيلُ على الرأس نفسِه) لم يسرِ**:
+ * بوّابةٌ صحيحةٌ مدموجةٌ في `main` وخطّافٌ حيٌّ لا يعرفها. **بنصّ المالك**: «ثقبٌ في
+ * البنية لا في الانضباط».
+ *
+ * ── طبقتان ────────────────────────────────────────────────────────────────
+ *
+ * ١. **لا أمرَ ينقلها عن `main`**: `git checkout`/`git switch`/`gh pr checkout` **فيها**
+ *    (بمجلّد الجلسة أو `cd` قبله أو `git -C`) إلى غير `main` ⟸ رفض. والملفّاتُ تُستعاد بـ`--`.
+ * ٢. **ولا دمجَ وهي على غيره**: فإن نقلها شيءٌ لا يراه هذا الخطّاف (يدٌ في طرفيّة ·
+ *    أداةٌ أخرى) توقّف الدمجُ حتى تعود — لأن البوّابات تُقرأ منها.
+ *
+ * والعملُ في نسخ عملٍ منفصلة (`git worktree add`) — ولا يمسّه هذا.
+ */
+const SHARED_ROOT = resolve(import.meta.dirname, '..', '..');
+/** مسارٌ بصيغةٍ واحدة للمقارنة: `/d/x` و`D:\x` و`D:/x` ⟸ `d:/x`. */
+const normPath = (p) =>
+  String(p)
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\/g, '/')
+    .replace(/^\/([a-zA-Z])(\/|$)/, '$1:/')
+    .replace(/\/+$/, '')
+    .toLowerCase();
+const SHARED = normPath(SHARED_ROOT);
+const inShared = (dir) => {
+  const d = normPath(dir);
+  return d === SHARED || d.startsWith(`${SHARED}/`);
+};
+/** مجلّدٌ بعد `cd` — نسبيٌّ يُحلّ على ما قبله. */
+const nextDir = (from, to) => {
+  const t = String(to).replace(/^["']|["']$/g, '');
+  if (/^([a-zA-Z]:[\\/]|\/[a-zA-Z](\/|$))/.test(t)) return normPath(t);
+  return normPath(resolve(normPath(from), t));
+};
+
+/**
+ * يُرجع وصفَ الأمر الذي ينقل النسخةَ المشتركة عن `main`، أو `null`.
+ * يمشي على مقاطع الأمر بترتيبها ويتتبّع `cd` — فـ`cd /d/mad-app && git checkout x` يُرى.
+ */
+function leavesSharedMain(command, sessionCwd) {
+  let dir = normPath(sessionCwd || SHARED_ROOT);
+  // جسمُ الـheredoc نصٌّ لا أوامر (رسالةُ التزامٍ تذكر «git checkout» لا تنقل شيئاً).
+  const body = command.replace(/<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?[\s\S]*?^\s*\1\s*$/gm, '');
+  for (const raw of body.split(/&&|\|\||;|\n|\|/)) {
+    const tokens = (raw.replace(/[()]/g, ' ').match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ''));
+    if (tokens[0] === 'cd' && tokens[1]) {
+      dir = nextDir(dir, tokens[1]);
+      continue;
+    }
+    const gh = tokens.indexOf('gh');
+    if (gh >= 0 && tokens[gh + 1] === 'pr' && tokens[gh + 2] === 'checkout' && inShared(dir)) {
+      return `gh pr checkout ${tokens[gh + 3] ?? ''}`.trim();
+    }
+    const g = tokens.indexOf('git');
+    if (g < 0) continue;
+    let here = dir;
+    let i = g + 1;
+    while (i < tokens.length && tokens[i].startsWith('-')) {
+      if (tokens[i] === '-C' && tokens[i + 1]) {
+        here = nextDir(here, tokens[i + 1]);
+        i += 2;
+      } else if (tokens[i] === '-c') i += 2;
+      else i += 1;
+    }
+    const sub = tokens[i];
+    if ((sub !== 'checkout' && sub !== 'switch') || !inShared(here)) continue;
+    const rest = tokens.slice(i + 1);
+    if (sub === 'checkout' && rest.includes('--')) continue; // استعادةُ ملفّات لا انتقالُ فرع
+    const creates = sub === 'checkout' ? ['-b', '-B', '--orphan', '--detach'] : ['-c', '-C', '--create', '--force-create', '--orphan', '--detach', '-d'];
+    if (rest.some((t) => creates.includes(t))) return `git ${sub} ${rest.join(' ')}`;
+    const positionals = rest.filter((t) => t === '-' || !t.startsWith('-')); // `-` وحدَه الفرعُ السابق لا خيار
+    if (positionals.length === 0) continue;
+    if (sub === 'checkout' && positionals.length > 1) continue; // `git checkout <ref> <مسار>` استعادةُ ملفّ
+    if (positionals[0] === 'main' || (sub === 'checkout' && positionals[0] === '.')) continue;
+    return `git ${sub} ${rest.join(' ')}`;
+  }
+  return null;
+}
+
+const leaving = leavesSharedMain(cmd, payload?.cwd);
+if (leaving) {
+  console.error(
+    [
+      `⛔ ممنوع: «${leaving}» ينقل النسخةَ المشتركة ${SHARED_ROOT} عن \`main\` (ق-١٤٨٤).`,
+      '',
+      'هذا الخطّافُ نفسُه يُقرأ من تلك النسخة — فإن كانت على فرعٍ لم تسرِ بوّاباتُ `main`.',
+      'وقع فعلاً: بقيت على فرعٍ مدموجٍ قديم فلم يسرِ شرطُ «الثقيلُ على الرأس نفسِه».',
+      '',
+      'البديل:',
+      '  git worktree add -b <فرع> D:/worktrees/<اسم> origin/main   ⟵ العملُ في نسخة عملٍ منفصلة',
+      '  git checkout -- <ملف>                                       ⟵ استعادةُ ملفٍّ لا تُمنع',
+    ].join('\n'),
+  );
+  process.exit(2);
+}
+
 const MERGE_CMD = /(^|[^\w-])gh\s+pr\s+merge(\s|$)/;
 
 if (MERGE_CMD.test(cmd)) {
+  // ⛔ (ق-١٤٨٤) الطبقةُ الثانية: لا دمجَ والنسخةُ المشتركة على غير `main` — البوّاباتُ تُقرأ منها،
+  // فدمجٌ وهي على فرعٍ يمرّ ببوّاباتِ ذلك الفرع لا بوّاباتِ `main`. والفشلُ مُغلِق.
+  const sharedBranch = spawnSync('git', ['-C', SHARED_ROOT, 'branch', '--show-current'], { encoding: 'utf8' });
+  if (sharedBranch.status !== 0 || sharedBranch.stdout.trim() !== 'main') {
+    console.error(
+      [
+        `⛔ الدمجُ ممنوع: النسخةُ المشتركة ${SHARED_ROOT} على «${sharedBranch.stdout?.trim() || 'غير مقروء'}» لا \`main\` (ق-١٤٨٤).`,
+        '',
+        'بوّاباتُ الدمج تُقرأ من تلك النسخة — فإن لم تكن على `main` فالدمجُ يمرّ ببوّاباتِ فرعٍ آخر.',
+        `أعدها أوّلاً (بلا تغييرٍ غيرِ ملتزَم، ولا جلسةَ تعمل عليها): git -C ${SHARED_ROOT} checkout main`,
+      ].join('\n'),
+    );
+    process.exit(2);
+  }
   if (/MERGE_UNSTABLE_OK=1/.test(cmd)) process.exit(0); // إذنٌ صريح، وأثرُه في الأمر
 
   const prNumber = cmd.match(/gh\s+pr\s+merge\s+(\d+)/)?.[1] ?? '';
