@@ -70,7 +70,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
     b = await registerIsolatedCompany(app, 'xtr-b');
     refs.a = await setup(a, 'أ');
     refs.b = await setup(b, 'ب');
-  }, 180000);
+  });
 
   afterAll(async () => {
     // eslint-disable-next-line no-console
@@ -78,7 +78,7 @@ describe('الحقنُ العابر للمنشآت يُرفض — ولا يبق�
     await removeIsolatedCompany(app, a);
     await removeIsolatedCompany(app, b);
     await app.close();
-  }, 120000);
+  });
 
   /**
    * حالةٌ واحدة: التوأمُ المشروع بمعرّف «أ» ⇒ `201` وعدُّه `≥ 1` (المسبارُ يرى)، ثم المحاولةُ بمعرّف «ب» ⇒
