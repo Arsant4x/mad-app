@@ -1928,6 +1928,17 @@
       "200"
     ]
   },
+  "PATCH /v1/employees/{id}/login-account": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "companyUserId"
+    ],
+    "responses": [
+      "200"
+    ]
+  },
   "PATCH /v1/fiscal-years/periods/{id}/close": {
     "parameters": [
       "path:id:required"
