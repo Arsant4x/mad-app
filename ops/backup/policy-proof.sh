@@ -37,6 +37,7 @@ RESTIC_PASSWORD=$(envval RESTIC_PASSWORD)
 AWS_ACCESS_KEY_ID=$(envval OFFSITE_ACCESS_KEY)
 AWS_SECRET_ACCESS_KEY=$(envval OFFSITE_SECRET_KEY)
 AWS_DEFAULT_REGION=$(envval OFFSITE_REGION)
+val=''   # يُسنَد داخل `eval` أدناه — والإسنادُ الظاهر هنا لـ`shellcheck` (SC2154) لا للصدفة.
 for k in RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   eval "val=\$$k"
   [ -n "$val" ] || { echo "policy-proof: المفتاحُ $k فارغٌ في $ENV_FILE" >&2; exit 3; }

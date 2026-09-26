@@ -111,10 +111,8 @@ git pull --ff-only origin main \
 
 after_commit="$(git rev-parse HEAD)"
 if [[ "$before_commit" == "$after_commit" ]]; then
-  code_changed=0
   say "${YLW}⚠${RST} لا التزام جديد — الشيفرة كما هي."
 else
-  code_changed=1
   say "${GRN}✔${RST} ${before_commit:0:7} ← ${after_commit:0:7}"
   # `|| true`: سرد الالتزامات زينة لا حارس. ونطاق غير صالح (بعد إعادة كتابة
   # تاريخ مثلاً) كان يقتل السكربت هنا برمز 128 و`fatal` من git — أي بلا رسالة

@@ -45,47 +45,21 @@ sub=${bucket_path#"$bucket"}
 sub=${sub#/}
 [ -n "$sub" ] && PREFIX="$sub/$PREFIX" || true
 
-hex_sha256() { openssl dgst -sha256 | sed 's/^.*= *//'; }
-hmac_hex() { openssl dgst -sha256 -mac HMAC -macopt "hexkey:$1" | sed 's/^.*= *//'; }
-hmac_key() { openssl dgst -sha256 -mac HMAC -macopt "key:$1" | sed 's/^.*= *//'; }
-
-amzdate=$(date -u +%Y%m%dT%H%M%SZ)
-datestamp=$(date -u +%Y%m%d)
-empty_hash=$(printf '' | hex_sha256)
-
-# ترميزُ البادئة للاستعلام: `/` تصير `%2F` — والترتيبُ المعجميُّ للمعاملات مشروطٌ في التوقيع.
+# ترميزُ البادئة للاستعلام: `/` تصير `%2F`.
 enc_prefix=$(printf '%s' "$PREFIX" | sed 's:/:%2F:g')
 query="list-type=2&max-keys=1000&prefix=$enc_prefix"
-canonical_uri="/$bucket"
-canonical_headers="host:$host
-x-amz-content-sha256:$empty_hash
-x-amz-date:$amzdate
-"
-signed_headers='host;x-amz-content-sha256;x-amz-date'
-canonical_request="GET
-$canonical_uri
-$query
-$canonical_headers
-$signed_headers
-$empty_hash"
-scope="$datestamp/$REGION/s3/aws4_request"
-string_to_sign="AWS4-HMAC-SHA256
-$amzdate
-$scope
-$(printf '%s' "$canonical_request" | hex_sha256)"
 
-k=$(printf '%s' "$datestamp" | hmac_key "AWS4$AWS_SECRET_ACCESS_KEY")
-k=$(printf '%s' "$REGION" | hmac_hex "$k")
-k=$(printf '%s' 's3' | hmac_hex "$k")
-k=$(printf '%s' 'aws4_request' | hmac_hex "$k")
-signature=$(printf '%s' "$string_to_sign" | hmac_hex "$k")
-
-body=$(curl -sS -f --max-time 30 \
-  -H "Host: $host" \
-  -H "x-amz-content-sha256: $empty_hash" \
-  -H "x-amz-date: $amzdate" \
-  -H "Authorization: AWS4-HMAC-SHA256 Credential=$AWS_ACCESS_KEY_ID/$scope, SignedHeaders=$signed_headers, Signature=$signature" \
-  "$scheme://$host$canonical_uri?$query" 2>/dev/null) || {
+# ⛔ **السرُّ لا يمرّ في سطر أمر** (`ق-١٤٧٥` · التوجيه ٢٦٦ §٧ب): سطرُ الأمر يُقرأ من قائمة العمليات
+#    (`/proc/<pid>/cmdline`)، وكان التوقيعُ يُحسب بـ`openssl -macopt key:` — و`openssl` لا يأخذ مفتاحَ
+#    `HMAC` إلا من سطر الأمر (مقيس: `openssl dgst -help` لا يعرف غير `-hmac` و`-macopt`). فصار التوقيعُ
+#    لـ`curl --aws-sigv4` نفسِه، والاعتمادُ يصله **من مدخله القياسيّ** (`-K -`)؛ و`printf` مدمجةٌ في الصدفة
+#    فلا عمليةَ تحمله في سطرها.
+case "$AWS_ACCESS_KEY_ID$AWS_SECRET_ACCESS_KEY" in
+  *[\"\\]*) echo "⛔ اعتمادٌ بحرفٍ لا يُكتب في ملفّ خيارات curl (\" أو \\) — ولا حكمَ بالصمت." >&2; exit 2 ;;
+esac
+body=$(printf 'user = "%s:%s"\n' "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" \
+  | curl -sS -f --max-time 30 -K - --aws-sigv4 "aws:amz:$REGION:s3" \
+      "$scheme://$host/$bucket?$query" 2>/dev/null) || {
     echo "⛔ تعذّر سؤالُ الدلو ($host/$bucket) — ولا حكمَ بالصمت." >&2
     exit 2
   }

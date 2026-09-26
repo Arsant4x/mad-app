@@ -38,13 +38,14 @@ fail() { echo "restore-drill FAILED: $1" >&2; cleanup; exit 1; }
 cleanup() { docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-net_arg=""
-[ -n "$DOCKER_NET" ] && net_arg="--network $DOCKER_NET"
-
+# ⛔ **لا قيمةَ سرّيةَ في سطر أمر** (`ق-١٤٧٥` · التوجيه ٢٦٦ §٧ب): سطرُ الأمر يُقرأ من قائمة العمليات.
+#    فكلُّ سرٍّ يصل الحاويةَ **بالاسم** (`-e NAME`) وقيمتُه في بيئة عميل `docker` وحده — بإسنادٍ يسبق
+#    الأمرَ على سطره (`NAME=… docker run`) فلا يسري إلى ما بعده. وهو نمطُ حاويتَي `restic` هنا نفسِه.
+#    والشبكةُ تُمرَّر كلمتين مقتبستين حين تُضبط — لا متغيّراً يُقسَّم بلا اقتباس.
 # ① تُستعاد أحدثُ لقطةٍ **للخدمة** من المستودع — **بلا مساسٍ بالقاعدة الحيّة**. وتُقيَّد بمضيف الخدمة
 #    (`BACKUP_HOST` — كما يُوسم في `offsite-backup.sh`) لئلّا تُلتقط لقطةُ إثبات السياسة الرميّة
 #    (`--host policy-proof` — `ق-٧٦٠`) بوصفها «الأحدث» فتسقط التجربةُ كذباً على لقطةٍ بلا مقلب.
-docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+docker run --rm ${DOCKER_NET:+--network "$DOCKER_NET"} -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
   -v "$DRILL_DIR:/out" "$RESTIC_IMAGE" restore latest --host "$BACKUP_HOST" --target /out >/dev/null \
   || fail "تعذّرت الاستعادةُ من المستودع"
 
@@ -64,8 +65,9 @@ want_s() { sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p' "$manifest" | head -1; }
 got_sha=$(sha256sum "$dump" | cut -d' ' -f1)
 [ "$got_sha" = "$(want_s sha256)" ] || fail "بصمةُ المقلب لا تطابق البيان ($got_sha)"
 
-# ② قاعدةٌ **فارغةٌ جديدة** — لا القائمة.
-docker run -d --name "$CONTAINER" $net_arg -e POSTGRES_PASSWORD="$DRILL_PASS" -e POSTGRES_USER="$DRILL_USER" -e POSTGRES_DB="$DRILL_DB" "$PG_IMAGE" >/dev/null \
+# ② قاعدةٌ **فارغةٌ جديدة** — لا القائمة. **وبلا شبكة**: كلُّ ما بعدها `docker exec` على المقبس
+#    المحلّي، فلا منفذَ يُطرق — وهي تحمل نسخةً كاملةً من بيانات الإنتاج المستعادة.
+POSTGRES_PASSWORD="$DRILL_PASS" docker run -d --name "$CONTAINER" --network none -e POSTGRES_PASSWORD -e POSTGRES_USER="$DRILL_USER" -e POSTGRES_DB="$DRILL_DB" "$PG_IMAGE" >/dev/null \
   || fail "تعذّر إقلاعُ قاعدة التجربة"
 i=0
 until docker exec "$CONTAINER" pg_isready -U "$DRILL_USER" -d "$DRILL_DB" >/dev/null 2>&1; do
@@ -98,14 +100,14 @@ key=$(grep '^SECRETS_ENCRYPTION_KEY=' "$envfile" | cut -d= -f2- | tr -d '"')
 [ -n "$key" ] || fail "المفتاحُ SECRETS_ENCRYPTION_KEY غائبٌ في النسخة"
 cipher=$(sql "select coalesce((select \"privateKeyEnc\" from zatca_credentials where \"privateKeyEnc\" is not null limit 1),'')")
 if [ -n "$cipher" ]; then
-  docker run --rm -e SECRETS_ENCRYPTION_KEY="$key" -e CIPHER="$cipher" "$API_IMAGE" \
+  SECRETS_ENCRYPTION_KEY="$key" CIPHER="$cipher" docker run --rm -e SECRETS_ENCRYPTION_KEY -e CIPHER "$API_IMAGE" \
     node -e 'const{decryptSecret}=require("./dist/src/common/crypto/secret.util");const v=decryptSecret(process.env.CIPHER);if(!v||v.length<8)throw new Error("فكٌّ فارغ");console.log("decrypted:"+v.length+" حرفاً")' \
     || fail "المفتاحُ المستعاد لا يفكّ سرّاً مخزَّناً — فالنسخةُ تُستعاد ولا تُقرأ (ق-٥٧٤)"
   decrypted=stored-secret
 else
   # ⚠️ لا سرَّ مخزَّنٌ بعد (لا شهادةَ فوترة) — **فيُثبَت المفتاحُ بدورةٍ كاملة بشيفرة التطبيق**،
   #    ويُعلَن في التقرير أن المقارنة كانت على قيمةٍ مصنوعةٍ لا على صفٍّ قائم.
-  docker run --rm -e SECRETS_ENCRYPTION_KEY="$key" "$API_IMAGE" \
+  SECRETS_ENCRYPTION_KEY="$key" docker run --rm -e SECRETS_ENCRYPTION_KEY "$API_IMAGE" \
     node -e 'const{encryptSecret,decryptSecret}=require("./dist/src/common/crypto/secret.util");const s="canary-"+Date.now();if(decryptSecret(encryptSecret(s))!==s)throw new Error("دورةُ التشفير لا تُغلق");console.log("canary ok")' \
     || fail "المفتاحُ المستعاد لا يعمل بشيفرة التطبيق"
   decrypted=canary-no-stored-secret
@@ -117,7 +119,7 @@ fi
 #    وتبدأ الكلفة)، **ويُكتب في التقرير** فيُقرأ الاتجاهُ شهراً بعد شهر. بلوغُ الحدّ **إنذارٌ مسمّىً بقراره
 #    لا سقوطٌ للتجربة** — وتعذُّرُ القياس نفسِه يُسقطها، فلا شهرَ بلا رقم.
 VOLUME_THRESHOLD_GB="${OFFSITE_VOLUME_THRESHOLD_GB:-10}"
-stats=$(docker run --rm $net_arg -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+stats=$(docker run --rm ${DOCKER_NET:+--network "$DOCKER_NET"} -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
   "$RESTIC_IMAGE" stats --mode raw-data --no-lock --json 2>/dev/null) || fail "تعذّر قياسُ المخزَّن (restic stats) — ولا شهرَ بلا رقم"
 stored=$(printf '%s' "$stats" | sed -n 's/.*"total_size":\([0-9]*\).*/\1/p' | head -1)
 [ -n "$stored" ] || fail "restic stats بلا total_size — فلا رقمَ يُقارَن بالحدّ"
