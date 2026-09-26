@@ -21,6 +21,7 @@ import {
   PagedPosShiftResponse,
   PosCardVerificationListResponse,
   PosClosedShiftResponse,
+  PosCurrentShiftResponse,
   PosIncidentsResponse,
   PosOpenPaymentAttemptResponse,
   PosPaymentAttemptResponse,
@@ -67,12 +68,12 @@ export class PosController {
     return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
-  // `null` بلا مناوبةٍ مفتوحة — و`Nest` يرسله جسماً فارغاً (`ExpressAdapter.reply`)؛ يُعلَن فراغاً والحارسُ الحيّ يحسم قراءتَه.
+  // ⚖️ `ق-١٤٤٩`: مغلَّفةً صراحةً `{ shift: null }` — كان `null` يُرسَل جسماً فارغاً (`ExpressAdapter.reply`) فيقرؤه كلُّ قارئٍ بحاله.
   @Get('shifts/current')
   @RequiresAction('view')
-  @ApiOkResponse({ schema: { allOf: [{ $ref: getSchemaPath(PosShiftWithTotalsResponse) }], nullable: true } })
-  currentShift(@CurrentTenant() tenant: TenantContext) {
-    return this.posService.currentShift(tenant);
+  @ApiOkResponse({ type: PosCurrentShiftResponse })
+  async currentShift(@CurrentTenant() tenant: TenantContext): Promise<{ shift: Awaited<ReturnType<PosService['currentShift']>> }> {
+    return { shift: await this.posService.currentShift(tenant) };
   }
 
   /** وقائعُ الانقطاع المستنتَجة — بمدّتها وعدد فواتيرها وحدّ استنتاجها (`ق-١٩٢`/ج · `ق-٢٠١`). */

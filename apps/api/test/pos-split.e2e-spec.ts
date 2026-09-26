@@ -67,10 +67,10 @@ describe('POS split payment (e2e)', () => {
 
     const cur = await auth(request(app.getHttpServer()).get('/pos/shifts/current')).expect(200);
     // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`) — يُقارَن حرفاً.
-    expect(cur.body.cashTotal).toBe('100.00');
-    expect(cur.body.cardTotal).toBe('38.00');
+    expect(cur.body.shift.cashTotal).toBe('100.00');
+    expect(cur.body.shift.cardTotal).toBe('38.00');
     // الدرج = العهدة 50 + النقد 100 فقط.
-    expect(cur.body.expectedCash).toBe('150.00');
+    expect(cur.body.shift.expectedCash).toBe('150.00');
   }, 60000);
 
   it('refuses parts that do not add up, before creating anything', async () => {
@@ -118,7 +118,7 @@ describe('POS split payment (e2e)', () => {
 
     // الدرج بعدها: 150 سابقاً + 20 نقد هذا البيع — مرة واحدة لا مرتين.
     const cur = await auth(request(app.getHttpServer()).get('/pos/shifts/current')).expect(200);
-    expect(cur.body.cashTotal).toBe('120.00');
-    expect(cur.body.expectedCash).toBe('170.00');
+    expect(cur.body.shift.cashTotal).toBe('120.00');
+    expect(cur.body.shift.expectedCash).toBe('170.00');
   }, 60000);
 });

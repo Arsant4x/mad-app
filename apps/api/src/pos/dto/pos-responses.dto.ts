@@ -1,7 +1,7 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import { CustomerKind, InvoiceDocType, InvoiceStatus, PosCardVerification, PosPaymentAttemptStatus, PosPaymentResolution, PosShiftStatus, TaxCategory } from '@prisma/client';
 // ⚖️ الحدُّ الوحيد بين النواة والوحدة في ردود الكاشير (`§3.8` · `ق-١٣٥٠`) — دَينٌ معلَنٌ بحجّته في `docs/country-literals-debt.json`.
-import { PosClearanceResponse, PosReceiptStampResponse } from './zatca-receipt-response.dto';
+import { PosClearanceResponse } from './zatca-receipt-response.dto';
 
 /**
  * ⚖️ **ردودُ الكاشير بأصنافٍ مسمّاة** (`ق-١٤٣٨` · خطّةُ الأنواع ④ · أوّلُ وحدةٍ الكاشير).
@@ -47,6 +47,16 @@ export class PosShiftWithTotalsResponse extends PosShiftResponse {
   cashTotal!: string;
   cardTotal!: string;
   expectedCash!: string;
+}
+
+/**
+ * ⚖️ **المناوبةُ الحالية مغلَّفةً صراحةً** (`ق-١٤٤٩`): `{ shift: null }` بلا مناوبةٍ مفتوحة — لا جسماً فارغاً يقرؤه قارئٌ `null`
+ * وآخرُ `""` أو `{}` (`Nest` يرسل `null` جسماً فارغاً — `ExpressAdapter.reply`). والمفتاحُ حاضرٌ دائماً، والفراغُ في قيمته.
+ */
+@ApiExtraModels(PosShiftWithTotalsResponse)
+export class PosCurrentShiftResponse {
+  @ApiProperty({ allOf: [{ $ref: getSchemaPath(PosShiftWithTotalsResponse) }], nullable: true })
+  shift!: PosShiftWithTotalsResponse | null;
 }
 
 /** المغلَّفُ المرقَّم لقائمة المناوبات (`?page=` — `pagedFindMany`). */
@@ -149,7 +159,14 @@ export class PosPaymentRowResponse {
  * **إيصالُ البيع — ما يحمله كلُّ مسارٍ يعيد بيعاً** (`withReceiptQr`): الفاتورةُ بسطورها ومشتريها وصفوفِ دفعها، ورمزُ الإيصال.
  * هو ردُّ الإعادة في المزامنة وإيصالُ محاولة الدفع المكتملة. (ولا `relatedInvoice` ولا `outstanding` ولا ما يشبههما: لا يُرسَل هنا.)
  */
-export class PosSaleReceiptResponse extends PosReceiptStampResponse {
+export class PosSaleReceiptResponse {
+  /**
+   * ⚖️ **رمزُ الإيصال باسمٍ محايدٍ على السلك** (`ق-١٤٤٨`): حمولتُه (TLV بـbase64) — `null` حين يغيب الاسمُ القانونيّ أو الرقمُ
+   * الضريبيّ فلا رمزَ يصحّ، أو حين تُحجب الكاملةُ حتى إجازتها. **اسمُه وظيفتُه لا اسمُ الجهة** — فلا علامةَ سعوديةً على السلك.
+   */
+  receiptQr!: string | null;
+  /** خُتم المستندُ (التوقيعُ والرمزُ التساعيّ) — `false` بلا ختمٍ بعد. */
+  stamped!: boolean;
   id!: string;
   no!: string;
   // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
@@ -179,7 +196,6 @@ export class PosSaleReceiptResponse extends PosReceiptStampResponse {
   lines!: PosSaleLineResponse[];
   customer!: PosSaleCustomerResponse;
   posPayments!: PosPaymentRowResponse[];
-  // ورمزُ الإيصال (`zatcaQr` · `zatcaStamped`) موروثٌ من صنف الوحدة — سعوديٌّ يسكن حدودَها (`§3.8`).
 }
 
 /** بندٌ هبط رصيدُه تحت الصفر — الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`). */

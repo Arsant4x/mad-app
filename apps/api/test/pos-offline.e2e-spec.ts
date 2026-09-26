@@ -112,7 +112,7 @@ describe('POS offline sync (e2e)', () => {
       (i: { clientSaleId?: string }) => i.clientSaleId === clientSaleId,
     ).length;
     expect(thisSaleCount).toBe(1);
-    expect(cur.body.id).toBe(shiftId);
+    expect(cur.body.shift.id).toBe(shiftId);
   }, 60000);
 
   it('two terminals that sold offline sync without numbering collisions', async () => {

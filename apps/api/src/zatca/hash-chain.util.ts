@@ -176,7 +176,8 @@ export type ReceiptClearance = { required: true; status: string; message: string
  * البيعُ المباشر والمزامنةُ وإعادتُها والبيعُ المكتمل ببطاقة وقراءةُ محاولته. **وقِيس أن ثلاثةً منها كانت تُخرج رمزاً قابلاً
  * للطباعة لفاتورةٍ كاملة** قبل أن يُسأل هنا.
  */
-export function gatedReceiptFields(invoice: ReceiptGateInput, message: string): { zatcaQr: null; zatcaStamped: false; clearance: ReceiptClearance } | null {
+export function gatedReceiptFields(invoice: ReceiptGateInput, message: string): { receiptQr: null; stamped: false; clearance: ReceiptClearance } | null {
   if (invoiceTypeFor(invoice.customer, invoice.lines) !== 'standard') return null;
-  return { zatcaQr: null, zatcaStamped: false, clearance: { required: true, status: invoice.zatcaStatus, message } };
+  // ⚖️ اسمُ رمز الإيصال محايدٌ على السلك (`ق-١٤٤٨`) — والبوّابةُ وحدَها سعوديةٌ هنا.
+  return { receiptQr: null, stamped: false, clearance: { required: true, status: invoice.zatcaStatus, message } };
 }

@@ -1051,9 +1051,9 @@ export function PosPage() {
                 {new Date().toLocaleString('ar-SA')}
               </p>
               {/* رمز الهيئة على إيصال العميل — إلزاميٌّ توليداً وطباعةً (الملحق ١ · ق-١٨٦). داخل منطقة الطباعة عمداً. */}
-              {receipt.zatcaQr && (
+              {receipt.receiptQr && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
-                  <ZatcaQr payload={receipt.zatcaQr} size={128} />
+                  <ZatcaQr payload={receipt.receiptQr} size={128} />
                 </div>
               )}
             </div>
@@ -1064,7 +1064,7 @@ export function PosPage() {
               </p>
             )}
             {/* خارج .print-receipt عمداً — تنبيه للكاشير لا سطراً على إيصال العميل. */}
-            {!receipt.zatcaQr && !receipt.clearance?.required && (
+            {!receipt.receiptQr && !receipt.clearance?.required && (
               <p className="hint" style={{ color: 'var(--rose)' }}>
                 الإيصال بلا رمز الهيئة — أكمل الاسم القانوني والرقم الضريبي في ملف المنشأة.
               </p>

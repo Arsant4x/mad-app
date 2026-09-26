@@ -162,8 +162,8 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
     expect(gated.body.status).toBe('PAID');
     expect(gated.body.clearance).toMatchObject({ required: true });
     expect(String(gated.body.clearance.message)).toContain('الإجازة');
-    expect(gated.body.zatcaQr).toBeNull();
-    expect(gated.body.zatcaStamped).toBe(false);
+    expect(gated.body.receiptQr).toBeNull();
+    expect(gated.body.stamped).toBe(false);
 
     const walkIn = await auth(http().post('/pos/sales')).send({ lines: [{ productId, quantity: 1 }], paymentMethod: 'CASH' }).expect(201);
     expect(walkIn.body.clearance).toEqual({ required: false });

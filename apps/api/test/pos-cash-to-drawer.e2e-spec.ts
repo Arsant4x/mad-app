@@ -97,8 +97,8 @@ describe('نقدُ الكاشير يصل درجَه، وفرقُ الجرد يُ
    */
   async function openShift(drawerId: string, float = 100) {
     const current = await auth(http().get('/pos/shifts/current')).expect(200);
-    if (current.body?.id) {
-      await auth(http().post(`/pos/shifts/${current.body.id}/close`)).send({ declaredClosing: Number(current.body.expectedCash ?? 0) });
+    if (current.body.shift?.id) {
+      await auth(http().post(`/pos/shifts/${current.body.shift.id}/close`)).send({ declaredClosing: Number(current.body.shift.expectedCash ?? 0) });
     }
     return (await auth(http().post('/pos/shifts')).send({ openingFloat: float, drawerId, branchId }).expect(201)).body as { id: string };
   }
