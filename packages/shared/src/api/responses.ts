@@ -17,6 +17,7 @@ export interface BankRowResponse {
   id: string;
   name: string;
   branchId: string | null;
+  iban: string | null;
   accountId: string;
   currency: string;
   balance: string;
@@ -24,6 +25,32 @@ export interface BankRowResponse {
   openingDate: string;
   archived: boolean;
   transferredToId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** ردٌّ — `BanksRefResponse` في الخادم (ق-١٤٣٨). */
+export interface BanksRefResponse {
+  id: string;
+  name: string;
+}
+
+/** ردٌّ — `BankStatementLineResponse` في الخادم (ق-١٤٣٨). */
+export interface BankStatementLineResponse {
+  id: string;
+  bankId: string;
+  branchId: string | null;
+  date: string;
+  description: string;
+  amount: string;
+  source: string | null;
+  matched: boolean;
+  entryNo: string | null;
+  matchedLineId: string | null;
+  matchedAt: string | null;
+  currency: string;
+  exchangeRate: string;
+  baseAmount: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +87,95 @@ export interface CashBoxTransferResponse {
   entries: BankTransferEntriesResponse;
 }
 
+/** ردٌّ — `CashDepositListResponse` في الخادم (ق-١٤٣٨). */
+export interface CashDepositListResponse {
+  items: CashDepositResponse[];
+  inTransit: CashInTransitResponse;
+}
+
+/** ردٌّ — `CashDepositResponse` في الخادم (ق-١٤٣٨). */
+export interface CashDepositResponse {
+  status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
+  drawer: BanksRefResponse;
+  bank: BanksRefResponse;
+  id: string;
+  no: string;
+  date: string;
+  amount: string;
+  memo: string | null;
+  drawerId: string;
+  bankId: string;
+  branchId: string | null;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  confirmedTransactionId: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** ردٌّ — `CashInTransitResponse` في الخادم (ق-١٤٣٨). */
+export interface CashInTransitResponse {
+  ledger: string;
+  documents: string;
+  matched: boolean;
+}
+
+/** ردٌّ — `CodeBandStatusResponse` في الخادم (ق-١٤٣٨). */
+export interface CodeBandStatusResponse {
+  key: string;
+  name: string;
+  capacity: number;
+  remaining: number;
+  next: string | null;
+  warnThreshold: number;
+  warn: boolean;
+}
+
+/** ردٌّ — `CreatedCashDepositResponse` في الخادم (ق-١٤٣٨). */
+export interface CreatedCashDepositResponse {
+  status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
+  drawer: BanksRefResponse;
+  bank: BanksRefResponse;
+  id: string;
+  no: string;
+  date: string;
+  amount: string;
+  memo: string | null;
+  drawerId: string;
+  bankId: string;
+  branchId: string | null;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  confirmedTransactionId: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  entryNo: string;
+}
+
+/** ردٌّ — `CreatedNetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+export interface CreatedNetworkSettlementResponse {
+  status: 'POSTED' | 'VOID';
+  id: string;
+  no: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  grossAmount: string;
+  feeAmount: string;
+  feeVatAmount: string;
+  netAmount: string;
+  memo: string | null;
+  branchId: string | null;
+  bankId: string;
+  bank: BanksRefResponse;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  receiptCount: number;
+  entryNo: string;
+}
+
 /** ردٌّ — `EmployeeIdentityOnFileResponse` في الخادم (ق-١٤٣٨). */
 export interface EmployeeIdentityOnFileResponse {
   nationalId: boolean;
@@ -86,6 +202,73 @@ export interface EmployeeWithLoginAccountResponse {
   identityOnFile: EmployeeIdentityOnFileResponse;
   createdAt: string;
   updatedAt: string;
+}
+
+/** ردٌّ — `LedgerSourceResponse` في الخادم (ق-١٤٣٨). */
+export interface LedgerSourceResponse {
+  type: string;
+  id: string;
+  no: string;
+}
+
+/** ردٌّ — `NetworkSettlementListResponse` في الخادم (ق-١٤٣٨). */
+export interface NetworkSettlementListResponse {
+  items: NetworkSettlementResponse[];
+  summary: NetworkTransitSummaryResponse;
+}
+
+/** ردٌّ — `NetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+export interface NetworkSettlementResponse {
+  status: 'POSTED' | 'VOID';
+  id: string;
+  no: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  grossAmount: string;
+  feeAmount: string;
+  feeVatAmount: string;
+  netAmount: string;
+  memo: string | null;
+  branchId: string | null;
+  bankId: string;
+  bank: BanksRefResponse;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  receiptCount: number;
+}
+
+/** ردٌّ — `NetworkTransitSummaryResponse` في الخادم (ق-١٤٣٨). */
+export interface NetworkTransitSummaryResponse {
+  ledger: string;
+  open: string;
+  openCount: number;
+  matched: boolean;
+}
+
+/** ردٌّ — `OpenNetworkReceiptResponse` في الخادم (ق-١٤٣٨). */
+export interface OpenNetworkReceiptResponse {
+  id: string;
+  no: string;
+  date: string;
+  branchId: string | null;
+  customerName: string;
+  signed: string;
+}
+
+/** ردٌّ — `OpenNetworkReceiptsResponse` في الخادم (ق-١٤٣٨). */
+export interface OpenNetworkReceiptsResponse {
+  receipts: OpenNetworkReceiptResponse[];
+  gross: string;
+  summary: NetworkTransitSummaryResponse;
+}
+
+/** ردٌّ — `PagedBankRowResponse` في الخادم (ق-١٤٣٨). */
+export interface PagedBankRowResponse {
+  items: BankRowResponse[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** ردٌّ — `PagedPosShiftResponse` في الخادم (ق-١٤٣٨). */
@@ -471,4 +654,127 @@ export interface PosUnresolvedAttemptRowResponse {
   detail: string | null;
   cashierName: string;
   shiftClosedAt: string | null;
+}
+
+/** ردٌّ — `ReconciliationBankResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationBankResponse {
+  id: string;
+  name: string;
+  accountId: string;
+  reconciledUntil: string | null;
+  mirrorBalance: string;
+}
+
+/** ردٌّ — `ReconciliationLedgerResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationLedgerResponse {
+  opening: string;
+  closing: string;
+  rows: ReconciliationLedgerRowResponse[];
+  truncated: boolean;
+}
+
+/** ردٌّ — `ReconciliationLedgerRowResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationLedgerRowResponse {
+  lineId: string;
+  entryId: string;
+  entryNo: string;
+  date: string;
+  memo: string;
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  debit: string;
+  credit: string;
+  balance: string;
+  source: LedgerSourceResponse;
+  branchId: string | null;
+  customerId: string | null;
+  supplierId: string | null;
+  propertyId: string | null;
+  unitId: string | null;
+  matched: boolean;
+}
+
+/** ردٌّ — `ReconciliationOverviewResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationOverviewResponse {
+  bank: ReconciliationBankResponse;
+  from: string | null;
+  to: string | null;
+  statement: ReconciliationStatementRowResponse[];
+  ledger: ReconciliationLedgerResponse;
+  suggestions: ReconciliationSuggestionResponse[];
+  totals: ReconciliationTotalsResponse;
+}
+
+/** ردٌّ — `ReconciliationStatementRowResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationStatementRowResponse {
+  id: string;
+  date: string;
+  description: string;
+  amount: string;
+  matchedLineId: string | null;
+  matchedAt: string | null;
+  source: string | null;
+}
+
+/** ردٌّ — `ReconciliationStateResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationStateResponse {
+  bankId: string;
+  reconciledUntil: string | null;
+}
+
+/** ردٌّ — `ReconciliationSuggestionResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationSuggestionResponse {
+  transactionId: string;
+  lineIds: string[];
+}
+
+/** ردٌّ — `ReconciliationTotalsResponse` في الخادم (ق-١٤٣٨). */
+export interface ReconciliationTotalsResponse {
+  unmatchedStatement: string;
+  unmatchedStatementCount: number;
+  unmatchedLedger: string;
+  unmatchedLedgerCount: number;
+}
+
+/** ردٌّ — `VoidedCashDepositResponse` في الخادم (ق-١٤٣٨). */
+export interface VoidedCashDepositResponse {
+  status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
+  voidEntryNo: string;
+  id: string;
+  no: string;
+  date: string;
+  amount: string;
+  memo: string | null;
+  drawerId: string;
+  bankId: string;
+  branchId: string | null;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  confirmedTransactionId: string | null;
+  confirmedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** ردٌّ — `VoidedNetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
+export interface VoidedNetworkSettlementResponse {
+  status: 'POSTED' | 'VOID';
+  id: string;
+  no: string;
+  date: string;
+  periodFrom: string;
+  periodTo: string;
+  grossAmount: string;
+  feeAmount: string;
+  feeVatAmount: string;
+  netAmount: string;
+  memo: string | null;
+  branchId: string | null;
+  bankId: string;
+  bank: BanksRefResponse;
+  journalEntryId: string | null;
+  voidJournalEntryId: string | null;
+  receiptCount: number;
+  voidEntryNo: string;
 }
