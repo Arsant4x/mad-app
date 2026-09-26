@@ -278,7 +278,7 @@ export class StockOpeningsService {
       if (Number(layer.qtyRemaining) !== Number(layer.qtyReceived)) throw new ConflictException(MSG.stock_opening_line_consumed);
 
       const original = await tx.stockMovement.findUniqueOrThrow({ where: { id: line.movementId }, select: { branchId: true } });
-      const branchId = await resolveBranchId(tx, original.branchId, allowedBranchIds);
+      const branchId = await resolveBranchId(tx, original.branchId, allowedBranchIds, 'mirror');
       const today = toDateOnly(new Date());
       const reversal = await tx.stockMovement.create({
         data: {

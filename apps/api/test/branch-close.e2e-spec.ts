@@ -145,7 +145,7 @@ describe('إغلاقُ الفرع — لا مستندَ جديدٌ فيه، وي
     const invoice = (await invoiceIn(customerId, branchId, 'فاتورةُ ما قبل الإغلاق').expect(201)).body;
     await asOwner(http().post(`/branches/${branchId}/close`)).expect(201);
 
-    const listed = (await asOwner(http().get('/invoices?pageSize=200')).expect(200)).body;
+    const listed = (await asOwner(http().get(`/invoices?search=${encodeURIComponent(invoice.no)}`)).expect(200)).body;
     const rows = (Array.isArray(listed) ? listed : listed.items) as { id: string }[];
     expect(rows.some((r) => r.id === invoice.id)).toBe(true);
     const summary = (await asOwner(http().get('/reports/branch-summary')).expect(200)).body as { branches: { branchId: string; revenue: string }[] };

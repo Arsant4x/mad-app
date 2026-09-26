@@ -742,6 +742,10 @@ model Branch {
 
   hours String?
 
+  /// ⚖️ `ق-١٤٥٣` — **الفرعُ يُغلق ولا يُحذف إلا إن لم يُستعمل قطّ**: مغلقٌ ⟸ لا مستندَ جديدٌ فيه (البوّابةُ في `resolveBranchId`)
+  /// ويبقى في التقارير والتاريخ، ويُعاد فتحُه بيد المالك. `null` ⟸ مفتوح.
+  closedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

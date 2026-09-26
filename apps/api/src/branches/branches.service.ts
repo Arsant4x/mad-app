@@ -5,7 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
 import { CreateBranchDto } from './dto/create-branch.dto';
-import { branchContentReasons, branchHistoryCount } from './branch-references';
+import { branchClosingReasons, branchContentReasons, branchHistoryCount } from './branch-references';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والنوع. */
 const BRANCH_SEARCH_FIELDS = ['name', 'type'] as const;
@@ -104,15 +104,57 @@ export class BranchesService {
       if (!existing) throw new NotFoundException(MSG.branch_not_found);
       await tx.$queryRaw`SELECT "id" FROM "branches" WHERE "id" = ${id} FOR UPDATE`;
 
+      // ⚖️ `ق-١٤٥٣`: «**والحذف: لفرعٍ لا أثرَ له إطلاقاً ولا في التاريخ، وما عداه يُدلّ على الإغلاق.**»
       const history = await branchHistoryCount(tx, id);
       if (history > 0) {
-        throw new ConflictException(formatMessage(MSG.branch_delete_history, { name: existing.name, count: history }));
+        const key = existing.closedAt ? MSG.branch_delete_history_closed : MSG.branch_delete_history;
+        throw new ConflictException(formatMessage(key, { name: existing.name, count: history }));
       }
       const reasons = await branchContentReasons(tx, id);
-      if (reasons.length > 0) throw new ConflictException(reasons);
+      if (reasons.length > 0) throw new ConflictException([...reasons, formatMessage(MSG.branch_delete_suggest_close, { name: existing.name })]);
 
       await tx.branch.delete({ where: { id } });
     });
+  }
+
+  /**
+   * ⚖️ **الإغلاق** (`ق-١٤٥٣`) بنصّ المالك: «**لا مستندَ جديدٌ فيه · ويبقى في التقارير والتاريخ · ويُعاد فتحُه بصلاحية. وشرطُه:
+   * صناديقُه نُقلت أو أُقفلت · وموظّفوه نُقلوا · ومستنداتُه المفتوحة سُوّيت. والرفضُ يسمّي ما بقي ويدلّ على النقل.**»
+   *
+   * **فعلُ مالكٍ** كإنشاء الفرع وحذفه (`assertIsCompanyOwner`) — وهو «الصلاحيةُ» هنا. **وصفُّ الفرع يُقفل `FOR UPDATE`** قبل
+   * الفحص: كلُّ مستندٍ جديدٍ يقرأ فرعَه بقفل المفتاح المشترك (`resolveBranchId`)، فلا يقع بين الفحص والإغلاق ثم يُكتب في مغلق.
+   */
+  close(companyId: string, actorType: string, id: string) {
+    assertIsCompanyOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await this.lockBranch(tx, id);
+      if (existing.closedAt) throw new ConflictException(formatMessage(MSG.branch_already_closed, { name: existing.name }));
+
+      const reasons = await branchClosingReasons(tx, id);
+      if (reasons.length > 0) throw new ConflictException(reasons);
+
+      await tx.branch.update({ where: { id }, data: { closedAt: new Date() } });
+      return tx.branch.findUniqueOrThrow({ where: { id }, include: BRANCH_INCLUDE });
+    });
+  }
+
+  /** يُعاد فتحُه بيد المالك — فيقبل المستندات من جديد، وتاريخُه كما هو. */
+  reopen(companyId: string, actorType: string, id: string) {
+    assertIsCompanyOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await this.lockBranch(tx, id);
+      if (!existing.closedAt) throw new ConflictException(formatMessage(MSG.branch_not_closed, { name: existing.name }));
+
+      await tx.branch.update({ where: { id }, data: { closedAt: null } });
+      return tx.branch.findUniqueOrThrow({ where: { id }, include: BRANCH_INCLUDE });
+    });
+  }
+
+  private async lockBranch(tx: Prisma.TransactionClient, id: string) {
+    const existing = await tx.branch.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(MSG.branch_not_found);
+    await tx.$queryRaw`SELECT "id" FROM "branches" WHERE "id" = ${id} FOR UPDATE`;
+    return tx.branch.findUniqueOrThrow({ where: { id } });
   }
 
   /** Falls back to the company's default (first) activity when none is given,

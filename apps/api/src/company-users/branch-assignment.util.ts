@@ -1,6 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { assertBranchAllowed } from '../branches/branch-scope.util';
+import { assertBranchAllowed, assertBranchIdsOpen } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 type Tx = Prisma.TransactionClient;
@@ -14,6 +14,8 @@ export async function assertBranchIdsAssignable(tx: Tx, allowedBranchIds: string
   const valid = await tx.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true } });
   if (valid.length !== branchIds.length) throw new NotFoundException(MSG.branch_not_found);
   for (const id of branchIds) assertBranchAllowed(allowedBranchIds, id);
+  // ⚖️ `ق-١٤٥٣`: والمغلقُ لا يُسنَد إليه حساب — فالإغلاقُ يشترط ألّا حسابَ مُسنَدٌ إليه؛ وفي المصدر الواحد فيشمل نقلَ الموظّف المربوط.
+  await assertBranchIdsOpen(tx, branchIds);
 }
 
 /**

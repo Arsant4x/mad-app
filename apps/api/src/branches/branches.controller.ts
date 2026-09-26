@@ -43,4 +43,18 @@ export class BranchesController {
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.branchesService.remove(tenant.companyId, tenant.actorType, id);
   }
+
+  /** ⚖️ `ق-١٤٥٣` — الإغلاق: لا مستندَ جديدٌ فيه، ويبقى في التقارير والتاريخ. */
+  @Post(':id/close')
+  @OwnerOnly()
+  close(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.branchesService.close(tenant.companyId, tenant.actorType, id);
+  }
+
+  /** ⚖️ `ق-١٤٥٣` — إعادةُ الفتح بيد المالك. */
+  @Post(':id/reopen')
+  @OwnerOnly()
+  reopen(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.branchesService.reopen(tenant.companyId, tenant.actorType, id);
+  }
 }
