@@ -38,7 +38,7 @@ export class SupplierPaymentsController {
   @Get(':id')
   @RequiresAction('view')
   findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.supplierPayments.findOne(tenant.companyId, id);
+    return this.supplierPayments.findOne(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   @Post()
@@ -51,13 +51,13 @@ export class SupplierPaymentsController {
   @Post(':id/allocate')
   @RequiresAction('edit')
   allocate(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: AllocateSupplierPaymentDto) {
-    return this.supplierPayments.allocate(tenant.companyId, id, dto);
+    return this.supplierPayments.allocate(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   /** التصحيحُ الوحيد المتاح: سندٌ عاكس بقيدٍ مضادّ. */
   @Post(':id/reverse')
   @RequiresAction('record')
   reverse(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReverseSupplierPaymentDto) {
-    return this.supplierPayments.reverse(tenant.companyId, id, dto.reason, dto.date);
+    return this.supplierPayments.reverse(tenant.companyId, tenant.allowedBranchIds, id, dto.reason, dto.date);
   }
 }

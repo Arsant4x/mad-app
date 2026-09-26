@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { branchFilter } from '../branches/branch-scope.util';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { FilesService } from '../files/files.service';
@@ -37,20 +38,20 @@ export class WriteOffAttachmentsService {
     private readonly files: FilesService,
   ) {}
 
-  list(companyId: string, writeOffId: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', writeOffId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      await this.writeOffOrThrow(tx, writeOffId);
+      await this.writeOffOrThrow(tx, allowedBranchIds, writeOffId);
       return tx.inventoryWriteOffAttachment.findMany({ where: { writeOffId }, select: ATTACHMENT_SELECT, orderBy: { uploadedAt: 'desc' } });
     });
   }
 
-  async add(companyId: string, writeOffId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
+  async add(companyId: string, allowedBranchIds: string[] | 'all', writeOffId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
     // الرفع أولاً: قائمة الأنواع المسموحة وحدّ الحجم وتسمية المفتاح كلها في
     // `FilesService` — فملفٌ مرفوض **لا يبلغ القاعدة أصلاً**.
     const stored = await this.files.upload(companyId, file);
     try {
       return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-        await this.writeOffOrThrow(tx, writeOffId);
+        await this.writeOffOrThrow(tx, allowedBranchIds, writeOffId);
         return tx.inventoryWriteOffAttachment.create({
           // `companyId` يحقنه امتداد المستأجر لكل صفّ.
           data: { writeOffId, fileKey: stored.key, filename: stored.filename, size: stored.size, mimeType: stored.mimeType } as unknown as Prisma.InventoryWriteOffAttachmentUncheckedCreateInput,
@@ -65,29 +66,39 @@ export class WriteOffAttachmentsService {
     }
   }
 
-  downloadUrl(companyId: string, attachmentId: string) {
+  downloadUrl(companyId: string, allowedBranchIds: string[] | 'all', attachmentId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const att = await tx.inventoryWriteOffAttachment.findUnique({ where: { id: attachmentId }, select: { fileKey: true } });
-      if (!att) throw new NotFoundException(MSG.file_not_found);
+      const att = await this.attachmentOrThrow(tx, allowedBranchIds, attachmentId);
       return this.files.downloadUrl(companyId, att.fileKey);
     });
   }
 
-  async remove(companyId: string, attachmentId: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', attachmentId: string): Promise<void> {
     const fileKey = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const att = await tx.inventoryWriteOffAttachment.findUnique({ where: { id: attachmentId }, select: { fileKey: true } });
-      if (!att) throw new NotFoundException(MSG.file_not_found);
+      const att = await this.attachmentOrThrow(tx, allowedBranchIds, attachmentId);
       await tx.inventoryWriteOffAttachment.delete({ where: { id: attachmentId } });
       return att.fileKey;
     });
     await this.files.remove(companyId, fileKey).catch((e: Error) => this.logger.warn(`تعذّر حذف كائن المرفق "${fileKey}": ${e.message}`));
   }
 
-  /** الواقعة موجودةٌ في هذه المنشأة — **يُفحص قبل أي كتابة**، فمعرّفٌ مخمَّن
+  /** الواقعة موجودةٌ في هذه المنشأة **وفي فروع القارئ** — **يُفحص قبل أي كتابة**، فمعرّفٌ مخمَّن
    * لجارٍ لا يجد صفّاً هنا (وRLS تحرسه ثانيةً). */
-  private async writeOffOrThrow(tx: Prisma.TransactionClient, writeOffId: string) {
-    const row = await tx.inventoryWriteOff.findUnique({ where: { id: writeOffId }, select: { id: true } });
+  private async writeOffOrThrow(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', writeOffId: string) {
+    // ق-١٤٤٠: واقعةُ فرعٍ خارج فروعه لا وجودَ لها عنده — `404` لا `403`، فلا تُسرد مرفقاتُها ولا يُزرع فيها دليل.
+    const row = await tx.inventoryWriteOff.findFirst({ where: { id: writeOffId, ...branchFilter(allowedBranchIds) }, select: { id: true } });
     if (!row) throw new NotFoundException(MSG.writeoff_not_found);
     return row;
+  }
+
+  /** المرفقُ بواقعته على فروع القارئ — **قبل الرابط والحذف**؛ والواقعةُ بلا فرعٍ (على المنشأة) يراها الجميع. */
+  private async attachmentOrThrow(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', attachmentId: string) {
+    // ق-١٤٤٠: مرفقُ واقعةٍ خارج فروعه لا وجودَ له عنده — `404` لا `403`، فلا يُنزَّل دليلُ فرعٍ آخر ولا يُحذف.
+    const att = await tx.inventoryWriteOffAttachment.findFirst({
+      where: { id: attachmentId, ...(allowedBranchIds === 'all' ? {} : { writeOff: branchFilter(allowedBranchIds) }) },
+      select: { fileKey: true },
+    });
+    if (!att) throw new NotFoundException(MSG.file_not_found);
+    return att;
   }
 }

@@ -246,9 +246,10 @@ export class PurchasesService {
    * **على مستوى المنشأة بحقّها**: إشعاراتُ الشراء تُعدّ في أيّ فرعٍ كانت لتجميد كميته وتكلفته — فإشعارٌ في
    * فرعٍ محجوبٍ عن القارئ يجمّده كما يجمّده إشعارُ فرعه، وإلا عُدِّل مستندٌ صُحِّح من فرعٍ آخر.
    */
-  update(companyId: string, id: string, dto: UpdatePurchaseDto) {
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdatePurchaseDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE });
+      // ق-١٤٤٠: الشراءُ بفروع الفاعل قبل أيّ فحص حال — شراءُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403)، فلا يُقرأ ولا يُعدَّل.
+      const existing = await tx.purchase.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: PURCHASE_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
       // ⚖️ إشعارُ المورّد حدثٌ مرحَّل — لا يُعدَّل بعد ترحيله (`ق-١٠٠٦`/②)، والتصحيحُ بإشعارٍ مقابل.
       if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);
@@ -479,9 +480,10 @@ export class PurchasesService {
    * **على مستوى المنشأة بحقّها**: الشراءُ الذي صدرت عليه إشعاراتٌ لا يُلغى — والعدُّ يقرأ إشعاراتِه في أيّ
    * فرعٍ كانت، كما يُمنع حذفُ العميل بفواتيره في أيّ فرع؛ وعدٌّ مقصورٌ على فروع القارئ يُلغي ما أُشير إليه.
    */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.purchase.findUnique({ where: { id }, include: PURCHASE_INCLUDE });
+      // ق-١٤٤٠: الشراءُ بفروع الفاعل قبل فحص الإلغاء والإشعارات والسندات — شراءُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403).
+      const existing = await tx.purchase.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: PURCHASE_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.purchase_not_found);
       // ⚖️ إشعارُ المورّد يُعكس ولا يُحذف (`ق-١٠٠٦`/②) — والشراءُ الذي صدرت عليه إشعاراتٌ يبقى (`Restrict`).
       if (existing.docType !== 'PURCHASE') throw new ConflictException(MSG.supplier_note_immutable);

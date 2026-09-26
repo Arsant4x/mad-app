@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { branchFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { pagedFindMany, searchTerm } from '../common/pagination/paged.util';
@@ -59,11 +60,21 @@ export class AttendanceService {
     });
   }
 
+  /**
+   * 🔴 **صفُّ الحضور بفروع الفاعل — وفرعُه فرعُ موظّفه** (`ق-١٤٤٠`): `AttendanceRecord` بلا `branchId`، فيُرشَّح بعلاقة
+   * `employee`. خارجُ الفروع **غيرُ موجودٍ له** (`404` لا `403`، فلا يُسرَّب وجودُه)، وموظّفُ المنشأة كلِّها مرئيٌّ للجميع.
+   */
+  private async findVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
+    const existing = await tx.attendanceRecord.findFirst({ where: { id, employee: branchFilter(allowedBranchIds) as Prisma.EmployeeWhereInput } });
+    if (!existing) throw new NotFoundException(MSG.attendance_not_found);
+    return existing;
+  }
+
   /** Checkout time, a status correction, or a note — on the existing day row. */
-  update(companyId: string, id: string, dto: UpdateAttendanceDto) {
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateAttendanceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.attendanceRecord.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.attendance_not_found);
+      // الفرعُ قبل التعديل (`ق-١٤٤٠`): حضورُ موظّفِ فرعٍ آخر غيرُ موجودٍ للفاعل — `404` لا `403`.
+      await this.findVisible(tx, allowedBranchIds, id);
       return tx.attendanceRecord.update({
         where: { id },
         data: {
@@ -77,10 +88,10 @@ export class AttendanceService {
     });
   }
 
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.attendanceRecord.findUnique({ where: { id } });
-      if (!existing) throw new NotFoundException(MSG.attendance_not_found);
+      // الفرعُ قبل الحذف الصلب (`ق-١٤٤٠`): حضورُ موظّفِ فرعٍ آخر غيرُ موجودٍ للفاعل — `404` لا `403`.
+      await this.findVisible(tx, allowedBranchIds, id);
       await tx.attendanceRecord.delete({ where: { id } });
     });
   }

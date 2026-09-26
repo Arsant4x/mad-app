@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { branchFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
@@ -193,9 +194,10 @@ export class LeavesService {
    *
    * ⇒ فالتشديدُ **خيارٌ معلوم** — و**الدائمُ هو فعلُ التسجيل لا المنع** (`ق-١٤٣`).
    */
-  async decide(companyId: string, actor: LeaveActor, id: string, status: 'APPROVED' | 'REJECTED', note?: string) {
+  async decide(companyId: string, allowedBranchIds: string[] | 'all', actor: LeaveActor, id: string, status: 'APPROVED' | 'REJECTED', note?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.leaveRequest.findUnique({ where: { id }, include: REQUEST_INCLUDE });
+      // الفرعُ قبل الحالة (`ق-١٤٤٠`): طلبُ موظّفِ فرعٍ آخر غيرُ موجودٍ للفاعل — `404` لا `403` ولا `409` يكشف أنه بُتّ فيه.
+      const existing = await tx.leaveRequest.findFirst({ where: { id, employee: branchFilter(allowedBranchIds) as Prisma.EmployeeWhereInput }, include: REQUEST_INCLUDE });
       if (!existing) throw new NotFoundException(MSG.leave_request_not_found);
       if (existing.status !== 'PENDING') throw new ConflictException(MSG.leave_request_not_pending);
 
@@ -260,9 +262,10 @@ export class LeavesService {
 
   /** Only a pending request can be withdrawn. A decided one is a record — an
    * approved leave that was taken, or a rejection someone was told about. */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.leaveRequest.findUnique({ where: { id } });
+      // الفرعُ قبل الحالة والحذف الصلب (`ق-١٤٤٠`): طلبُ موظّفِ فرعٍ آخر غيرُ موجودٍ للفاعل — `404` لا `403` ولا `409`.
+      const existing = await tx.leaveRequest.findFirst({ where: { id, employee: branchFilter(allowedBranchIds) as Prisma.EmployeeWhereInput } });
       if (!existing) throw new NotFoundException(MSG.leave_request_not_found);
       if (existing.status !== 'PENDING') throw new ConflictException(MSG.leave_request_not_pending);
       await tx.leaveRequest.delete({ where: { id } });

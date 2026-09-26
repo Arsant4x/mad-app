@@ -711,13 +711,14 @@ export class InvoicesService {
   }
 
   /**
-   * **على مستوى المنشأة بحقّها**: الخلَفُ في سلسلة الهيئة يُبحث عنه ببصمة
-   * الفاتورة أينما كان فرعُه — فالسلسلةُ سلسلةُ وحدة الإصدار عند الهيئة،
-   * وخلَفٌ محجوبٌ يُجيز تعديلاً يكسرها.
+   * 🔴 **الفاتورةُ بفروع الفاعل لا بمعرّفها وحدَه** (`ق-١٤٤٠`): فاتورةُ فرعٍ آخر غيرُ موجودةٍ له — `404` قبل
+   * أيّ فحصٍ يكشف نوعَها أو قفلَها. (وكان هنا إعلانُ قراءةٍ عامّةٍ لبحث الخلَف في سلسلة الهيئة، والبحثُ سقط
+   * حين صار الصادرُ كلُّه مقفلاً — `ق-٩٥٠` · `ق-٩٥٨` — فلا قراءةَ جامعةً فيه يُعلَن لها.)
    */
-  update(companyId: string, id: string, dto: UpdateInvoiceDto) {
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateInvoiceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.invoice.findUnique({ where: { id } });
+      // الفرعُ أوّلاً (`ق-١٤٤٠`): فاتورةُ فرعٍ آخر 404 لا 409/400 القفلِ الذي يكشف وجودَها — فهي غيرُ موجودةٍ له.
+      const existing = await tx.invoice.findFirst({ where: { id, ...branchFilter(allowedBranchIds) } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
 
       // What the submitted XML is signed over. Notes are absent on purpose: they
@@ -845,9 +846,9 @@ export class InvoicesService {
   }
 
   /**
-   * **على مستوى المنشأة بحقّها**: الإشعاراتُ المرتبطة بالفاتورة تمنع حذفَها
-   * أياً كان فرعُها — فالرابطُ رابطُ مستندٍ بمستند، وإشعارٌ في فرعٍ محجوبٍ يبقى
-   * معلَّقاً بها.
+   * 🔴 **الفاتورةُ بفروع الفاعل لا بمعرّفها وحدَه** (`ق-١٤٤٠`): فاتورةُ فرعٍ آخر `404` لا `409` القفل الذي
+   * يكشف وجودَها ونوعَها. (وكان هنا إعلانُ قراءةٍ عامّةٍ للإشعارات المرتبطة، والفحصُ صار محتوىً في المنع
+   * أدناه — فلا قراءةَ جامعةً فيه يُعلَن لها.)
    */
   /**
    * ⚖️ **الصادرُ لا يُزال — الحذفُ كالتعديل** (`ق-٩٤٣` · `ق-٩٤٥/٣`).
@@ -860,9 +861,10 @@ export class InvoicesService {
    * ⛔ ولا استثناءَ للاختبار هنا (`ق-٩٥٣`): تنظيفُه بمسارٍ في سياق المستأجر
    * (`test/purge-invoices.ts`) — فاستثناءٌ له يجعله يشهد لِما لا يقع.
    */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const existing = await tx.invoice.findUnique({ where: { id }, select: { docType: true } });
+      // الفرعُ أوّلاً (`ق-١٤٤٠`): فاتورةُ فرعٍ آخر 404 لا 409 القفلِ الذي يسمّي نوعَها — فهي غيرُ موجودةٍ له.
+      const existing = await tx.invoice.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, select: { docType: true } });
       if (!existing) throw new NotFoundException(MSG.invoice_not_found);
       throw new ConflictException(existing.docType === 'INVOICE' ? MSG.invoice_issued_locked : MSG.credit_note_immutable);
     });

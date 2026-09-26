@@ -31,13 +31,13 @@ export class TransactionsController {
   @Patch(':id')
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateTransactionDto) {
-    return this.transactionsService.update(tenant.companyId, id, dto);
+    return this.transactionsService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 
   @Delete(':id')
   @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.transactionsService.remove(tenant.companyId, id);
+    return this.transactionsService.remove(tenant.companyId, tenant.allowedBranchIds, id);
   }
 }
