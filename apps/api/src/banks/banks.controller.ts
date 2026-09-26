@@ -15,7 +15,10 @@ import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { BanksService } from './banks.service';
 import { CreateBankDto } from './dto/create-bank.dto';
+import { TransferBankDto } from './dto/transfer-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { MSG } from '../common/i18n/messages';
 
 @Controller('banks')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -140,6 +143,16 @@ export class BanksController {
   @RequiresAction('edit')
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateBankDto) {
     return this.banksService.update(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  }
+
+  /**
+   * نقلُ الصفّ إلى فرعٍ آخر بنوعه المعلَن (`ق-١٤٣١`): الصندوقُ إغلاقٌ وفتحٌ بعدّ نقده وقيدين (`ق-١٤١٣`)، والحسابُ البنكيّ
+   * للقادم وحدَه (`ق-١٤١٤`)، و«غيرُ المعلَن» لا يُنقل حتى يُعلَن — **للمالك** (`ق-١٤٣٢`).
+   */
+  @Post(':id/transfer')
+  @OwnerOnly(MSG.bank_transfer_forbidden)
+  transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferBankDto) {
+    return this.banksService.transfer(tenant.companyId, tenant.actorType, id, dto);
   }
 
   /** أرشفة/إلغاء أرشفة — يخفيه من القوائم اليومية ويبقيه في الحسابات. */
