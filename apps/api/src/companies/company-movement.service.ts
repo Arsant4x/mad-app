@@ -157,6 +157,9 @@ export class CompanyMovementService {
   /**
    * **ما يقع تحت الحفظ** (`ق-١٤٧٠`) — مصادرُ الحركة وسجلّاتُ العقار بذاتها، **وقيدٌ يحمل بُعدَ عقارٍ أو وحدة** (صيانةٌ
    * مُكمَلةٌ بكلفة — `JournalLine.propertyId/unitId`) فيصير الأجلُ `11` لا `10`. تحت سياق المنشأة كـ`describe`.
+   *
+   * **على مستوى المنشأة بحقّها**: الحفظُ التزامُ المنشأة كلِّها والحذفُ يطالها كلَّها — فقيدٌ في أيّ فرعٍ يُبقيها، ولا قارئَ
+   * بفروعٍ هنا أصلاً (الكنسُ والموافقةُ من المنصّة).
    */
   retention(companyId: string): Promise<RetentionReport> {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
