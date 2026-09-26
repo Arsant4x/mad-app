@@ -65,11 +65,13 @@ on:
       - 'package.json'
       - 'package-lock.json'
   pull_request:
-    # ⚠️ (ق-٢٥١) **لا `synchronize` هنا** — فالثقيلُ عند **فتح** الطلب وحده، ودفعةٌ
-    #    لاحقةٌ عليه لا تُشغّله. وهذا هو التقسيم نفسه: لا `if` على الوظائف بل
-    #    مُشغِّلٌ لا يصلها أصلاً. و`ready_for_review` معلَنةٌ لأنها ليست افتراضية
-    #    (ق-٢٥٠: شرطٌ يسمّي فعلاً غيرَ معلَن هو بوّابةٌ على بابٍ لا يُطرَق).
-    types: [opened, reopened, ready_for_review]
+    # ⚖️ (ق-١٤٧٣ · التوجيه ٢٦٦ §٦ — **يعدّل ق-٢٥١**) **الثقيلُ عند جاهزية الطلب لا مع كلِّ دفعة**:
+    #    الطلبُ يُفتح **مسوّدةً** فلا يعمل عليه إلا الخفيف، و`ready_for_review` تُشغّل الثقيل، **وكلُّ دفعةٍ
+    #    على طلبٍ جاهز** (`synchronize`) تُشغّله على الرأس الأخير مع إلغاء السابق — فيُفحص الرأسُ الذي
+    #    يُدمج آلياً بدل حيلة «مسوّدة ثم جاهز». **والمسوّدةُ تُحسم بـ`if` على الوظائف** — وهو ما منعه
+    #    ق-٢٥١؛ والشرطُ أن بوّابة الدمج تشترط الثقيلَ ناجحاً **على الرأس نفسِه** (ق-١٤٧٢)، فوظيفةٌ
+    #    تخطّتها المسوّدةُ لا تُدمج. و`ready_for_review` معلَنةٌ لأنها ليست افتراضية (ق-٢٥٠).
+    types: [opened, reopened, ready_for_review, synchronize]
     # ⚠️ (ق-٢٥١) **مساراتُ الشيفرة وحدها** — «ويُقاس بالمسار لا بالنيّة». فطلبٌ
     #    وثائقيٌّ محض لا يُشغّل الثقيلَ عند فتحه؛ ويُشغّله **عند الدمج** لأن
     #    `push` أعلاه بلا تصفيةِ مسارات: **ما يصل `main` يُفحص كاملاً مهما كان
@@ -103,11 +105,12 @@ env:
   LANG: C.UTF-8
 
 # ⚠️ (ق-٢٤٥ · 2026-09-06) دفعتان متتابعتان على طلبٍ واحد: تُلغى السابقةُ — فدقائقُ
-# تشغيلٍ تجاوزه دفعٌ أحدث تُنفَق بلا حكمٍ يُقرأ. ولا يُلغى تشغيلُ `main` (الدمج)،
-# فكلُّ دمجٍ يستحقّ فحصَه الثقيلَ كاملاً.
+# تشغيلٍ تجاوزه دفعٌ أحدث تُنفَق بلا حكمٍ يُقرأ.
+# ⚖️ (ق-١٤٧٣ م٥) **وعلى `main` أيضاً**: كلُّ نسخةٍ مدموجة فُحصت ثقيلاً على رأس طلبها بعينه (ق-١٤٧٢)،
+# فإلغاءُ تشغيلٍ على `main` تجاوزه دمجٌ أحدث لا يترك نسخةً مدموجةً بلا ثقيلٍ قطّ.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 # «والحراسة لا تضعف بل تنتقل إلى موضعها — فما يُدمج هو ما يصل `main`.»
 #
@@ -115,6 +118,51 @@ concurrency:
 # أو تبني صورةً (`docker build`) أو تشغّل متصفّحاً **يجب أن تكون في هذا الملفّ**،
 # وما سواها في الخفيف — ويوجب مُشغِّلَ كلٍّ منهما ومسارَه.
 jobs:
+  # ⚖️ (ق-١٤٧٣ م١) **بوّابةُ `main`: لا تشغيلان للشيفرة نفسِها.** على الدفع إلى `main` وحده: إن كان
+  # للالتزام طلبٌ مدموج **شجرةُ رأسه هي شجرةُ هذا الالتزام بعينها**، ونجحت الوظائفُ الثقيلة الثلاث على
+  # ذلك الرأس — **فالشيفرةُ نفسُها فُحصت** فلا يُعاد. وكلُّ شكٍّ (خطأُ استعلام · شجرةٌ مختلفة · وظيفةٌ لم
+  # تنجح) ⟸ `run=true` فيعمل الثقيل: **مُغلِقةٌ عند الشكّ**. وعلى الطلبات تُتخطّى فلا تُحاسَب.
+  # والقائمةُ في `JOBS` هي الوظائفُ التي تعتمد عليها — يحرس تطابقَهما `ci-split.spec.ts`.
+  gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          JOBS: db-integration nginx-cache playwright
+        run: |
+          set -o pipefail
+          run=true
+          tree=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.tree.sha 2>/dev/null) || tree=''
+          prs=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[] | select(.merged_at != null) | .number' 2>/dev/null) || prs=''
+          echo "الالتزام $SHA · الشجرة ${tree:-؟} · الطلبات: ${prs:-لا شيء}"
+          for pr in $prs; do
+            head=$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha 2>/dev/null) || continue
+            htree=$(gh api "repos/$REPO/commits/$head" --jq .commit.tree.sha 2>/dev/null) || continue
+            if [ -z "$tree" ] || [ "$htree" != "$tree" ]; then echo "#$pr: شجرةُ رأسه $htree ≠ $tree — يُفحص"; continue; fi
+            ok=0; want=0
+            for job in $JOBS; do
+              want=$((want+1))
+              c=$(gh api "repos/$REPO/commits/$head/check-runs?per_page=100" \
+                --jq "[.check_runs[] | select(.name == \"$job\")] | sort_by(.started_at) | last | ((.status // \"\") + \":\" + (.conclusion // \"\"))" 2>/dev/null) || c=''
+              echo "  #$pr $job على ${head:0:8}: ${c:-؟}"
+              [ "$c" = "completed:success" ] && ok=$((ok+1))
+            done
+            if [ "$ok" -eq "$want" ]; then run=false; echo "#$pr: الشجرةُ نفسُها فُحصت ثقيلاً على رأسه — لا يُعاد"; fi
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "الحكم: run=$run"
+
   # كل ما يحتاج قاعدةً حيّة — الإثباتُ الحيّ للسجلّات **و**اختبارات التكامل.
   #
   # سُمّيت `append-only-logs-live` حتى 2026-08-13، ثم اتّسع ما تفعله فاتّسع
@@ -150,6 +198,9 @@ jobs:
   #
   # ⛔ مانعة من أول يوم.
   db-integration:
+    # (ق-١٤٧٣ م١ · م٤) على الطلب: جاهزٌ لا مسوّدة. وعلى `main`: إلا أن تقول البوّابةُ بنجاحٍ صريح «فُحصت».
+    needs: gate
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
     # سقفٌ لئلا يلتهم تعليقٌ ستّ ساعات. خطّ الأساس 22 دقيقة، والضِّعف هامش.
     timeout-minutes: 60
@@ -212,7 +263,18 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
+      # ⚖️ (ق-١٤٧٣ م٦) حفظُ ما يُبنى: `node_modules` بمفتاح ملفّ القفل — يتبدّل معه فيُعاد التثبيت.
+      #    والإصابةُ تتخطّى `npm ci` وحدَها؛ والحزمةُ كاملةٌ بلا مساس.
+      - id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: nm-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.nm.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
 
       # MinIO بـ`docker run` لا كحاوية خدمة: خدمات GitHub لا تقبل `command:`،
       # وصورة minio تحتاج `server /data` وسيطاً — بدونه تخرج فوراً. والنمط
@@ -486,6 +548,8 @@ jobs:
   # ⛔ مانعة من أول يوم — بلا `continue-on-error`. درسُ 2026-08-12: وضع
   # الإبلاغ لم يُنقذ حارساً قط، بل أخفى ستة سقوطات وأنتج دمجاً على أخضرَ كاذب.
   nginx-cache:
+    needs: gate
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -493,7 +557,18 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
+      # ⚖️ (ق-١٤٧٣ م٦) حفظُ ما يُبنى: `node_modules` بمفتاح ملفّ القفل — يتبدّل معه فيُعاد التثبيت.
+      #    والإصابةُ تتخطّى `npm ci` وحدَها؛ والحزمةُ كاملةٌ بلا مساس.
+      - id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: nm-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.nm.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
 
       # سياق البناء هو جذر المستودع (الـDockerfile ينسخ package-lock والحزم).
       - name: بناء صورة الواجهة (nginx + الحزمة المبنية)
@@ -542,6 +617,8 @@ jobs:
         run: docker logs mad-web || true
 
   playwright:
+    needs: gate
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
 
     # قاعدة بيانات حقيقية: اختبارات التخطيط تسجّل منشأة فعلية عبر الـAPI
@@ -598,7 +675,18 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
+      # ⚖️ (ق-١٤٧٣ م٦) حفظُ ما يُبنى: `node_modules` بمفتاح ملفّ القفل — يتبدّل معه فيُعاد التثبيت.
+      #    والإصابةُ تتخطّى `npm ci` وحدَها؛ والحزمةُ كاملةٌ بلا مساس.
+      - id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: nm-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.nm.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
 
       # دور app_user: في الإنتاج ينشئه سكربت تهيئة مربوط بالحاوية، ولا مقابل
       # له في `services:` — فيُنشأ هنا يدوياً بنفس الخصائص. NOSUPERUSER
@@ -639,6 +727,12 @@ jobs:
       # فتُفسَّر كوسيط لـplaywright ويُجلب ثنائيٌّ من ذاكرة npx بدل المثبَّت
       # محلياً — فينهار التشغيل بـERR_MODULE_NOT_FOUND عند حلّ @playwright/test.
       # (انكشف بمحاكاة السير محلياً قبل دفعه.)
+      # ⚖️ (ق-١٤٧٣ م٦) ومتصفّحُ Playwright محفوظٌ بمفتاح ملفّ القفل (يحمل إصدارَ الحزمة)؛ والتثبيتُ بعده
+      #    يبقى — يضع ما ينقص (اعتمادياتُ النظام) ويتخطّى ما وُجد.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npm exec --workspace apps/web -- playwright install --with-deps chromium
 
       # ⛔ تمنع الدمج **من اليوم** (قرار المالك 2026-08-12، مقدَّماً على

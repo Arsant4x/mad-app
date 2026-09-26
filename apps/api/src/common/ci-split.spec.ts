@@ -63,6 +63,22 @@ export function jobBlocks(yaml: string): JobBlock[] {
 
 export const isHeavy = (job: JobBlock) => /^\s{4}services:\s*$/m.test(job.body) || /docker build/.test(job.body) || /playwright/i.test(job.body);
 
+/**
+ * (ق-١٤٧٣ م١ · م٢) **البوّابةُ تُعرَّف ببنيتها لا باسمها**: وظيفةٌ تعتمد عليها الوظائفُ الأخرى (`needs:`).
+ * وهي لا تُقاس بـ`isHeavy` — فقائمتُها `JOBS` تسمّي `playwright` فتبدو ثقيلةً بالمصادفة (`§8.7` الوجه الرابع).
+ */
+export function gateNames(yaml: string): string[] {
+  const needed = new Set<string>();
+  for (const j of jobBlocks(yaml)) {
+    const m = j.body.match(/^\s{4}needs:\s*\[?([^\]\n]*)\]?\s*$/m);
+    if (m) for (const n of m[1].split(',').map((s) => s.trim()).filter(Boolean)) needed.add(n);
+  }
+  return [...needed].sort();
+}
+
+/** قائمةُ `JOBS:` في بوّابةٍ — ما تشترط نجاحَه على رأس الطلب. */
+export const gateJobList = (job: JobBlock) => (job.body.match(/^\s+JOBS:\s*(.+)$/m)?.[1] ?? '').trim().split(/\s+/).filter(Boolean).sort();
+
 /** كتلةُ `pull_request:` تحت `on:` — بلا تعليقات. */
 function eventBlock(yaml: string, event: 'pull_request' | 'push'): string {
   // ⚠️ يُوحَّد سطرُ النهاية أولاً: نسخةُ العمل على ويندوز تحمل `CRLF` بعد
@@ -144,19 +160,53 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     expect(pushPaths(sample)).toBeNull();
   });
 
-  it('السطح غير فارغ — ثلاثُ وظائفٍ ثقيلة في ملفّها، واثنتان خفيفتان في ملفّهما', () => {
-    expect(jobBlocks(heavy).map((j) => j.name).sort()).toEqual(['db-integration', 'nginx-cache', 'playwright']);
-    expect(jobBlocks(light).map((j) => j.name).sort()).toEqual(['api-unit', 'vitest']);
+  it('السطح غير فارغ — ثلاثُ وظائفٍ ثقيلة في ملفّها، واثنتان خفيفتان في ملفّهما، ولكلٍّ بوّابتُه', () => {
+    expect(jobBlocks(heavy).map((j) => j.name).sort()).toEqual(['db-integration', 'gate', 'nginx-cache', 'playwright']);
+    expect(jobBlocks(light).map((j) => j.name).sort()).toEqual(['api-unit', 'gate', 'vitest']);
+    expect(gateNames(heavy)).toEqual(['gate']);
+    expect(gateNames(light)).toEqual(['gate']);
   });
 
-  it('🔴 كلُّ وظيفةٍ ثقيلة في الملفّ الثقيل، وكلُّ وظيفةٍ في الخفيف ليست ثقيلة', () => {
-    expect(jobBlocks(heavy).filter((j) => !isHeavy(j)).map((j) => j.name)).toEqual([]);
-    expect(jobBlocks(light).filter(isHeavy).map((j) => j.name)).toEqual([]);
+  it('🔴 كلُّ وظيفةٍ ثقيلة في الملفّ الثقيل، وكلُّ وظيفةٍ في الخفيف ليست ثقيلة — والبوّابةُ خارج القياس', () => {
+    const heavyGates = gateNames(heavy);
+    const lightGates = gateNames(light);
+    expect(jobBlocks(heavy).filter((j) => !heavyGates.includes(j.name) && !isHeavy(j)).map((j) => j.name)).toEqual([]);
+    expect(jobBlocks(light).filter((j) => !lightGates.includes(j.name) && isHeavy(j)).map((j) => j.name)).toEqual([]);
   });
 
-  it('🔴 مُشغِّلُ الثقيل: لا `synchronize`، ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بالمسارات نفسها (ق-٢٧٢)', () => {
-    expect(declaredTypes(heavy)).not.toContain('synchronize');
+  /**
+   * ⚖️ (ق-١٤٧٣ م١ · م٢) **البوّابةُ على `main` وحده، وقائمتُها ما يعتمد عليها بالضبط، ومُغلِقةٌ عند الشكّ**:
+   * كلُّ وظيفةٍ تعتمد عليها تعمل على `main` **إلا** أن تنجح البوّابةُ وتقول صراحةً `run=false`. وقائمةُ `JOBS`
+   * التي تُفحص على رأس الطلب تطابق الوظائفَ المعتمدةَ عليها — فوظيفةٌ تُضاف بلا أن تُضاف إليها لا يُتخطّى
+   * تشغيلُها على شهادة غيرها.
+   */
+  it('🔴 بوّابةُ `main`: على الدفع وحده، وقائمتُها ما يعتمد عليها، والتخطّي بنجاحٍ صريحٍ لا بغيابه', () => {
+    for (const yaml of [heavy, light]) {
+      const [gateName] = gateNames(yaml);
+      const gate = jobBlocks(yaml).find((j) => j.name === gateName)!;
+      expect(gate.body).toMatch(/^\s{4}if: github\.event_name == 'push'\s*$/m);
+      const dependents = jobBlocks(yaml).filter((j) => j.name !== gateName);
+      expect(gateJobList(gate)).toEqual(dependents.map((j) => j.name).sort());
+      for (const j of dependents) {
+        expect({ job: j.name, needs: /^\s{4}needs: gate\s*$/m.test(j.body) }).toEqual({ job: j.name, needs: true });
+        const cond = j.body.match(/^\s{4}if: (.+)$/m)?.[1] ?? '';
+        // مُغلِقةٌ عند الشكّ: لا تُتخطّى إلا بنجاح البوّابة وقولها `false` — وتعمل رغم تخطّي البوّابة على الطلبات.
+        expect({ job: j.name, closed: cond.includes("needs.gate.result != 'success'") && cond.includes("needs.gate.outputs.run != 'false'") && cond.includes('!cancelled()') }).toEqual({
+          job: j.name,
+          closed: true,
+        });
+      }
+    }
+  });
+
+  it('🔴 مُشغِّلُ الثقيل: عند جاهزية الطلب — `ready_for_review` و`synchronize` والمسوّدةُ تُتخطّى؛ ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بالمسارات نفسها (ق-١٤٧٣ · ق-٢٧٢)', () => {
+    expect(declaredTypes(heavy)).toContain('ready_for_review');
+    expect(declaredTypes(heavy)).toContain('synchronize');
     expect(declaredTypes(heavy)).toContain('opened');
+    // والمسوّدةُ لا يعمل عليها الثقيل: كلُّ وظيفةٍ ثقيلة تشترط الجاهزيةَ على الطلب (ق-١٤٧٣ م٤).
+    for (const j of jobBlocks(heavy).filter((b) => !gateNames(heavy).includes(b.name))) {
+      expect({ job: j.name, draftSkipped: /!github\.event\.pull_request\.draft/.test(j.body.match(/^\s{4}if: (.+)$/m)?.[1] ?? '') }).toEqual({ job: j.name, draftSkipped: true });
+    }
     const paths = declaredPaths(heavy) ?? [];
     expect(paths.length).toBeGreaterThan(0);
     // وثائقيٌّ في مسارات الثقيل يُبطل «الوثائقيُّ عند الدمج وحده».
@@ -169,15 +219,17 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     expect(pushPaths(heavy)).toEqual(paths);
   });
 
-  it('🔴 مُشغِّلُ الخفيف: `synchronize` معلَنةٌ، وكلُّ فعلٍ مسمّىً معلَنٌ، ويحمل tsc وبناءَ الويب و`concurrency`', () => {
+  it('🔴 مُشغِّلُ الخفيف: `synchronize` معلَنةٌ و`ready_for_review` لا (ق-١٤٧٣ م٣)، ويحمل tsc وبناءَ الويب و`concurrency`', () => {
     expect(declaredTypes(light)).toContain('synchronize');
+    expect(declaredTypes(light)).not.toContain('ready_for_review');
     const lightText = jobBlocks(light).map((j) => j.body).join('\n');
     expect(lightText).toContain('npx tsc --noEmit -p tsconfig.json');
     expect(lightText).toContain('npm run build --workspace apps/web');
     expect(lightText).toContain("npx jest --roots '<rootDir>/src'");
     for (const yaml of [heavy, light]) {
       // `\s+` بين الأسطر لا `\n` — فالمستودع على ويندوز قد يحمل CRLF.
-      expect(yaml).toMatch(/^concurrency:\s+group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/m);
+      // (ق-١٤٧٣ م٥) الإلغاءُ على `main` أيضاً — مشروطٌ ببوّابة الدمج على الرأس نفسِه (ق-١٤٧٢).
+      expect(yaml).toMatch(/^concurrency:\s+group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\s+cancel-in-progress: true\s*$/m);
     }
   });
 
