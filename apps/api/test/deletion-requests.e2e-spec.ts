@@ -597,7 +597,9 @@ describe('Account deletion requests (e2e)', () => {
       .expect(201);
     await keptAuth(request(app.getHttpServer()).post('/tasks')).send({ title: 'مهمّة باقية', assigneeId: clerk.body.id, assigneeKind: 'USER', targetScreen: 'contracts', targetId: 'c-2' }).expect(201);
     await closeCompany(kept);
-    await prisma.company.update({ where: { id: kept.id }, data: { closedAt: new Date(Date.now() - 100 * day), retainUntil: new Date(Date.now() - day) } });
+    // (`ق-١٤٧٠`) الكنسُ يعيد قياسَ الحفظ لحظةَ الحذف: المهمّةُ حركةٌ فأجلُها `closedAt + 10`. فيُدفع الإغلاقُ اثنتي
+    // عشرة سنةً إلى الماضي — كي يكون الأجلُ المُعاد قياسُه ماضياً، ويبقى المقيسُ هنا رفضَ القاعدة لا الحفظ.
+    await prisma.company.update({ where: { id: kept.id }, data: { closedAt: new Date(Date.now() - 12 * 366 * day), retainUntil: new Date(Date.now() - day) } });
 
     const result = await sweeper.sweep();
 
