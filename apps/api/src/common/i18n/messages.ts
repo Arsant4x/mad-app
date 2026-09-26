@@ -574,6 +574,7 @@ export const MSG = {
   fiscal_year_already_closed: 'fiscal.year_already_closed',
   fiscal_year_nothing_to_close: 'fiscal.year_nothing_to_close',
   account_system_protected: 'account.system_protected',
+  posting_accounts_missing: 'journal.posting_accounts_missing',
 
   // tenant status / screen access
   account_frozen: 'tenant.account_frozen',
@@ -1768,6 +1769,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.account_system_protected]: {
     ar: 'الحساب {code} حساب نظامي — لا يُحذف ولا يُعدَّل رمزه',
     en: 'Account {code} is a system account — it cannot be deleted and its code cannot be changed',
+  },
+  [MSG.posting_accounts_missing]: {
+    ar: 'لا يُحفظ المستندُ بلا قيده: الحسابُ {accounts} غيرُ موجودٍ في دليل الحسابات — أعد إنشاءه من شاشة الحسابات ثم أعد المحاولة',
+    en: 'The document cannot be saved without its journal entry: account {accounts} is missing from the chart of accounts — recreate it from the accounts screen, then try again',
   },
 
   [MSG.account_frozen]: { ar: 'الحساب مجمّد بسبب انتهاء الاشتراك', en: 'Account is frozen — the subscription has ended' },
