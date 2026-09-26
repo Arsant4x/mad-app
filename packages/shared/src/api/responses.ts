@@ -115,6 +115,11 @@ export interface PosClosedShiftResponse {
   pendingAttempts: PosPendingAttemptResponse[];
 }
 
+/** ردٌّ — `PosCurrentShiftResponse` في الخادم (ق-١٤٣٨). */
+export interface PosCurrentShiftResponse {
+  shift: PosShiftWithTotalsResponse | null;
+}
+
 /** ردٌّ — `PosIncidentItemResponse` في الخادم (ق-١٤٣٨). */
 export interface PosIncidentItemResponse {
   id: string;
@@ -182,6 +187,31 @@ export interface PosPaymentAttemptResponse {
   createdAt: string;
 }
 
+/** ردٌّ — `PosPaymentAttemptWithSaleResponse` في الخادم (ق-١٤٣٨). */
+export interface PosPaymentAttemptWithSaleResponse {
+  status: 'CREATED' | 'CHARGING' | 'APPROVED' | 'COMPLETED' | 'DECLINED' | 'UNKNOWN' | 'CANCELLED';
+  paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
+  resolution: 'PROVIDER_CHARGE' | 'PROVIDER_STATUS' | 'MANUAL_EVIDENCE' | 'CANCELLED' | null;
+  id: string;
+  clientSaleId: string;
+  shiftId: string;
+  cardAmount: string;
+  total: string;
+  currency: string;
+  provider: string;
+  providerRef: string | null;
+  approvalCode: string | null;
+  declineReason: string | null;
+  detail: string | null;
+  invoiceId: string | null;
+  chargeStartedAt: string | null;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  evidence: PosAttemptEvidenceResponse | null;
+  createdAt: string;
+  sale: PosSaleReceiptResponse | null;
+}
+
 /** ردٌّ — `PosPaymentModeResponse` في الخادم (ق-١٤٣٨). */
 export interface PosPaymentModeResponse {
   active: boolean;
@@ -239,6 +269,69 @@ export interface PosSaleLineResponse {
   taxExemptionReason: string | null;
 }
 
+/** ردٌّ — `PosSaleReceiptResponse` في الخادم (ق-١٤٣٨). */
+export interface PosSaleReceiptResponse {
+  docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
+  status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+  paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
+  receiptQr: string | null;
+  stamped: boolean;
+  id: string;
+  no: string;
+  customerId: string;
+  branchId: string | null;
+  issueDate: string;
+  dueDate: string;
+  issuedAt: string | null;
+  issuedOffsetMin: number | null;
+  subtotal: string;
+  taxTotal: string;
+  total: string;
+  notes: string | null;
+  currency: string;
+  exchangeRate: string;
+  posShiftId: string | null;
+  clientSaleId: string | null;
+  offlineRef: string | null;
+  createdAt: string;
+  lines: PosSaleLineResponse[];
+  customer: PosSaleCustomerResponse;
+  posPayments: PosPaymentRowResponse[];
+}
+
+/** ردٌّ — `PosSaleResponse` في الخادم (ق-١٤٣٨). */
+export interface PosSaleResponse {
+  docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
+  status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+  paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
+  stockDeduction: PosStockDeductedResponse | PosStockSkippedResponse;
+  stampError: string | null;
+  clearance: PosClearanceResponse;
+  receiptQr: string | null;
+  stamped: boolean;
+  id: string;
+  no: string;
+  customerId: string;
+  branchId: string | null;
+  issueDate: string;
+  dueDate: string;
+  issuedAt: string | null;
+  issuedOffsetMin: number | null;
+  subtotal: string;
+  taxTotal: string;
+  total: string;
+  notes: string | null;
+  currency: string;
+  exchangeRate: string;
+  posShiftId: string | null;
+  clientSaleId: string | null;
+  offlineRef: string | null;
+  createdAt: string;
+  lines: PosSaleLineResponse[];
+  customer: PosSaleCustomerResponse;
+  posPayments: PosPaymentRowResponse[];
+}
+
 /** ردٌّ — `PosShiftResponse` في الخادم (ق-١٤٣٨). */
 export interface PosShiftResponse {
   status: 'OPEN' | 'CLOSED';
@@ -291,6 +384,39 @@ export interface PosStockDeductedResponse {
 export interface PosStockSkippedResponse {
   deducted: false;
   reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS';
+}
+
+/** ردٌّ — `PosSyncedSaleResponse` في الخادم (ق-١٤٣٨). */
+export interface PosSyncedSaleResponse {
+  docType: 'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE' | 'PREPAYMENT';
+  status: 'DUE' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+  paymentMethod: 'CASH' | 'CARD' | 'SPLIT' | null;
+  stockDeduction?: PosStockDeductedResponse | PosStockSkippedResponse;
+  stampError?: string | null;
+  clearance?: PosClearanceResponse;
+  receiptQr: string | null;
+  stamped: boolean;
+  id: string;
+  no: string;
+  customerId: string;
+  branchId: string | null;
+  issueDate: string;
+  dueDate: string;
+  issuedAt: string | null;
+  issuedOffsetMin: number | null;
+  subtotal: string;
+  taxTotal: string;
+  total: string;
+  notes: string | null;
+  currency: string;
+  exchangeRate: string;
+  posShiftId: string | null;
+  clientSaleId: string | null;
+  offlineRef: string | null;
+  createdAt: string;
+  lines: PosSaleLineResponse[];
+  customer: PosSaleCustomerResponse;
+  posPayments: PosPaymentRowResponse[];
 }
 
 /** ردٌّ — `PosUnresolvedAttemptRowResponse` في الخادم (ق-١٤٣٨). */

@@ -72,7 +72,7 @@ describe('بوّابةُ الإجازة في كلِّ مسارٍ يُخرج إي
     expect(first.clearance).toMatchObject({ required: true });
     const replay = (await auth(http().post('/pos/sales/sync')).send(body).expect(201)).body;
     expect(replay.id).toBe(first.id);
-    expect({ clearance: replay.clearance?.required ?? null, qr: replay.zatcaQr }).toEqual({ clearance: true, qr: null });
+    expect({ clearance: replay.clearance?.required ?? null, qr: replay.receiptQr }).toEqual({ clearance: true, qr: null });
   });
 
   it('[SPEC 6.13] والمرور: إعادةُ مزامنةِ بيعه تحمل البوّابةَ مفتوحةً والرمزَ حاضراً — فالحجبُ للمستند لا للمسار', async () => {
@@ -82,7 +82,7 @@ describe('بوّابةُ الإجازة في كلِّ مسارٍ يُخرج إي
     const replay = (await auth(http().post('/pos/sales/sync')).send(body).expect(201)).body;
     expect(replay.clearance).toEqual({ required: false });
     // الرمزُ حاضرٌ للمبسّطة — فغيابُه في الاعتباريّ حجبٌ لا عطل.
-    expect(typeof replay.zatcaQr).toBe('string');
+    expect(typeof replay.receiptQr).toBe('string');
   });
 
   it('[SPEC 6.13] 🔴 ② البيعُ المكتمل ببطاقةٍ لمشترٍ اعتباريّ — ردُّ الشحن وقراءةُ المحاولة بعده محجوبان بلا رمز', async () => {
@@ -93,9 +93,9 @@ describe('بوّابةُ الإجازة في كلِّ مسارٍ يُخرج إي
     const read = (await auth(http().get(`/pos/payment-attempts/${attempt.id}`)).expect(200)).body;
     expect({
       chargeGate: charged.sale?.clearance?.required ?? null,
-      chargeQr: charged.sale?.zatcaQr ?? null,
+      chargeQr: charged.sale?.receiptQr ?? null,
       readGate: read.sale?.clearance?.required ?? null,
-      readQr: read.sale?.zatcaQr ?? null,
+      readQr: read.sale?.receiptQr ?? null,
     }).toEqual({ chargeGate: true, chargeQr: null, readGate: true, readQr: null });
   });
 

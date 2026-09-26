@@ -6,17 +6,19 @@ import type {
   PosCardVerificationRowResponse,
   PosClearanceResponse,
   PosClosedShiftResponse,
+  PosCurrentShiftResponse,
   PosIncidentsResponse,
   PosPaymentAttemptResponse,
   PosPaymentModeResponse,
+  PosSaleReceiptResponse,
+  PosSaleResponse as SoldSaleResponse,
   PosShiftResponse,
   PosShiftWithTotalsResponse,
   PosStockDeductedResponse,
   PosStockSkippedResponse,
+  PosSyncedSaleResponse,
   PosUnresolvedAttemptRowResponse,
 } from '@mad-app/shared/api/responses';
-// ⚖️ إيصالُ البيع يحمل رمزَ الإيصال (اسمُه على السلك سعوديّ) فيسكن ملفَّ الوحدة المولَّد — الحدُّ الوحيد هنا، دَينٌ معلَن (`§3.8` · `ق-١٤٣٨`).
-import type { PosSaleReceiptResponse, PosSaleResponse as SoldSaleResponse, PosSyncedSaleResponse } from '@mad-app/shared/api/zatca-responses';
 
 export type { PosCardVerification, PosPaymentAttemptStatus, PosPaymentMethod, PosPaymentResolution };
 
@@ -45,7 +47,8 @@ export type PosClearance = PosClearanceResponse;
  */
 export type PosSaleResponse = PosSyncedSaleResponse;
 
-export const getCurrentShift = () => apiClient.get<PosShift | null>('/pos/shifts/current').then((r) => r.data);
+/** ⚖️ `ق-١٤٤٩`: الخادمُ يعيدها مغلَّفةً `{ shift: null }` — والشاشةُ تأخذ المناوبةَ أو `null` كما كانت. */
+export const getCurrentShift = () => apiClient.get<PosCurrentShiftResponse>('/pos/shifts/current').then((r) => r.data.shift);
 export const listShifts = () => apiClient.get<PosShift[]>('/pos/shifts').then((r) => r.data);
 // الفتحُ يعيد أعمدةَ المناوبة بلا مجاميع — والنوعُ المكتوبُ بيدٍ كان يعلنها (`ق-١٤٣٨`).
 export const openShift = (openingFloat: number, branchId?: string) =>

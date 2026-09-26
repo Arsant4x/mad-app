@@ -91,7 +91,7 @@ export interface CardProof {
 }
 
 /** البيعُ كما يخرج من معاملة الإتمام — قبل الختم. */
-export type SoldSale = SaleRow & { zatcaQr: string | null; zatcaStamped: boolean; stockDeduction: StockDeductionReport; clearanceRequired: boolean };
+export type SoldSale = SaleRow & { receiptQr: string | null; stamped: boolean; stockDeduction: StockDeductionReport; clearanceRequired: boolean };
 
 /**
  * تقرير خصم المخزون المرفق بردّ البيع (معلوماتي فقط — الرصيد نفسه يبقى
@@ -857,15 +857,15 @@ export class PosService {
       const { clearanceRequired: _, ...rest } = sold;
       return {
         ...rest,
-        zatcaQr: null,
-        zatcaStamped: false,
+        receiptQr: null,
+        stamped: false,
         stampError: null,
         clearance: { required: true, status: sold.zatcaStatus, message: translate(MSG.pos_clearance_required, 'ar') },
       };
     }
     const stamp = await this.zatca.stampForReceipt(companyId, sold.id);
     const { clearanceRequired: _, ...rest } = sold;
-    return { ...rest, zatcaQr: stamp.qrPayload ?? sold.zatcaQr, zatcaStamped: stamp.qrPayload !== null, stampError: stamp.error, clearance: { required: false } };
+    return { ...rest, receiptQr: stamp.qrPayload ?? sold.receiptQr, stamped: stamp.qrPayload !== null, stampError: stamp.error, clearance: { required: false } };
   }
 
   /**
@@ -886,7 +886,7 @@ export class PosService {
    */
   private async withReceiptQr<
     T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null } & ReceiptGateInput,
-  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { zatcaQr: string | null; zatcaStamped: boolean; clearance: ReceiptClearance }> {
+  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { receiptQr: string | null; stamped: boolean; clearance: ReceiptClearance }> {
     const gated = gatedReceiptFields(invoice, translate(MSG.pos_clearance_required, 'ar'));
     if (gated) return { ...invoice, ...gated };
     // مستندٌ مختوم يعيد رمزَه التساعي المحفوظ — فإعادةُ المزامنة تطبع ما طُبع أولَ مرة حرفاً.
@@ -894,7 +894,7 @@ export class PosService {
     // ⚠️ **و`tx` تُمرَّر حين نكون داخل معاملة** (`ق-٣٦٠`): بدونها كانت تُفتح
     // معاملةٌ ثانية فوق الأولى، **فتمسك البيعةُ اتصالاً وتطلب ثانياً** — وثلاثُ
     // بيعاتٍ متزامنة تُجوّع المجموعَ فيعود `500`.
-    return { ...invoice, zatcaQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), zatcaStamped: Boolean(invoice.zatcaQrPayload), clearance: { required: false } };
+    return { ...invoice, receiptQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), stamped: Boolean(invoice.zatcaQrPayload), clearance: { required: false } };
   }
 
 

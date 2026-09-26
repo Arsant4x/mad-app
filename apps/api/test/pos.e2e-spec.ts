@@ -119,10 +119,10 @@ describe('POS cashier (e2e)', () => {
     expect(cur.body.shift.id).toBe(shiftId);
     expect(cur.body.shift.salesCount).toBe(2);
     // ② المالُ نصّاً بخانتين (`ق-١٢٣٥`): الشكلُ جزءٌ من العقد فيُقارَن حرفاً.
-    expect(cur.body.cashTotal).toBe('230.00');
-    expect(cur.body.cardTotal).toBe('115.00');
+    expect(cur.body.shift.cashTotal).toBe('230.00');
+    expect(cur.body.shift.cardTotal).toBe('115.00');
     // الدرج المتوقع = العهدة + النقد فقط — الشبكة ليست في الدرج.
-    expect(cur.body.expectedCash).toBe('430.00');
+    expect(cur.body.shift.expectedCash).toBe('430.00');
   }, 60000);
 
   it('[SPEC 7.3] closes the shift computing the variance itself — and blocks further sales', async () => {

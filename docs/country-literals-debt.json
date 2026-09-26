@@ -98,14 +98,14 @@
     },
     "apps/api/src/pos/dto/pos-responses.dto.ts": {
       "count": 1,
-      "reason": "§3.8 القاعدة ٣ (ق-١٤٣٨): سطرُ استيرادٍ واحد هو الحدُّ بين إيصال الكاشير في النواة وحقلَي رمز الإيصال في الوحدة — اسمُهما على السلك (zatcaQr · zatcaStamped) فصنفُ الردّ يحمل علامتهما بالضرورة، وسكنا pos/dto/zatca-receipt-response.dto.ts داخل الحدود. ويزول باسمٍ محايدٍ على السلك — تغييرُ عقدٍ للمستهلكين الخارجيين ⟸ لحكم المالك"
+      "reason": "§3.8 القاعدة ٣ (ق-١٤٣٨ · ق-١٤٤٨): سطرُ استيرادٍ واحد لصنف الإجازة (PosClearanceResponse) — حالُ المستند لدى الهيئة (ZatcaStatus) سعوديٌّ بطبعه لا باسمه، فسكن pos/dto/zatca-receipt-response.dto.ts. ورمزُ الإيصال خرج منه باسمٍ محايد (receiptQr · stamped) بعد قياسِ ألّا مفتاحَ خارجيَّ صدر. ويزول حين تُصاغ الإجازةُ خلف واجهةٍ موحّدة (§3.8 القاعدة ١)"
     },
     "apps/api/src/pos/pos.module.ts": {
       "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/api/src/pos/pos.service.ts": {
-      "count": 12,
+      "count": 7,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/api/src/purchases/purchases.service.ts": {
@@ -123,10 +123,6 @@
     "apps/web/src/api/notifications.ts": {
       "count": 1,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/api/pos.ts": {
-      "count": 1,
-      "reason": "§3.8 القاعدة ٣ (ق-١٤٣٨): استيرادُ إيصال البيع من ملفّ الوحدة المولَّد (zatca-responses) — الإيصالُ يحمل رمزَ الإيصال واسمُه على السلك سعوديّ، فمولِّدُ الأنواع يضعه في ملفّ الوحدة (ق-١٣٥٠). ويزول مع اسمٍ محايدٍ على السلك ⟸ لحكم المالك"
     },
     "apps/web/src/layout/AppShell.tsx": {
       "count": 5,
@@ -197,7 +193,7 @@
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/pos/PosPage.tsx": {
-      "count": 11,
+      "count": 9,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/products/ProductModal.tsx": {

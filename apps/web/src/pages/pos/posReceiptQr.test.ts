@@ -44,10 +44,10 @@ describe('إيصال الكاشير يحمل رمز الهيئة داخل منط
 
   it('ولا يُستبدَل الرمزُ الغائب برمزٍ وهميّ — بل تنبيهٌ للكاشير خارج الإيصال', () => {
     // رمزٌ يُقرأ ولا يصحّ أسوأ من غيابه (قاعدة QR المرحلة الأولى)؛ فحين يكون
-    // `zatcaQr` فارغاً لا يُرسم شيء، ويُنبَّه الكاشير إلى إكمال ملف المنشأة.
-    expect(source).toMatch(/receipt\.zatcaQr && \(/);
+    // `receiptQr` فارغاً لا يُرسم شيء، ويُنبَّه الكاشير إلى إكمال ملف المنشأة. (اسمُه محايدٌ على السلك — `ق-١٤٤٨`.)
+    expect(source).toMatch(/receipt\.receiptQr && \(/);
     // ⑤A4: الكاملةُ المحجوبة حتى الإجازة تخرج بلا رمزٍ **عمداً** — فتنبيهُ «أكمل الملفّ» لا يُعرض لها، ويُعرض حجبُها.
-    expect(source).toMatch(/!receipt\.zatcaQr && !receipt\.clearance\?\.required && \(/);
+    expect(source).toMatch(/!receipt\.receiptQr && !receipt\.clearance\?\.required && \(/);
     expect(source).toMatch(/receipt\.clearance\?\.required && \(/);
     expect(source).toContain('أكمل الاسم القانوني والرقم الضريبي');
   });
