@@ -32,7 +32,9 @@ for f in $staged; do
     # وفحصُ المحتوى أدناه يبقى عليه (مُثبَتٌ بسرٍّ مزروعٍ يُرفض). ملفٌّ آخر في المجلد نفسه يبقى مرفوضاً بالنوع.
     bench/external-review-2026-09/seed.sql) continue ;;
     # القوالب الفارغة مقصودة.
-    *.env.example|*.env.test.example|.env.example|.env.production.example|.env.test.example) continue ;;
+    # (ق-١٤٧٥) `.env.example` و`.env.test.example` حُذفا من القائمة: النجمةُ تطابق الفراغ فيغطّيهما ما قبلهما
+    # (shellcheck SC2221/SC2222 في أوّل تشغيلٍ له) — والسلوكُ هو هو.
+    *.env.example|*.env.test.example|.env.production.example) continue ;;
   esac
 
   case "$f" in

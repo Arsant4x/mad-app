@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # متغيّراتُ البيئة أدناه تُقرأ داخل الكتلة المقتطَعة من deploy.sh عبر `eval` — ولا يراها shellcheck.
 # ops/deploy/recreate-guard.selftest.sh — يُشغّل **كتلةَ الحارس كما هي في deploy.sh** (تُقتطع بين علامتَيها)
 # على docker مزيَّف، في ثلاث حالاتٍ معلومة الجواب (ق-٧١٧). يستدعيه apps/api/src/common/deploy-recreate-guard.spec.ts.
 #
@@ -11,7 +12,7 @@
 set -uo pipefail
 CASE="${1:?case}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$ROOT"
+cd "$ROOT" || exit 2
 
 # ── الكتلةُ المقتطَعة من deploy.sh — من عنوان الحارس إلى ما قبل الحصيلة ──
 block="$(awk '/^head_ "حارس إعادة الإنشاء"/{f=1} /^# ═══ ٦\)/{f=0} f' deploy.sh)"

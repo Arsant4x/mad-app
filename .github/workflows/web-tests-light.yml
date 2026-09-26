@@ -158,6 +158,33 @@ jobs:
           fi
           echo "كل خطّافات .githooks بنهايات LF: $count ملفاً"
 
+      # ⛔ (ق-١٤٧٥ · التوجيه ٢٦٦ §٧ب) shellcheck على كلِّ سكربتِ صدفةٍ متتبَّع — **مشتقّاً من السطر
+      #    الأوّل لا من الامتداد** (§8.15: الخطّافاتُ بلا امتداد). بوّابةٌ من يومها: لا `continue-on-error`.
+      #    وحدُّه معلَن: لا يرى الصدفةَ المضمَّنة في ملفّ التركيب ولا خطواتِ السير، ولا يرى سرّاً في سطر
+      #    أمر — ذاك حارسُه `shell-argv-secrets.spec.ts` في `api-unit`.
+      - name: shellcheck — سكربتات الصدفة المتتبَّعة (blocking)
+        shell: bash
+        run: |
+          set -o pipefail
+          command -v shellcheck >/dev/null || { echo "::error::shellcheck غير موجود على العدّاء — لا فحصَ بلا أداته"; exit 1; }
+          shellcheck --version | sed -n '2p'
+          files=()
+          while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            first=''
+            IFS= read -r first < "$f" 2>/dev/null || true
+            case "$first" in
+              '#!'*/sh|'#!'*/sh' '*|'#!'*/bash|'#!'*/bash' '*|'#!'*/dash|'#!'*'env sh'|'#!'*'env bash') files+=("$f") ;;
+            esac
+          done < <(git ls-files -z)
+          printf '  %s\n' "${files[@]}"
+          # المسبارُ مُصادَقٌ بحالاتٍ معلومة: خطّافٌ بلا امتداد يجب أن يُرى، وملفُّ JSON يجب ألّا يُرى.
+          printf '%s\n' "${files[@]}" | grep -qx '.githooks/pre-commit' || { echo "::error::المسبارُ أعمى: .githooks/pre-commit غائب"; exit 1; }
+          printf '%s\n' "${files[@]}" | grep -qx 'deploy.sh' || { echo "::error::المسبارُ أعمى: deploy.sh غائب"; exit 1; }
+          if printf '%s\n' "${files[@]}" | grep -qx 'package.json'; then echo "::error::المسبارُ واسع: package.json التُقط"; exit 1; fi
+          echo "سكربتاتُ الصدفة: ${#files[@]}"
+          shellcheck -x -S warning "${files[@]}"
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
