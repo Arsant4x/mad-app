@@ -536,6 +536,15 @@ export const MSG = {
   branch_delete_open_quotes: 'branches.delete_open_quotes',
   branch_delete_open_shifts: 'branches.delete_open_shifts',
   branch_delete_pending_write_offs: 'branches.delete_pending_write_offs',
+  branch_delete_history_closed: 'branches.delete_history_closed',
+  branch_delete_suggest_close: 'branches.delete_suggest_close',
+  branch_closed: 'branches.closed',
+  branch_already_closed: 'branches.already_closed',
+  branch_not_closed: 'branches.not_closed',
+  branch_close_cash_boxes: 'branches.close_cash_boxes',
+  branch_close_drawers: 'branches.close_drawers',
+  branch_close_employees: 'branches.close_employees',
+  branch_close_accounts: 'branches.close_accounts',
   document_box_other_branch: 'branches.document_box_other_branch',
   activity_not_found: 'activities.not_found',
   activity_name_taken: 'activities.name_taken',
@@ -1625,8 +1634,38 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.branch_name_taken]: { ar: 'يوجد فرع بالاسم "{name}" بالفعل', en: 'A branch named "{name}" already exists' },
   [MSG.branch_forbidden]: { ar: 'لا تملك صلاحية الوصول إلى هذا الفرع', en: 'You do not have permission to access this branch' },
   [MSG.branch_delete_history]: {
-    ar: 'للفرع "{name}" تاريخٌ مسجَّل ({count} من المستندات والقيود) — والتاريخُ لا يُنقل بين الفروع، فلا يُحذف فرعٌ له تاريخ',
-    en: 'Branch "{name}" has recorded history ({count} documents and entries) — history does not move between branches, so a branch with history is not deleted',
+    ar: 'للفرع "{name}" تاريخٌ مسجَّل ({count} من المستندات والقيود) — والتاريخُ لا يُنقل بين الفروع، فلا يُحذف فرعٌ له تاريخ: أغلقه بدلاً من حذفه، فلا يقبل مستنداً جديداً ويبقى تاريخُه في التقارير',
+    en: 'Branch "{name}" has recorded history ({count} documents and entries) — history does not move between branches, so a branch with history is not deleted: close it instead, so it takes no new documents and its history stays in the reports',
+  },
+  [MSG.branch_delete_history_closed]: {
+    ar: 'الفرع "{name}" مغلقٌ وله تاريخٌ مسجَّل ({count} من المستندات والقيود) — والتاريخُ لا يُنقل، فيبقى مغلقاً ولا يُحذف',
+    en: 'Branch "{name}" is closed and has recorded history ({count} documents and entries) — history does not move, so it stays closed and is not deleted',
+  },
+  [MSG.branch_delete_suggest_close]: {
+    ar: 'ولا يُحذف إلا فرعٌ لا أثرَ له إطلاقاً — فإن أردتَ إيقافَ "{name}" مع بقاء أثره فأغلقه',
+    en: 'Only a branch with no trace at all is deleted — to stop "{name}" while keeping its trace, close it',
+  },
+  [MSG.branch_closed]: {
+    ar: 'الفرع "{name}" مغلق — لا مستندَ جديدٌ فيه ولا يُسنَد إليه جديد: أعد فتحه من شاشة الفروع، أو اختر فرعاً آخر',
+    en: 'Branch "{name}" is closed — it takes no new documents or assignments: reopen it from the branches screen, or pick another branch',
+  },
+  [MSG.branch_already_closed]: { ar: 'الفرع "{name}" مغلقٌ بالفعل', en: 'Branch "{name}" is already closed' },
+  [MSG.branch_not_closed]: { ar: 'الفرع "{name}" مفتوح — لا يُعاد فتحُ فرعٍ مفتوح', en: 'Branch "{name}" is open — an open branch is not reopened' },
+  [MSG.branch_close_cash_boxes]: {
+    ar: 'في الفرع صناديقُ وحساباتٌ بنكيةٌ عاملة: {names} — انقلها إلى فرعٍ آخر أو أرشفها أولاً',
+    en: 'The branch holds active cash boxes and bank accounts: {names} — transfer them to another branch or archive them first',
+  },
+  [MSG.branch_close_drawers]: {
+    ar: 'في الفرع أدراجُ كاشيرٍ عاملة: {names} — انقلها إلى فرعٍ آخر أو أوقفها أولاً',
+    en: 'The branch holds active cashier drawers: {names} — transfer them to another branch or deactivate them first',
+  },
+  [MSG.branch_close_employees]: {
+    ar: 'في الفرع موظفون على رأس العمل: {names} — انقلهم إلى فرعٍ آخر أولاً (ومن انتهت خدمتُه يبقى في فرعه تاريخاً)',
+    en: 'The branch has serving employees: {names} — transfer them to another branch first (those whose service ended stay as history)',
+  },
+  [MSG.branch_close_accounts]: {
+    ar: 'حساباتُ دخولٍ مُسنَدٌ إليها الفرع: {names} — انقلها إلى فرعٍ آخر أولاً (أزل الفرعَ من فروع كلٍّ منها)',
+    en: 'Login accounts assigned to the branch: {names} — transfer them to another branch first (remove the branch from each account)',
   },
   [MSG.branch_delete_cash_boxes]: {
     ar: 'في الفرع صناديقُ وحساباتٌ بنكية: {names} — انقلها إلى فرعٍ آخر أولاً',

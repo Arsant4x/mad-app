@@ -6,7 +6,9 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { ApiCreatedResponse } from '@nestjs/swagger';
 import { BranchesService } from './branches.service';
+import { BranchResponse } from './dto/branch-responses.dto';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
 
@@ -42,5 +44,21 @@ export class BranchesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.branchesService.remove(tenant.companyId, tenant.actorType, id);
+  }
+
+  /** ⚖️ `ق-١٤٥٣` — الإغلاق: لا مستندَ جديدٌ فيه، ويبقى في التقارير والتاريخ. */
+  @Post(':id/close')
+  @OwnerOnly()
+  @ApiCreatedResponse({ type: BranchResponse })
+  close(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.branchesService.close(tenant.companyId, tenant.actorType, id);
+  }
+
+  /** ⚖️ `ق-١٤٥٣` — إعادةُ الفتح بيد المالك. */
+  @Post(':id/reopen')
+  @OwnerOnly()
+  @ApiCreatedResponse({ type: BranchResponse })
+  reopen(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.branchesService.reopen(tenant.companyId, tenant.actorType, id);
   }
 }

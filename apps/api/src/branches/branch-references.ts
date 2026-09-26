@@ -164,12 +164,79 @@ const REASON_ORDER: MessageKey[] = [
   MSG.branch_delete_pending_write_offs,
 ];
 
-/** ما في الفرع والمفتوحُ من مستنداته — سببٌ لكلِّ صنفٍ بأسمائه، في رفضٍ واحد. فارغةٌ ⟸ لا ما يوقف الحذف. */
-export async function branchContentReasons(tx: Prisma.TransactionClient, branchId: string): Promise<string[]> {
-  const found = (await Promise.all(Object.values(READERS).map((read) => read(tx, branchId)))).flat();
-  return REASON_ORDER.flatMap((key) => {
+/** يضمّ ما وجده القرّاءُ سبباً لكلِّ صنفٍ بترتيبه — والصنفُ الفارغُ لا يُذكر. */
+function reasonsOf(found: Found[], order: MessageKey[]): string[] {
+  return order.flatMap((key) => {
     const hits = found.filter((f) => f.key === key);
     const items = hits.flatMap((f) => f.items);
     return items.length ? [formatMessage(key, { [hits[0].param]: nameList(items) })] : [];
   });
+}
+
+/** ما في الفرع والمفتوحُ من مستنداته — سببٌ لكلِّ صنفٍ بأسمائه، في رفضٍ واحد. فارغةٌ ⟸ لا ما يوقف الحذف. */
+export async function branchContentReasons(tx: Prisma.TransactionClient, branchId: string): Promise<string[]> {
+  return reasonsOf((await Promise.all(Object.values(READERS).map((read) => read(tx, branchId)))).flat(), REASON_ORDER);
+}
+
+/**
+ * ⚖️ **شرطُ الإغلاق** (`ق-١٤٥٣`) بنصّ المالك: «**صناديقُه نُقلت أو أُقفلت · وموظّفوه نُقلوا · ومستنداتُه المفتوحة سُوّيت.
+ * والرفضُ يسمّي ما بقي ويدلّ على النقل.**» — **العاملُ وحدَه يوقفه**، فالإغلاقُ لا يُفرغ شيئاً (خلافَ الحذف): الصندوقُ المؤرشف ·
+ * والدرجُ الموقوف · ومن انتهت خدمتُه · وما في السلّة — **يبقى في فرعه تاريخاً**. **والنوعُ يُلزم قارئاً لكلِّ `content` و`open`**
+ * كقرّاء الحذف، فصنفٌ جديدٌ يُصنَّف لا يُنسى هنا. **والمفتوحُ بتعريف `OPEN_WHERE` نفسِه** — والفاتورةُ غيرُ المحصَّلة تاريخ:
+ * تُحصَّل بعد الإغلاق بسندٍ في فرعٍ آخر أو للمنشأة كلِّها.
+ *
+ * **على مستوى المنشأة بحقّها**: القارئُ يسمّي ما في الفرع المُغلَق نفسِه ليُرفض إغلاقُه بأسمائه — والإغلاقُ فعلُ مالكٍ نطاقُه
+ * الكلّ، فلا مرشِّحَ بفروع القارئ هنا (كقرّاء الحذف `READERS`).
+ */
+const CLOSING_READERS: Record<ModelsOf<'content'> | ModelsOf<'open'>, Reader> = {
+  Bank: async (tx, branchId) => [
+    {
+      key: MSG.branch_close_cash_boxes,
+      param: 'names',
+      items: (await tx.bank.findMany({ where: { branchId, archived: false }, select: { name: true }, orderBy: { name: 'asc' }, take: NAMES_TAKE })).map((r) => r.name),
+    },
+  ],
+  CashDrawer: async (tx, branchId) => [
+    {
+      key: MSG.branch_close_drawers,
+      param: 'names',
+      items: (await tx.cashDrawer.findMany({ where: { branchId, isActive: true }, select: { name: true }, orderBy: { name: 'asc' }, take: NAMES_TAKE })).map((r) => r.name),
+    },
+  ],
+  Employee: async (tx, branchId) => [
+    {
+      key: MSG.branch_close_employees,
+      param: 'names',
+      items: (
+        await tx.employee.findMany({ where: { branchId, status: { not: 'TERMINATED' } }, select: { fullName: true }, orderBy: { fullName: 'asc' }, take: NAMES_TAKE })
+      ).map((r) => r.fullName),
+    },
+  ],
+  CompanyUserBranch: async (tx, branchId) => [
+    {
+      key: MSG.branch_close_accounts,
+      param: 'names',
+      items: (
+        await tx.companyUserBranch.findMany({ where: { branchId }, select: { companyUser: { select: { name: true } } }, orderBy: { companyUser: { name: 'asc' } }, take: NAMES_TAKE })
+      ).map((r) => r.companyUser.name),
+    },
+  ],
+  Quote: READERS.Quote,
+  PosShift: READERS.PosShift,
+  InventoryWriteOff: READERS.InventoryWriteOff,
+};
+
+const CLOSING_ORDER: MessageKey[] = [
+  MSG.branch_close_cash_boxes,
+  MSG.branch_close_drawers,
+  MSG.branch_close_employees,
+  MSG.branch_close_accounts,
+  MSG.branch_delete_open_quotes,
+  MSG.branch_delete_open_shifts,
+  MSG.branch_delete_pending_write_offs,
+];
+
+/** ما يوقف الإغلاق — سببٌ لكلِّ صنفٍ بأسمائه، في رفضٍ واحد. فارغةٌ ⟸ يُغلق. */
+export async function branchClosingReasons(tx: Prisma.TransactionClient, branchId: string): Promise<string[]> {
+  return reasonsOf((await Promise.all(Object.values(CLOSING_READERS).map((read) => read(tx, branchId)))).flat(), CLOSING_ORDER);
 }

@@ -35,6 +35,20 @@ export interface BankTransferEntriesResponse {
   in: string | null;
 }
 
+/** ردٌّ — `BranchResponse` في الخادم (ق-١٤٣٨). */
+export interface BranchResponse {
+  id: string;
+  name: string;
+  type: string | null;
+  activityId: string | null;
+  propertyId: string | null;
+  warehouseId: string | null;
+  hours: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** ردٌّ — `CashBoxTransferResponse` في الخادم (ق-١٤٣٨). */
 export interface CashBoxTransferResponse {
   kind: 'CASH_BOX';

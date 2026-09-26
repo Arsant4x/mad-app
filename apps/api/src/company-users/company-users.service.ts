@@ -209,7 +209,7 @@ export class CompanyUsersService {
    * بوّابةٍ أخرى يسقط يوم تُفتَح تلك البوّابة، ولا يشتكي**.
    */
   private async assertBranchIdsAssignable(tx: Tx, allowedBranchIds: string[] | 'all', branchIds: string[]): Promise<void> {
-    // والإذنُ بعد الوجود — بالمصدر الواحد نفسِه الذي يمرّ به نقلُ الموظّف المربوط (`ق-١٤٤٥`).
+    // والإذنُ بعد الوجود، والمغلقُ لا يُسنَد إليه — بالمصدر الواحد نفسِه الذي يمرّ به نقلُ الموظّف المربوط (`ق-١٤٤٥` · `ق-١٤٥٣`).
     await assertBranchIdsAssignable(tx, allowedBranchIds, branchIds);
   }
 

@@ -68,15 +68,53 @@ export async function resolveBranchId(
   tx: Prisma.TransactionClient,
   branchId: string | null | undefined,
   allowedBranchIds: string[] | 'all',
+  use: BranchWriteUse = 'new',
 ): Promise<string | null> {
   if (branchId === undefined) return null;
   if (branchId === null || branchId === '') return null;
 
-  const branch = await tx.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+  const [branch] = await readBranchesForWrite(tx, [branchId]);
   if (!branch) throw new NotFoundException(MSG.branch_not_found);
 
   assertBranchAllowed(allowedBranchIds, branchId);
+  if (use === 'new') assertBranchesOpen([branch]);
   return branch.id;
+}
+
+/**
+ * ⚖️ **ما يُكتب في الفرع** (`ق-١٤٥٣`): `new` — مستندٌ أو إسنادٌ جديدٌ يختاره الطلب، **فالمغلقُ يرفضه** · `mirror` — عكسٌ أو
+ * إلغاءٌ يحمل فرعَ أصله كما هو، **فيمضي**: تصحيحُ التاريخ ليس نشاطاً جديداً في الفرع.
+ */
+export type BranchWriteUse = 'new' | 'mirror';
+
+interface BranchForWrite {
+  id: string;
+  name: string;
+  closedAt: Date | null;
+}
+
+/**
+ * يقرأ الفروعَ **بقفل المفتاح المشترك** (`FOR KEY SHARE`) — وهو ما يأخذه إدراجُ المفتاح الأجنبيّ على الصفّ نفسِه على كلّ حال.
+ * **فإغلاقٌ متزامن** (`FOR UPDATE` في `BranchesService.close`) **ينتظره أو ينتظرُه**: إمّا يُغلق بعد أن يُكتب المستندُ فيرى
+ * أثرَه، وإمّا يقرأ هذا الفرعَ بعد الإغلاق فيرفض — ولا يقع مستندٌ في فرعٍ أُغلق بين قراءته وكتابته.
+ */
+async function readBranchesForWrite(tx: Prisma.TransactionClient, ids: string[]): Promise<BranchForWrite[]> {
+  return tx.$queryRaw<BranchForWrite[]>`SELECT "id", "name", "closedAt" FROM "branches" WHERE "id" = ANY(${ids}::text[]) FOR KEY SHARE`;
+}
+
+/** 🔴 المغلقُ لا مستندَ جديدٌ فيه ولا يُسنَد إليه جديد — يُرفض مسمّىً ويدلّ على إعادة الفتح أو فرعٍ آخر. */
+function assertBranchesOpen(branches: BranchForWrite[]): void {
+  const closed = branches.filter((b) => b.closedAt);
+  if (closed.length) throw new ConflictException(formatMessage(MSG.branch_closed, { name: closed.map((b) => b.name).join('" · "') }));
+}
+
+/**
+ * فروعٌ تُسنَد إلى حساب دخول (`ق-١٤٥٣`): **مغلقٌ منها يُرفض** — فالإغلاقُ يشترط أن لا حسابَ مُسنَدٌ إليه، وإسنادٌ بعده
+ * يلتفّ على الشرط. **يُقرأ بالقفل نفسِه** فلا يسبقه إغلاقٌ متزامن.
+ */
+export async function assertBranchIdsOpen(tx: Prisma.TransactionClient, branchIds: string[]): Promise<void> {
+  if (branchIds.length === 0) return;
+  assertBranchesOpen(await readBranchesForWrite(tx, branchIds));
 }
 
 /**
