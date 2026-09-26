@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { INestApplication, PipeTransform } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
@@ -24,11 +25,19 @@ import { hardDeleteCompanyForTest } from '../test/hard-delete-company';
  * - **عمليةٌ في الوحدة بلا مخطَّطٍ يعلن شكلاً** — فلا يمرّ صامتاً ما لم يُعلَن.
  * - **عمليةٌ في الوحدة لم تُطابَق مرّةً على الأقل** — فالتغطيةُ تُقاس من الوثيقة لا من قائمةٍ مكتوبة (`§8.7`).
  * - **مسبارٌ أعمى**: ردٌّ حقيقيٌّ يُنزع منه حقلٌ إلزاميّ فيجب أن يُسقط — وإلا فصفرُ المخالفات عمى لا صدق (`§8.7` الحادي عشر).
+ *   **ومسبارٌ لكلِّ وحدة** على ردٍّ من ردودها — فوحدةٌ بلا مخطَّطٍ يُعمى مسبارُها ولا يشهد لها مسبارُ غيرها.
  *
  * ⚠️ **وحدودُه معلَنة**: الحقلُ الزائد غيرُ المعلَن لا يُعدّ (`response-schema.util.ts`) · **والجسمُ الفارغ يُقرأ `null`** حيث يعلن
  * المخطَّطُ `nullable` — لأن `Nest` لا يرسل `null` بل جسماً فارغاً (`ExpressAdapter.reply`: `isNil(body) ⟸ response.send()`)،
- * **ويُطبع حيث وقع** فلا يخفى. **ومحوّلُ الدفع التجريبيّ** (`MOCK`) يُستعمل لبلوغ مسارات المحاولة، **وشحنُه يُرمى مرّةً عمداً**
+ * **ويُطبع حيث وقع** فلا يخفى. **وردُّ `204` لا شكلَ له** (كالمِسنَن — `untypedResponseOperations`): يُطابَق رمزُه وأنّ جسمَه فارغٌ
+ * حقّاً، لا مخطَّط. **ومحوّلُ الدفع التجريبيّ** (`MOCK`) يُستعمل لبلوغ مسارات المحاولة، **وشحنُه يُرمى مرّةً عمداً**
  * ليبلغ «معلّقٌ» مسارَي الحسم — ويُعاد كما كان.
+ *
+ * **والوحداتُ اثنتان** (`ق-١٤٥٠`: «الوحدةُ التالية البنوكُ ثم الموافقات»): الكاشير ثم البنوك — وبياناتُ البنوك تُصنع **بالواجهة نفسِها**
+ * (درجٌ ممَوَّلٌ بقيدٍ يدويّ · سنداتُ قبضٍ بالشبكة · سطورُ كشفٍ بـ`/v1/transactions`) لا ببذرة.
+ *
+ * **ولقياس ما يُرسَل قبل إعلانه** (`RESPONSE_TRUTH_DUMP=<مسار>`): تُكتب الردودُ الحيّة كما وصلت (العمليةُ والوصفُ والرمزُ والجسم)
+ * إلى الملفّ — فيُقاس بها نوعُ الواجهة المكتوبُ بيدٍ قبل أن يُستبدل بالمولَّد (قاعدةُ المالك: «قِس، ثم أصلح»).
  *
  * الاستعمال (من `apps/api`، بقاعدةٍ حيّة في `DATABASE_URL`):
  *   npm run response:truth        ⟵ يبني ويقلع ويطابق — والخروجُ غيرُ الصفريّ يُسقط الخطوة
@@ -36,8 +45,13 @@ import { hardDeleteCompanyForTest } from '../test/hard-delete-company';
 
 const DIST = join(__dirname, '..', 'dist', 'src');
 
-/** الوحدةُ الأولى (`ق-١٤٣٨`): الكاشير — كلُّ عمليةٍ تحت هذا الباب في الوثيقة تُطابَق. */
-const UNIT_PREFIX = '/v1/pos/';
+/**
+ * الوحداتُ المطابَقة — كلُّ عمليةٍ تحت أحد هذه الأبواب في الوثيقة تُطابَق. الأولى الكاشير (`ق-١٤٣٨`)، والثانيةُ البنوك (`ق-١٤٥٠`).
+ * **والبابُ يشمل جذرَه بلا شرطةٍ أخيرة** (`GET /v1/banks` · `POST /v1/banks`) — وإلا سقطت القائمةُ والإنشاءُ من الوحدة صامتَين.
+ * ⚠️ لا بابَ يبدأ ببابٍ آخر، فالعمليةُ في وحدةٍ واحدة.
+ */
+const UNIT_PREFIXES = ['/v1/pos/', '/v1/banks/'] as const;
+const inUnit = (prefix: string, path: string) => path.startsWith(prefix) || path === prefix.slice(0, -1);
 
 interface Dist {
   AppModule: unknown;
@@ -78,6 +92,8 @@ interface Verdict {
   status: number;
   violations: string[];
   emptyAsNull: boolean;
+  /** الجسمُ كما وصل — يُكتب إلى ملفّ القياس وحدَه (`RESPONSE_TRUTH_DUMP`). */
+  body: unknown;
 }
 
 async function main(): Promise<void> {
@@ -111,20 +127,47 @@ async function main(): Promise<void> {
     const op = (doc.paths?.[template] as Record<string, object> | undefined)?.[method.toLowerCase()];
     const key = `${method} ${template}`;
     const violations: string[] = [];
-    const emptyAsNull = res.text === '' && res.status < 300;
-    const body: unknown = emptyAsNull ? null : res.body;
+    // `204` لا جسمَ له أصلاً — فلا يُقرأ فراغُه `null` ولا يُطبع كذلك.
+    const noContent = res.status === 204;
+    const emptyAsNull = res.text === '' && res.status < 300 && !noContent;
+    const body: unknown = emptyAsNull || noContent ? null : res.body;
     if (!op) violations.push('عمليةٌ لا توجد في الوثيقة');
     else {
       const success = dist.successResponseOf(op);
       if (!success) violations.push('لا ردَّ نجاحٍ معلَناً');
       else {
         if (String(res.status) !== success.status) violations.push(`رمزُ الردّ ${res.status} والمعلَنُ ${success.status} — ${String(res.text).slice(0, 160)}`);
-        else if (!dist.declaresShape(success.schema, schemas)) violations.push('ردُّ النجاح بلا مخطَّطٍ يعلن شكلاً');
+        // ردُّ «بلا محتوى» المعلَن: شكلُه أنه فارغ — فجسمٌ فيه مخالفة، ولا مخطَّطَ يُطلب له (كالمِسنَن).
+        else if (success.status === '204') {
+          if (res.text !== '') violations.push(`ردُّ 204 المعلَن حمل جسماً — ${String(res.text).slice(0, 160)}`);
+        } else if (!dist.declaresShape(success.schema, schemas)) violations.push('ردُّ النجاح بلا مخطَّطٍ يعلن شكلاً');
         else violations.push(...dist.schemaViolations(body, success.schema ?? undefined, schemas));
       }
     }
-    verdicts.push({ op: key, label, status: res.status, violations, emptyAsNull });
+    verdicts.push({ op: key, label, status: res.status, violations, emptyAsNull, body });
     return (body ?? {}) as Record<string, unknown>;
+  };
+
+  /**
+   * طلبُ إعدادٍ خارج الوحدات (درجٌ · قيدٌ · سطرُ كشف · سند) — لا يُطابَق، **ويُسقط السكربتَ برمزه** إن لم يكن المتوقَّع:
+   * فبياناتٌ لم تُصنع تجعل عملياتِ الوحدة تُطابَق على ردودٍ غيرِ التي قُصدت.
+   */
+  const setup = async (label: string, expected: number, r: request.Test): Promise<Record<string, unknown>> => {
+    const res = await r;
+    if (res.status !== expected) throw new Error(`${label} ردّ ${res.status}: ${res.text.slice(0, 200)}`);
+    return res.body as Record<string, unknown>;
+  };
+
+  /** المسبارُ يُصادَق على ردٍّ حقيقيّ (`§8.7` الحادي عشر): نزعُ أوّلِ حقلٍ إلزاميّ من مخطّط العملية يجب أن يُسقط. */
+  const probe = (what: string, method: string, template: string, body: Record<string, unknown>): boolean => {
+    const op = (doc.paths?.[template] as Record<string, object> | undefined)?.[method.toLowerCase()];
+    const schema = op ? dist.successResponseOf(op)?.schema ?? undefined : undefined;
+    const resolved = schema?.$ref ? schemas[schema.$ref.split('/').pop() as string] : schema;
+    const firstRequired = resolved?.required?.[0];
+    const caught = !!firstRequired && dist.schemaViolations(Object.fromEntries(Object.entries(body).filter(([k]) => k !== firstRequired)), schema, schemas).length > 0;
+    // eslint-disable-next-line no-console
+    console.log(`المسبار: نزعُ «${firstRequired ?? '—'}» من ${what} ⟸ ${caught ? 'أُمسك ✔' : 'لم يُمسك ✖'}`);
+    return caught;
   };
 
   // ── المنشأةُ بالمسار الحقيقيّ (كـ`registerIsolatedCompany`) — لا منشأة العرض. ──
@@ -199,35 +242,145 @@ async function main(): Promise<void> {
 
     check('إقفالُ المناوبة', 'POST', '/v1/pos/shifts/{id}/close', await as(http().post(`/v1/pos/shifts/${String(shift.id)}/close`)).send({ declaredClosing: 100, closedOffsetMin: 180 }));
 
-    // ── المسبارُ يُصادَق على ردٍّ حقيقيّ (`§8.7` الحادي عشر): نزعُ حقلٍ إلزاميّ يجب أن يُسقط. ──
-    const saleOp = (doc.paths?.['/v1/pos/sales'] as Record<string, object> | undefined)?.post;
-    const saleSchema = saleOp ? dist.successResponseOf(saleOp)?.schema ?? undefined : undefined;
-    const resolved = saleSchema?.$ref ? schemas[saleSchema.$ref.split('/').pop() as string] : saleSchema;
-    const firstRequired = resolved?.required?.[0];
-    const probeOk = !!firstRequired && dist.schemaViolations(Object.fromEntries(Object.entries(saleBody).filter(([k]) => k !== firstRequired)), saleSchema, schemas).length > 0;
-    // eslint-disable-next-line no-console
-    console.log(`المسبار: نزعُ «${firstRequired ?? '—'}» من ردّ البيع ⟸ ${probeOk ? 'أُمسك ✔' : 'لم يُمسك ✖'}`);
+    const probes: boolean[] = [probe('ردّ البيع', 'POST', '/v1/pos/sales', saleBody)];
 
-    // ── التغطيةُ من الوثيقة لا من قائمة. ──
-    const unitOps = Object.entries(doc.paths ?? {})
-      .filter(([p]) => p.startsWith(UNIT_PREFIX))
-      .flatMap(([p, item]) => ['get', 'post', 'put', 'patch', 'delete'].filter((m) => (item as Record<string, unknown>)[m]).map((m) => `${m.toUpperCase()} ${p}`))
-      .sort();
-    const covered = new Set(verdicts.map((v) => v.op));
-    const uncovered = unitOps.filter((k) => !covered.has(k));
+    // ── البنوك (`/v1/banks/…` — `ق-١٤٥٠`) ──
+    // التواريخُ في يونيو كحزم التكامل (`cash-deposits` · `network-settlements`): بعد افتتاح السنة وقبل أيِّ إقفال.
+    check('نطاقُ رموز البنوك', 'GET', '/v1/banks/code-band', await as(http().get('/v1/banks/code-band')));
+    const bank = check(
+      'إنشاءُ حسابٍ بنكيّ بآيبان',
+      'POST',
+      '/v1/banks',
+      await as(http().post('/v1/banks')).send({ name: `بنك الصدق ${stamp}`, kind: 'BANK_ACCOUNT', iban: `IBAN-${stamp}`, openingBalance: 0, openingDate: '2026-01-01' }),
+    );
+    const bankId = String(bank.id);
+    const box = check(
+      'إنشاءُ صندوقٍ نقديّ برصيدٍ افتتاحيّ',
+      'POST',
+      '/v1/banks',
+      await as(http().post('/v1/banks')).send({ name: `صندوق الصدق ${stamp}`, kind: 'CASH_BOX', openingBalance: 100, openingDate: '2026-01-01' }),
+    );
+    const moving = check('إنشاءُ حسابٍ بنكيّ للنقل', 'POST', '/v1/banks', await as(http().post('/v1/banks')).send({ name: `بنك النقل ${stamp}`, kind: 'BANK_ACCOUNT', openingDate: '2026-01-01' }));
+    const spare = check('إنشاءُ حسابٍ للأرشفة والحذف', 'POST', '/v1/banks', await as(http().post('/v1/banks')).send({ name: `بنك الحذف ${stamp}`, kind: 'BANK_ACCOUNT', openingDate: '2026-01-01' }));
+    check('قائمةُ البنوك', 'GET', '/v1/banks', await as(http().get('/v1/banks')));
+    check('قائمةُ البنوك مرقَّمة', 'GET', '/v1/banks', await as(http().get('/v1/banks?page=1')));
+    check('تعديلُ الاسم', 'PATCH', '/v1/banks/{id}', await as(http().patch(`/v1/banks/${bankId}`)).send({ name: `بنك الصدق المعدَّل ${stamp}` }));
+    check('أرشفة', 'PATCH', '/v1/banks/{id}/archive', await as(http().patch(`/v1/banks/${String(spare.id)}/archive`)).send({ archived: true }));
+    check('القائمةُ بالمؤرشف', 'GET', '/v1/banks', await as(http().get('/v1/banks?includeArchived=true')));
+    check('إلغاءُ الأرشفة', 'PATCH', '/v1/banks/{id}/archive', await as(http().patch(`/v1/banks/${String(spare.id)}/archive`)).send({ archived: false }));
+    check('حذفٌ إلى السلّة', 'DELETE', '/v1/banks/{id}', await as(http().delete(`/v1/banks/${String(spare.id)}`)));
+
+    // النقلُ بين الفروع بنوعَيه (`ق-١٤٣١`): الحسابُ البنكيّ للقادم، والصندوقُ إغلاقٌ وفتحٌ بعدّ نقده.
+    const branch = await setup('الفرعُ الهدف', 201, as(http().post('/v1/branches')).send({ name: `فرع الصدق ${stamp}`, type: 'فرع' }));
+    check('نقلُ حسابٍ بنكيّ', 'POST', '/v1/banks/{id}/transfer', await as(http().post(`/v1/banks/${String(moving.id)}/transfer`)).send({ toBranchId: branch.id }));
+    check(
+      'نقلُ صندوقٍ نقديّ بعدّه',
+      'POST',
+      '/v1/banks/{id}/transfer',
+      await as(http().post(`/v1/banks/${String(box.id)}/transfer`)).send({ toBranchId: branch.id, countedAmount: 100, date: '2026-06-15' }),
+    );
+
+    // إيداعُ الدرج (⑦A3): درجٌ ممَوَّلٌ بقيدٍ يدويّ ثم إيداعان — يُؤكَّد الأوّلُ من الكشف ويُلغى الثاني.
+    const accounts = (await setup('الدليل', 200, as(http().get('/v1/accounts')))) as unknown as { id: string; code: string }[];
+    const revenueId = accounts.find((a) => a.code === '4100')?.id;
+    if (!revenueId) throw new Error('الدليلُ بلا 4100 — لا طرفَ لتمويل الدرج');
+    const drawer = await setup('الدرج', 201, as(http().post('/v1/cash-drawers')).send({ name: `درج الصدق ${stamp}` }));
+    const drawerAccountId = String((drawer.account as { id?: string } | undefined)?.id ?? drawer.accountId);
+    await setup(
+      'تمويلُ الدرج',
+      201,
+      as(http().post('/v1/journal')).send({ date: '2026-06-01', memo: 'تمويل درج الصدق', lines: [{ accountId: drawerAccountId, debit: 500, credit: 0 }, { accountId: revenueId, debit: 0, credit: 500 }] }),
+    );
+    check('الإيداعاتُ قبل أيِّ إيداع', 'GET', '/v1/banks/cash-deposits', await as(http().get('/v1/banks/cash-deposits')));
+    const deposit = check('إيداعُ درجٍ في البنك', 'POST', '/v1/banks/cash-deposits', await as(http().post('/v1/banks/cash-deposits')).send({ drawerId: drawer.id, bankId, amount: 300, date: '2026-06-05' }));
+    const second = check('إيداعٌ ثانٍ', 'POST', '/v1/banks/cash-deposits', await as(http().post('/v1/banks/cash-deposits')).send({ drawerId: drawer.id, bankId, amount: 150, date: '2026-06-08' }));
+    check('إلغاءُ الإيداع الثاني', 'POST', '/v1/banks/cash-deposits/{depositId}/void', await as(http().post(`/v1/banks/cash-deposits/${String(second.id)}/void`)).send({ reason: 'لم يُودَع' }));
+    const depositRow = await setup('سطرُ كشف الإيداع', 201, as(http().post('/v1/transactions')).send({ bankId, date: '2026-06-07', description: 'إيداع نقدي', amount: 300 }));
+    check(
+      'تأكيدُ الإيداع من الكشف',
+      'POST',
+      '/v1/banks/{id}/reconciliation/post',
+      await as(http().post(`/v1/banks/${bankId}/reconciliation/post`)).send({ transactionId: depositRow.id, depositId: deposit.id }),
+    );
+    check('الإيداعاتُ بعد التأكيد والإلغاء', 'GET', '/v1/banks/cash-deposits', await as(http().get(`/v1/banks/cash-deposits?bankId=${bankId}`)));
+
+    // تسويةُ الشبكة (⑦A2): سندا قبضٍ بالشبكة في يونيو — ثم تسويةٌ تُطابَق من الكشف وتُفكّ وتُلغى.
+    check('تسوياتُ الشبكة قبل أيِّ سند', 'GET', '/v1/banks/network-settlements', await as(http().get('/v1/banks/network-settlements')));
+    const customer = await setup('عميلُ الشبكة', 201, as(http().post('/v1/customers')).send({ kind: 'NATURAL', name: `عميل الصدق ${stamp}` }));
+    const cardReceipt = (amount: number, date: string) =>
+      setup('سندُ قبضٍ بالشبكة', 201, as(http().post('/v1/payments')).send({ customerId: customer.id, date, amount, method: 'CARD', unallocated: 'PREPAYMENT', prepaymentTax: { taxCategory: 'S' } }));
+    await cardReceipt(1000, '2026-06-03');
+    await cardReceipt(500, '2026-06-10');
+    check('المفتوحُ على الشبكة لمدًى', 'GET', '/v1/banks/network-settlements/open', await as(http().get('/v1/banks/network-settlements/open?from=2026-06-01&to=2026-06-30')));
+    check('المفتوحُ على الشبكة كلُّه', 'GET', '/v1/banks/network-settlements/open', await as(http().get('/v1/banks/network-settlements/open')));
+    const settlement = check(
+      'تسويةُ شبكة',
+      'POST',
+      '/v1/banks/network-settlements',
+      await as(http().post('/v1/banks/network-settlements')).send({ bankId, date: '2026-07-02', periodFrom: '2026-06-01', periodTo: '2026-06-30', feeAmount: 30, feeVatAmount: 4.5 }),
+    );
+    check('تسوياتُ الشبكة', 'GET', '/v1/banks/network-settlements', await as(http().get(`/v1/banks/network-settlements?bankId=${bankId}`)));
+
+    // التسويةُ البنكية (ق-١٢٦١ ج): سطرُ كشفٍ بصافي التسوية يُطابَق بسطر دفترها ثم يُفكّ؛ وسطرٌ بلا دفترٍ يُرحَّل بطرف.
+    const settlementRow = await setup('سطرُ كشف التسوية', 201, as(http().post('/v1/transactions')).send({ bankId, date: '2026-07-02', description: 'تحويل المستحوذ', amount: 1465.5 }));
+    const overview = check('التسويةُ البنكية', 'GET', '/v1/banks/{id}/reconciliation', await as(http().get(`/v1/banks/${bankId}/reconciliation`)));
+    const ledgerRows = ((overview.ledger as { rows?: { lineId: string; entryNo: string }[] } | undefined)?.rows ?? []) as { lineId: string; entryNo: string }[];
+    const settlementLine = ledgerRows.find((r) => r.entryNo === settlement.entryNo);
+    if (!settlementLine) throw new Error(`لا سطرَ دفترٍ لقيد التسوية ${String(settlement.entryNo)} — المطابقةُ لا تُبلَغ`);
+    check(
+      'مطابقةُ سطر كشف',
+      'POST',
+      '/v1/banks/{id}/reconciliation/match',
+      await as(http().post(`/v1/banks/${bankId}/reconciliation/match`)).send({ transactionId: settlementRow.id, lineId: settlementLine.lineId }),
+    );
+    check('فكُّ المطابقة', 'POST', '/v1/banks/{id}/reconciliation/unmatch', await as(http().post(`/v1/banks/${bankId}/reconciliation/unmatch`)).send({ transactionId: settlementRow.id }));
+    check('إلغاءُ تسوية الشبكة', 'POST', '/v1/banks/network-settlements/{settlementId}/void', await as(http().post(`/v1/banks/network-settlements/${String(settlement.id)}/void`)).send({ reason: 'إشعار خاطئ' }));
+    const interestRow = await setup('سطرُ كشفٍ بلا دفتر', 201, as(http().post('/v1/transactions')).send({ bankId, date: '2026-07-03', description: 'فائدة', amount: 25 }));
+    check(
+      'ترحيلُ سطر كشفٍ بطرف',
+      'POST',
+      '/v1/banks/{id}/reconciliation/post',
+      await as(http().post(`/v1/banks/${bankId}/reconciliation/post`)).send({ transactionId: interestRow.id, counterpartyAccountId: revenueId }),
+    );
+    check('التسويةُ البنكية لمدًى', 'GET', '/v1/banks/{id}/reconciliation', await as(http().get(`/v1/banks/${bankId}/reconciliation?from=2026-06-01&to=2026-07-31`)));
+    // الإقفالُ قبل كلِّ سطرٍ معلَّق — فيُقبل؛ ثم يُعاد فتحُه فلا يبقى قيدٌ محجوباً.
+    check('إقفالُ التسوية', 'POST', '/v1/banks/{id}/reconciliation/close', await as(http().post(`/v1/banks/${bankId}/reconciliation/close`)).send({ until: '2026-05-31' }));
+    check('إعادةُ فتح التسوية', 'POST', '/v1/banks/{id}/reconciliation/reopen', await as(http().post(`/v1/banks/${bankId}/reconciliation/reopen`)));
+
+    probes.push(probe('ردّ إيداع الدرج', 'POST', '/v1/banks/cash-deposits', deposit));
 
     for (const v of verdicts) {
       // eslint-disable-next-line no-console
       console.log(`${v.violations.length ? '✖' : '✔'} ${v.op} (${v.status}) — ${v.label}${v.emptyAsNull ? ' · جسمٌ فارغٌ قُرئ null' : ''}${v.violations.length ? `\n   ${v.violations.slice(0, 12).join('\n   ')}` : ''}`);
     }
-    const bad = verdicts.filter((v) => v.violations.length > 0);
-    // eslint-disable-next-line no-console
-    console.log(`\nالوحدة ${UNIT_PREFIX}: عملياتٌ في الوثيقة ${unitOps.length} · طُوبقت ${unitOps.length - uncovered.length} · طلبات ${verdicts.length} · بمخالفة ${bad.length}`);
-    if (uncovered.length) {
+    if (process.env.RESPONSE_TRUTH_DUMP) {
+      writeFileSync(process.env.RESPONSE_TRUTH_DUMP, `${JSON.stringify(verdicts.map(({ op, label, status, body }) => ({ op, label, status, body })), null, 2)}\n`, 'utf8');
       // eslint-disable-next-line no-console
-      console.error(['✖ عملياتٌ في الوحدة لم تُطابَق:', ...uncovered.map((k) => `   ${k}`)].join('\n'));
+      console.log(`\nالقياس: كُتبت ${verdicts.length} ردّاً إلى ${process.env.RESPONSE_TRUTH_DUMP}`);
     }
-    if (bad.length || uncovered.length || !probeOk || unitOps.length === 0) process.exitCode = 1;
+
+    // ── التغطيةُ من الوثيقة لا من قائمة — لكلِّ وحدة. ──
+    const covered = new Set(verdicts.map((v) => v.op));
+    let failed = probes.some((ok) => !ok);
+    // eslint-disable-next-line no-console
+    console.log('');
+    for (const prefix of UNIT_PREFIXES) {
+      const unitOps = Object.entries(doc.paths ?? {})
+        .filter(([p]) => inUnit(prefix, p))
+        .flatMap(([p, item]) => ['get', 'post', 'put', 'patch', 'delete'].filter((m) => (item as Record<string, unknown>)[m]).map((m) => `${m.toUpperCase()} ${p}`))
+        .sort();
+      const uncovered = unitOps.filter((k) => !covered.has(k));
+      const mine = verdicts.filter((v) => inUnit(prefix, v.op.slice(v.op.indexOf(' ') + 1)));
+      const bad = mine.filter((v) => v.violations.length > 0);
+      // eslint-disable-next-line no-console
+      console.log(`الوحدة ${prefix}: عملياتٌ في الوثيقة ${unitOps.length} · طُوبقت ${unitOps.length - uncovered.length} · طلبات ${mine.length} · بمخالفة ${bad.length}`);
+      if (uncovered.length) {
+        // eslint-disable-next-line no-console
+        console.error([`✖ عملياتٌ في الوحدة ${prefix} لم تُطابَق:`, ...uncovered.map((k) => `   ${k}`)].join('\n'));
+      }
+      if (bad.length || uncovered.length || unitOps.length === 0) failed = true;
+    }
+    if (failed) process.exitCode = 1;
   } finally {
     dist.mockAdapter.charge = originalCharge;
     await hardDeleteCompanyForTest(prisma as never, companyId).catch(() => undefined);
