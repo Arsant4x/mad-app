@@ -108,7 +108,9 @@ describe('RLS coverage over every tenant-scoped table', () => {
     expect({ unprotected, checked: tables.length }).toEqual({ unprotected: [], checked: tables.length });
   }, 60000);
 
-  it('every tenant-scoped table carries an isolation policy', async () => {
+  // ⚠️ (`ق-١٤٧٤` · `§8.14`) العنوانُ كان «isolation policy» والتوكيدُ يعدّ فقط (`> 0`) — فسياسةٌ ثانية `USING (true)`
+  // تُرضيه. **محتوى** السياسة يحكم عليه `src/common/tenant/rls-policy-content.live.spec.ts`.
+  it('every tenant-scoped table carries a policy (count only — content is judged by rls-policy-content)', async () => {
     const policies = await prisma.$queryRaw<{ tablename: string; policies: bigint }[]>`
       SELECT c.relname AS tablename, COUNT(p.polname) AS policies
       FROM pg_class c
