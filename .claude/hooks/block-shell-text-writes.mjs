@@ -516,18 +516,20 @@ if (MERGE_CMD.test(cmd)) {
   }
 
   const touches = (file) => heavyPaths.some((p) => (p.endsWith('/**') ? file.startsWith(p.slice(0, -2)) : file === p));
-  const filesProbe = spawnSync('gh', ['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'files,commits'], {
+  const filesProbe = spawnSync('gh', ['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'files,commits,headRefOid'], {
     encoding: 'utf8',
     shell: process.platform === 'win32',
     cwd: repoRoot,
   });
   let prFiles = null;
   let commits = null;
+  let head = null;
   if (filesProbe.status === 0) {
     try {
       const parsed = JSON.parse(filesProbe.stdout);
       prFiles = (parsed.files ?? []).map((f) => f.path);
       commits = (parsed.commits ?? []).map((c) => c.oid);
+      head = typeof parsed.headRefOid === 'string' ? parsed.headRefOid : null;
     } catch {
       prFiles = null;
     }
@@ -539,45 +541,57 @@ if (MERGE_CMD.test(cmd)) {
 
   const codeFiles = prFiles.filter(touches);
   if (codeFiles.length > 0) {
-    let found = null;
-    for (const sha of commits.slice(-20)) {
-      const runs = spawnSync('gh', ['api', `repos/{owner}/{repo}/commits/${sha}/check-runs`], {
-        encoding: 'utf8',
-        shell: process.platform === 'win32',
-        cwd: repoRoot,
-      });
-      if (runs.status !== 0) {
-        console.error(`⛔ تعذّرت قراءة فحوص ${sha.slice(0, 7)} في #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
-        process.exit(2);
-      }
-      try {
-        const names = (JSON.parse(runs.stdout).check_runs ?? []).map((r) => r.name);
-        const hit = names.find((n) => heavyJobs.includes(n));
-        if (hit) {
-          found = `${hit} على ${sha.slice(0, 7)}`;
-          break;
-        }
-      } catch {
-        console.error(`⛔ مخرَجُ فحوص ${sha.slice(0, 7)} غير مفهوم — والدمج ممنوع (الفشل مُغلِق).`);
-        process.exit(2);
-      }
+    /**
+     * ⛔ **الثقيلُ ناجحٌ على الرأس نفسِه بتجزئته كاملة** (`ق-١٤٧٢` · التوجيه ٢٦٦ §٥ب — يشدّد `ق-٢٥٤`).
+     *
+     * كانت البوّابةُ تقبل **أيَّ** فحصٍ ثقيلٍ على **أيٍّ** من آخر عشرين تاريخاً — نجح أو سقط أو أُلغي. فرأسٌ تقدّم
+     * بدفعةٍ لم يعمل عليها ثقيلٌ قطّ كان يُدمج بشهادة تاريخٍ قبله، وكذلك رأسٌ سقط ثقيلُه ما دامت الحالُ لا تشترطه.
+     * **والآن**: كلُّ وظيفةٍ ثقيلةٍ مقروءةٍ من المُشغِّل **لها تشغيلٌ على `headRefOid` بعينه، أحدثُه مكتملٌ ناجح** —
+     * وإلا رُفض الدمجُ مسمّياً كلَّ وظيفةٍ بحالها. **وهو شرطُ `ق-١٤٧٣`**: الثقيلُ عند جاهزية الطلب لا يُفعَّل قبل أن
+     * تشترطه البوّابة.
+     */
+    if (!/^[0-9a-f]{40}$/.test(head ?? '')) {
+      console.error(`⛔ تعذّرت قراءةُ رأس #${number} بتجزئته كاملة — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+      process.exit(2);
     }
-    if (!found) {
+    const runs = spawnSync('gh', ['api', `repos/{owner}/{repo}/commits/${head}/check-runs?per_page=100`], {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+      cwd: repoRoot,
+    });
+    if (runs.status !== 0) {
+      console.error(`⛔ تعذّرت قراءة فحوص الرأس ${head.slice(0, 7)} في #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+      process.exit(2);
+    }
+    let checkRuns;
+    try {
+      checkRuns = JSON.parse(runs.stdout).check_runs ?? [];
+    } catch {
+      console.error(`⛔ مخرَجُ فحوص ${head.slice(0, 7)} غير مفهوم — والدمج ممنوع (الفشل مُغلِق).`);
+      process.exit(2);
+    }
+    const verdicts = heavyJobs.map((job) => {
+      const mine = checkRuns
+        .filter((r) => r.name === job && r.head_sha === head)
+        .sort((x, y) => String(y.started_at ?? '').localeCompare(String(x.started_at ?? '')));
+      const latest = mine[0];
+      if (!latest) return { job, ok: false, state: 'لم يعمل على هذا الرأس' };
+      if (latest.status !== 'completed') return { job, ok: false, state: `لم يكتمل (${latest.status})` };
+      return { job, ok: latest.conclusion === 'success', state: String(latest.conclusion) };
+    });
+    const bad = verdicts.filter((v) => !v.ok);
+    if (bad.length > 0) {
       console.error(
         [
-          `⛔ #${number} يمسّ شيفرةً ولم يعمل عليه فحصٌ ثقيل قطّ — والدمج ممنوع (ق-٢٥٤).`,
+          `⛔ #${number} يمسّ شيفرةً وثقيلُه لم ينجح على رأسه ${head} — والدمج ممنوع (ق-١٤٧٢).`,
+          '',
+          ...verdicts.map((v) => `  ${v.ok ? '✔' : '✖'} ${v.job}: ${v.state}`),
           '',
           `الملفات الشيفرية: ${codeFiles.slice(0, 5).join(' · ')}${codeFiles.length > 5 ? ` … (+${codeFiles.length - 5})` : ''}`,
-          `الوظائف الثقيلة المنتظَرة: ${heavyJobs.join(' · ')}`,
-          `فُحص ${commits.length} تاريخاً ولم يُوجد أيٌّ منها.`,
-          '',
-          'السبب البنيوي: الثقيلُ يعمل عند **فتح** الطلب لما يمسّ شيفرة، ودفعةٌ',
-          'لاحقة (synchronize) لا تُشغّله. فطلبٌ فُتح وثائقياً ثم دُفعت فيه شيفرة',
-          'يصل الدمجَ بأخضرَ **ناقص**.',
           '',
           'الطريق:',
-          `  gh pr close ${prNumber || '<رقم>'} && gh pr reopen ${prNumber || '<رقم>'}   ⟵ إعادةُ الفتح تُشغّل الثقيل`,
-          '  ثم انتظر اخضراره وأعد الدمج.',
+          `  gh pr ready ${prNumber || '<رقم>'} --undo && gh pr ready ${prNumber || '<رقم>'}   ⟵ الجاهزيةُ تُشغّل الثقيلَ على الرأس`,
+          '  ثم انتظر اخضرارَه **على هذا الرأس** وأعد الدمج. ولا يُقبل ثقيلُ تاريخٍ قبله.',
         ].join('\n'),
       );
       process.exit(2);
