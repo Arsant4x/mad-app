@@ -84,7 +84,7 @@ describe('Company region — country, time zone, locale and base currency on the
     const currencyOf: Record<string, string> = {};
 
     // ١ البنك
-    const bank = await auth(http().post('/banks')).send({ name: `بنك الإقليم ${suffix}`, openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: `بنك الإقليم ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     currencyOf.bank = (await inTenant((tx) => tx.bank.findUniqueOrThrow({ where: { id: bank.body.id } }))).currency;
 
     // ٢ الحركةُ البنكية
@@ -150,7 +150,7 @@ describe('Company region — country, time zone, locale and base currency on the
 
   it('④ والعملةُ الصريحة تُحترم كما كانت — والقراءةُ للمنشأة حين تغيب وحدَها', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const bank = await auth(http().post('/banks')).send({ name: `بنكٌ بعملته ${suffix}`, openingBalance: 0, openingDate: '2026-01-01', currency: 'USD', exchangeRate: 3.75 }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: `بنكٌ بعملته ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01', currency: 'USD', exchangeRate: 3.75 }).expect(201);
     const row = await inTenant((tx) => tx.bank.findUniqueOrThrow({ where: { id: bank.body.id } }));
     expect(row.currency).toBe('USD');
     expect(Number(row.exchangeRate)).toBe(3.75);

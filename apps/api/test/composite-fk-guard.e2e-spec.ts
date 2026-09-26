@@ -143,7 +143,7 @@ describe('Composite tenant foreign keys (e2e)', () => {
     const conname = await constraintNamed('banks', 'branchId');
     const branchA = await auth(a)(request(app.getHttpServer()).post('/branches')).send({ name: 'فرع أ' }).expect(201);
     const branchB = await auth(b)(request(app.getHttpServer()).post('/branches')).send({ name: 'فرع ب' }).expect(201);
-    const bankA = await auth(a)(request(app.getHttpServer()).post('/banks')).send({ name: 'بنك أ', openingDate: '2026-01-01' }).expect(201);
+    const bankA = await auth(a)(request(app.getHttpServer()).post('/banks')).send({ name: 'بنك أ', kind: 'BANK_ACCOUNT', openingDate: '2026-01-01' }).expect(201);
 
     const refused = await crossWrite('banks', 'branchId', bankA.body.id, branchB.body.id);
     expect(refused).toEqual({ sqlstate: '23503', constraint: conname });

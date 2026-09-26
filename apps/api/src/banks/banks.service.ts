@@ -91,6 +91,8 @@ export class BanksService {
             // scope extension (see accounts.service.ts for why this cast exists).
             data: {
               name: dto.name,
+              // ق-١٤٣١ — النوعُ معلَنٌ في الطلب (الـDTO يُلزمه) — لا يُستنبط من الفرع ولا من الآيبان.
+              kind: dto.kind,
               branchId,
               accountId: account.id,
               iban: dto.iban || null,
@@ -132,6 +134,8 @@ export class BanksService {
 
       const data: Prisma.BankUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
+      // إعلانُ «غيرِ المعلَن» أو تصحيحُ النوع — صريحٌ بيد صاحب الشاشة ويُسجَّل في التدقيق (ق-١٤٣١).
+      if (dto.kind !== undefined) data.kind = dto.kind;
       if (dto.iban !== undefined) data.iban = dto.iban || null;
 
       // ⭐ تاريخُ الفتح صار إعلاناً يصل الأستاذ (ق-٢٩٦): تغييرُه يُعيد ترحيلَ

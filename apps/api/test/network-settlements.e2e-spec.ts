@@ -51,7 +51,7 @@ describe('Network settlement of 1251 (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'netset');
     other = await registerIsolatedCompany(app, 'netset-other');
-    const bank = await auth(http().post('/banks')).send({ name: 'بنك الشبكة', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: 'بنك الشبكة', kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     bankId = bank.body.id;
     bankAccountId = bank.body.accountId;
     const customer = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'عميل الشبكة' }).expect(201);

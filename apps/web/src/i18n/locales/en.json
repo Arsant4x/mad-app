@@ -53,6 +53,7 @@
   "err_account_save": "Could not save the account",
   "err_account_name_code_required": "Please fill in the account name and code",
   "err_bank_name_required": "Please enter the account name",
+  "err_bank_kind_required": "Declare the row kind: cash box or bank account — it is never inferred",
   "err_bank_save": "Could not save the bank account",
   "err_file_too_large": "File exceeds the maximum allowed size (10 MB)",
   "err_legal_name_required": "Legal name is required",

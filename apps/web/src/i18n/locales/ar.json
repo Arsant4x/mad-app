@@ -53,6 +53,7 @@
   "err_account_save": "تعذّر حفظ الحساب",
   "err_account_name_code_required": "الرجاء تعبئة اسم ورمز الحساب",
   "err_bank_name_required": "الرجاء إدخال اسم الحساب",
+  "err_bank_kind_required": "حدِّد نوع الصفّ: صندوقٌ نقديّ أو حسابٌ بنكيّ — لا يُستنبط",
   "err_bank_save": "تعذّر حفظ الحساب البنكي",
   "err_file_too_large": "حجم الملف يتجاوز الحد المسموح (10 ميغابايت)",
   "err_legal_name_required": "الاسم القانوني مطلوب",

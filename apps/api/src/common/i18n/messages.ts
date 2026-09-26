@@ -197,6 +197,7 @@ export const MSG = {
   bank_not_found: 'banks.not_found',
   bank_code_range_full: 'banks.code_range_full',
   bank_required: 'banks.required',
+  bank_kind_required: 'banks.kind_required',
   bank_transaction_not_found: 'transactions.not_found',
   // bank reconciliation (ق-١٢٦١ ج)
   bank_reconciled_locked: 'banks.reconciled_locked',
@@ -1027,6 +1028,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The bank account code range (1100–1199) is full — remove an unused bank or widen the range by decision',
   },
   [MSG.bank_required]: { ar: 'الرجاء اختيار الحساب البنكي', en: 'Please choose a bank account' },
+  [MSG.bank_kind_required]: {
+    ar: 'حدِّد نوعَ الصفّ صراحةً: صندوقٌ نقديّ أو حسابٌ بنكيّ — لا يُستنبط من الفرع ولا من الآيبان',
+    en: 'Declare the row kind explicitly: cash box or bank account — it is never inferred from the branch or the IBAN',
+  },
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
 
   [MSG.property_not_found]: { ar: 'العقار غير موجود', en: 'Property not found' },

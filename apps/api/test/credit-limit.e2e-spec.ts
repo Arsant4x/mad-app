@@ -89,7 +89,7 @@ describe('⚖️ حدُّ الائتمان — يمنع، ويُتجاوَز ب�
 
     branchId = (await auth(request(app.getHttpServer()).post('/branches')).send({ name: `فرع الائتمان ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
-      .send({ name: `صندوق الائتمان ${suffix}`, openingBalance: 0, openingDate: today(), branchId })
+      .send({ name: `صندوق الائتمان ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: today(), branchId })
       .expect(201)).body.id;
 
     // **موظّفٌ يفوتر ولا يعتمد**: `invoice` بـ`view`+`add` بلا `review`.

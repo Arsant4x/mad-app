@@ -128,7 +128,7 @@ async function main() {
   log(`  ✔ ${ORG}`);
 
   // ── صندوق نقدي: كل تحصيل يحتاج وجهةً حقيقية، وإلا لم يظهر في الخزينة ───
-  const box = await api('POST', '/banks', { name: 'صندوق الإدارة', openingBalance: 0, openingDate: day(-400) });
+  const box = await api('POST', '/banks', { name: 'صندوق الإدارة', kind: 'CASH_BOX', openingBalance: 0, openingDate: day(-400) });
   log('  ✔ صندوق الإدارة');
 
   // ── العقاران ────────────────────────────────────────────────────────────

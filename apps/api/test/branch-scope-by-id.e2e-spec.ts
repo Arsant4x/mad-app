@@ -56,7 +56,7 @@ describe('فروعُ الفاعل عند التعديل بالمعرّف — ا�
     restrictedToken = (await http().post('/auth/login').send({ username: `north-byid-${suffix}`, password: 'ScopePass123!' }).expect(200)).body.accessToken;
 
     const bank = (name: string, branchId: string) =>
-      asOwner(http().post('/banks')).send({ name, openingBalance: 100, openingDate: '2026-01-01', branchId }).expect(201);
+      asOwner(http().post('/banks')).send({ name, kind: 'CASH_BOX', openingBalance: 100, openingDate: '2026-01-01', branchId }).expect(201);
     bankNorth = (await bank(`صندوق الشمال ${suffix}`, northId)).body.id;
     bankSouth = (await bank(`صندوق الجنوب ${suffix}`, southId)).body.id;
     const employee = (fullName: string, branchId: string) => asOwner(http().post('/employees')).send({ fullName, hireDate: '2026-01-01', branchId }).expect(201);

@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 38_000 });
 vi.mock('../../api/banks');
 vi.mock('../../api/accounts', () => ({ listAccounts: vi.fn() }));
 
-const bank: banks.Bank = { archived: false, id: 'b1', branchId: null, name: 'بنك التسوية', iban: null, balance: '465.00', openingBalance: '0.00', openingDate: '2026-01-01' };
+const bank: banks.Bank = { archived: false, id: 'b1', branchId: null, kind: 'BANK_ACCOUNT', name: 'بنك التسوية', iban: null, balance: '465.00', openingBalance: '0.00', openingDate: '2026-01-01' };
 
 const overview = (over: Partial<banks.ReconciliationOverview> = {}): banks.ReconciliationOverview => ({
   bank: { id: 'b1', name: 'بنك التسوية', accountId: 'a1', reconciledUntil: null, mirrorBalance: '465.00' },

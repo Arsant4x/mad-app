@@ -92,7 +92,7 @@ describe('Receivables aging (e2e)', () => {
     token = company.token;
     customerId = (await auth(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `عميل الأعمار ${suffix}` }).expect(201)).body.id;
     cashBoxId = (await auth(request(app.getHttpServer()).post('/banks'))
-      .send({ name: `صندوق الأعمار ${suffix}`, openingBalance: 0, openingDate: dayStr(0) })
+      .send({ name: `صندوق الأعمار ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: dayStr(0) })
       .expect(201)).body.id;
   }, 90000);
 
@@ -187,7 +187,7 @@ describe('Receivables aging (e2e)', () => {
     expect(bornWith).toEqual(expect.arrayContaining(['1000', '1200', '4100']));
 
     const buyer = (await co(request(app.getHttpServer()).post('/customers')).send({ kind: 'NATURAL', name: `مشترٍ ${suffix}` }).expect(201)).body.id;
-    const box = (await co(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, openingBalance: 0, openingDate: dayStr(0) }).expect(201)).body.id;
+    const box = (await co(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: dayStr(0) }).expect(201)).body.id;
 
     const mk = async (total: number, issueOffset: number, dueOffset: number) =>
       (

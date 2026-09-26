@@ -39,7 +39,7 @@ describe('Banks tenant isolation (e2e)', () => {
     const created = await request(app.getHttpServer())
       .post('/banks')
       .set('Authorization', `Bearer ${tokenA}`)
-      .send({ name: `حساب اختبار ${Date.now()}`, openingBalance: 1000, openingDate: '2026-01-01' })
+      .send({ name: `حساب اختبار ${Date.now()}`, kind: 'BANK_ACCOUNT', openingBalance: 1000, openingDate: '2026-01-01' })
       .expect(201);
 
     expect(Number(created.body.balance)).toBe(1000);

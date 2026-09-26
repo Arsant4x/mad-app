@@ -46,7 +46,7 @@ describe('تقريرُ الفرق البنكيّ (e2e)', () => {
 
     const bank = (
       await auth(http().post('/banks'))
-        .send({ name: `بنكُ الفرق ${suffix}`, openingBalance: 1000, openingDate: '2026-01-01' })
+        .send({ name: `بنكُ الفرق ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 1000, openingDate: '2026-01-01' })
         .expect(201)
     ).body as { id: string };
     bankId = bank.id;

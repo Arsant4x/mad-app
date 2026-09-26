@@ -320,7 +320,7 @@ describe('[SPEC 27.1] محاولةُ دفع البطاقة — الرفضُ وا
     const receipt = await tenant().runInTenantContext(co.companyId, (tx) =>
       tx.payment.findFirstOrThrow({ where: { method: 'CARD', allocations: { some: { invoiceId: synced.body.id } } }, select: { id: true } }),
     );
-    const bankId = (await auth(http().post('/banks')).send({ name: `بنك التسوية ${Date.now()}`, openingDate: '2026-01-01' }).expect(201)).body.id;
+    const bankId = (await auth(http().post('/banks')).send({ name: `بنك التسوية ${Date.now()}`, kind: 'BANK_ACCOUNT', openingDate: '2026-01-01' }).expect(201)).body.id;
     const today = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 10 * DAY_MS).toISOString().slice(0, 10);
     const settlement = await auth(http().post('/banks/network-settlements'))

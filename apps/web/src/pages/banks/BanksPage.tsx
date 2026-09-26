@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listBranches, type Branch } from '../../api/branches';
-import { createBank, deleteBank, getBankCodeBand, listBanks, setBankArchived, updateBank, type Bank, type BankInput, type CodeBandStatus } from '../../api/banks';
+import { BANK_KIND_LABEL, createBank, deleteBank, getBankCodeBand, listBanks, setBankArchived, updateBank, type Bank, type BankInput, type BankUpdateInput, type CodeBandStatus } from '../../api/banks';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
@@ -42,13 +42,14 @@ export function BanksPage() {
     return banks.filter((b) => b.name.toLowerCase().includes(q) || (b.iban ?? '').toLowerCase().includes(q));
   }, [banks, search]);
 
-  async function handleSave(data: BankInput) {
+  async function handleSave(data: BankInput | BankUpdateInput) {
     if (modal?.mode === 'edit') {
       // 🔴 ق-١٣٨٤: الفرعُ لا يُرسَل في التعديل — والنوعُ يمنعه (`BankUpdateInput`)، فيُنزع هنا صراحةً.
       const { branchId: _createOnly, ...update } = data;
       await updateBank(modal.bank.id, update);
     } else {
-      await createBank(data);
+      // النافذةُ لا تُنشئ بلا نوعٍ معلَن (ق-١٤٣١) — فجسمُ الإنشاء `BankInput` كاملاً.
+      await createBank(data as BankInput);
     }
     setModal(null);
     await reload();
@@ -128,7 +129,12 @@ export function BanksPage() {
             )}
             {rows.map((b) => (
               <tr key={b.id}>
-                <td>{b.name}{b.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                <td>
+                  {b.name}
+                  {/* ق-١٤٣١ — النوعُ يُرى، و«غيرُ المعلَن» يُعلَّم ليُعلَن من التعديل (لا يُنقل قبله). */}
+                  <span className={`badge ${b.kind === 'LEGACY_UNDECLARED' ? 'due' : 'draft'}`} style={{ marginRight: 6 }}>{BANK_KIND_LABEL[b.kind]}</span>
+                  {b.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
+                </td>
                 <td className="num">{b.iban || '—'}</td>
                 <td className="num">{fmt(b.balance)}</td>
                 <td className="num">{fmt(b.openingBalance)}</td>

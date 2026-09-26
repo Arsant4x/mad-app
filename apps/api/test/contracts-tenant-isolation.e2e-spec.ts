@@ -130,7 +130,7 @@ describe('Properties/Units/Contracts (e2e)', () => {
       await request(app.getHttpServer())
         .post('/banks')
         .set('Authorization', `Bearer ${tokenA}`)
-        .send({ name: `بنك اختبار الإيجار ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, openingBalance: 5000, openingDate: '2026-01-01' })
+        .send({ name: `بنك اختبار الإيجار ${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, kind: 'BANK_ACCOUNT', openingBalance: 5000, openingDate: '2026-01-01' })
         .expect(201)
     ).body;
     const bankBalanceBefore = Number(bank.balance);

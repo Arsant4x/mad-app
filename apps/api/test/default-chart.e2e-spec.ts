@@ -124,7 +124,7 @@ describe('Default chart of accounts on company creation (e2e)', () => {
       const inv = await auth(request(app.getHttpServer()).post('/invoices'))
         .send({ customerId, issueDate: '2026-07-20', dueDate: '2026-08-20', lines: [{ description: `بند قبض ${suffix}`, quantity: 1, unitPrice: 300, taxRate: 0, taxCategory: 'E', taxExemptionReasonCode: 'VATEX-SA-29' }] })
         .expect(201);
-      const bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, openingBalance: 0, openingDate: '2026-07-01' }).expect(201)).body.id;
+      const bankId = (await auth(request(app.getHttpServer()).post('/banks')).send({ name: `صندوق ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: '2026-07-01' }).expect(201)).body.id;
 
       const pay = await auth(request(app.getHttpServer()).post('/payments'))
         .send({ customerId, date: '2026-07-21', amount: 300, method: 'CASH', bankId, allocations: [{ invoiceId: inv.body.id, amount: 300 }] })

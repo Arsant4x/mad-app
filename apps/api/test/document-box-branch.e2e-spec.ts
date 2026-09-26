@@ -62,7 +62,7 @@ describe('مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آ�
     northId = (await asOwner(http().post('/branches')).send({ name: `الشمال ${suffix}`, type: 'فرع' }).expect(201)).body.id;
     southId = (await asOwner(http().post('/branches')).send({ name: `الجنوب ${suffix}`, type: 'فرع' }).expect(201)).body.id;
     const bank = async (name: string, branchId?: string) =>
-      (await asOwner(http().post('/banks')).send({ name, openingDate: '2026-01-01', ...(branchId ? { branchId } : {}) }).expect(201)).body.id as string;
+      (await asOwner(http().post('/banks')).send({ name, kind: 'CASH_BOX', openingDate: '2026-01-01', ...(branchId ? { branchId } : {}) }).expect(201)).body.id as string;
     northBox = await bank(`صندوق الشمال ${suffix}`, northId);
     southBox = await bank(SOUTH_BOX, southId);
     companyBox = await bank(`صندوق المنشأة ${suffix}`);

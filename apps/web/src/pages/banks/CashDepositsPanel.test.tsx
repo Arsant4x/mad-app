@@ -13,8 +13,8 @@ vi.mock('../../api/banks');
 vi.mock('../../api/cashDrawers', () => ({ listCashDrawers: vi.fn() }));
 
 const bankRows: banks.Bank[] = [
-  { archived: false, id: 'b1', branchId: null, name: 'بنك الإيداع', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' },
-  { archived: true, id: 'b9', branchId: null, name: 'بنك مؤرشف', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' },
+  { archived: false, id: 'b1', branchId: null, kind: 'BANK_ACCOUNT', name: 'بنك الإيداع', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' },
+  { archived: true, id: 'b9', branchId: null, kind: 'BANK_ACCOUNT', name: 'بنك مؤرشف', iban: null, balance: '0.00', openingBalance: '0.00', openingDate: '2026-01-01' },
 ];
 
 const deposit = (over: Partial<banks.CashDeposit> = {}): banks.CashDeposit => ({

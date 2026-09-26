@@ -2915,6 +2915,11 @@ model Bank {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   branchTenant Branch? @relation("Bank_branchId_tenant", fields: [companyId, branchId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ ق-١٤٣١ — نوعُ الصفّ عمودٌ صريح: «صندوقٌ نقديّ» (فرعُه مكانُ النقد — النقلُ إغلاقٌ وفتح، ق-١٤١٣) أو «حسابٌ
+  /// بنكيّ» (فرعُه بُعدٌ ورؤية — النقلُ للقادم، ق-١٤١٤). **لا يُستنبط** — لا من الفرع ولا من الآيبان. والقائمُ قبل
+  /// الهجرة `LEGACY_UNDECLARED` لا يُنقل حتى يُعلَن، **وقيدُ `CHECK` على `createdAt` يحبسها على ما سبق الهجرة**.
+  kind BankKind
+
   name           String
   iban           String?
   balance        Decimal  @default(0) @db.Decimal(18, 2)
@@ -4477,6 +4482,13 @@ model CashDrawer {
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
   cashDeposit_drawerId_tenant CashDeposit[] @relation("CashDeposit_drawerId_tenant")
+}
+
+/// ق-١٤٣١ — نوعُ صفّ البنك معلَنٌ لا مستنبَط. `LEGACY_UNDECLARED` لما سبق الهجرة وحدَه (قيدُ `CHECK` على `createdAt`).
+enum BankKind {
+  CASH_BOX
+  BANK_ACCOUNT
+  LEGACY_UNDECLARED
 }
 
 /// حالُ إيداع الدرج (ق-١٢٦١ ج — ⑦A3): في الطريق حتى يؤكّده كشفُ البنك من التسوية؛ أو مُلغى بقيدِ عكس.

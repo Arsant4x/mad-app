@@ -45,7 +45,7 @@ describe('Bank reconciliation (e2e)', () => {
     revenueId = accounts.find((a) => a.code === '4100')!.id;
     feeAccountId = accounts.find((a) => a.code === '5300')!.id;
 
-    const bank = await auth(http().post('/banks')).send({ name: 'بنك التسوية', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
+    const bank = await auth(http().post('/banks')).send({ name: 'بنك التسوية', kind: 'BANK_ACCOUNT', openingBalance: 0, openingDate: '2026-01-01' }).expect(201);
     bankId = bank.body.id;
     bankAccountId = bank.body.accountId;
 

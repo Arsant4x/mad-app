@@ -1,11 +1,26 @@
 import { apiClient } from './client';
-import type { CashDepositStatus, NetworkSettlementStatus } from '@mad-app/shared/api/enums';
+import type { BankKind, CashDepositStatus, NetworkSettlementStatus } from '@mad-app/shared/api/enums';
 import type { CreateBankDto, CreateCashDepositDto, CreateNetworkSettlementDto } from '@mad-app/shared/api/requests';
+
+/**
+ * ⚖️ ق-١٤٣١ — نوعُ الصفّ معلَنٌ لا مستنبَط: «صندوقٌ نقديّ» أو «حسابٌ بنكيّ». و`LEGACY_UNDECLARED` صفٌّ سبق البناءَ
+ * ولم يُعلَن — لا يُنقل حتى يُعلَن، ولا يُختار لصفٍّ جديد.
+ */
+export type { BankKind };
+/** ما يُختار لصفٍّ جديدٍ أو يُعلَن به القائم — القديمُ غيرُ المعلَن ليس خياراً. */
+/** ما يُعلَن عند الإنشاء — من جسم الطلب المولَّد (`CreateBankDto.kind`) لا اتّحاداً مكتوباً بيد: «غيرُ معلَن» ليس مدخلاً (`ق-١٤٣١`). */
+export type DeclaredBankKind = BankInput['kind'];
+export const BANK_KIND_LABEL: Record<BankKind, string> = {
+  CASH_BOX: 'صندوقٌ نقديّ',
+  BANK_ACCOUNT: 'حسابٌ بنكيّ',
+  LEGACY_UNDECLARED: 'غيرُ معلَن',
+};
 
 export interface Bank {
   archived: boolean;
   id: string;
   branchId: string | null;
+  kind: BankKind;
   name: string;
   iban: string | null;
   balance: string;
@@ -13,6 +28,7 @@ export interface Bank {
   openingDate: string;
 }
 
+/** جسمُ الإنشاء مولَّدٌ من الخادم (③) — والنوعُ فيه إلزاميٌّ بقيمتَيه المعلنتَين (ق-١٤٣١). */
 export type BankInput = CreateBankDto;
 
 /**
