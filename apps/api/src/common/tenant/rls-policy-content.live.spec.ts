@@ -231,7 +231,8 @@ function uncovered(tables: string[], rows: PolicyRow[], derived: Derived): strin
     const approvedHere = derived.approved.filter((a) => mine.some((p) => p.name === a.name && classify(p, derived) === 'approved'));
     const standalone = approvedHere.some((a) => !a.alongsideCanonical);
     const needsCanonical = approvedHere.filter((a) => a.alongsideCanonical && !canonical).map((a) => a.name);
-    if (!canonical && !standalone) out.push(`${t}: لا سياسةَ قانونيّةً ولا استثناءً بديلاً`);
+    // استثناءٌ «بجوار القانونيّة» بلا قانونيّةٍ يُسمّى بعينه أدناه — لا مرّتين (قِيس في أوّل تشغيلٍ في السير).
+    if (!canonical && !standalone && approvedHere.length === 0) out.push(`${t}: لا سياسةَ قانونيّةً ولا استثناءً بديلاً`);
     for (const n of needsCanonical) out.push(`${t}: الاستثناءُ ${n} يشترط القانونيّةَ بجواره وقد غابت`);
   }
   return out.sort();
