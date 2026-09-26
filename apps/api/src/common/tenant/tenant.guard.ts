@@ -219,11 +219,11 @@ export class TenantGuard implements CanActivate {
       isAllScreens = companyUser.permissionTemplate.isAllScreens;
       allowedScreens = isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens;
       screenActions = (companyUser.permissionTemplate.screenActions ?? null) as ScreenActionMap | null;
-      // No assignment means unrestricted, not "no access" — otherwise every
-      // employee account that existed before branches shipped would have been
-      // locked out of everything the moment this rolled out.
       canEditMasterData = companyUser.canEditMasterData;
-      allowedBranchIds = companyUser.branches.length > 0 ? companyUser.branches.map((b) => b.branchId) : 'all';
+      // ⚖️ `ق-١٤٦٨` — «كلُّ الفروع» علَمٌ يُقرأ لا غيابٌ يُستنتج، والقائمةُ الفارغةُ لا فرع (صفوفُ المنشأة العامّة وحدَها).
+      // كان الغيابُ يُقرأ «الكلّ»، فكان كلُّ ما يُفرغ الإسنادَ — قراءةٌ عمياء أعلاه أو حذفٌ خارج الخدمة — يوسّع بصمت.
+      // والقائمون بلا إسنادٍ وُسموا `true` في الهجرة فبقي سلوكُهم.
+      allowedBranchIds = companyUser.allBranches ? 'all' : companyUser.branches.map((b) => b.branchId);
     }
 
     // getAllAndOverride, not get(..., context.getHandler()) alone — every

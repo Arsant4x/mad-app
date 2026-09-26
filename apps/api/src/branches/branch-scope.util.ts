@@ -8,7 +8,8 @@ import { formatMessage, MSG } from '../common/i18n/messages';
  * This is deliberately **not** a Prisma extension like tenant scoping is. The
  * company boundary is absolute and must be impossible to forget, so it's
  * centralized and backed by RLS. A branch restriction is a permission: the
- * owner sees everything, an unassigned employee sees everything, and rows with
+ * owner sees everything, an employee flagged `allBranches` sees everything (`ق-١٤٦٨` —
+ * an unassigned employee without the flag sees company-wide rows only), and rows with
  * no branch at all (every row predating branches, and every single-location
  * business) must stay visible to everyone. Encoding that in a blanket
  * extension would silently hide legitimate data.

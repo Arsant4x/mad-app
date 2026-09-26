@@ -184,6 +184,8 @@ export class EmployeesService {
         await assertBranchIdsAssignable(tx, allowedBranchIds, dto.loginAccountBranchIds);
         await assertNoOpenShiftOutside(tx, existing.companyUserId, dto.loginAccountBranchIds);
         await replaceBranchAssignments(tx, existing.companyUserId, dto.loginAccountBranchIds);
+        // ⚖️ `ق-١٤٦٨`: قائمةُ فروعٍ صريحةٌ تقييدٌ — فيُطفأ «كلُّ الفروع» معها، ولا يبقى علَمٌ يعلو القائمة.
+        await tx.companyUser.update({ where: { id: existing.companyUserId }, data: { allBranches: false } });
       }
       const row = await tx.employee.update({ where: { id }, data: { branchId: toBranchId } });
       return { ...publicEmployee(row), loginAccount: await this.loginAccountOf(tx, row.companyUserId) };

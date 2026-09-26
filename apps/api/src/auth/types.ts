@@ -20,7 +20,8 @@ export interface TenantContext {
   allowedScreens: string[] | 'all';
   /**
    * Which branches this actor may see. `'all'` for the company owner, and for
-   * an employee with no branch assignment (see CompanyUserBranch).
+   * an employee whose `allBranches` flag is set (`ق-١٤٦٨`) — an employee with no
+   * assignment and no flag gets `[]`: company-wide rows only.
    *
    * Unlike `companyId` — an absolute boundary enforced by RLS — this is a
    * *permission* filter applied in queries. Keep the two distinct: a bug here

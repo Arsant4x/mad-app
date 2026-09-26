@@ -93,7 +93,8 @@ describe('TenantGuard مغلقٌ افتراضياً — الإعلانُ أو ا
       .expect(201);
     const username = `guard-emp-${suffix}`;
     await asOwner(http().post('/company-users'))
-      .send({ name: 'موظف مسبار', username, password: 'ProbePass123!', permissionTemplateId: template.body.id })
+      // ⚖️ ق-١٤٦٨: «كلُّ الفروع» صراحةً — فالرفضُ المقيسُ رفضُ الحارس لا فرعٌ لا يراه الموظّف.
+      .send({ name: 'موظف مسبار', username, password: 'ProbePass123!', permissionTemplateId: template.body.id, allBranches: true })
       .expect(201);
     employeeToken = (await http().post('/auth/login').send({ username, password: 'ProbePass123!' }).expect(200)).body.accessToken;
     branchId = (await asOwner(http().post('/branches')).send({ name: `فرع المسبار ${suffix}` }).expect(201)).body.id;

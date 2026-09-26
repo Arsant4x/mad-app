@@ -401,6 +401,7 @@ export const MSG = {
   support_grant_not_yours: 'support.grant_not_yours',
   company_user_not_found: 'companyUsers.not_found',
   company_user_open_shift_blocks_move: 'companyUsers.open_shift_blocks_move',
+  company_user_all_branches_conflict: 'companyUsers.all_branches_conflict',
   company_users_owner_only: 'companyUsers.owner_only',
   company_profile_owner_only: 'companyProfile.owner_only',
   /** معرّفُ النطاق الفرعيّ (`ق-١٣٠٣` · ك/⑬A2). */
@@ -1356,6 +1357,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.company_user_open_shift_blocks_move]: {
     ar: 'لا يُنقل الحسابُ عن فرع {branch}: عليه مناوبةُ كاشيرٍ مفتوحةٌ فيه — أقفلها أولاً ثم انقل الحساب (الإغلاقُ قبل النقل)',
     en: 'The account cannot leave branch {branch}: it has an open cashier shift there — close the shift first, then move the account',
+  },
+  [MSG.company_user_all_branches_conflict]: {
+    ar: 'لا يجتمع «كلُّ الفروع» مع فروعٍ محدَّدة — اختر أحدهما',
+    en: '«All branches» cannot be combined with specific branches — choose one',
   },
   [MSG.company_users_owner_only]: {
     ar: 'إدارة حسابات الموظفين متاحة لحساب الشركة الرئيسي فقط',

@@ -26,13 +26,18 @@ export class UpdateCompanyUserDto {
   @IsIn(STATUSES)
   status?: (typeof STATUSES)[number];
 
-  /// Which branches this employee may see. Sending `[]` clears the restriction
-  /// (back to unrestricted within the company) rather than locking them out of
-  /// everything — see CompanyUserBranch. Omitting the key leaves it unchanged.
+  /// ⚖️ `ق-١٤٦٨` — Which branches this employee may see (replace-all). **`[]` is no branch** —
+  /// company-wide rows only — not «all». A non-empty list with `allBranches` omitted clears the flag
+  /// (an explicit restriction). Omitting the key leaves it unchanged.
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   branchIds?: string[];
+  /// ⚖️ `ق-١٤٦٨` — «All branches, including ones added later» as an explicit flag. `true` with a
+  /// non-empty `branchIds` is refused (400). Omitting it leaves it unchanged.
+  @IsOptional()
+  @IsBoolean()
+  allBranches?: boolean;
   /// Exempts this employee from the master-data lock.
   @IsOptional()
   @IsBoolean()

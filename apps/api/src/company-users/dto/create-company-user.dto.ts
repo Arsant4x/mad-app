@@ -1,4 +1,4 @@
-import { IsArray, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateCompanyUserDto {
   @IsString()
@@ -16,11 +16,16 @@ export class CreateCompanyUserDto {
   @IsString()
   permissionTemplateId!: string;
 
-  /// Which branches this employee may see, from day one — same semantics as
-  /// UpdateCompanyUserDto.branchIds: empty/omitted = unrestricted within the
-  /// company (see CompanyUserBranch).
+  /// ⚖️ `ق-١٤٦٨` — Which branches this employee may see, from day one. **Empty/omitted is no branch**
+  /// (company-wide rows only) unless `allBranches` is `true`.
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   branchIds?: string[];
+
+  /// ⚖️ `ق-١٤٦٨` — «All branches, including ones added later» — an explicit flag, `false` when omitted.
+  /// `true` with a non-empty `branchIds` is refused (400): the two contradict.
+  @IsOptional()
+  @IsBoolean()
+  allBranches?: boolean;
 }

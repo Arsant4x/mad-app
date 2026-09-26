@@ -155,7 +155,8 @@ describe('إغلاقُ الفرع — لا مستندَ جديدٌ فيه، وي
   it('[SPEC 2.4] ⑥ يُعاد فتحُه بصلاحية — المالكُ يفتحه فيُقبل المستند، والموظّفُ يُرفض إغلاقاً وفتحاً', async () => {
     const branchId = await newBranch('فرع إعادة الفتح');
     await asOwner(http().post('/company-users'))
-      .send({ name: `موظّف الفتح ${suffix}`, username: `close-staff-${suffix}`, password: 'ClosePass123!', permissionTemplateId: templateId })
+      // ⚖️ ق-١٤٦٨: «كلُّ الفروع» صراحةً — فالرفضُ المقيسُ رفضُ الفعل للموظّف لا رفضُ فرعٍ لا يراه.
+      .send({ name: `موظّف الفتح ${suffix}`, username: `close-staff-${suffix}`, password: 'ClosePass123!', permissionTemplateId: templateId, allBranches: true })
       .expect(201);
     const staff = (await http().post('/auth/login').send({ username: `close-staff-${suffix}`, password: 'ClosePass123!' }).expect(200)).body.accessToken;
 

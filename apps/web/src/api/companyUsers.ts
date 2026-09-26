@@ -19,9 +19,11 @@ export interface CompanyUser {
   /** Exempts this employee from the master-data lock. */
   canEditMasterData: boolean;
   permissionTemplate: PermissionTemplate;
+  /** ⚖️ ق-١٤٦٨ — «كلُّ الفروع» علَمٌ صريح (ويشمل ما يُضاف لاحقاً). */
+  allBranches: boolean;
   /** صفوف الإسناد كمعرّفات فقط (الخادم لا يضمّن جدول الفروع المحمي بـRLS
    * هنا) — الأسماء تُحلّ من قائمة الفروع المحمَّلة أصلاً في الشاشة.
-   * فارغة = يرى كل الفروع. */
+   * فارغةٌ بلا العلَم = لا فرع (البيانات العامّة وحدَها). */
   branches: { branchId: string }[];
 }
 

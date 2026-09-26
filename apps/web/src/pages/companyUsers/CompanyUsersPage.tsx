@@ -38,10 +38,11 @@ export function CompanyUsersPage() {
     setBranches(b);
   }
 
-  /** «كل الفروع» لغير المقيَّد — الأسماء تُحلّ من قائمة الفروع لأن الخادم
+  /** «كل الفروع» للعلَم الصريح لا لغياب الإسناد (ق-١٤٦٨) — الأسماء تُحلّ من قائمة الفروع لأن الخادم
    * يعيد صفوف الإسناد كمعرّفات فقط (جدول الفروع محمي بـRLS هناك). */
   function describeBranches(u: CompanyUser): string {
-    if (!u.branches?.length) return 'كل الفروع';
+    if (u.allBranches) return 'كل الفروع';
+    if (!u.branches?.length) return 'لا فرع — البيانات العامّة وحدَها';
     const nameById = new Map(branches.map((b) => [b.id, b.name]));
     return u.branches.map((r) => nameById.get(r.branchId) ?? '—').join('، ');
   }
