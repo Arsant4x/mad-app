@@ -153,7 +153,7 @@ describe('فروعُ الفاعل عند الوصول بالمعرّف — ال�
 
     supplierId = (await asOwner(http().post('/suppliers')).send({ name: `مورّد الفروع ${suffix}` }).expect(201)).body.id;
     boxSouth = (
-      (await asOwner(http().post('/banks')).send({ name: `صندوق الجنوب ${suffix}`, openingBalance: 1000, openingDate: today(), branchId: southId }).expect(201))
+      (await asOwner(http().post('/banks')).send({ name: `صندوق الجنوب ${suffix}`, kind: 'CASH_BOX', openingBalance: 1000, openingDate: today(), branchId: southId }).expect(201))
         .body as { id: string }
     ).id;
 

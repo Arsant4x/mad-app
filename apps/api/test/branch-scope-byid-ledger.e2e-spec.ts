@@ -134,10 +134,10 @@ describe('فروعُ الفاعل عند المسارات بالمعرّف — �
     // الدخولُ يردّ `200` لا `201` (`@HttpCode` على المسار — كما في `branch-scope-by-id.e2e-spec.ts`).
     restrictedToken = ((await http().post('/auth/login').send({ username: `north-ledger-${suffix}`, password: 'ScopePass123!' }).expect(200)).body as { accessToken: string }).accessToken;
 
-    // ⚠️ `POST /banks` لا يقبل حقلَ نوع (`forbidNonWhitelisted`) — والرصيدُ الافتتاحيّ محذوفٌ عمداً (صفر): فلا قيدَ
+    // ⚠️ `POST /banks` يوجب نوعَ الصفّ منذ `ق-١٤٣١` (`CASH_BOX` هنا) — والرصيدُ الافتتاحيّ محذوفٌ عمداً (صفر): فلا قيدَ
     //    افتتاحيّاً ولا صفَّ يشير إلى البنك، فيبقى المحوُ النهائيّ (#30) ممكناً لا محبوساً بالحفظ النظاميّ (`409`).
     const bank = async (name: string, branchId: string): Promise<string> =>
-      ((await asOwner(http().post('/banks')).send({ name, openingDate: '2026-01-01', branchId }).expect(201)).body as { id: string }).id;
+      ((await asOwner(http().post('/banks')).send({ name, kind: 'CASH_BOX', openingDate: '2026-01-01', branchId }).expect(201)).body as { id: string }).id;
     const employee = async (fullName: string, branchId: string): Promise<string> =>
       ((await asOwner(http().post('/employees')).send({ fullName, hireDate: '2026-01-01', branchId }).expect(201)).body as { id: string }).id;
     const transaction = async (bankId: string, description: string, branchId: string): Promise<string> =>
