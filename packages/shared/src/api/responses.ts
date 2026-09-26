@@ -603,6 +603,8 @@ export interface PosStockDeductedResponse {
   warehouseId: string;
   movements: number;
   belowZero: PosStockBelowZeroResponse[];
+  provisionalQty: string;
+  zeroCostProvisional: PosZeroCostProvisionalResponse[];
 }
 
 /** ردٌّ — `PosStockSkippedResponse` في الخادم (ق-١٤٣٨). */
@@ -654,6 +656,13 @@ export interface PosUnresolvedAttemptRowResponse {
   detail: string | null;
   cashierName: string;
   shiftClosedAt: string | null;
+}
+
+/** ردٌّ — `PosZeroCostProvisionalResponse` في الخادم (ق-١٤٣٨). */
+export interface PosZeroCostProvisionalResponse {
+  costSource: 'WAREHOUSE_LAYER' | 'PRODUCT_LAYER' | 'PRODUCT_CARD' | 'NONE';
+  productId: string;
+  qty: string;
 }
 
 /** ردٌّ — `ReconciliationBankResponse` في الخادم (ق-١٤٣٨). */

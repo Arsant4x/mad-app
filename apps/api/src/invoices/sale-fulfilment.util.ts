@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { consumeFifo, restoreConsumptionPartial } from '../inventory/costing.util';
+import { consumeFifo, ProvisionalCostSource, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
 import { money, qty } from '../common/money/text';
 
@@ -54,6 +54,12 @@ export type FulfilmentResult =
       totalCost: number;
       /** كميةٌ استُهلكت بلا طبقة — **تقديرٌ في قائمة الدخل، ويُعلَن**. */
       provisionalQty: number;
+      /**
+       * (`ق-١٤٦٩` · التوجيه ٢٦٦ §٤هـ) **المؤقّتُ بتكلفة صفر — لكلّ صنفٍ بمصدره**: بيعٌ خرج بلا طبقة ولا تكلفةٍ معروفة لا
+       * قيدَ تكلفةٍ له (`postCogsEntry` يتخطّى الصفر) — فيُعلَن هنا ولا يمرّ صامتاً. **ولكلّ صنف**: فاتورةٌ مختلطة
+       * مجموعُ تكلفتها غيرُ صفرٍ تُخفيه لو أُعلن على مستوى الفاتورة.
+       */
+      zeroCostProvisional: { productId: string; qty: number; costSource: ProvisionalCostSource }[];
     }
   | { fulfilled: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
@@ -71,6 +77,7 @@ export type FulfilmentReport =
       belowZero: { productId: string; resultingQty: string }[];
       totalCost: string;
       provisionalQty: string;
+      zeroCostProvisional: { productId: string; qty: string; costSource: ProvisionalCostSource }[];
     }
   | { fulfilled: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
 
@@ -83,6 +90,7 @@ export function fulfilmentReport(f: FulfilmentResult): FulfilmentReport {
     belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: qty(b.resultingQty) })),
     totalCost: money(f.totalCost),
     provisionalQty: qty(f.provisionalQty),
+    zeroCostProvisional: f.zeroCostProvisional.map((z) => ({ productId: z.productId, qty: qty(z.qty), costSource: z.costSource })),
   };
 }
 
@@ -120,6 +128,7 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
 
   let totalCost = 0;
   let provisionalQty = 0;
+  const zeroCost = new Map<string, { qty: number; costSource: ProvisionalCostSource }>();
 
   for (const line of deductible) {
     const qty = Number(line.quantity);
@@ -152,6 +161,10 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
     });
     totalCost += consumed.totalCost;
     provisionalQty += consumed.provisionalQty;
+    if (consumed.zeroCostQty > 0 && consumed.provisionalCostSource) {
+      const was = zeroCost.get(line.productId!);
+      zeroCost.set(line.productId!, { qty: (was?.qty ?? 0) + consumed.zeroCostQty, costSource: consumed.provisionalCostSource });
+    }
   }
 
   const belowZero: { productId: string; resultingQty: number }[] = [];
@@ -168,6 +181,7 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
     belowZero,
     totalCost: roundTo(totalCost, 'LINE_AMOUNT'),
     provisionalQty: roundTo(provisionalQty, 'DERIVED_QUANTITY'),
+    zeroCostProvisional: [...zeroCost].map(([productId, z]) => ({ productId, qty: roundTo(z.qty, 'DERIVED_QUANTITY'), costSource: z.costSource })),
   };
 }
 

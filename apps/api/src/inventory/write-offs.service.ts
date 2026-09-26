@@ -276,10 +276,11 @@ export class WriteOffsService {
         });
       }
 
-      return { saved, selfApproved, provisionalQty: consumed.provisionalQty };
+      return { saved, selfApproved, provisionalQty: consumed.provisionalQty, zeroCostQty: consumed.zeroCostQty, costSource: consumed.provisionalCostSource };
     });
 
-    return { ...result.saved, selfApproved: result.selfApproved, provisionalQty: result.provisionalQty };
+    // (`ق-١٤٦٩`) والإعدامُ بتكلفة صفر لا قيدَ له (`postWriteOffEntry` يتخطّى الصفر) — فيُعلَن في الردّ.
+    return { ...result.saved, selfApproved: result.selfApproved, provisionalQty: result.provisionalQty, zeroCostQty: result.zeroCostQty, provisionalCostSource: result.costSource };
   }
 
   reject(companyId: string, allowedBranchIds: string[] | 'all', actorId: string, id: string, dto: RejectWriteOffDto) {

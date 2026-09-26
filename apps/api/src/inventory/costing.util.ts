@@ -79,8 +79,20 @@ export interface ConsumeResult {
   provisionalQty: number;
   /** التكلفة المستعملة للمؤقّت — للإفصاح لا للحساب. */
   provisionalUnitCost: number | null;
+  /** (`ق-١٤٦٩`) من أين جاءت تكلفةُ المؤقّت — و`NONE` صفرٌ بلا مصدر: لا طبقةَ قطّ وبطاقةُ الصنف صفر. */
+  provisionalCostSource: ProvisionalCostSource | null;
+  /** (`ق-١٤٦٩`) ما استُهلك مؤقّتاً **بتكلفة صفر** — يُعلَن ولا يمرّ صامتاً. */
+  zeroCostQty: number;
   consumptionIds: string[];
 }
+
+/**
+ * (`ق-١٤٦٩` · التوجيه ٢٦٦ §٤هـ) **مصدرُ تكلفة المؤقّت** — بالدرجة التي أعطتها:
+ *   `WAREHOUSE_LAYER` آخرُ طبقةٍ للصنف في المستودع · `PRODUCT_LAYER` في أيّ مستودع · `PRODUCT_CARD` بطاقةُ الصنف بقيمة ·
+ *   `NONE` لا طبقةَ قطّ **والبطاقةُ صفر** — فالصفرُ هنا مجهولٌ لا معروف. ⚠️ **وحدُّه**: البطاقةُ افتراضُها `0`، فلا يُفرَّق
+ *   بين «صفرٍ أُدخل» و«لم يُدخَل» — وكلاهما يُعلَن.
+ */
+export type ProvisionalCostSource = 'WAREHOUSE_LAYER' | 'PRODUCT_LAYER' | 'PRODUCT_CARD' | 'NONE';
 
 /**
  * آخر تكلفة معروفة للصنف في المستودع.
@@ -88,13 +100,13 @@ export interface ConsumeResult {
  * ⚠️ **الترتيب بـ`acquiredAt` لا `createdAt`**: طبقةٌ أُدخلت اليوم عن شحنةٍ
  * قديمة ليست «الأحدث» — تكلفتها أقدم من طبقةٍ استُلمت الأسبوع الماضي.
  */
-async function lastKnownUnitCost(tx: Tx, productId: string, warehouseId: string): Promise<number> {
+async function lastKnownUnitCost(tx: Tx, productId: string, warehouseId: string): Promise<{ unitCost: number; source: ProvisionalCostSource }> {
   const latest = await tx.inventoryLayer.findFirst({
     where: { productId, warehouseId },
     orderBy: [{ acquiredAt: 'desc' }, { createdAt: 'desc' }],
     select: { unitCost: true },
   });
-  if (latest) return Number(latest.unitCost);
+  if (latest) return { unitCost: Number(latest.unitCost), source: 'WAREHOUSE_LAYER' };
 
   // لا طبقة قطّ في هذا المستودع — يُقرأ آخر ما عُرف عن الصنف نفسه، ثم حقل
   // التكلفة على البطاقة. وصفرٌ في الأخير **ليس خطأً يُخفى**: يظهر في تقرير
@@ -104,10 +116,11 @@ async function lastKnownUnitCost(tx: Tx, productId: string, warehouseId: string)
     orderBy: [{ acquiredAt: 'desc' }, { createdAt: 'desc' }],
     select: { unitCost: true },
   });
-  if (anyLayer) return Number(anyLayer.unitCost);
+  if (anyLayer) return { unitCost: Number(anyLayer.unitCost), source: 'PRODUCT_LAYER' };
 
   const product = await tx.product.findUnique({ where: { id: productId }, select: { cost: true } });
-  return Number(product?.cost ?? 0);
+  const card = Number(product?.cost ?? 0);
+  return { unitCost: card, source: card === 0 ? 'NONE' : 'PRODUCT_CARD' };
 }
 
 /**
@@ -228,8 +241,11 @@ export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs):
   }
 
   let provisionalUnitCost: number | null = null;
+  let provisionalCostSource: ProvisionalCostSource | null = null;
   if (outstanding > 0) {
-    provisionalUnitCost = await lastKnownUnitCost(tx, args.productId, args.warehouseId);
+    const known = await lastKnownUnitCost(tx, args.productId, args.warehouseId);
+    provisionalUnitCost = known.unitCost;
+    provisionalCostSource = known.source;
     const created = await tx.inventoryConsumption.create({
       data: {
         // ⭐ **`layerId: null` هو التعريف لا الوصف.** ولا علَم `isProvisional`:
@@ -252,6 +268,8 @@ export async function consumeFifo(tx: Tx, companyId: string, args: ConsumeArgs):
     totalCost: roundTo(totalCost, 'LINE_AMOUNT'),
     provisionalQty: outstanding > 0 ? outstanding : 0,
     provisionalUnitCost,
+    provisionalCostSource,
+    zeroCostQty: outstanding > 0 && provisionalUnitCost === 0 ? outstanding : 0,
     consumptionIds,
   };
 }
