@@ -27,7 +27,9 @@ on:
   pull_request:
     # الأنواعُ معلَنةٌ صراحةً — و`synchronize` منها، فالخفيفُ على **كل دفع**.
     # (ق-٢٥٠: شرطٌ يسمّي نوعاً غيرَ معلَنٍ هو بوّابةٌ على بابٍ لا يُطرَق.)
-    types: [opened, synchronize, reopened, ready_for_review]
+    # ⚖️ (ق-١٤٧٣ م٣) **ولا `ready_for_review`**: `opened` و`synchronize` يغطّيان كلَّ رأسٍ جديد، فالجاهزيةُ
+    #    تُعيد تشغيلاً على رأسٍ فُحص (مقيس: ١٢١ دقيقة على رؤوسٍ اكتمل خفيفُها، و١٥٦ ألغت تشغيلاً سابقاً عليها).
+    types: [opened, synchronize, reopened]
     paths:
       - 'apps/**'
       - 'packages/**'
@@ -72,13 +74,59 @@ env:
   LC_ALL: C.UTF-8
   LANG: C.UTF-8
 
-# دفعتان متتابعتان على طلبٍ واحد: تُلغى السابقة — ولا يُلغى تشغيلُ `main`.
+# دفعتان متتابعتان على طلبٍ واحد: تُلغى السابقة.
+# ⚖️ (ق-١٤٧٣ م٥) وعلى `main` أيضاً — فكلُّ نسخةٍ مدموجة فُحصت على رأس طلبها (ق-١٤٧٢).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
+  # ⚖️ (ق-١٤٧٣ م٢) **بوّابةُ `main`: لا تشغيلان للشيفرة نفسِها** — نظيرةُ بوّابة الثقيل: طلبٌ مدموج شجرةُ رأسه
+  # شجرةُ هذا الالتزام بعينها ونجح عليه الخفيفُ ⟸ لا يُعاد. مُغلِقةٌ عند الشكّ، ومتخطّاةٌ على الطلبات.
+  gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          JOBS: api-unit vitest
+        run: |
+          set -o pipefail
+          run=true
+          tree=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.tree.sha 2>/dev/null) || tree=''
+          prs=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[] | select(.merged_at != null) | .number' 2>/dev/null) || prs=''
+          echo "الالتزام $SHA · الشجرة ${tree:-؟} · الطلبات: ${prs:-لا شيء}"
+          for pr in $prs; do
+            head=$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha 2>/dev/null) || continue
+            htree=$(gh api "repos/$REPO/commits/$head" --jq .commit.tree.sha 2>/dev/null) || continue
+            if [ -z "$tree" ] || [ "$htree" != "$tree" ]; then echo "#$pr: شجرةُ رأسه $htree ≠ $tree — يُفحص"; continue; fi
+            ok=0; want=0
+            for job in $JOBS; do
+              want=$((want+1))
+              c=$(gh api "repos/$REPO/commits/$head/check-runs?per_page=100" \
+                --jq "[.check_runs[] | select(.name == \"$job\")] | sort_by(.started_at) | last | ((.status // \"\") + \":\" + (.conclusion // \"\"))" 2>/dev/null) || c=''
+              echo "  #$pr $job على ${head:0:8}: ${c:-؟}"
+              [ "$c" = "completed:success" ] && ok=$((ok+1))
+            done
+            if [ "$ok" -eq "$want" ]; then run=false; echo "#$pr: الشجرةُ نفسُها فُحصت على رأسه — لا يُعاد"; fi
+          done
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "الحكم: run=$run"
+
   vitest:
+    # (ق-١٤٧٣ م٢) على `main`: إلا أن تقول البوّابةُ بنجاحٍ صريح «فُحصت». وعلى الطلب دائماً.
+    needs: gate
+    if: ${{ !cancelled() && (github.event_name != 'push' || needs.gate.result != 'success' || needs.gate.outputs.run != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -193,7 +241,17 @@ jobs:
       # المنصة @esbuild/linux-x64)، لا عبر postinstall — فالسكربت احتياطٌ لا
       # حاجة إليه، وتخطّيه يجعل التثبيت حتمياً ويُسكت تحذير allow-scripts.
       # مُتحقَّق منه: npm ci بلا موافقة سكربتات يترك esbuild عاملاً (--version).
-      - run: npm ci --ignore-scripts
+      # ⚖️ (ق-١٤٧٣ م٦) حفظُ ما يُبنى: `node_modules` بمفتاح ملفّ القفل — والإصابةُ تتخطّى `npm ci` وحدَها.
+      - id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: nm-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.nm.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
       # ⛔ vitest **تمنع من اليوم** (قرار المالك 2026-08-11): لا اعتماد خارجي
       # لها — لا قاعدة ولا شبكة ولا متصفح — فلا عذر لسقوطها، ولا معنى لتأجيل
       # صرامةٍ على اختباراتٍ حتمية. (ومنذ 2026-08-12 صارت Playwright مانعةً
@@ -227,6 +285,8 @@ jobs:
   #
   # ⛔ مانعة من أول يوم — لا اعتماد خارجي لها (لا قاعدة ولا شبكة)، فلا عذر.
   api-unit:
+    needs: gate
+    if: ${{ !cancelled() && (github.event_name != 'push' || needs.gate.result != 'success' || needs.gate.outputs.run != 'false') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +294,16 @@ jobs:
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci --ignore-scripts
+      - id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: nm-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
+      - if: steps.nm.outputs.cache-hit != 'true'
+        run: npm ci --ignore-scripts
 
       # أنواع Prisma فقط — لا اتصال بقاعدة. الاختبارات هنا نقيّة كلها،
       # لكنها تستورد أنواعاً مولَّدة (`@prisma/client`) فتفشل الترجمة بدونها.
