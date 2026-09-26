@@ -18,6 +18,7 @@ import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UpdatePurchaseDto } from './dto/update-purchase.dto';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
+import { assertPurchaseReferences } from './purchase-references.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 
@@ -120,6 +121,8 @@ export class PurchasesService {
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+        // `ق-١٤٦٥` مراجعُ منشأةٍ أخرى تُردّ مسمّاةً قبل الترقيم — لا `500` من المفتاح المركّب بعده.
+        await assertPurchaseReferences(tx, { supplierId: dto.supplierId, productIds: (dto.lines ?? []).map((l) => l.productId), warehouseId: dto.warehouseId });
         const no = await this.nextPurchaseNumber(tx, companyId);
         // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — لا تُخمَّن لصنفٍ لم يُعلنها.
         const unitCodes = await unitCodesFor(tx, dto.lines ?? []);
@@ -268,6 +271,9 @@ export class PurchasesService {
         const recorded = await tx.goodsReceipt.count({ where: { purchaseId: id, voidedAt: null, implicit: false } });
         if (recorded > 0) throw new ConflictException(formatMessage(MSG.purchase_lines_frozen_after_receipt, { no: existing.no }));
       }
+
+      // `ق-١٤٦٥` ما يُرسَل من مراجعَ يُقرأ في سياق المنشأة قبل أيّ عكسٍ أو كتابة.
+      await assertPurchaseReferences(tx, { supplierId: dto.supplierId, productIds: (dto.lines ?? []).map((l) => l.productId), warehouseId: dto.warehouseId });
 
       const data: Prisma.PurchaseUncheckedUpdateInput = {};
       if (dto.supplierId !== undefined) data.supplierId = dto.supplierId;

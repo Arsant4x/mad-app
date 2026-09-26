@@ -23,6 +23,7 @@ import { applySupplierNoteToStock } from './purchase-return.util';
 import { recordCostShares } from './layer-cost-allocation.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';
 import { recomputePurchaseStatus } from './purchase-settlement.util';
+import { assertPurchaseReferences } from './purchase-references.util';
 import { computePurchaseTax } from './purchases.service';
 
 /** أنواعُ مستند الشراء — الأساسُ وإشعاراه، كما للفاتورة `INVOICE`/`CREDIT_NOTE`/`DEBIT_NOTE`. */
@@ -118,6 +119,9 @@ export class SupplierNotesService {
           const prior = await tx.purchase.aggregate({ where: { relatedPurchaseId: original.id, docType }, _sum: { total: true } });
           assertWithinRemaining(noteTotal, Number(original.total), Number(prior._sum.total ?? 0), MSG.supplier_note_exceeds_remaining);
         }
+
+        // `ق-١٤٦٥` صنفُ سطرٍ من منشأةٍ أخرى يُردّ مسمّىً قبل الترقيم (والمورّدُ من الأصل فلا يُرسَل).
+        await assertPurchaseReferences(tx, { productIds: lines.map((l) => l.productId) });
 
         const rate = Number(original.exchangeRate);
         const date = dto.date ? new Date(dto.date) : new Date();
