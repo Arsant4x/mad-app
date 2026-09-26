@@ -20,7 +20,7 @@ export class AttendanceController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: ListAttendanceQueryDto) {
-    return this.attendanceService.list(tenant.companyId, query);
+    return this.attendanceService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** Recording presence is an operational posting — `record`, not `add`. */

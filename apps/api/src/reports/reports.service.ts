@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MSG } from '../common/i18n/messages';
 import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
@@ -38,6 +38,17 @@ const CASH_FLOW_ACCOUNTS = [
  * نقصاً في الدليل يُعلَن، بل صفرٌ صادق. ورمزُه من ملفّه وحده (`ق-٤٦٩`).
  */
 const DEFERRED_REVENUE_CASH_FLOW_CODE = DEFERRED_REVENUE_ACCOUNT_CODE;
+
+/**
+ * 🔴 **القوائمُ المالية للمنشأة لمن يرى فروعَها كلَّها** (`ق-١٤٥٢` — بنصّ المالك: «**المركزُ المالي … ثغرةُ صلاحية**»).
+ *
+ * المعلَنُ على قائمة الدخل: «**ولا تُشتقّ قائمةُ دخلٍ من نصف دفتر**» — فالقوائمُ الثلاث (الدخلُ · المركزُ المالي · التدفّقُ النقديّ)
+ * قوائمُ المنشأة الواحدة ولا تُرشَّح بفرع. **فكان مقيَّدٌ بفرعٍ يقرأ أرصدةَ الفروع كلِّها منها** (قِيس `200` للثلاث). والحكمُ من
+ * المعلَن نفسِه: **لا تُعطى لمن لا يرى الفروعَ كلَّها**، والرفضُ يدلّ على ملخّص الفرع المقصور على فروعه (`branchSummary`).
+ */
+function assertWholeCompanyReader(allowedBranchIds: string[] | 'all'): void {
+  if (allowedBranchIds !== 'all') throw new ForbiddenException(MSG.report_company_statement_whole_company);
+}
 
 /** Dates are compared day-to-day, so the time part is stripped: an installment
  * due today must not count as late because the clock says 14:00.
@@ -531,7 +542,8 @@ export class ReportsService {
    * واحد — **ولا تُشتقّ قائمةُ دخلٍ من نصف دفتر**؛ والفرعُ له تقريرُه المقصورُ
    * على فروع القارئ (`branchSummary`). و«هل ثمّة قيدٌ مرحَّل» سؤالٌ عن الدفتر كلِّه.
    */
-  incomeStatement(companyId: string, range: ReportRangeDto) {
+  incomeStatement(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
+    assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
       const movements = await this.movementsByAccount(tx, range);
@@ -576,7 +588,8 @@ export class ReportsService {
    * يكن ثمّة سطرٌ بلا حساب، الفرقُ صفرٌ حتماً. فبقاءُ `balanced` **حارسٌ على الدفتر** لا تحذيرٌ
    * للتاجر: اختلالُه يعني سطراً على حسابٍ محذوف أو نوعاً خارج الخمسة.
    */
-  balanceSheet(companyId: string, range?: ReportRangeDto) {
+  balanceSheet(companyId: string, allowedBranchIds: string[] | 'all', range?: ReportRangeDto) {
+    assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
       // الأرصدةُ حتى التاريخ — لا فترةَ لها بداية: المركزُ المالي **رصيدٌ لا حركة**.
@@ -613,7 +626,8 @@ export class ReportsService {
     });
   }
 
-  cashFlow(companyId: string, range: ReportRangeDto) {
+  cashFlow(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
+    assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
       const movements = await this.movementsByAccount(tx, range);

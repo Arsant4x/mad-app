@@ -66,7 +66,7 @@ export class InventoryController {
   @Get('stock-levels')
   @RequiresAction('view')
   stockLevels(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
-    return this.inventoryService.stockLevels(tenant.companyId, query);
+    return this.inventoryService.stockLevels(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   @Get('movements')

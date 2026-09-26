@@ -33,6 +33,9 @@ const TRASHED_ENTITIES = [
 /**
  * كياناتُ السلّة التي تحمل عمودَ الفرع — **من المخطّط** (`Prisma.dmmf`) لا من قائمة (`ق-١٤٤٠`): اليومَ الموظّفون
  * والبنوك، وكيانٌ يدخل السلّةَ غداً بفرعٍ يُحرَس بلا لمس هذا الموضع. وسائرُها للمنشأة كلِّها فلا مرشِّحَ عليها.
+ *
+ * 🔴 **وقائمةُ السلّة نفسُها مرشَّحةٌ بها** (`ق-١٤٥٢`) لا الوصولُ بالمعرّف وحدَه — قِيس: موظّفٌ مقيَّدٌ بالشمال كان يرى في
+ * القائمة موظّفَ الجنوب وصندوقَه المحذوفَين.
  */
 const BRANCH_BEARING_MODELS: ReadonlySet<string> = new Set(
   Prisma.dmmf.datamodel.models.filter((m) => m.fields.some((f) => f.name === 'branchId')).map((m) => m.name),
@@ -94,7 +97,7 @@ export class TrashService {
    * كلُّ صفٍّ يحمل حالَه أمام الحفظ النظاميّ (`ق-١٢٧١`/أ): ما يشير إليه سجلٌّ يُعلَن
    * «محفوظٌ نظاماً حتى …» بأسماء ما يحفظه — فلا يقرأ التاجر «٣ أيام» على ما لن يُمحى.
    */
-  list(companyId: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const now = new Date();
       const groups = await Promise.all(
@@ -103,7 +106,7 @@ export class TrashService {
           const rows = await delegate.findMany({
             // `not: null` is what tells the tenant extension to stop hiding
             // these — every other read gets deletedAt: null injected.
-            where: { deletedAt: { not: null } },
+            where: { deletedAt: { not: null }, ...(BRANCH_BEARING_MODELS.has(e.model) ? branchFilter(allowedBranchIds) : {}) },
             orderBy: { deletedAt: 'desc' },
             take: 200,
           });
