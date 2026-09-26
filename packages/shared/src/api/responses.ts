@@ -3,6 +3,49 @@
 // يُعاد توليدُه بـ: npm run openapi:snapshot  (من apps/api)
 // والحارسُ خطوةُ openapi:check نفسُها — وصدقُه يشهد به scripts/response-truth.ts على التطبيق المبنيّ.
 
+/** ردٌّ — `BankAccountTransferResponse` في الخادم (ق-١٤٣٨). */
+export interface BankAccountTransferResponse {
+  kind: 'BANK_ACCOUNT';
+  fromBranchId: string | null;
+  toBranchId: string | null;
+  bank: BankRowResponse;
+}
+
+/** ردٌّ — `BankRowResponse` في الخادم (ق-١٤٣٨). */
+export interface BankRowResponse {
+  kind: 'CASH_BOX' | 'BANK_ACCOUNT' | 'LEGACY_UNDECLARED';
+  id: string;
+  name: string;
+  branchId: string | null;
+  accountId: string;
+  currency: string;
+  balance: string;
+  openingBalance: string;
+  openingDate: string;
+  archived: boolean;
+  transferredToId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** ردٌّ — `BankTransferEntriesResponse` في الخادم (ق-١٤٣٨). */
+export interface BankTransferEntriesResponse {
+  variance: string | null;
+  out: string | null;
+  in: string | null;
+}
+
+/** ردٌّ — `CashBoxTransferResponse` في الخادم (ق-١٤٣٨). */
+export interface CashBoxTransferResponse {
+  kind: 'CASH_BOX';
+  from: BankRowResponse;
+  to: BankRowResponse;
+  bookBalance: string;
+  countedAmount: string;
+  variance: string;
+  entries: BankTransferEntriesResponse;
+}
+
 /** ردٌّ — `PagedPosShiftResponse` في الخادم (ق-١٤٣٨). */
 export interface PagedPosShiftResponse {
   items: PosShiftWithTotalsResponse[];
