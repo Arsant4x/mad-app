@@ -19,8 +19,11 @@ import { TransferBankDto } from './dto/transfer-bank.dto';
 import { UpdateBankDto } from './dto/update-bank.dto';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { MSG } from '../common/i18n/messages';
+import { ApiCreatedResponse, ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
+import { BankAccountTransferResponse, CashBoxTransferResponse } from './dto/bank-responses.dto';
 
 @Controller('banks')
+@ApiExtraModels(BankAccountTransferResponse, CashBoxTransferResponse)
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('banks')
 export class BanksController {
@@ -151,6 +154,8 @@ export class BanksController {
    */
   @Post(':id/transfer')
   @OwnerOnly(MSG.bank_transfer_forbidden)
+  // اتّحادٌ مميَّزٌ بـ`kind` — صنفان في `oneOf` كتقرير الخصم في الكاشير، لا صنفٌ بحقولٍ اختيارية.
+  @ApiCreatedResponse({ schema: { oneOf: [{ $ref: getSchemaPath(BankAccountTransferResponse) }, { $ref: getSchemaPath(CashBoxTransferResponse) }] } })
   transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferBankDto) {
     return this.banksService.transfer(tenant.companyId, tenant.actorType, id, dto);
   }

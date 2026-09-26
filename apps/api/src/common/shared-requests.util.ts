@@ -1,5 +1,5 @@
 import type { OpenAPIObject } from '@nestjs/swagger';
-import { COUNTRY_MARKERS } from './country-literals.util';
+import { COUNTRY_MARKERS, SAUDI_UNIT_PATH_MARK } from './country-literals.util';
 
 /**
  * ⚖️ **خطّةُ الأنواع ③ — أجسامُ الطلب ووسائطُ الاستعلام مولَّدةٌ من وثيقة الواجهة لا مكتوبةٌ مرّتين** (`ق-١٤٠٤` · الخطّة
@@ -74,7 +74,7 @@ function fieldsOf(s: JsonSchema): string[] {
 }
 
 /** أسماءُ الأصناف في مخطّط — لإغلاق التعدّي ولتوجيه ما يشير إلى الوحدة. */
-function refsIn(s: JsonSchema | undefined, out = new Set<string>()): Set<string> {
+export function refsIn(s: JsonSchema | undefined, out = new Set<string>()): Set<string> {
   if (!s) return out;
   if (s.$ref) out.add(refName(s.$ref));
   for (const x of [...(s.allOf ?? []), ...(s.oneOf ?? []), ...(s.anyOf ?? [])]) refsIn(x, out);
@@ -113,6 +113,8 @@ export interface RenderedRequests {
   bodies: number;
   queries: number;
   unitNames: string[];
+  /** كلُّ ما رُسم — فالردودُ تستورده ولا تعرّفه مرّتين (④). */
+  names: string[];
 }
 
 /** يرسم الملفّين من الوثيقة — والحارسُ يرسم بالدالّة نفسِها ويقارن. */
@@ -183,5 +185,86 @@ export function renderSharedRequests(doc: OpenAPIObject): RenderedRequests {
     unit.length ? unit.map((d) => d.text).join('\n\n') : 'export {};',
     '',
   ].join('\n');
-  return { general: generalText, unit: unitText, bodies: decls.length, queries: queries.length, unitNames: unit.map((d) => d.name) };
+  return { general: generalText, unit: unitText, bodies: decls.length, queries: queries.length, unitNames: unit.map((d) => d.name), names: all.map((d) => d.name) };
+}
+
+interface ResponseOperation {
+  responses?: Record<string, { content?: Record<string, { schema?: JsonSchema }> }>;
+}
+
+export interface RenderedResponses {
+  general: string;
+  unit: string;
+  count: number;
+  unitNames: string[];
+}
+
+/**
+ * ⚖️ **خطّةُ الأنواع ④ — الردودُ المعلنةُ مولَّدةٌ بالأداة نفسِها** (`ق-١٤٣٨`): كلُّ صنفٍ يشير إليه ردُّ نجاحٍ (`2xx`) بـ`application/json`
+ * — وما يشير إليه بالتعدّي — يُرسَم واجهةً باسم صنفه، **إلا ما رُسم جسمَ طلب** (يُستورد من ملفّه فلا يُعرَّف مرّتين). والحدُّ السعوديُّ
+ * كما في الطلب: ما يحمل علامةً أو يشير إلى ما يحملها يُكتب في ملفّ الوحدة (`ق-١٣٥٠`).
+ *
+ * **وصدقُ المرسوم لا تشهد به الأداة** — يشهد به حارسُ الصدق الحيّ (`scripts/response-truth.ts`) الذي يطابق كلَّ ردٍّ بمخطّطه.
+ */
+export function renderSharedResponses(doc: OpenAPIObject, requestNames: ReadonlySet<string>, requestUnitNames: ReadonlySet<string>): RenderedResponses {
+  const schemas = (doc.components?.schemas ?? {}) as Record<string, JsonSchema>;
+  const names = new Set<string>();
+  const queue: string[] = [];
+  for (const item of Object.values(doc.paths ?? {})) {
+    for (const op of Object.values(item as Record<string, ResponseOperation>)) {
+      if (!op || typeof op !== 'object') continue;
+      for (const [code, res] of Object.entries(op.responses ?? {})) {
+        if (/^2\d\d$/.test(code)) for (const n of refsIn(res.content?.['application/json']?.schema)) queue.push(n);
+      }
+    }
+  }
+  while (queue.length) {
+    const n = queue.pop()!;
+    if (names.has(n) || requestNames.has(n) || !schemas[n]) continue;
+    names.add(n);
+    for (const r of refsIn(schemas[n])) queue.push(r);
+  }
+  const all = [...names].sort((a, b) => a.localeCompare(b, 'en')).map((n) => declarationOf(n, schemas[n], `ردٌّ — \`${n}\` في الخادم (ق-١٤٣٨).`));
+
+  const unitSet = new Set(all.filter((d) => d.saudi || [...d.refs].some((r) => requestUnitNames.has(r))).map((d) => d.name));
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const d of all) {
+      if (!unitSet.has(d.name) && [...d.refs].some((r) => unitSet.has(r))) {
+        unitSet.add(d.name);
+        grew = true;
+      }
+    }
+  }
+  const general = all.filter((d) => !unitSet.has(d.name));
+  const unit = all.filter((d) => unitSet.has(d.name));
+  const importsFrom = (decls: Declaration[], local: ReadonlySet<string>) => {
+    const refs = [...new Set(decls.flatMap((d) => [...d.refs]).filter((r) => !local.has(r)))].sort((a, b) => a.localeCompare(b, 'en'));
+    const lines: string[] = [];
+    const fromRequests = refs.filter((r) => requestNames.has(r) && !requestUnitNames.has(r));
+    const fromUnitRequests = refs.filter((r) => requestUnitNames.has(r));
+    const fromGeneralResponses = refs.filter((r) => names.has(r) && !unitSet.has(r));
+    if (fromRequests.length) lines.push(`import type { ${fromRequests.join(', ')} } from './requests';`);
+    if (fromUnitRequests.length) lines.push(`import type { ${fromUnitRequests.join(', ')} } from './${SAUDI_UNIT_PATH_MARK}-requests';`);
+    if (fromGeneralResponses.length) lines.push(`import type { ${fromGeneralResponses.join(', ')} } from './responses';`);
+    return lines.length ? [...lines, ''] : [];
+  };
+  const header = (what: string) => [
+    '// ⛔ مولَّدٌ — لا يُحرَّر بيد.',
+    `// المصدرُ: وثيقةُ الواجهة المبنيّة (buildOpenApiDocument بعد nest build) — ${what}`,
+    `// يُعاد توليدُه بـ: ${REGENERATE_REQUESTS_COMMAND}`,
+    '// والحارسُ خطوةُ openapi:check نفسُها — وصدقُه يشهد به scripts/response-truth.ts على التطبيق المبنيّ.',
+    '',
+  ];
+  const generalNames = new Set(general.map((d) => d.name));
+  const unitNames = new Set(unit.map((d) => d.name));
+  const generalText = [...header('الردودُ المعلنة (ق-١٤٣٨).'), ...importsFrom(general, generalNames), general.length ? general.map((d) => d.text).join('\n\n') : 'export {};', ''].join('\n');
+  const unitText = [
+    ...header('ما يحمل علامةً سعوديةً منها أو يشير إليها (ق-١٣٥٠: حدُّ الوحدة بالاسم).'),
+    ...importsFrom(unit, unitNames),
+    unit.length ? unit.map((d) => d.text).join('\n\n') : 'export {};',
+    '',
+  ].join('\n');
+  return { general: generalText, unit: unitText, count: all.length, unitNames: unit.map((d) => d.name) };
 }

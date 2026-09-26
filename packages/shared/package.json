@@ -10,6 +10,8 @@
     "./api/enums": "./src/api/enums.ts",
     "./api/zatca-enums": "./src/api/zatca-enums.ts",
     "./api/requests": "./src/api/requests.ts",
-    "./api/zatca-requests": "./src/api/zatca-requests.ts"
+    "./api/zatca-requests": "./src/api/zatca-requests.ts",
+    "./api/responses": "./src/api/responses.ts",
+    "./api/zatca-responses": "./src/api/zatca-responses.ts"
   }
 }
