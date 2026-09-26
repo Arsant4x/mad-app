@@ -2,12 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { BankKind } from '@prisma/client';
 
 /**
- * ⚖️ **ردُّ نقل صفّ البنك بين الفروع** (`ق-١٤٣١`) بأصنافٍ مسمّاة — مسارٌ دخل `main` (`#611`) بعد أن بُني مِسنَنُ الردود
- * (`ق-١٤٣٨`)، **والمِسنَنُ لا يزيد**: فكان إعلانُ ردِّه شرطَ دمج `#614` لا إضافتَه إلى القائمة بيد.
+ * ⚖️ **ردودُ البنوك بأصنافٍ مسمّاة** (`ق-١٤٥٠`: «الوحدةُ التالية البنوكُ ثم الموافقات» · خطّةُ الأنواع ④ — الوحدةُ الثانية بعد الكاشير).
+ * صفُّ البنك ونطاقُ رموزه وقائمتُه هنا، ونقلُه بين الفروع (`ق-١٤٣١`)؛ والتسويةُ البنكيةُ والإيداعاتُ وتسوياتُ الشبكة في ملفّاتها.
+ * ونقلُ الصفّ دخل `main` (`#611`) بعد أن بُني مِسنَنُ الردود (`ق-١٤٣٨`)، **والمِسنَنُ لا يزيد**: فكان إعلانُ ردِّه شرطَ دمج `#614`.
  *
  * **والحقولُ كما تُرسَل** (نمطُ `pos-responses.dto.ts`): المالُ (`Decimal`) نصٌّ على السلك، والتاريخُ نصُّ `ISO`. **والصنفُ حدٌّ أدنى**:
- * صفُّ البنك يُرسَل بأعمدته كلِّها، والمعلَنُ هنا ما يحمله كلُّ ردٍّ ويقرؤه القارئ. ⚠️ **ووحدةُ البنوك كلُّها هي التاليةُ لحارس
- * الصدق الحيّ** (`ق-١٤٥٠`) — فهذا الصنفُ يُطابَق حيّاً حين تُضاف، لا قبلها.
+ * صفُّ البنك يُرسَل بأعمدته كلِّها، والمعلَنُ هنا ما يحمله كلُّ ردٍّ ويقرؤه القارئ — **وفراغُه من المخطَّط لا من ردٍّ رُئي** (`String?`
+ * فارغٌ هنا وإن لم يُرَ فارغاً). **وحارسُ الصدق الحيّ** (`scripts/response-truth.ts`) يطابق كلَّ مسارٍ في الوحدة بردٍّ حقيقيّ.
  */
 export class BankRowResponse {
   id!: string;
@@ -16,6 +17,8 @@ export class BankRowResponse {
   @ApiProperty({ enum: BankKind })
   kind!: BankKind;
   branchId!: string | null;
+  // الآيبانُ اختياريٌّ عند الإنشاء ويُكتب فراغاً حين يُترك (`dto.iban || null`) — وتقرؤه الشاشةُ في القائمة والبحث.
+  iban!: string | null;
   accountId!: string;
   currency!: string;
   balance!: string;
@@ -25,6 +28,35 @@ export class BankRowResponse {
   transferredToId!: string | null;
   createdAt!: string;
   updatedAt!: string;
+}
+
+/** المغلَّفُ المرقَّم لقائمة البنوك (`?page=` — `pagedFindMany`)؛ وبلا `?page` مصفوفةٌ من الصفّ نفسِه. */
+export class PagedBankRowResponse {
+  items!: BankRowResponse[];
+  total!: number;
+  page!: number;
+  pageSize!: number;
+}
+
+/**
+ * **حالُ نطاق رموز الحسابات** (`bandStatus` — `accounts/code-bands.ts` · `ق-٢٩٥`): يُنذر قبل الاصطدام لا عنده.
+ * الاسمُ عامٌّ لا بنكيّ عمداً — فالشكلُ نفسُه لنطاق الأدراج (`GET /cash-drawers/code-band`) حين تُعلَن وحدتُه.
+ */
+export class CodeBandStatusResponse {
+  key!: string;
+  name!: string;
+  capacity!: number;
+  remaining!: number;
+  /** الرمزُ التالي — فارغٌ حين امتلأ النطاق. */
+  next!: string | null;
+  warnThreshold!: number;
+  warn!: boolean;
+}
+
+/** مرجعٌ مسمّى (`{ id, name }`) — الدرجُ والبنكُ كما يُضمّان إلى مستندات الوحدة (`select: { id, name }`). */
+export class BanksRefResponse {
+  id!: string;
+  name!: string;
 }
 
 /** الحسابُ البنكيّ — للقادم وحدَه: يتغيّر فرعُه ولا عدَّ ولا قيد. */
