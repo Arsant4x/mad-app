@@ -110,14 +110,15 @@ export async function readClearedDelivery(
       no: true,
       zatcaStatus: true,
       zatcaClearedXml: true,
+      zatcaSignedXml: true,
       customer: { select: { kind: true, vatNumber: true, country: true } },
       lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
     },
   });
   if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
-  if (invoice.zatcaClearedXml) {
-    // والاسمُ من المستند نفسِه؛ وإن غابت إحدى قيمه الأربع سُمّي برقمه وحدَه (حدٌّ معلَن).
-    return { fileName: zatcaFileName(invoice.zatcaClearedXml) ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`, xml: invoice.zatcaClearedXml };
+  const deliverable = invoice.zatcaClearedXml ?? invoice.zatcaSignedXml;
+  if (deliverable) {
+    return { fileName: `${invoice.no}.xml`, xml: deliverable };
   }
   if (invoiceTypeFor(invoice.customer, invoice.lines) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
   if (invoice.zatcaStatus !== 'CLEARED') throw new ConflictException(formatMessage(MSG.invoice_xml_not_cleared, { no: invoice.no }));
