@@ -537,9 +537,12 @@ export class ContractsService {
         // settles at is the realized FX gain/loss.
         // ⚖️ (`ق-١٥٠٣`/ب · ٣-د) **ولا يُقبض الإيجارُ بعملةٍ غير عملة العقد**: كان يمرّ فيُسدَّد القسطُ بمقياسٍ آخر ويُحوَّل
         //    المبلغُ إلى عملة العقد بقسمة سعرين، ولا فرقَ صرفٍ يُعرف له (القياس B5). والقائمُ «`0`» على التطوير والمنشور
-        //    (`ق-١٥٠٤`) — فالرفضُ لا يمسّ صفّاً. والرموزُ بلا اعتبارٍ لحالة الأحرف، والمخزَّنُ عملةُ العقد بعينها.
+        //    (`ق-١٥٠٣`/ج) — فالرفضُ لا يمسّ صفّاً. والرموزُ بلا اعتبارٍ لحالة الأحرف، والمخزَّنُ عملةُ العقد بعينها.
         const requested = dto.currency?.trim();
-        const payCurrency = requested || contract.currency;
+        if (requested && requested.toUpperCase() !== contract.currency.trim().toUpperCase()) {
+          throw new BadRequestException(formatMessage(MSG.rent_payment_currency_mismatch, { payment: requested, contract: contract.currency }));
+        }
+        const payCurrency = contract.currency;
         const payRate = dto.exchangeRate ?? Number(contract.exchangeRate);
 
         const discount = dto.discount ?? 0;
