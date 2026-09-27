@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { existingReservedAccount, getOrCreateAccount } from './inventory-accounts.util';
 
 /**

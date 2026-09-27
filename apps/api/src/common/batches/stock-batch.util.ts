@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { randomUUID } from 'node:crypto';
 import { formatMessage, MSG } from '../i18n/messages';
 

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { Employee, Prisma } from '@prisma/client';
+import { Employee, Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { blindIndex, decryptField, encryptField } from '../common/crypto/field-cipher.util';
 import { normalizeIban, normalizeIdentifier } from '../common/identity/identifiers.util';

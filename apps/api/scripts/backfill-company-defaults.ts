@@ -12,7 +12,7 @@
  *   npx ts-node scripts/backfill-company-defaults.ts          # جافّ (لا كتابة)
  *   npx ts-node scripts/backfill-company-defaults.ts --apply  # تنفيذ
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { createCompanyDefaults } from '../src/companies/company-defaults';
 
 const prisma = new PrismaClient();

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCompanyProfileDto } from './dto/update-company-profile.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';

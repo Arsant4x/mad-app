@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { PlatformDecisionAction, PlatformRole } from '@prisma/client';
+import { PlatformDecisionAction, PlatformRole } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import request from 'supertest';
 import { PrismaService } from '../src/prisma/prisma.service';

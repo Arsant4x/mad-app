@@ -1,6 +1,6 @@
 import { readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 
 /**
  * `ق-٢٠٨` — **الحارسُ الحيّ يتحقّق أن القاعدة على آخر هجرة قبل أن يحكم.**

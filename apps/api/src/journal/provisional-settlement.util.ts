@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { round2, roundTo } from '../common/money/rounding';
 import { allocationOf, raiseLayerCost, recordCostShares, type CostAllocation, type CostShareNode } from '../purchases/layer-cost-allocation.util';
 

@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import { CustomerKind, InvoiceDocType, InvoiceStatus, PosCardVerification, PosPaymentAttemptStatus, PosPaymentResolution, PosShiftStatus, TaxCategory } from '@prisma/client';
+import { CustomerKind, InvoiceDocType, InvoiceStatus, PosCardVerification, PosPaymentAttemptStatus, PosPaymentResolution, PosShiftStatus, TaxCategory } from '@mad-app/db';
 // ⚖️ الحدُّ الوحيد بين النواة والوحدة في ردود الكاشير (`§3.8` · `ق-١٣٥٠`) — دَينٌ معلَنٌ بحجّته في `docs/country-literals-debt.json`.
 import { PosClearanceResponse } from './zatca-receipt-response.dto';
 

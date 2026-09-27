@@ -1,4 +1,4 @@
-import { PlatformDecisionAction } from '@prisma/client';
+import { PlatformDecisionAction } from '@mad-app/db';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 /**

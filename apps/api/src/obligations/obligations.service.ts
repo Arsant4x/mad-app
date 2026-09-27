@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
@@ -11,7 +11,7 @@ import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallme
 import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, previousVatPeriod, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
 import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, filedChangeNote, judgeCorrection } from '../common/vat/return-correction.util';
 import { annualSettlement, applyProportionalDeduction, type InputVatBuckets, proportionalRatio } from '../common/vat/proportional-deduction.util';
-import type { InputVatUse } from '@prisma/client';
+import type { InputVatUse } from '@mad-app/db';
 import { VatDeclarationQueryDto } from './dto/vat-declaration-query.dto';
 import { VatFiledDto } from './dto/vat-filed.dto';
 import { DeclareVatRatioDto } from './dto/vat-ratio.dto';

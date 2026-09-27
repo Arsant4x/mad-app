@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter } from '../branches/branch-scope.util';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayStartOf } from '../common/wall-clock.util';

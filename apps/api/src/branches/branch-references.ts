@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { formatMessage, MessageKey, MSG } from '../common/i18n/messages';
 
 /**

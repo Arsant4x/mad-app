@@ -16,7 +16,7 @@
  *
  * Run from apps/api:  npx ts-node scripts/backfill-opening-entries.ts
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
 
 const prisma = new PrismaClient();

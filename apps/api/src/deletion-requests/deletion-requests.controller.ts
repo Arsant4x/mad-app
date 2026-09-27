@@ -6,7 +6,7 @@ import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
-import { PlatformRole } from '@prisma/client';
+import { PlatformRole } from '@mad-app/db';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { AllowWhileClosed } from '../common/tenant/allow-while-closed.decorator';

@@ -153,7 +153,7 @@ function findTypeAlias(sf: ts.SourceFile, name: string): ts.TypeAliasDeclaration
   return sf.statements.find((s): s is ts.TypeAliasDeclaration => ts.isTypeAliasDeclaration(s) && s.name.text === name);
 }
 
-/** سياقُ الحلّ: ما مُرّ به (فلا دوران) · وتعداداتُ `Prisma` لاسمٍ مستوردٍ من `@prisma/client`. */
+/** سياقُ الحلّ: ما مُرّ به (فلا دوران) · وتعداداتُ `Prisma` لاسمٍ مستوردٍ من `@mad-app/db`. */
 export interface ResolveContext {
   seen: Set<string>;
   prismaEnums?: Map<string, string[]>;
@@ -163,7 +163,7 @@ const newContext = (prismaEnums?: Map<string, string[]>): ResolveContext => ({ s
 
 /**
  * قيمُ نوعٍ **حرفيّ**: اتّحادُ نصوص (`null`/`undefined` يُسقطان) · `(typeof X)[number]` على مصفوفةٍ ثابتة · `Exclude<X, …>` ·
- * أو اسمُ نوعٍ آخر في الملفّ نفسِه أو مستوردٌ منه (ومن `@prisma/client` تعدادُه). وغيرُ ذلك `null` — فالنوعُ ليس تعداداً.
+ * أو اسمُ نوعٍ آخر في الملفّ نفسِه أو مستوردٌ منه (ومن `@mad-app/db` تعدادُه). وغيرُ ذلك `null` — فالنوعُ ليس تعداداً.
  */
 export function typeValues(sf: ts.SourceFile, node: ts.TypeNode | undefined, ctx: ResolveContext = newContext()): string[] | null {
   if (!node) return null;
@@ -197,7 +197,7 @@ export function typeValues(sf: ts.SourceFile, node: ts.TypeNode | undefined, ctx
   return null;
 }
 
-/** قيمُ نوعٍ مسمّى — في الملفّ نفسِه، أو عبر استيرادٍ أو إعادةِ تصدير (نسبيّين أو من الحزمة المشتركة)، أو تعدادٌ من `@prisma/client`. */
+/** قيمُ نوعٍ مسمّى — في الملفّ نفسِه، أو عبر استيرادٍ أو إعادةِ تصدير (نسبيّين أو من الحزمة المشتركة)، أو تعدادٌ من `@mad-app/db`. */
 export function namedTypeValues(sf: ts.SourceFile, name: string, ctx: ResolveContext = newContext()): string[] | null {
   const key = `${sf.fileName}#${name}`;
   if (ctx.seen.has(key)) return null;
@@ -237,7 +237,7 @@ export function resolveSpecifier(fromFile: string, spec: string): string | null 
 }
 
 /**
- * أين يعيش اسمٌ مستورد: الملفُّ المحلول والاسمُ فيه (`import { A as B }` ⟵ `A`) — أو `prisma` إن كان من `@prisma/client`.
+ * أين يعيش اسمٌ مستورد: الملفُّ المحلول والاسمُ فيه (`import { A as B }` ⟵ `A`) — أو `prisma` إن كان من `@mad-app/db`.
  */
 export function importedFrom(sf: ts.SourceFile, local: string): { file?: string; prisma?: boolean; name: string } | null {
   for (const st of sf.statements) {
@@ -246,7 +246,8 @@ export function importedFrom(sf: ts.SourceFile, local: string): { file?: string;
     for (const el of st.importClause.namedBindings.elements) {
       if (el.name.text !== local) continue;
       const name = (el.propertyName ?? el.name).text;
-      if (spec === '@prisma/client') return { prisma: true, name };
+      // (`ق-١٥٠٤` — ب٢) العميلُ المولَّد لكلّ نسخةٍ يُستورد بـ`@mad-app/db`؛ و`@prisma/client` ممنوعٌ في `apps/api` بحارسه.
+      if (spec === '@mad-app/db') return { prisma: true, name };
       const file = resolveSpecifier(sf.fileName, spec);
       return file ? { file, name } : null;
     }

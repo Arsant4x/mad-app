@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateBankDto } from './dto/create-bank.dto';

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { PlatformDecisionStatus, PlatformRole } from '@prisma/client';
+import { PlatformDecisionStatus, PlatformRole } from '@mad-app/db';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload } from '../auth/types';

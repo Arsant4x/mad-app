@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { toBaseAmount } from '../currency/base-amount.util';
 import { formatMessage, MessageKey, MSG } from '../i18n/messages';
 import { formatMoney, round2 } from '../money/rounding';

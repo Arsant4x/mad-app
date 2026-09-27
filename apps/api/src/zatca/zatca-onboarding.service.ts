@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
-import { ZatcaEnvironment, ZatcaOnboardingStatus } from '@prisma/client';
+import { ZatcaEnvironment, ZatcaOnboardingStatus } from '@mad-app/db';
 import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { CERT_EXPIRY_WARN_DAYS, certificateNotAfter, daysUntil } from './certificate-expiry.util';

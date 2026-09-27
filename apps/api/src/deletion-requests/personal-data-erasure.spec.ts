@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { ARCHIVE_WINDOW_DAYS } from '../export/company-archive.service';
 import { ERASED_FIELDS, KEPT_FIELDS, PERSONAL_FIELD_NAMES, REOPEN_WINDOW_DAYS, reopenUntil } from './personal-data-erasure.service';
 

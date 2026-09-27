@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { assertBranchAllowed, assertBranchIdsOpen } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 

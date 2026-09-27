@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { createHash } from 'node:crypto';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';

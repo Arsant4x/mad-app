@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { NotificationKind, Prisma, SupportAccessGrant } from '@prisma/client';
+import { NotificationKind, Prisma, SupportAccessGrant } from '@mad-app/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';

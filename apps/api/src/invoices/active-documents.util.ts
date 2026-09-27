@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * ⚖️ **مصدرُ الاستثناء الواحد** (`ق-٩٦٧/١`): المردودةُ التي **صدر بدلُها** تخرج من الإقرار

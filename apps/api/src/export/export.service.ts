@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { TENANT_SCOPED_MODELS } from '../common/tenant/tenant-scope.extension';
 import { PrismaService } from '../prisma/prisma.service';

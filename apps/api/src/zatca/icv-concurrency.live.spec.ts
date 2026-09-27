@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { AppModule } from '../app.module';
 import { MSG } from '../common/i18n/messages';
 import { regionForNewCompany } from '../common/region/regions';

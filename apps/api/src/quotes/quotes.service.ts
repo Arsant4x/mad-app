@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Quote, QuoteStatus } from '@prisma/client';
+import { Prisma, Quote, QuoteStatus } from '@mad-app/db';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { computeDocumentTotals, type MoneyLine } from '../common/money/totals';

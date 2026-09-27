@@ -1,4 +1,4 @@
-import { ActorType } from '@prisma/client';
+import { ActorType } from '@mad-app/db';
 
 /** Claims carried inside the signed access token. */
 export interface JwtPayload {

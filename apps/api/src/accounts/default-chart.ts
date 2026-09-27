@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
 import { RETAINED_EARNINGS_CODE, RETAINED_EARNINGS_NAME } from '../fiscal/year-closing.util';
 import { WRITEOFF_EXPENSE_ACCOUNT_CODE, WRITEOFF_EXPENSE_ACCOUNT_NAME } from '../journal/writeoff-account.util';

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { LEDGER_LINES, NUMBERED_DOCUMENTS, REAL_ESTATE_MODELS, retentionDeadline } from '../companies/company-movement.service';
 
 /**

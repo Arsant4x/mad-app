@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, GoneException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { CompaniesService } from '../companies/companies.service';
 import { CompanyMovementService, retentionDeadline } from '../companies/company-movement.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { resolveBranchId } from '../branches/branch-scope.util';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';

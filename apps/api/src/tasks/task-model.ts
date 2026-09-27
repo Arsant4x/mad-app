@@ -1,4 +1,4 @@
-import { TaskAssigneeKind, TaskPriority } from '@prisma/client';
+import { TaskAssigneeKind, TaskPriority } from '@mad-app/db';
 import { ALLOWED_SCREENS, ScreenAction } from '../templates/screens';
 
 /**

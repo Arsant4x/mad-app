@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { AuditService } from '../audit/audit.service';
 import { CONTACT_FIELD_NAMES } from '../common/privacy/personal-fields';
 import { CompaniesService } from '../companies/companies.service';

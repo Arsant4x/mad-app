@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Prisma, TaxCategory } from '@prisma/client';
+import type { Prisma, TaxCategory } from '@mad-app/db';
 import { MSG } from '../i18n/messages';
 import { EXEMPTION_REASONS, exemptionReasonByCode, OUT_OF_SCOPE_REASON_CODE, OUT_OF_SCOPE_REASON_MAX, OUT_OF_SCOPE_REASON_MIN } from './exemption-reasons';
 import { STANDARD_VAT_RATE } from './standard-rate';

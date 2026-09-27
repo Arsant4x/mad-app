@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma, RentAccrualKind } from '@prisma/client';
+import { Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { postDeferredToOtherIncomeEntry, postRentAccrualEntry, postRentAccrualReversalEntry } from './auto-posting.util';

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { consumeFifo, expiredSaleRefusal, ProvisionalCostSource, readConsumptionView, refusesExpiredSale, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
 import { money, qty } from '../common/money/text';

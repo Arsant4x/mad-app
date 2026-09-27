@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 import { EventBus, type DomainEvent } from './event-bus';
 
 const tx = {} as Prisma.TransactionClient;

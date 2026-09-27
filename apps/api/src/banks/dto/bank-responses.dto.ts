@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BankKind } from '@prisma/client';
+import { BankKind } from '@mad-app/db';
 
 /**
  * ⚖️ **ردودُ البنوك بأصنافٍ مسمّاة** (`ق-١٤٥٠`: «الوحدةُ التالية البنوكُ ثم الموافقات» · خطّةُ الأنواع ④ — الوحدةُ الثانية بعد الكاشير).

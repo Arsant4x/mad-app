@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 
 /**
  * ⭐ **الوحدة الافتراضية (`EGS`) — الويب الإداري** (`ق-١٦٩` · `ق-١٧١`).

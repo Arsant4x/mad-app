@@ -1,4 +1,4 @@
-import { IntegrationKind } from '@prisma/client';
+import { IntegrationKind } from '@mad-app/db';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString } from 'class-validator';
 
 /**

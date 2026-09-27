@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { branchFilter } from '../branches/branch-scope.util';
 import { money } from '../common/money/text';

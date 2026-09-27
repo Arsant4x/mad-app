@@ -10,8 +10,14 @@
 // globally-unique usernames. Each identity points to exactly one profile row
 // (PlatformAdmin | Company | CompanyUser).
 
+/// ⚖️ **عميلُ Prisma لكلِّ نسخة عمل** (`ق-١٥٠٤` — ب٢، ويُعاد به فتحُ `ق-٤١٧`): يُولَّد في `apps/api/node_modules/@mad-app/db`
+/// **داخل النسخة نفسِها** ويُستورد بـ`@mad-app/db` لا `@prisma/client`. فقاعدةُ الحلّ القياسية في Node (أقربُ `node_modules`
+/// صعوداً) توصل كلَّ نسخةٍ إلى عميلها قبل وصلة الجذر المشتركة — **فلا يكسر توليدٌ في نسخةٍ نسخةً أخرى**، وقد وقع أحدَ عشرَ
+/// مرّةً في يومٍ واحد (`measure-prisma-client-per-worktree.md` §2.7). وحارسٌ يمنع عودةَ `@prisma/client` في `apps/api`
+/// (`common/prisma-client-import.spec.ts`)، والكاشفُ القائم (`test/prisma-client-fingerprint.ts`) يقرأ هذا العميلَ نفسَه.
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/@mad-app/db"
 }
 
 datasource db {

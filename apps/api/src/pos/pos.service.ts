@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PosCardVerification, Prisma } from '@prisma/client';
+import { PosCardVerification, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { moneyEquals } from '../common/money/allocation';

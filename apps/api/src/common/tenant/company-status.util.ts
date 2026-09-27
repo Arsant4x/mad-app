@@ -1,4 +1,4 @@
-import { AccountStatus } from '@prisma/client';
+import { AccountStatus } from '@mad-app/db';
 
 export interface StatusBearing {
   status: AccountStatus;

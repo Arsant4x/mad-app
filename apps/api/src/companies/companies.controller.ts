@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
-import { PlatformRole } from '@prisma/client';
+import { PlatformRole } from '@mad-app/db';
 import { CompaniesService } from './companies.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';

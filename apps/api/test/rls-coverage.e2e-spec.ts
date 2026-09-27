@@ -1,7 +1,7 @@
 // هذا الاختبار لا يُقلع AppModule (لا يحتاج HTTP) — فيلزمه تحميل .env بنفسه،
 // إذ إن بقية اختبارات e2e تحصل على DATABASE_URL ضمناً عبر ConfigModule.
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { TENANT_SCOPED_MODELS } from '../src/common/tenant/tenant-scope.extension';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (1.4 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.

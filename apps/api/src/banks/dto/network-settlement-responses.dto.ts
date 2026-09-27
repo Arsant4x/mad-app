@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { NetworkSettlementStatus } from '@prisma/client';
+import { NetworkSettlementStatus } from '@mad-app/db';
 import { BanksRefResponse } from './bank-responses.dto';
 
 /**

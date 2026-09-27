@@ -62,10 +62,13 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 [ -n "$root" ] || exit 0
 
 env_target="$root/apps/api/.env.test"
+# ③ (ق-١٥٠٤ — ب٢) عميلُ Prisma لهذه النسخة — يُولَّد داخلها لا في الجذر المشترك.
+client_target="$root/apps/api/node_modules/@mad-app/db/index.js"
+schema="$root/apps/api/prisma/schema.prisma"
 
 # ── الشرط ١: الخروج المبكر ────────────────────────────────────────────────
-# اختباران على نظام الملفات ثم انصراف. لا `git` ولا شبكة ولا نسخ.
-if [ -e "$root/node_modules" ] && [ -e "$env_target" ]; then
+# ثلاثةُ اختباراتٍ على نظام الملفات ثم انصراف. لا `git` ولا شبكة ولا نسخ.
+if [ -e "$root/node_modules" ] && [ -e "$env_target" ] && { [ -e "$client_target" ] || [ ! -f "$schema" ]; }; then
   exit 0
 fi
 
@@ -118,6 +121,19 @@ fi
 if [ ! -e "$env_target" ] && [ -f "$root/apps/api/.env.test.example" ]; then
   cp "$root/apps/api/.env.test.example" "$env_target" &&
     echo "تهيئة الشجرة: نُسخت apps/api/.env.test من .env.test.example"
+fi
+
+# ── ③ عميلُ Prisma لهذه النسخة (ق-١٥٠٤ — ب٢، بقرار المالك: «والخطّافُ يولّد العميلَ عند إنشاء النسخة») ──
+# قبل ب٢ كان عميلٌ واحدٌ في الجذر المشترك يكسر فيه توليدُ نسخةٍ نسخةً أخرى. والآن لكلّ نسخةٍ عميلُها في
+# apps/api/node_modules/@mad-app/db — **فنسخةٌ تولد بلا عميلٍ تسقط أوّلُ تشغيلاتها** بـMODULE_NOT_FOUND. ويطول
+# (مقيسٌ في نسخةٍ على هذا الجهاز ١٦٥ ث)، فيُعلَن قبل أن يبدأ وبعد أن ينتهي — والفشلُ يُعلَن ولا يوقف الإنشاء.
+if [ ! -e "$client_target" ] && [ -f "$schema" ] && [ -e "$root/node_modules" ]; then
+  echo "تهيئة الشجرة: يُولَّد عميلُ Prisma لهذه النسخة (apps/api/node_modules/@mad-app/db) — قد يطول دقائق …"
+  if (cd "$root/apps/api" && npx prisma generate >/dev/null 2>&1) && [ -e "$client_target" ]; then
+    echo "تهيئة الشجرة: وُلّد عميلُ Prisma لهذه النسخة"
+  else
+    echo "تهيئة الشجرة: ✖ تعذّر توليدُ عميل Prisma — شغّل من apps/api: npx prisma generate"
+  fi
 fi
 
 exit 0

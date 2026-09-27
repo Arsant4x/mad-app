@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';

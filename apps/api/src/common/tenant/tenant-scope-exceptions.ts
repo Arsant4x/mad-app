@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 
 /**
  * ⚖️ **إعلاناتُ تغطية العزل — بالطبقة التي تحمي ولماذا تكفي** (`ق-٦٥٢`).

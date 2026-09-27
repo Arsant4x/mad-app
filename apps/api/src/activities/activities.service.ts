@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';

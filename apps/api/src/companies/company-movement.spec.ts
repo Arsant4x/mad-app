@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { stripComments } from '../common/source-scan.util';
 import { LEDGER_LINES, NUMBERED_DOCUMENTS, REAL_ESTATE_MODELS, RETENTION_YEARS, movementSources, refusedByDatabase, retentionDeadline } from './company-movement.service';
 

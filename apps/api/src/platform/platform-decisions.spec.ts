@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
-import { PlatformDecisionAction } from '@prisma/client';
+import { PlatformDecisionAction } from '@mad-app/db';
 import { sourceFiles, stripComments } from '../common/source-scan.util';
 import { PLATFORM_ACTION_LABEL } from './platform-decisions.service';
 

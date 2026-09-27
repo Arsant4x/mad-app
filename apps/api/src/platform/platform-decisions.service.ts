@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PlatformDecision, PlatformDecisionAction, PlatformDecisionStatus, Prisma } from '@prisma/client';
+import { PlatformDecision, PlatformDecisionAction, PlatformDecisionStatus, Prisma } from '@mad-app/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 

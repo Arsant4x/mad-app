@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { NonDeductibleVatPlacement, NonDeductibleVatTrigger, Prisma } from '@prisma/client';
+import { NonDeductibleVatPlacement, NonDeductibleVatTrigger, Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2, roundTo } from '../common/money/rounding';
 import { postNonDeductibleVatEntry } from '../journal/auto-posting.util';

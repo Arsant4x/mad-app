@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { IntegrationKind, Prisma } from '@prisma/client';
+import { IntegrationKind, Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { DEFAULT_LANGUAGE, formatMessage, MSG, resolveMessage } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
