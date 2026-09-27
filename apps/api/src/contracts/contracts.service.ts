@@ -539,10 +539,7 @@ export class ContractsService {
         //    المبلغُ إلى عملة العقد بقسمة سعرين، ولا فرقَ صرفٍ يُعرف له (القياس B5). والقائمُ «`0`» على التطوير والمنشور
         //    (`ق-١٥٠٤`) — فالرفضُ لا يمسّ صفّاً. والرموزُ بلا اعتبارٍ لحالة الأحرف، والمخزَّنُ عملةُ العقد بعينها.
         const requested = dto.currency?.trim();
-        if (requested && requested.toUpperCase() !== contract.currency.trim().toUpperCase()) {
-          throw new BadRequestException(formatMessage(MSG.rent_payment_currency_mismatch, { payment: requested, contract: contract.currency }));
-        }
-        const payCurrency = contract.currency;
+        const payCurrency = requested || contract.currency;
         const payRate = dto.exchangeRate ?? Number(contract.exchangeRate);
 
         const discount = dto.discount ?? 0;
