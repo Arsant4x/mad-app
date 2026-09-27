@@ -341,7 +341,6 @@ export class PosPaymentAttemptsService {
      * لا يرتدّ)، ثم يسقط الخاسرُ على تفرّد معرّف البيع أو على الانتقال المشروط **بعد** ترقيمه ⟸ رقمُ فاتورةٍ ضريبيةٍ محترق.
      * والآن ينتظر الخاسرُ هنا حتى يلتزم الرابح، ثم يقرأ «مكتملة» فيعود `null` قبل أيّ ترقيم.
      */
-    await tx.$queryRaw`SELECT "id" FROM "pos_payment_attempts" WHERE "id" = ${id} FOR UPDATE`;
     const attempt = await tx.posPaymentAttempt.findUniqueOrThrow({ where: { id } });
     if (attempt.status !== 'APPROVED') return null;
     const snapshot = attempt.sale as unknown as SaleSnapshot;
