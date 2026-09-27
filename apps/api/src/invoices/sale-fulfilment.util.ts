@@ -175,7 +175,6 @@ export async function assertSaleNotBlockedByExpiry(tx: Tx, args: SaleExpiryCheck
     const view = await readConsumptionView(tx, { productId, warehouseId: stock.warehouseId, exit: 'SALE', date: args.date });
     if (refusesExpiredSale(view, qty)) throw expiredSaleRefusal(view.productName, productId, view.unexpiredAvailable, qty);
   }
->>>>>>> fix/expired-batch-before-numbering
 }
 
 /**
