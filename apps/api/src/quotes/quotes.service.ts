@@ -229,16 +229,30 @@ export class QuotesService {
    *
    * كلّه معاملة واحدة (قاعدة الموجز 4): الفحوص، فالفاتورة عبر نقطة الدخول
    * المشتركة (فيسري الترحيل والضريبة والترقيم تلقائياً — قاعدة 11)، فختم
-   * العرض بشرطِ ما-زال-قابلاً — الخاسر في سباق النقرتين يتراجع كلياً
-   * (فاتورته تُلغى مع المعاملة) ويعيد 409 باسم فاتورة الفائز (قرار 6.12).
+   * العرض بشرطِ ما-زال-قابلاً — الخاسر في سباق النقرتين ينتظر على قفل صفّ العرض
+   * ثم يعيد 409 باسم فاتورة الفائز **قبل أن يُرقَّم** (قرار 6.12 · `ق-١٤٩٠`)؛
+   * والختمُ المشروطُ طبقةٌ ثانية تُرجع المعاملةَ كلَّها إن فات القفلَ مسارٌ.
    */
   convert(companyId: string, allowedBranchIds: string[] | 'all', id: string, credit: CreditContext) {
     return retryOnUniqueConflict(async () => {
       try {
         return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-          // بترتيبها المعلَن — فالفاتورةُ المحوَّلة تُرقَّم بترتيب العرض لا بترتيب القرص (`ق-١٤١٢`).
           // والفرعُ أوّلاً (`ق-١٤٤٠`): عرضُ فرعٍ آخر 404 لا 403 الفرعِ ولا 409 المحوَّلِ/المنقضي التي تكشف رقمَ فاتورته وتاريخَه.
-          const quote = await tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { lines: LINE_ORDER } });
+          const visible = await tx.quote.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, select: { id: true } });
+          if (!visible) throw new NotFoundException(MSG.quote_not_found);
+
+          /**
+           * ⚖️ **صفُّ العرض يُقفل قبل فحص حاله، وحالُه تُقرأ بعد القفل** (`ق-١٤٩٠` · INV-⑤).
+           *
+           * كانت القراءةُ بلا قفل: نقرتان متزامنتان تقرآن «مسوّدة» معاً، فتُرقَّم فاتورتان على منفذ العدّاد المستقلّ
+           * (والرقمُ لا يرتدّ — `sequence-allocator.ts`)، ثم يسقط الخاسرُ على الختم المشروط أدناه **بعد** ترقيمه ⟸
+           * **رقمُ فاتورةٍ ضريبيةٍ محترقٌ في كل نقرةٍ مزدوجة**. والآن ينتظر الخاسرُ هنا حتى يلتزم الفائز، ثم يقرأ
+           * «محوَّل» فيُردّ `409` **قبل** الترقيم. والختمُ المشروطُ باقٍ طبقةً ثانية: هذا يسمّي مبكّراً، وذاك يمنع.
+           */
+          await tx.$queryRaw`SELECT "id" FROM "quotes" WHERE "id" = ${id} FOR UPDATE`;
+          // بترتيبها المعلَن — فالفاتورةُ المحوَّلة تُرقَّم بترتيب العرض لا بترتيب القرص (`ق-١٤١٢`).
+          // وعرضٌ حُذف بين قراءة الرؤية والقفل (حذفٌ التزم والقفلُ ينتظره) لا صفَّ له بعد القفل ⟸ `404` مسمّى لا `P2025` خام.
+          const quote = await tx.quote.findUnique({ where: { id }, include: { lines: LINE_ORDER } });
           if (!quote) throw new NotFoundException(MSG.quote_not_found);
 
           if (quote.status === 'CONVERTED') {

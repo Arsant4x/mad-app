@@ -17,6 +17,7 @@ import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import {
+  CASH_ACCOUNT_CODE,
   NETWORK_RECEIVABLE_CODE,
   NETWORK_RECEIVABLE_NAME,
   getOrCreateAccountByCode,
@@ -613,6 +614,15 @@ export class PosService {
       // صفّ دفعة لكل طريقة: البيع البسيط جزءٌ واحد بكامل المبلغ، والمقسّم كما فصّله الكاشير.
       const parts: SalePart[] = dto.paymentMethod === 'SPLIT' ? dto.payments!.map((p) => ({ method: p.method, amount: p.amount })) : [{ method: dto.paymentMethod, amount: total }];
       const cardParts = parts.filter((p) => p.method === 'CARD');
+      /**
+       * ⚖️ **ونقدُ البيع يُرحَّل إلى درج المناوبة، و`1000` حين لا درجَ لها** (`ق-١٤٩٠` · INV-⑥) — فيُفحص حسابُه هنا
+       * بجوار حسابات الفاتورة أعلاه، **قبل أيّ شحنٍ أو ترقيم**. كان يُرفض عند ترحيل سند التحصيل في `completeSaleWithinTx`
+       * بعد أن رُقّمت الفاتورةُ وسندُها فيحترق الرقمان؛ وفي محاولة الدفع بعد أن قُبض مالُ البطاقة. والشرطُ هو شرطُ
+       * الترحيل نفسُه: نقدٌ موجبٌ (`recordPosReceipt` يتخطّى الصفر) ولا حسابَ درجٍ للمناوبة (`shiftDrawerAccountId`
+       * — الدالّةُ التي يرحّل بها الإتمام). وفحصُ الترحيل باقٍ طبقةً ثانية لحسابٍ يُحذف بين التحضير والإتمام.
+       */
+      const cashAmount = round2(parts.filter((p) => p.method === 'CASH').reduce((sum, p) => sum + p.amount, 0));
+      if (cashAmount > 0 && !(await this.shiftDrawerAccountId(tx, shift.drawerId))) await assertPostingAccounts(tx, [CASH_ACCOUNT_CODE]);
       return {
         shiftId: shift.id,
         shiftBranchId: shift.branchId,
@@ -643,6 +653,17 @@ export class PosService {
     if (prepared.cardParts > 1) throw new BadRequestException(MSG.pos_card_single_part);
     if (!reference) throw new BadRequestException(MSG.pos_card_device_reference_required);
     return { verification: 'DEVICE_REFERENCE', deviceReference: reference };
+  }
+
+  /**
+   * حسابُ درج المناوبة — إليه يدخل نقدُ البيع (`ق-٣٠٩`)؛ و`null` لمناوبةٍ بلا درج (سبقت موجةَ الأدراج، أو منشأةٌ لم تُنشئ
+   * درجاً بعد) فيسقط النقدُ إلى `1000`. **مصدرٌ واحد للفحص والترحيل** (`ق-١٤٩٠`): التحضيرُ يسأل به قبل الترقيم،
+   * والإتمامُ يرحّل به — فلا يفترق ما فُحص عمّا يُرحَّل.
+   */
+  private async shiftDrawerAccountId(tx: Prisma.TransactionClient, drawerId: string | null): Promise<string | null> {
+    if (!drawerId) return null;
+    const drawer = await tx.cashDrawer.findUnique({ where: { id: drawerId }, select: { accountId: true } });
+    return drawer?.accountId ?? null;
   }
 
   /**
@@ -780,8 +801,7 @@ export class PosService {
       });
       // حسابُ درج المناوبة — إليه يدخل نقدُ البيع (ق-٣٠٩). و`null` لمناوبةٍ سبقت موجةَ الأدراج: تسقط إلى `1000` بإعلانٍ في مُرحِّلها.
       const shift = await tx.posShift.findUniqueOrThrow({ where: { id: prepared.shiftId }, select: { drawerId: true } });
-      const drawer = shift.drawerId ? await tx.cashDrawer.findUnique({ where: { id: shift.drawerId }, select: { accountId: true } }) : null;
-      const drawerAccountId = drawer?.accountId ?? null;
+      const drawerAccountId = await this.shiftDrawerAccountId(tx, shift.drawerId);
       const shiftBranchId = prepared.shiftBranchId;
 
       /**

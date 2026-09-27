@@ -331,9 +331,17 @@ export class PosPaymentAttemptsService {
 
   /**
    * ⭐ **الإتمام** (`APPROVED ⟸ COMPLETED`): الفاتورةُ من لقطة المحاولة، في معاملةٍ واحدة مع انتقال المحاولة — إتمامان
-   * متزامنان لا يُنتجان فاتورتين: الخاسرُ يسقط على الانتقال المشروط فتُرجَع معاملتُه كلُّها.
+   * متزامنان لا يُنتجان فاتورتين: الخاسرُ ينتظر على قفل صفّ المحاولة ثم يقرأها «مكتملة» فيعود بلا شيء، **قبل أن يُرقَّم**
+   * (`ق-١٤٩٠` · INV-⑦)؛ والانتقالُ المشروطُ بعد الإتمام طبقةٌ ثانية تُرجع المعاملةَ كلَّها إن فات القفلَ مسار.
    */
   private async settle(tx: Tx, companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<SoldSale | null> {
+    /**
+     * ⚖️ **صفُّ المحاولة يُقفل أوّلاً، وحالُها تُقرأ بعد القفل** (`ق-١٤٩٠` · INV-⑦). كانت القراءةُ بلا قفل: إتمامان متزامنان
+     * (نقرةُ «حسم» وكانسٌ دوريّ، أو نقرتان) يقرآن «مقبولة» معاً، فيُرقّم كلٌّ فاتورتَه وسندَه على منفذ العدّاد المستقلّ (والرقمُ
+     * لا يرتدّ)، ثم يسقط الخاسرُ على تفرّد معرّف البيع أو على الانتقال المشروط **بعد** ترقيمه ⟸ رقمُ فاتورةٍ ضريبيةٍ محترق.
+     * والآن ينتظر الخاسرُ هنا حتى يلتزم الرابح، ثم يقرأ «مكتملة» فيعود `null` قبل أيّ ترقيم.
+     */
+    await tx.$queryRaw`SELECT "id" FROM "pos_payment_attempts" WHERE "id" = ${id} FOR UPDATE`;
     const attempt = await tx.posPaymentAttempt.findUniqueOrThrow({ where: { id } });
     if (attempt.status !== 'APPROVED') return null;
     const snapshot = attempt.sale as unknown as SaleSnapshot;
