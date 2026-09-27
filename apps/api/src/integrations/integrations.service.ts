@@ -12,7 +12,7 @@ const INTEGRATION_SEARCH_FIELDS = ['provider', 'label'] as const;
 import { PaymentTerminalAdapter, TERMINAL_ADAPTERS, TerminalChargeRequest, TerminalStatusResult } from './payment-terminal.adapter';
 
 export const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
-  PAYMENT_GATEWAY: ['MOCK', 'ACME_PAY'],
+  PAYMENT_GATEWAY: ['MOCK'],
   BNPL: ['MOCK'],
   ECOMMERCE: ['MOCK'],
 };
@@ -72,6 +72,10 @@ export class IntegrationsService {
   create(companyId: string, dto: { kind: IntegrationKind; provider: string; label?: string; credentials: Record<string, string> }) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       if (!KNOWN_PROVIDERS[dto.kind]?.includes(dto.provider)) throw new BadRequestException(MSG.integration_unknown_provider);
+      // ⚖️ (ق-١٤٩٨) مزوّدُ بوّابة الدفع مدرَجٌ في سجلّ جهته المنظِّمة وإلا فلا ربط — الطبقةُ الثانية بعد الحارس الذي يمنع تسجيلَه.
+      if (dto.kind === 'PAYMENT_GATEWAY' && unlistedProviders([dto.provider], TEST_ONLY_PROVIDERS, LICENSED_PAYMENT_PROVIDERS).length > 0) {
+        throw new BadRequestException(MSG.integration_provider_not_licensed);
+      }
       // الحاجز الأول: منع دخول المزوّد التجريبي أصلاً. رفضٌ صريح بنصّ عربي
       // يشرح السبب — لا تجاهل صامت يترك التاجر يظن أن الربط تمّ.
       if (isProduction() && TEST_ONLY_PROVIDERS.has(dto.provider)) {
