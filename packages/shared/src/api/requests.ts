@@ -51,6 +51,7 @@ export interface CancelContractDto {
   settlementLines?: SettlementLineDto[];
   settlementInstallments?: number;
   unearnedDisposition?: 'refund' | 'income';
+  exchangeRate?: number;
 }
 
 /** جسمُ طلب — `CancelMaintenanceDto` في الخادم. */
@@ -778,6 +779,7 @@ export interface OpenShiftDto {
 /** جسمُ طلب — `PayClaimDto` في الخادم. */
 export interface PayClaimDto {
   paidAt: string;
+  exchangeRate?: number;
 }
 
 /** جسمُ طلب — `PosPaymentPartDto` في الخادم. */
@@ -1011,6 +1013,7 @@ export interface SetPrimaryActivityDto {
 export interface SettleDepositDto {
   settledAt: string;
   deductions: DeductionDto[];
+  exchangeRate?: number;
 }
 
 /** جسمُ طلب — `SettlementLineDto` في الخادم. */
