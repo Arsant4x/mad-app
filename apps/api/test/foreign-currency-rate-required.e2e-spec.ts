@@ -23,7 +23,9 @@ jest.setTimeout(300000);
  * `5600` ليس فرقاً. والإتمامُ في الصيانة كان يكتب `dto.exchangeRate ?? 1` والعملةَ `'SAR'` حرفاً.
  *
  * ⚖️ **ما يُثبته الملفّ**: ① الأجنبيةُ بلا سعرٍ `400` بالمفتاح ولا صفَّ ولا قيد · ② وبسعرها تُحوَّل كما كانت · ③ وعملةُ الأساس
- * صريحةً بلا سعرٍ `1` كما كانت · ④⑤ والصيانةُ على المحلِّل نفسِه · ⑥ وبلا عملةٍ تُوسَم الصيانةُ بعملة المنشأة لا بالريال.
+ * صريحةً بلا سعرٍ `1` كما كانت · ④⑤ والصيانةُ على المحلِّل نفسِه · ⑥ وبلا عملةٍ تُوسَم الصيانةُ بعملة المنشأة لا بالريال ·
+ * ⑦ و`null` صريحاً كالغياب — لا بابٌ ثانٍ للثقب · ⑧ وعملةُ الأساس بأحرفٍ صغيرة ليست أجنبية (`isBaseCurrency` بلا حالة الأحرف).
+ * (أُضيف ⑦⑧ في المراجعة العدائية: السلوكان مدّعيان في المحلِّل وبلا اختبار.)
  */
 describe('Foreign currency needs an explicit exchange rate — never a silent 1 (e2e · ق-١٤٨٩)', () => {
   let app: INestApplication;
@@ -159,5 +161,31 @@ describe('Foreign currency needs an explicit exchange rate — never a silent 1 
     expect(Number(row.exchangeRate)).toBe(1);
     // 100 × 1 = 100.
     expect(Number(row.baseCost)).toBe(100);
+  });
+
+  /** عملةُ الأساس **الحاليّة** من صفّ المنشأة — فـ⑥ قبلها ينقلها، والحكمُ على ما هي عليه لحظةَ الطلب لا على ما كانت. */
+  const currentBase = async () =>
+    (await prisma.company.findUniqueOrThrow({ where: { id: company.companyId }, select: { baseCurrency: true } })).baseCurrency;
+
+  it('⑦ و`exchangeRate: null` صريحاً مع عملةٍ أجنبية ⟵ 400 بالمفتاح نفسِه — لا يُقرأ «سعراً» ولا يُعاد ١', async () => {
+    // `@IsOptional` يُمرّر `null` إلى الخدمة (لا يُفحص كالغياب)، و`?? 1` القديمُ كان يجعله ١ بصمت.
+    const nowBase = await currentBase();
+    const other = foreign === nowBase ? (nowBase === 'USD' ? 'EUR' : 'USD') : foreign;
+    const before = await counts();
+    const res = await auth(http().post('/invoices')).send(invoiceBody({ currency: other, exchangeRate: null })).expect(400);
+    expect(res.body.message).toBe(rateRequired(other, nowBase));
+    expect(await counts()).toEqual(before);
+  });
+
+  it('⑧ وعملةُ الأساس بأحرفٍ صغيرة بلا سعر ⟵ 201 بسعر 1 — فليست «أجنبيةً» لأن حالةَ أحرفها اختلفت', async () => {
+    // عرضُ سعرٍ لا فاتورة: المحلِّلُ واحد (`quotes.service` ينادي `resolveCurrencyWithin`)، ولا مستندَ ضريبيَّ يُصدَر بالرمز الصغير.
+    const nowBase = await currentBase();
+    const res = await auth(http().post('/quotes'))
+      .send({ customerId, issueDate: today(), validUntil: today(), currency: nowBase.toLowerCase(), lines: [{ description: `عرضُ العملة ${suffix}`, quantity: 1, unitPrice: 100, taxRate: 15 }] })
+      .expect(201);
+    const row = await inTenant((tx) => tx.quote.findUniqueOrThrow({ where: { id: res.body.id } }));
+    expect(Number(row.exchangeRate)).toBe(1);
+    // ١ × ١٠٠ + ١٥٪ = ١١٥ (computeTotals) · × 1 = 115. (الرمزُ المخزَّن لا يُوكَّد عمداً — يُخزَّن كما أُرسل، حدٌّ معلَن لا عقد.)
+    expect(Number(row.baseTotal)).toBe(115);
   });
 });
