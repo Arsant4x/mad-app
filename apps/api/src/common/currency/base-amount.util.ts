@@ -51,7 +51,12 @@ export function isBaseCurrency(currency: string, baseCurrency: string): boolean 
  * `@IsOptional` يُمرّره، و`?? 1` القديم كان يعامله غياباً — فلا يُفتح الثقبُ من بابه الثاني. */
 export function resolveCurrency(input: CurrencyInput | undefined, baseCurrency: string): { currency: string; exchangeRate: number } {
   const currency = input?.currency?.trim() || baseCurrency;
-  return { currency, exchangeRate: input?.exchangeRate ?? DEFAULT_EXCHANGE_RATE };
+  const rate = input?.exchangeRate ?? null;
+  if (rate !== null) return { currency, exchangeRate: rate };
+  if (!isBaseCurrency(currency, baseCurrency)) {
+    throw new BadRequestException(formatMessage(MSG.currency_rate_required, { currency, base: baseCurrency }));
+  }
+  return { currency, exchangeRate: DEFAULT_EXCHANGE_RATE };
 }
 
 /** عملةُ أساس المنشأة — تُقرأ داخل معاملة المستأجر (`companies` بلا عزل صفوف، والقراءةُ بالمعرّف). */
