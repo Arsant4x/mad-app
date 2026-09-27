@@ -29,7 +29,7 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
   let tenantPrisma: TenantPrismaService;
   const suffix = `${Date.now()}`;
   const today = new Date().toISOString().slice(0, 10);
-  /** سنةُ بادئة المستند = السنةُ بتوقيت `UTC` لتاريخه (`documentYear` — `getUTCFullYear`)، وتاريخُه `today` نفسُه. */
+  /** سنةُ بادئة المستند = السنةُ بتوقيت `UTC` لتاريخه (`documentYear` — `getUTCFullYear`)، وتاريخُه `today` نفسُه — والإشعاراتُ تحمله صراحةً (`issueDate: today`) فلا تُؤرَّخ بساعة الخادم لحظةَ الطلب، وإلا افترقت السنةُ عن `Y` في تشغيلٍ يعبر منتصفَ ليلة رأس السنة. */
   const Y = today.slice(0, 4);
   const http = () => request(app.getHttpServer());
   /** النصُّ العربيّ كما يعيده المرشِّح لطلبٍ بلا `Accept-Language` (`DEFAULT_LANGUAGE = 'ar'`). */
@@ -145,16 +145,16 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
 
       // ② CN/DN-① — إشعارٌ أوّل يُعيد الوحدتين بسعرٍ رمزيّ (2 × 1 = 2 + 0.30 = 2.30 تحت السقف 230) ⟵ `CN-…-0001`.
       const returnLine = (quantity: number) => ({ description: `صنف ${suffix}`, productId, quantity, unitPrice: 1, taxRate: 15, returnsLineId: saleLineId, returnCondition: 'GOOD' });
-      const first = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'إرجاع', lines: [returnLine(2)] }).expect(201);
+      const first = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'إرجاع', issueDate: today, lines: [returnLine(2)] }).expect(201);
       expect(first.body.no).toBe(`CN-${Y}-0001`);
       // إشعارٌ ثانٍ يُعيد وحدةً: تمرّ من فحص السطر (1 ≤ 2 مُفوتَرة) وتسقط تراكمياً — بِيع 2 وأُعيد 2، فـ2 + 1 = 3 > 2.
       //    وأرقامُ الرسالة من `ReturnExceedsSoldError(sold=2, alreadyReturned=2, requested=1)`.
-      const over = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'إرجاع زائد', lines: [returnLine(1)] }).expect(400);
+      const over = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'إرجاع زائد', issueDate: today, lines: [returnLine(1)] }).expect(400);
       expect(over.body.message).toBe(ar(formatMessage(MSG.return_exceeds_sold, { sold: 2, returned: 2, requested: 1 })));
       expect(await count(co, 'CREDIT_NOTE')).toBe(1);
       // إشعارٌ ثالثٌ بسطرٍ حرّ (خصمٌ لا مرتجع: 1 + 0.15 = 1.15 تحت المتبقّي 230 − 2.30 = 227.70) ⟵ `0002` لا `0003`.
       const third = await auth(http().post(`/invoices/${invoice.id}/credit-note`))
-        .send({ reason: 'خصم لاحق', lines: [{ description: `خصم ${suffix}`, quantity: 1, unitPrice: 1, taxRate: 15 }] })
+        .send({ reason: 'خصم لاحق', issueDate: today, lines: [{ description: `خصم ${suffix}`, quantity: 1, unitPrice: 1, taxRate: 15 }] })
         .expect(201);
       expect(third.body.no).toBe(`CN-${Y}-0002`);
     } finally {
@@ -179,7 +179,7 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
       //    والنصُّ `2200 ضريبة القيمة المضافة المستحقة` من `DEFAULT_CHART` بالصيغة نفسِها.
       await auth(http().delete(`/accounts/${await accountId(co, '2200')}`)).expect(204);
       const note = () =>
-        auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'تسوية', lines: [{ description: `تسوية ${suffix}`, quantity: 1, unitPrice: 10, taxRate: 15 }] });
+        auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'تسوية', issueDate: today, lines: [{ description: `تسوية ${suffix}`, quantity: 1, unitPrice: 10, taxRate: 15 }] });
       const refused = await note().expect(409);
       expect(refused.body.message).toBe(ar(formatMessage(MSG.posting_accounts_missing, { accounts: '2200 ضريبة القيمة المضافة المستحقة' })));
       expect(await count(co, 'CREDIT_NOTE')).toBe(0);
