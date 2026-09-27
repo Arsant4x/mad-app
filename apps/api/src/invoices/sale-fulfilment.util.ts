@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { consumeFifo, ProvisionalCostSource, restoreConsumptionPartial } from '../inventory/costing.util';
+import { consumeFifo, expiredSaleRefusal, ProvisionalCostSource, readConsumptionView, refusesExpiredSale, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
 import { money, qty } from '../common/money/text';
 
@@ -137,6 +137,45 @@ export async function deductionPlan<L extends { productId: string | null }>(
   const deductible = stocked.filter((l) => tracked.has(l.productId!));
   if (deductible.length === 0) return { deducts: false, reason: 'NO_TRACKED_PRODUCTS' };
   return { deducts: true, warehouseId, deductible };
+}
+
+export interface SaleExpiryCheckArgs {
+  branchId: string | null;
+  warehouseId?: string | null;
+  /** يومُ المستند — به يقيس التسليمُ الانتهاء (`fulfilStockedLines` ⟵ `consumeFifo`). */
+  date: Date;
+  /** سطورُ المستند كما ستُكتب — الصنفُ والكمّية. */
+  lines: readonly { productId: string | null; quantity: Prisma.Decimal | number }[];
+}
+
+/**
+ * ⚖️ (`ق-١٤٩٠` · المسار `INV-①`) **الدفعةُ المنتهية تُفحص قبل ترقيم الفاتورة لا بعده.**
+ *
+ * كان رفضُ البيع من دفعةٍ منتهية (`ق-١٠٨٢`) يقع في `consumeFifo` داخل التسليم — بعد `nextDocumentNumber` —
+ * والعدّادُ على منفذٍ مستقلّ يلتزم فوراً (`ق-٣٤٨`)، **فيحترق رقمُ الفاتورة في كلّ رفض**. وهنا يُقرأ ما يقرؤه
+ * التسليمُ بعينه: السطورُ والمستودعُ من `deductionPlan`، والدورةُ الأولى من `readConsumptionView` بيوم
+ * المستند — فلا يفترق الفحصُ عن الصرف. ⚠️ **وبمجموع الكمّية لكلّ صنف**: سطران للصنف نفسِه يأخذان من الطبقات
+ * نفسِها بالتتابع، فالحكمُ على المجموع لا على كلّ سطرٍ وحدَه (وإلا أجاز الفحصُ ما يرفضه الصرفُ في السطر الثاني).
+ *
+ * والكمّيةُ تُدوَّر بثلاث خاناتٍ كما تُخزَّن على سطر الفاتورة (`Decimal(18,3)`) — فالصرفُ يقرأ المخزَّن.
+ *
+ * ⚠️ **وحدُّه معلَن**: يمنع الحرقَ الذي يُعرف قبل الكتابة؛ وبيعٌ متزامنٌ يأخذ غيرَ المنتهي بين الفحص والصرف يبلغ
+ * رفضَ `consumeFifo` الباقي طبقةَ سباق — فيحترق رقمُه هو وحدَه، ولا يُباع منتهٍ في الحالين.
+ */
+export async function assertSaleNotBlockedByExpiry(tx: Tx, args: SaleExpiryCheckArgs): Promise<void> {
+  const stock = await deductionPlan(tx, args);
+  if (!stock.deducts) return;
+
+  const requested = new Map<string, number>();
+  for (const line of stock.deductible) {
+    const productId = line.productId!;
+    requested.set(productId, roundTo((requested.get(productId) ?? 0) + roundTo(Number(line.quantity), 'DERIVED_QUANTITY'), 'DERIVED_QUANTITY'));
+  }
+  for (const [productId, qty] of requested) {
+    const view = await readConsumptionView(tx, { productId, warehouseId: stock.warehouseId, exit: 'SALE', date: args.date });
+    if (refusesExpiredSale(view, qty)) throw expiredSaleRefusal(view.productName, productId, view.unexpiredAvailable, qty);
+  }
+>>>>>>> fix/expired-batch-before-numbering
 }
 
 /**
