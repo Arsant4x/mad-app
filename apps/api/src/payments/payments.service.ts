@@ -366,7 +366,7 @@ export class PaymentsService {
     const payment = await tx.payment.findFirst({
       where: { id, ...branchFilter(allowedBranchIds) },
       // سعرُ إشعار الردّ (`ق-١٤٨٩`): به يُعكس ما لم يُخصَّص من سند الردّ — نقدُه بسعر يومه وذمّتُه بسعر إشعاره.
-      include: { allocations: true, customer: { select: { name: true } }, refundsInvoice: { select: { exchangeRate: true } } },
+      include: { allocations: true, customer: { select: { name: true } } },
     });
     if (!payment) throw new NotFoundException(MSG.payment_not_found);
     return payment;
@@ -460,18 +460,6 @@ export class PaymentsService {
       // لسند القبض هو سعرُه، ولسند الردّ سعرُ إشعاره — فلا يصنع اختلافُ القارئَين فرقاً لا أصلَ له.
       const settledAfter = baseSettledOf(round2(Number(payment.amount)), unallocatedReceivableRate(payment), toSettlementAllocations(requested), rates);
       const difference = round2(settledAfter - settledBefore);
-      if (difference !== 0 && payment.journalEntryId) {
-        await postCustomerPaymentEntry(tx, companyId, {
-          customerId: payment.customerId,
-          paymentNo: payment.no,
-          customerName: payment.customer.name,
-          date: dto.date ? new Date(dto.date) : new Date(),
-          baseCash: 0,
-          baseReceivable: difference,
-          branchId: payment.branchId,
-          reallocation: true,
-        });
-      }
 
       for (const invoiceId of touched) await this.recomputeInvoiceStatus(tx, invoiceId);
 

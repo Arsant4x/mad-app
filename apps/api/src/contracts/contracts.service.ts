@@ -135,8 +135,8 @@ async function isForeignCurrency(tx: Prisma.TransactionClient, companyId: string
  * أي العطلُ نفسُه من بابٍ ثانٍ (المراجعةُ العدائية لـ`ق-١٤٨٩`؛ ونظيرُه في `resolveCurrency` على فرع M1).
  */
 function requireCashDayRate(currency: string, dayRate: number | null | undefined): number {
-  if (dayRate === undefined || dayRate === null) throw new BadRequestException(formatMessage(MSG.rent_cash_rate_required, { currency }));
-  return dayRate;
+  if (dayRate === undefined) throw new BadRequestException(formatMessage(MSG.rent_cash_rate_required, { currency }));
+  return dayRate as number;
 }
 
 /**
