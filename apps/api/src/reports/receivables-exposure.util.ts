@@ -3,6 +3,7 @@ import { requestedBranchFilter } from '../branches/branch-scope.util';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { round2 } from '../common/money/rounding';
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
+import { unallocatedReceivableRate } from '../payments/voucher-receivable-rate.util';
 
 /**
  * ⭐ **تعرّضُ العميل — المصدرُ الواحد لِـ«كم يدين لنا»** (`ق-٣٤١`).
@@ -202,16 +203,25 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
     else unappliedByCustomer.set(n.customerId, (unappliedByCustomer.get(n.customerId) ?? 0) + signed);
   }
 
-  // دفعات لم تُخصَّص: خفّضت 1200 بلا فاتورة تنتمي إليها.
+  // دفعات لم تُخصَّص: خفّضت 1200 بلا فاتورة تنتمي إليها — **بسعر ذمّتها لا بسعر نقدها** (`ق-١٤٨٩`): لسند القبض
+  // السعران واحد، وسندُ الردّ (وعكسُه) نقدُه بسعر يومه وذمّتُه بسعر إشعاره؛ فقراءتُه بسعر الصفّ تصنع في المطابقة
+  // فرقاً غيرَ منسوب بقدر فرق الصرف الذي رُحّل على `5600`. والسعرُ من المصدر الواحد الذي يقرؤه مُرحِّلُ العكس.
   const payments = await tx.payment.findMany({
     where: { date: { lte: asOf }, ...branchWhere, ...customerWhere },
-    select: { customerId: true, amount: true, exchangeRate: true, allocations: { select: { amount: true } } },
+    select: {
+      customerId: true,
+      amount: true,
+      exchangeRate: true,
+      allocations: { select: { amount: true } },
+      refundsInvoice: { select: { exchangeRate: true } },
+      reverses: { select: { refundsInvoice: { select: { exchangeRate: true } } } },
+    },
   });
   for (const p of payments) {
     const allocated = p.allocations.reduce((sum, a) => sum + Number(a.amount), 0);
     const onAccount = Number(p.amount) - allocated;
     if (Math.abs(onAccount) > 0.005) {
-      unappliedByCustomer.set(p.customerId, (unappliedByCustomer.get(p.customerId) ?? 0) - onAccount * Number(p.exchangeRate));
+      unappliedByCustomer.set(p.customerId, (unappliedByCustomer.get(p.customerId) ?? 0) - onAccount * unallocatedReceivableRate(p));
     }
   }
 
