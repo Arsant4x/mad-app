@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@mad-app/db';
 import { AppModule } from '../app.module';
 import { encryptSecret } from '../common/crypto/secret.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';

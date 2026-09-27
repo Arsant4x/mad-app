@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PlatformRole } from '@prisma/client';
+import { PlatformRole } from '@mad-app/db';
 import { Request } from 'express';
 import { JwtPayload } from '../../auth/types';
 import { PrismaService } from '../../prisma/prisma.service';

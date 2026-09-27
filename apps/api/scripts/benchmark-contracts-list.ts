@@ -16,7 +16,7 @@
  */
 import { randomUUID } from 'crypto';
 import { NestFactory } from '@nestjs/core';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@mad-app/db';
 import { AppModule } from '../src/app.module';
 import { ContractsService } from '../src/contracts/contracts.service';
 

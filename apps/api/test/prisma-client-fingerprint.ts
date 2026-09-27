@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 
 /**
  * ⭐ **عميلُ Prisma يُنسب إلى فرعه — أو تسقط الحزمةُ باسم الحقل** (`ق-٤١٧` · `ق-٤٢١`).
@@ -81,7 +81,7 @@ export function clientDrift(schema: Map<string, Set<string>>, client: Map<string
  * يُنهي البحثَ قبل أن يبدأ**.
  */
 export function assertClientMatchesSchema(): void {
-  const drift = clientDrift(schemaModels(readFileSync(SCHEMA, 'utf8')), clientModels(Prisma.dmmf));
+  const drift = clientDrift(schemaModels(readFileSync(SCHEMA, 'utf8')), clientModels(loadClientDmmf()));
   if (drift.length === 0) return;
   const shown = drift.slice(0, 8).join(' · ');
   throw new Error(
@@ -90,11 +90,35 @@ export function assertClientMatchesSchema(): void {
       '⛔ عميلُ Prisma المُولَّد لا يعرف ما يعلنه مخطّطُ هذا الفرع (ق-٤١٧):',
       `   ${shown}${drift.length > 8 ? ` … و${drift.length - 8} غيرها` : ''}`,
       '',
-      '   والسبب: `node_modules` مشتركٌ بين الأشجار، فتوليدٌ على فرعٍ يكسر فرعاً آخر',
-      '   بلا أثرٍ في `git` — الشجرةُ نظيفة والعطلُ قائم.',
+      '   والسبب (بعد ب٢ — ق-١٥٠٤): العميلُ لكلّ نسخةٍ داخلها، فتغيّرُ المخطّط في هذه النسخة',
+      '   لم يتبعه توليدٌ فيها — لا نسخةٌ أخرى.',
       '',
-      '   العلاج:  npx prisma generate',
+      '   العلاج (من apps/api):  npx prisma generate',
       '',
     ].join('\n'),
   );
+}
+
+/**
+ * ⚖️ (`ق-١٥٠٤` — ب٢) **العميلُ يُحمَّل عند الحاجة لا في رأس الملف**: فإن غاب (`npm ci` يمحو `apps/api/node_modules` —
+ * مقيسٌ على npm 11.16.0 — أو نسخةٌ لم يُولَّد فيها بعد) سقطت الحزمةُ **برسالةٍ تسمّي العلاج** لا بـ`MODULE_NOT_FOUND` خام
+ * يُقرأ عطلاً في الشيفرة. وغيرُ الغياب يُرمى كما هو.
+ */
+function loadClientDmmf(): typeof Prisma.dmmf {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require('@mad-app/db') as { Prisma: typeof Prisma }).Prisma.dmmf;
+  } catch (e) {
+    if ((e as { code?: string }).code !== 'MODULE_NOT_FOUND') throw e;
+    throw new Error(
+      [
+        '',
+        '⛔ عميلُ Prisma غيرُ مولَّدٍ في هذه النسخة (`@mad-app/db` — ق-١٥٠٤):',
+        '   العميلُ لكلّ نسخةٍ داخلها (apps/api/node_modules/@mad-app/db)، و`npm ci` يمحوه.',
+        '',
+        '   العلاج (من apps/api):  npx prisma generate',
+        '',
+      ].join('\n'),
+    );
+  }
 }

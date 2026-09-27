@@ -143,7 +143,7 @@ describe('حارس اتجاه الاستيراد — activities → engines → 
     const imp = (spec: string) => `import { x } from '${spec}';\n`;
     const files = [f('journal', 'journal.service.ts'), f('pos', 'pos.service.ts'), f('journal', 'journal.spec.ts'), join(src, 'app.module.ts')];
     const contents: Record<string, string> = {
-      [f('journal', 'journal.service.ts')]: imp('../units/units.service') + imp('@prisma/client') + imp('./journal.util'),
+      [f('journal', 'journal.service.ts')]: imp('../units/units.service') + imp('@mad-app/db') + imp('./journal.util'),
       [f('pos', 'pos.service.ts')]: imp('../journal/journal-posting.util'),
       [f('journal', 'journal.spec.ts')]: imp('../units/fixture'),
       [join(src, 'app.module.ts')]: imp('./journal/journal.module'),

@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Unit } from '@prisma/client';
+import { Prisma, Unit } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { expireStaleReservations } from '../reservations/reservations.service';
 import { BulkCreateUnitsDto } from './dto/bulk-create-units.dto';

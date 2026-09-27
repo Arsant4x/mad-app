@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { stripComments } from '../source-scan.util';
 import {
   ADDRESS_PART_NAMES,

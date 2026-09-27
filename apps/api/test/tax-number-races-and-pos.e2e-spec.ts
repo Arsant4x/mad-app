@@ -1,6 +1,6 @@
 import { ConflictException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@mad-app/db';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
 import request from 'supertest';

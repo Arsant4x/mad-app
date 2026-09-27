@@ -5,7 +5,7 @@ import { JwtPayload, TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
-import { PlatformRole } from '@prisma/client';
+import { PlatformRole } from '@mad-app/db';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { OwnerOnlyGuard } from '../common/tenant/owner-only.guard';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';

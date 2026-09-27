@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 
 /**
  * **منفذُ العدّاد — اتصالٌ مخصَّصٌ لزيادة التسلسل وحدها** (`ق-٣٤٨`).

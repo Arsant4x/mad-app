@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
-import { PlatformRole } from '@prisma/client';
+import { PlatformRole } from '@mad-app/db';
 import { AllowWhileConsentPending } from '../common/tenant/allow-while-consent-pending.decorator';
 import { AllowWhileInactive } from '../common/tenant/allow-while-frozen.decorator';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';

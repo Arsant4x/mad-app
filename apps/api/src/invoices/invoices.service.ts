@@ -8,7 +8,7 @@ import { TenantContext } from '../auth/types';
 import { assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { buildZatcaQr, ZatcaQrValueTooLongError } from '../zatca/qr.util';
 import { dayStartOf, issuedWallClock } from '../common/wall-clock.util';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import {
   assertAdjustableTarget,
   assertReturnLinesBelong,

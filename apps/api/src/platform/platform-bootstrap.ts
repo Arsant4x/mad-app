@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@mad-app/db';
 import * as argon2 from 'argon2';
 
 /**

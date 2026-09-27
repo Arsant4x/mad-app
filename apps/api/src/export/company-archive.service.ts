@@ -1,5 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { AuditService } from '../audit/audit.service';

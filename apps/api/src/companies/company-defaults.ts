@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * ما تُولد به كل منشأة — **مصدر واحد** يركب كل مسارات الإنشاء.

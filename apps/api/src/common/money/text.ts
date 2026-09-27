@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { RoundingContext, SCALE, roundTo } from './rounding';
 
 /**

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';

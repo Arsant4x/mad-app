@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * Names of Prisma models that hold per-company business data. Every model

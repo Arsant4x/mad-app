@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AccountStatus, ActorType, PlatformRole } from '@prisma/client';
+import { AccountStatus, ActorType, PlatformRole } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';

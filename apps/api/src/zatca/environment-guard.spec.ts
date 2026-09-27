@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { ZatcaEnvironment } from '@prisma/client';
+import { ZatcaEnvironment } from '@mad-app/db';
 import { apiBaseFor, assertEnvironmentAllowed, defaultEnvironment } from './zatca-onboarding.service';
 import { MSG } from '../common/i18n/messages';
 

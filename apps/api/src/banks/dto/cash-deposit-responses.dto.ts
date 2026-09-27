@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { CashDepositStatus } from '@prisma/client';
+import { CashDepositStatus } from '@mad-app/db';
 import { BanksRefResponse } from './bank-responses.dto';
 
 /**

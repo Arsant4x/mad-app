@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { RECEIPT_CLEARING_BANDS, nextCodeInBands } from '../accounts/code-bands';
 import { MSG } from '../common/i18n/messages';
 

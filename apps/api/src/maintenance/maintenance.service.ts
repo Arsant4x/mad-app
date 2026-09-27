@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { MaintenanceStatus, Prisma } from '@prisma/client';
+import { MaintenanceStatus, Prisma } from '@mad-app/db';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';

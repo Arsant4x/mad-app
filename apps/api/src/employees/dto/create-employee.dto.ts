@@ -1,5 +1,5 @@
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
-import { EmployeeStatus } from '@prisma/client';
+import { EmployeeStatus } from '@mad-app/db';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 

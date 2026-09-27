@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Company, Prisma } from '@prisma/client';
+import { Company, Prisma } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
 import { evaluateCompanyStatus } from '../common/tenant/company-status.util';

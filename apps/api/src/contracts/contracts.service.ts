@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@prisma/client';
+import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@mad-app/db';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';

@@ -134,7 +134,7 @@ export function searchWhere(term: string | undefined, fields: readonly string[])
 }
 
 /**
- * مندوبُ Prisma بلا نوعٍ من `@prisma/client` (فالدالّةُ في `common` والنواةُ لا تستورد نموذجاً بعينه):
+ * مندوبُ Prisma بلا نوعٍ من `@mad-app/db` (فالدالّةُ في `common` والنواةُ لا تستورد نموذجاً بعينه):
  * ما يلزم منه `findMany` و`count` وحدَهما — والأنواعُ تُستنتج من المندوب نفسِه لا تُكتب.
  */
 export interface FindManyDelegate {

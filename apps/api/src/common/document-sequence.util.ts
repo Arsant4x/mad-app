@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { documentYear } from './document-year.util';
 import { allocateSequence } from './sequence-allocator';
 

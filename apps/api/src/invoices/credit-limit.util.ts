@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { round2 } from '../common/money/rounding';
 import { exposureOf } from '../reports/receivables-exposure.util';
 

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';

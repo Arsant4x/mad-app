@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ActorType, NotificationKind, Prisma } from '@prisma/client';
+import { ActorType, NotificationKind, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';

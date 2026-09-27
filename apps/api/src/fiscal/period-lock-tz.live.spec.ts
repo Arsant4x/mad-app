@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@mad-app/db';
 import { assertPeriodOpen } from './period-lock.util';
 import { createJournalEntry } from '../journal/journal-posting.util';
 import { postInvoiceEntry, postPurchaseEntry, postCustomerPaymentEntry, purchaseExpenseAccountCode } from '../journal/auto-posting.util';

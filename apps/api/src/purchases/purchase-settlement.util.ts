@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { allocatedFor, deriveSettlementStatus, SettlementTarget } from '../common/settlement/settlement.util';

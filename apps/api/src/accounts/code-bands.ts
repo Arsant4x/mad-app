@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * **نطاقاتُ الترقيم المشتقّ — ومعها سقفُها** (`ق-٢٩٥`).

@@ -14,7 +14,7 @@
  *
  * عديم الأثر عند التكرار: أعد تشغيله بعد كل تحديث بلا قلق.
  */
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { bootstrapPlatform } from '../src/platform/platform-bootstrap';
 
 const prisma = new PrismaClient();

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 export function stockQuantityKey(productId: string, warehouseId: string): string {
   return `${productId}|${warehouseId}`;

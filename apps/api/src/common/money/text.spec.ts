@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { SCALE } from './rounding';
 import { money, moneyText, numericText, percent, percentText, qty, qtyText, rateText, TEXT_SCALE } from './text';
 

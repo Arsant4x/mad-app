@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { decryptSecret, secretIsSet } from '../common/crypto/secret.util';
 import { issuedWallClock } from '../common/wall-clock.util';
 import { formatMessage, MSG } from '../common/i18n/messages';

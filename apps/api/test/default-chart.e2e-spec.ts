@@ -152,14 +152,14 @@ describe('Default chart of accounts on company creation (e2e)', () => {
    */
   describe('السكربت الاسترجاعي على منشأة ناقصة', () => {
     let token: string;
-    let prisma: import('@prisma/client').PrismaClient;
+    let prisma: import('@mad-app/db').PrismaClient;
     let companyId: string;
     const auth = (r: request.Test) => withToken(r, token);
 
     beforeAll(async () => {
       token = await bornViaSelfRegistration('backfill');
       companyId = (await auth(request(app.getHttpServer()).get('/auth/me')).expect(200)).body.companyId;
-      const { PrismaClient } = await import('@prisma/client');
+      const { PrismaClient } = await import('@mad-app/db');
       prisma = new PrismaClient();
     }, 90000);
 

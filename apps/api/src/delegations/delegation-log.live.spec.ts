@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import { randomUUID } from 'node:crypto';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { regionForNewCompany } from '../common/region/regions';

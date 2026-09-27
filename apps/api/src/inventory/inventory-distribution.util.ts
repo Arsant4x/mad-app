@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { round2 } from '../common/money/rounding';
 import { INVENTORY_VARIANCE_ACCOUNT_CODE } from '../journal/inventory-variance-account.util';
 import { WRITEOFF_EXPENSE_ACCOUNT_CODE } from '../journal/writeoff-account.util';

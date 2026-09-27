@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 
 /**
  * ناقل الأحداث — **بسلوكَين لا بسلوكٍ واحد** (`ق-٣٩` · `ق-١٢٨`، قرار المالك).

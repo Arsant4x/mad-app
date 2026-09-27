@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ConflictException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
 /**

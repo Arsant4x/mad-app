@@ -6,7 +6,7 @@ import { readsDeclaredStrings } from '../common/source-scan.util';
 // `@default("SAR")` في المخطَّط** — وهي **داخل اقتباس**؛ **فتجريدُ النصوص
 // يمحوها**.
 readsDeclaredStrings();
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { createCompanyDefaults, DEFAULT_ACTIVITY_NAME, DEFAULT_CURRENCY } from './company-defaults';
 import { regionForNewCompany } from '../common/region/regions';
 

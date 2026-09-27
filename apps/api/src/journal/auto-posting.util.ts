@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DEFAULT_CHART } from '../accounts/default-chart';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo, round2 } from '../common/money/rounding';

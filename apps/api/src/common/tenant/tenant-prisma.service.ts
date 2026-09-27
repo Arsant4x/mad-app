@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { tenantScopeExtension } from './tenant-scope.extension';
 import { withTransactionProbe } from './nested-transaction-probe';

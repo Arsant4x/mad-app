@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { roundTo } from '../common/money/rounding';
 import { allocationOf, raiseLayerCost, type CostShareNode } from './layer-cost-allocation.util';

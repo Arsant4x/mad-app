@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PosPaymentAttempt, PosPaymentAttemptStatus, PosPaymentResolution, Prisma } from '@prisma/client';
+import { PosPaymentAttempt, PosPaymentAttemptStatus, PosPaymentResolution, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { branchFilter } from '../branches/branch-scope.util';
 import { formatMessage, MSG } from '../common/i18n/messages';

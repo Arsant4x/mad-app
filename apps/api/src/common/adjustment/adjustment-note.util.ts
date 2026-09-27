@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@mad-app/db';
 import { formatMessage, type MessageKey } from '../i18n/messages';
 import { round2 } from '../money/rounding';
 

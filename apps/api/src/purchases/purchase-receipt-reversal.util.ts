@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { postReversalEntry } from '../journal/auto-posting.util';
 import { reconcileNonDeductibleVat } from './non-deductible-vat.util';

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { NotificationKind } from '@prisma/client';
+import { NotificationKind } from '@mad-app/db';
 import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';

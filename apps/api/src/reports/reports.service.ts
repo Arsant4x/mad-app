@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { MSG } from '../common/i18n/messages';
 import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';

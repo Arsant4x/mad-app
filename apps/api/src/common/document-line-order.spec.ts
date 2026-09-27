@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join, relative } from 'path';
 import * as ts from 'typescript';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { readsDeclaredStrings, sourceFiles } from './source-scan.util';
 import { LINE_ORDER, numberLines } from './document-lines.util';
 

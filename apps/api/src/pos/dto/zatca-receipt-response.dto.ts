@@ -8,7 +8,7 @@
  * النواة يبقى دَيناً معلَناً بحجّته (`docs/country-literals-debt.json`)، ويزول حين تُصاغ الإجازةُ خلف واجهةٍ موحّدة (`§3.8` القاعدة ١).
  */
 import { ApiProperty } from '@nestjs/swagger';
-import { ZatcaStatus } from '@prisma/client';
+import { ZatcaStatus } from '@mad-app/db';
 
 /**
  * ⚖️ **الإجازةُ قبل المشاركة** (`ق-١٢٦١` أ): الفاتورةُ الضريبيةُ الكاملة تُجاز لدى الهيئة قبل أن تُسلَّم — فبوّابتُها سعوديّةٌ تسكن هنا.

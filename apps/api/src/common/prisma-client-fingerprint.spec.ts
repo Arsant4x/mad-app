@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { clientDrift, clientModels, schemaModels } from '../../test/prisma-client-fingerprint';
 import { relativeCost, relativeCostVerdict } from './relative-cost.util';
 import { readsDeclaredStrings } from './source-scan.util';

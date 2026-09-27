@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { requestedBranchFilter } from '../branches/branch-scope.util';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { round2 } from '../common/money/rounding';

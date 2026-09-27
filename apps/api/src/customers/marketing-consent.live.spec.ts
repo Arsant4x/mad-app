@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@mad-app/db';
 import { LIVE_SPEC_TIMEOUT_MS } from '../../test/live-spec-timeout';
 import { CONSENT_SOURCES, MARKETING_CHANNELS } from './marketing-consent.util';
 

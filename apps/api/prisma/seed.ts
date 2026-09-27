@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { backfillCompanyOpeningEntries } from '../src/journal/opening-balance.util';
 import { DEFAULT_CHART } from '../src/accounts/default-chart';

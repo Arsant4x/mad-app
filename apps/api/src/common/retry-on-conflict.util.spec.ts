@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import { CONVERGENT_ENSURE_MODELS, isConvergentConflict, NUMBERED_MODELS, NUMBERING_COLUMNS, retryOnUniqueConflict } from './retry-on-conflict.util';
 
 /**

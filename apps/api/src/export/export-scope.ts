@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * ما يدخل تصدير بيانات المنشأة — **مشتقٌّ من المخطط، لا مكتوبٌ بقائمة**.

@@ -1,4 +1,4 @@
-import { LayerCostEvent, Prisma } from '@prisma/client';
+import { LayerCostEvent, Prisma } from '@mad-app/db';
 import { round2, roundTo } from '../common/money/rounding';
 import { spreadCostOverLayer, unitCostAfterShelfDelta } from './layer-cost-spread.util';
 

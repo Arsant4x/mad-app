@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 
 /**
  * Retries `fn` (a full `runInTenantContext` call — a fresh transaction each

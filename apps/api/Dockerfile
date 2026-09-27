@@ -26,8 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -
 WORKDIR /app
 
 # Lockfile-only layer first, so dependency install caches across code edits.
+# (ق-١٥٠٤ — ب٢) ومعها سكربتُ postinstall وحدَه: `npm ci` يُشغّله، ويتخطّى هنا لأن المخطّطَ لم يُنسخ بعد — فلا تُكسر الطبقة.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
+COPY apps/api/scripts/ensure-prisma-client.cjs apps/api/scripts/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci
@@ -54,8 +56,13 @@ WORKDIR /app
 # which is why this image had never been built successfully. Node resolves
 # upward from /app/apps/api to /app/node_modules, so nothing is lost: verified
 # in the built image by requiring @nestjs/core, @prisma/client and argon2 from
-# /app/apps/api.
+# /app/apps/api. (Since ق-١٥٠٤ the generated client is @mad-app/db, copied by
+# the line below — the one apps/api/node_modules entry that is NOT hoisted.)
 COPY --from=build /app/node_modules node_modules
+# ⚖️ (ق-١٥٠٤ — ب٢) **وعميلُ Prisma وحدَه من apps/api/node_modules**: صار يُولَّد هناك (`output` في المخطّط) لا في الجذر،
+# ومرحلةُ التشغيل تنسخ الجذرَ وحدَه عمداً (التعليق أعلاه). **وبدون هذا السطر يتوقّف الإقلاعُ بـMODULE_NOT_FOUND
+# على '@mad-app/db'** — فصيلةُ الحادثة التي يوثّقها ذلك التعليق نفسُه.
+COPY --from=build /app/apps/api/node_modules/@mad-app/db apps/api/node_modules/@mad-app/db
 COPY --from=build /app/package.json package.json
 COPY --from=build /app/apps/api/package.json apps/api/package.json
 COPY --from=build /app/apps/api/dist apps/api/dist

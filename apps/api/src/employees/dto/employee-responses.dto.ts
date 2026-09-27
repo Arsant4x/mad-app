@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import { EmployeeStatus } from '@prisma/client';
+import { EmployeeStatus } from '@mad-app/db';
 
 /**
  * ⚖️ **ردُّ ربط الموظّف بحساب دخوله** (`ق-١٤٤٥`) بصنفٍ مسمّى — مسارٌ جديد بعد مِسنَن الردود (`ق-١٤٣٨`)، **والمِسنَنُ لا يزيد**.
