@@ -118,7 +118,6 @@ export async function assertSaleIssuable(
   if (plan.deducts) await assertInventoryAccountUsable(tx, companyId);
 
   const prepaymentIds = sale.prepaymentInvoiceIds ?? [];
-  if (codes.length > 0 || prepaymentIds.length > 0) await assertPeriodOpen(tx, sale.issueDate);
   if (prepaymentIds.length === 0) return { prepayments: [] };
 
   const prepayments = await readApplicablePrepayments(tx, { customerId: sale.customerId, total: sale.total, prepaymentInvoiceIds: prepaymentIds });

@@ -585,11 +585,6 @@ export class InvoicesService {
       // ⚖️ (`ق-١٤٩٠` · `INV-①`) والبيعُ من دفعةٍ منتهية يُفحص قبل الترقيم كذلك — بقراءة التسليم نفسِها (مستودعُ الفرع ·
       //    السطورُ المخزنية · الدورةُ الأولى من `consumeFifo` بيوم المستند) وبمجموع الكمّية لكلّ صنف؛ فالرفضُ برسالته
       //    لا يحرق رقماً. ويبقى رفضُ `consumeFifo` بعد الترقيم طبقةَ السباق وحدَها. والكاشيرُ يمرّ من هنا كذلك.
-      await assertSaleNotBlockedByExpiry(tx, {
-        branchId,
-        date: new Date(dto.issueDate),
-        lines: lines.map((l) => ({ productId: l.productId ?? null, quantity: l.quantity })),
-      });
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — وصنفٌ لم يُعلن وحدتَه يترك السطرَ بلا وحدة، لا برمزٍ مخمَّن.
       const unitCodes = await unitCodesFor(tx, dto.lines);
