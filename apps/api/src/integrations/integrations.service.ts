@@ -5,12 +5,13 @@ import { DEFAULT_LANGUAGE, formatMessage, MSG, resolveMessage } from '../common/
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pageArray } from '../common/pagination/paged.util';
 import { decryptCredentials, encryptCredentials, maskCredentials } from './credentials.crypto';
+import { LICENSED_PAYMENT_PROVIDERS, unlistedProviders } from './licensed-payment-providers';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — المزوّدُ والتسمية. */
 const INTEGRATION_SEARCH_FIELDS = ['provider', 'label'] as const;
 import { PaymentTerminalAdapter, TERMINAL_ADAPTERS, TerminalChargeRequest, TerminalStatusResult } from './payment-terminal.adapter';
 
-const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
+export const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
   PAYMENT_GATEWAY: ['MOCK'],
   BNPL: ['MOCK'],
   ECOMMERCE: ['MOCK'],
@@ -28,7 +29,7 @@ const KNOWN_PROVIDERS: Record<IntegrationKind, string[]> = {
  * والقائمة قاعدةٌ لا استثناء: أي محوّل تجريبي يُضاف لاحقاً (تقسيط · متجر ·
  * غيرها) **يُدرَج هنا**، وإلا تكرّرت الثغرة بنفس الشكل.
  */
-const TEST_ONLY_PROVIDERS = new Set(['MOCK']);
+export const TEST_ONLY_PROVIDERS: ReadonlySet<string> = new Set(['MOCK']);
 
 /** بيئة الإنتاج تُقرأ عند كل فحص لا مرةً عند التحميل — فالاختبار يستطيع
  *  محاكاتها، ولا تتجمّد القيمة على ما كانت عليه لحظة الإقلاع. */
@@ -71,6 +72,10 @@ export class IntegrationsService {
   create(companyId: string, dto: { kind: IntegrationKind; provider: string; label?: string; credentials: Record<string, string> }) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       if (!KNOWN_PROVIDERS[dto.kind]?.includes(dto.provider)) throw new BadRequestException(MSG.integration_unknown_provider);
+      // ⚖️ (ق-١٤٩٨) مزوّدُ بوّابة الدفع مدرَجٌ في سجلّ جهته المنظِّمة وإلا فلا ربط — الطبقةُ الثانية بعد الحارس الذي يمنع تسجيلَه.
+      if (dto.kind === 'PAYMENT_GATEWAY' && unlistedProviders([dto.provider], TEST_ONLY_PROVIDERS, LICENSED_PAYMENT_PROVIDERS).length > 0) {
+        throw new BadRequestException(MSG.integration_provider_not_licensed);
+      }
       // الحاجز الأول: منع دخول المزوّد التجريبي أصلاً. رفضٌ صريح بنصّ عربي
       // يشرح السبب — لا تجاهل صامت يترك التاجر يظن أن الربط تمّ.
       if (isProduction() && TEST_ONLY_PROVIDERS.has(dto.provider)) {

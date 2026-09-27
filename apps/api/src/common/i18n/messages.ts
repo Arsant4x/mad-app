@@ -132,6 +132,7 @@ export const MSG = {
   purchase_amortize_requires_incorporation: 'purchases.amortize_requires_incorporation',
   purchase_has_payments: 'purchases.has_payments',
   purchase_total_below_allocated: 'purchases.total_below_allocated',
+  purchase_rate_frozen_after_payment: 'purchases.rate_frozen_after_payment',
   supplier_payment_not_found: 'supplier_payments.not_found',
   allocation_wrong_supplier: 'supplier_payments.allocation_wrong_supplier',
 
@@ -296,6 +297,8 @@ export const MSG = {
   deposit_not_found: 'deposits.not_found',
   deposit_already_settled: 'deposits.already_settled',
   deductions_exceed_deposit: 'deposits.deductions_exceed',
+  /** سعرُ يوم النقد لمطالبةٍ أو وديعةٍ أو مقبوضٍ يُردّ بعملةٍ غير عملة الأساس — مُدخَلٌ لا مفترَض (`ق-١٤٨٩` · B7 · B8 · B9). */
+  rent_cash_rate_required: 'contracts.cash_rate_required',
   payment_net_must_be_positive: 'contracts.payment_net_must_be_positive',
   rent_accrual_period_locked: 'contracts.rent_accrual_period_locked',
 
@@ -360,6 +363,7 @@ export const MSG = {
   pos_attempt_total_mismatch: 'pos.attempt_total_mismatch',
   integration_adapter_missing: 'integrations.adapter_missing',
   integration_unknown_provider: 'integrations.unknown_provider',
+  integration_provider_not_licensed: 'integrations.provider_not_licensed',
   integration_credentials_required: 'integrations.credentials_required',
   integration_kind_already_active: 'integrations.kind_already_active',
   integration_not_found: 'integrations.not_found',
@@ -509,6 +513,8 @@ export const MSG = {
   refund_target_invalid: 'returns.refund_target_invalid',
   refund_nothing_refundable: 'returns.refund_nothing_refundable',
   refund_exceeds_refundable: 'returns.refund_exceeds_refundable',
+  refund_currency_mismatch: 'returns.refund_currency_mismatch',
+  refund_rate_required: 'returns.refund_rate_required',
 
   // أدراج الكاشير (ق-٢١٨ · ق-٢٦٥)
   cash_drawer_not_found: 'cash_drawers.not_found',
@@ -560,6 +566,8 @@ export const MSG = {
   currency_in_use: 'currencies.in_use',
   currency_rate_must_be_positive: 'currencies.rate_must_be_positive',
   exchange_rate_same_currency: 'exchangeRates.same_currency',
+  /** مستندٌ بعملةٍ غيرِ عملة المنشأة بلا سعر صرف — لا يُسعَّر بـ١ بصمت (`ق-١٤٨٩`). */
+  currency_rate_required: 'currencies.rate_required',
 
   // fiscal year / period close
   fiscal_year_not_found: 'fiscal.year_not_found',
@@ -920,6 +928,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'إجمالي الفاتورة {no} الجديد {total} أقل مما سُدِّد عليها فعلاً {allocated}',
     en: 'The new total {total} of purchase invoice {no} is below what has already been paid on it ({allocated})',
   },
+  [MSG.purchase_rate_frozen_after_payment]: {
+    ar: 'عملة فاتورة الشراء {no} وسعر صرفها لا يُعدَّلان وعليها سدادٌ مخصَّص ({allocated}) — فرق الصرف رُحِّل بسعرها يوم السداد؛ اعكس سند الصرف أولاً ثم عدِّل',
+    en: 'The currency and exchange rate of purchase invoice {no} cannot be edited while supplier payments are allocated to it ({allocated}) — the exchange difference was posted at its rate when paid; reverse the supplier payment first, then edit',
+  },
   [MSG.supplier_payment_not_found]: { ar: 'سند الصرف غير موجود', en: 'Supplier payment not found' },
   [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },
 
@@ -1174,6 +1186,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'مجموع الخصومات يتجاوز مبلغ التأمين ({held})',
     en: 'Deductions exceed the deposit amount ({held})',
   },
+  [MSG.rent_cash_rate_required]: {
+    ar: 'المستند بعملة {currency} — أدخِل سعر صرف يوم حركة النقد: النقد يُقيَّد بسعر يومه، والفرق عن سعر المستند يُرحَّل إلى فروق العملة، ولا يُفترض سعرٌ',
+    en: 'This document is in {currency} — enter the exchange rate on the day the cash moves: cash is booked at that rate and the gap from the document rate goes to currency differences; no rate is assumed',
+  },
   [MSG.payment_net_must_be_positive]: { ar: 'المبلغ الصافي يجب أن يكون أكبر من صفر', en: 'Net amount must be greater than zero' },
   [MSG.rent_accrual_period_locked]: {
     ar: 'لا يمكن قبض هذه الدفعة: استحقاقُ القسط يقع في فترةٍ مقفلة — افتح الفترة أو قيّد الاستحقاق بقيدٍ عكسيّ في فترةٍ مفتوحة',
@@ -1286,6 +1302,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'No adapter is registered for provider {provider} — a card payment is not accepted through a connection that cannot work',
   },
   [MSG.integration_unknown_provider]: { ar: 'مزوّد غير معروف لهذا النوع من الربط', en: 'Unknown provider for this integration kind' },
+  [MSG.integration_provider_not_licensed]: {
+    ar: 'لا يُربط مزوّدُ دفعٍ إلا بمدرَجٍ في قائمة الجهة المنظِّمة للشركات المرخّصة — وهذا المزوّد بلا مدخلٍ مكتملٍ فيها',
+    en: 'A payment provider can only be connected if it is listed in the regulator’s register of licensed companies — this provider has no complete entry',
+  },
   [MSG.zatca_test_environment_forbidden_in_production]: { ar: 'بيئة الاختبار (SANDBOX/SIMULATION) غير مسموحة في الإنتاج — فواتيرها لا تُعتمد لدى هيئة الزكاة والضريبة والجمارك', en: 'Test environments (SANDBOX/SIMULATION) are not allowed in production — their invoices are not accepted by ZATCA' },
   [MSG.delegation_cycle_rejected]: {
     ar: 'لا يمكن التفويض لهذا المستخدم — فهو يفوّضك أصلاً (مباشرةً أو عبر سلسلة)، والتفويض الدائري غير مسموح',
@@ -1572,6 +1592,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.refund_target_invalid]: { ar: 'سند الردّ يُصدَر على إشعارٍ دائن مرتبطٍ بفاتورةٍ أصلية فقط', en: 'A refund is issued against a credit note linked to an original invoice only' },
   [MSG.refund_nothing_refundable]: { ar: 'لا شيء قابلٌ للردّ: الإشعار خُصم من متبقي الفاتورة غير المسدَّد، أو رُدّ من قبل', en: 'Nothing is refundable: the note offset the unpaid balance of its invoice, or was already refunded' },
   [MSG.refund_exceeds_refundable]: { ar: 'مبلغ الردّ ({amount}) يتجاوز القابل للردّ ({refundable}) — الخصم من الفاتورة غير المسدَّدة إلزاميّ أولاً', en: 'Refund ({amount}) exceeds the refundable amount ({refundable}) — the unpaid invoice balance must be offset first' },
+  [MSG.refund_currency_mismatch]: { ar: 'عملة الردّ ({currency}) تخالف عملة الإشعار الدائن {no} ({noteCurrency}) — الردُّ بعملة إشعاره', en: 'The refund currency ({currency}) differs from credit note {no} ({noteCurrency}) — a refund is paid in its note’s currency' },
+  [MSG.refund_rate_required]: { ar: 'الإشعار الدائن {no} بعملة {currency} — سعرُ صرف يوم الردّ مطلوب ولا يُفترض', en: 'Credit note {no} is in {currency} — the exchange rate of the refund day is required and is never assumed' },
   /**
    * ⚖️ **الفاتورةُ الصادرة لا تُعدَّل ولا تُحذف — مختومةً كانت أو لا** (`ق-٩٤٣`): العميلُ يحمل رقمَها ورمزَها
    * منذ لحظة الإصدار، وإيصالُ الكاشير يخرج قبل الإجازة، ولا نافذةَ ضيّقة حيث لا تسجيل. **ورسالةٌ واحدة
@@ -1733,6 +1755,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.currency_rate_must_be_positive]: { ar: 'سعر الصرف يجب أن يكون أكبر من صفر', en: 'The exchange rate must be greater than zero' },
   [MSG.exchange_rate_same_currency]: { ar: 'لا يمكن تسجيل سعر صرف بين العملة ونفسها', en: 'An exchange rate cannot be between a currency and itself' },
+  [MSG.currency_rate_required]: {
+    ar: 'المستند بعملة {currency} وعملة المنشأة الأساسية {base} — أدخل سعر الصرف وقت العملية، فلا يُفترض له سعر',
+    en: 'The document is in {currency}, not the base currency {base} — enter the exchange rate as of the transaction; none is assumed',
+  },
 
   [MSG.fiscal_year_not_found]: { ar: 'السنة المالية غير موجودة', en: 'Fiscal year not found' },
   [MSG.fiscal_period_not_found]: { ar: 'الفترة المالية غير موجودة', en: 'Fiscal period not found' },

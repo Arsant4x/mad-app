@@ -1247,6 +1247,11 @@ export interface CustomerPaymentForPosting {
   /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): نقدٌ خارج وذمّةٌ تعود — نفس القيد بمبالغٍ سالبة، بمذكّرةٍ تسمّيه. */
   refund?: boolean;
   /**
+   * **فرقُ ذمّةِ سندٍ أُعيد توزيعُه** (`ق-١٤٨٩`/B1): بلا نقد (`baseCash = 0`) — الذمّةُ المرحَّلة تتبدّل بسعر الفواتير
+   * الجديدة، والفارقُ ربحُ صرفٍ أو خسارتُه على `5600`. بمذكّرةٍ تسمّيه وتسمّي السند.
+   */
+  reallocation?: boolean;
+  /**
    * حسابُ النقد المستقبِل — **حسابُ البنك حين تُقبض الدفعة على بنك** (`ق-٢٧٧`)،
    * و`1000` حين تُقبض نقداً. وقبلَ هذا كان الطرفُ المدين `1000` دائماً، **فنقدُ
    * البنك يُعدّ صندوقاً** (`ق-٢٧٦` — عائقُ إطلاق).
@@ -1304,13 +1309,16 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
   const partyCode = receivable ? '1200' : '2100';
   // ربحُ الصرف: قبضٌ بنقدٍ يفوق الذمّة، أو صرفٌ بنقدٍ يقلّ عنها.
   const fxGain = round2(receivable ? cash - settled : settled - cash);
+  // ⚖️ **قيدٌ بلا نقد** (`ق-١٤٨٩`/B1 — فرقُ ذمّةِ سندٍ أُعيد توزيعُه): لا يُطلب حسابُ نقدٍ ولا يُكتب سطرُه — فـ`createJournalEntry`
+  //    يفحص المجموعَين وحدهما ويكتب كلَّ سطرٍ كما هو، فسطرُ نقدٍ صفريٌّ كان سيبقى في الدفتر بلا واقعة.
+  const withCash = cash !== 0;
   // `1000` لا يُطلَب حين يُمرَّر حسابُ بنك: منشأةٌ بلا `1000` لا يُسقَط قيدُها
   // البنكيّ لأجل رمزٍ لا يدخل فيه.
-  const needCodes = [...(p.cashAccountId ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);  const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
+  const needCodes = [...(p.cashAccountId || !withCash ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
 
   const lines: PostingLine[] = [
-    signedLine(cashAccountId, cash, receivable),
+    ...(withCash ? [signedLine(p.cashAccountId ?? ids.get('1000')!, cash, receivable)] : []),
     signedLine(ids.get(partyCode)!, settled, !receivable),
   ];
   if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
@@ -1589,7 +1597,7 @@ export function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId
   return postPartySettlementEntry(tx, companyId, {
     side: 'RECEIVABLE',
     date: p.date,
-    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : p.reallocation ? 'إعادة توزيع مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
     baseCash: p.baseCash,
     baseSettled: p.baseReceivable,
     customerId: p.customerId,
@@ -1704,6 +1712,17 @@ export interface DepositSettlementForPosting {
   againstIncome: number;
   refund: number;
   typeLabel: string;
+  /**
+   * (`ق-١٤٨٩` · B8) **النقدُ الذي تُفرج عنه «إيجار» للمنشأة، بسعر يومه** — للمحجوز لدى إيجار وحدَه. غائبٌ ⇒ مجموعُ
+   * الخصمين كما كان (القيدُ حرفاً كما قبل).
+   */
+  awardedCash?: number;
+  /**
+   * (`ق-١٤٨٩` · B8) **فرقُ الصرف المحقَّق** — موجبٌ ربحٌ دائنٌ على `5600`، وسالبٌ خسارةٌ مدينة؛ غائبٌ ⇒ صفر.
+   * **تحسبه الخدمةُ صريحاً** من الفرق بين تقويم كلِّ جزءٍ بسعر الوديعة وتقويمه بسعره هو — لا سطرَ موازنةٍ يُحسب
+   * هنا: فخطأٌ في التقسيم يُرفض من `createJournalEntry` (`journal_entry_unbalanced`) ولا يُطوى صامتاً في `5600`.
+   */
+  fxGain?: number;
 }
 
 /**
@@ -1723,6 +1742,10 @@ export interface DepositSettlementForPosting {
  * refund is settled between Ejar and the tenant and touches nothing here, so a
  * full refund posts **no entry at all**.
  *
+ * ⚖️ **وفرقُ الصرف على `5600` لا في `1000`** (`ق-١٤٨٩` · B8): لوديعةٍ بعملةٍ غير عملة الأساس يخرج الردُّ (أو يدخل
+ * ما تُفرج عنه إيجار) بسعر يوم التسوية، وتُقيَّد الذمّةُ دائنةً بسعرها — والفرقُ عن تقويمهما بسعر الوديعة سطرٌ
+ * صريحٌ هنا (`fxGain`). وبلا الحقلين الجديدين القيدُ حرفاً كما كان.
+ *
  * Returns `null` (soft-skip) if a required account isn't set up yet, or if
  * there is genuinely nothing to post.
  */
@@ -1734,20 +1757,23 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
   // never touches this company's books.
   if (!s.heldByCompany && awarded <= 0) return null;
 
+  const fxGain = round2(s.fxGain ?? 0);
   const needCodes = [
     ...(s.heldByCompany ? [TENANT_DEPOSITS_ACCOUNT] : ['1000']),
     ...(s.againstReceivable > 0 ? ['1200'] : []),
     ...(s.againstIncome > 0 ? [OTHER_INCOME_ACCOUNT] : []),
     ...(s.heldByCompany && s.refund > 0 ? ['1000'] : []),
+    ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : []),
   ];
   const ids = await resolveAccountIds(tx, needCodes);
   const lines: PostingLine[] = s.heldByCompany
     ? [{ accountId: ids.get(TENANT_DEPOSITS_ACCOUNT)!, debit: s.baseAmount, credit: 0 }]
-    : [{ accountId: ids.get('1000')!, debit: awarded, credit: 0 }];
+    : [{ accountId: ids.get('1000')!, debit: s.awardedCash ?? awarded, credit: 0 }];
 
   if (s.againstReceivable > 0) lines.push({ accountId: ids.get('1200')!, debit: 0, credit: s.againstReceivable });
   if (s.againstIncome > 0) lines.push({ accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.againstIncome });
   if (s.heldByCompany && s.refund > 0) lines.push({ accountId: ids.get('1000')!, debit: 0, credit: s.refund });
+  if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
 
   return createJournalEntry(tx, {
     companyId,
@@ -1772,6 +1798,12 @@ export interface DeferredSettlementForPosting {
   baseAmount: number;
   /** `refund` نقدٌ يخرج · `income` يُحتجَز بشرط العقد. */
   disposition: 'refund' | 'income';
+  /**
+   * (`ق-١٤٨٩` · B9) **النقدُ المردود بسعر يوم الإلغاء** — لـ`refund` على عقدٍ بعملةٍ غير عملة الأساس: الالتزامُ
+   * (`2400`) مقيَّدٌ بسعر العقد، والنقدُ الخارجُ يُقوَّم بسعر يومه، والفرقُ على `5600`. غائبٌ ⇒ النقدُ = `baseAmount`
+   * (القيدُ حرفاً كما كان). ولا يُقرأ مع `income` — لا نقدَ يتحرّك.
+   */
+  baseCash?: number;
 }
 
 /**
@@ -1785,22 +1817,32 @@ export interface DeferredSettlementForPosting {
  * ووديعةٌ محتجَزة تسلك المسلك عينَه إلى `4300`.
  *
  * ⚠️ **والوجهةُ مُدخَلةٌ لا مُفترَضة**: `cancel` يمنع الإلغاء حتى تُختار.
+ *
+ * ⚖️ **والمردودُ بعملةٍ أجنبية بسعر يومه** (`ق-١٤٨٩` · B9): كان النقدُ يخرج بالأساس التاريخيّ نفسِه فيُطوى فرقُ
+ * السوق في `1000`؛ والآن يُقيَّد بـ`baseCash` والفرقُ عن الالتزام سطرٌ على `5600`.
  */
 export async function postDeferredSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: DeferredSettlementForPosting) {
   if (s.baseAmount <= 0) return null;
 
-  const destination = s.disposition === 'refund' ? '1000' : OTHER_INCOME_ACCOUNT;
-  const ids = await resolveAccountIds(tx, [destination]);  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  const refund = s.disposition === 'refund';
+  const destination = refund ? '1000' : OTHER_INCOME_ACCOUNT;
+  const credit = refund && s.baseCash !== undefined ? round2(s.baseCash) : s.baseAmount;
+  // ربحُ الصرف: التزامٌ بسعره التاريخيّ يُسدَّد بنقدٍ أقلّ منه بسعر يومه — والخسارةُ عكسُه.
+  const fxGain = round2(s.baseAmount - credit);
+  const ids = await resolveAccountIds(tx, [destination, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])]);
+  const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);
+  const lines: PostingLine[] = [
+    { accountId: deferredId, debit: s.baseAmount, credit: 0 },
+    { accountId: ids.get(destination)!, debit: 0, credit },
+  ];
+  if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
 
   return createJournalEntry(tx, {
     companyId,
     date: s.date,
     memo: `إقفال إيراد مؤجَّل عند الإلغاء — عقد ${s.contractNo} — ${s.tenant} — ${s.disposition === 'refund' ? 'ردٌّ للمستأجر' : 'احتجازٌ بشرط العقد'}`,
     unitId: s.unitId,
-    lines: [
-      { accountId: deferredId, debit: s.baseAmount, credit: 0 },
-      { accountId: ids.get(destination)!, debit: 0, credit: s.baseAmount },
-    ],
+    lines,
     auto: true,
     customerId: s.customerId ?? null,
   });
@@ -1887,20 +1929,35 @@ export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyI
   });
 }
 
+/**
+ * تحصيلُ مطالبة — **والنقدُ بسعر يومه** (`ق-١٤٨٩` · B7): الذمّةُ قُيّدت بسعر المطالبة يومَ إصدارها (`baseAmount`)،
+ * والنقدُ الداخلُ يُقوَّم بسعر يوم التحصيل، وما بينهما فرقُ صرفٍ محقَّق على `5600` — كسند القبض
+ * (`postPartySettlementEntry`). وكان الطرفان بالمبلغ نفسِه فيُطوى الفرقُ في `1000`.
+ */
+export interface ClaimPaymentForPosting extends ClaimForPosting {
+  /** النقدُ بالعملة الأساسية = مبلغُ المطالبة × سعرُ يوم التحصيل. غائبٌ ⇒ مطالبةٌ بعملة الأساس، فالنقدُ = `baseAmount` والقيدُ حرفاً كما كان. */
+  baseCash?: number;
+}
+
 /** Collecting a claim: cash in (1000 or the bank's account), receivable out. */
-export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
+export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimPaymentForPosting) {
   if (c.baseAmount <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['1000', '1200']);
+  const cash = c.baseCash === undefined ? c.baseAmount : round2(c.baseCash);
+  // ربحُ الصرف: نقدٌ يفوق الذمّةَ بسعرها التاريخيّ — والخسارةُ عكسُه.
+  const fxGain = round2(cash - c.baseAmount);
+  const ids = await resolveAccountIds(tx, ['1000', '1200', ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])]);
+  const lines: PostingLine[] = [
+    { accountId: ids.get('1000')!, debit: cash, credit: 0 },
+    { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
+  ];
+  if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
     memo: `تحصيل مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
     unitId: c.unitId,
-    lines: [
-      { accountId: ids.get('1000')!, debit: c.baseAmount, credit: 0 },
-      { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
-    ],
+    lines,
     auto: true,
     customerId: c.customerId ?? null,
   });

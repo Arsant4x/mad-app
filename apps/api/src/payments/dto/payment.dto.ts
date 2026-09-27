@@ -102,6 +102,15 @@ export class AllocateDto {
   @ValidateNested({ each: true })
   @Type(() => AllocationDto)
   allocations!: AllocationDto[];
+
+  /**
+   * **يومُ إعادة التوزيع بتقويم التاجر** (`YYYY-MM-DD`) — به يُؤرَّخ قيدُ فرق الذمّة حين يختلف سعرُ الفواتير
+   * الجديدة عن القديمة (`ق-١٤٨٩`/B1)، ويخضع لقفل الفترات كأيِّ قيد. والغيابُ يؤرّخه بساعة الخادم كالعكس بلا
+   * تاريخ (`ReversePaymentDto.date` · `ق-٧٣٦`) — **حدٌّ معلَنٌ لا تخمين**.
+   */
+  @IsOptional()
+  @IsDateString()
+  date?: string;
 }
 
 export class ReversePaymentDto {
