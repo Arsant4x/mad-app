@@ -532,10 +532,17 @@ export class ContractsService {
         const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
         if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
 
-        // A payment defaults to the contract's currency/rate, but can carry
-        // its own — the gap between the rate the contract was priced at and
-        // the one it settles at is the realized FX gain/loss.
-        const payCurrency = dto.currency?.trim() || contract.currency;
+        // A payment carries the contract's currency and may carry its own rate —
+        // the gap between the rate the contract was priced at and the one it
+        // settles at is the realized FX gain/loss.
+        // ⚖️ (`ق-١٥٠٣`/ب · ٣-د) **ولا يُقبض الإيجارُ بعملةٍ غير عملة العقد**: كان يمرّ فيُسدَّد القسطُ بمقياسٍ آخر ويُحوَّل
+        //    المبلغُ إلى عملة العقد بقسمة سعرين، ولا فرقَ صرفٍ يُعرف له (القياس B5). والقائمُ «`0`» على التطوير والمنشور
+        //    (`ق-١٥٠٤`) — فالرفضُ لا يمسّ صفّاً. والرموزُ بلا اعتبارٍ لحالة الأحرف، والمخزَّنُ عملةُ العقد بعينها.
+        const requested = dto.currency?.trim();
+        if (requested && requested.toUpperCase() !== contract.currency.trim().toUpperCase()) {
+          throw new BadRequestException(formatMessage(MSG.rent_payment_currency_mismatch, { payment: requested, contract: contract.currency }));
+        }
+        const payCurrency = contract.currency;
         const payRate = dto.exchangeRate ?? Number(contract.exchangeRate);
 
         const discount = dto.discount ?? 0;
@@ -550,8 +557,9 @@ export class ContractsService {
         const treatment = treatmentOf(accrualContract);
         const accrualPath = treatment !== null && (installment === null || installment.accrualBasis === 'ACCRUAL');
         // الإجماليُّ بمقياس عملة العقد — قبل الخصم، فالخصمُ تعديلُ مقابلٍ لاحق.
-        const baseExpected = payCurrency === contract.currency ? toBaseAmount(netAmount, Number(contract.exchangeRate)) : toBaseAmount(netAmount, payRate);
-        const grossInContractCurrency = payCurrency === contract.currency ? dto.amount : round2(toBaseAmount(dto.amount, payRate) / (Number(contract.exchangeRate) || 1));
+        // والقبضُ بعملة العقد وحدَها — فالمتوقَّعُ بسعر العقد، والإجماليُّ هو المبلغُ نفسُه.
+        const baseExpected = toBaseAmount(netAmount, Number(contract.exchangeRate));
+        const grossInContractCurrency = dto.amount;
 
         let journalEntry: { id: string; no: string } | null = null;
         let earnedNow = 0;
@@ -627,7 +635,7 @@ export class ContractsService {
                   select: { id: true, baseAccruedGross: true, baseAccruedNet: true, baseAccruedTax: true, baseRecognized: true },
                 })
               : null;
-            const discountGross = payCurrency === contract.currency ? discount : round2(toBaseAmount(discount, payRate) / (Number(contract.exchangeRate) || 1));
+            const discountGross = discount;
             await discountAccrualWithinTx(tx, companyId, accrualContract, treatment, fresh, {
               date: new Date(dto.date),
               gross: discountGross,
