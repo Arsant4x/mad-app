@@ -23,7 +23,8 @@ import { ServicePeriod, splitAtCollection } from './rent-recognition.util';
  * سالباً، واعترافٌ يُرحَّل على استحقاقٍ متخطّى يجعل `2400` مديناً. **والآن يرمي `409` مسمّىً** بالرموز وأسمائها،
  * فالمعاملةُ كلُّها تسقط (المستندُ وحركاتُه وحدثُه) ويُدلّ المالكُ على المخرج: إعادةُ الحساب من شاشة الحسابات.
  * ⚠️ **وحدُّه معلَن**: رقمُ المستند يُحجز على منفذٍ خاصّ قبل الترحيل، فالرفضُ هنا يترك فجوةً في السلسلة — كرفض الفترة
- * المقفلة اليوم؛ والفحصُ المسبقُ قبل الترقيم مبنيٌّ للفاتورة وحدَها (`assertPostingAccounts`).
+ * المقفلة؛ والفحصُ المسبقُ قبل الترقيم (`assertPostingAccounts` مع الفترة) مبنيٌّ للمستندات الضريبية وحدَها — الفاتورةُ
+ * وإشعاراها ومستندُ الدفعة المقدَّمة (`ق-١٤٩٠` · `invoices/issue-prechecks.util.ts`) — والمراجعُ الداخليةُ حدٌّ معلَن.
  */
 async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]): Promise<Map<string, string>> {
   const rows = await tx.account.findMany({ where: { code: { in: codes } }, select: { id: true, code: true } });
@@ -56,6 +57,27 @@ export function invoicePostingCodes(inv: { baseTotal: number; baseSubtotal: numb
   if (inv.baseTotal <= 0) return [];
   return ['1200', ...(inv.baseSubtotal > 0 ? ['4100'] : []), ...(inv.baseTaxTotal > 0 ? ['2200'] : [])];
 }
+
+/** (`ق-١٤٩٠`) رموزُ قيد الإشعار الدائن أو المدين كما يطلبها `postCreditNoteEntry`/`postDebitNoteEntry` — مصدرٌ واحد للفحص المسبق وللترحيل. */
+export function adjustmentNotePostingCodes(note: { baseTotal: number; baseTaxTotal: number }): string[] {
+  if (note.baseTotal <= 0) return [];
+  return ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
+}
+
+/** (`ق-١٤٩٠`) رموزُ قيد مستند الدفعة المقدَّمة كما يطلبها `postPrepaymentInvoiceEntry` — مصدرٌ واحد للفحص المسبق وللترحيل. */
+export function prepaymentInvoicePostingCodes(p: { baseTotal: number; baseTaxTotal: number }): string[] {
+  if (p.baseTotal <= 0) return [];
+  return ['1200', ...(p.baseTaxTotal > 0 ? ['2200'] : [])];
+}
+
+/** (`ق-١٤٩٠`) رموزُ قيد تطبيق الدفعة المقدَّمة كما يطلبها `postPrepaymentApplicationEntry` — مصدرٌ واحد للفحص المسبق وللترحيل. */
+export function prepaymentApplicationPostingCodes(p: { gross: number; vat: number }): string[] {
+  if (p.gross <= 0) return [];
+  return ['1200', ...(p.vat > 0 ? ['2200'] : [])];
+}
+
+/** حسابُ تكلفة المبيعات — يطلبه قيدُ التكلفة وعكسُه، ومنه يقرأ الفحصُ المسبق (`ق-١٤٩٠`). */
+export const COST_OF_SALES_CODE = '5100';
 
 /**
  * حساب مصروف الشراء — **من `common/purchase-categories.ts`**، وكان هنا خريطةً
@@ -182,8 +204,8 @@ export interface PrepaymentForPosting {
 
 export async function postPrepaymentInvoiceEntry(tx: Prisma.TransactionClient, companyId: string, p: PrepaymentForPosting) {
   if (p.baseTotal <= 0) return null;
-  const needCodes = ['1200', ...(p.baseTaxTotal > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: p.baseTotal, credit: 0 }];
+  const ids = await resolveAccountIds(tx, prepaymentInvoicePostingCodes(p));
+  const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: p.baseTotal, credit: 0 }];
   if (p.baseSubtotal > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: 0, credit: p.baseSubtotal });
   if (p.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: p.baseTaxTotal });
   return createJournalEntry(tx, {
@@ -211,8 +233,8 @@ export async function postPrepaymentApplicationEntry(
   p: { customerId: string; branchId?: string | null; invoiceNo: string; prepaymentNo: string; date: Date; customerName: string; net: number; vat: number; gross: number; prepaymentsAccountId: string },
 ) {
   if (p.gross <= 0) return null;
-  const needCodes = ['1200', ...(p.vat > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);  const lines: PostingLine[] = [];
+  const ids = await resolveAccountIds(tx, prepaymentApplicationPostingCodes(p));
+  const lines: PostingLine[] = [];
   if (p.net > 0) lines.push({ accountId: p.prepaymentsAccountId, debit: p.net, credit: 0 });
   if (p.vat > 0) lines.push({ accountId: ids.get('2200')!, debit: p.vat, credit: 0 });
   lines.push({ accountId: ids.get('1200')!, debit: 0, credit: p.gross });
@@ -240,8 +262,7 @@ export async function postPrepaymentApplicationEntry(
 export async function postCreditNoteEntry(tx: Prisma.TransactionClient, companyId: string, note: InvoiceForPosting) {
   if (note.baseTotal <= 0) return null;
 
-  const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
+  const ids = await resolveAccountIds(tx, adjustmentNotePostingCodes(note));
   const lines: PostingLine[] = [];
   if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: note.baseSubtotal, credit: 0 });
   if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: note.baseTaxTotal, credit: 0 });
@@ -264,8 +285,7 @@ export async function postCreditNoteEntry(tx: Prisma.TransactionClient, companyI
 export async function postDebitNoteEntry(tx: Prisma.TransactionClient, companyId: string, note: InvoiceForPosting) {
   if (note.baseTotal <= 0) return null;
 
-  const needCodes = ['1200', '4100', ...(note.baseTaxTotal > 0 ? ['2200'] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);
+  const ids = await resolveAccountIds(tx, adjustmentNotePostingCodes(note));
   const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: note.baseTotal, credit: 0 }];
   if (note.baseSubtotal > 0) lines.push({ accountId: ids.get('4100')!, debit: 0, credit: note.baseSubtotal });
   if (note.baseTaxTotal > 0) lines.push({ accountId: ids.get('2200')!, debit: 0, credit: note.baseTaxTotal });
@@ -301,13 +321,13 @@ export async function postCogsEntry(
 ) {
   if (c.baseCost <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['5100']);
+  const ids = await resolveAccountIds(tx, [COST_OF_SALES_CODE]);
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
     memo: `تكلفة مبيعات ${c.no}`,
     lines: [
-      { accountId: ids.get('5100')!, debit: c.baseCost, credit: 0 },
+      { accountId: ids.get(COST_OF_SALES_CODE)!, debit: c.baseCost, credit: 0 },
       { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: 0, credit: c.baseCost },
     ],
     auto: true,
@@ -333,14 +353,14 @@ export async function postCogsReversalEntry(
 ) {
   if (c.baseCost <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['5100']);
+  const ids = await resolveAccountIds(tx, [COST_OF_SALES_CODE]);
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
     memo: c.memo ?? `عكس تكلفة مبيعات — مرتجع ${c.no}`,
     lines: [
       { accountId: await getOrCreateInventoryAccount(tx, companyId), debit: c.baseCost, credit: 0 },
-      { accountId: ids.get('5100')!, debit: 0, credit: c.baseCost },
+      { accountId: ids.get(COST_OF_SALES_CODE)!, debit: 0, credit: c.baseCost },
     ],
     auto: true,
     branchId: c.branchId ?? null,

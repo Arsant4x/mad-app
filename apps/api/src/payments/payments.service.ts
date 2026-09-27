@@ -28,6 +28,7 @@ import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
 import { resolveDeclaredLineTax, type LineTax } from '../common/vat/line-tax.util';
 import { InvoicesService } from '../invoices/invoices.service';
+import { assertPrepaymentIssuable } from '../invoices/issue-prechecks.util';
 import { unallocatedReceivableRate } from './voucher-receivable-rate.util';
 
 const PAYMENT_INCLUDE = {
@@ -200,6 +201,9 @@ export class PaymentsService {
             throw new BadRequestException(formatMessage(MSG.payment_on_account_uncovered, { remainder: money(remainder), open: money(Math.max(0, openRemaining)) }));
           }
         }
+        // ⚖️ (`ق-١٤٩٠`) مستندُ الدفعة المقدَّمة (386) رقمٌ ضريبيّ يُحجز بعد سند القبض — فمبلغُه وحساباتُ قيده و`2450` بنوعه
+        // تُفحص هنا قبل ترقيم السند، فيُرفض برسالته قبل رقمَي `RCV` و`PP` معاً لا بعدهما.
+        if (prepaymentTax) await assertPrepaymentIssuable(tx, companyId, { grossAmount: remainder, exchangeRate, taxRate: prepaymentTax.taxRate });
 
         const no = await this.nextPaymentNumber(tx, companyId, new Date(dto.date));
         const payment = await tx.payment.create({

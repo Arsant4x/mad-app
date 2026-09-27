@@ -22,14 +22,19 @@ import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
-import { fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
+import { assertSaleNotBlockedByExpiry, fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postPrepaymentApplicationEntry, postPrepaymentInvoiceEntry } from '../journal/auto-posting.util';
 import { getOrCreateCustomerPrepaymentsAccount } from '../journal/prepayment-account.util';
 import {
-  assertPostingAccounts,
-  invoicePostingCodes,
+  assertAdjustmentNoteIssuable,
+  assertSaleIssuable,
+  prepaymentDocumentAmounts,
+  returnExceedsSoldRefusal,
+  type ApplicablePrepayment,
+} from './issue-prechecks.util';
+import {
   postCogsEntry,
   postCogsReversalEntry,
   postCreditNoteEntry,
@@ -565,11 +570,26 @@ export class InvoicesService {
         credit,
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
-      // ⚖️ (`ق-١٤٦٦`) وحساباتُ القيد تُفحص قبل الترقيم كذلك — فالرفضُ برسالةٍ لا يحرق رقماً من سلسلة الفاتورة.
-      await assertPostingAccounts(
-        tx,
-        invoicePostingCodes({ baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) }),
-      );
+      // ⚖️ (`ق-١٤٦٦` · `ق-١٤٩٠`) وكلُّ ما يُرفض بعد الترقيم يُفحص قبله: حساباتُ القيد (و`5100`/`1300` حين يُخصم من الرفّ)
+      // والفترةُ والدفعاتُ المقدَّمة المسمّاة — فالرفضُ برسالةٍ لا يحرق رقماً من سلسلة الفاتورة. والمقروءُ هنا هو ما يقرؤه
+      // التنفيذُ بعينه، وفحوصُ التنفيذ باقيةٌ طبقةً ثانية.
+      const { prepayments } = await assertSaleIssuable(tx, companyId, {
+        issueDate: new Date(dto.issueDate),
+        branchId,
+        customerId: dto.customerId,
+        lines: dto.lines,
+        total,
+        base: { baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) },
+        prepaymentInvoiceIds: dto.prepaymentInvoiceIds,
+      });
+      // ⚖️ (`ق-١٤٩٠` · `INV-①`) والبيعُ من دفعةٍ منتهية يُفحص قبل الترقيم كذلك — بقراءة التسليم نفسِها (مستودعُ الفرع ·
+      //    السطورُ المخزنية · الدورةُ الأولى من `consumeFifo` بيوم المستند) وبمجموع الكمّية لكلّ صنف؛ فالرفضُ برسالته
+      //    لا يحرق رقماً. ويبقى رفضُ `consumeFifo` بعد الترقيم طبقةَ السباق وحدَها. والكاشيرُ يمرّ من هنا كذلك.
+      await assertSaleNotBlockedByExpiry(tx, {
+        branchId,
+        date: new Date(dto.issueDate),
+        lines: lines.map((l) => ({ productId: l.productId ?? null, quantity: l.quantity })),
+      });
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — وصنفٌ لم يُعلن وحدتَه يترك السطرَ بلا وحدة، لا برمزٍ مخمَّن.
       const unitCodes = await unitCodesFor(tx, dto.lines);
@@ -716,7 +736,8 @@ export class InvoicesService {
       });
 
       // ④A1: الدفعاتُ المقدَّمة المسمّاة تُطبَّق على هذه الفاتورة — تخصيصٌ من سند قبضها، وقيدُ إقفالِ الالتزام، وصفُّ الربط للمستند.
-      if (dto.prepaymentInvoiceIds?.length) await this.applyPrepayments(tx, companyId, created, dto.prepaymentInvoiceIds);
+      // (`ق-١٤٩٠`) وقد فُحصت قبل الترقيم (`assertSaleIssuable`)، فتصل هنا مقروءةً مرتَّبة.
+      if (prepayments.length > 0) await this.applyPrepayments(tx, companyId, created, prepayments);
 
       // ② التسليمُ يخرج نصّاً بدقّة صنفه (`ق-١٢٣٥`) — والكاشيرُ يقرأ صورةَ الحدّ هذه لا الرقم.
       if (!entry) return { ...created, stockFulfilment: fulfilmentReport(fulfilment) };
@@ -1044,8 +1065,16 @@ export class InvoicesService {
     const rate = Number(original.exchangeRate);
     // التاريخ يسبق الرقم — فالبادئة تُشتقّ منه.
     const issueDate = note.issueDate ? new Date(note.issueDate) : new Date();
-    const no = await this.nextDocumentNumber(tx, companyId, note.numberKind, issueDate);
     const { subtotal, taxTotal, total } = note.totals;
+    // ⚖️ (`ق-١٤٩٠`) الإشعارُ مستندٌ ضريبيّ يصل الهيئةَ برقمه — فما يُرفض بعد الترقيم يُفحص قبله: الإرجاعُ فوق المبيع
+    // تراكمياً، وحساباتُ قيده وقيدِ عكس تكلفته، والفترةُ. والرفوضُ بعده باقيةٌ طبقةً ثانية.
+    await assertAdjustmentNoteIssuable(tx, companyId, {
+      docType: note.docType,
+      issueDate,
+      lines: note.lines,
+      base: { baseTotal: toBaseAmount(total, rate), baseTaxTotal: toBaseAmount(taxTotal, rate) },
+    });
+    const no = await this.nextDocumentNumber(tx, companyId, note.numberKind, issueDate);
 
     const unitCodes = await unitCodesFor(tx, note.lines);
     const created = await tx.invoice.create({
@@ -1141,9 +1170,8 @@ export class InvoicesService {
           lines: created.lines,
         });
       } catch (e) {
-        if (e instanceof ReturnExceedsSoldError) {
-          throw new BadRequestException(formatMessage(MSG.return_exceeds_sold, { sold: e.sold, returned: e.alreadyReturned, requested: e.requested }));
-        }
+        // طبقةٌ ثانية (`ق-١٤٩٠`): فُحص قبل الترقيم، ولا يبلغ هنا إلا مرتجعٌ متزامنٌ سبقه إلى الالتزام — بالرسالة نفسِها.
+        if (e instanceof ReturnExceedsSoldError) throw returnExceedsSoldRefusal(e);
         throw e;
       }
       // ⚖️ ق-١٣٦٤ «والوحدةُ تعود بالتكلفة التي خرجت بها، وما رُفع عليها بعد خروجها يُعاد من تكلفة المبيعات إلى المخزون» —
@@ -1198,17 +1226,11 @@ export class InvoicesService {
     companyId: string,
     p: { customerId: string; customerName: string; paymentId: string; paymentNo: string; branchId: string | null; date: Date; grossAmount: number; currency: string; exchangeRate: number; tax: LineTax },
   ): Promise<{ id: string; no: string; total: number; onAccountRemainder: number }> {
-    const gross = round2(p.grossAmount);
-    if (gross <= 0) throw new BadRequestException(MSG.prepayment_amount_positive);
     // النسبةُ من الفئة المعلَنة (المعفى والصفريُّ وخارجُ النطاق صفر) — لا من ثابت.
     const rate = p.tax.taxRate;
-    // الصافي يُختار بحيث يساوي إجماليُّ المستند المقبوضَ؛ فإن تعذّر (قفزةُ تدوير الضريبة تتخطّى المقبوضَ — كـ`0.80`:
-    // `0.69 ⟵ 0.79` و`0.70 ⟵ 0.81`) اختير **أكبرُ صافٍ لا يفوق إجماليُّه المقبوضَ** — فلا يُخصَّص على المستند أكثرُ ممّا قُبض.
-    const base = round2(gross / (1 + rate / 100));
-    const totalOf = (net: number) => computeTotals([{ quantity: 1, unitPrice: net, taxRate: rate }]).total;
-    const candidates = [base, round2(base - 0.01), round2(base + 0.01), round2(base - 0.02)].filter((net) => net > 0 && totalOf(net) <= gross);
-    if (candidates.length === 0) throw new BadRequestException(MSG.prepayment_amount_positive);
-    const chosen = candidates.reduce((best, net) => (totalOf(net) > totalOf(best) ? net : best), candidates[0]);
+    // الصافي يُختار بحيث يساوي إجماليُّ المستند المقبوضَ — بالدالّة الواحدة التي فحص بها المستدعي قبل ترقيم سنده
+    // (`ق-١٤٩٠` · `assertPrepaymentIssuable`)؛ ورفضُها هنا طبقةٌ ثانية لمستدعٍ لم يفحص.
+    const { gross, net: chosen } = prepaymentDocumentAmounts(p.grossAmount, rate);
     const lines = await priceLines(
       tx,
       [
@@ -1297,7 +1319,9 @@ export class InvoicesService {
    * ④A1 — **تطبيقُ دفعاتٍ مقدَّمة على فاتورة التوريد**: كلُّ مستند 386 مسمّىً يُطبَّق كاملاً (لا تجزئة — حدٌّ معلَن)
    * على هذه الفاتورة وحدَها: **تخصيصٌ** من سند قبضه إليها (فالحالةُ والأعمارُ والمتبقّي من المصدر الواحد — التخصيصات)،
    * **وقيدٌ** يُقفل الالتزامَ ويعكس ضريبتَه، **وصفُّ ربطٍ** يحمله المستندُ إلى الهيئة (BT-113 · KSA-26…34).
-   * يُرفض ما ليس دفعةً مقدَّمة، أو لعميلٍ آخر، أو طُبّق من قبل، أو ما يفوق مجموعُه إجماليَّ الفاتورة.
+   * يُرفض ما ليس دفعةً مقدَّمة، أو لعميلٍ آخر، أو طُبّق من قبل، أو ما يفوق مجموعُه إجماليَّ الفاتورة — **وذلك كلُّه قبل
+   * الترقيم** (`ق-١٤٩٠` · `readApplicablePrepayments`)، فتصل المستنداتُ هنا مفحوصةً؛ ويبقى عدُّ التخصيص المنقول طبقةَ
+   * السباق: مستندٌ طبّقته معاملةٌ متزامنة بين الفحص وهنا يُرفض باسمه.
    *
    * **على مستوى المنشأة بحقّها**: مستنداتُ 386 تُقرأ بمعرّفاتها المسمّاة في الطلب، ومستندُ العميل الصادرُ من سند قبضٍ
    * في فرعٍ آخر يُطبَّق على توريده هنا — فالدفعةُ المقدَّمة التزامٌ للعميل على المنشأة لا على فرع.
@@ -1306,25 +1330,12 @@ export class InvoicesService {
     tx: Prisma.TransactionClient,
     companyId: string,
     invoice: { id: string; no: string; customerId: string; branchId: string | null; issueDate: Date; total: Prisma.Decimal; customer: { name: string } },
-    prepaymentInvoiceIds: string[],
+    docs: readonly ApplicablePrepayment[],
   ) {
-    const ids = [...new Set(prepaymentInvoiceIds)];
-    const docs = await tx.invoice.findMany({
-      where: { id: { in: ids } },
-      include: { appliedAsPrepayment: { select: { invoiceId: true } }, prepaymentPayment: { select: { id: true } } },
-    });
-    let applied = 0;
     const prepaymentsAccountId = await getOrCreateCustomerPrepaymentsAccount(tx, companyId);
-    for (const id of ids) {
-      const doc = docs.find((d) => d.id === id);
-      if (!doc || doc.docType !== 'PREPAYMENT' || !doc.prepaymentPayment) throw new NotFoundException(MSG.prepayment_not_found);
-      if (doc.customerId !== invoice.customerId) throw new BadRequestException(formatMessage(MSG.prepayment_other_customer, { no: doc.no }));
-      if (doc.appliedAsPrepayment.length > 0) throw new ConflictException(formatMessage(MSG.prepayment_already_applied, { no: doc.no }));
-      const gross = Number(doc.total);
-      applied = round2(applied + gross);
-      if (applied > Number(invoice.total) + 0.005) {
-        throw new BadRequestException(formatMessage(MSG.prepayment_exceeds_invoice, { no: doc.no, applied: money(applied), total: money(invoice.total) }));
-      }
+    for (const doc of docs) {
+      // `readApplicablePrepayments` لا يُعيد مستنداً بلا سند قبضه — والفحصُ هنا يُضيّق النوعَ لا يرفض.
+      if (!doc.prepaymentPayment) throw new NotFoundException(MSG.prepayment_not_found);
       await tx.invoicePrepayment.create({
         data: { companyId, invoiceId: invoice.id, prepaymentInvoiceId: doc.id, net: doc.subtotal, vat: doc.taxTotal, gross: doc.total } as unknown as Prisma.InvoicePrepaymentUncheckedCreateInput,
       });
