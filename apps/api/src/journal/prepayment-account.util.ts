@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { getOrCreateAccount } from './inventory-accounts.util';
+import { existingReservedAccount, getOrCreateAccount } from './inventory-accounts.util';
 
 /**
  * **دفعاتٌ مقدَّمة من العملاء** (`ق-١٢٦١` ب — ④A1): التزامٌ حتى يقع التوريد — لا إيرادٌ ولا ذمّةٌ سالبة.
@@ -11,6 +11,16 @@ import { getOrCreateAccount } from './inventory-accounts.util';
  */
 export const CUSTOMER_PREPAYMENTS_CODE = '2450';
 export const CUSTOMER_PREPAYMENTS_NAME = 'دفعات مقدَّمة من العملاء';
+/** نوعُه — مصدرٌ واحد للإنشاء عند الحاجة وللفحص قبل الترقيم. */
+const CUSTOMER_PREPAYMENTS_TYPE = 'liability';
 
 export const getOrCreateCustomerPrepaymentsAccount = (tx: Prisma.TransactionClient, companyId: string) =>
-  getOrCreateAccount(tx, companyId, CUSTOMER_PREPAYMENTS_CODE, CUSTOMER_PREPAYMENTS_NAME, 'liability');
+  getOrCreateAccount(tx, companyId, CUSTOMER_PREPAYMENTS_CODE, CUSTOMER_PREPAYMENTS_NAME, CUSTOMER_PREPAYMENTS_TYPE);
+
+/**
+ * (`ق-١٤٩٠`) **`2450` بنوعه قبل ترقيم مستند الدفعة المقدَّمة أو فاتورةٍ تطبّقها** — رمزٌ قائمٌ بنوعٍ آخر يُرفض هنا
+ * برسالته قبل أن يُحجز رقمٌ ضريبيّ، لا بعده. ولا يُنشأ الحسابُ هنا: الإنشاءُ عند الترحيل كما كان.
+ */
+export const assertCustomerPrepaymentsAccountUsable = async (tx: Prisma.TransactionClient, companyId: string): Promise<void> => {
+  await existingReservedAccount(tx, companyId, CUSTOMER_PREPAYMENTS_CODE, CUSTOMER_PREPAYMENTS_TYPE);
+};
