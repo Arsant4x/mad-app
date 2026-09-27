@@ -7,7 +7,7 @@ import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { registerIsolatedCompany, removeIsolatedCompany, type IsolatedCompany } from './isolated-company';
 
-// ⏱️ ميزانيةُ الحزمة: منشأةٌ معزولة وخمسةُ مشترياتٍ وسبعةُ بيوعٍ (منها الكاشير) — ثلاثةُ أضعاف ما يلزم عادةً على الأقلّ.
+// ⏱️ ميزانيةُ الحزمة: منشأةٌ معزولة وستّةُ مشترياتٍ وثمانيةُ بيوعٍ (منها الكاشير) — ثلاثةُ أضعاف ما يلزم عادةً على الأقلّ.
 jest.setTimeout(300000);
 
 /**
@@ -157,5 +157,20 @@ describe('البيعُ من دفعةٍ منتهية يُرفض قبل الترق
     const plain = await product(`صنفٌ بلا رفّ ${suffix}`, false);
     await auth(http().post('/pos/sales')).send({ lines: [{ productId: plain, quantity: 1 }], paymentMethod: 'CASH' }).expect(201);
     expect(await invoiceNos()).toEqual([inv('0001'), inv('0002'), inv('0003'), inv('0004')]);
+  });
+
+  it('⑤ الفحصُ يقيس الانتهاءَ بيوم المستند لا بيوم الخادم — فاتورةٌ مؤرَّخةٌ قبل انتهاء الدفعة تُباع منها كما يبيعها الصرف', async () => {
+    const r = await product(`مؤرَّخٌ قبل الانتهاء ${suffix}`, true);
+    // دفعةٌ وحيدة بعشرٍ بتكلفة 10 تنتهي في اليوم −5 ⟸ بيومِ اليوم: U = 0 · E = 10 (منتهيةٌ كما في ①).
+    await purchase([{ productId: r, quantity: 10, unitPrice: 10, batchNo: `S-${suffix}`, expiryDate: day(-5) }], day(-30)).expect(201);
+    // والمستندُ في اليوم −6: `isExpiredOn(اليوم −5، اليوم −6)` = (−5 < −6) كاذبة ⟸ U = 10 · E = 0 ⟸ لا رفض؛ والصرفُ
+    // بيوم المستند المخزَّن نفسِه يأخذ 2 من الدفعة بتكلفة 10 ⟸ 2 × 10 = 20.00، ولا مؤقّت.
+    // ولو قاس الفحصُ بيوم الخادم لرأى U = 0 · E = 10 و2 > 0 ⟸ 409 — رفضٌ لبيعٍ يُجيزه الصرف. (رقمُ هذه الفاتورة لا يُوكَّد:
+    // سنتُه سنةُ اليوم −6، وقد تسبق سنةَ الحزمة في أيامها الستة الأولى.)
+    const ok = await auth(http().post('/invoices'))
+      .send({ customerId, branchId, issueDate: day(-6), dueDate: day(-6), lines: [{ description: 'بيع', productId: r, quantity: 2, unitPrice: 150, taxRate: 15 }] })
+      .expect(201);
+    expect(ok.body.stockFulfilment.totalCost).toBe('20.00');
+    expect(ok.body.stockFulfilment.provisionalQty).toBe('0.000');
   });
 });
