@@ -18,6 +18,7 @@ import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
 import { LINE_ORDER } from '../common/document-lines.util';
 import { AuthorityMessage, zatcaWarningsOf } from './authority-warnings.util';
+import { clearedInvoiceFrom } from './cleared-invoice.util';
 
 /** Only the company owner submits to the authority — clearing an invoice is a
  * legal act on the merchant's behalf, not routine data entry. */
@@ -673,7 +674,14 @@ export class ZatcaService {
         await this.recordAttempt(companyId, invoiceId, reason);
         throw new ZatcaAttemptFailedException(reason);
       }
-      await this.recordResult(companyId, invoiceId, verdict === 'accepted', detail, zatcaWarningsOf(body));
+      // ⚖️ (`ق-١٥٠٦` · R24) القياسيةُ المقبولة تعود بنسختها المجازة (`clearedInvoice`) — **وهي ما يُسلَّم للمشتري**
+      //    لا نسختُنا قبل الإجازة. كانت تُهدَر مع الجسد. والقبولُ بلا نسخةٍ مقروءة يُكتب قبولاً (فالحكمُ حكمُ الهيئة)
+      //    ويُسجَّل خطأً — وطريقُ التنزيل يرفضه مسمّىً ولا يستبدل به نسختَنا.
+      const clearedXml = verdict === 'accepted' && invoiceType === 'standard' ? clearedInvoiceFrom(body) : null;
+      if (verdict === 'accepted' && invoiceType === 'standard' && clearedXml === null) {
+        this.logger.error(`ZATCA cleared invoice ${invoiceId} without a readable clearedInvoice in its response — there is no authority copy to deliver to the buyer`);
+      }
+      await this.recordResult(companyId, invoiceId, verdict === 'accepted', detail, zatcaWarningsOf(body), clearedXml);
       return this.statusOf(companyId, invoiceId);
     } catch (e) {
       if (e instanceof ZatcaAttemptFailedException) throw e;
@@ -727,7 +735,14 @@ export class ZatcaService {
    * فالحقلُ يصف **الجوابَ الأخير** لا اتحادَ الأجوبة. (والمعامل إلزاميٌّ عمداً: اختياريٌّ
    * يُغري بمُستدعٍ يُغفله فيبقى تحذيرُ جوابٍ سابقٍ منسوباً إلى جوابٍ لاحقٍ لم يقله.)
    */
-  private recordResult(companyId: string, invoiceId: string, cleared: boolean, message: string | null, warnings: AuthorityMessage[] | null) {
+  private recordResult(
+    companyId: string,
+    invoiceId: string,
+    cleared: boolean,
+    message: string | null,
+    warnings: AuthorityMessage[] | null,
+    clearedXml: string | null,
+  ) {
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       tx.invoice.update({
         where: { id: invoiceId },
@@ -735,6 +750,8 @@ export class ZatcaService {
           zatcaStatus: cleared ? 'CLEARED' : 'REJECTED',
           zatcaSubmittedAt: new Date(),
           zatcaMessage: storableText(message),
+          // مستندُ الهيئة لا يُقصّ (`Infinity`)، ونصٌّ يحمل البايتَ الصفريَّ رُفض قبلها (`clearedInvoiceFrom`) — فلا يُعدَّل بحرف.
+          zatcaClearedXml: storableText(clearedXml, Number.POSITIVE_INFINITY),
           // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`.
           // **والتنقيةُ في موضع الكتابة** (`ق-٩٨٢`): البايتُ الصفريُّ يرفضه `JSONB` كما يرفضه عمودُ
           // النصّ، فلا يكفي أن يُنقّى في المحلّل — يُرى هنا حيث يُكتب.

@@ -107,6 +107,18 @@ describe('مِسنَنُ الردود — ما «يعلن شكلاً» وما ل
     expect(untypedResponseOperations(doc)).toEqual(['GET /v1/sales/{id}', 'POST /v1/sales']);
   });
 
+  it('ق-١٥٠٦ ردُّ الملف بنوعٍ واحدٍ غيرِ JSON يُقرأ مخطّطُه منه — وبلا مخطّطٍ أو بنوعين بلا JSON يبقى غيرَ معلَن', () => {
+    const xmlString = { responses: { '200': { content: { 'application/xml': { schema: { type: 'string' } } } } } };
+    expect(successResponseOf(xmlString)?.schema).toEqual({ type: 'string' });
+    expect(declaresShape(successResponseOf(xmlString)?.schema, SCHEMAS)).toBe(true);
+    expect(successResponseOf({ responses: { '200': { content: { 'application/xml': {} } } } })?.schema).toBeNull();
+    const twoTypes = { responses: { '200': { content: { 'application/xml': { schema: { type: 'string' } }, 'text/csv': { schema: { type: 'string' } } } } } };
+    expect(successResponseOf(twoTypes)?.schema).toBeNull();
+    // و`application/json` يسبق غيرَه حين يوجد معه.
+    const both = { responses: { '200': { content: { 'text/csv': { schema: { type: 'string' } }, 'application/json': { schema: { $ref: '#/components/schemas/Customer' } } } } } };
+    expect(successResponseOf(both)?.schema).toEqual({ $ref: '#/components/schemas/Customer' });
+  });
+
   it('ردُّ النجاح أدنى رمزٍ 2xx — والمرجعُ إلى صنفٍ بلا خاصيّات لا يعلن شكلاً', () => {
     expect(successResponseOf({ responses: { '404': {}, '201': {}, '200': {} } })?.status).toBe('200');
     expect(successResponseOf({ responses: { '404': {} } })).toBeNull();

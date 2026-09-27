@@ -47,6 +47,7 @@ import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { isReplacedRejected } from './active-documents.util';
 import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { readClearedDelivery, withClearedCopyState } from '../zatca/cleared-invoice.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
 import { deriveSettlementStatus } from '../common/settlement/settlement.util';
@@ -227,26 +228,44 @@ export class InvoicesService {
         select: { legalName: true, vatNumber: true },
       });
 
-      return mapList(result, (inv) => ({
-        ...inv,
-        /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
-        invoiceType: invoiceTypeFor(inv.customer, inv.lines),
-        /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
-        outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
-        /** How much of this invoice has been credited back, so a screen can
-         * show the invoice as partly reversed without a second request. */
-        creditedTotal: money(inv.docType === 'CREDIT_NOTE' ? 0 : (creditedByInvoiceId.get(inv.id) ?? 0)),
-        // مستندٌ مختوم يعرض رمزَه التساعي المحفوظ؛ وغيرُه الوسومَ الخمسة المشتقّة (`ق-١٨٧`).
-        zatcaQr: inv.zatcaQrPayload ?? buildZatcaQr({
-          sellerName: company?.legalName ?? '',
-          vatNumber: company?.vatNumber ?? '',
-          issued: issuedWallClock(inv),
-          // ZATCA wants the figures as billed, in the invoice's own currency.
-          total: Number(inv.total),
-          vatAmount: Number(inv.taxTotal),
-        }),
-      }));
+      // ⚖️ (`ق-١٥٠٦`) الصفُّ بلا النسخة المجازة (نصٌّ كاملٌ لكلّ صفّ — تُنزَّل من طريقها `GET :id/cleared-xml`) وبحالِها
+      //    مكانها (`clearedCopy`) — من واجهة الوحدة لا من هنا.
+      return mapList(result, (row) => {
+        const inv = withClearedCopyState(row);
+        return {
+          ...inv,
+          /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
+          invoiceType: invoiceTypeFor(inv.customer, inv.lines),
+          /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
+          outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
+          /** How much of this invoice has been credited back, so a screen can
+           * show the invoice as partly reversed without a second request. */
+          creditedTotal: money(inv.docType === 'CREDIT_NOTE' ? 0 : (creditedByInvoiceId.get(inv.id) ?? 0)),
+          // مستندٌ مختوم يعرض رمزَه التساعي المحفوظ؛ وغيرُه الوسومَ الخمسة المشتقّة (`ق-١٨٧`).
+          zatcaQr: inv.zatcaQrPayload ?? buildZatcaQr({
+            sellerName: company?.legalName ?? '',
+            vatNumber: company?.vatNumber ?? '',
+            issued: issuedWallClock(inv),
+            // ZATCA wants the figures as billed, in the invoice's own currency.
+            total: Number(inv.total),
+            vatAmount: Number(inv.taxTotal),
+          }),
+        };
+      });
     });
+  }
+
+  /**
+   * ⚖️ **تسليمُ الفاتورة القياسية: نسختُها المجازة من الهيئة، ملفَّ XML باسمه النظاميّ** (`ق-١٥٠٦`/١ و٤).
+   *
+   * **بعد الإجازة لا قبلها**: الفاتورةُ القياسية لا تُعدّ صحيحةً قبل ختم الهيئة (الدليلُ الفنيّ التفصيليّ،
+   * الإصدار 2، ص50)، فالمسلَّمُ ما أعادته الهيئةُ في `clearedInvoice` — **ولا يُستبدل به `zatcaSignedXml`**
+   * (نسختُنا قبل الإجازة) في أيّ حال. وما لا نسخةَ له يُرفض بسببه المسمّى: مبسّطةٌ (خارج البند) · لم تُجَز
+   * بعد · أُجيزت قبل حفظ النسخة (`ق-١٥٠٦` — لا تُملأ رجعياً). والفرعُ يُحترم كقراءة القائمة.
+   */
+  clearedXml(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<{ fileName: string; xml: string }> {
+    // ما هو من الهيئة يسكن وحدتَها (`ق-١٣٥٠`): الفاتورةُ تسأل بحدّ فرعها، والوحدةُ تقرأ وتسمّي وترفض.
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => readClearedDelivery(tx, id, allowedBranchIds));
   }
 
   /**

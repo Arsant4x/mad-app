@@ -85,6 +85,11 @@ export interface Invoice {
   zatcaStatus: ZatcaInvoiceStatus;
   /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه — يحسبه الخادم (②A1)؛ يأتي مع القائمة. */
   invoiceType?: 'standard' | 'simplified';
+  /**
+   * ⚖️ (ق-١٥٠٦) حالُ النسخة المجازة من الهيئة — يحسبه الخادم ويأتي مع القائمة، والمستندُ نفسُه لا يأتي فيها:
+   * `available` تُنزَّل ملفَّ XML · `missing` قياسيةٌ أُجيزت ولم تُحفظ نسختُها · `null` لا نسخةَ تُنتظر.
+   */
+  clearedCopy?: 'available' | 'missing' | null;
   /** The authority's clearance or rejection note, or the local reason a
    * submission could not be completed. */
   zatcaMessage: string | null;
@@ -129,6 +134,34 @@ export type UpdateInvoiceInput = UpdateInvoiceDto;
 export type CreateCreditNoteInput = CreateCreditNoteDto;
 
 export const listInvoices = () => apiClient.get<Invoice[]>('/invoices').then((r) => r.data);
+
+/**
+ * ⚖️ (ق-١٥٠٦/١ و٤) **تسليمُ الفاتورة القياسية: نسختُها المجازة من الهيئة ملفَّ XML** — عبر blob بالرأس `Authorization`.
+ * والاسمُ اسمُ الخادم النظاميّ (معيارُ XML ١.٢، القسم 14) من `Content-Disposition` — لا يُعاد حسابُه هنا فيفترق عنه؛
+ * وإن تعذّرت قراءتُه فرقمُ الفاتورة.
+ */
+export const downloadClearedXml = async (invoice: Pick<Invoice, 'id' | 'no'>) => {
+  const res = await apiClient.get(`/invoices/${invoice.id}/cleared-xml`, { responseType: 'blob' }).catch(async (e: unknown) => {
+    // ردُّ الرفض (`409` المسمّى) يصل Blob لا JSON حين يُطلب blob — فيُعاد JSON كي تقرأ الشاشةُ `message` كعادتها.
+    const response = (e as { response?: { data?: unknown } }).response;
+    if (response?.data instanceof Blob) {
+      try {
+        response.data = JSON.parse(await response.data.text());
+      } catch {
+        // ليس JSON — يبقى كما وصل، والشاشةُ تعرض رسالتَها العامّة.
+      }
+    }
+    throw e;
+  });
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`;
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 /** ④A1: الدفعاتُ المقدَّمة المعلَّقة لعميل — ما يعرضه بنّاءُ الفاتورة للتطبيق. */
 export const listOpenPrepayments = (customerId: string) => apiClient.get<OpenPrepayment[]>(`/invoices/open-prepayments/${customerId}`).then((r) => r.data);
 export const createInvoice = (dto: CreateInvoiceInput) => apiClient.post<Invoice>('/invoices', dto).then((r) => r.data);

@@ -6,6 +6,7 @@ import { apiErrorCode } from '../../lib/apiError';
 import {
   CREDIT_LIMIT_EXCEEDED,
   createInvoice,
+  downloadClearedXml,
   type Invoice,
   type InvoiceLineInput,
   issueCreditNote,
@@ -143,6 +144,19 @@ export function InvoicesPage() {
     }
   }
 
+  /**
+   * ⚖️ (ق-١٥٠٦/١ و٤) **تسليمُ الفاتورة القياسية: ملفُّ XML المجاز من الهيئة** — التنزيلُ من الشاشة قناتُها الآن. ورفضُ
+   * الخادم (لم تُجَز · أُجيزت بلا نسخة · مبسّطة) يُعرض بنصّه — ولا بديلَ يُقترح: نسختُنا قبل الإجازة لا تُسلَّم مكانها.
+   */
+  async function handleDownloadClearedXml(invoice: Invoice) {
+    try {
+      await downloadClearedXml(invoice);
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تنزيل الفاتورة المجازة'));
+    }
+  }
+
   async function handleCreateCustomer(name: string, kind: NewCustomerKind): Promise<Customer> {
     const customer = await createCustomer({ name, kind });
     setCustomers((cs) => [...cs, customer].sort((a, b) => a.name.localeCompare(b.name)));
@@ -230,6 +244,7 @@ export function InvoicesPage() {
         onIssueCreditNote={(invoice) => setCreditNoteFor(invoice)}
         onIssueDebitNote={(invoice) => setDebitNoteFor(invoice)}
         onIssueReplacement={(invoice) => setReplacementFor(invoice)}
+        onDownloadClearedXml={handleDownloadClearedXml}
         canSubmitToZatca={user?.actorType === 'COMPANY'}
         submittingId={submittingId}
       />

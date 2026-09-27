@@ -28,6 +28,7 @@ export function InvoiceListView({
   onIssueCreditNote,
   onIssueDebitNote,
   onIssueReplacement,
+  onDownloadClearedXml,
   canSubmitToZatca,
   submittingId,
 }: {
@@ -38,6 +39,8 @@ export function InvoiceListView({
   onIssueDebitNote: (invoice: Invoice) => void;
   /** بدلٌ عن مردودة (ق-٩٥٨) — يُعرض على المردودة التي لم يصدر بدلُها بعد. */
   onIssueReplacement: (invoice: Invoice) => void;
+  /** تسليمُ الفاتورة القياسية (ق-١٥٠٦): ملفُّ XML المجاز من الهيئة — يُعرض حيث حُفظت النسخةُ وحدَه. */
+  onDownloadClearedXml: (invoice: Invoice) => void;
   canSubmitToZatca: boolean;
   /** The invoice currently being sent, so its row can say so — submission is a
    * network round-trip to the authority, not an instant local change. */
@@ -205,6 +208,13 @@ export function InvoiceListView({
                     <div className="hint">آخر محاولة: {inv.zatcaMessage}</div>
                   )}
                   {inv.zatcaIcv !== null && <div className="hint">تسلسل: {inv.zatcaIcv}</div>}
+                  {/* ⚖️ (ق-١٥٠٦) قياسيةٌ أُجيزت ولا نسخةَ مجازةً محفوظة — يُعلَن ولا يُخفى: لا ملفَّ للتسليم،
+                      ولا تُسلَّم نسختُنا قبل الإجازة مكانها. والحالُ من الخادم لا يُحسب هنا. */}
+                  {inv.clearedCopy === 'missing' && (
+                    <div className="hint" data-testid="cleared-copy-missing">
+                      لا نسخة مجازة محفوظة للتسليم
+                    </div>
+                  )}
                 </td>
                 {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في
                   * العقود والبلاغات. وخارج `RowMenu` عمداً: الإسناد فعلٌ
@@ -236,6 +246,8 @@ export function InvoiceListView({
                               inv.docType === 'PREPAYMENT'
                               ? []
                               : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
+                      // ⚖️ (ق-١٥٠٦) تسليمُ القياسية للمشتري: ملفُّ XML المجاز من الهيئة — حيث حُفظت نسختُه وحدَه.
+                      ...(inv.clearedCopy === 'available' ? ['-' as const, { label: '⬇ تنزيل الفاتورة المجازة (XML)', onClick: () => onDownloadClearedXml(inv) }] : []),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED' && inv.zatcaStatus !== 'REJECTED'

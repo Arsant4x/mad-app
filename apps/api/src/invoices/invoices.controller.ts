@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import { ApiOkResponse, ApiProduces } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtPayload, TenantContext } from '../auth/types';
@@ -25,6 +27,22 @@ export class InvoicesController {
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
     return this.invoicesService.list(tenant.companyId, tenant.allowedBranchIds, query);
+  }
+
+  /**
+   * ⚖️ **تسليمُ الفاتورة القياسية** (`ق-١٥٠٦`/١ و٤): نسختُها المجازة من الهيئة ملفَّ XML باسمه النظاميّ — والتنزيلُ
+   * من الشاشة قناتُها الآن، والبريدُ حين يعمل. **وقبل الإجازة لا شيء** (`409` مسمّى): لا تُسلَّم نسختُنا مكانَها.
+   * و`no-store`: مستندٌ ضريبيٌّ لطرفٍ ثالث لا يبقى في ذاكرةٍ وسيطة.
+   */
+  @Get(':id/cleared-xml')
+  @RequiresAction('view')
+  @ApiProduces('application/xml')
+  @ApiOkResponse({ description: 'النسخةُ المجازة من الهيئة — مستندُ UBL كما أعادته، باسم الملف النظاميّ في Content-Disposition', schema: { type: 'string' } })
+  async clearedXml(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    const { fileName, xml } = await this.invoicesService.clearedXml(tenant.companyId, tenant.allowedBranchIds, id);
+    const body = Buffer.from(xml, 'utf8');
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(body, { type: 'application/xml; charset=utf-8', length: body.length, disposition: `attachment; filename="${fileName}"` });
   }
 
   /** ④A1: مستنداتُ الدفعة المقدَّمة (386) غيرُ المطبَّقة لعميلٍ — ما تعرضه شاشةُ الفاتورة لتطبيقه عند إصدار التوريد. */
