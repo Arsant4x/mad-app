@@ -221,4 +221,33 @@ describe('سندُ الردّ بعملةٍ أجنبية — فرقُ الصرف 
     expect(lines.filter((l) => l.code === '5600')).toEqual([]);
     expect(lines).toHaveLength(2);
   });
+
+  /**
+   * ⚖️ **الردُّ الجزئيّ** (مراجعةٌ عدائية): الحالاتُ الثلاث أعلاه تردّ الإشعارَ كلَّه، فمبلغُ الردّ = مبلغُ الإشعار — فكسرٌ
+   * يُعيد الذمّةَ بأساس الإشعار كلِّه (`baseReceivable: round2(-Number(note.baseTotal))`) أو بالقابل للردّ كلِّه يمرّ عليها.
+   * وهنا يُردّ بعضُه: الذمّةُ تعود **بقدر المردود** × سعر الإشعار، لا بأساس الإشعار.
+   */
+  it('ردٌّ جزئيّ 40 USD بسعر 3.80 على إشعارٍ 100 USD بسعر 3.70: الصندوق دائن 152 · 1200 مدين 148 · 5600 مدين 4', async () => {
+    const note = await paidInvoiceWithCreditNote(100, { currency: 'USD', exchangeRate: 3.7 });
+    // القابلُ للردّ 100 (إشعار 100 − خصم 0 − ردود 0)، والمردودُ 40 منه.
+    const refund = await auth(http().post('/payments/refund'))
+      .send({ creditNoteId: note.id, date: today(), method: 'CASH', bankId: cashBoxId, amount: 40, currency: 'USD', exchangeRate: 3.8 })
+      .expect(201);
+    // الصفّ: المبلغ −40 · السعر 3.8 · الأساس round2(−40 × 3.80) = −152.00.
+    expect(Number(refund.body.amount)).toBe(-40);
+    expect(Number(refund.body.exchangeRate)).toBe(3.8);
+    expect(Number(refund.body.baseAmount)).toBe(-152);
+
+    const lines = await entryLines(refund.body.journalEntryId);
+    // الصندوق دائن بسعر اليوم: 40 × 3.80 = 152.00.
+    expect(lines.filter((l) => l.accountId === boxAccountId)).toEqual([expect.objectContaining({ debit: 0, credit: 152 })]);
+    // الذمّةُ تعود بقدر المردود × سعر الإشعار: 40 × 3.70 = 148.00 — لا أساسُ الإشعار كلِّه (370.00).
+    expect(lines.filter((l) => l.code === '1200')).toEqual([expect.objectContaining({ debit: 148, credit: 0 })]);
+    // الفرق: `fxGain = cash − settled = −152 − (−148) = −4` ⟵ `5600` مدين 4.00.
+    expect(lines.filter((l) => l.code === '5600')).toEqual([expect.objectContaining({ debit: 4, credit: 0 })]);
+    expect(lines).toHaveLength(3);
+    // متوازن: مدين 148 + 4 = 152 = دائن 152.
+    expect(lines.reduce((s, l) => s + l.debit, 0)).toBe(152);
+    expect(lines.reduce((s, l) => s + l.credit, 0)).toBe(152);
+  });
 });
