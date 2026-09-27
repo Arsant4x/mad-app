@@ -14,7 +14,24 @@ import { REQUEST_ID_HEADER, requestIdMiddleware } from './common/request-id/requ
 import { buildOpenApiDocument } from './common/openapi-document';
 import { applyApiVersioning } from './common/versioning';
 
+/**
+ * **إيقافٌ في أثناء الإقلاع** (`ق-١٥٢٣`) — قبل أن يوجد مستمعُ Nest.
+ *
+ * الخادمُ هو العمليةُ الأولى في الحاوية، **والعمليةُ الأولى بلا مستمعٍ تُهمل النواةُ إشارتَها**. و`enableShutdownHooks`
+ * لا يُسجِّل مستمعَه إلا بعد `NestFactory.create` (تحميلُ الوحدات والاتصالُ بالقاعدة) — فقِيس: إيقافٌ بعد ثانيةٍ من
+ * البدء ⟸ `31025 ms` ثم قتلٌ `137` بلا سطر. **ولا طلبَ يُخدم قبل الاستماع**، فلا شيءَ يُفرَغ: يُخرج فوراً بـ`0`، وما
+ * كان في منتصف معاملةٍ تُرجعه القاعدة.
+ */
+function exitDuringBoot(signal: NodeJS.Signals): void {
+  // eslint-disable-next-line no-console
+  console.log(`إيقافٌ في أثناء الإقلاع (${signal}): لم يُخدم طلبٌ بعد، فيُخرج الآن`);
+  process.exit(0);
+}
+
 async function bootstrap() {
+  process.once('SIGTERM', exitDuringBoot);
+  process.once('SIGINT', exitDuringBoot);
+
   // قبل أي شيء آخر — قبل الاتصال بقاعدة البيانات وقبل فتح المنفذ: منصةٌ تُقلع
   // بمفتاح توقيع منشور في المستودع أسوأ من منصةٍ لا تُقلع.
   assertProductionSecrets();
@@ -22,6 +39,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // ⭐ الإيقافُ المنظَّم (`ق-١٥٢٣`): بلا هذا لا يسمع الخادمُ إشارةَ الإيقاف — قِيس: `docker stop` والقاعدةُ قائمة
   // ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرٍ واحد. ومعه يُغلق المنفذَ ويُفرغ الاتصالاتِ ثم يخرج (سطرا `ShutdownLogService`).
+  // ومستمعُ الإقلاع يُرفع **في الخطوة نفسِها** التي يُسجَّل فيها مستمعُ Nest — فلا لحظةَ بلا مستمع ولا لحظةَ بمستمعَين.
+  process.removeListener('SIGTERM', exitDuringBoot);
+  process.removeListener('SIGINT', exitDuringBoot);
   app.enableShutdownHooks();
   const config = app.get(ConfigService);
   const isProduction = config.get<string>('NODE_ENV') === 'production';

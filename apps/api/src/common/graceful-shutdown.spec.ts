@@ -14,6 +14,8 @@ readsDeclaredStrings();
  *   ① أمرُ البدء: الهجراتُ **قبل** البدء كما هي، ثم `exec node …` — فالخادمُ هو العمليةُ الأولى لا ابنُ صدفة.
  *   ② `app.enableShutdownHooks()` في `main.ts` — وإلا لم يُسمع شيء؛ ومزوّدُ سطرَي الإيقاف مسجَّلٌ في الوحدة الجذر.
  *   ③ مهلةُ إيقافٍ **معلنة** على خدمة `api` في ملفّ الإنتاج — لا افتراضيُّ Docker الضمنيّ.
+ *   ④ ⑤ **ونافذتا الإقلاع** — قِيستا بعد ①–③: الإيقافُ قبل تسجيل مستمع Nest أُهمل فقُتل الخادمُ بعد `31025 ms`؛
+ *      فـ`trap` في الصدفة لنافذة الهجرات، ومستمعٌ مبكّر في `main.ts` يُرفع في خطوة تسجيل مستمع Nest نفسِها.
  *
  * ⚠️ **وحدُّه معلَن**: يحرس الشكلَ لا السلوك — والسلوكُ مُثبَتٌ مرّةً على الصورة المبنيّة (إيقافٌ والقاعدةُ قائمة ⟸ سطرا
  * الإيقاف وخروجٌ طبيعيّ قبل المهلة)، وهذا يمنع أن يعود الشكلُ الذي أنتج القتل.
@@ -71,5 +73,30 @@ describe('ق-١٥٢٣ — الإيقافُ المنظَّم للخادم: exec �
 
   it('③ مهلةُ إيقافٍ معلنة على `api` في ملفّ الإنتاج — سطرٌ لا تعليق', () => {
     expect(serviceBlock(COMPOSE, 'api')).toMatch(/^\s+stop_grace_period:\s*\d+s\s*$/m);
+  });
+
+  // نافذتا الإقلاع — مقيستان في ٢٦٨: قبل مستمع Nest أُهملت الإشارةُ فقُتل الخادمُ بعد `31025 ms`.
+  it('④ نافذةُ الهجرات: `trap` على TERM قبل الهجرات — فإيقافٌ فيها يُكمل الهجرةَ ثم يخرج ولا يبدأ الخادم', () => {
+    // بالمواضع لا بنمطٍ واحد: نصُّ الفخّ نفسُه يحمل `;` بين علامتَي اقتباس، فنمطٌ يقف عند أوّل `;` لا يبلغ `TERM`.
+    const cmd = lastCmd(DOCKERFILE);
+    const trap = cmd.indexOf("trap '");
+    const term = cmd.indexOf(' TERM', trap);
+    const migrate = cmd.indexOf('prisma migrate deploy');
+    expect(trap).toBeGreaterThanOrEqual(0);
+    expect(term).toBeGreaterThan(trap);
+    expect(term).toBeLessThan(migrate);
+  });
+
+  it('⑤ نافذةُ الإقلاع: مستمعٌ قبل `NestFactory.create`، ويُرفع قبل `enableShutdownHooks` مباشرةً', () => {
+    const early = MAIN.search(/process\.once\('SIGTERM',\s*exitDuringBoot\)/);
+    const create = MAIN.indexOf('NestFactory.create');
+    const removed = MAIN.search(/process\.removeListener\('SIGTERM',\s*exitDuringBoot\)/);
+    const hooks = MAIN.search(/\bapp\.enableShutdownHooks\(\)/);
+    expect(early).toBeGreaterThanOrEqual(0);
+    expect(early).toBeLessThan(create);
+    expect(removed).toBeGreaterThan(create);
+    expect(hooks).toBeGreaterThan(removed);
+    // ولا `await` بين الرفع والتسجيل — فلا لحظةَ بلا مستمع.
+    expect(MAIN.slice(removed, hooks)).not.toMatch(/\bawait\b/);
   });
 });
