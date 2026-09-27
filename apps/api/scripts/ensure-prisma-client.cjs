@@ -4,7 +4,9 @@
 // npm 11.16.0 في مساحة عملٍ تجريبية (`npm install` يُبقيه، و`npm ci` يحذفه، وpostinstall مساحةِ العمل يجري في الاثنين).
 // فبلا هذا يخرج `npm ci` أخضرَ ويسقط أوّلُ تشغيلٍ بـMODULE_NOT_FOUND.
 //
-// ويُتخطّى حيث لا مخطّط: طبقةُ الاعتماديات في Dockerfile تُثبّت قبل نسخ apps/api — وتوليدُها صريحٌ بعد النسخ.
+// ويُستدعى من postinstall **إن وُجد هذا الملفّ** (package.json): فطبقةُ الاعتماديات في Dockerfile الخادم وصورةُ الواجهة —
+// وكلتاهما تُثبّت مساحةَ العمل قبل نسخ apps/api — تتخطّيانه (أسقط `nginx-cache` نسخةً كانت تستدعيه بلا شرط:
+// «Cannot find module '/app/apps/api/scripts/ensure-prisma-client.cjs'»). وحيث يوجد الملفّ بلا مخطّطٍ يتخطّى أيضاً.
 const { existsSync } = require('node:fs');
 const { join } = require('node:path');
 const { execSync } = require('node:child_process');

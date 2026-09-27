@@ -26,10 +26,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -
 WORKDIR /app
 
 # Lockfile-only layer first, so dependency install caches across code edits.
-# (ق-١٥٠٤ — ب٢) ومعها سكربتُ postinstall وحدَه: `npm ci` يُشغّله، ويتخطّى هنا لأن المخطّطَ لم يُنسخ بعد — فلا تُكسر الطبقة.
+# (ق-١٥٠٤ — ب٢) و`postinstall` في apps/api يُشغّل سكربتَ توليد العميل **إن وُجد ملفُّه** — وهنا لم يُنسخ بعد فيتخطّى،
+# والتوليدُ صريحٌ بعد نسخ المصدر أدناه. (وكذلك صورةُ الواجهة التي تُثبّت مساحةَ العمل كلَّها.)
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-COPY apps/api/scripts/ensure-prisma-client.cjs apps/api/scripts/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 RUN npm ci

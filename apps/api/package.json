@@ -13,7 +13,7 @@
     "test:watch": "jest --watch --testPathIgnorePatterns=e2e-spec",
     "test:e2e": "node scripts/e2e-sharded.mjs",
     "test:e2e:one-shard": "E2E_SHARDS=1 node scripts/e2e-sharded.mjs",
-    "postinstall": "node scripts/ensure-prisma-client.cjs",
+    "postinstall": "node -e \"require('fs').existsSync('scripts/ensure-prisma-client.cjs') && require('./scripts/ensure-prisma-client.cjs')\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
