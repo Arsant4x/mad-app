@@ -27,6 +27,7 @@ const DOCKERFILE = read('apps', 'api', 'Dockerfile');
 const COMPOSE = read('docker-compose.prod.yml');
 const MAIN = stripComments(read('apps', 'api', 'src', 'main.ts'));
 const APP_MODULE = stripComments(read('apps', 'api', 'src', 'app.module.ts'));
+const BOOT_SIGNAL = stripComments(read('apps', 'api', 'src', 'common', 'lifecycle', 'boot-signal.ts'));
 
 /** آخرُ `CMD` في الملفّ — هو الذي يسري (Docker يأخذ الأخير). */
 function lastCmd(dockerfile: string): string {
@@ -87,14 +88,15 @@ describe('ق-١٥٢٣ — الإيقافُ المنظَّم للخادم: exec �
     expect(term).toBeLessThan(migrate);
   });
 
-  it('⑤ نافذةُ الإقلاع: مستمعٌ قبل `NestFactory.create` يبقى حتى `listen`، ثم يُرفع قبل `enableShutdownHooks` مباشرةً', () => {
-    const early = MAIN.search(/process\.once\('SIGTERM',\s*exitDuringBoot\)/);
+  it('⑤ نافذةُ الإقلاع: مستمعٌ يُسجَّل في أوّل استيراد، يبقى حتى `listen`، ثم يُرفع قبل `enableShutdownHooks` مباشرةً', () => {
+    // قِيس: مستمعٌ في أوّل `bootstrap()` يأتي بعد تحميل الاستيرادات ⟸ `31537 ms` ثم `137`. فالأوّلُ استيرادُ ملفّه.
+    const firstImport = MAIN.match(/^\s*import\b[^;]*?from\s+'([^']+)'/m)?.[1];
+    expect(firstImport).toBe('./common/lifecycle/boot-signal');
+    expect(BOOT_SIGNAL).toMatch(/^process\.once\('SIGTERM',\s*exitDuringBoot\);/m);
     const create = MAIN.indexOf('NestFactory.create');
     const listen = MAIN.search(/\bawait app\.listen\(/);
     const removed = MAIN.search(/process\.removeListener\('SIGTERM',\s*exitDuringBoot\)/);
     const hooks = MAIN.search(/\bapp\.enableShutdownHooks\(\)/);
-    expect(early).toBeGreaterThanOrEqual(0);
-    expect(early).toBeLessThan(create);
     // قِيس: مستمعُ Nest قبل `listen` ⟸ أُغلق التطبيقُ ثم فُتح منفذُه فبقيت العمليةُ حتى قُتلت (`30812 ms` · `137`).
     expect(listen).toBeGreaterThan(create);
     expect(removed).toBeGreaterThan(listen);

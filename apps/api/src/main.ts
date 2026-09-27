@@ -1,3 +1,5 @@
+// ⛔ **أوّلُ استيراد، ولا يُنقل** (`ق-١٥٢٣`): يُسجِّل مستمعَ الإيقاف في أثناء الإقلاع قبل تحميل ما يليه — انظر الملفّ.
+import { exitDuringBoot } from './common/lifecycle/boot-signal';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -14,28 +16,7 @@ import { REQUEST_ID_HEADER, requestIdMiddleware } from './common/request-id/requ
 import { buildOpenApiDocument } from './common/openapi-document';
 import { applyApiVersioning } from './common/versioning';
 
-/**
- * **إيقافٌ في أثناء الإقلاع** (`ق-١٥٢٣`) — قبل أن يوجد مستمعُ Nest.
- *
- * الخادمُ هو العمليةُ الأولى في الحاوية، **والعمليةُ الأولى بلا مستمعٍ تُهمل النواةُ إشارتَها**. و`enableShutdownHooks`
- * لا يُسجِّل مستمعَه إلا بعد `NestFactory.create` (تحميلُ الوحدات والاتصالُ بالقاعدة) — فقِيس: إيقافٌ بعد ثانيةٍ من
- * البدء ⟸ `31025 ms` ثم قتلٌ `137` بلا سطر. **ولا طلبَ يُخدم قبل الاستماع**، فلا شيءَ يُفرَغ: يُخرج فوراً بـ`0`، وما
- * كان في منتصف معاملةٍ تُرجعه القاعدة.
- *
- * ⚠️ **ويبقى حتى `listen` لا حتى `create`** — قِيس: مستمعُ Nest مسجَّلٌ بعد `create` وإشارةٌ قبل `listen` ⟸ أغلق Nest
- * التطبيقَ («تمّ الإيقافُ المنظَّم») **ثم أكمل الإقلاعُ ففتح المنفذَ على تطبيقٍ مُغلق** فبقيت العمليةُ حتى قُتلت
- * (`30812 ms` · `137`). فمستمعُ Nest لا يُسجَّل إلا بعد أن يوجد ما يُغلقه.
- */
-function exitDuringBoot(signal: NodeJS.Signals): void {
-  // eslint-disable-next-line no-console
-  console.log(`إيقافٌ في أثناء الإقلاع (${signal}): لم يُخدم طلبٌ بعد، فيُخرج الآن`);
-  process.exit(0);
-}
-
 async function bootstrap() {
-  process.once('SIGTERM', exitDuringBoot);
-  process.once('SIGINT', exitDuringBoot);
-
   // قبل أي شيء آخر — قبل الاتصال بقاعدة البيانات وقبل فتح المنفذ: منصةٌ تُقلع
   // بمفتاح توقيع منشور في المستودع أسوأ من منصةٍ لا تُقلع.
   assertProductionSecrets();
