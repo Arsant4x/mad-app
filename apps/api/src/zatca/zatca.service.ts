@@ -750,6 +750,8 @@ export class ZatcaService {
           zatcaStatus: cleared ? 'CLEARED' : 'REJECTED',
           zatcaSubmittedAt: new Date(),
           zatcaMessage: storableText(message),
+          // مستندُ الهيئة لا يُقصّ (`Infinity`)، ونصٌّ يحمل البايتَ الصفريَّ رُفض قبلها (`clearedInvoiceFrom`) — فلا يُعدَّل بحرف.
+          zatcaClearedXml: storableText(clearedXml, Number.POSITIVE_INFINITY),
           // `InputJsonValue` لا تقبل واجهةً مسمّاةً (لا فهرسَ نصّيّ فيها) — فالتحويلُ عبر `unknown`.
           // **والتنقيةُ في موضع الكتابة** (`ق-٩٨٢`): البايتُ الصفريُّ يرفضه `JSONB` كما يرفضه عمودُ
           // النصّ، فلا يكفي أن يُنقّى في المحلّل — يُرى هنا حيث يُكتب.
