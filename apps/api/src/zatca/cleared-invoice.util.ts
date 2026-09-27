@@ -1,6 +1,7 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import xpath from 'xpath';
+import { branchFilter } from '../branches/branch-scope.util';
 import { LINE_ORDER } from '../common/document-lines.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { type BuyerForInvoiceType, invoiceTypeFor, type LineForInvoiceType } from './hash-chain.util';
@@ -61,7 +62,7 @@ export function zatcaFileName(xml: string): string | null {
   const vat = text('/*/cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID');
   const date = text('/*/cbc:IssueDate').replace(/-/g, '');
   const time = text('/*/cbc:IssueTime').replace(/:/g, '');
-  const irn = text('/*/cbc:ID');
+  const irn = text('/*/cbc:ID').replace(/[^A-Za-z0-9]/g, '-');
   if (!vat || !date || !time || !irn) return null;
   const name = `${vat}_${date}T${time}_${irn}.xml`;
   // الاسمُ يدخل ترويسةَ `Content-Disposition` — فما ليس من هذه الحروف لا يُرسل فيها.
@@ -95,24 +96,28 @@ export function withClearedCopyState<T extends ClearedCopyRow>(row: T): Omit<T, 
  * ⚖️ **ما يُسلَّم للمشتري: النسخةُ المجازة كما أعادتها الهيئة، باسم ملفّها النظاميّ** (`ق-١٥٠٦`/١ و٤).
  *
  * **بعد الإجازة لا قبلها** — ولا يُستبدل بها `zatcaSignedXml` (نسختُنا قبل الإجازة) في أيّ حال. وما لا نسخةَ له يُرفض بسببه
- * المسمّى: مبسّطةٌ (خارج البند) · لم تُجَز بعد · أُجيزت قبل حفظ النسخة (لا تُملأ رجعياً). و`where` يحمل حدَّ الفرع من المستدعي.
+ * المسمّى: مبسّطةٌ (خارج البند) · لم تُجَز بعد · أُجيزت قبل حفظ النسخة (لا تُملأ رجعياً). والفرعُ يُحترم كقراءة القائمة
+ * (`ق-٥١٧`): فاتورةُ فرعٍ لا يراه القارئ لا توجد له.
  */
-export async function readClearedDelivery(tx: Prisma.TransactionClient, where: Prisma.InvoiceWhereInput): Promise<{ fileName: string; xml: string }> {
+export async function readClearedDelivery(
+  tx: Prisma.TransactionClient,
+  id: string,
+  allowedBranchIds: string[] | 'all',
+): Promise<{ fileName: string; xml: string }> {
   const invoice = await tx.invoice.findFirst({
-    where,
+    where: { id, ...branchFilter(allowedBranchIds) },
     select: {
       no: true,
       zatcaStatus: true,
       zatcaClearedXml: true,
-      zatcaSignedXml: true,
       customer: { select: { kind: true, vatNumber: true, country: true } },
       lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
     },
   });
   if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
-  const deliverable = invoice.zatcaClearedXml ?? invoice.zatcaSignedXml;
-  if (deliverable) {
-    return { fileName: `${invoice.no}.xml`, xml: deliverable };
+  if (invoice.zatcaClearedXml) {
+    // والاسمُ من المستند نفسِه؛ وإن غابت إحدى قيمه الأربع سُمّي برقمه وحدَه (حدٌّ معلَن).
+    return { fileName: zatcaFileName(invoice.zatcaClearedXml) ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`, xml: invoice.zatcaClearedXml };
   }
   if (invoiceTypeFor(invoice.customer, invoice.lines) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
   if (invoice.zatcaStatus !== 'CLEARED') throw new ConflictException(formatMessage(MSG.invoice_xml_not_cleared, { no: invoice.no }));

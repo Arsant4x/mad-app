@@ -98,8 +98,12 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
     other = await registerIsolatedCompany(app, 'cleared-xml-other');
     await as(company)(http().patch('/company-profile')).send({ legalName: 'شركة التسليم التجارية', vatNumber: VAT }).expect(200);
     // مؤسّسةٌ بسجلٍّ تجاريّ ⟵ قياسية (`invoiceTypeFor`)؛ وشخصٌ طبيعيّ بلا رقمٍ ضريبيّ ⟵ مبسّطة.
+    //    والقياسيةُ تشترط عنوانَ المشتري كاملاً قبل الإرسال (الشارع · المبنى · الحي · المدينة · الرمز) — كـ`zatca-phase2`.
+    const FULL_ADDRESS = { street: 'طريق الملك فهد', buildingNumber: '7001', district: 'العليا', city: 'الرياض', postalCode: '12211' };
     businessBuyerId = (
-      await as(company)(http().post('/customers')).send({ kind: 'ESTABLISHMENT', name: `مؤسسة التسليم ${Date.now()}`, otherIdScheme: 'CRN', otherId: '1010101010' }).expect(201)
+      await as(company)(http().post('/customers'))
+        .send({ kind: 'ESTABLISHMENT', name: `مؤسسة التسليم ${Date.now()}`, otherIdScheme: 'CRN', otherId: '1010101010', ...FULL_ADDRESS })
+        .expect(201)
     ).body.id;
     personBuyerId = (await as(company)(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل التسليم ${Date.now()}` }).expect(201)).body.id;
     await seedProductionCredential(tenantPrisma, company.companyId);

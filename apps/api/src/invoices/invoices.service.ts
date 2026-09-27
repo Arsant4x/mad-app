@@ -265,7 +265,7 @@ export class InvoicesService {
    */
   clearedXml(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<{ fileName: string; xml: string }> {
     // ما هو من الهيئة يسكن وحدتَها (`ق-١٣٥٠`): الفاتورةُ تسأل بحدّ فرعها، والوحدةُ تقرأ وتسمّي وترفض.
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => readClearedDelivery(tx, { id, ...branchFilter(allowedBranchIds) }));
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => readClearedDelivery(tx, id, allowedBranchIds));
   }
 
   /**
