@@ -11,6 +11,7 @@ export interface AcceptConsentDto {
 /** جسمُ طلب — `AllocateDto` في الخادم. */
 export interface AllocateDto {
   allocations: AllocationDto[];
+  date?: string;
 }
 
 /** جسمُ طلب — `AllocateSupplierPaymentDto` في الخادم. */
