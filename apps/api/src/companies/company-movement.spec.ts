@@ -80,7 +80,11 @@ describe('معيارُ الحركة — الأسماءُ من المصدر، و�
     expect(sequenceKindsInTexts([withoutTool])).toEqual([]);
   });
 
-  it('أجلُ الحفظ: عشرٌ للدفاتر وإحدى عشرة للعقار — من المدد المقروءة', () => {
+  it('أجلُ الحفظ: عشرٌ للدفاتر وخمسَ عشرةَ للعقار — من المدد المقروءة', () => {
+    // ⛔ حدٌّ أدنى بنصّه (`ق-١٥٢٢`): الاتفاقيةُ الموحّدة م٥٩ ودليلُ الفواتير §8.3.3 — «لا يُنزل عن ١٥ بلا نصّ».
+    // فتوكيدٌ على الرقم نفسِه لا على الثابت وحدَه: التوكيداتُ أدناه تتبع الثابتَ فتمرّ لأيّ قيمة.
+    expect(RETENTION_YEARS.realEstate).toBeGreaterThanOrEqual(15);
+    expect(RETENTION_YEARS.books).toBeGreaterThanOrEqual(10);
     const closedAt = new Date('2026-09-11T00:00:00Z');
     expect(retentionDeadline(closedAt, ['Invoice']).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.books);
     expect(retentionDeadline(closedAt, ['Invoice', 'Contract']).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
