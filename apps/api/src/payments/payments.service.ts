@@ -456,7 +456,9 @@ export class PaymentsService {
       // ⚖️ (`ق-١٤٨٩`/B1) الفرقُ بين الذمّتَين قيدٌ بلا نقد: موجبٌ ⟵ دائن `1200` · مدين `5600` (خسارة)، وسالبٌ ⟵ مدين `1200` ·
       //    دائن `5600` (ربح). بيوم التوزيع (من الطلب، وإلا ساعةُ الخادم كالعكس — `ق-٧٣٦`)، وقفلُ الفترات في `createJournalEntry`
       //    يرفضه في فترةٍ مقفلة فتسقط المعاملةُ كلُّها ويبقى التوزيعُ القديم.
-      const settledAfter = baseSettledOf(round2(Number(payment.amount)), Number(payment.exchangeRate), toSettlementAllocations(requested), rates);
+      // وما لم يُخصَّص بعد التوزيع بسعر ذمّته من المصدر نفسِه الذي قُرئ به `settledBefore` (`unallocatedReceivableRate` — B6):
+      // لسند القبض هو سعرُه، ولسند الردّ سعرُ إشعاره — فلا يصنع اختلافُ القارئَين فرقاً لا أصلَ له.
+      const settledAfter = baseSettledOf(round2(Number(payment.amount)), unallocatedReceivableRate(payment), toSettlementAllocations(requested), rates);
       const difference = round2(settledAfter - settledBefore);
       if (difference !== 0 && payment.journalEntryId) {
         await postCustomerPaymentEntry(tx, companyId, {
