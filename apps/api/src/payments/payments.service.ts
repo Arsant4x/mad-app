@@ -377,7 +377,43 @@ export class PaymentsService {
   }
 
   /**
+   * ⚖️ **الذمّةُ المرحَّلة لسند قبضٍ بتخصيصاته الحالية** (`ق-١٤٨٩`/B1): كلُّ تخصيصٍ بسعر **فاتورته**، وما لم يُخصَّص
+   * بسعر السند — الحسبةُ نفسُها التي رحّل بها السندُ ذمّتَه يومَ إنشائه (`baseSettledOf`)، وتبقى صادقةً بعد كلِّ إعادة
+   * توزيع لأن التوزيعَ يُرحّل فرقَها. **فإعادةُ التوزيع والعكسُ يقرآنها من هنا** — مصدرٌ واحد، فلا يفترق ما يطرحه
+   * التوزيعُ عمّا يعكسه العكس.
+   *
+   * **على مستوى المنشأة بحقّها**: أسعارُ فواتير تخصيصات السند تُقرأ بمعرّفاتها أيّاً كان فرعُها — فالسندُ سوّى ذمّتَها
+   * كلَّها بأسعارها، وحجبُ فاتورةِ فرعٍ آخر يُسقط سعرَها إلى سعر السند فيختلّ فرقُ الصرف المرحَّل.
+   */
+  private async postedSettledBaseOf(
+    tx: Prisma.TransactionClient,
+    payment: {
+      amount: Prisma.Decimal | number;
+      exchangeRate: Prisma.Decimal | number;
+      allocations: { invoiceId: string; amount: Prisma.Decimal | number }[];
+    },
+  ): Promise<number> {
+    const allocations = payment.allocations.map((a) => ({ documentId: a.invoiceId, amount: round2(Number(a.amount)) }));
+    const invoices = allocations.length
+      ? await tx.invoice.findMany({ where: { id: { in: allocations.map((a) => a.documentId) } }, select: { id: true, exchangeRate: true } })
+      : [];
+    const rateByInvoice = new Map(invoices.map((i) => [i.id, { exchangeRate: Number(i.exchangeRate) }]));
+    return baseSettledOf(round2(Number(payment.amount)), Number(payment.exchangeRate), allocations, rateByInvoice);
+  }
+
+  /**
    * إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها.
+   *
+   * ⚖️ **وفرقُ الذمّة بين التوزيعَين يُرحَّل** (`ق-١٤٨٩`/B1): الذمّةُ المرحَّلة للسند كلُّ تخصيصٍ بسعر فاتورته وغيرُ المخصَّص
+   * بسعر السند — فتخصيصُ ما كان «على الحساب» بسعر السند على فاتورةٍ بسعرٍ آخر، أو نقلُه من فاتورةٍ إلى أخرى بسعرٍ مختلف،
+   * يُبدّل الذمّةَ المسوّاة **بلا نقد**. كان التوزيعُ لا يُرحّل شيئاً، فيبقى الربحُ أو الخسارةُ المحقَّقة رصيداً يتيماً في `1200`
+   * على العميل وفواتيرُه مسدَّدة — ثم يعكس العكسُ (من التخصيصات الحالية) فرقاً على `5600` لم يُرحَّل أصلُه، شبحاً.
+   * **والآن**: قيدٌ بلا نقد بـ`بعد − قبل`، بيوم التوزيع، خاضعٌ لقفل الفترات — فيبقى مرحَّلُ السند مساوياً لذمّته من
+   * تخصيصاته الحالية، ويصدق فرضُ العكس بلا تعديلٍ فيه.
+   * ⚠️ **حدودٌ معلَنة**: سندٌ أُعيد توزيعُه قبل هذا البناء يبقى فرقُه كما رُحِّل (يُعدّ ولا يُصحَّح)؛ وسندٌ بلا قيدٍ أصلاً
+   * (`journalEntryId` فارغ — ما سبق `ق-١٤٦٦`) لا يُرحَّل له فرقٌ على ذمّةٍ لم تُرحَّل؛ ومصدرُ القيد في الأستاذ «آليّ» لا
+   * «سند قبض» — مذكّرتُه تسمّي السند، والربطُ بعمودٍ يحتاج هجرةً لم تُبنَ. **وسندُ الصرف للمورّد (B2) خارجُه** بانتظار
+   * حكم المالك في الدفعة المقدَّمة لمورّد.
    *
    * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
    * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
@@ -396,9 +432,13 @@ export class PaymentsService {
       const requested = dto.allocations.map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
       const touched = new Set<string>([...payment.allocations.map((a) => a.invoiceId), ...requested.map((a) => a.invoiceId)]);
 
+      // ⚖️ (`ق-١٤٨٩`/B1) الذمّةُ المرحَّلة **قبل** طرح القديمة — فبعد الحذف لا يبقى إلا «غيرُ مخصَّصٍ بسعر السند»،
+      //    وفرقٌ يُحسب منه يصدق حين كان السندُ كلُّه على الحساب ويكذب حين يُنقل من فاتورةٍ إلى أخرى.
+      const settledBefore = await this.postedSettledBaseOf(tx, payment);
+
       // القديمة تُطرح أولاً — وإلا رفضنا إعادةَ توزيعٍ لا تتجاوز شيئاً حقيقةً.
       await tx.paymentAllocation.deleteMany({ where: { paymentId: id } });
-      await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
+      const rates = await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
         amount: round2(Number(payment.amount)),
         currency: payment.currency,
         partyId: payment.customerId,
@@ -407,6 +447,24 @@ export class PaymentsService {
 
       if (requested.length) {
         await tx.paymentAllocation.createMany({ data: requested.map((a) => ({ companyId, paymentId: id, invoiceId: a.invoiceId, amount: a.amount })) });
+      }
+
+      // ⚖️ (`ق-١٤٨٩`/B1) الفرقُ بين الذمّتَين قيدٌ بلا نقد: موجبٌ ⟵ دائن `1200` · مدين `5600` (خسارة)، وسالبٌ ⟵ مدين `1200` ·
+      //    دائن `5600` (ربح). بيوم التوزيع (من الطلب، وإلا ساعةُ الخادم كالعكس — `ق-٧٣٦`)، وقفلُ الفترات في `createJournalEntry`
+      //    يرفضه في فترةٍ مقفلة فتسقط المعاملةُ كلُّها ويبقى التوزيعُ القديم.
+      const settledAfter = baseSettledOf(round2(Number(payment.amount)), Number(payment.exchangeRate), toSettlementAllocations(requested), rates);
+      const difference = round2(settledAfter - settledBefore);
+      if (difference !== 0 && payment.journalEntryId) {
+        await postCustomerPaymentEntry(tx, companyId, {
+          customerId: payment.customerId,
+          paymentNo: payment.no,
+          customerName: payment.customer.name,
+          date: dto.date ? new Date(dto.date) : new Date(),
+          baseCash: 0,
+          baseReceivable: difference,
+          branchId: payment.branchId,
+          reallocation: true,
+        });
       }
 
       for (const invoiceId of touched) await this.recomputeInvoiceStatus(tx, invoiceId);
@@ -452,19 +510,8 @@ export class PaymentsService {
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
         // القيدان طرفاً بطرف ويعود 5600 إلى ما كان: الحسبةُ نفسُها التي سوّت الأصل، مقلوبةَ الإشارة.
-        const invoices = await tx.invoice.findMany({
-          where: { id: { in: original.allocations.map((a) => a.invoiceId) } },
-          select: { id: true, exchangeRate: true },
-        });
-        const rateByInvoice = new Map(invoices.map((i) => [i.id, { exchangeRate: Number(i.exchangeRate) }]));
-        const baseReceivable = round2(
-          -baseSettledOf(
-            round2(Number(original.amount)),
-            rate,
-            original.allocations.map((a) => ({ documentId: a.invoiceId, amount: round2(Number(a.amount)) })),
-            rateByInvoice,
-          ),
-        );
+        // ⚖️ (`ق-١٤٨٩`/B1) ومن المصدر الذي تطرح منه إعادةُ التوزيع ذمّتَها القديمة — فما رحّله التوزيعُ فرقاً يعود هنا بعينه.
+        const baseReceivable = round2(-(await this.postedSettledBaseOf(tx, original)));
 
         const reversal = await tx.payment.create({
           data: {

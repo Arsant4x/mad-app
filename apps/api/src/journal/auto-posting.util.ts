@@ -1227,6 +1227,11 @@ export interface CustomerPaymentForPosting {
   /** سندُ ردٍّ لمرتجع (`SPEC 30.8`): نقدٌ خارج وذمّةٌ تعود — نفس القيد بمبالغٍ سالبة، بمذكّرةٍ تسمّيه. */
   refund?: boolean;
   /**
+   * **فرقُ ذمّةِ سندٍ أُعيد توزيعُه** (`ق-١٤٨٩`/B1): بلا نقد (`baseCash = 0`) — الذمّةُ المرحَّلة تتبدّل بسعر الفواتير
+   * الجديدة، والفارقُ ربحُ صرفٍ أو خسارتُه على `5600`. بمذكّرةٍ تسمّيه وتسمّي السند.
+   */
+  reallocation?: boolean;
+  /**
    * حسابُ النقد المستقبِل — **حسابُ البنك حين تُقبض الدفعة على بنك** (`ق-٢٧٧`)،
    * و`1000` حين تُقبض نقداً. وقبلَ هذا كان الطرفُ المدين `1000` دائماً، **فنقدُ
    * البنك يُعدّ صندوقاً** (`ق-٢٧٦` — عائقُ إطلاق).
@@ -1284,13 +1289,16 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
   const partyCode = receivable ? '1200' : '2100';
   // ربحُ الصرف: قبضٌ بنقدٍ يفوق الذمّة، أو صرفٌ بنقدٍ يقلّ عنها.
   const fxGain = round2(receivable ? cash - settled : settled - cash);
+  // ⚖️ **قيدٌ بلا نقد** (`ق-١٤٨٩`/B1 — فرقُ ذمّةِ سندٍ أُعيد توزيعُه): لا يُطلب حسابُ نقدٍ ولا يُكتب سطرُه — فـ`createJournalEntry`
+  //    يفحص المجموعَين وحدهما ويكتب كلَّ سطرٍ كما هو، فسطرُ نقدٍ صفريٌّ كان سيبقى في الدفتر بلا واقعة.
+  const withCash = cash !== 0;
   // `1000` لا يُطلَب حين يُمرَّر حسابُ بنك: منشأةٌ بلا `1000` لا يُسقَط قيدُها
   // البنكيّ لأجل رمزٍ لا يدخل فيه.
-  const needCodes = [...(p.cashAccountId ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
-  const ids = await resolveAccountIds(tx, needCodes);  const cashAccountId = p.cashAccountId ?? ids.get('1000')!;
+  const needCodes = [...(p.cashAccountId || !withCash ? [] : ['1000']), partyCode, ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])];
+  const ids = await resolveAccountIds(tx, needCodes);
 
   const lines: PostingLine[] = [
-    signedLine(cashAccountId, cash, receivable),
+    ...(withCash ? [signedLine(p.cashAccountId ?? ids.get('1000')!, cash, receivable)] : []),
     signedLine(ids.get(partyCode)!, settled, !receivable),
   ];
   if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
@@ -1569,7 +1577,7 @@ export function postCustomerPaymentEntry(tx: Prisma.TransactionClient, companyId
   return postPartySettlementEntry(tx, companyId, {
     side: 'RECEIVABLE',
     date: p.date,
-    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
+    memo: `${p.refund ? 'ردّ مرتجع' : p.reversal ? 'عكس مقبوض' : p.reallocation ? 'إعادة توزيع مقبوض' : 'مقبوض من عميل'} — سند ${p.paymentNo} — ${p.customerName}`,
     baseCash: p.baseCash,
     baseSettled: p.baseReceivable,
     customerId: p.customerId,
