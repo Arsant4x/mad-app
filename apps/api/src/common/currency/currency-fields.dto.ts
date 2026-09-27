@@ -10,6 +10,9 @@ import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
  * it must be the rate **as of the transaction**, and only the caller knows
  * whether this is a document being written today or one being back-dated.
  *
+ * ⚖️ `ق-١٤٨٩`: والإعفاءُ من السعر **لعملة الأساس وحدَها** — عملةٌ غيرُها بلا سعرٍ تُرفض `400` مسمّاةً في
+ * `resolveCurrency` (`currency_rate_required`) لا تُسعَّر بـ١. والشرطُ هناك لا هنا: عملةُ المنشأة لا تُعرف في الـDTO.
+ *
  * Extends BranchFieldDto because every money document is also attributable to
  * a branch — that way one rule covers both: any DTO that can carry a branch
  * extends BranchFieldDto, directly or through this class.

@@ -560,6 +560,8 @@ export const MSG = {
   currency_in_use: 'currencies.in_use',
   currency_rate_must_be_positive: 'currencies.rate_must_be_positive',
   exchange_rate_same_currency: 'exchangeRates.same_currency',
+  /** مستندٌ بعملةٍ غيرِ عملة المنشأة بلا سعر صرف — لا يُسعَّر بـ١ بصمت (`ق-١٤٨٩`). */
+  currency_rate_required: 'currencies.rate_required',
 
   // fiscal year / period close
   fiscal_year_not_found: 'fiscal.year_not_found',
@@ -1733,6 +1735,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.currency_rate_must_be_positive]: { ar: 'سعر الصرف يجب أن يكون أكبر من صفر', en: 'The exchange rate must be greater than zero' },
   [MSG.exchange_rate_same_currency]: { ar: 'لا يمكن تسجيل سعر صرف بين العملة ونفسها', en: 'An exchange rate cannot be between a currency and itself' },
+  [MSG.currency_rate_required]: {
+    ar: 'المستند بعملة {currency} وعملة المنشأة الأساسية {base} — أدخل سعر الصرف وقت العملية، فلا يُفترض له سعر',
+    en: 'The document is in {currency}, not the base currency {base} — enter the exchange rate as of the transaction; none is assumed',
+  },
 
   [MSG.fiscal_year_not_found]: { ar: 'السنة المالية غير موجودة', en: 'Fiscal year not found' },
   [MSG.fiscal_period_not_found]: { ar: 'الفترة المالية غير موجودة', en: 'Fiscal period not found' },

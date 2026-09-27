@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { MaintenanceStatus, Prisma } from '@prisma/client';
-import { toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
@@ -163,8 +163,12 @@ export class MaintenanceService {
         const existing = await this.load(tx, id, { property: true });
         this.assertTransition(existing.status, 'DONE');
 
-        const exchangeRate = dto.exchangeRate ?? 1;
-        const baseCost = dto.cost != null ? toBaseAmount(dto.cost, exchangeRate) : null;
+        // ⚖️ (`ق-١٤٨٩`) العملةُ وسعرُها يصفان التكلفةَ ويُخزَّنان معها — فيُحلّان بالمحلِّل المشترك حين تُسجَّل تكلفةٌ وحدَها:
+        //    كان هنا `dto.exchangeRate ?? 1` والعملةُ `'SAR'` حرفاً، فتكلفةٌ بعملةٍ أجنبيةٍ بلا سعرٍ تُرحَّل على `5700` بسعر ١،
+        //    وتكلفةٌ بلا عملةٍ تُوسَم ريالاً أيّاً كانت عملةُ المنشأة (`ق-١٣٦٨`). والحلُّ قبل الترحيل — فالرفضُ لا يترك قيداً.
+        //    وبلا تكلفةٍ لا شيء يُسعَّر، فلا يُرفض إتمامٌ مجّانيٌّ لأنه حمل عملةً بلا سعر.
+        const priced = dto.cost != null ? { cost: dto.cost, ...(await resolveCurrencyWithin(tx, companyId, dto)) } : null;
+        const baseCost = priced ? toBaseAmount(priced.cost, priced.exchangeRate) : null;
 
         const journalEntry =
           baseCost != null
@@ -183,8 +187,8 @@ export class MaintenanceService {
           data: {
             status: 'DONE',
             completedAt: new Date(dto.completedAt),
-            ...(dto.cost != null
-              ? { cost: dto.cost, currency: dto.currency?.trim() || 'SAR', exchangeRate, baseCost, journalEntryId: journalEntry?.id ?? null }
+            ...(priced
+              ? { cost: priced.cost, currency: priced.currency, exchangeRate: priced.exchangeRate, baseCost, journalEntryId: journalEntry?.id ?? null }
               : {}),
             ...(dto.notes !== undefined ? { notes: dto.notes.trim() || null } : {}),
           },
