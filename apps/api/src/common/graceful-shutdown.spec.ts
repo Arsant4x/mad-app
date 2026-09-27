@@ -87,14 +87,17 @@ describe('ق-١٥٢٣ — الإيقافُ المنظَّم للخادم: exec �
     expect(term).toBeLessThan(migrate);
   });
 
-  it('⑤ نافذةُ الإقلاع: مستمعٌ قبل `NestFactory.create`، ويُرفع قبل `enableShutdownHooks` مباشرةً', () => {
+  it('⑤ نافذةُ الإقلاع: مستمعٌ قبل `NestFactory.create` يبقى حتى `listen`، ثم يُرفع قبل `enableShutdownHooks` مباشرةً', () => {
     const early = MAIN.search(/process\.once\('SIGTERM',\s*exitDuringBoot\)/);
     const create = MAIN.indexOf('NestFactory.create');
+    const listen = MAIN.search(/\bawait app\.listen\(/);
     const removed = MAIN.search(/process\.removeListener\('SIGTERM',\s*exitDuringBoot\)/);
     const hooks = MAIN.search(/\bapp\.enableShutdownHooks\(\)/);
     expect(early).toBeGreaterThanOrEqual(0);
     expect(early).toBeLessThan(create);
-    expect(removed).toBeGreaterThan(create);
+    // قِيس: مستمعُ Nest قبل `listen` ⟸ أُغلق التطبيقُ ثم فُتح منفذُه فبقيت العمليةُ حتى قُتلت (`30812 ms` · `137`).
+    expect(listen).toBeGreaterThan(create);
+    expect(removed).toBeGreaterThan(listen);
     expect(hooks).toBeGreaterThan(removed);
     // ولا `await` بين الرفع والتسجيل — فلا لحظةَ بلا مستمع.
     expect(MAIN.slice(removed, hooks)).not.toMatch(/\bawait\b/);

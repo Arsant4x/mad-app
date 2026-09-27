@@ -21,6 +21,10 @@ import { applyApiVersioning } from './common/versioning';
  * لا يُسجِّل مستمعَه إلا بعد `NestFactory.create` (تحميلُ الوحدات والاتصالُ بالقاعدة) — فقِيس: إيقافٌ بعد ثانيةٍ من
  * البدء ⟸ `31025 ms` ثم قتلٌ `137` بلا سطر. **ولا طلبَ يُخدم قبل الاستماع**، فلا شيءَ يُفرَغ: يُخرج فوراً بـ`0`، وما
  * كان في منتصف معاملةٍ تُرجعه القاعدة.
+ *
+ * ⚠️ **ويبقى حتى `listen` لا حتى `create`** — قِيس: مستمعُ Nest مسجَّلٌ بعد `create` وإشارةٌ قبل `listen` ⟸ أغلق Nest
+ * التطبيقَ («تمّ الإيقافُ المنظَّم») **ثم أكمل الإقلاعُ ففتح المنفذَ على تطبيقٍ مُغلق** فبقيت العمليةُ حتى قُتلت
+ * (`30812 ms` · `137`). فمستمعُ Nest لا يُسجَّل إلا بعد أن يوجد ما يُغلقه.
  */
 function exitDuringBoot(signal: NodeJS.Signals): void {
   // eslint-disable-next-line no-console
@@ -37,12 +41,6 @@ async function bootstrap() {
   assertProductionSecrets();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  // ⭐ الإيقافُ المنظَّم (`ق-١٥٢٣`): بلا هذا لا يسمع الخادمُ إشارةَ الإيقاف — قِيس: `docker stop` والقاعدةُ قائمة
-  // ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرٍ واحد. ومعه يُغلق المنفذَ ويُفرغ الاتصالاتِ ثم يخرج (سطرا `ShutdownLogService`).
-  // ومستمعُ الإقلاع يُرفع **في الخطوة نفسِها** التي يُسجَّل فيها مستمعُ Nest — فلا لحظةَ بلا مستمع ولا لحظةَ بمستمعَين.
-  process.removeListener('SIGTERM', exitDuringBoot);
-  process.removeListener('SIGINT', exitDuringBoot);
-  app.enableShutdownHooks();
   const config = app.get(ConfigService);
   const isProduction = config.get<string>('NODE_ENV') === 'production';
 
@@ -106,6 +104,13 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
+  // ⭐ الإيقافُ المنظَّم (`ق-١٥٢٣`): بلا هذا لا يسمع الخادمُ إشارةَ الإيقاف — قِيس: `docker stop` والقاعدةُ قائمة
+  // ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرٍ واحد. ومعه يُغلق المنفذَ ويُفرغ الاتصالاتِ ثم يخرج (سطرا `ShutdownLogService`).
+  // **بعد `listen` لا قبله** (انظر `exitDuringBoot`)، ومستمعُ الإقلاع يُرفع في الخطوة نفسِها بلا `await` بينهما —
+  // فلا لحظةَ بلا مستمع ولا لحظةَ بمستمعَين.
+  process.removeListener('SIGTERM', exitDuringBoot);
+  process.removeListener('SIGINT', exitDuringBoot);
+  app.enableShutdownHooks();
   // eslint-disable-next-line no-console
   console.log(`API listening on port ${port}${docsEnabled ? ' (docs at /docs)' : ' (docs disabled)'}`);
 }
