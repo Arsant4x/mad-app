@@ -82,9 +82,6 @@ export async function readApplicablePrepayments(
     // ⚖️ (`ق-١٥٠٣`/ب) **مقدَّمٌ بعملةٍ لا يُطبَّق على فاتورةٍ بأخرى** — كان يمرّ فيُدين `1200` بأساس المقدَّم لا بسعر التوريد، وتُقارَن
     //    مبالغُ بعملتين كأنها عملةٌ واحدة (القياس B4 · P5). وهو لا يتوقّف على الإطار المحاسبيّ؛ واتّجاهُ فرق السعر بالعملة نفسِها
     //    ينتظر قراءةَ القسم الثلاثين. **وقبل مقارنة المجموع** — فتلك لا معنى لها بعملتين. والرموزُ بلا اعتبارٍ لحالة الأحرف.
-    if (doc.currency.trim().toUpperCase() !== sale.currency.trim().toUpperCase()) {
-      throw new BadRequestException(formatMessage(MSG.prepayment_currency_mismatch, { no: doc.no, prepayment: doc.currency, invoice: sale.currency }));
-    }
     if (doc.appliedAsPrepayment.length > 0) throw new ConflictException(formatMessage(MSG.prepayment_already_applied, { no: doc.no }));
     applied = round2(applied + Number(doc.total));
     if (applied > sale.total + 0.005) {
