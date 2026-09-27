@@ -108,11 +108,20 @@ function deductionTarget(kind: DeductionKind): 'receivable' | 'income' {
 }
 
 /**
+ * رمزا عملةٍ واحدٌ؟ — **بلا اعتبارٍ للمسافة ولا لحالة الأحرف**: الرمزُ يُشذَّب عند الإنشاء ولا يُطبَّع إلى أحرفٍ كبيرة
+ * (`createClaim` · `recordDeposit`)، فمقارنةٌ حرفيةٌ كانت تعدّ رمزَ عملة الأساس بأحرفٍ صغيرة عملةً أجنبيةً فتطلب لمستند
+ * عملة الأساس سعرَ يومٍ لا ترسله الواجهة (المراجعةُ العدائية لـ`ق-١٤٨٩`).
+ */
+function sameCurrency(a: string, b: string): boolean {
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+/**
  * ⚖️ **عملةُ المستند غيرُ عملة أساس المنشأة؟** (`ق-١٤٨٩` · B7 · B8 · B9) — فمستندٌ بعملة الأساس سعرُه سعرُ يومه
  * بالتعريف، ولا سعرَ يُطلب له ولا يُقرأ، ويبقى قيدُه حرفاً كما كان.
  */
 async function isForeignCurrency(tx: Prisma.TransactionClient, companyId: string, currency: string): Promise<boolean> {
-  return currency !== (await companyBaseCurrency(tx, companyId));
+  return !sameCurrency(currency, await companyBaseCurrency(tx, companyId));
 }
 
 /**
@@ -121,9 +130,12 @@ async function isForeignCurrency(tx: Prisma.TransactionClient, companyId: string
  * المطالبةُ والوديعةُ والمقبوضُ غيرُ المكتسَب قُيّدت بسعرها يومَ نشأت، والنقدُ الذي يسوّيها يتحرّك يوماً آخر بسعرٍ
  * آخر. **وكان النقدُ يُقيَّد بالسعر التاريخيّ فيُطوى فرقُ السوق في `1000`** في المسارات الثلاثة (قياس `ق-١٤٨٩`).
  * ⛔ **ولا سعرَ يُفترض**: سعرُ المستند افتراضاً هو العطلُ نفسُه بلبوسٍ آخر — فغيابُه يُرفض برسالةٍ مسمّاة قبل أيّ أثر.
+ * ⚠️ **و`null` كالغياب**: `@IsOptional` يُمرّر `null` بلا فحص؛ ولو عُومل سعراً لصار النقدُ `amount × null = 0` فيُرحَّل
+ * المستندُ كلُّه خسارةَ صرفٍ على `5600` بقيدٍ متوازن، ولصار في الوديعة والإلغاء «لا سعر» فيعود السعرُ التاريخيّ صامتاً —
+ * أي العطلُ نفسُه من بابٍ ثانٍ (المراجعةُ العدائية لـ`ق-١٤٨٩`؛ ونظيرُه في `resolveCurrency` على فرع M1).
  */
-function requireCashDayRate(currency: string, dayRate: number | undefined): number {
-  if (dayRate === undefined) throw new BadRequestException(formatMessage(MSG.rent_cash_rate_required, { currency }));
+function requireCashDayRate(currency: string, dayRate: number | null | undefined): number {
+  if (dayRate === undefined || dayRate === null) throw new BadRequestException(formatMessage(MSG.rent_cash_rate_required, { currency }));
   return dayRate;
 }
 
@@ -1219,7 +1231,7 @@ export class ContractsService {
           ? splitAtDepositRate(Number(deposit.baseAmount), { receivable: receivableAmount, income: incomeAmount, refund }, rate)
           : { receivable: toBaseAmount(receivableAmount, rate), income: toBaseAmount(incomeAmount, rate), refund: 0 };
         const againstReceivable =
-          foreign && deposit.currency === deposit.contract.currency
+          foreign && sameCurrency(deposit.currency, deposit.contract.currency)
             ? toBaseAmount(receivableAmount, Number(deposit.contract.exchangeRate))
             : atDepositRate.receivable;
         const refundCash = heldByCompany && dayRate !== null ? toBaseAmount(refund, dayRate) : atDepositRate.refund;

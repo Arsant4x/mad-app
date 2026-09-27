@@ -139,6 +139,10 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
     // ⛔ بلا سعر: `400` بالرسالة التي تسمّي العملة — لا سعرُ المطالبة افتراضاً.
     const refused = await auth(http().post(`/contracts/${contract.id}/claims/${claim.id}/pay`)).send({ paidAt: today }).expect(400);
     expect(refused.body.message).toBe(rateRequired(FX));
+    // ⛔ و`null` كالغياب (المراجعةُ العدائية): `@IsOptional` يُمرّره، ولو قُرئ سعراً لصار النقدُ 100 × null = 0
+    //    فيُرحَّل قيدٌ متوازنٌ صامت: 1000 مدين 0 · 1200 دائن 375 · 5600 مدين 375 — والردُّ `201`.
+    const refusedNull = await auth(http().post(`/contracts/${contract.id}/claims/${claim.id}/pay`)).send({ paidAt: today, exchangeRate: null }).expect(400);
+    expect(refusedNull.body.message).toBe(rateRequired(FX));
     // والرفضُ قبل أيّ أثر: المطالبةُ مفتوحةٌ بلا قيد تسوية.
     const untouched = (await readContract(contract.id)).claims.find((c) => c.id === claim.id)!;
     expect(untouched.status).toBe('OPEN');
@@ -172,6 +176,30 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
     expect(await linesOf(settled.settlementEntryId!)).toEqual({
       '1000': { debit: 100, credit: 0 },
       '1200': { debit: 0, credit: 100 },
+    });
+
+    // ⚖️ ورمزُ عملة الأساس بأحرفٍ صغيرة هو عملةُ الأساس نفسُها (المراجعةُ العدائية): `createClaim` يشذّب الرمزَ ولا يطبّعه
+    //    (`@Length(3, 3)` وحدَه في `CurrencyFieldsDto`)، فمقارنةٌ حرفيةٌ كانت تعدّه أجنبياً فتطلب سعرَ يومٍ ⟵ `400` بدل القيد القائم.
+    const { baseCurrency } = await tenantPrisma.runInTenantContext(company.companyId, (tx) =>
+      tx.company.findUniqueOrThrow({ where: { id: company.companyId }, select: { baseCurrency: true } }),
+    );
+    const lower = baseCurrency.toLowerCase();
+    // مجسٌّ للمجسّ: الرمزُ تغيّر فعلاً — وإلا فالحالةُ تعيد الحالةَ الأولى ولا تختبر شيئاً.
+    expect(lower).not.toBe(baseCurrency);
+    const withLower = (
+      await auth(http().post(`/contracts/${contract.id}/claims`))
+        .send({ kind: 'UTILITIES', amount: 50, description: 'فاتورة كهرباء', issuedAt: today, currency: lower })
+        .expect(201)
+    ).body as ContractBody;
+    const lowerClaim = withLower.claims.find((c) => c.currency === lower)!;
+    // سعرُ العقد (عملة الأساس) 1 يرثه `createClaim`: 50 × 1 = 50.00.
+    expect(Number(lowerClaim.baseAmount)).toBe(50);
+    const paidLower = (await auth(http().post(`/contracts/${contract.id}/claims/${lowerClaim.id}/pay`)).send({ paidAt: today }).expect(201))
+      .body as ContractBody;
+    // بلا سعر: النقدُ = الذمّة = 50.00 — سطران بالضبط، ولا 5600.
+    expect(await linesOf(paidLower.claims.find((c) => c.id === lowerClaim.id)!.settlementEntryId!)).toEqual({
+      '1000': { debit: 50, credit: 0 },
+      '1200': { debit: 0, credit: 50 },
     });
   });
 
