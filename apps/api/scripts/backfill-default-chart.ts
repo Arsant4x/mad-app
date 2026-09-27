@@ -17,7 +17,8 @@
  *
  * Run from apps/api:  npx ts-node scripts/backfill-default-chart.ts
  */
-import { PrismaClient } from '@mad-app/db';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { PrismaClient } = require('@prisma/client');
 import { createDefaultChart, DEFAULT_CHART } from '../src/accounts/default-chart';
 
 const prisma = new PrismaClient();
