@@ -132,6 +132,7 @@ export const MSG = {
   purchase_amortize_requires_incorporation: 'purchases.amortize_requires_incorporation',
   purchase_has_payments: 'purchases.has_payments',
   purchase_total_below_allocated: 'purchases.total_below_allocated',
+  purchase_rate_frozen_after_payment: 'purchases.rate_frozen_after_payment',
   supplier_payment_not_found: 'supplier_payments.not_found',
   allocation_wrong_supplier: 'supplier_payments.allocation_wrong_supplier',
 
@@ -921,6 +922,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.purchase_total_below_allocated]: {
     ar: 'إجمالي الفاتورة {no} الجديد {total} أقل مما سُدِّد عليها فعلاً {allocated}',
     en: 'The new total {total} of purchase invoice {no} is below what has already been paid on it ({allocated})',
+  },
+  [MSG.purchase_rate_frozen_after_payment]: {
+    ar: 'عملة فاتورة الشراء {no} وسعر صرفها لا يُعدَّلان وعليها سدادٌ مخصَّص ({allocated}) — فرق الصرف رُحِّل بسعرها يوم السداد؛ اعكس سند الصرف أولاً ثم عدِّل',
+    en: 'The currency and exchange rate of purchase invoice {no} cannot be edited while supplier payments are allocated to it ({allocated}) — the exchange difference was posted at its rate when paid; reverse the supplier payment first, then edit',
   },
   [MSG.supplier_payment_not_found]: { ar: 'سند الصرف غير موجود', en: 'Supplier payment not found' },
   [MSG.allocation_wrong_supplier]: { ar: 'فاتورة الشراء {no} ليست لهذا المورّد', en: 'Purchase invoice {no} belongs to another supplier' },
