@@ -578,6 +578,7 @@ export class InvoicesService {
         branchId,
         customerId: dto.customerId,
         lines: dto.lines,
+        currency,
         total,
         base: { baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) },
         prepaymentInvoiceIds: dto.prepaymentInvoiceIds,

@@ -69,7 +69,7 @@ export type ApplicablePrepayment = Prisma.InvoiceGetPayload<{ include: typeof PR
  */
 export async function readApplicablePrepayments(
   tx: Tx,
-  sale: { customerId: string; total: number; prepaymentInvoiceIds: readonly string[] },
+  sale: { customerId: string; currency: string; total: number; prepaymentInvoiceIds: readonly string[] },
 ): Promise<ApplicablePrepayment[]> {
   const ids = [...new Set(sale.prepaymentInvoiceIds)];
   const docs = await tx.invoice.findMany({ where: { id: { in: ids } }, include: PREPAYMENT_DOC_INCLUDE });
@@ -79,6 +79,12 @@ export async function readApplicablePrepayments(
     const doc = docs.find((d) => d.id === id);
     if (!doc || doc.docType !== 'PREPAYMENT' || !doc.prepaymentPayment) throw new NotFoundException(MSG.prepayment_not_found);
     if (doc.customerId !== sale.customerId) throw new BadRequestException(formatMessage(MSG.prepayment_other_customer, { no: doc.no }));
+    // ⚖️ (`ق-١٥٠٣`/ب) **مقدَّمٌ بعملةٍ لا يُطبَّق على فاتورةٍ بأخرى** — كان يمرّ فيُدين `1200` بأساس المقدَّم لا بسعر التوريد، وتُقارَن
+    //    مبالغُ بعملتين كأنها عملةٌ واحدة (القياس B4 · P5). وهو لا يتوقّف على الإطار المحاسبيّ؛ واتّجاهُ فرق السعر بالعملة نفسِها
+    //    ينتظر قراءةَ القسم الثلاثين. **وقبل مقارنة المجموع** — فتلك لا معنى لها بعملتين. والرموزُ بلا اعتبارٍ لحالة الأحرف.
+    if (doc.currency.trim().toUpperCase() !== sale.currency.trim().toUpperCase()) {
+      throw new BadRequestException(formatMessage(MSG.prepayment_currency_mismatch, { no: doc.no, prepayment: doc.currency, invoice: sale.currency }));
+    }
     if (doc.appliedAsPrepayment.length > 0) throw new ConflictException(formatMessage(MSG.prepayment_already_applied, { no: doc.no }));
     applied = round2(applied + Number(doc.total));
     if (applied > sale.total + 0.005) {
@@ -106,6 +112,8 @@ export async function assertSaleIssuable(
     branchId: string | null;
     customerId: string;
     lines: readonly { productId?: string | null }[];
+    /** عملةُ المستند — ولا يُطبَّق عليه مقدَّمٌ بعملةٍ أخرى (`ق-١٥٠٣`/ب). */
+    currency: string;
     /** إجماليُّ المستند بعملته — يُقارَن به مجموعُ الدفعات المقدَّمة كما في التطبيق. */
     total: number;
     base: { baseTotal: number; baseSubtotal: number; baseTaxTotal: number };
@@ -121,7 +129,12 @@ export async function assertSaleIssuable(
   if (codes.length > 0 || prepaymentIds.length > 0) await assertPeriodOpen(tx, sale.issueDate);
   if (prepaymentIds.length === 0) return { prepayments: [] };
 
-  const prepayments = await readApplicablePrepayments(tx, { customerId: sale.customerId, total: sale.total, prepaymentInvoiceIds: prepaymentIds });
+  const prepayments = await readApplicablePrepayments(tx, {
+    customerId: sale.customerId,
+    currency: sale.currency,
+    total: sale.total,
+    prepaymentInvoiceIds: prepaymentIds,
+  });
   const applicationCodes = prepayments.flatMap((d) => prepaymentApplicationPostingCodes({ gross: Number(d.baseTotal), vat: Number(d.baseTaxTotal) }));
   await assertPostingAccounts(tx, [...new Set(applicationCodes)]);
   await assertCustomerPrepaymentsAccountUsable(tx, companyId);
