@@ -20,6 +20,9 @@ async function bootstrap() {
   assertProductionSecrets();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // ⭐ الإيقافُ المنظَّم (`ق-١٥٢٣`): بلا هذا لا يسمع الخادمُ إشارةَ الإيقاف — قِيس: `docker stop` والقاعدةُ قائمة
+  // ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرٍ واحد. ومعه يُغلق المنفذَ ويُفرغ الاتصالاتِ ثم يخرج (سطرا `ShutdownLogService`).
+  app.enableShutdownHooks();
   const config = app.get(ConfigService);
   const isProduction = config.get<string>('NODE_ENV') === 'production';
 

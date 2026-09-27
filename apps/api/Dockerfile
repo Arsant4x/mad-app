@@ -82,4 +82,8 @@ EXPOSE 3000
 #
 # Migrations run on every boot: idempotent, and the container is the only
 # thing guaranteed to run before the app touches the schema.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
+#
+# ⭐ `exec` (ق-١٥٢٣): الصدفةُ تُطبّق الهجراتِ ثم **تُستبدل بالخادم** فيصير هو العمليةَ الأولى — بلا `exec` تبقى الصدفةُ
+# الأولى ولا تمرّر إشارةَ الإيقاف، فقِيس `docker stop` والقاعدةُ قائمة ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرِ إيقاف.
+# والهجراتُ قبل البدء باقيةٌ كما هي.
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/src/main.js"]
