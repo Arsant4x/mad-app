@@ -1,10 +1,12 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { DEFAULT_LANGUAGE, formatMessage, MSG, resolveMessage } from '../src/common/i18n/messages';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): معلَنةٌ لا مقيسة — لم يُشغَّل `jest` في بناء هذه الحزمة؛ تُعايَر بثلاثة أضعاف المقيس بعد أوّل تشغيل.
@@ -24,11 +26,16 @@ jest.setTimeout(300000);
  * - كشفُ المورّد (`readLedger` بطرف `credit`): `closing = Σ دائن − Σ مدين` لسطور `2100` التي تحمل المورّد.
  *
  * ولكلِّ حالةٍ مورّدٌ خاصّ فيُقرأ كشفُه وحدَه، و`5600` يُقرأ فرقاً على مستوى المنشأة المعزولة.
+ *
+ * ④ و⑤ أضافتهما المراجعةُ العدائية: ④ سدادٌ **جزئيّ** — يُسقط حارساً يقرأ `status === 'PAID'` بدل الصافي، ورسالةً تحمل
+ * الإجماليَّ بدل المسدَّد (فالمسدَّدُ في ① يساوي الإجماليَّ فلا يميّز بينهما) · ⑤ **سندٌ في الطريق** بتداخلٍ مفروضٍ لا
+ * متروكٍ للتوقيت (`§8.8` الوجه الثالث) — يُسقط الحارسَ بلا قفل صفّ الشراء.
  */
 describe('Paid purchase — currency and rate frozen (e2e)', () => {
   let app: INestApplication;
   let token: string;
   let company: IsolatedCompany;
+  let tenantPrisma: TenantPrismaService;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
@@ -47,10 +54,10 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
     return { id: res.body.id, no: res.body.no, journalEntryId: res.body.journalEntryId as string };
   };
 
-  /** سندُ صرفٍ ١٠٠ دولار بسعر 3.80 نقداً (بلا بنك ⟵ `1000`) مخصَّصٌ كلُّه على الشراء. */
-  const payUsd = async (supplierId: string, purchaseId: string): Promise<{ id: string; no: string }> => {
+  /** سندُ صرفٍ بالدولار بسعر 3.80 نقداً (بلا بنك ⟵ `1000`) مخصَّصٌ كلُّه على الشراء — ١٠٠ افتراضاً. */
+  const payUsd = async (supplierId: string, purchaseId: string, amount = 100): Promise<{ id: string; no: string }> => {
     const res = await auth(http().post('/supplier-payments'))
-      .send({ supplierId, date: today(), amount: 100, method: 'CASH', currency: 'USD', exchangeRate: 3.8, allocations: [{ purchaseId, amount: 100 }] })
+      .send({ supplierId, date: today(), amount, method: 'CASH', currency: 'USD', exchangeRate: 3.8, allocations: [{ purchaseId, amount }] })
       .expect(201);
     return { id: res.body.id, no: res.body.no };
   };
@@ -100,6 +107,7 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'paid-purchase-rate');
     token = company.token;
+    tenantPrisma = app.get(TenantPrismaService);
   });
 
   afterAll(async () => {
@@ -198,5 +206,93 @@ describe('Paid purchase — currency and rate frozen (e2e)', () => {
     const fxAfter = await fxTotals();
     expect(fxAfter.debit - fxBefore.debit).toBeCloseTo(0, 2);
     expect(fxAfter.credit - fxBefore.credit).toBeCloseTo(0, 2);
+  });
+
+  it('④ السدادُ الجزئيّ يجمّد كذلك ⟵ 409 والرسالةُ تحمل المسدَّدَ لا الإجماليّ، ولا يُمسّ الدفتر', async () => {
+    const supplierId = await newSupplier('جزئي');
+    const purchase = await makeUsdPurchase(supplierId);
+    const fxBefore = await fxTotals();
+    await payUsd(supplierId, purchase.id, 40);
+
+    // السداد: baseSettled = baseSettledOf(40, 3.8, [{P,40}], {P: 3.7}) = toBaseAmount(40, 3.7) + toBaseAmount(0, 3.8) = 148 + 0 = 148
+    // · baseCash = round2(40 × 3.8) = 152 · fxGain = 148 − 152 = −4 ⟵ مدين `2100` 148 · مدين `5600` 4 · دائن `1000` 152.
+    // الكشف: دائن 370 − مدين 148 = 222، وسطران على `2100`.
+    expect(await statementOf(supplierId)).toEqual({ closing: '222.00', count: 2 });
+    const fxPaid = await fxTotals();
+    expect(fxPaid.debit - fxBefore.debit).toBeCloseTo(4, 2);
+    expect(fxPaid.credit - fxBefore.credit).toBeCloseTo(0, 2);
+    // deriveSettlementStatus(40, 100): 40 < 100 − 0.005 و40 > 0.005 ⟵ PARTIAL — فحارسٌ على `status === 'PAID'` يمرّره.
+    expect(await purchaseRow(purchase.id)).toMatchObject({ status: 'PARTIAL', allocated: '40.00' });
+
+    // المخصَّصُ صافياً = 40 ⟵ formatMoney(40) = '40.00' — لا '100.00' الإجماليّ.
+    const res = await auth(http().patch(`/purchases/${purchase.id}`)).send({ exchangeRate: 3.6 });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe(frozenMessage(purchase.no, '40.00'));
+
+    // لا عكسَ ولا إعادةَ ترحيل: الكشفُ و`5600` والشراءُ كما كانوا.
+    expect(await statementOf(supplierId)).toEqual({ closing: '222.00', count: 2 });
+    const fxAfter = await fxTotals();
+    expect(fxAfter.debit - fxPaid.debit).toBeCloseTo(0, 2);
+    expect(fxAfter.credit - fxPaid.credit).toBeCloseTo(0, 2);
+    const row = await purchaseRow(purchase.id);
+    expect(Number(row.exchangeRate)).toBe(3.7);
+    expect(row.journalEntryId).toBe(purchase.journalEntryId);
+  });
+
+  it('⑤ سندٌ في الطريق: التعديلُ ينتظر قفلَ صفّ الشراء ثم يرى التخصيصَ ⟵ 409 لا 200', async () => {
+    const supplierId = await newSupplier('متزامن');
+    const purchase = await makeUsdPurchase(supplierId);
+
+    // «السندُ في الطريق» بخطوتَي السند نفسِها (`lockAndAssertAllocationsFit` ثم إنشاءُ السند بتخصيصه): يقفل صفَّ الشراء
+    // ويكتب تخصيصاً بـ100، **ولا يلتزم حتى يرى التعديلَ محجوزاً خلف قفله** (`pg_blocking_pids`) — فالتداخلُ مفروضٌ لا
+    // متروكٌ للتوقيت (`§8.8` الوجه الثالث): بالقفل يُحجز التعديلُ **قبل** قراءة المخصَّص، وبلا قفلٍ يُحجز عند كتابة الصفّ
+    // **بعد** أن قرأ صفراً. وسقفُ الانتظار ١٠ ث (١٠٠ × ٠٫١) كي لا يعلق الاختبار إن لم يُحجز شيء.
+    // ولا قيدَ هنا ولا إعادةَ حساب حالة: الحارسُ يقرأ التخصيصَ وحدَه.
+    let written: () => void = () => undefined;
+    const allocationWritten = new Promise<void>((resolve) => {
+      written = () => resolve();
+    });
+    const inFlight = tenantPrisma.runInTenantContext(
+      company.companyId,
+      async (tx) => {
+        await tx.$executeRaw`SELECT "id" FROM "purchases" WHERE "id" = ${purchase.id} FOR UPDATE`;
+        await tx.supplierPayment.create({
+          data: {
+            companyId: company.companyId,
+            no: `PAY-RACE-${suffix}`,
+            supplierId,
+            date: new Date(today()),
+            amount: 100,
+            method: 'CASH',
+            currency: 'USD',
+            exchangeRate: 3.8,
+            baseAmount: 380,
+            allocations: { create: [{ companyId: company.companyId, purchaseId: purchase.id, amount: 100 }] },
+          } as unknown as Prisma.SupplierPaymentUncheckedCreateInput,
+        });
+        written();
+        for (let i = 0; i < 100; i += 1) {
+          const [blocked] = await tx.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE pg_backend_pid() = ANY(pg_blocking_pids(pid))`;
+          if (blocked.n > 0) break;
+          await tx.$executeRaw`SELECT pg_sleep(0.1)`;
+        }
+      },
+      { timeout: 20000 },
+    );
+    // سقوطُ السند قبل الإشارة يُسقط الاختبارَ بسببه — لا بانتظار مهلة الحزمة.
+    await Promise.race([allocationWritten, inFlight.then(() => undefined)]);
+
+    // بالقفل: التعديلُ ينتظر حتى يلتزم السند، ثم يقرأ المخصَّصَ 100 ⟵ 409 بـ'100.00'.
+    // وبلا قفل: يقرأ صافياً صفراً (التخصيصُ لم يلتزم بعد) ثم ينتظر عند كتابة الصفّ ويكتب السعرَ الجديد بعد التزامه ⟵ 200.
+    const res = await auth(http().patch(`/purchases/${purchase.id}`)).send({ exchangeRate: 3.6 });
+    await inFlight;
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe(frozenMessage(purchase.no, '100.00'));
+
+    // والشراءُ كما أُنشئ: سعرُه وأساسُه وقيدُه (round2(100 × 3.7) = 370).
+    const row = await purchaseRow(purchase.id);
+    expect(Number(row.exchangeRate)).toBe(3.7);
+    expect(Number(row.baseTotal)).toBe(370);
+    expect(row.journalEntryId).toBe(purchase.journalEntryId);
   });
 });

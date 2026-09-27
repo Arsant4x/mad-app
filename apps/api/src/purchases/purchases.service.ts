@@ -283,6 +283,10 @@ export class PurchasesService {
       // يصير الصافي صفراً ويُعدَّل السعر. **وإشعارُ المورّد ليس مخرجاً هنا**: يُسعَّر بسعر أصله (`supplier-notes.service`)
       // فلا يصحّح سعراً. ويأتي **بعد** تجميد الاستهلاك: ما استُهلك لا يفكّه عكسُ السند، فرسالتُه أصدقُ مخرجاً.
       if (dto.currency !== undefined || dto.exchangeRate !== undefined) {
+        // **صفُّ الشراء يُقفل قبل قراءة المخصَّص** كما يقفله السندُ قبل أن يخصّص (`lockAndAssertAllocationsFit`):
+        // بلا قفلٍ يقرأ التعديلُ صافياً صفراً وسندٌ في الطريق لم يلتزم، ثم يكتب السعرَ الجديد بعد التزامه — فيقع ما يمنعه
+        // الحارس. وبالقفل: إمّا ينتظر التعديلُ السندَ فيرى تخصيصَه ويُرفض، وإمّا ينتظر السندُ التعديلَ فيقرأ السعرَ الجديد.
+        await tx.$queryRaw`SELECT "id" FROM "purchases" WHERE "id" = ${id} FOR UPDATE`;
         const settled = await allocatedFor(purchaseTarget(tx), id);
         if (settled > SETTLEMENT_EPS) {
           throw new ConflictException(formatMessage(MSG.purchase_rate_frozen_after_payment, { no: existing.no, allocated: formatMoney(settled) }));
