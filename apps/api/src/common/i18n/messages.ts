@@ -509,6 +509,8 @@ export const MSG = {
   refund_target_invalid: 'returns.refund_target_invalid',
   refund_nothing_refundable: 'returns.refund_nothing_refundable',
   refund_exceeds_refundable: 'returns.refund_exceeds_refundable',
+  refund_currency_mismatch: 'returns.refund_currency_mismatch',
+  refund_rate_required: 'returns.refund_rate_required',
 
   // أدراج الكاشير (ق-٢١٨ · ق-٢٦٥)
   cash_drawer_not_found: 'cash_drawers.not_found',
@@ -1572,6 +1574,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.refund_target_invalid]: { ar: 'سند الردّ يُصدَر على إشعارٍ دائن مرتبطٍ بفاتورةٍ أصلية فقط', en: 'A refund is issued against a credit note linked to an original invoice only' },
   [MSG.refund_nothing_refundable]: { ar: 'لا شيء قابلٌ للردّ: الإشعار خُصم من متبقي الفاتورة غير المسدَّد، أو رُدّ من قبل', en: 'Nothing is refundable: the note offset the unpaid balance of its invoice, or was already refunded' },
   [MSG.refund_exceeds_refundable]: { ar: 'مبلغ الردّ ({amount}) يتجاوز القابل للردّ ({refundable}) — الخصم من الفاتورة غير المسدَّدة إلزاميّ أولاً', en: 'Refund ({amount}) exceeds the refundable amount ({refundable}) — the unpaid invoice balance must be offset first' },
+  [MSG.refund_currency_mismatch]: { ar: 'عملة الردّ ({currency}) تخالف عملة الإشعار الدائن {no} ({noteCurrency}) — الردُّ بعملة إشعاره', en: 'The refund currency ({currency}) differs from credit note {no} ({noteCurrency}) — a refund is paid in its note’s currency' },
+  [MSG.refund_rate_required]: { ar: 'الإشعار الدائن {no} بعملة {currency} — سعرُ صرف يوم الردّ مطلوب ولا يُفترض', en: 'Credit note {no} is in {currency} — the exchange rate of the refund day is required and is never assumed' },
   /**
    * ⚖️ **الفاتورةُ الصادرة لا تُعدَّل ولا تُحذف — مختومةً كانت أو لا** (`ق-٩٤٣`): العميلُ يحمل رقمَها ورمزَها
    * منذ لحظة الإصدار، وإيصالُ الكاشير يخرج قبل الإجازة، ولا نافذةَ ضيّقة حيث لا تسجيل. **ورسالةٌ واحدة
