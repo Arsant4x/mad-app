@@ -94,12 +94,23 @@ export function fulfilmentReport(f: FulfilmentResult): FulfilmentReport {
   };
 }
 
+/** ما سيُخصم من الرفّ: المستودعُ والسطورُ المتعقَّبة — أو سببُ ألّا يُخصم شيء. */
+export type DeductionPlan<L> =
+  | { deducts: true; warehouseId: string; deductible: L[] }
+  | { deducts: false; reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
 /**
- * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
- * كلّ الحركات — فالمستودعُ وحدةُ المخزون لا الفرع، والخصمُ من رفٍّ لا يرى
- * القارئ نصفَه يُنزل الرصيدَ تحت الصفر بصمت.
+ * (`ق-١٤٩٠`) **ما سيخصمه البيعُ من الرفّ — قراءةً بلا كتابة**: مستودعُ الفرع والسطورُ ذاتُ الصنف المتعقَّب. هي نفسُها
+ * أوّلُ ما يفعله `fulfilStockedLines` (تستدعيها ثم تكتب)، ومنها يعرف الفحصُ قبل ترقيم الفاتورة أن قيدَ تكلفةٍ سيُرحَّل
+ * فيطلب حسابَه وفترتَه — فلا يفترق الفحصُ عن التنفيذ.
+ *
+ * **على مستوى المنشأة بحقّها**: «متعقَّبٌ» يعني حركةً واحدةً للصنف في أيّ مستودعٍ وفرع — صنفٌ استُلم في فرعٍ
+ * آخر متعقَّبٌ هنا أيضاً، وحصرُ السؤال بفرع القارئ يُسقط خصمَه وتكلفتَه صامتَين.
  */
-export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<FulfilmentResult> {
+export async function deductionPlan<L extends { productId: string | null }>(
+  tx: Tx,
+  args: { branchId: string | null; warehouseId?: string | null; lines: readonly L[] },
+): Promise<DeductionPlan<L>> {
   const warehouseId =
     args.warehouseId ??
     (args.branchId
@@ -112,10 +123,10 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
    * بضاعةً بلا مستودع يرى لماذا لم تُحسب تكلفتها بدل أن يكتشفه في تقرير هامش
    * بعد شهر.
    */
-  if (!warehouseId) return { fulfilled: false, reason: 'NO_WAREHOUSE' };
+  if (!warehouseId) return { deducts: false, reason: 'NO_WAREHOUSE' };
 
   const stocked = args.lines.filter((l) => l.productId !== null);
-  if (stocked.length === 0) return { fulfilled: false, reason: 'NO_TRACKED_PRODUCTS' };
+  if (stocked.length === 0) return { deducts: false, reason: 'NO_TRACKED_PRODUCTS' };
 
   const ids = [...new Set(stocked.map((l) => l.productId!))];
   const tracked = new Set(
@@ -124,7 +135,19 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
     ),
   );
   const deductible = stocked.filter((l) => tracked.has(l.productId!));
-  if (deductible.length === 0) return { fulfilled: false, reason: 'NO_TRACKED_PRODUCTS' };
+  if (deductible.length === 0) return { deducts: false, reason: 'NO_TRACKED_PRODUCTS' };
+  return { deducts: true, warehouseId, deductible };
+}
+
+/**
+ * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
+ * كلّ الحركات — فالمستودعُ وحدةُ المخزون لا الفرع، والخصمُ من رفٍّ لا يرى
+ * القارئ نصفَه يُنزل الرصيدَ تحت الصفر بصمت.
+ */
+export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<FulfilmentResult> {
+  const plan = await deductionPlan(tx, args);
+  if (!plan.deducts) return { fulfilled: false, reason: plan.reason };
+  const { warehouseId, deductible } = plan;
 
   let totalCost = 0;
   let provisionalQty = 0;
@@ -224,6 +247,67 @@ export interface ReturnResult {
 export const restoredReport = (restored: ReturnResult['restored']): { lineId: string; qty: string; cost: string }[] =>
   restored.map((r) => ({ lineId: r.lineId, qty: qty(r.qty), cost: money(r.cost) }));
 
+/** كمّيةُ سطر المرتجع كما تُعدّ وتُكتب — بدقّة الكمّية المشتقّة. */
+const returnQty = (quantity: Prisma.Decimal | number): number => roundTo(Number(quantity), 'DERIVED_QUANTITY');
+
+/**
+ * (`ق-١٤٩٠`) **ما بِيع على سطرٍ أصليّ وما أُعيد منه** — القراءةُ الواحدة التي يحكم بها التنفيذ (`returnStockedLines`)
+ * والفحصُ قبل ترقيم الإشعار (`assertReturnsWithinSold`)؛ و`null` حين لم تُخصم للسطر بضاعة (خدمةٌ · صنفٌ غيرُ متعقَّب).
+ *
+ * **على مستوى المنشأة بحقّها**: خروجُ البيع الأصليّ ومرتجعاتُه السابقة تُقرأ بسطر الفاتورة أيّاً كان فرعُ الإشعار —
+ * فإشعارٌ سابقٌ صدر من فرعٍ آخر أعاد جزءاً، وإغفالُه يُجيز إرجاعاً فوق ما بِيع.
+ */
+async function soldAndReturned(tx: Tx, returnsLineId: string) {
+  const original = await tx.stockMovement.findFirst({
+    where: { invoiceLineId: returnsLineId, type: 'OUT' },
+    select: { id: true, qty: true, warehouseId: true, productId: true },
+  });
+  if (!original) return null;
+  const priorReturns = await tx.stockMovement.aggregate({
+    where: { type: 'IN', origin: 'SALE', invoiceLine: { returnsLineId } },
+    _sum: { qty: true },
+  });
+  return { original, sold: Number(original.qty), already: Number(priorReturns._sum.qty ?? 0) };
+}
+
+/** الحكمُ الواحد للموضعين: مرتجعٌ فوق ما بِيع ناقصاً ما أُعيد قبله يُرفض بأرقامه. */
+function assertWithinSold(returnsLineId: string, sold: number, already: number, qty: number): void {
+  if (roundTo(already + qty, 'DERIVED_QUANTITY') > roundTo(sold, 'DERIVED_QUANTITY')) {
+    throw new ReturnExceedsSoldError(returnsLineId, sold, already, qty);
+  }
+}
+
+/** سطرُ إشعارٍ كما يصل الفحصَ قبل الترقيم — قبل أن يُكتب فلا معرّفَ له. */
+export interface ReturnRequestLine {
+  productId?: string | null;
+  quantity: Prisma.Decimal | number;
+  returnsLineId?: string | null;
+  returnCondition?: ReturnLine['returnCondition'];
+}
+
+/**
+ * (`ق-١٤٩٠`) **الإرجاعُ فوق المبيع يُفحص قبل ترقيم الإشعار الدائن** — كان يُكتشف في `returnStockedLines` بعد أن أخذ
+ * الإشعارُ رقمَه الضريبيّ فيحترق الرقم. يقرأ ما يقرؤه التنفيذ بعينه (`soldAndReturned`) ويحكم بحكمه (`assertWithinSold`)،
+ * **وبمجموع سطور الإشعار على السطر الأصليّ الواحد** — فسطران يُعيدان من سطرٍ واحد يُعدّان معاً كما يعدّهما التنفيذ
+ * تتابعاً. ويُعيد عددَ السطور الأصلية التي سيعود منها شيءٌ إلى الرفّ (فيُطلب حسابُ التكلفة وفترتُها).
+ * ويبقى فحصُ التنفيذ طبقةً ثانية لمرتجعٍ متزامن يسبق هذا الإشعارَ إلى الالتزام.
+ */
+export async function assertReturnsWithinSold(tx: Tx, lines: readonly ReturnRequestLine[]): Promise<number> {
+  const requested = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.productId || !line.returnsLineId || (line.returnCondition ?? 'GOOD') !== 'GOOD') continue;
+    requested.set(line.returnsLineId, roundTo((requested.get(line.returnsLineId) ?? 0) + returnQty(line.quantity), 'DERIVED_QUANTITY'));
+  }
+  let restocking = 0;
+  for (const [returnsLineId, qty] of requested) {
+    const state = await soldAndReturned(tx, returnsLineId);
+    if (!state) continue;
+    assertWithinSold(returnsLineId, state.sold, state.already, qty);
+    restocking += 1;
+  }
+  return restocking;
+}
+
 /**
  * **ردُّ البضاعة السليمة إلى المخزون** — من المالك الواحد نفسه لكتابتَي الحركة والتكلفة.
  *
@@ -253,25 +337,15 @@ export async function returnStockedLines(tx: Tx, args: ReturnArgs): Promise<Retu
     if (!line.returnsLineId) { skipped.push({ lineId: line.id, reason: 'NO_RETURNS_LINE' }); continue; }
     if ((line.returnCondition ?? 'GOOD') !== 'GOOD') { skipped.push({ lineId: line.id, reason: 'NOT_GOOD' }); continue; }
 
-    const original = await tx.stockMovement.findFirst({
-      where: { invoiceLineId: line.returnsLineId, type: 'OUT' },
-      select: { id: true, qty: true, warehouseId: true, productId: true },
-    });
-    if (!original) { skipped.push({ lineId: line.id, reason: 'NOT_STOCKED' }); continue; }
+    const state = await soldAndReturned(tx, line.returnsLineId);
+    if (!state) { skipped.push({ lineId: line.id, reason: 'NOT_STOCKED' }); continue; }
+    const { original, sold, already } = state;
     if (original.productId !== line.productId) {
       throw new Error(`سطر المرتجع ${line.id} يحمل صنفاً غير صنف سطر البيع الأصلي ${line.returnsLineId}`);
     }
 
-    const qty = roundTo(Number(line.quantity), 'DERIVED_QUANTITY');
-    const priorReturns = await tx.stockMovement.aggregate({
-      where: { type: 'IN', origin: 'SALE', invoiceLine: { returnsLineId: line.returnsLineId } },
-      _sum: { qty: true },
-    });
-    const sold = Number(original.qty);
-    const already = Number(priorReturns._sum.qty ?? 0);
-    if (roundTo(already + qty, 'DERIVED_QUANTITY') > roundTo(sold, 'DERIVED_QUANTITY')) {
-      throw new ReturnExceedsSoldError(line.returnsLineId, sold, already, qty);
-    }
+    const qty = returnQty(line.quantity);
+    assertWithinSold(line.returnsLineId, sold, already, qty);
 
     const movement = await tx.stockMovement.create({
       data: {
