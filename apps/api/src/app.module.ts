@@ -63,6 +63,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { UnitsModule } from './units/units.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { WarrantiesModule } from './warranties/warranties.module';
+import { ShutdownLogService } from './common/lifecycle/shutdown-log.service';
 
 @Module({
   imports: [
@@ -168,6 +169,6 @@ import { WarrantiesModule } from './warranties/warranties.module';
     CompanyProfileModule,
     FilesModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, ShutdownLogService],
 })
 export class AppModule {}

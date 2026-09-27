@@ -1,3 +1,5 @@
+// ⛔ **أوّلُ استيراد، ولا يُنقل** (`ق-١٥٢٣`): يُسجِّل مستمعَ الإيقاف في أثناء الإقلاع قبل تحميل ما يليه — انظر الملفّ.
+import { exitDuringBoot } from './common/lifecycle/boot-signal';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -83,6 +85,13 @@ async function bootstrap() {
 
   const port = config.get<number>('PORT', 3000);
   await app.listen(port);
+  // ⭐ الإيقافُ المنظَّم (`ق-١٥٢٣`): بلا هذا لا يسمع الخادمُ إشارةَ الإيقاف — قِيس: `docker stop` والقاعدةُ قائمة
+  // ⟸ `11165 ms` ثم قتلٌ `137` بلا سطرٍ واحد. ومعه يُغلق المنفذَ ويُفرغ الاتصالاتِ ثم يخرج (سطرا `ShutdownLogService`).
+  // **بعد `listen` لا قبله** (انظر `exitDuringBoot`)، ومستمعُ الإقلاع يُرفع في الخطوة نفسِها بلا `await` بينهما —
+  // فلا لحظةَ بلا مستمع ولا لحظةَ بمستمعَين.
+  process.removeListener('SIGTERM', exitDuringBoot);
+  process.removeListener('SIGINT', exitDuringBoot);
+  app.enableShutdownHooks();
   // eslint-disable-next-line no-console
   console.log(`API listening on port ${port}${docsEnabled ? ' (docs at /docs)' : ' (docs disabled)'}`);
 }
