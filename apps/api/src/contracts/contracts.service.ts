@@ -3,7 +3,7 @@ import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
-import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { companyBaseCurrency, resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import {
   postClaimIssueEntry,
@@ -105,6 +105,64 @@ const DEPOSIT_TYPE_LABEL: Record<DepositType, string> = {
  * a deduction carries a kind rather than just an amount. */
 function deductionTarget(kind: DeductionKind): 'receivable' | 'income' {
   return kind === 'UNPAID_RENT' ? 'receivable' : 'income';
+}
+
+/**
+ * رمزا عملةٍ واحدٌ؟ — **بلا اعتبارٍ للمسافة ولا لحالة الأحرف**: الرمزُ يُشذَّب عند الإنشاء ولا يُطبَّع إلى أحرفٍ كبيرة
+ * (`createClaim` · `recordDeposit`)، فمقارنةٌ حرفيةٌ كانت تعدّ رمزَ عملة الأساس بأحرفٍ صغيرة عملةً أجنبيةً فتطلب لمستند
+ * عملة الأساس سعرَ يومٍ لا ترسله الواجهة (المراجعةُ العدائية لـ`ق-١٤٨٩`).
+ */
+function sameCurrency(a: string, b: string): boolean {
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
+}
+
+/**
+ * ⚖️ **عملةُ المستند غيرُ عملة أساس المنشأة؟** (`ق-١٤٨٩` · B7 · B8 · B9) — فمستندٌ بعملة الأساس سعرُه سعرُ يومه
+ * بالتعريف، ولا سعرَ يُطلب له ولا يُقرأ، ويبقى قيدُه حرفاً كما كان.
+ */
+async function isForeignCurrency(tx: Prisma.TransactionClient, companyId: string, currency: string): Promise<boolean> {
+  return !sameCurrency(currency, await companyBaseCurrency(tx, companyId));
+}
+
+/**
+ * ⚖️ **سعرُ يوم النقد لمستندٍ بعملةٍ أجنبية — مُدخَلٌ لا مفترَض** (`ق-١٤٨٩` · B7 · B8 · B9).
+ *
+ * المطالبةُ والوديعةُ والمقبوضُ غيرُ المكتسَب قُيّدت بسعرها يومَ نشأت، والنقدُ الذي يسوّيها يتحرّك يوماً آخر بسعرٍ
+ * آخر. **وكان النقدُ يُقيَّد بالسعر التاريخيّ فيُطوى فرقُ السوق في `1000`** في المسارات الثلاثة (قياس `ق-١٤٨٩`).
+ * ⛔ **ولا سعرَ يُفترض**: سعرُ المستند افتراضاً هو العطلُ نفسُه بلبوسٍ آخر — فغيابُه يُرفض برسالةٍ مسمّاة قبل أيّ أثر.
+ * ⚠️ **و`null` كالغياب**: `@IsOptional` يُمرّر `null` بلا فحص؛ ولو عُومل سعراً لصار النقدُ `amount × null = 0` فيُرحَّل
+ * المستندُ كلُّه خسارةَ صرفٍ على `5600` بقيدٍ متوازن، ولصار في الوديعة والإلغاء «لا سعر» فيعود السعرُ التاريخيّ صامتاً —
+ * أي العطلُ نفسُه من بابٍ ثانٍ (المراجعةُ العدائية لـ`ق-١٤٨٩`؛ ونظيرُه في `resolveCurrency` على فرع M1).
+ */
+function requireCashDayRate(currency: string, dayRate: number | null | undefined): number {
+  if (dayRate === undefined || dayRate === null) throw new BadRequestException(formatMessage(MSG.rent_cash_rate_required, { currency }));
+  return dayRate;
+}
+
+/**
+ * ⚖️ **تقسيمُ الوديعة بسعرها — والأجزاءُ تساوي الالتزامَ بالضبط** (`ق-١٤٨٩` · B8 · البندُ ٢٩ من المراجعة العدائية).
+ *
+ * كان كلُّ جزءٍ (خصمُ الذمّة · خصمُ الدخل · الردّ) يُقوَّم بسعر الوديعة ويُدوَّر وحدَه، والالتزامُ `2300` مدوَّرٌ مرّةً
+ * واحدة: فوديعةُ `0.03` بسعر `1.5` التزامُها `0.05`، وأجزاؤها الثلاثة بـ`0.01` كلٌّ منها `0.02` — مجموعُها `0.06`،
+ * فيختلّ القيدُ بهللة ويُرفض `journal_entry_unbalanced`. **فبقيّةُ التقريب يحملها جزءٌ واحدٌ معلوم** (قاعدة `ق-٣٦` في
+ * `allocateEvenly`): **أكبرُ الأجزاء قيمةً** — فلا يصير جزءٌ سالباً — **وعند التساوي الدخلُ ثم الردُّ ثم الذمّة**: الدخلُ
+ * لا يُقوَّم بسعرٍ آخر، فبقيّتُه لا تصل `5600`.
+ */
+function splitAtDepositRate(
+  liability: number,
+  amounts: { receivable: number; income: number; refund: number },
+  rate: number,
+): { receivable: number; income: number; refund: number } {
+  const valued = {
+    receivable: toBaseAmount(amounts.receivable, rate),
+    income: toBaseAmount(amounts.income, rate),
+    refund: toBaseAmount(amounts.refund, rate),
+  };
+  const remainder = round2(liability - valued.receivable - valued.income - valued.refund);
+  const present = (['income', 'refund', 'receivable'] as const).filter((k) => amounts[k] > 0);
+  if (remainder === 0 || present.length === 0) return valued;
+  const carrier = present.reduce((best, k) => (valued[k] > valued[best] ? k : best));
+  return { ...valued, [carrier]: round2(valued[carrier] + remainder) };
 }
 
 // ⛔ كانت هنا خريطةُ كلماتٍ خمس تحوّل `Unit.type` الحرَّ إلى تعداد العقار لفحص اتساقٍ عند
@@ -336,6 +394,12 @@ export class ContractsService {
           // ⛔ **ولا افتراض** (`ق-٤٧٢`): «كلا الخيارين يكذب على نصف الحالات».
           throw new BadRequestException(formatMessage(MSG.unearned_disposition_required, { amount: formatMoney(unearned) }));
         }
+        // ⚖️ (`ق-١٤٨٩` · B9) **ما يُردّ نقداً من المقبوض عن مدّةٍ لم تُقدَّم يخرج بسعر يوم الإلغاء** لعقدٍ بعملةٍ أجنبية —
+        //    والالتزامُ (`2400`) بسعر العقد، والفرقُ على `5600`. ⛔ ولا سعرَ يُفترض: يُطلب هنا قبل تسوية الإلغاء.
+        const refundDayRate =
+          unearned > 0 && dto.unearnedDisposition === 'refund' && unearnedDetail.collected > 0 && (await isForeignCurrency(tx, companyId, existing.currency))
+            ? requireCashDayRate(existing.currency, dto.exchangeRate)
+            : null;
 
         const settlementAmount = await this.resolveSettlementAmount(tx, id, cancelDate, dto);
         // بنود التسوية (§16): التفصيل لا يغيّر المبلغ — يشرحه. مجموعٌ لا
@@ -398,6 +462,10 @@ export class ContractsService {
               date: cancelDate,
               baseAmount: unearnedDetail.collected,
               disposition: dto.unearnedDisposition,
+              // المردودُ بعملة العقد = الالتزامُ مقسوماً على سعره، ثم يُقوَّم نقداً بسعر يوم الإلغاء (`ق-١٤٨٩` · B9).
+              ...(refundDayRate === null
+                ? {}
+                : { baseCash: toBaseAmount(round2(unearnedDetail.collected / (Number(existing.exchangeRate) || 1)), refundDayRate) }),
             });
           }
           // وما **استُحقّ ولم يُقبض** عن مدّةٍ بعد الإلغاء يتبع الوجهةَ نفسَها (ق-٩٢٧/٧):
@@ -1006,7 +1074,7 @@ export class ContractsService {
   /** Collects a claim in cash. Partial collection isn't supported: a claim is a
    * single agreed demand, and splitting one is better modelled as two claims. */
   payClaim(companyId: string, contractId: string, claimId: string, dto: PayClaimDto) {
-    return this.settleClaim(companyId, contractId, claimId, 'PAID', new Date(dto.paidAt), null);
+    return this.settleClaim(companyId, contractId, claimId, 'PAID', new Date(dto.paidAt), null, dto.exchangeRate);
   }
 
   /** Writes a claim off. Reverses the income rather than deleting the claim —
@@ -1015,7 +1083,15 @@ export class ContractsService {
     return this.settleClaim(companyId, contractId, claimId, 'WAIVED', new Date(dto.waivedAt), dto.reason.trim());
   }
 
-  private settleClaim(companyId: string, contractId: string, claimId: string, status: 'PAID' | 'WAIVED', date: Date, waiveReason: string | null) {
+  private settleClaim(
+    companyId: string,
+    contractId: string,
+    claimId: string,
+    status: 'PAID' | 'WAIVED',
+    date: Date,
+    waiveReason: string | null,
+    cashDayRate?: number,
+  ) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
         const claim = await tx.contractClaim.findUnique({ where: { id: claimId }, include: { contract: true } });
@@ -1031,7 +1107,13 @@ export class ContractsService {
           baseAmount: Number(claim.baseAmount),
           kindLabel: CLAIM_KIND_LABEL[claim.kind],
         };
-        const entry = status === 'PAID' ? await postClaimPaymentEntry(tx, companyId, posting) : await postClaimWaiverEntry(tx, companyId, posting);
+        // ⚖️ (`ق-١٤٨٩` · B7) نقدُ التحصيل لمطالبةٍ بعملةٍ أجنبية بسعر يومه — والذمّةُ بسعر إصدارها، والفرقُ على `5600`.
+        //    والإسقاطُ لا نقدَ فيه فلا سعرَ له.
+        const baseCash =
+          status === 'PAID' && (await isForeignCurrency(tx, companyId, claim.currency))
+            ? toBaseAmount(Number(claim.amount), requireCashDayRate(claim.currency, cashDayRate))
+            : undefined;
+        const entry = status === 'PAID' ? await postClaimPaymentEntry(tx, companyId, { ...posting, baseCash }) : await postClaimWaiverEntry(tx, companyId, posting);
 
         await tx.contractClaim.update({
           where: { id: claimId },
@@ -1126,13 +1208,39 @@ export class ContractsService {
         }
 
         const rate = Number(deposit.exchangeRate);
-        const sumOf = (target: 'receivable' | 'income') =>
-          toBaseAmount(
-            sumMoney(dto.deductions.filter((d) => deductionTarget(d.kind as DeductionKind) === target).map((d) => d.amount)),
-            rate,
-          );
+        const amountFor = (target: 'receivable' | 'income') =>
+          sumMoney(dto.deductions.filter((d) => deductionTarget(d.kind as DeductionKind) === target).map((d) => d.amount));
+        const receivableAmount = amountFor('receivable');
+        const incomeAmount = amountFor('income');
 
         const refund = round2(held - deducted);
+        // An Ejar-held deposit has no liability to clear — only what the
+        // platform releases to the company gets posted.
+        const heldByCompany = deposit.holder === 'COMPANY';
+
+        // ⚖️ (`ق-١٤٨٩` · B8) **كلُّ جزءٍ بسعره، والفرقُ على `5600` لا في `1000`**:
+        //   · الالتزامُ `2300` بسعر الوديعة كما قُيِّد، وأجزاؤه بسعرها تساويه بالضبط (`splitAtDepositRate` — البندُ ٢٩)؛
+        //   · النقدُ — ردُّ المحتجَز أو ما تُفرج عنه إيجار — بسعر يوم التسوية لوديعةٍ بعملةٍ أجنبية، ولا سعرَ يُفترض؛
+        //   · وخصمُ الذمّة يُقيَّد `1200` دائناً **بسعر العقد** حين تكون الوديعةُ بعملته — فهو سعرُ الذمّة التي يسدّدها،
+        //     وبسعر الوديعة يترك في `1200` رصيداً يتيماً (القياس B8 ج).
+        //   ولوديعةٍ بعملة الأساس يعود كلُّ ذلك إلى القيد القائم حرفاً: سعرٌ واحد، ولا بقيّةَ تقريب، ولا فرق.
+        const foreign = await isForeignCurrency(tx, companyId, deposit.currency);
+        const cashMoves = heldByCompany ? refund > 0 : deducted > 0;
+        const dayRate = foreign && cashMoves ? requireCashDayRate(deposit.currency, dto.exchangeRate) : null;
+        const atDepositRate = heldByCompany
+          ? splitAtDepositRate(Number(deposit.baseAmount), { receivable: receivableAmount, income: incomeAmount, refund }, rate)
+          : { receivable: toBaseAmount(receivableAmount, rate), income: toBaseAmount(incomeAmount, rate), refund: 0 };
+        const againstReceivable =
+          foreign && sameCurrency(deposit.currency, deposit.contract.currency)
+            ? toBaseAmount(receivableAmount, Number(deposit.contract.exchangeRate))
+            : atDepositRate.receivable;
+        const refundCash = heldByCompany && dayRate !== null ? toBaseAmount(refund, dayRate) : atDepositRate.refund;
+        const awardedCash = !heldByCompany && dayRate !== null ? toBaseAmount(deducted, dayRate) : undefined;
+        // ربحُ الصرف: ما خرج من الالتزام بسعر الوديعة مطروحاً منه ما قُيِّد بسعره هو (للمحتجَز)، أو النقدُ الداخلُ مطروحاً
+        // منه ما سوّاه (لما في إيجار) — والدخلُ بسعر الوديعة في الحالين فلا يدخل الفرق.
+        const fxGain = heldByCompany
+          ? round2(atDepositRate.receivable - againstReceivable + (atDepositRate.refund - refundCash))
+          : round2((awardedCash ?? round2(atDepositRate.receivable + atDepositRate.income)) - againstReceivable - atDepositRate.income);
 
         const settlementEntry = await postDepositSettlementEntry(tx, companyId, {
           unitId: deposit.contract.unitId,
@@ -1140,14 +1248,14 @@ export class ContractsService {
           contractNo: deposit.contract.no,
           tenant: deposit.contract.tenant,
           date: new Date(dto.settledAt),
-          // An Ejar-held deposit has no liability to clear — only what the
-          // platform releases to the company gets posted.
-          heldByCompany: deposit.holder === 'COMPANY',
+          heldByCompany,
           baseAmount: Number(deposit.baseAmount),
-          againstReceivable: sumOf('receivable'),
-          againstIncome: sumOf('income'),
-          refund: toBaseAmount(refund, rate),
+          againstReceivable,
+          againstIncome: atDepositRate.income,
+          refund: refundCash,
           typeLabel: DEPOSIT_TYPE_LABEL[deposit.type],
+          awardedCash,
+          fxGain,
         });
 
         if (dto.deductions.length > 0) {

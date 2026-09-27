@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { companyBaseCurrency, resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { round2, formatMoney } from '../common/money/rounding';
 import { money } from '../common/money/text';
@@ -28,6 +28,7 @@ import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
 import { resolveDeclaredLineTax, type LineTax } from '../common/vat/line-tax.util';
 import { InvoicesService } from '../invoices/invoices.service';
+import { unallocatedReceivableRate } from './voucher-receivable-rate.util';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { id: true, name: true } },
@@ -364,7 +365,8 @@ export class PaymentsService {
   private async findVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
     const payment = await tx.payment.findFirst({
       where: { id, ...branchFilter(allowedBranchIds) },
-      include: { allocations: true, customer: { select: { name: true } } },
+      // سعرُ إشعار الردّ (`ق-١٤٨٩`): به يُعكس ما لم يُخصَّص من سند الردّ — نقدُه بسعر يومه وذمّتُه بسعر إشعاره.
+      include: { allocations: true, customer: { select: { name: true } }, refundsInvoice: { select: { exchangeRate: true } } },
     });
     if (!payment) throw new NotFoundException(MSG.payment_not_found);
     return payment;
@@ -377,7 +379,45 @@ export class PaymentsService {
   }
 
   /**
+   * ⚖️ **الذمّةُ المرحَّلة لسند قبضٍ بتخصيصاته الحالية** (`ق-١٤٨٩`/B1): كلُّ تخصيصٍ بسعر **فاتورته**، وما لم يُخصَّص
+   * بسعر السند — الحسبةُ نفسُها التي رحّل بها السندُ ذمّتَه يومَ إنشائه (`baseSettledOf`)، وتبقى صادقةً بعد كلِّ إعادة
+   * توزيع لأن التوزيعَ يُرحّل فرقَها. **فإعادةُ التوزيع والعكسُ يقرآنها من هنا** — مصدرٌ واحد، فلا يفترق ما يطرحه
+   * التوزيعُ عمّا يعكسه العكس.
+   *
+   * **على مستوى المنشأة بحقّها**: أسعارُ فواتير تخصيصات السند تُقرأ بمعرّفاتها أيّاً كان فرعُها — فالسندُ سوّى ذمّتَها
+   * كلَّها بأسعارها، وحجبُ فاتورةِ فرعٍ آخر يُسقط سعرَها إلى سعر السند فيختلّ فرقُ الصرف المرحَّل.
+   */
+  private async postedSettledBaseOf(
+    tx: Prisma.TransactionClient,
+    payment: {
+      amount: Prisma.Decimal | number;
+      exchangeRate: Prisma.Decimal | number;
+      allocations: { invoiceId: string; amount: Prisma.Decimal | number }[];
+      /** سندُ الردّ: ما لم يُخصَّص منه بسعر إشعاره لا بسعر نقده (B6 — `unallocatedReceivableRate`). */
+      refundsInvoice?: { exchangeRate: Prisma.Decimal | number } | null;
+    },
+  ): Promise<number> {
+    const allocations = payment.allocations.map((a) => ({ documentId: a.invoiceId, amount: round2(Number(a.amount)) }));
+    const invoices = allocations.length
+      ? await tx.invoice.findMany({ where: { id: { in: allocations.map((a) => a.documentId) } }, select: { id: true, exchangeRate: true } })
+      : [];
+    const rateByInvoice = new Map(invoices.map((i) => [i.id, { exchangeRate: Number(i.exchangeRate) }]));
+    return baseSettledOf(round2(Number(payment.amount)), unallocatedReceivableRate(payment), allocations, rateByInvoice);
+  }
+
+  /**
    * إعادة توزيع دفعة قائمة: تحلّ المجموعة الجديدة محلّ تخصيصاتها كلها.
+   *
+   * ⚖️ **وفرقُ الذمّة بين التوزيعَين يُرحَّل** (`ق-١٤٨٩`/B1): الذمّةُ المرحَّلة للسند كلُّ تخصيصٍ بسعر فاتورته وغيرُ المخصَّص
+   * بسعر السند — فتخصيصُ ما كان «على الحساب» بسعر السند على فاتورةٍ بسعرٍ آخر، أو نقلُه من فاتورةٍ إلى أخرى بسعرٍ مختلف،
+   * يُبدّل الذمّةَ المسوّاة **بلا نقد**. كان التوزيعُ لا يُرحّل شيئاً، فيبقى الربحُ أو الخسارةُ المحقَّقة رصيداً يتيماً في `1200`
+   * على العميل وفواتيرُه مسدَّدة — ثم يعكس العكسُ (من التخصيصات الحالية) فرقاً على `5600` لم يُرحَّل أصلُه، شبحاً.
+   * **والآن**: قيدٌ بلا نقد بـ`بعد − قبل`، بيوم التوزيع، خاضعٌ لقفل الفترات — فيبقى مرحَّلُ السند مساوياً لذمّته من
+   * تخصيصاته الحالية، ويصدق فرضُ العكس بلا تعديلٍ فيه.
+   * ⚠️ **حدودٌ معلَنة**: سندٌ أُعيد توزيعُه قبل هذا البناء يبقى فرقُه كما رُحِّل (يُعدّ ولا يُصحَّح)؛ وسندٌ بلا قيدٍ أصلاً
+   * (`journalEntryId` فارغ — ما سبق `ق-١٤٦٦`) لا يُرحَّل له فرقٌ على ذمّةٍ لم تُرحَّل؛ ومصدرُ القيد في الأستاذ «آليّ» لا
+   * «سند قبض» — مذكّرتُه تسمّي السند، والربطُ بعمودٍ يحتاج هجرةً لم تُبنَ. **وسندُ الصرف للمورّد (B2) خارجُه** بانتظار
+   * حكم المالك في الدفعة المقدَّمة لمورّد.
    *
    * **على مستوى المنشأة بحقّها**: عكسُ السند يُقرأ برابط الأصل (`reversesId`) لا بقائمة
    * رؤية — رابطُ مستندٍ بمستنده، وحجبُه بفرعٍ يُظهر السندَ المعكوس قابلاً للتوزيع من جديد.
@@ -396,9 +436,13 @@ export class PaymentsService {
       const requested = dto.allocations.map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
       const touched = new Set<string>([...payment.allocations.map((a) => a.invoiceId), ...requested.map((a) => a.invoiceId)]);
 
+      // ⚖️ (`ق-١٤٨٩`/B1) الذمّةُ المرحَّلة **قبل** طرح القديمة — فبعد الحذف لا يبقى إلا «غيرُ مخصَّصٍ بسعر السند»،
+      //    وفرقٌ يُحسب منه يصدق حين كان السندُ كلُّه على الحساب ويكذب حين يُنقل من فاتورةٍ إلى أخرى.
+      const settledBefore = await this.postedSettledBaseOf(tx, payment);
+
       // القديمة تُطرح أولاً — وإلا رفضنا إعادةَ توزيعٍ لا تتجاوز شيئاً حقيقةً.
       await tx.paymentAllocation.deleteMany({ where: { paymentId: id } });
-      await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
+      const rates = await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
         amount: round2(Number(payment.amount)),
         currency: payment.currency,
         partyId: payment.customerId,
@@ -407,6 +451,26 @@ export class PaymentsService {
 
       if (requested.length) {
         await tx.paymentAllocation.createMany({ data: requested.map((a) => ({ companyId, paymentId: id, invoiceId: a.invoiceId, amount: a.amount })) });
+      }
+
+      // ⚖️ (`ق-١٤٨٩`/B1) الفرقُ بين الذمّتَين قيدٌ بلا نقد: موجبٌ ⟵ دائن `1200` · مدين `5600` (خسارة)، وسالبٌ ⟵ مدين `1200` ·
+      //    دائن `5600` (ربح). بيوم التوزيع (من الطلب، وإلا ساعةُ الخادم كالعكس — `ق-٧٣٦`)، وقفلُ الفترات في `createJournalEntry`
+      //    يرفضه في فترةٍ مقفلة فتسقط المعاملةُ كلُّها ويبقى التوزيعُ القديم.
+      // وما لم يُخصَّص بعد التوزيع بسعر ذمّته من المصدر نفسِه الذي قُرئ به `settledBefore` (`unallocatedReceivableRate` — B6):
+      // لسند القبض هو سعرُه، ولسند الردّ سعرُ إشعاره — فلا يصنع اختلافُ القارئَين فرقاً لا أصلَ له.
+      const settledAfter = baseSettledOf(round2(Number(payment.amount)), unallocatedReceivableRate(payment), toSettlementAllocations(requested), rates);
+      const difference = round2(settledAfter - settledBefore);
+      if (difference !== 0 && payment.journalEntryId) {
+        await postCustomerPaymentEntry(tx, companyId, {
+          customerId: payment.customerId,
+          paymentNo: payment.no,
+          customerName: payment.customer.name,
+          date: dto.date ? new Date(dto.date) : new Date(),
+          baseCash: 0,
+          baseReceivable: difference,
+          branchId: payment.branchId,
+          reallocation: true,
+        });
       }
 
       for (const invoiceId of touched) await this.recomputeInvoiceStatus(tx, invoiceId);
@@ -452,19 +516,10 @@ export class PaymentsService {
 
         // الذمّة المعكوسة بأسعار فواتيرها هي نفسها التي سُوّيت — فيتطابق
         // القيدان طرفاً بطرف ويعود 5600 إلى ما كان: الحسبةُ نفسُها التي سوّت الأصل، مقلوبةَ الإشارة.
-        const invoices = await tx.invoice.findMany({
-          where: { id: { in: original.allocations.map((a) => a.invoiceId) } },
-          select: { id: true, exchangeRate: true },
-        });
-        const rateByInvoice = new Map(invoices.map((i) => [i.id, { exchangeRate: Number(i.exchangeRate) }]));
-        const baseReceivable = round2(
-          -baseSettledOf(
-            round2(Number(original.amount)),
-            rate,
-            original.allocations.map((a) => ({ documentId: a.invoiceId, amount: round2(Number(a.amount)) })),
-            rateByInvoice,
-          ),
-        );
+        // ⚖️ (`ق-١٤٨٩`/B1) ومن المصدر الذي تطرح منه إعادةُ التوزيع ذمّتَها القديمة — فما رحّله التوزيعُ فرقاً يعود هنا بعينه.
+        //    **وما لم يُخصَّص يُعكس بسعر ذمّته لا بسعر نقده** (B6): لسند القبض السعران واحد؛ وسندُ الردّ نقدُه بسعر يومه
+        //    (`rate` — المنسوخ على صفّ العكس) وذمّتُه بسعر إشعاره — والمصدرُ الواحد يقرأه (`unallocatedReceivableRate`).
+        const baseReceivable = round2(-(await this.postedSettledBaseOf(tx, original)));
 
         const reversal = await tx.payment.create({
           data: {
@@ -521,6 +576,9 @@ export class PaymentsService {
    * الدفعات، و`kind = REFUND` و`refundsInvoiceId` يُبقيان الواقعة مسمّاةً لا عكساً مجهولاً.
    * ترقيمُه سلسلةٌ مستقلة `RFD-` — فسند القبض والردّ لا يتزاحمان على عدّادٍ واحد.
    *
+   * **وبعملةٍ أجنبية** (`ق-١٤٨٩` — B6): النقدُ يخرج بسعر يوم الردّ (مطلوبٌ في الطلب، ولا يُفترض)، والذمّةُ تعود
+   * إلى `1200` بسعر الإشعار، والفرقُ بينهما على `5600` — لا يُطوى في قيمة حساب النقد/البنك.
+   *
    * **على مستوى المنشأة بحقّها**: المناوبةُ تُقرأ بمعرّفها المحفوظ على فاتورة
    * البيع لتحديد الدرج الذي يخرج منه الردّ — مفتاحٌ محفوظٌ لا قائمة، ولو حُجبت
    * لخرج الردُّ من الصندوق العامّ فاتُّهم الكاشير بفرق.
@@ -551,7 +609,29 @@ export class PaymentsService {
           throw new BadRequestException(formatMessage(MSG.refund_exceeds_refundable, { refundable: formatMoney(refundable), amount: formatMoney(amount) }));
         }
 
-        const rate = Number(note.exchangeRate);
+        // ⚖️ **النقدُ بسعر يوم الردّ، والذمّةُ بسعر الإشعار، والفرقُ على `5600`** (`ق-١٤٨٩` — المسار B6).
+        //    كان `currency` و`exchangeRate` يُقبلان من الطلب (`RefundDto extends CurrencyFieldsDto`) **ويُهملان**: النقدُ
+        //    والذمّةُ كلاهما بسعر الإشعار التاريخيّ، ففرقُ الصرف يُطوى في قيمة حساب النقد/البنك بلا سطرٍ يسمّيه.
+        //    ① عملةُ الردّ عملةُ إشعاره — عملةٌ أخرى مبلغٌ بمقياسٍ آخر، فتُرفض مسمّاةً لا تُحوَّل صامتةً.
+        //    ② وإشعارٌ بعملةٍ غير عملة الأساس **يُلزِم بسعر يوم الردّ** — لا يُفترض سعرُ الإشعار ولا التعادل.
+        //    ③ وإشعارٌ بعملة الأساس سعرُه سعرُه — فسعرٌ مرسَلٌ يخالفه سعرٌ بين العملة ونفسها، ولو قُبل لصنع على
+        //       `5600` فرقاً لا وجود له.
+        const requestedCurrency = dto.currency?.trim();
+        if (requestedCurrency && requestedCurrency !== note.currency) {
+          throw new BadRequestException(formatMessage(MSG.refund_currency_mismatch, { currency: requestedCurrency, no: note.no, noteCurrency: note.currency }));
+        }
+        const noteRate = Number(note.exchangeRate);
+        const requestedRate = dto.exchangeRate ?? null;
+        let cashRate = noteRate;
+        if (note.currency !== (await companyBaseCurrency(tx, companyId))) {
+          if (requestedRate === null) throw new BadRequestException(formatMessage(MSG.refund_rate_required, { no: note.no, currency: note.currency }));
+          cashRate = requestedRate;
+        } else if (requestedRate !== null && requestedRate !== noteRate) {
+          throw new BadRequestException(MSG.exchange_rate_same_currency);
+        }
+        // الذمّةُ تعود إلى `1200` بسعر إشعارها — من المصدر الواحد الذي تقرؤه مطابقةُ الأعمار ومُرحِّلُ العكس.
+        const receivableRate = unallocatedReceivableRate({ exchangeRate: cashRate, refundsInvoice: note });
+
         const date = new Date(dto.date);
         const no = await this.nextPaymentNumber(tx, companyId, date, 'RFD');
         const payment = await tx.payment.create({
@@ -570,8 +650,10 @@ export class PaymentsService {
             reference: dto.reference,
             notes: dto.notes ?? `ردّ مرتجع — إشعار دائن ${note.no}`,
             currency: note.currency,
-            exchangeRate: rate,
-            baseAmount: round2(-toBaseAmount(amount, rate)),
+            // سعرُ يوم الردّ لا سعرُ الإشعار: المبلغُ يحمل سعرَه وقتَ العملية (`§6.7`)، والذمّةُ تُقرأ بسعر إشعاره
+            // من رابطه (`refundsInvoiceId` ⟵ `unallocatedReceivableRate`) — فلا تنكسر مطابقةُ الأعمار مع `1200`.
+            exchangeRate: cashRate,
+            baseAmount: round2(-toBaseAmount(amount, cashRate)),
           } as unknown as Prisma.PaymentUncheckedCreateInput,
         });
 
@@ -600,11 +682,12 @@ export class PaymentsService {
           date,
           amount: -amount,
           currency: note.currency,
-          exchangeRate: rate,
+          // النقدُ ومرآةُ البنك بسعر يوم الردّ، والذمّةُ بسعر الإشعار — فيُخرج القيدُ الفرقَ على `5600` وحدَه.
+          exchangeRate: cashRate,
           branchId: note.branchId,
           bank,
           drawerAccountId: openShift?.drawer?.accountId ?? null,
-          baseReceivable: round2(-toBaseAmount(amount, rate)),
+          baseReceivable: round2(-toBaseAmount(amount, receivableRate)),
           description: `ردّ مرتجع — سند ${no} — إشعار دائن ${note.no} — ${note.customer.name}`,
           refund: true,
         });
