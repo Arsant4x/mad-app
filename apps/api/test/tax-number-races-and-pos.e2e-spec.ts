@@ -1,6 +1,6 @@
 import { ConflictException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
 import request from 'supertest';
@@ -42,6 +42,8 @@ describe('المساراتُ الضريبية لا تحرق رقمَ فاتور�
   let app: INestApplication;
   let tenantPrisma: TenantPrismaService;
   let prisma: PrismaService;
+  /** عميلُ العدّ خلف القفل — مجمّعُه غيرُ مجمّع التطبيق الذي يمسكه القافلُ والواقفون (`waitersBehind`). */
+  let probe: PrismaClient;
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const today = () => new Date().toISOString().slice(0, 10);
   const plusDays = (d: number) => new Date(Date.now() + d * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -79,9 +81,15 @@ describe('المساراتُ الضريبية لا تحرق رقمَ فاتور�
     return { ready, release: () => release(), finished };
   }
 
-  /** كم عمليةً تقف خلف القافل — مباشرةً أو خلف واقفٍ خلفه (الثاني في الطابور يقف خلف الأوّل). */
+  /**
+   * كم عمليةً تقف خلف القافل — مباشرةً أو خلف واقفٍ خلفه (الثاني في الطابور يقف خلف الأوّل).
+   *
+   * ⚠️ **بعميلٍ مستقلٍّ لا بمجمّع التطبيق** (`probe`): القافلُ يمسك اتصالاً والطلبان الواقفان خلفه اثنين — ومجمّعُ التطبيق في
+   * السير ثلاثةٌ («`connection limit: 3`») — فكان العدُّ ينتظر اتصالاً لا يتحرّر حتى يُطلق القفل، فيسقط بمهلة المجمّع على
+   * الشيفرة السليمة نفسِها (قِيس في السير على الرأس النظيف) **فلا يُثبت شيئاً عن القفل**.
+   */
   async function waitersBehind(holderPid: number): Promise<number> {
-    const [{ n }] = await prisma.$queryRaw<{ n: number }[]>`
+    const [{ n }] = await probe.$queryRaw<{ n: number }[]>`
       WITH RECURSIVE waiting(pid) AS (
         SELECT a.pid FROM pg_stat_activity a WHERE ${holderPid}::int = ANY(pg_blocking_pids(a.pid))
         UNION
@@ -125,10 +133,12 @@ describe('المساراتُ الضريبية لا تحرق رقمَ فاتور�
     await app.init();
     tenantPrisma = app.get(TenantPrismaService);
     prisma = app.get(PrismaService);
+    probe = new PrismaClient();
   });
 
   afterAll(async () => {
     jest.restoreAllMocks();
+    await probe?.$disconnect();
     await app.close();
   });
 
