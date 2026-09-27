@@ -251,7 +251,9 @@ export class QuotesService {
            */
           await tx.$queryRaw`SELECT "id" FROM "quotes" WHERE "id" = ${id} FOR UPDATE`;
           // بترتيبها المعلَن — فالفاتورةُ المحوَّلة تُرقَّم بترتيب العرض لا بترتيب القرص (`ق-١٤١٢`).
-          const quote = await tx.quote.findUniqueOrThrow({ where: { id }, include: { lines: LINE_ORDER } });
+          // وعرضٌ حُذف بين قراءة الرؤية والقفل (حذفٌ التزم والقفلُ ينتظره) لا صفَّ له بعد القفل ⟸ `404` مسمّى لا `P2025` خام.
+          const quote = await tx.quote.findUnique({ where: { id }, include: { lines: LINE_ORDER } });
+          if (!quote) throw new NotFoundException(MSG.quote_not_found);
 
           if (quote.status === 'CONVERTED') {
             throw new ConflictException(formatMessage(MSG.quote_already_converted, { invoiceNo: await this.convertedInvoiceNo(tx, quote) }));
