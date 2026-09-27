@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@mad-app/db';
 import xpath from 'xpath';
 import { branchFilter } from '../branches/branch-scope.util';
 import { LINE_ORDER } from '../common/document-lines.util';
