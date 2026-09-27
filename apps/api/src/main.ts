@@ -48,7 +48,9 @@ async function bootstrap() {
     origin: config.get<string>('WEB_ORIGIN', 'http://localhost:5173'),
     credentials: true,
     // المتصفّحُ لا يقرأ رأساً مخصَّصاً حتى يُعلَن — بدونه يبقى المعرِّفُ في الشبكة ولا يصل شاشةَ الخطأ.
-    exposedHeaders: [REQUEST_ID_HEADER],
+    // و`Content-Disposition` (`ق-١٥٠٦`): اسمُ ملفّ الفاتورة المجازة النظاميّ يُشتقّ في الخادم من المستند — والواجهةُ
+    // على أصلٍ آخر لا تقرؤه حتى يُعلَن، فتُسمّي الملفَّ برقمه بدل اسمه النظاميّ.
+    exposedHeaders: [REQUEST_ID_HEADER, 'Content-Disposition'],
   });
   // `exceptionFactory` يحوّل أخطاء class-validator إلى حمولاتٍ مقروءة آلياً
   // يترجمها المرشّح بلغة الطلب. بدونه تصل المستخدمَ العربي رسائل إنجليزية

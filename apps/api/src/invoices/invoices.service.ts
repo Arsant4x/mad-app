@@ -47,6 +47,7 @@ import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
 import { IssueReplacementDto } from './dto/issue-replacement.dto';
 import { isReplacedRejected } from './active-documents.util';
 import { invoiceTypeFor } from '../zatca/hash-chain.util';
+import { zatcaFileName } from '../zatca/cleared-invoice.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
 import { deriveSettlementStatus } from '../common/settlement/settlement.util';
@@ -227,10 +228,15 @@ export class InvoicesService {
         select: { legalName: true, vatNumber: true },
       });
 
-      return mapList(result, (inv) => ({
+      return mapList(result, ({ zatcaClearedXml, ...inv }) => ({
         ...inv,
         /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
         invoiceType: invoiceTypeFor(inv.customer, inv.lines),
+        /**
+         * ⚖️ (`ق-١٥٠٦`) هل حُفظت النسخةُ المجازة من الهيئة — فتعرض الشاشةُ تنزيلَها. **والمستندُ نفسُه لا يُرسل في
+         * القائمة**: نصٌّ كاملٌ لكلّ صفّ على شاشةٍ تسرد الفواتير كلَّها، ويُنزَّل من طريقه (`GET :id/cleared-xml`).
+         */
+        zatcaClearedXmlAvailable: zatcaClearedXml !== null,
         /** What this document still leaves owing — see outstandingOf. ② مالٌ نصّاً بخانتين على الحدّ (`ق-١٢٣٥`). */
         outstanding: money(this.outstandingOf(inv, creditedByInvoiceId, allocatedByInvoiceId)),
         /** How much of this invoice has been credited back, so a screen can
@@ -246,6 +252,40 @@ export class InvoicesService {
           vatAmount: Number(inv.taxTotal),
         }),
       }));
+    });
+  }
+
+  /**
+   * ⚖️ **تسليمُ الفاتورة القياسية: نسختُها المجازة من الهيئة، ملفَّ XML باسمه النظاميّ** (`ق-١٥٠٦`/١ و٤).
+   *
+   * **بعد الإجازة لا قبلها**: الفاتورةُ القياسية لا تُعدّ صحيحةً قبل ختم الهيئة (الدليلُ الفنيّ التفصيليّ،
+   * الإصدار 2، ص50)، فالمسلَّمُ ما أعادته الهيئةُ في `clearedInvoice` — **ولا يُستبدل به `zatcaSignedXml`**
+   * (نسختُنا قبل الإجازة) في أيّ حال. وما لا نسخةَ له يُرفض بسببه المسمّى: مبسّطةٌ (خارج البند) · لم تُجَز
+   * بعد · أُجيزت قبل حفظ النسخة (`ق-١٥٠٦` — لا تُملأ رجعياً). والفرعُ يُحترم كقراءة القائمة.
+   */
+  clearedXml(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<{ fileName: string; xml: string }> {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id, ...branchFilter(allowedBranchIds) },
+        select: {
+          no: true,
+          zatcaStatus: true,
+          zatcaClearedXml: true,
+          customer: { select: { kind: true, vatNumber: true, country: true } },
+          lines: { select: { taxExemptionReasonCode: true } },
+        },
+      });
+      if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
+      if (invoice.zatcaClearedXml) {
+        return {
+          // والاسمُ من المستند نفسِه؛ وإن غابت إحدى قيمه الأربع سُمّي برقمه وحدَه (حدٌّ معلَن).
+          fileName: zatcaFileName(invoice.zatcaClearedXml) ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`,
+          xml: invoice.zatcaClearedXml,
+        };
+      }
+      if (invoiceTypeFor(invoice.customer, invoice.lines) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
+      if (invoice.zatcaStatus !== 'CLEARED') throw new ConflictException(formatMessage(MSG.invoice_xml_not_cleared, { no: invoice.no }));
+      throw new ConflictException(formatMessage(MSG.invoice_xml_cleared_copy_missing, { no: invoice.no }));
     });
   }
 

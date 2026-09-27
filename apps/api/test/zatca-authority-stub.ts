@@ -19,8 +19,13 @@ export type AuthorityVerdict =
    * (تلك يهرّبها `JSON.stringify` فتُكتب سليمة).
    */
   | 'reject-nul'
-  /** `200` — قبول (`CLEARED`). */
+  /**
+   * `200` — قبول (`CLEARED`). **والإجازةُ تعيد نسختَها المجازة** في `clearedInvoice` كما تفعل الهيئة (`ق-١٥٠٦`):
+   * المستندُ المرسَل نفسُه وقد «ختمته» — هنا بتعليقٍ مميَّز (`STUB_CLEARED_MARKER`) يُثبت أن المسلَّمَ نسختُها لا نسختُنا.
+   */
   | 'clear'
+  /** `200` قبولُ إجازةٍ **بلا `clearedInvoice`** — ما لا تفعله الهيئة، ويُثبت أن غيابَ النسخة يُعلَن ولا يُستبدل. */
+  | 'clear-no-copy'
   /**
    * `200` **بتحذيرات** — الفاتورةُ تُقبل ومعها ملاحظات (`validationResults.warningMessages`).
    * وهو ما توثّقه الهيئة، **وكان يُهدَر كلُّه** قبل ز/⑤A2: القبولُ يجعل `detail` عندنا `null`.
@@ -43,6 +48,17 @@ export interface AuthorityStub {
 }
 
 export const STUB_REJECTION_MESSAGE = 'رفضٌ من خادمٍ محلّيٍّ يمثّل الهيئة — BR-KSA-STUB';
+
+/** ما «تختم» به الهيئةُ المحلّية النسخةَ المجازة — تعليقٌ لا يمسّ بنيةَ المستند، ويميّزها عن نسختنا. */
+export const STUB_CLEARED_MARKER = '<!-- stub-authority: cleared copy -->';
+
+/** النسخةُ المجازة من المستند المرسَل: التعليقُ المميِّز بعد إعلان XML (أو في أوّله إن غاب الإعلان). */
+function clearedCopyOf(submittedBase64: unknown): string | undefined {
+  if (typeof submittedBase64 !== 'string') return undefined;
+  const xml = Buffer.from(submittedBase64, 'base64').toString('utf8');
+  const afterDeclaration = xml.startsWith('<?xml') ? xml.indexOf('?>') + 2 : 0;
+  return Buffer.from(xml.slice(0, afterDeclaration) + STUB_CLEARED_MARKER + xml.slice(afterDeclaration), 'utf8').toString('base64');
+}
 
 /** تحذيرُ قبولٍ — رمزُه ونصُّه، كما تردّهما الهيئةُ في `warningMessages` (ز/⑤A2). */
 export const STUB_WARNING_CODE = 'BR-KSA-STUB-WARN';
@@ -78,13 +94,29 @@ export async function startAuthorityStub(initial: AuthorityVerdict = 'reject'): 
       switch (verdict) {
         case 'clear':
           res.statusCode = 200;
+          res.end(
+            JSON.stringify(
+              reporting
+                ? { reportingStatus: 'REPORTED', validationResults: { status: 'PASS' } }
+                : { clearanceStatus: 'CLEARED', clearedInvoice: clearedCopyOf(body.invoice), validationResults: { status: 'PASS' } },
+            ),
+          );
+          return;
+        case 'clear-no-copy':
+          res.statusCode = 200;
           res.end(JSON.stringify(reporting ? { reportingStatus: 'REPORTED', validationResults: { status: 'PASS' } } : { clearanceStatus: 'CLEARED', validationResults: { status: 'PASS' } }));
           return;
         case 'clear-warn': {
           res.statusCode = 200;
           // ⚖️ قبولٌ كامل (`2xx`) — والتحذيرُ بجانبه لا فوقه: الحكمُ لا يتغيّر (`ق-٩٧١`).
           const warnings = { status: 'PASS', warningMessages: [{ type: 'WARNING', code: STUB_WARNING_CODE, category: 'STUB', message: STUB_WARNING_MESSAGE, status: 'WARNING' }] };
-          res.end(JSON.stringify(reporting ? { reportingStatus: 'REPORTED', validationResults: warnings } : { clearanceStatus: 'CLEARED', validationResults: warnings }));
+          res.end(
+            JSON.stringify(
+              reporting
+                ? { reportingStatus: 'REPORTED', validationResults: warnings }
+                : { clearanceStatus: 'CLEARED', clearedInvoice: clearedCopyOf(body.invoice), validationResults: warnings },
+            ),
+          );
           return;
         }
         case 'reject':

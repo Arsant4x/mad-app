@@ -115,14 +115,21 @@ interface OperationLike {
   responses?: Record<string, { content?: Record<string, { schema?: ResponseSchema }> }>;
 }
 
-/** ردُّ النجاح لعملية: أدنى رمزٍ `2xx`، ومخطّطُه في `application/json` إن وُجد. `204` ردٌّ بلا جسمٍ أصلاً. */
+/**
+ * ردُّ النجاح لعملية: أدنى رمزٍ `2xx`، ومخطّطُه في `application/json` إن وُجد. `204` ردٌّ بلا جسمٍ أصلاً.
+ *
+ * ⚖️ (`ق-١٥٠٦`) **وردُّ الملف** (نوعُ وسائطٍ واحدٌ غيرُ JSON — كملفّ XML المجاز) مخطّطُه في نوعه المعلَن: ملفٌّ يُعلن
+ * `application/xml` نصّاً **معلَنٌ شكلاً** لا يُلبَس JSON ليُرضي الحارس. وأكثرُ من نوعٍ بلا JSON لا يُختار منها — يبقى غيرَ معلَن.
+ */
 export function successResponseOf(operation: OperationLike): { status: string; schema: ResponseSchema | null } | null {
   const codes = Object.keys(operation.responses ?? {})
     .filter((c) => /^2\d\d$/.test(c))
     .sort();
   if (codes.length === 0) return null;
   const status = codes[0];
-  const schema = operation.responses?.[status]?.content?.['application/json']?.schema ?? null;
+  const content = operation.responses?.[status]?.content ?? {};
+  const types = Object.keys(content);
+  const schema = content['application/json']?.schema ?? (types.length === 1 ? content[types[0]]?.schema : undefined) ?? null;
   return { status, schema };
 }
 

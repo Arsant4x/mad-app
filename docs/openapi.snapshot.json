@@ -947,6 +947,15 @@
       "200"
     ]
   },
+  "GET /v1/invoices/{id}/cleared-xml": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/journal": {
     "parameters": [
       "query:page",

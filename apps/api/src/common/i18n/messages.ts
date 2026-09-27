@@ -111,6 +111,9 @@ export const MSG = {
   customer_same_name_in_trash: 'customers.same_name_in_trash',
   customer_archived_cannot_link: 'customers.archived_cannot_link',
   invoice_not_found: 'invoices.not_found',
+  invoice_xml_simplified_out_of_scope: 'invoices.xml_simplified_out_of_scope',
+  invoice_xml_not_cleared: 'invoices.xml_not_cleared',
+  invoice_xml_cleared_copy_missing: 'invoices.xml_cleared_copy_missing',
   payment_not_found: 'payments.not_found',
   payment_posted_immutable: 'payments.posted_immutable',
   payment_reversal_immutable: 'payments.reversal_immutable',
@@ -901,6 +904,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.quote_converted_immutable]: { ar: 'عرضٌ محوَّل لا يُعدَّل — فاتورته {invoiceNo} قائمة', en: 'A converted quote is immutable — its invoice {invoiceNo} stands' },
   [MSG.quote_converted_undeletable]: { ar: 'عرضٌ محوَّل لا يُحذف — فاتورته {invoiceNo} قائمة', en: 'A converted quote cannot be deleted — its invoice {invoiceNo} stands' },
   [MSG.invoice_not_found]: { ar: 'الفاتورة غير موجودة', en: 'Invoice not found' },
+  [MSG.invoice_xml_simplified_out_of_scope]: {
+    ar: 'تسليم الفاتورة المبسّطة خارج هذا المسار — يُنزَّل هنا ملف الفاتورة القياسية المجازة من الهيئة وحده',
+    en: 'Delivering a simplified invoice is outside this route — only the standard invoice cleared by the authority is downloaded here',
+  },
+  [MSG.invoice_xml_not_cleared]: {
+    ar: 'الفاتورة {no} لم تُجِزها الهيئة بعد — والفاتورة القياسية لا تُسلَّم للمشتري قبل إجازتها',
+    en: 'Invoice {no} has not been cleared by the authority yet — a standard invoice is not delivered to the buyer before clearance',
+  },
+  [MSG.invoice_xml_cleared_copy_missing]: {
+    ar: 'أُجيزت الفاتورة {no} قبل أن تُحفظ نسختها المجازة — فلا نسخة من الهيئة تُسلَّم، ولا تُسلَّم نسختنا قبل الإجازة مكانها',
+    en: 'Invoice {no} was cleared before its cleared copy was kept — there is no authority copy to deliver, and our pre-clearance copy is not delivered in its place',
+  },
   [MSG.payment_not_found]: { ar: 'سند القبض غير موجود', en: 'Payment not found' },
   [MSG.payment_posted_immutable]: { ar: 'السند {no} مرحَّل محاسبياً — لا يُعدَّل ولا يُحذف؛ صحّحه بسند عكسي', en: 'Payment {no} is posted — it cannot be edited or deleted; correct it with a reversal' },
   [MSG.payment_reversal_immutable]: { ar: 'هذا سند عكسي — لا يُعاد عكسه ولا تُعدَّل تخصيصاته', en: 'This is a reversal — it cannot be reversed again or re-allocated' },

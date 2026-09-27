@@ -27,9 +27,12 @@ const NUL = String.fromCharCode(0);
 /**
  * نصٌّ خارجيٌّ صالحٌ للتخزين: بلا بايتٍ صفريّ، ومقصوصٌ عند الحدّ. `null`/`undefined` تبقى `null`
  * (عمودٌ اختياريّ يُصفَّر)، والرقمُ يصير نصّاً (معرّفُ الهيئة يأتي رقماً أحياناً).
+ *
+ * والحدُّ يُمرَّر صراحةً لمستندٍ لا يُقصّ (`ق-١٥٠٦`: النسخةُ المجازة من الهيئة — `Infinity`)؛ ومستندٌ كذاك
+ * يُرفض قبلها إن حمل البايتَ الصفريّ، فلا تُعدّله هنا بحرف.
  */
-export function storableText(raw: string | number): string;
-export function storableText(raw: string | number | null | undefined): string | null;
+export function storableText(raw: string | number, max?: number): string;
+export function storableText(raw: string | number | null | undefined, max?: number): string | null;
 export function storableText(raw: string | number | null | undefined, max: number = STORABLE_TEXT_MAX): string | null {
   if (raw === null || raw === undefined) return null;
   return String(raw).split(NUL).join('').slice(0, max);
