@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { consumeFifo, ProvisionalCostSource, restoreConsumptionPartial } from '../inventory/costing.util';
+import { consumeFifo, expiredSaleRefusal, ProvisionalCostSource, readConsumptionView, refusesExpiredSale, restoreConsumptionPartial } from '../inventory/costing.util';
 import { roundTo } from '../common/money/rounding';
 import { money, qty } from '../common/money/text';
 
@@ -94,12 +94,20 @@ export function fulfilmentReport(f: FulfilmentResult): FulfilmentReport {
   };
 }
 
+/** ما يُخصم من المستند ومن أيّ مستودع — أو سببُ التخطّي المعلَن. */
+type DeductibleResolution<L> = { warehouseId: string; deductible: L[] } | { reason: 'NO_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
 /**
- * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
- * كلّ الحركات — فالمستودعُ وحدةُ المخزون لا الفرع، والخصمُ من رفٍّ لا يرى
- * القارئ نصفَه يُنزل الرصيدَ تحت الصفر بصمت.
+ * ⚖️ (`ق-١٤٩٠`) **أيُّ السطور يُخصم ومن أيّ مستودع — مصدرٌ واحدٌ للفحص المسبق والتسليم**، فلا يفحص الأوّلُ
+ * سطوراً أو مستودعاً غيرَ ما يخصمه الثاني. نُقلت القاعدةُ من `fulfilStockedLines` كما هي لا أُعيدت صياغتُها.
+ *
+ * **على مستوى المنشأة بحقّها**: «المتعقَّبُ» صنفٌ له حركةٌ في أيّ مستودعٍ وأيّ فرع — فصنفٌ استُلم في فرعٍ
+ * آخر مخزنيٌّ هنا أيضاً، وقصرُ هذه القراءة على فروع القارئ يُسقط خصمَه ويجعل الفحصَ يرى غيرَ ما يخصمه التسليم.
  */
-export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<FulfilmentResult> {
+async function resolveDeductibleLines<L extends { productId: string | null }>(
+  tx: Tx,
+  args: { branchId: string | null; warehouseId?: string | null; lines: readonly L[] },
+): Promise<DeductibleResolution<L>> {
   const warehouseId =
     args.warehouseId ??
     (args.branchId
@@ -112,10 +120,10 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
    * بضاعةً بلا مستودع يرى لماذا لم تُحسب تكلفتها بدل أن يكتشفه في تقرير هامش
    * بعد شهر.
    */
-  if (!warehouseId) return { fulfilled: false, reason: 'NO_WAREHOUSE' };
+  if (!warehouseId) return { reason: 'NO_WAREHOUSE' };
 
   const stocked = args.lines.filter((l) => l.productId !== null);
-  if (stocked.length === 0) return { fulfilled: false, reason: 'NO_TRACKED_PRODUCTS' };
+  if (stocked.length === 0) return { reason: 'NO_TRACKED_PRODUCTS' };
 
   const ids = [...new Set(stocked.map((l) => l.productId!))];
   const tracked = new Set(
@@ -124,7 +132,57 @@ export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<
     ),
   );
   const deductible = stocked.filter((l) => tracked.has(l.productId!));
-  if (deductible.length === 0) return { fulfilled: false, reason: 'NO_TRACKED_PRODUCTS' };
+  if (deductible.length === 0) return { reason: 'NO_TRACKED_PRODUCTS' };
+  return { warehouseId, deductible };
+}
+
+export interface SaleExpiryCheckArgs {
+  branchId: string | null;
+  warehouseId?: string | null;
+  /** يومُ المستند — به يقيس التسليمُ الانتهاء (`fulfilStockedLines` ⟵ `consumeFifo`). */
+  date: Date;
+  /** سطورُ المستند كما ستُكتب — الصنفُ والكمّية. */
+  lines: readonly { productId: string | null; quantity: Prisma.Decimal | number }[];
+}
+
+/**
+ * ⚖️ (`ق-١٤٩٠` · المسار `INV-①`) **الدفعةُ المنتهية تُفحص قبل ترقيم الفاتورة لا بعده.**
+ *
+ * كان رفضُ البيع من دفعةٍ منتهية (`ق-١٠٨٢`) يقع في `consumeFifo` داخل التسليم — بعد `nextDocumentNumber` —
+ * والعدّادُ على منفذٍ مستقلّ يلتزم فوراً (`ق-٣٤٨`)، **فيحترق رقمُ الفاتورة في كلّ رفض**. وهنا يُقرأ ما يقرؤه
+ * التسليمُ بعينه: السطورُ والمستودعُ من `resolveDeductibleLines`، والدورةُ الأولى من `readConsumptionView` بيوم
+ * المستند — فلا يفترق الفحصُ عن الصرف. ⚠️ **وبمجموع الكمّية لكلّ صنف**: سطران للصنف نفسِه يأخذان من الطبقات
+ * نفسِها بالتتابع، فالحكمُ على المجموع لا على كلّ سطرٍ وحدَه (وإلا أجاز الفحصُ ما يرفضه الصرفُ في السطر الثاني).
+ *
+ * والكمّيةُ تُدوَّر بثلاث خاناتٍ كما تُخزَّن على سطر الفاتورة (`Decimal(18,3)`) — فالصرفُ يقرأ المخزَّن.
+ *
+ * ⚠️ **وحدُّه معلَن**: يمنع الحرقَ الذي يُعرف قبل الكتابة؛ وبيعٌ متزامنٌ يأخذ غيرَ المنتهي بين الفحص والصرف يبلغ
+ * رفضَ `consumeFifo` الباقي طبقةَ سباق — فيحترق رقمُه هو وحدَه، ولا يُباع منتهٍ في الحالين.
+ */
+export async function assertSaleNotBlockedByExpiry(tx: Tx, args: SaleExpiryCheckArgs): Promise<void> {
+  const stock = await resolveDeductibleLines(tx, args);
+  if (!('warehouseId' in stock)) return;
+
+  const requested = new Map<string, number>();
+  for (const line of stock.deductible) {
+    const productId = line.productId!;
+    requested.set(productId, roundTo((requested.get(productId) ?? 0) + roundTo(Number(line.quantity), 'DERIVED_QUANTITY'), 'DERIVED_QUANTITY'));
+  }
+  for (const [productId, qty] of requested) {
+    const view = await readConsumptionView(tx, { productId, warehouseId: stock.warehouseId, exit: 'SALE', date: args.date });
+    if (refusesExpiredSale(view, qty)) throw expiredSaleRefusal(view.productName, productId, view.unexpiredAvailable, qty);
+  }
+}
+
+/**
+ * **على مستوى المنشأة بحقّها**: تتبُّعُ الصنف ورصيدُه في المستودع يُقرآن من
+ * كلّ الحركات — فالمستودعُ وحدةُ المخزون لا الفرع، والخصمُ من رفٍّ لا يرى
+ * القارئ نصفَه يُنزل الرصيدَ تحت الصفر بصمت.
+ */
+export async function fulfilStockedLines(tx: Tx, args: FulfilmentArgs): Promise<FulfilmentResult> {
+  const stock = await resolveDeductibleLines(tx, args);
+  if (!('warehouseId' in stock)) return { fulfilled: false, reason: stock.reason };
+  const { warehouseId, deductible } = stock;
 
   let totalCost = 0;
   let provisionalQty = 0;

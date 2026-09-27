@@ -22,7 +22,7 @@ import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { computeDocumentTotals, lineDiscount, lineGross, type MoneyLine } from '../common/money/totals';
 import { lineTaxFromStored, resolveLineTax, productTaxFor, type LineTax, type ProductTaxProfile } from '../common/vat/line-tax.util';
-import { fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
+import { assertSaleNotBlockedByExpiry, fulfilStockedLines, fulfilmentReport, restoredReport, returnStockedLines, ReturnExceedsSoldError, type ReturnResult } from './sale-fulfilment.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postPrepaymentApplicationEntry, postPrepaymentInvoiceEntry } from '../journal/auto-posting.util';
@@ -570,6 +570,14 @@ export class InvoicesService {
         tx,
         invoicePostingCodes({ baseTotal: toBaseAmount(total, exchangeRate), baseSubtotal: toBaseAmount(subtotal, exchangeRate), baseTaxTotal: toBaseAmount(taxTotal, exchangeRate) }),
       );
+      // ⚖️ (`ق-١٤٩٠` · `INV-①`) والبيعُ من دفعةٍ منتهية يُفحص قبل الترقيم كذلك — بقراءة التسليم نفسِها (مستودعُ الفرع ·
+      //    السطورُ المخزنية · الدورةُ الأولى من `consumeFifo` بيوم المستند) وبمجموع الكمّية لكلّ صنف؛ فالرفضُ برسالته
+      //    لا يحرق رقماً. ويبقى رفضُ `consumeFifo` بعد الترقيم طبقةَ السباق وحدَها. والكاشيرُ يمرّ من هنا كذلك.
+      await assertSaleNotBlockedByExpiry(tx, {
+        branchId,
+        date: new Date(dto.issueDate),
+        lines: lines.map((l) => ({ productId: l.productId ?? null, quantity: l.quantity })),
+      });
       const no = await this.nextDocumentNumber(tx, companyId, 'INV', new Date(dto.issueDate));
       // ① وحدةُ كلِّ سطرٍ تُنسخ من صنفه لحظةَ الكتابة — وصنفٌ لم يُعلن وحدتَه يترك السطرَ بلا وحدة، لا برمزٍ مخمَّن.
       const unitCodes = await unitCodesFor(tx, dto.lines);
