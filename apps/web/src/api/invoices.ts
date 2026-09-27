@@ -85,8 +85,11 @@ export interface Invoice {
   zatcaStatus: ZatcaInvoiceStatus;
   /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه — يحسبه الخادم (②A1)؛ يأتي مع القائمة. */
   invoiceType?: 'standard' | 'simplified';
-  /** ⚖️ (ق-١٥٠٦) حُفظت النسخةُ المجازة من الهيئة فتُنزَّل ملفَّ XML — يأتي مع القائمة، والمستندُ نفسُه لا يأتي فيها. */
-  zatcaClearedXmlAvailable?: boolean;
+  /**
+   * ⚖️ (ق-١٥٠٦) حالُ النسخة المجازة من الهيئة — يحسبه الخادم ويأتي مع القائمة، والمستندُ نفسُه لا يأتي فيها:
+   * `available` تُنزَّل ملفَّ XML · `missing` قياسيةٌ أُجيزت ولم تُحفظ نسختُها · `null` لا نسخةَ تُنتظر.
+   */
+  clearedCopy?: 'available' | 'missing' | null;
   /** The authority's clearance or rejection note, or the local reason a
    * submission could not be completed. */
   zatcaMessage: string | null;

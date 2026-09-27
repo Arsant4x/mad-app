@@ -1,4 +1,9 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import xpath from 'xpath';
+import { LINE_ORDER } from '../common/document-lines.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { type BuyerForInvoiceType, invoiceTypeFor, type LineForInvoiceType } from './hash-chain.util';
 import { parseXml } from './ubl/canonicalize.util';
 
 /**
@@ -61,4 +66,54 @@ export function zatcaFileName(xml: string): string | null {
   const name = `${vat}_${date}T${time}_${irn}.xml`;
   // الاسمُ يدخل ترويسةَ `Content-Disposition` — فما ليس من هذه الحروف لا يُرسل فيها.
   return /^[A-Za-z0-9._-]+$/.test(name) ? name : null;
+}
+
+/**
+ * ⚖️ **واجهةُ الوحدة لشاشة الفواتير** (`ق-١٣٥٠` · §3.8): ما هو من الهيئة يسكن هنا، والفاتورةُ تسأل ولا تعرف.
+ *
+ * حالُ النسخة المجازة كما تعرضه القائمة: `available` تُنزَّل · `missing` قياسيةٌ أُجيزت ولم تُحفظ نسختُها (قبل هذا الحقل
+ * أو قبولٌ بلا نسخة) · `null` لا نسخةَ تُنتظر (لم تُجَز بعد، أو مبسّطة — تسليمُها خارج البند).
+ */
+export type ClearedCopyState = 'available' | 'missing' | null;
+
+interface ClearedCopyRow {
+  zatcaStatus: string;
+  zatcaClearedXml: string | null;
+  customer: BuyerForInvoiceType;
+  lines: ReadonlyArray<LineForInvoiceType>;
+}
+
+/** صفُّ القائمة بلا المستند (نصٌّ كاملٌ لكلّ صفّ) وبحالِه مكانه — فالمستندُ يُنزَّل من طريقه وحدَه. */
+export function withClearedCopyState<T extends ClearedCopyRow>(row: T): Omit<T, 'zatcaClearedXml'> & { clearedCopy: ClearedCopyState } {
+  const { zatcaClearedXml, ...rest } = row;
+  const clearedCopy: ClearedCopyState =
+    zatcaClearedXml !== null ? 'available' : row.zatcaStatus === 'CLEARED' && invoiceTypeFor(row.customer, row.lines) === 'standard' ? 'missing' : null;
+  return { ...rest, clearedCopy };
+}
+
+/**
+ * ⚖️ **ما يُسلَّم للمشتري: النسخةُ المجازة كما أعادتها الهيئة، باسم ملفّها النظاميّ** (`ق-١٥٠٦`/١ و٤).
+ *
+ * **بعد الإجازة لا قبلها** — ولا يُستبدل بها `zatcaSignedXml` (نسختُنا قبل الإجازة) في أيّ حال. وما لا نسخةَ له يُرفض بسببه
+ * المسمّى: مبسّطةٌ (خارج البند) · لم تُجَز بعد · أُجيزت قبل حفظ النسخة (لا تُملأ رجعياً). و`where` يحمل حدَّ الفرع من المستدعي.
+ */
+export async function readClearedDelivery(tx: Prisma.TransactionClient, where: Prisma.InvoiceWhereInput): Promise<{ fileName: string; xml: string }> {
+  const invoice = await tx.invoice.findFirst({
+    where,
+    select: {
+      no: true,
+      zatcaStatus: true,
+      zatcaClearedXml: true,
+      customer: { select: { kind: true, vatNumber: true, country: true } },
+      lines: { ...LINE_ORDER, select: { taxExemptionReasonCode: true } },
+    },
+  });
+  if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
+  if (invoice.zatcaClearedXml) {
+    // والاسمُ من المستند نفسِه؛ وإن غابت إحدى قيمه الأربع سُمّي برقمه وحدَه (حدٌّ معلَن).
+    return { fileName: zatcaFileName(invoice.zatcaClearedXml) ?? `${invoice.no.replace(/[^A-Za-z0-9]/g, '-')}.xml`, xml: invoice.zatcaClearedXml };
+  }
+  if (invoiceTypeFor(invoice.customer, invoice.lines) === 'simplified') throw new ConflictException(MSG.invoice_xml_simplified_out_of_scope);
+  if (invoice.zatcaStatus !== 'CLEARED') throw new ConflictException(formatMessage(MSG.invoice_xml_not_cleared, { no: invoice.no }));
+  throw new ConflictException(formatMessage(MSG.invoice_xml_cleared_copy_missing, { no: invoice.no }));
 }

@@ -209,8 +209,8 @@ export function InvoiceListView({
                   )}
                   {inv.zatcaIcv !== null && <div className="hint">تسلسل: {inv.zatcaIcv}</div>}
                   {/* ⚖️ (ق-١٥٠٦) قياسيةٌ أُجيزت ولا نسخةَ مجازةً محفوظة — يُعلَن ولا يُخفى: لا ملفَّ للتسليم،
-                      ولا تُسلَّم نسختُنا قبل الإجازة مكانها. */}
-                  {inv.invoiceType === 'standard' && inv.zatcaStatus === 'CLEARED' && inv.zatcaClearedXmlAvailable === false && (
+                      ولا تُسلَّم نسختُنا قبل الإجازة مكانها. والحالُ من الخادم لا يُحسب هنا. */}
+                  {inv.clearedCopy === 'missing' && (
                     <div className="hint" data-testid="cleared-copy-missing">
                       لا نسخة مجازة محفوظة للتسليم
                     </div>
@@ -247,7 +247,7 @@ export function InvoiceListView({
                               ? []
                               : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
                       // ⚖️ (ق-١٥٠٦) تسليمُ القياسية للمشتري: ملفُّ XML المجاز من الهيئة — حيث حُفظت نسختُه وحدَه.
-                      ...(inv.zatcaClearedXmlAvailable ? ['-' as const, { label: '⬇ تنزيل الفاتورة المجازة (XML)', onClick: () => onDownloadClearedXml(inv) }] : []),
+                      ...(inv.clearedCopy === 'available' ? ['-' as const, { label: '⬇ تنزيل الفاتورة المجازة (XML)', onClick: () => onDownloadClearedXml(inv) }] : []),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED' && inv.zatcaStatus !== 'REJECTED'

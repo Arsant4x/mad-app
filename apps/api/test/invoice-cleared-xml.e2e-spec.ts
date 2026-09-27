@@ -103,7 +103,7 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
     ).body.id;
     personBuyerId = (await as(company)(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل التسليم ${Date.now()}` }).expect(201)).body.id;
     await seedProductionCredential(tenantPrisma, company.companyId);
-  }, 120000);
+  });
 
   afterAll(async () => {
     await purgeInvoicesForTest(tenantPrisma, company.companyId, created);
@@ -112,7 +112,7 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
     await removeIsolatedCompany(app, other);
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 120000);
+  });
 
   it('① قبل الإجازة 409 مسمّى — وبعدها النسخةُ المجازة لا نسختُنا، باسم الملف النظاميّ، والقائمةُ تقول «متاحة» ولا تحمله', async () => {
     const invoice = await makeInvoice(businessBuyerId, 'توريد قياسيّ');
@@ -146,7 +146,7 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
     expect(res.headers['content-disposition']).toBe(`attachment; filename="${expectedName}"`);
 
     const listed = await listRow(invoice.id);
-    expect(listed.zatcaClearedXmlAvailable).toBe(true);
+    expect(listed.clearedCopy).toBe('available');
     expect('zatcaClearedXml' in listed).toBe(false);
   });
 
@@ -164,7 +164,7 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
 
     const missing = await clearedXml(company, invoice.id).expect(409);
     expect(missing.body.message).toBe(ar(formatMessage(MSG.invoice_xml_cleared_copy_missing, { no: invoice.no })));
-    expect((await listRow(invoice.id)).zatcaClearedXmlAvailable).toBe(false);
+    expect((await listRow(invoice.id)).clearedCopy).toBe('missing');
   });
 
   it('③ المبسّطة خارج البند ⟵ 409 مسمّى، والإبلاغُ لا يترك نسخة', async () => {
@@ -176,6 +176,8 @@ describe('⚖️ الفاتورةُ القياسية تُسلَّم بنسخته
 
     const simplified = await clearedXml(company, invoice.id).expect(409);
     expect(simplified.body.message).toBe(ar(MSG.invoice_xml_simplified_out_of_scope));
+    // والقائمةُ لا تنتظر لها نسخة — لا «متاحة» ولا «مفقودة».
+    expect((await listRow(invoice.id)).clearedCopy).toBeNull();
   });
 
   it('④ منشأةٌ أخرى لا ترى ملفَّ فاتورةٍ ليست لها ⟵ 404', async () => {
