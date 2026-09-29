@@ -4,15 +4,42 @@
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "apps/web"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/web"
+      ],
       "port": 5173,
       "autoPort": true
     },
     {
       "name": "api",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start:dev", "--workspace", "apps/api"],
+      "runtimeArgs": [
+        "run",
+        "start:dev",
+        "--workspace",
+        "apps/api"
+      ],
       "port": 3000
+    },
+    {
+      "name": "api-ui",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "D:/mad-app-scratch/ui-api.sh"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "web-preview",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": [
+        "-c",
+        "cd /d/worktrees/ui-rules/apps/web && npm run build && npx vite preview --port 4173 --strictPort"
+      ],
+      "port": 4173
     }
   ]
 }
