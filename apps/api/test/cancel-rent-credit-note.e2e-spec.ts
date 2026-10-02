@@ -65,7 +65,7 @@ describe('إلغاءُ العقد يُصحّح ضريبةَ المقبوض مق�
     await app.close();
   });
 
-  it('[SPEC 16.5] 🔴 قسطُ الشهر القادم المقبوضُ مقدَّماً يُعكس بضريبته عند الإلغاء ويُردّ كاملاً: النقدُ والضريبةُ في الدفتر والإقرار كما قبل القبض', async () => {
+  it('[SPEC 16.5] 🔴 قسطُ الشهر القادم المقبوضُ مقدَّماً يُعكس بضريبته عند الإلغاء ويُردّ كاملاً: يخرج النقدُ كلُّه وتنقص ضريبتُه كلُّها في الدفتر والإقرار', async () => {
     const contract = (await auth(http().get(`/contracts/${contractId}`)).expect(200)).body as { installments: { id: string; dueDate: string }[] };
     const future = contract.installments.find((i) => i.dueDate.slice(0, 10) === nextMonth);
     expect(future).toBeDefined();
@@ -80,14 +80,26 @@ describe('إلغاءُ العقد يُصحّح ضريبةَ المقبوض مق�
       .expect(201);
     const after = await snapshot();
 
+    /**
+     * ⚠️ **والإلغاءُ اليوم يمسّ قسطَ هذا الشهر أيضاً** (أمسكه أوّلُ سقوط): ما بعد يوم الإلغاء منه مستحقٌّ لم يُقبض، فيُعكس بالمسار
+     * القائم (`settleUnpaidUnearnedWithinTx`) — يُنقص الذمّةَ بإجماليّه وضريبتَه بـ15/115 منه، وقدرُه يتبع يومَ التشغيل في الشهر.
+     * فيُفصل بالحساب: ما نقص من الذمّة عند الإلغاء هو إجماليُّ ذلك الجزء وحدَه (ردُّ المقدَّم يُنقصها ثم يردّها)، وضريبتُه 15/115
+     * منه؛ **وما زاد عليها من نقص الضريبة هو ضريبةُ القسط المقدَّم**، والنقدُ الخارج كلُّه ردُّه.
+     */
+    const cancelReceivable = round(after.receivable - paid.receivable);
+    const currentMonthTax = round((-cancelReceivable * 15) / 115);
     expect({
       // الضابطُ: القبضُ وقع بضريبته — فالمسبارُ يرى ما يُعكس.
       paid: { cash: round(paid.cash - before.cash), outputVat: round(paid.outputVat - before.outputVat), returnVat: round(paid.returnVat - before.returnVat) },
-      // والحكم: بعد الإلغاء لا شيءَ من هذا القسط باقٍ — لا نقدٌ عندنا، ولا ضريبةٌ في الدفتر ولا في الإقرار.
-      net: { cash: round(after.cash - before.cash), outputVat: round(after.outputVat - before.outputVat), returnVat: round(after.returnVat - before.returnVat) },
+      // والحكم: عند الإلغاء يخرج للمستأجر ما دفعه كاملاً، وتنقص ضريبتُه كلُّها فوق ضريبة جزء هذا الشهر، في الدفتر والإقرار.
+      atCancel: {
+        cash: round(after.cash - paid.cash),
+        prepaidTaxOnBooks: Math.abs(round(after.outputVat - paid.outputVat + currentMonthTax) + 150) <= 0.02,
+        prepaidTaxInReturn: Math.abs(round(after.returnVat - paid.returnVat + currentMonthTax) + 150) <= 0.02,
+      },
     }).toEqual({
       paid: { cash: 1150, outputVat: 150, returnVat: 150 },
-      net: { cash: 0, outputVat: 0, returnVat: 0 },
+      atCancel: { cash: -1150, prepaidTaxOnBooks: true, prepaidTaxInReturn: true },
     });
   });
 });
