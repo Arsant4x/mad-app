@@ -39,6 +39,17 @@ jest.setTimeout(170000);
 /** الإزاحةُ المعلَنة على البدل والمبسَّطة — الرياض (+03:00). ونافذةُ التعرّض تُبنى منها لا من منطقة العملية (ق-١٠٥٦). */
 const ISSUED_OFFSET_MIN = 180;
 
+/**
+ * ربعُ البدل: البدلُ القياسيّ يُصدَر **اليومَ** بالإزاحة المعلنة (②)، فربعُه ربعُ اليوم لا ربعٌ مكتوب.
+ * كان التوكيدُ يقرأ الربعَ الثالث من 2026 حرفاً، فسقط حين بدأ الربعُ الرابع (2026-10-01) بلا تغيير حرفٍ
+ * في الشيفرة: البدلُ دخل ربعَه فعلاً، والحارسُ يقرأ ربعاً آخر. والمردودةُ مؤرَّخةٌ 2026-06-01 فربعُها الثاني ثابت.
+ */
+function quarterOfToday(): { year: number; quarter: number } {
+  const day = localDateOf(new Date(), ISSUED_OFFSET_MIN);
+  return { year: Number(day.slice(0, 4)), quarter: Math.floor((Number(day.slice(5, 7)) - 1) / 3) + 1 };
+}
+const REJECTED_QUARTER = { year: 2026, quarter: 2 };
+
 describe('المردودةُ تُغلق ويُصدَر بدلاً منها جديد (e2e)', () => {
   let app: INestApplication;
   let authority: AuthorityStub;
@@ -65,7 +76,8 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
   // ما تُثبته المرحلةُ الأولى وتقرؤه اللاحقات.
   let rejectedStd: Row;
   let replacementStd: Row;
-  let baseline: { q2: number; q3: number; exposure: number; layerQty: number; ledger: Map<string, number> };
+  let baseline: { q2: number; qNow: number; exposure: number; layerQty: number; ledger: Map<string, number> };
+  const replacementQuarter = quarterOfToday();
   let afterRejected: { q2: number; exposure: number; ledger: Map<string, number> };
 
   async function seedProductionCredential() {
@@ -153,8 +165,8 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     return res;
   }
 
-  async function declaration(quarter: number): Promise<number> {
-    const res = await auth(request(server()).get('/obligations/vat-declaration')).query({ year: 2026, quarter }).expect(200);
+  async function declaration(q: { year: number; quarter: number }): Promise<number> {
+    const res = await auth(request(server()).get('/obligations/vat-declaration')).query({ year: q.year, quarter: q.quarter }).expect(200);
     return Number(res.body.salesStandard);
   }
 
@@ -245,11 +257,11 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
   }, 60000);
 
   it('① البدلُ رقمٌ جديدٌ بلا لاحقة، بعدّادٍ وتجزئةٍ جديدَين ولا BillingReference — والمردودةُ كما هي بايتاً بايتاً', async () => {
-    baseline = { q2: await declaration(2), q3: await declaration(3), exposure: await exposureOf(standardCustomerId), layerQty: await layerQty(), ledger: await ledger() };
+    baseline = { q2: await declaration(REJECTED_QUARTER), qNow: await declaration(replacementQuarter), exposure: await exposureOf(standardCustomerId), layerQty: await layerQty(), ledger: await ledger() };
     expect(baseline.layerQty).toBe(10);
 
     rejectedStd = await makeRejected(standardCustomerId, { ...STOCKED, productId });
-    afterRejected = { q2: await declaration(2), exposure: await exposureOf(standardCustomerId), ledger: await ledger() };
+    afterRejected = { q2: await declaration(REJECTED_QUARTER), exposure: await exposureOf(standardCustomerId), ledger: await ledger() };
     const sealed = sealedView(rejectedStd);
 
     const now = new Date();
@@ -358,8 +370,8 @@ describe('المردودةُ تُغلق ويُصدَر بدلاً منها جد�
     expect(afterRejected.exposure - baseline.exposure).toBeCloseTo(345, 2);
 
     // بعد البدل: خرجت من ربعها ودخل البدلُ ربعَه — ولا ازدواج.
-    expect((await declaration(2)) - baseline.q2).toBeCloseTo(0, 2);
-    expect((await declaration(3)) - baseline.q3).toBeCloseTo(300, 2);
+    expect((await declaration(REJECTED_QUARTER)) - baseline.q2).toBeCloseTo(0, 2);
+    expect((await declaration(replacementQuarter)) - baseline.qNow).toBeCloseTo(300, 2);
     expect((await exposureOf(standardCustomerId)) - baseline.exposure).toBeCloseTo(345, 2);
 
     // وقائمةُ الفواتير تقرأ المتبقّي من المصدر نفسه: المردودةُ المغلقة صفر، والبدلُ يحمل الذمّة.
