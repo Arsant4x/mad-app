@@ -1,0 +1,162 @@
+# الفحصُ الأمنيّ المجّانيّ في السير — **إبلاغٌ لا منع** (ق-١٥٧٠ · ق-١٥٧٦ · مسحُه في docs/domain-scan/30-الفحص-الأمني-في-السير.md)
+#
+# ثلاثُ وظائف لثلاثة أصناف، كلُّها مجّانيةٌ لمستودعٍ خاصّ:
+#   ① ثغراتُ المكتبات: `npm audit` من ملفّ القفل بلا تثبيت.
+#   ② أنماطُ الثغرات في الشيفرة: Semgrep CE بقواعد `p/typescript` من صورته الرسمية مثبَّتةً بالبصمة، بلا دخولٍ ولا قياسات.
+#   ③ صورُ الحاويات: صورتا الخادم والواجهة تُبنيان ويفحصهما Trivy من إصداره الرسميّ مطابَقاً بـsha256،
+#      ومعه فحصُ إعدادات Dockerfile.
+#
+# ⚠️ **وضعُ الإبلاغ مقصودٌ بنصّ التوجيه**: «وما يكشفه أوّلَ تشغيلٍ يُعلَن ولا يُصلَح». فالنتائجُ لا تُسقط الوظيفة،
+#    **لكنّ تقريراً غائباً أو لا يُقرأ يُسقطها** (`.github/security/summarize.mjs`): الخضرةُ هنا «قُرئت التقارير»
+#    لا «لا ثغرة»، والأرقامُ في ملخّص التشغيل والتقاريرُ مرفوعة. ولا `continue-on-error` (السجلّ §4: «أخضر تحته
+#    يعني لم يُمنع الدمج لا نجح»). ومتى يصير منعاً وبأيّ عتبة: لحكم صاحب المشروع.
+#
+# ⚠️ **الإصداراتُ والبصمات** (قراءةُ 2026-10-02 من مصادرها الرسمية): اخترتُ الإصدارَ السابقَ لكلِّ أداةٍ لا الأحدث
+#    (عمرُ الأحدث ساعاتٌ أو يوم، وTrivy اختُرقت إصداراتُه في مارس 2026: GHSA-69fq-xp46-6x23). والأفعالُ مثبَّتةٌ
+#    بالالتزام الكامل لا بالوسم (البند 16 من مراجعة 3.3). وكلُّ ترقيةٍ تُعاد فيها البصمة من مصدرها.
+name: security-scan
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'docker/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security-scan.yml'
+      - '.github/security/**'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'docker/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security-scan.yml'
+      - '.github/security/**'
+  # الثغراتُ الجديدة تظهر بلا تغييرٍ في الشيفرة، فالفحصُ دوريّ (ECC 2-10-3-1 «فحص واكتشاف الثغرات دورياً»):
+  # الأحدُ 02:00 بتوقيت UTC = 05:00 بتوقيت الرياض.
+  schedule:
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+jobs:
+  dependencies:
+    name: ثغراتُ المكتبات (npm audit · إبلاغ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: npm audit من ملفّ القفل (بلا تثبيت)
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          npm audit --omit=dev --json > reports/npm-audit.json
+          echo "npm audit exit=$? (غيرُ الصفر يعني وجودَ ثغرة، ولا يُسقط في وضع الإبلاغ)"
+          exit 0
+      - name: الملخّص
+        shell: bash
+        run: |
+          set -o pipefail
+          node .github/security/summarize.mjs npm reports/npm-audit.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-dependencies
+          path: reports/
+          retention-days: 30
+
+  code-patterns:
+    name: أنماطُ الثغرات في الشيفرة (Semgrep CE · إبلاغ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Semgrep CE 1.178.0 من صورته الرسمية بالبصمة، بلا دخولٍ ولا قياسات
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src \
+            semgrep/semgrep@sha256:32e459968daabe7ab86968184a29109b9564aa00392401156f9788452b42786b \
+            semgrep scan --config p/typescript --metrics=off --json --output reports/semgrep.json \
+              --exclude node_modules --exclude dist --exclude '*.spec.ts' --exclude '*.e2e-spec.ts' \
+              apps packages
+          echo "semgrep exit=$?"
+          exit 0
+      - name: الملخّص
+        shell: bash
+        run: |
+          set -o pipefail
+          node .github/security/summarize.mjs semgrep reports/semgrep.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-code-patterns
+          path: reports/
+          retention-days: 30
+
+  images:
+    name: صورُ الحاويات (Trivy · إبلاغ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: تنزيلُ Trivy 0.74.0 من إصداره الرسميّ ومطابقةُ sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSLO https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz
+          echo "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a  trivy_0.74.0_Linux-64bit.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/trivy" && tar -xzf trivy_0.74.0_Linux-64bit.tar.gz -C "$RUNNER_TEMP/trivy" trivy
+          rm trivy_0.74.0_Linux-64bit.tar.gz
+          echo "$RUNNER_TEMP/trivy" >> "$GITHUB_PATH"
+      # سياقُ البناء جذرُ المستودع كما في `web-tests.yml` (الـDockerfile ينسخ ملفّ القفل والحزم).
+      - name: بناءُ الصورتين
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -f apps/api/Dockerfile -t mad-api:scan .
+          docker build -f apps/web/Dockerfile --build-arg VITE_API_URL=http://localhost:3000 -t mad-web:scan .
+      - name: فحصُ الصورتين وإعدادات الحاويات
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          trivy --version
+          trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --format json -o reports/trivy-api.json mad-api:scan
+          echo "trivy api exit=$?"
+          trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --format json -o reports/trivy-web.json mad-web:scan
+          echo "trivy web exit=$?"
+          trivy config --format json -o reports/trivy-config.json --skip-dirs node_modules .
+          echo "trivy config exit=$?"
+          exit 0
+      - name: الملخّص
+        shell: bash
+        run: |
+          set -o pipefail
+          node .github/security/summarize.mjs trivy-image reports/trivy-api.json reports/trivy-web.json | tee -a "$GITHUB_STEP_SUMMARY"
+          node .github/security/summarize.mjs trivy-config reports/trivy-config.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: security-images
+          path: reports/
+          retention-days: 30
