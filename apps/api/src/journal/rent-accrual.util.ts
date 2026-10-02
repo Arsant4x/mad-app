@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
-import { postDeferredToOtherIncomeEntry, postRentAccrualEntry, postRentAccrualReversalEntry } from './auto-posting.util';
+import { postDeferredToOtherIncomeEntry, postPartySettlementEntry, postRentAccrualEntry, postRentAccrualReversalEntry } from './auto-posting.util';
 import {
   pendingTaxPoints,
   rentAmountsOf,
@@ -435,6 +435,11 @@ export interface UnearnedDetail {
   /** وما استُحقّ ولم يُقبض عن مدّةٍ بعد الإلغاء — يتبع الوجهةَ نفسَها (`ق-٩٢٧/٧`). */
   unpaid: number;
   perInstallment: { id: string; unpaidNet: number; baseAccruedGross: Prisma.Decimal; baseAccruedNet: Prisma.Decimal; baseAccruedTax: Prisma.Decimal; baseRecognized: Prisma.Decimal }[];
+  /**
+   * ⚖️ **المقبوضُ عن مدّةٍ لن تُقدَّم لكلِّ قسطٍ على أساس الاستحقاق** (توجيه ٢٧٥ · `ق-١٥٨٢`): ما يُعكس بإشعارٍ دائنٍ بضريبته
+   * حين يُردّ (`refundCollectedUnearnedWithinTx`). والمقبوضُ على أساس القبض (القديم) خارجه، يبقى في `collected` وحدَه.
+   */
+  collectedPerInstallment: { id: string; collectedNet: number; baseAccruedGross: Prisma.Decimal; baseAccruedNet: Prisma.Decimal; baseAccruedTax: Prisma.Decimal; baseRecognized: Prisma.Decimal }[];
 }
 
 /**
@@ -458,7 +463,7 @@ export async function unearnedDetailWithinTx(tx: Prisma.TransactionClient, contr
     },
   });
 
-  const detail: UnearnedDetail = { total: 0, collected: 0, unpaid: 0, perInstallment: [] };
+  const detail: UnearnedDetail = { total: 0, collected: 0, unpaid: 0, perInstallment: [], collectedPerInstallment: [] };
   for (const i of installments) {
     const collectedCash = round2(i.payments.reduce((s, p) => s + Number(p.baseNetAmount), 0));
     const recognized = Number(i.baseRecognized);
@@ -479,6 +484,16 @@ export async function unearnedDetailWithinTx(tx: Prisma.TransactionClient, contr
     detail.total = round2(detail.total + unearned);
     detail.collected = round2(detail.collected + collectedUnearned);
     detail.unpaid = round2(detail.unpaid + unpaidUnearned);
+    if (collectedUnearned > 0) {
+      detail.collectedPerInstallment.push({
+        id: i.id,
+        collectedNet: collectedUnearned,
+        baseAccruedGross: i.baseAccruedGross,
+        baseAccruedNet: i.baseAccruedNet,
+        baseAccruedTax: i.baseAccruedTax,
+        baseRecognized: i.baseRecognized,
+      });
+    }
     if (unpaidUnearned > 0) {
       detail.perInstallment.push({
         id: i.id,
@@ -533,4 +548,60 @@ export async function settleUnpaidUnearnedWithinTx(
       reasonLabel: 'إسقاطٌ عن مدّةٍ بعد الإلغاء — لا يدين به المستأجر',
     });
   }
+}
+
+/**
+ * ⚖️ **ردُّ المقبوض عن مدّةٍ لن تُقدَّم: إشعارٌ دائنٌ بضريبته، ثم النقدُ كاملاً** (توجيه ٢٧٥ · `ق-١٥٨٢`، بحكم صاحب المشروع —
+ * ج-4 من مراجعة 3.3).
+ *
+ * كان يُردّ الصافي وحدَه (`2400` ⟵ نقد)، فتبقى ضريبةُ المقبوض على `2200` وفي الإقرار لتوريدٍ لم يقع. فلكلِّ قسطٍ على أساس
+ * الاستحقاق قُبض منه شيءٌ عن مدّةٍ لن تُقدَّم: **صفُّ عكسٍ** بصافي المقبوض وضريبته (يقرؤه الإقرارُ بتاريخ الإلغاء، وقيدُه يُنقص
+ * `2400` و`2200` مقابل الذمّة — `reduceAccrualWithinTx`)، **ثم يخرج النقدُ للمستأجر بالإجماليّ** مقابل الذمّة نفسِها
+ * (`postPartySettlementEntry` بالعكس)، وبسعر يوم الإلغاء لعقدٍ بعملةٍ أجنبية والفرقُ على `5600`.
+ *
+ * يعيد ما سوّاه من المقبوض **صافياً** بعملة الدفتر — فالمستدعي يُنقصه مما يُقفل بالمسار القائم (`postDeferredSettlementEntry`)،
+ * ولا يبقى له إلا المقبوضُ على أساس القبض (القديم: حدٌّ معلَن). ولعقدٍ غيرِ مصنَّف لا شيء.
+ */
+export async function refundCollectedUnearnedWithinTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  contract: AccrualContract,
+  detail: UnearnedDetail,
+  cancelDate: Date,
+  refundDayRate: number | null,
+): Promise<number> {
+  const treatment = treatmentOf(contract);
+  if (!treatment || detail.collectedPerInstallment.length === 0) return 0;
+  const rate = Number(contract.exchangeRate) || 1;
+
+  let settledNet = 0;
+  let grossBase = 0;
+  let grossInContract = 0;
+  for (const i of detail.collectedPerInstallment) {
+    const net = Number(i.baseAccruedNet);
+    if (net <= 0) continue;
+    const partGrossBase = round2((i.collectedNet * Number(i.baseAccruedGross)) / net);
+    await reduceAccrualWithinTx(tx, companyId, contract, treatment, i, {
+      date: cancelDate,
+      gross: partGrossBase / rate,
+      kind: 'REVERSAL',
+      reasonLabel: 'إشعارٌ دائنٌ عند الإلغاء — ردُّ المقبوض عن مدّةٍ لن تُقدَّم',
+    });
+    settledNet = round2(settledNet + i.collectedNet);
+    grossBase = round2(grossBase + partGrossBase);
+    grossInContract = round2(grossInContract + partGrossBase / rate);
+  }
+  if (grossBase <= 0) return 0;
+
+  // النقدُ يخرج بالإجماليّ مقابل الذمّة (سالبٌ في اتجاه القبض الطبيعيّ): `1200` مدينٌ و`1000` دائن.
+  await postPartySettlementEntry(tx, companyId, {
+    customerId: contract.customerId,
+    side: 'RECEIVABLE',
+    date: cancelDate,
+    memo: `ردُّ المقبوض مقدَّماً عند الإلغاء — عقد ${contract.no} — ${contract.tenant}`,
+    baseCash: -(refundDayRate === null ? grossBase : toBaseAmount(grossInContract, refundDayRate)),
+    baseSettled: -grossBase,
+    unitId: contract.unitId,
+  });
+  return settledNet;
 }

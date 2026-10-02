@@ -23,6 +23,7 @@ import {
   accrueDueWithinTx,
   accrueForPaymentWithinTx,
   discountAccrualWithinTx,
+  refundCollectedUnearnedWithinTx,
   reverseVoidedInstallmentsWithinTx,
   settleUnpaidUnearnedWithinTx,
   treatmentOf,
@@ -491,20 +492,25 @@ export class ContractsService {
         // إقفالُ الالتزام الباقي — **بعد تعديل الأقساط**، فالمبلغُ مقروءٌ قبلها
         // ولا تغيّره حالةُ قسطٍ لم يُقبض منه شيء.
         if (unearned > 0 && dto.unearnedDisposition) {
-          // ما **قُبض** عن مدّةٍ لن تُقدَّم: يُردّ أو يُحتجَز — كما كان (ق-٤٧٢).
-          if (unearnedDetail.collected > 0) {
+          // ⚖️ ما **قُبض** عن مدّةٍ لن تُقدَّم ويُردّ: إشعارٌ دائنٌ يعكسه بضريبته ثم يُردّ للمستأجر كاملاً (توجيه ٢٧٥ · `ق-١٥٨٢`) —
+          //    للأقساط على أساس الاستحقاق. والاحتجازُ بشرط العقد (`income`) والمقبوضُ القديمُ على أساس القبض كما كانا (حدّان معلَنان).
+          const creditedNet =
+            dto.unearnedDisposition === 'refund' ? await refundCollectedUnearnedWithinTx(tx, companyId, accrualContract, unearnedDetail, cancelDate, refundDayRate) : 0;
+          const collectedRest = round2(unearnedDetail.collected - creditedNet);
+          // وما بقي: يُردّ أو يُحتجَز — كما كان (ق-٤٧٢).
+          if (collectedRest > 0) {
             await postDeferredSettlementEntry(tx, companyId, {
               unitId: existing.unitId,
               customerId: existing.customerId,
               contractNo: existing.no,
               tenant: existing.tenant,
               date: cancelDate,
-              baseAmount: unearnedDetail.collected,
+              baseAmount: collectedRest,
               disposition: dto.unearnedDisposition,
               // المردودُ بعملة العقد = الالتزامُ مقسوماً على سعره، ثم يُقوَّم نقداً بسعر يوم الإلغاء (`ق-١٤٨٩` · B9).
               ...(refundDayRate === null
                 ? {}
-                : { baseCash: toBaseAmount(round2(unearnedDetail.collected / (Number(existing.exchangeRate) || 1)), refundDayRate) }),
+                : { baseCash: toBaseAmount(round2(collectedRest / (Number(existing.exchangeRate) || 1)), refundDayRate) }),
             });
           }
           // وما **استُحقّ ولم يُقبض** عن مدّةٍ بعد الإلغاء يتبع الوجهةَ نفسَها (ق-٩٢٧/٧):
