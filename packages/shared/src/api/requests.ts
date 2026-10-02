@@ -941,11 +941,11 @@ export interface RenewContractDto {
 export interface RenewSubscriptionDto {
   months: number;
 }
+
 /** جسمُ طلب — `ReopenPeriodDto` في الخادم. */
 export interface ReopenPeriodDto {
   reason: string;
 }
-
 
 /** جسمُ طلب — `RequestDecisionDto` في الخادم. */
 export interface RequestDecisionDto {
