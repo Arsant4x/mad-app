@@ -24,6 +24,17 @@ export function branchFilter(allowedBranchIds: string[] | 'all'): { branchId?: {
 }
 
 /**
+ * **فروعُ القارئ وحدَها** (توجيه ٢٧٥ · `ق-١٥٨٠`): لرقمٍ مجمَّعٍ يُعرض لموظّفٍ مقيَّد، كبطاقات لوحة التحكم.
+ *
+ * بخلاف `branchFilter` لا يدخل فيه صفُّ المنشأة كلِّها (بلا فرع): ذاك يُرى في القائمة صفّاً صفّاً، وفي المجموع يصير جزءاً
+ * من رقم المنشأة الذي لا يُعطى للمقيَّد (`ق-١٥٨١`). وبلا فرعٍ مسنَد (`[]`) لا صفَّ يدخل، فالرقمُ صفر.
+ */
+export function ownBranchesFilter(allowedBranchIds: string[] | 'all'): { branchId?: { in: string[] } } {
+  if (allowedBranchIds === 'all') return {};
+  return { branchId: { in: allowedBranchIds } };
+}
+
+/**
  * **فرعٌ يطلبه التقرير من الاستعلام** — `?branchId=` — **يُقاس على فروع القارئ
  * قبل أن يصير مرشِّحاً** (`ق-٥١٧`).
  *

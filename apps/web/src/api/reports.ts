@@ -90,15 +90,19 @@ export const getPropertyKpis = () => apiClient.get<PropertyKpis>('/reports/prope
 /**
  * لوحةُ التحكّم — **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`): الإيرادُ والمصروفُ من الدفتر (صافيَين من الضريبة)،
  * والذممُ من التخصيصات (المسدَّدُ جزئياً بمتبقّيه)، والسلسلةُ الشهرية من الدفتر — كلُّها نصٌّ بخانتين.
+ *
+ * ⚖️ **وكلُّ بطاقةٍ لمن يملك شاشتَها، وأرقامُ المقيَّد من فروعه وحدَها** (`ق-١٥٨٠`): البطاقةُ الغائبة لم يُرسلها الخادم فلا
+ * تُرسم، ولا تُقرأ صفراً. و`scope` يقول أيَّ دفترٍ قُرئ: المنشأةُ كلُّها، أو فروعُ القارئ وحدَها.
  */
 export interface DashboardSummary {
   from: string | null;
   to: string | null;
-  revenue: MoneyText;
-  expenses: MoneyText;
-  netProfit: MoneyText;
-  receivables: MoneyText;
-  monthly: { month: string; revenue: MoneyText }[];
+  scope: 'company' | 'ownBranches';
+  revenue?: MoneyText;
+  expenses?: MoneyText;
+  netProfit?: MoneyText;
+  receivables?: MoneyText;
+  monthly?: { month: string; revenue: MoneyText }[];
 }
 
 export const getDashboard = (range: ReportRange) => apiClient.get<DashboardSummary>('/reports/dashboard', { params: range }).then((r) => r.data);

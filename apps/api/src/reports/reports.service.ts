@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { MSG } from '../common/i18n/messages';
-import { assertBranchAllowed, branchFilter, requestedBranchFilter } from '../branches/branch-scope.util';
+import { assertBranchAllowed, branchFilter, ownBranchesFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { roundTo, round2 } from '../common/money/rounding';
 import { money, moneyText, percent, qty } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -14,6 +14,7 @@ import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
 import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
 import { readLedger, sideOfAccountType } from './ledger.util';
 import { customerExposure, RentReceivableRow } from './receivables-exposure.util';
+import { DashboardCard } from './dashboard-cards';
 
 interface Movement {
   debit: number;
@@ -684,18 +685,18 @@ export class ReportsService {
    * الفترةُ كما تفهمها بقيّةُ التقارير (`dateFilter`)؛ والسلسلةُ تنتهي بشهر `to` (أو اليوم) وتمتدّ
    * على أشهر الفترة (`1..24`) أو ستّةٍ حين لا بداية — كما كانت الشاشةُ ترسمها.
    *
-   * **على مستوى المنشأة بحقّها**: الإيرادُ والمصروفُ من دفترٍ واحد كقائمة الدخل — ولا تُشتقّ لوحةٌ
-   * من نصف دفتر؛ والذممُ وحدَها بفروع القارئ كما في الأعمار.
-   *
-   * 🔴 **ولذلك هي لمن يرى الفروعَ كلَّها** كقائمة الدخل (`ق-١٤٥٢`): كانت بلا حارس، فقرأ الموظّفُ المقيَّدُ بفرعٍ إيرادَ
-   * المنشأة ومصروفَها وصافيها وسلسلتَها كلَّها (توجيه ٢٧٤ · مراجعة 3.3 ج-1، ثبت بالتشغيل). والرفضُ يدلّه على ملخّص
-   * الفرع؛ ولوحةٌ مرشَّحةٌ بفروع القارئ قرارُ منتجٍ معروضٌ على صاحب المشروع لا يُبنى هنا.
+   * ⚖️ **تحترم صلاحياتِ القارئ وشاشاتِه وفروعَه معاً** (توجيه ٢٧٥ · `ق-١٥٨٠`، بحكم صاحب المشروع، وهو يبدّل رفضَ توجيه ٢٧٤
+   * للمقيَّد): البطاقةُ لا تُحسب ولا تُرسل إلا لمن يملك شاشتَها (`cards` من `DASHBOARD_CARD_SCREEN`، يحسبها المتحكّم)، وأرقامُ
+   * المقيَّد **من فروعه وحدَها** (`ownBranchesFilter`): سطورُ قيودٍ فرعُها من فروعه، وفواتيرُ فروعه. فلا يدخلها ما بلا فرع
+   * (رقمُ المنشأة، `ق-١٥٨١`) ولا الإيجارُ (العقودُ بلا فرع، `ق-٩٢٥/④`). والمالكُ ومن يرى الفروعَ كلَّها يقرأ الدفترَ كلَّه كما
+   * كان. و`scope` يقول للشاشة أيَّهما قرأت.
    */
-  dashboard(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
-    assertWholeCompanyReader(allowedBranchIds);
+  dashboard(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto, cards: ReadonlySet<DashboardCard>) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const accounts = await tx.account.findMany({ select: { id: true, type: true } });
-      const movements = await this.movementsByAccount(tx, range);
+      const ledger = cards.has('revenue') || cards.has('expenses') || cards.has('netProfit') || cards.has('monthly');
+      const ownBranches = ownBranchesFilter(allowedBranchIds);
+      const accounts = ledger ? await tx.account.findMany({ select: { id: true, type: true } }) : [];
+      const movements = ledger ? await this.movementsByAccount(tx, range, ownBranches) : new Map<string, Movement>();
       const revenueIds = accounts.filter((a) => a.type === 'revenue').map((a) => a.id);
       const expenseIds = accounts.filter((a) => a.type === 'expense').map((a) => a.id);
       const totalRevenue = revenueIds.reduce((s, id) => s + this.periodAmount(movements, id, 'credit'), 0);
@@ -710,9 +711,9 @@ export class ReportsService {
       }
       const firstMonth = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() - (monthsBack - 1), 1));
       const seriesEnd = new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-      const lines = revenueIds.length
+      const lines = cards.has('monthly') && revenueIds.length
         ? await tx.journalLine.findMany({
-            where: { accountId: { in: revenueIds }, journalEntry: { date: { gte: firstMonth, lte: seriesEnd } } },
+            where: { accountId: { in: revenueIds }, journalEntry: { ...ownBranches, date: { gte: firstMonth, lte: seriesEnd } } },
             select: { debit: true, credit: true, journalEntry: { select: { date: true } } },
           })
         : [];
@@ -730,17 +731,20 @@ export class ReportsService {
       }
 
       // الذممُ: تعرّضُ العملاء اليوم من التخصيصات — الفواتيرُ بمتبقّيها وأقساطُ الإيجار المستحقّة (`ق-٩٢٥/④`).
-      const exposure = await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds });
+      // وللمقيَّد فواتيرُ فروعه وحدَها (`ownBranchesOnly`)؛ والإيجارُ بلا فرعٍ فلا يدخل رقمَه (`rentReceivables`).
+      const exposure = cards.has('receivables') ? await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds, ownBranchesOnly: true }) : [];
       const receivables = exposure.reduce((s, r) => s + r.total, 0);
 
+      // البطاقةُ التي لا يملك القارئُ شاشتَها لا تُرسل أصلاً — لا صفراً يُقرأ رقماً (`ق-١٥٨٠`).
       return {
         from: range.from ?? null,
         to: range.to ?? null,
-        revenue: money(totalRevenue),
-        expenses: money(totalExpenses),
-        netProfit: money(totalRevenue - totalExpenses),
-        receivables: money(receivables),
-        monthly,
+        scope: allowedBranchIds === 'all' ? ('company' as const) : ('ownBranches' as const),
+        ...(cards.has('revenue') ? { revenue: money(totalRevenue) } : {}),
+        ...(cards.has('expenses') ? { expenses: money(totalExpenses) } : {}),
+        ...(cards.has('netProfit') ? { netProfit: money(totalRevenue - totalExpenses) } : {}),
+        ...(cards.has('receivables') ? { receivables: money(receivables) } : {}),
+        ...(cards.has('monthly') ? { monthly } : {}),
       };
     });
   }
@@ -1258,11 +1262,13 @@ export class ReportsService {
    * المالية (الدخل · المركز · التدفّق) — **وهي قوائمُ منشأةٍ لا فرع**: مركزٌ ماليٌّ
    * لنصف الفروع لا يتوازن، لأن حقوقَ الملكية والالتزاماتِ للمنشأة كلِّها.
    */
-  private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto): Promise<Map<string, Movement>> {
+  /** `entryScope` يُضيّق القيودَ (فروعُ القارئ وحدَها في لوحة التحكم — `ق-١٥٨٠`)؛ وبلاه الدفترُ كلُّه كما تقرؤه القوائم. */
+  private async movementsByAccount(tx: Prisma.TransactionClient, range: ReportRangeDto, entryScope: Prisma.JournalEntryWhereInput = {}): Promise<Map<string, Movement>> {
     const date = this.dateFilter(range);
+    const entry: Prisma.JournalEntryWhereInput = { ...entryScope, ...(date ? { date } : {}) };
 
     const lines = await tx.journalLine.findMany({
-      where: date ? { journalEntry: { date } } : undefined,
+      where: Object.keys(entry).length ? { journalEntry: entry } : undefined,
       select: { accountId: true, debit: true, credit: true },
     });
 
