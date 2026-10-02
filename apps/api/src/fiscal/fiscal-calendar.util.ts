@@ -46,12 +46,14 @@ export async function createFiscalYearWithinTx(tx: Prisma.TransactionClient, com
 
   // Two fiscal years must not both claim the same month: `periodForDate`
   // resolves a date to exactly one period, so an overlap would make which
-  // one applies arbitrary.
-  const clash = await tx.fiscalPeriod.findFirst({ where: { OR: months.map((m) => ({ month: m.month, year: m.year })) } });
+  // one applies arbitrary. `companyId` is explicit in every read here so the
+  // scope never depends on which client runs it (tenant-extended or raw).
+  const clash = await tx.fiscalPeriod.findFirst({ where: { companyId, OR: months.map((m) => ({ month: m.month, year: m.year })) } });
   if (clash) throw new ConflictException(MSG.fiscal_year_overlaps);
 
+  // `companyId` صريحاً — تقبله معاملةُ المستأجر، ويلزم في معاملة الميلاد التي تجري بالعميل الخام (كما `createDefaultChart`).
   const created = await tx.fiscalYear.create({
-    data: { name: input.name.trim(), start, end } as unknown as Prisma.FiscalYearUncheckedCreateInput,
+    data: { companyId, name: input.name.trim(), start, end } as unknown as Prisma.FiscalYearUncheckedCreateInput,
   });
   // كلُّ فتراتها مفتوحة — الإقفالُ فعلٌ مقصودٌ دائماً لا حالةٌ افتراضية.
   await tx.fiscalPeriod.createMany({
@@ -93,27 +95,27 @@ export async function lockFiscalCalendar(tx: Prisma.TransactionClient, companyId
 export async function ensureFiscalYearFor(tx: Prisma.TransactionClient, date: Date): Promise<void> {
   const month = date.getUTCMonth() + 1;
   const year = date.getUTCFullYear();
-  const hasPeriod = async () => !!(await tx.fiscalPeriod.findFirst({ where: { month, year }, select: { id: true } }));
-  if (await hasPeriod()) return;
+  // الطريقُ السريع بلا قراءةٍ زائدة: يرى ما يراه القفلُ نفسُه (`assertPeriodOpen` يقرأ فترتَه بالشكل ذاته)؛ وما بعده يسمّي المنشأة.
+  if (await tx.fiscalPeriod.findFirst({ where: { month, year }, select: { id: true } })) return;
 
   const companyId = await contextCompanyId(tx);
   if (!companyId) return;
   await lockFiscalCalendar(tx, companyId);
-  if (await hasPeriod()) return;
+  if (await tx.fiscalPeriod.findFirst({ where: { companyId, month, year }, select: { id: true } })) return;
 
   // الإيقاعُ من أقرب سنةٍ تبدأ قبل التاريخ، وإلا من أقدم سنةٍ بعده — فسنةٌ يدويةٌ بعيدةٌ في المستقبل لا تغيّر إيقاعَ ما قبلها.
   const anchor =
-    (await tx.fiscalYear.findFirst({ where: { start: { lte: date } }, orderBy: { start: 'desc' }, select: { start: true } })) ??
-    (await tx.fiscalYear.findFirst({ orderBy: { start: 'asc' }, select: { start: true } }));
+    (await tx.fiscalYear.findFirst({ where: { companyId, start: { lte: date } }, orderBy: { start: 'desc' }, select: { start: true } })) ??
+    (await tx.fiscalYear.findFirst({ where: { companyId }, orderBy: { start: 'asc' }, select: { start: true } }));
   const company = anchor ? null : await tx.company.findUnique({ where: { id: companyId }, select: { fiscalStartMonth: true } });
   const startMonth = anchor ? anchor.start.getUTCMonth() + 1 : (company?.fiscalStartMonth ?? 1);
   const range = fiscalYearContaining(date, startMonth);
   const months = monthsBetween(range.start, range.end);
-  if (await tx.fiscalPeriod.findFirst({ where: { OR: months.map((m) => ({ month: m.month, year: m.year })) }, select: { id: true } })) return;
+  if (await tx.fiscalPeriod.findFirst({ where: { companyId, OR: months.map((m) => ({ month: m.month, year: m.year })) }, select: { id: true } })) return;
 
   // الاسمُ فريدٌ في المنشأة (`@@unique([companyId, name])`)، وسنةٌ يدويةٌ قد تحمل الاسمَ المحسوب؛ فيُميَّز بتاريخ بدايته.
   const base = fiscalYearName(range.start, startMonth);
-  const taken = await tx.fiscalYear.findFirst({ where: { name: base }, select: { id: true } });
+  const taken = await tx.fiscalYear.findFirst({ where: { companyId, name: base }, select: { id: true } });
   const name = taken ? `${base} (${range.start.toISOString().slice(0, 10)})` : base;
   await createFiscalYearWithinTx(tx, companyId, { name, ...range });
 }

@@ -42,9 +42,9 @@ export class FiscalService {
   setStartMonth(companyId: string, month: number) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await lockFiscalCalendar(tx, companyId);
-      if (await tx.journalEntry.findFirst({ select: { id: true } })) throw new ConflictException(MSG.fiscal_start_month_after_posting);
+      if (await tx.journalEntry.findFirst({ where: { companyId }, select: { id: true } })) throw new ConflictException(MSG.fiscal_start_month_after_posting);
       await tx.company.update({ where: { id: companyId }, data: { fiscalStartMonth: month } });
-      await tx.fiscalYear.deleteMany({});
+      await tx.fiscalYear.deleteMany({ where: { companyId } });
       const range = fiscalYearContaining(dayStartOf(new Date()), month);
       await createFiscalYearWithinTx(tx, companyId, { name: fiscalYearName(range.start, month), ...range });
       return tx.fiscalYear.findMany({ include: YEAR_INCLUDE, orderBy: { start: 'asc' } });
