@@ -80,19 +80,22 @@ export class WriteOffsService {
 
     const term = searchTerm(query);
     const where: Prisma.InventoryWriteOffWhereInput = {
-      ...branchFilter(allowedBranchIds),
       ...(status ? { status: status as 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' } : {}),
-      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ الشطب ورمزُ سببه وملاحظتُه واسمُ الصنف — والأخيرُ علاقةٌ فيُكتب هنا.
-      ...(term
-        ? {
-            OR: [
-              { no: { contains: term, mode: 'insensitive' } },
-              { reasonCode: { contains: term, mode: 'insensitive' } },
-              { note: { contains: term, mode: 'insensitive' } },
-              { product: { name: { contains: term, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
+      // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` لا بنشرٍ يحلّ فيه الثاني محلّ الأوّل (توجيه ٢٧٤ · ج-2).
+      AND: [
+        branchFilter(allowedBranchIds),
+        // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ الشطب ورمزُ سببه وملاحظتُه واسمُ الصنف — والأخيرُ علاقةٌ فيُكتب هنا.
+        term
+          ? {
+              OR: [
+                { no: { contains: term, mode: 'insensitive' } },
+                { reasonCode: { contains: term, mode: 'insensitive' } },
+                { note: { contains: term, mode: 'insensitive' } },
+                { product: { name: { contains: term, mode: 'insensitive' } } },
+              ],
+            }
+          : {},
+      ],
     };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       pagedFindMany(query, tx.inventoryWriteOff, {

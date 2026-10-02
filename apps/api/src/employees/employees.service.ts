@@ -66,7 +66,8 @@ export class EmployeesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
-    const where: Prisma.EmployeeWhereInput = { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), EMPLOYEE_SEARCH_FIELDS) };
+    // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` كما يقول تعليقُ `searchWhere` (توجيه ٢٧٤ · ج-2).
+    const where: Prisma.EmployeeWhereInput = { ...(includeArchived ? {} : { archived: false }), AND: [branchFilter(allowedBranchIds), searchWhere(searchTerm(query), EMPLOYEE_SEARCH_FIELDS) ?? {}] };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) =>
       mapList(await pagedFindMany(query, tx.employee, { where, orderBy: { fullName: 'asc' } }), (row) => publicEmployee(row as Employee)),
     );

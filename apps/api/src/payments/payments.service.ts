@@ -80,20 +80,23 @@ export class PaymentsService {
   list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListPaymentsQueryDto) {
     const term = searchTerm(query);
     const where: Prisma.PaymentWhereInput = {
-      ...branchFilter(allowedBranchIds),
       ...(query?.customerId ? { customerId: query.customerId } : {}),
-      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ
-      // فلا يمرّ من `searchWhere` بل يُكتب هنا داخل `OR` نفسِه.
-      ...(term
-        ? {
-            OR: [
-              { no: { contains: term, mode: 'insensitive' } },
-              { reference: { contains: term, mode: 'insensitive' } },
-              { notes: { contains: term, mode: 'insensitive' } },
-              { customer: { name: { contains: term, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
+      // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` لا بنشرٍ يحلّ فيه الثاني محلّ الأوّل (توجيه ٢٧٤ · ج-2).
+      AND: [
+        branchFilter(allowedBranchIds),
+        // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ
+        // فلا يمرّ من `searchWhere` بل يُكتب هنا داخل `OR` نفسِه.
+        term
+          ? {
+              OR: [
+                { no: { contains: term, mode: 'insensitive' } },
+                { reference: { contains: term, mode: 'insensitive' } },
+                { notes: { contains: term, mode: 'insensitive' } },
+                { customer: { name: { contains: term, mode: 'insensitive' } } },
+              ],
+            }
+          : {},
+      ],
     };
     // المخصَّصُ وغيرُ المخصَّص على كلِّ صفّ — من التخصيصات في الخادم لا في الشاشة (`ق-١٢٤٣`).
     // (`listOrPage` لا `pagedFindMany`: الصفُّ يُقرأ بضمائمه فيُستنتج نوعُه من النداء نفسِه؛ والترتيبُ

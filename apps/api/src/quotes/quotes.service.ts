@@ -97,9 +97,12 @@ export class QuotesService {
   async list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
     const term = searchTerm(query);
     // البحثُ في رقم العرض وملاحظاته واسم عميله — العلاقةُ شرطُ Prisma لا ترشيحٌ في الذاكرة.
+    // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` لا بنشرٍ يحلّ فيه الثاني محلّ الأوّل (توجيه ٢٧٤ · ج-2).
     const where: Prisma.QuoteWhereInput = {
-      ...branchFilter(allowedBranchIds),
-      ...(term ? { OR: [{ no: { contains: term, mode: 'insensitive' } }, { notes: { contains: term, mode: 'insensitive' } }, { customer: { name: { contains: term, mode: 'insensitive' } } }] } : {}),
+      AND: [
+        branchFilter(allowedBranchIds),
+        term ? { OR: [{ no: { contains: term, mode: 'insensitive' } }, { notes: { contains: term, mode: 'insensitive' } }, { customer: { name: { contains: term, mode: 'insensitive' } } }] } : {},
+      ],
     };
     const result = await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       pagedFindMany(query, tx.quote, { where, include: QUOTE_INCLUDE, orderBy: { createdAt: 'desc' } }),

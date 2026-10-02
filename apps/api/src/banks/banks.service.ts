@@ -182,7 +182,8 @@ export class BanksService {
   }
 
   list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
-    const where: Prisma.BankWhereInput = { ...branchFilter(allowedBranchIds), ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), BANK_SEARCH_FIELDS) };
+    // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` كما يقول تعليقُ `searchWhere` (توجيه ٢٧٤ · ج-2).
+    const where: Prisma.BankWhereInput = { ...(includeArchived ? {} : { archived: false }), AND: [branchFilter(allowedBranchIds), searchWhere(searchTerm(query), BANK_SEARCH_FIELDS) ?? {}] };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) => pagedFindMany(query, tx.bank, { where, orderBy: { name: 'asc' } }));
   }
 
