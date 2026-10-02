@@ -23,7 +23,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { mirrorBankMovement, postCustomerPaymentEntry } from '../journal/auto-posting.util';
 import { getOrCreateAccountByCode, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME } from '../journal/pos-settlement.util';
-import { assertBoxInBranch, assertBranchAllowed, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, assertBranchAllowed, branchFilter, maskForeignDocument, resolveBranchId } from '../branches/branch-scope.util';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { AllocateDto, AllocationDto, CreatePaymentDto, RefundDto, UNALLOCATED_DECLARATION_MIN } from './dto/payment.dto';
@@ -34,7 +34,8 @@ import { unallocatedReceivableRate } from './voucher-receivable-rate.util';
 
 const PAYMENT_INCLUDE = {
   customer: { select: { id: true, name: true } },
-  allocations: { include: { invoice: { select: { id: true, no: true, total: true, currency: true } } } },
+  // `branchId` ليُحجب مستندُ فرعٍ آخر عن المقيَّد (`maskForeignDocument` · `ق-١٥٨١`).
+  allocations: { include: { invoice: { select: { id: true, no: true, total: true, currency: true, branchId: true } } } },
   // ④A1: فاتورةُ الدفعة المقدَّمة التي أصدرها السند — تقرؤها الشاشةُ من هنا لا تستنتجها.
   prepaymentInvoice: { select: { id: true, no: true, total: true } },
 } as const;
@@ -51,6 +52,23 @@ const invoiceTarget = (tx: Prisma.TransactionClient): SettlementTarget => ({
 
 /** تخصيصاتُ الطلب بمفردات التسوية المشتركة. */
 const toSettlementAllocations = (allocations: AllocationDto[]) => allocations.map((a) => ({ documentId: a.invoiceId, amount: a.amount }));
+
+/** تخصيصاتُ السند كما يراها القارئ: فاتورةُ فرعٍ آخر يسقط رقمُها ومبلغُها ويبقى مبلغُ التخصيص (`ق-١٥٨١`). */
+function scopeAllocations<P extends { allocations: { invoice: { id: string; branchId: string | null } }[] }>(allowedBranchIds: string[] | 'all', payment: P) {
+  if (allowedBranchIds === 'all') return payment;
+  return { ...payment, allocations: payment.allocations.map((a) => ({ ...a, invoice: maskForeignDocument(allowedBranchIds, a.invoice) })) };
+}
+
+/**
+ * ⚖️ **التخصيصُ على فاتورةٍ يراها القارئ** (`ق-١٥٨١`): قائمةُ الفواتير المفتوحة مرشَّحةٌ بفروعه، فتخصيصٌ بمعرّفٍ على فاتورة فرعٍ
+ * آخر بابٌ جانبيٌّ إليها — يُردّ كالفاتورة الغائبة (404)، كقراءتها. والمالكُ ومن يرى الفروعَ كلَّها لا يُقاس.
+ */
+async function assertInvoicesVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', allocations: AllocationDto[] | undefined): Promise<void> {
+  if (allowedBranchIds === 'all' || !allocations?.length) return;
+  const ids = [...new Set(allocations.map((a) => a.invoiceId))];
+  const visible = await tx.invoice.count({ where: { id: { in: ids }, ...branchFilter(allowedBranchIds) } });
+  if (visible !== ids.length) throw new NotFoundException(MSG.invoice_not_found);
+}
 
 /**
  * المقبوضات وتخصيصها على الفواتير (4.5).
@@ -109,7 +127,7 @@ export class PaymentsService {
           count: () => tx.payment.count({ where }),
           window: (offset, limit) => tx.payment.findMany({ ...args, skip: offset, take: limit }),
         }),
-        withAllocatedTotals,
+        (p) => withAllocatedTotals(scopeAllocations(allowedBranchIds, p)),
       ),
     );
   }
@@ -120,7 +138,7 @@ export class PaymentsService {
       tx.payment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: PAYMENT_INCLUDE }),
     );
     if (!payment) throw new NotFoundException(MSG.payment_not_found);
-    return withAllocatedTotals(payment);
+    return withAllocatedTotals(scopeAllocations(allowedBranchIds, payment));
   }
 
   /**
@@ -131,11 +149,14 @@ export class PaymentsService {
    * وتوزيعُ دفعته يقتضي رؤيةَ كلّ فواتيره المفتوحة، وإلا بقيت فاتورةُ فرعٍ
    * محجوبٍ مفتوحةً لا تُسدَّد أبداً. ⚖️ ويُعرَض للمالك: فهي تُظهر أرقامَ فواتيرِ
    * فرعٍ آخر ومبالغَها لمن يوزّع الدفعة.
+   *
+   * ⚖️ **وحُكم فيه** (توجيه ٢٧٥ · `ق-١٥٨١`): «القوائمُ تُرشَّح بفروع القارئ». فالمالكُ ومن يرى الفروعَ كلَّها يوزّع على فواتير
+   * المنشأة كلِّها، والمقيَّدُ على فواتير فرعه وما بلا فرع؛ وفاتورةُ الفرع الآخر يوزّع عليها من يراها.
    */
-  openInvoices(companyId: string, customerId: string) {
+  openInvoices(companyId: string, allowedBranchIds: string[] | 'all', customerId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const invoices = await tx.invoice.findMany({
-        where: { customerId, status: { not: 'PAID' } },
+        where: { customerId, status: { not: 'PAID' }, ...branchFilter(allowedBranchIds) },
         select: { id: true, no: true, issueDate: true, dueDate: true, total: true, currency: true, status: true },
         orderBy: { issueDate: 'asc' },
       });
@@ -177,6 +198,7 @@ export class PaymentsService {
         await assertBoxInBranch(tx, branchId, bank);
         const amount = round2(dto.amount);
         const allocations = (dto.allocations ?? []).map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
+        await assertInvoicesVisible(tx, allowedBranchIds, allocations);
 
         const invoices = await lockAndAssertAllocationsFit(tx, invoiceTarget(tx), {
           amount,
@@ -442,6 +464,7 @@ export class PaymentsService {
       assertReversible(payment, await tx.payment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
       const requested = dto.allocations.map((a) => ({ invoiceId: a.invoiceId, amount: round2(a.amount) }));
+      await assertInvoicesVisible(tx, allowedBranchIds, requested);
       const touched = new Set<string>([...payment.allocations.map((a) => a.invoiceId), ...requested.map((a) => a.invoiceId)]);
 
       // ⚖️ (`ق-١٤٨٩`/B1) الذمّةُ المرحَّلة **قبل** طرح القديمة — فبعد الحذف لا يبقى إلا «غيرُ مخصَّصٍ بسعر السند»،

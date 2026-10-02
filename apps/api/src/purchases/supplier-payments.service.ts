@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
-import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { assertBoxInBranch, branchFilter, maskForeignDocument, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { MSG } from '../common/i18n/messages';
@@ -25,11 +25,26 @@ import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './p
 
 const SUPPLIER_PAYMENT_INCLUDE = {
   supplier: { select: { id: true, name: true } },
-  allocations: { include: { purchase: { select: { id: true, no: true, total: true, currency: true } } } },
+  // `branchId` ليُحجب شراءُ فرعٍ آخر عن المقيَّد (`maskForeignDocument` · `ق-١٥٨١`).
+  allocations: { include: { purchase: { select: { id: true, no: true, total: true, currency: true, branchId: true } } } },
 } as const;
 
 /** تخصيصاتُ الطلب بمفردات التسوية المشتركة. */
 const toSettlementAllocations = (allocations: SupplierAllocationDto[]) => allocations.map((a) => ({ documentId: a.purchaseId, amount: a.amount }));
+
+/** تخصيصاتُ السند كما يراها القارئ: شراءُ فرعٍ آخر يسقط رقمُه ومبلغُه ويبقى مبلغُ التخصيص (`ق-١٥٨١`) — مرآةُ سند القبض. */
+function scopeAllocations<P extends { allocations: { purchase: { id: string; branchId: string | null } }[] }>(allowedBranchIds: string[] | 'all', payment: P) {
+  if (allowedBranchIds === 'all') return payment;
+  return { ...payment, allocations: payment.allocations.map((a) => ({ ...a, purchase: maskForeignDocument(allowedBranchIds, a.purchase) })) };
+}
+
+/** ⚖️ التخصيصُ على شراءٍ يراه القارئ (`ق-١٥٨١`) — مرآةُ `assertInvoicesVisible` في سند القبض: غيرُه يُردّ كالغائب (404). */
+async function assertPurchasesVisible(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', allocations: { purchaseId: string }[] | undefined): Promise<void> {
+  if (allowedBranchIds === 'all' || !allocations?.length) return;
+  const ids = [...new Set(allocations.map((a) => a.purchaseId))];
+  const visible = await tx.purchase.count({ where: { id: { in: ids }, ...branchFilter(allowedBranchIds) } });
+  if (visible !== ids.length) throw new NotFoundException(MSG.purchase_not_found);
+}
 
 /**
  * ⭐ **سنداتُ الصرف للمورّدين وتخصيصُها على فواتير الشراء** (`ق-٨٦٦` · `ق-٨٧١` · `ق-٨٧٢`).
@@ -84,7 +99,7 @@ export class SupplierPaymentsService {
           count: () => tx.supplierPayment.count({ where }),
           window: (offset, limit) => tx.supplierPayment.findMany({ ...args, skip: offset, take: limit }),
         }),
-        withAllocatedTotals,
+        (p) => withAllocatedTotals(scopeAllocations(allowedBranchIds, p)),
       ),
     );
   }
@@ -95,7 +110,7 @@ export class SupplierPaymentsService {
       tx.supplierPayment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: SUPPLIER_PAYMENT_INCLUDE }),
     );
     if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
-    return withAllocatedTotals(payment);
+    return withAllocatedTotals(scopeAllocations(allowedBranchIds, payment));
   }
 
   /**
@@ -104,13 +119,15 @@ export class SupplierPaymentsService {
    * **على مستوى المنشأة بحقّها**: ذمّةُ المورّد ذمّةُ المنشأة عليه لا ذمّةُ فرع — وتوزيعُ سنده
    * يقتضي رؤيةَ كلِّ فواتيره المفتوحة، وإلا بقيت فاتورةُ فرعٍ محجوبٍ مفتوحةً لا تُسدَّد أبداً.
    * ⚖️ ويُعرَض للمالك: فهي تُظهر أرقامَ فواتيرِ فرعٍ آخر ومبالغَها لمن يوزّع السند.
+   *
+   * ⚖️ **وحُكم فيه** (توجيه ٢٧٥ · `ق-١٥٨١`): «القوائمُ تُرشَّح بفروع القارئ» — كفواتير العميل المفتوحة في سند القبض.
    */
-  openPurchases(companyId: string, supplierId: string) {
+  openPurchases(companyId: string, allowedBranchIds: string[] | 'all', supplierId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // الإشعارُ الدائن من المورّد `PAID` بطبيعته فلا يدخل؛ والمدينُ مستحقٌّ يُسدَّد كالشراء (`ق-١٠٠٦`/②).
       const purchases = await tx.purchase.findMany({
         // والمُلغى بقيد عكسٍ لا ذمّةَ عليه (`ق-٩٩٧`/②).
-        where: { supplierId, status: { not: 'PAID' }, voidedAt: null },
+        where: { supplierId, status: { not: 'PAID' }, voidedAt: null, ...branchFilter(allowedBranchIds) },
         select: { id: true, no: true, date: true, dueDate: true, total: true, currency: true, status: true, docType: true },
         orderBy: { date: 'asc' },
       });
@@ -152,6 +169,7 @@ export class SupplierPaymentsService {
         await assertBoxInBranch(tx, branchId, bank);
         const amount = round2(dto.amount);
         const allocations = (dto.allocations ?? []).map((a) => ({ purchaseId: a.purchaseId, amount: round2(a.amount) }));
+        await assertPurchasesVisible(tx, allowedBranchIds, allocations);
 
         const purchases = await lockAndAssertAllocationsFit(tx, purchaseTarget(tx), {
           amount,
@@ -216,6 +234,7 @@ export class SupplierPaymentsService {
       assertReversible(payment, await tx.supplierPayment.findFirst({ where: { reversesId: id }, select: { no: true } }));
 
       const requested = dto.allocations.map((a) => ({ purchaseId: a.purchaseId, amount: round2(a.amount) }));
+      await assertPurchasesVisible(tx, allowedBranchIds, requested);
       const touched = new Set<string>([...payment.allocations.map((a) => a.purchaseId), ...requested.map((a) => a.purchaseId)]);
 
       // القديمةُ تُطرح أولاً — وإلا رفضنا إعادةَ توزيعٍ لا تتجاوز شيئاً حقيقةً.

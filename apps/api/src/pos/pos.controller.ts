@@ -81,7 +81,7 @@ export class PosController {
   @RequiresAction('view')
   @ApiOkResponse({ type: PosIncidentsResponse })
   incidents(@CurrentTenant() tenant: TenantContext) {
-    return this.posService.listIncidents(tenant.companyId);
+    return this.posService.listIncidents(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Post('shifts')

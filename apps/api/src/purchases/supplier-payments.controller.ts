@@ -32,7 +32,7 @@ export class SupplierPaymentsController {
   @Get('open-purchases/:supplierId')
   @RequiresAction('view')
   openPurchases(@CurrentTenant() tenant: TenantContext, @Param('supplierId') supplierId: string) {
-    return this.supplierPayments.openPurchases(tenant.companyId, supplierId);
+    return this.supplierPayments.openPurchases(tenant.companyId, tenant.allowedBranchIds, supplierId);
   }
 
   @Get(':id')

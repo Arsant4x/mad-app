@@ -49,7 +49,7 @@ export class InvoicesController {
   @Get('open-prepayments/:customerId')
   @RequiresAction('view')
   openPrepayments(@CurrentTenant() tenant: TenantContext, @Param('customerId') customerId: string) {
-    return this.invoicesService.openPrepayments(tenant.companyId, customerId);
+    return this.invoicesService.openPrepayments(tenant.companyId, tenant.allowedBranchIds, customerId);
   }
 
   /**
