@@ -318,19 +318,25 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
     await auth(http().post(`/contracts/${contract.id}/cancel`)).send({ ...cancelBody, exchangeRate: 3.8 }).expect(201);
     expect((await readContract(contract.id)).status).toBe('CANCELLED');
 
-    // قيدُ الإقفال الوحيد لهذا العقد — والرفضُ قبله لم يترك قيداً (معاملتُه أُرجعت).
-    const entries = await tenantPrisma.runInTenantContext(company.companyId, (tx) =>
-      tx.journalEntry.findMany({
-        where: { AND: [{ memo: { startsWith: 'إقفال إيراد مؤجَّل عند الإلغاء' } }, { memo: { contains: contract.no } }] },
-        select: { id: true },
-      }),
-    );
-    expect(entries).toHaveLength(1);
-    // الالتزامُ بسعر العقد 3,750.00 · المردودُ بعملة العقد 3,750 ÷ 3.75 = 1,000 × 3.80 (سعرُ يوم الإلغاء) = 3,800.00
-    // · الفرقُ 3,750 − 3,800 = −50 ⟵ خسارةٌ مدينة 50.00 على 5600. التوازن: 3,750 + 50 = 3,800.
-    // (وقبل الإصلاح: 2400 مدين 3,750 · 1000 دائن 3,750 — والخمسون مطويّةٌ في النقدية.)
-    expect(await linesOf(entries[0].id)).toEqual({
+    // ⚖️ توجيه ٢٧٥ (`ق-١٥٨٢`): الردُّ لقسطٍ على أساس الاستحقاق صار **إشعاراً دائناً** يعكس استحقاقَ المقبوض (`2400` ⟵ `1200`،
+    // ولا ضريبةَ هنا: سكنيٌّ معفى)، **ثم نقداً** يخرج مقابل الذمّة بسعر يوم الإلغاء والفرقُ على `5600` — قيدان لا قيد، والرفضُ
+    // قبلهما لم يترك قيداً (معاملتُه أُرجعت). والأثرُ مجموعاً كما أثبته B9: `2400` مدين 3,750 · `1000` دائن 3,800 · `5600` مدين 50.
+    const byMemo = (fragment: string) =>
+      tenantPrisma.runInTenantContext(company.companyId, (tx) =>
+        tx.journalEntry.findMany({ where: { AND: [{ memo: { contains: fragment } }, { memo: { contains: contract.no } }] }, select: { id: true } }),
+      );
+    const creditNote = await byMemo('إشعارٌ دائنٌ عند الإلغاء');
+    const refund = await byMemo('ردُّ المقبوض مقدَّماً عند الإلغاء');
+    expect({ creditNote: creditNote.length, refund: refund.length }).toEqual({ creditNote: 1, refund: 1 });
+    // الالتزامُ بسعر العقد 3,750.00 يُعكس عن الذمّة.
+    expect(await linesOf(creditNote[0].id)).toEqual({
       '2400': { debit: 3750, credit: 0 },
+      '1200': { debit: 0, credit: 3750 },
+    });
+    // والمردودُ بعملة العقد 3,750 ÷ 3.75 = 1,000 × 3.80 (سعرُ يوم الإلغاء) = 3,800.00 · الفرقُ 3,750 − 3,800 = −50 ⟵ خسارةٌ مدينة
+    // 50.00 على 5600. التوازن: 3,750 + 50 = 3,800. (وقبل B9: 1000 دائن 3,750 — والخمسون مطويّةٌ في النقدية.)
+    expect(await linesOf(refund[0].id)).toEqual({
+      '1200': { debit: 3750, credit: 0 },
       '1000': { debit: 0, credit: 3800 },
       '5600': { debit: 50, credit: 0 },
     });
