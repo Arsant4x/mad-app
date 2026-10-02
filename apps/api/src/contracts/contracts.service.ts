@@ -3,7 +3,7 @@ import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
-import { companyBaseCurrency, resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { companyBaseCurrency, resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import {
   postClaimIssueEntry,
@@ -543,7 +543,8 @@ export class ContractsService {
           throw new BadRequestException(formatMessage(MSG.rent_payment_currency_mismatch, { payment: requested, contract: contract.currency }));
         }
         const payCurrency = contract.currency;
-        const payRate = dto.exchangeRate ?? Number(contract.exchangeRate);
+        // السعرُ المرسَلُ يُقاس كمستندٍ جديد: لعقدٍ بعملة الأساس ١ لا غيرُه (توجيه ٢٧٤ · البند 1)، وبلا سعرٍ يرث سعرَ العقد.
+        const { exchangeRate: payRate } = await resolveFollowingCurrency(tx, companyId, { currency: payCurrency, exchangeRate: dto.exchangeRate }, { currency: contract.currency, exchangeRate: Number(contract.exchangeRate) });
 
         const discount = dto.discount ?? 0;
         const netAmount = round2(dto.amount - discount);
@@ -999,8 +1000,8 @@ export class ContractsService {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
-        const currency = dto.currency?.trim() || contract.currency;
-        const exchangeRate = dto.exchangeRate ?? Number(contract.exchangeRate);
+        // عملةُ التقبيل وسعرُها كمستندٍ يتبع العقد (توجيه ٢٧٤ · البند 1): لا سعرَ حرّاً لعملة الأساس، ولا ترثُ أجنبيةٌ سعرَ غيرها.
+        const { currency, exchangeRate } = await resolveFollowingCurrency(tx, companyId, dto, { currency: contract.currency, exchangeRate: Number(contract.exchangeRate) });
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
 
         const journalEntry = await postKeyMoneyEntry(tx, companyId, {
@@ -1046,8 +1047,8 @@ export class ContractsService {
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
-        const currency = dto.currency?.trim() || contract.currency;
-        const exchangeRate = dto.exchangeRate ?? Number(contract.exchangeRate);
+        // عملةُ المطالبة وسعرُها كمستندٍ يتبع العقد (توجيه ٢٧٤ · البند 1).
+        const { currency, exchangeRate } = await resolveFollowingCurrency(tx, companyId, dto, { currency: contract.currency, exchangeRate: Number(contract.exchangeRate) });
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
 
         const journalEntry = await postClaimIssueEntry(tx, companyId, {
@@ -1153,9 +1154,10 @@ export class ContractsService {
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
 
         // A deposit defaults to the contract's currency and rate, since it is
-        // part of the same deal, but may carry its own.
-        const currency = dto.currency?.trim() || contract.currency;
-        const exchangeRate = dto.exchangeRate ?? Number(contract.exchangeRate);
+        // part of the same deal, but may carry its own — measured like a new
+        // document (توجيه ٢٧٤ · البند 1): no free rate for the base currency,
+        // and a foreign currency without a rate does not inherit the contract's.
+        const { currency, exchangeRate } = await resolveFollowingCurrency(tx, companyId, dto, { currency: contract.currency, exchangeRate: Number(contract.exchangeRate) });
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
 
         // Only a deposit the company actually holds hits the ledger. One

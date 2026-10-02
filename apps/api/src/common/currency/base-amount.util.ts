@@ -48,11 +48,18 @@ export function isBaseCurrency(currency: string, baseCurrency: string): boolean 
  * ⚠️ `baseCurrency` إلزاميّ — **عملةُ المنشأة لا ثابتٌ** (`ق-١٣٦٨`)؛ ومن ليس في يده يقرؤه بـ`resolveCurrencyWithin`.
  *
  * ⚖️ `ق-١٤٨٩`: **السعرُ الغائب يُقرأ «١» لعملة الأساس وحدَها** — وعملةٌ أجنبيةٌ بلا سعرٍ تُرمى `400` مسمّاةً. و`null` كالغياب:
- * `@IsOptional` يُمرّره، و`?? 1` القديم كان يعامله غياباً — فلا يُفتح الثقبُ من بابه الثاني. */
+ * `@IsOptional` يُمرّره، و`?? 1` القديم كان يعامله غياباً — فلا يُفتح الثقبُ من بابه الثاني.
+ *
+ * 🔴 **ولعملة الأساس سعرُها ١ لا غيرُه** (توجيه ٢٧٤ · مراجعة 3.3 البند 1): كان السعرُ المرسَلُ يُقبل كما هو، ففاتورةٌ بعملة
+ * المنشأة بسعر `3.75` يُخزَّن أساسُها ثلاثةَ أضعافٍ ونصفاً ويُرحَّل به الدفتر. فيُرفض بالرسالة التي يرفض بها الردُّ سعراً لإشعارٍ
+ * بعملة الأساس (`exchange_rate_same_currency`)، وقبل أيّ كتابة. والقائمُ صفرٌ مقيساً، فالرفضُ لا يمسّ صفّاً. */
 export function resolveCurrency(input: CurrencyInput | undefined, baseCurrency: string): { currency: string; exchangeRate: number } {
   const currency = input?.currency?.trim() || baseCurrency;
   const rate = input?.exchangeRate ?? null;
-  if (rate !== null) return { currency, exchangeRate: rate };
+  if (rate !== null) {
+    if (rate !== DEFAULT_EXCHANGE_RATE && isBaseCurrency(currency, baseCurrency)) throw new BadRequestException(MSG.exchange_rate_same_currency);
+    return { currency, exchangeRate: rate };
+  }
   if (!isBaseCurrency(currency, baseCurrency)) {
     throw new BadRequestException(formatMessage(MSG.currency_rate_required, { currency, base: baseCurrency }));
   }
@@ -79,6 +86,28 @@ export async function resolveCurrencyWithin(
 ): Promise<{ currency: string; exchangeRate: number }> {
   const explicit = input?.currency?.trim();
   const rate = input?.exchangeRate ?? null;
-  if (explicit && rate !== null) return { currency: explicit, exchangeRate: rate };
+  // السعرُ ١ صحيحٌ أيّاً كانت العملة، فلا قراءةَ زائدة؛ وما سواه يُسأل عن عملة الأساس (البند 1: لا سعرَ حرّاً لها).
+  if (explicit && rate === DEFAULT_EXCHANGE_RATE) return { currency: explicit, exchangeRate: rate };
   return resolveCurrency(input, await companyBaseCurrency(tx, companyId));
+}
+
+/**
+ * **عملةُ مستندٍ يتبع غيرَه وسعرُها** — تعديلُ مستندٍ قائم، أو قبضٌ وتقبيلٌ ومطالبةٌ ووديعةٌ على عقد (توجيه ٢٧٤ · البند 1).
+ *
+ * كانت هذه المسارات تكتب `dto.exchangeRate ?? سعرَ ما تتبعه` بلا أن تمرّ بـ`resolveCurrency`: فسعرٌ حرٌّ لعملة الأساس يُقبل،
+ * وعملةٌ أجنبيةٌ بلا سعرٍ ترث سعرَ غيرها (وديعةٌ بالدولار على عقدٍ بالريال بسعر ١) — وهو ثقبُ `ق-١٤٨٩` من بابٍ ثالث.
+ * فالقاعدةُ واحدة: **السعرُ المرسَلُ يُقاس كمستندٍ جديد**؛ **وبلا سعرٍ** ترث العملةُ نفسُها سعرَ ما تتبعه (فالقديمُ لا يُمسّ)،
+ * وعملةٌ غيرُها تُعامَل كمستندٍ جديد (الأساسُ بـ١ والأجنبيةُ تُرفض مسمّاةً).
+ */
+export async function resolveFollowingCurrency(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  input: CurrencyInput | undefined,
+  followed: { currency: string; exchangeRate: number },
+): Promise<{ currency: string; exchangeRate: number }> {
+  const currency = input?.currency?.trim() || followed.currency;
+  const rate = input?.exchangeRate ?? null;
+  // الرمزُ كما أُرسل مشذَّباً لا مطبَّعاً، كما كان يُخزَّن (`rent-cash-fx-difference` يحرسه)؛ وتطبيعُه قرارٌ منفصل.
+  if (rate === null && isBaseCurrency(currency, followed.currency)) return { currency, exchangeRate: followed.exchangeRate };
+  return resolveCurrencyWithin(tx, companyId, { currency, ...(rate !== null ? { exchangeRate: rate } : {}) });
 }
