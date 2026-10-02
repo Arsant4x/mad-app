@@ -79,7 +79,10 @@ describe('Fiscal year deletion does not unlock closed periods (e2e)', () => {
     await auth(request(app.getHttpServer()).delete(`/fiscal-years/${yearId}`)).expect(204);
     const years = await auth(request(app.getHttpServer()).get('/fiscal-years')).expect(200);
     expect(years.body.some((y: { id: string }) => y.id === yearId)).toBe(false);
-    // بلا تقويمٍ لا قيدَ على التاريخ — وهي القاعدةُ القائمة، لا أثرُ الحذف.
+    // وتاريخٌ بلا فترةٍ يُنشئ سنتَه مفتوحةً عند الترحيل (`ق-١٥٨٤`) — فالحذفُ لا يترك التاريخَ بلا قفلٍ ولا يفكّ إقفالاً.
     await auth(request(app.getHttpServer()).post('/journal')).send(entryInMarch()).expect(201);
+    const again = (await auth(request(app.getHttpServer()).get('/fiscal-years')).expect(200)).body as { start: string; periods: { month: number; status: string }[] }[];
+    const recreated = again.find((y) => y.start.slice(0, 10) === `${YEAR}-01-01`);
+    expect(recreated?.periods.find((p) => p.month === 3)?.status).toBe('OPEN');
   }, 30000);
 });

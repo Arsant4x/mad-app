@@ -49,8 +49,9 @@ export async function getOrCreateOpeningEquityAccount(
 
 /** Opening entries carry the fiscal-year-start date so the opening position
  * belongs to the year from its first day — when a calendar covering today
- * exists. Without one there is no year start to anchor to, so today is used
- * (and, as everywhere else, no calendar means no period restriction). */
+ * exists, which since `ق-١٥٨٤` is the birth year of every new company. Without
+ * one (a company born before it, or whose years were all deleted) today is
+ * used, and posting it creates the year that contains it. */
 export async function openingEntryDate(tx: Prisma.TransactionClient, companyId: string): Promise<Date> {
   // Today at UTC midnight — the same shape a '2026-08-08' DTO string parses to,
   // so @db.Date comparisons behave identically. يومٌ معلَن لا يومُ منطقة العملية

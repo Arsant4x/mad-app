@@ -344,6 +344,10 @@ model Company {
   /// nobody edits or deletes them except the owner and employees explicitly
   /// exempted. Stops a busy clerk from quietly reshaping the asset register.
   masterDataLocked Boolean @default(false)
+  /// ⚖️ **شهرُ بداية السنة المالية — يناير افتراضاً** (توجيه ٢٧٥ · `ق-١٥٨٤`، بحكم صاحب المشروع): سنةُ الميلاد ميلادية،
+  /// ويغيّره صاحبُ المنشأة قبل أوّل ترحيلٍ وحدَه (`PATCH /fiscal-years/start-month`). ويُقرأ للتجدّد حين لا سنةَ معرَّفةً
+  /// أصلاً؛ ومع سنواتٍ قائمة يتجدّد التقويمُ على شهر بداية أقربها قبل التاريخ (`fiscal/fiscal-calendar.util.ts`). وقيدُ `CHECK` يحصره في ١…١٢.
+  fiscalStartMonth Int @default(1)
   /// ⭐ **«يُشترط شخصان» على شطب المخزون — مفعَّلٌ افتراضياً** (`ق-١٥٨٣`، بحكم صاحب المشروع، وكان مطفأً بـ`ق-١٤٣`).
   ///
   /// حين يُفعَّل: **من سجّل الواقعة لا يعتمدها**، ولو ملك `review`. وكان مطفأً افتراضياً لأن المنع يعطّل الميزةَ على متجرٍ

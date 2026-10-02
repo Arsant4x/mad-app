@@ -91,6 +91,6 @@ describe('السنةُ المالية تُنشأ مع المنشأة وتتجد�
       startsInJuly: containsToday?.start.slice(5, 10),
       periods: containsToday?.periods.length,
       afterPosting: after.status,
-    }).toEqual({ changed: 200, posted: 201, years: 1, startsInJuly: '07-01', periods: 12, afterPosting: 409 });
+    }).toEqual({ changed: 204, posted: 201, years: 1, startsInJuly: '07-01', periods: 12, afterPosting: 409 });
   });
 });

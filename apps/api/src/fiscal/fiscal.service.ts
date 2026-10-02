@@ -1,5 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@mad-app/db';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
@@ -9,38 +8,13 @@ import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/pag
 const FISCAL_SEARCH_FIELDS = ['name'] as const;
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 import { closeFiscalYearWithinTx, reverseClosingEntryWithinTx } from './year-closing.util';
+import { createFiscalYearWithinTx, fiscalYearContaining, fiscalYearName, lockFiscalCalendar } from './fiscal-calendar.util';
+import { dayStartOf } from '../common/wall-clock.util';
 
 const YEAR_INCLUDE = { periods: { orderBy: [{ year: 'asc' as const }, { month: 'asc' as const }] } };
 
-/**
- * أزواجُ (سنة، شهر) التي تغطّيها السنةُ المالية — **من بدايتها إلى نهايتها المعلَنة**
- * (`ق-١٢٧٩` · د/①A3 — `domain-scan/01` A3 · S24).
- *
- * **ما كان**: اثنا عشر شهراً دائماً من البداية، و`end` يُفحص أن يكون بعدها **ولا يؤثّر**.
- * فسنةٌ أولى من ثمانية عشر شهراً (نظامُ الشركات، م١٦) **لا تُمثَّل**: ستّةُ أشهرٍ بلا فترة،
- * وكلُّ قيدٍ فيها يُردّ `fiscal_no_period_for_date` — فالتقويمُ خاطئٌ من اليوم الأوّل،
- * وتصحيحُه بعد الإقفال يمرّ بحارس A2 (لا يُحذف تقويمٌ فيه فترةٌ مقفلة).
- *
- * واليومُ الأوّل من كلِّ شهرٍ يتجنّب فخَّ آخر الشهر (`Jan 31 + 1 month = Mar 3`).
- */
-export function monthsBetween(start: Date, end: Date): { month: number; year: number }[] {
-  const months: { month: number; year: number }[] = [];
-  const last = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
-  for (let d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1)); d <= last; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
-    months.push({ month: d.getUTCMonth() + 1, year: d.getUTCFullYear() });
-  }
-  return months;
-}
-
-/**
- * حدُّ المدّة — **من المصدر لا من الذاكرة**: نظامُ الشركات (١٤٤٣هـ) **م١٦**: «السنةُ المالية
- * للشركة اثنا عشر شهراً … ويجوز أن تكون السنةُ المالية الأولى … مدّةً لا تقلّ عن ستّة أشهر
- * ولا تزيد على ثمانية عشر شهراً» — الترجمةُ الإنجليزية على موقع وزارة الاستثمار، مقروءةً
- * 2026-09-21 (`docs/domain-scan/01` — المصدر م٨). **ولا يُفرَض اثنا عشر حتماً**: الأولى
- * والأخيرة يجوز أن تخالفاها، والنظامُ لا يميّزهما في بياناتنا — فالحدُّ على المدى وحدَه.
- */
-export const FISCAL_SPAN_MIN_MONTHS = 6;
-export const FISCAL_SPAN_MAX_MONTHS = 18;
+/** نُقلت إلى `fiscal-calendar.util.ts` ليشترك فيها الإنشاءُ اليدويّ والميلادُ والتجدّد (`ق-١٥٨٤`)، وتُصدَّر من هنا كما كانت. */
+export { FISCAL_SPAN_MAX_MONTHS, FISCAL_SPAN_MIN_MONTHS, monthsBetween } from './fiscal-calendar.util';
 
 @Injectable()
 export class FiscalService {
@@ -54,38 +28,26 @@ export class FiscalService {
 
   create(companyId: string, dto: CreateFiscalYearDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const start = new Date(dto.start);
-      const end = new Date(dto.end);
-      if (start >= end) throw new BadRequestException(MSG.fiscal_year_start_after_end);
-
-      const months = monthsBetween(start, end);
-      if (months.length < FISCAL_SPAN_MIN_MONTHS || months.length > FISCAL_SPAN_MAX_MONTHS) {
-        throw new BadRequestException(formatMessage(MSG.fiscal_year_span_out_of_range, { months: months.length }));
-      }
-
-      // Two fiscal years must not both claim the same month: `periodForDate`
-      // resolves a date to exactly one period, so an overlap would make which
-      // one applies arbitrary.
-      const clash = await tx.fiscalPeriod.findFirst({
-        where: { OR: months.map((m) => ({ month: m.month, year: m.year })) },
-      });
-      if (clash) throw new ConflictException(MSG.fiscal_year_overlaps);
-
-      const created = await tx.fiscalYear.create({
-        data: { name: dto.name.trim(), start, end } as unknown as Prisma.FiscalYearUncheckedCreateInput,
-      });
-
-      // كلُّ فتراتها مفتوحة — الإقفالُ فعلٌ مقصودٌ دائماً لا حالةٌ افتراضية.
-      await tx.fiscalPeriod.createMany({
-        data: months.map((m) => ({
-          companyId,
-          fiscalYearId: created.id,
-          month: m.month,
-          year: m.year,
-        })) as unknown as Prisma.FiscalPeriodUncheckedCreateInput[],
-      });
-
+      const created = await createFiscalYearWithinTx(tx, companyId, { name: dto.name, start: new Date(dto.start), end: new Date(dto.end) });
       return tx.fiscalYear.findUniqueOrThrow({ where: { id: created.id }, include: YEAR_INCLUDE });
+    });
+  }
+
+  /**
+   * ⚖️ **شهرُ بداية السنة المالية يغيّره التاجرُ قبل أوّل ترحيلٍ وحدَه** (توجيه ٢٧٥ · `ق-١٥٨٤`، بحكم صاحب المشروع).
+   *
+   * قبل أوّل قيدٍ لا شيءَ يقوم على الفترات، فيُعاد بناءُ التقويم من الشهر الجديد: تُحذف السنواتُ (كلُّها مفتوحة بلا قيد)
+   * وتُنشأ السنةُ التي تحوي اليوم. وبعده `409` مسمّى: القيودُ قائمةٌ على فتراتها، وتغييرُ البداية يعيد توزيعَها.
+   */
+  setStartMonth(companyId: string, month: number) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await lockFiscalCalendar(tx, companyId);
+      if (await tx.journalEntry.findFirst({ select: { id: true } })) throw new ConflictException(MSG.fiscal_start_month_after_posting);
+      await tx.company.update({ where: { id: companyId }, data: { fiscalStartMonth: month } });
+      await tx.fiscalYear.deleteMany({});
+      const range = fiscalYearContaining(dayStartOf(new Date()), month);
+      await createFiscalYearWithinTx(tx, companyId, { name: fiscalYearName(range.start, month), ...range });
+      return tx.fiscalYear.findMany({ include: YEAR_INCLUDE, orderBy: { start: 'asc' } });
     });
   }
 

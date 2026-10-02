@@ -151,8 +151,8 @@ describe('Fiscal year and period locking (e2e)', () => {
     const listB = await request(app.getHttpServer()).get('/fiscal-years').set('Authorization', `Bearer ${tokenB}`).expect(200);
     expect(listB.body.some((y: { id: string }) => createdYearIds.includes(y.id))).toBe(false);
 
-    // Company B has no calendar of its own, so it stays unrestricted — the
-    // "no periods defined means no restriction" rule, per company.
+    // Company B's own calendar is its own: the posting creates B's year on
+    // demand, open (`ق-١٥٨٤`), untouched by A's closed March.
     const accountsB = await request(app.getHttpServer()).get('/accounts').set('Authorization', `Bearer ${tokenB}`).expect(200);
     const cashB = accountsB.body.find((a: { code: string }) => a.code === '1000');
     const revenueB = accountsB.body.find((a: { code: string }) => a.code === '4100');
@@ -170,7 +170,11 @@ describe('Fiscal year and period locking (e2e)', () => {
       })
       .expect(201);
 
-    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) — وشركةُ ب بلا تقويمٍ فلا قفلَ على أيّ تاريخ.
+    // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①) — في سنة ب التي أنشأها ترحيلُها، ثم تُحذف وهي مفتوحةٌ كلُّها (لا يبقى تقويمٌ على المنشأة المشتركة).
     await request(app.getHttpServer()).post(`/journal/${posted.body.id}/reverse`).set('Authorization', `Bearer ${tokenB}`).send({ date: `${YEAR}-03-15` }).expect(201);
+    const yearsB = (await request(app.getHttpServer()).get('/fiscal-years').set('Authorization', `Bearer ${tokenB}`).expect(200)).body as { id: string; start: string }[];
+    const ownB = yearsB.find((y) => y.start.slice(0, 10) === `${YEAR}-01-01`);
+    expect(ownB).toBeDefined();
+    await request(app.getHttpServer()).delete(`/fiscal-years/${ownB!.id}`).set('Authorization', `Bearer ${tokenB}`).expect(204);
   });
 });

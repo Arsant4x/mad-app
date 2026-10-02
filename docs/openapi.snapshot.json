@@ -1968,6 +1968,15 @@
       "200"
     ]
   },
+  "PATCH /v1/fiscal-years/start-month": {
+    "parameters": [],
+    "requiredBody": [
+      "month"
+    ],
+    "responses": [
+      "204"
+    ]
+  },
   "PATCH /v1/integrations/{id}/enabled": {
     "parameters": [
       "path:id:required"
