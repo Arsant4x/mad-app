@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listInvoices, type Invoice } from '../api/invoices';
 import { getDashboard, type DashboardSummary } from '../api/reports';
+import { usePermissions } from '../auth/PermissionsContext';
 import { dfmt, fmt } from '../lib/format';
 import { num0 } from '../lib/money';
 import { computeRange, type DashRange } from './dashboardRange';
@@ -20,9 +21,14 @@ const monthLabel = (key: string) => MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? 
  * الشراء بضريبته، والذممَ من فواتيرَ غيرِ `PAID` **بكامل إجماليها** (المسدَّدُ جزئياً كاملاً)،
  * والسلسلةَ الشهرية من الإجماليات. صارت كلُّها من `GET /reports/dashboard` — من الدفتر والتخصيصات —
  * وتصل نصّاً بخانتين فتُعرض بـ`fmt` وتُقرأ بـ`num0` حيث تلزم مقارنة.
+ *
+ * ⚖️ **وكلُّ بطاقةٍ لمن يملك شاشتَها** (`ق-١٥٨٠`): بطاقاتُ الأرقام يحكم بها الخادم (لا يُرسل ما لا يملك القارئُ شاشتَه، فلا
+ * تُرسم)، و«أحدثُ الفواتير» وزرُّ «فاتورة جديدة» لشاشة الفواتير — **بحثٌ في الصلاحيات المحسومة لا حساب** (`usePermissions`).
  */
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { canSee, can, loading: permissionsLoading } = usePermissions();
+  const showInvoices = canSee('invoice');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,10 +39,17 @@ export function DashboardPage() {
   const { from, to } = useMemo(() => computeRange(range, customFrom, customTo), [range, customFrom, customTo]);
 
   useEffect(() => {
+    if (permissionsLoading) return;
+    // من لا يملك شاشةَ الفواتير لا تُطلب له قائمتُها — كان الطلبُ يُردّ `403` فلا تُرسم الصفحة.
+    if (!showInvoices) {
+      setInvoices([]);
+      setLoading(false);
+      return;
+    }
     listInvoices()
       .then(setInvoices)
       .finally(() => setLoading(false));
-  }, []);
+  }, [permissionsLoading, showInvoices]);
 
   useEffect(() => {
     getDashboard({ from: from ?? undefined, to }).then(setSummary);
@@ -68,13 +81,18 @@ export function DashboardPage() {
       <div className="topbar">
         <div>
           <div className="page-title">لوحة التحكم</div>
-          <div className="page-sub">نظرة عامة على الوضع المالي — {periodLabel}</div>
+          <div className="page-sub">
+            نظرة عامة على الوضع المالي — {periodLabel}
+            {summary.scope === 'ownBranches' && ' — من فروعك وحدَها'}
+          </div>
         </div>
-        <div className="topbar-actions">
-          <button className="btn btn-primary" onClick={() => navigate('/invoices', { state: { openBuilder: true } })}>
-            + فاتورة جديدة
-          </button>
-        </div>
+        {can('invoice', 'add') && (
+          <div className="topbar-actions">
+            <button className="btn btn-primary" onClick={() => navigate('/invoices', { state: { openBuilder: true } })}>
+              + فاتورة جديدة
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="toolbar" style={{ marginBottom: 16 }}>
@@ -101,83 +119,98 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="kpi-row">
-        <div className="kpi-card pos">
-          <div className="kpi-label">الإيرادات</div>
-          <div className="kpi-value num">{fmt(summary.revenue)} ر.س</div>
-          <div className="kpi-delta">صافيةً من الضريبة — للفترة المحددة</div>
-        </div>
-        <div className="kpi-card neg">
-          <div className="kpi-label">المصروفات</div>
-          <div className="kpi-value num">{fmt(summary.expenses)} ر.س</div>
-          <div className="kpi-delta">من الدفتر — للفترة المحددة</div>
-        </div>
-        <div className={`kpi-card ${net >= 0 ? 'pos' : 'neg'}`}>
-          <div className="kpi-label">صافي الربح</div>
-          <div className="kpi-value num">{fmt(summary.netProfit)} ر.س</div>
-          <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? 'ربح' : 'خسارة'} للفترة المحددة</div>
-        </div>
-        <div className="kpi-card neu">
-          <div className="kpi-label">الذمم المدينة المستحقة</div>
-          <div className="kpi-value num">{fmt(summary.receivables)} ر.س</div>
-          <div className="kpi-delta">متبقّي الفواتير والأقساط بعد المقبوض</div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">الإيرادات — اتجاه شهري</div>
-        </div>
-        <div className="chart-wrap">
-          {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>لا توجد قيودُ إيرادٍ بعد لعرض الاتجاه</div>}
-          {months.map((m, i) => (
-            <div key={i} className={`bar ${i === months.length - 1 ? 'now' : ''}`} style={{ height: `${Math.max(Math.round((m.value / maxMonth) * 100), 2)}%` }}>
-              <em className="num">{fmt(m.revenue)}</em>
-              <span>{m.label}</span>
+      {/* بطاقةٌ لم يُرسلها الخادم لا تُرسم (`ق-١٥٨٠`) — لا صفرَ يُقرأ رقماً. */}
+      {(summary.revenue !== undefined || summary.expenses !== undefined || summary.netProfit !== undefined || summary.receivables !== undefined) && (
+        <div className="kpi-row">
+          {summary.revenue !== undefined && (
+            <div className="kpi-card pos">
+              <div className="kpi-label">الإيرادات</div>
+              <div className="kpi-value num">{fmt(summary.revenue)} ر.س</div>
+              <div className="kpi-delta">صافيةً من الضريبة — للفترة المحددة</div>
             </div>
-          ))}
+          )}
+          {summary.expenses !== undefined && (
+            <div className="kpi-card neg">
+              <div className="kpi-label">المصروفات</div>
+              <div className="kpi-value num">{fmt(summary.expenses)} ر.س</div>
+              <div className="kpi-delta">من الدفتر — للفترة المحددة</div>
+            </div>
+          )}
+          {summary.netProfit !== undefined && (
+            <div className={`kpi-card ${net >= 0 ? 'pos' : 'neg'}`}>
+              <div className="kpi-label">صافي الربح</div>
+              <div className="kpi-value num">{fmt(summary.netProfit)} ر.س</div>
+              <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? 'ربح' : 'خسارة'} للفترة المحددة</div>
+            </div>
+          )}
+          {summary.receivables !== undefined && (
+            <div className="kpi-card neu">
+              <div className="kpi-label">الذمم المدينة المستحقة</div>
+              <div className="kpi-value num">{fmt(summary.receivables)} ر.س</div>
+              <div className="kpi-delta">{summary.scope === 'ownBranches' ? 'متبقّي فواتير فروعك بعد المقبوض' : 'متبقّي الفواتير والأقساط بعد المقبوض'}</div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">أحدث الفواتير</div>
-          <div className="card-link" style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
-            عرض الكل ←
+      {summary.monthly !== undefined && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">الإيرادات — اتجاه شهري</div>
+          </div>
+          <div className="chart-wrap">
+            {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>لا توجد قيودُ إيرادٍ بعد لعرض الاتجاه</div>}
+            {months.map((m, i) => (
+              <div key={i} className={`bar ${i === months.length - 1 ? 'now' : ''}`} style={{ height: `${Math.max(Math.round((m.value / maxMonth) * 100), 2)}%` }}>
+                <em className="num">{fmt(m.revenue)}</em>
+                <span>{m.label}</span>
+              </div>
+            ))}
           </div>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>العميل</th>
-              <th>رقم الفاتورة</th>
-              <th>التاريخ</th>
-              <th>الحالة</th>
-              <th>المبلغ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentInvoices.length === 0 && (
+      )}
+
+      {showInvoices && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-title">أحدث الفواتير</div>
+            <div className="card-link" style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
+              عرض الكل ←
+            </div>
+          </div>
+          <table>
+            <thead>
               <tr>
-                <td colSpan={5}>
-                  <div className="empty-state">لا توجد فواتير بعد</div>
-                </td>
+                <th>العميل</th>
+                <th>رقم الفاتورة</th>
+                <th>التاريخ</th>
+                <th>الحالة</th>
+                <th>المبلغ</th>
               </tr>
-            )}
-            {recentInvoices.map((inv) => (
-              <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
-                <td>{inv.customer.name}</td>
-                <td className="num">{inv.no}</td>
-                <td className="num">{dfmt(inv.issueDate)}</td>
-                <td>
-                  <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
-                </td>
-                <td className="num">{fmt(inv.total)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {recentInvoices.length === 0 && (
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">لا توجد فواتير بعد</div>
+                  </td>
+                </tr>
+              )}
+              {recentInvoices.map((inv) => (
+                <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
+                  <td>{inv.customer.name}</td>
+                  <td className="num">{inv.no}</td>
+                  <td className="num">{dfmt(inv.issueDate)}</td>
+                  <td>
+                    <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
+                  </td>
+                  <td className="num">{fmt(inv.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Prisma } from '@mad-app/db';
-import { requestedBranchFilter } from '../branches/branch-scope.util';
+import { ownBranchesFilter, requestedBranchFilter } from '../branches/branch-scope.util';
 import { adjustmentSign } from '../common/adjustment/adjustment-note.util';
 import { round2 } from '../common/money/rounding';
 import { NOT_REPLACED_REJECTED } from '../invoices/active-documents.util';
@@ -43,6 +43,11 @@ export interface ExposureFilter {
   allowedBranchIds: string[] | 'all';
   branchId?: string | null;
   customerId?: string | null;
+  /**
+   * **فروعُ القارئ وحدَها** (توجيه ٢٧٥ · `ق-١٥٨٠`): لرقمٍ مجمَّعٍ يُعرض لمقيَّد (بطاقةُ الذمم في لوحة التحكم) — فلا تدخله
+   * فواتيرُ المنشأة كلِّها بلا فرع (`ownBranchesFilter`). وبلا هذا الحقل تُقرأ كالقائمة (فروعُه وما بلا فرع).
+   */
+  ownBranchesOnly?: boolean;
 }
 
 /** شرائحُ العمر بالأيام من الاستحقاق — **لا من اليوم دائماً**. */
@@ -147,7 +152,7 @@ export async function rentReceivables(tx: Prisma.TransactionClient, filter: Expo
 
 export async function customerExposure(tx: Prisma.TransactionClient, filter: ExposureFilter, rentSink?: RentReceivableRow[]): Promise<ExposureRow[]> {
   const { asOf } = filter;
-  const branchWhere = requestedBranchFilter(filter.allowedBranchIds, filter.branchId);
+  const branchWhere = filter.ownBranchesOnly && !filter.branchId ? ownBranchesFilter(filter.allowedBranchIds) : requestedBranchFilter(filter.allowedBranchIds, filter.branchId);
   const customerWhere = filter.customerId ? { customerId: filter.customerId } : {};
 
   // كل مستندات الذمم حتى تاريخ القياس: الفواتير وإشعاراتها معاً —

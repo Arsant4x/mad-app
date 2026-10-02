@@ -10,6 +10,9 @@ import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } fr
 import { buildCsv } from '../common/csv.util';
 import type { LedgerRow } from './ledger.util';
 import { ReportsService } from './reports.service';
+import { PermissionsService } from '../delegations/permissions.service';
+import { grant } from '../delegations/permission-tree';
+import { DASHBOARD_CARD_SCREEN, DASHBOARD_CARDS } from './dashboard-cards';
 
 /** أعمدةُ الأستاذ وكشف الحساب في التصدير — واحدةٌ للاثنين لأن المحرّكَ واحد. */
 const LEDGER_CSV_COLUMNS = [
@@ -29,13 +32,25 @@ const LEDGER_CSV_COLUMNS = [
 @UseGuards(JwtAuthGuard, TenantGuard)
 @RequiresScreen('reports')
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(
+    private readonly reportsService: ReportsService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
-  /** لوحةُ التحكّم — أرقامُها من الدفتر والتخصيصات لا من جمع الشاشة (`ق-١٢٤٣`)؛ وشاشتُها شاشةُ التقارير: هي قائمةُ دخلٍ مختصرة. */
+  /**
+   * لوحةُ التحكّم — أرقامُها من الدفتر والتخصيصات لا من جمع الشاشة (`ق-١٢٤٣`).
+   *
+   * ⚖️ **شاشتُها شاشةُ اللوحة، وكلُّ بطاقةٍ بشاشتها** (توجيه ٢٧٥ · `ق-١٥٨٠`): كانت تحت شاشة التقارير كلُّها، فمن يرى اللوحةَ
+   * في الواجهة (`ScreenGuard screen="dashboard"`) ولا يملك التقارير يُردّ `403` فتبقى صفحتُه بيضاء. صار المسارُ لشاشة اللوحة،
+   * والبطاقاتُ تُحسب من صلاحياته النافذة (`PermissionsService.forActor` — المصدرُ الذي تقرؤه الواجهة، بالأنشطة والتفويض).
+   */
   @Get('dashboard')
+  @RequiresScreen('dashboard')
   @RequiresAction('view')
-  dashboard(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
-    return this.reportsService.dashboard(tenant.companyId, tenant.allowedBranchIds, range);
+  async dashboard(@CurrentTenant() tenant: TenantContext, @Query() range: ReportRangeDto) {
+    const { grants } = await this.permissions.forActor(tenant);
+    const cards = new Set(DASHBOARD_CARDS.filter((card) => grants.includes(grant(DASHBOARD_CARD_SCREEN[card], 'view'))));
+    return this.reportsService.dashboard(tenant.companyId, tenant.allowedBranchIds, range, cards);
   }
 
   /** Occupancy, on-time collection and the renewal pipeline — all derived, none stored. */
