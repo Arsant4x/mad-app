@@ -50,7 +50,7 @@ import { invoiceTypeFor } from '../zatca/hash-chain.util';
 import { readClearedDelivery, withClearedCopyState } from '../zatca/cleared-invoice.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
 import { localDateOf } from '../common/wall-clock.util';
-import { deriveSettlementStatus } from '../common/settlement/settlement.util';
+import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
@@ -969,6 +969,9 @@ export class InvoicesService {
       // All credit notes on one invoice together must not exceed what it billed — crediting more
       // than was ever invoiced is a bookkeeping error, not a judgment call (المصدرُ الواحد ④). (No
       // such cap exists for debit notes on an invoice: additional billing has no arithmetic ceiling.)
+      // والسقفُ يُحسب بعد قفل الأصل: إشعاران متزامنان كانا يقرآن المجموعَ نفسَه فيتجاوزانه معاً، وهو نظيرُ
+      // الردّ المزدوج (البند 18 من مراجعة 3.3 · `ق-١٥٧٥`)، والقفلُ نفسُه يسلسل الإشعارَ مع الردّ على الأصل.
+      await lockDocumentRow(tx, 'invoices', invoiceId);
       const already = await tx.invoice.aggregate({
         where: { relatedInvoiceId: invoiceId, docType: 'CREDIT_NOTE' },
         _sum: { total: true },
@@ -1012,6 +1015,7 @@ export class InvoicesService {
       // مدينٌ على دائنٍ زائد (`ق-٩٥٢`): يصحّح ما زاد في الإشعار الدائن — فلا يتجاوز ما بقي
       // منه بعد ما صُحِّح قبلَه. (على الفاتورة نفسِها لا سقفَ: فوترةٌ إضافية بلا حدٍّ حسابيّ.)
       if (original.docType === 'CREDIT_NOTE') {
+        await lockDocumentRow(tx, 'invoices', invoiceId); // السقفُ بعد القفل، كالإشعار الدائن أعلاه (`ق-١٥٧٥`)
         const already = await tx.invoice.aggregate({ where: { relatedInvoiceId: invoiceId, docType: 'DEBIT_NOTE' }, _sum: { total: true } });
         assertWithinRemaining(totals.total, Number(original.total), Number(already._sum.total ?? 0), MSG.credit_note_exceeds_remaining);
       }

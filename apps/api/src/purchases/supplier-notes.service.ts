@@ -16,6 +16,7 @@ import { MSG } from '../common/i18n/messages';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { round2, roundTo } from '../common/money/rounding';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postSupplierNoteEntry } from '../journal/auto-posting.util';
 import { CreateSupplierNoteDto, SupplierNoteLineDto } from './dto/create-supplier-note.dto';
@@ -116,6 +117,9 @@ export class SupplierNotesService {
 
         // ④ السقفُ من الأصل (`ق-١٠٠٦`/⑤): الدائنُ على الشراء، والمدينُ على دائنٍ زائد — لا يتجاوزان ما تبقّى.
         if (side === 'credit' || correctsOpposite) {
+          // بعد قفل الأصل: إشعاران متزامنان كانا يقرآن السابقَ نفسَه فيتجاوزان السقفَ معاً، نظيرُ الردّ المزدوج
+          // في المبيعات (البند 18 من مراجعة 3.3 · `ق-١٥٧٥`).
+          await lockDocumentRow(tx, 'purchases', original.id);
           const prior = await tx.purchase.aggregate({ where: { relatedPurchaseId: original.id, docType }, _sum: { total: true } });
           assertWithinRemaining(noteTotal, Number(original.total), Number(prior._sum.total ?? 0), MSG.supplier_note_exceeds_remaining);
         }
