@@ -27,7 +27,7 @@ export class AttendanceController {
   @Post()
   @RequiresAction('record')
   record(@CurrentTenant() tenant: TenantContext, @Body() dto: RecordAttendanceDto) {
-    return this.attendanceService.record(tenant.companyId, dto);
+    return this.attendanceService.record(tenant.companyId, tenant.allowedBranchIds, dto);
   }
 
   @Patch(':id')

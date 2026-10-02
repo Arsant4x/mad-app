@@ -204,6 +204,34 @@ describe('فروعُ الفاعل على الحضور والإجازات بال�
     expect(rows.find((r) => r.id === leaveSouthDelete)?.status).toBe('PENDING');
   });
 
+  // ---- الإنشاءُ بمعرّف الموظّف من جسم الطلب (توجيه ٢٧٥ · ق-١٥٧٨/ب) ----
+  // مسحُ نظائر الكتلة ٥ من توجيه ٢٧٤: `record` و`createRequest` يقرآن الموظّفَ بـ`findUnique({ where: { id } })` بلا فروع
+  // الفاعل، والمتحكّمان لا يمرّرانها — فموظّفُ الشمال يسجّل حضورَ موظّف الجنوب ويقدّم عنه إجازة. والحكمُ حكمُ ما سبق:
+  // موظّفٌ خارج فروع الفاعل غيرُ موجودٍ له (`404`)، ولا يُكتب صفّ.
+
+  it('[SPEC 2.7] 🔴 تسجيلُ حضورٍ لموظّفٍ في فرعٍ آخر — 404، ولا صفَّ في ذلك اليوم — `POST /attendance`', async () => {
+    await asRestricted(http().post('/attendance')).send({ employeeId: employeeSouth, date: '2026-01-07', status: 'PRESENT', checkIn: '08:00', notes: 'سُجّل من فرعٍ آخر' }).expect(404);
+    const rows = await ownerReadsAttendance(employeeSouth);
+    expect(rows.some((r) => r.notes === 'سُجّل من فرعٍ آخر')).toBe(false);
+    // وجودُ صفٍّ سابقٍ يُثبت أن القراءةَ ترى صفوفَ هذا الموظّف — فالغيابُ المقيس غيابٌ لا عمى.
+    expect(rows.map((r) => r.id)).toContain(attendanceSouthEdit);
+  });
+
+  it('[SPEC 2.7] 🔴 تقديمُ إجازةٍ عن موظّفٍ في فرعٍ آخر — 404، ولا طلبَ جديد — `POST /leaves/requests`', async () => {
+    const before = (await ownerReadsLeaves(employeeSouth)).length;
+    await asRestricted(http().post('/leaves/requests')).send({ employeeId: employeeSouth, leaveTypeId, startDate: '2026-05-01', endDate: '2026-05-03', reason: 'قُدّمت من فرعٍ آخر' }).expect(404);
+    const after = await ownerReadsLeaves(employeeSouth);
+    expect(before).toBeGreaterThan(0);
+    expect(after.length).toBe(before);
+  });
+
+  it('[SPEC 2.7] والحالةُ الموجبة: الفاعلُ نفسُه يسجّل حضورَ موظّفِ فرعه ويقدّم عنه إجازة — فالرفضُ للفرع لا للفعل', async () => {
+    const recorded = await asRestricted(http().post('/attendance')).send({ employeeId: employeeNorth, date: '2026-01-07', status: 'PRESENT', checkIn: '08:00', notes: 'حضورُ فرعه' }).expect(201);
+    expect((recorded.body as AttendanceRow).notes).toBe('حضورُ فرعه');
+    const requested = await asRestricted(http().post('/leaves/requests')).send({ employeeId: employeeNorth, leaveTypeId, startDate: '2026-05-01', endDate: '2026-05-03', reason: 'إجازةُ فرعه' }).expect(201);
+    expect((requested.body as LeaveRequestRow).status).toBe('PENDING');
+  });
+
   it('[SPEC 2.7] والحالةُ الموجبة: الفاعلُ نفسُه يعتمد إجازةَ موظّفِ فرعه ويرفض أخرى ويسحب ثالثة — فالرفضُ للفرع لا للفعل', async () => {
     const approved = await asRestricted(http().post(`/leaves/requests/${leaveNorthApprove}/approve`)).send({ note: 'موافق' }).expect(201);
     expect((approved.body as LeaveRequestRow).status).toBe('APPROVED');

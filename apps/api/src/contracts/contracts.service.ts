@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ClaimKind, Contract, DeductionKind, DepositType, Prisma, Property, Unit } from '@mad-app/db';
+import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -507,8 +508,11 @@ export class ContractsService {
   /**
    * **صندوقُه لا يُقاس هنا**: دفعةُ الإيجار مستندٌ بلا فرع (العقدُ والعقارُ لا يحملان فرعاً)، والمستندُ بلا فرعٍ خارجُ حكم
    * `ق-١٤٣٧` — وحركةُ البنك مرآتُها بلا فرعٍ كذلك.
+   *
+   * 🔴 **لكنّ فروعَ الفاعل تُقاس** (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): الصندوقُ صفٌّ يحمل فرعاً، والقبضُ فيه كتابةٌ في رصيده؛
+   * فموظّفٌ مقيَّدٌ لا يقبض في صندوق فرعٍ لا يملكه (`403`)، وصندوقُ المنشأة كلِّها (بلا فرع) لكلِّ فاعل.
    */
-  recordPayment(companyId: string, contractId: string, dto: RecordPaymentDto) {
+  recordPayment(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto) {
     // Retries on a journal-entry "no" collision from a concurrent payment.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
@@ -534,6 +538,7 @@ export class ContractsService {
         // branch's cash box reflects real money rather than only the GL account.
         const bank = dto.bankId ? await tx.bank.findUnique({ where: { id: dto.bankId } }) : null;
         if (dto.bankId && !bank) throw new NotFoundException(MSG.bank_not_found);
+        assertBranchAllowed(allowedBranchIds, bank?.branchId);
 
         // A payment carries the contract's currency and may carry its own rate —
         // the gap between the rate the contract was priced at and the one it

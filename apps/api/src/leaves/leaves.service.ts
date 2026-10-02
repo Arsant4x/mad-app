@@ -126,7 +126,7 @@ export class LeavesService {
     );
   }
 
-  createRequest(companyId: string, actor: LeaveActor, dto: CreateLeaveRequestDto) {
+  createRequest(companyId: string, actor: LeaveActor, allowedBranchIds: string[] | 'all', dto: CreateLeaveRequestDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const start = new Date(dto.startDate);
       const end = new Date(dto.endDate);
@@ -134,7 +134,8 @@ export class LeavesService {
 
       // Both foreign ids come off a request body, so re-check they belong to
       // this company under the tenant-scoped tx before trusting them.
-      const employee = await tx.employee.findUnique({ where: { id: dto.employeeId }, select: { id: true } });
+      // 🔴 وبفروع الفاعل (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): موظّفُ فرعٍ آخر غيرُ موجودٍ له، كالقرار على طلبه (`ق-١٤٤٠`).
+      const employee = await tx.employee.findFirst({ where: { id: dto.employeeId, ...branchFilter(allowedBranchIds) }, select: { id: true } });
       if (!employee) throw new NotFoundException(MSG.employee_not_found);
       const leaveType = await tx.leaveType.findUnique({ where: { id: dto.leaveTypeId }, select: { id: true } });
       if (!leaveType) throw new NotFoundException(MSG.leave_type_not_found);

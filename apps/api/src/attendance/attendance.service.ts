@@ -44,10 +44,11 @@ export class AttendanceService {
     );
   }
 
-  record(companyId: string, dto: RecordAttendanceDto) {
+  record(companyId: string, allowedBranchIds: string[] | 'all', dto: RecordAttendanceDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // The id comes off a request body — re-check it belongs to this company.
-      const employee = await tx.employee.findUnique({ where: { id: dto.employeeId }, select: { id: true } });
+      // 🔴 وبفروع الفاعل (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): موظّفُ فرعٍ آخر غيرُ موجودٍ له، كتعديل الصفّ وحذفه (`ق-١٤٤٠`).
+      const employee = await tx.employee.findFirst({ where: { id: dto.employeeId, ...branchFilter(allowedBranchIds) }, select: { id: true } });
       if (!employee) throw new NotFoundException(MSG.employee_not_found);
 
       const existing = await tx.attendanceRecord.findFirst({ where: { employeeId: dto.employeeId, date: new Date(dto.date) } });

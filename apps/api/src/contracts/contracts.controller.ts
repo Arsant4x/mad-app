@@ -262,6 +262,6 @@ export class ContractsController {
   @Post(':id/payments')
   @RequiresAction('record')
   recordPayment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordPaymentDto) {
-    return this.contractsService.recordPayment(tenant.companyId, id, dto);
+    return this.contractsService.recordPayment(tenant.companyId, tenant.allowedBranchIds, id, dto);
   }
 }
