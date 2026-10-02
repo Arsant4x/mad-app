@@ -117,7 +117,7 @@ describe('موظّفٌ مقيَّدٌ بفرع: لا رقم من فرعٍ آخر
       (await owner(http().post('/employees')).send({ fullName: `موظف اللوحة ${suffix}`, hireDate: '2024-01-01', branchId }).expect(201)).body.id;
     const drawer = async (branchId: string): Promise<string> => (await owner(http().post('/cash-drawers')).send({ name: `درج اللوحة ${suffix}`, branchId }).expect(201)).body.id;
     const bank = async (branchId: string): Promise<string> =>
-      (await owner(http().post('/banks')).send({ name: `بنك اللوحة ${suffix}`, kind: 'BANK_ACCOUNT', branchId }).expect(201)).body.id;
+      (await owner(http().post('/banks')).send({ name: `بنك اللوحة ${suffix}`, kind: 'BANK_ACCOUNT', openingDate: today, branchId }).expect(201)).body.id;
     rows.employees = { route: '/employees', a: await employee(branchA), b: await employee(branchB) };
     rows.cashDrawers = { route: '/cash-drawers', a: await drawer(branchA), b: await drawer(branchB) };
     rows.banks = { route: '/banks', a: await bank(branchA), b: await bank(branchB) };
