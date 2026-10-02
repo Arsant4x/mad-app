@@ -52,11 +52,15 @@ export class CustomersService {
    * من التخصيصات، وأقساطُ إيجاره المستحقّة) لا من جمع الشاشة (`ق-١٢٤٣`: كانت شاشةُ العملاء تحمّل
    * الفواتيرَ كلَّها وتجمع `outstanding` بنفسها). تمريرةٌ واحدة على المنشأة لا استعلامٌ لكل صفّ؛
    * والرصيدُ نصٌّ بخانتين (`ق-١٢٣٥`)، وصفرٌ لمن لا رصيدَ له. **وعلى مستوى المنشأة** كحدّ الائتمان.
+   *
+   * ⚖️ **ولذلك لا يُرسل لمن لا يرى الفروعَ كلَّها** (`ق-١٥٨١`): ذمّةُ العميل رقمُ المنشأة كلِّها، فتبقى القائمةُ للمقيَّد بلا
+   * `outstanding` (يسقط الحقلُ لا يصير صفراً)، ولا يُحسب التعرّضُ أصلاً.
    */
-  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
     const where: Prisma.CustomerWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), CUSTOMER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const result = await pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } });
+      if (allowedBranchIds !== 'all') return result;
       const exposure = new Map((await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds: 'all' })).map((r) => [r.customerId, r.total]));
       return mapList(result, (c) => ({ ...c, outstanding: money(exposure.get(c.id) ?? 0) }));
     });

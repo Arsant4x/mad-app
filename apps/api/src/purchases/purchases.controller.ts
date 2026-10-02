@@ -6,6 +6,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { CreateGoodsReceiptDto } from './dto/create-goods-receipt.dto';
 import { CreateLandedCostDto } from './dto/create-landed-cost.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
@@ -58,6 +59,7 @@ export class PurchasesController {
   /** حارسُ الرصيد: ما بقي في وسيط الاستلام من المستندات مطابَقاً بالدفتر. Static route — before `:id`. */
   @Get('receipts/reconciliation')
   @RequiresAction('view')
+  @CompanyWideFigures('رصيدُ وسيط الاستلام مطابَقاً بالدفتر: حسابٌ واحدٌ للمنشأة كلِّها بمستندات فروعها كلِّها')
   receiptsReconciliation(@CurrentTenant() tenant: TenantContext) {
     return this.receipts.reconciliation(tenant.companyId);
   }
@@ -101,6 +103,7 @@ export class PurchasesController {
    * reads "incorporation-report" as anything else. */
   @Get('incorporation-report')
   @RequiresAction('view')
+  @CompanyWideFigures('مصاريفُ تأسيس المنشأة وإطفاؤها: رقمٌ واحدٌ للمنشأة كلِّها لا لفرع')
   incorporationReport(@CurrentTenant() tenant: TenantContext) {
     return this.purchasesService.incorporationReport(tenant.companyId);
   }

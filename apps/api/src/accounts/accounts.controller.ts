@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { TenantContext } from '../auth/types';
 import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
@@ -19,12 +20,13 @@ export class AccountsController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
-    return this.accountsService.list(tenant.companyId, query);
+    return this.accountsService.list(tenant.companyId, tenant.allowedBranchIds, query);
   }
 
   /** مجموعُ الأرصدة لكل نوع — في الخادم لا في الشاشة (`ق-١٢٤٣`). */
   @Get('summary')
   @RequiresAction('view')
+  @CompanyWideFigures('مجموعُ أرصدة الدليل كلِّه لكل نوع: أرصدةُ المنشأة كلِّها لا أرصدةُ فرع')
   summary(@CurrentTenant() tenant: TenantContext) {
     return this.accountsService.summary(tenant.companyId);
   }

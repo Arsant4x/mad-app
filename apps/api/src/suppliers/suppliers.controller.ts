@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { ReportRangeDto } from '../reports/dto/report-range.dto';
@@ -27,6 +28,7 @@ export class SuppliersController {
   /** المفوتَرُ والمسدَّدُ والمستحقُّ في فترة — محسوبةٌ في الخادم لا في نافذة التفاصيل (`ق-١٢٤٣`). */
   @Get(':id/summary')
   @RequiresAction('view')
+  @CompanyWideFigures('ما فوترَه المورّدُ وما سُدّد له وما يُستحقّ له في المنشأة كلِّها، من كلِّ فروعها')
   summary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Query() range: ReportRangeDto) {
     return this.suppliersService.summary(tenant.companyId, id, range);
   }

@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { SetArchivedDto } from '../common/dto/set-archived.dto';
 import { ArchivablePagedQueryDto } from '../common/dto/archivable-paged-query.dto';
 import { CustomersService } from './customers.service';
@@ -21,12 +22,13 @@ export class CustomersController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
-    return this.customersService.list(tenant.companyId, query.includeArchived === 'true', query);
+    return this.customersService.list(tenant.companyId, tenant.allowedBranchIds, query.includeArchived === 'true', query);
   }
 
   /** المفوتَرُ والمقبوضُ والرصيد — محسوبةٌ في الخادم من التخصيصات لا في نافذة التفاصيل (`ق-١٢٤٣`). */
   @Get(':id/summary')
   @RequiresAction('view')
+  @CompanyWideFigures('ما فُوتر على العميل وما قُبض منه ورصيدُه في المنشأة كلِّها، من كلِّ فروعها')
   summary(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.customersService.summary(tenant.companyId, id);
   }

@@ -6,6 +6,7 @@ import { MSG } from '../common/i18n/messages';
 import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { StartOnboardingDto, SubmitOtpDto } from './dto/onboarding.dto';
 import { ZatcaOnboardingService } from './zatca-onboarding.service';
 import { ZatcaService } from './zatca.service';
@@ -56,8 +57,14 @@ export class ZatcaController {
     return this.zatcaService.submitInvoice(tenant.companyId, tenant.actorType, id);
   }
 
-  /** «صادرٌ لم يصل» — عدداً وأقدمَ وقائمةً (`ق-١٨٢`/٢). قراءةٌ لكل مستخدمي المنشأة: الكاشير يحتاج التحذير كالمالك. */
+  /**
+   * «صادرٌ لم يصل» — عدداً وأقدمَ وقائمةً (`ق-١٨٢`/٢). كان قراءةً لكل مستخدمي المنشأة (الكاشير يحتاج التحذير كالمالك).
+   *
+   * ⚖️ **وصار لمن يرى الفروعَ كلَّها** (توجيه ٢٧٥ · `ق-١٥٨١`، بحكم صاحب المشروع): «ما لم يُبلَّغ للهيئة» من الأرقام المجمَّعة
+   * التي تُرفض للمقيَّد — فيه أرقامُ مستندات الفروع كلِّها ومبالغُها. والشريطُ في الواجهة يسكت للمقيَّد (يبتلع الرفض).
+   */
   @Get('unreported')
+  @CompanyWideFigures('مستنداتُ المنشأة كلِّها التي لم تقبلها الهيئة، بأرقامها ومبالغها من كلِّ فروعها')
   unreported(@CurrentTenant() tenant: TenantContext) {
     return this.zatcaService.unreported(tenant.companyId);
   }

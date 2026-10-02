@@ -83,15 +83,18 @@ export function AccountModal({
             </select>
           </div>
         </div>
-        <div className="field">
-          <label>الرصيد الافتتاحي</label>
-          <input className="num" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" />
-          <p className="hint" style={{ marginTop: 4 }}>
-            {editing
-              ? 'تغيير الرصيد الافتتاحي يُرحَّل بقيد تسوية جديد مقابل حساب الأرصدة الافتتاحية (3900) — القيد الأصلي يبقى كما هو.'
-              : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900).'}
-          </p>
-        </div>
+        {/* الرصيدُ الافتتاحيّ رقمُ المنشأة كلِّها (`ق-١٥٨١`): لا يصل المقيَّدَ بفرع، فلا يُعرض له في التعديل ولا يُرسل. */}
+        {(!editing || editing.openingBalance !== undefined) && (
+          <div className="field">
+            <label>الرصيد الافتتاحي</label>
+            <input className="num" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" />
+            <p className="hint" style={{ marginTop: 4 }}>
+              {editing
+                ? 'تغيير الرصيد الافتتاحي يُرحَّل بقيد تسوية جديد مقابل حساب الأرصدة الافتتاحية (3900) — القيد الأصلي يبقى كما هو.'
+                : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900).'}
+            </p>
+          </div>
+        )}
         {/* ⭐ تاريخُ الافتتاح (ق-٢٩٦): الحقلُ المجاور للرصيد — كزوجِه في شاشة
             البنوك. وفراغُه يعني «لم يُعلَن» فيُشتقّ، ولا يُكتب مشتقٌّ في خانةِ
             إعلان. */}

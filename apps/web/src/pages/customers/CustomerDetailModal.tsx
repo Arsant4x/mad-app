@@ -17,8 +17,12 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
   const customerInvoices = invoices.filter((v) => v.customerId === customer.id).sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1));
   const { can } = usePermissions();
   const [summary, setSummary] = useState<CustomerSummary | null>(null);
+  // الملخّصُ رقمُ المنشأة كلِّها: يُرفض للمقيَّد بفرع (`ق-١٥٨١`)، فيُقال ذلك بدل «…» لا ينتهي.
+  const [refused, setRefused] = useState(false);
   useEffect(() => {
-    getCustomerSummary(customer.id).then(setSummary);
+    getCustomerSummary(customer.id)
+      .then(setSummary)
+      .catch(() => setRefused(true));
   }, [customer.id]);
   const balance = num0(summary?.outstanding);
 
@@ -47,21 +51,27 @@ export function CustomerDetailModal({ customer, invoices, onClose }: { customer:
           </div>
         </div>
 
-        <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
-          <div className="kpi-card neu">
-            <div className="kpi-label">إجمالي الفواتير المصدَرة</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
-            <div className="kpi-delta">{customerInvoices.length} فاتورة</div>
+        {refused ? (
+          <p className="hint" style={{ marginBottom: 16 }}>
+            أرقامُ العميل في المنشأة كلِّها تُقرأ لمن يرى فروعَها كلَّها.
+          </p>
+        ) : (
+          <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+            <div className="kpi-card neu">
+              <div className="kpi-label">إجمالي الفواتير المصدَرة</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
+              <div className="kpi-delta">{customerInvoices.length} فاتورة</div>
+            </div>
+            <div className="kpi-card pos">
+              <div className="kpi-label">المُحصَّل</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.collected)} ر.س` : '…'}</div>
+            </div>
+            <div className={`kpi-card ${balance > 0 ? 'neg' : 'pos'}`}>
+              <div className="kpi-label">الرصيد المستحق</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.outstanding)} ر.س` : '…'}</div>
+            </div>
           </div>
-          <div className="kpi-card pos">
-            <div className="kpi-label">المُحصَّل</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.collected)} ر.س` : '…'}</div>
-          </div>
-          <div className={`kpi-card ${balance > 0 ? 'neg' : 'pos'}`}>
-            <div className="kpi-label">الرصيد المستحق</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.outstanding)} ر.س` : '…'}</div>
-          </div>
-        </div>
+        )}
 
         {/* الموافقةُ التسويقية في بطاقة العميل — حيث ينظر التاجر إليه، لا في شاشةٍ مستقلة. */}
         <MarketingConsentPanel customerId={customer.id} canRecord={can('customers', 'record')} />

@@ -147,8 +147,9 @@ export function CustomersPage() {
                   <td className="num">{c.vatNumber || '—'}</td>
                   <td className="num">{c.phone || '—'}</td>
                   <td className="num">{fmt(c.creditLimit)}</td>
-                  <td className="num" style={{ color: balance > 0 ? 'var(--rose)' : 'var(--emerald)' }}>
-                    {fmt(c.outstanding ?? 0)}
+                  {/* ذمّةُ العميل رقمُ المنشأة كلِّها: لا تصل المقيَّدَ بفرع (`ق-١٥٨١`)، فغيابُها خانةٌ فارغة لا صفر. */}
+                  <td className="num" data-testid="customer-outstanding" style={c.outstanding === undefined ? undefined : { color: balance > 0 ? 'var(--rose)' : 'var(--emerald)' }}>
+                    {c.outstanding === undefined ? '' : fmt(c.outstanding)}
                   </td>
                   <td>
                     <RowMenu
