@@ -43,7 +43,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
-import { rentAmountsOf, rentTaxTreatment, type RentClassification, type RentVatInclusion } from '../journal/rent-tax-point.util';
+import { rentAmountsOf, rentTaxTreatment, type RentClassification, type RentTaxTreatment, type RentVatInclusion } from '../journal/rent-tax-point.util';
 import { money } from '../common/money/text';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
@@ -51,6 +51,41 @@ import { moneyEquals, sumMoney } from '../common/money/allocation';
 
 /** مهلةُ معاملةٍ تستحقّ جدولاً كاملاً (الإنشاءُ والتجديد) — لا الافتراضُ الخمس ثوانٍ. */
 const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
+
+/**
+ * ⚖️ **أجزاءُ قبضٍ على قسط** (توجيه ٢٧٥ · `ق-١٥٨٢`): القسطُ المقصودُ بباقيه، ثم ما يليه من أقساط العقد بترتيب استحقاقها بباقي
+ * كلٍّ، وما فاض عنها كلِّها جزءٌ بلا قسط (دفعةٌ مقدَّمة بقدرها كما كانت، م٢٠/٢).
+ *
+ * و«الباقي» إجماليُّ القسط بالضريبة (`rentAmountsOf`) ناقصاً ما سُدّد له (الصافي + الخصم) — المقياسُ الذي تُشتقّ به حالُه.
+ * والتاليةُ على أساس الاستحقاق وحدَه وغيرُ الملغاة؛ وقسطٌ لم يبقَ له شيء لا يُكتب له جزء.
+ */
+async function spreadRentPayment(
+  tx: Prisma.TransactionClient,
+  contractId: string,
+  treatment: RentTaxTreatment,
+  installment: { id: string; dueDate: Date },
+  amount: number,
+): Promise<{ installmentId: string | null; amount: number }[]> {
+  const candidates = await tx.installment.findMany({
+    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL', OR: [{ id: installment.id }, { dueDate: { gt: installment.dueDate } }] },
+    orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+    select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
+  });
+  const ordered = [...candidates.filter((c) => c.id === installment.id), ...candidates.filter((c) => c.id !== installment.id)];
+  let left = round2(amount);
+  const parts: { installmentId: string | null; amount: number }[] = [];
+  for (const c of ordered) {
+    if (left <= 0) break;
+    const settled = round2(c.payments.reduce((s, p) => s + Number(p.netAmount) + Number(p.discount), 0));
+    const remaining = round2(rentAmountsOf(Number(c.amount), treatment).gross - settled);
+    if (remaining <= 0) continue;
+    const take = round2(Math.min(left, remaining));
+    parts.push({ installmentId: c.id, amount: take });
+    left = round2(left - take);
+  }
+  if (left > 0) parts.push({ installmentId: null, amount: left });
+  return parts;
+}
 
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
@@ -566,9 +601,8 @@ export class ContractsService {
         const treatment = treatmentOf(accrualContract);
         const accrualPath = treatment !== null && (installment === null || installment.accrualBasis === 'ACCRUAL');
         // الإجماليُّ بمقياس عملة العقد — قبل الخصم، فالخصمُ تعديلُ مقابلٍ لاحق.
-        // والقبضُ بعملة العقد وحدَها — فالمتوقَّعُ بسعر العقد، والإجماليُّ هو المبلغُ نفسُه.
+        // والقبضُ بعملة العقد وحدَها — فالمتوقَّعُ بسعر العقد، والإجماليُّ مبلغُ كلِّ جزءٍ نفسُه (أدناه).
         const baseExpected = toBaseAmount(netAmount, Number(contract.exchangeRate));
-        const grossInContractCurrency = dto.amount;
 
         let journalEntry: { id: string; no: string } | null = null;
         let earnedNow = 0;
@@ -601,46 +635,75 @@ export class ContractsService {
           }
         }
 
-        const payment = await tx.rentPayment.create({
-          data: {
-            contractId,
-            installmentId: dto.installmentId,
-            date: new Date(dto.date),
-            amount: dto.amount,
-            discount,
-            netAmount,
-            method: dto.method,
-            // Records which money-holder took it — the bank account for a
-            // transfer, or the branch cash box for a cash receipt.
-            bankId: bank ? bank.id : undefined,
-            notes: dto.notes,
-            journalEntryId: journalEntry?.id,
-            currency: payCurrency,
-            exchangeRate: payRate,
-            baseAmount: toBaseAmount(dto.amount, payRate),
-            baseDiscount: toBaseAmount(discount, payRate),
-            baseNetAmount: toBaseAmount(netAmount, payRate),
-          } as unknown as Prisma.RentPaymentUncheckedCreateInput,
-        });
+        // ⚖️ **الزائدُ على القسط يُوزَّع على الأقساط التالية بترتيب استحقاقها** (توجيه ٢٧٥ · `ق-١٥٨٢`، بحكم صاحب المشروع —
+        //    ج-3 من مراجعة 3.3): كان الزائدُ صفَّ استحقاقٍ «بلا قسط» بتاريخه، ثم يحلّ القسطُ التالي كاملاً فتُستحقّ ضريبتُه
+        //    مرّتين وتبقى ذمّةٌ على مستأجرٍ دفع. فيُقسَم القبضُ أجزاءً، لكلِّ قسطٍ جزؤه، وما فاض عن الأقساط كلِّها يبقى بلا قسط.
+        //    والقبضُ واحد: قيدُ تسويةٍ واحد وحركةُ بنكٍ واحدة يحملهما الأجزاءُ كلُّها. وعلى مسار الاستحقاق وحدَه (حدٌّ معلَن):
+        //    القسطُ القديمُ على أساس القبض يبقى على مساره القائم.
+        const parts =
+          accrualPath && treatment && installment
+            ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount)
+            : [{ installmentId: dto.installmentId ?? null, amount: dto.amount }];
+        // الخصمُ على الجزء الأوّل — وهو القسطُ المقصود، أو أوّلُ قسطٍ بقي له شيء.
+        if (round2(parts[0].amount - discount) <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
+
+        // الأساسُ يُقسَم بالباقي: كلُّ جزءٍ بسعره إلا الأخيرَ فهو الفرقُ — فمجموعُ الأجزاء يساوي أساسَ القبض بلا هللة تقريب.
+        const baseTotal = { amount: toBaseAmount(dto.amount, payRate), discount: toBaseAmount(discount, payRate), net: toBaseAmount(netAmount, payRate) };
+        const baseSoFar = { amount: 0, net: 0 };
+        const rows: { id: string; installmentId: string | null; amount: number }[] = [];
+        for (const [k, part] of parts.entries()) {
+          const last = k === parts.length - 1;
+          const partDiscount = k === 0 ? discount : 0;
+          const partNet = round2(part.amount - partDiscount);
+          const baseAmount = last ? round2(baseTotal.amount - baseSoFar.amount) : toBaseAmount(part.amount, payRate);
+          const baseNet = last ? round2(baseTotal.net - baseSoFar.net) : toBaseAmount(partNet, payRate);
+          baseSoFar.amount = round2(baseSoFar.amount + baseAmount);
+          baseSoFar.net = round2(baseSoFar.net + baseNet);
+          const row = await tx.rentPayment.create({
+            data: {
+              contractId,
+              installmentId: part.installmentId,
+              date: new Date(dto.date),
+              amount: part.amount,
+              discount: partDiscount,
+              netAmount: partNet,
+              method: dto.method,
+              // Records which money-holder took it — the bank account for a
+              // transfer, or the branch cash box for a cash receipt.
+              bankId: bank ? bank.id : undefined,
+              notes: dto.notes,
+              journalEntryId: journalEntry?.id,
+              currency: payCurrency,
+              exchangeRate: payRate,
+              baseAmount,
+              baseDiscount: k === 0 ? baseTotal.discount : 0,
+              baseNetAmount: baseNet,
+            } as unknown as Prisma.RentPaymentUncheckedCreateInput,
+          });
+          rows.push({ id: row.id, installmentId: part.installmentId, amount: part.amount });
+        }
+        const payment = rows[0];
 
         if (accrualPath && treatment) {
           // ① يُستحقّ ما يلزم — بعد كتابة الدفعة كي يقرأها المحرّك: نقطتُها المقدَّمة بقدرها
-          //    إن سبقت الاستحقاق، أو باقي القسط إن حلّ، وما فاض عنه بقدره (م٢٠/٢ · ق-٩٢٤).
-          const accrued = await accrueForPaymentWithinTx(
-            tx,
-            companyId,
-            accrualContract,
-            treatment,
-            { id: payment.id, date: new Date(dto.date), grossInContractCurrency, installmentId: installment?.id ?? null },
-            new Date(),
-          );
-          if (!accrued) throw new BadRequestException(MSG.rent_accrual_period_locked);
+          //    إن سبقت الاستحقاق، أو باقي القسط إن حلّ، وما فاض عنه بقدره (م٢٠/٢ · ق-٩٢٤). ولكلِّ جزءٍ قسطُه.
+          for (const row of rows) {
+            const accrued = await accrueForPaymentWithinTx(
+              tx,
+              companyId,
+              accrualContract,
+              treatment,
+              { id: row.id, date: new Date(dto.date), grossInContractCurrency: row.amount, installmentId: row.installmentId },
+              new Date(),
+            );
+            if (!accrued) throw new BadRequestException(MSG.rent_accrual_period_locked);
+          }
 
-          // ② الخصمُ تعديلُ مقابلٍ (ق-٩٢٧/٦): يُنقص الذمّةَ والصافيَ والضريبة — لا يُهمَل.
+          // ② الخصمُ تعديلُ مقابلٍ (ق-٩٢٧/٦): يُنقص الذمّةَ والصافيَ والضريبة — لا يُهمَل. وهو على قسط الجزء الأوّل.
           if (discount > 0) {
-            const fresh = installment
+            const fresh = payment.installmentId
               ? await tx.installment.findUniqueOrThrow({
-                  where: { id: installment.id },
+                  where: { id: payment.installmentId },
                   select: { id: true, baseAccruedGross: true, baseAccruedNet: true, baseAccruedTax: true, baseRecognized: true },
                 })
               : null;
@@ -665,7 +728,7 @@ export class ContractsService {
             unitId: contract.unitId,
           });
           journalEntry = settlement;
-          if (settlement) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: settlement.id } });
+          if (settlement) await tx.rentPayment.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { journalEntryId: settlement.id } });
         }
 
         // مرآةُ البنك/الصندوق — بعد أن يُعرف قيدُ القبض على المسارَين (رقمُه في الحركة).
@@ -687,26 +750,31 @@ export class ContractsService {
           });
         }
 
-        if (installment) {
+        // لكلِّ قسطٍ مسَّه القبضُ حالُه — والقسطُ المقصودُ أوّلُها ولو لم يبقَ له شيء (فحالُه كما كانت تُشتقّ).
+        const touched = [...new Set([installment?.id, ...rows.map((r) => r.installmentId)].filter((id): id is string => !!id))];
+        for (const installmentId of touched) {
+          const target = installmentId === installment?.id ? installment : await tx.installment.findUniqueOrThrow({ where: { id: installmentId } });
           // **الحالةُ تُشتقّ من المقبوض مقابل الإجماليّ** — كما الفاتورة (`SPEC 4.5` · `ق-١٠٤٠`): لا ختمٌ ثابت.
           // الإجماليُّ بالضريبة من الدالّة نفسِها التي يقيس بها الاستحقاق (`rentAmountsOf`)، والقديمُ غيرُ
           // المصنَّف بمبلغه؛ والمقبوضُ مجموعُ دفعات القسط (الصافي + الخصم — فالخصمُ يُنقص المستحقَّ في
           // المحرّك `ق-٤٦٩`). و`PARTIAL` تتقدّم على `LATE` — المدفوعُ يتقدّم على كلِّ شيء — والتأخّرُ يُقرأ
           // من التاريخ. ⛔ ولا تُقرأ الحالةُ في الاستحقاق ولا في الأعمار ولا في الإقرار — بنقطة الضريبة وحدَها.
-          const settledAgg = await tx.rentPayment.aggregate({ where: { installmentId: installment.id }, _sum: { netAmount: true, discount: true } });
+          const settledAgg = await tx.rentPayment.aggregate({ where: { installmentId }, _sum: { netAmount: true, discount: true } });
           const settled = round2(Number(settledAgg._sum.netAmount ?? 0) + Number(settledAgg._sum.discount ?? 0));
-          const gross = treatment ? rentAmountsOf(Number(installment.amount), treatment).gross : round2(Number(installment.amount));
+          const gross = treatment ? rentAmountsOf(Number(target.amount), treatment).gross : round2(Number(target.amount));
           const derived = deriveSettlementStatus(settled, gross);
-          const status = derived === 'PAID' ? 'PAID' : derived === 'PARTIAL' ? 'PARTIAL' : installment.status;
+          const status = derived === 'PAID' ? 'PAID' : derived === 'PARTIAL' ? 'PARTIAL' : target.status;
           await tx.installment.update({
-            where: { id: installment.id },
+            where: { id: installmentId },
             // العدّادُ يُزاد بما اعتُرف به **في قيد القبض القائم وحده** — وصفرٌ على مسار
             // الاستحقاق (الاعترافُ هناك من الاستحقاق لا من القبض) وحين تخطّى الترحيل (ق-٤٦٨).
-            data: { status, baseRecognized: { increment: earnedNow } },
+            data: { status, baseRecognized: { increment: installmentId === installment?.id ? earnedNow : 0 } },
           });
         }
 
-        return tx.rentPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { installment: true } });
+        const first = await tx.rentPayment.findUniqueOrThrow({ where: { id: payment.id }, include: { installment: true } });
+        // وأجزاءُ القبض حين وُزّع — بأقساطها ومبالغها، فالشاشةُ تقول أين ذهب المال.
+        return rows.length > 1 ? { ...first, spread: rows.map((r) => ({ paymentId: r.id, installmentId: r.installmentId, amount: money(r.amount) })) } : first;
       }),
     );
   }
