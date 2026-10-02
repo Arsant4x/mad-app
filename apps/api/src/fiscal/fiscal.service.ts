@@ -38,16 +38,17 @@ export class FiscalService {
    *
    * قبل أوّل قيدٍ لا شيءَ يقوم على الفترات، فيُعاد بناءُ التقويم من الشهر الجديد: تُحذف السنواتُ (كلُّها مفتوحة بلا قيد)
    * وتُنشأ السنةُ التي تحوي اليوم. وبعده `409` مسمّى: القيودُ قائمةٌ على فتراتها، وتغييرُ البداية يعيد توزيعَها.
+   *
+   * **على مستوى المنشأة بحقّها**: التقويمُ واحدٌ للمنشأة كلِّها، فقيدٌ في أيّ فرعٍ يقوم على فتراته ويمنع تغييرَ بدايتها.
    */
-  setStartMonth(companyId: string, month: number) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  async setStartMonth(companyId: string, month: number): Promise<void> {
+    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await lockFiscalCalendar(tx, companyId);
       if (await tx.journalEntry.findFirst({ where: { companyId }, select: { id: true } })) throw new ConflictException(MSG.fiscal_start_month_after_posting);
       await tx.company.update({ where: { id: companyId }, data: { fiscalStartMonth: month } });
       await tx.fiscalYear.deleteMany({ where: { companyId } });
       const range = fiscalYearContaining(dayStartOf(new Date()), month);
       await createFiscalYearWithinTx(tx, companyId, { name: fiscalYearName(range.start, month), ...range });
-      return tx.fiscalYear.findMany({ include: YEAR_INCLUDE, orderBy: { start: 'asc' } });
     });
   }
 
