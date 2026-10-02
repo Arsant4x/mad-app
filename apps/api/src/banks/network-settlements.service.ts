@@ -4,6 +4,7 @@ import { assertBoxInBranch, assertBranchAllowed, requestedBranchFilter, resolveB
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { money } from '../common/money/text';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postNetworkSettlementEntry, postNetworkSettlementVoidEntry } from '../journal/auto-posting.util';
@@ -219,8 +220,13 @@ export class NetworkSettlementsService {
         } as unknown as Prisma.NetworkSettlementUncheckedCreateInput,
         include: { bank: { select: { id: true, name: true } }, _count: { select: { receipts: true } } },
       });
-      // المطالبةُ بالمعرّف: السندُ الذي طالبت به تسويةٌ لا تراه أخرى.
-      await tx.payment.updateMany({ where: { id: { in: claimed.map((r) => r.id) }, networkSettlementId: null }, data: { networkSettlementId: created.id } });
+      // المطالبةُ بالمعرّف: السندُ الذي طالبت به تسويةٌ لا تراه أخرى. **والعددُ يُقرأ** (توجيه ٢٧٤ · نظائرُ البندين 18 و27):
+      // تسويتان متزامنتان كانتا تقرآن السندَ مفتوحاً معاً وترحّلان قيدَيهما، ومطالبةُ الثانية تعود صفراً بلا شكوى فيبقى قيدُها
+      // بلا سنداته. فالنقصُ يُرفض برسالة السند غير المفتوح نفسِها، والمعاملةُ كلُّها ترجع.
+      const { count } = await tx.payment.updateMany({ where: { id: { in: claimed.map((r) => r.id) }, networkSettlementId: null }, data: { networkSettlementId: created.id } });
+      if (count !== claimed.length) {
+        throw new ConflictException(formatMessage(MSG.network_settlement_receipt_not_open, { count: String(claimed.length - count) }));
+      }
       return { ...this.present({ ...created, _count: { receipts: claimed.length } }), entryNo: entry.no };
     });
   }
@@ -232,6 +238,8 @@ export class NetworkSettlementsService {
    */
   void(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // الصفُّ يُقفل قبل قراءة حاله: إلغاءان متزامنان كانا يقرآن «مرحَّلة» معاً، فيسقط الثاني على عكسٍ فريدٍ بردٍّ بلا اسم.
+      await lockDocumentRow(tx, 'network_settlements', id);
       const settlement = await tx.networkSettlement.findUnique({
         where: { id },
         include: { bank: { select: { id: true, name: true, accountId: true, currency: true } }, journalEntry: { select: { no: true, lines: { select: { id: true, accountId: true } } } } },

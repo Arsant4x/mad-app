@@ -142,8 +142,14 @@ interface LockedDocument {
  * لا على الإشعار، لأن إشعاراتٍ عدّة على أصلٍ واحد تتقاسم رصيدَه؛ والثانيةُ تنتظر هنا ثم تقرأ المجاميعَ **بعد**
  * التزام الأولى (`READ COMMITTED` يقرأ الملتزَم عند كلِّ عبارة)، فتُرفض مسمّاةً. وهو نمطُ القفل أدناه بعينه،
  * والجدولُ من اتحادٍ مغلق لا من الطلب.
+ *
+ * **ونظائرُه في الجزء الثاني** (توجيه ٢٧٤ · مسحُ نظائر البندين 18 و27): كلُّ فعلٍ يفحص حالَ مستندٍ ثم يكتب أثراً يقفل
+ * صفَّه **قبل** الفحص: اعتمادُ الشطب · إقفالُ المناوبة · إلغاءُ التسوية والإيداع والعقد؛ والإيداعُ يقفل **الدرج** قبل
+ * أن يقيس رصيدَه. فالثاني ينتظر هنا ثم يقرأ ما التزمه الأوّل ويُرفض برسالته.
  */
-export async function lockDocumentRow(tx: Prisma.TransactionClient, table: 'invoices' | 'purchases', id: string): Promise<void> {
+export type LockableDocument = 'invoices' | 'purchases' | 'inventory_write_offs' | 'pos_shifts' | 'network_settlements' | 'cash_deposits' | 'contracts' | 'cash_drawers';
+
+export async function lockDocumentRow(tx: Prisma.TransactionClient, table: LockableDocument, id: string): Promise<void> {
   const t = Prisma.raw(`"${table}"`);
   await tx.$queryRaw`SELECT id FROM ${t} WHERE id = ${id} FOR UPDATE`;
 }

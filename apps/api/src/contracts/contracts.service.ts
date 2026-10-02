@@ -41,7 +41,7 @@ import { RenewContractDto } from './dto/renew-contract.dto';
 import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
-import { deriveSettlementStatus } from '../common/settlement/settlement.util';
+import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
 import { rentAmountsOf, rentTaxTreatment, type RentClassification, type RentVatInclusion } from '../journal/rent-tax-point.util';
 import { money } from '../common/money/text';
 import { FilesService } from '../files/files.service';
@@ -367,6 +367,9 @@ export class ContractsService {
       this.tenantPrisma.runInTenantContext(
         companyId,
         async (tx) => {
+        // الصفُّ يُقفل قبل قراءة حاله (توجيه ٢٧٤ · نظائرُ البندين 18 و27): إلغاءان متزامنان كانا يقرآن العقدَ قائماً معاً فيُرحَّل
+        // ما يتبعه مرّتين، وفيه ردُّ المقبوض نقداً. والثاني ينتظر هنا الآن ثم يقرأ «ملغى».
+        await lockDocumentRow(tx, 'contracts', id);
         const existing = await tx.contract.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException(MSG.contract_not_found);
         if (existing.status === 'CANCELLED') throw new ConflictException(MSG.contract_already_cancelled);
