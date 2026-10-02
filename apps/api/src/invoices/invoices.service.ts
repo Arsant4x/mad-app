@@ -57,7 +57,8 @@ import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceLineDto } from './dto/invoice-line.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
-import { formatMessage, MSG } from '../common/i18n/messages';
+import { formatMessage, MSG, type MessageKey } from '../common/i18n/messages';
+import { withoutCompanyFigures } from '../common/tenant/company-figures.util';
 import { unitCodeOf, unitCodesFor } from '../common/units/product-unit-codes.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { deadlineView } from './note-deadline.util';
@@ -236,7 +237,8 @@ export class InvoicesService {
       //    مكانها (`clearedCopy`) — من واجهة الوحدة لا من هنا.
       return mapList(result, (row) => {
         const inv = withClearedCopyState(row);
-        return {
+        // ⚖️ ذمّةُ العميل المحفوظةُ على فاتورة التجاوز رقمُ المنشأة كلِّها، فتسقط لمن لا يرى الفروعَ كلَّها (`ق-١٥٨١`)؛ والحدُّ يبقى.
+        return withoutCompanyFigures(allowedBranchIds, {
           ...inv,
           /** نوعُ المستند لدى الهيئة (كاملة/مبسّطة) من صفة المشتري ورقمِه (②A1) — تقرؤه الشاشةُ ولا تحسبه. */
           invoiceType: invoiceTypeFor(inv.customer, inv.lines),
@@ -254,7 +256,7 @@ export class InvoicesService {
             total: Number(inv.total),
             vatAmount: Number(inv.taxTotal),
           }),
-        };
+        }, ['creditOverrideExposure'] as const);
       });
     });
   }
@@ -501,7 +503,7 @@ export class InvoicesService {
   private async gateCreditLimit(
     tx: Prisma.TransactionClient,
     companyId: string,
-    args: { customerId: string; issueDate: Date; addingBase: number },
+    args: { customerId: string; issueDate: Date; addingBase: number; allowedBranchIds: string[] | 'all' },
     credit: CreditContext,
   ): Promise<{ by: string; at: Date; exposure: number; limit: number } | null> {
     // ⚠️ **`ق-٣٣٨`**: ما يُسدَّد في الطلب نفسه لا يُفحص — **وحدٌّ يمنع بيعاً
@@ -526,6 +528,11 @@ export class InvoicesService {
       adding: grouped(check.adding),
       after: grouped(check.after),
     };
+    // ⚖️ **والمقيَّدُ بفرعٍ لا يُقال له ذمّةُ العميل** (توجيه ٢٧٥ · `ق-١٥٨١`): القياسُ على المنشأة كلِّها كما هو، والرسالةُ تسمّي
+    //    حدَّ العميل وهذه الفاتورة بلا الذمّة وما تصير إليه — فتلك أرقامُ المنشأة كلِّها.
+    const branchReader = args.allowedBranchIds !== 'all';
+    const say = (whole: MessageKey, scoped: MessageKey) =>
+      branchReader ? formatMessage(scoped, { customer: numbers.customer, limit: numbers.limit, adding: numbers.adding }) : formatMessage(whole, numbers);
 
     // ⚖️ **المنعُ الصلب إعدادٌ يختاره التاجر** (`ق-٣٤٠`) — **ولا تجاوزَ معه
     //    لأحد ولو ملك `review`**، وهو معنى «صلب».
@@ -533,7 +540,7 @@ export class InvoicesService {
     if (company?.creditLimitHardBlock) {
       throw new ForbiddenException({
         statusCode: HttpStatus.FORBIDDEN,
-        message: formatMessage(MSG.credit_limit_hard_block, numbers),
+        message: say(MSG.credit_limit_hard_block, MSG.credit_limit_hard_block_branch_reader),
         code: CREDIT_CODE.hardBlock,
       });
     }
@@ -543,7 +550,7 @@ export class InvoicesService {
     if (!credit.overrideRequested) {
       throw new ConflictException({
         statusCode: HttpStatus.CONFLICT,
-        message: formatMessage(MSG.credit_limit_exceeded, numbers),
+        message: say(MSG.credit_limit_exceeded, MSG.credit_limit_exceeded_branch_reader),
         code: CREDIT_CODE.exceeded,
       });
     }
@@ -589,7 +596,7 @@ export class InvoicesService {
       const override = await this.gateCreditLimit(
         tx,
         companyId,
-        { customerId: dto.customerId, issueDate: new Date(dto.issueDate), addingBase: toBaseAmount(total, exchangeRate) },
+        { customerId: dto.customerId, issueDate: new Date(dto.issueDate), addingBase: toBaseAmount(total, exchangeRate), allowedBranchIds },
         credit,
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);

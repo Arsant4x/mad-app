@@ -89,6 +89,8 @@ export const MSG = {
   // customers / invoices
   credit_limit_exceeded: 'customers.credit_limit_exceeded',
   credit_limit_hard_block: 'customers.credit_limit_hard_block',
+  credit_limit_exceeded_branch_reader: 'customers.credit_limit_exceeded_branch_reader',
+  credit_limit_hard_block_branch_reader: 'customers.credit_limit_hard_block_branch_reader',
   credit_limit_override_forbidden: 'customers.credit_limit_override_forbidden',
   customer_not_found: 'customers.not_found',
   // buyer kind (ق-١٢٦١ أ — ②A1)
@@ -818,6 +820,15 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.credit_limit_hard_block]: {
     ar: 'حدّ ائتمان {customer} {limit} وعليه {exposure}، وهذه الفاتورة {adding} — فيصير {after}. والمنشأة تمنع التجاوز منعاً صلباً: حصِّل من العميل أو ارفع حدّه أو أطفئ المنع الصلب من إعدادات المنشأة',
     en: "{customer}'s credit limit is {limit} with {exposure} outstanding, and this invoice adds {adding} — reaching {after}. This company enforces a hard block: collect from the customer, raise their limit, or turn the hard block off in company settings",
+  },
+  // ⚖️ للمقيَّد بفرع (`ق-١٥٨١`): ذمّةُ العميل رقمُ المنشأة كلِّها فلا تُذكر، والحدُّ وهذه الفاتورة يُذكران.
+  [MSG.credit_limit_exceeded_branch_reader]: {
+    ar: 'هذه الفاتورة {adding} تتجاوز حدّ ائتمان {customer} ({limit}) بذمّته في المنشأة كلِّها. من يملك صلاحية الاعتماد يتجاوز الحدّ، ويُسجَّل تجاوزه على الفاتورة',
+    en: "This invoice of {adding} takes {customer} over their credit limit ({limit}) across the whole company. An authorised approver may override, and the override is recorded on the invoice",
+  },
+  [MSG.credit_limit_hard_block_branch_reader]: {
+    ar: 'هذه الفاتورة {adding} تتجاوز حدّ ائتمان {customer} ({limit}) بذمّته في المنشأة كلِّها، والمنشأة تمنع التجاوز منعاً صلباً',
+    en: "This invoice of {adding} takes {customer} over their credit limit ({limit}) across the whole company, and this company enforces a hard block",
   },
   [MSG.credit_limit_override_forbidden]: {
     ar: 'تجاوز حدّ الائتمان يملكه صاحب صلاحية الاعتماد وحده — اطلب من يملكها',
