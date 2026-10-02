@@ -1,4 +1,7 @@
+import { readFileSync } from 'fs';
+import { join, relative, sep } from 'path';
 import { decryptCredentials, encryptCredentials } from '../../integrations/credentials.crypto';
+import { sourceFiles, stripCommentsAndStrings } from '../source-scan.util';
 import { decryptBytes, decryptField, encryptBytes, encryptField } from './field-cipher.util';
 import { decryptSecret, encryptSecret } from './secret.util';
 
@@ -64,5 +67,20 @@ describe('وسمُ التحقّق يُفكّ بطوله الكامل وحدَه 
     const tagAt = 4 + 1 + stored[4] + 12;
     const cut = Buffer.concat([stored.subarray(0, tagAt + 4), stored.subarray(tagAt + 16)]);
     expect(() => decryptBytes(cut, 'contracts/a.pdf')).toThrow();
+  });
+
+  /**
+   * **والقاعدةُ بوّابةٌ لا تذكير** (القاعدة ٢٧): كلُّ فكٍّ في الخادم يمرّ بالمدخل الواحد `gcmDecipher` — فموضعٌ خامسٌ يُكتب
+   * بـ`createDecipheriv` مباشرةً يُسقط الحزمة. ويقرأ الشيفرةَ بلا تعليقاتها ونصوصها، ويُثبت أنه يرى: الملفاتُ المقروءةُ كثيرة،
+   * والمدخلُ الواحد نفسُه يحمل النداء.
+   */
+  it('⑤ لا `createDecipheriv` في الخادم إلا داخل المدخل الواحد', () => {
+    const SRC = join(__dirname, '..', '..');
+    const files = sourceFiles(SRC);
+    const calls = files
+      .filter((f) => /(?<![.\w])createDecipheriv\s*\(/.test(stripCommentsAndStrings(readFileSync(f, 'utf8'))))
+      .map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(files.length).toBeGreaterThan(100);
+    expect(calls).toEqual(['common/crypto/gcm.util.ts']);
   });
 });

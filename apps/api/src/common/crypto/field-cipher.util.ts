@@ -1,4 +1,5 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createHmac, randomBytes } from 'node:crypto';
+import { gcmDecipher } from './gcm.util';
 
 /**
  * ⚖️ **تشفيرُ الحقول الحسّاسة في التطبيق من أوّل حقل** (`ق-١٣٤٥` · الحزمة م①).
@@ -82,9 +83,9 @@ export function decryptField(stored: string, aad: string): string {
   }
   const key = keyring().keys.get(keyId);
   if (!key) throw new FieldCipherConfigError(`المفتاحُ «${keyId}» الذي شُفّرت به القيمةُ ليس في الحلقة — لا يُحذف مفتاحٌ ما دامت به قيمة`);
-  const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivB, 'base64url'));
+  // ⚖️ الوسمُ بطوله الكامل وحدَه (`ق-١٥٨٦`) — المدخلُ الواحد يرفض المقصوص.
+  const decipher = gcmDecipher(key, Buffer.from(ivB, 'base64url'), Buffer.from(tagB, 'base64url'));
   decipher.setAAD(Buffer.from(aad, 'utf8'));
-  decipher.setAuthTag(Buffer.from(tagB, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(dataB, 'base64url')), decipher.final()]).toString('utf8');
 }
 
@@ -129,9 +130,8 @@ export function decryptBytes(stored: Buffer, aad: string): Buffer {
   if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) throw new FieldCipherConfigError('غلافٌ مبتور');
   const key = keyring().keys.get(keyId);
   if (!key) throw new FieldCipherConfigError(`المفتاحُ «${keyId}» الذي غُلّف به الملفُّ ليس في الحلقة — لا يُحذف مفتاحٌ ما دام به ملفّ`);
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  const decipher = gcmDecipher(key, iv, tag);
   decipher.setAAD(Buffer.from(aad, 'utf8'));
-  decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(stored.subarray(at)), decipher.final()]);
 }
 
