@@ -4,6 +4,8 @@ import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amo
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { sumMoney } from '../common/money/allocation';
+import { round2, toHalalas } from '../common/money/rounding';
 import { assertPeriodOpen } from '../fiscal/period-lock.util';
 
 /** Account types whose balance increases with a debit (asset, expense);
@@ -196,11 +198,21 @@ export async function createJournalEntry(
   tx: Prisma.TransactionClient,
   input: CreateJournalEntryInput,
 ) {
-  const totalDebit = input.lines.reduce((sum, l) => sum + l.debit, 0);
-  const totalCredit = input.lines.reduce((sum, l) => sum + l.credit, 0);
-  if (totalDebit <= 0 || Math.abs(totalDebit - totalCredit) > 0.001) {
+  // 🔴 **التوازنُ بما يُخزَّن لا بما يُحسب** (توجيه ٢٧٤ · مراجعة 3.3 البند 2): السطرُ يُخزَّن بخانتين، وكان الفحصُ يقارن
+  // المجموعين الخامَين بسماحٍ `0.001` — فقيدٌ متوازنٌ قبل التدوير يُخزَّن غيرَ متوازن (`33.334+33.333+33.333` مقابل `100`
+  // يُخزَّن `99.99` مقابل `100.00`)، وفرقٌ دون السماح يصير فرقَ هللة (`0.005` مقابل `0.0045`). فكلُّ سطرٍ بالهللة بعد
+  // التدوير بسياسة المنصّة، والمجموعان يتساويان تماماً. وهنا لأن كلَّ ترحيلٍ يمرّ من هنا، يدويّاً كان أم آليّاً.
+  // والسطرُ يُدوَّر مرّةً هنا ثم يُفحص ويُخزَّن ويحرّك الرصيدَ بقيمته المدوَّرة نفسِها: فلا يُترك التدويرُ للقاعدة أو المشغِّل
+  // فيخالف تدويرُهما على نصف هللةٍ ما فُحص.
+  const lines = input.lines.map((l) => ({ ...l, debit: round2(l.debit), credit: round2(l.credit) }));
+  const debitHalalas = lines.reduce((sum, l) => sum + toHalalas(l.debit), 0);
+  const creditHalalas = lines.reduce((sum, l) => sum + toHalalas(l.credit), 0);
+  if (debitHalalas <= 0 || debitHalalas !== creditHalalas) {
     throw new BadRequestException(MSG.journal_entry_unbalanced);
   }
+  // ومجموعا القيد مجموعُ أسطره كما تُخزَّن، فلا يخالف رأسُ القيد أسطرَه بهللة.
+  const totalDebit = sumMoney(lines.map((l) => l.debit));
+  const totalCredit = sumMoney(lines.map((l) => l.credit));
 
   // Refuse anything dated inside a closed period. Placed here rather than in
   // each caller because this function is the one path every posting takes —
@@ -241,7 +253,7 @@ export async function createJournalEntry(
       baseTotalDebit: toBaseAmount(totalDebit, exchangeRate),
       baseTotalCredit: toBaseAmount(totalCredit, exchangeRate),
       lines: {
-        create: input.lines.map((l) => ({
+        create: lines.map((l) => ({
           companyId: input.companyId,
           accountId: l.accountId,
           debit: l.debit,
@@ -257,7 +269,7 @@ export async function createJournalEntry(
     include: { lines: { include: { account: true } } },
   });
 
-  await applyLinesToBalances(tx, input.lines, 1, accountTypes);
+  await applyLinesToBalances(tx, lines, 1, accountTypes);
   return entry;
 }
 
