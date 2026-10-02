@@ -128,6 +128,39 @@ describe('مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آ�
     expectNamed(refused.body);
   });
 
+  /**
+   * 🔴 **قبضُ الإيجار في صندوق فرعٍ لا يملكه الفاعل** (توجيه ٢٧٥ · ق-١٥٧٨/ب — نظيرٌ ثالث من مسح الكتلة ٥ في ٢٧٤).
+   *
+   * العقدُ بلا فرع، فـ`assertBoxInBranch` يقبل أيَّ صندوقٍ بحدّه المعلَن («المستندُ بلا فرعٍ خارجُ الحكم») — **وهذا صحيحٌ
+   * للمالك**. لكن موظّفاً مقيَّداً بالشمال كان يقبض في صندوق الجنوب فيحرّك رصيدَه: الصندوقُ صفٌّ يحمل فرعاً، والكتابةُ فيه
+   * كتابةٌ في فرعه (`assertBranchAllowed` — «writes are rejected outright»). فيُرفض `403`، ويبقى رصيدُ الصندوق كما هو.
+   */
+  it('[SPEC 2.6] ⑦ وموظّفُ الشمال لا يقبض إيجاراً في صندوق الجنوب — 403، ورصيدُه لا يتحرّك — وفي صندوق فرعه يمضي', async () => {
+    const property = (await asOwner(http().post('/properties')).send({ name: `عقار الصندوق ${suffix}`, ownership: 'owned' }).expect(201)).body;
+    const unit = (await asOwner(http().post('/units')).send({ propertyId: property.id, unitNo: `BOX-${suffix}`, type: 'سكني', rentMonthly: 1000 }).expect(201)).body;
+    const contract = (
+      await asOwner(http().post('/contracts'))
+        .send({ classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE', unitId: unit.id, customerId, value: 12000, cycle: 'monthly', start: '2025-01-01', end: '2025-12-31' })
+        .expect(201)
+    ).body;
+
+    const username = `north-rent-${suffix}`;
+    const template = (await asOwner(http().post('/templates')).send({ name: `عقود الشمال ${suffix}`, allowedScreens: ['dashboard', 'contracts'] }).expect(201)).body;
+    await asOwner(http().post('/company-users')).send({ name: 'محصّل الشمال', username, password: 'ScopePass123!', permissionTemplateId: template.id, branchIds: [northId] }).expect(201);
+    const token = ((await http().post('/auth/login').send({ username, password: 'ScopePass123!' }).expect(200)).body as { accessToken: string }).accessToken;
+    const asNorth = (r: request.Test) => r.set('Authorization', `Bearer ${token}`);
+    const balanceOf = async (id: string) => Number(((await asOwner(http().get('/banks')).expect(200)).body as { id: string; balance: string }[]).find((b) => b.id === id)?.balance ?? NaN);
+
+    const southBefore = await balanceOf(southBox);
+    expect(Number.isNaN(southBefore)).toBe(false);
+    await asNorth(http().post(`/contracts/${contract.id}/payments`)).send({ date: '2025-02-01', amount: 1000, method: 'CASH', bankId: southBox }).expect(403);
+    expect(await balanceOf(southBox)).toBeCloseTo(southBefore, 2);
+
+    const northBefore = await balanceOf(northBox);
+    await asNorth(http().post(`/contracts/${contract.id}/payments`)).send({ date: '2025-02-01', amount: 1000, method: 'CASH', bankId: northBox }).expect(201);
+    expect(await balanceOf(northBox)).toBeCloseTo(northBefore + 1000, 2);
+  });
+
   it('[SPEC 2.6] ⑥ وردُّ إشعارٍ دائنٍ في الشمال من صندوق الجنوب', async () => {
     const invoice = await invoiceIn(northId);
     const note = (await asOwner(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: `ردّ ${suffix}` }).expect(201)).body;
