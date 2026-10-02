@@ -5,6 +5,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { postCashDepositEntry, postCashDepositVoidEntry } from '../journal/auto-posting.util';
 import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME } from '../journal/pos-settlement.util';
@@ -76,8 +77,12 @@ export class CashDepositsService {
       if (amount <= 0) throw new BadRequestException(MSG.cash_deposit_amount_positive);
       const date = new Date(dto.date);
 
+      // الدرجُ يُقفل قبل قياس رصيده (توجيه ٢٧٤ · نظائرُ البندين 18 و27): إيداعان متزامنان كانا يقرآن الرصيدَ نفسَه فيتجاوزانه
+      // معاً، والثاني ينتظر هنا الآن ثم يقرأ ما التزمه الأوّل. ⚠️ وحدُّه معلَن: يحرس الإيداعَ من الإيداع، وما سواه ممّا يُنقص
+      // الدرجَ لا يقفله بعد.
+      await lockDocumentRow(tx, 'cash_drawers', drawer.id);
       // رصيدُ الدرج بالدفتر حتى تاريخ الإيداع — بالمحرّك نفسِه.
-      const drawerLedger = await readLedger(tx, { allowedBranchIds: 'all', accountId: drawer.accountId, to: date }, 'debit');
+      const drawerLedger =await readLedger(tx, { allowedBranchIds: 'all', accountId: drawer.accountId, to: date }, 'debit');
       const available = Number(drawerLedger.closing);
       if (available + 0.005 < amount) {
         throw new ConflictException(formatMessage(MSG.cash_deposit_exceeds_drawer, { drawer: drawer.name, available: money(available), amount: money(amount) }));
@@ -101,6 +106,8 @@ export class CashDepositsService {
    */
   void(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // الصفُّ يُقفل قبل قراءة حاله: إلغاءان متزامنان كانا يقرآن «في الطريق» معاً، فيسقط الثاني على عكسٍ فريدٍ بردٍّ بلا اسم.
+      await lockDocumentRow(tx, 'cash_deposits', id);
       const deposit = await tx.cashDeposit.findUnique({ where: { id }, include: { drawer: { select: { accountId: true, branchId: true } } } });
       if (!deposit) throw new NotFoundException(MSG.cash_deposit_not_found);
       if (deposit.branchId) assertBranchAllowed(allowedBranchIds, deposit.branchId);

@@ -3,6 +3,7 @@ import { PosCardVerification, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { moneyEquals } from '../common/money/allocation';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
@@ -299,6 +300,9 @@ export class PosService {
 
   closeShift(tenant: TenantContext, id: string, dto: CloseShiftDto) {
     return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      // الصفُّ يُقفل قبل قراءة حاله (توجيه ٢٧٤ · نظائرُ البندين 18 و27): إقفالان متزامنان كانا يقرآن «مفتوحة» معاً فيُرحَّل
+      // فرقُ الدرج مرّتين، والثاني ينتظر هنا الآن ثم يقرأ «مقفلة».
+      await lockDocumentRow(tx, 'pos_shifts', id);
       const shift = await tx.posShift.findUnique({ where: { id } });
       if (!shift) throw new NotFoundException(MSG.pos_shift_not_found);
       if (shift.openedById !== tenant.profileId) {

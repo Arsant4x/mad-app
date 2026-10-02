@@ -7,6 +7,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { SELF_REVIEW_ACTION, SELF_REVIEW_ENTITY } from '../common/self-review';
+import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { postWriteOffEntry } from '../journal/auto-posting.util';
@@ -299,6 +300,9 @@ export class WriteOffsService {
 
   /** واقعةٌ قائمةٌ في هذا الفرع وما تزال منتظرة — وإلا فالسبب معلَن. */
   private async pendingOrThrow(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string) {
+    // الصفُّ يُقفل قبل قراءة حاله (توجيه ٢٧٤ · نظائرُ البندين 18 و27): اعتمادان متزامنان كانا يقرآن «منتظرة» معاً فيُخرجان
+    // البضاعةَ مرّتين، والثاني ينتظر هنا الآن ثم يقرأ ما حسمه الأوّل. وكذلك اعتمادٌ ورفضٌ متزامنان.
+    await lockDocumentRow(tx, 'inventory_write_offs', id);
     const row = await tx.inventoryWriteOff.findUnique({ where: { id } });
     if (!row) throw new NotFoundException(MSG.writeoff_not_found);
     assertBranchAllowed(allowedBranchIds, row.branchId);
