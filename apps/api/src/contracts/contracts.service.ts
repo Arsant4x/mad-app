@@ -1105,6 +1105,10 @@ export class ContractsService {
         const claim = await tx.contractClaim.findUnique({ where: { id: claimId }, include: { contract: true } });
         if (!claim || claim.contractId !== contractId) throw new NotFoundException(MSG.claim_not_found);
         if (claim.status !== 'OPEN') throw new ConflictException(MSG.claim_already_settled);
+        // نظيرُ تسوية الوديعة (البند 27 · `ق-١٥٧٥`): تحصيلان، أو تحصيلٌ وإسقاطٌ متزامنان، كانا يرحّلان قيدين.
+        // فالمطالبةُ بشرط «مفتوحة» أوّلَ المعاملة، والثانيةُ تنتظر قفلَ الصفّ ثم تُردّ.
+        const claimed = await tx.contractClaim.updateMany({ where: { id: claimId, contractId, status: 'OPEN' }, data: { status } });
+        if (claimed.count === 0) throw new ConflictException(MSG.claim_already_settled);
 
         const posting = {
           unitId: claim.contract.unitId,
@@ -1206,6 +1210,11 @@ export class ContractsService {
         const deposit = await tx.contractDeposit.findUnique({ where: { id: depositId }, include: { contract: true } });
         if (!deposit || deposit.contractId !== contractId) throw new NotFoundException(MSG.deposit_not_found);
         if (deposit.status === 'SETTLED') throw new ConflictException(MSG.deposit_already_settled);
+        // ⚖️ **المطالبةُ أوّلَ المعاملة لا آخرَها** (البند 27 من مراجعة 3.3 · `ق-١٥٧٥`): الفحصُ أعلاه قراءةٌ عادية،
+        //    فتسويتان متزامنتان كانتا تقرآن «غيرَ مسوّاة» وترحّلان القيدَ مرّتين ثم يكتب الثاني فوق الأوّل، و`settlementEntryId`
+        //    الفريدُ لا يمنع لأن لكلٍّ قيدَه. فالحالُ تُكتب هنا بشرطها: الثانيةُ تنتظر قفلَ الصفّ ثم لا تجد ما تطالب به فتُردّ.
+        const claimed = await tx.contractDeposit.updateMany({ where: { id: depositId, contractId, status: { not: 'SETTLED' } }, data: { status: 'SETTLED' } });
+        if (claimed.count === 0) throw new ConflictException(MSG.deposit_already_settled);
 
         const held = Number(deposit.amount);
         // Rounded at every accumulation: two 2-decimal amounts can sum to a

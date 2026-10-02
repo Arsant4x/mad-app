@@ -13,6 +13,7 @@ import {
   baseSettledOf,
   deriveSettlementStatus,
   lockAndAssertAllocationsFit,
+  lockDocumentRow,
   SETTLEMENT_EPS as EPS,
   SettlementTarget,
   withAllocatedTotals,
@@ -606,6 +607,9 @@ export class PaymentsService {
         // الردُّ مستندٌ في فرع الإشعار — لا يخرج من صندوق فرعٍ آخر (`ق-١٤٣٧`).
         await assertBoxInBranch(tx, note.branchId, bank);
 
+        // ردّان متزامنان على أصلٍ واحد كانا يقرآن «القابلَ للردّ» نفسَه فيمرّان معاً (البند 18): القفلُ على
+        // الفاتورة الأصلية قبل الحساب، فالثاني ينتظر ثم يقرأ بعد الأوّل (`ق-١٥٧٥`).
+        await lockDocumentRow(tx, 'invoices', note.relatedInvoice.id);
         const refundable = await this.refundableOf(tx, note.relatedInvoice);
         if (refundable <= EPS) throw new BadRequestException(MSG.refund_nothing_refundable);
         const amount = round2(dto.amount ?? refundable);
