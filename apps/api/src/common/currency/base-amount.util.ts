@@ -35,8 +35,8 @@ export interface CurrencyInput {
 }
 
 /**
- * أهي عملةُ أساس المنشأة؟ — **بلا اعتبارٍ لحالة الأحرف**: الرمزُ ثلاثيٌّ لا يُطبَّع في الـDTO، و`sar` و`SAR` رمزٌ واحد؛
- * فمقارنةٌ حرفيةٌ كانت سترفض مستنداً بعملة المنشأة نفسِها لأنه كُتب بأحرفٍ صغيرة.
+ * أهي عملةُ أساس المنشأة؟ — **بلا اعتبارٍ لحالة الأحرف**: `sar` و`SAR` رمزٌ واحد؛ فمقارنةٌ حرفيةٌ كانت سترفض مستنداً بعملة
+ * المنشأة نفسِها لأنه كُتب بأحرفٍ صغيرة. والـDTO يوحّد الرمزَ اليوم (`ق-١٥٨٥`)، وتبقى المقارنةُ بلا حالةٍ لما خُزّن قبله.
  */
 export function isBaseCurrency(currency: string, baseCurrency: string): boolean {
   return currency.trim().toUpperCase() === baseCurrency.trim().toUpperCase();
@@ -54,7 +54,8 @@ export function isBaseCurrency(currency: string, baseCurrency: string): boolean 
  * المنشأة بسعر `3.75` يُخزَّن أساسُها ثلاثةَ أضعافٍ ونصفاً ويُرحَّل به الدفتر. فيُرفض بالرسالة التي يرفض بها الردُّ سعراً لإشعارٍ
  * بعملة الأساس (`exchange_rate_same_currency`)، وقبل أيّ كتابة. والقائمُ صفرٌ مقيساً، فالرفضُ لا يمسّ صفّاً. */
 export function resolveCurrency(input: CurrencyInput | undefined, baseCurrency: string): { currency: string; exchangeRate: number } {
-  const currency = input?.currency?.trim() || baseCurrency;
+  // ⚖️ `ق-١٥٨٥`: الرمزُ موحَّدٌ بأحرفٍ كبيرة (الـDTO يوحّده، وهنا لمن يصل من غيره).
+  const currency = input?.currency?.trim().toUpperCase() || baseCurrency;
   const rate = input?.exchangeRate ?? null;
   if (rate !== null) {
     if (rate !== DEFAULT_EXCHANGE_RATE && isBaseCurrency(currency, baseCurrency)) throw new BadRequestException(MSG.exchange_rate_same_currency);
@@ -84,7 +85,7 @@ export async function resolveCurrencyWithin(
   companyId: string,
   input: CurrencyInput | undefined,
 ): Promise<{ currency: string; exchangeRate: number }> {
-  const explicit = input?.currency?.trim();
+  const explicit = input?.currency?.trim().toUpperCase();
   const rate = input?.exchangeRate ?? null;
   // السعرُ ١ صحيحٌ أيّاً كانت العملة، فلا قراءةَ زائدة؛ وما سواه يُسأل عن عملة الأساس (البند 1: لا سعرَ حرّاً لها).
   if (explicit && rate === DEFAULT_EXCHANGE_RATE) return { currency: explicit, exchangeRate: rate };
@@ -105,9 +106,9 @@ export async function resolveFollowingCurrency(
   input: CurrencyInput | undefined,
   followed: { currency: string; exchangeRate: number },
 ): Promise<{ currency: string; exchangeRate: number }> {
-  const currency = input?.currency?.trim() || followed.currency;
+  // ⚖️ `ق-١٥٨٥`: الرمزُ موحَّدٌ بأحرفٍ كبيرة (كان يُخزَّن كما أُرسل مشذَّباً، وحُكم فيه).
+  const currency = input?.currency?.trim().toUpperCase() || followed.currency;
   const rate = input?.exchangeRate ?? null;
-  // الرمزُ كما أُرسل مشذَّباً لا مطبَّعاً، كما كان يُخزَّن (`rent-cash-fx-difference` يحرسه)؛ وتطبيعُه قرارٌ منفصل.
   if (rate === null && isBaseCurrency(currency, followed.currency)) return { currency, exchangeRate: followed.exchangeRate };
   return resolveCurrencyWithin(tx, companyId, { currency, ...(rate !== null ? { exchangeRate: rate } : {}) });
 }

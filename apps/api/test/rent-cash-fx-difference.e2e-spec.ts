@@ -191,7 +191,10 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
         .send({ kind: 'UTILITIES', amount: 50, description: 'فاتورة كهرباء', issuedAt: today, currency: lower })
         .expect(201)
     ).body as ContractBody;
-    const lowerClaim = withLower.claims.find((c) => c.currency === lower)!;
+    // ⚖️ والرمزُ يُخزَّن موحَّداً بأحرفٍ كبيرة (`ق-١٥٨٥`، بحكم صاحب المشروع) — كان يُخزَّن كما أُرسل، وهذا التوكيدُ كان يحرس ذلك.
+    expect(withLower.claims.some((c) => c.currency === lower)).toBe(false);
+    const lowerClaim = withLower.claims.find((c) => c.currency === baseCurrency && Number(c.baseAmount) === 50)!;
+    expect(lowerClaim).toBeDefined();
     // سعرُ العقد (عملة الأساس) 1 يرثه `createClaim`: 50 × 1 = 50.00.
     expect(Number(lowerClaim.baseAmount)).toBe(50);
     const paidLower = (await auth(http().post(`/contracts/${contract.id}/claims/${lowerClaim.id}/pay`)).send({ paidAt: today }).expect(201))
