@@ -82,6 +82,9 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     const login = await request(app.getHttpServer()).post('/auth/login').send({ username: 'demo-company-a', password: 'DemoPass123!' });
     token = login.body.accessToken;
     companyId = login.body.user.companyId;
+    // ⚖️ «الشخصان» مفعَّلٌ افتراضاً (`ق-١٥٨٣`)، وصاحبُ المنشأة يعتمد هنا ما سجّله — فيطفئه كما يطفئه تاجرٌ يعمل وحده.
+    // والافتراضُ نفسُه يُقاس على منشأةٍ جديدة في `writeoff-two-persons-default.e2e-spec.ts`.
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
 
     const suffix = Date.now();
     warehouseId = (await auth(request(app.getHttpServer()).post('/warehouses')).send({ name: `مستودع تلف ${suffix}` }).expect(201)).body.id;
@@ -207,9 +210,9 @@ describe('§30.5 شطب التلف — واقعةٌ تُعتمد وقيدٌ بل
     expect(`${entry!.action} · ${entry!.entity}`).toBe('self-review · inventory-write-offs');
   });
 
-  it('🔴 وإعداد «يُشترط شخصان» يمنع الاعتماد الذاتي حين يُفعَّل — وهو مطفأٌ افتراضياً', async () => {
+  it('🔴 وإعداد «يُشترط شخصان» يمنع الاعتماد الذاتي حين يُفعَّل — ويُطفأ لمن يعمل وحده', async () => {
     const profile = await auth(request(app.getHttpServer()).get('/company-profile')).expect(200);
-    expect(profile.body.writeOffRequiresTwoPersons).toBe(false); // الافتراضيّ معلَن، لا مفترَض
+    expect(profile.body.writeOffRequiresTwoPersons).toBe(false); // أطفأه `beforeAll` — والافتراضُ (مفعَّل) يُقاس في ملفّه
 
     /**
      * ⚠️ كان هنا التفافٌ يُعيد `legalName` في كل طلب — لأن المسار كان يفرضه

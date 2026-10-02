@@ -58,6 +58,8 @@ describe('حارسُ المطابقة: رصيدُ 1300 ⇄ قيمةُ الطبق
     const get = (path: string) => auth(request(app.getHttpServer()).get(path));
     const post = (path: string) => auth(request(app.getHttpServer()).post(path));
     const del = (path: string) => auth(request(app.getHttpServer()).delete(path));
+    // صاحبُ المنشأة وحدَه يسجّل الشطبَ ويعتمده هنا، فيطفئ «الشخصين» كما يطفئه تاجرٌ يعمل وحده (`ق-١٥٨٣`).
+    await auth(request(app.getHttpServer()).patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
     const suffix = `${Date.now()}`;
     const supplierId = (await post('/suppliers').send({ name: `مورّد مطابقة ${suffix}` }).expect(201)).body.id as string;
     const carrierId = (await post('/suppliers').send({ name: `ناقل مطابقة ${suffix}` }).expect(201)).body.id as string;

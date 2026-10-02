@@ -68,6 +68,8 @@ describe('㉙ حذفُ الحركة ⟵ عكسٌ بحركةٍ مقابلة — �
     company = await registerIsolatedCompany(app, 'movement-reversal');
     token = company.token;
     companyId = company.companyId;
+    // صاحبُ المنشأة وحدَه يسجّل الشطبَ ويعتمده هنا، فيطفئ «الشخصين» كما يطفئه تاجرٌ يعمل وحده (`ق-١٥٨٣`).
+    await auth(http().patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
     whA = (await auth(http().post('/warehouses')).send({ name: `مستودع أ ${suffix}` }).expect(201)).body.id;
     whB = (await auth(http().post('/warehouses')).send({ name: `مستودع ب ${suffix}` }).expect(201)).body.id;
   }, 120000);
