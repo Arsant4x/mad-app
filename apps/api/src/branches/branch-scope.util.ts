@@ -35,6 +35,25 @@ export function ownBranchesFilter(allowedBranchIds: string[] | 'all'): { branchI
 }
 
 /**
+ * **المستودعاتُ التي يراها القارئ** (توجيه ٢٧٥ · `ق-١٥٨١`): المستودعُ بلا عمود فرع، وفرعُه الفرعُ الذي يشير إليه
+ * (`Branch.warehouseId`). فيرى المقيَّدُ مستودعاتِ فروعه والمستودعَ الذي لا يشير إليه فرعٌ (مستودعُ المنشأة كلِّها)، كحكم
+ * `branchFilter` على ما بلا فرع.
+ */
+export function warehouseFilter(allowedBranchIds: string[] | 'all'): Prisma.WarehouseWhereInput {
+  if (allowedBranchIds === 'all') return {};
+  return { OR: [{ branches: { some: { id: { in: allowedBranchIds } } } }, { branches: { none: {} } }] };
+}
+
+/**
+ * **مستندُ فرعٍ آخر في تخصيص سندٍ يراه القارئ** (`ق-١٥٨١`): يبقى مبلغُ التخصيص (من السند نفسِه) ومعرّفُ المستند، ويسقط رقمُه
+ * ومبلغُه وعملتُه وفرعُه. ومستندُ فرعه أو المنشأة كلِّها يبقى كما هو.
+ */
+export function maskForeignDocument<T extends { id: string; branchId: string | null }>(allowedBranchIds: string[] | 'all', doc: T): T | { id: string } {
+  if (allowedBranchIds === 'all' || doc.branchId === null || allowedBranchIds.includes(doc.branchId)) return doc;
+  return { id: doc.id };
+}
+
+/**
  * **فرعٌ يطلبه التقرير من الاستعلام** — `?branchId=` — **يُقاس على فروع القارئ
  * قبل أن يصير مرشِّحاً** (`ق-٥١٧`).
  *

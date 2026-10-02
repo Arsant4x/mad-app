@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
-import { resolveBranchId } from '../branches/branch-scope.util';
+import { resolveBranchId, warehouseFilter } from '../branches/branch-scope.util';
 import { resolveReceiptBatch, toDateOnly } from '../common/batches/stock-batch.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
@@ -126,7 +126,8 @@ export class StockOpeningsService {
             await this.assertNoMovementBeforeOpening(tx, row.id, openingDate);
           }
           if (!warehouses.has(line.warehouseId)) {
-            const wh = await tx.warehouse.findUnique({ where: { id: line.warehouseId }, select: { id: true } });
+            // ⚖️ ومستودعٌ يراه المُعلِن (`ق-١٥٨١`): تقريرُ الافتتاح مرشَّحٌ بمستودعات فروعه، فإعلانُه في مستودع فرعٍ آخر يُردّ كالغائب.
+            const wh = await tx.warehouse.findFirst({ where: { id: line.warehouseId, ...warehouseFilter(allowedBranchIds) }, select: { id: true } });
             if (!wh) throw new NotFoundException(MSG.warehouse_not_found);
             warehouses.add(wh.id);
           }
@@ -232,14 +233,22 @@ export class StockOpeningsService {
   /**
    * تقريرُ الافتتاح: الإعلاناتُ بسطورها (مختومةً، وكلُّ سطرٍ بلا سندٍ مُعلَنٌ كذلك) ومجموعُها — **وطبقاتُ التسوية
    * بمتبقٍّ تُعدّ عدّاً مسمّىً خارج المجموع ولا تُحوَّل** (`ق-١١٧٨`).
+   *
+   * ⚖️ **بمستودعات القارئ** (توجيه ٢٧٥ · `ق-١٥٨١`): «القوائمُ تُرشَّح بفروع القارئ»، والسطرُ فرعُه فرعُ مستودعه (`warehouseFilter`).
+   * فيرى المقيَّدُ سطورَ مستودعات فروعه والمستودعِ الذي لا يشير إليه فرع، والمجموعُ مجموعُها، وطبقاتُ التسوية فيها وحدَها.
    */
-  list(companyId: string) {
+  list(companyId: string, allowedBranchIds: string[] | 'all') {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const openings = await tx.stockOpening.findMany({ include: LINES_INCLUDE, orderBy: [{ openingDate: 'asc' }, { createdAt: 'asc' }] });
+      const visible = await this.visibleWarehouseIds(tx, allowedBranchIds);
+      const inVisible = visible ? { warehouseId: { in: visible } } : {};
+      const openings = await tx.stockOpening.findMany({
+        include: { lines: { where: inVisible, orderBy: { createdAt: 'asc' } } },
+        orderBy: [{ openingDate: 'asc' }, { createdAt: 'asc' }],
+      });
       const names = await this.namesFor(tx, openings.flatMap((o) => o.lines));
       const items = openings.map((o) => this.present(o, names));
       const activeLines = items.flatMap((o) => o.lines.filter((l) => !l.voidedAt));
-      const legacyAdjustment = await tx.inventoryLayer.aggregate({ where: { sourceType: 'ADJUSTMENT', qtyRemaining: { gt: 0 } }, _count: { _all: true }, _sum: { qtyRemaining: true } });
+      const legacyAdjustment = await tx.inventoryLayer.aggregate({ where: { sourceType: 'ADJUSTMENT', qtyRemaining: { gt: 0 }, ...inVisible }, _count: { _all: true }, _sum: { qtyRemaining: true } });
       return {
         openingDate: openings[0]?.openingDate.toISOString().slice(0, 10) ?? null,
         items,
@@ -258,8 +267,14 @@ export class StockOpeningsService {
     });
   }
 
-  get(companyId: string, id: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => this.readOne(tx, id));
+  get(companyId: string, allowedBranchIds: string[] | 'all', id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => this.readOne(tx, id, {}, await this.visibleWarehouseIds(tx, allowedBranchIds)));
+  }
+
+  /** مستودعاتُ القارئ (`warehouseFilter`) — أو `null` لمن يرى الفروعَ كلَّها، فلا يُضيَّق شيء. */
+  private async visibleWarehouseIds(tx: Tx, allowedBranchIds: string[] | 'all'): Promise<string[] | null> {
+    if (allowedBranchIds === 'all') return null;
+    return (await tx.warehouse.findMany({ where: warehouseFilter(allowedBranchIds), select: { id: true } })).map((w) => w.id);
   }
 
   /**
@@ -270,7 +285,9 @@ export class StockOpeningsService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const opening = await tx.stockOpening.findUnique({ where: { id: openingId }, select: { id: true, no: true } });
       if (!opening) throw new NotFoundException(MSG.stock_opening_not_found);
-      const line = await tx.stockOpeningLine.findFirst({ where: { id: lineId, openingId } });
+      // سطرٌ في مستودعٍ لا يراه القارئ غيرُ موجودٍ له (`ق-١٥٨١`)، كما في التقرير.
+      const visible = await this.visibleWarehouseIds(tx, allowedBranchIds);
+      const line = await tx.stockOpeningLine.findFirst({ where: { id: lineId, openingId, ...(visible ? { warehouseId: { in: visible } } : {}) } });
       if (!line) throw new NotFoundException(MSG.stock_opening_line_not_found);
       if (line.voidedAt) throw new ConflictException(MSG.stock_opening_line_voided);
 
@@ -305,8 +322,11 @@ export class StockOpeningsService {
     });
   }
 
-  private async readOne(tx: Tx, id: string, extra: Record<string, unknown> = {}) {
-    const opening = await tx.stockOpening.findUnique({ where: { id }, include: LINES_INCLUDE });
+  private async readOne(tx: Tx, id: string, extra: Record<string, unknown> = {}, visibleWarehouses: string[] | null = null) {
+    const opening = await tx.stockOpening.findUnique({
+      where: { id },
+      include: { lines: { where: visibleWarehouses ? { warehouseId: { in: visibleWarehouses } } : {}, orderBy: { createdAt: 'asc' } } },
+    });
     if (!opening) throw new NotFoundException(MSG.stock_opening_not_found);
     const names = await this.namesFor(tx, opening.lines);
     return { ...this.present(opening, names), ...extra };

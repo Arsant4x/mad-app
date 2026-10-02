@@ -32,7 +32,7 @@ export class PaymentsController {
   @Get('open-invoices/:customerId')
   @RequiresAction('view')
   openInvoices(@CurrentTenant() tenant: TenantContext, @Param('customerId') customerId: string) {
-    return this.paymentsService.openInvoices(tenant.companyId, customerId);
+    return this.paymentsService.openInvoices(tenant.companyId, tenant.allowedBranchIds, customerId);
   }
 
   @Get(':id')

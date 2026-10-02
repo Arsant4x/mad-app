@@ -16,7 +16,7 @@ jest.setTimeout(240000);
  *
  * مسحُ توجيه ٢٧٤ (الكتلة ٥ج) وجد قوائمَ تُعرض لموظّفٍ مقيَّدٍ بفرعٍ بصفوف الفروع كلِّها، معلَنةً «على مستوى المنشأة بحقّها»:
  * فواتيرُ العميل المفتوحة ومشترياتُ المورّد المفتوحة ودفعاتُه المقدَّمة (يوزّع منها سندَه) · ورقمُ المستند ومبلغُه في تخصيص سندٍ
- * من فرعه على مستندِ فرعٍ آخر · والمستودعاتُ · وتقريرُ الأرصدة الافتتاحية · ووقائعُ انقطاع الكاشير.
+ * من فرعه على مستندِ فرعٍ آخر · وتقريرُ الأرصدة الافتتاحية · ووقائعُ انقطاع الكاشير. (وقائمةُ المستودعات معروضةٌ لا مبنيّة: ④.)
  *
  * والحكمُ حكمُ القائمة في المشروع (`branchFilter`): صفُّ فرعه وصفُّ المنشأة كلِّها (بلا فرع) يُريان، وصفُّ الفرع الآخر لا.
  * والمستودعُ فرعُه الفرعُ الذي يشير إليه (`Branch.warehouseId`)، والذي لا يشير إليه فرعٌ مستودعُ المنشأة كلِّها. والوقعةُ
@@ -38,7 +38,6 @@ describe('القوائمُ تُرشَّح بفروع القارئ (e2e)', () => 
   let branchB: string;
   let warehouseA: string;
   let warehouseB: string;
-  let warehouseCompany: string;
   let customerId: string;
   let supplierId: string;
   let productId: string;
@@ -62,7 +61,6 @@ describe('القوائمُ تُرشَّح بفروع القارئ (e2e)', () => 
     const warehouse = async (name: string): Promise<string> => (await owner(http().post('/warehouses')).send({ name: `${name} ${suffix}` }).expect(201)).body.id;
     warehouseA = await warehouse('مستودع أ');
     warehouseB = await warehouse('مستودع ب');
-    warehouseCompany = await warehouse('مستودع المنشأة');
     branchA = (await owner(http().post('/branches')).send({ name: `فرع أ ${suffix}`, type: 'فرع', warehouseId: warehouseA }).expect(201)).body.id;
     branchB = (await owner(http().post('/branches')).send({ name: `فرع ب ${suffix}`, type: 'فرع', warehouseId: warehouseB }).expect(201)).body.id;
 
@@ -182,16 +180,17 @@ describe('القوائمُ تُرشَّح بفروع القارئ (e2e)', () => 
     const docOf = (a: Allocation) => a.invoice ?? a.purchase;
     const shape = (allocs: Allocation[], otherId: string) => {
       const other = allocs.find((a) => docOf(a)?.id === otherId);
-      return { amount: other?.amount, no: other ? 'no' in docOf(other)! : null, total: other ? 'total' in docOf(other)! : null };
+      // مبلغُ التخصيص يصل `Decimal` بلا خانتين ("20")، فيُقارَن رقماً.
+      return { amount: other ? Number(other.amount) : null, no: other ? 'no' in docOf(other)! : null, total: other ? 'total' in docOf(other)! : null };
     };
     expect({
       payment: { ...shape(payment.allocations, ids.invoiceB), allocatedTotal: payment.allocatedTotal },
       supplierPayment: { ...shape(supplierPayment.allocations, ids.purchaseB), allocatedTotal: supplierPayment.allocatedTotal },
       owner: shape(ownerPayment.allocations, ids.invoiceB),
     }).toEqual({
-      payment: { amount: '20.00', no: false, total: false, allocatedTotal: '30.00' },
-      supplierPayment: { amount: '10.00', no: false, total: false, allocatedTotal: '15.00' },
-      owner: { amount: '20.00', no: true, total: true },
+      payment: { amount: 20, no: false, total: false, allocatedTotal: '30.00' },
+      supplierPayment: { amount: 10, no: false, total: false, allocatedTotal: '15.00' },
+      owner: { amount: 20, no: true, total: true },
     });
   });
 
@@ -203,21 +202,18 @@ describe('القوائمُ تُرشَّح بفروع القارئ (e2e)', () => 
     expect({ other: other.status, own: own.status }).toEqual({ other: 404, own: 201 });
   });
 
-  it('[SPEC 2.7] 🔴 ④ المستودعاتُ والأرصدةُ الافتتاحية: مستودعُ فرعه ومستودعُ المنشأة يُريان، ومستودعُ الفرع الآخر وسطرُه لا', async () => {
-    const warehousesMine = idsOf((await restricted(http().get('/warehouses')).expect(200)).body);
-    const warehousesAll = idsOf((await owner(http().get('/warehouses')).expect(200)).body);
+  // ⚠️ **وقائمةُ المستودعات خارجُ هذا الطلب، معروضةٌ على صاحب المشروع**: منها تختار حركةُ التحويل مستودعَ الوجهة، فترشيحُها
+  // يمنع المقيَّدَ تحويلاً إلى فرعٍ آخر (والنقلُ بين الفروع مدعومٌ، `CLAUDE.md §6.8`) — قرارُ سلوكٍ لا خطأ (القاعدة ٣٧). ومستودعا
+  // الفرعين يبقيان هنا لتمييز سطرَي الافتتاح.
+  it('[SPEC 2.7] 🔴 ④ تقريرُ الأرصدة الافتتاحية: سطرُ مستودع فرعه يُرى ومجموعُه مجموعُه، وسطرُ مستودع الفرع الآخر لا', async () => {
     type Report = { items: { lines: { warehouseId: string }[] }[]; totals: { lines: number; baseAmount: number } };
     const openingMine = (await restricted(http().get('/inventory/opening')).expect(200)).body as Report;
     const openingAll = (await owner(http().get('/inventory/opening')).expect(200)).body as Report;
     const lineWarehouses = (r: Report) => r.items.flatMap((i) => i.lines.map((l) => l.warehouseId));
     expect({
-      warehousesMine: { a: warehousesMine.includes(warehouseA), company: warehousesMine.includes(warehouseCompany), b: warehousesMine.includes(warehouseB) },
-      warehousesAll: { b: warehousesAll.includes(warehouseB) },
       openingMine: { a: lineWarehouses(openingMine).includes(warehouseA), b: lineWarehouses(openingMine).includes(warehouseB), totals: openingMine.totals.lines, amount: openingMine.totals.baseAmount },
       openingAll: { b: lineWarehouses(openingAll).includes(warehouseB), totals: openingAll.totals.lines, amount: openingAll.totals.baseAmount },
     }).toEqual({
-      warehousesMine: { a: true, company: true, b: false },
-      warehousesAll: { b: true },
       openingMine: { a: true, b: false, totals: 1, amount: 3 },
       openingAll: { b: true, totals: 2, amount: 10 },
     });

@@ -40,13 +40,13 @@ export class InventoryController {
   @Get('opening')
   @RequiresAction('view')
   listOpenings(@CurrentTenant() tenant: TenantContext) {
-    return this.stockOpenings.list(tenant.companyId);
+    return this.stockOpenings.list(tenant.companyId, tenant.allowedBranchIds);
   }
 
   @Get('opening/:id')
   @RequiresAction('view')
   getOpening(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.stockOpenings.get(tenant.companyId, id);
+    return this.stockOpenings.get(tenant.companyId, tenant.allowedBranchIds, id);
   }
 
   /** الاسمُ يُمرَّر لأن الإعلانَ **يُختم باسم مُعلِنه** وقتَ الفعل لا يُحلّ لاحقاً (كما سجلّ التدقيق). */

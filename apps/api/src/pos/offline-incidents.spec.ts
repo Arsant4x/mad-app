@@ -30,7 +30,8 @@ describe('(ج) وقائعُ الانقطاع — الحدُّ إعدادٌ وا�
   it('🔴 النافذة من زمن الرنّ — تقاطعٌ على [الرنّ − الحدّ، الرنّ + الحدّ] لا «آخر واقعة»', () => {
     // نطاق الاستنتاج وحده — فالتقرير يرتّب تنازلياً وذلك مشروع.
     const from = service.indexOf('private async recordOfflineIncident(');
-    const to = service.indexOf('listIncidents(companyId: string)');
+    // نهايةُ النطاق رأسُ التقرير — وصار يأخذ فروعَ القارئ (توجيه ٢٧٥ · ق-١٥٨١).
+    const to = service.indexOf('listIncidents(companyId: string, allowedBranchIds');
     expect(from).toBeGreaterThan(-1);
     expect(to).toBeGreaterThan(from);
     const inference = service.slice(from, to);

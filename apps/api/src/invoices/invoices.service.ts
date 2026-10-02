@@ -593,6 +593,11 @@ export class InvoicesService {
         credit,
       );
       const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+      // ⚖️ الدفعةُ المقدَّمة المطبَّقة يراها القارئ (`ق-١٥٨١`): قائمتُها مرشَّحةٌ بفروعه، فمعرّفُ دفعةِ فرعٍ آخر يُردّ كالغائب.
+      if (allowedBranchIds !== 'all' && dto.prepaymentInvoiceIds?.length) {
+        const ids = [...new Set(dto.prepaymentInvoiceIds)];
+        if ((await tx.invoice.count({ where: { id: { in: ids }, ...branchFilter(allowedBranchIds) } })) !== ids.length) throw new NotFoundException(MSG.invoice_not_found);
+      }
       // ⚖️ (`ق-١٤٦٦` · `ق-١٤٩٠`) وكلُّ ما يُرفض بعد الترقيم يُفحص قبله: حساباتُ القيد (و`5100`/`1300` حين يُخصم من الرفّ)
       // والفترةُ والدفعاتُ المقدَّمة المسمّاة — فالرفضُ برسالةٍ لا يحرق رقماً من سلسلة الفاتورة. والمقروءُ هنا هو ما يقرؤه
       // التنفيذُ بعينه، وفحوصُ التنفيذ باقيةٌ طبقةً ثانية.
@@ -1330,11 +1335,14 @@ export class InvoicesService {
    *
    * **على مستوى المنشأة بحقّها**: الدفعةُ المقدَّمة التزامٌ للعميل على المنشأة لا على فرع — مستندٌ صدر من سند قبضٍ في فرعٍ
    * يُطبَّق على توريدٍ يُفوتَر من فرعٍ آخر، وحجبُه يترك التزاماً لا يُقفل أبداً.
+   *
+   * ⚖️ **وحُكم فيه** (توجيه ٢٧٥ · `ق-١٥٨١`): «القوائمُ تُرشَّح بفروع القارئ». فدفعةُ فرعٍ آخر يطبّقها من يراها (المالكُ ومن يرى
+   * الفروعَ كلَّها)، والمقيَّدُ يطبّق دفعاتِ فرعه وما بلا فرع — وتطبيقُه بالمعرّف على غيرها يُردّ كالغائب (`create`).
    */
-  openPrepayments(companyId: string, customerId: string) {
+  openPrepayments(companyId: string, allowedBranchIds: string[] | 'all', customerId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const docs = await tx.invoice.findMany({
-        where: { customerId, docType: 'PREPAYMENT', appliedAsPrepayment: { none: {} } },
+        where: { customerId, docType: 'PREPAYMENT', appliedAsPrepayment: { none: {} }, ...branchFilter(allowedBranchIds) },
         select: { id: true, no: true, issueDate: true, subtotal: true, taxTotal: true, total: true, currency: true, prepaymentPayment: { select: { no: true } } },
         orderBy: [{ issueDate: 'asc' }, { id: 'asc' }],
       });

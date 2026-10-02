@@ -478,12 +478,23 @@ export class PosService {
     });
   }
 
-  /** تقريرُ وقائع الانقطاع — بحدّ الاستنتاج ظاهراً مع كل واقعة (`ق-٢٠١`/٢ب). */
-  listIncidents(companyId: string) {
+  /**
+   * تقريرُ وقائع الانقطاع — بحدّ الاستنتاج ظاهراً مع كل واقعة (`ق-٢٠١`/٢ب).
+   *
+   * ⚖️ **بفروع القارئ** (توجيه ٢٧٥ · `ق-١٥٨١`): الوقعةُ بلا فرع، وفرعُها فروعُ بيوعها. فيرى المقيَّدُ ما فيه بيعٌ من فرعه أو بلا
+   * فرع، ويُعدّ له من بيوعها ما يراه وحدَه.
+   */
+  listIncidents(companyId: string, allowedBranchIds: string[] | 'all') {
+    const visibleSales = branchFilter(allowedBranchIds) as Prisma.InvoiceWhereInput;
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const [company, rows] = await Promise.all([
         tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } }),
-        tx.posOfflineIncident.findMany({ orderBy: { startedAt: 'desc' }, take: 100, include: { _count: { select: { invoices: true } } } }),
+        tx.posOfflineIncident.findMany({
+          where: allowedBranchIds === 'all' ? {} : { invoices: { some: visibleSales } },
+          orderBy: { startedAt: 'desc' },
+          take: 100,
+          include: { _count: { select: { invoices: allowedBranchIds === 'all' ? true : { where: visibleSales } } } },
+        }),
       ]);
       return {
         /** استنتاجٌ من أزمنة رنّ البيوع المزامَنة — لا قياسٌ من الجهاز. */
