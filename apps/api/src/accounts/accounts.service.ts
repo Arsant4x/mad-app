@@ -6,6 +6,7 @@ import { UpdateAccountDto } from './dto/update-account.dto';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pageArray } from '../common/pagination/paged.util';
+import { withoutCompanyFigures } from '../common/tenant/company-figures.util';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الرمزُ والاسم. */
 const ACCOUNT_SEARCH_FIELDS = ['code', 'name'] as const;
@@ -49,8 +50,11 @@ export class AccountsService {
    * **على مستوى المنشأة بحقّها**: تاريخُ افتتاح الحساب صفةٌ للحساب في دليلٍ
    * واحد للمنشأة — والقيدُ الافتتاحيّ يُقرأ ليُشتقّ منه التاريخُ لا لتُعرض
    * قيمتُه، فلا معنى لفرعٍ فيه.
+   *
+   * ⚖️ **ورصيدُ الحساب رقمُ المنشأة كلِّها** (`ق-١٥٨١`): يسقط هو والرصيدُ الافتتاحيّ لمن لا يرى الفروعَ كلَّها، ويبقى له الدليلُ
+   * لمنتقيات القيد والمصروف (`withoutCompanyFigures`).
    */
-  list(companyId: string, query?: PagedQueryDto) {
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // الرمزُ فريدٌ داخل المنشأة، و`id` ختماً للترتيب التامّ الذي يوجبه القطعُ في الذاكرة (`ق-٣٥٦`).
       const accounts = await tx.account.findMany({ orderBy: [{ code: 'asc' }, { id: 'asc' }] });
@@ -63,11 +67,17 @@ export class AccountsService {
       const firstOpening = new Map<string, Date>();
       for (const e of openings) if (e.openingForAccountId && !firstOpening.has(e.openingForAccountId)) firstOpening.set(e.openingForAccountId, e.date);
 
-      const rows = accounts.map((a) => ({
-        ...a,
-        openingDate: a.openingDate ?? firstOpening.get(a.id) ?? null,
-        openingDateDeclared: a.openingDate !== null,
-      }));
+      const rows = accounts.map((a) =>
+        withoutCompanyFigures(
+          allowedBranchIds,
+          {
+            ...a,
+            openingDate: a.openingDate ?? firstOpening.get(a.id) ?? null,
+            openingDateDeclared: a.openingDate !== null,
+          },
+          ['balance', 'openingBalance'] as const,
+        ),
+      );
       // الدليلُ كلُّه يُقرأ ليُشتقّ تاريخُ الافتتاح، فالقطعُ في الذاكرة (ق-١٢٣٦).
       return pageArray(query, rows, ACCOUNT_SEARCH_FIELDS);
     });

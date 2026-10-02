@@ -21,8 +21,12 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
   // الأرقامُ الثلاثة من الخادم بالفترة نفسِها (`ق-١٢٤٣`): المفوتَرُ موقَّعاً، والمسدَّدُ من التخصيصات،
   // والمستحقُّ متبقّي كلِّ مستندٍ بعد ما ائتمن به المورّد — لا طرحُ الشاشة (المفوتَر − المسدَّد) الذي كان يتجاهل إشعاراتِه.
   const [summary, setSummary] = useState<SupplierSummary | null>(null);
+  // الملخّصُ رقمُ المنشأة كلِّها: يُرفض للمقيَّد بفرع (`ق-١٥٨١`)، فيُقال ذلك بدل «…» لا ينتهي.
+  const [refused, setRefused] = useState(false);
   useEffect(() => {
-    getSupplierSummary(supplier.id, { from: from || undefined, to: to || undefined }).then(setSummary);
+    getSupplierSummary(supplier.id, { from: from || undefined, to: to || undefined })
+      .then(setSummary)
+      .catch(() => setRefused(true));
   }, [supplier.id, from, to]);
   const totalDue = num0(summary?.due);
 
@@ -74,23 +78,29 @@ export function SupplierDetailModal({ supplier, purchases, onClose }: { supplier
           </button>
         )}
 
-        <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
-          <div className="kpi-card neu">
-            <div className="kpi-label">إجمالي فواتير الشراء</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
-            <div className="kpi-delta">
-              {filtered.length} من {allForSupplier.length} فاتورة
+        {refused ? (
+          <p className="hint" style={{ marginBottom: 16 }}>
+            أرقامُ المورّد في المنشأة كلِّها تُقرأ لمن يرى فروعَها كلَّها.
+          </p>
+        ) : (
+          <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+            <div className="kpi-card neu">
+              <div className="kpi-label">إجمالي فواتير الشراء</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.billed)} ر.س` : '…'}</div>
+              <div className="kpi-delta">
+                {filtered.length} من {allForSupplier.length} فاتورة
+              </div>
+            </div>
+            <div className="kpi-card pos">
+              <div className="kpi-label">المسدَّد</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.paid)} ر.س` : '…'}</div>
+            </div>
+            <div className={`kpi-card ${totalDue > 0 ? 'neg' : 'pos'}`}>
+              <div className="kpi-label">المتبقي غير المسدَّد</div>
+              <div className="kpi-value num">{summary ? `${fmt(summary.due)} ر.س` : '…'}</div>
             </div>
           </div>
-          <div className="kpi-card pos">
-            <div className="kpi-label">المسدَّد</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.paid)} ر.س` : '…'}</div>
-          </div>
-          <div className={`kpi-card ${totalDue > 0 ? 'neg' : 'pos'}`}>
-            <div className="kpi-label">المتبقي غير المسدَّد</div>
-            <div className="kpi-value num">{summary ? `${fmt(summary.due)} ر.س` : '…'}</div>
-          </div>
-        </div>
+        )}
 
         <div className="card-title" style={{ marginBottom: 10 }}>
           سجل فواتير الشراء ({filtered.length})

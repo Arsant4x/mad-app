@@ -10,12 +10,16 @@ export interface Account {
   code: string;
   name: string;
   type: AccountType;
-  openingBalance: string;
+  /**
+   * ⚖️ **الرصيدان رقمُ المنشأة كلِّها** (`ق-١٥٨١`): لا يرسلهما الخادمُ لموظّفٍ مقيَّدٍ بفرع، فغيابُهما غيرُ الصفر — لا يُعرضان
+   * ولا يُرسل الافتتاحيُّ في التعديل (وإلا رُحّل فرقٌ إلى الصفر).
+   */
+  openingBalance?: string;
   /** تاريخُ الافتتاح (ق-٢٩٦) — يُشتقّ من القيد حين لم يُعلَن. */
   openingDate: string | null;
   /** `false` = مشتقٌّ من الأستاذ، `true` = أعلنه التاجر. */
   openingDateDeclared: boolean;
-  balance: string;
+  balance?: string;
 }
 
 export type AccountInput = CreateAccountDto;

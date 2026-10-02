@@ -17,6 +17,7 @@ import { REQUIRES_ACTION_KEY } from './requires-action.decorator';
 import { ALLOW_WHILE_INACTIVE_KEY } from './allow-while-frozen.decorator';
 import { SUPPORT_SHELL_KEY } from './support-shell.decorator';
 import { TENANT_WIDE_KEY } from './tenant-wide.decorator';
+import { COMPANY_WIDE_FIGURES_KEY } from './company-wide-figures.decorator';
 import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
 import { MSG } from '../i18n/messages';
@@ -295,6 +296,11 @@ export class TenantGuard implements CanActivate {
       if (payload.actorType !== 'COMPANY' && !canEditMasterData) {
         throw new MasterDataLockedException();
       }
+    }
+
+    // ⚖️ رقمُ المنشأة كلِّها لمن يرى فروعَها كلَّها (`ق-١٥٨١`) — بعد الشاشة والفعل، فمن لا يملك الشاشةَ يُقال له ذلك أولاً.
+    if (this.reflector.getAllAndOverride<string | undefined>(COMPANY_WIDE_FIGURES_KEY, [context.getHandler(), context.getClass()]) && allowedBranchIds !== 'all') {
+      throw new ForbiddenException(MSG.company_figures_whole_company);
     }
 
     req.tenant = {

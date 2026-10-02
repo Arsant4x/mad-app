@@ -23,7 +23,8 @@ export function AccountsPage() {
   // مجموعُ كلِّ نوعٍ من الخادم (`ق-١٢٤٣`) — مجموعُ الدليل كلِّه، حقيقةٌ عن الدفاتر لا عن خانة البحث.
   const [summary, setSummary] = useState<AccountsSummary | null>(null);
   async function reload() {
-    const [rows, totals] = await Promise.all([listAccounts(), getAccountsSummary()]);
+    // المجموعُ رقمُ المنشأة كلِّها: يُرفض للمقيَّد بفرع (`ق-١٥٨١`)، فلا يُسقط رفضُه الدليلَ نفسَه.
+    const [rows, totals] = await Promise.all([listAccounts(), getAccountsSummary().catch(() => null)]);
     setAccounts(rows);
     setSummary(totals);
   }
@@ -46,7 +47,8 @@ export function AccountsPage() {
       await updateAccount(modal.account.id, {
         name: data.name,
         type: data.type,
-        openingBalance: data.openingBalance,
+        // من لا يرى الرصيدَ الافتتاحيّ لا يرسله (`ق-١٥٨١`) — فلا يُرحَّل فرقٌ إلى الصفر.
+        ...(modal.account.openingBalance !== undefined ? { openingBalance: data.openingBalance } : {}),
         // يُمرَّر فقط حين أرسله النموذج — أي حين غيّره التاجر (ق-٢٩٦).
         ...(data.openingDate ? { openingDate: data.openingDate } : {}),
       });
@@ -120,7 +122,7 @@ export function AccountsPage() {
           TYPE_GROUPS.map((g) => {
             const rows = filtered.filter((a) => a.type === g);
             if (!rows.length) return null;
-            const total = summary?.[g]?.total ?? '0.00';
+            const total = summary ? (summary[g]?.total ?? '0.00') : null;
             return (
               <div key={g}>
                 <div className="tree-row l1">
@@ -129,7 +131,7 @@ export function AccountsPage() {
                   <div>
                     <span className={`type-tag ${TYPE_TAG_CLASS[g]}`}>{TYPE_LABEL[g]}</span>
                   </div>
-                  <div className="num">{fmt(total)}</div>
+                  <div className="num">{total === null ? '' : fmt(total)}</div>
                   <div></div>
                 </div>
                 {rows.map((a) => (
@@ -141,7 +143,7 @@ export function AccountsPage() {
                     <div>
                       <span className={`type-tag ${TYPE_TAG_CLASS[a.type]}`}>{TYPE_LABEL[a.type]}</span>
                     </div>
-                    <div className="num">{fmt(a.balance)}</div>
+                    <div className="num">{a.balance === undefined ? '' : fmt(a.balance)}</div>
                     <div>
                       <RowMenu
                         actions={[

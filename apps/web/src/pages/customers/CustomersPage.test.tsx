@@ -65,7 +65,8 @@ describe('الاختبار ٤ — رصيد العميل = مجموع المتب�
     expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
   });
 
-  it('صفٌّ بلا رصيدٍ (ردٌّ قديم) يُعرض صفراً لا NaN', async () => {
+  // ⚖️ توجيه ٢٧٥ (`ق-١٥٨١`): صفٌّ بلا `outstanding` صار معناه «مقيَّدٌ بفرعٍ لا يرى ذمّةَ المنشأة» — فخانتُه فارغةٌ لا صفر.
+  it('صفٌّ بلا رصيدٍ (قارئٌ مقيَّدٌ بفرع) خانتُه فارغة، لا صفرٌ ولا NaN', async () => {
     vi.mocked(listCustomers).mockResolvedValue([customer('c3', 'عميل جديد')]);
     vi.mocked(listInvoices).mockResolvedValue([]);
 
@@ -73,7 +74,7 @@ describe('الاختبار ٤ — رصيد العميل = مجموع المتب�
 
     await waitFor(() => expect(screen.getByText((_, el) => el?.tagName === 'TD' && !!el.textContent?.includes('عميل جديد'))).toBeInTheDocument());
     expect(screen.queryByText('NaN')).not.toBeInTheDocument();
-    expect(screen.getAllByText('0.00').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('customer-outstanding').textContent).toBe('');
   });
 
   it('②A1 — الصفةُ تُعرض كما جاءت، والقديمُ غيرُ المعلَن يحمل زرَّ الإعلان الذي يفتح البطاقة', async () => {

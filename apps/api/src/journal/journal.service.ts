@@ -10,6 +10,7 @@ import { ReverseJournalEntryDto } from './dto/reverse-journal-entry.dto';
 import { resolveBranchId } from '../branches/branch-scope.util';
 import { createJournalEntry } from './journal-posting.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { withoutCompanyFigures } from '../common/tenant/company-figures.util';
 
 /** السطورُ بحساباتها، ورابطا العكس: مَن عكسه (`reversedBy`) ومَن يعكسه (`reversalOf`) — بالرقم للعرض. */
 const JOURNAL_ENTRY_INCLUDE = {
@@ -69,6 +70,11 @@ export class JournalService {
         take: pageSize,
       });
 
+      // ⚖️ قيودُ فرعه يقرؤها المقيَّد، ورصيدُ الحساب في أسطرها رقمُ المنشأة كلِّها فيسقط (`ق-١٥٨١`).
+      if (allowedBranchIds !== 'all') {
+        const scoped = items.map((e) => ({ ...e, lines: e.lines.map((l) => ({ ...l, account: withoutCompanyFigures(allowedBranchIds, l.account, ['balance', 'openingBalance'] as const) })) }));
+        return { items: scoped, total, page, pageSize };
+      }
       return { items, total, page, pageSize };
     });
   }

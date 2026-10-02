@@ -5,6 +5,7 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CompanyWideFigures } from '../common/tenant/company-wide-figures.decorator';
 import { AuditService } from './audit.service';
 import { ListAuditQueryDto } from './dto/list-audit-query.dto';
 
@@ -23,6 +24,7 @@ export class AuditController {
 
   @Get()
   @RequiresAction('audit')
+  @CompanyWideFigures('أثرُ كلِّ تغييرٍ في المنشأة كلِّها بفاعله ومستنده، لا يحمل فرعاً فلا يُقصر على فروع القارئ')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: ListAuditQueryDto) {
     return this.auditService.list(tenant.companyId, query);
   }
