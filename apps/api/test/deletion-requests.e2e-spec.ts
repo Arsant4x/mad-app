@@ -294,8 +294,8 @@ describe('Account deletion requests (e2e)', () => {
     expect(kept.length).toBeGreaterThanOrEqual(before);
     expect(kept.some((r) => r.entity === 'customers' && r.action === 'add')).toBe(true);
 
-    // تنظيفُ ما بقي عمداً — من حيث بقي.
-    await tenantPrisma.runInTenantContext(co.id, (tx) => tx.auditLog.deleteMany({}));
+    // ولا تنظيفَ لما بقي: سجلُّ التدقيق ملحقٌ فقط في القاعدة نفسِها (`ق-١٥٧٥`)، فالأثرُ الذي يُثبته هذا الاختبار باقٍ
+    // بعده كما يبقى بعد حذف المنشأة. وكان هنا `deleteMany` يمحوه، وهو ما صار المُشغِّلُ يرفضه.
   });
 
   /**
