@@ -58,7 +58,7 @@ export class LeavesController {
   @Post('requests')
   @RequiresAction('add')
   createRequest(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: JwtPayload, @Body() dto: CreateLeaveRequestDto) {
-    return this.leavesService.createRequest(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, dto);
+    return this.leavesService.createRequest(tenant.companyId, { id: tenant.profileId, actorType: tenant.actorType, name: user.username }, tenant.allowedBranchIds, dto);
   }
 
   @Post('requests/:id/approve')
