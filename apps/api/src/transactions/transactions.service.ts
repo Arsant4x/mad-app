@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { assertBoxInBranch, branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
-import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
@@ -116,12 +116,15 @@ export class TransactionsService {
       }
       if (dto.date !== undefined) data.date = new Date(dto.date);
       if (dto.description !== undefined) data.description = dto.description;
-      if (dto.amount !== undefined) {
-        data.amount = dto.amount;
-        data.baseAmount = toBaseAmount(dto.amount, dto.exchangeRate ?? Number(existing.exchangeRate));
+      // العملةُ والسعرُ المرسَلان يُقاسان كمستندٍ جديد (توجيه ٢٧٤ · البند 1): لا سعرَ حرّاً لعملة الأساس، ولا ترثُ أجنبيةٌ
+      // سعرَ غيرها. والأساسُ يُعاد حسابُه بالسعر الذي يُخزَّن، فلا يبقى أساسٌ بسعرٍ والسعرُ غيرُه.
+      const priced = await resolveFollowingCurrency(tx, companyId, dto, { currency: existing.currency, exchangeRate: Number(existing.exchangeRate) });
+      if (dto.amount !== undefined) data.amount = dto.amount;
+      if (dto.amount !== undefined || dto.currency !== undefined || dto.exchangeRate !== undefined) {
+        data.baseAmount = toBaseAmount(dto.amount ?? Number(existing.amount), priced.exchangeRate);
+        data.currency = priced.currency;
+        data.exchangeRate = priced.exchangeRate;
       }
-      if (dto.currency) data.currency = dto.currency;
-      if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
       if (dto.source !== undefined) data.source = dto.source || null;
 
       return tx.bankTransaction.update({ where: { id }, data, include: TX_INCLUDE });

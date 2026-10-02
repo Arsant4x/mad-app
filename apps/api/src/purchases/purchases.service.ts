@@ -3,7 +3,7 @@ import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
 import { STANDARD_VAT_RATE } from '../common/vat/standard-rate';
 import { Prisma } from '@mad-app/db';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
-import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
+import { resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
@@ -313,7 +313,10 @@ export class PurchasesService {
       if (dto.lines) this.stockedSubtotal({ subtotal: dto.subtotal ?? linesSubtotal!, lines: dto.lines });
       const amountsGiven =
         dto.subtotal !== undefined || dto.exempt !== undefined || dto.lines !== undefined || dto.exchangeRate !== undefined || dto.currency !== undefined;
-      const rate = dto.exchangeRate ?? Number(existing.exchangeRate);
+      // العملةُ والسعرُ المرسَلان يُقاسان كمستندٍ جديد (توجيه ٢٧٤ · البند 1): لا سعرَ حرّاً لعملة الأساس، وتبديلُ العملة إلى
+      // أجنبيةٍ بلا سعرٍ يُرفض ولا يرث السعرَ القديم. وبلا شيءٍ منهما يبقى ما على الشراء كما هو.
+      const priced = await resolveFollowingCurrency(tx, companyId, dto, { currency: existing.currency, exchangeRate: Number(existing.exchangeRate) });
+      const rate = priced.exchangeRate;
       if (amountsGiven) {
         const subtotal = dto.subtotal ?? linesSubtotal ?? Number(existing.subtotal);
         const exempt = dto.exempt ?? existing.exempt;
@@ -333,8 +336,10 @@ export class PurchasesService {
         data.baseSubtotal = toBaseAmount(subtotal, rate);
         data.baseTaxAmount = toBaseAmount(tax, rate);
         data.baseTotal = toBaseAmount(total, rate);
-        if (dto.currency) data.currency = dto.currency;
-        if (dto.exchangeRate !== undefined) data.exchangeRate = dto.exchangeRate;
+        if (dto.currency !== undefined || dto.exchangeRate !== undefined) {
+          data.currency = priced.currency;
+          data.exchangeRate = priced.exchangeRate;
+        }
       }
 
       // Declaration exclusion and amortization are metadata only — neither
