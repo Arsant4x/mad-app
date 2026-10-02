@@ -7,6 +7,7 @@ import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
+import { ReopenPeriodDto } from './dto/reopen-period.dto';
 import { FiscalService } from './fiscal.service';
 
 @Controller('fiscal-years')
@@ -36,10 +37,11 @@ export class FiscalController {
     return this.fiscalService.setPeriodStatus(tenant.companyId, id, true);
   }
 
+  /** ⚖️ بسببٍ مكتوبٍ يُسجَّل على الفترة مع لحظته ومن فتحها (`ق-١٥٨٣`). */
   @Patch('periods/:id/reopen')
   @RequiresAction('review')
-  reopenPeriod(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.fiscalService.setPeriodStatus(tenant.companyId, id, false);
+  reopenPeriod(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ReopenPeriodDto) {
+    return this.fiscalService.setPeriodStatus(tenant.companyId, id, false, { reason: dto.reason, actorId: tenant.profileId });
   }
 
   /**

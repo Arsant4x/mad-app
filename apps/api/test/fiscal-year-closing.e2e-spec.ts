@@ -142,7 +142,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
   });
 
   it('⭐ ⑤ إعادةُ فتح فترةٍ تعكس الإقفال بقيدٍ مرقَّم بتاريخه — فيعود السطرُ المؤقّت', async () => {
-    await auth(http().patch(`/fiscal-years/periods/${periodIds[5]}/reopen`)).expect(200);
+    await auth(http().patch(`/fiscal-years/periods/${periodIds[5]}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
 
     const sheet = await sheetAt('2024-12-31');
     expect(periodResultLine(sheet)?.amount).toBe('600.00');

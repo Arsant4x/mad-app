@@ -11,6 +11,10 @@ export interface FiscalPeriod {
   year: number;
   status: FiscalPeriodStatus;
   closedAt: string | null;
+  /** ⚖️ آخرُ إعادة فتحٍ بسببها ولحظتها وفاعلها (`ق-١٥٨٣`) — فارغةٌ لفترةٍ لم تُفتح بعد. */
+  reopenReason: string | null;
+  reopenedAt: string | null;
+  reopenedById: string | null;
 }
 
 export interface FiscalYear {
@@ -28,4 +32,5 @@ export const createFiscalYear = (dto: FiscalYearInput) => apiClient.post<FiscalY
 export const deleteFiscalYear = (id: string) => apiClient.delete(`/fiscal-years/${id}`).then(() => undefined);
 
 export const closeFiscalPeriod = (id: string) => apiClient.patch<FiscalPeriod>(`/fiscal-years/periods/${id}/close`).then((r) => r.data);
-export const reopenFiscalPeriod = (id: string) => apiClient.patch<FiscalPeriod>(`/fiscal-years/periods/${id}/reopen`).then((r) => r.data);
+/** ⚖️ بسببٍ مكتوب (`ق-١٥٨٣`) — والخادمُ يرفض الفراغ. */
+export const reopenFiscalPeriod = (id: string, reason: string) => apiClient.patch<FiscalPeriod>(`/fiscal-years/periods/${id}/reopen`, { reason }).then((r) => r.data);

@@ -1187,6 +1187,13 @@ model FiscalPeriod {
 
   closedAt DateTime?
 
+  /// ⚖️ **آخرُ إعادة فتحٍ بسببها ولحظتها وفاعلها** (`ق-١٥٨٣`): لا تُفتح فترةٌ مقفلة بلا سببٍ مكتوب. والفراغُ لفترةٍ لم تُفتح بعد
+  /// البناء — ولا يُكتب رجعياً. وفتحٌ ثانٍ يحلّ محلّ الأوّل هنا، والأوّلُ باقٍ في سجلّ التدقيق.
+  reopenReason String?
+  reopenedAt   DateTime?
+  /// معرّفُ ملفّ الفاعل (`profileId`: المنشأةُ أو موظّفُها) — كـ`recordedById` في الشطب.
+  reopenedById String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -580,6 +580,7 @@ export const MSG = {
   // fiscal year / period close
   fiscal_year_not_found: 'fiscal.year_not_found',
   fiscal_period_not_found: 'fiscal.period_not_found',
+  fiscal_reopen_reason_required: 'fiscal.reopen_reason_required',
   fiscal_year_overlaps: 'fiscal.year_overlaps',
   fiscal_year_start_after_end: 'fiscal.year_start_after_end',
   fiscal_year_span_out_of_range: 'fiscal.year_span_out_of_range',
@@ -1803,6 +1804,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
 
   [MSG.fiscal_year_not_found]: { ar: 'السنة المالية غير موجودة', en: 'Fiscal year not found' },
   [MSG.fiscal_period_not_found]: { ar: 'الفترة المالية غير موجودة', en: 'Fiscal period not found' },
+  [MSG.fiscal_reopen_reason_required]: { ar: 'اكتب سبب إعادة فتح الفترة — يُحفظ عليها مع وقت الفتح ومن فتحها', en: 'Give a reason for reopening the period — it is kept on the period with the time and who reopened it' },
   [MSG.fiscal_year_overlaps]: {
     ar: 'توجد سنة مالية معرَّفة بالفعل تتداخل مع هذه الفترة',
     en: 'A fiscal year covering part of this period is already defined',

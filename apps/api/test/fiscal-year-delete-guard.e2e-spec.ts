@@ -75,7 +75,7 @@ describe('Fiscal year deletion does not unlock closed periods (e2e)', () => {
   }, 30000);
 
   it('[SPEC 3.7] ② deletes once every period is reopened — a calendar that locks nothing may go', async () => {
-    await auth(request(app.getHttpServer()).patch(`/fiscal-years/periods/${marchId}/reopen`)).expect(200);
+    await auth(request(app.getHttpServer()).patch(`/fiscal-years/periods/${marchId}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
     await auth(request(app.getHttpServer()).delete(`/fiscal-years/${yearId}`)).expect(204);
     const years = await auth(request(app.getHttpServer()).get('/fiscal-years')).expect(200);
     expect(years.body.some((y: { id: string }) => y.id === yearId)).toBe(false);
