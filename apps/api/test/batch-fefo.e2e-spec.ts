@@ -86,6 +86,8 @@ describe('٥+٦ الدفعةُ كياناً على الطبقة وFEFO سياس�
     company = await registerIsolatedCompany(app, 'batch-fefo');
     token = company.token;
     companyId = company.companyId;
+    // صاحبُ المنشأة وحدَه يسجّل الشطبَ ويعتمده هنا، فيطفئ «الشخصين» كما يطفئه تاجرٌ يعمل وحده (`ق-١٥٨٣`).
+    await auth(http().patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
     supplierId = (await auth(http().post('/suppliers')).send({ name: `مورّد الدفعات ${suffix}` }).expect(201)).body.id;
     customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الدفعات ${suffix}` }).expect(201)).body.id;
     whA = (await auth(http().post('/warehouses')).send({ name: `مستودع أ ${suffix}` }).expect(201)).body.id;

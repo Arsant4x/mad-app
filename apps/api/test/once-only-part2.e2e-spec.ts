@@ -156,6 +156,8 @@ describe('أثرٌ يقع مرّةً واحدة تحت سباقٍ مفروض، �
     probe = new PrismaClient();
     company = await registerIsolatedCompany(app, 'once-part2');
     race = raceHarness(() => company.companyId, holdClient, probe);
+    // صاحبُ المنشأة وحدَه يسجّل الشطبَ ويعتمده هنا، فيطفئ «الشخصين» كما يطفئه تاجرٌ يعمل وحده (`ق-١٥٨٣`).
+    await auth(http().patch('/company-profile')).send({ writeOffRequiresTwoPersons: false }).expect(200);
 
     branchId = (await auth(http().post('/branches')).send({ name: `فرع المرّة ${suffix}`, type: 'فرع' }).expect(201)).body.id;
     warehouseId = (await auth(http().post('/warehouses')).send({ name: `مستودع المرّة ${suffix}` }).expect(201)).body.id;

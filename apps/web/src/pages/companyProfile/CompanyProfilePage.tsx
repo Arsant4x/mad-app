@@ -52,6 +52,8 @@ export function CompanyProfilePage() {
   // URL just for display, refetched whenever the key changes.
   const [logoFileKey, setLogoFileKey] = useState('');
   const [masterDataLocked, setMasterDataLocked] = useState(false);
+  // ⚖️ شطبُ التالف بشخصين افتراضاً، والمنشأةُ ذاتُ الشخص الواحد تُطفئه بنفسها (`ق-١٥٨٣`).
+  const [writeOffRequiresTwoPersons, setWriteOffRequiresTwoPersons] = useState(true);
   const [vatPeriod, setVatPeriod] = useState<'QUARTERLY' | 'MONTHLY'>('QUARTERLY');
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export function CompanyProfilePage() {
         setSlug(p.slug ?? '');
         setSavedSlug(p.slug ?? null);
         setMasterDataLocked(p.masterDataLocked ?? false);
+        setWriteOffRequiresTwoPersons(p.writeOffRequiresTwoPersons ?? true);
         setVatPeriod(p.vatPeriod ?? 'QUARTERLY');
       })
       .finally(() => setLoading(false));
@@ -187,6 +190,7 @@ export function CompanyProfilePage() {
         unitNumber: unitNumber.trim(),
         logoFileKey,
         masterDataLocked,
+        writeOffRequiresTwoPersons,
         vatPeriod,
       });
       // **يُقرأ المعرّفُ من ردّ الخادم لا من حالة الشاشة** — فهو الذي طبّعه وقبله.
@@ -333,6 +337,21 @@ export function CompanyProfilePage() {
         <p className="hint" style={{ marginTop: 6 }}>
           عند التفعيل تبقى القراءة والتقارير كما هي للجميع، ويُمنع فقط الإضافة والتعديل والحذف على العقارات والعقود.
           استثنِ موظفاً بعينه من شاشة «حسابات الموظفين».
+        </p>
+        {/* ⚖️ `ق-١٥٨٣`: شخصان افتراضاً، والمنشأةُ ذاتُ الشخص الواحد تطفئه من هنا. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: canEdit ? 'pointer' : 'default', marginTop: 14 }}>
+          <input
+            type="checkbox"
+            data-testid="company-writeoff-two-persons"
+            style={{ width: 'auto' }}
+            checked={writeOffRequiresTwoPersons}
+            disabled={!canEdit}
+            onChange={(e) => setWriteOffRequiresTwoPersons(e.target.checked)}
+          />
+          شطب التالف يحتاج شخصين: من سجّل الشطب لا يعتمده
+        </label>
+        <p className="hint" style={{ marginTop: 6 }}>
+          إن كنت تعمل وحدك فأطفئه لتعتمد ما تسجّله بنفسك. ويبقى كل شطبٍ ومن سجّله ومن اعتمده في تقرير التلف وسجل التدقيق.
         </p>
       </div>
 
