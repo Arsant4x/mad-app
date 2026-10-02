@@ -57,19 +57,22 @@ export class SupplierPaymentsService {
   list(companyId: string, allowedBranchIds: string[] | 'all', query?: ListSupplierPaymentsQueryDto) {
     const term = searchTerm(query);
     const where: Prisma.SupplierPaymentWhereInput = {
-      ...branchFilter(allowedBranchIds),
       ...(query?.supplierId ? { supplierId: query.supplierId } : {}),
-      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ المورّد — مرآةُ سند القبض.
-      ...(term
-        ? {
-            OR: [
-              { no: { contains: term, mode: 'insensitive' } },
-              { reference: { contains: term, mode: 'insensitive' } },
-              { notes: { contains: term, mode: 'insensitive' } },
-              { supplier: { name: { contains: term, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
+      // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` لا بنشرٍ يحلّ فيه الثاني محلّ الأوّل (توجيه ٢٧٤ · ج-2).
+      AND: [
+        branchFilter(allowedBranchIds),
+        // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ السند والمرجعُ والملاحظاتُ واسمُ المورّد — مرآةُ سند القبض.
+        term
+          ? {
+              OR: [
+                { no: { contains: term, mode: 'insensitive' } },
+                { reference: { contains: term, mode: 'insensitive' } },
+                { notes: { contains: term, mode: 'insensitive' } },
+                { supplier: { name: { contains: term, mode: 'insensitive' } } },
+              ],
+            }
+          : {},
+      ],
     };
     // المخصَّصُ وغيرُ المخصَّص على كلِّ صفّ — كسند القبض (`ق-١٢٤٣`)؛ و`listOrPage` لأن الصفَّ يُقرأ بضمائمه،
     // والترتيبُ مختومٌ بـ`id` (`ق-٣٥٦`).

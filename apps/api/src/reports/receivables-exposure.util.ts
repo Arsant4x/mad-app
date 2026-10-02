@@ -155,8 +155,10 @@ export async function customerExposure(tx: Prisma.TransactionClient, filter: Exp
   // تخرج والبدلُ يدخل — من المصدر الواحد لا بنسخةٍ هنا (`ق-٩٦٧/١`).
   // ④A1: مستندُ الدفعة المقدَّمة (386) ليس ذمّةً — سندُ قبضه مخصَّصٌ عليه حتى يُطبَّق، ثم ينتقل التخصيصُ إلى فاتورة التوريد؛
   // فلا يدخل الأعمارَ لا فاتورةً ولا إشعاراً (كان سيُقرأ إشعاراً مديناً يزيد الذمّة).
+  // ⚠️ مرشِّحُ الفرع وشرطُ المردودة كلاهما `OR`، فيُجمعان تحت `AND`: نشرُهما في الكائن نفسِه جعل الثانيَ يحلّ محلّ
+  // الأوّل، فقرأ المقيَّدُ بلا فرعٍ مسمّى ذممَ الفروع كلِّها هنا وفي لوحة التحكّم (توجيه ٢٧٤ · مراجعة 3.3 ج-2).
   const documents = await tx.invoice.findMany({
-    where: { issueDate: { lte: asOf }, docType: { not: 'PREPAYMENT' }, ...branchWhere, ...customerWhere, ...NOT_REPLACED_REJECTED },
+    where: { issueDate: { lte: asOf }, docType: { not: 'PREPAYMENT' }, ...customerWhere, AND: [branchWhere, NOT_REPLACED_REJECTED] },
     select: {
       id: true,
       no: true,

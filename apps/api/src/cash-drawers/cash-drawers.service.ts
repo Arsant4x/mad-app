@@ -63,7 +63,8 @@ export class CashDrawersService {
    * **يتغيّر ما تُظهره لا من يقرؤها**.
    */
   list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
-    const where: Prisma.CashDrawerWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), DRAWER_SEARCH_FIELDS) };
+    // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` كما يقول تعليقُ `searchWhere` (توجيه ٢٧٤ · ج-2).
+    const where: Prisma.CashDrawerWhereInput = { AND: [branchFilter(allowedBranchIds), searchWhere(searchTerm(query), DRAWER_SEARCH_FIELDS) ?? {}] };
     return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
       pagedFindMany(query, tx.cashDrawer, { where, include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
     );

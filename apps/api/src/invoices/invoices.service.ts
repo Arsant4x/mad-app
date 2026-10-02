@@ -178,17 +178,21 @@ export class InvoicesService {
   list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
     const term = searchTerm(query);
     const where: Prisma.InvoiceWhereInput = {
-      ...branchFilter(allowedBranchIds),
-      // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ المستند والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ فيُكتب هنا.
-      ...(term
-        ? {
-            OR: [
-              { no: { contains: term, mode: 'insensitive' } },
-              { notes: { contains: term, mode: 'insensitive' } },
-              { customer: { name: { contains: term, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
+      // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND`: نشرُهما في الكائن نفسِه كان يجعل الثانيَ يحلّ محلّ
+      // الأوّل، فيعود البحثُ بفواتير الفروع كلِّها لموظّفٍ مقيَّد (توجيه ٢٧٤ · مراجعة 3.3 ج-2 · حارسُه `where-or-collision.spec`).
+      AND: [
+        branchFilter(allowedBranchIds),
+        // حقولُ البحث المُعلَنة (`ق-١٢٣٦`): رقمُ المستند والملاحظاتُ واسمُ العميل — والأخيرُ علاقةٌ فيُكتب هنا.
+        term
+          ? {
+              OR: [
+                { no: { contains: term, mode: 'insensitive' } },
+                { notes: { contains: term, mode: 'insensitive' } },
+                { customer: { name: { contains: term, mode: 'insensitive' } } },
+              ],
+            }
+          : {},
+      ],
     };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // بلا `page` القائمةُ كلُّها كما كانت؛ وبه النافذةُ — والإثراءُ أدناه على الصفوف المُعادة وحدَها.

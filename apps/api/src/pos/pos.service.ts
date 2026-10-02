@@ -285,7 +285,8 @@ export class PosService {
    * والآن مقصورةٌ على فروع القارئ — كالفواتير والأدراج سواء.
    */
   listShifts(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
-    const where: Prisma.PosShiftWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), SHIFT_SEARCH_FIELDS) };
+    // مرشِّحُ الفرع وشرطُ البحث كلاهما `OR`، فيُجمعان تحت `AND` كما يقول تعليقُ `searchWhere` (توجيه ٢٧٤ · ج-2).
+    const where: Prisma.PosShiftWhereInput = { AND: [branchFilter(allowedBranchIds), searchWhere(searchTerm(query), SHIFT_SEARCH_FIELDS) ?? {}] };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const result = await pagedFindMany(query, tx.posShift, { where, orderBy: { openedAt: 'desc' } });
       // المجاميعُ للمناوبات المُعادة وحدَها (القائمةُ كلُّها أو الصفحة) — فلا تُحسب مناوبةٌ خارج النافذة.

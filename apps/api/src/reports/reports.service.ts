@@ -686,8 +686,13 @@ export class ReportsService {
    *
    * **على مستوى المنشأة بحقّها**: الإيرادُ والمصروفُ من دفترٍ واحد كقائمة الدخل — ولا تُشتقّ لوحةٌ
    * من نصف دفتر؛ والذممُ وحدَها بفروع القارئ كما في الأعمار.
+   *
+   * 🔴 **ولذلك هي لمن يرى الفروعَ كلَّها** كقائمة الدخل (`ق-١٤٥٢`): كانت بلا حارس، فقرأ الموظّفُ المقيَّدُ بفرعٍ إيرادَ
+   * المنشأة ومصروفَها وصافيها وسلسلتَها كلَّها (توجيه ٢٧٤ · مراجعة 3.3 ج-1، ثبت بالتشغيل). والرفضُ يدلّه على ملخّص
+   * الفرع؛ ولوحةٌ مرشَّحةٌ بفروع القارئ قرارُ منتجٍ معروضٌ على صاحب المشروع لا يُبنى هنا.
    */
   dashboard(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
+    assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ select: { id: true, type: true } });
       const movements = await this.movementsByAccount(tx, range);
@@ -868,9 +873,14 @@ export class ReportsService {
    * **وتوازنُه لا يُقاس على نصف دفتر**، فالقيدُ الواحد قد يمسّ فرعَين وما لا فرعَ
    * له. والفرعُ إن طُلب باسمه (`?branchId=`) **يُقاس على فروع القارئ قبل أن
    * يُرشَّح** — فلا يصير الميزانُ باباً جانبياً إلى فرعٍ محجوب (`ق-٥١٧`).
+   *
+   * 🔴 **وبلا فرعٍ مسمّى فهو ميزانُ المنشأة كلِّها**، فلا يُعطى إلا لمن يرى فروعَها كلَّها (`ق-١٤٥٢`): كان المقيَّدُ
+   * يقرأ أرصدةَ الفروع كلِّها حين لا يسمّي فرعاً (توجيه ٢٧٤، نظيرُ لوحة التحكّم). ولا يُرشَّح بفروعه صامتاً، فميزانٌ
+   * من نصف دفتر لا يُقرأ ميزاناً؛ والفرعُ المسمّى يبقى طريقَه.
    */
   trialBalance(companyId: string, allowedBranchIds: string[] | 'all', filter: TrialBalanceDto) {
     if (filter.branchId) assertBranchAllowed(allowedBranchIds, filter.branchId);
+    else assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const date = this.dateFilter(filter);
       const lines = await tx.journalLine.findMany({
