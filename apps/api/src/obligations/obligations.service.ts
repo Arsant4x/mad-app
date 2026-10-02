@@ -1017,7 +1017,10 @@ export class ObligationsService {
         gross: rentAmountsOf(Number(i.amount), treatment).gross,
         dueDate: i.dueDate,
         payments: i.payments.map((p) => ({ id: p.id, date: p.date, gross: Number(p.amount) })),
-        asOf: to,
+        // حتى اليوم في الربع المفتوح، كالعدِّ المعلّق أعلاه وكمسار الاستحقاق (الكنسُ يرحّل حتى اليوم):
+        // قسطٌ لم يحلّ ولم يُقبض ليس نقطةَ ضريبةٍ بعد. وكان `asOf: to` يعدّ في الربع المفتوح أقساطاً تحلّ
+        // بعد اليوم، فظهر أوّلَ الربع الرابع (2026-10-02) ولم يظهر في آخر الثالث (ق-١٥٧٦).
+        asOf: to < today ? to : today,
       }).filter((pt) => pt.date >= from && pt.date <= to);
       for (const pt of points) this.addLegacyPoint(section, splitGrossAmount(pt.gross, treatment), Number(i.exchangeRate), treatment);
     }
