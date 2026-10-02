@@ -68,7 +68,7 @@ describe('السنةُ المالية تُنشأ مع المنشأة وتتجد�
   it('[SPEC 3.7] 🔴 ② وتتجدّد: قيدٌ في السنة التالية يُنشئ سنتَها، وفترتُها تُقفل فيُرفض فيها القيد — فلا يعمل القفلُ مفتوحاً', async () => {
     const as = await born('fy-renew');
     const nextDate = `${thisYear + 1}-01-15`;
-    await (await post(as, nextDate)).expect(201);
+    expect((await post(as, nextDate)).status).toBe(201);
     const next = (await yearsOf(as)).find((y) => y.start.slice(0, 10) === `${thisYear + 1}-01-01`);
     expect(next?.periods.length).toBe(12);
     const january = next!.periods.find((p) => p.month === 1)!;
@@ -82,14 +82,15 @@ describe('السنةُ المالية تُنشأ مع المنشأة وتتجد�
     const changed = await as(http().patch('/fiscal-years/start-month')).send({ month: 7 });
     const years = await yearsOf(as);
     const containsToday = years.find((y) => y.start.slice(0, 10) <= new Date().toISOString().slice(0, 10) && y.end.slice(0, 10) >= new Date().toISOString().slice(0, 10));
-    await (await post(as, new Date().toISOString().slice(0, 10))).expect(201);
+    const posted = await post(as, new Date().toISOString().slice(0, 10));
     const after = await as(http().patch('/fiscal-years/start-month')).send({ month: 1 });
     expect({
       changed: changed.status,
+      posted: posted.status,
       years: years.length,
       startsInJuly: containsToday?.start.slice(5, 10),
       periods: containsToday?.periods.length,
       afterPosting: after.status,
-    }).toEqual({ changed: 200, years: 1, startsInJuly: '07-01', periods: 12, afterPosting: 409 });
+    }).toEqual({ changed: 200, posted: 201, years: 1, startsInJuly: '07-01', periods: 12, afterPosting: 409 });
   });
 });
