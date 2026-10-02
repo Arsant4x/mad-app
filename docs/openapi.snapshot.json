@@ -1961,7 +1961,9 @@
     "parameters": [
       "path:id:required"
     ],
-    "requiredBody": [],
+    "requiredBody": [
+      "reason"
+    ],
     "responses": [
       "200"
     ]
