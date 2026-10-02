@@ -28,17 +28,22 @@ jest.setTimeout(180000);
  * الأرقام: فرع أ بيعٌ 100 بفئة S (115 بالضريبة) قُبض منه 15، وشراءٌ معفى 40 سُدّد منه 10 · فرع ب بيعٌ 7,000 (8,050)
  * قُبض منه 50، وشراءٌ معفى 3,000 سُدّد منه 100.
  */
+/**
+ * ⚖️ **وبُدّل حكمُ اللوحة في توجيه ٢٧٥** (`ق-١٥٨٠`، بحكم صاحب المشروع): لا رفضَ للمقيَّد، بل **لوحةٌ مرشَّحةٌ بفروعه وحدَها،
+ * وكلُّ بطاقةٍ لمن يملك شاشتَها**. فالبطاقةُ التي لا يملك شاشتَها غائبةٌ من الردّ (لا صفر)، و`scope` يقول أيَّ دفترٍ قُرئ.
+ */
 interface Dash {
-  revenue: string;
-  expenses: string;
-  netProfit: string;
-  receivables: string;
-  monthly: { month: string; revenue: string }[];
+  scope: 'company' | 'ownBranches';
+  revenue?: string;
+  expenses?: string;
+  netProfit?: string;
+  receivables?: string;
+  monthly?: { month: string; revenue: string }[];
 }
 type Auth = (r: request.Test) => request.Test;
 
 const halalas = (amount: string): number => Math.round(Number(amount) * 100);
-const monthlyTotal = (d: Dash): number => d.monthly.reduce((s, m) => s + halalas(m.revenue), 0);
+const monthlyTotal = (d: Dash): number => (d.monthly ?? []).reduce((s, m) => s + halalas(m.revenue), 0);
 const idsOf = (body: unknown): string[] => ((Array.isArray(body) ? body : (body as { items: unknown[] }).items) as { id: string }[]).map((i) => i.id);
 const PASSWORD = 'DashScope123!';
 const NO_ADJUSTMENT = WRITEOFF_REASONS.find((r) => r.taxPath === 'NO_ADJUSTMENT')!;
@@ -149,7 +154,8 @@ describe('موظّفٌ مقيَّدٌ بفرع: لا رقم من فرعٍ آخر
 
   it('[SPEC 2.7] ① ضابطٌ موجب: المالك يرى الفرعين في اللوحة، فالمسبار يرى أرقام فرع ب حين تكون مرئية', async () => {
     const d = (await owner(http().get('/reports/dashboard')).query({ to: today }).expect(200)).body as Dash;
-    expect({ revenue: d.revenue, expenses: d.expenses, netProfit: d.netProfit, receivables: d.receivables, monthlyTotal: monthlyTotal(d) }).toEqual({
+    expect({ scope: d.scope, revenue: d.revenue, expenses: d.expenses, netProfit: d.netProfit, receivables: d.receivables, monthlyTotal: monthlyTotal(d) }).toEqual({
+      scope: 'company',
       revenue: '7100.00',
       expenses: '3040.00',
       netProfit: '4060.00',
@@ -170,12 +176,16 @@ describe('موظّفٌ مقيَّدٌ بفرع: لا رقم من فرعٍ آخر
     });
   });
 
-  it('[SPEC 2.7] ③ قالب «لوحة التحكم» وحده: نقطتا الصفحة كلتاهما 403 SCREEN_FORBIDDEN، فلا رقم يتسرّب', async () => {
-    const dash = await dashboardOnly(http().get('/reports/dashboard'));
+  // توجيه ٢٧٥ (`ق-١٥٨٠`): كانت اللوحةُ تحت شاشة التقارير فيُردّ صاحبُ «اللوحة وحدها» `403` وتبقى صفحتُه بيضاء. صارت لشاشة
+  // اللوحة، وبطاقاتُها كلُّها لشاشة التقارير — فيأخذ لوحةً بلا بطاقة: لا رقمَ ولا صفراً يُقرأ رقماً.
+  it('[SPEC 2.7] ③ قالب «لوحة التحكم» وحده: اللوحةُ 200 بلا بطاقةٍ واحدة، والفواتيرُ 403 SCREEN_FORBIDDEN، فلا رقم يتسرّب', async () => {
+    const dash = await dashboardOnly(http().get('/reports/dashboard')).query({ to: today });
     const list = await dashboardOnly(http().get('/invoices'));
-    expect({ dash: dash.status, dashCode: dash.body.code, list: list.status, listCode: list.body.code }).toEqual({
-      dash: 403,
-      dashCode: 'SCREEN_FORBIDDEN',
+    const cardKeys = ['revenue', 'expenses', 'netProfit', 'receivables', 'monthly'].filter((k) => k in (dash.body as object));
+    expect({ dash: dash.status, scope: (dash.body as Dash).scope, cardKeys, list: list.status, listCode: list.body.code }).toEqual({
+      dash: 200,
+      scope: 'ownBranches',
+      cardKeys: [],
       list: 403,
       listCode: 'SCREEN_FORBIDDEN',
     });
@@ -191,17 +201,36 @@ describe('موظّفٌ مقيَّدٌ بفرع: لا رقم من فرعٍ آخر
     expect(seen).toEqual(expected);
   });
 
-  it('[SPEC 2.7] 🔴 ⑤ لوحة التحكم وميزان المراجعة بلا فرعٍ مسمّى: 403 يدلّ على ملخّص الفرع، والميزانُ بفرع القارئ مسمّىً يبقى 200', async () => {
+  // توجيه ٢٧٥ (`ق-١٥٨٠`): كان حكمُ ٢٧٤ رفضَ اللوحة للمقيَّد؛ وصار لوحةً بأرقام فرعه وحدَه — بيعُ أ 100 وشراؤه 40 وذمّتُه
+  // 115 − 15. وميزانُ المراجعة بلا فرعٍ مسمّى رقمُ منشأةٍ فيبقى مرفوضاً (`ق-١٥٨١`).
+  it('[SPEC 2.7] 🔴 ⑤ لوحة التحكم للمقيَّد بأرقام فرعه وحدَه، وميزان المراجعة بلا فرعٍ مسمّى 403 يدلّ على ملخّص الفرع، وبفرعه مسمّىً 200', async () => {
     const dash = await restricted(http().get('/reports/dashboard')).query({ to: today });
+    const d = dash.body as Dash;
     const trial = await restricted(http().get('/reports/trial-balance'));
     const trialNamed = await restricted(http().get('/reports/trial-balance')).query({ branchId: branchA });
     expect({
       dash: dash.status,
-      dashPointsToSummary: String(dash.body.message).includes('ملخّص الفرع'),
+      scope: d.scope,
+      revenue: d.revenue,
+      expenses: d.expenses,
+      netProfit: d.netProfit,
+      receivables: d.receivables,
+      monthlyTotal: monthlyTotal(d),
       trial: trial.status,
       trialPointsToSummary: String(trial.body.message).includes('ملخّص الفرع'),
       trialNamed: trialNamed.status,
-    }).toEqual({ dash: 403, dashPointsToSummary: true, trial: 403, trialPointsToSummary: true, trialNamed: 200 });
+    }).toEqual({
+      dash: 200,
+      scope: 'ownBranches',
+      revenue: '100.00',
+      expenses: '40.00',
+      netProfit: '60.00',
+      receivables: '100.00',
+      monthlyTotal: 10000,
+      trial: 403,
+      trialPointsToSummary: true,
+      trialNamed: 200,
+    });
   });
 
   it('[SPEC 2.7] 🔴 ⑥ أعمار الذمم بلا فرعٍ مسمّى: إجماليّ القارئ المقيَّد 100.00 لا 8100.00', async () => {
@@ -221,5 +250,20 @@ describe('موظّفٌ مقيَّدٌ بفرع: لا رقم من فرعٍ آخر
     const both = Object.fromEntries(Object.keys(rows).map((name) => [name, { a: true, b: true }]));
     const onlyA = Object.fromEntries(Object.keys(rows).map((name) => [name, { a: true, b: false }]));
     expect({ owner: ownerSees, restricted: restrictedSees }).toEqual({ owner: both, restricted: onlyA });
+  });
+
+  // ⚠️ آخرُ الحزمة عمداً: بيعٌ بلا فرعٍ يغيّر أرقامَ المالك وأعمارَ المقيَّد (القائمةُ تُريه ما بلا فرع)، فلا يسبق ما قبله.
+  // «من فروعه وحدَها» (`ق-١٥٨٠`): بيعُ المنشأة كلِّها 500 (575 بالضريبة) يدخل لوحةَ المالك ولا يدخل لوحةَ المقيَّد.
+  it('[SPEC 2.7] 🔴 ⑧ بيعٌ بلا فرع: يدخل لوحةَ المالك ولا يدخل لوحةَ المقيَّد — فأرقامُه من فروعه وحدَها', async () => {
+    const customerId = await createTenantCustomer(app, company.token, `عميل المنشأة ${suffix}`);
+    await owner(http().post('/invoices'))
+      .send({ customerId, issueDate: today, dueDate: today, lines: [{ description: `بيع المنشأة ${suffix}`, quantity: 1, unitPrice: 500, taxCategory: 'S' }] })
+      .expect(201);
+    const mine = (await restricted(http().get('/reports/dashboard')).query({ to: today }).expect(200)).body as Dash;
+    const all = (await owner(http().get('/reports/dashboard')).query({ to: today }).expect(200)).body as Dash;
+    expect({ mine: { revenue: mine.revenue, receivables: mine.receivables }, all: { revenue: all.revenue, receivables: all.receivables } }).toEqual({
+      mine: { revenue: '100.00', receivables: '100.00' },
+      all: { revenue: '7600.00', receivables: '8675.00' },
+    });
   });
 });
