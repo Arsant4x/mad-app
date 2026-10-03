@@ -1039,13 +1039,20 @@ export interface OwnerRentCollectionForPosting {
   tenant: string;
   ownerName: string;
   date: Date;
-  /** المقبوضُ كلُّه بعملة الدفتر — يساوي حصّةَ المالك والعمولةَ وضريبتَها. */
+  /** المقبوضُ كلُّه بعملة الدفتر — يساوي حصّةَ المالك والعمولةَ وضريبتَها ورصيدَ المستأجر. */
   baseCash: number;
   baseOwnerShare: number;
   baseCommission: number;
   baseCommissionTax: number;
-  /** حسابُ البنك أو الصندوق حين يُقبض على بنكٍ أو درج (ق-٢٧٧). */
+  /**
+   * ⚖️ **ما زاد على أقساط العقد كلِّها رصيدٌ للمستأجر** (توجيه ٢٧٨ · `ق-١٦٣٠`، بحكم صاحب المشروع: «رصيدٌ للمستأجر في 2450، لا حصّةً ولا
+   * عمولة حتى يقابله قسط»): إجماليُّه دائنٌ في `2450`، ولا تُقسم منه حصّةٌ ولا عمولة.
+   */
+  baseTenantCredit?: number;
+  /** حسابُ البنك أو الصندوق حين يُقبض على بنكٍ أو درج (ق-٢٧٧)؛ و`2450` حين يُخصم القسطُ من رصيد المستأجر (`ق-١٦٢٩`). */
   cashAccountId?: string | null;
+  /** مذكّرةُ القيد حين لا يكون قبضاً (الخصمُ من رصيد المستأجر) — وإلا «قبض إيجار للمالك». */
+  memo?: string;
 }
 
 /**
@@ -1064,11 +1071,12 @@ export async function postOwnerRentCollectionEntry(tx: Prisma.TransactionClient,
   if (p.baseOwnerShare > 0) lines.push({ accountId: await getOrCreateOwnerShareAccount(tx, companyId), debit: 0, credit: round2(p.baseOwnerShare) });
   if (p.baseCommission > 0) lines.push({ accountId: await getOrCreateOperatingCommissionAccount(tx, companyId), debit: 0, credit: round2(p.baseCommission) });
   if (p.baseCommissionTax > 0) lines.push({ accountId: ids.get(OUTPUT_VAT_ACCOUNT)!, debit: 0, credit: round2(p.baseCommissionTax) });
+  if ((p.baseTenantCredit ?? 0) > 0) lines.push({ accountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId), debit: 0, credit: round2(p.baseTenantCredit!) });
 
   return createJournalEntry(tx, {
     companyId,
     date: p.date,
-    memo: `قبض إيجار للمالك ${p.ownerName} — عقد ${p.contractNo} — ${p.tenant}`,
+    memo: p.memo ?? `قبض إيجار للمالك ${p.ownerName} — عقد ${p.contractNo} — ${p.tenant}`,
     unitId: p.unitId,
     lines,
     auto: true,
@@ -1201,6 +1209,51 @@ export async function postRentAccrualEntry(
     customerId: a.customerId ?? null,
   });
 
+  return { entry, earned: split.earned, deferred: split.deferred };
+}
+
+export interface TenantCreditTransferForPosting {
+  customerId?: string | null;
+  /** ⭐ البُعد التحليلي — وحدةُ العقد المجدَّد. */
+  unitId: string;
+  branchId?: string | null;
+  /** العقدُ المجدَّد (القسطُ عليه) والأصلُ (الرصيدُ منه) — في المذكّرة. */
+  contractNo: string;
+  sourceContractNo: string;
+  tenant: string;
+  date: Date;
+  /** فترةُ خدمة القسط — تقسم الصافيَ بين `4200` و`2400` كقيد الاستحقاق. */
+  service?: ServicePeriod | null;
+  /** صافي ما نُقل بعملة الدفتر. */
+  baseNet: number;
+}
+
+/**
+ * ⚖️ **خصمُ رصيد المستأجر من أوّل قسطٍ في التجديد** (توجيه ٢٧٨ · `ق-١٦٢٩`، بحكم صاحب المشروع: «رصيدُ المستأجر يُخصم آلياً من أوّل قسطٍ في
+ * التجديد»).
+ *
+ * مدين `2450` بالصافي ⇄ دائن `4200` بما مضى من فترة خدمة القسط + دائن `2400` بما بقي. **ولا `1200` ولا `2200`**: المالُ قُبض يومَ نشأ
+ * الرصيد (فلا ذمّةَ تُفتح ثم تُسدَّد)، وضريبتُه استُحقّت يومها (م٢٠) — فالخصمُ ينقل الصافيَ من التزامٍ للمستأجر إلى إيراد القسط وحدَه.
+ */
+export async function postTenantCreditTransferEntry(tx: Prisma.TransactionClient, companyId: string, t: TenantCreditTransferForPosting): Promise<RentPostingResult> {
+  const net = round2(t.baseNet);
+  if (net <= 0) return { entry: null, earned: 0, deferred: 0 };
+  const split = t.service ? splitAtCollection(t.service, net, t.date) : { earned: net, deferred: 0 };
+  const ids = await resolveAccountIds(tx, ['4200']);
+  const lines: PostingLine[] = [{ accountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId), debit: net, credit: 0 }];
+  if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
+  if (split.deferred > 0) lines.push({ accountId: await getOrCreateDeferredRevenueAccount(tx, companyId), debit: 0, credit: split.deferred });
+
+  const entry = await createJournalEntry(tx, {
+    companyId,
+    date: t.date,
+    memo: `خصمُ رصيد المستأجر من قسط التجديد — عقد ${t.contractNo} من رصيد العقد ${t.sourceContractNo} — ${t.tenant}`,
+    unitId: t.unitId,
+    lines,
+    auto: true,
+    branchId: t.branchId ?? null,
+    customerId: t.customerId ?? null,
+  });
   return { entry, earned: split.earned, deferred: split.deferred };
 }
 

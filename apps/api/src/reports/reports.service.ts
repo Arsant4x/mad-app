@@ -11,6 +11,7 @@ import { LINE_ORDER } from '../common/document-lines.util';
 import { deadlineView } from '../invoices/note-deadline.util';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
+import { CUSTOMER_PREPAYMENTS_CODE } from '../journal/prepayment-account.util';
 import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
 import { readLedger, sideOfAccountType } from './ledger.util';
 import { customerExposure, RentReceivableRow } from './receivables-exposure.util';
@@ -656,7 +657,10 @@ export class ReportsService {
       // ضريبةٍ ولم يُسدَّد (`Δ2200`) نقدٌ في اليد لم يمرّ بالربح — يُضاف كما يُضاف `Δ2100`.
       const deferredRevenueChange = changeFor(DEFERRED_REVENUE_CASH_FLOW_CODE);
       const outputVatChange = changeFor('2200');
-      const operatingCashFlow = round2(netProfit - receivablesChange + payablesChange + deferredRevenueChange + outputVatChange);
+      // ⚖️ ومقدَّمُ العملاء (`Δ2450`) نقدٌ في اليد لم يمرّ بالربح كذلك (توجيه ٢٧٨، القاعدة ٣٧): رصيدُ المستأجر (`ق-١٦٢٤`) ومقدَّمُ سند
+      //    القبض (`ق-١٢٦٤`) يدخلانه، وكان التشغيليُّ ينقص بصافيهما؛ وخصمُ الرصيد من قسطٍ يُنقصه ويزيد `2400` فلا يتحرّك النقد.
+      const customerPrepaymentsChange = changeFor(CUSTOMER_PREPAYMENTS_CODE);
+      const operatingCashFlow = round2(netProfit - receivablesChange + payablesChange + deferredRevenueChange + outputVatChange + customerPrepaymentsChange);
 
       // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`).
       return {
@@ -665,6 +669,7 @@ export class ReportsService {
         payablesChange: money(payablesChange),
         deferredRevenueChange: money(deferredRevenueChange),
         outputVatChange: money(outputVatChange),
+        customerPrepaymentsChange: money(customerPrepaymentsChange),
         operatingCashFlow: money(operatingCashFlow),
         fixedAssetChange: money(fixedAssetChange),
         netCashChange: money(operatingCashFlow - fixedAssetChange),
