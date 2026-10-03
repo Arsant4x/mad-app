@@ -1,0 +1,45 @@
+"Cost per message in INR on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,INR,4.5293,1.9062,1.9062,n/a,n/a
+Brazil,INR,4.5808,0.4984,0.4984,n/a,n/a
+Chile,INR,6.5135,1.4654,1.4654,n/a,n/a
+Colombia,INR,0.9161,0.0588,0.0588,n/a,n/a
+Egypt,INR,4.7191,0.2639,0.2639,4.7668,n/a
+France,INR,6.2990,2.1994,2.1994,n/a,n/a
+Germany,INR,10.0073,4.0322,4.0322,n/a,n/a
+Hong Kong,INR,5.3664,1.9056,1.9056,n/a,n/a
+Hungary,INR,6.2997,2.5583,2.5583,n/a,n/a
+India,INR,0.8631,0.1150,0.1150,2.4971,n/a
+Indonesia,INR,3.0111,1.8316,1.8316,9.9638,n/a
+Israel,INR,2.5871,0.3885,0.3885,n/a,n/a
+Italy,INR,5.8206,2.1974,2.1974,n/a,n/a
+Malaysia,INR,6.3037,1.0262,1.0262,3.0639,n/a
+Mexico,INR,2.2357,0.6226,0.6226,n/a,n/a
+Netherlands,INR,11.7078,3.6656,3.6656,n/a,n/a
+Nigeria,INR,3.7851,0.4915,0.4915,5.5035,n/a
+Pakistan,INR,3.4683,0.7333,0.7333,5.5035,n/a
+Peru,INR,5.1536,1.4662,1.4662,n/a,n/a
+Poland,INR,2.6754,0.8918,0.8918,n/a,n/a
+Qatar,INR,2.4993,0.8789,0.8789,n/a,n/a
+Romania,INR,6.2997,2.1197,2.1197,n/a,n/a
+Russia,INR,5.8767,2.9311,2.9311,n/a,n/a
+Saudi Arabia,INR,3.6621,0.7834,0.7834,4.3871,n/a
+Singapore,INR,5.3664,1.1727,1.1727,n/a,n/a
+South Africa,INR,2.7821,0.5579,0.5579,1.4681,n/a
+Spain,INR,5.1801,1.4648,1.4648,n/a,n/a
+Turkey,INR,0.7989,0.0660,0.0660,n/a,n/a
+United Arab Emirates,INR,3.6613,1.1509,1.1509,3.7342,n/a
+United Kingdom,INR,4.6496,1.6122,1.6122,n/a,n/a
+North America,INR,1.8313,0.2491,0.2491,n/a,n/a
+Rest of Africa,INR,1.6497,0.2930,0.2930,n/a,n/a
+Rest of Asia Pacific,INR,5.3664,0.8282,0.8282,n/a,n/a
+Rest of Central & Eastern Europe,INR,6.2997,1.5496,1.5496,n/a,n/a
+Rest of Latin America,INR,5.4207,0.8278,0.8278,n/a,n/a
+Rest of Middle East,INR,2.4993,0.6665,0.6665,n/a,n/a
+Rest of Western Europe,INR,4.3378,1.2516,1.2516,n/a,n/a
+Other,INR,4.4248,0.5641,0.5641,n/a,n/a

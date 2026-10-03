@@ -1,0 +1,196 @@
+# id	source	app	date	stars	themes(comma)	paraphrase (no names, no personal data)
+Q-A1	AS-SA	Qoyod	2026-09-20	1	GEN	ضعيف ويحتاج تطويراً، يهدّد بالإلغاء
+Q-A2	AS-SA	Qoyod	2026-09-10	1	BILL	طلب الإلغاء قبل التجديد وخُصم التجديد
+Q-A3	AS-SA	Qoyod	2026-08-17	1	STAB,MOB	يعلّق، والموقع لا يفتح بالجوال فيُجبَر على التطبيق
+Q-A4	AS-SA	Qoyod	2026-06-20	1	SPAM	رسائل ترويج عبر واتساب
+Q-A5	AS-SA	Qoyod	2026-06-11	1	ACC,MOB	الفواتير مع الخصومات تعطي نتائج خاطئة، وفرق بين المتصفح والتطبيق
+Q-A6	AS-SA	Qoyod	2026-02-12	1	STAB,SUPP	بطيء ولا دعم يحلّ
+Q-A7	AS-SA	Qoyod	2025-10-23	1	SUPP	الدعم صار يأخذ أسبوعاً
+Q-A8	AS-SA	Qoyod	2025-02-28	1	STAB	التطبيق لا يفتح منذ أشهر
+Q-A9	AS-SA	Qoyod	2025-02-03	1	BILL,SUPP	السعر يتضاعف بعد سنتين، وإجابات متضاربة من الموظفين
+Q-A10	AS-SA	Qoyod	2024-10-04	2	STAB	بطيء جداً
+Q-A11	AS-SA	Qoyod	2024-08-10	1	STAB,UPD	تحديث لا يُعتمد عليه، يعمل مرة ويفشل مرات
+Q-A12	AS-SA	Qoyod	2024-07-08	3	UPD,UX	التحديث الأخير سيئ ومعقد
+Q-A13	AS-SA	Qoyod	2024-07-05	1	STAB,LOGIN,SUPP	بطء وخروج مستمر وتجمّد يحتاج إعادة تثبيت، بلا معالجة
+Q-A14	AS-SA	Qoyod	2024-07-01	1	STAB	تعليق ثم توقف تام
+Q-A15	AS-SA	Qoyod	2024-05-14	1	ACC,STAB,SUPP	فواتير تُلغى وحدها، وبطء، وخدمة سيئة
+Q-A16	AS-SA	Qoyod	2024-02-13	3	UPD,LOGIN	بعد التحديث لا يمكن الدخول
+Q-A17	AS-SA	Qoyod	2023-10-23	1	STAB	لا يعمل جيداً رغم التحديثات
+Q-A18	AS-SA	Qoyod	2023-05-15	1	BILL,SUPP	إيقاف الحساب ثلاثة أيام بخطأ موظف، بلا طباعة فواتير
+Q-A19	AS-SA	Qoyod	2022-10-24	1	INV	قالب الفاتورة: لا ترويسة ولا تذييل، والمجاميع تنتقل لصفحة ثانية
+Q-A20	AS-SA	Qoyod	2022-03-10	1	BILL,STAB,HW	إيقاف الاشتراك منتصف المدة، تعليق، جهاز نقطة البيع الموعود غير متوفر
+Q-A21	AS-SA	Qoyod	2022-02-16	3	INV	تنزيل الفاتورة لا يعمل ولا مشاركة
+Q-A22	AS-SA	Qoyod	2022-02-12	3	COMP,INV,UX	فاتورة نقطة البيع ناقصة الأركان (شروط/سياسة استرجاع)، وتعقيد
+Q-A23	AS-SA	Qoyod	2022-01-06	1	INV	عرض الفاتورة PDF لا يعمل
+Q-A24	AS-SA	Qoyod	2022-01-03	1	SUPP	الدعم الفني الأسوأ
+Q-A25	AS-SA	Qoyod	2021-12-03	1	LOGIN,SYNC	يخرج تلقائياً عند انقطاع الإنترنت
+Q-A26	AS-SA	Qoyod	2020-10-11	1	ONB	لم يستطع الدخول أو التسجيل
+Q-A27	AS-SA	Qoyod	2020-07-10	1	ONB	كيف نسجّل؟
+Q-A28	AS-SA	Qoyod	2020-07-05	1	ONB	لا خانة لتسجيل جديد
+Q-A29	AS-SA	Qoyod	2020-01-13	1	ACC	الفاتورة تضع كمية المخزون كاملة
+Q-A30	AS-SA	Qoyod	2019-11-03	1	ONB	ما طريقة التسجيل؟
+D-A1	AS-SA	Daftra	2026-04-22	3	GEN	جيد (بلا شكوى)
+D-A2	AS-SA	Daftra	2026-01-31	1	LOGIN,SUPP	يطلب الدخول مراراً، ودعم سيئ
+D-A3	AS-SA	Daftra	2025-07-31	1	BILL	حدّ العملاء في الباقة لا يتجدد
+D-A4	AS-SA	Daftra	2024-12-31	1	BILL	الخصومات للمشتركين الجدد فقط
+D-A5	AS-SA	Daftra	2024-10-30	1	GEN	سيئ جداً
+D-A6	AS-SA	Daftra	2024-07-29	1	MOB,STAB	نسخة من الموقع، بطيء ويعلّق
+D-A7	AS-SA	Daftra	2024-02-24	1	SUPP,HW	مبيعات ودعم سيئان، ولا يطبع إن كان الكاشير آيفون
+D-A8	AS-SA	Daftra	2023-12-30	3	SUPP	دعم ضعيف ودوام محدود وتحويلات
+D-A9	AS-SA	Daftra	2023-12-04	1	UPD,STAB	بعد التحديث صار بطيئاً
+D-A10	AS-SA	Daftra	2023-08-23	1	UPD,STAB	التحديث الأخير يقفل التطبيق
+D-A11	AS-SA	Daftra	2023-07-10	1	SUPP,ACC,REP	الأرباح لا تظهر بوضوح، ومشاكل مخزون سابقة، ودعم ضعيف
+D-A12	AS-SA	Daftra	2022-09-14	1	SUPP	الدعم مهذب بلا حلّ
+D-A13	AS-SA	Daftra	2022-03-27	1	SUPP,REP	سنة ولم تُحلّ تقارير الفروع
+D-A14	AS-SA	Daftra	2022-01-03	1	LANG	لا إنجليزية رغم الوصف
+D-A15	AS-SA	Daftra	2021-12-22	1	SUPP	بريد الدعم لا يصل والهاتف لا يُجاب
+D-A16	AS-SA	Daftra	2021-12-10	1	ONB	خانة الهاتف في البداية لا تُعبّأ
+D-A17	AS-SA	Daftra	2021-12-06	1	SUPP	لا ردّ على البريد والهاتف
+D-A18	AS-SA	Daftra	2020-11-20	1	GEN	لا ينصح به
+D-A19	AS-SA	Daftra	2019-02-23	1	UX	تصميم سيئ
+DP-A1	AS-SA	Daftra POS	2023-11-06	2	SUPP	تطبيق وخدمة عملاء سيئان
+O-A1	AS-SA	Odoo	2025-12-28	1	MOB	تطبيق الجوال غلاف ويب رخيص
+O-A2	AS-SA	Odoo	2024-10-13	1	MOB	أسوأ واجهة جوال
+O-A3	AS-SA	Odoo	2023-05-06	1	STAB	التطبيق لا يعمل
+O-A4	AS-SA	Odoo	2021-08-23	1	BILL,IMPL	كلفة تطبيق مخفية أضعاف السعر، ورفض الاسترداد
+O-A5	AS-SA	Odoo	2021-07-28	2	LOGIN	حلقة تسجيل دخول
+F-A1	AS-SA	Foodics Cashier	2026-08-18	1	SYNC	مزامنة سيئة مع لوحة التحكم
+F-A2	AS-SA	Foodics Cashier	2026-07-29	1	BILL	أُلغي العقد لارتفاع السعر
+F-A3	AS-SA	Foodics Cashier	2025-10-19	1	LANG	لا إنجليزية
+F-A4	AS-SA	Foodics Cashier	2025-06-04	1	GEN	فاشلون
+F-A5	AS-SA	Foodics Cashier	2025-01-16	1	UPD,STAB,LOGIN	بعد التحديث يُغلق ويخرج، والنظام كله متوقف
+F-A6	AS-SA	Foodics Cashier	2023-07-21	1	STAB	لا يعمل جيداً
+F-A7	AS-SA	Foodics Cashier	2023-01-14	3	FEAT	لا إلغاء لبند أُدخل خطأ (void)
+F-A8	AS-SA	Foodics Cashier	2021-12-04	2	UX,FIT,SUPP	معقد، لا يدعم التجزئة، الدعم لا يعرف المنتج
+F-A9	AS-SA	Foodics Cashier	2021-11-20	3	COMP	متى تحديث الفاتورة الإلكترونية
+F-A10	AS-SA	Foodics Cashier	2021-11-19	1	UPD	أقل من الإصدار السابق
+F-A11	AS-SA	Foodics Cashier	2021-11-09	1	UPD	القديم أفضل
+F-A12	AS-SA	Foodics Cashier	2021-04-30	1	UPD,UX	اللوحة القديمة أبسط
+F-A13	AS-SA	Foodics Cashier	2021-04-01	3	FEAT,INTEG	void قبل المطبخ، وطلبات API لا تُعدَّل
+F-A14	AS-SA	Foodics Cashier	2020-12-15	1	SYNC,UX,BILL,UPD	رفع الطلبات للوحة، شاشة معقدة، اشتراك مرتفع
+F-A15	AS-SA	Foodics Cashier	2020-12-06	1	UX,BILL,FIT	معقد ومكلف للمطعم الصغير
+F-A16	AS-SA	Foodics Cashier	2020-10-25	3	GEN	يحتاج تطويراً
+F-A17	AS-SA	Foodics Cashier	2020-09-07	1	UPD,UX	أسوأ تحديث
+F-A18	AS-SA	Foodics Cashier	2020-08-10	2	UPD,REP	السابق أفضل، وتقارير اللوحة ضعيفة
+F-A19	AS-SA	Foodics Cashier	2020-08-01	1	SYNC,UPD	لا يزامن كل الفواتير بعد التحديث
+FA-A1	AS-SA	Foodics AI	2026-02-17	1	UPD,UX	القديم أفضل، لا يخدم المطاعم
+FA-A2	AS-SA	Foodics AI	2026-02-04	2	STAB	يعلّق
+W-A1	AS-SA	Wafeq	2026-06-30	1	MOB	لا يدعم الآيباد أفقياً
+W-A2	AS-SA	Wafeq	2025-03-21	3	FEAT	لا عرض سعر
+W-A3	AS-SA	Wafeq	2025-02-24	1	SUPP,ONB	عشرة أيام بلا فاتورة واحدة، دعم خارج المملكة
+W-A4	AS-SA	Wafeq	2025-02-23	3	FEAT	لا عرض سعر
+RA-A1	AS-SA	Rewaa Assistant	2026-07-09	1	SUPP	الموظفون لا يحلّون
+RA-A2	AS-SA	Rewaa Assistant	2026-04-28	2	MOB	التفاصيل والصلاحيات في التطبيق محدودة
+RA-A3	AS-SA	Rewaa Assistant	2026-04-12	1	UPD	التطبيق الجديد غيّر الإقفال اليومي
+Z-A1	AS-SA	Zoho Books	2026-07-14	3	GEN	بلا نص
+Z-A2	AS-SA	Zoho Books	2024-05-04	3	MOB	اعتماد القيود اليدوية والمهام غير متاحة في التطبيق
+Z-A3	AS-SA	Zoho Books	2023-07-02	1	MOB,COMP	لا خانة للسجل التجاري في تطبيق الجوال
+Z-A4	AS-SA	Zoho Books	2022-03-24	3	LANG	لا عربية في iOS
+Z-A5	AS-SA	Zoho Books	2021-10-27	1	LANG	لا عربية
+Q-P1	GP-ar	Qoyod	2026-07-13	2	STAB,LOGIN	يتجمد عند الفتح ولا يدخل
+Q-P2	GP-ar	Qoyod	2025-07-05	3	FEAT	أرقام الأصناف البديلة عند الإدخال
+Q-P3	GP-ar	Qoyod	2023-11-27	1	UPD,SUPP	تغييرات متكررة، والدعم يردّ ولا يحلّ
+Q-P4	GP-ar	Qoyod	2025-08-10	1	UPD,LOGIN	بعد التحديث لا يدخل
+Q-P5	GP-ar	Qoyod	2022-03-09	1	SUPP	ثلاثة أيام بلا حلّ
+Q-P6	GP-ar	Qoyod	2024-04-23	1	LOGIN,STAB	خروج تلقائي وبطء وتعليق
+Q-P7	GP-ar	Qoyod	2024-05-17	1	MOB,STAB,REP	التطبيق يحوّل للمتصفح، التقارير وكشف الحساب لا تظهر
+Q-P8	GP-ar	Qoyod	2022-06-08	3	MOB	البيع شاملاً الضريبة على الحاسوب فقط
+Q-P9	GP-ar	Qoyod	2023-11-19	1	STAB,SUPP,UPD	يعلّق، والدعم بطيء، وتحديثات بلا إخطار
+Q-P10	GP-ar	Qoyod	2022-06-21	2	LANG	لا يمكن تغيير اللغة
+Q-P11	GP-ar	Qoyod	2021-03-24	1	ONB	يريد عرضاً قبل الاشتراك
+Q-P12	GP-ar	Qoyod	2025-05-25	1	STAB,ACC,UX,SUPP	بطء، توجيه المستندات للمشروعات يحتاج تأكيداً ثانياً، واختيار آخر عميل تلقائياً بلا تحذير
+Q-P13	GP-ar	Qoyod	2022-01-09	1	SUPP,FEAT	لا إقفال سنوي، وخدمة سيئة
+Q-P14	GP-ar	Qoyod	2026-03-28	1	SUPP	الدعم لا يفهم
+Q-P15	GP-ar	Qoyod	2025-03-12	1	STAB	يعمل يوماً ويتوقف، يحتاج إعادة تثبيت
+Q-P16	GP-ar	Qoyod	2021-01-07	4	STAB	(٤ نجوم) ينغلق عند إدخال الكمية
+D-P1	GP-ar	Daftra	2020-11-26	2	FEAT,SYNC	لا وحدات قياس للصنف، لا يعمل بلا إنترنت، لا عملة ثانية في البيع
+D-P2	GP-ar	Daftra	2024-09-08	1	ONB,UX	إنشاء الحساب طويل ومعطوب
+D-P3	GP-ar	Daftra	2023-07-11	1	SUPP,FEAT,INTEG,COMP	لا إشعار مدين، والربط مع سلة يرحّل بفروقات ضريبة
+D-P4	GP-ar	Daftra	2024-04-02	1	SPAM	اتصالات وواتساب بعد حذف التطبيق
+D-P5	GP-ar	Daftra	2024-08-29	2	MOB,UX	موقع لا تطبيق
+D-P6	GP-ar	Daftra	2023-07-23	2	BILL,STAB,PRIV	سعر المستخدم الإضافي، مشاكل نقاط البيع، والدعم يدخل ويعدّل بلا تحكم المالك
+D-P7	GP-ar	Daftra	2021-11-28	1	FEAT,BILL	العمولات ثابتة، ومندوب واحد للفاتورة، وكل مندوب مستخدم مدفوع
+D-P8	GP-ar	Daftra	2021-08-28	1	LOGIN	لا يستطيع الدخول بمستخدمه
+D-P9	GP-ar	Daftra	2019-05-31	5	FEAT,SYNC	(٥ نجوم) قراءة باركود بالكاميرا، وعمل بلا إنترنت
+D-P10	GP-ar	Daftra	2020-09-01	5	FEAT	(٥ نجوم) تحويل عرض السعر لفاتورة، دفع جزئي
+D-P11	GP-ar	Daftra	2019-01-22	5	BILL,FEAT	(٥ نجوم) حدّ ١٥ فاتورة، وسلة محذوفات
+D-P12	GP-ar	Daftra	2022-10-10	5	UPD	(٥ نجوم) ميزة اختفت بعد التحديث ثم عادت
+DP-P1	GP-ar	Daftra POS	2025-11-13	1	STAB,HW	بطء التنقل، البلوتوث لا يربط، إعادة تثبيت
+DP-P2	GP-ar	Daftra POS	2025-12-21	1	HW	لا يربط الطابعة بالبلوتوث
+DP-P3	GP-ar	Daftra POS	2024-11-02	3	STAB	يعلّق عند البحث عن المنتجات
+DP-P4	GP-ar	Daftra POS	2025-01-21	1	STAB	بطيء جداً
+DP-P5	GP-ar	Daftra POS	2024-06-18	1	STAB,HW	ثقيل، غير متوافق مع طابعات الأجهزة المحمولة
+DP-P6	GP-ar	Daftra POS	2024-05-25	1	STAB,ACC,UPD	يتعطل، الفواتير لا تُسجَّل، القديم أفضل
+DP-P7	GP-ar	Daftra POS	2026-04-15	2	GEN	لم يجرّبه
+DP-P8	GP-ar	Daftra POS	2022-07-02	3	UPD	لا يعمل بعد التحديث
+DP-P9	GP-ar	Daftra POS	2025-08-15	1	GEN	لا يُحذف
+DP-P10	GP-ar	Daftra POS	2023-12-11	3	STAB	معلّق
+DP-P11	GP-ar	Daftra POS	2025-08-07	1	STAB,SUPP	بطيء، وتبرير الأعطال
+DP-P12	GP-ar	Daftra POS	2024-01-18	1	UPD	كل عميل يطلب التحديث
+DP-P13	GP-ar	Daftra POS	2025-05-05	2	GEN	نص محايد
+DP-P14	GP-ar	Daftra POS	2024-02-18	5	FEAT	(٥ نجوم) لا مشتريات ولا تكلفة
+DP-P15	GP-ar	Daftra POS	2024-02-09	5	HW	(٥ نجوم) لا يربط الطابعة
+DP-P16	GP-ar	Daftra POS	2022-11-10	5	HW	(٥ نجوم) لا يعمل على أندرويد ٦ والأجهزة المحمولة
+R-P1	GP-ar	Rewaa POS	2026-04-08	1	UPD,ACC	بعد التحديث: مرتجع المشتريات متوقف ومبلغ يخالف المسجَّل
+R-P2	GP-ar	Rewaa POS	2026-08-09	1	SUPP	الدعم يُشعرك أنك المخطئ
+R-P3	GP-ar	Rewaa POS	2024-10-22	2	UPD,SUPP,FEAT	تحديثات إجبارية، شكوى شهراً بلا حلّ، مقترحات مهملة
+R-P4	GP-ar	Rewaa POS	2026-06-20	1	GEN	فاشل
+R-P5	GP-ar	Rewaa POS	2026-07-15	1	HW,SUPP	الجهاز سيئ، والفريق التقني لا يحلّ
+R-P6	GP-ar	Rewaa POS	2025-03-21	1	FEAT	إخراج المخزون بسعر التكلفة، وتوجيه طابعات المطبخ (محلي/سفري)
+R-P7	GP-ar	Rewaa POS	2025-10-08	1	UPD,ACC,SUPP,BILL	بعد التحديث يحذف أسعاراً وأصنافاً، والدعم الميداني بمقابل وغير متوفر
+R-P8	GP-ar	Rewaa POS	2025-01-13	1	SUPP,UX	دعم صفري ولا مرونة
+R-P9	GP-ar	Rewaa POS	2025-04-22	1	STAB,SUPP	أخطاء يومية، والدعم يلوم المستخدم ثم ١٥ يوماً للحل
+R-P10	GP-ar	Rewaa POS	2024-12-06	2	LOGIN	عمل يوماً ثم لا يدخل
+R-P11	GP-ar	Rewaa POS	2026-08-23	1	ACC	حُذفت مدفوعات العملاء
+R-P12	GP-ar	Rewaa POS	2026-03-15	1	SUPP	تحويل من شخص لآخر
+R-P13	GP-ar	Rewaa POS	2024-12-04	1	ONB	لم تصل رسالة البريد
+R-P14	GP-ar	Rewaa POS	2025-04-30	1	SUPP	خدمة ما بعد البيع
+R-P15	GP-ar	Rewaa POS	2024-07-04	1	ONB	لم يتم التسجيل
+R-P16	GP-ar	Rewaa POS	2025-01-15	1	BILL	لم تُردّ الأموال بعد التجربة
+R-P17	GP-ar	Rewaa POS	2025-03-26	1	GEN	سيئ جداً
+RA-P1	GP-ar	Rewaa Assistant	2026-08-09	1	SUPP,SALES	ما اتُّفق عليه مع المبيعات رفضه الدعم
+RA-P2	GP-ar	Rewaa Assistant	2026-07-13	1	SUPP,SALES	خدمة عملاء ومبيعات سيئة
+FAd-P1	GP-ar	Foodics Admin	2023-11-29	1	SUPP	لا دعم بعد البيع
+FAd-P2	GP-ar	Foodics Admin	2024-05-08	1	GEN	سيئ جداً
+FAI-P1	GP-ar	Foodics AI	2024-12-04	1	STAB	بطيء ولا يعمل
+FAI-P2	GP-ar	Foodics AI	2025-12-31	1	BILL,STAB	معلّق، وهمّهم جمع المال
+FAI-P3	GP-ar	Foodics AI	2025-04-25	5	UPD,REP	(٥ نجوم) التحديث قلّص طرق الدفع في التحليل
+MF-P1	GP-ar	My Foodics	2024-10-09	5	LOGIN,REP	(٥ نجوم) إدخال البيانات كل مرة، وتقارير أكثر
+Z-P1	GP-ar	Zoho Books	2026-05-23	1	GEN	لا علاقة بالمنتج
+Z-P2	GP-ar	Zoho Books	2021-12-25	3	LANG	العربية ناقصة وتتحول للإنجليزية
+Z-P3	GP-ar	Zoho Books	2019-08-08	1	LANG,UX,SUPP	صعب، لا عربية، ولا دعم بالعربية
+Z-P4	GP-ar	Zoho Books	2019-05-24	1	LANG	تنقصه العربية
+Z-P5	GP-ar	Zoho Books	2019-10-25	1	UX,LANG	صعب، وياليت العربية
+Z-P6	GP-ar	Zoho Books	2024-03-13	1	GEN	غير مفهوم
+Z-P7	GP-ar	Zoho Books	2024-10-16	1	PRIV	يدّعي انتهاك خصوصيته
+Z-P8	GP-ar	Zoho Books	2025-08-13	5	LANG	(٥ نجوم) كشف الحساب ينزل بالإنجليزية ناقصاً
+Z-P9	GP-ar	Zoho Books	2022-06-14	5	SUPP,LANG	(٥ نجوم) لا فريق دعم عربي
+Z-P10	GP-ar	Zoho Books	2020-07-07	5	LANG	(٥ نجوم) لا عربية
+Z-P11	GP-ar	Zoho Books	2025-11-24	4	FIT	(٤ نجوم) لا يناسب ورشة سيارات
+Z-P12	GP-ar	Zoho Books	2021-03-23	4	LANG	(٤ نجوم) أضيفوا العربية
+Z-P13	GP-ar	Zoho Books	2020-11-09	5	MOB,COMP	(٥ نجوم) تطبيق الجوال لا يدعم النظام الضريبي فتتعطل المعاملات
+Z-P14	GP-ar	Zoho Books	2022-06-16	5	LANG	(٥ نجوم) تنقصه العربية
+O-P1	GP-ar	Odoo	2026-06-11	1	BILL	تطبيق مجاني ثم اشتراك إجباري أو حذف الحساب
+O-P2	GP-ar	Odoo	2026-05-22	1	IMPL,SALES	وعود مبيعات ERP لا تطابق التشغيل الفعلي
+O-P3	GP-ar	Odoo	2023-05-08	2	STAB	بطيء ويعلّق
+O-P4	GP-ar	Odoo	2025-11-27	1	SUPP,BILL	اشتراك شهري دون علمه، ولا دعم
+O-P5	GP-ar	Odoo	2021-08-01	1	LANG	لا يدعم العربية
+O-P6	GP-ar	Odoo	2021-09-15	1	BILL,UX	سعر مرتفع وصعب
+O-P7	GP-ar	Odoo	2025-07-27	1	STAB	يُغلق بخطأ
+O-P8	GP-ar	Odoo	2025-11-02	3	GEN	لم يجرّبه
+O-P9	GP-ar	Odoo	2026-03-07	3	GEN	نص إيجابي
+O-P10	GP-ar	Odoo	2020-12-14	4	MOB	(٤ نجوم) رفع المرفقات لا يكتمل في الجوال
+O-P11	GP-ar	Odoo	2026-08-10	5	STAB	(٥ نجوم) لا يفتح على الهاتف
+O-P12	GP-ar	Odoo	2026-04-19	5	LOGIN	(٥ نجوم) لا دخول بحساب Google
+FT1	TP	Foodics	2026-07-26	1	STAB,ACC,SUPP,REP	يتوقف وقت الذروة، مزيج المبيعات غير دقيق وأرقام الفترة تتغير
+FT2	TP	Foodics	2026-04-10	1	SUPP,STAB	لا يستطيع تشغيل نشاطه
+FT3	TP	Foodics	2025-10-13	1	BILL	إيداع شيك مؤجل بعد إبلاغ إغلاق النشاط
+FT4	TP	Foodics	2025-08-16	1	SUPP	الدعم الميداني ٧ أيام، البريد لا يُجاب، الدردشة تكرار
+FT5	TP	Foodics	2024-12-11	2	IMPL,INTEG,SUPP	تأخير تفعيل الطلب أونلاين
+FT6	TP	Foodics	2023-05-27	1	SUPP	لا خدمة
+FT7	TP	Foodics	2023-02-02	1	INTEG,SUPP	التكامل لا يعمل بعد ستة أشهر
+FC1	CAP	Foodics	2026-04-10	1	SUPP,STAB,INTEG	الدعم، أخطاء النظام، التدريب، التكاملات
+FC2	CAP	Foodics	2022-09-12	2	BILL,SUPP,FEAT	اشتراك مبالغ فيه، خدمة ضعيفة، مخزون ضعيف
+FC3	CAP	Foodics	2018-07-04	5	UPD	(٥ نجوم) التحديثات تجلب أخطاء
+FC4	CAP	Foodics	2018-02-16	5	MOB	(٥ نجوم) آيباد فقط
+DC1	CAP	Daftra	2022-12-14	3	FEAT	الموارد البشرية محدودة

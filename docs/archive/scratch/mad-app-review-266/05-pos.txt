@@ -1,0 +1,2832 @@
+# نقاطُ البيع
+# الكاشير: المناوبات، والبيعُ وخصمُ المخزون، ومحاولاتُ الدفع بالبطاقة، والأدراج.
+# اللقطة: 0e0a022af9198522ce4e11e1c993c181ab57153e · الملفّات: 14
+
+====================================================================================================
+// FILE: apps/api/src/pos/dto/pos-responses.dto.ts
+====================================================================================================
+import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
+import { CustomerKind, InvoiceDocType, InvoiceStatus, PosCardVerification, PosPaymentAttemptStatus, PosPaymentResolution, PosShiftStatus, TaxCategory } from '@prisma/client';
+// ⚖️ الحدُّ الوحيد بين النواة والوحدة في ردود الكاشير (`§3.8` · `ق-١٣٥٠`) — دَينٌ معلَنٌ بحجّته في `docs/country-literals-debt.json`.
+import { PosClearanceResponse } from './zatca-receipt-response.dto';
+
+/**
+ * ⚖️ **ردودُ الكاشير بأصنافٍ مسمّاة** (`ق-١٤٣٨` · خطّةُ الأنواع ④ · أوّلُ وحدةٍ الكاشير).
+ *
+ * كلُّ مسارٍ في `pos.controller.ts` يعلن ردَّه صنفاً من هنا، والمُلحَقُ يصف خاصيّاتِه من أنواعها (`nest-cli.json` — يقرأ `.dto.ts` وحدَها).
+ * **والحقولُ كما تُرسَل لا كما تُخزَّن**: المالُ والكمّيةُ (`Decimal`) نصٌّ على السلك (`"12.50"`)، والتاريخُ (`Date`) نصُّ `ISO` — فلا
+ * `Decimal` ولا `Date` هنا. **والإلزاميُّ ما يحمله كلُّ ردٍّ من المسار**، والفراغُ معلَنٌ حيث يقع (`x: string | null`)، وما يغيب في
+ * بعض مسارات الردّ اختياريّ (`x?`).
+ *
+ * ⚠️ **وحدُّه معلَن**: الصنفُ حدٌّ أدنى لا حصر — **الحقلُ الزائد غيرُ المعلَن مسموح**، وما لا تقرؤه الواجهةُ من أعمدة الجدول لم يُعلَن كلُّه.
+ * **وحارسُ الصدق الحيّ** (`scripts/response-truth.ts`) يطابق ردوداً حقيقيةً على التطبيق المبنيّ بهذه الأصناف: الإلزاميُّ والنوعُ والفراغُ
+ * والتعداد.
+ *
+ * **و`@ApiProperty` حيث لا يصف المُلحَقُ النوعَ وحدَه فقط**: التعدادُ (تعدادُ `Prisma` اتّحادُ نصوص فيقرؤه المُلحَقُ `Object`) · المنطقيُّ
+ * الحرفيّ · والاتّحادُ بين صنفين.
+ */
+
+// ───────────────────────────── المناوبة ─────────────────────────────
+
+/**
+ * المناوبةُ كما يعيدها `posShift.create` — أعمدتُها بلا مجاميع (`POST /pos/shifts`).
+ * و`variance` لا يُعلَن هنا: عمودٌ فارغٌ حتى الإقفال، ويُعلَن في ردّ الإقفال وحدَه نصّاً غيرَ فارغ (وإعلانُه هنا يجعل الوارثَ فارغاً).
+ */
+export class PosShiftResponse {
+  id!: string;
+  branchId!: string | null;
+  drawerId!: string | null;
+  openedById!: string;
+  openedByName!: string;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ enum: PosShiftStatus })
+  status!: PosShiftStatus;
+  openedAt!: string;
+  closedAt!: string | null;
+  openingFloat!: string;
+  declaredClosing!: string | null;
+  notes!: string | null;
+}
+
+/** المناوبةُ بمجاميع درجها المشتقّة — مالٌ نصّاً بخانتين والعدُّ رقم (`totalsText` · `ق-١٢٣٥`). */
+export class PosShiftWithTotalsResponse extends PosShiftResponse {
+  salesCount!: number;
+  cashTotal!: string;
+  cardTotal!: string;
+  expectedCash!: string;
+}
+
+/**
+ * ⚖️ **المناوبةُ الحالية مغلَّفةً صراحةً** (`ق-١٤٤٩`): `{ shift: null }` بلا مناوبةٍ مفتوحة — لا جسماً فارغاً يقرؤه قارئٌ `null`
+ * وآخرُ `""` أو `{}` (`Nest` يرسل `null` جسماً فارغاً — `ExpressAdapter.reply`). والمفتاحُ حاضرٌ دائماً، والفراغُ في قيمته.
+ */
+@ApiExtraModels(PosShiftWithTotalsResponse)
+export class PosCurrentShiftResponse {
+  @ApiProperty({ allOf: [{ $ref: getSchemaPath(PosShiftWithTotalsResponse) }], nullable: true })
+  shift!: PosShiftWithTotalsResponse | null;
+}
+
+/** المغلَّفُ المرقَّم لقائمة المناوبات (`?page=` — `pagedFindMany`). */
+export class PagedPosShiftResponse {
+  items!: PosShiftWithTotalsResponse[];
+  total!: number;
+  page!: number;
+  pageSize!: number;
+}
+
+/** محاولةُ بطاقةٍ لم تُحسم مسمّاةً في ردّ الإقفال (`ق-١٤١٨`) — والاستعلامُ يقصرها على الثلاث. */
+export class PosPendingAttemptResponse {
+  id!: string;
+  // مجموعةٌ جزئية من التعداد — شرطُ الاستعلام في `closeShift`.
+  @ApiProperty({ enum: ['CHARGING', 'UNKNOWN', 'APPROVED'] })
+  status!: 'CHARGING' | 'UNKNOWN' | 'APPROVED';
+  cardAmount!: string;
+  clientSaleId!: string;
+  createdAt!: string;
+}
+
+/** ردُّ الإقفال — الفرقُ نصّاً بإشارته (`"-30.00"`) وما لم يُحسم من البطاقة مسمّىً. */
+export class PosClosedShiftResponse extends PosShiftWithTotalsResponse {
+  variance!: string;
+  pendingAttempts!: PosPendingAttemptResponse[];
+}
+
+// ───────────────────────────── وقائعُ الانقطاع ─────────────────────────────
+
+export class PosIncidentItemResponse {
+  id!: string;
+  startedAt!: string;
+  endedAt!: string;
+  firstSyncedAt!: string;
+  gapMinutes!: number;
+  durationMinutes!: number;
+  salesCount!: number;
+}
+
+export class PosIncidentsResponse {
+  // منطقيٌّ حرفيّ (`true as const`): `enum` في المزخرف يجعل النوعَ عدداً (`getEnumType`) — فيُلفّ التعدادُ في `allOf`.
+  @ApiProperty({ type: Boolean, allOf: [{ type: 'boolean', enum: [true] }] })
+  inferred!: true;
+  gapMinutes!: number;
+  items!: PosIncidentItemResponse[];
+}
+
+// ───────────────────────────── البيع ─────────────────────────────
+
+/** سطرُ الفاتورة كما يُقرأ مع البيع (`LINE_ORDER` — كلُّ أعمدته). */
+export class PosSaleLineResponse {
+  id!: string;
+  lineNo!: number;
+  description!: string;
+  productId!: string | null;
+  quantity!: string;
+  unitCode!: string | null;
+  unitPrice!: string;
+  discount!: string;
+  taxRate!: string;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ enum: TaxCategory })
+  taxCategory!: TaxCategory;
+  taxExemptionReasonCode!: string | null;
+  taxExemptionReason!: string | null;
+}
+
+/** المشتري — علاقةٌ إلزاميةٌ على الفاتورة (`customerId` غيرُ فارغ)، فلا فراغ. */
+export class PosSaleCustomerResponse {
+  id!: string;
+  name!: string;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ enum: CustomerKind })
+  kind!: CustomerKind;
+  vatNumber!: string | null;
+  phone!: string | null;
+  otherIdScheme!: string | null;
+  otherId!: string | null;
+  country!: string;
+}
+
+/** صفُّ دفعٍ لكل طريقة — نقدٌ أو بطاقةٌ بمبلغه، وبمَ ثبتت البطاقة (`ق-١٣٩٧`). */
+export class PosPaymentRowResponse {
+  id!: string;
+  // العمودُ نصٌّ حرّ، والكاتبُ الوحيد (`completeSaleWithinTx`) يكتب طريقةَ الجزء: نقدٌ أو بطاقة.
+  @ApiProperty({ enum: ['CASH', 'CARD'] })
+  method!: 'CASH' | 'CARD';
+  amount!: string;
+  // تعدادُ Prisma فارغٌ لصفّ النقد.
+  @ApiProperty({ enum: PosCardVerification, nullable: true })
+  verification!: PosCardVerification | null;
+  providerRef!: string | null;
+  deviceReference!: string | null;
+  approvalCode!: string | null;
+  attemptId!: string | null;
+  createdAt!: string;
+}
+
+/**
+ * **إيصالُ البيع — ما يحمله كلُّ مسارٍ يعيد بيعاً** (`withReceiptQr`): الفاتورةُ بسطورها ومشتريها وصفوفِ دفعها، ورمزُ الإيصال.
+ * هو ردُّ الإعادة في المزامنة وإيصالُ محاولة الدفع المكتملة. (ولا `relatedInvoice` ولا `outstanding` ولا ما يشبههما: لا يُرسَل هنا.)
+ */
+export class PosSaleReceiptResponse {
+  /**
+   * ⚖️ **رمزُ الإيصال باسمٍ محايدٍ على السلك** (`ق-١٤٤٨`): حمولتُه (TLV بـbase64) — `null` حين يغيب الاسمُ القانونيّ أو الرقمُ
+   * الضريبيّ فلا رمزَ يصحّ، أو حين تُحجب الكاملةُ حتى إجازتها. **اسمُه وظيفتُه لا اسمُ الجهة** — فلا علامةَ سعوديةً على السلك.
+   */
+  receiptQr!: string | null;
+  /** خُتم المستندُ (التوقيعُ والرمزُ التساعيّ) — `false` بلا ختمٍ بعد. */
+  stamped!: boolean;
+  id!: string;
+  no!: string;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ enum: InvoiceDocType })
+  docType!: InvoiceDocType;
+  @ApiProperty({ enum: InvoiceStatus })
+  status!: InvoiceStatus;
+  customerId!: string;
+  branchId!: string | null;
+  issueDate!: string;
+  dueDate!: string;
+  issuedAt!: string | null;
+  issuedOffsetMin!: number | null;
+  subtotal!: string;
+  taxTotal!: string;
+  total!: string;
+  notes!: string | null;
+  currency!: string;
+  exchangeRate!: string;
+  posShiftId!: string | null;
+  // العمودُ نصٌّ حرّ يكتبه الكاشيرُ وحدَه بطريقة البيع (`@IsIn` في `CreatePosSaleDto`)، وفارغٌ في المخطَّط.
+  @ApiProperty({ enum: ['CASH', 'CARD', 'SPLIT'], nullable: true })
+  paymentMethod!: 'CASH' | 'CARD' | 'SPLIT' | null;
+  clientSaleId!: string | null;
+  offlineRef!: string | null;
+  createdAt!: string;
+  lines!: PosSaleLineResponse[];
+  customer!: PosSaleCustomerResponse;
+  posPayments!: PosPaymentRowResponse[];
+}
+
+/** بندٌ هبط رصيدُه تحت الصفر — الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`). */
+export class PosStockBelowZeroResponse {
+  productId!: string;
+  resultingQty!: string;
+}
+
+/** (`ق-١٤٦٩`) صنفٌ خرج مؤقّتاً **بتكلفة صفر** — بكمّيته نصّاً ومصدر تكلفته؛ و`NONE` صفرٌ بلا مصدر. */
+export class PosZeroCostProvisionalResponse {
+  productId!: string;
+  qty!: string;
+  @ApiProperty({ enum: ['WAREHOUSE_LAYER', 'PRODUCT_LAYER', 'PRODUCT_CARD', 'NONE'] })
+  costSource!: 'WAREHOUSE_LAYER' | 'PRODUCT_LAYER' | 'PRODUCT_CARD' | 'NONE';
+}
+
+/** خُصم المخزون — فرعُ `deducted: true` من `StockDeductionReport`. */
+export class PosStockDeductedResponse {
+  // منطقيٌّ حرفيٌّ يميّز الفرعين: `enum` في المزخرف يجعل النوعَ عدداً (`getEnumType`) — فيُلفّ التعدادُ في `allOf`.
+  @ApiProperty({ type: Boolean, allOf: [{ type: 'boolean', enum: [true] }] })
+  deducted!: true;
+  warehouseId!: string;
+  movements!: number;
+  belowZero!: PosStockBelowZeroResponse[];
+  /** ما خرج بلا طبقة — نصّاً بثلاث خانات. */
+  provisionalQty!: string;
+  zeroCostProvisional!: PosZeroCostProvisionalResponse[];
+}
+
+/** تُخطّي الخصم صراحةً — فرعُ `deducted: false`. */
+export class PosStockSkippedResponse {
+  @ApiProperty({ type: Boolean, allOf: [{ type: 'boolean', enum: [false] }] })
+  deducted!: false;
+  @ApiProperty({ enum: ['NO_BRANCH_WAREHOUSE', 'NO_TRACKED_PRODUCTS'] })
+  reason!: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS';
+}
+
+/**
+ * تقريرُ الخصم **اتّحادٌ مميَّزٌ بـ`deducted`** — صنفان في `oneOf` لا صنفٌ بحقولٍ اختيارية، كي يبقى النوعُ المولَّد للواجهة
+ * `Deducted | Skipped` تُضيّقه `deducted` كما يفعل نوعُ الخادم (`deduction.deducted && deduction.belowZero`).
+ */
+const STOCK_DEDUCTION = { oneOf: [{ $ref: getSchemaPath(PosStockDeductedResponse) }, { $ref: getSchemaPath(PosStockSkippedResponse) }] };
+
+/** **بيعٌ أُتمّ الآن** (`finishReceipt`) — `POST /pos/sales` لا يعرف الإعادة (لا `clientSaleId` في جسمه)، فالثلاثةُ حاضرةٌ دائماً. */
+@ApiExtraModels(PosStockDeductedResponse, PosStockSkippedResponse)
+export class PosSaleResponse extends PosSaleReceiptResponse {
+  // اتّحادُ صنفين — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ type: Object, ...STOCK_DEDUCTION })
+  stockDeduction!: PosStockDeductedResponse | PosStockSkippedResponse;
+  stampError!: string | null;
+  clearance!: PosClearanceResponse;
+}
+
+/**
+ * **المزامنة** — أوّلُها يُتمّ البيعَ (`finishReceipt`: الثلاثةُ حاضرة)، **وإعادتُها بالمعرّف نفسِه تعيد الإيصالَ وحدَه**
+ * (`withReceiptQr`: لا خصمَ ولا ختمَ ولا إجازة) — فالثلاثةُ اختيارية.
+ */
+@ApiExtraModels(PosStockDeductedResponse, PosStockSkippedResponse)
+export class PosSyncedSaleResponse extends PosSaleReceiptResponse {
+  // اتّحادُ صنفين — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ type: Object, required: false, ...STOCK_DEDUCTION })
+  stockDeduction?: PosStockDeductedResponse | PosStockSkippedResponse;
+  stampError?: string | null;
+  clearance?: PosClearanceResponse;
+}
+
+// ───────────────────────────── بوابةُ الدفع ومحاولاتُها ─────────────────────────────
+
+/** `{ active: false }` بلا ربط، أو المزوّدُ ومهلةُ جهازه بالمللي ثانية (`ق-١٣٩٨`). */
+export class PosPaymentModeResponse {
+  active!: boolean;
+  provider?: string;
+  deadlineMs?: number;
+}
+
+/** دليلُ الحسم اليدويّ (`ق-١٣٩٩`) — حاضرٌ حين حُسمت بالدليل وحدَه. */
+export class PosAttemptEvidenceResponse {
+  deviceReference!: string | null;
+  approvalCode!: string | null;
+  note!: string | null;
+}
+
+/** المحاولةُ كما تخرج (`present`) — المالُ نصّاً، ولا لقطةَ البيع كاملةً. */
+export class PosPaymentAttemptResponse {
+  id!: string;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object.
+  @ApiProperty({ enum: PosPaymentAttemptStatus })
+  status!: PosPaymentAttemptStatus;
+  clientSaleId!: string;
+  shiftId!: string;
+  cardAmount!: string;
+  // لا فراغ: لقطةُ البيع (`sale Json`) إلزاميةٌ في المخطَّط، وغيابُ مجموعها يرمي `500` لا `null` (مراجعةُ الصنف).
+  total!: string;
+  // من لقطة البيع — طريقةُ `CreatePosSaleDto`.
+  @ApiProperty({ enum: ['CASH', 'CARD', 'SPLIT'], nullable: true })
+  paymentMethod!: 'CASH' | 'CARD' | 'SPLIT' | null;
+  currency!: string;
+  provider!: string;
+  providerRef!: string | null;
+  approvalCode!: string | null;
+  declineReason!: string | null;
+  detail!: string | null;
+  invoiceId!: string | null;
+  chargeStartedAt!: string | null;
+  resolvedAt!: string | null;
+  @ApiProperty({ enum: PosPaymentResolution, nullable: true })
+  resolution!: PosPaymentResolution | null;
+  resolvedByName!: string | null;
+  evidence!: PosAttemptEvidenceResponse | null;
+  createdAt!: string;
+}
+
+/** المحاولةُ بإيصال بيعها (`view`) — `null` ما لم تكتمل. ردُّ القراءة والشحن والحسمين والإلغاء. */
+export class PosPaymentAttemptWithSaleResponse extends PosPaymentAttemptResponse {
+  sale!: PosSaleReceiptResponse | null;
+}
+
+/** المحاولةُ المفتوحة في القائمة — باسم كاشير مناوبتها. */
+export class PosOpenPaymentAttemptResponse extends PosPaymentAttemptResponse {
+  cashierName!: string;
+}
+
+// ───────────────────────────── مطابقةُ البطاقة ─────────────────────────────
+
+/** دفعةُ بطاقةٍ لم تمرّ بالمزوّد (`ق-١٣٩٧`) — بحال المطابقة والمهلة. */
+export class PosCardVerificationRowResponse {
+  posPaymentId!: string;
+  invoiceId!: string;
+  invoiceNo!: string;
+  /** يومُ الفاتورة `YYYY-MM-DD`. */
+  issueDate!: string;
+  amount!: string;
+  // مجموعةٌ جزئية من التعداد — شرطُ الاستعلام في `rows()`.
+  @ApiProperty({ enum: ['DEVICE_REFERENCE', 'MANUAL_EVIDENCE'] })
+  verification!: 'DEVICE_REFERENCE' | 'MANUAL_EVIDENCE';
+  deviceReference!: string | null;
+  approvalCode!: string | null;
+  resolvedByName!: string | null;
+  cashierName!: string | null;
+  receiptNo!: string | null;
+  settlementNo!: string | null;
+  matched!: boolean;
+  ageDays!: number;
+  overdue!: boolean;
+}
+
+/** معلّقٌ من مناوبةٍ مقفلة (`ق-١٤١٨`) — حتى يحسمه جوابُ المزوّد أو الدليل. */
+export class PosUnresolvedAttemptRowResponse {
+  attemptId!: string;
+  // مجموعةٌ جزئية من التعداد — شرطُ الاستعلام في `unresolvedAttempts()`.
+  @ApiProperty({ enum: ['CHARGING', 'UNKNOWN', 'APPROVED'] })
+  status!: 'CHARGING' | 'UNKNOWN' | 'APPROVED';
+  amount!: string;
+  provider!: string;
+  createdAt!: string;
+  detail!: string | null;
+  /** اسمُ من فتح المناوبة — عمودٌ غيرُ فارغ. */
+  cashierName!: string;
+  shiftClosedAt!: string | null;
+}
+
+export class PosCardVerificationListResponse {
+  settlementDays!: number;
+  items!: PosCardVerificationRowResponse[];
+  unresolvedAttempts!: PosUnresolvedAttemptRowResponse[];
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/dto/pos.dto.ts
+====================================================================================================
+import { Type } from 'class-transformer';
+import { ArrayNotEmpty, IsArray, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+
+export class OpenShiftDto {
+  /** العهدة الافتتاحية — what the drawer starts with. Zero is a valid float. */
+  @IsNumber()
+  @Min(0)
+  openingFloat!: number;
+
+  @IsOptional()
+  @IsString()
+  branchId?: string;
+
+  /**
+   * الدرجُ الذي تُفتح عليه المناوبة (`ق-٢١٨`). يُترك فارغاً فيُؤخذ **الدرجُ
+   * الافتراضيُّ لفرعها** — فالكاشيرُ لا يختار حساباً، والتفصيلُ يبقى قائماً.
+   */
+  @IsOptional()
+  @IsString()
+  drawerId?: string;
+}
+
+export class CloseShiftDto {
+  /** What the cashier actually counted; the variance against the expected
+   * drawer is computed server-side, never typed in. */
+  @IsNumber()
+  @Min(0)
+  declaredClosing!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  /**
+   * **انحرافُ الطرفية عن `UTC` بالدقائق** لحظةَ الإقفال — كما يُرسَل مع البيع (`ringOffsetMin`) — فيُؤرَّخ
+   * قيدُ التسوية **بيوم الكاشير** لا بيوم الخادم (`ق-٧٣٦`): بين منتصف الليل والثالثة فجراً بتوقيت
+   * المملكة كان يقع في اليوم السابق. طرفيةٌ أقدم لا تُرسله تُعامَل بيوم `UTC` كما كانت — حدٌّ معلَن.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  closedOffsetMin?: number;
+}
+
+export class PosPaymentPartDto {
+  @IsIn(['CASH', 'CARD'])
+  method!: 'CASH' | 'CARD';
+
+  @IsNumber()
+  @IsPositive()
+  amount!: number;
+}
+
+export class PosSaleLineDto {
+  @IsString()
+  productId!: string;
+
+  @IsNumber()
+  @IsPositive()
+  quantity!: number;
+
+  /** ④B1 — خصمٌ على سطر الكاشير مبلغاً (≥ 0 ولا يفوق الكمية × السعر). */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount?: number;
+}
+
+export class CreatePosSaleDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => PosSaleLineDto)
+  lines!: PosSaleLineDto[];
+
+  /** SPLIT = نقدي + بطاقة معاً؛ التفصيل في payments. */
+  @IsIn(['CASH', 'CARD', 'SPLIT'])
+  paymentMethod!: 'CASH' | 'CARD' | 'SPLIT';
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PosPaymentPartDto)
+  payments?: PosPaymentPartDto[];
+
+  /** Optional named customer; omitted = the walk-in «عميل نقدي». */
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  /**
+   * متى رُنّ البيع فعلاً (ISO) **وانحرافُ الجهاز عن UTC بالدقائق** (`ق-١٨٥`) —
+   * للبيع الحيّ والمزامَن سواء: منهما يُشتقّ يومُ الفاتورة **ووقتُها** كما يقرؤهما
+   * التاجر، لا تاريخُ UTC ولا منتصفُ الليل. **انحرافٌ بلا لحظةٍ يُرفَض** — لا معنى له
+   * وحده؛ ولحظةٌ بلا انحراف تُقبَل (طرفيةٌ أقدم) وتُعامَل بيوم UTC كما كانت.
+   */
+  @ValidateIf((o: CreatePosSaleDto) => o.ringAt !== undefined || o.ringOffsetMin !== undefined)
+  @IsDateString()
+  ringAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(-840)
+  @Max(840)
+  ringOffsetMin?: number;
+
+  /**
+   * ⚖️ **رقمُ مرجع الجهاز من إيصاله** (`ق-١٣٩٧`/١ · `ق-١٤١٩`) — **إلزاميٌّ لجزء البطاقة إن لم يمرّ بمحاولة دفع**: بيعٌ دون اتصالٍ
+   * والربطُ فعّال، **أو جهازٌ مستقلٌّ بلا ربط** («فالحكمُ واحد» بنصّ المالك) — **لا «أكّده الكاشير» وحدَه**. يُعلَّم غيرَ متحقَّقٍ
+   * حتى تطالب به تسويةُ الشبكة. (ومحاولةُ الدفع ترث الحقلَ ولا تقرؤه: مرجعُها جوابُ المزوّد.)
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  cardDeviceReference?: string;
+}
+
+/** مزامنة بيع أوفلاين: نفس البيع + هوية الطرفية التي تجعل الإرسال آمن التكرار. */
+export class SyncPosSaleDto extends CreatePosSaleDto {
+  /** Terminal-generated UUID — the idempotency key. */
+  @IsString()
+  clientSaleId!: string;
+
+  /** المرجع المؤقت المطبوع على الإيصال قبل وجود رقم حقيقي. */
+  @IsOptional()
+  @IsString()
+  offlineRef?: string;
+}
+
+/**
+ * ⭐ **محاولةُ دفع البطاقة** (`ق-١٤٠١`): البيعُ نفسُه بهويّة الطرفية — يُتحقَّق منه ويُحفظ لقطةً **بلا فاتورةٍ ولا شحن**،
+ * ثم يُشحن بمسارٍ مستقلّ خارج كلِّ معاملة. وإعادةُ الطلب بالمعرّف نفسِه تعيد المحاولةَ نفسَها.
+ */
+export class CreatePosPaymentAttemptDto extends CreatePosSaleDto {
+  @IsString()
+  clientSaleId!: string;
+
+  @IsOptional()
+  @IsString()
+  offlineRef?: string;
+}
+
+/** مرشِّحُ دفعات البطاقة غير المتحقَّقة (`ق-١٣٩٧`): المفتوحُ افتراضاً · ما تجاوز المهلة · ما طابقته تسوية · الكلّ. */
+export class CardVerificationsQueryDto {
+  @IsOptional()
+  @IsIn(['open', 'overdue', 'matched', 'all'])
+  state?: 'open' | 'overdue' | 'matched' | 'all';
+}
+
+/**
+ * ⚖️ **الحسمُ اليدويّ للمعلّق — بدليلٍ لا بقول** (`ق-١٣٩٩`): إيصالُ الجهاز (مرجعُه) ورمزُ الموافقة، لصاحب صلاحية المراجعة،
+ * **بعد أن يُسأل المزوّد فلا يُجيب**؛ ولا يُعدّ نهائياً حتى تطابقه التسوية.
+ */
+export class ResolvePaymentAttemptWithEvidenceDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  deviceReference!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  approvalCode!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/dto/zatca-receipt-response.dto.ts
+====================================================================================================
+/**
+ * ⚖️ **إجازةُ الإيصال لدى الهيئة — سعوديّةٌ فتسكن وحدتَها** (`§3.8` · `ق-١٣٥٠` · `ق-١٤٣٨`).
+ *
+ * **ورمزُ الإيصال خرج من هنا** (`ق-١٤٤٨`): كان اسمُه على السلك `zatcaQr`/`zatcaStamped` فصنفُه يحمل علامةً سعوديةً بالضرورة؛ فصار
+ * اسمُه وظيفتَه (`receiptQr` · `stamped`) وسكن إيصالَ الكاشير في النواة — **بعد قياسِ ألّا مفتاحَ لنظامٍ خارجيٍّ صدر**.
+ *
+ * ⚠️ **وما بقي هنا سعوديٌّ بطبعه لا باسمه**: حالُ المستند لدى الهيئة (`ZatcaStatus`) في بوّابة الإجازة — فسطرُ استيرادٍ واحد في
+ * النواة يبقى دَيناً معلَناً بحجّته (`docs/country-literals-debt.json`)، ويزول حين تُصاغ الإجازةُ خلف واجهةٍ موحّدة (`§3.8` القاعدة ١).
+ */
+import { ApiProperty } from '@nestjs/swagger';
+import { ZatcaStatus } from '@prisma/client';
+
+/**
+ * ⚖️ **الإجازةُ قبل المشاركة** (`ق-١٢٦١` أ): الفاتورةُ الضريبيةُ الكاملة تُجاز لدى الهيئة قبل أن تُسلَّم — فبوّابتُها سعوديّةٌ تسكن هنا.
+ * `required: true` بحال المستند لدى الهيئة ورسالته، أو `required: false` وحدَها. **والحالُ من تعداد `Prisma` لا قائمةٌ منسوخة**
+ * — فقيمةٌ تُضاف إلى التعداد لا تُسقط الحارسَ الحيّ بلا خطأ ترجمة (مراجعةُ الصنف).
+ */
+export class PosClearanceResponse {
+  required!: boolean;
+  // تعدادُ Prisma — المُلحَقُ يقرؤه Object؛ وحاضرٌ في فرع `required: true` وحدَه.
+  @ApiProperty({ enum: ZatcaStatus, required: false })
+  status?: ZatcaStatus;
+  message?: string;
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/pos-card-verifications.service.ts
+====================================================================================================
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { Prisma } from '@prisma/client';
+import { TenantContext } from '../auth/types';
+import { branchFilter } from '../branches/branch-scope.util';
+import { money } from '../common/money/text';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { localDateOf, SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+type Tx = Prisma.TransactionClient;
+
+/** ما يُسأل عنه: المفتوحُ (لم تطالب به تسوية) · ما تجاوز المهلة · ما طابقته تسوية · الكلّ. */
+export type CardVerificationState = 'open' | 'overdue' | 'matched' | 'all';
+
+const DAY_MS = 86_400_000;
+
+/**
+ * ⭐ **دفعاتُ البطاقة التي لم تمرّ بالمزوّد — غيرُ متحقَّقةٍ حتى تطالب بها تسويةُ الشبكة** (`ق-١٣٩٧` · `ق-١٣٩٩`).
+ *
+ * بنصّ المالك (س١): «**ويُعلَّم «غيرَ متحقَّق» حتى يُطابَق بتسوية الشبكة المبنيّة · وما لا يُطابَق بعد مهلة التسوية يُرفع
+ * للمراجعة باسم الكاشير. ⇒ فليس تخميناً: الدفعُ وقع، والتحقّقُ يتأخّر ويقع بالتسوية.**» · و(س٣): «**ولا يُعدّ نهائياً حتى
+ * تطابقه التسوية، فإن خالفته رُفع.**»
+ *
+ * **والمطابقةُ مشتقّةٌ لا مخزَّنة**: صفُّ البطاقة يعلن بمَ ثبت (`DEVICE_REFERENCE` · `MANUAL_EVIDENCE`)، وتطابقه التسويةُ حين
+ * تطالب بسند قبض الشبكة لفاتورته (`Payment.networkSettlementId` — `ق-١٢٦١` ج). فإلغاءُ التسوية يُعيده «غيرَ مطابَق» بلا كتابة.
+ * **والمهلةُ إعدادُ المنشأة** (`posCardSettlementDays`) — ودورةُ التسوية تختلف بالمستحوذ.
+ *
+ * ⚠️ **حدودٌ معلَنة**: (١) **اليومُ يومُ `UTC`** — منطقةُ المنشأة الزمنية «تُكتب ولا تُقرأ بعد» (`ق-١٣٦٨`)، فالرفعُ قد يتأخّر
+ * ساعاتٍ عن منتصف ليل التاجر ولا يتقدّم. (٢) المطابقةُ **بالسند كلِّه** لا بالعملية: التسويةُ تطالب بسندات القبض لا بمرجع
+ * الجهاز — فلا تقول إن مرجعَ الجهاز نفسَه هو الذي حُوِّل، بل إن المبلغَ دخل التسوية. (٣) صفوفُ «أكّده الكاشير» (بلا ربط)
+ * خارج هذا الرفع — لم يُحكم فيها (سؤالٌ في التقرير).
+ */
+@Injectable()
+export class PosCardVerificationsService {
+  private readonly logger = new Logger(PosCardVerificationsService.name);
+
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /**
+   * القائمةُ للمراجعة — باسم الكاشير وبحال المطابقة والمهلة.
+   * **على مستوى المنشأة بحقّها**: مرشَّحةٌ بفروع القارئ عبر فرع الفاتورة.
+   */
+  list(tenant: TenantContext, state: CardVerificationState = 'open') {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const { days, rows } = await this.rows(tx, tenant.companyId, tenant.allowedBranchIds, new Date());
+      const items = state === 'all' ? rows : state === 'matched' ? rows.filter((r) => r.matched) : state === 'overdue' ? rows.filter((r) => r.overdue) : rows.filter((r) => !r.matched);
+      return { settlementDays: days, items, unresolvedAttempts: await this.unresolvedAttempts(tx, tenant.allowedBranchIds) };
+    });
+  }
+
+  /**
+   * ⚖️ **المعلّقُ من مناوبةٍ مقفلة ينتقل إلى قائمة المطابقة** (`ق-١٤١٨` · التوجيه ٢٦٣ §٥): المناوبةُ أُقفلت وهو فيها مسمّىً
+   * (`closeShift`)، **ويبقى هنا حتى يُحسم** — بجواب المزوّد (الكانس كلَّ عشر دقائق) أو بالدليل لصاحب المراجعة — **ولا يُخمَّن**:
+   * لا بيعَ يُسجَّل له ولا يُرفض حتى يُجاب. وما اكتمل منه صار دفعةً في `items` كسائر البطاقة.
+   * **على مستوى المنشأة بحقّها**: مرشَّحةٌ بفروع القارئ عبر فرع المناوبة.
+   */
+  private async unresolvedAttempts(tx: Tx, allowedBranchIds: string[] | 'all') {
+    const rows = await tx.posPaymentAttempt.findMany({
+      where: {
+        status: { in: ['CHARGING', 'UNKNOWN', 'APPROVED'] },
+        shift: { status: 'CLOSED', ...(branchFilter(allowedBranchIds) as Prisma.PosShiftWhereInput) },
+      },
+      select: { id: true, status: true, cardAmount: true, provider: true, createdAt: true, detail: true, shift: { select: { openedByName: true, closedAt: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+    return rows.map((a) => ({
+      attemptId: a.id,
+      status: a.status,
+      amount: money(a.cardAmount),
+      provider: a.provider,
+      createdAt: a.createdAt.toISOString(),
+      detail: a.detail,
+      cashierName: a.shift.openedByName,
+      shiftClosedAt: a.shift.closedAt?.toISOString() ?? null,
+    }));
+  }
+
+  /**
+   * ⚖️ **الرفعُ للمراجعة باسم الكاشير** — مرّةً لكلِّ دفعة (مفتاحُ التكرار بمعرّفها)، إلى المالك (يرى كلَّ شيءٍ في منشأته).
+   * يُستدعى من المهمّة الدورية، ويعيد عددَ ما رُفع الآن.
+   */
+  async raiseOverdue(companyId: string, now = new Date()): Promise<number> {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const { days, rows } = await this.rows(tx, companyId, 'all', now);
+      let raised = 0;
+      for (const r of rows.filter((x) => x.overdue)) {
+        const how = r.verification === 'MANUAL_EVIDENCE' ? `حسمٌ يدويٌّ بدليل${r.resolvedByName ? ` (${r.resolvedByName})` : ''}` : 'بيعٌ دون اتصالٍ برقم مرجع الجهاز';
+        const created = await NotificationsService.raise(tx, companyId, {
+          kind: 'POS_CARD_UNMATCHED',
+          dedupeKey: `pos-card-unmatched:${r.posPaymentId}`,
+          title: `دفعةُ بطاقةٍ لم تطابقها التسوية — الكاشير ${r.cashierName ?? '—'}`,
+          body: `الفاتورة ${r.invoiceNo} (${r.issueDate}) · ${r.amount} · ${how} · مرجعُ الجهاز ${r.deviceReference ?? '—'} — لم تطالب بها تسويةُ الشبكة بعد ${days} أيام من البيع. راجعها مع كشف المستحوذ.`,
+          linkScreen: 'pos',
+          linkId: r.invoiceId,
+        });
+        if (created) raised += 1;
+      }
+      return raised;
+    });
+  }
+
+  /**
+   * كلَّ ساعة لكلِّ منشأةٍ فعّالة. والمنطقةُ معلنةٌ بحارس `ق-١٢٧٩` (كلُّ جدولٍ غيرِ دقائقيٍّ يعلنها) — وهي منطقةُ الجدولة الثابتة
+   * القائمة (دَينٌ معدود في مسح التوطين)، لا منطقةُ المنشأة؛ واليومُ في المقارنة يومُ `UTC` معلَناً أعلاه.
+   */
+  @Cron(CronExpression.EVERY_HOUR, { timeZone: SCHEDULE_TIME_ZONE })
+  async raiseOverdueForAllCompanies(): Promise<{ companies: number; raised: number }> {
+    // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
+    const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+    let raised = 0;
+    for (const c of companies) {
+      try {
+        raised += await this.raiseOverdue(c.id);
+      } catch (e) {
+        this.logger.error(`رفعُ دفعات البطاقة غير المطابَقة أخفق للمنشأة ${c.id}`, e instanceof Error ? e.stack : String(e));
+      }
+    }
+    if (raised > 0) this.logger.log(`دفعاتُ بطاقةٍ غيرُ مطابَقة رُفعت للمراجعة: ${raised} عبر ${companies.length} منشأة`);
+    return { companies: companies.length, raised };
+  }
+
+  /**
+   * **على مستوى المنشأة بحقّها** في سندات القبض: تُقرأ بمعرّفات فواتير قُرئت مرشَّحةً بفروع القارئ في العبارة التي قبلها —
+   * فلا يبلغ القارئَ سندُ فرعٍ لا يراه.
+   */
+  private async rows(tx: Tx, companyId: string, allowedBranchIds: string[] | 'all', now: Date) {
+    const { posCardSettlementDays: days } = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posCardSettlementDays: true } });
+    const payments = await tx.posPayment.findMany({
+      where: {
+        method: 'CARD',
+        verification: { in: ['DEVICE_REFERENCE', 'MANUAL_EVIDENCE'] },
+        invoice: branchFilter(allowedBranchIds) as Prisma.InvoiceWhereInput,
+      },
+      select: {
+        id: true,
+        amount: true,
+        verification: true,
+        deviceReference: true,
+        approvalCode: true,
+        attempt: { select: { resolvedByName: true } },
+        invoice: { select: { id: true, no: true, issueDate: true, posShift: { select: { openedByName: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    const invoiceIds = [...new Set(payments.map((p) => p.invoice.id))];
+    // سندُ قبض الشبكة لكلِّ فاتورة — وبه تطالب التسوية (بالمعرّف: `§6.3`).
+    const receipts = invoiceIds.length
+      ? await tx.payment.findMany({
+          where: { method: 'CARD', allocations: { some: { invoiceId: { in: invoiceIds } } } },
+          select: { no: true, networkSettlementId: true, networkSettlement: { select: { no: true } }, allocations: { select: { invoiceId: true } } },
+        })
+      : [];
+    const byInvoice = new Map<string, (typeof receipts)[number]>();
+    for (const r of receipts) for (const a of r.allocations) byInvoice.set(a.invoiceId, r);
+
+    const today = Date.parse(localDateOf(now, 0));
+    const rows = payments.map((p) => {
+      const receipt = byInvoice.get(p.invoice.id);
+      const matched = Boolean(receipt?.networkSettlementId);
+      const issueDate = p.invoice.issueDate.toISOString().slice(0, 10);
+      const ageDays = Math.floor((today - Date.parse(issueDate)) / DAY_MS);
+      return {
+        posPaymentId: p.id,
+        invoiceId: p.invoice.id,
+        invoiceNo: p.invoice.no,
+        issueDate,
+        amount: money(p.amount),
+        verification: p.verification,
+        deviceReference: p.deviceReference,
+        approvalCode: p.approvalCode,
+        resolvedByName: p.attempt?.resolvedByName ?? null,
+        cashierName: p.invoice.posShift?.openedByName ?? null,
+        receiptNo: receipt?.no ?? null,
+        settlementNo: receipt?.networkSettlement?.no ?? null,
+        matched,
+        ageDays,
+        overdue: !matched && ageDays > days,
+      };
+    });
+    return { days, rows };
+  }
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/pos-payment-attempts.service.ts
+====================================================================================================
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PosPaymentAttempt, PosPaymentAttemptStatus, PosPaymentResolution, Prisma } from '@prisma/client';
+import { TenantContext } from '../auth/types';
+import { branchFilter } from '../branches/branch-scope.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { money } from '../common/money/text';
+import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { ChargeOutcome, IntegrationsService } from '../integrations/integrations.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreatePosPaymentAttemptDto, ResolvePaymentAttemptWithEvidenceDto } from './dto/pos.dto';
+import { PosService, PreparedSale, SoldSale } from './pos.service';
+
+/**
+ * **لقطةُ البيع في المحاولة** — الإصدارُ أوّلاً كي يُقرأ شكلُها إن تغيّر. منها وحدَها تُنشأ الفاتورة عند الإتمام،
+ * فلا يفترق ما يُفوتَر عمّا شُحن ولو تغيّر سعرُ الصنف أو فئتُه بين الشحن والإتمام.
+ */
+interface SaleSnapshot {
+  v: 1;
+  prepared: Pick<PreparedSale, 'shiftId' | 'shiftBranchId' | 'invoiceDto' | 'paymentMethod' | 'parts' | 'total'>;
+  offlineRef: string | null;
+}
+
+/** ما لم يُحسم بعد — لا تُقفل مناوبتُه، ويكنسه الكانس. */
+const IN_FLIGHT: PosPaymentAttemptStatus[] = ['CHARGING', 'UNKNOWN', 'APPROVED'];
+/** ما يُعرض للكاشير «مفتوحاً». */
+const OPEN: PosPaymentAttemptStatus[] = ['CREATED', ...IN_FLIGHT];
+
+type Tx = Prisma.TransactionClient;
+
+/**
+ * ⭐ **محاولةُ دفع البطاقة — الشحنُ خارج المعاملة، والفاتورةُ بعد القبول** (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`).
+ *
+ * الموجز `docs/موجز-مسار-دفع-الكاشير.md` بحكم المالك:
+ * - **الإنشاء** (`CREATED`): تحقّقُ البيع نفسُه (`PosService.prepareSale`) **بلا شحنٍ ولا فاتورة**، ولقطتُه تُحفظ.
+ * - **الشحن** (`CHARGING`): انتقالٌ مشروط يُلتزم، **ثم نداءُ المزوّد خارج كلِّ معاملة** بمهلة محوّله (`ق-١٣٩٨`: تسعون ثانية
+ *   للتجريبيّ — «تُعلَن في محوّل كلِّ مزوّدٍ لا في النواة»). قُبل ⟸ `APPROVED` ثم الإتمام · رُفض ⟸ `DECLINED` بلا رقم ·
+ *   لا جوابَ قاطعاً ⟸ **`UNKNOWN`**.
+ * - **الإتمام** (`COMPLETED`): الفاتورةُ وسنداتُها وختمُ `PAID` ومعرّفُ البيع في معاملةٍ واحدة (`completeSaleWithinTx`).
+ * - **الحسم** (`ق-١٣٩٩`): **جوابُ المزوّد أوّلاً** (`status` بالمرجع) — **ويدويٌّ بدليلٍ لا بقول**: صاحبُ `pos:review` بإيصال
+ *   الجهاز ورمز الموافقة، بعد أن يُسأل المزوّد فلا يُجيب، ويُسجَّل؛ **ولا يُعدّ نهائياً حتى تطابقه التسوية**.
+ *   **⛔ ولا زرَّ «اعتبرها مقبولة»** — القيدُ في القاعدة يرفض الحسمَ اليدويّ بلا مرجعٍ ورمز.
+ *
+ * **كلُّ انتقالٍ كتابةٌ مشروطةٌ بالحالة السابقة** (`updateMany … where status`): نقرتان لا تشحنان مرّتين، والإتمامُ لا يقع مرّتين.
+ */
+@Injectable()
+export class PosPaymentAttemptsService {
+  private readonly logger = new Logger(PosPaymentAttemptsService.name);
+
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly prisma: PrismaService,
+    private readonly integrations: IntegrationsService,
+    private readonly pos: PosService,
+  ) {}
+
+  /**
+   * **الإنشاء — بلا شحنٍ ولا فاتورة** · وإعادةُ الطلب بالمعرّف نفسِه تعيد المحاولةَ نفسَها.
+   * **على مستوى المنشأة بحقّها**: المحاولةُ على مناوبة الكاشير المفتوحة — مفتاحُها هويّتُه كالبيع (`prepareSale`).
+   */
+  async create(tenant: TenantContext, dto: CreatePosPaymentAttemptDto) {
+    try {
+      return await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+        const existing = await tx.posPaymentAttempt.findFirst({ where: { clientSaleId: dto.clientSaleId } });
+        if (existing) return present(existing);
+        const recorded = await tx.invoice.findFirst({ where: { clientSaleId: dto.clientSaleId }, select: { id: true } });
+        if (recorded) throw new ConflictException(MSG.pos_attempt_sale_recorded);
+
+        const gateway = await this.integrations.activeGateway(tx);
+        if (!gateway) throw new ConflictException(MSG.pos_attempt_requires_gateway);
+        const prepared = await this.pos.prepareSale(tx, tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin });
+        if (prepared.cardAmount <= 0) throw new BadRequestException(MSG.pos_attempt_needs_card);
+        if (prepared.cardParts > 1) throw new BadRequestException(MSG.pos_card_single_part);
+
+        // عملةُ المستند هي عملةُ أساس المنشأة (لا عملةَ صريحة في بيع الكاشير) — لا حرفَ عملةٍ في الشحن (`§3.8`).
+        const company = await tx.company.findUniqueOrThrow({ where: { id: tenant.companyId }, select: { baseCurrency: true } });
+        const snapshot: SaleSnapshot = {
+          v: 1,
+          prepared: {
+            shiftId: prepared.shiftId,
+            shiftBranchId: prepared.shiftBranchId,
+            invoiceDto: prepared.invoiceDto,
+            paymentMethod: prepared.paymentMethod,
+            parts: prepared.parts,
+            total: prepared.total,
+          },
+          offlineRef: dto.offlineRef ?? null,
+        };
+        const created = await tx.posPaymentAttempt.create({
+          data: {
+            clientSaleId: dto.clientSaleId,
+            shiftId: prepared.shiftId,
+            sale: snapshot as unknown as Prisma.InputJsonValue,
+            cardAmount: prepared.cardAmount,
+            currency: company.baseCurrency,
+            provider: gateway.provider,
+            createdById: tenant.profileId,
+          } as unknown as Prisma.PosPaymentAttemptUncheckedCreateInput,
+        });
+        return present(created);
+      });
+    } catch (e) {
+      // طلبان متزامنان بالمعرّف نفسِه: الخاسرُ يقرأ محاولةَ الرابح — ولا يفرّق المستدعي بينهما.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const winner = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => tx.posPaymentAttempt.findFirst({ where: { clientSaleId: dto.clientSaleId } }));
+        if (winner) return present(winner);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ⭐ **الشحن — انتقالٌ مشروط يُلتزم، ثم نداءُ المزوّد خارج كلِّ معاملة** (`ق-١٤٠١`).
+   * نقرةٌ ثانية أو إعادةٌ بعد انقطاع الردّ تقرأ الحالَ كما هو ولا تشحن ثانيةً.
+   */
+  async charge(tenant: TenantContext, id: string) {
+    const claim = await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const attempt = await this.readOwn(tx, tenant, id);
+      if (attempt.status !== 'CREATED') return null;
+      const shift = await tx.posShift.findUnique({ where: { id: attempt.shiftId }, select: { status: true } });
+      if (shift?.status !== 'OPEN') throw new ConflictException(MSG.pos_shift_closed);
+      const gateway = await this.integrations.activeGateway(tx);
+      if (!gateway || gateway.provider !== attempt.provider) throw new ConflictException(formatMessage(MSG.pos_attempt_gateway_changed, { provider: attempt.provider }));
+      const { count } = await tx.posPaymentAttempt.updateMany({ where: { id, status: 'CREATED' }, data: { status: 'CHARGING', chargeStartedAt: new Date() } });
+      return count === 1 ? attempt : null;
+    });
+    if (!claim) return this.view(tenant, id);
+
+    const outcome = await this.integrations.chargeWithDeadline(tenant.companyId, claim.provider, {
+      reference: claim.id,
+      amount: Number(claim.cardAmount),
+      currency: claim.currency,
+    });
+    if (outcome.kind === 'NOT_SENT') {
+      // لم يُرسل شيءٌ للمزوّد — فلا مالَ في الطريق: تعود المحاولةُ إلى ما قبل الإرسال ويظهر السبب.
+      await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+        tx.posPaymentAttempt.updateMany({ where: { id, status: 'CHARGING' }, data: { status: 'CREATED', chargeStartedAt: null } }),
+      );
+      throw outcome.error;
+    }
+    await this.apply(tenant.companyId, id, ['CHARGING'], outcome, 'PROVIDER_CHARGE');
+    return this.settleAndView(tenant, id);
+  }
+
+  /**
+   * ⭐ **الحسمُ بجواب المزوّد** (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً»): المقبولةُ التي لم تكتمل تُتمّ · المعلّقةُ — أو التي بقيت
+   * «تُشحن» بعد مهلة محوّلها (عمليةٌ انقطعت) — يُسأل عنها المزوّدُ بمرجعها: قُبلت ⟸ إتمامٌ بلا شحنٍ ثانٍ · رُفضت ⟸ رفض ·
+   * لا أثرَ لها بعد المهلة ⟸ رفض (الطلبُ لم يبلغه) · لا جوابَ ⟸ **تبقى معلّقة**: «تُحسم ولا تُخمَّن».
+   */
+  async resolve(tenant: TenantContext, id: string) {
+    const attempt = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.readVisible(tx, tenant, id));
+    await this.resolveByProvider(tenant.companyId, attempt);
+    return this.settleAndView(tenant, id);
+  }
+
+  /**
+   * ⚖️ **الحسمُ اليدويّ — بدليلٍ لا بقول** (`ق-١٣٩٩`).
+   *
+   * صاحبُ `pos:review` (الحارسُ في المتحكّم) **بمرجع إيصال الجهاز ورمز الموافقة**، ويُسجَّل مَن حسم ومتى. **والمزوّدُ يُسأل
+   * أوّلاً**: إن أجاب فجوابُه يحسمها لا الدليل. **ولا يُعدّ نهائياً حتى تطالب به تسويةُ الشبكة** — صفُّ البطاقة
+   * `MANUAL_EVIDENCE`، وما لم يُطابَق بعد مهلة التسوية يُرفع للمراجعة باسم الكاشير.
+   */
+  async resolveWithEvidence(tenant: TenantContext, id: string, dto: ResolvePaymentAttemptWithEvidenceDto) {
+    const attempt = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.readVisible(tx, tenant, id));
+    if (!this.awaitsAnswer(attempt)) throw new ConflictException(MSG.pos_attempt_manual_requires_unknown);
+
+    const answered = await this.resolveByProvider(tenant.companyId, attempt);
+    if (answered) return this.settleAndView(tenant, id);
+
+    await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const resolvedByName = await this.pos.actorName(tx, tenant);
+      const { count } = await tx.posPaymentAttempt.updateMany({
+        where: { id, status: { in: ['UNKNOWN', 'CHARGING'] } },
+        data: {
+          status: 'APPROVED',
+          resolution: 'MANUAL_EVIDENCE',
+          resolvedAt: new Date(),
+          resolvedById: tenant.profileId,
+          resolvedByName,
+          evidenceDeviceReference: dto.deviceReference.trim(),
+          evidenceApprovalCode: dto.approvalCode.trim(),
+          evidenceNote: dto.note?.trim() || null,
+          approvalCode: dto.approvalCode.trim(),
+        },
+      });
+      if (count === 0) throw new ConflictException(MSG.pos_attempt_manual_requires_unknown);
+    });
+    return this.settleAndView(tenant, id);
+  }
+
+  /** **الإلغاءُ قبل الإرسال وحدَه** — ما أُرسل لا يُلغى: المالُ قد يكون في الطريق. */
+  async cancel(tenant: TenantContext, id: string) {
+    await this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const attempt = await this.readOwn(tx, tenant, id);
+      const { count } = await tx.posPaymentAttempt.updateMany({
+        where: { id, status: 'CREATED' },
+        data: { status: 'CANCELLED', resolution: 'CANCELLED', resolvedAt: new Date() },
+      });
+      if (count === 0) throw new ConflictException(formatMessage(MSG.pos_attempt_not_cancellable, { status: attempt.status }));
+    });
+    return this.view(tenant, id);
+  }
+
+  /**
+   * **المحاولةُ بحالها** — وإيصالُ بيعها إن اكتملت.
+   * **على مستوى المنشأة بحقّها**: تُقرأ مرشَّحةً بفروع القارئ عبر فرع مناوبتها (`readVisible`).
+   */
+  async view(tenant: TenantContext, id: string) {
+    const attempt = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.readVisible(tx, tenant, id));
+    const sale = attempt.invoiceId ? await this.pos.receiptFor(tenant.companyId, attempt.invoiceId) : null;
+    return { ...present(attempt), sale };
+  }
+
+  /**
+   * المحاولاتُ **المفتوحة** (لم تُرسل · تُشحن · معلّقة · مقبولةٌ لم تكتمل) — للكاشير في شاشته ولمن يراجع.
+   * **على مستوى المنشأة بحقّها**: مرشَّحةٌ بفروع القارئ عبر فرع المناوبة، والأحدثُ أوّلاً بسقف.
+   */
+  listOpen(tenant: TenantContext) {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const rows = await tx.posPaymentAttempt.findMany({
+        where: { status: { in: OPEN }, shift: branchFilter(tenant.allowedBranchIds) as Prisma.PosShiftWhereInput },
+        include: { shift: { select: { openedByName: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      return rows.map((r) => ({ ...present(r), cashierName: r.shift.openedByName }));
+    });
+  }
+
+  /**
+   * ⭐ **الكانسُ الدوريّ** (الموجز ٢.٣/٤): لكلِّ معلّقةٍ ومقبولةٍ لم تكتمل وما بقي «يُشحن» بعد مهلته (عمليةٌ ماتت في
+   * منتصفها) — جوابُ المزوّد بالمرجع أو الإتمام. **فاعلُه النظام**: بلا قائمة فروع، والمنشآتُ واحدةً واحدة في سياقها.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async sweepAllCompanies(): Promise<{ companies: number; settled: number }> {
+    // العميلُ غيرُ المقيَّد عمداً: هذا الموضعُ يعبر المستأجرين ليدخل سياقَ كلٍّ.
+    const companies = await this.prisma.company.findMany({ where: { status: 'ACTIVE' }, select: { id: true } });
+    let settled = 0;
+    for (const c of companies) {
+      try {
+        settled += await this.sweepCompany(c.id);
+      } catch (e) {
+        this.logger.error(`كنسُ محاولات الدفع أخفق للمنشأة ${c.id}`, e instanceof Error ? e.stack : String(e));
+      }
+    }
+    if (settled > 0) this.logger.log(`محاولاتُ الدفع: حُسم ${settled} عبر ${companies.length} منشأة`);
+    return { companies: companies.length, settled };
+  }
+
+  /** كنسُ منشأةٍ واحدة — يعيد عددَ ما انتهى (حُسم أو اكتمل) في هذه الدورة. */
+  async sweepCompany(companyId: string): Promise<number> {
+    const pending = await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.posPaymentAttempt.findMany({ where: { status: { in: IN_FLIGHT } } }));
+    let settled = 0;
+    for (const attempt of pending) {
+      await this.resolveByProvider(companyId, attempt);
+      // الإتمامُ بلا إيصال: لا كاشيرَ ينتظره — والختمُ والإبلاغُ في الطابور كأيّ فاتورة (حدثُ الإصدار في معاملتها).
+      await retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(companyId, (tx) => this.settle(tx, companyId, 'all', attempt.id)));
+      const after = await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.posPaymentAttempt.findUniqueOrThrow({ where: { id: attempt.id }, select: { status: true } }));
+      if (after.status === 'COMPLETED' || after.status === 'DECLINED') settled += 1;
+    }
+    return settled;
+  }
+
+  // ───────────────────────────────── داخليّ ─────────────────────────────────
+
+  /**
+   * يسأل المزوّدَ عن محاولةٍ تنتظر جواباً ويطبّق جوابَه — ويعيد `true` إن أجاب جواباً قاطعاً.
+   * المقبولةُ التي لم تكتمل لا تُسأل عنها (قُبلت) — يكفيها الإتمام.
+   */
+  private async resolveByProvider(companyId: string, attempt: PosPaymentAttempt): Promise<boolean> {
+    if (!this.awaitsAnswer(attempt)) return false;
+    const answer = await this.integrations.queryStatus(companyId, attempt.provider, attempt.id);
+    const from: PosPaymentAttemptStatus[] = ['UNKNOWN', 'CHARGING'];
+    if (answer.state === 'APPROVED') {
+      await this.apply(companyId, attempt.id, from, { kind: 'APPROVED', providerRef: answer.providerRef ?? attempt.id, approvalCode: answer.approvalCode ?? null }, 'PROVIDER_STATUS');
+      return true;
+    }
+    if (answer.state === 'DECLINED') {
+      await this.apply(companyId, attempt.id, from, { kind: 'DECLINED', reason: answer.declineReason ?? null }, 'PROVIDER_STATUS');
+      return true;
+    }
+    // «لا أثر» جوابٌ بعد انقضاء مهلة الشحن وحدَها: الطلبُ لم يبلغ المزوّد — وقبلها قد يكون في الطريق.
+    if (answer.state === 'NOT_FOUND' && this.deadlinePassed(attempt)) {
+      await this.apply(companyId, attempt.id, from, { kind: 'DECLINED', reason: 'لا أثرَ للعملية لدى المزوّد — لم تبلغه' }, 'PROVIDER_STATUS');
+      return true;
+    }
+    // لا جوابَ قاطعاً: تبقى معلّقة — و«تُشحن» بعد مهلتها تصير معلّقةً مسمّاة.
+    const detail = answer.unreachable ? `تعذّر سؤالُ المزوّد: ${answer.unreachable}` : `جوابُ المزوّد: ${answer.state}`;
+    await this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.posPaymentAttempt.updateMany({ where: { id: attempt.id, status: { in: from } }, data: { status: 'UNKNOWN', detail } }),
+    );
+    return false;
+  }
+
+  /** تنتظر جواباً: معلّقة، أو «تُشحن» وقد انقضت مهلةُ محوّلها (عمليةٌ ماتت في منتصفها). */
+  private awaitsAnswer(attempt: PosPaymentAttempt): boolean {
+    return attempt.status === 'UNKNOWN' || (attempt.status === 'CHARGING' && this.deadlinePassed(attempt));
+  }
+
+  private deadlinePassed(attempt: PosPaymentAttempt): boolean {
+    if (!attempt.chargeStartedAt) return false;
+    return Date.now() - attempt.chargeStartedAt.getTime() >= this.integrations.deadlineOf(attempt.provider);
+  }
+
+  /** يطبّق نتيجةً على محاولةٍ في حالٍ متوقَّع — كتابةٌ مشروطة، فمن سبق إليها غلب. */
+  private async apply(companyId: string, id: string, from: PosPaymentAttemptStatus[], outcome: Exclude<ChargeOutcome, { kind: 'NOT_SENT' }>, resolution: PosPaymentResolution) {
+    const now = new Date();
+    const data: Prisma.PosPaymentAttemptUpdateManyMutationInput =
+      outcome.kind === 'APPROVED'
+        ? { status: 'APPROVED', providerRef: outcome.providerRef, approvalCode: outcome.approvalCode, resolution, resolvedAt: now, detail: null }
+        : outcome.kind === 'DECLINED'
+          ? { status: 'DECLINED', declineReason: outcome.reason, resolution, resolvedAt: now, detail: null }
+          : { status: 'UNKNOWN', detail: outcome.detail };
+    await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.posPaymentAttempt.updateMany({ where: { id, status: { in: from } }, data }));
+  }
+
+  /**
+   * بعد أيّ انتقال: المقبولةُ تُتمّ، ثم يُقرأ الحالُ بإيصاله.
+   *
+   * 🔴 **وإيصالُ البيع الذي أُتمّ في هذا الطلب هو ناتجُ `finishReceipt` نفسُه** (`ق-١٤٤٧`) — كان يُرمى ويُقرأ الإيصالُ من جديد،
+   * **فضاع تقريرُ الخصم** (تنبيهُ الرصيد السالب صفةُ لحظة الإتمام لا يُعاد بناؤه) **وضاعت نتيجةُ الختم**. وبوّابةُ الإجازة
+   * صارت في بانيّ الإيصال الواحد فتحملها القراءةُ اللاحقة أيضاً.
+   */
+  private async settleAndView(tenant: TenantContext, id: string) {
+    const sold = await retryOnUniqueConflict(() => this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) => this.settle(tx, tenant.companyId, tenant.allowedBranchIds, id)));
+    const finished = sold ? await this.pos.finishReceipt(tenant.companyId, sold) : null;
+    const viewed = await this.view(tenant, id);
+    return finished ? { ...viewed, sale: finished } : viewed;
+  }
+
+  /**
+   * ⭐ **الإتمام** (`APPROVED ⟸ COMPLETED`): الفاتورةُ من لقطة المحاولة، في معاملةٍ واحدة مع انتقال المحاولة — إتمامان
+   * متزامنان لا يُنتجان فاتورتين: الخاسرُ يسقط على الانتقال المشروط فتُرجَع معاملتُه كلُّها.
+   */
+  private async settle(tx: Tx, companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<SoldSale | null> {
+    const attempt = await tx.posPaymentAttempt.findUniqueOrThrow({ where: { id } });
+    if (attempt.status !== 'APPROVED') return null;
+    const snapshot = attempt.sale as unknown as SaleSnapshot;
+    const manual = attempt.resolution === 'MANUAL_EVIDENCE';
+    const sold = await this.pos.completeSaleWithinTx(tx, {
+      companyId,
+      allowedBranchIds,
+      prepared: snapshot.prepared,
+      clientSaleId: attempt.clientSaleId,
+      offlineRef: snapshot.offlineRef ?? undefined,
+      card: manual
+        ? { verification: 'MANUAL_EVIDENCE', deviceReference: attempt.evidenceDeviceReference, approvalCode: attempt.evidenceApprovalCode, attemptId: id }
+        : { verification: 'PROVIDER_APPROVED', providerRef: attempt.providerRef, approvalCode: attempt.approvalCode, attemptId: id },
+      trustLineTax: true,
+      expectedTotal: snapshot.prepared.total,
+    });
+    const { count } = await tx.posPaymentAttempt.updateMany({ where: { id, status: 'APPROVED' }, data: { status: 'COMPLETED', invoiceId: sold.id } });
+    if (count !== 1) throw new ConflictException(formatMessage(MSG.pos_attempt_not_resolvable, { status: attempt.status }));
+    return sold;
+  }
+
+  /** محاولةٌ يشحنها أو يلغيها صاحبُها — والمالكُ لمن ترك مناوبةً مفتوحة. */
+  private async readOwn(tx: Tx, tenant: TenantContext, id: string): Promise<PosPaymentAttempt> {
+    const attempt = await tx.posPaymentAttempt.findUnique({ where: { id } });
+    if (!attempt) throw new NotFoundException(MSG.pos_attempt_not_found);
+    if (attempt.createdById !== tenant.profileId && tenant.actorType !== 'COMPANY') {
+      // ق-١٤٤٠: محاولةُ غيره على مناوبةٍ خارج فروعه لا وجودَ لها عنده — `404` (`readVisible`) قبل `403` الملكيّة (ومحاولتُه هو بعد نقله قرارٌ معلَّق للمالك لا يُمسّ).
+      await this.readVisible(tx, tenant, id);
+      throw new ForbiddenException(MSG.pos_attempt_not_yours);
+    }
+    return attempt;
+  }
+
+  /** محاولةٌ يراها القارئ — بفرع مناوبتها على فروعه، **ومحجوبُ الفرع `404` لا `403`** فلا يُكشف وجودُه. */
+  private async readVisible(tx: Tx, tenant: TenantContext, id: string): Promise<PosPaymentAttempt> {
+    const attempt = await tx.posPaymentAttempt.findFirst({ where: { id, shift: branchFilter(tenant.allowedBranchIds) as Prisma.PosShiftWhereInput } });
+    if (!attempt) throw new NotFoundException(MSG.pos_attempt_not_found);
+    return attempt;
+  }
+}
+
+/** الشكلُ الخارج — المالُ نصّاً بخانتين (`ق-١٢٣٥`)، ولا لقطةَ البيع كاملةً (تبقى في الخادم). */
+function present(a: PosPaymentAttempt) {
+  const snapshot = a.sale as unknown as SaleSnapshot | null;
+  return {
+    id: a.id,
+    status: a.status,
+    clientSaleId: a.clientSaleId,
+    shiftId: a.shiftId,
+    cardAmount: money(a.cardAmount),
+    total: snapshot ? money(snapshot.prepared.total) : null,
+    paymentMethod: snapshot?.prepared.paymentMethod ?? null,
+    currency: a.currency,
+    provider: a.provider,
+    providerRef: a.providerRef,
+    approvalCode: a.approvalCode,
+    declineReason: a.declineReason,
+    detail: a.detail,
+    invoiceId: a.invoiceId,
+    chargeStartedAt: a.chargeStartedAt,
+    resolvedAt: a.resolvedAt,
+    resolution: a.resolution,
+    resolvedByName: a.resolvedByName,
+    evidence: a.resolution === 'MANUAL_EVIDENCE' ? { deviceReference: a.evidenceDeviceReference, approvalCode: a.evidenceApprovalCode, note: a.evidenceNote } : null,
+    createdAt: a.createdAt,
+  };
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/pos.controller.ts
+====================================================================================================
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiCreatedResponse, ApiExtraModels, ApiOkResponse, getSchemaPath } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
+import { TenantGuard } from '../common/tenant/tenant.guard';
+import { IntegrationsService } from '../integrations/integrations.service';
+import {
+  CardVerificationsQueryDto,
+  CloseShiftDto,
+  CreatePosPaymentAttemptDto,
+  CreatePosSaleDto,
+  OpenShiftDto,
+  ResolvePaymentAttemptWithEvidenceDto,
+  SyncPosSaleDto,
+} from './dto/pos.dto';
+import {
+  PagedPosShiftResponse,
+  PosCardVerificationListResponse,
+  PosClosedShiftResponse,
+  PosCurrentShiftResponse,
+  PosIncidentsResponse,
+  PosOpenPaymentAttemptResponse,
+  PosPaymentAttemptResponse,
+  PosPaymentAttemptWithSaleResponse,
+  PosPaymentModeResponse,
+  PosSaleResponse,
+  PosShiftResponse,
+  PosShiftWithTotalsResponse,
+  PosStockDeductedResponse,
+  PosStockSkippedResponse,
+  PosSyncedSaleResponse,
+} from './dto/pos-responses.dto';
+import { PosCardVerificationsService } from './pos-card-verifications.service';
+import { PosPaymentAttemptsService } from './pos-payment-attempts.service';
+import { PosService } from './pos.service';
+
+/**
+ * شاشة الكاشير — actor: the cashier employee (or the owner), gated by the
+ * `pos` screen the owner grants through permission templates. Ringing a sale
+ * is `record`; closing a drawer is `review` (it approves the count).
+ *
+ * ⚖️ **كلُّ مسارٍ يعلن ردَّه صنفاً مسمّىً** (`ق-١٤٣٨` · خطّةُ الأنواع ④) — `dto/pos-responses.dto.ts`، ويطابقه حارسُ الصدق الحيّ.
+ * والأصنافُ المشار إليها بـ`getSchemaPath` (القائمةُ والمناوبةُ الحالية وفرعا الخصم) تُسجَّل هنا كي توجد في الوثيقة.
+ */
+@Controller('pos')
+@UseGuards(JwtAuthGuard, TenantGuard)
+@RequiresScreen('pos')
+@ApiExtraModels(PosShiftWithTotalsResponse, PagedPosShiftResponse, PosStockDeductedResponse, PosStockSkippedResponse)
+export class PosController {
+  constructor(
+    private readonly posService: PosService,
+    private readonly attempts: PosPaymentAttemptsService,
+    private readonly verifications: PosCardVerificationsService,
+    private readonly integrations: IntegrationsService,
+  ) {}
+
+  // `pagedFindMany`: مصفوفةٌ بلا `?page`، ومغلَّفٌ مرقَّمٌ به — فالردُّ أحدُهما.
+  @Get('shifts')
+  @RequiresAction('view')
+  @ApiOkResponse({
+    schema: { oneOf: [{ type: 'array', items: { $ref: getSchemaPath(PosShiftWithTotalsResponse) } }, { $ref: getSchemaPath(PagedPosShiftResponse) }] },
+  })
+  listShifts(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.posService.listShifts(tenant.companyId, tenant.allowedBranchIds, query);
+  }
+
+  // ⚖️ `ق-١٤٤٩`: مغلَّفةً صراحةً `{ shift: null }` — كان `null` يُرسَل جسماً فارغاً (`ExpressAdapter.reply`) فيقرؤه كلُّ قارئٍ بحاله.
+  @Get('shifts/current')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: PosCurrentShiftResponse })
+  async currentShift(@CurrentTenant() tenant: TenantContext): Promise<{ shift: Awaited<ReturnType<PosService['currentShift']>> }> {
+    return { shift: await this.posService.currentShift(tenant) };
+  }
+
+  /** وقائعُ الانقطاع المستنتَجة — بمدّتها وعدد فواتيرها وحدّ استنتاجها (`ق-١٩٢`/ج · `ق-٢٠١`). */
+  @Get('incidents')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: PosIncidentsResponse })
+  incidents(@CurrentTenant() tenant: TenantContext) {
+    return this.posService.listIncidents(tenant.companyId);
+  }
+
+  @Post('shifts')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosShiftResponse })
+  openShift(@CurrentTenant() tenant: TenantContext, @Body() dto: OpenShiftDto) {
+    return this.posService.openShift(tenant, dto);
+  }
+
+  @Post('shifts/:id/close')
+  @RequiresAction('review')
+  @ApiCreatedResponse({ type: PosClosedShiftResponse })
+  closeShift(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: CloseShiftDto) {
+    return this.posService.closeShift(tenant, id, dto);
+  }
+
+  /** مزامنة مبيعات الأوفلاين — idempotent: التكرار يعيد نفس الفاتورة. */
+  @Post('sales/sync')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosSyncedSaleResponse })
+  syncSale(@CurrentTenant() tenant: TenantContext, @Body() dto: SyncPosSaleDto) {
+    return this.posService.syncSale(tenant, dto);
+  }
+
+  @Post('sales')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosSaleResponse })
+  createSale(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosSaleDto) {
+    return this.posService.createSale(tenant, dto);
+  }
+
+  // ───────── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────────
+
+  /** أفعّالٌ ربطُ بوابة الدفع، وبأيّ مزوّدٍ ومهلة — تقرؤه شاشةُ الكاشير لتختار المسار (بلا مفاتيح). */
+  @Get('payment-mode')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: PosPaymentModeResponse })
+  paymentMode(@CurrentTenant() tenant: TenantContext) {
+    return this.integrations.gatewayMode(tenant.companyId);
+  }
+
+  /** إنشاءُ المحاولة — تحقّقُ البيع ولقطتُه **بلا شحنٍ ولا فاتورة**؛ وإعادتُه بالمعرّف نفسِه تعيدها نفسَها. */
+  @Post('payment-attempts')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptResponse })
+  createAttempt(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosPaymentAttemptDto) {
+    return this.attempts.create(tenant, dto);
+  }
+
+  /** المحاولاتُ المفتوحة (لم تُرسل · تُشحن · معلّقة · مقبولةٌ لم تكتمل) — مرشَّحةً بفروع القارئ. */
+  @Get('payment-attempts')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: PosOpenPaymentAttemptResponse, isArray: true })
+  listAttempts(@CurrentTenant() tenant: TenantContext) {
+    return this.attempts.listOpen(tenant);
+  }
+
+  @Get('payment-attempts/:id')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: PosPaymentAttemptWithSaleResponse })
+  viewAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.view(tenant, id);
+  }
+
+  /** الشحنُ خارج كلِّ معاملة بمهلة المحوّل — قُبل ⟸ فاتورة · رُفض ⟸ لا شيء · لا جواب ⟸ معلّقة. */
+  @Post('payment-attempts/:id/charge')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  chargeAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.charge(tenant, id);
+  }
+
+  /** الحسمُ بجواب المزوّد بالمرجع (`ق-١٣٩٩`: «جوابُ المزوّد أوّلاً») — يطلبه الكاشير ويكنسه النظام. */
+  @Post('payment-attempts/:id/resolve')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  resolveAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.resolve(tenant, id);
+  }
+
+  /** ⚖️ الحسمُ اليدويّ بدليلٍ لا بقول — **لصاحب صلاحية المراجعة** (`ق-١٣٩٩`)؛ ولا يُعدّ نهائياً حتى تطابقه التسوية. */
+  @Post('payment-attempts/:id/resolve-with-evidence')
+  @RequiresAction('review')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  resolveAttemptWithEvidence(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ResolvePaymentAttemptWithEvidenceDto) {
+    return this.attempts.resolveWithEvidence(tenant, id, dto);
+  }
+
+  /** الإلغاءُ قبل الإرسال وحدَه. */
+  @Post('payment-attempts/:id/cancel')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: PosPaymentAttemptWithSaleResponse })
+  cancelAttempt(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.attempts.cancel(tenant, id);
+  }
+
+  /** ⚖️ دفعاتُ البطاقة غيرُ المتحقَّقة (`ق-١٣٩٧`/٢–٣) — باسم الكاشير وبحال المطابقة ومهلة التسوية، **للمراجعة**. */
+  @Get('card-verifications')
+  @RequiresAction('review')
+  @ApiOkResponse({ type: PosCardVerificationListResponse })
+  cardVerifications(@CurrentTenant() tenant: TenantContext, @Query() query: CardVerificationsQueryDto) {
+    return this.verifications.list(tenant, query.state ?? 'open');
+  }
+}
+
+====================================================================================================
+// FILE: apps/api/src/pos/pos.module.ts
+====================================================================================================
+import { Module } from '@nestjs/common';
+import { InvoicesModule } from '../invoices/invoices.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
+import { ZatcaModule } from '../zatca/zatca.module';
+import { PaymentsModule } from '../payments/payments.module';
+import { PosCardVerificationsService } from './pos-card-verifications.service';
+import { PosController } from './pos.controller';
+import { PosPaymentAttemptsService } from './pos-payment-attempts.service';
+import { PosService } from './pos.service';
+
+@Module({
+  // سندُ قبض بيع الكاشير يمرّ بوحدة الدفعات لا بمسارٍ ثانٍ (ق-٣١٦).
+  imports: [InvoicesModule, IntegrationsModule, ZatcaModule, PaymentsModule],
+  controllers: [PosController],
+  // محاولةُ دفع البطاقة وكانسُها ورفعُ غير المطابَق (`ق-١٤٠١` · `ق-١٣٩٧`) — مهامٌّ مجدولة تُسجَّل مزوّداتٍ هنا.
+  providers: [PosService, PosPaymentAttemptsService, PosCardVerificationsService],
+})
+export class PosModule {}
+
+====================================================================================================
+// FILE: apps/api/src/pos/pos.service.ts
+====================================================================================================
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PosCardVerification, Prisma } from '@prisma/client';
+import { TenantContext } from '../auth/types';
+import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { moneyEquals } from '../common/money/allocation';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { MSG } from '../common/i18n/messages';
+import { computeTotals, InvoicesService } from '../invoices/invoices.service';
+import { IntegrationsService } from '../integrations/integrations.service';
+import { formatMessage } from '../common/i18n/messages';
+import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
+import { FulfilmentReport } from '../invoices/sale-fulfilment.util';
+import { CloseShiftDto, CreatePosSaleDto, OpenShiftDto, PosSaleLineDto, SyncPosSaleDto } from './dto/pos.dto';
+import { round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
+import { toBaseAmount } from '../common/currency/base-amount.util';
+import {
+  NETWORK_RECEIVABLE_CODE,
+  NETWORK_RECEIVABLE_NAME,
+  getOrCreateAccountByCode,
+  postShiftVarianceEntry,
+} from '../journal/pos-settlement.util';
+import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
+import { gatedReceiptFields, invoiceTypeFor, ReceiptClearance, ReceiptGateInput } from '../zatca/hash-chain.util';
+import { translate } from '../common/i18n/messages';
+import { PaymentsService } from '../payments/payments.service';
+import { localDateOf } from '../common/wall-clock.util';
+import { rateForCategory } from '../common/vat/line-tax.util';
+import { ZatcaService } from '../zatca/zatca.service';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { listItems, pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+import { LINE_ORDER } from '../common/document-lines.util';
+
+/** حقولُ البحث المُعلَنة للمناوبات (`ق-١٢٣٦`) — اسمُ من فتحها وملاحظاتُ الإقفال. */
+const SHIFT_SEARCH_FIELDS = ['openedByName', 'notes'] as const;
+
+// ⑧ كان هنا `POS_TAX_RATE = 15` — نسبةٌ ثابتةٌ لكلِّ سطرٍ يرنّه الكاشير، فتُرَنّ الأدويةُ (نسبة الصفر)
+// بالنسبة الأساسية. صارت الفئةُ تُقرأ من بطاقة الصنف لحظةَ البيع والنسبةُ تُشتقّ منها (`ق-١٢١٢`):
+// الكاشيرُ **يقرأ فقط** ولا يختار فئةً ولا نسبة (`§3.5` في الموجز).
+
+/**
+ * يومُ الإقفال **بتقويم الكاشير** عند منتصف ليل `UTC` — الشكلُ الذي يقرؤه `@db.Date` (`ق-٧٣٦`).
+ *
+ * ⚠️ كان هنا `new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))` بحسبان أنه «يومُ
+ * الجهاز» — **وهو يومُ الخادم**، والخادمُ المنشور بلا منطقة (`UTC`) — فكان يومَ `UTC` متنكّراً في زيّ يومٍ
+ * محلّي: مناوبةٌ تُقفل الحاديةَ صباحاً بتوقيت الرياض تُؤرَّخ بالأمس، وإن كان شهرُه مقفلاً رُفض الإقفال.
+ * فالمصدرُ الصحيح **انحرافُ الطرفية** كما في البيع (`ringOffsetMin`)؛ وبلا انحرافٍ (طرفيةٌ أقدم) يومُ `UTC`
+ * **صراحةً** لا خلسةً — حدٌّ معلَن.
+ */
+export function settlementDate(offsetMin: number | undefined, now = new Date()): Date {
+  return new Date(`${localDateOf(now, offsetMin ?? 0)}T00:00:00.000Z`);
+}
+
+/** اسم عميل المرور الافتراضي — created once per company, then reused. */
+const WALK_IN_CUSTOMER = 'عميل نقدي';
+
+/** ما يُقرأ مع فاتورة البيع للإيصال — مصدرٌ واحد للمباشر والمزامَن والمكرَّر ومحاولة الدفع. */
+// الإيصالُ بترتيب السلّة المعلَن (`ق-١٤١٢`) — والثابتُ الواحد يحمله إلى كلِّ قراءةٍ لبيع (الإتمام · المزامنة · الإيصال).
+const SALE_INCLUDE = { lines: LINE_ORDER, customer: true, posPayments: true } as const;
+type SaleRow = Prisma.InvoiceGetPayload<{ include: typeof SALE_INCLUDE }>;
+
+/** جزءُ دفعٍ واحد — نقدٌ أو بطاقة بمبلغه. */
+export interface SalePart {
+  method: 'CASH' | 'CARD';
+  amount: number;
+}
+
+/**
+ * **البيعُ محضَّراً قبل أيّ كتابة** (`ق-١٤٠١`): المستندُ بسطوره وأسعاره وفئاته لحظةَ الرنّ، وأجزاءُ دفعه. هو ما يُحفظ لقطةً
+ * في محاولة الدفع، ومنه وحدَه تُنشأ الفاتورةُ عند الإتمام.
+ */
+export interface PreparedSale {
+  shiftId: string;
+  shiftBranchId: string | null;
+  invoiceDto: CreateInvoiceDto;
+  paymentMethod: 'CASH' | 'CARD' | 'SPLIT';
+  parts: SalePart[];
+  total: number;
+  cardAmount: number;
+  cardParts: number;
+}
+
+/** ⚖️ **بمَ ثبت دفعُ جزء البطاقة** (`ق-١٣٩٧` · `ق-١٣٩٩`) — يُكتب على صفّ البطاقة وحدَه. */
+export interface CardProof {
+  verification: PosCardVerification;
+  providerRef?: string | null;
+  approvalCode?: string | null;
+  deviceReference?: string | null;
+  attemptId?: string | null;
+}
+
+/** البيعُ كما يخرج من معاملة الإتمام — قبل الختم. */
+export type SoldSale = SaleRow & { receiptQr: string | null; stamped: boolean; stockDeduction: StockDeductionReport; clearanceRequired: boolean };
+
+/**
+ * تقرير خصم المخزون المرفق بردّ البيع (معلوماتي فقط — الرصيد نفسه يبقى
+ * مشتقاً من دفتر الحركات وحده، قاعدة 11: لا حالة موازية).
+ *
+ * `deducted: false` هو سلوك التراجع الصريح، لا عطلاً: وردية بلا فرع، أو فرع
+ * بلا مستودع مربوط، أو سلة كلها بنود غير مخزنية — البيع يمضي والخصم يُتخطى.
+ */
+export type StockDeductionReport =
+  | {
+      deducted: true;
+      warehouseId: string;
+      /** عدد حركات OUT المُنشأة (حركة لكل بند مخزني). */
+      movements: number;
+      /** بنود هبط رصيدها تحت الصفر — تحذير ناعم لا مانع، كسياسة المخزون القائمة. */
+      belowZero: { productId: string; resultingQty: string }[];
+      /** (`ق-١٤٦٩`) ما خرج بلا طبقة — كان يُسقَط هنا فيصمت الكاشيرُ عن المؤقّت كلّه. */
+      provisionalQty: string;
+      /** (`ق-١٤٦٩`) والمؤقّتُ بتكلفة صفر لكلّ صنفٍ بمصدره — يُعلَن ولا يمرّ صامتاً. */
+      // النوعُ من تقرير التسليم نفسِه لا من المخزون — فلا حافةَ استيرادٍ جديدةٍ من النواة إلى محرّك (`§3`).
+      zeroCostProvisional: Extract<FulfilmentReport, { fulfilled: true }>['zeroCostProvisional'];
+    }
+  | { deducted: false; reason: 'NO_BRANCH_WAREHOUSE' | 'NO_TRACKED_PRODUCTS' };
+
+/**
+ * يترجم تقرير التسليم (`م٦`) إلى شكل التقرير الذي يعرفه الكاشير.
+ *
+ * ⚠️ **والشكل يبقى كما هو عمداً**: الخصم انتقل مالكُه من الكاشير إلى سطر
+ * الفاتورة، **وهذا تغييرٌ داخليّ لا يخصّ من يقرأ الردّ**. فمن غيّر الشكل مع
+ * المالك أجبر كل واجهةٍ على تتبّع إعادة تنظيمٍ لا تعنيها.
+ */
+function toDeductionReport(f: FulfilmentReport | undefined): StockDeductionReport {
+  if (!f || !f.fulfilled) {
+    return { deducted: false, reason: f?.reason === 'NO_TRACKED_PRODUCTS' ? 'NO_TRACKED_PRODUCTS' : 'NO_BRANCH_WAREHOUSE' };
+  }
+  // ② الكمّيةُ نصّاً بثلاث خانات (`ق-١٢٣٥`) تصل من صورة حدّ التسليم نفسِها — تُمرَّر ولا تُعاد صياغتها.
+  return {
+    deducted: true,
+    warehouseId: f.warehouseId,
+    movements: f.movements,
+    belowZero: f.belowZero.map((b) => ({ productId: b.productId, resultingQty: b.resultingQty })),
+    provisionalQty: f.provisionalQty,
+    zeroCostProvisional: f.zeroCostProvisional.map((z) => ({ productId: z.productId, qty: z.qty, costSource: z.costSource })),
+  };
+}
+
+/** مجاميعُ المناوبة رقماً — للحساب داخل الخادم (فرقُ الجرد · قيدُ الفرق). */
+interface ShiftTotalsNumeric {
+  salesCount: number;
+  cashTotal: number;
+  cardTotal: number;
+  /** openingFloat + cashTotal — what should be in the drawer. */
+  expectedCash: number;
+}
+
+/**
+ * ② مجاميعُ المناوبة كما تخرج للكاشير — **المالُ نصّاً بخانتين** (`ق-١٢٣٥` · النطاقُ الثاني):
+ * `cashTotal` · `cardTotal` · `expectedCash` نصٌّ من `money()`، والعدُّ رقمٌ كما هو.
+ */
+export interface ShiftTotals {
+  salesCount: number;
+  cashTotal: string;
+  cardTotal: string;
+  /** openingFloat + cashTotal — what should be in the drawer. */
+  expectedCash: string;
+}
+
+const totalsText = (t: ShiftTotalsNumeric): ShiftTotals => ({
+  salesCount: t.salesCount,
+  cashTotal: money(t.cashTotal),
+  cardTotal: money(t.cardTotal),
+  expectedCash: money(t.expectedCash),
+});
+
+/**
+ * الكاشير (مستند §6، النسخة الأولى — أونلاين): مناوبات + بيع يُسجَّل كفاتورة
+ * حقيقية مدفوعة.
+ *
+ * A POS sale is not a parallel document type: it goes through
+ * InvoicesService.create — same numbering chain, same VAT math, same ledger
+ * auto-posting — then gets stamped PAID onto the open shift. The drawer's
+ * expected cash is *derived* from those invoices, never accumulated in a
+ * mutable counter that could drift.
+ */
+@Injectable()
+export class PosService {
+  private readonly logger = new Logger(PosService.name);
+
+  constructor(
+    private readonly tenantPrisma: TenantPrismaService,
+    private readonly invoicesService: InvoicesService,
+    private readonly integrationsService: IntegrationsService,
+    private readonly zatca: ZatcaService,
+    // سندُ قبض البيع بالمسار المبنيّ لا بمسارٍ ثانٍ (ق-٣١٦).
+    private readonly payments: PaymentsService,
+  ) {}
+
+  /**
+   * **على مستوى المنشأة بحقّها**: مناوبةُ الكاشير المفتوحة تُبحث بهويّته لا
+   * بفرعه — فمناوبةٌ فتحها في فرعٍ لم يعد يراه تبقى مفتوحةً ويجب أن تمنعه من
+   * ثانية، والفرعُ الجديد يُقاس بعدها بـ`resolveBranchId`.
+   *
+   * **صندوقُه لا يُقاس هنا**: الدرجُ يُقاس في `resolveDrawerId` بقاعدةٍ أشدّ من `ق-١٤٣٧` — مطابقةٌ تامّةٌ لفرع المناوبة
+   * (`cash_drawer_branch_mismatch`)، فلا درجَ للمنشأة في مناوبة فرعٍ ولا درجَ فرعٍ في مناوبةٍ بلا فرع.
+   */
+  openShift(tenant: TenantContext, dto: OpenShiftDto) {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      // One open drawer per cashier: a second float with the first still open
+      // is how cash goes missing between counts.
+      const open = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
+      if (open) throw new ConflictException(MSG.pos_shift_already_open);
+
+      /**
+       * 🔴 **الفرعُ يُقاس على فروع المستخدم لا على وجوده وحده** (`ق-٥١٢`).
+       *
+       * **كان هنا فحصُ وجودٍ وحده** — **فمستخدمٌ مقصورٌ على فرعٍ يفتح مناوبةً
+       * على فرعٍ آخر**، **ونقدُه يقع في درجٍ ليس له**. **ولا يُكشَف بالاستعمال**:
+       * البياناتُ تبدو صحيحةً لمن يراها.
+       *
+       * ⇒ **والمصدرُ الواحد هو `resolveBranchId`** — يتحقّق من الوجود **ثم من
+       * الإذن** (`assertBranchAllowed`)، **وهو ما تمرّ به تسعُ خدماتٍ أخرى**.
+       */
+      const branchId = await resolveBranchId(tx, dto.branchId, tenant.allowedBranchIds);
+
+      const drawerId = await this.resolveDrawerId(tx, dto, branchId);
+
+      return tx.posShift.create({
+        data: {
+          branchId,
+          drawerId,
+          openedById: tenant.profileId,
+          openedByName: await this.actorName(tx, tenant),
+          openingFloat: dto.openingFloat,
+        } as unknown as Prisma.PosShiftUncheckedCreateInput,
+      });
+    });
+  }
+
+  /**
+   * درجُ المناوبة (`ق-٢١٨` · `ق-٢٦١`): **مُسمّىً إن اختاره الكاشير، وإلا فالدرجُ
+   * الافتراضيُّ لفرعها**.
+   *
+   * ⚠️ **وفراغُه معلَنٌ لا مسكوتٌ عنه**: منشأةٌ بلا أدراجٍ بعدُ تفتح مناوبةً بلا
+   * درج — فلا يُخترع لها درجٌ من فتح مناوبة. والدرجُ يُنشئه المالك من الإعدادات،
+   * والترحيلُ إلى حسابه يأتي في الدفعة التالية.
+   *
+   * **على مستوى المنشأة بحقّها**: الفرعُ هنا مُحلَّلٌ بـ`resolveBranchId` قبل
+   * الاستدعاء — فالمرشِّحُ معرّفُ فرعٍ مأذونٍ للكاشير لا قائمةُ رؤيته، والدرجُ
+   * المختارُ يُقاس على الفرع نفسِه.
+   */
+  private async resolveDrawerId(tx: Prisma.TransactionClient, dto: OpenShiftDto, branchId: string | null): Promise<string | null> {
+    if (dto.drawerId) {
+      const chosen = await tx.cashDrawer.findUnique({ where: { id: dto.drawerId } });
+      if (!chosen) throw new NotFoundException(MSG.cash_drawer_not_found);
+      if (!chosen.isActive) throw new ConflictException(formatMessage(MSG.cash_drawer_inactive, { name: chosen.name }));
+      // درجٌ لفرعٍ آخر يجعل نقدَ فرعٍ في حساب فرعٍ ثانٍ — وهو عينُ ما بُني الدرجُ لمنعه.
+      if ((chosen.branchId ?? null) !== branchId) {
+        throw new ConflictException(formatMessage(MSG.cash_drawer_branch_mismatch, { name: chosen.name }));
+      }
+      return chosen.id;
+    }
+    const preferred = await tx.cashDrawer.findFirst({ where: { branchId, isDefault: true, isActive: true } });
+    if (preferred) return preferred.id;
+
+    // ولا افتراضيَّ للفرع (منشأةٌ أنشأت أدراجَها بيدها): **درجٌ نشِطٌ واحدٌ يُؤخذ،
+    // وأكثرُ من واحدٍ يُترك للاختيار** — فاختيارُ الأول من عدّةٍ يزعم ترتيباً لا
+    // معنى له، ويضع نقدَ درجٍ في حساب آخر بلا أن يُسأل أحد.
+    const active = await tx.cashDrawer.findMany({ where: { branchId, isActive: true }, take: 2 });
+    return active.length === 1 ? active[0].id : null;
+  }
+
+  /**
+   * The caller's open shift with live drawer math — null when none is open.
+   *
+   * **على مستوى المنشأة بحقّها**: المناوبةُ الحالية هي مناوبةُ الكاشير نفسِه —
+   * مفتاحُها هويّتُه لا فرعُه، ولا تُعرض مناوبةُ غيره من هذا المسار.
+   */
+  currentShift(tenant: TenantContext) {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
+      if (!shift) return null;
+      return { ...shift, ...totalsText(await this.totalsFor(tx, shift.id, Number(shift.openingFloat))) };
+    });
+  }
+
+  /**
+   * ⚠️ **كانت تعرض مناوباتِ المنشأة كلِّها بمجاميع نقدها** — لكلّ من يملك شاشةَ
+   * نقطة البيع. **فكاشيرُ فرعٍ يقرأ صندوقَ كلّ فرعٍ آخر مناوبةً مناوبة** (`ق-٥١٧`).
+   * والآن مقصورةٌ على فروع القارئ — كالفواتير والأدراج سواء.
+   */
+  listShifts(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const where: Prisma.PosShiftWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), SHIFT_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const result = await pagedFindMany(query, tx.posShift, { where, orderBy: { openedAt: 'desc' } });
+      // المجاميعُ للمناوبات المُعادة وحدَها (القائمةُ كلُّها أو الصفحة) — فلا تُحسب مناوبةٌ خارج النافذة.
+      const shifts = listItems(result);
+      const totals = await this.totalsForMany(tx, shifts);
+      const withTotals = shifts.map((s) => ({ ...s, ...totalsText(totals.get(s.id)!) }));
+      return Array.isArray(result) ? withTotals : { ...result, items: withTotals };
+    });
+  }
+
+  closeShift(tenant: TenantContext, id: string, dto: CloseShiftDto) {
+    return this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx) => {
+      const shift = await tx.posShift.findUnique({ where: { id } });
+      if (!shift) throw new NotFoundException(MSG.pos_shift_not_found);
+      if (shift.openedById !== tenant.profileId) {
+        // ق-١٤٤٠: مناوبةُ غيره خارج فروعه لا وجودَ لها عنده — `404` لا `403`، وقبل «مقفلة» فلا يُكشف وجودُها ولا حالُها (ومناوبتُه هو بعد نقله قرارٌ معلَّق للمالك لا يُمسّ).
+        const visible = await tx.posShift.findFirst({ where: { id, ...branchFilter(tenant.allowedBranchIds) }, select: { id: true } });
+        if (!visible) throw new NotFoundException(MSG.pos_shift_not_found);
+      }
+      if (shift.status === 'CLOSED') throw new ConflictException(MSG.pos_shift_closed);
+      // A cashier closes their own drawer; the owner can close anyone's
+      // (an employee who left with a shift still open must not wedge it).
+      if (shift.openedById !== tenant.profileId && tenant.actorType !== 'COMPANY') {
+        throw new ForbiddenException(MSG.pos_not_your_shift);
+      }
+
+      /**
+       * ⚖️ **المعلّقُ لا يحبس المناوبةَ أبداً** (`ق-١٤١٨` · التوجيه ٢٦٣ §٥ بنصّ المالك: «تُقفل وهو فيها مسمّىً، وينتقل إلى
+       * قائمة المطابقة بالتسوية ⇒ فلا يُخمَّن، ولا يُحبس التاجرُ عن إقفال يومه») — **ونسخ `409` الذي كان هنا** (`ق-١٤٠١`).
+       * محاولةُ بطاقةٍ تُشحن أو معلّقةٌ أو مقبولةٌ لم تكتمل **تبقى بحالها**: تُسمّى في ردّ الإقفال، وتظهر في قائمة المطابقة
+       * (`card-verifications` · `unresolvedAttempts`) حتى يحسمها جوابُ المزوّد (الكانس) أو الدليل — **والنقدُ لا يمسّه شيءٌ منها**:
+       * بطاقةٌ لا درج، فجردُ الدرج يُبنى على ما فيه.
+       * **وما لم يُرسل بعد (`CREATED`) يُلغى مع الإقفال**: لا مالَ فيه، وإبقاؤه يُشحن على مناوبةٍ مقفلة.
+       */
+      const pendingAttempts = await tx.posPaymentAttempt.findMany({
+        where: { shiftId: id, status: { in: ['CHARGING', 'UNKNOWN', 'APPROVED'] } },
+        select: { id: true, status: true, cardAmount: true, clientSaleId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      await tx.posPaymentAttempt.updateMany({ where: { shiftId: id, status: 'CREATED' }, data: { status: 'CANCELLED', resolution: 'CANCELLED', resolvedAt: new Date() } });
+
+      const totals = await this.totalsFor(tx, shift.id, Number(shift.openingFloat));
+      /** موجب = زيادة في الدرج، سالب = عجز. */
+      const variance = round2(dto.declaredClosing - totals.expectedCash);
+
+      const closed = await tx.posShift.update({
+        where: { id },
+        data: { status: 'CLOSED', closedAt: new Date(), declaredClosing: dto.declaredClosing, notes: dto.notes, variance },
+      });
+
+      /**
+       * ⭐ **العمودُ والقيدُ في المعاملة نفسها** (`ق-٣٠٨`، شرطُ المالك الأول).
+       *
+       * سقوطُ أحدهما يُسقط الإقفال: **تخزينُ الفرق بلا ترحيله يُعيد إنتاج
+       * «رقمٍ يتحرك بلا قيدٍ يسنده»** — وهو العطلُ الذي أُغلقت الكتلةُ لأجله.
+       * **وصفرُ الفرق لا يُرحَّل قيداً** (الشرط الثاني) — الدالّةُ تعيد `null`.
+       */
+      const drawer = shift.drawerId
+        ? await tx.cashDrawer.findUnique({ where: { id: shift.drawerId }, select: { accountId: true } })
+        : null;
+      await postShiftVarianceEntry(tx, tenant.companyId, {
+        shiftNo: shift.id.slice(0, 8),
+        // ⚖️ يومُ الكاشير من انحراف طرفيته (`ق-٧٣٦`) — لا يومُ الخادم؛ وبلا انحرافٍ يومُ `UTC` صراحةً.
+        date: settlementDate(dto.closedOffsetMin),
+        branchId: shift.branchId,
+        drawerAccountId: drawer?.accountId ?? null,
+        variance,
+      });
+
+      // ② الفرقُ نصّاً بخانتين كسائر المبالغ (`ق-١٢٣٥`) — موجبٌ زيادةٌ وسالبٌ عجزٌ، والإشارةُ تُقرأ بـ`num()` في الشاشة.
+      return {
+        ...closed,
+        ...totalsText(totals),
+        variance: money(variance),
+        // مسمّاةً في ردّ الإقفال (`ق-١٤١٨`) — ومنه إلى قائمة المطابقة حتى تُحسم.
+        pendingAttempts: pendingAttempts.map((a) => ({
+          id: a.id,
+          status: a.status,
+          cardAmount: money(a.cardAmount),
+          clientSaleId: a.clientSaleId,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      };
+    });
+  }
+
+  /** بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة. */
+  createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
+    return this.ringDirect(tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin, cardDeviceReference: dto.cardDeviceReference });
+  }
+
+  /**
+   * مزامنة بيع سُجّل أوفلاين (مستند §6 v2) — idempotent بمعرّف الطرفية:
+   * resending the same clientSaleId returns the SAME invoice, never a copy.
+   * The real invoice number is assigned HERE, centrally — two terminals that
+   * sold offline at the same moment can therefore never collide on numbering,
+   * which is exactly the conflict the requirements doc flags.
+   */
+  async syncSale(tenant: TenantContext, dto: SyncPosSaleDto) {
+    const existing = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
+    if (existing) return this.withReceiptQr(tenant.companyId, existing);
+    try {
+      const sold = await this.ringDirect(tenant, dto, {
+        clientSaleId: dto.clientSaleId,
+        offlineRef: dto.offlineRef,
+        ringAt: dto.ringAt,
+        ringOffsetMin: dto.ringOffsetMin,
+        // بيع أوفلاين أُخذت بطاقته على الجهاز وقت الانقطاع — لا نعيد تمريرها عند المزامنة؛
+        // **ورقمُ مرجع الجهاز من إيصاله إلزاميٌّ والربطُ فعّال** (`ق-١٣٩٧`).
+        viaSync: true,
+        cardDeviceReference: dto.cardDeviceReference,
+      });
+      // (ج) `ق-١٩٢`: واقعةُ الانقطاع تُستنتَج بعد أن التزم البيع — وسقوطُ استنتاجها
+      // لا يُسقط بيعاً التزم؛ يُسجَّل ويُقاس لا يُعمّى.
+      await this.recordOfflineIncident(tenant.companyId, sold.id, dto.ringAt).catch((e: Error) =>
+        this.logger.warn(`تعذّر استنتاج واقعة الانقطاع للبيع ${sold.id}: ${e.message}`),
+      );
+      return sold;
+    } catch (e) {
+      // Two terminals racing the same clientSaleId: the loser reads the
+      // winner's row — the caller cannot tell the difference, by design.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const winner = await this.findByClientSaleId(tenant.companyId, dto.clientSaleId);
+        if (winner) return this.withReceiptQr(tenant.companyId, winner);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * ⭐ **واقعةُ انقطاعٍ مستنتَجة على الخادم** (`ق-١٩٢`/ج · `ق-٢٠١`).
+   *
+   * لا هويةَ طرفيةٍ عندنا، فالانقطاع يُستنتَج من البيوع المزامَنة: بيعٌ رنَّ قبل
+   * مزامنته بأكثر من **حدّ الفصل** (إعدادُ المنشأة `posOfflineGapMinutes`) وقع في
+   * انقطاع. **والنافذة من أزمنة الرنّ لا من ترتيب الوصول** (`ق-٢٠١`/٣): المزامنة
+   * تصل مبعثرةً — الأحدثُ قبل الأقدم، أو بيعٌ متأخّر يقع **بين** واقعتَين قائمتَين
+   * فيجسرهما — فتُلتقط كلُّ الوقائع التي تتقاطع نافذتُها `[الرنّ − الحدّ، الرنّ + الحدّ]`
+   * وتُدمَج في أولها؛ بيوعُ المدموجة تُعاد إلى الباقية **قبل** حذفها.
+   *
+   * حدُّ الاستنتاج يُحفظ مع الواقعة ويُعرَض في التقرير: **استنتاجٌ لا قياس**.
+   * وبيعٌ تأخّرُه دون الحدّ ليس انقطاعاً — بطء شبكةٍ لا غيابُها.
+   */
+  private async recordOfflineIncident(companyId: string, invoiceId: string, ringAtIso: string | undefined, now = new Date()): Promise<string | null> {
+    if (!ringAtIso) return null;
+    const ringAt = new Date(ringAtIso);
+    if (Number.isNaN(ringAt.getTime())) return null;
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // قفلٌ استشاريّ على المنشأة داخل المعاملة (`ق-٢٠١`/٣): ثلاث مزامناتٍ تصل في
+      // لحظةٍ واحدة تقرأ «لا واقعةَ متقاطعة» ثلاثتُها فتُنشئ ثلاثاً. القياس (⑥) مرّ
+      // مرةً بلا قفل — والآلية لا تُترك للحظّ. يُحرَّر مع الالتزام.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'pos_offline_incident:' + companyId}))`;
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } });
+      const gapMs = company.posOfflineGapMinutes * 60_000;
+      if (now.getTime() - ringAt.getTime() < gapMs) return null;
+
+      const lo = new Date(ringAt.getTime() - gapMs);
+      const hi = new Date(ringAt.getTime() + gapMs);
+      const overlapping = await tx.posOfflineIncident.findMany({
+        where: { startedAt: { lte: hi }, endedAt: { gte: lo } },
+        orderBy: { startedAt: 'asc' },
+      });
+
+      if (overlapping.length === 0) {
+        const created = await tx.posOfflineIncident.create({
+          data: { companyId, startedAt: ringAt, endedAt: ringAt, firstSyncedAt: now, gapMinutes: company.posOfflineGapMinutes },
+        });
+        await tx.invoice.update({ where: { id: invoiceId }, data: { offlineIncidentId: created.id } });
+        return created.id;
+      }
+
+      const [survivor, ...absorbed] = overlapping;
+      const times = [ringAt, ...overlapping.map((i) => i.startedAt), ...overlapping.map((i) => i.endedAt)].map((d) => d.getTime());
+      const startedAt = new Date(Math.min(...times));
+      const endedAt = new Date(Math.max(...times));
+      const firstSyncedAt = new Date(Math.min(now.getTime(), ...overlapping.map((i) => i.firstSyncedAt.getTime())));
+      if (absorbed.length > 0) {
+        // جَسْرٌ: بيعٌ متأخّر ربط واقعتَين — بيوعُهما تُعاد أولاً، ثم تُحذف الفارغة.
+        const ids = absorbed.map((a) => a.id);
+        await tx.invoice.updateMany({ where: { offlineIncidentId: { in: ids } }, data: { offlineIncidentId: survivor.id } });
+        await tx.posOfflineIncident.deleteMany({ where: { id: { in: ids } } });
+      }
+      await tx.posOfflineIncident.update({ where: { id: survivor.id }, data: { startedAt, endedAt, firstSyncedAt } });
+      await tx.invoice.update({ where: { id: invoiceId }, data: { offlineIncidentId: survivor.id } });
+      return survivor.id;
+    });
+  }
+
+  /** تقريرُ وقائع الانقطاع — بحدّ الاستنتاج ظاهراً مع كل واقعة (`ق-٢٠١`/٢ب). */
+  listIncidents(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const [company, rows] = await Promise.all([
+        tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { posOfflineGapMinutes: true } }),
+        tx.posOfflineIncident.findMany({ orderBy: { startedAt: 'desc' }, take: 100, include: { _count: { select: { invoices: true } } } }),
+      ]);
+      return {
+        /** استنتاجٌ من أزمنة رنّ البيوع المزامَنة — لا قياسٌ من الجهاز. */
+        inferred: true as const,
+        gapMinutes: company.posOfflineGapMinutes,
+        items: rows.map((r) => ({
+          id: r.id,
+          startedAt: r.startedAt,
+          endedAt: r.endedAt,
+          firstSyncedAt: r.firstSyncedAt,
+          gapMinutes: r.gapMinutes,
+          durationMinutes: Math.round((r.endedAt.getTime() - r.startedAt.getTime()) / 60_000),
+          salesCount: r._count.invoices,
+        })),
+      };
+    });
+  }
+
+  /**
+   * **على مستوى المنشأة بحقّها**: مفتاحُ البيع من الجهاز (`clientSaleId`) فريدٌ
+   * في المنشأة، والبحثُ به يمنع تكرارَ البيعة عند المزامنة أياً كان فرعُها —
+   * وحجبُه يُصدر الفاتورةَ مرّتين.
+   */
+  private findByClientSaleId(companyId: string, clientSaleId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.findFirst({ where: { clientSaleId }, include: SALE_INCLUDE }));
+  }
+
+  /**
+   * إيصالُ بيعٍ مكتمل بمعرّف فاتورته — لمحاولة دفعٍ اكتملت قبل هذا الطلب (إعادةُ الشحن أو القراءة).
+   * **على مستوى المنشأة بحقّها**: الفاتورةُ تُبلغ عبر محاولةٍ قُرئت مرشَّحةً بفروع القارئ أو هي محاولتُه.
+   */
+  async receiptFor(companyId: string, invoiceId: string) {
+    const invoice = await this.tenantPrisma.runInTenantContext(companyId, (tx) => tx.invoice.findUnique({ where: { id: invoiceId }, include: SALE_INCLUDE }));
+    return invoice ? this.withReceiptQr(companyId, invoice) : null;
+  }
+
+  /**
+   * **على مستوى المنشأة بحقّها**: البيعُ يقع في مناوبة الكاشير المفتوحة —
+   * مفتاحُها هويّتُه، وفرعُ المناوبة هو ما يُقاس عليه البيعُ لا العكس، فلا
+   * قائمةَ فروعٍ في هذا الاستعلام أصلاً.
+   */
+  /**
+   * ⭐ **تحضيرُ البيع — تحقّقٌ وبناءُ مستندٍ بلا كتابةٍ ولا شحن** (`ق-١٤٠١`).
+   *
+   * ما كان المعاملةَ الأولى من ثلاثٍ في `ring()`: المناوبة · الأصناف · صفةُ المشتري · يومُ الجهاز · السطورُ بفئاتها ·
+   * الدفعُ المقسّم بالدالّة الواحدة. **وكان الشحنُ داخلها** — فجهازٌ يستغرق ستّ ثوانٍ في معاملة الخمس ⟸ المالُ قُبل
+   * والبيعُ سقط `500` (القياس ② في الموجز). **الآن لا شحنَ هنا**: البيعُ بلا ربطٍ يُتمّ في المعاملة نفسِها
+   * (`completeSaleWithinTx`)، والبطاقةُ والربطُ فعّال تُحفظ لقطتُها في محاولة دفعٍ تُشحن خارج كلِّ معاملة.
+   *
+   * (ومستودعُ الفرع لم يعد يُقرأ هنا: الخصمُ صار مالكُه سطرَ الفاتورة — `م٦` — وكان المتغيّرُ يُحسب ولا يُقرأ.)
+   */
+  async prepareSale(tx: Prisma.TransactionClient, tenant: TenantContext, dto: CreatePosSaleDto, opts: { ringAt?: string; ringOffsetMin?: number }): Promise<PreparedSale> {
+      const shift = await tx.posShift.findFirst({ where: { status: 'OPEN', openedById: tenant.profileId } });
+      if (!shift) throw new ConflictException(MSG.pos_no_open_shift);
+
+      const ids = dto.lines.map((l) => l.productId);
+      const products = await tx.product.findMany({ where: { id: { in: ids } } });
+      const byId = new Map(products.map((p) => [p.id, p]));
+      const missing = ids.find((id) => !byId.has(id));
+      if (missing) throw new NotFoundException(MSG.product_not_found);
+
+      const customerId = dto.customerId ?? (await this.walkInCustomerId(tx));
+      // ②A1: مشترٍ مسمّىً لم يُعلن صفتَه لا يُصدَر له مستند — الكاشيرُ لا يقرّر الصفة، صاحبُ المنشأة يعلنها من البطاقة.
+      // ⑤A4: وصفتُه تقرّر نوعَ المستند — كاملةٌ (مؤسّسة/اعتباريّ/مسجَّل) تُجاز قبل أن تُشارَك، فيُعلَم ذلك هنا للإيصال.
+      if (dto.customerId) await assertBuyerKindDeclared(tx, dto.customerId);
+      /**
+       * ⭐ **يومُ الفاتورة يومُ الجهاز، لا يومُ UTC ولا يومُ عودة الشبكة** (`ق-١٨٥`).
+       *
+       * كان يُشتقّ من `toISOString().slice(0, 10)` — تاريخُ UTC — فبيعٌ في الواحدة
+       * صباحاً بتوقيت الرياض يُؤرَّخ **أمس**، وبيعٌ أوفلاين يُزامَن بعد يوم يُبلَّغ
+       * بتاريخٍ خارج نافذة الـ٢٤ ساعة **ونحن من صنعها**. الآن: اللحظة من الجهاز
+       * (`ringAt`) وانحرافُه معها، فيُحسب يومُه؛ وتُحفظ اللحظةُ والانحراف لمستند
+       * الهيئة. طرفيةٌ لم تُرسل انحرافاً (عميلٌ أقدم) تُعامَل كما كانت: يومُ UTC
+       * بلا وقتٍ معلوم — حدٌّ معلَن لا تخمين.
+       */
+      const rungAt = opts.ringAt ? new Date(opts.ringAt) : new Date();
+      const offsetKnown = opts.ringAt !== undefined && opts.ringOffsetMin !== undefined;
+      const issueDate = localDateOf(rungAt, offsetKnown ? opts.ringOffsetMin! : 0);
+      const posLines = dto.lines.map((l) => {
+          const p = byId.get(l.productId)!;
+          /**
+           * ⚠️ **`productId` يُنقل ولا يُترك عند الاسم.**
+           *
+           * الكاشير **يعرف الصنف يقيناً** — يبحث عنه هنا بالسطر الذي فوق —
+           * وكان يحتفظ باسمه وحده. فينتج سطرُ فاتورةٍ بلا صنف، أي «خدميّ»
+           * بتعريف الطبقة، **فلا تكلفةَ مبيعات له أبداً** مهما اكتملت
+           * الطبقات لاحقاً.
+           *
+           * وهو المسار الأخطر تحديداً لأنه **الوحيد الذي يخصم من المخزون**:
+           * فتخرج البضاعة من الرفّ ولا يخرج ما يقابلها من الدفتر.
+           */
+          return {
+            description: p.name,
+            productId: p.id,
+            // ① وحدةُ الكمّية من بطاقة الصنف لحظةَ البيع — ولا رمزَ لصنفٍ لم يُعلنها.
+            unitCode: p.unitCode ?? null,
+            quantity: l.quantity,
+            unitPrice: Number(p.price),
+            discount: l.discount ?? 0,
+            // ⑧ الفئةُ من البطاقة والنسبةُ مشتقّةٌ منها — الخادمُ يعيد حلَّها من الصنف نفسِه عند الإنشاء،
+            // وتُمرَّر هنا كي تُحسب المجاميعُ (تدقيقُ الدفع المقسَّم أدناه) بالدالّة نفسِها وبالنسبة نفسِها.
+            taxRate: rateForCategory(p.taxCategory),
+            taxCategory: p.taxCategory as 'S' | 'Z' | 'E' | 'O',
+            taxExemptionReasonCode: p.taxExemptionReasonCode ?? undefined,
+            taxExemptionReason: p.taxExemptionReason ?? undefined,
+          };
+        });
+      const invoiceDto = {
+        customerId,
+        issueDate,
+        issuedAt: offsetKnown ? rungAt.toISOString() : undefined,
+        issuedOffsetMin: offsetKnown ? opts.ringOffsetMin : undefined,
+        // Paid on the spot — due = issue keeps it out of every aging bucket.
+        dueDate: issueDate,
+        branchId: shift.branchId ?? undefined,
+        lines: posLines,
+      } as CreateInvoiceDto;
+
+      // الدفع المقسّم يُدقَّق قبل إنشاء أي شيء: نفس دالة المجاميع التي
+      // ستحسب الفاتورة تتحقق أن الأجزاء تساويها — لا فاتورة نصف مدفوعة.
+      const total = computeTotals(posLines).total;
+      if (dto.paymentMethod === 'SPLIT') {
+        if (!dto.payments?.length) throw new BadRequestException(MSG.pos_split_parts_required);
+        const paid = dto.payments.reduce((sum, p) => sum + p.amount, 0);
+        if (Math.abs(paid - total) > 0.01) throw new BadRequestException(MSG.pos_split_mismatch);
+      } else if (dto.payments?.length) {
+        throw new BadRequestException(MSG.pos_split_only_for_split);
+      }
+      // صفّ دفعة لكل طريقة: البيع البسيط جزءٌ واحد بكامل المبلغ، والمقسّم كما فصّله الكاشير.
+      const parts: SalePart[] = dto.paymentMethod === 'SPLIT' ? dto.payments!.map((p) => ({ method: p.method, amount: p.amount })) : [{ method: dto.paymentMethod, amount: total }];
+      const cardParts = parts.filter((p) => p.method === 'CARD');
+      return {
+        shiftId: shift.id,
+        shiftBranchId: shift.branchId,
+        invoiceDto,
+        paymentMethod: dto.paymentMethod,
+        parts,
+        total,
+        cardAmount: round2(cardParts.reduce((sum, p) => sum + p.amount, 0)),
+        cardParts: cardParts.length,
+      };
+  }
+
+  /**
+   * ⭐ **بمَ يثبت جزءُ البطاقة في البيع المباشر** (`ق-١٣٩٧` · الموجز ٢.١ و٢.١٠ · `ق-١٤١٩`).
+   *
+   * - **والربطُ فعّال**: **المسارُ الحيّ يرفض** جزءَ البطاقة (يمرّ بمحاولة الدفع — فلا مالَ يُقبل لدى المزوّد بلا بيعٍ
+   *   يُسجَّل)؛ **والمزامنةُ تقبله بثلاثة شروط** (`ق-١٣٩٧`): رقمُ مرجع الجهاز **إلزاميٌّ من إيصاله** · ويُعلَّم «غيرَ متحقَّق»
+   *   حتى تطالب به تسويةُ الشبكة · وما لم يُطابَق بعد مهلتها يُرفع للمراجعة باسم الكاشير. **وجزءٌ واحد**: عمليةٌ واحدة
+   *   على الجهاز لها مرجعٌ واحد.
+   * - ⚖️ **وبلا ربطٍ فعّال — جهازٌ مستقلّ — الحكمُ نفسُه** (`ق-١٤١٩` · التوجيه ٢٦٣ §٥ بنصّ المالك: «يسري عليه شرطُ رقم
+   *   المرجع كبيع البطاقة دون اتصال، فالحكمُ واحد»): رقمُ المرجع إلزاميّ وجزءٌ واحد، ويُعلَّم «غيرَ متحقَّق» حتى تطابقه
+   *   التسوية — **ونسخ «أكّده الكاشير» (`CASHIER_CONFIRMED`) للبيع الجديد**؛ وما كُتب به قبل هذا يبقى كما هو.
+   */
+  private async directCardProof(tx: Prisma.TransactionClient, prepared: PreparedSale, opts: { viaSync?: boolean; cardDeviceReference?: string }): Promise<CardProof> {
+    const reference = opts.cardDeviceReference?.trim() || null;
+    const gateway = await this.integrationsService.activeGateway(tx);
+    if (gateway && !opts.viaSync) throw new ConflictException(MSG.pos_card_requires_attempt);
+    if (prepared.cardParts > 1) throw new BadRequestException(MSG.pos_card_single_part);
+    if (!reference) throw new BadRequestException(MSG.pos_card_device_reference_required);
+    return { verification: 'DEVICE_REFERENCE', deviceReference: reference };
+  }
+
+  /**
+   * ⭐ **البيعُ المباشر — تحضيرٌ وإتمامٌ في معاملةٍ واحدة** (`ق-١٤٠١` · `ق-١٣٩٤`).
+   *
+   * كان ثلاثَ معاملات، فسقوطُ الأخيرة يترك فاتورةً يتيمة `DUE` بقيدٍ مرحَّل، **وإعادةُ المزامنة بالمعرّف نفسِه فاتورةٌ ثانية**
+   * — «بيعٌ واحد ⟸ فاتورتان، ولو كان نقداً» (القياس ③). الآن: **سقوطُ أيّ خطوةٍ لا يترك شيئاً، وإعادتُها بالمعرّف نفسِه
+   * تُنتج فاتورةً واحدة** — ومعرّفُ البيع يُفحص **داخل** المعاملة نفسِها، ويُلفّ الكلُّ بإعادة المحاولة على تعارض الترقيم.
+   *
+   * **على مستوى المنشأة بحقّها**: معرّفُ البيع من الجهاز (`clientSaleId`) فريدٌ في المنشأة، والبحثُ به يمنع تكرارَ البيعة أياً كان
+   * فرعُها — وحجبُه يُصدر الفاتورةَ مرّتين.
+   */
+  private async ringDirect(
+    tenant: TenantContext,
+    dto: CreatePosSaleDto,
+    opts: { clientSaleId?: string; offlineRef?: string; ringAt?: string; ringOffsetMin?: number; viaSync?: boolean; cardDeviceReference?: string },
+  ) {
+    const outcome = await retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(tenant.companyId, async (tx): Promise<{ kind: 'replay'; invoice: SaleRow } | { kind: 'sold'; sold: SoldSale }> => {
+        if (opts.clientSaleId) {
+          const replay = await tx.invoice.findFirst({ where: { clientSaleId: opts.clientSaleId }, include: SALE_INCLUDE });
+          if (replay) return { kind: 'replay', invoice: replay };
+          await this.releaseUnsentAttempt(tx, opts.clientSaleId);
+        }
+        const prepared = await this.prepareSale(tx, tenant, dto, opts);
+        const card = prepared.cardAmount > 0 ? await this.directCardProof(tx, prepared, opts) : undefined;
+        const sold = await this.completeSaleWithinTx(tx, {
+          companyId: tenant.companyId,
+          allowedBranchIds: tenant.allowedBranchIds,
+          prepared,
+          clientSaleId: opts.clientSaleId,
+          offlineRef: opts.offlineRef,
+          card,
+        });
+        return { kind: 'sold', sold };
+      }),
+    );
+    if (outcome.kind === 'replay') return this.withReceiptQr(tenant.companyId, outcome.invoice);
+    return this.finishReceipt(tenant.companyId, outcome.sold);
+  }
+
+  /**
+   * بيعٌ يصل بالمزامنة ولمعرّفه محاولةُ دفعٍ عبر المزوّد (`ق-١٤٠١`): **لم تُرسل بعد ⟸ تُلغى** (لا مالَ فيها، والبيعُ يُسجَّل
+   * بالمزامنة) · **تُشحن أو معلّقةٌ أو قبلها المزوّدُ ولم تكتمل ⟸ `409`** — تُحسم أوّلاً، **ولا يُسجَّل البيعُ مرّتين**.
+   * المرفوضةُ والملغاةُ منتهيتان فلا تمنعان.
+   */
+  private async releaseUnsentAttempt(tx: Prisma.TransactionClient, clientSaleId: string): Promise<void> {
+    const attempt = await tx.posPaymentAttempt.findFirst({ where: { clientSaleId }, select: { id: true, status: true } });
+    if (!attempt) return;
+    if (attempt.status === 'CHARGING' || attempt.status === 'UNKNOWN' || attempt.status === 'APPROVED') throw new ConflictException(MSG.pos_attempt_in_flight);
+    if (attempt.status === 'CREATED') {
+      await tx.posPaymentAttempt.updateMany({ where: { id: attempt.id, status: 'CREATED' }, data: { status: 'CANCELLED', resolution: 'CANCELLED', resolvedAt: new Date() } });
+    }
+  }
+
+  /**
+   * ⭐ **الإتمامُ الذرّيّ — لكلِّ المسارات** (`ق-١٤٠١` · الموجز ٢.٥).
+   *
+   * الفاتورةُ (رقمُها · قيدُها · خصمُها · حدثُ الهيئة) **وصفوفُ الدفع وسنداتُها وختمُ `PAID` ومعرّفُ البيع** في معاملة
+   * المستدعي وحدَها: سقوطُ أيّ خطوةٍ يُسقطها كلَّها. والمستدعي مسؤولٌ عن إعادة المحاولة على تعارض الترقيم حول معاملته.
+   * ومحاولةُ الدفع تستدعيه بلقطتها (`trustLineTax`) وبما شُحن (`expectedTotal`) — فلا يُتمّ بيعٌ على مبلغٍ غير المشحون.
+   */
+  async completeSaleWithinTx(
+    tx: Prisma.TransactionClient,
+    input: {
+      companyId: string;
+      allowedBranchIds: string[] | 'all';
+      prepared: Pick<PreparedSale, 'shiftId' | 'shiftBranchId' | 'invoiceDto' | 'paymentMethod' | 'parts'>;
+      clientSaleId?: string;
+      offlineRef?: string;
+      /** بمَ ثبت جزءُ البطاقة — إلزاميٌّ متى كان في الأجزاء بطاقة. */
+      card?: CardProof;
+      /** السطورُ من لقطةٍ محفوظة — فئتُها كما كُتبت لحظةَ البيع. */
+      trustLineTax?: boolean;
+      /** إجماليُّ ما شُحن عليه البيع — يُطابَق بإجماليّ الفاتورة قبل أيّ صفّ دفع. */
+      expectedTotal?: number;
+    },
+  ): Promise<SoldSale> {
+    const { companyId, prepared, card } = input;
+    /**
+     * ⚖️ **`IMMEDIATE` — والبيعُ المسدَّدُ فوراً لا يُفحص على الحدّ** (`ق-٣٣٨`).
+     *
+     * «**وحدٌّ يمنع بيعاً نقدياً عطلٌ يصنعه لا يمنعه**»: السندُ يُنشأ بعد هذا
+     * السطر، **فعند لحظة الفحص تكون الذمّةُ ارتفعت والدفعةُ لم تصل** — فيُرفض
+     * بيعُ عميلٍ عند حدّه **نقداً**، وهو عطلٌ نصنعه.
+     *
+     * ⚠️ **وحدُّ هذا التصريح مُعلَنٌ في `credit-context.ts` ولا يُلتفّ عليه**:
+     * إن سقطت معاملةُ السند بقيت فاتورةٌ مفتوحةٌ أُعفيت من الحدّ — **بيعةٌ
+     * واحدة، ويظهر تعرّضُها في الفحص التالي**.
+     *
+     * ⚠️ **ولا تجاوزَ يُطلب هنا**: بيعُ الكاشير لا يُفحص أصلاً، **فتصريحُ
+     * تجاوزٍ فيه يوهم بقرارٍ لم يقع**.
+     */
+    const invoice = await this.invoicesService.createWithinTx(
+      tx,
+      companyId,
+      input.allowedBranchIds,
+      prepared.invoiceDto,
+      {
+        settlement: 'IMMEDIATE',
+        actor: null,
+        overrideRequested: false,
+        canOverride: false,
+      },
+      input.trustLineTax ? { trustLineTax: true } : null,
+    );
+    // ما شُحن هو ما يُفوتَر — وإلا فلا إتمام: المعاملةُ تسقط والمحاولةُ تبقى مقبولةً معلَنةً فلا تُقفل مناوبتُها.
+    if (input.expectedTotal !== undefined && !moneyEquals(Number(invoice.total), input.expectedTotal)) {
+      throw new ConflictException(formatMessage(MSG.pos_attempt_total_mismatch, { total: money(invoice.total), charged: money(input.expectedTotal) }));
+    }
+    // ⑤A4: نوعُ المستند من صفة مشتريه كما أُنشئ — كاملةٌ تُجاز قبل أن تُشارَك، فيُعلَم ذلك للإيصال أدناه.
+    const clearanceRequired = invoiceTypeFor(invoice.customer, invoice.lines) === 'standard';
+
+    {
+      // صفّ دفعة لكل طريقة: البيع البسيط صفٌّ واحد بكامل المبلغ، والمقسّم
+      // كما فصّله الكاشير — درجُ المناوبة يجمع صفوف النقد فقط.
+      const parts: SalePart[] = prepared.paymentMethod === 'SPLIT' ? prepared.parts : [{ method: prepared.paymentMethod, amount: Number(invoice.total) }];
+      if (parts.some((p) => p.method === 'CARD') && !card) throw new Error('completeSaleWithinTx: جزءُ بطاقةٍ بلا إعلانٍ بمَ ثبت — خطأُ مستدعٍ');
+      await tx.posPayment.createMany({
+        data: parts.map((p) => {
+          const isCard = p.method === 'CARD';
+          return {
+            companyId,
+            invoiceId: invoice.id,
+            method: p.method,
+            amount: p.amount,
+            // بمَ ثبت دفعُ البطاقة ومراجعُه — تلتصق بصفّ البطاقة وحدَه (`ق-١٣٩٧`).
+            providerRef: isCard ? (card?.providerRef ?? null) : null,
+            verification: isCard ? card!.verification : null,
+            deviceReference: isCard ? (card?.deviceReference ?? null) : null,
+            approvalCode: isCard ? (card?.approvalCode ?? null) : null,
+            attemptId: isCard ? (card?.attemptId ?? null) : null,
+          };
+        }),
+      });
+      // حسابُ درج المناوبة — إليه يدخل نقدُ البيع (ق-٣٠٩). و`null` لمناوبةٍ سبقت موجةَ الأدراج: تسقط إلى `1000` بإعلانٍ في مُرحِّلها.
+      const shift = await tx.posShift.findUniqueOrThrow({ where: { id: prepared.shiftId }, select: { drawerId: true } });
+      const drawer = shift.drawerId ? await tx.cashDrawer.findUnique({ where: { id: shift.drawerId }, select: { accountId: true } }) : null;
+      const drawerAccountId = drawer?.accountId ?? null;
+      const shiftBranchId = prepared.shiftBranchId;
+
+      /**
+       * ⭐ **تحصيلُ البيع سندُ قبضٍ حقيقيّ** (`ق-٣١٦`) — وكان لا يُرحَّل إطلاقاً.
+       *
+       * الفاتورةُ رحّلت `مدين 1200 / دائن 4100 + 2200`، **وصفوفُ الدفع تُكتب
+       * ولا تُرحَّل**. وأولُ إصلاحٍ رحّل القيدَ مباشرةً — **فكان مساراً ثانياً**:
+       * يُصلح الأستاذَ ويترك **الأعمارَ تعدّه ديناً والردَّ يرفضه**. فصار
+       * **سنداً بالمسار المبنيّ**، فتُغلق الثلاثةُ معاً.
+       *
+       * ⚠️ **وسندٌ لكل طريقة**: النقدُ إلى حساب الدرج، **والشبكةُ إلى `1251`**
+       * — والبيعُ المختلط سندان، وهو ما يقوله الواقع.
+       *
+       * ⚠️ **وفي معاملة البيع نفسها**: سقوطُه يُسقط البيعَ كلَّه.
+       */
+      const network = await getOrCreateAccountByCode(tx, companyId, NETWORK_RECEIVABLE_CODE, NETWORK_RECEIVABLE_NAME, 'asset');
+      const byMethod = new Map<'CASH' | 'CARD', number>();
+      for (const p of parts) {
+        const key = p.method === 'CASH' ? 'CASH' : 'CARD';
+        byMethod.set(key, round2((byMethod.get(key) ?? 0) + p.amount));
+      }
+      for (const [method, amount] of byMethod) {
+        await this.payments.recordPosReceipt(tx, companyId, {
+          invoiceId: invoice.id,
+          invoiceNo: invoice.no,
+          customerId: invoice.customerId,
+          customerName: invoice.customer.name,
+          date: invoice.issueDate,
+          branchId: shiftBranchId,
+          currency: invoice.currency,
+          exchangeRate: Number(invoice.exchangeRate),
+          method,
+          amount,
+          drawerAccountId,
+          networkAccountId: network.id,
+        });
+      }
+      /**
+       * ⭐ **الخصم لم يعد هنا** — صار مالكه سطرَ الفاتورة (`م٦`).
+       *
+       * كان الكاشير يخصم بنفسه والفاتورة تُرحّل وحدها: **كتابتان لمالكين
+       * مختلفين**، ومنه جاء عطل `م١` — مسارٌ يعرف الصنف ثم يرميه. وبقاء
+       * الخصم هنا بعد `م٦` كان سيخصم **مرّتين**.
+       *
+       * والخصم ما زال داخل معاملة إتمام البيع نفسها (موجز POS §6): سقوطها
+       * يُسقط حركاتها معها، **فلا خصم مزدوج بنيوياً**.
+       */
+      const stockDeduction = toDeductionReport(invoice.stockFulfilment);
+
+      // ومعرّفُ البيع يُكتب في معاملة الفاتورة نفسِها — فالحارسُ على التكرار يقع معها أو لا يقع شيء (`ق-١٣٩٤`).
+      const updated = await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          status: 'PAID',
+          posShiftId: prepared.shiftId,
+          paymentMethod: prepared.paymentMethod,
+          clientSaleId: input.clientSaleId,
+          offlineRef: input.offlineRef,
+        } as Prisma.InvoiceUncheckedUpdateInput,
+        // الإيصالُ بترتيب السلّة المعلَن (`ق-١٤١٢`) — عبر الثابت الواحد.
+        include: SALE_INCLUDE,
+      });
+      // إيصال العميل يحمل الوسوم الخمسة من هذه اللحظة — لا من قائمة الفواتير وحدها (ق-١٨٦).
+      return { ...(await this.withReceiptQr(companyId, updated, tx)), stockDeduction, clearanceRequired };
+    }
+  }
+
+  /**
+   * ما بعد الالتزام: ختمُ المستند للإيصال (`ق-١٨٧`) أو إعلانُ الإجازة (`ق-١٢٦١` أ) — ويستدعيه كلُّ مسارٍ أتمّ بيعاً،
+   * المباشرُ ومحاولةُ الدفع سواء.
+   */
+  async finishReceipt(companyId: string, sold: SoldSale) {
+    /**
+     * ⭐ **الختمُ المتزامن — بعد معاملة البيع لا داخلها** (`ق-١٨٧` · `ق-١٩٦`).
+     *
+     * البيعُ التزم وخُتم مدفوعاً؛ الآن يُختم مستندُه (١٠–٣٦ مللي ثانية) فيخرج
+     * الإيصالُ بالوسوم التسعة — والإبلاغُ يبقى في الطابور. **وسقوطُ الختم لا يُسقط
+     * البيع** (`ق-١٩٦`/١): `stampForReceipt` لا يرمي، فيخرج الإيصال بالوسوم الخمسة
+     * ويُنبَّه الكاشير، والطابور يعيد الختم والإبلاغ. والمزامَن يمرّ هنا أيضاً —
+     * وهذا هو (`ق-١٩٢`/ب): الممتثلة بتاريخ المعاملة عند عودة الاتصال.
+     */
+    /**
+     * ⚖️ **الكاملةُ لا تُشارَك قبل الاعتماد** (`ق-١٢٦١` أ — ⑤A4): مستندُ مشترٍ مؤسّسةٍ أو اعتباريٍّ أو مسجَّلٍ فاتورةٌ
+     * ضريبيةٌ كاملة **تُجاز** لدى الهيئة قبل أن تُسلَّم للمشتري — لا تُبلَّغ بعد التسليم كالمبسّطة. فالبيعُ يمضي (المالُ
+     * قُبض والقيدُ رُحِّل) **والإيصالُ يخرج بلا رمزٍ ولا يُطبع** حتى تعود الإجازةُ من الطابور؛ والشاشةُ تقرأ
+     * `clearance.required` فتحجب الطباعةَ وتحيل إلى شاشة الفواتير. **ما يُعلَن**: رمزُ الإجازة (من المستند المُجاز الذي
+     * تعيده الهيئة) لا يُخزَّن بعدُ — بندٌ في ⑤.
+     */
+    if (sold.clearanceRequired) {
+      const { clearanceRequired: _, ...rest } = sold;
+      return {
+        ...rest,
+        receiptQr: null,
+        stamped: false,
+        stampError: null,
+        clearance: { required: true, status: sold.zatcaStatus, message: translate(MSG.pos_clearance_required, 'ar') },
+      };
+    }
+    const stamp = await this.zatca.stampForReceipt(companyId, sold.id);
+    const { clearanceRequired: _, ...rest } = sold;
+    return { ...rest, receiptQr: stamp.qrPayload ?? sold.receiptQr, stamped: stamp.qrPayload !== null, stampError: stamp.error, clearance: { required: false } };
+  }
+
+  /**
+   * ⭐ **إيصالُ الكاشير يحمل رمز الهيئة في كل مساراته** — الحيّ والمزامَن والمكرَّر (`ق-١٨٦`).
+   *
+   * الملحق (١) من قرار التنفيذ: `QR` **إلزاميٌّ توليداً وطباعةً** على الفاتورة
+   * المبسّطة. وكان الرمز يُبنى لقائمة الفواتير وحدها، **والإيصالُ الذي يُسلَّم
+   * للعميل بلا رمزٍ إطلاقاً** — مخالفةٌ في كل بيعٍ في نقطة البيع. البنّاءُ نفسه
+   * وساعةُ الحائط نفسها (`ق-١٨٥`)، فلا يفترق رمزُ الإيصال عن رمز القائمة.
+   * `null` حين يغيب الاسم القانوني أو الرقم الضريبي — والواجهة تُنبّه الكاشير
+   * بدل رمزٍ يُقرأ ولا يصحّ.
+   */
+  /**
+   * 🔴 **وبوّابةُ الإجازة صفةُ المستند لا صفةُ المسار** (`ق-١٤٤٧` · `ق-١٢٦١` أ): كانت في البيع المباشر وحدَه (`finishReceipt`)،
+   * **فخرجت الفاتورةُ الكاملة برمزٍ قابلٍ للطباعة** من إعادة المزامنة ومن البيع المكتمل ببطاقة ومن قراءة محاولته — قِيس حيّاً.
+   * فتُحسب هنا، في بانيّ الإيصال الواحد، **بالقاعدة نفسِها** التي يحسبها الإتمام (`invoiceTypeFor` من مشتريه وسطوره):
+   * الكاملةُ بلا رمزٍ وبوّابتُها مغلقة، والمبسّطةُ برمزها وبوّابتُها مفتوحة.
+   */
+  private async withReceiptQr<
+    T extends { issueDate: Date; issuedAt: Date | null; issuedOffsetMin: number | null; total: Prisma.Decimal; taxTotal: Prisma.Decimal; zatcaQrPayload?: string | null } & ReceiptGateInput,
+  >(companyId: string, invoice: T, tx?: Prisma.TransactionClient): Promise<T & { receiptQr: string | null; stamped: boolean; clearance: ReceiptClearance }> {
+    const gated = gatedReceiptFields(invoice, translate(MSG.pos_clearance_required, 'ar'));
+    if (gated) return { ...invoice, ...gated };
+    // مستندٌ مختوم يعيد رمزَه التساعي المحفوظ — فإعادةُ المزامنة تطبع ما طُبع أولَ مرة حرفاً.
+    //
+    // ⚠️ **و`tx` تُمرَّر حين نكون داخل معاملة** (`ق-٣٦٠`): بدونها كانت تُفتح
+    // معاملةٌ ثانية فوق الأولى، **فتمسك البيعةُ اتصالاً وتطلب ثانياً** — وثلاثُ
+    // بيعاتٍ متزامنة تُجوّع المجموعَ فيعود `500`.
+    return { ...invoice, receiptQr: await this.invoicesService.zatcaQrFor(companyId, invoice, tx), stamped: Boolean(invoice.zatcaQrPayload), clearance: { required: false } };
+  }
+
+
+  /** مناوبةٌ واحدة — حالةٌ خاصّة من الجمع، لا حسابٌ ثانٍ (`totalsForMany`). */
+  private async totalsFor(tx: Prisma.TransactionClient, shiftId: string, openingFloat: number): Promise<ShiftTotalsNumeric> {
+    return (await this.totalsForMany(tx, [{ id: shiftId, openingFloat }])).get(shiftId)!;
+  }
+
+  /**
+   * مجاميعُ مناوباتٍ كثيرة **باستعلامَين لا باستعلامَين لكلّ مناوبة**.
+   *
+   * 🔴 كانت القائمةُ تسأل مرّتين عن كلّ مناوبة، **فبثلاثمئةٍ وستٍّ متراكمةٍ في
+   * منشأة العرض تجاوزت معاملةُ الخمس ثوانٍ فسقطت `500`** (مقيسٌ 2026-09-11 —
+   * `Transaction already closed … 5025 ms`). **ولا يظهر في السير** لأن قاعدتَه
+   * تُنشأ جديدةً كلَّ مرّة (`ق-٤٩٥`)، **ويظهر عند أوّل تاجرٍ يعمل سنة**.
+   *
+   * ومن صفوف الدفعات لا من الفواتير: الفاتورةُ المقسّمة تضع في الدرج جزءها
+   * النقديَّ فقط.
+   *
+   * **على مستوى المنشأة بحقّها**: المجاميعُ تُقرأ بمعرّفات مناوباتٍ مُمرَّرةٍ من
+   * مستدعٍ قرأها مرشَّحةً أو تحقّق منها — فالمرشِّحُ هنا مجموعةُ معرّفاتٍ لا
+   * قائمةُ رؤية.
+   */
+  private async totalsForMany(tx: Prisma.TransactionClient, shifts: { id: string; openingFloat: number | Prisma.Decimal }[]): Promise<Map<string, ShiftTotalsNumeric>> {
+    const ids = shifts.map((s) => s.id);
+    const [payments, counts] = ids.length
+      ? await Promise.all([
+          tx.posPayment.findMany({
+            where: { invoice: { posShiftId: { in: ids } } },
+            select: { method: true, amount: true, invoice: { select: { posShiftId: true } } },
+          }),
+          tx.invoice.groupBy({ by: ['posShiftId'], where: { posShiftId: { in: ids } }, _count: { _all: true } }),
+        ])
+      : [[], []];
+
+    const cash = new Map<string, number>();
+    const card = new Map<string, number>();
+    for (const p of payments) {
+      const shiftId = p.invoice.posShiftId!;
+      const bucket = p.method === 'CASH' ? cash : card;
+      bucket.set(shiftId, (bucket.get(shiftId) ?? 0) + Number(p.amount));
+    }
+    const salesCount = new Map(counts.map((c) => [c.posShiftId!, c._count._all]));
+
+    const totals = new Map<string, ShiftTotalsNumeric>();
+    for (const s of shifts) {
+      const cashTotal = cash.get(s.id) ?? 0;
+      totals.set(s.id, {
+        salesCount: salesCount.get(s.id) ?? 0,
+        cashTotal: round2(cashTotal),
+        cardTotal: round2(card.get(s.id) ?? 0),
+        expectedCash: round2(Number(s.openingFloat) + cashTotal),
+      });
+    }
+    return totals;
+  }
+
+  /**
+   * عميلُ المرور **طبيعيٌّ بالبناء** (②A1): بيعُ الكاشير بلا مشترٍ مسمّىً بيعٌ لمستهلك — مبسّطةٌ بحكم م٥٣(٧). فالصفُّ
+   * الذي تُنشئه هذه الدالّة يُعلَن `NATURAL` عند إنشائه؛ والقائمُ منه قبل البناء (`LEGACY_UNDECLARED`) تُعلنه هي
+   * نفسُها هنا — لأنها هي التي تعرفه بهويّته (هذا الاسمُ في الشيفرة) لا الهجرةُ من نصٍّ حرّ (ق-٨٩٨).
+   */
+  private async walkInCustomerId(tx: Prisma.TransactionClient): Promise<string> {
+    const existing = await tx.customer.findFirst({ where: { name: WALK_IN_CUSTOMER }, select: { id: true, kind: true } });
+    if (existing) {
+      if (existing.kind === 'LEGACY_UNDECLARED') await tx.customer.update({ where: { id: existing.id }, data: { kind: 'NATURAL' } });
+      return existing.id;
+    }
+    const created = await tx.customer.create({ data: { name: WALK_IN_CUSTOMER, kind: 'NATURAL' } as unknown as Prisma.CustomerUncheckedCreateInput });
+    return created.id;
+  }
+
+  /** اسمُ الفاعل لحظةَ الفعل — يُخزَّن مع المناوبة ومع الحسم اليدويّ لمحاولة الدفع (`ق-١٣٩٩`: «ويُسجَّل»). */
+  async actorName(tx: Prisma.TransactionClient, tenant: TenantContext): Promise<string> {
+    if (tenant.actorType === 'COMPANY_USER') {
+      const user = await tx.companyUser.findUnique({ where: { id: tenant.profileId }, select: { name: true } });
+      if (user) return user.name;
+    }
+    const company = await tx.company.findUnique({ where: { id: tenant.companyId }, select: { orgName: true } });
+    return company ? `مالك ${company.orgName}` : 'المالك';
+  }
+}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/cash-drawers.controller.ts
+====================================================================================================
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantContext } from '../auth/types';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
+import { MSG } from '../common/i18n/messages';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { TenantWide } from '../common/tenant/tenant-wide.decorator';
+import { TenantGuard } from '../common/tenant/tenant.guard';
+import { CashDrawersService } from './cash-drawers.service';
+import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
+import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
+import { TransferCashDrawerDto } from './dto/transfer-cash-drawer.dto';
+
+/** القائمةُ تُقرأ لكل فاعلٍ داخل المستأجر (تغذّي مُنتقي الدرج عند فتح المناوبة)،
+ * **والتغييرُ لمالك المنشأة** — معلَنٌ في الحارس (`@OwnerOnly`) ومؤكَّدٌ في الخدمة
+ * كالفروع (`ق-١١٩٨`/①). */
+@Controller('cash-drawers')
+@UseGuards(JwtAuthGuard, TenantGuard)
+@TenantWide('قائمةُ الأدراج تغذّي منتقي الدرج عند فتح المناوبة لكلّ فاعل، مصفّاةً بفروعه — والتغييرُ للمالك وحدَه')
+export class CashDrawersController {
+  constructor(private readonly cashDrawers: CashDrawersService) {}
+
+  @Get()
+  list(@CurrentTenant() tenant: TenantContext, @Query() query: PagedQueryDto) {
+    return this.cashDrawers.list(tenant.companyId, tenant.allowedBranchIds, query);
+  }
+
+  /** سقفُ نطاق رموز الأدراج (`ق-٢٩٥`) — مسارٌ ثابتٌ قبل `:id`. */
+  @Get('code-band')
+  codeBand(@CurrentTenant() tenant: TenantContext) {
+    return this.cashDrawers.codeBand(tenant.companyId);
+  }
+
+  @Post()
+  @OwnerOnly(MSG.cash_drawer_forbidden)
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateCashDrawerDto) {
+    return this.cashDrawers.create(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, dto);
+  }
+
+  @Patch(':id')
+  @OwnerOnly(MSG.cash_drawer_forbidden)
+  update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateCashDrawerDto) {
+    return this.cashDrawers.update(tenant.companyId, tenant.actorType, id, dto);
+  }
+
+  /** نقلُ الدرج إلى فرعٍ آخر — إغلاقٌ وفتحٌ بعدّ النقد ونقلِ رصيده بقيدين (`ق-١٤١٣`). */
+  @Post(':id/transfer')
+  @OwnerOnly(MSG.cash_drawer_forbidden)
+  transfer(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: TransferCashDrawerDto) {
+    return this.cashDrawers.transfer(tenant.companyId, tenant.actorType, tenant.allowedBranchIds, id, dto);
+  }
+
+  @Delete(':id')
+  @OwnerOnly(MSG.cash_drawer_forbidden)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.cashDrawers.remove(tenant.companyId, tenant.actorType, id);
+  }
+}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/cash-drawers.module.ts
+====================================================================================================
+import { Module } from '@nestjs/common';
+import { CashDrawersController } from './cash-drawers.controller';
+import { CashDrawersService } from './cash-drawers.service';
+
+@Module({
+  controllers: [CashDrawersController],
+  providers: [CashDrawersService],
+  exports: [CashDrawersService],
+})
+export class CashDrawersModule {}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/cash-drawers.service.ts
+====================================================================================================
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
+import { formatMessage, MSG } from '../common/i18n/messages';
+import { formatMoney, round2 } from '../common/money/rounding';
+import { money } from '../common/money/text';
+import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
+import { postDrawerTransferEntries } from '../journal/auto-posting.util';
+import { CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, getOrCreateAccountByCode, postShiftVarianceEntry } from '../journal/pos-settlement.util';
+import { readLedger } from '../reports/ledger.util';
+import { TransferCashDrawerDto } from './dto/transfer-cash-drawer.dto';
+import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { pagedFindMany, searchTerm, searchWhere } from '../common/pagination/paged.util';
+
+/** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسم. */
+const DRAWER_SEARCH_FIELDS = ['name'] as const;
+import { CreateCashDrawerDto } from './dto/create-cash-drawer.dto';
+import { UpdateCashDrawerDto } from './dto/update-cash-drawer.dto';
+import { DRAWER_BANDS, bandGroup, bandStatus, nextCodeInBands } from '../accounts/code-bands';
+
+/**
+ * **درجُ الكاشير: كيانٌ وحساب** (`ق-٢١٨` بحكم صاحب المشروع: «المفصَّل يُجمَّع دائماً
+ * والمجمَّع لا يُفصَّل أبداً» · والرموز في `ق-٢٥٣` · وحدُّ التعطيل في `ق-٢٦٥`).
+ *
+ * الحسابُ يُنشأ **مع الدرج لا بعده**: درجٌ بلا حساب لا يستقبل ترحيلاً، ورمزٌ يُدخله
+ * التاجر بيده يصطدم بدليلٍ لا يراه.
+ */
+const DRAWER_INCLUDE = { account: { select: { id: true, code: true, name: true, balance: true } }, branch: { select: { id: true, name: true } } } as const;
+
+/** إدارةُ الأدراج فعلُ مالك — كالفروع: كاشيرٌ يُنشئ درجاً يُنشئ حساباً في الدليل. */
+function assertIsCompanyOwner(actorType: string): void {
+  if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.cash_drawer_forbidden);
+}
+
+/**
+ * الرمزُ التالي في نطاق الأدراج — **`MAX+1` من المصدر، لا `count()`** (`ق-١٩٨`).
+ *
+ * يقرأ رموزَ حسابات المنشأة ويأخذ أكبرَ ما يقع في النطاق: **فالفجوةُ لا تُعاد
+ * تعبئتُها**، وحسابٌ يُنشئه التاجر يدوياً داخل النطاق يدفع التاليَ فوقه. والتصادمُ
+ * في سباقٍ حقيقيّ يظهر `P2002` على `(companyId, code)` فيُعاد الحساب — لا يُخمَّن.
+ *
+ * ⚠️ **والنطاقُ وسقفُه في `accounts/code-bands.ts`** (`ق-٢٩٥`) — موضعٌ واحد
+ * يجمع التعريفَ والإنذار، **فالأدراجُ عند `1082` من `1099`** ولا يكفي أن
+ * تُنذر البنوكُ وحدها.
+ */
+export async function nextDrawerCode(tx: Prisma.TransactionClient): Promise<string> {
+  const accounts = await tx.account.findMany({ select: { code: true } });
+  const next = nextCodeInBands(accounts.map((a) => a.code), DRAWER_BANDS);
+  if (next === null) throw new ConflictException(MSG.cash_drawer_code_range_full);
+  return String(next);
+}
+
+@Injectable()
+export class CashDrawersService {
+  constructor(private readonly tenantPrisma: TenantPrismaService) {}
+
+  /**
+   * ⚠️ **وهذه أثقلُ من العروض**: `DRAWER_INCLUDE` يحمل **رصيدَ حساب الدرج** —
+   * فكاشيرُ فرعٍ كان يقرأ **نقديّةَ كلّ فرعٍ آخر** لحظةً بلحظة، لا أسماءَ
+   * الأدراج فحسب.
+   *
+   * والقائمةُ تبقى مقروءةً لكلّ فاعل (تغذّي مُنتقي الدرج عند فتح المناوبة) —
+   * **يتغيّر ما تُظهره لا من يقرؤها**.
+   */
+  list(companyId: string, allowedBranchIds: string[] | 'all', query?: PagedQueryDto) {
+    const where: Prisma.CashDrawerWhereInput = { ...branchFilter(allowedBranchIds), ...searchWhere(searchTerm(query), DRAWER_SEARCH_FIELDS) };
+    return this.tenantPrisma.runInTenantContext(companyId, (tx) =>
+      pagedFindMany(query, tx.cashDrawer, { where, include: DRAWER_INCLUDE, orderBy: [{ isActive: 'desc' }, { name: 'asc' }] }),
+    );
+  }
+
+  /** حالةُ نطاق رموز الأدراج — تُقرأ من الدليل لحظةَ السؤال (`ق-٢٩٥`). */
+  codeBand(companyId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const accounts = await tx.account.findMany({ select: { code: true } });
+      return bandStatus(accounts.map((a) => a.code), bandGroup('drawer'));
+    });
+  }
+
+  /**
+   * ⚠️ **إعادةُ المحاولة تلفّ المعاملة لا تقع داخلها**: معاملةٌ سقطت بـ`P2002`
+   * **مُجهَضة**، فأيّ استعلامٍ بعدها فيها يسقط كذلك. فتُعاد المعاملةُ كاملةً —
+   * وهو نمطُ `ZatcaService` مع `nextIcv` نفسه.
+   */
+  /**
+   * ⚠️ **البوّابةُ هنا ملكيّةٌ لا فرع** — **ومالكُ المنشأة نطاقُه `all`**، فلا
+   * يقع تجاوزٌ عبر هذا المسار اليوم (مقيسٌ `ق-٥١٢`).
+   *
+   * ⭐ **ويمرّ بـ`resolveBranchId` رغم ذلك**: **حارسٌ يعتمد على بوّابةٍ أخرى
+   * يسقط يوم تُفتَح تلك البوّابة** — **والتحقّقُ في موضعه لا في جاره**. وهو
+   * اليومَ لا يمنع شيئاً، **وغداً يمنع ما لم نره**.
+   */
+  async create(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', dto: CreateCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+    const name = dto.name.trim();
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          const branchId = await resolveBranchId(tx, dto.branchId, allowedBranchIds);
+
+          const code = await nextDrawerCode(tx);
+          const account = await tx.account.create({
+            data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput,
+          });
+          const created = await tx.cashDrawer.create({
+            data: { name, branchId, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
+          });
+          return tx.cashDrawer.findUniqueOrThrow({ where: { id: created.id }, include: DRAWER_INCLUDE });
+        });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          const target = String((e.meta as { target?: string | string[] } | undefined)?.target ?? '');
+          // اسمُ الدرج مأخوذ ⇒ خطأُ المستعمل، لا سباق: لا تُعاد المحاولة.
+          if (target.includes('name')) throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name }));
+          if (attempt < 2) continue; // سباقٌ على الرمز — يُعاد بقراءةٍ جديدة
+        }
+        throw e;
+      }
+    }
+  }
+
+  /**
+   * التعديل — والتعطيلُ مشروطٌ بشرطَين، **ورسالةُ كلٍّ تسمّي المانع وتدلّ على
+   * المخرج** (`ق-٢٦٥`): فمنعٌ بلا مخرجٍ يُلتفّ عليه — يُعطَّل الدرجُ من القاعدة،
+   * أو يُترك مفتوحاً بلا استعمال، أو يُنشأ ثانٍ ويُهمل الأول.
+   *
+   * **على مستوى المنشأة بحقّها**: تعطيلُ الدرج يُمنع بمناوبةٍ مفتوحةٍ عليه
+   * أياً كان فاتحُها — فالدرجُ يعرّف فرعَه بنفسه، والتعديلُ فعلُ مالكٍ نطاقُه
+   * الكلّ.
+   */
+  async update(companyId: string, actorType: string, id: string, dto: UpdateCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.cashDrawer.findUnique({ where: { id }, include: DRAWER_INCLUDE });
+      if (!existing) throw new NotFoundException(MSG.cash_drawer_not_found);
+
+      if (dto.isActive === false && existing.isActive) {
+        const openShift = await tx.posShift.findFirst({ where: { drawerId: id, status: 'OPEN' }, orderBy: { openedAt: 'asc' } });
+        if (openShift) {
+          throw new ConflictException(
+            formatMessage(MSG.cash_drawer_has_open_shift, {
+              cashier: openShift.openedByName,
+              since: openShift.openedAt.toISOString().slice(0, 16).replace('T', ' '),
+            }),
+          );
+        }
+        // الرصيدُ يُقرأ من الحساب لا من عمودٍ على الدرج — مصدرٌ واحد (ق-٢٥٣/②).
+        if (!existing.account.balance.equals(0)) {
+          const company = await tx.company.findUnique({ where: { id: companyId }, select: { baseCurrency: true } });
+          throw new ConflictException(
+            formatMessage(MSG.cash_drawer_has_balance, {
+              // `formatMoney` لا `toFixed`: التدويرُ بالسياسة لا بيدٍ في كل موضع
+              // (حارس `money/rounding` أسقطها هنا فعلاً عند أول كتابة).
+              balance: `${formatMoney(existing.account.balance.toNumber())} ${company?.baseCurrency ?? 'SAR'}`,
+            }),
+          );
+        }
+      }
+
+      const name = dto.name?.trim();
+      try {
+        await tx.cashDrawer.update({ where: { id }, data: { ...(name ? { name } : {}), ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }) } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name: name ?? existing.name }));
+        }
+        throw e;
+      }
+      return tx.cashDrawer.findUniqueOrThrow({ where: { id }, include: DRAWER_INCLUDE });
+    });
+  }
+
+  /**
+   * ⚖️ **نقلُ الدرج بين الفروع إغلاقٌ وفتح** (`ق-١٤١٣` · التوجيه ٢٦٣ §٤ بنصّ المالك: «فرعُه مكانُ النقد فعلاً»).
+   *
+   * يُعدّ النقدُ ويُغلق الدرجُ في فرعه، ويُنقل رصيدُه بقيدٍ بين الفرعين، ويُفتح درجٌ جديدٌ في الفرع الهدف — **ولا
+   * يُنقل تاريخُه**: مناوباتُ القديم وإيداعاتُه وقيودُه تبقى بفرعه وحسابِه.
+   *
+   *   ① **فرقُ العدّ** (المعدودُ − الدفتر) يُرحَّل على `5900` بفرع القديم — كفرق جرد المناوبة (`ق-٣٠٨`)؛
+   *   ② **المعدودُ يخرج ويدخل بقيدَين**: `مدين 1190 / دائن القديم` بفرع القديم ⟵ `مدين الجديد / دائن 1190` بفرع
+   *      الجديد — **القيدُ الواحد لا يحمل فرعَين** (`resolveDimensions`)، ونقدٌ يُحمل بين فرعين نقدٌ في الطريق؛
+   *   ③ **القديمُ يُعطَّل برصيدٍ صفر** ويحمل رابطَ خلفه (`transferredToId`)، **والجديدُ درجٌ بحسابٍ جديد** في الهدف.
+   *
+   * **وشروطُه شروطُ التعطيل** (`ق-٢٦٥`): لا مناوبةً مفتوحة عليه — ولا قيدَ على حسابه بعد تاريخ العدّ، فالعدُّ عدٌّ لكلِّ ما
+   * في الدفتر. **والفاعلُ مالكُ المنشأة** كسائر إدارة الأدراج.
+   *
+   * **على مستوى المنشأة بحقّها**: النقلُ فعلُ مالكٍ نطاقُه الكلّ، والقراءاتُ الثلاث على هذا الدرج بعينه لا على قائمة —
+   * مناوبتُه المفتوحة أيّاً كان فرعُها، وقيدٌ على حسابه في الدفتر الواحد، واسمُه في الفرع الهدف تحديداً.
+   *
+   * ⚠️ **حدٌّ معلَن**: `1190` يُصفَّر على المنشأة ولا يُصفَّر لكلِّ فرعٍ منفرداً (موجبٌ في المُرسِل، سالبٌ في المستقبِل)؛
+   * وحسابٌ جارٍ بين الفروع يُقفل في المجمَّع **لحكم المالك**. (وإيداعُ درجٍ في بنكِ فرعٍ آخر — نظيرُه الذي كان — يُرفض منذ
+   * `ق-١٤٣٧`: مستندٌ في فرعٍ لا يستعمل صندوقَ فرعٍ آخر؛ فالإيداعُ في بنك فرعه أو بنكٍ للمنشأة كلِّها.)
+   */
+  async transfer(companyId: string, actorType: string, allowedBranchIds: string[] | 'all', id: string, dto: TransferCashDrawerDto) {
+    assertIsCompanyOwner(actorType);
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+          const drawer = await tx.cashDrawer.findUnique({ where: { id }, include: DRAWER_INCLUDE });
+          if (!drawer) throw new NotFoundException(MSG.cash_drawer_not_found);
+          if (!drawer.isActive) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_closed, { name: drawer.name }));
+
+          const toBranchId = await resolveBranchId(tx, dto.toBranchId, allowedBranchIds);
+          if (toBranchId === (drawer.branchId ?? null)) throw new BadRequestException(MSG.cash_drawer_transfer_same_branch);
+
+          const openShift = await tx.posShift.findFirst({ where: { drawerId: id, status: 'OPEN' }, orderBy: { openedAt: 'asc' } });
+          if (openShift) {
+            throw new ConflictException(
+              formatMessage(MSG.cash_drawer_transfer_open_shift, {
+                cashier: openShift.openedByName,
+                since: openShift.openedAt.toISOString().slice(0, 16).replace('T', ' '),
+              }),
+            );
+          }
+
+          // العدُّ عدٌّ لكلِّ ما في الدفتر: قيدٌ بعد تاريخه يترك الدرجَ المغلق برصيد.
+          const date = new Date(dto.date);
+          const later = await tx.journalLine.findFirst({ where: { accountId: drawer.accountId, journalEntry: { date: { gt: date } } }, select: { id: true } });
+          if (later) throw new ConflictException(formatMessage(MSG.cash_drawer_transfer_later_postings, { date: dto.date.slice(0, 10) }));
+
+          const book = round2(Number((await readLedger(tx, { allowedBranchIds: 'all', accountId: drawer.accountId, to: date }, 'debit')).closing));
+          const counted = round2(dto.countedAmount);
+          const variance = round2(counted - book);
+
+          // الجديدُ أوّلاً — فحسابُه يستقبل قيدَ الدخول. والاسمُ فريدٌ في فرعه: يُسمّى المانعُ قبل أن يسقط القيدُ الفريد.
+          const name = dto.name?.trim() || drawer.name;
+          if (await tx.cashDrawer.findFirst({ where: { branchId: toBranchId, name }, select: { id: true } })) {
+            throw new ConflictException(formatMessage(MSG.cash_drawer_name_taken, { name }));
+          }
+          const code = await nextDrawerCode(tx);
+          const account = await tx.account.create({
+            data: { code, name: `حساب ${name}`, type: 'asset' } as unknown as Prisma.AccountUncheckedCreateInput,
+          });
+          const successor = await tx.cashDrawer.create({
+            data: { name, branchId: toBranchId, accountId: account.id } as unknown as Prisma.CashDrawerUncheckedCreateInput,
+          });
+
+          const fromBranch = drawer.branch?.name ?? 'المنشأة';
+          const toBranch = (await tx.branch.findUnique({ where: { id: toBranchId! }, select: { name: true } }))?.name ?? '';
+          const varianceEntry = await postShiftVarianceEntry(tx, companyId, {
+            memo: `${variance > 0 ? 'زيادة' : 'عجز'} عدّ درج عند نقله — ${drawer.name} (${fromBranch} ⟵ ${toBranch})`,
+            date,
+            branchId: drawer.branchId,
+            drawerAccountId: drawer.accountId,
+            variance,
+          });
+          const transit = await getOrCreateAccountByCode(tx, companyId, CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, 'asset');
+          const moved =
+            counted > 0
+              ? await postDrawerTransferEntries(tx, companyId, {
+                  date,
+                  amount: counted,
+                  memoOut: `نقل درج — ${drawer.name}: خروجٌ من ${fromBranch} إلى ${toBranch}`,
+                  memoIn: `نقل درج — ${name}: دخولٌ في ${toBranch} من ${fromBranch}`,
+                  fromBranchId: drawer.branchId,
+                  toBranchId,
+                  fromAccountId: drawer.accountId,
+                  toAccountId: account.id,
+                  transitAccountId: transit.id,
+                })
+              : null;
+
+          await tx.cashDrawer.update({ where: { id }, data: { isActive: false, transferredToId: successor.id } });
+
+          return {
+            from: await tx.cashDrawer.findUniqueOrThrow({ where: { id }, include: DRAWER_INCLUDE }),
+            to: await tx.cashDrawer.findUniqueOrThrow({ where: { id: successor.id }, include: DRAWER_INCLUDE }),
+            bookBalance: money(book),
+            countedAmount: money(counted),
+            variance: money(variance),
+            entries: { variance: varianceEntry?.no ?? null, out: moved?.out.no ?? null, in: moved?.in.no ?? null },
+          };
+        });
+      } catch (e) {
+        // الاسمُ فُحص قبل الكتابة؛ فـ`P2002` هنا سباقٌ على الرمز أو الاسم — يُعاد بقراءةٍ جديدة ويُسمّى المانعُ فيها.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && attempt < 2) continue;
+        throw e;
+      }
+    }
+  }
+
+  /** الحذفُ يرثه `RESTRICT` من `journal_lines`: درجٌ تحرّك حسابُه يُعطَّل ولا يُحذف. */
+  async remove(companyId: string, actorType: string, id: string): Promise<void> {
+    assertIsCompanyOwner(actorType);
+    await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.cashDrawer.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException(MSG.cash_drawer_not_found);
+      try {
+        // وخلفُ درجٍ منقول (`ق-١٤١٣`) يشير إليه سلفُه — تاريخٌ لا يُحذف كالحركة.
+        await tx.cashDrawer.delete({ where: { id } });
+        await tx.account.delete({ where: { id: existing.accountId } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') {
+          throw new ConflictException(MSG.cash_drawer_has_movements);
+        }
+        throw e;
+      }
+    });
+  }
+}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/dto/create-cash-drawer.dto.ts
+====================================================================================================
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+
+export class CreateCashDrawerDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  name!: string;
+
+  /** الفرع الذي يقف فيه الدرج — يُترك فارغاً لمنشأةٍ بلا فروع. */
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
+}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/dto/transfer-cash-drawer.dto.ts
+====================================================================================================
+import { IsDateString, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength } from 'class-validator';
+
+/**
+ * ⚖️ **نقلُ الدرج إلى فرعٍ آخر إغلاقٌ وفتح** (`ق-١٤١٣` · التوجيه ٢٦٣ §٤): يُعدّ النقدُ ويُغلق الدرجُ في فرعه، ويُنقل
+ * رصيدُه بقيدٍ بين الفرعين، ويُفتح درجٌ جديدٌ في الفرع الهدف. **والمعدودُ يُعلَن ولا يُفترض** — الفرقُ عن الدفتر فرقُ جرد.
+ */
+export class TransferCashDrawerDto {
+  /** الفرعُ الذي يُفتح فيه الدرجُ الجديد. */
+  @IsUUID()
+  toBranchId!: string;
+
+  /** النقدُ المعدود في الدرج لحظةَ إغلاقه — صفرٌ فأكثر. */
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  countedAmount!: number;
+
+  /** تاريخُ العدّ والنقل — تاريخُ القيود الثلاثة (فرقُ الجرد · الخروج · الدخول). */
+  @IsDateString()
+  date!: string;
+
+  /** اسمُ الدرج الجديد في الفرع الهدف — بلا اسمٍ يرث اسمَ القديم. */
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  name?: string;
+}
+
+====================================================================================================
+// FILE: apps/api/src/cash-drawers/dto/update-cash-drawer.dto.ts
+====================================================================================================
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+
+export class UpdateCashDrawerDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(60)
+  name?: string;
+
+  /** التعطيل مشروط (ق-٢٦٥): لا مناوبةً مفتوحة، ولا رصيداً غير صفر. */
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}

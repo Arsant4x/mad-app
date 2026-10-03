@@ -1,0 +1,45 @@
+عقد المساحة المخصّصة إيجارٌ أم خدمة	ق.ح-3: متى يكون عقد المساحة المخصّصة في 3PL إيجاراً (IFRS 16) ومتى خدمة (IFRS 15)؟ «يحتاج قرار محاسبي — §11»	docs/plans/3pl-full-spec.md:846	accountant	SOCPA	false
+أصيل أم وكيل في الشحن والتخليص (3PL)	ق.ح-4: أصيل أم وكيل في الشحن والتخليص — «حقل تعاقدي + رأي محاسبي»	docs/plans/3pl-full-spec.md:847	accountant	SOCPA	false
+الحالات الضريبية السبع للتخزين	ق.ح-5: الحالات السبع لضريبة القيمة المضافة في التخزين (أخطرها: تخزين لغير مقيم والبضاعة في المملكة «يُرجَّح 15%» باستثناءات م33، ووضع الخدمة داخل منطقة الإيداع «يحتاج تأكيداً»، وشروط المصروف المسترد للرسوم الجمركية) — «يُعرض على مستشار ضريبي مرخّص قبل كتابة سطر كود»	docs/plans/3pl-full-spec.md:385	consultant	ZATCA	false
+مدة بقاء البضائع في مناطق الإيداع	ق.ح-6: هل اعتُمدت نهائياً تعديلات «استطلاع» (مارس 2026) بحدٍّ أقصى خمس سنوات لبقاء البضائع في مناطق الإيداع؟ «لم يُتحقق من اعتماد هذه التعديلات نهائياً… يجب التأكد قبل ترميز عدّاد المدة القصوى»	docs/plans/3pl-full-spec.md:447	deferred-research	ZATCA	false
+تراخيص المستودعات الغذائية والدوائية	تراخيص مستودعات الغذاء والدواء وسجلات الحرارة والرطوبة ومكافحة الآفات — «⚠️ يحتاج مراجعة النص النظامي مباشرة»	docs/plans/3pl-full-spec.md:899	deferred-research	SFDA	false
+تصنيف مدفوعات الإعلان الرقمي لغير المقيمين	س-9: ما تصنيف مدفوعات الإعلان الرقمي إلى منصات غير مقيمة (خدمات فنية · إتاوة · مدفوعات أخرى · خارج النطاق) ونسبة الاستقطاع؟ «لا يُرمَّز جدول النسب قبل هذا الجواب»	docs/plans/agency-full-spec.md:1105	consultant	ZATCA	false
+صفة وكالة الإعلان في شراء الوسائط	س-1: هل توجد إرشادات محلية تحدد صفة وكالة الإعلان (أصيل/وكيل) في شراء الوسائط؟ (يحجب ق-ح-1 «الوحيدة التي تمنع بدء الترميز»)	docs/plans/agency-full-spec.md:1097	consultant	ZATCA	false
+انقضاء الساعات المدفوعة غير المستهلكة	س-2: المعالجة الضريبية لانقضاء الساعات المدفوعة غير المستهلكة	docs/plans/agency-full-spec.md:1098	consultant	ZATCA	false
+حسومات مالكي الوسائل	س-3: معالجة حسومات مالكي الوسائل لضريبة القيمة المضافة	docs/plans/agency-full-spec.md:1099	consultant	ZATCA	false
+المقابل العيني للمؤثرين	س-4: المقابل العيني للمؤثرين — معالجته للطرفين	docs/plans/agency-full-spec.md:1100	consultant	ZATCA	false
+المصروف المدفوع نيابة عن العميل (وكالة)	س-5: شروط معاملة المصروف كمبلغ مدفوع نيابة عن العميل	docs/plans/agency-full-spec.md:1101	consultant	ZATCA	false
+استحقاق ضريبة دفعة الاحتفاظ المقدمة	س-6: توقيت استحقاق الضريبة على دفعة الاحتفاظ (retainer) المقدمة	docs/plans/agency-full-spec.md:1102	consultant	ZATCA	false
+المبالغ الممرَّرة في مسار الوكيل	س-7: معالجة المبالغ الممرَّرة في مسار الوكيل ضريبياً	docs/plans/agency-full-spec.md:1103	consultant	ZATCA	false
+الصفرية لخدمات عميل خارج دول المجلس	س-8: شروط المعاملة الصفرية لخدمات وكالةٍ لعميل خارج دول المجلس	docs/plans/agency-full-spec.md:1104	consultant	ZATCA	false
+غرامات التأخير في المقاولات الزراعية	1 (ح7): غرامات التأخير — إشعار دائن يخفّض الوعاء أم تعويض خارج نطاق الضريبة؟ «يُحسم قبل كتابة منطق المستخلص»	docs/plans/agri-contracting-full-spec.md:1216	consultant	ZATCA	false
+نقطة استحقاق المستخلص غير المعتمد	2: المستخلص المُعَدّ وغير المعتمد من الاستشاري لفترات طويلة — متى تنشأ نقطة الاستحقاق بالضبط؟	docs/plans/agri-contracting-full-spec.md:1217	consultant	ZATCA	false
+توريد وتركيب شبكة ري	3: توريد وتركيب شبكة ري — توريد مركّب واحد أم توريدان (سلعة + خدمة)؟ وأثره على تاريخ التوريد ومكانه	docs/plans/agri-contracting-full-spec.md:1218	consultant	ZATCA	false
+تاريخ التوريد في العقود الحكومية عبر اعتماد	4: تأكيد أي مستند يحرّك تاريخ التوريد في العقود الحكومية طويلة الأجل عبر «اعتماد»	docs/plans/agri-contracting-full-spec.md:1219	consultant	ZATCA	false
+مواد يورّدها المالك وتُخصم من المستخلص	5: المعالجة الضريبية لمواد يورّدها المالك ويخصمها من المستخلص	docs/plans/agri-contracting-full-spec.md:1220	consultant	ZATCA	false
+استقطاع مقاول باطن غير مقيم (زراعي)	6: ضريبة الاستقطاع على مقاول باطن غير مقيم أو خدمة فنية أجنبية (تصميم شبكة ري · دراسة بيئية)	docs/plans/agri-contracting-full-spec.md:1221	consultant	ZATCA	false
+مدخلات العطاءات الخاسرة	7: استرداد ضريبة المدخلات على مصاريف عطاءات خاسرة	docs/plans/agri-contracting-full-spec.md:1222	consultant	ZATCA	false
+أعمال تحت التنفيذ والمحتجزات في الوعاء الزكوي	8: معالجة الأعمال تحت التنفيذ والمحتجزات المدينة والدفعات المقدمة في الوعاء الزكوي	docs/plans/agri-contracting-full-spec.md:1225	consultant	ZATCA	false
+مكسب إعادة تقييم الأصول البيولوجية زكوياً	9: الأصول البيولوجية المقاسة بالقيمة العادلة — هل يدخل مكسب إعادة التقييم غير المحقق الوعاء الزكوي؟	docs/plans/agri-contracting-full-spec.md:1226	consultant	ZATCA	false
+قياس الشتلات البرية بالقيمة العادلة	10: هل يقبل المراجع قياس شتلات الأنواع البرية المحلية بالقيمة العادلة، أم أن غياب سوق نشط يبرّر التكلفة؟	docs/plans/agri-contracting-full-spec.md:1229	accountant	SOCPA	false
+تصنيف أشجار الأمّهات	11: تصنيف أشجار الأمّهات — نبات مثمر (ممتلكات وآلات) أم أصل بيولوجي؟	docs/plans/agri-contracting-full-spec.md:1230	accountant	SOCPA	false
+دعم ريف والمركز الوطني للغطاء النباتي	12: الدعم من «ريف» ومن المركز الوطني للغطاء النباتي — مشروط أم غير مشروط، وأي معيار يحكمه؟	docs/plans/agri-contracting-full-spec.md:1231	accountant	SOCPA	false
+الضمان العشري لشبكات الري	13: تطبيق الضمان العشري على شبكات الري المدفونة والخزانات والبنية التحتية للمواقع	docs/plans/agri-contracting-full-spec.md:1234	consultant		false
+مسؤولية المقاول الأصلي عن عمال الباطن	14: حدود المسؤولية التضامنية للمقاول الأصلي عن حقوق عمال مقاول الباطن في هذا القطاع	docs/plans/agri-contracting-full-spec.md:1235	consultant	HRSD	false
+نظام العمل ولائحة عمال الزراعة	15 (ح5): الفصل الدقيق بين من يخضع لنظام العمل ومن يخضع للائحة عمال الزراعة داخل منشأة مختلطة — «مراجعة قانونية قبل أول احتساب» لمكافأة نهاية الخدمة	docs/plans/agri-contracting-full-spec.md:1236	consultant	HRSD	false
+مدد الاحتفاظ بسجلات الرش والمياه والحجر	16: فترات الاحتفاظ الإلزامية بسجلات الرش والمياه وشهادات الحجر الزراعي	docs/plans/agri-contracting-full-spec.md:1237	consultant	MEWA	false
+الأثر الضريبي لمكسب القيمة العادلة غير المحقق	ق.م-1: المكسب غير المحقق للأصول الحيوية المقاسة بالقيمة العادلة «لا يدخل الوعاء الضريبي بنفس معالجة الربح المحقق — يحتاج مستشاراً»	docs/plans/agriculture-full-spec.md:109	consultant	ZATCA	false
+حصة الشريك عيناً في المزارعة والمساقاة	ض1: معالجة توريد حصة الشريك عيناً في المزارعة/المساقاة	docs/plans/agriculture-full-spec.md:440	consultant	ZATCA	false
+أصيل أم وكيل في البيع عبر مزاد	ض2 (ق.م-6): أصيل أم وكيل في البيع عبر مزاد/وسيط	docs/plans/agriculture-full-spec.md:441	consultant	ZATCA	false
+بيع المحصول القائم مقدماً	ض3: توقيت الضريبة على عقود بيع المحصول القائم مقدماً	docs/plans/agriculture-full-spec.md:442	consultant	ZATCA	false
+فروق أسعار التوريد الحكومي اللاحقة	ض4: المعالجة الضريبية لفروق أسعار التوريد الحكومي اللاحقة	docs/plans/agriculture-full-spec.md:443	consultant	ZATCA	false
+الاستهلاك الشخصي من إنتاج المزرعة	ض5: الاستهلاك الشخصي من إنتاج المزرعة (التوريد المفترض)	docs/plans/agriculture-full-spec.md:444	consultant	ZATCA	false
+مدخلات المعدات عند تغيّر الاستخدام	ض6: خصم ضريبة مدخلات المعدات عند تغيّر الاستخدام أو التوقف	docs/plans/agriculture-full-spec.md:445	consultant	ZATCA	false
+الاستهلاك النظامي والإهلاك المحاسبي	1: هل يُبنى الاستهلاك النظامي بالمجموعات كمحرك مستقل عن الإهلاك المحاسبي أم يُشتق أحدهما من الآخر؟ وما الحد الأدنى من الحقول من اليوم الأول؟	docs/plans/asset-register-master-plan.md:311	accountant	ZATCA	false
+فترة تعديل المدخلات للأصول الرأسمالية	2: مدة فترة التعديل لضريبة المدخلات على الأصول الرأسمالية، وحد القيمة الذي يجعل الأصل «رأسمالياً»	docs/plans/asset-register-master-plan.md:314	consultant	ZATCA	false
+ما يُرسمل مع الأصل	3: ما الذي يُرسمل مع الأصل وما الذي يُصرف (شحن · تركيب · تدريب · اختبار)؟	docs/plans/asset-register-master-plan.md:316	accountant	SOCPA	false
+حد الرسملة	4: حد الرسملة المعتاد المقبول في السعودية، وهل يختلف زكوياً عن ضريبياً؟	docs/plans/asset-register-master-plan.md:317	accountant	ZATCA	false
+الأصول الحيوية في سجل الأصول	5: معالجة الأصول الحيوية (مواشٍ · مزارع) — تختلف عن العقارات والآلات	docs/plans/asset-register-master-plan.md:318	accountant	SOCPA	false
+الأصول غير الملموسة	6: الأصول غير الملموسة (رخص برمجيات · اشتراكات أنظمة حجز) — رسملة أم مصروف؟	docs/plans/asset-register-master-plan.md:319	accountant	SOCPA	false
+اختبار الهبوط في القيمة	7: متى يلزم اختبار الهبوط في القيمة، ومن يقرّه؟	docs/plans/asset-register-master-plan.md:320	accountant	SOCPA	false
+معيار المنشآت الصغيرة الإصدار الثالث	8: أثر «المعايير الدولية للمنشآت الصغيرة والمتوسطة — الإصدار الثالث» النافذ من يناير 2027 على تصنيف الأصول وعرضها	docs/plans/asset-register-master-plan.md:321	accountant	SOCPA	false

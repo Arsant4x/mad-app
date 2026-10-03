@@ -1,0 +1,45 @@
+"Cost per message in SAR on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,SAR,0.2315,0.0974,0.0974,n/a,n/a
+Brazil,SAR,0.2342,0.0255,0.0255,n/a,n/a
+Chile,SAR,0.3331,0.0749,0.0749,n/a,n/a
+Colombia,SAR,0.0468,0.0030,0.0030,n/a,n/a
+Egypt,SAR,0.2413,0.0135,0.0135,0.2435,n/a
+France,SAR,0.3218,0.1124,0.1124,n/a,n/a
+Germany,SAR,0.5114,0.2061,0.2061,n/a,n/a
+Hong Kong,SAR,0.2742,0.0973,0.0973,n/a,n/a
+Hungary,SAR,0.3222,0.1311,0.1311,n/a,n/a
+India,SAR,0.0442,0.0052,0.0052,0.1139,n/a
+Indonesia,SAR,0.1540,0.0937,0.0937,0.5095,n/a
+Israel,SAR,0.1322,0.0199,0.0199,n/a,n/a
+Italy,SAR,0.2977,0.1124,0.1124,n/a,n/a
+Malaysia,SAR,0.3222,0.0524,0.0524,0.1566,n/a
+Mexico,SAR,0.1143,0.0318,0.0318,n/a,n/a
+Netherlands,SAR,0.5983,0.1873,0.1873,n/a,n/a
+Nigeria,SAR,0.1933,0.0251,0.0251,0.2810,n/a
+Pakistan,SAR,0.1772,0.0375,0.0375,0.2810,n/a
+Peru,SAR,0.2634,0.0749,0.0749,n/a,n/a
+Poland,SAR,0.1371,0.0457,0.0457,n/a,n/a
+Qatar,SAR,0.1278,0.0450,0.0450,n/a,n/a
+Romania,SAR,0.3222,0.1086,0.1086,n/a,n/a
+Russia,SAR,0.3005,0.1499,0.1499,n/a,n/a
+Saudi Arabia,SAR,0.1877,0.0401,0.0401,0.2240,n/a
+Singapore,SAR,0.2742,0.0599,0.0599,n/a,n/a
+South Africa,SAR,0.1420,0.0285,0.0285,0.0749,n/a
+Spain,SAR,0.2650,0.0749,0.0749,n/a,n/a
+Turkey,SAR,0.0408,0.0034,0.0034,n/a,n/a
+United Arab Emirates,SAR,0.1869,0.0588,0.0588,0.1911,n/a
+United Kingdom,SAR,0.2378,0.0824,0.0824,n/a,n/a
+North America,SAR,0.0937,0.0127,0.0127,n/a,n/a
+Rest of Africa,SAR,0.0843,0.0150,0.0150,n/a,n/a
+Rest of Asia Pacific,SAR,0.2742,0.0423,0.0423,n/a,n/a
+Rest of Central & Eastern Europe,SAR,0.3222,0.0794,0.0794,n/a,n/a
+Rest of Latin America,SAR,0.2772,0.0423,0.0423,n/a,n/a
+Rest of Middle East,SAR,0.1278,0.0341,0.0341,n/a,n/a
+Rest of Western Europe,SAR,0.2218,0.0641,0.0641,n/a,n/a
+Other,SAR,0.2263,0.0288,0.0288,n/a,n/a

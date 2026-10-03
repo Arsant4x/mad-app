@@ -1,0 +1,45 @@
+"Cost per message in BRL on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,BRL,0.3181,0.1338,0.1338,n/a,n/a
+Brazil,BRL,0.3217,0.0350,0.0350,n/a,n/a
+Chile,BRL,0.4576,0.1029,0.1029,n/a,n/a
+Colombia,BRL,0.0643,0.0041,0.0041,n/a,n/a
+Egypt,BRL,0.3315,0.0185,0.0185,0.3346,n/a
+France,BRL,0.4421,0.1544,0.1544,n/a,n/a
+Germany,BRL,0.7026,0.2831,0.2831,n/a,n/a
+Hong Kong,BRL,0.3768,0.1338,0.1338,n/a,n/a
+Hungary,BRL,0.4427,0.1801,0.1801,n/a,n/a
+India,BRL,0.0607,0.0072,0.0072,0.1565,n/a
+Indonesia,BRL,0.2115,0.1287,0.1287,0.7000,n/a
+Israel,BRL,0.1817,0.0273,0.0273,n/a,n/a
+Italy,BRL,0.4092,0.1544,0.1544,n/a,n/a
+Malaysia,BRL,0.4427,0.0721,0.0721,0.2151,n/a
+Mexico,BRL,0.1570,0.0438,0.0438,n/a,n/a
+Netherlands,BRL,0.8220,0.2574,0.2574,n/a,n/a
+Nigeria,BRL,0.2656,0.0345,0.0345,0.3860,n/a
+Pakistan,BRL,0.2435,0.0515,0.0515,0.3860,n/a
+Peru,BRL,0.3618,0.1029,0.1029,n/a,n/a
+Poland,BRL,0.1884,0.0628,0.0628,n/a,n/a
+Qatar,BRL,0.1755,0.0618,0.0618,n/a,n/a
+Romania,BRL,0.4427,0.1493,0.1493,n/a,n/a
+Russia,BRL,0.4128,0.2059,0.2059,n/a,n/a
+Saudi Arabia,BRL,0.2579,0.0551,0.0551,0.3078,n/a
+Singapore,BRL,0.3768,0.0824,0.0824,n/a,n/a
+South Africa,BRL,0.1951,0.0391,0.0391,0.1029,n/a
+Spain,BRL,0.3639,0.1029,0.1029,n/a,n/a
+Turkey,BRL,0.0561,0.0046,0.0046,n/a,n/a
+United Arab Emirates,BRL,0.2568,0.0808,0.0808,0.2625,n/a
+United Kingdom,BRL,0.3268,0.1132,0.1132,n/a,n/a
+North America,BRL,0.1287,0.0175,0.0175,n/a,n/a
+Rest of Africa,BRL,0.1158,0.0206,0.0206,n/a,n/a
+Rest of Asia Pacific,BRL,0.3768,0.0582,0.0582,n/a,n/a
+Rest of Central & Eastern Europe,BRL,0.4427,0.1091,0.1091,n/a,n/a
+Rest of Latin America,BRL,0.3809,0.0582,0.0582,n/a,n/a
+Rest of Middle East,BRL,0.1755,0.0468,0.0468,n/a,n/a
+Rest of Western Europe,BRL,0.3047,0.0880,0.0880,n/a,n/a
+Other,BRL,0.3109,0.0396,0.0396,n/a,n/a

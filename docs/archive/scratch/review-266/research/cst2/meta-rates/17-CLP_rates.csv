@@ -1,0 +1,45 @@
+"Cost per message in CLP on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,CLP,54.5645,22.9560,22.9560,n/a,n/a
+Brazil,CLP,55.1826,6.0039,6.0039,n/a,n/a
+Chile,CLP,78.4917,17.6584,17.6584,n/a,n/a
+Colombia,CLP,11.0365,0.7063,0.7063,n/a,n/a
+Egypt,CLP,56.8601,3.1785,3.1785,57.3899,n/a
+France,CLP,75.8429,26.4876,26.4876,n/a,n/a
+Germany,CLP,120.5188,48.5607,48.5607,n/a,n/a
+Hong Kong,CLP,64.6298,22.9559,22.9559,n/a,n/a
+Hungary,CLP,75.9312,30.9022,30.9022,n/a,n/a
+India,CLP,10.4185,1.2361,1.2361,26.8408,n/a
+Indonesia,CLP,36.2881,22.0730,22.0730,120.0773,n/a
+Israel,CLP,31.1671,4.6795,4.6795,n/a,n/a
+Italy,CLP,70.1614,26.4876,26.4876,n/a,n/a
+Malaysia,CLP,75.9312,12.3609,12.3609,36.9061,n/a
+Mexico,CLP,26.9291,7.5048,7.5048,n/a,n/a
+Netherlands,CLP,141.0025,44.1461,44.1461,n/a,n/a
+Nigeria,CLP,45.5587,5.9156,5.9156,66.2191,n/a
+Pakistan,CLP,41.7622,8.8292,8.8292,66.2191,n/a
+Peru,CLP,62.0694,17.6584,17.6584,n/a,n/a
+Poland,CLP,32.3148,10.7716,10.7716,n/a,n/a
+Qatar,CLP,30.1076,10.5951,10.5951,n/a,n/a
+Romania,CLP,75.9312,25.6047,25.6047,n/a,n/a
+Russia,CLP,70.8103,35.3169,35.3169,n/a,n/a
+Saudi Arabia,CLP,44.2344,9.4473,9.4473,52.7987,n/a
+Singapore,CLP,64.6298,14.1267,14.1267,n/a,n/a
+South Africa,CLP,33.4627,6.7102,6.7102,17.6584,n/a
+Spain,CLP,62.4447,17.6584,17.6584,n/a,n/a
+Turkey,CLP,9.6238,0.7946,0.7946,n/a,n/a
+United Arab Emirates,CLP,44.0578,13.8619,13.8619,45.0290,n/a
+United Kingdom,CLP,56.0478,19.4243,19.4243,n/a,n/a
+North America,CLP,22.0730,3.0019,3.0019,n/a,n/a
+Rest of Africa,CLP,19.8657,3.5317,3.5317,n/a,n/a
+Rest of Asia Pacific,CLP,64.6298,9.9770,9.9770,n/a,n/a
+Rest of Central & Eastern Europe,CLP,75.9312,18.7179,18.7179,n/a,n/a
+Rest of Latin America,CLP,65.3362,9.9770,9.9770,n/a,n/a
+Rest of Middle East,CLP,30.1076,8.0346,8.0346,n/a,n/a
+Rest of Western Europe,CLP,52.2689,15.0980,15.0980,n/a,n/a
+Other,CLP,53.3285,6.7985,6.7985,n/a,n/a

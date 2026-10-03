@@ -1,0 +1,65 @@
+	
+	https://nphies.sa/
+	http://hl7.org/fhir/R4
+FHIR	http://hl7.org/fhir/R4/index.html
+Home	https://portal.nphies.sa/ig/index.html
+Background	
+Reading this Guide	https://portal.nphies.sa/ig/reading-this-guide.html
+Introduction	https://portal.nphies.sa/ig/introduction.html
+Credits	https://portal.nphies.sa/ig/credits.html
+Specification	https://portal.nphies.sa/ig/#
+Conformance	https://portal.nphies.sa/ig/conformance.html
+Message Structure	https://portal.nphies.sa/ig/message-structure.html
+Message Exchange	https://portal.nphies.sa/ig/message-exchange.html
+Error Handling	https://portal.nphies.sa/ig/error-handling.html
+License	https://hl7.org/fhir/R4/license.html#license
+Use Cases	https://portal.nphies.sa/ig/#
+Overview	https://portal.nphies.sa/ig/usecases.html
+Eligibility Checking	https://portal.nphies.sa/ig/usecase-eligibility.html
+Prior Authorization	https://portal.nphies.sa/ig/usecase-prior-authorizations.html
+Advanced Authorization	https://portal.nphies.sa/ig/usecase-advanced-authorization.html
+Claim Submission	https://portal.nphies.sa/ig/usecase-claims.html
+Batch Claims	https://portal.nphies.sa/ig/usecase-claim-batch.html
+Payment Reconciliation	https://portal.nphies.sa/ig/usecase-payment-reconciliation.html
+Payment Notification	https://portal.nphies.sa/ig/usecase-payment-notification.html
+Information Submission	https://portal.nphies.sa/ig/usecase-information-submission.html
+Information Request	https://portal.nphies.sa/ig/usecase-information-request.html
+Cancellation	https://portal.nphies.sa/ig/usecase-cancel.html
+Error Notice	https://portal.nphies.sa/ig/usecase-error-notice.html
+Polling	https://portal.nphies.sa/ig/usecase-polling.html
+Status Check	https://portal.nphies.sa/ig/usecase-status.html
+Artifacts	https://portal.nphies.sa/ig/#
+Overview	https://portal.nphies.sa/ig/artifacts-overview.html
+Artifacts	https://portal.nphies.sa/ig/artifacts.html
+Roadmap	https://portal.nphies.sa/ig/roadmap.html
+Support	https://portal.nphies.sa/ig/support.html
+Table of Contents	https://portal.nphies.sa/ig/toc.html
+Table of Contents	https://portal.nphies.sa/ig/toc.html
+<prev	https://portal.nphies.sa/ig/toc.html
+bottom	https://portal.nphies.sa/ig/#bottom
+next>	https://portal.nphies.sa/ig/reading-this-guide.html
+	
+Directory of published versions	http://nphies.sa/fhir/ksa/nphies-fs/history.html
+	https://portal.nphies.sa/ig/#home
+Introduction	https://portal.nphies.sa/ig/#intro
+Technical Overview	https://portal.nphies.sa/ig/#technical
+	
+	https://portal.nphies.sa/ig/#introduction
+	
+	https://portal.nphies.sa/ig/#technical-overview
+HL7 FHIR R4.0.1	http://hl7.org/fhir/R4/
+	
+Background	https://portal.nphies.sa/ig/reading-this-guide.html
+Specification	https://portal.nphies.sa/ig/conformance.html
+Use Cases	https://portal.nphies.sa/ig/usecases.html
+Artifacts	https://portal.nphies.sa/ig/artifacts.html
+Roadmap	https://portal.nphies.sa/ig/roadmap.html
+Support	https://portal.nphies.sa/ig/support.html
+	
+<prev	https://portal.nphies.sa/ig/toc.html
+top	https://portal.nphies.sa/ig/#top
+next>	https://portal.nphies.sa/ig/reading-this-guide.html
+HL7 Saudi Arabia	http://hl7.sa/
+FHIR 4.0.1	http://hl7.org/fhir/R4/
+Table of Contents	https://portal.nphies.sa/ig/toc.html
+QA Report	https://portal.nphies.sa/ig/qa.html

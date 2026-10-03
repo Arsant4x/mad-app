@@ -1,0 +1,45 @@
+"Cost per message in PEN on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,PEN,0.2056,0.0865,0.0865,n/a,n/a
+Brazil,PEN,0.2079,0.0226,0.0226,n/a,n/a
+Chile,PEN,0.2958,0.0665,0.0665,n/a,n/a
+Colombia,PEN,0.0416,0.0027,0.0027,n/a,n/a
+Egypt,PEN,0.2143,0.0120,0.0120,0.2162,n/a
+France,PEN,0.2858,0.0998,0.0998,n/a,n/a
+Germany,PEN,0.4541,0.1830,0.1830,n/a,n/a
+Hong Kong,PEN,0.2435,0.0865,0.0865,n/a,n/a
+Hungary,PEN,0.2861,0.1164,0.1164,n/a,n/a
+India,PEN,0.0393,0.0047,0.0047,0.1011,n/a
+Indonesia,PEN,0.1367,0.0832,0.0832,0.4525,n/a
+Israel,PEN,0.1174,0.0176,0.0176,n/a,n/a
+Italy,PEN,0.2644,0.0998,0.0998,n/a,n/a
+Malaysia,PEN,0.2861,0.0466,0.0466,0.1391,n/a
+Mexico,PEN,0.1015,0.0283,0.0283,n/a,n/a
+Netherlands,PEN,0.5313,0.1663,0.1663,n/a,n/a
+Nigeria,PEN,0.1717,0.0223,0.0223,0.2495,n/a
+Pakistan,PEN,0.1574,0.0333,0.0333,0.2495,n/a
+Peru,PEN,0.2339,0.0665,0.0665,n/a,n/a
+Poland,PEN,0.1218,0.0406,0.0406,n/a,n/a
+Qatar,PEN,0.1134,0.0400,0.0400,n/a,n/a
+Romania,PEN,0.2861,0.0964,0.0964,n/a,n/a
+Russia,PEN,0.2668,0.1331,0.1331,n/a,n/a
+Saudi Arabia,PEN,0.1667,0.0356,0.0356,0.1989,n/a
+Singapore,PEN,0.2435,0.0532,0.0532,n/a,n/a
+South Africa,PEN,0.1261,0.0253,0.0253,0.0665,n/a
+Spain,PEN,0.2353,0.0665,0.0665,n/a,n/a
+Turkey,PEN,0.0363,0.0030,0.0030,n/a,n/a
+United Arab Emirates,PEN,0.1660,0.0522,0.0522,0.1697,n/a
+United Kingdom,PEN,0.2112,0.0732,0.0732,n/a,n/a
+North America,PEN,0.0832,0.0113,0.0113,n/a,n/a
+Rest of Africa,PEN,0.0749,0.0133,0.0133,n/a,n/a
+Rest of Asia Pacific,PEN,0.2435,0.0376,0.0376,n/a,n/a
+Rest of Central & Eastern Europe,PEN,0.2861,0.0705,0.0705,n/a,n/a
+Rest of Latin America,PEN,0.2462,0.0376,0.0376,n/a,n/a
+Rest of Middle East,PEN,0.1134,0.0303,0.0303,n/a,n/a
+Rest of Western Europe,PEN,0.1970,0.0569,0.0569,n/a,n/a
+Other,PEN,0.2009,0.0256,0.0256,n/a,n/a

@@ -1,0 +1,35 @@
+متطلبات XBRL السعودية	ق‑٣٣ (⇐ ق-٢٣): XBRL توليد داخلي أم مزوّد — «التصنيف السعودي يحتاج تحقّقاً من متطلباته الفعلية أولاً» (منصة قوائم)	docs/plans/reports-master-plan.md:419	deferred-research	MC	false
+هيكل قائمة الدخل تحت IFRS for SMEs 3	س‑١ (مراجع قانوني): هيكل قائمة الدخل الملزم للمنشآت الصغيرة تحت الإصدار الثالث من IFRS for SMEs — وهل يلزم رِكز بأي تصنيف من IFRS 18؟	docs/plans/reports-master-plan.md:429	accountant	SOCPA	false
+الحد الأدنى من الإيضاحات لشركة صغيرة	س‑٢: الحد الأدنى المقبول من الإيضاحات المتممة لشركة ذات مسؤولية محدودة صغيرة	docs/plans/reports-master-plan.md:430	accountant	SOCPA	false
+متى تلزم القوائم المدقّقة	س‑٣: متى تلزم القوائم المدقّقة ومتى يُقبل الإيداع الذاتي؟	docs/plans/reports-master-plan.md:431	accountant	SOCPA	false
+عرض الزكاة والضرائب في القوائم	س‑٤: معالجة الزكاة والضرائب في القوائم — عرضاً وإفصاحاً	docs/plans/reports-master-plan.md:432	accountant	SOCPA	false
+مصفوفة تصنيف الحسابات في الوعاء الزكوي	س‑٥: تصنيف كل نوع حساب في وعاء الزكاة (إضافة/حسم/محايد) — «مصفوفة كاملة لا أمثلة»	docs/plans/reports-master-plan.md:435	consultant	ZATCA	false
+المخصصات والاستثمارات والأطراف ذات العلاقة زكوياً	س‑٦: معالجة المخصصات والاستثمارات وأرصدة الأطراف ذات العلاقة في الوعاء	docs/plans/reports-master-plan.md:436	consultant	ZATCA	false
+الخصم النسبي مع تعدد السجلات	س‑٧: قواعد الخصم النسبي عند تعدد السجلات التجارية والأنشطة داخل مكلَّف واحد	docs/plans/reports-master-plan.md:437	consultant	ZATCA	false
+الاعتراف الضريبي مقابل المحاسبي	س‑٨: نقطة الاعتراف الضريبي مقابل المحاسبي في النماذج المؤجَّلة والعربون والعقود طويلة الأجل	docs/plans/reports-master-plan.md:438	consultant	ZATCA	false
+توليد القوائم عمل مهني محجوز؟	س‑٩ (قانوني): هل يُعدّ توليد رِكز للقوائم المالية عملاً مهنياً محجوزاً لأعضاء الهيئة السعودية للمراجعين والمحاسبين؟ «حدّ خطير لا يُتجاوَز بالتقدير»	docs/plans/reports-master-plan.md:441	consultant	SOCPA	false
+مسؤولية المنصة عن رقم خاطئ لجهة حكومية	س‑١٠ (قانوني): مسؤولية المنصة عن رقم خاطئ في تقرير قُدّم لجهة حكومية — وصياغة إخلاء المسؤولية	docs/plans/reports-master-plan.md:442	consultant		false
+PDPL وتصدير التقارير	س‑١١ (قانوني): أثر PDPL على تصدير التقارير وإرسالها وأرشفتها	docs/plans/reports-master-plan.md:443	consultant	SDAIA	false
+موعد إقرار الاستقطاع السنوي	ضريبة الاستقطاع السنوي — «خلال 120 يوماً (60 للشركات التضامنية) ⚠️ مصدر ثانوي»	docs/plans/reports-master-plan.md:327	deferred-research	ZATCA	false
+مدد الحفظ 6/11/10 سنوات	مدد الحفظ (6 سنوات عام · 11 سنة عقاري · 10 سنوات لمستندات الاستقطاع) — «⚠️ يُتحقق من نص اللائحة قبل الترميز»	docs/plans/reports-master-plan.md:516	deferred-research	ZATCA	false
+نطاق غرامة القرار 236	نطاق غرامة القرار الوزاري 236 (2,000–20,000 ريال) لتأخر إيداع القوائم — «⚠️ مصادر ثانوية — يُراجَع نص القرار»	docs/plans/reports-master-plan.md:511	deferred-research	MC	false
+لا إلزام SAF-T في المملكة	«لا إلزام SAF-T في المملكة — استدلال بالغياب — يُراجَع دورياً»	docs/plans/reports-master-plan.md:518	deferred-research	ZATCA	false
+تفصيل القيد لكل وردية (رأي محاسبي)	ق٥: تفصيل القيد — لكل فاتورة أم لكل وردية؟ «التوصية: قيد لكل وردية بتفصيل مرجعي… مطلوب رأي محاسبي»	docs/plans/retail-full-spec.md:1003	accountant	SOCPA	false
+بطاقات الهدايا قسيمة متعددة الغرض (تجزئة)	1: بطاقات الهدايا — قسيمة متعددة الغرض (الضريبة عند الاستبدال)؟ وما معالجة المنتهية غير المستخدمة؟	docs/plans/retail-full-spec.md:1017	consultant	ZATCA	false
+نقاط الولاء التزام أداء أم تسويق	2: نقاط الولاء — تخصيص جزء من الثمن (التزام أداء) أم مصروف تسويق؟ وما الوعاء عند الاستبدال؟	docs/plans/retail-full-spec.md:1018	consultant	ZATCA	false
+عتبة الألف ريال للفاتورة المبسطة	3: عتبة الألف ريال — التطبيق الدقيق على متى تجوز الفاتورة المبسطة ومتى تلزم القياسية	docs/plans/retail-full-spec.md:1019	consultant	ZATCA	false
+إتلاف البضاعة (تجزئة)	4: إتلاف البضاعة — هل يستوجب تعديل ضريبة المدخلات؟ وما التوثيق؟ (ملاحظة: CLAUDE.md §9-ب يسجّل حسمه بنصّه، والوثيقة لم تُعلِّمه)	docs/plans/retail-full-spec.md:1020	consultant	ZATCA	false
+حد القيمة الرمزية للعينات	5: العينات والهدايا الترويجية — حد القيمة الرمزية ومتى تصبح توريداً اعتبارياً	docs/plans/retail-full-spec.md:1021	consultant	ZATCA	false
+عمولات منصات البيع والتوصيل (تجزئة)	6: عمولات منصات البيع والتوصيل — وكيل أم أصيل؟ ومن يصدر الفاتورة للمستهلك؟	docs/plans/retail-full-spec.md:1022	consultant	ZATCA	false
+اشترِ واحصل مجاناً	7: عروض «اشترِ واحصل مجاناً» — وعاء الضريبة على القطعة المجانية	docs/plans/retail-full-spec.md:1023	consultant	ZATCA	false
+التقسيط عبر تمارا وتابي	8: التقسيط (تمارا/تابي) — الوعاء كامل قيمة البيع أم الصافي بعد عمولة المنصة؟	docs/plans/retail-full-spec.md:1024	consultant	ZATCA	false
+رصيد المتجر للمرتجع بلا فاتورة	9: الرصيد المتجري للمرتجع بلا فاتورة — المعالجة الضريبية	docs/plans/retail-full-spec.md:1025	consultant	ZATCA	false
+حد عجز الجرد المقبول	10: عجز الجرد — الحد المقبول ومتى يُطالب بتعديل ضريبي	docs/plans/retail-full-spec.md:1026	consultant	ZATCA	false
+الباقة دفعة مقدمة خاضعة (صالون)	١: تأكيد معاملة الباقة كدفعة مقدمة خاضعة عند القبض («يحدد 90% من قيود الباقات»)	docs/plans/salon-master-plan.md:173	consultant	ZATCA	false
+الرصيد المنتهي غير المستخدم (صالون)	٢: البطاقة/الرصيد المنتهي غير المستخدَم — ضريبة عند الانقضاء؟	docs/plans/salon-master-plan.md:174	consultant	ZATCA	false
+مصادرة العربون (صالون)	٣: مصادرة العربون — توريد خاضع أم تعويض خارج النطاق؟	docs/plans/salon-master-plan.md:175	consultant	ZATCA	false
+الخدمة المُعادة مجاناً	٤: الخدمة المُعادة مجاناً — هل تُعد «توريداً مفترضاً»؟ «يحتاج تكييفاً»	docs/plans/salon-master-plan.md:176	consultant	ZATCA	false
+الإكرامية عبر الشبكة (صالون)	٥: الإكرامية عبر الشبكة — خارج الوعاء؟ ومَن الملزم بها زكوياً؟	docs/plans/salon-master-plan.md:177	consultant	ZATCA	false
+إيجار الكرسي	٦: إيجار الكرسي — تأجير عقار أم خدمة؟ ومَن يفوتر العميلة؟ («يحدد نموذج عمل كامل»)	docs/plans/salon-master-plan.md:178	consultant	ZATCA	false
+الاسترداد الجزئي لباقة	٧: الاسترداد الجزئي لباقة — إشعار دائن على أي قيمة؟	docs/plans/salon-master-plan.md:179	consultant	ZATCA	false
+صور قبل/بعد كبيانات حساسة	قرار ٧ / P4: صور قبل/بعد — «تُبنى بقفل تسويقي افتراضي» أو «تُؤجَّل بالكامل إلى ما بعد المراجعة القانونية» («قفل التسويق افتراضياً + مراجعة قانونية»)	docs/plans/salon-master-plan.md:245	consultant	SDAIA	false
