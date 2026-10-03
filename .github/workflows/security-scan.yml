@@ -135,6 +135,18 @@ jobs:
           set -euo pipefail
           docker build -f apps/api/Dockerfile -t mad-api:scan .
           docker build -f apps/web/Dockerfile --build-arg VITE_API_URL=http://localhost:3000 -t mad-web:scan .
+      # ⚖️ `ق-١٥٨٦` (بحكم صاحب المشروع): «والحاوياتُ تعمل بمستخدمٍ غيرِ الجذر». حدٌّ نضعه نحن لا تقريرُ ماسح، فيُسقط الوظيفةَ
+      # إن عادت صورةٌ إلى الجذر. ويُثبت أن الخادم يعمل به فعلاً: أداةُ الهجرات (`prisma`) تعمل بالمستخدم نفسِه قبل الإقلاع.
+      - name: الحاويتان بغير الجذر
+        shell: bash
+        run: |
+          set -euo pipefail
+          for img in mad-api:scan mad-web:scan; do
+            uid=$(docker run --rm --entrypoint id "$img" -u)
+            echo "$img uid=$uid"
+            if [ "$uid" = "0" ]; then echo "::error::$img تعمل بالجذر (uid=0)"; exit 1; fi
+          done
+          docker run --rm --entrypoint sh mad-api:scan -c 'npx prisma --version'
       - name: فحصُ الصورتين وإعدادات الحاويات
         shell: bash
         run: |
