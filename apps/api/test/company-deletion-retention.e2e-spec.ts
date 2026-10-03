@@ -93,7 +93,7 @@ describe('حذفُ المنشأة لا يمسّ ما تحت الحفظ — وا�
     await app.close();
   });
 
-  it('① سجلّاتُ العقار بلا عقود تُحفظ إحدى عشرة سنةً — عند الإغلاق، وعند الكنس ولو حُسب أجلُها قبلُ تسعين يوماً', async () => {
+  it('① سجلّاتُ العقار بلا عقود تُحفظ خمسَ عشرةَ سنةً — عند الإغلاق، وعند الكنس ولو حُسب أجلُها قبلُ تسعين يوماً', async () => {
     const co = await makeCompany();
     const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
     const propertyId = (await auth(http().post('/properties')).send({ name: `عقار بلا عقود ${suffix}`, ownership: 'owned' }).expect(201)).body.id as string;
