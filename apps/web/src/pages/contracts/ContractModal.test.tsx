@@ -107,5 +107,24 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     fireEvent.click(screen.getByText('إضافة العقد'));
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('lessor');
+    // وغيرُ المختلط لا يُرسل نسبة.
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty('exemptSharePercent');
+  });
+
+  it('⑥ ⚖️ المختلط: نصيبُ المعفى وأساسُه يُعلَنان قبل الإرسال ويُرسلان معه (السؤال ٤١٢)', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ContractModal units={[unit]} properties={[property]} customers={[customer('c1', 'سعد الغامدي')]} onCancel={() => {}} onSave={onSave} onCreateCustomer={vi.fn()} />);
+    fireEvent.change(screen.getByRole('listbox'), { target: { value: 'c1' } });
+    fillRequired();
+    const [classification] = screen.getAllByRole('combobox').filter((s) => (s as HTMLSelectElement).options[0]?.textContent?.includes('اختر'));
+    fireEvent.change(classification, { target: { value: 'MIXED' } });
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(screen.getByText(/عقدٌ مختلط: اكتب/)).toBeTruthy());
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('نصيب الجزء السكنيّ المعفى (٪)'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText('أساس النسبة'), { target: { value: 'المساحة' } });
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ classification: 'MIXED', exemptSharePercent: 40, exemptShareBasis: 'المساحة' });
   });
 });

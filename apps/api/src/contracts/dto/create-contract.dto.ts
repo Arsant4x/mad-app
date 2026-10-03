@@ -1,5 +1,5 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 import { SAUDI_VAT_NUMBER_PATTERN } from '../../common/vat/vat-number';
 
@@ -11,8 +11,13 @@ export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as cons
  * `LEGACY_UNCLASSIFIED` للصفوف التي سبقت الهجرة وحدَها، ولا يقبلها الخادمُ لعقدٍ
  * جديدٍ أو تعديل — «قيمةٌ قديمة يقبلها الخادمُ لعقدٍ جديد افتراضٌ صامتٌ باسمٍ جديد».
  * والقاعدةُ تحبسها بقيد `CHECK` على `createdAt` طبقةً ثانية.
+ *
+ * ⚖️ ومعهما (السؤالان ٥٩ و٤١٢ · `ق-١٦٠٠`): `SERVICED_LODGING` إيواءٌ مخدومٌ أو مؤقّت خاضع، و`MIXED` عقدٌ بجزأين بنسبةٍ معلَنة.
  */
-export const CONTRACT_CLASSIFICATIONS = ['RESIDENTIAL', 'COMMERCIAL'] as const;
+export const CONTRACT_CLASSIFICATIONS = ['RESIDENTIAL', 'COMMERCIAL', 'SERVICED_LODGING', 'MIXED'] as const;
+/** نصيبُ المعفى في المختلط: بين 0 و100 لا يشملهما — فالمعفى كلُّه سكنيٌّ والخاضعُ كلُّه تجاريّ. */
+export const EXEMPT_SHARE_MIN = 0.01;
+export const EXEMPT_SHARE_MAX = 99.99;
 /** أشاملٌ `value` لضريبة القيمة المضافة أم لا — يُعلَن ولا يُفترض (`ق-٨٩٢`). */
 export const CONTRACT_VAT_INCLUSIONS = ['INCLUSIVE', 'EXCLUSIVE'] as const;
 /**
@@ -29,9 +34,22 @@ export class CreateContractDto extends CurrencyFieldsDto {
   @IsNotEmpty()
   unitId!: string;
 
-  /** إلزاميٌّ بلا افتراض: عقدٌ بلا تصنيفٍ يُرفض — سكنيٌّ معفى أو تجاريٌّ خاضع. */
+  /** إلزاميٌّ بلا افتراض: عقدٌ بلا تصنيفٍ يُرفض — سكنيٌّ معفى · تجاريٌّ خاضع · إيواءٌ مخدومٌ خاضع · مختلطٌ بنسبة. */
   @IsIn(CONTRACT_CLASSIFICATIONS)
   classification!: (typeof CONTRACT_CLASSIFICATIONS)[number];
+
+  /** ⚖️ المختلطُ وحدَه: نصيبُ الجزء المعفى بالمئة — وإلزامُه للمختلط ومنعُه لغيره في الخدمة (`mixedShareFieldsFor`). */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(EXEMPT_SHARE_MIN)
+  @Max(EXEMPT_SHARE_MAX)
+  exemptSharePercent?: number;
+
+  /** وأساسُ النسبة كما يعلنه المؤجّر (المساحة · القيمةُ السوقية · …). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  exemptShareBasis?: string;
 
   /** إلزاميٌّ كذلك: قيمةُ العقد شاملةٌ للضريبة أم غيرُ شاملة. */
   @IsIn(CONTRACT_VAT_INCLUSIONS)

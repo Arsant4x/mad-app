@@ -20,7 +20,7 @@ import {
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
 import { formatMoney, num0, round2, type MoneyText } from '../../lib/money';
-import { STANDARD_VAT_GROSS_FACTOR, STANDARD_VAT_RATE, standardVatIncludedIn } from '../../lib/vat';
+import { STANDARD_VAT_GROSS_FACTOR, standardVatIncludedIn, standardVatIncludedInShare, standardVatOnShare } from '../../lib/vat';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
@@ -28,7 +28,8 @@ import { HandoversSection } from './HandoversSection';
 import { KeyMoneySection } from './KeyMoneySection';
 import { LessorFields, lessorPayload, type DeclaredLessorChoice } from './LessorFields';
 import { newRequestKey } from '../../api/idempotency';
-import { CLASSIFICATION_LABEL, CLASSIFICATION_OPTIONS, CYCLE_LABEL, VAT_INCLUSION_LABEL, VAT_INCLUSION_OPTIONS, isLegacyContract } from './contractMeta';
+import { CLASSIFICATION_LABEL, CLASSIFICATION_OPTIONS, CYCLE_LABEL, VAT_INCLUSION_LABEL, VAT_INCLUSION_OPTIONS, isLegacyContract, isTaxedClassification, taxedShareOf } from './contractMeta';
+import { MixedShareFields, mixedSharePayload } from './MixedShareFields';
 import i18n from '../../i18n';
 
 const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeClass: string }> = {
@@ -50,11 +51,19 @@ const RENT_PAYMENT_METHOD_LABEL: Record<RentPaymentMethod, string> = {
   CARD: 'شبكة',
 };
 
+/** حقولُ العقد التي يُقرأ منها الخضوعُ والشمول. */
+type TaxedContract = { classification: string; vatInclusion: string; exemptSharePercent?: string | null };
+
 /** الإجماليُّ الذي يدين به المستأجر عن قسطٍ — بحسب الشمول (م٤٥/٢ · ق-٩١٨): غيرُ الشامل يزيد 15%. */
-/** إجماليُّ القسط رقماً — غيرُ الشامل الخاضع +15%، والباقي المبلغُ نفسُه (التدويرُ من `lib/money` وحده — ق-٦٥ بروحها). */
-function grossNumberOf(contract: { classification: string; vatInclusion: string }, amount: string | number): number {
+/**
+ * إجماليُّ القسط رقماً — غيرُ الشامل الخاضع +15%، والمختلطُ +15% من جزئه الخاضع (السؤال ٤١٢)، والباقي المبلغُ نفسُه
+ * (التدويرُ من `lib/money` وحده — ق-٦٥ بروحها).
+ */
+function grossNumberOf(contract: TaxedContract, amount: string | number): number {
   const a = Number(amount);
-  return contract.classification === 'COMMERCIAL' && contract.vatInclusion === 'EXCLUSIVE' ? round2(a * STANDARD_VAT_GROSS_FACTOR) : round2(a);
+  const share = taxedShareOf(contract);
+  if (share === 0 || contract.vatInclusion !== 'EXCLUSIVE') return round2(a);
+  return share === 1 ? round2(a * STANDARD_VAT_GROSS_FACTOR) : round2(a + round2(standardVatOnShare(round2(a * share))));
 }
 
 /**
@@ -63,7 +72,7 @@ function grossNumberOf(contract: { classification: string; vatInclusion: string 
  * اقتراحه الكامل.
  */
 function suggestedRemainingGross(
-  contract: { classification: string; vatInclusion: string },
+  contract: TaxedContract,
   installment: { id: string; amount: string | number; gross?: MoneyText; settled?: MoneyText; remaining?: MoneyText } | undefined,
 ): string {
   if (!installment) return '';
@@ -76,18 +85,21 @@ function suggestedRemainingGross(
 }
 
 /** نصُّ الإعلان في شاشة القبض — الشاملُ وغيرُ الشامل والمعفى، بأرقامها (ق-٩٢٧/②). */
-function paymentDeclaration(contract: { classification: string; vatInclusion: string }, amount: string | number | undefined): string | null {
+function paymentDeclaration(contract: TaxedContract, amount: string | number | undefined): string | null {
   if (amount === undefined || amount === null || amount === '') return null;
   const a = Number(amount);
   if (contract.classification === 'RESIDENTIAL') return `عقدٌ سكنيّ معفى — المبلغُ المقترَح هو القسطُ ${formatMoney(a)} بلا ضريبة.`;
-  if (contract.classification !== 'COMMERCIAL') return 'عقدٌ قديم بلا تصنيف — لا تُحسب له ضريبةٌ حتى يُصنَّف من بطاقته؛ والقبضُ على المسار القائم.';
+  const share = taxedShareOf(contract);
+  if (share === 0) return 'عقدٌ قديم بلا تصنيف — لا تُحسب له ضريبةٌ حتى يُصنَّف من بطاقته؛ والقبضُ على المسار القائم.';
+  // ⚖️ المختلط (السؤال ٤١٢): الضريبةُ على جزئه الخاضع وحدَه، فيُقال ذلك قبل الأرقام.
+  const mixed = share < 1 ? `عقدٌ مختلط: نصيبُ المعفى ${contract.exemptSharePercent}٪ والضريبةُ على الباقي. ` : '';
   if (contract.vatInclusion === 'INCLUSIVE') {
-    const tax = round2(standardVatIncludedIn(a));
-    return `قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
+    const tax = share === 1 ? round2(standardVatIncludedIn(a)) : round2(standardVatIncludedInShare(a, share));
+    return `${mixed}قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
   }
   if (contract.vatInclusion === 'EXCLUSIVE') {
-    const tax = round2((a * STANDARD_VAT_RATE) / 100);
-    return `قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
+    const tax = round2(standardVatOnShare(round2(a * share)));
+    return `${mixed}قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
   }
   return 'عقدٌ قديم غيرُ معلَنِ الشمول — لا تُحسب له ضريبةٌ حتى يُعلَن من بطاقته.';
 }
@@ -401,6 +413,9 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
   const [lessor, setLessor] = useState<DeclaredLessorChoice>(contract.lessor === 'LEGACY_UNDECLARED' ? '' : contract.lessor);
   const [ownerName, setOwnerName] = useState(contract.ownerName ?? '');
   const [ownerVatNumber, setOwnerVatNumber] = useState(contract.ownerVatNumber ?? '');
+  // ⚖️ ونسبةُ المختلط تُعبّأ من الأصل لتُراجَع، ولا تُورَّث في الخادم (السؤال ٤١٢).
+  const [sharePercent, setSharePercent] = useState(contract.exemptSharePercent ?? '');
+  const [shareBasis, setShareBasis] = useState(contract.exemptShareBasis ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -419,6 +434,7 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
         end,
         classification,
         vatInclusion,
+        ...mixedSharePayload(classification, sharePercent, shareBasis),
         ...(managed ? lessorPayload(lessor, ownerName, ownerVatNumber) : {}),
         value: parseFloat(value) || undefined,
         no: no.trim() || undefined,
@@ -480,6 +496,7 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
           </select>
         </div>
       </div>
+      {classification === 'MIXED' && <MixedShareFields idPrefix="renew" percent={sharePercent} onPercent={setSharePercent} basis={shareBasis} onBasis={setShareBasis} />}
       {managed && (
         <LessorFields
           idPrefix="renew"
@@ -489,7 +506,7 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
           onOwnerName={setOwnerName}
           ownerVatNumber={ownerVatNumber}
           onOwnerVatNumber={setOwnerVatNumber}
-          commercial={classification === 'COMMERCIAL'}
+          commercial={isTaxedClassification(classification)}
         />
       )}
       <div className="field">
@@ -530,6 +547,8 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
 function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; onDeclared: () => Promise<void> }) {
   const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
   const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
+  const [sharePercent, setSharePercent] = useState(contract.exemptSharePercent ?? '');
+  const [shareBasis, setShareBasis] = useState(contract.exemptShareBasis ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -541,7 +560,7 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
     }
     setSaving(true);
     try {
-      await updateContract(contract.id, { classification, vatInclusion });
+      await updateContract(contract.id, { classification, vatInclusion, ...mixedSharePayload(classification, sharePercent, shareBasis) });
       await onDeclared();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
@@ -578,6 +597,7 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
           </select>
         </div>
       </div>
+      {classification === 'MIXED' && <MixedShareFields idPrefix="legacy-class" percent={sharePercent} onPercent={setSharePercent} basis={shareBasis} onBasis={setShareBasis} />}
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-primary" onClick={declare} disabled={saving}>
@@ -628,7 +648,7 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
         onOwnerName={setOwnerName}
         ownerVatNumber={ownerVatNumber}
         onOwnerVatNumber={setOwnerVatNumber}
-        commercial={contract.classification === 'COMMERCIAL'}
+        commercial={isTaxedClassification(contract.classification)}
       />
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
@@ -721,7 +741,10 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
         <div className="two-col" style={{ marginBottom: 6 }}>
           <div className="field">
             <label>التصنيف للضريبة</label>
-            <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>{CLASSIFICATION_LABEL[contract.classification]}</p>
+            <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
+              {CLASSIFICATION_LABEL[contract.classification]}
+              {contract.classification === 'MIXED' && contract.exemptSharePercent !== null && ` · المعفى ${contract.exemptSharePercent}٪ (${contract.exemptShareBasis ?? ''})`}
+            </p>
           </div>
           <div className="field">
             <label>القيمة والضريبة</label>

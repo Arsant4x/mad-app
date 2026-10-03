@@ -197,7 +197,9 @@ export interface CreateCompanyUserDto {
 /** جسمُ طلب — `CreateContractDto` في الخادم. */
 export interface CreateContractDto {
   unitId: string;
-  classification: 'RESIDENTIAL' | 'COMMERCIAL';
+  classification: 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED';
+  exemptSharePercent?: number;
+  exemptShareBasis?: string;
   vatInclusion: 'INCLUSIVE' | 'EXCLUSIVE';
   lessor?: 'COMPANY' | 'OWNER';
   ownerName?: string;
@@ -932,8 +934,10 @@ export interface RejectWriteOffDto {
 export interface RenewContractDto {
   start: string;
   end: string;
-  classification: 'RESIDENTIAL' | 'COMMERCIAL';
+  classification: 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED';
   vatInclusion: 'INCLUSIVE' | 'EXCLUSIVE';
+  exemptSharePercent?: number;
+  exemptShareBasis?: string;
   lessor?: 'COMPANY' | 'OWNER';
   ownerName?: string;
   ownerVatNumber?: string;
@@ -1252,8 +1256,10 @@ export interface UpdateContractDto {
   services?: string;
   furnished?: 'unfurnished' | 'furnished' | 'partial';
   ejarNo?: string;
-  classification?: 'RESIDENTIAL' | 'COMMERCIAL';
+  classification?: 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED';
   vatInclusion?: 'INCLUSIVE' | 'EXCLUSIVE';
+  exemptSharePercent?: number;
+  exemptShareBasis?: string;
   lessor?: 'COMPANY' | 'OWNER';
   ownerName?: string;
   ownerVatNumber?: string;

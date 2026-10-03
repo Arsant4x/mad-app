@@ -1,4 +1,4 @@
-import { ownerCollectionSplit, pendingTaxPoints, quarterOf, rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from './rent-tax-point.util';
+import { exemptNetOf, ownerCollectionSplit, pendingTaxPoints, quarterOf, rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from './rent-tax-point.util';
 
 /**
  * **محرّكُ نقطة الضريبة — مُثبَتٌ بحالاتٍ جوابُها معروفٌ يداً** (`ق-٩٢٤` · `ق-٩٢٧/٤`).
@@ -117,5 +117,36 @@ describe('محرّكُ نقطة الضريبة للإيجار (م٢٠ · ق-٩٢
     expect(rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'COMPANY')?.taxable).toBe(true);
     // والسكنيُّ المؤجَّرُ من المالك بلا ضريبةٍ يدفعها المستأجر.
     expect(rentTaxTreatment('RESIDENTIAL', 'EXCLUSIVE', 'OWNER')?.chargesVat).toBe(false);
+  });
+
+  it('⚖️ الإيواءُ المخدوم خاضعٌ كالتجاريّ (السؤال ٥٩)', () => {
+    const serviced = rentTaxTreatment('SERVICED_LODGING', 'EXCLUSIVE', 'COMPANY')!;
+    expect(serviced.taxable).toBe(true);
+    expect(serviced.exemptShare).toBe(0);
+    expect(rentAmountsOf(1000, serviced)).toEqual({ gross: 1150, net: 1000, tax: 150 });
+    expect(exemptNetOf(1000, serviced)).toBeNull();
+  });
+
+  it('⚖️ المختلط (السؤال ٤١٢): الضريبةُ على جزئه الخاضع وحدَه — والمعفى نصيبُه من الصافي', () => {
+    // نصيبُ المعفى أربعون: غيرُ الشامل ⇒ 600 × 15٪ = 90 ⇒ يدين المستأجرُ 1090، والمعفى 400.
+    const exclusive = rentTaxTreatment('MIXED', 'EXCLUSIVE', 'COMPANY', 40)!;
+    expect(exclusive.taxable).toBe(true);
+    expect(rentAmountsOf(1000, exclusive)).toEqual({ gross: 1090, net: 1000, tax: 90 });
+    expect(exemptNetOf(1000, exclusive)).toBe(400);
+    // والشامل ⇒ 1000 × 0.09 ÷ 1.09 = 82.57 ⇒ الصافي 917.43، منه المعفى 366.97 والخاضعُ 550.46.
+    const inclusive = rentTaxTreatment('MIXED', 'INCLUSIVE', 'COMPANY', 40)!;
+    expect(rentAmountsOf(1000, inclusive)).toEqual({ gross: 1000, net: 917.43, tax: 82.57 });
+    expect(exemptNetOf(917.43, inclusive)).toBe(366.97);
+    // وقسمةُ مقبوضٍ إجماليٍّ بالقاعدة نفسِها: 1090 ⇒ 90 ضريبة.
+    expect(splitGrossAmount(1090, exclusive)).toEqual({ gross: 1090, net: 1000, tax: 90 });
+    // والمالكُ مؤجّراً لمختلط: ضريبتُه على جزئه الخاضع، والعمولةُ على الباقي.
+    expect(ownerCollectionSplit(1090, rentTaxTreatment('MIXED', 'EXCLUSIVE', 'OWNER', 40)!, 10)).toEqual({ ownerVat: 90, commission: 100, commissionTax: 15, ownerShare: 975 });
+  });
+
+  it('⛔ والمختلطُ بلا نسبةٍ معلَنة، أو بنسبةٍ خارج (0، 100)، بلا معاملة', () => {
+    expect(rentTaxTreatment('MIXED', 'EXCLUSIVE', 'COMPANY')).toBeNull();
+    expect(rentTaxTreatment('MIXED', 'EXCLUSIVE', 'COMPANY', null)).toBeNull();
+    expect(rentTaxTreatment('MIXED', 'EXCLUSIVE', 'COMPANY', 0)).toBeNull();
+    expect(rentTaxTreatment('MIXED', 'EXCLUSIVE', 'COMPANY', 100)).toBeNull();
   });
 });

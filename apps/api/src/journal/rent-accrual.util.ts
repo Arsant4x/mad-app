@@ -4,10 +4,12 @@ import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
 import { postDeferredToOtherIncomeEntry, postPartySettlementEntry, postRentAccrualEntry, postRentAccrualReversalEntry } from './auto-posting.util';
 import {
+  exemptNetOf,
   pendingTaxPoints,
   rentAmountsOf,
   rentTaxTreatment,
   RentTaxTreatment,
+  sharePercentOf,
   splitGrossAmount,
   taxPointsOfInstallment,
   TaxPoint,
@@ -48,6 +50,7 @@ export const ACCRUAL_CONTRACT_SELECT = {
   classification: true,
   vatInclusion: true,
   lessor: true,
+  exemptSharePercent: true,
   currency: true,
   exchangeRate: true,
   status: true,
@@ -78,7 +81,7 @@ type AccrualInstallment = Prisma.InstallmentGetPayload<{ select: typeof ACCRUAL_
 const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED'];
 
 export function treatmentOf(contract: AccrualContract): RentTaxTreatment | null {
-  return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.lessor);
+  return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.lessor, sharePercentOf(contract.exemptSharePercent));
 }
 
 /** إجماليُّ الدفعة بمقياس عملة العقد — والدفعةُ بعملةٍ أخرى تُترجَم عبر عملة الدفتر. */
@@ -167,6 +170,8 @@ async function writeAccrual(
       baseGross: base.gross,
       baseNet: base.net,
       baseTax: base.tax,
+      // ⚖️ المختلط (السؤال ٤١٢): جزؤه المعفى من الصافي على الصفّ نفسِه — فالإقرارُ يقرأ الجزأين مما رُحّل.
+      baseExemptNet: exemptNetOf(base.net, treatment),
       journalEntryId: posting.entry?.id ?? null,
     } as unknown as Prisma.RentAccrualUncheckedCreateInput,
   });
@@ -376,6 +381,7 @@ export async function reduceAccrualWithinTx(
       baseGross: -base.gross,
       baseNet: -base.net,
       baseTax: -base.tax,
+      baseExemptNet: ((e) => (e === null ? null : -e))(exemptNetOf(base.net, treatment)),
       journalEntryId: entry?.id ?? null,
     } as unknown as Prisma.RentAccrualUncheckedCreateInput,
   });

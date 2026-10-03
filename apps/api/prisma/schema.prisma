@@ -3476,6 +3476,12 @@ enum ContractClassification {
   /// تجاريٌّ — توريدٌ خاضع بالنسبة الأساسية.
   COMMERCIAL
   LEGACY_UNCLASSIFIED
+  /// ⚖️ إيواءٌ مخدومٌ أو مؤقّت — خاضعٌ كالتجاريّ (السؤال ٥٩ · `ق-١٦٠٠`): الإعفاءُ للمسكن الرئيس الدائم وحدَه، والمعيارُ
+  /// طبيعةُ السكن لا التأثيثُ ولا عددُ الأيام (دليلُ العقارات §6.1 ومثال 7).
+  SERVICED_LODGING
+  /// ⚖️ مختلطٌ — عقدٌ واحدٌ يجمع جزءاً سكنيّاً معفى وجزءاً خاضعاً (السؤال ٤١٢ · `ق-١٦٠٠`): نسبةُ المعفى يعلنها المؤجّرُ بأساسه
+  /// (`exemptSharePercent` · `exemptShareBasis`)، ولا مساحةَ إلزامية (دليلُ العقارات §6.2 و§6.3 ومثال 9).
+  MIXED
 }
 
 /// ⑧ فئةُ ضريبة القيمة المضافة على الصنف وعلى سطر المستند (`ق-١٢١١` · `ق-١٢١٢` · `ق-١٢٢٣`) —
@@ -4237,6 +4243,11 @@ model Contract {
   ownerName      String?
   /// رقمُه الضريبيّ (`^3\d{13}3$`) — إلزاميٌّ للتجاريّ، فتوريدُه الخاضعُ يحتاج مورّداً مسجَّلاً.
   ownerVatNumber String?
+  /// ⚖️ المختلطُ وحدَه (السؤال ٤١٢): نصيبُ الجزء المعفى من قيمة الإيجار بالمئة (بين 0 و100 لا يشملهما) — والضريبةُ على الباقي.
+  /// قيدُ `contracts_mixed_share_declared` يُلزمه للمختلط ويمنعه لغيره.
+  exemptSharePercent Decimal? @db.Decimal(5, 2)
+  /// أساسُ النسبة كما يعلنه المؤجّر (المساحة · القيمةُ السوقية · …) — فالمؤجّرُ مسؤولٌ عن التقسيم بنصّ الهيئة.
+  exemptShareBasis   String?
 
   status       ContractStatus @default(DUE)
   cancelDate   DateTime?      @db.Date
@@ -5492,7 +5503,8 @@ model RentAccrual {
   /// نقطةُ الضريبة — تاريخُ القيد وتاريخُ الإقرار معاً.
   date DateTime @db.Date
 
-  /// لقطةُ التصنيف: `RESIDENTIAL` معفى · `COMMERCIAL` خاضع — ولا صفَّ لعقدٍ غيرِ مصنَّف.
+  /// لقطةُ التصنيف: `RESIDENTIAL` معفى · `COMMERCIAL` و`SERVICED_LODGING` خاضع · `MIXED` بجزأيه (`baseExemptNet`) — ولا صفَّ
+  /// لعقدٍ غيرِ مصنَّف.
   classification ContractClassification
   /// خاضعٌ فعلاً: تجاريٌّ **و**العقارُ `owned`/`leased`؛ و`managed` تجاريٌّ بلا ضريبة
   /// (توريدُ مالكه — `ق-٩١٨`) يُعدّ في الإقرار ولا يدخله.
@@ -5511,6 +5523,9 @@ model RentAccrual {
   baseGross Decimal @db.Decimal(18, 2)
   baseNet   Decimal @db.Decimal(18, 2)
   baseTax   Decimal @db.Decimal(18, 2)
+  /// ⚖️ المختلطُ وحدَه (السؤال ٤١٢): الجزءُ المعفى من `baseNet` بعملة الدفتر — والخاضعُ ما بقي. فارغٌ لغير المختلط، وقيدُ
+  /// `rent_accruals_exempt_part_mixed` يُلزم الاقترانَ. يقرؤه الإقرارُ من الصفّ الذي رُحّل منه القيد.
+  baseExemptNet Decimal? @db.Decimal(18, 2)
 
   /// فارغٌ حين تخطّى الترحيلُ لنقص حسابٍ في الدليل — ويُعدّ في الإقرار «بلا قيد» لا يُخفى.
   journalEntryId String?

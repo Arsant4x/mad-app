@@ -280,6 +280,9 @@ export const MSG = {
   contract_owner_commission_rate_missing: 'contracts.owner_commission_rate_missing',
   contract_lessor_locked_after_posting: 'contracts.lessor_locked_after_posting',
   contract_owner_commission_exceeds_collection: 'contracts.owner_commission_exceeds_collection',
+  /** ⚖️ العقدُ المختلط (السؤال ٤١٢ · ق-١٦٠٠). */
+  contract_mixed_share_required: 'contracts.mixed_share_required',
+  contract_mixed_share_only_for_mixed: 'contracts.mixed_share_only_for_mixed',
   contract_already_cancelled: 'contracts.already_cancelled',
   contract_start_after_end: 'contracts.start_after_end',
   contract_outside_head_lease: 'contracts.outside_head_lease',
@@ -1219,6 +1222,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.contract_owner_commission_exceeds_collection]: {
     ar: 'العمولةُ وضريبتُها تتجاوزان المقبوض — راجع «نسبة عمولة التشغيل» في بطاقة العقار',
     en: 'The commission and its VAT exceed the amount collected — review the commission rate on the property',
+  },
+  [MSG.contract_mixed_share_required]: {
+    ar: 'العقدُ المختلط يُعلَن فيه نصيبُ الجزء السكنيّ المعفى بالمئة (أكبرُ من صفر وأقلُّ من مئة) وأساسُ النسبة (المساحة أو القيمة السوقية أو غيرهما) — فالضريبةُ على الباقي، والمؤجّرُ مسؤولٌ عن التقسيم',
+    en: 'A mixed contract needs the exempt (residential) share as a percentage (above 0 and below 100) and the basis of that share (area, market value, …) — VAT applies to the rest, and the lessor is responsible for the split',
+  },
+  [MSG.contract_mixed_share_only_for_mixed]: {
+    ar: 'نصيبُ المعفى وأساسُه للعقد المختلط وحدَه — العقدُ السكنيُّ معفى كلُّه، والتجاريُّ والإيواءُ المخدومُ خاضعان كلُّهما',
+    en: 'The exempt share and its basis apply to a mixed contract only — a residential contract is wholly exempt, and commercial or serviced lodging is wholly taxable',
   },
   [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
   [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },
