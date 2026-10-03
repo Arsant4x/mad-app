@@ -490,6 +490,10 @@ export class PaymentsService {
    */
   allocate(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: AllocateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // ⚖️ صفُّ السند يُقفل **قبل** قراءة تخصيصاته (توجيه ٢٧٦ · ٢و): طلبان معاً كانا يحذفان كلٌّ ما رآه ويكتبان، فيبقى التوزيعان
+      //    ويزيد المخصَّصُ على مبلغ السند (مقيسٌ بتداخلٍ مفروض في `payment-reallocation-race.e2e-spec.ts`). والثاني الآن ينتظر ثم
+      //    يقرأ توزيعَ الأوّل ويحلّ محلَّه.
+      await lockDocumentRow(tx, 'payments', id);
       // الفرعُ أوّلاً (`ق-١٤٤٠`): سندُ فرعٍ آخر 404 لا 409 الدفعةِ المقدَّمة التي تسمّي مستندَه — فهو غيرُ موجودٍ له.
       const payment = await this.findVisible(tx, allowedBranchIds, id);
       // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.

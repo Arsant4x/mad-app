@@ -13,6 +13,7 @@ import {
   assertReversible,
   baseSettledOf,
   lockAndAssertAllocationsFit,
+  lockDocumentRow,
   withAllocatedTotals,
   withRemaining,
 } from '../common/settlement/settlement.util';
@@ -262,6 +263,8 @@ export class SupplierPaymentsService {
    */
   allocate(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: AllocateSupplierPaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // ⚖️ صفُّ السند يُقفل **قبل** قراءة تخصيصاته (توجيه ٢٧٦ · ٢و) — مرآةُ سند القبض: بلا القفل يبقى التوزيعان معاً.
+      await lockDocumentRow(tx, 'supplier_payments', id);
       // ق-١٤٤٠: السندُ بفروع الفاعل قبل فحص العكس وقبل أيّ حذفٍ للتخصيصات — سندُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403).
       const payment = await tx.supplierPayment.findFirst({ where: { id, ...branchFilter(allowedBranchIds) }, include: { allocations: true } });
       if (!payment) throw new NotFoundException(MSG.supplier_payment_not_found);
