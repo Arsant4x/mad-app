@@ -307,6 +307,8 @@ export const MSG = {
   unit_not_in_property: 'units.not_in_property',
   handover_not_found: 'handovers.not_found',
   handover_signed_immutable: 'handovers.signed_immutable',
+  /** إعلامُ المستأجر بحفظ صور النموذج قبل توقيعه (`ق-١٦٠٠` · السؤال ٢٤٣). */
+  handover_photo_notice_required: 'handovers.photo_notice_required',
   handover_item_not_found: 'contracts.handover_item_not_found',
   settlement_lines_mismatch: 'contracts.settlement_lines_mismatch',
   unearned_disposition_required: 'contracts.unearned_disposition_required',
@@ -1282,6 +1284,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.handover_signed_immutable]: {
     ar: 'النموذج موقَّع ولا يمكن تعديله أو حذفه',
     en: 'This form is signed and can no longer be changed or deleted',
+  },
+  [MSG.handover_photo_notice_required]: {
+    ar: 'على هذا النموذج صور، فلا يُوقَّع حتى يُعلَم المستأجرُ أن صورَه تُحفظ مع سجلّات المنشأة العقارية {years} سنةً من إغلاق حسابها ثم تُتلف، ويُقرّ الموقِّعُ بذلك',
+    en: 'This form has photos, so it cannot be signed until the tenant is told they are kept with the company’s property records for {years} years after its account closes and then destroyed, and the signer confirms it',
   },
   [MSG.claim_not_found]: { ar: 'المطالبة غير موجودة', en: 'Claim not found' },
   [MSG.claim_already_settled]: { ar: 'هذه المطالبة مسوّاة بالفعل', en: 'This claim has already been settled' },

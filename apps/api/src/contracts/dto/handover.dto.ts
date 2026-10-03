@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsDateString, IsIn, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsIn, IsOptional, IsString, Matches, ValidateNested } from 'class-validator';
 
 const HANDOVER_TYPES = ['DELIVERY', 'RECEIPT'] as const;
 const CONDITIONS = ['GOOD', 'FAIR', 'DAMAGED', 'MISSING'] as const;
@@ -83,4 +83,10 @@ export class SignHandoverDto {
   @IsString()
   @Matches(NON_BLANK)
   signedBy!: string;
+
+  /// ⚖️ `ق-١٦٠٠` · السؤال ٢٤٣ — إقرارُ الموقِّع أن المستأجرَ أُعلم بأن صورَ النموذج تُحفظ مدّةَ حفظ المستندات العقارية
+  /// ثم تُتلف. إلزاميٌّ حين يحمل النموذجُ صوراً (يُفحص في الخدمة لأن الصورَ في جدولٍ آخر)، ولا يُطلب بلا صور.
+  @IsOptional()
+  @IsBoolean()
+  photoNoticeGiven?: boolean;
 }

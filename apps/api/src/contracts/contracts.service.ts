@@ -59,6 +59,7 @@ import {
 import { money } from '../common/money/text';
 import { chargeTaxIn, chargeTaxOn } from '../journal/charge-tax.util';
 import { FilesService } from '../files/files.service';
+import { RETENTION_YEARS } from '../companies/company-movement.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
 
@@ -395,6 +396,8 @@ export class ContractsService {
       // ⚖️ المطالبةُ المفتوحة بإجماليّها — الخاضعةُ بضريبتها (السؤال ٤١٣)، فهو ما يدين به المستأجر.
       claimsOutstanding: money(contract.claims.filter((c) => c.status === 'OPEN').reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount), 0)),
       depositsHeld: money(contract.deposits.filter((d) => d.status === 'HELD' && d.holder === 'COMPANY').reduce((s, d) => s + Number(d.amount), 0)),
+      // ⚖️ مدّةُ حفظ صور نماذج التسليم كما يُعلَم بها المستأجر (`ق-١٦٠٠` · السؤال ٢٤٣) — من مدد الحفظ، تقرؤها الشاشةُ ولا تكتبها.
+      handoverPhotoRetentionYears: RETENTION_YEARS.realEstate,
     };
   }
 
@@ -1243,14 +1246,29 @@ export class ContractsService {
    * `signedAt` is the **server's** clock, never the caller's. A document whose
    * purpose is to be unarguable later cannot let one side choose the time it
    * claims to have been signed.
+   *
+   * ⚖️ **وعلى النموذج صورٌ ⟸ لا يُوقَّع بلا إعلام المستأجر** (`ق-١٦٠٠` · السؤال ٢٤٣): صورُ داخل المسكن تبقى بمدّة
+   * النموذج لا بانتهاء غرضها، فيُعلَم المستأجرُ يومَ التوقيع ويُقرّ الموقِّعُ بذلك، وتُختم المدّةُ المعلنة يومَها ووقتُ
+   * الإعلام (هو وقتُ التوقيع نفسُه). ونموذجٌ بلا صورٍ لا يُثقَل بإقرارٍ لا موضوعَ له.
    */
   signHandover(companyId: string, contractId: string, handoverId: string, dto: SignHandoverDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const handover = await this.loadEditableHandover(tx, contractId, handoverId);
+      const photos = await tx.handoverPhoto.count({ where: { handoverId: handover.id } });
+      const years = RETENTION_YEARS.realEstate;
+      if (photos > 0 && dto.photoNoticeGiven !== true) {
+        throw new BadRequestException(formatMessage(MSG.handover_photo_notice_required, { years }));
+      }
 
+      const signedAt = new Date();
       await tx.contractHandover.update({
         where: { id: handover.id },
-        data: { status: 'SIGNED', signedAt: new Date(), signedBy: dto.signedBy.trim() },
+        data: {
+          status: 'SIGNED',
+          signedAt,
+          signedBy: dto.signedBy.trim(),
+          ...(photos > 0 ? { photoNoticeYears: years, photoNoticeAt: signedAt } : {}),
+        },
       });
 
       return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: CONTRACT_INCLUDE }));

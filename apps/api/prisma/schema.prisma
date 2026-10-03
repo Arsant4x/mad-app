@@ -3923,6 +3923,12 @@ model ContractHandover {
   signedAt DateTime?
   signedBy String?
 
+  /// ⚖️ إعلامُ المستأجر بحفظ الصور (`ق-١٦٠٠` · السؤال ٢٤٣): نموذجٌ عليه صورٌ لا يُوقَّع إلا بإقرار الموقِّع أن المستأجرَ
+  /// أُعلم بمدّة حفظها، فتُختم المدّةُ المعلنة يومَها ووقتُ الإعلام مع التوقيع بساعة الخادم. والمدّةُ من مدد الحفظ
+  /// (`RETENTION_YEARS.realEstate`) لا رقمٌ يُكتب، وما خُتم يُقرأ لاحقاً كما قيل يومَها ولو تغيّرت المدّة.
+  photoNoticeYears Int?
+  photoNoticeAt    DateTime?
+
   items HandoverItem[]
 
   createdAt DateTime @default(now())
