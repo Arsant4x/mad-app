@@ -199,6 +199,9 @@ export interface CreateContractDto {
   unitId: string;
   classification: 'RESIDENTIAL' | 'COMMERCIAL';
   vatInclusion: 'INCLUSIVE' | 'EXCLUSIVE';
+  lessor?: 'COMPANY' | 'OWNER';
+  ownerName?: string;
+  ownerVatNumber?: string;
   customerId: string;
   value: number;
   cycle: 'monthly' | 'quarterly' | 'semiannual' | 'annual';
@@ -931,6 +934,9 @@ export interface RenewContractDto {
   end: string;
   classification: 'RESIDENTIAL' | 'COMMERCIAL';
   vatInclusion: 'INCLUSIVE' | 'EXCLUSIVE';
+  lessor?: 'COMPANY' | 'OWNER';
+  ownerName?: string;
+  ownerVatNumber?: string;
   value?: number;
   cycle?: 'monthly' | 'quarterly' | 'semiannual' | 'annual';
   no?: string;
@@ -1248,6 +1254,9 @@ export interface UpdateContractDto {
   ejarNo?: string;
   classification?: 'RESIDENTIAL' | 'COMMERCIAL';
   vatInclusion?: 'INCLUSIVE' | 'EXCLUSIVE';
+  lessor?: 'COMPANY' | 'OWNER';
+  ownerName?: string;
+  ownerVatNumber?: string;
 }
 
 /** جسمُ طلب — `UpdateCurrencyDto` في الخادم. */

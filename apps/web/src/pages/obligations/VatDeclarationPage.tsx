@@ -437,6 +437,13 @@ export function VatDeclarationPage() {
                 <b>{declaration.rent.managedCount}</b> استحقاقاً لعقاراتِ تشغيلٍ ({fmt(declaration.rent.managedExcluded)}) — توريدُ مالكها، لا يدخل إقرارك.
               </p>
             )}
+            {/* ⚖️ المالكُ مؤجّراً (السؤال ٥٧٧ · ق-١٦٠٠): إيجارُه يُعدّ ولا يدخل، وعمولتُك عليه داخلةٌ في المبيعات الخاضعة أعلاه. */}
+            {declaration.rent.ownerCount > 0 && (
+              <p className="hint" style={{ marginTop: 6 }} data-testid="vat-owner-rent">
+                <b>{declaration.rent.ownerCount}</b> قبضاً لعقودٍ مؤجّرُها المالك ({fmt(declaration.rent.ownerCollected)}) — توريدُ المالك، لا يدخل إقرارك. وعمولتُك
+                عليها {fmt(declaration.rent.commissionStandard)} وضريبتُها {fmt(declaration.rent.commissionStandardVat)} داخلتان في المبيعات الخاضعة بالنسبة الأساسية.
+              </p>
+            )}
             {declaration.rent.pendingCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
                 <b>{declaration.rent.pendingCount}</b> قسطاً حلّ ولم يُرحَّل استحقاقُه بعد — {declaration.rent.pendingNote}

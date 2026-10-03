@@ -75,4 +75,37 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     expect(onCreateCustomer.mock.calls[1][0]).toMatchObject({ name: 'خالد الدوسري', kind: 'NATURAL', allowSameName: true });
     await waitFor(() => expect((screen.getByRole('listbox') as HTMLSelectElement).value).toBe('c9'));
   });
+
+  it('④ ⚖️ عقارُ تشغيل: المؤجّرُ يُعلَن ولا يُفترض، والمالكُ مؤجّراً يُرسل اسمَه ورقمَه (السؤال ٥٧٧)', async () => {
+    const managedProperty = { id: 'p1', name: 'عقار التشغيل', ownership: 'managed', opRate: '10.00' } as unknown as Property;
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ContractModal units={[unit]} properties={[managedProperty]} customers={[customer('c1', 'سعد الغامدي')]} onCancel={() => {}} onSave={onSave} onCreateCustomer={vi.fn()} />);
+    fireEvent.change(screen.getByRole('listbox'), { target: { value: 'c1' } });
+    fillRequired();
+    // بلا مؤجّرٍ مختار لا يُرسل شيء.
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(screen.getByText(/اختر المؤجّر/)).toBeTruthy());
+    expect(onSave).not.toHaveBeenCalled();
+    // والمالكُ مؤجّراً بلا اسمه لا يُرسل كذلك.
+    fireEvent.change(screen.getByLabelText('من المؤجّر في العقد؟'), { target: { value: 'OWNER' } });
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(screen.getByText(/اكتب اسم المالك/)).toBeTruthy());
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('اسم المالك'), { target: { value: 'مالكُ المحلّات' } });
+    fireEvent.change(screen.getByLabelText('الرقم الضريبيّ للمالك'), { target: { value: '300000000000003' } });
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ lessor: 'OWNER', ownerName: 'مالكُ المحلّات', ownerVatNumber: '300000000000003' });
+  });
+
+  it('⑤ وعلى عقارٍ مملوك لا حقلَ للمؤجّر ولا يُرسل — فالمؤجّرُ المنشأةُ واقعةً', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ContractModal units={[unit]} properties={[property]} customers={[customer('c1', 'سعد الغامدي')]} onCancel={() => {}} onSave={onSave} onCreateCustomer={vi.fn()} />);
+    expect(screen.queryByLabelText('من المؤجّر في العقد؟')).toBeNull();
+    fireEvent.change(screen.getByRole('listbox'), { target: { value: 'c1' } });
+    fillRequired();
+    fireEvent.click(screen.getByText('إضافة العقد'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty('lessor');
+  });
 });

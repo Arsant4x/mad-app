@@ -83,6 +83,7 @@ async function seed(companyId: string): Promise<void> {
         cycle: 'monthly',
         classification: 'RESIDENTIAL' as const,
         vatInclusion: 'EXCLUSIVE' as const,
+        lessor: 'COMPANY' as const,
         start: new Date(Date.UTC(startYear, startMonth - 1, 1)),
         end: new Date(Date.UTC(startYear + 1, startMonth - 1, 1)),
         baseValue: 12000,

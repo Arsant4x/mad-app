@@ -1,7 +1,7 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import type { Unit } from './units';
-import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
+import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
 import type { CancelContractDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
 
 export type { ContractStatus };
@@ -12,6 +12,8 @@ export type { Furnished };
 export type { ContractClassification };
 /** أقيمةُ العقد شاملةٌ لضريبة القيمة المضافة أم لا — تُعلَن ولا تُفترض (ق-٨٩٢). */
 export type { ContractVatInclusion };
+/** ⚖️ من المؤجّر (السؤال ٥٧٧ · ق-١٦٠٠) — يُعلَن على عقار التشغيل؛ والقيمةُ القديمة لعقدٍ عليه سبق الحقل. */
+export type { ContractLessor };
 export type DeclaredClassification = Exclude<ContractClassification, 'LEGACY_UNCLASSIFIED'>;
 export type DeclaredVatInclusion = Exclude<ContractVatInclusion, 'LEGACY_UNDECLARED'>;
 /** مولَّدٌ من `InstallmentStatus` في المخطّط عبر سجلّ التعدادات (`ق-١٣٨٤` — وكان منسوخاً بيدٍ: دَينُ 4.5) — `PARTIAL` مسدَّدٌ بعضُه، تُشتقّ من المقبوض مقابل الإجماليّ (ق-١٠٤٠). */
@@ -52,7 +54,8 @@ export interface RentPayment {
 export interface Contract {
   id: string;
   unitId: string;
-  unit: Unit & { property: { id: string; name: string } };
+  /** والملكيةُ تقرّر هل يُعلَن المؤجّر (عقارُ التشغيل وحدَه — السؤال ٥٧٧). */
+  unit: Unit & { property: { id: string; name: string; ownership?: string } };
   customerId: string | null;
   /** بطاقةُ العميل — مصدرُ الحقيقة؛ `tenant`/`phone` أدناه مشتقّان منها عند القراءة (ق-١٠٢٨/①⑥). */
   customer?: { id: string; name: string; phone: string | null; archived: boolean } | null;
@@ -69,6 +72,9 @@ export interface Contract {
   furnished: Furnished | null;
   classification: ContractClassification;
   vatInclusion: ContractVatInclusion;
+  lessor: ContractLessor;
+  ownerName: string | null;
+  ownerVatNumber: string | null;
   status: ContractStatus;
   cancelDate: string | null;
   cancelReason: string | null;

@@ -1,4 +1,4 @@
-import { pendingTaxPoints, quarterOf, rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from './rent-tax-point.util';
+import { ownerCollectionSplit, pendingTaxPoints, quarterOf, rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from './rent-tax-point.util';
 
 /**
  * **محرّكُ نقطة الضريبة — مُثبَتٌ بحالاتٍ جوابُها معروفٌ يداً** (`ق-٩٢٤` · `ق-٩٢٧/٤`).
@@ -10,10 +10,11 @@ import { pendingTaxPoints, quarterOf, rentAmountsOf, rentTaxTreatment, splitGros
 const d = (s: string) => new Date(s);
 
 describe('محرّكُ نقطة الضريبة للإيجار (م٢٠ · ق-٩٢٤)', () => {
-  const commercialExclusive = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'owned')!;
-  const commercialInclusive = rentTaxTreatment('COMMERCIAL', 'INCLUSIVE', 'owned')!;
-  const residential = rentTaxTreatment('RESIDENTIAL', 'EXCLUSIVE', 'owned')!;
-  const managed = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'managed')!;
+  const commercialExclusive = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'COMPANY')!;
+  const commercialInclusive = rentTaxTreatment('COMMERCIAL', 'INCLUSIVE', 'COMPANY')!;
+  const residential = rentTaxTreatment('RESIDENTIAL', 'EXCLUSIVE', 'COMPANY')!;
+  // ⚖️ المالكُ مؤجّر (السؤال ٥٧٧ · ق-١٦٠٠): المستأجرُ يدفع ضريبةَ المالك، ولا تدخل إقرارَ المنشأة.
+  const managed = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'OWNER')!;
 
   it('⚖️ مثالُ المالك: مئةٌ من خمسة آلافٍ قبل شهرٍ — المئةُ بتاريخها والباقي عند الاستحقاق', () => {
     const points = taxPointsOfInstallment({
@@ -85,10 +86,22 @@ describe('محرّكُ نقطة الضريبة للإيجار (م٢٠ · ق-٩٢
     expect(rentAmountsOf(1000, commercialExclusive)).toEqual({ gross: 1150, net: 1000, tax: 150 });
     expect(rentAmountsOf(1150, commercialInclusive)).toEqual({ gross: 1150, net: 1000, tax: 150 });
     expect(rentAmountsOf(1000, residential)).toEqual({ gross: 1000, net: 1000, tax: 0 });
-    // عقارُ تشغيل: تجاريٌّ بلا ضريبةٍ عندنا — يُعدّ ويُعلَن.
-    expect(rentAmountsOf(1000, managed)).toEqual({ gross: 1000, net: 1000, tax: 0 });
+    // ⚖️ المالكُ مؤجّراً على تجاريّ: المستأجرُ يدفع الألفَ وضريبتَها (ضريبةُ المالك)، وليست مخرجاتِ المنشأة.
+    expect(rentAmountsOf(1000, managed)).toEqual({ gross: 1150, net: 1000, tax: 150 });
     expect(managed.managed).toBe(true);
     expect(managed.taxable).toBe(false);
+    expect(managed.chargesVat).toBe(true);
+  });
+
+  it('⚖️ قسمةُ ما يُقبض لمالكٍ مؤجّر (السؤال ٥٧٧): العمولةُ على المقبوض بلا ضريبة المالك، وضريبتُها ١٥٪ منها', () => {
+    // سكنيٌّ: ألفٌ بلا ضريبة ⇒ العمولةُ 100 وضريبتُها 15 ⇒ للمالك 885.
+    const residentialOwner = rentTaxTreatment('RESIDENTIAL', 'EXCLUSIVE', 'OWNER')!;
+    expect(ownerCollectionSplit(1000, residentialOwner, 10)).toEqual({ ownerVat: 0, commission: 100, commissionTax: 15, ownerShare: 885 });
+    // تجاريٌّ: 1150 فيها 150 ضريبةُ المالك ⇒ العمولةُ على الألف 100 وضريبتُها 15 ⇒ للمالك 1035.
+    expect(ownerCollectionSplit(1150, managed, 10)).toEqual({ ownerVat: 150, commission: 100, commissionTax: 15, ownerShare: 1035 });
+    // والمجموعُ يساوي المقبوضَ دائماً، ولو بنسبةٍ كسرية تُقرَّب.
+    const s = ownerCollectionSplit(333.33, residentialOwner, 7.5);
+    expect(s.commission + s.commissionTax + s.ownerShare).toBeCloseTo(333.33, 2);
   });
 
   it('وقسمةُ المقبوض إجماليّاً: 115 ⇒ 100 + 15', () => {
@@ -97,8 +110,12 @@ describe('محرّكُ نقطة الضريبة للإيجار (م٢٠ · ق-٩٢
   });
 
   it('⛔ العقدُ القديم غيرُ المصنَّف أو غيرُ معلَنِ الشمول بلا معاملة — لا يُستحقّ ولا يدخل الإقرار', () => {
-    expect(rentTaxTreatment('LEGACY_UNCLASSIFIED', 'EXCLUSIVE', 'owned')).toBeNull();
-    expect(rentTaxTreatment('COMMERCIAL', 'LEGACY_UNDECLARED', 'owned')).toBeNull();
-    expect(rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'leased')?.taxable).toBe(true);
+    expect(rentTaxTreatment('LEGACY_UNCLASSIFIED', 'EXCLUSIVE', 'COMPANY')).toBeNull();
+    expect(rentTaxTreatment('COMMERCIAL', 'LEGACY_UNDECLARED', 'COMPANY')).toBeNull();
+    // ⚖️ وعقدٌ على عقار تشغيلٍ لم يُعلَن مؤجّرُه بلا معاملةٍ كذلك (السؤال ٥٧٧).
+    expect(rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'LEGACY_UNDECLARED')).toBeNull();
+    expect(rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'COMPANY')?.taxable).toBe(true);
+    // والسكنيُّ المؤجَّرُ من المالك بلا ضريبةٍ يدفعها المستأجر.
+    expect(rentTaxTreatment('RESIDENTIAL', 'EXCLUSIVE', 'OWNER')?.chargesVat).toBe(false);
   });
 });

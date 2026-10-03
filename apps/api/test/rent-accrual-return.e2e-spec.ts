@@ -122,7 +122,8 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
 
   async function makeProperty(ownership: 'owned' | 'leased' | 'managed') {
     const tag = `${suffix}-${++seq}`;
-    const property = (await auth(http().post('/properties')).send({ name: `عقار الاستحقاق ${tag}`, ownership }).expect(201)).body;
+    // عقارُ التشغيل بنسبة عمولةٍ معلَنة — شرطُ عقدٍ مؤجّرُه المالك (السؤال ٥٧٧).
+    const property = (await auth(http().post('/properties')).send({ name: `عقار الاستحقاق ${tag}`, ownership, ...(ownership === 'managed' ? { opRate: 10 } : {}) }).expect(201)).body;
     const unit = (await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `AC-${tag}`, type: 'تجاري', rentMonthly: 1000 }).expect(201)).body;
     return { property, unit, tag };
   }
@@ -132,6 +133,8 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     classification: 'RESIDENTIAL' | 'COMMERCIAL';
     vatInclusion: 'INCLUSIVE' | 'EXCLUSIVE';
     ownership?: 'owned' | 'leased' | 'managed';
+    /** ⚖️ على عقار التشغيل يُعلَن المؤجّر (السؤال ٥٧٧) — وحين المالك: اسمُه ورقمُه. */
+    lessor?: 'COMPANY' | 'OWNER';
     start: Date;
     value: number;
   }) {
@@ -142,6 +145,8 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
         .send({
           classification: opts.classification,
           vatInclusion: opts.vatInclusion,
+          ...(opts.lessor ? { lessor: opts.lessor } : {}),
+          ...(opts.lessor === 'OWNER' ? { ownerName: `مالك ${tag}`, ownerVatNumber: '300000000000003' } : {}),
           unitId: unit.id,
           customerId: await createTenantCustomer(app, token, `مستأجر الاستحقاق ${tag}`),
           value: opts.value,
@@ -344,20 +349,23 @@ describe('⭐ الحارسُ الحيّ: الدفترُ والإقرارُ مع�
     expect(d.receivable).toBeCloseTo(0, 2);
   }, 60000);
 
-  it('🔴 ⑥ عقارُ تشغيل: تجاريٌّ بلا 2200 — يُعدّ ويُعلَن', async () => {
+  // ⚖️ كانت هذه المرحلةُ تحرس السلوكَ القديم: عقارُ التشغيل كلُّه توريدٌ لمالكه، فالتجاريُّ بلا 2200 ويُستحقّ ذمّةً وإيراداً
+  //    للمنشأة. وحكمُ صاحب المشروع (السؤال ٥٧٧ · ق-١٦٠٠): الفيصلُ المؤجّرُ على العقد — فسقطت على الصواب وصُحّحت (§8.14
+  //    الوجه الثالث). والمنشأةُ مؤجّرةً على التشغيل، والعمولةُ وإيجارُ المالك في الإقرار، في `contract-lessor.e2e-spec.ts`.
+  it('🔴 ⑥ عقارُ تشغيل مؤجّرُه المالك: لا استحقاقَ ولا ذمّةَ ولا 2200 — الإيجارُ أمانةٌ للمالك لا توريدُ المنشأة', async () => {
     const before = await snapshot(thisQuarter);
-    const contract = await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', ownership: 'managed', start: thisQuarterStart, value: 12000 });
+    const contract = await makeContract({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', ownership: 'managed', lessor: 'OWNER', start: thisQuarterStart, value: 12000 });
     const after = await snapshot(thisQuarter);
     const d = delta(before, after);
 
-    const n = dueByToday(contract).length;
-    expect(d.managedExcluded).toBeCloseTo(1000 * n, 2);
-    expect(d.managedCount).toBe(n);
+    expect(dueByToday(contract).length).toBeGreaterThan(0);
+    expect(d.managedExcluded).toBeCloseTo(0, 2);
+    expect(d.managedCount).toBe(0);
     expect(d.standard).toBeCloseTo(0, 2);
     expect(d.standardVat).toBeCloseTo(0, 2);
     expect(d.outputVat).toBeCloseTo(0, 2);
-    // الإيرادُ نفسُه يُستحقّ صافياً (بحدّ موجز التشغيل) والذمّةُ بالقسط.
-    expect(d.receivable).toBeCloseTo(1000 * n, 2);
+    // ولا ذمّةَ للمنشأة: ما يدين به المستأجرُ دَينُ المالك، والمنشأةُ تحصّله وكيلاً.
+    expect(d.receivable).toBeCloseTo(0, 2);
   }, 60000);
 
   /** ② مبالغُ التقريرين نصٌّ بخانتين (`ق-١٢٣٥`): يُثبَت شكلُها ثم تُقرأ رقماً — والفروقُ أدناه على الأرقام كما كانت. */

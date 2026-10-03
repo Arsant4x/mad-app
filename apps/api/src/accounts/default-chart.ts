@@ -3,6 +3,12 @@ import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
 import { RETAINED_EARNINGS_CODE, RETAINED_EARNINGS_NAME } from '../fiscal/year-closing.util';
 import { WRITEOFF_EXPENSE_ACCOUNT_CODE, WRITEOFF_EXPENSE_ACCOUNT_NAME } from '../journal/writeoff-account.util';
 import { INVENTORY_VARIANCE_ACCOUNT_CODE, INVENTORY_VARIANCE_ACCOUNT_NAME } from '../journal/inventory-variance-account.util';
+import {
+  OPERATING_COMMISSION_ACCOUNT_CODE,
+  OPERATING_COMMISSION_ACCOUNT_NAME,
+  OWNER_SHARE_ACCOUNT_CODE,
+  OWNER_SHARE_ACCOUNT_NAME,
+} from '../journal/owner-rent-accounts.util';
 
 /**
  * دليل الحسابات الافتراضي — المصدر الوحيد الذي تُولد به كل منشأة جديدة.
@@ -65,6 +71,8 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   // إيرادٌ قُبض عن خدمةٍ لم تُقدَّم بعد — يتحوّل إيراداً على مدّة الخدمة لا
   // لحظةَ القبض. وللمنشآت القائمة يُنشأ عند أول تحوّل (ق-٤٧١).
   { code: '2400', name: 'إيرادات مؤجَّلة', type: 'liability' },
+  // ⚖️ ما يُقبض لمالكٍ مؤجّرٍ والمنشأةُ وكيلُه (السؤال ٥٧٧ · ق-١٦٠٠): أمانةٌ تُدفع له، لا إيراد. وللقائمة عند أوّل قبض.
+  { code: OWNER_SHARE_ACCOUNT_CODE, name: OWNER_SHARE_ACCOUNT_NAME, type: 'liability' },
 
   // ── حقوق الملكية ────────────────────────────────────────────────────────
   // الطرف المقابل لكل رصيد افتتاحي (3.8). يُنشئه opening-balance.util عند
@@ -79,6 +87,8 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   // ── الإيرادات ───────────────────────────────────────────────────────────
   { code: '4100', name: 'إيرادات المبيعات', type: 'revenue' },
   { code: '4200', name: 'إيرادات الإيجار', type: 'revenue' },
+  // ⚖️ وعمولةُ الوكيل عليه إيرادُه وحدَه، بضريبتها دائماً (السؤال ٥٧٧ · ق-١٦٠٠). وللقائمة عند أوّل قبض.
+  { code: OPERATING_COMMISSION_ACCOUNT_CODE, name: OPERATING_COMMISSION_ACCOUNT_NAME, type: 'revenue' },
   // مستقرّ الوديعة المصادرة والمطالبات: ليست إيجاراً، فلا تُضخِّم 4200.
   { code: '4300', name: 'إيرادات أخرى', type: 'revenue' },
 

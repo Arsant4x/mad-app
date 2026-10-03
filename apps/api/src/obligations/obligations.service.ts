@@ -36,8 +36,10 @@ import { LINE_ORDER } from '../common/document-lines.util';
  *   ① **ما سبق البناء** (أقساطٌ على أساس القبض ودفعاتٌ بلا قسطٍ سبقت): يُحسب هنا بالمحرّك
  *      نفسِه (`rent-tax-point.util`) ويدخل الإقرار **ولا يُرحَّل** — «في الإقرار لا في
  *      الدفتر»، الاستثناءُ الوحيد من «الدفتر = الإقرار» (`ق-٩٢٦`).
- *   ② **عقودٌ قديمة غيرُ مصنَّفة**: لا تدخل — تُعدّ حتى تُصنَّف بيدٍ (`ق-٨٩٨`).
- *   ③ **عقاراتُ التشغيل** (`managed`): توريدُ مالكها — تُعدّ ولا تدخل (`ق-٨٩٣`).
+ *   ② **عقودٌ قديمة غيرُ مصنَّفة**، أو على عقار تشغيلٍ لم يُعلَن مؤجّرُها: لا تدخل — تُعدّ حتى تُعلَن بيدٍ (`ق-٨٩٨`).
+ *   ③ ⚖️ **عقودٌ مؤجّرُها المالك** (السؤال ٥٧٧ · `ق-١٦٠٠`): الإيجارُ توريدُ المالك — يُعدّ المقبوضُ له ولا يدخل؛ **وعمولةُ
+ *      المنشأة عليه توريدٌ خاضعٌ يدخل الخانةَ ١ بضريبته** بتاريخ القبض، من صفّ الدفعة نفسِها. (وصفوفُ «تشغيل» القديمة
+ *      التي كُتبت قبل الحقل تُعدّ كما كانت.)
  */
 export interface RentDeclarationSection {
   /** الخاضعُ من الاستحقاق (صافياً) وضريبتُه — صفوفٌ بقيد. */
@@ -45,9 +47,15 @@ export interface RentDeclarationSection {
   standardVat: number;
   /** المعفى (سكنيٌّ) من الاستحقاق — صفُّ «المبيعات المعفاة». */
   exempt: number;
-  /** عقاراتُ التشغيل — تُعدّ ولا تدخل. */
+  /** صفوفُ «تشغيل» كُتبت قبل حقل المؤجّر، وقديمُ ما سبق البناء لعقدٍ مؤجّرُه المالك — تُعدّ ولا تدخل. */
   managedExcluded: number;
   managedCount: number;
+  /** ⚖️ عمولةُ المنشأة على قبض إيجار المالكين (صافياً) وضريبتُها — تدخل الخانةَ ١. */
+  commissionStandard: number;
+  commissionStandardVat: number;
+  /** ⚖️ ما قُبض لعقودٍ مؤجّرُها المالك (بضريبة المالك إن وُجدت) وعددُ دفعاته — يُعدّ ولا يدخل. */
+  ownerCollected: number;
+  ownerCount: number;
   /** ما سبق البناء — يدخل الإقرار ولا يحمله الدفتر. */
   legacyStandard: number;
   legacyStandardVat: number;
@@ -572,11 +580,14 @@ export class ObligationsService {
    */
   private async trailingTaxableSupplies(tx: Prisma.TransactionClient, period: ResolvedVatPeriod): Promise<number | null> {
     const window = trailingTwelveMonths(period);
-    const [invoiceAgg, rentAgg] = await Promise.all([
+    // ⚖️ وعمولةُ المنشأة على إيجار المالكين توريدٌ خاضعٌ لها (السؤال ٥٧٧) — تدخل الحدَّين معاً.
+    const [invoiceAgg, rentAgg, commissionAgg] = await Promise.all([
       tx.invoice.aggregate({ _sum: { baseSubtotal: true }, where: { issueDate: { gte: window.from, lte: window.to }, ...NOT_REPLACED_REJECTED } }),
       tx.rentAccrual.aggregate({ _sum: { amountNet: true }, where: { date: { gte: window.from, lte: window.to }, managed: false } }),
+      tx.rentPayment.aggregate({ _sum: { baseCommission: true }, where: { date: { gte: window.from, lte: window.to }, baseCommission: { not: null } } }),
     ]);
-    const upperBound = round2(Number(invoiceAgg._sum.baseSubtotal ?? 0) + Number(rentAgg._sum.amountNet ?? 0));
+    const commissionNet = Number(commissionAgg._sum.baseCommission ?? 0);
+    const upperBound = round2(Number(invoiceAgg._sum.baseSubtotal ?? 0) + Number(rentAgg._sum.amountNet ?? 0) + commissionNet);
     if (upperBound <= MONTHLY_PERIOD_THRESHOLD) return null;
 
     // فوق الحدّ الأعلى: يُقاس الخاضعُ بعينه بالمحرّك نفسِه — الخانةُ `1` والصفرُ والصادرات،
@@ -590,7 +601,7 @@ export class ObligationsService {
     ]);
     const boxes = salesBoxesFromLines(invoices.map((v) => ({ sign: adjustmentSign(v.docType, 'CREDIT_NOTE'), exchangeRate: Number(v.exchangeRate), lines: v.lines })));
     const rentStandard = rentRows.reduce((s, r) => s + Number(r.amountNet) * Number(r.exchangeRate), 0);
-    const exact = round2(boxes.box1.net + boxes.box3.net + boxes.box4.net + rentStandard);
+    const exact = round2(boxes.box1.net + boxes.box3.net + boxes.box4.net + rentStandard + commissionNet);
     return exact > MONTHLY_PERIOD_THRESHOLD ? exact : null;
   }
 
@@ -659,9 +670,9 @@ export class ObligationsService {
       const prepaymentsAppliedNet = round2(prepaymentsApplied.reduce((s, p) => s + Number(p.net) * Number(p.prepaymentInvoice.exchangeRate), 0));
       const prepaymentsAppliedVat = round2(prepaymentsApplied.reduce((s, p) => s + Number(p.vat) * Number(p.prepaymentInvoice.exchangeRate), 0));
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
-      // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز).
-      const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard);
-      const salesStandardVat = round2(boxes.box1.vat + rent.standardVat + rent.legacyStandardVat);
+      // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز). ⚖️ وعمولةُ المنشأة على إيجار المالكين خاضعةٌ (السؤال ٥٧٧).
+      const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard + rent.commissionStandard);
+      const salesStandardVat = round2(boxes.box1.vat + rent.standardVat + rent.legacyStandardVat + rent.commissionStandardVat);
       const salesExempt = round2(boxes.box5.net + rent.exempt + rent.legacyExempt);
       const salesZeroRatedDomestic = boxes.box3.net;
       const salesExports = boxes.box4.net;
@@ -884,6 +895,9 @@ export class ObligationsService {
           standardVat: money(rent.standardVat),
           exempt: money(rent.exempt),
           managedExcluded: money(rent.managedExcluded),
+          commissionStandard: money(rent.commissionStandard),
+          commissionStandardVat: money(rent.commissionStandardVat),
+          ownerCollected: money(rent.ownerCollected),
           legacyStandard: money(rent.legacyStandard),
           legacyStandardVat: money(rent.legacyStandardVat),
           legacyExempt: money(rent.legacyExempt),
@@ -962,19 +976,31 @@ export class ObligationsService {
     });
     const sum = (pick: (r: (typeof rows)[number]) => boolean, field: 'baseNet' | 'baseTax') => round2(rows.filter(pick).reduce((s, r) => s + Number(r[field]), 0));
 
+    // ⚖️ قبضُ إيجار المالكين (السؤال ٥٧٧ · ق-١٦٠٠): العمولةُ وضريبتُها على صفّ الدفعة بتاريخها — الخاضعُ للمنشأة —
+    // والمقبوضُ للمالك يُعدّ ولا يدخل. صفُّ الدفعة نفسُه هو ما رُحّل منه قيدُ القبض، فيستوي الدفترُ والإقرار.
+    const commission = await tx.rentPayment.aggregate({
+      where: { date: { gte: from, lte: to }, baseCommission: { not: null } },
+      _sum: { baseNetAmount: true, baseCommission: true, baseCommissionTax: true },
+      _count: { _all: true },
+    });
+
     const section: RentDeclarationSection = {
       standard: sum((r) => r.taxable, 'baseNet'),
       standardVat: sum((r) => r.taxable, 'baseTax'),
-      exempt: sum((r) => r.classification === 'RESIDENTIAL', 'baseNet'),
+      exempt: sum((r) => r.classification === 'RESIDENTIAL' && !r.managed, 'baseNet'),
       managedExcluded: sum((r) => r.managed, 'baseNet'),
       managedCount: rows.filter((r) => r.managed).length,
+      commissionStandard: round2(Number(commission._sum.baseCommission ?? 0)),
+      commissionStandardVat: round2(Number(commission._sum.baseCommissionTax ?? 0)),
+      ownerCollected: round2(Number(commission._sum.baseNetAmount ?? 0)),
+      ownerCount: commission._count._all,
       legacyStandard: 0,
       legacyStandardVat: 0,
       legacyExempt: 0,
       legacyCount: 0,
       legacyNote: 'أقساطٌ ودفعاتٌ سبقت بناءَ الاستحقاق: تدخل الإقرار بنقطة ضريبتها ولا يحملها الدفتر — «ما سبق اللحظةَ: في الإقرار لا في الدفتر»',
       unclassifiedCount: 0,
-      unclassifiedNote: 'أقساطٌ ودفعاتٌ لعقودٍ قديمةٍ غيرِ مصنَّفة لا تدخل الإقرار حتى تُصنَّف من بطاقة العقد',
+      unclassifiedNote: 'أقساطٌ ودفعاتٌ لعقودٍ قديمةٍ غيرِ مصنَّفة، أو على عقار تشغيلٍ لم يُعلَن مؤجّرُها، لا تدخل الإقرار حتى تُعلَن من بطاقة العقد',
       unpostedCount: rows.filter((r) => r.journalEntryId === null).length,
       pendingCount: 0,
       pendingNote: 'أقساطٌ حلّت في هذا الربع ولم يُرحَّل استحقاقُها بعد — يرحّلها الكنسُ اليوميّ، وإن حجبتها فترةٌ مقفلة فافتحها',
@@ -989,7 +1015,8 @@ export class ObligationsService {
         accrualCompletedAt: null,
         status: { not: 'CANCELLED' },
         dueDate: { gte: from, lte: to < today ? to : today },
-        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' }, status: { not: 'DRAFT' } },
+        // ⚖️ وعقدٌ مؤجّرُه المالك لا يُستحقّ بالتصميم (السؤال ٥٧٧) — فلا يُعدّ معلّقاً.
+        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' }, lessor: 'COMPANY', status: { not: 'DRAFT' } },
       },
     });
 
@@ -1000,18 +1027,18 @@ export class ObligationsService {
         accrualBasis: 'LEGACY_COLLECTED',
         status: { not: 'CANCELLED' },
         OR: [{ dueDate: { gte: from, lte: to } }, { payments: { some: { date: { gte: from, lte: to } } } }],
-        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' }, status: { not: 'DRAFT' } },
+        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' }, lessor: { not: 'LEGACY_UNDECLARED' }, status: { not: 'DRAFT' } },
       },
       select: {
         dueDate: true,
         amount: true,
         exchangeRate: true,
         payments: { select: { id: true, date: true, amount: true } },
-        contract: { select: { classification: true, vatInclusion: true, unit: { select: { property: { select: { ownership: true } } } } } },
+        contract: { select: { classification: true, vatInclusion: true, lessor: true } },
       },
     });
     for (const i of legacyInstallments) {
-      const treatment = rentTaxTreatment(i.contract.classification, i.contract.vatInclusion, i.contract.unit.property.ownership);
+      const treatment = rentTaxTreatment(i.contract.classification, i.contract.vatInclusion, i.contract.lessor);
       if (!treatment) continue;
       const points = taxPointsOfInstallment({
         gross: rentAmountsOf(Number(i.amount), treatment).gross,
@@ -1026,27 +1053,29 @@ export class ObligationsService {
     }
 
     // ودفعاتٌ بلا قسطٍ سبقت البناء (لا صفَّ لها) لعقودٍ مصنَّفة — بقدرها بتاريخها.
+    // ⚖️ ودفعةٌ لعقدٍ مؤجّرُه المالك ليست منها وإن لم يكن لها صفّ: عمولتُها على صفّها معدودةٌ أعلاه (السؤال ٥٧٧).
     const legacyUnlinked = await tx.rentPayment.findMany({
       where: {
         installmentId: null,
         date: { gte: from, lte: to },
         accruals: { none: {} },
-        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' } },
+        baseCommission: null,
+        contract: { classification: { not: 'LEGACY_UNCLASSIFIED' }, vatInclusion: { not: 'LEGACY_UNDECLARED' }, lessor: { not: 'LEGACY_UNDECLARED' } },
       },
       select: {
         amount: true,
         exchangeRate: true,
-        contract: { select: { classification: true, vatInclusion: true, unit: { select: { property: { select: { ownership: true } } } } } },
+        contract: { select: { classification: true, vatInclusion: true, lessor: true } },
       },
     });
     for (const p of legacyUnlinked) {
-      const treatment = rentTaxTreatment(p.contract.classification, p.contract.vatInclusion, p.contract.unit.property.ownership);
+      const treatment = rentTaxTreatment(p.contract.classification, p.contract.vatInclusion, p.contract.lessor);
       if (!treatment) continue;
       this.addLegacyPoint(section, splitGrossAmount(Number(p.amount), treatment), Number(p.exchangeRate), treatment);
     }
 
-    // ② عقودٌ غيرُ مصنَّفة — تُعدّ ولا تدخل.
-    const unclassifiedWhere = { OR: [{ classification: 'LEGACY_UNCLASSIFIED' as const }, { vatInclusion: 'LEGACY_UNDECLARED' as const }] };
+    // ② عقودٌ غيرُ مصنَّفة، أو على عقار تشغيلٍ لم يُعلَن مؤجّرُها — تُعدّ ولا تدخل.
+    const unclassifiedWhere = { OR: [{ classification: 'LEGACY_UNCLASSIFIED' as const }, { vatInclusion: 'LEGACY_UNDECLARED' as const }, { lessor: 'LEGACY_UNDECLARED' as const }] };
     const [unclassifiedInstallments, unclassifiedPayments] = await Promise.all([
       tx.installment.count({ where: { dueDate: { gte: from, lte: to }, status: { not: 'CANCELLED' }, contract: unclassifiedWhere } }),
       tx.rentPayment.count({ where: { installmentId: null, date: { gte: from, lte: to }, contract: unclassifiedWhere } }),

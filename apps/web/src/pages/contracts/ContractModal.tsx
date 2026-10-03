@@ -65,6 +65,12 @@ export function ContractModal({
   // بلا قيمةٍ مسبقة عمداً: التصنيفُ وشمولُ الضريبة يُعلَنان لا يُفترضان (ق-٨٩١ · ق-٨٩٢).
   const [classification, setClassification] = useState<DeclaredClassification | ''>('');
   const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>('');
+  // ⚖️ من المؤجّر (السؤال ٥٧٧ · ق-١٦٠٠): يُعلَن على عقار التشغيل ولا يُفترض — فالضريبةُ تتبع من يُبرم العقدَ باسمه.
+  const [lessor, setLessor] = useState<'COMPANY' | 'OWNER' | ''>('');
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerVatNumber, setOwnerVatNumber] = useState('');
+  const selectedProperty = propertyById.get(units.find((u) => u.id === unitId)?.propertyId ?? '');
+  const managed = selectedProperty?.ownership === 'managed';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,6 +128,14 @@ export function ContractModal({
       setError(i18n.t('err_contract_classification'));
       return;
     }
+    if (managed && !lessor) {
+      setError('عقارُ تشغيل: اختر المؤجّر — المنشأةُ أم المالك');
+      return;
+    }
+    if (managed && lessor === 'OWNER' && !ownerName.trim()) {
+      setError('المالكُ مؤجّر: اكتب اسم المالك');
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -137,6 +151,8 @@ export function ContractModal({
         ejarNo: ejarNo.trim() || undefined,
         classification,
         vatInclusion,
+        ...(managed && lessor ? { lessor } : {}),
+        ...(managed && lessor === 'OWNER' ? { ownerName: ownerName.trim(), ownerVatNumber: ownerVatNumber.trim() || undefined } : {}),
         draft,
       });
     } catch (e) {
@@ -269,6 +285,39 @@ export function ContractModal({
             )}
           </div>
         </div>
+        {managed && (
+          <div className="two-col">
+            <div className="field">
+              <label htmlFor="contract-lessor">من المؤجّر في العقد؟</label>
+              <select id="contract-lessor" value={lessor} onChange={(e) => setLessor(e.target.value as 'COMPANY' | 'OWNER' | '')}>
+                <option value="">— اختر —</option>
+                <option value="COMPANY">المنشأة: وقّعت العقدَ باسمها مؤجّرة</option>
+                <option value="OWNER">مالكُ العقار: والمنشأةُ وكيلُه تحصّل عنه بعمولة</option>
+              </select>
+              {lessor === 'COMPANY' && (
+                <p className="hint" style={{ marginTop: 4 }}>
+                  الإيجارُ إيرادُ المنشأة: التجاريُّ عليه ضريبةٌ في إقرارها، والسكنيُّ معفى فيه.
+                </p>
+              )}
+              {lessor === 'OWNER' && (
+                <p className="hint" style={{ marginTop: 4 }}>
+                  الإيجارُ أمانةٌ للمالك لا إيراد، ولا يدخل إقرارَ المنشأة. <b>وعمولتُها إيرادُها وعليها ضريبة ١٥٪ دائماً</b>، من «نسبة عمولة التشغيل» في بطاقة العقار
+                  {selectedProperty?.opRate ? ` (${selectedProperty.opRate}٪)` : '؛ والعقارُ بلا نسبةٍ بعد فاكتبها هناك أوّلاً'}.
+                </p>
+              )}
+            </div>
+            {lessor === 'OWNER' && (
+              <div className="field">
+                <label htmlFor="contract-owner-name">اسم المالك</label>
+                <input id="contract-owner-name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="له يُدفع ما يُقبض" />
+                <label htmlFor="contract-owner-vat" style={{ marginTop: 6 }}>
+                  الرقم الضريبيّ للمالك{classification === 'COMMERCIAL' ? '' : ' (إن كان مسجَّلاً)'}
+                </label>
+                <input id="contract-owner-vat" className="num" value={ownerVatNumber} onChange={(e) => setOwnerVatNumber(e.target.value)} placeholder="3xxxxxxxxxxxxx3" />
+              </div>
+            )}
+          </div>
+        )}
         <div className="two-col">
           <div className="field">
             <label>قيمة العقد</label>

@@ -140,8 +140,8 @@ describe('Contract classification (e2e)', () => {
     let error = '';
     try {
       await tenantPrisma.runInTenantContext(company.companyId, (tx) =>
-        tx.$executeRaw(Prisma.sql`INSERT INTO "contracts" ("id","companyId","unitId","no","tenant","value","cycle","start","end","deposit","currency","exchangeRate","baseValue","status","classification","vatInclusion","createdAt","updatedAt")
-          SELECT ${`${id}-legacy-probe`}, "companyId", "unitId", ${`PROBE-${Date.now()}`}, "tenant", "value", "cycle", "start", "end", 0, "currency", "exchangeRate", "baseValue", 'DUE'::"ContractStatus", 'LEGACY_UNCLASSIFIED'::"ContractClassification", 'EXCLUSIVE'::"ContractVatInclusion", clock_timestamp(), clock_timestamp()
+        tx.$executeRaw(Prisma.sql`INSERT INTO "contracts" ("id","companyId","unitId","no","tenant","value","cycle","start","end","deposit","currency","exchangeRate","baseValue","status","classification","vatInclusion","lessor","createdAt","updatedAt")
+          SELECT ${`${id}-legacy-probe`}, "companyId", "unitId", ${`PROBE-${Date.now()}`}, "tenant", "value", "cycle", "start", "end", 0, "currency", "exchangeRate", "baseValue", 'DUE'::"ContractStatus", 'LEGACY_UNCLASSIFIED'::"ContractClassification", 'EXCLUSIVE'::"ContractVatInclusion", "lessor", clock_timestamp(), clock_timestamp()
           FROM "contracts" WHERE "id" = ${id}`),
       );
     } catch (e) {

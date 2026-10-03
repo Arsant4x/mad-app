@@ -124,7 +124,7 @@ describe('السدادُ الجزئي للقسط — PARTIAL مشتقّةٌ من
     expect((await pay(c.id, inst.id, 100)).installment.status).toBe('PARTIAL');
     const afterPartial = (await accrualsOf(inst.id)).map((a) => Number(a.amountGross));
     expect(afterPartial).toEqual([100]);
-    const treatment = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'owned');
+    const treatment = rentTaxTreatment('COMMERCIAL', 'EXCLUSIVE', 'COMPANY');
     expect(treatment).not.toBeNull();
     expect(rentAmountsOf(1000, treatment!).gross).toBe(1150);
     // بعد الحلول: الكنسُ يرحّل 1,050 الباقية رغم PARTIAL — لأنه لا يقرأ الحالة
@@ -161,14 +161,14 @@ describe('السدادُ الجزئي للقسط — PARTIAL مشتقّةٌ من
           amount: true,
           status: true,
           payments: { select: { netAmount: true, discount: true } },
-          contract: { select: { classification: true, vatInclusion: true, unit: { select: { property: { select: { ownership: true } } } } } },
+          contract: { select: { classification: true, vatInclusion: true, lessor: true } },
         },
       }),
     );
     expect(rows.length).toBeGreaterThan(5);
     const drift = rows
       .map((r) => {
-        const t = rentTaxTreatment(r.contract.classification, r.contract.vatInclusion, r.contract.unit.property.ownership);
+        const t = rentTaxTreatment(r.contract.classification, r.contract.vatInclusion, r.contract.lessor);
         const gross = t ? rentAmountsOf(Number(r.amount), t).gross : Number(r.amount);
         const settled = r.payments.reduce((s, p) => s + Number(p.netAmount) + Number(p.discount), 0);
         const derived = deriveSettlementStatus(settled, gross);
