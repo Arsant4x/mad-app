@@ -1,0 +1,45 @@
+"Cost per message in ARS on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,ARS,89.5620,37.6798,37.6798,n/a,n/a
+Brazil,ARS,90.5765,9.8547,9.8547,n/a,n/a
+Chile,ARS,128.8360,28.9845,28.9845,n/a,n/a
+Colombia,ARS,18.1153,1.1594,1.1594,n/a,n/a
+Egypt,ARS,93.3300,5.2172,5.2172,94.1995,n/a
+France,ARS,124.4883,43.4767,43.4767,n/a,n/a
+Germany,ARS,197.8190,79.7073,79.7073,n/a,n/a
+Hong Kong,ARS,106.0832,37.6798,37.6798,n/a,n/a
+Hungary,ARS,124.6332,50.7228,50.7228,n/a,n/a
+India,ARS,17.1008,2.0289,2.0289,44.0564,n/a
+Indonesia,ARS,59.5631,36.2306,36.2306,197.0944,n/a
+Israel,ARS,51.1576,7.6809,7.6809,n/a,n/a
+Italy,ARS,115.1625,43.4767,43.4767,n/a,n/a
+Malaysia,ARS,124.6332,20.2891,20.2891,60.5775,n/a
+Mexico,ARS,44.2013,12.3184,12.3184,n/a,n/a
+Netherlands,ARS,231.4410,72.4612,72.4612,n/a,n/a
+Nigeria,ARS,74.7799,9.7098,9.7098,108.6918,n/a
+Pakistan,ARS,68.5483,14.4922,14.4922,108.6918,n/a
+Peru,ARS,101.8804,28.9845,28.9845,n/a,n/a
+Poland,ARS,53.0415,17.6805,17.6805,n/a,n/a
+Qatar,ARS,49.4185,17.3906,17.3906,n/a,n/a
+Romania,ARS,124.6332,42.0274,42.0274,n/a,n/a
+Russia,ARS,116.2277,57.9689,57.9689,n/a,n/a
+Saudi Arabia,ARS,72.6061,15.5067,15.5067,86.6636,n/a
+Singapore,ARS,106.0832,23.1875,23.1875,n/a,n/a
+South Africa,ARS,54.9256,11.0141,11.0141,28.9845,n/a
+Spain,ARS,102.4963,28.9845,28.9845,n/a,n/a
+Turkey,ARS,15.7965,1.3043,1.3043,n/a,n/a
+United Arab Emirates,ARS,72.3163,22.7528,22.7528,73.9104,n/a
+United Kingdom,ARS,91.9967,31.8829,31.8829,n/a,n/a
+North America,ARS,36.2306,4.9274,4.9274,n/a,n/a
+Rest of Africa,ARS,32.6075,5.7969,5.7969,n/a,n/a
+Rest of Asia Pacific,ARS,106.0832,16.3762,16.3762,n/a,n/a
+Rest of Central & Eastern Europe,ARS,124.6332,30.7235,30.7235,n/a,n/a
+Rest of Latin America,ARS,107.2425,16.3762,16.3762,n/a,n/a
+Rest of Middle East,ARS,49.4185,13.1879,13.1879,n/a,n/a
+Rest of Western Europe,ARS,85.7940,24.7817,24.7817,n/a,n/a
+Other,ARS,87.5331,11.1590,11.1590,n/a,n/a

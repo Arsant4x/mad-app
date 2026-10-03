@@ -1,0 +1,45 @@
+"Cost per message in MYR on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,MYR,0.2492,0.1048,0.1048,n/a,n/a
+Brazil,MYR,0.2520,0.0274,0.0274,n/a,n/a
+Chile,MYR,0.3584,0.0806,0.0806,n/a,n/a
+Colombia,MYR,0.0504,0.0032,0.0032,n/a,n/a
+Egypt,MYR,0.2596,0.0145,0.0145,0.2621,n/a
+France,MYR,0.3463,0.1210,0.1210,n/a,n/a
+Germany,MYR,0.5503,0.2217,0.2217,n/a,n/a
+Hong Kong,MYR,0.2951,0.1049,0.1049,n/a,n/a
+Hungary,MYR,0.3467,0.1412,0.1412,n/a,n/a
+India,MYR,0.0476,0.0056,0.0056,0.1226,n/a
+Indonesia,MYR,0.1657,0.1008,0.1008,0.5483,n/a
+Israel,MYR,0.1423,0.0214,0.0214,n/a,n/a
+Italy,MYR,0.3204,0.1210,0.1210,n/a,n/a
+Malaysia,MYR,0.3467,0.0564,0.0564,0.1685,n/a
+Mexico,MYR,0.1230,0.0343,0.0343,n/a,n/a
+Netherlands,MYR,0.6439,0.2016,0.2016,n/a,n/a
+Nigeria,MYR,0.2080,0.0270,0.0270,0.3024,n/a
+Pakistan,MYR,0.1907,0.0403,0.0403,0.3024,n/a
+Peru,MYR,0.2834,0.0806,0.0806,n/a,n/a
+Poland,MYR,0.1476,0.0492,0.0492,n/a,n/a
+Qatar,MYR,0.1375,0.0484,0.0484,n/a,n/a
+Romania,MYR,0.3467,0.1170,0.1170,n/a,n/a
+Russia,MYR,0.3233,0.1613,0.1613,n/a,n/a
+Saudi Arabia,MYR,0.2020,0.0431,0.0431,0.2411,n/a
+Singapore,MYR,0.2951,0.0646,0.0646,n/a,n/a
+South Africa,MYR,0.1528,0.0306,0.0306,0.0806,n/a
+Spain,MYR,0.2851,0.0806,0.0806,n/a,n/a
+Turkey,MYR,0.0439,0.0036,0.0036,n/a,n/a
+United Arab Emirates,MYR,0.2012,0.0633,0.0633,0.2056,n/a
+United Kingdom,MYR,0.2560,0.0887,0.0887,n/a,n/a
+North America,MYR,0.1008,0.0137,0.0137,n/a,n/a
+Rest of Africa,MYR,0.0907,0.0161,0.0161,n/a,n/a
+Rest of Asia Pacific,MYR,0.2951,0.0456,0.0456,n/a,n/a
+Rest of Central & Eastern Europe,MYR,0.3467,0.0855,0.0855,n/a,n/a
+Rest of Latin America,MYR,0.2983,0.0456,0.0456,n/a,n/a
+Rest of Middle East,MYR,0.1375,0.0367,0.0367,n/a,n/a
+Rest of Western Europe,MYR,0.2387,0.0689,0.0689,n/a,n/a
+Other,MYR,0.2435,0.0310,0.0310,n/a,n/a

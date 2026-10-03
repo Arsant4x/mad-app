@@ -1,0 +1,391 @@
+لم يقرا	NONE	.claude/hooks/block-shell-text-writes.mjs:164	15	
+لم يقرا	NONE	.claude/hooks/block-shell-text-writes.mjs:207	27	
+لم يقرا	NONE	.claude/hooks/block-shell-text-writes.mjs:388	83	
+لم يقرا	NONE	.claude/hooks/block-shell-text-writes.mjs:432	77	
+لم يبحث	NONE	apps/api/prisma/migrations/20260915120000_supplier_payments/migration.sql:19	78	
+لم يقرا	NONE	apps/api/scripts/openapi-snapshot.ts:107	104	
+لم يقرا	NONE	apps/api/scripts/openapi-snapshot.ts:187	142	
+لم يقرا	NONE	apps/api/scripts/seed-demo-realestate.mjs:343	65	
+ميداني	NONE	apps/api/src/common/batches/declared-limits.ts:6	109	
+ميداني	NONE	apps/api/src/common/batches/declared-limits.ts:12	149	
+لم يقرا	NONE	apps/api/src/common/batches/stock-batch.util.ts:56	89	
+لم يقرا	NONE	apps/api/src/common/config/production-secrets.ts:123	183	
+لم يقرا	NONE	apps/api/src/common/external-text-storable.spec.ts:198	125	
+لم يقرا	NONE	apps/api/src/common/mail/mail-quota.util.spec.ts:34	87	
+لم يقرا	NONE	apps/api/src/common/mail/mail-quota.util.ts:9	79	
+لم يقرا	NONE	apps/api/src/common/mail/mail-quota.util.ts:37	110	
+لم يقرا	NONE	apps/api/src/common/openapi-contract.util.ts:176	94	
+لم يقرا	NONE	apps/api/src/common/purchase-categories.spec.ts:34	97	
+لم يقرا	NONE	apps/api/src/common/sequence-port-sealed.spec.ts:74	79	
+ميداني	NONE	apps/api/src/common/vat/exemption-reasons.ts:15	91	
+لم يقرا	NONE	apps/api/src/consent/consent.service.ts:184	92	
+لم يقرا	NONE	apps/api/src/delegations/delegation-log.live.spec.ts:43	74	
+لم يبحث	NONE	apps/api/src/deletion-requests/personal-data-erasure.service.ts:55	157	
+لم يقرا	NONE	apps/api/src/inventory/costing.live.spec.ts:178	78	
+لم يقرا	NONE	apps/api/src/inventory/inventory.service.ts:178	112	
+لم يقرا	NONE	apps/api/src/journal/dimension-coverage.live.spec.ts:106	70	
+لم يقرا	NONE	apps/api/src/tasks/task-model.ts:121	72	
+لم يقرا	NONE	apps/api/src/zatca/icv-concurrency.live.spec.ts:242	144	
+لم يقرا	NONE	apps/web/src/lib/apiError.ts:6	70	
+ميداني	NONE	apps/web/src/lib/batchLimits.ts:7	149	
+ميداني	NONE	apps/web/src/lib/vat.ts:71	211	
+ميداني	EXACT	CLAUDE.md:217	96	R296
+ميداني	FILE	CLAUDE.md:222	81	
+ميداني	EXACT	CLAUDE.md:233	78	R322
+اسيلة الجهات	EXACT	CLAUDE.md:268	131	R01,R36
+لم يقرا	FILE	CLAUDE.md:656	59	
+ميداني	EXACT	CLAUDE.md:785	181	R23
+لم يقرا	FILE	CLAUDE.md:1281	146	
+لم يبحث	FILE	CLAUDE.md:1733	51	
+لم يبحث	FILE	CLAUDE.md:1825	77	
+لم يقرا	FILE	CLAUDE.md:1968	93	
+لم يقرا	FILE	CLAUDE.md:1970	66	
+اسيلة الجهات	FILE	CLAUDE.md:2078	80	
+لم يقرا	FILE	CLAUDE.md:2383	37	
+لم يقرا	FILE	CLAUDE.md:2698	77	
+لم يبحث	EXACT	docs/decisions.md:171	427	R81,R83
+سوال للهيية	EXACT	docs/decisions.md:171	427	R81,R83
+لم يقرا	FILE	docs/decisions.md:186	671	
+لم يقرا	EXACT	docs/decisions.md:325	485	R87,R88,R90,R91,R92
+اسيلة الجهات	EXACT	docs/decisions.md:419	573	R174,R41,R166
+اسيلة الجهات	EXACT	docs/decisions.md:484	1517	R01,R12,R27,R36
+ميداني	FILE	docs/decisions.md:665	616	
+ميداني	NEAR	docs/decisions.md:687	927	R52
+ميداني	EXACT	docs/decisions.md:689	569	R52
+ميداني	NEAR	docs/decisions.md:690	1405	R52
+لم يقرا	FILE	docs/decisions.md:714	917	
+ميداني	EXACT	docs/decisions.md:720	1318	R52
+ميداني	EXACT	docs/decisions.md:789	1271	R36,R52,R150
+ميداني	FILE	docs/decisions.md:793	592	
+ميداني	EXACT	docs/decisions.md:798	1107	R295
+لم يبحث	FILE	docs/decisions.md:826	598	
+لم يبحث	FILE	docs/decisions.md:994	722	
+ميداني	FILE	docs/decisions.md:1073	469	
+ميداني	EXACT	docs/decisions.md:1078	462	R296,R114
+لم يقرا	FILE	docs/decisions.md:1087	1404	
+ميداني	EXACT	docs/decisions.md:1095	1015	R114,R297
+لم يقرا	EXACT	docs/decisions.md:1111	1190	R179,R180
+لم يبحث	EXACT	docs/decisions.md:1111	1190	R179,R180
+لم يبحث	FILE	docs/decisions.md:1120	560	
+لم يقرا	EXACT	docs/decisions.md:1138	1030	R179
+ميداني	FILE	docs/decisions.md:1177	784	
+ميداني	EXACT	docs/decisions.md:1182	705	R113,R298
+لم يقرا	EXACT	docs/decisions.md:1188	572	R113,R299
+ميداني	FILE	docs/decisions.md:1195	664	
+ميداني	NEAR	docs/decisions.md:1200	415	R113,R298,R299
+لم يقرا	FILE	docs/decisions.md:1291	590	
+ميداني	EXACT	docs/decisions.md:1373	708	R300
+لم يقرا	EXACT	docs/decisions.md:1446	1216	R38
+لم يقرا	FILE	docs/decisions.md:1451	434	
+لم يقرا	FILE	docs/decisions.md:1452	506	
+ميداني	FILE	docs/decisions.md:1458	2111	
+ميداني	EXACT	docs/decisions.md:1466	735	R302,R175
+لم يقرا	EXACT	docs/decisions.md:1479	359	R131,R136,R225
+لم يبحث	EXACT	docs/decisions.md:1537	401	R64,R177,R42
+لم يقرا	NEAR	docs/decisions.md:1605	692	R43
+ميداني	FILE	docs/decisions.md:1655	1591	
+ميداني	EXACT	docs/decisions.md:1663	200	R303,R323
+لم يقرا	FILE	docs/decisions.md:1671	1455	
+لم يقرا	FILE	docs/decisions.md:1678	830	
+لم يقرا	NEAR	docs/decisions.md:1689	424	R154,R183
+لم يبحث	FILE	docs/decisions.md:1981	2187	
+لم يقرا	EXACT	docs/decisions.md:2297	5876	R125
+لم يقرا	FILE	docs/decisions.md:2303	2746	
+لم يقرا	EXACT	docs/decisions.md:2308	741	R125
+لم يقرا	EXACT	docs/decisions.md:2312	8035	R136,R137,R138
+لم يقرا	EXACT	docs/decisions.md:2327	5135	R141,R191
+لم يقرا	FILE	docs/decisions.md:2333	1954	
+لم يقرا	NEAR	docs/decisions.md:2338	681	R141
+ميداني	FILE	docs/decisions.md:2341	413	
+لم يقرا	EXACT	docs/decisions.md:2373	6647	R143,R144
+ميداني	EXACT	docs/decisions.md:2385	602	R304,R143
+لم يقرا	FILE	docs/decisions.md:2467	2199	
+لم يقرا	NEAR	docs/decisions.md:2477	827	R117
+لم يقرا	EXACT	docs/decisions.md:2478	6580	R117
+لم يقرا	EXACT	docs/decisions.md:2506	4431	R118,R119
+لم يقرا	FILE	docs/decisions.md:2570	427	
+لم يقرا	FILE	docs/decisions.md:2602	2771	
+لم يقرا	FILE	docs/decisions.md:2633	2635	
+لم يقرا	EXACT	docs/decisions.md:2711	726	R232,R171,R194,R305
+ميداني	EXACT	docs/decisions.md:2713	699	R305,R171,R232
+لم يقرا	FILE	docs/decisions.md:2742	1248	
+لم يقرا	FILE	docs/decisions.md:2766	1448	
+لم يقرا	FILE	docs/decisions.md:2842	747	
+ميداني	EXACT	docs/decisions.md:2938	562	R247,R306,R95,R324
+ميداني	FILE	docs/decisions.md:2964	1650	
+ميداني	EXACT	docs/decisions.md:2972	677	R307
+ميداني	FILE	docs/decisions.md:2982	1071	
+ميداني	EXACT	docs/decisions.md:2990	318	R307
+لم يبحث	EXACT	docs/decisions.md:3007	2575	R134,R308
+اسيلة الجهات	FILE	docs/decisions.md:3057	3777	
+ميداني	NEAR	docs/decisions.md:3070	615	R120,R309
+ميداني	EXACT	docs/decisions.md:3072	5323	R120,R309
+ميداني	EXACT	docs/decisions.md:3086	338	R309,R120
+ميداني	NEAR	docs/decisions.md:3132	1195	R123,R310
+لم يقرا	EXACT	docs/decisions.md:3133	2445	R123,R310
+ميداني	FILE	docs/decisions.md:3139	1754	
+ميداني	EXACT	docs/decisions.md:3146	420	R307,R123,R310
+ميداني	FILE	docs/decisions.md:3211	389	
+ميداني	EXACT	docs/decisions.md:3226	772	R312
+ميداني	EXACT	docs/decisions.md:3229	486	R312
+لم يقرا	EXACT	docs/decisions.md:3230	2098	R312
+لم يقرا	FILE	docs/decisions.md:3236	1346	
+لم يقرا	FILE	docs/decisions.md:3241	1032	
+لم يقرا	FILE	docs/decisions.md:3257	592	
+لم يقرا	EXACT	docs/decisions.md:3319	2521	R88,R112,R193
+لم يقرا	EXACT	docs/decisions.md:3364	3735	R216,R237,R238
+سوال للهيية	EXACT	docs/decisions.md:3620	1420	R47,R40,R192,R209
+لم يقرا	FILE	docs/decisions.md:3688	736	
+لم يقرا	EXACT	docs/decisions.md:3704	2270	R97,R192,R241,R293
+ميداني	FILE	docs/decisions.md:3731	800	
+ميداني	NEAR	docs/decisions.md:3752	586	R166
+لم يبحث	EXACT	docs/domain-scan/00-ب-مكسور-اليوم.md:36	174	R177
+لم يقرا	EXACT	docs/domain-scan/02-العملاء-والموردون-والذمم.md:47	105	R181
+اسيلة الجهات	NEAR	docs/domain-scan/02-العملاء-والموردون-والذمم.md:48	99	R181
+لم يقرا	NEAR	docs/domain-scan/02-العملاء-والموردون-والذمم.md:146	84	R124
+لم يقرا	FILE	docs/domain-scan/02-العملاء-والموردون-والذمم.md:176	117	
+لم يقرا	EXACT	docs/domain-scan/03-المشتريات-ودورتها.md:41	331	R125,R120
+لم يقرا	EXACT	docs/domain-scan/03-المشتريات-ودورتها.md:162	84	R119,R120
+اسيلة الجهات	NEAR	docs/domain-scan/04-المبيعات-ودورتها.md:43	99	R227
+لم يقرا	EXACT	docs/domain-scan/04-المبيعات-ودورتها.md:44	81	R227
+لم يقرا	EXACT	docs/domain-scan/04-المبيعات-ودورتها.md:152	168	R227
+لم يقرا	EXACT	docs/domain-scan/05-الفوترة-الإلكترونية-والتكامل.md:44	105	R88
+لم يقرا	FILE	docs/domain-scan/05-الفوترة-الإلكترونية-والتكامل.md:119	351	
+سوال للهيية	EXACT	docs/domain-scan/05-الفوترة-الإلكترونية-والتكامل.md:130	225	R98
+لم يقرا	EXACT	docs/domain-scan/05-الفوترة-الإلكترونية-والتكامل.md:157	121	R88,R93,R94,R98
+لم يقرا	EXACT	docs/domain-scan/06-الضريبة-والإقرار.md:42	243	R139,R130
+لم يقرا	NEAR	docs/domain-scan/06-الضريبة-والإقرار.md:45	95	R130,R139
+لم يقرا	EXACT	docs/domain-scan/06-الضريبة-والإقرار.md:146	115	R130,R132
+ميداني	EXACT	docs/domain-scan/07-البنوك-والصناديق-والتسويات.md:114	128	R313
+لم يقرا	EXACT	docs/domain-scan/08-الأصول-الثابتة.md:38	290	R140
+ميداني	EXACT	docs/domain-scan/08-الأصول-الثابتة.md:106	234	R314
+لم يقرا	EXACT	docs/domain-scan/08-الأصول-الثابتة.md:127	79	R140,R146,R314
+ميداني	EXACT	docs/domain-scan/08-الأصول-الثابتة.md:129	124	R314,R140,R146
+لم يقرا	EXACT	docs/domain-scan/09-الصلاحيات-والمستخدمون-والفروع.md:44	131	R71
+لم يقرا	EXACT	docs/domain-scan/09-الصلاحيات-والمستخدمون-والفروع.md:145	41	R71
+لم يقرا	EXACT	docs/domain-scan/10-التقارير-والقوائم-المالية.md:41	114	R147,R231
+لم يقرا	FILE	docs/domain-scan/10-التقارير-والقوائم-المالية.md:88	175	
+لم يقرا	EXACT	docs/domain-scan/10-التقارير-والقوائم-المالية.md:142	145	R147
+لم يقرا	EXACT	docs/domain-scan/11-تشغيل-المنصة.md:50	121	R72
+لم يقرا	EXACT	docs/domain-scan/12-الواجهة-البرمجية-والتكاملات.md:45	110	R213
+لم يقرا	FILE	docs/domain-scan/12-الواجهة-البرمجية-والتكاملات.md:83	249	
+لم يقرا	NONE	docs/domain-scan/13-النطاقات-والبريد.md:46	131	
+لم يقرا	EXACT	docs/domain-scan/14-نقاط-البيع-والورديات.md:43	132	R197
+لم يقرا	EXACT	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:38	160	R238,R237,R239
+لم يقرا	EXACT	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:39	225	R237,R238,R239
+لم يبحث	NEAR	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:42	342	R237,R240
+لم يقرا	EXACT	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:44	130	R240
+لم يقرا	FILE	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:58	101	
+لم يقرا	FILE	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:80	117	
+لم يبحث	EXACT	docs/domain-scan/15-الموارد-البشرية-والرواتب.md:91	147	R177
+لم يقرا	EXACT	docs/domain-scan/16-الملفات-والمرفقات-والحفظ.md:44	130	R72,R166
+لم يقرا	EXACT	docs/domain-scan/17-الإشعارات-والرسائل.md:43	132	R215
+لم يقرا	NONE	docs/domain-scan/18-المهام-وسير-العمل-والموافقات.md:42	90	
+لم يقرا	EXACT	docs/domain-scan/19-المستندات-المطبوعة-والقوالب.md:40	123	R97
+لم يقرا	EXACT	docs/domain-scan/20-نقل-البيانات-استيراد-وتصدير-وهجرة.md:41	130	R214
+اسيلة الجهات	FILE	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:12	131	
+اسيلة الجهات	FILE	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:28	139	
+اسيلة الجهات	FILE	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:40	198	
+لم يقرا	EXACT	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:45	134	R259
+اسيلة الجهات	FILE	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:58	120	
+اسيلة الجهات	FILE	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:59	95	
+اسيلة الجهات	EXACT	docs/domain-scan/21-التكاملات-الحكومية-والوطنية.md:81	173	R12,R01
+اسيلة الجهات	NEAR	docs/domain-scan/22-الدفع-الإلكتروني-وبوابات-الدفع.md:44	106	R27,R30
+اسيلة الجهات	EXACT	docs/domain-scan/22-الدفع-الإلكتروني-وبوابات-الدفع.md:96	282	R30
+لم يقرا	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:43	138	
+لم يبحث	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:44	144	
+لم يقرا	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:60	93	
+لم يبحث	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:62	84	
+لم يقرا	EXACT	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:74	159	R39
+لم يقرا	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:83	87	
+لم يبحث	FILE	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:85	69	
+لم يبحث	EXACT	docs/domain-scan/23-الخصوصية-وحماية-البيانات.md:120	130	R177
+لم يقرا	EXACT	docs/domain-scan/24-الزمن-والتقويم-واللغة.md:41	131	R221
+لم يقرا	NONE	docs/domain-scan/25-جاهزية-التوطين-لدولة-أخرى.md:143	79	
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:14	140	
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:28	96	
+ميداني	NEAR	docs/domain-scan/27-أجهزة-نقاط-البيع.md:63	144	R52,R59
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:141	149	
+لم يبحث	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:145	88	R219
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:149	91	
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:166	194	
+لم يقرا	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:170	152	R197
+لم يقرا	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:229	287	R218,R192,R210
+لم يقرا	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:231	385	R210,R192,R218
+ميداني	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:245	156	R52,R219
+لم يبحث	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:255	97	R59,R219,R73
+ميداني	EXACT	docs/domain-scan/27-أجهزة-نقاط-البيع.md:256	128	R73,R59,R219
+لم يقرا	FILE	docs/domain-scan/27-أجهزة-نقاط-البيع.md:265	121	
+لم يقرا	FILE	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:46	110	
+لم يبحث	NEAR	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:48	362	R40
+لم يقرا	NEAR	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:50	109	R40
+لم يقرا	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:71	261	R35,R34,R223
+اسيلة الجهات	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:74	386	R34,R35
+ميداني	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:106	460	R50,R49,R105
+اسيلة الجهات	NEAR	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:186	190	R50,R51,R70,R105,R106,R107,R108,R109
+لم يقرا	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:201	185	R170,R35,R224
+لم يقرا	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:203	106	R35,R170,R224
+لم يقرا	EXACT	docs/domain-scan/28-ركز-منشأة-ملتزمة.md:217	261	R69
+لم يقرا	NEAR	docs/domain-scan/29-جهات-الاتصال.md:95	141	R135
+لم يبحث	EXACT	docs/domain-scan/29-جهات-الاتصال.md:96	140	R135
+ميداني	EXACT	docs/domain-scan/29-جهات-الاتصال.md:103	145	R315,R326
+ميداني	EXACT	docs/domain-scan/29-جهات-الاتصال.md:114	58	R315,R135
+لم يقرا	NEAR	docs/domain-scan/README.md:12	126	R241
+سوال للهيية	FILE	docs/domain-scan/README.md:111	173	
+ميداني	NONE	docs/engines.md:119	41	
+ميداني	NONE	docs/engines.md:133	703	
+لم يبحث	FILE	docs/licensing-and-operations.md:16	77	
+لم يبحث	NEAR	docs/licensing-and-operations.md:29	394	R24,R31,R37,R46,R174,R175
+لم يقرا	EXACT	docs/licensing-and-operations.md:32	587	R175,R37,R46,R174
+لم يقرا	EXACT	docs/licensing-and-operations.md:38	1532	R46,R165,R16,R45,R125,R154,R182
+لم يقرا	EXACT	docs/licensing-and-operations.md:39	1712	R125,R16,R45,R46,R154,R165,R182,R288
+لم يبحث	EXACT	docs/licensing-and-operations.md:41	60	R16,R36,R46,R125,R165,R179,R288
+لم يبحث	EXACT	docs/licensing-and-operations.md:42	79	R288,R16,R36,R125,R179
+لم يبحث	EXACT	docs/licensing-and-operations.md:43	136	R36,R16,R179,R288
+لم يبحث	EXACT	docs/licensing-and-operations.md:44	267	R179,R16,R36,R288
+ميداني	EXACT	docs/licensing-and-operations.md:54	133	R31,R52,R59,R25,R295
+ميداني	EXACT	docs/licensing-and-operations.md:57	165	R295,R25,R31,R52,R59
+لم يقرا	EXACT	docs/licensing-and-operations.md:70	1774	R141,R36,R142
+لم يقرا	EXACT	docs/licensing-and-operations.md:71	876	R142,R36,R141
+لم يبحث	FILE	docs/licensing-and-operations.md:95	129	
+لم يقرا	EXACT	docs/licensing-and-operations.md:115	127	R179
+لم يقرا	NEAR	docs/licensing-and-operations.md:178	120	R37,R162
+ميداني	FILE	docs/licensing-and-operations.md:231	154	
+لم يقرا	FILE	docs/licensing-and-operations.md:260	596	
+لم يقرا	FILE	docs/licensing-and-operations.md:298	384	
+لم يقرا	EXACT	docs/licensing-and-operations.md:340	426	R164,R178
+لم يقرا	EXACT	docs/licensing-and-operations.md:385	709	R125
+لم يقرا	FILE	docs/licensing-and-operations.md:414	431	
+ميداني	FILE	docs/plans/agri-contracting-full-spec.md:137	103	
+ميداني	FILE	docs/plans/agri-contracting-full-spec.md:282	106	
+ميداني	FILE	docs/plans/agri-contracting-full-spec.md:1205	78	
+ميداني	FILE	docs/plans/asset-register-master-plan.md:74	30	
+لم يبحث	FILE	docs/plans/asset-register-master-plan.md:151	77	
+ميداني	FILE	docs/plans/asset-register-master-plan.md:367	89	
+لم يبحث	NEAR	docs/plans/asset-register-master-plan.md:396	79	R279
+ميداني	FILE	docs/plans/automotive-master-plan.md:837	209	
+ميداني	NEAR	docs/plans/automotive-master-plan.md:1044	23	R267
+ميداني	NONE	docs/plans/chat-master-plan.md:423	71	
+ميداني	FILE	docs/plans/contacts-identity-plan.md:16	155	
+ميداني	FILE	docs/plans/contacts-identity-plan.md:86	181	
+لم يبحث	EXACT	docs/plans/contacts-identity-plan.md:169	160	R135,R315,R330
+ميداني	EXACT	docs/plans/contacts-identity-plan.md:170	83	R315,R135,R330
+ميداني	NEAR	docs/plans/delivery-master-plan.md:110	150	R257
+ميداني	NEAR	docs/plans/delivery-master-plan.md:111	80	R257
+ميداني	FILE	docs/plans/delivery-master-plan.md:249	115	
+ميداني	FILE	docs/plans/delivery-master-plan.md:926	66	
+ميداني	FILE	docs/plans/events-full-spec.md:44	117	
+ميداني	FILE	docs/plans/freelance-full-spec.md:36	80	
+ميداني	FILE	docs/plans/freelance-full-spec.md:48	53	
+ميداني	FILE	docs/plans/fuel-station-full-spec.md:2166	35	
+ميداني	FILE	docs/plans/gov-integrations-master-plan.md:150	30	
+بانتظار جواب	NEAR	docs/plans/gov-integrations-master-plan.md:192	154	R238
+بانتظار جواب	FILE	docs/plans/gov-integrations-master-plan.md:471	189	
+ميداني	FILE	docs/plans/handover-forms-master-plan.md:131	30	
+ميداني	FILE	docs/plans/handover-forms-master-plan.md:352	42	
+لم يبحث	FILE	docs/plans/handover-forms-master-plan.md:597	78	
+ميداني	FILE	docs/plans/media-production-full-spec.md:32	37	
+ميداني	FILE	docs/plans/media-production-full-spec.md:174	82	
+ميداني	FILE	docs/plans/media-production-full-spec.md:212	158	
+ميداني	FILE	docs/plans/media-production-full-spec.md:421	43	
+ميداني	FILE	docs/plans/media-production-full-spec.md:437	40	
+ميداني	FILE	docs/plans/media-production-full-spec.md:1181	142	
+ميداني	FILE	docs/plans/media-production-full-spec.md:1194	34	
+لم يقرا	EXACT	docs/plans/media-production-full-spec.md:1435	124	R270
+ميداني	FILE	docs/plans/media-production-full-spec.md:1721	176	
+ميداني	FILE	docs/plans/media-production-full-spec.md:2414	169	
+لم يقرا	EXACT	docs/plans/media-production-full-spec.md:2606	132	R270
+لم يقرا	FILE	docs/plans/media-production-full-spec.md:2625	100	
+لم يقرا	FILE	docs/plans/permissions-tasks-master-plan-1.md:22	111	
+ميداني	FILE	docs/plans/permissions-tasks-master-plan-1.md:545	204	
+لم يقرا	EXACT	docs/plans/permissions-tasks-master-plan-1.md:885	89	R280
+ميداني	FILE	docs/plans/post-unified-gaps.md:6	167	
+ميداني	FILE	docs/plans/post-unified-gaps.md:42	108	
+ميداني	FILE	docs/plans/post-unified-gaps.md:43	58	
+ميداني	FILE	docs/plans/professional-services-full-spec.md:864	189	
+ميداني	FILE	docs/plans/professional-services-full-spec.md:1030	118	
+ميداني	FILE	docs/plans/professional-services-full-spec.md:1110	243	
+ميداني	NONE	docs/plans/realestate-contracting-master-plan.md:543	285	
+ميداني	EXACT	docs/plans/recruitment-master-plan.md:853	119	R321
+ميداني	NEAR	docs/plans/recruitment-master-plan.md:948	57	R245
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:90	61	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:102	47	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:200	48	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:205	57	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:239	47	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:242	45	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:384	47	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:401	43	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:409	48	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:446	43	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:452	56	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:454	43	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:455	48	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:549	37	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:663	37	
+ميداني	FILE	docs/plans/security-guarding-master-plan.md:909	38	
+ميداني	FILE	docs/plans/service-center-full-spec.md:177	65	
+بانتظار رد	FILE	docs/plans/service-center-full-spec.md:423	69	
+ميداني	FILE	docs/plans/support-full-spec.md:91	97	
+ميداني	FILE	docs/plans/support-full-spec.md:109	80	
+لم يقرا	NEAR	docs/plans/support-full-spec.md:751	106	R236
+ميداني	FILE	docs/plans/unified-build-plan.md:178	117	
+ميداني	FILE	docs/plans/unified-build-plan.md:410	178	
+ميداني	FILE	docs/plans/unified-build-plan.md:484	105	
+اسيلة الجهات	FILE	docs/plans/unified-core-plan.md:81	150	
+ميداني	FILE	docs/plans/veterinary-master-plan.md:124	105	
+ميداني	FILE	docs/plans/wholesale-full-spec.md:287	49	
+ميداني	FILE	docs/plans/wholesale-full-spec.md:292	296	
+ميداني	FILE	docs/plans/wholesale-full-spec.md:476	23	
+ميداني	FILE	docs/plans/wholesale-full-spec.md:591	111	
+ميداني	FILE	docs/plans/wholesale-full-spec.md:607	119	
+ميداني	FILE	docs/plans/خطة-نشاط-السوبرماركت.md:165	59	
+اسيلة الجهات	NONE	docs/reference-measurement-2026-09-06.md:15	207	
+اسيلة الجهات	NONE	docs/reference-measurement-2026-09-06.md:99	311	
+لم يبحث	FILE	docs/أسئلة-الجهات-النظامية.md:380	28	
+لم يبحث	EXACT	docs/بحث-تتبع-الأخطاء.md:111	87	R67
+لم يبحث	EXACT	docs/بحث-لائحة-حماية-البيانات.md:19	117	R173
+لم يبحث	NEAR	docs/بحث-لائحة-حماية-البيانات.md:186	93	R173
+لم يقرا	EXACT	docs/بحث-لائحة-حماية-البيانات.md:247	76	R173
+لم يقرا	EXACT	docs/بحث-لائحة-حماية-البيانات.md:253	79	R173
+لم يبحث	EXACT	docs/بحث-لائحة-حماية-البيانات.md:256	79	R173
+لم يقرا	EXACT	docs/بحث-مزوّد-البريد.md:52	300	R235
+لم يبحث	EXACT	docs/بحث-مزوّد-البريد.md:92	127	R235,R66
+لم يبحث	EXACT	docs/سجل-الخارطة-والقرارات.md:168	58	R294
+اسيلة الجهات	EXACT	docs/سجل-الخارطة-والقرارات.md:225	78	R27,R32
+ميداني	FILE	docs/سجل-الخارطة-والقرارات.md:629	91	
+ميداني	NONE	docs/قرارات-غير-مسجَّلة-2026-09-04.md:51	155	
+لم يقرا	EXACT	docs/موجز-إيجار-عقار-التشغيل.md:51	447	R159
+ميداني	FILE	docs/موجز-الأرصدة-الافتتاحية-بالطبقات.md:77	238	
+لم يقرا	EXACT	docs/موجز-الأرصدة-الافتتاحية-بالطبقات.md:89	348	R123,R310,R330
+لم يبحث	EXACT	docs/موجز-الأرصدة-الافتتاحية-بالطبقات.md:89	348	R123,R310,R330
+ميداني	EXACT	docs/موجز-الأرصدة-الافتتاحية-بالطبقات.md:90	127	R310,R123,R330
+لم يقرا	FILE	docs/موجز-الأرصدة-الافتتاحية-بالطبقات.md:103	140	
+ميداني	EXACT	docs/موجز-الأرقام-التسلسلية.md:62	194	R311,R133,R330
+ميداني	FILE	docs/موجز-الاستلام-المستقلّ.md:5	222	
+لم يبحث	EXACT	docs/موجز-الاستلام-المستقلّ.md:78	229	R134,R307,R308
+ميداني	EXACT	docs/موجز-الاستلام-المستقلّ.md:79	124	R308,R134,R307
+لم يقرا	EXACT	docs/موجز-الدفعة-وFEFO.md:101	1173	R247,R306,R330
+ميداني	EXACT	docs/موجز-الدفعة-وFEFO.md:102	238	R306,R247,R330
+لم يقرا	FILE	docs/موجز-الدفعة-وFEFO.md:113	64	
+لم يقرا	EXACT	docs/موجز-الفاتورة-الصادرة-لا-تُعدَّل.md:98	616	R104
+لم يبحث	EXACT	docs/موجز-المرتجعات-والتلف.md:73	256	R128,R53,R330
+ميداني	EXACT	docs/موجز-المرتجعات-والتلف.md:74	156	R53,R128,R330
+بانتظار جواب	NEAR	docs/موجز-تعديل-فاتورة-الشراء.md:194	117	R111
+ميداني	FILE	docs/موجز-تكاليف-الاستيراد.md:5	186	
+لم يبحث	EXACT	docs/موجز-تكاليف-الاستيراد.md:69	298	R120,R309,R330
+ميداني	EXACT	docs/موجز-تكاليف-الاستيراد.md:70	134	R309,R120,R330
+لم يقرا	EXACT	docs/موجز-ضريبة-الإيجار.md:49	461	R115
+لم يقرا	EXACT	docs/موجز-ضريبة-الصنف.md:86	413	R127,R24
+ميداني	EXACT	docs/موجز-ضريبة-الصنف.md:152	286	R312,R330
+ميداني	EXACT	docs/موجز-ضريبة-الصنف.md:162	198	R312
+لم يقرا	FILE	docs/موجز-ضريبة-الصنف.md:180	285	
+ميداني	FILE	docs/موجز-ضريبة-الصنف.md:230	181	
+لم يقرا	EXACT	docs/موجز-فاتورة-الإيجار-التجاري.md:52	572	R286
+لم يقرا	NEAR	docs/موجز-مسار-دفع-الكاشير.md:96	41	R209
+لم يقرا	EXACT	docs/موجز-مسار-دفع-الكاشير.md:121	81	R33
+لم يقرا	EXACT	docs/موجز-نقل-الحساب-والموظف-بين-الفروع.md:125	217	R244
+لم يبحث	EXACT	docs/موجز-نقل-الحساب-والموظف-بين-الفروع.md:126	173	R244
+لم يقرا	NEAR	docs/موجز-نقل-الحساب-والموظف-بين-الفروع.md:134	86	R316,R330
+ميداني	EXACT	docs/موجز-نقل-الحساب-والموظف-بين-الفروع.md:135	188	R316,R330
+ميداني	EXACT	SPEC.md:371	99	R53

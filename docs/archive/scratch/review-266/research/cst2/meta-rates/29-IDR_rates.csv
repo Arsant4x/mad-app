@@ -1,0 +1,45 @@
+"Cost per message in IDR on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,IDR,881.95,371.19,371.19,n/a,n/a
+Brazil,IDR,891.98,97.05,97.05,n/a,n/a
+Chile,IDR,"1,268.36",285.34,285.34,n/a,n/a
+Colombia,IDR,178.40,11.40,11.40,n/a,n/a
+Egypt,IDR,918.92,51.38,51.38,928.22,n/a
+France,IDR,"1,226.58",428.27,428.27,n/a,n/a
+Germany,IDR,"1,948.66",785.17,785.17,n/a,n/a
+Hong Kong,IDR,"1,044.97",371.06,371.06,n/a,n/a
+Hungary,IDR,"1,226.72",498.17,498.17,n/a,n/a
+India,IDR,168.05,19.97,19.97,433.68,n/a
+Indonesia,IDR,586.33,356.65,356.65,"1,940.13",n/a
+Israel,IDR,503.79,75.64,75.64,n/a,n/a
+Italy,IDR,"1,133.39",427.89,427.89,n/a,n/a
+Malaysia,IDR,"1,227.49",199.82,199.82,596.63,n/a
+Mexico,IDR,435.34,121.24,121.24,n/a,n/a
+Netherlands,IDR,"2,279.80",713.78,713.78,n/a,n/a
+Nigeria,IDR,737.05,95.70,95.70,"1,071.67",n/a
+Pakistan,IDR,675.37,142.78,142.78,"1,071.67",n/a
+Peru,IDR,"1,003.55",285.50,285.50,n/a,n/a
+Poland,IDR,520.95,173.65,173.65,n/a,n/a
+Qatar,IDR,486.68,171.14,171.14,n/a,n/a
+Romania,IDR,"1,226.72",412.77,412.77,n/a,n/a
+Russia,IDR,"1,144.36",570.75,570.75,n/a,n/a
+Saudi Arabia,IDR,713.11,152.54,152.54,854.24,n/a
+Singapore,IDR,"1,044.97",228.35,228.35,n/a,n/a
+South Africa,IDR,541.75,108.64,108.64,285.89,n/a
+Spain,IDR,"1,008.68",285.24,285.24,n/a,n/a
+Turkey,IDR,155.56,12.84,12.84,n/a,n/a
+United Arab Emirates,IDR,712.95,224.11,224.11,727.12,n/a
+United Kingdom,IDR,905.41,313.93,313.93,n/a,n/a
+North America,IDR,356.60,48.50,48.50,n/a,n/a
+Rest of Africa,IDR,321.24,57.06,57.06,n/a,n/a
+Rest of Asia Pacific,IDR,"1,044.97",161.27,161.27,n/a,n/a
+Rest of Central & Eastern Europe,IDR,"1,226.72",301.75,301.75,n/a,n/a
+Rest of Latin America,IDR,"1,055.54",161.18,161.18,n/a,n/a
+Rest of Middle East,IDR,486.68,129.78,129.78,n/a,n/a
+Rest of Western Europe,IDR,844.68,243.72,243.72,n/a,n/a
+Other,IDR,861.62,109.84,109.84,n/a,n/a

@@ -1,0 +1,346 @@
+MISSING	L1	tags=-	found=-	tagHit=null	جهةٌ أخرى — لم يُبحث هنا
+MISSING	L3	tags=-	found=-	tagHit=null	2026-09-27
+STRICT	L6	tags=-	found=S1,S22	tagHit=null	تعديلات المادة
+MISSING	L6	tags=-	found=-	tagHit=null	المعدّلة
+STRICT	L7	tags=-	found=S1	tagHit=null	الرُّخص
+STRICT	L7	tags=-	found=S1	tagHit=null	حقًّا
+STRICT	L7	tags=-	found=S1	tagHit=null	إلاَّ
+MISSING	L7	tags=-	found=-	tagHit=null	المعدّلة
+STRICT	L16	tags=-	found=S16	tagHit=null	6 - تأجير العقار.
+STRICT	L16	tags=-	found=S17	tagHit=null	على سبيل المثال نظاما (تم) و(إيجار) بنظام شموس في جميع المنشآت المسجلة في النظامين.
+MISSING	L16	tags=-	found=-	tagHit=null	سجلُّ النزلاء للضيافة
+STRICT	L16	tags=-	found=S16,S17	tagHit=null	تأجير الاستراحات
+STRICT	L16	tags=-	found=S17	tagHit=null	إيجار
+STRICT	L26	tags=-	found=S2,S3	tagHit=null	الكتابية أو الشفوية
+STRICT	L39	tags=S1	found=S1,S16,S20,S21,S22	tagHit=true	الحالة ساري
+STRICT	L40	tags=S2	found=S2	tagHit=true	1445-2-22 الموافق 07-09-2023
+STRICT	L42	tags=S4,S5,S12	found=S2,S3,S4	tagHit=true	أنظمة ولوائح
+STRICT	L48	tags=S10	found=S10	tagHit=true	تتجاوخ
+STRICT	L50	tags=S12,S5	found=S2,S5,S15,S17,S20	tagHit=true	تحميل
+STRICT	L50	tags=S12,S5	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L50	tags=S12,S5	found=S12,S18,S19	tagHit=true	العماء
+STRICT	L50	tags=S12,S5	found=S13,S15,S17	tagHit=false	العملاء
+STRICT	L50	tags=S12,S5	found=S12,S19	tagHit=true	الائحة
+STRICT	L51	tags=S13,S5	found=S2,S5,S15,S17,S20	tagHit=true	تحميل
+STRICT	L52	tags=S14	found=S5,S14,S15	tagHit=true	السجل الوطني للسمات الحيوية
+STRICT	L53	tags=S15	found=S5,S14,S15	tagHit=true	طلب بيان الرأي النظامي
+STRICT	L53	tags=S15	found=S5,S8,S14,S15	tagHit=true	تواصل معنا
+STRICT	L53	tags=S15	found=S2,S3,S5,S8,S9,S14,S15	tagHit=true	تقديم شكوى
+STRICT	L53	tags=S15	found=S5	tagHit=false	آلية طلب بيان الرأي النظامي
+MISSING	L53	tags=S15	found=-	tagHit=false	الخطاب والقناة
+STRICT	L54	tags=S16	found=S1,S2,S3,S14,S15,S16,S18,S19,S20,S21,S22	tagHit=true	ساري
+STRICT	L55	tags=S17	found=S17	tagHit=true	1445-2-02 الموافق 18-08-2023
+STRICT	L56	tags=S18	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L56	tags=S18	found=S12,S18,S19	tagHit=true	العماء
+STRICT	L56	tags=S18	found=S1,S2,S3,S4,S6,S7,S8,S9,S12,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	خال
+STRICT	L58	tags=S20	found=S1,S2,S3,S14,S15,S16,S18,S19,S20,S21,S22	tagHit=true	ساري
+STRICT	L59	tags=S21	found=S1,S2,S3,S14,S15,S16,S18,S19,S20,S21,S22	tagHit=true	ساري
+STRICT	L60	tags=S22	found=S1,S2,S3,S14,S15,S16,S18,S19,S20,S21,S22	tagHit=true	ساري
+STRICT	L60	tags=S22	found=S1,S2,S3,S5,S7,S16,S17,S20	tagHit=false	نظام آخر
+MISSING	L62	tags=-	found=-	tagHit=null	تنظيمات الحد من الرسائل والمكالمات الاقتحامية
+STRICT	L65	tags=S6,S12	found=S6	tagHit=true	ولا يعد هذا الدليل نصاً نظاميًا ملزماً
+STRICT	L65	tags=S6,S12	found=S12	tagHit=true	أي قواعد ملزمة أو التزامات
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S17,S18,S19,S20,S21	tagHit=true	البيانات
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S4,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S22	tagHit=true	خلال
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S12,S14	tagHit=true	السمات الحيوية
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S5,S7,S10,S11,S12,S13	tagHit=true	جهة عامة
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S5,S7,S8,S12,S13,S17,S18,S20,S22	tagHit=true	أمنية
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S2,S3,S12	tagHit=true	دعائية
+STRICT	L74	tags=S1,S12,S2,S3	found=S2,S3,S8	tagHit=true	مدة الاحتفاظ
+STRICT	L74	tags=S1,S12,S2,S3	found=S2,S3	tagHit=true	الشفوية
+STRICT	L74	tags=S1,S12,S2,S3	found=S12	tagHit=true	مالك السيارة
+STRICT	L74	tags=S1,S12,S2,S3	found=S1,S8,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	الخدمة
+STRICT	L75	tags=S14,S16,S17,S19	found=S14	tagHit=true	بصمات
+STRICT	L75	tags=S14,S16,S17,S19	found=S16,S17,S19	tagHit=true	شموس
+MISSING	L76	tags=-	found=-	tagHit=null	بصمة
+STRICT	L76	tags=-	found=S14	tagHit=null	بصمات
+STRICT	L76	tags=-	found=S18,S19	tagHit=null	الوجه
+MISSING	L76	tags=-	found=-	tagHit=null	الحضور
+MISSING	L76	tags=-	found=-	tagHit=null	قالب
+MISSING	L76	tags=-	found=-	tagHit=null	مركبة
+STRICT	L76	tags=-	found=S20	tagHit=null	صيانة
+STRICT	L76	tags=-	found=S19,S20	tagHit=null	المالك
+STRICT	L76	tags=-	found=S18,S20	tagHit=null	مكالم
+MISSING	L76	tags=-	found=-	tagHit=null	استبيان
+MISSING	L76	tags=-	found=-	tagHit=null	خدمية
+MISSING	L76	tags=-	found=-	tagHit=null	التسجيلات
+STRICT	L76	tags=-	found=S16,S17,S19	tagHit=null	شموس
+STRICT	L77	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L77	tags=S12	found=S12,S18,S19	tagHit=true	العماء
+STRICT	L77	tags=S12	found=S12,S19	tagHit=true	الائحة
+STRICT	L77	tags=S12	found=S1,S2,S3,S4,S6,S7,S8,S9,S12,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	خال
+STRICT	L77	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L77	tags=S12	found=-	tagHit=false	استطلاع
+STRICT	L77	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L77	tags=S12	found=-	tagHit=false	استطاعاً/الاستطاع
+STRICT	L77	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L83	tags=-	found=-	tagHit=null	ق-5
+MISSING	L83	tags=-	found=-	tagHit=null	أسئلة عمالية وقانونية
+MISSING	L83	tags=-	found=-	tagHit=null	خضوع بصمة الحارس وبيانات وجهه لنظام حماية البيانات الشخصية، ومتطلبات الموافقة والاحتفاظ وا
+MISSING	L83	tags=-	found=-	tagHit=null	بصمة/تعرف على الوجه بالموقع
+STRICT	L83	tags=-	found=S6,S10,S13	tagHit=null	عالية
+MISSING	L83	tags=-	found=-	tagHit=null	يتطلب معالجة بيانات حيوية
+MISSING	L83	tags=-	found=-	tagHit=null	الافتراضي: تخزين القالب المشفَّر لا الصورة، وموافقة صريحة موثقة، وسياسة إتلاف
+MISSING	L83	tags=-	found=-	tagHit=null	ح10
+MISSING	L83	tags=-	found=-	tagHit=null	يجب حسمه قبل بناء وحدة الحضور
+STRICT	L89	tags=S1	found=S1	tagHit=true	أي عملية مُعالجة لبيانات شخصية تتعلق بالأفراد تتم في المملكة بأي وسيلة كانت
+STRICT	L90	tags=S1	found=S1	tagHit=true	وكذلك البيانات الأمنية والجنائية، أو بيانات السمات الحيوية التي تحدد الهوية
+STRICT	L91	tags=S1,S2	found=S1,S7	tagHit=true	ولم تكن تلك البيانات بيانات حساسة.
+STRICT	L91	tags=S1,S2	found=S2,S3,S7	tagHit=true	ألا تتضمن المعالجة بيانات حساسة.
+STRICT	L92	tags=S12	found=S12	tagHit=true	لا يعتد بالمصلحة المشروعة كمسوغ نظامي لمعالجة البيانات الحساسة
+STRICT	L92	tags=S12	found=S12	tagHit=true	فيجب أن تكون الموافقة صريحة وفقاً للمادة الحادية عشرة
+STRICT	L92	tags=S12	found=S12	tagHit=true	ماهي الأحكام الخاصة بمعالجة البيانات الحساسة؟
+STRICT	L93	tags=S1	found=S1	tagHit=true	عندما تكون المعالجة بمقتضى نظام آخر أو تنفيذاً لاتفاق سابق يكون صاحب البيانات الشخصية طرفا
+STRICT	L94	tags=S13	found=S13	tagHit=true	يحدد مقدم الرعاية الصحية المسوغ النظامي المناسب وهو
+STRICT	L94	tags=S13	found=S13	tagHit=true	إبرام اتفاقية يكون صاحب البيانات الشخصية
+STRICT	L94	tags=S13	found=S13	tagHit=true	الشخصية للمرضى ضرورية لتمكين مقدم الرعاية الصحية من الوفاء بالتزاماته التعاقدية مع المرضى
+STRICT	L94	tags=S13	found=S13	tagHit=true	تحديد المسوغ النظامي للمعالجة
+STRICT	L95	tags=S2	found=S2,S3	tagHit=true	في حال تضمنت المعالجة بيانات حساسة.
+STRICT	L96	tags=S2	found=S2	tagHit=true	أن تصدر الموافقة بإرادة حرة، وألّا تُستخدم أي طرقٍ مُضللة في سبيل الحصول عليها
+STRICT	L96	tags=S2	found=S2	tagHit=true	أن توثّق الموافقة بوسائل تتيح التحقق منها مستقبلاً، ومن ذلك الاحتفاظ بسجلات تتضمن موافقة أ
+STRICT	L96	tags=S2	found=S2,S3	tagHit=true	أن تكون هناك موافقة مستقلة لكل غرض من أغراض المعالجة.
+STRICT	L97	tags=S1	found=S1	tagHit=true	لا يجوز أن تكون الموافقة المشار إليها في الفقرة (1) من المادة (الخامسة) من النظام شرطاً لإ
+STRICT	L98	tags=S2	found=S2,S3	tagHit=true	على أن تكون إجراءات العدول عن الموافقة مماثلة أو أكثر سهولةً من إجراءات الحصول عليها.
+STRICT	L98	tags=S2	found=S2,S3	tagHit=true	في حال العدول عن الموافقة، فيجب على جهة التحكم إيقاف المعالجة دون تأخير غير مبرر
+STRICT	L99	tags=S2	found=S2,S3	tagHit=true	على جهة التحكم جمع الحد الأدنى اللازم من البيانات الشخصية لتحقيق الغرض من المعالجة
+STRICT	L100	tags=S2	found=S2,S3	tagHit=true	معالجة البيانات الشخصية الحساسة.
+STRICT	L100	tags=S2	found=S2,S3	tagHit=true	على جهة التحكم تقديم نسخة من تقويم الأثر إلى أي جهة معالجة تتصرف نيابة عنها فيما يتعلق بال
+STRICT	L101	tags=S10	found=S10	tagHit=true	إذا كانت جهة التحكم تعالج بيانات حساسة.
+STRICT	L102	tags=S2,S11	found=S2,S3	tagHit=true	الأنشطة الأساسية لجهة التحكم على معالجة بيانات شخصية حساسة.
+STRICT	L102	tags=S2,S11	found=S11	tagHit=true	ولا تشكل الأنشطة التي تدعم الأعمال الرئيسية لجهة التحكم أنشطة أساسية؛ مثل معالجة بيانات ال
+STRICT	L102	tags=S2,S11	found=S1,S7,S8,S11,S17,S19,S20	tagHit=true	خامساً
+STRICT	L103	tags=S14	found=S5,S14,S15	tagHit=true	السجل الوطني للسمات الحيوية
+STRICT	L103	tags=S14	found=S14	tagHit=true	تهدف الخدمة إلى بناء سجل وطني لأنظمة الجهات الحكومية التي تجمع السمات الحيوية للأفراد مثل 
+STRICT	L104	tags=S2	found=S2	tagHit=true	مدة الاحتفاظ بالبيانات الشخصية أو معايير حساب المدة في حال تعذر تحديدها مسبقاً.
+STRICT	L104	tags=S2	found=S2,S3	tagHit=true	أو معالجة بيانات شخصية باستخدام تقنيات ناشئة
+STRICT	L105	tags=S5	found=S5	tagHit=true	لا توجد فترة زمنية محددة للاحتفاظ بالبيانات
+STRICT	L106	tags=S1	found=S1	tagHit=true	على جهة التحكم إتلاف البيانات الشخصية بعد انتهاء الغرض من جمعها دون تأخير.
+STRICT	L106	tags=S1	found=S1	tagHit=true	إذا توافر مسوغ نظامي يوجب الاحتفاظ بها مدة مُحددة
+STRICT	L107	tags=S2	found=S2	tagHit=true	إذا عدل صاحب البيانات الشخصية عن موافقته على جمع بياناته الشخصية، وكانت الموافقة هي المسوّ
+STRICT	L107	tags=S2	found=S2,S3,S6	tagHit=true	إتلاف كافة النسخ المتعلقة بالبيانات الشخصية المخزنة في أنظمة جهة التحكم، بما في ذلك النسخ 
+STRICT	L108	tags=S6	found=S6	tagHit=true	كما أن عملية أرشفة البيانات الشخصية والنسخ الاحتياطي لا تعد من قبيل عمليات الإتلاف
+STRICT	L108	tags=S6	found=S6	tagHit=true	الاحتفاظ بوثائق مفصلة لعمليات إخفاء الهوية والإتلاف
+STRICT	L109	tags=S2	found=S2,S3	tagHit=true	مدد الاحتفاظ الخاصة بكل من فئات البيانات الشخصية، ما أمكن ذلك.
+STRICT	L110	tags=S9	found=S9	tagHit=true	نقل بيانات حساسة أو الإفصاح عنها لجهات خارج المملكة بصفة مستمرة أو على نطاق واسع.
+STRICT	L113	tags=-	found=S1,S2,S3,S5,S7,S9,S10,S11,S12,S13	tagHit=null	بيانات حساسة
+STRICT	L113	tags=-	found=S1	tagHit=null	بيانات السمات الحيوية التي تحدد الهوية
+MISSING	L113	tags=-	found=-	tagHit=null	وقد تخضع لأحكام مشددة
+MISSING	L114	tags=-	found=-	tagHit=null	قالب
+STRICT	L117	tags=-	found=S2,S3,S7	tagHit=null	بأي شكل من الأشكال
+STRICT	L117	tags=-	found=S2,S3	tagHit=null	قابلة للإثبات
+STRICT	L118	tags=-	found=S6,S10,S13	tagHit=null	عالية
+STRICT	L119	tags=S13	found=S1,S2,S3,S4,S6,S7,S9,S13,S20	tagHit=true	ضرورية
+STRICT	L120	tags=S22	found=S1,S2,S3,S5,S7,S16,S17,S20	tagHit=false	نظام آخر
+MISSING	L120	tags=S22	found=-	tagHit=false	بصمة
+STRICT	L120	tags=S22	found=S14	tagHit=false	بصمات
+MISSING	L120	tags=S22	found=-	tagHit=false	الحضور
+STRICT	L120	tags=S22	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S17,S18,S19,S20,S21	tagHit=false	البيانات
+STRICT	L120	tags=S22	found=S22	tagHit=true	الحراسة
+STRICT	L120	tags=S22	found=S11,S12,S13,S16,S17,S18,S20,S21,S22	tagHit=true	الشركات
+STRICT	L125	tags=S10,S14	found=S10	tagHit=true	تعالج بيانات حساسة
+STRICT	L125	tags=S10,S14	found=S5,S14,S15	tagHit=true	السجل الوطني للسمات الحيوية
+STRICT	L126	tags=S11	found=S11	tagHit=true	أنشطة أساسية
+STRICT	L127	tags=S9	found=S9	tagHit=true	وألا تكون تلك البيانات بيانات حساسة
+MISSING	L127	tags=S9	found=-	tagHit=false	ح10
+MISSING	L130	tags=S14,S12	found=-	tagHit=false	بصمة
+STRICT	L130	tags=S14,S12	found=S14	tagHit=true	بصمات
+STRICT	L130	tags=S14,S12	found=S18,S19	tagHit=false	الوجه
+MISSING	L130	tags=S14,S12	found=-	tagHit=false	الحضور
+MISSING	L130	tags=S14,S12	found=-	tagHit=false	قالب
+STRICT	L130	tags=S14,S12	found=S1,S12,S14	tagHit=true	السمات الحيوية
+STRICT	L130	tags=S14,S12	found=S14	tagHit=true	بصمات
+STRICT	L130	tags=S14,S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L136	tags=-	found=-	tagHit=null	١٠. حماية البيانات والاحتفاظ بالسجلات
+MISSING	L136	tags=-	found=-	tagHit=null	سجل صيانة الأصل | يبقى مع الأصل لا مع المالك — عند بيع المركبة، من يملك حق الاطلاع على تار
+MISSING	L136	tags=-	found=-	tagHit=null	رقم الهيكل (VIN) ولوحة المركبة | بيانات شخصية بالقرن مع المالك
+MISSING	L136	tags=-	found=-	tagHit=null	الأصل يُملَك من العميل، لكنه كيان مستقل عن العميل لأن الملكية تنتقل. تاريخ الصيانة يتبع ال
+MISSING	L136	tags=-	found=-	tagHit=null	سجل صيانة موثّق
+MISSING	L136	tags=-	found=-	tagHit=null	برابط موقّع
+STRICT	L142	tags=S1	found=S1	tagHit=true	وأرقام الرُّخص والسجلات والممتلكات الشخصية
+STRICT	L143	tags=S1	found=S1	tagHit=true	16- صاحب البيانات الشخصية: الفرد الذي تتعلق به البيانات الشخصية
+STRICT	L144	tags=S12	found=S12	tagHit=true	تتضمن هذه القاعدة بيانات عن السيارات التي تدخل إلى مقرات الشركة وتخرج منها
+STRICT	L144	tags=S12	found=S12	tagHit=true	لتحديد هوية مالك السيارة
+STRICT	L144	tags=S12	found=S12	tagHit=true	تحديد هوية الفرد بشكل غير مباشر
+STRICT	L145	tags=S1	found=S1	tagHit=true	2- الحق في وصوله إلى بياناته الشخصية المتوافرة لدى جهة التحكم، وفق الضوابط والإجراءات التي
+STRICT	L145	tags=S1	found=S1	tagHit=true	3- الحق في طلب الحصول على بياناته الشخصية المتوافرة لدى جهة التحكم بصيغة مقروءة وواضحة
+STRICT	L146	tags=S2	found=S2	tagHit=true	تنفيذ طلبات ممارسة الحقوق المنصوص عليها في النظام خلال مدة لا تتجاوز (ثلاثين) يوماً دون تأ
+STRICT	L147	tags=S2	found=S2	tagHit=true	على جهة التحكم عند تمكين صاحب البيانات من الوصول إلى بياناته الشخصية، التأكد من أن ذلك لا 
+STRICT	L148	tags=S1	found=S1	tagHit=true	تمكين أي شخص -عدا جهة التحكم أو جهة المعالجة بحسب الأحوال - من الحصول على البيانات الشخصية
+STRICT	L149	tags=S1	found=S1	tagHit=true	1- إذا وافق صاحب البيانات الشخصية على الإفصاح وفقاً لأحكام النظام.
+STRICT	L149	tags=S1	found=S1	tagHit=true	6- إذا كان الإفصاح ضرورياً لتحقيق مصالح مشروعة لجهة التحكم، ما لم يخل ذلك بحقوق صاحب البيا
+STRICT	L150	tags=S2	found=S2,S3,S7	tagHit=true	على جهة التحكم عند الإفصاح عن بيانات شخصية مرتبطة ببيانات شخص آخر غير صاحبها
+STRICT	L150	tags=S2	found=S2,S3,S7	tagHit=true	ترميز البيانات الشخصية التي تدل على هوية الشخص الآخر ما أمكن ذلك.
+STRICT	L150	tags=S2	found=S2,S3,S7	tagHit=true	أن يقتصر الإفصاح على الحد الأدنى من البيانات الشخصية اللازمة لتحقيق الغرض منه.
+STRICT	L151	tags=S2	found=S2,S3,S7	tagHit=true	أن تكون المعالجة ضمن التوقعات المعقولة لصاحب البيانات الشخصية.
+STRICT	L152	tags=S2	found=S2	tagHit=true	2- لا تعد البيانات التي جرى إخفاء هوية أصحابها بيانات شخصية.
+STRICT	L152	tags=S2	found=S2,S3,S6	tagHit=true	التأكد من عدم إمكانية إعادة التعرف على هوية صاحب البيانات الشخصية بعد إخفاء هويته.
+STRICT	L153	tags=S6	found=S6	tagHit=true	تعد البيانات المرمزة بيانات شخصية
+STRICT	L153	tags=S6	found=S6	tagHit=true	يتم استخدام الترميز عند الإفصاح عن بيانات شخصية تتضمن بيانات شخصية لفرد آخر غير صاحبها
+STRICT	L156	tags=S12	found=S1,S5,S12	tagHit=true	الممتلكات الشخصية
+STRICT	L158	tags=-	found=S1,S2,S3,S5,S6,S7,S12	tagHit=null	فرد آخر
+STRICT	L159	tags=S6	found=S6	tagHit=true	البيانات المرمزة
+STRICT	L161	tags=-	found=S1,S2,S3,S6,S7,S8,S11,S12,S13,S14,S15,S17,S18,S20	tagHit=null	يتعلق
+STRICT	L161	tags=-	found=S1	tagHit=null	الفرد الذي تتعلق به البيانات
+MISSING	L161	tags=-	found=-	tagHit=null	من يملك حق الاطلاع على تاريخها؟
+MISSING	L163	tags=-	found=-	tagHit=null	سجل صيانة موثّق
+MISSING	L167	tags=S12	found=-	tagHit=false	مركبة
+STRICT	L167	tags=S12	found=S20	tagHit=false	صيانة
+STRICT	L167	tags=S12	found=S19,S20	tagHit=false	المالك
+STRICT	L167	tags=S12	found=S12	tagHit=true	مالك السيارة
+STRICT	L167	tags=S12	found=S12,S16,S17,S18,S19	tagHit=true	السيارات
+STRICT	L167	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L173	tags=-	found=-	tagHit=null	الأسئلة المحجوزة لمستشار مرخّص
+MISSING	L173	tags=-	found=-	tagHit=null	هل موافقة تسجيل المكالمة تكفي شفهياً في مطلع المكالمة؟
+MISSING	L173	tags=-	found=-	tagHit=null	قناة الهاتف
+MISSING	L173	tags=-	found=-	tagHit=null	تسجيل يدوي
+MISSING	L173	tags=-	found=-	tagHit=null	تسجيل المكالمات يستلزم موافقة مسبقة صريحة قبل بدء التسجيل وسنداً نظامياً للمعالجة.
+STRICT	L179	tags=S2,S3	found=S2,S3	tagHit=true	لجهة التحكم الحصول على موافقة صاحب البيانات الشخصية على معالجة بياناته بأي شكل أو وسيلة مل
+STRICT	L180	tags=S1	found=S1	tagHit=true	إحلال كلمة "صريحة" محل كلمة "كتابية" الواردة في الفقرة (1) من هذه المادة
+STRICT	L181	tags=S2	found=S2	tagHit=true	الموافقة الصريحة: موافقة تُمنح بشكل مباشر وصريح من صاحب البيانات الشخصية بأي شكل من الأشكا
+STRICT	L182	tags=S2	found=S2	tagHit=true	أن تكون أغراض المعالجة واضحةً ومحددةً، وأن توضح وتبيّن تلك الأغراض إلى صاحب البيانات الشخص
+STRICT	L183	tags=S2	found=S2,S3	tagHit=true	مع بيان وقت ووسيلة الموافقة.
+STRICT	L183	tags=S2	found=S2,S3	tagHit=true	أن تكون هناك موافقة مستقلة لكل غرض من أغراض المعالجة.
+STRICT	L185	tags=S2	found=S2,S3	tagHit=true	دون تأخير غير مبرر
+STRICT	L186	tags=S2	found=S2	tagHit=true	يجب على جهة التحكم قبل أو عند جمع البيانات، اتخاذ التدابير اللازمة لإبلاغ صاحب البيانات ال
+STRICT	L187	tags=S20	found=S20	tagHit=true	تعد سرّيةً المكالمات الهاتفية والمعلومات التي ترسَل أو تُستقبَل عن طريق شبكات الاتصالات ال
+STRICT	L188	tags=S18	found=S18	tagHit=true	وحفظها لمدة سنة، لتزويد الوزارة أو الجهات المختصة
+STRICT	L188	tags=S18	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L191	tags=-	found=S2,S3	tagHit=null	الشفوية
+STRICT	L191	tags=-	found=S1,S2,S3,S8,S12	tagHit=null	صريحة
+STRICT	L191	tags=-	found=S1,S2,S3,S19	tagHit=null	كتابية
+STRICT	L191	tags=-	found=S2,S3,S7	tagHit=null	بأي شكل من الأشكال
+STRICT	L191	tags=-	found=S2,S3	tagHit=null	قابلة للإثبات
+STRICT	L194	tags=-	found=S4,S5,S15	tagHit=null	نعم
+STRICT	L194	tags=-	found=S2,S3	tagHit=null	بحيث لا يمكن تفسيرها بخلاف ذلك
+STRICT	L199	tags=-	found=S20	tagHit=null	ولا تسجيلها؛ إلا في الحالات التي تبينها الأنظمة
+STRICT	L200	tags=S18	found=S1	tagHit=false	بمقتضى نظام آخر
+STRICT	L200	tags=S18	found=S2	tagHit=false	لا يؤثر العدول عن الموافقة على عمليات معالجة البيانات الشخصية التي تتم بناءً على مسوغات نظ
+MISSING	L203	tags=-	found=-	tagHit=null	موافقة مسبقة صريحة
+STRICT	L205	tags=S2,S3	found=S18,S20	tagHit=false	مكالم
+STRICT	L205	tags=S2,S3	found=S2,S3	tagHit=true	الشفوية
+STRICT	L205	tags=S2,S3	found=S8,S12,S13,S15,S18,S19,S20	tagHit=false	الهاتف
+STRICT	L205	tags=S2,S3	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L205	tags=S2,S3	found=S18,S20	tagHit=false	مكالم
+MISSING	L211	tags=-	found=-	tagHit=null	تكييف استطلاع الرضا: خدمي أم دعائي؟
+MISSING	L211	tags=-	found=-	tagHit=null	إرسال CSAT التلقائي
+MISSING	L211	tags=-	found=-	tagHit=null	رسائل الاستطلاع (CSAT) قد تسقط تحت مادة المواد الدعائية في نظام حماية البيانات الشخصية — أ
+MISSING	L211	tags=-	found=-	tagHit=null	المقترح: عدم إرساله افتراضياً، وتفعيله بقرار التاجر مع تسجيل موافقة.
+STRICT	L217	tags=S1	found=S1	tagHit=true	لأجل إرسال مواد دعائية أو توعوية، إلاَّ وفقاً لما يأتي:
+STRICT	L217	tags=S1	found=S1	tagHit=true	أن تؤخذ موافقة المتلقي المستهدف على إرسال هذه المواد إليه.
+STRICT	L217	tags=S1	found=S1	tagHit=true	وتحدد اللوائح الأحكام المتعلقة بالمواد الدعائية والتوعوية المشار إليها في هذه المادة
+STRICT	L218	tags=S2,S3	found=S2,S3	tagHit=true	على جهة التحكم قبل إرسال مواد دعائية أو توعوية الحصول على موافقة المتلقي المستهدف، وذلك في
+STRICT	L219	tags=S2	found=S2,S3	tagHit=true	دون الإخلال بنظام الاتصالات وتقنية المعلومات والأنظمة الأخرى ذوات الصلة
+STRICT	L219	tags=S2	found=S2,S3	tagHit=true	ذكر اسم الجهة المرسلة بوضوح دون أي إخفاء لهويتها.
+STRICT	L219	tags=S2	found=S2,S3	tagHit=true	التوقف عن إرسال الرسائل الدعائية أو التوعوية فور تلقيها طلب المتلقي المستهدف بذلك.
+STRICT	L219	tags=S2	found=S2,S3	tagHit=true	أن يكون إيقاف تلقي المواد الدعائية أو التوعوية دون مقابل مالي.
+STRICT	L220	tags=S2	found=S2,S3	tagHit=true	التسويق المباشر: التواصل مع صاحب البيانات الشخصية بأي وسيلة مادية أو إلكترونية مباشرة بهدف
+STRICT	L221	tags=S2	found=S2	tagHit=true	الحصول على موافقة صاحب البيانات الشخصية وفقاً لأحكام المادة (الحادية عشرة) من هذه اللائحة.
+STRICT	L222	tags=S1,S2	found=S2,S3,S7	tagHit=true	التوقعات المعقولة
+STRICT	L223	tags=S12	found=S12	tagHit=true	في هذه الحالة تعد آراء الموظفين بيانات شخصية
+STRICT	L223	tags=S12	found=S12	tagHit=true	الآراء
+STRICT	L223	tags=S12	found=S12	tagHit=true	استطاعاً
+STRICT	L226	tags=-	found=S2,S3	tagHit=null	في حال عدم وجود تعامل مسبق
+STRICT	L227	tags=-	found=S2,S3,S8	tagHit=null	التسويق المباشر
+STRICT	L227	tags=-	found=S2,S3	tagHit=null	مادة تسويقية
+MISSING	L229	tags=-	found=-	tagHit=null	تنظيمات الحد من الرسائل والمكالمات الاقتحامية
+MISSING	L232	tags=-	found=-	tagHit=null	معطَّل افتراضياً + سجل موافقة
+MISSING	L234	tags=S12	found=-	tagHit=false	استطلاع
+STRICT	L234	tags=S12	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+MISSING	L234	tags=S12	found=-	tagHit=false	استبيان
+MISSING	L234	tags=S12	found=-	tagHit=false	خدمية
+STRICT	L234	tags=S12	found=S1,S2,S3,S12	tagHit=true	دعائية
+MISSING	L240	tags=-	found=-	tagHit=null	مدة الاحتفاظ بالتسجيلات الصوتية والمرفقات ومقتضيات إتلافها
+STRICT	L240	tags=-	found=S13	tagHit=null	سياسة الاحتفاظ
+MISSING	L240	tags=-	found=-	tagHit=null	لا حذف صلب لأي رسالة أو تذكرة مرتبطة بفاتورة ضريبية
+MISSING	L240	tags=-	found=-	tagHit=null	الاحتفاظ بالمرفقات والتسجيلات | مدة وموقع | الخصوصية | ⛔ مرتبط بقرار إقامة البيانات
+STRICT	L246	tags=S5	found=S5	tagHit=true	لا توجد فترة زمنية محددة للاحتفاظ بالبيانات
+STRICT	L247	tags=S1	found=S1	tagHit=true	على جهة التحكم إتلاف البيانات الشخصية بعد انتهاء الغرض من جمعها دون تأخير.
+STRICT	L247	tags=S1	found=S1	tagHit=true	يجوز لها الاحتفاظ بتلك البيانات بعد انتهاء الغرض من جمعها إذا تمت إزالة كل ما يؤدي إلى معر
+STRICT	L248	tags=S1	found=S1	tagHit=true	أ- إذا توافر مسوغ نظامي يوجب الاحتفاظ بها مدة مُحددة، وفي هذه الحالة يُجرى إتلافها بعد انت
+STRICT	L248	tags=S1	found=S1	tagHit=true	ب- إذا كانت البيانات الشخصية متصلة اتصالاً وثيقاً بقضية منظورة أمام جهة قضائية وكان الاحتف
+STRICT	L249	tags=S2	found=S2	tagHit=true	مدة الاحتفاظ بالبيانات الشخصية أو معايير حساب المدة في حال تعذر تحديدها مسبقاً.
+STRICT	L250	tags=S1,S2	found=S1	tagHit=true	المدة الزمنية المتوقعة للاحتفاظ بالبيانات الشخصية.
+STRICT	L250	tags=S1,S2	found=S2,S3	tagHit=true	مدد الاحتفاظ الخاصة بكل من فئات البيانات الشخصية، ما أمكن ذلك.
+STRICT	L251	tags=S2	found=S2,S3	tagHit=true	إتلاف كافة النسخ المتعلقة بالبيانات الشخصية المخزنة في أنظمة جهة التحكم، بما في ذلك النسخ 
+STRICT	L252	tags=S6	found=S6	tagHit=true	الاحتفاظ بوثائق مفصلة لعمليات إخفاء الهوية والإتلاف
+STRICT	L253	tags=S1,S2	found=S1	tagHit=true	لا يجوز تصوير الوثائق الرسمية التي تحدد هوية صاحب البيانات الشخصية أو نسخها، إلاَّ عندما ي
+STRICT	L253	tags=S1,S2	found=S2,S3	tagHit=true	وإتلافها فور انتهاء الغرض منها، ما لم يكن هناك متطلب نظامي للاحتفاظ بها.
+STRICT	L254	tags=S21	found=S21	tagHit=true	على التاجر أن يحتفظ بصورة طبق الأصل من جميع المراسلات والوثائق المتعلقة بتجارته الصادرة من
+STRICT	L254	tags=S21	found=S21	tagHit=true	على التاجر وورثته الاحتفاظ بالدفاتر المنصوص عليها في هذا النظام، والمراسلات، والمستندات ال
+STRICT	L255	tags=S18	found=S18	tagHit=true	وحفظها لمدة سنة، لتزويد الوزارة أو الجهات المختصة
+STRICT	L255	tags=S18	found=S18	tagHit=true	لمدة لا تقل عن سنة - بنسخة من بيانات السياح وعقودهم
+STRICT	L259	tags=-	found=S1	tagHit=null	مسوغ نظامي يوجب الاحتفاظ بها مدة مُحددة
+STRICT	L261	tags=S21	found=S21	tagHit=true	المراسلات والوثائق المتعلقة بتجارته
+STRICT	L261	tags=S21	found=S21	tagHit=true	المراسلات
+MISSING	L269	tags=S5	found=-	tagHit=false	التسجيلات
+STRICT	L269	tags=S5	found=S2,S3,S8	tagHit=false	مدة الاحتفاظ
+MISSING	L275	tags=-	found=-	tagHit=null	ق4
+MISSING	L275	tags=-	found=-	tagHit=null	33. أسئلة للمستشار القانوني / حماية البيانات
+MISSING	L275	tags=-	found=-	tagHit=null	هل يُعدّ إرسال بيانات المتعاملين إلى شموس معالجةً بموجب التزام نظامي (ولا تحتاج موافقة منف
+MISSING	L275	tags=-	found=-	tagHit=null	ليس تكاملاً اختيارياً
+MISSING	L275	tags=-	found=-	tagHit=null	مكاتب خطوط الطيران
+MISSING	L275	tags=-	found=-	tagHit=null	22 قطاعاً ملزماً
+STRICT	L275	tags=-	found=S19	tagHit=null	الربط في نظام شموس الأمني
+STRICT	L277	tags=-	found=S16,S17	tagHit=null	تأجير العقار
+STRICT	L281	tags=S1	found=S1	tagHit=true	عندما تكون المعالجة بمقتضى نظام آخر أو تنفيذاً لاتفاق سابق يكون صاحب البيانات الشخصية طرفا
+STRICT	L282	tags=S1	found=S1	tagHit=true	3- إذا كانت الجهة التي تطلب الإفصاح جهة عامة، وكان ذلك لأغراض المصلحة العامة أو لأغراض أمن
+STRICT	L283	tags=S1,S7	found=S1	tagHit=true	في الأحوال المنصوص عليها في الفقرات (1) و(2) و(5) و(6) من المادة الخامسة عشرة من النظام
+STRICT	L283	tags=S1,S7	found=S7	tagHit=true	ولا تسري هذه القيود على عمليات الإفصاح في الحالات الآتية
+STRICT	L284	tags=S2	found=S2,S3	tagHit=true	توثيق طلب الإفصاح.
+STRICT	L284	tags=S2	found=S2,S3,S7	tagHit=true	تحديد نوع البيانات الشخصية المطلوب الإفصاح عنها بشكل دقيق.
+STRICT	L285	tags=S2	found=S2,S3,S7	tagHit=true	على جهة التحكم تضمين عمليات الإفصاح عن البيانات الشخصية في سجلات أنشطة معالجة البيانات الش
+STRICT	L286	tags=S1,S2	found=S1,S8	tagHit=true	عند جمع بياناته
+STRICT	L286	tags=S1,S2	found=S1	tagHit=true	الجهة أو الجهات التي سَيُجرى إفصاح البيانات الشخصية إليها، وصفتها، وما إذا كانت البيانات ا
+STRICT	L286	tags=S1,S2	found=S2	tagHit=true	المسوّغ النظامي والغرض من جمع ومعالجة البيانات الشخصية بصورة محددة وواضحة وصريحة.
+STRICT	L287	tags=S2	found=S2,S3	tagHit=true	يتعارض مع أي من الأنظمة السارية في المملكة.
+STRICT	L288	tags=S8	found=S8	tagHit=true	تنفيذاً لالتزام نظامي [يتم إيضاح اسم النظام والمادة التي تخول الجهة
+STRICT	L289	tags=S16	found=S16,S17	tagHit=true	يسري هذا النظام على المنشآت الخاصة التي تمارس الأنشطة الآتية:
+STRICT	L289	tags=S16	found=S16	tagHit=true	1 - مرافق الإيواء السياحي، وتأجير الاستراحات.
+STRICT	L289	tags=S16	found=S16	tagHit=true	4 - نقل الركاب بين المدن داخل المملكة، أو إلى خارجها.
+STRICT	L289	tags=S16	found=S16	tagHit=true	6 - تأجير العقار.
+STRICT	L289	tags=S16	found=S16,S17	tagHit=true	المتعامل: الشخص ذو الصفة الطبيعية المستفيد من الخدمات التي تقدمها المنشآت الخاصة.
+STRICT	L290	tags=S16,S17	found=S16	tagHit=true	4 - تسجيل المعلومات بشكل فوري منذُ بدء التعامل مع المتعامل.
+STRICT	L290	tags=S16,S17	found=S17	tagHit=true	تلتزم المنشأة بإرسال بيانات المتعاملين معها إلى نظام شموس في مدة لا تتجاوز ستين دقيقة بحد 
+STRICT	L290	tags=S16,S17	found=S17	tagHit=true	بموجب الهويات الوطنية ورخص الإقامة وجوازات السفر
+STRICT	L290	tags=S16,S17	found=S17	tagHit=true	محدداً البيانات المطلوب تدوينها.
+STRICT	L290	tags=S16,S17	found=S17	tagHit=true	ويمنع استخدام تلك المعلومات لغير الأغراض المنصوص عليها في النظام ولائحته.
+STRICT	L291	tags=S19	found=S19	tagHit=true	والربط في نظام شموس
+STRICT	L291	tags=S19	found=S19	tagHit=true	إصدار ترخيص فرعي
+STRICT	L292	tags=S18	found=S18	tagHit=true	المحافظة على سرية وخصوصية معلومات السائح، وعدم مشاركتها أو استخدامها لأي غرض كان دون أخذ م
+STRICT	L295	tags=-	found=S1	tagHit=null	بمقتضى نظام آخر
+STRICT	L295	tags=-	found=S1,S2,S3,S5,S7	tagHit=null	لأغراض أمنية أو لتنفيذ نظام آخر
+STRICT	L295	tags=-	found=S2,S3	tagHit=null	بإرادة حرة
+STRICT	L297	tags=S17	found=S1,S2,S3,S5,S7	tagHit=false	طلب الإفصاح
+STRICT	L298	tags=-	found=S19	tagHit=null	الربط في نظام شموس
+MISSING	L298	tags=-	found=-	tagHit=null	22 قطاعاً
+STRICT	L299	tags=-	found=S18	tagHit=null	لأي غرض كان دون أخذ موافقته
+STRICT	L301	tags=-	found=S8	tagHit=null	تنفيذاً لالتزام نظامي
+STRICT	L303	tags=S16,S17,S18,S19	found=S16,S17,S19	tagHit=true	شموس
+STRICT	L303	tags=S16,S17,S18,S19	found=S1,S2,S3,S5,S7,S10,S11,S12,S13	tagHit=false	جهة عامة
+STRICT	L303	tags=S16,S17,S18,S19	found=S1,S2,S3,S5,S7,S8,S12,S13,S17,S18,S20,S22	tagHit=true	أمنية
+STRICT	L303	tags=S16,S17,S18,S19	found=S16,S17,S19	tagHit=true	شموس
+STRICT	L303	tags=S16,S17,S18,S19	found=S16,S17,S19	tagHit=true	شموس
+STRICT	L303	tags=S16,S17,S18,S19	found=S17,S18,S19	tagHit=true	السفر
+STRICT	L303	tags=S16,S17,S18,S19	found=S1,S2,S3,S8,S12,S13,S16,S17,S18,S19,S20,S22	tagHit=true	الأمني
+STRICT	L303	tags=S16,S17,S18,S19	found=S16,S17,S19	tagHit=true	شموس
+STRICT	L303	tags=S16,S17,S18,S19	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=true	لا
+STRICT	L303	tags=S16,S17,S18,S19	found=S16,S17,S19	tagHit=true	شموس
+STRICT	L317	tags=-	found=S5,S8,S14,S15	tagHit=null	تواصل معنا
+STRICT	L317	tags=-	found=S5,S8,S14,S15	tagHit=null	تواصل معنا
+STRICT	L317	tags=-	found=S15	tagHit=null	Anonymous Angular Application
+STRICT	L318	tags=-	found=S15	tagHit=null	الحد الأقصى المسموح به 250 أحرف.
+STRICT	L319	tags=-	found=S5,S14,S15	tagHit=null	طلب بيان الرأي النظامي
+STRICT	L319	tags=-	found=S15	tagHit=null	حيال أي خلاف مرتبط بسياسة مشاركة البيانات.
+STRICT	L319	tags=-	found=S14,S15	tagHit=null	شهادة تسجيل سارية المفعول من مكتب إدارة البيانات الوطنية
+STRICT	L320	tags=-	found=S5,S14,S15	tagHit=null	تقديم شكوى متعلقة بالبيانات الشخصية
+MISSING	L338	tags=-	found=-	tagHit=null	تنظيمات الحد من الرسائل والمكالمات الاقتحامية
+MISSING	L347	tags=-	found=-	tagHit=null	22 قطاعاً ملزماً
+MISSING	L347	tags=-	found=-	tagHit=null	مكاتب خطوط الطيران
+STRICT	L348	tags=-	found=S16,S17	tagHit=null	تأجير العقار
+MISSING	L349	tags=-	found=-	tagHit=null	تحتاج موافقة
+MISSING	L350	tags=-	found=-	tagHit=null	نظام حماية البيانات الشخصية يشترط موافقة صاحب البيانات قبل معالجتها
+STRICT	L350	tags=-	found=S1,S2,S3,S8,S12	tagHit=null	صريحة
+MISSING	L351	tags=-	found=-	tagHit=null	قد تخضع
+MISSING	L352	tags=-	found=-	tagHit=null	تاريخ الصيانة يتبع الأصل
+STRICT	L356	tags=-	found=S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14,S15,S16,S17,S18,S19,S20,S21,S22	tagHit=null	لا

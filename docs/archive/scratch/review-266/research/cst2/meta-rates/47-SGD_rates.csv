@@ -1,0 +1,45 @@
+"Cost per message in SGD on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,SGD,0.0791,0.0333,0.0333,n/a,n/a
+Brazil,SGD,0.0800,0.0087,0.0087,n/a,n/a
+Chile,SGD,0.1138,0.0256,0.0256,n/a,n/a
+Colombia,SGD,0.0160,0.0010,0.0010,n/a,n/a
+Egypt,SGD,0.0825,0.0046,0.0046,0.0832,n/a
+France,SGD,0.1100,0.0384,0.0384,n/a,n/a
+Germany,SGD,0.1748,0.0704,0.0704,n/a,n/a
+Hong Kong,SGD,0.0937,0.0334,0.0334,n/a,n/a
+Hungary,SGD,0.1101,0.0447,0.0447,n/a,n/a
+India,SGD,0.0151,0.0018,0.0018,0.0389,n/a
+Indonesia,SGD,0.0526,0.0320,0.0320,0.1741,n/a
+Israel,SGD,0.0452,0.0068,0.0068,n/a,n/a
+Italy,SGD,0.1018,0.0384,0.0384,n/a,n/a
+Malaysia,SGD,0.1101,0.0179,0.0179,0.0535,n/a
+Mexico,SGD,0.0391,0.0109,0.0109,n/a,n/a
+Netherlands,SGD,0.2045,0.0640,0.0640,n/a,n/a
+Nigeria,SGD,0.0661,0.0086,0.0086,0.0960,n/a
+Pakistan,SGD,0.0606,0.0128,0.0128,0.0960,n/a
+Peru,SGD,0.0900,0.0256,0.0256,n/a,n/a
+Poland,SGD,0.0468,0.0156,0.0156,n/a,n/a
+Qatar,SGD,0.0437,0.0154,0.0154,n/a,n/a
+Romania,SGD,0.1101,0.0371,0.0371,n/a,n/a
+Russia,SGD,0.1027,0.0512,0.0512,n/a,n/a
+Saudi Arabia,SGD,0.0641,0.0137,0.0137,0.0766,n/a
+Singapore,SGD,0.0937,0.0205,0.0205,n/a,n/a
+South Africa,SGD,0.0485,0.0097,0.0097,0.0256,n/a
+Spain,SGD,0.0905,0.0256,0.0256,n/a,n/a
+Turkey,SGD,0.0140,0.0012,0.0012,n/a,n/a
+United Arab Emirates,SGD,0.0639,0.0201,0.0201,0.0653,n/a
+United Kingdom,SGD,0.0812,0.0282,0.0282,n/a,n/a
+North America,SGD,0.0320,0.0044,0.0044,n/a,n/a
+Rest of Africa,SGD,0.0288,0.0051,0.0051,n/a,n/a
+Rest of Asia Pacific,SGD,0.0937,0.0145,0.0145,n/a,n/a
+Rest of Central & Eastern Europe,SGD,0.1101,0.0271,0.0271,n/a,n/a
+Rest of Latin America,SGD,0.0947,0.0145,0.0145,n/a,n/a
+Rest of Middle East,SGD,0.0437,0.0117,0.0117,n/a,n/a
+Rest of Western Europe,SGD,0.0758,0.0219,0.0219,n/a,n/a
+Other,SGD,0.0773,0.0099,0.0099,n/a,n/a

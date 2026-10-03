@@ -1,0 +1,45 @@
+"Cost per message in AED on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here: ",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,AED,0.2269,0.0955,0.0955,n/a,n/a
+Brazil,AED,0.2295,0.0250,0.0250,n/a,n/a
+Chile,AED,0.3264,0.0734,0.0734,n/a,n/a
+Colombia,AED,0.0459,0.0029,0.0029,n/a,n/a
+Egypt,AED,0.2364,0.0132,0.0132,0.2386,n/a
+France,AED,0.3154,0.1101,0.1101,n/a,n/a
+Germany,AED,0.5012,0.2019,0.2019,n/a,n/a
+Hong Kong,AED,0.2688,0.0955,0.0955,n/a,n/a
+Hungary,AED,0.3157,0.1284,0.1284,n/a,n/a
+India,AED,0.0433,0.0051,0.0051,0.1116,n/a
+Indonesia,AED,0.1509,0.0918,0.0918,0.4993,n/a
+Israel,AED,0.1296,0.0195,0.0195,n/a,n/a
+Italy,AED,0.2918,0.1101,0.1101,n/a,n/a
+Malaysia,AED,0.3157,0.0514,0.0514,0.1535,n/a
+Mexico,AED,0.1120,0.0312,0.0312,n/a,n/a
+Netherlands,AED,0.5863,0.1836,0.1836,n/a,n/a
+Nigeria,AED,0.1894,0.0246,0.0246,0.2754,n/a
+Pakistan,AED,0.1737,0.0367,0.0367,0.2754,n/a
+Peru,AED,0.2581,0.0734,0.0734,n/a,n/a
+Poland,AED,0.1344,0.0448,0.0448,n/a,n/a
+Qatar,AED,0.1252,0.0440,0.0440,n/a,n/a
+Romania,AED,0.3157,0.1064,0.1064,n/a,n/a
+Russia,AED,0.2945,0.1469,0.1469,n/a,n/a
+Saudi Arabia,AED,0.1839,0.0393,0.0393,0.2196,n/a
+Singapore,AED,0.2688,0.0588,0.0588,n/a,n/a
+South Africa,AED,0.1391,0.0279,0.0279,0.0734,n/a
+Spain,AED,0.2597,0.0734,0.0734,n/a,n/a
+Turkey,AED,0.0400,0.0033,0.0033,n/a,n/a
+United Arab Emirates,AED,0.1832,0.0576,0.0576,0.1872,n/a
+United Kingdom,AED,0.2330,0.0808,0.0808,n/a,n/a
+North America,AED,0.0918,0.0125,0.0125,n/a,n/a
+Rest of Africa,AED,0.0826,0.0147,0.0147,n/a,n/a
+Rest of Asia Pacific,AED,0.2688,0.0415,0.0415,n/a,n/a
+Rest of Central & Eastern Europe,AED,0.3157,0.0778,0.0778,n/a,n/a
+Rest of Latin America,AED,0.2717,0.0415,0.0415,n/a,n/a
+Rest of Middle East,AED,0.1252,0.0334,0.0334,n/a,n/a
+Rest of Western Europe,AED,0.2174,0.0628,0.0628,n/a,n/a
+Other,AED,0.2218,0.0283,0.0283,n/a,n/a

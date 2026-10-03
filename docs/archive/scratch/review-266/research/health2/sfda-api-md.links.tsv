@@ -1,0 +1,38 @@
+Skip to main content	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#main-content
+	https://developer.sfda.gov.sa/index.php/
+	https://developer.sfda.gov.sa/user/login
+	https://developer.sfda.gov.sa/user/register
+Get Started	https://developer.sfda.gov.sa/index.php/get-started
+Products & Services	https://developer.sfda.gov.sa/index.php/products
+Contact Us	https://developer.sfda.gov.sa/index.php/contact-us
+FAQs	https://developer.sfda.gov.sa/index.php/faq
+Login	https://developer.sfda.gov.sa/index.php/user/login
+Create new account	https://developer.sfda.gov.sa/index.php/user/register
+Home	https://developer.sfda.gov.sa/
+Products and Services	https://developer.sfda.gov.sa/products
+Registered Medical Device Service	https://developer.sfda.gov.sa/apidoc/registered-medical-device-service/79
+	
+Overview	
+Techincal	
+Registered Medical Devices Product	https://developer.sfda.gov.sa/products/registered-medical-devices-product
+Ghad System	https://ghad.sfda.gov.sa/en
+https://developer.sfda.gov.sa/sites/default/files/apidoc_specs/medical-device-products-swagger-production-0.2.yaml	https://developer.sfda.gov.sa/sites/default/files/apidoc_specs/medical-device-products-swagger-production-0.2.yaml
+Contact Syatems Integration Team	mailto:DataHub.Int@sfda.gov.sa
+Medical Device	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device
+/Lowrisk/list/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_Lowrisk_list__page_
+/Lowrisk/Product	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_Lowrisk_Product
+/Lowrisk/search/{keyword}/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_Lowrisk_search__keyword___page_
+/GHTF/list/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_GHTF_list__page_
+/GHTF/Product	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_GHTF_Product
+/GHTF/Accessory/id/{PropertiesId}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_GHTF_Accessory_id__PropertiesId_
+/GHTF/search/{keyword}/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_GHTF_search__keyword___page_
+/TFA/list/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_TFA_list__page_
+/TFA/Accessory/id/{PropertiesId}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_TFA_Accessory_id__PropertiesId_
+/TFA/search/{keyword}/{page}	https://developer.sfda.gov.sa/apidoc/Registered-Medical-Device-Service/79#/Medical%20Device/get_TFA_search__keyword___page_
+	https://validator.swagger.io/validator/debug?url=https%3A%2F%2Fdeveloper.sfda.gov.sa%2Fsites%2Fdefault%2Ffiles%2Fapidoc_specs%2Fmedical-device-products-swagger-production-0.2.yaml
+Get Started	https://developer.sfda.gov.sa/get-started
+Products and Services	https://developer.sfda.gov.sa/products
+Contact us	https://developer.sfda.gov.sa/index.php/contact-us
+FAQ's	https://developer.sfda.gov.sa/index.php/faq
+	https://developer.sfda.gov.sa/
+	https://developer.sfda.gov.sa/

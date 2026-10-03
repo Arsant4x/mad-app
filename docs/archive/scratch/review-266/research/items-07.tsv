@@ -1,0 +1,31 @@
+تاجر الدروب شوبنق أصيل أم وكيل	1 🔴: هل يُعامَل تاجر الدروب شوبنق أصيلاً أم وكيلاً لأغراض ضريبة القيمة المضافة؟ وما المعايير الفاصلة؟ «لا يُكتب سطر منطق تنظيمي واحد قبل الإجابة»	docs/plans/fulfillment-models-full-spec.md:1332	consultant	ZATCA	false
+كشف اسم المورد للعميل	2: هل تختلف إجابة الأصيل/الوكيل إذا كُشف اسم المورد للعميل؟	docs/plans/fulfillment-models-full-spec.md:1333	consultant	ZATCA	false
+الملزم بالفاتورة في السوق متعدد البائعين	3: في السوق متعدد البائعين، من الملزم بإصدار الفاتورة — المنصة أم البائع؟ وهل تختلف إن ضمنت المنصة أو سعّرت؟	docs/plans/fulfillment-models-full-spec.md:1334	consultant	ZATCA	false
+الاستحقاق في التسليم عبر عدة شحنات	4: توقيت استحقاق الضريبة في التسليم المتأخر عبر عدة شحنات لطلب واحد	docs/plans/fulfillment-models-full-spec.md:1335	consultant	ZATCA	false
+رسوم الشحن عنصر أم توريد مستقل	5: هل رسوم الشحن المحصّلة عنصر من المقابل أم توريد مستقل؟	docs/plans/fulfillment-models-full-spec.md:1336	consultant	ZATCA	false
+الاحتساب العكسي على الخدمات الرقمية الأجنبية	6: نطاق الاحتساب العكسي على الخدمات الرقمية الأجنبية (منصات · إعلانات · بوابات)، وهل من عتبة؟	docs/plans/fulfillment-models-full-spec.md:1337	consultant	ZATCA	false
+عتبة الموجة 25 على الإجمالي أم العمولة	7: متى تُحتسب عتبة الموجة 25 على أساس الإيراد الإجمالي مقابل العمولة؟	docs/plans/fulfillment-models-full-spec.md:1338	consultant	ZATCA	false
+المرتجع المهجور	8: المرتجع المهجور (استرداد بلا إرجاع) — معالجته الضريبية؟ وهل يُصدر إشعار دائن كامل؟	docs/plans/fulfillment-models-full-spec.md:1339	consultant	ZATCA	false
+استيراد شخصي أم تجاري في الدروب شوبنق	9 🔴 (جمركي — الأخطر): شحنة يطلبها تاجر سعودي من مورد أجنبي وتُشحن باسم العميل النهائي — استيراد شخصي للعميل أم تجاري للتاجر؟	docs/plans/fulfillment-models-full-spec.md:1343	authority	ZATCA	false
+تكرار الشحنات وتصنيف الاستيراد	10 (جمركي): هل يتغيّر التصنيف بتكرار الشحنات من المصدر نفسه؟	docs/plans/fulfillment-models-full-spec.md:1344	authority	ZATCA	false
+من يخصم ضريبة الاستيراد	11 (جمركي): من يحق له خصم ضريبة الاستيراد في هذه الحالة؟	docs/plans/fulfillment-models-full-spec.md:1345	authority	ZATCA	false
+رسوم جمركية لم تُفصح للعميل	12 (جمركي): ما مسؤولية التاجر إن طُولب العميل برسوم لم تُفصح؟	docs/plans/fulfillment-models-full-spec.md:1346	consultant	MC	false
+رِكز مسؤول بيانات أم معالج (تنفيذ الطلبات)	13 🔴: هل رِكز مسؤول بيانات أم معالج؟ وما الأثر التعاقدي مع التجار؟	docs/plans/fulfillment-models-full-spec.md:1350	consultant	SDAIA	false
+البنود التعاقدية مع مورد أجنبي	14: الشكل المطلوب للبنود التعاقدية النموذجية مع مورد أجنبي (نقل بيانات الشحن)	docs/plans/fulfillment-models-full-spec.md:1351	consultant	SDAIA	false
+موافقة صريحة على مشاركة بيانات الشحن	15: هل يكفي إفصاح سياسة الخصوصية، أم تلزم موافقة صريحة منفصلة على مشاركة بيانات الشحن؟	docs/plans/fulfillment-models-full-spec.md:1352	consultant	SDAIA	false
+مدة السبعة أيام ومدد اللائحة	16: كيف تتفاعل مدة السبعة أيام في نظام التجارة الإلكترونية مع مدد اللائحة التنفيذية؟	docs/plans/fulfillment-models-full-spec.md:1353	consultant	MC	false
+الدروب شوبنق والسجل التجاري	17: هل يُعد الدروب شوبنق نشاطاً يحتاج وصفاً خاصاً في السجل التجاري؟	docs/plans/fulfillment-models-full-spec.md:1354	consultant	MC	false
+مسؤولية التاجر عن صنف معيب لم يره	18: ما مسؤولية التاجر عن صنف معيب لم يره قط؟	docs/plans/fulfillment-models-full-spec.md:1355	consultant	MC	false
+التغليف الأبيض وإخفاء المُصنّع	19: حدود التغليف الأبيض — هل إخفاء هوية المُصنّع الفعلي مخالفة إفصاح؟	docs/plans/fulfillment-models-full-spec.md:1356	consultant	MC	false
+عربون طلبية الأثاث وفاتورة الدفعة المقدمة	س-1: تأكيد أن قبض العربون ينشئ استحقاق ضريبة فوراً بمقدار المقبوض، وأن فاتورة الدفعة المقدمة (386) إلزامية لا اختيارية	docs/plans/furniture-full-spec.md:917	consultant	ZATCA	false
+دفعات مقدمة قبل الربط مع فاتورة	س-2: معالجة الدفعات المقدمة المقبوضة قبل الربط مع منصة فاتورة عند إصدار الفاتورة النهائية بعده	docs/plans/furniture-full-spec.md:918	consultant	ZATCA	false
+العربون المصادَر في طلبية تصنيع خاص	س-3: العربون المصادَر عند إلغاء طلبية تصنيع خاص — تعويض خارج النطاق أم مقابل توريد؟ وهل يستلزم إشعاراً دائناً؟	docs/plans/furniture-full-spec.md:919	consultant	ZATCA	false
+إتلاف مخزون سبق خصم مدخلاته	س-4: إتلاف مخزون سبق خصم مدخلاته — هل يستوجب تعديل الخصم أو توريداً اعتبارياً؟ وما التوثيق؟ (ملاحظة: CLAUDE.md §9-ب يسجّل أن ضريبة التالف حُسمت بنصّها، والوثيقة نفسها لم تُعلِّمه)	docs/plans/furniture-full-spec.md:920	consultant	ZATCA	false
+تأجيل سداد ضريبة الاستيراد	س-5: شروط الاستفادة من تأجيل سداد ضريبة الاستيراد وأثرها على توقيت الخصم	docs/plans/furniture-full-spec.md:921	consultant	ZATCA	false
+غرامات الأرضيات والتأخير الجمركي	س-6: هل تُرسمَل غرامات الأرضيات والتأخير الجمركي على تكلفة المخزون أم تُصرَف؟	docs/plans/furniture-full-spec.md:922	consultant	ZATCA	false
+بطاقة الهدية وباقة التصميم المدفوعة	س-7: التفريق بين بطاقة الهدية (خارج النطاق عند البيع) وباقة التصميم المدفوعة مقدماً (توريد محدَّد)	docs/plans/furniture-full-spec.md:923	consultant	ZATCA	false
+التقسيط المباشر وترخيص الدفع الآجل	س-8 (قانوني): هل بيع التاجر بضاعته بالتقسيط المباشر لعملائه يستلزم ترخيص دفع آجل من البنك المركزي؟ (ق-9 «مرهون برأي قانوني»)	docs/plans/furniture-full-spec.md:924	consultant	SAMA	false
+التوصيل والتركيب التزام منفصل	س-9: هل التوصيل والتركيب التزام أداء منفصل يُفوتر ويُعترف به منفصلاً، أم جزء من توريد السلعة؟	docs/plans/furniture-full-spec.md:925	consultant	ZATCA	false
+الضمان الممتد المدفوع (أثاث)	س-10: الضمان الممتد المدفوع — إيراد مؤجَّل على المدة، وما توقيت استحقاق ضريبته؟	docs/plans/furniture-full-spec.md:926	consultant	ZATCA	false
+حسومات ودعم الموردين الخارجيين	س-11: معاملة الحسومات والدعم من الموردين الخارجيين ضريبياً	docs/plans/furniture-full-spec.md:927	consultant	ZATCA	false
+المحتجزات في عقود التأثيث	س-12: الضريبة على المبالغ المحتجزة في عقود التأثيث — تستحق مع الفاتورة أم مع الإفراج؟	docs/plans/furniture-full-spec.md:928	consultant	ZATCA	false

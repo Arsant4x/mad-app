@@ -1,0 +1,45 @@
+"Cost per message in AUD on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,AUD,0.0804,0.0340,0.0340,n/a,n/a
+Brazil,AUD,0.0813,0.0088,0.0088,n/a,n/a
+Chile,AUD,0.1156,0.0260,0.0260,n/a,n/a
+Colombia,AUD,0.0163,0.0012,0.0012,n/a,n/a
+Egypt,AUD,0.0837,0.0047,0.0047,0.0846,n/a
+France,AUD,0.1117,0.0390,0.0390,n/a,n/a
+Germany,AUD,0.1775,0.0715,0.0715,n/a,n/a
+Hong Kong,AUD,0.0952,0.0341,0.0341,n/a,n/a
+Hungary,AUD,0.1117,0.0454,0.0454,n/a,n/a
+India,AUD,0.0153,0.0018,0.0018,0.0395,n/a
+Indonesia,AUD,0.0535,0.0325,0.0325,0.1768,n/a
+Israel,AUD,0.0459,0.0069,0.0069,n/a,n/a
+Italy,AUD,0.1032,0.0389,0.0389,n/a,n/a
+Malaysia,AUD,0.1117,0.0182,0.0182,0.0543,n/a
+Mexico,AUD,0.0396,0.0112,0.0112,n/a,n/a
+Netherlands,AUD,0.2077,0.0650,0.0650,n/a,n/a
+Nigeria,AUD,0.0671,0.0087,0.0087,0.0975,n/a
+Pakistan,AUD,0.0615,0.0130,0.0130,0.0975,n/a
+Peru,AUD,0.0913,0.0260,0.0260,n/a,n/a
+Poland,AUD,0.0474,0.0158,0.0158,n/a,n/a
+Qatar,AUD,0.0443,0.0154,0.0154,n/a,n/a
+Romania,AUD,0.1117,0.0376,0.0376,n/a,n/a
+Russia,AUD,0.1043,0.0520,0.0520,n/a,n/a
+Saudi Arabia,AUD,0.0649,0.0139,0.0139,0.0778,n/a
+Singapore,AUD,0.0952,0.0210,0.0210,n/a,n/a
+South Africa,AUD,0.0493,0.0099,0.0099,0.0260,n/a
+Spain,AUD,0.0919,0.0260,0.0260,n/a,n/a
+Turkey,AUD,0.0142,0.0012,0.0012,n/a,n/a
+United Arab Emirates,AUD,0.0649,0.0205,0.0205,0.0662,n/a
+United Kingdom,AUD,0.0824,0.0286,0.0286,n/a,n/a
+North America,AUD,0.0325,0.0044,0.0044,n/a,n/a
+Rest of Africa,AUD,0.0293,0.0052,0.0052,n/a,n/a
+Rest of Asia Pacific,AUD,0.0952,0.0148,0.0148,n/a,n/a
+Rest of Central & Eastern Europe,AUD,0.1117,0.0275,0.0275,n/a,n/a
+Rest of Latin America,AUD,0.0961,0.0147,0.0147,n/a,n/a
+Rest of Middle East,AUD,0.0443,0.0117,0.0117,n/a,n/a
+Rest of Western Europe,AUD,0.0769,0.0222,0.0222,n/a,n/a
+Other,AUD,0.0784,0.0100,0.0100,n/a,n/a

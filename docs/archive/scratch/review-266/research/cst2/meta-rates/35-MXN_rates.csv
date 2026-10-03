@@ -1,0 +1,45 @@
+"Cost per message in MXN on the WhatsApp Business Platform, effective July 1, 2026",,,,,,
+We charge on a per-message basis on the WhatsApp Business Platform. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+Marketing rates apply across Cloud API and Marketing Messages Lite API. Learn more here:,,,,https://developers.facebook.com/docs/whatsapp/pricing,,
+"Some markets are mapped to a ""Rest of"" region or ""Other."" Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing#country-calling-codes,,
+"In some markets, we have authentication-international rates. Learn more here:",,,,https://developers.facebook.com/docs/whatsapp/pricing/authentication-international-rates,,
+Market,Currency,Marketing,Utility,Authentication,"Authentication-
+International",Service
+Argentina,MXN,1.1375,0.4786,0.4786,n/a,n/a
+Brazil,MXN,1.1504,0.1252,0.1252,n/a,n/a
+Chile,MXN,1.6363,0.3681,0.3681,n/a,n/a
+Colombia,MXN,0.2301,0.0147,0.0147,n/a,n/a
+Egypt,MXN,1.1853,0.0663,0.0663,1.1964,n/a
+France,MXN,1.5811,0.5522,0.5522,n/a,n/a
+Germany,MXN,2.5124,1.0123,1.0123,n/a,n/a
+Hong Kong,MXN,1.3473,0.4786,0.4786,n/a,n/a
+Hungary,MXN,1.5829,0.6442,0.6442,n/a,n/a
+India,MXN,0.2172,0.0258,0.0258,0.5596,n/a
+Indonesia,MXN,0.7565,0.4602,0.4602,2.5032,n/a
+Israel,MXN,0.6497,0.0976,0.0976,n/a,n/a
+Italy,MXN,1.4627,0.5522,0.5522,n/a,n/a
+Malaysia,MXN,1.5829,0.2577,0.2577,0.7694,n/a
+Mexico,MXN,0.5614,0.1565,0.1565,n/a,n/a
+Netherlands,MXN,2.9394,0.9203,0.9203,n/a,n/a
+Nigeria,MXN,0.9497,0.1233,0.1233,1.3805,n/a
+Pakistan,MXN,0.8706,0.1841,0.1841,1.3805,n/a
+Peru,MXN,1.2939,0.3681,0.3681,n/a,n/a
+Poland,MXN,0.6735,0.2245,0.2245,n/a,n/a
+Qatar,MXN,0.6276,0.2209,0.2209,n/a,n/a
+Romania,MXN,1.5829,0.5338,0.5338,n/a,n/a
+Russia,MXN,1.4762,0.7362,0.7362,n/a,n/a
+Saudi Arabia,MXN,0.9213,0.1969,0.1969,1.1007,n/a
+Singapore,MXN,1.3473,0.2945,0.2945,n/a,n/a
+South Africa,MXN,0.6976,0.1399,0.1399,0.3681,n/a
+Spain,MXN,1.3018,0.3681,0.3681,n/a,n/a
+Turkey,MXN,0.2006,0.0166,0.0166,n/a,n/a
+United Arab Emirates,MXN,0.9185,0.2890,0.2890,0.9387,n/a
+United Kingdom,MXN,1.1684,0.4049,0.4049,n/a,n/a
+North America,MXN,0.4602,0.0626,0.0626,n/a,n/a
+Rest of Africa,MXN,0.4141,0.0736,0.0736,n/a,n/a
+Rest of Asia Pacific,MXN,1.3473,0.2080,0.2080,n/a,n/a
+Rest of Central & Eastern Europe,MXN,1.5829,0.3902,0.3902,n/a,n/a
+Rest of Latin America,MXN,1.3620,0.2080,0.2080,n/a,n/a
+Rest of Middle East,MXN,0.6276,0.1675,0.1675,n/a,n/a
+Rest of Western Europe,MXN,1.0896,0.3147,0.3147,n/a,n/a
+Other,MXN,1.1117,0.1417,0.1417,n/a,n/a

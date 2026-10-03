@@ -1,0 +1,35 @@
+شراكة تقنية مع مُدد	ب-٣: اعتماد شريك تقني لدى مُدد — «الوصول للواجهة يبدو مشروطاً باتفاقية شراكة لا تسجيل ذاتي» — الخطوة التالية: «تواصل رسمي لتحديد مسار الشريك التقني» (لم يبدأ)	docs/plans/gov-integrations-master-plan.md:564	authority	Mudad	false
+بند الإثبات في العقد (وسيلة رقمية)	1: ما الصيغة الدقيقة لبند الإثبات الذي يجعل رِكز «وسيلة رقمية منصوص عليها في العقد» بمعنى نظام الإثبات؟ وهل يصح إدراجه في عقد مبني على العقد الموحد لإيجار؟	docs/plans/handover-forms-master-plan.md:438	consultant	MOJ	false
+التوقيع المرسوم مع OTP	2: هل التوقيع المرسوم بالإصبع مع تحقق OTP «توقيع إلكتروني» بالمعنى النظامي أم مجرد قرينة؟ وأثر تقديمه للتاجر كـ«موثَّق» على مسؤوليتنا	docs/plans/handover-forms-master-plan.md:441	consultant	MCIT	false
+نموذج تسليم موازٍ لإيجار	3: في العقود السكنية المسجَّلة في إيجار — هل وجود نموذج موازٍ في منصة خاصة مكمّل مقبول أم قد يُفسَّر كمنافسة لخدمة نظامية؟	docs/plans/handover-forms-master-plan.md:444	consultant	REGA/Ejar	false
+مدة الاحتفاظ لكل نوع نموذج	4: مدة الاحتفاظ الملزمة لكل نوع نموذج، وأيّها يخضع لأحكام السجلات الضريبية	docs/plans/handover-forms-master-plan.md:446	consultant	ZATCA	false
+الاحتفاظ بصور داخل المسكن	5: هل يجوز للمؤجر الاحتفاظ بصور داخل المسكن بعد انتهاء العقد وتسوية التأمين؟ وما الأساس النظامي إن لم يكن نزاع قائم؟	docs/plans/handover-forms-master-plan.md:447	consultant	SDAIA	false
+أجر خمسة أيام في م91	6: آلية احتساب «أجر خمسة أيام» في م91 من نظام العمل — على الأجر الأساسي أم الشامل؟ وهل تتراكم الأشهر لتغطية كامل التلف أم يسقط الفائض؟	docs/plans/handover-forms-master-plan.md:449	consultant	HRSD	false
+ملحق حالة السيارة إلكترونياً	7: في تأجير المركبات — هل يُقبل ملحق حالة السيارة إلكترونياً بتوقيع مرسوم، أم تشترط الهيئة العامة للنقل شكلاً معيناً؟	docs/plans/handover-forms-master-plan.md:451	consultant	TGA	false
+إخطار الطرف المقابل بتخزين الصور	8: هل يلزم إخطار الطرف المقابل صراحةً بأن الصور تُخزَّن ومدتها، ومتى تُشترط موافقة منفصلة عن توقيع النموذج؟	docs/plans/handover-forms-master-plan.md:453	consultant	SDAIA	false
+ترقيم مواد نظام الإثبات	مواد نظام الإثبات (53، 57، 58، 59، 61، 63) من «شروح مكاتب محاماة — ⚠️ تعارض في الترقيم (57 مقابل 75) يستوجب مراجعة النص الرسمي»	docs/plans/handover-forms-master-plan.md:501	deferred-research	MOJ	false
+بند حالة السيارة في لائحة التأجير	بند حالة السيارة في لائحة التأجير «نص اللائحة عبر مصدر ناقل — يُراجع على tga.gov.sa»	docs/plans/handover-forms-master-plan.md:500	deferred-research	TGA	false
+شروط التوقيع الإلكتروني (م10)	شروط التوقيع الإلكتروني (م10 من اللائحة التنفيذية لنظام التعاملات الإلكترونية) «رسمي منقول — يُراجع على موقع الهيئة»	docs/plans/handover-forms-master-plan.md:503	deferred-research	MCIT	false
+احتفاظ سجلات الحرارة سنة بعد الصلاحية	احتفاظ سجلات الحرارة سنة بعد الصلاحية — «صحفي… يلزم تأكيده من مدونة الهيئة نفسها قبل ترميزه»	docs/plans/handover-forms-master-plan.md:504	deferred-research	SFDA	false
+واجهات إيجار للقراءة	واجهات إيجار للقراءة فقط — «من ذاكرة المشروع — يُعاد التحقق قبل بناء الموجة 8»	docs/plans/handover-forms-master-plan.md:507	deferred-research	REGA/Ejar	false
+توسّع إيجار للعقود التجارية	ملحق ب-1: هل توسّع خدمة إيجار (الاستلام والتسليم) لتشمل العقود التجارية؟ «التوقيت غير معروف، وهو خطر وجودي على الجزء العقاري»	docs/plans/handover-forms-master-plan.md:590	deferred-research	REGA/Ejar	false
+واجهة إيجار للاستلام والتسليم	ملحق ب-2: هل تنشر إيجار واجهة برمجية للاستلام والتسليم؟	docs/plans/handover-forms-master-plan.md:592	deferred-research	REGA/Ejar	false
+مؤشر سلوك المستأجر	ملحق ب-3: «مؤشر سلوك المستأجر» لدى إيجار — هل يمكن أن يُغذّى من سجلات التلف؟ «غير معروف، ويحتاج فحصاً مستقلاً»	docs/plans/handover-forms-master-plan.md:593	deferred-research	REGA/Ejar	false
+مقدمو خدمات التصديق الرقمي	ملحق ب-5: الوضع الدقيق لمقدمي خدمات التصديق الرقمي المرخصين وكلفة التوقيع لكل عملية	docs/plans/handover-forms-master-plan.md:596	deferred-research		false
+قوائم فحص سلامة الغذاء البلدية	ملحق ب-6: المتطلبات البلدية لقوائم فحص سلامة الغذاء — «لم تُبحث في هذه الجولة… بناءً على المعرفة العامة لا على مصدر نظامي»	docs/plans/handover-forms-master-plan.md:597	deferred-research	MOMAH/Balady	false
+سلسلة حيازة العينات المخبرية	ملحق ب-7: متطلبات سلسلة حيازة العينات المخبرية — «نفس الحال» (لم تُبحث)	docs/plans/handover-forms-master-plan.md:599	deferred-research	MOH	false
+حقل حرّ في نموذج إيجار للإحالة	ملحق ب-8 (ق-48): هل يقبل نموذج الاستلام والتسليم في إيجار حقلاً نصياً حراً أو مرفقاً يُحال فيه رابط خارجي؟ «غير متحقق منه — يلزم فحص الشاشة الفعلية عبر حساب سكني قبل أي ادعاء تسويقي»	docs/plans/handover-forms-master-plan.md:600	deferred-research	REGA/Ejar	false
+طرق الإهلاك المقبولة زكوياً وضريبياً	ملحق ب-9: الطرق المقبولة زكوياً وضريبياً لإهلاك الأصول وهل تختلف عن المحاسبية — «سؤال للمستشار لا يُحسم هندسياً»	docs/plans/handover-forms-master-plan.md:603	consultant	ZATCA	false
+العربون في أمر بيع لم يُسلَّم (مواد بناء)	ض١: توقيت استحقاق الضريبة على العربون والدفعة المقدمة في أمر بيع لم يُسلَّم	docs/plans/hardware-full-spec.md:1068	consultant	ZATCA	false
+التوريد والتركيب (مواد بناء)	ض٢: التوريد والتركيب — توريد مركّب واحد أم توريدان مستقلان؟ وأثره على تاريخ التوريد	docs/plans/hardware-full-spec.md:1069	consultant	ZATCA	false
+الفوترة الشهرية لعدة سندات تسليم	ض٣: الفوترة الشهرية المجمَّعة لعدة سندات تسليم — هل تُعامل كتوريد مستمر؟	docs/plans/hardware-full-spec.md:1070	consultant	ZATCA	false
+الخصم النقدي للسداد المبكر	ض٤: الخصم النقدي للسداد المبكر — إشعار دائن أم تخفيض وعاء أصلي؟	docs/plans/hardware-full-spec.md:1071	consultant	ZATCA	false
+خصومات وحوافز المورد اللاحقة	ض٥: الخصومات والحوافز اللاحقة من المورد — المعالجة الضريبية وأثرها على تكلفة المخزون	docs/plans/hardware-full-spec.md:1072	consultant	ZATCA	false
+السحب للاستخدام الداخلي والعجز	ض٦: السحب للاستخدام الداخلي والعجز غير المبرَّر — متى يُعدّ توريداً معتبراً؟	docs/plans/hardware-full-spec.md:1073	consultant	ZATCA	false
+إعدام الدين وتعديل المخرجات	ض٧: شروط تعديل ضريبة المخرجات عند إعدام دين	docs/plans/hardware-full-spec.md:1074	consultant	ZATCA	false
+التوصيل تابع أم مستقل (مواد بناء)	ض٨: التوصيل — توريد تابع للسلعة أم توريد مستقل؟	docs/plans/hardware-full-spec.md:1075	consultant	ZATCA	false
+فاتورة المطوّر العقاري المؤهل	ض٩: متطلبات الفاتورة الصادرة لعميل مطوّر عقاري مؤهل لضمان قبول استرداده	docs/plans/hardware-full-spec.md:1076	consultant	ZATCA	false
+رصيد العميل وبطاقات الهدايا (مواد بناء)	ض١٠: رصيد العميل وبطاقات الهدايا — التوقيت والفرق عن الدفعة المقدمة المحدَّدة	docs/plans/hardware-full-spec.md:1077	consultant	ZATCA	false
+ضريبة الاستيراد وآلية التأجيل	ض١١: ضريبة الاستيراد — السداد عند التخليص مقابل أي آلية تأجيل متاحة	docs/plans/hardware-full-spec.md:1078	consultant	ZATCA	false
+البضاعة الأمانة (مواد بناء)	ض١٢: البضاعة الأمانة — متى يقع التوريد ومن المورِّد؟	docs/plans/hardware-full-spec.md:1079	consultant	ZATCA	false
+مدد الاسترجاع وضوابط مواد البناء	«غير محقَّق ويحتاج تأكيداً»: مدد الاستبدال والاسترجاع لهذا النشاط (المصادر متضاربة) · خضوع أي فئة من مواد البناء لضوابط تسعير أو إفصاح خاصة · متطلبات حفظ البيانات داخل المملكة لهذه السجلات	docs/plans/hardware-full-spec.md:1115	deferred-research	MC	false
