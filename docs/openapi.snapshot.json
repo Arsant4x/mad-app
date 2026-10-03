@@ -637,6 +637,15 @@
       "200"
     ]
   },
+  "GET /v1/contracts/handover-photos/{photoId}/download": {
+    "parameters": [
+      "path:photoId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/contracts/handover-photos/{photoId}/download-url": {
     "parameters": [
       "path:photoId:required"

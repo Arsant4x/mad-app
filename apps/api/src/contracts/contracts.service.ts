@@ -1323,18 +1323,16 @@ export class ContractsService {
    * purpose is to be unarguable later cannot let one side choose the time it
    * claims to have been signed.
    *
-   * ⚖️ **وعلى النموذج صورٌ ⟸ لا يُوقَّع بلا إعلام المستأجر** (`ق-١٦٠٠` · السؤال ٢٤٣): صورُ داخل المسكن تبقى بمدّة
-   * النموذج لا بانتهاء غرضها، فيُعلَم المستأجرُ يومَ التوقيع ويُقرّ الموقِّعُ بذلك، وتُختم المدّةُ المعلنة يومَها ووقتُ
-   * الإعلام (هو وقتُ التوقيع نفسُه). ونموذجٌ بلا صورٍ لا يُثقَل بإقرارٍ لا موضوعَ له.
+   * ⚖️ **وعلى النموذج صورٌ ⟸ تُختم مدّةُ حفظها يومَ التوقيع، بلا إقرارٍ من الموظّف** (توجيه ٢٧٧ · `ق-١٦١٩`/ج، بحكم صاحب
+   * المشروع: «الاستلامُ والتسليمُ والوحدةُ فارغة يكفيهما بندٌ في العقد، ولا يُطلب فيهما إقرارُ الموظّف … والصورُ لا تُحذف، وتبقى في
+   * سجلّ العقد طوالَ مدّة الحفظ النظامية»). كان الإقرارُ شرطاً (`ق-١٦٠٠` · #718)؛ والمدّةُ تُختم كما كانت (ما يحفظه البند) ووقتُها وقتُ
+   * التوقيع. **والصفُّ مقفولٌ** منذ القراءة (`loadEditableHandover`)، فصورةٌ تُرفع في اللحظة نفسِها تنتظر: تدخل قبله فتُعدّ، أو تُردّ بعده.
    */
   signHandover(companyId: string, contractId: string, handoverId: string, dto: SignHandoverDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const handover = await this.loadEditableHandover(tx, contractId, handoverId);
       const photos = await tx.handoverPhoto.count({ where: { handoverId: handover.id } });
       const years = RETENTION_YEARS.realEstate;
-      if (photos > 0 && dto.photoNoticeGiven !== true) {
-        throw new BadRequestException(formatMessage(MSG.handover_photo_notice_required, { years }));
-      }
 
       const signedAt = new Date();
       await tx.contractHandover.update({
@@ -1369,8 +1367,12 @@ export class ContractsService {
   }
 
   /** The single gate every mutation goes through — one place to be wrong, and
-   * one place to get right. */
+   * one place to get right.
+   *
+   * 🔴 **ويقفل صفَّ النموذج قبل أن يقرأه** (توجيه ٢٧٧ · `ق-١٦١٩`/ج: «وقفلُ الصفّ بين رفع الصورة والتوقيع»): التعديلُ والحذفُ والتوقيعُ
+   * ورفعُ الصورة وحذفُها كلُّها تمرّ بقفل الصفّ نفسِه (`handover-photos.service.ts`)، فلا يعدّ التوقيعُ صوراً تتغيّر تحته. */
   private async loadEditableHandover(tx: Prisma.TransactionClient, contractId: string, handoverId: string) {
+    await tx.$queryRaw`SELECT "id" FROM "contract_handovers" WHERE "id" = ${handoverId} FOR UPDATE`;
     const handover = await tx.contractHandover.findUnique({ where: { id: handoverId } });
     if (!handover || handover.contractId !== contractId) throw new NotFoundException(MSG.handover_not_found);
     if (handover.status === 'SIGNED') throw new ConflictException(MSG.handover_signed_immutable);

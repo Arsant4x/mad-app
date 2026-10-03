@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { createHandover, deleteHandover, signHandover, updateHandover, type Contract, type ContractHandover, type HandoverItemInput, type HandoverType, type ItemCondition, listHandoverPhotos, uploadHandoverPhoto, handoverPhotoDownloadUrl, deleteHandoverPhoto, type HandoverPhoto } from '../../api/contracts';
+import { createHandover, deleteHandover, signHandover, updateHandover, type Contract, type ContractHandover, type HandoverItemInput, type HandoverType, type ItemCondition, listHandoverPhotos, uploadHandoverPhoto, openHandoverPhoto, deleteHandoverPhoto, type HandoverPhoto } from '../../api/contracts';
 import { dfmt, today } from '../../lib/format';
 
 const TYPE_LABEL: Record<HandoverType, string> = {
@@ -39,10 +39,9 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
-  // ⚖️ السؤال ٢٤٣ (`ق-١٦٠٠`): عددُ صور النموذج يُقرأ من الخادم عند فتح التوقيع (قد تُرفع صورٌ بعد تحميل العقد)،
-  //    وإقرارُ إعلام المستأجر لا يُطلب إلا إن كان عليه صور.
+  // ⚖️ عددُ صور النموذج يُقرأ من الخادم عند فتح التوقيع (قد تُرفع صورٌ بعد تحميل العقد)، فيُعرض مع مدّة حفظها؛ ولا إقرارَ من
+  //    الموظّف (توجيه ٢٧٧ · ق-١٦١٩/ج: «الاستلامُ والتسليمُ والوحدةُ فارغة يكفيهما بندٌ في العقد»).
   const [signPhotoCount, setSignPhotoCount] = useState(0);
-  const [photoNoticeGiven, setPhotoNoticeGiven] = useState(false);
   const [photosFor, setPhotosFor] = useState<string | null>(null);
   const [photos, setPhotos] = useState<HandoverPhoto[]>([]);
   const [photoItemId, setPhotoItemId] = useState('');
@@ -60,7 +59,6 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
   }
 
   async function toggleSigning(h: ContractHandover) {
-    setPhotoNoticeGiven(false);
     if (signingId === h.id) {
       setSigningId(null);
       return;
@@ -284,7 +282,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 </div>
               )}
               {h.status === 'SIGNED' && h.photoNoticeYears !== null && (
-                <div className="hint">أُعلم المستأجرُ عند التوقيع أن صورَ النموذج تُحفظ {h.photoNoticeYears} سنةً من إغلاق حساب المنشأة ثم تُتلف.</div>
+                <div className="hint">صورُ النموذج تبقى في سجلّ العقد {h.photoNoticeYears} سنةً من إغلاق حساب المنشأة ثم تُتلف، ولا تُحذف قبلها.</div>
               )}
             </div>
             {h.status === 'DRAFT' && !editing && (
@@ -349,6 +347,13 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 )}
                 {h.status === 'SIGNED' && <span className="hint">النموذج موقَّع — الصور جزء ممّا وُقِّع عليه فلا تُعدَّل</span>}
               </div>
+              {/* ⚖️ توجيه ٢٧٧ · ق-١٦١٩/ج: ما لا يُصوَّر، وأساسُ التصوير هنا، وما يلزم حين يكون المستأجرُ ساكناً. */}
+              {h.status !== 'SIGNED' && (
+                <p className="hint" style={{ marginTop: 6 }}>
+                  لا تُصوَّر وجوهٌ ولا مستنداتٌ ولا أغراضٌ شخصية. والتصويرُ هنا عند التسليم والاستلام والوحدةُ فارغة، ويكفيه بندٌ في العقد؛ فإن
+                  كان المستأجرُ ساكناً (كشفٌ أو صيانة) فأعلِمه قبل التصوير. والصورُ تبقى في سجلّ العقد طوالَ مدّة الحفظ النظامية.
+                </p>
+              )}
               {photos.length === 0 && <div className="empty-state">لا صور</div>}
               {photos.map((ph) => (
                 <div key={ph.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
@@ -357,7 +362,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                     {ph.itemId && <span className="hint"> — {h.items.find((it) => it.id === ph.itemId)?.label ?? 'بند'}</span>}
                     {ph.note && <span className="hint"> · {ph.note}</span>}
                   </span>
-                  <button className="btn btn-ghost btn-sm" onClick={async () => window.open((await handoverPhotoDownloadUrl(ph.id)).url, '_blank')}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => void openHandoverPhoto(ph.id)}>
                     عرض
                   </button>
                   {h.status !== 'SIGNED' && (
@@ -389,15 +394,12 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 {/* Says plainly that this is one-way. */}
                 <p className="hint">بعد التوقيع لا يمكن تعديل النموذج أو حذفه، ويُختم بوقت الخادم.</p>
               </div>
-              {/* ⚖️ السؤال ٢٤٣ (ق-١٦٠٠): الصورُ تبقى بمدّة النموذج، فيُعلَم المستأجرُ قبل أن يوقّع، والمدّةُ من الخادم. */}
+              {/* ⚖️ ق-١٦١٩/ج: الصورُ تبقى في سجلّ العقد بمدّة الحفظ (من الخادم)، ويكفيها بندُ العقد بلا إقرارٍ من الموظّف. */}
               {signPhotoCount > 0 && (
-                <div className="field">
-                  <label>
-                    <input type="checkbox" checked={photoNoticeGiven} onChange={(e) => setPhotoNoticeGiven(e.target.checked)} /> أعلمتُ
-                    المستأجرَ أن صورَ هذا النموذج ({signPhotoCount}) تُحفظ مع سجلّات المنشأة العقارية {contract.handoverPhotoRetentionYears} سنةً
-                    من إغلاق حسابها ثم تُتلف
-                  </label>
-                </div>
+                <p className="hint">
+                  على النموذج {signPhotoCount} صور، تبقى في سجلّ العقد {contract.handoverPhotoRetentionYears} سنةً من إغلاق حساب المنشأة ثم
+                  تُتلف، وأساسُها بندُ التصوير في العقد.
+                </p>
               )}
               <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
                 <button className="btn btn-ghost" onClick={() => setSigningId(null)}>
@@ -405,14 +407,13 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 </button>
                 <button
                   className="btn btn-primary"
-                  disabled={busy || !signedBy.trim() || (signPhotoCount > 0 && !photoNoticeGiven)}
+                  disabled={busy || !signedBy.trim()}
                   onClick={() =>
                     run(
-                      () => signHandover(contract.id, h.id, signedBy.trim(), signPhotoCount > 0 ? photoNoticeGiven : undefined),
+                      () => signHandover(contract.id, h.id, signedBy.trim()),
                       () => {
                         setSigningId(null);
                         setSignedBy('');
-                        setPhotoNoticeGiven(false);
                       },
                     )
                   }

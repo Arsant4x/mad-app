@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiCreatedResponse } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiProduces } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
@@ -108,6 +108,24 @@ export class ContractsController {
   @RequiresAction('view')
   handoverPhotoUrl(@CurrentTenant() tenant: TenantContext, @Param('photoId') photoId: string) {
     return this.handoverPhotos.downloadUrl(tenant.companyId, photoId);
+  }
+
+  /**
+   * ⚖️ ق-١٦٢٥ — **صورةُ النموذج تُبثّ عبر الخادم**: الجديدةُ في المخزن الحسّاس لا رابطَ موقَّعاً لها، فالشاشةُ تقرأ كلَّ صورةٍ من هنا.
+   * و`no-store` كمرفق العقد: المفكوكُ لا يبقى في وسيطٍ ولا متصفّح.
+   */
+  @Get('handover-photos/:photoId/download')
+  @RequiresAction('view')
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ description: 'بايتاتُ الصورة كما رُفعت، بنوعها في Content-Type', schema: { type: 'string', format: 'binary' } })
+  async downloadHandoverPhoto(@CurrentTenant() tenant: TenantContext, @Param('photoId') photoId: string, @Res({ passthrough: true }) res: Response) {
+    const file = await this.handoverPhotos.download(tenant.companyId, photoId);
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(file.buffer, {
+      type: file.mimeType,
+      length: file.buffer.length,
+      disposition: `inline; filename="photo"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+    });
   }
 
   @Delete('handover-photos/:photoId')
