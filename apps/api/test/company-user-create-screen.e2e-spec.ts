@@ -38,12 +38,12 @@ describe('حفظُ موظّفٍ جديد بما ترسله الشاشة (e2e)', 
     const usable = templates.find((t) => !t.isSystem);
     if (!usable) throw new Error('لا قالبَ غيرُ نظاميٍّ تراه المنشأة، والنافذةُ تختار أوّلَه');
     templateId = usable.id;
-  }, 30000);
+  });
 
   afterAll(async () => {
     await removeIsolatedCompany(app, company);
     await app.close();
-  }, 60000);
+  });
 
   /** جسمُ النافذة بنصّه: منشأةٌ بلا فروع فلا `branchIds`، والعلَمان يُرسلان دائماً. */
   const screenPayload = (username: string, canEditMasterData: boolean) => ({
