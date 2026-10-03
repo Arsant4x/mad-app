@@ -39,6 +39,10 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
+  // ⚖️ السؤال ٢٤٣ (`ق-١٦٠٠`): عددُ صور النموذج يُقرأ من الخادم عند فتح التوقيع (قد تُرفع صورٌ بعد تحميل العقد)،
+  //    وإقرارُ إعلام المستأجر لا يُطلب إلا إن كان عليه صور.
+  const [signPhotoCount, setSignPhotoCount] = useState(0);
+  const [photoNoticeGiven, setPhotoNoticeGiven] = useState(false);
   const [photosFor, setPhotosFor] = useState<string | null>(null);
   const [photos, setPhotos] = useState<HandoverPhoto[]>([]);
   const [photoItemId, setPhotoItemId] = useState('');
@@ -53,6 +57,17 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
     setPhotosFor(handoverId);
     setPhotoItemId('');
     setPhotos(await listHandoverPhotos(handoverId));
+  }
+
+  async function toggleSigning(h: ContractHandover) {
+    setPhotoNoticeGiven(false);
+    if (signingId === h.id) {
+      setSigningId(null);
+      return;
+    }
+    setSignPhotoCount(h.photos?.length ?? 0);
+    setSigningId(h.id);
+    setSignPhotoCount((await listHandoverPhotos(h.id)).length);
   }
 
   async function handlePhotoUpload(file: File) {
@@ -268,6 +283,9 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                   <button className="btn btn-ghost btn-sm" onClick={() => togglePhotos(h.id)}>📷 الصور</button>
                 </div>
               )}
+              {h.status === 'SIGNED' && h.photoNoticeYears !== null && (
+                <div className="hint">أُعلم المستأجرُ عند التوقيع أن صورَ النموذج تُحفظ {h.photoNoticeYears} سنةً من إغلاق حساب المنشأة ثم تُتلف.</div>
+              )}
             </div>
             {h.status === 'DRAFT' && !editing && (
               <div style={{ display: 'flex', gap: 4 }}>
@@ -277,7 +295,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 <button className="btn btn-ghost" onClick={() => togglePhotos(h.id)}>
                   📷 الصور
                 </button>
-                <button className="btn btn-ghost" onClick={() => setSigningId(signingId === h.id ? null : h.id)}>
+                <button className="btn btn-ghost" onClick={() => toggleSigning(h)}>
                   توقيع
                 </button>
                 <button
@@ -371,19 +389,30 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 {/* Says plainly that this is one-way. */}
                 <p className="hint">بعد التوقيع لا يمكن تعديل النموذج أو حذفه، ويُختم بوقت الخادم.</p>
               </div>
+              {/* ⚖️ السؤال ٢٤٣ (ق-١٦٠٠): الصورُ تبقى بمدّة النموذج، فيُعلَم المستأجرُ قبل أن يوقّع، والمدّةُ من الخادم. */}
+              {signPhotoCount > 0 && (
+                <div className="field">
+                  <label>
+                    <input type="checkbox" checked={photoNoticeGiven} onChange={(e) => setPhotoNoticeGiven(e.target.checked)} /> أعلمتُ
+                    المستأجرَ أن صورَ هذا النموذج ({signPhotoCount}) تُحفظ مع سجلّات المنشأة العقارية {contract.handoverPhotoRetentionYears} سنةً
+                    من إغلاق حسابها ثم تُتلف
+                  </label>
+                </div>
+              )}
               <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
                 <button className="btn btn-ghost" onClick={() => setSigningId(null)}>
                   تراجع
                 </button>
                 <button
                   className="btn btn-primary"
-                  disabled={busy || !signedBy.trim()}
+                  disabled={busy || !signedBy.trim() || (signPhotoCount > 0 && !photoNoticeGiven)}
                   onClick={() =>
                     run(
-                      () => signHandover(contract.id, h.id, signedBy.trim()),
+                      () => signHandover(contract.id, h.id, signedBy.trim(), signPhotoCount > 0 ? photoNoticeGiven : undefined),
                       () => {
                         setSigningId(null);
                         setSignedBy('');
+                        setPhotoNoticeGiven(false);
                       },
                     )
                   }

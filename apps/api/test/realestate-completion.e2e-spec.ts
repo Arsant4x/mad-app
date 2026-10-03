@@ -217,8 +217,10 @@ describe('§16 completion batch (e2e)', () => {
     photoId = photo.body.id;
     expect(photo.body.itemId).toBe(handoverItemId);
 
-    // توقيع النموذج…
-    await auth(request(app.getHttpServer()).post(`/contracts/${upcomingContractId}/handovers/${handoverId}/sign`)).send({ signedBy: `مستلم ${suffix}` }).expect(201);
+    // توقيع النموذج… (وعليه صورة، فبإقرار إعلام المستأجر بحفظها: ق-١٦٠٠ · السؤال ٢٤٣)
+    await auth(request(app.getHttpServer()).post(`/contracts/${upcomingContractId}/handovers/${handoverId}/sign`))
+      .send({ signedBy: `مستلم ${suffix}`, photoNoticeGiven: true })
+      .expect(201);
 
     // …فيُقفل كل شيء: لا صورة جديدة ولا حذف قائمة.
     await auth(request(app.getHttpServer()).post(`/contracts/handovers/${handoverId}/photos`)).attach('file', png, 'late.png').expect(409);

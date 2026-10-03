@@ -97,6 +97,8 @@ export interface Contract {
   /** مجموعُ المطالبات المفتوحة والتأميناتُ المحجوزة لدى المنشأة — من الخادم في `GET /contracts/:id` وحده (`ق-١٢٤٣`). */
   claimsOutstanding?: MoneyText;
   depositsHeld?: MoneyText;
+  /** ⚖️ مدّةُ حفظ صور نماذج التسليم كما يُعلَم بها المستأجر (`ق-١٦٠٠` · السؤال ٢٤٣) — من مدد الحفظ في الخادم. */
+  handoverPhotoRetentionYears?: number;
 }
 
 export type { HandoverType };
@@ -121,6 +123,11 @@ export interface ContractHandover {
   /** Server-stamped at signing — never supplied by the client. */
   signedAt: string | null;
   signedBy: string | null;
+  /** ⚖️ إعلامُ المستأجر بحفظ الصور: المدّةُ المعلنة يومَ التوقيع ووقتُه — يختمهما الخادمُ لنموذجٍ عليه صور. */
+  photoNoticeYears: number | null;
+  photoNoticeAt: string | null;
+  /** صورُ النموذج كما يُرجعها الخادم مع العقد (بلا مفتاح التخزين) — للعدّ هنا، والعرضُ من قائمتها. */
+  photos?: { id: string }[];
   items: HandoverItem[];
 }
 
@@ -259,8 +266,10 @@ export const updateHandover = (contractId: string, handoverId: string, dto: Upda
   apiClient.patch<Contract>(`/contracts/${contractId}/handovers/${handoverId}`, dto).then((r) => r.data);
 /** Takes no timestamp: the server stamps the signing time, which is what makes
  * it worth anything in a dispute. */
-export const signHandover = (contractId: string, handoverId: string, signedBy: string) =>
-  apiClient.post<Contract>(`/contracts/${contractId}/handovers/${handoverId}/sign`, { signedBy }).then((r) => r.data);
+export const signHandover = (contractId: string, handoverId: string, signedBy: string, photoNoticeGiven?: boolean) =>
+  apiClient
+    .post<Contract>(`/contracts/${contractId}/handovers/${handoverId}/sign`, photoNoticeGiven ? { signedBy, photoNoticeGiven } : { signedBy })
+    .then((r) => r.data);
 export const deleteHandover = (contractId: string, handoverId: string) =>
   apiClient.delete<Contract>(`/contracts/${contractId}/handovers/${handoverId}`).then((r) => r.data);
 
