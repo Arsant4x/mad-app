@@ -98,6 +98,16 @@
       "200"
     ]
   },
+  "DELETE /v1/contracts/{id}/forms/{formId}": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
   "DELETE /v1/contracts/{id}/handovers/{handoverId}": {
     "parameters": [
       "path:handoverId:required",
@@ -716,6 +726,35 @@
   },
   "GET /v1/contracts/{id}": {
     "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}/forms": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}/forms/{formId}": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}/forms/{formId}/verify": {
+    "parameters": [
+      "path:formId:required",
       "path:id:required"
     ],
     "requiredBody": [],
@@ -2917,6 +2956,27 @@
       "201"
     ]
   },
+  "POST /v1/contracts/{id}/forms": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "templateId"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/forms/{formId}/seal": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/contracts/{id}/handovers": {
     "parameters": [
       "path:id:required"
@@ -4002,6 +4062,18 @@
     "requiredBody": [],
     "responses": [
       "201"
+    ]
+  },
+  "PUT /v1/contracts/{id}/forms/{formId}/values": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "values"
+    ],
+    "responses": [
+      "200"
     ]
   }
 }

@@ -607,6 +607,9 @@ model Company {
   delegationLogs      DelegationLog[]
   formTemplates       FormTemplate[]
   formTemplateItems   FormTemplateItem[]
+  formInstances       FormInstance[]
+  formValues          FormValue[]
+  formSeals           FormSeal[]
 
   @@map("companies")
 }
@@ -6976,6 +6979,9 @@ model FormTemplate {
   items       FormTemplateItem[]
   itemsTenant FormTemplateItem[] @relation("FormTemplateItem_templateId_tenant")
 
+  instances       FormInstance[]
+  instancesTenant FormInstance[] @relation("FormInstance_templateVersionId_tenant")
+
   @@unique([familyId, version])
   @@unique([companyId, id])
   @@index([companyId, status])
@@ -7009,6 +7015,112 @@ model FormTemplateItem {
   unit     String?
   helpText String?
 
+  values       FormValue[]
+  valuesTenant FormValue[] @relation("FormValue_itemId_tenant")
+
   @@unique([templateId, lineNo])
+  @@unique([companyId, id])
   @@map("form_template_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚖️ محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// حالُ السجلّ المعبّأ في الموجة ١: مسوّدةٌ تُعبّأ، ثم مختومٌ لا يُعدَّل ولا يُحذف (القاعدةُ ٢ من §٦.٢ · ③ب: القاعدةُ مع البرنامج).
+/// وما بعدها (انتظارُ التواقيع · معترَضٌ عليه · منقَضٍ · مستبدَلٌ بنموذجٍ تصحيحيّ) يُضاف مع موجته.
+enum FormInstanceStatus {
+  DRAFT
+  SEALED
+}
+
+/// **سجلٌّ معبّأ على إصدارٍ منشورٍ من قالب المنشأة** (`FormInstance` في الخطّة §٦.١، والقاعدةُ ١ من §٦.٢: السجلُّ يشير إلى الإصدار
+/// `templateVersionId` لا إلى القالب). والكيانُ المرتبط (`linkedEntityType` · `linkedEntityId`) يكتبه النشاطُ الذي يطلب النموذج بعد أن
+/// يتحقّق منه — **والمحرّكُ لا يعرف نشاطاً** (`CLAUDE.md §3` أ)، فلا مفتاحَ أجنبيّاً إلى العقد هنا. والختمُ صفٌّ مستقلٌّ في `FormSeal`،
+/// ومُشغِّلٌ في القاعدة يمنع تعديلَ المختوم وحذفَه (`ق-١٦٣٥` ③ب).
+model FormInstance {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  templateVersionId     String
+  templateVersion       FormTemplate @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — المركّبُ يحرس أن يُعبّأ السجلُّ على قالب المنشأة نفسِها لا على قالبٍ عامٍّ ولا قالبِ غيرها.
+  templateVersionTenant FormTemplate @relation("FormInstance_templateVersionId_tenant", fields: [companyId, templateVersionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// الكيانُ المرتبط، يكتبه النشاطُ الطالب (`contract`) بمعرّفه.
+  linkedEntityType String
+  linkedEntityId   String
+
+  /// تاريخُ التعبئة — ومنه سنةُ رقم الختم لا من ساعة الخادم (`ق-١٦٣٦` ج).
+  formDate DateTime           @db.Date
+  status   FormInstanceStatus @default(DRAFT)
+
+  filledById   String
+  filledByName String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values       FormValue[]
+  valuesTenant FormValue[] @relation("FormValue_instanceId_tenant")
+  seal         FormSeal?
+  sealTenant   FormSeal?   @relation("FormSeal_instanceId_tenant")
+
+  @@unique([companyId, id])
+  @@index([companyId, linkedEntityType, linkedEntityId])
+  @@map("form_instances")
+}
+
+/// **ختمُ السجلّ** (`FormSeal` في الخطّة §٦.١ · `ق-١٦٣٦`، بحكم صاحب المشروع): رقمٌ `FRM-<السنة>-<التسلسل>` من العدّاد الذرّيّ،
+/// وموضعٌ في سلسلة أختام المنشأة (`sealSeq`)، وبصمةُ السجلّ كلِّه (`contentHash`)، وبصمةُ الختم السابق (`prevHash`).
+/// **يُكتب مرّةً ولا يُعدَّل ولا يُحذف** — مُشغِّلٌ في القاعدة (`ق-١٦٣٥` ③ب)، وقيودُ `CHECK` على السلسلة وشكل البصمة.
+model FormSeal {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String       @unique
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف.
+  instanceTenant FormInstance @relation("FormSeal_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  no           String
+  sealSeq      Int
+  contentHash  String
+  prevHash     String?
+  sealedById   String
+  sealedByName String
+  sealedAt     DateTime
+
+  @@unique([companyId, instanceId])
+  @@unique([companyId, no])
+  @@unique([companyId, sealSeq])
+  @@map("form_seals")
+}
+
+/// **قيمةُ بندٍ في السجلّ** — نوعُها من نوع البند، ولا تُكتب ولا تُعدَّل ولا تُحذف بعد الختم (مُشغِّلٌ في القاعدة).
+/// والانحرافُ عن النطاق يُحسب من القيمة والبند لا يُكتب (القاعدةُ ٣ من §٦.٢).
+model FormValue {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  instanceTenant FormInstance @relation("FormValue_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  itemId     String
+  item       FormTemplateItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  itemTenant FormTemplateItem @relation("FormValue_itemId_tenant", fields: [companyId, itemId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  textValue   String?
+  numberValue Decimal? @db.Decimal(18, 4)
+  boolValue   Boolean?
+  note        String?
+
+  @@unique([instanceId, itemId])
+  @@map("form_values")
 }

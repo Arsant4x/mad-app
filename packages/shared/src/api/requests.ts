@@ -306,6 +306,12 @@ export interface CreateFiscalYearDto {
   end: string;
 }
 
+/** جسمُ طلب — `CreateFormInstanceDto` في الخادم. */
+export interface CreateFormInstanceDto {
+  templateId: string;
+  formDate?: string;
+}
+
 /** جسمُ طلب — `CreateFormTemplateDto` في الخادم. */
 export interface CreateFormTemplateDto {
   formTypeId: string;
@@ -755,6 +761,15 @@ export interface FormTemplateItemDto {
   helpText?: string;
 }
 
+/** جسمُ طلب — `FormValueDto` في الخادم. */
+export interface FormValueDto {
+  itemId: string;
+  text?: string | null;
+  number?: number | null;
+  bool?: boolean | null;
+  note?: string | null;
+}
+
 /** جسمُ طلب — `GoodsReceiptLineDto` في الخادم. */
 export interface GoodsReceiptLineDto {
   purchaseLineId: string;
@@ -1074,6 +1089,11 @@ export interface SetEnabledDto {
 /** جسمُ طلب — `SetFiscalStartMonthDto` في الخادم. */
 export interface SetFiscalStartMonthDto {
   month: number;
+}
+
+/** جسمُ طلب — `SetFormValuesDto` في الخادم. */
+export interface SetFormValuesDto {
+  values: FormValueDto[];
 }
 
 /** جسمُ طلب — `SetPrimaryActivityDto` في الخادم. */

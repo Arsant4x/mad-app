@@ -225,6 +225,61 @@ export interface EmployeeWithLoginAccountResponse {
   updatedAt: string;
 }
 
+/** ردٌّ — `FormInstanceItemResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceItemResponse {
+  itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
+  itemId: string;
+  lineNo: number;
+  label: string;
+  required: boolean;
+  minValue: string | null;
+  maxValue: string | null;
+  isBlocking: boolean;
+  unit: string | null;
+  helpText: string | null;
+  text: string | null;
+  number: string | null;
+  bool: boolean | null;
+  note: string | null;
+  outOfRange: boolean;
+}
+
+/** ردٌّ — `FormInstanceResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceResponse {
+  status: 'DRAFT' | 'SEALED';
+  id: string;
+  templateVersionId: string;
+  template: FormInstanceTemplateRefResponse;
+  linkedEntityType: string;
+  linkedEntityId: string;
+  formDate: string;
+  no: string | null;
+  sealSeq: number | null;
+  contentHash: string | null;
+  prevHash: string | null;
+  filledByName: string;
+  sealedByName: string | null;
+  sealedAt: string | null;
+  createdAt: string;
+  items: FormInstanceItemResponse[];
+}
+
+/** ردٌّ — `FormInstanceTemplateRefResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceTemplateRefResponse {
+  id: string;
+  familyId: string;
+  version: number;
+  name: string;
+  formType: FormInstanceTypeRefResponse;
+}
+
+/** ردٌّ — `FormInstanceTypeRefResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceTypeRefResponse {
+  id: string;
+  code: string;
+  name: string;
+}
+
 /** ردٌّ — `FormTemplateItemResponse` في الخادم (ق-١٤٣٨). */
 export interface FormTemplateItemResponse {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
@@ -285,6 +340,16 @@ export interface FormTypeResponse {
   sector: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** ردٌّ — `FormVerificationResponse` في الخادم (ق-١٤٣٨). */
+export interface FormVerificationResponse {
+  no: string;
+  contentHash: string;
+  recomputedHash: string;
+  contentIntact: boolean;
+  chainLinked: boolean;
+  valid: boolean;
 }
 
 /** ردٌّ — `LedgerSourceResponse` في الخادم (ق-١٤٣٨). */
