@@ -228,7 +228,8 @@ interface LessorFields {
 function lessorFieldsFor(
   property: Pick<Property, 'ownership' | 'opRate'>,
   dto: { lessor?: 'COMPANY' | 'OWNER'; ownerName?: string; ownerVatNumber?: string },
-  classification: string,
+  /** العقدُ تجاريٌّ كما أُعلن — فتوريدُ المالك خاضعٌ ورقمُه الضريبيّ إلزاميّ. */
+  commercial: boolean,
 ): LessorFields {
   const none: LessorFields = { lessor: 'COMPANY', ownerName: null, ownerVatNumber: null };
   if (property.ownership !== 'managed') {
@@ -240,7 +241,7 @@ function lessorFieldsFor(
   const ownerName = dto.ownerName?.trim();
   if (!ownerName) throw new BadRequestException(MSG.contract_owner_name_required);
   const ownerVatNumber = dto.ownerVatNumber?.trim() || null;
-  if (classification === 'COMMERCIAL' && !ownerVatNumber) throw new BadRequestException(MSG.contract_owner_vat_required);
+  if (commercial && !ownerVatNumber) throw new BadRequestException(MSG.contract_owner_vat_required);
   if (property.opRate === null) throw new BadRequestException(MSG.contract_owner_commission_rate_missing);
   return { lessor: 'OWNER', ownerName, ownerVatNumber };
 }
@@ -324,7 +325,7 @@ export class ContractsService {
         const customer = await this.linkableCustomer(tx, dto.customerId);
         if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, customer.name);
         // ⚖️ من المؤجّر (السؤال ٥٧٧) — للمسوّدة كما للحيّ: الحقلُ إلزاميٌّ في القاعدة، ويُعلَن على عقار التشغيل.
-        const lessor = lessorFieldsFor(unit.property, dto, dto.classification);
+        const lessor = lessorFieldsFor(unit.property, dto, dto.classification === 'COMMERCIAL');
 
         const no = await this.nextContractNumber(tx, companyId, start);
 
@@ -423,7 +424,7 @@ export class ContractsService {
             ownerName: dto.ownerName ?? existing.ownerName ?? undefined,
             ownerVatNumber: dto.ownerVatNumber ?? existing.ownerVatNumber ?? undefined,
           },
-          (dto.classification ?? existing.classification) as string,
+          (dto.classification ?? existing.classification) === 'COMMERCIAL',
         );
         // **لا يُغيَّر المؤجّرُ بعد ترحيل**: القبضُ رُحّل أمانةً للمالك أو إيراداً للمنشأة، والاستحقاقُ ذمّةً — وتحويلُه
         // إعادةُ كتابة تاريخ (`§6.4`). أمّا إعلانُ مؤجّرِ عقدٍ قديم فيجوز ولو بعد قبض: لا معاملةَ له قبله، ويسري على ما بعده.
@@ -973,7 +974,7 @@ export class ContractsService {
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
         // ⚖️ والمؤجّرُ يُعلَن في طلب التجديد على عقار التشغيل كالتصنيف (السؤال ٥٧٧) — لا يُورَّث: عقدٌ جديدٌ باسم من يُبرمه.
-        const lessor = lessorFieldsFor(source.unit.property, dto, dto.classification);
+        const lessor = lessorFieldsFor(source.unit.property, dto, dto.classification === 'COMMERCIAL');
         // التجديد: بادئته من بداية العقد **الجديد** لا الأصل — فهو مستندٌ قائم
         // بذاته بمدّته الخاصة.
         const no = dto.no?.trim() || (await this.nextContractNumber(tx, companyId, start));
