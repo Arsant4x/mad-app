@@ -79,7 +79,8 @@ describe('Account deletion requests (e2e)', () => {
     ).body.accessToken;
 
     const templates = await admin(request(app.getHttpServer()).get('/templates')).expect(200);
-    templateId = (templates.body as { id: string; isAllScreens: boolean }[]).find((t) => t.isAllScreens)!.id;
+    // القالبُ العامُّ الشامل غيرُ النظاميّ (ق-٦٤٤): لوحةُ المدير ترفض «المطوّر» منذ توجيه ٢٧٥، وكانت هذه الحزمةُ تأخذه أوّلاً.
+    templateId = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean; companyId: string | null }[]).find((t) => t.isAllScreens && !t.isSystem && t.companyId === null)!.id;
   });
 
   afterAll(async () => {

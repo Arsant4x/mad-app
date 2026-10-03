@@ -78,7 +78,8 @@ describe('Sub-processor consent (e2e)', () => {
     ).body.accessToken;
 
     const templates = await admin(request(app.getHttpServer()).get('/templates')).expect(200);
-    templateId = (templates.body as { id: string; isAllScreens: boolean }[]).find((t) => t.isAllScreens)!.id;
+    // القالبُ العامُّ الشامل غيرُ النظاميّ (ق-٦٤٤): لوحةُ المدير ترفض «المطوّر» منذ توجيه ٢٧٥، وكانت هذه الحزمةُ تأخذه أوّلاً.
+    templateId = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean; companyId: string | null }[]).find((t) => t.isAllScreens && !t.isSystem && t.companyId === null)!.id;
 
     const sp = await admin(request(app.getHttpServer()).post('/admin/processing-agreement/sub-processors'))
       .send({ name: `مزوّدُ تخزينٍ ${suffix}`, purpose: 'نسخةٌ احتياطية خارج المضيف', location: 'المملكة العربية السعودية — جدة', dataCategories: ['بياناتُ المنشأة', 'مستنداتُها'] })

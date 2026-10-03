@@ -76,7 +76,8 @@ describe('حذفُ المنشأة لا يمسّ ما تحت الحفظ — وا�
       await http().post('/auth/login').send({ username: process.env.DEV_SEED_PLATFORM_ADMIN_USERNAME ?? 'Arsan', password: process.env.DEV_SEED_PLATFORM_ADMIN_PASSWORD })
     ).body.accessToken;
     const templates = await admin(http().get('/templates')).expect(200);
-    templateId = (templates.body as { id: string; isAllScreens: boolean }[]).find((t) => t.isAllScreens)!.id;
+    // القالبُ العامُّ الشامل غيرُ النظاميّ (ق-٦٤٤): لوحةُ المدير ترفض «المطوّر» منذ توجيه ٢٧٥، وكانت هذه الحزمةُ تأخذه أوّلاً.
+    templateId = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean; companyId: string | null }[]).find((t) => t.isAllScreens && !t.isSystem && t.companyId === null)!.id;
   });
 
   afterAll(async () => {

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Company, Prisma } from '@mad-app/db';
 import * as argon2 from 'argon2';
 import { ConfigService } from '@nestjs/config';
@@ -108,13 +108,24 @@ export class CompaniesService {
     }) as unknown as Promise<T>;
   }
 
-  async create(dto: CreateCompanyDto) {
-    // قراءةُ القالب **بمسنَد الإدارة** (المرحلة ③ · `ق-٦٧٥`): هذا مسارُ المنصّة. القالبُ العامُّ
-    // يُرى بلا سياقٍ بنصّ السياسة أصلاً — لكن السياقَ يُسمّى لا يُترك للسياسة أن تسامحه.
-    const template = await this.tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } }));
-    // A company account rides on a GLOBAL preset — a company-owned template
-    // defines employees within a company, not the company itself.
+  /**
+   * القالبُ الذي تركب عليه منشأة: **عامٌّ** (قالبُ منشأةٍ يحدّد موظّفيها لا المنشأةَ نفسَها) **وغيرُ نظاميّ**
+   * (`ق-٦٤٤`: قالبُ «المطوّر» لا يركب عليه تاجر). ⚖️ توجيه ٢٧٥ (القاعدة ٣٧): كان هذا المسارُ يفحص «عامٌّ» وحدَه، فيقبل
+   * قالبَ النظام في الإنشاء وفي التغيير، بعد أن أُغلق في التسجيل الذاتي وإسناد الموظّف.
+   *
+   * وقراءتُه **بمسنَد الإدارة** (المرحلة ③ · `ق-٦٧٥`): هذا مسارُ المنصّة. القالبُ العامُّ يُرى بلا سياقٍ بنصّ السياسة
+   * أصلاً، لكن السياقَ يُسمّى لا يُترك للسياسة أن تسامحه.
+   */
+  private async assertCompanyTemplate(permissionTemplateId: string): Promise<void> {
+    const template = await this.tenantPrisma.runAsPlatformAdmin((tx) =>
+      tx.permissionTemplate.findUnique({ where: { id: permissionTemplateId }, select: { companyId: true, isSystem: true } }),
+    );
     if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
+    if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_for_company);
+  }
+
+  async create(dto: CreateCompanyDto) {
+    await this.assertCompanyTemplate(dto.permissionTemplateId);
 
     // الإنشاء في `createCompanyAccount` — نواة واحدة يتقاسمها هذا المسار ومسار
     // التسجيل الذاتي. وما يخصّ لوحة المدير وحدها يبقى هنا: التحقق من أن القالب
@@ -145,12 +156,7 @@ export class CompaniesService {
     const existing = await this.prisma.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
 
-    if (dto.permissionTemplateId) {
-      const template = await this.tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.findUnique({ where: { id: dto.permissionTemplateId }, select: { companyId: true } }));
-    // A company account rides on a GLOBAL preset — a company-owned template
-    // defines employees within a company, not the company itself.
-    if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
-    }
+    if (dto.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
 
     if (dto.username) {
       const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });

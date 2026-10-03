@@ -231,7 +231,9 @@ export function DeveloperPanelPage() {
 
       {companyModal && (
         <CompanyModal
-          templates={templates}
+          // ⚖️ توجيه ٢٧٥ (القاعدة ٣٧ · `ق-٦٤٤`): المنشأةُ تركب قالباً عامّاً غيرَ نظاميّ، والخادمُ يرفض غيرَه. فالقائمةُ هنا
+          // ما يُقبل وحدَه، وإلا اختارت النافذةُ مسبقاً أوّلَها (قالبَ منشأةٍ أخرى أو «المطوّر») فيُرفض الحفظ.
+          templates={templates.filter((t) => t.companyId === null && !t.isSystem)}
           editing={companyModal.mode === 'edit' ? companyModal.company : null}
           onCancel={() => setCompanyModal(null)}
           onSave={handleSaveCompany}

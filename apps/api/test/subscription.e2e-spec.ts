@@ -62,7 +62,11 @@ describe('Subscription lifecycle (e2e)', () => {
     // A full-access template so the throwaway companies aren't screen-blocked
     // (this suite tests subscription state, not per-screen permissions).
     const templates = await admin(request(app.getHttpServer()).get('/templates')).expect(200);
-    const tpl = (templates.body as { id: string; isAllScreens: boolean }[]).find((t) => t.isAllScreens) ?? templates.body[0];
+    // القالبُ العامُّ الشامل غيرُ النظاميّ (ق-٦٤٤): لوحةُ المدير ترفض «المطوّر» منذ توجيه ٢٧٥.
+    const tpl = (templates.body as { id: string; isAllScreens: boolean; isSystem: boolean; companyId: string | null }[]).find(
+      (t) => t.isAllScreens && !t.isSystem && t.companyId === null,
+    );
+    if (!tpl) throw new Error('لا قالبَ عامٌّ شاملٌ غيرُ نظاميٍّ في قائمة المدير');
     templateId = tpl.id;
   }, 30000);
 
