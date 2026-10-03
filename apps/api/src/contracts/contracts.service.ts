@@ -39,7 +39,7 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
 import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
 import { raiseDueFeesWithinTx } from './contract-fees.util';
-import { applyTenantCreditOnRenewalWithinTx } from './tenant-credit.util';
+import { applyTenantCreditOnRenewalWithinTx, tenantCreditBalanceWithinTx } from './tenant-credit.util';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, HandoverItemDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
@@ -381,7 +381,9 @@ export class ContractsService {
       if (!contract) throw new NotFoundException(MSG.contract_not_found);
       // العميلُ مصدرُ الحقيقة (`ق-١٠٢٨`/⑥): ما افترق على العقد قبل هذا البناء يُصحَّح بالاشتقاق عند
       // القراءة — لا بهجرةٍ تكتبه — وما بعده تُبقيه الكتابةُ متطابقاً.
-      return this.withComputedFigures(withPartyFromCustomer(contract));
+      // ⚖️ ورصيدُ المستأجر الباقي تقرؤه نافذةُ التجديد (`ق-١٦٣٧`) — من مصدر الخصم نفسِه.
+      const tenantCredit = await tenantCreditBalanceWithinTx(tx, contract);
+      return { ...this.withComputedFigures(withPartyFromCustomer(contract)), tenantCredit: money(tenantCredit) };
     });
   }
 
