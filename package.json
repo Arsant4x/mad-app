@@ -31,6 +31,15 @@
     },
     "@nestjs/swagger": {
       "js-yaml": "4.3.2"
+    },
+    "@nestjs/cli": {
+      "glob": "10.5.0"
+    },
+    "@angular-devkit/core": {
+      "picomatch": "4.0.7"
+    },
+    "external-editor": {
+      "tmp": "0.2.7"
     }
   }
 }
