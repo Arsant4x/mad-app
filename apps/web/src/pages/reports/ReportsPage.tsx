@@ -303,10 +303,25 @@ export function ReportsPage() {
                   <td>صافي الربح</td>
                   <td className="num">{fmt(cash.netProfit)}</td>
                 </tr>
+                {/* ⚖️ قيدُ الإقفال يصفّر الإيرادَ والمصروفَ مقابل المبقاة، فيُعاد ما أُقفل في الفترة إلى الربح (توجيه ٢٧٨، القاعدة ٣٧). */}
+                {num0(cash.retainedEarningsChange) !== 0 && (
+                  <tr>
+                    <td>ربحٌ أُقفل إلى الأرباح المبقاة في الفترة</td>
+                    <td className="num">{fmt(cash.retainedEarningsChange)}</td>
+                  </tr>
+                )}
                 <tr>
                   <td>التغير في الذمم المدينة</td>
                   {/* ② السالبُ الأحادي على نصٍّ يمرّ من المترجم ويسقط الحارس — فيُقرأ رقماً أولاً. */}
                   <td className="num">{fmt(-num0(cash.receivablesChange))}</td>
+                </tr>
+                <tr>
+                  <td>التغير في المخزون</td>
+                  <td className="num">{fmt(-num0(cash.inventoryChange))}</td>
+                </tr>
+                <tr>
+                  <td>التغير في ضريبة المدخلات</td>
+                  <td className="num">{fmt(-num0(cash.inputVatChange))}</td>
                 </tr>
                 <tr>
                   <td>التغير في الذمم الدائنة</td>
@@ -326,6 +341,10 @@ export function ReportsPage() {
                   <td>التغير في مقدَّم العملاء ورصيد المستأجرين</td>
                   <td className="num">{fmt(cash.customerPrepaymentsChange)}</td>
                 </tr>
+                <tr>
+                  <td>التغير في بقيّة الأصول والالتزامات</td>
+                  <td className="num">{fmt(cash.otherOperatingChange)}</td>
+                </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
                   <td>صافي التدفق من الأنشطة التشغيلية</td>
                   <td className="num">{fmt(cash.operatingCashFlow)}</td>
@@ -334,10 +353,29 @@ export function ReportsPage() {
                   <td>شراء/بيع أصول ثابتة</td>
                   <td className="num">{fmt(-num0(cash.fixedAssetChange))}</td>
                 </tr>
+                <tr>
+                  <td>تقبيل وحقوق انتفاع</td>
+                  <td className="num">{fmt(-num0(cash.keyMoneyChange))}</td>
+                </tr>
+                <tr style={{ fontWeight: 700 }}>
+                  <td>صافي التدفق من الأنشطة الاستثمارية</td>
+                  <td className="num">{fmt(cash.investingCashFlow)}</td>
+                </tr>
+                <tr style={{ fontWeight: 700 }}>
+                  <td>صافي التدفق من الأنشطة التمويلية (حقوق الملكية)</td>
+                  <td className="num">{fmt(cash.financingCashFlow)}</td>
+                </tr>
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: 'var(--emerald)' }}>
                   <td>صافي التغير في النقدية</td>
                   <td className="num">{fmt(cash.netCashChange)}</td>
                 </tr>
+                {/* المطابقةُ بالنقد المقيس — كتوازن المركز المالي: اختلالُها يعني سطراً على حسابٍ خارج الأنواع الخمسة. */}
+                {!cash.reconciled && (
+                  <tr>
+                    <td style={{ color: 'var(--rose)' }}>⚠ لا يطابق تغيّرَ حسابات النقد المقيس</td>
+                    <td className="num">{fmt(cash.cashAccountsChange)}</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </>

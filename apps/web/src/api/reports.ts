@@ -34,19 +34,37 @@ export interface BalanceSheet {
   balanced: boolean;
 }
 
+/**
+ * التدفّقاتُ النقدية بالطريقة غير المباشرة — كلُّ حسابٍ في قسمه (توجيه ٢٧٨، القاعدة ٣٧). حقولُ «التغيّر» تغيّرُ الرصيد باتجاهه
+ * الطبيعيّ (الأصلُ يُطرح في العرض والالتزامُ يُضاف)، و`otherOperatingChange` أثرُ البقيّة على النقد بإشارته.
+ */
 export interface CashFlow {
   netProfit: MoneyText;
+  /** Δ3300 — ما أُقفل من الربح إلى المبقاة في الفترة، يُعاد إلى الربح. */
+  retainedEarningsChange: MoneyText;
   receivablesChange: MoneyText;
+  /** Δ1300 — مخزونٌ اشتُري ولم يُبع. */
+  inventoryChange: MoneyText;
+  /** Δ1250 — ضريبةُ مدخلاتٍ لم تُستردّ. */
+  inputVatChange: MoneyText;
   payablesChange: MoneyText;
   /** Δ2400 — قبضٌ يُؤجَّل (كان ناقصاً منذ بُني الإيراد المؤجَّل — ق-٩٢٣). */
   deferredRevenueChange: MoneyText;
   /** Δ2200 — ضريبةٌ مستحقّة لم تُسدَّد. */
   outputVatChange: MoneyText;
-  /** Δ2450 — مقدَّمُ العملاء ورصيدُ المستأجر (توجيه ٢٧٨: كان خارج المعادلة فينقص التشغيليُّ بصافيه). */
+  /** Δ2450 — مقدَّمُ العملاء ورصيدُ المستأجر. */
   customerPrepaymentsChange: MoneyText;
+  otherOperatingChange: MoneyText;
   operatingCashFlow: MoneyText;
   fixedAssetChange: MoneyText;
+  /** Δ1600 — تقبيلٌ وحقوقُ انتفاع. */
+  keyMoneyChange: MoneyText;
+  investingCashFlow: MoneyText;
+  financingCashFlow: MoneyText;
   netCashChange: MoneyText;
+  /** تغيّرُ حسابات النقد مقيساً، ويساوي الصافيَ بالقيد المزدوج. */
+  cashAccountsChange: MoneyText;
+  reconciled: boolean;
   missingAccounts: string[];
 }
 
