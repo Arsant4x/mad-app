@@ -320,10 +320,13 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
       unlinkedNote: string;
     };
 
+    // صفٌّ لكلِّ قسط: الأوّلُ بألفه المسمّاة، والأحدَ عشرَ الباقيةُ بما سدّدته الدفعةُ الحرّة (`ق-١٦١٤`) — اثنا عشرَ صفّاً بألفٍ مؤجَّلة.
     const mine = report.outstanding.filter((r) => r.contractNo === contract.no);
-    expect(mine.length).toBeGreaterThan(0);
-    expect(mine[0].deferred).toBe('12000.00');
-    expect(mine[0].accrualBasis).toBe('ACCRUAL');
+    expect({ rows: mine.length, deferred: [...new Set(mine.map((r) => r.deferred))], basis: [...new Set(mine.map((r) => r.accrualBasis))] }).toEqual({
+      rows: 12,
+      deferred: ['1000.00'],
+      basis: ['ACCRUAL'],
+    });
 
     // والرصيدُ ليس «دفعةً اعتُرف بها فوراً»، فلا يُسرد بينها (`ق-١٦٢٤`)؛ والقائمةُ لما قبل الحكم بحدّها المنصوص.
     const myUnlinked = report.unlinked.filter((r) => r.contractNo === contract.no);
