@@ -309,6 +309,9 @@ export class SupplierPaymentsService {
   reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // 🔴 صفُّ السند يُقفل **قبل** قراءة تخصيصاته (توجيه ٢٧٧ · ٢د · القاعدة ٣٧): إعادةُ التوزيع تقفله (#722) والعكسُ كان يقرأ بلا
+        //    قفل، فيعكس توزيعاً نقلته إعادةُ توزيعٍ في اللحظة نفسِها (مقيسٌ بتداخلٍ مفروض في `payment-reallocation-race.e2e-spec.ts`).
+        await lockDocumentRow(tx, 'supplier_payments', id);
         // ق-١٤٤٠: الأصلُ بفروع الفاعل قبل فحص «عُكس سابقاً» — سندُ فرعٍ آخر غيرُ موجودٍ له (404 لا 403)، فلا يُعكس.
         const original = await tx.supplierPayment.findFirst({
           where: { id, ...branchFilter(allowedBranchIds) },

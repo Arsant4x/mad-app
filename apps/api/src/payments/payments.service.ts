@@ -566,6 +566,10 @@ export class PaymentsService {
   reverse(companyId: string, allowedBranchIds: string[] | 'all', id: string, reason?: string, date?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // 🔴 صفُّ السند يُقفل **قبل** قراءة تخصيصاته (توجيه ٢٧٧ · ٢د · القاعدة ٣٧): إعادةُ التوزيع تقفله (#722) والعكسُ كان يقرأ بلا
+        //    قفل، فيعكس فاتورةً نقلت إعادةُ توزيعٍ السندَ عنها في اللحظة نفسِها، ويبقى على الأخرى مالٌ من سندٍ معكوس (مقيسٌ بتداخلٍ
+        //    مفروض في `payment-reallocation-race.e2e-spec.ts`). والقفلُ نفسُه يجعل عكسَين معاً عكساً واحداً وثانيهما `409`.
+        await lockDocumentRow(tx, 'payments', id);
         // الفرعُ أوّلاً (`ق-١٤٤٠`): سندُ فرعٍ آخر 404 لا 409 الدفعةِ المقدَّمة أو العكسِ السابق — فهو غيرُ موجودٍ له.
         const original = await this.findVisible(tx, allowedBranchIds, id);
         // ④A1: سندٌ أصدر مستندَ دفعةٍ مقدَّمة يُرفض هنا مسمّىً بمستنده.

@@ -89,6 +89,51 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
     return { heldRows, baseline, waiting, replies: await both };
   };
 
+  /**
+   * التداخلُ نفسُه **بترتيبٍ مفروض** (توجيه ٢٧٧ · ٢د): يُطلق الأوّلُ وينتظر حتى يقف على قفل، ثم يُطلق الثاني وينتظر حتى يقف، ثم يُفلت.
+   * فالأوّلُ يمسك صفَّ السند (إعادةُ التوزيع تقفله قبل قراءة تخصيصاته) ويقف عند حذف التخصيص المقفول جانبياً، والثاني يصل وهو ممسوك.
+   */
+  const raceInOrder = async (
+    table: 'payment_allocations' | 'supplier_payment_allocations',
+    paymentId: string,
+    first: () => request.Test,
+    second: () => request.Test,
+  ) => {
+    let release!: () => void;
+    const released = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((r) => (locked = r));
+    let heldRows = 0;
+    const holder = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${company.companyId}, true)`;
+        heldRows = (await tx.$queryRaw<{ id: string }[]>`SELECT id FROM ${Prisma.raw(`"${table}"`)} WHERE "paymentId" = ${paymentId} FOR UPDATE`).length;
+        locked();
+        await released;
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+    await lockTaken;
+    const baseline = await waitingOnLocks();
+    let waiting = 0;
+    let replies: request.Response[] = [];
+    try {
+      const a = first().then((r) => r);
+      for (let i = 0; i < 100 && (waiting = await waitingOnLocks()) < baseline + 1; i++) await new Promise((r) => setTimeout(r, 100));
+      const b = second().then((r) => r);
+      for (let i = 0; i < 100 && (waiting = await waitingOnLocks()) < baseline + 2; i++) await new Promise((r) => setTimeout(r, 100));
+      release();
+      await holder;
+      replies = await Promise.all([a, b]);
+    } finally {
+      release();
+    }
+    return { heldRows, baseline, waiting, replies };
+  };
+
+  /** صافي ما على كلِّ مستندٍ من السند وعكسِه معاً — والعكسُ الصحيح يُرجع ما على السند الآن، فالصافي صفرٌ على كلِّ مستند. */
+  const netOn = (rows: { doc: string; amount: string }[], doc: string) => rows.filter((r) => r.doc === doc).reduce((s, r) => s + Number(r.amount), 0);
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
@@ -153,5 +198,59 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
       total: after.allocations.reduce((s, a) => s + Number(a.amount), 0),
       documents: after.allocations.filter((a) => a.purchaseId === left || a.purchaseId === right).length,
     }).toEqual({ codes: [201, 201], total: 1000, documents: 1 });
+  });
+
+  /**
+   * 🔴 **العكسُ وإعادةُ التوزيع في اللحظة نفسِها** (توجيه ٢٧٧ · ٢د · `ق-١٦١٩`/د: «قِسه، ثم أصلحه بالقاعدة ٣٧ إن ثبت»). القفلُ في `#722` على
+   * إعادة التوزيع وحدَها؛ والعكسُ يقرأ تخصيصاتِ السند بلا قفلٍ ويكتب مرآتَها. فإعادةُ توزيعٍ ممسكةٌ بالسند تنقله من فاتورةٍ إلى أخرى، والعكسُ
+   * قرأ التوزيعَ القديم قبل أن تُكتب، فيعكس فاتورةً لم يعد السندُ عليها. **والجوابُ محسوبٌ يداً**: السندُ ألفٌ على الأولى، ينتقل إلى الثانية ثم
+   * يُعكس، فصافي السند وعكسِه **صفرٌ على كلتيهما** (لا `-1000` على الأولى و`+1000` على الثانية من سندٍ معكوس).
+   */
+  it('🔴 سندُ القبض: العكسُ في لحظة إعادة التوزيع يعكس ما على السند الآن، فلا يبقى على فاتورةٍ مالٌ من سندٍ معكوس', async () => {
+    const first = await makeInvoice(1000);
+    const moved = await makeInvoice(1000);
+    const payment = (
+      await auth(http().post('/payments'))
+        .send({ customerId, branchId, date: today(), amount: 1000, method: 'CASH', bankId: cashBoxId, allocations: [{ invoiceId: first, amount: 1000 }] })
+        .expect(201)
+    ).body as { id: string };
+
+    const { heldRows, baseline, waiting, replies } = await raceInOrder(
+      'payment_allocations',
+      payment.id,
+      () => auth(http().post(`/payments/${payment.id}/allocate`)).send({ allocations: [{ invoiceId: moved, amount: 1000 }] }),
+      () => auth(http().post(`/payments/${payment.id}/reverse`)).send({}),
+    );
+    expect({ heldRows, stoodOnLocks: waiting >= baseline + 2 }).toEqual({ heldRows: 1, stoodOnLocks: true });
+
+    const [allocated, reversed] = replies;
+    const rowsOf = async (id: string) =>
+      ((await auth(http().get(`/payments/${id}`)).expect(200)).body as { allocations: { invoiceId: string; amount: string }[] }).allocations.map((a) => ({ doc: a.invoiceId, amount: a.amount }));
+    const rows = [...(await rowsOf(payment.id)), ...(reversed.status === 201 ? await rowsOf(reversed.body.id as string) : [])];
+    expect({ codes: [allocated.status, reversed.status], first: netOn(rows, first), moved: netOn(rows, moved) }).toEqual({ codes: [201, 201], first: 0, moved: 0 });
+  });
+
+  it('🔴 سندُ الصرف للمورّد (مرآتُه): العكسُ في لحظة إعادة التوزيع يعكس ما على السند الآن', async () => {
+    const first = await makePurchase(1000);
+    const moved = await makePurchase(1000);
+    const payment = (
+      await auth(http().post('/supplier-payments'))
+        .send({ supplierId, branchId, date: today(), amount: 1000, method: 'CASH', bankId: cashBoxId, allocations: [{ purchaseId: first, amount: 1000 }] })
+        .expect(201)
+    ).body as { id: string };
+
+    const { heldRows, baseline, waiting, replies } = await raceInOrder(
+      'supplier_payment_allocations',
+      payment.id,
+      () => auth(http().post(`/supplier-payments/${payment.id}/allocate`)).send({ allocations: [{ purchaseId: moved, amount: 1000 }] }),
+      () => auth(http().post(`/supplier-payments/${payment.id}/reverse`)).send({}),
+    );
+    expect({ heldRows, stoodOnLocks: waiting >= baseline + 2 }).toEqual({ heldRows: 1, stoodOnLocks: true });
+
+    const [allocated, reversed] = replies;
+    const rowsOf = async (id: string) =>
+      ((await auth(http().get(`/supplier-payments/${id}`)).expect(200)).body as { allocations: { purchaseId: string; amount: string }[] }).allocations.map((a) => ({ doc: a.purchaseId, amount: a.amount }));
+    const rows = [...(await rowsOf(payment.id)), ...(reversed.status === 201 ? await rowsOf(reversed.body.id as string) : [])];
+    expect({ codes: [allocated.status, reversed.status], first: netOn(rows, first), moved: netOn(rows, moved) }).toEqual({ codes: [201, 201], first: 0, moved: 0 });
   });
 });
