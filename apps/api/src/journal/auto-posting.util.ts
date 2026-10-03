@@ -11,6 +11,7 @@ import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inven
 import { getOrCreateInventoryVarianceAccount } from './inventory-variance-account.util';
 import { getOrCreateOperatingCommissionAccount, getOrCreateOwnerShareAccount } from './owner-rent-accounts.util';
 import { getOrCreateOnBehalfAccount } from './on-behalf-account.util';
+import { getOrCreateCustomerPrepaymentsAccount } from './prepayment-account.util';
 import type { CostAllocation } from '../purchases/layer-cost-allocation.util';
 import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
@@ -1144,6 +1145,11 @@ export interface RentAccrualForPosting {
   baseTax: number;
   /** يُكتب في المذكّرة: «حلّ الاستحقاق» · «دفعةٌ مقدَّمة» · «دفعةٌ بلا قسط». */
   kindLabel: string;
+  /**
+   * ⚖️ **رصيدٌ للمستأجر لا إيراد** (توجيه ٢٧٧ · `ق-١٦٢٤`): ما زاد على أقساط العقد كلِّها يُرحَّل صافيه إلى `2450` «دفعاتٌ مقدَّمة
+   * من العملاء» (كمقدَّم سند القبض `ق-١٢٦٤`/②) لا إلى `4200`، وضريبتُه إلى `2200` يومَ القبض كسائر النقاط.
+   */
+  tenantCredit?: boolean;
 }
 
 /**
@@ -1171,11 +1177,12 @@ export async function postRentAccrualEntry(
   const tax = round2(a.baseTax);
   if (gross <= 0) return skipped;
 
-  const split = a.service ? splitAtCollection(a.service, net, a.date) : { earned: net, deferred: 0 };
+  const split = a.tenantCredit ? { earned: 0, deferred: 0 } : a.service ? splitAtCollection(a.service, net, a.date) : { earned: net, deferred: 0 };
 
   const needCodes = ['1200', '4200', ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])];
   const ids = await resolveAccountIds(tx, needCodes);
   const lines: PostingLine[] = [{ accountId: ids.get('1200')!, debit: gross, credit: 0 }];
+  if (a.tenantCredit && net > 0) lines.push({ accountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId), debit: 0, credit: net });
   if (split.earned > 0) lines.push({ accountId: ids.get('4200')!, debit: 0, credit: split.earned });
   if (split.deferred > 0) {
     const deferredId = await getOrCreateDeferredRevenueAccount(tx, companyId);

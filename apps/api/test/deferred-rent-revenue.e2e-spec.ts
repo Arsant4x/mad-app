@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { RentRecognitionService } from '../src/contracts/rent-recognition.service';
 import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../src/journal/deferred-revenue-account.util';
+import { CUSTOMER_PREPAYMENTS_CODE } from '../src/journal/prepayment-account.util';
 import { createTenantCustomer } from './tenant-customer';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (33.1 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
@@ -304,8 +305,11 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
     await auth(http().post(`/contracts/${contract.id}/payments`))
       .send({ installmentId: first.id, date: iso(today), amount: 1000, method: 'CASH' })
       .expect(201);
-    // ② ودفعةٌ بلا قسط — لا فترةَ خدمةٍ تُعرف لها.
-    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 250, method: 'CASH' }).expect(201);
+    // ② ودفعةٌ بلا قسط تزيد على الأقساط الباقية كلِّها بـ250 (`ق-١٦١٤`: تسدّد القادمَ بترتيبه، 11,000 للأحد عشر) — فالـ250 وحدَها
+    // لا قسطَ مفتوحاً يقابلها: رصيدٌ للمستأجر في `2450` (`ق-١٦٢٤`)، لا «دفعةٌ اعتُرف بها فوراً» يسردها التقرير.
+    const creditBefore = await balance(CUSTOMER_PREPAYMENTS_CODE);
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 11250, method: 'CASH' }).expect(201);
+    expect((await balance(CUSTOMER_PREPAYMENTS_CODE)) - creditBefore).toBeCloseTo(250, 2);
 
     // ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`) — تُقارَن حرفاً حيث الجوابُ معلوم، وتُقرأ رقماً للمجاميع المفتوحة.
     const report = (await auth(http().get('/reports/deferred-revenue')).expect(200)).body as {
@@ -316,31 +320,40 @@ describe('⚖️ الإيرادُ المؤجَّل — يُحتجَز بالاس
       unlinkedNote: string;
     };
 
+    // صفٌّ لكلِّ قسط: الأوّلُ بألفه المسمّاة، والأحدَ عشرَ الباقيةُ بما سدّدته الدفعةُ الحرّة (`ق-١٦١٤`) — اثنا عشرَ صفّاً بألفٍ مؤجَّلة.
     const mine = report.outstanding.filter((r) => r.contractNo === contract.no);
-    expect(mine.length).toBeGreaterThan(0);
-    expect(mine[0].deferred).toBe('1000.00');
-    expect(mine[0].accrualBasis).toBe('ACCRUAL');
+    expect({ rows: mine.length, deferred: [...new Set(mine.map((r) => r.deferred))], basis: [...new Set(mine.map((r) => r.accrualBasis))] }).toEqual({
+      rows: 12,
+      deferred: ['1000.00'],
+      basis: ['ACCRUAL'],
+    });
 
+    // والرصيدُ ليس «دفعةً اعتُرف بها فوراً»، فلا يُسرد بينها (`ق-١٦٢٤`)؛ والقائمةُ لما قبل الحكم بحدّها المنصوص.
     const myUnlinked = report.unlinked.filter((r) => r.contractNo === contract.no);
-    expect(myUnlinked).toHaveLength(1);
-    expect(myUnlinked[0].baseNetAmount).toBe('250.00');
+    expect(myUnlinked).toHaveLength(0);
 
     // ⚠️ والحدُّ منصوصٌ في التقرير نفسِه لا في وثيقةٍ بعيدة.
     expect(report.unlinkedNote).toContain('لا تُعرف لها فترة خدمة');
     expect(report.totalDeferred).toMatch(/^-?\d+\.\d{2}$/);
-    expect(Number(report.totalDeferred)).toBeGreaterThanOrEqual(1000);
-    expect(Number(report.totalUnlinked)).toBeGreaterThanOrEqual(250);
+    expect(Number(report.totalDeferred)).toBeGreaterThanOrEqual(12000);
   }, 60000);
 
-  it('⑥ ودفعةٌ بلا قسطٍ مرتبط تُعترَف فوراً — حدٌّ معلَنٌ لا عطل (ق-٤٧٣)', async () => {
+  it('⑥ ودفعةٌ بلا قسطٍ على عقدٍ أقساطُه قادمة تُؤجَّل مع أقساطها، وما زاد عليها كلِّها رصيدٌ للمستأجر لا إيراد (ق-١٦١٤ · ق-١٦٢٤)', async () => {
     const contract = await makeContract(futureStart);
-    const [rentBefore, deferredBefore, receivableBefore] = [await balance('4200'), await balance(DEFERRED_REVENUE_ACCOUNT_CODE), await balance('1200')];
+    const [rentBefore, deferredBefore, receivableBefore, creditBefore] = [
+      await balance('4200'),
+      await balance(DEFERRED_REVENUE_ACCOUNT_CODE),
+      await balance('1200'),
+      await balance(CUSTOMER_PREPAYMENTS_CODE),
+    ];
 
-    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 500, method: 'CASH' }).expect(201);
+    // 12,500 على اثني عشر قسطاً قادماً بألف (`ق-١٦١٤`): 12,000 تتبع أشهرَ أقساطها فتُؤجَّل، و500 لا قسطَ مفتوحاً يقابلها.
+    await auth(http().post(`/contracts/${contract.id}/payments`)).send({ date: iso(today), amount: 12500, method: 'CASH' }).expect(201);
 
-    // لا فترةَ خدمةٍ تُعرف لها إطلاقاً — فلا قسمةَ ممكنة: استحقاقٌ بقدرها يُعترَف فوراً ويُسدَّد.
-    expect((await balance('4200')) - rentBefore).toBeCloseTo(500, 2);
-    expect(await balance(DEFERRED_REVENUE_ACCOUNT_CODE)).toBeCloseTo(deferredBefore, 2);
+    // الـ500 «ليس إيراداً، بل رصيدٌ للمستأجر» (`ق-١٦٢٤`): في `2450` والإيرادُ لا يتحرّك (عقدٌ سكنيٌّ معفى فلا ضريبة)؛ والباقي مؤجَّلٌ كلُّه.
+    expect((await balance('4200')) - rentBefore).toBeCloseTo(0, 2);
+    expect((await balance(DEFERRED_REVENUE_ACCOUNT_CODE)) - deferredBefore).toBeCloseTo(12000, 2);
+    expect((await balance(CUSTOMER_PREPAYMENTS_CODE)) - creditBefore).toBeCloseTo(500, 2);
     expect(await balance('1200')).toBeCloseTo(receivableBefore, 2);
   }, 40000);
 });

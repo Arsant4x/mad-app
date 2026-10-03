@@ -81,4 +81,61 @@ describe('دفعةُ الإيجار الحرّة لا تُظهر المستأج�
       receivableDelta: Math.round(((await balance('1200')) - receivableBefore) * 100) / 100,
     }).toEqual({ oldest: 'PAID', unlinked: 0, vatDelta: 0, receivableDelta: -1150 });
   });
+
+  /**
+   * ⚖️ **ما زاد على الحالّ يذهب إلى القسط القادم** (توجيه ٢٧٧ · ٢ب · `ق-١٦١٤`، بحكم صاحب المشروع: «فيُوزَّع إيرادُه على شهره»). كان الزائدُ
+   * دفعةً مقدَّمة بلا قسط تُعترف فوراً (`ق-٤٧٣`). **والجوابُ محسوبٌ يداً**: بقي قسطان حالّان (2,300 بالضريبة) بعد الحالة الأولى، فـ2,875 تسدّدهما
+   * و575 للقسط القادم: صافيه 500 يُؤجَّل في `2400` حتى يحلّ شهرُه، وضريبتُه 75 تُستحقّ يومَ القبض (م٢٠)، ولا يُعترف بشيءٍ في `4200` اليوم،
+   * والذمّةُ تنقص 2,300 (ما استُحقّ) ولا صفَّ بلا قسط.
+   */
+  it('⚖️ وما زاد على الحالّ يذهب إلى القسط القادم فيُؤجَّل إيرادُه إلى شهره، ولا صفَّ بلا قسط (ق-١٦١٤)', async () => {
+    const before = await contract();
+    const sorted = [...before.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const due = sorted.filter((i) => i.dueDate.slice(0, 10) <= today);
+    const next = sorted.find((i) => i.dueDate.slice(0, 10) > today)!;
+    const [rentBefore, deferredBefore, vatBefore, receivableBefore] = [await balance('4200'), await balance('2400'), await balance('2200'), await balance('1200')];
+
+    await auth(http().post(`/contracts/${contractId}/payments`)).send({ date: today, amount: 2875, method: 'CASH' }).expect(201);
+
+    const after = await contract();
+    const statusOf = (id: string) => after.installments.find((i) => i.id === id)?.status;
+    const delta = async (code: string, was: number) => Math.round(((await balance(code)) - was) * 100) / 100;
+    expect({
+      due: due.map((i) => statusOf(i.id)),
+      next: after.payments.filter((p) => p.installmentId === next.id).reduce((s, p) => s + Number(p.amount), 0),
+      unlinked: after.payments.filter((p) => p.installmentId === null).length,
+      rentDelta: await delta('4200', rentBefore),
+      deferredDelta: await delta('2400', deferredBefore),
+      vatDelta: await delta('2200', vatBefore),
+      receivableDelta: await delta('1200', receivableBefore),
+    }).toEqual({ due: ['PAID', 'PAID', 'PAID'], next: 575, unlinked: 0, rentDelta: 0, deferredDelta: 500, vatDelta: 75, receivableDelta: -2300 });
+  });
+
+  /**
+   * ⚖️ **وما زاد على الأقساط كلِّها رصيدٌ للمستأجر لا إيراد** (توجيه ٢٧٧ · `ق-١٦٢٤`، بحكم صاحب المشروع: «ليس إيراداً، بل رصيدٌ للمستأجر
+   * يُخصم من القادم أو يُردّ إليه، كما في `ق-١٢٦٤`»). **والجوابُ محسوبٌ يداً**: بقي من الأقساط 9,775 بالضريبة (575 من الرابع وثمانيةٌ بـ1,150)،
+   * فـ10,005 تسدّدها كلَّها و230 تزيد: أصلُها 200 في `2450` وضريبتُها 30 يومَ القبض كمقدَّم سند القبض (`ق-١٢٦٤`/②، العقدُ تجاريٌّ خاضع)،
+   * وما للأقساط القادمة مؤجَّلٌ صافيه 8,500 في `2400` وضريبتُه 1,275 يومَ القبض، **ولا يتحرّك الإيراد**.
+   */
+  it('⚖️ وما زاد على الأقساط كلِّها رصيدٌ للمستأجر في 2450 بضريبته يومَ القبض، لا إيراد (ق-١٦٢٤)', async () => {
+    const [rentBefore, deferredBefore, vatBefore, creditBefore] = [await balance('4200'), await balance('2400'), await balance('2200'), await balance('2450')];
+
+    await auth(http().post(`/contracts/${contractId}/payments`)).send({ date: today, amount: 10005, method: 'CASH' }).expect(201);
+
+    const after = await contract();
+    const delta = async (code: string, was: number) => Math.round(((await balance(code)) - was) * 100) / 100;
+    expect({
+      open: after.installments.filter((i) => i.status !== 'PAID').length,
+      unlinked: after.payments.filter((p) => p.installmentId === null).reduce((s, p) => s + Number(p.amount), 0),
+      rentDelta: await delta('4200', rentBefore),
+      deferredDelta: await delta('2400', deferredBefore),
+      vatDelta: await delta('2200', vatBefore),
+      creditDelta: await delta('2450', creditBefore),
+    }).toEqual({ open: 0, unlinked: 230, rentDelta: 0, deferredDelta: 8500, vatDelta: 1305, creditDelta: 200 });
+  });
+
+  it('⚖️ ولا خصمَ على رصيد: دفعةٌ بخصمٍ لا يقع جزؤها الأوّلُ على قسطٍ تُردّ برسالتها (ق-١٦٢٤)', async () => {
+    const res = await auth(http().post(`/contracts/${contractId}/payments`)).send({ date: today, amount: 100, discount: 10, method: 'CASH' }).expect(400);
+    expect(String(res.body.message)).toContain('رصيدٌ للمستأجر');
+  });
 });

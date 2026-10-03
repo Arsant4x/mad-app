@@ -278,8 +278,9 @@ export class ReportsService {
         })
         .filter((r) => r.deferred > 0);
 
+      // ⚖️ ق-١٦٢٤: ما زاد على أقساط العقد كلِّها بعد الحكم رصيدٌ للمستأجر في `2450` لا إيراد، فلا يُسرد هنا مع ما اعتُرف به فوراً.
       const unlinkedRows = await tx.rentPayment.findMany({
-        where: { installmentId: null },
+        where: { installmentId: null, accruals: { none: { kind: 'TENANT_CREDIT' } } },
         select: {
           date: true,
           baseNetAmount: true,
