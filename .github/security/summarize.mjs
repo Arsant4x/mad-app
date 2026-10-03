@@ -1,15 +1,18 @@
 // ملخّصُ الفحص الأمنيّ في السير (ق-١٥٧٠ · ق-١٥٧٦): يقرأ تقاريرَ الأدوات الثلاث ويكتب جدولاً بالخطورة.
 //
-// ⚠️ **وضعُ إبلاغٍ لا منع**: ما تكشفه الأدوات يُعلَن ولا يُسقط الوظيفة (بنصّ التوجيه: «يُعلَن ولا يُصلَح»).
-//    لكنّ **تقريراً غائباً أو لا يُقرأ يُسقطها**: أداةٌ معطوبة تُخرج صفراً يشبه النظافة (السجلّ §8.7 الوجه الحادي
-//    عشر)، فالخضرةُ هنا تعني «قُرئت التقارير كلُّها» لا «لا ثغرة».
+// ⚖️ **يمنع الحرجَ الآن، والعاليَ من 2026-11-03** (`ق-١٥٨٦`، بحكم صاحب المشروع: «ثم يصير الفحصُ مانعاً للحرِج، والعالي بعد
+//    شهر»). كان وضعَ إبلاغٍ (`ق-١٥٧٠`) حتى أُصلحت الحرجتان (`#695`) والسبعُ العالية في المكتبات (`#696`). ويُطبع في كلِّ تشغيلٍ
+//    كم بقي على منع العالي وما يمنعه لو كان اليوم، فلا يأتي موعدُه مفاجأة. **وتقريرٌ غائبٌ أو لا يُقرأ يُسقط كما كان**: أداةٌ
+//    معطوبة تُخرج صفراً يشبه النظافة (السجلّ §8.7 الوجه الحادي عشر).
 //
 // الاستعمال: node .github/security/summarize.mjs <npm|semgrep|trivy-image|trivy-config> <ملفّ> [<ملفّ> …]
+// و`SECURITY_TODAY=YYYY-MM-DD` يُثبّت يومَ الحكم لإثبات منطق الموعد وحدَه، ولا يُضبط في السير.
 import { readFileSync } from 'node:fs';
 
 const [kind, ...files] = process.argv.slice(2);
 const ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'];
 const TOP = 15;
+const HIGH_BLOCKS_FROM = '2026-11-03';
 
 function load(file) {
   let text;
@@ -54,6 +57,7 @@ function table(title, findings) {
 }
 
 const sections = [];
+const all = [];
 for (const file of files) {
   const data = load(file);
   let findings = [];
@@ -78,5 +82,19 @@ for (const file of files) {
     fail(`نوعٌ غير معروف: ${kind}`);
   }
   sections.push(table(`${kind} · ${file}`, findings));
+  all.push(...findings);
 }
-console.log(['## الفحصُ الأمنيّ (إبلاغٌ لا منع)', '', ...sections].join('\n\n'));
+const today = process.env.SECURITY_TODAY ?? new Date().toISOString().slice(0, 10);
+const highBlocks = today >= HIGH_BLOCKS_FROM;
+const blocking = highBlocks ? ['CRITICAL', 'HIGH'] : ['CRITICAL'];
+const blocked = all.filter((f) => blocking.includes(f.severity));
+const highNow = all.filter((f) => f.severity === 'HIGH').length;
+const daysLeft = Math.round((Date.parse(HIGH_BLOCKS_FROM) - Date.parse(today)) / 86_400_000);
+const verdict = blocked.length
+  ? `**⛔ يُمنع: ${blocked.length} نتيجةً بخطورة ${blocking.join(' أو ')}** — تُصلح قبل الدمج.`
+  : `**✔ لا ما يمنع** (${blocking.join(' و')}).`;
+const schedule = highBlocks
+  ? `العالي مانعٌ منذ ${HIGH_BLOCKS_FROM}.`
+  : `العالي يصير مانعاً في ${HIGH_BLOCKS_FROM} (بعد ${daysLeft} يوماً)، ولو كان اليومَ لمنع هنا ${highNow}.`;
+console.log(['## الفحصُ الأمنيّ (يمنع الحرجَ الآن، والعاليَ من ' + HIGH_BLOCKS_FROM + ')', '', verdict, schedule, '', ...sections].join('\n\n'));
+process.exit(blocked.length ? 1 : 0);
