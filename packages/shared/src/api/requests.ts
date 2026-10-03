@@ -942,6 +942,11 @@ export interface RenewSubscriptionDto {
   months: number;
 }
 
+/** جسمُ طلب — `ReopenPeriodDto` في الخادم. */
+export interface ReopenPeriodDto {
+  reason: string;
+}
+
 /** جسمُ طلب — `RequestDecisionDto` في الخادم. */
 export interface RequestDecisionDto {
   action: 'ACCOUNT_ERASURE' | 'SUBSCRIPTION_CHANGE' | 'REFUND';

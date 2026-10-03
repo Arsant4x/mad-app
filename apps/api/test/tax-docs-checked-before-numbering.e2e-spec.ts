@@ -76,7 +76,7 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
       const closed = await invoiceOn('2093-05-10').expect(409);
       expect(closed.body.message).toBe(ar(formatMessage(MSG.fiscal_period_closed, { period: '05/2093' })));
       expect(await count(co, 'INVOICE')).toBe(0);
-      await auth(http().patch(`/fiscal-years/periods/${period(5)}/reopen`)).expect(200);
+      await auth(http().patch(`/fiscal-years/periods/${period(5)}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
       const invoice = (await invoiceOn('2093-05-10').expect(201)).body as { id: string; no: string };
       // البادئةُ من سنة المستند 2093 لا من اليوم، والرقمُ الأوّل — لو رُقّم المرفوضُ لكان هذا `0002`.
       expect(invoice.no).toBe('INV-2093-0001');
@@ -93,7 +93,7 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
       const creditRefused = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'تصحيح', issueDate: '2093-06-10' }).expect(409);
       expect(creditRefused.body.message).toBe(ar(formatMessage(MSG.fiscal_period_closed, { period: '06/2093' })));
       expect(await count(co, 'CREDIT_NOTE')).toBe(0);
-      await auth(http().patch(`/fiscal-years/periods/${period(6)}/reopen`)).expect(200);
+      await auth(http().patch(`/fiscal-years/periods/${period(6)}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
       const credit = await auth(http().post(`/invoices/${invoice.id}/credit-note`)).send({ reason: 'تصحيح', issueDate: '2093-06-10' }).expect(201);
       expect(credit.body.no).toBe('CN-2093-0001');
 
@@ -103,7 +103,7 @@ describe('المستندُ الضريبيّ يُفحص قبل ترقيمه — �
       const debitRefused = await auth(http().post(`/invoices/${invoice.id}/debit-note`)).send(debitBody).expect(409);
       expect(debitRefused.body.message).toBe(ar(formatMessage(MSG.fiscal_period_closed, { period: '07/2093' })));
       expect(await count(co, 'DEBIT_NOTE')).toBe(0);
-      await auth(http().patch(`/fiscal-years/periods/${period(7)}/reopen`)).expect(200);
+      await auth(http().patch(`/fiscal-years/periods/${period(7)}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
       expect((await auth(http().post(`/invoices/${invoice.id}/debit-note`)).send(debitBody).expect(201)).body.no).toBe('DN-2093-0001');
     } finally {
       await removeIsolatedCompany(app, co);

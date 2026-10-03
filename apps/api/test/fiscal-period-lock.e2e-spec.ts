@@ -119,7 +119,7 @@ describe('Fiscal year and period locking (e2e)', () => {
     const blocked = await request(app.getHttpServer()).post('/journal').set('Authorization', `Bearer ${tokenA}`).send(entry).expect(409);
     expect(blocked.body.message).toContain('مقفلة');
 
-    await request(app.getHttpServer()).patch(`/fiscal-years/periods/${march.id}/reopen`).set('Authorization', `Bearer ${tokenA}`).expect(200);
+    await request(app.getHttpServer()).patch(`/fiscal-years/periods/${march.id}/reopen`).set('Authorization', `Bearer ${tokenA}`).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
 
     const posted = await request(app.getHttpServer()).post('/journal').set('Authorization', `Bearer ${tokenA}`).send(entry).expect(201);
     // التنظيفُ بالعكس لا بالحذف (ق-١٢٥٣/①): المرحَّلُ يُعكس — بتاريخ الأصل والفترةُ مفتوحة.
@@ -144,7 +144,7 @@ describe('Fiscal year and period locking (e2e)', () => {
       })
       .expect(409);
 
-    await request(app.getHttpServer()).patch(`/fiscal-years/periods/${may.id}/reopen`).set('Authorization', `Bearer ${tokenA}`).expect(200);
+    await request(app.getHttpServer()).patch(`/fiscal-years/periods/${may.id}/reopen`).set('Authorization', `Bearer ${tokenA}`).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
   });
 
   it("does not let one company's fiscal calendar constrain or be seen by another", async () => {

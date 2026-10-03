@@ -258,13 +258,13 @@ describe('Opening balances as posted journal entries (e2e)', () => {
       await request(app.getHttpServer()).delete(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).expect(409);
 
       // Reopened: the same edit and delete go through.
-      await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/reopen`).set('Authorization', `Bearer ${token}`).expect(200);
+      await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/reopen`).set('Authorization', `Bearer ${token}`).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
       await request(app.getHttpServer()).patch(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).send({ openingBalance: 1200 }).expect(200);
       await request(app.getHttpServer()).delete(`/accounts/${account.id}`).set('Authorization', `Bearer ${token}`).expect(204);
     } finally {
       // Never leave the period closed or the calendar behind for other suites,
       // even on assertion failure — afterAll deletes the year as a backstop.
-      await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/reopen`).set('Authorization', `Bearer ${token}`);
+      await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/reopen`).set('Authorization', `Bearer ${token}`).send({ reason: 'إعادةُ فتحٍ في الاختبار' });
     }
   });
 });

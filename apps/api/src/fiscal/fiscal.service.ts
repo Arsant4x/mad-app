@@ -92,8 +92,13 @@ export class FiscalService {
   /** Closing is reversible by design: a period is reopened to correct a
    * genuine mistake, and every open/close is visible via `closedAt`. What is
    * *not* offered is editing an entry inside a closed period — that's the
-   * whole point (CLAUDE.md 6.9: correct with a reversing entry). */
-  setPeriodStatus(companyId: string, periodId: string, close: boolean) {
+   * whole point (CLAUDE.md 6.9: correct with a reversing entry).
+   *
+   * ⚖️ **والفتحُ بسببٍ مكتوبٍ يُسجَّل** (توجيه ٢٧٥ · `ق-١٥٨٣`، بحكم صاحب المشروع): يُحفظ على الفترة السببُ ولحظةُ الفتح ومن
+   * فتحها، فيُقرأ بجانبها؛ وفتحٌ ثانٍ يحلّ محلّ الأوّل فيها، والأوّلُ باقٍ في سجلّ التدقيق. والسببُ الفارغُ بعد التشذيب يُرفض. */
+  setPeriodStatus(companyId: string, periodId: string, close: boolean, reopen?: { reason: string; actorId: string }) {
+    const reason = reopen?.reason?.trim() ?? '';
+    if (!close && !reason) throw new BadRequestException(MSG.fiscal_reopen_reason_required);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const period = await tx.fiscalPeriod.findUnique({ where: { id: periodId } });
       if (!period) throw new NotFoundException(MSG.fiscal_period_not_found);
@@ -107,7 +112,9 @@ export class FiscalService {
 
       return tx.fiscalPeriod.update({
         where: { id: periodId },
-        data: { status: close ? 'CLOSED' : 'OPEN', closedAt: close ? new Date() : null },
+        data: close
+          ? { status: 'CLOSED', closedAt: new Date() }
+          : { status: 'OPEN', closedAt: null, reopenReason: reason, reopenedAt: new Date(), reopenedById: reopen?.actorId ?? null },
       });
     });
   }

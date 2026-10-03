@@ -152,7 +152,7 @@ describe('⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (e2e
     // التاريخُ الافتراضيُّ (اليوم) داخل الفترة المقفلة ⇒ مرفوض؛ والأصلُ لا يُمسّ.
     await auth(http().post(`/journal/${original.id}/reverse`)).send({}).expect(409);
 
-    await auth(http().patch(`/fiscal-years/periods/${period.id}/reopen`)).expect(200);
+    await auth(http().patch(`/fiscal-years/periods/${period.id}/reopen`)).send({ reason: 'إعادةُ فتحٍ في الاختبار' }).expect(200);
     await auth(http().post(`/journal/${original.id}/reverse`)).send({}).expect(201);
   }, 60000);
 });

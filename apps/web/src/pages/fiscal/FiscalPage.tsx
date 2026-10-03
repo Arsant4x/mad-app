@@ -25,6 +25,9 @@ export function FiscalPage() {
   const [saving, setSaving] = useState(false);
 
   const [pendingDelete, setPendingDelete] = useState<FiscalYear | null>(null);
+  // ⚖️ إعادةُ فتح الفترة بسببٍ مكتوبٍ يُسجَّل (`ق-١٥٨٣`): يُسأل عنه قبل الفتح، والخادمُ يرفض الفراغ.
+  const [reopenFor, setReopenFor] = useState<{ id: string; label: string } | null>(null);
+  const [reopenReason, setReopenReason] = useState('');
 
   async function reload() {
     setYears(await getFiscalYears());
@@ -61,17 +64,25 @@ export function FiscalPage() {
     }
   }
 
-  async function togglePeriod(periodId: string, isClosed: boolean) {
+  async function togglePeriod(periodId: string, isClosed: boolean, reason?: string) {
     setError(null);
     setBusyPeriodId(periodId);
     try {
-      await (isClosed ? reopenFiscalPeriod(periodId) : closeFiscalPeriod(periodId));
+      await (isClosed ? reopenFiscalPeriod(periodId, reason ?? '') : closeFiscalPeriod(periodId));
       await reload();
     } catch (e) {
       setError(serverMessage(e, i18n.t('err_fiscal_period_toggle')));
     } finally {
       setBusyPeriodId(null);
     }
+  }
+
+  async function confirmReopen() {
+    if (!reopenFor) return;
+    const { id } = reopenFor;
+    setReopenFor(null);
+    await togglePeriod(id, true, reopenReason.trim());
+    setReopenReason('');
   }
 
   async function confirmDelete() {
@@ -168,9 +179,14 @@ export function FiscalPage() {
                     </td>
                     <td>{p.closedAt ? p.closedAt.slice(0, 10) : '—'}</td>
                     <td>
-                      <button className="btn btn-ghost btn-sm" onClick={() => togglePeriod(p.id, isClosed)} disabled={busyPeriodId === p.id}>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => (isClosed ? setReopenFor({ id: p.id, label: `${AR_MONTHS[p.month - 1]} ${p.year}` }) : togglePeriod(p.id, false))}
+                        disabled={busyPeriodId === p.id}
+                      >
                         {isClosed ? 'إعادة فتح' : 'إقفال'}
                       </button>
+                      {p.reopenReason && <div className="hint" style={{ marginTop: 4 }}>آخر فتح: {p.reopenReason}</div>}
                     </td>
                   </tr>
                 );
@@ -179,6 +195,34 @@ export function FiscalPage() {
           </table>
         </div>
       ))}
+
+      {reopenFor && (
+        <div className="overlay" onClick={() => setReopenFor(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div className="modal-title">إعادة فتح {reopenFor.label}</div>
+              <button className="modal-close" onClick={() => setReopenFor(null)}>
+                ✕
+              </button>
+            </div>
+            <div className="field">
+              <label>سبب إعادة الفتح</label>
+              <textarea data-testid="period-reopen-reason" value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="مثال: تصحيح قيد مصروف رُحّل على حساب خطأ" rows={3} />
+              <p className="hint" style={{ marginTop: 4 }}>
+                يُحفظ السبب على الفترة مع وقت الفتح ومن فتحها. وإعادة الفتح تعكس قيد إقفال السنة إن وُجد، ويُعاد توليده حين تُقفل الفترة ثانيةً.
+              </p>
+            </div>
+            <div className="modal-foot">
+              <button className="btn btn-ghost" onClick={() => setReopenFor(null)}>
+                إلغاء
+              </button>
+              <button className="btn btn-primary" onClick={confirmReopen} disabled={!reopenReason.trim()}>
+                إعادة فتح
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDelete && (
         <ConfirmModal
