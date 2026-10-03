@@ -117,6 +117,9 @@ const SUB_RESOURCE_LABELS: Record<string, string> = {
   types: 'نوع',
   requests: 'طلب',
   movements: 'حركة',
+  forms: 'نموذج',
+  values: 'قيم نموذج',
+  seal: 'ختم نموذج',
 };
 
 @Injectable()

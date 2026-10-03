@@ -110,6 +110,9 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'ContractClaim',
   // ⚖️ بندُ رسمٍ على العقد (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠): companyId وRLS بـFORCE — طبقتان.
   'ContractFee',
+  // ⚖️ سجلُّ النموذج المعبّأ وقيمُه (توجيه ٢٧٨ · ق-١٦٣٦): companyId إلزاميّ وRLS بـFORCE — طبقتان. والقالبُ ثنائيُّ النطاق خارجها (db-only).
+  'FormInstance',
+  'FormValue',
   'ContractKeyMoney',
   'ContractHandover',
   'HandoverItem',
