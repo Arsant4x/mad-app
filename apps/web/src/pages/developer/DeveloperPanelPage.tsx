@@ -1,6 +1,7 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
+import { PublicFormTemplatesSection } from './PublicFormTemplatesSection';
 import { SubProcessorsSection } from './SubProcessorsSection';
 import { SupportAccessSection } from './SupportAccessSection';
 import { createCompany, listCompanies, updateCompany, updateCompanySubscription, type Company, type CompanyInput } from '../../api/companies';
@@ -227,6 +228,10 @@ export function DeveloperPanelPage() {
       </PlatformRoleGate>
       <PlatformRoleGate allow="COMPLIANCE">
         <SubProcessorsSection />
+      </PlatformRoleGate>
+      {/* ⚖️ القوالبُ العامّة (`ق-١٦٣٨` · الموجة ١ب): لمالك المنصّة وحدَه حتى يُحكم في الدور، كخادمها (`@RequiresPlatformRole()`). */}
+      <PlatformRoleGate allow="OWNER">
+        <PublicFormTemplatesSection />
       </PlatformRoleGate>
 
       {companyModal && (

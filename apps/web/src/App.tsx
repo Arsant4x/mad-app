@@ -19,6 +19,7 @@ import { MaintenancePage } from './pages/maintenance/MaintenancePage';
 import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { RemindersPage } from './pages/reminders/RemindersPage';
 import { CustomersPage } from './pages/customers/CustomersPage';
+import { FormsPage } from './pages/forms/FormsPage';
 import { FiscalPage } from './pages/fiscal/FiscalPage';
 import { EmployeesPage } from './pages/employees/EmployeesPage';
 import { HrPage } from './pages/hr/HrPage';
@@ -196,6 +197,16 @@ export default function App() {
               element={
                 <ScreenGuard screen="contracts">
                   <RemindersPage />
+                </ScreenGuard>
+              }
+            />
+            {/* ⚖️ «النماذج» (`ق-١٦٣٨`): سجلّاتُها على شاشة العقود (`ContractFormsController` بـ`@RequiresScreen('contracts')`)،
+              * والقوالبُ تُقرأ لكلِّ فاعلٍ وتُكتب للمالك، فحارسُ الشاشة حارسُ السجلّات. */}
+            <Route
+              path="forms"
+              element={
+                <ScreenGuard screen="contracts">
+                  <FormsPage />
                 </ScreenGuard>
               }
             />

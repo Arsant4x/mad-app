@@ -81,6 +81,7 @@ const NAV_GROUPS: NavGroupDef[] = [
       { screen: 'properties', to: '/units', labelKey: 'nav_units' },
       { screen: 'contracts', to: '/contracts', labelKey: 'nav_contracts' },
       { screen: 'contracts', to: '/reminders', labelKey: 'nav_reminders' },
+      { screen: 'contracts', to: '/forms', labelKey: 'nav_forms' },
       { screen: 'maintenance', to: '/maintenance', labelKey: 'nav_maintenance' },
       { screen: 'maintenance', to: '/warranties', labelKey: 'nav_warranties' },
     ],
