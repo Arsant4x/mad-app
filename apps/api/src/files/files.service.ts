@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -203,6 +204,30 @@ export class FilesService implements OnModuleInit {
   async remove(companyId: string, key: string): Promise<void> {
     assertKeyBelongsToCompany(key, companyId);
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /**
+   * ⚖️ **حذفُ ملفّات المنشأة كلِّها من المخزن** عند حذفها النهائيّ (توجيه ٢٧٥ · القاعدةُ الدائمة ٣٧). كان الحذفُ النهائيّ
+   * يحذف الصفوفَ وملفّاتِ النسخة وحدَها، فتبقى المرفقاتُ وصورُ داخل المسكن بلا صفٍّ يشير إليها بعد انقضاء الحفظ (م١٨ من
+   * نظام حماية البيانات). **والبادئةُ مجالُ المنشأة نفسُه** (`companyPrefix`، والحسّاسُ تحته)، فلا يمسّ منشأةً غيرَها ولا
+   * النُّسخ. والحذفُ كائناً كائناً لا دفعةً: حذفُ الدفعة يشترط تجزئةً لا يقبلها كلُّ مخزنٍ متوافق، والعددُ لمنشأةٍ واحدة صغير.
+   * ويُعيد عددَ ما حُذف.
+   */
+  async deleteCompanyObjects(companyId: string): Promise<number> {
+    if (!companyId || companyId.includes('/')) throw new ForbiddenException(MSG.file_access_denied);
+    const Prefix = companyPrefix(companyId);
+    let deleted = 0;
+    let ContinuationToken: string | undefined;
+    do {
+      const page = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix, ContinuationToken }));
+      for (const object of page.Contents ?? []) {
+        if (!object.Key?.startsWith(Prefix)) continue;
+        await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: object.Key }));
+        deleted += 1;
+      }
+      ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (ContinuationToken);
+    return deleted;
   }
 
   /**

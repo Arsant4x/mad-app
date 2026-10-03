@@ -191,4 +191,35 @@ describe('حذفُ المنشأة لا يمسّ ما تحت الحفظ — وا�
     expect(result.deleted).toContain(co.id);
     expect(await companyRow(co.id)).toBeNull();
   });
+
+  /**
+   * ⑤ ⚖️ **وملفّاتُها في المخزن تُحذف معها** (توجيه ٢٧٥ · القاعدةُ الدائمة ٣٧ · مراجعةُ السؤال ٢٤٣).
+   *
+   * كان الحذفُ النهائيّ يحذف الصفوفَ وملفّاتِ النسخة وحدَها، فتبقى المرفقاتُ (ومنها صورُ داخل المسكن) في المخزن بلا
+   * صفٍّ يشير إليها بعد انقضاء الحفظ (م١٨ من نظام حماية البيانات). **ووقوعُ الطُّعم أوّلاً** (`§8.8`): الملفّان مقروءان
+   * قبل الكنس، فغيابُهما بعده أثرُ الحذف لا خطأُ رفع. والمخزنُ الحسّاس معهما لأنه تحت مجال المنشأة نفسِه.
+   */
+  it('⑤ وما انقضى حفظُه يُحذف بملفّاته من المخزن، العاديِّ والحسّاس', async () => {
+    const co = await makeCompany();
+    const auth = (r: request.Test) => r.set('Authorization', `Bearer ${co.token}`);
+    const customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل الملفّات ${suffix}` }).expect(201)).body.id as string;
+    await auth(http().post('/invoices'))
+      .send({ customerId, issueDate: today, dueDate: today, lines: [{ description: 'بيعٌ قديم', quantity: 1, unitPrice: 100, taxRate: 15 }] })
+      .expect(201);
+
+    const files = app.get(FilesService);
+    const pdf = Buffer.from('%PDF-1.4 ملفُّ اختبار الحذف');
+    const plain = await files.upload(co.id, { originalname: 'erase-me.pdf', mimetype: 'application/pdf', buffer: pdf, size: pdf.length });
+    const sensitive = await files.uploadSensitive(co.id, { originalname: 'erase-me-too.pdf', mimetype: 'application/pdf', buffer: pdf, size: pdf.length });
+    expect((await files.readPlain(co.id, plain.key)).equals(pdf)).toBe(true);
+    expect((await files.readSensitive(co.id, sensitive.key)).equals(pdf)).toBe(true);
+
+    await close(co);
+    await prisma.company.update({ where: { id: co.id }, data: { closedAt: new Date(Date.now() - 12 * 366 * day), retainUntil: new Date(Date.now() - day) } });
+    const result = await sweeper.sweep();
+    expect(result.deleted).toContain(co.id);
+
+    await expect(files.readPlain(co.id, plain.key)).rejects.toThrow();
+    await expect(files.readSensitive(co.id, sensitive.key)).rejects.toThrow();
+  });
 });

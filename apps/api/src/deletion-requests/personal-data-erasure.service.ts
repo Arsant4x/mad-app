@@ -197,6 +197,12 @@ export class PersonalDataErasureService {
         await this.companiesService.remove(id);
         deleted.push(id);
         this.logger.warn(`Hard-deleted company ${id} ("${orgName}") at the end of its retention (${DEFERRAL_REASON})`);
+        // ⚖️ توجيه ٢٧٥ (القاعدة ٣٧): وملفّاتُها في المخزن معها، **بعد** حذف الصفوف: فإن منع سجلٌّ لا يُحذف حذفَها (الفرعُ
+        //    تحت) بقيت ملفّاتُها مع صفوفها. وسقوطُ حذف الملفّات خطأٌ يُسجَّل باسم المنشأة ولا يُعيد صفوفاً حُذفت.
+        await this.files
+          .deleteCompanyObjects(id)
+          .then((n) => this.logger.warn(`Deleted ${n} stored file(s) of company ${id} with its final erasure`))
+          .catch((e) => this.logger.error(`تعذّر حذفُ ملفّات المنشأة ${id} من المخزن بعد حذفها النهائيّ، فبقيت بلا صفٍّ يشير إليها: ${String(e)}`));
       } catch (e) {
         blocked.push(id);
         this.logger.warn(`Final erasure of company ${id} ("${orgName}") blocked by an append-only record (ق-١١٠): ${(e as Error).message}`);
