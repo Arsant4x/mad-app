@@ -104,8 +104,9 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
 
   it('③ قالبُ الموظّف يُقصّ بقالب منشأته: الشاملُ على منشأةٍ قالبُها الفواتيرُ وحدَها لا يرى غيرَها', async () => {
     // منشأةٌ قائمةٌ على قالبٍ أضيق (ركّبها المديرُ قبل هذا الحكم) — يُصنع القالبُ ويُركَّب بمسنَد الإدارة.
+    // ⚠️ مفتاحُ شاشة الفواتير `invoice` بالمفرد (`templates/screens.ts`) — كُتب أوّلاً `invoices` فلم يمنح القالبُ شيئاً.
     const narrow = await tenantPrisma.runAsPlatformAdmin((tx) =>
-      tx.permissionTemplate.create({ data: { name: `فواتير فقط ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoices'] } }),
+      tx.permissionTemplate.create({ data: { name: `فواتير فقط ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoice'] } }),
     );
     narrowId = narrow.id;
     const token = await employeeToken((await fullTemplate()).id, 'clipped');
@@ -115,14 +116,14 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
       await http().get('/customers').set('Authorization', `Bearer ${token}`).expect(403);
       const grants = await grantsOf(token);
       expect(grants.length).toBeGreaterThan(0);
-      expect(grants.every((g) => g.startsWith('invoices:'))).toBe(true);
+      expect(grants.every((g) => g.startsWith('invoice:'))).toBe(true);
     } finally {
       await prisma.company.update({ where: { id: company.companyId }, data: { permissionTemplateId: (await fullTemplate()).id } });
     }
   });
 
   it('④ صاحبُ المنشأة شاملٌ في المسارين: لوحةُ المدير ترفض قالباً غيرَ شامل للمنشأة إنشاءً وتغييراً', async () => {
-    const narrow = narrowId ?? (await tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.create({ data: { name: `ضيّق ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoices'] } }))).id;
+    const narrow = narrowId ?? (await tenantPrisma.runAsPlatformAdmin((tx) => tx.permissionTemplate.create({ data: { name: `ضيّق ${suffix}`, companyId: null, isAllScreens: false, allowedScreens: ['invoice'] } }))).id;
     narrowId = narrow;
     const body = (tag: string, permissionTemplateId: string) => ({ username: `own-${tag}-${suffix}`, password: 'OwnPass123!', orgName: `منشأة ${tag} ${suffix}`, permissionTemplateId, subEnd: '2030-01-01' });
     const refused = await admin(http().post('/companies')).send(body('narrow', narrow));
@@ -137,9 +138,10 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
     const full = await fullTemplate();
     const none = await noScreens();
     try {
-      await admin(http().patch(`/templates/${full.id}`)).send({ isAllScreens: false, allowedScreens: ['invoices'] }).expect(403);
+      // والمفتاحُ الصحيح `invoice` — مفتاحٌ مجهولٌ يردّه التحقّقُ `400` قبل أن تبلغ الحمايةُ، فلا يُثبت شيئاً عنها.
+      await admin(http().patch(`/templates/${full.id}`)).send({ isAllScreens: false, allowedScreens: ['invoice'] }).expect(403);
       await admin(http().delete(`/templates/${full.id}`)).expect(403);
-      await admin(http().patch(`/templates/${none.id}`)).send({ allowedScreens: ['invoices'] }).expect(403);
+      await admin(http().patch(`/templates/${none.id}`)).send({ allowedScreens: ['invoice'] }).expect(403);
       await admin(http().delete(`/templates/${none.id}`)).expect(403);
       // وما زالا كما كانا.
       expect((await fullTemplate()).isAllScreens).toBe(true);
