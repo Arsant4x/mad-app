@@ -20,7 +20,7 @@ export class WarehousesController {
   @Get()
   @RequiresAction('view')
   list(@CurrentTenant() tenant: TenantContext, @Query() query: ArchivablePagedQueryDto) {
-    return this.warehousesService.list(tenant.companyId, query.includeArchived === 'true', query);
+    return this.warehousesService.list(tenant.companyId, tenant.allowedBranchIds, query.includeArchived === 'true', query);
   }
 
   @Post()

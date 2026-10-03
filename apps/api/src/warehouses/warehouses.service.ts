@@ -7,6 +7,7 @@ import { UpdateWarehouseDto } from './dto/update-warehouse.dto';
 import { MSG } from '../common/i18n/messages';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { pageArray } from '../common/pagination/paged.util';
+import { warehouseFilter } from '../branches/branch-scope.util';
 
 /** حقولُ البحث المُعلَنة (`ق-١٢٣٦`) — الاسمُ والموقعُ والمسؤول. */
 const WAREHOUSE_SEARCH_FIELDS = ['name', 'location', 'manager'] as const;
@@ -15,12 +16,23 @@ const WAREHOUSE_SEARCH_FIELDS = ['name', 'location', 'manager'] as const;
 export class WarehousesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
-  list(companyId: string, includeArchived = false, query?: PagedQueryDto) {
+  /**
+   * ⚖️ **المقيَّدُ يرى الأسماءَ لا الكمّيات** (توجيه ٢٧٦ · `ق-١٦٠٤`، بحكم صاحب المشروع: «يرى المقيَّدُ أسماءَ مستودعات الفروع الأخرى
+   * ليحوّل إليها، ولا يرى كمّياتها ولا أرصدتَها»): القائمةُ بالمستودعات كلِّها، وعددُ الأصناف ومجموعُ الكمّية لمستودعات فروعه والمستودعِ
+   * الذي بلا فرع وحدَها (`warehouseFilter` — تعريفُ «مستودعاته» نفسُه في الأرصدة)؛ ومستودعُ فرعٍ آخر بكمّيتين فارغتين و`otherBranch`.
+   * والموقعُ والمسؤولُ ليسا كمّيةً ولا رصيداً فيبقيان، كي لا يمحوهما نموذجُ التعديل.
+   */
+  list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // الترتيبُ التامّ (`ق-٣٥٦`): الاسمُ ثم `id` — فالقطعُ في الذاكرة يعيد بناءَ القائمة في كل طلب.
       const [warehouses, quantities] = await Promise.all([tx.warehouse.findMany({ ...(includeArchived ? {} : { where: { archived: false } }), orderBy: [{ name: 'asc' }, { id: 'asc' }] }), computeStockQuantities(tx)]);
+      const own =
+        allowedBranchIds === 'all'
+          ? null
+          : new Set((await tx.warehouse.findMany({ where: warehouseFilter(allowedBranchIds), select: { id: true } })).map((w) => w.id));
 
       const rows = warehouses.map((w) => {
+        if (own && !own.has(w.id)) return { ...w, itemCount: null, totalQty: null, otherBranch: true };
         let itemCount = 0;
         let totalQty = 0;
         for (const [key, qty] of quantities) {
@@ -28,7 +40,7 @@ export class WarehousesService {
           itemCount += 1;
           totalQty += qty;
         }
-        return { ...w, itemCount, totalQty };
+        return { ...w, itemCount, totalQty, otherBranch: false };
       });
       // القائمةُ محسوبةٌ (أرصدةٌ لكل مستودع) فتُقطَع في الذاكرة بعد الحساب.
       return pageArray(query, rows, WAREHOUSE_SEARCH_FIELDS);
