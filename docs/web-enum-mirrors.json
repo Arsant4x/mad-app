@@ -90,6 +90,10 @@
       "server": "prisma:ContractVatInclusion"
     },
     {
+      "web": "apps/web/src/api/contracts.ts#DeclaredChargeTaxTreatment",
+      "server": "const:apps/api/src/contracts/dto/claim.dto.ts#CHARGE_TAX_TREATMENTS"
+    },
+    {
       "web": "apps/web/src/api/contracts.ts#DeclaredClassification",
       "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CLASSIFICATIONS"
     },
