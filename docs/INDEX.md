@@ -59,7 +59,7 @@
 ⚠️ **وهي تستشهد بـ`gap-analysis.md`** — وهو **مؤرشفٌ منذ 2026-08-08** في
 `docs/archive/` ورأسه يقول «لا يُعتمد عليها». بندٌ يُراجَع.
 
-## الوثائق — ٦١
+## الوثائق — ٦٢
 
 | الملف | العنوان | التاريخ | الحالة | أسطر | تعتمد على |
 |---|---|---|---|---|---|
@@ -86,6 +86,7 @@
 | [`gift-shop-full-spec.md`](plans/gift-shop-full-spec.md) | المواصفة الكاملة — وحدة محلات الهدايا والتحف والمقتنيات | — | مسوّدة | 898 | inventory-master-plan.md، retail-full-spec.md |
 | [`gov-integrations-master-plan.md`](plans/gov-integrations-master-plan.md) | التكاملات الحكومية — طبقة فوق الخطة الموحّدة | 2026-08-28 | مسوّدة (افتراضاً) | 586 | unified-build-plan.md |
 | [`handover-forms-master-plan.md`](plans/handover-forms-master-plan.md) | نماذج الاستلام والتسليم وما يشابهها — الخطة الرئيسية | 2026-08-31 | **معتمدة مرجعاً** (`ق-١٥٩٩`، 2026-10-03؛ والمحرّكُ موقوفٌ على النموذج المرئيّ والاثني عشر، `ق-١٦١٠`) | 605 | asset-register-master-plan.md، unified-build-plan.md |
+| [`handover-forms-wave-zero.md`](plans/handover-forms-wave-zero.md) | محرّكُ نماذج التسليم: الموجةُ صفر (القراراتُ في التصميم، ووصلُ MinIO) | 2026-10-03 | **مخرجُ الموجة صفر** (`ق-١٦١٠`/أ؛ لا شيفرة، ومعه النموذجُ المرئيّ `handover-forms-visual-model.html`) | 67 | handover-forms-master-plan.md |
 | [`hardware-full-spec.md`](plans/hardware-full-spec.md) | المواصفة الكاملة — قطاع السباكة والكهرباء ومواد البناء | — | مسوّدة | 1126 | inventory-master-plan.md، retail-full-spec.md، wholesale-full-spec.md |
 | [`healthcare-master-plan.md`](plans/healthcare-master-plan.md) | الخطة الشاملة لبناء النظام المحاسبي للمنشآت الصحية | 2026-08-26 | مسوّدة (افتراضاً) | 523 | — |
 | [`hospitality-master-plan.md`](plans/hospitality-master-plan.md) | الخطة الرئيسية — نشاط الضيافة والفنادق والشقق المفروشة | — | مسوّدة | 787 | — |
