@@ -387,7 +387,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
  * after the current term ends and to the same rent, which is the ordinary case;
  * everything else is an override.
  */
-function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: RenewContractInput) => Promise<void> }) {
+export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: RenewContractInput) => Promise<void> }) {
   const dayAfter = (iso: string) => {
     const d = new Date(iso);
     d.setDate(d.getDate() + 1);
