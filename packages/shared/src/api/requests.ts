@@ -191,6 +191,7 @@ export interface CreateCompanyUserDto {
   permissionTemplateId: string;
   branchIds?: string[];
   allBranches?: boolean;
+  canEditMasterData?: boolean;
 }
 
 /** جسمُ طلب — `CreateContractDto` في الخادم. */
