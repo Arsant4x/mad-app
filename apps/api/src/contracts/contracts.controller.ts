@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiCreatedResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
@@ -16,6 +17,7 @@ import { ContractsService } from './contracts.service';
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
+import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
@@ -244,6 +246,7 @@ export class ContractsController {
   /** ⚖️ بندُ رسمٍ فوق الإيجار يُطالَب مع كلِّ قسطٍ يحلّ بضريبته (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠). */
   @Post(':id/fees')
   @RequiresAction('edit')
+  @ApiCreatedResponse({ type: CreatedContractFeeResponse })
   addFee(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: ContractFeeDto) {
     return this.contractsService.addFee(tenant.companyId, id, dto);
   }
@@ -251,6 +254,7 @@ export class ContractsController {
   /** إنهاءُ بند رسم — لا حذف؛ ما طولب عنه يبقى. */
   @Post(':id/fees/:feeId/end')
   @RequiresAction('edit')
+  @ApiCreatedResponse({ type: ContractFeeResponse })
   endFee(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('feeId') feeId: string, @Body() dto: EndContractFeeDto) {
     return this.contractsService.endFee(tenant.companyId, id, feeId, dto);
   }

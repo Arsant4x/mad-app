@@ -21,7 +21,8 @@ const STATUS_META: Record<ClaimStatus, { label: string; badgeClass: string }> = 
 };
 
 // ⚖️ «رسوم خدمة» تُنشئها بنودُ الرسوم مع أقساطها لا اليد (ق-١٦٠٠) — فلا تُعرض في نوع المطالبة اليدوية.
-const KINDS = (Object.keys(KIND_LABEL) as ClaimKind[]).filter((k) => k !== 'FEE');
+type ManualClaimKind = Exclude<ClaimKind, 'FEE'>;
+const KINDS = (Object.keys(KIND_LABEL) as ClaimKind[]).filter((k): k is ManualClaimKind => k !== 'FEE');
 
 /**
  * Claims on the tenant: repairs they caused, utilities they left, late fees.
@@ -65,7 +66,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [kind, setKind] = useState<ClaimKind>('MAINTENANCE');
+  const [kind, setKind] = useState<ManualClaimKind>('MAINTENANCE');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [issuedAt, setIssuedAt] = useState(today());
@@ -114,7 +115,7 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
           <div className="two-col">
             <div className="field">
               <label>النوع</label>
-              <select value={kind} onChange={(e) => setKind(e.target.value as ClaimKind)}>
+              <select value={kind} onChange={(e) => setKind(e.target.value as ManualClaimKind)}>
                 {KINDS.map((k) => (
                   <option key={k} value={k}>
                     {KIND_LABEL[k]}

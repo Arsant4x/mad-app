@@ -4,6 +4,7 @@ import { withRequestKey } from './idempotency';
 import type { Unit } from './units';
 import type { ChargeTaxTreatment, ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
 import type { CancelContractDto, ContractFeeDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, EndContractFeeDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
+import type { ContractFeeResponse, CreatedContractFeeResponse } from '@mad-app/shared/api/responses';
 
 export type { ContractStatus };
 export type { ContractCycle };
@@ -262,9 +263,15 @@ export interface ContractFee {
   effectiveFrom: string;
   endedAt: string | null;
 }
-export const addContractFee = (contractId: string, dto: ContractFeeDto) => apiClient.post<Contract>(`/contracts/${contractId}/fees`, dto).then((r) => r.data);
-export const endContractFee = (contractId: string, feeId: string, dto: EndContractFeeDto) =>
-  apiClient.post<Contract>(`/contracts/${contractId}/fees/${feeId}/end`, dto).then((r) => r.data);
+/** الخادمُ يردّ البندَ وحدَه (`ContractFeeResponse` · `ق-١٤٣٨`)، فيُقرأ العقدُ بعده بمطالباته التي رُفعت معه. */
+export const addContractFee = async (contractId: string, dto: ContractFeeDto): Promise<Contract> => {
+  await apiClient.post<CreatedContractFeeResponse>(`/contracts/${contractId}/fees`, dto);
+  return getContract(contractId);
+};
+export const endContractFee = async (contractId: string, feeId: string, dto: EndContractFeeDto): Promise<Contract> => {
+  await apiClient.post<ContractFeeResponse>(`/contracts/${contractId}/fees/${feeId}/end`, dto);
+  return getContract(contractId);
+};
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);
 export const cancelContract = (id: string, dto: CancelContractInput) => apiClient.post<Contract>(`/contracts/${id}/cancel`, dto).then((r) => r.data);
 /** و`requestKey` مفتاحُ نافذة القبض الواحدة — يعيد القبضَ نفسَه إن أُعيد الطلب (توجيه ٢٧٦ · ق-١٦٠٩/ب). */

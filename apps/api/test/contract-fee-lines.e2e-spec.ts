@@ -141,14 +141,17 @@ describe('⚖️ بنودُ الرسوم على العقد (السؤالان ٤�
     expect(feeClaims(contract)).toHaveLength(0);
     const due = dueCount(contract);
 
-    const added = (await auth(http().post(`/contracts/${contract.id}/fees`)).send({ label: 'خدمات', amount: 100, effectiveFrom: iso(start) }).expect(201)).body as E2eContract;
-    expect(added.fees).toHaveLength(1);
-    expect(feeClaims(added)).toHaveLength(due);
+    // الردُّ البندُ وحدَه بعدد ما رُفع معه (`CreatedContractFeeResponse` · ق-١٤٣٨)، والعقدُ يُقرأ بعده.
+    type FeeReply = { id: string; amount: string; endedAt: string | null; raisedClaims?: number };
+    const added = (await auth(http().post(`/contracts/${contract.id}/fees`)).send({ label: 'خدمات', amount: 100, effectiveFrom: iso(start) }).expect(201)).body as FeeReply;
+    expect({ amount: added.amount, raisedClaims: added.raisedClaims }).toEqual({ amount: '100.00', raisedClaims: due });
+    const afterAdd = await readContract(contract.id);
+    expect(afterAdd.fees).toHaveLength(1);
+    expect(feeClaims(afterAdd)).toHaveLength(due);
 
     // إنهاؤه اليومَ: لا يُطالَب لقسطٍ يحلّ بعده — ولو كُنس حتى نهاية العقد.
-    const feeId = added.fees[0].id;
-    const ended = (await auth(http().post(`/contracts/${contract.id}/fees/${feeId}/end`)).send({ endedAt: iso(today) }).expect(201)).body as E2eContract;
-    expect(ended.fees[0].endedAt).not.toBeNull();
+    const ended = (await auth(http().post(`/contracts/${contract.id}/fees/${added.id}/end`)).send({ endedAt: iso(today) }).expect(201)).body as FeeReply;
+    expect(ended.endedAt).toBe(iso(today));
     await app.get(RentAccrualService).runForCompany(company.companyId, end);
     expect(feeClaims(await readContract(contract.id))).toHaveLength(due);
   });
