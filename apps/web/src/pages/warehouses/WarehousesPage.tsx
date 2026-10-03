@@ -116,14 +116,17 @@ export function WarehousesPage() {
                 <td className="num">{w.itemCount ?? '—'}</td>
                 <td className="num">{w.totalQty === null ? '—' : fmt(w.totalQty)}</td>
                 <td>
-                  <RowMenu
-                    actions={[
-                      { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', warehouse: w }) },
-                      { label: w.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
-                      '-',
-                      { label: '🗑 حذف', onClick: () => setPendingDelete(w), danger: true },
-                    ]}
-                  />
+                  {/* 🔴 ق-١٦١٩/أ: مستودعُ فرعٍ آخر لا يُعدَّل ولا يُؤرشف ولا يُحذف (الخادمُ يردّها 403)، فلا تُعرض أفعالُه. */}
+                  {!w.otherBranch && (
+                    <RowMenu
+                      actions={[
+                        { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', warehouse: w }) },
+                        { label: w.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setWarehouseArchived(w.id, !w.archived).then(reload) },
+                        '-',
+                        { label: '🗑 حذف', onClick: () => setPendingDelete(w), danger: true },
+                      ]}
+                    />
+                  )}
                 </td>
               </tr>
             ))}
