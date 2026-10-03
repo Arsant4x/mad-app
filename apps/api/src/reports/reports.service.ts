@@ -624,6 +624,13 @@ export class ReportsService {
     });
   }
 
+  /**
+   * قائمةُ التدفّقات النقدية للمنشأة (`cash-flow.util.ts`).
+   *
+   * **على مستوى المنشأة بحقّها**: النقدُ يُقاس من حسابات البنوك والصناديق والأدراج كلِّها لأن القائمةَ قائمةُ المنشأة
+   * الواحدة، ولا تُعطى إلا لمن يرى فروعَها كلَّها (`assertWholeCompanyReader` أوّلَ التابع، `ق-١٤٥٢`)؛ وحسابٌ نقديٌّ يُسقَط
+   * من القياس يكسر مطابقةَ الصافي بالنقد.
+   */
   cashFlow(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
     assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
