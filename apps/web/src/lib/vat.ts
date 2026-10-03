@@ -20,6 +20,18 @@ export function standardVatIncludedIn(gross: number): number {
   return (gross * STANDARD_VAT_RATE) / (100 + STANDARD_VAT_RATE);
 }
 
+/**
+ * ⚖️ **ضريبةُ جزءٍ خاضعٍ من مبلغ** (العقدُ المختلط · السؤال ٤١٢ · ق-١٦٠٠) — `share` نسبةُ الخاضع بين 0 و1 (1 للخاضع كلِّه).
+ * غيرُ الشامل: النسبةُ على الجزء الخاضع · الشامل: `gross × s × 15 ÷ (100 + s × 15)`. بلا تدوير (التدويرُ من `lib/money`)،
+ * ويطابقان `rentAmountsOf` في الخادم — والرقمُ المعتمَدُ يصل منه.
+ */
+export function standardVatOnShare(taxedPart: number): number {
+  return (taxedPart * STANDARD_VAT_RATE) / 100;
+}
+export function standardVatIncludedInShare(gross: number, share: number): number {
+  return (gross * share * STANDARD_VAT_RATE) / (100 + share * STANDARD_VAT_RATE);
+}
+
 /** الفئاتُ التي يُعلنها التاجر — والقيمتان القديمتان (`LEGACY_*`) تُقرآن ولا تُختاران. */
 export type { DeclarableTaxCategory };
 export type TaxCategory = DeclarableTaxCategory | 'LEGACY_STANDARD' | 'LEGACY_ZERO';

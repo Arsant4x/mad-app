@@ -96,7 +96,7 @@ export const DECLARABLE_TAX_CATEGORY_VALUES = ['S', 'Z', 'E', 'O'] as const;
 export type DeclarableTaxCategory = (typeof DECLARABLE_TAX_CATEGORY_VALUES)[number];
 
 /** `const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CLASSIFICATIONS` — ويقابلُه `apps/web/src/api/contracts.ts#DeclaredClassification`. */
-export const DECLARED_CLASSIFICATION_VALUES = ['RESIDENTIAL', 'COMMERCIAL'] as const;
+export const DECLARED_CLASSIFICATION_VALUES = ['RESIDENTIAL', 'COMMERCIAL', 'SERVICED_LODGING', 'MIXED'] as const;
 export type DeclaredClassification = (typeof DECLARED_CLASSIFICATION_VALUES)[number];
 
 /** `const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_VAT_INCLUSIONS` — ويقابلُه `apps/web/src/api/contracts.ts#DeclaredVatInclusion`. */

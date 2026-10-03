@@ -20,7 +20,7 @@ import {
 } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
 import { formatMoney, num0, round2, type MoneyText } from '../../lib/money';
-import { STANDARD_VAT_GROSS_FACTOR, STANDARD_VAT_RATE, standardVatIncludedIn } from '../../lib/vat';
+import { STANDARD_VAT_GROSS_FACTOR, standardVatIncludedIn, standardVatIncludedInShare, standardVatOnShare } from '../../lib/vat';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
@@ -63,7 +63,7 @@ function grossNumberOf(contract: TaxedContract, amount: string | number): number
   const a = Number(amount);
   const share = taxedShareOf(contract);
   if (share === 0 || contract.vatInclusion !== 'EXCLUSIVE') return round2(a);
-  return share === 1 ? round2(a * STANDARD_VAT_GROSS_FACTOR) : round2(a + round2((round2(a * share) * STANDARD_VAT_RATE) / 100));
+  return share === 1 ? round2(a * STANDARD_VAT_GROSS_FACTOR) : round2(a + round2(standardVatOnShare(round2(a * share))));
 }
 
 /**
@@ -94,11 +94,11 @@ function paymentDeclaration(contract: TaxedContract, amount: string | number | u
   // ⚖️ المختلط (السؤال ٤١٢): الضريبةُ على جزئه الخاضع وحدَه، فيُقال ذلك قبل الأرقام.
   const mixed = share < 1 ? `عقدٌ مختلط: نصيبُ المعفى ${contract.exemptSharePercent}٪ والضريبةُ على الباقي. ` : '';
   if (contract.vatInclusion === 'INCLUSIVE') {
-    const tax = share === 1 ? round2(standardVatIncludedIn(a)) : round2((a * share * STANDARD_VAT_RATE) / (100 + share * STANDARD_VAT_RATE));
+    const tax = share === 1 ? round2(standardVatIncludedIn(a)) : round2(standardVatIncludedInShare(a, share));
     return `${mixed}قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
   }
   if (contract.vatInclusion === 'EXCLUSIVE') {
-    const tax = round2((round2(a * share) * STANDARD_VAT_RATE) / 100);
+    const tax = round2(standardVatOnShare(round2(a * share)));
     return `${mixed}قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
   }
   return 'عقدٌ قديم غيرُ معلَنِ الشمول — لا تُحسب له ضريبةٌ حتى يُعلَن من بطاقته.';
