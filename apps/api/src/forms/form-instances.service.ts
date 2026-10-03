@@ -9,8 +9,8 @@ import { sealHash, type SealContent, type SealItemValue } from './seal-content.u
 
 type Tx = Prisma.TransactionClient;
 
-/** ما يخصّه السجلّ — يكتبه النشاطُ الطالب بعد أن يتحقّق منه؛ والمحرّكُ يقابله ولا يعرف معناه. */
-export interface FormSubject {
+/** الكيانُ المرتبط بالسجلّ — يكتبه النشاطُ الطالب بعد أن يتحقّق منه؛ والمحرّكُ يقابله ولا يعرف معناه. */
+export interface FormLinkedEntity {
   type: string;
   id: string;
 }
@@ -33,15 +33,16 @@ export interface FormValueInput {
 const FRM_SEQUENCE = { kind: 'FRM', pad: 4 } as const;
 
 const INSTANCE_INCLUDE = {
-  template: { include: { formType: true, items: { orderBy: { lineNo: 'asc' } } } },
+  templateVersion: { include: { formType: true, items: { orderBy: { lineNo: 'asc' } } } },
   values: true,
+  seal: true,
 } as const;
 
 type InstanceFull = Prisma.FormInstanceGetPayload<{ include: typeof INSTANCE_INCLUDE }>;
-type TemplateItem = InstanceFull['template']['items'][number];
+type TemplateItem = InstanceFull['templateVersion']['items'][number];
 type ValueRow = InstanceFull['values'][number];
+type SealStamp = { no: string; sealSeq: number; prevHash: string | null; sealedBy: FormActor; sealedAt: Date };
 
-const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 const blank = (s: string | null | undefined): string | null => {
   const t = (s ?? '').trim();
   return t === '' ? null : t;
@@ -64,7 +65,7 @@ function outOfRange(item: TemplateItem, v: ValueRow | undefined): boolean {
 
 function sealItems(instance: InstanceFull): SealItemValue[] {
   const byItem = new Map(instance.values.map((v) => [v.itemId, v]));
-  return instance.template.items.map((item) => {
+  return instance.templateVersion.items.map((item) => {
     const v = byItem.get(item.id);
     return {
       lineNo: item.lineNo,
@@ -80,7 +81,8 @@ function sealItems(instance: InstanceFull): SealItemValue[] {
 }
 
 /** نصُّ الختم من الصفوف كما خُزّنت — للختم وللتحقّق بالدالّة نفسِها. */
-function sealContentOf(instance: InstanceFull, stamp: { no: string; sealSeq: number; prevHash: string | null; sealedBy: FormActor; sealedAt: Date }): SealContent {
+function sealContentOf(instance: InstanceFull, stamp: SealStamp): SealContent {
+  const template = instance.templateVersion;
   return {
     companyId: instance.companyId,
     instanceId: instance.id,
@@ -88,9 +90,9 @@ function sealContentOf(instance: InstanceFull, stamp: { no: string; sealSeq: num
     sealSeq: stamp.sealSeq,
     prevHash: stamp.prevHash,
     formDate: instance.formDate.toISOString().slice(0, 10),
-    template: { id: instance.template.id, familyId: instance.template.familyId, version: instance.template.version, name: instance.template.name },
-    formTypeCode: instance.template.formType.code,
-    subject: { type: instance.subjectType, id: instance.subjectId },
+    template: { id: template.id, familyId: template.familyId, version: template.version, name: template.name },
+    formTypeCode: template.formType.code,
+    linkedEntity: { type: instance.linkedEntityType, id: instance.linkedEntityId },
     items: sealItems(instance),
     filledBy: { id: instance.filledById, name: instance.filledByName },
     sealedBy: stamp.sealedBy,
@@ -100,29 +102,31 @@ function sealContentOf(instance: InstanceFull, stamp: { no: string; sealSeq: num
 
 export function presentInstance(instance: InstanceFull) {
   const byItem = new Map(instance.values.map((v) => [v.itemId, v]));
+  const template = instance.templateVersion;
+  const seal = instance.seal;
   return {
     id: instance.id,
-    templateId: instance.templateId,
+    templateVersionId: instance.templateVersionId,
     template: {
-      id: instance.template.id,
-      familyId: instance.template.familyId,
-      version: instance.template.version,
-      name: instance.template.name,
-      formType: { id: instance.template.formType.id, code: instance.template.formType.code, name: instance.template.formType.name },
+      id: template.id,
+      familyId: template.familyId,
+      version: template.version,
+      name: template.name,
+      formType: { id: template.formType.id, code: template.formType.code, name: template.formType.name },
     },
-    subjectType: instance.subjectType,
-    subjectId: instance.subjectId,
+    linkedEntityType: instance.linkedEntityType,
+    linkedEntityId: instance.linkedEntityId,
     formDate: instance.formDate.toISOString().slice(0, 10),
     status: instance.status,
-    no: instance.no,
-    sealSeq: instance.sealSeq,
-    contentHash: instance.contentHash,
-    prevHash: instance.prevHash,
+    no: seal?.no ?? null,
+    sealSeq: seal?.sealSeq ?? null,
+    contentHash: seal?.contentHash ?? null,
+    prevHash: seal?.prevHash ?? null,
     filledByName: instance.filledByName,
-    sealedByName: instance.sealedByName,
-    sealedAt: iso(instance.sealedAt),
+    sealedByName: seal?.sealedByName ?? null,
+    sealedAt: seal ? seal.sealedAt.toISOString() : null,
     createdAt: instance.createdAt.toISOString(),
-    items: instance.template.items.map((item) => {
+    items: template.items.map((item) => {
       const v = byItem.get(item.id);
       return {
         itemId: item.id,
@@ -146,19 +150,19 @@ export function presentInstance(instance: InstanceFull) {
 }
 
 /**
- * ⚖️ **محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم** (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`).
+ * ⚖️ **محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم** (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`، بكيانات الخطّة §٦.١).
  *
- * **والمحرّكُ لا يعرف نشاطاً** (`CLAUDE.md §3` أ): كلُّ تابعٍ يأخذ الموضوعَ من النشاط الطالب (العقد) ويقابل السجلَّ به، فمسارُ عقدٍ لا يقرأ
- * سجلَّ عقدٍ آخر. **والختمُ** يُسلسَل في المنشأة بقفلٍ استشاريّ داخل معاملته (`pg_advisory_xact_lock`)، فختمان معاً لا يقرآن السابقَ نفسَه
- * فتتفرّع السلسلة؛ والرقمُ من العدّاد الذرّيّ بسنة تاريخ التعبئة؛ والبصمةُ على السجلّ كلِّه وفيها بصمةُ السابق (`seal-content.util.ts`).
- * **والمختومُ** يمنع البرنامجُ تعديلَه هنا، وتمنعه القاعدةُ بمُشغِّلَيها (③ب).
+ * **والمحرّكُ لا يعرف نشاطاً** (`CLAUDE.md §3` أ): كلُّ تابعٍ يأخذ الكيانَ المرتبط من النشاط الطالب (العقد) ويقابل السجلَّ به، فمسارُ عقدٍ
+ * لا يقرأ سجلَّ عقدٍ آخر. **والختمُ** (`FormSeal`) يُسلسَل في المنشأة بقفلٍ استشاريّ داخل معاملته (`pg_advisory_xact_lock`)، فختمان معاً
+ * لا يقرآن السابقَ نفسَه فتتفرّع السلسلة؛ والرقمُ من العدّاد الذرّيّ بسنة تاريخ التعبئة؛ والبصمةُ على السجلّ كلِّه وفيها بصمةُ السابق
+ * (`seal-content.util.ts`). **والمختومُ** يمنع البرنامجُ تعديلَه هنا، وتمنعه القاعدةُ بمُشغِّلاتها (③ب).
  */
 @Injectable()
 export class FormInstancesService {
   constructor(private readonly tenantPrisma: TenantPrismaService) {}
 
   /** سجلٌّ جديد مسوّدةً على إصدارٍ منشورٍ من قالب المنشأة. */
-  create(companyId: string, subject: FormSubject, input: { templateId: string; formDate?: string }, actor: FormActor) {
+  create(companyId: string, linked: FormLinkedEntity, input: { templateId: string; formDate?: string }, actor: FormActor) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       // قالبُ المنشأة نفسِها وحدَه (والمركّبُ في القاعدة يحرس الشيءَ نفسَه).
       const template = await tx.formTemplate.findFirst({ where: { id: input.templateId, companyId }, select: { id: true, status: true } });
@@ -167,17 +171,25 @@ export class FormInstancesService {
       // ⚠️ بلا تاريخٍ مُرسَل فيومُ UTC (حدٌّ معلَن في `wall-clock.util`)؛ والشاشةُ ترسل يومَ الجهاز.
       const formDate = input.formDate ? new Date(`${input.formDate}T00:00:00.000Z`) : dayStartOf(new Date());
       const created = await tx.formInstance.create({
-        data: { companyId, templateId: template.id, subjectType: subject.type, subjectId: subject.id, formDate, filledById: actor.id, filledByName: actor.name },
+        data: {
+          companyId,
+          templateVersionId: template.id,
+          linkedEntityType: linked.type,
+          linkedEntityId: linked.id,
+          formDate,
+          filledById: actor.id,
+          filledByName: actor.name,
+        },
         select: { id: true },
       });
-      return presentInstance(await this.load(tx, subject, created.id));
+      return presentInstance(await this.load(tx, linked, created.id));
     });
   }
 
-  list(companyId: string, subject: FormSubject) {
+  list(companyId: string, linked: FormLinkedEntity) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const rows = await tx.formInstance.findMany({
-        where: { subjectType: subject.type, subjectId: subject.id },
+        where: { linkedEntityType: linked.type, linkedEntityId: linked.id },
         include: INSTANCE_INCLUDE,
         orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       });
@@ -185,16 +197,16 @@ export class FormInstancesService {
     });
   }
 
-  get(companyId: string, subject: FormSubject, id: string) {
-    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => presentInstance(await this.load(tx, subject, id)));
+  get(companyId: string, linked: FormLinkedEntity, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => presentInstance(await this.load(tx, linked, id)));
   }
 
   /** تعبئةُ المسوّدة — قيمةٌ لكلِّ بندٍ مُرسَل بنوعه، تحلّ محلَّ قيمته السابقة. */
-  setValues(companyId: string, subject: FormSubject, id: string, values: readonly FormValueInput[]) {
+  setValues(companyId: string, linked: FormLinkedEntity, id: string, values: readonly FormValueInput[]) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const instance = await this.load(tx, subject, id);
+      const instance = await this.load(tx, linked, id);
       if (instance.status !== FormInstanceStatus.DRAFT) throw new ConflictException(MSG.form_instance_sealed);
-      const items = new Map(instance.template.items.map((i) => [i.id, i]));
+      const items = new Map(instance.templateVersion.items.map((i) => [i.id, i]));
       for (const input of values) {
         const item = items.get(input.itemId);
         if (!item) throw new BadRequestException(MSG.form_value_item_unknown);
@@ -205,14 +217,14 @@ export class FormInstancesService {
           update: data,
         });
       }
-      return presentInstance(await this.load(tx, subject, id));
+      return presentInstance(await this.load(tx, linked, id));
     });
   }
 
   /** حذفُ المسوّدة وحدَها — والمختومُ لا يُحذف (القاعدةُ ٢ من §٦.٢). */
-  remove(companyId: string, subject: FormSubject, id: string) {
+  remove(companyId: string, linked: FormLinkedEntity, id: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const instance = await this.load(tx, subject, id);
+      const instance = await this.load(tx, linked, id);
       if (instance.status !== FormInstanceStatus.DRAFT) throw new ConflictException(MSG.form_instance_sealed);
       await tx.formInstance.delete({ where: { id } });
     });
@@ -220,41 +232,42 @@ export class FormInstancesService {
 
   /**
    * **الختم**: يُفحص الإلزاميُّ والمانعُ خارج نطاقه، ثم يُقفل تسلسلُ أختام المنشأة، ويُقرأ السابقُ، ويُصرف الرقم، وتُحسب البصمة، ويُكتب
-   * الختمُ كلُّه بشرط أن السجلَّ ما زال مسوّدة.
+   * صفُّ الختم، ثم يصير السجلُّ مختوماً بشرط أنه ما زال مسوّدة (والقاعدةُ ترفض سجلّاً مختوماً بلا صفِّ ختم).
    */
-  seal(companyId: string, subject: FormSubject, id: string, actor: FormActor) {
+  seal(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const instance = await this.load(tx, subject, id);
+      const instance = await this.load(tx, linked, id);
       if (instance.status !== FormInstanceStatus.DRAFT) throw new ConflictException(MSG.form_instance_sealed);
 
       const byItem = new Map(instance.values.map((v) => [v.itemId, v]));
-      const missing = instance.template.items.filter((i) => i.required && isEmpty(i, byItem.get(i.id))).map((i) => i.label);
+      const items = instance.templateVersion.items;
+      const missing = items.filter((i) => i.required && isEmpty(i, byItem.get(i.id))).map((i) => i.label);
       if (missing.length) throw new BadRequestException(formatMessage(MSG.form_instance_required_missing, { labels: missing.join('، ') }));
-      const blocked = instance.template.items.filter((i) => i.isBlocking && outOfRange(i, byItem.get(i.id))).map((i) => i.label);
+      const blocked = items.filter((i) => i.isBlocking && outOfRange(i, byItem.get(i.id))).map((i) => i.label);
       if (blocked.length) throw new BadRequestException(formatMessage(MSG.form_instance_blocking_out_of_range, { labels: blocked.join('، ') }));
 
       // سلسلةُ الأختام في المنشأة تُسلسَل هنا حتى تلتزم المعاملة (`ق-١٦٣٦` ب).
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`form-seal:${companyId}`}))`;
-      const previous = await tx.formInstance.findFirst({
-        where: { sealSeq: { not: null } },
-        orderBy: { sealSeq: 'desc' },
-        select: { sealSeq: true, contentHash: true },
-      });
+      // وختمٌ سبق هذا إلى السجلّ نفسِه وانتظرناه عند القفل يُرى الآن (القراءةُ بعد القفل ترى ما التزم قبله).
+      const fresh = await tx.formInstance.findUnique({ where: { id }, select: { status: true } });
+      if (fresh?.status !== FormInstanceStatus.DRAFT) throw new ConflictException(MSG.form_instance_seal_race);
+      const previous = await tx.formSeal.findFirst({ orderBy: { sealSeq: 'desc' }, select: { sealSeq: true, contentHash: true } });
       const sealSeq = (previous?.sealSeq ?? 0) + 1;
       const prevHash = previous?.contentHash ?? null;
-      // أعلى رقمٍ صدر يُقرأ مرّةً عند بذر العدّاد وحدَه (`ق-٣٢٨`)، والرقمُ فارغٌ للمسوّدة فلا يطابق البادئة.
+      // أعلى رقمٍ صدر يُقرأ مرّةً عند بذر العدّاد وحدَه (`ق-٣٢٨`).
       const highest = (prefix: string) =>
-        highestSequenceOf({ findMany: (args) => tx.formInstance.findMany(args) as unknown as Promise<{ no: string }[]> }, prefix);
+        highestSequenceOf({ findMany: (args) => tx.formSeal.findMany(args) as unknown as Promise<{ no: string }[]> }, prefix);
       const no = await nextDocumentNumber(tx, companyId, instance.formDate, FRM_SEQUENCE, highest);
       const sealedAt = new Date();
       const contentHash = sealHash(sealContentOf(instance, { no, sealSeq, prevHash, sealedBy: actor, sealedAt }));
 
-      const done = await tx.formInstance.updateMany({
-        where: { id, status: FormInstanceStatus.DRAFT },
-        data: { status: FormInstanceStatus.SEALED, no, sealSeq, prevHash, contentHash, sealedById: actor.id, sealedByName: actor.name, sealedAt },
+      // الصفُّ الفريدُ على السجلّ يردّ ختماً ثانياً يسابق هذا، والشرطُ على المسوّدة يردّ ما خُتم بعد القراءة.
+      await tx.formSeal.create({
+        data: { companyId, instanceId: id, no, sealSeq, prevHash, contentHash, sealedById: actor.id, sealedByName: actor.name, sealedAt },
       });
+      const done = await tx.formInstance.updateMany({ where: { id, status: FormInstanceStatus.DRAFT }, data: { status: FormInstanceStatus.SEALED } });
       if (done.count !== 1) throw new ConflictException(MSG.form_instance_seal_race);
-      return presentInstance(await this.load(tx, subject, id));
+      return presentInstance(await this.load(tx, linked, id));
     });
   }
 
@@ -262,39 +275,39 @@ export class FormInstancesService {
    * **التحقّقُ من المختوم**: تُعاد البصمةُ من الصفوف كما هي وتُقابَل بالمختومة، ويُقابَل السابقُ بموضعه في السلسلة. والتحقّقُ يُعيد الحكمَ
    * ولا يُصلح شيئاً.
    */
-  verify(companyId: string, subject: FormSubject, id: string) {
+  verify(companyId: string, linked: FormLinkedEntity, id: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const instance = await this.load(tx, subject, id);
-      if (instance.status !== FormInstanceStatus.SEALED || instance.no === null || instance.sealSeq === null || instance.sealedAt === null) {
-        throw new ConflictException(MSG.form_instance_not_sealed);
-      }
+      const instance = await this.load(tx, linked, id);
+      const seal = instance.seal;
+      if (instance.status !== FormInstanceStatus.SEALED || !seal) throw new ConflictException(MSG.form_instance_not_sealed);
       const recomputed = sealHash(
         sealContentOf(instance, {
-          no: instance.no,
-          sealSeq: instance.sealSeq,
-          prevHash: instance.prevHash,
-          sealedBy: { id: instance.sealedById ?? '', name: instance.sealedByName ?? '' },
-          sealedAt: instance.sealedAt,
+          no: seal.no,
+          sealSeq: seal.sealSeq,
+          prevHash: seal.prevHash,
+          sealedBy: { id: seal.sealedById, name: seal.sealedByName },
+          sealedAt: seal.sealedAt,
         }),
       );
-      const previous =
-        instance.sealSeq > 1 ? await tx.formInstance.findFirst({ where: { sealSeq: instance.sealSeq - 1 }, select: { contentHash: true } }) : null;
-      const chainLinked = instance.sealSeq === 1 ? instance.prevHash === null : previous?.contentHash === instance.prevHash;
+      const previous = seal.sealSeq > 1 ? await tx.formSeal.findFirst({ where: { sealSeq: seal.sealSeq - 1 }, select: { contentHash: true } }) : null;
+      const chainLinked = seal.sealSeq === 1 ? seal.prevHash === null : previous?.contentHash === seal.prevHash;
       return {
-        no: instance.no,
-        contentHash: instance.contentHash,
+        no: seal.no,
+        contentHash: seal.contentHash,
         recomputedHash: recomputed,
-        contentIntact: recomputed === instance.contentHash,
+        contentIntact: recomputed === seal.contentHash,
         chainLinked,
-        valid: recomputed === instance.contentHash && chainLinked,
+        valid: recomputed === seal.contentHash && chainLinked,
       };
     });
   }
 
-  private async load(tx: Tx, subject: FormSubject, id: string): Promise<InstanceFull> {
+  private async load(tx: Tx, linked: FormLinkedEntity, id: string): Promise<InstanceFull> {
     const instance = await tx.formInstance.findUnique({ where: { id }, include: INSTANCE_INCLUDE });
-    // سجلُّ موضوعٍ آخر لا يُرى من مسار هذا الموضوع.
-    if (!instance || instance.subjectType !== subject.type || instance.subjectId !== subject.id) throw new NotFoundException(MSG.form_instance_not_found);
+    // سجلُّ كيانٍ آخر لا يُرى من مسار هذا الكيان.
+    if (!instance || instance.linkedEntityType !== linked.type || instance.linkedEntityId !== linked.id) {
+      throw new NotFoundException(MSG.form_instance_not_found);
+    }
     return instance;
   }
 }

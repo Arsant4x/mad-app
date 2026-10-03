@@ -114,7 +114,16 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
   it('① سجلٌّ على العقد مسوّدةً ببنود قالبه، وقيمٌ بنوعها وما يخالفه يُردّ', async () => {
     const created = await http().post(`/contracts/${contractA}/forms`).set('Authorization', bearer(a.token)).send({ templateId, formDate }).expect(201);
     first = { id: created.body.id, contentHash: '', no: '' };
-    expect(created.body).toMatchObject({ status: 'DRAFT', no: null, sealSeq: null, contentHash: null, formDate, subjectType: 'contract', subjectId: contractA });
+    expect(created.body).toMatchObject({
+      status: 'DRAFT',
+      no: null,
+      sealSeq: null,
+      contentHash: null,
+      formDate,
+      templateVersionId: templateId,
+      linkedEntityType: 'contract',
+      linkedEntityId: contractA,
+    });
     expect(created.body.items.map((i: { lineNo: number }) => i.lineNo)).toEqual([1, 2, 3]);
 
     const values = (v: unknown[]) => http().put(`/contracts/${contractA}/forms/${first.id}/values`).set('Authorization', bearer(a.token)).send({ values: v });
@@ -215,6 +224,32 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
     expect(
       await attempt(() => inA((tx) => tx.formValue.create({ data: { companyId: a.companyId, instanceId: first.id, itemId: items.cond, textValue: 'عبث' } }))),
     ).toContain('قيمُ السجلّ المختوم');
+
+    // وصفُّ الختم (FormSeal) يُكتب مرّةً: لا يُعدَّل ولا يُحذف.
+    expect(await attempt(() => inA((tx) => tx.formSeal.update({ where: { instanceId: first.id }, data: { sealedByName: 'عبث' } })))).toContain(
+      'الختمُ لا يُعدَّل ولا يُحذف',
+    );
+    expect(await attempt(() => inA((tx) => tx.formSeal.delete({ where: { instanceId: first.id } })))).toContain('الختمُ لا يُعدَّل ولا يُحذف');
+    // ولا تصير مسوّدةٌ مختومةً بلا صفِّ ختم، ولا يُنشأ سجلٌّ مختوماً.
+    expect(await attempt(() => inA((tx) => tx.formInstance.update({ where: { id: draftId }, data: { status: 'SEALED' } })))).toContain('بلا ختمٍ مكتوب');
+    expect(
+      await attempt(() =>
+        inA((tx) =>
+          tx.formInstance.create({
+            data: {
+              companyId: a.companyId,
+              templateVersionId: templateId,
+              linkedEntityType: 'contract',
+              linkedEntityId: contractA,
+              formDate: new Date(`${formDate}T00:00:00.000Z`),
+              status: 'SEALED',
+              filledById: 'x',
+              filledByName: 'عبث',
+            },
+          }),
+        ),
+      ),
+    ).toContain('يُنشأ مسوّدةً');
 
     // والحالةُ الموجبة: المسوّدةُ تُعدَّل في القاعدة نفسِها (مصادقةُ المسبار — ق-١٣٦).
     expect(await attempt(() => inA((tx) => tx.formInstance.update({ where: { id: draftId }, data: { filledByName: 'تصحيحٌ قبل الختم' } })))).toBeNull();

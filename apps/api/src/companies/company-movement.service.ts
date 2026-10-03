@@ -64,6 +64,8 @@ export const NUMBERED_DOCUMENTS: ReadonlyArray<{ model: Prisma.ModelName; kinds:
   { model: 'InventoryWriteOff', kinds: ['WO'], label: 'إعدام مخزون' },
   { model: 'Quote', kinds: ['Q'], label: 'عروض أسعار' },
   { model: 'Contract', kinds: ['EJ'], label: 'عقود' },
+  // ١ج ختمُ النموذج (ق-١٦٣٦): رقمٌ `FRM-YYYY-NNNN` يُصرف عند الختم، والقاعدةُ ترفض حذفَ الختم (③ب) فالمنشأةُ ذاتُ حركة.
+  { model: 'FormSeal', kinds: ['FRM'], label: 'أختام نماذج' },
 ];
 
 /** ③ دفاترُ الحركة بلا سلسلة. */

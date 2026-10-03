@@ -248,10 +248,10 @@ export interface FormInstanceItemResponse {
 export interface FormInstanceResponse {
   status: 'DRAFT' | 'SEALED';
   id: string;
-  templateId: string;
+  templateVersionId: string;
   template: FormInstanceTemplateRefResponse;
-  subjectType: string;
-  subjectId: string;
+  linkedEntityType: string;
+  linkedEntityId: string;
   formDate: string;
   no: string | null;
   sealSeq: number | null;
@@ -345,7 +345,7 @@ export interface FormTypeResponse {
 /** ردٌّ — `FormVerificationResponse` في الخادم (ق-١٤٣٨). */
 export interface FormVerificationResponse {
   no: string;
-  contentHash: string | null;
+  contentHash: string;
   recomputedHash: string;
   contentIntact: boolean;
   chainLinked: boolean;

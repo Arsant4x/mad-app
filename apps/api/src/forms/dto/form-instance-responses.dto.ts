@@ -42,13 +42,15 @@ export class FormInstanceItemResponse {
   outOfRange!: boolean;
 }
 
-/** السجلُّ المعبّأ ببنوده — والختمُ فارغٌ للمسوّدة. */
+/** السجلُّ المعبّأ ببنوده، وحقولُ ختمه (`FormSeal`) فارغةٌ للمسوّدة. */
 export class FormInstanceResponse {
   id!: string;
-  templateId!: string;
+  /** إصدارُ القالب الذي عُبّئ عليه (القاعدةُ ١ من §٦.٢). */
+  templateVersionId!: string;
   template!: FormInstanceTemplateRefResponse;
-  subjectType!: string;
-  subjectId!: string;
+  /** الكيانُ المرتبط كما كتبه النشاطُ الطالب (`contract`). */
+  linkedEntityType!: string;
+  linkedEntityId!: string;
   formDate!: string;
   @ApiProperty({ enum: FormInstanceStatus })
   status!: FormInstanceStatus;
@@ -70,7 +72,7 @@ export class FormInstanceResponse {
 /** حكمُ التحقّق من المختوم: البصمةُ معادةً من الصفوف، وصلتُه بسابقه في السلسلة. */
 export class FormVerificationResponse {
   no!: string;
-  contentHash!: string | null;
+  contentHash!: string;
   recomputedHash!: string;
   contentIntact!: boolean;
   chainLinked!: boolean;

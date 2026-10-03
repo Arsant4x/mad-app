@@ -9,7 +9,7 @@ const base: SealContent = {
   formDate: '2026-10-04',
   template: { id: 't-1', familyId: 't-1', version: 2, name: 'تسليمُ وحدة' },
   formTypeCode: 'UNIT_HANDOVER',
-  subject: { type: 'contract', id: 'c-1' },
+  linkedEntity: { type: 'contract', id: 'c-1' },
   items: [
     { lineNo: 1, itemId: 'i-1', label: 'قراءةُ العدّاد', itemType: 'METER_READING', text: null, number: '48213', bool: null, note: null },
     { lineNo: 2, itemId: 'i-2', label: 'حالةُ الخزائن', itemType: 'CONDITION', text: 'مقبول', number: null, bool: null, note: 'خدشٌ في الباب' },
@@ -30,15 +30,16 @@ describe('بصمةُ ختم السجلّ على السجلّ كلِّه وفيه
     expect(sealHash({ ...base, items: [...base.items].reverse() })).toBe(h);
   });
 
-  it('③ كلُّ ما في السجلّ يغيّرها: قيمةٌ · ملاحظة · من ختم · وقتُ الختم · الإصدار · الموضوع · الرقم · وبصمةُ السابق', () => {
+  it('③ كلُّ ما في السجلّ يغيّرها: قيمةٌ · ملاحظة · من عبّأ · من ختم · وقتُ الختم · الإصدار · الكيانُ المرتبط · الرقم · وبصمةُ السابق', () => {
     const h = sealHash(base);
     const variants: SealContent[] = [
       { ...base, items: [{ ...base.items[0], number: '48214' }, base.items[1]] },
       { ...base, items: [base.items[0], { ...base.items[1], note: null }] },
+      { ...base, filledBy: { id: 'u-3', name: 'third' } },
       { ...base, sealedBy: { id: 'u-2', name: 'other' } },
       { ...base, sealedAt: '2026-10-04T10:15:00.001Z' },
       { ...base, template: { ...base.template, version: 3 } },
-      { ...base, subject: { type: 'contract', id: 'c-2' } },
+      { ...base, linkedEntity: { type: 'contract', id: 'c-2' } },
       { ...base, no: 'FRM-2026-0002' },
       { ...base, sealSeq: 2, prevHash: 'a'.repeat(64) },
     ];
