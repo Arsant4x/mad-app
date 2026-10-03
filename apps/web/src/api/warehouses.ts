@@ -7,8 +7,10 @@ export interface Warehouse {
   name: string;
   location: string | null;
   manager: string | null;
-  itemCount: number;
-  totalQty: number;
+  /** ⚖️ فارغان لمستودع فرعٍ آخر عند الموظّف المقيَّد (`ق-١٦٠٤`): يرى اسمَه ليحوّل إليه، ولا يرى كمّياته. */
+  itemCount: number | null;
+  totalQty: number | null;
+  otherBranch?: boolean;
 }
 
 export type WarehouseInput = CreateWarehouseDto;

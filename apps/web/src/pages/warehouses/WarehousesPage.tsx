@@ -105,11 +105,16 @@ export function WarehousesPage() {
             )}
             {rows.map((w) => (
               <tr key={w.id}>
-                <td>{w.name}{w.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                <td>
+                  {w.name}
+                  {w.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
+                  {/* ⚖️ ق-١٦٠٤: مستودعُ فرعٍ آخر يُرى باسمه ليُحوَّل إليه، وكمّياتُه لا تصل (الخادمُ يحجبها). */}
+                  {w.otherBranch && <span className="badge draft" style={{ marginRight: 6 }}>فرعٌ آخر</span>}
+                </td>
                 <td>{w.location || '—'}</td>
                 <td>{w.manager || '—'}</td>
-                <td className="num">{w.itemCount}</td>
-                <td className="num">{fmt(w.totalQty)}</td>
+                <td className="num">{w.itemCount ?? '—'}</td>
+                <td className="num">{w.totalQty === null ? '—' : fmt(w.totalQty)}</td>
                 <td>
                   <RowMenu
                     actions={[
