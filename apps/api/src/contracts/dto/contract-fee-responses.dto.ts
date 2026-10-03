@@ -15,7 +15,16 @@ export class ContractFeeResponse {
   endedAt!: string | null;
 }
 
-/** `POST /contracts/:id/fees` — وعددُ المطالبات التي رُفعت في اللحظة نفسِها لما حلّ من أقساطه منذ سريانه. */
-export class CreatedContractFeeResponse extends ContractFeeResponse {
+/**
+ * `POST /contracts/:id/fees` — البندُ وعددُ المطالبات التي رُفعت في اللحظة نفسِها لما حلّ من أقساطه منذ سريانه.
+ * ⚠️ صنفٌ قائمٌ بحقوله لا وارثٌ: الملحقُ يرتّب حقولَ الوارث بأيِّ الصنفين يُستكشف أوّلاً (ترتيبُ المسارات)، فيتقلّب النوعُ المولَّد.
+ */
+export class CreatedContractFeeResponse {
+  id!: string;
+  contractId!: string;
+  label!: string;
+  amount!: string;
+  effectiveFrom!: string;
+  endedAt!: string | null;
   raisedClaims!: number;
 }
