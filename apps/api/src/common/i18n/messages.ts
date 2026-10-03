@@ -1287,7 +1287,7 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'Invalid Idempotency-Key — 8 to 100 characters of letters, digits, underscore or hyphen',
   },
   [MSG.idempotency_key_reused]: {
-    ar: 'مفتاحُ الطلب هذا استُعمل لطلبٍ آخر بمبلغٍ أو طرفٍ مختلف — لم يُكتب مستندٌ جديد؛ أعد المحاولة بمفتاحٍ جديد إن كان طلباً آخر',
+    ar: 'هذا المفتاحُ (Idempotency-Key) استُعمل لطلبٍ آخر — لم يُكتب مستندٌ جديد؛ أعد المحاولة بمفتاحٍ جديد إن كان طلباً آخر',
     en: 'This Idempotency-Key was already used for a different request — no new document was written; retry with a new key if this is another request',
   },
   [MSG.rent_accrual_period_locked]: {

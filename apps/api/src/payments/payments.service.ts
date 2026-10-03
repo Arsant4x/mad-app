@@ -180,19 +180,36 @@ export class PaymentsService {
    */
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
     // ⚖️ الإرسالُ المكرّر لا يُنشئ سندين (توجيه ٢٧٦ · ق-١٦٠٩/ب): المفتاحُ نفسُه يعيد السندَ نفسَه — `onceForKey`.
-    return onceForKey(idempotencyKey, () => this.replayByKey(companyId, idempotencyKey!, dto), () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey));
+    return onceForKey(
+      idempotencyKey,
+      () => this.replayByKey(companyId, allowedBranchIds, idempotencyKey!, dto),
+      () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey),
+    );
   }
 
-  /** السندُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (طرفاً أو مبلغاً). */
-  private replayByKey(companyId: string, key: string, dto: CreatePaymentDto) {
+  /**
+   * السندُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (طرفاً أو مبلغاً).
+   *
+   * **على مستوى المنشأة بحقّها**: مفتاحُ الطلب فريدٌ في المنشأة كلِّها بقيد القاعدة، فالبحثُ به لا يُقصر على فروع القارئ — وإلا
+   * اصطدم الإنشاءُ بالقيد ثم لم يجد ما اصطدم به. **وما يُعاد للقارئ يُقاس بفروعه بعد البحث**: سندٌ في فرعٍ لا يملكه يُردّ `409`
+   * كالمفتاح المعاد لطلبٍ آخر، فلا يُكشف له سندُ فرعٍ آخر ولا وجودُه.
+   */
+  private replayByKey(companyId: string, allowedBranchIds: string[] | 'all', key: string, dto: CreatePaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.payment.findFirst({ where: { clientRequestId: key }, include: PAYMENT_INCLUDE });
       if (!existing) return null;
-      if (existing.customerId !== dto.customerId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      const outsideReader = allowedBranchIds !== 'all' && existing.branchId !== null && !allowedBranchIds.includes(existing.branchId);
+      if (outsideReader || existing.customerId !== dto.customerId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
       return withAllocatedTotals(existing);
     });
   }
 
+  /**
+   * الكتابةُ مرّةً لكلِّ مفتاح — وبلا مفتاحٍ كما كانت.
+   *
+   * **على مستوى المنشأة بحقّها**: فحصُ المفتاح داخل المعاملة يرى المنشأةَ كلَّها لأن القيدَ الذي يحميه عليها كلِّها؛ وهو فحصُ
+   * وجودٍ يرمي ولا يُعيد شيئاً، والإعادةُ للقارئ في `replayByKey` بفروعه.
+   */
   private createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

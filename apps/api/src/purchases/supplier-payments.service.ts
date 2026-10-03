@@ -155,19 +155,35 @@ export class SupplierPaymentsService {
    */
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto, idempotencyKey?: string) {
     // ⚖️ الإرسالُ المكرّر لا يُنشئ سندين (توجيه ٢٧٦ · ق-١٦٠٩/ب) — مرآةُ سند القبض.
-    return onceForKey(idempotencyKey, () => this.replayByKey(companyId, idempotencyKey!, dto), () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey));
+    return onceForKey(
+      idempotencyKey,
+      () => this.replayByKey(companyId, allowedBranchIds, idempotencyKey!, dto),
+      () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey),
+    );
   }
 
-  /** السندُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (طرفاً أو مبلغاً). */
-  private replayByKey(companyId: string, key: string, dto: CreateSupplierPaymentDto) {
+  /**
+   * سندُ الصرف المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (مورّداً أو مبلغاً).
+   *
+   * **على مستوى المنشأة بحقّها**: قيدُ فرادة المفتاح على المنشأة كلِّها، فيُبحث به فيها كلِّها ثم يُقاس ما وُجد بفروع القارئ —
+   * سندُ صرفٍ في فرعٍ لا يملكه يُردّ `409` ولا يُعاد له، كمرآته في سند القبض.
+   */
+  private replayByKey(companyId: string, allowedBranchIds: string[] | 'all', key: string, dto: CreateSupplierPaymentDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.supplierPayment.findFirst({ where: { clientRequestId: key }, include: SUPPLIER_PAYMENT_INCLUDE });
       if (!existing) return null;
-      if (existing.supplierId !== dto.supplierId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      const outsideReader = allowedBranchIds !== 'all' && existing.branchId !== null && !allowedBranchIds.includes(existing.branchId);
+      if (outsideReader || existing.supplierId !== dto.supplierId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
       return withAllocatedTotals(existing);
     });
   }
 
+  /**
+   * تسجيلُ سند الصرف مرّةً لكلِّ مفتاح — وبلا مفتاحٍ كما كان.
+   *
+   * **على مستوى المنشأة بحقّها**: سؤالُ «أكُتب بهذا المفتاح؟» داخل المعاملة جوابُه من المنشأة كلِّها حيث يعيش القيد، ولا يُعيد
+   * صفّاً لأحد — يرمي فتُترك المعاملة؛ وما يراه القارئُ يُقاس في `replayByKey`.
+   */
   private createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto, idempotencyKey?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {

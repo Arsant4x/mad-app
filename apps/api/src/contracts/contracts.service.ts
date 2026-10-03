@@ -610,13 +610,7 @@ export class ContractsService {
     return round2(remaining.reduce((sum, i) => sum + Number(i.amount), 0));
   }
 
-  /**
-   * **صندوقُه لا يُقاس هنا**: دفعةُ الإيجار مستندٌ بلا فرع (العقدُ والعقارُ لا يحملان فرعاً)، والمستندُ بلا فرعٍ خارجُ حكم
-   * `ق-١٤٣٧` — وحركةُ البنك مرآتُها بلا فرعٍ كذلك.
-   *
-   * 🔴 **لكنّ فروعَ الفاعل تُقاس** (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): الصندوقُ صفٌّ يحمل فرعاً، والقبضُ فيه كتابةٌ في رصيده؛
-   * فموظّفٌ مقيَّدٌ لا يقبض في صندوق فرعٍ لا يملكه (`403`)، وصندوقُ المنشأة كلِّها (بلا فرع) لكلِّ فاعل.
-   */
+  /** قبضُ إيجار — مرّةً لكلِّ مفتاح طلب (`recordPaymentOnce` يحمل القبضَ نفسَه وإعلانَ صندوقه). */
   recordPayment(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto, idempotencyKey?: string) {
     // ⚖️ الإرسالُ المكرّر لا يُنشئ قبضين (توجيه ٢٧٦ · ق-١٦٠٩/ب): المفتاحُ نفسُه يعيد القبضَ نفسَه — `onceForKey`.
     return onceForKey(
@@ -641,6 +635,13 @@ export class ContractsService {
     });
   }
 
+  /**
+   * **صندوقُه لا يُقاس هنا**: دفعةُ الإيجار مستندٌ بلا فرع (العقدُ والعقارُ لا يحملان فرعاً)، والمستندُ بلا فرعٍ خارجُ حكم
+   * `ق-١٤٣٧` — وحركةُ البنك مرآتُها بلا فرعٍ كذلك.
+   *
+   * 🔴 **لكنّ فروعَ الفاعل تُقاس** (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): الصندوقُ صفٌّ يحمل فرعاً، والقبضُ فيه كتابةٌ في رصيده؛
+   * فموظّفٌ مقيَّدٌ لا يقبض في صندوق فرعٍ لا يملكه (`403`)، وصندوقُ المنشأة كلِّها (بلا فرع) لكلِّ فاعل.
+   */
   private recordPaymentOnce(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto, idempotencyKey?: string) {
     // Retries on a journal-entry "no" collision from a concurrent payment.
     return retryOnUniqueConflict(() =>
