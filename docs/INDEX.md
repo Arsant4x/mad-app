@@ -59,7 +59,7 @@
 ⚠️ **وهي تستشهد بـ`gap-analysis.md`** — وهو **مؤرشفٌ منذ 2026-08-08** في
 `docs/archive/` ورأسه يقول «لا يُعتمد عليها». بندٌ يُراجَع.
 
-## الوثائق — ٥٩
+## الوثائق — ٦١
 
 | الملف | العنوان | التاريخ | الحالة | أسطر | تعتمد على |
 |---|---|---|---|---|---|
@@ -102,6 +102,7 @@
 | [`monorepo-research.md`](plans/monorepo-research.md) | بحث: المستودع الموحّد (Monorepo) مقابل المستودعات المتعددة (Polyrepo) | 2026-09-03 | معتمد بشرطين | 212 | monorepo-proposal.md |
 | [`monorepo-preconditions.md`](plans/monorepo-preconditions.md) | موجز الشرطَين قبل أول نقل — اعتماد Monorepo (معيار النواة/المحرّك وتصنيف الـ٥١ · حارس التدرّج) | 2026-09-03 | معتمدة | 243 | monorepo-proposal.md، monorepo-research.md |
 | [`optical-master-plan.md`](plans/optical-master-plan.md) | الخطة الرئيسية — نشاط البصريات والنظارات الطبية | — | مسوّدة (افتراضاً) | 743 | — |
+| [`payments-receivables-owner-reference.md`](plans/payments-receivables-owner-reference.md) | أنظمة الدفعات والمستحقات: مرجع تصميمي لمنصة رِكز (مرجعُ صاحب المشروع محفوظاً بنصّه بايتاً ببايت · ق-١٥٨٩؛ وقياسُ المبنيّ عليه في [`domain-scan/34`](domain-scan/34-الدفعات-والمستحقات-على-مرجع-صاحب-المشروع.md)) | 2026-09-17 | مسوّدة (افتراضاً) | 389 | — |
 | [`permissions-tasks-master-plan-1.md`](plans/permissions-tasks-master-plan-1.md) | الصلاحيات والمهام — طبقة الحوكمة التشغيلية | 2026-08-31 | مسوّدة (افتراضاً) | 986 | gov-integrations-master-plan.md، post-unified-gaps.md، reports-master-plan.md، unified-build-plan.md |
 | [`pharmacy-master-plan.md`](plans/pharmacy-master-plan.md) | خطة بناء نظام الصيدليات — رِكز | 2026-08-24 | مسوّدة | 370 | — |
 | [`post-unified-gaps.md`](plans/post-unified-gaps.md) | فجوات ما بعد الخطة الموحّدة — الملف الحاكم | — | مسوّدة (افتراضاً) | 775 | chat-master-plan.md، unified-build-plan.md |
