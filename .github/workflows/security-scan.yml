@@ -147,7 +147,12 @@ jobs:
             echo "$img uid=$uid"
             if [ "$uid" = "0" ]; then echo "::error::$img تعمل بالجذر (uid=0)"; exit 1; fi
           done
-          docker run --rm --entrypoint sh mad-api:scan -c 'npx prisma --version'
+          # وأداةُ الهجرات باسمها من الغلاف، وnpm غائبٌ عن صورة التشغيل (حزمُه المضمَّنة كانت العالياتِ العشر · ق-١٥٨٦).
+          if docker run --rm --entrypoint sh mad-api:scan -c 'command -v npm || command -v npx || command -v corepack || test -d /usr/local/lib/node_modules/npm'; then
+            echo "::error::mad-api:scan تحمل npm في صورة التشغيل"; exit 1
+          fi
+          echo "mad-api:scan بلا npm"
+          docker run --rm --entrypoint sh mad-api:scan -c 'prisma --version'
       - name: فحصُ الصورتين وإعدادات الحاويات
         shell: bash
         run: |
