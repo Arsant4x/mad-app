@@ -70,11 +70,13 @@ import { moneyEquals, sumMoney } from '../common/money/allocation';
 const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
 
 /**
- * ⚖️ **أجزاءُ قبضٍ على قسط** (توجيه ٢٧٥ · `ق-١٥٨٢`): القسطُ المقصودُ بباقيه، ثم ما يليه من أقساط العقد بترتيب استحقاقها بباقي
- * كلٍّ، وما فاض عنها كلِّها جزءٌ بلا قسط (دفعةٌ مقدَّمة بقدرها كما كانت، م٢٠/٢).
+ * ⚖️ **أجزاءُ قبضٍ على قسط** (توجيه ٢٧٥ · `ق-١٥٨٢`، ووسّعه `ق-١٦٠٢`/④ في توجيه ٢٧٦): القسطُ المقصودُ بباقيه، ثم **أقدمُ أقساط
+ * العقد المفتوحة استحقاقاً** بباقي كلٍّ، سابقةً للمقصود كانت أو لاحقة (بحكم صاحب المشروع: «وزائدُ الإيجار يُوزَّع على الأقدم
+ * استحقاقاً داخل العقد نفسِه»؛ وكان: ما يلي المقصودَ وحدَه)، وما فاض عنها كلِّها جزءٌ بلا قسط (دفعةٌ مقدَّمة بقدرها كما كانت، م٢٠/٢).
+ * وحدُّه العقدُ نفسُه لا عقودُ المستأجر الأخرى.
  *
  * و«الباقي» إجماليُّ القسط بالضريبة (`rentAmountsOf`) ناقصاً ما سُدّد له (الصافي + الخصم) — المقياسُ الذي تُشتقّ به حالُه.
- * والتاليةُ على أساس الاستحقاق وحدَه وغيرُ الملغاة؛ وقسطٌ لم يبقَ له شيء لا يُكتب له جزء.
+ * والأقساطُ على أساس الاستحقاق وحدَه وغيرُ الملغاة؛ وقسطٌ لم يبقَ له شيء لا يُكتب له جزء.
  */
 async function spreadRentPayment(
   tx: Prisma.TransactionClient,
@@ -84,7 +86,7 @@ async function spreadRentPayment(
   amount: number,
 ): Promise<{ installmentId: string | null; amount: number }[]> {
   const candidates = await tx.installment.findMany({
-    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL', OR: [{ id: installment.id }, { dueDate: { gt: installment.dueDate } }] },
+    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL' },
     orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
   });

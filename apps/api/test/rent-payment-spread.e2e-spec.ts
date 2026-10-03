@@ -20,6 +20,8 @@ jest.setTimeout(180000);
  * الحالةُ هنا: عقدٌ تجاريٌّ غيرُ شاملٍ للضريبة بألفٍ شهرياً (1,150 بالضريبة)، بدأ قبل شهرين فحلّت أقساطُه الثلاثة الأولى
  * واستُحقّت (ضريبتُها 450). يدفع المستأجرُ 3,450 على القسط الأوّل. **والصوابُ**: يُسدَّد الثلاثةُ كلٌّ بـ1,150، فلا ضريبةَ تزيد،
  * ولا ذمّةَ تبقى، ولا صفَّ «بلا قسط».
+ *
+ * ⚖️ **ووسّعه `ق-١٦٠٢`/④** (توجيه ٢٧٦): الزائدُ يذهب إلى **أقدم قسطٍ مفتوح** في العقد نفسِه لا إلى ما يلي المقصودَ وحدَه (الحالةُ الثانية).
  */
 describe('دفعةٌ عن عدّة أقساط تُوزَّع بترتيب الاستحقاق (e2e)', () => {
   let app: INestApplication;
@@ -38,6 +40,7 @@ describe('دفعةٌ عن عدّة أقساط تُوزَّع بترتيب الا
   type Payment = { id: string; installmentId: string | null; amount: string };
   let contractId: string;
   let customerId: string;
+  let propertyId: string;
 
   const balance = async (code: string) => Number(((await auth(http().get('/accounts')).expect(200)).body as { code: string; balance: string }[]).find((a) => a.code === code)?.balance ?? 0);
   const contract = async () => (await auth(http().get(`/contracts/${contractId}`)).expect(200)).body as { installments: Installment[]; payments: Payment[] };
@@ -52,6 +55,7 @@ describe('دفعةٌ عن عدّة أقساط تُوزَّع بترتيب الا
 
     company = await registerIsolatedCompany(app, 'rent-spread');
     const property = (await auth(http().post('/properties')).send({ name: `عقار التوزيع ${suffix}`, ownership: 'owned' }).expect(201)).body;
+    propertyId = property.id;
     const unit = (await auth(http().post('/units')).send({ propertyId: property.id, unitNo: `SP-${suffix}`, type: 'تجاري', rentMonthly: 1000 }).expect(201)).body;
     customerId = await createTenantCustomer(app, company.token, `مستأجر التوزيع ${suffix}`);
     contractId = (
@@ -91,6 +95,37 @@ describe('دفعةٌ عن عدّة أقساط تُوزَّع بترتيب الا
       vatDelta: 0,
       // الذمّةُ قبل الدفع = الأقساطُ الثلاثة الحالّة (3,450)، فتنقص بها كاملة. (وكانت تنقص 1,150 فقط: 3,450 قبضاً − 2,300 استحقاقاً «بلا قسط».)
       receivableDelta: -3450,
+    });
+  });
+
+  it('[SPEC 16.3] ⚖️ زائدُ دفعةٍ على قسطٍ حديثٍ يذهب إلى أقدم قسطٍ مفتوح في العقد نفسِه، لا إلى ما يليه (ق-١٦٠٢/④)', async () => {
+    // عقدٌ ثانٍ بالشكل نفسِه: ثلاثةُ أقساطٍ حلّت (1,150 لكلٍّ بالضريبة)، ولا دفعَ قبلُ.
+    const unit2 = (await auth(http().post('/units')).send({ propertyId, unitNo: `SP2-${suffix}`, type: 'تجاري', rentMonthly: 1000 }).expect(201)).body;
+    const second = (
+      await auth(http().post('/contracts'))
+        .send({ classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE', unitId: unit2.id, customerId, value: 12000, cycle: 'monthly', start: iso(start), end: iso(end) })
+        .expect(201)
+    ).body.id as string;
+    const read = async () => (await auth(http().get(`/contracts/${second}`)).expect(200)).body as { installments: Installment[]; payments: Payment[] };
+    const ordered = [...(await read()).installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const due = ordered.filter((i) => i.dueDate.slice(0, 10) <= today);
+    expect(due.length).toBe(3);
+    const next = ordered.find((i) => i.dueDate.slice(0, 10) > today)!;
+
+    // 2,300 على القسط الثالث (أحدثِ الحالّ): يُسدَّد هو، والزائدُ 1,150 إلى الأوّل (أقدمِ المفتوح) لا إلى الرابع الذي لم يحلّ.
+    await auth(http().post(`/contracts/${second}/payments`)).send({ date: today, amount: 2300, method: 'CASH', installmentId: due[2].id }).expect(201);
+
+    const after = await read();
+    const paidTo = (id: string) => after.payments.filter((p) => p.installmentId === id).reduce((s, p) => s + Number(p.amount), 0);
+    const statusOf = (id: string) => after.installments.find((i) => i.id === id)?.status;
+    expect({
+      paidTo: [...due.map((i) => paidTo(i.id)), paidTo(next.id)],
+      statuses: [statusOf(due[0].id), statusOf(due[2].id)],
+      unlinked: after.payments.filter((p) => p.installmentId === null).length,
+    }).toEqual({
+      paidTo: [1150, 0, 1150, 0],
+      statuses: ['PAID', 'PAID'],
+      unlinked: 0,
     });
   });
 });
