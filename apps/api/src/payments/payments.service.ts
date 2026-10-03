@@ -5,6 +5,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { round2, formatMoney } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
 import { dayStartOf } from '../common/wall-clock.util';
 import {
   allocatedByDocument,
@@ -177,9 +178,43 @@ export class PaymentsService {
    * على فاتورة واحدة تتسلسلان، والثانية ترى المتبقي بعد الأولى فتُرفض مسمّاةً
    * بدل أن تتجاوزه.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
+    // ⚖️ الإرسالُ المكرّر لا يُنشئ سندين (توجيه ٢٧٦ · ق-١٦٠٩/ب): المفتاحُ نفسُه يعيد السندَ نفسَه — `onceForKey`.
+    return onceForKey(
+      idempotencyKey,
+      () => this.replayByKey(companyId, allowedBranchIds, idempotencyKey!, dto),
+      () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey),
+    );
+  }
+
+  /**
+   * السندُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (طرفاً أو مبلغاً).
+   *
+   * **على مستوى المنشأة بحقّها**: مفتاحُ الطلب فريدٌ في المنشأة كلِّها بقيد القاعدة، فالبحثُ به لا يُقصر على فروع القارئ — وإلا
+   * اصطدم الإنشاءُ بالقيد ثم لم يجد ما اصطدم به. **وما يُعاد للقارئ يُقاس بفروعه بعد البحث**: سندٌ في فرعٍ لا يملكه يُردّ `409`
+   * كالمفتاح المعاد لطلبٍ آخر، فلا يُكشف له سندُ فرعٍ آخر ولا وجودُه.
+   */
+  private replayByKey(companyId: string, allowedBranchIds: string[] | 'all', key: string, dto: CreatePaymentDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.payment.findFirst({ where: { clientRequestId: key }, include: PAYMENT_INCLUDE });
+      if (!existing) return null;
+      const outsideReader = allowedBranchIds !== 'all' && existing.branchId !== null && !allowedBranchIds.includes(existing.branchId);
+      if (outsideReader || existing.customerId !== dto.customerId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      return withAllocatedTotals(existing);
+    });
+  }
+
+  /**
+   * الكتابةُ مرّةً لكلِّ مفتاح — وبلا مفتاحٍ كما كانت.
+   *
+   * **على مستوى المنشأة بحقّها**: فحصُ المفتاح داخل المعاملة يرى المنشأةَ كلَّها لأن القيدَ الذي يحميه عليها كلِّها؛ وهو فحصُ
+   * وجودٍ يرمي ولا يُعيد شيئاً، والإعادةُ للقارئ في `replayByKey` بفروعه.
+   */
+  private createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // طلبٌ موازٍ بالمفتاح نفسِه سبق فكتب — لا يُكتب ثانٍ، ويُقرأ ما كُتب (`onceForKey`).
+        if (idempotencyKey && (await tx.payment.findFirst({ where: { clientRequestId: idempotencyKey }, select: { id: true } }))) throw new IdempotentReplay();
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true, name: true } });
@@ -247,6 +282,7 @@ export class PaymentsService {
             currency,
             exchangeRate,
             baseAmount: toBaseAmount(amount, exchangeRate),
+            clientRequestId: idempotencyKey ?? null,
             allocations: { create: allocations.map((a) => ({ companyId, invoiceId: a.invoiceId, amount: a.amount })) },
           } as unknown as Prisma.PaymentUncheckedCreateInput,
         });

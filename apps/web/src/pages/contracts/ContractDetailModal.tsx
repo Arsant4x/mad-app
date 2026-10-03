@@ -27,6 +27,7 @@ import { DepositsSection } from './DepositsSection';
 import { HandoversSection } from './HandoversSection';
 import { KeyMoneySection } from './KeyMoneySection';
 import { LessorFields, lessorPayload, type DeclaredLessorChoice } from './LessorFields';
+import { newRequestKey } from '../../api/idempotency';
 import { CLASSIFICATION_LABEL, CLASSIFICATION_OPTIONS, CYCLE_LABEL, VAT_INCLUSION_LABEL, VAT_INCLUSION_OPTIONS, isLegacyContract } from './contractMeta';
 import i18n from '../../i18n';
 
@@ -644,6 +645,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null | 'free'>(null);
   const [cancelling, setCancelling] = useState(false);
   const [renewing, setRenewing] = useState(false);
+  // ⚖️ مفتاحُ القبض الواحد (توجيه ٢٧٦ · ق-١٦٠٩/ب): يبقى مع كلِّ محاولةٍ للقبض نفسِه، ويتجدّد بعد نجاحه — فنقرةٌ مزدوجة أو إعادةٌ لا تقبض مرّتين.
+  const [paymentKey, setPaymentKey] = useState(newRequestKey);
 
   async function reload() {
     const fresh = await getContract(contract.id);
@@ -652,7 +655,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
   }
 
   async function handlePayment(dto: import('../../api/contracts').RecordPaymentInput) {
-    await recordPayment(contract.id, { ...dto, installmentId: payingInstallmentId === 'free' ? undefined : (payingInstallmentId ?? undefined) });
+    await recordPayment(contract.id, { ...dto, installmentId: payingInstallmentId === 'free' ? undefined : (payingInstallmentId ?? undefined) }, paymentKey);
+    setPaymentKey(newRequestKey());
     setPayingInstallmentId(null);
     await reload();
   }

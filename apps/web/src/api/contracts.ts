@@ -1,5 +1,6 @@
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import { withRequestKey } from './idempotency';
 import type { Unit } from './units';
 import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
 import type { CancelContractDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
@@ -230,7 +231,9 @@ export const getContract = (id: string) => apiClient.get<Contract>(`/contracts/$
 export const createContract = (dto: CreateContractInput) => apiClient.post<Contract>('/contracts', dto).then((r) => r.data);
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);
 export const cancelContract = (id: string, dto: CancelContractInput) => apiClient.post<Contract>(`/contracts/${id}/cancel`, dto).then((r) => r.data);
-export const recordPayment = (contractId: string, dto: RecordPaymentInput) => apiClient.post<RentPayment>(`/contracts/${contractId}/payments`, dto).then((r) => r.data);
+/** و`requestKey` مفتاحُ نافذة القبض الواحدة — يعيد القبضَ نفسَه إن أُعيد الطلب (توجيه ٢٧٦ · ق-١٦٠٩/ب). */
+export const recordPayment = (contractId: string, dto: RecordPaymentInput, requestKey?: string) =>
+  apiClient.post<RentPayment>(`/contracts/${contractId}/payments`, dto, withRequestKey(requestKey)).then((r) => r.data);
 export type RenewContractInput = RenewContractDto;
 
 export const renewContract = (id: string, dto: RenewContractInput) =>

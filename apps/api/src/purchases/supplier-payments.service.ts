@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { assertBoxInBranch, branchFilter, maskForeignDocument, resolveBranchId } from '../branches/branch-scope.util';
 import { resolveCurrencyWithin, toBaseAmount } from '../common/currency/base-amount.util';
@@ -7,6 +7,7 @@ import { MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
 import {
   allocatedByDocument,
   assertReversible,
@@ -152,9 +153,42 @@ export class SupplierPaymentsService {
    * قفلُ صفوف الفواتير المستهدفة (`6.12`) ثم التحقّقُ من المتبقّي ثم الإنشاءُ والترحيلُ
    * وإعادةُ حساب الحالات.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto, idempotencyKey?: string) {
+    // ⚖️ الإرسالُ المكرّر لا يُنشئ سندين (توجيه ٢٧٦ · ق-١٦٠٩/ب) — مرآةُ سند القبض.
+    return onceForKey(
+      idempotencyKey,
+      () => this.replayByKey(companyId, allowedBranchIds, idempotencyKey!, dto),
+      () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey),
+    );
+  }
+
+  /**
+   * سندُ الصرف المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (مورّداً أو مبلغاً).
+   *
+   * **على مستوى المنشأة بحقّها**: قيدُ فرادة المفتاح على المنشأة كلِّها، فيُبحث به فيها كلِّها ثم يُقاس ما وُجد بفروع القارئ —
+   * سندُ صرفٍ في فرعٍ لا يملكه يُردّ `409` ولا يُعاد له، كمرآته في سند القبض.
+   */
+  private replayByKey(companyId: string, allowedBranchIds: string[] | 'all', key: string, dto: CreateSupplierPaymentDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.supplierPayment.findFirst({ where: { clientRequestId: key }, include: SUPPLIER_PAYMENT_INCLUDE });
+      if (!existing) return null;
+      const outsideReader = allowedBranchIds !== 'all' && existing.branchId !== null && !allowedBranchIds.includes(existing.branchId);
+      if (outsideReader || existing.supplierId !== dto.supplierId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      return withAllocatedTotals(existing);
+    });
+  }
+
+  /**
+   * تسجيلُ سند الصرف مرّةً لكلِّ مفتاح — وبلا مفتاحٍ كما كان.
+   *
+   * **على مستوى المنشأة بحقّها**: سؤالُ «أكُتب بهذا المفتاح؟» داخل المعاملة جوابُه من المنشأة كلِّها حيث يعيش القيد، ولا يُعيد
+   * صفّاً لأحد — يرمي فتُترك المعاملة؛ وما يراه القارئُ يُقاس في `replayByKey`.
+   */
+  private createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateSupplierPaymentDto, idempotencyKey?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // طلبٌ موازٍ بالمفتاح نفسِه سبق فكتب — لا يُكتب ثانٍ، ويُقرأ ما كُتب (`onceForKey`).
+        if (idempotencyKey && (await tx.supplierPayment.findFirst({ where: { clientRequestId: idempotencyKey }, select: { id: true } }))) throw new IdempotentReplay();
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const supplier = await tx.supplier.findUnique({ where: { id: dto.supplierId }, select: { id: true, name: true } });
@@ -194,6 +228,7 @@ export class SupplierPaymentsService {
             currency,
             exchangeRate,
             baseAmount: toBaseAmount(amount, exchangeRate),
+            clientRequestId: idempotencyKey ?? null,
             allocations: { create: allocations.map((a) => ({ companyId, purchaseId: a.purchaseId, amount: a.amount })) },
           } as unknown as Prisma.SupplierPaymentUncheckedCreateInput,
         });

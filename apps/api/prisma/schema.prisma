@@ -5224,9 +5224,13 @@ model Payment {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   networkSettlementTenant NetworkSettlement? @relation("Payment_networkSettlementId_tenant", fields: [companyId, networkSettlementId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ مفتاحُ الطلب من رأس `Idempotency-Key` (توجيه ٢٧٦ · `ق-١٦٠٩`/ب) — فريدٌ في المنشأة: الطلبُ المكرّر يعيد هذا السندَ ولا يكتب ثانياً.
+  clientRequestId String?
+
   createdAt DateTime @default(now())
 
   @@unique([companyId, no])
+  @@unique([companyId, clientRequestId])
   @@index([companyId, customerId])
   @@index([refundsInvoiceId])
   @@map("payments")
@@ -5334,9 +5338,13 @@ model SupplierPayment {
 
   allocations SupplierPaymentAllocation[]
 
+  /// ⚖️ مفتاحُ الطلب من رأس `Idempotency-Key` (توجيه ٢٧٦ · `ق-١٦٠٩`/ب) — فريدٌ في المنشأة كسند القبض.
+  clientRequestId String?
+
   createdAt DateTime @default(now())
 
   @@unique([companyId, no])
+  @@unique([companyId, clientRequestId])
   @@index([companyId, supplierId])
   @@map("supplier_payments")
   supplierPaymentAllocation_paymentId_tenant SupplierPaymentAllocation[] @relation("SupplierPaymentAllocation_paymentId_tenant")
@@ -5424,8 +5432,13 @@ model RentPayment {
   /// الاستحقاقاتُ التي أنشأتها هذه الدفعة (مقدَّمةٌ أو بلا قسط) أو خصمُها.
   accruals RentAccrual[]
 
+  /// ⚖️ مفتاحُ الطلب من رأس `Idempotency-Key` (توجيه ٢٧٦ · `ق-١٦٠٩`/ب) — على الجزء الأوّل وحدَه حين يُوزَّع القبضُ أجزاءً،
+  /// فريدٌ في المنشأة: القبضُ المكرّر يعيد هذا القبضَ ولا يكتب ثانياً.
+  clientRequestId String?
+
   /// Same reasoning as Installment's contractId index.
   @@index([contractId])
+  @@unique([companyId, clientRequestId])
   /// NOT for the property-KPIs aggregate — that subquery groups the whole
   /// company's payments with no predicate on installmentId, so Postgres
   /// hash-aggregates a seq scan and never touches this index, at any size

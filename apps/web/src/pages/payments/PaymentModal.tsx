@@ -3,6 +3,7 @@ import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
 import { createPayment, listOpenInvoices, UNALLOCATED_DECLARATION_MIN, type OpenInvoice, type PaymentMethod, type UnallocatedFate } from '../../api/payments';
+import { newRequestKey } from '../../api/idempotency';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 import { lineTaxDraftError, lineTaxPayload, TAX_CATEGORY_OPTIONS, type DeclarableTaxCategory, type LineTaxDraft } from '../../lib/vat';
@@ -35,6 +36,8 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
   const [prepaymentTax, setPrepaymentTax] = useState<LineTaxDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ⚖️ مفتاحُ هذه النافذة (توجيه ٢٧٦ · ق-١٦٠٩/ب): كلُّ محاولةِ حفظٍ منها طلبٌ واحد — فلا يُكتب سندان لنقرةٍ مزدوجة أو إعادة.
+  const [requestKey] = useState(newRequestKey);
 
   useEffect(() => {
     listCustomers().then(setCustomers);
@@ -117,7 +120,7 @@ export function PaymentModal({ onCancel, onSaved }: { onCancel: () => void; onSa
           .filter((a) => a.amount > 0),
         ...(mustDeclare && fate ? { unallocated: fate } : {}),
         ...(mustDeclare && fate === 'PREPAYMENT' && prepaymentTax ? { prepaymentTax: lineTaxPayload(prepaymentTax) } : {}),
-      });
+      }, requestKey);
       await onSaved();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;

@@ -317,6 +317,8 @@ export const MSG = {
   rent_cash_rate_required: 'contracts.cash_rate_required',
   rent_payment_currency_mismatch: 'contracts.payment_currency_mismatch',
   payment_net_must_be_positive: 'contracts.payment_net_must_be_positive',
+  idempotency_key_invalid: 'common.idempotency_key_invalid',
+  idempotency_key_reused: 'common.idempotency_key_reused',
   rent_accrual_period_locked: 'contracts.rent_accrual_period_locked',
 
   // reservations
@@ -1280,6 +1282,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The contract is in {contract} and the receipt is in {payment} — rent is received in its contract currency, with that day’s exchange rate if it differs from the contract rate',
   },
   [MSG.payment_net_must_be_positive]: { ar: 'المبلغ الصافي يجب أن يكون أكبر من صفر', en: 'Net amount must be greater than zero' },
+  [MSG.idempotency_key_invalid]: {
+    ar: 'مفتاحُ الطلب (Idempotency-Key) بغير صيغته — من ثمانية إلى مئة حرفٍ من الحروف اللاتينية والأرقام والشرطة السفلية والوصل',
+    en: 'Invalid Idempotency-Key — 8 to 100 characters of letters, digits, underscore or hyphen',
+  },
+  [MSG.idempotency_key_reused]: {
+    ar: 'هذا المفتاحُ (Idempotency-Key) استُعمل لطلبٍ آخر — لم يُكتب مستندٌ جديد؛ أعد المحاولة بمفتاحٍ جديد إن كان طلباً آخر',
+    en: 'This Idempotency-Key was already used for a different request — no new document was written; retry with a new key if this is another request',
+  },
   [MSG.rent_accrual_period_locked]: {
     ar: 'لا يمكن قبض هذه الدفعة: استحقاقُ القسط يقع في فترةٍ مقفلة — افتح الفترة أو قيّد الاستحقاق بقيدٍ عكسيّ في فترةٍ مفتوحة',
     en: 'This payment cannot be recorded: the installment accrues inside a closed period — reopen it, or post the accrual in an open period',

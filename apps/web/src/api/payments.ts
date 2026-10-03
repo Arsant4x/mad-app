@@ -1,6 +1,7 @@
 import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import { withRequestKey } from './idempotency';
 import type { PaymentMethod, UnallocatedFate } from '@mad-app/shared/api/enums';
 import type { AllocationDto, CreatePaymentDto } from '@mad-app/shared/api/requests';
 
@@ -69,7 +70,8 @@ export const listPayments = (customerId?: string) =>
   apiClient.get<Payment[]>('/payments', { params: customerId ? { customerId } : {} }).then((r) => r.data);
 export const getPayment = (id: string) => apiClient.get<Payment>(`/payments/${id}`).then((r) => r.data);
 export const listOpenInvoices = (customerId: string) => apiClient.get<OpenInvoice[]>(`/payments/open-invoices/${customerId}`).then((r) => r.data);
-export const createPayment = (dto: PaymentInput) => apiClient.post<Payment>('/payments', dto).then((r) => r.data);
+/** و`requestKey` مفتاحُ النافذة الواحدة — يعيد السندَ نفسَه إن أُعيد الطلب (توجيه ٢٧٦ · ق-١٦٠٩/ب). */
+export const createPayment = (dto: PaymentInput, requestKey?: string) => apiClient.post<Payment>('/payments', dto, withRequestKey(requestKey)).then((r) => r.data);
 export const allocatePayment = (id: string, allocations: AllocationInput[]) =>
   apiClient.post<Payment>(`/payments/${id}/allocate`, { allocations }).then((r) => r.data);
 /** التصحيح الوحيد: سند عكسي — لا حذف ولا تعديل لمرحَّل. ويومُه يومُ التاجر (`today()` بتقويم الجهاز) لا يومُ الخادم (ق-٧٣٦). */
