@@ -53,12 +53,12 @@ describe('مسارُ المدير لا يركّب منشأةً على قالب �
     if (!system || !full) throw new Error('القالبان المزروعان غائبان عن قائمة المدير');
     systemId = system.id;
     fullId = full.id;
-  }, 30000);
+  });
 
   afterAll(async () => {
     for (const id of made) await hardDeleteCompanyForTest(prisma, id);
     await app.close();
-  }, 60000);
+  });
 
   it('🔴 الإنشاءُ على قالب النظام يُرفض، ولا تولد منشأة', async () => {
     const body = createBody('create', systemId);
