@@ -2,7 +2,7 @@ import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
 import { withRequestKey } from './idempotency';
 import type { Unit } from './units';
-import type { ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
+import type { ChargeTaxTreatment, ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
 import type { CancelContractDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
 
 export type { ContractStatus };
@@ -148,11 +148,18 @@ export type RecordKeyMoneyInput = RecordKeyMoneyDto;
 
 export type { ClaimKind };
 export type { ClaimStatus };
+/** ⚖️ معاملةُ المطالبة والخصم الضريبية (الأسئلة ٥١ و٤١٣ و٤١٤ · ق-١٦٠٠) — والقديمةُ `LEGACY_UNTAXED` تُقرأ ولا تُختار. */
+export type { ChargeTaxTreatment };
+export type DeclaredChargeTaxTreatment = Exclude<ChargeTaxTreatment, 'LEGACY_UNTAXED'>;
 
 export interface ContractClaim {
   id: string;
   kind: ClaimKind;
+  /** صافياً — والخاضعةُ ضريبتُها في `taxAmount` فوقه. */
   amount: string;
+  taxTreatment: ChargeTaxTreatment;
+  taxAmount: string;
+  onBehalfEvidence: string | null;
   description: string;
   currency: string;
   issuedAt: string;
@@ -175,8 +182,12 @@ export type { DeductionKind };
 export interface DepositDeduction {
   id: string;
   kind: DeductionKind;
+  /** إجماليٌّ — ما خرج من التأمين؛ والخاضعُ ضريبتُه منه. */
   amount: string;
   reason: string;
+  taxTreatment: ChargeTaxTreatment | null;
+  baseTax: string;
+  onBehalfEvidence: string | null;
 }
 
 export interface ContractDeposit {

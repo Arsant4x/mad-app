@@ -4016,6 +4016,19 @@ enum ClaimKind {
   OTHER
 }
 
+/// ⚖️ **معاملةُ ضريبة القيمة المضافة لمطالبةٍ أو خصمٍ من التأمين** (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · `ق-١٦٠٠` · `ق-١٦٠٩`/د،
+/// بحكم صاحب المشروع: «خانةٌ عند كلِّ مطالبة، والافتراضُ خاضع — فالنيابةُ استثناءٌ يُثبت»).
+enum ChargeTaxTreatment {
+  /// رسمٌ مقابل خدمة — خاضعٌ ١٥٪ ولو كان العقدُ سكنيّاً (دليلُ العقارات §6.1 ومثال 8). الافتراض.
+  TAXABLE_SERVICE
+  /// مبلغٌ دفعه المؤجّرُ نيابةً عن المستأجر بشروطه الخمسة (دليلُ الوكلاء §8.1) — حسابٌ وسيطٌ لا إيراد، ويُكتب ما يثبتها.
+  ON_BEHALF
+  /// تعويضٌ عن ضررٍ فعليّ — خارج نطاق الضريبة.
+  COMPENSATION
+  /// مطالبةٌ سبقت هذا الحقل — رُحّلت إيراداً بلا ضريبة وتبقى كذلك (يُعلَن ولا يُصحَّح رجعيّاً).
+  LEGACY_UNTAXED
+}
+
 enum ClaimStatus {
   /// Issued and owed.
   OPEN
@@ -4051,6 +4064,15 @@ model ContractClaim {
   currency     String  @default("SAR")
   exchangeRate Decimal @default(1) @db.Decimal(18, 6)
   baseAmount   Decimal @db.Decimal(18, 2)
+
+  /// ⚖️ معاملتُها الضريبية (الأسئلة ٥١ و٤١٣) — بلا `@default`: الخادمُ يكتبها في كلِّ إنشاء (والافتراضُ «خاضع» فيه)، والقديمُ
+  /// `LEGACY_UNTAXED` محبوسٌ بقيد `contract_claims_legacy_treatment_before_cutover` على ما سبق الهجرة.
+  taxTreatment ChargeTaxTreatment
+  /// ضريبتُها فوق `amount` للخاضعة (١٥٪) بعملة المطالبة، وصفرٌ لغيرها — فما يدين به المستأجرُ `amount + taxAmount`.
+  taxAmount    Decimal @default(0) @db.Decimal(18, 2)
+  baseTax      Decimal @default(0) @db.Decimal(18, 2)
+  /// ما يثبت شروطَ النيابة (عدّادٌ باسم المستأجر · فاتورةٌ مفصولة …) — إلزاميٌّ لـ`ON_BEHALF` بقيد `contract_claims_on_behalf_evidence`.
+  onBehalfEvidence String?
 
   issuedAt DateTime    @db.Date
   status   ClaimStatus @default(OPEN)
@@ -4189,6 +4211,15 @@ model DepositDeduction {
   kind   DeductionKind
   amount Decimal       @db.Decimal(18, 2)
   reason String
+
+  /// ⚖️ معاملتُه الضريبية (السؤال ٤١٤): الضررُ والإيجارُ غيرُ المسدَّد بلا معاملة (فارغ) · النظافةُ خاضعة (٤٩) · المرافقُ خاضعةٌ
+  /// أو نيابةً (٥١) · «أخرى» خاضعةٌ أو تعويض يُسأل عنه. والقديمُ فارغٌ وما بعد الهجرة يُعلَن بقيد `deposit_deductions_treatment_declared`.
+  taxTreatment ChargeTaxTreatment?
+  /// للخاضع: المبلغُ المأخوذُ من التأمين إجماليٌّ، وهذا صافيه وضريبتُه بعملة الدفتر بسعر الوديعة — يقرؤهما الإقرارُ بتاريخ التسوية.
+  baseNet      Decimal? @db.Decimal(18, 2)
+  baseTax      Decimal  @default(0) @db.Decimal(18, 2)
+  /// ما يثبت شروطَ النيابة — إلزاميٌّ لـ`ON_BEHALF` بقيد `deposit_deductions_on_behalf_evidence`.
+  onBehalfEvidence String?
 
   createdAt DateTime @default(now())
 

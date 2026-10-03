@@ -165,6 +165,8 @@ export interface CreateCashDrawerDto {
 export interface CreateClaimDto {
   kind: 'MAINTENANCE' | 'UTILITIES' | 'LATE_FEE' | 'DAMAGE' | 'OTHER';
   amount: number;
+  taxTreatment?: 'TAXABLE_SERVICE' | 'ON_BEHALF' | 'COMPENSATION';
+  onBehalfEvidence?: string;
   description: string;
   issuedAt: string;
   currency?: string;
@@ -687,6 +689,8 @@ export interface DeductionDto {
   kind: 'UNPAID_RENT' | 'DAMAGE' | 'UTILITIES' | 'CLEANING' | 'OTHER';
   amount: number;
   reason: string;
+  taxTreatment?: 'TAXABLE_SERVICE' | 'ON_BEHALF' | 'COMPENSATION';
+  onBehalfEvidence?: string;
 }
 
 /** جسمُ طلب — `DeletionRequestDecisionDto` في الخادم. */

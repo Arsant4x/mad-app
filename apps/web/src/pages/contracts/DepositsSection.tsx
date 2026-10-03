@@ -4,12 +4,14 @@ import {
   settleDeposit,
   type Contract,
   type ContractDeposit,
+  type DeclaredChargeTaxTreatment,
   type DeductionKind,
   type DepositHolder,
   type DepositType,
 } from '../../api/contracts';
 import { fmt, dfmt } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
+import { CHARGE_TREATMENT_LABEL, DEDUCTION_TREATMENT_OPTIONS } from './chargeTaxMeta';
 
 const TYPE_LABEL: Record<DepositType, string> = {
   RENT: 'تأمين إيجار',
@@ -31,7 +33,15 @@ const KIND_LABEL: Record<DeductionKind, string> = {
 
 const KINDS = Object.keys(KIND_LABEL) as DeductionKind[];
 
-type DeductionRow = { kind: DeductionKind; amount: string; reason: string };
+/** ⚖️ والمعاملةُ الضريبية لما يُسأل عنه (السؤال ٤١٤ · ق-١٦٠٠): المرافقُ خاضعةٌ افتراضاً، و«أخرى» بلا افتراض. */
+type DeductionRow = { kind: DeductionKind; amount: string; reason: string; treatment: DeclaredChargeTaxTreatment | ''; evidence: string };
+
+/** المعاملةُ الأولى لنوعٍ يُختار له — المرافقُ «خاضعة» افتراضاً، و«أخرى» فارغةٌ حتى تُختار. */
+const initialTreatment = (kind: DeductionKind): DeclaredChargeTaxTreatment | '' => (kind === 'UTILITIES' ? 'TAXABLE_SERVICE' : '');
+
+/** يحتاج البندُ اختياراً لم يقع (أو إثباتَ نيابة) قبل الإرسال؟ */
+const rowIncomplete = (r: DeductionRow) =>
+  Number(r.amount) > 0 && (!r.reason.trim() || (DEDUCTION_TREATMENT_OPTIONS[r.kind] !== null && !r.treatment) || (r.treatment === 'ON_BEHALF' && !r.evidence.trim()));
 
 /**
  * Deposits on a contract, and settling them.
@@ -97,7 +107,13 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
           // A blank row is a user who opened one and changed their mind, not a
           // zero deduction — dropped rather than rejected.
           .filter((r) => Number(r.amount) > 0)
-          .map((r) => ({ kind: r.kind, amount: Number(r.amount), reason: r.reason.trim() })),
+          .map((r) => ({
+            kind: r.kind,
+            amount: Number(r.amount),
+            reason: r.reason.trim(),
+            ...(DEDUCTION_TREATMENT_OPTIONS[r.kind] && r.treatment ? { taxTreatment: r.treatment } : {}),
+            ...(r.treatment === 'ON_BEHALF' ? { onBehalfEvidence: r.evidence.trim() } : {}),
+          })),
       });
       onChanged(updated);
       setSettlingId(null);
@@ -218,6 +234,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                     {d.deductions.map((x) => (
                       <div key={x.id} className="hint">
                         {KIND_LABEL[x.kind]}: {fmt(x.amount)} — {x.reason}
+                        {x.taxTreatment && ` (${CHARGE_TREATMENT_LABEL[x.taxTreatment]}${num0(x.baseTax) > 0 ? `، منها ضريبة ${fmt(x.baseTax)}` : ''})`}
                       </div>
                     ))}
                   </>
@@ -271,7 +288,10 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                     <label>البند</label>
                     <select
                       value={r.kind}
-                      onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, kind: e.target.value as DeductionKind } : x)))}
+                      onChange={(e) => {
+                        const kind = e.target.value as DeductionKind;
+                        setRows((rs) => rs.map((x, j) => (j === i ? { ...x, kind, treatment: initialTreatment(kind), evidence: '' } : x)));
+                      }}
                     >
                       {KINDS.map((k) => (
                         <option key={k} value={k}>
@@ -298,10 +318,39 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                       placeholder="يظهر للمستأجر — اذكر السبب بوضوح"
                     />
                   </div>
+                  {r.kind === 'CLEANING' && <p className="hint" style={{ gridColumn: '1 / -1' }}>النظافةُ خدمةٌ خاضعة: الضريبةُ ١٥٪ من المبلغ المخصوم نفسِه، وتدخل الإقرار.</p>}
+                  {DEDUCTION_TREATMENT_OPTIONS[r.kind] && (
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label htmlFor={`deduction-treatment-${i}`}>المعاملة الضريبية</label>
+                      <select
+                        id={`deduction-treatment-${i}`}
+                        value={r.treatment}
+                        onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, treatment: e.target.value as DeclaredChargeTaxTreatment | '' } : x)))}
+                      >
+                        {r.kind === 'OTHER' && <option value="">— اختر —</option>}
+                        {DEDUCTION_TREATMENT_OPTIONS[r.kind]!.map((t) => (
+                          <option key={t} value={t}>
+                            {CHARGE_TREATMENT_LABEL[t]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {r.treatment === 'ON_BEHALF' && (
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label htmlFor={`deduction-evidence-${i}`}>ما يثبت النيابة</label>
+                      <input
+                        id={`deduction-evidence-${i}`}
+                        value={r.evidence}
+                        onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, evidence: e.target.value } : x)))}
+                        placeholder="مثال: عدّادُ الماء باسم المستأجر"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
 
-              <button className="btn btn-ghost" onClick={() => setRows((rs) => [...rs, { kind: 'DAMAGE', amount: '', reason: '' }])}>
+              <button className="btn btn-ghost" onClick={() => setRows((rs) => [...rs, { kind: 'DAMAGE', amount: '', reason: '', treatment: '', evidence: '' }])}>
                 + بند خصم
               </button>
 
@@ -315,7 +364,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                 </button>
                 <button
                   className="btn btn-primary"
-                  disabled={busy || over || rows.some((r) => Number(r.amount) > 0 && !r.reason.trim())}
+                  disabled={busy || over || rows.some(rowIncomplete)}
                   onClick={() => submitSettlement(deposit)}
                 >
                   تأكيد التسوية

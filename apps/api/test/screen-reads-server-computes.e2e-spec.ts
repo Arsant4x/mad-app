@@ -168,7 +168,8 @@ describe('الشاشةُ تقرأ ولا تحسب — الأرقامُ من ال
       depositsHeld: string;
     };
     expect(detail.installments.find((i) => i.id === first.id)).toMatchObject({ gross: '1150.00', settled: '300.00', remaining: '850.00' });
-    expect(detail.claimsOutstanding).toBe('500.00');
+    // ⚖️ والمطالبةُ بلا معاملةٍ مختارة خاضعة (ق-١٦٠٠): المستحقُّ إجماليُّها 500 + 75 = 575.00، محسوباً في الخادم.
+    expect(detail.claimsOutstanding).toBe('575.00');
     // المحجوزُ لدى المنشأة وحدَه — ما لدى إيجار لا يُعدّ.
     expect(detail.depositsHeld).toBe('3000.00');
   }, 60000);

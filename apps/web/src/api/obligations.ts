@@ -23,6 +23,9 @@ export interface RentDeclarationSection {
   /** وما قُبض للمالكين وعددُ دفعاته — يُعدّ ولا يدخل. */
   ownerCollected: MoneyText;
   ownerCount: number;
+  /** ⚖️ المطالباتُ والخصوماتُ من التأمين الخاضعة وضريبتُها — في الخانة ١ (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · ق-١٦٠٠). */
+  chargesStandard: MoneyText;
+  chargesStandardVat: MoneyText;
   legacyStandard: MoneyText;
   legacyStandardVat: MoneyText;
   legacyExempt: MoneyText;

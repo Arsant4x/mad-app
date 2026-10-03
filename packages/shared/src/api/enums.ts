@@ -43,6 +43,10 @@ export type BuyerIdScheme = (typeof BUYER_ID_SCHEME_VALUES)[number];
 export const CASH_DEPOSIT_STATUS_VALUES = ['IN_TRANSIT', 'CONFIRMED', 'VOID'] as const;
 export type CashDepositStatus = (typeof CASH_DEPOSIT_STATUS_VALUES)[number];
 
+/** `prisma:ChargeTaxTreatment` — ويقابلُه `apps/web/src/api/contracts.ts#ChargeTaxTreatment`. */
+export const CHARGE_TAX_TREATMENT_VALUES = ['TAXABLE_SERVICE', 'ON_BEHALF', 'COMPENSATION', 'LEGACY_UNTAXED'] as const;
+export type ChargeTaxTreatment = (typeof CHARGE_TAX_TREATMENT_VALUES)[number];
+
 /** `prisma:ClaimKind` — ويقابلُه `apps/web/src/api/contracts.ts#ClaimKind`. */
 export const CLAIM_KIND_VALUES = ['MAINTENANCE', 'UTILITIES', 'LATE_FEE', 'DAMAGE', 'OTHER'] as const;
 export type ClaimKind = (typeof CLAIM_KIND_VALUES)[number];

@@ -318,8 +318,11 @@ describe('نقدٌ يخرج مرّةً واحدة: ردُّ المرتجع وت�
     settlementLines: after.settlementLines - before.settlementLines,
   });
 
-  /** تسويةٌ واحدة بحساب اليد: 2300 ينقص 5000، و4300 يزيد 500 (300 + 200)، و1000 ينقص 4500 (5000 - 500)، وسطرٌ واحد. */
-  const SETTLED_ONCE: DepositLedger = { deposits: -5000, otherIncome: 500, cash: -4500, settlementLines: 1 };
+  /**
+   * تسويةٌ واحدة بحساب اليد: 2300 ينقص 5000، و4300 يزيد 473.91 (الضررُ 300 وصافي النظافة 173.91)، و1000 ينقص 4500 (5000 - 500)،
+   * وسطرٌ واحد. ⚖️ والنظافةُ خاضعةٌ من مبلغها الإجماليّ (السؤال ٤١٤ · ق-١٦٠٠): 200 × 15 ÷ 115 = 26.09 على 2200 لا على 4300.
+   */
+  const SETTLED_ONCE: DepositLedger = { deposits: -5000, otherIncome: 473.91, cash: -4500, settlementLines: 1 };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();

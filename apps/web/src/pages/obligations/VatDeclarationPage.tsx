@@ -444,6 +444,13 @@ export function VatDeclarationPage() {
                 عليها {fmt(declaration.rent.commissionStandard)} وضريبتُها {fmt(declaration.rent.commissionStandardVat)} داخلتان في المبيعات الخاضعة بالنسبة الأساسية.
               </p>
             )}
+            {/* ⚖️ المطالباتُ والخصوماتُ من التأمين الخاضعة (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · ق-١٦٠٠): داخلةٌ في المبيعات الخاضعة أعلاه. */}
+            {num0(declaration.rent.chargesStandard) !== 0 && (
+              <p className="hint" style={{ marginTop: 6 }} data-testid="vat-rent-charges">
+                مطالباتٌ وخصوماتٌ من التأمين خاضعة {fmt(declaration.rent.chargesStandard)} وضريبتُها {fmt(declaration.rent.chargesStandardVat)} — داخلتان في المبيعات
+                الخاضعة بالنسبة الأساسية.
+              </p>
+            )}
             {declaration.rent.pendingCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
                 <b>{declaration.rent.pendingCount}</b> قسطاً حلّ ولم يُرحَّل استحقاقُه بعد — {declaration.rent.pendingNote}

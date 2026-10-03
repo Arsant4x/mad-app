@@ -316,6 +316,10 @@ export const MSG = {
   deposit_not_found: 'deposits.not_found',
   deposit_already_settled: 'deposits.already_settled',
   deductions_exceed_deposit: 'deposits.deductions_exceed',
+  /** ⚖️ معاملةُ المطالبة والخصم الضريبية (الأسئلة ٥١ و٤١٣ و٤١٤ · ق-١٦٠٠). */
+  charge_on_behalf_evidence_required: 'charges.on_behalf_evidence_required',
+  deduction_other_treatment_required: 'deposits.other_treatment_required',
+  deduction_treatment_not_allowed: 'deposits.treatment_not_allowed',
   /** سعرُ يوم النقد لمطالبةٍ أو وديعةٍ أو مقبوضٍ يُردّ بعملةٍ غير عملة الأساس — مُدخَلٌ لا مفترَض (`ق-١٤٨٩` · B7 · B8 · B9). */
   rent_cash_rate_required: 'contracts.cash_rate_required',
   rent_payment_currency_mismatch: 'contracts.payment_currency_mismatch',
@@ -1286,6 +1290,18 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.deductions_exceed_deposit]: {
     ar: 'مجموع الخصومات يتجاوز مبلغ التأمين ({held})',
     en: 'Deductions exceed the deposit amount ({held})',
+  },
+  [MSG.charge_on_behalf_evidence_required]: {
+    ar: 'المبلغُ المدفوعُ نيابةً عن المستأجر يُكتب معه ما يثبت شروطَ النيابة (أن يكون المستأجرُ متلقّي الخدمة كعدّادٍ باسمه، وأن تُفصل التكلفةُ في المستندات) — وإلا فهو خدمةٌ خاضعة',
+    en: 'An amount paid on the tenant\'s behalf needs evidence of the on-behalf conditions (the tenant receives the service, e.g. a meter in their name, and the cost is separated in the documents) — otherwise it is a taxable service',
+  },
+  [MSG.deduction_other_treatment_required]: {
+    ar: 'خصمُ «أخرى» من التأمين يُسأل عن معاملته: مقابلُ خدمةٍ أو رسمٍ تعاقديّ (خاضعٌ ١٥٪) أم تعويضٌ عن ضررٍ فعليّ (بلا ضريبة)',
+    en: 'An "other" deposit deduction needs its tax treatment: a service or contractual fee (taxable at the standard rate) or compensation for actual damage (no VAT)',
+  },
+  [MSG.deduction_treatment_not_allowed]: {
+    ar: 'هذه المعاملةُ لا تصحّ لهذا الخصم: الضررُ والإيجارُ غيرُ المسدَّد بلا معاملةٍ تُختار، والنظافةُ خاضعةٌ دائماً، والمرافقُ خاضعةٌ أو نيابةً، و«أخرى» خاضعةٌ أو تعويض',
+    en: 'This treatment does not fit this deduction: damage and unpaid rent take none, cleaning is always taxable, utilities are taxable or on-behalf, and "other" is taxable or compensation',
   },
   [MSG.rent_cash_rate_required]: {
     ar: 'المستند بعملة {currency} — أدخِل سعر صرف يوم حركة النقد: النقد يُقيَّد بسعر يومه، والفرق عن سعر المستند يُرحَّل إلى فروق العملة، ولا يُفترض سعرٌ',
