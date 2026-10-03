@@ -2,24 +2,25 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
-import { PrismaClient } from '@mad-app/db';
+import { Prisma, PrismaClient } from '@mad-app/db';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { IsolatedCompany, registerIsolatedCompany, removeIsolatedCompany } from './isolated-company';
 
-// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): منشأةٌ وسندٌ وثلاثُ فواتير وقفلٌ مقصود؛ لم تُقَس بعد، فالسقفُ مئةٌ وعشرون ثانية معلنةً هنا.
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): منشأةٌ وسندان وستُّ مستنداتٍ وقفلان مقصودان؛ لم تُقَس بعد، فالسقفُ مئةٌ وعشرون ثانية معلنةً هنا.
 jest.setTimeout(120000);
 
 /**
  * ⚖️ **إعادةُ توزيع السند تحت طلبين متزامنين** (توجيه ٢٧٦ · ٢و · `ق-١٦٠٩`/و، القاعدة الدائمة ٣٧: «قِس ثم أصلح»).
  *
  * مسحُ الدفعات (`docs/domain-scan/34`، م١) وجد أن إعادةَ التوزيع (`POST /payments/:id/allocate`) **لا تقفل صفَّ السند**: تقرأ تخصيصاتِه،
- * وتحذفها، وتكتب الجديدة. وطلبان معاً على السند نفسِه وإلى فاتورتين مختلفتين: يحذف الأوّلُ ويكتب، ويحذف الثاني ما رآه وحدَه (لا ما كتبه
- * الأوّلُ بعد بدء حذفه) ويكتب فوقه — **فيبقى التوزيعان معاً ويزيد مجموعُ تخصيصات السند على مبلغه**.
+ * وتحذفها، وتكتب الجديدة. وطلبان معاً على السند نفسِه وإلى مستندين مختلفين: يحذف الأوّلُ ويكتب، ويحذف الثاني ما رآه وحدَه (لا ما كتبه
+ * الأوّلُ بعد بدء حذفه) ويكتب فوقه — **فيبقى التوزيعان معاً ويزيد مجموعُ تخصيصات السند على مبلغه**. وسندُ الصرف للمورّد مرآتُه
+ * (`supplier-payments.service.ts` `allocate`) بالنمط نفسِه، فيُقاس معه.
  *
- * **والتداخلُ مفروضٌ لا منتظَر** (`§8.8` الوجهُ الثالث): معاملةٌ جانبيّة تقفل صفوفَ تخصيص السند (`FOR UPDATE`) حتى يصل الطلبان كلاهما إلى
- * الانتظار (يُقرأ من `pg_stat_activity` لا بزمنٍ يُخمَّن)، ثم تُفلت. والجوابُ محسوبٌ يداً: السندُ `1000`، وكلُّ طلبٍ يوزّعه كاملاً على فاتورةٍ
- * بألف، **فمجموعُ تخصيصاته بعدهما `1000` لا `2000`**، وفاتورتان مسدَّدتان لا تكون.
+ * **والتداخلُ مفروضٌ لا منتظَر** (`§8.8` الوجهُ الثالث): معاملةٌ جانبيّة تقفل صفَّ التخصيص القائم (`FOR UPDATE`) حتى يقف الطلبان كلاهما
+ * على قفلٍ (يُقرأ من `pg_stat_activity` لا بزمنٍ يُخمَّن)، ثم تُفلته. والجوابُ محسوبٌ يداً: السندُ `1000`، وكلُّ طلبٍ يوزّعه كاملاً على
+ * مستندٍ آخر بألف، **فمجموعُ تخصيصاته بعدهما `1000` لا `2000`، ومستندٌ واحدٌ من الاثنين**.
  */
 describe('إعادةُ توزيع السند تحت طلبين متزامنين لا تزيد تخصيصاتِه على مبلغه (ق-١٦٠٩/و)', () => {
   let app: INestApplication;
@@ -30,6 +31,7 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${company.token}`);
   const today = () => new Date().toISOString().slice(0, 10);
   let customerId: string;
+  let supplierId: string;
   let branchId: string;
   let cashBoxId: string;
 
@@ -46,10 +48,45 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
         .expect(201)
     ).body.id as string;
 
-  /** عددُ الجلسات المنتظرة على قفل صفٍّ في هذه القاعدة الآن — بلا الجلسة الجانبيّة نفسِها. */
+  const makePurchase = async (total: number): Promise<string> =>
+    (await auth(http().post('/purchases')).send({ supplierId, branchId, date: today(), category: `بند ${suffix}`, subtotal: total, exempt: true }).expect(201)).body.id as string;
+
+  /** عددُ الجلسات المنتظرة على قفل صفٍّ في هذه القاعدة الآن. */
   const waitingOnLocks = async (): Promise<number> => {
     const rows = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*)::bigint AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`;
     return Number(rows[0].n);
+  };
+
+  /**
+   * يفرض التداخل: يقفل صفَّ التخصيص القائم للسند في معاملةٍ جانبيّة، ويطلق الطلبين، وينتظر حتى يقفا على قفل، ثم يُفلت.
+   * والإفلاتُ في `finally` فلا يعلق شيءٌ إن سقط التوكيد. ويعيد ما رآه المسبارُ وردَّي الطلبين.
+   */
+  const race = async (table: 'payment_allocations' | 'supplier_payment_allocations', paymentId: string, sendBoth: () => Promise<request.Response[]>) => {
+    let release!: () => void;
+    const released = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((r) => (locked = r));
+    let heldRows = 0;
+    const holder = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${company.companyId}, true)`;
+        heldRows = (await tx.$queryRaw<{ id: string }[]>`SELECT id FROM ${Prisma.raw(`"${table}"`)} WHERE "paymentId" = ${paymentId} FOR UPDATE`).length;
+        locked();
+        await released;
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+    await lockTaken;
+    const baseline = await waitingOnLocks();
+    const both = sendBoth();
+    let waiting = 0;
+    try {
+      for (let i = 0; i < 100 && (waiting = await waitingOnLocks()) < baseline + 2; i++) await new Promise((r) => setTimeout(r, 100));
+    } finally {
+      release();
+    }
+    await holder;
+    return { heldRows, baseline, waiting, replies: await both };
   };
 
   beforeAll(async () => {
@@ -62,8 +99,9 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
 
     company = await registerIsolatedCompany(app, 'realloc-race');
     customerId = (await auth(http().post('/customers')).send({ kind: 'NATURAL', name: `عميل التوزيع ${suffix}` }).expect(201)).body.id;
+    supplierId = (await auth(http().post('/suppliers')).send({ name: `مورّد التوزيع ${suffix}` }).expect(201)).body.id;
     branchId = (await auth(http().post('/branches')).send({ name: `فرع التوزيع ${suffix}` }).expect(201)).body.id;
-    cashBoxId = (await auth(http().post('/banks')).send({ name: `صندوق ${suffix}`, kind: 'CASH_BOX', openingBalance: 0, openingDate: today(), branchId }).expect(201)).body.id;
+    cashBoxId = (await auth(http().post('/banks')).send({ name: `صندوق ${suffix}`, kind: 'CASH_BOX', openingBalance: 5000, openingDate: today(), branchId }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -72,7 +110,7 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
     await app.close();
   });
 
-  it('🔴 طلبان معاً إلى فاتورتين مختلفتين: يبقى توزيعٌ واحد، ومجموعُ التخصيصات مبلغُ السند', async () => {
+  it('🔴 سندُ القبض: طلبان معاً إلى فاتورتين مختلفتين، فيبقى توزيعٌ واحد ومجموعُ التخصيصات مبلغُ السند', async () => {
     const first = await makeInvoice(1000);
     const left = await makeInvoice(1000);
     const right = await makeInvoice(1000);
@@ -82,46 +120,38 @@ describe('إعادةُ توزيع السند تحت طلبين متزامنين 
         .expect(201)
     ).body as { id: string };
 
-    // المعاملةُ الجانبيّة: تقفل صفَّ التخصيص القائم حتى يصل الطلبان كلاهما إلى الانتظار، ثم تُفلته.
-    let release!: () => void;
-    const released = new Promise<void>((r) => (release = r));
-    let locked!: () => void;
-    const lockTaken = new Promise<void>((r) => (locked = r));
-    let heldRows = 0;
-    const holder = prisma.$transaction(
-      async (tx) => {
-        await tx.$executeRaw`SELECT set_config('app.company_id', ${company.companyId}, true)`;
-        heldRows = (await tx.$queryRaw<{ id: string }[]>`SELECT id FROM payment_allocations WHERE "paymentId" = ${payment.id} FOR UPDATE`).length;
-        locked();
-        await released;
-      },
-      { timeout: 60_000, maxWait: 10_000 },
-    );
-    await lockTaken;
-    // المسبارُ يرى (القاعدة ٢٩): القفلُ الجانبيّ أمسك صفَّ التخصيص القائم فعلاً، وإلا فلا تداخلَ يُفرض.
-    expect(heldRows).toBe(1);
-    const baseline = await waitingOnLocks();
-
     const send = (invoiceId: string) => auth(http().post(`/payments/${payment.id}/allocate`)).send({ allocations: [{ invoiceId, amount: 1000 }] });
-    const both = Promise.all([send(left), send(right)]);
-    // يُنتظر حتى يقف الطلبان كلاهما على القفل (أو مهلةٌ معلنة) — لا زمنٌ يُخمَّن. والإفلاتُ في `finally` فلا يعلق شيءٌ إن سقط التوكيد.
-    let waiting = 0;
-    try {
-      for (let i = 0; i < 100 && (waiting = await waitingOnLocks()) < baseline + 2; i++) await new Promise((r) => setTimeout(r, 100));
-    } finally {
-      release();
-    }
-    await holder;
-    // التداخلُ وقع: الطلبان كلاهما كانا واقفَين على قفلٍ قبل الإفلات (وإلا فما يلي لا يقيس السباق).
-    expect(waiting).toBeGreaterThanOrEqual(baseline + 2);
-    const replies = await both;
+    const { heldRows, baseline, waiting, replies } = await race('payment_allocations', payment.id, () => Promise.all([send(left), send(right)]));
+    // المسبارُ يرى (القاعدة ٢٩): القفلُ الجانبيّ أمسك صفَّ التخصيص القائم، والطلبان كلاهما وقفا على قفلٍ قبل الإفلات.
+    expect({ heldRows, stoodOnLocks: waiting >= baseline + 2 }).toEqual({ heldRows: 1, stoodOnLocks: true });
 
     const after = (await auth(http().get(`/payments/${payment.id}`)).expect(200)).body as { allocations: { invoiceId: string; amount: string }[] };
-    const total = after.allocations.reduce((s, a) => s + Number(a.amount), 0);
     expect({
       codes: replies.map((r) => r.status).sort(),
-      total,
-      invoices: after.allocations.map((a) => a.invoiceId).filter((id) => id === left || id === right).length,
-    }).toEqual({ codes: [201, 201], total: 1000, invoices: 1 });
+      total: after.allocations.reduce((s, a) => s + Number(a.amount), 0),
+      documents: after.allocations.filter((a) => a.invoiceId === left || a.invoiceId === right).length,
+    }).toEqual({ codes: [201, 201], total: 1000, documents: 1 });
+  });
+
+  it('🔴 سندُ الصرف للمورّد (مرآتُه): طلبان معاً إلى فاتورتَي شراء مختلفتين، فيبقى توزيعٌ واحد', async () => {
+    const first = await makePurchase(1000);
+    const left = await makePurchase(1000);
+    const right = await makePurchase(1000);
+    const payment = (
+      await auth(http().post('/supplier-payments'))
+        .send({ supplierId, branchId, date: today(), amount: 1000, method: 'CASH', bankId: cashBoxId, allocations: [{ purchaseId: first, amount: 1000 }] })
+        .expect(201)
+    ).body as { id: string };
+
+    const send = (purchaseId: string) => auth(http().post(`/supplier-payments/${payment.id}/allocate`)).send({ allocations: [{ purchaseId, amount: 1000 }] });
+    const { heldRows, baseline, waiting, replies } = await race('supplier_payment_allocations', payment.id, () => Promise.all([send(left), send(right)]));
+    expect({ heldRows, stoodOnLocks: waiting >= baseline + 2 }).toEqual({ heldRows: 1, stoodOnLocks: true });
+
+    const after = (await auth(http().get(`/supplier-payments/${payment.id}`)).expect(200)).body as { allocations: { purchaseId: string; amount: string }[] };
+    expect({
+      codes: replies.map((r) => r.status).sort(),
+      total: after.allocations.reduce((s, a) => s + Number(a.amount), 0),
+      documents: after.allocations.filter((a) => a.purchaseId === left || a.purchaseId === right).length,
+    }).toEqual({ codes: [201, 201], total: 1000, documents: 1 });
   });
 });
