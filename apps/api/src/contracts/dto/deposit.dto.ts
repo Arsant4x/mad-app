@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Matches, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
+import { CHARGE_TAX_TREATMENTS } from './claim.dto';
 
 const DEPOSIT_TYPES = ['RENT', 'FACILITY'] as const;
 const DEPOSIT_HOLDERS = ['COMPANY', 'EJAR'] as const;
@@ -45,6 +46,17 @@ export class DeductionDto {
   @IsString()
   @Matches(/\S/)
   reason!: string;
+
+  /// ⚖️ معاملتُه الضريبية (السؤال ٤١٤ · `ق-١٦٠٠`): للمرافق خاضعةٌ (الافتراض) أو نيابةً، و«أخرى» تُسأل خاضعةً أو تعويضاً، والنظافةُ
+  /// خاضعةٌ دائماً، والضررُ والإيجارُ غيرُ المسدَّد بلا معاملة — والفحصُ في الخدمة (`deductionTreatmentFor`).
+  @IsOptional()
+  @IsIn(CHARGE_TAX_TREATMENTS)
+  taxTreatment?: (typeof CHARGE_TAX_TREATMENTS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  onBehalfEvidence?: string;
 }
 
 export class SettleDepositDto {

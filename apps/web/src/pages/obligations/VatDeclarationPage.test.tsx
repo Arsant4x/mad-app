@@ -57,6 +57,8 @@ const declaration = (limits: api.VatDeclaration['limits']): api.VatDeclaration =
     managedCount: 0,
     commissionStandard: '0.00',
     commissionStandardVat: '0.00',
+    chargesStandard: '0.00',
+    chargesStandardVat: '0.00',
     ownerCollected: '0.00',
     ownerCount: 0,
     legacyStandard: '0.00',

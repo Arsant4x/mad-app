@@ -57,6 +57,10 @@
       "note": "عمودُ CompanyUser.status (ق-١٣٦٧) — كان يطابق حدَّ الإدخال STATUSES فقصر عن CLOSED"
     },
     {
+      "web": "apps/web/src/api/contracts.ts#ChargeTaxTreatment",
+      "server": "prisma:ChargeTaxTreatment"
+    },
+    {
       "web": "apps/web/src/api/contracts.ts#ClaimKind",
       "server": "prisma:ClaimKind"
     },
@@ -84,6 +88,10 @@
     {
       "web": "apps/web/src/api/contracts.ts#ContractVatInclusion",
       "server": "prisma:ContractVatInclusion"
+    },
+    {
+      "web": "apps/web/src/api/contracts.ts#DeclaredChargeTaxTreatment",
+      "server": "const:apps/api/src/contracts/dto/claim.dto.ts#CHARGE_TAX_TREATMENTS"
     },
     {
       "web": "apps/web/src/api/contracts.ts#DeclaredClassification",

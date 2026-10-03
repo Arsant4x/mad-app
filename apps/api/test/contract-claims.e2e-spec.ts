@@ -28,11 +28,13 @@ describe('Contract claims (e2e)', () => {
     return Number(accounts.body.find((a: { code: string }) => a.code === code)?.balance ?? 0);
   }
 
+  // ⚖️ «تعويض» صراحةً (توجيه ٢٧٦ · ق-١٦٠٠): هذه الحزمةُ تحرس آليّةَ المطالبة (ذمّةٌ ثم تحصيلٌ أو إسقاطٌ أو خصمٌ من التأمين)
+  // بأرقامٍ بلا ضريبة؛ والافتراضُ الخاضعُ وضريبتُه في `charge-tax-treatment.e2e-spec.ts`.
   async function raiseClaim(amount: number, kind = 'MAINTENANCE') {
     return request(app.getHttpServer())
       .post(`/contracts/${contractId}/claims`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ kind, amount, description: 'إصلاح سخان المياه', issuedAt: '2026-03-01' })
+      .send({ kind, amount, description: 'إصلاح سخان المياه', issuedAt: '2026-03-01', taxTreatment: 'COMPENSATION' })
       .expect(201);
   }
 

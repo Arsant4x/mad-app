@@ -56,6 +56,12 @@ export interface RentDeclarationSection {
   /** ⚖️ ما قُبض لعقودٍ مؤجّرُها المالك (بضريبة المالك إن وُجدت) وعددُ دفعاته — يُعدّ ولا يدخل. */
   ownerCollected: number;
   ownerCount: number;
+  /**
+   * ⚖️ **المطالباتُ والخصوماتُ من التأمين الخاضعة** (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · `ق-١٦٠٠`) — صافياً وضريبتُها، تدخل الخانةَ ١:
+   * المطالبةُ بتاريخ إصدارها ويُطرح إسقاطُها بتاريخه، والخصمُ بتاريخ تسوية التأمين — من الصفوف نفسِها التي رُحّل منها القيد.
+   */
+  chargesStandard: number;
+  chargesStandardVat: number;
   /** ما سبق البناء — يدخل الإقرار ولا يحمله الدفتر. */
   legacyStandard: number;
   legacyStandardVat: number;
@@ -671,8 +677,9 @@ export class ObligationsService {
       const prepaymentsAppliedVat = round2(prepaymentsApplied.reduce((s, p) => s + Number(p.vat) * Number(p.prepaymentInvoice.exchangeRate), 0));
       // الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته — من الدفتر (الاستحقاق) ومن ما سبق البناء
       // (يُحسب ويُعلَن)؛ والسكنيُّ صفُّ المعفى (م٦٢/٢/ز). ⚖️ وعمولةُ المنشأة على إيجار المالكين خاضعةٌ (السؤال ٥٧٧).
-      const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard + rent.commissionStandard);
-      const salesStandardVat = round2(boxes.box1.vat + rent.standardVat + rent.legacyStandardVat + rent.commissionStandardVat);
+      // ⚖️ والمطالباتُ والخصوماتُ من التأمين الخاضعة (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤) كذلك.
+      const salesStandard = round2(boxes.box1.net + rent.standard + rent.legacyStandard + rent.commissionStandard + rent.chargesStandard);
+      const salesStandardVat = round2(boxes.box1.vat + rent.standardVat + rent.legacyStandardVat + rent.commissionStandardVat + rent.chargesStandardVat);
       const salesExempt = round2(boxes.box5.net + rent.exempt + rent.legacyExempt);
       const salesZeroRatedDomestic = boxes.box3.net;
       const salesExports = boxes.box4.net;
@@ -897,6 +904,8 @@ export class ObligationsService {
           managedExcluded: money(rent.managedExcluded),
           commissionStandard: money(rent.commissionStandard),
           commissionStandardVat: money(rent.commissionStandardVat),
+          chargesStandard: money(rent.chargesStandard),
+          chargesStandardVat: money(rent.chargesStandardVat),
           ownerCollected: money(rent.ownerCollected),
           legacyStandard: money(rent.legacyStandard),
           legacyStandardVat: money(rent.legacyStandardVat),
@@ -986,6 +995,15 @@ export class ObligationsService {
       _count: { _all: true },
     });
 
+    // ⚖️ المطالباتُ الخاضعة بتاريخ إصدارها، ويُطرح ما أُسقط منها بتاريخ إسقاطه (تعديلٌ في فترته)؛ والخصوماتُ الخاضعة من التأمين
+    // بتاريخ تسويته — كلٌّ من صفّه الذي رُحّل منه القيد (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤).
+    const [claimsIssued, claimsWaived, deductionsTaxed] = await Promise.all([
+      tx.contractClaim.aggregate({ where: { taxTreatment: 'TAXABLE_SERVICE', issuedAt: { gte: from, lte: to } }, _sum: { baseAmount: true, baseTax: true } }),
+      tx.contractClaim.aggregate({ where: { taxTreatment: 'TAXABLE_SERVICE', status: 'WAIVED', settledAt: { gte: from, lte: to } }, _sum: { baseAmount: true, baseTax: true } }),
+      tx.depositDeduction.aggregate({ where: { taxTreatment: 'TAXABLE_SERVICE', deposit: { settledAt: { gte: from, lte: to } } }, _sum: { baseNet: true, baseTax: true } }),
+    ]);
+    const n = (v: Prisma.Decimal | null | undefined) => Number(v ?? 0);
+
     const section: RentDeclarationSection = {
       standard: round2(sum((r) => r.taxable, 'baseNet') - exemptPart((r) => r.taxable)),
       standardVat: sum((r) => r.taxable, 'baseTax'),
@@ -996,6 +1014,8 @@ export class ObligationsService {
       commissionStandardVat: round2(Number(commission._sum.baseCommissionTax ?? 0)),
       ownerCollected: round2(Number(commission._sum.baseNetAmount ?? 0)),
       ownerCount: commission._count._all,
+      chargesStandard: round2(n(claimsIssued._sum.baseAmount) - n(claimsWaived._sum.baseAmount) + n(deductionsTaxed._sum.baseNet)),
+      chargesStandardVat: round2(n(claimsIssued._sum.baseTax) - n(claimsWaived._sum.baseTax) + n(deductionsTaxed._sum.baseTax)),
       legacyStandard: 0,
       legacyStandardVat: 0,
       legacyExempt: 0,

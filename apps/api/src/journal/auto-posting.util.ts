@@ -10,6 +10,7 @@ import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.ut
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { getOrCreateInventoryVarianceAccount } from './inventory-variance-account.util';
 import { getOrCreateOperatingCommissionAccount, getOrCreateOwnerShareAccount } from './owner-rent-accounts.util';
+import { getOrCreateOnBehalfAccount } from './on-behalf-account.util';
 import type { CostAllocation } from '../purchases/layer-cost-allocation.util';
 import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
@@ -1757,7 +1758,12 @@ export interface DepositSettlementForPosting {
   baseAmount: number;
   /** Deductions already grouped by where they should land. */
   againstReceivable: number;
+  /** إلى `4300`: الضررُ والتعويضُ وصافي الخاضع. */
   againstIncome: number;
+  /** ⚖️ ضريبةُ الخصم الخاضع (النظافة · المرافق خدمةً · «أخرى» خدمةً — السؤال ٤١٤) إلى `2200`. غائبٌ ⇒ صفر. */
+  againstIncomeTax?: number;
+  /** ⚖️ ما خُصم لمرافق دُفعت نيابةً إلى `1260` لا إيراد (السؤال ٥١). غائبٌ ⇒ صفر. */
+  againstOnBehalf?: number;
   refund: number;
   typeLabel: string;
   /**
@@ -1800,7 +1806,9 @@ export interface DepositSettlementForPosting {
 export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, companyId: string, s: DepositSettlementForPosting) {
   if (s.baseAmount <= 0) return null;
 
-  const awarded = round2(s.againstReceivable + s.againstIncome);
+  const incomeTax = round2(s.againstIncomeTax ?? 0);
+  const onBehalf = round2(s.againstOnBehalf ?? 0);
+  const awarded = round2(s.againstReceivable + s.againstIncome + incomeTax + onBehalf);
   // Ejar refunding the tenant in full is a real, valid outcome that simply
   // never touches this company's books.
   if (!s.heldByCompany && awarded <= 0) return null;
@@ -1810,6 +1818,7 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
     ...(s.heldByCompany ? [TENANT_DEPOSITS_ACCOUNT] : ['1000']),
     ...(s.againstReceivable > 0 ? ['1200'] : []),
     ...(s.againstIncome > 0 ? [OTHER_INCOME_ACCOUNT] : []),
+    ...(incomeTax > 0 ? [OUTPUT_VAT_ACCOUNT] : []),
     ...(s.heldByCompany && s.refund > 0 ? ['1000'] : []),
     ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : []),
   ];
@@ -1820,6 +1829,8 @@ export async function postDepositSettlementEntry(tx: Prisma.TransactionClient, c
 
   if (s.againstReceivable > 0) lines.push({ accountId: ids.get('1200')!, debit: 0, credit: s.againstReceivable });
   if (s.againstIncome > 0) lines.push({ accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: s.againstIncome });
+  if (incomeTax > 0) lines.push({ accountId: ids.get(OUTPUT_VAT_ACCOUNT)!, debit: 0, credit: incomeTax });
+  if (onBehalf > 0) lines.push({ accountId: await getOrCreateOnBehalfAccount(tx, companyId), debit: 0, credit: onBehalf });
   if (s.heldByCompany && s.refund > 0) lines.push({ accountId: ids.get('1000')!, debit: 0, credit: s.refund });
   if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
 
@@ -1948,8 +1959,30 @@ export interface ClaimForPosting {
   contractNo: string;
   tenant: string;
   date: Date;
+  /** المبلغُ صافياً بعملة الدفتر — والضريبةُ فوقه في `baseTax` للخاضعة. */
   baseAmount: number;
   kindLabel: string;
+  /**
+   * ⚖️ معاملتُها الضريبية (الأسئلة ٥١ و٤١٣ · `ق-١٦٠٠`): الخاضعةُ ضريبتُها على `2200`، والنيابةُ على `1260` لا إيراد،
+   * والتعويضُ والقديمُ إيرادٌ بلا ضريبة كما كان. غائبٌ ⇒ القيدُ حرفاً كما كان (تعويض).
+   */
+  treatment?: 'TAXABLE_SERVICE' | 'ON_BEHALF' | 'COMPENSATION' | 'LEGACY_UNTAXED';
+  /** ضريبةُ الخاضعة بعملة الدفتر — وصفرٌ لغيرها. */
+  baseTax?: number;
+}
+
+/** الطرفُ الدائنُ لإنشاء المطالبة (ومدينُ إسقاطها) بحسب معاملتها — إيرادٌ وضريبتُه، أو وسيطُ النيابة، أو إيرادٌ وحدَه. */
+async function claimCounterLines(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting, side: 'credit' | 'debit'): Promise<PostingLine[]> {
+  const line = (accountId: string, amount: number): PostingLine => (side === 'credit' ? { accountId, debit: 0, credit: amount } : { accountId, debit: amount, credit: 0 });
+  if (c.treatment === 'ON_BEHALF') return [line(await getOrCreateOnBehalfAccount(tx, companyId), c.baseAmount)];
+  const tax = c.treatment === 'TAXABLE_SERVICE' ? round2(c.baseTax ?? 0) : 0;
+  const ids = await resolveAccountIds(tx, [OTHER_INCOME_ACCOUNT, ...(tax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])]);
+  return [line(ids.get(OTHER_INCOME_ACCOUNT)!, c.baseAmount), ...(tax > 0 ? [line(ids.get(OUTPUT_VAT_ACCOUNT)!, tax)] : [])];
+}
+
+/** إجماليُّ الذمّة بعملة الدفتر — الصافي وضريبةُ الخاضعة. */
+function claimGross(c: ClaimForPosting): number {
+  return round2(c.baseAmount + (c.treatment === 'TAXABLE_SERVICE' ? (c.baseTax ?? 0) : 0));
 }
 
 /**
@@ -1958,20 +1991,20 @@ export interface ClaimForPosting {
  * Same shape as a cancellation settlement, and for the same reason — a repair
  * the tenant caused or a late fee is income, but not *rental* income. Keeping
  * both out of 4200 is what lets a rent-roll report mean what it says.
+ *
+ * ⚖️ **والمطالبةُ تفرّق ثلاثة** (السؤال ٤١٣ · `ق-١٦٠٠`): **خدمةٌ خاضعة** — الذمّةُ بإجماليّها، والإيرادُ بصافيه، والضريبةُ
+ * على `2200` · **مبلغٌ دُفع نيابةً** — الذمّةُ مقابل `1260` لا إيراد ولا ضريبة · **تعويضُ ضرر** — كما كان.
  */
 export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
   if (c.baseAmount <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
+  const ids = await resolveAccountIds(tx, ['1200']);
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
     memo: `مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
     unitId: c.unitId,
-    lines: [
-      { accountId: ids.get('1200')!, debit: c.baseAmount, credit: 0 },
-      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: 0, credit: c.baseAmount },
-    ],
+    lines: [{ accountId: ids.get('1200')!, debit: claimGross(c), credit: 0 }, ...(await claimCounterLines(tx, companyId, c, 'credit'))],
     auto: true,
     customerId: c.customerId ?? null,
   });
@@ -1983,21 +2016,22 @@ export async function postClaimIssueEntry(tx: Prisma.TransactionClient, companyI
  * (`postPartySettlementEntry`). وكان الطرفان بالمبلغ نفسِه فيُطوى الفرقُ في `1000`.
  */
 export interface ClaimPaymentForPosting extends ClaimForPosting {
-  /** النقدُ بالعملة الأساسية = مبلغُ المطالبة × سعرُ يوم التحصيل. غائبٌ ⇒ مطالبةٌ بعملة الأساس، فالنقدُ = `baseAmount` والقيدُ حرفاً كما كان. */
+  /** النقدُ بالعملة الأساسية = إجماليُّ المطالبة × سعرُ يوم التحصيل. غائبٌ ⇒ مطالبةٌ بعملة الأساس، فالنقدُ = إجماليُّ الذمّة والقيدُ حرفاً كما كان. */
   baseCash?: number;
 }
 
-/** Collecting a claim: cash in (1000 or the bank's account), receivable out. */
+/** Collecting a claim: cash in (1000 or the bank's account), receivable out — بإجماليّها (الخاضعةُ بضريبتها). */
 export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimPaymentForPosting) {
   if (c.baseAmount <= 0) return null;
 
-  const cash = c.baseCash === undefined ? c.baseAmount : round2(c.baseCash);
+  const gross = claimGross(c);
+  const cash = c.baseCash === undefined ? gross : round2(c.baseCash);
   // ربحُ الصرف: نقدٌ يفوق الذمّةَ بسعرها التاريخيّ — والخسارةُ عكسُه.
-  const fxGain = round2(cash - c.baseAmount);
+  const fxGain = round2(cash - gross);
   const ids = await resolveAccountIds(tx, ['1000', '1200', ...(fxGain !== 0 ? [FX_DIFFERENCE_ACCOUNT] : [])]);
   const lines: PostingLine[] = [
     { accountId: ids.get('1000')!, debit: cash, credit: 0 },
-    { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
+    { accountId: ids.get('1200')!, debit: 0, credit: gross },
   ];
   if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
   return createJournalEntry(tx, {
@@ -2021,16 +2055,14 @@ export async function postClaimPaymentEntry(tx: Prisma.TransactionClient, compan
 export async function postClaimWaiverEntry(tx: Prisma.TransactionClient, companyId: string, c: ClaimForPosting) {
   if (c.baseAmount <= 0) return null;
 
-  const ids = await resolveAccountIds(tx, ['1200', OTHER_INCOME_ACCOUNT]);
+  // ⚖️ عكسُ الإنشاء بمعاملته نفسِها: الخاضعةُ تُعيد ضريبتَها من `2200` (الإسقاطُ تعديلٌ في فترته)، والنيابةُ تُعيد `1260`.
+  const ids = await resolveAccountIds(tx, ['1200']);
   return createJournalEntry(tx, {
     companyId,
     date: c.date,
     memo: `إسقاط مطالبة (${c.kindLabel}) — عقد ${c.contractNo} — ${c.tenant}`,
     unitId: c.unitId,
-    lines: [
-      { accountId: ids.get(OTHER_INCOME_ACCOUNT)!, debit: c.baseAmount, credit: 0 },
-      { accountId: ids.get('1200')!, debit: 0, credit: c.baseAmount },
-    ],
+    lines: [...(await claimCounterLines(tx, companyId, c, 'debit')), { accountId: ids.get('1200')!, debit: 0, credit: claimGross(c) }],
     auto: true,
     customerId: c.customerId ?? null,
   });

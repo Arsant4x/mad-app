@@ -129,7 +129,8 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
   it('🔴 ① B7 — مطالبةٌ بعملةٍ أجنبية: بلا سعرِ يومٍ تُرفض مسمّاةً بلا أثر، وبسعرٍ يُقيَّد النقدُ به والفرقُ على 5600', async () => {
     const contract = await makeContract({ currency: FX, exchangeRate: 3.75 });
     const created = (
-      await auth(http().post(`/contracts/${contract.id}/claims`)).send({ kind: 'MAINTENANCE', amount: 100, description: 'إصلاح تسريب', issuedAt: today }).expect(201)
+      // ⚖️ «تعويض» صراحةً (ق-١٦٠٠): الحالةُ تحرس فرقَ الصرف بسطورٍ بلا ضريبة، والافتراضُ الخاضعُ في `charge-tax-treatment.e2e-spec.ts`.
+      await auth(http().post(`/contracts/${contract.id}/claims`)).send({ kind: 'MAINTENANCE', amount: 100, description: 'إصلاح تسريب', issuedAt: today, taxTreatment: 'COMPENSATION' }).expect(201)
     ).body as ContractBody;
     const claim = created.claims[0];
     // المطالبةُ ترث عملةَ العقد وسعرَه (`createClaim`): 100 × 3.75 = 375.00 — وهي ما قُيِّد في `1200` عند إصدارها.
@@ -164,7 +165,7 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
   it('② B7 — مطالبةٌ بعملة الأساس: لا سعرَ يُطلب، والقيدُ سطران كما كان ولا 5600', async () => {
     const contract = await makeContract();
     const created = (
-      await auth(http().post(`/contracts/${contract.id}/claims`)).send({ kind: 'LATE_FEE', amount: 100, description: 'غرامة تأخير', issuedAt: today }).expect(201)
+      await auth(http().post(`/contracts/${contract.id}/claims`)).send({ kind: 'LATE_FEE', amount: 100, description: 'غرامة تأخير', issuedAt: today, taxTreatment: 'COMPENSATION' }).expect(201)
     ).body as ContractBody;
     const claim = created.claims[0];
     // عملةُ الأساس بسعر 1 (`resolveCurrencyWithin`): 100 × 1 = 100.00.
@@ -188,7 +189,7 @@ describe('⚖️ نقدُ الإيجار بعملةٍ أجنبية بسعر يو
     expect(lower).not.toBe(baseCurrency);
     const withLower = (
       await auth(http().post(`/contracts/${contract.id}/claims`))
-        .send({ kind: 'UTILITIES', amount: 50, description: 'فاتورة كهرباء', issuedAt: today, currency: lower })
+        .send({ kind: 'UTILITIES', amount: 50, description: 'فاتورة كهرباء', issuedAt: today, currency: lower, taxTreatment: 'COMPENSATION' })
         .expect(201)
     ).body as ContractBody;
     // ⚖️ والرمزُ يُخزَّن موحَّداً بأحرفٍ كبيرة (`ق-١٥٨٥`، بحكم صاحب المشروع) — كان يُخزَّن كما أُرسل، وهذا التوكيدُ كان يحرس ذلك.

@@ -57,6 +57,7 @@ import {
   type RentVatInclusion,
 } from '../journal/rent-tax-point.util';
 import { money } from '../common/money/text';
+import { chargeTaxIn, chargeTaxOn } from '../journal/charge-tax.util';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
@@ -153,6 +154,52 @@ const DEPOSIT_TYPE_LABEL: Record<DepositType, string> = {
  * a deduction carries a kind rather than just an amount. */
 function deductionTarget(kind: DeductionKind): 'receivable' | 'income' {
   return kind === 'UNPAID_RENT' ? 'receivable' : 'income';
+}
+
+type ChargeTreatment = 'TAXABLE_SERVICE' | 'ON_BEHALF' | 'COMPENSATION';
+
+/** النيابةُ تُثبَت: ما يثبت شروطَها مكتوبٌ معها، وإلا فهي خدمةٌ خاضعة (دليلُ الوكلاء §8.1). */
+function assertOnBehalfEvidence(treatment: ChargeTreatment, evidence: string | undefined): void {
+  if (treatment === 'ON_BEHALF' && !evidence?.trim()) throw new BadRequestException(MSG.charge_on_behalf_evidence_required);
+}
+
+/**
+ * ⚖️ **معاملةُ المطالبة** (الأسئلة ٥١ و٤١٣ · `ق-١٦٠٠`، بحكم صاحب المشروع: «خانةٌ عند كلِّ مطالبة، والافتراضُ خاضع») — أيُّ نوعٍ
+ * يقبل أيَّ معاملة، فالتاجرُ أعلمُ بالواقعة؛ والغيابُ خدمةٌ خاضعة لأن النيابةَ والتعويضَ استثناءان يُثبتان.
+ */
+function claimTreatmentFor(dto: { taxTreatment?: ChargeTreatment; onBehalfEvidence?: string }): ChargeTreatment {
+  const treatment = dto.taxTreatment ?? 'TAXABLE_SERVICE';
+  assertOnBehalfEvidence(treatment, dto.onBehalfEvidence);
+  return treatment;
+}
+
+/** ما يجوز من معاملةٍ لكلِّ نوع خصم (السؤال ٤١٤) — `null`: بلا معاملة (الضررُ تعويضٌ بطبعه والإيجارُ يسدّد ذمّتَه). */
+const DEDUCTION_TREATMENTS: Record<DeductionKind, readonly ChargeTreatment[] | null> = {
+  UNPAID_RENT: null,
+  DAMAGE: null,
+  CLEANING: ['TAXABLE_SERVICE'],
+  UTILITIES: ['TAXABLE_SERVICE', 'ON_BEHALF'],
+  OTHER: ['TAXABLE_SERVICE', 'COMPENSATION'],
+};
+
+/**
+ * ⚖️ **معاملةُ الخصم من التأمين** (السؤال ٤١٤ · `ق-١٦٠٠`، بحكم صاحب المشروع: «`DAMAGE` و`UNPAID_RENT` كما هما، و`CLEANING`
+ * و`UTILITIES` بحكم ٤٩ و٥١، و`OTHER` يُسأل عنه عند إدخاله»): النظافةُ خاضعةٌ دائماً · المرافقُ خاضعةٌ افتراضاً أو نيابةً بإثباتها ·
+ * «أخرى» لا افتراضَ لها · والضررُ والإيجارُ لا معاملةَ تُختار لهما.
+ */
+function deductionTreatmentFor(d: { kind: string; taxTreatment?: ChargeTreatment; onBehalfEvidence?: string }): ChargeTreatment | null {
+  const allowed = DEDUCTION_TREATMENTS[d.kind as DeductionKind];
+  if (!allowed) {
+    if (d.taxTreatment) throw new BadRequestException(MSG.deduction_treatment_not_allowed);
+    return null;
+  }
+  if (!d.taxTreatment) {
+    if (d.kind === 'OTHER') throw new BadRequestException(MSG.deduction_other_treatment_required);
+    return 'TAXABLE_SERVICE';
+  }
+  if (!allowed.includes(d.taxTreatment)) throw new BadRequestException(MSG.deduction_treatment_not_allowed);
+  assertOnBehalfEvidence(d.taxTreatment, d.onBehalfEvidence);
+  return d.taxTreatment;
 }
 
 /**
@@ -322,7 +369,7 @@ export class ContractsService {
     T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor' | 'exemptSharePercent'> & {
       installments: { id: string; amount: Prisma.Decimal }[];
       payments: { installmentId: string | null; netAmount: Prisma.Decimal; discount: Prisma.Decimal }[];
-      claims: { status: string; amount: Prisma.Decimal }[];
+      claims: { status: string; amount: Prisma.Decimal; taxAmount: Prisma.Decimal }[];
       deposits: { status: string; holder: string; amount: Prisma.Decimal }[];
     },
   >(contract: T) {
@@ -345,7 +392,8 @@ export class ContractsService {
         const settled = round2(settledBy.get(i.id) ?? 0);
         return { ...i, gross: money(gross), settled: money(settled), remaining: money(gross - settled) };
       }),
-      claimsOutstanding: money(contract.claims.filter((c) => c.status === 'OPEN').reduce((s, c) => s + Number(c.amount), 0)),
+      // ⚖️ المطالبةُ المفتوحة بإجماليّها — الخاضعةُ بضريبتها (السؤال ٤١٣)، فهو ما يدين به المستأجر.
+      claimsOutstanding: money(contract.claims.filter((c) => c.status === 'OPEN').reduce((s, c) => s + Number(c.amount) + Number(c.taxAmount), 0)),
       depositsHeld: money(contract.deposits.filter((d) => d.status === 'HELD' && d.holder === 'COMPANY').reduce((s, d) => s + Number(d.amount), 0)),
     };
   }
@@ -1333,6 +1381,10 @@ export class ContractsService {
         // عملةُ المطالبة وسعرُها كمستندٍ يتبع العقد (توجيه ٢٧٤ · البند 1).
         const { currency, exchangeRate } = await resolveFollowingCurrency(tx, companyId, dto, { currency: contract.currency, exchangeRate: Number(contract.exchangeRate) });
         const baseAmount = toBaseAmount(dto.amount, exchangeRate);
+        // ⚖️ معاملتُها الضريبية (السؤالان ٥١ و٤١٣): الخاضعةُ ضريبتُها فوق المبلغ بعملتها ثم بالدفتر.
+        const treatment = claimTreatmentFor(dto);
+        const taxAmount = treatment === 'TAXABLE_SERVICE' ? chargeTaxOn(dto.amount) : 0;
+        const baseTax = toBaseAmount(taxAmount, exchangeRate);
 
         const journalEntry = await postClaimIssueEntry(tx, companyId, {
           unitId: contract.unitId,
@@ -1342,6 +1394,8 @@ export class ContractsService {
           date: new Date(dto.issuedAt),
           baseAmount,
           kindLabel: CLAIM_KIND_LABEL[dto.kind as ClaimKind],
+          treatment,
+          baseTax,
         });
 
         await tx.contractClaim.create({
@@ -1353,6 +1407,10 @@ export class ContractsService {
             currency,
             exchangeRate,
             baseAmount,
+            taxTreatment: treatment,
+            taxAmount,
+            baseTax,
+            onBehalfEvidence: treatment === 'ON_BEHALF' ? dto.onBehalfEvidence!.trim() : null,
             issuedAt: new Date(dto.issuedAt),
             journalEntryId: journalEntry?.id ?? null,
           } as unknown as Prisma.ContractClaimUncheckedCreateInput,
@@ -1402,12 +1460,15 @@ export class ContractsService {
           date,
           baseAmount: Number(claim.baseAmount),
           kindLabel: CLAIM_KIND_LABEL[claim.kind],
+          // ⚖️ التحصيلُ والإسقاطُ بمعاملة الإنشاء نفسِها (الأسئلة ٥١ و٤١٣).
+          treatment: claim.taxTreatment,
+          baseTax: Number(claim.baseTax),
         };
         // ⚖️ (`ق-١٤٨٩` · B7) نقدُ التحصيل لمطالبةٍ بعملةٍ أجنبية بسعر يومه — والذمّةُ بسعر إصدارها، والفرقُ على `5600`.
-        //    والإسقاطُ لا نقدَ فيه فلا سعرَ له.
+        //    والإسقاطُ لا نقدَ فيه فلا سعرَ له. والنقدُ إجماليُّها (الخاضعةُ بضريبتها).
         const baseCash =
           status === 'PAID' && (await isForeignCurrency(tx, companyId, claim.currency))
-            ? toBaseAmount(Number(claim.amount), requireCashDayRate(claim.currency, cashDayRate))
+            ? toBaseAmount(Number(claim.amount) + Number(claim.taxAmount), requireCashDayRate(claim.currency, cashDayRate))
             : undefined;
         const entry = status === 'PAID' ? await postClaimPaymentEntry(tx, companyId, { ...posting, baseCash }) : await postClaimWaiverEntry(tx, companyId, posting);
 
@@ -1495,6 +1556,8 @@ export class ContractsService {
         const deposit = await tx.contractDeposit.findUnique({ where: { id: depositId }, include: { contract: true } });
         if (!deposit || deposit.contractId !== contractId) throw new NotFoundException(MSG.deposit_not_found);
         if (deposit.status === 'SETTLED') throw new ConflictException(MSG.deposit_already_settled);
+        // ⚖️ معاملةُ كلِّ خصمٍ قبل أيّ أثر (السؤال ٤١٤): ما لا يصحّ يُردّ برسالته ولا يُكتب شيء.
+        const treatments = dto.deductions.map((d) => deductionTreatmentFor(d));
         // ⚖️ **المطالبةُ أوّلَ المعاملة لا آخرَها** (البند 27 من مراجعة 3.3 · `ق-١٥٧٥`): الفحصُ أعلاه قراءةٌ عادية،
         //    فتسويتان متزامنتان كانتا تقرآن «غيرَ مسوّاة» وترحّلان القيدَ مرّتين ثم يكتب الثاني فوق الأوّل، و`settlementEntryId`
         //    الفريدُ لا يمنع لأن لكلٍّ قيدَه. فالحالُ تُكتب هنا بشرطها: الثانيةُ تنتظر قفلَ الصفّ ثم لا تجد ما تطالب به فتُردّ.
@@ -1544,6 +1607,18 @@ export class ContractsService {
           ? round2(atDepositRate.receivable - againstReceivable + (atDepositRate.refund - refundCash))
           : round2((awardedCash ?? round2(atDepositRate.receivable + atDepositRate.income)) - againstReceivable - atDepositRate.income);
 
+        // ⚖️ **جزءُ الدخل بمعاملته** (السؤال ٤١٤): لكلِّ خصمٍ خاضعٍ صافيه وضريبتُه من إجماليّه بسعر الوديعة (`chargeTaxIn`)،
+        //    ولكلِّ خصمٍ نيابةً مبلغُه إلى `1260`؛ و`4300` يحمل الباقي من جزء الدخل كلِّه (الضررُ والتعويضُ وصافي الخاضع وبقيّةُ
+        //    التقريب) — فالقيدُ يتوازن بالبناء، ومجموعُ ضريبة الأسطر هو ما يُقيَّد على `2200` ويقرؤه الإقرار.
+        const rows = dto.deductions.map((d, i) => {
+          const treatment = treatments[i];
+          const base = toBaseAmount(d.amount, rate);
+          const tax = treatment === 'TAXABLE_SERVICE' ? chargeTaxIn(base) : 0;
+          return { d, treatment, base, tax };
+        });
+        const incomeTax = round2(rows.reduce((s, r) => s + r.tax, 0));
+        const onBehalf = round2(rows.filter((r) => r.treatment === 'ON_BEHALF').reduce((s, r) => s + r.base, 0));
+
         const settlementEntry = await postDepositSettlementEntry(tx, companyId, {
           unitId: deposit.contract.unitId,
           customerId: deposit.contract.customerId,
@@ -1553,7 +1628,9 @@ export class ContractsService {
           heldByCompany,
           baseAmount: Number(deposit.baseAmount),
           againstReceivable,
-          againstIncome: atDepositRate.income,
+          againstIncome: round2(atDepositRate.income - incomeTax - onBehalf),
+          againstIncomeTax: incomeTax,
+          againstOnBehalf: onBehalf,
           refund: refundCash,
           typeLabel: DEPOSIT_TYPE_LABEL[deposit.type],
           awardedCash,
@@ -1562,11 +1639,15 @@ export class ContractsService {
 
         if (dto.deductions.length > 0) {
           await tx.depositDeduction.createMany({
-            data: dto.deductions.map((d) => ({
+            data: rows.map(({ d, treatment, base, tax }) => ({
               depositId,
               kind: d.kind,
               amount: d.amount,
               reason: d.reason,
+              taxTreatment: treatment,
+              baseNet: treatment === 'TAXABLE_SERVICE' ? round2(base - tax) : null,
+              baseTax: tax,
+              onBehalfEvidence: treatment === 'ON_BEHALF' ? d.onBehalfEvidence!.trim() : null,
             })) as unknown as Prisma.DepositDeductionUncheckedCreateInput[],
           });
         }

@@ -9,6 +9,7 @@ import {
   OWNER_SHARE_ACCOUNT_CODE,
   OWNER_SHARE_ACCOUNT_NAME,
 } from '../journal/owner-rent-accounts.util';
+import { ON_BEHALF_ACCOUNT_CODE, ON_BEHALF_ACCOUNT_NAME } from '../journal/on-behalf-account.util';
 
 /**
  * دليل الحسابات الافتراضي — المصدر الوحيد الذي تُولد به كل منشأة جديدة.
@@ -53,6 +54,8 @@ export const DEFAULT_CHART: DefaultAccount[] = [
   // المخرجات. وحسابٌ واحد يحمل الاتجاهين يصير رصيده سالباً كلما زادت
   // المشتريات — مقيس: `-7500` على مجسّ حيّ قبل هذه الموجة.
   { code: '1250', name: 'ضريبة القيمة المضافة — مدخلات', type: 'asset' },
+  // ⚖️ ما دُفع عن المستأجر ويُستردّ منه بشروط النيابة (السؤالان ٥١ و٤١٣ · ق-١٦٠٠): ذمّةٌ لا إيراد.
+  { code: ON_BEHALF_ACCOUNT_CODE, name: ON_BEHALF_ACCOUNT_NAME, type: 'asset' },
   // المخزون أصل حتى يُباع. والشراء كان يذهب إلى 5100 مباشرةً، فالهامش
   // **مقلوب لا غائب**: إيرادٌ بلا تكلفته وتكلفةٌ بلا إيرادها.
   { code: '1300', name: 'المخزون', type: 'asset' },

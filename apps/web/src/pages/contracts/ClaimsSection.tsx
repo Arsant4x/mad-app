@@ -1,8 +1,9 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useRef, useState } from 'react';
-import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
+import { createClaim, payClaim, waiveClaim, type ClaimKind, type ClaimStatus, type Contract, type DeclaredChargeTaxTreatment, listClaimAttachments, uploadClaimAttachment, claimAttachmentDownloadUrl, deleteClaimAttachment, type ClaimAttachment } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
-import { num0 } from '../../lib/money';
+import { num0, round2 } from '../../lib/money';
+import { CHARGE_TREATMENT_LABEL, CLAIM_TREATMENT_OPTIONS } from './chargeTaxMeta';
 
 const KIND_LABEL: Record<ClaimKind, string> = {
   MAINTENANCE: 'صيانة',
@@ -66,6 +67,9 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [issuedAt, setIssuedAt] = useState(today());
+  // ⚖️ «خانةٌ عند كلِّ مطالبة، والافتراضُ خاضع» (ق-١٦٠٠): النيابةُ والتعويضُ يُختاران، والنيابةُ تُثبَت.
+  const [treatment, setTreatment] = useState<DeclaredChargeTaxTreatment>('TAXABLE_SERVICE');
+  const [evidence, setEvidence] = useState('');
 
   // مجموعُ المطالبات المفتوحة يصل من الخادم مع العقد (`ق-١٢٤٣`) — يُقرأ رقماً لقرار الإظهار وحدَه.
   const outstanding = num0(contract.claimsOutstanding);
@@ -129,20 +133,49 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
             <label>تاريخ المطالبة</label>
             <input type="date" value={issuedAt} onChange={(e) => setIssuedAt(e.target.value)} />
           </div>
+          <div className="field">
+            <label htmlFor="claim-treatment">المعاملة الضريبية</label>
+            <select id="claim-treatment" value={treatment} onChange={(e) => setTreatment(e.target.value as DeclaredChargeTaxTreatment)}>
+              {CLAIM_TREATMENT_OPTIONS.map((t) => (
+                <option key={t} value={t}>
+                  {CHARGE_TREATMENT_LABEL[t]}
+                </option>
+              ))}
+            </select>
+            {treatment === 'TAXABLE_SERVICE' && <p className="hint">تُضاف ضريبة ١٥٪ فوق المبلغ، فيدين المستأجرُ بالمبلغ وضريبتِه، وتدخل الإقرار.</p>}
+            {treatment === 'COMPENSATION' && <p className="hint">تعويضٌ عن ضررٍ فعليّ: خارج نطاق الضريبة.</p>}
+          </div>
+          {treatment === 'ON_BEHALF' && (
+            <div className="field">
+              <label htmlFor="claim-evidence">ما يثبت النيابة</label>
+              <input id="claim-evidence" value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="مثال: العدّادُ باسم المستأجر، والفاتورةُ رقم … مرفقة" />
+              <p className="hint">مبلغٌ دفعته عن المستأجر ويُستردّ منه: لا إيراد ولا ضريبة، بشرط أن يكون المستأجرُ متلقّي الخدمة وأن تُفصل التكلفةُ في المستندات.</p>
+            </div>
+          )}
           {/* Says where it lands, because "claim" doesn't tell the user it is
               recognized as income the moment it's raised. */}
-          <p className="hint">تُسجَّل فور إنشائها كمستحق على المستأجر ضمن إيرادات أخرى — ويمكن خصمها لاحقاً من التأمين المحتجز.</p>
+          <p className="hint">تُسجَّل فور إنشائها كمستحق على المستأجر — ويمكن خصمها لاحقاً من التأمين المحتجز.</p>
           <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
             <button
               className="btn btn-primary"
-              disabled={busy || !(Number(amount) > 0) || !description.trim()}
+              disabled={busy || !(Number(amount) > 0) || !description.trim() || (treatment === 'ON_BEHALF' && !evidence.trim())}
               onClick={() =>
                 run(
-                  () => createClaim(contract.id, { kind, amount: Number(amount), description: description.trim(), issuedAt }),
+                  () =>
+                    createClaim(contract.id, {
+                      kind,
+                      amount: Number(amount),
+                      description: description.trim(),
+                      issuedAt,
+                      taxTreatment: treatment,
+                      ...(treatment === 'ON_BEHALF' ? { onBehalfEvidence: evidence.trim() } : {}),
+                    }),
                   () => {
                     setAdding(false);
                     setAmount('');
                     setDescription('');
+                    setEvidence('');
+                    setTreatment('TAXABLE_SERVICE');
                   },
                 )
               }
@@ -174,9 +207,15 @@ export function ClaimsSection({ contract, onChanged }: { contract: Contract; onC
           )}
           {contract.claims.map((c) => (
             <tr key={c.id}>
-              <td>{KIND_LABEL[c.kind]}</td>
+              <td>
+                {KIND_LABEL[c.kind]}
+                <div className="hint">{CHARGE_TREATMENT_LABEL[c.taxTreatment]}</div>
+              </td>
               <td>{c.description}</td>
-              <td className="num">{fmt(c.amount)}</td>
+              <td className="num">
+                {fmt(round2(num0(c.amount) + num0(c.taxAmount)))}
+                {num0(c.taxAmount) > 0 && <div className="hint">منها ضريبة {fmt(c.taxAmount)}</div>}
+              </td>
               <td className="num">{dfmt(c.issuedAt)}</td>
               <td>
                 <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
