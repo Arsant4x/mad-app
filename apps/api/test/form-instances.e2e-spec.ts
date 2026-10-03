@@ -172,6 +172,14 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       expect(v.body.recomputedHash).toBe(v.body.contentHash);
     }
 
+    // والتحقّقُ يعيد الحسابَ فعلاً: عنوانُ بندٍ يُغيَّر في القاعدة مباشرةً (البندُ المنشور مجمَّدٌ في البرنامج وحدَه) فيفترق المختوم.
+    const relabel = (label: string) => tenantPrisma.runInTenantContext(a.companyId, (tx) => tx.formTemplateItem.update({ where: { id: items.cond }, data: { label } }));
+    const original = (await tenantPrisma.runInTenantContext(a.companyId, (tx) => tx.formTemplateItem.findUniqueOrThrow({ where: { id: items.cond } }))).label;
+    await relabel('عنوانٌ مُبدَّل');
+    const tampered = await http().get(`/contracts/${contractA}/forms/${first.id}/verify`).set('Authorization', bearer(a.token)).expect(200);
+    expect(tampered.body).toMatchObject({ contentIntact: false, chainLinked: true, valid: false });
+    await relabel(original);
+
     // ومسوّدةٌ ثالثة تبقى للحالة الموجبة في ⑤.
     draftId = (await http().post(`/contracts/${contractA2}/forms`).set('Authorization', bearer(a.token)).send({ templateId, formDate }).expect(201)).body.id;
   });
