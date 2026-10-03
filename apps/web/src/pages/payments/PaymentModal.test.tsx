@@ -72,4 +72,25 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
     expect(vi.mocked(payments.createPayment).mock.calls[0][0]).not.toHaveProperty('unallocated');
     expect(vi.mocked(payments.createPayment).mock.calls[0][0].allocations).toEqual([{ invoiceId: 'i1', amount: 400 }]);
   });
+
+  it('⚖️ مفتاحُ النافذة يُرسل، ويبقى نفسَه حين يُعاد الحفظ بعد إخفاق — فلا يُكتب سندان (توجيه ٢٧٦ · ق-١٦٠٩/ب)', async () => {
+    vi.mocked(payments.listOpenInvoices).mockResolvedValue([
+      { id: 'i1', no: 'INV-2026-0002', issueDate: '2026-06-01', dueDate: '2026-06-30', total: '400.00', currency: 'SAR', status: 'DUE', allocated: '0.00', remaining: '400.00' },
+    ]);
+    // الأولى تنقطع (لا جوابَ يصل)، والثانيةُ تنجح — والمفتاحُ واحد، فالخادمُ يعيد السندَ إن كانت الأولى كتبته.
+    vi.mocked(payments.createPayment).mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({} as payments.Payment);
+    render(<PaymentModal onCancel={() => {}} onSaved={vi.fn().mockResolvedValue(undefined)} />);
+    await screen.findByRole('option', { name: 'عميل الدفعة' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'c1');
+    await screen.findByText('INV-2026-0002');
+    fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '400' } });
+    await userEvent.click(screen.getByText('توزيع تلقائي (الأقدم أولاً)'));
+    await userEvent.click(screen.getByText('تسجيل السند'));
+    await userEvent.click(screen.getByText('تسجيل السند'));
+    expect(vi.mocked(payments.createPayment)).toHaveBeenCalledTimes(2);
+    const [first, second] = vi.mocked(payments.createPayment).mock.calls;
+    expect(typeof first[1]).toBe('string');
+    expect(String(first[1]).length).toBeGreaterThanOrEqual(8);
+    expect(second[1]).toBe(first[1]);
+  });
 });

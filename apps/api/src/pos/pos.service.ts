@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { PosCardVerification, Prisma } from '@mad-app/db';
 import { TenantContext } from '../auth/types';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { onceForKey } from '../common/idempotency/idempotency';
 import { moneyEquals } from '../common/money/allocation';
 import { lockDocumentRow } from '../common/settlement/settlement.util';
 import { branchFilter, resolveBranchId } from '../branches/branch-scope.util';
@@ -377,9 +378,24 @@ export class PosService {
     });
   }
 
-  /** بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة. */
-  createSale(tenant: TenantContext, dto: CreatePosSaleDto) {
-    return this.ringDirect(tenant, dto, { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin, cardDeviceReference: dto.cardDeviceReference });
+  /**
+   * بيع كاشير: فاتورة حقيقية (ترقيم/ضريبة/قيد) تُختم مدفوعةً على المناوبة.
+   *
+   * ⚖️ **والإرسالُ المكرّر لا يبيع مرّتين** (توجيه ٢٧٦ · ق-١٦٠٩/ب): مفتاحُ الطلب (`Idempotency-Key`) يصير معرّفَ البيع من الطرفية
+   * (`clientSaleId`) بقيده القائم — فالطلبُ نفسُه يعيد الفاتورةَ نفسَها كالمزامنة تماماً، ولو وصل الطلبان معاً. وبلا مفتاحٍ كما كان.
+   * ⚠️ وحدُّه معلَن: الإعادةُ تعيد البيعَ كما تعيده المزامنة، بلا ملخّص الخصم من المخزون الذي حمله الردُّ الأوّل.
+   */
+  createSale(tenant: TenantContext, dto: CreatePosSaleDto, idempotencyKey?: string) {
+    const opts = { ringAt: dto.ringAt, ringOffsetMin: dto.ringOffsetMin, cardDeviceReference: dto.cardDeviceReference };
+    if (!idempotencyKey) return this.ringDirect(tenant, dto, opts);
+    return onceForKey(
+      idempotencyKey,
+      async () => {
+        const existing = await this.findByClientSaleId(tenant.companyId, idempotencyKey);
+        return existing ? this.withReceiptQr(tenant.companyId, existing) : null;
+      },
+      () => this.ringDirect(tenant, dto, { ...opts, clientSaleId: idempotencyKey }),
+    );
   }
 
   /**

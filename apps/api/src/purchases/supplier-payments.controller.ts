@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyKey } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
@@ -43,8 +44,8 @@ export class SupplierPaymentsController {
 
   @Post()
   @RequiresAction('record')
-  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateSupplierPaymentDto) {
-    return this.supplierPayments.create(tenant.companyId, tenant.allowedBranchIds, dto);
+  create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateSupplierPaymentDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.supplierPayments.create(tenant.companyId, tenant.allowedBranchIds, dto, idempotencyKey);
   }
 
   /** إعادةُ توزيع سندٍ على فواتير أخرى — لا يمسّ مبلغَه ولا قيدَه. */

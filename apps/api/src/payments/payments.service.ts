@@ -5,6 +5,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { round2, formatMoney } from '../common/money/rounding';
 import { money } from '../common/money/text';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
 import { dayStartOf } from '../common/wall-clock.util';
 import {
   allocatedByDocument,
@@ -177,9 +178,26 @@ export class PaymentsService {
    * على فاتورة واحدة تتسلسلان، والثانية ترى المتبقي بعد الأولى فتُرفض مسمّاةً
    * بدل أن تتجاوزه.
    */
-  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto) {
+  create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
+    // ⚖️ الإرسالُ المكرّر لا يُنشئ سندين (توجيه ٢٧٦ · ق-١٦٠٩/ب): المفتاحُ نفسُه يعيد السندَ نفسَه — `onceForKey`.
+    return onceForKey(idempotencyKey, () => this.replayByKey(companyId, idempotencyKey!, dto), () => this.createOnce(companyId, allowedBranchIds, dto, idempotencyKey));
+  }
+
+  /** السندُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به (طرفاً أو مبلغاً). */
+  private replayByKey(companyId: string, key: string, dto: CreatePaymentDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.payment.findFirst({ where: { clientRequestId: key }, include: PAYMENT_INCLUDE });
+      if (!existing) return null;
+      if (existing.customerId !== dto.customerId || round2(Number(existing.amount)) !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      return withAllocatedTotals(existing);
+    });
+  }
+
+  private createOnce(companyId: string, allowedBranchIds: string[] | 'all', dto: CreatePaymentDto, idempotencyKey?: string) {
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // طلبٌ موازٍ بالمفتاح نفسِه سبق فكتب — لا يُكتب ثانٍ، ويُقرأ ما كُتب (`onceForKey`).
+        if (idempotencyKey && (await tx.payment.findFirst({ where: { clientRequestId: idempotencyKey }, select: { id: true } }))) throw new IdempotentReplay();
         // بلا عملةٍ صريحة ⟵ عملةُ أساس المنشأة لا الريال (`ق-١٣٦٨`).
         const { currency, exchangeRate } = await resolveCurrencyWithin(tx, companyId, dto);
         const customer = await tx.customer.findUnique({ where: { id: dto.customerId }, select: { id: true, name: true } });
@@ -247,6 +265,7 @@ export class PaymentsService {
             currency,
             exchangeRate,
             baseAmount: toBaseAmount(amount, exchangeRate),
+            clientRequestId: idempotencyKey ?? null,
             allocations: { create: allocations.map((a) => ({ companyId, invoiceId: a.invoiceId, amount: a.amount })) },
           } as unknown as Prisma.PaymentUncheckedCreateInput,
         });

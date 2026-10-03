@@ -3,6 +3,7 @@ import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import type { Purchase } from '../../api/purchases';
 import { createSupplierPayment, listOpenPurchases, type OpenPurchase, type SupplierPaymentInputMethod } from '../../api/supplierPayments';
+import { newRequestKey } from '../../api/idempotency';
 import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 
@@ -29,6 +30,8 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   const [alloc, setAlloc] = useState<Record<string, string>>({ [purchase.id]: String(round2(num0(purchase.remaining))) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ⚖️ مفتاحُ هذه النافذة (توجيه ٢٧٦ · ق-١٦٠٩/ب) — مرآةُ سند القبض.
+  const [requestKey] = useState(newRequestKey);
 
   useEffect(() => {
     listBranches().then(setBranches);
@@ -83,7 +86,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
         allocations: Object.entries(alloc)
           .map(([purchaseId, v]) => ({ purchaseId, amount: parseFloat(v) || 0 }))
           .filter((a) => a.amount > 0),
-      });
+      }, requestKey);
       await onSaved();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;

@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
+import { IdempotencyKey } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -261,7 +262,7 @@ export class ContractsController {
 
   @Post(':id/payments')
   @RequiresAction('record')
-  recordPayment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordPaymentDto) {
-    return this.contractsService.recordPayment(tenant.companyId, tenant.allowedBranchIds, id, dto);
+  recordPayment(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordPaymentDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.contractsService.recordPayment(tenant.companyId, tenant.allowedBranchIds, id, dto, idempotencyKey);
   }
 }

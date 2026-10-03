@@ -1,6 +1,7 @@
 import { today } from '../lib/format';
 import type { MoneyText } from '../lib/money';
 import { apiClient } from './client';
+import { withRequestKey } from './idempotency';
 import type { SupplierPaymentInputMethod, SupplierPaymentMethod } from '@mad-app/shared/api/enums';
 import type { CreateSupplierPaymentDto, SupplierAllocationDto } from '@mad-app/shared/api/requests';
 
@@ -68,7 +69,9 @@ export const listSupplierPayments = (supplierId?: string) =>
   apiClient.get<SupplierPayment[]>('/supplier-payments', { params: supplierId ? { supplierId } : {} }).then((r) => r.data);
 export const listOpenPurchases = (supplierId: string) =>
   apiClient.get<OpenPurchase[]>(`/supplier-payments/open-purchases/${supplierId}`).then((r) => r.data);
-export const createSupplierPayment = (dto: SupplierPaymentInput) => apiClient.post<SupplierPayment>('/supplier-payments', dto).then((r) => r.data);
+/** و`requestKey` مفتاحُ النافذة الواحدة — يعيد السندَ نفسَه إن أُعيد الطلب (توجيه ٢٧٦ · ق-١٦٠٩/ب). */
+export const createSupplierPayment = (dto: SupplierPaymentInput, requestKey?: string) =>
+  apiClient.post<SupplierPayment>('/supplier-payments', dto, withRequestKey(requestKey)).then((r) => r.data);
 export const allocateSupplierPayment = (id: string, allocations: SupplierAllocationInput[]) =>
   apiClient.post<SupplierPayment>(`/supplier-payments/${id}/allocate`, { allocations }).then((r) => r.data);
 /** التصحيحُ الوحيد: سندٌ عاكس — لا حذفَ ولا تعديلَ لمرحَّل. ويومُه يومُ التاجر (`ق-٧٣٦`). */

@@ -3,6 +3,7 @@ import { ApiCreatedResponse, ApiExtraModels, ApiOkResponse, getSchemaPath } from
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
+import { IdempotencyKey } from '../common/idempotency/idempotency';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
@@ -109,8 +110,8 @@ export class PosController {
   @Post('sales')
   @RequiresAction('record')
   @ApiCreatedResponse({ type: PosSaleResponse })
-  createSale(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosSaleDto) {
-    return this.posService.createSale(tenant, dto);
+  createSale(@CurrentTenant() tenant: TenantContext, @Body() dto: CreatePosSaleDto, @IdempotencyKey() idempotencyKey: string | undefined) {
+    return this.posService.createSale(tenant, dto, idempotencyKey);
   }
 
   // ───────── محاولةُ دفع البطاقة (`ق-١٤٠١` · `ق-١٣٩٧` … `ق-١٣٩٩`) ─────────

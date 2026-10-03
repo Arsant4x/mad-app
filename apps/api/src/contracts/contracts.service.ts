@@ -4,6 +4,7 @@ import { assertBranchAllowed } from '../branches/branch-scope.util';
 import { documentYear } from '../common/document-year.util';
 import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequence.util';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
+import { IdempotentReplay, onceForKey } from '../common/idempotency/idempotency';
 import { companyBaseCurrency, resolveCurrencyWithin, resolveFollowingCurrency, toBaseAmount } from '../common/currency/base-amount.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import {
@@ -616,10 +617,36 @@ export class ContractsService {
    * 🔴 **لكنّ فروعَ الفاعل تُقاس** (توجيه ٢٧٥ · ق-١٥٧٨/ب — قِيس `201`): الصندوقُ صفٌّ يحمل فرعاً، والقبضُ فيه كتابةٌ في رصيده؛
    * فموظّفٌ مقيَّدٌ لا يقبض في صندوق فرعٍ لا يملكه (`403`)، وصندوقُ المنشأة كلِّها (بلا فرع) لكلِّ فاعل.
    */
-  recordPayment(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto) {
+  recordPayment(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto, idempotencyKey?: string) {
+    // ⚖️ الإرسالُ المكرّر لا يُنشئ قبضين (توجيه ٢٧٦ · ق-١٦٠٩/ب): المفتاحُ نفسُه يعيد القبضَ نفسَه — `onceForKey`.
+    return onceForKey(
+      idempotencyKey,
+      () => this.rentPaymentByKey(companyId, contractId, idempotencyKey!, dto),
+      () => this.recordPaymentOnce(companyId, allowedBranchIds, contractId, dto, idempotencyKey),
+    );
+  }
+
+  /**
+   * القبضُ المكتوبُ بالمفتاح — أو `null`؛ ويُرفض `409` إن خالف الطلبُ ما كُتب به: عقداً، أو مجموعَ أجزائه (القبضُ الموزَّع أجزاءٌ
+   * يحمل المفتاحَ أوّلُها ويجمعها قيدٌ واحد).
+   */
+  private rentPaymentByKey(companyId: string, contractId: string, key: string, dto: RecordPaymentDto) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const existing = await tx.rentPayment.findFirst({ where: { clientRequestId: key }, include: { installment: true } });
+      if (!existing) return null;
+      const parts = existing.journalEntryId ? await tx.rentPayment.findMany({ where: { journalEntryId: existing.journalEntryId }, select: { amount: true } }) : [existing];
+      const total = round2(parts.reduce((s, p) => s + Number(p.amount), 0));
+      if (existing.contractId !== contractId || total !== round2(dto.amount)) throw new ConflictException(MSG.idempotency_key_reused);
+      return existing;
+    });
+  }
+
+  private recordPaymentOnce(companyId: string, allowedBranchIds: string[] | 'all', contractId: string, dto: RecordPaymentDto, idempotencyKey?: string) {
     // Retries on a journal-entry "no" collision from a concurrent payment.
     return retryOnUniqueConflict(() =>
       this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+        // قبضٌ موازٍ بالمفتاح نفسِه سبق فكتب — لا يُكتب ثانٍ، ويُقرأ ما كُتب (`onceForKey`).
+        if (idempotencyKey && (await tx.rentPayment.findFirst({ where: { clientRequestId: idempotencyKey }, select: { id: true } }))) throw new IdempotentReplay();
         const contract = await tx.contract.findUnique({ where: { id: contractId } });
         if (!contract) throw new NotFoundException(MSG.contract_not_found);
         // ⚖️ لا قبضَ على عقدٍ ملغى ولا على قسطٍ ملغى (`ق-١١٩٨`/⑥ — مراجعةٌ خارجية): الإلغاءُ سوّى
@@ -770,6 +797,8 @@ export class ContractsService {
               ...(owner
                 ? { commissionRate: ownerRate, baseOwnerVat: owner.ownerVat, baseCommission: owner.commission, baseCommissionTax: owner.commissionTax, baseOwnerShare: owner.ownerShare }
                 : {}),
+              // المفتاحُ على الجزء الأوّل وحدَه — فالقيدُ فريدٌ في المنشأة، والأجزاءُ يجمعها قيدُها.
+              clientRequestId: k === 0 ? (idempotencyKey ?? null) : null,
             } as unknown as Prisma.RentPaymentUncheckedCreateInput,
           });
           rows.push({ id: row.id, installmentId: part.installmentId, amount: part.amount });
