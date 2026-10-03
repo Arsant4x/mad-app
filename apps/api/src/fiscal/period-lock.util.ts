@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
+import { ensureFiscalYearFor } from './fiscal-calendar.util';
 
 /** The placeholder is substituted *before* HttpExceptionFilter picks a
  * language, so a month **name** would have to be baked in for one language and
@@ -18,14 +19,12 @@ function periodLabel(month: number, year: number): string {
  * so closing a period locks all of them at once rather than needing the same
  * check repeated in each service.
  *
- * **No fiscal years defined at all means no restriction.** That's deliberate
- * and matches the mockup: a company that has never set up a fiscal calendar
- * must keep working exactly as before, otherwise this feature would silently
- * break every existing installation the moment it shipped.
+ * ⚖️ **ولا يعمل القفلُ مفتوحاً** (توجيه ٢٧٥ · `ق-١٥٨٤`، بحكم صاحب المشروع). كان هنا «لا سنةَ معرَّفةً أصلاً ⟵ لا قيد»
+ * (موروثاً من النموذج كي لا تنكسر منشأةٌ بلا تقويم)، فكلُّ ترحيلٍ يمرّ حتى ينشئ التاجرُ سنةً بيده. واليوم تولد المنشأةُ بسنتها،
+ * وتاريخٌ بلا فترةٍ يُنشئ سنتَه قبل السؤال (`ensureFiscalYearFor`)، فكلُّ قيدٍ يقع في فترةٍ تُقفل.
  */
 export async function assertPeriodOpen(tx: Prisma.TransactionClient, date: Date): Promise<void> {
-  const anyPeriod = await tx.fiscalPeriod.findFirst({ select: { id: true } });
-  if (!anyPeriod) return;
+  await ensureFiscalYearFor(tx, date);
 
   /**
    * ⚠️ **`getUTC*` لا `getMonth`/`getFullYear`** — والفرق يفتح فترةً مقفلة.
@@ -51,9 +50,9 @@ export async function assertPeriodOpen(tx: Prisma.TransactionClient, date: Date)
   const year = date.getUTCFullYear();
   const period = await tx.fiscalPeriod.findFirst({ where: { month, year } });
 
-  // A calendar defined but with a gap where this date falls is a genuine
-  // configuration error, not something to wave through — the entry would
-  // otherwise sit outside every reporting period.
+  // Still no period: the computed year clashes with a hand-made year of a
+  // different span. A genuine configuration error, not something to wave
+  // through — the entry would otherwise sit outside every reporting period.
   if (!period) throw new ConflictException(MSG.fiscal_no_period_for_date);
 
   if (period.status === 'CLOSED') {

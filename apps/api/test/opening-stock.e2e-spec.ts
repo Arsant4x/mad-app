@@ -280,14 +280,16 @@ describe('الأرصدةُ الافتتاحية بالطبقات — إعلان�
     const suffix = Date.now();
     const wh = (await post('/warehouses', t).send({ name: `مستودع مقفل ${suffix}` }).expect(201)).body.id;
     const prod = (await post('/products', t).send({ unitCode: 'H87', expiryTracked: false, taxCategory: 'S', name: `صنف مقفل ${suffix}`, price: 5, cost: 2 }).expect(201)).body.id;
-    const year = await post('/fiscal-years', t).send({ name: 'سنة الافتتاح', start: '2026-01-01', end: '2026-12-31' }).expect(201);
-    const january = year.body.periods.find((p: { month: number }) => p.month === 1);
+    // سنةُ اليوم وُلدت مع المنشأة (`ق-١٥٨٤`) — تُقرأ ولا تُنشأ، ويُقفل يناير منها.
+    const y = new Date().getUTCFullYear();
+    const years = (await get('/fiscal-years', t).expect(200)).body as { start: string; periods: { id: string; month: number }[] }[];
+    const january = years.find((yr) => yr.start.slice(0, 10) === `${y}-01-01`)!.periods.find((p) => p.month === 1)!;
     await patch(`/fiscal-years/periods/${january.id}/close`, t).expect(200);
 
     // بلا تاريخٍ مُعلَن يُشتقّ تاريخُ الافتتاح من بداية السنة المالية — وهي مقفلة.
-    const blocked = await post('/inventory/opening', t).send({ lines: [{ productId: prod, warehouseId: wh, qty: 3, unitCost: 2, acquiredAt: '2025-12-15' }] }).expect(409);
+    const blocked = await post('/inventory/opening', t).send({ lines: [{ productId: prod, warehouseId: wh, qty: 3, unitCost: 2, acquiredAt: `${y - 1}-12-15` }] }).expect(409);
     expect(blocked.body.message).toContain('fiscal.period_closed');
-    expect(blocked.body.message).toContain('01/2026');
+    expect(blocked.body.message).toContain(`01/${y}`);
     const left = await tenantPrisma.runInTenantContext(cid, async (tx) => ({
       openings: await tx.stockOpening.count(),
       movements: await tx.stockMovement.count(),

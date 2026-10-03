@@ -140,10 +140,9 @@ describe('⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (e2e
 
   it('⑤ العكسُ يخضع لقفل الفترات على تاريخه هو — فترةٌ مقفلة ترفضه، وبعد فتحها يمرّ', async () => {
     const year = Number(today().slice(0, 4));
-    const fy = (await auth(http().post('/fiscal-years')).send({ name: `سنة العكس ${suffix}`, start: `${year}-01-01`, end: `${year}-12-31` }).expect(201)).body as {
-      id: string;
-      periods: { id: string; month: number; year: number }[];
-    };
+    // سنةُ اليوم وُلدت مع المنشأة (`ق-١٥٨٤`) — تُقرأ ولا تُنشأ.
+    const years = (await auth(http().get('/fiscal-years')).expect(200)).body as { start: string; periods: { id: string; month: number; year: number }[] }[];
+    const fy = years.find((y) => y.start.slice(0, 10) === `${year}-01-01`)!;
     const original = (await postEntry('قيدٌ في فترةٍ ستُقفل', 75).expect(201)).body as { id: string };
     const month = Number(today().slice(5, 7));
     const period = fy.periods.find((p) => p.month === month && p.year === year)!;

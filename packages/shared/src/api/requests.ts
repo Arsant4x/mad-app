@@ -1009,6 +1009,11 @@ export interface SetEnabledDto {
   enabled: boolean;
 }
 
+/** جسمُ طلب — `SetFiscalStartMonthDto` في الخادم. */
+export interface SetFiscalStartMonthDto {
+  month: number;
+}
+
 /** جسمُ طلب — `SetPrimaryActivityDto` في الخادم. */
 export interface SetPrimaryActivityDto {
   activityId?: string | null;

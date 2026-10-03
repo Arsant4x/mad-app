@@ -30,6 +30,8 @@ export type FiscalYearInput = CreateFiscalYearDto;
 export const getFiscalYears = () => apiClient.get<FiscalYear[]>('/fiscal-years').then((r) => r.data);
 export const createFiscalYear = (dto: FiscalYearInput) => apiClient.post<FiscalYear>('/fiscal-years', dto).then((r) => r.data);
 export const deleteFiscalYear = (id: string) => apiClient.delete(`/fiscal-years/${id}`).then(() => undefined);
+/** ⚖️ شهرُ بداية السنة المالية (`ق-١٥٨٤`) — لصاحب المنشأة قبل أوّل ترحيل، والخادمُ يردّ `409` بعده. */
+export const setFiscalStartMonth = (month: number) => apiClient.patch('/fiscal-years/start-month', { month }).then(() => undefined);
 
 export const closeFiscalPeriod = (id: string) => apiClient.patch<FiscalPeriod>(`/fiscal-years/periods/${id}/close`).then((r) => r.data);
 /** ⚖️ بسببٍ مكتوب (`ق-١٥٨٣`) — والخادمُ يرفض الفراغ. */

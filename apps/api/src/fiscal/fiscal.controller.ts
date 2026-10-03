@@ -1,3 +1,4 @@
+import { ApiNoContentResponse } from '@nestjs/swagger';
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
@@ -6,8 +7,10 @@ import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { OwnerOnly } from '../common/tenant/owner-only.decorator';
 import { CreateFiscalYearDto } from './dto/create-fiscal-year.dto';
 import { ReopenPeriodDto } from './dto/reopen-period.dto';
+import { SetFiscalStartMonthDto } from './dto/set-fiscal-start-month.dto';
 import { FiscalService } from './fiscal.service';
 
 @Controller('fiscal-years')
@@ -26,6 +29,18 @@ export class FiscalController {
   @RequiresAction('add')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateFiscalYearDto) {
     return this.fiscalService.create(tenant.companyId, dto);
+  }
+
+  /**
+   * ⚖️ **شهرُ بداية السنة المالية** (توجيه ٢٧٥ · `ق-١٥٨٤`): لصاحب المنشأة، قبل أوّل ترحيلٍ وحدَه (`409` بعده)، ويُعيد
+   * بناءَ التقويم من الشهر الجديد. ولا جسمَ للردّ: الصفحةُ تعيد قراءةَ السنوات.
+   */
+  @Patch('start-month')
+  @OwnerOnly()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse()
+  async setStartMonth(@CurrentTenant() tenant: TenantContext, @Body() dto: SetFiscalStartMonthDto): Promise<void> {
+    await this.fiscalService.setStartMonth(tenant.companyId, dto.month);
   }
 
   /** Separate close/reopen verbs rather than one toggle: the caller should

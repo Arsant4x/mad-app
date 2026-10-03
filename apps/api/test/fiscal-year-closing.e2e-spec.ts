@@ -69,15 +69,7 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     company = await registerIsolatedCompany(app, 'year-closing');
     token = company.token;
 
-    // الحركةُ أوّلاً — قبل أي فترةٍ تُقفل.
-    const [receivable, sales, admin, cash] = await Promise.all([accountByCode('1200'), accountByCode('4100'), accountByCode('5300'), accountByCode('1000')]);
-    await auth(http().post('/journal'))
-      .send({ date: '2024-03-01', memo: 'بيعٌ للسنة', lines: [{ accountId: receivable.id, debit: 1000, credit: 0 }, { accountId: sales.id, debit: 0, credit: 1000 }] })
-      .expect(201);
-    await auth(http().post('/journal'))
-      .send({ date: '2024-04-01', memo: 'مصروفٌ للسنة', lines: [{ accountId: admin.id, debit: 400, credit: 0 }, { accountId: cash.id, debit: 0, credit: 400 }] })
-      .expect(201);
-
+    // السنةُ قبل الحركة: منذ `ق-١٥٨٤` يُنشئ ترحيلٌ في 2024 سنتَه بنفسه، فتعريفُها بعده يتقاطع معها `409`.
     const year = (await auth(http().post('/fiscal-years')).send({ name: 'سنةُ الإقفال ٢٠٢٤', start: '2024-01-01', end: '2024-12-31' }).expect(201)).body as {
       id: string;
       periods: { id: string }[];
@@ -85,6 +77,15 @@ describe('إقفالُ السنة المالية بقيدٍ واحد (e2e)', () 
     yearId = year.id;
     periodIds = year.periods.map((p) => p.id);
     expect(periodIds).toHaveLength(12);
+
+    // ثم الحركةُ — قبل أي فترةٍ تُقفل.
+    const [receivable, sales, admin, cash] = await Promise.all([accountByCode('1200'), accountByCode('4100'), accountByCode('5300'), accountByCode('1000')]);
+    await auth(http().post('/journal'))
+      .send({ date: '2024-03-01', memo: 'بيعٌ للسنة', lines: [{ accountId: receivable.id, debit: 1000, credit: 0 }, { accountId: sales.id, debit: 0, credit: 1000 }] })
+      .expect(201);
+    await auth(http().post('/journal'))
+      .send({ date: '2024-04-01', memo: 'مصروفٌ للسنة', lines: [{ accountId: admin.id, debit: 400, credit: 0 }, { accountId: cash.id, debit: 0, credit: 400 }] })
+      .expect(201);
   });
 
   afterAll(async () => {

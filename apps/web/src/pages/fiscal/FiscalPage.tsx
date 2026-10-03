@@ -5,8 +5,10 @@ import {
   deleteFiscalYear,
   getFiscalYears,
   reopenFiscalPeriod,
+  setFiscalStartMonth,
   type FiscalYear,
 } from '../../api/fiscal';
+import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import i18n from '../../i18n';
 
@@ -23,6 +25,10 @@ export function FiscalPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [saving, setSaving] = useState(false);
+  // ⚖️ شهرُ البداية (`ق-١٥٨٤`): لصاحب المنشأة، ويُقبل قبل أوّل ترحيلٍ وحدَه.
+  const { user } = useAuth();
+  const isOwner = user?.actorType === 'COMPANY';
+  const [startMonth, setStartMonth] = useState<number | null>(null);
 
   const [pendingDelete, setPendingDelete] = useState<FiscalYear | null>(null);
   // ⚖️ إعادةُ فتح الفترة بسببٍ مكتوبٍ يُسجَّل (`ق-١٥٨٣`): يُسأل عنه قبل الفتح، والخادمُ يرفض الفراغ.
@@ -41,6 +47,18 @@ export function FiscalPage() {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
     if (Array.isArray(data?.message)) return data.message.join(' — ');
     return data?.message ?? fallback;
+  }
+
+  async function handleStartMonth() {
+    if (!startMonth) return;
+    setError(null);
+    try {
+      await setFiscalStartMonth(startMonth);
+      setStartMonth(null);
+      await reload();
+    } catch (e) {
+      setError(serverMessage(e, i18n.t('err_fiscal_year_save')));
+    }
   }
 
   async function handleCreate() {
@@ -115,6 +133,29 @@ export function FiscalPage() {
 
       {error && <p className="error-text">{error}</p>}
 
+      {isOwner && (
+        <div className="card">
+          <div className="card-title" style={{ marginBottom: 8 }}>
+            شهر بداية السنة المالية
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select data-testid="fiscal-start-month" value={startMonth ?? years[0]?.start.slice(5, 7).replace(/^0/, '') ?? '1'} onChange={(e) => setStartMonth(Number(e.target.value))}>
+              {AR_MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <button className="btn btn-ghost btn-sm" onClick={handleStartMonth} disabled={!startMonth}>
+              تغيير
+            </button>
+          </div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            السنة ميلادية افتراضاً وتتجدّد تلقائياً مع أول قيد في سنة جديدة. ويتغيّر شهر بدايتها قبل أول قيد مرحَّل فقط، فيُعاد بناء التقويم منه.
+          </p>
+        </div>
+      )}
+
       {showForm && (
         <div className="card">
           <div className="card-title" style={{ marginBottom: 14 }}>
@@ -143,7 +184,7 @@ export function FiscalPage() {
 
       {years.length === 0 && !showForm && (
         <div className="empty-state">
-          لا توجد سنة مالية معرَّفة — ولا يوجد أي قيد ممنوع حالياً. عرّف سنة مالية لتتمكن من إقفال الفترات.
+          لا توجد سنة مالية بعد، وتُنشأ تلقائياً مع أول قيد مرحَّل.
         </div>
       )}
 

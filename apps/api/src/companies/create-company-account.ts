@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { createDefaultChart } from '../accounts/default-chart';
 import { createCompanyDefaults } from './company-defaults';
+import { createBirthFiscalYear } from '../fiscal/fiscal-calendar.util';
 import { regionForNewCompany } from '../common/region/regions';
 import { formatMessage, MSG } from '../common/i18n/messages';
 
@@ -122,6 +123,8 @@ export async function createCompanyAccount(
     await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
     await createDefaultChart(tx, companyId);
     await createCompanyDefaults(tx, companyId);
+    // ⚖️ السنةُ المالية تولد مع المنشأة، ميلاديةً افتراضاً (توجيه ٢٧٥ · ق-١٥٨٤)، فلا يعمل القفلُ مفتوحاً من يومها الأوّل.
+    await createBirthFiscalYear(tx, companyId);
 
     return { companyId, identityId: created.id };
   }, {

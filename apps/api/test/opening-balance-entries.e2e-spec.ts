@@ -225,18 +225,28 @@ describe('Opening balances as posted journal entries (e2e)', () => {
   });
 
   it('dates opening entries at the fiscal-year start, and lets a closed period refuse them atomically', async () => {
-    const year = await request(app.getHttpServer())
-      .post('/fiscal-years')
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'سنة القيود الافتتاحية', start: '2026-01-01', end: '2026-12-31' })
-      .expect(201);
-    createdYearIds.push(year.body.id);
-    const january = year.body.periods.find((p: { month: number }) => p.month === 1);
+    // سنةُ اليوم: منذ `ق-١٥٨٤` يُنشئها أوّلُ ترحيلٍ على المنشأة المشتركة (ومنه قيودُ هذا الملف الافتتاحية)، فتُقرأ إن وُجدت ولا تُنشأ ثانيةً.
+    const thisYear = new Date().getUTCFullYear();
+    type Year = { id: string; start: string; periods: { id: string; month: number }[] };
+    const existing = ((await request(app.getHttpServer()).get('/fiscal-years').set('Authorization', `Bearer ${token}`).expect(200)).body as Year[]).find(
+      (y) => y.start.slice(0, 10) === `${thisYear}-01-01`,
+    );
+    const year: Year =
+      existing ??
+      (
+        await request(app.getHttpServer())
+          .post('/fiscal-years')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: 'سنة القيود الافتتاحية', start: `${thisYear}-01-01`, end: `${thisYear}-12-31` })
+          .expect(201)
+      ).body;
+    if (!existing) createdYearIds.push(year.id);
+    const january = year.periods.find((p) => p.month === 1)!;
 
     try {
       const account = await createAccount({ code: `OB-F-${suffix()}`, name: 'حساب مؤرَّخ', type: 'asset', openingBalance: 900 });
       const [entry] = entriesFor(await listJournal(account.code), account.id);
-      expect(entry.date.startsWith('2026-01-01')).toBe(true);
+      expect(entry.date.startsWith(`${thisYear}-01-01`)).toBe(true);
 
       await request(app.getHttpServer()).patch(`/fiscal-years/periods/${january.id}/close`).set('Authorization', `Bearer ${token}`).expect(200);
 

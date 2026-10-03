@@ -591,6 +591,7 @@ export const MSG = {
   fiscal_year_close_needs_closed_periods: 'fiscal.year_close_needs_closed_periods',
   fiscal_year_already_closed: 'fiscal.year_already_closed',
   fiscal_year_nothing_to_close: 'fiscal.year_nothing_to_close',
+  fiscal_start_month_after_posting: 'fiscal.start_month_after_posting',
   account_system_protected: 'account.system_protected',
   posting_accounts_missing: 'journal.posting_accounts_missing',
 
@@ -1839,6 +1840,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.fiscal_year_nothing_to_close]: {
     ar: 'لا حركة إيراد ولا مصروف حتى نهاية السنة — لا شيء يُقفل',
     en: 'No revenue or expense movement up to the year end — nothing to close',
+  },
+  [MSG.fiscal_start_month_after_posting]: {
+    ar: 'لا يتغيّر شهرُ بداية السنة المالية بعد أوّل قيدٍ مرحَّل، فالقيودُ قائمةٌ على فتراتها',
+    en: 'The fiscal year start month cannot change once an entry has been posted, as entries already sit in their periods',
   },
   [MSG.account_system_protected]: {
     ar: 'الحساب {code} حساب نظامي — لا يُحذف ولا يُعدَّل رمزه',
