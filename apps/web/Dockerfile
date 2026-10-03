@@ -18,7 +18,10 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build --workspace=apps/web
 
-FROM nginx:1.27-alpine
+# ⚖️ `ق-١٥٨٦` (بحكم صاحب المشروع): الصورةُ الأساس محدَّثة والحاويةُ بغير الجذر. كانت `nginx:1.27-alpine` على Alpine 3.21.3 وفيها
+# ثغرتان حرجتان في OpenSSL (`libcrypto3`/`libssl3` 3.3.3) وتعمل بالجذر. والنسخةُ «غيرُ المتميّزة» الرسمية من nginx تعمل بمستخدمٍ
+# غيرِ الجذر (101) فتصغي على 8080 لا 80، وهي على الفرع المستقرّ 1.30 وAlpine 3.24، مثبَّتةٌ بالبصمة كسائر صورنا.
+FROM nginxinc/nginx-unprivileged:1.30.5-alpine3.24@sha256:ed04ec1ff34502c339ee5c3ae3f855442398edc1d05591e2b98981dcbbd20b1e
 COPY docker/web-nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 8080

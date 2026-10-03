@@ -576,7 +576,7 @@ jobs:
 
       - name: تشغيل الصورة وانتظار جاهزيتها
         run: |
-          docker run -d --name mad-web -p 8080:80 mad-web:ci
+          docker run -d --name mad-web -p 8080:8080 mad-web:ci
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null http://localhost:8080/; then echo "nginx جاهز بعد ${i}s"; exit 0; fi
             sleep 1
