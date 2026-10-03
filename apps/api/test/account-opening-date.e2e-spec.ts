@@ -178,4 +178,73 @@ describe('تاريخُ الافتتاح المعلَن (e2e)', () => {
     // القيدُ بتاريخ الفتح المعلَن، فالعرضُ يقرؤه مشتقّاً ويطابقه.
     expect(row.openingDate?.slice(0, 10)).toBe('2026-02-01');
   }, 20000);
+
+  /**
+   * ⚖️ **إعادةُ إعلان التاريخ لا تمسّ قيداً افتتاحيّاً في فترةٍ مقفلة** (توجيه ٢٧٥ · القاعدةُ الدائمة ٣٧ · `ق-١٥٧٩`).
+   *
+   * كانت تحذف القيدَ القديم بلا فحصِ فترته ثم تُرحّل الجديدَ في فترته المفتوحة، فيتغيّر رصيدُ الفترة المقفلة صامتاً،
+   * وهو ما ترفضه بوّابةُ القفل في كلِّ مسارٍ غيره (وحذفُ الحساب نفسُه يفحصها). **والرفضُ المتوقَّع هو رفضُ القفل بعينه**:
+   * يُقرأ نصُّه من قيدٍ يدويٍّ في الشهر المقفل نفسِه، فلا يمرّ التوكيدُ برفضٍ لسببٍ آخر. والتاريخُ الجديد في شهرٍ مفتوح،
+   * فلا يأتي الرفضُ من الترحيل الجديد.
+   */
+  async function closePeriod(year: number, month: number): Promise<string> {
+    const body = (await auth(http().get('/fiscal-years')).expect(200)).body as
+      | { periods: { id: string; year: number; month: number }[] }[]
+      | { items: { periods: { id: string; year: number; month: number }[] }[] };
+    const years = Array.isArray(body) ? body : body.items;
+    const period = years.flatMap((y) => y.periods).find((p) => p.year === year && p.month === month);
+    if (!period) throw new Error(`لا فترةَ ${year}-${month} في تقويم المنشأة، وقد رُحّل فيها قيدٌ افتتاحيّ`);
+    await auth(http().patch(`/fiscal-years/periods/${period.id}/close`)).expect(200);
+    return period.id;
+  }
+
+  async function closedPeriodRefusal(date: string): Promise<string> {
+    const a = await makeAccount(`طرفُ رفضٍ أ ${suffix}-${date}`);
+    const b = await makeAccount(`طرفُ رفضٍ ب ${suffix}-${date}`);
+    const refused = await auth(http().post('/journal'))
+      .send({ date, memo: `قيدٌ في فترةٍ مقفلة ${suffix}`, lines: [{ accountId: a.id, debit: 1, credit: 0 }, { accountId: b.id, debit: 0, credit: 1 }] })
+      .expect(409);
+    return refused.body.message as string;
+  }
+
+  const reopen = (periodId: string) =>
+    auth(http().patch(`/fiscal-years/periods/${periodId}/reopen`)).send({ reason: 'إعادةُ فتحٍ بعد اختبار القفل' }).expect(200);
+
+  it('🔴 حسابٌ ساكن قيدُه الافتتاحيّ في شهرٍ مقفل: نقلُ تاريخه يُرفض برفض القفل، والقيدُ باقٍ بتاريخه', async () => {
+    const account = await makeAccount(`حسابٌ في شهرٍ مقفل ${suffix}`, { openingBalance: 400, openingDate: '2026-07-15' });
+    const periodId = await closePeriod(2026, 7);
+    try {
+      const lockMessage = await closedPeriodRefusal('2026-07-20');
+
+      const refused = await auth(http().patch(`/accounts/${account.id}`)).send({ openingDate: '2026-08-20' }).expect(409);
+      expect(refused.body.message).toBe(lockMessage);
+
+      const row = await rowOf(account.id);
+      expect(row.openingDate?.slice(0, 10)).toBe('2026-07-15');
+      expect(Number(row.openingBalance)).toBe(400);
+    } finally {
+      await reopen(periodId);
+    }
+  });
+
+  it('🔴 وبنكٌ ساكن تاريخُ فتحه في شهرٍ مقفل: المسارُ الثاني إلى الدالّة نفسِها يُرفض كذلك', async () => {
+    const bank = (
+      await auth(http().post('/banks'))
+        .send({ name: `بنكٌ في شهرٍ مقفل ${suffix}`, kind: 'BANK_ACCOUNT', openingBalance: 650, openingDate: '2026-09-01' })
+        .expect(201)
+    ).body as { id: string; accountId: string };
+    banks.push(bank.id);
+    const periodId = await closePeriod(2026, 9);
+    try {
+      const lockMessage = await closedPeriodRefusal('2026-09-10');
+
+      const refused = await auth(http().patch(`/banks/${bank.id}`)).send({ openingDate: '2026-10-05' }).expect(409);
+      expect(refused.body.message).toBe(lockMessage);
+
+      const row = await rowOf(bank.accountId);
+      expect(row.openingDate?.slice(0, 10)).toBe('2026-09-01');
+    } finally {
+      await reopen(periodId);
+    }
+  });
 });

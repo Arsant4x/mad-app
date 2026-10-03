@@ -3,6 +3,7 @@ import { Prisma } from '@mad-app/db';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { round2 } from '../common/money/rounding';
 import { dayStartOf } from '../common/wall-clock.util';
+import { assertPeriodOpen } from '../fiscal/period-lock.util';
 import { createJournalEntry, DEBIT_NORMAL_TYPES, PostingLine, reverseAndDeleteJournalEntry } from './journal-posting.util';
 
 /**
@@ -210,8 +211,11 @@ export async function redeclareOpeningDate(
 
   const openings = await tx.journalEntry.findMany({
     where: { companyId: input.companyId, openingForAccountId: input.account.id },
-    select: { id: true },
+    select: { id: true, date: true },
   });
+  // ⚖️ القاعدةُ الدائمة ٣٧ (توجيه ٢٧٥): القيدُ الافتتاحيُّ القديم في فترةٍ مقفلة تاريخٌ لا يُمسّ؛ كان يُحذف بلا فحصٍ
+  //    فيتغيّر رصيدُ الفترة المقفلة صامتاً. والفحصُ كلُّه قبل أيّ حذف، كما يفعل حذفُ الحساب (`accounts.service.ts`).
+  for (const entry of openings) await assertPeriodOpen(tx, entry.date);
   for (const entry of openings) await reverseAndDeleteJournalEntry(tx, entry.id);
 
   const amount = round2(input.openingBalance);
