@@ -51,6 +51,8 @@ export interface RentPayment {
   bankId: string | null;
   notes: string | null;
   journalEntryId: string | null;
+  /** ⚖️ خصمٌ من رصيد المستأجر في العقد الأصل لا قبضُ نقد (توجيه ٢٧٨ · ق-١٦٢٩) — فارغٌ لكلِّ قبض. */
+  creditFromContractId?: string | null;
 }
 
 export interface Contract {

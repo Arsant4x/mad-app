@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Prisma, RentAccrualKind } from '@mad-app/db';
 import { toBaseAmount } from '../common/currency/base-amount.util';
 import { round2 } from '../common/money/rounding';
-import { postDeferredToOtherIncomeEntry, postPartySettlementEntry, postRentAccrualEntry, postRentAccrualReversalEntry } from './auto-posting.util';
+import { postDeferredToOtherIncomeEntry, postPartySettlementEntry, postRentAccrualEntry, postRentAccrualReversalEntry, postTenantCreditTransferEntry } from './auto-posting.util';
 import {
   exemptNetOf,
   pendingTaxPoints,
@@ -77,8 +77,11 @@ const ACCRUAL_INSTALLMENT_SELECT = {
 
 type AccrualInstallment = Prisma.InstallmentGetPayload<{ select: typeof ACCRUAL_INSTALLMENT_SELECT }>;
 
-/** أنواعُ الصفوف الموجبة — ما «استُحقّ»؛ العكسُ والخصمُ يُنقصان الذمّةَ ولا يُعيدان نقطةً. */
-const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED', 'TENANT_CREDIT'];
+/**
+ * أنواعُ الصفوف الموجبة — ما «استُحقّ»؛ العكسُ والخصمُ يُنقصان الذمّةَ ولا يُعيدان نقطةً. ونقلُ الرصيد موجبٌ على القسط (سالبُه على
+ * الأصل بلا قسطٍ فلا يدخل حسابَ قسط): ضريبتُه تُحسب من ضريبة القسط فلا تُستحقّ ثانيةً عند حلوله (`ق-١٦٢٩`).
+ */
+const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED', 'TENANT_CREDIT', 'CREDIT_TRANSFER'];
 
 export function treatmentOf(contract: AccrualContract): RentTaxTreatment | null {
   return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.lessor, sharePercentOf(contract.exemptSharePercent));
@@ -99,6 +102,7 @@ const KIND_LABEL: Record<RentAccrualKind, string> = {
   REVERSAL: 'عكس',
   DISCOUNT: 'خصم عند القبض',
   TENANT_CREDIT: 'رصيدٌ للمستأجر — ما زاد على أقساط العقد كلِّها',
+  CREDIT_TRANSFER: 'خصمُ رصيد المستأجر من قسط التجديد',
 };
 
 export interface AccrualSweepResult {
@@ -319,6 +323,82 @@ export async function accrueForPaymentWithinTx(
     await writeAccrual(tx, companyId, contract, treatment, null, { date: payment.date, gross: excess, kind: 'TENANT_CREDIT', paymentId: payment.id });
   }
   return true;
+}
+
+/**
+ * ⚖️ **رصيدُ المستأجر في العقد الأصل** (`ق-١٦٢٤` · `ق-١٦٢٩`): ما زاد من قبضه على أقساط العقد كلِّها (`TENANT_CREDIT`) ناقصاً ما نُقل منه
+ * إلى تجديده (`CREDIT_TRANSFER` السالب) — بعملة العقد، من صفوف الاستحقاق نفسِها لا من عمودٍ ثانٍ يفترق عنها.
+ */
+export async function tenantCreditOfWithinTx(tx: Prisma.TransactionClient, contractId: string): Promise<number> {
+  const agg = await tx.rentAccrual.aggregate({ where: { contractId, kind: { in: ['TENANT_CREDIT', 'CREDIT_TRANSFER'] }, installmentId: null }, _sum: { amountGross: true } });
+  return round2(Number(agg._sum.amountGross ?? 0));
+}
+
+/**
+ * ⚖️ **نقلُ رصيد المستأجر إلى قسطٍ في التجديد** (توجيه ٢٧٨ · `ق-١٦٢٩`): صفّان بتاريخٍ واحد — سالبٌ على العقد الأصل بلا قسط، وموجبٌ على
+ * القسط — يتعادلان في الإقرار (الضريبةُ استُحقّت يومَ القبض، م٢٠)، والموجبُ يحمل ضريبتَه فتُطرح من ضريبة القسط عند حلوله؛ وقيدٌ واحد
+ * ينقل الصافيَ من `2450` إلى إيراد القسط (`postTenantCreditTransferEntry`)، وتراكمُ القسط يتبعه كما يتبع قيدَ الاستحقاق.
+ * والمعاملةُ الضريبية واحدةٌ في العقدين بالشرط (المستدعي يتحقّق)، فتُقسم الضريبةُ بها.
+ */
+export async function transferTenantCreditWithinTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  source: AccrualContract,
+  target: AccrualContract,
+  treatment: RentTaxTreatment,
+  installment: { id: string; serviceStart: Date | null; serviceEnd: Date | null },
+  transfer: { date: Date; gross: number; paymentId: string },
+): Promise<void> {
+  const amounts = splitGrossAmount(transfer.gross, treatment);
+  const rate = Number(target.exchangeRate);
+  const base = { gross: toBaseAmount(amounts.gross, rate), net: 0, tax: toBaseAmount(amounts.tax, rate) };
+  base.net = round2(base.gross - base.tax);
+  const exempt = exemptNetOf(base.net, treatment);
+
+  const posting = await postTenantCreditTransferEntry(tx, companyId, {
+    customerId: target.customerId,
+    unitId: target.unitId,
+    contractNo: target.no,
+    sourceContractNo: source.no,
+    tenant: target.tenant,
+    date: transfer.date,
+    service: installment.serviceStart && installment.serviceEnd ? { start: installment.serviceStart, end: installment.serviceEnd } : null,
+    baseNet: base.net,
+  });
+
+  const row = (contractId: string, installmentId: string | null, sign: 1 | -1) =>
+    ({
+      contractId,
+      installmentId,
+      paymentId: transfer.paymentId,
+      kind: 'CREDIT_TRANSFER',
+      date: transfer.date,
+      classification: treatment.classification,
+      taxable: treatment.taxable,
+      managed: treatment.managed,
+      amountGross: sign * amounts.gross,
+      amountNet: sign * amounts.net,
+      amountTax: sign * amounts.tax,
+      currency: target.currency,
+      exchangeRate: rate,
+      baseGross: sign * base.gross,
+      baseNet: sign * base.net,
+      baseTax: sign * base.tax,
+      baseExemptNet: exempt === null ? null : sign * exempt,
+      journalEntryId: posting.entry?.id ?? null,
+    }) as unknown as Prisma.RentAccrualUncheckedCreateInput;
+  await tx.rentAccrual.create({ data: row(source.id, null, -1) });
+  await tx.rentAccrual.create({ data: row(target.id, installment.id, 1) });
+
+  await tx.installment.update({
+    where: { id: installment.id },
+    data: {
+      baseAccruedGross: { increment: base.gross },
+      baseAccruedNet: { increment: base.net },
+      baseAccruedTax: { increment: base.tax },
+      baseRecognized: { increment: posting.earned },
+    },
+  });
 }
 
 /**

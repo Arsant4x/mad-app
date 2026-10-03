@@ -39,6 +39,7 @@ import { CreateContractDto } from './dto/create-contract.dto';
 import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
 import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
 import { raiseDueFeesWithinTx } from './contract-fees.util';
+import { applyTenantCreditOnRenewalWithinTx } from './tenant-credit.util';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, HandoverItemDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
@@ -935,11 +936,12 @@ export class ContractsService {
             ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount)
             : [{ installmentId: dto.installmentId ?? null, amount: dto.amount }];
         // والخصمُ على قسط الجزء الأوّل؛ فإن لم يقع الجزءُ الأوّلُ على قسطٍ فالدفعةُ كلُّها رصيدٌ، ولا خصمَ على رصيد.
-        if (accrualPath && treatment && discount > 0 && parts[0]?.installmentId === null) {
+        if ((accrualPath || ownerPath) && treatment && discount > 0 && parts[0]?.installmentId === null) {
           throw new BadRequestException(MSG.rent_discount_on_tenant_credit);
         }
-        // ⚖️ وللمالك المؤجّر: لكلِّ جزءٍ قسمتُه من صافيه بعملة الدفتر — حصّةُ المالك والعمولةُ وضريبتُها (السؤال ٥٧٧).
-        const ownerTotals = { cash: 0, share: 0, commission: 0, tax: 0 };
+        // ⚖️ وللمالك المؤجّر: لكلِّ جزءٍ على قسطٍ قسمتُه من صافيه بعملة الدفتر — حصّةُ المالك والعمولةُ وضريبتُها (السؤال ٥٧٧)؛ **وما زاد على
+        //    الأقساط كلِّها رصيدٌ للمستأجر في `2450` لا حصّةً ولا عمولة حتى يقابله قسط** (توجيه ٢٧٨ · `ق-١٦٣٠`، بحكم صاحب المشروع).
+        const ownerTotals = { cash: 0, share: 0, commission: 0, tax: 0, credit: 0 };
         // الخصمُ على الجزء الأوّل — وهو القسطُ المقصود، أو أوّلُ قسطٍ بقي له شيء.
         if (round2(parts[0].amount - discount) <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
@@ -955,7 +957,11 @@ export class ContractsService {
           const baseNet = last ? round2(baseTotal.net - baseSoFar.net) : toBaseAmount(partNet, payRate);
           baseSoFar.amount = round2(baseSoFar.amount + baseAmount);
           baseSoFar.net = round2(baseSoFar.net + baseNet);
-          const owner = ownerPath && treatment ? ownerCollectionSplit(baseNet, treatment, ownerRate) : null;
+          const owner = ownerPath && treatment && part.installmentId !== null ? ownerCollectionSplit(baseNet, treatment, ownerRate) : null;
+          if (ownerPath && part.installmentId === null) {
+            ownerTotals.cash = round2(ownerTotals.cash + baseNet);
+            ownerTotals.credit = round2(ownerTotals.credit + baseNet);
+          }
           if (owner) {
             if (owner.ownerShare < 0) throw new BadRequestException(MSG.contract_owner_commission_exceeds_collection);
             ownerTotals.cash = round2(ownerTotals.cash + baseNet);
@@ -1006,6 +1012,7 @@ export class ContractsService {
             baseOwnerShare: ownerTotals.share,
             baseCommission: ownerTotals.commission,
             baseCommissionTax: ownerTotals.tax,
+            baseTenantCredit: ownerTotals.credit,
             cashAccountId: bank?.accountId ?? null,
           });
           journalEntry = ownerEntry;
@@ -1258,6 +1265,10 @@ export class ContractsService {
             data: { contractId: created.id },
           });
         }
+
+        // ⚖️ رصيدُ المستأجر في الأصل يُخصم آلياً من أوّل قسطٍ في التجديد (توجيه ٢٧٨ · `ق-١٦٢٩`) — قبل استحقاق ما حلّ، فالقسطُ يقرأ ما
+        //    خُصم منه نقطةً مضت ضريبتُها ولا يُستحقّ عليها ثانيةً.
+        await applyTenantCreditOnRenewalWithinTx(tx, companyId, source, created, new Date());
 
         // كسابقتها في `create`: ما حلّ من جدول التجديد يُستحقّ في اللحظة نفسِها.
         await accrueDueWithinTx(tx, companyId, new Date(), created.id);

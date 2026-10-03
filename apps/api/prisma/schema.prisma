@@ -3560,6 +3560,9 @@ enum RentAccrualKind {
   /// ⚖️ ما زاد على أقساط العقد كلِّها (توجيه ٢٧٧ · `ق-١٦٢٤`، بحكم صاحب المشروع: «ليس إيراداً، بل رصيدٌ للمستأجر يُخصم من القادم أو
   /// يُردّ إليه، كما في `ق-١٢٦٤`»): مقدَّمٌ بقدره بتاريخه، أصلُه في `2450` لا إيراد، وضريبتُه بفئة العقد يومَ القبض (م٢٠).
   TENANT_CREDIT
+  /// ⚖️ **نقلُ رصيد المستأجر إلى أوّل قسطٍ في التجديد** (توجيه ٢٧٨ · `ق-١٦٢٩`): صفّان بتاريخٍ واحد، سالبٌ على العقد الأصل بلا قسط وموجبٌ
+  /// على القسط، فيتعادلان في الإقرار (الضريبةُ استُحقّت يومَ القبض، م٢٠)، ويحمل الموجبُ ضريبتَه كي لا تُستحقّ ثانيةً عند حلول القسط.
+  CREDIT_TRANSFER
 }
 
 enum PaymentMethod {
@@ -4381,6 +4384,9 @@ model Contract {
   @@map("contracts")
   rentAccrual_contractId_tenant RentAccrual[] @relation("RentAccrual_contractId_tenant")
   rentPayment_contractId_tenant RentPayment[] @relation("RentPayment_contractId_tenant")
+  /// ⚖️ ما نُقل من رصيد مستأجر هذا العقد إلى أقساط تجديده (توجيه ٢٧٨ · `ق-١٦٢٩`).
+  creditTransfersOut RentPayment[] @relation("RentPaymentCreditFrom")
+  rentPayment_creditFromContractId_tenant RentPayment[] @relation("RentPayment_creditFromContractId_tenant")
   installment_contractId_tenant Installment[] @relation("Installment_contractId_tenant")
   contractSettlementLine_contractId_tenant ContractSettlementLine[] @relation("ContractSettlementLine_contractId_tenant")
   contractAttachment_contractId_tenant ContractAttachment[] @relation("ContractAttachment_contractId_tenant")
@@ -5502,6 +5508,13 @@ model RentPayment {
   /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
   installmentTenant Installment? @relation("RentPayment_installmentId_tenant", fields: [companyId, installmentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
 
+  /// ⚖️ **خصمٌ من رصيد المستأجر لا قبضُ نقد** (توجيه ٢٧٨ · `ق-١٦٢٩`): العقدُ الأصل الذي نُقل منه رصيدُ المستأجر إلى أوّل قسطٍ في تجديده؛
+  /// فارغٌ لكلِّ قبضٍ نقديّ. والصفُّ بلا بنكٍ ولا حركةِ صندوق، وطريقتُه طريقةُ القبض الذي أنشأ الرصيد.
+  creditFromContractId String?
+  creditFromContract   Contract? @relation("RentPaymentCreditFrom", fields: [creditFromContractId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  creditFromContractTenant Contract? @relation("RentPayment_creditFromContractId_tenant", fields: [companyId, creditFromContractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   date       DateTime      @db.Date
   amount     Decimal       @db.Decimal(18, 2)
   discount   Decimal       @default(0) @db.Decimal(18, 2)
@@ -5555,6 +5568,8 @@ model RentPayment {
   /// deleted installment row — without an index each firing scans this whole
   /// table (measured: 60,000 scans for 60,000 deleted installments).
   @@index([installmentId])
+  /// للمفتاح: `creditFromContractId` بـ`SET NULL`، فلا يمسح الحذفُ الجدولَ كلَّه لكلِّ عقد.
+  @@index([creditFromContractId])
   @@map("rent_payments")
   rentAccrual_paymentId_tenant RentAccrual[] @relation("RentAccrual_paymentId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).

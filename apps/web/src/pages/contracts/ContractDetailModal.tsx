@@ -902,7 +902,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
               <tr key={p.id}>
                 <td className="num">{dfmt(p.date)}</td>
                 <td className="num">{fmt(p.netAmount)}</td>
-                <td>{RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
+                {/* ⚖️ الخصمُ من رصيد المستأجر ليس قبضاً اليوم (توجيه ٢٧٨ · ق-١٦٢٩) — فلا يُعرض «نقداً». */}
+                <td>{p.creditFromContractId ? 'خصمٌ من رصيد المستأجر' : (RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method)}</td>
               </tr>
             ))}
           </tbody>

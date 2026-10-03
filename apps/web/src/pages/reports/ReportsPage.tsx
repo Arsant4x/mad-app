@@ -321,6 +321,11 @@ export function ReportsPage() {
                   <td>التغير في ضريبة القيمة المضافة المستحقة</td>
                   <td className="num">{fmt(cash.outputVatChange)}</td>
                 </tr>
+                {/* ⚖️ مقدَّمُ العملاء ورصيدُ المستأجر (Δ2450) نقدٌ في اليد لم يمرّ بالربح (توجيه ٢٧٨، القاعدة ٣٧). */}
+                <tr>
+                  <td>التغير في مقدَّم العملاء ورصيد المستأجرين</td>
+                  <td className="num">{fmt(cash.customerPrepaymentsChange)}</td>
+                </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
                   <td>صافي التدفق من الأنشطة التشغيلية</td>
                   <td className="num">{fmt(cash.operatingCashFlow)}</td>

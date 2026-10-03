@@ -42,6 +42,8 @@ export interface CashFlow {
   deferredRevenueChange: MoneyText;
   /** Δ2200 — ضريبةٌ مستحقّة لم تُسدَّد. */
   outputVatChange: MoneyText;
+  /** Δ2450 — مقدَّمُ العملاء ورصيدُ المستأجر (توجيه ٢٧٨: كان خارج المعادلة فينقص التشغيليُّ بصافيه). */
+  customerPrepaymentsChange: MoneyText;
   operatingCashFlow: MoneyText;
   fixedAssetChange: MoneyText;
   netCashChange: MoneyText;
