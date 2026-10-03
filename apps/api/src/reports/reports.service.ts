@@ -9,9 +9,9 @@ import { dayEndOf, dayStartOf } from '../common/wall-clock.util';
 import { writeOffReason } from '../common/writeoff-reasons';
 import { LINE_ORDER } from '../common/document-lines.util';
 import { deadlineView } from '../invoices/note-deadline.util';
-import { DEFERRED_REVENUE_ACCOUNT_CODE } from '../journal/deferred-revenue-account.util';
 import { DEBIT_NORMAL_TYPES } from '../journal/journal-posting.util';
-import { CUSTOMER_PREPAYMENTS_CODE } from '../journal/prepayment-account.util';
+import { OPENING_EQUITY_CODE } from '../journal/opening-balance.util';
+import { CASH_CODE, cashFlowStatement } from './cash-flow.util';
 import { AgingDto, LedgerDto, ReportRangeDto, StatementDto, TrialBalanceDto } from './dto/report-range.dto';
 import { readLedger, sideOfAccountType } from './ledger.util';
 import { customerExposure, RentReceivableRow } from './receivables-exposure.util';
@@ -34,12 +34,7 @@ const CASH_FLOW_ACCOUNTS = [
   { code: '2200', name: 'ضريبة القيمة المضافة المستحقة' },
 ];
 
-/**
- * الإيرادُ المؤجَّل — التزامٌ ينشأ عند الاستحقاق ويُقبض قبل أن يُعترَف به: **كان ناقصاً من التدفّق
- * منذ بُني** (`ق-٩٢٣` — ثقبٌ قائم لا أثرٌ للاستحقاق). يُنشأ عند أوّل حاجة (`ق-٤٧١`) فغيابُه ليس
- * نقصاً في الدليل يُعلَن، بل صفرٌ صادق. ورمزُه من ملفّه وحده (`ق-٤٦٩`).
- */
-const DEFERRED_REVENUE_CASH_FLOW_CODE = DEFERRED_REVENUE_ACCOUNT_CODE;
+// الإيرادُ المؤجَّل ومقدَّمُ العملاء وبقيّةُ الحسابات تُقرأ في `cash-flow.util.ts` من كلِّ حسابٍ لا من قائمةٍ مسرودة (توجيه ٢٧٨).
 
 /**
  * 🔴 **القوائمُ المالية للمنشأة لمن يرى فروعَها كلَّها** (`ق-١٤٥٢` — بنصّ المالك: «**المركزُ المالي … ثغرةُ صلاحية**»).
@@ -629,50 +624,60 @@ export class ReportsService {
     });
   }
 
+  /**
+   * قائمةُ التدفّقات النقدية للمنشأة (`cash-flow.util.ts`).
+   *
+   * **على مستوى المنشأة بحقّها**: النقدُ يُقاس من حسابات البنوك والصناديق والأدراج كلِّها لأن القائمةَ قائمةُ المنشأة
+   * الواحدة، ولا تُعطى إلا لمن يرى فروعَها كلَّها (`assertWholeCompanyReader` أوّلَ التابع، `ق-١٤٥٢`)؛ وحسابٌ نقديٌّ يُسقَط
+   * من القياس يكسر مطابقةَ الصافي بالنقد.
+   */
   cashFlow(companyId: string, allowedBranchIds: string[] | 'all', range: ReportRangeDto) {
     assertWholeCompanyReader(allowedBranchIds);
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const accounts = await tx.account.findMany({ orderBy: { code: 'asc' } });
-      const movements = await this.movementsByAccount(tx, range);
-
-      const revenue = accounts.filter((a) => a.type === 'revenue');
-      const expense = accounts.filter((a) => a.type === 'expense');
-      const totalRevenue = revenue.reduce((s, a) => s + this.periodAmount(movements, a.id, 'credit'), 0);
-      const totalExpenses = expense.reduce((s, a) => s + this.periodAmount(movements, a.id, 'debit'), 0);
-      const netProfit = totalRevenue - totalExpenses;
+      // ⚖️ الأرصدةُ الافتتاحية ليست تدفّقاً (توجيه ٢٧٨، القاعدة ٣٧): كلُّ قيدٍ على `3900` يُستثنى — رصيدُ الحساب الافتتاحيّ
+      //    وافتتاحيُّ البنك والصندوق وافتتاحيُّ المخزون — وإلا قُرئ رصيدُ يوم الدخول نقداً دخل في الفترة.
+      const opening = accounts.find((a) => a.code === OPENING_EQUITY_CODE);
+      const movements = await this.movementsByAccount(tx, range, opening ? { lines: { none: { accountId: opening.id } } } : {});
+      // حساباتُ النقد: `1000` وكلُّ بنكٍ وصندوقٍ ودرجٍ بحسابه — يُقاس تغيّرُها مباشرةً ويُطابَق بمجموع الأقسام.
+      const banks = await tx.bank.findMany({ select: { accountId: true } });
+      const drawers = await tx.cashDrawer.findMany({ select: { accountId: true } });
+      const cashIds = new Set<string>([
+        ...accounts.filter((a) => a.code === CASH_CODE).map((a) => a.id),
+        ...banks.map((b) => b.accountId),
+        ...drawers.map((d) => d.accountId),
+      ]);
 
       const byCode = new Map(accounts.map((a) => [a.code, a]));
       const missing = CASH_FLOW_ACCOUNTS.filter((c) => !byCode.has(c.code)).map((c) => c.name);
-      const changeFor = (code: string) => {
-        const account = byCode.get(code);
-        if (!account) return 0;
-        const m = movements.get(account.id) ?? { debit: 0, credit: 0 };
-        return DEBIT_NORMAL_TYPES.has(account.type) ? m.debit - m.credit : m.credit - m.debit;
-      };
-
-      const receivablesChange = changeFor('1200');
-      const payablesChange = changeFor('2100');
-      const fixedAssetChange = changeFor('1400');
-      // الطريقةُ غيرُ المباشرة بالتزامَين (ق-٩٢٥/③): ما قُبض ولم يُعترَف به (`Δ2400`) وما استُحقّ من
-      // ضريبةٍ ولم يُسدَّد (`Δ2200`) نقدٌ في اليد لم يمرّ بالربح — يُضاف كما يُضاف `Δ2100`.
-      const deferredRevenueChange = changeFor(DEFERRED_REVENUE_CASH_FLOW_CODE);
-      const outputVatChange = changeFor('2200');
-      // ⚖️ ومقدَّمُ العملاء (`Δ2450`) نقدٌ في اليد لم يمرّ بالربح كذلك (توجيه ٢٧٨، القاعدة ٣٧): رصيدُ المستأجر (`ق-١٦٢٤`) ومقدَّمُ سند
-      //    القبض (`ق-١٢٦٤`) يدخلانه، وكان التشغيليُّ ينقص بصافيهما؛ وخصمُ الرصيد من قسطٍ يُنقصه ويزيد `2400` فلا يتحرّك النقد.
-      const customerPrepaymentsChange = changeFor(CUSTOMER_PREPAYMENTS_CODE);
-      const operatingCashFlow = round2(netProfit - receivablesChange + payablesChange + deferredRevenueChange + outputVatChange + customerPrepaymentsChange);
+      const figures = cashFlowStatement(
+        accounts.map((a) => {
+          const m = movements.get(a.id) ?? { debit: 0, credit: 0 };
+          return { id: a.id, code: a.code, type: a.type, delta: DEBIT_NORMAL_TYPES.has(a.type) ? m.debit - m.credit : m.credit - m.debit };
+        }),
+        cashIds,
+      );
 
       // ② على الحدّ نصّاً بخانتين (`ق-١٢٣٥`).
       return {
-        netProfit: money(netProfit),
-        receivablesChange: money(receivablesChange),
-        payablesChange: money(payablesChange),
-        deferredRevenueChange: money(deferredRevenueChange),
-        outputVatChange: money(outputVatChange),
-        customerPrepaymentsChange: money(customerPrepaymentsChange),
-        operatingCashFlow: money(operatingCashFlow),
-        fixedAssetChange: money(fixedAssetChange),
-        netCashChange: money(operatingCashFlow - fixedAssetChange),
+        netProfit: money(figures.netProfit),
+        retainedEarningsChange: money(figures.retainedEarningsChange),
+        receivablesChange: money(figures.receivablesChange),
+        inventoryChange: money(figures.inventoryChange),
+        inputVatChange: money(figures.inputVatChange),
+        payablesChange: money(figures.payablesChange),
+        deferredRevenueChange: money(figures.deferredRevenueChange),
+        outputVatChange: money(figures.outputVatChange),
+        customerPrepaymentsChange: money(figures.customerPrepaymentsChange),
+        otherOperatingChange: money(figures.otherOperatingChange),
+        operatingCashFlow: money(figures.operatingCashFlow),
+        fixedAssetChange: money(figures.fixedAssetChange),
+        keyMoneyChange: money(figures.keyMoneyChange),
+        investingCashFlow: money(figures.investingCashFlow),
+        financingCashFlow: money(figures.financingCashFlow),
+        netCashChange: money(figures.netCashChange),
+        cashAccountsChange: money(figures.cashAccountsChange),
+        reconciled: figures.reconciled,
         missingAccounts: missing,
       };
     });
