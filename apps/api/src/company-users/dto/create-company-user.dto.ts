@@ -28,4 +28,10 @@ export class CreateCompanyUserDto {
   @IsOptional()
   @IsBoolean()
   allBranches?: boolean;
+
+  /// Exempts this employee from the master-data lock — `false` when omitted. ⚖️ توجيه ٢٧٥ (القاعدة ٣٧): نافذةُ
+  /// الإنشاء تعرض الخانةَ وترسلها منذ 2026-08-07، والإنشاءُ كان لا يعرفها فيرفض المرشّحُ الحفظَ كلَّه.
+  @IsOptional()
+  @IsBoolean()
+  canEditMasterData?: boolean;
 }

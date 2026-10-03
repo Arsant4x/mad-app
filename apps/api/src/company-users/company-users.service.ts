@@ -112,7 +112,15 @@ export class CompanyUsersService {
           // منشأةُ الهويّة (`ق-٦٦٦`) — تُكتب هنا إعلاناً، **والقاعدةُ تفرضها**: مشغِّلُ
           // `company_users_identity_follows` يرفض صفَّ حسابٍ لهويّةٍ منشأتُها غيرُ منشأته.
           companyId,
-          companyUser: { create: { companyId, name: dto.name, permissionTemplateId: dto.permissionTemplateId, allBranches: dto.allBranches === true } },
+          companyUser: {
+            create: {
+              companyId,
+              name: dto.name,
+              permissionTemplateId: dto.permissionTemplateId,
+              allBranches: dto.allBranches === true,
+              canEditMasterData: dto.canEditMasterData === true,
+            },
+          },
         },
         include: { companyUser: { include: COMPANY_USER_INCLUDE } },
       });
