@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@mad-app/db';
-import { branchFilter } from '../branches/branch-scope.util';
+import { branchFilter, warehouseFilter } from '../branches/branch-scope.util';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MSG, formatMessage } from '../common/i18n/messages';
@@ -40,6 +40,17 @@ const TRASHED_ENTITIES = [
 const BRANCH_BEARING_MODELS: ReadonlySet<string> = new Set(
   Prisma.dmmf.datamodel.models.filter((m) => m.fields.some((f) => f.name === 'branchId')).map((m) => m.name),
 );
+
+/**
+ * 🔴 **نطاقُ الفاعل لكلِّ كيانٍ في السلّة** (توجيه ٢٧٧ · ٢أ · `ق-١٦١٩`، بالقاعدة ٣٧): المستودعُ لا يحمل عمودَ فرع، وفرعُه الفرعُ الذي
+ * يشير إليه (`warehouseFilter`، تعريفُ «مستودعاته» نفسُه في الأرصدة)؛ فكان خارج المرشِّح، ويرى المقيَّدُ مستودعَ فرعٍ آخر محذوفاً
+ * ويستعيده أو يمحوه. والمحذوفُ الذي بلا فرعٍ ظاهرٌ للجميع كما كان.
+ */
+function trashScope(model: string, allowedBranchIds: string[] | 'all'): Record<string, unknown> {
+  if (BRANCH_BEARING_MODELS.has(model)) return branchFilter(allowedBranchIds);
+  if (model === 'Warehouse') return warehouseFilter(allowedBranchIds);
+  return {};
+}
 
 type DelegateLike = {
   findMany: (args: unknown) => Promise<Record<string, unknown>[]>;
@@ -85,7 +96,7 @@ export class TrashService {
    * `branchId: null` مرئيٌّ للجميع)، وصفُّ فرعٍ آخر **غيرُ موجودٍ له** (`404`) — قبل الحفظ النظاميّ وقبل أيّ كتابة.
    */
   private async findTrashedVisible(delegate: DelegateLike, model: Prisma.ModelName, allowedBranchIds: string[] | 'all', id: string) {
-    const scope = BRANCH_BEARING_MODELS.has(model) ? branchFilter(allowedBranchIds) : {};
+    const scope = trashScope(model, allowedBranchIds);
     const row = await delegate.findFirst({ where: { id, deletedAt: { not: null }, ...scope } });
     if (!row) throw new NotFoundException(MSG.trash_item_not_found);
     return row;
@@ -106,7 +117,7 @@ export class TrashService {
           const rows = await delegate.findMany({
             // `not: null` is what tells the tenant extension to stop hiding
             // these — every other read gets deletedAt: null injected.
-            where: { deletedAt: { not: null }, ...(BRANCH_BEARING_MODELS.has(e.model) ? branchFilter(allowedBranchIds) : {}) },
+            where: { deletedAt: { not: null }, ...trashScope(e.model, allowedBranchIds) },
             orderBy: { deletedAt: 'desc' },
             take: 200,
           });

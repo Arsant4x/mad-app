@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { computeStockQuantities } from '../inventory/stock-quantity.util';
@@ -57,10 +57,23 @@ export class WarehousesService {
     );
   }
 
-  update(companyId: string, id: string, dto: UpdateWarehouseDto) {
+  /**
+   * 🔴 **ما حُجبت كمّيتُه لا يُعدَّل** (توجيه ٢٧٧ · ٢أ · `ق-١٦١٩`، بالقاعدة ٣٧): حجبُ الرؤية في `ق-١٦٠٤` ترك التعديلَ والأرشفةَ
+   * والحذفَ تقرأ المستودعَ بمعرّفه وحدَه، فكان موظّفُ فرعٍ يغيّر مستودعَ فرعٍ آخر ويؤرشفه ويحذفه. ⟸ يُقاس على «مستودعاته» نفسِها
+   * (`warehouseFilter`: مستودعاتُ فروعه والذي بلا فرع) قبل أيّ كتابة. **والرفضُ `403` مسمّى لا `404`**: المستودعُ ظاهرٌ له باسمه في
+   * القائمة، فلا وجودَ يُخفى، وشاشتُه لا تعرض الأفعالَ الثلاثة على صفّ فرعٍ آخر.
+   */
+  private async assertOwnWarehouse(tx: Prisma.TransactionClient, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
+    if (allowedBranchIds === 'all') return;
+    const own = await tx.warehouse.count({ where: { id, ...warehouseFilter(allowedBranchIds) } });
+    if (own === 0) throw new ForbiddenException(MSG.branch_forbidden);
+  }
+
+  update(companyId: string, allowedBranchIds: string[] | 'all', id: string, dto: UpdateWarehouseDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.warehouse.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.warehouse_not_found);
+      await this.assertOwnWarehouse(tx, allowedBranchIds, id);
 
       const data: Prisma.WarehouseUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;
@@ -73,10 +86,11 @@ export class WarehousesService {
 
   /** Hidden from day-to-day lists while staying in the books — archiving
    * is presentation, deletion is the trash. */
-  setArchived(companyId: string, id: string, archived: boolean) {
+  setArchived(companyId: string, allowedBranchIds: string[] | 'all', id: string, archived: boolean) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.warehouse.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.warehouse_not_found);
+      await this.assertOwnWarehouse(tx, allowedBranchIds, id);
       return tx.warehouse.update({ where: { id }, data: { archived } });
     });
   }
@@ -86,10 +100,11 @@ export class WarehousesService {
    * الاتجاهين — والحركةُ تُنسب إلى مستودعٍ لا إلى فرع القارئ، ومستودعٌ استقبل
    * بضاعةً من فرعٍ محجوبٍ ليس فارغاً.
    */
-  async remove(companyId: string, id: string): Promise<void> {
+  async remove(companyId: string, allowedBranchIds: string[] | 'all', id: string): Promise<void> {
     await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.warehouse.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.warehouse_not_found);
+      await this.assertOwnWarehouse(tx, allowedBranchIds, id);
       // Checked explicitly rather than by catching a foreign-key error: a soft
       // delete never touches the FK, so the database can no longer be the one
       // refusing this. Same rule (CLAUDE.md 6.4), enforced where it's visible.
