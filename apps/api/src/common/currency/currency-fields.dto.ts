@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, Length, Min } from 'class-validator';
 import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
 
@@ -18,7 +19,10 @@ import { BranchFieldDto } from '../../branches/dto/branch-field.dto';
  * extends BranchFieldDto, directly or through this class.
  */
 export class CurrencyFieldsDto extends BranchFieldDto {
+  /// ⚖️ `ق-١٥٨٥` (بحكم صاحب المشروع): **الرمزُ يُوحَّد بأحرفٍ كبيرة** قبل التحقّق — `sar` و`SAR` رمزٌ واحد يُخزَّن واحداً، وكلُّ
+  /// مسارٍ يرث الحقلَ من هنا يأخذه موحَّداً (كانت `resolveFollowingCurrency` تشذّبه ولا تطبّعه فيُخزَّن كما أُرسل).
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
   @IsString()
   @Length(3, 3)
   currency?: string;

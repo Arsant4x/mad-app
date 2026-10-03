@@ -185,7 +185,9 @@ describe('Foreign currency needs an explicit exchange rate — never a silent 1 
       .expect(201);
     const row = await inTenant((tx) => tx.quote.findUniqueOrThrow({ where: { id: res.body.id } }));
     expect(Number(row.exchangeRate)).toBe(1);
-    // ١ × ١٠٠ + ١٥٪ = ١١٥ (computeTotals) · × 1 = 115. (الرمزُ المخزَّن لا يُوكَّد عمداً — يُخزَّن كما أُرسل، حدٌّ معلَن لا عقد.)
+    // ١ × ١٠٠ + ١٥٪ = ١١٥ (computeTotals) · × 1 = 115.
     expect(Number(row.baseTotal)).toBe(115);
+    // ⚖️ والرمزُ المخزَّن موحَّدٌ بأحرفٍ كبيرة (`ق-١٥٨٥`، بحكم صاحب المشروع) — كان يُخزَّن كما أُرسل حدّاً معلَناً، وحُكم فيه.
+    expect(row.currency).toBe(nowBase);
   });
 });

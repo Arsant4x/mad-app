@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { branchFilter } from '../branches/branch-scope.util';
 import { Prisma } from '@mad-app/db';
 import { retryOnUniqueConflict } from '../common/retry-on-conflict.util';
@@ -80,6 +80,9 @@ export class JournalService {
   }
 
   create(companyId: string, allowedBranchIds: string[] | 'all', dto: CreateJournalEntryDto) {
+    // ⚖️ `ق-١٥٨٥` (بحكم صاحب المشروع): القيدُ اليدويّ بعملة الأساس وحدَها، فحقلا العملة والسعر يُرفضان برسالة قبل أيّ كتابة؛
+    // وكانا يُقبلان في الـDTO (يرثهما من `CurrencyFieldsDto`) ثم يُسقطان صامتين فيُخزَّن القيدُ بسعر ١ أيّاً كان المرسَل.
+    if (dto.currency !== undefined || dto.exchangeRate !== undefined) throw new BadRequestException(MSG.journal_currency_fields_rejected);
     // Retries the whole transaction on a "no" collision from a concurrent
     // manual entry — same reasoning as InvoicesService.create.
     return retryOnUniqueConflict(() =>

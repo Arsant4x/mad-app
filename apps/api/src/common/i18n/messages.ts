@@ -77,6 +77,7 @@ export const MSG = {
   journal_auto_entry_not_reversible: 'journal.auto_entry_not_reversible',
   journal_reversal_not_reversible: 'journal.reversal_not_reversible',
   journal_already_reversed: 'journal.already_reversed',
+  journal_currency_fields_rejected: 'journal.currency_fields_rejected',
   account_opening_after_movement: 'accounts.opening_after_movement',
   account_opening_date_locked: 'accounts.opening_date_locked',
   writeoff_deemed_supply_not_built: 'journal.writeoff_deemed_supply_not_built',
@@ -780,6 +781,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.journal_already_reversed]: {
     ar: 'القيد {no} معكوسٌ سلفاً بالقيد {by}',
     en: 'Entry {no} has already been reversed by entry {by}',
+  },
+  [MSG.journal_currency_fields_rejected]: {
+    ar: 'القيدُ اليدويّ بعملة المنشأة الأساسية وحدَها، فلا يُقبل فيه حقلا العملة وسعر الصرف. أرسل القيدَ بلاهما',
+    en: 'A manual journal entry is in the company base currency only, so the currency and exchange rate fields are not accepted. Send the entry without them',
   },
   [MSG.account_opening_date_locked]: {
     ar: 'الحساب {code} — {name} عليه حركة بتاريخ {moved} (القيد {entry})، فتاريخ الافتتاح لا يُعدَّل بعدها — تعديله يعيد تأريخ قيدٍ صار له تاريخ. المخرج: أدخل الفرق بقيد بتاريخه',
