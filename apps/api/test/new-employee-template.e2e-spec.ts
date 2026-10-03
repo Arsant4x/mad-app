@@ -81,7 +81,8 @@ describe('⚖️ الموظّفُ الجديد بلا شاشات، وقالبُ�
   async function employeeToken(templateId: string, tag: string): Promise<string> {
     const username = `emp-${tag}-${suffix}`;
     await owner(http().post('/company-users')).send({ name: `موظّف ${tag}`, username, password: 'EmpPass123!', permissionTemplateId: templateId }).expect(201);
-    return (await http().post('/auth/login').send({ username, password: 'EmpPass123!' }).expect(201)).body.accessToken as string;
+    // الدخولُ يردّ 200 لا 201 (مقروءٌ من سقوط أوّل تشغيلٍ في السير، ومن platform-admin.e2e-spec).
+    return (await http().post('/auth/login').send({ username, password: 'EmpPass123!' }).expect(200)).body.accessToken as string;
   }
   const grantsOf = async (token: string): Promise<string[]> =>
     (await http().get('/me/permissions').set('Authorization', `Bearer ${token}`).expect(200)).body.grants as string[];
