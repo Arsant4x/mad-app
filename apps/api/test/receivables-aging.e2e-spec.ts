@@ -167,9 +167,11 @@ describe('Receivables aging (e2e)', () => {
     const templates = (await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${adminToken}`).expect(200)).body as {
       id: string;
       isSystem: boolean;
+      isAllScreens: boolean;
       companyId: string | null;
     }[];
-    const preset = templates.find((t) => !t.isSystem && t.companyId === null)!;
+    // قالبُ المنشأة شاملٌ لا غيرُه (توجيه ٢٧٦ · ق-١٦٠١): «أوّلُ عامٍّ غيرِ نظاميّ» قد يكون قالبَ «بلا شاشات» فتُرفض المنشأة.
+    const preset = templates.find((t) => !t.isSystem && t.isAllScreens && t.companyId === null)!;
 
     const username = `aging-co-${suffix}`;
     await request(app.getHttpServer())

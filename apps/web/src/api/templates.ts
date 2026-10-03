@@ -70,7 +70,19 @@ export interface PermissionTemplate {
   isAllScreens: boolean;
   allowedScreens: string[];
   screenActions: ScreenActionMap | null;
+  /** القالبُ العامّ «بلا شاشات»: اختيارُ الموظّف الجديد المسبق (توجيه ٢٧٦ · ق-١٦٠١). */
+  isNewUserDefault: boolean;
   createdAt: string;
+}
+
+/** القالبُ الذي يبدأ به حسابُ موظّفٍ جديد: «بلا شاشات» — والشاملُ وغيرُه اختيارٌ صريح (ق-١٦٠١). فارغٌ إن غاب فيُختار بيد. */
+export function newEmployeeTemplateId(templates: PermissionTemplate[]): string {
+  return templates.find((t) => t.isNewUserDefault)?.id ?? '';
+}
+
+/** ما تركب عليه منشأةٌ من لوحة المدير: عامٌّ شاملٌ غيرُ نظاميّ — «صاحبُ المنشأة شاملٌ في المسارين» (ق-١٦٠١). */
+export function companyTemplateChoices(templates: PermissionTemplate[]): PermissionTemplate[] {
+  return templates.filter((t) => t.companyId === null && !t.isSystem && t.isAllScreens);
 }
 
 export type TemplateInput = CreateTemplateDto;

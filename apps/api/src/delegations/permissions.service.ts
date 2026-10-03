@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { ScreenActionMap } from '../templates/screens';
+import { clipToCompany, grantsOf } from '../templates/template-clip.util';
 import { TenantContext } from '../auth/types';
 import { Grant, TreeNode, buildTree } from './permission-tree';
 import { DelegationLink, RootGrants, effectiveGrants } from './intersection';
@@ -152,10 +153,17 @@ export class PermissionsService {
    * سقف السلسلة من القالب.
    *
    * ⚠️ يُقرأ من **نفس** الجدولين اللذين يقرأهما `tenant.guard.ts`، بنفس
-   * الترتيب: قالب الموظف يَجُبّ قالب المنشأة. أي مصدرٍ ثانٍ هنا يفتح باب
-   * أن يقول الحارس شيئاً وتقول هذه شيئاً آخر.
+   * الحكم: قالبُ الموظّف **مقصوصاً بقالب المنشأة** (توجيه ٢٧٦ · ق-١٦٠١) بالدالّة الواحدة
+   * `clipToCompany`. أي مصدرٍ ثانٍ هنا يفتح باب أن يقول الحارس شيئاً وتقول هذه شيئاً آخر.
    */
   private async rootFor(tenant: TenantContext): Promise<RootGrants> {
+    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
+    const company = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.company.findUniqueOrThrow({
+        where: { id: tenant.companyId },
+        include: { permissionTemplate: true },
+      }),
+    );
     if (tenant.actorType === 'COMPANY_USER') {
       // تحت سياق المنشأة (`ق-٦٥٧` · المرحلة ①) — كما صار يقرأ `tenant.guard.ts` نفسُه.
       const user = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
@@ -164,16 +172,9 @@ export class PermissionsService {
           include: { permissionTemplate: true },
         }),
       );
-      const t = user.permissionTemplate;
-      return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
+      const c = clipToCompany(grantsOf(user.permissionTemplate), grantsOf(company.permissionTemplate));
+      return rootGrantsFrom(c.isAllScreens, c.allowedScreens, c.screenActions);
     }
-    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
-    const company = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
-      tx.company.findUniqueOrThrow({
-        where: { id: tenant.companyId },
-        include: { permissionTemplate: true },
-      }),
-    );
     const t = company.permissionTemplate;
     return rootGrantsFrom(t.isAllScreens, t.allowedScreens, t.screenActions as ScreenActionMap | null);
   }

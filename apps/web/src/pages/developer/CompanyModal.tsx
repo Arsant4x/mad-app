@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Company, CompanyInput } from '../../api/companies';
-import type { PermissionTemplate } from '../../api/templates';
+import { companyTemplateChoices, type PermissionTemplate } from '../../api/templates';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
 
@@ -18,7 +18,12 @@ export function CompanyModal({
   const [orgName, setOrgName] = useState(editing?.orgName ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? templates[0]?.id ?? '');
+  // ⚖️ ق-١٦٠١ — «صاحبُ المنشأة شاملٌ في المسارين»: الاختيارُ بين العامّة الشاملة وحدَها، ومنشأةٌ قائمةٌ على أضيق يبقى قالبُها
+  // ظاهراً كما هو (القائمون لا يُمسّون) ولا يُرسل ما لم يتغيّر.
+  const choices = companyTemplateChoices(templates);
+  const current = editing ? templates.find((t) => t.id === editing.permissionTemplateId) : undefined;
+  const options = current && !choices.some((t) => t.id === current.id) ? [current, ...choices] : choices;
+  const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? choices[0]?.id ?? '');
   const [subStart, setSubStart] = useState(editing?.subStart?.slice(0, 10) ?? today());
   const [subEnd, setSubEnd] = useState(editing?.subEnd?.slice(0, 10) ?? '');
   const [saving, setSaving] = useState(false);
@@ -36,7 +41,7 @@ export function CompanyModal({
         orgName: orgName.trim(),
         ...(username.trim() ? { username: username.trim() } : {}),
         ...(password ? { password } : {}),
-        permissionTemplateId,
+        ...(permissionTemplateId !== editing?.permissionTemplateId ? { permissionTemplateId } : {}),
         subStart: subStart || undefined,
         subEnd: subEnd || undefined,
       });
@@ -74,7 +79,7 @@ export function CompanyModal({
         <div className="field">
           <label>النموذج</label>
           <select value={permissionTemplateId} onChange={(e) => setPermissionTemplateId(e.target.value)}>
-            {templates.map((t) => (
+            {options.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>

@@ -115,13 +115,17 @@ export class CompaniesService {
    *
    * وقراءتُه **بمسنَد الإدارة** (المرحلة ③ · `ق-٦٧٥`): هذا مسارُ المنصّة. القالبُ العامُّ يُرى بلا سياقٍ بنصّ السياسة
    * أصلاً، لكن السياقَ يُسمّى لا يُترك للسياسة أن تسامحه.
+   *
+   * ⚖️ **وشاملٌ** (توجيه ٢٧٦ · `ق-١٦٠١`: «صاحبُ المنشأة شاملٌ في المسارين»): التسجيلُ الذاتيُّ يركّب المنشأةَ على الشامل، ولوحةُ
+   * المدير كانت تقبل أضيق — فيُقصّ به كلُّ موظّفيها (`clipToCompany`) ولا يعرف صاحبُها لماذا. والقائمةُ على قالبٍ أضيق لا تُمسّ.
    */
   private async assertCompanyTemplate(permissionTemplateId: string): Promise<void> {
     const template = await this.tenantPrisma.runAsPlatformAdmin((tx) =>
-      tx.permissionTemplate.findUnique({ where: { id: permissionTemplateId }, select: { companyId: true, isSystem: true } }),
+      tx.permissionTemplate.findUnique({ where: { id: permissionTemplateId }, select: { companyId: true, isSystem: true, isAllScreens: true } }),
     );
     if (!template || template.companyId !== null) throw new NotFoundException(MSG.template_not_found);
     if (template.isSystem) throw new ForbiddenException(MSG.template_system_not_for_company);
+    if (!template.isAllScreens) throw new BadRequestException(MSG.template_company_must_be_comprehensive);
   }
 
   async create(dto: CreateCompanyDto) {
@@ -156,7 +160,9 @@ export class CompaniesService {
     const existing = await this.prisma.company.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(MSG.company_not_found);
 
-    if (dto.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
+    // يُفحص القالبُ حين يتغيّر وحدَه: منشأةٌ قائمةٌ على قالبٍ أضيق (قبل ق-١٦٠١) تُعدَّل بقيّةُ حقولها ولا تُجبَر على تغييره —
+    // «والقائمون لا يُمسّون».
+    if (dto.permissionTemplateId && dto.permissionTemplateId !== existing.permissionTemplateId) await this.assertCompanyTemplate(dto.permissionTemplateId);
 
     if (dto.username) {
       const clash = await this.prisma.loginIdentity.findUnique({ where: { username: dto.username } });

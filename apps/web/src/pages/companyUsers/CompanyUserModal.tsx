@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Branch } from '../../api/branches';
 import type { CompanyUser, CompanyUserInput } from '../../api/companyUsers';
-import type { PermissionTemplate } from '../../api/templates';
+import { newEmployeeTemplateId, type PermissionTemplate } from '../../api/templates';
 import i18n from '../../i18n';
 
 export function CompanyUserModal({
@@ -22,7 +22,9 @@ export function CompanyUserModal({
   const [name, setName] = useState(editing?.name ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? templates[0]?.id ?? '');
+  // ⚖️ ق-١٦٠١ — الجديدُ يبدأ «بلا شاشات» لا بأوّل القائمة (وكان أوّلُها الشامل)؛ والأوسعُ اختيارٌ صريح.
+  const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? newEmployeeTemplateId(templates));
+  const chosen = templates.find((t) => t.id === permissionTemplateId);
   const [canEditMasterData, setCanEditMasterData] = useState(editing?.canEditMasterData ?? false);
   const [branchIds, setBranchIds] = useState<string[]>(editing?.branches.map((b) => b.branchId) ?? []);
   // ⚖️ ق-١٤٦٨ — «كلُّ الفروع» اختيارٌ صريح لا يُستنتج من فراغ القائمة؛ والجديدُ يبدأ بلا اختيار.
@@ -36,7 +38,7 @@ export function CompanyUserModal({
 
   async function handleSubmit() {
     setError(null);
-    if (!name.trim() || (!editing && (!username.trim() || !password))) {
+    if (!name.trim() || !permissionTemplateId || (!editing && (!username.trim() || !password))) {
       setError(i18n.t('err_company_user_fields'));
       return;
     }
@@ -87,12 +89,14 @@ export function CompanyUserModal({
         <div className="field">
           <label>النموذج</label>
           <select value={permissionTemplateId} onChange={(e) => setPermissionTemplateId(e.target.value)}>
+            {!permissionTemplateId && <option value="">اختر النموذج</option>}
             {templates.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
             ))}
           </select>
+          {chosen?.isNewUserDefault && <p className="hint" style={{ marginTop: 4 }}>لا يرى أي شاشة حتى تختار له نموذجاً أوسع. وما يراه لا يتجاوز ما تراه منشأتك.</p>}
         </div>
         {/* إسناد الفروع هنا مع بقية صلاحيات الموظف (قرار 6.8: الموظف يرى فرعه فقط). و«كلُّ الفروع» اختيارٌ
             صريحٌ يظهر دائماً (ق-١٤٦٨) — فمنشأةٌ بلا فروعٍ اليوم يُحكم موظّفوها في فرعٍ يُضاف غداً بما اختاره المالك. */}
