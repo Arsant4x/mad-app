@@ -42,7 +42,8 @@ describe('Company-user deactivation ends sessions (e2e)', () => {
 
     company = await registerIsolatedCompany(app, 'deactivation');
     const templates = await owner(request(app.getHttpServer()).get('/templates')).expect(200);
-    const templateId = templates.body.find((t: { isSystem: boolean }) => !t.isSystem).id;
+    // ⚖️ الشاملُ بعينه (توجيه ٢٧٦ · ق-١٦٠١): «أوّلُ غيرِ نظاميّ» قد يكون «بلا شاشات» فلا يعمل الموظّفُ قبل تعطيله أصلاً.
+    const templateId = templates.body.find((t: { isSystem: boolean; isAllScreens: boolean }) => !t.isSystem && t.isAllScreens).id;
     const employee = await owner(request(app.getHttpServer()).post('/company-users'))
       .send({ name: 'موظفٌ يُعطَّل', username: EMPLOYEE.username, password: EMPLOYEE.password, permissionTemplateId: templateId })
       .expect(201);

@@ -94,7 +94,8 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
     // A GLOBAL preset only: the owner's list now also carries company-owned
     // templates (actor rule §3.5), and picking whichever comes first would tie
     // this suite to whatever another suite happens to have created.
-    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
+    // ⚖️ والشاملُ بعينه (توجيه ٢٧٦ · ق-١٦٠١): «أوّلُ عامٍّ غيرِ نظاميّ» صار قد يكون «بلا شاشات» فيُردّ الموظّفُ 403 على كلِّ شاشة.
+    const template = templates.body.find((t: { isSystem: boolean; isAllScreens: boolean; companyId: string | null }) => !t.isSystem && t.isAllScreens && t.companyId === null);
     const emp = await request(app.getHttpServer())
       .post('/company-users')
       .set('Authorization', `Bearer ${ownerToken}`)
@@ -438,7 +439,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
 
   it('creates an employee already scoped to a branch — one call, restriction live immediately', async () => {
     const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${ownerToken}`).expect(200);
-    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
+    const template = templates.body.find((t: { isSystem: boolean; isAllScreens: boolean; companyId: string | null }) => !t.isSystem && t.isAllScreens && t.companyId === null);
 
     const created = await request(app.getHttpServer())
       .post('/company-users')
@@ -462,7 +463,7 @@ describe('Branches and branch-scoped visibility (e2e)', () => {
       .expect(201);
 
     const templates = await request(app.getHttpServer()).get('/templates').set('Authorization', `Bearer ${ownerToken}`).expect(200);
-    const template = templates.body.find((t: { isSystem: boolean; companyId: string | null }) => !t.isSystem && t.companyId === null);
+    const template = templates.body.find((t: { isSystem: boolean; isAllScreens: boolean; companyId: string | null }) => !t.isSystem && t.isAllScreens && t.companyId === null);
     const username = `foreign-${suffix}`;
 
     await request(app.getHttpServer())
