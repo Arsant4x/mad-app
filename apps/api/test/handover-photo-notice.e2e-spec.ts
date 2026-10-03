@@ -2,57 +2,68 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { PrismaClient } from '@mad-app/db';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
 import { RETENTION_YEARS } from '../src/companies/company-movement.service';
 import { createTenantCustomer } from './tenant-customer';
 
-// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): عقدٌ ونموذجان وصورةٌ في المخزن؛ لم تُقَس بعد، فالسقفُ ستّون ثانية معلنةً هنا.
-jest.setTimeout(60000);
+// ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): عقدٌ وخمسةُ نماذج وصورٌ في المخزن وقفلٌ مقصود؛ لم تُقَس بعد، فالسقفُ تسعون ثانية معلنةً هنا.
+jest.setTimeout(90000);
 
 /**
- * ⚖️ إعلامُ المستأجر بحفظ صور نموذج التسليم (توجيه ٢٧٦ · ٢د · `ق-١٦٠٠` · السؤال ٢٤٣، بحكم صاحب المشروع:
- * «يُسأل المستشارُ عن «مستندٍ عائدٍ للعقار»؛ وإلى جوابه تبقى الصورُ بمدّة النموذج ويُعلَم المستأجر»).
+ * ⚖️ صورُ نموذج التسليم بحكم صاحب المشروع (توجيه ٢٧٧ · ٢ج · `ق-١٦١٩`/ج و`ق-١٦٢٥`):
+ * «الاستلامُ والتسليمُ والوحدةُ فارغة يكفيهما بندٌ في العقد، ولا يُطلب فيهما إقرارُ الموظّف. … والصورُ لا تُحذف، وتبقى في سجلّ
+ * العقد طوالَ مدّة الحفظ النظامية. … وقفلُ الصفّ بين رفع الصورة والتوقيع.» و«تُنقل صورُه الجديدة إلى المخزن الحسّاس الآن».
  *
- * صورُ داخل المسكن بياناتٌ شخصية، ونظامُ حماية البيانات يوجب إتلافَها بعد غرضها إلا بنصٍّ يوجب مدّة؛ فإن بقيت
- * بمدّة النموذج (حفظُ المستندات العقارية) **وجب أن يعلم المستأجرُ ذلك يومَ التوقيع لا بعده**. فالنموذجُ الذي عليه
- * صورٌ لا يُوقَّع إلا بإقرار الموقِّع أن المستأجرَ أُعلم، وتُختم المدّةُ المعلنة يومَها مع التوقيع بساعة الخادم.
- *
- * والجوابُ محسوبٌ يداً: المدّةُ من مدد الحفظ نفسِها (`RETENTION_YEARS.realEstate`) لا رقمٌ في الاختبار.
+ * كان النموذجُ الذي عليه صورٌ لا يُوقَّع إلا بإقرار الموظّف أنه أعلم المستأجر (`ق-١٦٠٠` · #718)؛ فالإقرارُ يسقط في النوعين، وتبقى
+ * مدّةُ الحفظ تُختم يومَ التوقيع (ما يحفظه بندُ العقد). والجوابُ محسوبٌ يداً: المدّةُ من مدد الحفظ نفسِها (`RETENTION_YEARS.realEstate`).
  */
-describe('إعلامُ المستأجر بحفظ صور نموذج التسليم (ق-١٦٠٠ · السؤال ٢٤٣)', () => {
+describe('صورُ نموذج التسليم: بندُ العقد يكفي، والصورةُ في المخزن الحسّاس، وقفلٌ بين الرفع والتوقيع (ق-١٦١٩/ج · ق-١٦٢٥)', () => {
   let app: INestApplication;
   let token: string;
   let contractId: string;
+  let companyId: string;
+  const prisma = new PrismaClient();
 
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const http = () => request(app.getHttpServer());
   const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
 
   async function draftForm(type: 'DELIVERY' | 'RECEIPT'): Promise<string> {
+    const before = await http().get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
+    const known = new Set((before.body.handovers as { id: string }[]).map((h) => h.id));
     const res = await http()
       .post(`/contracts/${contractId}/handovers`)
       .set('Authorization', `Bearer ${token}`)
       .send({ type, date: '2026-01-01', items: [{ label: 'غرفة النوم', condition: 'GOOD' }] })
       .expect(201);
-    const drafts = res.body.handovers.filter((h: { type: string; status: string }) => h.type === type && h.status === 'DRAFT');
-    expect(drafts).toHaveLength(1);
-    return drafts[0].id as string;
+    const fresh = (res.body.handovers as { id: string }[]).filter((h) => !known.has(h.id));
+    expect(fresh).toHaveLength(1);
+    return fresh[0].id;
   }
 
-  async function addPhoto(handoverId: string) {
-    await http()
+  const addPhoto = (handoverId: string) =>
+    http()
       .post(`/contracts/handovers/${handoverId}/photos`)
       .set('Authorization', `Bearer ${token}`)
-      .attach('file', PNG, { filename: `غرفة ${suffix}.png`, contentType: 'image/png' })
-      .expect(201);
-  }
+      .attach('file', PNG, { filename: `غرفة ${suffix}.png`, contentType: 'image/png' });
 
-  function formOf(body: { handovers: { id: string }[] }, id: string) {
-    const form = body.handovers.find((h) => h.id === id) as Record<string, unknown> | undefined;
+  const sign = (handoverId: string) =>
+    http().post(`/contracts/${contractId}/handovers/${handoverId}/sign`).set('Authorization', `Bearer ${token}`).send({ signedBy: 'المستأجر' });
+
+  async function formOf(id: string) {
+    const res = await http().get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
+    const form = (res.body.handovers as Record<string, unknown>[]).find((h) => h.id === id);
     expect(form).toBeDefined();
     return form as Record<string, unknown>;
   }
+
+  /** عددُ الجلسات المنتظرة على قفل صفٍّ في هذه القاعدة الآن. */
+  const waitingOnLocks = async (): Promise<number> => {
+    const rows = await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*)::bigint AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`;
+    return Number(rows[0].n);
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -68,7 +79,7 @@ describe('إعلامُ المستأجر بحفظ صور نموذج التسلي�
     const property = await http()
       .post('/properties')
       .set('Authorization', `Bearer ${token}`)
-      .send({ name: `عقار إعلام الصور ${suffix}`, ownership: 'owned' })
+      .send({ name: `عقار صور التسليم ${suffix}`, ownership: 'owned' })
       .expect(201);
     const unit = await http()
       .post('/units')
@@ -82,7 +93,7 @@ describe('إعلامُ المستأجر بحفظ صور نموذج التسلي�
         classification: 'RESIDENTIAL',
         vatInclusion: 'EXCLUSIVE',
         unitId: unit.body.id,
-        customerId: await createTenantCustomer(app, token, `مستأجر إعلام الصور ${suffix}`),
+        customerId: await createTenantCustomer(app, token, `مستأجر صور التسليم ${suffix}`),
         value: 12000,
         cycle: 'monthly',
         start: '2026-01-01',
@@ -90,9 +101,12 @@ describe('إعلامُ المستأجر بحفظ صور نموذج التسلي�
       })
       .expect(201);
     contractId = contract.body.id;
+    companyId = contract.body.companyId;
+    expect(typeof companyId).toBe('string');
   });
 
   afterAll(async () => {
+    await prisma.$disconnect();
     await http()
       .post(`/contracts/${contractId}/cancel`)
       .set('Authorization', `Bearer ${token}`)
@@ -105,62 +119,107 @@ describe('إعلامُ المستأجر بحفظ صور نموذج التسلي�
     expect(res.body.handoverPhotoRetentionYears).toBe(RETENTION_YEARS.realEstate);
   });
 
-  it('② نموذجٌ عليه صورٌ لا يُوقَّع بلا إقرار الإعلام، ويبقى مسوّدةً والمدّةُ في الرسالة', async () => {
-    const id = await draftForm('DELIVERY');
-    await addPhoto(id);
-
-    const refused = await http()
-      .post(`/contracts/${contractId}/handovers/${id}/sign`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ signedBy: 'المستأجر' })
-      .expect(400);
-    expect(String(refused.body.message)).toContain(String(RETENTION_YEARS.realEstate));
-
-    // وإقرارٌ بالنفي ليس إقراراً.
-    await http()
-      .post(`/contracts/${contractId}/handovers/${id}/sign`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ signedBy: 'المستأجر', photoNoticeGiven: false })
-      .expect(400);
-
-    const after = await http().get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
-    const form = formOf(after.body, id);
-    expect(form.status).toBe('DRAFT');
-    expect(form.signedAt).toBeNull();
-    expect(form.photoNoticeYears).toBeNull();
-  });
-
-  it('③ وبالإقرار يُوقَّع، وتُختم المدّةُ المعلنة يومَها ووقتُ الإعلام هو وقتُ التوقيع بساعة الخادم', async () => {
-    const contract = await http().get(`/contracts/${contractId}`).set('Authorization', `Bearer ${token}`).expect(200);
-    const id = (contract.body.handovers as { id: string; type: string; status: string }[]).find((h) => h.type === 'DELIVERY' && h.status === 'DRAFT')!.id;
-
+  it('② التسليمُ والاستلامُ عليهما صورٌ يُوقَّعان بلا إقرارٍ من الموظّف، وتُختم مدّةُ الحفظ يومَ التوقيع بساعة الخادم (ق-١٦١٩/ج)', async () => {
+    const forms: Record<string, unknown>[] = [];
     const before = Date.now();
-    const res = await http()
-      .post(`/contracts/${contractId}/handovers/${id}/sign`)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ signedBy: 'المستأجر', photoNoticeGiven: true })
-      .expect(201);
+    for (const type of ['DELIVERY', 'RECEIPT'] as const) {
+      const id = await draftForm(type);
+      await addPhoto(id).expect(201);
+      await sign(id).expect(201);
+      forms.push(await formOf(id));
+    }
     const after = Date.now();
-
-    const form = formOf(res.body, id);
-    expect(form.status).toBe('SIGNED');
-    expect(form.photoNoticeYears).toBe(RETENTION_YEARS.realEstate);
-    expect(form.photoNoticeAt).toBe(form.signedAt);
-    const at = new Date(String(form.photoNoticeAt)).getTime();
-    expect(at).toBeGreaterThanOrEqual(before - 1000);
-    expect(at).toBeLessThanOrEqual(after + 1000);
+    for (const form of forms) {
+      expect({ status: form.status, years: form.photoNoticeYears, at: form.photoNoticeAt }).toEqual({
+        status: 'SIGNED',
+        years: RETENTION_YEARS.realEstate,
+        at: form.signedAt,
+      });
+      const at = new Date(String(form.photoNoticeAt)).getTime();
+      expect(at).toBeGreaterThanOrEqual(before - 1000);
+      expect(at).toBeLessThanOrEqual(after + 1000);
+    }
   });
 
-  it('④ ونموذجٌ بلا صورٍ يُوقَّع بلا إقرار، ولا يُختم عليه إعلامٌ لم يُطلب', async () => {
+  it('③ ونموذجٌ بلا صورٍ يُوقَّع ولا تُختم عليه مدّةُ حفظٍ لا موضوعَ لها', async () => {
     const id = await draftForm('RECEIPT');
-    const res = await http()
-      .post(`/contracts/${contractId}/handovers/${id}/sign`)
+    await sign(id).expect(201);
+    const form = await formOf(id);
+    expect({ status: form.status, years: form.photoNoticeYears, at: form.photoNoticeAt }).toEqual({ status: 'SIGNED', years: null, at: null });
+  });
+
+  it('④ الصورةُ الجديدة في المخزن الحسّاس: تُبثّ عبر الخادم ببايتاتها، ولا رابطَ موقَّعاً لها (ق-١٦٢٥)', async () => {
+    const id = await draftForm('DELIVERY');
+    const photoId = (await addPhoto(id).expect(201)).body.id as string;
+    const streamed = await http()
+      .get(`/contracts/handover-photos/${photoId}/download`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ signedBy: 'المستأجر' })
-      .expect(201);
-    const form = formOf(res.body, id);
-    expect(form.status).toBe('SIGNED');
-    expect(form.photoNoticeYears).toBeNull();
-    expect(form.photoNoticeAt).toBeNull();
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      });
+    const signedUrl = await http().get(`/contracts/handover-photos/${photoId}/download-url`).set('Authorization', `Bearer ${token}`);
+    expect({ streamed: streamed.status, same: Buffer.compare(streamed.body as Buffer, PNG) === 0, signedUrl: signedUrl.status }).toEqual({
+      streamed: 200,
+      same: true,
+      signedUrl: 403,
+    });
+  });
+
+  /**
+   * 🔴 **قفلُ الصفّ بين رفع الصورة والتوقيع** (`ق-١٦١٩`/ج): كان التوقيعُ يعدّ الصورَ ثم يكتب، والرفعُ يقرأ الحالَ ثم يُدرج، بلا قفلٍ بينهما؛ فصورةٌ
+   * تُرفع بعد أن عدّ التوقيعُ صفراً وقبل أن يُكتب تدخل نموذجاً وُقّع بدونها، فيصير نموذجٌ موقَّعٌ عليه صورةٌ بلا مدّة حفظٍ مختومة.
+   * **والتداخلُ مفروضٌ لا منتظَر** (`§8.8` الوجهُ الثالث): معاملةٌ جانبيّة تمسك صفَّ النموذج (`FOR NO KEY UPDATE`: يقف عليه ما يكتب الصفَّ،
+   * ولا يقف عليه إدراجٌ يشير إليه)، فيقف التوقيعُ أوّلاً، ثم يُرسل الرفع، ثم تُفلت. **والجوابُ**: إمّا أن تدخل الصورةُ قبل التوقيع فتُختم مدّتُها
+   * معه، وإمّا أن تُردّ `409` بعده؛ ولا ثالث.
+   */
+  it('🔴 ⑤ صورةٌ تُرفع في لحظة التوقيع إمّا قبله فتُختم مدّتُها معه وإمّا تُردّ بعده، ولا تدخل نموذجاً وُقّع بدونها', async () => {
+    const id = await draftForm('DELIVERY');
+    let release!: () => void;
+    const released = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((r) => (locked = r));
+    let held = 0;
+    const holder = prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
+        held = (await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "contract_handovers" WHERE id = ${id} FOR NO KEY UPDATE`).length;
+        locked();
+        await released;
+      },
+      { timeout: 60_000, maxWait: 10_000 },
+    );
+    await lockTaken;
+    const baseline = await waitingOnLocks();
+    let signReply: request.Response | null = null;
+    let addReply: request.Response | null = null;
+    let waiting = 0;
+    try {
+      const signing = sign(id).then((r) => (signReply = r));
+      for (let i = 0; i < 100 && (waiting = await waitingOnLocks()) < baseline + 1; i++) await new Promise((r) => setTimeout(r, 100));
+      const adding = addPhoto(id).then((r) => (addReply = r));
+      for (let i = 0; i < 100 && !addReply && (await waitingOnLocks()) < baseline + 2; i++) await new Promise((r) => setTimeout(r, 100));
+      release();
+      await holder;
+      await Promise.all([signing, adding]);
+    } finally {
+      release();
+    }
+    const form = await formOf(id);
+    const photos = (await http().get(`/contracts/handovers/${id}/photos`).set('Authorization', `Bearer ${token}`).expect(200)).body as unknown[];
+    const added = (addReply as request.Response | null)?.status;
+    // المسبارُ يرى (القاعدة ٢٩): القفلُ الجانبيّ أمسك صفَّ النموذج، والتوقيعُ وقف عليه قبل أن يُرسل الرفع.
+    expect({ held, signStood: waiting >= baseline + 1 }).toEqual({ held: 1, signStood: true });
+    expect({
+      signed: (signReply as request.Response | null)?.status,
+      status: form.status,
+      outcome: added === 201 ? { photos: photos.length, years: form.photoNoticeYears } : { added, photos: photos.length, years: form.photoNoticeYears },
+    }).toEqual({
+      signed: 201,
+      status: 'SIGNED',
+      outcome: added === 201 ? { photos: 1, years: RETENTION_YEARS.realEstate } : { added: 409, photos: 0, years: null },
+    });
   });
 });
