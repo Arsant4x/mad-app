@@ -1,7 +1,9 @@
+import { Type } from 'class-transformer';
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
 import { SAUDI_VAT_NUMBER_PATTERN } from '../../common/vat/vat-number';
+import { ContractFeeDto } from './contract-fee.dto';
 
 export const CONTRACT_CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as const;
@@ -107,6 +109,13 @@ export class CreateContractDto extends CurrencyFieldsDto {
   @IsOptional()
   @IsString()
   ejarNo?: string;
+
+  /** ⚖️ بنودُ الرسوم فوق الإيجار (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠`) — كلٌّ يُطالَب مع كلِّ قسطٍ يحلّ بضريبته. */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ContractFeeDto)
+  fees?: ContractFeeDto[];
 
   /** Save as draft — skips the whole validation pipeline (unit-type lock,
    * overlap check, head-lease containment) and doesn't generate installments,

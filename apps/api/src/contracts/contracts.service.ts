@@ -36,6 +36,9 @@ import { activeReservationForUnit, expireStaleReservations } from '../reservatio
 import { CancelContractDto } from './dto/cancel-contract.dto';
 import { CreateClaimDto, PayClaimDto, WaiveClaimDto } from './dto/claim.dto';
 import { CreateContractDto } from './dto/create-contract.dto';
+import { ContractFeeDto, EndContractFeeDto } from './dto/contract-fee.dto';
+import { ContractFeeResponse, CreatedContractFeeResponse } from './dto/contract-fee-responses.dto';
+import { raiseDueFeesWithinTx } from './contract-fees.util';
 import { ListContractsQueryDto } from './dto/list-contracts-query.dto';
 import { CreateHandoverDto, HandoverItemDto, SignHandoverDto, UpdateHandoverDto } from './dto/handover.dto';
 import { RecordKeyMoneyDto } from './dto/key-money.dto';
@@ -101,6 +104,18 @@ async function spreadRentPayment(
   return parts;
 }
 
+/** بندُ الرسم كما يُردّ (`ق-١٤٣٨`): المالُ نصٌّ بخانتين، والأيامُ `YYYY-MM-DD`. */
+function presentFee(fee: { id: string; contractId: string; label: string; amount: Prisma.Decimal; effectiveFrom: Date; endedAt: Date | null }): ContractFeeResponse {
+  return {
+    id: fee.id,
+    contractId: fee.contractId,
+    label: fee.label,
+    amount: money(fee.amount),
+    effectiveFrom: fee.effectiveFrom.toISOString().slice(0, 10),
+    endedAt: fee.endedAt ? fee.endedAt.toISOString().slice(0, 10) : null,
+  };
+}
+
 const CONTRACT_INCLUDE = {
   unit: { include: { property: true } },
   // بطاقةُ العميل — مصدرُ الحقيقة لاسم المستأجر وهاتفه (`ق-١٠٢٨`/①⑥)؛ الحقلان على العقد ذاكرةٌ مشتقّة.
@@ -110,6 +125,8 @@ const CONTRACT_INCLUDE = {
   deposits: { include: { deductions: true }, orderBy: { receivedAt: 'asc' as const } },
   settlementLines: { orderBy: { createdAt: 'asc' as const } },
   claims: { orderBy: { issuedAt: 'desc' as const } },
+  // ⚖️ بنودُ الرسوم (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠).
+  fees: { orderBy: { createdAt: 'asc' as const } },
   keyMoney: { orderBy: { paidAt: 'asc' as const } },
   // photos عبر select صريح: fileKey مفتاح تخزين داخلي لا يغادر الخادم —
   // التنزيل عبر رابط موقَّع فقط (اكتشاف المراجعة).
@@ -140,6 +157,7 @@ const CLAIM_KIND_LABEL: Record<ClaimKind, string> = {
   LATE_FEE: 'غرامة تأخير',
   DAMAGE: 'أضرار',
   OTHER: 'أخرى',
+  FEE: 'رسوم خدمة',
 };
 
 /** Arabic labels for the journal memo. Kept here rather than in the message
@@ -487,11 +505,55 @@ export class ContractsService {
           await accrueDueWithinTx(tx, companyId, new Date(), created.id);
         }
 
+        // ⚖️ بنودُ الرسوم (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠): تُكتب للمسوّدة كما للحيّ، وتُطالَب لما حلّ من أقساط الحيّ في اللحظة نفسِها.
+        if (dto.fees?.length) {
+          await tx.contractFee.createMany({
+            data: dto.fees.map((f) => ({ contractId: created.id, label: f.label.trim(), amount: f.amount, effectiveFrom: new Date(f.effectiveFrom ?? dto.start) })) as unknown as Prisma.ContractFeeCreateManyInput[],
+          });
+          if (!isDraft) await raiseDueFeesWithinTx(tx, companyId, new Date(), created.id);
+        }
+
         return this.withComputedFigures(await tx.contract.findUniqueOrThrow({ where: { id: created.id }, include: CONTRACT_INCLUDE }));
         },
         ACCRUAL_TX_OPTIONS,
       ),
     );
+  }
+
+  /**
+   * ⚖️ **بندُ رسمٍ يُضاف لعقدٍ قائم** (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠`) — ويُطالَب في اللحظة نفسِها لما حلّ من أقساطه منذ سريانه
+   * (الافتراضُ اليوم)، وما يحلّ بعدُ يلتقطه الكنسُ اليوميّ.
+   */
+  addFee(companyId: string, contractId: string, dto: ContractFeeDto): Promise<CreatedContractFeeResponse> {
+    return retryOnUniqueConflict(() =>
+      this.tenantPrisma.runInTenantContext(
+        companyId,
+        async (tx) => {
+          const contract = await tx.contract.findUnique({ where: { id: contractId } });
+          if (!contract) throw new NotFoundException(MSG.contract_not_found);
+          if (contract.status === 'CANCELLED') throw new ConflictException(MSG.contract_fee_on_cancelled);
+          const fee = await tx.contractFee.create({
+            data: { contractId, label: dto.label.trim(), amount: dto.amount, effectiveFrom: new Date(dto.effectiveFrom ?? new Date().toISOString().slice(0, 10)) } as unknown as Prisma.ContractFeeUncheckedCreateInput,
+          });
+          const raised = contract.status !== 'DRAFT' ? (await raiseDueFeesWithinTx(tx, companyId, new Date(), contractId)).raised : 0;
+          return { ...presentFee(fee), raisedClaims: raised };
+        },
+        ACCRUAL_TX_OPTIONS,
+      ),
+    );
+  }
+
+  /**
+   * ⚖️ **إنهاءُ بند رسم** — لا حذف: ما طولب عنه يبقى مطالبةً تُحصَّل أو تُسقَط، ولا يُطالَب لقسطٍ يحلّ بعد `endedAt`.
+   */
+  endFee(companyId: string, contractId: string, feeId: string, dto: EndContractFeeDto): Promise<ContractFeeResponse> {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const fee = await tx.contractFee.findUnique({ where: { id: feeId } });
+      if (!fee || fee.contractId !== contractId) throw new NotFoundException(MSG.contract_fee_not_found);
+      const endedAt = new Date(dto.endedAt);
+      if (endedAt < fee.effectiveFrom) throw new BadRequestException(MSG.contract_fee_end_before_start);
+      return presentFee(await tx.contractFee.update({ where: { id: feeId }, data: { endedAt } }));
+    });
   }
 
   update(companyId: string, id: string, dto: UpdateContractDto) {

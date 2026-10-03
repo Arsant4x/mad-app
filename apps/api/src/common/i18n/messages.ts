@@ -283,6 +283,10 @@ export const MSG = {
   /** ⚖️ العقدُ المختلط (السؤال ٤١٢ · ق-١٦٠٠). */
   contract_mixed_share_required: 'contracts.mixed_share_required',
   contract_mixed_share_only_for_mixed: 'contracts.mixed_share_only_for_mixed',
+  /** ⚖️ بنودُ الرسوم على العقد (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠). */
+  contract_fee_not_found: 'contracts.fee_not_found',
+  contract_fee_end_before_start: 'contracts.fee_end_before_start',
+  contract_fee_on_cancelled: 'contracts.fee_on_cancelled',
   contract_already_cancelled: 'contracts.already_cancelled',
   contract_start_after_end: 'contracts.start_after_end',
   contract_outside_head_lease: 'contracts.outside_head_lease',
@@ -1237,6 +1241,12 @@ const CATALOG: Record<string, Record<Language, string>> = {
     ar: 'نصيبُ المعفى وأساسُه للعقد المختلط وحدَه — العقدُ السكنيُّ معفى كلُّه، والتجاريُّ والإيواءُ المخدومُ خاضعان كلُّهما',
     en: 'The exempt share and its basis apply to a mixed contract only — a residential contract is wholly exempt, and commercial or serviced lodging is wholly taxable',
   },
+  [MSG.contract_fee_not_found]: { ar: 'بندُ الرسم غيرُ موجود في هذا العقد', en: 'Fee line not found on this contract' },
+  [MSG.contract_fee_end_before_start]: {
+    ar: 'لا يُنهى بندُ الرسم قبل سريانه — اختر تاريخاً لا يسبق تاريخَ بدايته',
+    en: 'A fee line cannot end before it starts — choose a date on or after its start',
+  },
+  [MSG.contract_fee_on_cancelled]: { ar: 'لا يُضاف بندُ رسمٍ لعقدٍ ملغى', en: 'A fee line cannot be added to a cancelled contract' },
   [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
   [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },
   [MSG.contract_outside_head_lease]: {

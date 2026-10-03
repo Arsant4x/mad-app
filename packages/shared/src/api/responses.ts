@@ -132,6 +132,16 @@ export interface CodeBandStatusResponse {
   warn: boolean;
 }
 
+/** ردٌّ — `ContractFeeResponse` في الخادم (ق-١٤٣٨). */
+export interface ContractFeeResponse {
+  id: string;
+  contractId: string;
+  label: string;
+  amount: string;
+  effectiveFrom: string;
+  endedAt: string | null;
+}
+
 /** ردٌّ — `CreatedCashDepositResponse` في الخادم (ق-١٤٣٨). */
 export interface CreatedCashDepositResponse {
   status: 'IN_TRANSIT' | 'CONFIRMED' | 'VOID';
@@ -152,6 +162,17 @@ export interface CreatedCashDepositResponse {
   createdAt: string;
   updatedAt: string;
   entryNo: string;
+}
+
+/** ردٌّ — `CreatedContractFeeResponse` في الخادم (ق-١٤٣٨). */
+export interface CreatedContractFeeResponse {
+  id: string;
+  contractId: string;
+  label: string;
+  amount: string;
+  effectiveFrom: string;
+  endedAt: string | null;
+  raisedClaims: number;
 }
 
 /** ردٌّ — `CreatedNetworkSettlementResponse` في الخادم (ق-١٤٣٨). */
