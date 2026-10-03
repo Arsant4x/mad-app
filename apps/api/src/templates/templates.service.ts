@@ -46,7 +46,7 @@ type Tx = Prisma.TransactionClient;
  * يعطي كلَّ موظّفٍ جديد ما لم يُعطَه. فالاسمُ يتغيّر، والنطاقُ لا، والحذفُ لا.
  */
 function isLoadBearingGlobal(t: { companyId: string | null; isAllScreens: boolean; isNewUserDefault: boolean }): boolean {
-  return t.companyId === null && t.isNewUserDefault;
+  return t.companyId === null && (t.isAllScreens || t.isNewUserDefault);
 }
 
 function sameScope(
