@@ -17,12 +17,15 @@
 #    بالالتزام الكامل لا بالوسم (البند 16 من مراجعة 3.3). وكلُّ ترقيةٍ تُعاد فيها البصمة من مصدرها.
 name: security-scan
 
+# ⚠️ `ops/**` في المسارَين (توجيه ٢٧٦ · ق-١٦٠٦): فحصُ الإعدادات (`trivy config .`) يقرأ `ops/backup/Dockerfile` ويُبلغ عنه،
+#    وتعديلُه وحدَه لم يكن يشغّل الفحص — بوّابةٌ على بابٍ لا يُطرَق (السجلّ §8.7 الوجهُ الرابع عشر).
 on:
   pull_request:
     paths:
       - 'apps/**'
       - 'packages/**'
       - 'docker/**'
+      - 'ops/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/security-scan.yml'
@@ -33,6 +36,7 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'docker/**'
+      - 'ops/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/security-scan.yml'
