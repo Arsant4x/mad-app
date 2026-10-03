@@ -78,10 +78,10 @@ const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
  * و«الباقي» إجماليُّ القسط بالضريبة (`rentAmountsOf`) ناقصاً ما سُدّد له (الصافي + الخصم) — المقياسُ الذي تُشتقّ به حالُه.
  * والأقساطُ على أساس الاستحقاق وحدَه وغيرُ الملغاة؛ وقسطٌ لم يبقَ له شيء لا يُكتب له جزء.
  *
- * ⚖️ **والدفعةُ الحرّة** (بلا قسطٍ مسمّى · توجيه ٢٧٦ · ٢و، القاعدة ٣٧): تسدّد **الأقساطَ الحالّة بتاريخها** (`dueBy`) من الأقدم. كانت جزءاً
- * واحداً «بلا قسط» على عقدٍ له أقساطٌ حالّة، فتُستحقّ ضريبتُها دفعةً مقدَّمةً فوق ضريبة الأقساط ويبقى القسطُ الأقدمُ متأخّراً على مستأجرٍ
- * دفع (مقيسٌ في `rent-free-payment.e2e-spec.ts`: الضريبةُ `+150` والذمّةُ لا تتحرّك). **وما فاض عن الحالّ دفعةٌ مقدَّمة بلا قسط كما كان**
- * (`ق-٤٧٣`: لا فترةَ خدمةٍ تُعرف لها) — فالإصلاحُ يمسّ المتأخّرَ وحدَه، ولا يُلحق الدفعةَ الحرّة بقسطٍ لم يحلّ.
+ * ⚖️ **والدفعةُ الحرّة** (بلا قسطٍ مسمّى): تسدّد الحالَّ من الأقدم (توجيه ٢٧٦ · ٢و، القاعدة ٣٧: كانت جزءاً واحداً «بلا قسط» على عقدٍ له
+ * أقساطٌ حالّة، فتُستحقّ ضريبتُها فوق ضريبة الأقساط ويبقى الأقدمُ متأخّراً على مستأجرٍ دفع) **ثم القادمَ بترتيب استحقاقه** (توجيه ٢٧٧ · ٢ب
+ * · `ق-١٦١٤`، بحكم صاحب المشروع: «ما زاد على الحالّ يذهب إلى القسط القادم، فيُوزَّع إيرادُه على شهره»؛ وكان الزائدُ دفعةً مقدَّمة بلا قسط
+ * تُعترف فوراً). فترتيبُها ترتيبُ الزائد نفسُه، **وما زاد على الأقساط كلِّها وحدَه** بلا قسطٍ يُعترف فوراً بحدّه المعلَن (`ق-٤٧٣`).
  */
 async function spreadRentPayment(
   tx: Prisma.TransactionClient,
@@ -89,10 +89,9 @@ async function spreadRentPayment(
   treatment: RentTaxTreatment,
   installment: { id: string; dueDate: Date } | null,
   amount: number,
-  dueBy?: Date,
 ): Promise<{ installmentId: string | null; amount: number }[]> {
   const candidates = await tx.installment.findMany({
-    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL', ...(installment ? {} : { dueDate: { lte: dueBy } }) },
+    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL' },
     orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
   });
@@ -928,11 +927,17 @@ export class ContractsService {
         //    مرّتين وتبقى ذمّةٌ على مستأجرٍ دفع. فيُقسَم القبضُ أجزاءً، لكلِّ قسطٍ جزؤه، وما فاض عن الأقساط كلِّها يبقى بلا قسط.
         //    والقبضُ واحد: قيدُ تسويةٍ واحد وحركةُ بنكٍ واحدة يحملهما الأجزاءُ كلُّها. وعلى مسار الاستحقاق وحدَه (حدٌّ معلَن):
         //    القسطُ القديمُ على أساس القبض يبقى على مساره القائم.
-        //    ⚖️ **والدفعةُ بلا قسطٍ مسمّى تسدّد الحالَّ بتاريخها من الأقدم** (توجيه ٢٧٦ · ٢و): كانت تبقى جزءاً واحداً بلا قسط.
+        //    ⚖️ **والدفعةُ بلا قسطٍ مسمّى تسدّد الحالَّ من الأقدم ثم القادمَ بترتيبه** (توجيه ٢٧٦ · ٢و ثم توجيه ٢٧٧ · ٢ب · ق-١٦١٤):
+        //    كانت تبقى جزءاً واحداً بلا قسط، ثم صار ما زاد على الحالّ وحدَه بلا قسط؛ وما زاد على الأقساط كلِّها رصيدٌ للمستأجر
+        //    لا إيراد (`ق-١٦٢٤`، نوعُ استحقاقه `TENANT_CREDIT` وأصلُه في `2450`).
         const parts =
           (accrualPath || ownerPath) && treatment
-            ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount, new Date(dto.date))
+            ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount)
             : [{ installmentId: dto.installmentId ?? null, amount: dto.amount }];
+        // والخصمُ على قسط الجزء الأوّل؛ فإن لم يقع الجزءُ الأوّلُ على قسطٍ فالدفعةُ كلُّها رصيدٌ، ولا خصمَ على رصيد.
+        if (accrualPath && treatment && discount > 0 && parts[0]?.installmentId === null) {
+          throw new BadRequestException(MSG.rent_discount_on_tenant_credit);
+        }
         // ⚖️ وللمالك المؤجّر: لكلِّ جزءٍ قسمتُه من صافيه بعملة الدفتر — حصّةُ المالك والعمولةُ وضريبتُها (السؤال ٥٧٧).
         const ownerTotals = { cash: 0, share: 0, commission: 0, tax: 0 };
         // الخصمُ على الجزء الأوّل — وهو القسطُ المقصود، أو أوّلُ قسطٍ بقي له شيء.

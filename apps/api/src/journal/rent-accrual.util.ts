@@ -78,7 +78,7 @@ const ACCRUAL_INSTALLMENT_SELECT = {
 type AccrualInstallment = Prisma.InstallmentGetPayload<{ select: typeof ACCRUAL_INSTALLMENT_SELECT }>;
 
 /** أنواعُ الصفوف الموجبة — ما «استُحقّ»؛ العكسُ والخصمُ يُنقصان الذمّةَ ولا يُعيدان نقطةً. */
-const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED'];
+const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED', 'TENANT_CREDIT'];
 
 export function treatmentOf(contract: AccrualContract): RentTaxTreatment | null {
   return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.lessor, sharePercentOf(contract.exemptSharePercent));
@@ -98,6 +98,7 @@ const KIND_LABEL: Record<RentAccrualKind, string> = {
   UNLINKED: 'دفعةٌ بلا قسطٍ مرتبط — بقدرها',
   REVERSAL: 'عكس',
   DISCOUNT: 'خصم عند القبض',
+  TENANT_CREDIT: 'رصيدٌ للمستأجر — ما زاد على أقساط العقد كلِّها',
 };
 
 export interface AccrualSweepResult {
@@ -150,6 +151,8 @@ async function writeAccrual(
     baseNet: base.net,
     baseTax: base.tax,
     kindLabel: KIND_LABEL[point.kind],
+    // ⚖️ ق-١٦٢٤: ما زاد على الأقساط كلِّها أصلُه في `2450` لا إيراد.
+    tenantCredit: point.kind === 'TENANT_CREDIT',
   });
 
   const row = await tx.rentAccrual.create({
@@ -282,6 +285,10 @@ export async function accrueDueWithinTx(tx: Prisma.TransactionClient, companyId:
  * (نقطتُه المقدَّمة بقدر الدفعة، أو باقيه إن حلّ)، **وما فاض عن القسط دفعةٌ بلا قسطٍ
  * بقدرها** (م٢٠/٢)؛ والدفعةُ بلا قسطٍ أصلاً تُستحقّ كلُّها بتاريخها.
  *
+ * ⚖️ **والجزءُ بلا قسطٍ رصيدٌ للمستأجر لا إيراد** (توجيه ٢٧٧ · `ق-١٦٢٤`): القبضُ يُقسَم على الأقساط المفتوحة كلِّها قبل هذه الدالّة
+ * (`spreadRentPayment`)، فما وصلها بلا قسطٍ هو ما زاد على أقساط العقد كلِّها؛ نوعُه `TENANT_CREDIT` وأصلُه في `2450`. و`UNLINKED`
+ * (اعترافٌ فوريّ) لما قبل الحكم وحدَه.
+ *
  * يعيد `false` إن حجبت فترةٌ مقفلة الاستحقاقَ — فالمستدعي يرفض القبضَ برسالته لا يُسجّله
  * بلا ذمّة.
  */
@@ -294,7 +301,7 @@ export async function accrueForPaymentWithinTx(
   asOf: Date,
 ): Promise<boolean> {
   if (!payment.installmentId) {
-    await writeAccrual(tx, companyId, contract, treatment, null, { date: payment.date, gross: payment.grossInContractCurrency, kind: 'UNLINKED', paymentId: payment.id });
+    await writeAccrual(tx, companyId, contract, treatment, null, { date: payment.date, gross: payment.grossInContractCurrency, kind: 'TENANT_CREDIT', paymentId: payment.id });
     return true;
   }
 
@@ -304,12 +311,12 @@ export async function accrueForPaymentWithinTx(
   const written = await accrueInstallment(tx, companyId, contract, treatment, i, asOf);
   if (written === null) return false;
 
-  // ما فاض عن إجماليّ القسط من هذه الدفعة — دفعةٌ بلا قسطٍ بقدره.
+  // ما فاض عن إجماليّ القسط من هذه الدفعة — رصيدٌ للمستأجر بقدره (`ق-١٦٢٤`).
   const whole = rentAmountsOf(Number(i.amount), treatment);
   const paidSoFar = round2(i.payments.reduce((s, p) => s + paymentGrossInContractCurrency(p, contract), 0));
   const excess = round2(Math.min(payment.grossInContractCurrency, Math.max(0, paidSoFar - whole.gross)));
   if (excess > 0) {
-    await writeAccrual(tx, companyId, contract, treatment, null, { date: payment.date, gross: excess, kind: 'UNLINKED', paymentId: payment.id });
+    await writeAccrual(tx, companyId, contract, treatment, null, { date: payment.date, gross: excess, kind: 'TENANT_CREDIT', paymentId: payment.id });
   }
   return true;
 }
