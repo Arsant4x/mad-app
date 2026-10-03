@@ -37,6 +37,7 @@
   .wave { font-size: 12.5px; color: var(--muted); }
   h2 { font-size: 18px; margin: 4px 0 10px; }
   .frame { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .phone { max-width: 380px; margin: 0 auto 12px; background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px 16px; }
   .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
   .grow { flex: 1 1 260px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -49,21 +50,24 @@
   .open { background: var(--open-soft); color: var(--open); }
   .btn { display: inline-block; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: var(--card); color: var(--ink); font-size: 13.5px; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { border-color: var(--bad); color: var(--bad); }
   .btn.disabled { opacity: .45; }
   .field { margin: 8px 0; }
   .field label { display: block; color: var(--muted); font-size: 13px; }
   .input { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-height: 34px; background: var(--bg); }
   .note { border-inline-start: 3px solid var(--open); background: var(--open-soft); padding: 8px 12px; border-radius: 6px; margin: 10px 0; font-size: 13.5px; }
   .note.decided { border-color: var(--accent); background: var(--accent-soft); }
-  .pad { height: 120px; border: 2px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .pad { height: 110px; border: 2px dashed var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
   .thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
   .thumb { width: 150px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; }
   .thumb .img { height: 90px; background: repeating-linear-gradient(45deg, var(--line), var(--line) 8px, var(--bg) 8px, var(--bg) 16px); }
   .thumb .meta { padding: 6px; color: var(--muted); }
-  .code { display: flex; gap: 6px; direction: ltr; justify-content: flex-end; }
+  .code { display: flex; gap: 6px; direction: ltr; justify-content: center; }
   .code span { width: 34px; height: 40px; border: 1px solid var(--line); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
   .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
   .step { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+  .flow .arrow { color: var(--muted); }
   .mono { font-family: ui-monospace, Consolas, monospace; direction: ltr; unicode-bidi: embed; font-size: 12.5px; }
   footer { max-width: 1100px; margin: 0 auto; padding: 8px 16px 32px; color: var(--muted); font-size: 13px; }
   @media (max-width: 600px) { th:nth-child(n+4), td:nth-child(n+4) { display: none; } }
@@ -71,24 +75,31 @@
 </head>
 <body>
 <header>
-  <h1>محرّكُ نماذج التسليم: النموذجُ المرئيّ للموجات ١ إلى ٣</h1>
-  <p>شاشاتٌ ساكنة تُعرض على صاحب المشروع قبل أيّ شيفرة (قاعدةُ المنهج §3.6 ③ · توجيه ٢٧٦ · ق-١٦١٠/ب). لا شيءَ هنا يعمل، والبياناتُ مثالٌ.</p>
-  <p>المرجع: خطّةُ نماذج التسليم (مرجعٌ معتمد، ق-١٥٩٩) وأحكامُ التوقيع (ق-١٥٤٦ · ق-١٥٩١)، والقراراتُ الاثنا عشر الباقية في المسح ٣٢.</p>
+  <h1>محرّكُ نماذج التسليم: النموذجُ المرئيّ بمسار الرابط</h1>
+  <p>شاشاتٌ ساكنة تُعرض على صاحب المشروع قبل أيّ شيفرة (قاعدةُ المنهج §3.6 ③). أُعيدت بمسار التوقيع الذي حكم به صاحبُ المشروع (توجيه ٢٧٧ · ق-١٦٢٠ · ق-١٦٢٢): الموظّفُ يعبّئ ويوقّع، ثم رابطٌ للعميل. لا شيءَ هنا يعمل، والبياناتُ مثال.</p>
+  <p>المرجع: خطّةُ نماذج التسليم (مرجعٌ معتمد، ق-١٥٩٩) ووثيقةُ الموجة صفر §٤، والقراراتُ الباقية في المسح ٣٢ (①..⑫ وما فتحه المسار ⑬..⑯).</p>
+  <div class="flow">
+    <span class="badge ok">الموظّفُ يعبّئ</span><span class="arrow">←</span><span class="badge ok">الموظّفُ يوقّع</span><span class="arrow">←</span><span class="badge ok">رابطٌ للعميل</span><span class="arrow">←</span><span class="badge ok">دخولٌ برمزٍ أو نفاذ</span><span class="arrow">←</span><span class="badge ok">مراجعةٌ ثم إقرارٌ وتوقيع</span><span class="arrow">أو</span><span class="badge warn">اعتراضٌ بملاحظةٍ وصورة</span><span class="arrow">←</span><span class="badge ok">قفلٌ ونسخةٌ نهائية</span>
+  </div>
   <div class="legend">
     <span class="badge ok">محسومٌ بحكم صاحب المشروع</span>
-    <span class="badge open">ينتظر حكماً من القرارات الاثني عشر</span>
+    <span class="badge open">ينتظر حكماً</span>
     <span class="badge warn">حالةُ انتظار</span>
   </div>
 </header>
 
 <nav role="tablist" aria-label="الشاشات">
-  <button role="tab" aria-selected="true" data-target="s1">١ القوالبُ العامّة (المنصّة)</button>
-  <button role="tab" aria-selected="false" data-target="s2">٢ قوالبُ المنشأة</button>
-  <button role="tab" aria-selected="false" data-target="s3">٣ تعبئةُ النموذج</button>
+  <button role="tab" aria-selected="true" data-target="s1">١ القوالبُ العامّة</button>
+  <button role="tab" aria-selected="false" data-target="s2">٢ قوالبُ المنشأة وإعدادُها</button>
+  <button role="tab" aria-selected="false" data-target="s3">٣ تعبئةُ الموظّف</button>
   <button role="tab" aria-selected="false" data-target="s4">٤ الأدلةُ والصور</button>
-  <button role="tab" aria-selected="false" data-target="s5">٥ التوقيع</button>
-  <button role="tab" aria-selected="false" data-target="s6">٦ البديلُ والورقيّ</button>
-  <button role="tab" aria-selected="false" data-target="s7">٧ المختومُ والمطبوع</button>
+  <button role="tab" aria-selected="false" data-target="s5">٥ توقيعُ الموظّف وإرسالُ الرابط</button>
+  <button role="tab" aria-selected="false" data-target="s6">٦ الرابطُ قبل الدخول</button>
+  <button role="tab" aria-selected="false" data-target="s7">٧ العميلُ يراجع ويقرّ</button>
+  <button role="tab" aria-selected="false" data-target="s8">٨ اعتراضٌ ونسخةٌ معدّلة</button>
+  <button role="tab" aria-selected="false" data-target="s9">٩ المدّةُ والتذكيرُ والسجلّ</button>
+  <button role="tab" aria-selected="false" data-target="s10">١٠ جهازُ الموظّف والبديلُ والورقيّ</button>
+  <button role="tab" aria-selected="false" data-target="s11">١١ المختومُ والنسخةُ النهائية</button>
 </nav>
 
 <main>
@@ -99,24 +110,11 @@
     <div class="note decided">قرارُ الخطّة ٤٣: المنصّةُ تملك القوالب، والتاجرُ يعدّل نسختَه. والقالبُ مُصدَّر: المنشورُ لا يُعدَّل بل يُنشأ إصدارٌ جديد.</div>
     <div class="frame">
       <table>
-        <thead><tr><th>القالب</th><th>النشاط</th><th>الإصدار</th><th>الحالة</th><th>أدنى مستوى توقيع</th><th></th></tr></thead>
+        <thead><tr><th>القالب</th><th>النشاط</th><th>الإصدار</th><th>الحالة</th><th>مدّةُ التوقيع الافتراضية</th><th></th></tr></thead>
         <tbody>
-          <tr><td>تسليمُ وحدةٍ سكنية</td><td>العقارات</td><td>٣</td><td><span class="badge ok">منشور</span></td><td>مرسومٌ برمز</td><td><span class="btn">إصدارٌ جديد</span></td></tr>
-          <tr><td>استلامُ وحدةٍ عند نهاية العقد</td><td>العقارات</td><td>٢</td><td><span class="badge ok">منشور</span></td><td>مرسومٌ برمز</td><td><span class="btn">إصدارٌ جديد</span></td></tr>
-          <tr><td>فحصُ مركبةٍ مؤجّرة</td><td>تأجيرُ السيارات</td><td>١</td><td><span class="badge warn">مسوّدة</span></td><td>مرسومٌ برمز</td><td><span class="btn">نشر</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="frame">
-      <b>بنودُ «تسليم وحدة سكنية» (الإصدار ٣)</b>
-      <table>
-        <thead><tr><th>القسم</th><th>البند</th><th>النوع</th><th>يمنع الختم إن فشل</th></tr></thead>
-        <tbody>
-          <tr><td>العدّادات</td><td>قراءةُ عدّاد الكهرباء</td><td>قراءةُ عدّاد</td><td>نعم</td></tr>
-          <tr><td>العدّادات</td><td>قراءةُ عدّاد الماء</td><td>قراءةُ عدّاد</td><td>نعم</td></tr>
-          <tr><td>المطبخ</td><td>حالةُ الخزائن</td><td>حالة (سليم · مقبول · تالف · مفقود)</td><td>لا</td></tr>
-          <tr><td>المطبخ</td><td>صورةُ المطبخ كاملاً</td><td>صورةٌ إلزامية</td><td>نعم</td></tr>
-          <tr><td>المفاتيح</td><td>عددُ المفاتيح المسلَّمة</td><td>عدد</td><td>نعم</td></tr>
+          <tr><td>تسليمُ وحدةٍ سكنية</td><td>العقارات</td><td>٣</td><td><span class="badge ok">منشور</span></td><td>٧ أيّام <span class="badge open">⑬</span></td><td><span class="btn">إصدارٌ جديد</span></td></tr>
+          <tr><td>استلامُ وحدةٍ عند نهاية العقد</td><td>العقارات</td><td>٢</td><td><span class="badge ok">منشور</span></td><td>٧ أيّام <span class="badge open">⑬</span></td><td><span class="btn">إصدارٌ جديد</span></td></tr>
+          <tr><td>فحصُ مركبةٍ مؤجّرة</td><td>تأجيرُ السيارات</td><td>١</td><td><span class="badge warn">مسوّدة</span></td><td>يومان <span class="badge open">⑬</span></td><td><span class="btn">نشر</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -125,26 +123,25 @@
   <!-- ٢ -->
   <section class="screen" id="s2">
     <div class="wave">الموجة ١ · الفاعل: مالكُ المنشأة · الواجهة: شاشاتُ المنشأة</div>
-    <h2>قوالبُ المنشأة</h2>
+    <h2>قوالبُ المنشأة وإعدادُ التوقيع</h2>
     <div class="frame">
-      <div class="row"><div class="grow"><b>قوالبُ المنصّة المتاحة لنشاطك</b></div><span class="btn primary">نسخُ قالبٍ لمنشأتي</span></div>
+      <div class="row"><div class="grow"><b>نسخُ المنشأة</b></div><span class="btn primary">نسخُ قالبٍ لمنشأتي</span></div>
       <table>
-        <thead><tr><th>نسختي</th><th>منسوخةٌ من</th><th>إصدارُ نسختي</th><th>آخرُ إصدارٍ للمنصّة</th><th></th></tr></thead>
+        <thead><tr><th>نسختي</th><th>منسوخةٌ من</th><th>إصدارُ نسختي</th><th>آخرُ إصدارٍ للمنصّة</th></tr></thead>
         <tbody>
-          <tr><td>تسليمُ شقّة (مع غرفة الخادمة)</td><td>تسليمُ وحدةٍ سكنية · إصدار ٢</td><td>٤</td><td>٣ <span class="badge warn">أحدث من أصل نسختك</span></td><td><span class="btn">تعديلُ نسختي</span></td></tr>
-          <tr><td>استلامُ وحدةٍ عند نهاية العقد</td><td>كما هو · إصدار ٢</td><td>١</td><td>٢</td><td><span class="btn">تعديلُ نسختي</span></td></tr>
+          <tr><td>تسليمُ شقّة (مع غرفة الخادمة)</td><td>تسليمُ وحدةٍ سكنية · إصدار ٢</td><td>٤</td><td>٣ <span class="badge warn">أحدث من أصل نسختك</span></td></tr>
         </tbody>
       </table>
-      <p class="wave">تحديثُ المنصّة لا يغيّر نسختَك صامتاً: يظهر أنه أحدث، وتختار أنت أن تنسخ الإصدارَ الجديد.</p>
     </div>
     <div class="frame">
-      <b>الإعداد: حدُّ «العقد الكبير» الذي يحتاج تحقّقَ هويّةٍ عبر نفاذ</b>
+      <b>إعدادُ التوقيع للمنشأة</b>
       <div class="row">
-        <div class="field grow"><label>الحدّ (فارغٌ يعني لا يُشترط نفاذ)</label><div class="input">١٠٠٬٠٠٠ ر.س</div></div>
-        <div class="field grow"><label>يُقاس على</label><div class="input">قيمةُ العقد كلِّها</div></div>
+        <div class="field grow"><label>مدّةُ التوقيع لنوع «تسليم وحدة»</label><div class="input">٧ أيّام</div></div>
+        <div class="field grow"><label>التذكير</label><div class="input">في منتصف المدّة، وقبل الانقضاء بيوم</div></div>
+        <div class="field grow"><label>حدُّ العقد الذي يُشترط فيه نفاذ (فارغٌ = لا يُشترط)</label><div class="input">١٠٠٬٠٠٠ ر.س</div></div>
       </div>
-      <div class="note decided">ق-١٥٩١: نفاذٌ تحقّقٌ من الهوية ويبقى التوقيعُ المرسومُ برمز، وحدُّ «الكبير» يضعه التاجر.</div>
-      <div class="note">ينتظر حكماً (القرار ①): بماذا يُقاس الحدّ، وما يقع إن تعطّل نفاذ يومَ التسليم.</div>
+      <div class="note decided">ق-١٦٢٠: «ومدّةُ التوقيع معلنةٌ محدّدة، لا مفتوحة، مع تذكيرٍ آليّ» · «ونفاذٌ متاحٌ لكلِّ العقود» · ق-١٥٩١: حدُّ «الكبير» يضعه التاجر.</div>
+      <div class="note">ينتظر حكماً: ⑬ كم يوماً وما أثرُ الانقضاء · ⑭ إيقاعُ التذكير · ① بماذا يُقاس الحدّ · ①ب نفاذٌ خيارٌ في كلِّ عقدٍ وشرطٌ فوق الحدّ (قراءتي).</div>
     </div>
   </section>
 
@@ -155,25 +152,24 @@
     <div class="frame">
       <div class="row">
         <span class="badge warn">مسوّدة</span>
-        <span class="wave">القالب: تسليمُ شقّة (إصدار ٤) · المستأجر من بطاقة العميل: محمّد العتيبي · ٠٥٥٥ ••• ٤٤٢</span>
+        <span class="wave">القالب: تسليمُ شقّة (إصدار ٤) · المستأجر من بطاقة العميل: محمّد العتيبي · الجوالُ المسجَّل ٠٥٥٥ ••• ٤٤٢</span>
       </div>
       <table>
         <thead><tr><th>البند</th><th>القيمة</th><th>ملاحظة</th><th>دليل</th></tr></thead>
         <tbody>
           <tr><td>قراءةُ عدّاد الكهرباء</td><td><div class="input mono">48213</div></td><td></td><td>صورة ١</td></tr>
-          <tr><td>قراءةُ عدّاد الماء</td><td><div class="input mono">  </div> <span class="badge bad">إلزاميّ، يمنع الإرسال</span></td><td></td><td></td></tr>
+          <tr><td>قراءةُ عدّاد الماء</td><td><div class="input mono">  </div> <span class="badge bad">إلزاميّ، يمنع التوقيع</span></td><td></td><td></td></tr>
           <tr><td>حالةُ الخزائن</td><td><div class="input">مقبول</div></td><td>خدشٌ في باب الخزانة العلوية</td><td>صورة ٢</td></tr>
-          <tr><td>صورةُ المطبخ كاملاً</td><td><span class="badge ok">أُرفقت</span></td><td></td><td>صورة ٣</td></tr>
           <tr><td>عددُ المفاتيح المسلَّمة</td><td><div class="input mono">3</div></td><td></td><td></td></tr>
         </tbody>
       </table>
       <div class="row" style="margin-top:10px">
         <span class="btn">حفظٌ كمسوّدة</span>
-        <span class="btn primary disabled">إرسالٌ للتوقيع</span>
-        <span class="wave">يُفعَّل حين تكتمل البنودُ الإلزامية.</span>
+        <span class="btn primary disabled">توقيعي ثم إرسالُ الرابط</span>
+        <span class="wave">يُفعَّل حين تكتمل البنودُ الإلزامية: الموظّفُ يعبّئ النموذجَ كاملاً قبل أن يوقّع.</span>
       </div>
+      <div class="note decided">ق-١٦٢٠: «الموظّفُ يعبّئ النموذجَ كاملاً ويوقّعه، ثم يصل رابطُه للعميل».</div>
       <div class="note decided">قرارُ الخطّة ٣٧: «هذا النموذجُ مكمّلٌ لنموذج إيجار ولا يحلّ محلّه» يظهر هنا وفي المطبوع، ولا زرَّ يوحي بإرسالٍ إلى إيجار (قرارُ الخطّة ٤٨).</div>
-      <div class="note decided">قرارُ الخطّة ٤٤: يعمل بلا اتصالٍ داخل الجلسة فقط؛ المدخلاتُ والصورُ في ذاكرة المتصفّح تُرفع حين تعود الشبكة.</div>
     </div>
   </section>
 
@@ -183,89 +179,167 @@
     <h2>صورُ النموذج</h2>
     <div class="frame">
       <div class="row"><span class="btn primary">التقاطُ صورة</span><span class="wave">على بندٍ أو على النموذج كلِّه · الحدّ ١٠ ميغابايت</span></div>
+      <p class="wave">لا تُصوَّر وجوهٌ ولا مستنداتٌ ولا أغراضٌ شخصية. والتسليمُ والاستلامُ والوحدةُ فارغة يكفيهما بندٌ في العقد؛ والكشفُ والصيانةُ والمستأجرُ ساكن: يُعلَم قبل التصوير.</p>
       <div class="thumbs" style="margin-top:10px">
         <div class="thumb"><div class="img"></div><div class="meta">عدّادُ الكهرباء<br>التُقطت ١٠:١٤ (الجهاز)<br>وصلت ١٠:١٥ (الخادم)<br><span class="mono">sha256 9f2c…a1</span> <span class="badge ok">مطابِقة</span></div></div>
         <div class="thumb"><div class="img"></div><div class="meta">باب الخزانة<br>التُقطت ١٠:٢١<br>وصلت ١٠:٢١<br><span class="mono">sha256 41be…07</span> <span class="badge ok">مطابِقة</span></div></div>
-        <div class="thumb"><div class="img"></div><div class="meta">المطبخ كاملاً<br>التُقطت ١٠:٢٣<br>وصلت ١٠:٣٠<br><span class="mono">sha256 c03d…5e</span> <span class="badge ok">مطابِقة</span></div></div>
       </div>
-      <div class="note decided">البصمةُ تُحسب على الجهاز لحظةَ الالتقاط، ويعيد الخادمُ حسابَها فيرفض المخالفة (القاعدة ٤ من الخطّة). الأصلُ يُحفظ والمصغّرةُ للعرض.</div>
-      <div class="note">ينتظر حكماً (وثيقةُ الموجة صفر §٢.٣): المخزنُ الحسّاس للصور داخل المساكن أم العاديّ، وأين تُصنع المصغّرة.</div>
-      <div class="note decided">بعد الختم لا إضافةَ ولا حذف (قرارُ الخطّة ٤٢)، وتُحفظ مدّةَ نوعها: العقارُ ١٥ سنةً من إغلاق حساب المنشأة (قرارُ الخطّة ٣٨).</div>
+      <div class="note decided">ق-١٦١٧: الصورُ في المخزن الحسّاس المشفَّر، والمصغّرةُ تُصنع على الجهاز. ق-١٦١٩/ج: والصورُ لا تُحذف وتبقى في سجلّ العقد طوالَ مدّة الحفظ (العقارُ ١٥ سنةً من إغلاق حساب المنشأة).</div>
+      <div class="note decided">بعد الختم لا إضافةَ ولا حذف (قرارُ الخطّة ٤٢)، وقفلُ الصفّ بين رفع الصورة والتوقيع (ق-١٦١٩/ج).</div>
     </div>
   </section>
 
   <!-- ٥ -->
   <section class="screen" id="s5">
-    <div class="wave">الموجة ٣ · التوقيعُ والنصاب</div>
-    <h2>التوقيع: النموذجُ ينتظر التواقيع</h2>
+    <div class="wave">الموجة ٣ · الفاعل: موظّفُ المنشأة</div>
+    <h2>توقيعُ الموظّف، ثم إرسالُ الرابط للعميل</h2>
     <div class="frame">
-      <div class="row"><span class="badge warn">ينتظر التواقيع</span><span class="wave">البنودُ مجمّدة؛ أيُّ تعديلٍ يعيده مسوّدةً ويُلغي ما جُمع (ترشيحُ القرار ③)</span></div>
-      <table>
-        <thead><tr><th>الدور</th><th>الموقّع</th><th>المستوى</th><th>الحال</th></tr></thead>
-        <tbody>
-          <tr><td>المستلِم (المستأجر)</td><td>محمّد العتيبي · من بطاقة العميل</td><td>مرسومٌ برمز + نفاذ (العقدُ فوق الحدّ)</td><td><span class="badge warn">لم يوقّع</span></td></tr>
-          <tr><td>المسلِّم (الموظّف)</td><td>سالم القحطاني · بحسابه</td><td>مرسومٌ بجلسة الموظّف</td><td><span class="badge ok">وقّع ١٠:٤٢</span></td></tr>
-        </tbody>
-      </table>
-      <div class="note decided">ق-١٥٩١: في نموذج نهاية العقد المستأجرُ مسلِّمٌ والموظّفُ مستلِم.</div>
-      <div class="note">ينتظر حكماً (القرار ⑦): كيف يوقّع الموظّف؛ والمعروضُ هنا الترشيح: رسمٌ مع هويّة جلسته.</div>
+      <div class="steps">
+        <div class="step"><b>١ توقيعُ الموظّف</b><div class="pad">يرسم سالم القحطاني توقيعَه</div><p class="wave">وهو داخلٌ بحسابه</p><div class="note">ينتظر حكماً (⑦): كيف يوقّع الموظّف؛ المعروضُ الترشيح: رسمٌ مع هويّة جلسته.</div></div>
+        <div class="step"><b>٢ إرسالُ الرابط</b><p class="wave">إلى الجوال المسجَّل في بطاقة العميل: ٠٥٥٥ ••• ٤٤٢</p><p class="wave">نصُّ الرسالة لا يذكر اسماً ولا مبلغاً: «لديك نموذجٌ ينتظر توقيعك» ورابط.</p><span class="btn primary">إرسالُ الرابط</span><div class="note">ينتظر حكماً (⑤): باسم من تصل الرسالة، وأين مزوّدُها.</div></div>
+        <div class="step"><b>٣ المدّة</b><p class="wave">تبدأ عند الإرسال وتُختم: تنقضي ٢٠٢٦/١٠/١١ ١٠:٤٥</p><span class="badge warn">ينتظر العميل · ٧ أيّام</span><div class="note">ينتظر حكماً (⑬): كم يوماً وما أثرُ الانقضاء.</div></div>
+      </div>
+      <div class="note decided">ق-١٦٢٠: «ثم يصل رابطُه للعميل» · «ومدّةُ التوقيع معلنةٌ محدّدة، لا مفتوحة». وما أُرسل لا يُعدَّل؛ التعديلُ نسخةٌ معدّلة (الشاشة ٨).</div>
     </div>
-    <div class="steps">
-      <div class="step"><b>١ الرسم</b><div class="pad">يرسم المستأجرُ توقيعَه على جهاز الموظّف</div><div class="note">ينتظر حكماً (القرار ⑧): بحضوره على جهاز الموظّف الآن، والصفحةُ العامّة موجةٌ مستقلّة.</div></div>
-      <div class="step"><b>٢ الرمز</b><p class="wave">أُرسل إلى ٠٥٥٥ ••• ٤٤٢ برسالةٍ نصّية (والبريدُ بديلاً)</p><div class="code"><span>4</span><span>8</span><span>1</span><span></span><span></span><span></span></div><p class="wave">ستّةُ أرقام · ينتهي خلال ٤:٢٠ · محاولتان باقيتان</p><span class="btn">إعادةُ الإرسال</span><div class="note">ينتظر حكماً (القرار ④): الجديدُ يُبطل القديم، وحدُّ الإعادة.</div></div>
-      <div class="step"><b>٣ نفاذ</b><p class="wave">قيمةُ العقد فوق حدّ المنشأة، فيُطلب تحقّقُ الهويّة عبر نفاذ</p><span class="btn">بدءُ التحقّق عبر نفاذ</span><div class="note">ينتظر حكماً (القرار ①): إن تعطّل نفاذ، أيبقى منتظراً؟</div></div>
-      <div class="step"><b>٤ الختم</b><p class="wave">يُختم حين يكتمل النصاب: قفلٌ وبصمةُ محتوى</p><span class="btn primary disabled">يُختم تلقائياً عند اكتمال التواقيع</span></div>
-    </div>
-    <div class="note decided" style="margin-top:10px">ق-١٥٩١: ستّةُ أرقام وخمسُ دقائق وثلاثُ محاولات، والكلفةُ على التاجر.</div>
-    <div class="note">ينتظر حكماً (القرار ⑤): باسم من تصل الرسالة، وأين مزوّدُها.</div>
   </section>
 
   <!-- ٦ -->
   <section class="screen" id="s6">
-    <div class="wave">الموجة ٣ · الحالاتُ الخاصّة</div>
-    <h2>بديلٌ يستلم عن المستأجر، وتوقيعٌ ورقيّ</h2>
-    <div class="frame">
-      <b>طلبُ بديل</b>
-      <div class="row">
-        <div class="field grow"><label>اسمُ البديل</label><div class="input">فهد العتيبي</div></div>
-        <div class="field grow"><label>جوالُ البديل (يُتحقّق منه برمز، ق-١٥٤٦)</label><div class="input mono">05•• ••• •17</div></div>
-      </div>
-      <div class="note decided">ق-١٥٤٦ بتمامه (ق-١٥٩٠): وجوالُ البديل يُتحقّق منه برمز.</div>
-      <div class="note">ينتظر حكماً (القرار ⑨): أيُجمع رقمُ هويّته، وأساسُ جمع بياناته، ونصُّ الإحاطة الذي يُعرض عليه قبل الرمز.</div>
-      <div class="note">ينتظر حكماً (القرار ⑩): أيُّ صلاحيةٍ تحكم طلبَ البديل (الترشيحُ: «المراجعة» كالختم).</div>
+    <div class="wave">الموجة ٦ مقترَحةً بعد ٣ · الفاعل: العميلُ النهائيّ · الواجهة: صفحةُ الرابط العامّة</div>
+    <h2>الرابطُ قبل الدخول: لا شيءَ يظهر</h2>
+    <div class="phone">
+      <p style="text-align:center; margin:0 0 6px"><b>نموذجٌ ينتظر توقيعك</b></p>
+      <p class="wave" style="text-align:center">للاطّلاع عليه ادخل برمزٍ يصل جوالَك المسجَّل، أو بنفاذ.</p>
+      <div style="text-align:center; margin:12px 0"><span class="btn primary">إرسالُ رمز التحقّق</span></div>
+      <div class="code"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <p class="wave" style="text-align:center">ستّةُ أرقام · خمسُ دقائق · ثلاثُ محاولات</p>
+      <div style="text-align:center; margin:12px 0"><span class="btn">الدخول بنفاذ</span></div>
+      <p class="wave" style="text-align:center">لا اسمَ منشأة · لا اسمَ مستأجر · لا صورة · لا مبلغ</p>
     </div>
-    <div class="frame">
-      <b>مستأجرٌ بلا جوالٍ أو يرفض التوقيعَ الإلكترونيّ</b>
-      <div class="row"><span class="btn">رفعُ النموذج الورقيّ الموقَّع</span><span class="btn">يشهد الموظّف</span></div>
-      <div class="note decided">ق-١٥٩١: توقيعٌ ورقيٌّ يُرفع ويشهد عليه الموظّف، ويُعرض مستواه «ورقيٌّ مرفوع».</div>
-      <div class="note">ينتظر حكماً (القرار ⑥): عقدٌ بلا عميلٍ مربوط أو بجوالٍ غير صالح؛ الترشيحُ رفضٌ برسالةٍ تقول ما الناقص.</div>
-    </div>
+    <div class="note decided">ق-١٦٢٠: «والدخولُ للرابط برمزٍ على جوال العميل المسجَّل، ونفاذٌ متاحٌ لكلِّ العقود. ⛔ ولا يظهر في الرابط أيُّ تفصيلٍ قبل الدخول، لا صورةٌ ولا اسمٌ ولا مبلغ.» ق-١٥٩١: ستّةُ أرقام وخمسُ دقائق وثلاثُ محاولات.</div>
+    <div class="note">ينتظر حكماً (④): الرمزُ الجديد يُبطل القديم، وحدُّ الإعادة.</div>
   </section>
 
   <!-- ٧ -->
   <section class="screen" id="s7">
-    <div class="wave">الموجات ١ إلى ٣ · المخرج</div>
-    <h2>النموذجُ المختوم ومطبوعُه</h2>
+    <div class="wave">بعد الدخول · الفاعل: العميلُ النهائيّ</div>
+    <h2>العميلُ يراجع، ثم يقرّ ويوقّع أو يعترض</h2>
+    <div class="phone">
+      <p style="margin:0"><b>تسليمُ شقّة · الوحدة ٣٠٥</b></p>
+      <p class="wave">وقّعه الموظّف سالم القحطاني ٢٠٢٦/١٠/٠٤ ١٠:٤٢ · الإصدار ١</p>
+      <table>
+        <tbody>
+          <tr><td>عدّادُ الكهرباء</td><td class="mono">48213</td></tr>
+          <tr><td>عدّادُ الماء</td><td class="mono">10577</td></tr>
+          <tr><td>الخزائن</td><td>مقبول · خدشٌ في الباب العلويّ</td></tr>
+          <tr><td>المفاتيح</td><td class="mono">3</td></tr>
+        </tbody>
+      </table>
+      <div class="thumbs" style="margin:8px 0"><div class="thumb"><div class="img"></div><div class="meta">عدّادُ الكهرباء</div></div><div class="thumb"><div class="img"></div><div class="meta">باب الخزانة</div></div></div>
+      <label class="wave"><input type="checkbox"> أقرّ بأني راجعتُ النموذجَ وصورَه وأنه يصف حالَ الوحدة</label>
+      <div class="pad" style="margin-top:8px">ارسم توقيعك</div>
+      <div class="row" style="margin-top:10px"><span class="btn primary disabled">إقرارٌ وتوقيع</span><span class="btn danger">اعتراضٌ بملاحظةٍ وصورة</span></div>
+      <p class="wave">ينقضي التوقيع ٢٠٢٦/١٠/١١ ١٠:٤٥</p>
+    </div>
+    <div class="note decided">ق-١٦٢٠: «فيراجع ويقرّ ويوقّع» · «واعتراضُ العميل بملاحظةٍ وصورة».</div>
+    <div class="note">ينتظر حكماً (⑫): صورةُ التوقيع ساكنةٌ وحدَها أم معها حركةُ القلم.</div>
+  </section>
+
+  <!-- ٨ -->
+  <section class="screen" id="s8">
+    <div class="wave">الاعتراضُ والردّ · الفاعلان: العميلُ ثم الموظّف</div>
+    <h2>«معترَضٌ عليه»، ثم نسخةٌ معدّلة يوقّعها العميلُ من جديد</h2>
+    <div class="frame">
+      <div class="row"><span class="badge bad">معترَضٌ عليه</span><span class="wave">الإصدار ١ · اعترض محمّد العتيبي ٢٠٢٦/١٠/٠٥ ٢٠:١٠</span></div>
+      <table>
+        <thead><tr><th>البند</th><th>ملاحظةُ العميل</th><th>صورتُه</th></tr></thead>
+        <tbody><tr><td>عدّادُ الماء</td><td>القراءةُ ١٠٥٧٠ لا ١٠٥٧٧</td><td><div class="thumb" style="width:110px"><div class="img" style="height:60px"></div></div></td></tr></tbody>
+      </table>
+      <div class="row" style="margin-top:10px"><span class="btn primary">نسخةٌ معدّلة</span><span class="wave">إصدارٌ جديد يشير إلى سابقه؛ والسابقُ يبقى مقروءاً باعتراضه.</span></div>
+    </div>
+    <div class="frame">
+      <table>
+        <thead><tr><th>الإصدار</th><th>الحال</th><th>توقيعُ الموظّف</th><th>توقيعُ العميل</th></tr></thead>
+        <tbody>
+          <tr><td>١</td><td><span class="badge bad">معترَضٌ عليه</span></td><td>١٠/٠٤ ١٠:٤٢</td><td>اعتراض ١٠/٠٥ ٢٠:١٠</td></tr>
+          <tr><td>٢</td><td><span class="badge warn">ينتظر العميل</span></td><td>١٠/٠٦ ٠٩:٠٥</td><td>رابطٌ جديد أُرسل</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note decided">ق-١٦٢٠: «فيصير النموذجُ معترَضاً عليه، ويردّ الموظّفُ بنسخةٍ معدّلةٍ يوقّعها العميلُ من جديد».</div>
+    <div class="note">ينتظر حكماً (⑮): حدُّ جولات الاعتراض، وما يُوسم به المعترَضُ عليه عند الانقضاء. و(③ب): من يمنع تعديلَ المختوم.</div>
+  </section>
+
+  <!-- ٩ -->
+  <section class="screen" id="s9">
+    <div class="wave">المدّةُ والسجلّ · الفاعل: موظّفُ المنشأة يقرأ</div>
+    <h2>المدّةُ والتذكيرُ الآليّ، وسجلُّ الإرسال</h2>
+    <div class="frame">
+      <div class="row"><span class="badge warn">ينتظر العميل</span><span class="wave">بقي ٣ أيّام · ينقضي ٢٠٢٦/١٠/١١ ١٠:٤٥</span></div>
+      <table>
+        <thead><tr><th>الوقت (بساعة الخادم)</th><th>الحدث</th><th>إلى</th><th>النتيجة</th></tr></thead>
+        <tbody>
+          <tr><td>١٠/٠٤ ١٠:٤٥</td><td>إرسالُ الرابط (الإصدار ١)</td><td>٠٥٥٥ ••• ٤٤٢</td><td><span class="badge ok">سُلّمت</span></td></tr>
+          <tr><td>١٠/٠٥ ١٩:٥٨</td><td>فتحُ الرابط ودخولٌ برمز</td><td>العميل</td><td><span class="badge ok">نجح</span></td></tr>
+          <tr><td>١٠/٠٥ ٢٠:١٠</td><td>اعتراض</td><td>العميل</td><td><span class="badge bad">معترَضٌ عليه</span></td></tr>
+          <tr><td>١٠/٠٦ ٠٩:٠٧</td><td>إرسالُ الرابط (الإصدار ٢)</td><td>٠٥٥٥ ••• ٤٤٢</td><td><span class="badge ok">سُلّمت</span></td></tr>
+          <tr><td>١٠/٠٨ ٠٩:٠٧</td><td>تذكيرٌ آليّ (منتصف المدّة)</td><td>٠٥٥٥ ••• ٤٤٢</td><td><span class="badge ok">سُلّمت</span></td></tr>
+        </tbody>
+      </table>
+      <p class="wave">السجلُّ يُلحق ولا يُعدَّل ولا يُحذف.</p>
+    </div>
+    <div class="note decided">ق-١٦٢٠: «مع تذكيرٍ آليٍّ وسجلٍّ بالإرسال والتذكيرات».</div>
+    <div class="note">ينتظر حكماً (⑬): عند الانقضاء، أيبقى «انقضت مدّتُه دون توقيع العميل» (ترشيحي حتى يجيب المحامي) أم يُعدّ موافقةً ضمنيةً كإيجار؟ و(⑭) إيقاعُ التذكير.</div>
+  </section>
+
+  <!-- ١٠ -->
+  <section class="screen" id="s10">
+    <div class="wave">الحالاتُ الخاصّة</div>
+    <h2>التوقيعُ على جهاز الموظّف، والبديل، والورقيّ</h2>
+    <div class="frame">
+      <b>العميلُ حاضر: التوقيعُ على جهاز الموظّف (خيار)</b>
+      <p class="wave">الخطوتان نفسُهما على الجهاز: دخولٌ برمزٍ يصل جوالَ العميل أو بنفاذ، ثم المراجعةُ والإقرارُ والتوقيع؛ ويُسجَّل المسارُ في السجلّ.</p>
+      <div class="note decided">ق-١٦٢٠: «ويبقى التوقيعُ على جهاز الموظّف خياراً».</div>
+    </div>
+    <div class="frame">
+      <b>بديلٌ يستلم عن المستأجر</b>
+      <div class="row">
+        <div class="field grow"><label>اسمُ البديل</label><div class="input">فهد العتيبي</div></div>
+        <div class="field grow"><label>جوالُ البديل (يُتحقّق منه برمز، ق-١٥٤٦)</label><div class="input mono">05•• ••• •17</div></div>
+      </div>
+      <div class="note">ينتظر حكماً (⑨): أيُجمع رقمُ هويّته، وأساسُ جمع بياناته. و(⑩): أيُّ صلاحيةٍ تحكم طلبَ البديل.</div>
+    </div>
+    <div class="frame">
+      <b>مستأجرٌ بلا جوالٍ مسجَّل أو يرفض التوقيعَ الإلكترونيّ</b>
+      <div class="row"><span class="btn">رفعُ النموذج الورقيّ الموقَّع</span><span class="btn">يشهد الموظّف</span></div>
+      <div class="note decided">ق-١٥٩١: توقيعٌ ورقيٌّ يُرفع ويشهد عليه الموظّف، ويُعرض مستواه «ورقيٌّ مرفوع». وق-١٦٢٠: الرابطُ إلى الجوال المسجَّل وحدَه.</div>
+      <div class="note">ينتظر حكماً (②): ممثّلُ الشركة المستأجرة، كيف يُتحقّق من سنده.</div>
+    </div>
+  </section>
+
+  <!-- ١١ -->
+  <section class="screen" id="s11">
+    <div class="wave">المخرج</div>
+    <h2>المختومُ، والنسخةُ النهائية للعميل</h2>
     <div class="frame">
       <div class="row"><span class="badge ok">مختوم</span><span class="wave">ختمٌ داخليٌّ الآن، وجهةٌ معتمدةٌ لاحقاً (قرارُ الخطّة ٤٦)</span></div>
       <table>
         <tbody>
           <tr><th>بصمةُ المحتوى</th><td class="mono">sha256 7d0e3b…c94f</td></tr>
-          <tr><th>وقتُ الختم</th><td>٢٠٢٦/١٠/٠٤ ١٠:٤٩ بساعة الخادم</td></tr>
-          <tr><th>التواقيع</th><td>المستلِم: مرسومٌ برمز + نفاذ · المسلِّم: مرسومٌ بجلسة الموظّف</td></tr>
-          <tr><th>مستوى التوقيع</th><td>يُعرض دائماً على الشاشة والمطبوع (القاعدة ٧ من الخطّة)</td></tr>
-          <tr><th>الصور</th><td>٣ صور ببصماتها، وأُعلم المستأجرُ أنها تُحفظ ١٥ سنةً من إغلاق حساب المنشأة</td></tr>
+          <tr><th>وقتُ الختم</th><td>٢٠٢٦/١٠/٠٦ ١٤:٢٠ بساعة الخادم</td></tr>
+          <tr><th>التواقيع</th><td>الموظّف: مرسومٌ بجلسته (الإصدار ٢) · العميل: مرسومٌ برمز عبر الرابط</td></tr>
+          <tr><th>الإصدارات</th><td>١ معترَضٌ عليه · ٢ مختوم</td></tr>
+          <tr><th>الصور</th><td>٣ صور ببصماتها، تبقى في سجلّ العقد ١٥ سنةً من إغلاق حساب المنشأة</td></tr>
         </tbody>
       </table>
-      <div class="row" style="margin-top:10px"><span class="btn">طباعة</span><span class="btn">نموذجٌ تصحيحيّ</span></div>
-      <div class="note decided">قرارُ الخطّة ٤٢: لا تعديلَ بعد الختم؛ التصحيحُ بنموذجٍ تصحيحيٍّ يجعل السابقَ «مستبدَلاً» ويبقى ظاهراً.</div>
-      <div class="note">ينتظر حكماً (القرار ⑪): كيف تُعرض النماذجُ الموقَّعة قبل هذا البناء باسمٍ مكتوب (الترشيح: «اسمٌ كتبه الموظّف، بلا تحقّق من الموقّع»).</div>
-      <div class="note">ينتظر حكماً (القرار ⑫): صورةُ التوقيع ساكنةٌ وحدَها أم معها حركةُ القلم.</div>
+      <div class="row" style="margin-top:10px"><span class="btn">طباعة</span><span class="btn">نموذجٌ تصحيحيّ</span><span class="btn">إعادةُ إرسال النسخة النهائية</span></div>
+      <div class="note decided">ق-١٦٢٠: «وبعد التوقيع يُقفل النموذج، وتصل العميلَ نسختُه النهائية». وقرارُ الخطّة ٤٢: التصحيحُ بنموذجٍ تصحيحيّ.</div>
+      <div class="note">ينتظر حكماً (⑯): قناةُ النسخة النهائية (الترشيح: رابطٌ يفتحها بعد الدخول برمز). و(⑪): كيف تُعرض النماذجُ الموقَّعة قبل هذا البناء.</div>
     </div>
   </section>
 </main>
 
-<footer>نموذجٌ مرئيٌّ ساكن: لا خادمَ ولا بيانات، ويُقرّه صاحبُ المشروع قبل الشيفرة (ق-١٥٩٢ · ق-١٦١٠). الشاشاتُ في واجهة فاعلها (CLAUDE.md §3.5).</footer>
+<footer>نموذجٌ مرئيٌّ ساكن: لا خادمَ ولا بيانات، ويُقرّه صاحبُ المشروع قبل الشيفرة (ق-١٥٩٢ · ق-١٦٢٢). الشاشاتُ في واجهة فاعلها (CLAUDE.md §3.5).</footer>
 
 <script>
   document.querySelectorAll('nav button').forEach(function (b) {
