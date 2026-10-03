@@ -14,4 +14,8 @@ COPY --from=restic /usr/bin/restic /usr/local/bin/restic
 RUN apk add --no-cache coreutils ca-certificates openssl curl
 COPY offsite-backup.sh check-freshness.sh check-repo-object.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/offsite-backup.sh /usr/local/bin/check-freshness.sh /usr/local/bin/check-repo-object.sh
+# ⚖️ **بغير الجذر** (توجيه ٢٧٦ · `ق-١٦٠٦`: «تُبنيان الآن بغير الجذر، وتُجرَّبان أوّلَ ما يقوم خادمُ الرياض»): مستخدمُ `postgres`
+#    الذي في الصورة الأساس (`70:70`)، وبيتُه `/var/lib/postgresql` يحمل ذاكرةَ `restic` المؤقّتة. وما يقرؤه ويكتبه على المضيف
+#    (`backups/` للحال، والأسرارُ للقراءة، ومخزنُ الملفّات للقراءة) يُهيّأ له في `DEPLOY.md`، والتجربةُ الحيّة في أوّل يومٍ لخادم الرياض.
+USER postgres
 ENTRYPOINT ["/bin/sh"]
