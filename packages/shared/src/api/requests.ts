@@ -1064,7 +1064,6 @@ export interface SettlementLineDto {
 /** جسمُ طلب — `SignHandoverDto` في الخادم. */
 export interface SignHandoverDto {
   signedBy: string;
-  photoNoticeGiven?: boolean;
 }
 
 /** جسمُ طلب — `StartMaintenanceDto` في الخادم. */

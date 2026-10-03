@@ -288,10 +288,8 @@ export const updateHandover = (contractId: string, handoverId: string, dto: Upda
   apiClient.patch<Contract>(`/contracts/${contractId}/handovers/${handoverId}`, dto).then((r) => r.data);
 /** Takes no timestamp: the server stamps the signing time, which is what makes
  * it worth anything in a dispute. */
-export const signHandover = (contractId: string, handoverId: string, signedBy: string, photoNoticeGiven?: boolean) =>
-  apiClient
-    .post<Contract>(`/contracts/${contractId}/handovers/${handoverId}/sign`, photoNoticeGiven ? { signedBy, photoNoticeGiven } : { signedBy })
-    .then((r) => r.data);
+export const signHandover = (contractId: string, handoverId: string, signedBy: string) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/handovers/${handoverId}/sign`, { signedBy }).then((r) => r.data);
 export const deleteHandover = (contractId: string, handoverId: string) =>
   apiClient.delete<Contract>(`/contracts/${contractId}/handovers/${handoverId}`).then((r) => r.data);
 
@@ -400,7 +398,15 @@ export const uploadHandoverPhoto = async (handoverId: string, file: File, opts?:
   return res.data;
 };
 
-export const handoverPhotoDownloadUrl = (photoId: string) =>
-  apiClient.get<{ url: string; expiresInSeconds: number }>(`/contracts/handover-photos/${photoId}/download-url`).then((r) => r.data);
+/**
+ * ⚖️ ق-١٦٢٥ — صورةُ النموذج **تُبثّ عبر الخادم** (blob بالرأس Authorization): الجديدةُ في المخزن الحسّاس لا رابطَ موقَّعاً لها، والقائمةُ
+ * تُقرأ من الطريق نفسِه. تُفتح في لسانٍ جديد ثم يُحرَّر رابطُها المحلّيّ.
+ */
+export const openHandoverPhoto = async (photoId: string) => {
+  const res = await apiClient.get(`/contracts/handover-photos/${photoId}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
 
 export const deleteHandoverPhoto = (photoId: string) => apiClient.delete(`/contracts/handover-photos/${photoId}`);
