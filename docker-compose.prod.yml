@@ -147,7 +147,7 @@ services:
     depends_on:
       - api
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8080:8080"
 
   # Nightly logical backup, keeping the newest 14 dumps. A dump the platform
   # can restore is the operator-side safety net; the merchant-side copy is the

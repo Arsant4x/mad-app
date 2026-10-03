@@ -69,6 +69,10 @@ COPY --from=build /app/apps/api/dist apps/api/dist
 COPY --from=build /app/apps/api/prisma apps/api/prisma
 
 WORKDIR /app/apps/api
+# ⚖️ `ق-١٥٨٦` (بحكم صاحب المشروع): «والحاوياتُ تعمل بمستخدمٍ غيرِ الجذر». المستخدمُ `node` (1000) موجودٌ في الصورة الرسمية،
+# والملفّاتُ المنسوخة أعلاه للجذر ومقروءةٌ له، والخادمُ لا يكتب على القرص (السجلُّ إلى المخرَج والملفّاتُ إلى المخزن). ووظيفةُ
+# الفحص الأمنيّ تُسقط إن عادت الصورةُ إلى الجذر، وتشغّل أداةَ الهجرات بهذا المستخدم.
+USER node
 EXPOSE 3000
 # dist/src/main.js — NOT dist/main.js. tsconfig.build.json excludes only
 # node_modules/dist/test/*.spec.ts, so prisma/*.ts and scripts/*.ts are part of
