@@ -39,6 +39,31 @@ function sanitizeScreenActions(input: Record<string, string[]> | undefined, allo
 type Tx = Prisma.TransactionClient;
 
 /**
+ * ⚖️ **القالبان العامّان اللذان تقوم عليهما المنصّة يُحميان** (توجيه ٢٧٦ · `ق-١٦٠١`: «والقالبُ العامّ الشامل يُحمى»).
+ *
+ * العامُّ الشامل يركب عليه كلُّ صاحب منشأة (التسجيلُ الذاتيُّ يبحث عنه، ولوحةُ المدير لا تقبل غيرَه): تضييقُه يقصّ كلَّ موظّفي كلِّ
+ * منشأةٍ عليه بصمت، وحذفُه يوقف التسجيلَ الذاتيَّ كلَّه (المسح ٣٣ الخطر ٣). و«بلا شاشات» اختيارُ الموظّف الجديد المسبق: توسيعُه
+ * يعطي كلَّ موظّفٍ جديد ما لم يُعطَه. فالاسمُ يتغيّر، والنطاقُ لا، والحذفُ لا.
+ */
+function isLoadBearingGlobal(t: { companyId: string | null; isAllScreens: boolean; isNewUserDefault: boolean }): boolean {
+  return t.companyId === null && (t.isAllScreens || t.isNewUserDefault);
+}
+
+function sameScope(
+  t: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown },
+  next: { isAllScreens: boolean; allowedScreens: string[]; screenActions: ScreenActionMap | null },
+): boolean {
+  const screens = (xs: string[]) => [...xs].sort().join('|');
+  const actions = (m: unknown) =>
+    JSON.stringify(
+      Object.entries((m ?? {}) as Record<string, string[]>)
+        .map(([s, a]) => [s, [...a].sort()] as const)
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+  return t.isAllScreens === next.isAllScreens && screens(t.allowedScreens) === screens(next.allowedScreens) && actions(t.screenActions) === actions(next.screenActions);
+}
+
+/**
  * 🔴 **كلُّ عمليةٍ هنا في معاملة نطاقها** (`ق-٦٧٥` · المرحلة ③).
  *
  * `permission_templates` تحت `FORCE` بصياغةٍ فريدة: **العامُّ** (`companyId IS NULL`)
@@ -116,6 +141,10 @@ export class TemplatesService {
       // screen just removed from the template doesn't linger.
       const sourceActions = dto.screenActions ?? ((existing.screenActions as Record<string, string[]> | null) ?? undefined);
       const screenActions = sanitizeScreenActions(sourceActions, allowedScreens, isAllScreens);
+      // الاسمُ يتغيّر، والنطاقُ لا (توجيه ٢٧٦ · ق-١٦٠١).
+      if (isLoadBearingGlobal(existing) && !sameScope(existing, { isAllScreens, allowedScreens, screenActions })) {
+        throw new ForbiddenException(MSG.template_global_protected);
+      }
       return tx.permissionTemplate.update({
         where: { id },
         data: {
@@ -132,6 +161,7 @@ export class TemplatesService {
     await this.inScope(scope, async (tx) => {
       const existing = await this.getOwned(tx, id, scope);
       if (existing.isSystem) throw new ForbiddenException(MSG.template_system_undeletable);
+      if (isLoadBearingGlobal(existing)) throw new ForbiddenException(MSG.template_global_protected);
 
       /**
        * 🔴 **عدُّ ما يركب على القالب في معاملة نطاقه** (`ق-٦٥٧` · `ق-٦٦٢`).

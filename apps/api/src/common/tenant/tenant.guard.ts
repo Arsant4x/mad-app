@@ -20,6 +20,7 @@ import { TENANT_WIDE_KEY } from './tenant-wide.decorator';
 import { COMPANY_WIDE_FIGURES_KEY } from './company-wide-figures.decorator';
 import { OWNER_ONLY_KEY } from './owner-only.decorator';
 import { isActionAllowed, type ScreenAction, type ScreenActionMap } from '../../templates/screens';
+import { clipToCompany, grantsOf } from '../../templates/template-clip.util';
 import { MSG } from '../i18n/messages';
 import { IntegrationUsageService, USAGE_API_KEY } from '../../api-keys/integration-usage.service';
 
@@ -225,6 +226,15 @@ export class TenantGuard implements CanActivate {
       // كان الغيابُ يُقرأ «الكلّ»، فكان كلُّ ما يُفرغ الإسنادَ — قراءةٌ عمياء أعلاه أو حذفٌ خارج الخدمة — يوسّع بصمت.
       // والقائمون بلا إسنادٍ وُسموا `true` في الهجرة فبقي سلوكُهم.
       allowedBranchIds = companyUser.allBranches ? 'all' : companyUser.branches.map((b) => b.branchId);
+    }
+
+    // ⚖️ **قالبُ الموظّف ومفتاحُ النظام يُقصّان بقالب المنشأة** (توجيه ٢٧٦ · ق-١٦٠١): كانا يحلّان محلَّه فيرى الموظّفُ ما لا تراه
+    //    منشأتُه. والتقاطعُ من الدالّة الواحدة التي يقرؤها `/me/permissions` أيضاً.
+    if (payload.actorType === 'COMPANY_USER' || payload.actorType === 'INTEGRATION') {
+      const clipped = clipToCompany({ isAllScreens, allowedScreens: allowedScreens === 'all' ? [] : allowedScreens, screenActions }, grantsOf(company.permissionTemplate));
+      isAllScreens = clipped.isAllScreens;
+      allowedScreens = clipped.isAllScreens ? 'all' : clipped.allowedScreens;
+      screenActions = clipped.screenActions;
     }
 
     // getAllAndOverride, not get(..., context.getHandler()) alone — every

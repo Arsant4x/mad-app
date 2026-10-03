@@ -5,6 +5,7 @@ import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { MSG } from '../common/i18n/messages';
 import { TenantContext } from '../auth/types';
 import { ScreenActionMap } from '../templates/screens';
+import { clipToCompany, grantsOf } from '../templates/template-clip.util';
 import { Grant } from './permission-tree';
 import { DelegationLogEntry, DelegationEvent, LogNode, append, buildLogTree, findSequenceBreak } from './delegation-log';
 import { assertNoCycle } from './cycles';
@@ -242,19 +243,20 @@ export class DelegationsService {
     }
   }
 
-  /** سقف القالب — بنفس المصدر الذي يقرأه `tenant.guard.ts`. */
+  /** سقف القالب — بنفس المصدر والحكم اللذين يقرؤهما `tenant.guard.ts`: قالبُ الموظّف مقصوصاً بقالب منشأته (توجيه ٢٧٦ · ق-١٦٠١). */
   private async rootFor(tenant: TenantContext) {
+    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
+    const c = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
+      tx.company.findUniqueOrThrow({ where: { id: tenant.companyId }, include: { permissionTemplate: true } }),
+    );
     if (tenant.actorType === 'COMPANY_USER') {
       // تحت سياق المنشأة (`ق-٦٥٧` · المرحلة ①) — كما صار يقرأ `tenant.guard.ts` نفسُه.
       const u = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
         tx.companyUser.findUniqueOrThrow({ where: { id: tenant.profileId }, include: { permissionTemplate: true } }),
       );
-      return rootGrantsFrom(u.permissionTemplate.isAllScreens, u.permissionTemplate.allowedScreens, u.permissionTemplate.screenActions as ScreenActionMap | null);
+      const clipped = clipToCompany(grantsOf(u.permissionTemplate), grantsOf(c.permissionTemplate));
+      return rootGrantsFrom(clipped.isAllScreens, clipped.allowedScreens, clipped.screenActions);
     }
-    // قالبُ المنشأة تحت سياقها (`ق-٦٧٥` · المرحلة ③) — كما صار يقرأ `tenant.guard.ts`.
-    const c = await this.tenantPrisma.runInTenantContext(tenant.companyId, (tx) =>
-      tx.company.findUniqueOrThrow({ where: { id: tenant.companyId }, include: { permissionTemplate: true } }),
-    );
     return rootGrantsFrom(c.permissionTemplate.isAllScreens, c.permissionTemplate.allowedScreens, c.permissionTemplate.screenActions as ScreenActionMap | null);
   }
 

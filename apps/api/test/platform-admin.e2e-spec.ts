@@ -114,7 +114,8 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
     const inUse = templates.body.find((t: { name: string }) => t.name === 'المستخدم الأول (شامل)');
     expect(inUse).toBeDefined();
 
-    await request(app.getHttpServer()).delete(`/templates/${inUse.id}`).set('Authorization', `Bearer ${platformAdminToken}`).expect(409);
+    // ⚖️ توجيه ٢٧٦ (ق-١٦٠١): القالبُ العامّ الشامل يُحمى قبل عدِّ ما يركبه — فالرفضُ 403 لا 409، ولا يُحذف وإن خلا.
+    await request(app.getHttpServer()).delete(`/templates/${inUse.id}`).set('Authorization', `Bearer ${platformAdminToken}`).expect(403);
   });
 
   it('creates a company, rejects a duplicate username, and lets the new company log in', async () => {
@@ -210,6 +211,9 @@ describe('Platform admin / permission templates / company users (e2e)', () => {
       .set('Authorization', `Bearer ${cashierToken}`)
       .send({ name: 'محاولة', username: `nested-${suffix}`, password: 'NestedPass123!', permissionTemplateId: limitedTemplate.body.id })
       .expect(403);
+
+    // قالبٌ عامٌّ يركبه موظّفٌ لا يُحذف (409) — والشاملُ محميٌّ قبل هذا العدّ (توجيه ٢٧٦)، فالعدُّ يُثبَت هنا على قالبٍ ضيّق.
+    await request(app.getHttpServer()).delete(`/templates/${limitedTemplate.body.id}`).set('Authorization', `Bearer ${platformAdminToken}`).expect(409);
   });
 
   it("REGRESSION — a limited-permission-template company user can reach a screen it's allowed but not one it isn't (locks in the @RequiresScreen class-vs-handler reflector fix)", async () => {

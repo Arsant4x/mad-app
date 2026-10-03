@@ -290,6 +290,9 @@ model PermissionTemplate {
   name           String
   isSystem       Boolean  @default(false)
   isAllScreens   Boolean  @default(false)
+  /// ⚖️ القالبُ العامّ «بلا شاشات» الذي يُختار مسبقاً للموظّف الجديد (`ق-١٦٠١` · `ق-١٦٠٩`/ج) — **علَمٌ معلَن لا اسمٌ يُطابَق**
+  /// (`§8.7` الوجه العاشر). واحدٌ في المنصّة (فهرسٌ جزئيّ فريد في الهجرة)، ويُحمى من التوسيع والحذف كالعامّ الشامل.
+  isNewUserDefault Boolean @default(false)
   allowedScreens String[] @default([])
   /// Per-screen action grants, e.g. { "contracts": ["view","add","edit"] }.
   /// A screen in `allowedScreens` with **no** entry here ⇒ all actions on it

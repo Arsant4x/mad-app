@@ -352,6 +352,9 @@ export const MSG = {
   template_system_undeletable: 'templates.system_undeletable',
   template_system_not_assignable: 'templates.system_not_assignable',
   template_system_not_for_company: 'templates.system_not_for_company',
+  /** توجيه ٢٧٦ · ق-١٦٠١ — صاحبُ المنشأة شاملٌ في المسارين، والقالبان العامّان الحاكمان يُحميان. */
+  template_company_must_be_comprehensive: 'templates.company_must_be_comprehensive',
+  template_global_protected: 'templates.global_protected',
   templates_read_forbidden: 'templates.read_forbidden',
   templates_owner_only: 'templates.owner_only',
   pos_shift_already_open: 'pos.shift_already_open',
@@ -1344,6 +1347,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.template_system_undeletable]: { ar: 'نموذج المطوّر ثابت ولا يمكن حذفه', en: 'The developer template is fixed and cannot be deleted' },
   [MSG.template_system_not_assignable]: { ar: 'لا يمكن إسناد نموذج المطوّر لحساب موظف', en: 'The developer template cannot be assigned to an employee account' },
   [MSG.template_system_not_for_company]: { ar: 'لا تُركَّب منشأةٌ على نموذج المطوّر، فهو قالبُ النظام. اختر نموذجاً عامّاً آخر', en: 'A company cannot ride on the developer template, which is the system template. Choose another global template' },
+  [MSG.template_company_must_be_comprehensive]: {
+    ar: 'صاحبُ المنشأة يركب على نموذجٍ شامل، وتضييقُ ما يراه الموظّفون من نماذجهم لا من نموذج المنشأة. اختر نموذجاً عامّاً شاملاً',
+    en: 'A company owner rides on a comprehensive template; narrow what employees see through their own templates. Choose a comprehensive global template',
+  },
+  [MSG.template_global_protected]: {
+    ar: 'هذا النموذجُ العامّ تقوم عليه المنصّة (الشاملُ لأصحاب المنشآت أو «بلا شاشات» للموظّف الجديد)، فلا يُغيَّر نطاقُه ولا يُحذف. أنشئ نموذجاً آخر',
+    en: 'This global template is load bearing (comprehensive for owners or "no screens" for new employees), so its scope cannot change and it cannot be deleted. Create another template',
+  },
   [MSG.pos_shift_already_open]: { ar: 'لديك مناوبة مفتوحة بالفعل — أقفلها قبل فتح غيرها', en: 'You already have an open shift — close it before opening another' },
   [MSG.pos_no_open_shift]: { ar: 'لا توجد مناوبة مفتوحة — افتح مناوبة قبل تسجيل البيع', en: 'No open shift — open one before ringing a sale' },
   [MSG.pos_shift_not_found]: { ar: 'المناوبة غير موجودة', en: 'Shift not found' },

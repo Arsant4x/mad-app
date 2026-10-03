@@ -13,6 +13,7 @@ import { JwtPayload } from './types';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { MailService } from '../common/mail/mail.service';
 import { MfaService } from '../common/mfa/mfa.service';
+import { clipToCompany, grantsOf } from '../templates/template-clip.util';
 
 export interface AuthUserView {
   id: string;
@@ -93,10 +94,18 @@ interface IdentityWithProfiles {
         name: string;
         status: AccountStatus;
         companyId: string;
-        company: { status: AccountStatus };
-        permissionTemplate: { isAllScreens: boolean; allowedScreens: string[] };
+        company: { status: AccountStatus; permissionTemplate: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown } };
+        permissionTemplate: { isAllScreens: boolean; allowedScreens: string[]; screenActions: unknown };
       }
     | null;
+}
+
+/**
+ * شاشاتُ الموظّف كما يراها الحارسُ: قالبُه **مقصوصاً بقالب منشأته** (توجيه ٢٧٦ · `ق-١٦٠١`) — فلا تعرض الواجهةُ قائمةً يردّها الخادمُ 403.
+ */
+function employeeScreens(u: NonNullable<IdentityWithProfiles['companyUser']>): string[] | 'all' {
+  const c = clipToCompany(grantsOf(u.permissionTemplate), grantsOf(u.company.permissionTemplate));
+  return c.isAllScreens ? 'all' : c.allowedScreens;
 }
 
 @Injectable()
@@ -128,7 +137,7 @@ export class AuthService {
       if (identity.actorType === 'COMPANY') {
         base.company = await tx.company.findUnique({ where: { loginIdentityId: identity.id }, include: { permissionTemplate: true } });
       } else {
-        base.companyUser = await tx.companyUser.findUnique({ where: { loginIdentityId: identity.id }, include: { company: true, permissionTemplate: true } });
+        base.companyUser = await tx.companyUser.findUnique({ where: { loginIdentityId: identity.id }, include: { company: { include: { permissionTemplate: true } }, permissionTemplate: true } });
       }
       return base;
     });
@@ -241,7 +250,7 @@ export class AuthService {
         displayName: identity.companyUser.name,
         companyId: identity.companyUser.companyId,
         status: identity.companyUser.status,
-        allowedScreens: identity.companyUser.permissionTemplate.isAllScreens ? 'all' : identity.companyUser.permissionTemplate.allowedScreens,
+        allowedScreens: employeeScreens(identity.companyUser),
         platformRole: null,
       };
     }
@@ -301,7 +310,7 @@ export class AuthService {
         displayName: companyUser.name,
         companyId: companyUser.companyId,
         status: companyUser.status,
-        allowedScreens: companyUser.permissionTemplate.isAllScreens ? 'all' : companyUser.permissionTemplate.allowedScreens,
+        allowedScreens: employeeScreens(companyUser),
         platformRole: null,
       };
     } else {
