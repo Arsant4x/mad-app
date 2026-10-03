@@ -46,7 +46,16 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
-import { ownerCollectionSplit, rentAmountsOf, rentTaxTreatment, type RentClassification, type RentLessor, type RentTaxTreatment, type RentVatInclusion } from '../journal/rent-tax-point.util';
+import {
+  ownerCollectionSplit,
+  rentAmountsOf,
+  rentTaxTreatment,
+  sharePercentOf,
+  type RentClassification,
+  type RentLessor,
+  type RentTaxTreatment,
+  type RentVatInclusion,
+} from '../journal/rent-tax-point.util';
 import { money } from '../common/money/text';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
@@ -247,6 +256,37 @@ function lessorFieldsFor(
   return { lessor: 'OWNER', ownerName, ownerVatNumber };
 }
 
+/**
+ * **أيُدفع على هذا الإيجار ضريبة؟** — التجاريُّ والإيواءُ المخدومُ كلُّه والمختلطُ بجزئه الخاضع (السؤالان ٥٩ و٤١٢). فالمالكُ
+ * المؤجّرُ لأيٍّ منها مورّدٌ خاضعٌ يحتاج رقماً ضريبيّاً. والوسيطُ «نوعٌ» لا «تصنيف» عمداً: حارسُ `no-word-classification`
+ * يقرأ كلَّ إسنادٍ لاسم التصنيف من غير الطلب.
+ */
+function isTaxedKind(kind: string): boolean {
+  return kind === 'COMMERCIAL' || kind === 'SERVICED_LODGING' || kind === 'MIXED';
+}
+
+/** نصيبُ المعفى وأساسُه كما يُكتبان على العقد. */
+interface MixedShareFields {
+  exemptSharePercent: number | null;
+  exemptShareBasis: string | null;
+}
+
+/**
+ * ⚖️ **نسبةُ العقد المختلط** (السؤال ٤١٢ · `ق-١٦٠٠`، بحكم صاحب المشروع: «نسبةٌ يعلنها المؤجّرُ بأساسه، ولا مساحةَ إلزامية»)
+ * — مصدرٌ واحد للإنشاء والتجديد والتعديل: إلزاميّةٌ مع أساسها للمختلط، وممنوعةٌ لغيره فلا تبقى نسبةٌ تشهد بقسمةٍ لا تقع.
+ * والقاعدةُ تحبس الشيءَ نفسَه بقيد `contracts_mixed_share_declared`.
+ */
+function mixedShareFieldsFor(kind: string, share: { exemptSharePercent?: number | null; exemptShareBasis?: string | null }): MixedShareFields {
+  const percent = share.exemptSharePercent ?? null;
+  const basis = share.exemptShareBasis?.trim() || null;
+  if (kind !== 'MIXED') {
+    if (percent !== null || basis !== null) throw new BadRequestException(MSG.contract_mixed_share_only_for_mixed);
+    return { exemptSharePercent: null, exemptShareBasis: null };
+  }
+  if (percent === null || basis === null) throw new BadRequestException(MSG.contract_mixed_share_required);
+  return { exemptSharePercent: percent, exemptShareBasis: basis };
+}
+
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
@@ -279,7 +319,7 @@ export class ContractsService {
    * المفتوحة؛ والتأميناتُ المحجوزة لدى المنشأة.
    */
   private withComputedFigures<
-    T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor'> & {
+    T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor' | 'exemptSharePercent'> & {
       installments: { id: string; amount: Prisma.Decimal }[];
       payments: { installmentId: string | null; netAmount: Prisma.Decimal; discount: Prisma.Decimal }[];
       claims: { status: string; amount: Prisma.Decimal }[];
@@ -287,7 +327,12 @@ export class ContractsService {
     },
   >(contract: T) {
     // المعاملةُ الضريبية من حقول العقد المُعلَنة (`ق-٨٩١` · السؤال ٥٧٧) — لا استنباطَ من كلمة.
-    const treatment = rentTaxTreatment(contract.classification as RentClassification, contract.vatInclusion as RentVatInclusion, contract.lessor as RentLessor);
+    const treatment = rentTaxTreatment(
+      contract.classification as RentClassification,
+      contract.vatInclusion as RentVatInclusion,
+      contract.lessor as RentLessor,
+      sharePercentOf(contract.exemptSharePercent),
+    );
     const settledBy = new Map<string, number>();
     for (const p of contract.payments) {
       if (!p.installmentId) continue;
@@ -326,7 +371,9 @@ export class ContractsService {
         const customer = await this.linkableCustomer(tx, dto.customerId);
         if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, customer.name);
         // ⚖️ من المؤجّر (السؤال ٥٧٧) — للمسوّدة كما للحيّ: الحقلُ إلزاميٌّ في القاعدة، ويُعلَن على عقار التشغيل.
-        const lessor = lessorFieldsFor(unit.property, dto, dto.classification === 'COMMERCIAL');
+        const lessor = lessorFieldsFor(unit.property, dto, isTaxedKind(dto.classification));
+        // ⚖️ ونسبةُ المختلط (السؤال ٤١٢) — للمسوّدة كما للحيّ كذلك: القيدُ في القاعدة لا يميّز المسوّدة.
+        const mixedShare = mixedShareFieldsFor(dto.classification, dto);
 
         const no = await this.nextContractNumber(tx, companyId, start);
 
@@ -350,6 +397,7 @@ export class ContractsService {
             classification: dto.classification,
             vatInclusion: dto.vatInclusion,
             ...lessor,
+            ...mixedShare,
             status: isDraft ? 'DRAFT' : 'DUE',
             currency,
             exchangeRate,
@@ -416,6 +464,18 @@ export class ContractsService {
       const data: Prisma.ContractUncheckedUpdateInput = {};
       if (dto.classification !== undefined) data.classification = dto.classification;
       if (dto.vatInclusion !== undefined) data.vatInclusion = dto.vatInclusion;
+      // ⚖️ نسبةُ المختلط تتبع التصنيفَ الذي يبقى بعد التعديل (السؤال ٤١٢): تُعلَن مع «مختلط» وتُمحى مع غيره، وتسري على ما
+      // يُستحقّ بعدها — فالصفُّ المرحَّلُ يحمل لقطتَه كما يحمل لقطةَ التصنيف.
+      if (dto.classification !== undefined || dto.exemptSharePercent !== undefined || dto.exemptShareBasis !== undefined) {
+        const nextKind = dto.classification ?? existing.classification;
+        Object.assign(
+          data,
+          mixedShareFieldsFor(nextKind, {
+            exemptSharePercent: dto.exemptSharePercent ?? (nextKind === 'MIXED' ? sharePercentOf(existing.exemptSharePercent) : null),
+            exemptShareBasis: dto.exemptShareBasis ?? (nextKind === 'MIXED' ? existing.exemptShareBasis : null),
+          }),
+        );
+      }
       if (dto.lessor !== undefined || dto.ownerName !== undefined || dto.ownerVatNumber !== undefined) {
         const unit = await tx.unit.findUniqueOrThrow({ where: { id: existing.unitId }, include: { property: true } });
         const next = lessorFieldsFor(
@@ -425,7 +485,7 @@ export class ContractsService {
             ownerName: dto.ownerName ?? existing.ownerName ?? undefined,
             ownerVatNumber: dto.ownerVatNumber ?? existing.ownerVatNumber ?? undefined,
           },
-          (dto.classification ?? existing.classification) === 'COMMERCIAL',
+          isTaxedKind(dto.classification ?? existing.classification),
         );
         // **لا يُغيَّر المؤجّرُ بعد ترحيل**: القبضُ رُحّل أمانةً للمالك أو إيراداً للمنشأة، والاستحقاقُ ذمّةً — وتحويلُه
         // إعادةُ كتابة تاريخ (`§6.4`). أمّا إعلانُ مؤجّرِ عقدٍ قديم فيجوز ولو بعد قبض: لا معاملةَ له قبله، ويسري على ما بعده.
@@ -1004,7 +1064,9 @@ export class ContractsService {
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
         // ⚖️ والمؤجّرُ يُعلَن في طلب التجديد على عقار التشغيل كالتصنيف (السؤال ٥٧٧) — لا يُورَّث: عقدٌ جديدٌ باسم من يُبرمه.
-        const lessor = lessorFieldsFor(source.unit.property, dto, dto.classification === 'COMMERCIAL');
+        const lessor = lessorFieldsFor(source.unit.property, dto, isTaxedKind(dto.classification));
+        // ⚖️ ونسبةُ المختلط تُعلَن في التجديد ولا تُورَّث (السؤال ٤١٢).
+        const mixedShare = mixedShareFieldsFor(dto.classification, dto);
         // التجديد: بادئته من بداية العقد **الجديد** لا الأصل — فهو مستندٌ قائم
         // بذاته بمدّته الخاصة.
         const no = dto.no?.trim() || (await this.nextContractNumber(tx, companyId, start));
@@ -1035,6 +1097,7 @@ export class ContractsService {
             classification: dto.classification,
             vatInclusion: dto.vatInclusion,
             ...lessor,
+            ...mixedShare,
             status: start > new Date() ? 'UPCOMING' : 'DUE',
             currency: source.currency,
             exchangeRate,

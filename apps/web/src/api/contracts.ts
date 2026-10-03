@@ -76,6 +76,9 @@ export interface Contract {
   lessor: ContractLessor;
   ownerName: string | null;
   ownerVatNumber: string | null;
+  /** ⚖️ المختلطُ وحدَه (السؤال ٤١٢): نصيبُ الجزء المعفى بالمئة وأساسُه كما أعلنه المؤجّر — فارغان لغيره. */
+  exemptSharePercent: string | null;
+  exemptShareBasis: string | null;
   status: ContractStatus;
   cancelDate: string | null;
   cancelReason: string | null;

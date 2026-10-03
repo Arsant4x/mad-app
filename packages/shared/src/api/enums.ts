@@ -68,7 +68,7 @@ export const CONSENT_SOURCE_VALUES = ['IN_PERSON', 'PHONE', 'WEB_FORM', 'WRITTEN
 export type ConsentSource = (typeof CONSENT_SOURCE_VALUES)[number];
 
 /** `prisma:ContractClassification` — ويقابلُه `apps/web/src/api/contracts.ts#ContractClassification`. */
-export const CONTRACT_CLASSIFICATION_VALUES = ['RESIDENTIAL', 'COMMERCIAL', 'LEGACY_UNCLASSIFIED'] as const;
+export const CONTRACT_CLASSIFICATION_VALUES = ['RESIDENTIAL', 'COMMERCIAL', 'LEGACY_UNCLASSIFIED', 'SERVICED_LODGING', 'MIXED'] as const;
 export type ContractClassification = (typeof CONTRACT_CLASSIFICATION_VALUES)[number];
 
 /** `const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CYCLES` — ويقابلُه `apps/web/src/api/contracts.ts#ContractCycle`. */

@@ -7,7 +7,7 @@ import { money } from '../common/money/text';
 import { computeDocumentTotals, lineNet } from '../common/money/totals';
 import { exemptionReasonByCode } from '../common/vat/exemption-reasons';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { rentAmountsOf, rentTaxTreatment, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
+import { exemptNetOf, rentAmountsOf, rentTaxTreatment, type RentTaxTreatment, sharePercentOf, splitGrossAmount, taxPointsOfInstallment } from '../journal/rent-tax-point.util';
 import { calendarYear, isLastPeriodOfYear, MONTHLY_PERIOD_THRESHOLD, previousVatPeriod, type ResolvedVatPeriod, resolveVatPeriod, trailingTwelveMonths } from '../common/vat/vat-period.util';
 import { CORRECTION_OVERSTATEMENT_YEARS, CORRECTION_UNDERSTATEMENT_LIMIT, filedChangeNote, judgeCorrection } from '../common/vat/return-correction.util';
 import { annualSettlement, applyProportionalDeduction, type InputVatBuckets, proportionalRatio } from '../common/vat/proportional-deduction.util';
@@ -972,9 +972,11 @@ export class ObligationsService {
   private async rentSection(tx: Prisma.TransactionClient, from: Date, to: Date): Promise<RentDeclarationSection> {
     const rows = await tx.rentAccrual.findMany({
       where: { date: { gte: from, lte: to } },
-      select: { classification: true, taxable: true, managed: true, baseNet: true, baseTax: true, journalEntryId: true },
+      select: { classification: true, taxable: true, managed: true, baseNet: true, baseTax: true, baseExemptNet: true, journalEntryId: true },
     });
     const sum = (pick: (r: (typeof rows)[number]) => boolean, field: 'baseNet' | 'baseTax') => round2(rows.filter(pick).reduce((s, r) => s + Number(r[field]), 0));
+    // ⚖️ المختلط (السؤال ٤١٢): جزؤه المعفى على صفّه — يُطرح من الخاضع ويُضاف إلى المعفى؛ وفارغٌ لغيره فصفر.
+    const exemptPart = (pick: (r: (typeof rows)[number]) => boolean) => round2(rows.filter(pick).reduce((s, r) => s + Number(r.baseExemptNet ?? 0), 0));
 
     // ⚖️ قبضُ إيجار المالكين (السؤال ٥٧٧ · ق-١٦٠٠): العمولةُ وضريبتُها على صفّ الدفعة بتاريخها — الخاضعُ للمنشأة —
     // والمقبوضُ للمالك يُعدّ ولا يدخل. صفُّ الدفعة نفسُه هو ما رُحّل منه قيدُ القبض، فيستوي الدفترُ والإقرار.
@@ -985,9 +987,9 @@ export class ObligationsService {
     });
 
     const section: RentDeclarationSection = {
-      standard: sum((r) => r.taxable, 'baseNet'),
+      standard: round2(sum((r) => r.taxable, 'baseNet') - exemptPart((r) => r.taxable)),
       standardVat: sum((r) => r.taxable, 'baseTax'),
-      exempt: sum((r) => r.classification === 'RESIDENTIAL' && !r.managed, 'baseNet'),
+      exempt: round2(sum((r) => r.classification === 'RESIDENTIAL' && !r.managed, 'baseNet') + exemptPart((r) => !r.managed)),
       managedExcluded: sum((r) => r.managed, 'baseNet'),
       managedCount: rows.filter((r) => r.managed).length,
       commissionStandard: round2(Number(commission._sum.baseCommission ?? 0)),
@@ -1034,11 +1036,11 @@ export class ObligationsService {
         amount: true,
         exchangeRate: true,
         payments: { select: { id: true, date: true, amount: true } },
-        contract: { select: { classification: true, vatInclusion: true, lessor: true } },
+        contract: { select: { classification: true, vatInclusion: true, lessor: true, exemptSharePercent: true } },
       },
     });
     for (const i of legacyInstallments) {
-      const treatment = rentTaxTreatment(i.contract.classification, i.contract.vatInclusion, i.contract.lessor);
+      const treatment = rentTaxTreatment(i.contract.classification, i.contract.vatInclusion, i.contract.lessor, sharePercentOf(i.contract.exemptSharePercent));
       if (!treatment) continue;
       const points = taxPointsOfInstallment({
         gross: rentAmountsOf(Number(i.amount), treatment).gross,
@@ -1065,11 +1067,11 @@ export class ObligationsService {
       select: {
         amount: true,
         exchangeRate: true,
-        contract: { select: { classification: true, vatInclusion: true, lessor: true } },
+        contract: { select: { classification: true, vatInclusion: true, lessor: true, exemptSharePercent: true } },
       },
     });
     for (const p of legacyUnlinked) {
-      const treatment = rentTaxTreatment(p.contract.classification, p.contract.vatInclusion, p.contract.lessor);
+      const treatment = rentTaxTreatment(p.contract.classification, p.contract.vatInclusion, p.contract.lessor, sharePercentOf(p.contract.exemptSharePercent));
       if (!treatment) continue;
       this.addLegacyPoint(section, splitGrossAmount(Number(p.amount), treatment), Number(p.exchangeRate), treatment);
     }
@@ -1085,7 +1087,7 @@ export class ObligationsService {
     return section;
   }
 
-  private addLegacyPoint(section: RentDeclarationSection, amounts: { net: number; tax: number }, rate: number, treatment: { taxable: boolean; managed: boolean; classification: string }) {
+  private addLegacyPoint(section: RentDeclarationSection, amounts: { net: number; tax: number }, rate: number, treatment: RentTaxTreatment) {
     const net = round2(amounts.net * rate);
     const tax = round2(amounts.tax * rate);
     section.legacyCount += 1;
@@ -1093,8 +1095,11 @@ export class ObligationsService {
       section.managedExcluded = round2(section.managedExcluded + net);
       section.managedCount += 1;
     } else if (treatment.taxable) {
-      section.legacyStandard = round2(section.legacyStandard + net);
+      // ⚖️ المختلطُ (السؤال ٤١٢) بجزأيه بالدالّة نفسِها التي تكتب صفَّ الاستحقاق — وغيرُه لا جزءَ معفى فيه.
+      const exempt = exemptNetOf(net, treatment) ?? 0;
+      section.legacyStandard = round2(section.legacyStandard + net - exempt);
       section.legacyStandardVat = round2(section.legacyStandardVat + tax);
+      section.legacyExempt = round2(section.legacyExempt + exempt);
     } else if (treatment.classification === 'RESIDENTIAL') {
       section.legacyExempt = round2(section.legacyExempt + net);
     }

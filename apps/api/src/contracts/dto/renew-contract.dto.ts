@@ -1,6 +1,6 @@
-import { IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsPositive, IsString, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
-import { CONTRACT_CLASSIFICATIONS, CONTRACT_LESSORS, CONTRACT_VAT_INCLUSIONS, OWNER_VAT_NUMBER_PATTERN } from './create-contract.dto';
+import { CONTRACT_CLASSIFICATIONS, CONTRACT_LESSORS, CONTRACT_VAT_INCLUSIONS, EXEMPT_SHARE_MAX, EXEMPT_SHARE_MIN, OWNER_VAT_NUMBER_PATTERN } from './create-contract.dto';
 
 const CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 
@@ -20,6 +20,18 @@ export class RenewContractDto {
 
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion!: (typeof CONTRACT_VAT_INCLUSIONS)[number];
+
+  /** ⚖️ ونسبةُ المختلط وأساسُها تُعلَن ولا تُورَّث (السؤال ٤١٢ · `ق-١٦٠٠`). */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(EXEMPT_SHARE_MIN)
+  @Max(EXEMPT_SHARE_MAX)
+  exemptSharePercent?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  exemptShareBasis?: string;
 
   /** ⚖️ ومن المؤجّر يُعلَن كذلك على عقار التشغيل ولا يُورَّث (السؤال ٥٧٧ · `ق-١٦٠٠`). */
   @IsOptional()

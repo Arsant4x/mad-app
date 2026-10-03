@@ -1,6 +1,6 @@
-import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { MSG } from '../../common/i18n/messages';
-import { CONTRACT_CLASSIFICATIONS, CONTRACT_LESSORS, CONTRACT_VAT_INCLUSIONS, FURNISHED_OPTIONS, OWNER_VAT_NUMBER_PATTERN } from './create-contract.dto';
+import { CONTRACT_CLASSIFICATIONS, CONTRACT_LESSORS, CONTRACT_VAT_INCLUSIONS, EXEMPT_SHARE_MAX, EXEMPT_SHARE_MIN, FURNISHED_OPTIONS, OWNER_VAT_NUMBER_PATTERN } from './create-contract.dto';
 
 /** Deliberately narrow: unit/value/dates/cycle can't be changed after
  * creation (that would require reconciling already-generated installments)
@@ -39,6 +39,18 @@ export class UpdateContractDto {
   @IsOptional()
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion?: (typeof CONTRACT_VAT_INCLUSIONS)[number];
+
+  /** ⚖️ نسبةُ المختلط وأساسُها (السؤال ٤١٢ · `ق-١٦٠٠`): تُعلَن مع «مختلط» وتُمحى مع غيره — وتسري على ما يُستحقّ بعدها كالتصنيف. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(EXEMPT_SHARE_MIN)
+  @Max(EXEMPT_SHARE_MAX)
+  exemptSharePercent?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  exemptShareBasis?: string;
 
   /**
    * ⚖️ من المؤجّر (السؤال ٥٧٧ · `ق-١٦٠٠`) — **إلزاميٌّ لعقدٍ على عقار تشغيلٍ سبق الحقل** قبل أيّ تعديل، ولا يُغيَّر بعد

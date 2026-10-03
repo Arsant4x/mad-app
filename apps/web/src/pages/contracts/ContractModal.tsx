@@ -5,7 +5,8 @@ import type { Unit } from '../../api/units';
 import type { ContractCycle, CreateContractInput, DeclaredClassification, DeclaredVatInclusion, Furnished } from '../../api/contracts';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
-import { CLASSIFICATION_OPTIONS, VAT_INCLUSION_OPTIONS } from './contractMeta';
+import { CLASSIFICATION_OPTIONS, VAT_INCLUSION_OPTIONS, isTaxedClassification } from './contractMeta';
+import { MixedShareFields, mixedSharePayload } from './MixedShareFields';
 
 const CYCLE_OPTIONS: { value: ContractCycle; label: string }[] = [
   { value: 'monthly', label: 'شهرية' },
@@ -69,6 +70,10 @@ export function ContractModal({
   const [lessor, setLessor] = useState<'COMPANY' | 'OWNER' | ''>('');
   const [ownerName, setOwnerName] = useState('');
   const [ownerVatNumber, setOwnerVatNumber] = useState('');
+  // ⚖️ نسبةُ المختلط وأساسُها (السؤال ٤١٢ · ق-١٦٠٠): تُعلَن مع «مختلط» وحدَه.
+  const [sharePercent, setSharePercent] = useState('');
+  const [shareBasis, setShareBasis] = useState('');
+  const taxed = isTaxedClassification(classification);
   const selectedProperty = propertyById.get(units.find((u) => u.id === unitId)?.propertyId ?? '');
   const managed = selectedProperty?.ownership === 'managed';
   const [saving, setSaving] = useState(false);
@@ -136,6 +141,10 @@ export function ContractModal({
       setError('المالكُ مؤجّر: اكتب اسم المالك');
       return;
     }
+    if (classification === 'MIXED' && (!sharePercent.trim() || !shareBasis.trim())) {
+      setError('عقدٌ مختلط: اكتب نصيب الجزء السكنيّ المعفى بالمئة وأساس النسبة');
+      return;
+    }
     setSaving(true);
     try {
       await onSave({
@@ -151,6 +160,7 @@ export function ContractModal({
         ejarNo: ejarNo.trim() || undefined,
         classification,
         vatInclusion,
+        ...mixedSharePayload(classification, sharePercent, shareBasis),
         ...(managed && lessor ? { lessor } : {}),
         ...(managed && lessor === 'OWNER' ? { ownerName: ownerName.trim(), ownerVatNumber: ownerVatNumber.trim() || undefined } : {}),
         draft,
@@ -268,14 +278,19 @@ export function ContractModal({
               ))}
             </select>
             {/* ⚠️ يُعلَن عند الاختيار لا بعده (ق-٩١٨): الشاملُ يُنقص الإيرادَ عن القسط، وغيرُ الشامل يزيد ما يدين به المستأجر. */}
-            {classification === 'COMMERCIAL' && vatInclusion === 'INCLUSIVE' && (
+            {taxed && vatInclusion === 'INCLUSIVE' && (
               <p className="hint" style={{ marginTop: 4 }}>
-                شاملةٌ للضريبة: الضريبةُ 15/115 من كلِّ قسط — <b>فالإيرادُ أقلُّ من القسط</b>، والمستأجرُ يدفع القسطَ نفسَه.
+                شاملةٌ للضريبة: الضريبةُ 15/115 من كلِّ قسط{classification === 'MIXED' ? ' على جزئه الخاضع' : ''} — <b>فالإيرادُ أقلُّ من القسط</b>، والمستأجرُ يدفع القسطَ نفسَه.
               </p>
             )}
-            {classification === 'COMMERCIAL' && vatInclusion === 'EXCLUSIVE' && (
+            {taxed && vatInclusion === 'EXCLUSIVE' && (
               <p className="hint" style={{ marginTop: 4 }}>
-                غيرُ شاملة: تُضاف 15% فوق كلِّ قسط — <b>فما يدين به المستأجرُ أكثرُ من القسط</b>، والإيرادُ هو القسط.
+                غيرُ شاملة: تُضاف 15% فوق كلِّ قسط{classification === 'MIXED' ? ' على جزئه الخاضع' : ''} — <b>فما يدين به المستأجرُ أكثرُ من القسط</b>، والإيرادُ هو القسط.
+              </p>
+            )}
+            {classification === 'SERVICED_LODGING' && (
+              <p className="hint" style={{ marginTop: 4 }}>
+                الإيواءُ المخدومُ أو المؤقّت خاضعٌ وإن كان سكناً: الإعفاءُ للمسكن الرئيس الدائم وحدَه، والمعيارُ طبيعةُ السكن لا التأثيثُ ولا عددُ الأيام.
               </p>
             )}
             {classification === 'RESIDENTIAL' && vatInclusion !== '' && (
@@ -285,6 +300,7 @@ export function ContractModal({
             )}
           </div>
         </div>
+        {classification === 'MIXED' && <MixedShareFields idPrefix="contract" percent={sharePercent} onPercent={setSharePercent} basis={shareBasis} onBasis={setShareBasis} />}
         {managed && (
           <div className="two-col">
             <div className="field">
@@ -311,7 +327,7 @@ export function ContractModal({
                 <label htmlFor="contract-owner-name">اسم المالك</label>
                 <input id="contract-owner-name" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="له يُدفع ما يُقبض" />
                 <label htmlFor="contract-owner-vat" style={{ marginTop: 6 }}>
-                  الرقم الضريبيّ للمالك{classification === 'COMMERCIAL' ? '' : ' (إن كان مسجَّلاً)'}
+                  الرقم الضريبيّ للمالك{taxed ? '' : ' (إن كان مسجَّلاً)'}
                 </label>
                 <input id="contract-owner-vat" className="num" value={ownerVatNumber} onChange={(e) => setOwnerVatNumber(e.target.value)} placeholder="3xxxxxxxxxxxxx3" />
               </div>

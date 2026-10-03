@@ -32,13 +32,23 @@ import { dayNumber } from './rent-recognition.util';
 // ⑧ النسبةُ من المصدر الواحد (`ق-١٢١٢`) — كانت `0.15` مكتوبةً هنا ثانيةً بجانب الكاشير وشاشتين.
 export const RENT_VAT_RATE = STANDARD_VAT_RATE / 100;
 
-export type RentClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCLASSIFIED';
+/**
+ * ⚖️ **التصنيفُ الثالث والمختلط** (السؤالان ٥٩ و٤١٢ · `ق-١٦٠٠` · `ق-١٦٠٩`/د): `SERVICED_LODGING` إيواءٌ مخدومٌ أو مؤقّت
+ * خاضعٌ كالتجاريّ (الإعفاءُ للمسكن الرئيس الدائم وحدَه — دليلُ العقارات §6.1 ومثال 7)؛ و`MIXED` عقدٌ واحدٌ يجمع جزءاً معفى
+ * وجزءاً خاضعاً بنسبةٍ يعلنها المؤجّرُ بأساسه (§6.2 و§6.3 ومثال 9).
+ */
+export type RentClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED' | 'LEGACY_UNCLASSIFIED';
 export type RentVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';
 
 export type RentLessor = 'COMPANY' | 'OWNER' | 'LEGACY_UNDECLARED';
 
 export interface RentTaxTreatment {
-  classification: 'RESIDENTIAL' | 'COMMERCIAL';
+  classification: Exclude<RentClassification, 'LEGACY_UNCLASSIFIED'>;
+  /**
+   * **نصيبُ المعفى من قيمة الإيجار** بين 0 و1: السكنيُّ 1 · التجاريُّ والمخدومُ 0 · المختلطُ ما أعلنه المؤجّر. والضريبةُ على
+   * الباقي وحدَه، فمختلطٌ نصيبُ معفاه أربعون في المئة يُحسب على ستّين منه.
+   */
+  exemptShare: number;
   /** ضريبةُ التجاريّ **مخرجاتُ المنشأة** — تجاريٌّ والمؤجّرُ المنشأة (`ق-٨٩٣` · السؤال ٥٧٧). */
   taxable: boolean;
   /**
@@ -64,17 +74,45 @@ export function rentTaxTreatment(
   classification: RentClassification,
   vatInclusion: RentVatInclusion,
   lessor: RentLessor,
+  /** نصيبُ المعفى بالمئة للمختلط وحدَه (`Contract.exemptSharePercent`) — ومختلطٌ بلا نسبةٍ معلَنة لا معاملةَ له. */
+  exemptSharePercent?: number | null,
 ): RentTaxTreatment | null {
   if (classification === 'LEGACY_UNCLASSIFIED' || vatInclusion === 'LEGACY_UNDECLARED' || lessor === 'LEGACY_UNDECLARED') return null;
+  let exemptShare: number;
+  if (classification === 'MIXED') {
+    if (exemptSharePercent === null || exemptSharePercent === undefined || !(exemptSharePercent > 0 && exemptSharePercent < 100)) return null;
+    exemptShare = exemptSharePercent / 100;
+  } else {
+    exemptShare = classification === 'RESIDENTIAL' ? 1 : 0;
+  }
   const owner = lessor === 'OWNER';
-  const commercial = classification === 'COMMERCIAL';
+  const chargesVat = exemptShare < 1;
   return {
     classification,
-    taxable: commercial && !owner,
-    chargesVat: commercial,
+    exemptShare,
+    taxable: chargesVat && !owner,
+    chargesVat,
     managed: owner,
     inclusive: vatInclusion === 'INCLUSIVE',
   };
+}
+
+/** نصيبُ المعفى بالمئة كما يقرؤه المحرّك — رقمٌ أو `null` (العمودُ عشريٌّ في القاعدة فيصل كائناً). */
+export function sharePercentOf(value: { toString(): string } | number | null | undefined): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
+/** نسبةُ ما يُحسب عليه الضريبةُ من القيمة — `1 − نصيب المعفى`. */
+function taxedFraction(t: RentTaxTreatment): number {
+  return 1 - t.exemptShare;
+}
+
+/**
+ * **الجزءُ المعفى من صافٍ** — للمختلط وحدَه (نصيبُه من الصافي)، و`null` لغيره: السكنيُّ يُقرأ معفى كلَّه بتصنيفه، والخاضعُ لا
+ * معفى فيه. يُكتب على صفّ الاستحقاق فيقرأ الإقرارُ الجزأين من الصفّ نفسِه الذي رُحّل منه القيد.
+ */
+export function exemptNetOf(net: number, t: RentTaxTreatment): number | null {
+  return t.classification === 'MIXED' ? round2(net * t.exemptShare) : null;
 }
 
 export interface GrossNetTax {
@@ -93,11 +131,13 @@ export interface GrossNetTax {
 export function rentAmountsOf(amount: number, t: RentTaxTreatment): GrossNetTax {
   const a = round2(amount);
   if (!t.chargesVat) return { gross: a, net: a, tax: 0 };
+  // المختلطُ: الضريبةُ على الجزء الخاضع وحدَه (`taxedFraction`)، والخاضعُ كلُّه جزؤه واحد فلا يتغيّر حسابُه.
+  const f = taxedFraction(t);
   if (t.inclusive) {
-    const tax = round2((a * RENT_VAT_RATE) / (1 + RENT_VAT_RATE));
+    const tax = round2((a * f * RENT_VAT_RATE) / (1 + f * RENT_VAT_RATE));
     return { gross: a, net: round2(a - tax), tax };
   }
-  const tax = round2(a * RENT_VAT_RATE);
+  const tax = round2(round2(a * f) * RENT_VAT_RATE);
   return { gross: round2(a + tax), net: a, tax };
 }
 
@@ -108,7 +148,8 @@ export function rentAmountsOf(amount: number, t: RentTaxTreatment): GrossNetTax 
 export function splitGrossAmount(gross: number, t: RentTaxTreatment): GrossNetTax {
   const g = round2(gross);
   if (!t.chargesVat) return { gross: g, net: g, tax: 0 };
-  const tax = round2((g * RENT_VAT_RATE) / (1 + RENT_VAT_RATE));
+  const f = taxedFraction(t);
+  const tax = round2((g * f * RENT_VAT_RATE) / (1 + f * RENT_VAT_RATE));
   return { gross: g, net: round2(g - tax), tax };
 }
 
