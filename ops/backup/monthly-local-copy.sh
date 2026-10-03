@@ -16,7 +16,7 @@ MONTH=$(date +%Y-%m)
 DAY=$(date +%F)
 OUT="D:/mad-app-backups/$MONTH"
 REPO=/d/mad-app
-SCRATCH="D:/mad-app-scratch"
+SCRATCH=/d/mad-app-scratch
 C=mad-app-postgres-1
 RT=mad_app_restore_check_monthly
 case "$OUT" in D:/mad-app-backups/20[0-9][0-9]-[01][0-9]) : ;; *) echo "✖ الموضعُ خاطئ: $OUT"; exit 1 ;; esac
@@ -90,10 +90,12 @@ step_raw() {
   # · نصوصُها المستخرجة `txt` · ومخرجاتُ الأدوات `json`. لا مخابئَ jest ولا أدواتِ الجلسات، ولا اسمَ يدلّ على سرّ (القاعدة ١٧):
   # تلك تُستثنى بأسمائها ولا تُفتح.
   # القائمةُ بفاصلٍ صفريّ إلى tar مباشرة، بلا xargs (المساراتُ العربية فقدت ملفّاتٍ بـ`xargs -I{}` من قبل)، والعدُّ قبل وبعد هو الحكم.
-  local R="$OUT/raw-sources-$DAY.tar" LIST
+  # GNU tar يقرأ «D:» اسمَ مضيفٍ بعيد ما لم يُعطَ `--force-local`، فيخرج بـ«Cannot connect to D: resolve failed».
+  local R="$OUT/raw-sources-$DAY.tar"
   refuse_existing "$R"
   echo "== raw sources (from $SCRATCH)"
   LIST=$(mktemp)
+  trap 'rm -f "$LIST"' EXIT
   ( cd "$SCRATCH" && find . -type d \( -name jest-cache -o -name 'jest-*' -o -name node_modules -o -name tmp -o -name .git \) -prune -o \
       -type f \( -iname '*.pdf' -o -iname '*.html' -o -iname '*.htm' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
       -o -iname '*.webp' -o -iname '*.txt' -o -iname '*.json' \) \
@@ -101,9 +103,8 @@ step_raw() {
       -print0 ) > "$LIST"
   local BEFORE AFTER
   BEFORE=$(tr -cd '\0' < "$LIST" | wc -c)
-  tar -cf "$R" -C "$SCRATCH" --null -T "$LIST"
-  AFTER=$(tar -tf "$R" | grep -vc '/$')
-  rm -f "$LIST"
+  tar --force-local -cf "$R" -C "$SCRATCH" --null -T "$LIST"
+  AFTER=$(tar --force-local -tf "$R" | grep -vc '/$')
   echo "files listed: $BEFORE · entries in archive: $AFTER · bytes: $(stat -c %s "$R") · sha256: $(sha256sum "$R" | cut -c1-64)"
   [ "$BEFORE" = "$AFTER" ] || { echo "✖ العدُّ لم يطابق"; exit 1; }
 }
