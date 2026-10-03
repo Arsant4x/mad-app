@@ -1,4 +1,5 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { createCipheriv, createHash, randomBytes } from 'crypto';
+import { gcmDecipher } from '../common/crypto/gcm.util';
 
 /**
  * تشفير مفاتيح المزوّدين (المستند: «التزم بتشفير أي مفاتيح API»).
@@ -41,8 +42,8 @@ export function encryptCredentials(plain: Record<string, string>): string {
 
 export function decryptCredentials(stored: string): Record<string, string> {
   const [iv, tag, ciphertext] = stored.split('.').map((p) => Buffer.from(p, 'base64'));
-  const decipher = createDecipheriv('aes-256-gcm', key(), iv);
-  decipher.setAuthTag(tag);
+  // ⚖️ الوسمُ بطوله الكامل وحدَه (`ق-١٥٨٦`) — المدخلُ الواحد يرفض المقصوص.
+  const decipher = gcmDecipher(key(), iv, tag);
   const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   return JSON.parse(plain) as Record<string, string>;
 }

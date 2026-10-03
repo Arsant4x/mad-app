@@ -1,4 +1,5 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
+import { gcmDecipher } from './gcm.util';
 
 /**
  * Encryption at rest for stored credentials (CLAUDE.md §10: sensitive fields
@@ -41,8 +42,8 @@ export function decryptSecret(stored: string): string {
   const [version, ivB64, tagB64, dataB64] = stored.split(':');
   if (version !== FORMAT_VERSION) throw new Error(`Unsupported secret format "${version}"`);
 
-  const decipher = createDecipheriv(ALGORITHM, key(), Buffer.from(ivB64, 'base64'));
-  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  // ⚖️ الوسمُ بطوله الكامل وحدَه (`ق-١٥٨٦`) — المدخلُ الواحد يرفض المقصوص.
+  const decipher = gcmDecipher(key(), Buffer.from(ivB64, 'base64'), Buffer.from(tagB64, 'base64'));
   return Buffer.concat([decipher.update(Buffer.from(dataB64, 'base64')), decipher.final()]).toString('utf8');
 }
 
