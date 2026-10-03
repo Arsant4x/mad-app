@@ -41,6 +41,13 @@ RUN cd apps/api && npx prisma generate && npm run build
 FROM node:22-bookworm-slim
 # openssl: prisma's engine needs it at runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# ⚖️ `ق-١٥٨٦` (العالي يصير مانعاً في 2026-11-03): **npm لا يعمل في مرحلة التشغيل، فلا يُشحن معها.** العالياتُ العشر الباقية في هذه
+# الصورة بعد `#699` كلُّها حزمٌ يحملها npm المضمَّنُ في صورة Node الأساس (`brace-expansion` 2.0.2 · `pacote` · `sigstore` · `ip-address` ·
+# `picomatch` 4.0.3)، ولا شيءَ منها في قفلنا. فيُحذف npm وnpx وcorepack، وأداةُ الهجرات تُنادى باسمها (`prisma`) من غلافٍ يشغّل
+# نسختَها المثبّتة في `node_modules` كما كان `npx` يفعل؛ فأوامرُ التشغيل في `DEPLOY.md` تقول `prisma` لا `npx prisma`.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+ && printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' > /usr/local/bin/prisma \
+ && chmod 755 /usr/local/bin/prisma
 ENV NODE_ENV=production
 WORKDIR /app
 
@@ -94,4 +101,4 @@ EXPOSE 3000
 # و`trap` لنافذة الهجرات: الصدفةُ هي العمليةُ الأولى حتى `exec`، وبلا مستمعٍ تُهمل النواةُ الإشارةَ فتُقتل بعد المهلة.
 # ومعه — مقيسٌ في هذه الصورة (`dash`): إيقافٌ في منتصف أمرٍ أماميّ ⟸ **يكتمل الأمرُ ثم يُنفَّذ الفخّ** فتخرج بـ`0` ولا
 # يبدأ ما بعده — فالهجرةُ لا تُقطع في منتصفها، والخادمُ لا يبدأ بعد إيقافٍ طُلب.
-CMD ["sh", "-c", "trap 'echo \"إيقافٌ في أثناء الهجرات: اكتملت، ولا يبدأ الخادم\"; exit 0' TERM INT; npx prisma migrate deploy && exec node dist/src/main.js"]
+CMD ["sh", "-c", "trap 'echo \"إيقافٌ في أثناء الهجرات: اكتملت، ولا يبدأ الخادم\"; exit 0' TERM INT; prisma migrate deploy && exec node dist/src/main.js"]
