@@ -77,20 +77,26 @@ const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
  *
  * و«الباقي» إجماليُّ القسط بالضريبة (`rentAmountsOf`) ناقصاً ما سُدّد له (الصافي + الخصم) — المقياسُ الذي تُشتقّ به حالُه.
  * والأقساطُ على أساس الاستحقاق وحدَه وغيرُ الملغاة؛ وقسطٌ لم يبقَ له شيء لا يُكتب له جزء.
+ *
+ * ⚖️ **والدفعةُ الحرّة** (بلا قسطٍ مسمّى · توجيه ٢٧٦ · ٢و، القاعدة ٣٧): تسدّد **الأقساطَ الحالّة بتاريخها** (`dueBy`) من الأقدم. كانت جزءاً
+ * واحداً «بلا قسط» على عقدٍ له أقساطٌ حالّة، فتُستحقّ ضريبتُها دفعةً مقدَّمةً فوق ضريبة الأقساط ويبقى القسطُ الأقدمُ متأخّراً على مستأجرٍ
+ * دفع (مقيسٌ في `rent-free-payment.e2e-spec.ts`: الضريبةُ `+150` والذمّةُ لا تتحرّك). **وما فاض عن الحالّ دفعةٌ مقدَّمة بلا قسط كما كان**
+ * (`ق-٤٧٣`: لا فترةَ خدمةٍ تُعرف لها) — فالإصلاحُ يمسّ المتأخّرَ وحدَه، ولا يُلحق الدفعةَ الحرّة بقسطٍ لم يحلّ.
  */
 async function spreadRentPayment(
   tx: Prisma.TransactionClient,
   contractId: string,
   treatment: RentTaxTreatment,
-  installment: { id: string; dueDate: Date },
+  installment: { id: string; dueDate: Date } | null,
   amount: number,
+  dueBy?: Date,
 ): Promise<{ installmentId: string | null; amount: number }[]> {
   const candidates = await tx.installment.findMany({
-    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL' },
+    where: { contractId, status: { not: 'CANCELLED' }, accrualBasis: 'ACCRUAL', ...(installment ? {} : { dueDate: { lte: dueBy } }) },
     orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     select: { id: true, amount: true, payments: { select: { netAmount: true, discount: true } } },
   });
-  const ordered = [...candidates.filter((c) => c.id === installment.id), ...candidates.filter((c) => c.id !== installment.id)];
+  const ordered = installment ? [...candidates.filter((c) => c.id === installment.id), ...candidates.filter((c) => c.id !== installment.id)] : candidates;
   let left = round2(amount);
   const parts: { installmentId: string | null; amount: number }[] = [];
   for (const c of ordered) {
@@ -922,9 +928,10 @@ export class ContractsService {
         //    مرّتين وتبقى ذمّةٌ على مستأجرٍ دفع. فيُقسَم القبضُ أجزاءً، لكلِّ قسطٍ جزؤه، وما فاض عن الأقساط كلِّها يبقى بلا قسط.
         //    والقبضُ واحد: قيدُ تسويةٍ واحد وحركةُ بنكٍ واحدة يحملهما الأجزاءُ كلُّها. وعلى مسار الاستحقاق وحدَه (حدٌّ معلَن):
         //    القسطُ القديمُ على أساس القبض يبقى على مساره القائم.
+        //    ⚖️ **والدفعةُ بلا قسطٍ مسمّى تسدّد الحالَّ بتاريخها من الأقدم** (توجيه ٢٧٦ · ٢و): كانت تبقى جزءاً واحداً بلا قسط.
         const parts =
-          (accrualPath || ownerPath) && treatment && installment
-            ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount)
+          (accrualPath || ownerPath) && treatment
+            ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount, new Date(dto.date))
             : [{ installmentId: dto.installmentId ?? null, amount: dto.amount }];
         // ⚖️ وللمالك المؤجّر: لكلِّ جزءٍ قسمتُه من صافيه بعملة الدفتر — حصّةُ المالك والعمولةُ وضريبتُها (السؤال ٥٧٧).
         const ownerTotals = { cash: 0, share: 0, commission: 0, tax: 0 };
