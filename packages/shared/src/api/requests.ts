@@ -97,6 +97,13 @@ export interface CompleteMaintenanceDto {
   branchId?: string;
 }
 
+/** جسمُ طلب — `ContractFeeDto` في الخادم. */
+export interface ContractFeeDto {
+  label: string;
+  amount: number;
+  effectiveFrom?: string;
+}
+
 /** جسمُ طلب — `ConvertQuoteDto` في الخادم. */
 export interface ConvertQuoteDto {
   creditOverride?: boolean;
@@ -215,6 +222,7 @@ export interface CreateContractDto {
   services?: string;
   furnished?: 'unfurnished' | 'furnished' | 'partial';
   ejarNo?: string;
+  fees?: ContractFeeDto[];
   draft?: boolean;
   currency?: string;
   exchangeRate?: number;
@@ -696,6 +704,11 @@ export interface DeductionDto {
 /** جسمُ طلب — `DeletionRequestDecisionDto` في الخادم. */
 export interface DeletionRequestDecisionDto {
   note?: string;
+}
+
+/** جسمُ طلب — `EndContractFeeDto` في الخادم. */
+export interface EndContractFeeDto {
+  endedAt: string;
 }
 
 /** جسمُ طلب — `FindByNationalIdDto` في الخادم. */

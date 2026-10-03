@@ -48,7 +48,7 @@ export const CHARGE_TAX_TREATMENT_VALUES = ['TAXABLE_SERVICE', 'ON_BEHALF', 'COM
 export type ChargeTaxTreatment = (typeof CHARGE_TAX_TREATMENT_VALUES)[number];
 
 /** `prisma:ClaimKind` — ويقابلُه `apps/web/src/api/contracts.ts#ClaimKind`. */
-export const CLAIM_KIND_VALUES = ['MAINTENANCE', 'UTILITIES', 'LATE_FEE', 'DAMAGE', 'OTHER'] as const;
+export const CLAIM_KIND_VALUES = ['MAINTENANCE', 'UTILITIES', 'LATE_FEE', 'DAMAGE', 'OTHER', 'FEE'] as const;
 export type ClaimKind = (typeof CLAIM_KIND_VALUES)[number];
 
 /** `prisma:ClaimStatus` — ويقابلُه `apps/web/src/api/contracts.ts#ClaimStatus`. */

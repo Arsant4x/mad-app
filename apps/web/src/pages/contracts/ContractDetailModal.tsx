@@ -23,6 +23,7 @@ import { formatMoney, num0, round2, type MoneyText } from '../../lib/money';
 import { STANDARD_VAT_GROSS_FACTOR, standardVatIncludedIn, standardVatIncludedInShare, standardVatOnShare } from '../../lib/vat';
 import { AttachmentsSection } from './AttachmentsSection';
 import { ClaimsSection } from './ClaimsSection';
+import { FeesSection } from './FeesSection';
 import { DepositsSection } from './DepositsSection';
 import { HandoversSection } from './HandoversSection';
 import { KeyMoneySection } from './KeyMoneySection';
@@ -839,6 +840,14 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
         />
 
         <KeyMoneySection
+          contract={contract}
+          onChanged={(updated) => {
+            setContract(updated);
+            onChanged();
+          }}
+        />
+
+        <FeesSection
           contract={contract}
           onChanged={(updated) => {
             setContract(updated);

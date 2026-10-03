@@ -546,6 +546,7 @@ model Company {
   deposits         ContractDeposit[]
   depositDeductions DepositDeduction[]
   claims           ContractClaim[]
+  contractFees     ContractFee[]
   keyMoney         ContractKeyMoney[]
   handovers        ContractHandover[]
   handoverItems    HandoverItem[]
@@ -4020,6 +4021,8 @@ enum ClaimKind {
   LATE_FEE
   DAMAGE
   OTHER
+  /// ⚖️ رسمُ خدمةٍ من بنود العقد يُطالَب مع قسطه (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠`) — يُنشئه الكنسُ لا اليد.
+  FEE
 }
 
 /// ⚖️ **معاملةُ ضريبة القيمة المضافة لمطالبةٍ أو خصمٍ من التأمين** (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · `ق-١٦٠٠` · `ق-١٦٠٩`/د،
@@ -4080,6 +4083,16 @@ model ContractClaim {
   /// ما يثبت شروطَ النيابة (عدّادٌ باسم المستأجر · فاتورةٌ مفصولة …) — إلزاميٌّ لـ`ON_BEHALF` بقيد `contract_claims_on_behalf_evidence`.
   onBehalfEvidence String?
 
+  /// ⚖️ مطالبةُ رسمٍ من بنود العقد (`FEE`): البندُ والقسطُ الذي حلّت معه — والزوجُ فريدٌ فلا يُطالَب رسمٌ مرّتين عن قسطٍ واحد.
+  feeId String?
+  fee   ContractFee? @relation(fields: [feeId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  feeTenant ContractFee? @relation("ContractClaim_feeId_tenant", fields: [companyId, feeId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  installmentId String?
+  installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  installmentTenant Installment? @relation("ContractClaim_installmentId_tenant", fields: [companyId, installmentId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
   issuedAt DateTime    @db.Date
   status   ClaimStatus @default(OPEN)
   settledAt DateTime?  @db.Date
@@ -4102,8 +4115,43 @@ model ContractClaim {
 
   attachments ClaimAttachment[]
 
+  @@unique([feeId, installmentId])
   @@map("contract_claims")
   claimAttachment_claimId_tenant ClaimAttachment[] @relation("ClaimAttachment_claimId_tenant")
+  /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
+  @@unique([companyId, id])
+}
+
+/// ⚖️ **بندُ رسمٍ على العقد** (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠` · `ق-١٦٠٩`/د، بحكم صاحب المشروع: «بنودٌ على العقد تُفوتر مع القسط»).
+///
+/// رسمٌ مسمّى فوق الإيجار (موقف · نظافة · خدمات) **توريدٌ منفصل خاضعٌ ١٥٪ ولو كان الإيجارُ سكنيّاً معفى** (دليلُ العقارات §6.1
+/// ومثال 8). مبلغُه لكلِّ قسطٍ صافياً بعملة العقد، وكلُّ قسطٍ يحلّ بين `effectiveFrom` و`endedAt` تُطالَب معه مطالبةً خاضعة
+/// (`ContractClaim` نوعُها `FEE`) بتاريخ استحقاقه — فتدخل الذمّةَ والإقرارَ وتُحصَّل وتُسقَط كأيّ مطالبة. يُنهى ولا يُحذف.
+model ContractFee {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  contractTenant Contract @relation("ContractFee_contractId_tenant", fields: [companyId, contractId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  label  String
+  /// لكلِّ قسط، صافياً بعملة العقد — والضريبةُ فوقه على مطالبته.
+  amount Decimal @db.Decimal(18, 2)
+  /// أوّلُ يومٍ يُطالَب فيه — قسطٌ يحلّ قبله لا رسمَ معه.
+  effectiveFrom DateTime  @db.Date
+  /// آخرُ يومٍ يُطالَب فيه (يُنهى ولا يُحذف) — وفارغٌ ما دام سارياً.
+  endedAt       DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+
+  claims ContractClaim[]
+
+  @@index([contractId])
+  @@map("contract_fees")
+  contractClaim_feeId_tenant ContractClaim[] @relation("ContractClaim_feeId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }
@@ -4317,6 +4365,8 @@ model Contract {
   attachments  ContractAttachment[]
   deposits     ContractDeposit[]
   claims       ContractClaim[]
+  /// ⚖️ بنودُ الرسوم فوق الإيجار (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠).
+  fees         ContractFee[]
   keyMoney     ContractKeyMoney[]
   handovers    ContractHandover[]
 
@@ -4334,6 +4384,7 @@ model Contract {
   contract_renewedFromId_tenant Contract[] @relation("Contract_renewedFromId_tenant")
   contractDeposit_contractId_tenant ContractDeposit[] @relation("ContractDeposit_contractId_tenant")
   contractClaim_contractId_tenant ContractClaim[] @relation("ContractClaim_contractId_tenant")
+  contractFee_contractId_tenant ContractFee[] @relation("ContractFee_contractId_tenant")
   contractKeyMoney_contractId_tenant ContractKeyMoney[] @relation("ContractKeyMoney_contractId_tenant")
   contractHandover_contractId_tenant ContractHandover[] @relation("ContractHandover_contractId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
@@ -5178,6 +5229,8 @@ model Installment {
   payments  RentPayment[]
   reminders RentReminder[]
   accruals  RentAccrual[]
+  /// ⚖️ مطالباتُ رسوم العقد التي حلّت مع هذا القسط (السؤال ٤٩ · ق-١٦٠٠).
+  feeClaims ContractClaim[]
 
   /// For loading one contract's schedule (findOne) — Postgres does not index
   /// FK columns on its own, so at ~30k installments each lookup was a scan.
@@ -5190,6 +5243,7 @@ model Installment {
   rentAccrual_installmentId_tenant RentAccrual[] @relation("RentAccrual_installmentId_tenant")
   rentPayment_installmentId_tenant RentPayment[] @relation("RentPayment_installmentId_tenant")
   rentReminder_installmentId_tenant RentReminder[] @relation("RentReminder_installmentId_tenant")
+  contractClaim_installmentId_tenant ContractClaim[] @relation("ContractClaim_installmentId_tenant")
   /// ق-١٢٥٢ — هدفُ المفاتيح المركّبة (companyId, id).
   @@unique([companyId, id])
 }

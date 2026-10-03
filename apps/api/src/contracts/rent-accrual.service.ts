@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { accrueDueWithinTx, AccrualSweepResult } from '../journal/rent-accrual.util';
+import { raiseDueFeesWithinTx } from './contract-fees.util';
 import { BATCH_TX_OPTIONS, RentRecognitionService } from './rent-recognition.service';
 import { SCHEDULE_TIME_ZONE } from '../common/wall-clock.util';
 
@@ -27,9 +28,21 @@ export class RentAccrualService {
     private readonly recognition: RentRecognitionService,
   ) {}
 
-  /** يُرحّل كلَّ ما حلّ حتى `asOf` لمنشأةٍ واحدة. */
+  /**
+   * يُرحّل كلَّ ما حلّ حتى `asOf` لمنشأةٍ واحدة — ⚖️ ومعه رسومُ العقود التي حلّت مع أقساطها (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠) في
+   * المعاملة نفسِها: فالرسمُ «يُفوتر مع القسط».
+   */
   async runForCompany(companyId: string, asOf: Date = new Date()): Promise<AccrualSweepResult> {
-    return this.tenantPrisma.runInTenantContext(companyId, (tx) => accrueDueWithinTx(tx, companyId, asOf), BATCH_TX_OPTIONS);
+    return this.tenantPrisma.runInTenantContext(
+      companyId,
+      async (tx) => {
+        const result = await accrueDueWithinTx(tx, companyId, asOf);
+        const fees = await raiseDueFeesWithinTx(tx, companyId, asOf);
+        if (fees.blockedByPeriodLock > 0) this.logger.warn(`رسومُ العقود: ${fees.blockedByPeriodLock} قسطاً حجبت فترةٌ مقفلة مطالبةَ رسومه في المنشأة ${companyId}`);
+        return result;
+      },
+      BATCH_TX_OPTIONS,
+    );
   }
 
   @Cron('0 1 * * *', { timeZone: SCHEDULE_TIME_ZONE })

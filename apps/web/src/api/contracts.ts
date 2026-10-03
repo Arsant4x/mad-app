@@ -3,7 +3,7 @@ import { apiClient } from './client';
 import { withRequestKey } from './idempotency';
 import type { Unit } from './units';
 import type { ChargeTaxTreatment, ClaimKind, ClaimStatus, ContractClassification, ContractCycle, ContractLessor, ContractStatus, ContractVatInclusion, DeductionKind, DepositHolder, DepositStatus, DepositType, Furnished, HandoverStatus, HandoverType, InstallmentStatus, ItemCondition, KeyMoneyDirection, RecordPaymentMethod, RentPaymentMethod, SettlementBasis } from '@mad-app/shared/api/enums';
-import type { CancelContractDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
+import type { CancelContractDto, ContractFeeDto, ContractsListQuery, CreateClaimDto, CreateContractDto, CreateHandoverDto, EndContractFeeDto, HandoverItemDto, RecordDepositDto, RecordKeyMoneyDto, RecordPaymentDto, RenewContractDto, SettleDepositDto, UpdateContractDto, UpdateHandoverDto } from '@mad-app/shared/api/requests';
 
 export type { ContractStatus };
 export type { ContractCycle };
@@ -92,6 +92,8 @@ export interface Contract {
   payments: RentPayment[];
   deposits: ContractDeposit[];
   claims: ContractClaim[];
+  /** ⚖️ بنودُ الرسوم فوق الإيجار (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠) — كلٌّ يُطالَب مع كلِّ قسطٍ يحلّ مطالبةً خاضعة نوعُها `FEE`. */
+  fees?: ContractFee[];
   keyMoney: ContractKeyMoney[];
   handovers: ContractHandover[];
   /** مجموعُ المطالبات المفتوحة والتأميناتُ المحجوزة لدى المنشأة — من الخادم في `GET /contracts/:id` وحده (`ق-١٢٤٣`). */
@@ -250,6 +252,19 @@ export const listContracts = (params: ListContractsParams = {}) =>
   apiClient.get<ContractListResponse>('/contracts', { params }).then((r) => r.data);
 export const getContract = (id: string) => apiClient.get<Contract>(`/contracts/${id}`).then((r) => r.data);
 export const createContract = (dto: CreateContractInput) => apiClient.post<Contract>('/contracts', dto).then((r) => r.data);
+
+/** ⚖️ بندُ رسم: إضافتُه (ويُطالَب لما حلّ منذ سريانه) وإنهاؤه (لا حذف). */
+export interface ContractFee {
+  id: string;
+  label: string;
+  /** لكلِّ قسط صافياً — والضريبةُ فوقه على مطالبته. */
+  amount: string;
+  effectiveFrom: string;
+  endedAt: string | null;
+}
+export const addContractFee = (contractId: string, dto: ContractFeeDto) => apiClient.post<Contract>(`/contracts/${contractId}/fees`, dto).then((r) => r.data);
+export const endContractFee = (contractId: string, feeId: string, dto: EndContractFeeDto) =>
+  apiClient.post<Contract>(`/contracts/${contractId}/fees/${feeId}/end`, dto).then((r) => r.data);
 export const updateContract = (id: string, dto: UpdateContractInput) => apiClient.patch<Contract>(`/contracts/${id}`, dto).then((r) => r.data);
 export const cancelContract = (id: string, dto: CancelContractInput) => apiClient.post<Contract>(`/contracts/${id}/cancel`, dto).then((r) => r.data);
 /** و`requestKey` مفتاحُ نافذة القبض الواحدة — يعيد القبضَ نفسَه إن أُعيد الطلب (توجيه ٢٧٦ · ق-١٦٠٩/ب). */

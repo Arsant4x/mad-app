@@ -11,6 +11,7 @@ const KIND_LABEL: Record<ClaimKind, string> = {
   LATE_FEE: 'غرامة تأخير',
   DAMAGE: 'أضرار',
   OTHER: 'أخرى',
+  FEE: 'رسوم خدمة',
 };
 
 const STATUS_META: Record<ClaimStatus, { label: string; badgeClass: string }> = {
@@ -19,7 +20,8 @@ const STATUS_META: Record<ClaimStatus, { label: string; badgeClass: string }> = 
   WAIVED: { label: 'مُسقَطة', badgeClass: 'draft' },
 };
 
-const KINDS = Object.keys(KIND_LABEL) as ClaimKind[];
+// ⚖️ «رسوم خدمة» تُنشئها بنودُ الرسوم مع أقساطها لا اليد (ق-١٦٠٠) — فلا تُعرض في نوع المطالبة اليدوية.
+const KINDS = (Object.keys(KIND_LABEL) as ClaimKind[]).filter((k) => k !== 'FEE');
 
 /**
  * Claims on the tenant: repairs they caused, utilities they left, late fees.
