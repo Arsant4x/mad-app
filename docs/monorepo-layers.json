@@ -5,7 +5,7 @@
     "core": 34,
     "infra": 6,
     "activity": 7,
-    "engine": 6
+    "engine": 7
   },
   "layers": {
     "shared": "shared",
@@ -33,6 +33,7 @@
     "export": "core",
     "files": "infra",
     "fiscal": "core",
+    "forms": "engine",
     "integrations": "core",
     "inventory": "engine",
     "invoices": "core",

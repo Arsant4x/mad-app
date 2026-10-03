@@ -109,6 +109,12 @@ export interface ConvertQuoteDto {
   creditOverride?: boolean;
 }
 
+/** جسمُ طلب — `CopyFormTemplateDto` في الخادم. */
+export interface CopyFormTemplateDto {
+  sourceTemplateId: string;
+  name?: string;
+}
+
 /** جسمُ طلب — `CreateAccountDto` في الخادم. */
 export interface CreateAccountDto {
   code: string;
@@ -298,6 +304,22 @@ export interface CreateFiscalYearDto {
   name: string;
   start: string;
   end: string;
+}
+
+/** جسمُ طلب — `CreateFormTemplateDto` في الخادم. */
+export interface CreateFormTemplateDto {
+  formTypeId: string;
+  name: string;
+  description?: string;
+  items: FormTemplateItemDto[];
+}
+
+/** جسمُ طلب — `CreateFormTypeDto` في الخادم. */
+export interface CreateFormTypeDto {
+  code: string;
+  name: string;
+  description?: string;
+  sector?: 'REALESTATE' | 'RESTAURANT' | 'RETAIL' | 'PHARMACY' | 'CONTRACTING' | 'FREELANCE' | 'OTHER';
 }
 
 /** جسمُ طلب — `CreateGoodsReceiptDto` في الخادم. */
@@ -719,6 +741,18 @@ export interface FindByNationalIdDto {
 /** جسمُ طلب — `ForgotPasswordDto` في الخادم. */
 export interface ForgotPasswordDto {
   username: string;
+}
+
+/** جسمُ طلب — `FormTemplateItemDto` في الخادم. */
+export interface FormTemplateItemDto {
+  itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
+  label: string;
+  required?: boolean;
+  minValue?: number;
+  maxValue?: number;
+  isBlocking?: boolean;
+  unit?: string;
+  helpText?: string;
 }
 
 /** جسمُ طلب — `GoodsReceiptLineDto` في الخادم. */
@@ -1319,6 +1353,20 @@ export interface UpdateEmployeeDto {
   nationalId?: string;
   salaryIban?: string;
   socialInsuranceNo?: string;
+}
+
+/** جسمُ طلب — `UpdateFormTemplateDto` في الخادم. */
+export interface UpdateFormTemplateDto {
+  name?: string;
+  description?: string;
+  items?: FormTemplateItemDto[];
+}
+
+/** جسمُ طلب — `UpdateFormTypeDto` في الخادم. */
+export interface UpdateFormTypeDto {
+  name?: string;
+  description?: string;
+  sector?: 'REALESTATE' | 'RESTAURANT' | 'RETAIL' | 'PHARMACY' | 'CONTRACTING' | 'FREELANCE' | 'OTHER' | null;
 }
 
 /** جسمُ طلب — `UpdateHandoverDto` في الخادم. */

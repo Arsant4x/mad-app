@@ -17,6 +17,15 @@
       "204"
     ]
   },
+  "DELETE /v1/admin/form-templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
   "DELETE /v1/attendance/{id}": {
     "parameters": [
       "path:id:required"
@@ -127,6 +136,15 @@
     ]
   },
   "DELETE /v1/fiscal-years/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "204"
+    ]
+  },
+  "DELETE /v1/form-templates/{id}": {
     "parameters": [
       "path:id:required"
     ],
@@ -402,6 +420,29 @@
       "query:pageSize",
       "query:search"
     ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/admin/form-templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/admin/form-templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/admin/form-types": {
+    "parameters": [],
     "requiredBody": [],
     "responses": [
       "200"
@@ -815,6 +856,29 @@
       "query:page",
       "query:pageSize",
       "query:search"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/form-templates": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/form-templates/catalog": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/form-templates/{id}": {
+    "parameters": [
+      "path:id:required"
     ],
     "requiredBody": [],
     "responses": [
@@ -1788,6 +1852,24 @@
       "200"
     ]
   },
+  "PATCH /v1/admin/form-templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "PATCH /v1/admin/form-types/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "PATCH /v1/attendance/{id}": {
     "parameters": [
       "path:id:required"
@@ -1984,6 +2066,15 @@
     ],
     "responses": [
       "204"
+    ]
+  },
+  "PATCH /v1/form-templates/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
     ]
   },
   "PATCH /v1/integrations/{id}/enabled": {
@@ -2306,6 +2397,45 @@
       "path:id:required"
     ],
     "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/form-templates": {
+    "parameters": [],
+    "requiredBody": [
+      "formTypeId",
+      "items",
+      "name"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/form-templates/{id}/publish": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/form-templates/{id}/versions": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/admin/form-types": {
+    "parameters": [],
+    "requiredBody": [
+      "code",
+      "name"
+    ],
     "responses": [
       "201"
     ]
@@ -2763,6 +2893,30 @@
       "201"
     ]
   },
+  "POST /v1/contracts/{id}/fees": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "amount",
+      "label"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/fees/{feeId}/end": {
+    "parameters": [
+      "path:feeId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "endedAt"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/contracts/{id}/handovers": {
     "parameters": [
       "path:id:required"
@@ -2964,6 +3118,33 @@
     ]
   },
   "POST /v1/fiscal-years/{id}/close": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/form-templates/copy": {
+    "parameters": [],
+    "requiredBody": [
+      "sourceTemplateId"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/form-templates/{id}/publish": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/form-templates/{id}/versions": {
     "parameters": [
       "path:id:required"
     ],

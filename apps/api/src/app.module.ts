@@ -63,6 +63,7 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { UnitsModule } from './units/units.module';
 import { WarehousesModule } from './warehouses/warehouses.module';
 import { WarrantiesModule } from './warranties/warranties.module';
+import { FormsModule } from './forms/forms.module';
 import { ShutdownLogService } from './common/lifecycle/shutdown-log.service';
 
 @Module({
@@ -168,6 +169,7 @@ import { ShutdownLogService } from './common/lifecycle/shutdown-log.service';
     ZatcaModule,
     CompanyProfileModule,
     FilesModule,
+    FormsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }, ShutdownLogService],
 })
