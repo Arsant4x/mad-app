@@ -421,6 +421,14 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
   const [error, setError] = useState<string | null>(null);
 
   const heldDeposits = contract.deposits.filter((d) => d.status === 'HELD');
+  // ⚖️ رصيدُ المستأجر يُخصم من أقساط التجديد بمعاملة الأصل الضريبية وحدَها (`ق-١٦٣٧`): تصنيفٌ أو شمولٌ أو نسبةٌ تختلف ⟵ لا يُخصم ويبقى في الأصل.
+  const tenantCredit = num0(contract.tenantCredit ?? '0');
+  const treatmentChanged =
+    classification !== contract.classification ||
+    vatInclusion !== contract.vatInclusion ||
+    (classification === 'MIXED' && sharePercent !== (contract.exemptSharePercent ?? ''));
+  // والمؤجّرُ على عقار التشغيل كذلك: رصيدُ المالك المؤجّر لا يُخصم من عقدٍ مؤجّرُه المنشأة ولا العكس.
+  const lessorChanged = managed && lessor !== contract.lessor;
 
   async function submit() {
     setError(null);
@@ -527,6 +535,15 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
               : 'سيبقى التأمين على العقد الحالي ويحتاج تسوية منفصلة.'}
           </p>
         </div>
+      )}
+      {tenantCredit > 0 && (
+        <p className="hint" role="note" style={treatmentChanged || lessorChanged ? { color: 'var(--rose)' } : undefined}>
+          {treatmentChanged
+            ? `بقي للمستأجر رصيدٌ ${formatMoney(tenantCredit)} لم يُخصم لتغيّر التصنيف، ويبقى في العقد الحالي.`
+            : lessorChanged
+              ? `بقي للمستأجر رصيدٌ ${formatMoney(tenantCredit)} لم يُخصم لتغيّر المؤجّر، ويبقى في العقد الحالي.`
+              : `يُخصم رصيدُ المستأجر ${formatMoney(tenantCredit)} من أقساط العقد الجديد بترتيبها حتى ينفد.`}
+        </p>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>

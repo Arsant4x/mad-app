@@ -104,6 +104,8 @@ export interface Contract {
   depositsHeld?: MoneyText;
   /** ⚖️ مدّةُ حفظ صور نماذج التسليم كما يُعلَم بها المستأجر (`ق-١٦٠٠` · السؤال ٢٤٣) — من مدد الحفظ في الخادم. */
   handoverPhotoRetentionYears?: number;
+  /** ⚖️ رصيدُ المستأجر الباقي في العقد بعملته — من `GET /contracts/:id` وحده، تقرؤه نافذةُ التجديد (`ق-١٦٣٧`). */
+  tenantCredit?: MoneyText;
 }
 
 export type { HandoverType };

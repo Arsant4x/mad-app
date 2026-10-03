@@ -30,8 +30,16 @@ async function ownerTenantCreditOf(tx: Prisma.TransactionClient, contractId: str
   return round2(Number(held._sum.netAmount ?? 0) - Number(moved._sum.netAmount ?? 0));
 }
 
+/**
+ * **رصيدُ المستأجر الباقي في العقد** بعملته — ما تقرؤه نافذةُ التجديد لتقول هل يُخصم (`ق-١٦٣٧`). مصدرُه مصدرُ الخصم نفسُه: صفوفُ
+ * الاستحقاق للمنشأة مؤجّرة، ودفعاتُ المالك غيرُ المقسومة لعقار التشغيل.
+ */
+export async function tenantCreditBalanceWithinTx(tx: Prisma.TransactionClient, contract: Pick<CreditContract, 'id' | 'lessor'>): Promise<number> {
+  return contract.lessor === 'OWNER' ? ownerTenantCreditOf(tx, contract.id) : tenantCreditOfWithinTx(tx, contract.id);
+}
+
 export interface TenantCreditApplication {
-  /** ما خُصم من الرصيد على أوّل قسطٍ في التجديد — بعملة العقد. */
+  /** ما خُصم من الرصيد على أقساط التجديد — بعملة العقد. */
   applied: number;
   /** وما بقي رصيداً في العقد الأصل بعده. */
   remaining: number;
@@ -44,8 +52,9 @@ export interface TenantCreditApplication {
  * قسطٍ في التجديد، ويُبنى الآن. والردُّ نقداً يُبنى مع كشف حساب المستأجر.»).
  *
  * يُستدعى في معاملة التجديد بعد إنشاء أقساطه وقبل استحقاق ما حلّ منها. **والخصمُ دفعةٌ على القسط بلا نقد** يحمل صفُّها العقدَ الأصل
- * (`creditFromContractId`): فحالُ القسط وأعمارُ الذمم تقرأ المسدَّدَ منها كما تقرأ القبض، ولا بنكَ ولا حركةَ صندوق. والمبلغُ **أقلُّ الرصيد
- * وإجماليِّ أوّل قسط** («من أوّل قسط»)، وما زاد يبقى رصيداً في الأصل حتى يُبنى الردّ.
+ * (`creditFromContractId`): فحالُ القسط وأعمارُ الذمم تقرأ المسدَّدَ منها كما تقرأ القبض، ولا بنكَ ولا حركةَ صندوق. ⚖️ **ويمضي الرصيدُ في
+ * الأقساط بترتيب استحقاقها حتى ينفد** (`ق-١٦٣٧` يعدّل «من أوّل قسط»): دفعةٌ لكلِّ قسطٍ بأقلِّ الباقي وإجماليِّه، وما زاد على الأقساط كلِّها
+ * يبقى رصيداً في الأصل حتى يُبنى الردّ.
  *   · **المنشأةُ مؤجّرة**: صفّا `CREDIT_TRANSFER` وقيدُ `2450` ⟵ إيرادُ القسط (`transferTenantCreditWithinTx`)، ولا ضريبةَ ثانية.
  *   · **المالكُ مؤجّر** (`ق-١٦٣٠`): الرصيدُ يقابل القسطَ الآن فيُقسم حصّةً وعمولةً وضريبتَها بنسبة العقار لحظةَ الخصم، والمدينُ `2450` لا النقد.
  */
@@ -66,14 +75,13 @@ export async function applyTenantCreditOnRenewalWithinTx(
   if (ownerSource !== (target.lessor === 'OWNER')) return { ...none, skipped: 'lessor-differs' };
   if (!sameTreatment(sourceTreatment, targetTreatment)) return { ...none, skipped: 'treatment-differs' };
 
-  const first = await tx.installment.findFirst({
+  // ⚖️ أقساطُ التجديد بترتيب استحقاقها، والرصيدُ يمضي فيها حتى ينفد (`ق-١٦٣٧` · «يمضي إلى الأقساط التالية حتى ينفد»).
+  const installments = await tx.installment.findMany({
     where: { contractId: target.id, status: { not: 'CANCELLED' } },
     orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
     select: { id: true, amount: true, serviceStart: true, serviceEnd: true },
   });
-  if (!first) return none;
-  const applied = round2(Math.min(credit, rentAmountsOf(Number(first.amount), targetTreatment).gross));
-  if (applied <= 0) return none;
+  if (installments.length === 0) return none;
 
   let ownerRate = 0;
   if (ownerSource) {
@@ -85,57 +93,66 @@ export async function applyTenantCreditOnRenewalWithinTx(
   // طريقةُ الصفّ طريقةُ القبض الذي أنشأ الرصيد (أحدثُه) — فلا تُوهم الشاشةُ بنقدٍ لم يُقبض اليوم، والصفُّ يحمل أصلَه.
   const origin = await tx.rentPayment.findFirst({ where: { contractId: source.id, installmentId: null }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], select: { method: true } });
   const rate = Number(target.exchangeRate);
-  const baseApplied = toBaseAmount(applied, rate);
-  const owner = ownerSource ? ownerCollectionSplit(baseApplied, targetTreatment, ownerRate) : null;
+  const prepaymentsAccountId = ownerSource ? await getOrCreateCustomerPrepaymentsAccount(tx, companyId) : null;
 
-  const payment = await tx.rentPayment.create({
-    data: {
-      contractId: target.id,
-      installmentId: first.id,
-      creditFromContractId: source.id,
-      date,
-      amount: applied,
-      discount: 0,
-      netAmount: applied,
-      method: origin?.method ?? 'CASH',
-      notes: `خصمٌ من رصيد المستأجر في العقد ${source.no}`,
-      currency: target.currency,
-      exchangeRate: rate,
-      baseAmount: baseApplied,
-      baseDiscount: 0,
-      baseNetAmount: baseApplied,
-      ...(owner
-        ? { commissionRate: ownerRate, baseOwnerVat: owner.ownerVat, baseCommission: owner.commission, baseCommissionTax: owner.commissionTax, baseOwnerShare: owner.ownerShare }
-        : {}),
-    } as unknown as Prisma.RentPaymentUncheckedCreateInput,
-  });
+  let left = credit;
+  for (const installment of installments) {
+    if (left <= 0) break;
+    const gross = rentAmountsOf(Number(installment.amount), targetTreatment).gross;
+    const applied = round2(Math.min(left, gross));
+    if (applied <= 0) continue;
+    const baseApplied = toBaseAmount(applied, rate);
+    const owner = ownerSource ? ownerCollectionSplit(baseApplied, targetTreatment, ownerRate) : null;
 
-  if (owner) {
-    const entry = await postOwnerRentCollectionEntry(tx, companyId, {
-      customerId: target.customerId,
-      unitId: target.unitId,
-      contractNo: target.no,
-      tenant: target.tenant,
-      ownerName: target.ownerName ?? '',
-      date,
-      baseCash: baseApplied,
-      baseOwnerShare: owner.ownerShare,
-      baseCommission: owner.commission,
-      baseCommissionTax: owner.commissionTax,
-      cashAccountId: await getOrCreateCustomerPrepaymentsAccount(tx, companyId),
-      memo: `خصمُ رصيد المستأجر من قسط التجديد للمالك ${target.ownerName ?? ''} — عقد ${target.no} من رصيد العقد ${source.no} — ${target.tenant}`,
+    const payment = await tx.rentPayment.create({
+      data: {
+        contractId: target.id,
+        installmentId: installment.id,
+        creditFromContractId: source.id,
+        date,
+        amount: applied,
+        discount: 0,
+        netAmount: applied,
+        method: origin?.method ?? 'CASH',
+        notes: `خصمٌ من رصيد المستأجر في العقد ${source.no}`,
+        currency: target.currency,
+        exchangeRate: rate,
+        baseAmount: baseApplied,
+        baseDiscount: 0,
+        baseNetAmount: baseApplied,
+        ...(owner
+          ? { commissionRate: ownerRate, baseOwnerVat: owner.ownerVat, baseCommission: owner.commission, baseCommissionTax: owner.commissionTax, baseOwnerShare: owner.ownerShare }
+          : {}),
+      } as unknown as Prisma.RentPaymentUncheckedCreateInput,
     });
-    if (entry) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: entry.id } });
-  } else {
-    await transferTenantCreditWithinTx(tx, companyId, source, target, targetTreatment, first, { date, gross: applied, paymentId: payment.id });
-    const row = await tx.rentAccrual.findFirst({ where: { paymentId: payment.id, installmentId: first.id }, select: { journalEntryId: true } });
-    if (row?.journalEntryId) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: row.journalEntryId } });
+
+    if (owner && prepaymentsAccountId) {
+      const entry = await postOwnerRentCollectionEntry(tx, companyId, {
+        customerId: target.customerId,
+        unitId: target.unitId,
+        contractNo: target.no,
+        tenant: target.tenant,
+        ownerName: target.ownerName ?? '',
+        date,
+        baseCash: baseApplied,
+        baseOwnerShare: owner.ownerShare,
+        baseCommission: owner.commission,
+        baseCommissionTax: owner.commissionTax,
+        cashAccountId: prepaymentsAccountId,
+        memo: `خصمُ رصيد المستأجر من قسط التجديد للمالك ${target.ownerName ?? ''} — عقد ${target.no} من رصيد العقد ${source.no} — ${target.tenant}`,
+      });
+      if (entry) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: entry.id } });
+    } else {
+      await transferTenantCreditWithinTx(tx, companyId, source, target, targetTreatment, installment, { date, gross: applied, paymentId: payment.id });
+      const row = await tx.rentAccrual.findFirst({ where: { paymentId: payment.id, installmentId: installment.id }, select: { journalEntryId: true } });
+      if (row?.journalEntryId) await tx.rentPayment.update({ where: { id: payment.id }, data: { journalEntryId: row.journalEntryId } });
+    }
+
+    // حالُ القسط من المسدَّد مقابل الإجماليّ — كما يكتبها مسارُ القبض (`ق-١٠٤٠`).
+    const derived = deriveSettlementStatus(applied, gross);
+    if (derived === 'PAID' || derived === 'PARTIAL') await tx.installment.update({ where: { id: installment.id }, data: { status: derived } });
+    left = round2(left - applied);
   }
 
-  // حالُ القسط من المسدَّد مقابل الإجماليّ — كما يكتبها مسارُ القبض (`ق-١٠٤٠`).
-  const settled = applied;
-  const derived = deriveSettlementStatus(settled, rentAmountsOf(Number(first.amount), targetTreatment).gross);
-  if (derived === 'PAID' || derived === 'PARTIAL') await tx.installment.update({ where: { id: first.id }, data: { status: derived } });
-
-  return { applied, remaining: round2(credit - applied), skipped: null };
+  return { applied: round2(credit - left), remaining: left, skipped: null };
 }

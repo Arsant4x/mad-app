@@ -45,9 +45,10 @@ interface E2eContract {
   id: string;
   installments: E2eInstallment[];
   payments: E2ePayment[];
+  tenantCredit?: string;
 }
 
-describe('⚖️ رصيدُ المستأجر: يُخصم من أوّل قسطٍ في التجديد، وزائدُ عقار التشغيل رصيدٌ لا حصّةٌ ولا عمولة (ق-١٦٢٩ · ق-١٦٣٠)', () => {
+describe('⚖️ رصيدُ المستأجر: يُخصم من أقساط التجديد بترتيبها حتى ينفد، وزائدُ عقار التشغيل رصيدٌ لا حصّةٌ ولا عمولة (ق-١٦٢٩ · ق-١٦٣٠ · ق-١٦٣٧)', () => {
   let app: INestApplication;
   let tenantPrisma: TenantPrismaService;
   let company: IsolatedCompany;
@@ -152,25 +153,41 @@ describe('⚖️ رصيدُ المستأجر: يُخصم من أوّل قسطٍ 
     }).toEqual({ sourceRemaining: 0, transferTax: 0, targetGross: 230 });
   });
 
-  it('⚖️ ② الرصيدُ فوق القسط: يُخصم بقدر أوّل قسطٍ فيُسدَّد، والباقي يبقى رصيداً في العقد الأصل (ق-١٦٢٩: «من أوّل قسط»)', async () => {
+  it('⚖️ ② الرصيدُ فوق القسط: يسدّد أوّلَ قسطٍ ويمضي إلى الثاني حتى ينفد، ولا يبقى في الأصل شيء (ق-١٦٣٧: «يمضي إلى الأقساط التالية حتى ينفد»)', async () => {
     const unitId = await makeUnit('owned');
     const sourceId = await makeContract(unitId, { classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE' });
     // 13,800 للأقساط و1,725 تزيد: صافيها 1,500 في 2450.
     await auth(http().post(`/contracts/${sourceId}/payments`)).send({ date: todayIso, amount: 15525, method: 'CASH' }).expect(201);
+    // ونافذةُ التجديد تقرأ الرصيدَ من تفاصيل العقد قبل التجديد.
+    expect((await getContract(sourceId)).tenantCredit).toBe('1725.00');
 
     const before = await balances(['2450', '2400', '2200', '1200']);
     const renewal = await renew(sourceId, { classification: 'COMMERCIAL', vatInclusion: 'EXCLUSIVE' });
     const after = await balances(['2450', '2400', '2200', '1200']);
 
+    // أوّلُ قسطٍ بإجماليّه 1,150 فيُسدَّد، وثانيه بالباقي 575 فيصير جزئياً.
     const fresh = await getContract(renewal.id);
-    const first = firstOf(fresh);
+    const ordered = [...fresh.installments].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const sourceRows = await creditRowsOf(sourceId);
     expect({
-      transferred: fresh.payments.filter((p) => p.creditFromContractId === sourceId).reduce((s, p) => s + Number(p.amount), 0),
-      firstStatus: fresh.installments.find((i) => i.id === first.id)?.status,
+      transfers: fresh.payments
+        .filter((p) => p.creditFromContractId === sourceId)
+        .map((p) => ({ installmentId: p.installmentId, amount: Number(p.amount) }))
+        .sort((a, b) => b.amount - a.amount),
+      statuses: ordered.slice(0, 3).map((i) => i.status),
       sourceRemaining: r2(sourceRows.reduce((s, r) => s + Number(r.amountGross), 0)),
+      sourceCredit: (await getContract(sourceId)).tenantCredit,
       deltas: deltas(after, before),
-    }).toEqual({ transferred: 1150, firstStatus: 'PAID', sourceRemaining: 575, deltas: { 2450: -1000, 2400: 1000, 2200: 0, 1200: 0 } });
+    }).toEqual({
+      transfers: [
+        { installmentId: ordered[0].id, amount: 1150 },
+        { installmentId: ordered[1].id, amount: 575 },
+      ],
+      statuses: ['PAID', 'PARTIAL', 'DUE'],
+      sourceRemaining: 0,
+      sourceCredit: '0.00',
+      deltas: { 2450: -1500, 2400: 1500, 2200: 0, 1200: 0 },
+    });
   });
 
   it('⚖️ ③ عقارُ التشغيل بمؤجّرٍ هو المالك: الزائدُ رصيدٌ في 2450 بلا حصّةٍ ولا عمولة، ويُخصم من أوّل قسطٍ في التجديد فيصير حصّةً وعمولة (ق-١٦٣٠ · ق-١٦٢٩)', async () => {
@@ -221,5 +238,7 @@ describe('⚖️ رصيدُ المستأجر: يُخصم من أوّل قسطٍ 
       creditDelta: r2((await balance('2450')) - before),
       sourceRemaining: r2(sourceRows.reduce((s, r) => s + Number(r.amountGross), 0)),
     }).toEqual({ transfers: 0, creditDelta: 0, sourceRemaining: 230 });
+    // والرصيدُ الباقي ظاهرٌ في تفاصيل الأصل، فتقول نافذةُ التجديد إنه لم يُخصم لتغيّر التصنيف (ق-١٦٣٧).
+    expect((await getContract(sourceId)).tenantCredit).toBe('230.00');
   });
 });
