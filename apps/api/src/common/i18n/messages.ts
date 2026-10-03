@@ -264,6 +264,7 @@ export const MSG = {
 
   // properties / units / contracts
   property_not_found: 'properties.not_found',
+  property_has_owner_lessor_contracts: 'properties.has_owner_lessor_contracts',
   property_has_units: 'properties.has_units',
   unit_not_found: 'units.not_found',
   unit_number_taken: 'units.number_taken',
@@ -272,6 +273,13 @@ export const MSG = {
   contract_not_found: 'contracts.not_found',
   contract_classification_required: 'contracts.classification_required',
   contract_vat_inclusion_required: 'contracts.vat_inclusion_required',
+  contract_lessor_required: 'contracts.lessor_required',
+  contract_owner_lessor_requires_managed: 'contracts.owner_lessor_requires_managed',
+  contract_owner_name_required: 'contracts.owner_name_required',
+  contract_owner_vat_required: 'contracts.owner_vat_required',
+  contract_owner_commission_rate_missing: 'contracts.owner_commission_rate_missing',
+  contract_lessor_locked_after_posting: 'contracts.lessor_locked_after_posting',
+  contract_owner_commission_exceeds_collection: 'contracts.owner_commission_exceeds_collection',
   contract_already_cancelled: 'contracts.already_cancelled',
   contract_start_after_end: 'contracts.start_after_end',
   contract_outside_head_lease: 'contracts.outside_head_lease',
@@ -1152,6 +1160,10 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.bank_transaction_not_found]: { ar: 'الحركة البنكية غير موجودة', en: 'Bank transaction not found' },
 
   [MSG.property_not_found]: { ar: 'العقار غير موجود', en: 'Property not found' },
+  [MSG.property_has_owner_lessor_contracts]: {
+    ar: 'للعقار عقودٌ مؤجّرُها المالك — لا تتغيّر ملكيتُه عن «تشغيل» وهي قائمة؛ فالمالكُ مؤجّراً لا يكون إلا على عقار تشغيل',
+    en: 'The property has contracts with the owner as lessor — its ownership cannot leave "managed" while they exist',
+  },
   [MSG.property_has_units]: {
     ar: 'لا يمكن حذف عقار له وحدات — احذف وحداته أولاً',
     en: 'Cannot delete a property that has units — delete its units first',
@@ -1174,6 +1186,34 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.contract_vat_inclusion_required]: {
     ar: 'عقدٌ قديم لم يُعلَن شمولُ قيمته للضريبة — اختر «شاملة» أو «غير شاملة» قبل أي تعديل',
     en: 'Legacy contract without a declared VAT inclusion — choose inclusive or exclusive before editing it',
+  },
+  [MSG.contract_lessor_required]: {
+    ar: 'عقدٌ على عقار تشغيل: اختر المؤجّر — المنشأةُ أم المالك؛ فمن يورّد الإيجارَ ومن عليه ضريبتُه يتبع من يُبرم العقد باسمه',
+    en: 'Contract on a managed property: choose the lessor (the company or the owner) — who supplies the rent and owes its VAT follows whose name the lease is signed in',
+  },
+  [MSG.contract_owner_lessor_requires_managed]: {
+    ar: 'المالكُ مؤجّراً لا يكون إلا على عقار تشغيل — هذا العقارُ مملوكٌ للمنشأة أو مستأجَرٌ منها، فالمؤجّرُ المنشأة',
+    en: 'The owner can be the lessor only on a managed property — this property is owned or head-leased by the company, so the company is the lessor',
+  },
+  [MSG.contract_owner_name_required]: {
+    ar: 'المالكُ مؤجّر: اكتب اسم المالك — له يُدفع ما يُقبض من الإيجار',
+    en: 'The owner is the lessor: enter the owner name — the collected rent is held for and paid to them',
+  },
+  [MSG.contract_owner_vat_required]: {
+    ar: 'عقدٌ تجاريٌّ مؤجّرُه المالك: اكتب الرقم الضريبيّ للمالك — فتوريدُه الخاضعُ يحتاج مورّداً مسجَّلاً',
+    en: 'Commercial lease with the owner as lessor: enter the owner VAT number — a taxable supply needs a registered supplier',
+  },
+  [MSG.contract_owner_commission_rate_missing]: {
+    ar: 'عقارُ التشغيل بلا نسبة عمولة — اكتب «نسبة عمولة التشغيل» في بطاقة العقار أوّلاً؛ منها تُحسب العمولةُ وضريبتُها عند كلِّ قبض',
+    en: 'The managed property has no commission rate — set it on the property first; the commission and its VAT are computed from it on every collection',
+  },
+  [MSG.contract_lessor_locked_after_posting]: {
+    ar: 'لا يُغيَّر المؤجّرُ بعد قبضٍ أو استحقاق — رُحِّل الإيجارُ على المؤجّر المعلَن، وتحويلُه إعادةُ كتابةٍ لما رُحِّل؛ والمخرجُ إنهاءُ العقد وعقدٌ جديد',
+    en: 'The lessor cannot change after a collection or accrual — rent was posted for the declared lessor; end the contract and create a new one instead',
+  },
+  [MSG.contract_owner_commission_exceeds_collection]: {
+    ar: 'العمولةُ وضريبتُها تتجاوزان المقبوض — راجع «نسبة عمولة التشغيل» في بطاقة العقار',
+    en: 'The commission and its VAT exceed the amount collected — review the commission rate on the property',
   },
   [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
   [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },

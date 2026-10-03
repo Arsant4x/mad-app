@@ -26,6 +26,7 @@ import { ClaimsSection } from './ClaimsSection';
 import { DepositsSection } from './DepositsSection';
 import { HandoversSection } from './HandoversSection';
 import { KeyMoneySection } from './KeyMoneySection';
+import { LessorFields, lessorPayload, type DeclaredLessorChoice } from './LessorFields';
 import { CLASSIFICATION_LABEL, CLASSIFICATION_OPTIONS, CYCLE_LABEL, VAT_INCLUSION_LABEL, VAT_INCLUSION_OPTIONS, isLegacyContract } from './contractMeta';
 import i18n from '../../i18n';
 
@@ -394,6 +395,11 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
   // تُعبّأ من الأصل ليُراجَعا — والخادمُ يوجبهما ولا يرثهما؛ وإن كان الأصلُ قديماً فلا قيمةَ مسبقة.
   const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
   const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
+  // ⚖️ والمؤجّرُ على عقار التشغيل يُعلَن في التجديد كالتصنيف (السؤال ٥٧٧) — يُعبّأ من الأصل ليُراجَع.
+  const managed = contract.unit.property.ownership === 'managed';
+  const [lessor, setLessor] = useState<DeclaredLessorChoice>(contract.lessor === 'LEGACY_UNDECLARED' ? '' : contract.lessor);
+  const [ownerName, setOwnerName] = useState(contract.ownerName ?? '');
+  const [ownerVatNumber, setOwnerVatNumber] = useState(contract.ownerVatNumber ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -412,6 +418,7 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
         end,
         classification,
         vatInclusion,
+        ...(managed ? lessorPayload(lessor, ownerName, ownerVatNumber) : {}),
         value: parseFloat(value) || undefined,
         no: no.trim() || undefined,
         ejarNo: ejarNo.trim() || undefined,
@@ -472,6 +479,18 @@ function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCan
           </select>
         </div>
       </div>
+      {managed && (
+        <LessorFields
+          idPrefix="renew"
+          lessor={lessor}
+          onLessor={setLessor}
+          ownerName={ownerName}
+          onOwnerName={setOwnerName}
+          ownerVatNumber={ownerVatNumber}
+          onOwnerVatNumber={setOwnerVatNumber}
+          commercial={classification === 'COMMERCIAL'}
+        />
+      )}
       <div className="field">
         <label>رقم عقد إيجار (اختياري)</label>
         <input value={ejarNo} onChange={(e) => setEjarNo(e.target.value)} />
@@ -568,6 +587,58 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
   );
 }
 
+/**
+ * ⚖️ عقدٌ على عقار تشغيلٍ سبق حقلَ المؤجّر (السؤال ٥٧٧ · ق-١٦٠٠) — يُعلَن مؤجّرُه هنا بيدٍ، ولا يُعدَّل قبل ذلك، ولا يُستحقّ
+ * ولا يدخل الإقرار حتى يُعلَن. ولا شيءَ يُفترض: الخيارُ فارغٌ حتى يُختار.
+ */
+function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDeclared: () => Promise<void> }) {
+  const [lessor, setLessor] = useState<DeclaredLessorChoice>('');
+  const [ownerName, setOwnerName] = useState(contract.ownerName ?? '');
+  const [ownerVatNumber, setOwnerVatNumber] = useState(contract.ownerVatNumber ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function declare() {
+    setError(null);
+    if (!lessor) {
+      setError('اختر المؤجّر — المنشأةُ أم المالك');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateContract(contract.id, lessorPayload(lessor, ownerName, ownerVatNumber));
+      await onDeclared();
+    } catch (e) {
+      const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ المؤجّر'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card" style={{ background: '#fff8e6', marginBottom: 10 }}>
+      <p className="hint" style={{ marginTop: 0 }}>عقدٌ على عقار تشغيل سُجِّل قبل حقل المؤجّر — اختر من المؤجّر فيه؛ لا يُعدَّل ولا يدخل الإقرار قبل ذلك.</p>
+      <LessorFields
+        idPrefix="legacy"
+        lessor={lessor}
+        onLessor={setLessor}
+        ownerName={ownerName}
+        onOwnerName={setOwnerName}
+        ownerVatNumber={ownerVatNumber}
+        onOwnerVatNumber={setOwnerVatNumber}
+        commercial={contract.classification === 'COMMERCIAL'}
+      />
+      {error && <p className="error-text">{error}</p>}
+      <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
+        <button className="btn btn-primary" onClick={declare} disabled={saving}>
+          حفظ المؤجّر
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ContractDetailModal({ contract: initial, banks, onClose, onChanged }: { contract: Contract; banks: Bank[]; onClose: () => void; onChanged: () => void }) {
   const [contract, setContract] = useState(initial);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null | 'free'>(null);
@@ -654,6 +725,17 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
           </div>
         </div>
         {isLegacyContract(contract) && <LegacyDeclarationForm contract={contract} onDeclared={reload} />}
+        {(contract.unit.property.ownership === 'managed' || contract.lessor !== 'COMPANY') && contract.lessor !== 'LEGACY_UNDECLARED' && (
+          <div className="field" style={{ marginBottom: 6 }}>
+            <label>المؤجّر</label>
+            <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
+              {contract.lessor === 'OWNER'
+                ? `مالكُ العقار ${contract.ownerName ?? ''}${contract.ownerVatNumber ? ` — رقمُه الضريبيّ ${contract.ownerVatNumber}` : ''}: الإيجارُ أمانةٌ له، والعمولةُ إيرادُ المنشأة بضريبتها`
+                : 'المنشأة: الإيجارُ إيرادُها'}
+            </p>
+          </div>
+        )}
+        {contract.lessor === 'LEGACY_UNDECLARED' && <LegacyLessorForm contract={contract} onDeclared={reload} />}
 
         {contract.status === 'CANCELLED' && (
           <p className="hint" style={{ color: 'var(--rose)', marginBottom: 10 }}>

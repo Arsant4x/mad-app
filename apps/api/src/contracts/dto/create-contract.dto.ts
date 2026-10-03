@@ -1,5 +1,7 @@
 import { CurrencyFieldsDto } from '../../common/currency/currency-fields.dto';
-import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
+import { MSG } from '../../common/i18n/messages';
+import { SAUDI_VAT_NUMBER_PATTERN } from '../../common/vat/vat-number';
 
 export const CONTRACT_CYCLES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as const;
@@ -13,6 +15,14 @@ export const FURNISHED_OPTIONS = ['unfurnished', 'furnished', 'partial'] as cons
 export const CONTRACT_CLASSIFICATIONS = ['RESIDENTIAL', 'COMMERCIAL'] as const;
 /** أشاملٌ `value` لضريبة القيمة المضافة أم لا — يُعلَن ولا يُفترض (`ق-٨٩٢`). */
 export const CONTRACT_VAT_INCLUSIONS = ['INCLUSIVE', 'EXCLUSIVE'] as const;
+/**
+ * ⚖️ من المؤجّر (السؤال ٥٧٧ · `ق-١٦٠٠`) — **مغلقٌ بلا القيمة القديمة** كالتصنيف: `LEGACY_UNDECLARED` لعقدٍ على عقار تشغيلٍ
+ * سبق الحقلَ وحدَه. وإلزامُه على عقار التشغيل في الخدمة (`lessorFieldsFor`) لأنه يتبع العقارَ لا الطلب.
+ * ورقمُ المالك الضريبيّ يُفحص نمطُه كرقم العميل والمنشأة، والفراغُ يمرّ: السكنيُّ قد يؤجّره فردٌ غيرُ مسجَّل. والصيغةُ من الوحدة
+ * السعودية لا حرفاً هنا (`ق-١٣٥٠`).
+ */
+export const CONTRACT_LESSORS = ['COMPANY', 'OWNER'] as const;
+export const OWNER_VAT_NUMBER_PATTERN = SAUDI_VAT_NUMBER_PATTERN;
 
 export class CreateContractDto extends CurrencyFieldsDto {
   @IsString()
@@ -26,6 +36,20 @@ export class CreateContractDto extends CurrencyFieldsDto {
   /** إلزاميٌّ كذلك: قيمةُ العقد شاملةٌ للضريبة أم غيرُ شاملة. */
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion!: (typeof CONTRACT_VAT_INCLUSIONS)[number];
+
+  @IsOptional()
+  @IsIn(CONTRACT_LESSORS)
+  lessor?: (typeof CONTRACT_LESSORS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  ownerName?: string;
+
+  @IsOptional()
+  @ValidateIf((o: CreateContractDto) => !!o.ownerVatNumber)
+  @Matches(OWNER_VAT_NUMBER_PATTERN, { message: MSG.vat_number_invalid })
+  ownerVatNumber?: string;
 
   /**
    * **المستأجرُ عميلٌ يُختار بمعرّفه** (`§6.3` · `ق-٤٩٧` · `ق-١٠٢٨`/①②) — لا اسمٌ يُبحث عنه ولا

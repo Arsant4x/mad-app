@@ -15,6 +15,7 @@ import {
   postDeferredSettlementEntry,
   postDepositReceiptEntry,
   postDepositSettlementEntry,
+  postOwnerRentCollectionEntry,
   postPartySettlementEntry,
   postRentPaymentEntry,
 } from '../journal/auto-posting.util';
@@ -44,7 +45,7 @@ import { UpdateContractDto } from './dto/update-contract.dto';
 import { generateInstallmentSchedule } from './installment-schedule.util';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { deriveSettlementStatus, lockDocumentRow } from '../common/settlement/settlement.util';
-import { rentAmountsOf, rentTaxTreatment, type RentClassification, type RentTaxTreatment, type RentVatInclusion } from '../journal/rent-tax-point.util';
+import { ownerCollectionSplit, rentAmountsOf, rentTaxTreatment, type RentClassification, type RentLessor, type RentTaxTreatment, type RentVatInclusion } from '../journal/rent-tax-point.util';
 import { money } from '../common/money/text';
 import { FilesService } from '../files/files.service';
 import { round2, formatMoney } from '../common/money/rounding';
@@ -208,6 +209,43 @@ function splitAtDepositRate(
 // **ولا يُستنبَط من نصّ** — ولا تُبقى الخريطةُ «لفحص الاتساق» فبقاؤها يُبقي الاستنباط.
 // حارسٌ يُسقط الحزمة على عودتها: `no-word-classification.spec.ts`.
 
+/** حقولُ المؤجّر كما تُكتب على العقد. */
+interface LessorFields {
+  lessor: 'COMPANY' | 'OWNER';
+  ownerName: string | null;
+  ownerVatNumber: string | null;
+}
+
+/**
+ * ⚖️ **من المؤجّر** (السؤال ٥٧٧ · `ق-١٦٠٠` · `ق-١٦٠٩`/أ، بحكم صاحب المشروع) — مصدرٌ واحد للإنشاء والتجديد والتعديل.
+ *
+ * - **عقارٌ مملوكٌ أو مستأجَرٌ رئيساً**: المؤجّرُ المنشأةُ واقعةً (لا مالكَ غيرُها يُبرم) — و«المالكُ مؤجّراً» عليه يُرفض.
+ * - **عقارُ تشغيل**: المؤجّرُ **يُعلَن ولا يُفترض** — فالفيصلُ عند الهيئة باسم من يُبرم العقد، والخطأُ فيه ضريبةٌ ناقصة
+ *   أو إيرادٌ ليس للمنشأة.
+ * - **المالكُ مؤجّراً**: اسمُه إلزاميّ (له يُدفع)، ورقمُه الضريبيّ للتجاريّ (مورّدٌ خاضعٌ مسجَّل)، ونسبةُ عمولة العقار
+ *   معلَنة (منها تُحسب العمولةُ عند كلِّ قبض). وحين المؤجّرُ المنشأةُ تُمحى حقولُ المالك ولا تُترك تشهد بغير الواقع.
+ */
+function lessorFieldsFor(
+  property: Pick<Property, 'ownership' | 'opRate'>,
+  dto: { lessor?: 'COMPANY' | 'OWNER'; ownerName?: string; ownerVatNumber?: string },
+  /** العقدُ تجاريٌّ كما أُعلن — فتوريدُ المالك خاضعٌ ورقمُه الضريبيّ إلزاميّ. */
+  commercial: boolean,
+): LessorFields {
+  const none: LessorFields = { lessor: 'COMPANY', ownerName: null, ownerVatNumber: null };
+  if (property.ownership !== 'managed') {
+    if (dto.lessor === 'OWNER') throw new BadRequestException(MSG.contract_owner_lessor_requires_managed);
+    return none;
+  }
+  if (dto.lessor === undefined) throw new BadRequestException(MSG.contract_lessor_required);
+  if (dto.lessor === 'COMPANY') return none;
+  const ownerName = dto.ownerName?.trim();
+  if (!ownerName) throw new BadRequestException(MSG.contract_owner_name_required);
+  const ownerVatNumber = dto.ownerVatNumber?.trim() || null;
+  if (commercial && !ownerVatNumber) throw new BadRequestException(MSG.contract_owner_vat_required);
+  if (property.opRate === null) throw new BadRequestException(MSG.contract_owner_commission_rate_missing);
+  return { lessor: 'OWNER', ownerName, ownerVatNumber };
+}
+
 @Injectable()
 export class ContractsService {
   private readonly logger = new Logger(ContractsService.name);
@@ -240,16 +278,15 @@ export class ContractsService {
    * المفتوحة؛ والتأميناتُ المحجوزة لدى المنشأة.
    */
   private withComputedFigures<
-    T extends Pick<Contract, 'classification' | 'vatInclusion'> & {
-      unit: { property: { ownership: string } };
+    T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor'> & {
       installments: { id: string; amount: Prisma.Decimal }[];
       payments: { installmentId: string | null; netAmount: Prisma.Decimal; discount: Prisma.Decimal }[];
       claims: { status: string; amount: Prisma.Decimal }[];
       deposits: { status: string; holder: string; amount: Prisma.Decimal }[];
     },
   >(contract: T) {
-    // المعاملةُ الضريبية من حقلَي العقد المُعلَنَين (`ق-٨٩١`) — لا استنباطَ من كلمة.
-    const treatment = rentTaxTreatment(contract.classification as RentClassification, contract.vatInclusion as RentVatInclusion, contract.unit.property.ownership);
+    // المعاملةُ الضريبية من حقول العقد المُعلَنة (`ق-٨٩١` · السؤال ٥٧٧) — لا استنباطَ من كلمة.
+    const treatment = rentTaxTreatment(contract.classification as RentClassification, contract.vatInclusion as RentVatInclusion, contract.lessor as RentLessor);
     const settledBy = new Map<string, number>();
     for (const p of contract.payments) {
       if (!p.installmentId) continue;
@@ -287,6 +324,8 @@ export class ContractsService {
         // **العميلُ يُختار بمعرّفه — للمسوّدة كما للحيّ** (`ق-١٠٢٨`/①②): لا بحثَ بالاسم ولا إنشاءَ ضمنيّ.
         const customer = await this.linkableCustomer(tx, dto.customerId);
         if (!isDraft) await this.validateContract(tx, unit, unit.property, start, end, customer.name);
+        // ⚖️ من المؤجّر (السؤال ٥٧٧) — للمسوّدة كما للحيّ: الحقلُ إلزاميٌّ في القاعدة، ويُعلَن على عقار التشغيل.
+        const lessor = lessorFieldsFor(unit.property, dto, dto.classification === 'COMMERCIAL');
 
         const no = await this.nextContractNumber(tx, companyId, start);
 
@@ -309,6 +348,7 @@ export class ContractsService {
             // إلزاميان من الـDTO وحدَه — لا افتراضَ ولا استنباط (ق-٨٩١ · ق-٨٩٢).
             classification: dto.classification,
             vatInclusion: dto.vatInclusion,
+            ...lessor,
             status: isDraft ? 'DRAFT' : 'DUE',
             currency,
             exchangeRate,
@@ -367,10 +407,33 @@ export class ContractsService {
       if (existing.vatInclusion === 'LEGACY_UNDECLARED' && dto.vatInclusion === undefined) {
         throw new BadRequestException(MSG.contract_vat_inclusion_required);
       }
+      // ⚖️ وعقدٌ على عقار تشغيلٍ سبق حقلَ المؤجّر يُعلَن مؤجّرُه أوّلاً (السؤال ٥٧٧ · ق-١٦٠٠) — بالمبدأ نفسِه.
+      if (existing.lessor === 'LEGACY_UNDECLARED' && dto.lessor === undefined) {
+        throw new BadRequestException(MSG.contract_lessor_required);
+      }
 
       const data: Prisma.ContractUncheckedUpdateInput = {};
       if (dto.classification !== undefined) data.classification = dto.classification;
       if (dto.vatInclusion !== undefined) data.vatInclusion = dto.vatInclusion;
+      if (dto.lessor !== undefined || dto.ownerName !== undefined || dto.ownerVatNumber !== undefined) {
+        const unit = await tx.unit.findUniqueOrThrow({ where: { id: existing.unitId }, include: { property: true } });
+        const next = lessorFieldsFor(
+          unit.property,
+          {
+            lessor: dto.lessor ?? (existing.lessor === 'LEGACY_UNDECLARED' ? undefined : existing.lessor),
+            ownerName: dto.ownerName ?? existing.ownerName ?? undefined,
+            ownerVatNumber: dto.ownerVatNumber ?? existing.ownerVatNumber ?? undefined,
+          },
+          (dto.classification ?? existing.classification) === 'COMMERCIAL',
+        );
+        // **لا يُغيَّر المؤجّرُ بعد ترحيل**: القبضُ رُحّل أمانةً للمالك أو إيراداً للمنشأة، والاستحقاقُ ذمّةً — وتحويلُه
+        // إعادةُ كتابة تاريخ (`§6.4`). أمّا إعلانُ مؤجّرِ عقدٍ قديم فيجوز ولو بعد قبض: لا معاملةَ له قبله، ويسري على ما بعده.
+        if (existing.lessor !== 'LEGACY_UNDECLARED' && next.lessor !== existing.lessor) {
+          const [accrued, paid] = await Promise.all([tx.rentAccrual.count({ where: { contractId: id } }), tx.rentPayment.count({ where: { contractId: id } })]);
+          if (accrued + paid > 0) throw new ConflictException(MSG.contract_lessor_locked_after_posting);
+        }
+        Object.assign(data, next);
+      }
       // **تغييرُ الطرف قبل أوّل ترحيلٍ فقط** (`ق-١٠٢٨`/③): بعده ذمّةٌ وقيودٌ نُسبت إليه — استحقاقٌ رُحِّل،
       // أو قبضٌ، أو وديعةٌ أو مطالبةٌ أو خلوّ — وتحويلُها إعادةُ كتابة تاريخ (`§6.4`). والمخرجُ تسمّيه
       // الرسالة: إنهاءُ العقد وعقدٌ جديد. أمّا الاسمُ والهاتفُ فمشتقّان من العميل لا مُدخَلان.
@@ -605,14 +668,24 @@ export class ContractsService {
         // — ويُحسب في الإقرار ويُعدّ باسمه، ولا يُرحَّل رجعياً.
         const accrualContract = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, select: ACCRUAL_CONTRACT_SELECT });
         const treatment = treatmentOf(accrualContract);
-        const accrualPath = treatment !== null && (installment === null || installment.accrualBasis === 'ACCRUAL');
+        // ⚖️ **ومسارٌ ثالث: عقدٌ مؤجّرُه المالك** (السؤال ٥٧٧ · ق-١٦٠٠): القبضُ أمانةٌ له (`2500`) وعمولةٌ للمنشأة (`4250`)
+        //    بضريبتها — بلا ذمّةٍ ولا استحقاقٍ ولا إيرادِ إيجار. والنسبةُ من العقار **لحظةَ القبض**؛ وبلا نسبةٍ يُرفض القبضُ برسالة
+        //    لا يُرحَّل ناقصاً.
+        const ownerPath = treatment !== null && treatment.managed;
+        let ownerRate = 0;
+        if (ownerPath) {
+          const unitRow = await tx.unit.findUniqueOrThrow({ where: { id: contract.unitId }, select: { property: { select: { opRate: true } } } });
+          if (unitRow.property.opRate === null) throw new BadRequestException(MSG.contract_owner_commission_rate_missing);
+          ownerRate = Number(unitRow.property.opRate);
+        }
+        const accrualPath = !ownerPath && treatment !== null && (installment === null || installment.accrualBasis === 'ACCRUAL');
         // الإجماليُّ بمقياس عملة العقد — قبل الخصم، فالخصمُ تعديلُ مقابلٍ لاحق.
         // والقبضُ بعملة العقد وحدَها — فالمتوقَّعُ بسعر العقد، والإجماليُّ مبلغُ كلِّ جزءٍ نفسُه (أدناه).
         const baseExpected = toBaseAmount(netAmount, Number(contract.exchangeRate));
 
         let journalEntry: { id: string; no: string } | null = null;
         let earnedNow = 0;
-        if (!accrualPath) {
+        if (!accrualPath && !ownerPath) {
           const posting = await postRentPaymentEntry(tx, companyId, {
             unitId: contract.unitId,
             customerId: contract.customerId,
@@ -647,9 +720,11 @@ export class ContractsService {
         //    والقبضُ واحد: قيدُ تسويةٍ واحد وحركةُ بنكٍ واحدة يحملهما الأجزاءُ كلُّها. وعلى مسار الاستحقاق وحدَه (حدٌّ معلَن):
         //    القسطُ القديمُ على أساس القبض يبقى على مساره القائم.
         const parts =
-          accrualPath && treatment && installment
+          (accrualPath || ownerPath) && treatment && installment
             ? await spreadRentPayment(tx, contractId, treatment, installment, dto.amount)
             : [{ installmentId: dto.installmentId ?? null, amount: dto.amount }];
+        // ⚖️ وللمالك المؤجّر: لكلِّ جزءٍ قسمتُه من صافيه بعملة الدفتر — حصّةُ المالك والعمولةُ وضريبتُها (السؤال ٥٧٧).
+        const ownerTotals = { cash: 0, share: 0, commission: 0, tax: 0 };
         // الخصمُ على الجزء الأوّل — وهو القسطُ المقصود، أو أوّلُ قسطٍ بقي له شيء.
         if (round2(parts[0].amount - discount) <= 0) throw new BadRequestException(MSG.payment_net_must_be_positive);
 
@@ -665,6 +740,14 @@ export class ContractsService {
           const baseNet = last ? round2(baseTotal.net - baseSoFar.net) : toBaseAmount(partNet, payRate);
           baseSoFar.amount = round2(baseSoFar.amount + baseAmount);
           baseSoFar.net = round2(baseSoFar.net + baseNet);
+          const owner = ownerPath && treatment ? ownerCollectionSplit(baseNet, treatment, ownerRate) : null;
+          if (owner) {
+            if (owner.ownerShare < 0) throw new BadRequestException(MSG.contract_owner_commission_exceeds_collection);
+            ownerTotals.cash = round2(ownerTotals.cash + baseNet);
+            ownerTotals.share = round2(ownerTotals.share + owner.ownerShare);
+            ownerTotals.commission = round2(ownerTotals.commission + owner.commission);
+            ownerTotals.tax = round2(ownerTotals.tax + owner.commissionTax);
+          }
           const row = await tx.rentPayment.create({
             data: {
               contractId,
@@ -684,11 +767,33 @@ export class ContractsService {
               baseAmount,
               baseDiscount: k === 0 ? baseTotal.discount : 0,
               baseNetAmount: baseNet,
+              ...(owner
+                ? { commissionRate: ownerRate, baseOwnerVat: owner.ownerVat, baseCommission: owner.commission, baseCommissionTax: owner.commissionTax, baseOwnerShare: owner.ownerShare }
+                : {}),
             } as unknown as Prisma.RentPaymentUncheckedCreateInput,
           });
           rows.push({ id: row.id, installmentId: part.installmentId, amount: part.amount });
         }
         const payment = rows[0];
+
+        if (ownerPath) {
+          // قيدٌ واحد للقبض كلِّه، ومجاميعُه من صفوف الأجزاء نفسِها — فما يقرؤه الإقرارُ هو ما رُحِّل.
+          const ownerEntry = await postOwnerRentCollectionEntry(tx, companyId, {
+            customerId: contract.customerId,
+            unitId: contract.unitId,
+            contractNo: contract.no,
+            tenant: contract.tenant,
+            ownerName: contract.ownerName ?? '',
+            date: new Date(dto.date),
+            baseCash: ownerTotals.cash,
+            baseOwnerShare: ownerTotals.share,
+            baseCommission: ownerTotals.commission,
+            baseCommissionTax: ownerTotals.tax,
+            cashAccountId: bank?.accountId ?? null,
+          });
+          journalEntry = ownerEntry;
+          if (ownerEntry) await tx.rentPayment.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { journalEntryId: ownerEntry.id } });
+        }
 
         if (accrualPath && treatment) {
           // ① يُستحقّ ما يلزم — بعد كتابة الدفعة كي يقرأها المحرّك: نقطتُها المقدَّمة بقدرها
@@ -868,6 +973,8 @@ export class ContractsService {
 
         const value = dto.value ?? Number(source.value);
         const cycle = dto.cycle ?? source.cycle;
+        // ⚖️ والمؤجّرُ يُعلَن في طلب التجديد على عقار التشغيل كالتصنيف (السؤال ٥٧٧) — لا يُورَّث: عقدٌ جديدٌ باسم من يُبرمه.
+        const lessor = lessorFieldsFor(source.unit.property, dto, dto.classification === 'COMMERCIAL');
         // التجديد: بادئته من بداية العقد **الجديد** لا الأصل — فهو مستندٌ قائم
         // بذاته بمدّته الخاصة.
         const no = dto.no?.trim() || (await this.nextContractNumber(tx, companyId, start));
@@ -897,6 +1004,7 @@ export class ContractsService {
             // يُعلَنان في طلب التجديد لا يُورَّثان من الأصل (ق-٨٩١).
             classification: dto.classification,
             vatInclusion: dto.vatInclusion,
+            ...lessor,
             status: start > new Date() ? 'UPCOMING' : 'DUE',
             currency: source.currency,
             exchangeRate,

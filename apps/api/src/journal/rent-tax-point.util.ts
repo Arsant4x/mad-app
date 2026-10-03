@@ -35,32 +35,44 @@ export const RENT_VAT_RATE = STANDARD_VAT_RATE / 100;
 export type RentClassification = 'RESIDENTIAL' | 'COMMERCIAL' | 'LEGACY_UNCLASSIFIED';
 export type RentVatInclusion = 'INCLUSIVE' | 'EXCLUSIVE' | 'LEGACY_UNDECLARED';
 
+export type RentLessor = 'COMPANY' | 'OWNER' | 'LEGACY_UNDECLARED';
+
 export interface RentTaxTreatment {
   classification: 'RESIDENTIAL' | 'COMMERCIAL';
-  /** تجاريٌّ **و**العقارُ مملوكٌ أو مستأجَرٌ رئيساً — فمخرجاتُه مخرجاتُنا (`ق-٨٩٣`). */
+  /** ضريبةُ التجاريّ **مخرجاتُ المنشأة** — تجاريٌّ والمؤجّرُ المنشأة (`ق-٨٩٣` · السؤال ٥٧٧). */
   taxable: boolean;
-  /** عقارُ تشغيل: التوريدُ توريدُ مالكه — لا ضريبةَ عندنا، ويُعدّ ويُعلَن (`ق-٩١٨`). */
+  /**
+   * **المستأجرُ يدفع ضريبةً على الإيجار** — تجاريٌّ أيّاً كان المؤجّر. يساوي `taxable` حين المؤجّرُ المنشأة،
+   * ويفترق عنه حين المؤجّرُ المالك: الضريبةُ ضريبتُه تمرّ في أمانته ولا تدخل إقرارَ المنشأة.
+   */
+  chargesVat: boolean;
+  /**
+   * ⚖️ **المالكُ مؤجّر والمنشأةُ وكيلٌ معلَن** (السؤال ٥٧٧ · `ق-١٦٠٠`): الإيجارُ أمانةٌ للمالك لا إيراد، فلا
+   * استحقاقَ في دفاتر المنشأة، ويُعدّ في إقرارها ولا يدخله، والعمولةُ إيرادُها بضريبتها.
+   */
   managed: boolean;
   inclusive: boolean;
 }
 
 /**
- * معاملةُ العقد الضريبية — أو `null` لعقدٍ قديمٍ لم يُعلَن.
+ * معاملةُ العقد الضريبية — أو `null` لعقدٍ قديمٍ لم يُعلَن تصنيفُه أو شمولُه أو مؤجّرُه.
  *
- * `ownership` قيمُ العقار (`owned` · `leased` · `managed`)؛ وما عداها يُعامَل مملوكاً
- * (القيمُ الثلاث هي كلُّ ما يقبله `CreatePropertyDto`).
+ * ⚖️ **الفيصلُ المؤجّرُ على العقد لا ملكيةُ العقار** (السؤال ٥٧٧): كان عقارُ التشغيل يُعامَل كلُّه توريداً لمالكه، والهيئةُ
+ * تقول «باسم من يُبرم العقد» — فالمشغّلُ الموقِّعُ مؤجّراً مورّدٌ كالمالك، والمالكُ الموقِّعُ مورّدٌ والمشغّلُ وكيلُه.
  */
 export function rentTaxTreatment(
   classification: RentClassification,
   vatInclusion: RentVatInclusion,
-  ownership: string,
+  lessor: RentLessor,
 ): RentTaxTreatment | null {
-  if (classification === 'LEGACY_UNCLASSIFIED' || vatInclusion === 'LEGACY_UNDECLARED') return null;
-  const managed = ownership === 'managed';
+  if (classification === 'LEGACY_UNCLASSIFIED' || vatInclusion === 'LEGACY_UNDECLARED' || lessor === 'LEGACY_UNDECLARED') return null;
+  const owner = lessor === 'OWNER';
+  const commercial = classification === 'COMMERCIAL';
   return {
     classification,
-    taxable: classification === 'COMMERCIAL' && !managed,
-    managed: classification === 'COMMERCIAL' && managed,
+    taxable: commercial && !owner,
+    chargesVat: commercial,
+    managed: owner,
     inclusive: vatInclusion === 'INCLUSIVE',
   };
 }
@@ -75,11 +87,12 @@ export interface GrossNetTax {
  * **الإجماليُّ والصافي والضريبة من مبلغ القسط** (`amount` كما كُتب في العقد).
  *
  * غيرُ الشامل الخاضع: `gross = amount + 15%`؛ الشاملُ الخاضع: `gross = amount` والضريبةُ
- * منه؛ والمعفى وعقارُ التشغيل: الثلاثةُ سواء — لا ضريبة.
+ * منه؛ والمعفى: الثلاثةُ سواء — لا ضريبة. **والخضوعُ هنا ما يدفعه المستأجر** (`chargesVat`): تجاريٌّ مؤجّرُه المالك
+ * يدفع المستأجرُ ضريبتَه كما يدفعها للمنشأة، وإن لم تكن ضريبتَها.
  */
 export function rentAmountsOf(amount: number, t: RentTaxTreatment): GrossNetTax {
   const a = round2(amount);
-  if (!t.taxable) return { gross: a, net: a, tax: 0 };
+  if (!t.chargesVat) return { gross: a, net: a, tax: 0 };
   if (t.inclusive) {
     const tax = round2((a * RENT_VAT_RATE) / (1 + RENT_VAT_RATE));
     return { gross: a, net: round2(a - tax), tax };
@@ -94,9 +107,38 @@ export function rentAmountsOf(amount: number, t: RentTaxTreatment): GrossNetTax 
  */
 export function splitGrossAmount(gross: number, t: RentTaxTreatment): GrossNetTax {
   const g = round2(gross);
-  if (!t.taxable) return { gross: g, net: g, tax: 0 };
+  if (!t.chargesVat) return { gross: g, net: g, tax: 0 };
   const tax = round2((g * RENT_VAT_RATE) / (1 + RENT_VAT_RATE));
   return { gross: g, net: round2(g - tax), tax };
+}
+
+export interface OwnerCollectionSplit {
+  /** ضريبةُ المالك في المقبوض (للتجاريّ) — تمرّ في أمانته. */
+  ownerVat: number;
+  /** العمولةُ على المقبوض بلا ضريبة المالك. */
+  commission: number;
+  /** ضريبتُها — مخرجاتُ المنشأة دائماً. */
+  commissionTax: number;
+  /** ما بقي للمالك: المقبوضُ كلُّه ناقصَ العمولة وضريبتها. */
+  ownerShare: number;
+}
+
+/**
+ * ⚖️ **قسمةُ ما يُقبض لمالكٍ مؤجّر** (السؤال ٥٧٧ · `ق-١٦٠٠`) — بعملة الدفتر، من المقبوض فعلاً (بعد الخصم).
+ *
+ * المقبوضُ إجماليٌّ دائماً: للتجاريّ فيه ضريبةُ المالك (`15/115`) وليست له مالاً يُحسب عليه أجر، **فالعمولةُ على الباقي**
+ * (`نسبةُ العقار × المقبوض بلا ضريبة المالك`)، وضريبتُها ١٥٪ منها، وتُخصمان من حصّة المالك (الخدمةُ له فالضريبةُ عليه).
+ * والسكنيُّ: لا ضريبةَ للمالك فالوعاءُ المقبوضُ كلُّه.
+ *
+ * ⚠️ **ووعاءُ العمولة تطبيقٌ معلَن** لا نصٌّ: الحقلُ على العقار «نسبة عمولة التشغيل» ولم يُكتب أساسُه في موضع؛ فأُخذ بما
+ * لا يجعل الضريبةَ أجراً (يُعرض على صاحب المشروع، توجيه ٢٧٦).
+ */
+export function ownerCollectionSplit(baseCollected: number, t: RentTaxTreatment, ratePercent: number): OwnerCollectionSplit {
+  const collected = round2(baseCollected);
+  const { net, tax: ownerVat } = splitGrossAmount(collected, t);
+  const commission = round2((net * ratePercent) / 100);
+  const commissionTax = round2(commission * RENT_VAT_RATE);
+  return { ownerVat, commission, commissionTax, ownerShare: round2(collected - commission - commissionTax) };
 }
 
 export type TaxPointKind = 'DUE' | 'PREPAYMENT';

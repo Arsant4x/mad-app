@@ -17,6 +17,12 @@ export interface RentDeclarationSection {
   exempt: MoneyText;
   managedExcluded: MoneyText;
   managedCount: number;
+  /** ⚖️ عمولةُ المنشأة على قبض إيجار المالكين وضريبتُها — خاضعةٌ في الخانة ١ (السؤال ٥٧٧ · ق-١٦٠٠). */
+  commissionStandard: MoneyText;
+  commissionStandardVat: MoneyText;
+  /** وما قُبض للمالكين وعددُ دفعاته — يُعدّ ولا يدخل. */
+  ownerCollected: MoneyText;
+  ownerCount: number;
   legacyStandard: MoneyText;
   legacyStandardVat: MoneyText;
   legacyExempt: MoneyText;

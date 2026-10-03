@@ -75,6 +75,10 @@ export type ContractClassification = (typeof CONTRACT_CLASSIFICATION_VALUES)[num
 export const CONTRACT_CYCLE_VALUES = ['monthly', 'quarterly', 'semiannual', 'annual'] as const;
 export type ContractCycle = (typeof CONTRACT_CYCLE_VALUES)[number];
 
+/** `prisma:ContractLessor` — ويقابلُه `apps/web/src/api/contracts.ts#ContractLessor`. */
+export const CONTRACT_LESSOR_VALUES = ['COMPANY', 'OWNER', 'LEGACY_UNDECLARED'] as const;
+export type ContractLessor = (typeof CONTRACT_LESSOR_VALUES)[number];
+
 /** `prisma:ContractStatus` — ويقابلُه `apps/web/src/api/contracts.ts#ContractStatus`. */
 export const CONTRACT_STATUS_VALUES = ['DRAFT', 'UPCOMING', 'DUE', 'LATE', 'CANCELLED'] as const;
 export type ContractStatus = (typeof CONTRACT_STATUS_VALUES)[number];

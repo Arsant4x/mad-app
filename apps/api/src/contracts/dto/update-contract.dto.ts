@@ -1,5 +1,6 @@
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
-import { CONTRACT_CLASSIFICATIONS, CONTRACT_VAT_INCLUSIONS, FURNISHED_OPTIONS } from './create-contract.dto';
+import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { MSG } from '../../common/i18n/messages';
+import { CONTRACT_CLASSIFICATIONS, CONTRACT_LESSORS, CONTRACT_VAT_INCLUSIONS, FURNISHED_OPTIONS, OWNER_VAT_NUMBER_PATTERN } from './create-contract.dto';
 
 /** Deliberately narrow: unit/value/dates/cycle can't be changed after
  * creation (that would require reconciling already-generated installments)
@@ -38,4 +39,22 @@ export class UpdateContractDto {
   @IsOptional()
   @IsIn(CONTRACT_VAT_INCLUSIONS)
   vatInclusion?: (typeof CONTRACT_VAT_INCLUSIONS)[number];
+
+  /**
+   * ⚖️ من المؤجّر (السؤال ٥٧٧ · `ق-١٦٠٠`) — **إلزاميٌّ لعقدٍ على عقار تشغيلٍ سبق الحقل** قبل أيّ تعديل، ولا يُغيَّر بعد
+   * قبضٍ أو استحقاق؛ واسمُ المالك ورقمُه يُصحَّحان متى شئت.
+   */
+  @IsOptional()
+  @IsIn(CONTRACT_LESSORS)
+  lessor?: (typeof CONTRACT_LESSORS)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  ownerName?: string;
+
+  @IsOptional()
+  @ValidateIf((o: UpdateContractDto) => !!o.ownerVatNumber)
+  @Matches(OWNER_VAT_NUMBER_PATTERN, { message: MSG.vat_number_invalid })
+  ownerVatNumber?: string;
 }

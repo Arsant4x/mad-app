@@ -48,6 +48,12 @@ export class PropertiesService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.property.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.property_not_found);
+      // ⚖️ عقارُ تشغيلٍ له عقدٌ مؤجّرُه المالك لا يصير مملوكاً ولا مستأجَراً رئيساً (السؤال ٥٧٧ · ق-١٦٠٠): «المالكُ مؤجّراً» لا
+      //    يكون إلا على التشغيل، وتغييرُ الملكية تحته يُبقي عقداً يشهد بغير الواقع.
+      if (dto.ownership !== undefined && dto.ownership !== 'managed' && existing.ownership === 'managed') {
+        const ownerContracts = await tx.contract.count({ where: { lessor: 'OWNER', unit: { propertyId: id } } });
+        if (ownerContracts > 0) throw new ConflictException(MSG.property_has_owner_lessor_contracts);
+      }
 
       const data: Prisma.PropertyUncheckedUpdateInput = {};
       if (dto.name !== undefined) data.name = dto.name;

@@ -9,6 +9,7 @@ import { taxPathOf, writeOffReason } from '../common/writeoff-reasons';
 import { getOrCreateDeferredRevenueAccount } from './deferred-revenue-account.util';
 import { getOrCreateInputVatAccount, getOrCreateInventoryAccount } from './inventory-accounts.util';
 import { getOrCreateInventoryVarianceAccount } from './inventory-variance-account.util';
+import { getOrCreateOperatingCommissionAccount, getOrCreateOwnerShareAccount } from './owner-rent-accounts.util';
 import type { CostAllocation } from '../purchases/layer-cost-allocation.util';
 import { getOrCreateReceiptClearingAccount } from './receipt-clearing-account.util';
 import { getOrCreateWriteOffAccount } from './writeoff-account.util';
@@ -1025,6 +1026,53 @@ export async function postRentPaymentEntry(
   });
 
   return { entry, earned: split.earned, deferred: split.deferred };
+}
+
+export interface OwnerRentCollectionForPosting {
+  /** عميلُ العقد إن سُجِّل (ق-٨٧٣). */
+  customerId?: string | null;
+  /** ⭐ البُعد التحليلي — إلزاميّ، انظر RentPaymentForPosting.unitId. */
+  unitId: string;
+  contractNo: string;
+  tenant: string;
+  ownerName: string;
+  date: Date;
+  /** المقبوضُ كلُّه بعملة الدفتر — يساوي حصّةَ المالك والعمولةَ وضريبتَها. */
+  baseCash: number;
+  baseOwnerShare: number;
+  baseCommission: number;
+  baseCommissionTax: number;
+  /** حسابُ البنك أو الصندوق حين يُقبض على بنكٍ أو درج (ق-٢٧٧). */
+  cashAccountId?: string | null;
+}
+
+/**
+ * ⚖️ **قبضُ إيجارٍ لمالكٍ مؤجّرٍ والمنشأةُ وكيلُه** (السؤال ٥٧٧ · `ق-١٦٠٠` · `ق-١٦٠٩`/أ).
+ *
+ * مدينٌ نقدٌ أو بنكٌ بالمقبوض كلِّه ⇄ دائنٌ `2500` حصّةُ المالك (أمانةٌ تُدفع له) · `4250` العمولة (إيرادُ المنشأة) ·
+ * `2200` ضريبتُها. **لا ذمّةَ ولا إيرادَ إيجارٍ ولا مؤجَّل**: الإيجارُ توريدُ المالك، فلا يدخل `1200` ولا `4200` ولا `2400`.
+ * والقيدُ متوازنٌ بالبناء: الحصّةُ تُشتقّ فرقاً (`ownerCollectionSplit`).
+ *
+ * والحسابان يُنشآن عند الحاجة (`getOrCreate` · `ق-٤٧١`)، و`1000` و`2200` من الدليل — وغيابُ أحدهما يرفض القبضَ برسالة.
+ */
+export async function postOwnerRentCollectionEntry(tx: Prisma.TransactionClient, companyId: string, p: OwnerRentCollectionForPosting) {
+  if (p.baseCash <= 0) return null;
+  const ids = await resolveAccountIds(tx, [...(p.cashAccountId ? [] : ['1000']), ...(p.baseCommissionTax > 0 ? [OUTPUT_VAT_ACCOUNT] : [])]);
+  const lines: PostingLine[] = [{ accountId: p.cashAccountId ?? ids.get('1000')!, debit: round2(p.baseCash), credit: 0 }];
+  if (p.baseOwnerShare > 0) lines.push({ accountId: await getOrCreateOwnerShareAccount(tx, companyId), debit: 0, credit: round2(p.baseOwnerShare) });
+  if (p.baseCommission > 0) lines.push({ accountId: await getOrCreateOperatingCommissionAccount(tx, companyId), debit: 0, credit: round2(p.baseCommission) });
+  if (p.baseCommissionTax > 0) lines.push({ accountId: ids.get(OUTPUT_VAT_ACCOUNT)!, debit: 0, credit: round2(p.baseCommissionTax) });
+
+  return createJournalEntry(tx, {
+    companyId,
+    date: p.date,
+    memo: `قبض إيجار للمالك ${p.ownerName} — عقد ${p.contractNo} — ${p.tenant}`,
+    unitId: p.unitId,
+    lines,
+    auto: true,
+    branchId: null,
+    customerId: p.customerId ?? null,
+  });
 }
 
 export interface DeferredRecognitionForPosting {

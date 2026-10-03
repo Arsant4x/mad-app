@@ -3503,6 +3503,19 @@ enum ContractVatInclusion {
   LEGACY_UNDECLARED
 }
 
+/// ⚖️ **من المؤجّرُ في عقد الإيجار** (السؤال ٥٧٧ · `ق-١٦٠٠` · `ق-١٦٠٩`/أ) — الفيصلُ عند الهيئة في من يورّد الإيجار.
+/// يُعلَن ولا يُفترض على عقار التشغيل؛ وعلى المملوك والمستأجَر رئيساً المؤجّرُ المنشأةُ واقعةً لا افتراضاً.
+enum ContractLessor {
+  /// المنشأةُ نفسُها (مالكةٌ أو مستأجرةٌ رئيساً أو مشغّلٌ وقّع مؤجّراً): الإيجارُ إيرادُها وضريبةُ التجاريّ عليها.
+  COMPANY
+  /// مالكُ العقار، والمنشأةُ وكيلٌ معلَن يحصّل عنه بعمولة: الإيجارُ أمانةٌ له (`2500`) لا إيراد، ويخرج من
+  /// إقرار المنشأة، والعمولةُ إيرادُها (`4250`) بضريبة ١٥٪ دائماً.
+  OWNER
+  /// عقدٌ على عقار تشغيلٍ سبق الحقل: لا معاملةَ له حتى يُعلَن من بطاقة العقد، ويُعدّ. محبوسٌ بقيد `CHECK`
+  /// على `createdAt` كقيد التصنيف (`ق-٨٩٨`).
+  LEGACY_UNDECLARED
+}
+
 enum InstallmentStatus {
   DUE
   LATE
@@ -4215,6 +4228,12 @@ model Contract {
   classification ContractClassification
   /// إلزاميٌّ كذلك — أشاملٌ `value` للضريبة أم لا (`ق-٨٩٢`).
   vatInclusion   ContractVatInclusion
+  /// ⚖️ من المؤجّر (السؤال ٥٧٧ · `ق-١٦٠٠`) — إلزاميٌّ بلا `@default`: على عقار التشغيل يُعلَن، وعلى غيره المنشأة.
+  lessor         ContractLessor
+  /// اسمُ المالك حين يكون المؤجّرَ — قيدُ `contracts_owner_lessor_named` يُلزمه.
+  ownerName      String?
+  /// رقمُه الضريبيّ (`^3\d{13}3$`) — إلزاميٌّ للتجاريّ، فتوريدُه الخاضعُ يحتاج مورّداً مسجَّلاً.
+  ownerVatNumber String?
 
   status       ContractStatus @default(DUE)
   cancelDate   DateTime?      @db.Date
@@ -5378,6 +5397,15 @@ model RentPayment {
   baseAmount    Decimal @db.Decimal(18, 2)
   baseDiscount  Decimal @default(0) @db.Decimal(18, 2)
   baseNetAmount Decimal @db.Decimal(18, 2)
+
+  /// ⚖️ **قبضٌ لعقدٍ مؤجّرُه المالك** (السؤال ٥٧٧ · `ق-١٦٠٠`) — فارغةٌ لغيره. بعملة الدفتر، من `baseNetAmount`:
+  /// ضريبةُ المالك فيه (للتجاريّ) · العمولةُ على الباقي بنسبة العقار لحظةَ القبض · ضريبتُها · وحصّةُ المالك.
+  /// **والإقرارُ يقرأ العمولةَ هنا توريداً خاضعاً بتاريخ القبض، ويعدّ المقبوضَ للمالك ولا يُدخله.**
+  commissionRate    Decimal? @db.Decimal(5, 2)
+  baseOwnerVat      Decimal? @db.Decimal(18, 2)
+  baseCommission    Decimal? @db.Decimal(18, 2)
+  baseCommissionTax Decimal? @db.Decimal(18, 2)
+  baseOwnerShare    Decimal? @db.Decimal(18, 2)
 
   bankId String?
   bank   Bank?   @relation(fields: [bankId], references: [id], onDelete: Restrict)

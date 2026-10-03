@@ -73,6 +73,11 @@
       "server": "const:apps/api/src/contracts/dto/create-contract.dto.ts#CONTRACT_CYCLES"
     },
     {
+      "web": "apps/web/src/api/contracts.ts#ContractLessor",
+      "server": "prisma:ContractLessor",
+      "note": "من المؤجّر (السؤال ٥٧٧ · ق-١٦٠٠) — والقيمةُ القديمة لعقدٍ على عقار تشغيلٍ سبق الحقل"
+    },
+    {
       "web": "apps/web/src/api/contracts.ts#ContractStatus",
       "server": "prisma:ContractStatus"
     },

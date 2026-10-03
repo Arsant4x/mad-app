@@ -47,10 +47,10 @@ export const ACCRUAL_CONTRACT_SELECT = {
   customerId: true,
   classification: true,
   vatInclusion: true,
+  lessor: true,
   currency: true,
   exchangeRate: true,
   status: true,
-  unit: { select: { property: { select: { ownership: true } } } },
 } satisfies Prisma.ContractSelect;
 
 export type AccrualContract = Prisma.ContractGetPayload<{ select: typeof ACCRUAL_CONTRACT_SELECT }>;
@@ -78,7 +78,7 @@ type AccrualInstallment = Prisma.InstallmentGetPayload<{ select: typeof ACCRUAL_
 const POSITIVE_KINDS: RentAccrualKind[] = ['DUE', 'PREPAYMENT', 'UNLINKED'];
 
 export function treatmentOf(contract: AccrualContract): RentTaxTreatment | null {
-  return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.unit.property.ownership);
+  return rentTaxTreatment(contract.classification, contract.vatInclusion, contract.lessor);
 }
 
 /** إجماليُّ الدفعة بمقياس عملة العقد — والدفعةُ بعملةٍ أخرى تُترجَم عبر عملة الدفتر. */
@@ -243,12 +243,13 @@ export async function accrueDueWithinTx(tx: Prisma.TransactionClient, companyId:
 
   // استعلامٌ واحد: ما لم يُختم (`accrualCompletedAt IS NULL`) وحلّ استحقاقُه أو قُبضت عليه دفعة —
   // لا مسحاً على كل قسط، ولا استعلاماً لكلِّ عقد.
+  // ⚖️ وعقدٌ مؤجّرُه المالك خارجُه بالتصميم (السؤال ٥٧٧): إيجارُه أمانةٌ للمالك لا ذمّةٌ ولا إيرادٌ للمنشأة.
   const installments = await tx.installment.findMany({
     where: {
       accrualBasis: 'ACCRUAL',
       accrualCompletedAt: null,
       status: { not: 'CANCELLED' },
-      contract: { status: { not: 'DRAFT' }, ...(contractId ? { id: contractId } : {}) },
+      contract: { status: { not: 'DRAFT' }, lessor: { not: 'OWNER' }, ...(contractId ? { id: contractId } : {}) },
       OR: [{ dueDate: { lte: asOf } }, { payments: { some: {} } }],
     },
     select: { ...ACCRUAL_INSTALLMENT_SELECT, contract: { select: ACCRUAL_CONTRACT_SELECT } },
