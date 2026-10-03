@@ -16,6 +16,11 @@ interface WarehouseRow {
   itemCount: number | null;
   totalQty: number | null;
   otherBranch?: boolean;
+  archived?: boolean;
+}
+interface TrashGroup {
+  entity: string;
+  items: { id: string }[];
 }
 const rowsOf = <T>(body: unknown): T[] => (Array.isArray(body) ? (body as T[]) : (body as { items: T[] }).items);
 
@@ -40,6 +45,9 @@ describe('المستودعاتُ للمقيَّد بأسمائها لا بكمّ
   let north: string;
   let south: string;
   let shared: string;
+  let east: string;
+  let west: string;
+  let spare: string;
 
   const stockIn = async (productId: string, warehouseId: string, qty: number) =>
     asOwner(http().post('/inventory/movements')).send({ productId, warehouseId, type: 'IN', qty, date: today(), reason: `إدخال ${suffix}`, unitCost: 10 }).expect(201);
@@ -58,8 +66,14 @@ describe('المستودعاتُ للمقيَّد بأسمائها لا بكمّ
     shared = (await asOwner(http().post('/warehouses')).send({ name: `المستودع المشترك ${suffix}` }).expect(201)).body.id;
     const northBranch = (await asOwner(http().post('/branches')).send({ name: `فرع الشمال ${suffix}`, warehouseId: north }).expect(201)).body.id as string;
     await asOwner(http().post('/branches')).send({ name: `فرع الجنوب ${suffix}`, warehouseId: south }).expect(201);
+    // مستودعاتٌ بلا حركة: الشرقُ والغربُ لفرعين آخرين، والاحتياطيُّ بلا فرع (للمنشأة كلِّها).
+    east = (await asOwner(http().post('/warehouses')).send({ name: `مستودع الشرق ${suffix}` }).expect(201)).body.id;
+    west = (await asOwner(http().post('/warehouses')).send({ name: `مستودع الغرب ${suffix}` }).expect(201)).body.id;
+    spare = (await asOwner(http().post('/warehouses')).send({ name: `المستودع الاحتياطي ${suffix}` }).expect(201)).body.id;
+    await asOwner(http().post('/branches')).send({ name: `فرع الشرق ${suffix}`, warehouseId: east }).expect(201);
+    await asOwner(http().post('/branches')).send({ name: `فرع الغرب ${suffix}`, warehouseId: west }).expect(201);
 
-    const templateId = (await asOwner(http().post('/templates')).send({ name: `المخزون ${suffix}`, allowedScreens: ['dashboard', 'inventory'] }).expect(201)).body.id as string;
+    const templateId = (await asOwner(http().post('/templates')).send({ name: `المخزون ${suffix}`, allowedScreens: ['dashboard', 'inventory', 'audit'] }).expect(201)).body.id as string;
     const username = `north-wh-${suffix}`;
     await asOwner(http().post('/company-users')).send({ name: 'موظّف الشمال', username, password: PASSWORD, permissionTemplateId: templateId, branchIds: [northBranch] }).expect(201);
     northToken = (await http().post('/auth/login').send({ username, password: PASSWORD }).expect(200)).body.accessToken;
@@ -86,6 +100,58 @@ describe('المستودعاتُ للمقيَّد بأسمائها لا بكمّ
       north: { name: 'الشمال', location: 'الشمال', itemCount: 1, totalQty: 3, otherBranch: false },
       south: { name: 'الجنوب', location: 'الجنوب', itemCount: null, totalQty: null, otherBranch: true },
       shared: { name: 'المشترك', location: null, itemCount: 1, totalQty: 2, otherBranch: false },
+    });
+  });
+
+  /**
+   * 🔴 **ما حُجبت كمّيتُه لا يُعدَّل** (توجيه ٢٧٧ · ٢أ · `ق-١٦١٩`، بالقاعدة ٣٧): كانت الرؤيةُ وحدَها محجوبةً في `#720`، والتعديلُ
+   * والأرشفةُ والحذفُ تقرأ المستودعَ بمعرّفه وحدَه، فموظّفُ الشمال يغيّر موقعَ مستودع الجنوب ويؤرشفه ويحذف مستودعَ الشرق.
+   * والمستودعُ ظاهرٌ له باسمه فالرفضُ `403` مسمّى لا `404`، وكلُّها قبل أيّ كتابة.
+   */
+  it('🔴 المقيَّدُ لا يعدّل مستودعَ فرعٍ آخر ولا يؤرشفه ولا يحذفه', async () => {
+    const statuses = [
+      (await asNorth(http().patch(`/warehouses/${south}`)).send({ location: 'غيرُ الجنوب' })).status,
+      (await asNorth(http().patch(`/warehouses/${south}/archive`)).send({ archived: true })).status,
+      (await asNorth(http().delete(`/warehouses/${east}`))).status,
+    ];
+    const rows = rowsOf<WarehouseRow>((await asOwner(http().get('/warehouses?includeArchived=true')).expect(200)).body);
+    const s = rows.find((r) => r.id === south);
+    expect({ statuses, south: { location: s?.location, archived: s?.archived }, eastStays: rows.some((r) => r.id === east) }).toEqual({
+      statuses: [403, 403, 403],
+      south: { location: 'الجنوب', archived: false },
+      eastStays: true,
+    });
+  });
+
+  it('ويعدّل مستودعَ فرعه والمشتركَ ويؤرشفهما', async () => {
+    const statuses = [
+      (await asNorth(http().patch(`/warehouses/${north}`)).send({ location: 'الشمال' })).status,
+      (await asNorth(http().patch(`/warehouses/${shared}`)).send({ location: 'الوسط' })).status,
+      (await asNorth(http().patch(`/warehouses/${shared}/archive`)).send({ archived: true })).status,
+      (await asNorth(http().patch(`/warehouses/${shared}/archive`)).send({ archived: false })).status,
+    ];
+    expect(statuses).toEqual([200, 200, 200, 200]);
+  });
+
+  /**
+   * 🔴 **وسلّةُ المحذوفات**: المستودعُ لا يحمل عمودَ فرع، فلم يدخل مرشِّحَ السلّة (`branchFilter` على ما يحمل `branchId` وحدَه)،
+   * فموظّفُ الشمال يرى مستودعَ الغرب المحذوفَ ويستعيده أو يمحوه. ⟸ يُقرأ في السلّة بفرعه كما في الأرصدة، وما لفرعٍ آخر غيرُ موجودٍ
+   * له (`404`، حكمُ السلّة `ق-١٤٤٠`)، والمحذوفُ الذي بلا فرعٍ ظاهرٌ له كما كان.
+   */
+  it('🔴 ولا يرى في السلّة مستودعَ فرعٍ آخر ولا يستعيده ولا يمحوه', async () => {
+    await asOwner(http().delete(`/warehouses/${west}`)).expect(204);
+    await asOwner(http().delete(`/warehouses/${spare}`)).expect(204);
+    const idsIn = (body: { groups: TrashGroup[] }) => (body.groups.find((g) => g.entity === 'warehouses')?.items ?? []).map((i) => i.id);
+    const northIds = idsIn((await asNorth(http().get('/trash')).expect(200)).body);
+    const restore = (await asNorth(http().post(`/trash/warehouses/${west}/restore`))).status;
+    const purge = (await asNorth(http().delete(`/trash/warehouses/${west}`))).status;
+    const ownerIds = idsIn((await asOwner(http().get('/trash')).expect(200)).body);
+    expect({ spare: northIds.includes(spare), west: northIds.includes(west), restore, purge, ownerSeesWest: ownerIds.includes(west) }).toEqual({
+      spare: true,
+      west: false,
+      restore: 404,
+      purge: 404,
+      ownerSeesWest: true,
     });
   });
 
