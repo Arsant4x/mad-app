@@ -44,6 +44,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'company-users': 'حساب موظف',
   zatca: 'الفوترة الإلكترونية',
   files: 'ملف',
+  'form-templates': 'قالب نموذج',
 };
 
 const ACTION_VERBS: Record<string, string> = {

@@ -126,8 +126,9 @@ describe('نفيٌ في مرشِّحٍ يستثني المجهولَ معه (ق-
     // ⚠️ **و`companyId` منها** — `PermissionTemplate` يقبل الفراغ فيه (قالبُ منصّةٍ بلا
     //    منشأة)، و`LoginIdentity` كذلك (مديرُ المنصّة بلا منشأة — `ق-٦٦٦`). **وهذا
     //    بعينه ما يجعل البوّابةَ تُطابق بالاسم لا بالنموذج**: نفيٌ على `companyId` في
-    //    أيّ استعلامٍ يمرّ بهذا الاسم يستحقّ قراءةً لا عبوراً.
-    expect(nullable.get('companyId')).toEqual(['LoginIdentity', 'PermissionTemplate']);
+    //    أيّ استعلامٍ يمرّ بهذا الاسم يستحقّ قراءةً لا عبوراً. ومعهما قالبُ النموذج وبنودُه
+    //    (القالبُ العامُّ بلا منشأة — توجيه ٢٧٨ · `ق-١٦٣٤`).
+    expect(nullable.get('companyId')).toEqual(['LoginIdentity', 'PermissionTemplate', 'FormTemplate', 'FormTemplateItem']);
   });
 
   /**

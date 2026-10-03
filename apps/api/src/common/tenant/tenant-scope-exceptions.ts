@@ -78,6 +78,15 @@ export const TENANT_SCOPE_EXCEPTIONS: Partial<Record<Prisma.ModelName, ScopeExce
     layer: 'db-only',
     why: 'ثنائيُّ النطاق: قوالبُ عامّة (companyId null) يراها الجميع ويقرؤها التسجيلُ قبل أيّ سياق، وخاصّة لمنشأة. فلا يدخل القائمة (الامتدادُ يحقن companyId فيُخفي العامَّ)، والقاعدةُ تحمل FORCE مع tenant_isolation_permission_templates: العامُّ يُرى من كلّ سياق، والخاصُّ لصاحبه، والكتابةُ على العامّ لمسنَد الإدارة وحدَه (runAsPlatformAdmin). يحرسه permission-templates-rls.live.spec.',
   },
+  // ── القاعدةُ وحدَها — قوالبُ النماذج، ثنائيّةُ النطاق (توجيه ٢٧٨ · ق-١٦٣٤) ──
+  FormTemplate: {
+    layer: 'db-only',
+    why: 'ثنائيُّ النطاق: القالبُ العامُّ (companyId null) تملكه المنصّة وتنسخ منه كلُّ منشأة، والنسخةُ للتاجر. فلا يدخل القائمة (الامتدادُ يحقن companyId فيُخفي العامَّ)، والقاعدةُ تحمل FORCE مع سياستين: tenant_isolation_form_templates للكتابة والقراءة (صفوفُ المنشأة، والعامُّ لمسنَد الإدارة) وpublic_read_form_templates لقراءة العامّ من كلِّ سياق؛ فلا يحذف مستأجرٌ قالباً عامّاً، ولا يقرأ مسنَدُ الإدارة نسخَ التجّار. يحرسه form-templates.e2e-spec.',
+  },
+  FormTemplateItem: {
+    layer: 'db-only',
+    why: 'بنودُ القالب بنطاق قالبها وصياغته: tenant_isolation_form_template_items وpublic_read_form_template_items، والمركّبُ (companyId, templateId) يمنع تعليقَ بندِ منشأةٍ على قالب غيرها. لا يدخل القائمة لأن بنودَ العامّ بلا منشأة. يحرسه form-templates.e2e-spec.',
+  },
   // ── بلا طبقة بتصميمه — مصدرُ السياق نفسُه (ق-٦٦٦) ──
   LoginIdentity: {
     layer: 'none',

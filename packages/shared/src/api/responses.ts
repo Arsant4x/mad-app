@@ -225,6 +225,68 @@ export interface EmployeeWithLoginAccountResponse {
   updatedAt: string;
 }
 
+/** ردٌّ — `FormTemplateItemResponse` في الخادم (ق-١٤٣٨). */
+export interface FormTemplateItemResponse {
+  itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
+  id: string;
+  lineNo: number;
+  label: string;
+  required: boolean;
+  minValue: string | null;
+  maxValue: string | null;
+  isBlocking: boolean;
+  unit: string | null;
+  helpText: string | null;
+}
+
+/** ردٌّ — `FormTemplateResponse` في الخادم (ق-١٤٣٨). */
+export interface FormTemplateResponse {
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  id: string;
+  companyId: string | null;
+  formTypeId: string;
+  formType: FormTypeResponse;
+  familyId: string;
+  version: number;
+  name: string;
+  description: string | null;
+  sourceTemplateId: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: FormTemplateItemResponse[];
+}
+
+/** ردٌّ — `FormTemplateRowResponse` في الخادم (ق-١٤٣٨). */
+export interface FormTemplateRowResponse {
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  id: string;
+  companyId: string | null;
+  formTypeId: string;
+  formType: FormTypeResponse;
+  familyId: string;
+  version: number;
+  name: string;
+  description: string | null;
+  sourceTemplateId: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itemCount: number;
+  sourceLatestVersion: number | null;
+}
+
+/** ردٌّ — `FormTypeResponse` في الخادم (ق-١٤٣٨). */
+export interface FormTypeResponse {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  sector: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** ردٌّ — `LedgerSourceResponse` في الخادم (ق-١٤٣٨). */
 export interface LedgerSourceResponse {
   type: string;

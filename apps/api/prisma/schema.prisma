@@ -605,6 +605,8 @@ model Company {
   tasks               Task[]
   taskLogs            TaskLog[]
   delegationLogs      DelegationLog[]
+  formTemplates       FormTemplate[]
+  formTemplateItems   FormTemplateItem[]
 
   @@map("companies")
 }
@@ -6890,3 +6892,123 @@ model MailSendCount {
   @@map("mail_send_counts")
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚖️ محرّكُ النماذج المهيكلة — الموجةُ ١أ: الأنواعُ والقوالبُ المُصدَّرة (توجيه ٢٧٨ · `ق-١٦٣٤`)
+// الخطّة: docs/plans/handover-forms-master-plan.md §٦.١ و§٦.٢ · والموجةُ صفر: docs/plans/handover-forms-wave-zero.md §١
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// حالُ إصدار القالب. **المسوّدةُ** وحدَها تُحرَّر؛ **والمنشورُ** لا يُعدَّل بل يُنشأ إصدارٌ بعده (القاعدة ١ من §٦.٢)؛
+/// **والمؤرشَفُ** إصدارٌ نُشر بعده أحدثُ منه، يبقى مقروءاً لأن السجلّاتِ المعبّأةَ تشير إلى إصدارها.
+enum FormTemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// نوعُ البند في القالب (§٦.١ من الخطّة). ما يُلتقط بصورةٍ وخريطةِ الضرر ومستوى الوقود يُضاف مع موجته (الأدلة ٢ · المركبات ٧).
+enum FormItemType {
+  /// حالةٌ تُوصف (مقبول · تالف …) ومعها ملاحظة.
+  CONDITION
+  /// عددٌ صحيح يُسلَّم أو يُستلم (المفاتيح · القطع).
+  QTY
+  /// رقمٌ عامّ بنطاقٍ اختياريّ.
+  NUMBER
+  /// قراءةُ عدّاد (كهرباء · ماء · مسافة).
+  METER_READING
+  /// درجةُ حرارة بنطاقٍ مقبول (الأدوية 2–8 مثلاً).
+  TEMPERATURE
+  /// نعم أو لا.
+  BOOLEAN
+  /// نصٌّ حرّ.
+  TEXT
+}
+
+/// **نوعُ النموذج** — تملكه المنصّة (`ق-١٥٩٩` قرارُ الخطّة ٤٣): «تسليمُ وحدة» · «استلامُ وحدةٍ عند نهاية العقد» · «فحصُ مركبة».
+/// بلا `companyId` عمداً: كتالوجُ المنصّة يراه كلُّ مستأجر ولا بياناتِ تاجرٍ فيه، والكتابةُ عليه من لوحة المطوّر وحدَها.
+/// وما يُلزمه النوعُ في موجاتٍ لاحقة (الحدثُ المُشغِّل · الاقتران · نصابُ التوقيع · مدّةُ الحفظ · مدّةُ التوقيع) يُضاف مع موجته.
+model FormType {
+  id          String  @id @default(uuid())
+  /// مفتاحٌ ثابت لا يتغيّر بتغيّر الاسم (`UNIT_HANDOVER`).
+  code        String  @unique
+  name        String
+  description String?
+  /// نشاطُ المنشأة الذي يخصّه (من `activities/sectors.ts`)، وفارغٌ = لكلِّ الأنشطة. وصفٌ يُقرأ لا فرعٌ في المحرّك.
+  sector      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  templates FormTemplate[]
+
+  @@map("form_types")
+}
+
+/// **إصدارُ قالبِ نموذج** — صفٌّ لكلِّ إصدار، والإصداراتُ يجمعها `familyId`.
+/// ⚖️ **فاعلان** (`CLAUDE.md §3.5` · قرارُ الخطّة ٤٣): `companyId` فارغٌ = قالبٌ عامٌّ تملكه المنصّة في لوحة المطوّر،
+/// ومملوءٌ = نسخةُ التاجر في شاشات منشأته، **منسوخةٌ من إصدارٍ عامٍّ بعينه** (`sourceTemplateId`) فلا يغيّرها تعديلُ المنصّة لاحقاً.
+/// والعزلُ في القاعدة بصياغةٍ ثنائية النطاق (العامُّ يُقرأ من كلِّ سياق، والكتابةُ لصاحبها) — الهجرة `20261004000000_form_templates`.
+model FormTemplate {
+  id        String   @id @default(uuid())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  formTypeId String
+  formType   FormType @relation(fields: [formTypeId], references: [id], onDelete: Restrict)
+
+  /// يجمع إصداراتِ القالب الواحد؛ وهو معرّفُ إصداره الأوّل.
+  familyId String
+  version  Int
+  status   FormTemplateStatus @default(DRAFT)
+
+  name        String
+  description String?
+
+  /// للنسخة وحدَها: الإصدارُ العامُّ الذي نُسخت منه — وفارغٌ لقالب المنصّة.
+  sourceTemplateId String?
+  sourceTemplate   FormTemplate?  @relation("FormTemplateSource", fields: [sourceTemplateId], references: [id], onDelete: Restrict)
+  copies           FormTemplate[] @relation("FormTemplateSource")
+
+  /// وقتُ النشر من الخادم؛ وفارغٌ للمسوّدة وحدَها (قيدُ `form_templates_published_stamped`).
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items       FormTemplateItem[]
+  itemsTenant FormTemplateItem[] @relation("FormTemplateItem_templateId_tenant")
+
+  @@unique([familyId, version])
+  @@unique([companyId, id])
+  @@index([companyId, status])
+  @@map("form_templates")
+}
+
+/// **بندٌ في إصدار القالب** — يتجمّد بنشر إصداره، ويُنسخ مع الإصدار الجديد ومع نسخة التاجر.
+/// `companyId` يتبع قالبَه: فارغٌ للعامّ ومملوءٌ للنسخة، والمركّبُ يحرس ألّا يُعلَّق بندُ منشأةٍ على قالب غيرها.
+model FormTemplateItem {
+  id        String   @id @default(uuid())
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  templateId     String
+  template       FormTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت: المركّبُ بجانب المفرد، بلا فعلٍ عند الحذف (المفردُ يحمله).
+  templateTenant FormTemplate? @relation("FormTemplateItem_templateId_tenant", fields: [companyId, templateId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  /// ترتيبُ البند في القالب، من ١ بلا فجوة.
+  lineNo   Int
+  label    String
+  itemType FormItemType
+  /// بندٌ فارغٌ يمنع الختم.
+  required Boolean @default(false)
+  /// النطاقُ المقبول لما هو رقم (العددُ والرقمُ والعدّادُ والحرارة)، وكلاهما اختياريّ.
+  minValue Decimal? @db.Decimal(18, 4)
+  maxValue Decimal? @db.Decimal(18, 4)
+  /// قيمةٌ خارج النطاق تمنع الختم؛ وإلا سُجّلت انحرافاً ومضى (القاعدةُ ٣ من §٦.٢: الانحرافُ يُحسب لا يُكتب).
+  isBlocking Boolean @default(false)
+  /// وحدةُ القياس كما تُعرض (°م · ك.و.س).
+  unit     String?
+  helpText String?
+
+  @@unique([templateId, lineNo])
+  @@map("form_template_items")
+}

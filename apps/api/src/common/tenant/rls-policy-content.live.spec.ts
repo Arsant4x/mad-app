@@ -111,6 +111,43 @@ const APPROVED: ApprovedSource[] = [
     alongsideCanonical: true,
     why: 'ق-١٢٩١ — المفتاحُ يُقدَّم قبل أن يُعرف مستأجرُه: قراءةٌ فقط، ومسارٌ واحد (runAsApiKeyLookup)، وبالبادئة الفريدة. وتبقى القانونيّةُ بجواره لكلّ ما عدا ذلك. الهجرة 20260923000000_api_keys.',
   },
+  // ── قوالبُ النماذج (توجيه ٢٧٨ · ق-١٦٣٤): سياستان بدل القانونيّة على كلِّ جدول ──
+  {
+    table: 'form_templates',
+    name: 'tenant_isolation_form_templates',
+    cmd: 'ALL',
+    using: `"companyId" = current_setting('app.company_id', true) OR ("companyId" IS NULL AND current_setting('app.platform_admin', true) = 'true')`,
+    check: `"companyId" = current_setting('app.company_id', true) OR ("companyId" IS NULL AND current_setting('app.platform_admin', true) = 'true')`,
+    alongsideCanonical: false,
+    why: 'ق-١٦٣٤ — القالبُ العامُّ تملكه المنصّة: يكتبه مسنَدُ الإدارة وحدَه، وهذه السياسةُ وحدَها تحكم الحذف فلا يحذف مستأجرٌ قالباً عامّاً؛ ومسنَدُ الإدارة لا يقرأ نسخَ التجّار. الهجرة 20261004000000_form_templates.',
+  },
+  {
+    table: 'form_templates',
+    name: 'public_read_form_templates',
+    cmd: 'SELECT',
+    using: `"companyId" IS NULL`,
+    check: null,
+    alongsideCanonical: false,
+    why: 'ق-١٦٣٤ — القالبُ العامُّ يُقرأ من كلِّ سياقٍ لتنسخ منه المنشأة؛ قراءةٌ فقط. الهجرة 20261004000000_form_templates.',
+  },
+  {
+    table: 'form_template_items',
+    name: 'tenant_isolation_form_template_items',
+    cmd: 'ALL',
+    using: `"companyId" = current_setting('app.company_id', true) OR ("companyId" IS NULL AND current_setting('app.platform_admin', true) = 'true')`,
+    check: `"companyId" = current_setting('app.company_id', true) OR ("companyId" IS NULL AND current_setting('app.platform_admin', true) = 'true')`,
+    alongsideCanonical: false,
+    why: 'ق-١٦٣٤ — بنودُ القالب بنطاق قالبها وصياغته. الهجرة 20261004000000_form_templates.',
+  },
+  {
+    table: 'form_template_items',
+    name: 'public_read_form_template_items',
+    cmd: 'SELECT',
+    using: `"companyId" IS NULL`,
+    check: null,
+    alongsideCanonical: false,
+    why: 'ق-١٦٣٤ — بنودُ القالب العامّ تُقرأ مع قالبها من كلِّ سياق؛ قراءةٌ فقط. الهجرة 20261004000000_form_templates.',
+  },
 ];
 
 const ROLLBACK = 'rls-policy-content: rollback';
