@@ -40,7 +40,11 @@ RUN cd apps/api && npx prisma generate && npm run build
 
 FROM node:22-bookworm-slim
 # openssl: prisma's engine needs it at runtime.
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# ⚖️ القاعدة ٣٧ (توجيه ٢٨١): `perl-base` 5.36.0-7+deb12u3 في صورة الأساس فيه ثلاثُ ثغراتٍ حرجة يُسقط بها فحصُ الصور، وإصلاحُها في
+# deb12u4 من مستودع Debian 12؛ فيُرقّى وحدَه هنا كما رُقّي `pcre2` في صورة الواجهة، حتى تحمله صورةُ Node الأساس فيصير السطرُ بلا أثر.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl \
+ && apt-get install -y --no-install-recommends --only-upgrade perl-base \
+ && rm -rf /var/lib/apt/lists/*
 # ⚖️ `ق-١٥٨٦` (العالي يصير مانعاً في 2026-11-03): **npm لا يعمل في مرحلة التشغيل، فلا يُشحن معها.** العالياتُ العشر الباقية في هذه
 # الصورة بعد `#699` كلُّها حزمٌ يحملها npm المضمَّنُ في صورة Node الأساس (`brace-expansion` 2.0.2 · `pacote` · `sigstore` · `ip-address` ·
 # `picomatch` 4.0.3)، ولا شيءَ منها في قفلنا. فيُحذف npm وnpx وcorepack، وأداةُ الهجرات تُنادى باسمها (`prisma`) من غلافٍ يشغّل
