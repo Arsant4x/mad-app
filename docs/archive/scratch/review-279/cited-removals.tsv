@@ -1,0 +1,150 @@
+259	١٧٢	measurement	1	docs/reference-measurement-2026-09-06.md	ق-١٧٢ — بند «تشعّب سلسلة الهاش عند جهازين أوفلاين» لم يُوجد في السجل —
+272	١٧٣	research	1	docs/reference-measurement-2026-09-06.md	✅ ق-١٧٣ — جهازٌ مُسِح أو استُبدل: وحدةٌ جديدة بشهادةٍ جديدة، أم إعادةُ
+275	١٧٦	research	1	docs/reference-measurement-2026-09-06.md	✅ ق-١٧٦ — موقع التوقيع: السؤال الأعمق، ويُقرأ من الهيئة قبل (ج) و(د)
+277	١٧٨	research	1	docs/reference-measurement-2026-09-06.md	✅ ق-١٧٨ — منشأةٌ في المرحلة الثانية غير مربوطة تُصدر: يفشل الإرسال ستّ
+278	١٧٩	measurement	1	docs/reference-measurement-2026-09-06.md	✅ ق-١٧٩ — حفظ المفتاح الخاص مقابل معيار الخصائص الأمنية (المتطلبان ٦ و
+286	١٧٦	research	1	docs/reference-measurement-2026-09-06.md	٤ — موقع التوقيع (ق-١٧٦)
+287	١٧٣	research	1	docs/reference-measurement-2026-09-06.md	١ — الجهاز المستبدَل (ق-١٧٣)
+318	١٨٤	measurement	1	docs/reference-measurement-2026-09-06.md	ق-١٨٤ — الفجوة في الإيصال لا في الأوفلاين: إيصال الكاشير بلا `QR` إطلا
+331	١٩٠	research	1	docs/reference-measurement-2026-09-06.md	✅ ق-١٩٠ — بحث الأوفلاين: أربعة أسئلة قبل أي حكمٍ بديل — أُجيب، وحُكم ع
+384	٢٠٢	measurement	1	docs/reference-measurement-2026-09-06.md	ق-٢٠٢ — (ج) مقيسٌ: الوصولُ المبعثر والوصولُ المتزامن يعطيان واقعةً واح
+385	٢٠٣	operation	1	docs/reference-measurement-2026-09-06.md	ق-٢٠٣ — الدمجُ الثالث بترتيبه: السجلّ ← البوّابة ← ما تحرسه
+389	٢٠٧	measurement	1	docs/reference-measurement-2026-09-06.md	ق-٢٠٧ — قياسُ ③ (المسار الثلاثي للأوفلاين): بنودُه الثلاثة مبنيّةٌ ومح
+399	٢١٠	directive	1	docs/reference-measurement-2026-09-06.md	ق-٢١٠ — قياسُ المرجع الشامل: ثلاث قوائم لا تصحيح، والثالثة هي الغرض
+408	٢١٢	operation	1	docs/reference-measurement-2026-09-06.md	ق-٢١٢ — الصفُّ اليتيم `20260808140000_quotes`: قُرئ فلا أثرَ له، فحُذف
+409	٢١٣	measurement	1	docs/reference-measurement-2026-09-06.md	ق-٢١٣ — قياسُ المرجع الشامل (٥ سبتمبر ٢٠٢٦): ثلاث قوائم، والثالثةُ تسم
+615	٢٨٦	measurement	2	apps/api/src/purchases/purchase-lines.live.spec.ts , apps/api/test/bank-account-link.e2e-spec.ts	ق-٢٨٦ — تصحيحُ تشخيصٍ سابق: `purchase-lines.live.spec` سطحُ استعلامها 
+697	٣٠٦	operation	1	apps/api/test/document-sequence.e2e-spec.ts	📌 ق-٣٠٦ — مفتاحُ المالك العامّ يُضاف إلى الخادم — إضافةً لا استبدالاً
+709	٣١٨	directive	2	apps/api/prisma/migrations/20260908180000_document_sequence/migration.sql , apps/api/prisma/schema.prisma	🔴 ق-٣١٨ — ترقيمُ المستندات عائقُ إطلاق: طلبٌ مستقلٌّ فورَ الاستبدال، 
+710	٣١٩	research	3	.githooks/pre-push , apps/api/prisma/schema.prisma , apps/api/src/common/registry-not-with-code.spec.ts	🔬 ق-٣١٩ — «من دفع ليس دائماً من اشترى»: نمطٌ لا حالة — ستةُ مواضع تُق
+749	٣٤٢	measurement	4	apps/api/src/common/document-sequence.util.ts , apps/api/src/common/sequence-allocator.ts , apps/api/src/inventory/costing.util.ts	🔴 ق-٣٤٢ — قفلُ صفّ العدّاد يُسلسل المعاملةَ كلَّها لا الترقيمَ وحده
+760	٣٤٦	research	1	docs/licensing-and-operations.md	🔬 ق-٣٤٦ — أيشترط النظام تسلسلاً بلا فجوات في أرقام الفواتير؟
+893	٣٨١	measurement	2	apps/api/src/common/bank-mirror.spec.ts , apps/api/src/common/scheduler-registered.spec.ts	🔴 ق-٣٨١ — «كلُّ من احتاج مُجرِّداً كتبه»: المصدرُ الواحد منعٌ لا ترتي
+943	٣٨٩	measurement	1	apps/api/src/common/probe-two-cases.spec.ts	🔴 ق-٣٨٩ — بوّابةٌ أدانت نفسها من نصوصها
+991	٤٠٢	measurement	4	apps/api/scripts/clean-verdict.mjs , apps/api/scripts/e2e-sharded.mjs , apps/api/scripts/test-clean.mjs	📌 ق-٤٠٢ — بندُ بيئة: سقفُ `V8` يُضبط على المضيف، فحزمةٌ تنقطع تُبطل ك
+1054	٤٢٣	measurement	3	.github/workflows/web-tests.yml , apps/api/scripts/e2e-sharded.mjs , apps/api/scripts/sharded-jest.mjs	🔴 ق-٤٢٣ — إشباعُ خطوة الـ`e2e` في السير: عائقُ إطلاق لا بندُ إصلاح
+1173	٤٥١	research	1	docs/licensing-and-operations.md	🔬 ق-٤٥١ — استثناءُ الوكيل التجاريّ: بابٌ ثانٍ للتوصيل يُقاس ولا يُرجَ
+1195	٤٥٩	research	1	docs/licensing-and-operations.md	🔬 ق-٤٥٩ — حارسُ النصّ المعروض: يُقاس قبل أن يُرجَّح
+1392	٥١٢	directive	7	apps/api/src/banks/network-settlements.service.ts , apps/api/src/cash-drawers/cash-drawers.service.ts , apps/api/src/common/branch-from-request-checked.spec.ts	🔴 ق-٥١٢ — عزلُ الفروع: يُقاس السطحُ قبل إصلاح العيّنتَين
+1481	٥٣٨	measurement	2	apps/api/src/companies/companies.service.ts , apps/api/test/deletion-requests.e2e-spec.ts	🔬 ق-٥٣٨ — وجهُ الرفض `500` يُقاس قبل أن يُبنى: ما المخرج؟
+1612	٥٨٨	operation	1	.claude/hooks/block-edit-while-reading.mjs	📌 ق-٥٨٨ — ما ينتظر المالك مُقرّ، وبندُ المنطقة قائمٌ ولا يُنقض
+1679	٦١٠	measurement	1	docs/domain-scan/README.md	🔬 ق-٦١٠ — قياسٌ ثلاثيٌّ قبل أيّ سطر: مساراتُ الاعتماد القائمة · وما ه
+1752	٦٣٦	measurement	3	apps/api/src/common/i18n/messages.ts , apps/api/src/tasks/tasks.service.ts , apps/api/test/tasks.e2e-spec.ts	🔴 ق-٦٣٦ — انتقالُ الحالة بمعرّف: أيستطيع حسابٌ فرعيٌّ أن يغيّر حالةَ 
+1765	٦٤٠	measurement	3	CLAUDE.md , apps/api/src/common/tenant/tenant-scope-exceptions.ts , apps/api/src/company-users/company-users-rls.live.spec.ts	🔴 ق-٦٤٠ — `company_users` بلا عزلٍ في الطبقتين: تأكيدٌ ثانٍ مستقلٌّ ل
+1796	٦٥٣	measurement	5	apps/api/prisma/migrations/20260913130000_company_users_rls/migration.sql , apps/api/src/common/tenant/rls-coverage.live.spec.ts , apps/api/src/common/tenant/rls-policy-content.live.spec.ts	🔬 ق-٦٥٣ — إغلاقُ العائق يُقاس لا يُبنى: ما ينكسر إن أُضيف `FORCE` وسي
+1823	٦٦٢	measurement	5	apps/api/prisma/migrations/20260913130000_company_users_rls/migration.sql , apps/api/src/common/tenant/rls-policy-content.live.spec.ts , apps/api/src/common/tenant/tenant-scope-exceptions.ts	⚠️ ق-٦٦٢ — مسارُ منصّةٍ يقرأ عبر المستأجرين ينكسر تحت ④ ولا يُغلق بسيا
+1836	٦٦٤	research	2	apps/api/prisma/migrations/20260913120000_permission_templates_rls/migration.sql , apps/api/src/common/tenant/tenant-prisma.service.ts	⚖️ ق-٦٦٤ — ترجيحُ المالك المشروط: (ب) إن صحّ القياس؛ و(أ) مرفوضٌ ما وُ
+1912	٦٨٩	results	2	DEPLOY.md , apps/api/src/common/migrations-announce.spec.ts	🔬 ق-٦٨٩ — نتائجُ البروفة (2026-09-13 `16:50–17:05 UTC`): `5e3f040 → 3
+1914	٦٩١	measurement	27	CLAUDE.md , apps/api/prisma/migrations/20260916090000_journal_line_party/migration.sql , apps/api/prisma/migrations/20260916150000_contract_classification/migration.sql	⭐ ق-٦٩١ — هجرةٌ تُبلّغ بـ`NOTICE` تُبلّغ لا أحد: `Prisma` لا يطبعه وسج
+1929	٦٩٧	measurement	1	DEPLOY.md	📌 ق-٦٩٧ — الفراغان معلَنان بحقّهما — ويُعاد القياسان على حجمٍ حقيقيّ،
+1931	٦٩٩	measurement	1	apps/api/src/reports/deferred-revenue.live.spec.ts	⚠️ ق-٦٩٩ — تقريرُ الإيراد المؤجَّل يلامس مهلةَ المعاملة التفاعلية عند 
+1947	٧٠٤	measurement	6	CLAUDE.md , apps/api/prisma/migrations/20260914100000_plan_cache_mode_custom/migration.sql , apps/api/src/common/plan-cache-mode.live.spec.ts	🔬 ق-٧٠٤ — نتائجُ القياس: المعاملةُ حاملةُ سياقٍ لا ذرّية · لا `N+1` ب
+1973	٧١٢	operation	2	apps/api/src/common/bank-drawer-tests-isolated.spec.ts , apps/api/test/isolated-company.ts	✅ ق-٧١٢ — تنظيفُ حسابات البنوك والأدراج المتراكمة على التطوير وحدَه — 
+1975	٧١٤	results	1	CLAUDE.md	🔬 ق-٧١٤ — نتائجُ التنفيذ: الثلاثةُ على `main` خضراء (`b311482` · `e4c
+2007	٧٢٤	directive	1	docs/plans/unified-core-plan.md	🔬 ق-٧٢٤ — قياسُ تشفير الحقول الشخصية في القاعدة — بأربعةٍ ولا بناء: ا
+2009	٧٢٦	measurement	1	docs/licensing-and-operations.md	🔬 ق-٧٢٦ — نتائجُ القياس (الأربعة): لا حقلَ هويّةٍ يُخزَّن أصلاً · وكل
+2037	٧٣٤	directive	6	.github/workflows/web-tests-light.yml , apps/api/src/common/offsite-backup.spec.ts , docker-compose.prod.yml	▶️ ق-٧٣٤ — النسخُ خارج المضيف: `OCI Object Storage` — `me-riyadh-1` · 
+2107	٧٥٩	measurement	1	ops/backup/README.md	🔴 ق-٧٥٩ — شرطٌ مقروءٌ من ملفّ التركيب لا مفترَض: خدمةُ `backup-offsit
+2108	٧٦٠	directive	4	apps/api/src/common/offsite-backup.spec.ts , ops/backup/README.md , ops/backup/policy-proof.sh	✅ ق-٧٦٠ — حالتا السياسة تُثبَتان بـ`restic` نفسِه لا بتوقيعٍ مكتوبٍ با
+2172	٧٧٩	results	2	apps/api/src/common/offsite-backup.spec.ts , ops/backup/README.md	🔬 ق-٧٧٩ — نتائجُ التنفيذ: `#372 → 4ec2b99`؛ العدُّ `6`؛ المستودعُ هُي
+2184	٧٨٢	directive	1	ops/backup/README.md	🔬 ق-٧٨٢ — العلاج: تُقاس صيغةُ الاستثناء من وثائق أوراكل قبل تعديل الس
+2271	٨٠٦	measurement	2	apps/api/src/inventory/costing-race.live.spec.ts , apps/api/src/inventory/costing.util.ts	🔬 ق-٨٠٦ — نتائجُ القياس: الستُّ كلُّها قائمةٌ على `main` (`7e2d0e6`) 
+2281	٨٠٧	operation	1	CLAUDE.md	✅ ق-٨٠٧ — دمجُ `#382`؛ وإقرارُ المالك: القياسُ على المسار الحقيقيّ ضبط
+2286	٨١٢	results	1	docs/licensing-and-operations.md	🔬 ق-٨١٢ — نتائجُ التنفيذ: `#382 → d5f0771`؛ ④ قُرئ من نصّ اللائحة: ال
+2300	٨١٧	results	3	CLAUDE.md , apps/api/src/purchases/layer-cost-allocation.util.ts , apps/api/src/purchases/purchase-return.util.ts	🔬 ق-٨١٧ — نتائجُ التنفيذ: `#383` و`#384` ⇒ `main` `327ad60`؛ ② بُني ب
+2313	٨٢١	research	2	apps/api/src/common/vat/proportional-deduction.util.ts , docs/licensing-and-operations.md	🔬 ق-٨٢١ — الخصمُ النسبيّ: مصدران رسميّان يُفتحان — ① الدليلُ الإرشادي
+2314	٨٢٢	results	2	apps/api/src/common/vat/proportional-deduction.util.ts , docs/licensing-and-operations.md	🔬 ق-٨٢٢ — نتائجُ التنفيذ: `#385` ⇒ `78f61d9` و`#386` ⇒ `477cbb7`؛ وال
+2342	٨٣٢	research	1	docs/licensing-and-operations.md	🔬 ق-٨٣٢ — بحثُ الوساطة المحاسبية بالنصّ بلا ترجيح — الفكرة: المحاسبُ 
+2344	٨٣٤	results	1	docs/licensing-and-operations.md	🔬 ق-٨٣٤ — نتائجُ التنفيذ: `#388` ⇒ `178dea3`؛ والوساطةُ المحاسبية بال
+2358	٨٣٩	research	1	docs/licensing-and-operations.md	▶️ ق-٨٣٩ — ما بقي يُبحث حين يُفتح البند لا اليوم: قواعدُ سلوك وآداب ال
+2390	٨٥٣	results	1	docs/licensing-and-operations.md	🔬 ق-٨٥٣ — نتائجُ التنفيذ: `#391` ⇒ `37487c8`؛ والموجزُ كُتب ([`docs/م
+2418	٨٦٣	results	3	apps/api/prisma/migrations/20260915120000_supplier_payments/migration.sql , apps/api/src/journal/auto-posting.util.ts , apps/api/test/supplier-payments.e2e-spec.ts	🔬 ق-٨٦٣ — نتائجُ التنفيذ: `#393` ⇒ `5ff0f03`؛ ورقمُ السداد: ١. لا مسا
+2448	٨٧٥	directive	2	CLAUDE.md , apps/api/test/supplier-payments.e2e-spec.ts	▶️ ق-٨٧٥ — البناء: يومان للسند ثم البُعد؛ وشرطان عامّان للقبول: ١. الح
+2509	٩٠٠	results	1	apps/api/src/common/rule-extension-attached.spec.ts	🔬 ق-٩٠٠ — نتائجُ التنفيذ: `#401` ⇒ `6688e77`؛ و① بُني بشروطه الثلاثة 
+2519	٩٠١	operation	1	apps/api/src/common/rule-extension-attached.spec.ts	✅ ق-٩٠١ — دمجُ `#403` (سجلُّ التوجيه ١٩٣) ثم `#402` (①) — كلٌّ بقراءةِ
+2589	٩٣٥	results	2	apps/api/src/invoices/invoices.service.ts , apps/api/src/zatca/hash-chain.util.ts	🔬 ق-٩٣٥ — نتائجُ التنفيذ: `#409` ⇒ `266095d` · `#407` ⇒ `a12c88b` · `
+2604	٩٤١	results	2	apps/api/src/invoices/invoices.service.ts , apps/api/test/zatca-invoice-edit-guard.e2e-spec.ts	🔬 ق-٩٤١ — نتائجُ التنفيذ: `#410` ⇒ `73901fd`؛ والقياسُ الحاسم — قراءة
+2617	٩٤٥	directive	2	apps/api/src/invoices/invoices.service.ts , apps/api/test/zatca-invoice-delete-guard.e2e-spec.ts	⚠️ ق-٩٤٥ — موجزٌ قبل البناء — وأربعةٌ فيه، ولا بناءَ قبل حكم المالك عل
+2661	٩٦٢	measurement	1	apps/api/src/invoices/active-documents.util.ts	🔴 ق-٩٦٢ — أعجلُ الأربعة مُثبَت: ازدواجٌ كامل — المردودةُ مرحَّلةٌ بكا
+2682	٩٧٤	results	3	apps/api/src/common/i18n/storable-text.spec.ts , apps/api/src/common/i18n/storable-text.ts , apps/api/test/zatca-authority-stub.ts	🔬 ق-٩٧٤ — نتائجُ التنفيذ
+2696	٩٧٩	results	4	apps/api/src/common/external-text-storable.spec.ts , apps/api/src/zatca/zatca.service.ts , apps/api/test/zatca-authority-stub.ts	🔬 ق-٩٧٩ — نتائجُ التنفيذ
+2709	٩٨٣	directive	4	apps/api/src/outbox/outbox.module.ts , apps/api/src/zatca/zatca.service.ts , apps/api/test/note-outbox.e2e-spec.ts	📌 ق-٩٨٣ — الضجيجُ: الإرسالُ اليدويُّ لا يختم حدثَ الطابور — يُصلَح مع
+2732	٩٩٧	results	13	apps/api/prisma/schema.prisma , apps/api/src/obligations/obligations.service.ts , apps/api/src/purchases/dto/update-purchase.dto.ts	🔬 ق-٩٩٧ — نتائجُ التنفيذ
+2761	١٠٠٨	directive	7	apps/api/src/common/adjustment/adjustment-note.util.ts , apps/api/src/invoices/invoices.service.ts , apps/api/src/obligations/obligations.service.ts	▶️ ق-١٠٠٨ — بناءُ ③ وإشعار المورّد معاً — بشرطين: مصدرٌ واحد يُستخرَج 
+2791	١٠٢٠	results	4	apps/api/prisma/migrations/20260918000000_installment_partial/migration.sql , apps/api/src/contracts/no-name-linking.spec.ts , apps/api/src/customers/customer-trash.util.ts	🔬 ق-١٠٢٠ — نتائجُ التنفيذ: دُمج `#431` ⟵ `428ce63` ثم `#432` ⟵ `e53da
+2818	١٠٢٩	directive	11	apps/api/prisma/migrations/20260917230000_contract_customer_link/migration.sql , apps/api/scripts/benchmark-contracts-list.ts , apps/api/scripts/benchmark-property-kpis.ts	▶️ ق-١٠٢٩ — البناءُ بترتيبه الثلاثيّ: ثقبُ الحذف ← الربطُ بالمعرّف ← ا
+2877	١٠٥٢	directive	1	docs/domain-scan/README.md	▶️ ق-١٠٥٢ — المسحُ الرجعيّ بالبوّابتين باباً باباً — والمخزونُ أوّلاً:
+2890	١٠٥٦	directive	1	apps/api/test/rejected-replacement.e2e-spec.ts	⭐ ق-١٠٥٦ — تشخيصُ سقوط السير مُقرّ: رقمُ زمنِ تشغيلٍ لا نوعٌ، أُثبت ول
+2894	١٠٦٠	results	5	apps/api/src/zatca/ubl/invoice-xml-unit-code.spec.ts , apps/api/src/zatca/ubl/invoice-xml.util.ts , docs/plans/irreversible-20-plan.md	🔬 ق-١٠٦٠ — نتائجُ التنفيذ: دُمج `#448` ⟵ `623de67` ثم `#449` ⟵ `8f2a9
+2933	١٠٧٢	operation	3	CLAUDE.md , apps/api/src/inventory/stock-openings.service.ts , apps/api/test/opening-stock.e2e-spec.ts	✅ ق-١٠٧٢ — دمجُ `#457` ثم `#458` بترتيبهما، بالتربيع، وبقراءة حالٍ في 
+2950	١٠٨٠	measurement	5	apps/api/prisma/migrations/20260918200000_stock_batches/migration.sql , apps/api/prisma/schema.prisma , apps/api/src/inventory/inventory.service.ts	🔴 ق-١٠٨٠ — قراءةُ المالك للمقيس في الموجز: الدفعةُ غيرُ مبنيّةٍ أصلاً
+2956	١٠٨٦	directive	13	apps/api/prisma/migrations/20260918200000_stock_batches/migration.sql , apps/api/prisma/migrations/20260918230000_stock_batch_key_ruled/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٠٨٦ — ابنِ `٥+٦` (الدفعةُ كياناً على الطبقة و`FEFO` سياسةً تُقرأ
+2957	١٠٨٧	results	1	CLAUDE.md	🔬 ق-١٠٨٧ — نتائجُ التنفيذ: دُمج `#459` (⟵ `f988dd9`) ثم `#460` بعد تر
+3009	١١١٢	results	1	CLAUDE.md	🔬 ق-١١١٢ — نتائجُ التنفيذ: دُمج `#465` (⟵ `c34ce67`) ثم `#466` بعد تر
+3088	١١٤٦	directive	8	CLAUDE.md , apps/api/prisma/migrations/20260919190000_landed_costs/migration.sql , apps/api/prisma/schema.prisma	⚠️ ق-١١٤٦ — قبل أوّل سطرٍ من `٧`: أيُّ ما قِيس في الموجز تغيّر بعد `٢٥
+3166	١١٧٩	directive	10	CLAUDE.md , apps/api/prisma/migrations/20260919230000_stock_openings/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١١٧٩ — بناءُ `٣٠` بلا شاشة: نوعُ حركة `OPENING` وكيانُ إعلانٍ (`s
+3183	١١٨٧	results	1	apps/api/src/common/local-day.spec.ts	🔬 ق-١١٨٧ — نتائجُ التنفيذ: دُمج `#482` (⟵ `c64b9f4`) ثم `#483` (⟵ `0b
+3211	١١٩٧	measurement	1	docs/external-review/README.md	📏 ق-١١٩٧ — قياساتُ المراجعة الخارجية مُثبَتةً لا تقديراً، على قاعدةٍ 
+3212	١١٩٨	directive	52	CLAUDE.md , apps/api/src/activities/activities.controller.ts , apps/api/src/branches/branches.controller.ts	🔴 ق-١١٩٨ — الحزمةُ الأولى ثمانيةٌ بملفٍّ وسطر (لقطةُ `19` سبتمبر): ① 
+3245	١٢١٣	operation	3	.gitattributes , bench/external-review-2026-09/ORIGIN.md , docs/external-review/README.md	📌 ق-١٢١٣ — ملفّاتُ القياس الأربعة عند المالك ويرسلها؛ تُحفظ كما تصل ب
+3247	١٢١٥	results	1	bench/external-review-2026-09/ORIGIN.md	🔬 ق-١٢١٥ — نتائجُ التنفيذ: دُمج `#492` ⟵ `cea962c` بقراءة `CLEAN` في 
+3275	١٢٢٥	directive	7	apps/api/prisma/migrations/20260920150000_product_tax_category/migration.sql , apps/api/src/common/vat/exemption-reasons.spec.ts , apps/api/src/common/vat/line-tax.util.ts	▶️ ق-١٢٢٥ — يُبنى ⑧ بمراحله الستّ كما في الخطّة، بشرطين: ① الحارسُ الش
+3290	١٢٣١	directive	1	CLAUDE.md	▶️ ق-١٢٣١ — طلباتُ وكيل الواجهة الأربعة لا تُبنى قبل موجزٍ يقيس لكلٍّ 
+3335	١٢٤٩	research	1	docs/domain-scan/README.md	🔬 ق-١٢٤٩ — المسحُ الشامل بالبوّابتين يبدأ، والأبوابُ العشرة بنصّ الما
+3349	١٢٥٤	directive	2	docs/INDEX.md , docs/plans/irreversible-20-plan.md	▶️ ق-١٢٥٤ — خطّةُ العشرين الباقية جدولاً واحداً: البندُ · يعتمد على ما
+3350	١٢٥٥	directive	2	CLAUDE.md , SPEC.md	📌 ق-١٢٥٥ — الوثائقُ الثلاث المتخلّفة عن الشيفرة تُصحَّح الآن: `SPEC 4
+3365	١٢٦١	directive	54	apps/api/prisma/migrations/20260921210000_bank_reconciliation/migration.sql , apps/api/prisma/migrations/20260921220000_cash_deposits/migration.sql , apps/api/prisma/migrations/20260921233000_network_settlements/migration.sql	▶️ ق-١٢٦١ — تُبنى ج (⑩A2 الأستاذُ العام وكشفُ الحساب ⟵ ⑦A1 التسويةُ ال
+3378	١٢٦٥	directive	2	apps/api/src/payments/dto/payment.dto.ts , apps/api/src/zatca/icv-concurrency.live.spec.ts	▶️ ق-١٢٦٥ — بناءُ ما حكم به القسمُ ٢: (أ) فئةُ الدفعة المقدَّمة تُعلَن
+3379	١٢٦٦	measurement	1	docs/external-review/README.md	🔬 ق-١٢٦٦ — أربعةُ قياساتٍ قراءةً لا بناء: (أ) كلُّ مولِّد رقمٍ في الش
+3392	١٢٧٠	results	2	CLAUDE.md , docs/plans/unified-core-plan.md	⭐ ق-١٢٧٠ — مسحُ النواة أثبت أن البوّابةَ لزمت ثانيةً: أربعةَ عشرَ بابا
+3395	١٢٧٣	operation	1	docs/external-review/README.md	📌 ق-١٢٧٣ — القسمُ الثالث: الأجزاءُ الخمسةُ للمراجعة الخارجية تُحفظ كم
+3410	١٢٧٩	directive	21	CLAUDE.md , apps/api/prisma/migrations/20260922120000_zatca_warnings_and_cert_expiry/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٢٧٩ — بناءُ ط ثم د ثم ز بلا وقوفٍ بينها: ط (سجلُّ التدقيق بحكم ا
+3411	١٢٨٠	results	1	docs/external-review/README.md	✅ ق-١٢٨٠ — نتائجُ التنفيذ: دُمج الخمسة والسجلُّ أوّلاً، وبُنيت ط ثم د 
+3426	١٢٨٦	directive	6	apps/api/src/auth/auth.controller.ts , apps/api/src/common/versioning.ts , apps/api/src/main.ts	▶️ ق-١٢٨٦ — الحزمةُ ي: سطحُ الواجهة البرمجية، وأوّلُها الإصدارات — فهي
+3440	١٢٩١	directive	25	apps/api/prisma/migrations/20260923000000_api_keys/migration.sql , apps/api/prisma/migrations/20260923010000_integration_usage/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٢٩١ — بقيّةُ ي تُبنى كلُّها بترتيبها: ⑫A2 حارسُ العقد ← ⑫A3 مفات
+3443	١٢٩٤	measurement	2	apps/api/src/common/privacy/personal-fields.ts , docs/plans/unified-core-plan.md	🔬 ق-١٢٩٤ — قياسٌ يخصّ ط: أيُسجَّل تغييرُ رقم حساب المورّد البنكيّ في 
+3461	١٣٠٣	directive	22	apps/api/prisma/migrations/20260923120000_company_slug/migration.sql , apps/api/prisma/migrations/20260923170000_marketing_consent/migration.sql , apps/api/prisma/migrations/20260923180000_marketing_consent_erasure/migration.sql	▶️ ق-١٣٠٣ — الحزمةُ ك: النطاقاتُ والبريد
+3479	١٣١٢	directive	16	apps/api/prisma/migrations/20260923200000_platform_roles/migration.sql , apps/api/prisma/migrations/20260923220000_platform_decisions/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٣١٢ — ثم الحزمة ل
+3494	١٣١٨	directive	37	apps/api/prisma/migrations/20260923220000_platform_decisions/migration.sql , apps/api/prisma/migrations/20260923235000_mfa_totp/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٣١٨ — إكمالُ الحزمة ل بترتيبها: `⑪A1` الفعلُ الحرجُ بيدين ← `⑪A3
+3549	١٣٤٤	directive	3	apps/api/src/inventory/inventory-ledger-reconciliation.util.ts , apps/api/src/purchases/layer-cost-allocation.util.ts , apps/api/test/inventory-ledger-reconciliation.e2e-spec.ts	📌 ق-١٣٤٤ — العيوبُ الثلاثةُ القائمة: بندٌ مستقلٌّ بعد الحارس، لا مع ه
+3553	١٣٤٨	research	2	CLAUDE.md , docs/domain-scan/README.md	🔬 ق-١٣٤٨ — مسح ①: جاهزيةُ التوطين لدولةٍ أخرى — قياسٌ لا بناء
+3554	١٣٤٩	research	2	docs/domain-scan/README.md , docs/plans/shared-types-plan.md	🔬 ق-١٣٤٩ — مسح ②: بنيةُ المستودع — ما يُولَّد وما يُكتب باليد*
+3583	١٣٦٩	directive	1	apps/api/src/common/openapi-contract.util.ts	🔴 ق-١٣٦٩ — مكسورُ اليوم (ج): التعليقُ المتخلّف في عقد الواجهة البرمجي
+3584	١٣٧٠	directive	3	docs/INDEX.md , docs/domain-scan/README.md , docs/plans/shared-types-plan.md	▶️ ق-١٣٧٠ — الأنواعُ المشتركة: خطّةٌ لا بناء*
+3585	١٣٧١	research	1	docs/domain-scan/README.md	🔬 ق-١٣٧١ — مسح: أجهزةُ نقاط البيع*
+3587	١٣٧٣	results	1	apps/api/prisma/migrations/20260924200000_manual_movement_reason/migration.sql	🔬 ق-١٣٧٣ — نتائجُ التنفيذ
+3609	١٣٨٦	directive	3	docs/domain-scan/README.md , docs/plans/shared-types-plan.md , docs/plans/unified-core-plan.md	▶️ ق-١٣٨٦ — ترتيبُ بناء الأنواع: ① ثم ② ثم ③، ثم ④ وحدةً وحدة بالمِسنَ
+3626	١٣٩٤	results	3	apps/api/src/pos/pos.service.ts , apps/api/test/pos-payment-path.e2e-spec.ts , docs/SPEC-status.md	⭐ ق-١٣٩٤ — العيبُ الثالث وجده التشغيلُ لا القراءة: بيعٌ واحدٌ يصير فات
+3633	١٤٠١	directive	22	CLAUDE.md , apps/api/prisma/migrations/20260924210000_pos_payment_attempts/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٤٠١ — ابنِ الكاشير بالشكل المكتوب (`docs/موجز-مسار-دفع-الكاشير.m
+3636	١٤٠٤	directive	24	apps/api/scripts/openapi-snapshot.ts , apps/api/src/common/openapi-contract.spec.ts , apps/api/src/common/openapi-contract.util.ts	▶️ ق-١٤٠٤ — ③ الطلباتُ والاستعلامات، ثم ④ بعد الكاشير كما قُرئ
+3637	١٤٠٥	research	1	docs/domain-scan/README.md	🔬 ق-١٤٠٥ — مسحٌ جديد: «رِكز منشأةً ملتزمة» — من النصوص الأصلية لا من 
+3653	١٤١١	directive	5	SPEC.md , apps/api/src/banks/banks.service.ts , apps/api/src/employees/employees.service.ts	🔴 ق-١٤١١ — مكسورُ اليوم (أ): فحصُ فروع الفاعل عند تعديل البنك والموظّ
+3663	١٤٢١	research	1	docs/domain-scan/README.md	📌 ق-١٤٢١ — المسح ㉘: لا يُرسل شيءٌ لجهة، ويُطابَق بمدخلَيه
+3692	١٤٤٠	measurement	18	apps/api/src/attendance/attendance.service.ts , apps/api/src/inventory/write-off-attachments.service.ts , apps/api/src/invoices/invoices.service.ts	🔬 ق-١٤٤٠ — عائلةُ «التعديل بالمعرّف»: تُقاس حيّاً مساراً مساراً، والم
+3708	١٤٤٧	directive	4	apps/api/src/pos/pos-payment-attempts.service.ts , apps/api/src/pos/pos.service.ts , apps/api/src/zatca/hash-chain.util.ts	🔴 ق-١٤٤٧ — إيصالُ البطاقة بلا بوّابة الإجازة: يُبنى الآن
+3711	١٤٥٠	directive	8	.github/workflows/web-tests.yml , apps/api/scripts/response-truth.ts , apps/api/src/banks/banks.controller.ts	⚖️ ق-١٤٥٠ — حارسُ الصدق ٣: الوحدةُ التالية البنوكُ ثم الموافقات
+3713	١٤٥٢	measurement	8	apps/api/src/attendance/attendance.service.ts , apps/api/src/inventory/inventory.service.ts , apps/api/src/leaves/leaves.service.ts	🔴 ق-١٤٥٢ — القوائمُ بلا ترشيح فرع تُقاس حيّاً مساراً مساراً، والمكسور
+3735	١٤٦٥	measurement	4	apps/api/src/purchases/purchase-references.util.ts , apps/api/src/purchases/purchases.service.ts , apps/api/src/purchases/supplier-notes.service.ts	🔬 ق-١٤٦٥ — دعوى أ: حقنُ العميل والصنف بين المنشآت
+3740	١٤٧٠	measurement	5	apps/api/src/companies/company-movement.service.ts , apps/api/src/deletion-requests/deletion-requests.service.ts , apps/api/src/deletion-requests/personal-data-erasure.service.ts	🔬 ق-١٤٧٠ — دعوى و: حذفُ المنشأة وفيها مستنداتٌ تحت الحفظ
+3768	١٤٨٩	directive	20	apps/api/src/common/currency/base-amount.util.ts , apps/api/src/common/currency/currency-fields.dto.ts , apps/api/src/common/i18n/messages.ts	🔴 ق-١٤٨٩ — فرقُ الصرف المحقَّق لا يصل حساباً في بعض المسارات: قيدٌ نا
+3805	١٥١٩	results	1	docs/external-review/README.md	⭐ ق-١٥١٩ — يُسجَّل: النسخةُ المجازة، وحارسان أمسكا عيبين قبل الدمج
+3814	١٥٢٨	research	2	docs/licensing-and-operations.md , docs/plans/gov-integrations-master-plan.md	📌 ق-١٥٢٨ — إيجار: المراسلةُ قائمة، ومقروءةٌ من بريد المالك
+3816	١٥٣٠	research	1	docs/licensing-and-operations.md	✅ ق-١٥٣٠ — فال: باسم المنشأة التي تتبعها رِكز — فشرطُ إيجار مستوفى
+3823	١٥٣٧	directive	1	CLAUDE.md	⚖️ ق-١٥٣٧ — جردُ القرارات أوّلاً: كلُّ قرارٍ في واحدٍ من أربعة، والمخر
+3854	١٥٦٨	directive	1	docs/external-review/README.md	▶️ ق-١٥٦٨ — الكتلة ٢: قياساتٌ لا إصلاح
+3856	١٥٧٠	directive	3	.github/security/summarize.mjs , .github/workflows/security-scan.yml , docs/domain-scan/README.md	▶️ ق-١٥٧٠ — الكتلة ٤أ: أدواتُ الفحص الأمنيّ المجانية في السير
+3857	١٥٧١	directive	1	docs/domain-scan/README.md	▶️ ق-١٥٧١ — الكتلة ٤ب: الانحرافاتُ الخمسة، واحداً واحداً
+3858	١٥٧٢	directive	1	docs/domain-scan/README.md	▶️ ق-١٥٧٢ — الكتلة ٤ج: توقيعُ نموذج التسليم
+3861	١٥٧٥	directive	9	apps/api/prisma/migrations/20261002120000_audit_log_append_only/migration.sql , apps/api/src/audit/audit-log-append-only.live.spec.ts , apps/api/src/common/settlement/settlement.util.ts	▶️ ق-١٥٧٥ — الكتلة ٥: إصلاحُ ما ثبت قائماً من الكتلة ٢، الأخطرُ أوّلاً
+3862	١٥٧٦	directive	5	.github/security/summarize.mjs , .github/workflows/security-scan.yml , CLAUDE.md	▶️ ق-١٥٧٦ — توجيهُ الجلسة ٢٧٤: توجيهُ ٢٧٣ الثاني بنصّه في جلسةٍ جديدة 
+3864	١٥٧٨	directive	6	apps/api/src/attendance/attendance.service.ts , apps/api/src/contracts/contracts.service.ts , apps/api/src/leaves/leaves.service.ts	▶️ ق-١٥٧٨ — الكتلة ١: إكمالُ ما في الطريق
+3874	١٥٨٨	directive	1	docs/domain-scan/README.md	▶️ ق-١٥٨٨ — الكتلة ٣ب: المنشأةُ الجديدة وقالبُ «كلّ الشاشات» يُشرح
+3875	١٥٨٩	directive	2	docs/INDEX.md , docs/domain-scan/README.md	▶️ ق-١٥٨٩ — الكتلة ٣ج: مرجعُ صاحب المشروع لأنظمة الدفعات والمستحقات يُ
+3878	١٥٩٢	directive	3	docs/domain-scan/README.md , docs/plans/handover-forms-master-plan.md , docs/plans/handover-forms-wave-zero.md	⏸️ ق-١٥٩٢ — توقيعُ التسليم لا يُبنى حتى تُعتمد خطّتُه ونموذجُه المرئيّ
+3880	١٥٩٤	results	2	CLAUDE.md , docs/external-review/README.md	✅ ق-١٥٩٤ — نتائجُ توجيه ٢٧٤: يومُ العمل الكامل بكتله الخمس
+3881	١٥٩٥	operation	2	CLAUDE.md , docs/regulatory-questions/README.md	▶️ ق-١٥٩٥ — إضافةٌ على توجيه ٢٧٥: ملفّاتُ المسوّدة والمراجعة والبحث تُ
+3896	١٦١٠	directive	3	docs/INDEX.md , docs/plans/handover-forms-master-plan.md , docs/plans/handover-forms-wave-zero.md	⏸️ ق-١٦١٠ — الكتلة ٣: محرّكُ نماذج التسليم موجةً صفراً، ونموذجٌ مرئيّ،
+3907	١٦٢١	research	1	docs/plans/handover-forms-master-plan.md	🔬 ق-١٦٢١ — بحثٌ بالنصّ: مدّةُ نماذج منصّة إيجار، وأثرُ انقضائها
+3908	١٦٢٢	directive	3	docs/INDEX.md , docs/plans/handover-forms-master-plan.md , docs/plans/handover-forms-wave-zero.md	⏸️ ق-١٦٢٢ — النموذجُ المرئيّ يُعاد بالمسار الجديد، والاثنا عشر تُقلَّص
+3909	١٦٢٣	directive	1	docs/domain-scan/README.md	▶️ ق-١٦٢٣ — الكتلة ٤: قائمةٌ واحدة بالحدود المعلنة لصاحب المشروع
+files scanned=1588 distinct ids cited=844 removal candidates cited=149

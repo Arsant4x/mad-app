@@ -1,0 +1,82 @@
+615	٢٨٦	measurement	2	apps/api/src/purchases/purchase-lines.live.spec.ts , apps/api/test/bank-account-link.e2e-spec.ts	ق-٢٨٦ — تصحيحُ تشخيصٍ سابق: `purchase-lines.live.spec` سطحُ 
+697	٣٠٦	operation	1	apps/api/test/document-sequence.e2e-spec.ts	📌 ق-٣٠٦ — مفتاحُ المالك العامّ يُضاف إلى الخادم — إضافةً لا
+709	٣١٨	directive	2	apps/api/prisma/migrations/20260908180000_document_sequence/migration.sql , apps/api/prisma/schema.prisma	🔴 ق-٣١٨ — ترقيمُ المستندات عائقُ إطلاق: طلبٌ مستقلٌّ فورَ ا
+710	٣١٩	research	3	.githooks/pre-push , apps/api/prisma/schema.prisma	🔬 ق-٣١٩ — «من دفع ليس دائماً من اشترى»: نمطٌ لا حالة — ستةُ
+749	٣٤٢	measurement	4	apps/api/src/common/document-sequence.util.ts , apps/api/src/common/sequence-allocator.ts	🔴 ق-٣٤٢ — قفلُ صفّ العدّاد يُسلسل المعاملةَ كلَّها لا الترق
+893	٣٨١	measurement	2	apps/api/src/common/bank-mirror.spec.ts , apps/api/src/common/scheduler-registered.spec.ts	🔴 ق-٣٨١ — «كلُّ من احتاج مُجرِّداً كتبه»: المصدرُ الواحد من
+943	٣٨٩	measurement	1	apps/api/src/common/probe-two-cases.spec.ts	🔴 ق-٣٨٩ — بوّابةٌ أدانت نفسها من نصوصها
+991	٤٠٢	measurement	4	apps/api/scripts/clean-verdict.mjs , apps/api/scripts/e2e-sharded.mjs	📌 ق-٤٠٢ — بندُ بيئة: سقفُ `V8` يُضبط على المضيف، فحزمةٌ تنق
+1054	٤٢٣	measurement	3	.github/workflows/web-tests.yml , apps/api/scripts/e2e-sharded.mjs	🔴 ق-٤٢٣ — إشباعُ خطوة الـ`e2e` في السير: عائقُ إطلاق لا بند
+1392	٥١٢	directive	7	apps/api/src/banks/network-settlements.service.ts , apps/api/src/cash-drawers/cash-drawers.service.ts	🔴 ق-٥١٢ — عزلُ الفروع: يُقاس السطحُ قبل إصلاح العيّنتَين
+1481	٥٣٨	measurement	2	apps/api/src/companies/companies.service.ts , apps/api/test/deletion-requests.e2e-spec.ts	🔬 ق-٥٣٨ — وجهُ الرفض `500` يُقاس قبل أن يُبنى: ما المخرج؟
+1612	٥٨٨	operation	1	.claude/hooks/block-edit-while-reading.mjs	📌 ق-٥٨٨ — ما ينتظر المالك مُقرّ، وبندُ المنطقة قائمٌ ولا يُ
+1752	٦٣٦	measurement	3	apps/api/src/common/i18n/messages.ts , apps/api/src/tasks/tasks.service.ts	🔴 ق-٦٣٦ — انتقالُ الحالة بمعرّف: أيستطيع حسابٌ فرعيٌّ أن يغ
+1765	٦٤٠	measurement	2	apps/api/src/common/tenant/tenant-scope-exceptions.ts , apps/api/src/company-users/company-users-rls.live.spec.ts	🔴 ق-٦٤٠ — `company_users` بلا عزلٍ في الطبقتين: تأكيدٌ ثانٍ
+1796	٦٥٣	measurement	5	apps/api/prisma/migrations/20260913130000_company_users_rls/migration.sql , apps/api/src/common/tenant/rls-coverage.live.spec.ts	🔬 ق-٦٥٣ — إغلاقُ العائق يُقاس لا يُبنى: ما ينكسر إن أُضيف `
+1823	٦٦٢	measurement	5	apps/api/prisma/migrations/20260913130000_company_users_rls/migration.sql , apps/api/src/common/tenant/rls-policy-content.live.spec.ts	⚠️ ق-٦٦٢ — مسارُ منصّةٍ يقرأ عبر المستأجرين ينكسر تحت ④ ولا 
+1836	٦٦٤	research	2	apps/api/prisma/migrations/20260913120000_permission_templates_rls/migration.sql , apps/api/src/common/tenant/tenant-prisma.service.ts	⚖️ ق-٦٦٤ — ترجيحُ المالك المشروط: (ب) إن صحّ القياس؛ و(أ) مر
+1912	٦٨٩	results	1	apps/api/src/common/migrations-announce.spec.ts	🔬 ق-٦٨٩ — نتائجُ البروفة (2026-09-13 `16:50–17:05 UTC`): `5
+1914	٦٩١	measurement	26	apps/api/prisma/migrations/20260916090000_journal_line_party/migration.sql , apps/api/prisma/migrations/20260916150000_contract_classification/migration.sql	⭐ ق-٦٩١ — هجرةٌ تُبلّغ بـ`NOTICE` تُبلّغ لا أحد: `Prisma` لا
+1931	٦٩٩	measurement	1	apps/api/src/reports/deferred-revenue.live.spec.ts	⚠️ ق-٦٩٩ — تقريرُ الإيراد المؤجَّل يلامس مهلةَ المعاملة التف
+1947	٧٠٤	measurement	5	apps/api/prisma/migrations/20260914100000_plan_cache_mode_custom/migration.sql , apps/api/src/common/plan-cache-mode.live.spec.ts	🔬 ق-٧٠٤ — نتائجُ القياس: المعاملةُ حاملةُ سياقٍ لا ذرّية · 
+1973	٧١٢	operation	2	apps/api/src/common/bank-drawer-tests-isolated.spec.ts , apps/api/test/isolated-company.ts	✅ ق-٧١٢ — تنظيفُ حسابات البنوك والأدراج المتراكمة على التطوي
+2037	٧٣٤	directive	5	.github/workflows/web-tests-light.yml , apps/api/src/common/offsite-backup.spec.ts	▶️ ق-٧٣٤ — النسخُ خارج المضيف: `OCI Object Storage` — `me-ri
+2108	٧٦٠	directive	3	apps/api/src/common/offsite-backup.spec.ts , ops/backup/policy-proof.sh	✅ ق-٧٦٠ — حالتا السياسة تُثبَتان بـ`restic` نفسِه لا بتوقيعٍ
+2172	٧٧٩	results	1	apps/api/src/common/offsite-backup.spec.ts	🔬 ق-٧٧٩ — نتائجُ التنفيذ: `#372 → 4ec2b99`؛ العدُّ `6`؛ الم
+2271	٨٠٦	measurement	2	apps/api/src/inventory/costing-race.live.spec.ts , apps/api/src/inventory/costing.util.ts	🔬 ق-٨٠٦ — نتائجُ القياس: الستُّ كلُّها قائمةٌ على `main` (`
+2300	٨١٧	results	2	apps/api/src/purchases/layer-cost-allocation.util.ts , apps/api/src/purchases/purchase-return.util.ts	🔬 ق-٨١٧ — نتائجُ التنفيذ: `#383` و`#384` ⇒ `main` `327ad60`
+2313	٨٢١	research	1	apps/api/src/common/vat/proportional-deduction.util.ts	🔬 ق-٨٢١ — الخصمُ النسبيّ: مصدران رسميّان يُفتحان — ① الدليل
+2314	٨٢٢	results	1	apps/api/src/common/vat/proportional-deduction.util.ts	🔬 ق-٨٢٢ — نتائجُ التنفيذ: `#385` ⇒ `78f61d9` و`#386` ⇒ `477
+2418	٨٦٣	results	3	apps/api/prisma/migrations/20260915120000_supplier_payments/migration.sql , apps/api/src/journal/auto-posting.util.ts	🔬 ق-٨٦٣ — نتائجُ التنفيذ: `#393` ⇒ `5ff0f03`؛ ورقمُ السداد:
+2448	٨٧٥	directive	1	apps/api/test/supplier-payments.e2e-spec.ts	▶️ ق-٨٧٥ — البناء: يومان للسند ثم البُعد؛ وشرطان عامّان للقب
+2509	٩٠٠	results	1	apps/api/src/common/rule-extension-attached.spec.ts	🔬 ق-٩٠٠ — نتائجُ التنفيذ: `#401` ⇒ `6688e77`؛ و① بُني بشروط
+2519	٩٠١	operation	1	apps/api/src/common/rule-extension-attached.spec.ts	✅ ق-٩٠١ — دمجُ `#403` (سجلُّ التوجيه ١٩٣) ثم `#402` (①) — كل
+2589	٩٣٥	results	2	apps/api/src/invoices/invoices.service.ts , apps/api/src/zatca/hash-chain.util.ts	🔬 ق-٩٣٥ — نتائجُ التنفيذ: `#409` ⇒ `266095d` · `#407` ⇒ `a1
+2604	٩٤١	results	2	apps/api/src/invoices/invoices.service.ts , apps/api/test/zatca-invoice-edit-guard.e2e-spec.ts	🔬 ق-٩٤١ — نتائجُ التنفيذ: `#410` ⇒ `73901fd`؛ والقياسُ الحا
+2617	٩٤٥	directive	2	apps/api/src/invoices/invoices.service.ts , apps/api/test/zatca-invoice-delete-guard.e2e-spec.ts	⚠️ ق-٩٤٥ — موجزٌ قبل البناء — وأربعةٌ فيه، ولا بناءَ قبل حكم
+2661	٩٦٢	measurement	1	apps/api/src/invoices/active-documents.util.ts	🔴 ق-٩٦٢ — أعجلُ الأربعة مُثبَت: ازدواجٌ كامل — المردودةُ مر
+2682	٩٧٤	results	3	apps/api/src/common/i18n/storable-text.spec.ts , apps/api/src/common/i18n/storable-text.ts	🔬 ق-٩٧٤ — نتائجُ التنفيذ
+2696	٩٧٩	results	4	apps/api/src/common/external-text-storable.spec.ts , apps/api/src/zatca/zatca.service.ts	🔬 ق-٩٧٩ — نتائجُ التنفيذ
+2709	٩٨٣	directive	4	apps/api/src/outbox/outbox.module.ts , apps/api/src/zatca/zatca.service.ts	📌 ق-٩٨٣ — الضجيجُ: الإرسالُ اليدويُّ لا يختم حدثَ الطابور —
+2732	٩٩٧	results	13	apps/api/prisma/schema.prisma , apps/api/src/obligations/obligations.service.ts	🔬 ق-٩٩٧ — نتائجُ التنفيذ
+2761	١٠٠٨	directive	7	apps/api/src/common/adjustment/adjustment-note.util.ts , apps/api/src/invoices/invoices.service.ts	▶️ ق-١٠٠٨ — بناءُ ③ وإشعار المورّد معاً — بشرطين: مصدرٌ واحد
+2791	١٠٢٠	results	4	apps/api/prisma/migrations/20260918000000_installment_partial/migration.sql , apps/api/src/contracts/no-name-linking.spec.ts	🔬 ق-١٠٢٠ — نتائجُ التنفيذ: دُمج `#431` ⟵ `428ce63` ثم `#432
+2818	١٠٢٩	directive	11	apps/api/prisma/migrations/20260917230000_contract_customer_link/migration.sql , apps/api/scripts/benchmark-contracts-list.ts	▶️ ق-١٠٢٩ — البناءُ بترتيبه الثلاثيّ: ثقبُ الحذف ← الربطُ با
+2890	١٠٥٦	directive	1	apps/api/test/rejected-replacement.e2e-spec.ts	⭐ ق-١٠٥٦ — تشخيصُ سقوط السير مُقرّ: رقمُ زمنِ تشغيلٍ لا نوعٌ
+2894	١٠٦٠	results	2	apps/api/src/zatca/ubl/invoice-xml-unit-code.spec.ts , apps/api/src/zatca/ubl/invoice-xml.util.ts	🔬 ق-١٠٦٠ — نتائجُ التنفيذ: دُمج `#448` ⟵ `623de67` ثم `#449
+2933	١٠٧٢	operation	2	apps/api/src/inventory/stock-openings.service.ts , apps/api/test/opening-stock.e2e-spec.ts	✅ ق-١٠٧٢ — دمجُ `#457` ثم `#458` بترتيبهما، بالتربيع، وبقراء
+2950	١٠٨٠	measurement	5	apps/api/prisma/migrations/20260918200000_stock_batches/migration.sql , apps/api/prisma/schema.prisma	🔴 ق-١٠٨٠ — قراءةُ المالك للمقيس في الموجز: الدفعةُ غيرُ مبن
+2956	١٠٨٦	directive	13	apps/api/prisma/migrations/20260918200000_stock_batches/migration.sql , apps/api/prisma/migrations/20260918230000_stock_batch_key_ruled/migration.sql	▶️ ق-١٠٨٦ — ابنِ `٥+٦` (الدفعةُ كياناً على الطبقة و`FEFO` سي
+3088	١١٤٦	directive	7	apps/api/prisma/migrations/20260919190000_landed_costs/migration.sql , apps/api/prisma/schema.prisma	⚠️ ق-١١٤٦ — قبل أوّل سطرٍ من `٧`: أيُّ ما قِيس في الموجز تغي
+3166	١١٧٩	directive	9	apps/api/prisma/migrations/20260919230000_stock_openings/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١١٧٩ — بناءُ `٣٠` بلا شاشة: نوعُ حركة `OPENING` وكيانُ 
+3183	١١٨٧	results	1	apps/api/src/common/local-day.spec.ts	🔬 ق-١١٨٧ — نتائجُ التنفيذ: دُمج `#482` (⟵ `c64b9f4`) ثم `#4
+3212	١١٩٨	directive	50	apps/api/src/activities/activities.controller.ts , apps/api/src/branches/branches.controller.ts	🔴 ق-١١٩٨ — الحزمةُ الأولى ثمانيةٌ بملفٍّ وسطر (لقطةُ `19` س
+3245	١٢١٣	operation	1	.gitattributes	📌 ق-١٢١٣ — ملفّاتُ القياس الأربعة عند المالك ويرسلها؛ تُحفظ
+3275	١٢٢٥	directive	7	apps/api/prisma/migrations/20260920150000_product_tax_category/migration.sql , apps/api/src/common/vat/exemption-reasons.spec.ts	▶️ ق-١٢٢٥ — يُبنى ⑧ بمراحله الستّ كما في الخطّة، بشرطين: ① ا
+3365	١٢٦١	directive	53	apps/api/prisma/migrations/20260921210000_bank_reconciliation/migration.sql , apps/api/prisma/migrations/20260921220000_cash_deposits/migration.sql	▶️ ق-١٢٦١ — تُبنى ج (⑩A2 الأستاذُ العام وكشفُ الحساب ⟵ ⑦A1 ا
+3378	١٢٦٥	directive	2	apps/api/src/payments/dto/payment.dto.ts , apps/api/src/zatca/icv-concurrency.live.spec.ts	▶️ ق-١٢٦٥ — بناءُ ما حكم به القسمُ ٢: (أ) فئةُ الدفعة المقدَ
+3410	١٢٧٩	directive	19	apps/api/prisma/migrations/20260922120000_zatca_warnings_and_cert_expiry/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٢٧٩ — بناءُ ط ثم د ثم ز بلا وقوفٍ بينها: ط (سجلُّ التد
+3426	١٢٨٦	directive	5	apps/api/src/auth/auth.controller.ts , apps/api/src/common/versioning.ts	▶️ ق-١٢٨٦ — الحزمةُ ي: سطحُ الواجهة البرمجية، وأوّلُها الإصد
+3440	١٢٩١	directive	24	apps/api/prisma/migrations/20260923000000_api_keys/migration.sql , apps/api/prisma/migrations/20260923010000_integration_usage/migration.sql	▶️ ق-١٢٩١ — بقيّةُ ي تُبنى كلُّها بترتيبها: ⑫A2 حارسُ العقد 
+3443	١٢٩٤	measurement	1	apps/api/src/common/privacy/personal-fields.ts	🔬 ق-١٢٩٤ — قياسٌ يخصّ ط: أيُسجَّل تغييرُ رقم حساب المورّد ا
+3461	١٣٠٣	directive	22	apps/api/prisma/migrations/20260923120000_company_slug/migration.sql , apps/api/prisma/migrations/20260923170000_marketing_consent/migration.sql	▶️ ق-١٣٠٣ — الحزمةُ ك: النطاقاتُ والبريد
+3479	١٣١٢	directive	16	apps/api/prisma/migrations/20260923200000_platform_roles/migration.sql , apps/api/prisma/migrations/20260923220000_platform_decisions/migration.sql	▶️ ق-١٣١٢ — ثم الحزمة ل
+3494	١٣١٨	directive	37	apps/api/prisma/migrations/20260923220000_platform_decisions/migration.sql , apps/api/prisma/migrations/20260923235000_mfa_totp/migration.sql	▶️ ق-١٣١٨ — إكمالُ الحزمة ل بترتيبها: `⑪A1` الفعلُ الحرجُ بي
+3549	١٣٤٤	directive	3	apps/api/src/inventory/inventory-ledger-reconciliation.util.ts , apps/api/src/purchases/layer-cost-allocation.util.ts	📌 ق-١٣٤٤ — العيوبُ الثلاثةُ القائمة: بندٌ مستقلٌّ بعد الحار
+3583	١٣٦٩	directive	1	apps/api/src/common/openapi-contract.util.ts	🔴 ق-١٣٦٩ — مكسورُ اليوم (ج): التعليقُ المتخلّف في عقد الواج
+3587	١٣٧٣	results	1	apps/api/prisma/migrations/20260924200000_manual_movement_reason/migration.sql	🔬 ق-١٣٧٣ — نتائجُ التنفيذ
+3626	١٣٩٤	results	2	apps/api/src/pos/pos.service.ts , apps/api/test/pos-payment-path.e2e-spec.ts	⭐ ق-١٣٩٤ — العيبُ الثالث وجده التشغيلُ لا القراءة: بيعٌ واحد
+3633	١٤٠١	directive	20	apps/api/prisma/migrations/20260924210000_pos_payment_attempts/migration.sql , apps/api/prisma/schema.prisma	▶️ ق-١٤٠١ — ابنِ الكاشير بالشكل المكتوب (`docs/موجز-مسار-دفع
+3636	١٤٠٤	directive	23	apps/api/scripts/openapi-snapshot.ts , apps/api/src/common/openapi-contract.spec.ts	▶️ ق-١٤٠٤ — ③ الطلباتُ والاستعلامات، ثم ④ بعد الكاشير كما قُ
+3653	١٤١١	directive	4	apps/api/src/banks/banks.service.ts , apps/api/src/employees/employees.service.ts	🔴 ق-١٤١١ — مكسورُ اليوم (أ): فحصُ فروع الفاعل عند تعديل الب
+3692	١٤٤٠	measurement	17	apps/api/src/attendance/attendance.service.ts , apps/api/src/inventory/write-off-attachments.service.ts	🔬 ق-١٤٤٠ — عائلةُ «التعديل بالمعرّف»: تُقاس حيّاً مساراً مس
+3708	١٤٤٧	directive	4	apps/api/src/pos/pos-payment-attempts.service.ts , apps/api/src/pos/pos.service.ts	🔴 ق-١٤٤٧ — إيصالُ البطاقة بلا بوّابة الإجازة: يُبنى الآن
+3711	١٤٥٠	directive	8	.github/workflows/web-tests.yml , apps/api/scripts/response-truth.ts	⚖️ ق-١٤٥٠ — حارسُ الصدق ٣: الوحدةُ التالية البنوكُ ثم المواف
+3713	١٤٥٢	measurement	7	apps/api/src/attendance/attendance.service.ts , apps/api/src/inventory/inventory.service.ts	🔴 ق-١٤٥٢ — القوائمُ بلا ترشيح فرع تُقاس حيّاً مساراً مساراً
+3735	١٤٦٥	measurement	4	apps/api/src/purchases/purchase-references.util.ts , apps/api/src/purchases/purchases.service.ts	🔬 ق-١٤٦٥ — دعوى أ: حقنُ العميل والصنف بين المنشآت
+3740	١٤٧٠	measurement	5	apps/api/src/companies/company-movement.service.ts , apps/api/src/deletion-requests/deletion-requests.service.ts	🔬 ق-١٤٧٠ — دعوى و: حذفُ المنشأة وفيها مستنداتٌ تحت الحفظ
+3768	١٤٨٩	directive	20	apps/api/src/common/currency/base-amount.util.ts , apps/api/src/common/currency/currency-fields.dto.ts	🔴 ق-١٤٨٩ — فرقُ الصرف المحقَّق لا يصل حساباً في بعض المسارا
+3856	١٥٧٠	directive	2	.github/security/summarize.mjs , .github/workflows/security-scan.yml	▶️ ق-١٥٧٠ — الكتلة ٤أ: أدواتُ الفحص الأمنيّ المجانية في السي
+3861	١٥٧٥	directive	8	apps/api/prisma/migrations/20261002120000_audit_log_append_only/migration.sql , apps/api/src/audit/audit-log-append-only.live.spec.ts	▶️ ق-١٥٧٥ — الكتلة ٥: إصلاحُ ما ثبت قائماً من الكتلة ٢، الأخ
+3862	١٥٧٦	directive	3	.github/security/summarize.mjs , .github/workflows/security-scan.yml	▶️ ق-١٥٧٦ — توجيهُ الجلسة ٢٧٤: توجيهُ ٢٧٣ الثاني بنصّه في جل
+3864	١٥٧٨	directive	5	apps/api/src/attendance/attendance.service.ts , apps/api/src/contracts/contracts.service.ts	▶️ ق-١٥٧٨ — الكتلة ١: إكمالُ ما في الطريق
