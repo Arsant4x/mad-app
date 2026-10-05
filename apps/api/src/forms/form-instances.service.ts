@@ -4,7 +4,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayStartOf } from '../common/wall-clock.util';
-import { isConditionValue, NUMERIC_ITEM_TYPES } from './form-template-items.util';
+import { conditionValueOf, isConditionValue, NUMERIC_ITEM_TYPES } from './form-template-items.util';
 import { sealHash, type SealContent, type SealItemValue } from './seal-content.util';
 
 type Tx = Prisma.TransactionClient;
@@ -338,8 +338,5 @@ function valueDataOf(item: TemplateItem, input: FormValueInput): { textValue: st
   if (hasNumber || hasBool) throw new BadRequestException(formatMessage(MSG.form_value_type_mismatch, { label }));
   const text = blank(input.text);
   // ⚖️ `ق-١٦٤١`/٥: «الحالة» من السلّم الثابت وحدَه، والفارغُ يُفرغ الحقل.
-  if (item.itemType === FormItemType.CONDITION && text !== null && !isConditionValue(text)) {
-    throw new BadRequestException(formatMessage(MSG.form_value_condition_scale, { label }));
-  }
-  return { textValue: text, numberValue: null, boolValue: null, note };
+  return { textValue: item.itemType === FormItemType.CONDITION ? conditionValueOf(label, text) : text, numberValue: null, boolValue: null, note };
 }
