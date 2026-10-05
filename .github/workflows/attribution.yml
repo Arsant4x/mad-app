@@ -1,0 +1,60 @@
+# ⛔ لا توقيعَ للوكيل فيما يُكتب على GitHub (القاعدةُ الدائمة ٤١ · ق-١٦٤٣ · بوّابتُه بحكم ق-١٦٤٥/٤).
+#
+# الخطّافُ المحلّيّ `.githooks/commit-msg` لا يرى عنوانَ الطلب ولا وصفَه ولا رسالةَ الدمج المضغوط.
+# فهذا السيرُ يقرأها بـ`ops/ci/attribution-check.mjs`، والنمطُ من الخطّاف نفسِه.
+#
+# ⚠️ سيرٌ مستقلّ لا وظيفةٌ في الخفيف: تعديلُ الوصف حدثُ `edited`، وإضافتُه إلى الخفيف تعيد حزمتَيه
+#    كاملتين على كلِّ تعديلٍ للوصف (ق-١٤٧٣ م٣ يمنع التشغيلَ المكرَّر على رأسٍ فُحص). ولا `paths`:
+#    الوصفُ قائمٌ أيّاً كانت الملفّات. ورسالةُ الدمج تُفحص بعد الدمج على `main`، فتُرى ولا تُمنع.
+name: لا توقيع (القاعدة ٤١)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attribution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: |
+            .githooks
+            ops/ci
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: رسائلُ التزامات الطلب
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/commits" --jq '.[].commit.message | @json' > "$RUNNER_TEMP/commits.jsonl"
+          echo "التزامات: $(wc -l < "$RUNNER_TEMP/commits.jsonl")"
+      - name: لا سطرَ توقيع
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node ops/ci/attribution-check.mjs "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/commits.jsonl"
+          else
+            node ops/ci/attribution-check.mjs "$GITHUB_EVENT_PATH"
+          fi
