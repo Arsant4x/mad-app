@@ -1,0 +1,51 @@
+#!/bin/sh
+# اللغة تُضبط أولاً — §8.7 الوجه السادس: grep بلا لغةٍ يعامل النصّ العربي
+# بايتاتٍ لا أحرفاً ويعود صفراً بلا خطأ. ويحرسه `locale-gate.spec.ts`.
+export LC_ALL=C.UTF-8
+#
+# ⛔ لا توقيعَ للوكيل في رسالة الالتزام (القاعدةُ الدائمة ٤١ · `ق-١٦٤٣`)
+#
+# بنصّ صاحب المشروع: «ولا يُضاف اسمُك ولا توقيعُك في أيّ تعديلٍ أو طلبِ دمج … ووصفُ
+# التعديل نصٌّ واضحٌ فقط». وهذا الخطّافُ البوّابةُ الثانية: يحذف قبل الحفظ ثلاثةَ أصنافٍ
+# من الأسطر، بلا اعتبارٍ لحالة الأحرف:
+#
+#   سطرٌ يبدأ بـ Co-Authored-By:   أيّاً كان صاحبُه (للمشروع مؤلّفٌ بشريٌّ واحد)
+#   سطرٌ يبدأ بـ Claude-Session:
+#   سطرٌ فيه عبارةُ الأداة «Generated with Claude Code» بأقواسها أو بدونها
+#
+# وما سواها يبقى كما هو بايتاً بايتاً، ومنه سطرٌ يذكر أحدَ الاسمين في وسطه.
+# والبوّابةُ الأولى `attribution` بقيمتين فارغتين في `.claude/settings.json`.
+# ويحرسهما `apps/api/src/common/commit-msg-attribution.spec.ts` بالتزامٍ حقيقيّ.
+#
+# ⚠️ وحدُّه: لا يعمل بلا core.hooksPath ولا مع --no-verify، ولا يرى وصفَ طلب الدمج
+#    على GitHub؛ فوصفُ الطلب يُكتب بلا توقيعٍ باليد.
+#
+# التفعيل (مرة واحدة لكل نسخة):   git config core.hooksPath .githooks
+
+msg="$1"
+if [ -z "$msg" ] || [ ! -f "$msg" ]; then
+  exit 0
+fi
+
+PATTERN='^[[:space:]]*(co-authored-by|claude-session)[[:space:]]*:|generated with \[?claude code'
+tmp="$msg.no-attribution"
+
+grep -viE "$PATTERN" "$msg" > "$tmp"
+rc=$?
+# grep: صفرٌ إن بقي سطر، وواحدٌ إن حُذف كلُّ شيء (فتفرغ الرسالةُ ويرفضها git)، وما فوقهما خطأ.
+if [ "$rc" -gt 1 ]; then
+  rm -f "$tmp"
+  echo "commit-msg: تعذّرت قراءةُ رسالة الالتزام" >&2
+  exit 1
+fi
+
+if cmp -s "$msg" "$tmp"; then
+  rm -f "$tmp"
+  exit 0
+fi
+
+removed=$(grep -ciE "$PATTERN" "$msg")
+cat "$tmp" > "$msg"
+rm -f "$tmp"
+echo "commit-msg: حُذف من الرسالة $removed من أسطر التوقيع (القاعدة الدائمة ٤١)" >&2
+exit 0
