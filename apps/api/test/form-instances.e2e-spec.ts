@@ -129,13 +129,16 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
     const values = (v: unknown[]) => http().put(`/contracts/${contractA}/forms/${first.id}/values`).set('Authorization', bearer(a.token)).send({ values: v });
     await values([{ itemId: items.meter, text: 'كثير' }]).expect(400);
     await values([{ itemId: items.cond, number: 3 }]).expect(400);
+    // ⚖️ ق-١٦٤١/٥: «الحالة» من السلّم الثابت وحدَه (جيّد · مقبول · تالف)، والنصُّ الحرّ يُردّ مسمّىً.
+    const offScale = await values([{ itemId: items.cond, text: 'مقبول' }]).expect(400);
+    expect(offScale.body.message).toContain('حالةُ الخزائن');
     const filled = await values([
       { itemId: items.temp, number: 9 },
-      { itemId: items.cond, text: '  مقبول ', note: 'خدشٌ في الباب' },
+      { itemId: items.cond, text: '  FAIR ', note: 'خدشٌ في الباب' },
     ]).expect(200);
     const temp = filled.body.items.find((i: { itemId: string }) => i.itemId === items.temp);
     expect(temp).toMatchObject({ number: '9', outOfRange: true });
-    expect(filled.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'مقبول', note: 'خدشٌ في الباب' });
+    expect(filled.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'FAIR', note: 'خدشٌ في الباب' });
   });
 
   it('② لا يُختم وإلزاميٌّ فارغ، ولا وقيمةٌ خارج نطاقها المانع — ثم يُختم برقمه وموضعه وبصمته', async () => {
@@ -287,5 +290,29 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       .send({ values: [{ itemId: items.meter, number: 7 }] })
       .expect(200);
     await http().post(`/contracts/${contractA2}/forms/${draftId}/seal`).set('Authorization', bearer(token)).expect(403);
+  });
+
+  it('⑧ مسوّدةٌ عُبّئت «حالتُها» نصّاً حرّاً قبل السلّم لا تُختم به، وتُختم حين تُختار قيمتُها من السلّم (ق-١٦٤١/٥)', async () => {
+    // القيمةُ القديمة تُكتب في القاعدة مباشرةً كما كتبها البرنامجُ قبل السلّم (والمسوّدةُ تُعدَّل في القاعدة، ⑤).
+    await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
+      tx.formValue.upsert({
+        where: { instanceId_itemId: { instanceId: draftId, itemId: items.cond } },
+        create: { companyId: a.companyId, instanceId: draftId, itemId: items.cond, textValue: 'مقبول' },
+        update: { textValue: 'مقبول' },
+      }),
+    );
+    const seal = () => http().post(`/contracts/${contractA2}/forms/${draftId}/seal`).set('Authorization', bearer(a.token));
+    const legacy = await seal().expect(400);
+    expect(legacy.body.message).toContain('قيمةٌ قديمة');
+    expect(legacy.body.message).toContain('حالةُ الخزائن');
+
+    await http()
+      .put(`/contracts/${contractA2}/forms/${draftId}/values`)
+      .set('Authorization', bearer(a.token))
+      .send({ values: [{ itemId: items.cond, text: 'DAMAGED', note: 'كسرٌ في الرفّ' }] })
+      .expect(200);
+    const sealed = await seal().expect(201);
+    expect(sealed.body.status).toBe('SEALED');
+    expect(sealed.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'DAMAGED', note: 'كسرٌ في الرفّ' });
   });
 });

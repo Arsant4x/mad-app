@@ -314,6 +314,8 @@ export const MSG = {
   form_value_item_unknown: 'forms.value_item_unknown',
   form_value_type_mismatch: 'forms.value_type_mismatch',
   form_value_qty_whole: 'forms.value_qty_whole',
+  form_value_condition_scale: 'forms.value_condition_scale',
+  form_instance_condition_legacy: 'forms.instance_condition_legacy',
   contract_already_cancelled: 'contracts.already_cancelled',
   contract_start_after_end: 'contracts.start_after_end',
   contract_outside_head_lease: 'contracts.outside_head_lease',
@@ -1326,6 +1328,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.form_value_item_unknown]: { ar: 'البندُ ليس في قالب هذا السجلّ', en: 'This item is not part of the record’s template' },
   [MSG.form_value_type_mismatch]: { ar: 'قيمةُ البند «{label}» لا تطابق نوعَه', en: 'The value of item “{label}” does not match its type' },
   [MSG.form_value_qty_whole]: { ar: 'قيمةُ البند «{label}» عددٌ صحيح', en: 'The value of item “{label}” must be a whole number' },
+  [MSG.form_value_condition_scale]: {
+    ar: 'قيمةُ البند «{label}» واحدةٌ من سلّم الحالة: جيّد · مقبول · تالف',
+    en: 'The value of item “{label}” must be one of the condition scale: good · fair · damaged',
+  },
+  [MSG.form_instance_condition_legacy]: {
+    ar: 'لا يُختم السجلّ وفي بنود الحالة قيمةٌ قديمة خارج السلّم، فتُختار من جيّد · مقبول · تالف: {labels}',
+    en: 'The record cannot be sealed while condition items hold an old value outside the scale; choose good, fair or damaged: {labels}',
+  },
   [MSG.contract_already_cancelled]: { ar: 'العقد ملغى بالفعل', en: 'Contract is already cancelled' },
   [MSG.contract_start_after_end]: { ar: 'تاريخ البداية يجب أن يسبق تاريخ النهاية', en: 'Start date must come before the end date' },
   [MSG.contract_outside_head_lease]: {

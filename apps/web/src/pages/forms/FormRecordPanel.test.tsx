@@ -121,6 +121,25 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     expect(screen.getByRole('button', { name: 'طباعة' })).toBeTruthy();
   });
 
+  it('⭐ «الحالة» قائمةٌ من السلّم الثابت، والقيمةُ القديمة تُرى ولا تُختار، ويُرسل الرمز (ق-١٦٤١/٥)', async () => {
+    const cond = { ...draft.items[0], itemId: 'i2', lineNo: 2, label: 'حالةُ الخزائن', itemType: 'CONDITION' as const, required: false, text: 'خدشٌ قديم' };
+    const withCond: FormInstance = { ...draft, items: [draft.items[0], cond] };
+    vi.mocked(setContractFormValues).mockResolvedValue({ ...withCond, items: [draft.items[0], { ...cond, text: 'DAMAGED' }] });
+    mount(withCond, { canRecord: true, canReview: false });
+    const select = screen.getByLabelText('حالةُ الخزائن') as HTMLSelectElement;
+    const options = [...select.options].map((o) => ({ value: o.value, text: o.textContent, disabled: o.disabled }));
+    expect(options).toEqual([
+      { value: '', text: '', disabled: false },
+      { value: 'GOOD', text: 'جيّد', disabled: false },
+      { value: 'FAIR', text: 'مقبول', disabled: false },
+      { value: 'DAMAGED', text: 'تالف', disabled: false },
+      { value: 'خدشٌ قديم', text: 'قيمةٌ قديمة: خدشٌ قديم', disabled: true },
+    ]);
+    fireEvent.change(select, { target: { value: 'DAMAGED' } });
+    fireEvent.click(screen.getByRole('button', { name: 'حفظٌ كمسوّدة' }));
+    await waitFor(() => expect(setContractFormValues).toHaveBeenCalledWith('c1', 'f1', [{ itemId: 'i2', text: 'DAMAGED', note: null }]));
+  });
+
   it('والتحقّقُ يقول إن المحتوى تغيّر حين لا تطابق البصمةُ المعادة', async () => {
     vi.mocked(verifyContractForm).mockResolvedValue({ no: 'FRM-2026-0001', contentHash: HASH, recomputedHash: 'b'.repeat(64), contentIntact: false, chainLinked: true, valid: false });
     mount(sealed, { canRecord: false, canReview: false });
