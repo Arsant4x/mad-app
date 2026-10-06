@@ -71,7 +71,15 @@ on:
     #    يُدمج آلياً بدل حيلة «مسوّدة ثم جاهز». **والمسوّدةُ تُحسم بـ`if` على الوظائف** — وهو ما منعه
     #    ق-٢٥١؛ والشرطُ أن بوّابة الدمج تشترط الثقيلَ ناجحاً **على الرأس نفسِه** (ق-١٤٧٢)، فوظيفةٌ
     #    تخطّتها المسوّدةُ لا تُدمج. و`ready_for_review` معلَنةٌ لأنها ليست افتراضية (ق-٢٥٠).
-    types: [opened, reopened, ready_for_review, synchronize]
+    # ⚖️ (ق-١٦٤٨ — **يعدّل ق-١٤٧٣**، بحكم صاحب المشروع) **الثقيلُ مرّةً واحدةً على الرأس الأخير قبل الدمج**:
+    #    لا عند الفتح ولا عند الجاهزية ولا مع كلِّ دفعة، بل حين يوضع على الطلب وسمُ `merge-ready` قبيل
+    #    الدمج، فيجري على الرأس الحاضر وحدَه. ودفعةٌ بعد الوسم لا تُشغّله، وبوّابةُ الدمج (ق-١٤٧٢) ترفض
+    #    حتى يُعاد الوسم (يُنزع ثم يوضع) فيجري على الرأس الجديد. فالجودةُ كما هي: لا دمجَ بلا ثقيلٍ ناجح
+    #    على الرأس الأخير بعينه (القاعدة ١٥). والمقيسُ قبله (30 يوماً): 227 تشغيلاً ثقيلاً بـ3,213 دقيقة
+    #    جرت على رؤوسٍ لم تكن الأخيرةَ عند الدمج. والوثائقيُّ المحض لا يبلغه بمسارات `paths` أدناه.
+    #    ⚠️ وكلُّ وسمٍ آخر يبدأ تشغيلاً تتخطّى وظائفُه كلُّها، لكنه في مجموعة `concurrency` نفسِها
+    #    فيُلغي ثقيلاً جارياً؛ فلا يوضع وسمٌ آخر والثقيلُ يجري.
+    types: [labeled]
     # ⚠️ (ق-٢٥١) **مساراتُ الشيفرة وحدها** — «ويُقاس بالمسار لا بالنيّة». فطلبٌ
     #    وثائقيٌّ محض لا يُشغّل الثقيلَ عند فتحه؛ ويُشغّله **عند الدمج** لأن
     #    `push` أعلاه بلا تصفيةِ مسارات: **ما يصل `main` يُفحص كاملاً مهما كان
@@ -198,9 +206,9 @@ jobs:
   #
   # ⛔ مانعة من أول يوم.
   db-integration:
-    # (ق-١٤٧٣ م١ · م٤) على الطلب: جاهزٌ لا مسوّدة. وعلى `main`: إلا أن تقول البوّابةُ بنجاحٍ صريح «فُحصت».
+    # (ق-١٤٧٣ م١ · م٤ · ق-١٦٤٨) على الطلب: جاهزٌ لا مسوّدة، والوسمُ الموضوعُ `merge-ready`. وعلى `main`: إلا أن تقول البوّابةُ بنجاحٍ صريح «فُحصت».
     needs: gate
-    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.label.name == 'merge-ready') || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
     # سقفٌ لئلا يلتهم تعليقٌ ستّ ساعات. خطّ الأساس 22 دقيقة، والضِّعف هامش.
     timeout-minutes: 60
@@ -549,7 +557,7 @@ jobs:
   # الإبلاغ لم يُنقذ حارساً قط، بل أخفى ستة سقوطات وأنتج دمجاً على أخضرَ كاذب.
   nginx-cache:
     needs: gate
-    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.label.name == 'merge-ready') || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -618,7 +626,7 @@ jobs:
 
   playwright:
     needs: gate
-    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft) || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
+    if: ${{ !cancelled() && ((github.event_name == 'pull_request' && !github.event.pull_request.draft && github.event.label.name == 'merge-ready') || (github.event_name == 'push' && (needs.gate.result != 'success' || needs.gate.outputs.run != 'false'))) }}
     runs-on: ubuntu-latest
 
     # قاعدة بيانات حقيقية: اختبارات التخطيط تسجّل منشأة فعلية عبر الـAPI
