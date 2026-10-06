@@ -28,6 +28,7 @@ describe('Form templates — wave 1a (e2e)', () => {
   let b: IsolatedCompany;
   let employeeToken: string;
   let operations: { identityId: string; token: string } | undefined;
+  let compliance: { identityId: string } | undefined;
   const stamp = `${Date.now()}`.slice(-8);
   const typeIds: string[] = [];
   const familyIds: string[] = [];
@@ -83,6 +84,7 @@ describe('Form templates — wave 1a (e2e)', () => {
     }
     if (typeIds.length) await prisma.formType.deleteMany({ where: { id: { in: typeIds } } });
     if (operations) await prisma.loginIdentity.delete({ where: { id: operations.identityId } }).catch(() => undefined);
+    if (compliance) await prisma.loginIdentity.delete({ where: { id: compliance.identityId } }).catch(() => undefined);
     await app.close();
   });
 
@@ -250,7 +252,20 @@ describe('Form templates — wave 1a (e2e)', () => {
     expect(String((crossed as Error).message)).toContain('form_template_items_companyId_templateId_fkey');
   });
 
-  it('⑦ القوالبُ العامّة لمالك المنصّة وحدَه حتى يُحكم في الدور', async () => {
+  it('⑦ القوالبُ العامّة لمالك المنصّة ودور «الامتثال» (ق-١٦٤١/١)، والأدوارُ الأخرى تُردّ', async () => {
+    // «الامتثال» يقرأ القوالبَ العامّة وينشئ نوعاً، لأن القالبَ يحمل نصوصاً نظامية.
+    const compUser = `forms-comp-${stamp}`;
+    const compIdentity = await prisma.loginIdentity.create({
+      data: { username: compUser, passwordHash: await argon2.hash('FormsComp123!'), actorType: 'PLATFORM_ADMIN' },
+      select: { id: true },
+    });
+    compliance = { identityId: compIdentity.id };
+    await prisma.platformAdmin.create({ data: { loginIdentityId: compIdentity.id, displayName: 'امتثالُ النماذج', role: PlatformRole.COMPLIANCE } });
+    const compToken = (await http().post('/auth/login').send({ username: compUser, password: 'FormsComp123!' }).expect(200)).body.accessToken as string;
+    await http().get('/admin/form-templates').set('Authorization', bearer(compToken)).expect(200);
+    const compType = await http().post('/admin/form-types').set('Authorization', bearer(compToken)).send({ code: `COMP_T${stamp}`, name: 'فحصُ امتثال' }).expect(201);
+    typeIds.push(compType.body.id);
+
     const username = `forms-ops-${stamp}`;
     const identity = await prisma.loginIdentity.create({
       data: { username, passwordHash: await argon2.hash('FormsOps123!'), actorType: 'PLATFORM_ADMIN' },
