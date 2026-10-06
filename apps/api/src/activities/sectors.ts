@@ -119,6 +119,18 @@ export function screensFor(sectors: readonly Sector[]): Set<string> {
 }
 
 /**
+ * ⚖️ قطاعاتُ كتالوج القوالب العامّة لمنشأةٍ بأنشطتها (`ق-١٦٤١`/٣: «ما يخصّ أنشطتَها وما لا نشاطَ له»): القالبُ بلا قطاعٍ يُرى
+ * دائماً، وذو القطاع يُرى إن كان من قطاعات أنشطتها المفعَّلة.
+ *
+ * والقاعدةُ قاعدةُ `screensFor` نفسُها كي لا يفترق الكتالوجُ عن الشاشات: **لا أنشطة ⇒ لا ترشيح** (`null`، فالمنشأةُ ترى ما كانت
+ * تراه)، و**«أخرى» تفتح الكلّ** كما تفتح الشاشاتِ المرشَّحةَ كلَّها.
+ */
+export function catalogSectorsFor(sectors: readonly Sector[]): Sector[] | null {
+  if (sectors.length === 0 || sectors.includes('OTHER')) return null;
+  return [...new Set(sectors)];
+}
+
+/**
  * مطابقة النصّ الحرّ على قطاع — **اقتراحٌ لا حكم**.
  *
  * ⚠️ ناتجها يُكتب في `sectorSuggested` **ولا يُكتب في `sector` أبداً**

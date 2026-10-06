@@ -294,4 +294,34 @@ describe('Form templates — wave 1a (e2e)', () => {
     await http().patch(`/form-templates/${made.body.id}`).set('Authorization', bearer(employeeToken)).send({ name: 'لا' }).expect(403);
     await http().delete(`/form-templates/${made.body.id}`).set('Authorization', bearer(a.token)).expect(204);
   });
+
+  it('⑨ الكتالوجُ يعرض للمنشأة ما يخصّ أنشطتَها وما لا نشاطَ له، وبلا نشاطٍ رئيسيّ الكلّ (ق-١٦٤١/٣)', async () => {
+    // قالبٌ عامٌّ منشور بلا نشاط، بجانب إصدار العقارات المنشور بعد ④ (والكتالوجُ لا يعرض إلا المنشور).
+    const general = await http().post('/admin/form-types').set('Authorization', bearer(ownerToken)).send({ code: `GENERAL_T${stamp}`, name: 'استلامُ عُهدة' }).expect(201);
+    typeIds.push(general.body.id);
+    const tpl = await http()
+      .post('/admin/form-templates')
+      .set('Authorization', bearer(ownerToken))
+      .send({ formTypeId: general.body.id, name: 'استلامُ عُهدةِ موظّف', items: ITEMS })
+      .expect(201);
+    familyIds.push(tpl.body.familyId);
+    await http().post(`/admin/form-templates/${tpl.body.id}/publish`).set('Authorization', bearer(ownerToken)).expect(201);
+    const catalogOf = async () =>
+      ((await http().get('/form-templates/catalog').set('Authorization', bearer(b.token)).expect(200)).body as { id: string }[]).map((t) => t.id);
+
+    // بلا نشاطٍ رئيسيّ (والحالةُ تُبدأ معلومةً بالتراجع عنه): الكلُّ كما كان.
+    await http().patch('/activities/primary').set('Authorization', bearer(b.token)).send({ activityId: null, confirmed: true }).expect(200);
+    expect(await catalogOf()).toEqual(expect.arrayContaining([v2Id, tpl.body.id]));
+
+    // نشاطُها مطعمٌ وحدَه: لا يُرى قالبُ العقارات، ويبقى ما لا نشاطَ له.
+    const restaurant = await http().post('/activities').set('Authorization', bearer(b.token)).send({ name: `مطعم ${stamp}`, sector: 'RESTAURANT' }).expect(201);
+    await http().patch('/activities/primary').set('Authorization', bearer(b.token)).send({ activityId: restaurant.body.id, confirmed: true }).expect(200);
+    const filtered = await catalogOf();
+    expect(filtered).toContain(tpl.body.id);
+    expect(filtered).not.toContain(v2Id);
+
+    // والتراجعُ عن الترشيح يعيد الكلّ.
+    await http().patch('/activities/primary').set('Authorization', bearer(b.token)).send({ activityId: null, confirmed: true }).expect(200);
+    expect(await catalogOf()).toEqual(expect.arrayContaining([v2Id, tpl.body.id]));
+  });
 });

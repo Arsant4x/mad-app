@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { FormTemplateStatus, Prisma, type FormType } from '@mad-app/db';
 import { randomUUID } from 'node:crypto';
+import { catalogSectorsFor, SECTORS, type Sector } from '../activities/sectors';
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -146,11 +147,24 @@ export class FormTemplatesService {
     });
   }
 
-  /** كتالوجُ القوالب العامّة للمنشأة: المنشورُ وحدَه من كلِّ قالب، لتنسخ منه. */
+  /**
+   * كتالوجُ القوالب العامّة للمنشأة: المنشورُ وحدَه من كلِّ قالب، لتنسخ منه. ⚖️ **وما يخصّ أنشطتَها وما لا نشاطَ له** (`ق-١٦٤١`/٣)
+   * بقاعدة الشاشات نفسِها (`catalogSectorsFor`): بلا نشاطٍ رئيسيّ لا ترشيح، و«أخرى» تفتح الكلّ.
+   */
   catalog(companyId: string) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      // ⚠️ الأنشطةُ تحت RLS: تُقرأ في سياق المنشأة نفسِه، وقراءةٌ خارجه تعود فارغةً فيسقط الترشيحُ بصمت.
+      const company = await tx.company.findUniqueOrThrow({ where: { id: companyId }, select: { primaryActivityId: true } });
+      const activities = company.primaryActivityId
+        ? await tx.businessActivity.findMany({ where: { disabledAt: null }, select: { sector: true } })
+        : [];
+      const sectors = catalogSectorsFor(activities.map((a) => a.sector).filter((s): s is Sector => s !== null && (SECTORS as readonly string[]).includes(s)));
       const rows = await tx.formTemplate.findMany({
-        where: { companyId: null, status: FormTemplateStatus.PUBLISHED },
+        where: {
+          companyId: null,
+          status: FormTemplateStatus.PUBLISHED,
+          ...(sectors ? { formType: { OR: [{ sector: null }, { sector: { in: sectors } }] } } : {}),
+        },
         include: ROW_INCLUDE,
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
       });

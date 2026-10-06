@@ -7,6 +7,7 @@ import { readsDeclaredStrings } from '../common/source-scan.util';
 readsDeclaredStrings();
 import { ALLOWED_SCREENS } from '../templates/screens';
 import {
+  catalogSectorsFor,
   CORE_SCREENS,
   RAW_GATED_SCREENS,
   RAW_SECTOR_EXTRAS,
@@ -115,6 +116,18 @@ describe('الخريطة المعتمَدة — بتعديلات المالك ا
     // منشأةٌ بنشاطين ترى شاشات الاثنين. والتقاطع يُخفي عنها ما تعمل عليه.
     const both = [...screensFor(['REALESTATE', 'RETAIL'])];
     for (const s of ['properties', 'contracts', 'pos', 'products']) expect(both).toContain(s);
+  });
+});
+
+describe('⚖️ كتالوجُ القوالب العامّة بأنشطة المنشأة بقاعدة الشاشات (ق-١٦٤١/٣)', () => {
+  it('⭐ قطاعاتُ الأنشطة تُرشّح، والمكرَّرُ واحد', () => {
+    expect(catalogSectorsFor(['REALESTATE'])).toEqual(['REALESTATE']);
+    expect(catalogSectorsFor(['REALESTATE', 'RETAIL', 'REALESTATE'])).toEqual(['REALESTATE', 'RETAIL']);
+  });
+
+  it('⭐ لا أنشطة ⇒ لا ترشيح، و«أخرى» تفتح الكلّ — كالشاشات', () => {
+    expect(catalogSectorsFor([])).toBeNull();
+    expect(catalogSectorsFor(['RESTAURANT', 'OTHER'])).toBeNull();
   });
 });
 
