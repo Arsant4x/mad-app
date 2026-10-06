@@ -27,7 +27,11 @@
   "overrides": {
     "lodash": "4.18.1",
     "@nestjs/platform-express": {
-      "multer": "2.4.0"
+      "multer": "2.4.0",
+      "proxy-addr": "2.0.8"
+    },
+    "vitest": {
+      "tinypool": "2.1.2"
     },
     "@nestjs/swagger": {
       "js-yaml": "4.3.2"
