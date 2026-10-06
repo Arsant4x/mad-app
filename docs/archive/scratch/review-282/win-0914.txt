@@ -1,0 +1,9 @@
+range=2026-09-14T00:00:00Z..2026-09-17T23:59:59Z runs=325 first=2026-09-14T05:13:08Z last=2026-09-17T22:00:26Z job_minutes_rounded=1681
+  492	254	median_wall=1.4	web-tests-light :: api-unit
+  433	254	median_wall=1.1	web-tests-light :: vitest
+  412	69	median_wall=5.5	web-tests :: db-integration
+  206	69	median_wall=2.5	web-tests :: playwright
+  138	69	median_wall=1.2	web-tests :: nginx-cache
+heavy_runs=69 heavy_minutes=756 by_event={"pull_request":452,"push":304}
+heavy_parallel_wall_median=5.5 heavy_serial_wall_median=9.1
+EXIT=0

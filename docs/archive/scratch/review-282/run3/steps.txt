@@ -1,0 +1,32 @@
+▶ حاويةُ التشغيل
+  حاويةُ التشغيل: 1s rc=0
+▶ Postgres
+  Postgres: 0s rc=0
+▶ MinIO
+  MinIO: 1s rc=0
+▶ أدواتُ النظام (openssl كما في صورة GitHub)
+  أدواتُ النظام (openssl كما في صورة GitHub): 10s rc=0
+▶ الشيفرة من git archive origin/main
+  الشيفرة من git archive origin/main: 4s rc=0
+▶ npm ci (بلا مخبأ)
+  npm ci (بلا مخبأ): 32s rc=0
+▶ انتظارُ Postgres
+  انتظارُ Postgres: 1s rc=0
+▶ انتظارُ MinIO
+  انتظارُ MinIO: 0s rc=0
+▶ دور app_user
+  دور app_user: 1s rc=0
+▶ prisma generate + migrate deploy
+  prisma generate + migrate deploy: 21s rc=0
+▶ البذرة
+  البذرة: 9s rc=0
+▶ المجسّاتُ الحيّة
+  المجسّاتُ الحيّة: 56s rc=0
+▶ قفلُ الفترة (America/New_York)
+  قفلُ الفترة (America/New_York): 13s rc=0
+▶ التكامل e2e مشرَّحاً
+  التكامل e2e مشرَّحاً: 731s rc=0
+▶ صدقُ الردود
+  صدقُ الردود: 31s rc=0
+الحكم: live=0 tz=0 e2e=0 response_truth=0 · الكلّ 911s
+تُمحى: lh-1791275982-run lh-1791275982-pg lh-1791275982-minio · الباقي باسمها: 0
