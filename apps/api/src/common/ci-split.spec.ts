@@ -199,13 +199,18 @@ describe('تقسيمُ السير: الثقيلُ بمُشغِّلٍ على مس
     }
   });
 
-  it('🔴 مُشغِّلُ الثقيل: عند جاهزية الطلب — `ready_for_review` و`synchronize` والمسوّدةُ تُتخطّى؛ ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بالمسارات نفسها (ق-١٤٧٣ · ق-٢٧٢)', () => {
-    expect(declaredTypes(heavy)).toContain('ready_for_review');
-    expect(declaredTypes(heavy)).toContain('synchronize');
-    expect(declaredTypes(heavy)).toContain('opened');
-    // والمسوّدةُ لا يعمل عليها الثقيل: كلُّ وظيفةٍ ثقيلة تشترط الجاهزيةَ على الطلب (ق-١٤٧٣ م٤).
+  it('🔴 مُشغِّلُ الثقيل: مرّةً على الرأس الأخير عند وسم `merge-ready` لا مع كلِّ دفعة، والمسوّدةُ تُتخطّى؛ ومساراتُ شيفرةٍ بلا وثائق، و`push` إلى `main` بالمسارات نفسها (ق-١٦٤٨ · ق-١٤٧٣ · ق-٢٧٢)', () => {
+    // ⚖️ (ق-١٦٤٨، يعدّل ق-١٤٧٣) الوسمُ وحدَه يُشغّل الثقيلَ على الطلب: لا فتحٌ ولا جاهزيةٌ ولا دفعة.
+    //    وعودةُ `synchronize` أو `ready_for_review` تعيد الثقيلَ على كلِّ دفعةٍ بلا أن يشكو شيء.
+    expect(declaredTypes(heavy)).toEqual(['labeled']);
+    // وكلُّ وظيفةٍ ثقيلة تشترط على الطلب الجاهزيةَ (ق-١٤٧٣ م٤) والوسمَ بعينه، فوسمٌ آخر لا يُشغّلها.
     for (const j of jobBlocks(heavy).filter((b) => !gateNames(heavy).includes(b.name))) {
-      expect({ job: j.name, draftSkipped: /!github\.event\.pull_request\.draft/.test(j.body.match(/^\s{4}if: (.+)$/m)?.[1] ?? '') }).toEqual({ job: j.name, draftSkipped: true });
+      const cond = j.body.match(/^\s{4}if: (.+)$/m)?.[1] ?? '';
+      expect({ job: j.name, draftSkipped: /!github\.event\.pull_request\.draft/.test(cond), label: /github\.event\.label\.name == 'merge-ready'/.test(cond) }).toEqual({
+        job: j.name,
+        draftSkipped: true,
+        label: true,
+      });
     }
     const paths = declaredPaths(heavy) ?? [];
     expect(paths.length).toBeGreaterThan(0);

@@ -712,7 +712,7 @@ if (MERGE_CMD.test(cmd)) {
           `الملفات الشيفرية: ${codeFiles.slice(0, 5).join(' · ')}${codeFiles.length > 5 ? ` … (+${codeFiles.length - 5})` : ''}`,
           '',
           'الطريق:',
-          `  gh pr ready ${prNumber || '<رقم>'} --undo && gh pr ready ${prNumber || '<رقم>'}   ⟵ الجاهزيةُ تُشغّل الثقيلَ على الرأس`,
+          `  gh pr edit ${prNumber || '<رقم>'} --remove-label merge-ready; gh pr edit ${prNumber || '<رقم>'} --add-label merge-ready   ⟵ الوسمُ يُشغّل الثقيلَ على الرأس (ق-١٦٤٨)`,
           '  ثم انتظر اخضرارَه **على هذا الرأس** وأعد الدمج. ولا يُقبل ثقيلُ تاريخٍ قبله.',
         ].join('\n'),
       );
