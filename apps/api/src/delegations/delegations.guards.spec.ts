@@ -31,9 +31,9 @@ describe('مفردات التفويض مشتقّة من مصدرها — لا م
     expect(errorsOn(dto({ nodeKey: 'audit-log' }))).toContain('nodeKey');
   });
 
-  it('⭐ الـ168 زوجاً كلها مقبولة، وما خرج عنها مرفوض', () => {
+  it('⭐ الـ175 زوجاً كلها مقبولة، وما خرج عنها مرفوض', () => {
     const all = ALLOWED_SCREENS.flatMap((s) => SCREEN_ACTIONS.map((a) => `${s}:${a}`));
-    expect(all).toHaveLength(168);
+    expect(all).toHaveLength(175);
     expect(all.filter((g) => errorsOn(dto({ grants: [g] })).includes('grants'))).toEqual([]);
     for (const bad of ['contracts:approve', 'invoices:view', 'contracts', 'contracts:view:extra', '*:*']) {
       expect({ bad, rejected: errorsOn(dto({ grants: [bad] })).includes('grants') }).toEqual({ bad, rejected: true });

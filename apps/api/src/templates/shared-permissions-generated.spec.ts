@@ -13,7 +13,7 @@ readsDeclaredStrings();
  * **حرفاً** (بعد توحيد نهاية السطر — `§8.7` الوجه الخامس عشر): شاشةٌ تُضاف إلى `screens.ts`
  * بلا إعادة توليدٍ تُسقط الحزمةَ باسم الأمر الذي يُصلحها؛ وتحريرٌ يدويّ للمولَّد يُسقطها كذلك.
  *
- * وقبل المطابقة يُثبت أن الحارسَ **قرأ شيئاً** (`§8.7`): الملفُّ غيرُ فارغ، وفيه `24 × 7 = 168`
+ * وقبل المطابقة يُثبت أن الحارسَ **قرأ شيئاً** (`§8.7`): الملفُّ غيرُ فارغ، وفيه `25 × 7 = 175`
  * مفتاحاً كما يُحسبان من المصدر — فحارسٌ على ملفٍّ فارغ يمرّ عمىً.
  */
 describe('مفرداتُ الصلاحيات المشتركة مولَّدةٌ من مصدرها', () => {
@@ -23,7 +23,7 @@ describe('مفرداتُ الصلاحيات المشتركة مولَّدةٌ م
   it('يقرأ الملفَّ فعلاً — وفيه المفاتيحُ كلُّها (الشاشات × الأفعال)', () => {
     expect(onDisk.length).toBeGreaterThan(1000);
     const expectedKeys = ALLOWED_SCREENS.length * SCREEN_ACTIONS.length;
-    expect(expectedKeys).toBe(168);
+    expect(expectedKeys).toBe(175);
     const keysOnDisk = onDisk.match(/^  '[a-z]+:[a-z]+',$/gm) ?? [];
     expect(keysOnDisk).toHaveLength(expectedKeys);
     for (const screen of ALLOWED_SCREENS) expect(onDisk).toContain(`  '${screen}',`);
