@@ -1,0 +1,381 @@
+      ✓ ⭐ الحارسُ يرى — مسبارٌ في معاملةٍ مُرجَعة: سطرٌ بلا طرفه يُمسَك، وبعد ختمه لا (33 ms)
+
+FAIL src/common/tenant/rls-policy-content.live.spec.ts
+  محتوى سياسات العزل — كلُّ سياسةٍ متساهلة قانونيّةٌ أو استثناءٌ معتمدٌ بعينه
+    ✓ ⓪ حارسٌ على المسبار: القراءةُ أعادت السياسات، والاشتقاقُ يطابق حالةً معلومة ويخالف أخرى (1 ms)
+    ✓ [SPEC 1.2] ⭐ كلُّ سياسةٍ متساهلة قانونيّةٌ أو استثناءٌ معتمدٌ بعينه — مطابقةً تامّة
+    ✓ [SPEC 1.2] ⭐ وكلُّ جدولٍ عليه عزلٌ مكفيٌّ بسياسةٍ تقيّد بالمنشأة، وعزلُه قائم (5 ms)
+    ✓ ⭐ والاستثناءاتُ صادقةٌ في الاتجاهين: كلٌّ موجودٌ حيّاً ومطابق، ولكلٍّ حجّة (1 ms)
+    ✓ 🔴 الإثباتُ بالعكس: `USING (true)` بجوار القانونيّة يُمسك — وهو تسريبٌ حقيقيّ لا شكلٌ فقط (81 ms)
+    ✓ ⑤ يُمسك: القانونيّة `OR true` (105 ms)
+    ✓ ⑤ يُمسك: قراءةُ المدير `FOR SELECT USING (true)` (63 ms)
+    ✓ ⑤ يُمسك: كتابةٌ مفتوحة `WITH CHECK (true)` (158 ms)
+    ✓ ⑤ يُمسك: مسنَدُ الإدارة على جدولٍ عاديّ (12 ms)
+    ✓ ⑤ يُمسك: `TO app_user USING (true)` (10 ms)
+    ✓ ⑥ لا يُمسك: مقيِّدةٌ `AS RESTRICTIVE USING (true)` (58 ms)
+    ✓ ⑥ لا يُمسك: قانونيّةٌ مكرَّرة باسمٍ آخر (10 ms)
+    ✓ ⑥ لا يُمسك: قانونيّةٌ بلا `WITH CHECK` (11 ms)
+    ✕ ⑥ والتغطيةُ تُمسك: استثناءٌ «بجوار القانونيّة» زالت قانونيّتُه، وجدولٌ سياساتُه كلُّها مقيِّدة (2 ms)
+    ✓ ⑦ القاعدةُ بعد التشغيل كما قبله — من اتصالٍ خارج المعاملات (3 ms)
+
+  ● محتوى سياسات العزل — كلُّ سياسةٍ متساهلة قانونيّةٌ أو استثناءٌ معتمدٌ بعينه › ⑥ والتغطيةُ تُمسك: استثناءٌ «بجوار القانونيّة» زالت قانونيّتُه، وجدولٌ سياساتُه كلُّها مقيِّدة
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "api_keys: الاستثناءُ api_key_authentication يشترط القانونيّةَ بجواره وقد غابت",
+    +   "api_keys: لا سياسةَ قانونيّةً ولا استثناءً بديلاً",
+      ]
+
+    ^[[0m ^[[90m 416 |^[[39m     ^[[36mconst^[[39m withoutCanon ^[[33m=^[[39m live^[[33m.^[[39mfilter((p) ^[[33m=>^[[39m p^[[33m.^[[39mname ^[[33m!==^[[39m ^[[32m'tenant_isolation_api_keys'^[[39m)^[[33m;^[[39m
+     ^[[90m 417 |^[[39m     expect(withoutCanon^[[33m.^[[39mlength)^[[33m.^[[39mtoBe(live^[[33m.^[[39mlength ^[[33m-^[[39m ^[[35m1^[[39m)^[[33m;^[[39m
+    ^[[31m^[[1m>^[[22m^[[39m^[[90m 418 |^[[39m     expect(uncovered([^[[32m'api_keys'^[[39m]^[[33m,^[[39m withoutCanon^[[33m,^[[39m derived))^[[33m.^[[39mtoEqual([
+     ^[[90m     |^[[39m                                                            ^[[31m^[[1m^^[[22m^[[39m
+     ^[[90m 419 |^[[39m       ^[[32m'api_keys: الاستثناءُ api_key_authentication يشترط القانونيّةَ بجواره وقد غابت'^[[39m^[[33m,^[[39m
+     ^[[90m 420 |^[[39m     ])^[[33m;^[[39m
+     ^[[90m 421 |^[[39m^[[0m
+
+      at Object.<anonymous> (src/common/tenant/rls-policy-content.live.spec.ts:418:60)
+
+PASS src/zatca/icv-concurrency.live.spec.ts (12.615 s)
+  سباق ICV — إعادة المحاولة تُقارب بدل أن تُخطئ
+    ✓ ⓪ حارسٌ على المجسّ: الفاتورتان تبدآن بلا موقع في السلسلة (16 ms)
+    ✓ ① استدعاءان متزامنان يُنتجان موقعين مختلفين — الخاسرُ يُرفض باسمه ويعود بعد ختم سلفه، ولا تصادم (224 ms)
+
+Summary of all failing tests
+FAIL src/common/tenant/rls-policy-content.live.spec.ts
+  ● محتوى سياسات العزل — كلُّ سياسةٍ متساهلة قانونيّةٌ أو استثناءٌ معتمدٌ بعينه › ⑥ والتغطيةُ تُمسك: استثناءٌ «بجوار القانونيّة» زالت قانونيّتُه، وجدولٌ سياساتُه كلُّها مقيِّدة
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "api_keys: الاستثناءُ api_key_authentication يشترط القانونيّةَ بجواره وقد غابت",
+    +   "api_keys: لا سياسةَ قانونيّةً ولا استثناءً بديلاً",
+      ]
+
+    ^[[0m ^[[90m 416 |^[[39m     ^[[36mconst^[[39m withoutCanon ^[[33m=^[[39m live^[[33m.^[[39mfilter((p) ^[[33m=>^[[39m p^[[33m.^[[39mname ^[[33m!==^[[39m ^[[32m'tenant_isolation_api_keys'^[[39m)^[[33m;^[[39m
+     ^[[90m 417 |^[[39m     expect(withoutCanon^[[33m.^[[39mlength)^[[33m.^[[39mtoBe(live^[[33m.^[[39mlength ^[[33m-^[[39m ^[[35m1^[[39m)^[[33m;^[[39m
+    ^[[31m^[[1m>^[[22m^[[39m^[[90m 418 |^[[39m     expect(uncovered([^[[32m'api_keys'^[[39m]^[[33m,^[[39m withoutCanon^[[33m,^[[39m derived))^[[33m.^[[39mtoEqual([
+     ^[[90m     |^[[39m                                                            ^[[31m^[[1m^^[[22m^[[39m
+     ^[[90m 419 |^[[39m       ^[[32m'api_keys: الاستثناءُ api_key_authentication يشترط القانونيّةَ بجواره وقد غابت'^[[39m^[[33m,^[[39m
+     ^[[90m 420 |^[[39m     ])^[[33m;^[[39m
+     ^[[90m 421 |^[[39m^[[0m
+
+      at Object.<anonymous> (src/common/tenant/rls-policy-content.live.spec.ts:418:60)
+
+
+Test Suites: 1 failed, 21 passed, 22 total
+Tests:       1 failed, 115 passed, 116 total
+Snapshots:   0 total
+Time:        29.335 s
+Ran all test suites matching /live\.spec/i.
+##[error]Process completed with exit code 1.
+##[group]Run grep -aE "✓|✗|√|×|Tests:|Suites:" /tmp/live.log || echo "(لا ملخّص)"
+shell: /usr/bin/bash -e {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+  PII_ENCRYPTION_KEY_ID: test1
+  PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
+  S3_ENDPOINT: http://localhost:9100
+  S3_ACCESS_KEY: mad_app
+  S3_SECRET_KEY: mad_app_dev_password
+  S3_BUCKET: mad-app-files
+##[endgroup]
+    ✓ الترحيل مطبَّق — وإلا فالحارس يقيس قاعدةً لا تحمل الأعمدة (2 ms)
+    ✓ ⭐ كل سطر قيدٍ من مستندٍ يحمل عقداً يحمل وحدةً — ولا واحد فارغ (51 ms)
+    ✓ ⭐ سطرٌ لا مصدر له يبقى فارغاً — لا يُلفَّق له انتماء (5 ms)
+      ✓ هجرةُ الطرف مطبَّقة — وإلا فالحارس يقيس قاعدةً لا تحمل العمودين
+    ✓ ⭐ ② ثابتةٌ على الدور لا على الجلسة: pg_roles.rolconfig يحملها (3 ms)
+    ✓ المجسُّ مُثبَتٌ بحالتين: SET LOCAL auto داخل معاملةٍ تُرجَع يقرؤه SHOW auto — ثم تعود القيمةُ الثابتة (2 ms)
+Test Suites: 1 failed, 21 passed, 22 total
+Tests:       1 failed, 115 passed, 116 total
+##[group]Run if grep -aq "period-lock-tz.live.spec: تُخطّى" /tmp/period-tz.log; then
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+  PII_ENCRYPTION_KEY_ID: test1
+  PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
+  S3_ENDPOINT: http://localhost:9100
+  S3_ACCESS_KEY: mad_app
+  S3_SECRET_KEY: mad_app_dev_password
+  S3_BUCKET: mad-app-files
+##[endgroup]
+grep: /tmp/period-tz.log: No such file or directory
+grep: /tmp/period-tz.log: No such file or directory
+grep: /tmp/period-tz.log: No such file or directory
+(لا ملخّص)
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+##[endgroup]
+على القرص: 23 · العامة: 22 · قفل الفترة: 0 · المجموع: 22
+##[error]تفاوت: 23 مجسّاً حيّاً على القرص و22 منفَّذ — مجسّ سقط خارج نطاق jest
+src/activities/rls-probe.live.spec.ts
+src/auth/identity-company.live.spec.ts
+src/auth/off-system-template-migration.live.spec.ts
+src/common/mail/mail-quota.live.spec.ts
+src/common/plan-cache-mode.live.spec.ts
+src/common/tenant/rls-coverage.live.spec.ts
+src/common/tenant/rls-policy-content.live.spec.ts
+src/company-profile/slug-constraint.live.spec.ts
+src/company-users/company-users-rls.live.spec.ts
+src/customers/marketing-consent.live.spec.ts
+src/delegations/delegation-log.live.spec.ts
+src/export/export-scope.live.spec.ts
+src/fiscal/period-lock-tz.live.spec.ts
+src/inventory/costing-race.live.spec.ts
+src/inventory/costing.live.spec.ts
+src/inventory/quantity-precision.live.spec.ts
+src/invoices/invoice-line-order.live.spec.ts
+src/journal/dimension-coverage.live.spec.ts
+src/purchases/purchase-lines.live.spec.ts
+src/reports/deferred-revenue.live.spec.ts
+src/tasks/task-log.live.spec.ts
+src/templates/permission-templates-rls.live.spec.ts
+src/zatca/icv-concurrency.live.spec.ts
+##[error]Process completed with exit code 1.
+##[group]Run set -o pipefail
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+  PII_ENCRYPTION_KEY_ID: test1
+  PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
+  S3_ENDPOINT: http://localhost:9100
+  S3_ACCESS_KEY: mad_app
+  S3_SECRET_KEY: mad_app_dev_password
+  S3_BUCKET: mad-app-files
+##[endgroup]
+
+PASS test/customers-tenant-isolation.e2e-spec.ts
+
+Test Suites: 46 passed, 46 total
+Tests:       278 passed, 278 total
+Snapshots:   0 total
+Time:        147.232 s
+Ran all test suites matching /e2e-spec/i.
+Test results written to: ../../../../../../../tmp/mad-app-shard-3358-1.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+
+▶ الشريحة 2/4
+
+PASS test/goods-receipts.e2e-spec.ts (12.025 s)
+PASS test/rejected-replacement.e2e-spec.ts
+PASS test/pos-payment-attempts.e2e-spec.ts (7.957 s)
+PASS test/supplier-payments.e2e-spec.ts
+PASS test/landed-costs.e2e-spec.ts
+PASS test/tasks.e2e-spec.ts
+PASS test/branch-scope-byid-purchases.e2e-spec.ts
+PASS test/activities-currencies.e2e-spec.ts
+PASS test/prepayment.e2e-spec.ts
+PASS test/receivables-aging.e2e-spec.ts
+PASS test/support-access.e2e-spec.ts
+PASS test/audit-log.e2e-spec.ts
+PASS test/returns-wave-a.e2e-spec.ts
+PASS test/trash-retention.e2e-spec.ts
+PASS test/movement-reversal.e2e-spec.ts
+PASS test/integrations.e2e-spec.ts
+PASS test/employee-login-link.e2e-spec.ts
+PASS test/request-id.e2e-spec.ts
+
+Test Suites: 46 passed, 46 total
+Tests:       264 passed, 264 total
+Snapshots:   0 total
+Time:        114.163 s
+Ran all test suites matching /e2e-spec/i.
+Test results written to: ../../../../../../../tmp/mad-app-shard-3358-2.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+
+▶ الشريحة 3/4
+
+PASS test/payments.e2e-spec.ts (10.937 s)
+PASS test/zatca-ubl.e2e-spec.ts
+PASS test/purchase-edit-reversal.e2e-spec.ts
+PASS test/issued-invoice-immutable.e2e-spec.ts
+^[[31m[Nest] 18254  - ^[[39m09/26/2026, 3:25:20 PM ^[[31m  ERROR^[[39m ^[[38;5;3m[ZatcaService] ^[[39m^[[31mZATCA stored document for invoice 2e1bb6a4-4974-447b-ada2-5041814ba3c3 failed integrity: hash MISMATCH, signature ok^[[39m
+PASS test/zatca-stamp.e2e-spec.ts
+PASS test/platform-admin.e2e-spec.ts
+PASS test/realestate-completion.e2e-spec.ts
+PASS test/pos-offline-incidents.e2e-spec.ts
+PASS test/branch-transfer.e2e-spec.ts
+PASS test/customer-kind.e2e-spec.ts
+PASS test/contract-renewal.e2e-spec.ts
+PASS test/proportional-deduction.e2e-spec.ts
+PASS test/contract-customer-link.e2e-spec.ts
+PASS test/property-kpis.e2e-spec.ts (6.057 s)
+PASS test/zatca-external-text.e2e-spec.ts
+  ● Console
+PASS test/employees-tenant-isolation.e2e-spec.ts
+
+Test Suites: 45 passed, 45 total
+Tests:       249 passed, 249 total
+Snapshots:   0 total
+Time:        110.817 s
+Ran all test suites matching /e2e-spec/i.
+Test results written to: ../../../../../../../tmp/mad-app-shard-3358-3.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+
+▶ الشريحة 4/4
+
+^[[31m[Nest] 24494  - ^[[39m09/26/2026, 3:27:04 PM ^[[31m  ERROR^[[39m ^[[38;5;3m[CompanyArchiveService] ^[[39m^[[31mتعذّر رفع نسخة الإغلاق للمنشأة 921a8bf7-accd-490e-89c5-00592b116bcd: Error: storage down (test bait)^[[39m
+PASS test/deletion-requests.e2e-spec.ts (18.985 s)
+PASS test/zatca-phase2.e2e-spec.ts
+PASS test/branches.e2e-spec.ts
+PASS test/rent-accrual-return.e2e-spec.ts (6.044 s)
+PASS test/branch-scope-byid-pos-inventory.e2e-spec.ts
+PASS test/branch-scope-byid-sales.e2e-spec.ts
+PASS test/branch-scope-byid-ledger.e2e-spec.ts
+PASS test/non-deductible-vat.e2e-spec.ts (5.427 s)
+PASS test/inventory-write-offs.e2e-spec.ts
+PASS test/invoice-purchase-auto-posting.e2e-spec.ts
+^[[31m[Nest] 24494  - ^[[39m09/26/2026, 3:27:47 PM ^[[31m  ERROR^[[39m ^[[38;5;3m[OutboxService] ^[[39m^[[31mOutbox invoice.issued 6fe66616-c638-45c0-a11d-ae78eb0b4121 استُنفدت محاولاته: تعذّرت المحاولة ولم تُجب الهيئة على المستند (fetch failed) — المستند كما هو، وسيُعاد الإرسال آلياً بتراجع؛ وإن استُنفدت المحاولات بقي مُعلَناً في «صادرٌ لم يصل» ويُعاد يدوياً^[[39m
+PASS test/zatca-transport-failure.e2e-spec.ts
+  ● Console
+
+    console.warn
+      ⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 1/50
+PASS test/products-tenant-isolation.e2e-spec.ts
+
+Test Suites: 45 passed, 45 total
+Tests:       332 passed, 332 total
+Snapshots:   0 total
+Time:        123.902 s
+Ran all test suites matching /e2e-spec/i.
+Test results written to: ../../../../../../../tmp/mad-app-shard-3358-4.json
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+
+▶ أحكامُ الشرائح: PASS · PASS · PASS · PASS ⇒ PASS
+
+▶ بلاغاتُ المعاملة المتداخلة: 59 — منها 0 من «nested-transaction-probe.spec.ts» و59 من غيره
+⚠️ 59 بلاغاً من مسارٍ تطبيقيّ — معاملةٌ داخل معاملة تمسك اتصالين، فاقرأ أثرَها في المخرَج أعلاه.
+
+▶ ملفّاتُ e2e على القرص: 182 · شرائح: 4
+
+✔ اختبارات التكامل خضراء على كل الشرائح.
+##[group]Run on_disk=$(find test -name '*.e2e-spec.ts' | wc -l)
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+  PII_ENCRYPTION_KEY_ID: test1
+  PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
+  S3_ENDPOINT: http://localhost:9100
+  S3_ACCESS_KEY: mad_app
+  S3_SECRET_KEY: mad_app_dev_password
+##[group]Run echo "──────── الملخّص ────────"
+shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long
+  PII_ENCRYPTION_KEYS: test1:ERERERERERERERERERERERERERERERERERERERERERE=
+  PII_ENCRYPTION_KEY_ID: test1
+  PII_BLIND_INDEX_KEY: tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=
+  S3_ENDPOINT: http://localhost:9100
+  S3_ACCESS_KEY: mad_app
+  S3_SECRET_KEY: mad_app_dev_password
+  S3_BUCKET: mad-app-files
+##[endgroup]
+──────── الملخّص ────────
+Test Suites: 46 passed, 46 total
+Tests:       278 passed, 278 total
+Time:        147.232 s
+Test Suites: 46 passed, 46 total
+Tests:       264 passed, 264 total
+Time:        114.163 s
+Test Suites: 45 passed, 45 total
+Tests:       249 passed, 249 total
+Time:        110.817 s
+Test Suites: 45 passed, 45 total
+Tests:       332 passed, 332 total
+Time:        123.902 s
+
+──────── المجموعات الساقطة ────────
+  ● Console
+  ● Console
+  ● Console
+  ● Console
+  ● Console
+  ● Console
+  ● Console
+##[group]Run docker logs minio 2>&1 | tail -30 || true
+shell: /usr/bin/bash -e {0}
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+  PGPASSWORD: ci_only_not_a_secret
+  DATABASE_URL: ***localhost:5432/mad_app?schema=public
+  DEV_SEED_PLATFORM_ADMIN_USERNAME: Arsan_admin
+  DEV_SEED_PLATFORM_ADMIN_PASSWORD: CiAdminPass123!
+  JWT_ACCESS_SECRET: test-jwt-secret-not-used-outside-tests-0123456789
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  WEB_ORIGIN: http://localhost:5173
+  SECRETS_ENCRYPTION_KEY: test-secrets-key-at-least-32-characters-long

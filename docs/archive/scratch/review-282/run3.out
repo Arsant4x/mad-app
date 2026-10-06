@@ -1,0 +1,59 @@
+▶ حاويةُ التشغيل
+c4b60459fc3c14671ef024d834a8a07acfa2cf2a2d8e0d3aea6751a3b3f9471b
+  حاويةُ التشغيل: 1s rc=0
+▶ Postgres
+2b65e79799ceaf18fb7b098ab2267afd0733aacaafec66d3fa8b8752a9952b37
+  Postgres: 0s rc=0
+▶ MinIO
+e1594509ffd466696a3756be44dc8d03d0a7cbc3bb8fb6261cb5178fb2d23031
+  MinIO: 1s rc=0
+▶ أدواتُ النظام (openssl كما في صورة GitHub)
+debconf: delaying package configuration, since apt-utils is not installed
+  أدواتُ النظام (openssl كما في صورة GitHub): 10s rc=0
+▶ الشيفرة من git archive origin/main
+  الشيفرة من git archive origin/main: 4s rc=0
+▶ npm ci (بلا مخبأ)
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm notice
+npm notice New major version of npm available! 10.9.9 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+  npm ci (بلا مخبأ): 32s rc=0
+▶ انتظارُ Postgres
+  انتظارُ Postgres: 1s rc=0
+▶ انتظارُ MinIO
+  انتظارُ MinIO: 0s rc=0
+▶ دور app_user
+CREATE ROLE
+GRANT
+ALTER SCHEMA
+  دور app_user: 1s rc=0
+▶ prisma generate + migrate deploy
+┌─────────────────────────────────────────────────────────┐
+│  Update available 5.22.0 -> 8.0.0-rc.20                 │
+│                                                         │
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
+│                                                         │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+  prisma generate + migrate deploy: 21s rc=0
+▶ البذرة
+Seeded. Platform admin username: Arsan_admin / dev template: المطوّر
+
+🌱  The seed command has been executed.
+  البذرة: 9s rc=0
+الحكم: live=0 tz=0 e2e=0 response_truth=0 · الكلّ 911s
+تُمحى: lh-1791275982-run lh-1791275982-pg lh-1791275982-minio · الباقي باسمها: 0
+EXIT=0

@@ -1,0 +1,15 @@
+range=2026-10-04T00:00:00Z..2026-10-06T23:59:59Z runs=110 first=2026-10-04T07:34:03Z last=2026-10-06T06:11:09Z job_minutes_rounded=558
+  171	12	median_wall=14.8	web-tests :: db-integration
+  79	26	median_wall=2.8	web-tests-light :: api-unit
+  70	23	median_wall=2.8	security-scan :: صورُ الحاويات (Trivy · يمنع الحرج)
+  56	26	median_wall=1.7	web-tests-light :: vitest
+  45	23	median_wall=1.1	security-scan :: أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)
+  38	12	median_wall=2.7	web-tests :: playwright
+  24	24	median_wall=0.1	لا توقيع (القاعدة ٤١) :: attribution
+  24	12	median_wall=1.2	web-tests :: nginx-cache
+  23	23	median_wall=0.2	security-scan :: ثغراتُ المكتبات (npm audit · يمنع الحرج)
+  20	20	median_wall=0.1	web-tests-light :: gate
+  8	8	median_wall=0.1	web-tests :: gate
+heavy_runs=12 heavy_minutes=233 by_event={"pull_request":213,"push":20}
+heavy_parallel_wall_median=14.8 heavy_serial_wall_median=18.8
+EXIT=0
