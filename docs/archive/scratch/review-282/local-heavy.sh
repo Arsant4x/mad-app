@@ -22,27 +22,33 @@ cleanup() {
 }
 trap cleanup EXIT
 t0=$(date +%s)
-step() { local name="$1"; shift; local s=$(date +%s); echo "▶ $name" | tee -a "$LOG/steps.txt"; "$@"; local rc=$?; echo "  $name: $(( $(date +%s) - s ))s rc=$rc" | tee -a "$LOG/steps.txt"; return $rc; }
+step() { local name="$1"; shift; local s; s=$(date +%s); echo "▶ $name" | tee -a "$LOG/steps.txt"; "$@"; local rc=$?; echo "  $name: $(( $(date +%s) - s ))s rc=$rc" | tee -a "$LOG/steps.txt"; return $rc; }
 ex() { docker exec -w /w/apps/api "${ENVS[@]}" "$R" bash -c "$1"; }
 
-ENVS=(-e LC_ALL=C.UTF-8 -e LANG=C.UTF-8 -e CI=true
-  -e PGPASSWORD=ci_only_not_a_secret
-  -e DATABASE_URL='postgresql://app_user:ci_app_pass@localhost:5432/mad_app?schema=public'
-  -e DEV_SEED_PLATFORM_ADMIN_USERNAME=Arsan_admin -e DEV_SEED_PLATFORM_ADMIN_PASSWORD='CiAdminPass123!'
-  -e JWT_ACCESS_SECRET=test-jwt-secret-not-used-outside-tests-0123456789 -e JWT_ACCESS_TTL=15m -e JWT_REFRESH_TTL=30d
-  -e WEB_ORIGIN=http://localhost:5173
-  -e SECRETS_ENCRYPTION_KEY=test-secrets-key-at-least-32-characters-long
-  -e PII_ENCRYPTION_KEYS='test1:ERERERERERERERERERERERERERERERERERERERERERE=' -e PII_ENCRYPTION_KEY_ID=test1
-  -e PII_BLIND_INDEX_KEY='tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI='
-  -e S3_ENDPOINT=http://localhost:9100 -e S3_ACCESS_KEY=mad_app -e S3_SECRET_KEY=mad_app_dev_password -e S3_BUCKET=mad-app-files)
+# قيمُ اختبارٍ منسوخةٌ من `web-tests.yml` (لا أسرار)، في بيئة العميل لا في سطر الأمر (`ق-١٤٧٥`: `-e NAME` وحدَه).
+export CI=true PGPASSWORD=ci_only_not_a_secret
+export DATABASE_URL='postgresql://app_user:ci_app_pass@localhost:5432/mad_app?schema=public'
+export DEV_SEED_PLATFORM_ADMIN_USERNAME=Arsan_admin DEV_SEED_PLATFORM_ADMIN_PASSWORD='CiAdminPass123!'
+export JWT_ACCESS_SECRET=test-jwt-secret-not-used-outside-tests-0123456789 JWT_ACCESS_TTL=15m JWT_REFRESH_TTL=30d
+export WEB_ORIGIN=http://localhost:5173
+export SECRETS_ENCRYPTION_KEY=test-secrets-key-at-least-32-characters-long
+export PII_ENCRYPTION_KEYS='test1:ERERERERERERERERERERERERERERERERERERERERERE=' PII_ENCRYPTION_KEY_ID=test1
+export PII_BLIND_INDEX_KEY='tb1:IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI='
+export S3_ENDPOINT=http://localhost:9100 S3_ACCESS_KEY=mad_app S3_SECRET_KEY=mad_app_dev_password S3_BUCKET=mad-app-files
+export POSTGRES_USER=mad_app POSTGRES_PASSWORD=ci_only_not_a_secret POSTGRES_DB=mad_app
+export MINIO_ROOT_USER=mad_app MINIO_ROOT_PASSWORD=mad_app_dev_password
+ENVS=()
+for v in LC_ALL LANG CI PGPASSWORD DATABASE_URL DEV_SEED_PLATFORM_ADMIN_USERNAME DEV_SEED_PLATFORM_ADMIN_PASSWORD \
+  JWT_ACCESS_SECRET JWT_ACCESS_TTL JWT_REFRESH_TTL WEB_ORIGIN SECRETS_ENCRYPTION_KEY PII_ENCRYPTION_KEYS \
+  PII_ENCRYPTION_KEY_ID PII_BLIND_INDEX_KEY S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET; do ENVS+=(-e "$v"); done
 
 # ⚠️ حجمُ خادم `ubuntu-latest` للمستودع الخاصّ لم يُقرأ من مصدر في هذه الجلسة (القاعدة ١٢: يُوسم ويُعدّ).
 # فيُقيَّد افتراضياً بمعالجَين و7 GB، ويُقاس أيضاً بلا قيدٍ (CPUS=22 MEM=14g) ليُعرف أثرُ الجهاز.
 step "حاويةُ التشغيل" docker run -d --name "$R" --cpus "${CPUS:-2}" --memory "${MEM:-7g}" node:22-bookworm-slim sleep infinity
 step "Postgres" docker run -d --name "$PG" --network "container:$R" \
-  -e POSTGRES_USER=mad_app -e POSTGRES_PASSWORD=ci_only_not_a_secret -e POSTGRES_DB=mad_app postgres:16-alpine
+  -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:16-alpine
 step "MinIO" docker run -d --name "$MIN" --network "container:$R" \
-  -e MINIO_ROOT_USER=mad_app -e MINIO_ROOT_PASSWORD=mad_app_dev_password \
+  -e MINIO_ROOT_USER -e MINIO_ROOT_PASSWORD \
   ghcr.io/arsant4x/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2 server /data --address :9100
 step "أدواتُ النظام (openssl كما في صورة GitHub)" docker exec "$R" bash -c 'apt-get update -qq && apt-get install -y -qq openssl ca-certificates >/dev/null'
 step "الشيفرة من git archive $REF" bash -c "git -C D:/mad-app archive --format=tar '$REF' | docker exec -i '$R' bash -c 'mkdir -p /w && tar -x -C /w'"
