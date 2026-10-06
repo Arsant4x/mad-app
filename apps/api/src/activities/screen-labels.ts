@@ -42,6 +42,7 @@ export const SCREEN_LABELS: Record<string, string> = {
   audit: 'سجل التدقيق',
   pos: 'الكاشير',
   quotes: 'عروض الأسعار',
+  forms: 'النماذج',
 };
 
 /** حارسٌ عند التحميل: مفتاحٌ ناقص يجعل السجل يكتب `pos` بدل «الكاشير». */

@@ -12,7 +12,7 @@ import {
   type FormTemplate,
   type FormTemplateRow,
 } from '../../api/forms';
-import { useAuth } from '../../auth/AuthContext';
+import { usePermissions } from '../../auth/PermissionsContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { apiErrorMessage } from '../../lib/apiError';
@@ -26,12 +26,16 @@ type Pending = { kind: 'publish' | 'delete'; row: FormTemplateRow };
 /**
  * ⚖️ **قوالبُ المنشأة** (الموجة ١ب · `ق-١٦٣٨`، والنموذجُ المرئيّ المُقرّ «قوالبُ المنشأة»): الفاعلُ **مالكُ المنشأة** في شاشاتها
  * (`CLAUDE.md §3.5`) — ينسخ من القوالب العامّة ويحرّر مسوّدةَ نسخته وينشرها، والمنشورُ لا يُعدَّل بل يُبنى بعده إصدار.
- * **والموظّفُ يرى ولا يحرّر** (الخادمُ يكتب للمالك وحدَه حتى يُحكم فيمن يعدّل قوالبَ المنشأة). ومعها «أحدثُ من أصل نسختك»:
+ * ⚖️ **ويعدّلها المالكُ ومن يمنحه شاشةَ «النماذج»** (`ق-١٦٤١`/٢)، كلُّ زرٍّ بفعله كما يحكمه الخادم: النسخُ وإصدارٌ جديد «إضافة»،
+ * والتحريرُ «تعديل»، والنشرُ «مراجعة»، وحذفُ المسوّدة «حذف»؛ ومن لا يملكها يرى ولا يحرّر. ومعها «أحدثُ من أصل نسختك»:
  * إصدارُ المنصّة الأحدثُ من الذي نُسخت منه.
  */
 export function CompanyTemplatesTab() {
-  const { user } = useAuth();
-  const isOwner = user?.actorType === 'COMPANY';
+  const { can } = usePermissions();
+  const canAdd = can('forms', 'add');
+  const canEdit = can('forms', 'edit');
+  const canPublish = can('forms', 'review');
+  const canDelete = can('forms', 'delete');
   const [rows, setRows] = useState<FormTemplateRow[]>([]);
   const [catalog, setCatalog] = useState<FormTemplateRow[]>([]);
   const [sources, setSources] = useState<Map<string, { name: string; version: number }>>(new Map());
@@ -130,7 +134,7 @@ export function CompanyTemplatesTab() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <div className="empty-state">{isOwner ? 'لا قوالبَ لمنشأتك بعد. انسخ قالباً من القوالب العامّة أدناه.' : 'لا قوالبَ لمنشأتك بعد.'}</div>
+                  <div className="empty-state">{canAdd ? 'لا قوالبَ لمنشأتك بعد. انسخ قالباً من القوالب العامّة أدناه.' : 'لا قوالبَ لمنشأتك بعد.'}</div>
                 </td>
               </tr>
             )}
@@ -139,18 +143,16 @@ export function CompanyTemplatesTab() {
               const source = r.sourceTemplateId ? sources.get(r.sourceTemplateId) : undefined;
               const newer = source && r.sourceLatestVersion !== null && r.sourceLatestVersion > source.version;
               const actions =
-                isOwner && r.status === 'DRAFT'
+                r.status === 'DRAFT'
                   ? [
-                      { label: '✎ تحرير', onClick: () => open(r, false) },
-                      { label: 'نشر', onClick: () => setPending({ kind: 'publish', row: r }) },
-                      { label: 'حذفُ المسوّدة', onClick: () => setPending({ kind: 'delete', row: r }), danger: true },
+                      canEdit ? { label: '✎ تحرير', onClick: () => open(r, false) } : { label: 'عرض', onClick: () => open(r, true) },
+                      ...(canPublish ? [{ label: 'نشر', onClick: () => setPending({ kind: 'publish', row: r }) }] : []),
+                      ...(canDelete ? [{ label: 'حذفُ المسوّدة', onClick: () => setPending({ kind: 'delete', row: r }), danger: true }] : []),
                     ]
-                  : isOwner && r.status === 'PUBLISHED'
-                    ? [
-                        { label: 'عرض', onClick: () => open(r, true) },
-                        { label: 'إصدارٌ جديد', onClick: () => newVersion(r) },
-                      ]
-                    : [{ label: 'عرض', onClick: () => open(r, true) }];
+                  : [
+                      { label: 'عرض', onClick: () => open(r, true) },
+                      ...(canAdd && r.status === 'PUBLISHED' ? [{ label: 'إصدارٌ جديد', onClick: () => newVersion(r) }] : []),
+                    ];
               return (
                 <tr key={r.id} data-testid="company-template-row">
                   <td>{r.name}</td>
@@ -175,7 +177,7 @@ export function CompanyTemplatesTab() {
         </table>
       </div>
 
-      {isOwner && (
+      {canAdd && (
         <div className="card" style={{ padding: 0, marginTop: 14 }}>
           <div className="card-title" style={{ padding: '10px 12px' }}>
             القوالبُ العامّةُ الجاهزة

@@ -26,8 +26,8 @@ describe('أسماء الشاشات — نسخةٌ ثانية محروسة', () 
   );
 
   it('يقرأ الملفين فعلاً — حارسٌ على خريطةٍ فارغة ليس حارساً', () => {
-    expect(Object.keys(web).length).toBe(24);
-    expect(Object.keys(SCREEN_LABELS).length).toBe(24);
+    expect(Object.keys(web).length).toBe(25);
+    expect(Object.keys(SCREEN_LABELS).length).toBe(25);
   });
 
   it('⭐ المفاتيح = `ALLOWED_SCREENS` في **الاتجاهين**', () => {

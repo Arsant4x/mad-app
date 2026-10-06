@@ -3,7 +3,8 @@ import { ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
-import { OwnerOnly } from '../common/tenant/owner-only.decorator';
+import { RequiresAction } from '../common/tenant/requires-action.decorator';
+import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantWide } from '../common/tenant/tenant-wide.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
 import { FormTemplateResponse, FormTemplateRowResponse } from './dto/form-responses.dto';
@@ -14,12 +15,14 @@ import { FormTemplatesService } from './form-templates.service';
  * ⚖️ **قوالبُ المنشأة — نسخُ التاجر من القوالب العامّة** (توجيه ٢٧٨ · `ق-١٦٣٤` · قرارُ الخطّة ٤٣: «المنصّةُ تملك القوالب،
  * والتاجرُ يعدّل نسختَه»).
  *
- * **الفاعلُ مالكُ المنشأة في شاشاتها** (النموذجُ المرئيّ المُقرّ، «قوالبُ المنشأة وإعدادُ التوقيع»): النسخُ والتحريرُ والنشرُ
- * له وحدَه (`@OwnerOnly`، ويُؤكَّد في الخدمة). **والقراءةُ لكلِّ فاعل**: الموظّفُ يعبّئ النموذجَ على إصدارٍ منشور (الموجة ١ج).
+ * **الفاعلُ مالكُ المنشأة في شاشاتها** (النموذجُ المرئيّ المُقرّ، «قوالبُ المنشأة وإعدادُ التوقيع»)، ⚖️ **ومن يمنحه المالكُ شاشةَ
+ * «النماذج»** في قالب صلاحياته (`ق-١٦٤١`/٢): الكتابةُ على شاشة `forms` بأفعالها — النسخُ وإصدارٌ جديد «إضافة»، والتحريرُ
+ * «تعديل»، والنشرُ «مراجعة»، وحذفُ المسوّدة «حذف» — والمالكُ يملكها كلَّها. **والقراءةُ لكلِّ فاعل**: الموظّفُ يعبّئ النموذجَ على
+ * إصدارٍ منشور (الموجة ١ج)، فوسمُ الصنف `@TenantWide` للقراءة ووسمُ الدالّة يغلبه في الكتابة.
  */
 @Controller('form-templates')
 @UseGuards(JwtAuthGuard, TenantGuard)
-@TenantWide('قوالبُ المنشأة وكتالوجُ القوالب العامّة تُقرأ لكلّ فاعل لأن الموظّفَ يعبّئ النموذجَ على إصدارٍ منشور — والكتابةُ للمالك وحدَه')
+@TenantWide('قوالبُ المنشأة وكتالوجُ القوالب العامّة تُقرأ لكلّ فاعل لأن الموظّفَ يعبّئ النموذجَ على إصدارٍ منشور — والكتابةُ على شاشة «النماذج»')
 export class FormTemplatesController {
   constructor(private readonly service: FormTemplatesService) {}
 
@@ -43,37 +46,42 @@ export class FormTemplatesController {
   }
 
   @Post('copy')
-  @OwnerOnly()
+  @RequiresScreen('forms')
+  @RequiresAction('add')
   @ApiCreatedResponse({ type: FormTemplateResponse })
   copy(@CurrentTenant() tenant: TenantContext, @Body() dto: CopyFormTemplateDto) {
-    return this.service.copy(tenant.companyId, tenant.actorType, dto);
+    return this.service.copy(tenant.companyId, dto);
   }
 
   @Patch(':id')
-  @OwnerOnly()
+  @RequiresScreen('forms')
+  @RequiresAction('edit')
   @ApiOkResponse({ type: FormTemplateResponse })
   update(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: UpdateFormTemplateDto) {
-    return this.service.update({ companyId: tenant.companyId }, tenant.actorType, id, dto);
+    return this.service.update({ companyId: tenant.companyId }, id, dto);
   }
 
   @Post(':id/publish')
-  @OwnerOnly()
+  @RequiresScreen('forms')
+  @RequiresAction('review')
   @ApiCreatedResponse({ type: FormTemplateResponse })
   publish(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.service.publish({ companyId: tenant.companyId }, tenant.actorType, id);
+    return this.service.publish({ companyId: tenant.companyId }, id);
   }
 
   @Post(':id/versions')
-  @OwnerOnly()
+  @RequiresScreen('forms')
+  @RequiresAction('add')
   @ApiCreatedResponse({ type: FormTemplateResponse })
   newVersion(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.service.newVersion({ companyId: tenant.companyId }, tenant.actorType, id);
+    return this.service.newVersion({ companyId: tenant.companyId }, id);
   }
 
   @Delete(':id')
-  @OwnerOnly()
+  @RequiresScreen('forms')
+  @RequiresAction('delete')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
-    return this.service.remove({ companyId: tenant.companyId }, tenant.actorType, id);
+    return this.service.remove({ companyId: tenant.companyId }, id);
   }
 }

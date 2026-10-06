@@ -20,7 +20,7 @@ import {
 describe('الخريطة مشتقّة من `ALLOWED_SCREENS` — لا مكتوبة يدوياً', () => {
   it('يقرأ شيئاً فعلاً — حارسٌ على خريطةٍ فارغة ليس حارساً', () => {
     expect(SECTORS.length).toBeGreaterThan(5);
-    expect(ALLOWED_SCREENS.length).toBe(24);
+    expect(ALLOWED_SCREENS.length).toBe(25);
     expect(Object.keys(RAW_SECTOR_EXTRAS)).toHaveLength(SECTORS.length);
   });
 
