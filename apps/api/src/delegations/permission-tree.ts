@@ -63,7 +63,7 @@ export const RAW_DOMAINS: readonly RawDomain[] = [
   { key: 'hr', label: 'الموارد البشرية', screens: ['employees'] },
   { key: 'banking', label: 'البنوك', screens: ['banks', 'transactions'] },
   { key: 'compliance', label: 'الامتثال', screens: ['obligations', 'scripts', 'audit'] },
-  { key: 'company', label: 'المنشأة', screens: ['settings', 'branches'] },
+  { key: 'company', label: 'المنشأة', screens: ['settings', 'branches', 'forms'] },
   { key: 'overview', label: 'نظرة عامة', screens: ['dashboard'] },
 ] as const;
 

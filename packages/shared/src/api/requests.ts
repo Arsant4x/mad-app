@@ -280,7 +280,7 @@ export interface CreateDebitNoteDto {
 /** جسمُ طلب — `CreateDelegationDto` في الخادم. */
 export interface CreateDelegationDto {
   granteeId: string;
-  nodeKey: 'root' | 'other' | 'realestate' | 'accounting' | 'sales' | 'purchasing' | 'hr' | 'banking' | 'compliance' | 'company' | 'overview' | 'dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes';
+  nodeKey: 'root' | 'other' | 'realestate' | 'accounting' | 'sales' | 'purchasing' | 'hr' | 'banking' | 'compliance' | 'company' | 'overview' | 'dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms';
   grants: string[];
 }
 
@@ -608,7 +608,7 @@ export interface CreateTaskDto {
   title: string;
   assigneeId: string;
   assigneeKind: 'OWNER' | 'USER';
-  targetScreen?: 'dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes';
+  targetScreen?: 'dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms';
   targetId?: string;
   note?: string;
   priority?: 'URGENT' | 'HIGH' | 'NORMAL';
@@ -619,7 +619,7 @@ export interface CreateTaskDto {
 
 /** جسمُ طلب — `CreateTemplateDto` في الخادم. */
 export interface CreateTemplateDto {
-  allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes')[];
+  allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   name: string;
   isAllScreens?: boolean;
   screenActions?: Record<string, unknown>;
@@ -1033,7 +1033,7 @@ export interface RequestDecisionDto {
 
 /** جسمُ طلب — `RequestSupportAccessDto` في الخادم. */
 export interface RequestSupportAccessDto {
-  screens: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes')[];
+  screens: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   companyId: string;
   reason: string;
   durationMinutes: number;
@@ -1518,7 +1518,7 @@ export interface UpdateSupplierDto {
 
 /** جسمُ طلب — `UpdateTemplateDto` في الخادم. */
 export interface UpdateTemplateDto {
-  allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes')[];
+  allowedScreens?: ('dashboard' | 'accounts' | 'journal' | 'fiscal' | 'branches' | 'settings' | 'invoice' | 'payments' | 'customers' | 'suppliers' | 'products' | 'inventory' | 'properties' | 'contracts' | 'maintenance' | 'employees' | 'banks' | 'transactions' | 'obligations' | 'reports' | 'scripts' | 'audit' | 'pos' | 'quotes' | 'forms')[];
   name?: string;
   isAllScreens?: boolean;
   screenActions?: Record<string, unknown>;

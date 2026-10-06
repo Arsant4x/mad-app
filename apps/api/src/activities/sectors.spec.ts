@@ -20,7 +20,7 @@ import {
 describe('الخريطة مشتقّة من `ALLOWED_SCREENS` — لا مكتوبة يدوياً', () => {
   it('يقرأ شيئاً فعلاً — حارسٌ على خريطةٍ فارغة ليس حارساً', () => {
     expect(SECTORS.length).toBeGreaterThan(5);
-    expect(ALLOWED_SCREENS.length).toBe(24);
+    expect(ALLOWED_SCREENS.length).toBe(25);
     expect(Object.keys(RAW_SECTOR_EXTRAS)).toHaveLength(SECTORS.length);
   });
 
@@ -36,10 +36,11 @@ describe('الخريطة مشتقّة من `ALLOWED_SCREENS` — لا مكتوب
     expect(invented).toEqual([]);
   });
 
-  it('⭐ النواة + المُرشَّحة = الأربع والعشرون بالضبط، بلا تداخل', () => {
+  it('⭐ النواة + المُرشَّحة = الخمس والعشرون بالضبط، بلا تداخل', () => {
     // النواة تُعرَّف **بالطرح**: شاشةٌ جديدة تصير نواةً تلقائياً فتظهر
     // للجميع. والعدُّ اليدوي يجعلها **تختفي عن الجميع** بصمت.
-    expect(CORE_SCREENS).toHaveLength(17);
+    // (والثامنةَ عشرةَ «النماذج» منذ توجيه ٢٨١، `ق-١٦٤١`/٢: نواةٌ لا يحجبها نشاط.)
+    expect(CORE_SCREENS).toHaveLength(18);
     expect(RAW_GATED_SCREENS).toHaveLength(7);
     expect([...CORE_SCREENS, ...RAW_GATED_SCREENS].sort()).toEqual([...ALLOWED_SCREENS].sort());
     expect(CORE_SCREENS.filter((s) => (RAW_GATED_SCREENS as readonly string[]).includes(s))).toEqual([]);

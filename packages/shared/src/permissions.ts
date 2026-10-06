@@ -29,6 +29,7 @@ export const ALLOWED_SCREENS = [
   'audit',
   'pos',
   'quotes',
+  'forms',
 ] as const;
 export type ScreenKey = (typeof ALLOWED_SCREENS)[number];
 
@@ -36,7 +37,7 @@ export type ScreenKey = (typeof ALLOWED_SCREENS)[number];
 export const SCREEN_ACTIONS = ['view', 'add', 'edit', 'delete', 'record', 'review', 'audit'] as const;
 export type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 
-/** كلُّ زوجٍ `شاشة:فعل` — 24 × 7 = 168. */
+/** كلُّ زوجٍ `شاشة:فعل` — 25 × 7 = 175. */
 export const PERMISSION_KEYS = [
   'dashboard:view',
   'dashboard:add',
@@ -206,6 +207,13 @@ export const PERMISSION_KEYS = [
   'quotes:record',
   'quotes:review',
   'quotes:audit',
+  'forms:view',
+  'forms:add',
+  'forms:edit',
+  'forms:delete',
+  'forms:record',
+  'forms:review',
+  'forms:audit',
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 

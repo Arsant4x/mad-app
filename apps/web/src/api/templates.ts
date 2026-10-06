@@ -45,6 +45,7 @@ export const SCREEN_LABELS: Record<ScreenKey, string> = {
   audit: 'سجل التدقيق',
   pos: 'الكاشير',
   quotes: 'عروض الأسعار',
+  forms: 'النماذج',
 };
 
 export const ACTION_LABELS: Record<ScreenAction, string> = {

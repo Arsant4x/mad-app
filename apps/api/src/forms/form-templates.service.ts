@@ -15,10 +15,7 @@ type Tx = Prisma.TransactionClient;
  *   · المنشأة تملك نسخَها في شاشاتها — معاملتُها في سياقها، وترى معها العامَّ المنشورَ لتنسخ منه.
  */
 export type FormScope = { companyId: string | null };
-
-function assertIsCompanyOwner(actorType: string): void {
-  if (actorType !== 'COMPANY') throw new ForbiddenException(MSG.owner_only);
-}
+// ⚖️ `ق-١٦٤١`/٢: من يكتب قوالبَ المنشأة يحكمه حارسُ المستأجر بشاشة «النماذج» وفعلها على المتحكّم، لا الخدمة؛ والمنصّةُ بدورها.
 
 const isUniqueViolation = (e: unknown): boolean => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 
@@ -184,8 +181,7 @@ export class FormTemplatesService {
   }
 
   /** نسخُ إصدارٍ عامٍّ منشور إلى المنشأة: مسوّدةٌ أولى ببنوده، تشير إلى الإصدار الذي نُسخت منه بعينه. */
-  copy(companyId: string, actorType: string, dto: CopyFormTemplateDto) {
-    assertIsCompanyOwner(actorType);
+  copy(companyId: string, dto: CopyFormTemplateDto) {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const source = await tx.formTemplate.findFirst({ where: { id: dto.sourceTemplateId, companyId: null }, include: TEMPLATE_INCLUDE });
       // مسوّدةُ المنصّة لا تُرى خارجها، كما في القراءة.
@@ -210,8 +206,7 @@ export class FormTemplatesService {
   }
 
   /** تحريرُ المسوّدة — والبنودُ إن أُرسلت تحلّ محلَّ بنودها كلِّها. */
-  update(scope: FormScope, actorType: string | null, id: string, dto: UpdateFormTemplateDto) {
-    if (scope.companyId) assertIsCompanyOwner(actorType ?? '');
+  update(scope: FormScope, id: string, dto: UpdateFormTemplateDto) {
     const rows = dto.items ? normalizeTemplateItems(dto.items) : null;
     return this.inScope(scope, async (tx) => {
       const t = await this.owned(tx, scope, id);
@@ -235,8 +230,7 @@ export class FormTemplatesService {
    * **نشرُ المسوّدة**: تتجمّد بنودُها، ويُؤرشف المنشورُ قبلها في المعاملة نفسِها فيبقى مقروءاً لما عُبّئ عليه.
    * والفهرسان الجزئيّان (منشورٌ واحد · مسوّدةٌ واحدة لكلِّ قالب) يحبسان السباقَ في القاعدة.
    */
-  async publish(scope: FormScope, actorType: string | null, id: string) {
-    if (scope.companyId) assertIsCompanyOwner(actorType ?? '');
+  async publish(scope: FormScope, id: string) {
     try {
       return await this.inScope(scope, async (tx) => {
         const t = await this.owned(tx, scope, id);
@@ -262,8 +256,7 @@ export class FormTemplatesService {
   }
 
   /** **إصدارٌ جديد** على المنشور: مسوّدةٌ بالرقم التالي ببنوده، والمنشورُ يبقى سارياً حتى تُنشر. */
-  async newVersion(scope: FormScope, actorType: string | null, id: string) {
-    if (scope.companyId) assertIsCompanyOwner(actorType ?? '');
+  async newVersion(scope: FormScope, id: string) {
     try {
       return await this.inScope(scope, async (tx) => {
         const t = await this.owned(tx, scope, id);
@@ -294,8 +287,7 @@ export class FormTemplatesService {
   }
 
   /** حذفُ المسوّدة وحدَها — والمنشورُ لا يُحذف: قد يُعبّأ عليه (القاعدة ١ من §٦.٢). */
-  remove(scope: FormScope, actorType: string | null, id: string) {
-    if (scope.companyId) assertIsCompanyOwner(actorType ?? '');
+  remove(scope: FormScope, id: string) {
     return this.inScope(scope, async (tx) => {
       const t = await this.owned(tx, scope, id);
       if (t.status !== FormTemplateStatus.DRAFT) throw new ConflictException(MSG.form_template_not_draft);

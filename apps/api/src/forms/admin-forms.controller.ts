@@ -71,24 +71,24 @@ export class AdminFormTemplatesController {
   @Patch(':id')
   @ApiOkResponse({ type: FormTemplateResponse })
   update(@Param('id') id: string, @Body() dto: UpdateFormTemplateDto) {
-    return this.service.update(PLATFORM, null, id, dto);
+    return this.service.update(PLATFORM, id, dto);
   }
 
   @Post(':id/publish')
   @ApiCreatedResponse({ type: FormTemplateResponse })
   publish(@Param('id') id: string) {
-    return this.service.publish(PLATFORM, null, id);
+    return this.service.publish(PLATFORM, id);
   }
 
   @Post(':id/versions')
   @ApiCreatedResponse({ type: FormTemplateResponse })
   newVersion(@Param('id') id: string) {
-    return this.service.newVersion(PLATFORM, null, id);
+    return this.service.newVersion(PLATFORM, id);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
-    return this.service.remove(PLATFORM, null, id);
+    return this.service.remove(PLATFORM, id);
   }
 }
