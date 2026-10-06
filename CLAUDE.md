@@ -3104,14 +3104,24 @@ Prisma يخزّن في `_prisma_migrations.checksum` **قيمة `sha256` لمل�
 **القاعدة (قرار المالك)**: قبل كلّ دفعٍ تُشغَّل `api-unit` كلُّها — وحداتٌ وحرّاسٌ وحيّة —
 مع `e2e`:
 
-```bash
-cd /d/mad-app/apps/api && NODE_OPTIONS=--max-old-space-size=1536 npx jest --testPathIgnorePatterns=e2e-spec --maxWorkers=2
+```powershell
+Set-Location D:\mad-app\apps\api; Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue; npx jest --testPathIgnorePatterns=e2e-spec --maxWorkers=2
 ```
 
 **كلفتُها مقيسة**: `337 s ≈ 5.6 min` مقابل `166 s ≈ 2.8 min` لـ`src/common` وحدها —
 **والدقائقُ الثلاثُ أرخصُ من دورة سيرٍ كاملةٍ تُكتشف فيها العلّة بعد الدفع.**
 ⚠️ **وحدُّها معلَن**: بعاملَين لضغط الذاكرة على مضيف التطوير (`7.8 GB` — الثمانيةُ
 الافتراضية تُسقط العمّال بنفاد الذاكرة) — **وهو حدُّ المضيف لا الاختيار**.
+
+⚖️ **صُحّح الأمرُ 2026-10-06 (توجيه ٢٨٢، القاعدة ٣٧ تصحيحاً لملفّ حال):** كان
+`NODE_OPTIONS=--max-old-space-size=1536` من `bash`. **والسقفُ صار أصغرَ من الحاجة**: على `main`
+نفسِه سقط عاملا `rounding.spec.ts` و`local-day.spec.ts` بـ«Reached heap limit … JavaScript heap out
+of memory» عند نحو `1,533 MB`، وخرجت المحطّةُ بـ`255` بلا سطر ملخّص في `1,516 s`؛ **وبلا سقفٍ**
+اكتملت في `128 s` (`191` حزمة). **ومن PowerShell لا من `bash`**: على الجهاز الجديد كانت `jest` من
+Git Bash أبطأَ عشر مرّاتٍ فأكثر، و`bash` هناك قد يكون WSL. ⚠️ **وخمسُ حزمٍ تسقط على هذا الجهاز على
+`main` نفسِه** (`certificate-expiry` · `dimension-coverage` · `plan-cache-mode` · `mail-dns-check` ·
+`deploy-recreate-guard`، `17` اختباراً) من بيئته لا من الشيفرة، فسقوطٌ محلّيّ يُقارن بـ`main` قبل أن
+يُنسب إلى تغيير، **والحكمُ لـ`api-unit` في السير**.
 
 **والمسابيرُ الحيّة تصنع صفوفَها** داخل معاملاتٍ تُرجَع وتُثبت آليتَها (بلا سياقٍ `0` · به
 موجب) — ولا تعتمد على ما تركته البذرة.
