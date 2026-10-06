@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
+import { PlatformRole } from '@mad-app/db';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PlatformAdminGuard } from '../common/platform-admin/platform-admin.guard';
 import { RequiresPlatformRole } from '../common/platform-admin/platform-role.decorator';
@@ -12,12 +13,12 @@ const PLATFORM: FormScope = { companyId: null };
 /**
  * ⚖️ **أنواعُ النماذج — كتالوجُ المنصّة في لوحة المطوّر** (توجيه ٢٧٨ · `ق-١٦٣٤` · قرارُ الخطّة ٤٣).
  *
- * ⚠️ **لمالك المنصّة وحدَه حتى يُحكم** (`@RequiresPlatformRole()` بلا دور = المالكُ بتعريفه): أيُّ دورٍ منصّيٍّ يملك
- * القوالبَ العامّة قرارٌ لصاحب المشروع لم يُتّخذ، والأضيقُ يُوسَّع بسطرٍ ولا يُستردّ ما فُعل بالأوسع.
+ * ⚖️ **لمالك المنصّة ومعه دورُ «الامتثال»** (`ق-١٦٤١`/١، رابعاً بترتيب `ق-١٦٤٥`/٣): القالبُ العامُّ يحمل نصوصاً نظامية، فيشارك
+ * الامتثالُ المالكَ فيه؛ والمالكُ يمرّ كلَّ مسارٍ بتعريف المزخرِف، والأدوارُ الأخرى تُردّ.
  */
 @Controller('admin/form-types')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
-@RequiresPlatformRole()
+@RequiresPlatformRole(PlatformRole.COMPLIANCE)
 export class AdminFormTypesController {
   constructor(private readonly service: FormTemplatesService) {}
 
@@ -42,11 +43,11 @@ export class AdminFormTypesController {
 
 /**
  * ⚖️ **القوالبُ العامّة الجاهزة — تملكها المنصّة** (`CLAUDE.md §3.5`: لوحةُ المطوّر «القوالبُ العامّة الجاهزة فقط»).
- * مُصدَّرة: المسوّدةُ تُحرَّر ثم تُنشر، والمنشورُ يُبنى بعده إصدارٌ جديد ولا يُعدَّل. ولمالك المنصّة وحدَه كالأنواع.
+ * مُصدَّرة: المسوّدةُ تُحرَّر ثم تُنشر، والمنشورُ يُبنى بعده إصدارٌ جديد ولا يُعدَّل. ولمالك المنصّة ودور «الامتثال» كالأنواع.
  */
 @Controller('admin/form-templates')
 @UseGuards(JwtAuthGuard, PlatformAdminGuard)
-@RequiresPlatformRole()
+@RequiresPlatformRole(PlatformRole.COMPLIANCE)
 export class AdminFormTemplatesController {
   constructor(private readonly service: FormTemplatesService) {}
 

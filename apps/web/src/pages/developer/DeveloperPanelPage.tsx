@@ -229,8 +229,8 @@ export function DeveloperPanelPage() {
       <PlatformRoleGate allow="COMPLIANCE">
         <SubProcessorsSection />
       </PlatformRoleGate>
-      {/* ⚖️ القوالبُ العامّة (`ق-١٦٣٨` · الموجة ١ب): لمالك المنصّة وحدَه حتى يُحكم في الدور، كخادمها (`@RequiresPlatformRole()`). */}
-      <PlatformRoleGate allow="OWNER">
+      {/* ⚖️ القوالبُ العامّة (`ق-١٦٣٨` · الموجة ١ب): لمالك المنصّة ودور «الامتثال» (`ق-١٦٤١`/١)، كخادمها (`@RequiresPlatformRole(COMPLIANCE)`). */}
+      <PlatformRoleGate allow="COMPLIANCE">
         <PublicFormTemplatesSection />
       </PlatformRoleGate>
 
