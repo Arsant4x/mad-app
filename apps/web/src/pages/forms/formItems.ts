@@ -38,6 +38,15 @@ export const ITEM_TYPE_LABELS: Record<FormItemType, string> = {
   TEXT: 'نصّ',
 };
 
+/**
+ * ⚖️ سلّمُ «الحالة» الثابت للمنصّة (`ق-١٦٤١`/٥)، كـ`CONDITION_SCALE` في الخادم: الرمزُ يُرسل ويُخزَّن، والاسمُ يُعرض ويُطبع.
+ */
+export const CONDITION_SCALE = ['GOOD', 'FAIR', 'DAMAGED'] as const;
+export type ConditionValue = (typeof CONDITION_SCALE)[number];
+export const CONDITION_LABELS: Record<ConditionValue, string> = { GOOD: 'جيّد', FAIR: 'مقبول', DAMAGED: 'تالف' };
+export const isConditionValue = (s: string | null | undefined): s is ConditionValue =>
+  s !== null && s !== undefined && (CONDITION_SCALE as readonly string[]).includes(s);
+
 /** ما له نطاقٌ ووحدة، كـ`NUMERIC_ITEM_TYPES` في الخادم. */
 export const NUMERIC_TYPES: ReadonlySet<FormItemType> = new Set<FormItemType>(['QTY', 'NUMBER', 'METER_READING', 'TEMPERATURE']);
 
@@ -151,9 +160,10 @@ export function valueChanged(item: FormInstanceItem, v: ValueDraft): boolean {
   return saved.text !== v.text || saved.number !== v.number || saved.bool !== v.bool || saved.note !== v.note;
 }
 
-/** القيمةُ مقروءةً للعرض والطباعة. */
+/** القيمةُ مقروءةً للعرض والطباعة؛ و«الحالة» باسمها في السلّم، وما عُبّئ قبله نصّاً يُعرض كما هو. */
 export function valueText(item: FormInstanceItem): string {
   if (item.itemType === 'BOOLEAN') return item.bool === null ? '' : item.bool ? 'نعم' : 'لا';
+  if (item.itemType === 'CONDITION') return isConditionValue(item.text) ? CONDITION_LABELS[item.text] : (item.text ?? '');
   if (NUMERIC_TYPES.has(item.itemType)) return item.number === null ? '' : item.unit ? `${item.number} ${item.unit}` : item.number;
   return item.text ?? '';
 }

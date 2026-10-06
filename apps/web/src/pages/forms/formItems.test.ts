@@ -1,6 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FormInstanceItem } from '../../api/forms';
-import { emptyItemDraft, itemInputOf, itemInputsOf, valueChanged, valueDraftOf, valueInputOf, valueText } from './formItems';
+import {
+  CONDITION_LABELS,
+  CONDITION_SCALE,
+  emptyItemDraft,
+  isConditionValue,
+  itemInputOf,
+  itemInputsOf,
+  valueChanged,
+  valueDraftOf,
+  valueInputOf,
+  valueText,
+} from './formItems';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): دوالُّ نقيّةٌ بلا تصيير، فالافتراضيُّ نفسُه.
 vi.setConfig({ testTimeout: 5_000 });
@@ -51,7 +62,7 @@ describe('قيمُ السجلّ: الحقلُ جسماً للخادم بنوع �
 
   it('النصُّ مشذّباً والملاحظةُ معه، ونعم أو لا قيمةٌ منطقية', () => {
     const c = item({ itemType: 'CONDITION', label: 'الحالة' });
-    expect(valueInputOf(c, { ...valueDraftOf(c), text: ' مقبول ', note: ' خدش ' })).toEqual({ input: { itemId: 'i1', text: 'مقبول', note: 'خدش' } });
+    expect(valueInputOf(c, { ...valueDraftOf(c), text: 'FAIR', note: ' خدش ' })).toEqual({ input: { itemId: 'i1', text: 'FAIR', note: 'خدش' } });
     const b = item({ itemType: 'BOOLEAN', label: 'المفاتيح' });
     expect(valueInputOf(b, { ...valueDraftOf(b), bool: 'no' })).toEqual({ input: { itemId: 'i1', bool: false, note: null } });
   });
@@ -62,5 +73,14 @@ describe('قيمُ السجلّ: الحقلُ جسماً للخادم بنوع �
     expect(valueChanged(m, { ...valueDraftOf(m), number: '6' })).toBe(true);
     expect(valueText(m)).toBe('5 °م');
     expect(valueText(item({ itemType: 'BOOLEAN', bool: true }))).toBe('نعم');
+  });
+
+  it('«الحالة» من السلّم الثابت تُقرأ باسمها، وما عُبّئ قبله نصّاً يُعرض كما هو (ق-١٦٤١/٥)', () => {
+    expect(CONDITION_SCALE).toEqual(['GOOD', 'FAIR', 'DAMAGED']);
+    expect(CONDITION_SCALE.map((c) => CONDITION_LABELS[c])).toEqual(['جيّد', 'مقبول', 'تالف']);
+    expect(valueText(item({ itemType: 'CONDITION', text: 'DAMAGED' }))).toBe('تالف');
+    expect(valueText(item({ itemType: 'CONDITION', text: 'خدشٌ قديم' }))).toBe('خدشٌ قديم');
+    expect(isConditionValue('FAIR')).toBe(true);
+    expect(isConditionValue('مقبول')).toBe(false);
   });
 });

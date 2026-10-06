@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { FormItemType } from '@mad-app/db';
 import { MSG } from '../common/i18n/messages';
-import { normalizeTemplateItems } from './form-template-items.util';
+import { CONDITION_SCALE, conditionValueOf, isConditionValue, normalizeTemplateItems } from './form-template-items.util';
 
 /** المفتاحُ الذي رُمي به — `formatMessage` يُلحق بالمفتاح وسائطَه بعد فاصل. */
 function refusal(fn: () => unknown): string {
@@ -54,5 +54,17 @@ describe('بنودُ إصدار القالب تُطبَّع وتُفحص قبل 
     // وحدٌّ واحدٌ يكفي للمنع، والمتساويان نطاقٌ صحيح.
     expect(normalizeTemplateItems([{ label: 'ضغط', itemType: FormItemType.NUMBER, maxValue: 3, isBlocking: true }])[0].isBlocking).toBe(true);
     expect(normalizeTemplateItems([{ label: 'عدد', itemType: FormItemType.QTY, minValue: 3, maxValue: 3 }])[0].minValue).toBe('3');
+  });
+});
+
+describe('سلّمُ «الحالة» ثابتٌ للمنصّة: جيّد · مقبول · تالف (ق-١٦٤١/٥)', () => {
+  it('⭐ القيمةُ من السلّم أو فارغة، والنصُّ الحرّ يُردّ ببنده', () => {
+    expect(CONDITION_SCALE).toEqual(['GOOD', 'FAIR', 'DAMAGED']);
+    for (const c of CONDITION_SCALE) expect(conditionValueOf('حالةُ الخزائن', c)).toBe(c);
+    expect(conditionValueOf('حالةُ الخزائن', null)).toBeNull();
+    expect(refusal(() => conditionValueOf('حالةُ الخزائن', 'مقبول'))).toBe(MSG.form_value_condition_scale);
+    expect(refusal(() => conditionValueOf('حالةُ الخزائن', 'good'))).toBe(MSG.form_value_condition_scale);
+    expect(refusal(() => conditionValueOf('حالةُ الخزائن', 'MISSING'))).toBe(MSG.form_value_condition_scale);
+    expect(isConditionValue(undefined)).toBe(false);
   });
 });

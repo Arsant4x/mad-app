@@ -12,8 +12,11 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { apiErrorMessage } from '../../lib/apiError';
 import { dfmt } from '../../lib/format';
 import {
+  CONDITION_LABELS,
+  CONDITION_SCALE,
   dateTimeText,
   EJAR_COMPLEMENT_NOTE,
+  isConditionValue,
   NUMERIC_TYPES,
   valueChanged,
   valueDraftOf,
@@ -162,6 +165,21 @@ export function FormRecordPanel({
                             <option value=""></option>
                             <option value="yes">نعم</option>
                             <option value="no">لا</option>
+                          </select>
+                        ) : item.itemType === 'CONDITION' ? (
+                          <select aria-label={item.label} value={d.text} onChange={(e) => setDraft(item.itemId, { text: e.target.value })}>
+                            <option value=""></option>
+                            {CONDITION_SCALE.map((c) => (
+                              <option key={c} value={c}>
+                                {CONDITION_LABELS[c]}
+                              </option>
+                            ))}
+                            {/* قيمةٌ عُبّئت قبل السلّم تُرى ولا تُختار، والختمُ يردّها حتى تُختار من السلّم. */}
+                            {d.text !== '' && !isConditionValue(d.text) && (
+                              <option value={d.text} disabled>
+                                {`قيمةٌ قديمة: ${d.text}`}
+                              </option>
+                            )}
                           </select>
                         ) : numeric ? (
                           <input aria-label={item.label} className="num" inputMode="decimal" value={d.number} onChange={(e) => setDraft(item.itemId, { number: e.target.value })} />

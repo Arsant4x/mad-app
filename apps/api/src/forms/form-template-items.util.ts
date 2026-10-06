@@ -17,6 +17,22 @@ export const NUMERIC_ITEM_TYPES: ReadonlySet<FormItemType> = new Set<FormItemTyp
   FormItemType.TEMPERATURE,
 ]);
 
+/**
+ * ⚖️ **سلّمُ «الحالة» ثابتٌ للمنصّة** (`ق-١٦٤١`/٥ · مبنيٌّ أوّلاً بحكم `ق-١٦٤٥`/٣): جيّد · مقبول · تالف، والملاحظةُ معه.
+ * والرمزُ هو ما يُخزَّن ويدخل بصمةَ الختم، والاسمُ العربيّ في الشاشة والمطبوع؛ والرموزُ رموزُ نموذج التسليم القائم نفسُها.
+ */
+export const CONDITION_SCALE = ['GOOD', 'FAIR', 'DAMAGED'] as const;
+export type ConditionValue = (typeof CONDITION_SCALE)[number];
+export const isConditionValue = (s: string | null | undefined): s is ConditionValue =>
+  s !== null && s !== undefined && (CONDITION_SCALE as readonly string[]).includes(s);
+
+/** قيمةُ بند «الحالة» كما تُكتب: من السلّم أو فارغة، وما سواهما يُردّ مسمّىً ببنده. */
+export function conditionValueOf(label: string, text: string | null): ConditionValue | null {
+  if (text === null) return null;
+  if (!isConditionValue(text)) throw new BadRequestException(formatMessage(MSG.form_value_condition_scale, { label }));
+  return text;
+}
+
 export interface TemplateItemInput {
   label: string;
   itemType: FormItemType;

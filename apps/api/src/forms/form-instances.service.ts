@@ -4,7 +4,7 @@ import { highestSequenceOf, nextDocumentNumber } from '../common/document-sequen
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { dayStartOf } from '../common/wall-clock.util';
-import { NUMERIC_ITEM_TYPES } from './form-template-items.util';
+import { conditionValueOf, isConditionValue, NUMERIC_ITEM_TYPES } from './form-template-items.util';
 import { sealHash, type SealContent, type SealItemValue } from './seal-content.util';
 
 type Tx = Prisma.TransactionClient;
@@ -245,6 +245,11 @@ export class FormInstancesService {
       if (missing.length) throw new BadRequestException(formatMessage(MSG.form_instance_required_missing, { labels: missing.join('، ') }));
       const blocked = items.filter((i) => i.isBlocking && outOfRange(i, byItem.get(i.id))).map((i) => i.label);
       if (blocked.length) throw new BadRequestException(formatMessage(MSG.form_instance_blocking_out_of_range, { labels: blocked.join('، ') }));
+      // ⚖️ `ق-١٦٤١`/٥: مسوّدةٌ عُبّئت قبل السلّم نصّاً حرّاً لا تُختم به؛ تُختار قيمتُها من السلّم (والمختومُ قبله لا يُمسّ).
+      const legacy = items
+        .filter((i) => i.itemType === FormItemType.CONDITION && !isEmpty(i, byItem.get(i.id)) && !isConditionValue(byItem.get(i.id)?.textValue))
+        .map((i) => i.label);
+      if (legacy.length) throw new BadRequestException(formatMessage(MSG.form_instance_condition_legacy, { labels: legacy.join('، ') }));
 
       // سلسلةُ الأختام في المنشأة تُسلسَل هنا حتى تلتزم المعاملة (`ق-١٦٣٦` ب).
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`form-seal:${companyId}`}))`;
@@ -331,5 +336,7 @@ function valueDataOf(item: TemplateItem, input: FormValueInput): { textValue: st
     return { textValue: null, numberValue: hasNumber ? String(input.number) : null, boolValue: null, note };
   }
   if (hasNumber || hasBool) throw new BadRequestException(formatMessage(MSG.form_value_type_mismatch, { label }));
-  return { textValue: blank(input.text), numberValue: null, boolValue: null, note };
+  const text = blank(input.text);
+  // ⚖️ `ق-١٦٤١`/٥: «الحالة» من السلّم الثابت وحدَه، والفارغُ يُفرغ الحقل.
+  return { textValue: item.itemType === FormItemType.CONDITION ? conditionValueOf(label, text) : text, numberValue: null, boolValue: null, note };
 }
