@@ -88,6 +88,8 @@ describe('Form templates — wave 1a (e2e)', () => {
 
   let typeId: string;
   let v1: { id: string; familyId: string };
+  // الإصدارُ المنشورُ بعد ④ (وفيه يُؤرشف v1، ومن المؤرشف لا يُنسخ).
+  let v2Id: string;
   let copy: { id: string };
 
   it('① المنصّةُ تنشئ نوعاً وقالباً: الإصدارُ الأوّل مسوّدة لا تراها المنشأة، والنشرُ يضعه في كتالوجها', async () => {
@@ -170,6 +172,7 @@ describe('Form templates — wave 1a (e2e)', () => {
   it('④ الإصدارُ الجديد مسوّدةٌ بالرقم التالي، والثانيةُ تُرفض، ونشرُه يؤرشف الأوّل — ونسخةُ التاجر لا تتغيّر', async () => {
     const v2 = await http().post(`/admin/form-templates/${v1.id}/versions`).set('Authorization', bearer(ownerToken)).expect(201);
     expect(v2.body).toMatchObject({ familyId: v1.familyId, version: 2, status: 'DRAFT' });
+    v2Id = v2.body.id;
     await http().post(`/admin/form-templates/${v1.id}/versions`).set('Authorization', bearer(ownerToken)).expect(409);
     // من مسوّدةٍ لا يُبنى إصدار.
     await http().post(`/admin/form-templates/${v2.body.id}/versions`).set('Authorization', bearer(ownerToken)).expect(400);
@@ -276,8 +279,8 @@ describe('Form templates — wave 1a (e2e)', () => {
       .expect(201);
     const editor = (await http().post('/auth/login').send({ username, password: 'FormsEdit123!' }).expect(200)).body.accessToken as string;
 
-    // «إضافة» تنسخ، و«تعديل» يحرّر المسوّدة.
-    const made = await http().post('/form-templates/copy').set('Authorization', bearer(editor)).send({ sourceTemplateId: v1.id, name: 'نسخةُ المحرّر' }).expect(201);
+    // «إضافة» تنسخ (من المنشور بعد ④)، و«تعديل» يحرّر المسوّدة.
+    const made = await http().post('/form-templates/copy').set('Authorization', bearer(editor)).send({ sourceTemplateId: v2Id, name: 'نسخةُ المحرّر' }).expect(201);
     await http()
       .patch(`/form-templates/${made.body.id}`)
       .set('Authorization', bearer(editor))
