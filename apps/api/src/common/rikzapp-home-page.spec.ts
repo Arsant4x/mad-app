@@ -47,8 +47,10 @@ function englishParagraph(html: string): string {
 describe('حدودُ صفحة التعريف العامة (ق-١٦٥٣ · ق-١٦٥٤)', () => {
   it('⓪ المسبارُ يرى: يُصيب كلَّ ممنوعٍ مزروع، ولا يُصيب صفحةً سليمة', () => {
     // مصادقةُ المسبار بحالتين (القاعدة ٢٩).
+    // ⚠️ النصُّ المصنوع حرفياً داخل الاستدعاء: `probe-two-cases` يجمع متغيّراتِ النصّ المصنوع بنمطٍ
+    //    يمتدّ من أوّل `const X = [` إلى أوّل `].join(` بعده، فيبتلع تعريفاً بينهما ولا يراه.
+    expect(pageViolations('<html lang="en"><p>رِكز</p><a href="mailto:x@example.com">x</a></html>')).toEqual([]);
     const clean = '<html lang="en"><p>رِكز</p><a href="mailto:x@example.com">x</a></html>';
-    expect(pageViolations(clean)).toEqual([]);
     const planted = [
       ['<scr', 'ipt>'].join(''),
       ['<fo', 'rm>'].join(''),
