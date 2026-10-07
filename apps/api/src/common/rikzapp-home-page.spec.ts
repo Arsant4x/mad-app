@@ -97,10 +97,13 @@ describe('حدودُ صفحة التعريف العامة (ق-١٦٥٣ · ق-١�
     expect(englishParagraph(read('index.html'))).toBe(APPLICATION_TEXT);
   });
 
-  it('③ لا فهرسة: الوسمُ في الصفحة، والترويسةُ، وrobots.txt', () => {
+  it('③ لا فهرسة بالوسم في الصفحة وبالترويسة، وrobots.txt يسمح بالزحف للجميع', () => {
     expect(read('index.html')).toMatch(/<meta name="robots" content="noindex/);
+    // ⚖️ (ق-١٦٥٣) robots.txt يسمح ولا يمنع: المراجعةُ الآلية للبرنامج قد تحترمه فلا تفتح الصفحة، والزاحفُ
+    //    الممنوعُ لا يقرأ noindex أصلاً. فلا سطرَ Disallow بمسارٍ غيرِ فارغ.
     const robots = read('robots.txt').split(/\r?\n/).map((l) => l.trim());
-    expect(robots).toEqual(expect.arrayContaining(['User-agent: *', 'Disallow: /']));
+    expect(robots).toEqual(expect.arrayContaining(['User-agent: *', 'Allow: /']));
+    expect(robots.filter((l) => /^disallow:\s*\S/i.test(l))).toEqual([]);
     const headers = read('_headers').split(/\r?\n/);
     expect(headers[0].trim()).toBe('/*');
     expect(headers.map((l) => l.trim())).toEqual(expect.arrayContaining(['X-Robots-Tag: noindex, nofollow']));
