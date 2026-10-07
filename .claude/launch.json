@@ -13,6 +13,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start:dev", "--workspace", "apps/api"],
       "port": 3000
+    },
+    {
+      "name": "rikzapp-home",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["sites/rikzapp-home/preview-server.mjs"],
+      "port": 8788
     }
   ]
 }
