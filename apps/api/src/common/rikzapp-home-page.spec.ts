@@ -8,11 +8,12 @@ readsDeclaredStrings();
 /**
  * ⚖️ **حدودُ صفحة التعريف العامة** (`ق-١٦٥٣` · `ق-١٦٥٤`، بحكم صاحب المشروع، توجيه ٢٨٥):
  * صفحةٌ ثابتةٌ في `sites/rikzapp-home/public/` لا تُفهرس حتى الإطلاق، ولا شيفرةَ فيها ولا نموذجَ
- * ولا طلبَ لطرفٍ ثالث، والإنجليزيةُ لغتُها وفي أعلاها بنصّ طلب البرنامج حرفاً، والعربيةُ قسمٌ
- * تحتها، والاسمُ العربيّ بكسرةٍ ظاهرة. والقاعدةُ ٢٧: قاعدةٌ بلا بوّابةٍ تُنسى في أوّل ضغط.
+ * ولا طلبَ لطرفٍ ثالث، **وإنجليزيةٌ كلُّها** بنصّ طلب البرنامج حرفاً، **ولا عربيّةَ فيها إلا «رِكز»
+ * بكسرته شعاراً نصّياً بجانب «Rikz»**، واسمُ الشركة في أسفلها كما سُمّي (حكمُ صاحب المشروع بعد
+ * المعاينة المنشورة، ملحقٌ بـ`ق-١٦٥٣`). والقاعدةُ ٢٧: قاعدةٌ بلا بوّابةٍ تُنسى في أوّل ضغط.
  *
  * ⚠️ **وحدُّها**: تقرأ الملفّاتِ في المستودع لا ما رُفع إلى Cloudflare، فما يُرفع يُرفع من
- * `main`. ولا ترى معنى النصّ العربيّ: «نشاطٌ غيرُ مبنيّ» يُراجَع بالعين، والممنوعُ هنا كلماتٌ مسمّاة.
+ * `main`. ولا ترى معنى النصّ الإنجليزيّ خارج فقرة الطلب، والممنوعُ هنا كلماتٌ مسمّاة.
  */
 const PUBLIC = join(__dirname, '..', '..', '..', '..', 'sites', 'rikzapp-home', 'public');
 const read = (f: string): string => readFileSync(join(PUBLIC, f), 'utf8');
@@ -35,6 +36,19 @@ export function pageViolations(html: string): string[] {
   if (EXTERNAL.test(html)) out.push('طلبٌ لطرفٍ ثالث');
   if (BARE_NAME.test(html)) out.push('الاسمُ العربيّ بلا كسرة');
   return out;
+}
+
+/** الموضعان الوحيدان المسموحُ فيهما بحرفٍ عربيّ: الشعارُ النصّيّ واسمُ الشركة. */
+const ALLOWED_ARABIC = [
+  /<span class="wordmark-ar" lang="ar" dir="rtl">[^<]*<\/span>/g,
+  /<p class="company"><span lang="ar" dir="rtl">[^<]*<\/span><\/p>/g,
+];
+
+/** ما في الصفحة من نصٍّ عربيٍّ خارج الموضعين المسموحين. */
+export function arabicOutsideWordmark(html: string): string[] {
+  let rest = html;
+  for (const re of ALLOWED_ARABIC) rest = rest.replace(re, '');
+  return [...rest.matchAll(/[؀-ۿ][؀-ۿ\s]*/g)].map((m) => m[0].trim());
 }
 
 /** نصُّ أوّلِ فقرةٍ في القسم الإنجليزيّ بلا وسوم ولا فراغاتٍ زائدة. */
@@ -63,14 +77,20 @@ describe('حدودُ صفحة التعريف العامة (ق-١٦٥٣ · ق-١�
     for (const bad of planted) expect(pageViolations(clean + bad)).not.toEqual([]);
   });
 
-  it('① الصفحةُ تُقرأ فعلاً، والإنجليزيةُ لغتُها واتجاهُها وفي أعلاها', () => {
+  it('⓪ب مسبارُ العربيّة يرى: يتركها في الشعار واسم الشركة، ويُصيبها في أيّ موضعٍ غيرهما', () => {
+    expect(arabicOutsideWordmark('<p class="wordmark"><span class="wordmark-ar" lang="ar" dir="rtl">رِكز</span></p><p class="company"><span lang="ar" dir="rtl">شركة</span></p>')).toEqual([]);
+    expect(arabicOutsideWordmark('<title>Rikz · رِكز</title>')).toHaveLength(1);
+    expect(arabicOutsideWordmark('<section lang="ar"><h2>منصّة سحابية</h2></section>')).toHaveLength(1);
+    expect(arabicOutsideWordmark('<span class="wordmark-ar">رِكز</span>')).toHaveLength(1);
+  });
+
+  it('① الصفحةُ تُقرأ فعلاً، وإنجليزيةٌ كلُّها، و«رِكز» شعاراً نصّياً وحدَه', () => {
     const html = read('index.html');
     expect(html).toMatch(/<html lang="en" dir="ltr">/);
-    const en = html.indexOf('<section class="english');
-    const ar = html.indexOf('<section class="arabic"');
-    expect(en).toBeGreaterThan(0);
-    expect(ar).toBeGreaterThan(en);
-    expect(html).toMatch(/<section class="arabic" lang="ar" dir="rtl"/);
+    expect(html.indexOf('<section class="english')).toBeGreaterThan(0);
+    expect(html).not.toMatch(/<section class="arabic"/);
+    expect(html).toMatch(/<span class="wordmark-ar" lang="ar" dir="rtl">رِكز<\/span>/);
+    expect(arabicOutsideWordmark(html)).toEqual([]);
   });
 
   it('② النصُّ الإنجليزيّ يطابق نصَّ الطلب حرفاً', () => {
