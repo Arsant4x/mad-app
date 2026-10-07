@@ -157,44 +157,6 @@ h1::after {
 }
 
 .english .lead { line-height: 1.75; max-width: 42rem; }
-
-.facts {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: 1fr;
-}
-
-@media (min-width: 40rem) {
-  .facts { grid-template-columns: repeat(3, 1fr); }
-}
-
-.fact {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
-  padding: 1.25rem 1.25rem 1.1rem;
-}
-
-.fact h3 {
-  font-size: 1rem;
-  color: var(--accent);
-  margin-bottom: 0.4rem;
-}
-
-.fact p { margin: 0; }
-
-.arabic {
-  padding-top: 2.25rem;
-  border-top: 1px solid var(--line);
-  line-height: 1.85;
-}
-
-.arabic h2 {
-  font-size: clamp(1.4rem, 1.1rem + 1.4vw, 1.9rem);
-  color: var(--text);
-}
-
-.arabic .lead { margin: 0.6rem 0 1.5rem; font-size: 1.1rem; }
 .nowrap { white-space: nowrap; }
 
 .footer {
