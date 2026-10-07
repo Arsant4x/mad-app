@@ -111,8 +111,8 @@ body {
   font-weight: 600;
   line-height: 1;
 }
-.wordmark-ar { font-size: 2.25rem; color: var(--text); }
-.wordmark-en { font-size: 1rem; color: var(--accent); letter-spacing: 0.04em; }
+.wordmark-en { font-size: 2.1rem; color: var(--text); letter-spacing: 0.01em; }
+.wordmark-ar { font-size: 1.6rem; color: var(--accent); }
 
 .status {
   margin: 0;
@@ -128,7 +128,7 @@ body {
 
 .hero { padding: 3rem 0 2.25rem; }
 
-h1, h2 {
+h1, h2, h3 {
   font-family: var(--display);
   font-weight: 600;
   line-height: 1.35;
@@ -156,6 +156,8 @@ h1::after {
   color: var(--muted);
 }
 
+.english .lead { line-height: 1.75; max-width: 42rem; }
+
 .facts {
   display: grid;
   gap: 1rem;
@@ -173,7 +175,7 @@ h1::after {
   padding: 1.25rem 1.25rem 1.1rem;
 }
 
-.fact h2 {
+.fact h3 {
   font-size: 1rem;
   color: var(--accent);
   margin-bottom: 0.4rem;
@@ -181,20 +183,18 @@ h1::after {
 
 .fact p { margin: 0; }
 
-.english {
-  margin-top: 3rem;
-  padding-top: 2rem;
+.arabic {
+  padding-top: 2.25rem;
   border-top: 1px solid var(--line);
-  font-size: 1rem;
-  line-height: 1.75;
+  line-height: 1.85;
 }
 
-.english h2 {
-  font-size: 1.25rem;
-  margin-bottom: 0.6rem;
+.arabic h2 {
+  font-size: clamp(1.4rem, 1.1rem + 1.4vw, 1.9rem);
+  color: var(--text);
 }
 
-.english p { margin: 0; color: var(--muted); }
+.arabic .lead { margin: 0.6rem 0 1.5rem; font-size: 1.1rem; }
 .nowrap { white-space: nowrap; }
 
 .footer {
