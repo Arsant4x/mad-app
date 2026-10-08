@@ -479,6 +479,8 @@ describe('ZATCA phase 2 — onboarding, chain and submission guards (e2e)', () =
         // BT-48 غائب — لا `CompanyID` للمشتري (BR-KSA-46)؛ وعنصرُ المخطّط الفارغ كما يخرج لكل مشترٍ بلا رقم.
         expect(buyerXml).not.toContain('<cbc:CompanyID>');
         expect(buyerXml).toContain('<cbc:IdentificationCode>AE</cbc:IdentificationCode>');
+        // ⚖️ توجيه ٢٨٦: المعرّفُ البديل مشفَّرٌ في القاعدة — والمستندُ يحمله مفكوكاً بمخطّطه (BR-KSA-14).
+        expect(buyerXml).toContain(`<cbc:ID schemeID="TIN">AE${unique}</cbc:ID>`);
       }, 30000);
     });
 

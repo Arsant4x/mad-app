@@ -66,6 +66,8 @@ import { FilesService } from '../files/files.service';
 import { RETENTION_YEARS } from '../companies/company-movement.service';
 import { round2, formatMoney } from '../common/money/rounding';
 import { moneyEquals, sumMoney } from '../common/money/allocation';
+import { contractTenantIdData, decryptContractTenantId, publicContract } from './contract-tenant-id.util';
+import { randomUUID } from 'node:crypto';
 
 /** مهلةُ معاملةٍ تستحقّ جدولاً كاملاً (الإنشاءُ والتجديد) — لا الافتراضُ الخمس ثوانٍ. */
 const ACCRUAL_TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
@@ -383,7 +385,9 @@ export class ContractsService {
       // القراءة — لا بهجرةٍ تكتبه — وما بعده تُبقيه الكتابةُ متطابقاً.
       // ⚖️ ورصيدُ المستأجر الباقي تقرؤه نافذةُ التجديد (`ق-١٦٣٧`) — من مصدر الخصم نفسِه.
       const tenantCredit = await tenantCreditBalanceWithinTx(tx, contract);
-      return { ...this.withComputedFigures(withPartyFromCustomer(contract)), tenantCredit: money(tenantCredit) };
+      // ⚖️ رقمُ هويّة المستأجر مفكوكاً — في التفصيل وحدَه (السؤال ٩٤٨ · توجيه ٢٨٦).
+      const tenantIdNumber = decryptContractTenantId(companyId, contract);
+      return { ...this.withComputedFigures(withPartyFromCustomer(contract)), tenantCredit: money(tenantCredit), tenantIdNumber };
     });
   }
 
@@ -395,7 +399,7 @@ export class ContractsService {
    * المفتوحة؛ والتأميناتُ المحجوزة لدى المنشأة.
    */
   private withComputedFigures<
-    T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor' | 'exemptSharePercent'> & {
+    T extends Pick<Contract, 'classification' | 'vatInclusion' | 'lessor' | 'exemptSharePercent' | 'tenantIdCipher' | 'tenantIdIndex'> & {
       installments: { id: string; amount: Prisma.Decimal }[];
       payments: { installmentId: string | null; netAmount: Prisma.Decimal; discount: Prisma.Decimal }[];
       claims: { status: string; amount: Prisma.Decimal; taxAmount: Prisma.Decimal }[];
@@ -415,7 +419,8 @@ export class ContractsService {
       settledBy.set(p.installmentId, (settledBy.get(p.installmentId) ?? 0) + Number(p.netAmount) + Number(p.discount));
     }
     return {
-      ...contract,
+      // ⚖️ بلا نصِّ هويّة المستأجر المشفَّر ولا بصمته (توجيه ٢٨٦) — `tenantIdOnFile` وحدَها.
+      ...publicContract(contract),
       installments: contract.installments.map((i) => {
         const gross = treatment ? rentAmountsOf(Number(i.amount), treatment).gross : round2(Number(i.amount));
         const settled = round2(settledBy.get(i.id) ?? 0);
@@ -455,9 +460,13 @@ export class ContractsService {
         const mixedShare = mixedShareFieldsFor(dto.classification, dto);
 
         const no = await this.nextContractNumber(tx, companyId, start);
+        // المعرّفُ قبل الكتابة — فرقمُ هويّة المستأجر المشفَّر يُربط بصفّه من أوّل حقل (توجيه ٢٨٦).
+        const contractId = randomUUID();
 
         const created = await tx.contract.create({
           data: {
+            id: contractId,
+            ...contractTenantIdData(companyId, contractId, dto.tenantIdNumber),
             unitId: dto.unitId,
             customerId: customer.id,
             no,
@@ -638,6 +647,7 @@ export class ContractsService {
       if (dto.services !== undefined) data.services = dto.services;
       if (dto.furnished !== undefined) data.furnished = dto.furnished;
       if (dto.ejarNo !== undefined) data.ejarNo = dto.ejarNo;
+      Object.assign(data, contractTenantIdData(companyId, id, dto.tenantIdNumber));
 
       return this.withComputedFigures(await tx.contract.update({ where: { id }, data, include: CONTRACT_INCLUDE }));
     });
@@ -1214,8 +1224,12 @@ export class ContractsService {
         }
 
         const exchangeRate = Number(source.exchangeRate);
+        // ⚖️ رقمُ هويّة المستأجر يُحمل إلى التجديد بإعادة تشفيره لصفّه (توجيه ٢٨٦): الموضعُ يحمل معرّفَ العقد فلا يُنسخ النصّ.
+        const renewedId = randomUUID();
         const created = await tx.contract.create({
           data: {
+            id: renewedId,
+            ...contractTenantIdData(companyId, renewedId, decryptContractTenantId(companyId, source) ?? undefined),
             unitId: source.unitId,
             customerId: source.customerId,
             no,
@@ -1857,7 +1871,8 @@ export class ContractsService {
     });
     // الاسمُ والهاتفُ من بطاقة العميل عند القراءة (`ق-١٠٢٨`/⑥) — والبحثُ أعلاه على الذاكرة المشتقّة
     // التي تُحدَّث مع تعديل العميل، فلا تتخلّف إلا لعقودٍ افترقت قبل هذا البناء.
-    const items = rows.map(withPartyFromCustomer);
+    // ⚖️ والقائمةُ بلا نصِّ هويّة المستأجر المشفَّر ولا بصمته (توجيه ٢٨٦) — `tenantIdOnFile` وحدَها.
+    const items = rows.map((r) => publicContract(withPartyFromCustomer(r)));
 
     return { items, total, page, pageSize };
   }

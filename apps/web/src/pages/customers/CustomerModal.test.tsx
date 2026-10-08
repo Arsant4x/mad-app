@@ -42,3 +42,39 @@ describe('نافذةُ العميل — المعرّفُ البديل على ا�
     expect(payload.otherId).toBeNull();
   });
 });
+
+/**
+ * ⚖️ **الرقمُ مشفَّرٌ في الخادم ولا تحمله القائمة** (توجيه ٢٨٦): النافذةُ لا ترسل المعرّفَ البديل إلا إن غيّره المستخدم — فنافذةٌ فُتحت
+ * على صفٍّ بلا رقمه (`otherIdOnFile` وحدَها) لا تمحوه بفراغٍ لم يكتبه أحد، ولا يسافر الرقمُ في طلبٍ لم يمسّه.
+ */
+describe('نافذةُ العميل — المعرّفُ البديل لا يُرسَل إلا إن تغيّر (توجيه ٢٨٦)', () => {
+  const onFileOnly = { id: 'c2', name: 'عميلٌ رقمُه مسجَّل', kind: 'NATURAL', otherIdScheme: 'NAT', otherIdOnFile: true, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00', archived: false } as unknown as Customer;
+
+  it('🔴 حفظُ التعديل بلا لمس المعرّف لا يرسله — فلا يُمحى الرقمُ المسجَّل', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CustomerModal editing={onFileOnly} onCancel={() => {}} onSave={onSave} />);
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('otherId');
+    expect(payload).not.toHaveProperty('otherIdScheme');
+  });
+
+  it('تغييرُ المخطّط وحدَه يرسل المخطّطَ بلا رقم — والرقمُ المشفَّرُ باقٍ في الخادم', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CustomerModal editing={onFileOnly} onCancel={() => {}} onSave={onSave} />);
+    await userEvent.selectOptions(screen.getByLabelText(/المعرّف البديل/), 'IQA');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload.otherIdScheme).toBe('IQA');
+    expect(payload).not.toHaveProperty('otherId');
+  });
+
+  it('رقمٌ يُكتب يُرسَل مع مخطّطه', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CustomerModal editing={onFileOnly} onCancel={() => {}} onSave={onSave} />);
+    await userEvent.type(screen.getByLabelText('رقم المعرّف'), '2233445566');
+    await userEvent.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+    const payload = onSave.mock.calls[0][0] as Record<string, unknown>;
+    expect(payload).toMatchObject({ otherIdScheme: 'NAT', otherId: '2233445566' });
+  });
+});

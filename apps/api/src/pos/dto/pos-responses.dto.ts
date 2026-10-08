@@ -134,7 +134,7 @@ export class PosSaleCustomerResponse {
   vatNumber!: string | null;
   phone!: string | null;
   otherIdScheme!: string | null;
-  otherId!: string | null;
+  // ⚖️ ولا رقمَ للمعرّف البديل (توجيه ٢٨٦): مشفَّرٌ في القاعدة، ولا يُقرأ مع البيع (`CUSTOMER_PUBLIC_SELECT`).
   country!: string;
 }
 

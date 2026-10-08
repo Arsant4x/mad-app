@@ -40,7 +40,13 @@ export interface Customer {
   name: string;
   kind: CustomerKind;
   otherIdScheme: BuyerIdScheme | null;
-  otherId: string | null;
+  /**
+   * ⚖️ **الرقمُ مشفَّرٌ في الخادم** (توجيه ٢٨٦): القائمةُ تقول «مسجَّلٌ أم لا» وحدَها، والرقمُ نفسُه يأتي من التفصيل
+   * (`getCustomer`) وحدَه — فنافذةُ التعديل تقرؤه من هناك.
+   */
+  otherIdOnFile: boolean;
+  /** من `GET /customers/:id` وحدَه — غائبٌ في القائمة وردود الإنشاء والتعديل. */
+  otherId?: string | null;
   /** رمزُ البلد ISO 3166-1 alpha-2 — `SA` غياباً. */
   country: string;
   vatNumber: string | null;
@@ -66,6 +72,8 @@ export type CustomerInput = CreateCustomerDto;
 export type CustomerUpdateInput = UpdateCustomerDto;
 
 export const listCustomers = (includeArchived = false) => apiClient.get<Customer[]>('/customers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
+/** تفصيلُ العميل — يحمل المعرّفَ البديل مفكوكاً لنافذة التعديل (توجيه ٢٨٦). */
+export const getCustomer = (id: string) => apiClient.get<Customer>(`/customers/${id}`).then((r) => r.data);
 export const createCustomer = (dto: CustomerInput) => apiClient.post<Customer>('/customers', dto).then((r) => r.data);
 export const updateCustomer = (id: string, dto: CustomerUpdateInput) => apiClient.patch<Customer>(`/customers/${id}`, dto).then((r) => r.data);
 export const deleteCustomer = (id: string) => apiClient.delete(`/customers/${id}`);

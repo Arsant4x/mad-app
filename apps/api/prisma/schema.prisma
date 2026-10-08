@@ -1316,8 +1316,15 @@ model Customer {
   /// أو لا شيء، والرقمُ ألفبائيٌّ رقميّ (قيدان في القاعدة).
   /// نصٌّ مقيَّد في القاعدة (CHECK على القيم الأحد عشر) لا تعدادُ Prisma — لأن «700» ليست اسمَ عضوٍ صالحاً وتحويلُها
   /// ذهاباً وإياباً فخٌّ (§8.7 الوجه العاشر: آليةٌ تقرأ الاسمَ لا القيمة).
+  ///
+  /// ⚖️ **والرقمُ مشفَّرٌ في التطبيق** (توجيه ٢٨٦ · نمطُ `ق-١٣٤٥` لهويّة الموظف): هويّةٌ وطنية وإقامةٌ وجوازٌ وسجلٌّ تجاريٌّ
+  /// كلُّها بالشكل نفسِه — نصٌّ مشفَّرٌ `f1:` مربوطٌ بالمنشأة والحقل والصفّ (`companyId|customers.otherId|customerId`)،
+  /// وبصمةُ بحثٍ `b1:` مجالُها المنشأة. والمخطّطُ يبقى صريحاً (رمزٌ لا رقم). ولا يخرج النصُّ المشفَّرُ ولا البصمةُ في ردّ:
+  /// القوائمُ تقول `otherIdOnFile` وحدَها، والتفصيلُ (`GET /customers/:id`) ومستندُ الهيئة يفكّان.
+  /// قيودُ القاعدة: الصيغتان بشكلهما، والنصُّ والبصمةُ معاً، والمخطّطُ والنصُّ زوجاً.
   otherIdScheme String?
-  otherId       String?
+  otherIdCipher String?
+  otherIdIndex  String?
 
   /// بلدُ المشتري (BT-55) — كان المستندُ يكتب «SA» ثابتاً لكلِّ مشترٍ، فالافتراضُ تثبيتُ ذلك السلوك لا تصنيفٌ.
   country String @default("SA")
@@ -1359,6 +1366,8 @@ model Customer {
   /// العقدُ يُنشئ عميلَه بالاسم — وقد زال بالربط الصريح بالمعرّف؛ فبقي ضررُها وحدَه (شخصان حقيقيان
   /// بالاسم نفسِه لا يكونان عميلين). الفهرسُ للبحث، والتنبيهُ «أهو نفسُه؟» في الخدمة.
   @@index([companyId, name])
+  /// البحثُ برقم المعرّف البديل ببصمته داخل المنشأة (توجيه ٢٨٦) — للتكرار والبحث حين يُبنيان.
+  @@index([companyId, otherIdIndex])
 
   /// Soft delete: set instead of removing the row, so it can be restored
   /// from the trash within 30 days. Reads filter it out centrally.
@@ -4317,6 +4326,11 @@ model Contract {
 
   tenant String
   phone  String?
+  /// ⚖️ **رقمُ هويّة المستأجر — تشفيرٌ يُفكّ** (حكمُ صاحب المشروع على السؤال ٩٤٨، الخيار «ب»: كهويّة الموظف `ق-١٣٤٥`).
+  /// نصٌّ مشفَّرٌ `f1:` مربوطٌ بـ`companyId|contracts.tenantId|contractId`، وبصمةُ بحثٍ `b1:` مجالُها المنشأة. اختياريّ؛
+  /// يُكتب من `tenantIdNumber` في الإنشاء والتعديل، ويُفكّ في التفصيل وحدَه — ولا يخرج في قائمة.
+  tenantIdCipher String?
+  tenantIdIndex  String?
 
   value  Decimal        @db.Decimal(18, 2)
   /// 'monthly' | 'quarterly' | 'semiannual' | 'annual' — drives installment generation.
@@ -4390,6 +4404,8 @@ model Contract {
   @@unique([companyId, no])
   /// The paginated list orders by start desc within the tenant.
   @@index([companyId, start])
+  /// البحثُ برقم هويّة المستأجر ببصمته داخل المنشأة (توجيه ٢٨٦).
+  @@index([companyId, tenantIdIndex])
   @@map("contracts")
   rentAccrual_contractId_tenant RentAccrual[] @relation("RentAccrual_contractId_tenant")
   rentPayment_contractId_tenant RentPayment[] @relation("RentPayment_contractId_tenant")

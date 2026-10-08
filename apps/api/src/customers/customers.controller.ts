@@ -12,6 +12,8 @@ import { CustomersService } from './customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { RecordMarketingConsentDto } from './dto/record-marketing-consent.dto';
+import { ApiOkResponse } from '@nestjs/swagger';
+import { CustomerDetailResponse } from './dto/customer-responses.dto';
 
 @Controller('customers')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -51,6 +53,17 @@ export class CustomersController {
   @RequiresAction('record')
   recordMarketingConsent(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() dto: RecordMarketingConsentDto) {
     return this.customersService.recordMarketingConsent(tenant, id, dto);
+  }
+
+  /**
+   * ⚖️ **تفصيلُ العميل — المعرّفُ البديل مفكوكاً** (توجيه ٢٨٦): الرقمُ مشفَّرٌ في القاعدة، والقائمةُ لا تحمله؛ ونافذةُ التعديل
+   * تقرؤه من هنا لمن يملك الاطّلاع على الشاشة — كتفصيل الموظف (`ق-١٣٤٥`).
+   */
+  @Get(':id')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: CustomerDetailResponse })
+  findOne(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.customersService.findOne(tenant.companyId, id);
   }
 
   @Post()

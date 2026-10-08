@@ -21,7 +21,7 @@ describe('سندُ القبض — مصيرُ الفائض غير المخصَّ�
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(listCustomers).mockResolvedValue([
-      { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherId: null, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' },
+      { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherIdOnFile: false, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' },
     ]);
     vi.mocked(listBranches).mockResolvedValue([]);
     vi.mocked(listBanks).mockResolvedValue([]);

@@ -35,7 +35,12 @@ export const FREE_TEXT_FIELD_NAMES = ['notes', 'note', 'reason', 'description', 
  * ورقمُ تأميناته. **تُشفَّر في جدولها فلا تبقى صريحةً في السجلّ** — وإلا عاد النصُّ الصريح من الباب الذي أُغلق.
  * ⚠️ **و`salaryIban` اسمٌ غيرُ `iban`** عمداً: `iban` حسابُ المنشأة نفسِها ويبقى كاملاً (`ق-١٢٩٨` أدناه)، وحسابُ الموظف بيانُ شخص.
  */
-export const IDENTITY_FIELD_NAMES = ['nationalid', 'salaryiban', 'socialinsuranceno'] as const;
+/*
+ * ⚖️ ومعها معرّفُ المشتري البديل ورقمُ هويّة المستأجر (توجيه ٢٨٦): `otherId` (هويّةٌ · إقامة · جواز · سجلّ — BR-KSA-14)
+ * و`tenantIdNumber` على العقد، وكلاهما مشفَّرٌ في جدوله الآن. ⚠️ وصفوفُ السجلّ السابقة قد تحمل `otherId` بقيمته (كُتبت قبل
+ * هذا البناء) — والسجلُّ لا يُعدَّل، فهو حدٌّ معلَن.
+ */
+export const IDENTITY_FIELD_NAMES = ['nationalid', 'salaryiban', 'socialinsuranceno', 'otherid', 'tenantidnumber'] as const;
 
 /** ما لا تُكتب قيمتُه في `details` — تُكتب علامةُ التغيّر وحدَها. */
 export const REDACTED_FIELD_NAMES: ReadonlySet<string> = new Set<string>([

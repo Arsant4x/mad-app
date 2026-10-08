@@ -228,6 +228,7 @@ export interface CreateContractDto {
   services?: string;
   furnished?: 'unfurnished' | 'furnished' | 'partial';
   ejarNo?: string;
+  tenantIdNumber?: string;
   fees?: ContractFeeDto[];
   draft?: boolean;
   currency?: string;
@@ -1327,6 +1328,7 @@ export interface UpdateContractDto {
   services?: string;
   furnished?: 'unfurnished' | 'furnished' | 'partial';
   ejarNo?: string;
+  tenantIdNumber?: string | null;
   classification?: 'RESIDENTIAL' | 'COMMERCIAL' | 'SERVICED_LODGING' | 'MIXED';
   vatInclusion?: 'INCLUSIVE' | 'EXCLUSIVE';
   exemptSharePercent?: number;
