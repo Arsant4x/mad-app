@@ -25,6 +25,7 @@
 import { blindKeyProblem, keyringProblem } from '../crypto/field-cipher.util';
 import { parseDsn } from '../error-tracking/error-event.util';
 import { parseMailDailyLimit } from '../mail/mail-quota.util';
+import { providerProblem } from '../../verification/providers';
 
 /** قيم المثال والتطوير المعروفة — وجودها في الإنتاج يعني أن الملف نُسخ ولم يُملأ. */
 const KNOWN_PLACEHOLDERS = [
@@ -138,12 +139,32 @@ const WHEN_ERROR_TRACKING: SecretRule[] = [
 ];
 
 /**
+ * ⚖️ توجيه ٢٨٧ ⑩ — **مزوّدا الرسائل والتحقّق من الهويّة حين يُضبطان**: محوّلٌ مسجَّلٌ غيرُ تجريبيّ، فالتجريبيُّ (يُرسل لا شيء، ويوافق بلا
+ * تحقّق) لا يُقلع في الإنتاج — **الحاجزُ الأوّل**، والثاني عند كلِّ استعمال (`VerificationGateway`). **وغيابُهما جائز**: لم يُتعاقد بعد،
+ * والمسارُ يُرفض باسمه حين يُستعمل؛ والتعاقدُ شرطُ تشغيل (القاعدة الدائمة ١٩).
+ */
+const WHEN_SMS: SecretRule[] = [
+  { name: 'SMS_PROVIDER', why: 'مزوّدُ الرسائل الذي يحمل رمزَ التحقّق ورابطَ التوقيع إلى جوال العميل', extra: (v) => providerProblem('SMS', v) },
+];
+const WHEN_IDENTITY: SecretRule[] = [
+  { name: 'IDENTITY_PROVIDER', why: 'مزوّدُ التحقّق من الهويّة الوطنية (نفاذ) لتوقيع النماذج', extra: (v) => providerProblem('IDENTITY', v) },
+];
+
+/**
  * **كلُّ متغيّرٍ يقرؤه هذا الحارس** — ليُفحص أنه **يبلغ الحاوية** (`boot-vars-reach-container.spec.ts`):
  * `docker-compose.prod.yml` يسرد بيئةَ `api` بالاسم، **فمتغيّرٌ يطلبه الحارسُ ولا يمرّره التركيبُ يُسقط الإقلاعَ
  * ولو ضُبط في `.env.production`** — والمشغِّلُ يرى «غير مضبوط» عن قيمةٍ كتبها بيده.
  */
 export function bootGuardedVariables(): string[] {
-  return ['NODE_ENV', 'SMTP_HOST', ...REQUIRED.map((r) => r.name), ...WHEN_MAIL.map((r) => r.name), ...WHEN_ERROR_TRACKING.map((r) => r.name)];
+  return [
+    'NODE_ENV',
+    'SMTP_HOST',
+    ...REQUIRED.map((r) => r.name),
+    ...WHEN_MAIL.map((r) => r.name),
+    ...WHEN_ERROR_TRACKING.map((r) => r.name),
+    ...WHEN_SMS.map((r) => r.name),
+    ...WHEN_IDENTITY.map((r) => r.name),
+  ];
 }
 
 export class ProductionSecretsError extends Error {}
@@ -160,6 +181,8 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
     ...REQUIRED,
     ...((env.SMTP_HOST ?? '').trim() ? WHEN_MAIL : []),
     ...((env.ERROR_TRACKING_DSN ?? '').trim() ? WHEN_ERROR_TRACKING : []),
+    ...((env.SMS_PROVIDER ?? '').trim() ? WHEN_SMS : []),
+    ...((env.IDENTITY_PROVIDER ?? '').trim() ? WHEN_IDENTITY : []),
   ];
 
   for (const rule of rules) {

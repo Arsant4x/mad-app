@@ -116,6 +116,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'FormInstance',
   'FormValue',
   'FormSeal',
+  // ⚖️ تحدّي رمز التحقّق (توجيه ٢٨٧): companyId إلزاميّ وRLS بـFORCE — طبقتان.
+  'VerificationChallenge',
   'ContractKeyMoney',
   'ContractHandover',
   'HandoverItem',
