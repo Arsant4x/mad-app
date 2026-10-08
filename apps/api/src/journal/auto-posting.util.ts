@@ -1631,6 +1631,7 @@ export async function postNetworkSettlementEntry(
     currency: p.bank.currency,
     exchangeRate: 1,
     entryNo: entry.no,
+    branchId: p.branchId,
   });
   return { id: entry.id, no: entry.no };
 }
@@ -1659,6 +1660,7 @@ export async function postNetworkSettlementVoidEntry(
     currency: p.bank.currency,
     exchangeRate: 1,
     entryNo: entry.no,
+    branchId: p.branchId,
   });
   return { id: entry.id, no: entry.no };
 }
@@ -1669,19 +1671,24 @@ export async function postNetworkSettlementVoidEntry(
  * (موجبٌ يدخل، سالبٌ يخرج؛ والعكسُ يقلب الإشارة). لا شيء حين لا بنك (نقدٌ على `1000`).
  * مشتركةٌ بين سند القبض وسند الصرف (`ق-٨٧١`).
  *
- * **صندوقُه لا يُقاس هنا**: المرآةُ تتبع سنداً قيس صندوقُه بفرعه عند إنشائه (`ق-١٤٣٧`)، وتُكتب بلا فرعٍ —
- * فهي أثرٌ لا مستندٌ يختار صندوقاً (والمرآةُ بلا فرعٍ حدٌّ معلَن في التطوير: `360` حركةً).
+ * **صندوقُه لا يُقاس هنا**: المرآةُ تتبع سنداً قيس صندوقُه بفرعه عند إنشائه (`ق-١٤٣٧`).
+ *
+ * ⚖️ **وتحمل فرعَ سندها** (البند ٥٩٩ · توجيه ٢٨٦ · القاعدة ٣٧ · `ق-١٥٨١`): كانت تُكتب بلا فرع، وقائمةُ الحركات ترشّح
+ * بـ`branchFilter` الذي يُدخل ما بلا فرع، فرأى المقيَّدُ بفرعٍ حركاتِ صناديق الفروع الأخرى (مقيسٌ حيّاً قبل الإصلاح
+ * في `bank-mirror-branch.e2e-spec.ts`). فالحقلُ إلزاميٌّ في الاستدعاء كي لا يُنسى، وإن كان السندُ بلا فرعٍ أخذت المرآةُ
+ * فرعَ الصندوق الذي تحرّك؛ وما بقي بلا فرعٍ حركةُ بنكٍ على مستوى المنشأة.
  */
 export async function mirrorBankMovement(
   tx: Prisma.TransactionClient,
   bank: { id: string } | null,
-  movement: { date: Date; description: string; amount: number; source: string; currency: string; exchangeRate: number; entryNo: string | null },
+  movement: { date: Date; description: string; amount: number; source: string; currency: string; exchangeRate: number; entryNo: string | null; branchId: string | null },
 ): Promise<void> {
   if (!bank) return;
-  await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: movement.amount } } });
+  const moved = await tx.bank.update({ where: { id: bank.id }, data: { balance: { increment: movement.amount } }, select: { branchId: true } });
   await tx.bankTransaction.create({
     data: {
       bankId: bank.id,
+      branchId: movement.branchId ?? moved.branchId ?? null,
       date: movement.date,
       description: movement.description,
       amount: movement.amount,
