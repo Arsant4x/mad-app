@@ -6,12 +6,26 @@ import { FormRecordPanel } from './FormRecordPanel';
 vi.mock('../../api/forms', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   setContractFormValues: vi.fn(),
-  sealContractForm: vi.fn(),
   verifyContractForm: vi.fn(),
   deleteContractForm: vi.fn(),
+  sendContractForm: vi.fn(),
+  resendContractFormLink: vi.fn(),
+  reviseContractForm: vi.fn(),
+  contractFormDeviceLink: vi.fn(),
+  paperSignContractForm: vi.fn(),
+  contractFormEvents: vi.fn(),
 }));
 
-import { sealContractForm, setContractFormValues, verifyContractForm } from '../../api/forms';
+// لوحةُ الرسم في jsdom بلا لوحةٍ حقيقية: زرٌّ يسلّم صورةً كما يسلّمها الرسم.
+vi.mock('../../components/SignaturePad', () => ({
+  SignaturePad: ({ onChange, label }: { onChange: (b: Blob | null) => void; label?: string }) => (
+    <button type="button" onClick={() => onChange(new Blob(['png'], { type: 'image/png' }))}>
+      {`ارسم ${label ?? ''}`}
+    </button>
+  ),
+}));
+
+import { paperSignContractForm, reviseContractForm, sendContractForm, setContractFormValues, verifyContractForm } from '../../api/forms';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): تقديرٌ أوّلٌ قبل أن يُقاس تحت حِمل الحزمة، ويُضبط بثلاثة أضعاف أوّلِ زمنٍ مقيس.
 vi.setConfig({ testTimeout: 15_000 });
@@ -38,7 +52,16 @@ const draft: FormInstance = {
   filledByName: 'salem',
   sealedByName: null,
   sealedAt: null,
+  sealFormat: null,
   createdAt: '2026-10-04T10:00:00.000Z',
+  revisionGroupId: 'f1',
+  revisionNo: 1,
+  previousRevisionId: null,
+  sentAt: null,
+  signDeadline: null,
+  nafathRequired: false,
+  signatures: [],
+  objection: null,
   items: [
     {
       itemId: 'i1',
@@ -71,19 +94,115 @@ const sealed: FormInstance = {
   items: [{ ...draft.items[0], number: '48213' }],
 };
 
-const mount = (record: FormInstance, perms: { canRecord: boolean; canReview: boolean }, onChanged = vi.fn()) =>
-  render(<FormRecordPanel contract={contract} record={record} {...perms} onChanged={onChanged} onDeleted={() => {}} onClose={() => {}} />);
+const awaiting: FormInstance = {
+  ...draft,
+  status: 'AWAITING_SIGNATURE',
+  sentAt: '2026-10-04T10:30:00.000Z',
+  signDeadline: '2026-10-11T10:30:00.000Z',
+  items: [{ ...draft.items[0], number: '48213' }],
+  signatures: [
+    {
+      id: 's1',
+      role: 'STAFF',
+      level: 'DRAWN_STAFF_SESSION',
+      channel: 'STAFF_DEVICE',
+      signerName: 'salem',
+      mobileMasked: null,
+      witnessUserName: null,
+      authorityType: null,
+      authorityRef: null,
+      authorityVerification: null,
+      signedAt: '2026-10-04T10:30:00.000Z',
+    },
+  ],
+};
+
+const mount = (record: FormInstance, perms: { canRecord: boolean; canReview: boolean }, onChanged = vi.fn(), onRevised = vi.fn()) =>
+  render(<FormRecordPanel contract={contract} record={record} {...perms} onChanged={onChanged} onRevised={onRevised} onDeleted={() => {}} onClose={() => {}} />);
 
 beforeEach(() => vi.clearAllMocks());
 
 describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» (ق-١٦٣٨)', () => {
-  it('⭐ الختمُ «مراجعة»: من يعبّئ ولا يراجع لا يرى زرَّ الختم، ومن يراجع يراه', () => {
+  it('⭐ التوقيعُ والإرسال «مراجعة»: من يعبّئ ولا يراجع لا يرى الزرّ، ومن يراجع يراه، ولا ختمَ باليد (توجيه ٢٨٧ ⑨)', () => {
     const { unmount } = mount(draft, { canRecord: true, canReview: false });
-    expect(screen.queryByRole('button', { name: 'ختم' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'توقيعٌ وإرسال' })).toBeNull();
     expect(screen.getByRole('button', { name: 'حفظٌ كمسوّدة' })).toBeTruthy();
     unmount();
     mount(draft, { canRecord: true, canReview: true });
-    expect(screen.getByRole('button', { name: 'ختم' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'توقيعٌ وإرسال' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'ختم' })).toBeNull();
+  });
+
+  it('⭐ التوقيعُ يحفظ ما لم يُحفظ أوّلاً ثم يرسل الرسمَ، ولا يُرسل قبل أن يُرسم', async () => {
+    vi.mocked(setContractFormValues).mockResolvedValue({ ...draft, items: [{ ...draft.items[0], number: '7' }] });
+    vi.mocked(sendContractForm).mockResolvedValue({ form: awaiting, delivery: 'SENT' });
+    const onChanged = vi.fn();
+    mount(draft, { canRecord: true, canReview: true }, onChanged);
+    fireEvent.change(screen.getByLabelText('قراءةُ عدّاد الكهرباء'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'توقيعٌ وإرسال' }));
+    const submit = () => screen.getAllByRole('button', { name: 'توقيعٌ وإرسال' }).at(-1)! as HTMLButtonElement;
+    expect(submit().disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'ارسم توقيعُ الموظّف' }));
+    expect(submit().disabled).toBe(false);
+    fireEvent.click(submit());
+    await waitFor(() => expect(sendContractForm).toHaveBeenCalledWith('c1', 'f1', expect.any(Blob), null, null));
+    expect(vi.mocked(setContractFormValues).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(sendContractForm).mock.invocationCallOrder[0]);
+    expect(onChanged).toHaveBeenLastCalledWith(awaiting);
+  });
+
+  it('⭐ الشخصُ الاعتباريّ: حقولُ الممثّل إلزاميّةٌ قبل الإرسال، وتُرسل مع الرسم (توجيه ٢٨٧ ⑥)', async () => {
+    vi.mocked(sendContractForm).mockResolvedValue({ form: awaiting, delivery: 'SENT' });
+    mount({ ...draft, items: [{ ...draft.items[0], number: '1' }] }, { canRecord: true, canReview: true });
+    fireEvent.click(screen.getByRole('button', { name: 'توقيعٌ وإرسال' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ارسم توقيعُ الموظّف' }));
+    fireEvent.click(screen.getByLabelText(/شخصٌ اعتباريّ/));
+    const submit = () => screen.getAllByRole('button', { name: 'توقيعٌ وإرسال' }).at(-1)! as HTMLButtonElement;
+    expect(submit().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('اسمُ الممثّل'), { target: { value: 'مدير الشركة' } });
+    fireEvent.change(screen.getByLabelText('جوالُ الممثّل'), { target: { value: '0555123456' } });
+    fireEvent.change(screen.getByLabelText('رقمُ السجلّ التجاريّ'), { target: { value: '1010101010' } });
+    expect(submit().disabled).toBe(false);
+    fireEvent.click(submit());
+    await waitFor(() =>
+      expect(sendContractForm).toHaveBeenCalledWith(
+        'c1',
+        'f1',
+        expect.any(Blob),
+        expect.objectContaining({ name: 'مدير الشركة', mobile: '0555123456', authorityType: 'CR_MANAGER', authorityRef: '1010101010' }),
+        null,
+      ),
+    );
+  });
+
+  it('⭐ ما ينتظر التوقيع لا يُحرَّر ولا يُحذف، وله إعادةُ الرابط وجهازُ الموظّف والورقيّ، والورقيُّ هنا بلا رسم', async () => {
+    vi.mocked(paperSignContractForm).mockResolvedValue({ form: { ...awaiting, status: 'SEALED' }, finalCopy: 'SENT' });
+    mount(awaiting, { canRecord: true, canReview: true });
+    expect(screen.queryByLabelText('قراءةُ عدّاد الكهرباء')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'حذفُ المسوّدة' })).toBeNull();
+    expect(screen.getByText('ينتظر التوقيع')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'إعادةُ إرسال الرابط' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'توقيعٌ على هذا الجهاز' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'توقيعٌ ورقيّ' }));
+    expect(screen.queryByRole('button', { name: /^ارسم/ })).toBeNull();
+    const file = new File(['%PDF'], 'paper.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('صورةُ الورقة الموقَّعة'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'رفعٌ وختم' }));
+    await waitFor(() => expect(paperSignContractForm).toHaveBeenCalledWith('c1', 'f1', file, null, ''));
+  });
+
+  it('⭐ المعترَضُ عليه يُرى اعتراضُه، والنسخةُ المعدّلة «تسجيل» وتُفتح مكانه (ق-١٦٦٩)', async () => {
+    const objected: FormInstance = {
+      ...awaiting,
+      status: 'OBJECTED',
+      objection: { note: 'القراءةُ خطأ', byName: 'محمّد', mobileMasked: '0555 ••• 442', hasPhoto: false, objectedAt: '2026-10-05T09:00:00.000Z' },
+    };
+    const revised: FormInstance = { ...draft, id: 'f2', revisionNo: 2, previousRevisionId: 'f1' };
+    vi.mocked(reviseContractForm).mockResolvedValue(revised);
+    const onRevised = vi.fn();
+    mount(objected, { canRecord: true, canReview: false }, vi.fn(), onRevised);
+    expect(screen.getByTestId('form-objection').textContent).toContain('القراءةُ خطأ');
+    fireEvent.click(screen.getByRole('button', { name: 'نسخةٌ معدّلة' }));
+    await waitFor(() => expect(onRevised).toHaveBeenCalledWith(revised));
   });
 
   it('الحفظُ يرسل ما تغيّر وحدَه بنوع بنده', async () => {
@@ -92,19 +211,6 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     fireEvent.change(screen.getByLabelText('قراءةُ عدّاد الكهرباء'), { target: { value: '48213' } });
     fireEvent.click(screen.getByRole('button', { name: 'حفظٌ كمسوّدة' }));
     await waitFor(() => expect(setContractFormValues).toHaveBeenCalledWith('c1', 'f1', [{ itemId: 'i1', number: 48213, note: null }]));
-  });
-
-  it('⭐ الختمُ يحفظ ما لم يُحفظ أوّلاً ثم يختم، فلا يُختم غيرُ ما على الشاشة', async () => {
-    vi.mocked(setContractFormValues).mockResolvedValue({ ...draft, items: [{ ...draft.items[0], number: '7' }] });
-    vi.mocked(sealContractForm).mockResolvedValue(sealed);
-    const onChanged = vi.fn();
-    mount(draft, { canRecord: true, canReview: true }, onChanged);
-    fireEvent.change(screen.getByLabelText('قراءةُ عدّاد الكهرباء'), { target: { value: '7' } });
-    fireEvent.click(screen.getByRole('button', { name: 'ختم' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'ختم' }).at(-1)!);
-    await waitFor(() => expect(sealContractForm).toHaveBeenCalledWith('c1', 'f1'));
-    expect(vi.mocked(setContractFormValues).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(sealContractForm).mock.invocationCallOrder[0]);
-    expect(onChanged).toHaveBeenLastCalledWith(sealed);
   });
 
   it('⭐ المختومُ يُقرأ ببصمته ورقمه ولا يُحرَّر، والمطبوعُ يحمل سطرَ إيجار', () => {

@@ -71,6 +71,16 @@ export const apiClient = axios.create({ baseURL: API_BASE, withCredentials: true
 // recursively triggering the 401 handler below.
 const refreshClient = axios.create({ baseURL: API_BASE, withCredentials: true });
 
+/**
+ * ⚖️ **عميلُ صفحة النموذج العامّة** (توجيه ٢٨٧ · `/f/:token`): بلا رمزِ دخول ولا ملفّاتِ تعريف ولا تجديدِ جلسة — فالمستأجرُ لا حسابَ له،
+ * و`401` هنا «ادخل بالرمز» لا «سجّل الدخول»، فلا يمرّ بمعترض التجديد ولا يُحوِّل إلى صفحة الدخول.
+ */
+export const publicApiClient = axios.create({ baseURL: API_BASE, withCredentials: false });
+publicApiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  config.headers.set('Accept-Language', currentLanguage());
+  return config;
+});
+
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
     config.headers.set('Authorization', `Bearer ${accessToken}`);

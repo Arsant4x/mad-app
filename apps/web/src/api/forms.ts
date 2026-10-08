@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, publicApiClient } from './client';
 import type {
   CopyFormTemplateDto,
   CreateFormInstanceDto,
@@ -18,6 +18,18 @@ import type {
   FormTemplateRowResponse,
   FormTypeResponse,
   FormVerificationResponse,
+  FormDeviceLinkResponse,
+  FormLinkOpenResponse,
+  FormNafathPollResponse,
+  FormNafathStartResponse,
+  FormObjectedResponse,
+  FormOtpIssuedResponse,
+  FormPaperSignedResponse,
+  FormPublicViewResponse,
+  FormSentResponse,
+  FormSessionResponse,
+  FormSignedResponse,
+  FormSigningEventResponse,
 } from '@mad-app/shared/api/responses';
 
 /**
@@ -70,8 +82,6 @@ export const getContractForm = (contractId: string, formId: string) =>
   apiClient.get<FormInstance>(`/contracts/${contractId}/forms/${formId}`).then((r) => r.data);
 export const setContractFormValues = (contractId: string, formId: string, values: FormValueInput[]) =>
   apiClient.put<FormInstance>(`/contracts/${contractId}/forms/${formId}/values`, { values }).then((r) => r.data);
-export const sealContractForm = (contractId: string, formId: string) =>
-  apiClient.post<FormInstance>(`/contracts/${contractId}/forms/${formId}/seal`).then((r) => r.data);
 export const verifyContractForm = (contractId: string, formId: string) =>
   apiClient.get<FormVerification>(`/contracts/${contractId}/forms/${formId}/verify`).then((r) => r.data);
 export const deleteContractForm = (contractId: string, formId: string) => apiClient.delete(`/contracts/${contractId}/forms/${formId}`);
@@ -81,3 +91,84 @@ export type FormSigningSettings = FormSigningSettingsResponse;
 export const getFormSigningSettings = () => apiClient.get<FormSigningSettings>('/form-signing-settings').then((r) => r.data);
 export const updateFormSigningSettings = (dto: UpdateFormSigningSettingsDto) =>
   apiClient.put<FormSigningSettings>('/form-signing-settings', dto).then((r) => r.data);
+
+// ── مسارُ التوقيع من جهة الموظّف (توجيه ٢٨٧): يوقّع ويرسل، ويعيد الرابط، ويردّ على الاعتراض بنسخةٍ معدّلة، ويوقّع ورقياً أو على جهازه ──
+export type FormSent = FormSentResponse;
+export type FormSigningEvent = FormSigningEventResponse;
+export type FormPaperSigned = FormPaperSignedResponse;
+export type FormDeviceLink = FormDeviceLinkResponse;
+
+/** ممثّلُ الشخص الاعتباريّ (توجيه ٢٨٧ ⑥): مديرٌ في السجلّ التجاريّ أو وكيلٌ بوكالةٍ من ناجز. */
+export interface RepresentativeFields {
+  name: string;
+  mobile: string;
+  authorityType: 'CR_MANAGER' | 'NAJIZ_POA';
+  authorityRef: string;
+  nationalId?: string;
+}
+
+const base = (contractId: string, formId: string) => `/contracts/${contractId}/forms/${formId}`;
+
+export function sendContractForm(contractId: string, formId: string, drawing: Blob, representative?: RepresentativeFields | null, authorityDocument?: File | null) {
+  const form = new FormData();
+  form.append('drawing', drawing, 'signature.png');
+  if (representative) {
+    form.append('representativeName', representative.name);
+    form.append('representativeMobile', representative.mobile);
+    form.append('authorityType', representative.authorityType);
+    form.append('authorityRef', representative.authorityRef);
+    if (representative.nationalId) form.append('representativeNationalId', representative.nationalId);
+    if (authorityDocument) form.append('authorityDocument', authorityDocument);
+  }
+  return apiClient.post<FormSent>(`${base(contractId, formId)}/send`, form).then((r) => r.data);
+}
+export const resendContractFormLink = (contractId: string, formId: string) => apiClient.post<FormSent>(`${base(contractId, formId)}/resend`).then((r) => r.data);
+export const reviseContractForm = (contractId: string, formId: string) => apiClient.post<FormInstance>(`${base(contractId, formId)}/revisions`).then((r) => r.data);
+export const contractFormEvents = (contractId: string, formId: string) => apiClient.get<FormSigningEvent[]>(`${base(contractId, formId)}/events`).then((r) => r.data);
+export const contractFormDeviceLink = (contractId: string, formId: string) =>
+  apiClient.post<FormDeviceLink>(`${base(contractId, formId)}/device-link`).then((r) => r.data);
+export function paperSignContractForm(contractId: string, formId: string, paper: File, drawing?: Blob | null, signerName?: string) {
+  const form = new FormData();
+  form.append('paper', paper);
+  if (drawing) form.append('drawing', drawing, 'signature.png');
+  if (signerName?.trim()) form.append('signerName', signerName.trim());
+  return apiClient.post<FormPaperSigned>(`${base(contractId, formId)}/paper`, form).then((r) => r.data);
+}
+/** صورةُ توقيعٍ أو ورقةٍ أو اعتراض: تُجلب بالدخول ثم تُفتح رابطاً محلّياً (لا رابطَ موقَّعاً للمخزن الحسّاس). */
+export const contractFormSignatureImage = (contractId: string, formId: string, signatureId: string) =>
+  apiClient.get<Blob>(`${base(contractId, formId)}/signatures/${signatureId}/image`, { responseType: 'blob' }).then((r) => r.data);
+export const contractFormObjectionPhoto = (contractId: string, formId: string) =>
+  apiClient.get<Blob>(`${base(contractId, formId)}/objection/photo`, { responseType: 'blob' }).then((r) => r.data);
+
+// ── صفحةُ الرابط العامّة (`/f/:token`): الفاعلُ المستأجرُ بلا حساب، والجلسةُ في رأسٍ بعد الرمز أو نفاذ ──
+export type FormLinkOpen = FormLinkOpenResponse;
+export type FormOtpIssued = FormOtpIssuedResponse;
+export type FormSession = FormSessionResponse;
+export type FormNafathStart = FormNafathStartResponse;
+export type FormNafathPoll = FormNafathPollResponse;
+export type FormPublicView = FormPublicViewResponse;
+export type FormSigned = FormSignedResponse;
+export type FormObjected = FormObjectedResponse;
+
+const pub = (token: string) => `/public/forms/${encodeURIComponent(token)}`;
+const session = (s: string) => ({ headers: { 'x-form-session': s } });
+
+export const openFormLink = (token: string) => publicApiClient.get<FormLinkOpen>(pub(token)).then((r) => r.data);
+export const requestFormOtp = (token: string) => publicApiClient.post<FormOtpIssued>(`${pub(token)}/otp`).then((r) => r.data);
+export const verifyFormOtp = (token: string, challengeId: string, code: string) =>
+  publicApiClient.post<FormSession>(`${pub(token)}/otp/verify`, { challengeId, code }).then((r) => r.data);
+export const startFormNafath = (token: string) => publicApiClient.post<FormNafathStart>(`${pub(token)}/nafath`).then((r) => r.data);
+export const pollFormNafath = (token: string) => publicApiClient.get<FormNafathPoll>(`${pub(token)}/nafath`).then((r) => r.data);
+export const viewPublicForm = (token: string, s: string) => publicApiClient.get<FormPublicView>(`${pub(token)}/form`, session(s)).then((r) => r.data);
+export function signPublicForm(token: string, s: string, drawing: Blob) {
+  const form = new FormData();
+  form.append('acknowledged', 'true');
+  form.append('drawing', drawing, 'signature.png');
+  return publicApiClient.post<FormSigned>(`${pub(token)}/sign`, form, session(s)).then((r) => r.data);
+}
+export function objectPublicForm(token: string, s: string, note: string, photo?: File | null) {
+  const form = new FormData();
+  form.append('note', note);
+  if (photo) form.append('photo', photo);
+  return publicApiClient.post<FormObjected>(`${pub(token)}/objection`, form, session(s)).then((r) => r.data);
+}
