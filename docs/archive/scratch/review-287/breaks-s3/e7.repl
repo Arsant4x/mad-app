@@ -1,0 +1,1 @@
+  if (link.expiresAt && link.expiresAt.getTime() <= Date.now() - 86_400_000) return false;

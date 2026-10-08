@@ -1,0 +1,1 @@
+        const finalTo = p.role === FormSignerRole.SUBSTITUTE ? await this.signing.recipientOf(tx, link.companyId, instance, FormSignerRole.COUNTERPARTY) : p;

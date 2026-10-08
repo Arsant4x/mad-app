@@ -1,0 +1,5 @@
+    const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
+      if (session) await this.sessionLink(tx, link, session);
+      await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${link.instanceId} FOR UPDATE`;
+      const instance = await this.activeInstance(tx, link);
+      const pending

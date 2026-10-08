@@ -1,0 +1,1 @@
+    if (issued >= OTP_POLICY.maxIssuesPerSubject) throw

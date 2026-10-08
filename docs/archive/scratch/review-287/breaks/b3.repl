@@ -1,0 +1,1 @@
+    if (row.expiresAt.getTime() <= now.getTime() - 3_600_000) return { result: 'EXPIRED', attemptsLeft: 0 };

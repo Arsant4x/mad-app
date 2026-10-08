@@ -1,0 +1,1 @@
+      where: { purpose: input.purpose, subjectKey: `${input.subjectKey}#none`, consumedAt: null, revokedAt: null, lockedAt: null },

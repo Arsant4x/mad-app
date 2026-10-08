@@ -1,0 +1,2 @@
+      const party = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+      const challenge

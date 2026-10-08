@@ -1,0 +1,1 @@
+export const DEFAULT_SIGN_PERIOD_DAYS = 7;

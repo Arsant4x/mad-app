@@ -1,0 +1,1 @@
+    if (nafathRequired && !plan) throw new ConflictException(MSG.form_representative_nafath_id);

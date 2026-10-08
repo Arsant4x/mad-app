@@ -1,0 +1,1 @@
+      const token = await this.openLink(tx, companyId, id, FormLinkPurpose.SIGN, role, instance.signDeadline, false);

@@ -1,0 +1,1 @@
+    if (decision !== 'VERIFIED') throw new ConflictException(MSG.form_representative_authority_not_found);
