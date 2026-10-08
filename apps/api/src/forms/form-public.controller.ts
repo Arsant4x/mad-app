@@ -66,15 +66,15 @@ export class FormPublicController {
   @Post('nafath')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiCreatedResponse({ type: FormNafathStartResponse })
-  startNafath(@Param('token') token: string, @Req() req: Request) {
-    return this.service.startNafath(token, metaOf(req));
+  startNafath(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
+    return this.service.startNafath(token, session, metaOf(req));
   }
 
   @Get('nafath')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOkResponse({ type: FormNafathPollResponse })
-  pollNafath(@Param('token') token: string, @Req() req: Request) {
-    return this.service.pollNafath(token, metaOf(req));
+  pollNafath(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Req() req: Request) {
+    return this.service.pollNafath(token, session, metaOf(req));
   }
 
   @Get('form')

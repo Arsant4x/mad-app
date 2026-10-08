@@ -133,8 +133,9 @@ describe('Form signing path — link, code, objection, revision, seal (e2e)', ()
     await sendForm(app, a.token, c.contractId, c.formId).expect(201);
     const token = linkOf(c.mobile.e164);
     const open = await http().get(`/public/forms/${token}`).expect(200);
-    expect(Object.keys(open.body).sort()).toEqual(['identityProvider', 'methods', 'purpose', 'state']);
-    expect(open.body).toMatchObject({ state: 'ACTIVE', purpose: 'SIGN', methods: { otp: true, nafath: false } });
+    // `nafathAfterOtp` علَمٌ لطريقة الدخول وحدَه (البديلُ في نموذج نفاذ، `ق-١٦٧٧`)، لا شيءَ من النموذج.
+    expect(Object.keys(open.body).sort()).toEqual(['identityProvider', 'methods', 'nafathAfterOtp', 'purpose', 'state']);
+    expect(open.body).toMatchObject({ state: 'ACTIVE', purpose: 'SIGN', methods: { otp: true, nafath: false }, nafathAfterOtp: false });
     const text = JSON.stringify(open.body);
     for (const leak of [c.tenantName, '12000', 'تسليمُ شقّة', a.companyId, c.formId]) expect(text).not.toContain(leak);
 

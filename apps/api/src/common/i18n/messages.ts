@@ -343,6 +343,10 @@ export const MSG = {
   form_substitute_not_for_representative: 'forms.substitute_not_for_representative',
   form_substitute_same_mobile: 'forms.substitute_same_mobile',
   form_substitute_nafath_id: 'forms.substitute_nafath_id',
+  form_substitute_national_id_unneeded: 'forms.substitute_national_id_unneeded',
+  form_substitute_otp_first: 'forms.substitute_otp_first',
+  form_paper_signer_required: 'forms.paper_signer_required',
+  form_paper_signer_ambiguous: 'forms.paper_signer_ambiguous',
   form_substitute_not_approved: 'forms.substitute_not_approved',
   form_substitute_not_pending: 'forms.substitute_not_pending',
   /** ⚖️ إعدادُ توقيع النماذج (توجيه ٢٨٧ · ق-١٦٣٣ ⑬ · ق-١٦٣٥ ①). */
@@ -1465,8 +1469,24 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The substitute mobile is the tenant mobile itself',
   },
   [MSG.form_substitute_nafath_id]: {
-    ar: 'النموذجُ يشترط نفاذ، والمستلمُ البديل يوافق برمزٍ إلى جواله؛ فلا بديلَ في نموذجٍ يشترط نفاذ حتى يُحكم كيف يجتمعان، ويوقّع المستأجرُ أو ورقياً',
-    en: 'This form requires Nafath, while a substitute consents by a code to their mobile; no substitute applies to a Nafath form until that is decided, so the tenant signs or a paper signature is used',
+    ar: 'النموذجُ يشترط نفاذ: أدخل رقمَ هويّة المستلم البديل ليجتاز نفاذ بعد الرمز الذي يصل جواله',
+    en: 'This form requires Nafath: enter the substitute identity number so they pass Nafath after the code sent to their mobile',
+  },
+  [MSG.form_substitute_national_id_unneeded]: {
+    ar: 'رقمُ هويّة المستلم البديل لا يُطلب ولا يُحفظ إلا في نموذجٍ يشترط نفاذ',
+    en: 'The substitute identity number is requested and kept only for a form that requires Nafath',
+  },
+  [MSG.form_substitute_otp_first]: {
+    ar: 'ادخل أوّلاً بالرمز الذي يصل جوالك، ثم نفاذ',
+    en: 'Sign in first with the code sent to your mobile, then Nafath',
+  },
+  [MSG.form_paper_signer_required]: {
+    ar: 'الورقيّ عن شخصٍ اعتباريّ: اختر أن الممثّلَ المعيَّن هو من وقّع، أو اكتب اسمَ الموقّع ونوعَ سنده ورقمَه',
+    en: 'Paper signature for a legal person: choose that the designated representative signed, or enter the signer name, authority type and number',
+  },
+  [MSG.form_paper_signer_ambiguous]: {
+    ar: 'الورقيّ عن شخصٍ اعتباريّ: إمّا الممثّلُ المعيَّن وإمّا اسمُ الموقّع وسندُه، لا الاثنان معاً',
+    en: 'Paper signature for a legal person: either the designated representative or the signer name and authority, not both',
   },
   [MSG.form_substitute_not_approved]: {
     ar: 'لا مستلمَ بديلاً وافق عليه المستأجر لهذا النموذج',

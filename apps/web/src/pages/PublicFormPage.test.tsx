@@ -25,7 +25,7 @@ vi.mock('../components/SignaturePad', () => ({
   ),
 }));
 
-import { decidePublicSubstitute, objectPublicForm, openFormLink, requestFormOtp, signPublicForm, verifyFormOtp, viewPublicForm } from '../api/forms';
+import { decidePublicSubstitute, objectPublicForm, openFormLink, requestFormOtp, signPublicForm, startFormNafath, verifyFormOtp, viewPublicForm } from '../api/forms';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): تقديرٌ أوّلٌ قبل أن يُقاس تحت حِمل الحزمة.
 vi.setConfig({ testTimeout: 15_000 });
@@ -109,7 +109,25 @@ describe('⚖️ صفحةُ النموذج للمستأجر (توجيه ٢٨٧ �
     expect(sign().disabled).toBe(false);
     fireEvent.click(sign());
     await waitFor(() => expect(signPublicForm).toHaveBeenCalledWith(TOKEN, 'sess', expect.any(Blob)));
-    expect((await screen.findByTestId('public-form-done')).textContent).toContain('نسختك النهائية');
+    // ⚖️ النسخةُ النهائية إلى جوال بطاقة المستأجر في كلِّ مسار (`ق-١٦٧٨`).
+    expect((await screen.findByTestId('public-form-done')).textContent).toContain('جوال المستأجر المسجَّل');
+  });
+
+  it('⭐ البديلُ في نموذج نفاذ: الرمزُ أوّلاً ثم نفاذ بجلسة الرمز، ولا يُفتح النموذجُ بالرمز وحدَه (ق-١٦٧٧)', async () => {
+    vi.mocked(openFormLink).mockResolvedValue({ state: 'ACTIVE', purpose: 'SIGN', methods: { otp: true, nafath: true }, nafathAfterOtp: true, identityProvider: 'نفاذ' });
+    vi.mocked(requestFormOtp).mockResolvedValue({ challengeId: 'ch1', expiresAt: '2026-10-08T10:05:00.000Z', mobileMasked: '0566 ••• 101' });
+    vi.mocked(verifyFormOtp).mockResolvedValue({ session: 'otp-sess', expiresAt: '2026-10-08T10:30:00.000Z' });
+    vi.mocked(startFormNafath).mockResolvedValue({ displayCode: '42' });
+    mount();
+    await screen.findByRole('button', { name: 'أرسل رمزاً إلى جوالي' });
+    expect(screen.queryByRole('button', { name: 'التحقّق عبر نفاذ' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'أرسل رمزاً إلى جوالي' }));
+    fireEvent.change(await screen.findByLabelText('الرمز'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'دخول' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'التحقّق عبر نفاذ' }));
+    await waitFor(() => expect(startFormNafath).toHaveBeenCalledWith(TOKEN, 'otp-sess'));
+    expect(viewPublicForm).not.toHaveBeenCalled();
+    expect(await screen.findByText('42')).toBeTruthy();
   });
 
   it('⭐ رابطُ الموافقة على البديل: بعد الدخول يرى المستأجرُ اسمَ البديل وجوالَه مقنَّعاً ويوافق بالجلسة (ق-١٦٧٢)', async () => {

@@ -19,7 +19,8 @@ jest.setTimeout(120000);
  *    ويوافق، فيُقفل رابطُه ويصل البديلَ رابطُه، ويدخل البديلُ برمزٍ إلى جواله ويوقّع، والنسخةُ النهائية إلى المستأجر ·
  * ② الرفضُ يُبقي المستأجرَ مستلماً ورابطُه يعمل ·
  * ③ الموافقةُ بلا جلسةٍ تُردّ، وبرابط توقيعٍ تُردّ، ومرّتين تُردّ ·
- * ④ حقولٌ ناقصة · جوالُ المستأجر نفسُه · نموذجٌ لم يُرسل.
+ * ④ حقولٌ ناقصة · جوالُ المستأجر نفسُه · نموذجٌ لم يُرسل · رقمُ هويّةٍ في نموذجٍ لا يشترط نفاذ ·
+ * ⑤ في نموذجٍ يشترط نفاذ: رقمُ الهويّة إلزاميٌّ مشفَّر، والدخولُ بالرمز ثم نفاذ، والرمزُ وحدَه لا يرى ولا يوقّع (`ق-١٦٧٧`).
  */
 describe('Form signing substitute recipient (e2e)', () => {
   let app: INestApplication;
@@ -189,11 +190,13 @@ describe('Form signing substitute recipient (e2e)', () => {
     await requestSubstitute(c.contractId, c.formId, { name: '', mobile: uniqueMobile().local }).expect(400);
     const same = await requestSubstitute(c.contractId, c.formId, { name: 'بديل', mobile: c.mobile.local }).expect(409);
     expect(same.body.message).toContain('جوالُ المستأجر');
-    // ولا يُقبل رقمُ هويّةٍ للبديل (لا يلزم إلا لنفاذ).
-    await requestSubstitute(c.contractId, c.formId, { name: 'بديل', mobile: uniqueMobile().local, nationalId: '1012345678' }).expect(400);
+    // ولا يُقبل رقمُ هويّةٍ للبديل في نموذجٍ لا يشترط نفاذ (`ق-١٦٧٧`)، ولا يُحفظ.
+    const unneeded = await requestSubstitute(c.contractId, c.formId, { name: 'بديل', mobile: uniqueMobile().local, nationalId: '1012345678' }).expect(400);
+    expect(unneeded.body.message).toContain('إلا في نموذجٍ يشترط نفاذ');
+    expect(await inA((tx) => tx.formSignerDesignation.count({ where: { instanceId: c.formId } }))).toBe(0);
   });
 
-  it('⑤ لا بديلَ في نموذجٍ يشترط نفاذ حتى يُحكم (موافقتُه برمزٍ ولا رمزَ هنا)', async () => {
+  it('⑤ في نموذجٍ يشترط نفاذ: رقمُ هويّة البديل إلزاميٌّ مشفَّر، ويدخل بالرمز أوّلاً ثم نفاذ، ولا يرى ولا يوقّع بالرمز وحدَه (ق-١٦٧٧)', async () => {
     await http().put('/form-signing-settings').set('Authorization', bearer(a.token)).send({ nafathThreshold: 1000 }).expect(200);
     try {
       const tag = `${stamp}-${Math.random().toString(36).slice(2, 6)}`;
@@ -215,10 +218,49 @@ describe('Form signing substitute recipient (e2e)', () => {
       const sent = await sendForm(app, a.token, contract.body.id, form.body.id).expect(201);
       expect(sent.body.form.nafathRequired).toBe(true);
       const sub = uniqueMobile();
-      const refused = await requestSubstitute(contract.body.id, form.body.id, { name: 'بديل', mobile: sub.local }).expect(409);
-      expect(refused.body.message).toContain('نفاذ');
+      // بلا رقم هويّة يُردّ ولا يُكتب شيء.
+      const refused = await requestSubstitute(contract.body.id, form.body.id, { name: 'بديل', mobile: sub.local }).expect(400);
+      expect(refused.body.message).toContain('رقمَ هويّة المستلم البديل');
       expect(mockSms(app).lastTo(mobile.e164)?.text ?? '').not.toMatch(/شخصٌ آخر/);
       expect(await inA((tx) => tx.formSignerDesignation.count({ where: { instanceId: form.body.id } }))).toBe(0);
+
+      // برقمه يُقبل، ويُحفظ مشفَّراً ببصمة بحث.
+      await requestSubstitute(contract.body.id, form.body.id, { name: 'بديلُ نفاذ', mobile: sub.local, nationalId: '1098765432' }).expect(201);
+      const d = await inA((tx) => tx.formSignerDesignation.findFirstOrThrow({ where: { instanceId: form.body.id, role: 'SUBSTITUTE' } }));
+      expect(d.nationalIdCipher).toMatch(/^f1:/);
+      expect(d.nationalIdCipher).not.toContain('1098765432');
+      expect(d.nationalIdIndex).toBeTruthy();
+
+      // المستأجرُ يوافق برمزه.
+      const consent = linkOf(mobile.e164);
+      const consentSession = await loginByOtp(app, consent, mobile.e164);
+      await http().post(`/public/forms/${consent}/substitute/decision`).set('x-form-session', consentSession).send({ approve: true }).expect(200);
+
+      // البديلُ: الرمزُ أوّلاً ثم نفاذ.
+      const subLink = linkOf(sub.e164);
+      expect((await http().get(`/public/forms/${subLink}`).expect(200)).body).toMatchObject({ methods: { otp: true, nafath: true }, nafathAfterOtp: true });
+      const before = await http().post(`/public/forms/${subLink}/nafath`).expect(401);
+      expect(before.body.message).toContain('بالرمز');
+      const otpSession = await loginByOtp(app, subLink, sub.e164);
+      expect(mockSms(app).lastTo(sub.e164)?.text ?? '').toContain('ستستلم هذه الوحدة');
+      // بالرمز وحدَه لا يرى النموذجَ ولا يعترض ولا يوقّع.
+      await http().get(`/public/forms/${subLink}/form`).set('x-form-session', otpSession).expect(403);
+      await http().post(`/public/forms/${subLink}/objection`).set('x-form-session', otpSession).field('note', 'خطأ').expect(403);
+      await signAsTenant(app, subLink, otpSession).expect(403);
+      // ولا يُحكم نفاذ بلا جلسة الرمز.
+      await http().post(`/public/forms/${subLink}/nafath`).set('x-form-session', otpSession).expect(201);
+      await http().get(`/public/forms/${subLink}/nafath`).expect(401);
+      const polled = await http().get(`/public/forms/${subLink}/nafath`).set('x-form-session', otpSession).expect(200);
+      expect(polled.body.state).toBe('APPROVED');
+      const full = polled.body.session.session as string;
+      await http().get(`/public/forms/${subLink}/form`).set('x-form-session', full).expect(200);
+      const signed = await signAsTenant(app, subLink, full).expect(201);
+      expect(signed.body).toEqual({ status: 'SEALED', finalCopy: 'SENT' });
+      expect(mockSms(app).lastTo(mobile.e164)?.text).toMatch(/نسختك النهائية/);
+      const sig = await inA((tx) => tx.formSignature.findFirstOrThrow({ where: { instanceId: form.body.id, role: 'SUBSTITUTE' } }));
+      expect(sig.level).toBe('DRAWN_NAFATH');
+      expect(sig.challengeId).toBeTruthy();
+      expect(sig.identityTxRef).toBeTruthy();
     } finally {
       await http().put('/form-signing-settings').set('Authorization', bearer(a.token)).send({ nafathThreshold: null }).expect(200);
     }

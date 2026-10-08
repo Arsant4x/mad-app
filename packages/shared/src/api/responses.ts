@@ -352,6 +352,7 @@ export interface FormLinkOpenResponse {
   state: 'ACTIVE' | 'CLOSED';
   purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
   methods: FormLinkMethodsResponse;
+  nafathAfterOtp: boolean;
   identityProvider: string | null;
 }
 
@@ -450,7 +451,7 @@ export interface FormSessionResponse {
 /** ردٌّ — `FormSignedResponse` في الخادم (ق-١٤٣٨). */
 export interface FormSignedResponse {
   status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
-  finalCopy: 'SENT' | 'FAILED';
+  finalCopy: 'SENT' | 'FAILED' | 'NONE';
 }
 
 /** ردٌّ — `FormSigningEventResponse` في الخادم (ق-١٤٣٨). */

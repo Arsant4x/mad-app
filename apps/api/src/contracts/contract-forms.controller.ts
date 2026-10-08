@@ -142,7 +142,7 @@ export class ContractFormsController {
     @UploadedFiles() files: { paper?: Express.Multer.File[]; drawing?: Express.Multer.File[]; authorityDocument?: Express.Multer.File[] } | undefined,
   ) {
     const authority = dto.authorityType || dto.authorityRef ? { type: dto.authorityType ?? '', ref: dto.authorityRef ?? '' } : null;
-    return this.service.paper(tenant.companyId, id, formId, actorOf(tenant, req), files?.paper?.[0], files?.drawing?.[0], dto.signerName ?? null, metaOf(req), authority, files?.authorityDocument?.[0]);
+    return this.service.paper(tenant.companyId, id, formId, actorOf(tenant, req), files?.paper?.[0], files?.drawing?.[0], dto.signerName ?? null, metaOf(req), authority, files?.authorityDocument?.[0], dto.designatedSigned === 'true');
   }
 
   /** ⚖️ **رابطُ جهاز الموظّف** (توجيه ٢٨٧ ⑤): يعود للموظّف ولا يُرسل، والخطوتان نفسُهما. */

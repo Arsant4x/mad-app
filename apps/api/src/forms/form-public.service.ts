@@ -12,7 +12,7 @@ import { OtpChallengesService } from '../verification/otp-challenges.service';
 import { VerificationGateway } from '../verification/verification-gateway.service';
 import type { VerificationPurpose } from '../verification/otp-policy';
 import { contentHashOf, FormInstancesService, groupIdOf, INSTANCE_INCLUDE, verifyInstanceWithinTx, type InstanceFull } from './form-instances.service';
-import { assertDrawing, FormSigningService, type FormRecipient, type RequestMeta, type UploadedEvidence } from './form-signing.service';
+import { assertDrawing, FormSigningService, type RequestMeta, type UploadedEvidence } from './form-signing.service';
 import { bytesSha256, formLinkUrl, LINK_ACTOR, opaqueTokenHash, recordFormEvent, SMS_TEXT, type FormSigningEventKind } from './form-signing.util';
 
 type Tx = Prisma.TransactionClient;
@@ -53,13 +53,15 @@ export class FormPublicService {
       const plan = identityPlanOf((await tx.company.findUniqueOrThrow({ where: { id: link.companyId }, select: { country: true } })).country);
       const party = active ? await this.recipientOrNull(tx, link, instance) : null;
       const nafathPossible = !!(plan && party?.idIndex && party.idScheme && plan.idSchemes.includes(party.idScheme));
-      const nafathOnly = link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired;
+      const nafathOnly = nafathOnlyOf(link, instance);
       // موافقةُ المستأجر على البديل برمزه (`ق-١٦٧٢`) لا بنفاذ.
       const consent = link.purpose === FormLinkPurpose.SUBSTITUTE_CONSENT;
       return {
         state: active ? ('ACTIVE' as const) : ('CLOSED' as const),
         purpose: link.purpose,
         methods: { otp: active && !nafathOnly, nafath: active && nafathPossible && !consent },
+        // ⚖️ البديلُ في نموذج نفاذ: الرمزُ أوّلاً ثم نفاذ (`ق-١٦٧٧`)، لا أحدُهما.
+        nafathAfterOtp: active && twoStepOf(link, instance),
         identityProvider: plan?.displayName ?? null,
       };
     });
@@ -70,7 +72,7 @@ export class FormPublicService {
     const link = await this.resolve(token);
     const outbound = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
-      if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired) throw new ForbiddenException(MSG.form_signing_nafath_only);
+      if (nafathOnlyOf(link, instance)) throw new ForbiddenException(MSG.form_signing_nafath_only);
       const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const challenge = await this.otp.issueWithinTx(tx, {
         companyId: link.companyId,
@@ -107,7 +109,7 @@ export class FormPublicService {
     const link = await this.resolve(token);
     const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
-      if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired) throw new ForbiddenException(MSG.form_signing_nafath_only);
+      if (nafathOnlyOf(link, instance)) throw new ForbiddenException(MSG.form_signing_nafath_only);
       const verdict = await this.otp.verifyWithinTx(tx, {
         companyId: link.companyId,
         id: input.challengeId,
@@ -132,11 +134,15 @@ export class FormPublicService {
     return outcome.session;
   }
 
-  /** نفاذ: يبدأ معاملةً برقم الهويّة في بطاقة العميل، ويُعيد الرقمَ الذي يختاره في تطبيقه. */
-  async startNafath(token: string, meta: RequestMeta) {
+  /**
+   * نفاذ: يبدأ معاملةً برقم الهويّة في بطاقة العميل، ويُعيد الرقمَ الذي يختاره في تطبيقه. ⚖️ **والبديلُ في نموذج نفاذ** (`ق-١٦٧٧`) لا يبدأ نفاذ
+   * إلا بجلسة رمزٍ قائمةٍ على رابطه: الرمزُ أوّلاً.
+   */
+  async startNafath(token: string, session: string | undefined, meta: RequestMeta) {
     const link = await this.resolve(token);
     const started = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
+      if (twoStepOf(link, instance)) await this.otpStepDone(tx, link, session);
       const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const plan = identityPlanOf(party.country);
       if (!plan || !party.idScheme || !plan.idSchemes.includes(party.idScheme)) {
@@ -155,13 +161,17 @@ export class FormPublicService {
     return { displayCode: tx.displayCode };
   }
 
-  /** حكمُ نفاذ: المقبولُ برقم هويّةٍ يطابق بصمةَ البطاقة يفتح الجلسة، والمرفوضُ يُرفض. */
-  async pollNafath(token: string, meta: RequestMeta) {
+  /**
+   * حكمُ نفاذ: المقبولُ برقم هويّةٍ يطابق بصمةَ البطاقة يفتح الجلسة، والمرفوضُ يُرفض. وللبديل في نموذج نفاذ تبقى مرجعيّةُ رمزه على الجلسة
+   * (`sessionRef`) فيحمل صفُّ توقيعه الاثنين.
+   */
+  async pollNafath(token: string, session: string | undefined, meta: RequestMeta) {
     const link = await this.resolve(token);
     if (!link.identityTxRef) throw new ConflictException(MSG.form_signing_nafath_not_started);
     const decision = await this.gateway.identity().status(link.identityTxRef);
     const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
+      const otpStep = twoStepOf(link, instance) ? await this.otpStepDone(tx, link, session) : null;
       if (decision.decision === 'PENDING') return { state: 'PENDING' as const, session: null, instanceId: instance.id };
       const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const matches = decision.decision === 'APPROVED' && !!decision.nationalId && !!party.idIndex && party.idIndex === customerOtherIdIndex(decision.nationalId, link.companyId);
@@ -169,9 +179,9 @@ export class FormPublicService {
         await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'NAFATH_REJECTED', actor: LINK_ACTOR, note: decision.decision });
         return { state: 'REJECTED' as const, session: null, instanceId: instance.id };
       }
-      const session = await this.openSession(tx, link, 'NAFATH', link.identityTxRef!);
-      await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'LOGIN', actor: LINK_ACTOR, note: 'NAFATH' });
-      return { state: 'APPROVED' as const, session, instanceId: instance.id };
+      const opened = await this.openSession(tx, link, 'NAFATH', otpStep ? otpStep.challengeId : link.identityTxRef!);
+      await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'LOGIN', actor: LINK_ACTOR, note: otpStep ? 'OTP+NAFATH' : 'NAFATH' });
+      return { state: 'APPROVED' as const, session: opened, instanceId: instance.id };
     });
     await this.trail(link, outcome.instanceId, 'nafath_polled', meta, { state: outcome.state });
     if (outcome.state === 'REJECTED') throw new ForbiddenException(MSG.form_signing_nafath_rejected);
@@ -236,15 +246,15 @@ export class FormPublicService {
     if (!acknowledged) throw new ConflictException(MSG.form_signing_ack_required);
     const drawing = assertDrawing(drawingFile);
     const stored = await this.files.uploadSensitive(link.companyId, drawing);
-    let finalToken: string;
-    let party: FormRecipient;
+    let finalToken: string | null;
+    let party: { mobile: string; masked: string } | null;
     let instanceId: string;
     try {
       ({ finalToken, party, instanceId } = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
         const fresh = await this.sessionLink(tx, link, session);
         await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${link.instanceId} FOR UPDATE`;
         const instance = await this.activeInstance(tx, link);
-        if (instance.nafathRequired && fresh.sessionMethod !== 'NAFATH') throw new ForbiddenException(MSG.form_signing_nafath_only);
+        this.assertFullLogin(fresh, link, instance);
         const staff = instance.signatures.find((s) => s.role === FormSignerRole.STAFF);
         if (!staff) throw new ConflictException(MSG.form_signing_not_awaiting);
         // ما يوقّعه الطرفُ هو ما وقّعه الموظّفُ بعينه — والقاعدةُ تمنع تعديلَ المرسَل، وهذا يقابل البصمتين.
@@ -271,8 +281,9 @@ export class FormPublicService {
             evidenceKey: stored.key,
             evidenceSha256: bytesSha256(drawing.buffer),
             signedContentHash: contentHashOf(instance),
-            challengeId: fresh.sessionMethod === 'OTP' ? fresh.sessionRef : null,
-            identityTxRef: fresh.sessionMethod === 'NAFATH' ? fresh.sessionRef : null,
+            // البديلُ في نموذج نفاذ دخل بالاثنين: مرجعُ رمزه على الجلسة، ومعاملةُ نفاذ على الرابط (`ق-١٦٧٧`).
+            challengeId: fresh.sessionMethod === 'OTP' || twoStepOf(link, instance) ? fresh.sessionRef : null,
+            identityTxRef: fresh.sessionMethod === 'NAFATH' ? fresh.identityTxRef : null,
             ip: meta.ip,
             userAgent: meta.userAgent,
           },
@@ -285,9 +296,10 @@ export class FormPublicService {
           where: { instanceId: instance.id, revokedAt: null, purpose: { in: [FormLinkPurpose.SIGN, FormLinkPurpose.SUBSTITUTE_CONSENT] } },
           data: { revokedAt: new Date() },
         });
-        // النسخةُ النهائية للمستأجر نفسِه حين وقّع عنه بديل (توجيه ٢٨٧ ⑨: «وصل المستأجرَ رابطُ النسخة النهائية»)، ولمن وقّع فيما سواه.
-        const finalTo = p.role === FormSignerRole.SUBSTITUTE ? await this.signing.recipientOf(tx, link.companyId, instance, FormSignerRole.COUNTERPARTY) : p;
-        const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, finalTo.role, null);
+        // ⚖️ النسخةُ النهائية إلى جوال بطاقة المستأجر في كلِّ مسار (`ق-١٦٧٨` (ب) · توجيه ٢٨٧ ⑨)، وقّع بنفسه أو عنه ممثّلٌ أو بديل؛
+        // وبلا جوالٍ صالحٍ في البطاقة لا رابطَ نهائيّ.
+        const finalTo = await this.signing.finalCopyRecipientOrNull(tx, link.companyId, instance.counterpartyCustomerId);
+        const t = finalTo ? await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, finalTo.role, null) : null;
         return { finalToken: t, party: finalTo, instanceId: instance.id };
       }));
     } catch (e) {
@@ -295,7 +307,10 @@ export class FormPublicService {
       throw e;
     }
     await this.trail(link, instanceId, 'signed', meta, null);
-    const delivery = await this.signing.deliver(link.companyId, instanceId, party.mobile, party.masked, SMS_TEXT.finalCopy(formLinkUrl(finalToken)), 'FINAL_SENT', 'FINAL_SEND_FAILED', LINK_ACTOR);
+    const delivery =
+      party && finalToken
+        ? await this.signing.deliver(link.companyId, instanceId, party.mobile, party.masked, SMS_TEXT.finalCopy(formLinkUrl(finalToken)), 'FINAL_SENT', 'FINAL_SEND_FAILED', LINK_ACTOR)
+        : ('NONE' as const);
     return { status: FormInstanceStatus.SEALED, finalCopy: delivery };
   }
 
@@ -310,9 +325,10 @@ export class FormPublicService {
     let instanceId: string;
     try {
       instanceId = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
-        await this.sessionLink(tx, link, session);
+        const fresh = await this.sessionLink(tx, link, session);
         await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${link.instanceId} FOR UPDATE`;
         const instance = await this.activeInstance(tx, link);
+        this.assertFullLogin(fresh, link, instance);
         const p = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
         await tx.formObjection.create({
           data: {
@@ -389,10 +405,31 @@ export class FormPublicService {
     return fresh;
   }
 
+  /**
+   * ⚖️ **البديلُ في نموذج نفاذ** (`ق-١٦٧٧`): جلسةُ رمزٍ قائمةٌ على رابطه شرطُ بدء نفاذ وحكمِه — فلا نفاذَ قبل الرمز. ويُعيد مرجعَ الرمز ليُحمل
+   * على جلسة نفاذ.
+   */
+  private async otpStepDone(tx: Tx, link: LinkRow, session: string | undefined) {
+    let fresh: Awaited<ReturnType<FormPublicService['sessionLink']>>;
+    try {
+      fresh = await this.sessionLink(tx, link, session);
+    } catch {
+      throw new UnauthorizedException(MSG.form_substitute_otp_first);
+    }
+    if (!fresh.sessionRef || (fresh.sessionMethod !== 'OTP' && fresh.sessionMethod !== 'NAFATH')) throw new UnauthorizedException(MSG.form_substitute_otp_first);
+    return { challengeId: fresh.sessionRef };
+  }
+
+  /** في نموذجٍ يشترط نفاذ لا يُرى النموذجُ ولا يُعترض عليه ولا يُوقَّع إلا بجلسة نفاذ — ولو قامت قبلها جلسةُ رمز البديل (`ق-١٦٧٧`). */
+  private assertFullLogin(fresh: { sessionMethod: string | null }, link: LinkRow, instance: InstanceFull) {
+    if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired && fresh.sessionMethod !== 'NAFATH') throw new ForbiddenException(MSG.form_signing_nafath_only);
+  }
+
   private async withSession<T>(link: LinkRow, session: string | undefined, meta: RequestMeta, action: string, work: (tx: Tx, instance: InstanceFull) => Promise<T>) {
     const result = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
-      await this.sessionLink(tx, link, session);
+      const fresh = await this.sessionLink(tx, link, session);
       const instance = await this.activeInstance(tx, link);
+      this.assertFullLogin(fresh, link, instance);
       return { value: await work(tx, instance), instanceId: instance.id };
     });
     await this.trail(link, result.instanceId, action, meta, null);
@@ -446,6 +483,14 @@ function isActive(link: LinkRow, instance: { status: FormInstanceStatus }): bool
   if (link.purpose === FormLinkPurpose.FINAL_COPY) return instance.status === FormInstanceStatus.SEALED;
   return false;
 }
+
+/** ⚖️ البديلُ في نموذجٍ يشترط نفاذ: الرمزُ أوّلاً ثم نفاذ (`ق-١٦٧٧`). */
+const twoStepOf = (link: LinkRow, instance: { nafathRequired: boolean }): boolean =>
+  link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired && link.recipientRole === FormSignerRole.SUBSTITUTE;
+
+/** نفاذٌ وحدَه: رابطُ توقيعٍ لنموذجٍ يشترط نفاذ، إلا البديلَ فرمزُه أوّلاً. */
+const nafathOnlyOf = (link: LinkRow, instance: { nafathRequired: boolean }): boolean =>
+  link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired && !twoStepOf(link, instance);
 
 const otpPurposeOf = (purpose: FormLinkPurpose): VerificationPurpose =>
   purpose === FormLinkPurpose.FINAL_COPY ? 'FORM_FINAL_COPY_LOGIN' : purpose === FormLinkPurpose.SUBSTITUTE_CONSENT ? 'FORM_SUBSTITUTE_CONSENT' : 'FORM_SIGNER_LOGIN';

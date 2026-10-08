@@ -251,12 +251,13 @@ export class FormSigningService {
    * المستأجر»، **ويصل جوالَ المستأجر المسجَّل رابطٌ يدخله برمزه** فيرى اسمَ البديل والنموذجَ ويوافق أو يرفض؛ **والرمزُ لا يمرّ بالموظّف**. ولا
    * بديلَ عن ممثّل شخصٍ اعتباريّ (الممثّلُ نفسُه من يُعيَّن)، وطلبٌ جديد يحلّ محلّ ما لم يُحكم فيه.
    *
-   * ⚠️ **ولا بديلَ في نموذجٍ يشترط نفاذ، حتى يحكم صاحبُ المشروع**: موافقةُ البديل على حفظ بياناته بإدخال رمزٍ يحمل نصَّ الإحاطة (`ق-١٦٧٣` ·
-   * `ق-١٦٧٤`)، والنموذجُ الذي يشترط نفاذ لا رمزَ فيه؛ فيُردّ مسمّىً ولا يُخمَّن كيف يجتمعان. **ولا يُحفظ رقمُ هويّته** لأنه لا يلزم إلا لنفاذ.
+   * ⚖️ **وفي نموذجٍ يشترط نفاذ: الرمزُ أوّلاً ثم نفاذ** (`ق-١٦٧٧`): البديلُ يدخل برمزٍ إلى جواله يحمل الإحاطة (`ق-١٦٧٤`) ثم يجتاز نفاذ برقم
+   * هويّته؛ فرقمُه إلزاميٌّ عند الطلب في هذه الحالة وحدَها، ويُحفظ مشفَّراً ببصمة بحثٍ كهويّة الممثّل. وفي غيرها لا يُطلب ولا يُحفظ.
    */
-  async requestSubstitute(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor, input: { name: string; mobile: string }) {
+  async requestSubstitute(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor, input: { name: string; mobile: string; nationalId?: string | null }) {
     const name = input.name?.trim() ?? '';
     if (!name || !input.mobile?.trim()) throw new BadRequestException(MSG.form_substitute_required_fields);
+    const nationalId = input.nationalId?.trim() ? normalizeOtherId(REPRESENTATIVE_ID_SCHEME, input.nationalId) : null;
     const outbound = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${id} FOR UPDATE`;
       const instance = await this.awaiting(tx, linked, id);
@@ -266,7 +267,12 @@ export class FormSigningService {
       const mobile = normalizeMobile(input.mobile, tenant.country);
       if (!mobile) throw new ConflictException(MSG.form_signing_mobile_invalid);
       if (mobile === tenant.mobile) throw new ConflictException(MSG.form_substitute_same_mobile);
-      if (instance.nafathRequired) throw new ConflictException(MSG.form_substitute_nafath_id);
+      if (instance.nafathRequired) {
+        const plan = identityPlanOf(tenant.country);
+        if (!nationalId || !plan || !plan.idSchemes.includes(REPRESENTATIVE_ID_SCHEME)) throw new BadRequestException(MSG.form_substitute_nafath_id);
+      } else if (nationalId) {
+        throw new BadRequestException(MSG.form_substitute_national_id_unneeded);
+      }
       // طلبٌ جديد يحلّ محلّ ما ينتظر؛ والموافَقُ عليه يبقى حتى يحلّ محلَّه موافَقٌ أحدث.
       await tx.formSignerDesignation.updateMany({ where: { groupId: group, role: FormSignerRole.SUBSTITUTE, status: 'PENDING_CONSENT' }, data: { status: 'REPLACED', decidedAt: new Date() } });
       await tx.formSigningLink.updateMany({ where: { instanceId: id, purpose: FormLinkPurpose.SUBSTITUTE_CONSENT, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -283,6 +289,8 @@ export class FormSigningService {
           mobileCipher: encryptField(mobile, designationAad(companyId, designationId, 'mobile')),
           mobileMasked: masked,
           mobileIndex: mobileIndex(companyId, mobile),
+          nationalIdCipher: nationalId ? encryptField(nationalId, designationAad(companyId, designationId, 'national_id')) : null,
+          nationalIdIndex: nationalId ? customerOtherIdIndex(nationalId, companyId) : null,
           status: 'PENDING_CONSENT',
         },
       });
@@ -317,6 +325,7 @@ export class FormSigningService {
    * ⚖️ **والمستأجرُ شخصٌ اعتباريّ يوقّع عنه ممثّلُه ورقاً** (`ق-١٦٧٥`): الصفُّ بدور «الممثّل» باسم من وقّع ونوعِ سنده (مديرٌ في السجلّ التجاريّ
    * أو وكالةٌ من ناجز) ورقمِه، من الطلب أو من ممثّلٍ معيَّنٍ للمجموعة؛ ويُتحقَّق من السند بالمزوّد إن وُجد (وما لم يُعثر عليه يُردّ)، **وبلا
    * مزوّدٍ «لم يُتحقَّق منه»**، وسندُه يدخل بصمةَ الختم كالممثّل الإلكترونيّ. **وشهادةُ الموظّف تبقى بديلَ نفاذ** في الورقيّ (`ق-١٦٧٦` ⑦).
+   * ⚖️ **والموقّعُ يُعلن ولا يُستنتج، والنسخةُ النهائية إلى جوال البطاقة** (`ق-١٦٧٨`).
    */
   async signPaper(
     companyId: string,
@@ -331,6 +340,7 @@ export class FormSigningService {
       signerName?: string | null;
       authority?: { type: string; ref: string } | null;
       authorityDocument?: UploadedEvidence | undefined;
+      designatedSigned?: boolean;
       meta: RequestMeta;
     },
   ) {
@@ -340,7 +350,7 @@ export class FormSigningService {
     const document = input.authorityDocument?.buffer?.length ? input.authorityDocument : null;
     if (document && !PAPER_TYPES.has(document.mimetype)) throw new BadRequestException(MSG.form_paper_file_required);
     // من يوقّع ورقاً عن الطرف: يُقرأ قبل المعاملة لأن التحقّقَ من السند نداءُ شبكة.
-    const paperRep = await this.paperRepresentativeOf(companyId, linked, id, input.counterparty, input.signerName ?? null, input.authority ?? null);
+    const paperRep = await this.paperRepresentativeOf(companyId, linked, id, input.counterparty, input.signerName ?? null, input.authority ?? null, input.designatedSigned === true);
     const storedPaper = await this.files.uploadSensitive(companyId, paper);
     const storedDrawing = drawing ? await this.files.uploadSensitive(companyId, drawing) : null;
     const storedDocument = paperRep && document ? await this.files.uploadSensitive(companyId, document) : null;
@@ -397,12 +407,12 @@ export class FormSigningService {
         // الصفةُ تُقرأ ثانيةً تحت القفل: الحكمُ بما في البطاقة الآن لا بما قُرئ قبل المعاملة.
         if ((customer.kind === 'LEGAL_PERSON') !== !!paperRep) throw new ConflictException(MSG.form_signing_content_changed);
         const country = await countryOf(tx, companyId);
-        // الجوالُ اختياريٌّ هنا (من لا جوالَ له يوقّع ورقاً): يُكتب مقنَّعاً وبصمتَه إن صلح، ويُرسل إليه رابطُ النسخة النهائية؛ وللممثّل جوالُه
-        // المعيَّن إن وُجد، وإلا فجوالُ البطاقة للنسخة النهائية وحدَها لا على صفّ توقيعه.
+        // الجوالُ اختياريٌّ هنا (من لا جوالَ له يوقّع ورقاً): على صفّ التوقيع جوالُ من وقّع مقنَّعاً وبصمتُه إن صلح (للممثّل جوالُه المعيَّن)،
+        // ⚖️ ورابطُ النسخة النهائية إلى جوال بطاقة المستأجر وحدَه (`ق-١٦٧٨` (ب)).
         const cardMobile = normalizeMobile(customer.phone, country);
         const signerMobile = paperRep ? paperRep.mobile : cardMobile;
         const masked = signerMobile ? maskMobile(signerMobile, country) : null;
-        const finalMobile = paperRep ? (paperRep.mobile ?? cardMobile) : cardMobile;
+        const finalMobile = cardMobile;
         await tx.formSignature.create({
           data: {
             companyId,
@@ -435,8 +445,7 @@ export class FormSigningService {
         await recordFormEvent(tx, { companyId, instanceId: id, kind: 'SEALED', actor: input.actor.name });
         await tx.formSigningLink.updateMany({ where: { instanceId: id, revokedAt: null, purpose: FormLinkPurpose.SIGN }, data: { revokedAt: new Date() } });
         if (!finalMobile) return null;
-        const finalRole = paperRep?.mobile ? FormSignerRole.REPRESENTATIVE : FormSignerRole.COUNTERPARTY;
-        const token = await this.openLink(tx, companyId, id, FormLinkPurpose.FINAL_COPY, finalRole, null);
+        const token = await this.openLink(tx, companyId, id, FormLinkPurpose.FINAL_COPY, FormSignerRole.COUNTERPARTY, null);
         return { to: finalMobile, masked: maskMobile(finalMobile, country), token };
       });
     } catch (e) {
@@ -554,6 +563,19 @@ export class FormSigningService {
     return { customer, mobile, masked: maskMobile(mobile, country), index: mobileIndex(companyId, mobile), country };
   }
 
+  /**
+   * ⚖️ **مستلمُ النسخة النهائية في كلِّ مسار: جوالُ بطاقة المستأجر** (`ق-١٦٧٨` (ب) · توجيه ٢٨٧ ⑨)، وقّع بنفسه أو عنه ممثّلٌ أو بديل؛ وبلا جوالٍ
+   * صالحٍ في البطاقة لا رابطَ نهائيّ (`null`) ولا يُحبس به التوقيع.
+   */
+  async finalCopyRecipientOrNull(tx: Tx, companyId: string, customerId: string | null): Promise<{ role: FormSignerRole; mobile: string; masked: string } | null> {
+    if (!customerId) return null;
+    const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { phone: true } });
+    if (!customer) return null;
+    const country = await countryOf(tx, companyId);
+    const mobile = normalizeMobile(customer.phone, country);
+    return mobile ? { role: FormSignerRole.COUNTERPARTY, mobile, masked: maskMobile(mobile, country) } : null;
+  }
+
   /** من يستلم روابطَ المجموعة: بديلٌ وافق عليه المستأجر، أو ممثّلٌ معيَّن، وإلا الطرفُ نفسُه. */
   async recipientRoleOf(tx: Tx, instance: { id: string; revisionGroupId: string | null }): Promise<FormSignerRole> {
     const group = groupIdOf(instance);
@@ -649,10 +671,10 @@ export class FormSigningService {
   }
 
   /**
-   * ⚖️ **من يوقّع ورقاً عن الطرف** (`ق-١٦٧٥`): للشخص الطبيعيّ لا أحد (يوقّع بنفسه، وحقولُ السند تُردّ `400`)؛ وللشخص الاعتباريّ ممثّلٌ
-   * **إمّا بثلاثته في الطلب** (اسمُ من وقّع ونوعُ السند ورقمُه، ويُتحقَّق منه بالمزوّد إن وُجد) **وإمّا ممثّلٌ معيَّنٌ للمجموعة** بسنده وحكمه
-   * وجواله؛ ولا ثالث: اسمٌ بلا سندٍ، أو لا اسمَ ولا تعيين، يُردّ `400`. والصفةُ تُقرأ من حيث يقرؤها الإرسال: من الطلب للمسوّدة، ومن
-   * المختوم على النسخة بعدها؛ وتُعاد قراءتُها من البطاقة تحت القفل.
+   * ⚖️ **من يوقّع ورقاً عن الطرف** (`ق-١٦٧٥` · `ق-١٦٧٨`): للشخص الطبيعيّ لا أحد (يوقّع بنفسه، وحقولُ السند واختيارُ الممثّل يُردّان `400`)؛
+   * **وللشخص الاعتباريّ يُعلن الموظّفُ الموقّعَ ولا يُستنتج من خاناتٍ متروكة**: إمّا اختيارٌ صريحٌ أن الممثّلَ المعيَّن هو من وقّع (وبلا ممثّلٍ
+   * معيَّن `409`)، وإمّا اسمُ الموقّع ونوعُ سنده ورقمُه (ويُتحقَّق منه بالمزوّد إن وُجد). وما سواهما يُردّ `400`: الاختيارُ مع الحقول، أو الحقولُ
+   * ناقصة، أو لا شيء. والصفةُ تُقرأ من حيث يقرؤها الإرسال: من الطلب للمسوّدة، ومن المختوم على النسخة بعدها؛ وتُعاد قراءتُها تحت القفل.
    */
   private async paperRepresentativeOf(
     companyId: string,
@@ -661,6 +683,7 @@ export class FormSigningService {
     counterparty: FormCounterparty | null,
     signerName: string | null,
     authority: { type: string; ref: string } | null,
+    designatedSigned: boolean,
   ): Promise<{
     name: string;
     type: string;
@@ -682,8 +705,22 @@ export class FormSigningService {
     const hasAuthority = !!(authority && (authority.type?.trim() || authority.ref?.trim()));
     if (!context) return null;
     if (!context.legal) {
-      if (hasAuthority) throw new BadRequestException(MSG.form_representative_legal_only);
+      if (hasAuthority || designatedSigned) throw new BadRequestException(MSG.form_representative_legal_only);
       return null;
+    }
+    if (designatedSigned) {
+      if (hasAuthority || signerName?.trim()) throw new BadRequestException(MSG.form_paper_signer_ambiguous);
+      const d = context.designation;
+      if (!d) throw new ConflictException(MSG.form_signing_representative_required);
+      return {
+        name: d.name,
+        type: d.authorityType!,
+        ref: d.authorityRef!,
+        evidenceKey: d.authorityEvidenceKey,
+        evidenceSha256: d.authorityEvidenceSha256,
+        verification: (d.authorityVerification as 'VERIFIED' | 'UNVERIFIED' | null) ?? 'UNVERIFIED',
+        mobile: decryptField(d.mobileCipher, designationAad(companyId, d.id, 'mobile')),
+      };
     }
     if (hasAuthority) {
       const name = signerName?.trim() ?? '';
@@ -692,17 +729,9 @@ export class FormSigningService {
       const verification = await this.verifyAuthority({ name, mobile: '', authorityType: authority!.type, authorityRef: ref });
       return { name, type: authority!.type, ref, evidenceKey: null, evidenceSha256: null, verification, mobile: null };
     }
-    const d = context.designation;
-    if (signerName?.trim() || !d) throw new BadRequestException(MSG.form_representative_required_fields);
-    return {
-      name: d.name,
-      type: d.authorityType!,
-      ref: d.authorityRef!,
-      evidenceKey: d.authorityEvidenceKey,
-      evidenceSha256: d.authorityEvidenceSha256,
-      verification: (d.authorityVerification as 'VERIFIED' | 'UNVERIFIED' | null) ?? 'UNVERIFIED',
-      mobile: decryptField(d.mobileCipher, designationAad(companyId, d.id, 'mobile')),
-    };
+    // حقولٌ متروكةٌ بلا اختيار لا تعني الممثّلَ المعيَّن (`ق-١٦٧٨` (أ)).
+    if (signerName?.trim()) throw new BadRequestException(MSG.form_representative_required_fields);
+    throw new BadRequestException(MSG.form_paper_signer_required);
   }
 
   /**
