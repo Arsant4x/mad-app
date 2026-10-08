@@ -110,6 +110,15 @@ export class CreateContractDto extends CurrencyFieldsDto {
   @IsString()
   ejarNo?: string;
 
+  /**
+   * ⚖️ **رقمُ هويّة المستأجر — اختياريّ، ويُشفَّر في التطبيق** (حكمُ صاحب المشروع على السؤال ٩٤٨، الخيار «ب»: كهويّة الموظف
+   * `ق-١٣٤٥` · توجيه ٢٨٦). يُطبَّع بقاعدة المعرّفات (`normalizeIdentifier`) ويُكتب نصّاً مشفَّراً ببصمته، ولا يخرج إلا في التفصيل.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  tenantIdNumber?: string;
+
   /** ⚖️ بنودُ الرسوم فوق الإيجار (السؤالان ٤٩ و٤١٣ · `ق-١٦٠٠`) — كلٌّ يُطالَب مع كلِّ قسطٍ يحلّ بضريبته. */
   @IsOptional()
   @IsArray()

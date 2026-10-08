@@ -36,7 +36,7 @@ const { listInvoices } = await import('../../api/invoices');
 const { CustomersPage } = await import('./CustomersPage');
 
 const customer = (id: string, name: string, outstanding?: string, kind: Customer['kind'] = 'NATURAL'): Customer =>
-  ({ id, name, kind, otherIdScheme: null, otherId: null, country: 'SA', vatNumber: '', phone: '', creditLimit: '0', archived: false, outstanding }) as unknown as Customer;
+  ({ id, name, kind, otherIdScheme: null, otherIdOnFile: false, country: 'SA', vatNumber: '', phone: '', creditLimit: '0', archived: false, outstanding }) as unknown as Customer;
 
 /** فاتورة بأقل ما تحتاجه الشاشة — إجماليُّها هو ما كانت الشاشةُ تجمعه خطأً. */
 const invoice = (id: string, customerId: string, total: string, outstanding: string, status: string): Invoice =>

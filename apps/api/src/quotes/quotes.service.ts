@@ -17,9 +17,11 @@ import { CreateInvoiceDto } from '../invoices/dto/create-invoice.dto';
 import { CreateQuoteDto, QuoteLineDto, UpdateQuoteDto } from './dto/quote.dto';
 import { isQuoteExpired } from './quote-expiry.util';
 import { LINE_ORDER, numberLines } from '../common/document-lines.util';
+import { CUSTOMER_PUBLIC_SELECT } from '../customers/customer-identity.util';
 
 /** السطورُ بترتيبها المعلَن (`ق-١٤١٢`) — والعرضُ مصدرُ ترتيب فاتورته المحوَّلة. */
-const QUOTE_INCLUDE = { customer: true, lines: LINE_ORDER } as const;
+// ⚖️ والعميلُ بأعمدته العامّة (توجيه ٢٨٦) — بلا نصِّ المعرّف البديل المشفَّر ولا بصمته.
+const QUOTE_INCLUDE = { customer: { select: CUSTOMER_PUBLIC_SELECT }, lines: LINE_ORDER } as const;
 
 /** نفس رياضيات الفاتورة حرفياً — **الدالة نفسها** (`common/money/totals.ts`) لا نسخةٌ منها،
  * فما يراه العميل في العرض هو ما سيُفوتَر هللةً بهللة. (كانت هنا نسخةٌ **غير مدوَّرة**

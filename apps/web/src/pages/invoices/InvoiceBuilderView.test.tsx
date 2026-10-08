@@ -11,7 +11,7 @@ vi.setConfig({ testTimeout: 37_000 });
 
 vi.mock('../../api/invoices', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../api/invoices')>()), listOpenPrepayments: vi.fn() }));
 
-const customer: Customer = { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherId: null, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' };
+const customer: Customer = { archived: false, id: 'c1', name: 'عميل الدفعة', kind: 'NATURAL', otherIdScheme: null, otherIdOnFile: false, country: 'SA', vatNumber: null, phone: null, creditLimit: '0.00' };
 
 /** ④A1 — بنّاءُ الفاتورة يقرأ الدفعاتِ المقدَّمة المعلَّقة من الخادم للعميل المختار، ويرسل ما اختير منها بمعرّفاته. */
 describe('بنّاءُ الفاتورة — تطبيقُ الدفعات المقدَّمة (④A1)', () => {

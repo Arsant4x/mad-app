@@ -26,6 +26,7 @@ import {
   postShiftVarianceEntry,
 } from '../journal/pos-settlement.util';
 import { assertBuyerKindDeclared } from '../customers/buyer-kind.util';
+import { CUSTOMER_PUBLIC_SELECT } from '../customers/customer-identity.util';
 import { gatedReceiptFields, invoiceTypeFor, ReceiptClearance, ReceiptGateInput } from '../zatca/hash-chain.util';
 import { translate } from '../common/i18n/messages';
 import { PaymentsService } from '../payments/payments.service';
@@ -61,7 +62,8 @@ const WALK_IN_CUSTOMER = 'عميل نقدي';
 
 /** ما يُقرأ مع فاتورة البيع للإيصال — مصدرٌ واحد للمباشر والمزامَن والمكرَّر ومحاولة الدفع. */
 // الإيصالُ بترتيب السلّة المعلَن (`ق-١٤١٢`) — والثابتُ الواحد يحمله إلى كلِّ قراءةٍ لبيع (الإتمام · المزامنة · الإيصال).
-const SALE_INCLUDE = { lines: LINE_ORDER, customer: true, posPayments: true } as const;
+// ⚖️ والعميلُ بأعمدته العامّة (توجيه ٢٨٦) — بلا نصِّ المعرّف البديل المشفَّر ولا بصمته.
+const SALE_INCLUDE = { lines: LINE_ORDER, customer: { select: CUSTOMER_PUBLIC_SELECT }, posPayments: true } as const;
 type SaleRow = Prisma.InvoiceGetPayload<{ include: typeof SALE_INCLUDE }>;
 
 /** جزءُ دفعٍ واحد — نقدٌ أو بطاقة بمبلغه. */

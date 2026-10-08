@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@mad-app/db';
+import { Customer, Prisma } from '@mad-app/db';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -13,6 +13,8 @@ import { assertCustomerNotInTrash } from './customer-trash.util';
 import { TenantContext } from '../auth/types';
 import { RecordMarketingConsentDto } from './dto/record-marketing-consent.dto';
 import { MarketingChannel, marketingState, mayReceiveMarketing } from './marketing-consent.util';
+import { randomUUID } from 'node:crypto';
+import { customerOtherIdData, decryptCustomerOtherId, publicCustomer } from './customer-identity.util';
 
 /**
  * المعرّفُ البديل زوجٌ (BR-KSA-14): مخطّطٌ ورقمٌ معاً، أو لا شيء — نصفُ زوجٍ يُرفض مسمّىً لا يُكمَل صامتاً.
@@ -59,10 +61,23 @@ export class CustomersService {
   list(companyId: string, allowedBranchIds: string[] | 'all', includeArchived = false, query?: PagedQueryDto) {
     const where: Prisma.CustomerWhereInput = { ...(includeArchived ? {} : { archived: false }), ...searchWhere(searchTerm(query), CUSTOMER_SEARCH_FIELDS) };
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
-      const result = await pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } });
+      // ⚖️ توجيه ٢٨٦: الصفُّ بلا نصٍّ مشفَّرٍ ولا بصمة — `otherIdOnFile` وحدَها، والرقمُ في التفصيل.
+      const result = mapList(await pagedFindMany(query, tx.customer, { where, orderBy: { name: 'asc' } }), (c) => publicCustomer(c as Customer));
       if (allowedBranchIds !== 'all') return result;
       const exposure = new Map((await customerExposure(tx, { asOf: dayEndOf(new Date()), allowedBranchIds: 'all' })).map((r) => [r.customerId, r.total]));
       return mapList(result, (c) => ({ ...c, outstanding: money(exposure.get(c.id) ?? 0) }));
+    });
+  }
+
+  /**
+   * ⚖️ **تفصيلُ العميل لنافذة تعديله** (توجيه ٢٨٦) — المعرّفُ البديل مفكوكاً لمن يملك الاطّلاع على شاشة العملاء، كتفصيل
+   * الموظف (`ق-١٣٤٥`). وحدَه يحمل الرقم؛ القائمةُ وكلُّ ردٍّ غيرُه `otherIdOnFile` وحدَها.
+   */
+  findOne(companyId: string, id: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const row = await tx.customer.findUnique({ where: { id } });
+      if (!row) throw new NotFoundException(MSG.customer_not_found);
+      return { ...publicCustomer(row), otherId: decryptCustomerOtherId(companyId, row) };
     });
   }
 
@@ -99,16 +114,18 @@ export class CustomersService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await this.assertNoDuplicate(tx, dto.name, dto.vatNumber, undefined, dto.allowSameName === true);
       assertCountryVatConsistent(dto.country, dto.vatNumber);
-      const otherId = otherIdPair(dto.otherIdScheme, dto.otherId);
-      return tx.customer.create({
+      // المعرّفُ قبل الكتابة — فالنصُّ المشفَّر يُربط بصفّه من أوّل حقل (توجيه ٢٨٦ · نمطُ `ق-١٣٤٥`).
+      const id = randomUUID();
+      const otherId = customerOtherIdData(companyId, id, otherIdPair(dto.otherIdScheme, dto.otherId));
+      const created = await tx.customer.create({
         // companyId omitted on purpose — injected at runtime by the tenant
         // scope extension (see accounts.service.ts for why this cast exists).
         data: {
+          id,
           name: dto.name,
           // ②A1: الصفةُ تُذكر في كل إنشاء — لا افتراض؛ والمعرّفُ البديل زوجٌ أو لا شيء؛ والبلدُ `SA` غياباً.
           kind: dto.kind,
-          otherIdScheme: otherId?.scheme ?? null,
-          otherId: otherId?.id ?? null,
+          ...otherId,
           country: dto.country?.trim() || 'SA',
           vatNumber: dto.vatNumber || null,
           phone: dto.phone || null,
@@ -122,6 +139,7 @@ export class CustomersService {
           creditLimit: dto.creditLimit ?? 0,
         } as unknown as Prisma.CustomerCreateInput,
       });
+      return publicCustomer(created);
     });
   }
 
@@ -137,9 +155,14 @@ export class CustomersService {
       if (dto.kind !== undefined) data.kind = dto.kind;
       if (dto.otherIdScheme !== undefined || dto.otherId !== undefined) {
         const cleared = [dto.otherIdScheme, dto.otherId].some((v) => v === null || v === '');
-        const pair = otherIdPair(dto.otherIdScheme ?? existing.otherIdScheme, dto.otherId ?? existing.otherId, { clear: cleared });
-        data.otherIdScheme = pair?.scheme ?? null;
-        data.otherId = pair?.id ?? null;
+        if (cleared || dto.otherId !== undefined) {
+          // رقمٌ جديد (أو محوٌ): يُشفَّر بصفّه من جديد — والمخطّطُ الغائبُ من الطلب يُقرأ من البطاقة.
+          Object.assign(data, customerOtherIdData(companyId, id, otherIdPair(dto.otherIdScheme ?? existing.otherIdScheme, dto.otherId, { clear: cleared })));
+        } else {
+          // المخطّطُ وحدَه يتغيّر: النصُّ المشفَّر باقٍ بموضعه (الموضعُ لا يحمل المخطّط) — ونصفُ زوجٍ يُرفض كما كان.
+          if (!existing.otherIdCipher) throw new BadRequestException(MSG.customer_other_id_pair);
+          data.otherIdScheme = dto.otherIdScheme as string;
+        }
       }
       if (dto.country !== undefined) data.country = dto.country.trim() || 'SA';
       if (dto.vatNumber !== undefined) data.vatNumber = dto.vatNumber || null;
@@ -158,7 +181,7 @@ export class CustomersService {
       if (dto.name !== undefined || dto.phone !== undefined) {
         await tx.contract.updateMany({ where: { customerId: id }, data: { tenant: updated.name, phone: updated.phone } });
       }
-      return updated;
+      return publicCustomer(updated);
     });
   }
 
@@ -168,7 +191,7 @@ export class CustomersService {
     return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const existing = await tx.customer.findUnique({ where: { id } });
       if (!existing) throw new NotFoundException(MSG.customer_not_found);
-      return tx.customer.update({ where: { id }, data: { archived } });
+      return publicCustomer(await tx.customer.update({ where: { id }, data: { archived } }));
     });
   }
 

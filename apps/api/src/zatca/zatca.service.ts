@@ -17,6 +17,7 @@ import { API_BASE, apiBaseFor, zatcaFetchSignal } from './zatca-onboarding.servi
 import { INVOICE_ISSUED } from '../shared/events/domain-events';
 import { storableText } from '../common/i18n/storable-text';
 import { LINE_ORDER } from '../common/document-lines.util';
+import { decryptCustomerOtherId } from '../customers/customer-identity.util';
 import { AuthorityMessage, zatcaWarningsOf } from './authority-warnings.util';
 import { clearedInvoiceFrom } from './cleared-invoice.util';
 
@@ -370,6 +371,9 @@ export class ZatcaService {
     });
     if (!invoice) throw new NotFoundException(MSG.invoice_not_found);
     if (invoice.zatcaStatus === 'CLEARED') throw new BadRequestException(MSG.zatca_already_cleared);
+    // ⚖️ المعرّفُ البديل مشفَّرٌ في القاعدة (توجيه ٢٨٦) — يُفكّ هنا، داخل سياق المنشأة، لأن المستند يحمله بحكم BR-KSA-14.
+    // ⚠️ حدٌّ معلَن: المستندُ الموقَّع المحفوظ (`zatcaSignedXml`) يحمل الرقمَ صريحاً — هو المستندُ كما قُبل، ولا يُمسّ.
+    const buyerOtherId = invoice.customer.otherIdScheme ? decryptCustomerOtherId(companyId, invoice.customer) : null;
 
     // The chain link is assigned once and kept: re-submitting a rejected
     // invoice must reuse its UUID, position and counter, not mint new ones,
@@ -442,7 +446,7 @@ export class ZatcaService {
         );
       }
       // BR-KSA-81 (②A1): مشترٍ بلا رقمٍ ضريبيّ على فاتورةٍ كاملة يحتاج معرّفَه البديل (BT-46) بمخطّطه — يُسمّى الناقصُ هنا لا في ردّ الهيئة.
-      if (!invoice.customer.vatNumber?.trim() && !(invoice.customer.otherIdScheme && invoice.customer.otherId)) {
+      if (!invoice.customer.vatNumber?.trim() && !(invoice.customer.otherIdScheme && buyerOtherId)) {
         throw new BadRequestException(formatMessage(MSG.zatca_buyer_id_missing, { customer: invoice.customer.name }));
       }
     }
@@ -532,10 +536,7 @@ export class ZatcaService {
         name: invoice.customer.name,
         vatNumber: invoice.customer.vatNumber,
         // ②A1: معرّفٌ بديل بمخطّطه (BR-KSA-14) وبلدُ المشتري (BT-55) — من بطاقته لا ثابتَين.
-        otherId:
-          invoice.customer.otherIdScheme && invoice.customer.otherId
-            ? { scheme: invoice.customer.otherIdScheme, id: invoice.customer.otherId }
-            : null,
+        otherId: invoice.customer.otherIdScheme && buyerOtherId ? { scheme: invoice.customer.otherIdScheme, id: buyerOtherId } : null,
         country: invoice.customer.country,
         street: invoice.customer.street,
         buildingNumber: invoice.customer.buildingNumber,

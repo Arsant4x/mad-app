@@ -798,6 +798,15 @@
       "200"
     ]
   },
+  "GET /v1/customers/{id}": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/customers/{id}/marketing-consent": {
     "parameters": [
       "path:id:required"

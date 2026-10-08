@@ -61,7 +61,18 @@ export function CustomerModal(props: CustomerModalProps) {
         ...(allowSameName ? { allowSameName: true } : {}),
       };
       // ⚠️ الإنشاءُ بـ`''` كان يُردّ `400` («مخطّط المعرّف البديل غير معروف») — فيُغفَل الفارغ، والتعديلُ يمحو بـ`null`.
-      if (props.editing !== null) await props.onSave({ ...base, otherIdScheme: otherIdScheme || null, otherId: otherId.trim() || null });
+      // ⚖️ والتعديلُ لا يرسل المعرّفَ البديل إلا إن تغيّر (توجيه ٢٨٦): الرقمُ مشفَّرٌ ويُقرأ من التفصيل، فنافذةٌ فُتحت بلا رقمه
+      // لا تمحوه بإرسال فراغٍ لم يكتبه أحد — ولا يسافر الرقمُ في طلبٍ لم يمسّه.
+      const idTyped = otherId.trim() !== (editing?.otherId ?? '');
+      const schemeChanged = otherIdScheme !== (editing?.otherIdScheme ?? '');
+      const otherIdPatch = idTyped
+        ? { otherIdScheme: otherIdScheme || null, otherId: otherId.trim() || null }
+        : schemeChanged
+          ? otherIdScheme
+            ? { otherIdScheme } // المخطّطُ وحدَه — والرقمُ المشفَّرُ باقٍ في الخادم.
+            : { otherIdScheme: null, otherId: null }
+          : {};
+      if (props.editing !== null) await props.onSave({ ...base, ...otherIdPatch });
       else await props.onSave({ ...base, otherIdScheme: otherIdScheme || undefined, otherId: otherId.trim() || undefined });
       setSameNameAsk(null);
     } catch (e) {
@@ -117,7 +128,14 @@ export function CustomerModal(props: CustomerModalProps) {
           </div>
           <div className="field">
             <label htmlFor="customer-other-id">رقم المعرّف</label>
-            <input id="customer-other-id" className="num" value={otherId} onChange={(e) => setOtherId(e.target.value)} placeholder="حروف وأرقام لاتينية" />
+            <input
+              id="customer-other-id"
+              className="num"
+              value={otherId}
+              onChange={(e) => setOtherId(e.target.value)}
+              // الرقمُ مشفَّرٌ في الخادم (توجيه ٢٨٦): إن لم يُقرأ التفصيلُ قيل «مسجَّل» ولم يُعرض، والكتابةُ تستبدله.
+              placeholder={editing?.otherIdOnFile && editing.otherId === undefined ? 'مسجَّل — اكتب رقماً جديداً لاستبداله' : 'حروف وأرقام لاتينية'}
+            />
           </div>
         </div>
         <div className="two-col">

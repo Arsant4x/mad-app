@@ -3,6 +3,7 @@ import {
   createCustomer,
   CUSTOMER_KIND_LABEL,
   deleteCustomer,
+  getCustomer,
   listCustomers,
   setCustomerArchived,
   updateCustomer,
@@ -56,6 +57,15 @@ export function CustomersPage() {
     await createCustomer(data);
     setModal(null);
     await reload();
+  }
+
+  /**
+   * ⚖️ نافذةُ التعديل تُفتح على **تفصيل** العميل (توجيه ٢٨٦): المعرّفُ البديل مشفَّرٌ والقائمةُ لا تحمله، فيُقرأ من
+   * `GET /customers/:id`. وإن تعذّر التفصيلُ تُفتح على صفّ القائمة — والنافذةُ لا ترسل المعرّفَ إلا إن غيّره المستخدم.
+   */
+  async function openEdit(c: Customer) {
+    const detail = await getCustomer(c.id).catch(() => c);
+    setModal({ mode: 'edit', customer: detail });
   }
 
   async function handleUpdate(id: string, data: CustomerUpdateInput) {
@@ -137,7 +147,7 @@ export function CustomersPage() {
                   <td>
                     {c.kind === 'LEGACY_UNDECLARED' ? (
                       // ②A1: القديمُ غيرُ المعلَن لا يُصدَر له مستند — الإعلانُ نقرةٌ من هنا، لا افتراضٌ من الخادم.
-                      <button className="btn link" data-testid="declare-kind" onClick={() => setModal({ mode: 'edit', customer: c })}>
+                      <button className="btn link" data-testid="declare-kind" onClick={() => void openEdit(c)}>
                         ⚠ أعلن الصفة
                       </button>
                     ) : (
@@ -155,7 +165,7 @@ export function CustomersPage() {
                     <RowMenu
                       actions={[
                         { label: '👁 عرض التفاصيل', onClick: () => setDetailFor(c) },
-                        { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', customer: c }) },
+                        { label: '✎ تعديل', onClick: () => void openEdit(c) },
                         { label: c.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setCustomerArchived(c.id, !c.archived).then(reload) },
                         '-',
                         { label: '🗑 حذف', onClick: () => setPendingDelete(c), danger: true },

@@ -67,6 +67,7 @@ import { INVOICE_ISSUED, type InvoiceIssuedPayload } from '../shared/events/doma
 import { PagedQueryDto } from '../common/dto/paged-query.dto';
 import { listOrPage, mapList, searchTerm } from '../common/pagination/paged.util';
 import { LINE_ORDER, numberLines } from '../common/document-lines.util';
+import { CUSTOMER_PUBLIC_SELECT } from '../customers/customer-identity.util';
 
 /** أنواعُ مستند البيع — الأساسُ وإشعاراه؛ نظيرُها في الشراء `PURCHASE_NOTE_KINDS` (المصدرُ الواحد `ق-١٠٠٨`/١). */
 const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = { base: 'INVOICE', credit: 'CREDIT_NOTE', debit: 'DEBIT_NOTE' };
@@ -76,7 +77,8 @@ const INVOICE_NOTE_KINDS: NoteKinds<'INVOICE' | 'CREDIT_NOTE' | 'DEBIT_NOTE'> = 
  * و`replacesInvoice`/`replacedBy` كذلك: البدلُ يسمّي مردودتَه والمردودةُ بدلَها (`ق-٩٦٣`)،
  * ومنهما تُشتقّ «مغلقة» (`ق-٩٦٤`). */
 const INVOICE_INCLUDE = {
-  customer: true,
+  // ⚖️ توجيه ٢٨٦: العميلُ بأعمدته العامّة — بلا نصِّ المعرّف البديل المشفَّر ولا بصمته.
+  customer: { select: CUSTOMER_PUBLIC_SELECT },
   // بترتيبها المعلَن لا بترتيب القرص (`ق-١٤١٢`).
   lines: LINE_ORDER,
   relatedInvoice: { select: { id: true, no: true } },
@@ -1064,7 +1066,7 @@ export class InvoicesService {
     allowedBranchIds: string[] | 'all',
     noteKind: 'CREDIT_NOTE' | 'DEBIT_NOTE',
   ) {
-    const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: true, lines: LINE_ORDER } });
+    const original = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { customer: { select: CUSTOMER_PUBLIC_SELECT }, lines: LINE_ORDER } });
     if (!original) throw new NotFoundException(MSG.invoice_not_found);
     // ④A1: الإشعارُ على مستند 386 (ردُّ دفعةٍ مقدَّمة) موجةٌ لاحقة — يُرفض مسمّىً لا يُبنى نصفُه.
     if (original.docType === 'PREPAYMENT') throw new ConflictException(MSG.prepayment_note_unsupported);

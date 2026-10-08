@@ -54,7 +54,10 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
     expect(String(missing.body.message)).toContain('صفة');
 
     const est = await auth(http().post('/customers')).send({ kind: 'ESTABLISHMENT', name: 'مؤسسة النور', otherIdScheme: 'CRN', otherId: '1010101010' }).expect(201);
-    expect(est.body).toMatchObject({ kind: 'ESTABLISHMENT', otherIdScheme: 'CRN', otherId: '1010101010', country: 'SA' });
+    // ⚖️ توجيه ٢٨٦: الرقمُ مشفَّرٌ — ردُّ الإنشاء يقول «مسجَّل» وحدَه، والتفصيلُ يفكّه.
+    expect(est.body).toMatchObject({ kind: 'ESTABLISHMENT', otherIdScheme: 'CRN', otherIdOnFile: true, country: 'SA' });
+    expect(JSON.stringify(est.body)).not.toContain('1010101010');
+    expect((await auth(http().get(`/customers/${est.body.id}`)).expect(200)).body).toMatchObject({ otherIdScheme: 'CRN', otherId: '1010101010' });
 
     const half = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'نصف معرّف', otherIdScheme: 'NAT' }).expect(400);
     expect(String(half.body.message)).toContain('معاً');
@@ -63,20 +66,21 @@ describe('Buyer kind decides the invoice type (e2e)', () => {
 
     // «700» تُخزَّن وتُعاد كما هي — نصٌّ مقيَّد لا تعدادٌ يترجمها.
     const seven = await auth(http().post('/customers')).send({ kind: 'LEGAL_PERSON', name: 'شركة السبعمئة', otherIdScheme: '700', otherId: '7001234567', country: 'AE' }).expect(201);
-    expect(seven.body).toMatchObject({ kind: 'LEGAL_PERSON', otherIdScheme: '700', otherId: '7001234567', country: 'AE' });
+    expect(seven.body).toMatchObject({ kind: 'LEGAL_PERSON', otherIdScheme: '700', otherIdOnFile: true, country: 'AE' });
+    expect((await auth(http().get(`/customers/${seven.body.id}`)).expect(200)).body).toMatchObject({ otherIdScheme: '700', otherId: '7001234567' });
 
     // مسحُ الزوج بنصفٍ فارغ يمسحهما معاً.
     const cleared = await auth(http().patch(`/customers/${seven.body.id}`)).send({ otherIdScheme: '', otherId: '' }).expect(200);
-    expect(cleared.body).toMatchObject({ otherIdScheme: null, otherId: null });
+    expect(cleared.body).toMatchObject({ otherIdScheme: null, otherIdOnFile: false });
 
     // ⚖️ `ق-١٤٠٤` — **العقدُ الذي تحترمه النافذةُ الآن**: الإنشاءُ بمخطّطٍ فارغ يُردّ (`''` ليس من القائمة — وكانت النافذةُ ترسله
     //    فيُردّ كلُّ عميلٍ جديدٍ بلا معرّفٍ بديل)، والإنشاءُ بلا الحقل يُقبل، والمحوُ في التعديل بـ`null` يُقبل كالفارغ.
     const emptyOnCreate = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'مخطّط فارغ', otherIdScheme: '', otherId: '' }).expect(400);
     expect(String(emptyOnCreate.body.message)).toContain('مخطّط المعرّف البديل');
     const omitted = await auth(http().post('/customers')).send({ kind: 'NATURAL', name: 'بلا معرّفٍ بديل' }).expect(201);
-    expect(omitted.body).toMatchObject({ otherIdScheme: null, otherId: null });
+    expect(omitted.body).toMatchObject({ otherIdScheme: null, otherIdOnFile: false });
     const clearedByNull = await auth(http().patch(`/customers/${est.body.id}`)).send({ otherIdScheme: null, otherId: null }).expect(200);
-    expect(clearedByNull.body).toMatchObject({ otherIdScheme: null, otherId: null });
+    expect(clearedByNull.body).toMatchObject({ otherIdScheme: null, otherIdOnFile: false });
   }, 30000);
 
   it('[SPEC 4.10] ② a customer from before the build is refused a document by name until its kind is declared — then it is invoiced', async () => {

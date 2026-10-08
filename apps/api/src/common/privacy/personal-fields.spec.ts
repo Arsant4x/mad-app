@@ -28,7 +28,9 @@ import {
 const SRC = join(__dirname, '..', '..');
 
 /** ما يشبه الشخصيَّ في المخطَّط — الاسمُ وحدَه، فالنموذجُ لا يعني المعترضَ (يقرأ جسمَ الطلب). */
-const LOOKS_PERSONAL = /^(phone|mobile|email|website|address|street|district|postalCode|buildingNo|additionalNumber|unitNumber|notes?|reason|description|remark|comment|memo|name|fullName|tenant|orgName)$/i;
+// ⚖️ ومُعرِّفاتُ الشخص بأسمائها في الطلب (`ق-١٣٤٥` · توجيه ٢٨٦): لا تبقى أعمدةً صريحةً في المخطَّط بعد التشفير — فإن عاد عمودٌ
+// باسمها صريحاً (`otherId` · `nationalId` …) أسقطه ① حتى يُستبعَد من السجلّ أو يُعلَن.
+const LOOKS_PERSONAL = /^(phone|mobile|email|website|address|street|district|postalCode|buildingNo|additionalNumber|unitNumber|notes?|reason|description|remark|comment|memo|name|fullName|tenant|orgName|otherId|tenantIdNumber|nationalId|salaryIban|socialInsuranceNo)$/i;
 
 function schemaPersonalNames(): string[] {
   const names = new Set<string>();
@@ -88,6 +90,10 @@ describe('الحقولُ الشخصية في سجلّ التدقيق — مشت�
     expect(isRedactedKey('POSTALCODE')).toBe(true);
     expect(isRedactedKey('name')).toBe(false);
     expect(isRedactedKey('total')).toBe(false);
+    // ⚖️ توجيه ٢٨٦: معرّفُ المشتري البديل ورقمُ هويّة المستأجر — اسمُ الحقل يُكتب وقيمتُه لا تُكتب؛ والمخطّطُ (رمزٌ لا رقم) يبقى.
+    expect(isRedactedKey('otherId')).toBe(true);
+    expect(isRedactedKey('tenantIdNumber')).toBe(true);
+    expect(isRedactedKey('otherIdScheme')).toBe(false);
     expect(REDACTED_VALUE.length).toBeGreaterThan(5);
     expect([...CONTACT_FIELD_NAMES, ...ADDRESS_PART_NAMES, ...FREE_TEXT_FIELD_NAMES].every((n) => REDACTED_FIELD_NAMES.has(n))).toBe(true);
   });

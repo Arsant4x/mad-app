@@ -197,6 +197,28 @@ export interface CreatedNetworkSettlementResponse {
   entryNo: string;
 }
 
+/** ردٌّ — `CustomerDetailResponse` في الخادم (ق-١٤٣٨). */
+export interface CustomerDetailResponse {
+  kind: 'NATURAL' | 'ESTABLISHMENT' | 'LEGAL_PERSON' | 'LEGACY_UNDECLARED';
+  id: string;
+  name: string;
+  vatNumber: string | null;
+  phone: string | null;
+  creditLimit: string;
+  otherIdScheme: string | null;
+  otherIdOnFile: boolean;
+  otherId: string | null;
+  country: string;
+  street: string | null;
+  buildingNumber: string | null;
+  district: string | null;
+  city: string | null;
+  postalCode: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** ردٌّ — `EmployeeIdentityOnFileResponse` في الخادم (ق-١٤٣٨). */
 export interface EmployeeIdentityOnFileResponse {
   nationalId: boolean;
@@ -640,7 +662,6 @@ export interface PosSaleCustomerResponse {
   vatNumber: string | null;
   phone: string | null;
   otherIdScheme: string | null;
-  otherId: string | null;
   country: string;
 }
 
