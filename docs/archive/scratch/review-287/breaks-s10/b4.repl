@@ -1,0 +1,1 @@
+        const finalTo = p.role === FormSignerRole.REPRESENTATIVE ? { role: p.role, mobile: p.mobile, masked: p.masked } : await this.signing.finalCopyRecipientOrNull(tx, link.companyId, instance.counterpartyCustomerId);
