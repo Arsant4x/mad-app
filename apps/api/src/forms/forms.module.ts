@@ -7,6 +7,7 @@ import { FormPublicController } from './form-public.controller';
 import { FormPublicService } from './form-public.service';
 import { FormSigningSettingsController } from './form-signing-settings.controller';
 import { FormSigningSettingsService } from './form-signing-settings.service';
+import { FormSigningSweepService } from './form-signing-sweep.service';
 import { FormSigningService } from './form-signing.service';
 import { FormTemplatesController } from './form-templates.controller';
 import { FormTemplatesService } from './form-templates.service';
@@ -20,7 +21,7 @@ import { FormTemplatesService } from './form-templates.service';
 @Module({
   imports: [FilesModule, VerificationModule],
   controllers: [AdminFormTypesController, AdminFormTemplatesController, FormTemplatesController, FormSigningSettingsController, FormPublicController],
-  providers: [FormTemplatesService, FormInstancesService, FormSigningSettingsService, FormSigningService, FormPublicService],
-  exports: [FormTemplatesService, FormInstancesService, FormSigningSettingsService, FormSigningService],
+  providers: [FormTemplatesService, FormInstancesService, FormSigningSettingsService, FormSigningService, FormPublicService, FormSigningSweepService],
+  exports: [FormTemplatesService, FormInstancesService, FormSigningSettingsService, FormSigningService, FormSigningSweepService],
 })
 export class FormsModule {}
