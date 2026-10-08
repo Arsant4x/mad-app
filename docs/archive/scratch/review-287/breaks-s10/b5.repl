@@ -1,0 +1,2 @@
+    if (designatedSigned || (!hasAuthority && !signerName?.trim() && !!context.designation)) {
+      if (hasAuthority || signerName?.trim()) throw new BadRequestException(MSG.form_paper_signer_ambiguous);

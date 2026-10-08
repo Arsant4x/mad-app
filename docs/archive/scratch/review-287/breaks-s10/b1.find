@@ -1,0 +1,1 @@
+      if (twoStepOf(link, instance)) await this.otpStepDone(tx, link, session);
