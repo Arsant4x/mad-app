@@ -130,15 +130,17 @@ export class FormSigningSweepService {
       if (!sent.has('REMINDER_LAST') && now.getTime() >= last) kind = 'REMINDER_LAST';
       else if (!sent.has('REMINDER_MID') && !sent.has('REMINDER_LAST') && now.getTime() >= mid) kind = 'REMINDER_MID';
       if (!kind) continue;
+      // التذكيرُ إلى من يستلم روابطَ المجموعة: الممثّلُ إن عُيّن، وإلا الطرف.
+      const role = await this.signing.recipientRoleOf(tx, f);
       let party;
       try {
-        party = await this.signing.partyOf(tx, companyId, f.counterpartyCustomerId);
+        party = await this.signing.recipientOf(tx, companyId, f, role);
       } catch {
         // جوالٌ صار غيرَ صالحٍ في البطاقة: يُسجَّل التذكيرُ «لم يُرسل» مرّةً (فلا يُعاد كلَّ دورة) ويُرى في سجلّ النموذج.
         await recordFormEvent(tx, { companyId, instanceId: f.id, kind, actor: SYSTEM_ACTOR, note: 'لم يُرسل: جوالُ العميل في بطاقته غيرُ صالح' });
         continue;
       }
-      const token = await this.signing.openLink(tx, companyId, f.id, FormLinkPurpose.SIGN, FormSignerRole.COUNTERPARTY, f.signDeadline);
+      const token = await this.signing.openLink(tx, companyId, f.id, FormLinkPurpose.SIGN, role, f.signDeadline);
       out.push({ instanceId: f.id, kind, token, to: party.mobile, masked: party.masked });
     }
     return out;

@@ -125,6 +125,8 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'FormSigningLink',
   'FormSigningEvent',
   'FormObjection',
+  // ⚖️ من يوقّع عن الطرف (توجيه ٢٨٧ ⑥ و⑦): الممثّلُ والبديل — companyId إلزاميّ وRLS بـFORCE — طبقتان.
+  'FormSignerDesignation',
   'ContractKeyMoney',
   'ContractHandover',
   'HandoverItem',

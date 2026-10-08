@@ -2,7 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { MSG } from '../common/i18n/messages';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
 import { FormInstancesService, type FormActor, type FormLinkedEntity, type FormValueInput } from '../forms/form-instances.service';
-import { FormSigningService, type FormCounterparty, type RequestMeta, type UploadedEvidence } from '../forms/form-signing.service';
+import { FormSigningService, type FormCounterparty, type RepresentativeInput, type RequestMeta, type UploadedEvidence } from '../forms/form-signing.service';
 
 /** نوعُ الكيان الذي يكتبه العقدُ على سجلّات النماذج (`linkedEntityType`) — النشاطُ يسمّي كيانَه، والمحرّكُ يقابله ولا يعرف معناه. */
 export const CONTRACT_FORM_ENTITY = 'contract';
@@ -54,10 +54,9 @@ export class ContractFormsService {
     throw new ConflictException(MSG.form_seal_by_signatures);
   }
 
-  /** الموظّفُ يوقّع ويرسل الرابطَ إلى جوال المستأجر المسجَّل في بطاقة العميل. */
-  async send(companyId: string, contractId: string, formId: string, actor: FormActor, drawing: UploadedEvidence | undefined, meta: RequestMeta) {
-    const linked = await this.linkedOf(companyId, contractId);
-    const { counterparty, baseValue } = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+  /** الطرفُ من بطاقة عميل العقد، وقيمةُ العقد بعملة أساس المنشأة. */
+  private partyOf(companyId: string, contractId: string) {
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       const contract = await tx.contract.findUniqueOrThrow({
         where: { id: contractId },
         select: {
@@ -71,7 +70,43 @@ export class ContractFormsService {
         : null;
       return { counterparty: party, baseValue: contract.baseValue };
     });
-    return this.signing.signAndSend(companyId, linked, formId, { actor, drawing, counterparty, entityBaseValue: baseValue, meta });
+  }
+
+  /** الموظّفُ يوقّع ويرسل الرابطَ إلى جوال المستأجر المسجَّل في بطاقة العميل، أو إلى ممثّل الشخص الاعتباريّ. */
+  async send(
+    companyId: string,
+    contractId: string,
+    formId: string,
+    actor: FormActor,
+    drawing: UploadedEvidence | undefined,
+    meta: RequestMeta,
+    representative: RepresentativeInput | null = null,
+    authorityDocument?: UploadedEvidence,
+  ) {
+    const linked = await this.linkedOf(companyId, contractId);
+    const { counterparty, baseValue } = await this.partyOf(companyId, contractId);
+    return this.signing.signAndSend(companyId, linked, formId, { actor, drawing, counterparty, entityBaseValue: baseValue, meta, representative, authorityDocument });
+  }
+
+  /** التوقيعُ الورقيّ بشهادة الموظّف (توجيه ٢٨٧ ⑧). */
+  async paper(
+    companyId: string,
+    contractId: string,
+    formId: string,
+    actor: FormActor,
+    paper: UploadedEvidence | undefined,
+    drawing: UploadedEvidence | undefined,
+    signerName: string | null,
+    meta: RequestMeta,
+  ) {
+    const linked = await this.linkedOf(companyId, contractId);
+    const { counterparty, baseValue } = await this.partyOf(companyId, contractId);
+    return this.signing.signPaper(companyId, linked, formId, { actor, paper, drawing, counterparty, entityBaseValue: baseValue, signerName, meta });
+  }
+
+  /** رابطُ جهاز الموظّف (توجيه ٢٨٧ ⑤). */
+  async deviceLink(companyId: string, contractId: string, formId: string, actor: FormActor) {
+    return this.signing.staffDeviceLink(companyId, await this.linkedOf(companyId, contractId), formId, actor);
   }
 
   async resend(companyId: string, contractId: string, formId: string, actor: FormActor) {

@@ -623,6 +623,7 @@ model Company {
   formSigningLinks  FormSigningLink[]
   formSigningEvents FormSigningEvent[]
   formObjections    FormObjection[]
+  formSignerDesignations FormSignerDesignation[]
   /// ⚖️ مدّةُ التوقيع لكلِّ نوع نموذج (توجيه ٢٨٧).
   formTypeSettings FormTypeSetting[]
 
@@ -7225,6 +7226,8 @@ model FormInstance {
   eventsTenant     FormSigningEvent[] @relation("FormSigningEvent_instanceId_tenant")
   objections       FormObjection[]
   objectionsTenant FormObjection[] @relation("FormObjection_instanceId_tenant")
+  designations       FormSignerDesignation[]
+  designationsTenant FormSignerDesignation[] @relation("FormSignerDesignation_instanceId_tenant")
 
   @@unique([companyId, id])
   @@index([companyId, linkedEntityType, linkedEntityId])
@@ -7327,6 +7330,14 @@ model FormSignature {
   witnessUserId   String?
   witnessUserName String?
 
+  /// ⚖️ **سندُ الممثّل** (`ق-١٥٩١` · `ق-١٦٣٥` ②): نوعُه (مديرٌ في السجلّ التجاريّ · وكالةٌ من ناجز) ورقمُه، وصورتُه الاختيارية ببصمتها،
+  /// وحكمُ التحقّق منه (`VERIFIED` · `UNVERIFIED` حين لا مزوّد) — لقطةٌ تُختم مع التوقيع.
+  authorityType           String?
+  authorityRef            String?
+  authorityEvidenceKey    String?
+  authorityEvidenceSha256 String?
+  authorityVerification   String?
+
   ip        String?
   userAgent String?
   signedAt  DateTime @default(now())
@@ -7334,6 +7345,46 @@ model FormSignature {
   @@unique([companyId, id])
   @@unique([instanceId, role])
   @@map("form_signatures")
+}
+
+/// ⚖️ **من يوقّع عن الطرف** (توجيه ٢٨٧ ⑥ و⑦ · `ق-١٥٤٦` · `ق-١٥٩١` · `ق-١٦٣٥` ② و⑨): ممثّلُ الشخص الاعتباريّ بسنده، أو مستلمٌ بديلٌ بموافقة
+/// المستأجر. لمجموعة النموذج كلِّها (النسخُ ترثه)، **وجوالُه مشفَّرٌ يُفكّ** لأن الرابطَ والرمزَ والتذكيرَ تُرسل إليه بعد حين؛ وصفُّ التوقيع
+/// يحمل جوالَه مقنَّعاً وبصمتَه وحدَهما (`ق-١٦٦٨`). ورقمُ هويّته مشفَّرٌ حين يلزم نفاذ وحدَه.
+model FormSignerDesignation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// النسخةُ التي عُيّن عليها، والمجموعةُ التي يخدمها.
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  instanceTenant FormInstance @relation("FormSignerDesignation_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  groupId        String
+
+  role FormSignerRole
+  name String
+
+  mobileCipher String
+  mobileMasked String
+  mobileIndex  String
+
+  nationalIdCipher String?
+  nationalIdIndex  String?
+
+  authorityType           String?
+  authorityRef            String?
+  authorityEvidenceKey    String?
+  authorityEvidenceSha256 String?
+  authorityVerification   String?
+
+  /// `ACTIVE` للممثّل (و`REPLACED` لمن حلّ محلَّه تعيينٌ أحدث) · `PENDING_CONSENT` ⟵ `APPROVED` أو `REJECTED` للبديل.
+  status    String
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  @@unique([companyId, id])
+  @@index([companyId, groupId, role])
+  @@map("form_signer_designations")
 }
 
 /// **رابطُ النموذج العامّ** (توجيه ٢٨٧ ① و⑪ · §٥ من الخطّة): رمزٌ عشوائيٌّ من اثنين وثلاثين بايتاً **يُخزَّن بصمةً** (`tokenHash`)، لنسخةٍ بعينها
@@ -7361,6 +7412,8 @@ model FormSigningLink {
   sessionRef       String?
   /// معاملةُ نفاذٍ جارية لهذا الرابط.
   identityTxRef    String?
+  /// ⚖️ رابطٌ فُتح على جهاز الموظّف بحضور الطرف (`ق-١٦٢٠`: «ويبقى التوقيعُ على جهاز الموظّف خياراً»): الخطوتان نفسُهما، والقناةُ تُسجَّل.
+  staffDevice      Boolean @default(false)
 
   createdAt DateTime @default(now())
 

@@ -56,7 +56,9 @@ export type FormSigningEventKind =
   | 'SUBSTITUTE_REQUESTED'
   | 'SUBSTITUTE_APPROVED'
   | 'SUBSTITUTE_REJECTED'
-  | 'PAPER_UPLOADED';
+  | 'PAPER_UPLOADED'
+  | 'REPRESENTATIVE_DESIGNATED'
+  | 'DEVICE_LINK';
 
 /** الفاعلُ في سجلّ الأحداث نصّاً: الموظّفُ باسمه، أو «العميل عبر الرابط»، أو «النظام». */
 export const LINK_ACTOR = 'العميل عبر الرابط';

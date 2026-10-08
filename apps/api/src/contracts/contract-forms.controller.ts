@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Req, Res, StreamableFile, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiProduces } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -11,7 +11,7 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import { FormInstanceResponse, FormVerificationResponse } from '../forms/dto/form-instance-responses.dto';
 import { CreateFormInstanceDto, SetFormValuesDto } from '../forms/dto/form-instance.dto';
-import { FormSentResponse, FormSigningEventResponse } from '../forms/dto/form-signing.dto';
+import { FormDeviceLinkResponse, FormPaperSignedResponse, FormSentResponse, FormSigningEventResponse, PaperSignFormDto, SendFormDto } from '../forms/dto/form-signing.dto';
 import { metaOf } from '../forms/form-public.controller';
 import type { FormActor } from '../forms/form-instances.service';
 import { ContractFormsService } from './contract-forms.service';
@@ -68,10 +68,21 @@ export class ContractFormsController {
     return this.service.seal(tenant.companyId, id);
   }
 
-  /** الموظّفُ يوقّع (صورةُ رسمٍ ساكنة) ثم يُرسل الرابطُ إلى جوال المستأجر المسجَّل. */
+  /**
+   * الموظّفُ يوقّع (صورةُ رسمٍ ساكنة) ثم يُرسل الرابطُ إلى جوال المستأجر المسجَّل — **والشخصُ الاعتباريّ إلى ممثّله** بحقوله وصورة سنده
+   * الاختيارية (توجيه ٢٨٧ ⑥).
+   */
   @Post(':formId/send')
   @RequiresAction('review')
-  @UseInterceptors(FileInterceptor('drawing', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'drawing', maxCount: 1 },
+        { name: 'authorityDocument', maxCount: 1 },
+      ],
+      { limits: { fileSize: MAX_FILE_BYTES } },
+    ),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiCreatedResponse({ type: FormSentResponse })
   send(
@@ -79,9 +90,56 @@ export class ContractFormsController {
     @Req() req: Request,
     @Param('id') id: string,
     @Param('formId') formId: string,
-    @UploadedFile() drawing: Express.Multer.File | undefined,
+    @Body() dto: SendFormDto,
+    @UploadedFiles() files: { drawing?: Express.Multer.File[]; authorityDocument?: Express.Multer.File[] } | undefined,
   ) {
-    return this.service.send(tenant.companyId, id, formId, actorOf(tenant, req), drawing, metaOf(req));
+    const representative =
+      dto.representativeName || dto.representativeMobile || dto.authorityType || dto.authorityRef
+        ? {
+            name: dto.representativeName ?? '',
+            mobile: dto.representativeMobile ?? '',
+            authorityType: dto.authorityType ?? '',
+            authorityRef: dto.authorityRef ?? '',
+            nationalId: dto.representativeNationalId ?? null,
+          }
+        : null;
+    return this.service.send(tenant.companyId, id, formId, actorOf(tenant, req), files?.drawing?.[0], metaOf(req), representative, files?.authorityDocument?.[0]);
+  }
+
+  /**
+   * ⚖️ **التوقيعُ الورقيّ** (توجيه ٢٨٧ ⑧): صورةُ الورقة الموقَّعة (`paper`) ويشهد عليها الموظّف، ومعها رسمُ الموظّف (`drawing`) إن لم يوقّع
+   * من قبل؛ والختمُ في الطلب نفسِه.
+   */
+  @Post(':formId/paper')
+  @RequiresAction('review')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'paper', maxCount: 1 },
+        { name: 'drawing', maxCount: 1 },
+      ],
+      { limits: { fileSize: MAX_FILE_BYTES } },
+    ),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiCreatedResponse({ type: FormPaperSignedResponse })
+  paper(
+    @CurrentTenant() tenant: TenantContext,
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('formId') formId: string,
+    @Body() dto: PaperSignFormDto,
+    @UploadedFiles() files: { paper?: Express.Multer.File[]; drawing?: Express.Multer.File[] } | undefined,
+  ) {
+    return this.service.paper(tenant.companyId, id, formId, actorOf(tenant, req), files?.paper?.[0], files?.drawing?.[0], dto.signerName ?? null, metaOf(req));
+  }
+
+  /** ⚖️ **رابطُ جهاز الموظّف** (توجيه ٢٨٧ ⑤): يعود للموظّف ولا يُرسل، والخطوتان نفسُهما. */
+  @Post(':formId/device-link')
+  @RequiresAction('review')
+  @ApiCreatedResponse({ type: FormDeviceLinkResponse })
+  deviceLink(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
+    return this.service.deviceLink(tenant.companyId, id, formId, actorOf(tenant, req));
   }
 
   @Post(':formId/resend')

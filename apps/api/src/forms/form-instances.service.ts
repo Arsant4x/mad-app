@@ -136,6 +136,9 @@ export function sealSignatureOf(s: SignatureRow): SealSignature {
     signedContentHash: s.signedContentHash,
     witnessUserId: s.witnessUserId,
     signedAt: s.signedAt.toISOString(),
+    ...(s.authorityType
+      ? { authority: { type: s.authorityType, ref: s.authorityRef ?? '', evidenceSha256: s.authorityEvidenceSha256, verification: s.authorityVerification } }
+      : {}),
   };
 }
 
@@ -202,6 +205,9 @@ export function presentInstance(instance: InstanceFull) {
       signerName: s.signerName,
       mobileMasked: s.mobileMasked,
       witnessUserName: s.witnessUserName,
+      authorityType: s.authorityType,
+      authorityRef: s.authorityRef,
+      authorityVerification: s.authorityVerification,
       signedAt: s.signedAt.toISOString(),
     })),
     objection: objection

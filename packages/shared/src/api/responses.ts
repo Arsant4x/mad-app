@@ -247,6 +247,12 @@ export interface EmployeeWithLoginAccountResponse {
   updatedAt: string;
 }
 
+/** ردٌّ — `FormDeviceLinkResponse` في الخادم (ق-١٤٣٨). */
+export interface FormDeviceLinkResponse {
+  url: string;
+  expiresAt: string;
+}
+
 /** ردٌّ — `FormInstanceItemResponse` في الخادم (ق-١٤٣٨). */
 export interface FormInstanceItemResponse {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
@@ -313,6 +319,9 @@ export interface FormInstanceSignatureResponse {
   signerName: string;
   mobileMasked: string | null;
   witnessUserName: string | null;
+  authorityType: string | null;
+  authorityRef: string | null;
+  authorityVerification: string | null;
   signedAt: string;
 }
 
@@ -367,6 +376,12 @@ export interface FormOtpIssuedResponse {
   challengeId: string;
   expiresAt: string;
   mobileMasked: string;
+}
+
+/** ردٌّ — `FormPaperSignedResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPaperSignedResponse {
+  finalCopy: 'SENT' | 'FAILED' | 'NONE';
+  form: FormInstanceResponse;
 }
 
 /** ردٌّ — `FormPublicItemResponse` في الخادم (ق-١٤٣٨). */

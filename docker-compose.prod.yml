@@ -109,6 +109,7 @@ services:
       # مزوّدا الرسائل والتحقّق من الهويّة (توجيه ٢٨٧) — فارغان حتى يُتعاقد؛ والتجريبيُّ يرفضه حارسُ الإقلاع.
       SMS_PROVIDER: ${SMS_PROVIDER:-}
       IDENTITY_PROVIDER: ${IDENTITY_PROVIDER:-}
+      AUTHORITY_PROVIDER: ${AUTHORITY_PROVIDER:-}
       ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
