@@ -1,0 +1,1 @@
+            authorityEvidenceSha256: paperRep ? paperRep.evidenceSha256 : null,

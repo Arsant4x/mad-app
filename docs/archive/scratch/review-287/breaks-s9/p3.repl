@@ -1,0 +1,1 @@
+      if (hasAuthority && signerName === '\u0000') throw new BadRequestException(MSG.form_representative_legal_only);
