@@ -3712,6 +3712,8 @@ enum NotificationKind {
   FORM_SIGNING_EXPIRED
   /// ⚖️ المستأجرُ اعترض على نموذجٍ أُرسل إليه، والردُّ نسخةٌ معدّلة (`ق-١٦٢٠` · `ق-١٦٦٩`).
   FORM_OBJECTED
+  /// ⚖️ المستأجرُ وافق على مستلمٍ بديل أو رفضه (توجيه ٢٨٧ ⑦ · `ق-١٦٧٢`).
+  FORM_SUBSTITUTE_DECIDED
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  decidePublicSubstitute,
   objectPublicForm,
   openFormLink,
   pollFormNafath,
@@ -20,7 +21,7 @@ import { SIGNATURE_LEVEL, SIGNER_ROLE } from './forms/formStatus';
 
 const NAFATH_POLL_MS = 3000;
 
-type Stage = 'loading' | 'closed' | 'login' | 'view' | 'signed' | 'objected';
+type Stage = 'loading' | 'closed' | 'login' | 'view' | 'signed' | 'objected' | 'approved' | 'rejected';
 
 /** قيمةُ البند كما تُقرأ: رقمٌ أو نعم/لا أو نصّ. */
 function itemValue(i: FormPublicView['items'][number]): string {
@@ -123,6 +124,13 @@ export function PublicFormPage() {
       setStage('signed');
     }, 'تعذّر التوقيع');
 
+  const decide = (approve: boolean) =>
+    run(async () => {
+      if (!session) return;
+      await decidePublicSubstitute(token, session, approve);
+      setStage(approve ? 'approved' : 'rejected');
+    }, 'تعذّر تسجيلُ قرارك');
+
   const object = () =>
     run(async () => {
       if (!session) return;
@@ -139,7 +147,9 @@ export function PublicFormPage() {
 
         {stage === 'login' && link && (
           <>
-            <h2 style={{ marginTop: 0 }}>{link.purpose === 'FINAL_COPY' ? 'نسختُك النهائية من النموذج' : 'نموذجٌ ينتظر توقيعك'}</h2>
+            <h2 style={{ marginTop: 0 }}>
+              {link.purpose === 'FINAL_COPY' ? 'نسختُك النهائية من النموذج' : link.purpose === 'SUBSTITUTE_CONSENT' ? 'طلبُ مستلمٍ بديلٍ عنك' : 'نموذجٌ ينتظر توقيعك'}
+            </h2>
             <p className="hint">ادخل أوّلاً لترى النموذج.</p>
             {link.methods.otp && (
               <div style={{ marginBottom: 12 }}>
@@ -245,6 +255,28 @@ export function PublicFormPage() {
               </div>
             )}
 
+            {view.purpose === 'SUBSTITUTE_CONSENT' && (
+              <div className="card" style={{ marginTop: 12 }} data-testid="public-form-substitute">
+                {view.substitute ? (
+                  <>
+                    <p>
+                      طُلب أن يستلم <strong>{view.substitute.name}</strong> (<span className="num">{view.substitute.mobileMasked}</span>) هذا النموذجَ نيابةً عنك ويوقّعه.
+                    </p>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-primary" disabled={busy} onClick={() => decide(true)}>
+                        أوافق
+                      </button>
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => decide(false)}>
+                        أرفض
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="hint">لا طلبَ ينتظر موافقتك الآن.</p>
+                )}
+              </div>
+            )}
+
             {view.purpose === 'SIGN' && !objecting && (
               <div style={{ marginTop: 12 }}>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -287,6 +319,16 @@ export function PublicFormPage() {
         {stage === 'signed' && (
           <p className="hint" data-testid="public-form-done">
             وُقّع النموذج وخُتم. {finalCopy === 'SENT' ? 'وأُرسل إلى جوالك رابطُ نسختك النهائية.' : 'وتعذّر إرسالُ رابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'}
+          </p>
+        )}
+        {stage === 'approved' && (
+          <p className="hint" data-testid="public-form-done">
+            سُجّلت موافقتُك، ويصل البديلَ رابطُ التوقيع على جواله، وتصلك النسخةُ النهائية حين يوقّع.
+          </p>
+        )}
+        {stage === 'rejected' && (
+          <p className="hint" data-testid="public-form-done">
+            سُجّل رفضُك، ويبقى التوقيعُ لك برابطك.
           </p>
         )}
         {stage === 'objected' && (

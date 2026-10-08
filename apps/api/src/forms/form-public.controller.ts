@@ -14,6 +14,8 @@ import {
   FormPublicViewResponse,
   FormSessionResponse,
   FormSignedResponse,
+  FormSubstituteDecidedResponse,
+  FormSubstituteDecisionDto,
   VerifyFormOtpDto,
 } from './dto/form-signing.dto';
 import { FormPublicService } from './form-public.service';
@@ -110,5 +112,14 @@ export class FormPublicController {
     @Req() req: Request,
   ) {
     return this.service.object(token, session, dto.note, photo, metaOf(req));
+  }
+
+  /** ⚖️ حكمُ المستأجر على المستلم البديل (`ق-١٦٧٢`): يوافق أو يرفض برابط الموافقة بعد الدخول برمزه. */
+  @Post('substitute/decision')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOkResponse({ type: FormSubstituteDecidedResponse })
+  decideSubstitute(@Param('token') token: string, @Headers(SESSION_HEADER) session: string | undefined, @Body() dto: FormSubstituteDecisionDto, @Req() req: Request) {
+    return this.service.decideSubstitute(token, session, dto.approve, metaOf(req));
   }
 }

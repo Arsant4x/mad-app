@@ -54,10 +54,12 @@ export class FormPublicService {
       const party = active ? await this.recipientOrNull(tx, link, instance) : null;
       const nafathPossible = !!(plan && party?.idIndex && party.idScheme && plan.idSchemes.includes(party.idScheme));
       const nafathOnly = link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired;
+      // موافقةُ المستأجر على البديل برمزه (`ق-١٦٧٢`) لا بنفاذ.
+      const consent = link.purpose === FormLinkPurpose.SUBSTITUTE_CONSENT;
       return {
         state: active ? ('ACTIVE' as const) : ('CLOSED' as const),
         purpose: link.purpose,
-        methods: { otp: active && !nafathOnly, nafath: active && nafathPossible },
+        methods: { otp: active && !nafathOnly, nafath: active && nafathPossible && !consent },
         identityProvider: plan?.displayName ?? null,
       };
     });
@@ -173,7 +175,52 @@ export class FormPublicService {
   /** النموذجُ بعد الدخول: بنودُه وقيمُه وتوقيعُ الموظّف والمدّة — للنسخة نفسِها وحدَها. */
   async view(token: string, session: string | undefined, meta: RequestMeta) {
     const link = await this.resolve(token);
-    return this.withSession(link, session, meta, 'viewed', async (tx, instance) => publicView(tx, instance, link.purpose));
+    return this.withSession(link, session, meta, 'viewed', async (tx, instance) => {
+      const view = await publicView(tx, instance, link.purpose);
+      if (link.purpose !== FormLinkPurpose.SUBSTITUTE_CONSENT) return view;
+      const pending = await this.signing.pendingSubstitute(tx, groupIdOf(instance));
+      return { ...view, substitute: pending ? { name: pending.name, mobileMasked: pending.mobileMasked } : null };
+    });
+  }
+
+  /**
+   * ⚖️ **حكمُ المستأجر على المستلم البديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٧٢`): برابط الموافقة بعد الدخول برمزه. **الموافقةُ** تجعل البديلَ مستلمَ
+   * المجموعة: يُقفل رابطُ المستأجر ورابطُ الموافقة، ويصل البديلَ رابطُه على جواله فيكون رمزُه تحقّقاً من جواله (`ق-١٥٩٠`). **والرفضُ**
+   * يُبقي المستأجرَ مستلماً. وكلاهما حدثٌ في سجلّ النموذج ويُعلَم التاجر.
+   */
+  async decideSubstitute(token: string, session: string | undefined, approve: boolean, meta: RequestMeta) {
+    const link = await this.resolve(token);
+    if (link.purpose !== FormLinkPurpose.SUBSTITUTE_CONSENT) throw new ForbiddenException(MSG.form_link_unavailable);
+    const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
+      await this.sessionLink(tx, link, session);
+      await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${link.instanceId} FOR UPDATE`;
+      const instance = await this.activeInstance(tx, link);
+      const pending = await this.signing.pendingSubstitute(tx, groupIdOf(instance));
+      if (!pending) throw new ConflictException(MSG.form_substitute_not_pending);
+      const now = new Date();
+      await tx.formSignerDesignation.update({ where: { id: pending.id }, data: { status: approve ? 'APPROVED' : 'REJECTED', decidedAt: now } });
+      await tx.formSigningLink.updateMany({ where: { instanceId: instance.id, revokedAt: null, purpose: FormLinkPurpose.SUBSTITUTE_CONSENT }, data: { revokedAt: now } });
+      await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: approve ? 'SUBSTITUTE_APPROVED' : 'SUBSTITUTE_REJECTED', actor: LINK_ACTOR, recipientMasked: pending.mobileMasked });
+      await NotificationsService.raise(tx, link.companyId, {
+        kind: NotificationKind.FORM_SUBSTITUTE_DECIDED,
+        dedupeKey: `form-substitute:${pending.id}`,
+        title: approve ? 'وافق المستأجرُ على مستلمٍ بديل' : 'رفض المستأجرُ المستلمَ البديل',
+        body: `«${instance.templateVersion.name}» (النسخة ${instance.revisionNo}): ${approve ? 'أُرسل الرابطُ إلى البديل' : 'يبقى المستأجرُ مستلماً'}.`,
+        linkScreen: 'forms',
+        linkId: instance.id,
+      });
+      if (!approve) return { instanceId: instance.id, outbound: null };
+      // البديلُ مستلمُ المجموعة الآن: رابطُ المستأجر يُقفل كي لا يوقّع اثنان، ورابطُ البديل إلى جواله.
+      await tx.formSigningLink.updateMany({ where: { instanceId: instance.id, revokedAt: null, purpose: FormLinkPurpose.SIGN }, data: { revokedAt: now } });
+      const substitute = await this.signing.recipientOf(tx, link.companyId, instance, FormSignerRole.SUBSTITUTE);
+      const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.SIGN, FormSignerRole.SUBSTITUTE, instance.signDeadline);
+      return { instanceId: instance.id, outbound: { to: substitute.mobile, masked: substitute.masked, token: t } };
+    });
+    await this.trail(link, outcome.instanceId, approve ? 'substitute_approved' : 'substitute_rejected', meta, null);
+    const delivery = outcome.outbound
+      ? await this.signing.deliver(link.companyId, outcome.instanceId, outcome.outbound.to, outcome.outbound.masked, SMS_TEXT.sign(formLinkUrl(outcome.outbound.token)), 'LINK_SENT', 'LINK_SEND_FAILED', LINK_ACTOR)
+      : ('NONE' as const);
+    return { decision: approve ? ('APPROVED' as const) : ('REJECTED' as const), delivery };
   }
 
   /** الإقرارُ والتوقيع: صفُّ توقيعٍ برسمه وبصمةِ ما وُقّع عليه، ثم الختمُ بالصيغة ٢، ثم رابطُ النسخة النهائية. */
@@ -228,9 +275,14 @@ export class FormPublicService {
         // النصابُ اكتمل (الموظّفُ والطرف): الختمُ في المعاملة نفسِها (توجيه ٢٨٧ ⑨)، والروابطُ تُقفل.
         await this.instances.sealWithinTx(tx, instance.id, { id: staff.signerUserId ?? staff.id, name: staff.signerName });
         await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'SEALED', actor: LINK_ACTOR });
-        await tx.formSigningLink.updateMany({ where: { instanceId: instance.id, revokedAt: null, purpose: FormLinkPurpose.SIGN }, data: { revokedAt: new Date() } });
-        const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, p.role, null);
-        return { finalToken: t, party: p, instanceId: instance.id };
+        await tx.formSigningLink.updateMany({
+          where: { instanceId: instance.id, revokedAt: null, purpose: { in: [FormLinkPurpose.SIGN, FormLinkPurpose.SUBSTITUTE_CONSENT] } },
+          data: { revokedAt: new Date() },
+        });
+        // النسخةُ النهائية للمستأجر نفسِه حين وقّع عنه بديل (توجيه ٢٨٧ ⑨: «وصل المستأجرَ رابطُ النسخة النهائية»)، ولمن وقّع فيما سواه.
+        const finalTo = p.role === FormSignerRole.SUBSTITUTE ? await this.signing.recipientOf(tx, link.companyId, instance, FormSignerRole.COUNTERPARTY) : p;
+        const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, finalTo.role, null);
+        return { finalToken: t, party: finalTo, instanceId: instance.id };
       }));
     } catch (e) {
       await this.files.remove(link.companyId, stored.key).catch(() => undefined);
@@ -384,6 +436,7 @@ function isActive(link: LinkRow, instance: { status: FormInstanceStatus }): bool
   if (link.revokedAt) return false;
   if (link.expiresAt && link.expiresAt.getTime() <= Date.now()) return false;
   if (link.purpose === FormLinkPurpose.SIGN) return instance.status === FormInstanceStatus.AWAITING_SIGNATURE;
+  if (link.purpose === FormLinkPurpose.SUBSTITUTE_CONSENT) return instance.status === FormInstanceStatus.AWAITING_SIGNATURE;
   if (link.purpose === FormLinkPurpose.FINAL_COPY) return instance.status === FormInstanceStatus.SEALED;
   return false;
 }
@@ -428,5 +481,6 @@ async function publicView(tx: Tx, instance: InstanceFull, purpose: FormLinkPurpo
     }),
     signatures: instance.signatures.map((s) => ({ role: s.role, level: s.level, channel: s.channel, signerName: s.signerName, signedAt: s.signedAt.toISOString() })),
     seal: instance.seal ? { no: instance.seal.no, contentHash: instance.seal.contentHash, sealedAt: instance.seal.sealedAt.toISOString(), valid: verification?.valid ?? null } : null,
+    substitute: null as { name: string; mobileMasked: string } | null,
   };
 }

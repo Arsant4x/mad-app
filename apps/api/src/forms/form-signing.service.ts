@@ -177,10 +177,18 @@ export class FormSigningService {
           recipient = await this.designateRepresentative(tx, companyId, instance, group, country, nafathRequired, rep, verification, storedDocument && document ? { key: storedDocument.key, sha256: bytesSha256(document.buffer) } : null);
         } else {
           if (rep) throw new BadRequestException(MSG.form_representative_legal_only);
-          const mobile = normalizeMobile(party.mobile, country);
-          if (!mobile) throw new ConflictException(MSG.form_signing_mobile_invalid);
-          if (nafathRequired) assertNafathPossible(country, party);
-          recipient = { role: FormSignerRole.COUNTERPARTY, mobile, masked: maskMobile(mobile, country), designated: false };
+          // بديلٌ وافق عليه المستأجر يبقى للمجموعة: النسخةُ المعدّلة تُرسل إليه (`ق-١٦٧٢`).
+          const substitute = instance.previousRevisionId ? await this.approvedSubstitute(tx, group) : null;
+          if (substitute) {
+            if (nafathRequired && !substitute.nationalIdIndex) throw new ConflictException(MSG.form_substitute_nafath_id);
+            const mobile = decryptField(substitute.mobileCipher, designationAad(companyId, substitute.id, 'mobile'));
+            recipient = { role: FormSignerRole.SUBSTITUTE, mobile, masked: substitute.mobileMasked, designated: false };
+          } else {
+            const mobile = normalizeMobile(party.mobile, country);
+            if (!mobile) throw new ConflictException(MSG.form_signing_mobile_invalid);
+            if (nafathRequired) assertNafathPossible(country, party);
+            recipient = { role: FormSignerRole.COUNTERPARTY, mobile, masked: maskMobile(mobile, country), designated: false };
+          }
         }
 
         await tx.formSignature.create({
@@ -235,6 +243,55 @@ export class FormSigningService {
       return { to: recipient.mobile, masked: recipient.masked, token };
     });
     const delivery = await this.deliver(companyId, id, outbound.to, outbound.masked, SMS_TEXT.sign(formLinkUrl(outbound.token)), 'LINK_SENT', 'LINK_SEND_FAILED', actor.name);
+    return { form: await this.instances.get(companyId, linked, id), delivery };
+  }
+
+  /**
+   * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٣٥` ⑨ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه (ورقمَ هويّته حين يُشترط نفاذ)، فيُحفظ
+   * تعييناً «ينتظر موافقة المستأجر»، **ويصل جوالَ المستأجر المسجَّل رابطٌ يدخله برمزه** فيرى اسمَ البديل والنموذجَ ويوافق أو يرفض؛ **والرمزُ
+   * لا يمرّ بالموظّف**. ولا بديلَ عن ممثّل شخصٍ اعتباريّ (الممثّلُ نفسُه من يُعيَّن)، وطلبٌ جديد يحلّ محلّ ما لم يُحكم فيه.
+   */
+  async requestSubstitute(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor, input: { name: string; mobile: string; nationalId?: string | null }) {
+    const name = input.name?.trim() ?? '';
+    if (!name || !input.mobile?.trim()) throw new BadRequestException(MSG.form_substitute_required_fields);
+    const nationalId = input.nationalId?.trim() ? normalizeOtherId(REPRESENTATIVE_ID_SCHEME, input.nationalId) : null;
+    const outbound = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${id} FOR UPDATE`;
+      const instance = await this.awaiting(tx, linked, id);
+      const group = groupIdOf(instance);
+      if (await this.activeRepresentative(tx, group)) throw new ConflictException(MSG.form_substitute_not_for_representative);
+      const tenant = await this.recipientOf(tx, companyId, instance, FormSignerRole.COUNTERPARTY);
+      const mobile = normalizeMobile(input.mobile, tenant.country);
+      if (!mobile) throw new ConflictException(MSG.form_signing_mobile_invalid);
+      if (mobile === tenant.mobile) throw new ConflictException(MSG.form_substitute_same_mobile);
+      const plan = identityPlanOf(tenant.country);
+      if (instance.nafathRequired && (!nationalId || !plan || !plan.idSchemes.includes(REPRESENTATIVE_ID_SCHEME))) throw new ConflictException(MSG.form_substitute_nafath_id);
+      // طلبٌ جديد يحلّ محلّ ما ينتظر؛ والموافَقُ عليه يبقى حتى يحلّ محلَّه موافَقٌ أحدث.
+      await tx.formSignerDesignation.updateMany({ where: { groupId: group, role: FormSignerRole.SUBSTITUTE, status: 'PENDING_CONSENT' }, data: { status: 'REPLACED', decidedAt: new Date() } });
+      await tx.formSigningLink.updateMany({ where: { instanceId: id, purpose: FormLinkPurpose.SUBSTITUTE_CONSENT, revokedAt: null }, data: { revokedAt: new Date() } });
+      const designationId = randomUUID();
+      const masked = maskMobile(mobile, tenant.country);
+      await tx.formSignerDesignation.create({
+        data: {
+          id: designationId,
+          companyId,
+          instanceId: id,
+          groupId: group,
+          role: FormSignerRole.SUBSTITUTE,
+          name,
+          mobileCipher: encryptField(mobile, designationAad(companyId, designationId, 'mobile')),
+          mobileMasked: masked,
+          mobileIndex: mobileIndex(companyId, mobile),
+          nationalIdCipher: nationalId ? encryptField(nationalId, designationAad(companyId, designationId, 'national_id')) : null,
+          nationalIdIndex: nationalId ? customerOtherIdIndex(nationalId, companyId) : null,
+          status: 'PENDING_CONSENT',
+        },
+      });
+      await recordFormEvent(tx, { companyId, instanceId: id, kind: 'SUBSTITUTE_REQUESTED', actor: actor.name, recipientMasked: masked });
+      const token = await this.openLink(tx, companyId, id, FormLinkPurpose.SUBSTITUTE_CONSENT, FormSignerRole.COUNTERPARTY, instance.signDeadline);
+      return { to: tenant.mobile, masked: tenant.masked, token };
+    });
+    const delivery = await this.deliver(companyId, id, outbound.to, outbound.masked, SMS_TEXT.substituteConsent(formLinkUrl(outbound.token)), 'LINK_SENT', 'LINK_SEND_FAILED', actor.name);
     return { form: await this.instances.get(companyId, linked, id), delivery };
   }
 
@@ -475,14 +532,35 @@ export class FormSigningService {
     return { customer, mobile, masked: maskMobile(mobile, country), index: mobileIndex(companyId, mobile), country };
   }
 
-  /** من يستلم روابطَ المجموعة: ممثّلٌ معيَّن إن وُجد، وإلا الطرفُ نفسُه. */
+  /** من يستلم روابطَ المجموعة: بديلٌ وافق عليه المستأجر، أو ممثّلٌ معيَّن، وإلا الطرفُ نفسُه. */
   async recipientRoleOf(tx: Tx, instance: { id: string; revisionGroupId: string | null }): Promise<FormSignerRole> {
-    const rep = await this.activeRepresentative(tx, groupIdOf(instance));
+    const group = groupIdOf(instance);
+    if (await this.approvedSubstitute(tx, group)) return FormSignerRole.SUBSTITUTE;
+    const rep = await this.activeRepresentative(tx, group);
     return rep ? FormSignerRole.REPRESENTATIVE : FormSignerRole.COUNTERPARTY;
   }
 
-  /** المستلمُ بدوره: الطرفُ من بطاقته الآن، أو الممثّلُ من صفّ تعيينه (جوالُه يُفكّ للإرسال وحدَه). */
+  /** المستلمُ بدوره: الطرفُ من بطاقته الآن، أو الممثّلُ أو البديلُ من صفّ تعيينه (جوالُه يُفكّ للإرسال وحدَه). */
   async recipientOf(tx: Tx, companyId: string, instance: { id: string; revisionGroupId: string | null; counterpartyCustomerId: string | null }, role: FormSignerRole): Promise<FormRecipient> {
+    if (role === FormSignerRole.SUBSTITUTE) {
+      const d = await this.approvedSubstitute(tx, groupIdOf(instance));
+      if (!d) throw new ConflictException(MSG.form_substitute_not_approved);
+      const country = await countryOf(tx, companyId);
+      return {
+        role,
+        name: d.name,
+        customerId: instance.counterpartyCustomerId,
+        kind: null,
+        mobile: decryptField(d.mobileCipher, designationAad(companyId, d.id, 'mobile')),
+        masked: d.mobileMasked,
+        index: d.mobileIndex,
+        country,
+        idScheme: d.nationalIdIndex ? REPRESENTATIVE_ID_SCHEME : null,
+        idIndex: d.nationalIdIndex,
+        nationalId: () => (d.nationalIdCipher ? decryptField(d.nationalIdCipher, designationAad(companyId, d.id, 'national_id')) : null),
+        authority: null,
+      };
+    }
     if (role === FormSignerRole.REPRESENTATIVE) {
       const d = await this.activeRepresentative(tx, groupIdOf(instance));
       if (!d) throw new ConflictException(MSG.form_signing_representative_required);
@@ -521,6 +599,15 @@ export class FormSigningService {
 
   private activeRepresentative(tx: Tx, groupId: string) {
     return tx.formSignerDesignation.findFirst({ where: { groupId, role: FormSignerRole.REPRESENTATIVE, status: 'ACTIVE' }, orderBy: { createdAt: 'desc' } });
+  }
+
+  approvedSubstitute(tx: Tx, groupId: string) {
+    return tx.formSignerDesignation.findFirst({ where: { groupId, role: FormSignerRole.SUBSTITUTE, status: 'APPROVED' }, orderBy: { createdAt: 'desc' } });
+  }
+
+  /** البديلُ الذي ينتظر موافقةَ المستأجر — لرابط الموافقة وحدَه. */
+  pendingSubstitute(tx: Tx, groupId: string) {
+    return tx.formSignerDesignation.findFirst({ where: { groupId, role: FormSignerRole.SUBSTITUTE, status: 'PENDING_CONSENT' }, orderBy: { createdAt: 'desc' } });
   }
 
   private async awaiting(tx: Tx, linked: FormLinkedEntity, id: string) {

@@ -413,6 +413,12 @@ export interface FormPublicSignatureResponse {
   signedAt: string;
 }
 
+/** ردٌّ — `FormPublicSubstituteResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPublicSubstituteResponse {
+  name: string;
+  mobileMasked: string;
+}
+
 /** ردٌّ — `FormPublicViewResponse` في الخادم (ق-١٤٣٨). */
 export interface FormPublicViewResponse {
   purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
@@ -426,6 +432,7 @@ export interface FormPublicViewResponse {
   items: FormPublicItemResponse[];
   signatures: FormPublicSignatureResponse[];
   seal: FormPublicSealResponse | null;
+  substitute: FormPublicSubstituteResponse | null;
 }
 
 /** ردٌّ — `FormSentResponse` في الخادم (ق-١٤٣٨). */
@@ -462,6 +469,12 @@ export interface FormSigningSettingsResponse {
   currency: string;
   defaultSignPeriodDays: number;
   types: FormTypeSigningSettingResponse[];
+}
+
+/** ردٌّ — `FormSubstituteDecidedResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSubstituteDecidedResponse {
+  decision: 'APPROVED' | 'REJECTED';
+  delivery: 'SENT' | 'FAILED' | 'NONE';
 }
 
 /** ردٌّ — `FormTemplateItemResponse` في الخادم (ق-١٤٣٨). */

@@ -339,6 +339,12 @@ export const MSG = {
   form_paper_file_required: 'forms.paper_file_required',
   form_paper_not_allowed: 'forms.paper_not_allowed',
   form_representative_legal_only: 'forms.representative_legal_only',
+  form_substitute_required_fields: 'forms.substitute_required_fields',
+  form_substitute_not_for_representative: 'forms.substitute_not_for_representative',
+  form_substitute_same_mobile: 'forms.substitute_same_mobile',
+  form_substitute_nafath_id: 'forms.substitute_nafath_id',
+  form_substitute_not_approved: 'forms.substitute_not_approved',
+  form_substitute_not_pending: 'forms.substitute_not_pending',
   /** ⚖️ إعدادُ توقيع النماذج (توجيه ٢٨٧ · ق-١٦٣٣ ⑬ · ق-١٦٣٥ ①). */
   form_signing_settings_owner_only: 'forms.signing_settings_owner_only',
   form_signing_type_unknown: 'forms.signing_type_unknown',
@@ -1445,6 +1451,30 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.form_representative_legal_only]: {
     ar: 'الممثّلُ بسنده لعميلٍ صفتُه شخصٌ اعتباريّ وحدَه؛ والشخصُ الطبيعيّ يوقّع بنفسه',
     en: 'A representative with an authority applies only to a legal person customer; a natural person signs personally',
+  },
+  [MSG.form_substitute_required_fields]: {
+    ar: 'المستلمُ البديل: الاسمُ والجوالُ مطلوبان',
+    en: 'Substitute recipient: name and mobile are required',
+  },
+  [MSG.form_substitute_not_for_representative]: {
+    ar: 'نموذجُ الشخص الاعتباريّ يوقّعه ممثّلُه، فلا بديلَ عنه؛ عيّن ممثّلاً آخر بالإرسال',
+    en: 'A legal person form is signed by its representative, so no substitute applies; designate another representative when sending',
+  },
+  [MSG.form_substitute_same_mobile]: {
+    ar: 'جوالُ البديل هو جوالُ المستأجر نفسِه',
+    en: 'The substitute mobile is the tenant mobile itself',
+  },
+  [MSG.form_substitute_nafath_id]: {
+    ar: 'قيمةُ العقد فوق حدّ نفاذ: أدخل رقمَ هويّة البديل ليتحقّق منه نفاذ',
+    en: 'The contract value is above the Nafath threshold: enter the substitute identity number for Nafath to verify',
+  },
+  [MSG.form_substitute_not_approved]: {
+    ar: 'لا مستلمَ بديلاً وافق عليه المستأجر لهذا النموذج',
+    en: 'No substitute recipient approved by the tenant for this form',
+  },
+  [MSG.form_substitute_not_pending]: {
+    ar: 'لا طلبَ مستلمٍ بديلٍ ينتظر موافقتك؛ ربما حُكم فيه أو حلّ محلَّه طلبٌ أحدث',
+    en: 'No substitute request awaits your approval; it may have been decided or replaced by a newer one',
   },
   [MSG.form_signing_settings_owner_only]: {
     ar: 'إعدادُ توقيع النماذج (مدّتُه وحدُّ نفاذ) لمالك المنشأة وحدَه',

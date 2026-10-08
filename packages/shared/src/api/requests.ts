@@ -750,6 +750,11 @@ export interface ForgotPasswordDto {
   username: string;
 }
 
+/** جسمُ طلب — `FormSubstituteDecisionDto` في الخادم. */
+export interface FormSubstituteDecisionDto {
+  approve: boolean;
+}
+
 /** جسمُ طلب — `FormTemplateItemDto` في الخادم. */
 export interface FormTemplateItemDto {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
@@ -1036,6 +1041,13 @@ export interface RequestDecisionDto {
   action: 'ACCOUNT_ERASURE' | 'SUBSCRIPTION_CHANGE' | 'REFUND';
   targetId: string;
   summary: string;
+}
+
+/** جسمُ طلب — `RequestSubstituteDto` في الخادم. */
+export interface RequestSubstituteDto {
+  name: string;
+  mobile: string;
+  nationalId?: string;
 }
 
 /** جسمُ طلب — `RequestSupportAccessDto` في الخادم. */

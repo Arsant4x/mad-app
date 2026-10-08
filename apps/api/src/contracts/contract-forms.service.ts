@@ -113,6 +113,11 @@ export class ContractFormsService {
     return this.signing.resendLink(companyId, await this.linkedOf(companyId, contractId), formId, actor);
   }
 
+  /** طلبُ مستلمٍ بديل بموافقة المستأجر (توجيه ٢٨٧ ⑦). */
+  async requestSubstitute(companyId: string, contractId: string, formId: string, actor: FormActor, input: { name: string; mobile: string; nationalId?: string | null }) {
+    return this.signing.requestSubstitute(companyId, await this.linkedOf(companyId, contractId), formId, actor, input);
+  }
+
   async revise(companyId: string, contractId: string, formId: string, actor: FormActor) {
     return this.signing.revise(companyId, await this.linkedOf(companyId, contractId), formId, actor);
   }

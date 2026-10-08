@@ -1,7 +1,42 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { FormInstanceStatus, FormLinkPurpose, FormSignatureChannel, FormSignatureLevel, FormSignerRole } from '@mad-app/db';
-import { IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 import { FormInstanceResponse } from './form-instance-responses.dto';
+
+/** ⚖️ طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): اسمُه وجوالُه، ورقمُ هويّته حين يُشترط نفاذ. */
+export class RequestSubstituteDto {
+  @IsString()
+  @MaxLength(200)
+  name!: string;
+
+  @IsString()
+  @MaxLength(32)
+  mobile!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  nationalId?: string;
+}
+
+/** ⚖️ حكمُ المستأجر على البديل (`ق-١٦٧٢`). */
+export class FormSubstituteDecisionDto {
+  @IsBoolean()
+  approve!: boolean;
+}
+
+export class FormSubstituteDecidedResponse {
+  @ApiProperty({ enum: ['APPROVED', 'REJECTED'] })
+  decision!: 'APPROVED' | 'REJECTED';
+  @ApiProperty({ enum: ['SENT', 'FAILED', 'NONE'] })
+  delivery!: 'SENT' | 'FAILED' | 'NONE';
+}
+
+/** البديلُ كما يراه المستأجرُ في رابط الموافقة بعد الدخول: اسمُه وجوالُه مقنَّعاً. */
+export class FormPublicSubstituteResponse {
+  name!: string;
+  mobileMasked!: string;
+}
 
 /**
  * ⚖️ **حقولُ الإرسال مع الرسم** (طلبٌ متعدّد الأجزاء): ممثّلُ الشخص الاعتباريّ (توجيه ٢٨٧ ⑥) — الاسمُ والجوالُ ونوعُ السند ورقمُه، ورقمُ
@@ -139,6 +174,8 @@ export class FormPublicViewResponse {
   items!: FormPublicItemResponse[];
   signatures!: FormPublicSignatureResponse[];
   seal!: FormPublicSealResponse | null;
+  /** في رابط الموافقة وحدَه: البديلُ المطلوب. */
+  substitute!: FormPublicSubstituteResponse | null;
 }
 
 export class FormSignedResponse {
