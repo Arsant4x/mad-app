@@ -230,9 +230,13 @@ jobs:
           done < <(git ls-files -z)
           printf '  %s\n' "${files[@]}"
           # المسبارُ مُصادَقٌ بحالاتٍ معلومة: خطّافٌ بلا امتداد يجب أن يُرى، وملفُّ JSON يجب ألّا يُرى.
-          printf '%s\n' "${files[@]}" | grep -qx '.githooks/pre-commit' || { echo "::error::المسبارُ أعمى: .githooks/pre-commit غائب"; exit 1; }
-          printf '%s\n' "${files[@]}" | grep -qx 'deploy.sh' || { echo "::error::المسبارُ أعمى: deploy.sh غائب"; exit 1; }
-          if printf '%s\n' "${files[@]}" | grep -qx 'package.json'; then echo "::error::المسبارُ واسع: package.json التُقط"; exit 1; fi
+          # ⚠️ (توجيه ٢٨٦ · القاعدة ٣٧) بحلقةٍ على المصفوفة لا بأنبوبٍ إلى `grep -q`: تحت `pipefail` يخرج
+          #    `grep -q` عند أوّل تطابق فيُكسر الأنبوب على `printf` («Broken pipe»)، فيسقط الأنبوبُ والملفُّ
+          #    حاضر (التشغيل 37634712533 على `9d6e7c9`). مقيسٌ محلّياً بقائمةٍ طويلة: الأنبوبُ سقط 5 من 5، والحلقةُ 0.
+          has_file() { local x; for x in "${files[@]}"; do [ "$x" = "$1" ] && return 0; done; return 1; }
+          has_file '.githooks/pre-commit' || { echo "::error::المسبارُ أعمى: .githooks/pre-commit غائب"; exit 1; }
+          has_file 'deploy.sh' || { echo "::error::المسبارُ أعمى: deploy.sh غائب"; exit 1; }
+          if has_file 'package.json'; then echo "::error::المسبارُ واسع: package.json التُقط"; exit 1; fi
           echo "سكربتاتُ الصدفة: ${#files[@]}"
           shellcheck -x -S warning "${files[@]}"
 
