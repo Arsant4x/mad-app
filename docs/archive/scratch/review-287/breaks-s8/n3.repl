@@ -1,0 +1,1 @@
+      if (instance.nafathRequired) this.logger.warn('substitute on a Nafath form');
