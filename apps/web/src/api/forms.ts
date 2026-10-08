@@ -6,11 +6,13 @@ import type {
   CreateFormTypeDto,
   FormTemplateItemDto,
   FormValueDto,
+  UpdateFormSigningSettingsDto,
   UpdateFormTemplateDto,
 } from '@mad-app/shared/api/requests';
 import type {
   FormInstanceItemResponse,
   FormInstanceResponse,
+  FormSigningSettingsResponse,
   FormTemplateItemResponse,
   FormTemplateResponse,
   FormTemplateRowResponse,
@@ -73,3 +75,9 @@ export const sealContractForm = (contractId: string, formId: string) =>
 export const verifyContractForm = (contractId: string, formId: string) =>
   apiClient.get<FormVerification>(`/contracts/${contractId}/forms/${formId}/verify`).then((r) => r.data);
 export const deleteContractForm = (contractId: string, formId: string) => apiClient.delete(`/contracts/${contractId}/forms/${formId}`);
+
+// ── إعدادُ التوقيع (توجيه ٢٨٧): مدّةُ كلِّ نوعٍ وحدُّ نفاذ — الكتابةُ لمالك المنشأة ──────────────────────────────────────────────
+export type FormSigningSettings = FormSigningSettingsResponse;
+export const getFormSigningSettings = () => apiClient.get<FormSigningSettings>('/form-signing-settings').then((r) => r.data);
+export const updateFormSigningSettings = (dto: UpdateFormSigningSettingsDto) =>
+  apiClient.put<FormSigningSettings>('/form-signing-settings', dto).then((r) => r.data);

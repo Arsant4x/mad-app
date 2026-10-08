@@ -910,6 +910,13 @@
       "200"
     ]
   },
+  "GET /v1/form-signing-settings": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/form-templates": {
     "parameters": [],
     "requiredBody": [],
@@ -4088,6 +4095,13 @@
     "requiredBody": [
       "values"
     ],
+    "responses": [
+      "200"
+    ]
+  },
+  "PUT /v1/form-signing-settings": {
+    "parameters": [],
+    "requiredBody": [],
     "responses": [
       "200"
     ]

@@ -395,6 +395,10 @@ model Company {
   /// تسويةُ الشبكة**؛ وما لم يُطابَق بعد هذه المهلة من يوم البيع **يُرفع للمراجعة باسم الكاشير**. ودورةُ التسوية
   /// تختلف بالمستحوذ (T+1 إلى T+3 في خطّتنا الموثَّقة) — فهي للتاجر، والافتراضيُّ أعلاها.
   posCardSettlementDays Int @default(3)
+  /// ⚖️ **حدُّ نفاذ في توقيع النماذج** (توجيه ٢٨٧ ② · `ق-١٥٩١` · `ق-١٦٣٣` ①ب · `ق-١٦٣٥` ①): كيانٌ قيمتُه **فوق** هذا الحدّ بعملة أساس المنشأة
+  /// (للعقد قيمتُه كلُّها) لا يوقّعه الطرفُ إلا بعد التحقّق من هويّته عبر نفاذ، وتحته نفاذٌ خيارٌ له. **والفارغُ = لا يُشترط** — بلا قيمةٍ
+  /// افتراضية في الشيفرة ولا في القاعدة؛ والضابطُ مالكُ المنشأة.
+  formsNafathThreshold Decimal? @db.Decimal(18, 2)
 
   /// **معرّفُ النطاق الفرعيّ** (`ق-١٣٠٣` · ك/⑬A2) — `alfa` في `alfa.rikzapp.com`.
   ///
@@ -614,6 +618,8 @@ model Company {
   formSeals           FormSeal[]
   /// ⚖️ تحدّياتُ رمز التحقّق (توجيه ٢٨٧).
   verificationChallenges VerificationChallenge[]
+  /// ⚖️ مدّةُ التوقيع لكلِّ نوع نموذج (توجيه ٢٨٧).
+  formTypeSettings FormTypeSetting[]
 
   @@map("companies")
 }
@@ -6997,8 +7003,27 @@ model FormType {
   updatedAt   DateTime @updatedAt
 
   templates FormTemplate[]
+  settings  FormTypeSetting[]
 
   @@map("form_types")
+}
+
+/// ⚖️ **مدّةُ التوقيع لنوع النموذج في المنشأة** (توجيه ٢٨٧ ④ · `ق-١٦٣٣` ⑬): «سبعةُ أيّامٍ افتراضاً يغيّرها التاجرُ لكلِّ نوع». صفٌّ لما غيّره التاجرُ
+/// وحدَه، وغيابُه = الافتراضُ (`DEFAULT_SIGN_PERIOD_DAYS`). والمدّةُ تُختم على النموذج عند إرساله، فتغييرُها لا يمسّ ما أُرسل.
+model FormTypeSetting {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  formTypeId String
+  formType   FormType @relation(fields: [formTypeId], references: [id], onDelete: Restrict)
+
+  signPeriodDays Int
+  updatedAt      DateTime @updatedAt
+
+  @@unique([companyId, formTypeId])
+  @@unique([companyId, id])
+  @@map("form_type_settings")
 }
 
 /// **إصدارُ قالبِ نموذج** — صفٌّ لكلِّ إصدار، والإصداراتُ يجمعها `familyId`.

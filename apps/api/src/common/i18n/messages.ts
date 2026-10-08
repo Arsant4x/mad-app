@@ -305,6 +305,9 @@ export const MSG = {
   form_template_item_qty_whole: 'forms.template_item_qty_whole',
   /** ⚖️ السجلُّ المعبّأ والختم (توجيه ٢٧٨ · ق-١٦٣٥ · ق-١٦٣٦ · الموجة ١ج). */
   form_instance_not_found: 'forms.instance_not_found',
+  /** ⚖️ إعدادُ توقيع النماذج (توجيه ٢٨٧ · ق-١٦٣٣ ⑬ · ق-١٦٣٥ ①). */
+  form_signing_settings_owner_only: 'forms.signing_settings_owner_only',
+  form_signing_type_unknown: 'forms.signing_type_unknown',
   form_instance_template_not_published: 'forms.instance_template_not_published',
   form_instance_sealed: 'forms.instance_sealed',
   form_instance_seal_race: 'forms.instance_seal_race',
@@ -1316,6 +1319,14 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.form_template_item_qty_whole]: { ar: 'حدّا العدد في البند «{label}» عددان صحيحان', en: 'The limits of quantity item “{label}” must be whole numbers' },
   [MSG.form_instance_not_found]: { ar: 'سجلُّ النموذج غيرُ موجود', en: 'Form record not found' },
+  [MSG.form_signing_settings_owner_only]: {
+    ar: 'إعدادُ توقيع النماذج (مدّتُه وحدُّ نفاذ) لمالك المنشأة وحدَه',
+    en: 'Form signing settings (period and identity threshold) are for the company owner only',
+  },
+  [MSG.form_signing_type_unknown]: {
+    ar: 'نوعُ النموذج ({id}) ليس من أنواع قوالب المنشأة',
+    en: 'Form type ({id}) is not one of the company template types',
+  },
   [MSG.form_instance_template_not_published]: {
     ar: 'يُعبّأ النموذجُ على إصدارٍ منشورٍ من قوالب المنشأة؛ انسخ القالبَ العامّ وانشر نسختَك أوّلاً',
     en: 'A form is filled on a published version of the company templates; copy the platform template and publish your copy first',
