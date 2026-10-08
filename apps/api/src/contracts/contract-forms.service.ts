@@ -114,7 +114,7 @@ export class ContractFormsService {
   }
 
   /** طلبُ مستلمٍ بديل بموافقة المستأجر (توجيه ٢٨٧ ⑦). */
-  async requestSubstitute(companyId: string, contractId: string, formId: string, actor: FormActor, input: { name: string; mobile: string; nationalId?: string | null }) {
+  async requestSubstitute(companyId: string, contractId: string, formId: string, actor: FormActor, input: { name: string; mobile: string }) {
     return this.signing.requestSubstitute(companyId, await this.linkedOf(companyId, contractId), formId, actor, input);
   }
 

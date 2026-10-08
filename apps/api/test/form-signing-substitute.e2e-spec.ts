@@ -122,7 +122,21 @@ describe('Form signing substitute recipient (e2e)', () => {
     expect((await http().get(`/public/forms/${tenantSign}`).expect(200)).body.state).toBe('CLOSED');
     expect((await http().get(`/public/forms/${consent}`).expect(200)).body.state).toBe('CLOSED');
     const subLink = linkOf(sub.e164);
+    // ⚖️ `ق-١٦٧٤`: صفحةُ رابط البديل قبل الدخول بلا اسم منشأةٍ ولا نصّ، والنصُّ في رسالة رمزه قبل الرمز باسم المنشأة.
+    const company = await inA((tx) => tx.company.findUniqueOrThrow({ where: { id: a.companyId }, select: { legalName: true, orgName: true } }));
+    const companyName = company.legalName?.trim() || company.orgName;
+    const opened = await http().get(`/public/forms/${subLink}`).expect(200);
+    expect(JSON.stringify(opened.body)).not.toContain(companyName);
+    expect(JSON.stringify(opened.body)).not.toContain('ستستلم');
     const subSession = await loginByOtp(app, subLink, sub.e164);
+    const subOtp = mockSms(app).lastTo(sub.e164)?.text ?? '';
+    const notice = `ستستلم هذه الوحدة نيابةً عن المستأجر وبموافقته. ولإثبات ذلك تحفظ ${companyName} مع نموذج الاستلام اسمَك ورقمَ جوالك، ورقمَ هويتك إن لزم التحقق عبر نفاذ، طوال مدة الحفظ النظامية للنموذج، ولا تستعملها لغير هذا النموذج ولا تُطلع عليها أحداً إلا بما يوجبه النظام. وبإدخالك الرمز الذي يصل جوالك توافق على ذلك.`;
+    expect(subOtp.startsWith(notice)).toBe(true);
+    expect(subOtp.indexOf('رمز التحقق:')).toBeGreaterThan(subOtp.indexOf(notice));
+    // ورمزُ المستأجر نفسِه بلا الإحاطة.
+    const tenantOtps = mockSms(app).outbox.filter((m) => m.to === c.mobile.e164 && m.text.includes('رمز التحقق:'));
+    expect(tenantOtps.length).toBeGreaterThan(0);
+    expect(tenantOtps.every((m) => !m.text.includes('ستستلم'))).toBe(true);
     const signed = await signAsTenant(app, subLink, subSession).expect(201);
     expect(signed.body).toEqual({ status: 'SEALED', finalCopy: 'SENT' });
     expect(mockSms(app).lastTo(c.mobile.e164)?.text).toMatch(/نسختك النهائية/);
@@ -175,5 +189,38 @@ describe('Form signing substitute recipient (e2e)', () => {
     await requestSubstitute(c.contractId, c.formId, { name: '', mobile: uniqueMobile().local }).expect(400);
     const same = await requestSubstitute(c.contractId, c.formId, { name: 'بديل', mobile: c.mobile.local }).expect(409);
     expect(same.body.message).toContain('جوالُ المستأجر');
+    // ولا يُقبل رقمُ هويّةٍ للبديل (لا يلزم إلا لنفاذ).
+    await requestSubstitute(c.contractId, c.formId, { name: 'بديل', mobile: uniqueMobile().local, nationalId: '1012345678' }).expect(400);
+  });
+
+  it('⑤ لا بديلَ في نموذجٍ يشترط نفاذ حتى يُحكم (موافقتُه برمزٍ ولا رمزَ هنا)', async () => {
+    await http().put('/form-signing-settings').set('Authorization', bearer(a.token)).send({ nafathThreshold: 1000 }).expect(200);
+    try {
+      const tag = `${stamp}-${Math.random().toString(36).slice(2, 6)}`;
+      const property = await http().post('/properties').set('Authorization', bearer(a.token)).send({ name: `عقار نفاذ ${tag}`, ownership: 'owned' }).expect(201);
+      const unit = await http().post('/units').set('Authorization', bearer(a.token)).send({ propertyId: property.body.id, unitNo: `NF-${tag}`, type: 'شقة', rentMonthly: 1000 }).expect(201);
+      const mobile = uniqueMobile();
+      const customer = await http()
+        .post('/customers')
+        .set('Authorization', bearer(a.token))
+        .send({ kind: 'NATURAL', name: `مستأجر نفاذ ${tag}`, phone: mobile.local, allowSameName: true, otherIdScheme: 'NAT', otherId: '1012345678' })
+        .expect(201);
+      const contract = await http()
+        .post('/contracts')
+        .set('Authorization', bearer(a.token))
+        .send({ unitId: unit.body.id, customerId: customer.body.id, value: 12000, cycle: 'monthly', start: `${year}-01-01`, end: `${year}-12-31`, classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' })
+        .expect(201);
+      const form = await http().post(`/contracts/${contract.body.id}/forms`).set('Authorization', bearer(a.token)).send({ templateId, formDate }).expect(201);
+      await http().put(`/contracts/${contract.body.id}/forms/${form.body.id}/values`).set('Authorization', bearer(a.token)).send({ values: [{ itemId: meterItem, number: 1 }] }).expect(200);
+      const sent = await sendForm(app, a.token, contract.body.id, form.body.id).expect(201);
+      expect(sent.body.form.nafathRequired).toBe(true);
+      const sub = uniqueMobile();
+      const refused = await requestSubstitute(contract.body.id, form.body.id, { name: 'بديل', mobile: sub.local }).expect(409);
+      expect(refused.body.message).toContain('نفاذ');
+      expect(mockSms(app).lastTo(mobile.e164)?.text ?? '').not.toMatch(/شخصٌ آخر/);
+      expect(await inA((tx) => tx.formSignerDesignation.count({ where: { instanceId: form.body.id } }))).toBe(0);
+    } finally {
+      await http().put('/form-signing-settings').set('Authorization', bearer(a.token)).send({ nafathThreshold: null }).expect(200);
+    }
   });
 });

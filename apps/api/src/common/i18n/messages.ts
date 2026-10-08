@@ -1465,8 +1465,8 @@ const CATALOG: Record<string, Record<Language, string>> = {
     en: 'The substitute mobile is the tenant mobile itself',
   },
   [MSG.form_substitute_nafath_id]: {
-    ar: 'قيمةُ العقد فوق حدّ نفاذ: أدخل رقمَ هويّة البديل ليتحقّق منه نفاذ',
-    en: 'The contract value is above the Nafath threshold: enter the substitute identity number for Nafath to verify',
+    ar: 'النموذجُ يشترط نفاذ، والمستلمُ البديل يوافق برمزٍ إلى جواله؛ فلا بديلَ في نموذجٍ يشترط نفاذ حتى يُحكم كيف يجتمعان، ويوقّع المستأجرُ أو ورقياً',
+    en: 'This form requires Nafath, while a substitute consents by a code to their mobile; no substitute applies to a Nafath form until that is decided, so the tenant signs or a paper signature is used',
   },
   [MSG.form_substitute_not_approved]: {
     ar: 'لا مستلمَ بديلاً وافق عليه المستأجر لهذا النموذج',

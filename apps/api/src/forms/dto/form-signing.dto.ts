@@ -3,7 +3,7 @@ import { FormInstanceStatus, FormLinkPurpose, FormSignatureChannel, FormSignatur
 import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 import { FormInstanceResponse } from './form-instance-responses.dto';
 
-/** ⚖️ طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): اسمُه وجوالُه، ورقمُ هويّته حين يُشترط نفاذ. */
+/** ⚖️ طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): اسمُه وجوالُه، ولا رقمَ هويّة (لا يلزم إلا لنفاذ، والنموذجُ الذي يشترطه لا بديلَ فيه بعد). */
 export class RequestSubstituteDto {
   @IsString()
   @MaxLength(200)
@@ -12,11 +12,6 @@ export class RequestSubstituteDto {
   @IsString()
   @MaxLength(32)
   mobile!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(32)
-  nationalId?: string;
 }
 
 /** ⚖️ حكمُ المستأجر على البديل (`ق-١٦٧٢`). */

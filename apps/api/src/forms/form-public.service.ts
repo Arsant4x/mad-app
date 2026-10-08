@@ -79,14 +79,20 @@ export class FormPublicService {
         mobileE164: party.mobile,
         mobileMasked: party.masked,
       });
-      return { party, challenge, instanceId: instance.id };
+      // ⚖️ رمزُ البديل يحمل نصَّ الإحاطة باسم المنشأة قبله (`ق-١٦٧٤`)، ورمزُ غيره كما هو.
+      let text = SMS_TEXT.otp(challenge.code);
+      if (party.role === FormSignerRole.SUBSTITUTE) {
+        const company = await tx.company.findUniqueOrThrow({ where: { id: link.companyId }, select: { legalName: true, orgName: true } });
+        text = SMS_TEXT.substituteOtp(challenge.code, company.legalName?.trim() || company.orgName);
+      }
+      return { party, challenge, instanceId: instance.id, text };
     });
     const delivery = await this.signing.deliver(
       link.companyId,
       outbound.instanceId,
       outbound.party.mobile,
       outbound.party.masked,
-      SMS_TEXT.otp(outbound.challenge.code),
+      outbound.text,
       'OTP_SENT',
       'OTP_SEND_FAILED',
       LINK_ACTOR,

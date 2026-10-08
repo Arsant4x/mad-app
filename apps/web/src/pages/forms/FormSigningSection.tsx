@@ -346,10 +346,9 @@ function SendDialog({
  * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه، ويوافق المستأجرُ من جواله برمزه؛ **والرمزُ لا يمرّ
  * بالموظّف**.
  */
-function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCancel: () => void; onSubmit: (body: { name: string; mobile: string; nationalId?: string }) => void }) {
+function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCancel: () => void; onSubmit: (body: { name: string; mobile: string }) => void }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
-  const [nationalId, setNationalId] = useState('');
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }} role="dialog" aria-label="مستلمٌ بديل">
@@ -368,10 +367,7 @@ function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCance
           <label>جوالُ البديل</label>
           <input aria-label="جوالُ البديل" className="num" inputMode="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} />
         </div>
-        <div className="field">
-          <label>رقمُ هويّة البديل (حين يُشترط نفاذ)</label>
-          <input aria-label="رقمُ هويّة البديل" className="num" value={nationalId} onChange={(e) => setNationalId(e.target.value)} />
-        </div>
+        <p className="hint">ويصل البديلَ مع رمزه نصُّ الإحاطة بحفظ بياناته، ويوافق عليه بإدخال الرمز.</p>
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
             إلغاء
@@ -379,7 +375,7 @@ function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCance
           <button
             className="btn btn-primary"
             disabled={busy || !name.trim() || !mobile.trim()}
-            onClick={() => onSubmit({ name: name.trim(), mobile: mobile.trim(), ...(nationalId.trim() ? { nationalId: nationalId.trim() } : {}) })}
+            onClick={() => onSubmit({ name: name.trim(), mobile: mobile.trim() })}
           >
             إرسالُ طلب الموافقة
           </button>

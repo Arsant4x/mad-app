@@ -125,7 +125,7 @@ export function sendContractForm(contractId: string, formId: string, drawing: Bl
 }
 export const resendContractFormLink = (contractId: string, formId: string) => apiClient.post<FormSent>(`${base(contractId, formId)}/resend`).then((r) => r.data);
 /** طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): يصل جوالَ المستأجر رابطُ الموافقة، ولا يعود للموظّف رمزٌ ولا رابط. */
-export const requestContractFormSubstitute = (contractId: string, formId: string, body: { name: string; mobile: string; nationalId?: string }) =>
+export const requestContractFormSubstitute = (contractId: string, formId: string, body: { name: string; mobile: string }) =>
   apiClient.post<FormSent>(`${base(contractId, formId)}/substitute`, body).then((r) => r.data);
 export const reviseContractForm = (contractId: string, formId: string) => apiClient.post<FormInstance>(`${base(contractId, formId)}/revisions`).then((r) => r.data);
 export const contractFormEvents = (contractId: string, formId: string) => apiClient.get<FormSigningEvent[]>(`${base(contractId, formId)}/events`).then((r) => r.data);

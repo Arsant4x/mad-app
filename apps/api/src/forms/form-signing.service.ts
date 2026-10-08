@@ -247,14 +247,16 @@ export class FormSigningService {
   }
 
   /**
-   * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٣٥` ⑨ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه (ورقمَ هويّته حين يُشترط نفاذ)، فيُحفظ
-   * تعييناً «ينتظر موافقة المستأجر»، **ويصل جوالَ المستأجر المسجَّل رابطٌ يدخله برمزه** فيرى اسمَ البديل والنموذجَ ويوافق أو يرفض؛ **والرمزُ
-   * لا يمرّ بالموظّف**. ولا بديلَ عن ممثّل شخصٍ اعتباريّ (الممثّلُ نفسُه من يُعيَّن)، وطلبٌ جديد يحلّ محلّ ما لم يُحكم فيه.
+   * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٣٥` ⑨ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه، فيُحفظ تعييناً «ينتظر موافقة
+   * المستأجر»، **ويصل جوالَ المستأجر المسجَّل رابطٌ يدخله برمزه** فيرى اسمَ البديل والنموذجَ ويوافق أو يرفض؛ **والرمزُ لا يمرّ بالموظّف**. ولا
+   * بديلَ عن ممثّل شخصٍ اعتباريّ (الممثّلُ نفسُه من يُعيَّن)، وطلبٌ جديد يحلّ محلّ ما لم يُحكم فيه.
+   *
+   * ⚠️ **ولا بديلَ في نموذجٍ يشترط نفاذ، حتى يحكم صاحبُ المشروع**: موافقةُ البديل على حفظ بياناته بإدخال رمزٍ يحمل نصَّ الإحاطة (`ق-١٦٧٣` ·
+   * `ق-١٦٧٤`)، والنموذجُ الذي يشترط نفاذ لا رمزَ فيه؛ فيُردّ مسمّىً ولا يُخمَّن كيف يجتمعان. **ولا يُحفظ رقمُ هويّته** لأنه لا يلزم إلا لنفاذ.
    */
-  async requestSubstitute(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor, input: { name: string; mobile: string; nationalId?: string | null }) {
+  async requestSubstitute(companyId: string, linked: FormLinkedEntity, id: string, actor: FormActor, input: { name: string; mobile: string }) {
     const name = input.name?.trim() ?? '';
     if (!name || !input.mobile?.trim()) throw new BadRequestException(MSG.form_substitute_required_fields);
-    const nationalId = input.nationalId?.trim() ? normalizeOtherId(REPRESENTATIVE_ID_SCHEME, input.nationalId) : null;
     const outbound = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${id} FOR UPDATE`;
       const instance = await this.awaiting(tx, linked, id);
@@ -264,8 +266,7 @@ export class FormSigningService {
       const mobile = normalizeMobile(input.mobile, tenant.country);
       if (!mobile) throw new ConflictException(MSG.form_signing_mobile_invalid);
       if (mobile === tenant.mobile) throw new ConflictException(MSG.form_substitute_same_mobile);
-      const plan = identityPlanOf(tenant.country);
-      if (instance.nafathRequired && (!nationalId || !plan || !plan.idSchemes.includes(REPRESENTATIVE_ID_SCHEME))) throw new ConflictException(MSG.form_substitute_nafath_id);
+      if (instance.nafathRequired) throw new ConflictException(MSG.form_substitute_nafath_id);
       // طلبٌ جديد يحلّ محلّ ما ينتظر؛ والموافَقُ عليه يبقى حتى يحلّ محلَّه موافَقٌ أحدث.
       await tx.formSignerDesignation.updateMany({ where: { groupId: group, role: FormSignerRole.SUBSTITUTE, status: 'PENDING_CONSENT' }, data: { status: 'REPLACED', decidedAt: new Date() } });
       await tx.formSigningLink.updateMany({ where: { instanceId: id, purpose: FormLinkPurpose.SUBSTITUTE_CONSENT, revokedAt: null }, data: { revokedAt: new Date() } });
@@ -282,8 +283,6 @@ export class FormSigningService {
           mobileCipher: encryptField(mobile, designationAad(companyId, designationId, 'mobile')),
           mobileMasked: masked,
           mobileIndex: mobileIndex(companyId, mobile),
-          nationalIdCipher: nationalId ? encryptField(nationalId, designationAad(companyId, designationId, 'national_id')) : null,
-          nationalIdIndex: nationalId ? customerOtherIdIndex(nationalId, companyId) : null,
           status: 'PENDING_CONSENT',
         },
       });

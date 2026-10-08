@@ -26,7 +26,8 @@ export function linkTokenFrom(text: string | undefined): string {
 }
 
 export function codeFrom(text: string | undefined): string {
-  const m = /(\d{6})/.exec(text ?? '');
+  // الرمزُ بعد «رمز التحقق:» بعينه، فاسمُ منشأةٍ فيه أرقامٌ في نصّ الإحاطة قبله لا يُقرأ رمزاً (`ق-١٦٧٤`).
+  const m = /رمز التحقق: (\d{6})/.exec(text ?? '');
   if (!m) throw new Error(`لا رمزَ في الرسالة: ${text}`);
   return m[1];
 }
