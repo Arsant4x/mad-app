@@ -24,6 +24,8 @@ import { ListSupplierPaymentsQueryDto } from './dto/list-supplier-payments-query
 import { AllocateSupplierPaymentDto, CreateSupplierPaymentDto, SupplierAllocationDto } from './dto/supplier-payment.dto';
 import { outstandingAfterNotes } from '../common/adjustment/adjustment-note.util';
 import { creditedByPurchase, purchaseTarget, recomputePurchaseStatus } from './purchase-settlement.util';
+import { stockedBaseOf } from './goods-receipts.service';
+import { purchaseCostLines, reallocationCostShifts } from './reallocation-cost.util';
 
 const SUPPLIER_PAYMENT_INCLUDE = {
   supplier: { select: { id: true, name: true } },
@@ -275,18 +277,73 @@ export class SupplierPaymentsService {
       await assertPurchasesVisible(tx, allowedBranchIds, requested);
       const touched = new Set<string>([...payment.allocations.map((a) => a.purchaseId), ...requested.map((a) => a.purchaseId)]);
 
+      // ⚖️ (توجيه ٢٨٦) **إعادةُ التوزيع تكتب قيدها**: كانت لا تكتب شيئاً، فيبقى فرقُ الأساس في `2100` ويظهر ربحٌ وهميّ في
+      //    `5600` عند العكس. فالأساسُ المسوّى قبل التوزيع وبعده (كسند القبض)، وما طُبّق من دفعةٍ مقدّمةٍ يُقاس بسعرها فيُرحَّل
+      //    فرقُه إلى تكلفة الشراء لا إلى فرق الصرف (حكمُ صاحب المشروع المؤقّت، `reallocation-cost.util.ts`).
+      const amount = round2(Number(payment.amount));
+      const payRate = Number(payment.exchangeRate);
+      const purchaseRows = await tx.purchase.findMany({
+        where: { id: { in: [...touched] } },
+        select: {
+          id: true,
+          date: true,
+          exchangeRate: true,
+          categoryCode: true,
+          baseSubtotal: true,
+          lines: { select: { id: true, productId: true, quantity: true, unitPrice: true, batchNo: true, expiryDate: true } },
+        },
+      });
+      const purchaseById = new Map(purchaseRows.map((p) => [p.id, p]));
+      const rateByPurchase = new Map(purchaseRows.map((p) => [p.id, { exchangeRate: Number(p.exchangeRate) }]));
+      const asSettled = (rows: { purchaseId: string; amount: number }[]) =>
+        baseSettledOf(amount, payRate, rows.map((a) => ({ documentId: a.purchaseId, amount: a.amount })), rateByPurchase);
+      const settledBefore = asSettled(payment.allocations.map((a) => ({ purchaseId: a.purchaseId, amount: round2(Number(a.amount)) })));
+
       // القديمةُ تُطرح أولاً — وإلا رفضنا إعادةَ توزيعٍ لا تتجاوز شيئاً حقيقةً.
       await tx.supplierPaymentAllocation.deleteMany({ where: { paymentId: id } });
       await lockAndAssertAllocationsFit(tx, purchaseTarget(tx), {
-        amount: round2(Number(payment.amount)),
+        amount,
         currency: payment.currency,
         partyId: payment.supplierId,
         allocations: toSettlementAllocations(requested),
       });
 
+      const day = (d: Date) => d.toISOString().slice(0, 10);
+      const shifts = reallocationCostShifts({
+        paymentRate: payRate,
+        paymentDay: day(payment.date),
+        before: new Map(payment.allocations.map((a) => [a.purchaseId, { amount: round2(Number(a.amount)), cost: round2(Number(a.baseCostAdjusted)) }])),
+        after: new Map(requested.map((a) => [a.purchaseId, a.amount])),
+        purchases: new Map(purchaseRows.map((p) => [p.id, { rate: Number(p.exchangeRate), day: day(p.date) }])),
+      });
+
       if (requested.length) {
         await tx.supplierPaymentAllocation.createMany({
-          data: requested.map((a) => ({ companyId, paymentId: id, purchaseId: a.purchaseId, amount: a.amount })),
+          data: requested.map((a) => ({
+            companyId,
+            paymentId: id,
+            purchaseId: a.purchaseId,
+            amount: a.amount,
+            baseCostAdjusted: shifts.get(a.purchaseId)?.cost ?? 0,
+          })),
+        });
+      }
+
+      const difference = round2(asSettled(requested) - settledBefore);
+      const costLines = await this.costLinesFor(tx, purchaseById, [...shifts].map(([purchaseId, s]) => ({ purchaseId, amount: s.shift })));
+      // سندٌ لم يُرحَّل أصلاً (لا قيدَ له) لا يُرحَّل فرقُ توزيعه، كسند القبض.
+      if (payment.journalEntryId && (difference !== 0 || costLines.length > 0)) {
+        const supplier = await tx.supplier.findUniqueOrThrow({ where: { id: payment.supplierId }, select: { name: true } });
+        await postSupplierPaymentEntry(tx, companyId, {
+          supplierId: payment.supplierId,
+          paymentNo: payment.no,
+          supplierName: supplier.name,
+          date: new Date(),
+          baseCash: 0,
+          basePayable: difference,
+          branchId: payment.branchId,
+          reallocation: true,
+          costLines,
         });
       }
 
@@ -360,7 +417,12 @@ export class SupplierPaymentsService {
             baseAmount: round2(-Number(original.baseAmount)),
             reversesId: original.id,
             allocations: {
-              create: original.allocations.map((a) => ({ companyId, purchaseId: a.purchaseId, amount: round2(-Number(a.amount)) })),
+              create: original.allocations.map((a) => ({
+                companyId,
+                purchaseId: a.purchaseId,
+                amount: round2(-Number(a.amount)),
+                baseCostAdjusted: round2(-Number(a.baseCostAdjusted)),
+              })),
             },
           } as unknown as Prisma.SupplierPaymentUncheckedCreateInput,
         });
@@ -378,6 +440,25 @@ export class SupplierPaymentsService {
           basePayable,
           description: `عكس سداد لمورّد — سند ${no} (يعكس ${original.no})`,
           reversal: true,
+          // ⚖️ (توجيه ٢٨٦) وما رحّلته إعادةُ التوزيع إلى تكلفة الشراء يُردّ منها لا من `5600`، فلا ربحَ وهميّاً.
+          costLines: await this.costLinesFor(
+            tx,
+            new Map(
+              (
+                await tx.purchase.findMany({
+                  where: { id: { in: original.allocations.map((a) => a.purchaseId) } },
+                  select: {
+                    id: true,
+                    exchangeRate: true,
+                    categoryCode: true,
+                    baseSubtotal: true,
+                    lines: { select: { id: true, productId: true, quantity: true, unitPrice: true, batchNo: true, expiryDate: true } },
+                  },
+                })
+              ).map((p) => [p.id, p]),
+            ),
+            original.allocations.map((a) => ({ purchaseId: a.purchaseId, amount: round2(-Number(a.baseCostAdjusted)) })),
+          ),
         });
 
         for (const a of original.allocations) await recomputePurchaseStatus(tx, a.purchaseId);
@@ -388,6 +469,36 @@ export class SupplierPaymentsService {
   }
 
   // ---------------- الداخل ----------------
+
+  /** سطورُ تكلفة الشراء لمبالغَ موقَّعةٍ لكلِّ شراء (توجيه ٢٨٦): حصّةُ المخزنيّ إلى `5100` وحصّةُ الخدمات إلى حساب فئته. */
+  private async costLinesFor(
+    tx: Prisma.TransactionClient,
+    purchases: ReadonlyMap<
+      string,
+      {
+        exchangeRate: Prisma.Decimal;
+        categoryCode: string | null;
+        baseSubtotal: Prisma.Decimal;
+        lines: { id: string; productId: string | null; quantity: Prisma.Decimal; unitPrice: Prisma.Decimal; batchNo: string | null; expiryDate: Date | null }[];
+      }
+    >,
+    shifts: { purchaseId: string; amount: number }[],
+  ): Promise<{ accountId: string; amount: number }[]> {
+    const lines: { accountId: string; amount: number }[] = [];
+    for (const s of shifts) {
+      if (round2(s.amount) === 0) continue;
+      const p = purchases.get(s.purchaseId);
+      if (!p) throw new NotFoundException(MSG.purchase_not_found);
+      lines.push(
+        ...(await purchaseCostLines(
+          tx,
+          { categoryCode: p.categoryCode, subtotal: Number(p.baseSubtotal), stockedSubtotal: stockedBaseOf(p.lines, Number(p.exchangeRate)) },
+          s.amount,
+        )),
+      );
+    }
+    return lines;
+  }
 
   /** الترحيلُ + أثرُ الصندوق/البنك — مسارٌ واحد للسند وعكسه. */
   private async postAndSettle(
@@ -409,6 +520,8 @@ export class SupplierPaymentsService {
       basePayable: number;
       description: string;
       reversal?: boolean;
+      /** ما يُردّ إلى تكلفة الشراء عند العكس (توجيه ٢٨٦). */
+      costLines?: { accountId: string; amount: number }[];
     },
   ): Promise<void> {
     const entry = await postSupplierPaymentEntry(tx, companyId, {
@@ -420,6 +533,7 @@ export class SupplierPaymentsService {
       basePayable: p.basePayable,
       branchId: p.branchId,
       reversal: p.reversal,
+      costLines: p.costLines,
       // النقدُ يخرج من حساب البنك حين يُسدَّد على بنك، ومن `1000` نقداً — ولا درج (`ق-٨٧٢`).
       cashAccountId: p.bank?.accountId ?? null,
     });
