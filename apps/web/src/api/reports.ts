@@ -150,6 +150,33 @@ export interface BankDifference {
 
 export const getBankDifference = () => apiClient.get<BankDifference>('/reports/bank-difference').then((r) => r.data);
 
+/** رقمٌ أُخذ من العدّاد: اسمُه كما يُعرض ووقتُ أخذه (`ق-٣٤٥`). */
+export interface TakenNumber {
+  no: string;
+  number: number;
+  allocatedAt: string;
+}
+
+/**
+ * الأرقامُ المأخوذة غير المستعملة لكلِّ سلسلة (`ق-٣٤٥`): «أُخذ ولم يُستعمل» لما ارتدّت معاملتُه، و«قيد المعالجة» لما أُخذ
+ * في الدقائق العشر الأخيرة. والسجلُّ يبدأ من `firstRecorded`، فما قبله صدر قبل بنائه.
+ */
+export interface NumberGaps {
+  asOf: string;
+  series: {
+    kind: string;
+    year: number;
+    taken: number;
+    firstRecorded: number | null;
+    lastRecorded: number | null;
+    recordedSince: string | null;
+    unused: TakenNumber[];
+    pending: TakenNumber[];
+  }[];
+}
+
+export const getNumberGaps = () => apiClient.get<NumberGaps>('/reports/number-gaps').then((r) => r.data);
+
 /**
  * الإيرادُ المؤجَّل (`ق-٤٦٨`) — **الالتزامُ القائم بتفصيله**، ومعه **ما لم يمرّ
  * به** (`ق-٤٧٣`): دفعاتٌ بلا قسطٍ مرتبط اعتُرف بها إيراداً فوراً.

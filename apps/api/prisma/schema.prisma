@@ -568,6 +568,8 @@ model Company {
   outboxEvents     OutboxEvent[]
   /// عدّاداتُ تسلسل المستندات (`ق-٣٢٨`) — واحدٌ لكل نوعٍ وسنة.
   documentSequences DocumentSequence[]
+  /// كلُّ رقمٍ أُخذ من العدّاد وهل استُعمل (`ق-٣٤٥`).
+  documentNumberAllocations DocumentNumberAllocation[]
   ownedTemplates   PermissionTemplate[] @relation("CompanyTemplates")
   purchaseAttachments PurchaseAttachment[]
   purchaseLines       PurchaseLine[]
@@ -6815,6 +6817,34 @@ model DocumentSequence {
   /// الإدراجُ الثاني يصطدم به، فتشغيلٌ ثانٍ للبذر **لا يغيّر شيئاً**.
   @@unique([companyId, kind, year])
   @@map("document_sequences")
+}
+
+/// ⚖️ **الفجوةُ تُرى ولا تُصمت** (`ق-٣٤٥`، شرطُ صاحب المشروع على `ق-٣٤٤`؛ بُني في توجيه ٢٨٦ بالقاعدة ٣٧):
+/// كلُّ رقمٍ أخذه منفذُ العدّاد صفٌّ هنا، **يُكتب في المعاملة القصيرة نفسِها مع زيادة العدّاد** (جملةٌ واحدة)،
+/// **ويُختم «مستعمَلاً» (`usedAt`) في معاملة العمل** — فارتدادُها يترك الرقمَ «أُخذ ولم يُستعمل» من نفسه، بلا
+/// شيءٍ يُتذكَّر. ويقرؤه تقريرُ الأرقام المأخوذة غير المستعملة (`GET /reports/number-gaps`).
+/// ⚠️ **حدّ**: ما صدر قبل هذا الجدول لا صفَّ له، فالتقريرُ يبدأ من أوّل رقمٍ سُجّل لكلِّ سلسلة؛ ورقمٌ استُعمل ثم حُذف
+/// مستندُه (عرضُ سعرٍ غيرُ محوَّل، قيدٌ يُعكس ويُحذف) يبقى «مستعمَلاً».
+/// **بلا أبٍ** — سجلٌّ **يتراكم بحكمٍ مقصود** كالعدّاد: رقمٌ أُخذ لا يُعاد، وأثرُ أخذه هو جوابُ المراجع.
+model DocumentNumberAllocation {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// سلسلتُه كما في العدّاد (`kind` و`year`، و`year = 0` لما لا يبدأ كلَّ سنة).
+  kind   String
+  year   Int
+  number Int
+  /// الرقمُ كما يُعرض (`INV-2026-0007`) — يُكتب مع الأخذ لأن عرضَه يحتاج حشوَ سلسلته.
+  no     String
+
+  allocatedAt DateTime  @default(now())
+  /// يُكتب في معاملة العمل وحدَها؛ فارغٌ = أُخذ ولم يُستعمل.
+  usedAt      DateTime?
+
+  @@unique([companyId, kind, year, number])
+  @@index([companyId, usedAt])
+  @@map("document_number_allocations")
 }
 
 /// ═══ موافقةُ التاجر على المعالجين الفرعيين (`ق-٥٨١` · `ق-٥٨٩`) ═══

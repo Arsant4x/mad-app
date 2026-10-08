@@ -1,5 +1,7 @@
 import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
 import { Response } from 'express';
+import { NumberGapsResponse } from './dto/number-gaps-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -87,6 +89,14 @@ export class ReportsController {
   @RequiresAction('view')
   deferredRevenue(@CurrentTenant() tenant: TenantContext) {
     return this.reportsService.deferredRevenue(tenant.companyId);
+  }
+
+  /** الأرقامُ المأخوذة غير المستعملة في كلِّ سلسلة (`ق-٣٤٥`): للمنشأة كلِّها، فلمن يرى الفروعَ كلَّها. */
+  @Get('number-gaps')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: NumberGapsResponse })
+  numberGaps(@CurrentTenant() tenant: TenantContext): Promise<NumberGapsResponse> {
+    return this.reportsService.numberGaps(tenant.companyId, tenant.allowedBranchIds);
   }
 
   /** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض — وإعلانُ ق-٢٨٣ معه. */

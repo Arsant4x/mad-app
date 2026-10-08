@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ForbiddenException, INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
@@ -8,6 +8,7 @@ import { purgeInvoicesForTest } from './purge-invoices';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { nextDocumentNumber } from '../src/common/document-sequence.util';
 import { isSequencePortReady } from '../src/common/sequence-allocator';
+import { NUMBER_GAP_PENDING_MS, ReportsService } from '../src/reports/reports.service';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): ثلاثةُ أضعاف المقيس (9.3 ث) — معلَنةٌ هنا لا مفترَضةٌ في خمس ثوانٍ.
 jest.setTimeout(30000);
@@ -80,8 +81,18 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
       tx.documentSequence.findFirst({ where: { kind, year: YEAR }, select: { last: true } }),
     );
 
+  // وسجلُّ ما أُخذ معه (`ق-٣٤٥`): عدّادٌ يُحذف ويُبذر ثانيةً يعيد أرقاماً أُخذت، فيصطدم بقيدها الفريد.
   const dropCounter = async (kind: string) =>
-    tenantPrisma.runInTenantContext(companyId, (tx) => tx.documentSequence.deleteMany({ where: { kind, year: YEAR } }));
+    tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      await tx.documentNumberAllocation.deleteMany({ where: { kind, year: YEAR } });
+      return tx.documentSequence.deleteMany({ where: { kind, year: YEAR } });
+    });
+
+  /** صفوفُ ما أُخذ من السلسلة وهل استُعمل (`ق-٣٤٥`) — تحت سياق المنشأة. */
+  const takenOf = async (kind: string) =>
+    tenantPrisma.runInTenantContext(companyId, (tx) =>
+      tx.documentNumberAllocation.findMany({ where: { kind, year: YEAR }, orderBy: { number: 'asc' }, select: { number: true, no: true, usedAt: true } }),
+    );
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -191,6 +202,29 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
 
     // **الرقمُ ‎0002‎ أُخذ ولم يُستعمل** — فالتالي ‎0003‎ لا ‎0002‎.
     expect(await issue(kind, 0)).toBe(`${kind}-${YEAR}-0003`);
+
+    // ⚖️ (`ق-٣٤٥` · توجيه ٢٨٦) **والفجوةُ تُرى ولا تُصمت**: الأخذُ مسجَّلٌ للثلاثة، والختمُ «مستعمَلاً» على ما التزمت
+    // معاملتُه وحدَه — فالساقطُ بقي «أُخذ ولم يُستعمل» من نفسه. الجوابُ محسوبٌ يداً.
+    expect((await takenOf(kind)).map((t) => ({ no: t.no, used: t.usedAt !== null }))).toEqual([
+      { no: `${kind}-${YEAR}-0001`, used: true },
+      { no: `${kind}-${YEAR}-0002`, used: false },
+      { no: `${kind}-${YEAR}-0003`, used: true },
+    ]);
+
+    // **والتقريرُ يسمّيه**: عبر HTTP للمالك «قيد المعالجة» (أُخذ للتوّ)، وبعد عشر دقائق «غيرُ مستعمَل».
+    const seriesOf = (body: { series: { kind: string; taken: number; unused: { no: string }[]; pending: { no: string }[] }[] }) =>
+      body.series.find((s) => s.kind === kind)!;
+    const now = seriesOf((await auth(http().get('/reports/number-gaps')).expect(200)).body);
+    expect({ taken: now.taken, unused: now.unused.map((u) => u.no), pending: now.pending.map((u) => u.no) }).toEqual({
+      taken: 3,
+      unused: [],
+      pending: [`${kind}-${YEAR}-0002`],
+    });
+    const reports = app.get(ReportsService);
+    const later = seriesOf(await reports.numberGaps(companyId, 'all', new Date(Date.now() + NUMBER_GAP_PENDING_MS + 60_000)));
+    expect({ unused: later.unused.map((u) => u.no), pending: later.pending.map((u) => u.no) }).toEqual({ unused: [`${kind}-${YEAR}-0002`], pending: [] });
+    // **وللمنشأة كلِّها**: المقيَّدُ بفرعٍ يُردّ كالقوائم المالية (`ق-١٤٥٢`).
+    expect(() => reports.numberGaps(companyId, ['branch-x'])).toThrow(ForbiddenException);
   }, 30000);
 
   it('🔴 والعزلُ على هذا المسار تحديداً — حيّاً لا بقراءة الهجرة', async () => {
@@ -219,7 +253,10 @@ describe('عدّادُ تسلسل المستندات (e2e)', () => {
     // **و«أ» لم يتأثّر** — عدّادان مستقلّان تحت مفتاحٍ واحد.
     expect(await issue(kind, 40)).toBe(`${kind}-${YEAR}-0042`);
 
-    await tenantPrisma.runInTenantContext(companyB, (tx) => tx.documentSequence.deleteMany({ where: { kind, year: YEAR } }));
+    await tenantPrisma.runInTenantContext(companyB, async (tx) => {
+      await tx.documentNumberAllocation.deleteMany({ where: { kind, year: YEAR } });
+      return tx.documentSequence.deleteMany({ where: { kind, year: YEAR } });
+    });
   }, 40000);
 
   it('🔴 والمسارُ الحقيقيّ عبر HTTP: الشكلُ باقٍ والأرقامُ متتالية صاعدة', async () => {

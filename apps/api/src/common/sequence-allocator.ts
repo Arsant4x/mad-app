@@ -116,18 +116,32 @@ export async function allocateSequence(
   kind: string,
   year: number,
   seed: () => Promise<number>,
+  label: { prefix: string; pad: number },
 ): Promise<number> {
   const client = sequencePort();
 
   // ⚠️ **والسياقُ يُضبط داخل كل معاملةٍ هنا**: `set_config` بعمرِ المعاملة
   // (`is_local = true`)، فاتصالٌ مُعادُ استعماله **لا يرث سياقَ منشأةٍ سابقة**.
+  //
+  // ⚖️ (`ق-٣٤٥` · توجيه ٢٨٦) **والأخذُ يُسجَّل في الجملة نفسِها**: الزيادةُ وصفُّ الأخذ يلتزمان معاً أو لا يقعان،
+  // فلا رقمَ يُؤخذ بلا أثر. والختمُ «مستعمَلاً» في معاملة العمل (`document-sequence.util.ts`)، لا هنا.
+  // والحشوُ كـ`padStart` في الشيفرة: لا يقصّ رقماً أطولَ من حشوه (و`lpad` وحدَها تقصّ).
   const bump = () =>
     client.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.company_id', ${companyId}, true)`;
       return tx.$queryRaw<{ last: number }[]>`
-        UPDATE "document_sequences" SET "last" = "last" + 1, "updatedAt" = NOW()
-        WHERE "companyId" = ${companyId} AND "kind" = ${kind} AND "year" = ${year}
-        RETURNING "last"
+        WITH bumped AS (
+          UPDATE "document_sequences" SET "last" = "last" + 1, "updatedAt" = NOW()
+          WHERE "companyId" = ${companyId} AND "kind" = ${kind} AND "year" = ${year}
+          RETURNING "last"
+        ), taken AS (
+          INSERT INTO "document_number_allocations" ("id", "companyId", "kind", "year", "number", "no")
+          SELECT gen_random_uuid(), ${companyId}, ${kind}, ${year}, "last",
+                 ${label.prefix}::text || CASE WHEN length("last"::text) >= ${label.pad}::int THEN "last"::text ELSE lpad("last"::text, ${label.pad}::int, '0') END
+          FROM bumped
+          RETURNING "number"
+        )
+        SELECT "number" AS "last" FROM taken
       `;
     });
 
