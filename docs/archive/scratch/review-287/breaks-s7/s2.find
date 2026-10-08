@@ -1,0 +1,1 @@
+    if (link.purpose !== FormLinkPurpose.SUBSTITUTE_CONSENT) throw new ForbiddenException(MSG.form_link_unavailable);

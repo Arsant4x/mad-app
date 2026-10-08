@@ -1,0 +1,166 @@
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+nginx-cache	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+api-unit	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+vitest	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+صورُ الحاويات (Trivy · يمنع الحرج)	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+vitest	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+api-unit	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+صورُ الحاويات (Trivy · يمنع الحرج)	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+api-unit	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+Refreshing checks status every 60 seconds. Press Ctrl+C to quit.
+
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+db-integration	pending	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+db-integration	pass	11m42s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239566387	
+api-unit	pass	2m52s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483228	
+attribution	pass	7s	https://github.com/Arsant4x/mad-app/actions/runs/37755674874/job/113239482470	
+db-integration	pass	11m42s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526059	
+nginx-cache	pass	1m14s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239525836	
+playwright	pass	2m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755687844/job/113239526246	
+vitest	pass	1m47s	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239483709	
+أنماطُ الثغرات في الشيفرة (Semgrep CE · يمنع الحرج)	pass	1m9s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482745	
+ثغراتُ المكتبات (npm audit · يمنع الحرج)	pass	12s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482448	
+صورُ الحاويات (Trivy · يمنع الحرج)	pass	2m30s	https://github.com/Arsant4x/mad-app/actions/runs/37755674872/job/113239482754	
+gate	skipping	0	https://github.com/Arsant4x/mad-app/actions/runs/37755674859/job/113239484959	
+exit=0

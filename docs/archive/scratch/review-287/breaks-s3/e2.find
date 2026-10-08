@@ -1,0 +1,1 @@
+        state: active ? ('ACTIVE' as const) : ('CLOSED' as const),

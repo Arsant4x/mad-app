@@ -1,0 +1,1 @@
+    if (process.env.NODE_ENV === 'production' && TEST_ONLY_SMS_PROVIDERS.has(name)) throw new ServiceUnavailableException(MSG.sms_test_provider_in_production);

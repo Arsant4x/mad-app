@@ -1,0 +1,1103 @@
+﻿npx.cmd : PASS src/common/tenant/rls-policy-content.live.spec.ts (12.752 s)
+At line:6 char:1
++ npx.cmd jest --testPathIgnorePatterns=e2e-spec --maxWorkers=2 2>&1 |  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/common...c.ts (12.752 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+PASS src/journal/dimension-coverage.live.spec.ts (12.857 s)
+  ● Console
+
+    console.log
+      [أبعاد] فُحص 1620 سطراً · استُثني 0 سابقاً للموجة · 8 مسار
+
+      at Object.<anonymous> (src/journal/dimension-coverage.live.spec.ts:189:13)
+
+    console.log
+      [طرف] فُحص 1620 سطراً · استُثني 0 سابقاً لهجرة الطرف · 13 مسار · بلا طرفٍ (كلُّ الزمن): على 1200 0 · على 2100 0
+
+      at Object.<anonymous> (src/journal/dimension-coverage.live.spec.ts:355:15)
+
+PASS src/common/money/rounding.spec.ts
+PASS src/common/branch-read-declared.spec.ts
+PASS src/reports/deferred-revenue.live.spec.ts
+  ● Console
+
+    console.log
+        ق-٧٠٦ · المنشأة 59233e76-6f2b-46a1-a63c-48511829e8d7 · أقساطٌ بفترة خدمة 0 · مؤجَّلٌ موجب 110 · غيرُ مرتبط 0
+
+      at Object.<anonymous> (src/reports/deferred-revenue.live.spec.ts:312:13)
+
+    console.log
+        ⚠️ شرطُ النسبة لم يُقَس: 132 قسطاً دون 10000 — يُقاس حيث توجد الأقساط (التطوير)
+
+      at Object.<anonymous> (src/reports/deferred-revenue.live.spec.ts:318:15)
+
+PASS src/common/offsite-backup.spec.ts
+PASS src/common/local-day.spec.ts
+PASS src/common/support-entry-live-grant.spec.ts
+PASS src/auth/identity-company.live.spec.ts
+  ● Console
+
+    console.log
+      
+        ▶ هويّاتٌ يتيمة (بلا ملفّ): 0 — لا شيء
+          (تُعدّ ولا تُحذف — ق-٦٦٨: إن نما العددُ بعد إغلاق المصدر فذاك عطلٌ جديد)
+
+      at Object.<anonymous> (src/auth/identity-company.live.spec.ts:156:13)
+
+PASS src/common/external-text-storable.spec.ts
+  ● Console
+
+    console.log
+      external-text guard: 6 أعمدة معلَنة · 557 ملفاً · 32 نداءَ كتابةٍ فُحص في 7 ملفاً
+
+      at Object.<anonymous> (src/common/external-text-storable.spec.ts:320:13)
+
+PASS src/common/ci-split.spec.ts
+PASS src/fiscal/period-lock-tz.live.spec.ts
+PASS src/common/clean-run-verdict.spec.ts
+PASS src/delegations/me-permissions.spec.ts
+PASS src/activities/rls-context.spec.ts
+PASS src/inventory/costing.live.spec.ts
+PASS src/common/money/totals.spec.ts
+PASS src/common/document-line-order.spec.ts
+  ● Console
+
+    console.log
+      line-order guard: 39 قراءةً لسطورٍ مرقَّمة في 9 ملفّاً
+
+      at Object.<anonymous> (src/common/document-line-order.spec.ts:223:13)
+
+PASS src/common/where-or-collision.spec.ts
+PASS src/common/openapi-contract.spec.ts
+PASS src/common/box-branch-declared.spec.ts
+PASS src/zatca/icv-concurrency.live.spec.ts (18.372 s)
+PASS src/common/hooks-present.spec.ts
+PASS src/tasks/tasks.guards.spec.ts
+PASS src/common/tenant/tenant-guard-declared.spec.ts
+  ● Console
+
+    console.log
+      [إعلان] 385 مساراً · شاشة 313 · للمالك 44 · لكلّ فاعل 31 · قشرة 1
+
+      at Object.<anonymous> (src/common/tenant/tenant-guard-declared.spec.ts:122:13)
+
+PASS src/purchases/purchase-lines.live.spec.ts
+PASS src/common/vat/exemption-reasons.spec.ts
+PASS src/export/export-scope.live.spec.ts
+PASS src/tasks/task-model.spec.ts
+PASS src/customers/marketing-consent.live.spec.ts
+PASS src/common/config/production-secrets.spec.ts
+PASS src/company-users/company-users-rls.live.spec.ts
+PASS src/journal/rent-tax-point.util.spec.ts
+PASS src/common/edit-while-reading.spec.ts (6.021 s)
+PASS src/auth/off-system-template-migration.live.spec.ts
+PASS src/delegations/delegation-log.live.spec.ts
+PASS src/common/migrations-announce.spec.ts
+PASS src/common/vat/vat-rate-single-source.spec.ts
+PASS src/common/prisma-client-fingerprint.spec.ts
+  ● Console
+
+    console.log
+      
+      ▶ كلفةُ البصمة: 4.3 م.ث · والمرجع 2.3 م.ث ⇒ 1.9× (السقف 6×)
+
+      at Object.<anonymous> (src/common/prisma-client-fingerprint.spec.ts:103:15)
+
+PASS src/common/null-safe-negation.spec.ts
+PASS src/common/import-direction.spec.ts
+PASS src/common/count-numbering.spec.ts
+PASS src/common/model-parent-declared.spec.ts
+PASS src/common/no-id-scan.spec.ts
+PASS src/common/probe-two-cases.spec.ts
+PASS src/common/spec-tags.spec.ts
+PASS src/common/error-tracking/error-reporter.spec.ts
+PASS src/common/tenant/tenant-scope-coverage.spec.ts
+PASS src/common/tenant/rls-coverage.live.spec.ts
+PASS src/activities/sectors.spec.ts
+PASS src/inventory/costing-race.live.spec.ts
+PASS src/invoices/credit-limit.guards.spec.ts
+PASS src/journal/rent-recognition.util.spec.ts
+PASS src/activities/rls-probe.live.spec.ts
+  ● Console
+
+    console.log
+      
+        ═══ تشخيص RLS — بلا سياق مقابل داخل سياق ═══
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:63:13)
+
+    console.log
+        audit_logs                     خارج:    0  داخل:    0  ⚪ لا بيانات — القياس لا يحكم
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:90:15)
+
+    console.log
+                                       الخدمة: audit.service.ts
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:92:15)
+
+    console.log
+        account_deletion_requests      خارج:    0  داخل:    0  ⚪ لا بيانات — القياس لا يحكم
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:90:15)
+
+    console.log
+                                       الخدمة: deletion-requests.service.ts
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:92:15)
+
+    console.log
+        support_access_grants          خارج:    0  داخل:    0  ⚪ لا بيانات — القياس لا يحكم
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:90:15)
+
+    console.log
+                                       الخدمة: support-access.service.ts
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:92:15)
+
+    console.log
+        support_access_logs            خارج:    0  داخل:    0  ⚪ لا بيانات — القياس لا يحكم
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:90:15)
+
+    console.log
+                                       الخدمة: support-access.service.ts
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:92:15)
+
+    console.log
+        business_activities            خارج:    0  داخل:    1  🔴 العزل يعمل — والقراءة الخارجية عمياء ⇒ الخدمة معطوبة 
+صامتة
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:90:15)
+
+    console.log
+                                       الخدمة: (المرجع — أُصلح)
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:92:15)
+
+    console.log
+      
+        ═══ الحكم من الكتالوج الحيّ ═══
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:127:13)
+
+    console.log
+        audit_logs                     FORCE=true   🔴 نفس شكل `business_activities` المُثبَت عطبه ⇒ القراءة الخارجية 
+عمياء
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:137:15)
+
+    console.log
+                                       السياسة: ("companyId" = current_setting('app.company_id'::text, true))
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:139:15)
+
+    console.log
+        support_access_grants          FORCE=false  ⚠️ بلا FORCE — مالك الجدول يتجاوز السياسة
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:137:15)
+
+    console.log
+                                       السياسة: ("companyId" = current_setting('app.company_id'::text, true))
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:139:15)
+
+    console.log
+        support_access_logs            FORCE=false  ⚠️ بلا FORCE — مالك الجدول يتجاوز السياسة
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:137:15)
+
+    console.log
+                                       السياسة: ("companyId" = current_setting('app.company_id'::text, true))
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:139:15)
+
+    console.log
+        business_activities            FORCE=true   🔴 نفس شكل `business_activities` المُثبَت عطبه ⇒ القراءة الخارجية 
+عمياء
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:137:15)
+
+    console.log
+                                       السياسة: ("companyId" = current_setting('app.company_id'::text, true))
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:139:15)
+
+    console.log
+        account_deletion_requests      FORCE=false  ⚠️ بلا FORCE — مالك الجدول يتجاوز السياسة
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:137:15)
+
+    console.log
+                                       السياسة: ("companyId" = current_setting('app.company_id'::text, true))
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:139:15)
+
+    console.log
+      
+        مرجع العزل (customers): خارج 0 · داخل 2
+
+      at Object.<anonymous> (src/activities/rls-probe.live.spec.ts:156:13)
+
+PASS src/common/subprocessor-consent.spec.ts
+PASS src/common/web-enum-mirrors.spec.ts
+FAIL src/common/mail-dns-check.spec.ts
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ① بلا SMTP_HOST لا فحصَ ولا رفض — والحارسُ 
+على تفعيل البريد لا على كلِّ نشر
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      75 |   it('① بلا SMTP_HOST لا فحصَ ولا رفض — والحارسُ على تفعيل البريد لا على كلِّ نشر', () => {
+      76 |     const r = run({ SMTP_FROM: 'no-reply@rikzapp.com' }, []);
+    > 77 |     expect(r.code).toBe(0);
+         |                    ^
+      78 |     expect(r.out).toContain('لا SMTP_HOST');
+      79 |   });
+      80 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:77:20)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ② الثلاثةُ حاضرة ⟸ يمرّ ويسمّي كلَّ سجلّ — 
+والنطاقُ من SMTP_FROM باسمٍ عرضيٍّ وحروفٍ كبيرة
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      81 |   it('② الثلاثةُ حاضرة ⟸ يمرّ ويسمّي كلَّ سجلّ — والنطاقُ من SMTP_FROM باسمٍ عرضيٍّ وحروفٍ كبيرة', () => {
+      82 |     const r = run(MAIL_ON, [SPF, DKIM, DMARC]);
+    > 83 |     expect(r.code).toBe(0);
+         |                    ^
+      84 |     // مصادقةُ المسبار: الأسطرُ تسمّي ما قرأته من الجدول — فالأداةُ المزيَّفةُ نودِيت فعلاً.
+      85 |     expect(r.out).toContain('✔ SPF   rikzapp.com: v=spf1 include:rp.oracleemaildelivery.com ~all');
+      86 |     expect(r.out).toContain('✔ DKIM  ruh-20260923._domainkey.rikzapp.com → 
+ruh-20260923.rikzapp.com.dkim.ruh.oracleemaildelivery.com.');
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:83:20)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ⭐ ③ غيابُ أيٍّ منها يُسقط — ويُبلّغ عن 
+الثلاثة كلِّها لا عن أوّل غائب
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "✖ DKIM  ruh-20260923._domainkey.rikzapp.com: لا سجلَّ CNAME"
+    Received string:    "<3>WSL (284474 - Relay) ERROR: CreateProcessCommon:817: execvpe(/bin/bash) failed: No such 
+file or directory
+    "
+
+       96 |     const noDkim = run(MAIL_ON, [SPF, DMARC]);
+       97 |     expect(noDkim.code).toBe(1);
+    >  98 |     expect(noDkim.out).toContain('✖ DKIM  ruh-20260923._domainkey.rikzapp.com: لا سجلَّ CNAME');
+          |                        ^
+       99 |     expect(noDkim.out).toContain('✔ SPF');
+      100 |     expect(noDkim.out).toContain('✔ DMARC');
+      101 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:98:24)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ④ غيابُ الأداة ليس فحصاً ناجحاً — يُسقط 
+ويسمّي الحزمة
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "dig غير مثبَّت"
+    Received string:    "<3>WSL (284477 - Relay) ERROR: CreateProcessCommon:817: execvpe(/bin/bash) failed: No such 
+file or directory
+    "
+
+      115 |     const r = run(MAIL_ON, [SPF, DKIM, DMARC], { noDig: true });
+      116 |     expect(r.code).toBe(1);
+    > 117 |     expect(r.out).toContain('dig غير مثبَّت');
+          |                   ^
+      118 |     expect(r.out).toContain('dnsutils');
+      119 |   });
+      120 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:117:19)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ⑥ يُشغَّل مباشرةً بيدٍ على الخادم — بالرمز 
+نفسِه (وأنّه لا يعمل وحدَه حين يُستورد يوكّده ②)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      129 |     // أوّلُ نشرٍ يحمل الملفَّ ينفّذ نسخةَ deploy.sh القديمة — فهذا المدخلُ هو فحصُه قبله.
+      130 |     const ok = run(MAIL_ON, [SPF, DKIM, DMARC], { direct: true });
+    > 131 |     expect(ok.code).toBe(0);
+          |                     ^
+      132 |     expect(ok.out).toContain('✔ DMARC _dmarc.rikzapp.com');
+      133 |     const missing = run(MAIL_ON, [SPF, DKIM], { direct: true });
+      134 |     expect(missing.code).toBe(1);
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:131:21)
+
+PASS src/common/rikzapp-home-page.spec.ts
+PASS src/templates/permission-templates-rls.live.spec.ts
+PASS src/common/response-schema.util.spec.ts
+PASS src/companies/company-movement.spec.ts
+PASS src/common/sequence-from-counter.spec.ts
+FAIL src/common/deploy-recreate-guard.spec.ts
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ① مصادرُ البناء تُقرأ من 
+Dockerfile نفسِه — ومطابقةٌ لمحلِّلٍ مستقلّ (web · api)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      70 |       expect(expected.length).toBeGreaterThan(3); // حارسٌ على المجسّ: الملفُّ قُرئ فعلاً
+      71 |       const r = guardFn('build_sources', [df]);
+    > 72 |       expect(r.code).toBe(0);
+         |                      ^
+      73 |       expect(r.out.trim().split('\n')).toEqual(expected);
+      74 |     }
+      75 |     // ما يُنسخ من مرحلةٍ سابقة ليس مصدراً من الشجرة
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:72:22)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ② touching_sources بحالتين: 
+apps/web يمسّ web لا api · docs لا يمسّ أحداً · packages/shared يمسّ الاثنين
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      79 |   it('② touching_sources بحالتين: apps/web يمسّ web لا api · docs لا يمسّ أحداً · packages/shared يمسّ 
+الاثنين', () => {
+      80 |     const webHit = guardFn('touching_sources', ['apps/web/Dockerfile'], 
+'docs/x.md\napps/web/src/App.tsx\n');
+    > 81 |     expect(webHit.code).toBe(0);
+         |                         ^
+      82 |     expect(webHit.out.trim()).toBe('apps/web/src/App.tsx');
+      83 |     const apiMiss = guardFn('touching_sources', ['apps/api/Dockerfile'], 
+'docs/x.md\napps/web/src/App.tsx\n');
+      84 |     expect(apiMiss.code).toBe(1);
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:81:25)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ③ Dockerfile الخدمة يُقرأ 
+من إعداد compose المطبَّع — ويُردّ نسبياً إلى الجذر
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "apps/web/Dockerfile"
+    Received: ""
+
+       95 |   it('③ Dockerfile الخدمة يُقرأ من إعداد compose المطبَّع — ويُردّ نسبياً إلى الجذر', () => {
+       96 |     const cfg = 'services:\n  api:\n    build:\n      context: /opt/mad-app\n      dockerfile: 
+apps/api/Dockerfile\n  web:\n    build:\n      context: /opt/mad-app\n      dockerfile: 
+/opt/mad-app/apps/web/Dockerfile\nnetworks:\n  default: {}\n';
+    >  97 |     expect(guardFn('service_dockerfile', ['web', '/opt/mad-app'], 
+cfg).out.trim()).toBe('apps/web/Dockerfile');
+          |                                                                                    ^
+       98 |     expect(guardFn('service_dockerfile', ['api', '/opt/mad-app'], 
+cfg).out.trim()).toBe('apps/api/Dockerfile');
+       99 |     expect(guardFn('service_dockerfile', ['minio', '/opt/mad-app'], cfg).out.trim()).toBe('');
+      100 |   });
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:97:84)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ⭐ ④ كتلةُ الحارس كما هي في 
+deploy.sh — بلا تغييرٍ في المصادر تمرّ (○)، وبتغييرٍ أو بصورةٍ جديدة تُسقط
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      102 |   it('⭐ ④ كتلةُ الحارس كما هي في deploy.sh — بلا تغييرٍ في المصادر تمرّ (○)، وبتغييرٍ أو بصورةٍ جديدة 
+تُسقط', () => {
+      103 |     const pass = bash('ops/deploy/recreate-guard.selftest.sh', ['1']);
+    > 104 |     expect(pass.code).toBe(0);
+          |                       ^
+      105 |     expect(pass.out).toMatch(/○ «web»: لم تُعَد إنشاؤها — ولا ملفَّ من مصادر بنائها 
+\(apps\/web\/Dockerfile · COPY\) تغيّر/);
+      106 |     expect(pass.out).not.toMatch(/✖/);
+      107 |
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:104:23)
+
+PASS src/common/locale-gate.spec.ts
+PASS src/tasks/task-log.live.spec.ts
+PASS src/common/no-silent-skip.spec.ts
+PASS src/common/registry-numbering.spec.ts
+FAIL src/zatca/certificate-expiry.spec.ts
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⓪ حارسٌ على المجسّ: الشهادةُ 
+وُلدت فعلاً — وإلا لم يُفحص شيء
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      35 |     it('⓪ حارسٌ على المجسّ: الشهادةُ وُلدت فعلاً — وإلا لم يُفحص شيء', () => {
+      36 |       // ⚠️ لا `return` صامت (`ق-٢٦٨`): غيابُ `openssl` **يُعلَن سقوطاً** لا يُبتلَع.
+    > 37 |       expect(hasOpenssl).toBe(true);
+         |                          ^
+      38 |       expect(pem).toContain('BEGIN CERTIFICATE');
+      39 |     });
+      40 |
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:37:26)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⭐ يقرأ `notAfter` من نصّ `PEM`
+
+    TypeError: Cannot read properties of undefined (reading 'trim')
+
+      14 |  */
+      15 | export function certificateNotAfter(certificateBase64: string): Date | null {
+    > 16 |   const raw = certificateBase64.trim();
+         |                                 ^
+      17 |   if (!raw) return null;
+      18 |   const candidates: Buffer[] = [];
+      19 |   // ① نصٌّ `PEM` مباشرةً (قد يصل هكذا من ملفٍّ أو من نسخٍ يدويّ).
+
+      at certificateNotAfter (src/zatca/certificate-expiry.util.ts:16:33)
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:42:37)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⭐ ويقرؤه من `base64` لجسم `DER` — 
+وهو ما ترسله الهيئة (`binarySecurityToken`)
+
+    TypeError: Cannot read properties of undefined (reading 'replace')
+
+      49 |
+      50 |     it('⭐ ويقرؤه من `base64` لجسم `DER` — وهو ما ترسله الهيئة (`binarySecurityToken`)', () => {
+    > 51 |       const der = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+         |                       ^
+      52 |       const at = certificateNotAfter(der);
+      53 |       expect(at).toBeInstanceOf(Date);
+      54 |       expect(at!.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:51:23)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ويقرؤه من `base64` لنصّ `PEM` 
+كامل — الشكلُ الثالث الذي قد يصل
+
+    TypeError: The first argument must be of type string or an instance of Buffer, ArrayBuffer, or Array or an 
+Array-like Object. Received undefined
+
+      82 |
+      83 |     it('ويقرؤه من `base64` لنصّ `PEM` كامل — الشكلُ الثالث الذي قد يصل', () => {
+    > 84 |       const wrapped = Buffer.from(pem, 'utf8').toString('base64');
+         |                              ^
+      85 |       expect(certificateNotAfter(wrapped)?.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
+      86 |     });
+      87 |
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:84:30)
+
+PASS src/common/shell-argv-secrets.spec.ts
+PASS src/delegations/delegations.guards.spec.ts
+PASS src/delegations/me-permissions.bench.spec.ts
+  ● Console
+
+    console.log
+      
+        ═══ 25 شاشة × 7 أفعال = 175 زوجاً ═══
+
+      at Object.<anonymous> (src/delegations/me-permissions.bench.spec.ts:59:13)
+
+    console.log
+        ① اشتقاق السقف من القالب (168 زوجاً)                 24.23 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ① اشتقاق السقف — قالب مقيَّد                         2.30 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ② طيّ الصفوف إلى مسارات (عمق 5)                      40.78 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ③ التقاطع الكامل على السلسلة                         42.75 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ④ فصل النافذ عن المنطفئ بأسبابه                      42.58 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ⑤ بناء الشجرة                                        1.97 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ⇒ الطلب الكامل (بلا قراءة القاعدة)                   176.71 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+      
+        ⇒ نسبةً إلى معاملة سياق المستأجر (4.4 ms) المدفوعة أصلاً: 4.02%
+
+      at Object.<anonymous> (src/delegations/me-permissions.bench.spec.ts:90:13)
+
+    console.log
+      
+        عمق 2: 33.04 µs · عمق 10: 142.13 µs · النسبة ×4.3
+
+      at Object.<anonymous> (src/delegations/me-permissions.bench.spec.ts:132:13)
+
+    console.log
+        ⇒ الأثقل: 168 زوجاً × عمق 10، المسار الكامل          313.85 µs
+
+      at measure (src/delegations/me-permissions.bench.spec.ts:50:11)
+
+    console.log
+        ⇒ 7.13% من معاملة سياق المستأجر
+
+      at Object.<anonymous> (src/delegations/me-permissions.bench.spec.ts:154:13)
+
+PASS src/invoices/invoice-line-order.live.spec.ts
+PASS src/common/graceful-shutdown.spec.ts
+PASS src/companies/company-defaults.spec.ts
+PASS src/common/moved-paths.spec.ts
+PASS src/accounts/default-chart.spec.ts
+PASS src/activities/sector-guard.spec.ts
+PASS src/common/shared-requests.util.spec.ts
+PASS src/common/error-tracking/error-event.util.spec.ts
+PASS src/common/wall-clock.util.spec.ts
+PASS src/common/pagination/paged.util.spec.ts
+PASS src/audit/audit-attribution.spec.ts
+PASS src/customers/marketing-consent.spec.ts
+PASS src/common/privacy/personal-fields.spec.ts
+PASS src/company-profile/slug-constraint.live.spec.ts
+PASS src/common/company-user-reads-in-context.spec.ts
+PASS src/common/guard-reads-declared.spec.ts
+PASS src/contracts/no-word-classification.spec.ts
+PASS src/zatca/egs-unit.spec.ts
+PASS src/pos/offline-incidents.spec.ts
+PASS src/common/scheduler-registered.spec.ts
+PASS src/common/migration-rls-read.spec.ts
+PASS src/common/branch-from-request-checked.spec.ts
+PASS src/delegations/delegation-log.spec.ts
+PASS src/common/crypto/field-cipher.util.spec.ts
+PASS src/common/strict-gate.spec.ts
+[Nest] 13348  - ٠٨‏/١٠‏/٢٠٢٦، ١٢:١٩:٣٦ م   ERROR [OutboxService] Outbox invoice.issued r1 استُنفدت محاولاته: رُفض 
+نهائياً
+PASS src/outbox/outbox.spec.ts
+PASS src/contracts/installment-schedule.util.spec.ts
+PASS src/common/vat/return-correction.util.spec.ts
+PASS src/integrations/mock-provider-guard.spec.ts
+PASS src/verification/providers.spec.ts
+PASS src/activities/primary-activity.spec.ts
+PASS src/common/sequence-port-sealed.spec.ts
+PASS src/common/crypto/gcm-tag-length.spec.ts
+PASS src/common/request-id/request-id.middleware.spec.ts
+PASS src/common/registry-not-with-code.spec.ts
+PASS src/common/stable-page-order.spec.ts
+PASS src/common/test-explicit-timeouts.spec.ts
+PASS src/common/settlement/settlement.util.spec.ts
+PASS src/common/retry-on-conflict.util.spec.ts
+PASS src/audit/audit-log-append-only.live.spec.ts
+PASS src/accounts/code-band-collision.spec.ts
+PASS src/common/prisma-client-import.spec.ts
+PASS src/common/bank-drawer-tests-isolated.spec.ts
+PASS src/contracts/no-name-linking.spec.ts
+PASS src/common/registry-decisions-only.spec.ts
+PASS src/zatca/qr-tlv-limit.spec.ts
+PASS src/zatca/ubl/invoice-xml-prepayment.spec.ts
+PASS src/common/pagination/list-routes-paged.spec.ts
+PASS src/common/code-bands-registered.spec.ts
+PASS src/common/rule-extension-attached.spec.ts
+PASS src/tasks/task-visibility.spec.ts
+PASS src/common/mail/mail.service.spec.ts
+PASS src/common/live-guard-precheck.spec.ts
+PASS src/delegations/cycles.spec.ts
+PASS src/journal/writeoff-posting.spec.ts
+PASS src/inventory/quantity-precision.live.spec.ts
+PASS src/delegations/intersection.spec.ts
+PASS src/zatca/sync-stamp.spec.ts
+PASS src/common/bank-mirror.spec.ts
+PASS src/common/i18n/validation.util.spec.ts
+PASS src/zatca/cleared-invoice.spec.ts
+  ● Console
+
+    console.error
+      [xmldom fatalError]	missing root element 
+      @#[line:0,col:undefined]
+
+      40 |
+      41 | export function parseXml(xml: string): Document {
+    > 42 |   return new DOMParser().parseFromString(xml, 'text/xml') as unknown as Document;
+         |                          ^
+      43 | }
+      44 |
+      45 | /**
+
+      at DOMHandler.reportError (../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:469:12)
+      at DOMHandler.fatalError (../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:494:8)
+      at DOMParser.Object.<anonymous>.DOMParser.parseFromString 
+(../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:258:20)
+      at parseXml (src/zatca/ubl/canonicalize.util.ts:42:26)
+      at clearedInvoiceFrom (src/zatca/cleared-invoice.util.ts:39:26)
+      at Object.<anonymous> (src/zatca/cleared-invoice.spec.ts:50:30)
+
+    console.error
+      [xmldom fatalError]	missing root element 
+      @#[line:0,col:undefined]
+
+      40 |
+      41 | export function parseXml(xml: string): Document {
+    > 42 |   return new DOMParser().parseFromString(xml, 'text/xml') as unknown as Document;
+         |                          ^
+      43 | }
+      44 |
+      45 | /**
+
+      at DOMHandler.reportError (../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:469:12)
+      at DOMHandler.fatalError (../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:494:8)
+      at DOMParser.Object.<anonymous>.DOMParser.parseFromString 
+(../../../../mad-app/node_modules/@xmldom/xmldom/lib/dom-parser.js:258:20)
+      at parseXml (src/zatca/ubl/canonicalize.util.ts:42:26)
+      at zatcaFileName (src/zatca/cleared-invoice.util.ts:57:19)
+      at Object.<anonymous> (src/zatca/cleared-invoice.spec.ts:66:25)
+
+PASS src/integrations/licensed-payment-providers.spec.ts
+PASS src/forms/form-template-items.util.spec.ts
+PASS src/common/country-literals.spec.ts
+PASS src/common/posting-gates-attached.spec.ts
+PASS src/accounts/code-bands.spec.ts
+PASS src/common/mail/mail-quota.live.spec.ts
+PASS src/common/mfa/totp.util.spec.ts
+PASS src/common/letters-no-platform-name.spec.ts
+PASS src/common/plan-cache-mode.live.spec.ts
+PASS src/zatca/ubl/ubl-exemption-reason.spec.ts
+PASS src/delegations/permission-tree.spec.ts
+PASS src/common/test-budget-declared.spec.ts
+PASS src/platform/platform-decisions.spec.ts
+PASS src/common/config/boot-vars-reach-container.spec.ts
+PASS src/common/writeoff-reasons.spec.ts
+PASS src/common/vat/vat-period.util.spec.ts
+PASS src/common/relative-cost.util.spec.ts
+PASS src/common/shared-enums-generated.spec.ts
+PASS src/zatca/environment-guard.spec.ts
+PASS src/common/attribution-ci.spec.ts
+PASS src/activities/sectors-mirror.spec.ts
+PASS src/common/purchase-categories.spec.ts
+PASS src/customers/customer-identity.util.spec.ts
+PASS src/common/tenant/nested-transaction-probe.spec.ts
+  ● Console
+
+    console.warn
+      ⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 1/50
+      Error: 
+          at captureStack (D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:70:17)
+          at withTransactionProbe 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:111:19)
+          at D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:25:78
+          at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+          at withTransactionProbe 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:119:17)
+          at Object.<anonymous> 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:25:45)
+          at Promise.then.completed (D:\mad-app\node_modules\jest-circus\build\utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\mad-app\node_modules\jest-circus\build\utils.js:231:10)
+          at _callCircusTest (D:\mad-app\node_modules\jest-circus\build\run.js:316:40)
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+          at _runTest (D:\mad-app\node_modules\jest-circus\build\run.js:252:3)
+          at _runTestsForDescribeBlock (D:\mad-app\node_modules\jest-circus\build\run.js:126:9)
+          at _runTestsForDescribeBlock (D:\mad-app\node_modules\jest-circus\build\run.js:121:9)
+          at run (D:\mad-app\node_modules\jest-circus\build\run.js:71:3)
+          at runAndTransformResultsToJestFormat 
+(D:\mad-app\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:122:21)
+          at jestAdapter (D:\mad-app\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:79:19)
+          at runTestInternal (D:\mad-app\node_modules\jest-runner\build\runTest.js:367:16)
+          at runTest (D:\mad-app\node_modules\jest-runner\build\runTest.js:444:34)
+          at Object.worker (D:\mad-app\node_modules\jest-runner\build\testWorker.js:106:12)
+
+      114 |       // ① **الأثرُ كاملاً** — فالمسارُ هو ما يُحتاج بعد أسبوع لا الموضع،
+      115 |       //    **وبلاغٌ بأثرٍ مبتور لا يُنتفَع به**.
+    > 116 |       console.warn(`⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 
+${reported.size}/${NESTED_REPORT_LIMIT}\n${stack}`);
+          |               ^
+      117 |     }
+      118 |   }
+      119 |   return active.run(true, work);
+
+      at withTransactionProbe (src/common/tenant/nested-transaction-probe.ts:116:15)
+      at src/common/tenant/nested-transaction-probe.spec.ts:25:78
+      at withTransactionProbe (src/common/tenant/nested-transaction-probe.ts:119:17)
+      at Object.<anonymous> (src/common/tenant/nested-transaction-probe.spec.ts:25:45)
+
+    console.warn
+      ⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 1/50
+      Error: 
+          at captureStack (D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:70:17)
+          at withTransactionProbe 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:111:19)
+          at site (D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:35:50)
+          at D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:37:63
+          at AsyncLocalStorage.run (node:internal/async_local_storage/async_hooks:91:14)
+          at withTransactionProbe 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:119:17)
+          at Object.<anonymous> 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:36:31)
+          at Promise.then.completed (D:\mad-app\node_modules\jest-circus\build\utils.js:298:28)
+          at new Promise (<anonymous>)
+          at callAsyncCircusFn (D:\mad-app\node_modules\jest-circus\build\utils.js:231:10)
+          at _callCircusTest (D:\mad-app\node_modules\jest-circus\build\run.js:316:40)
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+          at _runTest (D:\mad-app\node_modules\jest-circus\build\run.js:252:3)
+          at _runTestsForDescribeBlock (D:\mad-app\node_modules\jest-circus\build\run.js:126:9)
+          at _runTestsForDescribeBlock (D:\mad-app\node_modules\jest-circus\build\run.js:121:9)
+          at run (D:\mad-app\node_modules\jest-circus\build\run.js:71:3)
+          at runAndTransformResultsToJestFormat 
+(D:\mad-app\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapterInit.js:122:21)
+          at jestAdapter (D:\mad-app\node_modules\jest-circus\build\legacy-code-todo-rewrite\jestAdapter.js:79:19)
+          at runTestInternal (D:\mad-app\node_modules\jest-runner\build\runTest.js:367:16)
+          at runTest (D:\mad-app\node_modules\jest-runner\build\runTest.js:444:34)
+          at Object.worker (D:\mad-app\node_modules\jest-runner\build\testWorker.js:106:12)
+
+      114 |       // ① **الأثرُ كاملاً** — فالمسارُ هو ما يُحتاج بعد أسبوع لا الموضع،
+      115 |       //    **وبلاغٌ بأثرٍ مبتور لا يُنتفَع به**.
+    > 116 |       console.warn(`⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 
+${reported.size}/${NESTED_REPORT_LIMIT}\n${stack}`);
+          |               ^
+      117 |     }
+      118 |   }
+      119 |   return active.run(true, work);
+
+      at withTransactionProbe (src/common/tenant/nested-transaction-probe.ts:116:15)
+      at site (src/common/tenant/nested-transaction-probe.spec.ts:35:50)
+      at src/common/tenant/nested-transaction-probe.spec.ts:37:63
+      at withTransactionProbe (src/common/tenant/nested-transaction-probe.ts:119:17)
+      at Object.<anonymous> (src/common/tenant/nested-transaction-probe.spec.ts:36:31)
+
+    console.warn
+      ⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 2/50
+      Error: 
+          at captureStack (D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:70:17)
+          at withTransactionProbe 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.ts:111:19)
+          at site (D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:35:50)
+          at D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:37:63
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+          at Object.<anonymous> 
+(D:\worktrees\d287-subst\apps\api\src\common\tenant\nested-transaction-probe.spec.ts:36:5)
+
+      114 |       // ① **الأثرُ كاملاً** — فالمسارُ هو ما يُحتاج بعد أسبوع لا الموضع،
+      115 |       //    **وبلاغٌ بأثرٍ مبتور لا يُنتفَع به**.
+    > 116 |       console.warn(`⚠️ معاملةٌ داخل معاملة (ق-٣٦٢) — بلاغٌ 
+${reported.size}/${NESTED_REPORT_LIMIT}\n${stack}`);
+          |               ^
+      117 |     }
+      118 |   }
+      119 |   return active.run(true, work);
+
+      at withTransactionProbe (src/common/tenant/nested-transaction-probe.ts:116:15)
+      at site (src/common/tenant/nested-transaction-probe.spec.ts:35:50)
+      at src/common/tenant/nested-transaction-probe.spec.ts:37:63
+      at Object.<anonymous> (src/common/tenant/nested-transaction-probe.spec.ts:36:5)
+
+PASS src/zatca/ubl/transaction-code.spec.ts
+PASS src/common/money/allocation.spec.ts
+PASS src/shared/events/event-bus.spec.ts
+PASS src/common/i18n/messages-catalog.spec.ts
+PASS src/common/vat/proportional-deduction.util.spec.ts
+PASS src/common/platform-admin/platform-role-declared.spec.ts
+PASS src/common/commit-msg-attribution.spec.ts
+PASS src/activities/sector-migration.spec.ts
+PASS src/journal/journal-balance.spec.ts
+PASS src/export/company-archive.spec.ts
+PASS src/purchases/layer-cost-spread.spec.ts
+PASS src/journal/rent-revenue-single-source.spec.ts
+PASS src/common/money/text.spec.ts
+PASS src/forms/seal-signature.spec.ts
+PASS src/quotes/quote-expiry.util.spec.ts
+PASS src/branches/branch-references.spec.ts
+PASS src/companies/create-company-account.spec.ts
+PASS src/pos/settlement-date.spec.ts
+PASS src/audit/record-within-tx.spec.ts
+PASS src/zatca/ubl/invoice-xml-unit-code.spec.ts
+PASS src/inventory/consumption-order.spec.ts
+PASS src/templates/shared-permissions-generated.spec.ts
+PASS src/common/units/units.spec.ts
+PASS src/journal/deferred-revenue-account.spec.ts
+PASS src/invoices/note-deadline.spec.ts
+PASS src/forms/seal-content.util.spec.ts
+PASS src/common/region/regions.spec.ts
+PASS src/deletion-requests/personal-data-erasure.spec.ts
+PASS src/activities/screen-labels.spec.ts
+PASS src/purchases/layer-cost-allocation.spec.ts
+PASS src/zatca/issue-time.spec.ts
+PASS src/reports/cash-flow.util.spec.ts
+PASS src/common/mail/mail-quota.util.spec.ts
+PASS src/purchases/reallocation-cost.util.spec.ts
+PASS src/templates/template-clip.util.spec.ts
+PASS src/common/identity/identifiers.util.spec.ts
+PASS src/common/i18n/storable-text.spec.ts
+PASS src/forms/form-templates.controller.spec.ts
+PASS src/common/batches/declared-limits.spec.ts
+PASS src/common/tenant/company-status.util.spec.ts
+PASS src/common/region/mobile.spec.ts
+PASS src/forms/admin-forms.controller.spec.ts
+
+Summary of all failing tests
+FAIL src/common/mail-dns-check.spec.ts
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ① بلا SMTP_HOST لا فحصَ ولا رفض — والحارسُ 
+على تفعيل البريد لا على كلِّ نشر
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      75 |   it('① بلا SMTP_HOST لا فحصَ ولا رفض — والحارسُ على تفعيل البريد لا على كلِّ نشر', () => {
+      76 |     const r = run({ SMTP_FROM: 'no-reply@rikzapp.com' }, []);
+    > 77 |     expect(r.code).toBe(0);
+         |                    ^
+      78 |     expect(r.out).toContain('لا SMTP_HOST');
+      79 |   });
+      80 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:77:20)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ② الثلاثةُ حاضرة ⟸ يمرّ ويسمّي كلَّ سجلّ — 
+والنطاقُ من SMTP_FROM باسمٍ عرضيٍّ وحروفٍ كبيرة
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      81 |   it('② الثلاثةُ حاضرة ⟸ يمرّ ويسمّي كلَّ سجلّ — والنطاقُ من SMTP_FROM باسمٍ عرضيٍّ وحروفٍ كبيرة', () => {
+      82 |     const r = run(MAIL_ON, [SPF, DKIM, DMARC]);
+    > 83 |     expect(r.code).toBe(0);
+         |                    ^
+      84 |     // مصادقةُ المسبار: الأسطرُ تسمّي ما قرأته من الجدول — فالأداةُ المزيَّفةُ نودِيت فعلاً.
+      85 |     expect(r.out).toContain('✔ SPF   rikzapp.com: v=spf1 include:rp.oracleemaildelivery.com ~all');
+      86 |     expect(r.out).toContain('✔ DKIM  ruh-20260923._domainkey.rikzapp.com → 
+ruh-20260923.rikzapp.com.dkim.ruh.oracleemaildelivery.com.');
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:83:20)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ⭐ ③ غيابُ أيٍّ منها يُسقط — ويُبلّغ عن 
+الثلاثة كلِّها لا عن أوّل غائب
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "✖ DKIM  ruh-20260923._domainkey.rikzapp.com: لا سجلَّ CNAME"
+    Received string:    "<3>WSL (284474 - Relay) ERROR: CreateProcessCommon:817: execvpe(/bin/bash) failed: No such 
+file or directory
+    "
+
+       96 |     const noDkim = run(MAIL_ON, [SPF, DMARC]);
+       97 |     expect(noDkim.code).toBe(1);
+    >  98 |     expect(noDkim.out).toContain('✖ DKIM  ruh-20260923._domainkey.rikzapp.com: لا سجلَّ CNAME');
+          |                        ^
+       99 |     expect(noDkim.out).toContain('✔ SPF');
+      100 |     expect(noDkim.out).toContain('✔ DMARC');
+      101 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:98:24)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ④ غيابُ الأداة ليس فحصاً ناجحاً — يُسقط 
+ويسمّي الحزمة
+
+    expect(received).toContain(expected) // indexOf
+
+    Expected substring: "dig غير مثبَّت"
+    Received string:    "<3>WSL (284477 - Relay) ERROR: CreateProcessCommon:817: execvpe(/bin/bash) failed: No such 
+file or directory
+    "
+
+      115 |     const r = run(MAIL_ON, [SPF, DKIM, DMARC], { noDig: true });
+      116 |     expect(r.code).toBe(1);
+    > 117 |     expect(r.out).toContain('dig غير مثبَّت');
+          |                   ^
+      118 |     expect(r.out).toContain('dnsutils');
+      119 |   });
+      120 |
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:117:19)
+
+  ● ⑬A1 — لا يُقبل SMTP_HOST بلا سجلّات مصادقة النطاق الثلاثة (ق-١٣٣٣) › ⑥ يُشغَّل مباشرةً بيدٍ على الخادم — بالرمز 
+نفسِه (وأنّه لا يعمل وحدَه حين يُستورد يوكّده ②)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      129 |     // أوّلُ نشرٍ يحمل الملفَّ ينفّذ نسخةَ deploy.sh القديمة — فهذا المدخلُ هو فحصُه قبله.
+      130 |     const ok = run(MAIL_ON, [SPF, DKIM, DMARC], { direct: true });
+    > 131 |     expect(ok.code).toBe(0);
+          |                     ^
+      132 |     expect(ok.out).toContain('✔ DMARC _dmarc.rikzapp.com');
+      133 |     const missing = run(MAIL_ON, [SPF, DKIM], { direct: true });
+      134 |     expect(missing.code).toBe(1);
+
+      at Object.<anonymous> (src/common/mail-dns-check.spec.ts:131:21)
+
+FAIL src/common/deploy-recreate-guard.spec.ts
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ① مصادرُ البناء تُقرأ من 
+Dockerfile نفسِه — ومطابقةٌ لمحلِّلٍ مستقلّ (web · api)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      70 |       expect(expected.length).toBeGreaterThan(3); // حارسٌ على المجسّ: الملفُّ قُرئ فعلاً
+      71 |       const r = guardFn('build_sources', [df]);
+    > 72 |       expect(r.code).toBe(0);
+         |                      ^
+      73 |       expect(r.out.trim().split('\n')).toEqual(expected);
+      74 |     }
+      75 |     // ما يُنسخ من مرحلةٍ سابقة ليس مصدراً من الشجرة
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:72:22)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ② touching_sources بحالتين: 
+apps/web يمسّ web لا api · docs لا يمسّ أحداً · packages/shared يمسّ الاثنين
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      79 |   it('② touching_sources بحالتين: apps/web يمسّ web لا api · docs لا يمسّ أحداً · packages/shared يمسّ 
+الاثنين', () => {
+      80 |     const webHit = guardFn('touching_sources', ['apps/web/Dockerfile'], 
+'docs/x.md\napps/web/src/App.tsx\n');
+    > 81 |     expect(webHit.code).toBe(0);
+         |                         ^
+      82 |     expect(webHit.out.trim()).toBe('apps/web/src/App.tsx');
+      83 |     const apiMiss = guardFn('touching_sources', ['apps/api/Dockerfile'], 
+'docs/x.md\napps/web/src/App.tsx\n');
+      84 |     expect(apiMiss.code).toBe(1);
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:81:25)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ③ Dockerfile الخدمة يُقرأ 
+من إعداد compose المطبَّع — ويُردّ نسبياً إلى الجذر
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "apps/web/Dockerfile"
+    Received: ""
+
+       95 |   it('③ Dockerfile الخدمة يُقرأ من إعداد compose المطبَّع — ويُردّ نسبياً إلى الجذر', () => {
+       96 |     const cfg = 'services:\n  api:\n    build:\n      context: /opt/mad-app\n      dockerfile: 
+apps/api/Dockerfile\n  web:\n    build:\n      context: /opt/mad-app\n      dockerfile: 
+/opt/mad-app/apps/web/Dockerfile\nnetworks:\n  default: {}\n';
+    >  97 |     expect(guardFn('service_dockerfile', ['web', '/opt/mad-app'], 
+cfg).out.trim()).toBe('apps/web/Dockerfile');
+          |                                                                                    ^
+       98 |     expect(guardFn('service_dockerfile', ['api', '/opt/mad-app'], 
+cfg).out.trim()).toBe('apps/api/Dockerfile');
+       99 |     expect(guardFn('service_dockerfile', ['minio', '/opt/mad-app'], cfg).out.trim()).toBe('');
+      100 |   });
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:97:84)
+
+  ● حارسُ إعادة الإنشاء مشروطٌ بسياق البناء — يُقرأ من Dockerfile ويُثبَت بالعكس (ق-٧١٧) › ⭐ ④ كتلةُ الحارس كما هي في 
+deploy.sh — بلا تغييرٍ في المصادر تمرّ (○)، وبتغييرٍ أو بصورةٍ جديدة تُسقط
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 0
+    Received: 1
+
+      102 |   it('⭐ ④ كتلةُ الحارس كما هي في deploy.sh — بلا تغييرٍ في المصادر تمرّ (○)، وبتغييرٍ أو بصورةٍ جديدة 
+تُسقط', () => {
+      103 |     const pass = bash('ops/deploy/recreate-guard.selftest.sh', ['1']);
+    > 104 |     expect(pass.code).toBe(0);
+          |                       ^
+      105 |     expect(pass.out).toMatch(/○ «web»: لم تُعَد إنشاؤها — ولا ملفَّ من مصادر بنائها 
+\(apps\/web\/Dockerfile · COPY\) تغيّر/);
+      106 |     expect(pass.out).not.toMatch(/✖/);
+      107 |
+
+      at Object.<anonymous> (src/common/deploy-recreate-guard.spec.ts:104:23)
+
+FAIL src/zatca/certificate-expiry.spec.ts
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⓪ حارسٌ على المجسّ: الشهادةُ 
+وُلدت فعلاً — وإلا لم يُفحص شيء
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      35 |     it('⓪ حارسٌ على المجسّ: الشهادةُ وُلدت فعلاً — وإلا لم يُفحص شيء', () => {
+      36 |       // ⚠️ لا `return` صامت (`ق-٢٦٨`): غيابُ `openssl` **يُعلَن سقوطاً** لا يُبتلَع.
+    > 37 |       expect(hasOpenssl).toBe(true);
+         |                          ^
+      38 |       expect(pem).toContain('BEGIN CERTIFICATE');
+      39 |     });
+      40 |
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:37:26)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⭐ يقرأ `notAfter` من نصّ `PEM`
+
+    TypeError: Cannot read properties of undefined (reading 'trim')
+
+      14 |  */
+      15 | export function certificateNotAfter(certificateBase64: string): Date | null {
+    > 16 |   const raw = certificateBase64.trim();
+         |                                 ^
+      17 |   if (!raw) return null;
+      18 |   const candidates: Buffer[] = [];
+      19 |   // ① نصٌّ `PEM` مباشرةً (قد يصل هكذا من ملفٍّ أو من نسخٍ يدويّ).
+
+      at certificateNotAfter (src/zatca/certificate-expiry.util.ts:16:33)
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:42:37)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ⭐ ويقرؤه من `base64` لجسم `DER` — 
+وهو ما ترسله الهيئة (`binarySecurityToken`)
+
+    TypeError: Cannot read properties of undefined (reading 'replace')
+
+      49 |
+      50 |     it('⭐ ويقرؤه من `base64` لجسم `DER` — وهو ما ترسله الهيئة (`binarySecurityToken`)', () => {
+    > 51 |       const der = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+         |                       ^
+      52 |       const at = certificateNotAfter(der);
+      53 |       expect(at).toBeInstanceOf(Date);
+      54 |       expect(at!.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:51:23)
+
+  ● حزمةُ ز — انتهاءُ الشهادة وتحذيراتُ الهيئة (وحدات) › ⑤A1 نهايةُ صلاحية الشهادة › ويقرؤه من `base64` لنصّ `PEM` 
+كامل — الشكلُ الثالث الذي قد يصل
+
+    TypeError: The first argument must be of type string or an instance of Buffer, ArrayBuffer, or Array or an 
+Array-like Object. Received undefined
+
+      82 |
+      83 |     it('ويقرؤه من `base64` لنصّ `PEM` كامل — الشكلُ الثالث الذي قد يصل', () => {
+    > 84 |       const wrapped = Buffer.from(pem, 'utf8').toString('base64');
+         |                              ^
+      85 |       expect(certificateNotAfter(wrapped)?.toISOString()).toBe(certificateNotAfter(pem)!.toISOString());
+      86 |     });
+      87 |
+
+      at Object.<anonymous> (src/zatca/certificate-expiry.spec.ts:84:30)
+
+
+Test Suites: 3 failed, 195 passed, 198 total
+Tests:       13 failed, 1231 passed, 1244 total
+Snapshots:   0 total
+Time:        72.098 s
+Ran all test suites.

@@ -1,0 +1,2 @@
+  @Throttle({ default: { limit: 50, ttl: 60_000 } })
+  @ApiCreatedResponse({ type: FormOtpIssuedResponse })

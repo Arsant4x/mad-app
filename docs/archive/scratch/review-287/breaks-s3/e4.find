@@ -1,0 +1,3 @@
+      if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired) throw new ForbiddenException(MSG.form_signing_nafath_only);
+      const party = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+      const challenge

@@ -1,0 +1,9 @@
+﻿authority-not-found-passes [break landed: 1] Tests:       1 failed, 6 passed, 7 total :: restored=True
+rep-mobile-in-clear [break landed: 1] Tests:       4 failed, 3 passed, 7 total :: restored=True
+rep-for-natural-person [break landed: 1] Tests:       1 failed, 6 passed, 7 total :: restored=True
+paper-on-sealed [break landed: 1] Tests:       0 total :: restored=True
+device-channel-lost-at-sign [break landed: 1] Tests:       1 failed, 6 passed, 7 total :: restored=True
+rep-nafath-without-id [break landed: 1] Tests:       1 failed, 6 passed, 7 total :: restored=True
+link-to-card-not-rep [break landed: 1] Tests:       4 failed, 3 passed, 7 total :: restored=True
+authority-out-of-seal [break landed: 1] Tests:       0 total :: restored=True
+device-link-unflagged [break landed: 1] Tests:       1 failed, 6 passed, 7 total :: restored=True
