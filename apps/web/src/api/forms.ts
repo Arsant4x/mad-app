@@ -30,6 +30,7 @@ import type {
   FormSessionResponse,
   FormSignedResponse,
   FormSigningEventResponse,
+  FormSubstituteDecidedResponse,
 } from '@mad-app/shared/api/responses';
 
 /**
@@ -123,6 +124,9 @@ export function sendContractForm(contractId: string, formId: string, drawing: Bl
   return apiClient.post<FormSent>(`${base(contractId, formId)}/send`, form).then((r) => r.data);
 }
 export const resendContractFormLink = (contractId: string, formId: string) => apiClient.post<FormSent>(`${base(contractId, formId)}/resend`).then((r) => r.data);
+/** طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): يصل جوالَ المستأجر رابطُ الموافقة، ولا يعود للموظّف رمزٌ ولا رابط. */
+export const requestContractFormSubstitute = (contractId: string, formId: string, body: { name: string; mobile: string }) =>
+  apiClient.post<FormSent>(`${base(contractId, formId)}/substitute`, body).then((r) => r.data);
 export const reviseContractForm = (contractId: string, formId: string) => apiClient.post<FormInstance>(`${base(contractId, formId)}/revisions`).then((r) => r.data);
 export const contractFormEvents = (contractId: string, formId: string) => apiClient.get<FormSigningEvent[]>(`${base(contractId, formId)}/events`).then((r) => r.data);
 export const contractFormDeviceLink = (contractId: string, formId: string) =>
@@ -166,6 +170,10 @@ export function signPublicForm(token: string, s: string, drawing: Blob) {
   form.append('drawing', drawing, 'signature.png');
   return publicApiClient.post<FormSigned>(`${pub(token)}/sign`, form, session(s)).then((r) => r.data);
 }
+export type FormSubstituteDecided = FormSubstituteDecidedResponse;
+/** حكمُ المستأجر على البديل برابط الموافقة بعد الدخول (`ق-١٦٧٢`). */
+export const decidePublicSubstitute = (token: string, s: string, approve: boolean) =>
+  publicApiClient.post<FormSubstituteDecided>(`${pub(token)}/substitute/decision`, { approve }, session(s)).then((r) => r.data);
 export function objectPublicForm(token: string, s: string, note: string, photo?: File | null) {
   const form = new FormData();
   form.append('note', note);

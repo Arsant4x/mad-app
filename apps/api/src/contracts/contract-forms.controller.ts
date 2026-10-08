@@ -11,7 +11,15 @@ import { TenantGuard } from '../common/tenant/tenant.guard';
 import { MAX_FILE_BYTES } from '../files/files.service';
 import { FormInstanceResponse, FormVerificationResponse } from '../forms/dto/form-instance-responses.dto';
 import { CreateFormInstanceDto, SetFormValuesDto } from '../forms/dto/form-instance.dto';
-import { FormDeviceLinkResponse, FormPaperSignedResponse, FormSentResponse, FormSigningEventResponse, PaperSignFormDto, SendFormDto } from '../forms/dto/form-signing.dto';
+import {
+  FormDeviceLinkResponse,
+  FormPaperSignedResponse,
+  FormSentResponse,
+  FormSigningEventResponse,
+  PaperSignFormDto,
+  RequestSubstituteDto,
+  SendFormDto,
+} from '../forms/dto/form-signing.dto';
 import { metaOf } from '../forms/form-public.controller';
 import type { FormActor } from '../forms/form-instances.service';
 import { ContractFormsService } from './contract-forms.service';
@@ -140,6 +148,17 @@ export class ContractFormsController {
   @ApiCreatedResponse({ type: FormDeviceLinkResponse })
   deviceLink(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
     return this.service.deviceLink(tenant.companyId, id, formId, actorOf(tenant, req));
+  }
+
+  /**
+   * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٣٥` ⑩: «المراجعة» لطلب البديل): يصل جوالَ المستأجر رابطُ الموافقة، ورمزُه لا يمرّ بالموظّف
+   * (`ق-١٦٧٢`).
+   */
+  @Post(':formId/substitute')
+  @RequiresAction('review')
+  @ApiCreatedResponse({ type: FormSentResponse })
+  requestSubstitute(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string, @Body() dto: RequestSubstituteDto) {
+    return this.service.requestSubstitute(tenant.companyId, id, formId, actorOf(tenant, req), dto);
   }
 
   @Post(':formId/resend')

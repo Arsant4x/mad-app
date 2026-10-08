@@ -14,6 +14,7 @@ vi.mock('../api/forms', async (orig) => ({
   viewPublicForm: vi.fn(),
   signPublicForm: vi.fn(),
   objectPublicForm: vi.fn(),
+  decidePublicSubstitute: vi.fn(),
 }));
 
 vi.mock('../components/SignaturePad', () => ({
@@ -24,7 +25,7 @@ vi.mock('../components/SignaturePad', () => ({
   ),
 }));
 
-import { objectPublicForm, openFormLink, requestFormOtp, signPublicForm, verifyFormOtp, viewPublicForm } from '../api/forms';
+import { decidePublicSubstitute, objectPublicForm, openFormLink, requestFormOtp, signPublicForm, verifyFormOtp, viewPublicForm } from '../api/forms';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): تقديرٌ أوّلٌ قبل أن يُقاس تحت حِمل الحزمة.
 vi.setConfig({ testTimeout: 15_000 });
@@ -43,6 +44,7 @@ const view: FormPublicView = {
   items: [{ lineNo: 1, label: 'قراءةُ العدّاد', itemType: 'METER_READING', unit: null, text: null, number: '48213', bool: null, note: null }],
   signatures: [{ role: 'STAFF', level: 'DRAWN_STAFF_SESSION', channel: 'STAFF_DEVICE', signerName: 'salem', signedAt: '2026-10-08T10:00:00.000Z' }],
   seal: null,
+  substitute: null,
 };
 
 const mount = () =>
@@ -108,6 +110,25 @@ describe('⚖️ صفحةُ النموذج للمستأجر (توجيه ٢٨٧ �
     fireEvent.click(sign());
     await waitFor(() => expect(signPublicForm).toHaveBeenCalledWith(TOKEN, 'sess', expect.any(Blob)));
     expect((await screen.findByTestId('public-form-done')).textContent).toContain('نسختك النهائية');
+  });
+
+  it('⭐ رابطُ الموافقة على البديل: بعد الدخول يرى المستأجرُ اسمَ البديل وجوالَه مقنَّعاً ويوافق بالجلسة (ق-١٦٧٢)', async () => {
+    vi.mocked(openFormLink).mockResolvedValue({ state: 'ACTIVE', purpose: 'SUBSTITUTE_CONSENT', methods: { otp: true, nafath: false }, identityProvider: 'نفاذ' });
+    vi.mocked(requestFormOtp).mockResolvedValue({ challengeId: 'ch1', expiresAt: '2026-10-08T10:05:00.000Z', mobileMasked: '0555 ••• 442' });
+    vi.mocked(verifyFormOtp).mockResolvedValue({ session: 'sess', expiresAt: '2026-10-08T10:30:00.000Z' });
+    vi.mocked(viewPublicForm).mockResolvedValue({ ...view, purpose: 'SUBSTITUTE_CONSENT', substitute: { name: 'أخو المستأجر', mobileMasked: '0566 ••• 101' } });
+    vi.mocked(decidePublicSubstitute).mockResolvedValue({ decision: 'APPROVED', delivery: 'SENT' });
+    mount();
+    expect(await screen.findByText('طلبُ مستلمٍ بديلٍ عنك')).toBeTruthy();
+    expect(screen.queryByText(/أخو المستأجر/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'أرسل رمزاً إلى جوالي' }));
+    fireEvent.change(await screen.findByLabelText('الرمز'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'دخول' }));
+    expect((await screen.findByTestId('public-form-substitute')).textContent).toContain('أخو المستأجر');
+    expect(screen.queryByRole('button', { name: 'أقرّ وأوقّع' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'أوافق' }));
+    await waitFor(() => expect(decidePublicSubstitute).toHaveBeenCalledWith(TOKEN, 'sess', true));
+    expect((await screen.findByTestId('public-form-done')).textContent).toContain('موافقتُك');
   });
 
   it('⭐ الاعتراضُ يشترط ملاحظة، ويُرسل بالجلسة', async () => {

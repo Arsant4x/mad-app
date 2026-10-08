@@ -3107,6 +3107,19 @@
       "201"
     ]
   },
+  "POST /v1/contracts/{id}/forms/{formId}/substitute": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [
+      "mobile",
+      "name"
+    ],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/contracts/{id}/handovers": {
     "parameters": [
       "path:id:required"
@@ -3899,6 +3912,17 @@
     "requiredBody": [],
     "responses": [
       "201"
+    ]
+  },
+  "POST /v1/public/forms/{token}/substitute/decision": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [
+      "approve"
+    ],
+    "responses": [
+      "200"
     ]
   },
   "POST /v1/purchases": {

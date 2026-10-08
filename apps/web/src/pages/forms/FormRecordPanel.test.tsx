@@ -14,6 +14,7 @@ vi.mock('../../api/forms', async (orig) => ({
   contractFormDeviceLink: vi.fn(),
   paperSignContractForm: vi.fn(),
   contractFormEvents: vi.fn(),
+  requestContractFormSubstitute: vi.fn(),
 }));
 
 // لوحةُ الرسم في jsdom بلا لوحةٍ حقيقية: زرٌّ يسلّم صورةً كما يسلّمها الرسم.
@@ -25,7 +26,7 @@ vi.mock('../../components/SignaturePad', () => ({
   ),
 }));
 
-import { paperSignContractForm, reviseContractForm, sendContractForm, setContractFormValues, verifyContractForm } from '../../api/forms';
+import { paperSignContractForm, requestContractFormSubstitute, reviseContractForm, sendContractForm, setContractFormValues, verifyContractForm } from '../../api/forms';
 
 // ⏱️ ميزانيةُ الملفّ (ق-١٣٣٢): تقديرٌ أوّلٌ قبل أن يُقاس تحت حِمل الحزمة، ويُضبط بثلاثة أضعاف أوّلِ زمنٍ مقيس.
 vi.setConfig({ testTimeout: 15_000 });
@@ -188,6 +189,22 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     fireEvent.change(screen.getByLabelText('صورةُ الورقة الموقَّعة'), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'رفعٌ وختم' }));
     await waitFor(() => expect(paperSignContractForm).toHaveBeenCalledWith('c1', 'f1', file, null, ''));
+  });
+
+  it('⭐ المستلمُ البديل «مراجعة»: اسمُه وجوالُه إلزاميّان، ويُرسل طلبُ الموافقة ولا رمزَ يعود للموظّف (توجيه ٢٨٧ ⑦)', async () => {
+    vi.mocked(requestContractFormSubstitute).mockResolvedValue({ form: awaiting, delivery: 'SENT' });
+    const { unmount } = mount(awaiting, { canRecord: true, canReview: false });
+    expect(screen.queryByRole('button', { name: 'مستلمٌ بديل' })).toBeNull();
+    unmount();
+    mount(awaiting, { canRecord: true, canReview: true });
+    fireEvent.click(screen.getByRole('button', { name: 'مستلمٌ بديل' }));
+    const submit = () => screen.getByRole('button', { name: 'إرسالُ طلب الموافقة' }) as HTMLButtonElement;
+    expect(submit().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('اسمُ البديل'), { target: { value: 'أخو المستأجر' } });
+    fireEvent.change(screen.getByLabelText('جوالُ البديل'), { target: { value: '0566123101' } });
+    fireEvent.click(submit());
+    await waitFor(() => expect(requestContractFormSubstitute).toHaveBeenCalledWith('c1', 'f1', { name: 'أخو المستأجر', mobile: '0566123101' }));
+    expect(await screen.findByText(/يوافق به على البديل برمزه/)).toBeTruthy();
   });
 
   it('⭐ المعترَضُ عليه يُرى اعتراضُه، والنسخةُ المعدّلة «تسجيل» وتُفتح مكانه (ق-١٦٦٩)', async () => {

@@ -5,6 +5,7 @@ import {
   contractFormObjectionPhoto,
   contractFormSignatureImage,
   paperSignContractForm,
+  requestContractFormSubstitute,
   resendContractFormLink,
   reviseContractForm,
   sendContractForm,
@@ -49,7 +50,7 @@ export function FormSigningSection({
   onChanged: (updated: FormInstance) => void;
   onRevised: (created: FormInstance) => void;
 }) {
-  const [dialog, setDialog] = useState<'send' | 'paper' | null>(null);
+  const [dialog, setDialog] = useState<'send' | 'paper' | 'substitute' | null>(null);
   const [events, setEvents] = useState<FormSigningEvent[] | null>(null);
   const [device, setDevice] = useState<FormDeviceLink | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -189,6 +190,9 @@ export function FormSigningSection({
             <button className="btn btn-ghost" disabled={busy} onClick={() => setDialog('paper')}>
               توقيعٌ ورقيّ
             </button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setDialog('substitute')}>
+              مستلمٌ بديل
+            </button>
           </>
         )}
         {status === 'OBJECTED' && canRecord && (
@@ -228,6 +232,20 @@ export function FormSigningSection({
               onChanged(r.form);
               setNotice(r.delivery === 'SENT' ? 'وُقّع النموذجُ وأُرسل الرابط.' : 'وُقّع النموذج، وتعذّر إرسالُ الرسالة؛ أعد الإرسال.');
             }, 'تعذّر التوقيعُ والإرسال')
+          }
+        />
+      )}
+      {dialog === 'substitute' && (
+        <SubstituteDialog
+          busy={busy}
+          onCancel={() => setDialog(null)}
+          onSubmit={(body) =>
+            run(async () => {
+              const r = await requestContractFormSubstitute(contract.id, record.id, body);
+              setDialog(null);
+              onChanged(r.form);
+              setNotice(r.delivery === 'SENT' ? 'أُرسل إلى جوال المستأجر رابطٌ يوافق به على البديل برمزه.' : 'تعذّر إرسالُ رابط الموافقة؛ أعد الطلب.');
+            }, 'تعذّر طلبُ المستلم البديل')
           }
         />
       )}
@@ -317,6 +335,49 @@ function SendDialog({
           </button>
           <button className="btn btn-primary" disabled={busy || !drawing || !repReady} onClick={() => drawing && onSubmit(drawing, legal ? rep : null, legal ? doc : null)}>
             توقيعٌ وإرسال
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه، ويوافق المستأجرُ من جواله برمزه؛ **والرمزُ لا يمرّ
+ * بالموظّف**.
+ */
+function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCancel: () => void; onSubmit: (body: { name: string; mobile: string }) => void }) {
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  return (
+    <div className="overlay" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }} role="dialog" aria-label="مستلمٌ بديل">
+        <div className="modal-head">
+          <div className="modal-title">مستلمٌ بديل بموافقة المستأجر</div>
+          <button className="modal-close" onClick={onCancel}>
+            ✕
+          </button>
+        </div>
+        <p className="hint">يصل جوالَ المستأجر المسجَّل رابطٌ يرى فيه اسمَ البديل ويوافق أو يرفض برمزه، ثم يصل البديلَ رابطُه على جواله.</p>
+        <div className="field">
+          <label>اسمُ البديل</label>
+          <input aria-label="اسمُ البديل" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>جوالُ البديل</label>
+          <input aria-label="جوالُ البديل" className="num" inputMode="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} />
+        </div>
+        <p className="hint">ويصل البديلَ مع رمزه نصُّ الإحاطة بحفظ بياناته، ويوافق عليه بإدخال الرمز.</p>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onCancel}>
+            إلغاء
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={busy || !name.trim() || !mobile.trim()}
+            onClick={() => onSubmit({ name: name.trim(), mobile: mobile.trim() })}
+          >
+            إرسالُ طلب الموافقة
           </button>
         </div>
       </div>
