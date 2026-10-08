@@ -638,11 +638,32 @@ if (MERGE_CMD.test(cmd)) {
   }
 
   const touches = (file) => heavyPaths.some((p) => (p.endsWith('/**') ? file.startsWith(p.slice(0, -2)) : file === p));
-  const filesProbe = spawnSync('gh', ['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'files,commits,headRefOid'], {
-    encoding: 'utf8',
-    shell: process.platform === 'win32',
-    cwd: repoRoot,
-  });
+
+  /**
+   * ⏳ **قراءةُ GitHub تُعاد ثلاثاً قبل الرفض، والرفضُ يعرض سببَه** (`ق-١٦٥٦`، بحكم صاحب المشروع).
+   *
+   * رُفض دمجُ #797 أربعَ مرّاتٍ «تعذّرت قراءة فحوص الرأس» وفحوصُه ناجحةٌ مقروءة من الصدفة: نداءُ
+   * `check-runs` فشل عابراً ونداءا GraphQL قبله نجحا، ثم نجح هو نفسُه بعد دقائق. وكانت البوّابةُ تنادي
+   * مرّةً واحدة وترمي `stderr`، فلم يُعرف السبب. فالقراءةُ هنا تُعاد بفواصل حالة `UNKNOWN` أعلاه، والفشلُ
+   * بعد الثلاث **مُغلِقٌ كما كان** — فلا يُرخي هذا شيئاً — وتحمل رسالتُه رمزَ خروج `gh` وأوّلَ أسطر رسالته.
+   */
+  const GH_READ_WAIT_MS = [2000, 4000, 6000];
+  const ghReadOnce = (ghArgs) => spawnSync('gh', ghArgs, { encoding: 'utf8', shell: process.platform === 'win32', cwd: repoRoot });
+  const ghRead = (ghArgs) => {
+    let r = ghReadOnce(ghArgs);
+    for (let i = 0; r.status !== 0 && i < GH_READ_WAIT_MS.length; i += 1) {
+      sleepSync(GH_READ_WAIT_MS[i]);
+      r = ghReadOnce(ghArgs);
+    }
+    return r;
+  };
+  const ghWhy = (r) => {
+    const lines = String(r.stderr ?? '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 3);
+    const code = r.status ?? r.error?.code ?? 'غير معروف';
+    return `\n   رمزُ خروج gh: ${code} بعد ${GH_READ_WAIT_MS.length + 1} محاولات${lines.length ? `\n   ${lines.join('\n   ')}` : ''}`;
+  };
+
+  const filesProbe = ghRead(['pr', 'view', ...(prNumber ? [prNumber] : []), '--json', 'files,commits,headRefOid']);
   let prFiles = null;
   let commits = null;
   let head = null;
@@ -657,7 +678,7 @@ if (MERGE_CMD.test(cmd)) {
     }
   }
   if (prFiles === null || commits === null) {
-    console.error(`⛔ تعذّرت قراءة ملفات #${number} أو تواريخه قبل الدمج — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+    console.error(`⛔ تعذّرت قراءة ملفات #${number} أو تواريخه قبل الدمج — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).${filesProbe.status !== 0 ? ghWhy(filesProbe) : '\n   خرج gh بنجاح ولم يُفهم مخرَجه.'}`);
     process.exit(2);
   }
 
@@ -676,13 +697,9 @@ if (MERGE_CMD.test(cmd)) {
       console.error(`⛔ تعذّرت قراءةُ رأس #${number} بتجزئته كاملة — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
       process.exit(2);
     }
-    const runs = spawnSync('gh', ['api', `repos/{owner}/{repo}/commits/${head}/check-runs?per_page=100`], {
-      encoding: 'utf8',
-      shell: process.platform === 'win32',
-      cwd: repoRoot,
-    });
+    const runs = ghRead(['api', `repos/{owner}/{repo}/commits/${head}/check-runs?per_page=100`]);
     if (runs.status !== 0) {
-      console.error(`⛔ تعذّرت قراءة فحوص الرأس ${head.slice(0, 7)} في #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).`);
+      console.error(`⛔ تعذّرت قراءة فحوص الرأس ${head.slice(0, 7)} في #${number} — والدمج ممنوع بلا قراءتها (الفشل مُغلِق).${ghWhy(runs)}`);
       process.exit(2);
     }
     let checkRuns;
