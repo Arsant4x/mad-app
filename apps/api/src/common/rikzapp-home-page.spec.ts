@@ -9,8 +9,8 @@ readsDeclaredStrings();
  * ⚖️ **حدودُ صفحة التعريف العامة** (`ق-١٦٥٣` · `ق-١٦٥٤`، بحكم صاحب المشروع، توجيه ٢٨٥):
  * صفحةٌ ثابتةٌ في `sites/rikzapp-home/public/` لا تُفهرس حتى الإطلاق، ولا شيفرةَ فيها ولا نموذجَ
  * ولا طلبَ لطرفٍ ثالث، **وإنجليزيةٌ كلُّها** بنصّ طلب البرنامج حرفاً، **ولا عربيّةَ فيها إلا «رِكز»
- * بكسرته شعاراً نصّياً بجانب «Rikz»**، واسمُ الشركة في أسفلها كما سُمّي (حكمُ صاحب المشروع بعد
- * المعاينة المنشورة، ملحقٌ بـ`ق-١٦٥٣`). والقاعدةُ ٢٧: قاعدةٌ بلا بوّابةٍ تُنسى في أوّل ضغط.
+ * بكسرته شعاراً نصّياً بجانب «Rikz»**، واسمُ الشركة في أسفلها بالإنجليزية كما سمّاه صاحبُ المشروع
+ * (أحكامُه بعد المعاينة المنشورة، ملحقةٌ بـ`ق-١٦٥٣`). والقاعدةُ ٢٧: قاعدةٌ بلا بوّابةٍ تُنسى في أوّل ضغط.
  *
  * ⚠️ **وحدُّها**: تقرأ الملفّاتِ في المستودع لا ما رُفع إلى Cloudflare، فما يُرفع يُرفع من
  * `main`. ولا ترى معنى النصّ الإنجليزيّ خارج فقرة الطلب، والممنوعُ هنا كلماتٌ مسمّاة.
@@ -38,13 +38,13 @@ export function pageViolations(html: string): string[] {
   return out;
 }
 
-/** الموضعان الوحيدان المسموحُ فيهما بحرفٍ عربيّ: الشعارُ النصّيّ واسمُ الشركة. */
-const ALLOWED_ARABIC = [
-  /<span class="wordmark-ar" lang="ar" dir="rtl">[^<]*<\/span>/g,
-  /<p class="company"><span lang="ar" dir="rtl">[^<]*<\/span><\/p>/g,
-];
+/** الموضعُ الوحيد المسموحُ فيه بحرفٍ عربيّ: الشعارُ النصّيّ. */
+const ALLOWED_ARABIC = [/<span class="wordmark-ar" lang="ar" dir="rtl">[^<]*<\/span>/g];
 
-/** ما في الصفحة من نصٍّ عربيٍّ خارج الموضعين المسموحين. */
+/** اسمُ الشركة بالإنجليزية في أسفل الصفحة كما سمّاه صاحبُ المشروع (`ق-١٦٥٣`). */
+const COMPANY_EN = 'Mawj Ishbilia Trading Co.';
+
+/** ما في الصفحة من نصٍّ عربيٍّ خارج الشعار النصّيّ. */
 export function arabicOutsideWordmark(html: string): string[] {
   let rest = html;
   for (const re of ALLOWED_ARABIC) rest = rest.replace(re, '');
@@ -77,8 +77,9 @@ describe('حدودُ صفحة التعريف العامة (ق-١٦٥٣ · ق-١�
     for (const bad of planted) expect(pageViolations(clean + bad)).not.toEqual([]);
   });
 
-  it('⓪ب مسبارُ العربيّة يرى: يتركها في الشعار واسم الشركة، ويُصيبها في أيّ موضعٍ غيرهما', () => {
-    expect(arabicOutsideWordmark('<p class="wordmark"><span class="wordmark-ar" lang="ar" dir="rtl">رِكز</span></p><p class="company"><span lang="ar" dir="rtl">شركة</span></p>')).toEqual([]);
+  it('⓪ب مسبارُ العربيّة يرى: يتركها في الشعار، ويُصيبها في أيّ موضعٍ غيره ومنه اسمُ الشركة', () => {
+    expect(arabicOutsideWordmark('<p class="wordmark"><span class="wordmark-ar" lang="ar" dir="rtl">رِكز</span></p><p class="company">Mawj</p>')).toEqual([]);
+    expect(arabicOutsideWordmark('<p class="company"><span lang="ar" dir="rtl">شركة</span></p>')).toHaveLength(1);
     expect(arabicOutsideWordmark('<title>Rikz · رِكز</title>')).toHaveLength(1);
     expect(arabicOutsideWordmark('<section lang="ar"><h2>منصّة سحابية</h2></section>')).toHaveLength(1);
     expect(arabicOutsideWordmark('<span class="wordmark-ar">رِكز</span>')).toHaveLength(1);
@@ -91,6 +92,7 @@ describe('حدودُ صفحة التعريف العامة (ق-١٦٥٣ · ق-١�
     expect(html).not.toMatch(/<section class="arabic"/);
     expect(html).toMatch(/<span class="wordmark-ar" lang="ar" dir="rtl">رِكز<\/span>/);
     expect(arabicOutsideWordmark(html)).toEqual([]);
+    expect(html).toContain(`<p class="company">${COMPANY_EN}</p>`);
   });
 
   it('② النصُّ الإنجليزيّ يطابق نصَّ الطلب حرفاً', () => {
