@@ -164,6 +164,8 @@ describe('Form signing path — link, code, objection, revision, seal (e2e)', ()
     const view = await http().get(`/public/forms/${t1}/form`).set('x-form-session', session).expect(200);
     expect(view.body).toMatchObject({ templateName: 'تسليمُ شقّة', status: 'AWAITING_SIGNATURE', revisionNo: 1 });
     expect(view.body.items[0]).toMatchObject({ label: 'قراءةُ عدّاد الكهرباء', number: '48213' });
+    // وجلسةٌ مزوّرة على رابطٍ فُتحت له جلسةٌ صحيحة لا تفتحه (الجلسةُ تُطابَق ببصمتها لا بوجودها).
+    await http().get(`/public/forms/${t1}/form`).set('x-form-session', 'Z'.repeat(43)).expect(401);
     // وجلسةُ رابطٍ لا تفتح رابطاً آخر.
     await http().get(`/public/forms/${t2}/form`).set('x-form-session', session).expect(401);
     // ورمزُ نموذجٍ لا يصلح لآخر.
