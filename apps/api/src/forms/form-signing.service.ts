@@ -7,7 +7,7 @@ import { FilesService } from '../files/files.service';
 import { VerificationGateway } from '../verification/verification-gateway.service';
 import { mobileIndex } from '../verification/otp-challenges.service';
 import { signPeriodDaysFor } from './form-signing-settings.service';
-import { bytesSha256, deadlineFrom, formLinkUrl, newOpaqueToken, opaqueTokenHash, recordFormEvent, SMS_TEXT } from './form-signing.util';
+import { bytesSha256, deadlineFrom, formLinkUrl, newOpaqueToken, opaqueTokenHash, recordFormEvent, SMS_TEXT, type FormSigningEventKind } from './form-signing.util';
 import { contentHashOf, FormInstancesService, groupIdOf, presentInstance, type FormActor, type FormLinkedEntity, type InstanceFull } from './form-instances.service';
 
 type Tx = Prisma.TransactionClient;
@@ -221,7 +221,7 @@ export class FormSigningService {
   }
 
   /** يرسل رسالةً بعد الالتزام ويُسجّل نتيجتَها حدثاً — والفشلُ يُعاد من الشاشة لا يُرمى على ما التزم. */
-  async deliver(companyId: string, instanceId: string, to: string, masked: string, text: string, ok: 'LINK_SENT' | 'FINAL_SENT' | 'OTP_SENT', failed: 'LINK_SEND_FAILED' | 'FINAL_SEND_FAILED' | 'OTP_SEND_FAILED', actor: string) {
+  async deliver(companyId: string, instanceId: string, to: string, masked: string, text: string, ok: FormSigningEventKind, failed: FormSigningEventKind, actor: string) {
     let delivered = true;
     try {
       await this.gateway.sms().send({ to, text });
@@ -259,7 +259,9 @@ export class FormSigningService {
   /** موعدُ الانقضاء: من أوّل إرسالٍ بمدّة النوع، وترثه النسخةُ المعدّلة ولا تُرسل بعده (`ق-١٦٧١`). */
   private async deadlineFor(tx: Tx, instance: InstanceFull, now: Date): Promise<Date> {
     if (!instance.previousRevisionId) return deadlineFrom(now, await signPeriodDaysFor(tx, instance.templateVersion.formTypeId));
-    const previous = await tx.formInstance.findUniqueOrThrow({ where: { id: instance.previousRevisionId }, select: { signDeadline: true } });
+    const previous = await tx.formInstance.findUniqueOrThrow({ where: { id: instance.previousRevisionId }, select: { signDeadline: true, status: true } });
+    // السابقةُ ما زالت «معترَضاً عليها»: فإن حُسمت المجموعةُ خلافاً قائماً عند الموعد فلا تُرسل نسختُها بعده (`ق-١٦٣٣` ⑮).
+    if (previous.status !== FormInstanceStatus.OBJECTED) throw new ConflictException(MSG.form_signing_deadline_passed);
     if (!previous.signDeadline || previous.signDeadline.getTime() <= now.getTime()) throw new ConflictException(MSG.form_signing_deadline_passed);
     return previous.signDeadline;
   }
