@@ -314,6 +314,12 @@ export const MSG = {
   form_value_item_unknown: 'forms.value_item_unknown',
   form_value_type_mismatch: 'forms.value_type_mismatch',
   form_value_qty_whole: 'forms.value_qty_whole',
+  /** ⚖️ رمزُ التحقّق ومزوّدا الرسائل والهويّة (توجيه ٢٨٧ · ق-١٥٩١ · ق-١٦٣٥ ④). */
+  sms_provider_missing: 'verification.sms_provider_missing',
+  sms_test_provider_in_production: 'verification.sms_test_provider_in_production',
+  identity_provider_missing: 'verification.identity_provider_missing',
+  identity_test_provider_in_production: 'verification.identity_test_provider_in_production',
+  otp_issue_limit: 'verification.otp_issue_limit',
   form_value_condition_scale: 'forms.value_condition_scale',
   form_instance_condition_legacy: 'forms.instance_condition_legacy',
   contract_already_cancelled: 'contracts.already_cancelled',
@@ -1320,6 +1326,26 @@ const CATALOG: Record<string, Record<Language, string>> = {
   },
   [MSG.form_instance_seal_race]: { ar: 'خُتم هذا السجلّ في اللحظة نفسِها من طلبٍ آخر؛ أعد فتحه', en: 'This record was sealed at the same moment by another request; reopen it' },
   [MSG.form_instance_not_sealed]: { ar: 'السجلُّ لم يُختم بعد، فلا بصمةَ يُتحقّق منها', en: 'This record is not sealed yet, so there is no fingerprint to verify' },
+  [MSG.sms_provider_missing]: {
+    ar: 'لا مزوّدَ رسائلَ قصيرةٍ مهيّأ، فلا يُرسل رمزٌ ولا رابط',
+    en: 'No SMS provider is configured, so no code or link can be sent',
+  },
+  [MSG.sms_test_provider_in_production]: {
+    ar: 'مزوّدُ الرسائل التجريبيّ غيرُ مسموحٍ في بيئة الإنتاج — لا يُرسل شيئاً',
+    en: 'The test SMS provider is not allowed in production — it sends nothing',
+  },
+  [MSG.identity_provider_missing]: {
+    ar: 'لا مزوّدَ تحقّقٍ من الهويّة مهيّأ، فلا دخولَ بالهويّة الوطنية الآن',
+    en: 'No identity verification provider is configured, so national identity login is unavailable',
+  },
+  [MSG.identity_test_provider_in_production]: {
+    ar: 'مزوّدُ التحقّق من الهويّة التجريبيّ غيرُ مسموحٍ في بيئة الإنتاج — يوافق بلا تحقّق',
+    en: 'The test identity provider is not allowed in production — it approves without verifying anyone',
+  },
+  [MSG.otp_issue_limit]: {
+    ar: 'بلغ هذا النموذجُ حدَّ إعادة إرسال الرمز (خمسُ مرّات)؛ تواصل مع المنشأة',
+    en: 'This form has reached the code resend limit (five times); contact the company',
+  },
   [MSG.form_instance_required_missing]: { ar: 'لا يُختم السجلّ وبنودٌ إلزاميةٌ فارغة: {labels}', en: 'The record cannot be sealed while required items are empty: {labels}' },
   [MSG.form_instance_blocking_out_of_range]: {
     ar: 'لا يُختم السجلّ وقيمٌ خارج نطاقها المانع: {labels}',

@@ -612,6 +612,8 @@ model Company {
   formInstances       FormInstance[]
   formValues          FormValue[]
   formSeals           FormSeal[]
+  /// ⚖️ تحدّياتُ رمز التحقّق (توجيه ٢٨٧).
+  verificationChallenges VerificationChallenge[]
 
   @@map("companies")
 }
@@ -7176,4 +7178,39 @@ model FormValue {
 
   @@unique([instanceId, itemId])
   @@map("form_values")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚖️ رمزُ التحقّق (توجيه ٢٨٧ · `ق-١٥٩١` · `ق-١٦٣٥` ④): ستّةُ أرقام · خمسُ دقائق · ثلاثُ محاولات · والجديدُ يُبطل القديم · والإصداراتُ ستّةٌ للموضوع
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// **تحدّي رمزٍ أُرسل إلى جوال** — **الرمزُ بصمةٌ لا نصّ** (`codeHash`: `HMAC` بمفتاحٍ خارج القاعدة ومجالُها المنشأةُ والتحدّي)، **والجوالُ
+/// بصمةٌ ومقنَّعٌ لا رقمٌ كامل** (توجيه ٢٨٧ ⑪). والموضوعُ (`subjectKey`) يكتبه المستدعي ولا يعرف هذا الجدولُ معناه (نموذجٌ أو بديل)،
+/// فرمزُ غرضٍ لا يصلح لغيره. يبقى صفّاً بعد الاستعمال: عدُّ الإصدارات يُقرأ منه، وهو أثرٌ لكلِّ إرسال.
+/// بلا أبٍ — سجلٌّ لا يُحذف: موضوعُه يكتبه المستدعي نصّاً (نموذجٌ أو بديل) فلا مفتاحَ أجنبيّاً إليه، ويبقى بعد استعماله ليُعدّ منه حدُّ الإعادة، ويذهب مع المنشأة.
+model VerificationChallenge {
+  id        String  @id
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  /// الغرض (`otp-policy.ts`): دخولُ الموقّع · موافقةُ المستأجر على بديل · جوالُ البديل · فتحُ النسخة النهائية.
+  purpose    String
+  subjectKey String
+
+  mobileIndex  String
+  mobileMasked String
+  codeHash     String
+
+  attempts    Int @default(0)
+  maxAttempts Int
+
+  expiresAt  DateTime
+  consumedAt DateTime?
+  revokedAt  DateTime?
+  lockedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([companyId, id])
+  @@index([companyId, purpose, subjectKey, createdAt])
+  @@map("verification_challenges")
 }
