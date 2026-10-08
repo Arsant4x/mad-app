@@ -1074,6 +1074,8 @@ export class ContractsService {
           await tx.bankTransaction.create({
             data: {
               bankId: bank.id,
+              // ⚖️ (البند ٥٩٩ · توجيه ٢٨٦ · `ق-١٥٨١`) العقدُ بلا فرع، فالمرآةُ بفرع الصندوق الذي قبض فيه، فلا يراها المقيَّدُ بفرعٍ آخر.
+              branchId: bank.branchId ?? null,
               date: new Date(dto.date),
               description: `دفعة إيجار — عقد ${contract.no} — ${contract.tenant}`,
               amount: netAmount,

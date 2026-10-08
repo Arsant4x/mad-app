@@ -887,6 +887,7 @@ export class PaymentsService {
       currency: p.currency,
       exchangeRate: p.exchangeRate,
       entryNo: entry?.no ?? null,
+      branchId: p.branchId,
     });
   }
 

@@ -128,7 +128,7 @@ export class BanksService {
           const varianceMemo = `${variance > 0 ? 'زيادة' : 'عجز'} عدّ صندوق عند نقله — ${bank.name} (${fromBranch} ⟵ ${toBranch})`;
           const varianceEntry = await postShiftVarianceEntry(tx, companyId, { memo: varianceMemo, date, branchId: bank.branchId, drawerAccountId: bank.accountId, variance });
           if (varianceEntry) {
-            await mirrorBankMovement(tx, bank, { date, description: varianceMemo, amount: variance, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: varianceEntry.no });
+            await mirrorBankMovement(tx, bank, { date, description: varianceMemo, amount: variance, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: varianceEntry.no, branchId: bank.branchId });
           }
 
           const transit = await getOrCreateAccountByCode(tx, companyId, CASH_IN_TRANSIT_CODE, CASH_IN_TRANSIT_NAME, 'asset');
@@ -149,8 +149,8 @@ export class BanksService {
                 })
               : null;
           if (moved) {
-            await mirrorBankMovement(tx, bank, { date, description: memoOut, amount: -counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.out.no });
-            await mirrorBankMovement(tx, successor, { date, description: memoIn, amount: counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.in.no });
+            await mirrorBankMovement(tx, bank, { date, description: memoOut, amount: -counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.out.no, branchId: bank.branchId });
+            await mirrorBankMovement(tx, successor, { date, description: memoIn, amount: counted, source: 'transfer', currency: bank.currency, exchangeRate: 1, entryNo: moved.in.no, branchId: toBranchId });
           }
 
           await tx.bank.update({ where: { id }, data: { archived: true, transferredToId: successor.id } });
