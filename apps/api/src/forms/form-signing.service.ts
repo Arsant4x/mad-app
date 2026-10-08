@@ -313,6 +313,10 @@ export class FormSigningService {
    * ⚖️ **التوقيعُ الورقيّ** (توجيه ٢٨٧ ⑧ · `ق-١٦٣٥` ⑨): من لا جوالَ له أو يرفض يوقّع ورقاً، فتُرفع صورةُ الورقة ويشهد عليها الموظّف. من
    * المسوّدة (ومعه رسمُ الموظّف فيوقّع ويُرسَل ويُختم في معاملةٍ واحدة) أو من «تنتظر التوقيع»؛ **والختمُ بالصيغة ٢ عند اكتمال التواقيع**،
    * ورابطُ النسخة النهائية إلى جوال الطرف إن صلح. ولا يُقبل على مختومٍ أو معترَضٍ عليه أو منقضٍ.
+   *
+   * ⚖️ **والمستأجرُ شخصٌ اعتباريّ يوقّع عنه ممثّلُه ورقاً** (`ق-١٦٧٥`): الصفُّ بدور «الممثّل» باسم من وقّع ونوعِ سنده (مديرٌ في السجلّ التجاريّ
+   * أو وكالةٌ من ناجز) ورقمِه، من الطلب أو من ممثّلٍ معيَّنٍ للمجموعة؛ ويُتحقَّق من السند بالمزوّد إن وُجد (وما لم يُعثر عليه يُردّ)، **وبلا
+   * مزوّدٍ «لم يُتحقَّق منه»**، وسندُه يدخل بصمةَ الختم كالممثّل الإلكترونيّ. **وشهادةُ الموظّف تبقى بديلَ نفاذ** في الورقيّ (`ق-١٦٧٦` ⑦).
    */
   async signPaper(
     companyId: string,
@@ -325,14 +329,21 @@ export class FormSigningService {
       counterparty: FormCounterparty | null;
       entityBaseValue: Prisma.Decimal | null;
       signerName?: string | null;
+      authority?: { type: string; ref: string } | null;
+      authorityDocument?: UploadedEvidence | undefined;
       meta: RequestMeta;
     },
   ) {
     const paper = input.paper;
     if (!paper?.buffer?.length || !PAPER_TYPES.has(paper.mimetype)) throw new BadRequestException(MSG.form_paper_file_required);
     const drawing = input.drawing?.buffer?.length ? assertDrawing(input.drawing) : null;
+    const document = input.authorityDocument?.buffer?.length ? input.authorityDocument : null;
+    if (document && !PAPER_TYPES.has(document.mimetype)) throw new BadRequestException(MSG.form_paper_file_required);
+    // من يوقّع ورقاً عن الطرف: يُقرأ قبل المعاملة لأن التحقّقَ من السند نداءُ شبكة.
+    const paperRep = await this.paperRepresentativeOf(companyId, linked, id, input.counterparty, input.signerName ?? null, input.authority ?? null);
     const storedPaper = await this.files.uploadSensitive(companyId, paper);
     const storedDrawing = drawing ? await this.files.uploadSensitive(companyId, drawing) : null;
+    const storedDocument = paperRep && document ? await this.files.uploadSensitive(companyId, document) : null;
     let drawingUsed = false;
     let outbound: { to: string; masked: string; token: string } | null = null;
     try {
@@ -383,22 +394,32 @@ export class FormSigningService {
 
         const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true, kind: true, phone: true } });
         if (!customer) throw new ConflictException(MSG.form_signing_no_counterparty);
+        // الصفةُ تُقرأ ثانيةً تحت القفل: الحكمُ بما في البطاقة الآن لا بما قُرئ قبل المعاملة.
+        if ((customer.kind === 'LEGAL_PERSON') !== !!paperRep) throw new ConflictException(MSG.form_signing_content_changed);
         const country = await countryOf(tx, companyId);
-        // الجوالُ اختياريٌّ هنا (من لا جوالَ له يوقّع ورقاً): يُكتب مقنَّعاً وبصمتَه إن صلح، ويُرسل إليه رابطُ النسخة النهائية.
-        const mobile = normalizeMobile(customer.phone, country);
-        const masked = mobile ? maskMobile(mobile, country) : null;
+        // الجوالُ اختياريٌّ هنا (من لا جوالَ له يوقّع ورقاً): يُكتب مقنَّعاً وبصمتَه إن صلح، ويُرسل إليه رابطُ النسخة النهائية؛ وللممثّل جوالُه
+        // المعيَّن إن وُجد، وإلا فجوالُ البطاقة للنسخة النهائية وحدَها لا على صفّ توقيعه.
+        const cardMobile = normalizeMobile(customer.phone, country);
+        const signerMobile = paperRep ? paperRep.mobile : cardMobile;
+        const masked = signerMobile ? maskMobile(signerMobile, country) : null;
+        const finalMobile = paperRep ? (paperRep.mobile ?? cardMobile) : cardMobile;
         await tx.formSignature.create({
           data: {
             companyId,
             instanceId: id,
-            role: FormSignerRole.COUNTERPARTY,
+            role: paperRep ? FormSignerRole.REPRESENTATIVE : FormSignerRole.COUNTERPARTY,
             level: FormSignatureLevel.PAPER_WITNESSED,
             channel: FormSignatureChannel.PAPER,
-            signerName: input.signerName?.trim() || customer.name,
+            signerName: paperRep ? paperRep.name : input.signerName?.trim() || customer.name,
             signerCustomerId: customer.id,
             signerKind: customer.kind,
+            authorityType: paperRep?.type ?? null,
+            authorityRef: paperRep?.ref ?? null,
+            authorityEvidenceKey: paperRep ? (storedDocument?.key ?? paperRep.evidenceKey) : null,
+            authorityEvidenceSha256: paperRep ? (storedDocument && document ? bytesSha256(document.buffer) : paperRep.evidenceSha256) : null,
+            authorityVerification: paperRep?.verification ?? null,
             mobileMasked: masked,
-            mobileIndex: mobile ? mobileIndex(companyId, mobile) : null,
+            mobileIndex: signerMobile ? mobileIndex(companyId, signerMobile) : null,
             evidenceKey: storedPaper.key,
             evidenceSha256: bytesSha256(paper.buffer),
             signedContentHash: contentHashOf(instance),
@@ -413,13 +434,15 @@ export class FormSigningService {
         await this.instances.sealWithinTx(tx, id, input.actor);
         await recordFormEvent(tx, { companyId, instanceId: id, kind: 'SEALED', actor: input.actor.name });
         await tx.formSigningLink.updateMany({ where: { instanceId: id, revokedAt: null, purpose: FormLinkPurpose.SIGN }, data: { revokedAt: new Date() } });
-        if (!mobile || !masked) return null;
-        const token = await this.openLink(tx, companyId, id, FormLinkPurpose.FINAL_COPY, FormSignerRole.COUNTERPARTY, null);
-        return { to: mobile, masked, token };
+        if (!finalMobile) return null;
+        const finalRole = paperRep?.mobile ? FormSignerRole.REPRESENTATIVE : FormSignerRole.COUNTERPARTY;
+        const token = await this.openLink(tx, companyId, id, FormLinkPurpose.FINAL_COPY, finalRole, null);
+        return { to: finalMobile, masked: maskMobile(finalMobile, country), token };
       });
     } catch (e) {
       await this.files.remove(companyId, storedPaper.key).catch(() => undefined);
       if (storedDrawing) await this.files.remove(companyId, storedDrawing.key).catch(() => undefined);
+      if (storedDocument) await this.files.remove(companyId, storedDocument.key).catch(() => undefined);
       throw e;
     }
     // رسمٌ أُرفق لنموذجٍ وقّعه الموظّفُ من قبل: لا يُستعمل ولا يبقى.
@@ -623,6 +646,63 @@ export class FormSigningService {
     const { decision } = await verifier.verify({ type: rep.authorityType as AuthorityType, ref: rep.authorityRef, representativeName: rep.name });
     if (decision !== 'VERIFIED') throw new ConflictException(MSG.form_representative_authority_not_found);
     return 'VERIFIED';
+  }
+
+  /**
+   * ⚖️ **من يوقّع ورقاً عن الطرف** (`ق-١٦٧٥`): للشخص الطبيعيّ لا أحد (يوقّع بنفسه، وحقولُ السند تُردّ `400`)؛ وللشخص الاعتباريّ ممثّلٌ
+   * **إمّا بثلاثته في الطلب** (اسمُ من وقّع ونوعُ السند ورقمُه، ويُتحقَّق منه بالمزوّد إن وُجد) **وإمّا ممثّلٌ معيَّنٌ للمجموعة** بسنده وحكمه
+   * وجواله؛ ولا ثالث: اسمٌ بلا سندٍ، أو لا اسمَ ولا تعيين، يُردّ `400`. والصفةُ تُقرأ من حيث يقرؤها الإرسال: من الطلب للمسوّدة، ومن
+   * المختوم على النسخة بعدها؛ وتُعاد قراءتُها من البطاقة تحت القفل.
+   */
+  private async paperRepresentativeOf(
+    companyId: string,
+    linked: FormLinkedEntity,
+    id: string,
+    counterparty: FormCounterparty | null,
+    signerName: string | null,
+    authority: { type: string; ref: string } | null,
+  ): Promise<{
+    name: string;
+    type: string;
+    ref: string;
+    evidenceKey: string | null;
+    evidenceSha256: string | null;
+    verification: 'VERIFIED' | 'UNVERIFIED';
+    mobile: string | null;
+  } | null> {
+    const context = await this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const instance = await this.instances.load(tx, linked, id);
+      const customerId = instance.status === FormInstanceStatus.DRAFT ? (counterparty?.customerId ?? null) : instance.counterpartyCustomerId;
+      if (!customerId) return null;
+      const customer = await tx.customer.findUnique({ where: { id: customerId }, select: { kind: true } });
+      if (!customer) return null;
+      const designation = customer.kind === 'LEGAL_PERSON' ? await this.activeRepresentative(tx, groupIdOf(instance)) : null;
+      return { legal: customer.kind === 'LEGAL_PERSON', designation };
+    });
+    const hasAuthority = !!(authority && (authority.type?.trim() || authority.ref?.trim()));
+    if (!context) return null;
+    if (!context.legal) {
+      if (hasAuthority) throw new BadRequestException(MSG.form_representative_legal_only);
+      return null;
+    }
+    if (hasAuthority) {
+      const name = signerName?.trim() ?? '';
+      const ref = authority!.ref?.trim() ?? '';
+      if (!name || !AUTHORITY_TYPES.has(authority!.type) || !ref) throw new BadRequestException(MSG.form_representative_required_fields);
+      const verification = await this.verifyAuthority({ name, mobile: '', authorityType: authority!.type, authorityRef: ref });
+      return { name, type: authority!.type, ref, evidenceKey: null, evidenceSha256: null, verification, mobile: null };
+    }
+    const d = context.designation;
+    if (signerName?.trim() || !d) throw new BadRequestException(MSG.form_representative_required_fields);
+    return {
+      name: d.name,
+      type: d.authorityType!,
+      ref: d.authorityRef!,
+      evidenceKey: d.authorityEvidenceKey,
+      evidenceSha256: d.authorityEvidenceSha256,
+      verification: (d.authorityVerification as 'VERIFIED' | 'UNVERIFIED' | null) ?? 'UNVERIFIED',
+      mobile: decryptField(d.mobileCipher, designationAad(companyId, d.id, 'mobile')),
+    };
   }
 
   /**

@@ -116,7 +116,8 @@ export class ContractFormsController {
 
   /**
    * ⚖️ **التوقيعُ الورقيّ** (توجيه ٢٨٧ ⑧): صورةُ الورقة الموقَّعة (`paper`) ويشهد عليها الموظّف، ومعها رسمُ الموظّف (`drawing`) إن لم يوقّع
-   * من قبل؛ والختمُ في الطلب نفسِه.
+   * من قبل؛ والختمُ في الطلب نفسِه. **والشخصُ الاعتباريّ يوقّع عنه ممثّلُه** (`ق-١٦٧٥`): اسمُه ونوعُ سنده ورقمُه، وصورةُ السند
+   * (`authorityDocument`) اختيارية، أو الممثّلُ المعيَّن إن خلت.
    */
   @Post(':formId/paper')
   @RequiresAction('review')
@@ -125,6 +126,7 @@ export class ContractFormsController {
       [
         { name: 'paper', maxCount: 1 },
         { name: 'drawing', maxCount: 1 },
+        { name: 'authorityDocument', maxCount: 1 },
       ],
       { limits: { fileSize: MAX_FILE_BYTES } },
     ),
@@ -137,9 +139,10 @@ export class ContractFormsController {
     @Param('id') id: string,
     @Param('formId') formId: string,
     @Body() dto: PaperSignFormDto,
-    @UploadedFiles() files: { paper?: Express.Multer.File[]; drawing?: Express.Multer.File[] } | undefined,
+    @UploadedFiles() files: { paper?: Express.Multer.File[]; drawing?: Express.Multer.File[]; authorityDocument?: Express.Multer.File[] } | undefined,
   ) {
-    return this.service.paper(tenant.companyId, id, formId, actorOf(tenant, req), files?.paper?.[0], files?.drawing?.[0], dto.signerName ?? null, metaOf(req));
+    const authority = dto.authorityType || dto.authorityRef ? { type: dto.authorityType ?? '', ref: dto.authorityRef ?? '' } : null;
+    return this.service.paper(tenant.companyId, id, formId, actorOf(tenant, req), files?.paper?.[0], files?.drawing?.[0], dto.signerName ?? null, metaOf(req), authority, files?.authorityDocument?.[0]);
   }
 
   /** ⚖️ **رابطُ جهاز الموظّف** (توجيه ٢٨٧ ⑤): يعود للموظّف ولا يُرسل، والخطوتان نفسُهما. */

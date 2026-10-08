@@ -69,6 +69,16 @@ export class PaperSignFormDto {
   @IsString()
   @MaxLength(200)
   signerName?: string;
+
+  /** ⚖️ سندُ من وقّع عن شخصٍ اعتباريّ (`ق-١٦٧٥`): نوعُه ورقمُه مع `signerName`، أو لا شيء فيُقرأ الممثّلُ المعيَّن. */
+  @IsOptional()
+  @IsIn(['CR_MANAGER', 'NAJIZ_POA'])
+  authorityType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  authorityRef?: string;
 }
 
 /** رمزُ التحقّق كما يكتبه العميل. */

@@ -26,7 +26,8 @@ const TINY_PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n'
  * ④ النسخةُ المعدّلة ترث الممثّلَ فتُرسل إليه بلا حقوله ·
  * ⑤ نفاذٌ فوق الحدّ يشترط رقمَ هويّة الممثّل، ونفاذُه يُقابَل برقمه ·
  * ⑥ الورقيّ من المسوّدة ومن «تنتظر التوقيع» يُختم بشهادة الموظّف، وبلا جوالٍ صالحٍ لا رابطَ نهائيّ، ولا ورقيَّ على مختوم ·
- * ⑦ رابطُ جهاز الموظّف يعود له ولا يُرسل، والقناةُ «جهاز الموظّف» على التوقيع.
+ * ⑦ رابطُ جهاز الموظّف يعود له ولا يُرسل، والقناةُ «جهاز الموظّف» على التوقيع ·
+ * ⑧ الورقيّ عن شخصٍ اعتباريّ بدور «الممثّل» باسم الموقّع وسنده (`ق-١٦٧٥`)، أو بالممثّل المعيَّن، وللطبيعيّ حقولُ السند تُردّ.
  */
 describe('Form signing parties — representative, paper, staff device (e2e)', () => {
   let app: INestApplication;
@@ -294,6 +295,76 @@ describe('Form signing parties — representative, paper, staff device (e2e)', (
       .attach('paper', Buffer.from('x'), { filename: 'paper.txt', contentType: 'text/plain' })
       .attach('drawing', TINY_PNG, { filename: 'sig.png', contentType: 'image/png' })
       .expect(400);
+  });
+
+  it('⑧ الورقيّ عن شخصٍ اعتباريّ بدور «الممثّل» باسم الموقّع وسنده، يُتحقَّق منه أو «لم يُتحقَّق منه»، أو بالممثّل المعيَّن (ق-١٦٧٥)', async () => {
+    const paperOf = (contractId: string, formId: string) =>
+      http()
+        .post(`/contracts/${contractId}/forms/${formId}/paper`)
+        .set('Authorization', bearer(a.token))
+        .attach('paper', TINY_PDF, { filename: 'paper.pdf', contentType: 'application/pdf' })
+        .attach('drawing', TINY_PNG, { filename: 'sig.png', contentType: 'image/png' });
+
+    // بلا سندٍ ولا ممثّلٍ معيَّن يُردّ، والاسمُ وحدَه لا يكفي، ولا يُكتب شيء.
+    const legal = await contractWithForm({ kind: 'LEGAL_PERSON' });
+    const bare = await paperOf(legal.contractId, legal.formId).expect(400);
+    expect(bare.body.message).toContain('السند');
+    await paperOf(legal.contractId, legal.formId).field('signerName', 'مدير').expect(400);
+    // سندٌ لم يُعثر عليه يُردّ، والنموذجُ يبقى مسوّدةً بلا توقيع.
+    authority().decide('CR_MANAGER', `PNF${stamp}`, 'NOT_FOUND');
+    const notFound = await paperOf(legal.contractId, legal.formId).field('signerName', 'مدير').field('authorityType', 'CR_MANAGER').field('authorityRef', `PNF${stamp}`).expect(409);
+    expect(notFound.body.message).toContain('السند');
+    expect(await inA((tx) => tx.formSignature.count({ where: { instanceId: legal.formId } }))).toBe(0);
+
+    // بثلاثته وصورة سنده: «الممثّل» لا «المستأجر»، والسندُ متحقَّقٌ منه وفي البصمة، والنسخةُ النهائية إلى جوال البطاقة.
+    const signed = await paperOf(legal.contractId, legal.formId)
+      .field('signerName', 'مدير المؤسسة')
+      .field('authorityType', 'CR_MANAGER')
+      .field('authorityRef', `PCR${stamp}`)
+      .attach('authorityDocument', TINY_PDF, { filename: 'cr.pdf', contentType: 'application/pdf' })
+      .expect(201);
+    expect(signed.body.form.status).toBe('SEALED');
+    expect(signed.body.finalCopy).toBe('SENT');
+    const roles = (signed.body.form.signatures as { role: string }[]).map((s) => s.role).sort();
+    expect(roles).toEqual(['REPRESENTATIVE', 'STAFF']);
+    const rep = await inA((tx) => tx.formSignature.findFirstOrThrow({ where: { instanceId: legal.formId, role: 'REPRESENTATIVE' } }));
+    expect(rep).toMatchObject({ level: 'PAPER_WITNESSED', channel: 'PAPER', signerName: 'مدير المؤسسة', authorityType: 'CR_MANAGER', authorityRef: `PCR${stamp}`, authorityVerification: 'VERIFIED', witnessUserName: a.username });
+    expect(rep.authorityEvidenceSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect((await http().get(`/contracts/${legal.contractId}/forms/${legal.formId}/verify`).set('Authorization', bearer(a.token)).expect(200)).body.valid).toBe(true);
+    expect(mockSms(app).lastTo(legal.mobile.e164)?.text).toMatch(/نسختك النهائية/);
+
+    // بلا مزوّدٍ «لم يُتحقَّق منه» ولا يحبس.
+    const saved = process.env.AUTHORITY_PROVIDER;
+    delete process.env.AUTHORITY_PROVIDER;
+    try {
+      const c = await contractWithForm({ kind: 'LEGAL_PERSON' });
+      await paperOf(c.contractId, c.formId).field('signerName', 'وكيل').field('authorityType', 'NAJIZ_POA').field('authorityRef', `PPOA${stamp}`).expect(201);
+      const sig = await inA((tx) => tx.formSignature.findFirstOrThrow({ where: { instanceId: c.formId, role: 'REPRESENTATIVE' } }));
+      expect(sig.authorityVerification).toBe('UNVERIFIED');
+      expect(sig.authorityEvidenceSha256).toBeNull();
+    } finally {
+      process.env.AUTHORITY_PROVIDER = saved;
+    }
+
+    // للشخص الطبيعيّ حقولُ السند تُردّ، ويوقّع بنفسه بدور «المستأجر».
+    const natural = await contractWithForm();
+    const wrong = await paperOf(natural.contractId, natural.formId).field('signerName', 'مدير').field('authorityType', 'CR_MANAGER').field('authorityRef', '1010101010').expect(400);
+    expect(wrong.body.message).toContain('شخصٌ اعتباريّ');
+    expect(await inA((tx) => tx.formSignature.count({ where: { instanceId: natural.formId } }))).toBe(0);
+
+    // من «تنتظر التوقيع» بممثّلٍ معيَّن: الورقةُ وحدَها تكفي، فيُكتب بسنده، والنسخةُ النهائية إلى جواله.
+    const designated = await contractWithForm({ kind: 'LEGAL_PERSON' });
+    const repMobile = uniqueMobile();
+    await sendToRepresentative(designated.contractId, designated.formId, { mobile: repMobile.local, ref: `PDS${stamp}` }).expect(201);
+    const fromDesignation = await http()
+      .post(`/contracts/${designated.contractId}/forms/${designated.formId}/paper`)
+      .set('Authorization', bearer(a.token))
+      .attach('paper', TINY_PDF, { filename: 'paper.pdf', contentType: 'application/pdf' })
+      .expect(201);
+    expect(fromDesignation.body.finalCopy).toBe('SENT');
+    const dSig = await inA((tx) => tx.formSignature.findFirstOrThrow({ where: { instanceId: designated.formId, role: 'REPRESENTATIVE' } }));
+    expect(dSig).toMatchObject({ channel: 'PAPER', signerName: 'مدير الشركة', authorityRef: `PDS${stamp}`, authorityVerification: 'VERIFIED' });
+    expect(mockSms(app).lastTo(repMobile.e164)?.text).toMatch(/نسختك النهائية/);
   });
 
   it('⑦ رابطُ جهاز الموظّف يعود له ولا يُرسل، والقناةُ «جهاز الموظّف» على التوقيع', async () => {

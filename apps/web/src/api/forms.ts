@@ -131,11 +131,30 @@ export const reviseContractForm = (contractId: string, formId: string) => apiCli
 export const contractFormEvents = (contractId: string, formId: string) => apiClient.get<FormSigningEvent[]>(`${base(contractId, formId)}/events`).then((r) => r.data);
 export const contractFormDeviceLink = (contractId: string, formId: string) =>
   apiClient.post<FormDeviceLink>(`${base(contractId, formId)}/device-link`).then((r) => r.data);
-export function paperSignContractForm(contractId: string, formId: string, paper: File, drawing?: Blob | null, signerName?: string) {
+/** سندُ من وقّع ورقاً عن شخصٍ اعتباريّ (`ق-١٦٧٥`): اسمُه في `signerName`، ونوعُ السند ورقمُه هنا. */
+export interface PaperAuthorityFields {
+  authorityType: 'CR_MANAGER' | 'NAJIZ_POA';
+  authorityRef: string;
+}
+
+export function paperSignContractForm(
+  contractId: string,
+  formId: string,
+  paper: File,
+  drawing?: Blob | null,
+  signerName?: string,
+  authority?: PaperAuthorityFields | null,
+  authorityDocument?: File | null,
+) {
   const form = new FormData();
   form.append('paper', paper);
   if (drawing) form.append('drawing', drawing, 'signature.png');
   if (signerName?.trim()) form.append('signerName', signerName.trim());
+  if (authority) {
+    form.append('authorityType', authority.authorityType);
+    form.append('authorityRef', authority.authorityRef.trim());
+    if (authorityDocument) form.append('authorityDocument', authorityDocument);
+  }
   return apiClient.post<FormPaperSigned>(`${base(contractId, formId)}/paper`, form).then((r) => r.data);
 }
 /** صورةُ توقيعٍ أو ورقةٍ أو اعتراض: تُجلب بالدخول ثم تُفتح رابطاً محلّياً (لا رابطَ موقَّعاً للمخزن الحسّاس). */
