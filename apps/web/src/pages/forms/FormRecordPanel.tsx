@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   deleteContractForm,
-  sealContractForm,
   setContractFormValues,
   verifyContractForm,
   type FormInstance,
@@ -25,11 +24,16 @@ import {
   type FormContractRef,
   type ValueDraft,
 } from './formItems';
+import { FormSigningSection } from './FormSigningSection';
+import { statusOf } from './formStatus';
 
 /**
  * ⚖️ **السجلُّ المعبّأ** (الموجة ١د · `ق-١٦٣٨`): تعبئةُ المسوّدة بأنواع بنودها، ثم الختمُ ببصمته ورقمه وموضعه في السلسلة
  * (`ق-١٦٣٦`)، ثم التحقّقُ والطباعةُ ببصمة التحقّق. **التعبئةُ «تسجيل» والختمُ «مراجعة»** على شاشة العقود (الخادمُ يحكم، والزرُّ
  * يُخفى لمن لا يملكه). **والمختومُ يُقرأ ولا يُعدَّل** (`ق-١٦٣٥` ③ب)، والتصحيحُ بنموذجٍ تصحيحيٍّ لم يُبنَ بعد.
+ *
+ * ⚖️ **والختمُ صار يقع بتوقيع الطرف** (توجيه ٢٨٧ ⑨): الموظّفُ يوقّع ويرسل من قسم التوقيع، **وما أُرسل لا يُعدَّل** ولا يُحذف، والردُّ على
+ * الاعتراض نسخةٌ معدّلة تُفتح مكانه.
  */
 export function FormRecordPanel({
   contract,
@@ -37,6 +41,7 @@ export function FormRecordPanel({
   canRecord,
   canReview,
   onChanged,
+  onRevised,
   onDeleted,
   onClose,
 }: {
@@ -45,19 +50,22 @@ export function FormRecordPanel({
   canRecord: boolean;
   canReview: boolean;
   onChanged: (updated: FormInstance) => void;
+  onRevised: (created: FormInstance) => void;
   onDeleted: () => void;
   onClose: () => void;
 }) {
   const sealed = record.status === 'SEALED';
+  const draft = record.status === 'DRAFT';
+  const status = statusOf(record.status);
   const [drafts, setDrafts] = useState<Record<string, ValueDraft>>(() =>
     Object.fromEntries(record.items.map((i) => [i.itemId, valueDraftOf(i)])),
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<'seal' | 'delete' | null>(null);
+  const [confirm, setConfirm] = useState<'delete' | null>(null);
   const [verification, setVerification] = useState<FormVerification | null>(null);
 
-  const editable = !sealed && canRecord;
+  const editable = draft && canRecord;
   const dirty = useMemo(() => record.items.some((i) => valueChanged(i, drafts[i.itemId])), [record.items, drafts]);
   const setDraft = (itemId: string, patch: Partial<ValueDraft>) => setDrafts((d) => ({ ...d, [itemId]: { ...d[itemId], ...patch } }));
 
@@ -94,14 +102,11 @@ export function FormRecordPanel({
 
   const save = () => run(async () => void (await saveChanges()), 'تعذّر حفظ القيم');
 
-  const seal = () =>
-    run(async () => {
-      setConfirm(null);
-      // ما لم يُحفظ يُحفظ أوّلاً، فلا يُختم غيرُ ما على الشاشة.
-      const saved = await saveChanges();
-      if (!saved) return;
-      onChanged(await sealContractForm(contract.id, record.id));
-    }, 'تعذّر الختم');
+  /** ما لم يُحفظ يُحفظ قبل التوقيع، فلا يُوقَّع غيرُ ما على الشاشة. */
+  const beforeSend = async () => {
+    if (!editable || !dirty) return true;
+    return (await saveChanges()) !== null;
+  };
 
   const remove = () =>
     run(async () => {
@@ -119,7 +124,8 @@ export function FormRecordPanel({
         <div className="modal-head">
           <div className="modal-title">
             {record.template.name} · إصدار {record.template.version}{' '}
-            <span className={`badge ${sealed ? 'paid' : 'due'}`}>{sealed ? 'مختوم' : 'مسوّدة'}</span>
+            <span className={`badge ${status.badge}`}>{status.label}</span>
+            {record.revisionNo > 1 && <span className="hint"> · النسخة {record.revisionNo}</span>}
           </div>
           <button className="modal-close" onClick={onClose}>
             ✕
@@ -229,6 +235,16 @@ export function FormRecordPanel({
           <p className="hint">{EJAR_COMPLEMENT_NOTE}</p>
         </div>
 
+        <FormSigningSection
+          contract={contract}
+          record={record}
+          canRecord={canRecord}
+          canReview={canReview}
+          beforeSend={beforeSend}
+          onChanged={onChanged}
+          onRevised={onRevised}
+        />
+
         {verification && (
           <p className={verification.valid ? 'hint' : 'error-text'} data-testid="form-verification">
             {verification.valid
@@ -242,7 +258,7 @@ export function FormRecordPanel({
           <button className="btn btn-ghost" onClick={onClose}>
             إغلاق
           </button>
-          {!sealed && canRecord && (
+          {draft && canRecord && (
             <button className="btn btn-ghost" onClick={() => setConfirm('delete')} disabled={busy}>
               حذفُ المسوّدة
             </button>
@@ -250,11 +266,6 @@ export function FormRecordPanel({
           {editable && (
             <button className="btn btn-ghost" onClick={save} disabled={busy || !dirty}>
               حفظٌ كمسوّدة
-            </button>
-          )}
-          {!sealed && canReview && (
-            <button className="btn btn-primary" onClick={() => setConfirm('seal')} disabled={busy}>
-              ختم
             </button>
           )}
           {sealed && (
@@ -271,15 +282,6 @@ export function FormRecordPanel({
       </div>
     </div>
 
-      {confirm === 'seal' && (
-        <ConfirmModal
-          title="ختمُ السجلّ"
-          body="يُختم السجلُّ برقمه وبصمته وموضعه في سلسلة أختام المنشأة، ولا يُعدَّل بعد ذلك ولا يُحذف. والتصحيحُ بعده بنموذجٍ تصحيحيّ."
-          confirmLabel="ختم"
-          onCancel={() => setConfirm(null)}
-          onConfirm={seal}
-        />
-      )}
       {confirm === 'delete' && (
         <ConfirmModal
           title="حذفُ المسوّدة"

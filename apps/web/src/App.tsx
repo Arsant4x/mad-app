@@ -33,6 +33,7 @@ import { QuotesPage } from './pages/quotes/QuotesPage';
 import { JournalPage } from './pages/journal/JournalPage';
 import { LoginPage } from './pages/LoginPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { PublicFormPage } from './pages/PublicFormPage';
 import { ObligationsPage } from './pages/obligations/ObligationsPage';
 import { VatDeclarationPage } from './pages/obligations/VatDeclarationPage';
 import { ProductsPage } from './pages/products/ProductsPage';
@@ -60,6 +61,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* ⚖️ صفحةُ النموذج للمستأجر (توجيه ٢٨٧): خارج الحماية ولا حسابَ لها، والدخولُ برمزٍ أو نفاذ داخلها. */}
+          <Route path="/f/:token" element={<PublicFormPage />} />
           <Route
             path="/"
             element={

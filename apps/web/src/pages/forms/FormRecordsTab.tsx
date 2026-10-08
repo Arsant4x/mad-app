@@ -7,6 +7,7 @@ import { apiErrorMessage } from '../../lib/apiError';
 import { dfmt, today } from '../../lib/format';
 import type { FormContractRef } from './formItems';
 import { FormRecordPanel } from './FormRecordPanel';
+import { statusOf } from './formStatus';
 
 const contractRefOf = (c: Pick<ContractListItem, 'id' | 'no' | 'tenant' | 'unit'>): FormContractRef => ({
   id: c.id,
@@ -237,7 +238,8 @@ export function FormRecordsTab() {
                 <td className="num">{dfmt(r.formDate)}</td>
                 <td>{r.filledByName}</td>
                 <td>
-                  <span className={`badge ${r.status === 'SEALED' ? 'paid' : 'due'}`}>{r.status === 'SEALED' ? 'مختوم' : 'مسوّدة'}</span>
+                  <span className={`badge ${statusOf(r.status).badge}`}>{statusOf(r.status).label}</span>
+                  {r.revisionNo > 1 && <span className="hint num"> · {r.revisionNo}</span>}
                 </td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => setOpen(r)}>
@@ -258,6 +260,11 @@ export function FormRecordsTab() {
           canRecord={canRecord}
           canReview={canReview}
           onChanged={replace}
+          onRevised={(created) => {
+            // النسخةُ المعدّلة سجلٌّ جديد في المجموعة (`ق-١٦٦٩`): تُضاف وتُفتح، والسابقةُ تبقى «معترَضاً عليها».
+            setRecords((rs) => [created, ...rs]);
+            setOpen(created);
+          }}
           onDeleted={() => {
             setRecords((rs) => rs.filter((r) => r.id !== open.id));
             setOpen(null);
