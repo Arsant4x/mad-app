@@ -1529,6 +1529,13 @@
       "200"
     ]
   },
+  "GET /v1/reports/number-gaps": {
+    "parameters": [],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/reports/property-kpis": {
     "parameters": [],
     "requiredBody": [],

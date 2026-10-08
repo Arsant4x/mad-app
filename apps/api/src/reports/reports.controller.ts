@@ -1,5 +1,7 @@
 import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
 import { Response } from 'express';
+import { NumberGapsResponse } from './dto/number-gaps-response.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
@@ -92,7 +94,8 @@ export class ReportsController {
   /** الأرقامُ المأخوذة غير المستعملة في كلِّ سلسلة (`ق-٣٤٥`): للمنشأة كلِّها، فلمن يرى الفروعَ كلَّها. */
   @Get('number-gaps')
   @RequiresAction('view')
-  numberGaps(@CurrentTenant() tenant: TenantContext) {
+  @ApiOkResponse({ type: NumberGapsResponse })
+  numberGaps(@CurrentTenant() tenant: TenantContext): Promise<NumberGapsResponse> {
     return this.reportsService.numberGaps(tenant.companyId, tenant.allowedBranchIds);
   }
 

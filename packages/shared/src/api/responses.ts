@@ -394,6 +394,24 @@ export interface NetworkTransitSummaryResponse {
   matched: boolean;
 }
 
+/** ردٌّ — `NumberGapSeriesResponse` في الخادم (ق-١٤٣٨). */
+export interface NumberGapSeriesResponse {
+  kind: string;
+  year: number;
+  taken: number;
+  firstRecorded: number | null;
+  lastRecorded: number | null;
+  recordedSince: string | null;
+  unused: TakenNumberResponse[];
+  pending: TakenNumberResponse[];
+}
+
+/** ردٌّ — `NumberGapsResponse` في الخادم (ق-١٤٣٨). */
+export interface NumberGapsResponse {
+  asOf: string;
+  series: NumberGapSeriesResponse[];
+}
+
 /** ردٌّ — `OpenNetworkReceiptResponse` في الخادم (ق-١٤٣٨). */
 export interface OpenNetworkReceiptResponse {
   id: string;
@@ -892,6 +910,13 @@ export interface ReconciliationTotalsResponse {
   unmatchedStatementCount: number;
   unmatchedLedger: string;
   unmatchedLedgerCount: number;
+}
+
+/** ردٌّ — `TakenNumberResponse` في الخادم (ق-١٤٣٨). */
+export interface TakenNumberResponse {
+  no: string;
+  number: number;
+  allocatedAt: string;
 }
 
 /** ردٌّ — `VoidedCashDepositResponse` في الخادم (ق-١٤٣٨). */
