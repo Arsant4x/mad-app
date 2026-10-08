@@ -3048,6 +3048,26 @@
       "201"
     ]
   },
+  "POST /v1/contracts/{id}/forms/{formId}/device-link": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/forms/{formId}/paper": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/contracts/{id}/forms/{formId}/resend": {
     "parameters": [
       "path:formId:required",

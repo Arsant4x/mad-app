@@ -149,6 +149,9 @@ const WHEN_SMS: SecretRule[] = [
 const WHEN_IDENTITY: SecretRule[] = [
   { name: 'IDENTITY_PROVIDER', why: 'مزوّدُ التحقّق من الهويّة الوطنية (نفاذ) لتوقيع النماذج', extra: (v) => providerProblem('IDENTITY', v) },
 ];
+const WHEN_AUTHORITY: SecretRule[] = [
+  { name: 'AUTHORITY_PROVIDER', why: 'مزوّدُ التحقّق من سند ممثّل الشخص الاعتباريّ (واثق · ناجز)', extra: (v) => providerProblem('AUTHORITY', v) },
+];
 
 /**
  * **كلُّ متغيّرٍ يقرؤه هذا الحارس** — ليُفحص أنه **يبلغ الحاوية** (`boot-vars-reach-container.spec.ts`):
@@ -164,6 +167,7 @@ export function bootGuardedVariables(): string[] {
     ...WHEN_ERROR_TRACKING.map((r) => r.name),
     ...WHEN_SMS.map((r) => r.name),
     ...WHEN_IDENTITY.map((r) => r.name),
+    ...WHEN_AUTHORITY.map((r) => r.name),
   ];
 }
 
@@ -183,6 +187,7 @@ export function assertProductionSecrets(env: NodeJS.ProcessEnv = process.env): v
     ...((env.ERROR_TRACKING_DSN ?? '').trim() ? WHEN_ERROR_TRACKING : []),
     ...((env.SMS_PROVIDER ?? '').trim() ? WHEN_SMS : []),
     ...((env.IDENTITY_PROVIDER ?? '').trim() ? WHEN_IDENTITY : []),
+    ...((env.AUTHORITY_PROVIDER ?? '').trim() ? WHEN_AUTHORITY : []),
   ];
 
   for (const rule of rules) {

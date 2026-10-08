@@ -5,14 +5,14 @@ import { AuditService } from '../audit/audit.service';
 import { formatMessage, MSG } from '../common/i18n/messages';
 import { identityPlanOf } from '../common/region/mobile';
 import { TenantPrismaService } from '../common/tenant/tenant-prisma.service';
-import { customerOtherIdIndex, decryptCustomerOtherId } from '../customers/customer-identity.util';
+import { customerOtherIdIndex } from '../customers/customer-identity.util';
 import { FilesService } from '../files/files.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OtpChallengesService } from '../verification/otp-challenges.service';
 import { VerificationGateway } from '../verification/verification-gateway.service';
 import type { VerificationPurpose } from '../verification/otp-policy';
 import { contentHashOf, FormInstancesService, groupIdOf, INSTANCE_INCLUDE, verifyInstanceWithinTx, type InstanceFull } from './form-instances.service';
-import { assertDrawing, FormSigningService, type RequestMeta, type UploadedEvidence } from './form-signing.service';
+import { assertDrawing, FormSigningService, type FormRecipient, type RequestMeta, type UploadedEvidence } from './form-signing.service';
 import { bytesSha256, formLinkUrl, LINK_ACTOR, opaqueTokenHash, recordFormEvent, SMS_TEXT, type FormSigningEventKind } from './form-signing.util';
 
 type Tx = Prisma.TransactionClient;
@@ -51,8 +51,8 @@ export class FormPublicService {
     return this.inCompany(link, meta, 'LINK_OPENED', async (tx, instance) => {
       const active = isActive(link, instance);
       const plan = identityPlanOf((await tx.company.findUniqueOrThrow({ where: { id: link.companyId }, select: { country: true } })).country);
-      const party = active ? await this.partyOrNull(tx, link.companyId, instance.counterpartyCustomerId) : null;
-      const nafathPossible = !!(plan && party?.customer.otherIdIndex && party.customer.otherIdScheme && plan.idSchemes.includes(party.customer.otherIdScheme));
+      const party = active ? await this.recipientOrNull(tx, link, instance) : null;
+      const nafathPossible = !!(plan && party?.idIndex && party.idScheme && plan.idSchemes.includes(party.idScheme));
       const nafathOnly = link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired;
       return {
         state: active ? ('ACTIVE' as const) : ('CLOSED' as const),
@@ -69,7 +69,7 @@ export class FormPublicService {
     const outbound = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
       if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired) throw new ForbiddenException(MSG.form_signing_nafath_only);
-      const party = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+      const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const challenge = await this.otp.issueWithinTx(tx, {
         companyId: link.companyId,
         purpose: otpPurposeOf(link.purpose),
@@ -129,12 +129,12 @@ export class FormPublicService {
     const link = await this.resolve(token);
     const started = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
-      const party = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+      const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
       const plan = identityPlanOf(party.country);
-      if (!plan || !party.customer.otherIdScheme || !plan.idSchemes.includes(party.customer.otherIdScheme)) {
+      if (!plan || !party.idScheme || !plan.idSchemes.includes(party.idScheme)) {
         throw new ConflictException(formatMessage(MSG.form_signing_nafath_id_missing, { provider: plan?.displayName ?? '' }));
       }
-      const nationalId = decryptCustomerOtherId(link.companyId, party.customer);
+      const nationalId = party.nationalId();
       if (!nationalId) throw new ConflictException(formatMessage(MSG.form_signing_nafath_id_missing, { provider: plan.displayName }));
       return { instanceId: instance.id, nationalId };
     });
@@ -155,8 +155,8 @@ export class FormPublicService {
     const outcome = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
       const instance = await this.activeInstance(tx, link);
       if (decision.decision === 'PENDING') return { state: 'PENDING' as const, session: null, instanceId: instance.id };
-      const party = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
-      const matches = decision.decision === 'APPROVED' && !!decision.nationalId && party.customer.otherIdIndex === customerOtherIdIndex(decision.nationalId, link.companyId);
+      const party = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
+      const matches = decision.decision === 'APPROVED' && !!decision.nationalId && !!party.idIndex && party.idIndex === customerOtherIdIndex(decision.nationalId, link.companyId);
       if (!matches) {
         await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'NAFATH_REJECTED', actor: LINK_ACTOR, note: decision.decision });
         return { state: 'REJECTED' as const, session: null, instanceId: instance.id };
@@ -184,7 +184,7 @@ export class FormPublicService {
     const drawing = assertDrawing(drawingFile);
     const stored = await this.files.uploadSensitive(link.companyId, drawing);
     let finalToken: string;
-    let party: Awaited<ReturnType<FormSigningService['partyOf']>>;
+    let party: FormRecipient;
     let instanceId: string;
     try {
       ({ finalToken, party, instanceId } = await this.tenantPrisma.runInTenantContext(link.companyId, async (tx) => {
@@ -196,17 +196,23 @@ export class FormPublicService {
         if (!staff) throw new ConflictException(MSG.form_signing_not_awaiting);
         // ما يوقّعه الطرفُ هو ما وقّعه الموظّفُ بعينه — والقاعدةُ تمنع تعديلَ المرسَل، وهذا يقابل البصمتين.
         if (staff.signedContentHash !== contentHashOf(instance)) throw new ConflictException(MSG.form_signing_content_changed);
-        const p = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+        const p = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
         await tx.formSignature.create({
           data: {
             companyId: link.companyId,
             instanceId: instance.id,
-            role: FormSignerRole.COUNTERPARTY,
+            role: p.role,
             level: fresh.sessionMethod === 'NAFATH' ? FormSignatureLevel.DRAWN_NAFATH : FormSignatureLevel.DRAWN_OTP,
-            channel: FormSignatureChannel.LINK,
-            signerName: p.customer.name,
-            signerCustomerId: p.customer.id,
-            signerKind: p.customer.kind,
+            // ⑤: الخطوتان نفسُهما على جهاز الموظّف، والقناةُ تُسجَّل.
+            channel: link.staffDevice ? FormSignatureChannel.STAFF_DEVICE : FormSignatureChannel.LINK,
+            signerName: p.name,
+            signerCustomerId: p.customerId,
+            signerKind: p.kind,
+            authorityType: p.authority?.type ?? null,
+            authorityRef: p.authority?.ref ?? null,
+            authorityEvidenceKey: p.authority?.evidenceKey ?? null,
+            authorityEvidenceSha256: p.authority?.evidenceSha256 ?? null,
+            authorityVerification: p.authority?.verification ?? null,
             mobileMasked: p.masked,
             mobileIndex: p.index,
             evidenceKey: stored.key,
@@ -223,7 +229,7 @@ export class FormPublicService {
         await this.instances.sealWithinTx(tx, instance.id, { id: staff.signerUserId ?? staff.id, name: staff.signerName });
         await recordFormEvent(tx, { companyId: link.companyId, instanceId: instance.id, kind: 'SEALED', actor: LINK_ACTOR });
         await tx.formSigningLink.updateMany({ where: { instanceId: instance.id, revokedAt: null, purpose: FormLinkPurpose.SIGN }, data: { revokedAt: new Date() } });
-        const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, FormSignerRole.COUNTERPARTY, null);
+        const t = await this.signing.openLink(tx, link.companyId, instance.id, FormLinkPurpose.FINAL_COPY, p.role, null);
         return { finalToken: t, party: p, instanceId: instance.id };
       }));
     } catch (e) {
@@ -249,7 +255,7 @@ export class FormPublicService {
         await this.sessionLink(tx, link, session);
         await tx.$queryRaw`SELECT "id" FROM "form_instances" WHERE "id" = ${link.instanceId} FOR UPDATE`;
         const instance = await this.activeInstance(tx, link);
-        const p = await this.signing.partyOf(tx, link.companyId, instance.counterpartyCustomerId);
+        const p = await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
         await tx.formObjection.create({
           data: {
             companyId: link.companyId,
@@ -258,7 +264,7 @@ export class FormPublicService {
             photoKey: stored?.key ?? null,
             photoSha256: stored && photo ? bytesSha256(photo.buffer) : null,
             photoMime: stored && photo ? photo.mimetype : null,
-            byName: p.customer.name,
+            byName: p.name,
             mobileMasked: p.masked,
           },
         });
@@ -346,9 +352,9 @@ export class FormPublicService {
     return result.value;
   }
 
-  private async partyOrNull(tx: Tx, companyId: string, customerId: string | null) {
+  private async recipientOrNull(tx: Tx, link: LinkRow, instance: InstanceFull) {
     try {
-      return await this.signing.partyOf(tx, companyId, customerId);
+      return await this.signing.recipientOf(tx, link.companyId, instance, link.recipientRole);
     } catch {
       return null;
     }

@@ -103,11 +103,49 @@ export const IDENTITY_PROVIDER_FACTORIES: Readonly<Record<string, () => Identity
 });
 
 /**
- * المزوّدُ المختار في البيئة (`SMS_PROVIDER` · `IDENTITY_PROVIDER`)، أو `null` إن لم يُضبط — **ولا افتراض**. والمستدعي يرفض الغيابَ باسمه عند
- * الاستعمال، فلا يُرسل شيءٌ بلا مزوّد ولا يُختم توقيعٌ بلا رمز.
+ * ⚖️ **التحقّقُ من سند ممثّل الشخص الاعتباريّ** (توجيه ٢٨٧ ⑥ · `ق-١٥٩١` · `ق-١٦٣٥` ②: «وواجهةُ «واثق» تُبنى بوهميٍّ وتُشغَّل حين يُرخَّص
+ * الربط»): مديرٌ مقيّدٌ في السجلّ التجاريّ (واثق) أو وكيلٌ بوكالةٍ من ناجز. يُسأل بنوع السند ورقمه واسم الممثّل، ويُجيب بحكمٍ لا يُخمَّن.
  */
-export function chosenProvider(kind: 'SMS' | 'IDENTITY', env: NodeJS.ProcessEnv = process.env): string | null {
-  const raw = (kind === 'SMS' ? env.SMS_PROVIDER : env.IDENTITY_PROVIDER)?.trim().toUpperCase();
+export type AuthorityType = 'CR_MANAGER' | 'NAJIZ_POA';
+export type AuthorityDecision = 'VERIFIED' | 'NOT_FOUND';
+
+export interface AuthorityVerifier {
+  readonly provider: string;
+  verify(request: { type: AuthorityType; ref: string; representativeName: string }): Promise<{ decision: AuthorityDecision }>;
+}
+
+export const TEST_ONLY_AUTHORITY_PROVIDERS: ReadonlySet<string> = new Set(['MOCK']);
+
+/** **مزوّدُ السند للتطوير والاختبار**: يقبل كلَّ سندٍ إلا ما ضبطته الاختبارات (`decide`) — ولذلك ممنوعٌ في الإنتاج كأخويه. */
+export class MockAuthorityVerifier implements AuthorityVerifier {
+  readonly provider = 'MOCK';
+  private readonly decisions = new Map<string, AuthorityDecision>();
+
+  async verify(request: { type: AuthorityType; ref: string; representativeName: string }): Promise<{ decision: AuthorityDecision }> {
+    if (isProduction()) throw new ServiceUnavailableException(MSG.authority_test_provider_in_production);
+    return { decision: this.decisions.get(`${request.type}:${request.ref}`) ?? 'VERIFIED' };
+  }
+
+  /** للاختبارات وحدَها: حكمُ سندٍ بعينه. */
+  decide(type: AuthorityType, ref: string, decision: AuthorityDecision): void {
+    this.decisions.set(`${type}:${ref}`, decision);
+  }
+}
+
+export const AUTHORITY_VERIFIER_FACTORIES: Readonly<Record<string, () => AuthorityVerifier>> = Object.freeze({
+  MOCK: () => new MockAuthorityVerifier(),
+});
+
+type ProviderKind = 'SMS' | 'IDENTITY' | 'AUTHORITY';
+
+const ENV_OF: Record<ProviderKind, string> = { SMS: 'SMS_PROVIDER', IDENTITY: 'IDENTITY_PROVIDER', AUTHORITY: 'AUTHORITY_PROVIDER' };
+
+/**
+ * المزوّدُ المختار في البيئة (`SMS_PROVIDER` · `IDENTITY_PROVIDER` · `AUTHORITY_PROVIDER`)، أو `null` إن لم يُضبط — **ولا افتراض**. والمستدعي
+ * يرفض الغيابَ باسمه عند الاستعمال، فلا يُرسل شيءٌ بلا مزوّد ولا يُختم توقيعٌ بلا رمز.
+ */
+export function chosenProvider(kind: ProviderKind, env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = env[ENV_OF[kind]]?.trim().toUpperCase();
   return raw ? raw : null;
 }
 
@@ -115,9 +153,10 @@ export function chosenProvider(kind: 'SMS' | 'IDENTITY', env: NodeJS.ProcessEnv 
  * **لحارس الإقلاع** (`production-secrets.ts`): مزوّدٌ مضبوطٌ في الإنتاج يجب أن يكون محوّلاً مسجَّلاً وغيرَ تجريبيّ؛ والغيابُ جائز (المسارُ يُرفض
  * باسمه حين يُستعمل، والتعاقدُ شرطُ تشغيل).
  */
-export function providerProblem(kind: 'SMS' | 'IDENTITY', name: string): string | null {
-  const factories = kind === 'SMS' ? SMS_CHANNEL_FACTORIES : IDENTITY_PROVIDER_FACTORIES;
-  const testOnly = kind === 'SMS' ? TEST_ONLY_SMS_PROVIDERS : TEST_ONLY_IDENTITY_PROVIDERS;
+export function providerProblem(kind: ProviderKind, name: string): string | null {
+  const factories: Readonly<Record<string, unknown>> =
+    kind === 'SMS' ? SMS_CHANNEL_FACTORIES : kind === 'IDENTITY' ? IDENTITY_PROVIDER_FACTORIES : AUTHORITY_VERIFIER_FACTORIES;
+  const testOnly = kind === 'SMS' ? TEST_ONLY_SMS_PROVIDERS : kind === 'IDENTITY' ? TEST_ONLY_IDENTITY_PROVIDERS : TEST_ONLY_AUTHORITY_PROVIDERS;
   const key = name.trim().toUpperCase();
   if (testOnly.has(key)) return 'مزوّدٌ تجريبيٌّ لا يُرسل شيئاً ولا يتحقّق من أحد';
   if (!factories[key]) return `لا محوّلَ مسجَّلاً باسم «${key}»`;

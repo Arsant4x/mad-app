@@ -54,6 +54,10 @@ export class FormInstanceSignatureResponse {
   signerName!: string;
   mobileMasked!: string | null;
   witnessUserName!: string | null;
+  /** سندُ الممثّل (توجيه ٢٨٧ ⑥): نوعُه ورقمُه وحكمُ التحقّق منه، وفارغةٌ لغيره. */
+  authorityType!: string | null;
+  authorityRef!: string | null;
+  authorityVerification!: string | null;
   signedAt!: string;
 }
 

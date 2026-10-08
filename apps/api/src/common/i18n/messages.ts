@@ -332,6 +332,13 @@ export const MSG = {
   otp_expired: 'verification.otp_expired',
   otp_locked: 'verification.otp_locked',
   otp_used: 'verification.otp_used',
+  authority_test_provider_in_production: 'verification.authority_test_provider_in_production',
+  form_representative_required_fields: 'forms.representative_required_fields',
+  form_representative_authority_not_found: 'forms.representative_authority_not_found',
+  form_representative_nafath_id: 'forms.representative_nafath_id',
+  form_paper_file_required: 'forms.paper_file_required',
+  form_paper_not_allowed: 'forms.paper_not_allowed',
+  form_representative_legal_only: 'forms.representative_legal_only',
   /** ⚖️ إعدادُ توقيع النماذج (توجيه ٢٨٧ · ق-١٦٣٣ ⑬ · ق-١٦٣٥ ①). */
   form_signing_settings_owner_only: 'forms.signing_settings_owner_only',
   form_signing_type_unknown: 'forms.signing_type_unknown',
@@ -1411,6 +1418,34 @@ const CATALOG: Record<string, Record<Language, string>> = {
   [MSG.otp_expired]: { ar: 'انقضى الرمز؛ اطلب رمزاً جديداً', en: 'The code expired; request a new one' },
   [MSG.otp_locked]: { ar: 'استُنفدت المحاولاتُ الثلاث؛ اطلب رمزاً جديداً', en: 'All three attempts are used; request a new code' },
   [MSG.otp_used]: { ar: 'استُعمل هذا الرمزُ أو حلّ محلَّه أحدث؛ اطلب رمزاً جديداً', en: 'This code was used or replaced; request a new one' },
+  [MSG.authority_test_provider_in_production]: {
+    ar: 'مزوّدُ التحقّق من السند التجريبيّ غيرُ مسموحٍ في بيئة الإنتاج — يقبل كلَّ سند',
+    en: 'The test authority provider is not allowed in production — it accepts every authority',
+  },
+  [MSG.form_representative_required_fields]: {
+    ar: 'ممثّلُ الشخص الاعتباريّ: الاسمُ والجوالُ ونوعُ السند (مديرٌ في السجلّ التجاريّ أو وكالةٌ من ناجز) ورقمُه مطلوبة',
+    en: 'Legal person representative: name, mobile, authority type (commercial registry manager or Najiz power of attorney) and its number are required',
+  },
+  [MSG.form_representative_authority_not_found]: {
+    ar: 'لم يُعثر على السند بهذا النوع والرقم لهذا الممثّل؛ راجِع رقمَ السجلّ أو الوكالة',
+    en: 'No authority of this type and number was found for this representative; check the registry or power of attorney number',
+  },
+  [MSG.form_representative_nafath_id]: {
+    ar: 'قيمةُ العقد فوق حدّ نفاذ: أدخل رقمَ هويّة الممثّل ليتحقّق منه نفاذ',
+    en: 'The contract value is above the Nafath threshold: enter the representative identity number for Nafath to verify',
+  },
+  [MSG.form_paper_file_required]: {
+    ar: 'ارفع صورةَ النموذج الورقيّ الموقَّع (PDF أو صورة)',
+    en: 'Upload the signed paper form (PDF or image)',
+  },
+  [MSG.form_paper_not_allowed]: {
+    ar: 'التوقيعُ الورقيّ لنموذجٍ لم يُرسل أو ينتظر التوقيع، لا لمختومٍ أو معترَضٍ عليه أو منقضٍ',
+    en: 'A paper signature applies to a form not yet sent or awaiting signature, not to a sealed, objected or expired one',
+  },
+  [MSG.form_representative_legal_only]: {
+    ar: 'الممثّلُ بسنده لعميلٍ صفتُه شخصٌ اعتباريّ وحدَه؛ والشخصُ الطبيعيّ يوقّع بنفسه',
+    en: 'A representative with an authority applies only to a legal person customer; a natural person signs personally',
+  },
   [MSG.form_signing_settings_owner_only]: {
     ar: 'إعدادُ توقيع النماذج (مدّتُه وحدُّ نفاذ) لمالك المنشأة وحدَه',
     en: 'Form signing settings (period and identity threshold) are for the company owner only',

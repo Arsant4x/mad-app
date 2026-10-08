@@ -1,7 +1,45 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { FormInstanceStatus, FormLinkPurpose, FormSignatureChannel, FormSignatureLevel, FormSignerRole } from '@mad-app/db';
-import { IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 import { FormInstanceResponse } from './form-instance-responses.dto';
+
+/**
+ * ⚖️ **حقولُ الإرسال مع الرسم** (طلبٌ متعدّد الأجزاء): ممثّلُ الشخص الاعتباريّ (توجيه ٢٨٧ ⑥) — الاسمُ والجوالُ ونوعُ السند ورقمُه، ورقمُ
+ * هويّته حين يلزم نفاذ؛ وصورةُ السند ملفٌّ اختياريٌّ في الطلب نفسِه. وكلُّها فارغةٌ للشخص الطبيعيّ.
+ */
+export class SendFormDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  representativeName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  representativeMobile?: string;
+
+  @IsOptional()
+  @IsIn(['CR_MANAGER', 'NAJIZ_POA'])
+  authorityType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  authorityRef?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  representativeNationalId?: string;
+}
+
+/** التوقيعُ الورقيّ: اسمُ من وقّع الورقةَ بيده إن خالف اسمَ العميل (مديرٌ عن شخصٍ اعتباريّ مثلاً). */
+export class PaperSignFormDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  signerName?: string;
+}
 
 /** رمزُ التحقّق كما يكتبه العميل. */
 export class VerifyFormOtpDto {
@@ -120,6 +158,19 @@ export class FormSentResponse {
   form!: FormInstanceResponse;
   @ApiProperty({ enum: ['SENT', 'FAILED'] })
   delivery!: 'SENT' | 'FAILED';
+}
+
+/** التوقيعُ الورقيّ: النموذجُ مختوماً، وحالُ رابط النسخة النهائية (`NONE` حين لا جوالَ صالحاً للطرف). */
+export class FormPaperSignedResponse {
+  form!: FormInstanceResponse;
+  @ApiProperty({ enum: ['SENT', 'FAILED', 'NONE'] })
+  finalCopy!: 'SENT' | 'FAILED' | 'NONE';
+}
+
+/** رابطُ جهاز الموظّف: يعود مرّةً واحدة، وينتهي بانتهاء المدّة. */
+export class FormDeviceLinkResponse {
+  url!: string;
+  expiresAt!: string;
 }
 
 export class FormSigningEventResponse {

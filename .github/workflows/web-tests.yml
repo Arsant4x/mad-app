@@ -262,6 +262,7 @@ jobs:
       # مزوّدا الرسائل والهويّة التجريبيّان (توجيه ٢٨٧) — منسوخان من `.env.test.example`.
       SMS_PROVIDER: MOCK
       IDENTITY_PROVIDER: MOCK
+      AUTHORITY_PROVIDER: MOCK
       # ⚠️ بلا MinIO يرتدّ رفع الشعار بـ500 وتسقط `company-profile`.
       S3_ENDPOINT: http://localhost:9100
       S3_ACCESS_KEY: mad_app

@@ -46,6 +46,10 @@ export interface SealSignature {
   witnessUserId: string | null;
   /** `ISO` بالمللي ثانية كما يُخزَّن. */
   signedAt: string;
+  /**
+   * ⚖️ سندُ الممثّل (توجيه ٢٨٧ ⑥): نوعُه ورقمُه وبصمةُ صورته وحكمُ التحقّق — **يُكتب حين يوجد وحدَه**، فبصمةُ ما لا ممثّلَ فيه لا تتغيّر.
+   */
+  authority?: { type: string; ref: string; evidenceSha256: string | null; verification: string | null };
 }
 
 /** النسخةُ في مجموعتها، وبصمةُ محتوى السابقة لحظةَ وقّعها الموظّف — فلا تُحذف جولةٌ ولا تُدسّ. */
