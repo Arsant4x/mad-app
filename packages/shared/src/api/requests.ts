@@ -762,6 +762,12 @@ export interface FormTemplateItemDto {
   helpText?: string;
 }
 
+/** جسمُ طلب — `FormTypeSignPeriodDto` في الخادم. */
+export interface FormTypeSignPeriodDto {
+  formTypeId: string;
+  signPeriodDays: number;
+}
+
 /** جسمُ طلب — `FormValueDto` في الخادم. */
 export interface FormValueDto {
   itemId: string;
@@ -1375,6 +1381,12 @@ export interface UpdateEmployeeDto {
   nationalId?: string;
   salaryIban?: string;
   socialInsuranceNo?: string;
+}
+
+/** جسمُ طلب — `UpdateFormSigningSettingsDto` في الخادم. */
+export interface UpdateFormSigningSettingsDto {
+  nafathThreshold?: number | null;
+  periods?: FormTypeSignPeriodDto[];
 }
 
 /** جسمُ طلب — `UpdateFormTemplateDto` في الخادم. */

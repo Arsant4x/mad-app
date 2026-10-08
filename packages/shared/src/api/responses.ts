@@ -302,6 +302,14 @@ export interface FormInstanceTypeRefResponse {
   name: string;
 }
 
+/** ردٌّ — `FormSigningSettingsResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSigningSettingsResponse {
+  nafathThreshold: string | null;
+  currency: string;
+  defaultSignPeriodDays: number;
+  types: FormTypeSigningSettingResponse[];
+}
+
 /** ردٌّ — `FormTemplateItemResponse` في الخادم (ق-١٤٣٨). */
 export interface FormTemplateItemResponse {
   itemType: 'CONDITION' | 'QTY' | 'NUMBER' | 'METER_READING' | 'TEMPERATURE' | 'BOOLEAN' | 'TEXT';
@@ -362,6 +370,15 @@ export interface FormTypeResponse {
   sector: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** ردٌّ — `FormTypeSigningSettingResponse` في الخادم (ق-١٤٣٨). */
+export interface FormTypeSigningSettingResponse {
+  formTypeId: string;
+  code: string;
+  name: string;
+  signPeriodDays: number;
+  isDefault: boolean;
 }
 
 /** ردٌّ — `FormVerificationResponse` في الخادم (ق-١٤٣٨). */
