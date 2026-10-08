@@ -239,6 +239,7 @@ export function FormSigningSection({
       {dialog === 'substitute' && (
         <SubstituteDialog
           busy={busy}
+          nafathRequired={record.nafathRequired}
           onCancel={() => setDialog(null)}
           onSubmit={(body) =>
             run(async () => {
@@ -255,15 +256,23 @@ export function FormSigningSection({
           needsDrawing={status === 'DRAFT'}
           busy={busy}
           onCancel={() => setDialog(null)}
-          onSubmit={(paper, drawing, signerName, authority, doc) =>
+          onSubmit={(paper, drawing, signerName, authority, doc, designatedSigned) =>
             run(async () => {
               if (status === 'DRAFT' && !(await beforeSend())) return;
-              const r = authority
-                ? await paperSignContractForm(contract.id, record.id, paper, drawing, signerName, authority, doc)
-                : await paperSignContractForm(contract.id, record.id, paper, drawing, signerName);
+              const r = designatedSigned
+                ? await paperSignContractForm(contract.id, record.id, paper, drawing, '', null, null, true)
+                : authority
+                  ? await paperSignContractForm(contract.id, record.id, paper, drawing, signerName, authority, doc)
+                  : await paperSignContractForm(contract.id, record.id, paper, drawing, signerName);
               setDialog(null);
               onChanged(r.form);
-              setNotice(r.finalCopy === 'SENT' ? 'خُتم النموذج وأُرسلت النسخةُ النهائية.' : r.finalCopy === 'NONE' ? 'خُتم النموذج؛ ولا جوالَ صالحاً للنسخة النهائية.' : 'خُتم النموذج، وتعذّر إرسالُ النسخة النهائية.');
+              setNotice(
+                r.finalCopy === 'SENT'
+                  ? 'خُتم النموذج وأُرسل رابطُ النسخة النهائية إلى جوال المستأجر المسجَّل.'
+                  : r.finalCopy === 'NONE'
+                    ? 'خُتم النموذج؛ ولا جوالَ صالحاً في بطاقة المستأجر للنسخة النهائية.'
+                    : 'خُتم النموذج، وتعذّر إرسالُ النسخة النهائية.',
+              );
             }, 'تعذّر التوقيعُ الورقيّ')
           }
         />
@@ -349,9 +358,21 @@ function SendDialog({
  * ⚖️ **طلبُ مستلمٍ بديل** (توجيه ٢٨٧ ⑦ · `ق-١٦٧٢`): الموظّفُ يُدخل اسمَ البديل وجوالَه، ويوافق المستأجرُ من جواله برمزه؛ **والرمزُ لا يمرّ
  * بالموظّف**.
  */
-function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCancel: () => void; onSubmit: (body: { name: string; mobile: string }) => void }) {
+function SubstituteDialog({
+  busy,
+  nafathRequired,
+  onCancel,
+  onSubmit,
+}: {
+  busy: boolean;
+  nafathRequired: boolean;
+  onCancel: () => void;
+  onSubmit: (body: { name: string; mobile: string; nationalId?: string }) => void;
+}) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
+  // ⚖️ رقمُ هويّة البديل في نموذجٍ يشترط نفاذ وحدَه (`ق-١٦٧٧`): يدخل بالرمز ثم نفاذ برقمه.
+  const [nationalId, setNationalId] = useState('');
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }} role="dialog" aria-label="مستلمٌ بديل">
@@ -370,15 +391,23 @@ function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCance
           <label>جوالُ البديل</label>
           <input aria-label="جوالُ البديل" className="num" inputMode="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} />
         </div>
-        <p className="hint">ويصل البديلَ مع رمزه نصُّ الإحاطة بحفظ بياناته، ويوافق عليه بإدخال الرمز.</p>
+        {nafathRequired && (
+          <div className="field">
+            <label>رقمُ هويّة البديل (النموذجُ يشترط نفاذ)</label>
+            <input aria-label="رقمُ هويّة البديل" className="num" inputMode="numeric" value={nationalId} onChange={(e) => setNationalId(e.target.value)} />
+          </div>
+        )}
+        <p className="hint">
+          ويصل البديلَ مع رمزه نصُّ الإحاطة بحفظ بياناته، ويوافق عليه بإدخال الرمز{nafathRequired ? '، ثم يجتاز نفاذ برقم هويّته' : ''}.
+        </p>
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
             إلغاء
           </button>
           <button
             className="btn btn-primary"
-            disabled={busy || !name.trim() || !mobile.trim()}
-            onClick={() => onSubmit({ name: name.trim(), mobile: mobile.trim() })}
+            disabled={busy || !name.trim() || !mobile.trim() || (nafathRequired && !nationalId.trim())}
+            onClick={() => onSubmit(nafathRequired ? { name: name.trim(), mobile: mobile.trim(), nationalId: nationalId.trim() } : { name: name.trim(), mobile: mobile.trim() })}
           >
             إرسالُ طلب الموافقة
           </button>
@@ -390,7 +419,7 @@ function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCance
 
 /**
  * التوقيعُ الورقيّ: صورةُ الورقة الموقَّعة بشهادة الموظّف، ورسمُ الموظّف إن لم يوقّع بعد. ⚖️ **والشخصُ الاعتباريّ يوقّع عنه ممثّلُه**
- * (`ق-١٦٧٥`): اسمُه ونوعُ سنده ورقمُه، أو تُترك الحقولُ فيُقرأ الممثّلُ المعيَّن عند الإرسال.
+ * (`ق-١٦٧٥`)، **والموقّعُ يُختار صراحةً ولا يُستنتج** (`ق-١٦٧٨` (أ)): الممثّلُ المعيَّن عند الإرسال، أو موقّعٌ آخر باسمه ونوع سنده ورقمه.
  */
 function PaperDialog({
   needsDrawing,
@@ -401,15 +430,18 @@ function PaperDialog({
   needsDrawing: boolean;
   busy: boolean;
   onCancel: () => void;
-  onSubmit: (paper: File, drawing: Blob | null, signerName: string, authority: PaperAuthorityFields | null, doc: File | null) => void;
+  onSubmit: (paper: File, drawing: Blob | null, signerName: string, authority: PaperAuthorityFields | null, doc: File | null, designatedSigned: boolean) => void;
 }) {
   const [paper, setPaper] = useState<File | null>(null);
   const [drawing, setDrawing] = useState<Blob | null>(null);
   const [signerName, setSignerName] = useState('');
   const [legal, setLegal] = useState(false);
+  // من وقّع عن الشركة: لا اختيارَ مسبق، فيختار الموظّف.
+  const [signer, setSigner] = useState<'designated' | 'other' | null>(null);
   const [authority, setAuthority] = useState<PaperAuthorityFields>({ authorityType: 'CR_MANAGER', authorityRef: '' });
   const [doc, setDoc] = useState<File | null>(null);
-  const repReady = !legal || (signerName.trim() && authority.authorityRef.trim());
+  const repReady = !legal || signer === 'designated' || (signer === 'other' && signerName.trim() && authority.authorityRef.trim());
+  const otherSigner = legal && signer === 'other';
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }} role="dialog" aria-label="توقيعٌ ورقيّ">
@@ -427,11 +459,23 @@ function PaperDialog({
         <label style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10 }}>
           <input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /> المستأجرُ شخصٌ اعتباريّ ووقّع عنه ممثّلُه
         </label>
-        <div className="field">
-          <label>{legal ? 'اسمُ من وقّع عنه' : 'من وقّع الورقةَ بيده (إن خالف اسمَ المستأجر)'}</label>
-          <input aria-label="من وقّع الورقةَ بيده" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
-        </div>
-        {legal ? (
+        {legal && (
+          <div role="radiogroup" aria-label="من وقّع عن الشركة" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="radio" name="paper-signer" checked={signer === 'designated'} onChange={() => setSigner('designated')} /> الممثّلُ المعيَّن عند الإرسال هو من وقّع
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="radio" name="paper-signer" checked={signer === 'other'} onChange={() => setSigner('other')} /> وقّع غيرُه: أكتب اسمَه وسندَه
+            </label>
+          </div>
+        )}
+        {(!legal || otherSigner) && (
+          <div className="field">
+            <label>{legal ? 'اسمُ من وقّع عنه' : 'من وقّع الورقةَ بيده (إن خالف اسمَ المستأجر)'}</label>
+            <input aria-label="من وقّع الورقةَ بيده" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
+          </div>
+        )}
+        {otherSigner && (
           <div className="two-col">
             <div className="field">
               <label>صفتُه</label>
@@ -454,8 +498,6 @@ function PaperDialog({
               <input aria-label="صورةُ السند" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => setDoc(e.target.files?.[0] ?? null)} />
             </div>
           </div>
-        ) : (
-          <p className="hint">وإن عُيّن عند الإرسال ممثّلٌ لشخصٍ اعتباريّ فاترك الحقول، فيُكتب التوقيعُ باسمه وسنده.</p>
         )}
         {needsDrawing && <SignaturePad onChange={setDrawing} label="توقيعُ الموظّف" />}
         <div className="modal-foot">
@@ -465,7 +507,9 @@ function PaperDialog({
           <button
             className="btn btn-primary"
             disabled={busy || !paper || (needsDrawing && !drawing) || !repReady}
-            onClick={() => paper && onSubmit(paper, drawing, signerName, legal ? authority : null, legal ? doc : null)}
+            onClick={() =>
+              paper && onSubmit(paper, drawing, legal && signer === 'designated' ? '' : signerName, otherSigner ? authority : null, otherSigner ? doc : null, legal && signer === 'designated')
+            }
           >
             رفعٌ وختم
           </button>

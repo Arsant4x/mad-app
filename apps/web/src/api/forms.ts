@@ -124,8 +124,11 @@ export function sendContractForm(contractId: string, formId: string, drawing: Bl
   return apiClient.post<FormSent>(`${base(contractId, formId)}/send`, form).then((r) => r.data);
 }
 export const resendContractFormLink = (contractId: string, formId: string) => apiClient.post<FormSent>(`${base(contractId, formId)}/resend`).then((r) => r.data);
-/** طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): يصل جوالَ المستأجر رابطُ الموافقة، ولا يعود للموظّف رمزٌ ولا رابط. */
-export const requestContractFormSubstitute = (contractId: string, formId: string, body: { name: string; mobile: string }) =>
+/**
+ * طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): يصل جوالَ المستأجر رابطُ الموافقة، ولا يعود للموظّف رمزٌ ولا رابط. ورقمُ هويّة البديل في نموذجٍ يشترط نفاذ
+ * وحدَه (`ق-١٦٧٧`).
+ */
+export const requestContractFormSubstitute = (contractId: string, formId: string, body: { name: string; mobile: string; nationalId?: string }) =>
   apiClient.post<FormSent>(`${base(contractId, formId)}/substitute`, body).then((r) => r.data);
 export const reviseContractForm = (contractId: string, formId: string) => apiClient.post<FormInstance>(`${base(contractId, formId)}/revisions`).then((r) => r.data);
 export const contractFormEvents = (contractId: string, formId: string) => apiClient.get<FormSigningEvent[]>(`${base(contractId, formId)}/events`).then((r) => r.data);
@@ -145,10 +148,13 @@ export function paperSignContractForm(
   signerName?: string,
   authority?: PaperAuthorityFields | null,
   authorityDocument?: File | null,
+  designatedSigned?: boolean,
 ) {
   const form = new FormData();
   form.append('paper', paper);
   if (drawing) form.append('drawing', drawing, 'signature.png');
+  // ⚖️ الممثّلُ المعيَّن هو من وقّع: اختيارٌ صريحٌ لا يُستنتج من خاناتٍ متروكة (`ق-١٦٧٨` (أ)).
+  if (designatedSigned) form.append('designatedSigned', 'true');
   if (signerName?.trim()) form.append('signerName', signerName.trim());
   if (authority) {
     form.append('authorityType', authority.authorityType);
@@ -180,8 +186,10 @@ export const openFormLink = (token: string) => publicApiClient.get<FormLinkOpen>
 export const requestFormOtp = (token: string) => publicApiClient.post<FormOtpIssued>(`${pub(token)}/otp`).then((r) => r.data);
 export const verifyFormOtp = (token: string, challengeId: string, code: string) =>
   publicApiClient.post<FormSession>(`${pub(token)}/otp/verify`, { challengeId, code }).then((r) => r.data);
-export const startFormNafath = (token: string) => publicApiClient.post<FormNafathStart>(`${pub(token)}/nafath`).then((r) => r.data);
-export const pollFormNafath = (token: string) => publicApiClient.get<FormNafathPoll>(`${pub(token)}/nafath`).then((r) => r.data);
+/** نفاذ: وللبديل في نموذج نفاذ جلسةُ رمزه شرطٌ قبله (`ق-١٦٧٧`)، فتُرسل إن وُجدت. */
+export const startFormNafath = (token: string, s?: string | null) =>
+  publicApiClient.post<FormNafathStart>(`${pub(token)}/nafath`, undefined, s ? session(s) : undefined).then((r) => r.data);
+export const pollFormNafath = (token: string, s?: string | null) => publicApiClient.get<FormNafathPoll>(`${pub(token)}/nafath`, s ? session(s) : undefined).then((r) => r.data);
 export const viewPublicForm = (token: string, s: string) => publicApiClient.get<FormPublicView>(`${pub(token)}/form`, session(s)).then((r) => r.data);
 export function signPublicForm(token: string, s: string, drawing: Blob) {
   const form = new FormData();

@@ -3,7 +3,7 @@ import { FormInstanceStatus, FormLinkPurpose, FormSignatureChannel, FormSignatur
 import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength } from 'class-validator';
 import { FormInstanceResponse } from './form-instance-responses.dto';
 
-/** ⚖️ طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): اسمُه وجوالُه، ولا رقمَ هويّة (لا يلزم إلا لنفاذ، والنموذجُ الذي يشترطه لا بديلَ فيه بعد). */
+/** ⚖️ طلبُ مستلمٍ بديل (توجيه ٢٨٧ ⑦): اسمُه وجوالُه، ورقمُ هويّته في نموذجٍ يشترط نفاذ وحدَه (`ق-١٦٧٧`). */
 export class RequestSubstituteDto {
   @IsString()
   @MaxLength(200)
@@ -12,6 +12,11 @@ export class RequestSubstituteDto {
   @IsString()
   @MaxLength(32)
   mobile!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  nationalId?: string;
 }
 
 /** ⚖️ حكمُ المستأجر على البديل (`ق-١٦٧٢`). */
@@ -70,7 +75,12 @@ export class PaperSignFormDto {
   @MaxLength(200)
   signerName?: string;
 
-  /** ⚖️ سندُ من وقّع عن شخصٍ اعتباريّ (`ق-١٦٧٥`): نوعُه ورقمُه مع `signerName`، أو لا شيء فيُقرأ الممثّلُ المعيَّن. */
+  /** ⚖️ الممثّلُ المعيَّن هو من وقّع (`ق-١٦٧٨` (أ)): اختيارٌ صريح، لا يجتمع مع الاسم والسند. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  designatedSigned?: string;
+
+  /** ⚖️ سندُ من وقّع عن شخصٍ اعتباريّ (`ق-١٦٧٥`): نوعُه ورقمُه مع `signerName`، أو الاختيارُ الصريح أعلاه. */
   @IsOptional()
   @IsIn(['CR_MANAGER', 'NAJIZ_POA'])
   authorityType?: string;
@@ -111,6 +121,8 @@ export class FormLinkOpenResponse {
   @ApiProperty({ enum: FormLinkPurpose })
   purpose!: FormLinkPurpose;
   methods!: FormLinkMethodsResponse;
+  /** ⚖️ البديلُ في نموذج نفاذ يدخل بالرمز أوّلاً ثم نفاذ (`ق-١٦٧٧`). */
+  nafathAfterOtp!: boolean;
   identityProvider!: string | null;
 }
 
@@ -183,11 +195,12 @@ export class FormPublicViewResponse {
   substitute!: FormPublicSubstituteResponse | null;
 }
 
+/** التوقيعُ بالرابط: مختوم، وحالُ رابط النسخة النهائية إلى جوال بطاقة المستأجر (`NONE` حين لا جوالَ صالحاً فيها، `ق-١٦٧٨`). */
 export class FormSignedResponse {
   @ApiProperty({ enum: FormInstanceStatus })
   status!: FormInstanceStatus;
-  @ApiProperty({ enum: ['SENT', 'FAILED'] })
-  finalCopy!: 'SENT' | 'FAILED';
+  @ApiProperty({ enum: ['SENT', 'FAILED', 'NONE'] })
+  finalCopy!: 'SENT' | 'FAILED' | 'NONE';
 }
 
 export class FormObjectedResponse {

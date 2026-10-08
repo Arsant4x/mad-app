@@ -1047,6 +1047,7 @@ export interface RequestDecisionDto {
 export interface RequestSubstituteDto {
   name: string;
   mobile: string;
+  nationalId?: string;
 }
 
 /** جسمُ طلب — `RequestSupportAccessDto` في الخادم. */

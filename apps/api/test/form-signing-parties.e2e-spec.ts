@@ -151,7 +151,12 @@ describe('Form signing parties — representative, paper, staff device (e2e)', (
     const session = await loginByOtp(app, t, rep.e164);
     const signed = await signAsTenant(app, t, session).expect(201);
     expect(signed.body).toEqual({ status: 'SEALED', finalCopy: 'SENT' });
-    expect(mockSms(app).lastTo(rep.e164)?.text).toMatch(/نسختك النهائية/);
+    // ⚖️ النسخةُ النهائية إلى جوال بطاقة المستأجر لا إلى جوال الممثّل (`ق-١٦٧٨` (ب))، ورمزُ فتحها إلى البطاقة.
+    const finalSms = mockSms(app).lastTo(c.mobile.e164)?.text ?? '';
+    expect(finalSms).toMatch(/نسختك النهائية/);
+    expect(mockSms(app).lastTo(rep.e164)?.text ?? '').not.toMatch(/نسختك النهائية/);
+    const finalLink = linkTokenFrom(finalSms);
+    await loginByOtp(app, finalLink, c.mobile.e164);
 
     const form = (await http().get(`/contracts/${c.contractId}/forms/${c.formId}`).set('Authorization', bearer(a.token)).expect(200)).body;
     const repSig = form.signatures.find((s: { role: string }) => s.role === 'REPRESENTATIVE');
@@ -169,6 +174,15 @@ describe('Form signing parties — representative, paper, staff device (e2e)', (
     // عبثٌ بسند الممثّل في القاعدة لا يمرّ: صفُّ التوقيع لا يُعدَّل.
     const tamper = await inA((tx) => tx.formSignature.updateMany({ where: { instanceId: c.formId, role: 'REPRESENTATIVE' }, data: { authorityRef: 'X' } })).catch((e: unknown) => String((e as Error).message));
     expect(String(tamper)).toContain('23001');
+
+    // وبطاقةٌ بلا جوالٍ صالح: يوقّع الممثّلُ ويُختم، ولا رابطَ نهائيّ (`NONE`) ولا يُرسل إلى الممثّل.
+    const noPhone = await contractWithForm({ kind: 'LEGAL_PERSON', phone: null });
+    const rep2 = uniqueMobile();
+    await sendToRepresentative(noPhone.contractId, noPhone.formId, { mobile: rep2.local, ref: `CRN2${stamp}` }).expect(201);
+    const t2 = linkOf(rep2.e164);
+    const done = await signAsTenant(app, t2, await loginByOtp(app, t2, rep2.e164)).expect(201);
+    expect(done.body).toEqual({ status: 'SEALED', finalCopy: 'NONE' });
+    expect(mockSms(app).lastTo(rep2.e164)?.text ?? '').not.toMatch(/نسختك النهائية/);
   });
 
   it('③ سندٌ لم يُعثر عليه يُرفض ولا يُعيَّن به أحد، وبلا مزوّدٍ «لم يُتحقَّق منه» ولا يحبس', async () => {
@@ -305,11 +319,21 @@ describe('Form signing parties — representative, paper, staff device (e2e)', (
         .attach('paper', TINY_PDF, { filename: 'paper.pdf', contentType: 'application/pdf' })
         .attach('drawing', TINY_PNG, { filename: 'sig.png', contentType: 'image/png' });
 
-    // بلا سندٍ ولا ممثّلٍ معيَّن يُردّ، والاسمُ وحدَه لا يكفي، ولا يُكتب شيء.
+    // ⚖️ الموقّعُ لا يُستنتج من خاناتٍ متروكة (`ق-١٦٧٨` (أ)): بلا اختيارٍ ولا سندٍ يُردّ، والاسمُ وحدَه لا يكفي، ولا يُكتب شيء.
     const legal = await contractWithForm({ kind: 'LEGAL_PERSON' });
     const bare = await paperOf(legal.contractId, legal.formId).expect(400);
-    expect(bare.body.message).toContain('السند');
+    expect(bare.body.message).toContain('اختر أن الممثّلَ المعيَّن هو من وقّع');
     await paperOf(legal.contractId, legal.formId).field('signerName', 'مدير').expect(400);
+    // الاختيارُ بلا ممثّلٍ معيَّن يُردّ، والاختيارُ مع الاسم والسند يُردّ.
+    const noDesignation = await paperOf(legal.contractId, legal.formId).field('designatedSigned', 'true').expect(409);
+    expect(noDesignation.body.message).toContain('ممثّل');
+    const both = await paperOf(legal.contractId, legal.formId)
+      .field('designatedSigned', 'true')
+      .field('signerName', 'مدير')
+      .field('authorityType', 'CR_MANAGER')
+      .field('authorityRef', `PBO${stamp}`)
+      .expect(400);
+    expect(both.body.message).toContain('لا الاثنان');
     // سندٌ لم يُعثر عليه يُردّ، والنموذجُ يبقى مسوّدةً بلا توقيع.
     authority().decide('CR_MANAGER', `PNF${stamp}`, 'NOT_FOUND');
     const notFound = await paperOf(legal.contractId, legal.formId).field('signerName', 'مدير').field('authorityType', 'CR_MANAGER').field('authorityRef', `PNF${stamp}`).expect(409);
@@ -350,21 +374,30 @@ describe('Form signing parties — representative, paper, staff device (e2e)', (
     const natural = await contractWithForm();
     const wrong = await paperOf(natural.contractId, natural.formId).field('signerName', 'مدير').field('authorityType', 'CR_MANAGER').field('authorityRef', '1010101010').expect(400);
     expect(wrong.body.message).toContain('شخصٌ اعتباريّ');
+    await paperOf(natural.contractId, natural.formId).field('designatedSigned', 'true').expect(400);
     expect(await inA((tx) => tx.formSignature.count({ where: { instanceId: natural.formId } }))).toBe(0);
 
-    // من «تنتظر التوقيع» بممثّلٍ معيَّن: الورقةُ وحدَها تكفي، فيُكتب بسنده، والنسخةُ النهائية إلى جواله.
+    // من «تنتظر التوقيع» بممثّلٍ معيَّن: الحقولُ المتروكةُ بلا اختيارٍ تُردّ، والاختيارُ الصريح يكتبه بسنده، والنسخةُ النهائية إلى جوال البطاقة.
     const designated = await contractWithForm({ kind: 'LEGAL_PERSON' });
     const repMobile = uniqueMobile();
     await sendToRepresentative(designated.contractId, designated.formId, { mobile: repMobile.local, ref: `PDS${stamp}` }).expect(201);
-    const fromDesignation = await http()
-      .post(`/contracts/${designated.contractId}/forms/${designated.formId}/paper`)
-      .set('Authorization', bearer(a.token))
-      .attach('paper', TINY_PDF, { filename: 'paper.pdf', contentType: 'application/pdf' })
-      .expect(201);
+    const paperOnly = () =>
+      http()
+        .post(`/contracts/${designated.contractId}/forms/${designated.formId}/paper`)
+        .set('Authorization', bearer(a.token))
+        .attach('paper', TINY_PDF, { filename: 'paper.pdf', contentType: 'application/pdf' });
+    await paperOnly().expect(400);
+    const fromDesignation = await paperOnly().field('designatedSigned', 'true').expect(201);
     expect(fromDesignation.body.finalCopy).toBe('SENT');
     const dSig = await inA((tx) => tx.formSignature.findFirstOrThrow({ where: { instanceId: designated.formId, role: 'REPRESENTATIVE' } }));
     expect(dSig).toMatchObject({ channel: 'PAPER', signerName: 'مدير الشركة', authorityRef: `PDS${stamp}`, authorityVerification: 'VERIFIED' });
-    expect(mockSms(app).lastTo(repMobile.e164)?.text).toMatch(/نسختك النهائية/);
+    expect(mockSms(app).lastTo(designated.mobile.e164)?.text).toMatch(/نسختك النهائية/);
+    expect(mockSms(app).lastTo(repMobile.e164)?.text ?? '').not.toMatch(/نسختك النهائية/);
+
+    // وبلا جوالٍ صالحٍ في البطاقة لا رابطَ نهائيّ، ولو كان للممثّل جوال.
+    const noPhone = await contractWithForm({ kind: 'LEGAL_PERSON', phone: null });
+    const none = await paperOf(noPhone.contractId, noPhone.formId).field('signerName', 'مدير').field('authorityType', 'CR_MANAGER').field('authorityRef', `PNP${stamp}`).expect(201);
+    expect(none.body.finalCopy).toBe('NONE');
   });
 
   it('⑦ رابطُ جهاز الموظّف يعود له ولا يُرسل، والقناةُ «جهاز الموظّف» على التوقيع', async () => {

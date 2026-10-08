@@ -205,6 +205,41 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     fireEvent.click(submit());
     await waitFor(() => expect(requestContractFormSubstitute).toHaveBeenCalledWith('c1', 'f1', { name: 'أخو المستأجر', mobile: '0566123101' }));
     expect(await screen.findByText(/يوافق به على البديل برمزه/)).toBeTruthy();
+    // ولا خانةَ لرقم الهويّة في نموذجٍ لا يشترط نفاذ.
+    expect(screen.queryByLabelText('رقمُ هويّة البديل')).toBeNull();
+  });
+
+  it('⭐ البديلُ في نموذجٍ يشترط نفاذ: رقمُ هويّته إلزاميٌّ ويُرسل معه (ق-١٦٧٧)', async () => {
+    vi.mocked(requestContractFormSubstitute).mockResolvedValue({ form: awaiting, delivery: 'SENT' });
+    mount({ ...awaiting, nafathRequired: true }, { canRecord: true, canReview: true });
+    fireEvent.click(screen.getByRole('button', { name: 'مستلمٌ بديل' }));
+    const submit = () => screen.getByRole('button', { name: 'إرسالُ طلب الموافقة' }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText('اسمُ البديل'), { target: { value: 'أخو المستأجر' } });
+    fireEvent.change(screen.getByLabelText('جوالُ البديل'), { target: { value: '0566123101' } });
+    expect(submit().disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('رقمُ هويّة البديل'), { target: { value: '1098765432' } });
+    expect(submit().disabled).toBe(false);
+    fireEvent.click(submit());
+    await waitFor(() =>
+      expect(requestContractFormSubstitute).toHaveBeenCalledWith('c1', 'f1', { name: 'أخو المستأجر', mobile: '0566123101', nationalId: '1098765432' }),
+    );
+  });
+
+  it('⭐ الورقيّ عن شخصٍ اعتباريّ: الموقّعُ يُختار صراحةً، والممثّلُ المعيَّن اختيارٌ لا خاناتٌ متروكة (ق-١٦٧٨)', async () => {
+    vi.mocked(paperSignContractForm).mockResolvedValue({ form: { ...awaiting, status: 'SEALED' }, finalCopy: 'SENT' });
+    mount(awaiting, { canRecord: true, canReview: true });
+    fireEvent.click(screen.getByRole('button', { name: 'توقيعٌ ورقيّ' }));
+    const file = new File(['%PDF'], 'paper.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('صورةُ الورقة الموقَّعة'), { target: { files: [file] } });
+    fireEvent.click(screen.getByLabelText(/شخصٌ اعتباريّ ووقّع عنه ممثّلُه/));
+    const submit = screen.getByRole('button', { name: 'رفعٌ وختم' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText(/الممثّلُ المعيَّن عند الإرسال هو من وقّع/));
+    expect(screen.queryByLabelText('من وقّع الورقةَ بيده')).toBeNull();
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() => expect(paperSignContractForm).toHaveBeenCalledWith('c1', 'f1', file, null, '', null, null, true));
+    expect(await screen.findByText(/جوال المستأجر المسجَّل/)).toBeTruthy();
   });
 
   it('⭐ الورقيّ عن شخصٍ اعتباريّ يُرسل اسمَ الموقّع وسندَه، ولا يُرفع قبل رقم السند (ق-١٦٧٥)', async () => {
@@ -214,6 +249,7 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     const file = new File(['%PDF'], 'paper.pdf', { type: 'application/pdf' });
     fireEvent.change(screen.getByLabelText('صورةُ الورقة الموقَّعة'), { target: { files: [file] } });
     fireEvent.click(screen.getByLabelText(/شخصٌ اعتباريّ ووقّع عنه ممثّلُه/));
+    fireEvent.click(screen.getByLabelText(/وقّع غيرُه/));
     fireEvent.change(screen.getByLabelText('من وقّع الورقةَ بيده'), { target: { value: 'مدير المؤسسة' } });
     const submit = screen.getByRole('button', { name: 'رفعٌ وختم' }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);

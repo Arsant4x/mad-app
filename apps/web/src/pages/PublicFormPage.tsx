@@ -43,6 +43,8 @@ export function PublicFormPage() {
   const [otp, setOtp] = useState<FormOtpIssued | null>(null);
   const [code, setCode] = useState('');
   const [nafathCode, setNafathCode] = useState<string | null>(null);
+  // ⚖️ البديلُ في نموذج نفاذ (`ق-١٦٧٧`): جلسةُ رمزه تُحفظ هنا لتصحب نفاذ، ولا يُرى النموذجُ بها وحدَها.
+  const [otpStep, setOtpStep] = useState<string | null>(null);
   const [session, setSession] = useState<string | null>(null);
   const [view, setView] = useState<FormPublicView | null>(null);
   const [ack, setAck] = useState(false);
@@ -93,17 +95,21 @@ export function PublicFormPage() {
     run(async () => {
       if (!otp) return;
       const s = await verifyFormOtp(token, otp.challengeId, code.trim());
+      if (link?.nafathAfterOtp) {
+        setOtpStep(s.session);
+        return;
+      }
       await enter(s.session);
     }, 'تعذّر التحقّق من الرمز');
 
   const startNafath = () =>
     run(async () => {
-      const started = await startFormNafath(token);
+      const started = otpStep ? await startFormNafath(token, otpStep) : await startFormNafath(token);
       setNafathCode(started.displayCode);
       if (poller.current) window.clearInterval(poller.current);
       poller.current = window.setInterval(async () => {
         try {
-          const r = await pollFormNafath(token);
+          const r = otpStep ? await pollFormNafath(token, otpStep) : await pollFormNafath(token);
           if (r.state === 'APPROVED' && r.session) {
             if (poller.current) window.clearInterval(poller.current);
             await enter(r.session.session);
@@ -150,8 +156,11 @@ export function PublicFormPage() {
             <h2 style={{ marginTop: 0 }}>
               {link.purpose === 'FINAL_COPY' ? 'نسختُك النهائية من النموذج' : link.purpose === 'SUBSTITUTE_CONSENT' ? 'طلبُ مستلمٍ بديلٍ عنك' : 'نموذجٌ ينتظر توقيعك'}
             </h2>
-            <p className="hint">ادخل أوّلاً لترى النموذج.</p>
-            {link.methods.otp && (
+            <p className="hint">
+              {link.nafathAfterOtp ? 'ادخل بالرمز الذي يصل جوالك أوّلاً، ثم بنفاذ، لترى النموذج.' : 'ادخل أوّلاً لترى النموذج.'}
+            </p>
+            {link.nafathAfterOtp && otpStep && <p className="hint">تحقّقنا من جوالك؛ بقي التحقّقُ عبر {link.identityProvider ?? 'نفاذ'}.</p>}
+            {link.methods.otp && !otpStep && (
               <div style={{ marginBottom: 12 }}>
                 {!otp ? (
                   <button className="btn btn-primary" disabled={busy} onClick={sendCode}>
@@ -178,10 +187,10 @@ export function PublicFormPage() {
                 )}
               </div>
             )}
-            {link.methods.nafath && (
+            {link.methods.nafath && (!link.nafathAfterOtp || otpStep) && (
               <div>
                 {!nafathCode ? (
-                  <button className={link.methods.otp ? 'btn btn-ghost' : 'btn btn-primary'} disabled={busy} onClick={startNafath}>
+                  <button className={link.methods.otp && !otpStep ? 'btn btn-ghost' : 'btn btn-primary'} disabled={busy} onClick={startNafath}>
                     التحقّق عبر {link.identityProvider ?? 'نفاذ'}
                   </button>
                 ) : (
@@ -318,7 +327,12 @@ export function PublicFormPage() {
 
         {stage === 'signed' && (
           <p className="hint" data-testid="public-form-done">
-            وُقّع النموذج وخُتم. {finalCopy === 'SENT' ? 'وأُرسل إلى جوالك رابطُ نسختك النهائية.' : 'وتعذّر إرسالُ رابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'}
+            وُقّع النموذج وخُتم.{' '}
+            {finalCopy === 'SENT'
+              ? 'وأُرسل رابطُ النسخة النهائية إلى جوال المستأجر المسجَّل.'
+              : finalCopy === 'NONE'
+                ? 'ولا جوالَ صالحاً في بطاقة المستأجر لرابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'
+                : 'وتعذّر إرسالُ رابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'}
           </p>
         )}
         {stage === 'approved' && (
