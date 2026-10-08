@@ -29,7 +29,7 @@ import { ServicePeriod, splitAtCollection } from './rent-recognition.util';
  * المقفلة؛ والفحصُ المسبقُ قبل الترقيم (`assertPostingAccounts` مع الفترة) مبنيٌّ للمستندات الضريبية وحدَها — الفاتورةُ
  * وإشعاراها ومستندُ الدفعة المقدَّمة (`ق-١٤٩٠` · `invoices/issue-prechecks.util.ts`) — والمراجعُ الداخليةُ حدٌّ معلَن.
  */
-async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]): Promise<Map<string, string>> {
+export async function resolveAccountIds(tx: Prisma.TransactionClient, codes: string[]): Promise<Map<string, string>> {
   const rows = await tx.account.findMany({ where: { code: { in: codes } }, select: { id: true, code: true } });
   const ids = new Map(rows.map((r) => [r.code, r.id]));
   const missing = [...new Set(codes.filter((c) => !ids.has(c)))];
@@ -1401,6 +1401,11 @@ export interface PartySettlementForPosting {
   cashAccountId?: string | null;
   /** البُعدُ التحليلي حين تُسوّى ذمّةُ إيجار (`ق-٩١٧`): وحدةُ العقد — والعقارُ يُشتقّ منها. */
   unitId?: string | null;
+  /**
+   * ⚖️ (توجيه ٢٨٦) سطورُ تكلفةٍ بالعملة الأساسية، موقَّعةٌ (الموجبُ مدين)، يُقتطع مجموعُها من فرق الصرف: إعادةُ توزيع سند
+   * صرف المورّد تقيس ما طُبّق على شراءٍ من دفعةٍ سبقته بسعر الدفعة، فالفرقُ تكلفةُ المشتريات لا `5600`، وعكسُ السند يردّها.
+   */
+  costLines?: { accountId: string; amount: number }[];
 }
 
 /** سطرُ قيدٍ من مبلغٍ موقَّع: الموجبُ على الجانب المعلَن، والسالبُ على قرينه. */
@@ -1412,12 +1417,15 @@ function signedLine(accountId: string, amount: number, debitWhenPositive: boolea
 export async function postPartySettlementEntry(tx: Prisma.TransactionClient, companyId: string, p: PartySettlementForPosting) {
   const cash = round2(p.baseCash);
   const settled = round2(p.baseSettled);
-  if (cash === 0 && settled === 0) return null;
+  if (cash === 0 && settled === 0 && !(p.costLines ?? []).some((c) => round2(c.amount) !== 0)) return null;
 
   const receivable = p.side === 'RECEIVABLE';
   const partyCode = receivable ? '1200' : '2100';
-  // ربحُ الصرف: قبضٌ بنقدٍ يفوق الذمّة، أو صرفٌ بنقدٍ يقلّ عنها.
-  const fxGain = round2(receivable ? cash - settled : settled - cash);
+  // ⚖️ (توجيه ٢٨٦) سطورُ تكلفةٍ موقَّعة (الموجبُ مدين) تُقتطع من فرق الصرف: ما يُقاس بسعر الدفعة المقدّمة تكلفةٌ لا فرقُ صرف.
+  const costLines = (p.costLines ?? []).map((c) => ({ accountId: c.accountId, amount: round2(c.amount) })).filter((c) => c.amount !== 0);
+  const cost = round2(costLines.reduce((t, c) => t + c.amount, 0));
+  // ربحُ الصرف: قبضٌ بنقدٍ يفوق الذمّة، أو صرفٌ بنقدٍ يقلّ عنها — بعد ما ذهب إلى التكلفة.
+  const fxGain = round2(receivable ? cash + cost - settled : settled + cost - cash);
   // ⚖️ **قيدٌ بلا نقد** (`ق-١٤٨٩`/B1 — فرقُ ذمّةِ سندٍ أُعيد توزيعُه): لا يُطلب حسابُ نقدٍ ولا يُكتب سطرُه — فـ`createJournalEntry`
   //    يفحص المجموعَين وحدهما ويكتب كلَّ سطرٍ كما هو، فسطرُ نقدٍ صفريٌّ كان سيبقى في الدفتر بلا واقعة.
   const withCash = cash !== 0;
@@ -1428,7 +1436,8 @@ export async function postPartySettlementEntry(tx: Prisma.TransactionClient, com
 
   const lines: PostingLine[] = [
     ...(withCash ? [signedLine(p.cashAccountId ?? ids.get('1000')!, cash, receivable)] : []),
-    signedLine(ids.get(partyCode)!, settled, !receivable),
+    ...(settled !== 0 || costLines.length === 0 ? [signedLine(ids.get(partyCode)!, settled, !receivable)] : []),
+    ...costLines.map((c) => signedLine(c.accountId, c.amount, true)),
   ];
   if (fxGain !== 0) lines.push(signedLine(ids.get(FX_DIFFERENCE_ACCOUNT)!, fxGain, false));
 
@@ -1727,8 +1736,12 @@ export interface SupplierPaymentForPosting {
   basePayable: number;
   branchId?: string | null;
   reversal?: boolean;
+  /** قيدُ إعادة توزيعٍ بلا نقد (توجيه ٢٨٦) — للمذكّرة. */
+  reallocation?: boolean;
   /** حسابُ البنك/الصندوق المسدِّد، و`1000` نقداً — **ولا درج** (`ق-٨٧٢`). */
   cashAccountId?: string | null;
+  /** ما يُقاس بسعر الدفعة المقدّمة إلى تكلفة المشتريات، لا إلى `5600` (توجيه ٢٨٦). */
+  costLines?: { accountId: string; amount: number }[];
 }
 
 /**
@@ -1743,12 +1756,13 @@ export function postSupplierPaymentEntry(tx: Prisma.TransactionClient, companyId
   return postPartySettlementEntry(tx, companyId, {
     side: 'PAYABLE',
     date: p.date,
-    memo: `${p.reversal ? 'عكس سداد لمورّد' : 'سداد لمورّد'} — سند ${p.paymentNo} — ${p.supplierName}`,
+    memo: `${p.reversal ? 'عكس سداد لمورّد' : p.reallocation ? 'إعادة توزيع سداد لمورّد' : 'سداد لمورّد'} — سند ${p.paymentNo} — ${p.supplierName}`,
     baseCash: p.baseCash,
     baseSettled: p.basePayable,
     supplierId: p.supplierId,
     branchId: p.branchId,
     cashAccountId: p.cashAccountId,
+    costLines: p.costLines,
   });
 }
 
