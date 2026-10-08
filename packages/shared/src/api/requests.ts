@@ -1619,6 +1619,12 @@ export interface VatRatioQueryDto {
   year: number;
 }
 
+/** جسمُ طلب — `VerifyFormOtpDto` في الخادم. */
+export interface VerifyFormOtpDto {
+  challengeId: string;
+  code: string;
+}
+
 /** جسمُ طلب — `VoidCashDepositDto` في الخادم. */
 export interface VoidCashDepositDto {
   reason?: string;
