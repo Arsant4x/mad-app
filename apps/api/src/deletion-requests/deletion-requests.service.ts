@@ -296,7 +296,7 @@ export class DeletionRequestsService {
     // صاحبُه نسختَه** (`ق-٥٥٤`)، فأُرجئ إلى انقضاء الأجل.
     // ⚖️ (`ق-١٤٧٠`) والأجلُ من مصادر **الحفظ** لا الحركة وحدها — فمنشأةُ عقاراتٍ بلا عقود تُحفظ `15` سنة لا `90` يوماً (كانت `11` حتى `ق-١٥٢٢`).
     const kept = await this.movement.retention(company.id);
-    const retainUntil = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
+    const retainUntil = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models, kept.sealedYears) : new Date(closedAt.getTime() + ARCHIVE_WINDOW_DAYS * 24 * 3600 * 1000);
     // مدّةُ الإتاحة = مدّةُ الحفظ (`ق-٥٥٨/ج`): ما دمنا نحفظ يصل التاجرُ نسختَه — فقطعُ وصوله قبل
     // انقضاء التزامه يتركه مسؤولاً عمّا لا يبلغه. وبلا حركةٍ النافذةُ هي الأجل نفسُه.
     const archiveExpiresAt = retainUntil;

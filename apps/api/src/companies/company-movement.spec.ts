@@ -91,6 +91,15 @@ describe('معيارُ الحركة — الأسماءُ من المصدر، و�
     expect(retentionDeadline(closedAt, []).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.books);
   });
 
+  it('⚖️ ومدّةُ الحفظ المختومة على نموذج التسليم تُقرأ: الأجلُ أطولُها وأطولُ مدّة الصنف (توجيه ٢٨٦ · القاعدة ٣٧)', () => {
+    // الجوابُ محسوبٌ يداً: ختمٌ أطولُ من مدّة العقار يمدّ الأجل، وأقصرُ منها أو غائبٌ لا يُنقصه.
+    const closedAt = new Date('2026-09-11T00:00:00Z');
+    expect(retentionDeadline(closedAt, ['Contract'], RETENTION_YEARS.realEstate + 5).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate + 5);
+    expect(retentionDeadline(closedAt, ['Contract'], 3).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
+    expect(retentionDeadline(closedAt, ['Contract'], 0).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
+    expect(retentionDeadline(closedAt, ['Invoice'], RETENTION_YEARS.realEstate).getUTCFullYear()).toBe(2026 + RETENTION_YEARS.realEstate);
+  });
+
   it('سجلّاتُ العقار: كلُّ اسمٍ في المجموعة إمّا العقارُ أو الوحدةُ أو نموذجٌ يشير إلى أحدهما — لا اسمَ مخترَع (ق-١٢٧١/أ)', () => {
     const byName = new Map(Prisma.dmmf.datamodel.models.map((m) => [m.name, m]));
     const pointsAtRealEstate = (name: string, depth = 3): boolean =>
