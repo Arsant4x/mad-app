@@ -114,8 +114,11 @@ export const REAL_ESTATE_MODELS: ReadonlySet<Prisma.ModelName> = new Set<Prisma.
  * أجلُ الحفظ الأدنى (`ق-٥٤٧`): «حتى {التاريخ} على الأقلّ» — أطولُ المدد المقروءة لصنف
  * المنشأة. **«على الأقلّ»** لأن المددَ حدودٌ دنيا بنصوصها — والعقارُ حُسم ١٥ (`ق-١٥٢٢`، وكان معلَّقاً في `ق-٥٣٩`) — فلا يُوعَد بمحوٍ أبكر.
  */
-export function retentionDeadline(closedAt: Date, models: ReadonlyArray<string>): Date {
-  const years = models.some((m) => REAL_ESTATE_MODELS.has(m as Prisma.ModelName)) ? RETENTION_YEARS.realEstate : RETENTION_YEARS.books;
+export function retentionDeadline(closedAt: Date, models: ReadonlyArray<string>, sealedYears = 0): Date {
+  const category = models.some((m) => REAL_ESTATE_MODELS.has(m as Prisma.ModelName)) ? RETENTION_YEARS.realEstate : RETENTION_YEARS.books;
+  // ⚖️ (توجيه ٢٨٦ · القاعدة ٣٧) وما خُتم على نموذج التسليم يومَ توقيعه (`photoNoticeYears`، `ق-١٦٠٠`) يُقرأ كما قيل يومَها
+  //    ولو قصُرت المدّةُ بعده: الأجلُ أطولُهما، فلا يُمحى ما وُعد المستأجرُ بحفظه قبل أجله المختوم.
+  const years = Math.max(category, sealedYears);
   const until = new Date(closedAt);
   until.setFullYear(until.getFullYear() + years);
   return until;
@@ -138,6 +141,8 @@ export interface RetentionReport {
   /** ما يقع تحت الحفظ — للأجل. وقيدٌ يحمل بُعدَ عقارٍ أو وحدة يُحسب عقاراً (`Property`). */
   models: Prisma.ModelName[];
   labels: string[];
+  /** أطولُ مدّة حفظٍ خُتمت على نموذج تسليمٍ بصور يومَ توقيعه (`ContractHandover.photoNoticeYears`)، وصفرٌ إن لم يُختم شيء. */
+  sealedYears: number;
 }
 
 export interface MovementReport {
@@ -191,7 +196,8 @@ export class CompanyMovementService {
         models.push('Property');
         labels.push('قيودٌ بأبعاد عقار');
       }
-      return { models, labels };
+      const sealed = await tx.contractHandover.aggregate({ where: { companyId, photoNoticeYears: { not: null } }, _max: { photoNoticeYears: true } });
+      return { models, labels, sealedYears: sealed._max.photoNoticeYears ?? 0 };
     });
   }
 }

@@ -181,7 +181,7 @@ export class PersonalDataErasureService {
       //    لا يُحذف شيء — ولا نسختُه — ويُمدّ الأجلُ ويُعلَن.
       if (closedAt) {
         const kept = await this.movement.retention(id);
-        const deadline = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models) : null;
+        const deadline = kept.models.length > 0 ? retentionDeadline(closedAt, kept.models, kept.sealedYears) : null;
         if (deadline && deadline > now) {
           await this.prisma.company.update({ where: { id }, data: { retainUntil: deadline } });
           retained.push(id);

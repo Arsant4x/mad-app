@@ -5,7 +5,8 @@ import request from 'supertest';
 import { PrismaClient } from '@mad-app/db';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { AppModule } from '../src/app.module';
-import { RETENTION_YEARS } from '../src/companies/company-movement.service';
+import { CompanyMovementService, RETENTION_YEARS, retentionDeadline } from '../src/companies/company-movement.service';
+import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
 import { createTenantCustomer } from './tenant-customer';
 
 // ⏱️ ميزانيةُ الحزمة (ق-١٢٨٥): عقدٌ وخمسةُ نماذج وصورٌ في المخزن وقفلٌ مقصود؛ لم تُقَس بعد، فالسقفُ تسعون ثانية معلنةً هنا.
@@ -138,6 +139,27 @@ describe('صورُ نموذج التسليم: بندُ العقد يكفي، و�
       const at = new Date(String(form.photoNoticeAt)).getTime();
       expect(at).toBeGreaterThanOrEqual(before - 1000);
       expect(at).toBeLessThanOrEqual(after + 1000);
+    }
+  });
+
+  it('⚖️ ②ب والمدّةُ المختومة يقرؤها قياسُ الحفظ عند الإغلاق والحذف النهائيّ، فختمٌ أطولُ يمدّ الأجل (توجيه ٢٨٦ · القاعدة ٣٧)', async () => {
+    const movement = app.get(CompanyMovementService);
+    const tenantPrisma = app.get(TenantPrismaService);
+    const id = await draftForm('DELIVERY');
+    await addPhoto(id).expect(201);
+    await sign(id).expect(201);
+    // تحت سياق المنشأة: الصفرُ بلا سياقٍ عمى (`ق-٢٦٢`)، فالقراءةُ الموجبة هنا تُثبت أن المسبار يرى.
+    expect((await movement.retention(companyId)).sealedYears).toBe(RETENTION_YEARS.realEstate);
+    // ختمٌ بمدّةٍ أطولَ (كأنه قيل يومَها ثم قصُرت المدّة) يُقرأ ويمدّ الأجل، ثم يُعاد كما كان.
+    const longer = RETENTION_YEARS.realEstate + 5;
+    await tenantPrisma.runInTenantContext(companyId, (tx) => tx.contractHandover.update({ where: { id }, data: { photoNoticeYears: longer } }));
+    try {
+      const kept = await movement.retention(companyId);
+      expect(kept.sealedYears).toBe(longer);
+      const closedAt = new Date('2026-09-11T00:00:00Z');
+      expect(retentionDeadline(closedAt, kept.models, kept.sealedYears).getUTCFullYear()).toBe(2026 + longer);
+    } finally {
+      await tenantPrisma.runInTenantContext(companyId, (tx) => tx.contractHandover.update({ where: { id }, data: { photoNoticeYears: RETENTION_YEARS.realEstate } }));
     }
   });
 
