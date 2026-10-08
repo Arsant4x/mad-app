@@ -1,14 +1,18 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiProduces } from '@nestjs/swagger';
+import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload, TenantContext } from '../auth/types';
 import { CurrentTenant } from '../common/tenant/current-tenant.decorator';
 import { RequiresAction } from '../common/tenant/requires-action.decorator';
 import { RequiresScreen } from '../common/tenant/requires-screen.decorator';
 import { TenantGuard } from '../common/tenant/tenant.guard';
+import { MAX_FILE_BYTES } from '../files/files.service';
 import { FormInstanceResponse, FormVerificationResponse } from '../forms/dto/form-instance-responses.dto';
 import { CreateFormInstanceDto, SetFormValuesDto } from '../forms/dto/form-instance.dto';
+import { FormSentResponse, FormSigningEventResponse } from '../forms/dto/form-signing.dto';
+import { metaOf } from '../forms/form-public.controller';
 import type { FormActor } from '../forms/form-instances.service';
 import { ContractFormsService } from './contract-forms.service';
 
@@ -19,7 +23,8 @@ function actorOf(tenant: TenantContext, req: Request): FormActor {
 
 /**
  * ⚖️ **نماذجُ العقد في شاشة العقود** (توجيه ٢٧٨ · `ق-١٦٣٦`). الفاعلُ موظّفُ المنشأة بما منحه المالك: **التعبئةُ «تسجيل»**،
- * **والختمُ «مراجعة»** (`ق-١٦٣٥` ⑩: «المراجعة» لطلب البديل وللختم)، والقراءةُ «اطّلاع».
+ * **والتوقيعُ والإرسالُ «مراجعة»** (`ق-١٦٣٥` ⑩: «المراجعة» لطلب البديل وللختم؛ والختمُ صار يقع بتوقيع المستأجر، فالفعلُ الحاكمُ
+ * لتوقيع الموظّف وإرساله هو فعلُ الختم نفسُه)، **والنسخةُ المعدّلة «تسجيل»** (تعبئةٌ جديدة)، والقراءةُ «اطّلاع».
  */
 @Controller('contracts/:id/forms')
 @UseGuards(JwtAuthGuard, TenantGuard)
@@ -55,11 +60,75 @@ export class ContractFormsController {
     return this.service.setValues(tenant.companyId, id, formId, dto.values);
   }
 
+  /** ⚖️ الختمُ باليد سقط (توجيه ٢٨٧ ⑨): يُردّ `409` مسمّىً، والختمُ يقع حين يوقّع المستأجر. */
   @Post(':formId/seal')
   @RequiresAction('review')
   @ApiCreatedResponse({ type: FormInstanceResponse })
-  seal(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
-    return this.service.seal(tenant.companyId, id, formId, actorOf(tenant, req));
+  seal(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.service.seal(tenant.companyId, id);
+  }
+
+  /** الموظّفُ يوقّع (صورةُ رسمٍ ساكنة) ثم يُرسل الرابطُ إلى جوال المستأجر المسجَّل. */
+  @Post(':formId/send')
+  @RequiresAction('review')
+  @UseInterceptors(FileInterceptor('drawing', { limits: { fileSize: MAX_FILE_BYTES } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiCreatedResponse({ type: FormSentResponse })
+  send(
+    @CurrentTenant() tenant: TenantContext,
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('formId') formId: string,
+    @UploadedFile() drawing: Express.Multer.File | undefined,
+  ) {
+    return this.service.send(tenant.companyId, id, formId, actorOf(tenant, req), drawing, metaOf(req));
+  }
+
+  @Post(':formId/resend')
+  @RequiresAction('review')
+  @ApiCreatedResponse({ type: FormSentResponse })
+  resend(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
+    return this.service.resend(tenant.companyId, id, formId, actorOf(tenant, req));
+  }
+
+  @Post(':formId/revisions')
+  @RequiresAction('record')
+  @ApiCreatedResponse({ type: FormInstanceResponse })
+  revise(@CurrentTenant() tenant: TenantContext, @Req() req: Request, @Param('id') id: string, @Param('formId') formId: string) {
+    return this.service.revise(tenant.companyId, id, formId, actorOf(tenant, req));
+  }
+
+  @Get(':formId/events')
+  @RequiresAction('view')
+  @ApiOkResponse({ type: FormSigningEventResponse, isArray: true })
+  events(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('formId') formId: string) {
+    return this.service.events(tenant.companyId, id, formId);
+  }
+
+  @Get(':formId/signatures/:signatureId/image')
+  @RequiresAction('view')
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
+  async signatureImage(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Param('formId') formId: string,
+    @Param('signatureId') signatureId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const file = await this.service.evidence(tenant.companyId, id, formId, { signatureId });
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(file.buffer, { type: file.mime, length: file.buffer.length, disposition: 'inline; filename="signature"' });
+  }
+
+  @Get(':formId/objection/photo')
+  @RequiresAction('view')
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
+  async objectionPhoto(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Param('formId') formId: string, @Res({ passthrough: true }) res: Response) {
+    const file = await this.service.evidence(tenant.companyId, id, formId, { objection: true });
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(file.buffer, { type: file.mime, length: file.buffer.length, disposition: 'inline; filename="objection"' });
   }
 
   @Get(':formId/verify')

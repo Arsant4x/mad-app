@@ -111,6 +111,15 @@ const APPROVED: ApprovedSource[] = [
     alongsideCanonical: true,
     why: 'ق-١٢٩١ — المفتاحُ يُقدَّم قبل أن يُعرف مستأجرُه: قراءةٌ فقط، ومسارٌ واحد (runAsApiKeyLookup)، وبالبادئة الفريدة. وتبقى القانونيّةُ بجواره لكلّ ما عدا ذلك. الهجرة 20260923000000_api_keys.',
   },
+  {
+    table: 'form_signing_links',
+    name: 'form_signing_link_lookup',
+    cmd: 'SELECT',
+    using: `current_setting('app.form_link_lookup', true) = 'true'`,
+    check: null,
+    alongsideCanonical: true,
+    why: 'توجيه ٢٨٧ — رابطُ النموذج العامّ يُقدَّم قبل أن تُعرف منشأتُه، على نمط api_key_authentication: قراءةٌ فقط، ومسارٌ واحد (runAsFormLinkLookup)، وببصمة الرمز الفريدة. وتبقى القانونيّةُ بجواره لكلّ ما عدا ذلك. الهجرة 20261008170100_form_signing.',
+  },
   // ── قوالبُ النماذج (توجيه ٢٧٨ · ق-١٦٣٤): سياستان بدل القانونيّة على كلِّ جدول ──
   {
     table: 'form_templates',

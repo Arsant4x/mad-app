@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/i18n/http-exception.filter';
 import { TenantPrismaService } from '../src/common/tenant/tenant-prisma.service';
+import { sendAndSeal, sendForm, uniqueMobile } from './form-signing-helpers';
 import { registerIsolatedCompany, type IsolatedCompany } from './isolated-company';
 import { createTenantCustomer } from './tenant-customer';
 
@@ -13,7 +14,8 @@ import { createTenantCustomer } from './tenant-customer';
 jest.setTimeout(120000);
 
 /**
- * ⚖️ **محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم** (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`).
+ * ⚖️ **محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم** (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`) — **والختمُ عند اكتمال التواقيع** (توجيه ٢٨٧
+ * ⑨): لا يُختم النموذجُ باليد، بل يوقّعه الموظّفُ ويرسله، ويُختم حين يوقّع المستأجرُ عبر الرابط (`form-signing-helpers.ts`).
  *
  * الجوابُ معروفٌ يداً: منشأةٌ معزولة تنسخ قالباً عامّاً ببنودٍ ثلاثة (عدّادٌ إلزاميّ · حرارةٌ بنطاقٍ مانع 2–8 · حالة)، وتعبّئه على عقدها،
  * وتختمه، ثم تختم ثانياً: الرقمان `FRM-<السنة>-0001` ثم `0002`، والسلسلةُ تصل الثاني بالأوّل، والمختومُ لا يُعدَّل في البرنامج **ولا في
@@ -34,6 +36,7 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
   let contractB: string;
   let first: { id: string; contentHash: string; no: string };
   let draftId: string;
+  const mobileOf = new Map<string, string>();
   const year = new Date().getUTCFullYear();
   const formDate = `${year}-06-15`;
   const stamp = `${Date.now()}`.slice(-8);
@@ -49,12 +52,14 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       .set('Authorization', bearer(company.token))
       .send({ propertyId: property.body.id, unitNo: `FRM-${tag}`, type: 'شقة', rentMonthly: 1000 })
       .expect(201);
-    const customerId = await createTenantCustomer(app, company.token, `مستأجر النماذج ${tag}`);
+    const mobile = uniqueMobile();
+    const customerId = await createTenantCustomer(app, company.token, `مستأجر النماذج ${tag}`, mobile.local);
     const contract = await http()
       .post('/contracts')
       .set('Authorization', bearer(company.token))
       .send({ unitId: unit.body.id, customerId, value: 12000, cycle: 'monthly', start: `${year}-01-01`, end: `${year}-12-31`, classification: 'RESIDENTIAL', vatInclusion: 'EXCLUSIVE' })
       .expect(201);
+    mobileOf.set(contract.body.id as string, mobile.e164);
     return contract.body.id as string;
   }
 
@@ -141,28 +146,30 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
     expect(filled.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'FAIR', note: 'خدشٌ في الباب' });
   });
 
-  it('② لا يُختم وإلزاميٌّ فارغ، ولا وقيمةٌ خارج نطاقها المانع — ثم يُختم برقمه وموضعه وبصمته', async () => {
-    const seal = () => http().post(`/contracts/${contractA}/forms/${first.id}/seal`).set('Authorization', bearer(a.token));
-    const missing = await seal().expect(400);
+  it('② لا يُرسل وإلزاميٌّ فارغ، ولا وقيمةٌ خارج نطاقها المانع، والختمُ باليد سقط — ثم يُختم بتوقيع المستأجر برقمه وموضعه وبصمته', async () => {
+    const missing = await sendForm(app, a.token, contractA, first.id).expect(400);
     expect(missing.body.message).toContain('قراءةُ عدّاد الكهرباء');
     await http()
       .put(`/contracts/${contractA}/forms/${first.id}/values`)
       .set('Authorization', bearer(a.token))
       .send({ values: [{ itemId: items.meter, number: 48213 }] })
       .expect(200);
-    const blocked = await seal().expect(400);
+    const blocked = await sendForm(app, a.token, contractA, first.id).expect(400);
     expect(blocked.body.message).toContain('حرارةُ الثلاجة');
     await http()
       .put(`/contracts/${contractA}/forms/${first.id}/values`)
       .set('Authorization', bearer(a.token))
       .send({ values: [{ itemId: items.temp, number: 5 }] })
       .expect(200);
+    // ⚖️ توجيه ٢٨٧ ⑨: «ولا قفلَ قبل اكتمال كل التواقيع» — فالختمُ باليد يُردّ مسمّىً.
+    const byHand = await http().post(`/contracts/${contractA}/forms/${first.id}/seal`).set('Authorization', bearer(a.token)).expect(409);
+    expect(byHand.body.message).toContain('يُختم حين يوقّع المستأجر');
 
-    const sealed = await seal().expect(201);
-    expect(sealed.body).toMatchObject({ status: 'SEALED', no: `FRM-${year}-0001`, sealSeq: 1, prevHash: null });
-    expect(sealed.body.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(sealed.body.sealedByName).toBe(a.username);
-    first = { id: first.id, contentHash: sealed.body.contentHash, no: sealed.body.no };
+    const sealed = await sendAndSeal(app, a.token, contractA, first.id, mobileOf.get(contractA)!);
+    expect(sealed).toMatchObject({ status: 'SEALED', no: `FRM-${year}-0001`, sealSeq: 1, prevHash: null, sealFormat: 2 });
+    expect(sealed.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(sealed.sealedByName).toBe(a.username);
+    first = { id: first.id, contentHash: sealed.contentHash, no: sealed.no };
   });
 
   it('③ الختمُ الثاني في المنشأة يحمل بصمةَ الأوّل ورقمَه التالي، والتحقّقُ يعيد البصمةَ نفسَها', async () => {
@@ -172,8 +179,8 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       .set('Authorization', bearer(a.token))
       .send({ values: [{ itemId: items.meter, number: 100 }] })
       .expect(200);
-    const sealed = await http().post(`/contracts/${contractA2}/forms/${second.body.id}/seal`).set('Authorization', bearer(a.token)).expect(201);
-    expect(sealed.body).toMatchObject({ no: `FRM-${year}-0002`, sealSeq: 2, prevHash: first.contentHash });
+    const sealed = await sendAndSeal(app, a.token, contractA2, second.body.id, mobileOf.get(contractA2)!);
+    expect(sealed).toMatchObject({ no: `FRM-${year}-0002`, sealSeq: 2, prevHash: first.contentHash });
 
     for (const [contract, id] of [
       [contractA, first.id],
@@ -196,14 +203,14 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
     draftId = (await http().post(`/contracts/${contractA2}/forms`).set('Authorization', bearer(a.token)).send({ templateId, formDate }).expect(201)).body.id;
   });
 
-  it('④ المختومُ في البرنامج: لا تعبئةَ ولا حذفَ ولا ختمَ ثانٍ', async () => {
+  it('④ المختومُ في البرنامج: لا تعبئةَ ولا حذفَ ولا إرسالَ ثانٍ', async () => {
     await http()
       .put(`/contracts/${contractA}/forms/${first.id}/values`)
       .set('Authorization', bearer(a.token))
       .send({ values: [{ itemId: items.meter, number: 1 }] })
       .expect(409);
     await http().delete(`/contracts/${contractA}/forms/${first.id}`).set('Authorization', bearer(a.token)).expect(409);
-    await http().post(`/contracts/${contractA}/forms/${first.id}/seal`).set('Authorization', bearer(a.token)).expect(409);
+    await sendForm(app, a.token, contractA, first.id).expect(409);
   });
 
   it('⑤ والمختومُ في القاعدة (③ب): تعديلُه وحذفُه وكتابةُ قيمته تُرفض بالمُشغِّل، والمسوّدةُ تُعدَّل', async () => {
@@ -222,11 +229,11 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
 
     expect(await attempt(() => inA((tx) => tx.formInstance.update({ where: { id: first.id }, data: { filledByName: 'عبث' } })))).toContain('المختوم لا يُعدَّل');
     expect(await attempt(() => inA((tx) => tx.formInstance.delete({ where: { id: first.id } })))).toContain('المختوم لا يُحذف');
-    expect(await attempt(() => inA((tx) => tx.formValue.updateMany({ where: { instanceId: first.id }, data: { note: 'عبث' } })))).toContain('قيمُ السجلّ المختوم');
-    expect(await attempt(() => inA((tx) => tx.formValue.deleteMany({ where: { instanceId: first.id } })))).toContain('قيمُ السجلّ المختوم');
+    expect(await attempt(() => inA((tx) => tx.formValue.updateMany({ where: { instanceId: first.id }, data: { note: 'عبث' } })))).toContain('قيمُ السجلّ');
+    expect(await attempt(() => inA((tx) => tx.formValue.deleteMany({ where: { instanceId: first.id } })))).toContain('قيمُ السجلّ');
     expect(
       await attempt(() => inA((tx) => tx.formValue.create({ data: { companyId: a.companyId, instanceId: first.id, itemId: items.cond, textValue: 'عبث' } }))),
-    ).toContain('قيمُ السجلّ المختوم');
+    ).toContain('قيمُ السجلّ');
 
     // وصفُّ الختم (FormSeal) يُكتب مرّةً: لا يُعدَّل ولا يُحذف.
     expect(await attempt(() => inA((tx) => tx.formSeal.update({ where: { instanceId: first.id }, data: { sealedByName: 'عبث' } })))).toContain(
@@ -270,7 +277,7 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
     expect(await tenantPrisma.runInTenantContext(a.companyId, (tx) => tx.formInstance.count({ where: { id: first.id } }))).toBe(1);
   });
 
-  it('⑦ الختمُ «مراجعة» والتعبئةُ «تسجيل»: موظّفٌ بالاطّلاع والتسجيل يعبّئ ولا يختم', async () => {
+  it('⑦ التوقيعُ والإرسالُ «مراجعة» والتعبئةُ «تسجيل»: موظّفٌ بالاطّلاع والتسجيل يعبّئ ولا يرسل', async () => {
     const template = await http()
       .post('/templates')
       .set('Authorization', bearer(a.token))
@@ -289,10 +296,10 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       .set('Authorization', bearer(token))
       .send({ values: [{ itemId: items.meter, number: 7 }] })
       .expect(200);
-    await http().post(`/contracts/${contractA2}/forms/${draftId}/seal`).set('Authorization', bearer(token)).expect(403);
+    await sendForm(app, token, contractA2, draftId).expect(403);
   });
 
-  it('⑧ مسوّدةٌ عُبّئت «حالتُها» نصّاً حرّاً قبل السلّم لا تُختم به، وتُختم حين تُختار قيمتُها من السلّم (ق-١٦٤١/٥)', async () => {
+  it('⑧ مسوّدةٌ عُبّئت «حالتُها» نصّاً حرّاً قبل السلّم لا تُرسل به، وتُختم حين تُختار قيمتُها من السلّم (ق-١٦٤١/٥)', async () => {
     // القيمةُ القديمة تُكتب في القاعدة مباشرةً كما كتبها البرنامجُ قبل السلّم (والمسوّدةُ تُعدَّل في القاعدة، ⑤).
     await tenantPrisma.runInTenantContext(a.companyId, (tx) =>
       tx.formValue.upsert({
@@ -301,8 +308,7 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
         update: { textValue: 'مقبول' },
       }),
     );
-    const seal = () => http().post(`/contracts/${contractA2}/forms/${draftId}/seal`).set('Authorization', bearer(a.token));
-    const legacy = await seal().expect(400);
+    const legacy = await sendForm(app, a.token, contractA2, draftId).expect(400);
     expect(legacy.body.message).toContain('قيمةٌ قديمة');
     expect(legacy.body.message).toContain('حالةُ الخزائن');
 
@@ -311,8 +317,9 @@ describe('Form instances and sealing — wave 1c (e2e)', () => {
       .set('Authorization', bearer(a.token))
       .send({ values: [{ itemId: items.cond, text: 'DAMAGED', note: 'كسرٌ في الرفّ' }] })
       .expect(200);
-    const sealed = await seal().expect(201);
-    expect(sealed.body.status).toBe('SEALED');
-    expect(sealed.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'DAMAGED', note: 'كسرٌ في الرفّ' });
+    const sealed = await sendAndSeal(app, a.token, contractA2, draftId, mobileOf.get(contractA2)!);
+    expect(sealed.status).toBe('SEALED');
+    const got = await http().get(`/contracts/${contractA2}/forms/${draftId}`).set('Authorization', bearer(a.token)).expect(200);
+    expect(got.body.items.find((i: { itemId: string }) => i.itemId === items.cond)).toMatchObject({ text: 'DAMAGED', note: 'كسرٌ في الرفّ' });
   });
 });

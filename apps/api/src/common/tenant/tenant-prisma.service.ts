@@ -101,4 +101,19 @@ export class TenantPrismaService {
       }, options),
     );
   }
+
+  /**
+   * ⚖️ **مسندُ البحث عن رابط النموذج العامّ** (توجيه ٢٨٧) — على نمط `runAsApiKeyLookup`: الرابطُ يُقدَّم قبل أن تُعرف منشأتُه.
+   *
+   * ⚠️ **وحدودُه ثلاثة**: السياسةُ `FOR SELECT` على `form_signing_links` وحدَها فلا يُكتب بها شيء · ولا يستدعيه إلا مسارُ الرابط العامّ
+   * (`FormPublicService`) · **والبحثُ ببصمة الرمز الفريدة** فلا يُعيد إلا صفّاً واحداً، وكلُّ ما بعده في سياق منشأة الرابط.
+   */
+  async runAsFormLinkLookup<T>(work: (tx: Prisma.TransactionClient) => Promise<T>, options?: { timeout?: number; maxWait?: number }): Promise<T> {
+    return withTransactionProbe(() =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.form_link_lookup', 'true', true)`;
+        return work(tx);
+      }, options),
+    );
+  }
 }

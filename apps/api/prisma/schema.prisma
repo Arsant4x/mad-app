@@ -618,6 +618,11 @@ model Company {
   formSeals           FormSeal[]
   /// ⚖️ تحدّياتُ رمز التحقّق (توجيه ٢٨٧).
   verificationChallenges VerificationChallenge[]
+  /// ⚖️ مسارُ التوقيع (توجيه ٢٨٧): التواقيعُ والروابطُ والأحداثُ والاعتراضات.
+  formSignatures    FormSignature[]
+  formSigningLinks  FormSigningLink[]
+  formSigningEvents FormSigningEvent[]
+  formObjections    FormObjection[]
   /// ⚖️ مدّةُ التوقيع لكلِّ نوع نموذج (توجيه ٢٨٧).
   formTypeSettings FormTypeSetting[]
 
@@ -3702,6 +3707,10 @@ enum NotificationKind {
   /// دفعُ بطاقةٍ لم يمرّ بالمزوّد (رقمُ مرجع الجهاز · حسمٌ يدويّ) ولم تطالب به تسويةُ الشبكة بعد مهلتها —
   /// **يُرفع للمراجعة باسم الكاشير** (`ق-١٣٩٧`/٣ · `ق-١٣٩٩`).
   POS_CARD_UNMATCHED
+  /// ⚖️ نموذجٌ انقضت مدّتُه دون توقيع العميل، أو بقي اعتراضُه خلافاً قائماً — يُعلَم التاجر (`ق-١٦٣٣` ⑬).
+  FORM_SIGNING_EXPIRED
+  /// ⚖️ المستأجرُ اعترض على نموذجٍ أُرسل إليه، والردُّ نسخةٌ معدّلة (`ق-١٦٢٠` · `ق-١٦٦٩`).
+  FORM_OBJECTED
 }
 
 /// An in-system notification. Deliberately a *stored* row rather than something
@@ -7107,11 +7116,54 @@ model FormTemplateItem {
 // ⚖️ محرّكُ النماذج — الموجةُ ١ج: السجلُّ المعبّأ والختم (توجيه ٢٧٨ · `ق-١٦٣٥` · `ق-١٦٣٦`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// حالُ السجلّ المعبّأ في الموجة ١: مسوّدةٌ تُعبّأ، ثم مختومٌ لا يُعدَّل ولا يُحذف (القاعدةُ ٢ من §٦.٢ · ③ب: القاعدةُ مع البرنامج).
-/// وما بعدها (انتظارُ التواقيع · معترَضٌ عليه · منقَضٍ · مستبدَلٌ بنموذجٍ تصحيحيّ) يُضاف مع موجته.
+/// حالُ السجلّ المعبّأ: مسوّدةٌ تُعبّأ، ثم مختومٌ لا يُعدَّل ولا يُحذف (القاعدةُ ٢ من §٦.٢ · ③ب: القاعدةُ مع البرنامج).
+/// ⚖️ **ومسارُ التوقيع** (توجيه ٢٨٧ · `ق-١٦٢٠` · `ق-١٦٣٣` · وثيقةُ الموجة صفر §٤): **ينتظر التوقيع** بعد أن وقّعه الموظّفُ وأُرسل رابطُه ·
+/// **معترَضٌ عليه** (`ق-١٦٦٩`: يبقى كذلك ولا يُعدَّل، والردُّ نسخةٌ جديدة) · **انقضت مدّتُه دون توقيع العميل** · **خلافٌ قائم** (اعتراضٌ
+/// بقي بلا حسمٍ عند الانقضاء). ولا انتقالَ إلى المسوّدة من غيرها، والمختومُ والمنقضي والخلافُ نهائيّة (مُشغِّلٌ في القاعدة).
 enum FormInstanceStatus {
   DRAFT
   SEALED
+  AWAITING_SIGNATURE
+  OBJECTED
+  EXPIRED
+  DISPUTED
+}
+
+/// ⚖️ **دورُ الموقّع** (`ق-١٥٤٦` · `ق-١٥٩١`): الموظّفُ يوقّع أوّلاً، ثم الطرفُ (المستأجر) أو بديلُه بموافقته أو ممثّلُ الشخص الاعتباريّ.
+enum FormSignerRole {
+  STAFF
+  COUNTERPARTY
+  SUBSTITUTE
+  REPRESENTATIVE
+}
+
+/// ⚖️ **مستوى التوقيع مسمّى بفعله** (وثيقةُ الموجة صفر §١ · القاعدةُ ٧ من §٦.٢: يُخزَّن ولا يُستنتج، ويُعرض دائماً).
+enum FormSignatureLevel {
+  /// مرسومٌ بجلسة الموظّف.
+  DRAWN_STAFF_SESSION
+  /// مرسومٌ برمزٍ إلى الجوال.
+  DRAWN_OTP
+  /// مرسومٌ بعد التحقّق من الهويّة عبر نفاذ.
+  DRAWN_NAFATH
+  /// ورقيٌّ مرفوعٌ يشهد عليه الموظّف (`ق-١٥٩١`).
+  PAPER_WITNESSED
+}
+
+/// قناةُ التوقيع: الرابط · جهازُ الموظّف بحضور الطرف · الورقيّ (`ق-١٦٢٠`).
+enum FormSignatureChannel {
+  LINK
+  STAFF_DEVICE
+  PAPER
+}
+
+/// غرضُ رابط النموذج العامّ.
+enum FormLinkPurpose {
+  /// المراجعةُ والإقرارُ والتوقيع أو الاعتراض.
+  SIGN
+  /// النسخةُ النهائية بعد الختم (`ق-١٦٣٣` ⑯).
+  FINAL_COPY
+  /// موافقةُ المستأجر على مستلمٍ بديل (`ق-١٦٧٢`).
+  SUBSTITUTE_CONSENT
 }
 
 /// **سجلٌّ معبّأ على إصدارٍ منشورٍ من قالب المنشأة** (`FormInstance` في الخطّة §٦.١، والقاعدةُ ١ من §٦.٢: السجلُّ يشير إلى الإصدار
@@ -7139,6 +7191,24 @@ model FormInstance {
   filledById   String
   filledByName String
 
+  /// ⚖️ **نسخُ النموذج** (`ق-١٦٦٩`): الردُّ على الاعتراض سجلٌّ جديدٌ في المجموعة نفسِها برقم نسخته ومعرّف سابقته. والمجموعةُ معرّفُ
+  /// النسخة الأولى، وفارغُها = السجلُّ نفسُه (ما سبق هذا البناء).
+  revisionGroupId    String?
+  revisionNo         Int           @default(1)
+  previousRevisionId String?
+  previousRevision   FormInstance? @relation("FormInstanceRevision", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  nextRevisions      FormInstance[] @relation("FormInstanceRevision")
+  /// ق-١٢٥٢ — السابقةُ من المنشأة نفسِها.
+  previousRevisionTenant FormInstance?  @relation("FormInstance_previousRevisionId_tenant", fields: [companyId, previousRevisionId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+  nextRevisionsTenant    FormInstance[] @relation("FormInstance_previousRevisionId_tenant")
+
+  /// ⚖️ **الإرسالُ والمدّة** (`ق-١٦٧١`): وقتُ إرسال هذه النسخة، وموعدُ الانقضاء يُختم عند أوّل إرسالٍ وترثه النسخُ المعدّلة.
+  sentAt       DateTime?
+  signDeadline DateTime?
+  /// العميلُ الذي يصل جوالَه الرابط (من الكيان المرتبط عند الإرسال)، ونفاذٌ شرطٌ لنسخةٍ قيمةُ كيانها فوق حدّ المنشأة (`ق-١٦٣٣` ①ب).
+  counterpartyCustomerId String?
+  nafathRequired         Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -7147,8 +7217,18 @@ model FormInstance {
   seal         FormSeal?
   sealTenant   FormSeal?   @relation("FormSeal_instanceId_tenant")
 
+  signatures       FormSignature[]
+  signaturesTenant FormSignature[] @relation("FormSignature_instanceId_tenant")
+  links            FormSigningLink[]
+  linksTenant      FormSigningLink[] @relation("FormSigningLink_instanceId_tenant")
+  events           FormSigningEvent[]
+  eventsTenant     FormSigningEvent[] @relation("FormSigningEvent_instanceId_tenant")
+  objections       FormObjection[]
+  objectionsTenant FormObjection[] @relation("FormObjection_instanceId_tenant")
+
   @@unique([companyId, id])
   @@index([companyId, linkedEntityType, linkedEntityId])
+  @@index([companyId, status, signDeadline])
   @@map("form_instances")
 }
 
@@ -7172,6 +7252,8 @@ model FormSeal {
   sealedById   String
   sealedByName String
   sealedAt     DateTime
+  /// ⚖️ **رقمُ صيغة البصمة مختومٌ معها** (`ق-١٦٧٠`): ١ للسجلّ بلا تواقيع (`ق-١٦٣٦`)، و٢ بالتواقيع والنسخة وسابقتها.
+  format       Int      @default(1)
 
   @@unique([companyId, instanceId])
   @@unique([companyId, no])
@@ -7203,6 +7285,133 @@ model FormValue {
 
   @@unique([instanceId, itemId])
   @@map("form_values")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚖️ مسارُ التوقيع (توجيه ٢٨٧ · `ق-١٦٢٠` · `ق-١٦٣٣` · `ق-١٦٦٨` إلى `ق-١٦٧٣`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// **صفُّ التوقيع** (`ق-١٦٦٨`، البنيةُ المعروضة قبل البناء بحكم `ق-١٦٣٤`): توقيعٌ لكلِّ دورٍ على نسخةٍ بعينها، **يُكتب مرّةً ولا يُعدَّل ولا
+/// يُحذف** (مُشغِّلٌ في القاعدة)، ويدخل بصمةَ الختم بالصيغة ٢ (`ق-١٦٧٠`). **والجوالُ مقنَّعٌ وبصمتُه، لا الرقمُ كاملاً** (`ق-١٦٦٨`).
+/// وما وُقّع عليه بصمةُ محتوى النسخة لحظةَ التوقيع (`signedContentHash`)، والوقتُ من الخادم.
+model FormSignature {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  /// ق-١٢٥٢ — حارسُ الكتابة عبر المنشآت.
+  instanceTenant FormInstance @relation("FormSignature_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  role    FormSignerRole
+  level   FormSignatureLevel
+  channel FormSignatureChannel
+
+  /// لقطةُ الموقّع: اسمُه، ومعرّفُ العميل وصفتُه للطرف، ومعرّفُ ملفّ الموظّف للموظّف.
+  signerName       String
+  signerCustomerId String?
+  signerKind       String?
+  signerUserId     String?
+  mobileMasked     String?
+  mobileIndex      String?
+
+  /// صورةُ الرسم الساكنة (أو الورقةُ المرفوعة) في المخزن الحسّاس، وبصمتُها.
+  evidenceKey    String?
+  evidenceSha256 String?
+
+  signedContentHash String
+  /// مرجعُ ما أثبت الحيازةَ أو الهويّة: تحدّي الرمز أو معاملةُ نفاذ، والشاهدُ للورقيّ.
+  challengeId     String?
+  identityTxRef   String?
+  witnessUserId   String?
+  witnessUserName String?
+
+  ip        String?
+  userAgent String?
+  signedAt  DateTime @default(now())
+
+  @@unique([companyId, id])
+  @@unique([instanceId, role])
+  @@map("form_signatures")
+}
+
+/// **رابطُ النموذج العامّ** (توجيه ٢٨٧ ① و⑪ · §٥ من الخطّة): رمزٌ عشوائيٌّ من اثنين وثلاثين بايتاً **يُخزَّن بصمةً** (`tokenHash`)، لنسخةٍ بعينها
+/// وغرضٍ بعينه، **ينتهي بانتهاء المدّة أو الإقفال** (`expiresAt` · `revokedAt`). والجلسةُ بعد الدخول بصمةٌ كذلك وقصيرة. ويُبحث عنه قبل معرفة
+/// المنشأة بسياسة قراءةٍ ضيّقة (نمطُ مفاتيح الواجهة البرمجية)، وما بعده في سياق منشأته.
+model FormSigningLink {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  instanceTenant FormInstance @relation("FormSigningLink_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  purpose       FormLinkPurpose
+  recipientRole FormSignerRole
+  tokenHash     String          @unique
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+
+  /// جلسةُ الدخول: بصمتُها وانقضاؤها وطريقُها (`OTP` · `NAFATH`) ومرجعُها.
+  sessionHash      String?
+  sessionExpiresAt DateTime?
+  sessionMethod    String?
+  sessionRef       String?
+  /// معاملةُ نفاذٍ جارية لهذا الرابط.
+  identityTxRef    String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, id])
+  @@index([companyId, instanceId])
+  @@map("form_signing_links")
+}
+
+/// **سجلُّ أحداث التوقيع** (`ق-١٦٢٠`: «وسجلٌّ بالإرسال والتذكيرات»): إرسالٌ وتذكيرٌ وفتحٌ ودخولٌ وفشلُ رمزٍ وتوقيعٌ واعتراضٌ وانقضاءٌ وختم.
+/// **ملحقٌ فقط** (مُشغِّلٌ في القاعدة)، والجوالُ فيه مقنَّع، والوقتُ من الخادم.
+model FormSigningEvent {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  instanceTenant FormInstance @relation("FormSigningEvent_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  kind            String
+  actor           String
+  recipientMasked String?
+  note            String?
+  at              DateTime @default(now())
+
+  @@unique([companyId, id])
+  @@index([companyId, instanceId, at])
+  @@map("form_signing_events")
+}
+
+/// **اعتراضُ المستأجر** (`ق-١٦٢٠`: «بملاحظةٍ وصورة») على نسخةٍ بعينها — يُكتب مرّةً ولا يُعدَّل ولا يُحذف، والصورةُ في المخزن الحسّاس ببصمتها.
+model FormObjection {
+  id        String  @id @default(uuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  instanceId     String
+  instance       FormInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  instanceTenant FormInstance @relation("FormObjection_instanceId_tenant", fields: [companyId, instanceId], references: [companyId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  note         String
+  photoKey     String?
+  photoSha256  String?
+  photoMime    String?
+  byName       String
+  mobileMasked String?
+  objectedAt   DateTime @default(now())
+
+  @@unique([companyId, id])
+  @@unique([instanceId])
+  @@map("form_objections")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

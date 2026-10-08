@@ -266,9 +266,18 @@ export interface FormInstanceItemResponse {
   outOfRange: boolean;
 }
 
+/** ردٌّ — `FormInstanceObjectionResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceObjectionResponse {
+  note: string;
+  byName: string;
+  mobileMasked: string | null;
+  hasPhoto: boolean;
+  objectedAt: string;
+}
+
 /** ردٌّ — `FormInstanceResponse` في الخادم (ق-١٤٣٨). */
 export interface FormInstanceResponse {
-  status: 'DRAFT' | 'SEALED';
+  status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
   id: string;
   templateVersionId: string;
   template: FormInstanceTemplateRefResponse;
@@ -282,8 +291,29 @@ export interface FormInstanceResponse {
   filledByName: string;
   sealedByName: string | null;
   sealedAt: string | null;
+  sealFormat: number | null;
   createdAt: string;
+  revisionGroupId: string;
+  revisionNo: number;
+  previousRevisionId: string | null;
+  sentAt: string | null;
+  signDeadline: string | null;
+  nafathRequired: boolean;
+  signatures: FormInstanceSignatureResponse[];
+  objection: FormInstanceObjectionResponse | null;
   items: FormInstanceItemResponse[];
+}
+
+/** ردٌّ — `FormInstanceSignatureResponse` في الخادم (ق-١٤٣٨). */
+export interface FormInstanceSignatureResponse {
+  role: 'STAFF' | 'COUNTERPARTY' | 'SUBSTITUTE' | 'REPRESENTATIVE';
+  level: 'DRAWN_STAFF_SESSION' | 'DRAWN_OTP' | 'DRAWN_NAFATH' | 'PAPER_WITNESSED';
+  channel: 'LINK' | 'STAFF_DEVICE' | 'PAPER';
+  id: string;
+  signerName: string;
+  mobileMasked: string | null;
+  witnessUserName: string | null;
+  signedAt: string;
 }
 
 /** ردٌّ — `FormInstanceTemplateRefResponse` في الخادم (ق-١٤٣٨). */
@@ -300,6 +330,115 @@ export interface FormInstanceTypeRefResponse {
   id: string;
   code: string;
   name: string;
+}
+
+/** ردٌّ — `FormLinkMethodsResponse` في الخادم (ق-١٤٣٨). */
+export interface FormLinkMethodsResponse {
+  otp: boolean;
+  nafath: boolean;
+}
+
+/** ردٌّ — `FormLinkOpenResponse` في الخادم (ق-١٤٣٨). */
+export interface FormLinkOpenResponse {
+  state: 'ACTIVE' | 'CLOSED';
+  purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
+  methods: FormLinkMethodsResponse;
+  identityProvider: string | null;
+}
+
+/** ردٌّ — `FormNafathPollResponse` في الخادم (ق-١٤٣٨). */
+export interface FormNafathPollResponse {
+  state: 'PENDING' | 'APPROVED';
+  session: FormSessionResponse | null;
+}
+
+/** ردٌّ — `FormNafathStartResponse` في الخادم (ق-١٤٣٨). */
+export interface FormNafathStartResponse {
+  displayCode: string;
+}
+
+/** ردٌّ — `FormObjectedResponse` في الخادم (ق-١٤٣٨). */
+export interface FormObjectedResponse {
+  status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
+}
+
+/** ردٌّ — `FormOtpIssuedResponse` في الخادم (ق-١٤٣٨). */
+export interface FormOtpIssuedResponse {
+  challengeId: string;
+  expiresAt: string;
+  mobileMasked: string;
+}
+
+/** ردٌّ — `FormPublicItemResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPublicItemResponse {
+  lineNo: number;
+  label: string;
+  itemType: string;
+  unit: string | null;
+  text: string | null;
+  number: string | null;
+  bool: boolean | null;
+  note: string | null;
+}
+
+/** ردٌّ — `FormPublicSealResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPublicSealResponse {
+  no: string;
+  contentHash: string;
+  sealedAt: string;
+  valid: boolean | null;
+}
+
+/** ردٌّ — `FormPublicSignatureResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPublicSignatureResponse {
+  role: 'STAFF' | 'COUNTERPARTY' | 'SUBSTITUTE' | 'REPRESENTATIVE';
+  level: 'DRAWN_STAFF_SESSION' | 'DRAWN_OTP' | 'DRAWN_NAFATH' | 'PAPER_WITNESSED';
+  channel: 'LINK' | 'STAFF_DEVICE' | 'PAPER';
+  signerName: string;
+  signedAt: string;
+}
+
+/** ردٌّ — `FormPublicViewResponse` في الخادم (ق-١٤٣٨). */
+export interface FormPublicViewResponse {
+  purpose: 'SIGN' | 'FINAL_COPY' | 'SUBSTITUTE_CONSENT';
+  status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
+  templateName: string;
+  formTypeName: string;
+  formDate: string;
+  revisionNo: number;
+  signDeadline: string | null;
+  nafathRequired: boolean;
+  items: FormPublicItemResponse[];
+  signatures: FormPublicSignatureResponse[];
+  seal: FormPublicSealResponse | null;
+}
+
+/** ردٌّ — `FormSentResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSentResponse {
+  delivery: 'SENT' | 'FAILED';
+  form: FormInstanceResponse;
+}
+
+/** ردٌّ — `FormSessionResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSessionResponse {
+  session: string;
+  expiresAt: string;
+}
+
+/** ردٌّ — `FormSignedResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSignedResponse {
+  status: 'DRAFT' | 'SEALED' | 'AWAITING_SIGNATURE' | 'OBJECTED' | 'EXPIRED' | 'DISPUTED';
+  finalCopy: 'SENT' | 'FAILED';
+}
+
+/** ردٌّ — `FormSigningEventResponse` في الخادم (ق-١٤٣٨). */
+export interface FormSigningEventResponse {
+  kind: string;
+  actor: string;
+  recipientMasked: string | null;
+  note: string | null;
+  at: string;
+  revisionNo: number;
 }
 
 /** ردٌّ — `FormSigningSettingsResponse` في الخادم (ق-١٤٣٨). */

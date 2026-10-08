@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { FormInstanceStatus, FormItemType } from '@mad-app/db';
+import { FormInstanceStatus, FormItemType, FormSignatureChannel, FormSignatureLevel, FormSignerRole } from '@mad-app/db';
 
 /**
  * ⚖️ **ردودُ السجلّ المعبّأ** (توجيه ٢٧٨ · `ق-١٦٣٦` · `ق-١٤٣٨`) كما يُخرجها `presentInstance()`: الرقمُ (`Decimal`) نصٌّ، والأوقاتُ `ISO`،
@@ -42,6 +42,30 @@ export class FormInstanceItemResponse {
   outOfRange!: boolean;
 }
 
+/** توقيعٌ على النسخة بمستواه المسمّى بفعله، والجوالُ مقنَّع (`ق-١٦٦٨`). */
+export class FormInstanceSignatureResponse {
+  id!: string;
+  @ApiProperty({ enum: FormSignerRole })
+  role!: FormSignerRole;
+  @ApiProperty({ enum: FormSignatureLevel })
+  level!: FormSignatureLevel;
+  @ApiProperty({ enum: FormSignatureChannel })
+  channel!: FormSignatureChannel;
+  signerName!: string;
+  mobileMasked!: string | null;
+  witnessUserName!: string | null;
+  signedAt!: string;
+}
+
+/** اعتراضُ المستأجر على النسخة. */
+export class FormInstanceObjectionResponse {
+  note!: string;
+  byName!: string;
+  mobileMasked!: string | null;
+  hasPhoto!: boolean;
+  objectedAt!: string;
+}
+
 /** السجلُّ المعبّأ ببنوده، وحقولُ ختمه (`FormSeal`) فارغةٌ للمسوّدة. */
 export class FormInstanceResponse {
   id!: string;
@@ -65,7 +89,18 @@ export class FormInstanceResponse {
   filledByName!: string;
   sealedByName!: string | null;
   sealedAt!: string | null;
+  /** صيغةُ بصمة الختم (`ق-١٦٧٠`): ١ بلا تواقيع، و٢ بالتواقيع والنسخة. */
+  sealFormat!: number | null;
   createdAt!: string;
+  /** ⚖️ النسخُ والإرسالُ والمدّة (توجيه ٢٨٧ · `ق-١٦٦٩` · `ق-١٦٧١`). */
+  revisionGroupId!: string;
+  revisionNo!: number;
+  previousRevisionId!: string | null;
+  sentAt!: string | null;
+  signDeadline!: string | null;
+  nafathRequired!: boolean;
+  signatures!: FormInstanceSignatureResponse[];
+  objection!: FormInstanceObjectionResponse | null;
   items!: FormInstanceItemResponse[];
 }
 

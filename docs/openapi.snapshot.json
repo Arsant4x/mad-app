@@ -752,6 +752,37 @@
       "200"
     ]
   },
+  "GET /v1/contracts/{id}/forms/{formId}/events": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}/forms/{formId}/objection/photo": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/contracts/{id}/forms/{formId}/signatures/{signatureId}/image": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required",
+      "path:signatureId:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
   "GET /v1/contracts/{id}/forms/{formId}/verify": {
     "parameters": [
       "path:formId:required",
@@ -1334,6 +1365,33 @@
       "query:page",
       "query:pageSize",
       "query:search"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/public/forms/{token}": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/public/forms/{token}/form": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "200"
+    ]
+  },
+  "GET /v1/public/forms/{token}/nafath": {
+    "parameters": [
+      "path:token:required"
     ],
     "requiredBody": [],
     "responses": [
@@ -2990,7 +3048,36 @@
       "201"
     ]
   },
+  "POST /v1/contracts/{id}/forms/{formId}/resend": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/forms/{formId}/revisions": {
+    "parameters": [
+      "path:formId:required",
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
   "POST /v1/contracts/{id}/forms/{formId}/seal": {
+    "parameters": [
+      "path:id:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/contracts/{id}/forms/{formId}/send": {
     "parameters": [
       "path:formId:required",
       "path:id:required"
@@ -3742,6 +3829,54 @@
       "name",
       "ownership"
     ],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/public/forms/{token}/nafath": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/public/forms/{token}/objection": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/public/forms/{token}/otp": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
+    "responses": [
+      "201"
+    ]
+  },
+  "POST /v1/public/forms/{token}/otp/verify": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [
+      "challengeId",
+      "code"
+    ],
+    "responses": [
+      "200"
+    ]
+  },
+  "POST /v1/public/forms/{token}/sign": {
+    "parameters": [
+      "path:token:required"
+    ],
+    "requiredBody": [],
     "responses": [
       "201"
     ]
