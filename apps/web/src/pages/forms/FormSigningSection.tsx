@@ -12,6 +12,7 @@ import {
   type FormDeviceLink,
   type FormInstance,
   type FormSigningEvent,
+  type PaperAuthorityFields,
   type RepresentativeFields,
 } from '../../api/forms';
 import { SignaturePad } from '../../components/SignaturePad';
@@ -254,10 +255,12 @@ export function FormSigningSection({
           needsDrawing={status === 'DRAFT'}
           busy={busy}
           onCancel={() => setDialog(null)}
-          onSubmit={(paper, drawing, signerName) =>
+          onSubmit={(paper, drawing, signerName, authority, doc) =>
             run(async () => {
               if (status === 'DRAFT' && !(await beforeSend())) return;
-              const r = await paperSignContractForm(contract.id, record.id, paper, drawing, signerName);
+              const r = authority
+                ? await paperSignContractForm(contract.id, record.id, paper, drawing, signerName, authority, doc)
+                : await paperSignContractForm(contract.id, record.id, paper, drawing, signerName);
               setDialog(null);
               onChanged(r.form);
               setNotice(r.finalCopy === 'SENT' ? 'خُتم النموذج وأُرسلت النسخةُ النهائية.' : r.finalCopy === 'NONE' ? 'خُتم النموذج؛ ولا جوالَ صالحاً للنسخة النهائية.' : 'خُتم النموذج، وتعذّر إرسالُ النسخة النهائية.');
@@ -385,7 +388,10 @@ function SubstituteDialog({ busy, onCancel, onSubmit }: { busy: boolean; onCance
   );
 }
 
-/** التوقيعُ الورقيّ: صورةُ الورقة الموقَّعة بشهادة الموظّف، ورسمُ الموظّف إن لم يوقّع بعد. */
+/**
+ * التوقيعُ الورقيّ: صورةُ الورقة الموقَّعة بشهادة الموظّف، ورسمُ الموظّف إن لم يوقّع بعد. ⚖️ **والشخصُ الاعتباريّ يوقّع عنه ممثّلُه**
+ * (`ق-١٦٧٥`): اسمُه ونوعُ سنده ورقمُه، أو تُترك الحقولُ فيُقرأ الممثّلُ المعيَّن عند الإرسال.
+ */
 function PaperDialog({
   needsDrawing,
   busy,
@@ -395,11 +401,15 @@ function PaperDialog({
   needsDrawing: boolean;
   busy: boolean;
   onCancel: () => void;
-  onSubmit: (paper: File, drawing: Blob | null, signerName: string) => void;
+  onSubmit: (paper: File, drawing: Blob | null, signerName: string, authority: PaperAuthorityFields | null, doc: File | null) => void;
 }) {
   const [paper, setPaper] = useState<File | null>(null);
   const [drawing, setDrawing] = useState<Blob | null>(null);
   const [signerName, setSignerName] = useState('');
+  const [legal, setLegal] = useState(false);
+  const [authority, setAuthority] = useState<PaperAuthorityFields>({ authorityType: 'CR_MANAGER', authorityRef: '' });
+  const [doc, setDoc] = useState<File | null>(null);
+  const repReady = !legal || (signerName.trim() && authority.authorityRef.trim());
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }} role="dialog" aria-label="توقيعٌ ورقيّ">
@@ -414,16 +424,49 @@ function PaperDialog({
           <label>صورةُ الورقة الموقَّعة</label>
           <input type="file" aria-label="صورةُ الورقة الموقَّعة" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => setPaper(e.target.files?.[0] ?? null)} />
         </div>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 10 }}>
+          <input type="checkbox" checked={legal} onChange={(e) => setLegal(e.target.checked)} /> المستأجرُ شخصٌ اعتباريّ ووقّع عنه ممثّلُه
+        </label>
         <div className="field">
-          <label>من وقّع الورقةَ بيده (إن خالف اسمَ المستأجر)</label>
+          <label>{legal ? 'اسمُ من وقّع عنه' : 'من وقّع الورقةَ بيده (إن خالف اسمَ المستأجر)'}</label>
           <input aria-label="من وقّع الورقةَ بيده" value={signerName} onChange={(e) => setSignerName(e.target.value)} />
         </div>
+        {legal ? (
+          <div className="two-col">
+            <div className="field">
+              <label>صفتُه</label>
+              <select aria-label="صفةُ الموقّع" value={authority.authorityType} onChange={(e) => setAuthority({ ...authority, authorityType: e.target.value as PaperAuthorityFields['authorityType'] })}>
+                <option value="CR_MANAGER">{AUTHORITY_TYPE.CR_MANAGER}</option>
+                <option value="NAJIZ_POA">{AUTHORITY_TYPE.NAJIZ_POA}</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>{authority.authorityType === 'CR_MANAGER' ? 'رقمُ السجلّ التجاريّ' : 'رقمُ الوكالة'}</label>
+              <input
+                aria-label={authority.authorityType === 'CR_MANAGER' ? 'رقمُ السجلّ التجاريّ' : 'رقمُ الوكالة'}
+                className="num"
+                value={authority.authorityRef}
+                onChange={(e) => setAuthority({ ...authority, authorityRef: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>صورةُ السند (اختيارية)</label>
+              <input aria-label="صورةُ السند" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" onChange={(e) => setDoc(e.target.files?.[0] ?? null)} />
+            </div>
+          </div>
+        ) : (
+          <p className="hint">وإن عُيّن عند الإرسال ممثّلٌ لشخصٍ اعتباريّ فاترك الحقول، فيُكتب التوقيعُ باسمه وسنده.</p>
+        )}
         {needsDrawing && <SignaturePad onChange={setDrawing} label="توقيعُ الموظّف" />}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
             إلغاء
           </button>
-          <button className="btn btn-primary" disabled={busy || !paper || (needsDrawing && !drawing)} onClick={() => paper && onSubmit(paper, drawing, signerName)}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || !paper || (needsDrawing && !drawing) || !repReady}
+            onClick={() => paper && onSubmit(paper, drawing, signerName, legal ? authority : null, legal ? doc : null)}
+          >
             رفعٌ وختم
           </button>
         </div>

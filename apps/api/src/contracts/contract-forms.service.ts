@@ -98,10 +98,12 @@ export class ContractFormsService {
     drawing: UploadedEvidence | undefined,
     signerName: string | null,
     meta: RequestMeta,
+    authority: { type: string; ref: string } | null = null,
+    authorityDocument?: UploadedEvidence,
   ) {
     const linked = await this.linkedOf(companyId, contractId);
     const { counterparty, baseValue } = await this.partyOf(companyId, contractId);
-    return this.signing.signPaper(companyId, linked, formId, { actor, paper, drawing, counterparty, entityBaseValue: baseValue, signerName, meta });
+    return this.signing.signPaper(companyId, linked, formId, { actor, paper, drawing, counterparty, entityBaseValue: baseValue, signerName, authority, authorityDocument, meta });
   }
 
   /** رابطُ جهاز الموظّف (توجيه ٢٨٧ ⑤). */

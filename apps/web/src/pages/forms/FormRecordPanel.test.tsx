@@ -207,6 +207,25 @@ describe('⚖️ السجلُّ المعبّأ في شاشة «النماذج» 
     expect(await screen.findByText(/يوافق به على البديل برمزه/)).toBeTruthy();
   });
 
+  it('⭐ الورقيّ عن شخصٍ اعتباريّ يُرسل اسمَ الموقّع وسندَه، ولا يُرفع قبل رقم السند (ق-١٦٧٥)', async () => {
+    vi.mocked(paperSignContractForm).mockResolvedValue({ form: { ...awaiting, status: 'SEALED' }, finalCopy: 'SENT' });
+    mount(awaiting, { canRecord: true, canReview: true });
+    fireEvent.click(screen.getByRole('button', { name: 'توقيعٌ ورقيّ' }));
+    const file = new File(['%PDF'], 'paper.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('صورةُ الورقة الموقَّعة'), { target: { files: [file] } });
+    fireEvent.click(screen.getByLabelText(/شخصٌ اعتباريّ ووقّع عنه ممثّلُه/));
+    fireEvent.change(screen.getByLabelText('من وقّع الورقةَ بيده'), { target: { value: 'مدير المؤسسة' } });
+    const submit = screen.getByRole('button', { name: 'رفعٌ وختم' }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('صفةُ الموقّع'), { target: { value: 'NAJIZ_POA' } });
+    fireEvent.change(screen.getByLabelText('رقمُ الوكالة'), { target: { value: '445566' } });
+    expect(submit.disabled).toBe(false);
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(paperSignContractForm).toHaveBeenCalledWith('c1', 'f1', file, null, 'مدير المؤسسة', { authorityType: 'NAJIZ_POA', authorityRef: '445566' }, null),
+    );
+  });
+
   it('⭐ المعترَضُ عليه يُرى اعتراضُه، والنسخةُ المعدّلة «تسجيل» وتُفتح مكانه (ق-١٦٦٩)', async () => {
     const objected: FormInstance = {
       ...awaiting,
