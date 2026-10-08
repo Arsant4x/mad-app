@@ -21,6 +21,10 @@ import { sourceFiles, stripComments } from './source-scan.util';
  * `document_sequences` · `INSERT` عليه. **فجدولٌ آخر يُذكر هنا يُسقط الحزمة**
  * — وهو الشكلُ الذي «يُغري بالمرور» بعد شهور.
  *
+ * ⚖️ **وجدولٌ ثانٍ مأذونٌ بقرارٍ لا باتّفاق** (`ق-٣٤٥`، بُني في توجيه ٢٨٦): `document_number_allocations`، يُدرَج فيه
+ * صفُّ الأخذ **في جملة الزيادة نفسِها** — فالقرارُ يوجب أن يُكتب التخصيصُ في المعاملة القصيرة. والإدراجُ وحدَه:
+ * الختمُ «مستعمَلاً» في معاملة العمل لا في المنفذ.
+ *
  * ⚠️ **وحدُّ الحارس معلَن**: يقرأ **المصدر** لا سلوكَ التشغيل. **والشكلُ
  * الأقوى — دورٌ في القاعدة لا يملك إلا هذا الجدول — يجعل العجزَ في القاعدة
  * نفسها**، ويحتاج صلاحيةَ إنشاء أدوار: **عملُ تشغيلٍ لا هجرة**، والمنشورةُ
@@ -31,8 +35,8 @@ const PORT = join('common', 'sequence-allocator.ts');
 /** `PrismaService` هو العميلُ الأصلي — يرثه لا يُنشئه، فلا يُعدّ منفذاً ثانياً. */
 const BASE_CLIENT = join('prisma', 'prisma.service.ts');
 
-/** الجداولُ المأذونُ للمنفذ بمسّها — واحدٌ لا غير. */
-const ALLOWED_TABLES = ['document_sequences'];
+/** الجداولُ المأذونُ للمنفذ بمسّها — العدّادُ وسجلُّ ما أُخذ منه (`ق-٣٤٥`)، لا غير. */
+const ALLOWED_TABLES = ['document_sequences', 'document_number_allocations'];
 
 /** أسماءُ جداولٍ مقتبسةٌ في `SQL` خام: `"..."` بعد `FROM` · `INTO` · `UPDATE` · `JOIN`. */
 export function tablesTouched(source: string): string[] {

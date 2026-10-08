@@ -105,7 +105,14 @@ export async function nextDocumentNumber(
   //
   // **و`tx` يبقى للبذر وحده**: قراءةُ أعلى رقمٍ قائمٍ قراءةُ **مستندات** لا
   // عدّاد، فموضعُها معاملةُ العمل.
-  const last = await allocateSequence(companyId, spec.kind, year, () => highestExisting(prefix));
+  const last = await allocateSequence(companyId, spec.kind, year, () => highestExisting(prefix), { prefix, pad: spec.pad });
+
+  // ⚖️ (`ق-٣٤٥` · توجيه ٢٨٦) **الختمُ «مستعمَلاً» في معاملة العمل**: إن ارتدّت ارتدّ معها، فيبقى الرقمُ «أُخذ ولم
+  // يُستعمل» في تقرير الأرقام بلا شيءٍ يُتذكَّر. صفٌّ واحدٌ بمفتاحه الفريد، فلا يُسلسل ما فكّه `ق-٣٤٤`.
+  await tx.$executeRaw`
+    UPDATE "document_number_allocations" SET "usedAt" = NOW()
+    WHERE "companyId" = ${companyId} AND "kind" = ${spec.kind} AND "year" = ${year} AND "number" = ${last}
+  `;
 
   return `${prefix}${String(last).padStart(spec.pad, '0')}`;
 }

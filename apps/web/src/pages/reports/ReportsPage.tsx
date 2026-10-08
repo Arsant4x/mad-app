@@ -1,4 +1,5 @@
 import { ReceivablesAgingSection } from './ReceivablesAgingSection';
+import { NumberGapsSection } from './NumberGapsSection';
 import { LedgerSection } from './LedgerSection';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -23,7 +24,7 @@ import { num0 } from '../../lib/money';
 import { getBranchSummary, type BranchSummary } from '../../api/branches';
 import { computeRange, type DashRange } from '../dashboardRange';
 
-type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'ledger' | 'aging' | 'bankdiff' | 'deferred';
+type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'ledger' | 'aging' | 'bankdiff' | 'deferred' | 'gaps';
 
 export function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('income');
@@ -153,6 +154,10 @@ export function ReportsPage() {
         </button>
         <button className={tab === 'aging' ? 'tab active' : 'tab'} onClick={() => setTab('aging')}>
           أعمار الذمم
+        </button>
+        {/* يُعرض دائماً (ق-٣٤٥): القائمةُ الفارغةُ هنا جوابُ المراجع لا تبويبٌ بلا موضوع. */}
+        <button className={tab === 'gaps' ? 'tab active' : 'tab'} onClick={() => setTab('gaps')}>
+          الأرقام المأخوذة
         </button>
         {/* لا يُعرض لمن لا بنكَ له — تبويبٌ فارغ يسأل عن سؤالٍ لا يخصّه. */}
         {(bankDiff?.rows.length ?? 0) > 0 && (
@@ -432,6 +437,7 @@ export function ReportsPage() {
         )}
 
         {tab === 'aging' && <ReceivablesAgingSection />}
+        {tab === 'gaps' && <NumberGapsSection />}
         {tab === 'ledger' && <LedgerSection />}
 
         {/* الإيرادُ المؤجَّل (ق-٤٦٨): رصيدُ `2400` رقمٌ واحدٌ لا يقول ممّن تكوّن

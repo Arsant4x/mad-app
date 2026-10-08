@@ -89,6 +89,13 @@ export class ReportsController {
     return this.reportsService.deferredRevenue(tenant.companyId);
   }
 
+  /** الأرقامُ المأخوذة غير المستعملة في كلِّ سلسلة (`ق-٣٤٥`): للمنشأة كلِّها، فلمن يرى الفروعَ كلَّها. */
+  @Get('number-gaps')
+  @RequiresAction('view')
+  numberGaps(@CurrentTenant() tenant: TenantContext) {
+    return this.reportsService.numberGaps(tenant.companyId, tenant.allowedBranchIds);
+  }
+
   /** تقريرُ الفرق (ق-٢٨٥/٣): الرصيدُ الدفتريّ مقابل ما كان يُعرض — وإعلانُ ق-٢٨٣ معه. */
   @Get('bank-difference')
   @RequiresAction('view')

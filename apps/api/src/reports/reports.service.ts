@@ -43,6 +43,9 @@ const CASH_FLOW_ACCOUNTS = [
  * قوائمُ المنشأة الواحدة ولا تُرشَّح بفرع. **فكان مقيَّدٌ بفرعٍ يقرأ أرصدةَ الفروع كلِّها منها** (قِيس `200` للثلاث). والحكمُ من
  * المعلَن نفسِه: **لا تُعطى لمن لا يرى الفروعَ كلَّها**، والرفضُ يدلّ على ملخّص الفرع المقصور على فروعه (`branchSummary`).
  */
+/** رقمٌ أُخذ منذ أقلّ من هذا قد تكون معاملتُه قائمةً لم تلتزم بعد، فيُعرض «قيد المعالجة» لا «غيرَ مستعمَل» (`ق-٣٤٥`). */
+export const NUMBER_GAP_PENDING_MS = 10 * 60 * 1000;
+
 function assertWholeCompanyReader(allowedBranchIds: string[] | 'all'): void {
   if (allowedBranchIds !== 'all') throw new ForbiddenException(MSG.report_company_statement_whole_company);
 }
@@ -306,6 +309,53 @@ export class ReportsService {
         totalUnlinked: money(unlinked.reduce((sum, r) => sum + r.baseNetAmount, 0)),
         /** ⚠️ **حدٌّ معلَن**: هذه اعتُرف بها إيراداً فوراً — **لا فترةَ خدمةٍ تُعرف لها**. */
         unlinkedNote: 'دفعات غير مرتبطة بأقساط: لا تُعرف لها فترة خدمة، فاعتُرف بها إيراداً فوراً ولم تمرّ بالإيراد المؤجَّل',
+      };
+    });
+  }
+
+  /**
+   * ⚖️ **تقريرُ الأرقام المأخوذة غير المستعملة** (`ق-٣٤٥`، شرطُ صاحب المشروع على `ق-٣٤٤`؛ بُني في توجيه ٢٨٦):
+   * «**فمراجعٌ يسأل عن رقمٍ ناقص يجد جواباً، لا سكوتاً**». لكلِّ سلسلةٍ ما أُخذ منها منذ بدأ التسجيل، وكلُّ رقمٍ «أُخذ
+   * ولم يُستعمل» باسمه ووقت أخذه: معاملةٌ ارتدّت بعد الترقيم (فترةٌ مقفلة، رفضٌ، تعارضٌ أُعيد) فاحترق رقمُها (`ق-٣٤٨`).
+   *
+   * **والأحدثُ من عشر دقائق «قيد المعالجة» لا «غيرُ مستعمَل»**: معاملةُ العمل قد تكون قائمةً لم تلتزم بعد.
+   * **وللمنشأة كلِّها**: الترقيمُ سلسلةٌ واحدةٌ للمنشأة لا للفرع، والصفُّ بلا فرع، فلا يُعطى إلا لمن يرى الفروعَ كلَّها
+   * (`ق-١٥٨١` · `ق-١٤٥٢`).
+   * ⚠️ **حدّ**: ما صدر قبل بناء السجلّ لا صفَّ له (`firstRecorded` أوّلُ رقمٍ سُجّل في السلسلة)، ورقمٌ استُعمل ثم حُذف
+   * مستندُه يبقى «مستعمَلاً».
+   */
+  numberGaps(companyId: string, allowedBranchIds: string[] | 'all', now: Date = new Date()) {
+    assertWholeCompanyReader(allowedBranchIds);
+    return this.tenantPrisma.runInTenantContext(companyId, async (tx) => {
+      const pendingSince = new Date(now.getTime() - NUMBER_GAP_PENDING_MS);
+      const series = await tx.documentNumberAllocation.groupBy({
+        by: ['kind', 'year'],
+        _count: { _all: true },
+        _min: { number: true, allocatedAt: true },
+        _max: { number: true },
+        orderBy: [{ kind: 'asc' }, { year: 'asc' }],
+      });
+      const unused = await tx.documentNumberAllocation.findMany({
+        where: { usedAt: null },
+        orderBy: [{ kind: 'asc' }, { year: 'asc' }, { number: 'asc' }],
+        select: { kind: true, year: true, number: true, no: true, allocatedAt: true },
+      });
+      return {
+        asOf: now.toISOString(),
+        series: series.map((s) => {
+          const mine = unused.filter((u) => u.kind === s.kind && u.year === s.year);
+          const view = (u: (typeof mine)[number]) => ({ no: u.no, number: u.number, allocatedAt: u.allocatedAt.toISOString() });
+          return {
+            kind: s.kind,
+            year: s.year,
+            taken: s._count._all,
+            firstRecorded: s._min.number,
+            lastRecorded: s._max.number,
+            recordedSince: s._min.allocatedAt?.toISOString() ?? null,
+            unused: mine.filter((u) => u.allocatedAt < pendingSince).map(view),
+            pending: mine.filter((u) => u.allocatedAt >= pendingSince).map(view),
+          };
+        }),
       };
     });
   }
