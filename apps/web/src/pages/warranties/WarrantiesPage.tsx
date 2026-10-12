@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
 import { createWarranty, deleteWarranty, listWarranties, updateWarranty, type Warranty } from '../../api/warranties';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
-/** قيم النموذج كما تُكتب — التحويل إلى DTO يحدث عند الحفظ. */
+/** Form values as typed; they become a DTO on save. */
 interface WarrantyFormValues {
   propertyId: string;
   unitId: string;
@@ -19,16 +21,17 @@ interface WarrantyFormValues {
   notes: string;
 }
 
-/** عتبة «يوشك»: شهر يكفي لمطالبة الجهة الضامنة قبل أن يسقط الحق. */
+/** "Expiring soon" threshold: a month is enough to claim from the provider before cover lapses. */
 const EXPIRING_SOON_DAYS = 30;
 
 function expiryMeta(w: Warranty): { label: string; badgeClass: string } {
-  if (w.expired) return { label: 'منتهٍ', badgeClass: 'overdue' };
-  if (w.daysLeft <= EXPIRING_SOON_DAYS) return { label: 'يوشك', badgeClass: 'due' };
-  return { label: 'ساري', badgeClass: 'paid' };
+  if (w.expired) return { label: i18n.t('warranties.expiry.expired'), badgeClass: 'overdue' };
+  if (w.daysLeft <= EXPIRING_SOON_DAYS) return { label: i18n.t('warranties.expiry.soon'), badgeClass: 'due' };
+  return { label: i18n.t('warranties.expiry.active'), badgeClass: 'paid' };
 }
 
 export function WarrantiesPage() {
+  const { t } = useTranslation();
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -71,7 +74,7 @@ export function WarrantiesPage() {
         provider: data.provider,
         startDate: data.startDate,
         endDate: data.endDate,
-        // النص الفارغ يمسح الحقل في الخادم — وهذا هو المقصود عند التعديل.
+        // An empty string clears the field on the server, which is intended when editing.
         reference: data.reference,
         terms: data.terms,
         notes: data.notes,
@@ -101,9 +104,9 @@ export function WarrantiesPage() {
       setPendingDelete(null);
       await reload();
     } catch (e) {
-      // أبرز رفض متوقَّع: ضمان له مطالبات صيانة لا يُحذف — رسالة الخادم تشرح ذلك.
+      // The usual refusal: a warranty with maintenance claims cannot be deleted; the server message says so.
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setDeleteError(message ?? 'تعذّر حذف الضمان');
+      setDeleteError(message ?? t('warranties.page.err_delete'));
     }
   }
 
@@ -113,21 +116,21 @@ export function WarrantiesPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الضمانات</div>
-          <div className="page-sub">ضمانات ما هو مركَّب في العقارات — ومتى تنتهي تغطيتها</div>
+          <div className="page-title">{t('warranties.page.title')}</div>
+          <div className="page-sub">{t('warranties.page.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
-            + ضمان جديد
+            {t('warranties.page.new')}
           </button>
         </div>
       </div>
 
-      {properties.length === 0 && <div className="empty-state">أضِف عقاراً أولاً حتى تتمكن من تسجيل الضمانات.</div>}
+      {properties.length === 0 && <div className="empty-state">{t('warranties.page.no_properties')}</div>}
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالاسم أو الجهة أو العقار أو المرجع..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('warranties.page.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -139,12 +142,12 @@ export function WarrantiesPage() {
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الجهة</th>
-              <th>الموقع</th>
-              <th>من</th>
-              <th>إلى</th>
-              <th>الحالة</th>
+              <th>{t('warranties.page.col_name')}</th>
+              <th>{t('warranties.page.col_provider')}</th>
+              <th>{t('warranties.page.col_location')}</th>
+              <th>{t('warranties.page.col_from')}</th>
+              <th>{t('warranties.page.col_to')}</th>
+              <th>{t('warranties.page.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -152,7 +155,7 @@ export function WarrantiesPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <div className="empty-state">لا توجد ضمانات مطابقة</div>
+                  <div className="empty-state">{t('warranties.page.empty')}</div>
                 </td>
               </tr>
             )}
@@ -162,24 +165,24 @@ export function WarrantiesPage() {
                 <tr key={w.id}>
                   <td>
                     {w.subject}
-                    {w.reference && <div className="hint">مرجع: {w.reference}</div>}
+                    {w.reference && <div className="hint">{t('warranties.page.reference', { ref: w.reference })}</div>}
                   </td>
                   <td>{w.provider}</td>
                   <td>
                     {w.property.name}
-                    <div className="hint">{w.unit ? `وحدة ${w.unit.unitNo}` : 'العقار كله'}</div>
+                    <div className="hint">{w.unit ? t('warranties.page.unit_no', { unit: w.unit.unitNo }) : t('warranties.page.whole_property')}</div>
                   </td>
                   <td className="num">{dfmt(w.startDate)}</td>
                   <td className="num">{dfmt(w.endDate)}</td>
                   <td>
                     <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
-                    {!w.expired && w.daysLeft <= EXPIRING_SOON_DAYS && <div className="hint">متبقٍ {w.daysLeft} يوماً</div>}
+                    {!w.expired && w.daysLeft <= EXPIRING_SOON_DAYS && <div className="hint">{t('warranties.page.days_left', { n: w.daysLeft })}</div>}
                   </td>
                   <td>
                     <RowMenu
                       actions={[
-                        { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', warranty: w }) },
-                        { label: '🗑 حذف', onClick: () => setPendingDelete(w), danger: true },
+                        { label: t('warranties.page.action_edit'), onClick: () => setModal({ mode: 'edit', warranty: w }) },
+                        { label: t('warranties.page.action_delete'), onClick: () => setPendingDelete(w), danger: true },
                       ]}
                     />
                   </td>
@@ -202,9 +205,9 @@ export function WarrantiesPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الضمان"
-          body={deleteError ?? `حذف ضمان «${pendingDelete.subject}»؟`}
-          confirmLabel="حذف"
+          title={t('warranties.page.delete_title')}
+          body={deleteError ?? t('warranties.page.delete_body', { subject: pendingDelete.subject })}
+          confirmLabel={t('warranties.page.delete_confirm')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);
@@ -229,6 +232,7 @@ function WarrantyModal({
   onCancel: () => void;
   onSave: (data: WarrantyFormValues) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [propertyId, setPropertyId] = useState(editing?.propertyId ?? properties[0]?.id ?? '');
   const [unitId, setUnitId] = useState(editing?.unitId ?? '');
   const [subject, setSubject] = useState(editing?.subject ?? '');
@@ -246,12 +250,12 @@ function WarrantyModal({
   async function handleSubmit() {
     setError(null);
     if (!subject.trim() || !provider.trim() || !propertyId || !startDate || !endDate) {
-      setError('أكمل الحقول المطلوبة: الاسم والجهة والعقار وتاريخي البداية والنهاية');
+      setError(t('warranties.modal.err_required'));
       return;
     }
-    // نفس فحص الخادم، لكن قبل الإرسال: نهاية قبل البداية خطأ كتابي مؤكد.
+    // Same check as the server, before sending: an end before the start is a typing mistake.
     if (endDate < startDate) {
-      setError('تاريخ نهاية الضمان قبل بدايته');
+      setError(t('warranties.modal.err_end_before_start'));
       return;
     }
     setSaving(true);
@@ -269,7 +273,7 @@ function WarrantyModal({
       });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ الضمان'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('warranties.modal.err_save')));
     } finally {
       setSaving(false);
     }
@@ -279,15 +283,15 @@ function WarrantyModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل الضمان' : 'ضمان جديد'}</div>
+          <div className="modal-title">{editing ? t('warranties.modal.title_edit') : t('warranties.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="two-col">
           <div className="field">
-            <label>العقار</label>
-            {/* لا يقبل الخادم نقل الضمان بين العقارات — لذا يُقفل الحقل عند التعديل. */}
+            <label>{t('warranties.modal.property')}</label>
+            {/* The server does not move a warranty between properties, so the field is locked when editing. */}
             <select
               value={propertyId}
               disabled={!!editing}
@@ -304,55 +308,55 @@ function WarrantyModal({
             </select>
           </div>
           <div className="field">
-            <label>الوحدة</label>
+            <label>{t('warranties.modal.unit')}</label>
             <select value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-              <option value="">— العقار كله —</option>
+              <option value="">{t('warranties.modal.whole_property_option')}</option>
               {unitsOfProperty.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.unitNo}
                 </option>
               ))}
             </select>
-            <p className="hint">ضمان المصعد أو المولّد يخصّ العقار كله؛ ضمان مكيّف شقة يخصّ وحدتها.</p>
+            <p className="hint">{t('warranties.modal.unit_hint')}</p>
           </div>
         </div>
         <div className="field">
-          <label>ما الذي يغطيه الضمان</label>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="مثال: مصعد المبنى الرئيسي" />
+          <label>{t('warranties.modal.subject')}</label>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t('warranties.modal.subject_placeholder')} />
         </div>
         <div className="field">
-          <label>الجهة الضامنة</label>
-          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="اسم الشركة أو الوكيل الذي يلتزم بالضمان" />
+          <label>{t('warranties.modal.provider')}</label>
+          <input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder={t('warranties.modal.provider_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>بداية الضمان</label>
+            <label>{t('warranties.modal.start')}</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>نهاية الضمان</label>
+            <label>{t('warranties.modal.end')}</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
         <div className="field">
-          <label>المرجع (اختياري)</label>
-          <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="رقم الفاتورة أو العقد الذي نشأ عنه الضمان" />
+          <label>{t('warranties.modal.reference')}</label>
+          <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={t('warranties.modal.reference_placeholder')} />
         </div>
         <div className="field">
-          <label>شروط التغطية (اختياري)</label>
-          <textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="ما الذي يشمله الضمان وما الذي يستثنيه" />
+          <label>{t('warranties.modal.terms')}</label>
+          <textarea rows={3} value={terms} onChange={(e) => setTerms(e.target.value)} placeholder={t('warranties.modal.terms_placeholder')} />
         </div>
         <div className="field">
-          <label>ملاحظات (اختياري)</label>
+          <label>{t('warranties.modal.notes')}</label>
           <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('warranties.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة الضمان'}
+            {editing ? t('warranties.modal.save_edit') : t('warranties.modal.add')}
           </button>
         </div>
       </div>

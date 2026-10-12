@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createCashDrawer, getDrawerCodeBand, listCashDrawers, updateCashDrawer, type CashDrawer } from '../../api/cashDrawers';
 import type { CodeBandStatus } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
+import { formatNumber } from '../../i18n/format';
 
 /**
- * **أدراجُ الكاشير** — للمالك وحده (قاعدة الفاعل §3.5، والخادمُ يفرضها).
+ * Cash drawers, for the owner only (the server enforces it).
  *
- * كان الدرجُ ضمنياً (فرعٌ وكاشير على المناوبة) بلا كيانٍ ولا حساب، فسؤالُ «أيُّ
- * درجٍ عجز؟» بلا جوابٍ رجعيّ (`ق-٢١٨`). وهنا يُنشأ الدرجُ **وحسابُه معه** —
- * **ولا رمزَ يُدخله التاجر**: الرمزُ مشتقٌّ في الخادم (`MAX+1` داخل `1010`–`1099`).
+ * Each drawer is created together with its own ledger account, so a shortage can
+ * be traced to one drawer. The merchant never types the account code: the server
+ * derives it inside its reserved range.
  *
- * ⚠️ **ورسائلُ المنع تُعرض كما جاءت من الخادم** لا تُستبدل بعبارةٍ عامّة: هي التي
- * تحمل الرصيدَ والمخرج («انقلها إلى درج آخر أو إلى البنك») — و`ق-٢٦٥` تجعل ذلك
- * شرطاً، فمنعٌ بلا مخرجٍ يُلتفّ عليه.
+ * Refusal messages are shown exactly as the server sends them, not replaced by a
+ * generic sentence: they carry the balance and the way out ("move it to another
+ * drawer or to the bank"), and a refusal without a way out gets worked around.
  */
 export function CashDrawersCard() {
+  const { t } = useTranslation();
   const [drawers, setDrawers] = useState<CashDrawer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState('');
@@ -25,7 +28,7 @@ export function CashDrawersCard() {
 
   async function reload() {
     setDrawers(await listCashDrawers());
-    // سقفُ نطاق الرموز يُقرأ مع كل تحميل — فالإنذار يتبع الحالة لا لحظةَ الفتح.
+    // The code range is re-read on every load so the warning follows the current state.
     setCodeBand(await getDrawerCodeBand());
   }
 
@@ -36,7 +39,7 @@ export function CashDrawersCard() {
       .catch(() => {});
   }, []);
 
-  /** رسالةُ الخادم كما هي — فهي التي تسمّي المانع وتدلّ على المخرج (ق-٢٦٥). */
+  /** The server's message as is: it names the obstacle and the way out. */
   function serverMessage(e: unknown, fallback: string): string {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
     if (Array.isArray(data?.message)) return data.message.join(' — ');
@@ -46,7 +49,7 @@ export function CashDrawersCard() {
   async function handleAdd() {
     setError(null);
     if (name.trim().length < 2) {
-      setError('اسم الدرج مطلوب.');
+      setError(t('settings.cash_drawers.err_name_required'));
       return;
     }
     setBusy(true);
@@ -56,7 +59,7 @@ export function CashDrawersCard() {
       setBranchId('');
       await reload();
     } catch (e) {
-      setError(serverMessage(e, 'تعذّر إنشاء الدرج.'));
+      setError(serverMessage(e, t('settings.cash_drawers.err_create')));
     } finally {
       setBusy(false);
     }
@@ -69,7 +72,7 @@ export function CashDrawersCard() {
       await updateCashDrawer(drawer.id, { isActive: !drawer.isActive });
       await reload();
     } catch (e) {
-      setError(serverMessage(e, 'تعذّر تعديل الدرج.'));
+      setError(serverMessage(e, t('settings.cash_drawers.err_update')));
     } finally {
       setBusy(false);
     }
@@ -77,17 +80,15 @@ export function CashDrawersCard() {
 
   return (
     <section className="card" data-testid="cash-drawers-card">
-      <h2>أدراج الكاشير</h2>
-      <p className="muted">
-        لكل درجٍ حسابٌ في الدليل يُنشأ معه — فيُعرف عجزُ كل درجٍ على حدة. والمناوبات السابقة منسوبةٌ إلى «الدرج الافتراضي» لفرعها.
-      </p>
+      <h2>{t('settings.cash_drawers.title')}</h2>
+      <p className="muted">{t('settings.cash_drawers.intro')}</p>
 
-      {/* إنذارُ سقف الرموز (ق-٢٩٥) — قبل الجدار لا عنده. */}
+      {/* Warn before the code range runs out, not when it does. */}
       {codeBand?.warn && (
         <p className="muted" role="status" data-testid="drawer-code-band-warning">
           {codeBand.remaining > 0
-            ? `⚠ بقيت ${codeBand.remaining} من ${codeBand.capacity} خانة في نطاق رموز ${codeBand.name} — والرمز لا يعود بحذف الدرج. راجعنا قبل أن ينفد.`
-            : `⛔ نفدت خانات نطاق رموز ${codeBand.name} — لا يمكن إنشاء درج جديد حتى يُوسَّع النطاق. راجعنا.`}
+            ? t('settings.cash_drawers.band_low', { remaining: codeBand.remaining, capacity: codeBand.capacity, band: codeBand.name })
+            : t('settings.cash_drawers.band_full', { band: codeBand.name })}
         </p>
       )}
 
@@ -99,13 +100,13 @@ export function CashDrawersCard() {
 
       <div className="row">
         <label>
-          اسم الدرج
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="درج الواجهة" data-testid="cash-drawer-name" />
+          {t('settings.cash_drawers.name_label')}
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.cash_drawers.name_placeholder')} data-testid="cash-drawer-name" />
         </label>
         <label>
-          الفرع
+          {t('settings.cash_drawers.branch_label')}
           <select value={branchId} onChange={(e) => setBranchId(e.target.value)} data-testid="cash-drawer-branch">
-            <option value="">بلا فرع</option>
+            <option value="">{t('settings.cash_drawers.no_branch')}</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -114,18 +115,18 @@ export function CashDrawersCard() {
           </select>
         </label>
         <button type="button" onClick={handleAdd} disabled={busy} data-testid="cash-drawer-add">
-          إضافة درج
+          {t('settings.cash_drawers.add')}
         </button>
       </div>
 
       <table data-testid="cash-drawers-table">
         <thead>
           <tr>
-            <th>الدرج</th>
-            <th>الفرع</th>
-            <th>الحساب</th>
-            <th>الرصيد</th>
-            <th>الحالة</th>
+            <th>{t('settings.cash_drawers.col_drawer')}</th>
+            <th>{t('settings.cash_drawers.col_branch')}</th>
+            <th>{t('settings.cash_drawers.col_account')}</th>
+            <th>{t('settings.cash_drawers.col_balance')}</th>
+            <th>{t('settings.cash_drawers.col_status')}</th>
             <th />
           </tr>
         </thead>
@@ -137,11 +138,11 @@ export function CashDrawersCard() {
               <td>
                 {d.account.code} · {d.account.name}
               </td>
-              <td>{Number(d.account.balance).toLocaleString('ar-SA', { minimumFractionDigits: 2 })}</td>
-              <td>{d.isActive ? 'نشِط' : 'معطَّل'}</td>
+              <td>{formatNumber(Number(d.account.balance), { minimumFractionDigits: 2 })}</td>
+              <td>{d.isActive ? t('settings.cash_drawers.active') : t('settings.cash_drawers.inactive')}</td>
               <td>
                 <button type="button" onClick={() => toggleActive(d)} disabled={busy} data-testid={`cash-drawer-toggle-${d.id}`}>
-                  {d.isActive ? 'تعطيل' : 'تفعيل'}
+                  {d.isActive ? t('settings.cash_drawers.disable') : t('settings.cash_drawers.enable')}
                 </button>
               </td>
             </tr>
@@ -149,7 +150,7 @@ export function CashDrawersCard() {
           {drawers.length === 0 && (
             <tr>
               <td colSpan={6} className="muted">
-                لا أدراج بعد.
+                {t('settings.cash_drawers.empty')}
               </td>
             </tr>
           )}

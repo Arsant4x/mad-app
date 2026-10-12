@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -39,6 +40,7 @@ function occupancyColor(occupied: number, total: number): string {
 }
 
 export function PropertiesMap({ properties, units }: { properties: Property[]; units: Unit[] }) {
+  const { t } = useTranslation();
   const mapped = useMemo(
     () =>
       properties
@@ -61,7 +63,7 @@ export function PropertiesMap({ properties, units }: { properties: Property[]; u
         // Says why the map looks emptier than the list, instead of leaving the
         // user to wonder.
         <p className="hint">
-          {withoutCoordinates} من {properties.length} عقاراً بلا إحداثيات ولا تظهر على الخريطة — أضِفها من نموذج تعديل العقار.
+          {t('properties.map.without_coords', { n: withoutCoordinates, total: properties.length })}
         </p>
       )}
 
@@ -81,7 +83,7 @@ export function PropertiesMap({ properties, units }: { properties: Property[]; u
                 <br />
                 {property.address ?? '—'}
                 <br />
-                {total === 0 ? 'لا توجد وحدات' : `مؤجَّرة ${occupied} من ${total}`}
+                {total === 0 ? t('properties.map.no_units') : t('properties.map.rented_of', { occupied, total })}
               </Popup>
             </Marker>
           ))}
@@ -90,10 +92,10 @@ export function PropertiesMap({ properties, units }: { properties: Property[]; u
 
       <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
         {[
-          { color: '#16a34a', label: 'مؤجَّر بالكامل' },
-          { color: '#d97706', label: 'مؤجَّر جزئياً' },
-          { color: '#dc2626', label: 'شاغر' },
-          { color: '#9ca3af', label: 'بلا وحدات' },
+          { color: '#16a34a', label: t('properties.map.legend_full') },
+          { color: '#d97706', label: t('properties.map.legend_partial') },
+          { color: '#dc2626', label: t('properties.map.legend_vacant') },
+          { color: '#9ca3af', label: t('properties.map.legend_empty') },
         ].map((l) => (
           <span key={l.label} className="hint" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: l.color, display: 'inline-block' }} />
