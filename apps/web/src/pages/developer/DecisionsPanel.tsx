@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   decidePlatformDecision,
   listPlatformDecisions,
@@ -10,27 +11,27 @@ import {
 import { dfmt } from '../../lib/format';
 
 /**
- * **الفعلُ الحرجُ بيدين — طلبٌ وإقرار** (`ق-١٣١٨` · ⑪A1 — باب `⑪ تشغيلُ المنصّة`).
+ * Critical actions take two people: one requests, another approves.
+ * Erasing a company's data or changing its subscription with one hand happens once and cannot be undone.
  *
- * «**محوُ بيانات منشأةٍ أو تغييرُ اشتراكها بيدٍ واحدة يقع مرّةً ولا يُردّ**».
- *
- * ⚠️ **واللوحةُ لا تخفي زرَّ الإقرار عمّن طلب**: يُضغط فيُردّ بنصّه «بيدين لا بيد» —
- * **فالرفضُ يعلّم، والإخفاءُ يترك السائلَ يخمّن**. والحكمُ في الخادم والقاعدة معاً.
+ * The approve button is not hidden from the requester: pressing it returns the server's refusal, which
+ * teaches the rule, while hiding it would leave them guessing. The server and database enforce it.
  */
-const ACTION_LABEL: Record<PlatformDecisionAction, string> = {
-  ACCOUNT_ERASURE: 'إغلاق حساب أو محو بياناته',
-  SUBSCRIPTION_CHANGE: 'تعديل اشتراك',
-  REFUND: 'ردّ مال',
+const ACTION_LABEL_KEY: Record<PlatformDecisionAction, string> = {
+  ACCOUNT_ERASURE: 'developer.decisions.actions.account_erasure',
+  SUBSCRIPTION_CHANGE: 'developer.decisions.actions.subscription_change',
+  REFUND: 'developer.decisions.actions.refund',
 };
 
-const STATUS_LABEL: Record<PlatformDecision['status'], { label: string; badgeClass: string }> = {
-  PENDING: { label: 'بانتظار إقرار', badgeClass: 'due' },
-  APPROVED: { label: 'مُقرّ — لم يُنفَّذ بعد', badgeClass: 'paid' },
-  REJECTED: { label: 'مرفوض', badgeClass: 'overdue' },
-  EXECUTED: { label: 'نُفِّذ', badgeClass: 'draft' },
+const STATUS_LABEL: Record<PlatformDecision['status'], { labelKey: string; badgeClass: string }> = {
+  PENDING: { labelKey: 'developer.decisions.status.pending', badgeClass: 'due' },
+  APPROVED: { labelKey: 'developer.decisions.status.approved', badgeClass: 'paid' },
+  REJECTED: { labelKey: 'developer.decisions.status.rejected', badgeClass: 'overdue' },
+  EXECUTED: { labelKey: 'developer.decisions.status.executed', badgeClass: 'draft' },
 };
 
 export function DecisionsPanel() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<PlatformDecision[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export function DecisionsPanel() {
 
   function show(e: unknown) {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تنفيذ الطلب'));
+    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('developer.decisions.err_request')));
   }
 
   async function ask() {
@@ -82,44 +83,44 @@ export function DecisionsPanel() {
   return (
     <div className="card">
       <div className="card-title" style={{ marginBottom: 10 }}>
-        القرارات الحرجة — بيدين لا بيد
+        {t('developer.decisions.title')}
       </div>
       <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 12px' }}>
-        إغلاق حساب أو محو بياناته وتعديل الاشتراك: يطلبها مدير ويقرّها مدير آخر. ومن طلب القرار لا يقرّه.
+        {t('developer.decisions.intro')}
       </p>
 
       <div className="two-col" style={{ marginBottom: 8 }}>
         <div className="field">
-          <label>الفعل</label>
+          <label>{t('developer.decisions.action')}</label>
           <select value={action} onChange={(e) => setAction(e.target.value as PlatformDecisionAction)}>
             {PLATFORM_DECISION_ACTIONS.map((a) => (
               <option key={a} value={a}>
-                {ACTION_LABEL[a]}
+                {t(ACTION_LABEL_KEY[a])}
               </option>
             ))}
           </select>
         </div>
         <div className="field">
-          <label>معرّف الهدف (منشأة أو طلب)</label>
+          <label>{t('developer.decisions.target_id')}</label>
           <input className="num" value={targetId} onChange={(e) => setTargetId(e.target.value)} />
         </div>
       </div>
       <div className="field">
-        <label>ملخّص الأثر — يقرأه من يقرّ</label>
-        <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="ما الذي سيقع بالضبط، وعلى مَن" />
+        <label>{t('developer.decisions.summary_label')}</label>
+        <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder={t('developer.decisions.summary_placeholder')} />
       </div>
       <button className="btn btn-sm btn-primary" onClick={ask} disabled={busy === 'new' || !targetId.trim() || summary.trim().length < 10}>
-        طلب قرار
+        {t('developer.decisions.request')}
       </button>
       {error && <p className="error-text">{error}</p>}
 
       <table style={{ marginTop: 14 }}>
         <thead>
           <tr>
-            <th>الفعل</th>
-            <th>الملخّص</th>
-            <th>الطالب</th>
-            <th>الحالة</th>
+            <th>{t('developer.decisions.action')}</th>
+            <th>{t('developer.decisions.col_summary')}</th>
+            <th>{t('developer.decisions.col_requester')}</th>
+            <th>{t('developer.common.status')}</th>
             <th></th>
           </tr>
         </thead>
@@ -127,30 +128,30 @@ export function DecisionsPanel() {
           {rows.length === 0 && (
             <tr>
               <td colSpan={5}>
-                <div className="empty-state">لا قرارات بعد</div>
+                <div className="empty-state">{t('developer.decisions.empty')}</div>
               </td>
             </tr>
           )}
           {rows.map((d) => (
             <tr key={d.id}>
-              <td>{ACTION_LABEL[d.action]}</td>
+              <td>{t(ACTION_LABEL_KEY[d.action])}</td>
               <td>{d.summary}</td>
               <td>
                 {d.requestedBy.displayName}
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}> — {dfmt(d.requestedAt)}</span>
               </td>
               <td>
-                <span className={`badge ${STATUS_LABEL[d.status].badgeClass}`}>{STATUS_LABEL[d.status].label}</span>
+                <span className={`badge ${STATUS_LABEL[d.status].badgeClass}`}>{t(STATUS_LABEL[d.status].labelKey)}</span>
                 {d.decidedBy && <span style={{ fontSize: 11, color: 'var(--muted)' }}> — {d.decidedBy.displayName}</span>}
               </td>
               <td>
                 {d.status === 'PENDING' && (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="btn btn-ghost btn-sm" disabled={busy === d.id} onClick={() => decide(d.id, true)}>
-                      إقرار
+                      {t('developer.decisions.approve')}
                     </button>
                     <button className="btn btn-ghost btn-sm" disabled={busy === d.id} onClick={() => decide(d.id, false)}>
-                      رفض
+                      {t('developer.common.reject')}
                     </button>
                   </div>
                 )}

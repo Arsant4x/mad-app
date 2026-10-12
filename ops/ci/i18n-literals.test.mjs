@@ -33,9 +33,10 @@ describe('i18n literal scanner', () => {
     assert.equal(inScope('apps/api/src/invoices/invoices.service.ts'), false);
   });
 
-  it('sees the real tree: a known screen has text and a pure helper has none', () => {
+  it('reads files from disk: a fixture screen has its two texts and a pure helper has none', () => {
+    // A fixture, not a real screen: real screens are converted one by one and would stop being a known case.
     const read = (p) => readFileSync(join(REPO, p), 'utf8');
-    assert.ok(literals(read('apps/web/src/pages/reports/ReportsPage.tsx'), 'apps/web/src/pages/reports/ReportsPage.tsx').length > 0);
+    assert.deepEqual(literals(read('ops/ci/fixtures/i18n-sample.tsx'), 'ops/ci/fixtures/i18n-sample.tsx').map((h) => h.kind), ['jsx-text', 'visible-attr']);
     assert.equal(literals(read('apps/web/src/lib/money.ts'), 'apps/web/src/lib/money.ts').length, 0);
   });
 });

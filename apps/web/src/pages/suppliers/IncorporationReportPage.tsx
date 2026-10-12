@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getIncorporationReport, type IncorporationReport } from '../../api/purchases';
 import { fmt } from '../../lib/format';
 
 /**
- * تقرير مصاريف التأسيس — ported from the v20 mockup's
+ * Establishment costs report, ported from the v20 mockup's
  * `screen-incorporation-report`: a KPI row over a table grouped by line item.
  *
  * Kept apart from the general expense report on purpose (the mockup does the
@@ -12,6 +13,7 @@ import { fmt } from '../../lib/format';
  * than it actually is.
  */
 export function IncorporationReportPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<IncorporationReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function IncorporationReportPage() {
   useEffect(() => {
     getIncorporationReport()
       .then(setData)
-      .catch(() => setError('تعذّر تحميل التقرير'))
+      .catch(() => setError(t('suppliers.incorporation.load_failed')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -27,32 +29,30 @@ export function IncorporationReportPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">تقرير مصاريف التأسيس</div>
-          <div className="page-sub">إجمالي مصاريف تأسيس النشاط، مقسمة حسب البند — منفصل عن تقرير المصروفات العام</div>
+          <div className="page-title">{t('suppliers.incorporation.title')}</div>
+          <div className="page-sub">{t('suppliers.incorporation.subtitle')}</div>
         </div>
       </div>
 
       {error && <p className="error-text">{error}</p>}
 
       {loading ? (
-        <p className="hint">جارٍ التحميل…</p>
+        <p className="hint">{t('suppliers.common.loading')}</p>
       ) : !data || data.invoiceCount === 0 ? (
-        <div className="empty-state">
-          لا مصاريف تأسيس مسجّلة. سجّل فاتورة شراء بفئة «مصروفات تأسيس» وحدّد بندها لتظهر هنا.
-        </div>
+        <div className="empty-state">{t('suppliers.incorporation.empty')}</div>
       ) : (
         <>
           <div className="kpi-row">
             <div className="kpi-card neu">
-              <div className="kpi-label">إجمالي مصاريف التأسيس</div>
-              <div className="kpi-value num">{fmt(data.total)} ر.س</div>
+              <div className="kpi-label">{t('suppliers.incorporation.kpi_total')}</div>
+              <div className="kpi-value num">{t('suppliers.amount_sar', { amount: fmt(data.total) })}</div>
             </div>
             <div className="kpi-card neu">
-              <div className="kpi-label">عدد الفواتير</div>
+              <div className="kpi-label">{t('suppliers.incorporation.kpi_count')}</div>
               <div className="kpi-value num">{data.invoiceCount}</div>
             </div>
             <div className="kpi-card pos">
-              <div className="kpi-label">فواتير تُستهلك على فترة</div>
+              <div className="kpi-label">{t('suppliers.incorporation.kpi_amortized')}</div>
               <div className="kpi-value num">{data.amortizedCount}</div>
             </div>
           </div>
@@ -61,10 +61,10 @@ export function IncorporationReportPage() {
             <table>
               <thead>
                 <tr>
-                  <th>البند</th>
-                  <th>عدد الفواتير</th>
-                  <th>الإجمالي</th>
-                  <th>طريقة الاحتساب</th>
+                  <th>{t('suppliers.incorporation.col_item')}</th>
+                  <th>{t('suppliers.incorporation.col_count')}</th>
+                  <th>{t('suppliers.incorporation.col_total')}</th>
+                  <th>{t('suppliers.incorporation.col_method')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -72,7 +72,7 @@ export function IncorporationReportPage() {
                   <tr key={row.item}>
                     <td>{row.item}</td>
                     <td className="num">{row.count}</td>
-                    <td className="num">{fmt(row.total)} ر.س</td>
+                    <td className="num">{t('suppliers.amount_sar', { amount: fmt(row.total) })}</td>
                     <td>{row.method}</td>
                   </tr>
                 ))}

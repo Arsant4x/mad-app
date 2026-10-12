@@ -1,5 +1,6 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DeletionRequestsSection } from './DeletionRequestsSection';
 import { PublicFormTemplatesSection } from './PublicFormTemplatesSection';
 import { SubProcessorsSection } from './SubProcessorsSection';
@@ -15,14 +16,15 @@ import { PlatformRoleGate } from './PlatformRoleGate';
 import { DecisionsPanel } from './DecisionsPanel';
 import i18n from '../../i18n';
 
-const STATUS_META: Record<Company['status'], { label: string; badgeClass: string }> = {
-  ACTIVE: { label: 'نشط', badgeClass: 'paid' },
-  FROZEN: { label: 'مجمّد', badgeClass: 'due' },
-  STOPPED: { label: 'متوقف', badgeClass: 'overdue' },
-  CLOSED: { label: 'مغلق', badgeClass: 'overdue' },
-};
+const statusMeta = (): Record<Company['status'], { label: string; badgeClass: string }> => ({
+  ACTIVE: { label: i18n.t('developer.panel.status.active'), badgeClass: 'paid' },
+  FROZEN: { label: i18n.t('developer.panel.status.frozen'), badgeClass: 'due' },
+  STOPPED: { label: i18n.t('developer.panel.status.stopped'), badgeClass: 'overdue' },
+  CLOSED: { label: i18n.t('developer.panel.status.closed'), badgeClass: 'overdue' },
+});
 
 export function DeveloperPanelPage() {
+  const { t } = useTranslation();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,11 +61,11 @@ export function DeveloperPanelPage() {
 
   async function handleSaveCompany(data: Partial<CompanyInput>) {
     if (companyModal?.mode === 'edit') {
-      // ⑪A2 (`ق-١٣١٧`): الاشتراكُ مسارٌ بدوره — **والمالُ لا يُرسل مع الاسم**.
+      // The subscription has its own route and role, so money is never sent with the name.
       const { subStart, subEnd, ...profile } = data;
       await updateCompany(companyModal.company.id, profile);
-      // **ولا يُنادى مسارُ المالية إلا إن تغيّر التاريخُ فعلاً**: من يعدّل الاسمَ وحدَه
-      // بدور التشغيل لا يُردّ `403` على اشتراكٍ لم يمسّه.
+      // Call the billing route only when the date actually changed, so someone who edits the
+      // name alone under an operations role is not refused on a subscription they did not touch.
       const current = companyModal.company.subEnd?.slice(0, 10) ?? '';
       if ((subEnd ?? '') !== current) await updateCompanySubscription(companyModal.company.id, { subStart, subEnd });
     } else {
@@ -83,7 +85,7 @@ export function DeveloperPanelPage() {
     await reload();
   }
 
-  // ⛔ لا حذفَ مباشراً للحساب من هنا (ق-٥٤٨): المسارُ الوحيد طلبُ التاجر وموافقتُه في قسم الطلبات أدناه.
+  // No direct account delete here: the only path is the merchant's request and its approval below.
 
   async function confirmDeleteTemplate() {
     if (!pendingDeleteTemplate) return;
@@ -104,66 +106,66 @@ export function DeveloperPanelPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">لوحة المطوّر</div>
-          <div className="page-sub">إدارة النماذج والحسابات والاشتراكات</div>
+          <div className="page-title">{t('developer.panel.title')}</div>
+          <div className="page-sub">{t('developer.panel.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setCompanyModal({ mode: 'create' })}>
-            + حساب جديد
+            {t('developer.panel.new_account')}
           </button>
         </div>
       </div>
 
       <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         <div className="kpi-card pos">
-          <div className="kpi-label">إجمالي الحسابات</div>
+          <div className="kpi-label">{t('developer.panel.kpi_total')}</div>
           <div className="kpi-value num">{summary.total}</div>
         </div>
         <div className="kpi-card pos">
-          <div className="kpi-label">نشطة</div>
+          <div className="kpi-label">{t('developer.panel.kpi_active')}</div>
           <div className="kpi-value num">{summary.active}</div>
         </div>
         <div className="kpi-card neu">
-          <div className="kpi-label">مجمَّدة</div>
+          <div className="kpi-label">{t('developer.panel.kpi_frozen')}</div>
           <div className="kpi-value num">{summary.frozen}</div>
         </div>
         <div className="kpi-card neg">
-          <div className="kpi-label">متوقفة</div>
+          <div className="kpi-label">{t('developer.panel.kpi_stopped')}</div>
           <div className="kpi-value num">{summary.stopped}</div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">النماذج</div>
+          <div className="card-title">{t('developer.panel.templates_title')}</div>
           <button className="btn btn-sm btn-primary" onClick={() => setTemplateModal({ mode: 'create' })}>
-            + إنشاء نموذج جديد
+            {t('developer.panel.new_template')}
           </button>
         </div>
         <table>
           <thead>
             <tr>
-              <th>اسم النموذج</th>
-              <th>عدد الأقسام المتاحة</th>
-              <th>عدد الحسابات المستخدِمة له</th>
+              <th>{t('developer.panel.col_template_name')}</th>
+              <th>{t('developer.panel.col_screens')}</th>
+              <th>{t('developer.panel.col_usage')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {templates.map((t) => (
-              <tr key={t.id}>
+            {templates.map((tpl) => (
+              <tr key={tpl.id}>
                 <td>
-                  {t.name}
-                  {t.isSystem && <span className="badge draft"> ثابت — غير قابل للتعديل</span>}
+                  {tpl.name}
+                  {tpl.isSystem && <span className="badge draft"> {t('developer.panel.system_badge')}</span>}
                 </td>
-                <td className="num">{t.isAllScreens ? 'الكل' : t.allowedScreens.length}</td>
-                <td className="num">{usageByTemplate.get(t.id) ?? 0}</td>
+                <td className="num">{tpl.isAllScreens ? t('developer.panel.all') : tpl.allowedScreens.length}</td>
+                <td className="num">{usageByTemplate.get(tpl.id) ?? 0}</td>
                 <td>
-                  {!t.isSystem && (
+                  {!tpl.isSystem && (
                     <RowMenu
                       actions={[
-                        { label: '✎ تعديل', onClick: () => setTemplateModal({ mode: 'edit', template: t }) },
-                        { label: '🗑 حذف', onClick: () => setPendingDeleteTemplate(t), danger: true },
+                        { label: t('developer.panel.edit'), onClick: () => setTemplateModal({ mode: 'edit', template: tpl }) },
+                        { label: t('developer.panel.delete'), onClick: () => setPendingDeleteTemplate(tpl), danger: true },
                       ]}
                     />
                   )}
@@ -178,10 +180,10 @@ export function DeveloperPanelPage() {
         <table>
           <thead>
             <tr>
-              <th>المنشأة/المستخدم</th>
-              <th>النموذج</th>
-              <th>نهاية الاشتراك</th>
-              <th>الحالة</th>
+              <th>{t('developer.panel.col_company')}</th>
+              <th>{t('developer.panel.col_template')}</th>
+              <th>{t('developer.panel.col_sub_end')}</th>
+              <th>{t('developer.common.status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -189,7 +191,7 @@ export function DeveloperPanelPage() {
             {companies.length === 0 && (
               <tr>
                 <td colSpan={5}>
-                  <div className="empty-state">لا توجد حسابات بعد</div>
+                  <div className="empty-state">{t('developer.panel.empty')}</div>
                 </td>
               </tr>
             )}
@@ -199,12 +201,12 @@ export function DeveloperPanelPage() {
                 <td>{c.permissionTemplate.name}</td>
                 <td className="num">{c.subEnd ? dfmt(c.subEnd) : '—'}</td>
                 <td>
-                  <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
+                  <span className={`badge ${badgeOf(statusMeta(), c.status).badgeClass}`}>{badgeOf(statusMeta(), c.status).label}</span>
                 </td>
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل', onClick: () => setCompanyModal({ mode: 'edit', company: c }) },
+                      { label: t('developer.panel.edit'), onClick: () => setCompanyModal({ mode: 'edit', company: c }) },
                     ]}
                   />
                 </td>
@@ -214,10 +216,11 @@ export function DeveloperPanelPage() {
         </table>
       </div>
 
-      {/* ⑪A2 (`ق-١٣١٢`): كلُّ قسمٍ لدوره — **والإخفاءُ كي لا يُقاد أحدٌ إلى بابٍ يُردّ منه**،
-          والحكمُ في الخادم لا هنا. والبوّابةُ مكوِّنٌ مستقلّ **لأن هذه اللوحةَ لا تقرأ الفاعل
-          إطلاقاً**: هي محرِّرُ نماذجَ، وخلطُ ذلك بسلطة المستخدم هو ما يمنعه حارسُ الواجهة. */}
-      {/* ⑪A1 (`ق-١٣١٨`): القراراتُ الحرجة لكلِّ دورٍ منصّيّ — **فالفصلُ بين شخصين لا بين دورين**. */}
+      {/* Each section shows only for its platform role, so nobody is led to a door that refuses them;
+          the server decides. The gate is a separate component because this panel never reads the
+          current actor: it edits templates, and mixing that with the user's own authority is what the
+          UI guard forbids. Critical decisions are open to every platform role: the split is between
+          two people, not two roles. */}
       <DecisionsPanel />
 
       <PlatformRoleGate allow="SUPPORT">
@@ -229,16 +232,16 @@ export function DeveloperPanelPage() {
       <PlatformRoleGate allow="COMPLIANCE">
         <SubProcessorsSection />
       </PlatformRoleGate>
-      {/* ⚖️ القوالبُ العامّة (`ق-١٦٣٨` · الموجة ١ب): لمالك المنصّة ودور «الامتثال» (`ق-١٦٤١`/١)، كخادمها (`@RequiresPlatformRole(COMPLIANCE)`). */}
+      {/* Public form templates: the platform owner and the compliance role, matching the server. */}
       <PlatformRoleGate allow="COMPLIANCE">
         <PublicFormTemplatesSection />
       </PlatformRoleGate>
 
       {companyModal && (
         <CompanyModal
-          // ⚖️ توجيه ٢٧٥ (القاعدة ٣٧ · `ق-٦٤٤`): المنشأةُ تركب قالباً عامّاً غيرَ نظاميّ، والخادمُ يرفض غيرَه. فالقائمةُ هنا
-          // ما يُقبل وحدَه، وإلا اختارت النافذةُ مسبقاً أوّلَها (قالبَ منشأةٍ أخرى أو «المطوّر») فيُرفض الحفظ.
-          templates={templates.filter((t) => t.companyId === null && !t.isSystem)}
+          // A company uses a public, non-system template, and the server refuses any other. Listing only
+          // those keeps the modal from preselecting one the server would reject.
+          templates={templates.filter((tpl) => tpl.companyId === null && !tpl.isSystem)}
           editing={companyModal.mode === 'edit' ? companyModal.company : null}
           onCancel={() => setCompanyModal(null)}
           onSave={handleSaveCompany}
@@ -251,9 +254,9 @@ export function DeveloperPanelPage() {
 
       {pendingDeleteTemplate && (
         <ConfirmModal
-          title="حذف النموذج"
-          body={deleteError ?? `حذف نموذج "${pendingDeleteTemplate.name}"؟`}
-          confirmLabel="حذف"
+          title={t('developer.panel.delete_template_title')}
+          body={deleteError ?? t('developer.panel.delete_template_body', { name: pendingDeleteTemplate.name })}
+          confirmLabel={t('developer.common.delete')}
           onCancel={() => {
             setPendingDeleteTemplate(null);
             setDeleteError(null);

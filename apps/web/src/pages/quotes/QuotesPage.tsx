@@ -1,24 +1,28 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { convertQuote, deleteQuote, listQuotes, type DerivedQuoteStatus, type Quote } from '../../api/quotes';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { QuoteModal } from './QuoteModal';
 
+/** Labels are translation keys, turned into text at render. */
 const STATUS_META: Record<DerivedQuoteStatus, { label: string; badgeClass: string }> = {
-  DRAFT: { label: 'مسودة', badgeClass: 'draft' },
-  SENT: { label: 'مرسَل', badgeClass: 'due' },
-  CONVERTED: { label: 'محوَّل', badgeClass: 'paid' },
-  EXPIRED: { label: 'منتهٍ', badgeClass: 'overdue' },
+  DRAFT: { label: 'quotes.status.draft', badgeClass: 'draft' },
+  SENT: { label: 'quotes.status.sent', badgeClass: 'due' },
+  CONVERTED: { label: 'quotes.status.converted', badgeClass: 'paid' },
+  EXPIRED: { label: 'quotes.status.expired', badgeClass: 'overdue' },
 };
 
 /**
- * عروض الأسعار (4.9): وثيقة تفاوض تتحوّل فاتورةً بنقرة — بلا إعادة إدخال.
- * زر التحويل يعطَّل بسببٍ ظاهر للمنتهي والمحوَّل، ورسائل الخادم تُعرض نصاً.
+ * Quotes: a negotiation document that becomes an invoice in one click, without
+ * re-entry. The convert button is disabled with a visible reason for expired
+ * and converted quotes, and server messages are shown as text.
  */
 export function QuotesPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,10 +47,10 @@ export function QuotesPage() {
     return quotes.filter((x) => x.no.toLowerCase().includes(q) || x.customer.name.toLowerCase().includes(q));
   }, [quotes, search]);
 
-  /** لماذا لا يُحوَّل هذا العرض الآن؟ null = قابل للتحويل. */
+  /** Why this quote cannot be converted now; null means it can. */
   function convertBlockReason(q: Quote): string | null {
-    if (q.derivedStatus === 'CONVERTED') return `حُوِّل إلى ${q.convertedInvoice?.no ?? 'فاتورة'}`;
-    if (q.derivedStatus === 'EXPIRED') return `انتهى بتاريخ ${q.validUntil.slice(0, 10)}`;
+    if (q.derivedStatus === 'CONVERTED') return t('quotes.page.converted_to', { no: q.convertedInvoice?.no ?? t('quotes.page.invoice_fallback') });
+    if (q.derivedStatus === 'EXPIRED') return t('quotes.page.expired_on', { date: q.validUntil.slice(0, 10) });
     return null;
   }
 
@@ -57,11 +61,11 @@ export function QuotesPage() {
     try {
       const { invoice } = await convertQuote(converting.id);
       setConverting(null);
-      // عند النجاح: مباشرةً إلى شاشة الفواتير على الفاتورة المُنشأة.
+      // On success, go straight to the invoices screen on the new invoice.
       navigate(`/invoices?highlight=${invoice.id}`);
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر التحويل');
+      setError(d?.message ?? t('quotes.page.convert_failed'));
       await reload();
     } finally {
       setBusy(false);
@@ -77,7 +81,7 @@ export function QuotesPage() {
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر حذف العرض');
+      setError(d?.message ?? t('quotes.page.delete_failed'));
     }
   }
 
@@ -87,19 +91,19 @@ export function QuotesPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">عروض الأسعار</div>
-          <div className="page-sub">عرضٌ يوافق عليه العميل يصير فاتورةً بنقرة — بأسعاره المتفق عليها</div>
+          <div className="page-title">{t('quotes.page.title')}</div>
+          <div className="page-sub">{t('quotes.page.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + عرض سعر جديد
+            {t('quotes.page.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالرقم أو اسم العميل..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('quotes.page.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -113,12 +117,12 @@ export function QuotesPage() {
         <table>
           <thead>
             <tr>
-              <th>الرقم</th>
-              <th>العميل</th>
-              <th>الإصدار</th>
-              <th>الصلاحية حتى</th>
-              <th>الإجمالي</th>
-              <th>الحالة</th>
+              <th>{t('quotes.page.col_no')}</th>
+              <th>{t('quotes.page.col_customer')}</th>
+              <th>{t('quotes.page.col_issue')}</th>
+              <th>{t('quotes.page.col_valid_until')}</th>
+              <th>{t('quotes.page.col_total')}</th>
+              <th>{t('quotes.page.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -126,7 +130,7 @@ export function QuotesPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <div className="empty-state">لا عروض أسعار مطابقة</div>
+                  <div className="empty-state">{t('quotes.page.empty')}</div>
                 </td>
               </tr>
             )}
@@ -141,7 +145,7 @@ export function QuotesPage() {
                   <td className="num">{dfmt(q.validUntil)}</td>
                   <td className="num">{fmt(Number(q.total))}</td>
                   <td>
-                    <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
+                    <span className={`badge ${meta.badgeClass}`}>{t(meta.label)}</span>
                     {q.derivedStatus === 'CONVERTED' && q.convertedInvoice && <div className="hint num">{q.convertedInvoice.no}</div>}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -151,15 +155,15 @@ export function QuotesPage() {
                       </button>
                     ) : (
                       <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConverting(q)}>
-                        ⇐ تحويل إلى فاتورة
+                        {t('quotes.page.convert')}
                       </button>
                     )}
                     <RowMenu
                       actions={[
                         ...(q.derivedStatus === 'DRAFT' || q.derivedStatus === 'SENT'
-                          ? [{ label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', quote: q }) }]
+                          ? [{ label: t('quotes.page.edit'), onClick: () => setModal({ mode: 'edit', quote: q }) }]
                           : []),
-                        { label: '🗑 حذف', onClick: () => setPendingDelete(q), danger: true },
+                        { label: t('quotes.page.delete'), onClick: () => setPendingDelete(q), danger: true },
                       ]}
                     />
                   </td>
@@ -183,9 +187,9 @@ export function QuotesPage() {
 
       {converting && (
         <ConfirmModal
-          title="تحويل العرض إلى فاتورة"
-          body={`إصدار فاتورة للعميل «${converting.customer.name}» بإجمالي ${fmt(Number(converting.total))} بأسعار العرض المتفق عليها؟ ستُرحَّل الفاتورة محاسبياً فور الإنشاء.`}
-          confirmLabel="تحويل"
+          title={t('quotes.page.convert_title')}
+          body={t('quotes.page.convert_body', { customer: converting.customer.name, total: fmt(Number(converting.total)) })}
+          confirmLabel={t('quotes.page.convert_confirm')}
           onCancel={() => setConverting(null)}
           onConfirm={confirmConvert}
         />
@@ -193,9 +197,9 @@ export function QuotesPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف عرض السعر"
-          body={error ?? `حذف العرض ${pendingDelete.no}؟`}
-          confirmLabel="حذف"
+          title={t('quotes.page.delete_title')}
+          body={error ?? t('quotes.page.delete_body', { no: pendingDelete.no })}
+          confirmLabel={t('quotes.page.delete_confirm')}
           onCancel={() => {
             setPendingDelete(null);
             setError(null);

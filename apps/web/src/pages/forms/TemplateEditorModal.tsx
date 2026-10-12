@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { FormItemInput, FormType } from '../../api/forms';
 import { apiErrorMessage } from '../../lib/apiError';
 import { emptyItemDraft, ITEM_TYPE_LABELS, ITEM_TYPES, itemInputsOf, NUMERIC_TYPES, type ItemDraft } from './formItems';
@@ -11,9 +12,11 @@ export interface TemplateEditorValue {
 }
 
 /**
- * ⚖️ **منشئُ القوالب** (الموجة ١ب · `ق-١٦٣٨`): يحرّر مسوّدةَ إصدار — الاسمَ والوصفَ والبنودَ بترتيبها ونوعِها ونطاقِها.
- * مكوِّنٌ واحد لفاعلَين (قرارُ الخطّة ٤٣): مالكُ المنصّة في لوحة المطوّر لقوالبها العامّة، ومالكُ المنشأة في شاشة «النماذج» لنسخته.
- * **والمنشورُ يُعرض ولا يُحرَّر** (`readOnly`): تعديلُه إصدارٌ جديد. والحكمُ في الخادم، ورسالتُه هي ما يظهر.
+ * Template builder: edits a draft version, its name, description and ordered
+ * items with type and range. One component for two actors: the platform owner in
+ * the developer panel for public templates, and the company owner in the Forms
+ * screen for their copy. A published version is shown, not edited (readOnly);
+ * changing it means a new version. The server decides, and its message is shown.
  */
 export function TemplateEditorModal({
   title,
@@ -25,12 +28,13 @@ export function TemplateEditorModal({
 }: {
   title: string;
   initial: { formTypeId?: string; name: string; description: string; items: ItemDraft[] };
-  /** يُعرض مُنتقي النوع حين يُمرَّر (قالبٌ عامٌّ جديد). */
+  /** Shows the type picker when passed (a new public template). */
   formTypes?: FormType[];
   readOnly?: boolean;
   onCancel: () => void;
   onSave?: (value: TemplateEditorValue) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [formTypeId, setFormTypeId] = useState(initial.formTypeId ?? '');
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
@@ -51,15 +55,15 @@ export function TemplateEditorModal({
   async function handleSave() {
     if (!onSave) return;
     setError(null);
-    if (formTypes && !formTypeId) return setError('اختر نوعَ النموذج.');
-    if (!name.trim()) return setError('للقالب اسمٌ يُكتب.');
+    if (formTypes && !formTypeId) return setError(t('forms.editor.error_pick_type'));
+    if (!name.trim()) return setError(t('forms.editor.error_name_required'));
     const built = itemInputsOf(items);
     if ('error' in built) return setError(built.error);
     setSaving(true);
     try {
       await onSave({ formTypeId: formTypes ? formTypeId : undefined, name: name.trim(), description: description.trim(), items: built.items });
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر حفظ القالب'));
+      setError(apiErrorMessage(e, t('forms.editor.save_failed')));
     } finally {
       setSaving(false);
     }
@@ -77,12 +81,12 @@ export function TemplateEditorModal({
 
         {formTypes && (
           <div className="field">
-            <label>نوعُ النموذج</label>
+            <label>{t('forms.editor.form_type')}</label>
             <select value={formTypeId} onChange={(e) => setFormTypeId(e.target.value)} disabled={readOnly}>
-              <option value="">اختر</option>
-              {formTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
+              <option value="">{t('forms.editor.choose')}</option>
+              {formTypes.map((ft) => (
+                <option key={ft.id} value={ft.id}>
+                  {ft.name}
                 </option>
               ))}
             </select>
@@ -90,11 +94,11 @@ export function TemplateEditorModal({
         )}
         <div className="two-col">
           <div className="field">
-            <label>اسمُ القالب</label>
+            <label>{t('forms.editor.name')}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} disabled={readOnly} />
           </div>
           <div className="field">
-            <label>وصف (اختياريّ)</label>
+            <label>{t('forms.editor.description')}</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} disabled={readOnly} />
           </div>
         </div>
@@ -103,14 +107,14 @@ export function TemplateEditorModal({
           <thead>
             <tr>
               <th>#</th>
-              <th style={{ width: '24%' }}>البند</th>
-              <th>النوع</th>
-              <th>إلزاميّ</th>
-              <th>من</th>
-              <th>إلى</th>
-              <th>الوحدة</th>
-              <th title="قيمةٌ خارج النطاق تمنع الختم">يمنع الختم</th>
-              <th>إرشاد</th>
+              <th style={{ width: '24%' }}>{t('forms.editor.col_item')}</th>
+              <th>{t('forms.editor.col_type')}</th>
+              <th>{t('forms.editor.col_required')}</th>
+              <th>{t('forms.editor.col_min')}</th>
+              <th>{t('forms.editor.col_max')}</th>
+              <th>{t('forms.editor.col_unit')}</th>
+              <th title={t('forms.editor.col_blocking_title')}>{t('forms.editor.col_blocking')}</th>
+              <th>{t('forms.editor.col_help')}</th>
               {!readOnly && <th></th>}
             </tr>
           </thead>
@@ -121,18 +125,18 @@ export function TemplateEditorModal({
                 <tr key={i} data-testid="template-item-row">
                   <td className="num">{i + 1}</td>
                   <td>
-                    <input aria-label={`اسم البند ${i + 1}`} value={it.label} onChange={(e) => setItem(i, { label: e.target.value })} disabled={readOnly} />
+                    <input aria-label={t('forms.editor.item_name_aria', { n: i + 1 })} value={it.label} onChange={(e) => setItem(i, { label: e.target.value })} disabled={readOnly} />
                   </td>
                   <td>
                     <select
-                      aria-label={`نوع البند ${i + 1}`}
+                      aria-label={t('forms.editor.item_type_aria', { n: i + 1 })}
                       value={it.itemType}
                       onChange={(e) => setItem(i, { itemType: e.target.value as ItemDraft['itemType'] })}
                       disabled={readOnly}
                     >
-                      {ITEM_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {ITEM_TYPE_LABELS[t]}
+                      {ITEM_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {ITEM_TYPE_LABELS[type]}
                         </option>
                       ))}
                     </select>
@@ -143,7 +147,7 @@ export function TemplateEditorModal({
                   <td>
                     {numeric && (
                       <input
-                        aria-label={`أدنى البند ${i + 1}`}
+                        aria-label={t('forms.editor.item_min_aria', { n: i + 1 })}
                         className="num"
                         style={{ width: 64 }}
                         value={it.minValue}
@@ -155,7 +159,7 @@ export function TemplateEditorModal({
                   <td>
                     {numeric && (
                       <input
-                        aria-label={`أعلى البند ${i + 1}`}
+                        aria-label={t('forms.editor.item_max_aria', { n: i + 1 })}
                         className="num"
                         style={{ width: 64 }}
                         value={it.maxValue}
@@ -166,7 +170,7 @@ export function TemplateEditorModal({
                   </td>
                   <td>
                     {numeric && (
-                      <input aria-label={`وحدة البند ${i + 1}`} style={{ width: 64 }} value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value })} disabled={readOnly} />
+                      <input aria-label={t('forms.editor.item_unit_aria', { n: i + 1 })} style={{ width: 64 }} value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value })} disabled={readOnly} />
                     )}
                   </td>
                   <td>
@@ -175,21 +179,21 @@ export function TemplateEditorModal({
                     )}
                   </td>
                   <td>
-                    <input aria-label={`إرشاد البند ${i + 1}`} style={{ width: 140 }} value={it.helpText} onChange={(e) => setItem(i, { helpText: e.target.value })} disabled={readOnly} />
+                    <input aria-label={t('forms.editor.item_help_aria', { n: i + 1 })} style={{ width: 140 }} value={it.helpText} onChange={(e) => setItem(i, { helpText: e.target.value })} disabled={readOnly} />
                   </td>
                   {!readOnly && (
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label="أعلى">
+                      <button className="btn btn-ghost btn-sm" onClick={() => move(i, -1)} disabled={i === 0} aria-label={t('forms.editor.move_up')}>
                         ▲
                       </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => move(i, 1)} disabled={i === items.length - 1} aria-label="أسفل">
+                      <button className="btn btn-ghost btn-sm" onClick={() => move(i, 1)} disabled={i === items.length - 1} aria-label={t('forms.editor.move_down')}>
                         ▼
                       </button>
                       <button
                         className="btn btn-ghost btn-sm"
                         onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}
                         disabled={items.length === 1}
-                        aria-label="حذف البند"
+                        aria-label={t('forms.editor.remove_item')}
                       >
                         ✕
                       </button>
@@ -202,18 +206,18 @@ export function TemplateEditorModal({
         </table>
         {!readOnly && (
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => setItems((xs) => [...xs, emptyItemDraft()])}>
-            + بند
+            {t('forms.editor.add_item')}
           </button>
         )}
 
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            {readOnly ? 'إغلاق' : 'إلغاء'}
+            {readOnly ? t('forms.common.close') : t('forms.common.cancel')}
           </button>
           {!readOnly && onSave && (
             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              حفظُ المسوّدة
+              {t('forms.editor.save_draft')}
             </button>
           )}
         </div>

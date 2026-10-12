@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   deleteContractForm,
   setContractFormValues,
@@ -14,7 +15,6 @@ import {
   CONDITION_LABELS,
   CONDITION_SCALE,
   dateTimeText,
-  EJAR_COMPLEMENT_NOTE,
   isConditionValue,
   NUMERIC_TYPES,
   valueChanged,
@@ -28,12 +28,16 @@ import { FormSigningSection } from './FormSigningSection';
 import { statusOf } from './formStatus';
 
 /**
- * ⚖️ **السجلُّ المعبّأ** (الموجة ١د · `ق-١٦٣٨`): تعبئةُ المسوّدة بأنواع بنودها، ثم الختمُ ببصمته ورقمه وموضعه في السلسلة
- * (`ق-١٦٣٦`)، ثم التحقّقُ والطباعةُ ببصمة التحقّق. **التعبئةُ «تسجيل» والختمُ «مراجعة»** على شاشة العقود (الخادمُ يحكم، والزرُّ
- * يُخفى لمن لا يملكه). **والمختومُ يُقرأ ولا يُعدَّل** (`ق-١٦٣٥` ③ب)، والتصحيحُ بنموذجٍ تصحيحيٍّ لم يُبنَ بعد.
+ * A filled record: the draft is filled by item type, then sealed with its
+ * fingerprint, number and place in the chain, then verified and printed with the
+ * verification fingerprint. Filling is "record" and sealing is "review" on the
+ * contracts screen (the server decides; the button is hidden from those without
+ * the action). A sealed record is read only; correction needs a corrective form
+ * that is not built yet.
  *
- * ⚖️ **والختمُ صار يقع بتوقيع الطرف** (توجيه ٢٨٧ ⑨): الموظّفُ يوقّع ويرسل من قسم التوقيع، **وما أُرسل لا يُعدَّل** ولا يُحذف، والردُّ على
- * الاعتراض نسخةٌ معدّلة تُفتح مكانه.
+ * Sealing happens when the party signs: staff sign and send from the signing
+ * section, what was sent is neither edited nor deleted, and the answer to an
+ * objection is a revised copy opened in its place.
  */
 export function FormRecordPanel({
   contract,
@@ -54,6 +58,7 @@ export function FormRecordPanel({
   onDeleted: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const sealed = record.status === 'SEALED';
   const draft = record.status === 'DRAFT';
   const status = statusOf(record.status);
@@ -69,7 +74,7 @@ export function FormRecordPanel({
   const dirty = useMemo(() => record.items.some((i) => valueChanged(i, drafts[i.itemId])), [record.items, drafts]);
   const setDraft = (itemId: string, patch: Partial<ValueDraft>) => setDrafts((d) => ({ ...d, [itemId]: { ...d[itemId], ...patch } }));
 
-  /** يُرسل ما تغيّر وحدَه، ويعيد السجلَّ كما حفظه الخادم. */
+  /** Sends only what changed, and returns the record as the server saved it. */
   async function saveChanges(): Promise<FormInstance | null> {
     const values: FormValueInput[] = [];
     for (const item of record.items) {
@@ -100,9 +105,9 @@ export function FormRecordPanel({
     }
   }
 
-  const save = () => run(async () => void (await saveChanges()), 'تعذّر حفظ القيم');
+  const save = () => run(async () => void (await saveChanges()), t('forms.record.save_failed'));
 
-  /** ما لم يُحفظ يُحفظ قبل التوقيع، فلا يُوقَّع غيرُ ما على الشاشة. */
+  /** Unsaved values are saved before signing, so only what is on screen is signed. */
   const beforeSend = async () => {
     if (!editable || !dirty) return true;
     return (await saveChanges()) !== null;
@@ -113,19 +118,19 @@ export function FormRecordPanel({
       setConfirm(null);
       await deleteContractForm(contract.id, record.id);
       onDeleted();
-    }, 'تعذّر حذف المسوّدة');
+    }, t('forms.record.delete_failed'));
 
-  const verify = () => run(async () => setVerification(await verifyContractForm(contract.id, record.id)), 'تعذّر التحقّق');
+  const verify = () => run(async () => setVerification(await verifyContractForm(contract.id, record.id)), t('forms.record.verify_failed'));
 
   return (
     <>
     <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }} role="dialog" aria-label="السجلّ المعبّأ">
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }} role="dialog" aria-label={t('forms.record.dialog_aria')}>
         <div className="modal-head">
           <div className="modal-title">
-            {record.template.name} · إصدار {record.template.version}{' '}
+            {t('forms.common.name_version', { name: record.template.name, version: record.template.version })}{' '}
             <span className={`badge ${status.badge}`}>{status.label}</span>
-            {record.revisionNo > 1 && <span className="hint"> · النسخة {record.revisionNo}</span>}
+            {record.revisionNo > 1 && <span className="hint">{t('forms.record.revision', { n: record.revisionNo })}</span>}
           </div>
           <button className="modal-close" onClick={onClose}>
             ✕
@@ -134,17 +139,18 @@ export function FormRecordPanel({
 
         <div className="print-receipt" data-testid="form-print-sheet">
           <p style={{ fontSize: 12.5 }}>
-            العقد <span className="num">{contract.no}</span> · الوحدة <span className="num">{contract.unitNo}</span> · {contract.propertyName} · المستأجر{' '}
-            {contract.tenant} · تاريخُ النموذج <span className="num">{dfmt(record.formDate)}</span> · عبّأه {record.filledByName}
+            {t('forms.common.contract')} <span className="num">{contract.no}</span> · {t('forms.common.unit')} <span className="num">{contract.unitNo}</span> ·{' '}
+            {contract.propertyName} · {t('forms.common.tenant')} {contract.tenant} · {t('forms.record.form_date')} <span className="num">{dfmt(record.formDate)}</span> ·{' '}
+            {t('forms.record.filled_by', { name: record.filledByName })}
           </p>
 
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th style={{ width: '30%' }}>البند</th>
-                <th>القيمة</th>
-                <th>ملاحظة</th>
+                <th style={{ width: '30%' }}>{t('forms.record.col_item')}</th>
+                <th>{t('forms.record.col_value')}</th>
+                <th>{t('forms.record.col_note')}</th>
               </tr>
             </thead>
             <tbody>
@@ -153,15 +159,15 @@ export function FormRecordPanel({
                 const numeric = NUMERIC_TYPES.has(item.itemType);
                 const range =
                   numeric && (item.minValue !== null || item.maxValue !== null)
-                    ? `من ${item.minValue ?? '…'} إلى ${item.maxValue ?? '…'}${item.unit ? ` ${item.unit}` : ''}`
+                    ? t('forms.record.range', { min: item.minValue ?? '…', max: item.maxValue ?? '…', unit: item.unit ? ` ${item.unit}` : '' })
                     : null;
                 return (
                   <tr key={item.itemId} data-testid="form-item-row">
                     <td className="num">{item.lineNo}</td>
                     <td>
                       {item.label}
-                      {item.required && <div className="hint">إلزاميّ</div>}
-                      {range && <div className="hint">{item.isBlocking ? `${range}، وما خرج عنه يمنع الختم` : range}</div>}
+                      {item.required && <div className="hint">{t('forms.record.required')}</div>}
+                      {range && <div className="hint">{item.isBlocking ? t('forms.record.range_blocking', { range }) : range}</div>}
                       {item.helpText && <div className="hint">{item.helpText}</div>}
                     </td>
                     <td>
@@ -169,8 +175,8 @@ export function FormRecordPanel({
                         item.itemType === 'BOOLEAN' ? (
                           <select aria-label={item.label} value={d.bool} onChange={(e) => setDraft(item.itemId, { bool: e.target.value as ValueDraft['bool'] })}>
                             <option value=""></option>
-                            <option value="yes">نعم</option>
-                            <option value="no">لا</option>
+                            <option value="yes">{t('forms.items.yes')}</option>
+                            <option value="no">{t('forms.items.no')}</option>
                           </select>
                         ) : item.itemType === 'CONDITION' ? (
                           <select aria-label={item.label} value={d.text} onChange={(e) => setDraft(item.itemId, { text: e.target.value })}>
@@ -180,10 +186,10 @@ export function FormRecordPanel({
                                 {CONDITION_LABELS[c]}
                               </option>
                             ))}
-                            {/* قيمةٌ عُبّئت قبل السلّم تُرى ولا تُختار، والختمُ يردّها حتى تُختار من السلّم. */}
+                            {/* A value filled before the scale is shown but not selectable; sealing rejects it until a scale value is chosen. */}
                             {d.text !== '' && !isConditionValue(d.text) && (
                               <option value={d.text} disabled>
-                                {`قيمةٌ قديمة: ${d.text}`}
+                                {t('forms.record.legacy_value', { value: d.text })}
                               </option>
                             )}
                           </select>
@@ -195,11 +201,11 @@ export function FormRecordPanel({
                       ) : (
                         <span className={numeric ? 'num' : undefined}>{valueText(item)}</span>
                       )}
-                      {item.outOfRange && <div className="error-text">خارج النطاق</div>}
+                      {item.outOfRange && <div className="error-text">{t('forms.record.out_of_range')}</div>}
                     </td>
                     <td>
                       {editable ? (
-                        <input aria-label={`ملاحظة ${item.label}`} value={d.note} onChange={(e) => setDraft(item.itemId, { note: e.target.value })} />
+                        <input aria-label={t('forms.record.note_aria', { label: item.label })} value={d.note} onChange={(e) => setDraft(item.itemId, { note: e.target.value })} />
                       ) : (
                         item.note ?? ''
                       )}
@@ -212,27 +218,28 @@ export function FormRecordPanel({
 
           {sealed && (
             <div className="card" style={{ marginTop: 10 }} data-testid="form-seal-block">
-              <div className="card-title">الختم</div>
+              <div className="card-title">{t('forms.record.seal_title')}</div>
               <p style={{ fontSize: 12.5 }}>
-                الرقم <span className="num">{record.no}</span> · الموضعُ في سلسلة أختام المنشأة <span className="num">{record.sealSeq}</span>
+                {t('forms.record.seal_no')} <span className="num">{record.no}</span> · {t('forms.record.seal_seq')} <span className="num">{record.sealSeq}</span>
               </p>
               <p style={{ fontSize: 12.5 }}>
-                بصمةُ المحتوى (sha256) <span className="num" style={{ wordBreak: 'break-all' }}>{record.contentHash}</span>
+                {t('forms.record.content_hash')} <span className="num" style={{ wordBreak: 'break-all' }}>{record.contentHash}</span>
               </p>
               <p style={{ fontSize: 12.5 }}>
-                بصمةُ الختم السابق{' '}
+                {t('forms.record.prev_hash')}{' '}
                 <span className="num" style={{ wordBreak: 'break-all' }}>
-                  {record.prevHash ?? 'لا سابقَ له: أوّلُ ختمٍ في المنشأة'}
+                  {record.prevHash ?? t('forms.record.no_prev_hash')}
                 </span>
               </p>
               <p style={{ fontSize: 12.5 }}>
-                ختمه {record.sealedByName} · وقتُ الختم <span className="num">{record.sealedAt ? dateTimeText(record.sealedAt) : ''}</span> بساعة الخادم
+                {t('forms.record.sealed_by', { name: record.sealedByName })} · {t('forms.record.sealed_at')}{' '}
+                <span className="num">{record.sealedAt ? dateTimeText(record.sealedAt) : ''}</span> {t('forms.record.server_clock')}
               </p>
-              <p className="hint">ختمٌ داخليٌّ الآن، وجهةٌ معتمدةٌ لاحقاً (قرارُ الخطّة ٤٦).</p>
+              <p className="hint">{t('forms.record.internal_seal_note')}</p>
             </div>
           )}
 
-          <p className="hint">{EJAR_COMPLEMENT_NOTE}</p>
+          <p className="hint">{t('forms.record.ejar_complement')}</p>
         </div>
 
         <FormSigningSection
@@ -248,33 +255,36 @@ export function FormRecordPanel({
         {verification && (
           <p className={verification.valid ? 'hint' : 'error-text'} data-testid="form-verification">
             {verification.valid
-              ? 'التحقّق: البصمةُ المعادة من السجلّ تطابق المختومة، وهو متّصلٌ بسابقه في السلسلة.'
-              : `التحقّق: ${verification.contentIntact ? '' : 'محتوى السجلّ تغيّر عمّا خُتم. '}${verification.chainLinked ? '' : 'السجلُّ لا يتّصل بسابقه في السلسلة.'}`}
+              ? t('forms.record.verify_ok')
+              : t('forms.record.verify_bad', {
+                  content: verification.contentIntact ? '' : t('forms.record.verify_content_changed'),
+                  chain: verification.chainLinked ? '' : t('forms.record.verify_chain_broken'),
+                })}
           </p>
         )}
 
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>
-            إغلاق
+            {t('forms.common.close')}
           </button>
           {draft && canRecord && (
             <button className="btn btn-ghost" onClick={() => setConfirm('delete')} disabled={busy}>
-              حذفُ المسوّدة
+              {t('forms.record.delete_draft')}
             </button>
           )}
           {editable && (
             <button className="btn btn-ghost" onClick={save} disabled={busy || !dirty}>
-              حفظٌ كمسوّدة
+              {t('forms.record.save_draft')}
             </button>
           )}
           {sealed && (
             <>
               <button className="btn btn-ghost" onClick={verify} disabled={busy}>
-                تحقّق
+                {t('forms.record.verify')}
               </button>
               <button className="btn btn-primary" onClick={() => window.print()}>
-                طباعة
+                {t('forms.record.print')}
               </button>
             </>
           )}
@@ -284,9 +294,9 @@ export function FormRecordPanel({
 
       {confirm === 'delete' && (
         <ConfirmModal
-          title="حذفُ المسوّدة"
-          body="تُحذف المسوّدةُ بقيمها، ولا رقمَ لها فلا تترك فجوة."
-          confirmLabel="حذف"
+          title={t('forms.record.delete_draft')}
+          body={t('forms.record.delete_body')}
+          confirmLabel={t('forms.common.delete')}
           onCancel={() => setConfirm(null)}
           onConfirm={remove}
         />

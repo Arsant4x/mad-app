@@ -1,5 +1,6 @@
 import { badgeAltOf } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   approveDeletionRequest,
   listDeletionRequests,
@@ -10,49 +11,54 @@ import {
 } from '../../api/deletionRequests';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
+import i18n from '../../i18n';
 
-const STATUS_META: Record<DeletionRequestStatus, { label: string; badge: string }> = {
-  PENDING: { label: 'قيد المراجعة', badge: 'due' },
-  APPROVED: { label: 'مُوافَق', badge: 'overdue' },
-  REJECTED: { label: 'مرفوض', badge: 'draft' },
-  CANCELLED: { label: 'مسحوب', badge: 'draft' },
+const statusMeta = (): Record<DeletionRequestStatus, { label: string; badge: string }> => ({
+  PENDING: { label: i18n.t('developer.deletion.status.pending'), badge: 'due' },
+  APPROVED: { label: i18n.t('developer.deletion.status.approved'), badge: 'overdue' },
+  REJECTED: { label: i18n.t('developer.deletion.status.rejected'), badge: 'draft' },
+  CANCELLED: { label: i18n.t('developer.deletion.status.cancelled'), badge: 'draft' },
+});
+
+/** What actually happened; an approval is not shown as a plain "done". */
+const outcomeMeta = (): Record<AccountRequestOutcome, { label: string; badge: string }> => ({
+  DELETED: { label: i18n.t('developer.deletion.outcome.deleted'), badge: 'overdue' },
+  CLOSED: { label: i18n.t('developer.deletion.outcome.closed'), badge: 'overdue' },
+  REOPENED: { label: i18n.t('developer.deletion.outcome.reopened'), badge: 'paid' },
+  ERASED: { label: i18n.t('developer.deletion.outcome.erased'), badge: 'overdue' },
+});
+
+const KIND_LABEL_KEY: Record<AdminDeletionRequest['kind'], string> = {
+  DELETION: 'developer.deletion.kind.deletion',
+  REOPENING: 'developer.deletion.kind.reopening',
+  ERASURE: 'developer.deletion.kind.erasure',
 };
 
-/** ما وقع فعلاً — لا «نُفِّذ» لكل موافقة (ق-٥٤٢). */
-const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string }> = {
-  DELETED: { label: 'حُذفت نهائياً', badge: 'overdue' },
-  CLOSED: { label: 'أُغلقت — والبيانات باقية', badge: 'overdue' },
-  REOPENED: { label: 'أُعيد فتحها', badge: 'paid' },
-  ERASED: { label: 'مُحي غيرُ الملزِم — والملزِم باقٍ', badge: 'overdue' },
-};
-
-/** نوعُ الطلب كما يُقرأ في القائمة (ق-٥٥٩). */
-const KIND_LABEL: Record<AdminDeletionRequest['kind'], string> = { DELETION: 'حذف', REOPENING: 'إعادة فتح', ERASURE: 'محو غير الملزِم' };
-
-/** الوجهُ الذي يُقرأ: الموافقةُ تُعرَض بما وقع، والباقي بحالته. */
+/** An approved request shows what happened; the rest show their status. */
 function statusOf(r: AdminDeletionRequest) {
-  return r.status === 'APPROVED' && r.outcome ? badgeAltOf(OUTCOME_META, r.outcome) : badgeAltOf(STATUS_META, r.status);
+  return r.status === 'APPROVED' && r.outcome ? badgeAltOf(outcomeMeta(), r.outcome) : badgeAltOf(statusMeta(), r.status);
 }
 
-/** نصُّ التأكيد يقول الحقيقة قبل الضغطة (ق-٥٤٦): أتُحذف أم تُغلَق، ولماذا. */
+/** The confirmation says what will happen before the click: delete or close, and why. */
 function confirmBody(r: AdminDeletionRequest): string {
-  if (r.kind === 'REOPENING') return `سيُعاد فتح حساب "${r.companyName}" ويعود الدخول إليه. هل تريد التنفيذ؟`;
+  if (r.kind === 'REOPENING') return i18n.t('developer.deletion.confirm_body_reopen', { company: r.companyName });
   if (r.kind === 'ERASURE') {
-    return `ستُمحى الآن البيانات غير الملزِمة لمنشأة "${r.companyName}" (الهواتف وبيانات التواصل) ويبقى الملزِم إلى أجله — ولا إعادة فتح بعدها. هل تريد التنفيذ؟`;
+    return i18n.t('developer.deletion.confirm_body_erase', { company: r.companyName });
   }
   if (r.preview?.outcome === 'CLOSE') {
-    return `للمنشأة "${r.companyName}" حركة (${r.preview.movement.join(' · ')}) — فستُغلق ولا تُحذف: يُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية. هل تريد التنفيذ؟`;
+    return i18n.t('developer.deletion.confirm_body_close', { company: r.companyName, movement: r.preview.movement.join(' · ') });
   }
-  return `المنشأة "${r.companyName}" بلا حركة — سيُحذف حسابها وكل بياناتها نهائياً، لا رجعة بعدها. هل تريد التنفيذ؟`;
+  return i18n.t('developer.deletion.confirm_body_delete', { company: r.companyName });
 }
 
 /**
- * قائمة عمل الدعم: طلبات حذف الحسابات وإعادة فتحها عبر كل المنشآت. الموافقة هنا
- * **تقيس ثم تنفّذ** (ق-٥٤٢): بلا حركةٍ حذفٌ، وبحركةٍ إغلاق — والتأكيدُ يسمّي المنشأة
- * ويقول ما سيقع قبل الضغطة. ولا زرَّ حذفٍ مباشراً في اللوحة (ق-٥٤٨): المسارُ الوحيد هنا.
- * onExecuted يُخطر اللوحة لتحدّث قائمة المنشآت (المحذوفة تختفي والمغلقة تُوسَم).
+ * Support work list: account deletion and reopening requests across all companies. Approval measures
+ * first and then acts: no activity means delete, activity means close. The confirmation names the
+ * company and says what will happen. There is no direct delete button in the panel; this is the only path.
+ * onExecuted tells the panel to refresh its company list (deleted ones disappear, closed ones are marked).
  */
 export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void }) {
+  const { t } = useTranslation();
   const [requests, setRequests] = useState<AdminDeletionRequest[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,23 +94,23 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-head">
         <div className="card-title">
-          طلبات حذف الحسابات وإعادة فتحها {pending.length > 0 && <span className="badge overdue">{pending.length} بانتظار المراجعة</span>}
+          {t('developer.deletion.title')} {pending.length > 0 && <span className="badge overdue">{t('developer.deletion.pending_badge', { n: pending.length })}</span>}
         </div>
       </div>
 
       {error && <p className="error-text">{error}</p>}
 
       {requests.length === 0 ? (
-        <p className="hint">لا طلبات.</p>
+        <p className="hint">{t('developer.deletion.empty')}</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>المنشأة</th>
-              <th>الطلب</th>
-              <th>السبب</th>
-              <th>التاريخ</th>
-              <th>الحالة</th>
+              <th>{t('developer.common.company')}</th>
+              <th>{t('developer.deletion.col_request')}</th>
+              <th>{t('developer.common.reason')}</th>
+              <th>{t('developer.deletion.col_date')}</th>
+              <th>{t('developer.common.status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -112,32 +118,38 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
             {requests.map((r) => (
               <tr key={r.id}>
                 <td>{r.companyName || '—'}</td>
-                <td>{KIND_LABEL[r.kind]}</td>
+                <td>{t(KIND_LABEL_KEY[r.kind])}</td>
                 <td>{r.reason ?? '—'}</td>
                 <td className="num">{dfmt(r.createdAt)}</td>
                 <td>
                   <span className={`badge ${statusOf(r).badge}`}>{statusOf(r).label}</span>
                   {r.status === 'PENDING' && r.preview && (
                     <div className="hint">
-                      {r.preview.outcome === 'CLOSE' ? `لها حركة: ${r.preview.movement.join(' · ')} — ستُغلق` : 'بلا حركة — ستُحذف'}
+                      {r.preview.outcome === 'CLOSE'
+                        ? t('developer.deletion.preview_close', { movement: r.preview.movement.join(' · ') })
+                        : t('developer.deletion.preview_delete')}
                     </div>
                   )}
-                  {r.outcome === 'CLOSED' && r.movement.length > 0 && <div className="hint">الحركة: {r.movement.join(' · ')}</div>}
+                  {r.outcome === 'CLOSED' && r.movement.length > 0 && <div className="hint">{t('developer.deletion.movement', { movement: r.movement.join(' · ') })}</div>}
                   {r.decidedNote && <div className="hint">{r.decidedNote}</div>}
-                  {r.decidedByName && <div className="hint">بقرار: {r.decidedByName}</div>}
+                  {r.decidedByName && <div className="hint">{t('developer.deletion.decided_by', { name: r.decidedByName })}</div>}
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {r.status === 'PENDING' && (
                     <>
                       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirming(r)}>
-                        {r.kind === 'REOPENING' ? 'موافقة وإعادة فتح' : r.kind === 'ERASURE' ? 'موافقة ومحو' : 'موافقة وتنفيذ'}
+                        {r.kind === 'REOPENING'
+                          ? t('developer.deletion.approve_reopen')
+                          : r.kind === 'ERASURE'
+                            ? t('developer.deletion.approve_erase')
+                            : t('developer.deletion.approve_execute')}
                       </button>{' '}
                       <button
                         className="btn btn-ghost btn-sm"
                         disabled={busy}
-                        onClick={() => run(() => rejectDeletionRequest(r.id, note.trim() || undefined), 'تعذّر الرفض')}
+                        onClick={() => run(() => rejectDeletionRequest(r.id, note.trim() || undefined), t('developer.deletion.err_reject'))}
                       >
-                        رفض
+                        {t('developer.common.reject')}
                       </button>
                     </>
                   )}
@@ -150,8 +162,8 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
 
       {pending.length > 0 && (
         <div className="field" style={{ marginTop: 10, maxWidth: 420 }}>
-          <label>ملاحظة القرار (تُعاد للتاجر)</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثال: تواصلنا معك هاتفياً للتأكيد" />
+          <label>{t('developer.deletion.note_label')}</label>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('developer.deletion.note_placeholder')} />
         </div>
       )}
 
@@ -159,19 +171,27 @@ export function DeletionRequestsSection({ onExecuted }: { onExecuted: () => void
         <ConfirmModal
           title={
             confirming.kind === 'REOPENING'
-              ? 'إعادة فتح الحساب'
+              ? t('developer.deletion.confirm_title_reopen')
               : confirming.kind === 'ERASURE'
-                ? 'محو البيانات غير الملزِمة'
+                ? t('developer.deletion.confirm_title_erase')
                 : confirming.preview?.outcome === 'CLOSE'
-                  ? 'إغلاق الحساب'
-                  : 'تنفيذ حذف الحساب'
+                  ? t('developer.deletion.confirm_title_close')
+                  : t('developer.deletion.confirm_title_delete')
           }
           body={confirmBody(confirming)}
-          confirmLabel={confirming.kind === 'REOPENING' ? 'إعادة الفتح' : confirming.kind === 'ERASURE' ? 'محو' : confirming.preview?.outcome === 'CLOSE' ? 'إغلاق' : 'تنفيذ الحذف'}
+          confirmLabel={
+            confirming.kind === 'REOPENING'
+              ? t('developer.deletion.confirm_label_reopen')
+              : confirming.kind === 'ERASURE'
+                ? t('developer.deletion.confirm_label_erase')
+                : confirming.preview?.outcome === 'CLOSE'
+                  ? t('developer.deletion.confirm_label_close')
+                  : t('developer.deletion.confirm_label_delete')
+          }
           onConfirm={() => {
             const target = confirming;
             setConfirming(null);
-            return run(() => approveDeletionRequest(target.id, note.trim() || undefined), 'تعذّر التنفيذ', true);
+            return run(() => approveDeletionRequest(target.id, note.trim() || undefined), t('developer.deletion.err_execute'), true);
           }}
           onCancel={() => setConfirming(null)}
         />
