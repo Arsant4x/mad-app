@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker, BranchReadOnly } from '../../components/BranchPicker';
@@ -15,11 +16,12 @@ export function BankModal({
   editing: Bank | null;
   branches: Branch[];
   onCancel: () => void;
-  /** الإنشاءُ `BankInput` (النوعُ فيه إلزاميّ) والتعديلُ `BankUpdateInput` — والصفحةُ تفرّق بوضع النافذة. */
+  /** Create sends `BankInput` (kind required), edit sends `BankUpdateInput`; the page tells them apart by mode. */
   onSave: (data: BankInput | BankUpdateInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
-  // ⚖️ ق-١٤٣١ — النوعُ معلَنٌ لا مستنبَط: لا افتراضَ في الإنشاء، و«غيرُ المعلَن» يبقى كذلك حتى يُعلَن.
+  // The kind is declared, never inferred: no default on create, and an undeclared row stays so until declared.
   const [kind, setKind] = useState<BankKind | ''>(editing?.kind ?? '');
   const [iban, setIban] = useState(editing?.iban ?? '');
   const [openingBalance, setOpeningBalance] = useState(editing?.openingBalance ?? '');
@@ -48,8 +50,8 @@ export function BankModal({
         openingBalance: parseFloat(String(openingBalance)) || 0,
         openingDate,
       };
-      // 🔴 ق-١٣٨٤: الفرعُ عند الإنشاء وحدَه — `UpdateBankDto` لا يقبله، وإرسالُه في التعديل كان يُردّ `400`.
-      // والنوعُ في التعديل يُرسَل حين يُعلَن فقط — فـ«غيرُ المعلَن» الذي لم يُختر له نوعٌ يبقى كما هو.
+      // The branch is set on create only: `UpdateBankDto` rejects it with 400.
+      // On edit the kind is sent only when declared, so an undeclared row with no choice stays as it is.
       if (editing) await onSave(declared ? { ...fields, kind: declared } : fields);
       else await onSave({ ...fields, kind: declared!, branchId: branchId || undefined });
     } catch (e) {
@@ -63,34 +65,34 @@ export function BankModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل الحساب البنكي' : 'حساب بنكي جديد'}</div>
+          <div className="modal-title">{editing ? t('banks.modal.title_edit') : t('banks.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم الحساب</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: مصرف الراجحي — الحساب الرئيسي" />
+          <label>{t('banks.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('banks.modal.name_placeholder')} />
         </div>
         <div className="field">
-          <label htmlFor="bank-kind">نوع الصفّ</label>
+          <label htmlFor="bank-kind">{t('banks.modal.kind')}</label>
           <select id="bank-kind" value={declared ?? ''} onChange={(e) => setKind(e.target.value as DeclaredBankKind | '')}>
-            <option value="">{editing?.kind === 'LEGACY_UNDECLARED' ? `${BANK_KIND_LABEL.LEGACY_UNDECLARED} — اختر نوعه` : '— اختر —'}</option>
+            <option value="">{editing?.kind === 'LEGACY_UNDECLARED' ? t('banks.modal.kind_legacy_choose', { label: BANK_KIND_LABEL.LEGACY_UNDECLARED }) : t('banks.modal.choose')}</option>
             <option value="CASH_BOX">{BANK_KIND_LABEL.CASH_BOX}</option>
             <option value="BANK_ACCOUNT">{BANK_KIND_LABEL.BANK_ACCOUNT}</option>
           </select>
         </div>
         <div className="field">
-          <label>IBAN</label>
-          <input className="num" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="SA0000000000000000000000" />
+          <label>{t('banks.modal.iban')}</label>
+          <input className="num" value={iban} onChange={(e) => setIban(e.target.value)} placeholder={t('banks.modal.iban_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>الرصيد الافتتاحي</label>
+            <label>{t('banks.modal.opening_balance')}</label>
             <input className="num" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" />
           </div>
           <div className="field">
-            <label>تاريخ الافتتاح</label>
+            <label>{t('banks.modal.opening_date')}</label>
             <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
           </div>
         </div>
@@ -98,10 +100,10 @@ export function BankModal({
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('banks.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة الحساب'}
+            {editing ? t('banks.modal.save_edit') : t('banks.modal.add')}
           </button>
         </div>
       </div>

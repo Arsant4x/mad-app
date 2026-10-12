@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createCashDeposit, listCashDeposits, voidCashDeposit, type Bank, type CashDeposit, type CashDepositList } from '../../api/banks';
 import { listCashDrawers, type CashDrawer } from '../../api/cashDrawers';
 import { fmt, today } from '../../lib/format';
+import i18n from '../../i18n';
 
 /**
- * إيداعاتُ الأدراج في البنوك عبر «نقدٍ في الطريق» `1190` (`ق-١٢٦١` ج — ⑦A3): الإيداعُ يخرج من الدرج إلى الطريق،
- * ويؤكّده سطرُ كشف البنك من لوحة التسوية، والإلغاءُ عكسٌ قبل التأكيد وحدَه.
- * **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`): رصيدُ الطريق ومجموعُ المستندات ومطابقتُهما من الخادم؛ ورفضُ ما يفوق الدرجَ
- * يقوله الخادمُ بالرصيد المسمّى.
+ * Drawer deposits to banks through "cash in transit" 1190: a deposit leaves the drawer for transit, is confirmed
+ * by a bank statement line from the reconciliation panel, and can be voided (reversed) only before confirmation.
+ * The screen reads and does not compute: the transit balance, document total and their match come from the
+ * server, and the server rejects an amount above the drawer balance with its own message.
  */
-const STATUS_LABEL: Record<CashDeposit['status'], { text: string; cls: string }> = {
-  IN_TRANSIT: { text: 'في الطريق', cls: 'badge draft' },
-  CONFIRMED: { text: 'مؤكَّد', cls: 'badge paid' },
-  VOID: { text: 'ملغى', cls: 'badge' },
+const STATUS_LABEL: Record<CashDeposit['status'], { key: string; cls: string }> = {
+  IN_TRANSIT: { key: 'banks.deposits.status.in_transit', cls: 'badge draft' },
+  CONFIRMED: { key: 'banks.deposits.status.confirmed', cls: 'badge paid' },
+  VOID: { key: 'banks.deposits.status.void', cls: 'badge' },
 };
 
 export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: () => void }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<CashDepositList | null>(null);
   const [drawers, setDrawers] = useState<CashDrawer[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
     try {
       setData(await listCashDeposits());
     } catch (e) {
-      fail(e, 'تعذّر تحميل الإيداعات');
+      fail(e, i18n.t('banks.deposits.err_load'));
     }
   }
   useEffect(() => {
@@ -54,11 +57,11 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
         date: form.date,
         memo: form.memo.trim() || undefined,
       });
-      setNotice(`أُنشئ الإيداع ${created.no} بقيد ${created.entryNo} — يُؤكَّد من التسوية البنكية حين يظهر في الكشف.`);
+      setNotice(i18n.t('banks.deposits.created', { no: created.no, entry: created.entryNo }));
       setForm({ ...form, amount: '', memo: '' });
       await load();
     } catch (e) {
-      fail(e, 'تعذّر إنشاء الإيداع');
+      fail(e, i18n.t('banks.deposits.err_create'));
     }
   }
 
@@ -67,10 +70,10 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
     setNotice(null);
     try {
       const voided = await voidCashDeposit(d.id);
-      setNotice(`أُلغي الإيداع ${d.no} بقيد عكسٍ ${voided.voidEntryNo} — عاد النقد إلى الدرج.`);
+      setNotice(i18n.t('banks.deposits.voided', { no: d.no, entry: voided.voidEntryNo }));
       await load();
     } catch (e) {
-      fail(e, 'تعذّر إلغاء الإيداع');
+      fail(e, i18n.t('banks.deposits.err_void'));
     }
   }
 
@@ -80,25 +83,25 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h3 style={{ margin: 0 }}>إيداعات الأدراج في البنوك</h3>
+          <h3 style={{ margin: 0 }}>{t('banks.deposits.title')}</h3>
           <button className="btn secondary" onClick={onClose}>
-            إغلاق
+            {t('banks.close')}
           </button>
         </div>
         <div className="muted" style={{ marginBottom: 10 }}>
-          الإيداعُ يخرج من الدرج إلى «نقدٍ في الطريق» 1190، ويؤكّده سطرُ كشف البنك من التسوية البنكية بمبلغه نفسِه.
+          {t('banks.deposits.intro')}
         </div>
 
         {error && <div className="error-text">{error}</div>}
         {notice && <div className="muted" data-testid="deposit-notice">{notice}</div>}
 
         <div className="card">
-          <strong>إيداعٌ جديد</strong>
+          <strong>{t('banks.deposits.new')}</strong>
           <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
             <div className="field" style={{ margin: 0, minWidth: 200 }}>
-              <label htmlFor="dep-drawer">الدرج</label>
+              <label htmlFor="dep-drawer">{t('banks.deposits.drawer')}</label>
               <select id="dep-drawer" value={form.drawerId} onChange={(e) => setForm({ ...form, drawerId: e.target.value })}>
-                <option value="">— اختر درجاً —</option>
+                <option value="">{t('banks.deposits.choose_drawer')}</option>
                 {drawers
                   .filter((d) => d.isActive)
                   .map((d) => (
@@ -109,9 +112,9 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
               </select>
             </div>
             <div className="field" style={{ margin: 0, minWidth: 200 }}>
-              <label htmlFor="dep-bank">البنك</label>
+              <label htmlFor="dep-bank">{t('banks.bank')}</label>
               <select id="dep-bank" value={form.bankId} onChange={(e) => setForm({ ...form, bankId: e.target.value })}>
-                <option value="">— اختر بنكاً —</option>
+                <option value="">{t('banks.choose_bank')}</option>
                 {banks
                   .filter((b) => !b.archived)
                   .map((b) => (
@@ -122,19 +125,19 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
               </select>
             </div>
             <div className="field" style={{ margin: 0, minWidth: 140 }}>
-              <label htmlFor="dep-amount">المبلغ</label>
+              <label htmlFor="dep-amount">{t('banks.deposits.amount')}</label>
               <input id="dep-amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             </div>
             <div className="field" style={{ margin: 0 }}>
-              <label htmlFor="dep-date">التاريخ</label>
+              <label htmlFor="dep-date">{t('banks.deposits.date')}</label>
               <input id="dep-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </div>
             <div className="field" style={{ margin: 0, minWidth: 240 }}>
-              <label htmlFor="dep-memo">البيان</label>
+              <label htmlFor="dep-memo">{t('banks.memo')}</label>
               <input id="dep-memo" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
             </div>
             <button className="btn btn-primary" disabled={!canSubmit} onClick={submit}>
-              أودِع
+              {t('banks.deposits.submit')}
             </button>
           </div>
         </div>
@@ -143,16 +146,16 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
           <>
             <div className="toolbar" style={{ gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
               <span data-testid="in-transit-ledger">
-                في الطريق بالدفتر (1190): <strong>{fmt(data.inTransit.ledger)}</strong>
+                {t('banks.deposits.ledger')} <strong>{fmt(data.inTransit.ledger)}</strong>
               </span>
               <span>
-                مستنداتٌ مفتوحة: <strong>{fmt(data.inTransit.documents)}</strong>
+                {t('banks.deposits.documents')} <strong>{fmt(data.inTransit.documents)}</strong>
               </span>
               {data.inTransit.matched ? (
-                <span className="badge paid">الدفترُ والمستنداتُ متطابقان</span>
+                <span className="badge paid">{t('banks.deposits.matched')}</span>
               ) : (
                 <span className="badge draft" data-testid="in-transit-gap">
-                  فرقٌ بين الدفتر والمستندات — قيدٌ يدويّ على 1190 أو إيداعٌ سبق البناء
+                  {t('banks.deposits.gap')}
                 </span>
               )}
             </div>
@@ -161,12 +164,12 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
               <table className="table">
                 <thead>
                   <tr>
-                    <th>الرقم</th>
-                    <th>التاريخ</th>
-                    <th>الدرج</th>
-                    <th>البنك</th>
-                    <th>المبلغ</th>
-                    <th>الحالة</th>
+                    <th>{t('banks.col_no')}</th>
+                    <th>{t('banks.deposits.date')}</th>
+                    <th>{t('banks.deposits.drawer')}</th>
+                    <th>{t('banks.bank')}</th>
+                    <th>{t('banks.deposits.amount')}</th>
+                    <th>{t('banks.col_status')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -174,7 +177,7 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
                   {data.items.length === 0 && (
                     <tr>
                       <td colSpan={7}>
-                        <div className="empty-state">لا إيداعات بعد</div>
+                        <div className="empty-state">{t('banks.deposits.empty')}</div>
                       </td>
                     </tr>
                   )}
@@ -186,12 +189,12 @@ export function CashDepositsPanel({ banks, onClose }: { banks: Bank[]; onClose: 
                       <td>{d.bank.name}</td>
                       <td className="num">{fmt(d.amount)}</td>
                       <td>
-                        <span className={STATUS_LABEL[d.status].cls}>{STATUS_LABEL[d.status].text}</span>
+                        <span className={STATUS_LABEL[d.status].cls}>{t(STATUS_LABEL[d.status].key)}</span>
                       </td>
                       <td>
                         {d.status === 'IN_TRANSIT' && (
                           <button className="btn link" onClick={() => voidOne(d)}>
-                            ↩ ألغِ (عكس)
+                            {t('banks.void_reverse')}
                           </button>
                         )}
                       </td>
