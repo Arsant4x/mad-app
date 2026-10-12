@@ -1,0 +1,37 @@
+{
+  "modal": {
+    "title_edit": "Edit warehouse",
+    "title_new": "New warehouse",
+    "name": "Warehouse name",
+    "name_placeholder": "Main warehouse",
+    "location": "Location",
+    "location_placeholder": "City / district",
+    "manager": "Manager",
+    "manager_placeholder": "Name of the person in charge of the warehouse",
+    "cancel": "Cancel",
+    "save_edit": "Save changes",
+    "add": "Add warehouse"
+  },
+  "list": {
+    "title": "Warehouses",
+    "sub": "Stock storage locations",
+    "new": "+ New warehouse",
+    "search": "Search by name or location...",
+    "show_archived": "Show archived",
+    "col_name": "Warehouse name",
+    "col_location": "Location",
+    "col_manager": "Manager",
+    "col_item_count": "Items",
+    "col_total_qty": "Total quantity",
+    "empty": "No matching warehouses",
+    "archived": "Archived",
+    "other_branch": "Other branch",
+    "edit": "✎ Edit",
+    "unarchive": "📂 Unarchive",
+    "archive": "🗄 Archive",
+    "delete": "🗑 Delete",
+    "delete_title": "Delete warehouse",
+    "delete_body": "Delete warehouse \"{{name}}\"? This cannot be undone.",
+    "delete_confirm": "Delete"
+  }
+}

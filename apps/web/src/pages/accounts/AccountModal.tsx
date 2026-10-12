@@ -1,14 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Account, AccountInput, AccountType } from '../../api/accounts';
 import i18n from '../../i18n';
 
-const TYPE_OPTIONS: { value: AccountType; label: string }[] = [
-  { value: 'asset', label: 'أصل' },
-  { value: 'liability', label: 'خصم' },
-  { value: 'equity', label: 'حقوق ملكية' },
-  { value: 'revenue', label: 'إيراد' },
-  { value: 'expense', label: 'مصروف' },
-];
+const TYPE_OPTIONS: AccountType[] = ['asset', 'liability', 'equity', 'revenue', 'expense'];
 
 export function AccountModal({
   editing,
@@ -19,12 +14,13 @@ export function AccountModal({
   onCancel: () => void;
   onSave: (data: AccountInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [code, setCode] = useState(editing?.code ?? '');
   const [type, setType] = useState<AccountType>(editing?.type ?? 'asset');
   const [openingBalance, setOpeningBalance] = useState(editing?.openingBalance ?? '');
-  // المشتقُّ يُعرض في الحقل كما يُعرض المُعلَن — فالتاجر يرى التاريخ نفسه،
-  // والفرقُ في التلميح تحته لا في الرقم.
+  // A derived date shows in the field like a declared one, so the merchant sees
+  // the same date; the difference is in the hint below, not the value.
   const [openingDate, setOpeningDate] = useState(editing?.openingDate?.slice(0, 10) ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +38,8 @@ export function AccountModal({
         name: name.trim(),
         type,
         openingBalance: parseFloat(String(openingBalance)) || 0,
-        // ⚠️ **لا يُرسَل إلا ما غيّره التاجر**: إرسالُ المشتقِّ كما هو يحوّله
-        // إلى إعلانٍ لم يُعلنه (ق-٢٩٦/⑤).
+        // Send the date only when the merchant changed it: sending the derived
+        // value back would turn it into a declaration they never made.
         ...(openingDate && openingDate !== editing?.openingDate?.slice(0, 10) ? { openingDate } : {}),
       });
     } catch (e) {
@@ -58,62 +54,57 @@ export function AccountModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل الحساب' : 'حساب جديد'}</div>
+          <div className="modal-title">{editing ? t('accounts.modal.title_edit') : t('accounts.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم الحساب</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: عهدة نثرية" />
+          <label>{t('accounts.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('accounts.modal.name_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>رمز الحساب</label>
+            <label>{t('accounts.modal.code')}</label>
             <input className="num" value={code} onChange={(e) => setCode(e.target.value)} placeholder="1013" disabled={!!editing} />
           </div>
           <div className="field">
-            <label>النوع</label>
+            <label>{t('accounts.modal.type')}</label>
             <select value={type} onChange={(e) => setType(e.target.value as AccountType)}>
-              {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {TYPE_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {t(`accounts.types.${value}`)}
                 </option>
               ))}
             </select>
           </div>
         </div>
-        {/* الرصيدُ الافتتاحيّ رقمُ المنشأة كلِّها (`ق-١٥٨١`): لا يصل المقيَّدَ بفرع، فلا يُعرض له في التعديل ولا يُرسل. */}
+        {/* The opening balance is a company-wide figure: a branch-restricted user does not receive it, so it is neither shown nor sent. */}
         {(!editing || editing.openingBalance !== undefined) && (
           <div className="field">
-            <label>الرصيد الافتتاحي</label>
+            <label>{t('accounts.modal.opening_balance')}</label>
             <input className="num" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} placeholder="0.00" />
             <p className="hint" style={{ marginTop: 4 }}>
-              {editing
-                ? 'تغيير الرصيد الافتتاحي يُرحَّل بقيد تسوية جديد مقابل حساب الأرصدة الافتتاحية (3900) — القيد الأصلي يبقى كما هو.'
-                : 'يُرحَّل تلقائياً بقيد افتتاحي متوازن مقابل حساب الأرصدة الافتتاحية (3900).'}
+              {editing ? t('accounts.modal.opening_balance_hint_edit') : t('accounts.modal.opening_balance_hint_new')}
             </p>
           </div>
         )}
-        {/* ⭐ تاريخُ الافتتاح (ق-٢٩٦): الحقلُ المجاور للرصيد — كزوجِه في شاشة
-            البنوك. وفراغُه يعني «لم يُعلَن» فيُشتقّ، ولا يُكتب مشتقٌّ في خانةِ
-            إعلان. */}
+        {/* Opening date sits next to the balance, as on the banks screen. Empty means
+            "not declared", so it is derived; a derived value is never written as a declaration. */}
         <div className="field">
-          <label>تاريخ الافتتاح</label>
+          <label>{t('accounts.modal.opening_date')}</label>
           <input type="date" value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
           <p className="hint" style={{ marginTop: 4 }}>
-            {editing && !editing.openingDateDeclared
-              ? 'هذا التاريخ مأخوذ من القيد الافتتاحي نفسه ولم تُدخله أنت — أدخِله ليصبح إعلانك.'
-              : 'تاريخ القيد الافتتاحي. اتركه فارغاً ليُحسب من السنة المالية أو تاريخ اليوم. ولا يُعدَّل بعد أول حركة على الحساب.'}
+            {editing && !editing.openingDateDeclared ? t('accounts.modal.opening_date_derived') : t('accounts.modal.opening_date_hint')}
           </p>
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('accounts.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة الحساب'}
+            {editing ? t('accounts.modal.save_edit') : t('accounts.modal.add')}
           </button>
         </div>
       </div>

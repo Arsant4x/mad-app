@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { JournalEntry } from '../../api/journal';
 import { Pager } from '../../components/Pager';
 import { RowMenu } from '../../components/RowMenu';
@@ -22,26 +23,27 @@ export function JournalListView({
   total: number;
   onPage: (page: number) => void;
   onNew: () => void;
-  /** ⚖️ القيدُ المرحَّل يُعكس ولا يُحذف (ق-١٢٥٣). */
+  /** A posted entry is reversed, never deleted. */
   onReverse: (entry: JournalEntry) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="subview active">
       <div className="topbar">
         <div>
-          <div className="page-title">القيود اليومية</div>
-          <div className="page-sub">سجل كافة القيود المرحّلة إلى الأستاذ العام</div>
+          <div className="page-title">{t('journal.list.title')}</div>
+          <div className="page-sub">{t('journal.list.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={onNew}>
-            + قيد جديد
+            {t('journal.list.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالبيان أو رقم القيد..." value={search} onChange={(e) => onSearch(e.target.value)} />
+          <input placeholder={t('journal.list.search')} value={search} onChange={(e) => onSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -53,12 +55,12 @@ export function JournalListView({
         <table>
           <thead>
             <tr>
-              <th>رقم القيد</th>
-              <th>التاريخ</th>
-              <th>البيان</th>
-              <th>المدين</th>
-              <th>الدائن</th>
-              <th>الحالة</th>
+              <th>{t('journal.list.col_number')}</th>
+              <th>{t('journal.list.col_date')}</th>
+              <th>{t('journal.list.col_memo')}</th>
+              <th>{t('journal.list.col_debit')}</th>
+              <th>{t('journal.list.col_credit')}</th>
+              <th>{t('journal.list.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -66,7 +68,7 @@ export function JournalListView({
             {entries.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <div className="empty-state">لا توجد قيود مطابقة</div>
+                  <div className="empty-state">{t('journal.list.empty')}</div>
                 </td>
               </tr>
             )}
@@ -78,30 +80,30 @@ export function JournalListView({
                   {j.memo}
                   {j.auto && (
                     <span className="type-tag type-eq" style={{ marginInlineStart: 8 }}>
-                      آلي
+                      {t('journal.list.auto')}
                     </span>
                   )}
                 </td>
                 <td className="num">{fmt(j.totalDebit)}</td>
                 <td className="num">{fmt(j.totalCredit)}</td>
                 <td>
-                  {/* الحالةُ تُقرأ من روابط العكس لا من نصٍّ ثابت: معكوسٌ (ومَن عكسه) · قيدُ عكسٍ (ولمَن) · مرحَّل. */}
+                  {/* Status comes from the reversal links: reversed (and by which entry), a reversal (and of which), or posted. */}
                   {j.reversedBy ? (
-                    <span className="badge overdue" title={`عُكس بالقيد ${j.reversedBy.no}`}>
-                      معكوس — {j.reversedBy.no}
+                    <span className="badge overdue" title={t('journal.list.reversed_title', { no: j.reversedBy.no })}>
+                      {t('journal.list.reversed', { no: j.reversedBy.no })}
                     </span>
                   ) : j.reversalOf ? (
-                    <span className="badge" title={`يعكس القيد ${j.reversalOf.no}`}>
-                      قيد عكس — {j.reversalOf.no}
+                    <span className="badge" title={t('journal.list.reversal_title', { no: j.reversalOf.no })}>
+                      {t('journal.list.reversal', { no: j.reversalOf.no })}
                     </span>
                   ) : (
-                    <span className="badge paid">مرحّل</span>
+                    <span className="badge paid">{t('journal.list.posted')}</span>
                   )}
                 </td>
                 <td>
-                  {/* لا حذفَ لقيدٍ مرحَّل؛ والآليُّ يتبع مستندَه، والمعكوسُ والعكسيُّ لا يُعكسان ثانيةً. */}
+                  {/* A posted entry is never deleted; an automatic one follows its document, and reversed or reversing entries are not reversed again. */}
                   {!j.auto && !j.reversedBy && !j.reversalOf && (
-                    <RowMenu actions={[{ label: '↩ عكس القيد', onClick: () => onReverse(j), danger: true }]} />
+                    <RowMenu actions={[{ label: t('journal.list.reverse_action'), onClick: () => onReverse(j), danger: true }]} />
                   )}
                 </td>
               </tr>

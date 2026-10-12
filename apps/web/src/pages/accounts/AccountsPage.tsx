@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createAccount, deleteAccount, getAccountsSummary, listAccounts, updateAccount, type Account, type AccountInput, type AccountType, type AccountsSummary } from '../../api/accounts';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
@@ -7,11 +8,10 @@ import { AccountModal } from './AccountModal';
 import i18n from '../../i18n';
 
 const TYPE_GROUPS: AccountType[] = ['asset', 'liability', 'equity', 'revenue', 'expense'];
-const TYPE_LABEL: Record<AccountType, string> = { asset: 'أصل', liability: 'خصم', equity: 'حقوق ملكية', revenue: 'إيراد', expense: 'مصروف' };
-const TYPE_GROUP_LABEL: Record<AccountType, string> = { asset: 'الأصول', liability: 'الخصوم', equity: 'حقوق الملكية', revenue: 'الإيرادات', expense: 'المصروفات' };
 const TYPE_TAG_CLASS: Record<AccountType, string> = { asset: 'type-asset', liability: 'type-liab', equity: 'type-eq', revenue: 'type-rev', expense: 'type-exp' };
 
 export function AccountsPage() {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -20,10 +20,10 @@ export function AccountsPage() {
   const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // مجموعُ كلِّ نوعٍ من الخادم (`ق-١٢٤٣`) — مجموعُ الدليل كلِّه، حقيقةٌ عن الدفاتر لا عن خانة البحث.
+  // Per-type totals come from the server for the whole chart, a fact about the books, not about the search box.
   const [summary, setSummary] = useState<AccountsSummary | null>(null);
   async function reload() {
-    // المجموعُ رقمُ المنشأة كلِّها: يُرفض للمقيَّد بفرع (`ق-١٥٨١`)، فلا يُسقط رفضُه الدليلَ نفسَه.
+    // The totals are company-wide and refused to a branch-restricted user; that refusal must not drop the chart itself.
     const [rows, totals] = await Promise.all([listAccounts(), getAccountsSummary().catch(() => null)]);
     setAccounts(rows);
     setSummary(totals);
@@ -47,9 +47,9 @@ export function AccountsPage() {
       await updateAccount(modal.account.id, {
         name: data.name,
         type: data.type,
-        // من لا يرى الرصيدَ الافتتاحيّ لا يرسله (`ق-١٥٨١`) — فلا يُرحَّل فرقٌ إلى الصفر.
+        // A user who cannot see the opening balance does not send it, so no difference to zero is posted.
         ...(modal.account.openingBalance !== undefined ? { openingBalance: data.openingBalance } : {}),
-        // يُمرَّر فقط حين أرسله النموذج — أي حين غيّره التاجر (ق-٢٩٦).
+        // Passed only when the form sent it, that is when the merchant changed it.
         ...(data.openingDate ? { openingDate: data.openingDate } : {}),
       });
     } else {
@@ -78,19 +78,19 @@ export function AccountsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">دليل الحسابات</div>
-          <div className="page-sub">الهيكل الشجري لكافة حسابات الأستاذ العام</div>
+          <div className="page-title">{t('accounts.list.title')}</div>
+          <div className="page-sub">{t('accounts.list.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + حساب جديد
+            {t('accounts.list.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالاسم أو الرمز..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('accounts.list.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -98,11 +98,11 @@ export function AccountsPage() {
         </div>
         <div className="chip-group">
           <button className={typeFilter === 'all' ? 'chip active' : 'chip'} onClick={() => setTypeFilter('all')}>
-            الكل
+            {t('accounts.list.all')}
           </button>
-          {TYPE_GROUPS.map((t) => (
-            <button key={t} className={typeFilter === t ? 'chip active' : 'chip'} onClick={() => setTypeFilter(t)}>
-              {TYPE_GROUP_LABEL[t]}
+          {TYPE_GROUPS.map((g) => (
+            <button key={g} className={typeFilter === g ? 'chip active' : 'chip'} onClick={() => setTypeFilter(g)}>
+              {t(`accounts.groups.${g}`)}
             </button>
           ))}
         </div>
@@ -110,14 +110,14 @@ export function AccountsPage() {
 
       <div className="card" style={{ padding: 0 }}>
         <div className="tree-row l1">
-          <div>اسم الحساب</div>
-          <div>الرمز</div>
-          <div>النوع</div>
-          <div>الرصيد الحالي</div>
+          <div>{t('accounts.list.col_name')}</div>
+          <div>{t('accounts.list.col_code')}</div>
+          <div>{t('accounts.list.col_type')}</div>
+          <div>{t('accounts.list.col_balance')}</div>
           <div></div>
         </div>
         {filtered.length === 0 ? (
-          <div className="empty-state">لا توجد حسابات مطابقة لبحثك</div>
+          <div className="empty-state">{t('accounts.list.empty')}</div>
         ) : (
           TYPE_GROUPS.map((g) => {
             const rows = filtered.filter((a) => a.type === g);
@@ -126,10 +126,10 @@ export function AccountsPage() {
             return (
               <div key={g}>
                 <div className="tree-row l1">
-                  <div>{TYPE_GROUP_LABEL[g]}</div>
+                  <div>{t(`accounts.groups.${g}`)}</div>
                   <div></div>
                   <div>
-                    <span className={`type-tag ${TYPE_TAG_CLASS[g]}`}>{TYPE_LABEL[g]}</span>
+                    <span className={`type-tag ${TYPE_TAG_CLASS[g]}`}>{t(`accounts.types.${g}`)}</span>
                   </div>
                   <div className="num">{total === null ? '' : fmt(total)}</div>
                   <div></div>
@@ -141,15 +141,15 @@ export function AccountsPage() {
                       <span className="code-chip">{a.code}</span>
                     </div>
                     <div>
-                      <span className={`type-tag ${TYPE_TAG_CLASS[a.type]}`}>{TYPE_LABEL[a.type]}</span>
+                      <span className={`type-tag ${TYPE_TAG_CLASS[a.type]}`}>{t(`accounts.types.${a.type}`)}</span>
                     </div>
                     <div className="num">{a.balance === undefined ? '' : fmt(a.balance)}</div>
                     <div>
                       <RowMenu
                         actions={[
-                          { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', account: a }) },
+                          { label: t('accounts.list.edit'), onClick: () => setModal({ mode: 'edit', account: a }) },
                           '-',
-                          { label: '🗑 حذف', onClick: () => setPendingDelete(a), danger: true },
+                          { label: t('accounts.list.delete'), onClick: () => setPendingDelete(a), danger: true },
                         ]}
                       />
                     </div>
@@ -165,9 +165,9 @@ export function AccountsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الحساب"
-          body={deleteError ?? `حذف الحساب "${pendingDelete.name}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('accounts.list.delete_title')}
+          body={deleteError ?? t('accounts.list.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('accounts.list.delete_confirm')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);
