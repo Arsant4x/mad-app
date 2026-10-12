@@ -1,5 +1,0 @@
-﻿paper-role-stays-counterparty [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-authority-not-found-accepted [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-authority-for-natural-person [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-final-copy-skips-designated-mobile [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-authority-document-not-in-seal [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True

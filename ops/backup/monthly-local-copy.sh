@@ -40,6 +40,17 @@ step_bundle() {
   echo "heads in bundle: $(git -C "$REPO" bundle list-heads "$B" | wc -l)"
   echo "refs in repo:    $(git -C "$REPO" for-each-ref | wc -l)"
   echo "sha256: $(sha256sum "$B" | cut -c1-64)"
+  # The operations records live in their own repository (rikzapp/rikz-ops) and
+  # are part of the monthly copy too.
+  local OPS=/d/rikz-ops
+  local OB="$OUT/rikz-ops-all-refs-$DAY.bundle"
+  refuse_existing "$OB"
+  if [ ! -d "$OPS/.git" ]; then echo "x ops repository missing: $OPS"; exit 1; fi
+  echo "== git bundle (rikz-ops)"
+  git -C "$OPS" fetch -q origin
+  git -C "$OPS" bundle create "$OB" --all 2>&1 | tail -2
+  git -C "$OPS" bundle verify "$OB" 2>&1 | tail -1
+  echo "sha256: $(sha256sum "$OB" | cut -c1-64)"
 }
 
 step_db() {
