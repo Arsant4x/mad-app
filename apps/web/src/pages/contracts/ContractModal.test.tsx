@@ -88,7 +88,8 @@ describe('نموذجُ العقد — منتقي العميل', () => {
       fireEvent.change(screen.getByPlaceholderText('Tenant name'), { target: { value: 'Khalid' } });
       fireEvent.change(screen.getByLabelText('Tenant type'), { target: { value: 'NATURAL' } });
       fireEvent.click(screen.getByText('Save customer and select'));
-      await waitFor(() => expect(screen.getByText(/is it the same one\?/)).toBeTruthy());
+      // The confirm button exists only in the same-name step, not when the message is shown as a plain error.
+      await waitFor(() => expect(screen.getByText(/Yes, a different person with the same name/)).toBeTruthy());
       expect(onCreateCustomer).toHaveBeenCalledTimes(1);
     } finally {
       setLanguage('ar');
