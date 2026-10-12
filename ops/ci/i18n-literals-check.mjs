@@ -28,11 +28,16 @@ const debtPath = join(REPO, DEBT_FILE);
 const debt = JSON.parse(readFileSync(debtPath, 'utf8'));
 
 if (process.argv.includes('--write-debt')) {
-  const kept = Object.fromEntries(Object.entries(counts).filter(([f]) => f in debt.files).sort());
-  debt.measured = { filesScanned: files.length, filesWithLiterals: Object.keys(kept).length, literals: Object.values(kept).reduce((a, b) => a + b, 0) };
+  // Only lowers: a file never gets more debt than it had, and a new file gets none.
+  const kept = Object.fromEntries(
+    Object.entries(debt.files)
+      .map(([f, allowed]) => [f, Math.min(allowed, counts[f] ?? 0)])
+      .filter(([, n]) => n > 0)
+      .sort(([a], [b]) => (a < b ? -1 : 1)),
+  );
   debt.files = kept;
   writeFileSync(debtPath, JSON.stringify(debt, null, 2) + '\n');
-  console.log(`debt rewritten: ${debt.measured.filesWithLiterals} files, ${debt.measured.literals} literals`);
+  console.log(`debt rewritten: ${Object.keys(kept).length} files, ${Object.values(kept).reduce((a, b) => a + b, 0)} literals`);
   process.exit(0);
 }
 

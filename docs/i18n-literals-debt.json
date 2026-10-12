@@ -1,11 +1,6 @@
 {
   "rule": "ق-١٦٩١",
-  "note": "Direct user-visible text in web UI files before the bilingual rule. It only goes down: a file touched by a pull request is converted in full, and the count is lowered with `node ops/ci/i18n-literals-check.mjs --write-debt`. Gate: ops/ci/i18n-literals-check.mjs in .github/workflows/i18n-literals.yml.",
-  "measured": {
-    "filesScanned": 215,
-    "filesWithLiterals": 146,
-    "literals": 4192
-  },
+  "note": "Direct user-visible text in web UI files before the bilingual rule. It only goes down: a file touched by a pull request is converted in full, and the count is lowered with `node ops/ci/i18n-literals-check.mjs --write-debt`. Gate: ops/ci/i18n-literals-check.mjs in .github/workflows/i18n-literals.yml. Measured on 2026-10-12: 146 of 215 files, 4192 direct texts; the gate prints the current totals.",
   "files": {
     "apps/web/src/api/activities.ts": 7,
     "apps/web/src/api/banks.ts": 3,
