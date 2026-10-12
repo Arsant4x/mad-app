@@ -9,14 +9,15 @@ import { getZatcaUnreported, type ZatcaUnreported } from '../api/zatca';
 import { useAuth } from '../auth/AuthContext';
 import { usePermissions } from '../auth/PermissionsContext';
 import { exitSupportMode, supportCompanyId, supportCompanyName } from '../lib/supportMode';
+import { currentLanguage, setLanguage } from '../i18n';
+import { formatDate } from '../i18n/format';
 
 interface NavItemDef {
   /**
-   * الشاشة التي تحرس هذا المدخل — و`null` يعني **بلا حارس شاشة عمداً**،
-   * مطابقةً لنقطةٍ في الخادم بلا `@RequiresScreen` (مهامي · الإشعارات).
-   *
-   * ⚠️ ولا يعني «للجميع بلا حساب»: الحراسة داخل الخدمة نفسها — الاستعلام
-   * مقيَّدٌ بصاحبه. وحارسُ شاشةٍ فوقه يُخفي عن الموظف ما كُلِّف به.
+   * The screen that guards this entry. `null` means no screen guard on
+   * purpose, matching a server route without one (my tasks, notifications).
+   * It does not mean "everything for everyone": the service itself limits the
+   * query to its owner, and a screen guard here would hide assigned work.
    */
   screen: string | null;
   to: string;
@@ -38,9 +39,8 @@ const NAV_GROUPS: NavGroupDef[] = [
     labelKey: 'grp_home',
     items: [
       { screen: 'dashboard', to: '/', labelKey: 'nav_dashboard', end: true },
-      // ⚠️ `screen: null` — **بلا حارس شاشة، مطابقةً للخادم**. «مهامي» يقرأ
-      // ما كُلِّف به الفاعل نفسه، وحارسُ شاشةٍ يُخفي عن موظفٍ محدود الصلاحية
-      // ما كُلِّف به — وهو نقيض الغرض. نظيرُه: `notifications`.
+      // No screen guard, matching the server: "my tasks" reads what the actor
+      // was assigned, and a screen guard would hide it from a limited employee.
       { screen: null, to: '/my-tasks', labelKey: 'nav_my_tasks' },
     ],
   },
@@ -107,9 +107,8 @@ const NAV_GROUPS: NavGroupDef[] = [
       { screen: 'obligations', to: '/obligations', labelKey: 'nav_obligations' },
       { screen: 'scripts', to: '/scripts', labelKey: 'nav_scripts' },
       { screen: 'audit', to: '/audit-log', labelKey: 'nav_audit_log' },
-      // ⚠️ `audit` — **مطابقةً لحارس الخادم** كما في المسار. من يدقّق
-      // الامتثال يحتاج تاريخ الصلاحيات ولا يحتاج إدارة الموظفين، وموضعُه
-      // هنا بجانب سجل التدقيق يقول ذلك. (قرار المالك 2026-08-13.)
+      // Guarded by 'audit', matching the server: a compliance reviewer needs the
+      // permission history without needing to manage employees.
       { screen: 'audit', to: '/delegation-log', labelKey: 'nav_delegation_log' },
       { screen: 'audit', to: '/trash', labelKey: 'nav_trash' },
     ],
@@ -146,10 +145,11 @@ export function AppShell() {
   }, []);
 
   /**
-   * «فواتيرك لا تصل الهيئة» — تحذيرٌ **ظاهرٌ ومستمر لا إشعارٌ يُغلق** (ق-١٨٢/١ · شرطُ
-   * قبول الختم المتزامن ق-١٩٦): بعد الختم يخرج الإيصال مكتملَ الشكل وإن لم يصل
-   * الهيئة — فهذا الشريط هو ما يُبقي العلّةَ مرئيّة. يُعرض لمنشأةٍ **مربوطة** فقط؛
-   * غيرُ المربوطة لا نعرف موجتها (حدٌّ معلَن)، وتقريرُها في ملف المنشأة.
+   * "Your invoices are not reaching the tax authority": a standing warning, not
+   * a dismissible notice. After stamping, the receipt looks complete even when
+   * it never reached the authority, so this banner keeps the problem visible.
+   * Shown only to a connected company; for one that is not connected the
+   * report lives in the company profile.
    */
   const [unreported, setUnreported] = useState<ZatcaUnreported | null>(null);
   useEffect(() => {
@@ -167,9 +167,9 @@ export function AppShell() {
   }, []);
 
   /**
-   * موافقةُ المعالجين الفرعيين (`ق-٥٨٩`) — **تُقرأ مرّةً عند فتح الشاشة**: تتغيّر مرّاتٍ
-   * في السنة، ولا معنى لاستطلاعها كالإشعارات. وسقوطُ القراءة **لا يمنع** شيئاً: الخادمُ
-   * هو البوّابة، وهذه الشاشةُ وجهُها لا حارسُها.
+   * Sub-processor consent is read once when the shell opens; it changes a few
+   * times a year. A failed read blocks nothing: the server is the gate, and
+   * this screen is only its face.
    */
   const [consent, setConsent] = useState<ConsentState | null>(null);
   useEffect(() => {
@@ -182,28 +182,25 @@ export function AppShell() {
     };
   }, []);
 
-  // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا. انظر
-  // `PermissionsContext`: نسختان من قاعدةٍ واحدة تفترقان بلا شكوى.
+  // A lookup in a set the server decided; no rule lives here (see PermissionsContext).
   const { canSee } = usePermissions();
 
   const inSupportMode = user?.actorType === 'PLATFORM_ADMIN' && !!supportCompanyId();
 
-  // قائمة الجوال — منقولة من toggleMobileMenu/goTo في النموذج (أ٣): فئةٌ على
-  // الجذر تفتح الشريط المنزلق، والستارة تغلقه، وكل تنقّلٍ يغلقه تلقائياً.
+  // Mobile menu: a class on the root opens the sliding sidebar, the backdrop
+  // closes it, and every navigation closes it.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   useEffect(() => {
-    // نظير `classList.remove('mobile-menu-open')` داخل goTo() في النموذج:
-    // اختيارُ وجهةٍ يعني انتهاء الحاجة للقائمة — إبقاؤها مفتوحة فوق الصفحة
-    // الجديدة يجبر المستخدم على إغلاقها يدوياً بعد كل تنقّل.
+    // Choosing a destination ends the need for the menu; leaving it open over
+    // the new page would make the user close it by hand after every move.
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
   return (
     <div className={mobileMenuOpen ? 'app-shell mobile-menu-open' : 'app-shell'}>
-      {/* زر الهامبرغر الثابت (يظهر تحت 860px فقط عبر CSS) — أيقونته تتبدّل
-       * بين ☰ و✕ كما في النموذج حرفياً. */}
-      <button className="mobile-menu-btn" title="القائمة" aria-label="القائمة" onClick={() => setMobileMenuOpen((v) => !v)}>
+      {/* Fixed menu button, shown under 860px by CSS; its icon switches between open and close. */}
+      <button className="mobile-menu-btn" title={t('shell.menu')} aria-label={t('shell.menu')} onClick={() => setMobileMenuOpen((v) => !v)}>
         {mobileMenuOpen ? (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
             <path d="M6 6l12 12M18 6L6 18" />
@@ -215,12 +212,12 @@ export function AppShell() {
         )}
       </button>
       <div className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} />
-      {/* §1.10: معاينة الدعم لا تُخفى أبداً — شريط أحمر دائم مع مخرج فوري. */}
+      {/* Support preview is never hidden: a permanent red bar with an immediate exit. */}
       {inSupportMode && (
         <div style={{ position: 'fixed', top: 0, insetInlineStart: 0, insetInlineEnd: 0, zIndex: 200, background: 'var(--rose)', color: '#fff', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-          <span>🔍 وضع الدعم الفني — معاينة «{supportCompanyName()}» للقراءة فقط، وكل ما تفتحه مسجَّل أمام المنشأة</span>
+          <span>{t('shell.support_banner', { company: supportCompanyName() })}</span>
           <button className="btn btn-ghost btn-sm" style={{ color: '#fff', borderColor: '#fff', marginInlineStart: 'auto' }} onClick={() => { exitSupportMode(); window.location.href = '/'; }}>
-            خروج من وضع الدعم
+            {t('shell.support_exit')}
           </button>
         </div>
       )}
@@ -235,10 +232,10 @@ export function AppShell() {
            * permission would hide a manager's own escalations from them. */}
           <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
             {t('nav_notifications')}
-            {unread > 0 && <span className="badge overdue" style={{ marginRight: 6 }}>{unread}</span>}
+            {unread > 0 && <span className="badge overdue" style={{ marginInlineStart: 6 }}>{unread}</span>}
           </NavLink>
           {NAV_GROUPS.map((group) => {
-            // `screen: null` ⇒ يظهر دائماً — والحراسة في الخدمة لا هنا.
+            // A null screen is always shown; the guard is in the service.
             const visibleItems = group.items.filter((item) => item.screen === null || canSee(item.screen));
             if (visibleItems.length === 0) return null;
             return (
@@ -272,12 +269,15 @@ export function AppShell() {
             )}
           </div>
         </nav>
+        <button type="button" className="logout-btn" onClick={() => setLanguage(currentLanguage() === 'ar' ? 'en' : 'ar')}>
+          {t('language_toggle')}
+        </button>
         <button className="logout-btn" onClick={() => logout()}>
           {t('logout')}
         </button>
       </aside>
       <main className="main-content">
-        {/* ق-١٨٢/١: ظاهرٌ ومستمرٌ — بلا زرّ إغلاق عمداً. */}
+        {/* Standing and permanent: no close button on purpose. */}
         {unreported && unreported.onboarded && unreported.count > 0 && (
           <div
             role="alert"
@@ -298,12 +298,12 @@ export function AppShell() {
             }}
           >
             <span>
-              فواتيرك لا تصل الهيئة — {unreported.count} مستنداً صادراً لم يُقبَل بعد
-              {unreported.oldestIssueDate ? `، أقدمها بتاريخ ${new Date(unreported.oldestIssueDate).toLocaleDateString('ar-SA')}` : ''}
-              {unreported.failedQueue > 0 ? ` · ${unreported.failedQueue} في الطابور استُنفدت محاولاته` : ''}
+              {t('shell.zatca_unreported', { n: unreported.count })}
+              {unreported.oldestIssueDate ? t('shell.zatca_oldest', { date: formatDate(unreported.oldestIssueDate) }) : ''}
+              {unreported.failedQueue > 0 ? t('shell.zatca_failed', { n: unreported.failedQueue }) : ''}
             </span>
             <NavLink to="/company-profile" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              تقرير «صادرٌ لم يصل»
+              {t('shell.zatca_report_link')}
             </NavLink>
           </div>
         )}
@@ -324,15 +324,15 @@ export function AppShell() {
               flexWrap: 'wrap',
             }}
           >
-            <span>انتهى اشتراكك — أنت في فترة سماح للاطلاع والتصدير فقط. لا يمكن الإضافة أو التعديل أو الحذف حتى التجديد.</span>
+            <span>{t('shell.frozen_banner')}</span>
             <NavLink to="/subscription" className="btn btn-primary btn-sm" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>
-              جدّد الآن
+              {t('shell.renew_now')}
             </NavLink>
           </div>
         )}
-        {/* الحالةُ الرابعة (ق-٥٤٧): المغلقُ لا يرى شاشةً سوى حاله وطلبِ إعادة الفتح.
-            ثم الموافقةُ على المعالجين الفرعيين (ق-٥٨٩): **اختيارٌ لا حجب** — والمغلقُ
-            لا يُسأل موافقةً على معالجةٍ لم تعد تقع له، فترتيبُهما مقصود. */}
+        {/* A closed account sees only its state and the reopen request. Then the
+            sub-processor consent: a choice, not a block; a closed account is not
+            asked to consent to processing that no longer happens, so the order matters. */}
         {user?.status === 'CLOSED' ? (
           <ClosedAccountView onLogout={logout} />
         ) : consent?.blocked ? (

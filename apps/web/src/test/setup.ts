@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, vi } from 'vitest';
+// Components render through translation keys; tests see the default Arabic interface.
+import '../i18n';
 
 /**
  * تهيئة مشتركة لكل اختبارات المكوّنات.

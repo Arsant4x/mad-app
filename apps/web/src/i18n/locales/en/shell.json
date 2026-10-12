@@ -1,0 +1,11 @@
+{
+  "menu": "Menu",
+  "support_banner": "🔍 Support mode: viewing “{{company}}” read only, and everything you open is logged for the company",
+  "support_exit": "Leave support mode",
+  "zatca_unreported": "Your invoices are not reaching ZATCA: {{n}} issued documents not yet accepted",
+  "zatca_oldest": ", the oldest dated {{date}}",
+  "zatca_failed": " · {{n}} in the queue ran out of retries",
+  "zatca_report_link": "“Issued, not delivered” report",
+  "frozen_banner": "Your subscription has ended. You are in a grace period for viewing and export only; you cannot add, edit or delete until you renew.",
+  "renew_now": "Renew now"
+}
