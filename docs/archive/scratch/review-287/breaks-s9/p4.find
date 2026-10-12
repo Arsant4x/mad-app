@@ -1,1 +1,0 @@
-        const finalMobile = paperRep ? (paperRep.mobile ?? cardMobile) : cardMobile;
