@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { CompanyTemplatesTab } from './CompanyTemplatesTab';
 import { FormRecordsTab } from './FormRecordsTab';
@@ -5,44 +6,46 @@ import { SigningSettingsTab } from './SigningSettingsTab';
 
 type Tab = 'records' | 'templates' | 'signing';
 
-const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
-  { id: 'records', label: 'السجلّات' },
-  { id: 'templates', label: 'قوالبُ المنشأة' },
-  { id: 'signing', label: 'إعدادُ التوقيع' },
+const TABS: ReadonlyArray<{ id: Tab; labelKey: string }> = [
+  { id: 'records', labelKey: 'forms.page.tab_records' },
+  { id: 'templates', labelKey: 'forms.page.tab_templates' },
+  { id: 'signing', labelKey: 'forms.page.tab_signing' },
 ];
 
 /**
- * ⚖️ **شاشةُ «النماذج»** (توجيه ٢٧٨ · `ق-١٦٣٨`، بحكم صاحب المشروع: «تُبنيان شاشةً مستقلّةً باسم «النماذج» لا داخل نافذة العقد،
- * فلا تنتظران فرعَ وكيل الواجهة، وشاشةُ العقد الجديدة تضيف لاحقاً زرّاً يفتحها»).
+ * The Forms screen, a standalone screen rather than part of the contract window,
+ * so the new contract screen can later add a button that opens it.
  *
- * **بوّابةُ الفاعل** (`CLAUDE.md §3.5`): الفاعلُ مالكُ المنشأة وموظّفوها، والشاشةُ في واجهة المنشأة. **السجلّاتُ** (الموجة ١د)
- * بأفعال شاشة العقود، **وقوالبُ المنشأة** (الموجة ١ب) يحرّرها المالك ويراها غيرُه، **وإعدادُ التوقيع** (توجيه ٢٨٧) لمالك المنشأة.
- * والتبويبُ في الرابط (`?tab=`) كالعقد.
+ * Actor: the company owner and staff, in the company interface. Records use the
+ * contracts screen actions, company templates are edited by the owner and seen by
+ * others, and signing settings belong to the company owner. The tab lives in the
+ * URL (?tab=) like the contract.
  */
 export function FormsPage() {
+  const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab');
   const tab: Tab = requested === 'templates' || requested === 'signing' ? requested : 'records';
-  const select = (t: Tab) => {
-    const next = new URLSearchParams(params);
-    if (t === 'records') next.delete('tab');
-    else next.set('tab', t);
-    setParams(next, { replace: true });
+  const select = (next: Tab) => {
+    const p = new URLSearchParams(params);
+    if (next === 'records') p.delete('tab');
+    else p.set('tab', next);
+    setParams(p, { replace: true });
   };
 
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">النماذج</div>
-          <div className="page-sub">نماذجُ التسليم والاستلام: تُعبّأ على قالبٍ منشور، وتُختم ببصمةٍ ورقمٍ فلا تُعدَّل بعدها</div>
+          <div className="page-title">{t('forms.page.title')}</div>
+          <div className="page-sub">{t('forms.page.sub')}</div>
         </div>
       </div>
 
       <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'tab active' : 'tab'} onClick={() => select(t.id)}>
-            {t.label}
+        {TABS.map((x) => (
+          <button key={x.id} className={tab === x.id ? 'tab active' : 'tab'} onClick={() => select(x.id)}>
+            {t(x.labelKey)}
           </button>
         ))}
       </div>

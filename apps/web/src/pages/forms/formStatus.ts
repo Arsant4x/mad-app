@@ -1,73 +1,84 @@
 import type { FormInstance } from '../../api/forms';
+import i18n from '../../i18n';
 
 /**
- * ⚖️ **حالاتُ النموذج في مسار التوقيع** (توجيه ٢٨٧): المسوّدةُ تُعبّأ، ثم «ينتظر التوقيع» بعد توقيع الموظّف وإرساله، ثم «مختوم» حين
- * يوقّع الطرف؛ أو «معترَضٌ عليه» فتليه نسخةٌ معدّلة، أو «انقضت مدّتُه» بلا موافقة، أو «خلافٌ قائم» لاعتراضٍ بقي عند الموعد.
+ * A table of code to label whose labels are read through translation on access,
+ * so a language switch shows the new text. Unknown codes stay undefined, letting
+ * callers fall back to the raw code.
+ */
+function labels(prefix: string, codes: readonly string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const code of codes) {
+    Object.defineProperty(out, code, { enumerable: true, get: () => i18n.t(`forms.${prefix}.${code.toLowerCase()}`) });
+  }
+  return out;
+}
+
+const statusEntry = (code: FormInstance['status'], badge: string) => ({
+  badge,
+  get label() {
+    return i18n.t(`forms.status.${code.toLowerCase()}`);
+  },
+});
+
+/**
+ * Form states in the signing flow: a draft is filled, then awaits the party's
+ * signature after staff sign and send, then is sealed when the party signs; or it
+ * is objected to (a revised copy follows), expires without consent, or ends in a
+ * standing dispute when an objection remains at the deadline.
  */
 export const FORM_STATUS: Record<FormInstance['status'], { label: string; badge: string }> = {
-  DRAFT: { label: 'مسوّدة', badge: 'draft' },
-  AWAITING_SIGNATURE: { label: 'ينتظر التوقيع', badge: 'due' },
-  OBJECTED: { label: 'معترَضٌ عليه', badge: 'overdue' },
-  SEALED: { label: 'مختوم', badge: 'paid' },
-  EXPIRED: { label: 'انقضت مدّتُه', badge: 'overdue' },
-  DISPUTED: { label: 'خلافٌ قائم', badge: 'overdue' },
+  DRAFT: statusEntry('DRAFT', 'draft'),
+  AWAITING_SIGNATURE: statusEntry('AWAITING_SIGNATURE', 'due'),
+  OBJECTED: statusEntry('OBJECTED', 'overdue'),
+  SEALED: statusEntry('SEALED', 'paid'),
+  EXPIRED: statusEntry('EXPIRED', 'overdue'),
+  DISPUTED: statusEntry('DISPUTED', 'overdue'),
 };
 
 export const statusOf = (s: FormInstance['status']) => FORM_STATUS[s] ?? { label: s, badge: 'due' };
 
-/** مستوى التوقيع بفعله لا برمزه. */
-export const SIGNATURE_LEVEL: Record<string, string> = {
-  DRAWN_STAFF_SESSION: 'مرسومٌ بجلسة الموظّف',
-  DRAWN_OTP: 'مرسومٌ بعد رمزٍ إلى الجوال',
-  DRAWN_NAFATH: 'مرسومٌ بعد التحقّق عبر نفاذ',
-  PAPER_WITNESSED: 'ورقيٌّ بشهادة الموظّف',
-};
+/** Signature level named by what was done, not by its code. */
+export const SIGNATURE_LEVEL: Record<string, string> = labels('signature_level', [
+  'DRAWN_STAFF_SESSION',
+  'DRAWN_OTP',
+  'DRAWN_NAFATH',
+  'PAPER_WITNESSED',
+]);
 
-export const SIGNER_ROLE: Record<string, string> = {
-  STAFF: 'الموظّف',
-  COUNTERPARTY: 'المستأجر',
-  REPRESENTATIVE: 'ممثّلُ المستأجر',
-  SUBSTITUTE: 'المستلمُ البديل',
-};
+export const SIGNER_ROLE: Record<string, string> = labels('signer_role', ['STAFF', 'COUNTERPARTY', 'REPRESENTATIVE', 'SUBSTITUTE']);
 
-export const SIGNATURE_CHANNEL: Record<string, string> = {
-  LINK: 'برابطٍ على جواله',
-  STAFF_DEVICE: 'على جهاز الموظّف',
-  PAPER: 'على الورق',
-};
+export const SIGNATURE_CHANNEL: Record<string, string> = labels('signature_channel', ['LINK', 'STAFF_DEVICE', 'PAPER']);
 
-export const AUTHORITY_TYPE: Record<string, string> = {
-  CR_MANAGER: 'مديرٌ مقيّدٌ في السجلّ التجاريّ',
-  NAJIZ_POA: 'وكالةٌ من ناجز',
-};
+export const AUTHORITY_TYPE: Record<string, string> = labels('authority_type', ['CR_MANAGER', 'NAJIZ_POA']);
 
-/** أحداثُ سجلّ النموذج بأسمائها. */
-export const EVENT_LABEL: Record<string, string> = {
-  STAFF_SIGNED: 'وقّع الموظّف',
-  LINK_SENT: 'أُرسل الرابط',
-  LINK_SEND_FAILED: 'تعذّر إرسالُ الرابط',
-  LINK_OPENED: 'فُتح الرابط',
-  OTP_SENT: 'أُرسل رمزُ الدخول',
-  OTP_SEND_FAILED: 'تعذّر إرسالُ الرمز',
-  OTP_FAILED: 'رمزٌ خاطئ',
-  OTP_LOCKED: 'قُفل الرمز بعد ثلاث محاولات',
-  LOGIN: 'دخل الطرف',
-  NAFATH_STARTED: 'بدأ التحقّق عبر نفاذ',
-  NAFATH_REJECTED: 'رُفض التحقّق عبر نفاذ',
-  SIGNED: 'وقّع الطرف',
-  OBJECTED: 'اعترض الطرف',
-  REVISED: 'نسخةٌ معدّلة',
-  SEALED: 'خُتم النموذج',
-  FINAL_SENT: 'أُرسلت النسخةُ النهائية',
-  FINAL_SEND_FAILED: 'تعذّر إرسالُ النسخة النهائية',
-  EXPIRED: 'انقضت المدّة',
-  DISPUTED: 'خلافٌ قائم',
-  REMINDER_MID: 'تذكيرُ منتصف المدّة',
-  REMINDER_LAST: 'تذكيرُ اليوم الأخير',
-  PAPER_UPLOADED: 'رُفعت الورقةُ الموقَّعة',
-  REPRESENTATIVE_DESIGNATED: 'عُيّن ممثّلُ الطرف',
-  DEVICE_LINK: 'فُتح رابطٌ على جهاز الموظّف',
-  SUBSTITUTE_REQUESTED: 'طُلب مستلمٌ بديل',
-  SUBSTITUTE_APPROVED: 'وافق الطرفُ على البديل',
-  SUBSTITUTE_REJECTED: 'رفض الطرفُ البديل',
-};
+/** Form log events by name. */
+export const EVENT_LABEL: Record<string, string> = labels('event', [
+  'STAFF_SIGNED',
+  'LINK_SENT',
+  'LINK_SEND_FAILED',
+  'LINK_OPENED',
+  'OTP_SENT',
+  'OTP_SEND_FAILED',
+  'OTP_FAILED',
+  'OTP_LOCKED',
+  'LOGIN',
+  'NAFATH_STARTED',
+  'NAFATH_REJECTED',
+  'SIGNED',
+  'OBJECTED',
+  'REVISED',
+  'SEALED',
+  'FINAL_SENT',
+  'FINAL_SEND_FAILED',
+  'EXPIRED',
+  'DISPUTED',
+  'REMINDER_MID',
+  'REMINDER_LAST',
+  'PAPER_UPLOADED',
+  'REPRESENTATIVE_DESIGNATED',
+  'DEVICE_LINK',
+  'SUBSTITUTE_REQUESTED',
+  'SUBSTITUTE_APPROVED',
+  'SUBSTITUTE_REJECTED',
+]);

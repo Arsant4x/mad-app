@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { listCustomers, type Customer } from '../../api/customers';
 import { downloadReceivablesAgingCsv, getReceivablesAging, type AgingReport } from '../../api/reports';
@@ -6,12 +7,13 @@ import { fmt, today } from '../../lib/format';
 import { num0 } from '../../lib/money';
 
 /**
- * أعمار ذمم العملاء (4.6) — «مَن يدين لنا، بكم، ومنذ متى».
+ * Customer receivables aging: who owes us, how much, and since when.
  *
- * المطابقة مع ميزان المراجعة **عند الطلب**: مسح الدفتر أثقل من التقرير نفسه،
- * فلا يُدفع ثمنه في كل تحميل.
+ * Reconciliation with the trial balance runs on request only: scanning the ledger costs more
+ * than the report itself, so it is not paid on every load.
  */
 export function ReceivablesAgingSection() {
+  const { t } = useTranslation();
   const [report, setReport] = useState<AgingReport | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -31,7 +33,7 @@ export function ReceivablesAgingSection() {
       setReport(await getReceivablesAging({ ...params(), ...(reconcile ? { reconcile: 'true' } : {}) }));
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر تحميل التقرير');
+      setError(d?.message ?? t('reports.load_failed'));
     } finally {
       setLoading(false);
       setReconciling(false);
@@ -49,22 +51,22 @@ export function ReceivablesAgingSection() {
   }, [asOf, branchId, customerId]);
 
   if (loading || !report) return null;
-  const t = report.totals;
+  const totals = report.totals;
   const rec = report.reconciliation;
-  // ② الفرقُ يصل نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ رقماً قبل المقارنة.
+  // The difference arrives as two-decimal text; read it as a number before comparing.
   const matched = rec ? Math.abs(num0(rec.difference)) < 0.005 : false;
 
   return (
     <div>
       <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
         <div className="field" style={{ margin: 0 }}>
-          <label>حتى تاريخ</label>
+          <label>{t('reports.aging.as_of')}</label>
           <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>الفرع</label>
+          <label>{t('reports.aging.branch')}</label>
           <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">كل الفروع (مجمَّع)</option>
+            <option value="">{t('reports.aging.all_branches')}</option>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -73,9 +75,9 @@ export function ReceivablesAgingSection() {
           </select>
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>العميل</label>
+          <label>{t('reports.aging.customer')}</label>
           <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">كل العملاء</option>
+            <option value="">{t('reports.aging.all_customers')}</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -83,11 +85,11 @@ export function ReceivablesAgingSection() {
             ))}
           </select>
         </div>
-        <button className="btn btn-ghost" style={{ marginRight: 'auto' }} onClick={() => load(true)} disabled={reconciling}>
-          {reconciling ? 'جارٍ المطابقة…' : '⚖ طابق مع ميزان المراجعة'}
+        <button className="btn btn-ghost" style={{ marginInlineStart: 'auto' }} onClick={() => load(true)} disabled={reconciling}>
+          {reconciling ? t('reports.aging.reconciling') : t('reports.aging.reconcile')}
         </button>
         <button className="btn btn-ghost" onClick={() => downloadReceivablesAgingCsv(params())}>
-          ⭳ تصدير CSV
+          {t('reports.aging.export_csv')}
         </button>
       </div>
 
@@ -97,26 +99,26 @@ export function ReceivablesAgingSection() {
         <table>
           <thead>
             <tr>
-              <th>العميل</th>
-              <th>جارٍ</th>
-              <th>1-30 يوم</th>
-              <th>31-60</th>
-              <th>61-90</th>
-              <th>أكثر من 90</th>
+              <th>{t('reports.aging.customer')}</th>
+              <th>{t('reports.aging.current')}</th>
+              <th>{t('reports.aging.d1_header')}</th>
+              <th>{t('reports.aging.d31')}</th>
+              <th>{t('reports.aging.d61')}</th>
+              <th>{t('reports.aging.d90')}</th>
               <th>
-                مبالغ غير مخصَّصة
+                {t('reports.aging.unapplied')}
                 <div className="hint" style={{ fontWeight: 400 }}>
-                  دفعة على الحساب أو إشعار دائن بلا فاتورة — تخفّض الذمّة بلا عمرٍ تنتمي إليه
+                  {t('reports.aging.unapplied_hint')}
                 </div>
               </th>
-              <th>الإجمالي</th>
+              <th>{t('reports.total')}</th>
             </tr>
           </thead>
           <tbody>
             {report.rows.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <div className="empty-state">لا ذمم مستحقة حتى هذا التاريخ</div>
+                  <div className="empty-state">{t('reports.aging.no_rows')}</div>
                 </td>
               </tr>
             )}
@@ -144,15 +146,15 @@ export function ReceivablesAgingSection() {
           {report.rows.length > 0 && (
             <tfoot>
               <tr>
-                <td style={{ fontWeight: 700 }}>الإجمالي</td>
-                <td className="num">{fmt(t.current)}</td>
-                <td className="num">{fmt(t.d1)}</td>
-                <td className="num">{fmt(t.d31)}</td>
-                <td className="num">{fmt(t.d61)}</td>
-                <td className="num">{fmt(t.d90)}</td>
-                <td className="num">{fmt(t.unapplied)}</td>
+                <td style={{ fontWeight: 700 }}>{t('reports.total')}</td>
+                <td className="num">{fmt(totals.current)}</td>
+                <td className="num">{fmt(totals.d1)}</td>
+                <td className="num">{fmt(totals.d31)}</td>
+                <td className="num">{fmt(totals.d61)}</td>
+                <td className="num">{fmt(totals.d90)}</td>
+                <td className="num">{fmt(totals.unapplied)}</td>
                 <td className="num" style={{ fontWeight: 700 }}>
-                  {fmt(t.total)}
+                  {fmt(totals.total)}
                 </td>
               </tr>
             </tfoot>
@@ -160,31 +162,32 @@ export function ReceivablesAgingSection() {
         </table>
       </div>
 
-      {/* ⭐ الصفُّ الثاني (ق-٩٢٥/④): أقساطُ إيجارٍ استُحقّت ذمّةً ولم تُقبض — قسطاً قسطاً بعمره؛
-          وهي مضمَّنةٌ في شرائح عميلها أعلاه وفي المطابقة، فتقريرٌ يسمّي الحقيقةَ «فرقاً غير منسوب» أسوأُ من نقصه. */}
+      {/* Rent installments accrued as receivables and not yet collected, one by one with their age.
+          They are already inside their customer's buckets above and in the reconciliation; naming
+          them keeps the report from showing them as an unattributed difference. */}
       <div className="card" style={{ padding: 0, marginTop: 12 }}>
         <div style={{ padding: '10px 12px', fontWeight: 600 }}>
-          أقساطُ الإيجار المستحقّة غيرُ المقبوضة
+          {t('reports.aging.rent_title')}
           <span className="hint" style={{ fontWeight: 400, marginInlineStart: 8 }}>{report.rentNote}</span>
         </div>
         <table>
           <thead>
             <tr>
-              <th>المستأجر</th>
-              <th>العقد</th>
-              <th>الوحدة</th>
-              <th>الاستحقاق</th>
-              <th>المستحقّ</th>
-              <th>المسدَّد</th>
-              <th>المتبقّي</th>
-              <th>الشريحة</th>
+              <th>{t('reports.aging.tenant')}</th>
+              <th>{t('reports.aging.contract')}</th>
+              <th>{t('reports.aging.unit')}</th>
+              <th>{t('reports.aging.due')}</th>
+              <th>{t('reports.aging.accrued')}</th>
+              <th>{t('reports.aging.paid')}</th>
+              <th>{t('reports.aging.remaining')}</th>
+              <th>{t('reports.aging.bucket')}</th>
             </tr>
           </thead>
           <tbody>
             {report.rentRows.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <div className="empty-state">لا أقساط إيجار مستحقّة غير مقبوضة حتى هذا التاريخ</div>
+                  <div className="empty-state">{t('reports.aging.no_rent_rows')}</div>
                 </td>
               </tr>
             )}
@@ -197,15 +200,15 @@ export function ReceivablesAgingSection() {
                 <td className="num">{fmt(r.accrued)}</td>
                 <td className="num">{fmt(r.paid)}</td>
                 <td className="num" style={{ fontWeight: 700 }}>{fmt(r.remaining)}</td>
-                <td>{{ current: 'جارٍ', d1: '1-30', d31: '31-60', d61: '61-90', d90: 'أكثر من 90' }[r.bucket]}</td>
+                <td>{t(`reports.aging.bucket_name.${r.bucket}`)}</td>
               </tr>
             ))}
           </tbody>
           {report.rentRows.length > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={6} style={{ fontWeight: 700 }}>مجموع ذمم الإيجار</td>
-                <td className="num" style={{ fontWeight: 700 }}>{fmt(t.rent)}</td>
+                <td colSpan={6} style={{ fontWeight: 700 }}>{t('reports.aging.rent_total')}</td>
+                <td className="num" style={{ fontWeight: 700 }}>{fmt(totals.rent)}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -213,8 +216,8 @@ export function ReceivablesAgingSection() {
         </table>
       </div>
 
-      {/* سطر التسوية: يظهر عند الطلب وحده. المطابقة طمأنةٌ تُعرض كما يُعرض
-          الفرق — والفرق واقعٌ يحتاج تفسيراً لا خطأٌ يُنبَّه عليه. */}
+      {/* Reconciliation line, shown on request only. A match is shown as plainly as a
+          difference: a difference is a fact to explain, not an error to warn about. */}
       {rec && (
         <div
           className="card"
@@ -225,20 +228,20 @@ export function ReceivablesAgingSection() {
           }}
         >
           {matched ? (
-            <div style={{ color: 'var(--emerald)', fontWeight: 600 }}>مطابق لميزان المراجعة ✓</div>
+            <div style={{ color: 'var(--emerald)', fontWeight: 600 }}>{t('reports.aging.matched')}</div>
           ) : (
             <>
               <div style={{ fontWeight: 600 }}>
-                فرق غير منسوب: <span className="num">{fmt(rec.difference)}</span>
+                {t('reports.aging.unattributed')}<span className="num">{fmt(rec.difference)}</span>
               </div>
               <p className="hint" style={{ marginTop: 4 }}>
-                قيود يدوية على حساب الذمم (1200) لا يقابلها مستند — فالتقرير يقرأ الفواتير والسندات، والدفتر يضمّ كل قيدٍ حتى اليدوي.
-                {rec.accountMissing && ' (حساب الذمم 1200 غير موجود في دليل الحسابات بعد.)'}
+                {t('reports.aging.manual_entries')}
+                {rec.accountMissing && t('reports.aging.account_missing')}
               </p>
             </>
           )}
           <p className="hint" style={{ marginTop: 6 }}>
-            رصيد الدفتر: <b className="num">{fmt(rec.ledgerBalance)}</b> · مجموع التقرير: <b className="num">{fmt(rec.reportTotal)}</b>
+            {t('reports.aging.ledger_balance')}<b className="num">{fmt(rec.ledgerBalance)}</b>{t('reports.aging.report_total')}<b className="num">{fmt(rec.reportTotal)}</b>
           </p>
         </div>
       )}

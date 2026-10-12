@@ -1,1 +1,0 @@
-      const verification = await this.verifyAuthority({ name, mobile: '', authorityType: authority!.type, authorityRef: ref }).catch(() => 'UNVERIFIED' as const);
