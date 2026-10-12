@@ -2,6 +2,7 @@ import { ReceivablesAgingSection } from './ReceivablesAgingSection';
 import { NumberGapsSection } from './NumberGapsSection';
 import { LedgerSection } from './LedgerSection';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   getBalanceSheet,
   getCashFlow,
@@ -27,6 +28,7 @@ import { computeRange, type DashRange } from '../dashboardRange';
 type ReportTab = 'income' | 'balance' | 'cash' | 'branch' | 'property' | 'trial' | 'ledger' | 'aging' | 'bankdiff' | 'deferred' | 'gaps';
 
 export function ReportsPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<ReportTab>('income');
   const [range, setRange] = useState<DashRange>('month');
   const [customFrom, setCustomFrom] = useState('');
@@ -57,7 +59,7 @@ export function ReportsPage() {
     setLoading(true);
     Promise.all([
       getIncomeStatement({ from: from ?? undefined, to }),
-      // **بتاريخٍ فعلاً** (`ق-١٢٧٩` · ⑩A1): كانت الشاشةُ تقول «كما في …» والخادمُ يقرأ رصيداً تراكمياً بلا تاريخ.
+      // Dated for real, so "as at" on screen matches what the server reads.
       getBalanceSheet(to),
       getCashFlow({ from: from ?? undefined, to }),
       getBranchSummary({ from: from ?? undefined, to }),
@@ -65,9 +67,9 @@ export function ReportsPage() {
       // about the selected reporting period.
       getPropertyKpis(),
       getTrialBalance({ from: from ?? undefined, to }),
-      // خارج المدى عمداً: الفرقُ حالةٌ قائمة اليوم لا حركةُ فترة.
+      // Outside the range on purpose: the difference is a standing state today, not period movement.
       getBankDifference(),
-      // وكذلك الالتزام: رصيدٌ قائمٌ اليوم لا حركةُ فترة.
+      // Same for the liability: a balance standing today, not period movement.
       getDeferredRevenue(),
     ])
       .then(([inc, bal, cf, br, pk, tb, bd, dr]) => {
@@ -83,7 +85,9 @@ export function ReportsPage() {
       .finally(() => setLoading(false));
   }, [from, to]);
 
-  const periodLabel = from ? `عن الفترة من ${dfmt(from)} إلى ${dfmt(to)}` : `حتى ${dfmt(to)}`;
+  const periodLabel = from
+    ? t('reports.page.period_from_to', { from: dfmt(from), to: dfmt(to) })
+    : t('reports.page.period_until', { to: dfmt(to) });
 
   if (loading || !income || !balance || !cash) return null;
 
@@ -91,24 +95,24 @@ export function ReportsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">التقارير المالية</div>
-          <div className="page-sub">تقارير تُبنى مباشرة من دفتر الأستاذ</div>
+          <div className="page-title">{t('reports.page.title')}</div>
+          <div className="page-sub">{t('reports.page.subtitle')}</div>
         </div>
       </div>
 
       <div className="toolbar" style={{ marginBottom: 16 }}>
         <div className="chip-group">
           <button className={range === 'month' ? 'chip active' : 'chip'} onClick={() => selectRange('month')}>
-            هذا الشهر
+            {t('reports.range.month')}
           </button>
           <button className={range === 'quarter' ? 'chip active' : 'chip'} onClick={() => selectRange('quarter')}>
-            هذا الربع
+            {t('reports.range.quarter')}
           </button>
           <button className={range === 'year' ? 'chip active' : 'chip'} onClick={() => selectRange('year')}>
-            هذه السنة
+            {t('reports.range.year')}
           </button>
           <button className={range === 'all' ? 'chip active' : 'chip'} onClick={() => selectRange('all')}>
-            كل الفترات
+            {t('reports.range.all')}
           </button>
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
@@ -122,7 +126,7 @@ export function ReportsPage() {
             style={{ padding: '9px 12px', border: '1px solid var(--line)', borderRadius: 8, fontFamily: 'inherit', fontSize: 12.5 }}
           />
         </div>
-        <span style={{ color: 'var(--muted)', fontSize: 12 }}>إلى</span>
+        <span style={{ color: 'var(--muted)', fontSize: 12 }}>{t('reports.page.to')}</span>
         <div className="field" style={{ marginBottom: 0 }}>
           <input
             type="date"
@@ -138,51 +142,50 @@ export function ReportsPage() {
 
       <div className="tabs">
         <button className={tab === 'income' ? 'tab active' : 'tab'} onClick={() => setTab('income')}>
-          قائمة الدخل
+          {t('reports.tabs.income')}
         </button>
         <button className={tab === 'balance' ? 'tab active' : 'tab'} onClick={() => setTab('balance')}>
-          الميزانية العمومية
+          {t('reports.tabs.balance')}
         </button>
         <button className={tab === 'cash' ? 'tab active' : 'tab'} onClick={() => setTab('cash')}>
-          التدفقات النقدية
+          {t('reports.tabs.cash')}
         </button>
         <button className={tab === 'trial' ? 'tab active' : 'tab'} onClick={() => setTab('trial')}>
-          ميزان المراجعة
+          {t('reports.tabs.trial')}
         </button>
         <button className={tab === 'ledger' ? 'tab active' : 'tab'} onClick={() => setTab('ledger')}>
-          الأستاذ العام / كشف الحساب
+          {t('reports.tabs.ledger')}
         </button>
         <button className={tab === 'aging' ? 'tab active' : 'tab'} onClick={() => setTab('aging')}>
-          أعمار الذمم
+          {t('reports.tabs.aging')}
         </button>
-        {/* يُعرض دائماً (ق-٣٤٥): القائمةُ الفارغةُ هنا جوابُ المراجع لا تبويبٌ بلا موضوع. */}
+        {/* Always shown: an empty list here is the auditor's answer, not a tab with no subject. */}
         <button className={tab === 'gaps' ? 'tab active' : 'tab'} onClick={() => setTab('gaps')}>
-          الأرقام المأخوذة
+          {t('reports.tabs.gaps')}
         </button>
-        {/* لا يُعرض لمن لا بنكَ له — تبويبٌ فارغ يسأل عن سؤالٍ لا يخصّه. */}
+        {/* Hidden for a business with no bank: an empty tab would ask a question that does not apply. */}
         {(bankDiff?.rows.length ?? 0) > 0 && (
           <button className={tab === 'bankdiff' ? 'tab active' : 'tab'} onClick={() => setTab('bankdiff')}>
-            فروق البنوك
+            {t('reports.tabs.bankdiff')}
           </button>
         )}
-        {/* لا يُعرض لمن لا التزامَ له ولا دفعةً حرّة — تبويبٌ فارغ يسأل عن سؤالٍ
-            لا يخصّه، كسابقه في فروق البنوك. */}
+        {/* Hidden when there is no liability and no free payment, for the same reason as bank differences. */}
         {((deferred?.outstanding.length ?? 0) > 0 || (deferred?.unlinked.length ?? 0) > 0) && (
           <button className={tab === 'deferred' ? 'tab active' : 'tab'} onClick={() => setTab('deferred')}>
-            الإيراد المؤجَّل
+            {t('reports.tabs.deferred')}
           </button>
         )}
         {/* Only for landlords: a business with no properties has nothing here. */}
         {(kpis?.occupancy.length ?? 0) > 0 && (
           <button className={tab === 'property' ? 'tab active' : 'tab'} onClick={() => setTab('property')}>
-            المؤشرات العقارية
+            {t('reports.tabs.property')}
           </button>
         )}
         {/* Only offered once branches exist — a single-location business has
             nothing to compare. */}
         {(branchSummary?.branches.length ?? 0) > 0 && (
           <button className={tab === 'branch' ? 'tab active' : 'tab'} onClick={() => setTab('branch')}>
-            حسب الفرع
+            {t('reports.tabs.branch')}
           </button>
         )}
       </div>
@@ -191,47 +194,47 @@ export function ReportsPage() {
         {tab === 'income' && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              قائمة الدخل — {periodLabel}
+              {t('reports.income.title', { period: periodLabel })}
             </div>
             <table>
               <tbody>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>الإيرادات</td>
+                  <td>{t('reports.income.revenue')}</td>
                   <td></td>
                 </tr>
                 {income.revenue.map((a) => (
                   <tr key={a.code}>
-                    <td style={{ paddingRight: 20 }}>{a.name}</td>
+                    <td style={{ paddingInlineStart: 20 }}>{a.name}</td>
                     <td className="num">{fmt(a.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
-                  <td>إجمالي الإيرادات</td>
+                  <td>{t('reports.income.total_revenue')}</td>
                   <td className="num">{fmt(income.totalRevenue)}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>المصروفات</td>
+                  <td>{t('reports.income.expenses')}</td>
                   <td></td>
                 </tr>
                 {income.expenses.map((a) => (
                   <tr key={a.code}>
-                    <td style={{ paddingRight: 20 }}>{a.name}</td>
+                    <td style={{ paddingInlineStart: 20 }}>{a.name}</td>
                     <td className="num">{fmt(a.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
-                  <td>إجمالي المصروفات</td>
+                  <td>{t('reports.income.total_expenses')}</td>
                   <td className="num">{fmt(income.totalExpenses)}</td>
                 </tr>
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: 'var(--emerald)' }}>
-                  <td>صافي الربح</td>
+                  <td>{t('reports.income.net_profit')}</td>
                   <td className="num">{fmt(income.netProfit)}</td>
                 </tr>
               </tbody>
             </table>
             {!income.hasAnyPostedEntries && (
               <p className="hint" style={{ marginTop: 10 }}>
-                لا توجد قيود مرحّلة بعد — القيم كلها صفر حتى تُرحَّل قيود فعلية
+                {t('reports.income.no_entries')}
               </p>
             )}
           </>
@@ -240,54 +243,54 @@ export function ReportsPage() {
         {tab === 'balance' && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              الميزانية العمومية — كما في {dfmt(balance.asOf ?? to)}
+              {t('reports.balance.title', { date: dfmt(balance.asOf ?? to) })}
             </div>
             <table>
               <tbody>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>الأصول</td>
+                  <td>{t('reports.balance.assets')}</td>
                   <td></td>
                 </tr>
                 {balance.assets.map((a) => (
                   <tr key={a.code}>
-                    <td style={{ paddingRight: 20 }}>{a.name}</td>
+                    <td style={{ paddingInlineStart: 20 }}>{a.name}</td>
                     <td className="num">{fmt(a.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
-                  <td>إجمالي الأصول</td>
+                  <td>{t('reports.balance.total_assets')}</td>
                   <td className="num">{fmt(balance.totalAssets)}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>الخصوم</td>
+                  <td>{t('reports.balance.liabilities')}</td>
                   <td></td>
                 </tr>
                 {balance.liabilities.map((a) => (
                   <tr key={a.code}>
-                    <td style={{ paddingRight: 20 }}>{a.name}</td>
+                    <td style={{ paddingInlineStart: 20 }}>{a.name}</td>
                     <td className="num">{fmt(a.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ fontWeight: 700 }}>
-                  <td>حقوق الملكية</td>
+                  <td>{t('reports.balance.equity')}</td>
                   <td></td>
                 </tr>
                 {balance.equity.map((a) => (
                   <tr key={a.code}>
-                    <td style={{ paddingRight: 20 }}>{a.name}</td>
+                    <td style={{ paddingInlineStart: 20 }}>{a.name}</td>
                     <td className="num">{fmt(a.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700 }}>
-                  <td>إجمالي الخصوم وحقوق الملكية</td>
+                  <td>{t('reports.balance.total_liabilities_equity')}</td>
                   <td className="num">{fmt(balance.totalLiabilitiesAndEquity)}</td>
                 </tr>
               </tbody>
             </table>
             <p className="hint" style={{ marginTop: 10, color: balance.balanced ? 'var(--emerald)' : 'var(--rose)' }}>
               {balance.balanced
-                ? '✓ الأصول = الخصوم + حقوق الملكية'
-                : '⚠ الأصول لا تساوي الخصوم وحقوق الملكية — وهذا لا يقع مع القيد المزدوج إلا بسطرٍ على حسابٍ خارج الأنواع الخمسة؛ راجعها مع الدعم'}
+                ? t('reports.balance.balanced')
+                : t('reports.balance.unbalanced')}
             </p>
           </>
         )}
@@ -295,89 +298,92 @@ export function ReportsPage() {
         {tab === 'cash' && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              قائمة التدفقات النقدية — {periodLabel}
+              {t('reports.cash.title', { period: periodLabel })}
             </div>
             {cash.missingAccounts.length > 0 && (
               <p className="hint" style={{ color: 'var(--rose)', marginBottom: 10 }}>
-                ⚠ الحسابات التالية غير موجودة بدليل الحسابات فتظهر بصفر: {cash.missingAccounts.join('، ')}
+                {t('reports.cash.missing_accounts', { accounts: cash.missingAccounts.join(t('reports.list_sep')) })}
               </p>
             )}
             <table>
               <tbody>
                 <tr>
-                  <td>صافي الربح</td>
+                  <td>{t('reports.cash.net_profit')}</td>
                   <td className="num">{fmt(cash.netProfit)}</td>
                 </tr>
-                {/* ⚖️ قيدُ الإقفال يصفّر الإيرادَ والمصروفَ مقابل المبقاة، فيُعاد ما أُقفل في الفترة إلى الربح (توجيه ٢٧٨، القاعدة ٣٧). */}
+                {/* The closing entry zeroes revenue and expense against retained earnings, so what
+                    was closed in the period is added back to profit. */}
                 {num0(cash.retainedEarningsChange) !== 0 && (
                   <tr>
-                    <td>ربحٌ أُقفل إلى الأرباح المبقاة في الفترة</td>
+                    <td>{t('reports.cash.retained_closed')}</td>
                     <td className="num">{fmt(cash.retainedEarningsChange)}</td>
                   </tr>
                 )}
                 <tr>
-                  <td>التغير في الذمم المدينة</td>
-                  {/* ② السالبُ الأحادي على نصٍّ يمرّ من المترجم ويسقط الحارس — فيُقرأ رقماً أولاً. */}
+                  <td>{t('reports.cash.receivables')}</td>
+                  {/* Unary minus on a text value passes the compiler but breaks the result, so read it as a number first. */}
                   <td className="num">{fmt(-num0(cash.receivablesChange))}</td>
                 </tr>
                 <tr>
-                  <td>التغير في المخزون</td>
+                  <td>{t('reports.cash.inventory')}</td>
                   <td className="num">{fmt(-num0(cash.inventoryChange))}</td>
                 </tr>
                 <tr>
-                  <td>التغير في ضريبة المدخلات</td>
+                  <td>{t('reports.cash.input_vat')}</td>
                   <td className="num">{fmt(-num0(cash.inputVatChange))}</td>
                 </tr>
                 <tr>
-                  <td>التغير في الذمم الدائنة</td>
+                  <td>{t('reports.cash.payables')}</td>
                   <td className="num">{fmt(cash.payablesChange)}</td>
                 </tr>
-                {/* ⭐ التزامان كانا خارج المعادلة (ق-٩٢٣ · ق-٩٢٥/③): قبضٌ يُؤجَّل، وضريبةٌ مستحقّة لم تُسدَّد — نقدٌ في اليد لم يمرّ بالربح. */}
+                {/* Two liabilities that hold cash in hand without passing through profit: deferred
+                    collections and VAT due but not yet paid. */}
                 <tr>
-                  <td>التغير في الإيراد المؤجَّل (قبضٌ عن خدمةٍ لم تُقدَّم)</td>
+                  <td>{t('reports.cash.deferred_revenue')}</td>
                   <td className="num">{fmt(cash.deferredRevenueChange)}</td>
                 </tr>
                 <tr>
-                  <td>التغير في ضريبة القيمة المضافة المستحقة</td>
+                  <td>{t('reports.cash.output_vat')}</td>
                   <td className="num">{fmt(cash.outputVatChange)}</td>
                 </tr>
-                {/* ⚖️ مقدَّمُ العملاء ورصيدُ المستأجر (Δ2450) نقدٌ في اليد لم يمرّ بالربح (توجيه ٢٧٨، القاعدة ٣٧). */}
+                {/* Customer advances and tenant credit (account 2450) are cash in hand that did not pass through profit. */}
                 <tr>
-                  <td>التغير في مقدَّم العملاء ورصيد المستأجرين</td>
+                  <td>{t('reports.cash.customer_prepayments')}</td>
                   <td className="num">{fmt(cash.customerPrepaymentsChange)}</td>
                 </tr>
                 <tr>
-                  <td>التغير في بقيّة الأصول والالتزامات</td>
+                  <td>{t('reports.cash.other_operating')}</td>
                   <td className="num">{fmt(cash.otherOperatingChange)}</td>
                 </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
-                  <td>صافي التدفق من الأنشطة التشغيلية</td>
+                  <td>{t('reports.cash.operating')}</td>
                   <td className="num">{fmt(cash.operatingCashFlow)}</td>
                 </tr>
                 <tr>
-                  <td>شراء/بيع أصول ثابتة</td>
+                  <td>{t('reports.cash.fixed_assets')}</td>
                   <td className="num">{fmt(-num0(cash.fixedAssetChange))}</td>
                 </tr>
                 <tr>
-                  <td>تقبيل وحقوق انتفاع</td>
+                  <td>{t('reports.cash.key_money')}</td>
                   <td className="num">{fmt(-num0(cash.keyMoneyChange))}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>صافي التدفق من الأنشطة الاستثمارية</td>
+                  <td>{t('reports.cash.investing')}</td>
                   <td className="num">{fmt(cash.investingCashFlow)}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>صافي التدفق من الأنشطة التمويلية (حقوق الملكية)</td>
+                  <td>{t('reports.cash.financing')}</td>
                   <td className="num">{fmt(cash.financingCashFlow)}</td>
                 </tr>
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: 'var(--emerald)' }}>
-                  <td>صافي التغير في النقدية</td>
+                  <td>{t('reports.cash.net_change')}</td>
                   <td className="num">{fmt(cash.netCashChange)}</td>
                 </tr>
-                {/* المطابقةُ بالنقد المقيس — كتوازن المركز المالي: اختلالُها يعني سطراً على حسابٍ خارج الأنواع الخمسة. */}
+                {/* Checked against the measured cash accounts, like the balance sheet check: a mismatch
+                    means a line on an account outside the five types. */}
                 {!cash.reconciled && (
                   <tr>
-                    <td style={{ color: 'var(--rose)' }}>⚠ لا يطابق تغيّرَ حسابات النقد المقيس</td>
+                    <td style={{ color: 'var(--rose)' }}>{t('reports.cash.not_reconciled')}</td>
                     <td className="num">{fmt(cash.cashAccountsChange)}</td>
                   </tr>
                 )}
@@ -389,18 +395,18 @@ export function ReportsPage() {
         {tab === 'branch' && branchSummary && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              الأداء حسب الفرع — {periodLabel}
+              {t('reports.branch.title', { period: periodLabel })}
             </div>
             <p className="hint" style={{ marginBottom: 10 }}>
-              محسوب من القيود المرحَّلة بالعملة الأساسية، فتظهر الفروع التي تتعامل بعملة أخرى ضمن إجمالي واحد قابل للمقارنة.
+              {t('reports.branch.hint')}
             </p>
             <table>
               <thead>
                 <tr>
-                  <th>الفرع</th>
-                  <th>الإيرادات</th>
-                  <th>المصروفات</th>
-                  <th>صافي الدخل</th>
+                  <th>{t('reports.branch.branch')}</th>
+                  <th>{t('reports.branch.revenue')}</th>
+                  <th>{t('reports.branch.expenses')}</th>
+                  <th>{t('reports.branch.net_income')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -440,29 +446,29 @@ export function ReportsPage() {
         {tab === 'gaps' && <NumberGapsSection />}
         {tab === 'ledger' && <LedgerSection />}
 
-        {/* الإيرادُ المؤجَّل (ق-٤٦٨): رصيدُ `2400` رقمٌ واحدٌ لا يقول ممّن تكوّن
-            — فيُفصَّل بعقده وفترته. ومعه شرطُ المالك (ق-٤٧٣): «من يقرأ إيرادَه
-            يعرف كم منه لم يمرّ بالالتزام». */}
+        {/* Deferred revenue: the 2400 balance is one number that does not say where it came from,
+            so it is broken down by contract and period, together with the payments that never
+            passed through the liability. */}
         {tab === 'deferred' && deferred && (
           <div className="card">
             <div className="card-title" style={{ marginBottom: 8 }}>
-              الإيراد المؤجَّل — التزامٌ عن مدّة لم تُقدَّم بعد
+              {t('reports.deferred.title')}
             </div>
             <div className="page-sub" style={{ marginBottom: 14 }}>
-              القسط يستحقّ في أوّل فترته، فما يُقبض عن مدّة لم تُقدَّم يبقى التزاماً ويتحوّل إيراداً شهراً بشهر. الإجمالي القائم:{' '}
+              {t('reports.deferred.intro')}{' '}
               <strong>{fmt(deferred.totalDeferred)}</strong>
             </div>
             {deferred.outstanding.length > 0 && (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>العقد</th>
-                    <th>المستأجر</th>
-                    <th>الوحدة</th>
-                    <th>فترة الخدمة</th>
-                    <th>المقبوض</th>
-                    <th>المعترَف به</th>
-                    <th>المتبقّي التزاماً</th>
+                    <th>{t('reports.deferred.contract')}</th>
+                    <th>{t('reports.deferred.tenant')}</th>
+                    <th>{t('reports.deferred.unit')}</th>
+                    <th>{t('reports.deferred.service_period')}</th>
+                    <th>{t('reports.deferred.collected')}</th>
+                    <th>{t('reports.deferred.recognized')}</th>
+                    <th>{t('reports.deferred.remaining')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -485,23 +491,23 @@ export function ReportsPage() {
               </table>
             )}
 
-            {/* ⚠️ الحدُّ المعلَن — يُعرض ولو كان الجدولُ فارغاً، فالصفرُ خبرٌ أيضاً. */}
+            {/* The stated limit, shown even when the table is empty: zero is news too. */}
             <div className="card-title" style={{ marginTop: 20, marginBottom: 8 }}>
-              دفعات لم تمرّ بالإيراد المؤجَّل
+              {t('reports.deferred.unlinked_title')}
             </div>
             <div className="page-sub" style={{ marginBottom: 14 }}>
-              {deferred.unlinkedNote}. الإجمالي: <strong>{fmt(deferred.totalUnlinked)}</strong>
+              {deferred.unlinkedNote}{t('reports.deferred.unlinked_total')}<strong>{fmt(deferred.totalUnlinked)}</strong>
             </div>
             {deferred.unlinked.length === 0 ? (
-              <div className="page-sub">لا دفعات من هذا النوع.</div>
+              <div className="page-sub">{t('reports.deferred.no_unlinked')}</div>
             ) : (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>التاريخ</th>
-                    <th>العقد</th>
-                    <th>المستأجر</th>
-                    <th>المبلغ</th>
+                    <th>{t('reports.deferred.date')}</th>
+                    <th>{t('reports.deferred.contract')}</th>
+                    <th>{t('reports.deferred.tenant')}</th>
+                    <th>{t('reports.deferred.amount')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -519,30 +525,30 @@ export function ReportsPage() {
           </div>
         )}
 
-        {/* تقريرُ الفرق (ق-٢٨٥/٣): «الرصيدُ الدفتريّ مقابل ما كان يُعرض،
-            فينتقل التاجرُ بلا صدمة» — ومعه إعلانُ ق-٢٨٣. */}
+        {/* Bank differences: the ledger balance against what used to be shown, so the merchant
+            moves over without surprise. */}
         {tab === 'bankdiff' && bankDiff && (
           <div className="card">
             <div className="card-title" style={{ marginBottom: 8 }}>
-              فروق البنوك — الرصيد الدفتري مقابل المعروض
+              {t('reports.bankdiff.title')}
             </div>
             <div className="page-sub" style={{ marginBottom: 14 }}>
-              الرصيدُ الدفتري يأتي من دفتر الأستاذ. والحركة البنكية اليدوية للمطابقة ولا تُرحَّل، فلا تحرّك الرصيد — وما حرّكته قبل ذلك يظهر هنا فرقاً.
+              {t('reports.bankdiff.intro')}
             </div>
             {bankDiff.bankCashSeparatedOn && (
               <div className="page-sub" style={{ marginBottom: 14 }}>
-                ⚠ ما قبل {dfmt(bankDiff.bankCashSeparatedOn)} يشمل مقبوضات البنوك ضمن الصندوق — قبل ذلك التاريخ لم يكن للبنوك حساباتٌ في الدليل.
+                {t('reports.bankdiff.separated_on', { date: dfmt(bankDiff.bankCashSeparatedOn) })}
               </div>
             )}
             <table className="table">
               <thead>
                 <tr>
-                  <th>البنك</th>
-                  <th>الحساب</th>
-                  <th>الرصيد الدفتري</th>
-                  <th>المعروض</th>
-                  <th>الفرق</th>
-                  <th>أسطر بلا قيد</th>
+                  <th>{t('reports.bankdiff.bank')}</th>
+                  <th>{t('reports.bankdiff.account')}</th>
+                  <th>{t('reports.bankdiff.ledger_balance')}</th>
+                  <th>{t('reports.bankdiff.shown_balance')}</th>
+                  <th>{t('reports.bankdiff.difference')}</th>
+                  <th>{t('reports.bankdiff.unposted_lines')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -553,13 +559,13 @@ export function ReportsPage() {
                     <td>{fmt(r.ledgerBalance)}</td>
                     <td>{fmt(r.shownBalance)}</td>
                     <td>{num0(r.difference) === 0 ? '—' : <span className="badge overdue">{fmt(r.difference)}</span>}</td>
-                    <td>{r.unpostedCount === 0 ? '—' : `${r.unpostedCount} بمجموع ${fmt(r.unpostedSum)}`}</td>
+                    <td>{r.unpostedCount === 0 ? '—' : t('reports.bankdiff.unposted_sum', { n: r.unpostedCount, sum: fmt(r.unpostedSum) })}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
-                  <th colSpan={2}>الإجمالي</th>
+                  <th colSpan={2}>{t('reports.total')}</th>
                   <th>{fmt(bankDiff.totals.ledgerBalance)}</th>
                   <th>{fmt(bankDiff.totals.shownBalance)}</th>
                   <th>{fmt(bankDiff.totals.difference)}</th>
@@ -573,27 +579,27 @@ export function ReportsPage() {
         {tab === 'trial' && trial && (
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
-              <div className="card-title">ميزان المراجعة</div>
-              {!trial.balanced && <span className="badge overdue" style={{ marginRight: 10 }}>⚠ غير متوازن — راجع القيود</span>}
-              <button className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={() => downloadTrialBalanceCsv({ from: from ?? undefined, to })}>
-                ⬇ تصدير CSV
+              <div className="card-title">{t('reports.trial.title')}</div>
+              {!trial.balanced && <span className="badge overdue" style={{ marginInlineStart: 10 }}>{t('reports.trial.unbalanced')}</span>}
+              <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => downloadTrialBalanceCsv({ from: from ?? undefined, to })}>
+                {t('reports.export_csv')}
               </button>
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>الرمز</th>
-                  <th>الحساب</th>
-                  <th>مدين</th>
-                  <th>دائن</th>
-                  <th>رصيد مدين</th>
-                  <th>رصيد دائن</th>
+                  <th>{t('reports.trial.code')}</th>
+                  <th>{t('reports.trial.account')}</th>
+                  <th>{t('reports.trial.debit')}</th>
+                  <th>{t('reports.trial.credit')}</th>
+                  <th>{t('reports.trial.balance_debit')}</th>
+                  <th>{t('reports.trial.balance_credit')}</th>
                 </tr>
               </thead>
               <tbody>
                 {trial.rows.length === 0 && (
                   <tr>
-                    <td colSpan={6}><div className="empty-state">لا حركة في الفترة المحددة</div></td>
+                    <td colSpan={6}><div className="empty-state">{t('reports.trial.no_movement')}</div></td>
                   </tr>
                 )}
                 {trial.rows.map((r) => (
@@ -607,7 +613,7 @@ export function ReportsPage() {
                   </tr>
                 ))}
                 <tr style={{ fontWeight: 700, borderTop: '2px solid var(--line)' }}>
-                  <td colSpan={2}>الإجمالي</td>
+                  <td colSpan={2}>{t('reports.total')}</td>
                   <td className="num">{fmt(trial.totalDebit)}</td>
                   <td className="num">{fmt(trial.totalCredit)}</td>
                   <td className="num">{fmt(trial.totalBalanceDebit)}</td>
@@ -621,62 +627,69 @@ export function ReportsPage() {
         {tab === 'property' && kpis && (
           <>
             <div className="card-title" style={{ marginBottom: 14 }}>
-              مؤشرات المحفظة العقارية — حتى اليوم
+              {t('reports.property.title')}
             </div>
             {/* Says the figures are live, unlike the tabs above which honour the
                 period picker. Leaving that unsaid invites the wrong reading. */}
             <p className="hint" style={{ marginBottom: 10 }}>
-              هذه المؤشرات لحظية ولا تتبع الفترة المختارة أعلاه: الإشغال والعقود المنتهية تُحسب من تاريخ اليوم.
+              {t('reports.property.live_hint')}
             </p>
 
             <div className="two-col" style={{ marginBottom: 14 }}>
               <div className="field">
-                <label>معدل الإشغال</label>
+                <label>{t('reports.property.occupancy_rate')}</label>
                 <p className="num" style={{ fontSize: 20, margin: 0, fontWeight: 700 }}>
                   {kpis.portfolio.occupancyRate}%
                 </p>
                 <p className="hint">
-                  {kpis.portfolio.rented} من {kpis.portfolio.totalUnits} وحدة في {kpis.portfolio.totalProperties} عقاراً
+                  {t('reports.property.units_line', {
+                    rented: kpis.portfolio.rented,
+                    total: kpis.portfolio.totalUnits,
+                    properties: kpis.portfolio.totalProperties,
+                  })}
                 </p>
               </div>
               <div className="field">
-                <label>التحصيل في الوقت المحدد</label>
+                <label>{t('reports.property.on_time')}</label>
                 <p className="num" style={{ fontSize: 20, margin: 0, fontWeight: 700 }}>
                   {kpis.collection.onTimeRate}%
                 </p>
                 {/* Two different numbers, and the gap between them is the point. */}
                 <p className="hint">
-                  المحصَّل إجمالاً {kpis.collection.collectedRate}% من {fmt(kpis.collection.dueAmount)} مستحقة —{' '}
-                  {kpis.collection.overdueCount} قسط متأخر
+                  {t('reports.property.collected_line', {
+                    rate: kpis.collection.collectedRate,
+                    due: fmt(kpis.collection.dueAmount),
+                    n: kpis.collection.overdueCount,
+                  })}
                 </p>
               </div>
             </div>
 
             <div className="card-title" style={{ margin: '16px 0 8px' }}>
-              العقود المنتهية قريباً
+              {t('reports.property.expiring_title')}
             </div>
             <div className="chip-group" style={{ marginBottom: 8 }}>
-              <span className="chip">خلال 30 يوماً: {kpis.expiring.within30}</span>
-              <span className="chip">خلال 60: {kpis.expiring.within60}</span>
-              <span className="chip">خلال 90: {kpis.expiring.within90}</span>
-              {kpis.expiring.alreadyRenewed > 0 && <span className="chip">مجدَّدة بالفعل: {kpis.expiring.alreadyRenewed}</span>}
+              <span className="chip">{t('reports.property.within30', { n: kpis.expiring.within30 })}</span>
+              <span className="chip">{t('reports.property.within60', { n: kpis.expiring.within60 })}</span>
+              <span className="chip">{t('reports.property.within90', { n: kpis.expiring.within90 })}</span>
+              {kpis.expiring.alreadyRenewed > 0 && <span className="chip">{t('reports.property.already_renewed', { n: kpis.expiring.alreadyRenewed })}</span>}
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>العقد</th>
-                  <th>المستأجر</th>
-                  <th>الموقع</th>
-                  <th>الانتهاء</th>
-                  <th>المتبقي</th>
-                  <th>القيمة</th>
+                  <th>{t('reports.property.contract')}</th>
+                  <th>{t('reports.property.tenant')}</th>
+                  <th>{t('reports.property.location')}</th>
+                  <th>{t('reports.property.end')}</th>
+                  <th>{t('reports.property.remaining')}</th>
+                  <th>{t('reports.property.value')}</th>
                 </tr>
               </thead>
               <tbody>
                 {kpis.expiring.contracts.length === 0 && (
                   <tr>
                     <td colSpan={6}>
-                      <div className="empty-state">لا توجد عقود تنتهي خلال 90 يوماً</div>
+                      <div className="empty-state">{t('reports.property.no_expiring')}</div>
                     </td>
                   </tr>
                 )}
@@ -686,11 +699,11 @@ export function ReportsPage() {
                     <td>{c.tenant}</td>
                     <td>
                       {c.propertyName}
-                      <div className="hint">وحدة {c.unitNo}</div>
+                      <div className="hint">{t('reports.property.unit_no', { unit: c.unitNo })}</div>
                     </td>
                     <td className="num">{dfmt(c.end)}</td>
                     <td className="num" style={{ color: c.daysLeft <= 30 ? 'var(--rose)' : undefined }}>
-                      {c.daysLeft} يوم
+                      {t('reports.property.days', { n: c.daysLeft })}
                     </td>
                     <td className="num">{fmt(c.value)}</td>
                   </tr>
@@ -699,25 +712,25 @@ export function ReportsPage() {
             </table>
 
             <div className="card-title" style={{ margin: '16px 0 8px' }}>
-              الإشغال حسب العقار
+              {t('reports.property.occupancy_title')}
             </div>
             <table>
               <thead>
                 <tr>
-                  <th>العقار</th>
-                  <th>الوحدات</th>
-                  <th>مؤجَّرة</th>
-                  <th>محجوزة</th>
-                  <th>شاغرة</th>
-                  <th>صيانة</th>
-                  <th>الإشغال</th>
+                  <th>{t('reports.property.property')}</th>
+                  <th>{t('reports.property.units')}</th>
+                  <th>{t('reports.property.rented')}</th>
+                  <th>{t('reports.property.reserved')}</th>
+                  <th>{t('reports.property.vacant')}</th>
+                  <th>{t('reports.property.maintenance')}</th>
+                  <th>{t('reports.property.occupancy')}</th>
                 </tr>
               </thead>
               <tbody>
                 {kpis.occupancy.length === 0 && (
                   <tr>
                     <td colSpan={7}>
-                      <div className="empty-state">لا توجد عقارات</div>
+                      <div className="empty-state">{t('reports.property.no_properties')}</div>
                     </td>
                   </tr>
                 )}
