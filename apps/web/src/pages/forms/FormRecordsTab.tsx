@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { getContract, listContracts, type ContractListItem } from '../../api/contracts';
 import { createContractForm, listCompanyFormTemplates, listContractForms, type FormInstance, type FormTemplateRow } from '../../api/forms';
@@ -18,11 +19,14 @@ const contractRefOf = (c: Pick<ContractListItem, 'id' | 'no' | 'tenant' | 'unit'
 });
 
 /**
- * ⚖️ **سجلّاتُ النماذج** (الموجة ١د · `ق-١٦٣٨`): يُختار العقدُ ثم تُعرض سجلّاتُه، ويُنشأ سجلٌّ من إصدارٍ منشورٍ من قوالب المنشأة،
- * ويُعبّأ ويُختم ويُطبع. **والعقدُ يُقرأ من الرابط** (`?contract=`) فيفتح زرُّ شاشة العقد الجديدة هذه الشاشةَ على عقده بعينه.
- * والأفعالُ أفعالُ شاشة العقود: التعبئةُ «تسجيل» والختمُ «مراجعة».
+ * Form records: pick a contract, see its records, create a record from a
+ * published company template, then fill, seal and print it. The contract is read
+ * from the URL (?contract=) so the new contract screen can open this screen on a
+ * given contract. Actions are those of the contracts screen: filling is "record"
+ * and sealing is "review".
  */
 export function FormRecordsTab() {
+  const { t } = useTranslation();
   const { can } = usePermissions();
   const canRecord = can('contracts', 'record');
   const canReview = can('contracts', 'review');
@@ -42,7 +46,7 @@ export function FormRecordsTab() {
   const [newDate, setNewDate] = useState(today());
   const [creating, setCreating] = useState(false);
 
-  // العقدُ من الرابط: رأسُه وسجلّاتُه.
+  // The contract from the URL: its header and records.
   useEffect(() => {
     if (!contractId) {
       setContract(null);
@@ -57,32 +61,32 @@ export function FormRecordsTab() {
         setContract(contractRefOf(c));
         setRecords(list);
       })
-      .catch((e) => !cancelled && setError(apiErrorMessage(e, 'تعذّر تحميل العقد وسجلّاته')));
+      .catch((e) => !cancelled && setError(apiErrorMessage(e, t('forms.records.load_failed'))));
     return () => {
       cancelled = true;
     };
   }, [contractId]);
 
-  // ما يُعبّأ عليه: المنشورُ من قوالب المنشأة.
+  // What can be filled in: the company's published templates.
   useEffect(() => {
     listCompanyFormTemplates()
       .then((rows) => setTemplates(rows.filter((r) => r.status === 'PUBLISHED')))
       .catch(() => setTemplates([]));
   }, []);
 
-  // البحثُ عن عقد: من الخادم برقمه أو مستأجره أو وحدته.
+  // Contract search on the server, by number, tenant or unit.
   useEffect(() => {
     if (contractId) return;
     const q = search.trim();
     let cancelled = false;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       listContracts({ search: q || undefined, pageSize: 10 })
         .then((r) => !cancelled && setResults(r.items))
         .catch(() => !cancelled && setResults([]));
     }, 250);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [search, contractId]);
 
@@ -103,7 +107,7 @@ export function FormRecordsTab() {
       setOpen(created);
       setNewTemplateId('');
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر إنشاء السجلّ'));
+      setError(apiErrorMessage(e, t('forms.records.create_failed')));
     } finally {
       setCreating(false);
     }
@@ -119,18 +123,18 @@ export function FormRecordsTab() {
       <div>
         <div className="toolbar">
           <div className="search-box">
-            <input placeholder="ابحث عن العقد برقمه أو المستأجر أو الوحدة..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input placeholder={t('forms.records.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
         <div className="card" style={{ padding: 0 }}>
           <table>
             <thead>
               <tr>
-                <th>العقد</th>
-                <th>المستأجر</th>
-                <th>الوحدة</th>
-                <th>العقار</th>
-                <th>المدّة</th>
+                <th>{t('forms.records.col_contract')}</th>
+                <th>{t('forms.records.col_tenant')}</th>
+                <th>{t('forms.records.col_unit')}</th>
+                <th>{t('forms.records.col_property')}</th>
+                <th>{t('forms.records.col_period')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -138,7 +142,7 @@ export function FormRecordsTab() {
               {results.length === 0 && (
                 <tr>
                   <td colSpan={6}>
-                    <div className="empty-state">لا عقودَ مطابقة</div>
+                    <div className="empty-state">{t('forms.records.no_contracts')}</div>
                   </td>
                 </tr>
               )}
@@ -148,12 +152,10 @@ export function FormRecordsTab() {
                   <td>{c.tenant}</td>
                   <td className="num">{c.unit.unitNo}</td>
                   <td>{c.unit.property.name}</td>
-                  <td className="num">
-                    {dfmt(c.start)} إلى {dfmt(c.end)}
-                  </td>
+                  <td className="num">{t('forms.records.period', { start: dfmt(c.start), end: dfmt(c.end) })}</td>
                   <td>
                     <button className="btn btn-ghost btn-sm" onClick={() => choose(c.id)}>
-                      نماذجُ هذا العقد
+                      {t('forms.records.contract_forms')}
                     </button>
                   </td>
                 </tr>
@@ -171,12 +173,13 @@ export function FormRecordsTab() {
         <div style={{ fontSize: 13 }}>
           {contract ? (
             <>
-              العقد <span className="num">{contract.no}</span> · الوحدة <span className="num">{contract.unitNo}</span> · {contract.propertyName} · {contract.tenant}
+              {t('forms.common.contract')} <span className="num">{contract.no}</span> · {t('forms.common.unit')} <span className="num">{contract.unitNo}</span> · {contract.propertyName} ·{' '}
+              {contract.tenant}
             </>
           ) : null}
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => choose(null)}>
-          عقدٌ آخر
+          {t('forms.records.other_contract')}
         </button>
       </div>
 
@@ -186,23 +189,23 @@ export function FormRecordsTab() {
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="two-col" style={{ alignItems: 'end' }}>
             <div className="field">
-              <label>نموذجٌ جديد من قالب</label>
-              <select value={newTemplateId} onChange={(e) => setNewTemplateId(e.target.value)} aria-label="القالب">
-                <option value="">{templates.length ? 'اختر قالباً منشوراً' : 'لا قالبَ منشوراً للمنشأة بعد'}</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} · إصدار {t.version}
+              <label>{t('forms.records.new_from_template')}</label>
+              <select value={newTemplateId} onChange={(e) => setNewTemplateId(e.target.value)} aria-label={t('forms.records.template_aria')}>
+                <option value="">{templates.length ? t('forms.records.choose_template') : t('forms.records.no_published_template')}</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {t('forms.common.name_version', { name: tpl.name, version: tpl.version })}
                   </option>
                 ))}
               </select>
             </div>
             <div className="field">
-              <label>تاريخُ النموذج</label>
+              <label>{t('forms.records.form_date')}</label>
               <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
             </div>
           </div>
           <button className="btn btn-primary btn-sm" onClick={create} disabled={!newTemplateId || creating}>
-            + إنشاءُ السجلّ
+            {t('forms.records.create')}
           </button>
         </div>
       )}
@@ -211,12 +214,12 @@ export function FormRecordsTab() {
         <table>
           <thead>
             <tr>
-              <th>الرقم</th>
-              <th>القالب</th>
-              <th>النوع</th>
-              <th>تاريخُ النموذج</th>
-              <th>عبّأه</th>
-              <th>الحالة</th>
+              <th>{t('forms.records.col_no')}</th>
+              <th>{t('forms.records.col_template')}</th>
+              <th>{t('forms.records.col_type')}</th>
+              <th>{t('forms.records.form_date')}</th>
+              <th>{t('forms.records.col_filled_by')}</th>
+              <th>{t('forms.records.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -224,16 +227,14 @@ export function FormRecordsTab() {
             {records.length === 0 && (
               <tr>
                 <td colSpan={7}>
-                  <div className="empty-state">لا نماذجَ لهذا العقد بعد</div>
+                  <div className="empty-state">{t('forms.records.no_records')}</div>
                 </td>
               </tr>
             )}
             {records.map((r) => (
               <tr key={r.id} data-testid="form-record-row">
                 <td className="num">{r.no ?? ''}</td>
-                <td>
-                  {r.template.name} · إصدار {r.template.version}
-                </td>
+                <td>{t('forms.common.name_version', { name: r.template.name, version: r.template.version })}</td>
                 <td>{r.template.formType.name}</td>
                 <td className="num">{dfmt(r.formDate)}</td>
                 <td>{r.filledByName}</td>
@@ -243,7 +244,7 @@ export function FormRecordsTab() {
                 </td>
                 <td>
                   <button className="btn btn-ghost btn-sm" onClick={() => setOpen(r)}>
-                    فتح
+                    {t('forms.records.open')}
                   </button>
                 </td>
               </tr>
@@ -261,7 +262,7 @@ export function FormRecordsTab() {
           canReview={canReview}
           onChanged={replace}
           onRevised={(created) => {
-            // النسخةُ المعدّلة سجلٌّ جديد في المجموعة (`ق-١٦٦٩`): تُضاف وتُفتح، والسابقةُ تبقى «معترَضاً عليها».
+            // A revised copy is a new record in the set: it is added and opened, the previous one stays objected.
             setRecords((rs) => [created, ...rs]);
             setOpen(created);
           }}

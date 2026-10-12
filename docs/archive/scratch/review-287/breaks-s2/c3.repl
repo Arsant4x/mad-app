@@ -1,1 +1,0 @@
-          if (known.has('never')) throw

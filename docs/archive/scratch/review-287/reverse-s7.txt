@@ -1,6 +1,0 @@
-﻿decision-without-session [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
-decision-on-sign-link [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
-tenant-link-stays-open [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
-final-copy-to-substitute [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
-consent-by-nafath [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
-substitute-is-tenant [break landed: 1] Tests:       1 failed, 3 passed, 4 total  :: restored=True
