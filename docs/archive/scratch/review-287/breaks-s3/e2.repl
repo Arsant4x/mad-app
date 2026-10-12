@@ -1,2 +1,0 @@
-        state: active ? ('ACTIVE' as const) : ('CLOSED' as const),
-        templateName: instance.templateVersion.name,

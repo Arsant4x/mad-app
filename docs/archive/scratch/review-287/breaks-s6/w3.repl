@@ -1,1 +1,0 @@
-  const editable = !sealed && canRecord;

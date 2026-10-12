@@ -1,1 +1,0 @@
-    if (link.purpose === FormLinkPurpose.FINAL_COPY) throw new ForbiddenException(MSG.form_link_unavailable);
