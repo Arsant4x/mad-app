@@ -46,6 +46,13 @@ export function lineProblems(line, path) {
 export const SUBJECT = /^(feat|fix|docs|chore|refactor|test|ci|build|perf|style|revert)(\([a-z0-9][a-z0-9./-]*\))?!?: \S.*$/;
 export const SUBJECT_MAX = 72;
 
+/**
+ * A merge commit that git wrote itself when main was merged into a branch.
+ * It disappears in the squash merge, so its default subject is not checked.
+ */
+export const isGitMergeOfMain = (text) =>
+  /^Merge (remote-tracking )?branch '(origin\/)?main' into [\w./-]+$/.test(String(text ?? '').split(/\r?\n/)[0]);
+
 /** Problems in a commit message or a pull request title (the first line is the subject). */
 export function messageProblems(text) {
   const message = String(text ?? '').replace(/\r\n/g, '\n').trim();

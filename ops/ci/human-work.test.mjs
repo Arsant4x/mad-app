@@ -2,7 +2,7 @@
 // and with a healthy case that must pass.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { addedLines, appliesTo, commentPart, lineProblems, messageProblems } from './human-work.mjs';
+import { addedLines, appliesTo, commentPart, isGitMergeOfMain, lineProblems, messageProblems } from './human-work.mjs';
 
 const TS = 'apps/api/src/invoices/invoices.service.ts';
 const TSX = 'apps/web/src/pages/InvoicesPage.tsx';
@@ -74,6 +74,15 @@ describe('commit messages and pull request titles', () => {
     assert.ok(messageProblems('chore: apply ق-1680').includes('decision reference'));
     assert.ok(messageProblems('docs(registry): record decisions for directive 289').includes('work method word'));
     assert.ok(messageProblems('fix(api): guard\n\nWritten with Claude').includes('work method word'));
+  });
+});
+
+describe('git merge of main into a branch', () => {
+  it('skips only the subject git writes when main is merged in', () => {
+    assert.equal(isGitMergeOfMain("Merge remote-tracking branch 'origin/main' into ci/289-human-work"), true);
+    assert.equal(isGitMergeOfMain("Merge branch 'main' into feat/x"), true);
+    assert.equal(isGitMergeOfMain("Merge branch 'feature' into main"), false);
+    assert.equal(isGitMergeOfMain('Merge everything for directive 289'), false);
   });
 });
 

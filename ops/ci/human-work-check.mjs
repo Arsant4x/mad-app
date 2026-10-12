@@ -11,7 +11,7 @@
 // The diff is read from git, so the checkout needs the base commit.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { addedLines, appliesTo, lineProblems, messageProblems } from './human-work.mjs';
+import { addedLines, appliesTo, isGitMergeOfMain, lineProblems, messageProblems } from './human-work.mjs';
 
 const [eventPath, commitsPath] = process.argv.slice(2);
 if (!eventPath) {
@@ -44,7 +44,10 @@ const diff = git('diff', '--unified=0', '--no-color', '--diff-filter=AMR', ...ra
 const lines = addedLines(diff).filter((l) => appliesTo(l.path));
 
 const problems = [];
-for (const [label, text] of messages) for (const p of messageProblems(text)) problems.push(`${label}: ${p}: ${String(text).split('\n')[0]}`);
+for (const [label, text] of messages) {
+  if (isGitMergeOfMain(text)) continue;
+  for (const p of messageProblems(text)) problems.push(`${label}: ${p}: ${String(text).split('\n')[0]}`);
+}
 for (const l of lines) for (const p of lineProblems(l.text, l.path)) problems.push(`${l.path}:${l.line}: ${p}: ${l.text.trim().slice(0, 100)}`);
 
 console.log(`messages=${messages.length} added-lines=${lines.length} problems=${problems.length}`);
