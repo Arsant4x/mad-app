@@ -5,7 +5,7 @@
     "paid": "مدفوعة",
     "overdue": "متأخرة"
   },
-  "zatca_status": {
+  "einvoice_status": {
     "not_submitted": "لم تُرسل",
     "submitting": "قيد الإرسال",
     "stamped": "مختومة — بانتظار الإبلاغ",

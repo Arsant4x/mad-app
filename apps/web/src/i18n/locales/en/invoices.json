@@ -5,7 +5,7 @@
     "paid": "Paid",
     "overdue": "Overdue"
   },
-  "zatca_status": {
+  "einvoice_status": {
     "not_submitted": "Not sent",
     "submitting": "Sending",
     "stamped": "Stamped — awaiting reporting",

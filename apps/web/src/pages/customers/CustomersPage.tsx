@@ -145,7 +145,7 @@ export function CustomersPage() {
               return (
                 <tr key={c.id}>
                   <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(c)}>
-                    {c.name} 👁{c.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('customers.page.archived')}</span>}
+                    {c.name} {t('customers.view_icon')}{c.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('customers.page.archived')}</span>}
                   </td>
                   <td>
                     {c.kind === 'LEGACY_UNDECLARED' ? (

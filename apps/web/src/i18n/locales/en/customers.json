@@ -107,5 +107,6 @@
     "col_source": "Source",
     "event_granted": "Consent",
     "event_withdrawn": "Withdrawal of consent"
-  }
+  },
+  "view_icon": "👁"
 }

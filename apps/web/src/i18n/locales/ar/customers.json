@@ -107,5 +107,6 @@
     "col_source": "المصدر",
     "event_granted": "موافقة",
     "event_withdrawn": "رجوع عن الموافقة"
-  }
+  },
+  "view_icon": "👁"
 }

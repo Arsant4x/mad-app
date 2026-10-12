@@ -26,9 +26,9 @@ export const STATUS_ORDER: InvoiceStatus[] = ['DUE', 'PAID', 'OVERDUE'];
 /** Clearance state with the authority, separate from the payment status above:
  *  a paid invoice may be uncleared, and a cleared one unpaid. */
 export const ZATCA_STATUS_META: Record<ZatcaInvoiceStatus, { label: string; badgeClass: string }> = {
-  NOT_SUBMITTED: badge('invoices.zatca_status.not_submitted', ''),
-  SUBMITTING: badge('invoices.zatca_status.submitting', 'due'),
-  STAMPED: badge('invoices.zatca_status.stamped', 'due'),
-  CLEARED: badge('invoices.zatca_status.cleared', 'paid'),
-  REJECTED: badge('invoices.zatca_status.rejected', 'overdue'),
+  NOT_SUBMITTED: badge('invoices.einvoice_status.not_submitted', ''),
+  SUBMITTING: badge('invoices.einvoice_status.submitting', 'due'),
+  STAMPED: badge('invoices.einvoice_status.stamped', 'due'),
+  CLEARED: badge('invoices.einvoice_status.cleared', 'paid'),
+  REJECTED: badge('invoices.einvoice_status.rejected', 'overdue'),
 };
