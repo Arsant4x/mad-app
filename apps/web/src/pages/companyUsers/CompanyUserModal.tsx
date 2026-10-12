@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Branch } from '../../api/branches';
 import type { CompanyUser, CompanyUserInput } from '../../api/companyUsers';
 import { newEmployeeTemplateId, type PermissionTemplate } from '../../api/templates';
@@ -12,22 +13,23 @@ export function CompanyUserModal({
   onSave,
 }: {
   templates: PermissionTemplate[];
-  /** فروع المنشأة — فارغة لمنشأة بلا فروع فلا يظهر قسم الإسناد إطلاقاً
-   * (نفس فلسفة BranchPicker: منشأة الموقع الواحد لا تُسأل عن فروع). */
+  /** The company's branches. Empty for a single-site company, so the assignment section is not asked about
+   * (same idea as BranchPicker). */
   branches: Branch[];
   editing: CompanyUser | null;
   onCancel: () => void;
   onSave: (data: Partial<CompanyUserInput> & { canEditMasterData?: boolean }) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  // ⚖️ ق-١٦٠١ — الجديدُ يبدأ «بلا شاشات» لا بأوّل القائمة (وكان أوّلُها الشامل)؛ والأوسعُ اختيارٌ صريح.
+  // A new employee starts with the "no screens" template, not the first in the list; anything wider is an explicit choice.
   const [permissionTemplateId, setPermissionTemplateId] = useState(editing?.permissionTemplateId ?? newEmployeeTemplateId(templates));
-  const chosen = templates.find((t) => t.id === permissionTemplateId);
+  const chosen = templates.find((tpl) => tpl.id === permissionTemplateId);
   const [canEditMasterData, setCanEditMasterData] = useState(editing?.canEditMasterData ?? false);
   const [branchIds, setBranchIds] = useState<string[]>(editing?.branches.map((b) => b.branchId) ?? []);
-  // ⚖️ ق-١٤٦٨ — «كلُّ الفروع» اختيارٌ صريح لا يُستنتج من فراغ القائمة؛ والجديدُ يبدأ بلا اختيار.
+  // "All branches" is an explicit choice, not inferred from an empty list; a new employee starts without it.
   const [allBranches, setAllBranches] = useState<boolean>(editing?.allBranches ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +52,8 @@ export function CompanyUserModal({
         ...(password ? { password } : {}),
         permissionTemplateId,
         canEditMasterData,
-        // ⚖️ ق-١٤٦٨ — العلَمُ يُرسل دائماً (ولو بلا فروع: فرعٌ يُضاف لاحقاً يحكمه العلَم)، والقائمةُ ما دامت
-        // للمنشأة فروع — استبدالٌ كلّيّ، وتُفرَغ مع «الكلّ» فلا يتعارضان. وإفراغُها بلا العلَم **لا فرع**.
+        // The flag is always sent (a branch added later is governed by it). The list is sent while the company
+        // has branches; it replaces the whole set and is emptied with "all". Empty without the flag means no branch.
         allBranches,
         ...(branches.length > 0 ? { branchIds: allBranches ? [] : branchIds } : {}),
       });
@@ -67,44 +69,45 @@ export function CompanyUserModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل حساب الموظف' : 'حساب موظف جديد'}</div>
+          <div className="modal-title">{editing ? t('company_users.modal.title_edit') : t('company_users.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم الموظف</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: خالد المطيري" />
+          <label>{t('company_users.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('company_users.modal.name_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>اسم الدخول</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={editing ? 'اتركه فارغاً للإبقاء عليه' : 'username'} />
+            <label>{t('company_users.modal.username')}</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={editing ? t('company_users.modal.username_keep') : t('company_users.modal.username_placeholder')} />
           </div>
           <div className="field">
-            <label>كلمة المرور</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={editing ? 'اتركها فارغة للإبقاء عليها' : 'كلمة المرور'} />
+            <label>{t('company_users.modal.password')}</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={editing ? t('company_users.modal.password_keep') : t('company_users.modal.password')} />
           </div>
         </div>
         <div className="field">
-          <label>النموذج</label>
+          <label>{t('company_users.modal.template')}</label>
           <select value={permissionTemplateId} onChange={(e) => setPermissionTemplateId(e.target.value)}>
-            {!permissionTemplateId && <option value="">اختر النموذج</option>}
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {!permissionTemplateId && <option value="">{t('company_users.modal.template_choose')}</option>}
+            {templates.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.name}
               </option>
             ))}
           </select>
-          {chosen?.isNewUserDefault && <p className="hint" style={{ marginTop: 4 }}>لا يرى أي شاشة حتى تختار له نموذجاً أوسع. وما يراه لا يتجاوز ما تراه منشأتك.</p>}
+          {chosen?.isNewUserDefault && <p className="hint" style={{ marginTop: 4 }}>{t('company_users.modal.no_screens_hint')}</p>}
         </div>
-        {/* إسناد الفروع هنا مع بقية صلاحيات الموظف (قرار 6.8: الموظف يرى فرعه فقط). و«كلُّ الفروع» اختيارٌ
-            صريحٌ يظهر دائماً (ق-١٤٦٨) — فمنشأةٌ بلا فروعٍ اليوم يُحكم موظّفوها في فرعٍ يُضاف غداً بما اختاره المالك. */}
+        {/* Branch assignment sits with the rest of the employee's permissions (an employee sees only their branch).
+            "All branches" always shows, so employees of a company without branches today are governed by the
+            owner's choice when a branch is added. */}
         <div className="field">
-          <label>الفروع التي يراها</label>
+          <label>{t('company_users.modal.branches')}</label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 'normal' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={allBranches} onChange={(e) => setAllBranches(e.target.checked)} />
-            كل الفروع — ويشمل ما يُضاف لاحقاً
+            {t('company_users.modal.all_branches')}
           </label>
           {branches.length > 0 && !allBranches && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 4 }}>
@@ -118,10 +121,10 @@ export function CompanyUserModal({
           )}
           <p className="hint" style={{ marginTop: 4 }}>
             {allBranches
-              ? 'يرى كل الفروع والبيانات العامة، ومنها كل فرعٍ يُضاف لاحقاً.'
+              ? t('company_users.modal.hint_all')
               : branchIds.length === 0
-                ? 'لا فرع — يرى البيانات العامة (غير المسندة لفرع) وحدَها.'
-                : 'يرى الفروع المحددة والبيانات العامة (غير المسندة لفرع) فقط، ويسري فوراً دون إعادة دخول.'}
+                ? t('company_users.modal.hint_none')
+                : t('company_users.modal.hint_some')}
           </p>
         </div>
         {/* Sits with the rest of this employee's permissions — the natural
@@ -129,17 +132,17 @@ export function CompanyUserModal({
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={canEditMasterData} onChange={(e) => setCanEditMasterData(e.target.checked)} />
-            استثناء من قفل البيانات الرئيسية
+            {t('company_users.modal.master_data')}
           </label>
-          <p className="hint" style={{ marginTop: 4 }}>يسمح له بتعديل العقارات والعقود حتى عندما تكون مقفلة على بقية الموظفين.</p>
+          <p className="hint" style={{ marginTop: 4 }}>{t('company_users.modal.master_data_hint')}</p>
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('company_users.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            حفظ الحساب
+            {t('company_users.modal.save')}
           </button>
         </div>
       </div>
