@@ -1,35 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { declareVatRatio, getVatDeclaration, getVatRatio, markVatFiled, settleVatRatio, unmarkVatFiled, type VatDeclaration, type VatPeriodQuery, type VatPeriodType, type VatRatioView } from '../../api/obligations';
 import { dfmt, fmt } from '../../lib/format';
 import { num0, pct, sumMoney } from '../../lib/money';
 
-const QUARTER_OPTIONS = [
-  { value: 1, label: 'الربع الأول (يناير - مارس)' },
-  { value: 2, label: 'الربع الثاني (أبريل - يونيو)' },
-  { value: 3, label: 'الربع الثالث (يوليو - سبتمبر)' },
-  { value: 4, label: 'الربع الرابع (أكتوبر - ديسمبر)' },
-];
+const QUARTER_OPTIONS = [1, 2, 3, 4].map((value) => ({ value, labelKey: `obligations.vat.quarter_${value}` }));
 
-/** ⑥A2 (`ق-١٣٢٥`) — الشهورُ الاثنا عشر بأسمائها؛ الفترةُ الشهرية فوق أربعين مليوناً. */
-const MONTH_OPTIONS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'].map((label, i) => ({ value: i + 1, label }));
+/** The twelve months by name; monthly returns apply above forty million in sales. */
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, labelKey: `obligations.vat.month_${i + 1}` }));
 
 export function VatDeclarationPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [quarter, setQuarter] = useState(Math.floor(new Date().getMonth() / 3) + 1);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   /**
-   * ⑥A2 — **الشاشةُ تعرض الفترتين معاً ولا تحجب إحداهما**: التاجرُ الشهريُّ قدّم أرباعاً
-   * قبل انتقاله، ومنعُه من قراءتها عطلٌ لا حراسة. والإعدادُ يضبط **ما يُفتح عليه أولاً**
-   * — يُقرأ من الخادم في أوّل ردّ، فلا تخمّن الشاشةُ فترةَ التاجر.
+   * Both period types stay readable: a merchant now filing monthly still filed quarters
+   * before switching. The business setting only picks which one opens first, read from
+   * the server's first answer so the screen never guesses.
    */
   const [periodType, setPeriodType] = useState<VatPeriodType | null>(null);
   const [declaration, setDeclaration] = useState<VatDeclaration | null>(null);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
-  /** ⑥A1 — نسبةُ السنة: المعلَنةُ والمقترَحة. تُقرأ **حين يجب الخصمُ النسبيّ وحدَه**. */
+  /** The year's declared and suggested ratio, read only when proportional deduction applies. */
   const [ratioView, setRatioView] = useState<VatRatioView | null>(null);
   const [ratioInput, setRatioInput] = useState('');
   const [ratioBusy, setRatioBusy] = useState(false);
@@ -41,9 +38,9 @@ export function VatDeclarationPage() {
     return getVatDeclaration(period)
       .then(async (d) => {
         setDeclaration(d);
-        // أوّلُ ردٍّ يكشف فترةَ التاجر — فتُتبَع مرّةً واحدة، ثم اختيارُه هو الحاكم.
+        // The first answer reveals the business's period; after that the user's choice rules.
         setPeriodType((p) => p ?? d.companyVatPeriod);
-        // ⑥A1 — **ولا تُقرأ النسبةُ لمن لا يجب عليه**: منشأةٌ خاضعةٌ وحدَها لا شأنَ لها بم٥١.
+        // A fully taxable business has no ratio to read.
         if (d.proportional.applies) {
           const r = await getVatRatio(year);
           setRatioView(r);
@@ -59,7 +56,7 @@ export function VatDeclarationPage() {
     if (!ratioView) return;
     setRatioBusy(true);
     try {
-      // الأساسُ يتبع ما يملكه النظام: سنةٌ ماضيةٌ كاملةٌ ⟵ محسوبة، وإلا ⟵ مقدَّرة (م٥١/٦).
+      // A complete previous year gives a computed ratio; otherwise it is an estimate (Art. 51/6).
       const basis = ratioView.suggestion.coversPreviousYear && ratioView.suggestion.ratio !== null ? 'COMPUTED' : 'ESTIMATED';
       await declareVatRatio({ year, ratio: Number(ratioInput), basis, note: ratioView.suggestion.note });
       await reload();
@@ -96,25 +93,26 @@ export function VatDeclarationPage() {
   }
 
   const years = useMemo(() => [currentYear - 1, currentYear, currentYear + 1], [currentYear]);
-  // ② الصافي نصٌّ بخانتين من الخادم — يُقرأ رقماً مرّةً واحدة للإشارة والمقدار (`ق-١٢٣٥`).
+  // Net VAT arrives as two-decimal text; read it as a number once for sign and size.
   const netVat = num0(declaration?.netVat);
+  const periodName = (type: VatPeriodType, n: number) => (type === 'MONTHLY' ? t('obligations.vat.month_n', { n }) : t('obligations.vat.quarter_n', { n }));
 
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الإقرار الضريبي (ضريبة القيمة المضافة)</div>
-          <div className="page-sub">هيئة الزكاة والضريبة والجمارك</div>
+          <div className="page-title">{t('obligations.vat.title')}</div>
+          <div className="page-sub">{t('obligations.vat.sub')}</div>
         </div>
       </div>
       <button className="btn btn-ghost" style={{ marginBottom: 14 }} onClick={() => navigate('/obligations')}>
-        → رجوع إلى الالتزامات الحكومية
+        {t('obligations.vat.back')}
       </button>
 
       <div className="card">
         <div className="two-col" style={{ marginBottom: 14 }}>
           <div className="field">
-            <label>السنة</label>
+            <label>{t('obligations.vat.year')}</label>
             <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
               {years.map((y) => (
                 <option key={y} value={y}>
@@ -124,30 +122,30 @@ export function VatDeclarationPage() {
             </select>
           </div>
           <div className="field">
-            <label>الفترة</label>
+            <label>{t('obligations.vat.period')}</label>
             <select data-testid="vat-period-type" value={periodType ?? 'QUARTERLY'} onChange={(e) => setPeriodType(e.target.value as VatPeriodType)}>
-              <option value="QUARTERLY">ربع سنوية</option>
-              <option value="MONTHLY">شهرية</option>
+              <option value="QUARTERLY">{t('obligations.vat.quarterly')}</option>
+              <option value="MONTHLY">{t('obligations.vat.monthly')}</option>
             </select>
           </div>
           {periodType === 'MONTHLY' ? (
             <div className="field">
-              <label>الشهر</label>
+              <label>{t('obligations.vat.month')}</label>
               <select data-testid="vat-month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
                 {MONTH_OPTIONS.map((m) => (
                   <option key={m.value} value={m.value}>
-                    {m.label}
+                    {t(m.labelKey)}
                   </option>
                 ))}
               </select>
             </div>
           ) : (
             <div className="field">
-              <label>الربع</label>
+              <label>{t('obligations.vat.quarter')}</label>
               <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))}>
                 {QUARTER_OPTIONS.map((q) => (
                   <option key={q.value} value={q.value}>
-                    {q.label}
+                    {t(q.labelKey)}
                   </option>
                 ))}
               </select>
@@ -159,7 +157,9 @@ export function VatDeclarationPage() {
           <>
             {!declaration.periodMatchesCompany && (
               <p className="hint" data-testid="vat-period-mismatch" style={{ marginBottom: 10 }}>
-                فترةُ هذه المنشأة المسجَّلة {declaration.companyVatPeriod === 'MONTHLY' ? 'شهرية' : 'ربع سنوية'} — وهذه قراءةٌ لفترةٍ من النوع الآخر.
+                {t('obligations.vat.period_mismatch', {
+                  period: declaration.companyVatPeriod === 'MONTHLY' ? t('obligations.vat.period_word_monthly') : t('obligations.vat.period_word_quarterly'),
+                })}
               </p>
             )}
             {declaration.limits.map((l) => (
@@ -173,48 +173,48 @@ export function VatDeclarationPage() {
                     : { marginBottom: 12, borderInlineStart: '4px solid var(--gold)', background: 'var(--gold-soft)' }
                 }
               >
-                <strong>{l.severity === 'blocking' ? '⛔ حدٌّ معلَن — لا يُقدَّم هذا الإقرار' : '⚠️ تنبيهٌ معلَن'}</strong>
+                <strong>{l.severity === 'blocking' ? t('obligations.vat.limit_blocking') : t('obligations.vat.limit_notice')}</strong>
                 <p style={{ margin: '6px 0 0' }}>{l.message}</p>
               </div>
             ))}
             <p className="hint" style={{ marginBottom: 10 }}>
-              عن الفترة من {dfmt(declaration.from)} إلى {dfmt(declaration.to)}
+              {t('obligations.vat.period_range', { from: dfmt(declaration.from), to: dfmt(declaration.to) })}
             </p>
 
-            {/* ⑥A1 (`ق-١٣٢٥`) — **بطاقةُ النسبة: يحسب النظامُ ويعرض، ويُقرّ التاجر** (م٥١/٤–٦).
-                ونسبةٌ من بياناتٍ ناقصة رقمٌ خاطئٌ بلا عَرَض — فالتحفّظُ يُعرض قبل الإقرار لا بعده. */}
+            {/* The system computes and shows the ratio; the merchant declares it (Art. 51/4 to 51/6).
+                A ratio from incomplete data is wrong without a symptom, so the caveat comes before declaring. */}
             {ratioView && (
               <div className="card" data-testid="vat-ratio-card" style={{ marginBottom: 12 }}>
                 <div className="card-title" style={{ marginBottom: 10 }}>
-                  نسبة الخصم النسبي لسنة {ratioView.year}
+                  {t('obligations.vat.ratio_title', { year: ratioView.year })}
                 </div>
                 <p className="hint" style={{ marginTop: 0 }}>
                   {ratioView.suggestion.note}
                   {ratioView.suggestion.ratio !== null && (
                     <>
-                      {' '}— المقترَح <span className="num">{pct(ratioView.suggestion.ratio)}</span> (خاضع {fmt(ratioView.suggestion.taxableSupplies)} · معفى{' '}
-                      {fmt(ratioView.suggestion.exemptSupplies)})
+                      {' '}
+                      {t('obligations.vat.ratio_suggested')} <span className="num">{pct(ratioView.suggestion.ratio)}</span>{' '}
+                      {t('obligations.vat.ratio_split', { taxable: fmt(ratioView.suggestion.taxableSupplies), exempt: fmt(ratioView.suggestion.exemptSupplies) })}
                     </>
                   )}
                 </p>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                   <div className="field" style={{ maxWidth: 200, marginBottom: 0 }}>
-                    <label>النسبة المطبَّقة (كسر)</label>
+                    <label>{t('obligations.vat.ratio_applied')}</label>
                     <input data-testid="vat-ratio-input" className="num" value={ratioInput} onChange={(e) => setRatioInput(e.target.value)} placeholder="0.75" />
                   </div>
                   <button className="btn btn-primary" data-testid="vat-ratio-save" disabled={ratioBusy || ratioInput.trim() === ''} onClick={saveRatio}>
-                    {ratioView.declared ? 'تحديث النسبة' : 'إعلان النسبة'}
+                    {ratioView.declared ? t('obligations.vat.ratio_update') : t('obligations.vat.ratio_declare')}
                   </button>
                   {declaration.proportional.settlement && !declaration.proportional.settlement.settledAt && (
                     <button className="btn btn-ghost" data-testid="vat-ratio-settle" disabled={ratioBusy} onClick={confirmSettlement}>
-                      إقرار تسوية السنة (م٥١/٧)
+                      {t('obligations.vat.ratio_settle')}
                     </button>
                   )}
                 </div>
                 {ratioView.declared?.settledAt && (
                   <p className="hint" style={{ marginBottom: 0 }}>
-                    أُقرّت تسوية السنة في {dfmt(ratioView.declared.settledAt)} بنسبة فعلية{' '}
-                    <span className="num">{pct(ratioView.declared.settledRatio)}</span>
+                    {t('obligations.vat.ratio_settled', { date: dfmt(ratioView.declared.settledAt) })} <span className="num">{pct(ratioView.declared.settledRatio)}</span>
                   </p>
                 )}
               </div>
@@ -222,140 +222,150 @@ export function VatDeclarationPage() {
             <table>
               <tbody>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>المبيعات — خاناتُ نموذج الهيئة</td>
+                  <td>{t('obligations.vat.sales_head')}</td>
                   <td className="num" style={{ color: 'var(--muted)', fontWeight: 400 }}>
-                    الصافي
+                    {t('obligations.vat.net')}
                   </td>
                   <td className="num" style={{ color: 'var(--muted)', fontWeight: 400 }}>
-                    الضريبة
+                    {t('obligations.vat.vat')}
                   </td>
                 </tr>
-                {/* ⑧ الخاناتُ من فئات السطور (ق-١٢١١/⑤): 1 الأساسية · 2 المواطنون (معطَّلة) · 3 الصفر الداخلي · 4 الصادرات · 5 المعفاة · 6 المجموع. */}
+                {/* Boxes come from line categories: 1 standard, 2 citizens (disabled), 3 domestic zero rated, 4 exports, 5 exempt, 6 total. */}
                 <tr>
-                  <td style={{ paddingRight: 20 }}>
-                    <span className="num">1</span> — المبيعات الخاضعة للنسبة الأساسية ({declaration.invoiceCount} فاتورة
-                    {declaration.rent.accrualCount + declaration.rent.legacyCount > 0
-                      ? ` · ${declaration.rent.accrualCount + declaration.rent.legacyCount} استحقاق إيجار`
-                      : ''}
-                    )
+                  <td style={{ paddingInlineStart: 20 }}>
+                    <span className="num">1</span>{' '}
+                    {t('obligations.vat.box1', {
+                      n: declaration.invoiceCount,
+                      rent:
+                        declaration.rent.accrualCount + declaration.rent.legacyCount > 0
+                          ? t('obligations.vat.box1_rent', { n: declaration.rent.accrualCount + declaration.rent.legacyCount })
+                          : '',
+                    })}
                   </td>
                   <td className="num">{fmt(declaration.salesStandard)}</td>
                   <td className="num">{fmt(declaration.salesStandardVat)}</td>
                 </tr>
-                {/* ⭐ الإيجارُ التجاريُّ يدخل الخاضعَ بنقطة ضريبته (ق-٩١٧ · ق-٩١٨) — ويُفصَل هنا ليُقرأ. */}
-                {/* ② المبالغُ نصٌّ بخانتين (`ق-١٢٣٥`): تُعرض كما هي، وتُجمع بـ`sumMoney` لا بـ`+` (وصلٌ لا جمع). */}
+                {/* Commercial rent enters the standard box at its tax point; shown separately so it can be read. */}
+                {/* Amounts are two-decimal text: shown as is and added with sumMoney, never with + (that would join strings). */}
                 {(num0(declaration.rent.standard) !== 0 || num0(declaration.rent.legacyStandard) !== 0) && (
                   <tr>
-                    <td style={{ paddingRight: 36, color: 'var(--muted)' }}>منها إيجاراتٌ تجارية مستحقّة (من الدفتر {fmt(declaration.rent.standard)} · وما سبق البناء {fmt(declaration.rent.legacyStandard)})</td>
+                    <td style={{ paddingInlineStart: 36, color: 'var(--muted)' }}>
+                      {t('obligations.vat.rent_commercial', { ledger: fmt(declaration.rent.standard), legacy: fmt(declaration.rent.legacyStandard) })}
+                    </td>
                     <td className="num" style={{ color: 'var(--muted)' }}>{fmt(sumMoney([declaration.rent.standard, declaration.rent.legacyStandard]))}</td>
                     <td className="num" style={{ color: 'var(--muted)' }}>{fmt(sumMoney([declaration.rent.standardVat, declaration.rent.legacyStandardVat]))}</td>
                   </tr>
                 )}
                 {declaration.legacyStandardLines.lineCount > 0 && (
                   <tr>
-                    <td style={{ paddingRight: 36, color: 'var(--muted)' }}>
-                      منها {declaration.legacyStandardLines.lineCount} سطراً على صنفٍ لم تُعلَن فئتُه — تُرَنّ بالأساسية كما كانت حتى تُعلَن من بطاقة الصنف
+                    <td style={{ paddingInlineStart: 36, color: 'var(--muted)' }}>
+                      {t('obligations.vat.legacy_standard_lines', { n: declaration.legacyStandardLines.lineCount })}
                     </td>
                     <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.legacyStandardLines.net)}</td>
                     <td></td>
                   </tr>
                 )}
-                {/* الخانةُ 2 معروضةٌ ومعطَّلة بسببها (ق-١٢٢٢/③): تابعةٌ للمشتري لا الصنف — صفرٌ معلَن لا يُدمَج في 3. */}
+                {/* Box 2 is shown disabled with its reason: it depends on the buyer, not the product, so it is a declared zero kept out of box 3. */}
                 <tr style={{ color: 'var(--muted)' }} title={declaration.salesCitizensNote}>
-                  <td style={{ paddingRight: 20 }}>
-                    <span className="num">2</span> — المبيعات للمواطنين (الخدمات الصحية الخاصة / التعليم الأهلي الخاص) <span className="badge draft">غير مدعومة — تتبع المشتري</span>
+                  <td style={{ paddingInlineStart: 20 }}>
+                    <span className="num">2</span> {t('obligations.vat.box2')} <span className="badge draft">{t('obligations.vat.box2_badge')}</span>
                   </td>
                   <td className="num">{fmt(declaration.salesCitizens)}</td>
                   <td className="num">{fmt(declaration.boxes[2].vat)}</td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>
-                    <span className="num">3</span> — المبيعات المحلية الخاضعة لنسبة الصفر
+                  <td style={{ paddingInlineStart: 20 }}>
+                    <span className="num">3</span> {t('obligations.vat.box3')}
                   </td>
                   <td className="num">{fmt(declaration.salesZeroRatedDomestic)}</td>
                   <td className="num">{fmt(0)}</td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>
-                    <span className="num">4</span> — الصادرات
+                  <td style={{ paddingInlineStart: 20 }}>
+                    <span className="num">4</span> {t('obligations.vat.box4')}
                   </td>
                   <td className="num">{fmt(declaration.salesExports)}</td>
                   <td className="num">{fmt(0)}</td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>
-                    <span className="num">5</span> — المبيعات المعفاة (ومنها الإيجاراتُ السكنية — م٦٢/٢/ز)
+                  <td style={{ paddingInlineStart: 20 }}>
+                    <span className="num">5</span> {t('obligations.vat.box5')}
                   </td>
                   <td className="num">{fmt(declaration.salesExempt)}</td>
                   <td className="num">{fmt(0)}</td>
                 </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
                   <td>
-                    <span className="num">6</span> — إجمالي المبيعات
+                    <span className="num">6</span> {t('obligations.vat.box6')}
                   </td>
                   <td className="num">{fmt(declaration.totalSales)}</td>
                   <td className="num">{fmt(declaration.salesStandardVat)}</td>
                 </tr>
                 <tr style={{ fontWeight: 700 }}>
-                  <td>المشتريات</td>
+                  <td>{t('obligations.vat.purchases_head')}</td>
                   <td></td>
                   <td></td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>المشتريات الخاضعة ({declaration.purchaseCount} فاتورة شراء)</td>
+                  <td style={{ paddingInlineStart: 20 }}>{t('obligations.vat.purchases_standard', { n: declaration.purchaseCount })}</td>
                   <td className="num">{fmt(declaration.purchasesStandard)}</td>
                   <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
                 <tr>
-                  <td style={{ paddingRight: 20 }}>المشتريات المعفاة</td>
+                  <td style={{ paddingInlineStart: 20 }}>{t('obligations.vat.purchases_exempt')}</td>
                   <td className="num">{fmt(declaration.purchasesExempt)}</td>
                   <td className="num">{fmt(0)}</td>
                 </tr>
                 <tr style={{ borderTop: '1.5px solid var(--line)', fontWeight: 700 }}>
-                  <td>إجمالي المشتريات</td>
+                  <td>{t('obligations.vat.purchases_total')}</td>
                   <td className="num">{fmt(declaration.totalPurchases)}</td>
                   <td className="num">{fmt(declaration.purchasesStandardVat)}</td>
                 </tr>
-                {/* ⑥A1 (`ق-١٣٢٥`) — الخصمُ النسبيّ بأجزائه (م٥١): يُعرض **حين يجب وحدَه**،
-                    فمنشأةٌ خاضعةٌ وحدَها لا شأنَ لها بالمادّة ولا تُثقَل بصفوفٍ لا تعنيها. */}
+                {/* Proportional deduction by its parts (Art. 51), shown only when it applies, so a fully taxable business is not burdened with rows that do not concern it. */}
                 {declaration.proportional.applies && (
                   <>
                     <tr style={{ fontWeight: 700 }}>
                       <td data-testid="proportional-head">
-                        الخصم النسبي لضريبة المدخلات (م٥١)
-                        {declaration.proportional.ratio !== null && <span className="badge draft"> النسبة {pct(declaration.proportional.ratio)}</span>}
+                        {t('obligations.vat.proportional_head')}
+                        {declaration.proportional.ratio !== null && (
+                          <span className="badge draft"> {t('obligations.vat.proportional_ratio', { ratio: pct(declaration.proportional.ratio) })}</span>
+                        )}
                       </td>
                       <td></td>
                       <td></td>
                     </tr>
                     <tr>
-                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>منسوبة حصراً لتوريد خاضع — تُخصم كاملة</td>
+                      <td style={{ paddingInlineStart: 20, color: 'var(--muted)' }}>{t('obligations.vat.taxable_only')}</td>
                       <td></td>
                       <td className="num">{fmt(declaration.proportional.buckets.taxableOnly)}</td>
                     </tr>
                     <tr>
-                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>منسوبة حصراً لتوريد معفى — لا تُخصم</td>
+                      <td style={{ paddingInlineStart: 20, color: 'var(--muted)' }}>{t('obligations.vat.exempt_only')}</td>
                       <td></td>
                       <td className="num">{fmt(declaration.proportional.buckets.exemptOnly)}</td>
                     </tr>
                     <tr>
-                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
-                        مشتركة تُخصم بالنسبة
-                        {declaration.proportional.buckets.legacyCount > 0 && ` (منها ${declaration.proportional.buckets.legacyCount} فاتورة سبقت بناء الإسناد بضريبة ${fmt(declaration.proportional.buckets.legacyUnassigned)})`}
+                      <td style={{ paddingInlineStart: 20, color: 'var(--muted)' }}>
+                        {t('obligations.vat.mixed')}
+                        {declaration.proportional.buckets.legacyCount > 0 &&
+                          t('obligations.vat.mixed_legacy', { n: declaration.proportional.buckets.legacyCount, vat: fmt(declaration.proportional.buckets.legacyUnassigned) })}
                       </td>
                       <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.proportional.apportionedBase)}</td>
                       <td className="num">{fmt(declaration.proportional.apportionedDeductible)}</td>
                     </tr>
                     <tr style={{ fontWeight: 700 }}>
-                      <td data-testid="deductible-input-vat">ضريبة المدخلات القابلة للخصم</td>
-                      <td className="num" style={{ color: 'var(--muted)' }}>غير القابلة: {fmt(declaration.proportional.nonDeductibleInputVat)}</td>
+                      <td data-testid="deductible-input-vat">{t('obligations.vat.deductible')}</td>
+                      <td className="num" style={{ color: 'var(--muted)' }}>{t('obligations.vat.non_deductible', { amount: fmt(declaration.proportional.nonDeductibleInputVat) })}</td>
                       <td className="num">{fmt(declaration.proportional.deductibleInputVat)}</td>
                     </tr>
                     {declaration.proportional.settlement && (
                       <tr data-testid="proportional-settlement">
-                        <td style={{ paddingRight: 20 }}>
-                          تسوية السنة {declaration.proportional.settlement.year} (م٥١/٧) — النسبة المطبَّقة {pct(declaration.proportional.settlement.appliedRatio)} والفعلية{' '}
-                          {pct(declaration.proportional.settlement.actualRatio)}
+                        <td style={{ paddingInlineStart: 20 }}>
+                          {t('obligations.vat.settlement_row', {
+                            year: declaration.proportional.settlement.year,
+                            applied: pct(declaration.proportional.settlement.appliedRatio),
+                            actual: pct(declaration.proportional.settlement.actualRatio),
+                          })}
                         </td>
                         <td className="num" style={{ color: 'var(--muted)' }}>{fmt(declaration.proportional.settlement.yearApportionedBase)}</td>
                         <td className="num">{fmt(declaration.proportional.settlement.differenceText)}</td>
@@ -363,35 +373,36 @@ export function VatDeclarationPage() {
                     )}
                   </>
                 )}
-                {/* ⑥A3 (`ق-١٣٢٥`) — التصحيحاتُ تدخل الصافي بإشارتها (م٦٣/٢ · خانةُ م٦٢/٢/ي). */}
+                {/* Corrections enter the net with their sign (Art. 63/2). */}
                 {declaration.corrections.rows.map((c) => (
                   <tr key={c.id} data-testid="vat-correction-row">
-                    <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
-                      تصحيح {c.correctedPeriodType === 'MONTHLY' ? `شهر ${c.correctedPeriodNo}` : `الربع ${c.correctedPeriodNo}`} من {c.correctedYear} — {c.reason}
+                    <td style={{ paddingInlineStart: 20, color: 'var(--muted)' }}>
+                      {t('obligations.vat.correction', { period: periodName(c.correctedPeriodType, c.correctedPeriodNo), year: c.correctedYear, reason: c.reason })}
                     </td>
                     <td></td>
                     <td className="num">{fmt(c.amount)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: '2px solid var(--ink)', fontWeight: 700, color: netVat >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
-                  <td>{netVat >= 0 ? 'صافي الضريبة المستحقة' : 'صافي الضريبة القابلة للاسترداد'}</td>
+                  <td>{netVat >= 0 ? t('obligations.vat.net_due') : t('obligations.vat.net_refundable')}</td>
                   <td></td>
                   <td className="num">{fmt(Math.abs(netVat))}</td>
                 </tr>
-                {/* ⑥A3 — المرحَّلُ يُعرض **حين يوجد وحدَه**، ومصدرُه مسمّىً فلا يُسأل «من أين». */}
+                {/* A carried balance shows only when there is one, with its source named. */}
                 {num0(declaration.carriedForward) !== 0 && declaration.carriedForwardFrom && (
                   <>
                     <tr data-testid="vat-carry-forward">
-                      <td style={{ paddingRight: 20, color: 'var(--muted)' }}>
-                        رصيد مرحَّل من{' '}
-                        {declaration.carriedForwardFrom.periodType === 'MONTHLY' ? `شهر ${declaration.carriedForwardFrom.periodNo}` : `الربع ${declaration.carriedForwardFrom.periodNo}`} من{' '}
-                        {declaration.carriedForwardFrom.year}
+                      <td style={{ paddingInlineStart: 20, color: 'var(--muted)' }}>
+                        {t('obligations.vat.carried_from', {
+                          period: periodName(declaration.carriedForwardFrom.periodType, declaration.carriedForwardFrom.periodNo),
+                          year: declaration.carriedForwardFrom.year,
+                        })}
                       </td>
                       <td></td>
                       <td className="num">−{fmt(declaration.carriedForward)}</td>
                     </tr>
                     <tr style={{ fontWeight: 700, color: num0(declaration.netVatAfterCarryForward) >= 0 ? 'var(--rose)' : 'var(--emerald)' }}>
-                      <td>{num0(declaration.netVatAfterCarryForward) >= 0 ? 'المستحق بعد استنزال المرحَّل' : 'الفائض بعد استنزال المرحَّل'}</td>
+                      <td>{num0(declaration.netVatAfterCarryForward) >= 0 ? t('obligations.vat.due_after_carry') : t('obligations.vat.surplus_after_carry')}</td>
                       <td></td>
                       <td className="num">{fmt(Math.abs(num0(declaration.netVatAfterCarryForward)))}</td>
                     </tr>
@@ -400,80 +411,83 @@ export function VatDeclarationPage() {
               </tbody>
             </table>
 
-            {/* ⑥A3 (`ق-١٣٢٥`) — **ما لم يُبنَ يُعلَن في وجه الإقرار**: من يقرأ رقماً بلا تنبيهٍ يظنّه كاملاً. */}
+            {/* What is not built is stated on the return itself: a number without a notice reads as complete. */}
             {declaration.notBuilt.map((n) => (
               <p key={n.code} className="hint" data-testid="vat-not-built" style={{ marginTop: 10, color: 'var(--muted)' }}>
                 ⓘ {n.note}
               </p>
             ))}
 
-            {/* ⑧ ما يُعدّ ولا يدخل الخانات — يُعلَن حيث يُقرأ الرقم (ق-١٢١١/⑤ · ق-١٢٢٥). */}
+            {/* What is counted but kept out of the boxes is stated where the number is read. */}
             <p className="hint" style={{ marginTop: 10, color: 'var(--muted)' }}>{declaration.salesCitizensNote}</p>
             {declaration.salesOutOfScope.lineCount > 0 && (
               <p className="hint" style={{ marginTop: 6 }}>
-                <b>{declaration.salesOutOfScope.lineCount}</b> سطراً خارجَ نطاق الضريبة ({fmt(declaration.salesOutOfScope.net)}) — يُعدّ ولا يدخل خانات الإقرار.
+                <b>{declaration.salesOutOfScope.lineCount}</b> {t('obligations.vat.out_of_scope', { amount: fmt(declaration.salesOutOfScope.net) })}
               </p>
             )}
             {declaration.legacyZeroLines.lineCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
-                <b>{declaration.legacyZeroLines.lineCount}</b> سطراً بنسبة صفر سبقت البناء بلا فئةٍ معلَنة ({fmt(declaration.legacyZeroLines.net)}) — لا يُعرف أهي صفرٌ أم معفاةٌ أم خارجَ النطاق، فتُعدّ ولا تدخل الخانات؛ ومستندُها لا يُختم حتى يُعاد إصدارُه بفئة.
+                <b>{declaration.legacyZeroLines.lineCount}</b> {t('obligations.vat.legacy_zero', { amount: fmt(declaration.legacyZeroLines.net) })}
               </p>
             )}
 
-            {/* ⚠️ حدودُ الإيجار تُعلَن حيث يُقرأ الرقم لا في وثيقة (ق-٤٤٩ · ق-٩١٨ · ق-٩٢٦). */}
+            {/* Rent limits are stated where the number is read, not in a document. */}
             {declaration.rent.legacyCount > 0 && (
               <p className="hint" style={{ marginTop: 10 }}>
-                <b>{declaration.rent.legacyCount}</b> قسطاً/دفعةً سبقت بناءَ الاستحقاق: <b>في الإقرار لا في الدفتر</b> — {declaration.rent.legacyNote}
-                {num0(declaration.rent.legacyExempt) > 0 ? ` (معفى: ${fmt(declaration.rent.legacyExempt)})` : ''}
+                <b>{declaration.rent.legacyCount}</b> {t('obligations.vat.legacy_rent')} <b>{t('obligations.vat.legacy_rent_where')}</b> — {declaration.rent.legacyNote}
+                {num0(declaration.rent.legacyExempt) > 0 ? t('obligations.vat.legacy_rent_exempt', { amount: fmt(declaration.rent.legacyExempt) }) : ''}
               </p>
             )}
             {declaration.rent.unclassifiedCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
-                <b>{declaration.rent.unclassifiedCount}</b> قسطاً/دفعةً لعقودٍ قديمةٍ غيرِ مصنَّفة لا تدخل الإقرار حتى تُصنَّف — {declaration.rent.unclassifiedNote}
+                <b>{declaration.rent.unclassifiedCount}</b> {t('obligations.vat.unclassified', { note: declaration.rent.unclassifiedNote })}
               </p>
             )}
             {declaration.rent.managedCount > 0 && (
               <p className="hint" style={{ marginTop: 6 }}>
-                <b>{declaration.rent.managedCount}</b> استحقاقاً لعقاراتِ تشغيلٍ ({fmt(declaration.rent.managedExcluded)}) — توريدُ مالكها، لا يدخل إقرارك.
+                <b>{declaration.rent.managedCount}</b> {t('obligations.vat.managed', { amount: fmt(declaration.rent.managedExcluded) })}
               </p>
             )}
-            {/* ⚖️ المالكُ مؤجّراً (السؤال ٥٧٧ · ق-١٦٠٠): إيجارُه يُعدّ ولا يدخل، وعمولتُك عليه داخلةٌ في المبيعات الخاضعة أعلاه. */}
+            {/* When the owner is the lessor, the rent is counted but not entered; your commission on it is in the standard rated sales above. */}
             {declaration.rent.ownerCount > 0 && (
               <p className="hint" style={{ marginTop: 6 }} data-testid="vat-owner-rent">
-                <b>{declaration.rent.ownerCount}</b> قبضاً لعقودٍ مؤجّرُها المالك ({fmt(declaration.rent.ownerCollected)}) — توريدُ المالك، لا يدخل إقرارك. وعمولتُك
-                عليها {fmt(declaration.rent.commissionStandard)} وضريبتُها {fmt(declaration.rent.commissionStandardVat)} داخلتان في المبيعات الخاضعة بالنسبة الأساسية.
+                <b>{declaration.rent.ownerCount}</b>{' '}
+                {t('obligations.vat.owner_rent', {
+                  collected: fmt(declaration.rent.ownerCollected),
+                  commission: fmt(declaration.rent.commissionStandard),
+                  vat: fmt(declaration.rent.commissionStandardVat),
+                })}
               </p>
             )}
-            {/* ⚖️ المطالباتُ والخصوماتُ من التأمين الخاضعة (الأسئلة ٤٩ و٥١ و٤١٣ و٤١٤ · ق-١٦٠٠): داخلةٌ في المبيعات الخاضعة أعلاه. */}
+            {/* Taxable claims and deposit deductions are already in the standard rated sales above. */}
             {num0(declaration.rent.chargesStandard) !== 0 && (
               <p className="hint" style={{ marginTop: 6 }} data-testid="vat-rent-charges">
-                مطالباتٌ وخصوماتٌ من التأمين خاضعة {fmt(declaration.rent.chargesStandard)} وضريبتُها {fmt(declaration.rent.chargesStandardVat)} — داخلتان في المبيعات
-                الخاضعة بالنسبة الأساسية.
+                {t('obligations.vat.rent_charges', { amount: fmt(declaration.rent.chargesStandard), vat: fmt(declaration.rent.chargesStandardVat) })}
               </p>
             )}
             {declaration.rent.pendingCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--amber)' }}>
-                <b>{declaration.rent.pendingCount}</b> قسطاً حلّ ولم يُرحَّل استحقاقُه بعد — {declaration.rent.pendingNote}
+                <b>{declaration.rent.pendingCount}</b> {t('obligations.vat.pending', { note: declaration.rent.pendingNote })}
               </p>
             )}
             {declaration.rent.unpostedCount > 0 && (
               <p className="hint" style={{ marginTop: 6, color: 'var(--rose)' }}>
-                <b>{declaration.rent.unpostedCount}</b> استحقاقاً بلا قيدٍ في الدفتر (نقصُ حسابٍ في دليل الحسابات) — الإقرارُ يحسبه والدفترُ لا يحمله.
+                <b>{declaration.rent.unpostedCount}</b> {t('obligations.vat.unposted')}
               </p>
             )}
             <p className="hint" style={{ marginTop: 6 }}>
-              الإيجارُ التجاريُّ يوجب فاتورةً ضريبية، والنظامُ لا يُصدرها بعد — أصدرها خارجه (ق-٩١١).
+              {t('obligations.vat.rent_invoice_note')}
             </p>
 
-            {/* ⭐ علَمُ «قُدِّم» (ق-٩١٩): سطرٌ واحد بيد التاجر — فتُعرض رسالةُ التصحيح لمن قدّم وتغيّر رقمُه وحدَه. */}
+            {/* The "filed" flag is one line set by the merchant, so the correction message shows only to someone who filed and whose number changed. */}
             <div className="card" style={{ marginTop: 12, borderInlineStart: `4px solid ${declaration.changedSinceFiled ? 'var(--rose)' : declaration.filed ? 'var(--emerald)' : 'var(--line)'}` }}>
               {declaration.filed ? (
                 <div style={{ fontWeight: 600 }}>
-                  قُدِّم هذا الإقرارُ للهيئة في {dfmt(declaration.filed.filedAt)} بصافي <span className="num">{fmt(declaration.filed.netVat)}</span>
-                  {declaration.changedSinceFiled ? ' — وتغيّر بعده' : ' — ولم يتغيّر'}
+                  {t('obligations.vat.filed_on', { date: dfmt(declaration.filed.filedAt) })} <span className="num">{fmt(declaration.filed.netVat)}</span>
+                  {declaration.changedSinceFiled ? t('obligations.vat.filed_changed') : t('obligations.vat.filed_unchanged')}
                 </div>
               ) : (
-                <div style={{ fontWeight: 600 }}>لم يُوسَم هذا الربعُ مقدَّماً بعد — وسمْه بعد تقديمه للهيئة</div>
+                <div style={{ fontWeight: 600 }}>{t('obligations.vat.not_filed')}</div>
               )}
               {declaration.filedNote && (
                 <p className="hint" style={{ marginTop: 4, color: 'var(--rose)' }}>
@@ -481,7 +495,7 @@ export function VatDeclarationPage() {
                 </p>
               )}
               <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={toggleFiled} disabled={marking}>
-                {declaration.filed ? 'إلغاء وسم «قُدِّم»' : '✓ قُدِّم للهيئة'}
+                {declaration.filed ? t('obligations.vat.unmark_filed') : t('obligations.vat.mark_filed')}
               </button>
             </div>
           </>
