@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Invoice, InvoiceLineInput } from '../../api/invoices';
 import { fmt } from '../../lib/format';
 import { lineTaxDraftError, lineTaxPayload, rateForCategory, STANDARD_LINE_TAX, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 
-/** ⑧ البندُ يحمل الفئةَ بسببها لا نسبةً تُختار — كما في بنّاء الفاتورة. */
+/** A line carries its tax category (with its reason), not a chosen rate — as in the invoice builder. */
 interface DebitLineDraft {
   description: string;
   quantity: number;
@@ -34,6 +35,7 @@ export function DebitNoteModal({
   onCancel: () => void;
   onConfirm: (reason: string, lines: InvoiceLineInput[]) => void;
 }) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
   const [lines, setLines] = useState<DebitLineDraft[]>([{ description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }]);
 
@@ -42,11 +44,11 @@ export function DebitNoteModal({
   }
 
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم.
+  // Preview only, with the rate derived from the category; the server's figures are authoritative.
   const tax = lines.reduce((s, l) => s + l.quantity * l.unitPrice * (rateForCategory(l.tax.taxCategory) / 100), 0);
   // Every line must actually bill something — a zero-value note is a document
   // issued to the authority that says nothing. And a Z/E/O line without its
-  // reason is refused here as the server refuses it (ق-١٢١١/③).
+  // reason is refused here as the server refuses it.
   const taxProblem = lines.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
   const valid = reason.trim() !== '' && !taxProblem && lines.every((l) => l.description.trim() !== '' && l.quantity > 0 && l.unitPrice > 0);
 
@@ -54,29 +56,30 @@ export function DebitNoteModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">إصدار إشعار مدين</div>
+          <div className="modal-title">{t('invoices.debit_note.title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="hint" style={{ marginBottom: 10 }}>
           {invoice.docType === 'CREDIT_NOTE'
-            ? `إشعار مدين يصحّح الإشعار الدائن ${invoice.no} (${fmt(invoice.total)}) — يعيد ما زاد فيه إلى ذمّة العميل ولا يتجاوز قيمته، فالإشعار الصادر لا يُعدَّل ولا يُحذف؛ ويُرسَل للهيئة كمستند 383 مرتبطاً به.`
-            : `مبالغ إضافية على الفاتورة ${invoice.no} — تُقيَّد على العميل كمستحقات جديدة، وتُرسَل للهيئة كمستند 383 مرتبطاً `}بها. الفاتورة الأصلية لا تُعدَّل.
+            ? t('invoices.debit_note.hint_on_credit_note', { no: invoice.no, total: fmt(invoice.total) })
+            : t('invoices.debit_note.hint_on_invoice', { no: invoice.no })}
+          {t('invoices.debit_note.hint_tail')}
         </div>
         <div className="field">
-          <label>سبب الإصدار (إلزامي لهيئة الزكاة)</label>
-          <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: تكاليف شحن غير مفوترة / فرق سعر" />
+          <label>{t('invoices.common.reason_label')}</label>
+          <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('invoices.debit_note.reason_placeholder')} />
         </div>
 
         <table className="line-items">
           <thead>
             <tr>
-              <th>الوصف</th>
-              <th style={{ width: 55 }}>الكمية</th>
-              <th style={{ width: 95 }}>السعر</th>
-              <th style={{ width: 210 }}>الفئة الضريبية</th>
-              <th style={{ width: 55 }}>النسبة</th>
+              <th>{t('invoices.common.col_description')}</th>
+              <th style={{ width: 55 }}>{t('invoices.common.col_quantity')}</th>
+              <th style={{ width: 95 }}>{t('invoices.common.col_price')}</th>
+              <th style={{ width: 210 }}>{t('invoices.common.col_tax_category')}</th>
+              <th style={{ width: 55 }}>{t('invoices.common.col_rate')}</th>
               <th style={{ width: 30 }}></th>
             </tr>
           </thead>
@@ -95,7 +98,7 @@ export function DebitNoteModal({
                 <td>
                   <LineTaxPicker compact value={l.tax} onChange={(tax) => updateLine(i, { tax })} />
                 </td>
-                <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
+                <td className="num">{t('invoices.common.rate_pct', { rate: rateForCategory(l.tax.taxCategory) })}</td>
                 <td>
                   {lines.length > 1 && (
                     <button className="remove-line" onClick={() => setLines((ls) => ls.filter((_, x) => x !== i))}>
@@ -108,25 +111,25 @@ export function DebitNoteModal({
           </tbody>
         </table>
         <button className="add-line" onClick={() => setLines((ls) => [...ls, { description: '', quantity: 1, unitPrice: 0, tax: STANDARD_LINE_TAX }])}>
-          + إضافة بند جديد
+          {t('invoices.common.add_line')}
         </button>
 
         {taxProblem && (
           <p className="error-text" style={{ marginTop: 8 }}>
-            البند {taxProblem.i + 1}: {taxProblem.msg}
+            {t('invoices.common.line_error', { n: taxProblem.i + 1, msg: taxProblem.msg })}
           </p>
         )}
 
         <div className="hint" style={{ marginTop: 10 }}>
-          الإجمالي: {fmt(subtotal + tax)} (شامل ضريبة {fmt(tax)})
+          {t('invoices.debit_note.total', { total: fmt(subtotal + tax), tax: fmt(tax) })}
         </div>
 
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('invoices.common.cancel')}
           </button>
           <button className="btn btn-primary" disabled={!valid} onClick={() => onConfirm(reason.trim(), lines.map(toInput))}>
-            إصدار الإشعار
+            {t('invoices.common.issue_note')}
           </button>
         </div>
       </div>
