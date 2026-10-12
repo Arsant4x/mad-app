@@ -1,21 +1,23 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ActivityType, Ownership, Property, PropertyInput } from '../../api/properties';
 import { today } from '../../lib/format';
 import i18n from '../../i18n';
 
-const ACTIVITY_OPTIONS: { value: ActivityType; label: string }[] = [
-  { value: 'residential', label: 'سكني' },
-  { value: 'shop', label: 'محل' },
-  { value: 'showroom', label: 'معرض' },
-  { value: 'office', label: 'مكتب' },
-  { value: 'warehouse', label: 'مخزن' },
-  { value: 'mixed', label: 'مختلط' },
+/** Built at render so the labels follow the current language. */
+const activityOptions = (): { value: ActivityType; label: string }[] => [
+  { value: 'residential', label: i18n.t('properties.activity.residential') },
+  { value: 'shop', label: i18n.t('properties.activity.shop') },
+  { value: 'showroom', label: i18n.t('properties.activity.showroom') },
+  { value: 'office', label: i18n.t('properties.activity.office') },
+  { value: 'warehouse', label: i18n.t('properties.activity.warehouse') },
+  { value: 'mixed', label: i18n.t('properties.activity.mixed') },
 ];
 
-const OWNERSHIP_OPTIONS: { value: Ownership; label: string }[] = [
-  { value: 'owned', label: 'ملك' },
-  { value: 'leased', label: 'إيجار' },
-  { value: 'managed', label: 'تشغيل' },
+const ownershipOptions = (): { value: Ownership; label: string }[] => [
+  { value: 'owned', label: i18n.t('properties.ownership.owned') },
+  { value: 'leased', label: i18n.t('properties.ownership.leased') },
+  { value: 'managed', label: i18n.t('properties.ownership.managed') },
 ];
 
 export function PropertyModal({
@@ -27,6 +29,7 @@ export function PropertyModal({
   onCancel: () => void;
   onSave: (data: PropertyInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [address, setAddress] = useState(editing?.address ?? '');
   const [floors, setFloors] = useState(String(editing?.floors ?? 1));
@@ -83,42 +86,42 @@ export function PropertyModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل العقار' : 'عقار جديد'}</div>
+          <div className="modal-title">{editing ? t('properties.modal.title_edit') : t('properties.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم العقار</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: برج النخيل" />
+          <label>{t('properties.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('properties.modal.name_placeholder')} />
         </div>
         <div className="field">
-          <label>العنوان</label>
-          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="المدينة — الحي" />
+          <label>{t('properties.modal.address')}</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('properties.modal.address_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>خط العرض (Latitude)</label>
+            <label>{t('properties.modal.lat')}</label>
             <input className="num" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="24.7136" />
           </div>
           <div className="field">
-            <label>خط الطول (Longitude)</label>
+            <label>{t('properties.modal.lng')}</label>
             <input className="num" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="46.6753" />
             {/* Says where to get them, since nobody knows their coordinates by
                 heart — and a property without them simply won't appear on the map. */}
-            <p className="hint">انسخهما من خرائط جوجل (اضغط مطوّلاً على الموقع). العقار بدونهما لا يظهر على الخريطة.</p>
+            <p className="hint">{t('properties.modal.coords_hint')}</p>
           </div>
         </div>
         <div className="two-col">
           <div className="field">
-            <label>عدد الطوابق</label>
+            <label>{t('properties.modal.floors')}</label>
             <input className="num" value={floors} onChange={(e) => setFloors(e.target.value)} placeholder="1" />
           </div>
           <div className="field">
-            <label>نوع النشاط</label>
+            <label>{t('properties.modal.activity')}</label>
             <select value={activityType} onChange={(e) => setActivityType(e.target.value as ActivityType | '')}>
-              <option value="">بدون تخصيص</option>
-              {ACTIVITY_OPTIONS.map((o) => (
+              <option value="">{t('properties.modal.activity_none')}</option>
+              {activityOptions().map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -128,15 +131,15 @@ export function PropertyModal({
         </div>
         {activityType === 'residential' && (
           <div className="field">
-            <label>الفئة السكنية المستهدفة</label>
-            <input value={activitySubtype} onChange={(e) => setActivitySubtype(e.target.value)} placeholder="عوائل / عزاب / طالبات..." />
+            <label>{t('properties.modal.residential_subtype')}</label>
+            <input value={activitySubtype} onChange={(e) => setActivitySubtype(e.target.value)} placeholder={t('properties.modal.residential_subtype_placeholder')} />
           </div>
         )}
 
         <div className="field">
-          <label>الملكية</label>
+          <label>{t('properties.modal.ownership')}</label>
           <select value={ownership} onChange={(e) => setOwnership(e.target.value as Ownership)}>
-            {OWNERSHIP_OPTIONS.map((o) => (
+            {ownershipOptions().map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -146,8 +149,8 @@ export function PropertyModal({
 
         {ownership === 'owned' && (
           <div className="field">
-            <label>رقم الصك</label>
-            <input className="num" value={deedNo} onChange={(e) => setDeedNo(e.target.value)} placeholder="رقم صك الملكية" />
+            <label>{t('properties.modal.deed_no')}</label>
+            <input className="num" value={deedNo} onChange={(e) => setDeedNo(e.target.value)} placeholder={t('properties.modal.deed_no_placeholder')} />
           </div>
         )}
 
@@ -155,21 +158,21 @@ export function PropertyModal({
           <>
             <div className="two-col">
               <div className="field">
-                <label>قيمة الإيجار</label>
+                <label>{t('properties.modal.lease_value')}</label>
                 <input className="num" value={leaseValue} onChange={(e) => setLeaseValue(e.target.value)} placeholder="0.00" />
               </div>
               <div className="field">
-                <label>دورة السداد</label>
-                <input value={leaseCycle} onChange={(e) => setLeaseCycle(e.target.value)} placeholder="سنوية" />
+                <label>{t('properties.modal.lease_cycle')}</label>
+                <input value={leaseCycle} onChange={(e) => setLeaseCycle(e.target.value)} placeholder={t('properties.modal.lease_cycle_placeholder')} />
               </div>
             </div>
             <div className="two-col">
               <div className="field">
-                <label>بداية عقد الإيجار</label>
+                <label>{t('properties.modal.lease_start')}</label>
                 <input type="date" value={leaseStart} onChange={(e) => setLeaseStart(e.target.value)} />
               </div>
               <div className="field">
-                <label>نهاية عقد الإيجار</label>
+                <label>{t('properties.modal.lease_end')}</label>
                 <input type="date" value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} />
               </div>
             </div>
@@ -178,7 +181,7 @@ export function PropertyModal({
 
         {ownership === 'managed' && (
           <div className="field">
-            <label>نسبة عمولة التشغيل %</label>
+            <label>{t('properties.modal.op_rate')}</label>
             <input className="num" value={opRate} onChange={(e) => setOpRate(e.target.value)} placeholder="0.00" />
           </div>
         )}
@@ -186,10 +189,10 @@ export function PropertyModal({
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('properties.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة العقار'}
+            {editing ? t('properties.modal.save_edit') : t('properties.modal.add')}
           </button>
         </div>
       </div>
