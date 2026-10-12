@@ -1,16 +1,19 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getStockLevels, type StockLevelRow, type StockStatus } from '../../api/inventory';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
 import { fmt } from '../../lib/format';
 
+// Labels are translation keys, turned into text where rendered.
 const STATUS_META: Record<StockStatus, { label: string; badgeClass: string }> = {
-  out: { label: 'نفدت الكمية', badgeClass: 'overdue' },
-  low: { label: 'منخفض', badgeClass: 'due' },
-  available: { label: 'متوفر', badgeClass: 'paid' },
+  out: { label: 'inventory.levels.status.out', badgeClass: 'overdue' },
+  low: { label: 'inventory.levels.status.low', badgeClass: 'due' },
+  available: { label: 'inventory.levels.status.available', badgeClass: 'paid' },
 };
 
 export function StockLevelsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<StockLevelRow[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,14 +44,14 @@ export function StockLevelsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">مستويات المخزون</div>
-          <div className="page-sub">الكمية المتوفرة من كل صنف بكل مستودع</div>
+          <div className="page-title">{t('inventory.levels.title')}</div>
+          <div className="page-sub">{t('inventory.levels.sub')}</div>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث باسم المنتج أو الرمز..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('inventory.levels.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -56,7 +59,7 @@ export function StockLevelsPage() {
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
           <select value={warehouseFilter} onChange={(e) => setWarehouseFilter(e.target.value)}>
-            <option value="all">كل المستودعات</option>
+            <option value="all">{t('inventory.levels.all_warehouses')}</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
@@ -70,19 +73,19 @@ export function StockLevelsPage() {
         <table>
           <thead>
             <tr>
-              <th>المنتج</th>
-              <th>الرمز</th>
-              <th>المستودع</th>
-              <th>الكمية الحالية</th>
-              <th>الحد الأدنى</th>
-              <th>الحالة</th>
+              <th>{t('inventory.levels.col_product')}</th>
+              <th>{t('inventory.levels.col_sku')}</th>
+              <th>{t('inventory.levels.col_warehouse')}</th>
+              <th>{t('inventory.levels.col_qty')}</th>
+              <th>{t('inventory.levels.col_min')}</th>
+              <th>{t('inventory.levels.col_status')}</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={6}>
-                  <div className="empty-state">لا توجد بيانات مخزون مطابقة</div>
+                  <div className="empty-state">{t('inventory.levels.empty')}</div>
                 </td>
               </tr>
             )}
@@ -94,7 +97,7 @@ export function StockLevelsPage() {
                 <td className="num">{fmt(r.qty)}</td>
                 <td className="num">{fmt(r.product.minStock)}</td>
                 <td>
-                  <span className={`badge ${badgeOf(STATUS_META, r.status).badgeClass}`}>{badgeOf(STATUS_META, r.status).label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, r.status).badgeClass}`}>{t(badgeOf(STATUS_META, r.status).label)}</span>
                 </td>
               </tr>
             ))}
