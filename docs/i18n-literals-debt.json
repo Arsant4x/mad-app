@@ -18,7 +18,6 @@
     "apps/web/src/components/RowMenu.tsx": 1,
     "apps/web/src/components/SignaturePad.tsx": 3,
     "apps/web/src/components/ZatcaQr.tsx": 3,
-    "apps/web/src/layout/AppShell.tsx": 12,
     "apps/web/src/layout/DeveloperShell.tsx": 2,
     "apps/web/src/lib/apiError.ts": 1,
     "apps/web/src/lib/batchLimits.ts": 4,

@@ -568,7 +568,7 @@ tr:last-child td {
   background: #faf9f5;
 }
 .tree-row.l2 {
-  padding-right: 24px;
+  padding-inline-start: 24px;
   color: var(--charcoal);
 }
 .code-chip {
@@ -613,7 +613,7 @@ tr:last-child td {
 }
 .je-table th:first-child,
 .je-table td:first-child {
-  text-align: right;
+  text-align: start;
 }
 .balance-check {
   display: flex;
@@ -826,7 +826,7 @@ tr:last-child td {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-end: 0;
   width: 1px;
   background-image: repeating-linear-gradient(to bottom, var(--gold) 0 6px, transparent 6px 14px);
   opacity: 0.55;
