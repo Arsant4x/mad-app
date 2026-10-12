@@ -1,27 +1,5 @@
 {
   "rule": "ق-١٦٩١",
   "note": "Direct user-visible text in web UI files before the bilingual rule. It only goes down: a file touched by a pull request is converted in full, and the count is lowered with `node ops/ci/i18n-literals-check.mjs --write-debt`. Gate: ops/ci/i18n-literals-check.mjs in .github/workflows/i18n-literals.yml. Measured on 2026-10-12: 146 of 215 files, 4192 direct texts; the gate prints the current totals.",
-  "files": {
-    "apps/web/src/api/activities.ts": 7,
-    "apps/web/src/api/banks.ts": 3,
-    "apps/web/src/api/customers.ts": 15,
-    "apps/web/src/api/integrations.ts": 3,
-    "apps/web/src/api/request-contracts.typecheck.ts": 5,
-    "apps/web/src/api/templates.ts": 32,
-    "apps/web/src/components/AssignTaskButton.tsx": 22,
-    "apps/web/src/components/BranchPicker.tsx": 5,
-    "apps/web/src/components/ConfirmModal.tsx": 2,
-    "apps/web/src/components/ErrorBoundary.tsx": 3,
-    "apps/web/src/components/LineTaxPicker.tsx": 5,
-    "apps/web/src/components/MfaCard.tsx": 14,
-    "apps/web/src/components/Pager.tsx": 5,
-    "apps/web/src/components/RowMenu.tsx": 1,
-    "apps/web/src/components/SignaturePad.tsx": 3,
-    "apps/web/src/components/ZatcaQr.tsx": 3,
-    "apps/web/src/lib/apiError.ts": 1,
-    "apps/web/src/lib/batchLimits.ts": 4,
-    "apps/web/src/lib/units.ts": 23,
-    "apps/web/src/lib/vat.ts": 34,
-    "apps/web/src/lib/zatcaQr.ts": 2
-  }
+  "files": {}
 }

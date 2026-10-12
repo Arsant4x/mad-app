@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
- * ⚖️ **لوحةُ التوقيع المرسوم** (توجيه ٢٨٧ ③ · `ق-١٦٣٥` ⑫: «صورةُ رسمٍ ساكنة»): يُرسم بالإصبع أو الفأرة، ويُسلَّم صورةَ `PNG` بعد كلِّ
- * خطّ، و«مسح» يعيدها فارغة. لا تحفظ شيئاً ولا ترسل: المستدعي يرسل الصورة مع طلبه.
+ * A drawn signature pad: drawn with a finger or a mouse, handed over as a `PNG` image after every
+ * stroke, and "clear" returns it empty. It saves and sends nothing: the caller sends the image with
+ * its request.
  */
-export function SignaturePad({ onChange, label = 'ارسم توقيعك هنا', height = 160 }: { onChange: (png: Blob | null) => void; label?: string; height?: number }) {
+export function SignaturePad({ onChange, label, height = 160 }: { onChange: (png: Blob | null) => void; label?: string; height?: number }) {
+  const { t } = useTranslation();
+  const shownLabel = label ?? t('common.signature.draw_here');
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
   const [empty, setEmpty] = useState(true);
@@ -12,7 +16,7 @@ export function SignaturePad({ onChange, label = 'ارسم توقيعك هنا',
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-    // دقّةُ الشاشة: اللوحةُ بحجمها الظاهر مضروباً في كثافة البكسل، فلا يبهت الخطّ.
+    // Screen density: the canvas is its visible size times the pixel ratio, so the stroke is not blurred.
     const ratio = window.devicePixelRatio || 1;
     c.width = Math.max(1, Math.floor(c.clientWidth * ratio));
     c.height = Math.max(1, Math.floor(height * ratio));
@@ -68,7 +72,7 @@ export function SignaturePad({ onChange, label = 'ارسم توقيعك هنا',
     <div>
       <canvas
         ref={canvas}
-        aria-label={label}
+        aria-label={shownLabel}
         data-testid="signature-pad"
         style={{ width: '100%', height, border: '1px dashed var(--border, #bbb)', borderRadius: 8, touchAction: 'none', background: '#fff' }}
         onPointerDown={start}
@@ -77,9 +81,9 @@ export function SignaturePad({ onChange, label = 'ارسم توقيعك هنا',
         onPointerLeave={end}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-        <span className="hint">{empty ? label : 'رُسم التوقيع'}</span>
+        <span className="hint">{empty ? shownLabel : t('common.signature.drawn')}</span>
         <button type="button" className="btn btn-ghost" onClick={clear} disabled={empty}>
-          مسح
+          {t('common.signature.clear')}
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createTask, type TaskAssigneeKind, type TaskPriority } from '../api/tasks';
 import { listCompanyUsers, type CompanyUser } from '../api/companyUsers';
 import type { ScreenKey } from '../api/templates';
@@ -7,8 +8,8 @@ import { usePermissions } from '../auth/PermissionsContext';
 import { apiErrorMessage } from '../lib/apiError';
 
 /**
- * قيمةُ المنتقي تحمل **الوسمَ والمعرّفَ معاً** (`ق-٦٣٩`): `OWNER:<companyId>` للمالك،
- * و`USER:<id>` لحسابٍ فرعيّ — فلا يُرسَل معرّفٌ بلا فضائه، ولا يُملأ الوسمُ بالظنّ.
+ * The picker value carries the kind and the ID together: `OWNER:<companyId>` for the owner and
+ * `USER:<id>` for a sub account, so an ID is never sent without its space and the kind is never guessed.
  */
 const OWNER_PREFIX = 'OWNER:';
 const USER_PREFIX = 'USER:';
@@ -19,42 +20,31 @@ function splitAssignee(value: string): { assigneeId: string; assigneeKind: TaskA
 }
 
 /**
- * إسناد مهمة **من داخل المستند** — مكوّنٌ واحد يُركَّب في الثلاث.
- *
- * ## لماذا واحدٌ لا ثلاث نسخ
- *
- * العقود والفواتير والبلاغات تحتاج الشيء نفسه: «أسنِد هذا المستند لفلان».
- * وثلاث نسخ تفترق عند أول تعديل — تُصلَح إحداها وتبقى اثنتان، **بلا شكوى**.
- * وهي عائلة العطب التي أنتجت `RowMenu` أصلاً: مكوّنٌ واحد لعشرين شاشة.
- *
- * ## والاستعمال يمرّ الشاشة والمعرّف فقط
+ * Assigns a task from inside a document: one component mounted in contracts, invoices and maintenance
+ * requests, so the three cannot drift apart.
  *
  *     <AssignTaskButton screen="contracts" entityId={contract.id} />
  *
- * ولا يمرّ **عنوان المستند ولا محتواه**: العنوان يكتبه المُسنِد، والخادم
- * لا يقرأ المستند أصلاً. فالمكوّن لا يفتح باباً لتسريب ما لا يُسرَّب.
+ * Only the screen and the ID are passed, never the document's title or content: the assigner writes the
+ * title and the server does not read the document, so the component opens no leak.
  *
- * ## ⚠️ والزرّ لا يظهر لمن لا يرى المستند
- *
- * الخادم يرفض ربط مهمةٍ بمستندٍ لا يراه المُسنِد (`task_target_not_visible`)
- * — وإلا صار الإسناد **قناة تسريب معكوسة**: من لا يملك `contracts:view`
- * يربط مهمةً بعقدٍ لم يره فيكشف وجوده ومعرّفه لمن يفتحه.
- *
- * وإخفاء الزر هنا **عرضٌ لا منع**: يوفّر محاولةً ترفضها الخادم، والمنع
- * هناك لا هنا.
+ * The button is hidden from anyone who cannot view the document. The server refuses to link a task to a
+ * document the assigner cannot see (`task_target_not_visible`); otherwise assigning would reveal a
+ * document's existence and ID. Hiding the button here only saves a refused attempt; the server enforces it.
  */
-// الشاشةُ من القائمة المشتركة لا نصٌّ حرّ — وهي ما يقبله الخادمُ في `targetScreen` (`ق-١٤٠٤`).
+// The screen comes from the shared list, not free text: it is what the server accepts in `targetScreen`.
 export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; entityId: string }) {
+  const { t } = useTranslation();
   const { can } = usePermissions();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [title, setTitle] = useState('');
-  // ⚠️ القيمةُ `OWNER:…` أو `USER:…` — الوسمُ جزءٌ من الاختيار لا افتراضٌ يُلحَق به.
+  // The value is `OWNER:…` or `USER:…`: the kind is part of the choice, not an assumption added later.
   const [assignee, setAssignee] = useState('');
   const [dueAnchor, setDueAnchor] = useState('');
   const [recurEveryDays, setRecurEveryDays] = useState(0);
-  // التذكرةُ الداخلية (SPEC 1.11 · 14.2): أولويةٌ وقسم — حقلان على المهمّة نفسِها.
+  // The internal ticket: a priority and a department, two fields on the task itself.
   const [priority, setPriority] = useState<TaskPriority>('NORMAL');
   const [department, setDepartment] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -65,16 +55,16 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
     if (!open) return;
     listCompanyUsers()
       .then((u) => setUsers(u.filter((x) => x.status === 'ACTIVE')))
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل الموظفين')));
+      .catch((e) => setError(apiErrorMessage(e, t('common.assign_task.load_users_failed'))));
   }, [open]);
 
-  // ⚠️ بحثٌ في مجموعةٍ محسومة من الخادم — لا قاعدة هنا.
+  // A lookup in a set the server already decided; no rule lives here.
   if (!can(screen, 'view')) return null;
 
   const submit = async () => {
     const picked = splitAssignee(assignee);
     if (!picked) {
-      setError('اختر المكلَّف.');
+      setError(t('common.assign_task.pick_assignee_error'));
       return;
     }
     setSaving(true);
@@ -86,7 +76,7 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
         targetScreen: screen,
         targetId: entityId,
         recurEveryDays: recurEveryDays > 0 ? recurEveryDays : undefined,
-        // مهمةٌ متكرّرة تحتاج مرساة — والقاعدة تفرضها بقيدٍ أيضاً.
+        // A recurring task needs an anchor; the database enforces it with a constraint too.
         dueAnchor: dueAnchor ? new Date(dueAnchor).toISOString() : undefined,
         priority,
         department: department.trim() || undefined,
@@ -96,7 +86,7 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
       setTitle('');
       setAssignee('');
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر إسناد المهمة'));
+      setError(apiErrorMessage(e, t('common.assign_task.assign_failed')));
     } finally {
       setSaving(false);
     }
@@ -105,36 +95,36 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
   return (
     <>
       <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)} data-testid="assign-task-open">
-        ⊕ أسنِد مهمة
+        {t('common.assign_task.open')}
       </button>
-      {done && <span className="muted" data-testid="assign-task-done"> أُسنِدت</span>}
+      {done && <span className="muted" data-testid="assign-task-done"> {t('common.assign_task.assigned')}</span>}
 
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="إسناد مهمة">
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('common.assign_task.dialog_label')}>
             <div className="modal-head">
-              <div className="modal-title">إسناد مهمة على هذا المستند</div>
+              <div className="modal-title">{t('common.assign_task.title')}</div>
               <button className="modal-close" onClick={() => setOpen(false)}>✕</button>
             </div>
 
             {error && <p className="error" role="alert">{error}</p>}
 
             <div className="field">
-              <label>عنوان المهمة</label>
-              {/* العنوان يكتبه المُسنِد — **ولا يُؤخذ من المستند**. فالمكلَّف
-                * يقرأه دون أن يقرأ المستند، وهي القاعدة بعينها. */}
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: راجع بند التأمين" data-testid="assign-title" />
+              <label>{t('common.assign_task.task_title')}</label>
+              {/* The assigner writes the title; it is never taken from the document, so the assignee
+                * reads it without reading the document. */}
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('common.assign_task.task_title_placeholder')} data-testid="assign-title" />
             </div>
 
             <div className="field">
-              <label>المكلَّف</label>
-              {/* ⭐ المالكُ مكلَّفٌ ممكن (ق-٦٣٩): كان المنتقي حساباتٍ فرعيةً وحدَها، وفي منشأةٍ
-                  بفاعلٍ واحدٍ يبقى فارغاً والزرُّ معطَّلاً بلا رسالةٍ تقول لماذا. والخيارُ
-                  الأولُ الآن هو المالك — بمعرّف المنشأة موسوماً OWNER لا بمعرّفٍ عارٍ. */}
+              <label>{t('common.assign_task.assignee')}</label>
+              {/* The owner can be assigned too: in a company with one person the list of sub accounts
+                  was empty and the button disabled with no reason. The owner comes first, as the
+                  company ID tagged OWNER, never a bare ID. */}
               <select value={assignee} onChange={(e) => setAssignee(e.target.value)} data-testid="assign-assignee">
-                <option value="">اختر المكلَّف</option>
+                <option value="">{t('common.assign_task.pick_assignee')}</option>
                 {user?.companyId && (
-                  <option value={`${OWNER_PREFIX}${user.companyId}`}>المالك{user.actorType === 'COMPANY' ? ` (${user.displayName})` : ''}</option>
+                  <option value={`${OWNER_PREFIX}${user.companyId}`}>{t('common.assign_task.owner')}{user.actorType === 'COMPANY' ? ` (${user.displayName})` : ''}</option>
                 )}
                 {users.map((u) => (
                   <option key={u.id} value={`${USER_PREFIX}${u.id}`}>{u.name}</option>
@@ -144,26 +134,26 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
 
             <div className="two-col">
               <div className="field">
-                <label>الأولوية</label>
+                <label>{t('common.assign_task.priority')}</label>
                 <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} data-testid="assign-priority">
-                  <option value="NORMAL">عادي</option>
-                  <option value="HIGH">مرتفع</option>
-                  <option value="URGENT">عاجل</option>
+                  <option value="NORMAL">{t('common.assign_task.priority_normal')}</option>
+                  <option value="HIGH">{t('common.assign_task.priority_high')}</option>
+                  <option value="URGENT">{t('common.assign_task.priority_urgent')}</option>
                 </select>
               </div>
               <div className="field">
-                <label>القسم المختصّ (اختياري)</label>
-                <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="مثال: محاسبة" maxLength={60} data-testid="assign-department" />
+                <label>{t('common.assign_task.department')}</label>
+                <input value={department} onChange={(e) => setDepartment(e.target.value)} placeholder={t('common.assign_task.department_placeholder')} maxLength={60} data-testid="assign-department" />
               </div>
             </div>
 
             <div className="two-col">
               <div className="field">
-                <label>أول موعد استحقاق (اختياري)</label>
+                <label>{t('common.assign_task.first_due')}</label>
                 <input type="date" value={dueAnchor} onChange={(e) => setDueAnchor(e.target.value)} data-testid="assign-due" />
               </div>
               <div className="field">
-                <label>تتكرّر كل (يوم)</label>
+                <label>{t('common.assign_task.recur_every')}</label>
                 <input
                   type="number"
                   min={0}
@@ -182,9 +172,9 @@ export function AssignTaskButton({ screen, entityId }: { screen: ScreenKey; enti
                 onClick={submit}
                 data-testid="assign-submit"
               >
-                إسناد
+                {t('common.assign_task.submit')}
               </button>
-              <button type="button" onClick={() => setOpen(false)} disabled={saving}>إلغاء</button>
+              <button type="button" onClick={() => setOpen(false)} disabled={saving}>{t('common.assign_task.cancel')}</button>
             </div>
           </div>
         </div>

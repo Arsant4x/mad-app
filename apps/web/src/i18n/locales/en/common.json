@@ -1,4 +1,154 @@
 {
+  "assign_task": {
+    "open": "⊕ Assign a task",
+    "assigned": "Assigned",
+    "dialog_label": "Assign a task",
+    "title": "Assign a task on this document",
+    "task_title": "Task title",
+    "task_title_placeholder": "Example: review the deposit clause",
+    "assignee": "Assignee",
+    "pick_assignee": "Choose the assignee",
+    "pick_assignee_error": "Choose the assignee.",
+    "owner": "Owner",
+    "priority": "Priority",
+    "priority_normal": "Normal",
+    "priority_high": "High",
+    "priority_urgent": "Urgent",
+    "department": "Responsible department (optional)",
+    "department_placeholder": "Example: accounting",
+    "first_due": "First due date (optional)",
+    "recur_every": "Repeats every (days)",
+    "submit": "Assign",
+    "cancel": "Cancel",
+    "load_users_failed": "Could not load employees",
+    "assign_failed": "Could not assign the task"
+  },
+  "branch_picker": {
+    "label": "Branch",
+    "company_wide": "— Company wide —",
+    "fixed_at_creation": "{{name}} · set on creation and cannot be changed"
+  },
+  "confirm": {
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "error_boundary": {
+    "title": "Something went wrong",
+    "body": "This page could not be shown. Your data is not affected — reload to continue.",
+    "reload": "Reload"
+  },
+  "line_tax": {
+    "category": "Tax category",
+    "exemption_reason": "Exemption reason",
+    "reason_from_list": "— Reason from the authority's list —",
+    "out_of_scope_reason": "Out of scope reason",
+    "out_of_scope_placeholder": "A reason written for each case; it is sent to the authority"
+  },
+  "mfa": {
+    "title": "Two step sign in",
+    "intro": "A code from an authenticator app on your phone is asked for with your password. A password alone is enough for whoever steals it to sign in.",
+    "required_suffix": " It is required on platform accounts.",
+    "enabled": "Enabled",
+    "recovery_left": " — recovery codes left: ",
+    "recovery_low": "Few recovery codes are left — turn it off and on again to get new codes.",
+    "code_to_disable": "Code from the app (to turn it off)",
+    "disable": "Turn off",
+    "add_key": "Add this key in your authenticator app, then enter the code it shows:",
+    "code_from_app": "Code from the app",
+    "confirm": "Confirm and turn on",
+    "enable": "Turn on two step sign in",
+    "save_codes": "Save the recovery codes now — they will not be shown again. Each code works once.",
+    "request_failed": "The request could not be completed"
+  },
+  "pager": {
+    "previous": "← Previous",
+    "next": "Next →",
+    "summary": "Page {{page}} of {{pages}} — total: {{total}}"
+  },
+  "row_menu": {
+    "options": "Options"
+  },
+  "signature": {
+    "draw_here": "Draw your signature here",
+    "drawn": "Signature drawn",
+    "clear": "Clear"
+  },
+  "einvoice_qr": {
+    "missing_profile": "Complete the legal name and VAT number in \"Company details\" to show the e-invoice code.",
+    "alt": "QR code of the tax invoice",
+    "caption": "Invoice — Zakat, Tax and Customs Authority"
+  },
+  "api_error": {
+    "with_request_id": "{{text}} (request ID: {{id}})"
+  },
+  "batch_limits": {
+    "limit_1": "Declared limit 1: what the Food and Drug Authority requires of pharmacies (the Rassd system: coding on the pack and batch standards) was read by title only, not in full — here a batch is part of core inventory, not a pharmacy profile.",
+    "limit_2": "Declared limit 2: no field session was held with a pharmacist or food merchant — first expiring first out and refusing to sell expired stock were built from the rule, not from an observed shelf.",
+    "limit_3": "Declared limit 3: no visual model was approved before the code — the layout of this screen is open to review, not final.",
+    "limit_4": "Declared limit 4: stock with no expiry is issued after stock with an expiry — a layer without a batch has an unknown expiry, not merely an old one, and its batch is never guessed."
+  },
+  "units": {
+    "h87": "piece",
+    "c62": "unit",
+    "kgm": "kilogram",
+    "grm": "gram",
+    "tne": "tonne",
+    "ltr": "litre",
+    "mlt": "millilitre",
+    "mtr": "metre",
+    "cmt": "centimetre",
+    "mtk": "square metre",
+    "mtq": "cubic metre",
+    "hur": "hour",
+    "day": "day",
+    "mon": "month",
+    "set": "set",
+    "pr": "pair",
+    "dzn": "dozen",
+    "xbx": "box",
+    "xct": "carton",
+    "xpk": "package",
+    "xbg": "bag",
+    "xbo": "bottle",
+    "xca": "can"
+  },
+  "vat": {
+    "categories": {
+      "s": "Standard rate (S) — {{rate}}%",
+      "s_short": "Standard rate (S)",
+      "z": "Zero rated (Z) — 0% with a reason from the authority's list",
+      "z_short": "Zero rated (Z) — with reason",
+      "e": "Exempt (E) — 0% with a reason from the authority's list",
+      "e_short": "Exempt (E) — with reason",
+      "o": "Out of scope (O) — 0% with a reason the merchant writes",
+      "o_short": "Out of scope (O) — written reason"
+    },
+    "reasons": {
+      "vatex_sa_29": "Financial services",
+      "vatex_sa_29_7": "Life insurance contract",
+      "vatex_sa_30": "Exempt real estate supplies",
+      "vatex_sa_32": "Export of goods",
+      "vatex_sa_33": "Export of services",
+      "vatex_sa_34_1": "International transport of goods",
+      "vatex_sa_34_2": "International transport of passengers",
+      "vatex_sa_34_3": "Services directly connected or incidental to international passenger transport",
+      "vatex_sa_34_4": "Supply of qualifying means of transport",
+      "vatex_sa_34_5": "Services related to goods or passenger transport (Article 25 of the Regulations)",
+      "vatex_sa_35": "Medicines and medical equipment",
+      "vatex_sa_36": "Qualifying metals",
+      "vatex_sa_edu": "Private education services for citizens",
+      "vatex_sa_hea": "Private healthcare services for citizens",
+      "vatex_sa_mltry": "Supply of qualifying military goods",
+      "vatex_sa_oos": "Out of scope — a reason the taxpayer writes for each case"
+    },
+    "buyer_dependent_limit": "Buyer dependent categories (private healthcare and education for citizens — VATEX-SA-HEA · VATEX-SA-EDU) are not supported: they follow the buyer's identity, not the item, and will be settled after the field session.",
+    "badge_standard": "S · {{rate}}%",
+    "badge_out_of_scope": "O · Out of scope",
+    "badge_undeclared": "Category not declared — LEGACY_STANDARD",
+    "error_out_of_scope_required": "The \"out of scope\" category needs a written reason; it is sent to the authority for each case",
+    "error_out_of_scope_length": "The \"out of scope\" reason must be {{min}} to {{max}} characters after trimming",
+    "error_reason_required": "Zero rated or exempt needs an exemption reason from the authority's list"
+  },
   "menu": "Menu",
   "access_denied": {
     "title": "Access denied",

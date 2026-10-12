@@ -1,0 +1,76 @@
+{
+  "sectors": {
+    "realestate": "مكتب عقاري",
+    "restaurant": "مطعم أو كافيه",
+    "retail": "تجزئة",
+    "pharmacy": "صيدلية",
+    "contracting": "مقاولات",
+    "freelance": "عمل حرّ",
+    "other": "أخرى"
+  },
+  "bank_kinds": {
+    "cash_box": "صندوقٌ نقديّ",
+    "bank_account": "حسابٌ بنكيّ",
+    "legacy_undeclared": "غيرُ معلَن"
+  },
+  "customer_kinds": {
+    "natural": "فرد",
+    "establishment": "مؤسسة فردية",
+    "legal_person": "شخص اعتباري (شركة/جهة)",
+    "legacy_undeclared": "غير معلَن — سبق البناء"
+  },
+  "buyer_id_schemes": {
+    "tin": "الرقم المميز (TIN)",
+    "crn": "السجل التجاري",
+    "mom": "رخصة الشؤون البلدية (MOMRAH)",
+    "mls": "رخصة الموارد البشرية (MHRSD)",
+    "700": "الرقم الموحد 700",
+    "sag": "ترخيص الاستثمار (MISA)",
+    "nat": "الهوية الوطنية",
+    "gcc": "هوية خليجية",
+    "iqa": "الإقامة",
+    "pas": "جواز السفر",
+    "oth": "معرّف آخر"
+  },
+  "integration_kinds": {
+    "payment_gateway": "بوابة دفع (أجهزة الكاشير)",
+    "bnpl": "الدفع بالتقسيط",
+    "ecommerce": "متجر إلكتروني"
+  },
+  "screens": {
+    "dashboard": "لوحة التحكم",
+    "accounts": "دليل الحسابات",
+    "journal": "دفتر اليومية",
+    "fiscal": "السنة المالية والفترات",
+    "branches": "الفروع",
+    "settings": "الأنشطة والعملات",
+    "invoice": "الفواتير",
+    "payments": "سندات القبض",
+    "customers": "العملاء",
+    "suppliers": "الموردون",
+    "products": "المنتجات والخدمات",
+    "inventory": "إدارة المخزون",
+    "properties": "العقارات والوحدات",
+    "contracts": "عقود الإيجار",
+    "maintenance": "الصيانة",
+    "employees": "الموظفون والموارد البشرية",
+    "banks": "البنوك",
+    "transactions": "الحركات البنكية",
+    "obligations": "الالتزامات الحكومية",
+    "reports": "التقارير المالية",
+    "scripts": "قوالب الرسائل",
+    "audit": "سجل التدقيق",
+    "pos": "الكاشير",
+    "quotes": "عروض الأسعار",
+    "forms": "النماذج"
+  },
+  "actions": {
+    "view": "اطلاع",
+    "add": "إضافة",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "record": "تسجيل",
+    "review": "مراجعة",
+    "audit": "تدقيق"
+  }
+}

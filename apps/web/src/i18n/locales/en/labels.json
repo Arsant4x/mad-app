@@ -1,0 +1,76 @@
+{
+  "sectors": {
+    "realestate": "Real estate office",
+    "restaurant": "Restaurant or café",
+    "retail": "Retail",
+    "pharmacy": "Pharmacy",
+    "contracting": "Contracting",
+    "freelance": "Freelance",
+    "other": "Other"
+  },
+  "bank_kinds": {
+    "cash_box": "Cash box",
+    "bank_account": "Bank account",
+    "legacy_undeclared": "Not declared"
+  },
+  "customer_kinds": {
+    "natural": "Individual",
+    "establishment": "Sole proprietorship",
+    "legal_person": "Legal person (company or body)",
+    "legacy_undeclared": "Not declared (older record)"
+  },
+  "buyer_id_schemes": {
+    "tin": "Tax identification number (TIN)",
+    "crn": "Commercial registration",
+    "mom": "Municipal license (MOMRAH)",
+    "mls": "Labor license (MHRSD)",
+    "700": "Unified number 700",
+    "sag": "Investment license (MISA)",
+    "nat": "National ID",
+    "gcc": "GCC ID",
+    "iqa": "Residence permit (Iqama)",
+    "pas": "Passport",
+    "oth": "Other ID"
+  },
+  "integration_kinds": {
+    "payment_gateway": "Payment gateway (POS terminals)",
+    "bnpl": "Buy now, pay later",
+    "ecommerce": "Online store"
+  },
+  "screens": {
+    "dashboard": "Dashboard",
+    "accounts": "Chart of accounts",
+    "journal": "Journal",
+    "fiscal": "Fiscal year and periods",
+    "branches": "Branches",
+    "settings": "Activities and currencies",
+    "invoice": "Invoices",
+    "payments": "Receipt vouchers",
+    "customers": "Customers",
+    "suppliers": "Suppliers",
+    "products": "Products and services",
+    "inventory": "Inventory",
+    "properties": "Properties and units",
+    "contracts": "Lease contracts",
+    "maintenance": "Maintenance",
+    "employees": "Employees and HR",
+    "banks": "Banks",
+    "transactions": "Bank transactions",
+    "obligations": "Government obligations",
+    "reports": "Financial reports",
+    "scripts": "Message templates",
+    "audit": "Audit log",
+    "pos": "Point of sale",
+    "quotes": "Quotations",
+    "forms": "Forms"
+  },
+  "actions": {
+    "view": "View",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "record": "Record",
+    "review": "Review",
+    "audit": "Audit"
+  }
+}

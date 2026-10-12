@@ -1,27 +1,24 @@
+import i18n from '../i18n';
+
 /**
- * استخراج رسالة الخادم من خطأ axios — مصدرٌ واحد لكل الشاشات.
+ * Reads the server's message from an axios error: one source for every screen.
  *
- * **الحادثة:** اثنا عشر موضعاً كانت تكتب `} catch {` بلا معامل، أي **ترمي
- * كائن الخطأ كله** وتعرض نصاً ثابتاً («تعذّر حفظ بيانات الموظف»). والخادم
- * كان قد قال السبب بالضبط — لكن أحداً لم يقرأه. والسجل لا يحويه أيضاً
- * (NestJS لا يسجّل 4xx)، فكان العطل **غير مرئي من الطرفين معاً**.
- *
- * **ولماذا دالة لا نسخ ولصق:** النمط الصحيح كان موجوداً في
- * `CompanyUserModal` وحده، وفيه عيبٌ خفيّ — رسالة التحقّق تعود **مصفوفة**
- * (سطرٌ لكل قاعدة أخفقت)، و`setError(message)` بمصفوفة يعرض عناصرها ملتصقة
- * بلا فواصل. فنسخُ ذلك النمط كان سينشر العيب على اثني عشر موضعاً.
+ * A bare `catch {}` throws the error object away and shows fixed text, while the server had said the
+ * exact reason (and NestJS does not log 4xx), so the failure was invisible on both sides. Validation
+ * messages arrive as an array (one line per failed rule); showing the array as is glues the lines
+ * together, so it is flattened here once instead of in every screen.
  */
 
-/** شكل ردّ الخطأ من NestJS كما يصل عبر axios — مع رأس `x-request-id` وجسمٍ يحمل `requestId` (ق-١٢٣٧). */
+/** The NestJS error answer as it arrives through axios, with an `x-request-id` header and a `requestId` in the body. */
 interface ApiErrorShape {
   response?: { status?: number; data?: { message?: unknown; code?: unknown; requestId?: unknown }; headers?: Record<string, unknown> };
   message?: unknown;
 }
 
 /**
- * **معرِّفُ الطلب** كما أعاده الخادم (`ق-١٢٣٧`): من الرأس `x-request-id` (يُعلَن في `CORS` فيقرؤه
- * المتصفّح) أو من جسم الخطأ. يُبلَّغ به الدعمُ فيجد الطلبَ في السجلّ بلا تخمين — و`undefined` حين لا
- * ردَّ أصلاً (انقطاعُ شبكة) فلا يُخترَع.
+ * The request ID as the server returned it: from the `x-request-id` header (exposed through CORS so the
+ * browser can read it) or from the error body. Support finds the request in the log with it;
+ * `undefined` when there was no answer at all (a network failure), so none is invented.
  */
 export function apiRequestId(error: unknown): string | undefined {
   const res = (error as ApiErrorShape)?.response;
@@ -32,13 +29,9 @@ export function apiRequestId(error: unknown): string | undefined {
 }
 
 /**
- * ⭐ **رمزُ الخطأ الثابت — لا نصُّه** (`ق-٣٣٩`).
- *
- * ⚠️ **ولماذا لا تُطابَق الرسالة**: الرسائلُ **مترجَمةٌ ومصاغةٌ للتاجر**،
- * فمطابقتُها **تنكسر بأول تحسينِ صياغةٍ أو بتبديل اللغة** — **وتنكسر صامتةً**:
- * يختفي الزرُّ ويبقى الرفضُ فيُقرأ منعاً لا يُتجاوَز وهو ليس كذلك.
- *
- * و`undefined` هو الغالب: أكثرُ الأخطاء لا رمزَ لها.
+ * The stable error code, not its text. Messages are translated and worded for the merchant, so matching
+ * them breaks silently on the first rewording or language switch. `undefined` is the usual case: most
+ * errors have no code.
  */
 export function apiErrorCode(error: unknown): string | undefined {
   const code = (error as ApiErrorShape)?.response?.data?.code;
@@ -46,18 +39,16 @@ export function apiErrorCode(error: unknown): string | undefined {
 }
 
 /**
- * يعيد رسالةً جاهزة للعرض: رسالة الخادم إن وُجدت، وإلا `fallback`.
- *
- * المصفوفة تُسطَّح بفاصلٍ عربي مقروء («الراتب الأساسي يجب أن يكون رقماً ·
- * تاريخ المباشرة مطلوب») لا بالتصاقٍ صامت.
+ * A message ready to show: the server's message when present, otherwise `fallback`.
+ * An array is flattened with a readable separator rather than glued together.
  */
 export function apiErrorMessage(error: unknown, fallback: string): string {
   const raw = (error as ApiErrorShape)?.response?.data?.message;
-  // ⑧ خطأُ الخادم (`5xx`) يحمل معرِّفَ طلبه في الرسالة كي يُبلَّغ به الدعمُ (ق-١٢٣٧)؛ أمّا `4xx` فرسالتُه
-  // تسمّي سببَها وحدَها — والمعرِّفُ متاحٌ لمن أراده بـ`apiRequestId`.
+  // A server error (`5xx`) carries its request ID in the message so it can be reported to support; a
+  // `4xx` message names its own cause, and the ID is still available through `apiRequestId`.
   const status = (error as ApiErrorShape)?.response?.status;
   const requestId = apiRequestId(error);
-  const withId = (text: string) => (requestId && typeof status === 'number' && status >= 500 ? `${text} (رقم الطلب: ${requestId})` : text);
+  const withId = (text: string) => (requestId && typeof status === 'number' && status >= 500 ? i18n.t('common.api_error.with_request_id', { text, id: requestId }) : text);
 
   if (Array.isArray(raw)) {
     const parts = raw.map((m) => String(m).trim()).filter(Boolean);
@@ -66,7 +57,7 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
     return withId(raw.trim());
   }
 
-  // انقطاع شبكة أو انهيار قبل الردّ: لا `response` أصلاً. رسالة axios نفسها
-  // إنجليزية تقنية (`Network Error`) فلا تُعرض — الاحتياطي العربي أصدق.
+  // A network failure or a crash before the answer: no `response` at all. The axios message itself is
+  // technical English (`Network Error`), so it is not shown; the caller's fallback is clearer.
   return withId(fallback);
 }

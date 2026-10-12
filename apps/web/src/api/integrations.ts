@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { IntegrationKind } from '@mad-app/shared/api/enums';
+import { labelTable } from '../lib/labelTable';
 
 export type { IntegrationKind };
 
@@ -9,27 +10,22 @@ export interface IntegrationConnection {
   provider: string;
   label: string | null;
   enabled: boolean;
-  /** مقنَّعة دائماً («•••• آخر 4») — القيم الكاملة لا تغادر الخادم. */
+  /** Always masked ("•••• last 4"); full values never leave the server. */
   credentials: Record<string, string>;
   createdAt: string;
 }
 
-export const KIND_LABELS: Record<IntegrationKind, string> = {
-  PAYMENT_GATEWAY: 'بوابة دفع (أجهزة الكاشير)',
-  BNPL: 'الدفع بالتقسيط',
-  ECOMMERCE: 'متجر إلكتروني',
-};
+export const KIND_LABELS: Record<IntegrationKind, string> = labelTable('labels.integration_kinds', ['PAYMENT_GATEWAY', 'BNPL', 'ECOMMERCE']);
 
 /**
- * المزوّدون **الحقيقيون** المتاحون للتاجر — فارغة اليوم عمداً.
+ * Real providers available to the merchant: empty on purpose today.
  *
- * ⚠️ كان هنا `MOCK` معروضاً باسم «مزوّد تجريبي (Mock)» **كخيارٍ وحيد**. وهو
- * ليس نقصاً تجميلياً بل **ثغرة مالية**: محوّله يعتمد كل عملية بطاقة بلا
- * تحصيل، فتُختم الفواتير مسدَّدة بلا مال. أُزيل من الواجهة، ورُفض في الخادم
- * حين `NODE_ENV=production` (`integrations.service.ts`).
+ * A test provider shown here once was a financial hole, not a cosmetic gap: its adapter approved every
+ * card payment without collecting money, so invoices were stamped paid with no cash. It was removed from
+ * the interface and is rejected by the server when `NODE_ENV=production` (`integrations.service.ts`).
  *
- * **قاعدة الإضافة:** لا يُدرَج هنا إلا مزوّد يُحصّل مالاً فعلاً. وبمجرد
- * وجود واحد يظهر القسم من تلقائه — لا شيء آخر يحتاج تعديلاً.
+ * Only a provider that really collects money is listed here. As soon as one exists the section shows by
+ * itself; nothing else needs changing.
  */
 export const PROVIDERS_BY_KIND: Record<IntegrationKind, { value: string; label: string }[]> = {
   PAYMENT_GATEWAY: [],
@@ -37,7 +33,7 @@ export const PROVIDERS_BY_KIND: Record<IntegrationKind, { value: string; label: 
   ECOMMERCE: [],
 };
 
-/** هل يوجد مزوّد حقيقي واحد على الأقل؟ يحسم عرض قسم الربط من إخفائه. */
+/** Is there at least one real provider? Decides whether the connections section shows. */
 export const hasAnyProvider = (): boolean =>
   Object.values(PROVIDERS_BY_KIND).some((list) => list.length > 0);
 

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { Branch } from '../api/branches';
 
 /**
@@ -14,20 +15,21 @@ export function BranchPicker({
   branches,
   value,
   onChange,
-  label = 'الفرع',
+  label,
 }: {
   branches: Branch[];
   value: string;
   onChange: (branchId: string) => void;
   label?: string;
 }) {
+  const { t } = useTranslation();
   if (branches.length === 0) return null;
 
   return (
     <div className="field">
-      <label>{label}</label>
+      <label>{label ?? t('common.branch_picker.label')}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">— على مستوى الشركة —</option>
+        <option value="">{t('common.branch_picker.company_wide')}</option>
         {branches.map((b) => (
           <option key={b.id} value={b.id}>
             {b.name}
@@ -39,17 +41,19 @@ export function BranchPicker({
 }
 
 /**
- * الفرعُ **قراءةً** — لسجلٍّ يُحدَّد فرعُه عند الإنشاء ولا يقبل خادمُه تغييرَه في التعديل (`ق-١٣٨٤`: الحسابُ البنكيّ · الموظّف).
- * كان المُنتقي يُعرض في التعديل فيُرسَل الفرعُ ويُردّ الحفظُ كلُّه `400` — **فالشاشةُ تقول الحقيقة بدل أن تعرض اختياراً يُردّ**.
- * ولا يظهر لمنشأةٍ بلا فروع، كالمُنتقي نفسِه.
+ * The branch, read only, for a record whose branch is set on create and cannot be changed by the server
+ * on update (bank accounts, employees). Showing the picker there sent the branch and the whole save was
+ * answered `400`, so the screen states the fact instead of offering a choice that is refused.
+ * Hidden for a company without branches, like the picker.
  */
-export function BranchReadOnly({ branches, branchId, label = 'الفرع' }: { branches: Branch[]; branchId: string | null; label?: string }) {
+export function BranchReadOnly({ branches, branchId, label }: { branches: Branch[]; branchId: string | null; label?: string }) {
+  const { t } = useTranslation();
   if (branches.length === 0) return null;
-  const name = branchId ? (branches.find((b) => b.id === branchId)?.name ?? '—') : '— على مستوى الشركة —';
+  const name = branchId ? (branches.find((b) => b.id === branchId)?.name ?? '—') : t('common.branch_picker.company_wide');
   return (
     <div className="field">
-      <label>{label}</label>
-      <p className="hint">{name} · يُحدَّد عند الإنشاء ولا يُغيَّر</p>
+      <label>{label ?? t('common.branch_picker.label')}</label>
+      <p className="hint">{t('common.branch_picker.fixed_at_creation', { name })}</p>
     </div>
   );
 }

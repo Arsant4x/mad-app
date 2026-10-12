@@ -4,7 +4,7 @@ import { apiErrorMessage } from '../../lib/apiError';
 import type { Product, ProductInput } from '../../api/products';
 import { UNITS_OF_MEASURE } from '../../lib/units';
 import { BATCH_FEFO_DECLARED_LIMITS } from '../../lib/batchLimits';
-import { BUYER_DEPENDENT_LIMIT, draftTaxOf, lineTaxDraftError, productTaxPayload, STANDARD_VAT_RATE, TAX_CATEGORY_OPTIONS, type LineTaxDraft } from '../../lib/vat';
+import { buyerDependentLimit, draftTaxOf, lineTaxDraftError, productTaxPayload, STANDARD_VAT_RATE, TAX_CATEGORY_OPTIONS, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
 
@@ -157,7 +157,7 @@ export function ProductModal({
             </select>
           )}
           {legacy && !tax && <div className="hint">{t('products.modal.legacy_panel', { rate: STANDARD_VAT_RATE })}</div>}
-          {tax?.taxCategory !== 'Z' && <div className="hint">{BUYER_DEPENDENT_LIMIT}</div>}
+          {tax?.taxCategory !== 'Z' && <div className="hint">{buyerDependentLimit()}</div>}
         </div>
         <div className="field">
           <label>{t('products.modal.cost')}</label>

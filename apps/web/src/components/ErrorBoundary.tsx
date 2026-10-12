@@ -1,18 +1,21 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import i18n, { currentLanguage } from '../i18n';
 
 /**
- * حاجز الأخطاء — يمنع «الصفحة البيضاء الصامتة».
+ * Error boundary: prevents the silent white page.
  *
- * بدونه، أي خطأ تشغيلي في أي مكوّن يجعل React يفكّ الشجرة كاملةً، فيرى
- * المستخدم بياضاً بلا كلمة واحدة تشرح ما جرى. والأسوأ أن ذلك البياض **يطابق
- * تماماً** بياضَ فشلِ تحميل الحزمة، فيتعذّر على من يبلّغ عن العطل — ومن
- * يشخّصه — التمييز بين سببين علاجهما مختلف كلياً.
+ * Without it, any render error unmounts the whole React tree and the user sees a blank page with no
+ * word of explanation, identical to the blank page of a bundle that failed to load, so neither the
+ * reporter nor the person diagnosing can tell two causes with different fixes apart.
  *
- * فالغرض هنا **ليس إخفاء العطل بل تسميته**: رسالةٌ تُقرأ، وزرٌ يخرج منها.
- * وتفاصيل الخطأ تبقى في طرفية المتصفح للمطوّر، لا في وجه التاجر.
+ * The aim is to name the failure, not hide it: a readable message and a button out of it. The error
+ * details stay in the browser console for the developer, not in front of the merchant.
  *
- * ملاحظة على الحدود: React يمسك أخطاء **العرض** وحدها. الأخطاء داخل معالج
- * حدث أو داخل وعد غير مُلتقَط لا تصل إلى هنا — تلك تُعالج عند مصدرها.
+ * React catches render errors only. Errors in an event handler or an unhandled promise do not reach
+ * here; those are handled where they happen.
+ *
+ * The text uses `i18n.t` directly (no hook): the i18n module loads before React, so the message is
+ * available even when the tree below has crashed.
  */
 interface Props {
   children: ReactNode;
@@ -30,8 +33,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // الطرفية عمداً: لا خدمة تجميع أخطاء بعد، وابتلاعُه صامتاً يعيدنا إلى
-    // النقطة نفسها — عطلٌ بلا أثر يُتتبَّع.
+    // The console on purpose: there is no error collection service yet, and swallowing it silently
+    // would leave a failure with no trace.
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info.componentStack);
   }
@@ -41,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div
-        dir="rtl"
+        dir={currentLanguage() === 'en' ? 'ltr' : 'rtl'}
         style={{
           minHeight: '100vh',
           display: 'flex',
@@ -56,14 +59,14 @@ export class ErrorBoundary extends Component<Props, State> {
           <div style={{ fontSize: 40, marginBottom: 12 }} aria-hidden="true">
             ⚠️
           </div>
-          <h1 style={{ fontSize: 20, margin: '0 0 8px' }}>حدث خطأ غير متوقع</h1>
+          <h1 style={{ fontSize: 20, margin: '0 0 8px' }}>{i18n.t('common.error_boundary.title')}</h1>
           <p style={{ margin: '0 0 20px', lineHeight: 1.7, color: 'var(--muted, #6b7280)' }}>
-            تعذّر عرض هذه الصفحة. بياناتك لم تتأثر — أعد التحميل للمتابعة.
+            {i18n.t('common.error_boundary.body')}
           </p>
-          {/* إعادة تحميل كاملة لا setState: الحالة التي أدّت إلى الانهيار قد
-              تكون هي نفسها التالفة، فإعادة العرض عليها تُسقط الصفحة ثانيةً. */}
+          {/* A full reload, not setState: the state that caused the crash may itself be broken, and
+              rendering on it again would bring the page down again. */}
           <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
-            إعادة تحميل
+            {i18n.t('common.error_boundary.reload')}
           </button>
         </div>
       </div>
