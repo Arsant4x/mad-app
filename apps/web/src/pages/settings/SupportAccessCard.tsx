@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { approveSupport, denySupport, ownerSupportLog, ownerSupportOverview, revokeSupport, type SupportGrant, type SupportLogLine } from '../../api/supportAccess';
 import { SCREEN_LABELS } from '../../api/templates';
+import i18n from '../../i18n';
+import { formatDateTime } from '../../i18n/format';
 
-/** نطاقُ الإذن بأسماء شاشاته — يُعرض في شاشة القرار لا في السجل وحده (ق-٥٢٧). */
+/** The grant's scope by screen names, shown where the owner decides, not only in the log. */
 function scopeLabel(screens: string[]): string {
-  if (screens.length === 0) return 'بلا نطاق — لا تُفتح شاشة';
+  if (screens.length === 0) return i18n.t('settings.support.no_scope');
   return screens.map((s) => SCREEN_LABELS[s as keyof typeof SCREEN_LABELS] ?? s).join(' · ');
 }
 
 /**
- * سيادة المالك على وضع الدعم (§1.10): يوافق أو يرفض، يقطع النافذة متى شاء،
- * ويقرأ سجلَّ كل طلبٍ نفّذه الدعم داخلها — بالاسم والسبب والوقت.
+ * The owner's control over support mode: approve or deny, cut the window at any
+ * time, and read every request support made inside it, with name, reason and time.
  */
 export function SupportAccessCard() {
+  const { t } = useTranslation();
   const [grants, setGrants] = useState<SupportGrant[]>([]);
   const [log, setLog] = useState<SupportLogLine[]>([]);
   const [showLog, setShowLog] = useState(false);
@@ -35,7 +39,7 @@ export function SupportAccessCard() {
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر تنفيذ الإجراء');
+      setError(d?.message ?? t('settings.support.err_action'));
     }
   }
 
@@ -46,11 +50,11 @@ export function SupportAccessCard() {
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-head">
         <div>
-          <div className="card-title">الدعم الفني والوصول لبياناتك</div>
-          <div className="page-sub">لا يدخل الدعم بياناتك إلا بموافقتك، لمدة تحددها، قراءةً فقط — وكل ما يفعله مسجَّل هنا</div>
+          <div className="card-title">{t('settings.support.title')}</div>
+          <div className="page-sub">{t('settings.support.subtitle')}</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => setShowLog((v) => !v)}>
-          {showLog ? 'إخفاء سجل الوصول' : `سجل الوصول (${log.length})`}
+          {showLog ? t('settings.support.hide_log') : t('settings.support.show_log', { n: log.length })}
         </button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -59,19 +63,19 @@ export function SupportAccessCard() {
         <div key={g.id} className="card" style={{ background: 'var(--bg)', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
-              <b>طلب دخول من الدعم الفني ({g.requestedByName})</b>
+              <b>{t('settings.support.pending_title', { name: g.requestedByName })}</b>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                السبب: {g.reason} · المدة المطلوبة: {g.durationMinutes} دقيقة
+                {t('settings.support.pending_detail', { reason: g.reason, minutes: g.durationMinutes })}
               </div>
               <div style={{ fontSize: 13 }}>
-                <b>ما سيراه (قراءةً فقط):</b> {scopeLabel(g.screens)}
+                <b>{t('settings.support.will_see')}</b> {scopeLabel(g.screens)}
               </div>
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => act(approveSupport, g.id)}>
-              ✓ موافقة
+              {t('settings.support.approve')}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => act(denySupport, g.id)}>
-              ✗ رفض
+              {t('settings.support.deny')}
             </button>
           </div>
         </div>
@@ -81,46 +85,46 @@ export function SupportAccessCard() {
         <div key={g.id} className="card" style={{ background: 'var(--bg)', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 220 }}>
-              <b>نافذة دعم فعّالة الآن ({g.requestedByName})</b>
+              <b>{t('settings.support.active_title', { name: g.requestedByName })}</b>
               <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                تنتهي: {g.expiresAt ? new Date(g.expiresAt).toLocaleString('ar-SA') : '—'} · قراءة فقط · النطاق: {scopeLabel(g.screens)}
+                {t('settings.support.active_detail', { expires: g.expiresAt ? formatDateTime(g.expiresAt) : '—', scope: scopeLabel(g.screens) })}
                 {' · '}
-                {g.firstEntryAt ? `دخل أوّلَ مرّة: ${new Date(g.firstEntryAt).toLocaleString('ar-SA')}` : 'لم يدخل بعد'}
+                {g.firstEntryAt ? t('settings.support.first_entry', { at: formatDateTime(g.firstEntryAt) }) : t('settings.support.not_entered')}
               </div>
             </div>
             <button className="btn btn-danger btn-sm" onClick={() => act(revokeSupport, g.id)}>
-              ⛔ قطع الوصول الآن
+              {t('settings.support.revoke_now')}
             </button>
           </div>
         </div>
       ))}
 
-      {pending.length === 0 && active.length === 0 && <div className="empty-state">لا طلبات دعم معلّقة ولا نوافذ مفتوحة</div>}
+      {pending.length === 0 && active.length === 0 && <div className="empty-state">{t('settings.support.empty')}</div>}
 
       {showLog && (
         <table style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th>الوقت</th>
-              <th>مَن</th>
-              <th>ماذا قرأ</th>
-              <th>السبب المعلن</th>
+              <th>{t('settings.support.col_time')}</th>
+              <th>{t('settings.support.col_who')}</th>
+              <th>{t('settings.support.col_what')}</th>
+              <th>{t('settings.support.col_reason')}</th>
             </tr>
           </thead>
           <tbody>
             {log.length === 0 && (
               <tr>
                 <td colSpan={4}>
-                  <div className="empty-state">لم يدخل الدعم بياناتك قط</div>
+                  <div className="empty-state">{t('settings.support.log_empty')}</div>
                 </td>
               </tr>
             )}
             {log.map((l) => (
               <tr key={l.id}>
                 <td className="num" style={{ fontSize: 12 }}>
-                  {new Date(l.at).toLocaleString('ar-SA')}
+                  {formatDateTime(l.at)}
                 </td>
-                {/* من دخل فعلاً (ق-٥٢٨) — والطالبُ يبقى على الإذن نفسه. */}
+                {/* Who actually entered; the requester stays on the grant itself. */}
                 <td style={{ fontSize: 12 }}>{l.actorName || l.grant.requestedByName}</td>
                 <td className="num" style={{ fontSize: 12 }}>
                   {l.method} {l.path}
