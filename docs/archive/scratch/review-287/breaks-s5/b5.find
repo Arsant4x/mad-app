@@ -1,1 +1,0 @@
-            channel: link.staffDevice ? FormSignatureChannel.STAFF_DEVICE : FormSignatureChannel.LINK,

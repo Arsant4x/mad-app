@@ -1,1 +1,0 @@
-  const editable = draft && canRecord;

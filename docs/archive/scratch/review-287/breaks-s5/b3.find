@@ -1,1 +1,0 @@
-          if (rep) throw new BadRequestException(MSG.form_representative_legal_only);
