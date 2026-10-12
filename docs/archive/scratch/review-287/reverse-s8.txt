@@ -1,3 +1,0 @@
-﻿notice-missing [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
-notice-to-tenant [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
-substitute-on-nafath-form [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True

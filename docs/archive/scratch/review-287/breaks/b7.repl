@@ -1,1 +1,0 @@
-    this.logger.log(`رسالةٌ تجريبية ${providerRef}: ${message.text}`);

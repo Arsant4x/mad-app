@@ -1,3 +1,0 @@
-{"prRuns":527,"prMin":7244,"finalFirst":294,"finalFirstMin":3963,"finalExtra":5,"finalExtraMin":59,"nonFinal":227,"nonFinalMin":3213,"nonFinalFailedMin":1558,"unmerged":1,"unmergedMin":9,"push":263,"pushMin":3271}
-merged=603 merged_with_heavy=300 docs_only_merged=305 heavy_runs_per_merged_pr: median=2 max=7 gt1=156
-merged_with_heavy_but_no_run_on_final_head=6
