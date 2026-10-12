@@ -1,60 +1,54 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { SCREEN_ROUTES, commentTask, listMyTasks, listTaskLog, transitionTask, type MyTask, type TaskLogLine, type TaskPriority, type TaskStatus } from '../../api/tasks';
 import { SCREEN_LABELS } from '../../api/templates';
 import { apiErrorMessage } from '../../lib/apiError';
+import { formatDate, formatDateTime } from '../../i18n/format';
 
 /**
- * لوحة «مهامي» — **ما كُلِّفتُ به**، لا مهام المنشأة.
+ * "My tasks": what I was assigned, not the company's tasks.
  *
- * ## القاعدة التي تُرى هنا بالعين
+ * The assignee sees that a task exists, not the content of its document. The
+ * title (written by the assigner) and the screen name always show; the link
+ * shows only when `canOpenTarget` is true. Someone asked to review a contract
+ * without `contracts:view` knows there is a task on a contract and cannot open it.
  *
- * > المكلَّف يرى **وجود** المهمة ولا يرى **محتوى** المستند.
- *
- * فالعنوان يُعرض دائماً — كتبه المُسنِد لا المستند — واسمُ الشاشة يُعرض
- * دائماً، **والرابط يظهر بـ`canOpenTarget` وحده**. ومن كُلِّف بمراجعة عقدٍ
- * لا يملك `contracts:view` يعرف أن عليه مهمة، ويعرف أنها على عقد، ولا
- * يفتحه.
- *
- * ⚠️ و**`canOpenTarget` يأتي محسوباً** — لا يُشتقّ هنا ولا يُخزَّن هناك.
- * اشتقاقُه في الواجهة نسخةٌ ثانية من قاعدةٍ تعيش في الخادم، وتخزينُه نسخةٌ
- * تتقادم عند أول سحب.
- *
- * ## وأزرار الانتقال تأتي محسوبةً كذلك
- *
- * `allowedTransitions` هي ما يسمح به التفويض **على شاشة المستند** لهذا
- * الفاعل الآن — لا كل الانتقالات الممكنة نظرياً. فمكلَّفٌ بلا `review` لا
- * يرى زرّ «تمّت» أصلاً، **والخادم يرفضه أيضاً لو صُنع الطلب بيد**.
+ * `canOpenTarget` and `allowedTransitions` arrive computed by the server.
+ * Deriving them here would be a second copy of a server rule; storing them
+ * would go stale on the first revocation. An assignee without `review` never
+ * sees the "done" button, and the server refuses a hand-made request as well.
  */
 
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  OPEN: 'مفتوحة',
-  IN_PROGRESS: 'قيد العمل',
-  BLOCKED: 'متعثّرة',
-  DONE: 'تمّت',
-  CANCELLED: 'أُلغيت',
+const STATUS_KEYS: Record<TaskStatus, string> = {
+  OPEN: 'tasks.status.OPEN',
+  IN_PROGRESS: 'tasks.status.IN_PROGRESS',
+  BLOCKED: 'tasks.status.BLOCKED',
+  DONE: 'tasks.status.DONE',
+  CANCELLED: 'tasks.status.CANCELLED',
 };
 
-/** الأولوية (SPEC 14.2) — تسمياتُ العرض للقائمة المغلقة في الخادم. */
-const PRIORITY_LABELS: Record<TaskPriority, string> = {
-  URGENT: 'عاجل',
-  HIGH: 'مرتفع',
-  NORMAL: 'عادي',
+/** Display labels for the server's closed priority list. */
+const PRIORITY_KEYS: Record<TaskPriority, string> = {
+  URGENT: 'tasks.priority.URGENT',
+  HIGH: 'tasks.priority.HIGH',
+  NORMAL: 'tasks.priority.NORMAL',
 };
 
-const TRANSITION_LABELS: Record<TaskStatus, string> = {
-  OPEN: 'إعادة فتح',
-  IN_PROGRESS: 'ابدأ',
-  BLOCKED: 'تعثّرت',
-  DONE: 'تمّت',
-  CANCELLED: 'إلغاء',
+const TRANSITION_KEYS: Record<TaskStatus, string> = {
+  OPEN: 'tasks.transition.OPEN',
+  IN_PROGRESS: 'tasks.transition.IN_PROGRESS',
+  BLOCKED: 'tasks.transition.BLOCKED',
+  DONE: 'tasks.transition.DONE',
+  CANCELLED: 'tasks.transition.CANCELLED',
 };
 
 export function MyTasksPage() {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<MyTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // حوارُ المهمّة (SPEC 1.11): السجلُّ يُفتح لمهمّةٍ واحدة، والتعليقُ سطرٌ فيه بلا انتقال.
+  // Task thread: the log opens for one task at a time; a comment is a line in it with no transition.
   const [openLog, setOpenLog] = useState<string | null>(null);
   const [log, setLog] = useState<TaskLogLine[]>([]);
   const [draft, setDraft] = useState('');
@@ -70,7 +64,7 @@ export function MyTasksPage() {
       setOpenLog(id);
       setDraft('');
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر تحميل سجل المهمة'));
+      setError(apiErrorMessage(e, t('tasks.log_load_failed')));
     }
   };
 
@@ -83,7 +77,7 @@ export function MyTasksPage() {
       setLog(await listTaskLog(id));
       setDraft('');
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر إرسال التعليق'));
+      setError(apiErrorMessage(e, t('tasks.comment_failed')));
     } finally {
       setBusy(null);
     }
@@ -92,7 +86,7 @@ export function MyTasksPage() {
   const load = () =>
     listMyTasks()
       .then(setTasks)
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل المهام')));
+      .catch((e) => setError(apiErrorMessage(e, t('tasks.load_failed'))));
 
   useEffect(() => {
     load();
@@ -105,26 +99,26 @@ export function MyTasksPage() {
       await transitionTask(id, to);
       await load();
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر تغيير حالة المهمة'));
+      setError(apiErrorMessage(e, t('tasks.transition_failed')));
     } finally {
       setBusy(null);
     }
   };
 
-  const live = tasks?.filter((t) => t.status !== 'DONE' && t.status !== 'CANCELLED') ?? [];
-  const closed = tasks?.filter((t) => t.status === 'DONE' || t.status === 'CANCELLED') ?? [];
+  const live = tasks?.filter((task) => task.status !== 'DONE' && task.status !== 'CANCELLED') ?? [];
+  const closed = tasks?.filter((task) => task.status === 'DONE' || task.status === 'CANCELLED') ?? [];
 
   return (
     <div className="page">
       <div className="topbar">
-        <h2>مهامي</h2>
+        <h2>{t('tasks.title')}</h2>
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
-      {!tasks && !error && <p>جارٍ التحميل…</p>}
+      {!tasks && !error && <p>{t('tasks.loading')}</p>}
 
       {tasks && tasks.length === 0 && (
-        <p className="muted" data-testid="tasks-empty">لا مهام مُسنَدة إليك.</p>
+        <p className="muted" data-testid="tasks-empty">{t('tasks.empty')}</p>
       )}
 
       {tasks && tasks.length > 0 && (
@@ -132,75 +126,75 @@ export function MyTasksPage() {
           <table className="table" data-testid="my-tasks">
             <thead>
               <tr>
-                <th>المهمة</th>
-                <th>الأولوية</th>
-                <th>القسم</th>
-                <th>المستند</th>
-                <th>الحالة</th>
-                <th>الموعد</th>
-                <th>إجراء</th>
+                <th>{t('tasks.col.task')}</th>
+                <th>{t('tasks.col.priority')}</th>
+                <th>{t('tasks.col.department')}</th>
+                <th>{t('tasks.col.document')}</th>
+                <th>{t('tasks.col.status')}</th>
+                <th>{t('tasks.col.due')}</th>
+                <th>{t('tasks.col.action')}</th>
               </tr>
             </thead>
             <tbody>
-              {[...live, ...closed].map((t) => (
-                <tr key={t.id} data-testid={`task-${t.id}`} data-status={t.status} data-overdue={t.isOverdue}>
-                  <td>{t.title}</td>
-                  <td data-testid={`priority-${t.id}`}>
-                    <span className={t.priority === 'URGENT' ? 'badge overdue' : t.priority === 'HIGH' ? 'badge sealed' : 'badge'}>
-                      {PRIORITY_LABELS[t.priority] ?? '—'}
+              {[...live, ...closed].map((task) => (
+                <tr key={task.id} data-testid={`task-${task.id}`} data-status={task.status} data-overdue={task.isOverdue}>
+                  <td>{task.title}</td>
+                  <td data-testid={`priority-${task.id}`}>
+                    <span className={task.priority === 'URGENT' ? 'badge overdue' : task.priority === 'HIGH' ? 'badge sealed' : 'badge'}>
+                      {PRIORITY_KEYS[task.priority] ? t(PRIORITY_KEYS[task.priority]) : '—'}
                     </span>
                   </td>
-                  <td data-testid={`department-${t.id}`}>{t.department || <span className="muted">—</span>}</td>
+                  <td data-testid={`department-${task.id}`}>{task.department || <span className="muted">—</span>}</td>
                   <td>
-                    {/* ⭐ **القاعدة بالعين**: لا هدف ⇒ شرطة · هدفٌ يُفتح ⇒ رابط ·
-                      * هدفٌ لا يُفتح ⇒ **اسم الشاشة نصّاً بلا رابط**. والثالثة هي
-                      * القاعدة: يعرف أن هناك مستنداً، ولا يصل إليه. */}
-                    {!t.target ? (
+                    {/* No target: a dash. Openable target: a link. Target that cannot be
+                      * opened: the screen name as plain text, so the assignee knows a
+                      * document exists without reaching it. */}
+                    {!task.target ? (
                       <span className="muted">—</span>
-                    ) : t.canOpenTarget ? (
-                      <Link to={`${SCREEN_ROUTES[t.target.screen] ?? '/'}`} data-testid={`open-${t.id}`}>
-                        {SCREEN_LABELS[t.target.screen as keyof typeof SCREEN_LABELS] ?? t.target.screen}
+                    ) : task.canOpenTarget ? (
+                      <Link to={`${SCREEN_ROUTES[task.target.screen] ?? '/'}`} data-testid={`open-${task.id}`}>
+                        {SCREEN_LABELS[task.target.screen as keyof typeof SCREEN_LABELS] ?? task.target.screen}
                       </Link>
                     ) : (
-                      <span className="muted" data-testid={`locked-${t.id}`}>
-                        {SCREEN_LABELS[t.target.screen as keyof typeof SCREEN_LABELS] ?? t.target.screen} — لا تملك صلاحية فتحه
+                      <span className="muted" data-testid={`locked-${task.id}`}>
+                        {t('tasks.locked_target', { screen: SCREEN_LABELS[task.target.screen as keyof typeof SCREEN_LABELS] ?? task.target.screen })}
                       </span>
                     )}
                   </td>
                   <td>
-                    <span className={t.status === 'DONE' ? 'badge' : 'badge sealed'}>{STATUS_LABELS[t.status]}</span>
+                    <span className={task.status === 'DONE' ? 'badge' : 'badge sealed'}>{t(STATUS_KEYS[task.status])}</span>
                   </td>
-                  <td data-testid={`due-${t.id}`}>
-                    {t.dueAt ? (
-                      <span className={t.isOverdue ? 'error' : undefined}>
-                        {new Date(t.dueAt).toLocaleDateString('ar-SA')}
-                        {t.isOverdue ? ' — متأخّرة' : ''}
+                  <td data-testid={`due-${task.id}`}>
+                    {task.dueAt ? (
+                      <span className={task.isOverdue ? 'error' : undefined}>
+                        {formatDate(task.dueAt)}
+                        {task.isOverdue ? t('tasks.overdue_suffix') : ''}
                       </span>
                     ) : (
                       <span className="muted">—</span>
                     )}
                   </td>
                   <td>
-                    {/* الأزرار من `allowedTransitions` المحسوبة في الخادم —
-                      * لا من جدول انتقالاتٍ منسوخٍ هنا. */}
-                    {t.allowedTransitions.length === 0 ? (
+                    {/* Buttons come from the server's computed `allowedTransitions`,
+                      * not from a transition table copied here. */}
+                    {task.allowedTransitions.length === 0 ? (
                       <span className="muted">—</span>
                     ) : (
-                      t.allowedTransitions.map((to) => (
+                      task.allowedTransitions.map((to) => (
                         <button
                           key={to}
                           type="button"
                           className="btn btn-ghost btn-sm"
-                          disabled={busy === t.id}
-                          onClick={() => move(t.id, to)}
-                          data-testid={`move-${t.id}-${to}`}
+                          disabled={busy === task.id}
+                          onClick={() => move(task.id, to)}
+                          data-testid={`move-${task.id}-${to}`}
                         >
-                          {TRANSITION_LABELS[to]}
+                          {t(TRANSITION_KEYS[to])}
                         </button>
                       ))
                     )}
-                    {/* حوارُ المهمّة — تعليقٌ بلا انتقال (SPEC 1.11). */}
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => showLog(t.id)} data-testid={`log-${t.id}`}>
+                    {/* Task thread: a comment without a transition. */}
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => showLog(task.id)} data-testid={`log-${task.id}`}>
                       💬
                     </button>
                   </td>
@@ -210,20 +204,22 @@ export function MyTasksPage() {
                 <tr data-testid={`thread-${openLog}`}>
                   <td colSpan={7}>
                     <div style={{ display: 'grid', gap: 6 }}>
-                      {log.length === 0 && <span className="muted">لا سطور بعد</span>}
+                      {log.length === 0 && <span className="muted">{t('tasks.no_lines')}</span>}
                       {log.map((l) => (
                         <div key={l.id} style={{ fontSize: 13 }}>
                           <span className="muted">
-                            #{l.seq} · {new Date(l.createdAt).toLocaleString('ar-SA')} ·{' '}
-                            {l.fromStatus === l.toStatus ? 'تعليق' : `${l.fromStatus ? STATUS_LABELS[l.fromStatus] : 'إنشاء'} ← ${STATUS_LABELS[l.toStatus]}`}
+                            #{l.seq} · {formatDateTime(l.createdAt)} ·{' '}
+                            {l.fromStatus === l.toStatus
+                              ? t('tasks.comment')
+                              : t('tasks.log_transition', { from: l.fromStatus ? t(STATUS_KEYS[l.fromStatus]) : t('tasks.created'), to: t(STATUS_KEYS[l.toStatus]) })}
                           </span>
                           {l.note && <div>{l.note}</div>}
                         </div>
                       ))}
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="تعليقٌ لطرف المهمّة الآخر — لا يغيّر حالتها" style={{ flex: 1 }} data-testid={`draft-${openLog}`} />
+                        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={t('tasks.comment_placeholder')} style={{ flex: 1 }} data-testid={`draft-${openLog}`} />
                         <button type="button" className="btn btn-primary btn-sm" disabled={busy === openLog || !draft.trim()} onClick={() => sendComment(openLog)} data-testid={`send-${openLog}`}>
-                          أرسل
+                          {t('tasks.send')}
                         </button>
                       </div>
                     </div>

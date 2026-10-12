@@ -1,0 +1,19 @@
+{
+  "title": "Notifications",
+  "subtitle": "What the system needed to tell someone",
+  "action_failed": "Could not complete the action",
+  "warranty_none": "Nothing new: no warranties ending within {{n}} days that have not been flagged.",
+  "warranty_raised": "Alert raised for {{n}} warranties nearing expiry.",
+  "escalation_disabled": "Escalation is off. Set the escalation threshold in the collection reminders screen first.",
+  "escalation_none": "Nothing new: every overdue item past the threshold was already escalated.",
+  "escalated": "Escalated {{n}} overdue items.",
+  "escalated_partial": "Escalated {{n}} overdue items; {{remaining}} still waiting and will follow.",
+  "check_escalation": "Check escalation now",
+  "check_warranties": "Check warranties now",
+  "mark_all_read": "Mark all as read",
+  "in_app_only": "⚠️ Notifications stay inside the platform: no email and no text messages. Anyone who does not open the app receives nothing.",
+  "all": "All",
+  "unread": "Unread ({{n}})",
+  "empty_unread": "No unread notifications",
+  "empty": "No notifications"
+}

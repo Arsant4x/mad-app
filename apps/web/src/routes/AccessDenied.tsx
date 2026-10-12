@@ -1,14 +1,17 @@
+import { useTranslation } from 'react-i18next';
+
 export function AccessDenied() {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">لا تملك صلاحية الوصول</div>
-          <div className="page-sub">هذه الشاشة غير متاحة لحسابك حالياً</div>
+          <div className="page-title">{t('common.access_denied.title')}</div>
+          <div className="page-sub">{t('common.access_denied.subtitle')}</div>
         </div>
       </div>
       <div className="card">
-        <div className="empty-state">لا تملك صلاحية الوصول لهذه الشاشة ضمن نموذج الصلاحيات الحالي. تواصل مع مسؤول حسابك لمنحك الصلاحية اللازمة.</div>
+        <div className="empty-state">{t('common.access_denied.body')}</div>
       </div>
     </div>
   );

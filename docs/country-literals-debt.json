@@ -140,10 +140,6 @@
       "count": 1,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/audit/DelegationLogPage.tsx": {
-      "count": 2,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/companyProfile/CompanyProfilePage.tsx": {
       "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
@@ -177,10 +173,6 @@
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/suppliers/PurchaseModal.tsx": {
-      "count": 2,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/tasks/MyTasksPage.tsx": {
       "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     }

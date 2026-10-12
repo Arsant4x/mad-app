@@ -1,0 +1,41 @@
+{
+  "title": "قوالب الرسائل",
+  "subtitle": "نصوص جاهزة للتواصل مع المستأجرين والعملاء والموظفين",
+  "new_button": "+ قالب جديد",
+  "search_placeholder": "ابحث بأي تفاصيل القالب...",
+  "show_archived": "عرض المؤرشفة",
+  "all_audiences": "كل الفئات",
+  "col": {
+    "audience": "الفئة",
+    "title": "العنوان",
+    "text": "النص"
+  },
+  "empty": "لا توجد قوالب مطابقة",
+  "archived": "مؤرشف",
+  "menu": {
+    "edit": "✎ تعديل",
+    "unarchive": "📂 إلغاء الأرشفة",
+    "archive": "🗄 أرشفة",
+    "delete": "🗑 حذف"
+  },
+  "delete_title": "حذف القالب",
+  "delete_body": "حذف قالب \"{{title}}\"؟",
+  "delete": "حذف",
+  "audience": {
+    "TENANT": "مستأجرون",
+    "CUSTOMER": "عملاء",
+    "EMPLOYEE": "موظفون"
+  },
+  "modal": {
+    "edit_title": "تعديل القالب",
+    "new_title": "قالب رسالة جديد",
+    "audience": "الفئة المستهدفة",
+    "title": "عنوان القالب",
+    "title_placeholder": "مثال: تذكير بموعد السداد",
+    "text": "نص الرسالة",
+    "text_placeholder": "نص الرسالة الجاهزة...",
+    "cancel": "إلغاء",
+    "save_edit": "حفظ التعديل",
+    "add": "إضافة القالب"
+  }
+}

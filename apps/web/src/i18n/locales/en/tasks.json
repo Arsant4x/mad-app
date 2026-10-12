@@ -1,0 +1,45 @@
+{
+  "title": "My tasks",
+  "loading": "Loading…",
+  "empty": "No tasks assigned to you.",
+  "load_failed": "Could not load tasks",
+  "log_load_failed": "Could not load the task log",
+  "comment_failed": "Could not send the comment",
+  "transition_failed": "Could not change the task status",
+  "col": {
+    "task": "Task",
+    "priority": "Priority",
+    "department": "Department",
+    "document": "Document",
+    "status": "Status",
+    "due": "Due",
+    "action": "Action"
+  },
+  "status": {
+    "OPEN": "Open",
+    "IN_PROGRESS": "In progress",
+    "BLOCKED": "Blocked",
+    "DONE": "Done",
+    "CANCELLED": "Cancelled"
+  },
+  "priority": {
+    "URGENT": "Urgent",
+    "HIGH": "High",
+    "NORMAL": "Normal"
+  },
+  "transition": {
+    "OPEN": "Reopen",
+    "IN_PROGRESS": "Start",
+    "BLOCKED": "Blocked",
+    "DONE": "Done",
+    "CANCELLED": "Cancel"
+  },
+  "locked_target": "{{screen}} (you do not have permission to open it)",
+  "overdue_suffix": " (overdue)",
+  "no_lines": "No lines yet",
+  "comment": "Comment",
+  "created": "Created",
+  "log_transition": "{{from}} → {{to}}",
+  "comment_placeholder": "A comment for the other party on the task; it does not change the status",
+  "send": "Send"
+}

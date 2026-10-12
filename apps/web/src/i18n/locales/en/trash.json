@@ -1,0 +1,19 @@
+{
+  "title": "Recycle bin",
+  "subtitle": "Anything deleted can be restored for {{n}} days, then it is erased for good, except what a legally retained record points to (invoices · journal entries · reports): it stays in the bin until the retention period ends",
+  "load_failed": "Could not load the recycle bin",
+  "empty": "The bin is empty: no deleted records.",
+  "col": {
+    "record": "Record",
+    "deleted_at": "Deleted on",
+    "remaining": "Remaining"
+  },
+  "retained": "Legally retained until {{until}}, for {{by}}",
+  "retained_until": "Legally retained until {{until}}",
+  "days_left": "{{n}} days",
+  "restore": "Restore",
+  "restore_failed": "Could not restore",
+  "purge": "Delete permanently",
+  "purge_body": "\"{{name}}\" will be erased permanently and cannot be restored afterwards.",
+  "purge_failed": "Could not delete permanently"
+}

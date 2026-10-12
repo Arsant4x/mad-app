@@ -1,0 +1,39 @@
+{
+  "title": "Branches",
+  "subtitle": "Each branch is an operating unit with its own stock, cash box and reports; employees are granted the branches they can see",
+  "new_button": "+ New branch",
+  "search_placeholder": "Search by branch name or type...",
+  "empty": "No branches yet. A company with one location does not need branches; everything stays at company level.",
+  "no_results": "No results match your search.",
+  "col": {
+    "name": "Branch name",
+    "type": "Type",
+    "activity": "Activity",
+    "default_warehouse": "Default warehouse",
+    "hours": "Working hours"
+  },
+  "edit": "Edit",
+  "delete": "Delete",
+  "delete_title": "Delete branch",
+  "delete_body": "\"{{name}}\" will be deleted. A branch with transactions cannot be deleted; move or reassign its data first.",
+  "types": {
+    "branch": "Branch",
+    "shop": "Shop",
+    "warehouse": "Warehouse",
+    "office": "Office"
+  },
+  "modal": {
+    "edit_title": "Edit branch",
+    "new_title": "New branch",
+    "name": "Branch name",
+    "name_placeholder": "Main branch",
+    "type": "Type",
+    "hours": "Working hours",
+    "hours_placeholder": "9 am to 10 pm daily",
+    "default_warehouse": "Default warehouse",
+    "no_warehouse": "None",
+    "cancel": "Cancel",
+    "save_edit": "Save changes",
+    "add": "Add branch"
+  }
+}

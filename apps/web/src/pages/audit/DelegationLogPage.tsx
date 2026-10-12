@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react';
 import { listCompanyUsers, type CompanyUser } from '../../api/companyUsers';
 import { getDelegationLog, type DelegationLog, type LogNode } from '../../api/delegations';
 import { SCREEN_LABELS, ACTION_LABELS, type ScreenAction } from '../../api/templates';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
+import { formatDateTime } from '../../i18n/format';
 
 /**
- * سجل التفويض الشجري — **شاشة مستقلة، موضعها الامتثال**.
+ * Delegation log: a standalone compliance screen, read across the whole
+ * company ("who delegated what to whom, and when") rather than per employee.
  *
- * ولماذا مستقلةٌ بينما شجرة التفويض تُفتح من الموظف: هذا يُقرأ **عرضاً عبر
- * المنشأة كلها** — «من فوّض من، بماذا، ومتى» — لا عن موظفٍ بعينه. وربطُه
- * بموظف يجعل الإجابة عن سؤالٍ عن المنشأة تحتاج فتح عشرين نافذة.
- *
- * ## ثلاثة لا تُخفى هنا
- *
- * ١. **المسحوب ظاهرٌ مختوماً لا محذوفاً.** السجل ملحقٌ فقط، وإخفاء
- *    المسحوب في العرض يُنتج نفس أثر حذفه: قصةٌ غير التي وقعت.
- * ٢. **فجوة التسلسل تُعرض بصراحة.** فجوةٌ في `seq` تعني صفّاً غاب — وهي
- *    الإشارة الوحيدة على عبثٍ نجا من مُشغِّلات القاعدة. وابتلاعُها يجعل
- *    السجل يبدو سليماً وهو ليس كذلك.
- * ٣. **غابةٌ لا شجرة.** الخادم يعيد `roots` جمعاً: تفويضٌ بين موظفَين لم
- *    يمرّ بالمالك **له جذرٌ مستقل**، ولولا ذلك لاختفى من السجل صامتاً.
+ * Three things are never hidden here:
+ * 1. Revoked rows stay visible and sealed. The log is append only, and hiding a
+ *    revoked row in the view tells a different story, just like deleting it.
+ * 2. A gap in `seq` is shown plainly. It means a row went missing, the only sign
+ *    of tampering that got past the database triggers.
+ * 3. A forest, not a tree. The server returns several `roots`: a delegation
+ *    between two employees that never passed through the owner has its own root
+ *    and would otherwise vanish from the log.
  */
 
 const grantLabel = (g: string): string => {
@@ -41,7 +39,7 @@ function Node({ node, nameOf, depth }: { node: LogNode; nameOf: (id: string) => 
               <span className="num">#{e.seq}</span>{' '}
               <span>{nameOf(e.grantorId)} ⇐ {nameOf(e.granteeId)}</span>{' '}
               <span className="muted">{e.grants.map(grantLabel).join(' · ')}</span>{' '}
-              <time>{new Date(e.at).toLocaleString('ar-SA')}</time>
+              <time>{formatDateTime(e.at)}</time>
             </li>
           ))}
         </ul>
@@ -58,6 +56,7 @@ function Node({ node, nameOf, depth }: { node: LogNode; nameOf: (id: string) => 
 }
 
 export function DelegationLogPage() {
+  const { t } = useTranslation();
   const [log, setLog] = useState<DelegationLog | null>(null);
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -68,29 +67,29 @@ export function DelegationLogPage() {
         setLog(l);
         setUsers(u);
       })
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل سجل التفويض')));
+      .catch((e) => setError(apiErrorMessage(e, t('audit.delegation.load_failed'))));
   }, []);
 
-  // معرّفٌ لا يقابله موظف يُعرض كما هو — ولا يُحذف من الصفّ. الصفّ اليتيم
-  // معلومةٌ في سجلٍّ لا يُحذف منه، وإخفاؤه يخالف سبب وجود السجل.
+  // An id with no matching employee is shown as is, never dropped: an orphan row
+  // is information in a log nothing may be removed from.
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? id;
 
   return (
     <div className="page">
       <div className="topbar">
-        <h2>سجل التفويض</h2>
+        <h2>{t('audit.delegation.title')}</h2>
       </div>
 
       {error && <p className="error" role="alert">{error}</p>}
-      {!log && !error && <p>جارٍ التحميل…</p>}
+      {!log && !error && <p>{t('audit.loading')}</p>}
 
       {log?.sequenceBreak && (
         <p className="error" role="alert" data-testid="sequence-break">
-          ⚠️ فجوة في تسلسل السجل عند رقم {log.sequenceBreak.at} — المتوقَّع {log.sequenceBreak.expected}. راجع القاعدة فوراً.
+          {t('audit.delegation.sequence_break', { at: log.sequenceBreak.at, expected: log.sequenceBreak.expected })}
         </p>
       )}
 
-      {log && log.rows.length === 0 && <p className="muted" data-testid="log-empty">لا تفويض في هذه المنشأة بعد.</p>}
+      {log && log.rows.length === 0 && <p className="muted" data-testid="log-empty">{t('audit.delegation.empty')}</p>}
 
       {log && log.rows.length > 0 && (
         <>
@@ -100,16 +99,16 @@ export function DelegationLogPage() {
             ))}
           </ul>
 
-          <h3>الصفوف — والمسحوب مختومٌ لا محذوف</h3>
+          <h3>{t('audit.delegation.rows_title')}</h3>
           <table className="table" data-testid="deleg-log-rows">
             <thead>
               <tr>
                 <th>#</th>
-                <th>من</th>
-                <th>إلى</th>
-                <th>الصلاحيات</th>
-                <th>الحالة</th>
-                <th>التاريخ</th>
+                <th>{t('audit.delegation.col.from')}</th>
+                <th>{t('audit.delegation.col.to')}</th>
+                <th>{t('audit.delegation.col.grants')}</th>
+                <th>{t('audit.delegation.col.state')}</th>
+                <th>{t('audit.delegation.col.date')}</th>
               </tr>
             </thead>
             <tbody>
@@ -121,10 +120,10 @@ export function DelegationLogPage() {
                   <td>{r.grants.map(grantLabel).join(' · ')}</td>
                   <td>
                     <span className={r.state === 'ACTIVE' ? 'badge' : 'badge sealed'}>
-                      {r.state === 'ACTIVE' ? 'فعّال' : 'مسحوب'}
+                      {r.state === 'ACTIVE' ? t('audit.delegation.active') : t('audit.delegation.revoked')}
                     </span>
                   </td>
-                  <td>{new Date(r.state === 'ACTIVE' ? r.createdAt : (r.revokedAt ?? r.createdAt)).toLocaleString('ar-SA')}</td>
+                  <td>{formatDateTime(r.state === 'ACTIVE' ? r.createdAt : (r.revokedAt ?? r.createdAt))}</td>
                 </tr>
               ))}
             </tbody>
