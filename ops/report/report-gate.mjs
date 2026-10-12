@@ -49,13 +49,20 @@ if (sinceArg) {
   const { join, relative, resolve } = await import('node:path');
   const { execFileSync } = await import('node:child_process');
   const since = new Date(sinceArg.split('=')[1] + 'T00:00:00Z');
-  const REPO = 'D:/mad-app';
+  // The archive lives in the ops repository (rikzapp/rikz-ops, cloned at D:/rikz-ops) since October 2026.
+  // A scratch file counts as committed when its path is under docs/archive/scratch there, or when its
+  // content is a blob on main in either repository (research that became a product document).
+  const OPS = process.env.RIKZ_OPS_REPO || 'D:/rikz-ops';
+  const PRODUCT = 'D:/mad-app';
   const SCRATCH = 'D:/mad-app-scratch';
-  const git = (...a) => execFileSync('git', ['-C', REPO, ...a], { maxBuffer: 1 << 28 }).toString('utf8');
-  git('fetch', '-q', 'origin');
-  const tree = git('ls-tree', '-r', '-z', 'origin/main').split('\0').filter(Boolean);
-  const paths = new Set(tree.map((l) => l.split('\t')[1]));
-  const blobs = new Set(tree.map((l) => l.split('\t')[0].split(' ')[2]));
+  const treeOf = (repo) => {
+    const git = (...a) => execFileSync('git', ['-C', repo, ...a], { maxBuffer: 1 << 28 }).toString('utf8');
+    git('fetch', '-q', 'origin');
+    return git('ls-tree', '-r', '-z', 'origin/main').split('\0').filter(Boolean);
+  };
+  const opsTree = treeOf(OPS);
+  const paths = new Set(opsTree.map((l) => l.split('\t')[1]));
+  const blobs = new Set([...opsTree, ...treeOf(PRODUCT)].map((l) => l.split('\t')[0].split(' ')[2]));
   const EXEMPT = /(^|\/)(pr-|body|commit|results-|decisions-|apply-|inventory-|selection-|archive-manifest-|.*-log|.*-out)|\/(tmp|jest-cache[^/]*|node_modules)\//i;
   const skip = new Set([resolve(report), resolve(facts)].map((p) => p.replace(/\\/g, '/').toLowerCase()));
   const missing = [];

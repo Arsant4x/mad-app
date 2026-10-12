@@ -1,1 +1,0 @@
-      const otpStep = twoStepOf(link, instance) ? await this.otpStepDone(tx, link, session) : null;

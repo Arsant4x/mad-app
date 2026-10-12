@@ -1,1 +1,0 @@
-  if (actorType === 'NOBODY') throw new ForbiddenException(MSG.form_signing_settings_owner_only);
