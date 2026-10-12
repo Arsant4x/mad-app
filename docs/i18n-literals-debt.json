@@ -64,7 +64,6 @@
     "apps/web/src/pages/journal/JournalBuilderView.tsx": 17,
     "apps/web/src/pages/journal/JournalListView.tsx": 18,
     "apps/web/src/pages/journal/JournalPage.tsx": 4,
-    "apps/web/src/pages/maintenance/MaintenancePage.tsx": 54,
     "apps/web/src/pages/notifications/NotificationsPage.tsx": 21,
     "apps/web/src/pages/obligations/ObligationsPage.tsx": 9,
     "apps/web/src/pages/obligations/VatDeclarationPage.tsx": 115,
@@ -72,10 +71,6 @@
     "apps/web/src/pages/payments/PaymentsPage.tsx": 23,
     "apps/web/src/pages/products/ProductModal.tsx": 37,
     "apps/web/src/pages/products/ProductsPage.tsx": 34,
-    "apps/web/src/pages/properties/PropertiesMap.tsx": 9,
-    "apps/web/src/pages/properties/PropertiesPage.tsx": 31,
-    "apps/web/src/pages/properties/PropertyModal.tsx": 35,
-    "apps/web/src/pages/reminders/RemindersPage.tsx": 48,
     "apps/web/src/pages/scripts/ScriptModal.tsx": 13,
     "apps/web/src/pages/scripts/ScriptsPage.tsx": 22,
     "apps/web/src/pages/settings/ApiKeysCard.tsx": 22,
@@ -92,13 +87,8 @@
     "apps/web/src/pages/transactions/TransactionModal.tsx": 16,
     "apps/web/src/pages/transactions/TransactionsPage.tsx": 22,
     "apps/web/src/pages/trash/TrashPage.tsx": 20,
-    "apps/web/src/pages/units/BulkUnitsModal.tsx": 16,
-    "apps/web/src/pages/units/ReservationModal.tsx": 10,
-    "apps/web/src/pages/units/UnitModal.tsx": 25,
-    "apps/web/src/pages/units/UnitsPage.tsx": 40,
     "apps/web/src/pages/warehouses/WarehouseModal.tsx": 11,
     "apps/web/src/pages/warehouses/WarehousesPage.tsx": 21,
-    "apps/web/src/pages/warranties/WarrantiesPage.tsx": 50,
     "apps/web/src/routes/AccessDenied.tsx": 3
   }
 }
