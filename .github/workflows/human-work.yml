@@ -1,0 +1,64 @@
+# "Human work" gate (standing rule in CLAUDE.md, decisions 1680 and 1685).
+#
+# Added lines of product code under apps/ and packages/ carry no emoji, no
+# decision reference, no work method word and no Arabic comment. Commit
+# messages and the pull request title are short English "type(scope): subject"
+# lines. Existing code is not checked; it is cleaned when its file is touched.
+#
+# On a push to main the merge message is written at merge time, so it is
+# checked after the fact: seen, not blocked.
+name: human-work
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  human-work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Gate self test
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test ops/ci/human-work.test.mjs
+      - name: Pull request commit messages
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/commits" --jq '.[].commit.message | @json' > "$RUNNER_TEMP/commits.jsonl"
+          echo "commits: $(wc -l < "$RUNNER_TEMP/commits.jsonl")"
+      - name: Check added lines and messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node ops/ci/human-work-check.mjs "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/commits.jsonl"
+          else
+            node ops/ci/human-work-check.mjs "$GITHUB_EVENT_PATH"
+          fi
