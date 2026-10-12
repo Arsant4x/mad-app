@@ -1,7 +1,0 @@
-﻿nafath-start-without-otp [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
-otp-session-alone-sees-and-signs [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
-substitute-without-national-id [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
-final-copy-to-representative-link [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-signer-inferred-from-empty-fields [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-paper-final-copy-to-representative [break landed: 1] Tests:       1 failed, 7 passed, 8 total  :: restored=True
-nafath-poll-without-otp [break landed: 1] Tests:       1 failed, 4 passed, 5 total  :: restored=True
