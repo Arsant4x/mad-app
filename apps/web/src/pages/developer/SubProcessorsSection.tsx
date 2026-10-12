@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getConsentOverview, publishConsentVersion, retireSubProcessor, upsertSubProcessor, type ConsentOverview } from '../../api/consent';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 
 /**
- * قائمةُ المعالجين الفرعيين ونشرُ نسخها (`ق-٥٨١` · `ق-٥٨٩`).
+ * The sub-processor list and its published versions.
  *
- * ⚠️ **والنشرُ حدثٌ لا تحرير**: تعديلُ صفٍّ في القائمة **لا يُلزم أحداً** — حتى تُنشَر
- * نسخةٌ بمهلتها، فتصير هي النصَّ الذي تُطلب الموافقةُ عليه. **وبلا ذلك تصير القائمةُ
- * إعلاناً لا موافقة.**
+ * Publishing is an event, not an edit: changing a row binds nobody until a version is published with
+ * its notice period, and that version becomes the text merchants are asked to accept. Without it the
+ * list would be an announcement, not consent.
  *
- * ⛔ **والمهلةُ يرفضها الخادمُ لا هذه الشاشة** — وهي هنا مكتوبةٌ ليقرأها الناشر قبل أن يُردّ.
+ * The server rejects a short notice period, not this screen; it is shown here so the publisher reads
+ * it before being refused.
  */
 export function SubProcessorsSection() {
+  const { t } = useTranslation();
   const [data, setData] = useState<ConsentOverview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,17 +52,17 @@ export function SubProcessorsSection() {
   return (
     <div className="card" style={{ marginTop: 14 }}>
       <div className="card-head">
-        <div className="card-title">المعالجون الفرعيون وموافقةُ التجّار</div>
+        <div className="card-title">{t('developer.sub_processors.title')}</div>
       </div>
       {error && <p className="error-text">{error}</p>}
 
       <table>
         <thead>
           <tr>
-            <th>المعالج</th>
-            <th>الغرض</th>
-            <th>الموقع</th>
-            <th>فئاتُ البيانات</th>
+            <th>{t('developer.sub_processors.col_processor')}</th>
+            <th>{t('developer.sub_processors.col_purpose')}</th>
+            <th>{t('developer.sub_processors.col_location')}</th>
+            <th>{t('developer.sub_processors.col_categories')}</th>
             <th></th>
           </tr>
         </thead>
@@ -72,10 +75,10 @@ export function SubProcessorsSection() {
               <td>{s.dataCategories.join(' · ')}</td>
               <td style={{ whiteSpace: 'nowrap' }}>
                 {s.removedAt ? (
-                  <span className="hint">رُفع في {dfmt(s.removedAt)}</span>
+                  <span className="hint">{t('developer.sub_processors.removed_on', { date: dfmt(s.removedAt) })}</span>
                 ) : (
-                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => retireSubProcessor(s.id), 'تعذّر رفعُه من القائمة')}>
-                    ارفعه من القائمة
+                  <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => retireSubProcessor(s.id), t('developer.sub_processors.err_retire'))}>
+                    {t('developer.sub_processors.retire')}
                   </button>
                 )}
               </td>
@@ -83,17 +86,17 @@ export function SubProcessorsSection() {
           ))}
           {data.subProcessors.length === 0 && (
             <tr>
-              <td colSpan={5} className="hint">لا معالجَ فرعياً مسجَّلاً بعد.</td>
+              <td colSpan={5} className="hint">{t('developer.sub_processors.empty')}</td>
             </tr>
           )}
         </tbody>
       </table>
 
       <div className="field-row" style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input placeholder="الاسم" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input placeholder="الغرض" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
-        <input placeholder="الموقع الجغرافيّ" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-        <input placeholder="فئاتُ البيانات (مفصولةٌ بفاصلة)" value={form.dataCategories} onChange={(e) => setForm({ ...form, dataCategories: e.target.value })} />
+        <input placeholder={t('developer.sub_processors.ph_name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input placeholder={t('developer.sub_processors.ph_purpose')} value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+        <input placeholder={t('developer.sub_processors.ph_location')} value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+        <input placeholder={t('developer.sub_processors.ph_categories')} value={form.dataCategories} onChange={(e) => setForm({ ...form, dataCategories: e.target.value })} />
         <button
           className="btn btn-ghost btn-sm"
           disabled={busy || !form.name.trim() || !form.location.trim()}
@@ -106,36 +109,36 @@ export function SubProcessorsSection() {
                   location: form.location.trim(),
                   dataCategories: form.dataCategories.split(',').map((s) => s.trim()).filter(Boolean),
                 }).then(() => setForm({ name: '', purpose: '', location: '', dataCategories: '' })),
-              'تعذّرت الإضافة',
+              t('developer.sub_processors.err_add'),
             )
           }
         >
-          أضف معالجاً
+          {t('developer.sub_processors.add')}
         </button>
       </div>
 
       <div className="card" style={{ marginTop: 14 }}>
-        <div className="card-title" style={{ marginBottom: 6 }}>نشرُ نسخةٍ جديدة — وموافقةُ التجّار تُطلب عليها</div>
+        <div className="card-title" style={{ marginBottom: 6 }}>{t('developer.sub_processors.publish_title')}</div>
         <p className="hint">
-          النشرُ يلتقط القائمةَ الحالية ({active.length} معالجاً) نصّاً ثابتاً، ويُشعر كلَّ تاجرٍ لم يقبلها.
-          <strong> ومهلةُ السريان {data.noticeDays} يوماً على الأقلّ</strong> — وما دونها يرفضه الخادم.
+          {t('developer.sub_processors.publish_hint_lead', { n: active.length })}
+          <strong> {t('developer.sub_processors.publish_hint_notice', { n: data.noticeDays })}</strong> {t('developer.sub_processors.publish_hint_tail')}
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input placeholder="ما الذي تغيّر — بلغة التاجر" value={summary} onChange={(e) => setSummary(e.target.value)} style={{ minWidth: 280 }} />
+          <input placeholder={t('developer.sub_processors.ph_summary')} value={summary} onChange={(e) => setSummary(e.target.value)} style={{ minWidth: 280 }} />
           <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
           <button className="btn btn-primary btn-sm" disabled={busy || summary.trim().length < 5 || !effectiveFrom} onClick={() => setPublishing(true)}>
-            انشر النسخة
+            {t('developer.sub_processors.publish')}
           </button>
         </div>
 
         <table style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th>النسخة</th>
-              <th>نُشرت</th>
-              <th>تسري</th>
-              <th>ما تغيّر</th>
-              <th>قبِلها</th>
+              <th>{t('developer.sub_processors.col_version')}</th>
+              <th>{t('developer.sub_processors.col_published')}</th>
+              <th>{t('developer.sub_processors.col_effective')}</th>
+              <th>{t('developer.sub_processors.col_changed')}</th>
+              <th>{t('developer.sub_processors.col_accepted')}</th>
             </tr>
           </thead>
           <tbody>
@@ -150,7 +153,7 @@ export function SubProcessorsSection() {
             ))}
             {data.versions.length === 0 && (
               <tr>
-                <td colSpan={5} className="hint">لا نسخةَ منشورةً بعد — فلا موافقةَ مطلوبةٌ من أحد.</td>
+                <td colSpan={5} className="hint">{t('developer.sub_processors.no_versions')}</td>
               </tr>
             )}
           </tbody>
@@ -159,12 +162,12 @@ export function SubProcessorsSection() {
 
       {publishing && (
         <ConfirmModal
-          title="نشرُ نسخةٍ من قائمة المعالجين الفرعيين"
-          body={`ستُنشر النسخةُ بـ${active.length} معالجاً وتسري في ${effectiveFrom}. ويُشعَر كلُّ تاجرٍ الآن، ويُذكَّر قبل السريان — ومن لم يقبل بعد السريان يُمنع حتى يقبل أو ينزّل بياناته ويُغلق حسابه. هل تريد النشر؟`}
-          confirmLabel="انشر"
+          title={t('developer.sub_processors.confirm_title')}
+          body={t('developer.sub_processors.confirm_body', { n: active.length, date: effectiveFrom })}
+          confirmLabel={t('developer.sub_processors.confirm')}
           onConfirm={() => {
             setPublishing(false);
-            return run(() => publishConsentVersion(summary.trim(), new Date(effectiveFrom).toISOString()).then(() => { setSummary(''); setEffectiveFrom(''); }), 'تعذّر النشر');
+            return run(() => publishConsentVersion(summary.trim(), new Date(effectiveFrom).toISOString()).then(() => { setSummary(''); setEffectiveFrom(''); }), t('developer.sub_processors.err_publish'));
           }}
           onCancel={() => setPublishing(false)}
         />
