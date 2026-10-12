@@ -117,7 +117,9 @@ export function ContractModal({
       setNewPhone('');
     } catch (e) {
       const message = serverMessage(e);
-      if (serverStatus(e) === 409 && message && message.includes('أهو نفسُه')) { // i18n-exempt: matches the server's Arabic same-name message
+      // The server answers in the interface language, so its same-name question is matched in both.
+      const sameName = message && (message.includes('أهو نفسُه') || message.includes('is it the same one?')); // i18n-exempt: matches the server's same-name message
+      if (serverStatus(e) === 409 && sameName) {
         setSameNameAsk(message);
       } else {
         setCustomerError(message ?? i18n.t('err_customer_save'));
