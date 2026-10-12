@@ -1,36 +1,34 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { previewPrimaryActivity, setPrimaryActivity, type Activity, type ScreenChangePreview } from '../../api/activities';
 import { usePermissions } from '../../auth/PermissionsContext';
 import { apiErrorMessage } from '../../lib/apiError';
 
 /**
- * تأكيد تغيير النشاط الرئيسي — **يعرض ما سيختفي بالاسم قبل أن يقع**.
+ * Confirms a change of the primary activity, naming what will disappear before it happens.
  *
- * ## لماذا نافذةٌ لا زرّ
+ * Why a dialog and not a button: the primary activity changes what every employee
+ * sees. One click that hides four screens without showing which ones lets the
+ * owner discover the effect from an employee's complaint, not from their own decision.
  *
- * تغيير النشاط الرئيسي يغيّر ما يراه **كل موظف** في المنشأة. ونقرةٌ واحدة
- * تُخفي أربع شاشات بلا أن يرى أحدٌ ماذا اختفى تجعل المالك يكتشف الأثر من
- * شكوى موظف — لا من قراره هو.
+ * The server enforces it: `PATCH /activities/primary` refuses without `confirmed`,
+ * so the interface has to show the preview.
  *
- * ⚠️ **والخادم يفرضها لا يجاملها**: `PATCH /activities/primary` يرفض بلا
- * `confirmed`. فالواجهة **مضطرّةٌ** لعرض المعاينة — لا مخيَّرة. وحارسٌ في
- * الخادم يمنع أن يصير العلَم اختيارياً.
- *
- * ## والقائمة من الخادم لا من هنا
- *
- * `willHide` محسوبةٌ هناك بأسمائها العربية. واشتقاقُها في الواجهة نسخةٌ
- * ثانية من الخريطة تفترق عند أول تعديل — فيُعرض للمالك أثرٌ غير الذي يقع.
+ * The list comes from the server, not from here: deriving it in the interface
+ * would be a second copy of the map that drifts at the first change, and the
+ * owner would see an effect other than the real one.
  */
 export function PrimaryActivityModal({
   activity,
   onDone,
   onCancel,
 }: {
-  /** `null` يعني **التراجع**: إطفاء الترشيح وإعادة كل الشاشات. */
+  /** `null` means undo: turn filtering off and bring every screen back. */
   activity: Activity | null;
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const { refresh } = usePermissions();
   const [preview, setPreview] = useState<ScreenChangePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +37,7 @@ export function PrimaryActivityModal({
   useEffect(() => {
     previewPrimaryActivity(activity?.id ?? null)
       .then(setPreview)
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر حساب أثر التغيير')));
+      .catch((e) => setError(apiErrorMessage(e, t('settings.primary_activity.err_preview'))));
   }, [activity]);
 
   const apply = async () => {
@@ -47,11 +45,11 @@ export function PrimaryActivityModal({
     setError(null);
     try {
       await setPrimaryActivity(activity?.id ?? null);
-      // الصلاحيات تُقرأ حيّةً — والشاشات تتغيّر فوراً بلا إعادة دخول.
+      // Permissions are read live, so the screens change at once without signing in again.
       refresh();
       onDone();
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر تغيير النشاط الرئيسي'));
+      setError(apiErrorMessage(e, t('settings.primary_activity.err_apply')));
     } finally {
       setSaving(false);
     }
@@ -59,28 +57,29 @@ export function PrimaryActivityModal({
 
   return (
     <div className="overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="تأكيد النشاط الرئيسي">
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('settings.primary_activity.aria_label')}>
         <div className="modal-head">
-          <div className="modal-title">{activity ? `اجعل «${activity.name}» النشاط الرئيسي` : 'إلغاء الترشيح — إظهار كل الشاشات'}</div>
+          <div className="modal-title">
+            {activity ? t('settings.primary_activity.title_make', { name: activity.name }) : t('settings.primary_activity.title_clear')}
+          </div>
           <button className="modal-close" onClick={onCancel}>✕</button>
         </div>
 
         {error && <p className="error" role="alert">{error}</p>}
-        {!preview && !error && <p>جارٍ حساب الأثر…</p>}
+        {!preview && !error && <p>{t('settings.primary_activity.computing')}</p>}
 
         {preview && (
           <>
             {preview.willHide.length === 0 && preview.willShow.length === 0 && (
-              <p className="muted" data-testid="primary-no-change">لا تتغيّر أي شاشة.</p>
+              <p className="muted" data-testid="primary-no-change">{t('settings.primary_activity.no_change')}</p>
             )}
 
             {preview.willHide.length > 0 && (
               <div className="field">
-                {/* ⭐ **بالاسم لا بالعدد**: «ستُخفى 4 شاشات» لا يُمكّن المالك
-                  * من الحكم — قد تكون الأربع بلا قيمة، وقد تكون فيها واحدة
-                  * يعمل عليها نصف موظفيه. */}
+                {/* By name, not by count: "4 screens will be hidden" does not let the owner
+                  * judge; one of them may be where half the staff work. */}
                 <label className="error" data-testid="will-hide-count">
-                  ستُخفى {preview.willHide.length} شاشات:
+                  {t('settings.primary_activity.will_hide', { n: preview.willHide.length })}
                 </label>
                 <ul data-testid="will-hide">
                   {preview.willHide.map((s) => (
@@ -88,14 +87,16 @@ export function PrimaryActivityModal({
                   ))}
                 </ul>
                 <p className="hint">
-                  ⚠️ الشاشات تختفي و<strong>البيانات تبقى كما هي</strong> — ولا يُحذف صفٌّ واحد. ويمكن التراجع في أي وقت.
+                  {t('settings.primary_activity.data_note_before')}
+                  <strong>{t('settings.primary_activity.data_note_strong')}</strong>
+                  {t('settings.primary_activity.data_note_after')}
                 </p>
               </div>
             )}
 
             {preview.willShow.length > 0 && (
               <div className="field">
-                <label data-testid="will-show-count">ستظهر {preview.willShow.length} شاشات:</label>
+                <label data-testid="will-show-count">{t('settings.primary_activity.will_show', { n: preview.willShow.length })}</label>
                 <ul data-testid="will-show">
                   {preview.willShow.map((s) => (
                     <li key={s.screen} data-testid={`show-${s.screen}`}>{s.label}</li>
@@ -105,14 +106,14 @@ export function PrimaryActivityModal({
             )}
 
             <p className="muted">
-              الشاشات المتاحة: {preview.currentCount} ← {preview.nextCount}
+              {t('settings.primary_activity.screens_available', { from: preview.currentCount, to: preview.nextCount })}
             </p>
 
             <div className="modal-actions">
               <button type="button" className="btn btn-primary" disabled={saving} onClick={apply} data-testid="primary-confirm">
-                تأكيد
+                {t('settings.primary_activity.confirm')}
               </button>
-              <button type="button" onClick={onCancel} disabled={saving}>إلغاء</button>
+              <button type="button" onClick={onCancel} disabled={saving}>{t('settings.primary_activity.cancel')}</button>
             </div>
           </>
         )}

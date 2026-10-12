@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
@@ -20,6 +21,7 @@ export function TransactionModal({
   onCancel: () => void;
   onSave: (data: TransactionInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [bankId, setBankId] = useState(editing?.bankId ?? banks[0]?.id ?? '');
   const [date, setDate] = useState(editing ? editing.date.slice(0, 10) : today());
   const [amount, setAmount] = useState(editing?.amount ?? '');
@@ -57,19 +59,18 @@ export function TransactionModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل الحركة البنكية' : 'حركة بنكية جديدة'}</div>
+          <div className="modal-title">{editing ? t('transactions.modal.title_edit') : t('transactions.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
-        {/* (ق-٢٨٥) التاجرُ يرى ما تغيّر: كان هذا السطر يحرّك الرصيد بيدٍ بلا قيد،
-            فصار سطرَ مطابقةٍ والرصيدُ يتبع الأستاذ. ومنعٌ بلا إعلانٍ يُقرأ عطلاً. */}
+        {/* This line used to move the balance by hand with no entry; it is now a matching line and the balance
+            follows the ledger. A restriction with no notice reads as a fault, so the merchant is told. */}
         <p className="hint" data-testid="tx-mirror-notice">
-          هذا السطر <strong>للمطابقة مع كشف البنك</strong> — ولا يحرّك الرصيد.
-          والرصيد يتبع القيود المحاسبية (الدفعات والإيجارات والقيود اليدوية).
+          {t('transactions.modal.mirror_before')} <strong>{t('transactions.modal.mirror_strong')}</strong> {t('transactions.modal.mirror_after')}
         </p>
         <div className="field">
-          <label>الحساب البنكي</label>
+          <label>{t('transactions.modal.bank')}</label>
           <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
             {banks.map((b) => (
               <option key={b.id} value={b.id}>
@@ -80,30 +81,30 @@ export function TransactionModal({
         </div>
         <div className="two-col">
           <div className="field">
-            <label>التاريخ</label>
+            <label>{t('transactions.modal.date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>المبلغ (سالب للصادر)</label>
-            <input className="num" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1000.00 أو -500.00" />
+            <label>{t('transactions.modal.amount')}</label>
+            <input className="num" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('transactions.modal.amount_placeholder')} />
           </div>
         </div>
         <div className="field">
-          <label>البيان</label>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="مثال: تحويل وارد من عميل" />
+          <label>{t('transactions.modal.memo')}</label>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('transactions.modal.memo_placeholder')} />
         </div>
         <div className="field">
-          <label>المصدر</label>
-          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="مبيعات / دفعة مقدمة..." />
+          <label>{t('transactions.modal.source')}</label>
+          <input value={source} onChange={(e) => setSource(e.target.value)} placeholder={t('transactions.modal.source_placeholder')} />
         </div>
         <BranchPicker branches={branches} value={branchId} onChange={setBranchId} />
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('transactions.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة الحركة'}
+            {editing ? t('transactions.modal.save_edit') : t('transactions.modal.add')}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CONSENT_SOURCES,
   MARKETING_CHANNELS,
@@ -11,24 +12,20 @@ import {
 import { dfmt } from '../../lib/format';
 
 /**
- * **الموافقةُ التسويقية — تُسجَّل قبل أوّل رسالة** (`ق-١٣٠٣` · ك/⑰A1).
+ * Marketing consent, recorded before the first message.
  *
- * **والحالةُ من الخادم لا تُحسب هنا**: قرارُ «أيجوز أن أرسل؟» له موضعٌ واحد، وشاشةٌ تعيد
- * حسابَه تخطئ في حالةٍ واحدة (رجوعٌ بعد موافقة) **والخطأُ رسالةٌ خرجت ولا تُستردّ**.
+ * The state comes from the server and is not computed here: "may I send?" has one
+ * place to be decided, and a screen recomputing it would get one case wrong (a
+ * withdrawal after consent), where the mistake is a message that cannot be recalled.
  *
- * **والسجلُّ معروضٌ لا مخفيّ**: اللائحة (م٢٨/٣) توجب الاحتفاظ بالإثبات — **وإثباتٌ لا يُقرأ
- * ليس إثباتاً**؛ ومن يُسأل «متى وافق؟» يجد الجواب هنا لا في قاعدة البيانات.
+ * The history is shown, not hidden: the regulation requires keeping the proof,
+ * and proof nobody can read is no proof.
  */
-const CHANNEL_LABEL: Record<MarketingChannel, string> = { SMS: 'رسائل نصية', EMAIL: 'بريد إلكتروني', WHATSAPP: 'واتساب' };
-const SOURCE_LABEL: Record<ConsentSource, string> = {
-  IN_PERSON: 'شفهياً في الفرع',
-  PHONE: 'عبر الهاتف',
-  WEB_FORM: 'نموذج الموقع',
-  WRITTEN: 'خطياً',
-  IMPORTED: 'منقولة من نظام سابق',
-};
+const channelKey = (channel: MarketingChannel) => `customers.consent.channel.${channel.toLowerCase()}`;
+const sourceKey = (source: ConsentSource) => `customers.consent.source.${source.toLowerCase()}`;
 
 export function MarketingConsentPanel({ customerId, canRecord }: { customerId: string; canRecord: boolean }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<MarketingConsentState | null>(null);
   const [source, setSource] = useState<ConsentSource>('IN_PERSON');
   const [busy, setBusy] = useState<MarketingChannel | null>(null);
@@ -46,7 +43,7 @@ export function MarketingConsentPanel({ customerId, canRecord }: { customerId: s
       setState(await getMarketingConsent(customerId));
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تسجيل الموافقة'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('customers.consent.err_record')));
     } finally {
       setBusy(null);
     }
@@ -57,19 +54,19 @@ export function MarketingConsentPanel({ customerId, canRecord }: { customerId: s
   return (
     <>
       <div className="card-title" style={{ marginBottom: 10 }}>
-        الموافقة على الرسائل التسويقية
+        {t('customers.consent.title')}
       </div>
       <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 10px' }}>
-        لا تُرسَل مواد دعائية إلا بموافقة العميل، ولكل قناة موافقتها. وله الرجوع عنها في أي وقت — ويُسجَّل الرجوع واقعةً جديدة ولا يُمحى ما قبله.
+        {t('customers.consent.intro')}
       </p>
 
       {canRecord && (
         <div className="field" style={{ maxWidth: 260, marginBottom: 10 }}>
-          <label>كيف وصلت الموافقة</label>
+          <label>{t('customers.consent.source_label')}</label>
           <select value={source} onChange={(e) => setSource(e.target.value as ConsentSource)}>
             {CONSENT_SOURCES.map((s) => (
               <option key={s} value={s}>
-                {SOURCE_LABEL[s]}
+                {t(sourceKey(s))}
               </option>
             ))}
           </select>
@@ -80,8 +77,8 @@ export function MarketingConsentPanel({ customerId, canRecord }: { customerId: s
       <table style={{ marginBottom: 14 }}>
         <thead>
           <tr>
-            <th>القناة</th>
-            <th>الحالة</th>
+            <th>{t('customers.consent.col_channel')}</th>
+            <th>{t('customers.consent.col_status')}</th>
             {canRecord && <th></th>}
           </tr>
         </thead>
@@ -90,20 +87,20 @@ export function MarketingConsentPanel({ customerId, canRecord }: { customerId: s
             const verdict = state.channels[channel];
             return (
               <tr key={channel}>
-                <td>{CHANNEL_LABEL[channel]}</td>
+                <td>{t(channelKey(channel))}</td>
                 <td>
                   {verdict.allowed ? (
-                    <span className="badge paid">موافق — منذ {dfmt(verdict.since)}</span>
+                    <span className="badge paid">{t('customers.consent.allowed_since', { date: dfmt(verdict.since) })}</span>
                   ) : verdict.reason === 'WITHDRAWN' ? (
-                    <span className="badge overdue">رجع عن الموافقة{verdict.at ? ` — ${dfmt(verdict.at)}` : ''}</span>
+                    <span className="badge overdue">{verdict.at ? t('customers.consent.withdrawn_at', { date: dfmt(verdict.at) }) : t('customers.consent.withdrawn')}</span>
                   ) : (
-                    <span className="badge">لم يوافق</span>
+                    <span className="badge">{t('customers.consent.not_granted')}</span>
                   )}
                 </td>
                 {canRecord && (
                   <td>
                     <button className="btn btn-ghost btn-sm" disabled={busy === channel} onClick={() => toggle(channel, !verdict.allowed)}>
-                      {verdict.allowed ? 'سجّل رجوعاً' : 'سجّل موافقة'}
+                      {verdict.allowed ? t('customers.consent.record_withdrawal') : t('customers.consent.record_consent')}
                     </button>
                   </td>
                 )}
@@ -115,23 +112,23 @@ export function MarketingConsentPanel({ customerId, canRecord }: { customerId: s
 
       {state.events.length > 0 && (
         <details style={{ marginBottom: 16 }}>
-          <summary style={{ fontSize: 12, cursor: 'pointer' }}>سجل الموافقات ({state.events.length})</summary>
+          <summary style={{ fontSize: 12, cursor: 'pointer' }}>{t('customers.consent.history', { n: state.events.length })}</summary>
           <table style={{ marginTop: 8 }}>
             <thead>
               <tr>
-                <th>التاريخ</th>
-                <th>القناة</th>
-                <th>الواقعة</th>
-                <th>المصدر</th>
+                <th>{t('customers.consent.col_date')}</th>
+                <th>{t('customers.consent.col_channel')}</th>
+                <th>{t('customers.consent.col_event')}</th>
+                <th>{t('customers.consent.col_source')}</th>
               </tr>
             </thead>
             <tbody>
               {state.events.map((e) => (
                 <tr key={e.id}>
                   <td className="num">{dfmt(e.at)}</td>
-                  <td>{CHANNEL_LABEL[e.channel]}</td>
-                  <td>{e.granted ? 'موافقة' : 'رجوع عن الموافقة'}</td>
-                  <td>{SOURCE_LABEL[e.source]}</td>
+                  <td>{t(channelKey(e.channel))}</td>
+                  <td>{e.granted ? t('customers.consent.event_granted') : t('customers.consent.event_withdrawn')}</td>
+                  <td>{t(sourceKey(e.source))}</td>
                 </tr>
               ))}
             </tbody>

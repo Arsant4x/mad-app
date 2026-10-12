@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { useLocation } from 'react-router-dom';
 import { createCustomer, listCustomers, type Customer, type NewCustomerKind } from '../../api/customers';
@@ -23,27 +24,25 @@ import { DebitNoteModal } from './DebitNoteModal';
 import { InvoiceBuilderView } from './InvoiceBuilderView';
 import { InvoiceListView } from './InvoiceListView';
 
-/** البنّاءُ للإنشاء وحدَه: الصادرُ لا يُعدَّل ولا يُحذف (ق-٩٤٣) — والمخرجُ الإشعاران. */
+/** The builder only creates: an issued document is never edited or deleted; the remedy is a credit or debit note. */
 type View = { mode: 'list' } | { mode: 'builder' };
 
 export function InvoicesPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
-  // Dashboard's "+ فاتورة جديدة" navigates here with this nav state to jump
-  // straight into the builder, matching the mockup's goTo('invoice');
-  // showInvoiceBuilder() combo.
+  // The dashboard's "new invoice" button navigates here with this nav state to
+  // jump straight into the builder.
   const [view, setView] = useState<View>((location.state as { openBuilder?: boolean } | null)?.openBuilder ? { mode: 'builder' } : { mode: 'list' });
   const [saveError, setSaveError] = useState<string | null>(null);
   /**
-   * مسوّدةُ الفاتورة المرفوضة **لتجاوزٍ ممكن** — تُحفظ لتُعاد بتصريح.
-   *
-   * ⚠️ **وتُحفظ المسوّدةُ لا علَمٌ منطقيّ**: التاجرُ ما زال في المُنشئ وبياناتُه
-   * فيه، **وإعادةُ الإرسال تحتاج ما أُرسل بعينه** — فلو حُفظ علَمٌ وحده لوجب
-   * على المُنشئ أن يُرسل ثانيةً، **وهو ما لا يقع ما دام الخطأُ مُلتقَطاً هنا**.
+   * The draft refused for an overridable reason, kept so it can be resent with
+   * the override. The draft itself is kept, not a flag: the resend needs exactly
+   * what was sent, and the builder does not resend while the error is caught here.
    */
   const [overridable, setOverridable] = useState<Parameters<typeof handleSave>[0] | null>(null);
   const [pendingSubmit, setPendingSubmit] = useState<Invoice | null>(null);
@@ -84,7 +83,7 @@ export function InvoicesPage() {
       await submitInvoiceToZatca(invoice.id);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إرسال الفاتورة'));
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_submit')));
     } finally {
       setSubmittingId(null);
       await reload();
@@ -103,7 +102,7 @@ export function InvoicesPage() {
       await issueCreditNote(invoice.id, { reason, issueDate: today() });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار إشعار الدائن'));
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_credit_note')));
     } finally {
       await reload();
     }
@@ -119,15 +118,16 @@ export function InvoicesPage() {
       await issueDebitNote(invoice.id, { reason, issueDate: today(), lines });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار الإشعار المدين'));
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_debit_note')));
     } finally {
       await reload();
     }
   }
 
   /**
-   * ⚖️ بدلٌ عن مردودة (ق-٩٥٨): الخادمُ ينسخ البيعَ كلَّه من المردودة ويُغلقها — لا بنودَ
-   * تُرسَل. وتُرسَل ساعةُ الجهاز كما في الإنشاء (ق-١٨٥) للقياسية التي يُحدَّث تاريخُها.
+   * A replacement for a rejected invoice: the server copies the whole sale from
+   * the rejected one and closes it, so no lines are sent. The device clock is
+   * sent as on creation, for a standard invoice whose date is refreshed.
    */
   async function confirmReplacement() {
     if (!replacementFor) return;
@@ -138,22 +138,23 @@ export function InvoicesPage() {
       await issueReplacement(invoice.id, { issuedAt: now.toISOString(), issuedOffsetMin: -now.getTimezoneOffset() });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إصدار البدل'));
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_replacement')));
     } finally {
       await reload();
     }
   }
 
   /**
-   * ⚖️ (ق-١٥٠٦/١ و٤) **تسليمُ الفاتورة القياسية: ملفُّ XML المجاز من الهيئة** — التنزيلُ من الشاشة قناتُها الآن. ورفضُ
-   * الخادم (لم تُجَز · أُجيزت بلا نسخة · مبسّطة) يُعرض بنصّه — ولا بديلَ يُقترح: نسختُنا قبل الإجازة لا تُسلَّم مكانها.
+   * A standard invoice is delivered as the XML file cleared by the authority.
+   * A server refusal (not cleared, cleared without a copy, simplified) is shown
+   * as is, with no fallback: our pre-clearance copy is not delivered in its place.
    */
   async function handleDownloadClearedXml(invoice: Invoice) {
     try {
       await downloadClearedXml(invoice);
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تنزيل الفاتورة المجازة'));
+      setSubmitError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('invoices.page.err_download_cleared')));
     }
   }
 
@@ -166,20 +167,20 @@ export function InvoicesPage() {
   /**
    * The server refuses to edit the content of an invoice that entered the
    * ZATCA chain (409) — the builder posts the whole document, so that refusal
-   * covers this screen. Show its Arabic reason and **stay in the builder**:
+   * covers this screen. Show its reason and **stay in the builder**:
    * closing back to the list would throw away everything the user typed for a
    * save that never happened.
    */
   /**
-   * ⚖️ **ورفضُ حدّ الائتمان يُعرض بزرِّ تجاوزٍ لا بـ«حسناً» وحدها** (`ق-٣٣٩`).
+   * A credit limit refusal is shown with an override button, not just "OK".
    *
-   * **الرسالةُ تحمل الحدَّ والقائمَ والمطلوب**، فيقرؤها التاجر **ثم يقرّر**.
-   * ⚠️ **ولا يُرسَل التصريحُ مع أول طلب**: تصريحٌ مسبقٌ يجعل الحدَّ زخرفةً —
-   * وهو عينُ «شيءٍ يُرى ولا يفعل» الذي بُنيت الميزةُ لعلاجه.
+   * The message carries the limit, the current exposure and the request, so the
+   * merchant reads it and then decides. The override is never sent with the
+   * first request: a pre-declared override would make the limit decorative.
    *
-   * ⚠️ **والزرُّ يُعرض على `CREDIT_LIMIT_EXCEEDED` وحده**: المنعُ الصلب ورفضُ
-   * الصلاحية **يُقرآن ولا زرَّ لهما** — **وزرٌّ يُعرض ويُرفض دائماً أسوأ من
-   * غيابه**، فيُقرأ النظامُ عابثاً.
+   * The button appears only on `CREDIT_LIMIT_EXCEEDED`: a hard block or a
+   * permission refusal is read without a button, since a button that is always
+   * refused is worse than none.
    */
   async function handleSave(
     data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[]; prepaymentInvoiceIds?: string[] },
@@ -193,8 +194,8 @@ export function InvoicesPage() {
       await createInvoice(payload);
     } catch (e) {
       const body = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? 'تعذّر حفظ الفاتورة'));
-      // **الرمزُ يقرّر لا نصُّ الرسالة** — فالنصُّ مترجَمٌ ويتغيّر بلا شكوى.
+      setSaveError(Array.isArray(body?.message) ? body.message.join(' — ') : (body?.message ?? t('invoices.page.err_save')));
+      // The error code decides, not the message text, which is translated.
       if (apiErrorCode(e) === CREDIT_LIMIT_EXCEEDED) setOverridable(data);
       return;
     }
@@ -217,13 +218,13 @@ export function InvoicesPage() {
           onCreateCustomer={handleCreateCustomer}
         />
         {saveError && !overridable && (
-          <ConfirmModal title="تعذّر الحفظ" body={saveError} confirmLabel="حسناً" hideCancel onCancel={() => setSaveError(null)} onConfirm={() => setSaveError(null)} />
+          <ConfirmModal title={t('invoices.page.save_failed_title')} body={saveError} confirmLabel={t('invoices.page.ok')} hideCancel onCancel={() => setSaveError(null)} onConfirm={() => setSaveError(null)} />
         )}
         {saveError && overridable && (
           <ConfirmModal
-            title="تجاوز حدّ الائتمان؟"
+            title={t('invoices.page.credit_override_title')}
             body={saveError}
-            confirmLabel="تجاوز وإصدار — ويُسجَّل باسمك"
+            confirmLabel={t('invoices.page.credit_override_confirm')}
             onCancel={() => {
               setSaveError(null);
               setOverridable(null);
@@ -252,24 +253,27 @@ export function InvoicesPage() {
       {debitNoteFor && <DebitNoteModal invoice={debitNoteFor} onCancel={() => setDebitNoteFor(null)} onConfirm={handleIssueDebitNote} />}
       {replacementFor && (
         <ConfirmModal
-          title="إصدار بدل عن الفاتورة المردودة"
-          body={`تُغلق الفاتورة ${replacementFor.no} كما هي (عدّادها وتجزئتها لا يُمسّان)، ويصدر بدلها مستند جديد برقم جديد بالبنود نفسها؛ يُعكس قيدها وتعود بضاعتها إلى الرفّ ثم تُخصم للبدل، ويُنقل ما قُبض عليها إلى البدل ويُسجَّل النقل باسمك. ${replacementFor.customer.vatNumber ? 'فاتورة قياسية: يحمل البدل تاريخ اليوم.' : 'فاتورة مبسَّطة: يحتفظ البدل بتاريخ المعاملة الأصلي ولا يُعاد للعميل.'}`}
-          confirmLabel="إصدار البدل"
+          title={t('invoices.page.replacement_title')}
+          body={t('invoices.page.replacement_body', {
+            no: replacementFor.no,
+            tail: replacementFor.customer.vatNumber ? t('invoices.page.replacement_standard') : t('invoices.page.replacement_simplified'),
+          })}
+          confirmLabel={t('invoices.page.replacement_confirm')}
           onCancel={() => setReplacementFor(null)}
           onConfirm={confirmReplacement}
         />
       )}
       {pendingSubmit && (
         <ConfirmModal
-          title="إرسال الفاتورة لهيئة الزكاة"
-          body={`إرسال الفاتورة ${pendingSubmit.no} للتصديق؟ لا يمكن سحب الفاتورة بعد تصديقها.`}
-          confirmLabel="إرسال"
+          title={t('invoices.page.submit_title')}
+          body={t('invoices.page.submit_body', { no: pendingSubmit.no })}
+          confirmLabel={t('invoices.page.submit_confirm')}
           onCancel={() => setPendingSubmit(null)}
           onConfirm={confirmSubmit}
         />
       )}
       {submitError && (
-        <ConfirmModal title="تعذّر الإرسال" body={submitError} confirmLabel="حسناً" hideCancel onCancel={() => setSubmitError(null)} onConfirm={() => setSubmitError(null)} />
+        <ConfirmModal title={t('invoices.page.submit_failed_title')} body={submitError} confirmLabel={t('invoices.page.ok')} hideCancel onCancel={() => setSubmitError(null)} onConfirm={() => setSubmitError(null)} />
       )}
     </>
   );

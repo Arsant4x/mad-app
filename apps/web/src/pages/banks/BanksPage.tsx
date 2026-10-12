@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { BANK_KIND_LABEL, createBank, deleteBank, getBankCodeBand, listBanks, setBankArchived, updateBank, type Bank, type BankInput, type BankUpdateInput, type CodeBandStatus } from '../../api/banks';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -10,11 +11,12 @@ import { NetworkSettlementsPanel } from './NetworkSettlementsPanel';
 import { ReconciliationPanel } from './ReconciliationPanel';
 
 export function BanksPage() {
+  const { t } = useTranslation();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by day-to-day default.
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; bank: Bank } | null>(null);
   const [reconciling, setReconciling] = useState<Bank | null>(null);
@@ -25,7 +27,7 @@ export function BanksPage() {
 
   async function reload() {
     setBanks(await listBanks(showArchived));
-    // سقفُ نطاق الرموز يُقرأ مع كل تحميل — فالإنذار يتبع الحالة لا لحظةَ الفتح.
+    // The code range is read on every load, so the warning follows the current state.
     setCodeBand(await getBankCodeBand());
   }
 
@@ -44,11 +46,11 @@ export function BanksPage() {
 
   async function handleSave(data: BankInput | BankUpdateInput) {
     if (modal?.mode === 'edit') {
-      // 🔴 ق-١٣٨٤: الفرعُ لا يُرسَل في التعديل — والنوعُ يمنعه (`BankUpdateInput`)، فيُنزع هنا صراحةً.
+      // The branch is never sent on edit; strip it explicitly.
       const { branchId: _createOnly, ...update } = data;
       await updateBank(modal.bank.id, update);
     } else {
-      // النافذةُ لا تُنشئ بلا نوعٍ معلَن (ق-١٤٣١) — فجسمُ الإنشاء `BankInput` كاملاً.
+      // The modal never creates without a declared kind, so the body is a full `BankInput`.
       await createBank(data as BankInput);
     }
     setModal(null);
@@ -68,42 +70,41 @@ export function BanksPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الحسابات البنكية</div>
-          <div className="page-sub">أرصدة الحسابات البنكية للمنشأة</div>
+          <div className="page-title">{t('banks.page.title')}</div>
+          <div className="page-sub">{t('banks.page.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn secondary" onClick={() => setSettling(true)}>
-            ▦ تسويات الشبكة
+            {t('banks.page.network_settlements')}
           </button>
           <button className="btn secondary" onClick={() => setDepositing(true)}>
-            ⇄ إيداعات الأدراج
+            {t('banks.page.cash_deposits')}
           </button>
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + حساب بنكي
+            {t('banks.page.add')}
           </button>
         </div>
       </div>
 
-      {/* إنذارُ سقف الرموز (ق-٢٩٥) — **قبل الجدار لا عنده**: رمزُ الحساب لا
-          يعود بحذف البنك، فالنطاق يمشي في اتجاهٍ واحد. */}
+      {/* Warn before the code range runs out: a code is not freed when a bank is deleted. */}
       {codeBand?.warn && (
         <div className="page-sub" style={{ marginBottom: 14 }}>
           {codeBand.remaining > 0
-            ? `⚠ بقيت ${codeBand.remaining} من ${codeBand.capacity} خانة في نطاق رموز ${codeBand.name} — والرمز لا يعود بحذف الحساب. راجعنا قبل أن ينفد.`
-            : `⛔ نفدت خانات نطاق رموز ${codeBand.name} — لا يمكن إنشاء حساب بنكي جديد حتى يُوسَّع النطاق. راجعنا.`}
+            ? t('banks.page.band_remaining', { remaining: codeBand.remaining, capacity: codeBand.capacity, name: codeBand.name })
+            : t('banks.page.band_exhausted', { name: codeBand.name })}
         </div>
       )}
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل الحساب..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('banks.page.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('banks.page.show_archived')}
         </button>
       </div>
 
@@ -111,11 +112,11 @@ export function BanksPage() {
         <table>
           <thead>
             <tr>
-              <th>اسم الحساب</th>
-              <th>IBAN</th>
-              <th>الرصيد الحالي</th>
-              <th>الرصيد الافتتاحي</th>
-              <th>تاريخ الافتتاح</th>
+              <th>{t('banks.page.col_name')}</th>
+              <th>{t('banks.page.col_iban')}</th>
+              <th>{t('banks.page.col_balance')}</th>
+              <th>{t('banks.page.col_opening_balance')}</th>
+              <th>{t('banks.page.col_opening_date')}</th>
               <th></th>
             </tr>
           </thead>
@@ -123,7 +124,7 @@ export function BanksPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={6}>
-                  <div className="empty-state">لا توجد حسابات بنكية مطابقة</div>
+                  <div className="empty-state">{t('banks.page.empty')}</div>
                 </td>
               </tr>
             )}
@@ -131,9 +132,9 @@ export function BanksPage() {
               <tr key={b.id}>
                 <td>
                   {b.name}
-                  {/* ق-١٤٣١ — النوعُ يُرى، و«غيرُ المعلَن» يُعلَّم ليُعلَن من التعديل (لا يُنقل قبله). */}
-                  <span className={`badge ${b.kind === 'LEGACY_UNDECLARED' ? 'due' : 'draft'}`} style={{ marginRight: 6 }}>{BANK_KIND_LABEL[b.kind]}</span>
-                  {b.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
+                  {/* The kind is shown; an undeclared row is flagged so it gets declared from edit. */}
+                  <span className={`badge ${b.kind === 'LEGACY_UNDECLARED' ? 'due' : 'draft'}`} style={{ marginInlineStart: 6 }}>{BANK_KIND_LABEL[b.kind]}</span>
+                  {b.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('banks.page.archived')}</span>}
                 </td>
                 <td className="num">{b.iban || '—'}</td>
                 <td className="num">{fmt(b.balance)}</td>
@@ -142,11 +143,11 @@ export function BanksPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', bank: b }) },
-                      { label: '⚖ التسوية البنكية', onClick: () => setReconciling(b) },
-                      { label: b.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
+                      { label: t('banks.page.edit'), onClick: () => setModal({ mode: 'edit', bank: b }) },
+                      { label: t('banks.page.reconcile'), onClick: () => setReconciling(b) },
+                      { label: b.archived ? t('banks.page.unarchive') : t('banks.page.archive'), onClick: () => setBankArchived(b.id, !b.archived).then(reload) },
                       '-',
-                      { label: '🗑 حذف', onClick: () => setPendingDelete(b), danger: true },
+                      { label: t('banks.page.delete'), onClick: () => setPendingDelete(b), danger: true },
                     ]}
                   />
                 </td>
@@ -163,9 +164,9 @@ export function BanksPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الحساب البنكي"
-          body={`حذف "${pendingDelete.name}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('banks.page.delete_title')}
+          body={t('banks.page.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('banks.page.delete_confirm')}
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmDelete}
         />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { listOpenPrepayments, type Customer, type Invoice, type InvoiceLineInput, type OpenPrepayment } from '../../api/invoices';
@@ -9,22 +10,20 @@ import { draftTaxOf, lineTaxDraftError, lineTaxPayload, rateForCategory, STANDAR
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
 
-/** ⑧ البندُ يحمل الفئةَ والسبب لا نسبةً تُختار (`ق-١٢١١`/③)؛ والنسبةُ للمعاينة تُقرأ من الفئة. */
+/** A line carries its tax category and reason, not a chosen rate; the preview rate is read from the category. */
 export interface LineDraft {
   description: string;
   quantity: number;
   unitPrice: number;
-  /** ④B1 — خصمٌ مبلغاً على السطر؛ صفرٌ غياباً. */
+  /** A line discount as an amount; zero when absent. */
   discount: number;
   tax: LineTaxDraft;
 }
 
-/** ما يُرسَل للخادم: الوصفُ والكمّيةُ والسعرُ والفئةُ بسببها — بلا `taxRate` (الخادمُ يشتقّها). */
+/** What is sent to the server: description, quantity, price and category with its reason, without `taxRate` (the server derives it). */
 function lineDraftPayload(l: LineDraft): InvoiceLineInput {
   return { description: l.description, quantity: l.quantity, unitPrice: l.unitPrice, ...(l.discount > 0 ? { discount: l.discount } : {}), ...lineTaxPayload(l.tax) };
 }
-
-const DEFAULT_NOTES = 'يتم سداد المبلغ خلال 30 يوماً من تاريخ الإصدار. تُضاف غرامة تأخير بنسبة 1.5٪ شهرياً على المبالغ المتأخرة.';
 
 function defaultDueDate(): string {
   const d = new Date();
@@ -43,8 +42,8 @@ function initialLines(editing: Invoice | null): LineDraft[] {
     }));
   }
   return [
-    { description: 'اشتراك شهري — النظام المحاسبي', quantity: 1, unitPrice: 1200, discount: 0, tax: STANDARD_LINE_TAX },
-    { description: 'تدريب فريق المحاسبة', quantity: 3, unitPrice: 450, discount: 0, tax: STANDARD_LINE_TAX },
+    { description: i18n.t('invoices.builder.sample_line_subscription'), quantity: 1, unitPrice: 1200, discount: 0, tax: STANDARD_LINE_TAX },
+    { description: i18n.t('invoices.builder.sample_line_training'), quantity: 3, unitPrice: 450, discount: 0, tax: STANDARD_LINE_TAX },
   ];
 }
 
@@ -65,18 +64,19 @@ export function InvoiceBuilderView({
   onSave: (data: { customerId: string; issueDate: string; issuedAt?: string; issuedOffsetMin?: number; dueDate: string; notes: string; branchId: string; lines: InvoiceLineInput[]; prepaymentInvoiceIds?: string[] }) => Promise<void>;
   onCreateCustomer: (name: string, kind: NewCustomerKind) => Promise<Customer>;
 }) {
+  const { t } = useTranslation();
   const [customerInput, setCustomerInput] = useState(editing?.customer.name ?? '');
-  // ②A1: عميلٌ جديد يُنشأ من هنا يحتاج صفتَه — الخادمُ يرفض بلا صفة، والشاشةُ تسألها بجانب الاسم.
+  // A customer created from here needs its kind: the server refuses without one, so the screen asks next to the name.
   const [newCustomerKind, setNewCustomerKind] = useState<NewCustomerKind | ''>('');
   const [issueDate, setIssueDate] = useState(editing ? editing.issueDate.slice(0, 10) : today());
   const [dueDate, setDueDate] = useState(editing ? editing.dueDate.slice(0, 10) : defaultDueDate());
-  const [notes, setNotes] = useState(editing?.notes ?? DEFAULT_NOTES);
+  const [notes, setNotes] = useState(() => editing?.notes ?? i18n.t('invoices.builder.default_notes'));
   const [branchId, setBranchId] = useState(editing?.branchId ?? '');
   const [lines, setLines] = useState<LineDraft[]>(() => initialLines(editing));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ④A1: الدفعاتُ المقدَّمة المعلَّقة للعميل المختار — يقرؤها الخادم (لا تُحسب هنا)، وتُطبَّق كاملةً بما يختاره التاجر.
+  // Open prepayments for the chosen customer, read from the server and applied in full as the merchant picks.
   const matchedCustomerId = useMemo(() => customers.find((c) => c.name === customerInput.trim())?.id ?? null, [customers, customerInput]);
   const [openPrepayments, setOpenPrepayments] = useState<OpenPrepayment[]>([]);
   const [applyIds, setApplyIds] = useState<string[]>([]);
@@ -100,9 +100,9 @@ export function InvoiceBuilderView({
   }, [matchedCustomerId, editing]);
   const appliedPreview = useMemo(() => openPrepayments.filter((p) => applyIds.includes(p.id)).reduce((s, p) => s + num0(p.total), 0), [openPrepayments, applyIds]);
 
-  // معاينةٌ بنسبةٍ مشتقّةٍ من الفئة — والمعتمَدُ ما يعيده الخادم بدالّة المجاميع الواحدة.
+  // Preview with the rate derived from the category; the server's totals are authoritative.
   const totals = useMemo(() => {
-    // ④B1 — الصافي بعد خصم السطر، والضريبةُ منه (BT-131).
+    // Net after the line discount, and the tax on that net.
     const net = (l: LineDraft) => Math.max(0, l.quantity * l.unitPrice - (l.discount || 0));
     const subtotal = lines.reduce((s, l) => s + net(l), 0);
     const tax = lines.reduce((s, l) => s + net(l) * (rateForCategory(l.tax.taxCategory) / 100), 0);
@@ -130,10 +130,11 @@ export function InvoiceBuilderView({
       setError(i18n.t('err_invoice_line_desc'));
       return;
     }
-    // سببُ الفئة قبل الإرسال — بقواعد الخادم نفسِها كي لا يُفاجَأ التاجر بـ400 بعد أن أنشأ العميل.
+    // Check the category reason before sending, with the server's own rules, so the
+    // merchant is not surprised by a 400 after the customer was created.
     const taxProblem = lines.map((l, i) => ({ i, msg: lineTaxDraftError(l.tax) })).find((x) => x.msg);
     if (taxProblem) {
-      setError(`البند ${taxProblem.i + 1}: ${taxProblem.msg}`);
+      setError(t('invoices.common.line_error', { n: taxProblem.i + 1, msg: taxProblem.msg }));
       return;
     }
 
@@ -142,14 +143,14 @@ export function InvoiceBuilderView({
       let customer = customers.find((c) => c.name === name);
       if (!customer) {
         if (!newCustomerKind) {
-          setError('العميل جديد — اختر صفته (فرد · مؤسسة · شخص اعتباري) فهي ما يقرّر نوع الفاتورة');
+          setError(t('invoices.builder.err_new_customer_kind'));
           setSaving(false);
           return;
         }
         customer = await onCreateCustomer(name, newCustomerKind);
       }
-      // فاتورةٌ مؤرَّخةٌ باليوم تحمل لحظةَ الجهاز وانحرافَه؛ والمؤرَّخة بيدٍ في يومٍ آخر
-      // لا وقتَ معلوماً لها فلا يُخترَع (ق-١٨٥).
+      // An invoice dated today carries the device's moment and offset; one dated by hand
+      // on another day has no known time, so none is invented.
       const stamped = issueDate === today() ? { issuedAt: new Date().toISOString(), issuedOffsetMin: -new Date().getTimezoneOffset() } : {};
       await onSave({ customerId: customer.id, issueDate, dueDate, notes, branchId, lines: lines.map(lineDraftPayload), ...stamped, ...(applyIds.length ? { prepaymentInvoiceIds: applyIds } : {}) });
     } catch (e) {
@@ -163,15 +164,15 @@ export function InvoiceBuilderView({
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">{editing ? 'تعديل فاتورة' : 'إنشاء فاتورة'}</div>
-          <div className="page-sub">سيتم ترحيلها تلقائياً إلى الذمم المدينة عند الإصدار</div>
+          <div className="page-title">{editing ? t('invoices.builder.title_edit') : t('invoices.builder.title_create')}</div>
+          <div className="page-sub">{t('invoices.builder.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('invoices.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديلات' : 'إصدار الفاتورة'}
+            {editing ? t('invoices.builder.save_edit') : t('invoices.builder.issue')}
           </button>
         </div>
       </div>
@@ -180,36 +181,36 @@ export function InvoiceBuilderView({
         <div>
           <div className="card">
             <div className="card-title" style={{ marginBottom: 14 }}>
-              بيانات الفاتورة
+              {t('invoices.builder.details_title')}
             </div>
             <div className="two-col">
               <div className="field">
-                <label>العميل</label>
-                <input list="inv-customer-suggestions" value={customerInput} onChange={(e) => setCustomerInput(e.target.value)} placeholder="اكتب للبحث عن العميل..." />
+                <label>{t('invoices.builder.customer')}</label>
+                <input list="inv-customer-suggestions" value={customerInput} onChange={(e) => setCustomerInput(e.target.value)} placeholder={t('invoices.builder.customer_placeholder')} />
                 <datalist id="inv-customer-suggestions">
                   {customers.map((c) => (
                     <option key={c.id} value={c.name} />
                   ))}
                 </datalist>
                 {customerInput.trim() && !customers.some((c) => c.name === customerInput.trim()) && (
-                  <select aria-label="صفة العميل الجديد" value={newCustomerKind} onChange={(e) => setNewCustomerKind(e.target.value as NewCustomerKind | '')} style={{ marginTop: 6 }}>
-                    <option value="">عميل جديد — اختر صفته</option>
-                    <option value="NATURAL">فرد — فاتورة مبسّطة</option>
-                    <option value="ESTABLISHMENT">مؤسسة فردية — فاتورة كاملة</option>
-                    <option value="LEGAL_PERSON">شخص اعتباري — فاتورة كاملة</option>
+                  <select aria-label={t('invoices.builder.new_customer_kind_label')} value={newCustomerKind} onChange={(e) => setNewCustomerKind(e.target.value as NewCustomerKind | '')} style={{ marginTop: 6 }}>
+                    <option value="">{t('invoices.builder.new_customer_kind_prompt')}</option>
+                    <option value="NATURAL">{t('invoices.builder.kind_natural')}</option>
+                    <option value="ESTABLISHMENT">{t('invoices.builder.kind_establishment')}</option>
+                    <option value="LEGAL_PERSON">{t('invoices.builder.kind_legal_person')}</option>
                   </select>
                 )}
               </div>
               <div className="field">
-                <label>رقم الفاتورة</label>
+                <label>{t('invoices.builder.invoice_no')}</label>
                 <input className="num" readOnly value={editing?.no ?? nextNumberHint} />
               </div>
               <div className="field">
-                <label>تاريخ الإصدار</label>
+                <label>{t('invoices.builder.issue_date')}</label>
                 <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
               </div>
               <div className="field">
-                <label>تاريخ الاستحقاق</label>
+                <label>{t('invoices.builder.due_date')}</label>
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
             </div>
@@ -217,9 +218,9 @@ export function InvoiceBuilderView({
                 should never be asked to pick one. */}
             {branches.length > 0 && (
               <div className="field">
-                <label>الفرع</label>
+                <label>{t('invoices.builder.branch')}</label>
                 <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-                  <option value="">— على مستوى الشركة —</option>
+                  <option value="">{t('invoices.builder.company_wide')}</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
@@ -232,18 +233,18 @@ export function InvoiceBuilderView({
 
           <div className="card">
             <div className="card-title" style={{ marginBottom: 14 }}>
-              بنود الفاتورة
+              {t('invoices.builder.lines_title')}
             </div>
             <table className="line-items">
               <thead>
                 <tr>
-                  <th>الوصف</th>
-                  <th style={{ width: 55 }}>الكمية</th>
-                  <th style={{ width: 95 }}>السعر</th>
-                  <th style={{ width: 80 }}>الخصم</th>
-                  <th style={{ width: 210 }}>الفئة الضريبية</th>
-                  <th style={{ width: 55 }}>النسبة</th>
-                  <th style={{ width: 100 }}>الإجمالي</th>
+                  <th>{t('invoices.common.col_description')}</th>
+                  <th style={{ width: 55 }}>{t('invoices.common.col_quantity')}</th>
+                  <th style={{ width: 95 }}>{t('invoices.common.col_price')}</th>
+                  <th style={{ width: 80 }}>{t('invoices.builder.col_discount')}</th>
+                  <th style={{ width: 210 }}>{t('invoices.common.col_tax_category')}</th>
+                  <th style={{ width: 55 }}>{t('invoices.common.col_rate')}</th>
+                  <th style={{ width: 100 }}>{t('invoices.builder.col_total')}</th>
                   <th style={{ width: 30 }}></th>
                 </tr>
               </thead>
@@ -260,13 +261,13 @@ export function InvoiceBuilderView({
                       <input className="num" value={l.unitPrice} onChange={(e) => updateLine(i, { unitPrice: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td>
-                      <input className="num" aria-label={`خصم البند ${i + 1}`} value={l.discount} onChange={(e) => updateLine(i, { discount: Math.max(0, parseFloat(e.target.value) || 0) })} />
+                      <input className="num" aria-label={t('invoices.builder.line_discount_label', { n: i + 1 })} value={l.discount} onChange={(e) => updateLine(i, { discount: Math.max(0, parseFloat(e.target.value) || 0) })} />
                     </td>
                     <td>
                       <LineTaxPicker compact value={l.tax} onChange={(tax) => updateLine(i, { tax })} />
                     </td>
-                    {/* النسبةُ تُقرأ من الفئة ولا تُدخَل — عمودٌ للقراءة كما في النموذج المُقرّ. */}
-                    <td className="num">{rateForCategory(l.tax.taxCategory)}٪</td>
+                    {/* The rate is read from the category, not entered. */}
+                    <td className="num">{t('invoices.common.rate_pct', { rate: rateForCategory(l.tax.taxCategory) })}</td>
                     <td className="num line-total">{fmt(Math.max(0, l.quantity * l.unitPrice - (l.discount || 0)))}</td>
                     <td>
                       {lines.length > 1 && (
@@ -280,21 +281,21 @@ export function InvoiceBuilderView({
               </tbody>
             </table>
             <button className="add-line" onClick={addLine}>
-              + إضافة بند جديد
+              {t('invoices.common.add_line')}
             </button>
           </div>
 
           <div className="card">
             <div className="field" style={{ marginBottom: 0 }}>
-              <label>ملاحظات</label>
+              <label>{t('invoices.builder.notes')}</label>
               <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
 
-          {/* ④A1: دفعاتٌ مقدَّمة معلَّقة لهذا العميل — تُطبَّق كاملةً على هذه الفاتورة، والمقدَّمُ يُخصم من المستحقّ لا من الإجمالي. */}
+          {/* Open prepayments for this customer, applied in full to this invoice; a prepayment reduces the amount due, not the total. */}
           {openPrepayments.length > 0 && (
             <fieldset className="field" data-testid="open-prepayments" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-              <legend>دفعات مقدَّمة معلَّقة للعميل — تُطبَّق كاملةً على هذه الفاتورة</legend>
+              <legend>{t('invoices.builder.open_prepayments')}</legend>
               {openPrepayments.map((p) => (
                 <label key={p.id} style={{ display: 'block' }}>
                   <input
@@ -303,7 +304,7 @@ export function InvoiceBuilderView({
                     onChange={(e) => setApplyIds((ids) => (e.target.checked ? [...ids, p.id] : ids.filter((x) => x !== p.id)))}
                   />{' '}
                   <span className="num">{p.no}</span> · {p.issueDate.slice(0, 10)} · <span className="num">{p.total}</span> {p.currency}
-                  {p.receiptNo && <span className="hint"> — من سند القبض {p.receiptNo}</span>}
+                  {p.receiptNo && <span className="hint">{t('invoices.builder.from_receipt', { no: p.receiptNo })}</span>}
                 </label>
               ))}
             </fieldset>
@@ -315,26 +316,26 @@ export function InvoiceBuilderView({
         <div>
           <div className="totals-card">
             <div className="t-row">
-              <span>المجموع الفرعي</span>
+              <span>{t('invoices.builder.subtotal')}</span>
               <span className="num">{fmt(totals.subtotal)}</span>
             </div>
             <div className="t-row">
-              <span>ضريبة القيمة المضافة</span>
+              <span>{t('invoices.builder.vat')}</span>
               <span className="num">{fmt(totals.tax)}</span>
             </div>
             <div className="t-row grand">
-              <span>الإجمالي المستحق</span>
-              <span className="num">{fmt(totals.grand)} ر.س</span>
+              <span>{t('invoices.builder.grand_total')}</span>
+              <span className="num">{t('invoices.common.amount_sar', { amount: fmt(totals.grand) })}</span>
             </div>
             {appliedPreview > 0 && (
               <>
                 <div className="t-row">
-                  <span>دفعات مقدَّمة مطبَّقة</span>
+                  <span>{t('invoices.builder.applied_prepayments')}</span>
                   <span className="num" data-testid="applied-prepayments">− {fmt(appliedPreview)}</span>
                 </div>
                 <div className="t-row">
-                  <span>المستحق بعد المقدَّم</span>
-                  <span className="num">{fmt(Math.max(0, totals.grand - appliedPreview))} ر.س</span>
+                  <span>{t('invoices.builder.due_after_prepayments')}</span>
+                  <span className="num">{t('invoices.common.amount_sar', { amount: fmt(Math.max(0, totals.grand - appliedPreview)) })}</span>
                 </div>
               </>
             )}
