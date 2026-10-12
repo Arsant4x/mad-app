@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listAccounts, type Account } from '../../api/accounts';
 import {
   closeReconciliation,
@@ -14,19 +15,22 @@ import {
   type ReconciliationOverview,
 } from '../../api/banks';
 import { fmt } from '../../lib/format';
+import i18n from '../../i18n';
 
 /**
- * التسويةُ البنكية (`ق-١٢٦١` ج): جانبُ الكشف (السطورُ اليدوية) مقابل جانب الدفتر (سطورُ حساب البنك بمحرّك الأستاذ)،
- * مقترَحاتٌ من الخادم، مطابقةٌ واحدٌ لواحد، وترحيلُ السطر الذي لا دفترَ له بطرفٍ يختاره المحاسب، وإقفالٌ حتى تاريخ.
- * **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`): المجاميعُ والمقترَحاتُ من الخادم.
+ * Bank reconciliation: the statement side (manual lines) against the ledger side (the bank account's lines from
+ * the ledger engine), with server suggestions, one to one matching, posting a statement line that has no ledger
+ * line to an account the accountant picks, and closing up to a date. The screen reads and does not compute:
+ * totals and suggestions come from the server.
  */
 export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: () => void }) {
+  const { t } = useTranslation();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [data, setData] = useState<ReconciliationOverview | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [error, setError] = useState<string | null>(null);
-  // `depositId` — إيداعُ درجٍ في الطريق (⑦A3) يؤكَّد من هذا السطر: الطرفُ المقابل يفرضه الخادم (`1190`) فيُخفى الاختيار.
+  // `depositId`: a drawer deposit in transit confirmed from this line; the server sets the counter account (1190), so the picker is hidden.
   const [posting, setPosting] = useState<{ transactionId: string; counterpartyAccountId: string; memo: string; depositId: string } | null>(null);
   const [inTransit, setInTransit] = useState<CashDeposit[]>([]);
   const [closeUntil, setCloseUntil] = useState('');
@@ -35,11 +39,11 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
     setError(null);
     try {
       setData(await getReconciliation(bank.id, { from: from || undefined, to: to || undefined }));
-      // الإيداعاتُ المفتوحة على هذا البنك — ما لم يؤكَّد بعد يُعرض في نموذج الترحيل.
+      // Open deposits on this bank; unconfirmed ones are offered in the posting form.
       const deposits = await listCashDeposits(bank.id).catch(() => null);
       setInTransit(deposits ? deposits.items.filter((d) => d.status === 'IN_TRANSIT') : []);
     } catch (e) {
-      setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'تعذّر تحميل التسوية');
+      setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? i18n.t('banks.reconciliation.err_load'));
     }
   }
   useEffect(() => {
@@ -56,7 +60,7 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
       await fn();
       await load();
     } catch (e) {
-      setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'تعذّر التنفيذ');
+      setError((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? i18n.t('banks.reconciliation.err_action'));
     }
   }
 
@@ -70,23 +74,23 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <h3 style={{ margin: 0 }}>التسوية البنكية — {bank.name}</h3>
+          <h3 style={{ margin: 0 }}>{t('banks.reconciliation.title', { name: bank.name })}</h3>
           <button className="btn secondary" onClick={onClose}>
-            إغلاق
+            {t('banks.close')}
           </button>
         </div>
         <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
           <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="rec-from">من</label>
+            <label htmlFor="rec-from">{t('banks.reconciliation.from')}</label>
             <input id="rec-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </div>
           <div className="field" style={{ margin: 0 }}>
-            <label htmlFor="rec-to">إلى</label>
+            <label htmlFor="rec-to">{t('banks.reconciliation.to')}</label>
             <input id="rec-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
           {data && (
             <span className="muted">
-              مُسوّى حتى: {data.bank.reconciledUntil ?? '—'} · رصيد المرآة: {fmt(data.bank.mirrorBalance)} · رصيد الدفتر الختامي: {fmt(data.ledger.closing)}
+              {t('banks.reconciliation.summary', { until: data.bank.reconciledUntil ?? '—', mirror: fmt(data.bank.mirrorBalance), closing: fmt(data.ledger.closing) })}
             </span>
           )}
         </div>
@@ -96,22 +100,22 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
             <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div>
                 <h4>
-                  سطور الكشف <span className="muted">(المعلَّق: {data.totals.unmatchedStatementCount} · {fmt(data.totals.unmatchedStatement)})</span>
+                  {t('banks.reconciliation.statement_title')} <span className="muted">{t('banks.reconciliation.statement_pending', { n: data.totals.unmatchedStatementCount, amount: fmt(data.totals.unmatchedStatement) })}</span>
                 </h4>
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>التاريخ</th>
-                      <th>البيان</th>
-                      <th className="num">المبلغ</th>
-                      <th>الحال</th>
+                      <th>{t('banks.reconciliation.col_date')}</th>
+                      <th>{t('banks.memo')}</th>
+                      <th className="num">{t('banks.reconciliation.col_amount')}</th>
+                      <th>{t('banks.reconciliation.col_state')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.statement.length === 0 && (
                       <tr>
                         <td colSpan={4} className="muted">
-                          لا سطور كشفٍ يدوية في المدى.
+                          {t('banks.reconciliation.no_statement')}
                         </td>
                       </tr>
                     )}
@@ -123,20 +127,20 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                         <td>
                           {s.matchedLineId ? (
                             <>
-                              <span className="badge paid">مطابَق</span>{' '}
+                              <span className="badge paid">{t('banks.reconciliation.matched')}</span>{' '}
                               <button className="btn link" onClick={() => act(() => unmatchStatementLine(bank.id, s.id))}>
-                                فكّ
+                                {t('banks.reconciliation.unmatch')}
                               </button>
                             </>
                           ) : (
                             <>
                               {suggestionFor(s.id).map((lineId) => (
                                 <button key={lineId} className="btn link" title={lineLabel(lineId)} onClick={() => act(() => matchStatementLine(bank.id, s.id, lineId))}>
-                                  ✓ طابِق بـ {lineLabel(lineId)}
+                                  {t('banks.reconciliation.match_with', { line: lineLabel(lineId) })}
                                 </button>
                               ))}
                               <button className="btn link" onClick={() => setPosting({ transactionId: s.id, counterpartyAccountId: '', memo: s.description, depositId: '' })}>
-                                ↳ رحِّل بطرف
+                                {t('banks.reconciliation.post_with')}
                               </button>
                             </>
                           )}
@@ -148,17 +152,17 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
               </div>
               <div>
                 <h4>
-                  سطور الدفتر <span className="muted">(غير المطابَق: {data.totals.unmatchedLedgerCount} · {fmt(data.totals.unmatchedLedger)})</span>
+                  {t('banks.reconciliation.ledger_title')} <span className="muted">{t('banks.reconciliation.ledger_pending', { n: data.totals.unmatchedLedgerCount, amount: fmt(data.totals.unmatchedLedger) })}</span>
                 </h4>
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>التاريخ</th>
-                      <th>القيد</th>
-                      <th>المصدر</th>
-                      <th className="num">مدين</th>
-                      <th className="num">دائن</th>
-                      <th>الحال</th>
+                      <th>{t('banks.reconciliation.col_date')}</th>
+                      <th>{t('banks.reconciliation.col_entry')}</th>
+                      <th>{t('banks.reconciliation.col_source')}</th>
+                      <th className="num">{t('banks.reconciliation.col_debit')}</th>
+                      <th className="num">{t('banks.reconciliation.col_credit')}</th>
+                      <th>{t('banks.reconciliation.col_state')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -171,7 +175,7 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                         </td>
                         <td className="num">{fmt(r.debit)}</td>
                         <td className="num">{fmt(r.credit)}</td>
-                        <td>{r.matched ? <span className="badge paid">مطابَق</span> : <span className="badge draft">معلَّق</span>}</td>
+                        <td>{r.matched ? <span className="badge paid">{t('banks.reconciliation.matched')}</span> : <span className="badge draft">{t('banks.reconciliation.pending')}</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -181,13 +185,13 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
 
             {posting && (
               <div className="card" style={{ marginTop: 12 }}>
-                <strong>ترحيلُ سطر الكشف بطرفٍ مقابل</strong>
+                <strong>{t('banks.reconciliation.post_title')}</strong>
                 <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
                   {inTransit.length > 0 && (
                     <div className="field" style={{ margin: 0, minWidth: 260 }}>
-                      <label htmlFor="rec-deposit">إيداعُ درجٍ في الطريق</label>
+                      <label htmlFor="rec-deposit">{t('banks.reconciliation.deposit')}</label>
                       <select id="rec-deposit" value={posting.depositId} onChange={(e) => setPosting({ ...posting, depositId: e.target.value, counterpartyAccountId: '' })}>
-                        <option value="">— ليس إيداعَ درج —</option>
+                        <option value="">{t('banks.reconciliation.not_deposit')}</option>
                         {inTransit.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.no} · {d.date} · {d.drawer.name} · {fmt(d.amount)}
@@ -198,9 +202,9 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                   )}
                   {!posting.depositId && (
                     <div className="field" style={{ margin: 0, minWidth: 260 }}>
-                      <label htmlFor="rec-counterparty">الطرف المقابل</label>
+                      <label htmlFor="rec-counterparty">{t('banks.reconciliation.counterparty')}</label>
                       <select id="rec-counterparty" value={posting.counterpartyAccountId} onChange={(e) => setPosting({ ...posting, counterpartyAccountId: e.target.value })}>
-                        <option value="">— اختر حساباً —</option>
+                        <option value="">{t('banks.reconciliation.choose_account')}</option>
                         {accounts.map((a) => (
                           <option key={a.id} value={a.id}>
                             {a.code} — {a.name}
@@ -210,10 +214,10 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                     </div>
                   )}
                   {posting.depositId ? (
-                    <span className="muted">الطرفُ المقابل «نقدٌ في الطريق 1190» والمبلغُ مبلغُ المستند — يفرضهما الخادم.</span>
+                    <span className="muted">{t('banks.reconciliation.deposit_forced')}</span>
                   ) : (
                     <div className="field" style={{ margin: 0, minWidth: 260 }}>
-                      <label htmlFor="rec-memo">البيان</label>
+                      <label htmlFor="rec-memo">{t('banks.memo')}</label>
                       <input id="rec-memo" value={posting.memo} onChange={(e) => setPosting({ ...posting, memo: e.target.value })} />
                     </div>
                   )}
@@ -228,10 +232,10 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
                       ).then(() => setPosting(null))
                     }
                   >
-                    {posting.depositId ? 'أكِّد الإيداع وطابِق' : 'رحِّل وطابِق'}
+                    {posting.depositId ? t('banks.reconciliation.confirm_deposit') : t('banks.reconciliation.post_match')}
                   </button>
                   <button className="btn secondary" onClick={() => setPosting(null)}>
-                    إلغاء
+                    {t('banks.cancel')}
                   </button>
                 </div>
               </div>
@@ -239,15 +243,15 @@ export function ReconciliationPanel({ bank, onClose }: { bank: Bank; onClose: ()
 
             <div className="toolbar" style={{ gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
               <div className="field" style={{ margin: 0 }}>
-                <label htmlFor="rec-close">إقفال التسوية حتى</label>
+                <label htmlFor="rec-close">{t('banks.reconciliation.close_until')}</label>
                 <input id="rec-close" type="date" value={closeUntil} onChange={(e) => setCloseUntil(e.target.value)} />
               </div>
               <button className="btn btn-primary" disabled={!closeUntil} onClick={() => act(() => closeReconciliation(bank.id, closeUntil))}>
-                أقفل
+                {t('banks.reconciliation.lock')}
               </button>
               {data.bank.reconciledUntil && (
                 <button className="btn secondary" onClick={() => act(() => reopenReconciliation(bank.id))}>
-                  أعد فتح التسوية
+                  {t('banks.reconciliation.reopen')}
                 </button>
               )}
             </div>

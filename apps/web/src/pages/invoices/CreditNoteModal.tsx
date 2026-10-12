@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Invoice } from '../../api/invoices';
 import { fmt } from '../../lib/format';
 
@@ -9,32 +10,33 @@ import { fmt } from '../../lib/format';
  * button stays disabled until it's given.
  */
 export function CreditNoteModal({ invoice, onCancel, onConfirm }: { invoice: Invoice; onCancel: () => void; onConfirm: (reason: string) => void }) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
 
   return (
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">إصدار إشعار دائن</div>
+          <div className="modal-title">{t('invoices.credit_note.title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="hint" style={{ marginBottom: 10 }}>
           {invoice.docType === 'DEBIT_NOTE'
-            ? `إشعار دائن يصحّح الإشعار المدين ${invoice.no} (${fmt(invoice.total)}) بكامل قيمته — فالإشعار الصادر لا يُعدَّل ولا يُحذف، ومخرجه إشعار مقابل؛ ويُرسَل للهيئة كمستند 381 مرتبطاً به.`
-            : `إشعار دائن بكامل قيمة الفاتورة ${invoice.no} (${fmt(invoice.total)}) — يعكس أثرها في الدفاتر دون تعديل الفاتورة الأصلية، ويُرسَل للهيئة كمستند 381 مرتبطاً بها.`}
+            ? t('invoices.credit_note.hint_on_debit_note', { no: invoice.no, total: fmt(invoice.total) })
+            : t('invoices.credit_note.hint_on_invoice', { no: invoice.no, total: fmt(invoice.total) })}
         </div>
         <div className="field">
-          <label>سبب الإصدار (إلزامي لهيئة الزكاة)</label>
-          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: إرجاع بضاعة / إلغاء خدمة / تصحيح مبلغ" />
+          <label>{t('invoices.common.reason_label')}</label>
+          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('invoices.credit_note.reason_placeholder')} />
         </div>
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('invoices.common.cancel')}
           </button>
           <button className="btn btn-primary" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
-            إصدار الإشعار
+            {t('invoices.common.issue_note')}
           </button>
         </div>
       </div>

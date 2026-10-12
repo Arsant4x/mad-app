@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BUYER_ID_SCHEMES,
   BUYER_ID_SCHEME_LABEL,
@@ -11,22 +12,23 @@ import {
 } from '../../api/customers';
 import i18n from '../../i18n';
 
-/** رسالةُ الخادم وحالتُه من خطأ محور — كما تقرؤها بقيّةُ الشاشات. */
+/** The server's message and status from an axios error, read as the other screens read them. */
 const serverMessage = (e: unknown): string | undefined => (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
 const serverStatus = (e: unknown): number | undefined => (e as { response?: { status?: number } })?.response?.status;
 
 /**
- * الإنشاءُ والتعديلُ صنفان في الخادم (`CreateCustomerDto` · `UpdateCustomerDto`) — فالنافذةُ تسلّم كلّاً بنوعه:
- * الإنشاءُ يُغفل المعرّفَ البديلَ الفارغ، والتعديلُ يمحوه بـ`null` (`ق-١٤٠٤` · ③).
+ * Create and update are two DTOs on the server, so the modal hands each its own type:
+ * create omits an empty other ID, update clears it with `null`.
  */
 type CustomerModalProps =
   | { editing: null; onCancel: () => void; onSave: (data: CustomerInput) => Promise<void> }
   | { editing: Customer; onCancel: () => void; onSave: (data: CustomerUpdateInput) => Promise<void> };
 
 export function CustomerModal(props: CustomerModalProps) {
+  const { t } = useTranslation();
   const { editing, onCancel } = props;
   const [name, setName] = useState(editing?.name ?? '');
-  // ②A1: الصفةُ تُختار صراحةً — لا افتراضَ لعميلٍ جديد، والقديمُ غيرُ المعلَن يُعلَن من هنا.
+  // The kind is chosen explicitly: no default for a new customer, and an undeclared old one is declared here.
   const [kind, setKind] = useState<Exclude<CustomerKind, 'LEGACY_UNDECLARED'> | ''>(editing && editing.kind !== 'LEGACY_UNDECLARED' ? editing.kind : '');
   const [otherIdScheme, setOtherIdScheme] = useState<BuyerIdScheme | ''>(editing?.otherIdScheme ?? '');
   const [otherId, setOtherId] = useState(editing?.otherId ?? '');
@@ -36,7 +38,7 @@ export function CustomerModal(props: CustomerModalProps) {
   const [creditLimit, setCreditLimit] = useState(editing?.creditLimit ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // **الاسمُ المكرَّر تنبيهٌ لا قيد** (ق-١٠٢٨/⑤): الخادمُ يردّ «أهو نفسُه؟» فيُعرض السؤالُ ولا يُفترض الجواب.
+  // A duplicate name is a warning, not a constraint: the server asks "is it the same one?", and the question is shown, not answered for the user.
   const [sameNameAsk, setSameNameAsk] = useState<string | null>(null);
 
   async function handleSubmit(allowSameName = false) {
@@ -46,7 +48,7 @@ export function CustomerModal(props: CustomerModalProps) {
       return;
     }
     if (!kind) {
-      setError('اختر صفة العميل: فرد، أو مؤسسة فردية، أو شخص اعتباري — هي ما يقرّر نوع الفاتورة');
+      setError(t('customers.modal.err_kind_required'));
       return;
     }
     setSaving(true);
@@ -60,16 +62,16 @@ export function CustomerModal(props: CustomerModalProps) {
         creditLimit: parseFloat(creditLimit as string) || 0,
         ...(allowSameName ? { allowSameName: true } : {}),
       };
-      // ⚠️ الإنشاءُ بـ`''` كان يُردّ `400` («مخطّط المعرّف البديل غير معروف») — فيُغفَل الفارغ، والتعديلُ يمحو بـ`null`.
-      // ⚖️ والتعديلُ لا يرسل المعرّفَ البديل إلا إن تغيّر (توجيه ٢٨٦): الرقمُ مشفَّرٌ ويُقرأ من التفصيل، فنافذةٌ فُتحت بلا رقمه
-      // لا تمحوه بإرسال فراغٍ لم يكتبه أحد — ولا يسافر الرقمُ في طلبٍ لم يمسّه.
+      // Create with '' was refused with 400, so an empty value is omitted; update clears with `null`.
+      // Update sends the other ID only when it changed: the number is encrypted and read from the detail,
+      // so a modal opened without it must not erase it with an empty value, and an untouched number is not sent.
       const idTyped = otherId.trim() !== (editing?.otherId ?? '');
       const schemeChanged = otherIdScheme !== (editing?.otherIdScheme ?? '');
       const otherIdPatch = idTyped
         ? { otherIdScheme: otherIdScheme || null, otherId: otherId.trim() || null }
         : schemeChanged
           ? otherIdScheme
-            ? { otherIdScheme } // المخطّطُ وحدَه — والرقمُ المشفَّرُ باقٍ في الخادم.
+            ? { otherIdScheme } // The scheme alone; the encrypted number stays on the server.
             : { otherIdScheme: null, otherId: null }
           : {};
       if (props.editing !== null) await props.onSave({ ...base, ...otherIdPatch });
@@ -77,7 +79,9 @@ export function CustomerModal(props: CustomerModalProps) {
       setSameNameAsk(null);
     } catch (e) {
       const message = serverMessage(e);
-      if (serverStatus(e) === 409 && message && message.includes('أهو نفسُه')) {
+      // The server answers in the interface language, so its same-name sentence is matched in both.
+      const sameName = message && (message.includes('أهو نفسُه') || message.includes('is it the same one?')); // i18n-exempt: matches the server's same-name message
+      if (serverStatus(e) === 409 && message && sameName) {
         setSameNameAsk(message);
       } else {
         setError(message ?? i18n.t('err_customer_save'));
@@ -91,34 +95,34 @@ export function CustomerModal(props: CustomerModalProps) {
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل العميل' : 'عميل جديد'}</div>
+          <div className="modal-title">{editing ? t('customers.modal.title_edit') : t('customers.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم العميل</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: شركة الأفق التجارية" />
+          <label>{t('customers.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('customers.modal.name_placeholder')} />
         </div>
         <div className="field">
-          <label htmlFor="customer-kind">صفة العميل</label>
+          <label htmlFor="customer-kind">{t('customers.modal.kind')}</label>
           <select id="customer-kind" value={kind} onChange={(e) => setKind(e.target.value as Exclude<CustomerKind, 'LEGACY_UNDECLARED'> | '')}>
-            <option value="">— اختر —</option>
-            <option value="NATURAL">{CUSTOMER_KIND_LABEL.NATURAL} — فاتورة مبسّطة</option>
-            <option value="ESTABLISHMENT">{CUSTOMER_KIND_LABEL.ESTABLISHMENT} — فاتورة ضريبية كاملة</option>
-            <option value="LEGAL_PERSON">{CUSTOMER_KIND_LABEL.LEGAL_PERSON} — فاتورة ضريبية كاملة</option>
+            <option value="">{t('customers.modal.choose')}</option>
+            <option value="NATURAL">{t('customers.modal.kind_simplified', { label: CUSTOMER_KIND_LABEL.NATURAL })}</option>
+            <option value="ESTABLISHMENT">{t('customers.modal.kind_standard', { label: CUSTOMER_KIND_LABEL.ESTABLISHMENT })}</option>
+            <option value="LEGAL_PERSON">{t('customers.modal.kind_standard', { label: CUSTOMER_KIND_LABEL.LEGAL_PERSON })}</option>
           </select>
-          {editing?.kind === 'LEGACY_UNDECLARED' && <p className="hint">هذا العميل سبق البناء ولم تُعلَن صفته — لا يُصدَر له مستند حتى تُعلنها هنا.</p>}
+          {editing?.kind === 'LEGACY_UNDECLARED' && <p className="hint">{t('customers.modal.legacy_hint')}</p>}
         </div>
         <div className="field">
-          <label>الرقم الضريبي</label>
-          <input className="num" value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="300XXXXXXXXXXX" />
+          <label>{t('customers.modal.vat')}</label>
+          <input className="num" value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder={t('customers.modal.vat_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label htmlFor="customer-other-scheme">المعرّف البديل (لغير المسجَّل في الضريبة)</label>
+            <label htmlFor="customer-other-scheme">{t('customers.modal.other_scheme')}</label>
             <select id="customer-other-scheme" value={otherIdScheme} onChange={(e) => setOtherIdScheme(e.target.value as BuyerIdScheme | '')}>
-              <option value="">— بلا —</option>
+              <option value="">{t('customers.modal.none')}</option>
               {BUYER_ID_SCHEMES.map((s) => (
                 <option key={s} value={s}>
                   {BUYER_ID_SCHEME_LABEL[s]}
@@ -127,29 +131,29 @@ export function CustomerModal(props: CustomerModalProps) {
             </select>
           </div>
           <div className="field">
-            <label htmlFor="customer-other-id">رقم المعرّف</label>
+            <label htmlFor="customer-other-id">{t('customers.modal.other_id')}</label>
             <input
               id="customer-other-id"
               className="num"
               value={otherId}
               onChange={(e) => setOtherId(e.target.value)}
-              // الرقمُ مشفَّرٌ في الخادم (توجيه ٢٨٦): إن لم يُقرأ التفصيلُ قيل «مسجَّل» ولم يُعرض، والكتابةُ تستبدله.
-              placeholder={editing?.otherIdOnFile && editing.otherId === undefined ? 'مسجَّل — اكتب رقماً جديداً لاستبداله' : 'حروف وأرقام لاتينية'}
+              // The number is encrypted on the server: when the detail was not read it shows as "on file", and typing replaces it.
+              placeholder={editing?.otherIdOnFile && editing.otherId === undefined ? t('customers.modal.other_id_on_file') : t('customers.modal.other_id_placeholder')}
             />
           </div>
         </div>
         <div className="two-col">
           <div className="field">
-            <label htmlFor="customer-country">البلد (رمز ISO)</label>
-            <input id="customer-country" className="num" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="SA" maxLength={2} />
+            <label htmlFor="customer-country">{t('customers.modal.country')}</label>
+            <input id="customer-country" className="num" value={country} onChange={(e) => setCountry(e.target.value)} placeholder={t('customers.modal.country_placeholder')} maxLength={2} />
           </div>
           <div className="field">
-            <label>رقم الجوال</label>
-            <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XXXXXXXX" />
+            <label>{t('customers.modal.phone')}</label>
+            <input className="num" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('customers.modal.phone_placeholder')} />
           </div>
         </div>
         <div className="field">
-          <label>حد الائتمان</label>
+          <label>{t('customers.modal.credit_limit')}</label>
           <input className="num" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="50,000" />
         </div>
         {error && <p className="error-text">{error}</p>}
@@ -160,20 +164,20 @@ export function CustomerModal(props: CustomerModalProps) {
         )}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('customers.modal.cancel')}
           </button>
           {sameNameAsk ? (
             <>
               <button className="btn btn-ghost" onClick={() => setSameNameAsk(null)} disabled={saving}>
-                لا — أراجع القائمة
+                {t('customers.modal.same_name_no')}
               </button>
               <button className="btn btn-primary" onClick={() => handleSubmit(true)} disabled={saving}>
-                نعم، شخصٌ آخر بالاسم نفسِه — {editing ? 'احفظ' : 'أنشئه'}
+                {editing ? t('customers.modal.same_name_yes_save') : t('customers.modal.same_name_yes_create')}
               </button>
             </>
           ) : (
             <button className="btn btn-primary" onClick={() => handleSubmit(false)} disabled={saving}>
-              {editing ? 'حفظ التعديل' : 'إضافة العميل'}
+              {editing ? t('customers.modal.save_edit') : t('customers.modal.add')}
             </button>
           )}
         </div>

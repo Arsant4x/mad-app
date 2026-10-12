@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { formatMoney } from '../../lib/money';
 import { getPosIncidents, type PosOfflineIncidents } from '../../api/pos';
 import { updateCompanyProfile } from '../../api/companyProfile';
@@ -11,6 +12,7 @@ import {
   type ZatcaOnboarding,
   type ZatcaUnreported,
 } from '../../api/zatca';
+import { formatDate, formatDateTime } from '../../i18n/format';
 
 /**
  * The merchant's whole share of e-invoicing registration.
@@ -21,23 +23,24 @@ import {
  * paste, and nothing to install. The single input is the OTP from the merchant's
  * own Fatoora portal, which is the one thing only they can obtain.
  */
-const STEP_LABEL: Record<ZatcaOnboarding['status'], string> = {
-  NOT_STARTED: 'لم يبدأ',
-  AWAITING_OTP: 'بانتظار رمز التحقق',
-  COMPLIANCE_ISSUED: 'تم إصدار شهادة الامتثال',
-  PRODUCTION_ISSUED: 'مكتمل — جاهز لإرسال الفواتير',
-  FAILED: 'تعذّر الإكمال',
+const STEP_LABEL_KEY: Record<ZatcaOnboarding['status'], string> = {
+  NOT_STARTED: 'company_profile.zatca.status_not_started',
+  AWAITING_OTP: 'company_profile.zatca.status_awaiting_otp',
+  COMPLIANCE_ISSUED: 'company_profile.zatca.status_compliance_issued',
+  PRODUCTION_ISSUED: 'company_profile.zatca.status_production_issued',
+  FAILED: 'company_profile.zatca.status_failed',
 };
 
 export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<ZatcaOnboarding | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
-  /** «صادرٌ لم يصل» (ق-١٨٢/٢) — يُقرأ مع الحالة، ويُعرض للمربوطة وغيرها بصياغةٍ مختلفة. */
+  /** Issued documents not yet accepted by ZATCA; shown for linked and unlinked companies with different wording. */
   const [unreported, setUnreported] = useState<ZatcaUnreported | null>(null);
-  /** وقائعُ الانقطاع المستنتَجة (ق-١٩٢/ج · ق-٢٠١) وحدُّ فصلها — إعدادٌ للتاجر. */
+  /** Inferred offline incidents and their separation threshold, a merchant setting. */
   const [incidents, setIncidents] = useState<PosOfflineIncidents | null>(null);
   const [gapInput, setGapInput] = useState<string>('');
   const [gapSaving, setGapSaving] = useState(false);
@@ -45,7 +48,7 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
   useEffect(() => {
     getZatcaOnboarding()
       .then(setState)
-      .catch(() => setError('تعذّر قراءة حالة الربط'))
+      .catch(() => setError(t('company_profile.zatca.err_read')))
       .finally(() => setLoading(false));
     getZatcaUnreported()
       .then(setUnreported)
@@ -58,11 +61,11 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
       .catch(() => undefined);
   }, []);
 
-  /** الحدّ إعدادٌ لا ثابت (ق-٢٠١/٢أ) — يُحفظ في ملف المنشأة، والـPATCH جزئيّ فلا يمسّ غيرَه. */
+  /** The threshold is a setting, not a constant: saved on the company profile, and the PATCH is partial so nothing else changes. */
   async function saveGap() {
     const minutes = Number(gapInput);
     if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) {
-      setError('حدُّ الفصل عددٌ صحيح من الدقائق بين ١ و١٤٤٠');
+      setError(t('company_profile.zatca.err_gap_range'));
       return;
     }
     setGapSaving(true);
@@ -71,7 +74,7 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
       await updateCompanyProfile({ posOfflineGapMinutes: minutes });
       setIncidents(await getPosIncidents());
     } catch (e) {
-      setError(serverMessage(e, 'تعذّر حفظ حدّ الفصل'));
+      setError(serverMessage(e, t('company_profile.zatca.err_gap_save')));
     } finally {
       setGapSaving(false);
     }
@@ -100,41 +103,36 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="card">
       <div className="card-head">
-        <div className="card-title">الفوترة الإلكترونية (هيئة الزكاة والضريبة والجمارك)</div>
-        <span className={state.status === 'PRODUCTION_ISSUED' ? 'badge paid' : 'badge'}>{STEP_LABEL[state.status]}</span>
+        <div className="card-title">{t('company_profile.zatca.title')}</div>
+        <span className={state.status === 'PRODUCTION_ISSUED' ? 'badge paid' : 'badge'}>{t(STEP_LABEL_KEY[state.status])}</span>
       </div>
 
-      <p className="hint">
-        نتولّى عنك كل الجانب التقني — توليد المفاتيح وطلب الشهادات وحفظها بشكل مشفّر. الخطوة الوحيدة المطلوبة منك هي إدخال رمز التحقق
-        (OTP) من بوابة «فاتورة» الخاصة بمنشأتك.
-      </p>
+      <p className="hint">{t('company_profile.zatca.intro')}</p>
 
-      {!state.profileComplete && (
-        <p className="error-text">أكمل الاسم النظامي والرقم الضريبي أعلاه أولاً — الشهادة تُصدر باسم منشأتك ورقمها الضريبي.</p>
-      )}
+      {!state.profileComplete && <p className="error-text">{t('company_profile.zatca.profile_incomplete')}</p>}
 
       {error && <p className="error-text">{error}</p>}
-      {state.lastError && <p className="error-text">آخر خطأ من الهيئة: {state.lastError}</p>}
+      {state.lastError && <p className="error-text">{t('company_profile.zatca.last_error', { message: state.lastError })}</p>}
 
       <table>
         <thead>
           <tr>
-            <th>الخطوة</th>
-            <th>الحالة</th>
+            <th>{t('company_profile.zatca.col_step')}</th>
+            <th>{t('company_profile.zatca.col_status')}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>١ — توليد مفاتيح المنشأة وطلب التوقيع</td>
-            <td>{state.hasKeys ? '✔ تم' : '—'}</td>
+            <td>{t('company_profile.zatca.step_keys')}</td>
+            <td>{state.hasKeys ? t('company_profile.zatca.done') : '—'}</td>
           </tr>
           <tr>
-            <td>٢ — شهادة الامتثال (تحتاج رمز التحقق)</td>
-            <td>{state.hasComplianceCertificate ? '✔ تم' : '—'}</td>
+            <td>{t('company_profile.zatca.step_compliance')}</td>
+            <td>{state.hasComplianceCertificate ? t('company_profile.zatca.done') : '—'}</td>
           </tr>
           <tr>
-            <td>٣ — شهادة الإنتاج (تُفعّل إرسال الفواتير)</td>
-            <td>{state.hasProductionCertificate ? '✔ تم' : '—'}</td>
+            <td>{t('company_profile.zatca.step_production')}</td>
+            <td>{state.hasProductionCertificate ? t('company_profile.zatca.done') : '—'}</td>
           </tr>
         </tbody>
       </table>
@@ -145,21 +143,25 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
             <button
               className="btn btn-primary"
               disabled={busy || !state.profileComplete}
-              onClick={() => run(() => startZatcaOnboarding({ environment: state.environment }), 'تعذّر بدء الربط')}
+              onClick={() => run(() => startZatcaOnboarding({ environment: state.environment }), t('company_profile.zatca.err_start'))}
             >
-              {state.hasKeys ? 'إعادة توليد المفاتيح' : 'ابدأ الربط'}
+              {state.hasKeys ? t('company_profile.zatca.regenerate_keys') : t('company_profile.zatca.start')}
             </button>
           )}
 
           {state.hasKeys && !state.hasComplianceCertificate && (
             <div className="two-col" style={{ marginTop: 14 }}>
               <div className="field">
-                <label>رمز التحقق من بوابة فاتورة</label>
+                <label>{t('company_profile.zatca.otp_label')}</label>
                 <input className="num" value={otp} onChange={(e) => setOtp(e.target.value)} placeholder="123456" />
               </div>
               <div className="field" style={{ alignSelf: 'end' }}>
-                <button className="btn btn-primary" disabled={busy || !otp.trim()} onClick={() => run(() => submitZatcaOtp(otp.trim()), 'تعذّر إرسال رمز التحقق')}>
-                  إرسال الرمز
+                <button
+                  className="btn btn-primary"
+                  disabled={busy || !otp.trim()}
+                  onClick={() => run(() => submitZatcaOtp(otp.trim()), t('company_profile.zatca.err_otp'))}
+                >
+                  {t('company_profile.zatca.send_otp')}
                 </button>
               </div>
             </div>
@@ -170,42 +172,40 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
               className="btn btn-primary"
               style={{ marginInlineStart: 8 }}
               disabled={busy}
-              onClick={() => run(requestZatcaProduction, 'تعذّر طلب شهادة الإنتاج')}
+              onClick={() => run(requestZatcaProduction, t('company_profile.zatca.err_production'))}
             >
-              اطلب شهادة الإنتاج
+              {t('company_profile.zatca.request_production')}
             </button>
           )}
         </div>
       )}
 
-      {/* «صادرٌ لم يصل» (ق-١٨٢/٢): عدداً وأقدمَ وقائمةً — للمربوطة مخالفةٌ تُصحَّح، ولغيرها حالٌ يُعرَف. */}
+      {/* Issued but not delivered: count, oldest and list. For a linked company each one is a breach to fix; otherwise a state to know. */}
       {unreported && unreported.count > 0 && (
         <div data-testid="zatca-unreported-report" style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>
-            صادرٌ لم يصل الهيئة: {unreported.count} مستنداً
-            {unreported.oldestIssueDate ? ` — أقدمها ${new Date(unreported.oldestIssueDate).toLocaleDateString('ar-SA')}` : ''}
-            {unreported.failedQueue > 0 ? ` — ${unreported.failedQueue} في الطابور استُنفدت محاولاته وتعود عند الربط` : ''}
+            {t('company_profile.zatca.unreported_title', { n: unreported.count })}
+            {unreported.oldestIssueDate ? t('company_profile.zatca.unreported_oldest', { date: formatDate(unreported.oldestIssueDate) }) : ''}
+            {unreported.failedQueue > 0 ? t('company_profile.zatca.unreported_failed', { n: unreported.failedQueue }) : ''}
           </div>
           <p className="hint" style={{ marginBottom: 8 }}>
-            {unreported.onboarded
-              ? 'المنشأة مربوطة، فكلُّ مستندٍ هنا مخالفةٌ تُتدارك بالإبلاغ — يُعاد الإرسال تلقائياً، وما رُدّ يُصحَّح ثم يُعاد.'
-              : 'المنشأة غير مربوطة بعد — هذه المستندات لن تصل الهيئة حتى يتمّ الربط؛ وحين يتمّ تعود كلُّها إلى الإرسال تلقائياً.'}
+            {unreported.onboarded ? t('company_profile.zatca.unreported_linked') : t('company_profile.zatca.unreported_unlinked')}
           </p>
           <table className="table" style={{ fontSize: 12 }}>
             <thead>
               <tr>
-                <th>الرقم</th>
-                <th>التاريخ</th>
-                <th>الحالة</th>
-                <th>الإجمالي</th>
-                <th>آخر رسالة</th>
+                <th>{t('company_profile.zatca.col_no')}</th>
+                <th>{t('company_profile.zatca.col_date')}</th>
+                <th>{t('company_profile.zatca.col_status')}</th>
+                <th>{t('company_profile.zatca.col_total')}</th>
+                <th>{t('company_profile.zatca.col_last_message')}</th>
               </tr>
             </thead>
             <tbody>
               {unreported.items.slice(0, 50).map((it) => (
                 <tr key={it.id}>
                   <td className="num">{it.no}</td>
-                  <td className="num">{new Date(it.issueDate).toLocaleDateString('ar-SA')}</td>
+                  <td className="num">{formatDate(it.issueDate)}</td>
                   <td>{it.zatcaStatus}</td>
                   <td className="num">{formatMoney(Number(it.total))}</td>
                   <td style={{ color: 'var(--muted)' }}>{it.zatcaMessage ?? '—'}</td>
@@ -213,47 +213,47 @@ export function ZatcaOnboardingCard({ canEdit }: { canEdit: boolean }) {
               ))}
             </tbody>
           </table>
-          {unreported.items.length > 50 && <p className="hint">يُعرض أول ٥٠ من {unreported.count}.</p>}
+          {unreported.items.length > 50 && <p className="hint">{t('company_profile.zatca.first_fifty', { n: unreported.count })}</p>}
         </div>
       )}
 
-      {/* وقائع الانقطاع (ق-١٩٢/ج): مستنتَجةٌ على الخادم من أزمنة الرنّ — وحدُّ الاستنتاج ظاهرٌ مع التقرير (ق-٢٠١/٢ب). */}
+      {/* Offline incidents, inferred on the server from ring times; the inference threshold is shown with the report. */}
       {incidents && (
         <div data-testid="pos-offline-incidents" style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>وقائع الانقطاع — مستنتَجة، والفصل {incidents.gapMinutes} دقيقة</div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{t('company_profile.zatca.incidents_title', { n: incidents.gapMinutes })}</div>
           <p className="hint" style={{ marginBottom: 8 }}>
-            واقعةٌ مستنتَجة من أزمنة رنّ البيوع التي زُومنت بعد رنّها بأكثر من حدّ الفصل — استنتاجٌ لا قياسٌ من الجهاز. تحفظها المنشأة لأن الهيئة توجب حفظ السجلات عند تعطّل الحلّ وقد تسأل عنها.
+            {t('company_profile.zatca.incidents_hint')}
           </p>
           {canEdit && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-              <label className="hint" htmlFor="pos-gap-minutes">حدّ الفصل (دقائق)</label>
+              <label className="hint" htmlFor="pos-gap-minutes">{t('company_profile.zatca.gap_label')}</label>
               <input id="pos-gap-minutes" type="number" min={1} max={1440} value={gapInput} onChange={(e) => setGapInput(e.target.value)} style={{ width: 90 }} />
               <button className="btn btn-ghost btn-sm" disabled={gapSaving || busy} onClick={saveGap}>
-                حفظ
+                {t('company_profile.zatca.save')}
               </button>
             </div>
           )}
           {incidents.items.length === 0 ? (
-            <p className="hint">لا وقائعَ مستنتَجة.</p>
+            <p className="hint">{t('company_profile.zatca.incidents_empty')}</p>
           ) : (
             <table className="table" style={{ fontSize: 12 }}>
               <thead>
                 <tr>
-                  <th>من</th>
-                  <th>إلى</th>
-                  <th>المدة</th>
-                  <th>الفواتير</th>
-                  <th>الفصل</th>
+                  <th>{t('company_profile.zatca.col_from')}</th>
+                  <th>{t('company_profile.zatca.col_to')}</th>
+                  <th>{t('company_profile.zatca.col_duration')}</th>
+                  <th>{t('company_profile.zatca.col_invoices')}</th>
+                  <th>{t('company_profile.zatca.col_gap')}</th>
                 </tr>
               </thead>
               <tbody>
                 {incidents.items.map((it) => (
                   <tr key={it.id}>
-                    <td className="num">{new Date(it.startedAt).toLocaleString('ar-SA')}</td>
-                    <td className="num">{new Date(it.endedAt).toLocaleString('ar-SA')}</td>
-                    <td className="num">{it.durationMinutes} د</td>
+                    <td className="num">{formatDateTime(it.startedAt)}</td>
+                    <td className="num">{formatDateTime(it.endedAt)}</td>
+                    <td className="num">{t('company_profile.zatca.minutes_short', { n: it.durationMinutes })}</td>
                     <td className="num">{it.salesCount}</td>
-                    <td className="num">{it.gapMinutes} د</td>
+                    <td className="num">{t('company_profile.zatca.minutes_short', { n: it.gapMinutes })}</td>
                   </tr>
                 ))}
               </tbody>

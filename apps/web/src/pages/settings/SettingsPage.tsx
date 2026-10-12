@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   createActivity,
   deleteActivity,
@@ -37,6 +38,7 @@ import i18n from '../../i18n';
  * buttons are hidden here so the refusal isn't a surprise.
  */
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const isOwner = user?.actorType === 'COMPANY';
 
@@ -51,7 +53,7 @@ export function SettingsPage() {
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [pendingActivityDelete, setPendingActivityDelete] = useState<Activity | null>(null);
   const [activitySector, setActivitySector] = useState<Sector | ''>('');
-  /** النشاط المرشَّح ليصير رئيسياً — و`null` داخل الكائن يعني التراجع. */
+  /** The activity proposed as primary; 'CLEAR' means undo the filtering. */
   const [primaryCandidate, setPrimaryCandidate] = useState<Activity | 'CLEAR' | null>(null);
 
   const [code, setCode] = useState('');
@@ -103,10 +105,10 @@ export function SettingsPage() {
   }
 
   /**
-   * التعطيل لا الحذف — الشاشات تختفي و**البيانات تبقى كما هي**.
+   * Disable, not delete: the screens disappear and the data stays.
    *
-   * ⚠️ ولا يُخفى النشاط من الجدول بعد التعطيل: بقاؤه مرئياً معطَّلاً هو ما
-   * يجعل إعادة تفعيله ممكنة. وإخفاؤه يجعله يبدو محذوفاً — وهو ليس كذلك.
+   * The activity stays in the table once disabled: keeping it visible is what
+   * makes enabling it again possible, and hiding it would make it look deleted.
    */
   async function toggleActivity(a: Activity) {
     setError(null);
@@ -198,8 +200,8 @@ export function SettingsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الأنشطة والعملات</div>
-          <div className="page-sub">النشاط يحدّد سلوك الفروع والمنتجات — والعملة الأساسية هي وحدة القياس لكل التقارير</div>
+          <div className="page-title">{t('settings.page.title')}</div>
+          <div className="page-sub">{t('settings.page.subtitle')}</div>
         </div>
       </div>
 
@@ -207,12 +209,12 @@ export function SettingsPage() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">الأنشطة التجارية</div>
-          {/* ⭐ **التراجع الفوري** — مرئيٌّ دائماً لا مخفيّاً في قائمة.
-            * فمن أخفى شاشةً بالخطأ يحتاج طريق العودة الآن، لا بعد بحث. */}
+          <div className="card-title">{t('settings.page.activities_title')}</div>
+          {/* Immediate undo, always visible rather than tucked into a menu: whoever
+            * hid a screen by mistake needs the way back now, not after a search. */}
           {isOwner && (
             <button className="btn btn-ghost btn-sm" data-testid="clear-primary" onClick={() => setPrimaryCandidate('CLEAR')}>
-              إظهار كل الشاشات (إلغاء الترشيح)
+              {t('settings.page.clear_primary')}
             </button>
           )}
         </div>
@@ -220,30 +222,30 @@ export function SettingsPage() {
         {isOwner && (
           <div className="two-col" style={{ marginBottom: 14 }}>
             <div className="field">
-              <label>اسم النشاط</label>
-              <input value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="مثال: صيدلية" />
+              <label>{t('settings.page.activity_name')}</label>
+              <input value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder={t('settings.page.activity_name_placeholder')} />
             </div>
             <div className="field">
-              <label>نوع النشاط (اختياري)</label>
-              <input value={activityType} onChange={(e) => setActivityType(e.target.value)} placeholder="عقارات | مطاعم | صيدلية" />
+              <label>{t('settings.page.activity_type')}</label>
+              <input value={activityType} onChange={(e) => setActivityType(e.target.value)} placeholder={t('settings.page.activity_type_placeholder')} />
             </div>
             <div className="field">
-              <label>القطاع — يحدّد الشاشات</label>
-              {/* القائمة من `SECTORS` المقروءة، لا مكتوبةً هنا. */}
+              <label>{t('settings.page.sector')}</label>
+              {/* The list comes from `SECTORS`, not written here. */}
               <select value={activitySector} onChange={(e) => setActivitySector(e.target.value as Sector | '')} data-testid="sector-select">
-                <option value="">— بلا قطاع (كل الشاشات) —</option>
+                <option value="">{t('settings.page.no_sector')}</option>
                 {SECTORS.map((s) => (
                   <option key={s} value={s}>{SECTOR_LABELS[s]}</option>
                 ))}
               </select>
-              <p className="hint">القطاع يحدّد الشاشات التي تظهر لك ولموظفيك. ويبقى بلا أثر حتى تختار نشاطاً رئيسياً.</p>
+              <p className="hint">{t('settings.page.sector_hint')}</p>
             </div>
           </div>
         )}
         {isOwner && (
           <div style={{ marginBottom: 14 }}>
             <button className="btn btn-primary" onClick={saveActivity}>
-              {editingActivity ? 'حفظ التعديل' : '+ إضافة نشاط'}
+              {editingActivity ? t('settings.page.save_edit') : t('settings.page.add_activity')}
             </button>
             {editingActivity && (
               <button
@@ -255,7 +257,7 @@ export function SettingsPage() {
                   setActivityType('');
                 }}
               >
-                إلغاء
+                {t('settings.page.cancel')}
               </button>
             )}
           </div>
@@ -264,11 +266,11 @@ export function SettingsPage() {
         <table>
           <thead>
             <tr>
-              <th>النشاط</th>
-              <th>النوع</th>
-              <th>القطاع</th>
-              <th>الفروع</th>
-              <th>المنتجات</th>
+              <th>{t('settings.page.col_activity')}</th>
+              <th>{t('settings.page.col_type')}</th>
+              <th>{t('settings.page.col_sector')}</th>
+              <th>{t('settings.page.col_branches')}</th>
+              <th>{t('settings.page.col_products')}</th>
               {isOwner && <th></th>}
             </tr>
           </thead>
@@ -277,18 +279,18 @@ export function SettingsPage() {
               <tr key={a.id} data-testid={`activity-${a.id}`} data-disabled={a.disabledAt !== null}>
                 <td>
                   {a.name}
-                  {a.disabledAt && <span className="badge sealed" style={{ marginInlineStart: 6 }}>معطَّل</span>}
+                  {a.disabledAt && <span className="badge sealed" style={{ marginInlineStart: 6 }}>{t('settings.page.disabled')}</span>}
                 </td>
                 <td>{a.activityType ?? '—'}</td>
                 <td data-testid={`sector-${a.id}`}>
-                  {/* ⭐ **ثلاث حالات لا اثنتان**: مؤكَّد · مقترَح ينتظر
-                    * التأكيد · ولا شيء. والثانية هي التي تحتاج فعلاً من
-                    * المالك — ودمجُها بالأولى يجعله يظنّ أنه أكّد. */}
+                  {/* Three states, not two: confirmed, suggested awaiting confirmation,
+                    * and none. The second needs the owner's action, and merging it
+                    * with the first would make them think they confirmed it. */}
                   {a.sector ? (
                     SECTOR_LABELS[a.sector]
                   ) : a.sectorSuggested ? (
                     <span className="hint" data-testid={`suggested-${a.id}`}>
-                      نرشّح: {SECTOR_LABELS[a.sectorSuggested]} — يحتاج تأكيدك
+                      {t('settings.page.suggested', { sector: SECTOR_LABELS[a.sectorSuggested] })}
                     </span>
                   ) : (
                     <span className="muted">—</span>
@@ -307,23 +309,23 @@ export function SettingsPage() {
                         setActivitySector(a.sector ?? a.sectorSuggested ?? '');
                       }}
                     >
-                      تعديل
+                      {t('settings.page.edit')}
                     </button>
-                    {/* التعطيل لا الحذف — والبيانات تبقى. */}
+                    {/* Disable, not delete: the data stays. */}
                     <button
                       className="btn btn-ghost btn-sm"
                       data-testid={`toggle-${a.id}`}
                       onClick={() => void toggleActivity(a)}
                     >
-                      {a.disabledAt ? 'تفعيل' : 'تعطيل'}
+                      {a.disabledAt ? t('settings.page.enable') : t('settings.page.disable')}
                     </button>
                     {a.sector && !a.disabledAt && (
                       <button className="btn btn-ghost btn-sm" data-testid={`make-primary-${a.id}`} onClick={() => setPrimaryCandidate(a)}>
-                        اجعله رئيسياً
+                        {t('settings.page.make_primary')}
                       </button>
                     )}
                     <button className="btn btn-ghost btn-sm" onClick={() => setPendingActivityDelete(a)}>
-                      حذف
+                      {t('settings.page.delete')}
                     </button>
                   </td>
                 )}
@@ -335,33 +337,33 @@ export function SettingsPage() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">العملات</div>
+          <div className="card-title">{t('settings.page.currencies_title')}</div>
         </div>
 
         {isOwner && (
           <>
             <div className="two-col">
               <div className="field">
-                <label>الرمز (3 أحرف)</label>
-                <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={3} placeholder="USD" />
+                <label>{t('settings.page.currency_code')}</label>
+                <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={3} placeholder={t('settings.page.currency_code_placeholder')} />
               </div>
               <div className="field">
-                <label>الاسم</label>
-                <input value={currencyName} onChange={(e) => setCurrencyName(e.target.value)} placeholder="دولار أمريكي" />
+                <label>{t('settings.page.currency_name')}</label>
+                <input value={currencyName} onChange={(e) => setCurrencyName(e.target.value)} placeholder={t('settings.page.currency_name_placeholder')} />
               </div>
             </div>
             <div className="two-col">
               <div className="field">
-                <label>الرمز المختصر (اختياري)</label>
+                <label>{t('settings.page.currency_symbol')}</label>
                 <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder="$" />
               </div>
               <div className="field">
-                <label>سعر الصرف مقابل العملة الأساسية</label>
+                <label>{t('settings.page.currency_rate')}</label>
                 <input type="number" step="0.000001" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="3.75" />
               </div>
             </div>
             <button className="btn btn-primary" style={{ marginBottom: 14 }} onClick={saveCurrency}>
-              + إضافة عملة
+              {t('settings.page.add_currency')}
             </button>
           </>
         )}
@@ -369,9 +371,9 @@ export function SettingsPage() {
         <table>
           <thead>
             <tr>
-              <th>الرمز</th>
-              <th>الاسم</th>
-              <th>سعر الصرف</th>
+              <th>{t('settings.page.col_code')}</th>
+              <th>{t('settings.page.col_name')}</th>
+              <th>{t('settings.page.col_rate')}</th>
               {isOwner && <th></th>}
             </tr>
           </thead>
@@ -379,7 +381,7 @@ export function SettingsPage() {
             {currencies.map((c) => (
               <tr key={c.id}>
                 <td>
-                  {c.code} {c.isBase && <span className="badge paid">أساسية</span>}
+                  {c.code} {c.isBase && <span className="badge paid">{t('settings.page.base')}</span>}
                 </td>
                 <td>
                   {c.name} {c.symbol ? `(${c.symbol})` : ''}
@@ -405,7 +407,7 @@ export function SettingsPage() {
                         can be neither repriced nor removed. */}
                     {!c.isBase && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setPendingCurrencyDelete(c)}>
-                        حذف
+                        {t('settings.page.delete')}
                       </button>
                     )}
                   </td>
@@ -418,20 +420,17 @@ export function SettingsPage() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">أسعار الصرف التاريخية</div>
+          <div className="card-title">{t('settings.page.rates_title')}</div>
         </div>
-        <p className="hint">
-          سعر اليوم الواحد يُحفظ مرة واحدة — إعادة تسجيل نفس التاريخ تُحدّث السعر ولا تضيف سطراً جديداً. المستند المرحَّل يحتفظ بسعره وقت
-          الترحيل ولا يُعاد تسعيره.
-        </p>
+        <p className="hint">{t('settings.page.rates_hint')}</p>
 
         {isOwner && (
           <>
             <div className="two-col">
               <div className="field">
-                <label>من عملة</label>
+                <label>{t('settings.page.rate_from')}</label>
                 <select value={rateFrom} onChange={(e) => setRateFrom(e.target.value)}>
-                  <option value="">اختر…</option>
+                  <option value="">{t('settings.page.choose')}</option>
                   {currencies.map((c) => (
                     <option key={c.id} value={c.code}>
                       {c.code}
@@ -440,7 +439,7 @@ export function SettingsPage() {
                 </select>
               </div>
               <div className="field">
-                <label>إلى عملة</label>
+                <label>{t('settings.page.rate_to')}</label>
                 <select value={rateTo} onChange={(e) => setRateTo(e.target.value)}>
                   {currencies.map((c) => (
                     <option key={c.id} value={c.code}>
@@ -452,30 +451,30 @@ export function SettingsPage() {
             </div>
             <div className="two-col">
               <div className="field">
-                <label>السعر</label>
+                <label>{t('settings.page.rate_value')}</label>
                 <input type="number" step="0.000001" value={rateValue} onChange={(e) => setRateValue(e.target.value)} />
               </div>
               <div className="field">
-                <label>التاريخ</label>
+                <label>{t('settings.page.rate_date')}</label>
                 <input type="date" value={rateDate} onChange={(e) => setRateDate(e.target.value)} />
               </div>
             </div>
             <button className="btn btn-primary" style={{ marginBottom: 14 }} onClick={saveExchangeRate}>
-              حفظ السعر
+              {t('settings.page.save_rate')}
             </button>
           </>
         )}
 
         {rates.length === 0 ? (
-          <div className="empty-state">لا توجد أسعار صرف مسجّلة.</div>
+          <div className="empty-state">{t('settings.page.rates_empty')}</div>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>التاريخ</th>
-                <th>من</th>
-                <th>إلى</th>
-                <th>السعر</th>
+                <th>{t('settings.page.rate_date')}</th>
+                <th>{t('settings.page.col_from')}</th>
+                <th>{t('settings.page.col_to')}</th>
+                <th>{t('settings.page.rate_value')}</th>
               </tr>
             </thead>
             <tbody>
@@ -505,9 +504,9 @@ export function SettingsPage() {
 
       {pendingActivityDelete && (
         <ConfirmModal
-          title="حذف النشاط"
-          body={`سيُحذف "${pendingActivityDelete.name}". لا يمكن الحذف إذا كان مرتبطاً بفروع أو منتجات.`}
-          confirmLabel="حذف"
+          title={t('settings.page.delete_activity_title')}
+          body={t('settings.page.delete_activity_body', { name: pendingActivityDelete.name })}
+          confirmLabel={t('settings.page.delete')}
           onConfirm={confirmActivityDelete}
           onCancel={() => setPendingActivityDelete(null)}
         />
@@ -515,22 +514,22 @@ export function SettingsPage() {
 
       {pendingCurrencyDelete && (
         <ConfirmModal
-          title="حذف العملة"
-          body={`ستُحذف "${pendingCurrencyDelete.code}". لا يمكن الحذف إذا كانت مستخدَمة في أي مستند.`}
-          confirmLabel="حذف"
+          title={t('settings.page.delete_currency_title')}
+          body={t('settings.page.delete_currency_body', { code: pendingCurrencyDelete.code })}
+          confirmLabel={t('settings.page.delete')}
           onConfirm={confirmCurrencyDelete}
           onCancel={() => setPendingCurrencyDelete(null)}
         />
       )}
-      {/* أدراج الكاشير — للمالك فقط: إنشاءُ درجٍ يُنشئ حساباً في الدليل (ق-٢١٨). */}
+      {/* Cash drawers, owner only: creating a drawer creates a ledger account. */}
       {user?.actorType === 'COMPANY' && <CashDrawersCard />}
-      {/* الربط والتكاملات — تظهر للمالك فقط: المفاتيح ملكه (قاعدة §3.5). */}
+      {/* Integrations, owner only: the keys belong to the owner. */}
       {user?.actorType === 'COMPANY' && <IntegrationsCard />}
-      {/* مفاتيحُ الأنظمة — للمالك وحدَه كما يُنفِذه الخادم بـ`@OwnerOnly` (ي/⑫A3). */}
+      {/* System API keys, owner only, as the server enforces with `@OwnerOnly`. */}
       {user?.actorType === 'COMPANY' && <ApiKeysCard />}
       {user?.actorType === 'COMPANY' && <SupportAccessCard />}
-      {/* المصادقةُ بخطوتين — **لكلِّ فاعلٍ على حسابه هو** (`ق-١٣١٨` · ⑨A1): لا دورَ يمنحها،
-          فحمايةُ حسابي قراري. والخادمُ يقرأ الهويّةَ من الرمز فلا يمسّ أحدٌ حسابَ غيره. */}
+      {/* Two-step sign-in, for every actor on their own account: no role grants it,
+          and the server reads the identity from the token, so nobody touches another's account. */}
       <MfaCard />
     </div>
   );
