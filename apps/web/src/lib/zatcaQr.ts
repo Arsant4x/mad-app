@@ -2,20 +2,19 @@ import { formatMoney } from './money';
 import { qrTimestamp, type WallClock } from './wallClock';
 
 /**
- * رمزُ الهيئة للمرحلة الأولى **على الجهاز، بلا مفاتيح** (`ق-١٨٨`) — نسخةُ
- * المتصفّح من `apps/api/src/zatca/qr.util.ts`، للإيصال الأوفلاين وحده؛ الإيصال
- * المتصل يأخذ رمزه من الخادم (`ق-١٨٦`).
+ * The phase 1 invoice QR built on the device, with no keys: the browser copy of
+ * `apps/api/src/zatca/qr.util.ts`, used for the offline receipt only; an online receipt takes its code
+ * from the server.
  *
- * الملحق (١) من قرار التنفيذ: `QR` إلزاميٌّ **توليداً وطباعةً** على المبسّطة.
- * وسيناريو الانقطاع في §10 يفترض جهازاً يولّد الرمز أوفلاين — والوسوم الخمسة لا
- * تحتاج مفتاحاً: الاسم · الرقم الضريبي · الطابع الزمني · الإجمالي · الضريبة.
+ * The QR is required, generated and printed, on simplified invoices, and the offline scenario expects
+ * the device to build it. The five tags need no key: name, VAT number, timestamp, total and tax.
  *
- * ⚠️ **طولُ كل وسمٍ بالبايتات لا بالحروف** — الاسم عربيٌّ، والحرف بايتان؛ وعدُّ
- * الحروف يُنتج رمزاً يُقرأ ولا يصحّ (العطل المعروف في الخادم قبل أن يُصلَح).
- * مُثبَتٌ بالعكس في `zatcaQr.test.ts` بنصٍّ عربي.
+ * Each tag length is in bytes, not characters: the name is Arabic and a letter takes two bytes, so
+ * counting characters gives a code that scans but is invalid. Proven against Arabic text in
+ * `zatcaQr.test.ts`.
  *
- * `null` حين يغيب الاسم القانوني أو الرقم الضريبي (ملفٌ ناقص أو لم يُخبَّأ قبل
- * الانقطاع): رمزٌ يُقرأ ولا يصحّ أسوأ من غيابه — والواجهة تُنبّه الكاشير.
+ * `null` when the legal name or VAT number is missing (an incomplete profile, or not cached before going
+ * offline): a code that scans but is invalid is worse than none, and the screen warns the cashier.
  */
 
 export interface Phase1QrInput {
@@ -28,10 +27,10 @@ export interface Phase1QrInput {
 
 const encoder = new TextEncoder();
 
-/** وسمٌ + طولٌ **بالبايتات** + القيمة. */
+/** Tag, length in bytes, then the value. */
 export function tlv(tag: number, value: string): Uint8Array {
   const bytes = encoder.encode(value);
-  if (bytes.length > 255) throw new Error(`وسم ${tag}: القيمة أطول من ٢٥٥ بايتاً`);
+  if (bytes.length > 255) throw new Error(`وسم ${tag}: القيمة أطول من ٢٥٥ بايتاً`); // i18n-exempt: internal error for developers, never shown in the interface
   const out = new Uint8Array(2 + bytes.length);
   out[0] = tag;
   out[1] = bytes.length;
@@ -49,14 +48,14 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** base64 لبايتاتٍ خام — `btoa` يقبل سلسلةَ بايتاتٍ لا نصاً مفكوكاً. */
+/** base64 of raw bytes: `btoa` takes a byte string, not decoded text. */
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary);
 }
 
-/** المبلغ كما تكتبه الهيئة: منزلتان بعد التدوير بسياسة المنتج — عبر `lib/money.ts` وحده (حارس كنسة التدوير). */
+/** The amount as the authority writes it: two decimals after the product's rounding, through `lib/money.ts` only. */
 const amount = (value: number) => formatMoney(value);
 
 export function buildPhase1Qr(input: Phase1QrInput): string | null {
@@ -68,7 +67,7 @@ export function buildPhase1Qr(input: Phase1QrInput): string | null {
   );
 }
 
-/** فكُّ الرمز إلى وسومه — للاختبار ولتشخيص إيصالٍ مرفوض. */
+/** Decodes the code into its tags, for tests and for diagnosing a rejected receipt. */
 export function decodePhase1Qr(base64: string): Record<number, string> {
   const binary = atob(base64);
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));

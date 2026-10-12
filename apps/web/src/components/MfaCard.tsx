@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { beginMfa, confirmMfa, disableMfa, getMfaStatus, type MfaStatus } from '../api/mfa';
 
 /**
- * **المصادقةُ المتعدّدة — على حسابك أنت** (`ق-١٣١٨` · ⑨A1).
+ * Two step sign in, on your own account.
  *
- * **قاعدةُ الفاعل** (`§3.5`): حمايةُ حسابي قراري — فلا دورَ يمنحها ولا يمنعها، والهويّةُ
- * من الرمز.
- *
- * ⚠️ **والسرُّ ورموزُ الاسترداد تُعرض مرّةً واحدة**: لا مسارَ يُعيدها، **والشاشةُ تقول ذلك
- * قبل أن يُغلقها المستخدم** — فمن أغلقها بلا نسخٍ يبدأ من جديد.
+ * Protecting my account is my decision: no role grants or withholds it, and the identity comes from
+ * the token. The secret and the recovery codes are shown once: no path returns them, and the screen
+ * says so before the user closes it, so whoever closes it without copying starts again.
  */
 export function MfaCard() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<MfaStatus | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [otpauth, setOtpauth] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function MfaCard() {
 
   function show(e: unknown) {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تنفيذ الطلب'));
+    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('common.mfa.request_failed')));
   }
 
   async function run(fn: () => Promise<void>) {
@@ -49,21 +49,21 @@ export function MfaCard() {
   return (
     <div className="card">
       <div className="card-title" style={{ marginBottom: 10 }}>
-        المصادقة بخطوتين
+        {t('common.mfa.title')}
       </div>
       <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 12px' }}>
-        رمز من تطبيق مصادقة على هاتفك يُطلب مع كلمة المرور. كلمة مرور وحدها تكفي من سرقها للدخول.
-        {status.required && ' وهي إلزامية على حسابات المنصّة.'}
+        {t('common.mfa.intro')}
+        {status.required && t('common.mfa.required_suffix')}
       </p>
 
       {status.enrolled ? (
         <>
           <p style={{ fontSize: 12 }}>
-            <span className="badge paid">مفعّلة</span> — رموز استرداد متبقية: <span className="num">{status.recoveryCodesLeft}</span>
+            <span className="badge paid">{t('common.mfa.enabled')}</span>{t('common.mfa.recovery_left')}<span className="num">{status.recoveryCodesLeft}</span>
           </p>
-          {status.recoveryCodesLeft <= 2 && <p className="error-text">تبقّى القليل من رموز الاسترداد — ألغِ التفعيل وأعِده للحصول على رموز جديدة.</p>}
+          {status.recoveryCodesLeft <= 2 && <p className="error-text">{t('common.mfa.recovery_low')}</p>}
           <div className="field" style={{ maxWidth: 220 }}>
-            <label>رمز من التطبيق (لإلغاء التفعيل)</label>
+            <label>{t('common.mfa.code_to_disable')}</label>
             <input className="num" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} />
           </div>
           <button
@@ -79,16 +79,16 @@ export function MfaCard() {
               })
             }
           >
-            إلغاء التفعيل
+            {t('common.mfa.disable')}
           </button>
         </>
       ) : secret ? (
         <>
-          <p style={{ fontSize: 12 }}>أضف هذا المفتاح في تطبيق المصادقة، ثم أدخل الرمز الذي يعرضه:</p>
+          <p style={{ fontSize: 12 }}>{t('common.mfa.add_key')}</p>
           <p className="num" style={{ fontSize: 14, letterSpacing: 1, wordBreak: 'break-all' }}>{secret}</p>
           {otpauth && <p style={{ fontSize: 10, color: 'var(--muted)', wordBreak: 'break-all' }}>{otpauth}</p>}
           <div className="field" style={{ maxWidth: 220 }}>
-            <label>الرمز من التطبيق</label>
+            <label>{t('common.mfa.code_from_app')}</label>
             <input className="num" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
           </div>
           <button
@@ -104,7 +104,7 @@ export function MfaCard() {
               })
             }
           >
-            تأكيد التفعيل
+            {t('common.mfa.confirm')}
           </button>
         </>
       ) : (
@@ -119,13 +119,13 @@ export function MfaCard() {
             })
           }
         >
-          تفعيل المصادقة بخطوتين
+          {t('common.mfa.enable')}
         </button>
       )}
 
       {codes && (
         <div style={{ marginTop: 14 }}>
-          <p className="error-text">احفظ رموز الاسترداد الآن — لن تُعرض مرة أخرى. كل رمز يعمل مرة واحدة.</p>
+          <p className="error-text">{t('common.mfa.save_codes')}</p>
           <p className="num" style={{ fontSize: 13, lineHeight: 1.9 }}>{codes.join(' · ')}</p>
         </div>
       )}

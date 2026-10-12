@@ -3,36 +3,21 @@ import { apiClient } from './client';
 import { BUYER_ID_SCHEME_VALUES, CONSENT_SOURCE_VALUES, MARKETING_CHANNEL_VALUES } from '@mad-app/shared/api/enums';
 import type { BuyerIdScheme, ConsentSource, CustomerKind, MarketingChannel } from '@mad-app/shared/api/enums';
 import type { CreateCustomerDto, UpdateCustomerDto } from '@mad-app/shared/api/requests';
+import { labelTable } from '../lib/labelTable';
 
 /**
- * صفةُ المشتري (ق-١٢٦١ أ — ②A1): تقرّر نوعَ الفاتورة في الخادم (م٥٣) — مؤسّسةٌ أو اعتباريٌّ ⟵ كاملة، طبيعيٌّ ⟵ مبسّطة.
- * `LEGACY_UNDECLARED` صفٌّ سبق البناءَ ولم يُعلَن — لا يُفوتَر قبل الإعلان، ولا يُختار لصفٍّ جديد.
+ * The buyer kind decides the invoice type on the server: an establishment or a legal person gets a
+ * full tax invoice, a natural person a simplified one. `LEGACY_UNDECLARED` is a row from before the
+ * field existed; it is not invoiced until declared and is never chosen for a new row.
  */
 export type { CustomerKind };
-/** ما يُختار لعميلٍ جديد — القديمةُ غيرُ المعلَنة ليست خياراً. */
+/** What can be chosen for a new customer; the undeclared legacy value is not a choice. */
 export type NewCustomerKind = Exclude<CustomerKind, 'LEGACY_UNDECLARED'>;
-export const CUSTOMER_KIND_LABEL: Record<CustomerKind, string> = {
-  NATURAL: 'فرد',
-  ESTABLISHMENT: 'مؤسسة فردية',
-  LEGAL_PERSON: 'شخص اعتباري (شركة/جهة)',
-  LEGACY_UNDECLARED: 'غير معلَن — سبق البناء',
-};
-/** مخطّطاتُ المعرّف البديل (BR-KSA-14) كما يقبلها الخادم — بترتيب أسبقية المعيار. */
+export const CUSTOMER_KIND_LABEL: Record<CustomerKind, string> = labelTable('labels.customer_kinds', ['NATURAL', 'ESTABLISHMENT', 'LEGAL_PERSON', 'LEGACY_UNDECLARED']);
+/** Alternative buyer ID schemes as the server accepts them, in the standard's order of precedence. */
 export const BUYER_ID_SCHEMES = BUYER_ID_SCHEME_VALUES;
 export type { BuyerIdScheme };
-export const BUYER_ID_SCHEME_LABEL: Record<BuyerIdScheme, string> = {
-  TIN: 'الرقم المميز (TIN)',
-  CRN: 'السجل التجاري',
-  MOM: 'رخصة الشؤون البلدية (MOMRAH)',
-  MLS: 'رخصة الموارد البشرية (MHRSD)',
-  '700': 'الرقم الموحد 700',
-  SAG: 'ترخيص الاستثمار (MISA)',
-  NAT: 'الهوية الوطنية',
-  GCC: 'هوية خليجية',
-  IQA: 'الإقامة',
-  PAS: 'جواز السفر',
-  OTH: 'معرّف آخر',
-};
+export const BUYER_ID_SCHEME_LABEL: Record<BuyerIdScheme, string> = labelTable('labels.buyer_id_schemes', BUYER_ID_SCHEME_VALUES);
 
 export interface Customer {
   archived: boolean;
@@ -41,22 +26,22 @@ export interface Customer {
   kind: CustomerKind;
   otherIdScheme: BuyerIdScheme | null;
   /**
-   * ⚖️ **الرقمُ مشفَّرٌ في الخادم** (توجيه ٢٨٦): القائمةُ تقول «مسجَّلٌ أم لا» وحدَها، والرقمُ نفسُه يأتي من التفصيل
-   * (`getCustomer`) وحدَه — فنافذةُ التعديل تقرؤه من هناك.
+   * The number is encrypted on the server: the list only says whether one is on file, and the number
+   * itself comes from the detail (`getCustomer`), which the edit dialog reads.
    */
   otherIdOnFile: boolean;
-  /** من `GET /customers/:id` وحدَه — غائبٌ في القائمة وردود الإنشاء والتعديل. */
+  /** Only from `GET /customers/:id`; absent in the list and in create and update answers. */
   otherId?: string | null;
-  /** رمزُ البلد ISO 3166-1 alpha-2 — `SA` غياباً. */
+  /** ISO 3166-1 alpha-2 country code. */
   country: string;
   vatNumber: string | null;
   phone: string | null;
   creditLimit: string;
-  /** رصيدُ العميل المستحقّ — من المصدر الواحد للتعرّض في الخادم (`ق-١٢٤٣`)؛ نصٌّ بخانتين، ولا يأتي مع ردود الإنشاء والتعديل. */
+  /** The customer's outstanding balance from the server's single exposure source; text with two decimals, absent in create and update answers. */
   outstanding?: MoneyText;
 }
 
-/** المفوتَرُ والمقبوضُ والرصيد — من الخادم (`GET /customers/:id/summary`)، لا من جمع الفواتير في النافذة. */
+/** Billed, collected and balance from the server (`GET /customers/:id/summary`), not summed from invoices in the dialog. */
 export interface CustomerSummary {
   customerId: string;
   billed: MoneyText;
@@ -66,25 +51,25 @@ export interface CustomerSummary {
 
 export type CustomerInput = CreateCustomerDto;
 /**
- * التعديلُ صنفٌ آخر في الخادم: يمحو المعرّفَ البديل بـ`null` حيث يُغفله الإنشاء — فلكلٍّ نوعُه لا `Partial` للإنشاء
- * (`ق-١٤٠٤` · ③: وجد التوليدُ أن الإنشاءَ بـ`''` كان يُردّ `400`).
+ * Update is a different class on the server: it clears the alternative ID with `null` where create
+ * omits it, so each has its own type rather than a `Partial` of create.
  */
 export type CustomerUpdateInput = UpdateCustomerDto;
 
 export const listCustomers = (includeArchived = false) => apiClient.get<Customer[]>('/customers', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
-/** تفصيلُ العميل — يحمل المعرّفَ البديل مفكوكاً لنافذة التعديل (توجيه ٢٨٦). */
+/** Customer detail; carries the decrypted alternative ID for the edit dialog. */
 export const getCustomer = (id: string) => apiClient.get<Customer>(`/customers/${id}`).then((r) => r.data);
 export const createCustomer = (dto: CustomerInput) => apiClient.post<Customer>('/customers', dto).then((r) => r.data);
 export const updateCustomer = (id: string, dto: CustomerUpdateInput) => apiClient.patch<Customer>(`/customers/${id}`, dto).then((r) => r.data);
 export const deleteCustomer = (id: string) => apiClient.delete(`/customers/${id}`);
 export const getCustomerSummary = (id: string) => apiClient.get<CustomerSummary>(`/customers/${id}/summary`).then((r) => r.data);
 
-/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+/** Archive or unarchive: hidden from daily lists while staying in the accounts. */
 export const setCustomerArchived = (id: string, archived: boolean) => apiClient.patch<Customer>(`/customers/${id}/archive`, { archived }).then((r) => r.data);
 
 /**
- * **الموافقةُ التسويقية** (`ق-١٣٠٣` · ك/⑰A1) — الحالةُ **مشتقّةٌ في الخادم** والسجلُّ يُعرض معها:
- * اللائحةُ (م٢٨/٣) توجب الاحتفاظ بالإثبات، **وإثباتٌ لا يُقرأ ليس إثباتاً**.
+ * Marketing consent: the state is derived on the server and the history is shown with it, because the
+ * regulation requires keeping the proof and a proof nobody can read is no proof.
  */
 export const MARKETING_CHANNELS = MARKETING_CHANNEL_VALUES;
 export type { MarketingChannel };
@@ -113,6 +98,6 @@ export interface MarketingConsentState {
 
 export const getMarketingConsent = (id: string) => apiClient.get<MarketingConsentState>(`/customers/${id}/marketing-consent`).then((r) => r.data);
 
-/** **الرجوعُ واقعةٌ تالية لا تعديلٌ للأولى** — ولذلك `POST` لا `PATCH`. */
+/** Withdrawing is a later event, not an edit of the first one; hence `POST`, not `PATCH`. */
 export const recordMarketingConsent = (id: string, dto: { channel: MarketingChannel; granted: boolean; source: ConsentSource; note?: string }) =>
   apiClient.post<MarketingConsentEvent>(`/customers/${id}/marketing-consent`, dto).then((r) => r.data);

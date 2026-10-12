@@ -19,60 +19,55 @@ import type {
   VoidedCashDepositResponse,
   VoidedNetworkSettlementResponse,
 } from '@mad-app/shared/api/responses';
+import { labelTable } from '../lib/labelTable';
 
 /**
- * ⚖️ **أنواعُ الردّ مولَّدةٌ لا مكتوبةٌ بيد** (`ق-١٤٥٠` · خطّةُ الأنواع ④ — الوحدةُ الثانية بعد الكاشير): الأسماءُ هنا **استعارةٌ** لأصناف
- * الخادم (`apps/api/src/banks/dto/*-responses.dto.ts`)، وصدقُها يشهد به حارسُ الصدق الحيّ على التطبيق المبنيّ (`scripts/response-truth.ts`)
- * — لا هذا الملفّ. **وقِيس المكتوبُ بيدٍ قبل استبداله**: كان إلغاءُ الإيداع يُعلن `drawer` و`bank` ولا يُرسَلان فيه، وكان
- * `journalEntryId` على الإيداع `string` والعمودُ `String?`، وكانت المطابقةُ وفكُّها والترحيلُ من الكشف بلا نوعٍ أصلاً.
+ * Response types are generated from the server's response classes (`apps/api/src/banks/dto/*-responses.dto.ts`),
+ * not written by hand; their truth is checked against the built app by `scripts/response-truth.ts`.
  */
 
 /**
- * ⚖️ ق-١٤٣١ — نوعُ الصفّ معلَنٌ لا مستنبَط: «صندوقٌ نقديّ» أو «حسابٌ بنكيّ». و`LEGACY_UNDECLARED` صفٌّ سبق البناءَ
- * ولم يُعلَن — لا يُنقل حتى يُعلَن، ولا يُختار لصفٍّ جديد.
+ * The row kind is declared, never inferred: a cash box or a bank account. `LEGACY_UNDECLARED` is a row
+ * from before the field existed; it is not moved until declared and is never chosen for a new row.
  */
 export type { BankKind };
-/** ما يُعلَن عند الإنشاء — من جسم الطلب المولَّد (`CreateBankDto.kind`) لا اتّحاداً مكتوباً بيد: «غيرُ معلَن» ليس مدخلاً (`ق-١٤٣١`). */
+/** What is declared on create, from the generated request body: "not declared" is not an input. */
 export type DeclaredBankKind = BankInput['kind'];
-export const BANK_KIND_LABEL: Record<BankKind, string> = {
-  CASH_BOX: 'صندوقٌ نقديّ',
-  BANK_ACCOUNT: 'حسابٌ بنكيّ',
-  LEGACY_UNDECLARED: 'غيرُ معلَن',
-};
+export const BANK_KIND_LABEL: Record<BankKind, string> = labelTable('labels.bank_kinds', ['CASH_BOX', 'BANK_ACCOUNT', 'LEGACY_UNDECLARED']);
 
-/** صفُّ البنك كما يُرسَل — في القائمة والإنشاء والتعديل والأرشفة. */
+/** A bank row as sent in the list, create, update and archive answers. */
 export type Bank = BankRowResponse;
 
-/** جسمُ الإنشاء مولَّدٌ من الخادم (③) — والنوعُ فيه إلزاميٌّ بقيمتَيه المعلنتَين (ق-١٤٣١). */
+/** The create body, generated from the server; the kind is required with its two declared values. */
 export type BankInput = CreateBankDto;
 
 /**
- * 🔴 `ق-١٣٨٤` — **الفرعُ يُحدَّد عند الإنشاء**: `UpdateBankDto` لا يقبل `branchId` (و`forbidNonWhitelisted` يردّ `400`)،
- * فنوعُ التعديل يمنعه **بالبناء** — `never` لا الإغفال، كي لا يُسلَّم إليه كائنُ إنشاءٍ يحمله (وهكذا كان يُردّ تعديلُ كلِّ حسابٍ له فرع).
+ * The branch is set on create: `UpdateBankDto` does not accept `branchId` and the server answers `400`.
+ * `never` (not an omitted field) stops a create object carrying it from being passed here.
  */
 export type BankUpdateInput = Partial<Omit<BankInput, 'branchId'>> & { branchId?: never };
 
-// بلا `?page` فالردُّ مصفوفة — والمغلَّفُ المرقَّم لا تطلبه الشاشة.
+// Without `?page` the answer is a plain array; the screen does not need the paginated envelope.
 export const listBanks =(includeArchived = false) => apiClient.get<Bank[]>('/banks', { params: includeArchived ? { includeArchived: 'true' } : {} }).then((r) => r.data);
 
-/** سقفُ نطاق رموز الحسابات (ق-٢٩٥) — يُنذر قبل الاصطدام لا عنده؛ والشكلُ نفسُه لنطاق الأدراج. */
+/** The account code band ceiling: warns before a collision, not at it. Same shape as the drawer band. */
 export type CodeBandStatus = CodeBandStatusResponse;
 
 export const getBankCodeBand = () => apiClient.get<CodeBandStatus>('/banks/code-band').then((r) => r.data);
 export const createBank = (dto: BankInput) => apiClient.post<Bank>('/banks', dto).then((r) => r.data);
 export const updateBank = (id: string, dto: BankUpdateInput) => apiClient.patch<Bank>(`/banks/${id}`, dto).then((r) => r.data);
-/** `204` بلا جسم — نقلٌ إلى سلّة المحذوفات. */
+/** `204` with no body: moved to the trash. */
 export const deleteBank = (id: string) => apiClient.delete<void>(`/banks/${id}`);
 
-/** أرشفة/إلغاء أرشفة — إخفاء من القوائم اليومية مع البقاء في الحسابات. */
+/** Archive or unarchive: hidden from daily lists while staying in the accounts. */
 export const setBankArchived = (id: string, archived: boolean) => apiClient.patch<Bank>(`/banks/${id}/archive`, { archived }).then((r) => r.data);
 
-/** التسويةُ البنكية (`ق-١٢٦١` ج) — كلُّ رقمٍ نصٌّ من الخادم، والمقترَحاتُ من الخادم. */
+/** Bank reconciliation: every amount is text from the server, and the suggestions come from the server. */
 export type ReconciliationLedgerRow = ReconciliationLedgerRowResponse;
 export type ReconciliationOverview = ReconciliationOverviewResponse;
-/** سطرُ الكشف كما تعيده المطابقةُ وفكُّها والترحيلُ منه — وكانت الثلاثةُ بلا نوعٍ قبل الوحدة. */
+/** A statement line as returned by match, unmatch and post. */
 export type BankStatementLine = BankStatementLineResponse;
-/** حالُ الإقفال — تاريخُه يوماً، وفراغٌ بعد إعادة الفتح. */
+/** Close state: the date as a day, and empty after reopening. */
 export type ReconciliationState = ReconciliationStateResponse;
 export const getReconciliation = (bankId: string, params: { from?: string; to?: string }) =>
   apiClient.get<ReconciliationOverview>(`/banks/${bankId}/reconciliation`, { params }).then((r) => r.data);
@@ -83,8 +78,8 @@ export const unmatchStatementLine = (bankId: string, transactionId: string) =>
 export const postStatementLine = (bankId: string, transactionId: string, counterpartyAccountId: string, memo?: string) =>
   apiClient.post<BankStatementLine>(`/banks/${bankId}/reconciliation/post`, { transactionId, counterpartyAccountId, memo }).then((r) => r.data);
 /**
- * تأكيدُ إيداعٍ في الطريق من سطر الكشف (⑦A3): الطرفُ المقابل يفرضه الخادم (`1190`) والمبلغُ يجب أن يساوي المستند —
- * فلا طرفَ يُرسَل من هنا.
+ * Confirms a deposit in transit from a statement line: the server sets the counter account (`1190`) and
+ * the amount must equal the document, so no counter account is sent from here.
  */
 export const confirmDepositFromStatement = (bankId: string, transactionId: string, depositId: string) =>
   apiClient.post<BankStatementLine>(`/banks/${bankId}/reconciliation/post`, { transactionId, depositId }).then((r) => r.data);
@@ -93,25 +88,25 @@ export const closeReconciliation = (bankId: string, until: string) =>
 export const reopenReconciliation = (bankId: string) =>
   apiClient.post<ReconciliationState>(`/banks/${bankId}/reconciliation/reopen`).then((r) => r.data);
 
-/** إيداعُ نقدِ الدرج في البنك عبر «نقدٍ في الطريق» `1190` (`ق-١٢٦١` ج — ⑦A3). كلُّ رقمٍ نصٌّ من الخادم. */
+/** Depositing drawer cash in the bank through "cash in transit" `1190`. Every amount is text from the server. */
 export type { CashDepositStatus };
-/** الإيداعُ في القائمة وعند إنشائه — بالدرج والبنك مسمّيَين؛ و`journalEntryId` فارغٌ حيث يقبله العمود. */
+/** A deposit in the list and on create, with its drawer and bank named; `journalEntryId` is empty where the column allows. */
 export type CashDeposit = CashDepositResponse;
-/** الإيداعاتُ ومجموعُ `1190` بالدفتر مقابل المستندات المفتوحة — والفرقُ يُعلَن لا يُصحَّح. */
+/** Deposits and the `1190` ledger total against open documents; a difference is shown, not corrected. */
 export type CashDepositList = CashDepositListResponse;
 export type CashDepositInput = CreateCashDepositDto;
 export const listCashDeposits = (bankId?: string) =>
   apiClient.get<CashDepositList>('/banks/cash-deposits', { params: bankId ? { bankId } : undefined }).then((r) => r.data);
 export const createCashDeposit = (dto: CashDepositInput) =>
   apiClient.post<CreatedCashDepositResponse>('/banks/cash-deposits', dto).then((r) => r.data);
-/** الإلغاءُ يعيد أعمدةَ المستند ورقمَ قيد العكس — **بلا الدرج والبنك** (كان النوعُ المكتوبُ بيدٍ يعلنهما). */
+/** Voiding returns the document columns and the reversal entry number, without the drawer and bank. */
 export const voidCashDeposit = (id: string, reason?: string) =>
   apiClient.post<VoidedCashDepositResponse>(`/banks/cash-deposits/${id}/void`, { reason }).then((r) => r.data);
 
-/** تسويةُ الشبكة `1251` (`ق-١٢٦١` ج — ⑦A2): الإجماليُّ من السندات، والصافي إلى البنك؛ كلُّ رقمٍ نصٌّ من الخادم. */
+/** Card network settlement `1251`: the gross from the receipts, the net to the bank; every amount is text from the server. */
 export type { NetworkSettlementStatus };
 export type NetworkSettlement = NetworkSettlementResponse;
-/** رصيدُ `1251` بالدفتر مقابل مجموع السندات المفتوحة — والفرقُ يُعلَن لا يُصحَّح. */
+/** The `1251` ledger balance against open receipts; a difference is shown, not corrected. */
 export type NetworkTransitSummary = NetworkTransitSummaryResponse;
 export type NetworkSettlementList = NetworkSettlementListResponse;
 export type OpenNetworkReceipts = OpenNetworkReceiptsResponse;

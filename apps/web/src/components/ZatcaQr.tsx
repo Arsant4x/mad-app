@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
 
 /**
- * Renders the ZATCA phase-1 QR for a printed tax invoice.
+ * Renders the phase 1 e-invoice QR for a printed tax invoice.
  *
- * `payload` is the base64 TLV string the server builds (see
- * apps/api/src/zatca/qr.util.ts) — this component only turns it into an image
- * and never constructs or alters it, so what's printed is exactly what the
- * server attested to.
+ * `payload` is the base64 TLV string the server builds; this component only
+ * turns it into an image and never constructs or alters it, so what's printed
+ * is exactly what the server attested to.
  *
  * Renders nothing when `payload` is null, which is the server's way of saying
  * the company profile is missing its legal name or VAT number. Showing a
@@ -15,6 +15,7 @@ import QRCode from 'qrcode';
  * failing inspection.
  */
 export function ZatcaQr({ payload, size = 120 }: { payload: string | null; size?: number }) {
+  const { t } = useTranslation();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export function ZatcaQr({ payload, size = 120 }: { payload: string | null; size?
   if (!payload) {
     return (
       <div style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 180 }}>
-        أكمل الاسم القانوني والرقم الضريبي في «بيانات المنشأة» ليظهر رمز الفاتورة الإلكترونية.
+        {t('common.einvoice_qr.missing_profile')}
       </div>
     );
   }
@@ -47,8 +48,8 @@ export function ZatcaQr({ payload, size = 120 }: { payload: string | null; size?
 
   return (
     <div style={{ textAlign: 'center' }}>
-      <img src={dataUrl} alt="رمز الاستجابة السريعة للفاتورة الضريبية" width={size} height={size} />
-      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>فاتورة — هيئة الزكاة والضريبة والجمارك</div>
+      <img src={dataUrl} alt={t('common.einvoice_qr.alt')} width={size} height={size} />
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{t('common.einvoice_qr.caption')}</div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface RowMenuAction {
   label: string;
@@ -7,26 +8,23 @@ export interface RowMenuAction {
 }
 
 /**
- * سجلٌّ على مستوى الوحدة لقائمةٍ واحدة مفتوحة في الصفحة كلها.
+ * A module level record of the one open menu on the whole page.
  *
- * **لماذا لا يكفي مستمع `document`:** كل قائمة تحمل حالتها الخاصة، وكانت
- * تُغلق بمستمعٍ على `document`. لكن `toggle` يستدعي `stopPropagation()` —
- * وهو **لازم** لا زائد: React 19 يربط مستمعه بجذر التطبيق، والأحداث
- * المنفصلة (discrete) تُفرَّغ تزامنياً داخل الإرسال الأصلي نفسه، فيُضاف
- * مستمع `document` **قبل** أن يبلغه الحدثُ الفاتح فيغلق القائمة فور فتحها.
+ * A `document` listener is not enough: `toggle` calls `stopPropagation()`, which is required because
+ * React 19 attaches its listener at the app root and flushes discrete events synchronously inside the
+ * original dispatch, so a `document` listener added on open would see the opening click and close the
+ * menu at once. That same stop meant a click on another row's button never reached `document`, the
+ * first menu stayed open and two menus overlapped at the same z-index, on every list screen.
  *
- * والنتيجة أن الضغط على زرّ صفٍّ آخر كان يوقف الحدث عند الجذر، فلا يصل إلى
- * `document`، فلا تُغلق الأولى — **فتتراكب القائمتان بنفس z-index**. وهو
- * عطلٌ في مكوّنٍ تستعمله عشرون شاشة، فظهر «في كل الشاشات».
- *
- * فالإغلاق هنا **صريح**: من يفتح يُغلق سابقه بنفسه، بلا اعتمادٍ على انتشار
- * حدثٍ يوقفه سطرٌ آخر عمداً.
+ * So closing is explicit: whoever opens closes the previous one, without relying on event propagation
+ * that another line stops on purpose.
  */
 let closeOpenMenu: (() => void) | null = null;
 
 /** The "⋮" per-row action menu used across list screens, matching the
  * original mockup's rowMenuBtn()/openRowMenu() behavior. */
 export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -37,7 +35,7 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
     if (closeOpenMenu === close) closeOpenMenu = null;
   }, []);
 
-  /** يحسب موضع القائمة من الزر نفسه — تُستدعى عند الفتح **وعند كل تمرير**. */
+  /** Places the menu from the button itself; called on open and on every scroll. */
   const place = useCallback(() => {
     const btn = btnRef.current;
     if (!btn) return;
@@ -58,16 +56,15 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
     }
 
     /**
-     * القائمة `position:fixed` بإحداثيات كانت تُحسب **لحظة الفتح فقط** — فأي
-     * تمرير يترك الصفَّ يتحرك والقائمةَ ثابتة، حتى تصير معلّقة فوق صفٍّ آخر
-     * تماماً. تُعاد الآن الإحداثيات من الزر نفسه على كل تمرير، فتبقى ملتصقة
-     * بصفّها.
+     * The menu is `position:fixed` with coordinates once taken only on open, so scrolling moved the row
+     * and left the menu hanging over another row. The coordinates are now taken from the button on every
+     * scroll, so the menu stays on its row.
      *
-     * `capture: true` لازم: التمرير قد يقع داخل حاوية قابلة للتمرير لا على
-     * النافذة، وحدث `scroll` **لا يصعد** — فبلا الالتقاط لا نسمع به.
+     * `capture: true` is required: scrolling may happen inside a scrollable container rather than the
+     * window, and `scroll` does not bubble, so without capture it is never heard.
      *
-     * وإن خرج الزر من الشاشة تماماً تُغلق: قائمةٌ بلا صفٍّ مرئي تعليقٌ في
-     * الفراغ، والإبقاء عليها أسوأ من إخفائها.
+     * When the button leaves the screen entirely the menu closes: a menu with no visible row is worse
+     * than none.
      */
     let frame = 0;
     function reposition() {
@@ -95,7 +92,7 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
     };
   }, [open, close, place]);
 
-  /** لا تترك السجلّ يشير إلى قائمةٍ فُكّت من الشجرة (تنقّل أو إعادة رسم). */
+  /** Do not leave the record pointing at a menu that was unmounted (navigation or rerender). */
   useEffect(() => () => {
     if (closeOpenMenu === close) closeOpenMenu = null;
   }, [close]);
@@ -106,7 +103,7 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
       close();
       return;
     }
-    closeOpenMenu?.(); // ← تُغلق قائمة الصف الآخر قبل فتح هذه
+    closeOpenMenu?.(); // close the other row's menu before opening this one
     closeOpenMenu = close;
     place();
     setOpen(true);
@@ -114,7 +111,7 @@ export function RowMenu({ actions }: { actions: (RowMenuAction | '-')[] }) {
 
   return (
     <>
-      <button ref={btnRef} className="menu-btn" title="خيارات" onClick={toggle}>
+      <button ref={btnRef} className="menu-btn" title={t('common.row_menu.options')} onClick={toggle}>
         ⋮
       </button>
       {open && (
