@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ACTION_LABELS,
   ALLOWED_SCREENS,
@@ -21,6 +22,7 @@ export function TemplateModal({
   onCancel: () => void;
   onSave: (data: TemplateInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [screens, setScreens] = useState<Set<string>>(new Set(editing?.allowedScreens ?? ['dashboard']));
   // Per-screen actions. A screen missing from this map means "all actions",
@@ -48,7 +50,7 @@ export function TemplateModal({
   function toggleAction(screen: string, action: ScreenAction) {
     setActions((prev) => {
       // Undetailed means "all", so the first click starts from the full set and
-      // removes one — otherwise ticking a box would silently *widen* nothing and
+      // removes one; otherwise ticking a box would silently *widen* nothing and
       // unticking would look like it did nothing.
       const current = prev[screen] ?? [...SCREEN_ACTIONS];
       const next = current.includes(action) ? current.filter((a) => a !== action) : [...current, action];
@@ -93,24 +95,24 @@ export function TemplateModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل النموذج' : 'نموذج جديد'}</div>
+          <div className="modal-title">{editing ? t('developer.template_modal.title_edit') : t('developer.template_modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم النموذج</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: محاسب خارجي، مدير مبيعات..." />
+          <label>{t('developer.template_modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('developer.template_modal.name_placeholder')} />
         </div>
         <p className="field hint" style={{ marginBottom: 10 }}>
-          اختر الأقسام، ثم حدّد ما يُسمح به داخل كل قسم. قسم بلا تحديد أفعال = كل الصلاحيات عليه.
+          {t('developer.template_modal.hint')}
         </p>
         <div style={{ marginBottom: 8 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => selectAllScreens(true)}>
-            تحديد الكل
+            {t('developer.template_modal.select_all')}
           </button>{' '}
           <button className="btn btn-ghost btn-sm" onClick={() => selectAllScreens(false)}>
-            إلغاء التحديد
+            {t('developer.template_modal.clear_all')}
           </button>
         </div>
 
@@ -125,7 +127,7 @@ export function TemplateModal({
                   {SCREEN_LABELS[key]}
                 </label>
                 {on && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6, paddingRight: 22 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6, paddingInlineStart: 22 }}>
                     {SCREEN_ACTIONS.map((action) => (
                       <label key={action} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 'calc(11.5px * var(--font-scale))', color: 'var(--muted)' }}>
                         <input type="checkbox" checked={granted.includes(action)} onChange={() => toggleAction(key, action)} style={{ width: 'auto' }} />
@@ -142,10 +144,10 @@ export function TemplateModal({
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('developer.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            حفظ النموذج
+            {t('developer.template_modal.save')}
           </button>
         </div>
       </div>

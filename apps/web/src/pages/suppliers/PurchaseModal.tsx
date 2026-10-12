@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Branch } from '../../api/branches';
 import { BranchPicker } from '../../components/BranchPicker';
@@ -10,39 +11,40 @@ import { round2 } from '../../lib/money';
 import i18n from '../../i18n';
 
 /**
- * الفئات المعتمَدة — **الرمز هو ما يُرسَل**، واللافتة للعرض وحدها.
+ * Known purchase categories. The code is what is sent; the label is display only.
  *
- * الحقل يبقى حرّاً (التاجر يكتب فئته)، لكنّ ما يطابق لافتةً معروفة يُرسَل برمزه،
- * فيقرّر الخادم به: جواز الإطفاء · تقرير التأسيس · حساب الترحيل. وكان القرار
- * يُتَّخذ بمطابقة النصّ العربي، فمسافةٌ لاحقة تنقل الفاتورة من تقريرٍ إلى لا شيء.
+ * The field stays free text (the merchant may write their own category), but text
+ * matching a known label is sent with its code, and the server decides by the code:
+ * whether amortization is allowed, the establishment costs report, and the posting
+ * account. Matching the Arabic text instead let a trailing space move an invoice
+ * out of a report.
  *
- * ⚠️ الرموز واللافتات مرآةٌ لـ`apps/api/src/common/purchase-categories.ts`،
- * وحارسُه `purchase-categories.spec.ts` **يقرأ هذا الملف من القرص** ويثبت التطابق
- * في الاتجاهين. فإضافة فئةٍ هنا بلا نظيرتها هناك تُسقط الحارس، والعكس.
+ * The codes mirror `apps/api/src/common/purchase-categories.ts`, and its guard
+ * `purchase-categories.spec.ts` reads this file from disk and checks both
+ * directions, so a category added on one side only fails the guard.
  */
 const CATEGORY_CODES = ['POWER', 'WATER', 'TELECOM', 'RENT', 'SALARIES', 'COGS', 'FORMATION', 'OTHER'] as const;
 
-const CATEGORY_LABELS: Record<(typeof CATEGORY_CODES)[number], string> = {
-  POWER: 'كهرباء',
-  WATER: 'مياه',
-  TELECOM: 'اتصالات وإنترنت',
-  RENT: 'إيجار',
-  SALARIES: 'رواتب',
-  COGS: 'تكلفة مبيعات',
-  FORMATION: 'مصروفات تأسيس',
-  OTHER: 'مصروفات أخرى',
-};
+type CategoryCode = (typeof CATEGORY_CODES)[number];
 
-const CATEGORY_SUGGESTIONS = CATEGORY_CODES.map((c) => CATEGORY_LABELS[c]);
+const categoryKey = (c: CategoryCode) => `suppliers.purchase_form.categories.${c}`;
 
-function categoryCodeOf(written: string): (typeof CATEGORY_CODES)[number] | undefined {
+/** The label in the current language, translated when used. */
+const categoryLabel = (c: CategoryCode) => i18n.t(categoryKey(c));
+
+/** Matches the code, or its label in either language, so text written before a language switch still maps. */
+function categoryCodeOf(written: string): CategoryCode | undefined {
   const v = written.trim();
-  return CATEGORY_CODES.find((c) => c === v || CATEGORY_LABELS[c] === v);
+  return CATEGORY_CODES.find(
+    (c) => c === v || i18n.t(categoryKey(c), { lng: 'ar' }) === v || i18n.t(categoryKey(c), { lng: 'en' }) === v,
+  );
 }
 
+const INCORP_ITEM_KEYS = ['license', 'equipment', 'furniture', 'decor', 'consulting', 'gov_fees'] as const;
+
 /**
- * ما تسلّمه النافذةُ للإنشاء والتعديل معاً — نوعٌ واحدٌ كان منسوخاً في الصفحة. والرمزُ بنوع الخادم المولَّد
- * (`ق-١٤٠٤` · ③) لا `string`: فمرآةُ `CATEGORY_CODES` تُفحص به عند الترجمة أيضاً.
+ * What the modal hands back for both create and edit. The code uses the server's
+ * generated type, not `string`, so the `CATEGORY_CODES` mirror is also checked at compile time.
  */
 export interface PurchaseFormData {
   supplierId: string;
@@ -75,6 +77,7 @@ export function PurchaseModal({
   onSave: (data: PurchaseFormData) => Promise<void>;
   onCreateSupplier: (name: string) => Promise<Supplier>;
 }) {
+  const { t } = useTranslation();
   const [supplierInput, setSupplierInput] = useState(editing?.supplier.name ?? '');
   const [date, setDate] = useState(editing ? editing.date.slice(0, 10) : today());
   const [dueDate, setDueDate] = useState(editing?.dueDate?.slice(0, 10) ?? '');
@@ -90,7 +93,7 @@ export function PurchaseModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Amortization is offered only for establishment costs — matches the mockup,
+  // Amortization is offered only for establishment costs, matching the mockup,
   // which shows the control only when that category is selected.
   const isIncorporation = categoryCodeOf(category) === 'FORMATION';
 
@@ -116,7 +119,7 @@ export function PurchaseModal({
     const amort = isIncorporation && amortize;
     const months = amort ? parseInt(amortizeMonths, 10) || 0 : undefined;
     if (amort && (!months || months < 1)) {
-      setError('حدّد عدد أشهر الاستهلاك (شهر واحد على الأقل).');
+      setError(t('suppliers.purchase_form.months_required'));
       return;
     }
 
@@ -150,15 +153,15 @@ export function PurchaseModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل فاتورة الشراء' : 'تسجيل فاتورة شراء / التزام'}</div>
+          <div className="modal-title">{editing ? t('suppliers.purchase_form.title_edit') : t('suppliers.purchase_form.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
 
         <div className="field">
-          <label>المورد / الجهة</label>
-          <input list="pur-supplier-suggestions" value={supplierInput} onChange={(e) => setSupplierInput(e.target.value)} placeholder="اكتب للبحث عن المورد..." />
+          <label>{t('suppliers.purchase_form.supplier')}</label>
+          <input list="pur-supplier-suggestions" value={supplierInput} onChange={(e) => setSupplierInput(e.target.value)} placeholder={t('suppliers.purchase_form.supplier_placeholder')} />
           <datalist id="pur-supplier-suggestions">
             {suppliers.map((s) => (
               <option key={s.id} value={s.name} />
@@ -167,52 +170,52 @@ export function PurchaseModal({
         </div>
         <div className="two-col">
           <div className="field">
-            <label>تاريخ الفاتورة</label>
+            <label>{t('suppliers.purchase_form.date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>تاريخ الاستحقاق (آخر موعد سداد)</label>
+            <label>{t('suppliers.purchase_form.due_date')}</label>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
         </div>
         <div className="field">
-          <label>رقم فاتورة المورّد (مرجع خارجي — كما على ورقته)</label>
-          <input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="اختياري" />
+          <label>{t('suppliers.purchase_form.supplier_ref')}</label>
+          <input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder={t('suppliers.purchase_form.optional')} />
         </div>
         <div className="field">
-          <label>الفئة</label>
-          <input list="pur-category-list" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="كهرباء / ماء / إنترنت / مواد خام..." />
+          <label>{t('suppliers.purchase_form.category')}</label>
+          <input list="pur-category-list" value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('suppliers.purchase_form.category_placeholder')} />
           <datalist id="pur-category-list">
-            {CATEGORY_SUGGESTIONS.map((c) => (
+            {CATEGORY_CODES.map(categoryLabel).map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
         </div>
         <div className="field">
-          <label>المبلغ قبل الضريبة</label>
+          <label>{t('suppliers.purchase_form.subtotal')}</label>
           <input className="num" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} placeholder="0.00" />
         </div>
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={exempt} onChange={(e) => setExempt(e.target.checked)} /> معفاة من ضريبة القيمة المضافة
+            <input type="checkbox" style={{ width: 'auto' }} checked={exempt} onChange={(e) => setExempt(e.target.checked)} /> {t('suppliers.purchase_form.exempt')}
           </label>
         </div>
         <div className="field">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" style={{ width: 'auto' }} checked={excludeFromVat} onChange={(e) => setExcludeFromVat(e.target.checked)} /> مستبعدة من الإقرار الضريبي (بلا فاتورة ضريبية صحيحة)
+            <input type="checkbox" style={{ width: 'auto' }} checked={excludeFromVat} onChange={(e) => setExcludeFromVat(e.target.checked)} /> {t('suppliers.purchase_form.exclude')}
           </label>
-          <p className="hint" style={{ marginTop: 4 }}>لا تُسترد ضريبتها في إقرار القيمة المضافة.</p>
+          <p className="hint" style={{ marginTop: 4 }}>{t('suppliers.purchase_form.exclude_hint')}</p>
         </div>
         <div className="two-col" style={{ background: 'var(--paper)', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            ضريبة القيمة المضافة (15٪)
+            {t('suppliers.purchase_form.vat_label')}
             <br />
             <b className="num" style={{ fontSize: 14, color: 'var(--ink)' }}>
-              {exempt ? 'معفاة' : fmt(preview.tax)}
+              {exempt ? t('suppliers.common.exempt') : fmt(preview.tax)}
             </b>
           </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            الإجمالي شامل الضريبة
+            {t('suppliers.purchase_form.total_incl')}
             <br />
             <b className="num" style={{ fontSize: 14, color: 'var(--emerald)' }}>
               {fmt(preview.total)}
@@ -222,27 +225,27 @@ export function PurchaseModal({
 
         {isIncorporation && (
           <div className="field">
-            <label>بند التأسيس</label>
-            <input list="incorp-item-list" value={incorpItem} onChange={(e) => setIncorpItem(e.target.value)} placeholder="رسوم ترخيص / تجهيزات / أثاث..." />
+            <label>{t('suppliers.purchase_form.incorp_item')}</label>
+            <input list="incorp-item-list" value={incorpItem} onChange={(e) => setIncorpItem(e.target.value)} placeholder={t('suppliers.purchase_form.incorp_placeholder')} />
             <datalist id="incorp-item-list">
-              {['رسوم ترخيص', 'تجهيزات', 'أثاث', 'ديكور', 'استشارات', 'رسوم حكومية'].map((c) => (
+              {INCORP_ITEM_KEYS.map((k) => t(`suppliers.purchase_form.incorp_items.${k}`)).map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
-            <p className="hint">يُجمَّع التقرير حسب هذا البند.</p>
+            <p className="hint">{t('suppliers.purchase_form.incorp_hint')}</p>
           </div>
         )}
 
         {isIncorporation && (
           <div className="field">
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" style={{ width: 'auto' }} checked={amortize} onChange={(e) => setAmortize(e.target.checked)} /> استهلاك على فترة (مصروف تأسيس مؤجَّل)
+              <input type="checkbox" style={{ width: 'auto' }} checked={amortize} onChange={(e) => setAmortize(e.target.checked)} /> {t('suppliers.purchase_form.amortize')}
             </label>
             {amortize && (
               <div style={{ marginTop: 8 }}>
-                <label>عدد أشهر الاستهلاك</label>
-                <input className="num" value={amortizeMonths} onChange={(e) => setAmortizeMonths(e.target.value)} placeholder="مثال: 12" />
-                <p className="hint" style={{ marginTop: 4 }}>للتقرير فقط — المصروف يُقيَّد كاملاً الآن على حساب مصروفات التأسيس (5500).</p>
+                <label>{t('suppliers.purchase_form.months')}</label>
+                <input className="num" value={amortizeMonths} onChange={(e) => setAmortizeMonths(e.target.value)} placeholder={t('suppliers.purchase_form.months_placeholder')} />
+                <p className="hint" style={{ marginTop: 4 }}>{t('suppliers.purchase_form.amortize_hint')}</p>
               </div>
             )}
           </div>
@@ -253,10 +256,10 @@ export function PurchaseModal({
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('suppliers.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'تسجيل الفاتورة'}
+            {editing ? t('suppliers.common.save_edit') : t('suppliers.purchase_form.submit')}
           </button>
         </div>
       </div>
