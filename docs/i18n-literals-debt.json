@@ -18,21 +18,10 @@
     "apps/web/src/components/RowMenu.tsx": 1,
     "apps/web/src/components/SignaturePad.tsx": 3,
     "apps/web/src/components/ZatcaQr.tsx": 3,
-    "apps/web/src/layout/DeveloperShell.tsx": 2,
     "apps/web/src/lib/apiError.ts": 1,
     "apps/web/src/lib/batchLimits.ts": 4,
     "apps/web/src/lib/units.ts": 23,
     "apps/web/src/lib/vat.ts": 34,
-    "apps/web/src/lib/zatcaQr.ts": 2,
-    "apps/web/src/pages/audit/AuditLogPage.tsx": 26,
-    "apps/web/src/pages/audit/DelegationLogPage.tsx": 15,
-    "apps/web/src/pages/branches/BranchModal.tsx": 16,
-    "apps/web/src/pages/branches/BranchesPage.tsx": 17,
-    "apps/web/src/pages/notifications/NotificationsPage.tsx": 21,
-    "apps/web/src/pages/scripts/ScriptModal.tsx": 13,
-    "apps/web/src/pages/scripts/ScriptsPage.tsx": 22,
-    "apps/web/src/pages/tasks/MyTasksPage.tsx": 34,
-    "apps/web/src/pages/trash/TrashPage.tsx": 20,
-    "apps/web/src/routes/AccessDenied.tsx": 3
+    "apps/web/src/lib/zatcaQr.ts": 2
   }
 }
