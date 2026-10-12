@@ -145,7 +145,7 @@
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/companyProfile/CompanyProfilePage.tsx": {
-      "count": 4,
+      "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/customers/CustomerDetailModal.tsx": {
@@ -184,20 +184,8 @@
       "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/settings/ApiKeysCard.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/settings/CashDrawersCard.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/settings/SettingsPage.tsx": {
       "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/settings/SupportAccessCard.tsx": {
-      "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/suppliers/PurchaseModal.tsx": {
