@@ -128,7 +128,7 @@
 
 ## كيف يُحرَس هذا الفهرس
 
-`apps/api/src/common/registry-numbering.spec.ts` يُسقط الحزمة إن:
+`ops/process-gates/registry-numbering.test.mjs` (السير `process-gates`) يُسقط الحزمة إن:
 
 - وُجد ملفٌ في `docs/plans/` **بلا صفٍّ هنا**، أو صفٌّ هنا **بلا ملف** — بالاتجاهين.
 - استُشهد في وثيقةٍ بمعرّف محرّكٍ `L*-*` **غير مسجَّل** في [`engines.md`](engines.md).
