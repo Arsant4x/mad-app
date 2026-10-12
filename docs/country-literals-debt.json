@@ -120,8 +120,12 @@
       "count": 1,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
+    "apps/web/src/i18n/format.ts": {
+      "count": 1,
+      "reason": "Default Arabic display locale 'ar-SA', kept so every screen moved here renders Arabic exactly as before; one place instead of one per screen. Moves to the company's region setting with the localisation work."
+    },
     "apps/web/src/layout/AppShell.tsx": {
-      "count": 5,
+      "count": 4,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/lib/posQueue.ts": {
@@ -164,10 +168,6 @@
       "count": 4,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/developer/SupportAccessSection.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/invoices/InvoiceBuilderView.tsx": {
       "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
@@ -208,16 +208,8 @@
       "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/suppliers/IncorporationReportPage.tsx": {
-      "count": 2,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/suppliers/PurchaseModal.tsx": {
-      "count": 3,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/suppliers/SupplierDetailModal.tsx": {
-      "count": 3,
+      "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/tasks/MyTasksPage.tsx": {
