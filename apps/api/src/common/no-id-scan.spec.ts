@@ -144,8 +144,13 @@ describe('لا دعوة إلى صور الهويات (لائحة 2289 م.٢٨/١
     expect(doc).toContain('دون طلب أو أخذ نسخة منها');
   });
 
+  // The UI text lives behind a translation key; the Arabic wording is checked in the Arabic translation file.
+  const arContracts = (): { attachments: Record<string, string>; claims: Record<string, string> } =>
+    JSON.parse(readFileSync(join(repoRoot, 'apps', 'web', 'src', 'i18n', 'locales', 'ar', 'contracts.json'), 'utf8'));
+
   it('واجهة الرفع تحمل التحذير بنصّه', () => {
-    expect(readFileSync(uiPath, 'utf8')).toContain('لا ترفع صور الهويات — سجّل الرقم في حقله');
+    expect(readFileSync(uiPath, 'utf8')).toContain("t('contracts.attachments.id_warning')");
+    expect(arContracts().attachments.id_warning).toContain('لا ترفع صور الهويات — سجّل الرقم في حقله');
   });
 
   /**
@@ -154,6 +159,7 @@ describe('لا دعوة إلى صور الهويات (لائحة 2289 م.٢٨/١
    */
   it('شاشةُ رفع مرفقات المطالبة تحمل حدَّها بنصّ المالك', () => {
     const claims = join(repoRoot, 'apps', 'web', 'src', 'pages', 'contracts', 'ClaimsSection.tsx');
-    expect(readFileSync(claims, 'utf8')).toContain('لا تُرفع صورُ الهويّات هنا');
+    expect(readFileSync(claims, 'utf8')).toContain("t('contracts.claims.id_warning')");
+    expect(arContracts().claims.id_warning).toContain('لا تُرفع صورُ الهويّات هنا');
   });
 });

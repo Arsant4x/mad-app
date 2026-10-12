@@ -1,5 +1,6 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Bank } from '../../api/banks';
 import {
   cancelContract,
@@ -34,31 +35,31 @@ import { MixedShareFields, mixedSharePayload } from './MixedShareFields';
 import i18n from '../../i18n';
 
 const INSTALLMENT_STATUS_META: Record<InstallmentStatus, { label: string; badgeClass: string }> = {
-  DUE: { label: 'مستحقة', badgeClass: 'due' },
-  LATE: { label: 'متأخرة', badgeClass: 'overdue' },
-  // مسدَّدٌ بعضُه — تُشتقّ في الخادم من المقبوض مقابل الإجماليّ (ق-١٠٤٠)؛ والباقي يُقبض من زرّ القبض نفسِه.
-  PARTIAL: { label: 'مسدَّدة جزئياً', badgeClass: 'due' },
-  PAID: { label: 'مدفوعة', badgeClass: 'paid' },
-  CANCELLED: { label: 'ملغية', badgeClass: 'draft' },
+  DUE: { get label() { return i18n.t('contracts.detail.installment_status.due'); }, badgeClass: 'due' },
+  LATE: { get label() { return i18n.t('contracts.detail.installment_status.late'); }, badgeClass: 'overdue' },
+  // Partly paid: derived on the server from what was received against the gross; the rest is collected from the same button.
+  PARTIAL: { get label() { return i18n.t('contracts.detail.installment_status.partial'); }, badgeClass: 'due' },
+  PAID: { get label() { return i18n.t('contracts.detail.installment_status.paid'); }, badgeClass: 'paid' },
+  CANCELLED: { get label() { return i18n.t('contracts.detail.installment_status.cancelled'); }, badgeClass: 'draft' },
 };
 
 /**
- * طريقةُ السداد **بكلِّ قيم عمودها** (`ق-١٣٦٧`) — كان العرضُ `p.method === 'CASH' ? 'نقداً' : 'تحويل بنكي'` فسندٌ بالشبكة يُقرأ تحويلاً.
- * و`Record` يُلزمه المترجمُ بكلِّ قيمة: قيمةٌ تُضاف إلى النوع تُسقط البناءَ حتى تُسمّى هنا. «شبكة» لا «بطاقة» (`ق-٣٢٠`).
+ * Payment method for every value of its column, so a card payment is never
+ * read as a bank transfer. `Record` makes the compiler require each value: a
+ * value added to the type fails the build until it is named here.
  */
 const RENT_PAYMENT_METHOD_LABEL: Record<RentPaymentMethod, string> = {
-  CASH: 'نقداً',
-  BANK: 'تحويل بنكي',
-  CARD: 'شبكة',
+  get CASH() { return i18n.t('contracts.detail.payment_method.cash'); },
+  get BANK() { return i18n.t('contracts.detail.payment_method.bank'); },
+  get CARD() { return i18n.t('contracts.detail.payment_method.card'); },
 };
 
-/** حقولُ العقد التي يُقرأ منها الخضوعُ والشمول. */
+/** The contract fields that decide whether VAT applies and whether it is included. */
 type TaxedContract = { classification: string; vatInclusion: string; exemptSharePercent?: string | null };
 
-/** الإجماليُّ الذي يدين به المستأجر عن قسطٍ — بحسب الشمول (م٤٥/٢ · ق-٩١٨): غيرُ الشامل يزيد 15%. */
 /**
- * إجماليُّ القسط رقماً — غيرُ الشامل الخاضع +15%، والمختلطُ +15% من جزئه الخاضع (السؤال ٤١٢)، والباقي المبلغُ نفسُه
- * (التدويرُ من `lib/money` وحده — ق-٦٥ بروحها).
+ * The installment gross as a number: taxable exclusive adds 15%, mixed adds 15%
+ * of its taxable part, anything else is the amount itself (rounding only through `lib/money`).
  */
 function grossNumberOf(contract: TaxedContract, amount: string | number): number {
   const a = Number(amount);
@@ -68,41 +69,42 @@ function grossNumberOf(contract: TaxedContract, amount: string | number): number
 }
 
 /**
- * المقترَحُ للقسط المسدَّد بعضُه هو **الباقي** لا القسطُ كلُّه (ق-١٠٤٠): الإجماليُّ بالضريبة ناقصَ ما
- * قُبض عليه (صافي الدفعة + خصمُها — كما يشتقّ الخادمُ الحالة). القسطُ الذي لم يُقبض عليه شيءٌ يبقى على
- * اقتراحه الكامل.
+ * The suggestion for a partly paid installment is the remainder, not the whole
+ * installment: the gross with VAT less what was received on it (net payment plus
+ * its discount, as the server derives the status). An installment with nothing
+ * received keeps its full suggestion.
  */
 function suggestedRemainingGross(
   contract: TaxedContract,
   installment: { id: string; amount: string | number; gross?: MoneyText; settled?: MoneyText; remaining?: MoneyText } | undefined,
 ): string {
   if (!installment) return '';
-  // الإجماليُّ والمسدَّدُ والمتبقّي يصلون من الخادم مع العقد (`ق-١٢٤٣`) — وقد كانت النافذةُ تحسبها من دفعاته،
-  // وتخطئ عقارَ التشغيل (لا ضريبةَ عليه). والعقدُ القادم من قائمةٍ بلا حساب يعود إلى إجماليّ الشاشة.
+  // Gross, settled and remaining come from the server with the contract; computing them here
+  // got operated properties wrong (no VAT on them). A contract from a list without them falls back to the screen's gross.
   const gross = installment.gross !== undefined ? num0(installment.gross) : grossNumberOf(contract, installment.amount);
   const settled = num0(installment.settled);
   const remaining = installment.remaining !== undefined ? num0(installment.remaining) : round2(gross - settled);
   return formatMoney(settled > 0 && remaining > 0 ? remaining : gross);
 }
 
-/** نصُّ الإعلان في شاشة القبض — الشاملُ وغيرُ الشامل والمعفى، بأرقامها (ق-٩٢٧/②). */
+/** The statement on the payment screen: inclusive, exclusive or exempt, with its figures. */
 function paymentDeclaration(contract: TaxedContract, amount: string | number | undefined): string | null {
   if (amount === undefined || amount === null || amount === '') return null;
   const a = Number(amount);
-  if (contract.classification === 'RESIDENTIAL') return `عقدٌ سكنيّ معفى — المبلغُ المقترَح هو القسطُ ${formatMoney(a)} بلا ضريبة.`;
+  if (contract.classification === 'RESIDENTIAL') return i18n.t('contracts.detail.declaration.residential', { amount: formatMoney(a) });
   const share = taxedShareOf(contract);
-  if (share === 0) return 'عقدٌ قديم بلا تصنيف — لا تُحسب له ضريبةٌ حتى يُصنَّف من بطاقته؛ والقبضُ على المسار القائم.';
-  // ⚖️ المختلط (السؤال ٤١٢): الضريبةُ على جزئه الخاضع وحدَه، فيُقال ذلك قبل الأرقام.
-  const mixed = share < 1 ? `عقدٌ مختلط: نصيبُ المعفى ${contract.exemptSharePercent}٪ والضريبةُ على الباقي. ` : '';
+  if (share === 0) return i18n.t('contracts.detail.declaration.unclassified');
+  // Mixed: VAT is on its taxable part only, so that is said before the figures.
+  const mixed = share < 1 ? i18n.t('contracts.detail.declaration.mixed', { percent: String(contract.exemptSharePercent) }) : '';
   if (contract.vatInclusion === 'INCLUSIVE') {
     const tax = share === 1 ? round2(standardVatIncludedIn(a)) : round2(standardVatIncludedInShare(a, share));
-    return `${mixed}قيمةُ العقد شاملةٌ للضريبة: القسطُ ${formatMoney(a)} = ${formatMoney(round2(a - tax))} صافياً + ${formatMoney(tax)} ضريبة — فالإيرادُ أقلُّ من القسط.`;
+    return i18n.t('contracts.detail.declaration.inclusive', { mixed, amount: formatMoney(a), net: formatMoney(round2(a - tax)), tax: formatMoney(tax) });
   }
   if (contract.vatInclusion === 'EXCLUSIVE') {
     const tax = round2(standardVatOnShare(round2(a * share)));
-    return `${mixed}قيمةُ العقد غيرُ شاملة: القسطُ ${formatMoney(a)} + ${formatMoney(tax)} ضريبة = ${formatMoney(round2(a + tax))} يدين به المستأجر — وهو المقترَح.`;
+    return i18n.t('contracts.detail.declaration.exclusive', { mixed, amount: formatMoney(a), tax: formatMoney(tax), gross: formatMoney(round2(a + tax)) });
   }
-  return 'عقدٌ قديم غيرُ معلَنِ الشمول — لا تُحسب له ضريبةٌ حتى يُعلَن من بطاقته.';
+  return i18n.t('contracts.detail.declaration.undeclared');
 }
 
 function PaymentForm({
@@ -114,11 +116,12 @@ function PaymentForm({
 }: {
   banks: Bank[];
   defaultAmount: string;
-  /** ⭐ الشاملُ وغيرُ الشامل يُعلنان في شاشة القبض — فالمقترَحُ إجماليٌّ لا قسط (ق-٩٢٧/②). */
+  /** Inclusive and exclusive are stated on the payment screen, so the suggestion reads as a gross, not an installment. */
   declaration?: string | null;
   onCancel: () => void;
   onSubmit: (dto: RecordPaymentInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState(defaultAmount);
   const [discount, setDiscount] = useState('');
@@ -164,30 +167,30 @@ function PaymentForm({
       )}
       <div className="two-col">
         <div className="field">
-          <label>تاريخ الدفعة</label>
+          <label>{t('contracts.detail.payment.date')}</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div className="field">
-          <label>المبلغ</label>
+          <label>{t('contracts.detail.payment.amount')}</label>
           <input className="num" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
         </div>
       </div>
       <div className="two-col">
         <div className="field">
-          <label>الخصم</label>
+          <label>{t('contracts.detail.payment.discount')}</label>
           <input className="num" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0.00" />
         </div>
         <div className="field">
-          <label>طريقة السداد</label>
+          <label>{t('contracts.detail.payment.method')}</label>
           <select value={method} onChange={(e) => setMethod(e.target.value as RecordPaymentMethod)}>
-            <option value="CASH">نقداً</option>
-            <option value="BANK">تحويل بنكي</option>
+            <option value="CASH">{t('contracts.detail.payment_method.cash')}</option>
+            <option value="BANK">{t('contracts.detail.payment_method.bank')}</option>
           </select>
         </div>
       </div>
       {method === 'BANK' && (
         <div className="field">
-          <label>الحساب البنكي</label>
+          <label>{t('contracts.detail.payment.bank_account')}</label>
           <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
             {banks.map((b) => (
               <option key={b.id} value={b.id}>
@@ -199,25 +202,25 @@ function PaymentForm({
       )}
       {method === 'CASH' && banks.length > 0 && (
         <div className="field">
-          <label>الصندوق المستلِم (اختياري)</label>
+          <label>{t('contracts.detail.payment.cash_box')}</label>
           <select value={cashBoxId} onChange={(e) => setCashBoxId(e.target.value)}>
-            <option value="">— لا صندوق محدّد —</option>
+            <option value="">{t('contracts.detail.payment.no_cash_box')}</option>
             {banks.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
           </select>
-          <p className="hint">اختر صندوق الفرع الذي استلم النقد ليرتفع رصيده. اتركه فارغاً لتسجيل الدخل دون تحديد صندوق.</p>
+          <p className="hint">{t('contracts.detail.payment.cash_box_hint')}</p>
         </div>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-ghost" onClick={onCancel}>
-          إلغاء
+          {t('contracts.detail.cancel')}
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={saving}>
-          تسجيل الدفعة
+          {t('contracts.detail.payment.record')}
         </button>
       </div>
     </div>
@@ -225,13 +228,14 @@ function PaymentForm({
 }
 
 const SETTLEMENT_BASIS_LABEL: Record<SettlementBasis, string> = {
-  none: 'بدون تسوية',
-  amount: 'مبلغ محدَّد',
-  installments: 'عدد من الدفعات',
-  all: 'كامل المتبقي',
+  get none() { return i18n.t('contracts.detail.settlement_basis.none'); },
+  get amount() { return i18n.t('contracts.detail.settlement_basis.amount'); },
+  get installments() { return i18n.t('contracts.detail.settlement_basis.installments'); },
+  get all() { return i18n.t('contracts.detail.settlement_basis.all'); },
 };
 
 function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: CancelContractInput) => Promise<void> }) {
+  const { t } = useTranslation();
   const [cancelDate, setCancelDate] = useState(today());
   const [cancelReason, setCancelReason] = useState('');
   const [installmentDisposition, setInstallmentDisposition] = useState<'keep' | 'cancel'>('cancel');
@@ -267,7 +271,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
     if (settlementBasis !== 'none' && lines.length) {
       const sum = lines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0);
       if (Math.abs(sum - previewedSettlement) > 0.01) {
-        setError('مجموع البنود لا يساوي مبلغ التسوية.');
+        setError(t('contracts.detail.cancel_form.lines_mismatch'));
         return;
       }
     }
@@ -297,24 +301,24 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
   return (
     <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
       <div className="field">
-        <label>تاريخ الإلغاء</label>
+        <label>{t('contracts.detail.cancel_form.date')}</label>
         <input type="date" value={cancelDate} onChange={(e) => setCancelDate(e.target.value)} />
       </div>
       <div className="field">
-        <label>سبب الإلغاء</label>
-        <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="مثال: إخلاء مبكر باتفاق الطرفين" />
+        <label>{t('contracts.detail.cancel_form.reason')}</label>
+        <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder={t('contracts.detail.cancel_form.reason_placeholder')} />
       </div>
       <div className="field">
-        <label>الأقساط المستحقة القادمة</label>
+        <label>{t('contracts.detail.cancel_form.upcoming_installments')}</label>
         <select value={installmentDisposition} onChange={(e) => setInstallmentDisposition(e.target.value as 'keep' | 'cancel')}>
-          <option value="cancel">إلغاؤها</option>
-          <option value="keep">إبقاؤها مستحقة</option>
+          <option value="cancel">{t('contracts.detail.cancel_form.cancel_them')}</option>
+          <option value="keep">{t('contracts.detail.cancel_form.keep_them')}</option>
         </select>
       </div>
 
       <div className="two-col">
         <div className="field">
-          <label>تسوية الإخلاء المبكر</label>
+          <label>{t('contracts.detail.cancel_form.settlement')}</label>
           <select value={settlementBasis} onChange={(e) => setSettlementBasis(e.target.value as SettlementBasis)}>
             {(Object.keys(SETTLEMENT_BASIS_LABEL) as SettlementBasis[]).map((b) => (
               <option key={b} value={b}>
@@ -325,15 +329,15 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
         </div>
         {settlementBasis === 'amount' && (
           <div className="field">
-            <label>المبلغ</label>
+            <label>{t('contracts.detail.cancel_form.amount')}</label>
             <input className="num" value={settlementAmount} onChange={(e) => setSettlementAmount(e.target.value)} placeholder="0.00" />
           </div>
         )}
         {settlementBasis === 'installments' && (
           <div className="field">
-            <label>عدد الدفعات</label>
+            <label>{t('contracts.detail.cancel_form.installment_count')}</label>
             <input type="number" min="1" value={settlementInstallments} onChange={(e) => setSettlementInstallments(e.target.value)} />
-            <p className="hint">المتبقي غير المسدَّد من تاريخ الإلغاء: {unpaidFromCancelDate.length} دفعة</p>
+            <p className="hint">{t('contracts.detail.cancel_form.unpaid_from_date', { n: unpaidFromCancelDate.length })}</p>
           </div>
         )}
       </div>
@@ -341,21 +345,21 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
         // Says where the money lands, because "settlement" alone doesn't tell
         // the user it becomes a receivable rather than cash in hand.
         <p className="hint">
-          سيُسجَّل {fmt(previewedSettlement)} كمستحق على المستأجر ضمن إيرادات أخرى — وليس إيراد إيجار. يمكن خصمه لاحقاً من التأمين المحتجز.
+          {t('contracts.detail.cancel_form.settlement_hint', { amount: fmt(previewedSettlement) })}
         </p>
       )}
       {previewedSettlement > 0 && (
         <div className="card" style={{ background: '#faf9f5', marginTop: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            <b>تفصيل التسوية بنوداً (اختياري)</b>
-            <button type="button" className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={() => setLines((ls) => [...ls, { label: '', amount: '' }])}>
-              + بند
+            <b>{t('contracts.detail.cancel_form.lines_title')}</b>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => setLines((ls) => [...ls, { label: '', amount: '' }])}>
+              {t('contracts.detail.cancel_form.add_line')}
             </button>
           </div>
           {lines.map((l, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <input style={{ flex: 2 }} placeholder="مثال: بدل إشعار" value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-              <input style={{ flex: 1 }} type="number" placeholder="المبلغ (سالب = خصم)" value={l.amount} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
+              <input style={{ flex: 2 }} placeholder={t('contracts.detail.cancel_form.line_label_placeholder')} value={l.label} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+              <input style={{ flex: 1 }} type="number" placeholder={t('contracts.detail.cancel_form.line_amount_placeholder')} value={l.amount} onChange={(e) => setLines((ls) => ls.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} />
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>
                 ✕
               </button>
@@ -363,7 +367,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
           ))}
           {lines.length > 0 && (
             <p className="hint" style={{ marginTop: 6 }}>
-              مجموع البنود: <b className="num">{fmt(lines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0))}</b> — يجب أن يساوي {fmt(previewedSettlement)}
+              {t('contracts.detail.cancel_form.lines_sum')}<b className="num">{fmt(lines.reduce((acc, l) => acc + (parseFloat(l.amount) || 0), 0))}</b>{t('contracts.detail.cancel_form.lines_must_equal', { amount: fmt(previewedSettlement) })}
             </p>
           )}
         </div>
@@ -371,10 +375,10 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-ghost" onClick={onCancel}>
-          تراجع
+          {t('contracts.detail.back')}
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={saving}>
-          تأكيد الإلغاء
+          {t('contracts.detail.cancel_form.confirm')}
         </button>
       </div>
     </div>
@@ -388,6 +392,7 @@ function CancelForm({ contract, onCancel, onSubmit }: { contract: Contract; onCa
  * everything else is an override.
  */
 export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract; onCancel: () => void; onSubmit: (dto: RenewContractInput) => Promise<void> }) {
+  const { t } = useTranslation();
   const dayAfter = (iso: string) => {
     const d = new Date(iso);
     d.setDate(d.getDate() + 1);
@@ -406,28 +411,29 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
   const [no, setNo] = useState('');
   const [ejarNo, setEjarNo] = useState('');
   const [carryDeposits, setCarryDeposits] = useState(true);
-  // تُعبّأ من الأصل ليُراجَعا — والخادمُ يوجبهما ولا يرثهما؛ وإن كان الأصلُ قديماً فلا قيمةَ مسبقة.
+  // Prefilled from the original for review: the server requires both and does not inherit them; a legacy original gives no preset.
   const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
   const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
-  // ⚖️ والمؤجّرُ على عقار التشغيل يُعلَن في التجديد كالتصنيف (السؤال ٥٧٧) — يُعبّأ من الأصل ليُراجَع.
+  // The lessor on an operated property is declared on renewal like the classification, prefilled from the original for review.
   const managed = contract.unit.property.ownership === 'managed';
   const [lessor, setLessor] = useState<DeclaredLessorChoice>(contract.lessor === 'LEGACY_UNDECLARED' ? '' : contract.lessor);
   const [ownerName, setOwnerName] = useState(contract.ownerName ?? '');
   const [ownerVatNumber, setOwnerVatNumber] = useState(contract.ownerVatNumber ?? '');
-  // ⚖️ ونسبةُ المختلط تُعبّأ من الأصل لتُراجَع، ولا تُورَّث في الخادم (السؤال ٤١٢).
+  // The mixed share is prefilled from the original for review; the server does not inherit it.
   const [sharePercent, setSharePercent] = useState(contract.exemptSharePercent ?? '');
   const [shareBasis, setShareBasis] = useState(contract.exemptShareBasis ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const heldDeposits = contract.deposits.filter((d) => d.status === 'HELD');
-  // ⚖️ رصيدُ المستأجر يُخصم من أقساط التجديد بمعاملة الأصل الضريبية وحدَها (`ق-١٦٣٧`): تصنيفٌ أو شمولٌ أو نسبةٌ تختلف ⟵ لا يُخصم ويبقى في الأصل.
+  // The tenant credit is deducted from renewal installments only under the original tax treatment:
+  // a different classification, inclusion or share means no deduction and it stays on the original.
   const tenantCredit = num0(contract.tenantCredit ?? '0');
   const treatmentChanged =
     classification !== contract.classification ||
     vatInclusion !== contract.vatInclusion ||
     (classification === 'MIXED' && sharePercent !== (contract.exemptSharePercent ?? ''));
-  // والمؤجّرُ على عقار التشغيل كذلك: رصيدُ المالك المؤجّر لا يُخصم من عقدٍ مؤجّرُه المنشأة ولا العكس.
+  // Same for the lessor on an operated property: an owner-lessor credit is not deducted from a company-lessor contract, nor the reverse.
   const lessorChanged = managed && lessor !== contract.lessor;
 
   async function submit() {
@@ -452,7 +458,7 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
       });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر تجديد العقد'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.detail.renew.failed')));
     } finally {
       setSaving(false);
     }
@@ -462,30 +468,30 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
     <div className="card" style={{ background: '#faf9f5', marginTop: 10 }}>
       <div className="two-col">
         <div className="field">
-          <label>بداية العقد الجديد</label>
+          <label>{t('contracts.detail.renew.start')}</label>
           <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
         </div>
         <div className="field">
-          <label>نهايته</label>
+          <label>{t('contracts.detail.renew.end')}</label>
           <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
         </div>
       </div>
       <div className="two-col">
         <div className="field">
-          <label>القيمة السنوية</label>
+          <label>{t('contracts.detail.renew.annual_value')}</label>
           <input className="num" value={value} onChange={(e) => setValue(e.target.value)} />
-          <p className="hint">تركها كما هي يعني تجديداً بنفس الإيجار.</p>
+          <p className="hint">{t('contracts.detail.renew.same_rent_hint')}</p>
         </div>
         <div className="field">
-          <label>رقم العقد (اختياري)</label>
-          <input value={no} onChange={(e) => setNo(e.target.value)} placeholder="يُولَّد تلقائياً إن تُرك فارغاً" />
+          <label>{t('contracts.detail.renew.no')}</label>
+          <input value={no} onChange={(e) => setNo(e.target.value)} placeholder={t('contracts.detail.renew.no_placeholder')} />
         </div>
       </div>
       <div className="two-col">
         <div className="field">
-          <label>تصنيف العقد الجديد للضريبة</label>
+          <label>{t('contracts.detail.renew.classification')}</label>
           <select value={classification} onChange={(e) => setClassification(e.target.value as DeclaredClassification | '')}>
-            <option value="">— اختر —</option>
+            <option value="">{t('contracts.lessor.choose')}</option>
             {CLASSIFICATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -494,9 +500,9 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
           </select>
         </div>
         <div className="field">
-          <label>قيمته والضريبة</label>
+          <label>{t('contracts.detail.renew.vat_inclusion')}</label>
           <select value={vatInclusion} onChange={(e) => setVatInclusion(e.target.value as DeclaredVatInclusion | '')}>
-            <option value="">— اختر —</option>
+            <option value="">{t('contracts.lessor.choose')}</option>
             {VAT_INCLUSION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -519,39 +525,39 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
         />
       )}
       <div className="field">
-        <label>رقم عقد إيجار (اختياري)</label>
+        <label>{t('contracts.detail.renew.ejar_no')}</label>
         <input value={ejarNo} onChange={(e) => setEjarNo(e.target.value)} />
       </div>
       {heldDeposits.length > 0 && (
         <div className="field">
           <label>
-            <input type="checkbox" checked={carryDeposits} onChange={(e) => setCarryDeposits(e.target.checked)} /> ترحيل التأمين المحتجز للعقد الجديد
+            <input type="checkbox" checked={carryDeposits} onChange={(e) => setCarryDeposits(e.target.checked)} /> {t('contracts.detail.renew.carry_deposits')}
           </label>
           {/* No cash moves either way — this only changes which lease the
               existing deposit secures. */}
           <p className="hint">
             {carryDeposits
-              ? `سيُنقل ${heldDeposits.length} تأمين محتجز إلى العقد الجديد دون أي حركة نقدية.`
-              : 'سيبقى التأمين على العقد الحالي ويحتاج تسوية منفصلة.'}
+              ? t('contracts.detail.renew.carry_hint', { n: heldDeposits.length })
+              : t('contracts.detail.renew.keep_hint')}
           </p>
         </div>
       )}
       {tenantCredit > 0 && (
         <p className="hint" role="note" style={treatmentChanged || lessorChanged ? { color: 'var(--rose)' } : undefined}>
           {treatmentChanged
-            ? `بقي للمستأجر رصيدٌ ${formatMoney(tenantCredit)} لم يُخصم لتغيّر التصنيف، ويبقى في العقد الحالي.`
+            ? t('contracts.detail.renew.credit_kept_classification', { amount: formatMoney(tenantCredit) })
             : lessorChanged
-              ? `بقي للمستأجر رصيدٌ ${formatMoney(tenantCredit)} لم يُخصم لتغيّر المؤجّر، ويبقى في العقد الحالي.`
-              : `يُخصم رصيدُ المستأجر ${formatMoney(tenantCredit)} من أقساط العقد الجديد بترتيبها حتى ينفد.`}
+              ? t('contracts.detail.renew.credit_kept_lessor', { amount: formatMoney(tenantCredit) })
+              : t('contracts.detail.renew.credit_deducted', { amount: formatMoney(tenantCredit) })}
         </p>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-ghost" onClick={onCancel}>
-          تراجع
+          {t('contracts.detail.back')}
         </button>
         <button className="btn btn-primary" onClick={submit} disabled={saving}>
-          تأكيد التجديد
+          {t('contracts.detail.renew.confirm')}
         </button>
       </div>
     </div>
@@ -559,10 +565,12 @@ export function RenewForm({ contract, onCancel, onSubmit }: { contract: Contract
 }
 
 /**
- * عقدٌ سبق الهجرة يحمل قيمةً قديمةً معلَنة («غير مصنَّف» / «غير معلَن») — يُنقصها التاجرُ بيدٍ
- * هنا؛ ولا شيءَ يُفترض: الخياران فارغان حتى يُختارا (ق-٨٩٨).
+ * A contract from before the migration carries a declared legacy value
+ * (unclassified / undeclared); the merchant replaces it here by hand. Nothing
+ * is assumed: both choices stay empty until picked.
  */
 function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; onDeclared: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [classification, setClassification] = useState<DeclaredClassification | ''>(contract.classification === 'LEGACY_UNCLASSIFIED' ? '' : contract.classification);
   const [vatInclusion, setVatInclusion] = useState<DeclaredVatInclusion | ''>(contract.vatInclusion === 'LEGACY_UNDECLARED' ? '' : contract.vatInclusion);
   const [sharePercent, setSharePercent] = useState(contract.exemptSharePercent ?? '');
@@ -582,7 +590,7 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
       await onDeclared();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ التصنيف'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.detail.legacy.classification_failed')));
     } finally {
       setSaving(false);
     }
@@ -590,12 +598,12 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
 
   return (
     <div className="card" style={{ background: '#fff8e6', marginBottom: 10 }}>
-      <p className="hint" style={{ marginTop: 0 }}>عقدٌ سُجِّل قبل اعتماد التصنيف — اختر تصنيفه وهل قيمته شاملة للضريبة؛ لا يُعدَّل قبل ذلك.</p>
+      <p className="hint" style={{ marginTop: 0 }}>{t('contracts.detail.legacy.classification_hint')}</p>
       <div className="two-col">
         <div className="field">
-          <label>تصنيف العقد للضريبة</label>
+          <label>{t('contracts.modal.classification')}</label>
           <select value={classification} onChange={(e) => setClassification(e.target.value as DeclaredClassification | '')}>
-            <option value="">— اختر —</option>
+            <option value="">{t('contracts.lessor.choose')}</option>
             {CLASSIFICATION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -604,9 +612,9 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
           </select>
         </div>
         <div className="field">
-          <label>القيمة والضريبة</label>
+          <label>{t('contracts.detail.value_and_vat')}</label>
           <select value={vatInclusion} onChange={(e) => setVatInclusion(e.target.value as DeclaredVatInclusion | '')}>
-            <option value="">— اختر —</option>
+            <option value="">{t('contracts.lessor.choose')}</option>
             {VAT_INCLUSION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -619,7 +627,7 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-primary" onClick={declare} disabled={saving}>
-          حفظ التصنيف
+          {t('contracts.detail.legacy.save_classification')}
         </button>
       </div>
     </div>
@@ -627,10 +635,12 @@ function LegacyDeclarationForm({ contract, onDeclared }: { contract: Contract; o
 }
 
 /**
- * ⚖️ عقدٌ على عقار تشغيلٍ سبق حقلَ المؤجّر (السؤال ٥٧٧ · ق-١٦٠٠) — يُعلَن مؤجّرُه هنا بيدٍ، ولا يُعدَّل قبل ذلك، ولا يُستحقّ
- * ولا يدخل الإقرار حتى يُعلَن. ولا شيءَ يُفترض: الخيارُ فارغٌ حتى يُختار.
+ * A contract on an operated property from before the lessor field: its lessor
+ * is declared here by hand. It cannot be edited, accrued or enter the return
+ * until declared. Nothing is assumed: the choice stays empty until picked.
  */
 function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDeclared: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [lessor, setLessor] = useState<DeclaredLessorChoice>('');
   const [ownerName, setOwnerName] = useState(contract.ownerName ?? '');
   const [ownerVatNumber, setOwnerVatNumber] = useState(contract.ownerVatNumber ?? '');
@@ -640,7 +650,7 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
   async function declare() {
     setError(null);
     if (!lessor) {
-      setError('اختر المؤجّر — المنشأةُ أم المالك');
+      setError(t('contracts.detail.legacy.err_lessor'));
       return;
     }
     setSaving(true);
@@ -649,7 +659,7 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
       await onDeclared();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ المؤجّر'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.detail.legacy.lessor_failed')));
     } finally {
       setSaving(false);
     }
@@ -657,7 +667,7 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
 
   return (
     <div className="card" style={{ background: '#fff8e6', marginBottom: 10 }}>
-      <p className="hint" style={{ marginTop: 0 }}>عقدٌ على عقار تشغيل سُجِّل قبل حقل المؤجّر — اختر من المؤجّر فيه؛ لا يُعدَّل ولا يدخل الإقرار قبل ذلك.</p>
+      <p className="hint" style={{ marginTop: 0 }}>{t('contracts.detail.legacy.lessor_hint')}</p>
       <LessorFields
         idPrefix="legacy"
         lessor={lessor}
@@ -671,7 +681,7 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
       {error && <p className="error-text">{error}</p>}
       <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
         <button className="btn btn-primary" onClick={declare} disabled={saving}>
-          حفظ المؤجّر
+          {t('contracts.detail.legacy.save_lessor')}
         </button>
       </div>
     </div>
@@ -679,11 +689,12 @@ function LegacyLessorForm({ contract, onDeclared }: { contract: Contract; onDecl
 }
 
 export function ContractDetailModal({ contract: initial, banks, onClose, onChanged }: { contract: Contract; banks: Bank[]; onClose: () => void; onChanged: () => void }) {
+  const { t } = useTranslation();
   const [contract, setContract] = useState(initial);
   const [payingInstallmentId, setPayingInstallmentId] = useState<string | null | 'free'>(null);
   const [cancelling, setCancelling] = useState(false);
   const [renewing, setRenewing] = useState(false);
-  // ⚖️ مفتاحُ القبض الواحد (توجيه ٢٧٦ · ق-١٦٠٩/ب): يبقى مع كلِّ محاولةٍ للقبض نفسِه، ويتجدّد بعد نجاحه — فنقرةٌ مزدوجة أو إعادةٌ لا تقبض مرّتين.
+  // One key per payment: it stays with every attempt at the same payment and is renewed after success, so a double click or retry never collects twice.
   const [paymentKey, setPaymentKey] = useState(newRequestKey);
 
   async function reload() {
@@ -720,7 +731,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
       <div className="modal" style={{ maxWidth: 720 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div className="modal-title">
-            عقد {contract.no} — {contract.unit.property.name} / {contract.unit.unitNo}
+            {t('contracts.detail.title', { no: contract.no, property: contract.unit.property.name, unit: contract.unit.unitNo })}
           </div>
           <button className="modal-close" onClick={onClose}>
             ✕
@@ -729,13 +740,13 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         <div className="two-col" style={{ marginBottom: 6 }}>
           <div className="field">
-            <label>المستأجر</label>
+            <label>{t('contracts.detail.tenant')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {contract.tenant} {contract.phone ? `— ${contract.phone}` : ''}
             </p>
           </div>
           <div className="field">
-            <label>القيمة / الدورة</label>
+            <label>{t('contracts.detail.value_cycle')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {fmt(contract.value)} — {CYCLE_LABEL[contract.cycle]}
             </p>
@@ -743,13 +754,13 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
         </div>
         <div className="two-col" style={{ marginBottom: 6 }}>
           <div className="field">
-            <label>الفترة</label>
+            <label>{t('contracts.detail.period')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {dfmt(contract.start)} — {dfmt(contract.end)}
             </p>
           </div>
           <div className="field">
-            <label>التأمين</label>
+            <label>{t('contracts.detail.deposit')}</label>
             <p className="num" style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {fmt(contract.deposit)}
             </p>
@@ -758,25 +769,25 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         <div className="two-col" style={{ marginBottom: 6 }}>
           <div className="field">
-            <label>التصنيف للضريبة</label>
+            <label>{t('contracts.detail.classification')}</label>
             <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {CLASSIFICATION_LABEL[contract.classification]}
-              {contract.classification === 'MIXED' && contract.exemptSharePercent !== null && ` · المعفى ${contract.exemptSharePercent}٪ (${contract.exemptShareBasis ?? ''})`}
+              {contract.classification === 'MIXED' && contract.exemptSharePercent !== null && t('contracts.detail.exempt_share', { percent: contract.exemptSharePercent, basis: contract.exemptShareBasis ?? '' })}
             </p>
           </div>
           <div className="field">
-            <label>القيمة والضريبة</label>
+            <label>{t('contracts.detail.value_and_vat')}</label>
             <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>{VAT_INCLUSION_LABEL[contract.vatInclusion]}</p>
           </div>
         </div>
         {isLegacyContract(contract) && <LegacyDeclarationForm contract={contract} onDeclared={reload} />}
         {(contract.unit.property.ownership === 'managed' || contract.lessor !== 'COMPANY') && contract.lessor !== 'LEGACY_UNDECLARED' && (
           <div className="field" style={{ marginBottom: 6 }}>
-            <label>المؤجّر</label>
+            <label>{t('contracts.detail.lessor')}</label>
             <p style={{ fontSize: 12.5, padding: '9px 0', margin: 0 }}>
               {contract.lessor === 'OWNER'
-                ? `مالكُ العقار ${contract.ownerName ?? ''}${contract.ownerVatNumber ? ` — رقمُه الضريبيّ ${contract.ownerVatNumber}` : ''}: الإيجارُ أمانةٌ له، والعمولةُ إيرادُ المنشأة بضريبتها`
-                : 'المنشأة: الإيجارُ إيرادُها'}
+                ? t('contracts.detail.lessor_owner', { name: contract.ownerName ?? '', vat: contract.ownerVatNumber ? t('contracts.detail.lessor_owner_vat', { vat: contract.ownerVatNumber }) : '' })
+                : t('contracts.detail.lessor_company')}
             </p>
           </div>
         )}
@@ -784,19 +795,19 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         {contract.status === 'CANCELLED' && (
           <p className="hint" style={{ color: 'var(--rose)', marginBottom: 10 }}>
-            ملغى بتاريخ {contract.cancelDate ? dfmt(contract.cancelDate) : ''} — {contract.cancelReason}
+            {t('contracts.detail.cancelled_on', { date: contract.cancelDate ? dfmt(contract.cancelDate) : '', reason: contract.cancelReason })}
           </p>
         )}
 
         <div className="card-title" style={{ marginBottom: 10 }}>
-          جدول الأقساط ({contract.installments.length})
+          {t('contracts.detail.installments_title', { n: contract.installments.length })}
         </div>
         <table>
           <thead>
             <tr>
-              <th>تاريخ الاستحقاق</th>
-              <th>المبلغ</th>
-              <th>الحالة</th>
+              <th>{t('contracts.detail.col_due_date')}</th>
+              <th>{t('contracts.detail.col_amount')}</th>
+              <th>{t('contracts.detail.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -811,7 +822,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
                 <td>
                   {(i.status === 'DUE' || i.status === 'LATE' || i.status === 'PARTIAL') && contract.status !== 'CANCELLED' && (
                     <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11.5 }} onClick={() => setPayingInstallmentId(i.id)}>
-                      تسجيل دفعة
+                      {t('contracts.detail.record_payment')}
                     </button>
                   )}
                 </td>
@@ -822,16 +833,17 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         {payingInstallmentId && (
           <>
-            {/* ⚠️ **حدُّ المحرّك يُعلَن حيث يُقرأ لا في وثيقته** (`ق-٤٤٩` · `ق-٤٧٣`).
-                إيرادُ الإيجار يُقسَم على فترة خدمة القسط — **ودفعةٌ بلا قسطٍ لا
-                فترةَ خدمةٍ تُعرف لها إطلاقاً**، فتُعترَف إيراداً فوراً. وهي
-                **٢٩٪ من الدفعات المقيسة**، فليست حالةً نادرة تُترك بلا بيان. */}
-            {/* ⚖️ توجيه ٢٧٧ · ٢ب · ق-١٦١٤ وق-١٦٢٤: في العقد المصنَّف تسدّد الدفعةُ بلا قسطٍ الحالَّ من الأقدم ثم القادمَ بترتيبه (الخادمُ
-                يقسمها)، فيتبع إيرادُ كلِّ جزءٍ شهرَ قسطه؛ وما زاد على الأقساط كلِّها رصيدٌ للمستأجر لا إيراد. */}
+            {/* The engine's limit is stated where it is read: rent revenue is
+                spread over the installment's service period, and a payment with
+                no installment has no known service period. */}
+            {/* On a classified contract a payment with no installment settles the
+                due installments from the oldest, then the upcoming ones in order
+                (the server splits it), so each part's revenue follows its
+                installment's month; anything beyond all installments is tenant
+                credit, not revenue. */}
             {payingInstallmentId === 'free' && (
               <p className="hint" style={{ marginTop: 4 }}>
-                دفعة بلا قسطٍ مسمّى: في العقد المصنَّف تُسدّد <strong>الأقساطَ الحالّة من الأقدم ثم القادمةَ بترتيبها</strong>، فيُوزَّع إيرادُ
-                كلِّ جزءٍ على شهر قسطه. وما زاد على الأقساط كلِّها <strong>رصيدٌ للمستأجر لا إيراد</strong>، يبقى باسمه حتى يُخصم أو يُردّ.
+                {t('contracts.detail.free_payment.start')}<strong>{t('contracts.detail.free_payment.order')}</strong>{t('contracts.detail.free_payment.middle')}<strong>{t('contracts.detail.free_payment.credit')}</strong>{t('contracts.detail.free_payment.end')}
               </p>
             )}
             <PaymentForm
@@ -846,7 +858,7 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         {!payingInstallmentId && contract.status !== 'CANCELLED' && (
           <button className="add-line" onClick={() => setPayingInstallmentId('free')}>
-            + دفعة إيجار حرة (غير مرتبطة بقسط)
+            {t('contracts.detail.free_payment_button')}
           </button>
         )}
 
@@ -897,21 +909,21 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
         <AttachmentsSection contractId={contract.id} />
 
         <div className="card-title" style={{ margin: '16px 0 10px' }}>
-          سجل الدفعات ({contract.payments.length})
+          {t('contracts.detail.payments_title', { n: contract.payments.length })}
         </div>
         <table>
           <thead>
             <tr>
-              <th>التاريخ</th>
-              <th>المبلغ الصافي</th>
-              <th>الطريقة</th>
+              <th>{t('contracts.detail.col_date')}</th>
+              <th>{t('contracts.detail.col_net_amount')}</th>
+              <th>{t('contracts.detail.col_method')}</th>
             </tr>
           </thead>
           <tbody>
             {contract.payments.length === 0 && (
               <tr>
                 <td colSpan={3}>
-                  <div className="empty-state">لا توجد دفعات مسجَّلة بعد</div>
+                  <div className="empty-state">{t('contracts.detail.no_payments')}</div>
                 </td>
               </tr>
             )}
@@ -919,8 +931,8 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
               <tr key={p.id}>
                 <td className="num">{dfmt(p.date)}</td>
                 <td className="num">{fmt(p.netAmount)}</td>
-                {/* ⚖️ الخصمُ من رصيد المستأجر ليس قبضاً اليوم (توجيه ٢٧٨ · ق-١٦٢٩) — فلا يُعرض «نقداً». */}
-                <td>{p.creditFromContractId ? 'خصمٌ من رصيد المستأجر' : (RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method)}</td>
+                {/* A deduction from the tenant credit is not a collection today, so it is never shown as cash. */}
+                <td>{p.creditFromContractId ? t('contracts.detail.credit_deduction') : (RENT_PAYMENT_METHOD_LABEL[p.method] ?? p.method)}</td>
               </tr>
             ))}
           </tbody>
@@ -931,18 +943,18 @@ export function ContractDetailModal({ contract: initial, banks, onClose, onChang
 
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onClose}>
-            إغلاق
+            {t('contracts.detail.close')}
           </button>
           {/* A cancelled lease has no future to renew, and a draft isn't a
               tenancy yet. */}
           {contract.status !== 'CANCELLED' && contract.status !== 'DRAFT' && !renewing && !cancelling && (
             <button className="btn btn-ghost" onClick={() => setRenewing(true)}>
-              تجديد العقد
+              {t('contracts.detail.renew_contract')}
             </button>
           )}
           {contract.status !== 'CANCELLED' && !cancelling && (
             <button className="btn btn-ghost" style={{ color: 'var(--rose)' }} onClick={() => setCancelling(true)}>
-              إلغاء العقد
+              {t('contracts.detail.cancel_contract')}
             </button>
           )}
         </div>
