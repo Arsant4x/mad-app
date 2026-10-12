@@ -168,10 +168,6 @@
       "count": 4,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/developer/SupportAccessSection.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/invoices/InvoiceBuilderView.tsx": {
       "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
