@@ -1,0 +1,52 @@
+{
+  "status": {
+    "active": "نشط",
+    "suspended": "موقوف",
+    "terminated": "منتهي"
+  },
+  "common": {
+    "cancel": "إلغاء",
+    "delete": "حذف"
+  },
+  "title": "الموظفون",
+  "subtitle": "سجل الموارد البشرية والرواتب الأساسية",
+  "new": "+ موظف جديد",
+  "search_placeholder": "ابحث بأي تفاصيل الموظف...",
+  "show_archived": "عرض المؤرشفة",
+  "col": {
+    "name": "الاسم",
+    "job": "الوظيفة",
+    "department": "القسم",
+    "hire_date": "تاريخ التعيين",
+    "base_salary": "الراتب الأساسي",
+    "phone": "الجوال",
+    "status": "الحالة"
+  },
+  "empty": "لا يوجد موظفون مطابقون",
+  "archived": "مؤرشف",
+  "menu": {
+    "edit": "✎ تعديل",
+    "archive": "🗄 أرشفة",
+    "unarchive": "📂 إلغاء الأرشفة",
+    "delete": "🗑 حذف"
+  },
+  "delete_title": "حذف الموظف",
+  "delete_body": "حذف \"{{name}}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+  "modal": {
+    "title_edit": "تعديل بيانات الموظف",
+    "title_new": "موظف جديد",
+    "full_name": "الاسم الكامل",
+    "full_name_placeholder": "مثال: سارة العتيبي",
+    "job_title": "المسمى الوظيفي",
+    "job_title_placeholder": "محاسبة",
+    "department": "القسم",
+    "department_placeholder": "المالية",
+    "hire_date": "تاريخ التعيين",
+    "base_salary": "الراتب الأساسي",
+    "phone": "رقم الجوال",
+    "phone_placeholder": "05XXXXXXXX",
+    "status": "الحالة",
+    "save_edit": "حفظ التعديل",
+    "add": "إضافة الموظف"
+  }
+}

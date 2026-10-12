@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { apiErrorMessage } from '../../lib/apiError';
 import type { Product, ProductInput } from '../../api/products';
 import { UNITS_OF_MEASURE } from '../../lib/units';
@@ -6,9 +7,6 @@ import { BATCH_FEFO_DECLARED_LIMITS } from '../../lib/batchLimits';
 import { BUYER_DEPENDENT_LIMIT, draftTaxOf, lineTaxDraftError, productTaxPayload, STANDARD_VAT_RATE, TAX_CATEGORY_OPTIONS, type LineTaxDraft } from '../../lib/vat';
 import { LineTaxPicker } from '../../components/LineTaxPicker';
 import i18n from '../../i18n';
-
-/** الصنفُ القائم قبل الحقل يحمل `LEGACY_STANDARD` — «لم تُعلَن الفئة»: يُرَنّ بالأساسية ويبقى حتى يُعلَن هنا (`ق-١٢١١`/④). */
-const LEGACY_PANEL = `فئةُ هذا الصنف LEGACY_STANDARD — كان يُرَنّ بـ${STANDARD_VAT_RATE}٪ قبل أن يوجد الحقل، ويبقى كذلك حتى تُعلَن هنا. والسطورُ التي بيعت به قبل الإعلان لا تتغيّر.`;
 
 export function ProductModal({
   editing,
@@ -19,18 +17,20 @@ export function ProductModal({
   onCancel: () => void;
   onSave: (data: ProductInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [sku, setSku] = useState(editing?.sku ?? '');
   const [category, setCategory] = useState(editing?.category ?? '');
-  // ① الوحدةُ تُعلَن من القائمة المغلقة — لا نصٌّ حرّ ولا افتراض: صنفٌ قائم بلا إعلان يبقى فارغاً حتى يُعلَن.
+  // The unit is declared from the closed list, never free text or assumed; an existing item without one stays empty until declared.
   const [unitCode, setUnitCode] = useState(editing?.unitCode ?? '');
-  // ٥+٦ التتبّعُ بالدفعة والانتهاء يُعلَن (نعم أو لا) ولا يُخمَّن — والقائمُ بلا إعلان يبقى فارغاً حتى يُعلَن.
+  // Batch and expiry tracking is declared (yes or no), never guessed; an existing item without a declaration stays empty.
   const [expiryTracked, setExpiryTracked] = useState<'' | 'yes' | 'no'>(editing?.expiryTracked === true ? 'yes' : editing?.expiryTracked === false ? 'no' : '');
   const [price, setPrice] = useState(editing?.price ?? '');
   const [cost, setCost] = useState(editing?.cost ?? '');
   const [minStock, setMinStock] = useState(editing?.minStock ?? '');
   const [barcode, setBarcode] = useState(editing?.barcode ?? '');
-  // ⑧ الفئةُ الضريبية تُعلَن ولا تُفترض: جديدٌ بلا فئة يُرفض؛ والقائمُ `LEGACY_STANDARD` يبقى «لم تُعلَن» حتى يُعلَن هنا.
+  // The tax category is declared, never assumed: a new item without one is refused, and an existing
+  // LEGACY_STANDARD item (created before the field, sold at the standard rate) stays undeclared until declared here.
   const legacy = editing?.taxCategory === 'LEGACY_STANDARD';
   const [tax, setTax] = useState<LineTaxDraft | null>(editing && !legacy ? draftTaxOf(editing) : null);
   const [saving, setSaving] = useState(false);
@@ -43,15 +43,15 @@ export function ProductModal({
       return;
     }
     if (!unitCode) {
-      setError('وحدة القياس مطلوبة — تُعلَن من القائمة ولا تُفترض');
+      setError(t('products.modal.err_unit_required'));
       return;
     }
     if (!expiryTracked) {
-      setError('إعلانُ التتبّع بالدفعة والانتهاء مطلوب — نعم أو لا، ولا يُخمَّن');
+      setError(t('products.modal.err_tracking_required'));
       return;
     }
     if (!editing && !tax) {
-      setError('الفئةُ الضريبية مطلوبة — تُعلَن من القائمة ولا تُفترض');
+      setError(t('products.modal.err_tax_required'));
       return;
     }
     const taxProblem = tax ? lineTaxDraftError(tax) : null;
@@ -67,7 +67,7 @@ export function ProductModal({
         category: category.trim() || undefined,
         unitCode,
         expiryTracked: expiryTracked === 'yes',
-        // القائمُ غيرُ المعلَن يُترك كما هو (لا تُرسَل حقولُ الضريبة) — فالتعديلُ لا يُصحّح القديم صامتاً.
+        // An undeclared existing item is left as it is (no tax fields sent), so editing never silently fixes old data.
         ...(tax ? productTaxPayload(tax) : {}),
         price: parseFloat(String(price)) || 0,
         cost: parseFloat(String(cost)) || 0,
@@ -85,30 +85,30 @@ export function ProductModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل المنتج' : 'منتج / خدمة جديدة'}</div>
+          <div className="modal-title">{editing ? t('products.modal.title_edit') : t('products.modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>الاسم</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: اشتراك شهري" />
+          <label>{t('products.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('products.modal.name_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>الرمز (SKU)</label>
-            <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SVC-002" />
+            <label>{t('products.modal.sku')}</label>
+            <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder={t('products.modal.sku_placeholder')} />
           </div>
           <div className="field">
-            <label>الفئة</label>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="خدمة / بضاعة" />
+            <label>{t('products.modal.category')}</label>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('products.modal.category_placeholder')} />
           </div>
         </div>
         <div className="two-col">
           <div className="field">
-            <label>وحدة القياس</label>
-            <select value={unitCode} onChange={(e) => setUnitCode(e.target.value)} aria-label="وحدة القياس">
-              <option value="">— تُعلَن من القائمة —</option>
+            <label>{t('products.modal.unit')}</label>
+            <select value={unitCode} onChange={(e) => setUnitCode(e.target.value)} aria-label={t('products.modal.unit')}>
+              <option value="">{t('products.modal.choose_from_list')}</option>
               {UNITS_OF_MEASURE.map((u) => (
                 <option key={u.code} value={u.code}>
                   {u.ar} ({u.code})
@@ -116,22 +116,24 @@ export function ProductModal({
               ))}
             </select>
             {editing && !editing.unitCode && (
-              <div className="hint">لم تُعلَن وحدةُ هذا الصنف بعد{editing.unit ? ` — النصُّ القديم: «${editing.unit}»` : ''}؛ لا تُخمَّن، تُختار.</div>
+              <div className="hint">
+                {t('products.modal.unit_undeclared', { old: editing.unit ? t('products.modal.unit_old_text', { text: editing.unit }) : '' })}
+              </div>
             )}
           </div>
           <div className="field">
-            <label>سعر الوحدة</label>
+            <label>{t('products.modal.price')}</label>
             <input className="num" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
           </div>
         </div>
         <div className="field">
-          <label>يُتتبَّع بالدفعة والانتهاء؟</label>
-          <select value={expiryTracked} onChange={(e) => setExpiryTracked(e.target.value as '' | 'yes' | 'no')} aria-label="يُتتبَّع بالدفعة والانتهاء">
-            <option value="">— يُعلَن: نعم أو لا —</option>
-            <option value="yes">نعم — يُصرَف بالأقرب انتهاءً ولا يُباع منه المنتهي؛ والاستلام يوجب رقمَ دفعةٍ وتاريخَ انتهاء</option>
-            <option value="no">لا — يُصرَف بالأقدم كما كان</option>
+          <label>{t('products.modal.tracked')}</label>
+          <select value={expiryTracked} onChange={(e) => setExpiryTracked(e.target.value as '' | 'yes' | 'no')} aria-label={t('products.modal.tracked_aria')}>
+            <option value="">{t('products.modal.tracked_choose')}</option>
+            <option value="yes">{t('products.modal.tracked_yes')}</option>
+            <option value="no">{t('products.modal.tracked_no')}</option>
           </select>
-          {editing && editing.expiryTracked === null && <div className="hint">لم يُعلَن تتبّعُ هذا الصنف بعد — يُعلَن هنا عند لمسه، ولا يُخمَّن.</div>}
+          {editing && editing.expiryTracked === null && <div className="hint">{t('products.modal.tracked_undeclared')}</div>}
           {expiryTracked === 'yes' && (
             <ul className="hint" style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>
               {BATCH_FEFO_DECLARED_LIMITS.map((l) => (
@@ -141,12 +143,12 @@ export function ProductModal({
           )}
         </div>
         <div className="field">
-          <label>الفئة الضريبية (ضريبة القيمة المضافة)</label>
+          <label>{t('products.modal.tax')}</label>
           {tax ? (
             <LineTaxPicker value={tax} onChange={setTax} />
           ) : (
-            <select value="" onChange={(e) => e.target.value && setTax({ taxCategory: e.target.value as LineTaxDraft['taxCategory'] })} aria-label="فئة الضريبة">
-              <option value="">— تُعلَن من القائمة —</option>
+            <select value="" onChange={(e) => e.target.value && setTax({ taxCategory: e.target.value as LineTaxDraft['taxCategory'] })} aria-label={t('products.modal.tax_aria')}>
+              <option value="">{t('products.modal.choose_from_list')}</option>
               {TAX_CATEGORY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -154,28 +156,28 @@ export function ProductModal({
               ))}
             </select>
           )}
-          {legacy && !tax && <div className="hint">{LEGACY_PANEL}</div>}
+          {legacy && !tax && <div className="hint">{t('products.modal.legacy_panel', { rate: STANDARD_VAT_RATE })}</div>}
           {tax?.taxCategory !== 'Z' && <div className="hint">{BUYER_DEPENDENT_LIMIT}</div>}
         </div>
         <div className="field">
-          <label>التكلفة</label>
+          <label>{t('products.modal.cost')}</label>
           <input className="num" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0.00" />
         </div>
         <div className="field">
-          <label>الحد الأدنى للمخزون (تنبيه عند الانخفاض)</label>
-          <input className="num" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder="اختياري" />
+          <label>{t('products.modal.min_stock')}</label>
+          <input className="num" value={minStock} onChange={(e) => setMinStock(e.target.value)} placeholder={t('products.modal.min_stock_placeholder')} />
         </div>
         <div className="field">
-          <label>الباركود (اتركه فارغاً للتوليد التلقائي)</label>
-          <input className="num" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="يُولَّد تلقائياً إن ترك فارغاً" />
+          <label>{t('products.modal.barcode')}</label>
+          <input className="num" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder={t('products.modal.barcode_placeholder')} />
         </div>
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('products.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة المنتج'}
+            {editing ? t('products.modal.save_edit') : t('products.modal.add')}
           </button>
         </div>
       </div>

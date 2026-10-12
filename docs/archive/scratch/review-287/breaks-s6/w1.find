@@ -1,1 +1,0 @@
-        setStage(l.state === 'ACTIVE' ? 'login' : 'closed');

@@ -1,2 +1,0 @@
-        setStage(l.state === 'ACTIVE' ? 'login' : 'closed');
-        void viewPublicForm(token, '').then(setView).catch(() => undefined);

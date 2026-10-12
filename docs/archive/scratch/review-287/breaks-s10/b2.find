@@ -1,1 +1,0 @@
-    if (link.purpose === FormLinkPurpose.SIGN && instance.nafathRequired && fresh.sessionMethod !== 'NAFATH') throw new ForbiddenException(MSG.form_signing_nafath_only);

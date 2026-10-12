@@ -1,17 +1,20 @@
 import { useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createHandover, deleteHandover, signHandover, updateHandover, type Contract, type ContractHandover, type HandoverItemInput, type HandoverType, type ItemCondition, listHandoverPhotos, uploadHandoverPhoto, openHandoverPhoto, deleteHandoverPhoto, type HandoverPhoto } from '../../api/contracts';
 import { dfmt, today } from '../../lib/format';
+import i18n from '../../i18n';
+import { formatDateTime } from '../../i18n/format';
 
 const TYPE_LABEL: Record<HandoverType, string> = {
-  DELIVERY: 'تسليم للمستأجر',
-  RECEIPT: 'استلام من المستأجر',
+  get DELIVERY() { return i18n.t('contracts.handovers.type.delivery'); },
+  get RECEIPT() { return i18n.t('contracts.handovers.type.receipt'); },
 };
 
 const CONDITION_LABEL: Record<ItemCondition, string> = {
-  GOOD: 'سليم',
-  FAIR: 'مقبول',
-  DAMAGED: 'تالف',
-  MISSING: 'مفقود',
+  get GOOD() { return i18n.t('contracts.handovers.condition.good'); },
+  get FAIR() { return i18n.t('contracts.handovers.condition.fair'); },
+  get DAMAGED() { return i18n.t('contracts.handovers.condition.damaged'); },
+  get MISSING() { return i18n.t('contracts.handovers.condition.missing'); },
 };
 
 const CONDITION_BADGE: Record<ItemCondition, string> = {
@@ -24,8 +27,16 @@ const CONDITION_BADGE: Record<ItemCondition, string> = {
 const CONDITIONS = Object.keys(CONDITION_LABEL) as ItemCondition[];
 
 /** Rooms and fittings a Saudi residential handover almost always covers —
- * offered as a starting point so the form isn't built from nothing each time. */
-const SUGGESTED_ITEMS = ['المطبخ', 'دورات المياه', 'المكيّفات', 'الأبواب والنوافذ', 'الدهانات', 'العدادات'];
+ * offered as a starting point so the form isn't built from nothing each time.
+ * Translation keys; the chosen text becomes the item label. */
+const SUGGESTED_ITEMS = [
+  'contracts.handovers.suggested.kitchen',
+  'contracts.handovers.suggested.bathrooms',
+  'contracts.handovers.suggested.air_conditioners',
+  'contracts.handovers.suggested.doors_windows',
+  'contracts.handovers.suggested.paint',
+  'contracts.handovers.suggested.meters',
+];
 
 /**
  * The condition-of-unit form, at handover and at return.
@@ -35,12 +46,15 @@ const SUGGESTED_ITEMS = ['المطبخ', 'دورات المياه', 'المكي�
  * negotiable when its whole purpose is that it isn't.
  */
 export function HandoversSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState('');
-  // ⚖️ عددُ صور النموذج يُقرأ من الخادم عند فتح التوقيع (قد تُرفع صورٌ بعد تحميل العقد)، فيُعرض مع مدّة حفظها؛ ولا إقرارَ من
-  //    الموظّف (توجيه ٢٧٧ · ق-١٦١٩/ج: «الاستلامُ والتسليمُ والوحدةُ فارغة يكفيهما بندٌ في العقد»).
+  // The photo count is read from the server when signing opens (photos may be
+  // uploaded after the contract loaded) and shown with how long they are kept.
+  // No acknowledgement from the employee: the contract clause covers handover,
+  // return and an empty unit.
   const [signPhotoCount, setSignPhotoCount] = useState(0);
   const [photosFor, setPhotosFor] = useState<string | null>(null);
   const [photos, setPhotos] = useState<HandoverPhoto[]>([]);
@@ -76,7 +90,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
       setPhotos(await listHandoverPhotos(photosFor));
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر رفع الصورة — الحد 10MB وبصيغ صور/PDF');
+      setError(d?.message ?? t('contracts.handovers.photo_upload_failed'));
     } finally {
       setPhotoUploading(false);
       if (photoFileRef.current) photoFileRef.current.value = '';
@@ -119,7 +133,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
       after?.();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إتمام العملية'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.handovers.action_failed')));
     } finally {
       setBusy(false);
     }
@@ -137,7 +151,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
   return (
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>نماذج الاستلام والتسليم ({contract.handovers.length})</span>
+        <span>{t('contracts.handovers.title', { n: contract.handovers.length })}</span>
         {contract.status !== 'CANCELLED' && !editing && (
           <button
             className="btn btn-ghost"
@@ -146,7 +160,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
               setAdding(true);
             }}
           >
-            + نموذج جديد
+            {t('contracts.handovers.new')}
           </button>
         )}
       </div>
@@ -157,39 +171,39 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
-              <label>نوع النموذج</label>
+              <label>{t('contracts.handovers.type_label')}</label>
               <select value={type} onChange={(e) => setType(e.target.value as HandoverType)} disabled={editingId !== null}>
-                {(Object.keys(TYPE_LABEL) as HandoverType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]}
+                {(Object.keys(TYPE_LABEL) as HandoverType[]).map((ht) => (
+                  <option key={ht} value={ht}>
+                    {TYPE_LABEL[ht]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="field">
-              <label>التاريخ</label>
+              <label>{t('contracts.handovers.date')}</label>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
           <div className="two-col">
             <div className="field">
-              <label>قراءة عداد الكهرباء</label>
+              <label>{t('contracts.handovers.electricity_meter')}</label>
               <input className="num" value={electricityMeter} onChange={(e) => setElectricityMeter(e.target.value)} />
             </div>
             <div className="field">
-              <label>قراءة عداد الماء</label>
+              <label>{t('contracts.handovers.water_meter')}</label>
               <input className="num" value={waterMeter} onChange={(e) => setWaterMeter(e.target.value)} />
             </div>
           </div>
 
           <div className="field">
-            <label>البنود</label>
+            <label>{t('contracts.handovers.items')}</label>
             {items.map((it, i) => (
               <div className="two-col" key={i} style={{ marginBottom: 4 }}>
                 <input
                   value={it.label}
                   onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  placeholder="البند"
+                  placeholder={t('contracts.handovers.item')}
                 />
                 <div style={{ display: 'flex', gap: 6 }}>
                   <select
@@ -202,7 +216,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                       </option>
                     ))}
                   </select>
-                  <button className="menu-btn" title="حذف البند" onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
+                  <button className="menu-btn" title={t('contracts.handovers.remove_item')} onClick={() => setItems((xs) => xs.filter((_, j) => j !== i))}>
                     ✕
                   </button>
                 </div>
@@ -210,15 +224,15 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                   style={{ gridColumn: '1 / -1' }}
                   value={it.note ?? ''}
                   onChange={(e) => setItems((xs) => xs.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))}
-                  placeholder="ملاحظة (اختياري)"
+                  placeholder={t('contracts.handovers.note_optional')}
                 />
               </div>
             ))}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
               <button className="btn btn-ghost" onClick={() => setItems((xs) => [...xs, { label: '', condition: 'GOOD' }])}>
-                + بند
+                {t('contracts.handovers.add_item')}
               </button>
-              {SUGGESTED_ITEMS.filter((s) => !items.some((i) => i.label === s)).map((s) => (
+              {SUGGESTED_ITEMS.map((k) => t(k)).filter((s) => !items.some((i) => i.label === s)).map((s) => (
                 <button key={s} className="chip" onClick={() => setItems((xs) => [...xs, { label: s, condition: 'GOOD' }])}>
                   + {s}
                 </button>
@@ -227,7 +241,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
           </div>
 
           <div className="field">
-            <label>ملاحظات</label>
+            <label>{t('contracts.handovers.notes')}</label>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
@@ -239,7 +253,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 setEditingId(null);
               }}
             >
-              تراجع
+              {t('contracts.handovers.back')}
             </button>
             <button
               className="btn btn-primary"
@@ -254,47 +268,47 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                 )
               }
             >
-              حفظ كمسودة
+              {t('contracts.handovers.save_draft')}
             </button>
           </div>
         </div>
       )}
 
-      {contract.handovers.length === 0 && !editing && <div className="empty-state">لا توجد نماذج</div>}
+      {contract.handovers.length === 0 && !editing && <div className="empty-state">{t('contracts.handovers.empty')}</div>}
 
       {contract.handovers.map((h) => (
         <div className="card" key={h.id} style={{ marginBottom: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
             <div>
               <strong style={{ fontSize: 12.5 }}>{TYPE_LABEL[h.type]}</strong>{' '}
-              <span className={`badge ${h.status === 'SIGNED' ? 'paid' : 'draft'}`}>{h.status === 'SIGNED' ? 'موقَّع' : 'مسودة'}</span>
+              <span className={`badge ${h.status === 'SIGNED' ? 'paid' : 'draft'}`}>{h.status === 'SIGNED' ? t('contracts.handovers.status_signed') : t('contracts.handovers.status_draft')}</span>
               <div className="hint">
                 {dfmt(h.date)}
-                {h.electricityMeter && ` — كهرباء: ${h.electricityMeter}`}
-                {h.waterMeter && ` — ماء: ${h.waterMeter}`}
+                {h.electricityMeter && t('contracts.handovers.electricity_reading', { value: h.electricityMeter })}
+                {h.waterMeter && t('contracts.handovers.water_reading', { value: h.waterMeter })}
               </div>
               {h.status === 'SIGNED' && (
                 // The stamp is the evidence — shown to the second, and always
                 // beside who signed.
                 <div className="hint">
-                  وقّعه {h.signedBy} — {new Date(h.signedAt!).toLocaleString('ar-SA')}{' '}
-                  <button className="btn btn-ghost btn-sm" onClick={() => togglePhotos(h.id)}>📷 الصور</button>
+                  {t('contracts.handovers.signed_by', { name: h.signedBy, date: formatDateTime(h.signedAt!) })}{' '}
+                  <button className="btn btn-ghost btn-sm" onClick={() => togglePhotos(h.id)}>{t('contracts.handovers.photos')}</button>
                 </div>
               )}
               {h.status === 'SIGNED' && h.photoNoticeYears !== null && (
-                <div className="hint">صورُ النموذج تبقى في سجلّ العقد {h.photoNoticeYears} سنةً من إغلاق حساب المنشأة ثم تُتلف، ولا تُحذف قبلها.</div>
+                <div className="hint">{t('contracts.handovers.photo_retention', { years: h.photoNoticeYears })}</div>
               )}
             </div>
             {h.status === 'DRAFT' && !editing && (
               <div style={{ display: 'flex', gap: 4 }}>
                 <button className="btn btn-ghost" onClick={() => loadForEdit(h)}>
-                  تعديل
+                  {t('contracts.handovers.edit')}
                 </button>
                 <button className="btn btn-ghost" onClick={() => togglePhotos(h.id)}>
-                  📷 الصور
+                  {t('contracts.handovers.photos')}
                 </button>
                 <button className="btn btn-ghost" onClick={() => toggleSigning(h)}>
-                  توقيع
+                  {t('contracts.handovers.sign')}
                 </button>
                 <button
                   className="btn btn-ghost"
@@ -302,7 +316,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                   disabled={busy}
                   onClick={() => run(() => deleteHandover(contract.id, h.id))}
                 >
-                  حذف
+                  {t('contracts.handovers.delete')}
                 </button>
               </div>
             )}
@@ -328,42 +342,41 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
           {photosFor === h.id && (
             <div className="card" style={{ background: '#faf9f5', marginTop: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <b>صور النموذج</b>
+                <b>{t('contracts.handovers.photos_title')}</b>
                 {h.status !== 'SIGNED' && (
                   <>
                     <select value={photoItemId} onChange={(e) => setPhotoItemId(e.target.value)} style={{ maxWidth: 200 }}>
-                      <option value="">النموذج كاملاً</option>
+                      <option value="">{t('contracts.handovers.whole_form')}</option>
                       {h.items.map((it) => (
                         <option key={it.id} value={it.id}>
-                          بند: {it.label}
+                          {t('contracts.handovers.item_option', { label: it.label })}
                         </option>
                       ))}
                     </select>
                     <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                      {photoUploading ? 'جارٍ الرفع…' : '📤 إضافة صورة'}
+                      {photoUploading ? t('contracts.handovers.uploading') : t('contracts.handovers.add_photo')}
                       <input ref={photoFileRef} type="file" accept="image/*" style={{ display: 'none' }} disabled={photoUploading} onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])} />
                     </label>
                   </>
                 )}
-                {h.status === 'SIGNED' && <span className="hint">النموذج موقَّع — الصور جزء ممّا وُقِّع عليه فلا تُعدَّل</span>}
+                {h.status === 'SIGNED' && <span className="hint">{t('contracts.handovers.signed_photos_locked')}</span>}
               </div>
-              {/* ⚖️ توجيه ٢٧٧ · ق-١٦١٩/ج: ما لا يُصوَّر، وأساسُ التصوير هنا، وما يلزم حين يكون المستأجرُ ساكناً. */}
+              {/* What must not be photographed, the basis for photographing here, and what is needed when the tenant is living in the unit. */}
               {h.status !== 'SIGNED' && (
                 <p className="hint" style={{ marginTop: 6 }}>
-                  لا تُصوَّر وجوهٌ ولا مستنداتٌ ولا أغراضٌ شخصية. والتصويرُ هنا عند التسليم والاستلام والوحدةُ فارغة، ويكفيه بندٌ في العقد؛ فإن
-                  كان المستأجرُ ساكناً (كشفٌ أو صيانة) فأعلِمه قبل التصوير. والصورُ تبقى في سجلّ العقد طوالَ مدّة الحفظ النظامية.
+                  {t('contracts.handovers.photo_rules')}
                 </p>
               )}
-              {photos.length === 0 && <div className="empty-state">لا صور</div>}
+              {photos.length === 0 && <div className="empty-state">{t('contracts.handovers.no_photos')}</div>}
               {photos.map((ph) => (
                 <div key={ph.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
                   <span style={{ flex: 1, fontSize: 13 }}>
                     {ph.filename}
-                    {ph.itemId && <span className="hint"> — {h.items.find((it) => it.id === ph.itemId)?.label ?? 'بند'}</span>}
+                    {ph.itemId && <span className="hint"> — {h.items.find((it) => it.id === ph.itemId)?.label ?? t('contracts.handovers.item')}</span>}
                     {ph.note && <span className="hint"> · {ph.note}</span>}
                   </span>
                   <button className="btn btn-ghost btn-sm" onClick={() => void openHandoverPhoto(ph.id)}>
-                    عرض
+                    {t('contracts.handovers.view')}
                   </button>
                   {h.status !== 'SIGNED' && (
                     <button
@@ -374,11 +387,11 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                           setPhotos(await listHandoverPhotos(h.id));
                         } catch (e2) {
                           const d = (e2 as { response?: { data?: { message?: string } } })?.response?.data;
-                          setError(d?.message ?? 'تعذّر حذف الصورة');
+                          setError(d?.message ?? t('contracts.handovers.photo_delete_failed'));
                         }
                       }}
                     >
-                      حذف
+                      {t('contracts.handovers.delete')}
                     </button>
                   )}
                 </div>
@@ -389,21 +402,20 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
           {signingId === h.id && (
             <div style={{ marginTop: 8 }}>
               <div className="field">
-                <label>اسم الموقِّع</label>
-                <input value={signedBy} onChange={(e) => setSignedBy(e.target.value)} placeholder="مثال: أبو محمد — المستأجر" />
+                <label>{t('contracts.handovers.signer_name')}</label>
+                <input value={signedBy} onChange={(e) => setSignedBy(e.target.value)} placeholder={t('contracts.handovers.signer_name_placeholder')} />
                 {/* Says plainly that this is one-way. */}
-                <p className="hint">بعد التوقيع لا يمكن تعديل النموذج أو حذفه، ويُختم بوقت الخادم.</p>
+                <p className="hint">{t('contracts.handovers.sign_hint')}</p>
               </div>
-              {/* ⚖️ ق-١٦١٩/ج: الصورُ تبقى في سجلّ العقد بمدّة الحفظ (من الخادم)، ويكفيها بندُ العقد بلا إقرارٍ من الموظّف. */}
+              {/* Photos stay in the contract record for the retention period (from the server), covered by the contract clause with no acknowledgement from the employee. */}
               {signPhotoCount > 0 && (
                 <p className="hint">
-                  على النموذج {signPhotoCount} صور، تبقى في سجلّ العقد {contract.handoverPhotoRetentionYears} سنةً من إغلاق حساب المنشأة ثم
-                  تُتلف، وأساسُها بندُ التصوير في العقد.
+                  {t('contracts.handovers.sign_photos', { n: signPhotoCount, years: contract.handoverPhotoRetentionYears })}
                 </p>
               )}
               <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
                 <button className="btn btn-ghost" onClick={() => setSigningId(null)}>
-                  تراجع
+                  {t('contracts.handovers.back')}
                 </button>
                 <button
                   className="btn btn-primary"
@@ -418,7 +430,7 @@ export function HandoversSection({ contract, onChanged }: { contract: Contract; 
                     )
                   }
                 >
-                  تأكيد التوقيع
+                  {t('contracts.handovers.confirm_sign')}
                 </button>
               </div>
             </div>

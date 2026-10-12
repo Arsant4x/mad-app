@@ -1,0 +1,50 @@
+{
+  "types": {
+    "asset": "Asset",
+    "liability": "Liability",
+    "equity": "Equity",
+    "revenue": "Revenue",
+    "expense": "Expense"
+  },
+  "groups": {
+    "asset": "Assets",
+    "liability": "Liabilities",
+    "equity": "Equity",
+    "revenue": "Revenue",
+    "expense": "Expenses"
+  },
+  "modal": {
+    "title_edit": "Edit account",
+    "title_new": "New account",
+    "name": "Account name",
+    "name_placeholder": "e.g. Petty cash",
+    "code": "Account code",
+    "type": "Type",
+    "opening_balance": "Opening balance",
+    "opening_balance_hint_edit": "Changing the opening balance posts a new adjusting entry against the opening balances account (3900); the original entry stays as it is.",
+    "opening_balance_hint_new": "Posted automatically as a balanced opening entry against the opening balances account (3900).",
+    "opening_date": "Opening date",
+    "opening_date_derived": "This date comes from the opening entry itself; you did not enter it. Enter it to make it your declaration.",
+    "opening_date_hint": "Date of the opening entry. Leave it empty to take it from the fiscal year or today's date. It cannot be changed after the first movement on the account.",
+    "cancel": "Cancel",
+    "save_edit": "Save changes",
+    "add": "Add account"
+  },
+  "list": {
+    "title": "Chart of accounts",
+    "sub": "Tree of all general ledger accounts",
+    "new": "+ New account",
+    "search": "Search by name or code...",
+    "all": "All",
+    "col_name": "Account name",
+    "col_code": "Code",
+    "col_type": "Type",
+    "col_balance": "Current balance",
+    "empty": "No accounts match your search",
+    "edit": "✎ Edit",
+    "delete": "🗑 Delete",
+    "delete_title": "Delete account",
+    "delete_body": "Delete account \"{{name}}\"? This cannot be undone.",
+    "delete_confirm": "Delete"
+  }
+}

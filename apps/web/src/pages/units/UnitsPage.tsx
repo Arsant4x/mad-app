@@ -1,5 +1,6 @@
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listProperties, type Property } from '../../api/properties';
 import { BulkUnitsModal } from './BulkUnitsModal';
 import { cancelReservation, createReservation, listReservations, type Reservation, type ReservationInput } from '../../api/reservations';
@@ -11,21 +12,23 @@ import { ReservationModal } from './ReservationModal';
 import { UnitModal } from './UnitModal';
 import i18n from '../../i18n';
 
-const STATUS_META: Record<UnitStatus, { label: string; badgeClass: string }> = {
-  vacant: { label: 'شاغرة', badgeClass: 'draft' },
-  rented: { label: 'مؤجَّرة', badgeClass: 'paid' },
-  maintenance: { label: 'صيانة', badgeClass: 'overdue' },
-  reserved: { label: 'محجوزة', badgeClass: 'due' },
-  upcoming: { label: 'محجوزة لعقد قادم', badgeClass: 'due' },
-};
+/** Built at render so the labels follow the current language. */
+const statusMeta = (): Record<UnitStatus, { label: string; badgeClass: string }> => ({
+  vacant: { label: i18n.t('units.status.vacant'), badgeClass: 'draft' },
+  rented: { label: i18n.t('units.status.rented'), badgeClass: 'paid' },
+  maintenance: { label: i18n.t('units.status.maintenance'), badgeClass: 'overdue' },
+  reserved: { label: i18n.t('units.status.reserved'), badgeClass: 'due' },
+  upcoming: { label: i18n.t('units.status.upcoming'), badgeClass: 'due' },
+});
 
 export function UnitsPage() {
+  const { t } = useTranslation();
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off for day-to-day use.
   const [showArchived, setShowArchived] = useState(false);
   const [propertyFilter, setPropertyFilter] = useState<string>('all');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; unit: Unit } | null>(null);
@@ -107,41 +110,43 @@ export function UnitsPage() {
 
   if (loading) return null;
 
+  const STATUS_META = statusMeta();
+
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الوحدات</div>
-          <div className="page-sub">وحدات جميع العقارات وحالتها الحالية</div>
+          <div className="page-title">{t('units.page.title')}</div>
+          <div className="page-sub">{t('units.page.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-ghost" onClick={() => setBulkOpen(true)} disabled={properties.length === 0}>
-            ⧉ وحدات بالجملة
+            {t('units.page.bulk')}
           </button>
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={properties.length === 0}>
-            + وحدة جديدة
+            {t('units.page.new')}
           </button>
         </div>
       </div>
 
       {properties.length === 0 ? (
-        <div className="empty-state">أضف عقارًا أولاً قبل إنشاء وحدات</div>
+        <div className="empty-state">{t('units.page.no_properties')}</div>
       ) : (
         <>
           <div className="toolbar">
             <div className="search-box">
-              <input placeholder="ابحث برقم الوحدة أو النوع أو العقار..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input placeholder={t('units.page.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M21 21l-4-4" />
               </svg>
             </div>
             <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-              عرض المؤرشفة
+              {t('units.page.show_archived')}
             </button>
             <div className="field" style={{ marginBottom: 0 }}>
               <select value={propertyFilter} onChange={(e) => setPropertyFilter(e.target.value)}>
-                <option value="all">كل العقارات</option>
+                <option value="all">{t('units.page.all_properties')}</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -155,12 +160,12 @@ export function UnitsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>العقار</th>
-                  <th>رقم الوحدة</th>
-                  <th>الطابق</th>
-                  <th>النوع</th>
-                  <th>الإيجار الشهري</th>
-                  <th>الحالة</th>
+                  <th>{t('units.page.col_property')}</th>
+                  <th>{t('units.page.col_unit_no')}</th>
+                  <th>{t('units.page.col_floor')}</th>
+                  <th>{t('units.page.col_type')}</th>
+                  <th>{t('units.page.col_rent')}</th>
+                  <th>{t('units.page.col_status')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -168,7 +173,7 @@ export function UnitsPage() {
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={7}>
-                      <div className="empty-state">لا توجد وحدات مطابقة</div>
+                      <div className="empty-state">{t('units.page.empty')}</div>
                     </td>
                   </tr>
                 )}
@@ -177,31 +182,31 @@ export function UnitsPage() {
                   return (
                     <tr key={u.id}>
                       <td>{propertyById.get(u.propertyId)?.name ?? '—'}</td>
-                      <td className="num">{u.unitNo}{u.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                      <td className="num">{u.unitNo}{u.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('units.page.archived')}</span>}</td>
                       <td>{u.floor || '—'}</td>
                       <td>{u.type}</td>
                       <td className="num">{fmt(u.rentMonthly)}</td>
                       <td>
                         <span className={`badge ${badgeOf(STATUS_META, u.status).badgeClass}`}>
                           {u.status === 'rented' && u.currentTenant
-                            ? `مؤجَّرة — ${u.currentTenant}`
+                            ? t('units.page.rented_to', { tenant: u.currentTenant })
                             : u.status === 'upcoming' && u.upcomingTenant
-                              ? `عقد قادم مؤكَّد — ${u.upcomingTenant}`
+                              ? t('units.page.upcoming_to', { tenant: u.upcomingTenant })
                             : u.status === 'reserved' && activeRsv
-                              ? `محجوزة حتى ${activeRsv.expiryDate.slice(0, 10)} — ${activeRsv.name}`
+                              ? t('units.page.reserved_until', { date: activeRsv.expiryDate.slice(0, 10), name: activeRsv.name })
                               : badgeOf(STATUS_META, u.status).label}
                         </span>
                       </td>
                       <td>
                         <RowMenu
                           actions={[
-                            { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', unit: u }) },
-                            ...(u.status === 'vacant' ? [{ label: '💳 حجز بعربون', onClick: () => setReservingUnit(u) }] : []),
-                            ...(activeRsv ? [{ label: '✕ إلغاء الحجز', onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
-                            { label: u.underMaintenance ? '✓ إنهاء الصيانة' : '🔧 وضع تحت الصيانة', onClick: () => toggleMaintenance(u) },
-                            { label: u.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
+                            { label: t('units.page.action_edit'), onClick: () => setModal({ mode: 'edit', unit: u }) },
+                            ...(u.status === 'vacant' ? [{ label: t('units.page.action_reserve'), onClick: () => setReservingUnit(u) }] : []),
+                            ...(activeRsv ? [{ label: t('units.page.action_cancel_reservation'), onClick: () => setPendingCancelReservation({ unit: u, reservation: activeRsv }) }] : []),
+                            { label: u.underMaintenance ? t('units.page.action_end_maintenance') : t('units.page.action_start_maintenance'), onClick: () => toggleMaintenance(u) },
+                            { label: u.archived ? t('units.page.action_unarchive') : t('units.page.action_archive'), onClick: () => setUnitArchived(u.id, !u.archived).then(reload) },
                             '-',
-                            { label: '🗑 حذف', onClick: () => setPendingDelete(u), danger: true },
+                            { label: t('units.page.action_delete'), onClick: () => setPendingDelete(u), danger: true },
                           ]}
                         />
                       </td>
@@ -236,9 +241,9 @@ export function UnitsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الوحدة"
-          body={deleteError ?? `حذف الوحدة "${pendingDelete.unitNo}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('units.page.delete_title')}
+          body={deleteError ?? t('units.page.delete_body', { unit: pendingDelete.unitNo })}
+          confirmLabel={t('units.page.delete_confirm')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);
@@ -257,9 +262,9 @@ export function UnitsPage() {
 
       {pendingCancelReservation && (
         <ConfirmModal
-          title="إلغاء الحجز"
-          body={`إلغاء حجز "${pendingCancelReservation.reservation.name}"؟`}
-          confirmLabel="إلغاء الحجز"
+          title={t('units.page.cancel_reservation_title')}
+          body={t('units.page.cancel_reservation_body', { name: pendingCancelReservation.reservation.name })}
+          confirmLabel={t('units.page.cancel_reservation_confirm')}
           onCancel={() => setPendingCancelReservation(null)}
           onConfirm={confirmCancelReservation}
         />

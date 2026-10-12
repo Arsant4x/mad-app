@@ -1,6 +1,7 @@
 import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ZatcaQr } from '../../components/ZatcaQr';
 import type { Invoice, InvoiceStatus } from '../../api/invoices';
 import { RowMenu } from '../../components/RowMenu';
@@ -8,11 +9,11 @@ import { dfmt, fmt } from '../../lib/format';
 import { STATUS_META, ZATCA_STATUS_META } from './statusMeta';
 
 type SortKey = 'issueDate' | 'no' | 'total' | 'customer';
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'issueDate', label: 'التاريخ' },
-  { key: 'no', label: 'الرقم' },
-  { key: 'total', label: 'المبلغ' },
-  { key: 'customer', label: 'العميل' },
+const SORT_OPTIONS: { key: SortKey; labelKey: string }[] = [
+  { key: 'issueDate', labelKey: 'invoices.list.sort.issue_date' },
+  { key: 'no', labelKey: 'invoices.list.sort.no' },
+  { key: 'total', labelKey: 'invoices.list.sort.total' },
+  { key: 'customer', labelKey: 'invoices.list.sort.customer' },
 ];
 
 function sortValue(inv: Invoice, key: SortKey): string | number {
@@ -37,15 +38,16 @@ export function InvoiceListView({
   onSubmitToZatca: (invoice: Invoice) => void;
   onIssueCreditNote: (invoice: Invoice) => void;
   onIssueDebitNote: (invoice: Invoice) => void;
-  /** بدلٌ عن مردودة (ق-٩٥٨) — يُعرض على المردودة التي لم يصدر بدلُها بعد. */
+  /** A replacement for a rejected invoice; offered while no replacement has been issued. */
   onIssueReplacement: (invoice: Invoice) => void;
-  /** تسليمُ الفاتورة القياسية (ق-١٥٠٦): ملفُّ XML المجاز من الهيئة — يُعرض حيث حُفظت النسخةُ وحدَه. */
+  /** Delivery of a standard invoice as the XML cleared by the authority; offered only where that copy was saved. */
   onDownloadClearedXml: (invoice: Invoice) => void;
   canSubmitToZatca: boolean;
   /** The invoice currently being sent, so its row can say so — submission is a
    * network round-trip to the authority, not an instant local change. */
   submittingId: string | null;
 }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | InvoiceStatus>('all');
   const [sortKey, setSortKey] = useState<SortKey>('issueDate');
@@ -75,19 +77,19 @@ export function InvoiceListView({
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الفواتير</div>
-          <div className="page-sub">إدارة فواتير المبيعات وحالات السداد</div>
+          <div className="page-title">{t('invoices.list.title')}</div>
+          <div className="page-sub">{t('invoices.list.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={onNew}>
-            + فاتورة جديدة
+            {t('invoices.list.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بالعميل أو رقم الفاتورة..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('invoices.list.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
@@ -97,26 +99,26 @@ export function InvoiceListView({
           <select className="sort-select" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
             {SORT_OPTIONS.map((o) => (
               <option key={o.key} value={o.key}>
-                ترتيب حسب: {o.label}
+                {t('invoices.list.sort_by', { label: t(o.labelKey) })}
               </option>
             ))}
           </select>
-          <button className="menu-btn" title="عكس الترتيب" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+          <button className="menu-btn" title={t('invoices.list.reverse_sort')} onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
             {sortDir === 'asc' ? '⬆' : '⬇'}
           </button>
         </div>
         <div className="chip-group">
           <button className={statusFilter === 'all' ? 'chip active' : 'chip'} onClick={() => setStatusFilter('all')}>
-            الكل
+            {t('invoices.list.filter_all')}
           </button>
           <button className={statusFilter === 'PAID' ? 'chip active' : 'chip'} onClick={() => setStatusFilter('PAID')}>
-            مدفوعة
+            {t('invoices.status.paid')}
           </button>
           <button className={statusFilter === 'DUE' ? 'chip active' : 'chip'} onClick={() => setStatusFilter('DUE')}>
-            مستحقة
+            {t('invoices.status.due')}
           </button>
           <button className={statusFilter === 'OVERDUE' ? 'chip active' : 'chip'} onClick={() => setStatusFilter('OVERDUE')}>
-            متأخرة
+            {t('invoices.status.overdue')}
           </button>
         </div>
       </div>
@@ -125,15 +127,15 @@ export function InvoiceListView({
         <table>
           <thead>
             <tr>
-              <th>العميل</th>
-              <th>رقم الفاتورة</th>
-              <th>تاريخ الإصدار</th>
-              <th>الاستحقاق</th>
-              <th>الحالة</th>
-              <th>المبلغ</th>
-              <th>فوترة (ZATCA)</th>
-              <th>التصديق</th>
-              <th>مهمة</th>
+              <th>{t('invoices.list.col.customer')}</th>
+              <th>{t('invoices.list.col.no')}</th>
+              <th>{t('invoices.list.col.issue_date')}</th>
+              <th>{t('invoices.list.col.due')}</th>
+              <th>{t('invoices.list.col.status')}</th>
+              <th>{t('invoices.list.col.amount')}</th>
+              <th>{t('invoices.list.col.zatca')}</th>
+              <th>{t('invoices.list.col.clearance')}</th>
+              <th>{t('invoices.list.col.task')}</th>
               <th></th>
             </tr>
           </thead>
@@ -141,7 +143,7 @@ export function InvoiceListView({
             {rows.length === 0 && (
               <tr>
                 <td colSpan={10}>
-                  <div className="empty-state">لا توجد فواتير مطابقة</div>
+                  <div className="empty-state">{t('invoices.list.empty')}</div>
                 </td>
               </tr>
             )}
@@ -157,24 +159,23 @@ export function InvoiceListView({
                   {inv.docType !== 'INVOICE' && (
                     <>
                       <span className={`badge ${inv.docType === 'CREDIT_NOTE' ? 'overdue' : inv.docType === 'PREPAYMENT' ? 'paid' : 'due'}`} style={{ marginInlineStart: 6 }}>
-                        {inv.docType === 'CREDIT_NOTE' ? 'إشعار دائن' : inv.docType === 'PREPAYMENT' ? 'دفعة مقدَّمة' : 'إشعار مدين'}
+                        {inv.docType === 'CREDIT_NOTE' ? t('invoices.list.doc_credit_note') : inv.docType === 'PREPAYMENT' ? t('invoices.list.doc_prepayment') : t('invoices.list.doc_debit_note')}
                       </span>
-                      {inv.relatedInvoice && <div className="hint">على الفاتورة {inv.relatedInvoice.no}</div>}
+                      {inv.relatedInvoice && <div className="hint">{t('invoices.list.on_invoice', { no: inv.relatedInvoice.no })}</div>}
                     </>
                   )}
-                  {/* ⚖️ الإحالةُ في الشاشة (ق-٩٦٣): البدلُ يسمّي مردودتَه، والمردودةُ تسمّي
-                      بدلَها — فلا يُقرأ البيعُ مرّتين ولا تُطلَب المردودةُ من العميل. */}
-                  {inv.replacesInvoice && <div className="hint">بدلٌ عن المردودة {inv.replacesInvoice.no}</div>}
-                  {inv.replacedBy && <div className="hint">مغلقة — صدر بدلها {inv.replacedBy.no}</div>}
+                  {/* A replacement names the rejected invoice and the rejected one names its
+                      replacement, so the sale is not read twice. */}
+                  {inv.replacesInvoice && <div className="hint">{t('invoices.list.replaces', { no: inv.replacesInvoice.no })}</div>}
+                  {inv.replacedBy && <div className="hint">{t('invoices.list.replaced_by', { no: inv.replacedBy.no })}</div>}
                 </td>
                 <td className="num">{dfmt(inv.issueDate)}</td>
                 <td className="num">{dfmt(inv.dueDate)}</td>
                 <td>
-                  {/* الحالةُ مشتقّةٌ من المقبوضات ولا تُكتب بيد (`ق-١١٩٨`/②): كانت هنا نافذةُ
-                      «تغيير الحالة» تُرسل `status` فتُختم فاتورةٌ «مسدَّدة» بلا ريال — والسدادُ
-                      يُسجَّل من شاشة المقبوضات. والإشعارُ الدائن بلا دورة سداد أصلاً. */}
+                  {/* The status is derived from receipts and never written by hand; payment is
+                      recorded in the receipts screen. A credit note has no payment cycle. */}
                   {inv.docType !== 'CREDIT_NOTE' ? (
-                    <span title="الحالةُ تُشتقّ من المقبوضات — سجّل السداد من شاشة المقبوضات">
+                    <span title={t('invoices.list.status_hint')}>
                       <span className={`badge ${badgeOf(STATUS_META, inv.status).badgeClass}`}>{badgeOf(STATUS_META, inv.status).label}</span>
                     </span>
                   ) : (
@@ -186,13 +187,13 @@ export function InvoiceListView({
                   {/* The server returns null until the company profile carries a
                       legal name and VAT number — showing a placeholder QR would
                       look compliant while failing inspection. */}
-                  {inv.zatcaQr ? <ZatcaQr payload={inv.zatcaQr} size={64} /> : <span className="badge">غير مكتمل</span>}
+                  {inv.zatcaQr ? <ZatcaQr payload={inv.zatcaQr} size={64} /> : <span className="badge">{t('invoices.list.qr_incomplete')}</span>}
                 </td>
                 <td>
-                  {/* ②A1: نوعُ المستند لدى الهيئة يقرّره الخادمُ من صفة المشتري — يُعرض ولا يُختار. */}
+                  {/* The document type is decided by the server from the buyer's kind; shown, not chosen. */}
                   {inv.invoiceType && (
                     <span className="badge" data-testid="invoice-type" style={{ marginInlineEnd: 6 }}>
-                      {inv.invoiceType === 'standard' ? 'كاملة' : 'مبسّطة'}
+                      {inv.invoiceType === 'standard' ? t('invoices.list.type_standard') : t('invoices.list.type_simplified')}
                     </span>
                   )}
                   <span className={`badge ${badgeOf(ZATCA_STATUS_META, inv.zatcaStatus).badgeClass}`} title={inv.zatcaMessage ?? undefined}>
@@ -202,59 +203,57 @@ export function InvoiceListView({
                       rejection, so it is shown rather than hidden behind the
                       badge alone. */}
                   {inv.zatcaStatus === 'REJECTED' && inv.zatcaMessage && <div className="hint zatca-reason">{inv.zatcaMessage}</div>}
-                  {/* ⚖️ سقوطُ المحاولة ليس جواباً (ق-٩٧١): المستندُ كما هو ويُعاد آلياً — والسببُ الأخير
-                      يُعلَن هنا لا يُخفى، فما لا يُرى لا يُتابَع. */}
+                  {/* A failed attempt is not an answer: the document stays as is and is retried
+                      automatically, and the last reason is shown. */}
                   {inv.zatcaStatus !== 'REJECTED' && inv.zatcaStatus !== 'CLEARED' && inv.zatcaMessage && (
-                    <div className="hint">آخر محاولة: {inv.zatcaMessage}</div>
+                    <div className="hint">{t('invoices.list.last_attempt', { message: inv.zatcaMessage })}</div>
                   )}
-                  {inv.zatcaIcv !== null && <div className="hint">تسلسل: {inv.zatcaIcv}</div>}
-                  {/* ⚖️ (ق-١٥٠٦) قياسيةٌ أُجيزت ولا نسخةَ مجازةً محفوظة — يُعلَن ولا يُخفى: لا ملفَّ للتسليم،
-                      ولا تُسلَّم نسختُنا قبل الإجازة مكانها. والحالُ من الخادم لا يُحسب هنا. */}
+                  {inv.zatcaIcv !== null && <div className="hint">{t('invoices.list.icv', { icv: inv.zatcaIcv })}</div>}
+                  {/* A cleared standard invoice with no saved cleared copy is stated, not hidden:
+                      there is no file to deliver. The state comes from the server. */}
                   {inv.clearedCopy === 'missing' && (
                     <div className="hint" data-testid="cleared-copy-missing">
-                      لا نسخة مجازة محفوظة للتسليم
+                      {t('invoices.list.cleared_copy_missing')}
                     </div>
                   )}
                 </td>
-                {/* الإسناد **من داخل المستند** — نفس المكوّن المركَّب في
-                  * العقود والبلاغات. وخارج `RowMenu` عمداً: الإسناد فعلٌ
-                  * متكرّر على الفواتير المعلَّقة، ودفنُه في قائمةٍ منسدلة
-                  * يجعله يُستعمل أقلّ مما يجب. */}
+                {/* Assigning a task from inside the document, as in contracts and
+                  * maintenance requests. Kept outside `RowMenu` on purpose: it is a
+                  * frequent action on pending invoices. */}
                 <td onClick={(e) => e.stopPropagation()}>
                   <AssignTaskButton screen="invoice" entityId={inv.id} />
                 </td>
                 <td>
                   <RowMenu
                     actions={[
-                      // ⚖️ الصادرُ لا يُعدَّل ولا يُحذف — مختومةً كانت أو لا (ق-٩٤٣): لا زرَّ
-                      // تعديلٍ ولا حذف؛ والمخرجُ الإشعاران. وعلى الإشعار إشعارٌ مقابلٌ
-                      // يصحّحه (ق-٩٥٢): مدينٌ لدائنٍ زائد، ودائنٌ لمدينٍ زائد — لا من نوعه.
-                      // ⚖️ والمردودةُ تُغلق ولا تُمسّ (ق-٩٥٨): لا إشعارَ عليها ولا إعادةَ إرسال —
-                      // مخرجُها الوحيد بدلٌ جديد، ومردودةٌ صدر بدلُها لا فعلَ عليها.
+                      // An issued document is never edited or deleted; the remedy is a note.
+                      // A note is corrected by the opposite note. A rejected invoice is closed
+                      // and untouched: its only remedy is a new replacement, and one that
+                      // already has a replacement offers no action.
                       ...(inv.zatcaStatus === 'REJECTED'
                         ? inv.docType === 'INVOICE' && !inv.replacedBy
-                          ? [{ label: '🔁 إصدار بدل عنها', onClick: () => onIssueReplacement(inv) }]
+                          ? [{ label: t('invoices.list.action.replacement'), onClick: () => onIssueReplacement(inv) }]
                           : []
                         : inv.docType === 'INVOICE'
                           ? [
-                              { label: '↩ إشعار دائن', onClick: () => onIssueCreditNote(inv) },
-                              { label: '↪ إشعار مدين', onClick: () => onIssueDebitNote(inv) },
+                              { label: t('invoices.list.action.credit_note'), onClick: () => onIssueCreditNote(inv) },
+                              { label: t('invoices.list.action.debit_note'), onClick: () => onIssueDebitNote(inv) },
                             ]
                           : inv.docType === 'CREDIT_NOTE'
-                            ? [{ label: '↪ إشعار مدين يصحّحه', onClick: () => onIssueDebitNote(inv) }]
-                            : // ④A1: مستندُ الدفعة المقدَّمة لا إشعارَ عليه بعدُ (الخادمُ يرفضه مسمّىً) — فلا زرَّ يُعرض ويُرفض.
+                            ? [{ label: t('invoices.list.action.debit_note_fix'), onClick: () => onIssueDebitNote(inv) }]
+                            : // A prepayment document takes no note yet (the server refuses it), so no button is offered.
                               inv.docType === 'PREPAYMENT'
                               ? []
-                              : [{ label: '↩ إشعار دائن يصحّحه', onClick: () => onIssueCreditNote(inv) }]),
-                      // ⚖️ (ق-١٥٠٦) تسليمُ القياسية للمشتري: ملفُّ XML المجاز من الهيئة — حيث حُفظت نسختُه وحدَه.
-                      ...(inv.clearedCopy === 'available' ? ['-' as const, { label: '⬇ تنزيل الفاتورة المجازة (XML)', onClick: () => onDownloadClearedXml(inv) }] : []),
+                              : [{ label: t('invoices.list.action.credit_note_fix'), onClick: () => onIssueCreditNote(inv) }]),
+                      // Delivery of a standard invoice to the buyer, only where its cleared copy was saved.
+                      ...(inv.clearedCopy === 'available' ? ['-' as const, { label: t('invoices.list.action.download_cleared'), onClick: () => onDownloadClearedXml(inv) }] : []),
                       // Submission is the owner's act — an employee sub-account
                       // is refused by the server, so the action isn't offered.
                       ...(canSubmitToZatca && inv.zatcaStatus !== 'CLEARED' && inv.zatcaStatus !== 'REJECTED'
                         ? [
                             '-' as const,
                             {
-                              label: submittingId === inv.id ? '… جارٍ الإرسال' : '📤 إرسال لهيئة الزكاة',
+                              label: submittingId === inv.id ? t('invoices.list.action.submitting') : t('invoices.list.action.submit'),
                               onClick: () => onSubmitToZatca(inv),
                             },
                           ]

@@ -1,5 +1,6 @@
-import { badgeOf } from '../../lib/statusBadge';
+import { badgeOf, type BadgeMeta } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { createEmployee, deleteEmployee, listEmployees, setEmployeeArchived, updateEmployee, type Employee, type EmployeeInput, type EmployeeStatus } from '../../api/employees';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -7,18 +8,20 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { EmployeeModal } from './EmployeeModal';
 
-const STATUS_META: Record<EmployeeStatus, { label: string; badgeClass: string }> = {
-  ACTIVE: { label: 'نشط', badgeClass: 'paid' },
-  SUSPENDED: { label: 'موقوف', badgeClass: 'due' },
-  TERMINATED: { label: 'منتهي', badgeClass: 'overdue' },
+// `label` holds a translation key; it is turned into text where rendered.
+const STATUS_META: Record<EmployeeStatus, BadgeMeta> = {
+  ACTIVE: { label: 'employees.status.active', badgeClass: 'paid' },
+  SUSPENDED: { label: 'employees.status.suspended', badgeClass: 'due' },
+  TERMINATED: { label: 'employees.status.terminated', badgeClass: 'overdue' },
 };
 
 export function EmployeesPage() {
+  const { t } = useTranslation();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by day-to-day default.
   const [showArchived, setShowArchived] = useState(false);
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; employee: Employee } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Employee | null>(null);
@@ -48,7 +51,7 @@ export function EmployeesPage() {
 
   async function handleSave(data: EmployeeInput) {
     if (modal?.mode === 'edit') {
-      // 🔴 ق-١٣٨٤: الفرعُ لا يُرسَل في التعديل — والنوعُ يمنعه (`EmployeeUpdateInput`)، فيُنزع هنا صراحةً.
+      // The branch is never sent on update (the update type forbids it), so it is stripped here.
       const { branchId: _createOnly, ...update } = data;
       await updateEmployee(modal.employee.id, update);
     } else {
@@ -71,26 +74,26 @@ export function EmployeesPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الموظفون</div>
-          <div className="page-sub">سجل الموارد البشرية والرواتب الأساسية</div>
+          <div className="page-title">{t('employees.title')}</div>
+          <div className="page-sub">{t('employees.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + موظف جديد
+            {t('employees.new')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل الموظف..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('employees.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('employees.show_archived')}
         </button>
       </div>
 
@@ -98,13 +101,13 @@ export function EmployeesPage() {
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>الوظيفة</th>
-              <th>القسم</th>
-              <th>تاريخ التعيين</th>
-              <th>الراتب الأساسي</th>
-              <th>الجوال</th>
-              <th>الحالة</th>
+              <th>{t('employees.col.name')}</th>
+              <th>{t('employees.col.job')}</th>
+              <th>{t('employees.col.department')}</th>
+              <th>{t('employees.col.hire_date')}</th>
+              <th>{t('employees.col.base_salary')}</th>
+              <th>{t('employees.col.phone')}</th>
+              <th>{t('employees.col.status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -112,28 +115,28 @@ export function EmployeesPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <div className="empty-state">لا يوجد موظفون مطابقون</div>
+                  <div className="empty-state">{t('employees.empty')}</div>
                 </td>
               </tr>
             )}
             {rows.map((e) => (
               <tr key={e.id}>
-                <td>{e.fullName}{e.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                <td>{e.fullName}{e.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('employees.archived')}</span>}</td>
                 <td>{e.jobTitle || '—'}</td>
                 <td>{e.department || '—'}</td>
                 <td className="num">{dfmt(e.hireDate)}</td>
                 <td className="num">{fmt(e.baseSalary)}</td>
                 <td className="num">{e.phone || '—'}</td>
                 <td>
-                  <span className={`badge ${badgeOf(STATUS_META, e.status).badgeClass}`}>{badgeOf(STATUS_META, e.status).label}</span>
+                  <span className={`badge ${badgeOf(STATUS_META, e.status).badgeClass}`}>{t(badgeOf(STATUS_META, e.status).label)}</span>
                 </td>
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', employee: e }) },
-                      { label: e.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setEmployeeArchived(e.id, !e.archived).then(reload) },
+                      { label: t('employees.menu.edit'), onClick: () => setModal({ mode: 'edit', employee: e }) },
+                      { label: e.archived ? t('employees.menu.unarchive') : t('employees.menu.archive'), onClick: () => setEmployeeArchived(e.id, !e.archived).then(reload) },
                       '-',
-                      { label: '🗑 حذف', onClick: () => setPendingDelete(e), danger: true },
+                      { label: t('employees.menu.delete'), onClick: () => setPendingDelete(e), danger: true },
                     ]}
                   />
                 </td>
@@ -147,9 +150,9 @@ export function EmployeesPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الموظف"
-          body={`حذف "${pendingDelete.fullName}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('employees.delete_title')}
+          body={t('employees.delete_body', { name: pendingDelete.fullName })}
+          confirmLabel={t('employees.common.delete')}
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmDelete}
         />

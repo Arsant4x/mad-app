@@ -1,0 +1,46 @@
+{
+  "builder": {
+    "title": "New journal entry",
+    "sub": "Total debit must equal total credit before posting",
+    "cancel": "Cancel",
+    "post": "Post entry",
+    "number": "Entry number",
+    "date": "Date",
+    "memo": "Description",
+    "memo_placeholder": "e.g. Payment collected from a customer...",
+    "col_account": "Account",
+    "col_debit": "Debit",
+    "col_credit": "Credit",
+    "choose_account": "Choose an account...",
+    "add_line": "+ Add line",
+    "balanced": "✓ Entry is balanced: ",
+    "unbalanced_debit": "⚠ Not balanced: debit ",
+    "unbalanced_credit": " / credit ",
+    "default_memo": "No description"
+  },
+  "list": {
+    "title": "Journal entries",
+    "sub": "Log of all entries posted to the general ledger",
+    "new": "+ New entry",
+    "search": "Search by description or entry number...",
+    "col_number": "Entry number",
+    "col_date": "Date",
+    "col_memo": "Description",
+    "col_debit": "Debit",
+    "col_credit": "Credit",
+    "col_status": "Status",
+    "empty": "No matching entries",
+    "auto": "Automatic",
+    "reversed_title": "Reversed by entry {{no}}",
+    "reversed": "Reversed: {{no}}",
+    "reversal_title": "Reverses entry {{no}}",
+    "reversal": "Reversal of {{no}}",
+    "posted": "Posted",
+    "reverse_action": "↩ Reverse entry"
+  },
+  "reverse": {
+    "title": "Reverse entry",
+    "body": "Reverse entry {{no}}? A new reversing entry dated today is posted that restores the account balances; the original entry stays as it is (a posted entry is never deleted).",
+    "confirm": "Reverse"
+  }
+}

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { listObligations, toggleObligation, type GovernmentObligation } from '../../api/obligations';
 
-const VAT_TITLE_MARKER = 'إقرار ضريبة القيمة المضافة';
+// Obligation titles and authorities are stored data from the server, so these match the stored text.
+const VAT_TITLE_MARKER = 'إقرار ضريبة القيمة المضافة'; // i18n-exempt: matches the stored obligation title
 
-// ZATCA first, matching the mockup's `order` sort in renderObligationsNav/renderObligations.
-const ENTITY_ORDER = 'هيئة الزكاة والضريبة والجمارك';
+// ZATCA is listed first, as in the mockup.
+const ENTITY_ORDER = 'هيئة الزكاة والضريبة والجمارك'; // i18n-exempt: matches the stored authority name
 
 export function ObligationsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [obligations, setObligations] = useState<GovernmentObligation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,13 +48,13 @@ export function ObligationsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الالتزامات الحكومية</div>
-          <div className="page-sub">نظرة عامة على كل الجهات ومتطلباتها</div>
+          <div className="page-title">{t('obligations.list.title')}</div>
+          <div className="page-sub">{t('obligations.list.sub')}</div>
         </div>
       </div>
 
       {groups.length === 0 ? (
-        <div className="empty-state">لا توجد التزامات مسجَّلة</div>
+        <div className="empty-state">{t('obligations.list.empty')}</div>
       ) : (
         groups.map(([entity, items]) => {
           const pending = items.filter((o) => !o.done).length;
@@ -59,7 +62,7 @@ export function ObligationsPage() {
             <div className="card" style={{ marginBottom: 14 }} key={entity}>
               <div className="card-head">
                 <div className="card-title">{entity}</div>
-                <span className={`badge ${pending ? 'due' : 'paid'}`}>{pending ? `${pending} قيد المتابعة` : 'الكل منجَز'}</span>
+                <span className={`badge ${pending ? 'due' : 'paid'}`}>{pending ? t('obligations.list.pending_n', { n: pending }) : t('obligations.list.all_done')}</span>
               </div>
               {items.map((o) => (
                 <div
@@ -68,7 +71,7 @@ export function ObligationsPage() {
                   onClick={() => handleRowClick(o)}
                 >
                   <div style={{ fontSize: 12.5 }}>{o.title}</div>
-                  <span className={`badge ${o.done ? 'paid' : 'due'}`}>{o.done ? 'منجَز' : 'قيد المتابعة'}</span>
+                  <span className={`badge ${o.done ? 'paid' : 'due'}`}>{o.done ? t('obligations.list.done') : t('obligations.list.pending')}</span>
                 </div>
               ))}
             </div>

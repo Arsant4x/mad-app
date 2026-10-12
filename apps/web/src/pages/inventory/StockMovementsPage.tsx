@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createStockMovement, listStockMovements, reverseStockMovement, type StockMovement, type StockMovementInput } from '../../api/inventory';
 import { listProducts, type Product } from '../../api/products';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
@@ -8,16 +9,18 @@ import { RowMenu } from '../../components/RowMenu';
 import { dfmt, fmt } from '../../lib/format';
 import { StockMovementModal } from './StockMovementModal';
 
+// Labels are translation keys, turned into text where rendered.
 const TYPE_META: Record<string, string> = {
-  IN: '📥 إضافة',
-  OUT: '📤 صرف',
-  TRANSFER: '🔁 تحويل',
-  ADJUSTMENT: '⚖ تسوية',
+  IN: 'inventory.movements.type_in',
+  OUT: 'inventory.movements.type_out',
+  TRANSFER: 'inventory.movements.type_transfer',
+  ADJUSTMENT: 'inventory.movements.type_adjustment',
 };
 
 const PAGE_SIZE = 25;
 
 export function StockMovementsPage() {
+  const { t } = useTranslation();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -62,7 +65,7 @@ export function StockMovementsPage() {
     return result;
   }
 
-  // ㉙ لا حذفَ لحركة: تُعكَس بحركةٍ مقابلة تشير إليها وتبقى الاثنتان (ق-١٠٦٣).
+  // A movement is never deleted: it is reversed by an opposite movement that points to it, and both stay.
   async function confirmReverse() {
     if (!pendingDelete) return;
     await reverseStockMovement(pendingDelete.id);
@@ -76,23 +79,23 @@ export function StockMovementsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">حركات المخزون</div>
-          <div className="page-sub">سجل كل إضافة أو صرف أو تحويل أو تسوية للمخزون</div>
+          <div className="page-title">{t('inventory.movements.title')}</div>
+          <div className="page-sub">{t('inventory.movements.sub')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setShowModal(true)} disabled={products.length === 0 || warehouses.length === 0}>
-            + حركة مخزون جديدة
+            {t('inventory.movements.new')}
           </button>
         </div>
       </div>
 
       {products.length === 0 || warehouses.length === 0 ? (
-        <div className="empty-state">أضف منتجًا ومستودعًا أولاً قبل تسجيل حركات المخزون</div>
+        <div className="empty-state">{t('inventory.movements.needs_setup')}</div>
       ) : (
         <>
           <div className="toolbar">
             <div className="search-box">
-              <input placeholder="ابحث باسم المنتج أو المستودع أو السبب..." value={search} onChange={(e) => handleSearch(e.target.value)} />
+              <input placeholder={t('inventory.movements.search')} value={search} onChange={(e) => handleSearch(e.target.value)} />
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M21 21l-4-4" />
@@ -104,12 +107,12 @@ export function StockMovementsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>التاريخ</th>
-                  <th>المنتج</th>
-                  <th>المستودع</th>
-                  <th>النوع</th>
-                  <th>الكمية</th>
-                  <th>السبب/ملاحظات</th>
+                  <th>{t('inventory.movements.col_date')}</th>
+                  <th>{t('inventory.movements.col_product')}</th>
+                  <th>{t('inventory.movements.col_warehouse')}</th>
+                  <th>{t('inventory.movements.col_type')}</th>
+                  <th>{t('inventory.movements.col_qty')}</th>
+                  <th>{t('inventory.movements.col_reason')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -117,7 +120,7 @@ export function StockMovementsPage() {
                 {movements.length === 0 && (
                   <tr>
                     <td colSpan={7}>
-                      <div className="empty-state">{search.trim() ? 'لا توجد حركات مطابقة' : 'لا توجد حركات مخزون مسجَّلة بعد'}</div>
+                      <div className="empty-state">{search.trim() ? t('inventory.movements.empty_search') : t('inventory.movements.empty')}</div>
                     </td>
                   </tr>
                 )}
@@ -125,12 +128,16 @@ export function StockMovementsPage() {
                   <tr key={m.id}>
                     <td className="num">{dfmt(m.date)}</td>
                     <td>{m.product.name}</td>
-                    <td>{m.type === 'TRANSFER' && m.toWarehouse ? `${m.warehouse.name} ← ${m.toWarehouse.name}` : m.warehouse.name}</td>
-                    <td>{TYPE_META[m.type]}</td>
+                    <td>
+                      {m.type === 'TRANSFER' && m.toWarehouse
+                        ? t('inventory.movements.transfer_route', { from: m.warehouse.name, to: m.toWarehouse.name })
+                        : m.warehouse.name}
+                    </td>
+                    <td>{TYPE_META[m.type] ? t(TYPE_META[m.type]) : undefined}</td>
                     <td className="num">{fmt(m.qty)}</td>
                     <td>{m.reason || '—'}</td>
                     <td>
-                      <RowMenu actions={[{ label: '↩ عكس الحركة', onClick: () => setPendingDelete(m), danger: true }]} />
+                      <RowMenu actions={[{ label: t('inventory.movements.reverse_action'), onClick: () => setPendingDelete(m), danger: true }]} />
                     </td>
                   </tr>
                 ))}
@@ -146,9 +153,9 @@ export function StockMovementsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="عكس الحركة"
-          body="تُنشأ حركةٌ مقابلة تشير إلى هذه الحركة وتعيد أثرها على الرصيد والتكلفة، وتبقى الاثنتان في السجلّ — لا حذف. ما له مستند (بيع أو استلام أو شطب) يُعكَس من مستنده، وما استُهلكت طبقته لا يُعكَس."
-          confirmLabel="عكس"
+          title={t('inventory.movements.reverse_title')}
+          body={t('inventory.movements.reverse_body')}
+          confirmLabel={t('inventory.movements.reverse_confirm')}
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmReverse}
         />

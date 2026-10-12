@@ -1,0 +1,109 @@
+{
+  "common": {
+    "support_reply": "Support reply: {{note}}",
+    "withdraw": "Withdraw request",
+    "err_withdraw": "Could not withdraw the request",
+    "err_submit": "Could not submit the request",
+    "err_export": "Could not export the data",
+    "confirm_submit": "Yes, submit the request",
+    "logout": "Sign out"
+  },
+  "closed": {
+    "size_mb": "{{n}} MB",
+    "size_kb": "{{n}} KB",
+    "kind": {
+      "deletion": "Deletion request",
+      "reopening": "Reopening request",
+      "erasure": "Request to erase non-mandatory data"
+    },
+    "title": "Your account is closed at your request",
+    "closed_on": "Closed on {{date}}.",
+    "retained": "Your data is kept for the legal retention periods and then erased; destruction completes within fourteen days as backups rotate. It cannot be accessed or changed while the account is closed.",
+    "retained_until": "Your data is kept for the legal retention periods, until at least {{date}}, and then erased; destruction completes within fourteen days as backups rotate. It cannot be accessed or changed while the account is closed.",
+    "erased_note": "Your non-mandatory data (phone numbers and contact details) was erased on {{date}}; what the law requires stays until its term. The account cannot be reopened after erasure.",
+    "reopen_note": "You can request reopening until {{date}}. After that your non-mandatory data (phone numbers and contact details) is erased automatically; what the law requires stays until its term, and the account cannot be reopened afterwards.",
+    "archive_title": "Your full copy, ready to download until {{date}}",
+    "archive_hint": "Yearly files ({{years}}) and a core file, {{invoices}} stamped invoices as issued, and {{rows}} rows, with a `README` describing the content and a `manifest` with each file's fingerprint.",
+    "pending_badge": "{{kind}} under review, submitted on {{date}}",
+    "request_reopen": "Request to reopen the account",
+    "request_erase": "Request erasure of my non-mandatory data now",
+    "erase_confirm_title": "Request erasure of non-mandatory data",
+    "erase_confirm_body": "Platform support will review your request, then erase what the law does not require to keep: phone numbers of customers, suppliers, employees and contract parties, and your company's contact details. Names, addresses, invoices and journal entries stay until their retention term. The account cannot be reopened after erasure. Are you sure?"
+  },
+  "consent": {
+    "err_accept": "Could not record your consent",
+    "title": "The list of who processes your data has changed, and your decision is needed",
+    "intro": "We use providers to run the service (storage, backups and the like); they are \"sub-processors\" of your data.",
+    "intro_strong": " The law requires your consent first",
+    "intro_end": ", as you control your customers' data and we process it on your behalf.",
+    "version_line": "Version {{version}}, published on {{published}} and effective on {{effective}} (with {{days}} days' announced notice).",
+    "col_processor": "Processor",
+    "col_purpose": "Purpose",
+    "col_location": "Location",
+    "col_categories": "Data categories",
+    "options_strong": "You have three options, all open now:",
+    "options": " accept and the service returns as it was, download a full copy of your data, or request closing your account. Export and the closure request work on this screen, so you are never locked inside your account.",
+    "accept": "I accept the list",
+    "download": "Download my data",
+    "close_account": "Close my account",
+    "confirm_title": "Accept the sub-processor list",
+    "confirm_body": "Your consent to version {{version}} of the list will be recorded with your name and date, and the account will work as before. Do you want to continue?",
+    "confirm_label": "Yes, I accept"
+  },
+  "deletion": {
+    "status": {
+      "pending": "Under review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Withdrawn"
+    },
+    "outcome": {
+      "deleted": "Carried out",
+      "closed": "Closed",
+      "reopened": "Reopened",
+      "erased": "Non-mandatory data erased"
+    },
+    "kind": {
+      "deletion": "Deletion request",
+      "reopening": "Reopening request",
+      "erasure": "Non-mandatory data erasure request"
+    },
+    "title": "Delete account",
+    "submitted": "{{kind}}, submitted on {{date}}",
+    "reason_label": "Reason for deletion (optional, helps support serve you)",
+    "reason_placeholder": "Example: closing the business",
+    "submit": "Submit request",
+    "back": "Back",
+    "explain": "Account deletion is not immediate: you submit a request that platform support reviews and then carries out. A company without activity has its data deleted permanently; a company with activity (invoices · journal entries · vouchers · contracts · tasks…) is closed, not deleted: access is cut and its data is kept for the legal retention periods and then erased. You can request reopening later.",
+    "request": "Request account deletion",
+    "confirm_title": "Submit an account deletion request",
+    "confirm_body": "Platform support will review your request. If your company has no activity, all its data is deleted permanently and cannot be recovered; if it has activity, it is closed, access is cut, and its data is kept for the legal retention periods. Are you sure?"
+  },
+  "page": {
+    "status": {
+      "active": "Active",
+      "frozen": "Grace period (view only)",
+      "stopped": "Stopped",
+      "closed": "Closed at your request"
+    },
+    "err_load": "Could not load subscription details",
+    "err_renew": "Could not renew the subscription",
+    "loading": "Loading…",
+    "start": "Subscription start: {{date}}",
+    "end": "Subscription end: {{date}}",
+    "days_left": "Remaining: {{n}} days",
+    "frozen": "Your subscription has ended. You are in a grace period for viewing and export only. Renew to restore adding and editing.",
+    "frozen_grace": "Your subscription has ended. You are in a grace period for viewing and export only ({{n}} days left before suspension). Renew to restore adding and editing.",
+    "stopped": "The account is stopped. Renew your subscription to restore full access.",
+    "renew_title": "Renew subscription",
+    "months": "{{n}} mo",
+    "renewing": "Renewing…",
+    "renew": "Renew for {{n}} mo",
+    "export_title": "A copy of your data",
+    "export_hint": "A single JSON file with all your company's data, always available, even during the grace period.",
+    "exporting": "Preparing…",
+    "export": "Export all data",
+    "title": "Subscription",
+    "subtitle": "Your subscription status and renewal, inside the platform"
+  }
+}
