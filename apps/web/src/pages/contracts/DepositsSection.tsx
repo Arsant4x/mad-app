@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   recordDeposit,
   settleDeposit,
@@ -11,35 +12,36 @@ import {
 } from '../../api/contracts';
 import { fmt, dfmt } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
+import i18n from '../../i18n';
 import { CHARGE_TREATMENT_LABEL, DEDUCTION_TREATMENT_OPTIONS } from './chargeTaxMeta';
 
 const TYPE_LABEL: Record<DepositType, string> = {
-  RENT: 'تأمين إيجار',
-  FACILITY: 'تأمين منشأة',
+  get RENT() { return i18n.t('contracts.deposits.type.rent'); },
+  get FACILITY() { return i18n.t('contracts.deposits.type.facility'); },
 };
 
 const HOLDER_LABEL: Record<DepositHolder, string> = {
-  COMPANY: 'لدى الشركة',
-  EJAR: 'محجوز لدى إيجار',
+  get COMPANY() { return i18n.t('contracts.deposits.holder.company'); },
+  get EJAR() { return i18n.t('contracts.deposits.holder.ejar'); },
 };
 
 const KIND_LABEL: Record<DeductionKind, string> = {
-  UNPAID_RENT: 'إيجار متأخر',
-  DAMAGE: 'أضرار',
-  UTILITIES: 'فواتير خدمات',
-  CLEANING: 'نظافة',
-  OTHER: 'أخرى',
+  get UNPAID_RENT() { return i18n.t('contracts.deposits.kind.unpaid_rent'); },
+  get DAMAGE() { return i18n.t('contracts.deposits.kind.damage'); },
+  get UTILITIES() { return i18n.t('contracts.deposits.kind.utilities'); },
+  get CLEANING() { return i18n.t('contracts.deposits.kind.cleaning'); },
+  get OTHER() { return i18n.t('contracts.deposits.kind.other'); },
 };
 
 const KINDS = Object.keys(KIND_LABEL) as DeductionKind[];
 
-/** ⚖️ والمعاملةُ الضريبية لما يُسأل عنه (السؤال ٤١٤ · ق-١٦٠٠): المرافقُ خاضعةٌ افتراضاً، و«أخرى» بلا افتراض. */
+/** The tax treatment for the kinds that ask for one: utilities are taxable by default, "other" has no default. */
 type DeductionRow = { kind: DeductionKind; amount: string; reason: string; treatment: DeclaredChargeTaxTreatment | ''; evidence: string };
 
-/** المعاملةُ الأولى لنوعٍ يُختار له — المرافقُ «خاضعة» افتراضاً، و«أخرى» فارغةٌ حتى تُختار. */
+/** The initial treatment for a kind that asks for one: utilities start taxable, "other" stays empty until chosen. */
 const initialTreatment = (kind: DeductionKind): DeclaredChargeTaxTreatment | '' => (kind === 'UTILITIES' ? 'TAXABLE_SERVICE' : '');
 
-/** يحتاج البندُ اختياراً لم يقع (أو إثباتَ نيابة) قبل الإرسال؟ */
+/** Does the row still need a choice (or proof of payment on behalf) before it can be sent? */
 const rowIncomplete = (r: DeductionRow) =>
   Number(r.amount) > 0 && (!r.reason.trim() || (DEDUCTION_TREATMENT_OPTIONS[r.kind] !== null && !r.treatment) || (r.treatment === 'ON_BEHALF' && !r.evidence.trim()));
 
@@ -53,6 +55,7 @@ const rowIncomplete = (r: DeductionRow) =>
  * misrepresent what the company actually holds.
  */
 export function DepositsSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,12 +70,12 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
   const [settledAt, setSettledAt] = useState(new Date().toISOString().slice(0, 10));
   const [rows, setRows] = useState<DeductionRow[]>([]);
 
-  // المحجوزُ لدى المنشأة يصل من الخادم مع العقد (`ق-١٢٤٣`) — يُقرأ رقماً لقرار الإظهار وحدَه.
+  // The amount held by the company comes from the server with the contract; read as a number only to decide what to show.
   const heldTotal = num0(contract.depositsHeld);
 
   function fail(e: unknown) {
     const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إتمام العملية'));
+    setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.deposits.action_failed')));
   }
 
   async function submitDeposit() {
@@ -131,11 +134,11 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>
-          التأمينات ({contract.deposits.length}){heldTotal > 0 && <span className="hint"> — محتجز لدى الشركة: {fmt(contract.depositsHeld ?? 0)}</span>}
+          {t('contracts.deposits.title', { n: contract.deposits.length })}{heldTotal > 0 && <span className="hint">{t('contracts.deposits.held_total', { amount: fmt(contract.depositsHeld ?? 0) })}</span>}
         </span>
         {contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'إلغاء' : '+ تسجيل تأمين'}
+            {adding ? t('contracts.deposits.cancel') : t('contracts.deposits.add')}
           </button>
         )}
       </div>
@@ -146,17 +149,17 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
-              <label>النوع</label>
+              <label>{t('contracts.deposits.type_label')}</label>
               <select value={type} onChange={(e) => setType(e.target.value as DepositType)}>
-                {(Object.keys(TYPE_LABEL) as DepositType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]}
+                {(Object.keys(TYPE_LABEL) as DepositType[]).map((dt) => (
+                  <option key={dt} value={dt}>
+                    {TYPE_LABEL[dt]}
                   </option>
                 ))}
               </select>
             </div>
             <div className="field">
-              <label>الجهة الحائزة</label>
+              <label>{t('contracts.deposits.holder_label')}</label>
               <select value={holder} onChange={(e) => setHolder(e.target.value as DepositHolder)}>
                 {(Object.keys(HOLDER_LABEL) as DepositHolder[]).map((h) => (
                   <option key={h} value={h}>
@@ -167,28 +170,28 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
               {/* The single most consequential field on this form. */}
               <p className="hint">
                 {holder === 'EJAR'
-                  ? 'المبلغ محجوز لدى منصة إيجار ولم تستلمه الشركة — لن يُرحَّل للنقدية ولا للالتزامات.'
-                  : 'المبلغ استلمته الشركة — يُرحَّل مديناً للنقدية ودائناً لحساب تأمينات المستأجرين.'}
+                  ? t('contracts.deposits.holder_ejar_hint')
+                  : t('contracts.deposits.holder_company_hint')}
               </p>
             </div>
           </div>
           <div className="two-col">
             <div className="field">
-              <label>المبلغ</label>
+              <label>{t('contracts.deposits.amount')}</label>
               <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div className="field">
-              <label>التاريخ</label>
+              <label>{t('contracts.deposits.date')}</label>
               <input type="date" value={receivedAt} onChange={(e) => setReceivedAt(e.target.value)} />
             </div>
           </div>
           <div className="field">
-            <label>ملاحظة</label>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="رقم سند القبض أو مرجع إيجار" />
+            <label>{t('contracts.deposits.note')}</label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('contracts.deposits.note_placeholder')} />
           </div>
           <div className="modal-foot">
             <button className="btn btn-primary" disabled={busy || !(Number(amount) > 0)} onClick={submitDeposit}>
-              حفظ
+              {t('contracts.deposits.save')}
             </button>
           </div>
         </div>
@@ -197,11 +200,11 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
       <table>
         <thead>
           <tr>
-            <th>النوع</th>
-            <th>الجهة الحائزة</th>
-            <th>المبلغ</th>
-            <th>التاريخ</th>
-            <th>الحالة</th>
+            <th>{t('contracts.deposits.type_label')}</th>
+            <th>{t('contracts.deposits.holder_label')}</th>
+            <th>{t('contracts.deposits.amount')}</th>
+            <th>{t('contracts.deposits.date')}</th>
+            <th>{t('contracts.deposits.col_status')}</th>
             <th></th>
           </tr>
         </thead>
@@ -209,7 +212,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
           {contract.deposits.length === 0 && (
             <tr>
               <td colSpan={6}>
-                <div className="empty-state">لا توجد تأمينات مسجَّلة</div>
+                <div className="empty-state">{t('contracts.deposits.empty')}</div>
               </td>
             </tr>
           )}
@@ -223,18 +226,18 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
               <td className="num">{dfmt(d.receivedAt)}</td>
               <td>
                 {d.status === 'HELD' ? (
-                  <span className="badge">محتجز</span>
+                  <span className="badge">{t('contracts.deposits.status_held')}</span>
                 ) : (
                   <>
-                    <span className="badge paid">مسوّى</span>
+                    <span className="badge paid">{t('contracts.deposits.status_settled')}</span>
                     <div className="hint">
-                      رُدّ {fmt(d.refundAmount ?? 0)}
-                      {d.deductions.length > 0 && ` — خُصم ${d.deductions.length} بند`}
+                      {t('contracts.deposits.refunded', { amount: fmt(d.refundAmount ?? 0) })}
+                      {d.deductions.length > 0 && t('contracts.deposits.deducted_lines', { n: d.deductions.length })}
                     </div>
                     {d.deductions.map((x) => (
                       <div key={x.id} className="hint">
                         {KIND_LABEL[x.kind]}: {fmt(x.amount)} — {x.reason}
-                        {x.taxTreatment && ` (${CHARGE_TREATMENT_LABEL[x.taxTreatment]}${num0(x.baseTax) > 0 ? `، منها ضريبة ${fmt(x.baseTax)}` : ''})`}
+                        {x.taxTreatment && t('contracts.deposits.treatment_paren', { label: CHARGE_TREATMENT_LABEL[x.taxTreatment], tax: num0(x.baseTax) > 0 ? t('contracts.deposits.tax_part', { amount: fmt(x.baseTax) }) : '' })}
                       </div>
                     ))}
                   </>
@@ -250,7 +253,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                       setError(null);
                     }}
                   >
-                    تسوية
+                    {t('contracts.deposits.settle')}
                   </button>
                 )}
               </td>
@@ -269,23 +272,23 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
           return (
             <div className="card" style={{ marginTop: 10 }}>
               <div className="card-title" style={{ marginBottom: 8 }}>
-                تسوية {TYPE_LABEL[deposit.type]} — {fmt(held)}
+                {t('contracts.deposits.settle_title', { type: TYPE_LABEL[deposit.type], amount: fmt(held) })}
               </div>
               {deposit.holder === 'EJAR' && (
                 <p className="hint">
-                  هذا التأمين محجوز لدى منصة إيجار: ما يُخصَم لصالح الشركة فقط هو ما يُرحَّل، والمتبقي يُعاد للمستأجر من المنصة مباشرة.
+                  {t('contracts.deposits.settle_ejar_hint')}
                 </p>
               )}
 
               <div className="field">
-                <label>تاريخ التسوية</label>
+                <label>{t('contracts.deposits.settled_at')}</label>
                 <input type="date" value={settledAt} onChange={(e) => setSettledAt(e.target.value)} />
               </div>
 
               {rows.map((r, i) => (
                 <div className="two-col" key={i}>
                   <div className="field">
-                    <label>البند</label>
+                    <label>{t('contracts.deposits.line')}</label>
                     <select
                       value={r.kind}
                       onChange={(e) => {
@@ -301,7 +304,7 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                     </select>
                   </div>
                   <div className="field">
-                    <label>المبلغ</label>
+                    <label>{t('contracts.deposits.amount')}</label>
                     <input
                       type="number"
                       min="0"
@@ -311,26 +314,26 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                     />
                   </div>
                   <div className="field" style={{ gridColumn: '1 / -1' }}>
-                    <label>السبب</label>
+                    <label>{t('contracts.deposits.reason')}</label>
                     <input
                       value={r.reason}
                       onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, reason: e.target.value } : x)))}
-                      placeholder="يظهر للمستأجر — اذكر السبب بوضوح"
+                      placeholder={t('contracts.deposits.reason_placeholder')}
                     />
                   </div>
-                  {r.kind === 'CLEANING' && <p className="hint" style={{ gridColumn: '1 / -1' }}>النظافةُ خدمةٌ خاضعة: الضريبةُ ١٥٪ من المبلغ المخصوم نفسِه، وتدخل الإقرار.</p>}
+                  {r.kind === 'CLEANING' && <p className="hint" style={{ gridColumn: '1 / -1' }}>{t('contracts.deposits.cleaning_hint')}</p>}
                   {DEDUCTION_TREATMENT_OPTIONS[r.kind] && (
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label htmlFor={`deduction-treatment-${i}`}>المعاملة الضريبية</label>
+                      <label htmlFor={`deduction-treatment-${i}`}>{t('contracts.deposits.treatment')}</label>
                       <select
                         id={`deduction-treatment-${i}`}
                         value={r.treatment}
                         onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, treatment: e.target.value as DeclaredChargeTaxTreatment | '' } : x)))}
                       >
-                        {r.kind === 'OTHER' && <option value="">— اختر —</option>}
-                        {DEDUCTION_TREATMENT_OPTIONS[r.kind]!.map((t) => (
-                          <option key={t} value={t}>
-                            {CHARGE_TREATMENT_LABEL[t]}
+                        {r.kind === 'OTHER' && <option value="">{t('contracts.lessor.choose')}</option>}
+                        {DEDUCTION_TREATMENT_OPTIONS[r.kind]!.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {CHARGE_TREATMENT_LABEL[opt]}
                           </option>
                         ))}
                       </select>
@@ -338,12 +341,12 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
                   )}
                   {r.treatment === 'ON_BEHALF' && (
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label htmlFor={`deduction-evidence-${i}`}>ما يثبت النيابة</label>
+                      <label htmlFor={`deduction-evidence-${i}`}>{t('contracts.deposits.evidence')}</label>
                       <input
                         id={`deduction-evidence-${i}`}
                         value={r.evidence}
                         onChange={(e) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, evidence: e.target.value } : x)))}
-                        placeholder="مثال: عدّادُ الماء باسم المستأجر"
+                        placeholder={t('contracts.deposits.evidence_placeholder')}
                       />
                     </div>
                   )}
@@ -351,23 +354,23 @@ export function DepositsSection({ contract, onChanged }: { contract: Contract; o
               ))}
 
               <button className="btn btn-ghost" onClick={() => setRows((rs) => [...rs, { kind: 'DAMAGE', amount: '', reason: '', treatment: '', evidence: '' }])}>
-                + بند خصم
+                {t('contracts.deposits.add_line')}
               </button>
 
               <p className="hint" style={{ color: over ? 'var(--rose)' : undefined }}>
-                {over ? `الخصومات (${fmt(deducted)}) تتجاوز مبلغ التأمين` : `المبلغ المُعاد للمستأجر: ${fmt(refund)}`}
+                {over ? t('contracts.deposits.over', { amount: fmt(deducted) }) : t('contracts.deposits.refund', { amount: fmt(refund) })}
               </p>
 
               <div className="modal-foot">
                 <button className="btn btn-ghost" onClick={() => setSettlingId(null)}>
-                  إلغاء
+                  {t('contracts.deposits.cancel')}
                 </button>
                 <button
                   className="btn btn-primary"
                   disabled={busy || over || rows.some(rowIncomplete)}
                   onClick={() => submitSettlement(deposit)}
                 >
-                  تأكيد التسوية
+                  {t('contracts.deposits.confirm_settle')}
                 </button>
               </div>
             </div>
