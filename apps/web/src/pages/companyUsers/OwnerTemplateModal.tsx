@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ACTION_LABELS,
   ALLOWED_SCREENS,
@@ -11,11 +12,10 @@ import {
 } from '../../api/templates';
 
 /**
- * محرّر نموذج صلاحيات للمالك: مصفوفة شاشات × أفعال.
+ * The owner's permission template editor: a screens by actions matrix.
  *
- * صف لكل شاشة ممنوحة، وأمام كل شاشة أفعالها السبعة (اطلاع · إضافة · تعديل ·
- * حذف · تسجيل · اعتماد · تدقيق) — «كتابة العقود» = إضافة على شاشة العقود،
- * «تحرير العقود» = تعديل عليها، ويمكن جمع أي عدد من الصلاحيات.
+ * One row per granted screen, with its seven actions in front of it; "write contracts" is add on the
+ * contracts screen, "edit contracts" is edit on it, and any number of permissions can be combined.
  */
 export function OwnerTemplateModal({
   editing,
@@ -26,6 +26,7 @@ export function OwnerTemplateModal({
   onCancel: () => void;
   onSave: (data: TemplateInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
   const [screens, setScreens] = useState<string[]>(editing?.allowedScreens ?? []);
   const [actions, setActions] = useState<ScreenActionMap>(() => {
@@ -68,16 +69,16 @@ export function OwnerTemplateModal({
   async function handleSubmit() {
     setError(null);
     if (!name.trim()) {
-      setError('اسم النموذج مطلوب.');
+      setError(t('company_users.template_modal.err_name'));
       return;
     }
     if (screens.length === 0) {
-      setError('اختر شاشة واحدة على الأقل.');
+      setError(t('company_users.template_modal.err_screens'));
       return;
     }
     const emptyScreen = screens.find((s) => (actions[s] ?? []).length === 0);
     if (emptyScreen) {
-      setError(`شاشة «${SCREEN_LABELS[emptyScreen as keyof typeof SCREEN_LABELS]}» بلا أي صلاحية — امنحها فعلاً واحداً على الأقل أو أزلها.`);
+      setError(t('company_users.template_modal.err_empty_screen', { screen: SCREEN_LABELS[emptyScreen as keyof typeof SCREEN_LABELS] }));
       return;
     }
 
@@ -86,7 +87,7 @@ export function OwnerTemplateModal({
       await onSave({ name: name.trim(), isAllScreens: false, allowedScreens: screens.filter(isScreenKey), screenActions: actions });
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر حفظ النموذج'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('company_users.template_modal.err_save')));
     } finally {
       setSaving(false);
     }
@@ -96,26 +97,26 @@ export function OwnerTemplateModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل نموذج الصلاحيات' : 'نموذج صلاحيات جديد'}</div>
+          <div className="modal-title">{editing ? t('company_users.template_modal.title_edit') : t('company_users.template_modal.title_new')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
 
         <div className="field">
-          <label>اسم النموذج</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: محرِّر عقود · محاسب استقبال" />
+          <label>{t('company_users.template_modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('company_users.template_modal.name_placeholder')} />
         </div>
 
         <p className="hint" style={{ marginBottom: 8 }}>
-          اختر الشاشات، ثم حدّد ما يستطيع الموظف فعله في كل شاشة.
+          {t('company_users.template_modal.hint')}
         </p>
 
         <div style={{ maxHeight: '46vh', overflowY: 'auto', border: '1px solid var(--line)', borderRadius: 8 }}>
           <table>
             <thead>
               <tr>
-                <th>الشاشة</th>
+                <th>{t('company_users.template_modal.col_screen')}</th>
                 {SCREEN_ACTIONS.map((a) => (
                   <th key={a} style={{ textAlign: 'center', fontSize: 11 }}>
                     {ACTION_LABELS[a]}
@@ -155,10 +156,10 @@ export function OwnerTemplateModal({
         {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('company_users.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إنشاء النموذج'}
+            {editing ? t('company_users.template_modal.save_edit') : t('company_users.template_modal.create')}
           </button>
         </div>
       </div>

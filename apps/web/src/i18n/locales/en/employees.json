@@ -1,0 +1,52 @@
+{
+  "status": {
+    "active": "Active",
+    "suspended": "Suspended",
+    "terminated": "Terminated"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "title": "Employees",
+  "subtitle": "Human resources records and base salaries",
+  "new": "+ New employee",
+  "search_placeholder": "Search by any employee detail...",
+  "show_archived": "Show archived",
+  "col": {
+    "name": "Name",
+    "job": "Job",
+    "department": "Department",
+    "hire_date": "Hire date",
+    "base_salary": "Base salary",
+    "phone": "Mobile",
+    "status": "Status"
+  },
+  "empty": "No matching employees",
+  "archived": "Archived",
+  "menu": {
+    "edit": "✎ Edit",
+    "archive": "🗄 Archive",
+    "unarchive": "📂 Unarchive",
+    "delete": "🗑 Delete"
+  },
+  "delete_title": "Delete employee",
+  "delete_body": "Delete \"{{name}}\"? This cannot be undone.",
+  "modal": {
+    "title_edit": "Edit employee details",
+    "title_new": "New employee",
+    "full_name": "Full name",
+    "full_name_placeholder": "Example: Sara Alotaibi",
+    "job_title": "Job title",
+    "job_title_placeholder": "Accountant",
+    "department": "Department",
+    "department_placeholder": "Finance",
+    "hire_date": "Hire date",
+    "base_salary": "Base salary",
+    "phone": "Mobile number",
+    "phone_placeholder": "05XXXXXXXX",
+    "status": "Status",
+    "save_edit": "Save changes",
+    "add": "Add employee"
+  }
+}

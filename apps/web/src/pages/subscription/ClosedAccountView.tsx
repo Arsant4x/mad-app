@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   cancelDeletionRequest,
   getAccountClosureState,
@@ -12,17 +13,27 @@ import {
 } from '../../api/deletionRequests';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
+import i18n from '../../i18n';
 
-const kb = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} م.ب` : `${Math.max(1, Math.round(bytes / 1024))} ك.ب`);
+const kb = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? i18n.t('subscription.closed.size_mb', { n: (bytes / 1024 / 1024).toFixed(1) })
+    : i18n.t('subscription.closed.size_kb', { n: Math.max(1, Math.round(bytes / 1024)) });
 
-const KIND_LABEL: Record<DeletionRequest['kind'], string> = { DELETION: 'طلب الحذف', REOPENING: 'طلب إعادة الفتح', ERASURE: 'طلب محو البيانات غير الملزِمة' };
+const KIND_KEY: Record<DeletionRequest['kind'], string> = {
+  DELETION: 'subscription.closed.kind.deletion',
+  REOPENING: 'subscription.closed.kind.reopening',
+  ERASURE: 'subscription.closed.kind.erasure',
+};
 
 /**
- * ما يراه صاحبُ منشأةٍ مغلقة (ق-٥٤٧): لا شاشةَ سوى هذه — الرسالةُ تجيب «وأين بياناتي؟»
- * وبأجل، وزرّان: طلبُ إعادة الفتح (ق-٥٤٨) ما دامت نافذتُها مفتوحة، وطلبُ محو غير الملزِم الآن
- * (ق-٥٥٩ — م٤/٥) — وكلاهما يُراجعه الدعم ويقرّره باسمه. **وما يُمحى لا يعود**: فيُقال ذلك قبل الطلب.
+ * The only screen a closed company's owner sees. It answers "where is my data?" with its
+ * retention date, and offers two requests the support team reviews: reopening (while the
+ * window is open) and erasing the non-mandatory data now. Erased data does not come back,
+ * so that is said before the request.
  */
 export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
+  const { t } = useTranslation();
   const [account, setAccount] = useState<AccountClosureState | null>(null);
   const [req, setReq] = useState<DeletionRequest | null>(null);
   const [archive, setArchive] = useState<ClosureArchive | null>(null);
@@ -33,7 +44,7 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     getAccountClosureState().then(setAccount).catch(() => undefined);
     getMyDeletionRequest().then(setReq).catch(() => undefined);
-    // الروابطُ قصيرةُ العمر — تُطلب عند فتح الشاشة، وتُعاد بإعادة فتحها.
+    // The links are short lived: fetched when the screen opens, renewed by reopening it.
     getClosureArchive().then(setArchive).catch(() => undefined);
   }, []);
 
@@ -58,27 +69,31 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="card" style={{ maxWidth: 640, margin: '40px auto' }}>
-      <div className="card-title" style={{ marginBottom: 10 }}>حسابُك مغلقٌ بطلبك</div>
-      {account?.closedAt && <p className="hint">أُغلق في {dfmt(account.closedAt)}.</p>}
+      <div className="card-title" style={{ marginBottom: 10 }}>{t('subscription.closed.title')}</div>
+      {account?.closedAt && <p className="hint">{t('subscription.closed.closed_on', { date: dfmt(account.closedAt) })}</p>}
       <p style={{ marginTop: 8 }}>
-        بياناتُك محفوظةٌ بمدد الحفظ النظامية{retainUntil ? ` حتى ${retainUntil} على الأقلّ` : ''} ثم تُمحى — ويكتمل الإتلافُ خلال أربعةَ عشرَ يوماً من دوران النسخ الاحتياطية. لا يمكن الدخول إليها أو تعديلها ما دام الحساب مغلقاً.
+        {retainUntil ? t('subscription.closed.retained_until', { date: retainUntil }) : t('subscription.closed.retained')}
       </p>
       {erased ? (
-        <p className="hint">مُحيت بياناتُك غيرُ الملزِمة (الهواتف وبيانات التواصل) في {dfmt(account!.erasedAt!)} — وبقي ما يلزم النظامُ حفظَه إلى أجله. ولا إعادةَ فتحٍ بعد المحو.</p>
+        <p className="hint">{t('subscription.closed.erased_note', { date: dfmt(account!.erasedAt!) })}</p>
       ) : (
         reopenUntil && (
           <p className="hint">
-            يمكنك طلب إعادة الفتح حتى {reopenUntil}. بعده تُمحى بياناتُك غيرُ الملزِمة (الهواتف وبيانات التواصل) آلياً — ويبقى ما يلزم النظامُ حفظَه إلى أجله، ولا إعادةَ فتحٍ بعد ذلك.
+            {t('subscription.closed.reopen_note', { date: reopenUntil })}
           </p>
         )
       )}
-      {req?.status !== 'PENDING' && req?.decidedNote && <p className="hint">ردّ الدعم: {req.decidedNote}</p>}
+      {req?.status !== 'PENDING' && req?.decidedNote && <p className="hint">{t('subscription.common.support_reply', { note: req.decidedNote })}</p>}
 
       {archive && (
         <div className="card" style={{ marginTop: 14 }}>
-          <div className="card-title" style={{ marginBottom: 6 }}>نسختُك الكاملة — جاهزةٌ للتنزيل حتى {archive.expiresAt.slice(0, 10)}</div>
+          <div className="card-title" style={{ marginBottom: 6 }}>{t('subscription.closed.archive_title', { date: archive.expiresAt.slice(0, 10) })}</div>
           <p className="hint">
-            ملفّاتٌ سنوية ({archive.years.join(' · ') || '—'}) وملفٌّ أساسيّ، و{archive.stampedInvoices} فاتورةً مختومةً كما هي، و{archive.totalRows} صفّاً — مع `README` يشرح المحتوى و`manifest` ببصمة كلِّ ملفّ.
+            {t('subscription.closed.archive_hint', {
+              years: archive.years.join(' · ') || '—',
+              invoices: archive.stampedInvoices,
+              rows: archive.totalRows,
+            })}
           </p>
           <ul style={{ paddingInlineStart: 18 }}>
             {archive.files.map((f) => (
@@ -97,40 +112,40 @@ export function ClosedAccountView({ onLogout }: { onLogout: () => void }) {
         {pending ? (
           <>
             <span className="badge due">
-              {KIND_LABEL[pending.kind]} قيد المراجعة — قُدِّم في {dfmt(pending.createdAt)}
+              {t('subscription.closed.pending_badge', { kind: t(KIND_KEY[pending.kind]), date: dfmt(pending.createdAt) })}
             </span>
-            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(pending.id), 'تعذّر سحب الطلب')}>
-              سحب الطلب
+            <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(pending.id), t('subscription.common.err_withdraw'))}>
+              {t('subscription.common.withdraw')}
             </button>
           </>
         ) : (
           <>
             {windowOpen && (
-              <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => requestReopening(), 'تعذّر تقديم الطلب')}>
-                طلب إعادة فتح الحساب
+              <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(() => requestReopening(), t('subscription.common.err_submit'))}>
+                {t('subscription.closed.request_reopen')}
               </button>
             )}
             {!erased && (
               <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setConfirmErase(true)}>
-                طلب محو بياناتي غير الملزِمة الآن
+                {t('subscription.closed.request_erase')}
               </button>
             )}
           </>
         )}
         <button className="btn btn-ghost btn-sm" onClick={onLogout}>
-          تسجيل الخروج
+          {t('subscription.common.logout')}
         </button>
       </div>
       {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
       {confirmErase && (
         <ConfirmModal
-          title="طلب محو البيانات غير الملزِمة"
-          body="سيُراجع دعم المنصة طلبك ثم يُمحى ما لا يلزم النظامُ حفظَه: هواتف العملاء والموردين والموظفين وأطراف العقود، وبيانات تواصل منشأتك. وتبقى الأسماء والعناوين والفواتير والقيود إلى أجل حفظها. ولا يمكن إعادة فتح الحساب بعد المحو. هل أنت متأكد؟"
-          confirmLabel="نعم، قدِّم الطلب"
+          title={t('subscription.closed.erase_confirm_title')}
+          body={t('subscription.closed.erase_confirm_body')}
+          confirmLabel={t('subscription.common.confirm_submit')}
           onConfirm={() => {
             setConfirmErase(false);
-            return run(() => requestErasure(), 'تعذّر تقديم الطلب');
+            return run(() => requestErasure(), t('subscription.common.err_submit'));
           }}
           onCancel={() => setConfirmErase(false)}
         />

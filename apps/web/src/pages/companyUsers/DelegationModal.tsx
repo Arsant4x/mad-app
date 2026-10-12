@@ -1,42 +1,31 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ALLOWED_SCREENS, SCREEN_ACTIONS, SCREEN_LABELS, ACTION_LABELS } from '../../api/templates';
 import { createDelegation, getDelegationView, revokeDelegation, type DelegationView } from '../../api/delegations';
 import { usePermissions, type ExtinctionReason } from '../../auth/PermissionsContext';
 import { apiErrorMessage } from '../../lib/apiError';
 
 /**
- * شجرة التفويض — **مفتوحةٌ من الموظف لا من شاشة مستقلة**.
+ * The delegation tree, opened from the employee rather than a separate screen: delegation is a
+ * relation between two people, and a separate screen would first ask "to whom?", rebuilding the
+ * employee list the user is already standing in.
  *
- * السبب: التفويض **علاقة بين شخصين** لا إعداد نظام. وشاشةٌ مستقلة تسأل
- * أولاً «لمن؟» — أي تعيد بناء قائمة الموظفين التي يقف المستخدم فيها أصلاً.
+ * Three states, because two are not enough:
+ * - held by the delegator and not granted: empty box, available to grant;
+ * - granted and in force: checked;
+ * - granted and extinguished: checked, struck through, with the reason.
+ * The third matters most: the intersection extinguishes a grant without touching its row. Shown as
+ * "not granted", the delegator would grant again with no effect, since the cause sits above them.
  *
- * ## الحالات الثلاث — ولماذا لا تكفي حالتان
- *
- * | الحالة | العرض | لماذا |
- * |---|---|---|
- * | يملكها المفوِّض ولم تُمنح | مربّع فارغ | متاحةٌ للمنح |
- * | مُنحت ونافذة | مربّع مُعلَّم | نافذة الآن |
- * | **مُنحت وانطفأت** | مُعلَّم **بشطب** + السبب | لا يجوز إخفاؤها |
- *
- * والثالثة أهمّها: التقاطع يُطفئ منحةً **دون أن يمسّ صفّها**. فلو عُرضت
- * «غير ممنوحة» لظنّ المفوِّض أنه لم يمنح، فمنح مرةً أخرى **بلا أثر** —
- * لأن العطب فوقه لا عنده. ولا رسالة خطأ في أيٍّ من المرّات: كل منحةٍ نجحت
- * فعلاً، والتقاطع أطفأها بعدها.
- *
- * ## وما لا يملكه المفوِّض لا يُعرض إطلاقاً
- *
- * لا رمادياً ولا معطَّلاً. عرضُه يدعو لمحاولةٍ يرفضها الخادم، ورفضٌ بلا
- * سببٍ مفهوم أسوأ من الغياب. والترشيح يأتي من `grantable` **محسوباً في
- * الخادم** — والواجهة تعرضه ولا تشتقّه.
- *
- * ⚠️ وهذا **عرضٌ لا منع**: `DelegationsService.grant` يفحص السقف على كل
- * منحة، وحارسٌ يطرق النقطة بلا متصفح يثبت ذلك.
+ * What the delegator does not hold is not shown at all, not even greyed out: showing it invites an
+ * attempt the server rejects. The list comes from `grantable`, computed on the server; the screen
+ * shows it and does not derive it. This is display only: the server checks the ceiling on every grant.
  */
 
-const REASON_TEXT: Record<ExtinctionReason, string> = {
-  NOT_IN_ROOT: 'لم تعد في قالب الصلاحيات',
-  REVOKED: 'سُحبت من فوقك',
-  NARROWED: 'لا يملكها من فوقك',
+const REASON_KEY: Record<ExtinctionReason, string> = {
+  NOT_IN_ROOT: 'company_users.delegation.reason.not_in_root',
+  REVOKED: 'company_users.delegation.reason.revoked_above',
+  NARROWED: 'company_users.delegation.reason.narrowed',
 };
 
 interface Props {
@@ -46,6 +35,7 @@ interface Props {
 }
 
 export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
+  const { t } = useTranslation();
   const { refresh } = usePermissions();
   const [view, setView] = useState<DelegationView | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -58,7 +48,7 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
         setView(v);
         setPicked(new Set());
       })
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل التفويض')));
+      .catch((e) => setError(apiErrorMessage(e, t('company_users.delegation.err_load'))));
   };
 
   useEffect(load, [granteeId]);
@@ -68,10 +58,10 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
   const extinguished = useMemo(() => new Map((view?.extinguished ?? []).map((e) => [e.grant, e])), [view]);
 
   /**
-   * الشاشات المعروضة = ما للمفوِّض فيها فعلٌ واحد على الأقل.
+   * Screens shown = those where the delegator has at least one action.
    *
-   * ⚠️ يُشتقّ من `grantable` القادمة من الخادم، لا من `ALLOWED_SCREENS`
-   * كاملةً: عرضُ الشجرة كلها يُظهر ما لا يملكه المفوِّض.
+   * Derived from the server's `grantable`, not from all of `ALLOWED_SCREENS`: showing the whole
+   * tree would show what the delegator does not hold.
    */
   const screens = useMemo(
     () => ALLOWED_SCREENS.filter((s) => SCREEN_ACTIONS.some((a) => grantable.has(`${s}:${a}`))),
@@ -94,10 +84,10 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
     try {
       await createDelegation(granteeId, 'root', [...picked]);
       load();
-      // الصلاحيات تُقرأ حيّةً — والمنح يغيّرها فوراً لا عند التنقّل التالي.
+      // Permissions are read live, and a grant changes them now, not on the next navigation.
       refresh();
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر حفظ التفويض'));
+      setError(apiErrorMessage(e, t('company_users.delegation.err_save')));
     } finally {
       setBusy(false);
     }
@@ -111,33 +101,33 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
       load();
       refresh();
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر سحب التفويض'));
+      setError(apiErrorMessage(e, t('company_users.delegation.err_revoke')));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    // `overlay` + `modal-head` — نفس صدفة `CompanyUserModal` لا صدفةً ثانية.
+    // Same `overlay` + `modal-head` shell as `CompanyUserModal`.
     <div className="overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`تفويض ${granteeName}`}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('company_users.delegation.aria', { name: granteeName })}>
         <div className="modal-head">
-          <div className="modal-title">تفويض الصلاحيات — {granteeName}</div>
+          <div className="modal-title">{t('company_users.delegation.title', { name: granteeName })}</div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
         {error && <p className="error" role="alert">{error}</p>}
-        {!view && !error && <p>جارٍ التحميل…</p>}
+        {!view && !error && <p>{t('company_users.delegation.loading')}</p>}
 
         {view && screens.length === 0 && (
           <p className="muted" data-testid="deleg-nothing-to-grant">
-            لا تملك صلاحياتٍ يمكن تفويضها. ولا يمنح أحدٌ ما لا يملك.
+            {t('company_users.delegation.nothing')}
           </p>
         )}
 
         {view && screens.length > 0 && (
           <>
-            <p className="muted">يُعرض ما تملكه أنت وحده — ولا يمنح أحدٌ ما لا يملك.</p>
+            <p className="muted">{t('company_users.delegation.shown_hint')}</p>
             <div className="deleg-tree" data-testid="deleg-tree">
               {screens.map((screen) => (
                 <fieldset key={screen} className="deleg-screen">
@@ -162,7 +152,7 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
                         <span>{ACTION_LABELS[action]}</span>
                         {dead && (
                           <em className="deleg-reason" data-testid={`reason-${key}`}>
-                            {REASON_TEXT[dead.reason]}
+                            {t(REASON_KEY[dead.reason])}
                           </em>
                         )}
                       </label>
@@ -173,17 +163,17 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
             </div>
 
             <div className="deleg-links">
-              <h4>التفويضات القائمة</h4>
-              {view.links.length === 0 && <p className="muted">لا تفويض بعد.</p>}
+              <h4>{t('company_users.delegation.links_title')}</h4>
+              {view.links.length === 0 && <p className="muted">{t('company_users.delegation.no_links')}</p>}
               {view.links.map((l) => (
                 <div key={l.id} className="deleg-link" data-testid={`link-${l.id}`} data-state={l.state}>
                   <span>{l.grants.map((g) => g.split(':')[0]).filter((v, i, a) => a.indexOf(v) === i).map((s) => SCREEN_LABELS[s as keyof typeof SCREEN_LABELS] ?? s).join(' · ')}</span>
-                  <span className="num">{l.grants.length} صلاحية</span>
-                  {/* المسحوب **يبقى ظاهراً مختوماً** — لا يُحذف من العرض كما لا يُحذف من السجل. */}
+                  <span className="num">{t('company_users.delegation.grants_n', { n: l.grants.length })}</span>
+                  {/* A revoked link stays visible and sealed, as it stays in the log. */}
                   {l.state === 'ACTIVE' ? (
-                    <button type="button" onClick={() => doRevoke(l.id)} disabled={busy}>سحب</button>
+                    <button type="button" onClick={() => doRevoke(l.id)} disabled={busy}>{t('company_users.delegation.revoke')}</button>
                   ) : (
-                    <span className="badge sealed">مسحوب</span>
+                    <span className="badge sealed">{t('company_users.delegation.state_revoked')}</span>
                   )}
                 </div>
               ))}
@@ -191,9 +181,9 @@ export function DelegationModal({ granteeId, granteeName, onClose }: Props) {
 
             <div className="modal-actions">
               <button type="button" onClick={submit} disabled={busy || picked.size === 0} data-testid="deleg-submit">
-                تفويض {picked.size > 0 ? `(${picked.size})` : ''}
+                {picked.size > 0 ? t('company_users.delegation.submit_n', { n: picked.size }) : t('company_users.delegation.submit')}
               </button>
-              <button type="button" onClick={onClose} disabled={busy}>إغلاق</button>
+              <button type="button" onClick={onClose} disabled={busy}>{t('company_users.delegation.close')}</button>
             </div>
           </>
         )}

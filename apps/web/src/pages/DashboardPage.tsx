@@ -1,5 +1,6 @@
 import { badgeOf } from '../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { listInvoices, type Invoice } from '../api/invoices';
 import { getDashboard, type DashboardSummary } from '../api/reports';
@@ -9,23 +10,17 @@ import { num0 } from '../lib/money';
 import { computeRange, type DashRange } from './dashboardRange';
 import { STATUS_META } from './invoices/statusMeta';
 
-const MONTH_NAMES = ['ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون', 'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'];
-
-/** تسميةُ شهرٍ من مفتاحه `YYYY-MM` — عرضٌ لا حساب. */
-const monthLabel = (key: string) => MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? key;
-
 /**
- * لوحةُ التحكّم — **الشاشةُ تقرأ ولا تحسب** (`ق-١٢٤٣`).
+ * The dashboard reads and does not compute: every figure comes from
+ * GET /reports/dashboard (ledger and allocations) as two-decimal text, shown with
+ * fmt and read with num0 only where a comparison is needed.
  *
- * كانت تجمع بنفسها من قائمتَي الفواتير والمشتريات: الإيرادَ شاملَ الضريبة، والمصروفَ إجماليَّ
- * الشراء بضريبته، والذممَ من فواتيرَ غيرِ `PAID` **بكامل إجماليها** (المسدَّدُ جزئياً كاملاً)،
- * والسلسلةَ الشهرية من الإجماليات. صارت كلُّها من `GET /reports/dashboard` — من الدفتر والتخصيصات —
- * وتصل نصّاً بخانتين فتُعرض بـ`fmt` وتُقرأ بـ`num0` حيث تلزم مقارنة.
- *
- * ⚖️ **وكلُّ بطاقةٍ لمن يملك شاشتَها** (`ق-١٥٨٠`): بطاقاتُ الأرقام يحكم بها الخادم (لا يُرسل ما لا يملك القارئُ شاشتَه، فلا
- * تُرسم)، و«أحدثُ الفواتير» وزرُّ «فاتورة جديدة» لشاشة الفواتير — **بحثٌ في الصلاحيات المحسومة لا حساب** (`usePermissions`).
+ * Each card belongs to whoever can see its screen: the server omits figure cards the
+ * reader cannot see, and the recent invoices and the new invoice button follow the
+ * invoices screen permission.
  */
 export function DashboardPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { canSee, can, loading: permissionsLoading } = usePermissions();
   const showInvoices = canSee('invoice');
@@ -40,7 +35,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (permissionsLoading) return;
-    // من لا يملك شاشةَ الفواتير لا تُطلب له قائمتُها — كان الطلبُ يُردّ `403` فلا تُرسم الصفحة.
+    // Without the invoices screen the list is not requested; the 403 would stop the page from rendering.
     if (!showInvoices) {
       setInvoices([]);
       setLoading(false);
@@ -64,12 +59,19 @@ export function DashboardPage() {
     }
   }
 
-  const periodLabel = from ? `من ${dfmt(from)} إلى ${dfmt(to)}` : `حتى ${dfmt(to)} (كل الفترات)`;
+  const periodLabel = from ? t('dashboard.period_range', { from: dfmt(from), to: dfmt(to) }) : t('dashboard.period_until', { to: dfmt(to) });
 
-  // الأرقامُ من الخادم كما هي؛ والصافي يُقرأ رقماً لاختيار اللون فقط.
+  // Figures are shown as the server sends them; net is read as a number only to pick the colour.
   const net = num0(summary?.netProfit);
-  // السلسلةُ الشهرية تصل جاهزة؛ الارتفاعُ النسبيّ للعمود تخطيطٌ لا رقمٌ يُعرض.
-  const months = useMemo(() => (summary?.monthly ?? []).map((m) => ({ label: monthLabel(m.month), revenue: m.revenue, value: num0(m.revenue) })), [summary]);
+  // The monthly series arrives ready; a bar's relative height is layout, not a shown number.
+  const months = useMemo(
+    () =>
+      (summary?.monthly ?? []).map((m) => {
+        const monthNo = Number(m.month.slice(5, 7));
+        return { label: monthNo >= 1 && monthNo <= 12 ? t(`dashboard.month_short_${monthNo}`) : m.month, revenue: m.revenue, value: num0(m.revenue) };
+      }),
+    [summary, t],
+  );
   const maxMonth = Math.max(1, ...months.map((m) => m.value));
 
   const recentInvoices = useMemo(() => [...invoices].sort((a, b) => (a.issueDate < b.issueDate ? 1 : -1)).slice(0, 4), [invoices]);
@@ -80,16 +82,16 @@ export function DashboardPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">لوحة التحكم</div>
+          <div className="page-title">{t('dashboard.title')}</div>
           <div className="page-sub">
-            نظرة عامة على الوضع المالي — {periodLabel}
-            {summary.scope === 'ownBranches' && ' — من فروعك وحدَها'}
+            {t('dashboard.sub', { period: periodLabel })}
+            {summary.scope === 'ownBranches' && t('dashboard.own_branches')}
           </div>
         </div>
         {can('invoice', 'add') && (
           <div className="topbar-actions">
             <button className="btn btn-primary" onClick={() => navigate('/invoices', { state: { openBuilder: true } })}>
-              + فاتورة جديدة
+              {t('dashboard.new_invoice')}
             </button>
           </div>
         )}
@@ -98,56 +100,56 @@ export function DashboardPage() {
       <div className="toolbar" style={{ marginBottom: 16 }}>
         <div className="chip-group">
           <button className={range === 'month' ? 'chip active' : 'chip'} onClick={() => selectRange('month')}>
-            هذا الشهر
+            {t('dashboard.range_month')}
           </button>
           <button className={range === 'quarter' ? 'chip active' : 'chip'} onClick={() => selectRange('quarter')}>
-            هذا الربع
+            {t('dashboard.range_quarter')}
           </button>
           <button className={range === 'year' ? 'chip active' : 'chip'} onClick={() => selectRange('year')}>
-            هذه السنة
+            {t('dashboard.range_year')}
           </button>
           <button className={range === 'all' ? 'chip active' : 'chip'} onClick={() => selectRange('all')}>
-            كل الفترات
+            {t('dashboard.range_all')}
           </button>
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
           <input type="date" value={customFrom} onChange={(e) => { setRange('custom'); setCustomFrom(e.target.value); }} style={{ padding: '9px 12px', border: '1px solid var(--line)', borderRadius: 8, fontFamily: 'inherit', fontSize: 12.5 }} />
         </div>
-        <span style={{ color: 'var(--muted)', fontSize: 12 }}>إلى</span>
+        <span style={{ color: 'var(--muted)', fontSize: 12 }}>{t('dashboard.to')}</span>
         <div className="field" style={{ marginBottom: 0 }}>
           <input type="date" value={customTo} onChange={(e) => { setRange('custom'); setCustomTo(e.target.value); }} style={{ padding: '9px 12px', border: '1px solid var(--line)', borderRadius: 8, fontFamily: 'inherit', fontSize: 12.5 }} />
         </div>
       </div>
 
-      {/* بطاقةٌ لم يُرسلها الخادم لا تُرسم (`ق-١٥٨٠`) — لا صفرَ يُقرأ رقماً. */}
+      {/* A card the server did not send is not drawn, so no zero is read as a figure. */}
       {(summary.revenue !== undefined || summary.expenses !== undefined || summary.netProfit !== undefined || summary.receivables !== undefined) && (
         <div className="kpi-row">
           {summary.revenue !== undefined && (
             <div className="kpi-card pos">
-              <div className="kpi-label">الإيرادات</div>
-              <div className="kpi-value num">{fmt(summary.revenue)} ر.س</div>
-              <div className="kpi-delta">صافيةً من الضريبة — للفترة المحددة</div>
+              <div className="kpi-label">{t('dashboard.revenue')}</div>
+              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.revenue) })}</div>
+              <div className="kpi-delta">{t('dashboard.revenue_note')}</div>
             </div>
           )}
           {summary.expenses !== undefined && (
             <div className="kpi-card neg">
-              <div className="kpi-label">المصروفات</div>
-              <div className="kpi-value num">{fmt(summary.expenses)} ر.س</div>
-              <div className="kpi-delta">من الدفتر — للفترة المحددة</div>
+              <div className="kpi-label">{t('dashboard.expenses')}</div>
+              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.expenses) })}</div>
+              <div className="kpi-delta">{t('dashboard.expenses_note')}</div>
             </div>
           )}
           {summary.netProfit !== undefined && (
             <div className={`kpi-card ${net >= 0 ? 'pos' : 'neg'}`}>
-              <div className="kpi-label">صافي الربح</div>
-              <div className="kpi-value num">{fmt(summary.netProfit)} ر.س</div>
-              <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? 'ربح' : 'خسارة'} للفترة المحددة</div>
+              <div className="kpi-label">{t('dashboard.net_profit')}</div>
+              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.netProfit) })}</div>
+              <div className={`kpi-delta ${net >= 0 ? 'up' : 'down'}`}>{net >= 0 ? t('dashboard.profit_period') : t('dashboard.loss_period')}</div>
             </div>
           )}
           {summary.receivables !== undefined && (
             <div className="kpi-card neu">
-              <div className="kpi-label">الذمم المدينة المستحقة</div>
-              <div className="kpi-value num">{fmt(summary.receivables)} ر.س</div>
-              <div className="kpi-delta">{summary.scope === 'ownBranches' ? 'متبقّي فواتير فروعك بعد المقبوض' : 'متبقّي الفواتير والأقساط بعد المقبوض'}</div>
+              <div className="kpi-label">{t('dashboard.receivables')}</div>
+              <div className="kpi-value num">{t('dashboard.amount_sar', { amount: fmt(summary.receivables) })}</div>
+              <div className="kpi-delta">{summary.scope === 'ownBranches' ? t('dashboard.receivables_own') : t('dashboard.receivables_all')}</div>
             </div>
           )}
         </div>
@@ -156,10 +158,10 @@ export function DashboardPage() {
       {summary.monthly !== undefined && (
         <div className="card">
           <div className="card-head">
-            <div className="card-title">الإيرادات — اتجاه شهري</div>
+            <div className="card-title">{t('dashboard.monthly_title')}</div>
           </div>
           <div className="chart-wrap">
-            {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>لا توجد قيودُ إيرادٍ بعد لعرض الاتجاه</div>}
+            {months.length === 0 && <div className="empty-state" style={{ width: '100%' }}>{t('dashboard.monthly_empty')}</div>}
             {months.map((m, i) => (
               <div key={i} className={`bar ${i === months.length - 1 ? 'now' : ''}`} style={{ height: `${Math.max(Math.round((m.value / maxMonth) * 100), 2)}%` }}>
                 <em className="num">{fmt(m.revenue)}</em>
@@ -173,26 +175,26 @@ export function DashboardPage() {
       {showInvoices && (
         <div className="card">
           <div className="card-head">
-            <div className="card-title">أحدث الفواتير</div>
+            <div className="card-title">{t('dashboard.recent_invoices')}</div>
             <div className="card-link" style={{ cursor: 'pointer' }} onClick={() => navigate('/invoices')}>
-              عرض الكل ←
+              {t('dashboard.view_all')}
             </div>
           </div>
           <table>
             <thead>
               <tr>
-                <th>العميل</th>
-                <th>رقم الفاتورة</th>
-                <th>التاريخ</th>
-                <th>الحالة</th>
-                <th>المبلغ</th>
+                <th>{t('dashboard.col_customer')}</th>
+                <th>{t('dashboard.col_invoice_no')}</th>
+                <th>{t('dashboard.col_date')}</th>
+                <th>{t('dashboard.col_status')}</th>
+                <th>{t('dashboard.col_amount')}</th>
               </tr>
             </thead>
             <tbody>
               {recentInvoices.length === 0 && (
                 <tr>
                   <td colSpan={5}>
-                    <div className="empty-state">لا توجد فواتير بعد</div>
+                    <div className="empty-state">{t('dashboard.no_invoices')}</div>
                   </td>
                 </tr>
               )}

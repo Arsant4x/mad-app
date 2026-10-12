@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import {
   decidePublicSubstitute,
@@ -15,6 +16,7 @@ import {
   type FormPublicView,
 } from '../api/forms';
 import { SignaturePad } from '../components/SignaturePad';
+import i18n from '../i18n';
 import { apiErrorMessage } from '../lib/apiError';
 import { dateTimeText } from './forms/formItems';
 import { SIGNATURE_LEVEL, SIGNER_ROLE } from './forms/formStatus';
@@ -23,27 +25,30 @@ const NAFATH_POLL_MS = 3000;
 
 type Stage = 'loading' | 'closed' | 'login' | 'view' | 'signed' | 'objected' | 'approved' | 'rejected';
 
-/** قيمةُ البند كما تُقرأ: رقمٌ أو نعم/لا أو نصّ. */
+/** An item's value as read: a number, yes/no, or text. */
 function itemValue(i: FormPublicView['items'][number]): string {
   if (i.number !== null) return `${i.number}${i.unit ? ` ${i.unit}` : ''}`;
-  if (i.bool !== null) return i.bool ? 'نعم' : 'لا';
+  if (i.bool !== null) return i.bool ? i18n.t('public_form.yes') : i18n.t('public_form.no');
   return i.text ?? '';
 }
 
 /**
- * ⚖️ **صفحةُ النموذج للمستأجر** (توجيه ٢٨٧ ① إلى ③ و⑨ · `ق-١٦٢٠`): الفاعلُ العميلُ النهائيّ بلا حساب (`§3.5`). **قبل الدخول لا يظهر من
- * النموذج شيء**: لا اسمَ ولا مبلغ ولا منشأة، بل طرقُ الدخول وحدَها. **والدخولُ** برمزٍ من ستّة أرقامٍ إلى جواله المسجَّل (خمسُ دقائق وثلاثُ
- * محاولات) أو عبر نفاذ حين يُشترط. **ثم يراجع** فيقرّ ويوقّع برسمه، **أو يعترض** بملاحظةٍ وصورة. **والنسخةُ النهائية** رابطٌ يُفتح بالرمز
- * نفسِه وفيه رقمُ الختم وبصمتُه وحكمُ التحقّق.
+ * The form page for the tenant: the end customer, with no account. Before signing in
+ * nothing of the form shows (no name, amount or business), only the ways to sign in:
+ * a six digit code to the registered mobile (five minutes, three attempts) or Nafath
+ * when required. Then the tenant reviews and signs by drawing, or objects with a note
+ * and a photo. The final copy is a link opened the same way, with the seal number,
+ * its fingerprint and the verification result.
  */
 export function PublicFormPage() {
+  const { t } = useTranslation();
   const { token = '' } = useParams<{ token: string }>();
   const [stage, setStage] = useState<Stage>('loading');
   const [link, setLink] = useState<FormLinkOpen | null>(null);
   const [otp, setOtp] = useState<FormOtpIssued | null>(null);
   const [code, setCode] = useState('');
   const [nafathCode, setNafathCode] = useState<string | null>(null);
-  // ⚖️ البديلُ في نموذج نفاذ (`ق-١٦٧٧`): جلسةُ رمزه تُحفظ هنا لتصحب نفاذ، ولا يُرى النموذجُ بها وحدَها.
+  // A substitute on a Nafath form: the code session is kept here to go with Nafath; it does not open the form alone.
   const [otpStep, setOtpStep] = useState<string | null>(null);
   const [session, setSession] = useState<string | null>(null);
   const [view, setView] = useState<FormPublicView | null>(null);
@@ -90,7 +95,9 @@ export function PublicFormPage() {
     setStage('view');
   }
 
-  const sendCode = () => run(async () => setOtp(await requestFormOtp(token)), 'تعذّر إرسالُ الرمز');
+  const provider = link?.identityProvider ?? t('public_form.nafath');
+
+  const sendCode = () => run(async () => setOtp(await requestFormOtp(token)), t('public_form.err_send_code'));
   const checkCode = () =>
     run(async () => {
       if (!otp) return;
@@ -100,7 +107,7 @@ export function PublicFormPage() {
         return;
       }
       await enter(s.session);
-    }, 'تعذّر التحقّق من الرمز');
+    }, t('public_form.err_check_code'));
 
   const startNafath = () =>
     run(async () => {
@@ -117,10 +124,10 @@ export function PublicFormPage() {
         } catch (e) {
           if (poller.current) window.clearInterval(poller.current);
           setNafathCode(null);
-          setError(apiErrorMessage(e, 'لم يكتمل التحقّق عبر نفاذ'));
+          setError(apiErrorMessage(e, t('public_form.err_nafath_incomplete')));
         }
       }, NAFATH_POLL_MS);
-    }, 'تعذّر بدءُ التحقّق عبر نفاذ');
+    }, t('public_form.err_nafath_start'));
 
   const sign = () =>
     run(async () => {
@@ -128,59 +135,62 @@ export function PublicFormPage() {
       const r = await signPublicForm(token, session, drawing);
       setFinalCopy(r.finalCopy);
       setStage('signed');
-    }, 'تعذّر التوقيع');
+    }, t('public_form.err_sign'));
 
   const decide = (approve: boolean) =>
     run(async () => {
       if (!session) return;
       await decidePublicSubstitute(token, session, approve);
       setStage(approve ? 'approved' : 'rejected');
-    }, 'تعذّر تسجيلُ قرارك');
+    }, t('public_form.err_decide'));
 
   const object = () =>
     run(async () => {
       if (!session) return;
       await objectPublicForm(token, session, note.trim(), photo);
       setStage('objected');
-    }, 'تعذّر تسجيلُ الاعتراض');
+    }, t('public_form.err_object'));
 
   return (
     <div className="login-screen" style={{ alignItems: 'flex-start', overflowY: 'auto' }}>
       <div className="login-card" style={{ maxWidth: 720, width: '100%' }} data-testid="public-form-page">
-        {stage === 'loading' && <p className="hint">جارٍ فتحُ الرابط…</p>}
+        {stage === 'loading' && <p className="hint">{t('public_form.loading')}</p>}
 
-        {stage === 'closed' && <p className="error-text">انتهى هذا الرابط أو أُقفل. إن كان لديك نموذجٌ ينتظر توقيعك فاطلب رابطاً جديداً ممّن أرسله.</p>}
+        {stage === 'closed' && <p className="error-text">{t('public_form.closed')}</p>}
 
         {stage === 'login' && link && (
           <>
             <h2 style={{ marginTop: 0 }}>
-              {link.purpose === 'FINAL_COPY' ? 'نسختُك النهائية من النموذج' : link.purpose === 'SUBSTITUTE_CONSENT' ? 'طلبُ مستلمٍ بديلٍ عنك' : 'نموذجٌ ينتظر توقيعك'}
+              {link.purpose === 'FINAL_COPY'
+                ? t('public_form.heading_final_copy')
+                : link.purpose === 'SUBSTITUTE_CONSENT'
+                  ? t('public_form.heading_substitute')
+                  : t('public_form.heading_sign')}
             </h2>
-            <p className="hint">
-              {link.nafathAfterOtp ? 'ادخل بالرمز الذي يصل جوالك أوّلاً، ثم بنفاذ، لترى النموذج.' : 'ادخل أوّلاً لترى النموذج.'}
-            </p>
-            {link.nafathAfterOtp && otpStep && <p className="hint">تحقّقنا من جوالك؛ بقي التحقّقُ عبر {link.identityProvider ?? 'نفاذ'}.</p>}
+            <p className="hint">{link.nafathAfterOtp ? t('public_form.enter_code_then_nafath') : t('public_form.enter_first')}</p>
+            {link.nafathAfterOtp && otpStep && <p className="hint">{t('public_form.mobile_verified', { provider })}</p>}
             {link.methods.otp && !otpStep && (
               <div style={{ marginBottom: 12 }}>
                 {!otp ? (
                   <button className="btn btn-primary" disabled={busy} onClick={sendCode}>
-                    أرسل رمزاً إلى جوالي
+                    {t('public_form.send_code')}
                   </button>
                 ) : (
                   <>
                     <p className="hint">
-                      أُرسل رمزٌ من ستّة أرقام إلى <span className="num">{otp.mobileMasked}</span>، صالحٌ خمس دقائق.
+                      {t('public_form.code_sent_to')} <span className="num">{otp.mobileMasked}</span>
+                      {t('public_form.code_valid')}
                     </p>
                     <div className="field">
-                      <label>الرمز</label>
-                      <input aria-label="الرمز" className="num" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+                      <label>{t('public_form.code')}</label>
+                      <input aria-label={t('public_form.code')} className="num" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-primary" disabled={busy || code.length !== 6} onClick={checkCode}>
-                        دخول
+                        {t('public_form.sign_in')}
                       </button>
                       <button className="btn btn-ghost" disabled={busy} onClick={sendCode}>
-                        رمزٌ جديد
+                        {t('public_form.new_code')}
                       </button>
                     </div>
                   </>
@@ -191,16 +201,17 @@ export function PublicFormPage() {
               <div>
                 {!nafathCode ? (
                   <button className={link.methods.otp && !otpStep ? 'btn btn-ghost' : 'btn btn-primary'} disabled={busy} onClick={startNafath}>
-                    التحقّق عبر {link.identityProvider ?? 'نفاذ'}
+                    {t('public_form.verify_via', { provider })}
                   </button>
                 ) : (
                   <p className="hint">
-                    افتح تطبيق {link.identityProvider ?? 'نفاذ'} واختر الرقم <strong className="num">{nafathCode}</strong>، وتنتقل الصفحةُ حين يكتمل التحقّق.
+                    {t('public_form.nafath_pick', { provider })} <strong className="num">{nafathCode}</strong>
+                    {t('public_form.nafath_wait')}
                   </p>
                 )}
               </div>
             )}
-            {!link.methods.otp && !link.methods.nafath && <p className="error-text">لا طريقةَ دخولٍ متاحة لهذا الرابط؛ راجِع من أرسله.</p>}
+            {!link.methods.otp && !link.methods.nafath && <p className="error-text">{t('public_form.no_method')}</p>}
           </>
         )}
 
@@ -210,12 +221,17 @@ export function PublicFormPage() {
               {view.templateName} <span className="hint">· {view.formTypeName}</span>
             </h2>
             <p className="hint">
-              تاريخُ النموذج <span className="num">{view.formDate}</span>
-              {view.revisionNo > 1 && <> · النسخة {view.revisionNo}</>}
+              {t('public_form.form_date')} <span className="num">{view.formDate}</span>
+              {view.revisionNo > 1 && (
+                <>
+                  {' '}
+                  {t('public_form.revision', { n: view.revisionNo })}
+                </>
+              )}
               {view.signDeadline && view.purpose === 'SIGN' && (
                 <>
                   {' '}
-                  · يُوقَّع قبل <span className="num">{dateTimeText(view.signDeadline)}</span>
+                  {t('public_form.sign_before')} <span className="num">{dateTimeText(view.signDeadline)}</span>
                 </>
               )}
             </p>
@@ -223,9 +239,9 @@ export function PublicFormPage() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>البند</th>
-                  <th>القيمة</th>
-                  <th>ملاحظة</th>
+                  <th>{t('public_form.col_item')}</th>
+                  <th>{t('public_form.col_value')}</th>
+                  <th>{t('public_form.col_note')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,14 +268,14 @@ export function PublicFormPage() {
             {view.purpose === 'FINAL_COPY' && view.seal && (
               <div className="card" data-testid="public-form-seal">
                 <p style={{ fontSize: 12.5 }}>
-                  رقمُ الختم <span className="num">{view.seal.no}</span> · وقتُ الختم <span className="num">{dateTimeText(view.seal.sealedAt)}</span>
+                  {t('public_form.seal_no')} <span className="num">{view.seal.no}</span> · {t('public_form.seal_time')} <span className="num">{dateTimeText(view.seal.sealedAt)}</span>
                 </p>
                 <p style={{ fontSize: 12.5 }}>
-                  البصمة <span className="num" style={{ wordBreak: 'break-all' }}>{view.seal.contentHash}</span>
+                  {t('public_form.fingerprint')} <span className="num" style={{ wordBreak: 'break-all' }}>{view.seal.contentHash}</span>
                 </p>
-                <p className={view.seal.valid ? 'hint' : 'error-text'}>{view.seal.valid ? 'التحقّق: النسخةُ مطابقةٌ لما خُتم.' : 'التحقّق: النسخةُ لا تطابق ما خُتم.'}</p>
+                <p className={view.seal.valid ? 'hint' : 'error-text'}>{view.seal.valid ? t('public_form.seal_valid') : t('public_form.seal_invalid')}</p>
                 <button className="btn btn-ghost" onClick={() => window.print()}>
-                  طباعة
+                  {t('public_form.print')}
                 </button>
               </div>
             )}
@@ -269,19 +285,19 @@ export function PublicFormPage() {
                 {view.substitute ? (
                   <>
                     <p>
-                      طُلب أن يستلم <strong>{view.substitute.name}</strong> (<span className="num">{view.substitute.mobileMasked}</span>) هذا النموذجَ نيابةً عنك ويوقّعه.
+                      {t('public_form.substitute_asked')} <strong>{view.substitute.name}</strong> (<span className="num">{view.substitute.mobileMasked}</span>) {t('public_form.substitute_on_behalf')}
                     </p>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-primary" disabled={busy} onClick={() => decide(true)}>
-                        أوافق
+                        {t('public_form.approve')}
                       </button>
                       <button className="btn btn-ghost" disabled={busy} onClick={() => decide(false)}>
-                        أرفض
+                        {t('public_form.reject')}
                       </button>
                     </div>
                   </>
                 ) : (
-                  <p className="hint">لا طلبَ ينتظر موافقتك الآن.</p>
+                  <p className="hint">{t('public_form.no_request')}</p>
                 )}
               </div>
             )}
@@ -289,15 +305,15 @@ export function PublicFormPage() {
             {view.purpose === 'SIGN' && !objecting && (
               <div style={{ marginTop: 12 }}>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> اطّلعتُ على النموذج وأقرّ بما فيه
+                  <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> {t('public_form.ack')}
                 </label>
                 <SignaturePad onChange={setDrawing} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button className="btn btn-primary" disabled={busy || !ack || !drawing} onClick={sign}>
-                    أقرّ وأوقّع
+                    {t('public_form.sign')}
                   </button>
                   <button className="btn btn-ghost" disabled={busy} onClick={() => setObjecting(true)}>
-                    لديّ اعتراض
+                    {t('public_form.have_objection')}
                   </button>
                 </div>
               </div>
@@ -305,19 +321,19 @@ export function PublicFormPage() {
             {view.purpose === 'SIGN' && objecting && (
               <div style={{ marginTop: 12 }}>
                 <div className="field">
-                  <label>ما اعتراضُك؟</label>
-                  <textarea aria-label="ما اعتراضُك؟" rows={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
+                  <label>{t('public_form.objection')}</label>
+                  <textarea aria-label={t('public_form.objection')} rows={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
                 </div>
                 <div className="field">
-                  <label>صورة (اختيارية)</label>
-                  <input aria-label="صورةُ الاعتراض" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+                  <label>{t('public_form.photo_optional')}</label>
+                  <input aria-label={t('public_form.objection_photo')} type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary" disabled={busy || !note.trim()} onClick={object}>
-                    إرسالُ الاعتراض
+                    {t('public_form.send_objection')}
                   </button>
                   <button className="btn btn-ghost" disabled={busy} onClick={() => setObjecting(false)}>
-                    رجوع
+                    {t('public_form.back')}
                   </button>
                 </div>
               </div>
@@ -327,27 +343,27 @@ export function PublicFormPage() {
 
         {stage === 'signed' && (
           <p className="hint" data-testid="public-form-done">
-            وُقّع النموذج وخُتم.{' '}
+            {t('public_form.signed')}{' '}
             {finalCopy === 'SENT'
-              ? 'وأُرسل رابطُ النسخة النهائية إلى جوال المستأجر المسجَّل.'
+              ? t('public_form.final_sent')
               : finalCopy === 'NONE'
-                ? 'ولا جوالَ صالحاً في بطاقة المستأجر لرابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'
-                : 'وتعذّر إرسالُ رابط النسخة النهائية؛ اطلبه ممّن أرسل النموذج.'}
+                ? t('public_form.final_no_mobile')
+                : t('public_form.final_failed')}
           </p>
         )}
         {stage === 'approved' && (
           <p className="hint" data-testid="public-form-done">
-            سُجّلت موافقتُك، ويصل البديلَ رابطُ التوقيع على جواله، وتصلك النسخةُ النهائية حين يوقّع.
+            {t('public_form.approved')}
           </p>
         )}
         {stage === 'rejected' && (
           <p className="hint" data-testid="public-form-done">
-            سُجّل رفضُك، ويبقى التوقيعُ لك برابطك.
+            {t('public_form.rejected')}
           </p>
         )}
         {stage === 'objected' && (
           <p className="hint" data-testid="public-form-done">
-            سُجّل اعتراضُك، ويصلك ردٌّ بنسخةٍ معدّلة قبل انقضاء المدّة.
+            {t('public_form.objected')}
           </p>
         )}
 
