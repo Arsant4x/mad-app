@@ -74,6 +74,12 @@ describe('commit messages and pull request titles', () => {
     assert.ok(messageProblems('chore: apply ق-1680').includes('decision reference'));
     assert.ok(messageProblems('docs(registry): record decisions for directive 289').includes('work method word'));
     assert.ok(messageProblems('fix(api): guard\n\nWritten with Claude').includes('work method word'));
+    assert.ok(messageProblems('chore: notes\n\nClaude.mdx is not the rules file').includes('work method word'));
+  });
+
+  it('reads the rules file name CLAUDE.md as a path, not the word', () => {
+    assert.deepEqual(messageProblems('chore: merge main into ci/x\n\n# Conflicts:\n#\tCLAUDE.md'), []);
+    assert.deepEqual(lineProblems("const RULES = 'CLAUDE.md';", 'apps/api/src/x.ts'), []);
   });
 });
 
