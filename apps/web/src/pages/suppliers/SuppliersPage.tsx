@@ -194,7 +194,7 @@ export function SuppliersPage() {
             {supplierRows.map((s) => (
               <tr key={s.id}>
                 <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(s)}>
-                  {s.name} 👁{s.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('suppliers.page.archived')}</span>}
+                  {s.name} {t('suppliers.page.view_icon')}{s.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('suppliers.page.archived')}</span>}
                 </td>
                 <td className="num">{s.vatNumber || '—'}</td>
                 <td className="num">{s.phone || '—'}</td>

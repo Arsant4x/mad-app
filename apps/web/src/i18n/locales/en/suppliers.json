@@ -223,6 +223,7 @@
     "delete_supplier_body": "Delete supplier \"{{name}}\"? This cannot be undone.",
     "delete_purchase_title": "Cancel purchase invoice",
     "delete_purchase_body": "Cancel invoice {{no}}? Its entry is reversed with an entry dated today and whatever was received returns to stock, and the row stays in the records as cancelled. Goods already consumed are not reversed; that needs a note from the supplier.",
-    "delete_purchase_confirm": "Cancel invoice"
+    "delete_purchase_confirm": "Cancel invoice",
+    "view_icon": "👁"
   }
 }
