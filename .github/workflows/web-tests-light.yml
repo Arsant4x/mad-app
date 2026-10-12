@@ -41,6 +41,8 @@ on:
       #    و`spec-tags` يقرأ `SPEC.md`، و`moved-paths` يقرأ `monorepo-moves.json`.
       #    فطلبٌ وثائقيٌّ محض **لم يكن يشغّل حزمة الخادم أصلاً** — فمرّ تغييرٌ
       #    يكسر حارساً، **وظهر `main` أحمرَ عند أول فرعٍ يمسّ `apps/api`**.
+      #    Note: registry-numbering and rule-extension-attached moved to
+      #    ops/process-gates and run in process-gates.yml.
       - 'docs/**'
       - 'SPEC.md'
       - 'CLAUDE.md'
