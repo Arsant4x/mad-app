@@ -1,0 +1,8 @@
+{
+  "menu": "Menu",
+  "access_denied": {
+    "title": "Access denied",
+    "subtitle": "This screen is not available to your account right now",
+    "body": "You do not have access to this screen under the current permission template. Contact your account administrator to grant you the access you need."
+  }
+}

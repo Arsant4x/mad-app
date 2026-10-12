@@ -1,0 +1,41 @@
+{
+  "title": "Message templates",
+  "subtitle": "Ready-made texts for contacting tenants, customers and employees",
+  "new_button": "+ New template",
+  "search_placeholder": "Search any template detail...",
+  "show_archived": "Show archived",
+  "all_audiences": "All audiences",
+  "col": {
+    "audience": "Audience",
+    "title": "Title",
+    "text": "Text"
+  },
+  "empty": "No matching templates",
+  "archived": "Archived",
+  "menu": {
+    "edit": "✎ Edit",
+    "unarchive": "📂 Unarchive",
+    "archive": "🗄 Archive",
+    "delete": "🗑 Delete"
+  },
+  "delete_title": "Delete template",
+  "delete_body": "Delete the template \"{{title}}\"?",
+  "delete": "Delete",
+  "audience": {
+    "TENANT": "Tenants",
+    "CUSTOMER": "Customers",
+    "EMPLOYEE": "Employees"
+  },
+  "modal": {
+    "edit_title": "Edit template",
+    "new_title": "New message template",
+    "audience": "Target audience",
+    "title": "Template title",
+    "title_placeholder": "Example: payment due reminder",
+    "text": "Message text",
+    "text_placeholder": "Ready-made message text...",
+    "cancel": "Cancel",
+    "save_edit": "Save changes",
+    "add": "Add template"
+  }
+}
