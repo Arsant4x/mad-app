@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBanks, type Bank } from '../../api/banks';
 import { listBranches, type Branch } from '../../api/branches';
 import type { Purchase } from '../../api/purchases';
@@ -8,20 +9,23 @@ import { dfmt, fmt, today } from '../../lib/format';
 import { num0, round2 } from '../../lib/money';
 
 /**
- * سندُ صرفٍ لمورّد وتوزيعُه على فواتير الشراء المفتوحة (`ق-٨٧١`) — مرآةُ نافذة سند القبض.
+ * A payment voucher to a supplier and its allocation to open purchase invoices,
+ * mirroring the receipt voucher modal.
  *
- * يُفتح من فاتورةٍ بعينها: المورّدُ مثبَّت، والفاتورةُ مخصَّصةٌ ابتداءً بمتبقّيها — وما عداها من
- * فواتيره المفتوحة معروضٌ للتوزيع. المتبقّي لكل فاتورة **من الخادم** (من التخصيصات)، والتحقّقُ
- * النهائي على الخادم دائماً. **ولا درج هنا** — الصندوقُ أو البنك (`ق-٨٧٢`).
+ * Opened from a specific invoice: the supplier is fixed and that invoice starts
+ * allocated with its remainder, while the supplier's other open invoices are listed
+ * for allocation. Each remainder comes from the server (from allocations), and the
+ * final check is always on the server. No cash drawer here: a cash box or a bank.
  */
 export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase: Purchase; onCancel: () => void; onSaved: () => Promise<void> }) {
+  const { t } = useTranslation();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [open, setOpen] = useState<OpenPurchase[]>([]);
 
   const [branchId, setBranchId] = useState(purchase.branchId ?? '');
   const [date, setDate] = useState(today());
-  // ② المتبقّي يصل نصّاً بخانتين (`ق-١٢٣٥`) — يُقرأ رقماً مرّةً ثم يُملأ به الحقلان.
+  // The remainder arrives as a two-decimal string; read it as a number once, then fill both fields.
   const [amount, setAmount] = useState(String(round2(num0(purchase.remaining))));
   const [method, setMethod] = useState<SupplierPaymentInputMethod>('CASH');
   const [bankId, setBankId] = useState('');
@@ -30,7 +34,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   const [alloc, setAlloc] = useState<Record<string, string>>({ [purchase.id]: String(round2(num0(purchase.remaining))) });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ⚖️ مفتاحُ هذه النافذة (توجيه ٢٧٦ · ق-١٦٠٩/ب) — مرآةُ سند القبض.
+  // One idempotency key per open modal, as for receipt vouchers.
   const [requestKey] = useState(newRequestKey);
 
   useEffect(() => {
@@ -43,7 +47,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   const paymentAmount = parseFloat(amount) || 0;
   const unallocated = round2(paymentAmount - allocatedSum);
 
-  /** توزيعٌ تلقائي: الأقدم فالأقدم حتى ينفد المبلغ. */
+  /** Automatic allocation: oldest first until the amount runs out. */
   function autoAllocate() {
     let left = paymentAmount;
     const next: Record<string, string> = {};
@@ -61,15 +65,15 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
   async function handleSave() {
     setError(null);
     if (paymentAmount <= 0) {
-      setError('مبلغٌ موجب مطلوب.');
+      setError(t('suppliers.payment.amount_required'));
       return;
     }
     if (method === 'BANK' && !bankId) {
-      setError('اختر الحساب البنكي للتحويل.');
+      setError(t('suppliers.payment.bank_required'));
       return;
     }
     if (allocatedSum - paymentAmount > 0.005) {
-      setError('مجموع التخصيصات يتجاوز مبلغ السند.');
+      setError(t('suppliers.payment.over_allocated'));
       return;
     }
     setSaving(true);
@@ -90,7 +94,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
       await onSaved();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? 'تعذّر تسجيل السند'));
+      setError(Array.isArray(d?.message) ? d.message.join(' — ') : (d?.message ?? t('suppliers.payment.failed')));
     } finally {
       setSaving(false);
     }
@@ -100,7 +104,7 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
         <div className="modal-head">
-          <div className="modal-title">سند صرف — {purchase.supplier.name}</div>
+          <div className="modal-title">{t('suppliers.payment.title', { supplier: purchase.supplier.name })}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
@@ -108,27 +112,27 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
 
         <div className="two-col">
           <div className="field">
-            <label>التاريخ</label>
+            <label>{t('suppliers.payment.date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>المبلغ</label>
+            <label>{t('suppliers.payment.amount')}</label>
             <input className="num" type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
           </div>
         </div>
 
         <div className="two-col">
           <div className="field">
-            <label>طريقة السداد</label>
+            <label>{t('suppliers.payment.method')}</label>
             <select value={method} onChange={(e) => setMethod(e.target.value as SupplierPaymentInputMethod)}>
-              <option value="CASH">نقداً</option>
-              <option value="BANK">تحويل بنكي</option>
+              <option value="CASH">{t('suppliers.payment.cash')}</option>
+              <option value="BANK">{t('suppliers.payment.bank')}</option>
             </select>
           </div>
           <div className="field">
-            <label>{method === 'BANK' ? 'الحساب البنكي' : 'الصندوق المسدِّد (اختياري)'}</label>
+            <label>{method === 'BANK' ? t('suppliers.payment.bank_account') : t('suppliers.payment.cash_box')}</label>
             <select value={bankId} onChange={(e) => setBankId(e.target.value)}>
-              <option value="">— بلا تحديد —</option>
+              <option value="">{t('suppliers.payment.none')}</option>
               {banks.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -140,9 +144,9 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
 
         <div className="two-col">
           <div className="field">
-            <label>الفرع</label>
+            <label>{t('suppliers.payment.branch')}</label>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">— بلا فرع —</option>
+              <option value="">{t('suppliers.payment.no_branch')}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -151,37 +155,37 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
             </select>
           </div>
           <div className="field">
-            <label>المرجع (رقم الشيك/الحوالة)</label>
+            <label>{t('suppliers.payment.reference')}</label>
             <input value={reference} onChange={(e) => setReference(e.target.value)} />
           </div>
         </div>
 
         <div className="field">
-          <label>ملاحظات</label>
+          <label>{t('suppliers.payment.notes')}</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <b>توزيع السند على فواتير المورّد المفتوحة</b>
-          <button className="btn btn-ghost btn-sm" style={{ marginRight: 'auto' }} onClick={autoAllocate} disabled={paymentAmount <= 0}>
-            توزيع تلقائي (الأقدم أولاً)
+          <b>{t('suppliers.payment.allocate_title')}</b>
+          <button className="btn btn-ghost btn-sm" style={{ marginInlineStart: 'auto' }} onClick={autoAllocate} disabled={paymentAmount <= 0}>
+            {t('suppliers.payment.auto_allocate')}
           </button>
         </div>
         <table>
           <thead>
             <tr>
-              <th>الفاتورة</th>
-              <th>التاريخ</th>
-              <th>الإجمالي</th>
-              <th>المتبقي</th>
-              <th>المخصَّص</th>
+              <th>{t('suppliers.payment.col_invoice')}</th>
+              <th>{t('suppliers.payment.col_date')}</th>
+              <th>{t('suppliers.payment.col_total')}</th>
+              <th>{t('suppliers.payment.col_remaining')}</th>
+              <th>{t('suppliers.payment.col_allocated')}</th>
             </tr>
           </thead>
           <tbody>
             {open.length === 0 && (
               <tr>
                 <td colSpan={5}>
-                  <div className="empty-state">لا فواتير مفتوحة لهذا المورّد — يمكن تسجيل السند على الحساب وتوزيعه لاحقاً</div>
+                  <div className="empty-state">{t('suppliers.payment.empty')}</div>
                 </td>
               </tr>
             )}
@@ -207,7 +211,8 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
           </tbody>
         </table>
         <p className="hint">
-          المخصَّص: <b className="num">{fmt(allocatedSum)}</b> · غير المخصَّص (دفعة على الحساب):{' '}
+          {t('suppliers.payment.allocated')} <b className="num">{fmt(allocatedSum)}</b>
+          {t('suppliers.payment.unallocated')}{' '}
           <b className="num" style={{ color: unallocated < 0 ? 'var(--rose)' : undefined }}>
             {fmt(unallocated)}
           </b>
@@ -216,10 +221,10 @@ export function SupplierPaymentModal({ purchase, onCancel, onSaved }: { purchase
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('suppliers.common.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            تسجيل السند
+            {t('suppliers.payment.submit')}
           </button>
         </div>
       </div>

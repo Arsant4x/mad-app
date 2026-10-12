@@ -76,6 +76,26 @@ describe('نموذجُ العقد — منتقي العميل', () => {
     await waitFor(() => expect((screen.getByRole('listbox') as HTMLSelectElement).value).toBe('c9'));
   });
 
+  it('asks "is it the same one?" in English too, when the server answers in English', async () => {
+    const { setLanguage } = await import('../../i18n');
+    setLanguage('en');
+    try {
+      const onCreateCustomer = vi.fn().mockRejectedValueOnce({
+        response: { status: 409, data: { message: 'A customer with this name already exists — is it the same one? Pick it from the list, or confirm creation if this is a different person with the same name' } },
+      });
+      render(<ContractModal units={[unit]} properties={[property]} customers={[customer('c1', 'Khalid')]} onCancel={() => {}} onSave={vi.fn()} onCreateCustomer={onCreateCustomer} />);
+      fireEvent.click(screen.getByText('+ New customer'));
+      fireEvent.change(screen.getByPlaceholderText('Tenant name'), { target: { value: 'Khalid' } });
+      fireEvent.change(screen.getByLabelText('Tenant type'), { target: { value: 'NATURAL' } });
+      fireEvent.click(screen.getByText('Save customer and select'));
+      // The confirm button exists only in the same-name step, not when the message is shown as a plain error.
+      await waitFor(() => expect(screen.getByText(/Yes, a different person with the same name/)).toBeTruthy());
+      expect(onCreateCustomer).toHaveBeenCalledTimes(1);
+    } finally {
+      setLanguage('ar');
+    }
+  });
+
   it('④ ⚖️ عقارُ تشغيل: المؤجّرُ يُعلَن ولا يُفترض، والمالكُ مؤجّراً يُرسل اسمَه ورقمَه (السؤال ٥٧٧)', async () => {
     const managedProperty = { id: 'p1', name: 'عقار التشغيل', ownership: 'managed', opRate: '10.00' } as unknown as Property;
     const onSave = vi.fn().mockResolvedValue(undefined);

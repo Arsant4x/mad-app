@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SECTOR_LABELS } from '../../api/activities';
 import {
   copyFormTemplate,
@@ -24,13 +25,16 @@ import { sortTemplateRows, TEMPLATE_STATUS_META } from './templateStatus';
 type Pending = { kind: 'publish' | 'delete'; row: FormTemplateRow };
 
 /**
- * ⚖️ **قوالبُ المنشأة** (الموجة ١ب · `ق-١٦٣٨`، والنموذجُ المرئيّ المُقرّ «قوالبُ المنشأة»): الفاعلُ **مالكُ المنشأة** في شاشاتها
- * (`CLAUDE.md §3.5`) — ينسخ من القوالب العامّة ويحرّر مسوّدةَ نسخته وينشرها، والمنشورُ لا يُعدَّل بل يُبنى بعده إصدار.
- * ⚖️ **ويعدّلها المالكُ ومن يمنحه شاشةَ «النماذج»** (`ق-١٦٤١`/٢)، كلُّ زرٍّ بفعله كما يحكمه الخادم: النسخُ وإصدارٌ جديد «إضافة»،
- * والتحريرُ «تعديل»، والنشرُ «مراجعة»، وحذفُ المسوّدة «حذف»؛ ومن لا يملكها يرى ولا يحرّر. ومعها «أحدثُ من أصل نسختك»:
- * إصدارُ المنصّة الأحدثُ من الذي نُسخت منه.
+ * Company templates. The actor is the company owner in the company screens: they
+ * copy from the public templates, edit their copy's draft and publish it; a
+ * published version is never edited, a new version is built after it. The owner
+ * and anyone granted the Forms screen edit them, each button by its action as the
+ * server rules: copy and new version are "add", editing is "edit", publishing is
+ * "review" and deleting a draft is "delete"; others see without editing. "Newer
+ * than your copy's source" marks a platform version newer than the one copied.
  */
 export function CompanyTemplatesTab() {
+  const { t } = useTranslation();
   const { can } = usePermissions();
   const canAdd = can('forms', 'add');
   const canEdit = can('forms', 'edit');
@@ -48,15 +52,15 @@ export function CompanyTemplatesTab() {
     const [mine, pub] = await Promise.all([listCompanyFormTemplates(), formTemplateCatalog()]);
     setRows(sortTemplateRows(mine));
     setCatalog(pub);
-    // أصلُ كلِّ نسخة: اسمُه وإصدارُه، لتُقابَل بآخر إصدارٍ للمنصّة.
+    // Each copy's source name and version, to compare with the platform's latest version.
     const ids = [...new Set(mine.map((r) => r.sourceTemplateId).filter((x): x is string => !!x))];
-    const found = await Promise.all(ids.map((id) => getCompanyFormTemplate(id).then((t) => [id, { name: t.name, version: t.version }] as const).catch(() => null)));
+    const found = await Promise.all(ids.map((id) => getCompanyFormTemplate(id).then((tpl) => [id, { name: tpl.name, version: tpl.version }] as const).catch(() => null)));
     setSources(new Map(found.filter((x): x is readonly [string, { name: string; version: number }] => x !== null)));
   }
 
   useEffect(() => {
     reload()
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل القوالب')))
+      .catch((e) => setError(apiErrorMessage(e, t('forms.templates.load_failed'))))
       .finally(() => setLoading(false));
   }, []);
 
@@ -67,7 +71,7 @@ export function CompanyTemplatesTab() {
     try {
       setEditing({ template: await getCompanyFormTemplate(row.id), readOnly });
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر فتح القالب'));
+      setError(apiErrorMessage(e, t('forms.templates.open_failed')));
     }
   }
 
@@ -78,7 +82,7 @@ export function CompanyTemplatesTab() {
       await reload();
       setEditing({ template: created, readOnly: false });
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر نسخ القالب'));
+      setError(apiErrorMessage(e, t('forms.templates.copy_failed')));
     }
   }
 
@@ -89,7 +93,7 @@ export function CompanyTemplatesTab() {
       await reload();
       setEditing({ template: draft, readOnly: false });
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر إنشاء إصدارٍ جديد'));
+      setError(apiErrorMessage(e, t('forms.templates.new_version_failed')));
     }
   }
 
@@ -103,7 +107,7 @@ export function CompanyTemplatesTab() {
       await reload();
     } catch (e) {
       setPending(null);
-      setError(apiErrorMessage(e, pending.kind === 'publish' ? 'تعذّر النشر' : 'تعذّر الحذف'));
+      setError(apiErrorMessage(e, pending.kind === 'publish' ? t('forms.templates.publish_failed') : t('forms.templates.delete_failed')));
     }
   }
 
@@ -115,18 +119,18 @@ export function CompanyTemplatesTab() {
 
       <div className="card" style={{ padding: 0 }}>
         <div className="card-title" style={{ padding: '10px 12px' }}>
-          نسخُ المنشأة
+          {t('forms.templates.company_title')}
         </div>
         <table>
           <thead>
             <tr>
-              <th>القالب</th>
-              <th>النوع</th>
-              <th>الإصدار</th>
-              <th>الحالة</th>
-              <th>البنود</th>
-              <th>منسوخةٌ من</th>
-              <th>آخرُ إصدارٍ للمنصّة</th>
+              <th>{t('forms.templates.col_template')}</th>
+              <th>{t('forms.templates.col_type')}</th>
+              <th>{t('forms.templates.col_version')}</th>
+              <th>{t('forms.templates.col_status')}</th>
+              <th>{t('forms.templates.col_items')}</th>
+              <th>{t('forms.templates.col_copied_from')}</th>
+              <th>{t('forms.templates.col_platform_latest')}</th>
               <th></th>
             </tr>
           </thead>
@@ -134,7 +138,7 @@ export function CompanyTemplatesTab() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={8}>
-                  <div className="empty-state">{canAdd ? 'لا قوالبَ لمنشأتك بعد. انسخ قالباً من القوالب العامّة أدناه.' : 'لا قوالبَ لمنشأتك بعد.'}</div>
+                  <div className="empty-state">{canAdd ? t('forms.templates.empty_can_add') : t('forms.templates.empty')}</div>
                 </td>
               </tr>
             )}
@@ -145,13 +149,13 @@ export function CompanyTemplatesTab() {
               const actions =
                 r.status === 'DRAFT'
                   ? [
-                      canEdit ? { label: '✎ تحرير', onClick: () => open(r, false) } : { label: 'عرض', onClick: () => open(r, true) },
-                      ...(canPublish ? [{ label: 'نشر', onClick: () => setPending({ kind: 'publish', row: r }) }] : []),
-                      ...(canDelete ? [{ label: 'حذفُ المسوّدة', onClick: () => setPending({ kind: 'delete', row: r }), danger: true }] : []),
+                      canEdit ? { label: t('forms.templates.action_edit'), onClick: () => open(r, false) } : { label: t('forms.templates.action_view'), onClick: () => open(r, true) },
+                      ...(canPublish ? [{ label: t('forms.templates.action_publish'), onClick: () => setPending({ kind: 'publish', row: r }) }] : []),
+                      ...(canDelete ? [{ label: t('forms.templates.action_delete_draft'), onClick: () => setPending({ kind: 'delete', row: r }), danger: true }] : []),
                     ]
                   : [
-                      { label: 'عرض', onClick: () => open(r, true) },
-                      ...(canAdd && r.status === 'PUBLISHED' ? [{ label: 'إصدارٌ جديد', onClick: () => newVersion(r) }] : []),
+                      { label: t('forms.templates.action_view'), onClick: () => open(r, true) },
+                      ...(canAdd && r.status === 'PUBLISHED' ? [{ label: t('forms.templates.action_new_version'), onClick: () => newVersion(r) }] : []),
                     ];
               return (
                 <tr key={r.id} data-testid="company-template-row">
@@ -162,10 +166,10 @@ export function CompanyTemplatesTab() {
                     <span className={`badge ${meta.badgeClass}`}>{meta.label}</span>
                   </td>
                   <td className="num">{r.itemCount}</td>
-                  <td>{source ? `${source.name} · إصدار ${source.version}` : ''}</td>
+                  <td>{source ? t('forms.templates.source', { name: source.name, version: source.version }) : ''}</td>
                   <td>
                     {r.sourceLatestVersion !== null && <span className="num">{r.sourceLatestVersion}</span>}
-                    {newer && <div className="hint">أحدثُ من أصل نسختك</div>}
+                    {newer && <div className="hint">{t('forms.templates.newer_than_source')}</div>}
                   </td>
                   <td>
                     <RowMenu actions={actions} />
@@ -180,16 +184,16 @@ export function CompanyTemplatesTab() {
       {canAdd && (
         <div className="card" style={{ padding: 0, marginTop: 14 }}>
           <div className="card-title" style={{ padding: '10px 12px' }}>
-            القوالبُ العامّةُ الجاهزة
+            {t('forms.templates.public_title')}
           </div>
           <table>
             <thead>
               <tr>
-                <th>القالب</th>
-                <th>النوع</th>
-                <th>النشاط</th>
-                <th>الإصدار</th>
-                <th>البنود</th>
+                <th>{t('forms.templates.col_template')}</th>
+                <th>{t('forms.templates.col_type')}</th>
+                <th>{t('forms.templates.col_sector')}</th>
+                <th>{t('forms.templates.col_version')}</th>
+                <th>{t('forms.templates.col_items')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -197,7 +201,7 @@ export function CompanyTemplatesTab() {
               {catalog.length === 0 && (
                 <tr>
                   <td colSpan={6}>
-                    <div className="empty-state">لا قوالبَ عامّةً منشورة بعد.</div>
+                    <div className="empty-state">{t('forms.templates.public_empty')}</div>
                   </td>
                 </tr>
               )}
@@ -205,12 +209,12 @@ export function CompanyTemplatesTab() {
                 <tr key={c.id} data-testid="catalog-row">
                   <td>{c.name}</td>
                   <td>{c.formType.name}</td>
-                  <td>{c.formType.sector ? SECTOR_LABELS[c.formType.sector as keyof typeof SECTOR_LABELS] ?? c.formType.sector : 'كلُّ الأنشطة'}</td>
+                  <td>{c.formType.sector ? SECTOR_LABELS[c.formType.sector as keyof typeof SECTOR_LABELS] ?? c.formType.sector : t('forms.templates.all_sectors')}</td>
                   <td className="num">{c.version}</td>
                   <td className="num">{c.itemCount}</td>
                   <td>
                     <button className="btn btn-ghost btn-sm" onClick={() => copy(c)}>
-                      {copiedFrom.has(c.id) ? 'نسخةٌ أخرى لمنشأتي' : 'نسخُ قالبٍ لمنشأتي'}
+                      {copiedFrom.has(c.id) ? t('forms.templates.copy_again') : t('forms.templates.copy')}
                     </button>
                   </td>
                 </tr>
@@ -222,7 +226,11 @@ export function CompanyTemplatesTab() {
 
       {editing && (
         <TemplateEditorModal
-          title={editing.readOnly ? `${editing.template.name} · إصدار ${editing.template.version}` : `تحريرُ ${editing.template.name} · إصدار ${editing.template.version}`}
+          title={
+            editing.readOnly
+              ? t('forms.templates.editor_title_view', { name: editing.template.name, version: editing.template.version })
+              : t('forms.templates.editor_title_edit', { name: editing.template.name, version: editing.template.version })
+          }
           initial={{ name: editing.template.name, description: editing.template.description ?? '', items: editing.template.items.map(itemDraftOf) }}
           readOnly={editing.readOnly}
           onCancel={() => setEditing(null)}
@@ -240,13 +248,13 @@ export function CompanyTemplatesTab() {
 
       {pending && (
         <ConfirmModal
-          title={pending.kind === 'publish' ? 'نشرُ الإصدار' : 'حذفُ المسوّدة'}
+          title={pending.kind === 'publish' ? t('forms.templates.confirm_publish_title') : t('forms.templates.confirm_delete_title')}
           body={
             pending.kind === 'publish'
-              ? `يُنشر «${pending.row.name}» إصدار ${pending.row.version} فيُعبّأ عليه، ويُؤرشف ما قبله. والمنشورُ لا يُعدَّل بعد ذلك بل يُبنى بعده إصدارٌ جديد.`
-              : `تُحذف مسوّدةُ «${pending.row.name}» إصدار ${pending.row.version}.`
+              ? t('forms.templates.confirm_publish_body', { name: pending.row.name, version: pending.row.version })
+              : t('forms.templates.confirm_delete_body', { name: pending.row.name, version: pending.row.version })
           }
-          confirmLabel={pending.kind === 'publish' ? 'نشر' : 'حذف'}
+          confirmLabel={pending.kind === 'publish' ? t('forms.templates.action_publish') : t('forms.common.delete')}
           onCancel={() => setPending(null)}
           onConfirm={confirmPending}
         />

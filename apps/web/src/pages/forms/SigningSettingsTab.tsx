@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getFormSigningSettings, updateFormSigningSettings, type FormSigningSettings } from '../../api/forms';
 import { useAuth } from '../../auth/AuthContext';
 import { apiErrorMessage } from '../../lib/apiError';
 
 /**
- * ⚖️ **إعدادُ التوقيع** (توجيه ٢٨٧ ② و④ · النموذجُ المرئيُّ المُقرّ، الشاشة ٢ «قوالبُ المنشأة وإعدادُ التوقيع»).
+ * Signing settings.
  *
- * **الفاعلُ مالكُ المنشأة** (`CLAUDE.md §3.5`: «الحدُّ يضعه التاجر، والضابطُ مالكُ المنشأة»)، وغيرُه يرى ولا يحرّر — والخادمُ يردّ الكتابةَ
- * لغيره (`403`). **المدّةُ لكلِّ نوعٍ** من أنواع قوالب المنشأة، والافتراضُ سبعةُ أيّام (`ق-١٦٣٣` ⑬)، والتذكيرُ في منتصفها وقبل نهايتها بيوم.
- * **وحدُّ نفاذ** بقيمة العقد كلِّها بعملة المنشأة (`ق-١٦٣٥` ①): فوقه لا يوقّع المستأجرُ إلا بنفاذ، وتحته نفاذٌ خيارٌ له، والفارغُ لا يشترط.
+ * The actor is the company owner; others see but do not edit, and the server
+ * rejects their writes (403). A signing period per company template type
+ * (default seven days), with reminders at its midpoint and one day before it ends.
+ * The Nafath threshold applies to the whole contract value in the company
+ * currency: above it the tenant signs only through Nafath, below it Nafath is
+ * optional, and empty requires nothing.
  */
 export function SigningSettingsTab() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const isOwner = user?.actorType === 'COMPANY';
   const [settings, setSettings] = useState<FormSigningSettings | null>(null);
@@ -23,13 +28,13 @@ export function SigningSettingsTab() {
   function adopt(s: FormSigningSettings) {
     setSettings(s);
     setThreshold(s.nafathThreshold === null ? '' : String(Number(s.nafathThreshold)));
-    setPeriods(Object.fromEntries(s.types.map((t) => [t.formTypeId, String(t.signPeriodDays)])));
+    setPeriods(Object.fromEntries(s.types.map((x) => [x.formTypeId, String(x.signPeriodDays)])));
   }
 
   useEffect(() => {
     getFormSigningSettings()
       .then(adopt)
-      .catch((e) => setError(apiErrorMessage(e, 'تعذّر تحميل إعداد التوقيع')));
+      .catch((e) => setError(apiErrorMessage(e, t('forms.signing_settings.load_failed'))));
   }, []);
 
   async function save() {
@@ -39,16 +44,16 @@ export function SigningSettingsTab() {
     setSaved(false);
     try {
       const value = threshold.trim();
-      const changed = settings.types.filter((t) => periods[t.formTypeId] !== String(t.signPeriodDays));
+      const changed = settings.types.filter((x) => periods[x.formTypeId] !== String(x.signPeriodDays));
       adopt(
         await updateFormSigningSettings({
           nafathThreshold: value === '' ? null : Number(value),
-          periods: changed.map((t) => ({ formTypeId: t.formTypeId, signPeriodDays: Number(periods[t.formTypeId]) })),
+          periods: changed.map((x) => ({ formTypeId: x.formTypeId, signPeriodDays: Number(periods[x.formTypeId]) })),
         }),
       );
       setSaved(true);
     } catch (e) {
-      setError(apiErrorMessage(e, 'تعذّر حفظ إعداد التوقيع'));
+      setError(apiErrorMessage(e, t('forms.signing_settings.save_failed')));
     } finally {
       setBusy(false);
     }
@@ -58,35 +63,32 @@ export function SigningSettingsTab() {
 
   return (
     <div className="card" data-testid="signing-settings">
-      <div className="card-title">إعدادُ التوقيع للمنشأة</div>
-      <p className="hint">
-        الموظّفُ يعبّئ النموذجَ ويوقّعه، ثم يصل رابطُه للمستأجر. ومدّةُ التوقيع تبدأ عند الإرسال، ويُذكَّر المستأجرُ في منتصفها وقبل نهايتها بيوم، وانقضاؤها
-        بلا توقيعٍ لا يُعدّ موافقة.
-      </p>
+      <div className="card-title">{t('forms.signing_settings.title')}</div>
+      <p className="hint">{t('forms.signing_settings.intro')}</p>
 
       {error && <p className="error-text">{error}</p>}
-      {saved && <p className="hint">حُفظ إعدادُ التوقيع</p>}
+      {saved && <p className="hint">{t('forms.signing_settings.saved')}</p>}
 
       <table>
         <thead>
           <tr>
-            <th>نوعُ النموذج</th>
-            <th>مدّةُ التوقيع (أيّام)</th>
+            <th>{t('forms.signing_settings.col_type')}</th>
+            <th>{t('forms.signing_settings.col_period')}</th>
           </tr>
         </thead>
         <tbody>
           {settings.types.length === 0 && (
             <tr>
               <td colSpan={2}>
-                <div className="empty-state">لا قوالبَ للمنشأة بعد؛ انسخ قالباً من «قوالب المنشأة» لتضبط مدّتَه</div>
+                <div className="empty-state">{t('forms.signing_settings.empty')}</div>
               </td>
             </tr>
           )}
-          {settings.types.map((t) => (
-            <tr key={t.formTypeId}>
+          {settings.types.map((x) => (
+            <tr key={x.formTypeId}>
               <td>
-                {t.name}
-                {t.isDefault && <div className="hint">الافتراض</div>}
+                {x.name}
+                {x.isDefault && <div className="hint">{t('forms.signing_settings.default')}</div>}
               </td>
               <td>
                 <input
@@ -94,10 +96,10 @@ export function SigningSettingsTab() {
                   min={1}
                   step={1}
                   className="num"
-                  aria-label={`مدّةُ التوقيع: ${t.name}`}
-                  value={periods[t.formTypeId] ?? ''}
+                  aria-label={t('forms.signing_settings.period_aria', { name: x.name })}
+                  value={periods[x.formTypeId] ?? ''}
                   disabled={!isOwner || busy}
-                  onChange={(e) => setPeriods((p) => ({ ...p, [t.formTypeId]: e.target.value }))}
+                  onChange={(e) => setPeriods((p) => ({ ...p, [x.formTypeId]: e.target.value }))}
                 />
               </td>
             </tr>
@@ -106,28 +108,28 @@ export function SigningSettingsTab() {
       </table>
 
       <div className="field" style={{ marginTop: 12 }}>
-        <label htmlFor="nafath-threshold">حدُّ العقد الذي يُشترط فيه نفاذ ({settings.currency})</label>
+        <label htmlFor="nafath-threshold">{t('forms.signing_settings.threshold_label', { currency: settings.currency })}</label>
         <input
           id="nafath-threshold"
           type="number"
           min={0}
           step="0.01"
           className="num"
-          aria-label="حدُّ نفاذ"
-          placeholder="فارغٌ = لا يُشترط"
+          aria-label={t('forms.signing_settings.threshold_aria')}
+          placeholder={t('forms.signing_settings.threshold_placeholder')}
           value={threshold}
           disabled={!isOwner || busy}
           onChange={(e) => setThreshold(e.target.value)}
         />
-        <div className="hint">عقدٌ قيمتُه كلُّها فوق هذا الحدّ لا يوقّعه المستأجرُ إلا بعد التحقّق من هويّته عبر نفاذ، وتحته نفاذٌ خيارٌ له.</div>
+        <div className="hint">{t('forms.signing_settings.threshold_hint')}</div>
       </div>
 
       {isOwner ? (
         <button className="btn btn-primary" onClick={save} disabled={busy}>
-          حفظ
+          {t('forms.signing_settings.save')}
         </button>
       ) : (
-        <p className="hint">يضبط هذا الإعدادَ مالكُ المنشأة.</p>
+        <p className="hint">{t('forms.signing_settings.owner_only')}</p>
       )}
     </div>
   );
