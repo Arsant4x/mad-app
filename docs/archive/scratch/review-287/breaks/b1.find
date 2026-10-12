@@ -1,1 +1,0 @@
-        codeHash: otpCodeHash(input.companyId, id, code),

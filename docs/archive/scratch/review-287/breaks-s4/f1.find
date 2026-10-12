@@ -1,1 +1,0 @@
-      else if (!sent.has('REMINDER_MID') && !sent.has('REMINDER_LAST') && now.getTime() >= mid) kind = 'REMINDER_MID';
