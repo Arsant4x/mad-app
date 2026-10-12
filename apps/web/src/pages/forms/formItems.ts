@@ -1,7 +1,8 @@
 import type { FormInstanceItem, FormItemInput, FormItemType, FormTemplateItem, FormValueInput } from '../../api/forms';
+import i18n from '../../i18n';
 import { dfmt, toLocalISODate } from '../../lib/format';
 
-/** العقدُ كما يُعرض في رأس السجلّ ومطبوعه. */
+/** The contract as shown in the record header and its printout. */
 export interface FormContractRef {
   id: string;
   no: string;
@@ -10,47 +11,49 @@ export interface FormContractRef {
   propertyName: string;
 }
 
-/** وقتُ الختم بساعة الجهاز: يومٌ وساعةٌ ودقيقة. */
+/** Seal time on the device clock: day, hour and minute. */
 export function dateTimeText(iso: string): string {
   const d = new Date(iso);
   return `${dfmt(toLocalISODate(d))} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** قرارُ الخطّة ٣٧: يظهر في التعبئة وفي المطبوع، ولا زرَّ يوحي بإرسالٍ إلى إيجار (قرارُ الخطّة ٤٨). */
-export const EJAR_COMPLEMENT_NOTE = 'هذا النموذجُ مكمّلٌ لنموذج إيجار ولا يحلّ محلّه.';
-
 /**
- * بنودُ النماذج في الواجهة: أسماءُ الأنواع، وتحويلُ البند بين صفّ الخادم ومسوّدةِ التحرير، والقيمةُ بين حقل الإدخال وجسم الطلب.
+ * Form items in the interface: type names, conversion between the server row and
+ * the editing draft, and between the input value and the request body.
  *
- * ⚠️ **الخادمُ يحكم** (`form-template-items.util.ts` و`form-instances.service.ts`): ما هنا يُعِدّ الجسمَ بشكله ويُسقط ما لا يخصّ
- * النوعَ كي لا يُرسل حقلاً يرفضه، ولا يكرّر قواعدَ الخادم (التكرار · ترتيبُ النطاق · المانعُ بلا نطاق) — فرسالتُه هي ما يُعرض.
+ * The server decides (form-template-items.util.ts and form-instances.service.ts):
+ * this only shapes the body and drops fields that do not belong to the type so
+ * nothing is sent that the server rejects. Server rules (duplicates, range order,
+ * blocking without a range) are not repeated here; its message is what shows.
  */
 
 export const ITEM_TYPES: readonly FormItemType[] = ['CONDITION', 'QTY', 'NUMBER', 'METER_READING', 'TEMPERATURE', 'BOOLEAN', 'TEXT'];
 
-export const ITEM_TYPE_LABELS: Record<FormItemType, string> = {
-  CONDITION: 'حالة',
-  QTY: 'عدد',
-  NUMBER: 'رقم',
-  METER_READING: 'قراءةُ عدّاد',
-  TEMPERATURE: 'حرارة',
-  BOOLEAN: 'نعم أو لا',
-  TEXT: 'نصّ',
-};
+/** Labels read through translation on access, so a language switch shows the new text. */
+function labels<K extends string>(prefix: string, codes: readonly K[]): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const code of codes) {
+    Object.defineProperty(out, code, { enumerable: true, get: () => i18n.t(`forms.${prefix}.${code.toLowerCase()}`) });
+  }
+  return out;
+}
+
+export const ITEM_TYPE_LABELS: Record<FormItemType, string> = labels('item_type', ITEM_TYPES);
 
 /**
- * ⚖️ سلّمُ «الحالة» الثابت للمنصّة (`ق-١٦٤١`/٥)، كـ`CONDITION_SCALE` في الخادم: الرمزُ يُرسل ويُخزَّن، والاسمُ يُعرض ويُطبع.
+ * The platform's fixed condition scale, matching CONDITION_SCALE on the server:
+ * the code is sent and stored, the name is shown and printed.
  */
 export const CONDITION_SCALE = ['GOOD', 'FAIR', 'DAMAGED'] as const;
 export type ConditionValue = (typeof CONDITION_SCALE)[number];
-export const CONDITION_LABELS: Record<ConditionValue, string> = { GOOD: 'جيّد', FAIR: 'مقبول', DAMAGED: 'تالف' };
+export const CONDITION_LABELS: Record<ConditionValue, string> = labels('condition', CONDITION_SCALE);
 export const isConditionValue = (s: string | null | undefined): s is ConditionValue =>
   s !== null && s !== undefined && (CONDITION_SCALE as readonly string[]).includes(s);
 
-/** ما له نطاقٌ ووحدة، كـ`NUMERIC_ITEM_TYPES` في الخادم. */
+/** Types that carry a range and a unit, matching NUMERIC_ITEM_TYPES on the server. */
 export const NUMERIC_TYPES: ReadonlySet<FormItemType> = new Set<FormItemType>(['QTY', 'NUMBER', 'METER_READING', 'TEMPERATURE']);
 
-/** بندٌ كما يُحرَّر: الأرقامُ نصوصُ حقولٍ تُقرأ عند الحفظ. */
+/** An item as edited: numbers are field text read on save. */
 export interface ItemDraft {
   label: string;
   itemType: FormItemType;
@@ -94,18 +97,20 @@ const numberOf = (s: string): number | undefined => {
 };
 
 /**
- * المسوّدةُ جسماً للخادم. وغيرُ الرقميّ يُسقط نطاقَه ووحدتَه ومانعَه (تغييرُ النوع يُبقيها في الحقول ولا يُرسلها)،
- * ورقمٌ لا يُقرأ يُردّ برسالةٍ هنا لأن الخادمَ لا يرى النصَّ الذي كتبه المستخدم.
+ * The draft as a server body. A non-numeric type drops its range, unit and
+ * blocking flag (changing the type keeps them in the fields but does not send
+ * them), and an unreadable number is answered here because the server never sees
+ * the text the user typed.
  */
 export function itemInputOf(d: ItemDraft): { input: FormItemInput } | { error: string } {
   const label = d.label.trim();
-  if (!label) return { error: 'لكلِّ بندٍ اسمٌ يُكتب.' };
+  if (!label) return { error: i18n.t('forms.items.error_label_required') };
   const base: FormItemInput = { label, itemType: d.itemType, required: d.required };
   if (d.helpText.trim()) base.helpText = d.helpText.trim();
   if (!NUMERIC_TYPES.has(d.itemType)) return { input: base };
   const min = numberOf(d.minValue);
   const max = numberOf(d.maxValue);
-  if (Number.isNaN(min) || Number.isNaN(max)) return { error: `نطاقُ «${label}» يُكتب أرقاماً.` };
+  if (Number.isNaN(min) || Number.isNaN(max)) return { error: i18n.t('forms.items.error_range_numbers', { label }) };
   if (min !== undefined) base.minValue = min;
   if (max !== undefined) base.maxValue = max;
   if (d.unit.trim()) base.unit = d.unit.trim();
@@ -123,7 +128,7 @@ export function itemInputsOf(drafts: readonly ItemDraft[]): { items: FormItemInp
   return { items };
 }
 
-/** قيمةُ البند كما تُحرَّر في السجلّ. */
+/** An item value as edited in the record. */
 export interface ValueDraft {
   text: string;
   number: string;
@@ -140,7 +145,7 @@ export function valueDraftOf(item: FormInstanceItem): ValueDraft {
   };
 }
 
-/** القيمةُ جسماً للخادم بنوع بندها: الفارغُ يُفرغ الحقلَ (`null`)، والرقمُ الذي لا يُقرأ يُردّ برسالة. */
+/** The value as a server body for its item type: empty clears the field (null), an unreadable number is answered with a message. */
 export function valueInputOf(item: FormInstanceItem, v: ValueDraft): { input: FormValueInput } | { error: string } {
   const note = v.note.trim() ? v.note.trim() : null;
   if (item.itemType === 'BOOLEAN') {
@@ -148,21 +153,21 @@ export function valueInputOf(item: FormInstanceItem, v: ValueDraft): { input: Fo
   }
   if (NUMERIC_TYPES.has(item.itemType)) {
     const n = numberOf(v.number);
-    if (Number.isNaN(n)) return { error: `«${item.label}» يُكتب رقماً.` };
+    if (Number.isNaN(n)) return { error: i18n.t('forms.items.error_value_number', { label: item.label }) };
     return { input: { itemId: item.itemId, number: n === undefined ? null : n, note } };
   }
   return { input: { itemId: item.itemId, text: v.text.trim() ? v.text.trim() : null, note } };
 }
 
-/** هل تغيّرت القيمةُ عمّا حُفظ؟ — فلا يُرسل إلا ما تغيّر. */
+/** Whether the value differs from what was saved, so only changes are sent. */
 export function valueChanged(item: FormInstanceItem, v: ValueDraft): boolean {
   const saved = valueDraftOf(item);
   return saved.text !== v.text || saved.number !== v.number || saved.bool !== v.bool || saved.note !== v.note;
 }
 
-/** القيمةُ مقروءةً للعرض والطباعة؛ و«الحالة» باسمها في السلّم، وما عُبّئ قبله نصّاً يُعرض كما هو. */
+/** The value as read for display and print; a condition by its scale name, and text filled before the scale shown as is. */
 export function valueText(item: FormInstanceItem): string {
-  if (item.itemType === 'BOOLEAN') return item.bool === null ? '' : item.bool ? 'نعم' : 'لا';
+  if (item.itemType === 'BOOLEAN') return item.bool === null ? '' : item.bool ? i18n.t('forms.items.yes') : i18n.t('forms.items.no');
   if (item.itemType === 'CONDITION') return isConditionValue(item.text) ? CONDITION_LABELS[item.text] : (item.text ?? '');
   if (NUMERIC_TYPES.has(item.itemType)) return item.number === null ? '' : item.unit ? `${item.number} ${item.unit}` : item.number;
   return item.text ?? '';
