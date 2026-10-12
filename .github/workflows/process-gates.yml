@@ -1,0 +1,41 @@
+# Work method gates, run apart from the product tests.
+#
+# These gates guard how the project is run (the decisions registry, CLAUDE.md,
+# the pre-push hook), not what the product does. They live in ops/process-gates
+# and use only node:test, so they need no install and no product toolchain.
+name: process-gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  process-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The branch-mix gate compares this branch with main.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run work method gates
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test ops/process-gates/*.test.mjs

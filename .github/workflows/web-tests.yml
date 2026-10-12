@@ -45,6 +45,8 @@ on:
   # وكانت صحيحةً **حين كان كلُّ ما يصل `main` شيفرة**. واليومَ تصله سجلّاتٌ ووثائقُ
   # كثيرة، **وحرّاسُ الوثائق كلُّها في الخفيف** (`no-id-scan` · `registry-numbering` ·
   # `spec-tags` · `moved-paths` · `rule-extension-attached`).
+  # Note: registry-numbering and rule-extension-attached moved to ops/process-gates
+  # and run in process-gates.yml.
   #
   # المقيس (2026-09-07): **أربعةٌ من خمسَ عشرة دمجةً في يومٍ وثائقيةٌ محضة** ودفعت
   # ثقيلاً كاملاً على `main` — **≈٣٦ دقيقة ≈ $0.29 يومياً بلا شيءٍ يُفحص**.
