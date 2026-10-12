@@ -1,2 +1,0 @@
-﻿paper-on-sealed [break landed: 1] Tests:       1 failed, 6 passed, 7 total  :: restored=True
-authority-out-of-seal [break landed: 1] Tests:       1 failed, 1 passed, 2 total  :: restored=True

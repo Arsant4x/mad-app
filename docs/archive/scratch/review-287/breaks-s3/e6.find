@@ -1,2 +1,0 @@
-  if (instance.status !== FormInstanceStatus.DRAFT) throw new ConflictException(MSG.form_instance_sent_locked);
-}

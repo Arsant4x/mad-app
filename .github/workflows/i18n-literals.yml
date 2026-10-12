@@ -1,0 +1,52 @@
+# Bilingual UI gate (standing rule in CLAUDE.md, decision 1691).
+#
+# A web UI file added or changed by a pull request carries no direct
+# user-visible text; it uses translation keys. Existing direct text is a
+# declared debt in docs/i18n-literals-debt.json that only goes down.
+name: i18n-literals
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  LC_ALL: C.UTF-8
+  LANG: C.UTF-8
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  i18n-literals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install (the scanner reads the TypeScript syntax tree)
+        run: npm ci --ignore-scripts
+      - name: Scanner self test
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test ops/ci/i18n-literals.test.mjs
+      - name: No direct UI text in changed files, and the debt only goes down
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node ops/ci/i18n-literals-check.mjs "$GITHUB_EVENT_PATH"
+          else
+            node ops/ci/i18n-literals-check.mjs
+          fi

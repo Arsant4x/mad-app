@@ -1,1 +1,0 @@
-      await tx.formSigningLink.updateMany({ where: { instanceId: instance.id, revokedAt: null, purpose: FormLinkPurpose.SIGN, recipientRole: FormSignerRole.SUBSTITUTE }, data: { revokedAt: now } });

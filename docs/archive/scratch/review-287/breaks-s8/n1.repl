@@ -1,1 +1,0 @@
-      if (party.role === FormSignerRole.SUBSTITUTE && party.kind === 'NEVER') {

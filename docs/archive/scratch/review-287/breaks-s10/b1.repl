@@ -1,1 +1,0 @@
-      if (twoStepOf(link, instance) && session === 'never') await this.otpStepDone(tx, link, session);
