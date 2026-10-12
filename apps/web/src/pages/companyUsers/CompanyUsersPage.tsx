@@ -1,5 +1,6 @@
-import { badgeOf } from '../../lib/statusBadge';
+import { badgeOf, type BadgeMeta } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBranches, type Branch } from '../../api/branches';
 import { createCompanyUser, deleteCompanyUser, listCompanyUsers, updateCompanyUser, type CompanyUser, type CompanyUserInput } from '../../api/companyUsers';
 import { createTemplate, deleteTemplate, listTemplates, updateTemplate, ACTION_LABELS, SCREEN_LABELS, type PermissionTemplate, type TemplateInput } from '../../api/templates';
@@ -10,15 +11,17 @@ import { CompanyUserModal } from './CompanyUserModal';
 import { DelegationModal } from './DelegationModal';
 import i18n from '../../i18n';
 
-// بكلِّ قيم عمود الحالة (`AccountStatus`) — `CLOSED` كان غائباً فيُعرض مفتاحُه (`ق-١٣٦٧`).
-const STATUS_META: Record<CompanyUser['status'], { label: string; badgeClass: string }> = {
-  ACTIVE: { label: 'نشط', badgeClass: 'paid' },
-  FROZEN: { label: 'مجمّد', badgeClass: 'due' },
-  STOPPED: { label: 'متوقف', badgeClass: 'overdue' },
-  CLOSED: { label: 'مغلق', badgeClass: 'overdue' },
+// Every value of the status column (`AccountStatus`); a missing one would show its raw code.
+// `label` holds a translation key; it is turned into text where rendered.
+const STATUS_META: Record<CompanyUser['status'], BadgeMeta> = {
+  ACTIVE: { label: 'company_users.status.active', badgeClass: 'paid' },
+  FROZEN: { label: 'company_users.status.frozen', badgeClass: 'due' },
+  STOPPED: { label: 'company_users.status.stopped', badgeClass: 'overdue' },
+  CLOSED: { label: 'company_users.status.closed', badgeClass: 'overdue' },
 };
 
 export function CompanyUsersPage() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [templates, setTemplates] = useState<PermissionTemplate[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -32,19 +35,19 @@ export function CompanyUsersPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function reload() {
-    const [u, t, b] = await Promise.all([listCompanyUsers(), listTemplates(), listBranches()]);
+    const [u, tpls, b] = await Promise.all([listCompanyUsers(), listTemplates(), listBranches()]);
     setUsers(u);
-    setTemplates(t.filter((tpl) => !tpl.isSystem));
+    setTemplates(tpls.filter((tpl) => !tpl.isSystem));
     setBranches(b);
   }
 
-  /** «كل الفروع» للعلَم الصريح لا لغياب الإسناد (ق-١٤٦٨) — الأسماء تُحلّ من قائمة الفروع لأن الخادم
-   * يعيد صفوف الإسناد كمعرّفات فقط (جدول الفروع محمي بـRLS هناك). */
+  /** "All branches" follows the explicit flag, not the absence of assignments. Names are resolved from the
+   * branch list because the server returns assignment rows as ids only. */
   function describeBranches(u: CompanyUser): string {
-    if (u.allBranches) return 'كل الفروع';
-    if (!u.branches?.length) return 'لا فرع — البيانات العامّة وحدَها';
+    if (u.allBranches) return t('company_users.branches_all');
+    if (!u.branches?.length) return t('company_users.branches_none');
     const nameById = new Map(branches.map((b) => [b.id, b.name]));
-    return u.branches.map((r) => nameById.get(r.branchId) ?? '—').join('، ');
+    return u.branches.map((r) => nameById.get(r.branchId) ?? '—').join(t('company_users.list_sep'));
   }
 
   useEffect(() => {
@@ -97,50 +100,52 @@ export function CompanyUsersPage() {
       await reload();
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setTplError(d?.message ?? 'تعذّر حذف النموذج');
+      setTplError(d?.message ?? t('company_users.templates.err_delete'));
     }
   }
 
-  /** وصف مقروء لما يمنحه النموذج — «العقود: اطلاع، إضافة» لا JSON. */
-  function describeTemplate(t: PermissionTemplate): string {
-    if (t.isAllScreens) return 'كل الشاشات، كل الصلاحيات';
-    return t.allowedScreens
+  /** A readable summary of what a template grants ("Contracts: view, add"), not JSON. */
+  function describeTemplate(tpl: PermissionTemplate): string {
+    if (tpl.isAllScreens) return t('company_users.templates.all_screens');
+    return tpl.allowedScreens
       .map((sc) => {
         const label = SCREEN_LABELS[sc as keyof typeof SCREEN_LABELS] ?? sc;
-        const acts = t.screenActions?.[sc];
+        const acts = tpl.screenActions?.[sc];
         if (!acts) return label;
-        return label + ': ' + acts.map((a) => ACTION_LABELS[a as keyof typeof ACTION_LABELS] ?? a).join('، ');
+        return label + ': ' + acts.map((a) => ACTION_LABELS[a as keyof typeof ACTION_LABELS] ?? a).join(t('company_users.list_sep'));
       })
       .join(' · ');
   }
+
+  const statusOf = (u: CompanyUser) => badgeOf(STATUS_META, u.status);
 
   return (
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">حسابات الموظفين</div>
-          <div className="page-sub">حسابات دخول فرعية لموظفي المنشأة، بصلاحيات محدَّدة عبر نموذج</div>
+          <div className="page-title">{t('company_users.title')}</div>
+          <div className="page-sub">{t('company_users.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })} disabled={templates.length === 0}>
-            + حساب موظف جديد
+            {t('company_users.new_user')}
           </button>
         </div>
       </div>
 
       {templates.length === 0 ? (
-        <div className="empty-state">لا توجد نماذج صلاحيات متاحة — تواصل مع المطوّر لإنشاء نموذج</div>
+        <div className="empty-state">{t('company_users.no_templates')}</div>
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <table>
             <thead>
               <tr>
-                <th>اسم الموظف</th>
-                <th>النموذج</th>
-                {/* عمود الفروع يظهر فقط لمنشأة لديها فروع — لمنشأة الموقع
-                    الواحد سيكون «كل الفروع» في كل صف: ضجيج بلا معلومة. */}
-                {branches.length > 0 && <th>الفروع</th>}
-                <th>الحالة</th>
+                <th>{t('company_users.col_name')}</th>
+                <th>{t('company_users.col_template')}</th>
+                {/* The branches column shows only for a company with branches; for a single site it would read
+                    "all branches" on every row: noise without information. */}
+                {branches.length > 0 && <th>{t('company_users.col_branches')}</th>}
+                <th>{t('company_users.col_status')}</th>
                 <th></th>
               </tr>
             </thead>
@@ -148,7 +153,7 @@ export function CompanyUsersPage() {
               {users.length === 0 && (
                 <tr>
                   <td colSpan={branches.length > 0 ? 5 : 4}>
-                    <div className="empty-state">لا يوجد موظفون بحسابات دخول بعد</div>
+                    <div className="empty-state">{t('company_users.empty')}</div>
                   </td>
                 </tr>
               )}
@@ -158,19 +163,18 @@ export function CompanyUsersPage() {
                   <td>{u.permissionTemplate.name}</td>
                   {branches.length > 0 && <td style={{ fontSize: 12, color: 'var(--muted)' }}>{describeBranches(u)}</td>}
                   <td>
-                    <span className={`badge ${badgeOf(STATUS_META, u.status).badgeClass}`}>{badgeOf(STATUS_META, u.status).label}</span>
+                    <span className={`badge ${statusOf(u).badgeClass}`}>{t(statusOf(u).label)}</span>
                   </td>
                   <td>
                     <RowMenu
                       actions={[
-                        { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', user: u }) },
-                        // التفويض **من الموظف** لا من شاشة مستقلة: هو علاقةٌ
-                        // بين شخصين لا إعداد نظام، وشاشةٌ مستقلة تسأل «لمن؟»
-                        // أولاً — أي تعيد بناء هذه القائمة بعينها.
-                        { label: '⇄ التفويض', onClick: () => setDelegating(u) },
-                        { label: u.status === 'ACTIVE' ? '⏸ تجميد الحساب' : '✓ إعادة التفعيل', onClick: () => toggleStatus(u) },
+                        { label: t('company_users.menu.edit'), onClick: () => setModal({ mode: 'edit', user: u }) },
+                        // Delegation opens from the employee, not a separate screen: it is a relation between two
+                        // people, and a separate screen would first ask "to whom?", rebuilding this very list.
+                        { label: t('company_users.menu.delegate'), onClick: () => setDelegating(u) },
+                        { label: u.status === 'ACTIVE' ? t('company_users.menu.freeze') : t('company_users.menu.reactivate'), onClick: () => toggleStatus(u) },
                         '-',
-                        { label: '🗑 حذف', onClick: () => setPendingDelete(u), danger: true },
+                        { label: t('company_users.menu.delete'), onClick: () => setPendingDelete(u), danger: true },
                       ]}
                     />
                   </td>
@@ -181,35 +185,34 @@ export function CompanyUsersPage() {
         </div>
       )}
 
-      {/* نماذج الصلاحيات — قرار المالك، في واجهة المالك (قاعدة الفاعل §3.5).
-          القوالب العامة من المنصة تظهر للقراءة؛ نماذجك أنت من ينشئها ويحرّرها
-          بمصفوفة الشاشات × الأفعال. */}
+      {/* Permission templates are the owner's decision, in the owner's interface. Public platform templates
+          show read only; the owner creates and edits their own with the screens by actions matrix. */}
       <div className="card" style={{ marginTop: 14 }}>
         <div className="card-head">
-          <div className="card-title">نماذج الصلاحيات</div>
-          <button className="btn btn-ghost btn-sm" onClick={() => setTplModal({ mode: 'create' })}>+ نموذج جديد</button>
+          <div className="card-title">{t('company_users.templates.title')}</div>
+          <button className="btn btn-ghost btn-sm" onClick={() => setTplModal({ mode: 'create' })}>{t('company_users.templates.new')}</button>
         </div>
         {tplError && <p className="error-text">{tplError}</p>}
         <table>
           <thead>
             <tr>
-              <th>الاسم</th>
-              <th>ما يمنحه</th>
-              <th>المصدر</th>
+              <th>{t('company_users.templates.col_name')}</th>
+              <th>{t('company_users.templates.col_grants')}</th>
+              <th>{t('company_users.templates.col_source')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {templates.map((t) => (
-              <tr key={t.id}>
-                <td>{t.name}</td>
-                <td style={{ fontSize: 12, color: 'var(--muted)' }}>{describeTemplate(t)}</td>
-                <td>{t.companyId ? <span className="badge paid">نموذجك</span> : <span className="badge draft">قالب عام</span>}</td>
+            {templates.map((tpl) => (
+              <tr key={tpl.id}>
+                <td>{tpl.name}</td>
+                <td style={{ fontSize: 12, color: 'var(--muted)' }}>{describeTemplate(tpl)}</td>
+                <td>{tpl.companyId ? <span className="badge paid">{t('company_users.templates.yours')}</span> : <span className="badge draft">{t('company_users.templates.public')}</span>}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  {t.companyId && (
+                  {tpl.companyId && (
                     <>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setTplModal({ mode: 'edit', template: t })}>تعديل</button>{' '}
-                      <button className="btn btn-ghost btn-sm" onClick={() => setPendingDeleteTpl(t)}>حذف</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setTplModal({ mode: 'edit', template: tpl })}>{t('company_users.common.edit')}</button>{' '}
+                      <button className="btn btn-ghost btn-sm" onClick={() => setPendingDeleteTpl(tpl)}>{t('company_users.common.delete')}</button>
                     </>
                   )}
                 </td>
@@ -231,9 +234,9 @@ export function CompanyUsersPage() {
 
       {pendingDeleteTpl && (
         <ConfirmModal
-          title="حذف النموذج"
-          body={tplError ?? `حذف نموذج "${pendingDeleteTpl.name}"؟ لا يمكن حذف نموذج مسنَد لموظف.`}
-          confirmLabel="حذف"
+          title={t('company_users.templates.delete_title')}
+          body={tplError ?? t('company_users.templates.delete_body', { name: pendingDeleteTpl.name })}
+          confirmLabel={t('company_users.common.delete')}
           onCancel={() => { setPendingDeleteTpl(null); setTplError(null); }}
           onConfirm={confirmDeleteTemplate}
         />
@@ -241,9 +244,9 @@ export function CompanyUsersPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف حساب الموظف"
-          body={deleteError ?? `حذف حساب "${pendingDelete.name}"؟ لن يستطيع تسجيل الدخول بعدها.`}
-          confirmLabel="حذف"
+          title={t('company_users.delete_title')}
+          body={deleteError ?? t('company_users.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('company_users.common.delete')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);

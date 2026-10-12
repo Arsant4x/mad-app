@@ -1,5 +1,6 @@
-import { badgeAltOf } from '../../lib/statusBadge';
+import { badgeAltOf, type BadgeMetaAlt } from '../../lib/statusBadge';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   cancelDeletionRequest,
   getMyDeletionRequest,
@@ -11,32 +12,37 @@ import {
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 
-const STATUS_META: Record<DeletionRequestStatus, { label: string; badge: string }> = {
-  PENDING: { label: 'قيد المراجعة', badge: 'due' },
-  APPROVED: { label: 'مُوافَق', badge: 'overdue' },
-  REJECTED: { label: 'مرفوض', badge: 'draft' },
-  CANCELLED: { label: 'مسحوب', badge: 'draft' },
+// `label` holds a translation key; it is turned into text where rendered.
+const STATUS_META: Record<DeletionRequestStatus, BadgeMetaAlt> = {
+  PENDING: { label: 'subscription.deletion.status.pending', badge: 'due' },
+  APPROVED: { label: 'subscription.deletion.status.approved', badge: 'overdue' },
+  REJECTED: { label: 'subscription.deletion.status.rejected', badge: 'draft' },
+  CANCELLED: { label: 'subscription.deletion.status.cancelled', badge: 'draft' },
 };
 
-/** ما وقع فعلاً — «نُفِّذ» لمن حُذفت، و«أُغلق» لمن لها حركة (ق-٥٤٢). */
-const OUTCOME_META: Record<AccountRequestOutcome, { label: string; badge: string }> = {
-  DELETED: { label: 'نُفِّذ', badge: 'overdue' },
-  CLOSED: { label: 'أُغلق', badge: 'overdue' },
-  REOPENED: { label: 'أُعيد الفتح', badge: 'paid' },
-  ERASED: { label: 'مُحي غيرُ الملزِم', badge: 'overdue' },
+/** What actually happened: deleted for a company without activity, closed for one with activity. */
+const OUTCOME_META: Record<AccountRequestOutcome, BadgeMetaAlt> = {
+  DELETED: { label: 'subscription.deletion.outcome.deleted', badge: 'overdue' },
+  CLOSED: { label: 'subscription.deletion.outcome.closed', badge: 'overdue' },
+  REOPENED: { label: 'subscription.deletion.outcome.reopened', badge: 'paid' },
+  ERASED: { label: 'subscription.deletion.outcome.erased', badge: 'overdue' },
 };
 
-const KIND_LABEL: Record<DeletionRequest['kind'], string> = { DELETION: 'طلب حذف', REOPENING: 'طلب إعادة فتح', ERASURE: 'طلب محو غير الملزِم' };
+const KIND_KEY: Record<DeletionRequest['kind'], string> = {
+  DELETION: 'subscription.deletion.kind.deletion',
+  REOPENING: 'subscription.deletion.kind.reopening',
+  ERASURE: 'subscription.deletion.kind.erasure',
+};
 
 /**
- * حذف الحساب، بصيغة SaaS: التاجر يقدّم طلباً والدعم هو من ينفّذه — لا زرّ
- * «امسح كل شيء». يعيش في صفحة الاشتراك لأن هذا هو المكان الذي يُدار منه
- * وجود الحساب نفسه.
+ * Account deletion, SaaS style: the merchant submits a request and support carries it out;
+ * there is no "erase everything" button. It lives on the subscription page because that is
+ * where the account's existence is managed.
  *
- * والحقيقةُ قبل الطلب (ق-٥٤٧): منشأةٌ لها حركة تُغلَق ولا تُحذف — فيُقال ذلك هنا،
- * لا بعد الموافقة.
+ * The truth is told before the request: a company with activity is closed, not deleted.
  */
 export function DeletionRequestCard() {
+  const { t } = useTranslation();
   const [req, setReq] = useState<DeletionRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
@@ -72,42 +78,42 @@ export function DeletionRequestCard() {
 
   return (
     <div className="card" style={{ marginTop: 14, borderColor: 'rgba(180, 65, 60, 0.35)' }}>
-      <div className="card-title" style={{ marginBottom: 10 }}>حذف الحساب</div>
+      <div className="card-title" style={{ marginBottom: 10 }}>{t('subscription.deletion.title')}</div>
 
       {req && shown && (
         <div style={{ marginBottom: 10 }}>
-          <span className={`badge ${shown.badge}`}>{shown.label}</span>{' '}
+          <span className={`badge ${shown.badge}`}>{t(shown.label)}</span>{' '}
           <span className="hint">
-            {KIND_LABEL[req.kind]} — قُدِّم في {dfmt(req.createdAt)}
+            {t('subscription.deletion.submitted', { kind: t(KIND_KEY[req.kind]), date: dfmt(req.createdAt) })}
           </span>
-          {req.decidedNote && <p className="hint" style={{ marginTop: 6 }}>ردّ الدعم: {req.decidedNote}</p>}
+          {req.decidedNote && <p className="hint" style={{ marginTop: 6 }}>{t('subscription.common.support_reply', { note: req.decidedNote })}</p>}
         </div>
       )}
 
       {open ? (
-        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(req!.id), 'تعذّر سحب الطلب')}>
-          سحب الطلب
+        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => cancelDeletionRequest(req!.id), t('subscription.common.err_withdraw'))}>
+          {t('subscription.common.withdraw')}
         </button>
       ) : asking ? (
         <div>
           <div className="field">
-            <label>سبب الحذف (اختياري — يساعد الدعم على خدمتك)</label>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: إغلاق النشاط" />
+            <label>{t('subscription.deletion.reason_label')}</label>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('subscription.deletion.reason_placeholder')} />
           </div>
           <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConfirming(true)}>
-            تقديم الطلب
+            {t('subscription.deletion.submit')}
           </button>{' '}
           <button className="btn btn-ghost btn-sm" onClick={() => setAsking(false)}>
-            تراجع
+            {t('subscription.deletion.back')}
           </button>
         </div>
       ) : (
         <>
           <p className="hint" style={{ marginBottom: 10 }}>
-            حذف الحساب لا يتم مباشرةً: تقدّم طلباً يراجعه دعم المنصة ثم ينفّذه. منشأةٌ بلا حركة تُحذف بياناتها نهائياً؛ ومنشأةٌ لها حركة (فواتير · قيود · سندات · عقود · مهامّ…) تُغلق ولا تُحذف — يُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية ثم تُمحى. ويمكنك طلب إعادة الفتح لاحقاً.
+            {t('subscription.deletion.explain')}
           </p>
           <button className="btn btn-ghost btn-sm" onClick={() => setAsking(true)}>
-            طلب حذف الحساب
+            {t('subscription.deletion.request')}
           </button>
         </>
       )}
@@ -116,13 +122,13 @@ export function DeletionRequestCard() {
 
       {confirming && (
         <ConfirmModal
-          title="تقديم طلب حذف الحساب"
-          body="سيُراجع دعم المنصة طلبك. إن كانت منشأتك بلا حركة تُحذف كل بياناتها نهائياً ولا يمكن استرجاعها؛ وإن كانت لها حركة تُغلق ويُقطع الدخول وتبقى بياناتها محفوظة بمدد الحفظ النظامية. هل أنت متأكد؟"
-          confirmLabel="نعم، قدِّم الطلب"
+          title={t('subscription.deletion.confirm_title')}
+          body={t('subscription.deletion.confirm_body')}
+          confirmLabel={t('subscription.common.confirm_submit')}
           onConfirm={() => {
             setConfirming(false);
             setAsking(false);
-            return run(() => submitDeletionRequest(reason.trim() || undefined), 'تعذّر تقديم الطلب');
+            return run(() => submitDeletionRequest(reason.trim() || undefined), t('subscription.common.err_submit'));
           }}
           onCancel={() => setConfirming(false)}
         />
