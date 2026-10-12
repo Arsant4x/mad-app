@@ -62,7 +62,13 @@ describe('موافقةُ المعالجين الفرعيين — أربعةُ ش
   /** ③ **ولا زرَّ واحدٌ في الشاشة**: ثلاثةٌ معاً — وإلا صارت حجباً. */
   it('③ شاشةُ الموافقة تعرض ثلاثةَ أفعالٍ لا واحداً', () => {
     const view = readFileSync(join(WEB, 'pages', 'subscription', 'ConsentRequiredView.tsx'), 'utf8');
-    for (const action of ['أوافق على القائمة', 'نزّل بياناتي', 'أغلق حسابي']) expect(view).toContain(action);
+    // The labels live behind translation keys; the Arabic wording is checked in the Arabic translation file.
+    const ar = JSON.parse(readFileSync(join(WEB, 'i18n', 'locales', 'ar', 'subscription.json'), 'utf8')).consent;
+    const actions: Array<[string, string]> = [['accept', 'أوافق على القائمة'], ['download', 'نزّل بياناتي'], ['close_account', 'أغلق حسابي']];
+    for (const [key, label] of actions) {
+      expect(view).toContain(`t('subscription.consent.${key}')`);
+      expect(ar[key]).toBe(label);
+    }
     // والتنزيلُ مسارٌ يعمل لا وعدٌ: يستدعي التصديرَ نفسَه.
     expect(view).toContain('exportAllData');
     // والإغلاقُ ببطاقة الطلب نفسِها لا بنسخةٍ منها.

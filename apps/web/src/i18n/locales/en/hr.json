@@ -1,0 +1,92 @@
+{
+  "leave_status": {
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "employee": "Employee",
+    "status": "Status",
+    "choose": "Choose",
+    "type": "Type",
+    "entitlement": "Entitlement",
+    "from": "From",
+    "to": "To",
+    "days": "{{n}} days",
+    "no_limit": "No limit"
+  },
+  "err_load": "Could not load human resources data",
+  "err_delete": "Could not delete",
+  "title": "Human resources",
+  "subtitle": "Attendance · leaves and their balances, and payroll once it is built",
+  "kpi": {
+    "employees": "Employees",
+    "pending_leaves": "Pending leaves",
+    "approved_days": "Approved leave days",
+    "present_today": "Present today",
+    "present_on_day": "Present on the selected day"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "add": "+ Record attendance",
+    "present": "Present",
+    "absent": "Absent",
+    "check_in_time": "Check-in time",
+    "empty": "No records for this day.",
+    "col_in": "In",
+    "col_out": "Out",
+    "check_out_now": "Check out now",
+    "err_employee": "Choose the employee.",
+    "err_record": "Could not record attendance",
+    "err_checkout": "Could not record the check-out"
+  },
+  "requests": {
+    "title": "Leave requests ({{n}})",
+    "add": "+ Leave request",
+    "leave_type": "Leave type",
+    "reason": "Reason (optional)",
+    "reason_placeholder": "Example: family trip",
+    "save": "Save request",
+    "empty": "No leave requests.",
+    "col_days": "Days",
+    "show_balance": "Show their leave balance",
+    "self_decided": "Self-decided: requested and decided by {{name}}",
+    "decided_by": "Decided by {{name}}",
+    "approve": "Approve",
+    "reject": "Reject",
+    "delete": "Delete request",
+    "delete_label": "leave request",
+    "err_fields": "Choose the employee and the leave type.",
+    "err_create": "Could not create the request",
+    "err_approve": "Could not approve",
+    "err_reject": "Could not reject"
+  },
+  "types": {
+    "show": "Leave types",
+    "hide": "Hide types",
+    "none_hint": "Add at least one leave type before creating a request; press “Leave types”.",
+    "name": "Type name",
+    "name_placeholder": "Annual / sick / unpaid",
+    "annual_days": "Annual entitlement (days)",
+    "annual_days_placeholder": "0 = no fixed limit",
+    "paid_label": "Paid",
+    "entitlement_hint": "You set the entitlement; the system does not assume a statutory number.",
+    "add": "Add type",
+    "col_paid": "Paid?",
+    "yes": "Yes",
+    "no": "No",
+    "err_name": "Leave type name is required.",
+    "err_save": "Could not save the leave type"
+  },
+  "balance": {
+    "title": "{{name}}'s leave balance, {{year}}",
+    "col_used": "Used",
+    "col_remaining": "Remaining",
+    "err_load": "Could not load the balance"
+  },
+  "delete_title": "Confirm deletion",
+  "delete_body": "\"{{label}}\" will be deleted."
+}

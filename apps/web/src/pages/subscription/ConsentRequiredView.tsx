@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { acceptConsent, type ConsentState } from '../../api/consent';
 import { exportAllData } from '../../api/subscription';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -6,22 +7,20 @@ import { DeletionRequestCard } from './DeletionRequestCard';
 import { dfmt } from '../../lib/format';
 
 /**
- * ⭐ **اختيارٌ لا حجب** (`ق-٥٨٩`): ليست شاشةَ منعٍ بل شاشةَ قرار — **«الخدمةُ صارت تقتضي
- * هذا: اقبل، أو خذ بياناتك واخرج»**.
- *
- * ⚠️ **ولا زرَّ واحدٌ فيها**: **ثلاثةٌ معاً** — «أوافق» · «نزّل بياناتي» · «أغلق حسابي».
- * **فشاشةٌ بخيارٍ واحدٍ حجبٌ لا اختيار**، وهو الشرطُ الثالث بنصّه.
- *
- * ⚠️ **والقائمةُ تُعرض كاملةً بمواقعها** — فالموافقةُ على نصٍّ يُقرأ لا على عنوانٍ يُصدَّق.
+ * A choice, not a block: the service now requires this, so accept, or take your data and leave.
+ * Three actions are offered together (accept, download, close the account); a screen with a
+ * single option would be a block. The full list is shown with locations, so consent is given
+ * to a text that can be read, not to a title.
  */
 export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: ConsentState; onAccepted: (next: ConsentState) => void; onLogout: () => void }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [exiting, setExiting] = useState(false);
   const list = state.current;
 
-  /** «نزّل بياناتي» — **مسارٌ يعمل هنا لا وعدٌ في نصّ**: المسارُ نفسُه الذي في صفحة الاشتراك. */
+  /** Download works here, through the same export as the subscription page. */
   async function download() {
     setError(null);
     setBusy(true);
@@ -35,7 +34,7 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
       URL.revokeObjectURL(url);
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر تصدير البيانات');
+      setError(d?.message ?? t('subscription.common.err_export'));
     } finally {
       setBusy(false);
     }
@@ -49,7 +48,7 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
       onAccepted(await acceptConsent(state.requiredVersion));
     } catch (e) {
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setError(d?.message ?? 'تعذّر تسجيل موافقتك');
+      setError(d?.message ?? t('subscription.consent.err_accept'));
     } finally {
       setBusy(false);
     }
@@ -57,14 +56,19 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
 
   return (
     <div className="card" style={{ maxWidth: 760, margin: '40px auto' }}>
-      <div className="card-title" style={{ marginBottom: 10 }}>تغيّرت قائمةُ من يعالج بياناتك — وقرارُك مطلوب</div>
+      <div className="card-title" style={{ marginBottom: 10 }}>{t('subscription.consent.title')}</div>
       <p>
-        نستعين بمزوّدين لتشغيل الخدمة (تخزينٌ ونسخٌ احتياطيّ وما شابه)، وهم «معالجون فرعيون» لبياناتك.
-        <strong> والنظامُ يوجب موافقتك قبل ذلك</strong>، فأنت جهةُ التحكم في بيانات عملائك ونحن نعالجها نيابةً عنك.
+        {t('subscription.consent.intro')}
+        <strong>{t('subscription.consent.intro_strong')}</strong>{t('subscription.consent.intro_end')}
       </p>
       {list && (
         <p className="hint">
-          النسخة {list.version} — نُشرت في {dfmt(list.publishedAt)} وسرت في {dfmt(list.effectiveFrom)} (بمهلة {state.noticeDays} يوماً معلَنة). {list.summary}
+          {t('subscription.consent.version_line', {
+            version: list.version,
+            published: dfmt(list.publishedAt),
+            effective: dfmt(list.effectiveFrom),
+            days: state.noticeDays,
+          })}{' '}{list.summary}
         </p>
       )}
 
@@ -72,10 +76,10 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
         <table style={{ marginTop: 12 }}>
           <thead>
             <tr>
-              <th>المعالج</th>
-              <th>الغرض</th>
-              <th>الموقع</th>
-              <th>فئاتُ البيانات</th>
+              <th>{t('subscription.consent.col_processor')}</th>
+              <th>{t('subscription.consent.col_purpose')}</th>
+              <th>{t('subscription.consent.col_location')}</th>
+              <th>{t('subscription.consent.col_categories')}</th>
             </tr>
           </thead>
           <tbody>
@@ -92,34 +96,33 @@ export function ConsentRequiredView({ state, onAccepted, onLogout }: { state: Co
       )}
 
       <p style={{ marginTop: 14 }}>
-        <strong>وأمامك ثلاثةٌ — وكلُّها مفتوحةٌ الآن:</strong> أن تقبل فتعود الخدمة كما كانت، أو تنزّل نسخةً كاملة من بياناتك، أو تطلب إغلاق حسابك.
-        والتصديرُ وطلبُ الإغلاق يعملان في هذه الشاشة، فلا تُحبس داخل حسابك.
+        <strong>{t('subscription.consent.options_strong')}</strong>{t('subscription.consent.options')}
       </p>
 
       <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => setConfirming(true)}>
-          أوافق على القائمة
+          {t('subscription.consent.accept')}
         </button>
         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={download}>
-          نزّل بياناتي
+          {t('subscription.consent.download')}
         </button>
         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setExiting((v) => !v)}>
-          أغلق حسابي
+          {t('subscription.consent.close_account')}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={onLogout}>
-          تسجيل الخروج
+          {t('subscription.common.logout')}
         </button>
       </div>
       {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
 
-      {/* ⭐ ومسارُ الإغلاق **نفسُه** لا نسخةٌ منه — فبطاقةٌ واحدةٌ تحكم الطلبَ أينما عُرضت. */}
+      {/* The same closure card, not a copy, so one card governs the request wherever it shows. */}
       {exiting && <DeletionRequestCard />}
 
       {confirming && (
         <ConfirmModal
-          title="الموافقة على قائمة المعالجين الفرعيين"
-          body={`ستُسجَّل موافقتك على النسخة ${state.requiredVersion ?? ''} من القائمة باسمك وتاريخها، ويعود عملُ الحساب كما كان. هل تريد المتابعة؟`}
-          confirmLabel="نعم، أوافق"
+          title={t('subscription.consent.confirm_title')}
+          body={t('subscription.consent.confirm_body', { version: state.requiredVersion ?? '' })}
+          confirmLabel={t('subscription.consent.confirm_label')}
           onConfirm={() => {
             setConfirming(false);
             return accept();
