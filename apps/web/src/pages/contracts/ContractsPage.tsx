@@ -1,6 +1,7 @@
 import { AssignTaskButton } from '../../components/AssignTaskButton';
 import { badgeOf } from '../../lib/statusBadge';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listBanks, type Bank } from '../../api/banks';
 import { createCustomer, listCustomers, type Customer, type CustomerInput } from '../../api/customers';
 import {
@@ -15,28 +16,30 @@ import {
 import { listProperties, type Property } from '../../api/properties';
 import { listUnits, type Unit } from '../../api/units';
 import { dfmt, fmt } from '../../lib/format';
+import i18n from '../../i18n';
 import { ContractDetailModal } from './ContractDetailModal';
 import { CYCLE_LABEL } from './contractMeta';
 import { ContractModal } from './ContractModal';
 
 const STATUS_META: Record<ContractStatus, { label: string; badgeClass: string }> = {
-  DRAFT: { label: 'مسودة', badgeClass: 'draft' },
+  DRAFT: { get label() { return i18n.t('contracts.page.status.draft'); }, badgeClass: 'draft' },
   // Signed and certain, unlike a draft — its term simply hasn't started.
-  UPCOMING: { label: 'قادم مؤكَّد', badgeClass: 'due' },
-  DUE: { label: 'سارٍ', badgeClass: 'paid' },
-  LATE: { label: 'متأخر', badgeClass: 'overdue' },
-  CANCELLED: { label: 'ملغى', badgeClass: 'due' },
+  UPCOMING: { get label() { return i18n.t('contracts.page.status.upcoming'); }, badgeClass: 'due' },
+  DUE: { get label() { return i18n.t('contracts.page.status.due'); }, badgeClass: 'paid' },
+  LATE: { get label() { return i18n.t('contracts.page.status.late'); }, badgeClass: 'overdue' },
+  CANCELLED: { get label() { return i18n.t('contracts.page.status.cancelled'); }, badgeClass: 'due' },
 };
 
 const PAGE_SIZE = 25;
 
 export function ContractsPage() {
+  const { t } = useTranslation();
   const [contracts, setContracts] = useState<ContractListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [units, setUnits] = useState<Unit[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  // العملاءُ الأحياء لمنتقي المستأجر — العقدُ يُربط بمعرّف العميل لا باسمه (ق-١٠٢٨/①).
+  // Live customers for the tenant picker: a contract links to the customer id, not a name.
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +65,7 @@ export function ContractsPage() {
     setCustomers(c);
   }
 
-  /** عميلٌ جديد من داخل نموذج العقد — عبر مسار العملاء نفسِه، ثم يُضاف إلى القائمة ليُختار. */
+  /** A new customer from inside the contract form, through the customers route itself, then added to the list to be picked. */
   async function handleCreateCustomer(data: CustomerInput): Promise<Customer> {
     const created = await createCustomer(data);
     setCustomers((prev) => [created, ...prev]);
@@ -101,23 +104,23 @@ export function ContractsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">عقود الإيجار</div>
-          <div className="page-sub">سجل عقود إيجار جميع الوحدات</div>
+          <div className="page-title">{t('contracts.page.title')}</div>
+          <div className="page-sub">{t('contracts.page.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setShowBuilder(true)} disabled={units.length === 0}>
-            + عقد جديد
+            {t('contracts.page.new')}
           </button>
         </div>
       </div>
 
       {units.length === 0 ? (
-        <div className="empty-state">أضف عقارًا ووحدة أولاً قبل إنشاء عقود</div>
+        <div className="empty-state">{t('contracts.page.no_units')}</div>
       ) : (
         <>
           <div className="toolbar">
             <div className="search-box">
-              <input placeholder="ابحث باسم المستأجر أو رقم العقد أو الوحدة..." value={search} onChange={(e) => handleSearch(e.target.value)} />
+              <input placeholder={t('contracts.page.search_placeholder')} value={search} onChange={(e) => handleSearch(e.target.value)} />
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" />
                 <path d="M21 21l-4-4" />
@@ -129,22 +132,22 @@ export function ContractsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>رقم العقد</th>
-                  <th>المستأجر</th>
-                  <th>الوحدة</th>
-                  <th>القيمة</th>
-                  <th>الدورة</th>
-                  <th>البداية</th>
-                  <th>النهاية</th>
-                  <th>الحالة</th>
-                  <th>مهمة</th>
+                  <th>{t('contracts.page.col_no')}</th>
+                  <th>{t('contracts.page.col_tenant')}</th>
+                  <th>{t('contracts.page.col_unit')}</th>
+                  <th>{t('contracts.page.col_value')}</th>
+                  <th>{t('contracts.page.col_cycle')}</th>
+                  <th>{t('contracts.page.col_start')}</th>
+                  <th>{t('contracts.page.col_end')}</th>
+                  <th>{t('contracts.page.col_status')}</th>
+                  <th>{t('contracts.page.col_task')}</th>
                 </tr>
               </thead>
               <tbody>
                 {contracts.length === 0 && (
                   <tr>
                     <td colSpan={9}>
-                      <div className="empty-state">لا توجد عقود مطابقة</div>
+                      <div className="empty-state">{t('contracts.page.empty')}</div>
                     </td>
                   </tr>
                 )}
@@ -162,12 +165,12 @@ export function ContractsPage() {
                     <td>
                       <span className={`badge ${badgeOf(STATUS_META, c.status).badgeClass}`}>{badgeOf(STATUS_META, c.status).label}</span>
                     </td>
-                    {/* الإسناد **من داخل المستند** — مكوّنٌ واحد يُركَّب في
-                      * العقود والفواتير والبلاغات. ثلاث نسخ تفترق عند أول
-                      * تعديل: تُصلَح إحداها وتبقى اثنتان بلا شكوى. */}
-                    {/* ⚠️ `stopPropagation` لازم: الصفّ كله يفتح نافذة
-                      * التفاصيل بالنقر، فبدونه يفتح زرُّ الإسناد نافذتين
-                      * معاً — وهو عطلٌ يظهر أول مرة يُنقر فيها. */}
+                    {/* Assigning starts from inside the document: one component
+                      * mounted in contracts, invoices and maintenance requests. Three copies
+                      * would drift at the first edit. */}
+                    {/* `stopPropagation` is required: the whole row opens the
+                      * detail modal on click, so without it the assign button
+                      * would open two windows at once. */}
                     <td onClick={(e) => e.stopPropagation()}>
                       <AssignTaskButton screen="contracts" entityId={c.id} />
                     </td>
@@ -180,13 +183,13 @@ export function ContractsPage() {
           {pageCount > 1 && (
             <div className="toolbar" style={{ justifyContent: 'space-between', marginTop: 10 }}>
               <button className="btn btn-ghost" disabled={page <= 1} onClick={() => void reloadPage(page - 1, search)}>
-                → السابق
+                {t('contracts.page.prev')}
               </button>
               <span style={{ alignSelf: 'center' }}>
-                صفحة {page} من {pageCount} — إجمالي العقود: {total}
+                {t('contracts.page.pagination', { page, pages: pageCount, total })}
               </span>
               <button className="btn btn-ghost" disabled={page >= pageCount} onClick={() => void reloadPage(page + 1, search)}>
-                التالي ←
+                {t('contracts.page.next')}
               </button>
             </div>
           )}

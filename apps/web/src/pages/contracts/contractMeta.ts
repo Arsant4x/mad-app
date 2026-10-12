@@ -1,40 +1,48 @@
 import type { ContractClassification, ContractVatInclusion, DeclaredClassification, DeclaredVatInclusion } from '../../api/contracts';
+import i18n from '../../i18n';
 
-export const CYCLE_LABEL: Record<string, string> = { monthly: 'شهرية', quarterly: 'ربع سنوية', semiannual: 'نصف سنوية', annual: 'سنوية' };
+// Labels are getters so they follow the language chosen at render time.
+export const CYCLE_LABEL: Record<string, string> = {
+  get monthly() { return i18n.t('contracts.meta.cycle.monthly'); },
+  get quarterly() { return i18n.t('contracts.meta.cycle.quarterly'); },
+  get semiannual() { return i18n.t('contracts.meta.cycle.semiannual'); },
+  get annual() { return i18n.t('contracts.meta.cycle.annual'); },
+};
 
-/** خياراتُ الإعلان — بلا القيمة القديمة: لا تُعرض ولا تُختار لعقدٍ جديد (ق-٨٩٨). */
+/** Declaration choices, without the legacy value: it is never offered for a new contract. */
 export const CLASSIFICATION_OPTIONS: { value: DeclaredClassification; label: string }[] = [
-  { value: 'RESIDENTIAL', label: 'سكني — معفى من ضريبة القيمة المضافة' },
-  { value: 'COMMERCIAL', label: 'تجاري — خاضع للضريبة' },
-  // ⚖️ السؤالان ٥٩ و٤١٢ (ق-١٦٠٠): المخدومُ خاضعٌ وإن كان سكناً، والمختلطُ يُقسَّم بنسبةٍ يعلنها المؤجّر.
-  { value: 'SERVICED_LODGING', label: 'إيواء مخدوم أو مؤقّت — خاضع للضريبة' },
-  { value: 'MIXED', label: 'مختلط (سكني وتجاري في عقد واحد) — يُقسَّم بنسبة' },
+  { value: 'RESIDENTIAL', get label() { return i18n.t('contracts.meta.classification_option.residential'); } },
+  { value: 'COMMERCIAL', get label() { return i18n.t('contracts.meta.classification_option.commercial'); } },
+  // Serviced lodging is taxable even when it is housing; a mixed contract is split by a share the lessor declares.
+  { value: 'SERVICED_LODGING', get label() { return i18n.t('contracts.meta.classification_option.serviced_lodging'); } },
+  { value: 'MIXED', get label() { return i18n.t('contracts.meta.classification_option.mixed'); } },
 ];
 export const VAT_INCLUSION_OPTIONS: { value: DeclaredVatInclusion; label: string }[] = [
-  { value: 'EXCLUSIVE', label: 'غير شاملة للضريبة' },
-  { value: 'INCLUSIVE', label: 'شاملة للضريبة' },
+  { value: 'EXCLUSIVE', get label() { return i18n.t('contracts.meta.vat_inclusion.exclusive'); } },
+  { value: 'INCLUSIVE', get label() { return i18n.t('contracts.meta.vat_inclusion.inclusive'); } },
 ];
 export const CLASSIFICATION_LABEL: Record<ContractClassification, string> = {
-  RESIDENTIAL: 'سكني — معفى',
-  COMMERCIAL: 'تجاري — خاضع',
-  SERVICED_LODGING: 'إيواء مخدوم — خاضع',
-  MIXED: 'مختلط — يُقسَّم بنسبة',
-  LEGACY_UNCLASSIFIED: 'قديم — غير مصنَّف',
+  get RESIDENTIAL() { return i18n.t('contracts.meta.classification.residential'); },
+  get COMMERCIAL() { return i18n.t('contracts.meta.classification.commercial'); },
+  get SERVICED_LODGING() { return i18n.t('contracts.meta.classification.serviced_lodging'); },
+  get MIXED() { return i18n.t('contracts.meta.classification.mixed'); },
+  get LEGACY_UNCLASSIFIED() { return i18n.t('contracts.meta.classification.legacy_unclassified'); },
 };
 export const VAT_INCLUSION_LABEL: Record<ContractVatInclusion, string> = {
-  INCLUSIVE: 'شاملة للضريبة',
-  EXCLUSIVE: 'غير شاملة للضريبة',
-  LEGACY_UNDECLARED: 'قديم — غير معلَن',
+  get INCLUSIVE() { return i18n.t('contracts.meta.vat_inclusion.inclusive'); },
+  get EXCLUSIVE() { return i18n.t('contracts.meta.vat_inclusion.exclusive'); },
+  get LEGACY_UNDECLARED() { return i18n.t('contracts.meta.vat_inclusion.legacy_undeclared'); },
 };
 export const isLegacyContract = (c: { classification: ContractClassification; vatInclusion: ContractVatInclusion }) =>
   c.classification === 'LEGACY_UNCLASSIFIED' || c.vatInclusion === 'LEGACY_UNDECLARED';
 
-/** أيدفع المستأجرُ ضريبةً على هذا الإيجار؟ — التجاريُّ والمخدومُ والمختلطُ بجزئه الخاضع (يطابق `isTaxedKind` في الخادم). */
+/** Does the tenant pay VAT on this rent? Commercial, serviced, and mixed for its taxable part (matches `isTaxedKind` on the server). */
 export const isTaxedClassification = (classification: string) => classification === 'COMMERCIAL' || classification === 'SERVICED_LODGING' || classification === 'MIXED';
 
 /**
- * **نسبةُ ما تُحسب عليه الضريبة من القسط** — 1 للخاضع كلِّه، و`1 − نصيب المعفى` للمختلط، و0 للمعفى والقديم.
- * للعرض والاقتراح وحدَهما: الرقمُ المرحَّلُ والإجماليُّ لكلِّ قسطٍ يصلان من الخادم (ق-١٢٤٣).
+ * The share of an installment that VAT is computed on: 1 when fully taxable,
+ * `1 − exempt share` when mixed, 0 when exempt or legacy.
+ * For display and suggestions only: the posted figure and each installment's gross come from the server.
  */
 export function taxedShareOf(contract: { classification: string; exemptSharePercent?: string | null }): number {
   if (contract.classification === 'COMMERCIAL' || contract.classification === 'SERVICED_LODGING') return 1;

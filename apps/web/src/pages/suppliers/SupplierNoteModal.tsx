@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Purchase, SupplierNoteInput } from '../../api/purchases';
 import { fmt, today } from '../../lib/format';
 
 /**
- * تسجيلُ إشعارٍ من المورّد (دائنٍ أو مدين) على فاتورة شراء — **مستندُه هو، يُسجَّل لا يُصدَر**
- * (`ق-١٠٠٦`/①): سببُه وتاريخُه ورقمُه كما على ورقته، والبنودُ الكاملة من الفاتورة. والإشعارُ
- * الدائن الكامل يعيد البضاعةَ المخزنية إلى المورّد ويُخرجها من الرفّ (`ق-١٠٠٦`/③)؛ والمدينُ فوترةٌ
- * إضافية تُسدَّد بسند صرف. وما رُحِّل لا يُعدَّل ولا يُحذف — يُصحَّح بإشعارٍ مقابل.
+ * Records a supplier's credit or debit note against a purchase invoice. The note
+ * is the supplier's own document, so it is recorded, not issued: its reason, date
+ * and number as on their paper, with the full lines of the invoice. A full credit
+ * note returns stock items to the supplier and takes them off the shelf; a debit
+ * note is an extra charge settled with a payment voucher. Posted notes are never
+ * edited or deleted; they are corrected with an opposite note.
  */
 export function SupplierNoteModal({
   purchase,
@@ -19,6 +22,7 @@ export function SupplierNoteModal({
   onCancel: () => void;
   onConfirm: (data: SupplierNoteInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState('');
   const [supplierRef, setSupplierRef] = useState('');
   const [date, setDate] = useState(today());
@@ -33,9 +37,9 @@ export function SupplierNoteModal({
     try {
       await onConfirm({ reason: reason.trim(), date, supplierRef: supplierRef.trim() || undefined });
     } catch (e) {
-      // رفضٌ مسمّىً من الخادم (سقفٌ · رفٌّ لا يكفي · هدفٌ لا يقبل) — يُعرض ولا يُبتلع.
+      // A named server refusal (cap, not enough stock, target not accepted) is shown, never swallowed.
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(message ?? 'تعذّر تسجيل الإشعار');
+      setError(message ?? t('suppliers.note.failed'));
     } finally {
       setSaving(false);
     }
@@ -45,37 +49,37 @@ export function SupplierNoteModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{isCredit ? 'إشعار دائن من المورّد' : 'إشعار مدين من المورّد'}</div>
+          <div className="modal-title">{isCredit ? t('suppliers.note.title_credit') : t('suppliers.note.title_debit')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="hint" style={{ marginBottom: 10 }}>
           {isCredit
-            ? `يُسجَّل إشعارُ المورّد الدائن بكامل قيمة الفاتورة ${purchase.no} (${fmt(purchase.total)}): البضاعةُ المخزنية تعود إلى المورّد وتخرج من الرفّ، وتُعكس ضريبة المدخلات بتاريخ الإشعار، ويقلّ ما ندين به. الفاتورة الأصلية لا تُمسّ.`
-            : `يُسجَّل إشعارُ المورّد المدين بكامل بنود الفاتورة ${purchase.no} (${fmt(purchase.total)}) — فوترةٌ إضافية تزيد ما ندين به وتُسدَّد بسند صرف. الفاتورة الأصلية لا تُمسّ.`}
+            ? t('suppliers.note.intro_credit', { no: purchase.no, total: fmt(purchase.total) })
+            : t('suppliers.note.intro_debit', { no: purchase.no, total: fmt(purchase.total) })}
         </div>
         <div className="two-col">
           <div className="field">
-            <label>تاريخ مستند المورّد</label>
+            <label>{t('suppliers.note.doc_date')}</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="field">
-            <label>رقم الإشعار عند المورّد (مرجع خارجي)</label>
-            <input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder="كما على ورقة المورّد" />
+            <label>{t('suppliers.note.ref')}</label>
+            <input value={supplierRef} onChange={(e) => setSupplierRef(e.target.value)} placeholder={t('suppliers.note.ref_placeholder')} />
           </div>
         </div>
         <div className="field">
-          <label>السبب (إلزامي)</label>
-          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isCredit ? 'مثال: إعادة بضاعة / تخفيض سعر' : 'مثال: فرق سعر / رسوم شحن'} />
+          <label>{t('suppliers.note.reason')}</label>
+          <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={isCredit ? t('suppliers.note.reason_placeholder_credit') : t('suppliers.note.reason_placeholder_debit')} />
         </div>
         {error && <div className="alert-error">{error}</div>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel} disabled={saving}>
-            إلغاء
+            {t('suppliers.common.cancel')}
           </button>
           <button className="btn btn-primary" disabled={!reason.trim() || saving} onClick={submit}>
-            {saving ? 'جارٍ التسجيل…' : 'تسجيل الإشعار'}
+            {saving ? t('suppliers.note.saving') : t('suppliers.note.submit')}
           </button>
         </div>
       </div>

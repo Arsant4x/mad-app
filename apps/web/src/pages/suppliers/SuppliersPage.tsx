@@ -12,23 +12,25 @@ import { PurchaseAttachmentsModal } from './PurchaseAttachmentsModal';
 import { purchaseStatus } from './purchaseStatus';
 import { SupplierDetailModal } from './SupplierDetailModal';
 import { SupplierModal } from './SupplierModal';
+import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 
 type PurchaseSortKey = 'date' | 'no' | 'total' | 'supplier';
-const PURCHASE_SORT_OPTIONS: { key: PurchaseSortKey; label: string }[] = [
-  { key: 'date', label: 'التاريخ' },
-  { key: 'no', label: 'الرقم' },
-  { key: 'total', label: 'المبلغ' },
-  { key: 'supplier', label: 'المورد' },
+const PURCHASE_SORT_OPTIONS: { key: PurchaseSortKey; labelKey: string }[] = [
+  { key: 'date', labelKey: 'suppliers.page.sort.date' },
+  { key: 'no', labelKey: 'suppliers.page.sort.no' },
+  { key: 'total', labelKey: 'suppliers.page.sort.total' },
+  { key: 'supplier', labelKey: 'suppliers.page.sort.supplier' },
 ];
 
 export function SuppliersPage() {
+  const { t } = useTranslation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by default for day-to-day work.
   const [showArchived, setShowArchived] = useState(false);
   const [sortKey, setSortKey] = useState<PurchaseSortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -126,16 +128,16 @@ export function SuppliersPage() {
     try {
       await deletePurchase(pendingDeletePurchase.id);
     } catch (e) {
-      // فاتورةٌ عليها سندُ صرفٍ لا تُحذف (409 مسمّاة) — تُعرض رسالةُ الخادم ولا يُبتلع الرفض.
+      // An invoice with a payment voucher cannot be deleted (named 409); show the server message, never swallow it.
       const d = (e as { response?: { data?: { message?: string } } })?.response?.data;
-      setPurchaseDeleteError(d?.message ?? 'تعذّر حذف الفاتورة');
+      setPurchaseDeleteError(d?.message ?? t('suppliers.page.delete_invoice_failed'));
       return;
     }
     setPendingDeletePurchase(null);
     await reload();
   }
 
-  /** السدادُ سندُ صرفٍ يُرحَّل (ق-٨٦٦) — لا علَمٌ يُقلب ولا «تراجعٌ» يمحوه؛ التصحيحُ بسندٍ عاكس. */
+  /** Payment is a posted voucher, not a flag to flip or undo; corrections use a reversing voucher. */
   async function afterPaymentSaved() {
     setPayingPurchase(null);
     await reload();
@@ -147,26 +149,26 @@ export function SuppliersPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الموردون</div>
-          <div className="page-sub">سجل موردي المشتريات ومزودي الخدمات</div>
+          <div className="page-title">{t('suppliers.page.title')}</div>
+          <div className="page-sub">{t('suppliers.page.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setSupplierModal({ mode: 'create' })}>
-            + مورد جديد
+            {t('suppliers.page.new_supplier')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل المورد..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('suppliers.page.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('suppliers.page.show_archived')}
         </button>
       </div>
 
@@ -174,10 +176,10 @@ export function SuppliersPage() {
         <table>
           <thead>
             <tr>
-              <th>اسم المورد</th>
-              <th>الرقم الضريبي</th>
-              <th>الجوال</th>
-              <th>الفئة</th>
+              <th>{t('suppliers.page.col_name')}</th>
+              <th>{t('suppliers.page.col_vat')}</th>
+              <th>{t('suppliers.page.col_mobile')}</th>
+              <th>{t('suppliers.page.col_category')}</th>
               <th></th>
             </tr>
           </thead>
@@ -185,14 +187,14 @@ export function SuppliersPage() {
             {supplierRows.length === 0 && (
               <tr>
                 <td colSpan={5}>
-                  <div className="empty-state">لا يوجد موردون مطابقون</div>
+                  <div className="empty-state">{t('suppliers.page.empty_suppliers')}</div>
                 </td>
               </tr>
             )}
             {supplierRows.map((s) => (
               <tr key={s.id}>
                 <td style={{ cursor: 'pointer' }} onClick={() => setDetailFor(s)}>
-                  {s.name} 👁{s.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}
+                  {s.name} {t('suppliers.page.view_icon')}{s.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('suppliers.page.archived')}</span>}
                 </td>
                 <td className="num">{s.vatNumber || '—'}</td>
                 <td className="num">{s.phone || '—'}</td>
@@ -200,11 +202,11 @@ export function SuppliersPage() {
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '👁 عرض التفاصيل', onClick: () => setDetailFor(s) },
-                      { label: '✎ تعديل', onClick: () => setSupplierModal({ mode: 'edit', supplier: s }) },
-                      { label: s.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setSupplierArchived(s.id, !s.archived).then(reload) },
+                      { label: t('suppliers.page.action_view'), onClick: () => setDetailFor(s) },
+                      { label: t('suppliers.page.action_edit'), onClick: () => setSupplierModal({ mode: 'edit', supplier: s }) },
+                      { label: s.archived ? t('suppliers.page.action_unarchive') : t('suppliers.page.action_archive'), onClick: () => setSupplierArchived(s.id, !s.archived).then(reload) },
                       '-',
-                      { label: '🗑 حذف', onClick: () => setPendingDeleteSupplier(s), danger: true },
+                      { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeleteSupplier(s), danger: true },
                     ]}
                   />
                 </td>
@@ -216,16 +218,16 @@ export function SuppliersPage() {
 
       <div className="card">
         <div className="card-head">
-          <div className="card-title">فواتير الشراء المسجَّلة</div>
+          <div className="card-title">{t('suppliers.page.purchases_title')}</div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select className="sort-select" value={sortKey} onChange={(e) => setSortKey(e.target.value as PurchaseSortKey)}>
               {PURCHASE_SORT_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>
-                  ترتيب حسب: {o.label}
+                  {t('suppliers.page.sort_by', { label: t(o.labelKey) })}
                 </option>
               ))}
             </select>
-            <button className="menu-btn" title="عكس الترتيب" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+            <button className="menu-btn" title={t('suppliers.page.reverse_sort')} onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
               {sortDir === 'asc' ? '⬆' : '⬇'}
             </button>
             <button
@@ -235,21 +237,21 @@ export function SuppliersPage() {
                 setPurchaseModal({ mode: 'create' });
               }}
             >
-              + تسجيل فاتورة شراء
+              {t('suppliers.page.new_purchase')}
             </button>
           </div>
         </div>
         <table>
           <thead>
             <tr>
-              <th>رقم</th>
-              <th>المورد</th>
-              <th>التاريخ</th>
-              <th>الفئة</th>
-              <th>قبل الضريبة</th>
-              <th>الضريبة</th>
-              <th>الإجمالي</th>
-              <th>الحالة</th>
+              <th>{t('suppliers.page.col_no')}</th>
+              <th>{t('suppliers.page.col_supplier')}</th>
+              <th>{t('suppliers.page.col_date')}</th>
+              <th>{t('suppliers.page.col_category')}</th>
+              <th>{t('suppliers.page.col_subtotal')}</th>
+              <th>{t('suppliers.page.col_tax')}</th>
+              <th>{t('suppliers.page.col_total')}</th>
+              <th>{t('suppliers.page.col_status')}</th>
               <th></th>
             </tr>
           </thead>
@@ -257,7 +259,7 @@ export function SuppliersPage() {
             {purchaseRows.length === 0 && (
               <tr>
                 <td colSpan={9}>
-                  <div className="empty-state">لا توجد فواتير شراء مسجَّلة</div>
+                  <div className="empty-state">{t('suppliers.page.empty_purchases')}</div>
                 </td>
               </tr>
             )}
@@ -268,34 +270,34 @@ export function SuppliersPage() {
                   <td className="num">
                     {p.no}
                     {p.docType === 'SUPPLIER_CREDIT_NOTE' && (
-                      <span className="badge paid" style={{ fontSize: 9, marginRight: 4 }}>
-                        إشعار دائن من المورّد
+                      <span className="badge paid" style={{ fontSize: 9, marginInlineStart: 4 }}>
+                        {t('suppliers.page.badge_credit')}
                       </span>
                     )}
                     {p.docType === 'SUPPLIER_DEBIT_NOTE' && (
-                      <span className="badge due" style={{ fontSize: 9, marginRight: 4 }}>
-                        إشعار مدين من المورّد
+                      <span className="badge due" style={{ fontSize: 9, marginInlineStart: 4 }}>
+                        {t('suppliers.page.badge_debit')}
                       </span>
                     )}
-                    {p.supplierRef && <div className="hint">مرجع المورّد: {p.supplierRef}</div>}
+                    {p.supplierRef && <div className="hint">{t('suppliers.page.supplier_ref', { ref: p.supplierRef })}</div>}
                   </td>
                   <td>{p.supplier.name}</td>
                   <td className="num">{dfmt(p.date)}</td>
                   <td>
                     {p.category || '—'}
                     {p.excludeFromVat && (
-                      <span className="badge draft" style={{ fontSize: 9, marginRight: 4 }}>
-                        مستبعدة من الإقرار
+                      <span className="badge draft" style={{ fontSize: 9, marginInlineStart: 4 }}>
+                        {t('suppliers.page.badge_excluded')}
                       </span>
                     )}
                     {p.amortize && p.amortizeMonths ? (
-                      <span className="badge" style={{ fontSize: 9, marginRight: 4 }}>
-                        استهلاك {p.amortizeMonths} شهر
+                      <span className="badge" style={{ fontSize: 9, marginInlineStart: 4 }}>
+                        {t('suppliers.page.badge_amortize', { n: p.amortizeMonths })}
                       </span>
                     ) : null}
                   </td>
                   <td className="num">{fmt(p.subtotal)}</td>
-                  <td className="num">{p.exempt ? 'معفاة' : fmt(p.taxAmount)}</td>
+                  <td className="num">{p.exempt ? t('suppliers.common.exempt') : fmt(p.taxAmount)}</td>
                   <td className="num">{fmt(p.total)}</td>
                   <td>
                     <span className={`badge ${status.badgeClass}`}>{status.label}</span>
@@ -303,27 +305,27 @@ export function SuppliersPage() {
                   <td>
                     <RowMenu
                       actions={
-                        // ⚖️ الإشعارُ مرحَّلٌ لا يُعدَّل ولا يُحذف (`ق-١٠٠٦`/②) — فلا تعديلَ ولا حذفَ عليه، وتصحيحُه بإشعارٍ مقابل.
-                        // والمُلغاةُ بقيد عكس (`ق-٩٩٧`/②) مُغلَقة: مستنداتُها تُقرأ ولا شيءَ يُكتب عليها.
+                        // A posted note is never edited or deleted; it is corrected with an opposite note.
+                        // An invoice voided by reversal is closed: its documents can be read, nothing is written to it.
                         p.voidedAt
-                          ? [{ label: '📎 المستندات', onClick: () => setAttachmentsFor(p) }]
+                          ? [{ label: t('suppliers.page.action_documents'), onClick: () => setAttachmentsFor(p) }]
                           : p.docType === 'PURCHASE'
                           ? [
-                              ...(p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
-                              { label: '↩ إشعار دائن من المورّد', onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
-                              { label: '↪ إشعار مدين من المورّد', onClick: () => setNoteFor({ purchase: p, side: 'debit' }) },
-                              { label: '✎ تعديل', onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
-                              { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
+                              ...(p.status !== 'PAID' ? [{ label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) }] : []),
+                              { label: t('suppliers.page.action_credit'), onClick: () => setNoteFor({ purchase: p, side: 'credit' }) },
+                              { label: t('suppliers.page.action_debit'), onClick: () => setNoteFor({ purchase: p, side: 'debit' }) },
+                              { label: t('suppliers.page.action_edit'), onClick: () => setPurchaseModal({ mode: 'edit', purchase: p }) },
+                              { label: t('suppliers.page.action_documents'), onClick: () => setAttachmentsFor(p) },
                               '-',
-                              { label: '🗑 حذف', onClick: () => setPendingDeletePurchase(p), danger: true },
+                              { label: t('suppliers.page.action_delete'), onClick: () => setPendingDeletePurchase(p), danger: true },
                             ]
                           : [
-                              ...(p.docType === 'SUPPLIER_DEBIT_NOTE' && p.status !== 'PAID' ? [{ label: '💳 سند صرف', onClick: () => setPayingPurchase(p) }] : []),
+                              ...(p.docType === 'SUPPLIER_DEBIT_NOTE' && p.status !== 'PAID' ? [{ label: t('suppliers.page.action_payment'), onClick: () => setPayingPurchase(p) }] : []),
                               {
-                                label: p.docType === 'SUPPLIER_CREDIT_NOTE' ? '↪ إشعار مدين يصحّحه' : '↩ إشعار دائن يصحّحه',
+                                label: p.docType === 'SUPPLIER_CREDIT_NOTE' ? t('suppliers.page.action_fix_debit') : t('suppliers.page.action_fix_credit'),
                                 onClick: () => setNoteFor({ purchase: p, side: p.docType === 'SUPPLIER_CREDIT_NOTE' ? 'debit' : 'credit' }),
                               },
-                              { label: '📎 المستندات', onClick: () => setAttachmentsFor(p) },
+                              { label: t('suppliers.page.action_documents'), onClick: () => setAttachmentsFor(p) },
                             ]
                       }
                     />
@@ -343,9 +345,9 @@ export function SuppliersPage() {
 
       {pendingDeleteSupplier && (
         <ConfirmModal
-          title="حذف المورد"
-          body={supplierDeleteError ?? `حذف المورد "${pendingDeleteSupplier.name}"؟ لا يمكن التراجع عن هذا الإجراء.`}
-          confirmLabel="حذف"
+          title={t('suppliers.page.delete_supplier_title')}
+          body={supplierDeleteError ?? t('suppliers.page.delete_supplier_body', { name: pendingDeleteSupplier.name })}
+          confirmLabel={t('suppliers.common.delete')}
           onCancel={() => {
             setPendingDeleteSupplier(null);
             setSupplierDeleteError(null);
@@ -373,12 +375,9 @@ export function SuppliersPage() {
 
       {pendingDeletePurchase && (
         <ConfirmModal
-          title="إلغاء فاتورة الشراء"
-          body={
-            purchaseDeleteError ??
-            `إلغاء الفاتورة ${pendingDeletePurchase.no}؟ يُعكس قيدُها بقيدٍ بتاريخ اليوم ويعود ما استُلم من رفّها، ويبقى الصفُّ مُلغىً في السجلّ. وما استُهلك من بضاعتها لا يُلغى — مخرجُه إشعارٌ من المورّد.`
-          }
-          confirmLabel="إلغاء الفاتورة"
+          title={t('suppliers.page.delete_purchase_title')}
+          body={purchaseDeleteError ?? t('suppliers.page.delete_purchase_body', { no: pendingDeletePurchase.no })}
+          confirmLabel={t('suppliers.page.delete_purchase_confirm')}
           onCancel={() => {
             setPendingDeletePurchase(null);
             setPurchaseDeleteError(null);

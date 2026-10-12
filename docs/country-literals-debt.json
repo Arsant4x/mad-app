@@ -148,14 +148,6 @@
       "count": 4,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/contracts/ContractModal.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/contracts/HandoversSection.tsx": {
-      "count": 1,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/customers/CustomerDetailModal.tsx": {
       "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
@@ -166,10 +158,6 @@
     },
     "apps/web/src/pages/DashboardPage.tsx": {
       "count": 4,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/developer/SupportAccessSection.tsx": {
-      "count": 1,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/invoices/InvoiceBuilderView.tsx": {
@@ -189,7 +177,7 @@
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/pos/PosPage.tsx": {
-      "count": 9,
+      "count": 7,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/products/ProductModal.tsx": {
@@ -212,16 +200,8 @@
       "count": 3,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
-    "apps/web/src/pages/suppliers/IncorporationReportPage.tsx": {
-      "count": 2,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
     "apps/web/src/pages/suppliers/PurchaseModal.tsx": {
-      "count": 3,
-      "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
-    },
-    "apps/web/src/pages/suppliers/SupplierDetailModal.tsx": {
-      "count": 3,
+      "count": 2,
       "reason": "قائمٌ قبل القاعدة الملزمة (ق-١٣٥٠) — معدودٌ في مسح التوطين (docs/domain-scan/25)، وينقص ولا يزيد"
     },
     "apps/web/src/pages/tasks/MyTasksPage.tsx": {
