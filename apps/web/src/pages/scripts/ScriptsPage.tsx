@@ -1,22 +1,26 @@
 import { tagOf } from '../../lib/statusBadge';
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { createScript, deleteScript, listScripts, setScriptArchived, updateScript, type MessageScript, type ScriptAudience, type ScriptInput } from '../../api/scripts';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
 import { ScriptModal } from './ScriptModal';
 import i18n from '../../i18n';
 
-const AUDIENCE_META: Record<ScriptAudience, { label: string; tagClass: string }> = {
-  TENANT: { label: 'مستأجرون', tagClass: 'type-asset' },
-  CUSTOMER: { label: 'عملاء', tagClass: 'type-rev' },
-  EMPLOYEE: { label: 'موظفون', tagClass: 'type-exp' },
-};
+const audienceMeta = (t: TFunction): Record<ScriptAudience, { label: string; tagClass: string }> => ({
+  TENANT: { label: t('scripts.audience.TENANT'), tagClass: 'type-asset' },
+  CUSTOMER: { label: t('scripts.audience.CUSTOMER'), tagClass: 'type-rev' },
+  EMPLOYEE: { label: t('scripts.audience.EMPLOYEE'), tagClass: 'type-exp' },
+});
 
 export function ScriptsPage() {
+  const { t } = useTranslation();
+  const AUDIENCE_META = audienceMeta(t);
   const [scripts, setScripts] = useState<MessageScript[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Include archived records; off by day-to-day default (gap-analysis §1).
+  // Include archived records; off by default for day-to-day work.
   const [showArchived, setShowArchived] = useState(false);
   const [audienceFilter, setAudienceFilter] = useState<'all' | ScriptAudience>('all');
   const [modal, setModal] = useState<{ mode: 'create' } | { mode: 'edit'; script: MessageScript } | null>(null);
@@ -70,30 +74,30 @@ export function ScriptsPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">قوالب الرسائل</div>
-          <div className="page-sub">نصوص جاهزة للتواصل مع المستأجرين والعملاء والموظفين</div>
+          <div className="page-title">{t('scripts.title')}</div>
+          <div className="page-sub">{t('scripts.subtitle')}</div>
         </div>
         <div className="topbar-actions">
           <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-            + قالب جديد
+            {t('scripts.new_button')}
           </button>
         </div>
       </div>
 
       <div className="toolbar">
         <div className="search-box">
-          <input placeholder="ابحث بأي تفاصيل القالب..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input placeholder={t('scripts.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
         </div>
         <button className={showArchived ? 'chip active' : 'chip'} onClick={() => setShowArchived((v) => !v)}>
-          عرض المؤرشفة
+          {t('scripts.show_archived')}
         </button>
         <div className="field" style={{ marginBottom: 0 }}>
           <select value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value as 'all' | ScriptAudience)}>
-            <option value="all">كل الفئات</option>
+            <option value="all">{t('scripts.all_audiences')}</option>
             {(Object.keys(AUDIENCE_META) as ScriptAudience[]).map((a) => (
               <option key={a} value={a}>
                 {tagOf(AUDIENCE_META, a).label}
@@ -107,9 +111,9 @@ export function ScriptsPage() {
         <table>
           <thead>
             <tr>
-              <th>الفئة</th>
-              <th>العنوان</th>
-              <th>النص</th>
+              <th>{t('scripts.col.audience')}</th>
+              <th>{t('scripts.col.title')}</th>
+              <th>{t('scripts.col.text')}</th>
               <th></th>
             </tr>
           </thead>
@@ -117,7 +121,7 @@ export function ScriptsPage() {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={4}>
-                  <div className="empty-state">لا توجد قوالب مطابقة</div>
+                  <div className="empty-state">{t('scripts.empty')}</div>
                 </td>
               </tr>
             )}
@@ -126,14 +130,14 @@ export function ScriptsPage() {
                 <td>
                   <span className={`type-tag ${tagOf(AUDIENCE_META, s.audience).tagClass}`}>{tagOf(AUDIENCE_META, s.audience).label}</span>
                 </td>
-                <td>{s.title}{s.archived && <span className="badge draft" style={{ marginRight: 6 }}>مؤرشف</span>}</td>
+                <td>{s.title}{s.archived && <span className="badge draft" style={{ marginInlineStart: 6 }}>{t('scripts.archived')}</span>}</td>
                 <td style={{ maxWidth: 420, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.text}</td>
                 <td>
                   <RowMenu
                     actions={[
-                      { label: '✎ تعديل', onClick: () => setModal({ mode: 'edit', script: s }) },
-                      { label: s.archived ? '📂 إلغاء الأرشفة' : '🗄 أرشفة', onClick: () => setScriptArchived(s.id, !s.archived).then(reload) },
-                      { label: '🗑 حذف', onClick: () => setPendingDelete(s), danger: true },
+                      { label: t('scripts.menu.edit'), onClick: () => setModal({ mode: 'edit', script: s }) },
+                      { label: s.archived ? t('scripts.menu.unarchive') : t('scripts.menu.archive'), onClick: () => setScriptArchived(s.id, !s.archived).then(reload) },
+                      { label: t('scripts.menu.delete'), onClick: () => setPendingDelete(s), danger: true },
                     ]}
                   />
                 </td>
@@ -147,9 +151,9 @@ export function ScriptsPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف القالب"
-          body={deleteError ?? `حذف قالب "${pendingDelete.title}"؟`}
-          confirmLabel="حذف"
+          title={t('scripts.delete_title')}
+          body={deleteError ?? t('scripts.delete_body', { title: pendingDelete.title })}
+          confirmLabel={t('scripts.delete')}
           onCancel={() => {
             setPendingDelete(null);
             setDeleteError(null);

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createBranch, deleteBranch, listBranches, updateBranch, type Branch, type BranchInput } from '../../api/branches';
 import { listWarehouses, type Warehouse } from '../../api/warehouses';
 import { useAuth } from '../../auth/AuthContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { RowMenu } from '../../components/RowMenu';
-import { BranchModal } from './BranchModal';
+import { BranchModal, branchTypeLabel } from './BranchModal';
 import i18n from '../../i18n';
 
 export function BranchesPage() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   // Creating/editing branches is owner-only server-side; hiding the controls
   // keeps an employee from being offered an action that would 403.
@@ -67,13 +69,13 @@ export function BranchesPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">الفروع</div>
-          <div className="page-sub">كل فرع وحدة تشغيلية — له مخزونه وصندوقه وتقاريره، والموظف يُمنح الفروع التي يراها</div>
+          <div className="page-title">{t('branches.title')}</div>
+          <div className="page-sub">{t('branches.subtitle')}</div>
         </div>
         {canManage && (
           <div className="topbar-actions">
             <button className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
-              + فرع جديد
+              {t('branches.new_button')}
             </button>
           </div>
         )}
@@ -83,26 +85,26 @@ export function BranchesPage() {
 
       <div className="toolbar">
         <div className="search-box">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ابحث باسم الفرع أو نوعه..." />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('branches.search_placeholder')} />
         </div>
       </div>
 
       {rows.length === 0 ? (
         <div className="empty-state">
           {branches.length === 0
-            ? 'لا توجد فروع بعد. المنشأة بموقع واحد لا تحتاج فروعاً — كل شيء يبقى على مستوى الشركة.'
-            : 'لا نتائج مطابقة للبحث.'}
+            ? t('branches.empty')
+            : t('branches.no_results')}
         </div>
       ) : (
         <div className="card" style={{ padding: 0 }}>
           <table>
             <thead>
               <tr>
-                <th>اسم الفرع</th>
-                <th>النوع</th>
-                <th>النشاط</th>
-                <th>المستودع الافتراضي</th>
-                <th>ساعات العمل</th>
+                <th>{t('branches.col.name')}</th>
+                <th>{t('branches.col.type')}</th>
+                <th>{t('branches.col.activity')}</th>
+                <th>{t('branches.col.default_warehouse')}</th>
+                <th>{t('branches.col.hours')}</th>
                 {canManage && <th></th>}
               </tr>
             </thead>
@@ -110,7 +112,7 @@ export function BranchesPage() {
               {rows.map((b) => (
                 <tr key={b.id}>
                   <td>{b.name}</td>
-                  <td>{b.type ?? '—'}</td>
+                  <td>{b.type ? branchTypeLabel(b.type) : '—'}</td>
                   <td>{b.activity?.name ?? '—'}</td>
                   <td>{warehouseName(b.warehouseId)}</td>
                   <td>{b.hours ?? '—'}</td>
@@ -118,8 +120,8 @@ export function BranchesPage() {
                     <td>
                       <RowMenu
                         actions={[
-                          { label: 'تعديل', onClick: () => setModal({ mode: 'edit', branch: b }) },
-                          { label: 'حذف', onClick: () => setPendingDelete(b), danger: true },
+                          { label: t('branches.edit'), onClick: () => setModal({ mode: 'edit', branch: b }) },
+                          { label: t('branches.delete'), onClick: () => setPendingDelete(b), danger: true },
                         ]}
                       />
                     </td>
@@ -142,9 +144,9 @@ export function BranchesPage() {
 
       {pendingDelete && (
         <ConfirmModal
-          title="حذف الفرع"
-          body={`سيُحذف "${pendingDelete.name}". لا يمكن حذف فرع له حركات — انقل بياناته أو أعد إسنادها أولاً.`}
-          confirmLabel="حذف"
+          title={t('branches.delete_title')}
+          body={t('branches.delete_body', { name: pendingDelete.name })}
+          confirmLabel={t('branches.delete')}
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}
         />

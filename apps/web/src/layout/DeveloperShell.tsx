@@ -3,20 +3,20 @@ import { Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthContext';
 
-/** The platform admin's own shell — deliberately separate from AppShell:
+/** The platform admin's own shell, deliberately separate from AppShell:
  * a platform admin has no company/allowedScreens to gate a business nav
  * against, just the one developer-panel screen and a logout button. */
 export function DeveloperShell() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  // نفس معالجة أ٣ في AppShell: تحت 860px يصير الشريط منزلقاً، وبدون هذا
-  // الزر تُقفَل لوحة المطوّر على الجوال بلا مدخل — وشاشة مقفلة تُقرأ عطلاً.
-  // (لا إغلاق-عند-التنقّل هنا: الشل بوجهة واحدة.)
+  // Same as AppShell: below 860px the sidebar slides in, and without this button
+  // the developer panel would be unreachable on a phone. No close-on-navigate
+  // here because the shell has a single destination.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className={mobileMenuOpen ? 'app-shell mobile-menu-open' : 'app-shell'}>
-      <button className="mobile-menu-btn" title="القائمة" aria-label="القائمة" onClick={() => setMobileMenuOpen((v) => !v)}>
+      <button className="mobile-menu-btn" title={t('common.menu')} aria-label={t('common.menu')} onClick={() => setMobileMenuOpen((v) => !v)}>
         {mobileMenuOpen ? (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ width: 19, height: 19 }}>
             <path d="M6 6l12 12M18 6L6 18" />

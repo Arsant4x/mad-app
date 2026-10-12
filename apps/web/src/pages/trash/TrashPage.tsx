@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { listTrash, purgeFromTrash, restoreFromTrash, type TrashList } from '../../api/trash';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { dfmt } from '../../lib/format';
 
 /**
- * سلة المحذوفات. Deleting a master record hides it everywhere without losing
- * it; this is where it comes back from — or goes for good.
+ * Recycle bin. Deleting a master record hides it everywhere without losing
+ * it; this is where it comes back from, or goes for good.
  *
  * Records are shown by their own name and how long is left, because the two
  * questions someone opening this screen has are "which one was it" and "how
  * long do I have".
  */
 export function TrashPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<TrashList | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -24,7 +26,7 @@ export function TrashPage() {
 
   useEffect(() => {
     reload()
-      .catch(() => setError('تعذّر تحميل سلة المحذوفات'))
+      .catch(() => setError(t('trash.load_failed')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -50,9 +52,9 @@ export function TrashPage() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">سلة المحذوفات</div>
+          <div className="page-title">{t('trash.title')}</div>
           <div className="page-sub">
-            كل ما حُذف يبقى قابلاً للاسترجاع {data?.retentionDays ?? 30} يوماً، ثم يُمسح نهائياً — إلا ما يشير إليه سجلٌّ يُحفظ نظاماً (فواتير · قيود · بلاغات): يبقى في السلة حتى انقضاء مدة الحفظ
+            {t('trash.subtitle', { n: data?.retentionDays ?? 30 })}
           </div>
         </div>
       </div>
@@ -60,7 +62,7 @@ export function TrashPage() {
       {error && <p className="error-text">{error}</p>}
 
       {total === 0 ? (
-        <div className="empty-state">السلة فارغة — لا سجلات محذوفة.</div>
+        <div className="empty-state">{t('trash.empty')}</div>
       ) : (
         data!.groups.map((group) => (
           <div className="card" key={group.entity} style={{ marginBottom: 14 }}>
@@ -72,9 +74,9 @@ export function TrashPage() {
             <table>
               <thead>
                 <tr>
-                  <th>السجل</th>
-                  <th>تاريخ الحذف</th>
-                  <th>المتبقّي</th>
+                  <th>{t('trash.col.record')}</th>
+                  <th>{t('trash.col.deleted_at')}</th>
+                  <th>{t('trash.col.remaining')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -85,28 +87,28 @@ export function TrashPage() {
                     <td className="num">{dfmt(item.deletedAt)}</td>
                     <td>
                       {item.retainedUntil ? (
-                        /* محفوظٌ نظاماً (ق-١٢٧١/أ): لا عدَّ تنازلياً على ما لن يُمحى — يُقال الأجلُ وما يحفظه */
+                        /* Legally retained: no countdown on what will not be erased; show the date and what holds it */
                         <span className="badge draft" title={item.retainedBy.join(' · ')} data-testid="retained">
-                          محفوظ نظاماً حتى {item.retainedUntil} — له {item.retainedBy.join(' · ')}
+                          {t('trash.retained', { until: item.retainedUntil, by: item.retainedBy.join(' · ') })}
                         </span>
                       ) : (
                         /* Colour carries urgency: a week or less is the point at
                             which someone should actually decide. */
-                        <span className={`badge ${item.daysLeft <= 7 ? 'overdue' : 'draft'}`}>{item.daysLeft} يوم</span>
+                        <span className={`badge ${item.daysLeft <= 7 ? 'overdue' : 'draft'}`}>{t('trash.days_left', { n: item.daysLeft })}</span>
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => restoreFromTrash(group.entity, item.id), 'تعذّر الاسترجاع')}>
-                        استرجاع
+                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(() => restoreFromTrash(group.entity, item.id), t('trash.restore_failed'))}>
+                        {t('trash.restore')}
                       </button>{' '}
-                      {/* الخادمُ يرفض المحوَ على المحفوظ بـ409 مسمّىً؛ والزرُّ يُعطَّل لا يُخفى — فالتفسيرُ في العنوان */}
+                      {/* The server refuses to purge a retained record with a named 409; the button is disabled, not hidden, so the title can explain why */}
                       <button
                         className="btn btn-ghost btn-sm"
                         disabled={busy || Boolean(item.retainedUntil)}
-                        title={item.retainedUntil ? `محفوظ نظاماً حتى ${item.retainedUntil}` : undefined}
+                        title={item.retainedUntil ? t('trash.retained_until', { until: item.retainedUntil }) : undefined}
                         onClick={() => setPendingPurge({ entity: group.entity, id: item.id, name: item.name })}
                       >
-                        حذف نهائي
+                        {t('trash.purge')}
                       </button>
                     </td>
                   </tr>
@@ -119,13 +121,13 @@ export function TrashPage() {
 
       {pendingPurge && (
         <ConfirmModal
-          title="حذف نهائي"
-          body={`سيُمسح "${pendingPurge.name}" نهائياً ولا يمكن استرجاعه بعدها.`}
-          confirmLabel="حذف نهائي"
+          title={t('trash.purge')}
+          body={t('trash.purge_body', { name: pendingPurge.name })}
+          confirmLabel={t('trash.purge')}
           onConfirm={() => {
             const target = pendingPurge;
             setPendingPurge(null);
-            return run(() => purgeFromTrash(target.entity, target.id), 'تعذّر الحذف النهائي');
+            return run(() => purgeFromTrash(target.entity, target.id), t('trash.purge_failed'));
           }}
           onCancel={() => setPendingPurge(null)}
         />

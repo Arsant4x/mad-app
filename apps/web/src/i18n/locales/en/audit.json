@@ -1,0 +1,48 @@
+{
+  "title": "Audit log",
+  "immutable_badge": "Cannot be deleted or edited",
+  "subtitle": "Every action in the system recorded automatically, for audit and accountability",
+  "search_placeholder": "Search by user or item...",
+  "all_sections": "All sections",
+  "all_actions": "All action types",
+  "simplified_view": "Simplified view",
+  "load_failed": "Could not load the audit log",
+  "loading": "Loading…",
+  "empty": "No matching recorded actions.",
+  "col": {
+    "datetime": "Date and time",
+    "user": "User",
+    "section": "Section",
+    "action": "Action type",
+    "details": "Details"
+  },
+  "owner_suffix": " (owner)",
+  "hide": "Hide",
+  "details": "Details",
+  "ip_label": "IP:",
+  "actions": {
+    "add": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "record": "Record",
+    "review": "Approve",
+    "audit": "Audit",
+    "view": "View"
+  },
+  "delegation": {
+    "title": "Delegation log",
+    "load_failed": "Could not load the delegation log",
+    "sequence_break": "⚠️ Gap in the log sequence at number {{at}}; expected {{expected}}. Check the database immediately.",
+    "empty": "No delegations in this company yet.",
+    "rows_title": "Rows (revoked ones are sealed, not deleted)",
+    "col": {
+      "from": "From",
+      "to": "To",
+      "grants": "Permissions",
+      "state": "Status",
+      "date": "Date"
+    },
+    "active": "Active",
+    "revoked": "Revoked"
+  }
+}

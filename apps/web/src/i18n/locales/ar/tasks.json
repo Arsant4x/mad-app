@@ -1,0 +1,45 @@
+{
+  "title": "مهامي",
+  "loading": "جارٍ التحميل…",
+  "empty": "لا مهام مُسنَدة إليك.",
+  "load_failed": "تعذّر تحميل المهام",
+  "log_load_failed": "تعذّر تحميل سجل المهمة",
+  "comment_failed": "تعذّر إرسال التعليق",
+  "transition_failed": "تعذّر تغيير حالة المهمة",
+  "col": {
+    "task": "المهمة",
+    "priority": "الأولوية",
+    "department": "القسم",
+    "document": "المستند",
+    "status": "الحالة",
+    "due": "الموعد",
+    "action": "إجراء"
+  },
+  "status": {
+    "OPEN": "مفتوحة",
+    "IN_PROGRESS": "قيد العمل",
+    "BLOCKED": "متعثّرة",
+    "DONE": "تمّت",
+    "CANCELLED": "أُلغيت"
+  },
+  "priority": {
+    "URGENT": "عاجل",
+    "HIGH": "مرتفع",
+    "NORMAL": "عادي"
+  },
+  "transition": {
+    "OPEN": "إعادة فتح",
+    "IN_PROGRESS": "ابدأ",
+    "BLOCKED": "تعثّرت",
+    "DONE": "تمّت",
+    "CANCELLED": "إلغاء"
+  },
+  "locked_target": "{{screen}} — لا تملك صلاحية فتحه",
+  "overdue_suffix": " — متأخّرة",
+  "no_lines": "لا سطور بعد",
+  "comment": "تعليق",
+  "created": "إنشاء",
+  "log_transition": "{{from}} ← {{to}}",
+  "comment_placeholder": "تعليقٌ لطرف المهمّة الآخر — لا يغيّر حالتها",
+  "send": "أرسل"
+}

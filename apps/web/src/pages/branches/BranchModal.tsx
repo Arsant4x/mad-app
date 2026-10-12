@@ -1,9 +1,22 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Branch, BranchInput } from '../../api/branches';
 import type { Warehouse } from '../../api/warehouses';
 import i18n from '../../i18n';
 
-const BRANCH_TYPES = ['فرع', 'محل', 'مستودع', 'مكتب'];
+// The value is what the server stores; the key names its label.
+const BRANCH_TYPES = [
+  { value: 'فرع', key: 'branch' }, // i18n-exempt: stored branch type value
+  { value: 'محل', key: 'shop' }, // i18n-exempt: stored branch type value
+  { value: 'مستودع', key: 'warehouse' }, // i18n-exempt: stored branch type value
+  { value: 'مكتب', key: 'office' }, // i18n-exempt: stored branch type value
+];
+
+/** Label of a stored branch type in the interface language; unknown values show as stored. */
+export function branchTypeLabel(value: string): string {
+  const known = BRANCH_TYPES.find((b) => b.value === value);
+  return known ? i18n.t(`branches.types.${known.key}`) : value;
+}
 
 export function BranchModal({
   editing,
@@ -16,8 +29,9 @@ export function BranchModal({
   onCancel: () => void;
   onSave: (data: BranchInput) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(editing?.name ?? '');
-  const [type, setType] = useState(editing?.type ?? BRANCH_TYPES[0]);
+  const [type, setType] = useState(editing?.type ?? BRANCH_TYPES[0].value);
   const [hours, setHours] = useState(editing?.hours ?? '');
   const [warehouseId, setWarehouseId] = useState(editing?.warehouseId ?? '');
   const [saving, setSaving] = useState(false);
@@ -49,35 +63,35 @@ export function BranchModal({
     <div className="overlay" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <div className="modal-title">{editing ? 'تعديل الفرع' : 'فرع جديد'}</div>
+          <div className="modal-title">{editing ? t('branches.modal.edit_title') : t('branches.modal.new_title')}</div>
           <button className="modal-close" onClick={onCancel}>
             ✕
           </button>
         </div>
         <div className="field">
-          <label>اسم الفرع</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الفرع الرئيسي" />
+          <label>{t('branches.modal.name')}</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('branches.modal.name_placeholder')} />
         </div>
         <div className="two-col">
           <div className="field">
-            <label>النوع</label>
+            <label>{t('branches.modal.type')}</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              {BRANCH_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {BRANCH_TYPES.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {t(`branches.types.${b.key}`)}
                 </option>
               ))}
             </select>
           </div>
           <div className="field">
-            <label>ساعات العمل</label>
-            <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder="9 ص - 10 م يومياً" />
+            <label>{t('branches.modal.hours')}</label>
+            <input value={hours} onChange={(e) => setHours(e.target.value)} placeholder={t('branches.modal.hours_placeholder')} />
           </div>
         </div>
         <div className="field">
-          <label>المستودع الافتراضي</label>
+          <label>{t('branches.modal.default_warehouse')}</label>
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-            <option value="">— لا يوجد —</option>
+            <option value="">{t('branches.modal.no_warehouse')}</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
@@ -88,10 +102,10 @@ export function BranchModal({
         {error && <p className="error-text">{error}</p>}
         <div className="modal-foot">
           <button className="btn btn-ghost" onClick={onCancel}>
-            إلغاء
+            {t('branches.modal.cancel')}
           </button>
           <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
-            {editing ? 'حفظ التعديل' : 'إضافة الفرع'}
+            {editing ? t('branches.modal.save_edit') : t('branches.modal.add')}
           </button>
         </div>
       </div>
