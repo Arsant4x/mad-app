@@ -65,7 +65,6 @@ export function DebitNoteModal({
           {invoice.docType === 'CREDIT_NOTE'
             ? t('invoices.debit_note.hint_on_credit_note', { no: invoice.no, total: fmt(invoice.total) })
             : t('invoices.debit_note.hint_on_invoice', { no: invoice.no })}
-          {t('invoices.debit_note.hint_tail')}
         </div>
         <div className="field">
           <label>{t('invoices.common.reason_label')}</label>

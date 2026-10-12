@@ -35,8 +35,7 @@
   "debit_note": {
     "title": "Issue debit note",
     "hint_on_credit_note": "A debit note correcting credit note {{no}} ({{total}}). It restores any excess to the customer's balance and cannot exceed the note's value. An issued note cannot be edited or deleted. It is sent to ZATCA as a 383 document linked to it.",
-    "hint_on_invoice": "Additional amounts on invoice {{no}}: recorded against the customer as new receivables, and sent to ZATCA as a 383 document linked to ",
-    "hint_tail": "it. The original invoice is not changed.",
+    "hint_on_invoice": "Additional amounts on invoice {{no}}: recorded against the customer as new receivables, and sent to ZATCA as a 383 document linked to it. The original invoice is not changed.",
     "reason_placeholder": "Example: unbilled shipping costs / price difference",
     "total": "Total: {{total}} (including VAT {{tax}})"
   },
