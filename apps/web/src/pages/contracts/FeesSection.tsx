@@ -1,14 +1,18 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { addContractFee, endContractFee, type Contract } from '../../api/contracts';
 import { dfmt, fmt, today } from '../../lib/format';
 
 /**
- * ⚖️ **بنودُ الرسوم فوق الإيجار** (السؤالان ٤٩ و٤١٣ · ق-١٦٠٠، بحكم صاحب المشروع: «بنودٌ على العقد تُفوتر مع القسط»).
+ * Fee lines on top of the rent, invoiced with each installment.
  *
- * رسمٌ مسمّى (موقف · نظافة · خدمات) توريدٌ منفصلٌ خاضعٌ ١٥٪ ولو كان الإيجارُ سكنيّاً معفى: كلُّ قسطٍ يحلّ تُطالَب معه رسومُه
- * مطالبةً خاضعةً تظهر في «المطالبات» تُحصَّل أو تُسقَط. والبندُ يُنهى ولا يُحذف — فما طولب عنه يبقى.
+ * A named fee (parking, cleaning, services) is a separate supply taxed at 15%
+ * even when the rent is exempt residential: every installment that falls due
+ * raises its fees as a taxable claim shown under claims, to be collected or
+ * waived. A line is ended, never deleted, so what was already claimed stays.
  */
 export function FeesSection({ contract, onChanged }: { contract: Contract; onChanged: (updated: Contract) => void }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState('');
   const [amount, setAmount] = useState('');
@@ -25,7 +29,7 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
       after?.();
     } catch (e) {
       const data = (e as { response?: { data?: { message?: string | string[] } } })?.response?.data;
-      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? 'تعذّر إتمام العملية'));
+      setError(Array.isArray(data?.message) ? data.message.join(' — ') : (data?.message ?? t('contracts.fees.action_failed')));
     } finally {
       setBusy(false);
     }
@@ -34,10 +38,10 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
   return (
     <div style={{ marginTop: 14 }}>
       <div className="card-title" style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>بنود الرسوم ({fees.length})</span>
+        <span>{t('contracts.fees.title', { n: fees.length })}</span>
         {contract.status !== 'CANCELLED' && (
           <button className="btn btn-ghost" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'إلغاء' : '+ بند رسم'}
+            {adding ? t('contracts.fees.cancel') : t('contracts.fees.add')}
           </button>
         )}
       </div>
@@ -46,19 +50,19 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
         <div className="card" style={{ background: '#faf9f5', marginBottom: 10 }}>
           <div className="two-col">
             <div className="field">
-              <label htmlFor="fee-label">اسم الرسم</label>
-              <input id="fee-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="مثال: موقف سيارة" />
+              <label htmlFor="fee-label">{t('contracts.fees.name')}</label>
+              <input id="fee-label" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('contracts.fees.name_placeholder')} />
             </div>
             <div className="field">
-              <label htmlFor="fee-amount">المبلغ لكل قسط</label>
+              <label htmlFor="fee-amount">{t('contracts.fees.amount')}</label>
               <input id="fee-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
           </div>
           <div className="field">
-            <label htmlFor="fee-from">يُطالَب ابتداءً من</label>
+            <label htmlFor="fee-from">{t('contracts.fees.effective_from')}</label>
             <input id="fee-from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
           </div>
-          <p className="hint">رسمٌ خاضعٌ للضريبة ١٥٪ فوق مبلغه ولو كان الإيجارُ معفى، ويُطالَب مع كلِّ قسطٍ يحلّ — وما حلّ منذ هذا التاريخ يُطالَب الآن.</p>
+          <p className="hint">{t('contracts.fees.hint')}</p>
           <div className="modal-foot" style={{ padding: 0, border: 'none' }}>
             <button
               className="btn btn-primary"
@@ -74,7 +78,7 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
                 )
               }
             >
-              حفظ البند
+              {t('contracts.fees.save')}
             </button>
           </div>
         </div>
@@ -83,9 +87,9 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
         <table>
           <thead>
             <tr>
-              <th>الرسم</th>
-              <th>لكل قسط</th>
-              <th>السريان</th>
+              <th>{t('contracts.fees.col_fee')}</th>
+              <th>{t('contracts.fees.col_per_installment')}</th>
+              <th>{t('contracts.fees.col_effective')}</th>
               <th></th>
             </tr>
           </thead>
@@ -96,12 +100,12 @@ export function FeesSection({ contract, onChanged }: { contract: Contract; onCha
                 <td className="num">{fmt(f.amount)}</td>
                 <td className="num">
                   {dfmt(f.effectiveFrom)}
-                  {f.endedAt ? ` — حتى ${dfmt(f.endedAt)}` : ''}
+                  {f.endedAt ? t('contracts.fees.until', { date: dfmt(f.endedAt) }) : ''}
                 </td>
                 <td>
                   {!f.endedAt && contract.status !== 'CANCELLED' && (
                     <button className="btn btn-ghost" disabled={busy} onClick={() => run(() => endContractFee(contract.id, f.id, { endedAt: today() }))}>
-                      إنهاء
+                      {t('contracts.fees.end')}
                     </button>
                   )}
                 </td>
